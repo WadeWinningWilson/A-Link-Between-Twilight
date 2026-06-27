@@ -2154,8 +2154,8 @@ EditorWindow::EditorWindow() {
             "sumo minigame; not written to the game save." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitHat, "Link Hat",
-            "WIP: wear Link's cap on the sumo body instead of the sumo headpiece. Crash-safe, "
-            "but the cap does not render yet on the sumo skeleton." +
+            "Wear Link's green cap on the sumo body instead of the sumo headpiece. Works from "
+            "any base outfit." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return !getSettings().game.sumoOutfit.getValue(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",

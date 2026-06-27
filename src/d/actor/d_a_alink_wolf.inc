@@ -346,6 +346,18 @@ void daAlink_c::changeLink(int param_0) {
                 initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33)), 0);
         }
         mpLinkHandModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x32)), 0);
+#if TARGET_PC
+        // Link Hat: shape visibility lives on the shared al_head.bmd J3DModelData,
+        // and a prior use of the model may have left shapes hidden.  Force every
+        // cap-model shape visible so the cap renders.
+        if (dAlbwSumoTest_wantLinkCap() && mpLinkHatModel != NULL &&
+            mpLinkHatModel->getModelData()->getJointNum() > 6) {
+            J3DModelData* capMd = mpLinkHatModel->getModelData();
+            for (u16 caps = 0; caps < capMd->getShapeNum(); caps++) {
+                capMd->getShapeNodePointer(caps)->show();
+            }
+        }
+#endif
     } else if (checkCasualWearFlg()) {
         onNoResetFlg2(FLG2_UNK_100000);
 
@@ -390,24 +402,20 @@ void daAlink_c::changeLink(int param_0) {
     }
 
     // ============================================
-    // NEW CODE — ALBW Port (SumoTest equipment attach)
-    // The alSumou "BLS" skeleton places the hands / weapon locators at different
+    // NEW CODE — ALBW Port (Sumo Outfit equipment attach)
+    // The alSumou "BLS" skeleton places the hand / weapon locators at different
     // joint indices than Link's normal body: HANDL=9, HANDR=14, WEAPONL=10,
-    // WEAPONR=15 (vs Link's 19/24).  Without this remap the sword/shield/held
-    // items attach to BLS joints 19/24 — which are the LEGS — so they read as
-    // invisible.  Restore Link's normal indices when not wearing the sumo body
-    // (FLG2_UNK_80000 = sumo model active, set in the sumo branch above).
+    // WEAPONR=15.  Without this remap the sword/shield/held items attach to the
+    // wrong BLS joints and read as invisible on the sumo body.  Override ONLY for
+    // the sumo body — for normal clothes the game sets these joints dynamically
+    // (per equipped item), so we must not clobber them or every outfit swap puts
+    // the sword at the legs.  On revert the game restores them itself.
     // ============================================
     if (checkNoResetFlg2(FLG2_UNK_80000)) {
         mLeftHandJntNo  = 9;   // BLS_JNT_HANDL
         mRightHandJntNo = 14;  // BLS_JNT_HANDR
         mLeftItemJntNo  = 10;  // BLS_JNT_WEAPONL
         mRightItemJntNo = 15;  // BLS_JNT_WEAPONR
-    } else {
-        mLeftHandJntNo  = 19;
-        mRightHandJntNo = 24;
-        mLeftItemJntNo  = 19;
-        mRightItemJntNo = 24;
     }
     // ============================================
     // NEW CODE ENDS HERE
