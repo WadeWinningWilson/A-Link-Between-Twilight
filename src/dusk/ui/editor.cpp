@@ -2146,6 +2146,12 @@ EditorWindow::EditorWindow() {
             "Treat Ordon, Wooden, and Master swords as valid boss swords (Zant, Ganondorf, "
             "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.sumoTest, "SumoTest",
+            "Dev visual spike: swaps Link's body to the shirtless sumo model in the field (loads "
+            "the alSumou archive on demand, so it works anywhere). On = sumo model; Off = your "
+            "equipped clothes. Reverts on a stage transition (toggle off/on to re-apply). Drives "
+            "only the model — never the sumo minigame; not written to the game save." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.shadeRefuge, "Shade's Refuge",
             "Lies-of-P-style Shade Watcher rest points: rest to full-heal and set a respawn "
             "point, respawn at the last watcher on death, and buy a return-to-watcher service "

@@ -173,6 +173,7 @@ set(DOLZEL_FILES
         src/d/d_albw_shade_refuge.cpp
         src/d/d_albw_death_rupee.cpp
         src/d/d_albw_rental.cpp
+        src/d/d_albw_sumo_test.cpp
         src/d/d_albw_master_quest.cpp
         src/d/d_albw_shop.cpp
         src/d/d_albw_dialogue.cpp

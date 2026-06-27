@@ -16,6 +16,7 @@
 #include "d/d_item.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_sumo_test.h"
 #include "d/d_pane_class.h"
 #include "d/d_demo.h"
 #include "d/actor/d_a_crod.h"
@@ -18280,6 +18281,17 @@ int daAlink_c::procGoronRideWait() {
 }
 
 int daAlink_c::execute() {
+    // ============================================
+    // NEW CODE — ALBW Port (Sumo Link visual test)
+    // Dev-only model-swap driver (editor -> ALBW -> SumoTest).  Runs before the
+    // model update so a queued clothes-change is applied the same frame.
+    // ============================================
+#if TARGET_PC
+    dAlbwSumoTest_exec(this);
+#endif
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     if (loadModelDVD() && !checkNoResetFlg2(FLG2_STATUS_WINDOW_DRAW)) {
         loadShieldModelDVD();
     }
@@ -19627,13 +19639,34 @@ void daAlink_c::setDrawHand() {
 }
 
 bool daAlink_c::checkSwordDraw() {
-    return ((checkSwordGet() && mSwordChangeWaitTimer == 0) && !checkNoResetFlg2(FLG2_UNK_2080000))
+    // ============================================
+    // MODIFIED CODE — ALBW Port (SumoTest equipment draw)
+    // FLG2_UNK_2080000 = 0x2000000 | 0x80000, so the sumo body flag
+    // (FLG2_UNK_80000) suppresses the sword whenever the sumo body is worn (the
+    // minigame has no weapons).  For the SumoTest dev OUTFIT, drop just the sumo
+    // bit (keep FLG2_UNK_2000000) so the sword still draws.
+    // ============================================
+    daPy_FLG2 drawSuppress = FLG2_UNK_2080000;
+#if TARGET_PC
+    if (dAlbwSumoTest_isOutfitActive()) {
+        drawSuppress = FLG2_UNK_2000000;
+    }
+#endif
+    return ((checkSwordGet() && mSwordChangeWaitTimer == 0) && !checkNoResetFlg2(drawSuppress))
             && (!checkWolf() || !dComIfGs_isEventBit(dSv_event_flag_c::M_068));
 }
 
 bool daAlink_c::checkShieldDraw() {
+    // MODIFIED — ALBW Port (SumoTest): drop the sumo bit (0x80000) from the
+    // shield suppression mask for the SumoTest dev outfit (see checkSwordDraw).
+    daPy_FLG2 drawSuppress = FLG2_UNK_4080000;
+#if TARGET_PC
+    if (dAlbwSumoTest_isOutfitActive()) {
+        drawSuppress = FLG2_UNK_4000000;
+    }
+#endif
     return mShieldModel != NULL &&
-           ((checkShieldGet() && mShieldChangeWaitTimer == 0) && !checkNoResetFlg2(FLG2_UNK_4080000)) &&
+           ((checkShieldGet() && mShieldChangeWaitTimer == 0) && !checkNoResetFlg2(drawSuppress)) &&
            (!checkWolf() || !dComIfGs_isEventBit(dSv_event_flag_c::M_068));
 }
 

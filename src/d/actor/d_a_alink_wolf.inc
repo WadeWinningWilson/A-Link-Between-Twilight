@@ -368,6 +368,30 @@ void daAlink_c::changeLink(int param_0) {
             initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_hands.bmd")), 0);
     }
 
+    // ============================================
+    // NEW CODE — ALBW Port (SumoTest equipment attach)
+    // The alSumou "BLS" skeleton places the hands / weapon locators at different
+    // joint indices than Link's normal body: HANDL=9, HANDR=14, WEAPONL=10,
+    // WEAPONR=15 (vs Link's 19/24).  Without this remap the sword/shield/held
+    // items attach to BLS joints 19/24 — which are the LEGS — so they read as
+    // invisible.  Restore Link's normal indices when not wearing the sumo body
+    // (FLG2_UNK_80000 = sumo model active, set in the sumo branch above).
+    // ============================================
+    if (checkNoResetFlg2(FLG2_UNK_80000)) {
+        mLeftHandJntNo  = 9;   // BLS_JNT_HANDL
+        mRightHandJntNo = 14;  // BLS_JNT_HANDR
+        mLeftItemJntNo  = 10;  // BLS_JNT_WEAPONL
+        mRightItemJntNo = 15;  // BLS_JNT_WEAPONR
+    } else {
+        mLeftHandJntNo  = 19;
+        mRightHandJntNo = 24;
+        mLeftItemJntNo  = 19;
+        mRightItemJntNo = 24;
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+
     if (checkNoResetFlg2(FLG2_UNK_200000) || !checkZoraWearFlg()) {
         mpLinkFaceModel =
             initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd")), 0x20200);
