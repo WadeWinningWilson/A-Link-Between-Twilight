@@ -2146,20 +2146,25 @@ EditorWindow::EditorWindow() {
             "Treat Ordon, Wooden, and Master swords as valid boss swords (Zant, Ganondorf, "
             "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        // ============================================
+        // NEW CODE — ALBW Port (Sumo Outfit — master toggle removed)
+        // The Sumo Outfit is now a shipped feature obtained from the ALBW rental
+        // shop and worn via the D-pad outfit cycle, so the master "Sumo Outfit"
+        // toggle is no longer surfaced here.  Its Link Hat / Fists Only sub-options
+        // stay visible for tuning — they retain the same behavior and only apply
+        // while sumo is currently worn (the predicate greys them out otherwise).
+        // The game.sumoOutfit / sumoOutfitHat / sumoOutfitFists ConfigVars stay
+        // registered (settings.cpp) and drive the look as before.
+        // ============================================
         leftPane.add_section("Sumo Outfit");
-        editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfit, "Sumo Outfit",
-            "Swaps Link's body to the shirtless sumo model in the field (loads the alSumou archive "
-            "on demand, so it works anywhere). On = sumo model; Off = your equipped clothes. Reverts "
-            "on a stage transition (toggle off/on to re-apply). Drives only the model — never the "
-            "sumo minigame; not written to the game save." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitHat, "Link Hat",
             "Wear Link's green cap on the sumo body instead of the sumo headpiece. Works from "
-            "any base outfit." +
+            "any base outfit.  Applies only while the Sumo Outfit is worn." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return !getSettings().game.sumoOutfit.getValue(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
-            "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off." +
+            "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
+            "Applies only while the Sumo Outfit is worn." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return !getSettings().game.sumoOutfit.getValue(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.shadeRefuge, "Shade's Refuge",

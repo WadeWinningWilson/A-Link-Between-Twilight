@@ -41,6 +41,7 @@
 #include "d/d_albw_master_quest.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_sumo_test.h"
+#include "d/d_albw_outfit.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
@@ -743,7 +744,8 @@ static void tryPurchase(int visIdx) {
     // Clothes outfits (Ordon, Hero's, Zora, Magic) have no inventory slot — grant
     // + auto-equip + swap the model in one call so the change shows on shop exit.
     // Buying a real outfit also drops the sumo overlay if it was worn, so the
-    // chosen clothes show instead of sumo re-applying over them.
+    // chosen clothes show instead of sumo re-applying over them.  Record the
+    // wardrobe stash bit (691-694) so the D-pad outfit cycle sees it as owned.
     // ============================================
     } else if (e.itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
                e.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
@@ -751,6 +753,7 @@ static void tryPurchase(int visIdx) {
                e.itemNo == (u8)dItemNo_ARMOR_e) {
         dAlbwSumoTest_clearWorn();
         dMeter2_grantRentalClothes(e.itemNo);
+        dAlbwOutfit_recordOwnedByItemNo(e.itemNo);
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
