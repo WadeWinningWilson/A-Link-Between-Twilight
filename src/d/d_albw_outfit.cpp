@@ -13,6 +13,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_save.h"
 #include "d/d_item_data.h"
+#include "d/d_meter2_info.h"
 
 namespace {
 
@@ -25,6 +26,33 @@ constexpr int kStashHeros = 692;
 constexpr int kStashZora  = 693;
 constexpr int kStashMagic = 694;
 constexpr int kStashDeity = 695;
+
+// Sumo CURRENTLY worn (per-save).  697-699 belong to Quick Swap, so 700.
+constexpr int kSumoWornBit = 700;
+
+// Native clothes dItemNo for an outfit kind.  -1 for SUMO (no native item).
+int itemNoForKind(dAlbwOutfitKind kind) {
+    switch (kind) {
+    case D_ALBW_OUTFIT_ORDON: return dItemNo_WEAR_CASUAL_e;
+    case D_ALBW_OUTFIT_HEROS: return dItemNo_WEAR_KOKIRI_e;
+    case D_ALBW_OUTFIT_ZORA:  return dItemNo_WEAR_ZORA_e;
+    case D_ALBW_OUTFIT_MAGIC: return dItemNo_ARMOR_e;
+    case D_ALBW_OUTFIT_DEITY: return dItemNo_DEITY_ARMOR_e;
+    default:                  return -1;
+    }
+}
+
+// Equipped native clothes dItemNo -> outfit kind (defaults to Ordon, the base).
+dAlbwOutfitKind kindForClothes(int clothes) {
+    switch (clothes) {
+    case dItemNo_WEAR_KOKIRI_e: return D_ALBW_OUTFIT_HEROS;
+    case dItemNo_WEAR_ZORA_e:   return D_ALBW_OUTFIT_ZORA;
+    case dItemNo_ARMOR_e:       return D_ALBW_OUTFIT_MAGIC;
+    case dItemNo_DEITY_ARMOR_e: return D_ALBW_OUTFIT_DEITY;
+    case dItemNo_WEAR_CASUAL_e:
+    default:                    return D_ALBW_OUTFIT_ORDON;
+    }
+}
 
 // Outfit identity -> stash bit.  Returns -1 for kinds without a stash bit.
 int stashBitForKind(dAlbwOutfitKind kind) {
@@ -67,6 +95,89 @@ void dAlbwOutfit_recordOwnedByItemNo(int itemNo) {
         return;  // not a wardrobe-tracked outfit
     }
     dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[bit]);
+}
+
+bool dAlbwOutfit_isSumoWorn() {
+    return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kSumoWornBit]) != 0;
+}
+
+void dAlbwOutfit_setSumoWorn(bool on) {
+    if (on) {
+        dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kSumoWornBit]);
+    } else {
+        dComIfGs_offEventBit(dSv_event_flag_c::saveBitLabels[kSumoWornBit]);
+    }
+}
+
+dAlbwOutfitKind dAlbwOutfit_getActive() {
+    // TARGET semantics: sumo if the worn bit is set, else the equipped clothes.
+    if (dAlbwOutfit_isSumoWorn()) {
+        return D_ALBW_OUTFIT_SUMO;
+    }
+    return kindForClothes(dComIfGs_getSelectEquipClothes());
+}
+
+bool dAlbwOutfit_isActive(dAlbwOutfitKind kind) {
+    return dAlbwOutfit_getActive() == kind;
+}
+
+bool dAlbwOutfit_equip(dAlbwOutfitKind kind) {
+    if (kind >= D_ALBW_OUTFIT_COUNT) {
+        return false;
+    }
+    if (!dAlbwOutfit_isOwned(kind)) {
+        return false;  // only equip outfits already in the wardrobe
+    }
+    if (kind == D_ALBW_OUTFIT_SUMO) {
+        dAlbwOutfit_setSumoWorn(true);  // overlay re-applies next frame (sumo exec)
+        return true;
+    }
+    const int itemNo = itemNoForKind(kind);
+    if (itemNo < 0) {
+        return false;
+    }
+    dAlbwOutfit_setSumoWorn(false);          // mutual exclusion: drop the sumo overlay
+    dMeter2_grantRentalClothes((u8)itemNo);  // equip + auto-equip the native clothes
+    return true;
+}
+
+dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current) {
+    // Fixed cycle order (Deity excluded from the v1 rotation).
+    static const dAlbwOutfitKind kCycle[] = {
+        D_ALBW_OUTFIT_SUMO,  D_ALBW_OUTFIT_ORDON, D_ALBW_OUTFIT_HEROS,
+        D_ALBW_OUTFIT_ZORA,  D_ALBW_OUTFIT_MAGIC,
+    };
+    const int n = (int)(sizeof(kCycle) / sizeof(kCycle[0]));
+
+    int ci = -1;
+    for (int i = 0; i < n; ++i) {
+        if (kCycle[i] == current) {
+            ci = i;
+            break;
+        }
+    }
+    // Scan forward from current (or from the front if current is off-cycle, e.g.
+    // Deity), returning the first owned outfit; fall back to current if <=1 owned.
+    for (int s = 1; s <= n; ++s) {
+        const int idx = ((ci + s) % n + n) % n;
+        const dAlbwOutfitKind cand = kCycle[idx];
+        if (ci >= 0 && cand == current) {
+            break;  // wrapped back to current
+        }
+        if (dAlbwOutfit_isOwned(cand)) {
+            return cand;
+        }
+    }
+    return current;
+}
+
+void dAlbwOutfit_syncWornOwnership() {
+    // You own what you wear: seed the stash bit for the equipped native outfit so
+    // vanilla-acquired clothes register as owned without per-grant-site hooks.
+    const int bit = stashBitForItemNo(dComIfGs_getSelectEquipClothes());
+    if (bit >= 0 && dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[bit]) == 0) {
+        dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[bit]);
+    }
 }
 
 #endif  // TARGET_PC

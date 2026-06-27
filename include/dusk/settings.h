@@ -250,9 +250,10 @@ struct UserSettings {
         ConfigVar<FocusedArtsCheatMode> focusedArtsCheat;
         // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
         ConfigVar<bool> flurryRush;
-        // Sumo Outfit (dev): swap Link's body to the shirtless sumo model in the field. Drives the
-        // model flag only, never the sumo minigame; not written to the game save.
-        //   sumoOutfit      — master on/off
+        // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
+        // never the sumo minigame.
+        //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).
+        //                     Kept registered for back-compat; no code reads it.
         //   sumoOutfitHat   — wear Link's green cap on the sumo body (works from any base)
         //   sumoOutfitFists — hide weapons (fists only)
         ConfigVar<bool> sumoOutfit;
@@ -447,6 +448,7 @@ struct UserSettings {
         std::array<ActionBindConfigVar, 4> turboSpeedButton;
         std::array<ActionBindConfigVar, 4> cycleSword;
         std::array<ActionBindConfigVar, 4> cycleShield;
+        std::array<ActionBindConfigVar, 4> cycleOutfit;
         std::array<ActionBindConfigVar, 4> quickTransform;
         std::array<ActionBindConfigVar, 4> openItemWheel;
     } actionBindings;

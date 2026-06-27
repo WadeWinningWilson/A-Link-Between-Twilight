@@ -21,6 +21,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_save.h"
+#include "d/d_albw_outfit.h"
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_phase.h"
 
@@ -73,8 +74,15 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
         return;
     }
 
-    // Editor -> ALBW -> Sumo Outfit (game.sumoOutfit / *Hat / *Fists).
-    const bool want = dusk::getSettings().game.sumoOutfit.getValue();
+    // Own-what-you-wear: seed the wardrobe stash bit for the equipped outfit so
+    // vanilla-acquired clothes register as owned for the D-pad cycle.  Cheap (a
+    // getter + one event-bit read; writes at most once per outfit) and must run
+    // every frame, so it sits ahead of the early-out below.
+    dAlbwOutfit_syncWornOwnership();
+
+    // "Worn" now lives in the save (bit 700), set by the shop / D-pad — not the
+    // old game.sumoOutfit AppData toggle.  Hat / Fists stay editor ConfigVars.
+    const bool want = dAlbwOutfit_isSumoWorn();
 
     // Nothing to manage during normal play (outfit off and not currently applied).
     if (!want && !sApplied) {
@@ -187,12 +195,12 @@ bool dAlbwSumoTest_isShopEligible() {
 
 bool dAlbwSumoTest_tryPurchaseShop() {
     dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kSumoOwnedBit]);  // own / store it
-    dusk::getSettings().game.sumoOutfit.setValue(true);                   // wear it now
+    dAlbwOutfit_setSumoWorn(true);                                        // wear it now (save bit 700)
     return true;
 }
 
 void dAlbwSumoTest_clearWorn() {
-    dusk::getSettings().game.sumoOutfit.setValue(false);  // buying a real outfit drops sumo
+    dAlbwOutfit_setSumoWorn(false);  // buying a real outfit (or equipping one) drops sumo
 }
 
 void dAlbwSumoTest_onWrestlerMet() {

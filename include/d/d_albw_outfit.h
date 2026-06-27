@@ -37,6 +37,30 @@ bool dAlbwOutfit_isOwned(dAlbwOutfitKind kind);
 // itemNo.  Call alongside dMeter2_grantRentalClothes().
 void dAlbwOutfit_recordOwnedByItemNo(int itemNo);
 
+// ---- Currently-worn sumo state (per-save, save bit 700) -----------------------
+// The sumo overlay's "is worn" flag lives in the save (not AppData config), so it
+// is per-file and survives the removal of the editor toggle.  The sumo module
+// reads isSumoWorn() for its per-frame apply; the shop / D-pad set it.
+bool dAlbwOutfit_isSumoWorn();
+void dAlbwOutfit_setSumoWorn(bool on);
+
+// ---- Active outfit + equip + cycle (D-pad outfit quick-swap surface) ----------
+// getActive() returns the TARGET outfit (intended), not the live model: SUMO when
+// the worn bit is set, else the equipped native clothes.  equip() is async-
+// initiate (the model swap completes over the next frames); it equips only OWNED
+// outfits and enforces mutual exclusion (equipping a native clears the sumo
+// overlay).  getNextOwned() walks the fixed cycle order, skips unowned, and
+// returns `current` when 0-or-1 outfits are owned (so Down becomes a no-op).
+dAlbwOutfitKind dAlbwOutfit_getActive();
+bool            dAlbwOutfit_isActive(dAlbwOutfitKind kind);
+bool            dAlbwOutfit_equip(dAlbwOutfitKind kind);
+dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current);
+
+// Own-what-you-wear: call once per frame.  Records the stash bit for the
+// currently equipped native outfit so vanilla-acquired clothes (Ordon at start,
+// Hero's post-Faron, Zora/Magic via story) register as owned for the cycle.
+void dAlbwOutfit_syncWornOwnership();
+
 #endif  // TARGET_PC
 
 #endif /* D_ALBW_OUTFIT_H */

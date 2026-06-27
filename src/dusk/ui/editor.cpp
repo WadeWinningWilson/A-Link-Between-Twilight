@@ -6,6 +6,7 @@
 #include "bool_button.hpp"
 #include "button.hpp"
 #include "d/actor/d_a_player.h"
+#include "d/d_albw_outfit.h"
 #include "d/d_kankyo.h"
 #include "d/d_meter2_info.h"
 #include "dusk/config.hpp"
@@ -2153,20 +2154,22 @@ EditorWindow::EditorWindow() {
         // toggle is no longer surfaced here.  Its Link Hat / Fists Only sub-options
         // stay visible for tuning — they retain the same behavior and only apply
         // while sumo is currently worn (the predicate greys them out otherwise).
-        // The game.sumoOutfit / sumoOutfitHat / sumoOutfitFists ConfigVars stay
-        // registered (settings.cpp) and drive the look as before.
+        // The sumoOutfitHat / sumoOutfitFists ConfigVars stay registered
+        // (settings.cpp) and tune the look.  "Worn" itself is now per-save
+        // (save bit 700, via dAlbwOutfit_*), so these greys-out track
+        // dAlbwOutfit_isSumoWorn() rather than the old game.sumoOutfit toggle.
         // ============================================
         leftPane.add_section("Sumo Outfit");
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitHat, "Link Hat",
             "Wear Link's green cap on the sumo body instead of the sumo headpiece. Works from "
             "any base outfit.  Applies only while the Sumo Outfit is worn." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return !getSettings().game.sumoOutfit.getValue(); });
+            [] { return !dAlbwOutfit_isSumoWorn(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
             "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
             "Applies only while the Sumo Outfit is worn." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return !getSettings().game.sumoOutfit.getValue(); });
+            [] { return !dAlbwOutfit_isSumoWorn(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.shadeRefuge, "Shade's Refuge",
             "Lies-of-P-style Shade Watcher rest points: rest to full-heal and set a respawn "
             "point, respawn at the last watcher on death, and buy a return-to-watcher service "
