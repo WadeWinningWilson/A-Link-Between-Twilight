@@ -10,8 +10,9 @@
 // equipped clothes (getSelectEquipClothes()).  This drives ONLY the model
 // flag — never setSumouReady() / the sumo minigame procedures.
 //
-// Limitation (acceptable for a dev spike): the sumo flag is one-shot, so the
-// look reverts on a stage transition — re-toggle to re-apply.
+// Persistence: a room/stage transition (and demo/cutscene Link rebuilds) clear
+// the sumo model flag, so once an apply settles we detect FLG2_UNK_80000 missing
+// and re-apply — the outfit survives transitions and shows through cutscenes.
 // ============================================
 #include "d/d_albw_sumo_test.h"
 
@@ -19,6 +20,7 @@
 
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_save.h"
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_phase.h"
 
@@ -39,12 +41,21 @@ request_of_phase_process_class sClothesPhase; // current base-clothes arc (kept 
 // build models from an unloaded archive and crash.
 u8 sLastClothes = 0xFF;
 
+// Frames to wait after (re)applying before trusting the FLG2_UNK_80000 sumo flag,
+// so we don't re-trigger while the clothes-change that SETS that flag is in flight.
+int sApplyGrace = 0;
+
 // alSumou body-model resource index; matches daAlink_c::changeLink().
 constexpr int kSumoBodyResIdx = 0x31;
 
 // Hero's Clothes archive — holds al_head.bmd (the Link cap).  Kept resident on
 // demand so the cap renders no matter what clothes the player wears underneath.
 constexpr const char* kCapArcName = "Kmdl";
+
+// Save bits (dSv_event_flag_c::saveBitLabels) — continue the ALBW shop reservation
+// block after kMultiShieldUpgradeBit (688); array size is 822.
+constexpr int kSumoOwnedBit       = 689;  // Sumo Outfit purchased / stored
+constexpr int kSumoWrestlerMetBit = 690;  // met the Ordon sumo-wrestler NPC
 
 // Archive backing the player's currently equipped human clothes.  Mirrors
 // daAlink_c::setArcName()'s mapping so we keep the right arc resident.
@@ -65,11 +76,8 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     // Editor -> ALBW -> Sumo Outfit (game.sumoOutfit / *Hat / *Fists).
     const bool want = dusk::getSettings().game.sumoOutfit.getValue();
 
-    if (!want) {
-        if (sApplied) {
-            i_link->setClothesChange(0);  // revert to the player's equipped clothes
-            sApplied = false;
-        }
+    // Nothing to manage during normal play (outfit off and not currently applied).
+    if (!want && !sApplied) {
         sShowWeapons = false;
         return;
     }
@@ -77,32 +85,55 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     const bool hat   = dusk::getSettings().game.sumoOutfitHat.getValue();
     const bool fists = dusk::getSettings().game.sumoOutfitFists.getValue();
 
-    // Keep the player's base-clothes arc resident the whole time the outfit is on.
-    // While the sumo model flag is set the game skips reloading the clothes arc on
-    // a clothes change, so changeLink would otherwise build from an unloaded
-    // archive and crash.  When the equipped clothes change, reset the phase to
-    // load the NEW arc and force a clean sumo re-apply over it.
+    // Keep the player's equipped base-clothes arc resident AND mArcName synced to
+    // it every frame while the outfit is applied or being applied/reverted.  While
+    // the sumo flag is set the clothes loader skips reloading the arc and never
+    // refreshes mArcName, so otherwise changeLink builds the face/boots from a
+    // stale or unloaded archive and crashes -- including the shop's swap from sumo
+    // to a real outfit.  Reset the phase when the equipped clothes change so we
+    // load the NEW arc; only point mArcName at it once it is resident.
     const u8 clothes = dComIfGs_getSelectEquipClothes();
     if (clothes != sLastClothes) {
         cPhs_Reset(&sClothesPhase);
         sLastClothes = clothes;
-        sApplied     = false;  // re-apply the sumo over the new clothes
+        if (want) {
+            sApplied = false;  // re-apply the sumo over the new base
+        }
     }
     const int baseState = dComIfG_resLoad(&sClothesPhase, baseClothesArc());
+    if (baseState == cPhs_COMPLEATE_e) {
+        i_link->setArcName(0);
+    }
+
+    if (!want) {
+        // Reverting from sumo to the player's (possibly just-changed) clothes.
+        // Wait until that arc is resident -- mArcName was synced above -- so the
+        // revert's changeLink reads a valid archive instead of crashing.
+        if (sApplied) {
+            if (baseState != cPhs_COMPLEATE_e) {
+                sShowWeapons = false;
+                return;
+            }
+            i_link->setClothesChange(0);
+            sApplied = false;
+        }
+        sShowWeapons = false;
+        return;
+    }
+
+    // Persist the outfit across room/stage transitions.  A transition rebuilds
+    // Link with the sumo model flag cleared, leaving our static sApplied stale; so
+    // once the apply has settled (grace elapsed), detect the flag missing and
+    // re-apply.  Without this the outfit would silently revert on every transition.
+    if (sApplyGrace > 0) {
+        sApplyGrace--;
+    } else if (sApplied && !i_link->checkNoResetFlg2(daAlink_c::FLG2_UNK_80000)) {
+        sApplied = false;
+    }
 
     // The Link cap (al_head.bmd) lives in Kmdl; keep it resident too so the cap's
     // textures bind regardless of the base outfit.
     const int capState = hat ? dComIfG_resLoad(&sKmdlPhase, kCapArcName) : cPhs_COMPLEATE_e;
-
-    // Keep mArcName synced to the current (resident) clothes arc EVERY frame.  The
-    // sumo clothes-change uses the loader's skip path, which never refreshes
-    // mArcName, so otherwise changeLink can load the face/boots from a stale arc
-    // and crash — most visibly when rapidly switching outfits (e.g. Magic Armor),
-    // where a re-apply-time sync can land while the wear flags are mid-transition.
-    // Only point it at the new arc once that arc is actually resident.
-    if (baseState == cPhs_COMPLEATE_e) {
-        i_link->setArcName(0);
-    }
 
     // Re-apply (reload the model) if the Link-hat toggle changed while worn.
     if (sApplied && hat != sAppliedHat) {
@@ -124,6 +155,7 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
         i_link->setClothesChange(1);
         sApplied    = true;
         sAppliedHat = hat;
+        sApplyGrace = 30;  // let the clothes change set FLG2_UNK_80000 before we trust it
     }
 
     sShowWeapons = !fists;  // sApplied is true here
@@ -139,6 +171,32 @@ bool dAlbwSumoTest_showWeapons() {
 
 bool dAlbwSumoTest_wantLinkCap() {
     return dusk::getSettings().game.sumoOutfitHat.getValue();
+}
+
+bool dAlbwSumoTest_isOwned() {
+    return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kSumoOwnedBit]) != 0;
+}
+
+bool dAlbwSumoTest_isShopEligible() {
+    // Always listed so the shop works as an outfit switcher (re-select to wear).
+    // The stored-armors ownership-hide and the sumo-wrestler / True-ALBW gating
+    // are deferred follow-ups (the wrestler talk-hook crashed on the Ordon entry
+    // event and was removed; the met/owned save bits 689/690 are still recorded).
+    return true;
+}
+
+bool dAlbwSumoTest_tryPurchaseShop() {
+    dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kSumoOwnedBit]);  // own / store it
+    dusk::getSettings().game.sumoOutfit.setValue(true);                   // wear it now
+    return true;
+}
+
+void dAlbwSumoTest_clearWorn() {
+    dusk::getSettings().game.sumoOutfit.setValue(false);  // buying a real outfit drops sumo
+}
+
+void dAlbwSumoTest_onWrestlerMet() {
+    dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kSumoWrestlerMetBit]);
 }
 
 #endif  // TARGET_PC

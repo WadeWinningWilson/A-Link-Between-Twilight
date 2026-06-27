@@ -253,7 +253,7 @@ struct UserSettings {
         // Sumo Outfit (dev): swap Link's body to the shirtless sumo model in the field. Drives the
         // model flag only, never the sumo minigame; not written to the game save.
         //   sumoOutfit      — master on/off
-        //   sumoOutfitHat   — wear Link's cap on the sumo body (DIAGNOSTIC: currently crashes)
+        //   sumoOutfitHat   — wear Link's green cap on the sumo body (works from any base)
         //   sumoOutfitFists — hide weapons (fists only)
         ConfigVar<bool> sumoOutfit;
         ConfigVar<bool> sumoOutfitHat;

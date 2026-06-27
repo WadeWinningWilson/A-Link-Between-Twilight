@@ -29,6 +29,26 @@ bool dAlbwSumoTest_showWeapons();
 // True when the "Link Hat" sub-toggle is on — read by changeLink.
 bool dAlbwSumoTest_wantLinkCap();
 
+// ---- Shop integration (Sumo Outfit purchase) ----------------------------------
+// True once the Sumo Outfit has been bought (save-backed ownership bit).  This is
+// the foundation brick of the planned stored-armors / quick-swap system.
+bool dAlbwSumoTest_isOwned();
+
+// Whether the "Sumo Outfit" shop row should be shown: not already owned, AND
+// (True ALBW is on OR the Ordon sumo-wrestler NPC has been met).
+bool dAlbwSumoTest_isShopEligible();
+
+// Shop purchase: record ownership (save bit) and wear it now.  Returns true.
+bool dAlbwSumoTest_tryPurchaseShop();
+
+// Turn the sumo overlay OFF — called when the player buys a real clothes outfit
+// so the chosen clothes show instead of sumo re-applying over them.
+void dAlbwSumoTest_clearWorn();
+
+// Marks the Ordon sumo-wrestler NPC as met — gates the shop row in non-True-ALBW
+// play.  Called from daNpcWrestler_c::talk().
+void dAlbwSumoTest_onWrestlerMet();
+
 #endif  // TARGET_PC
 
 #endif /* D_ALBW_SUMO_TEST_H */

@@ -40,6 +40,7 @@
 #include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_master_quest.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_sumo_test.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
@@ -192,6 +193,28 @@ static const ALBWRentalEntry kItems[] = {
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
+    // ============================================
+    // NEW CODE — ALBW Port (Outfits — Armors tab)
+    // Hero's Clothes (the default green tunic, dItemNo_WEAR_KOKIRI_e) and Zora
+    // Armor (dItemNo_WEAR_ZORA_e) sit between Ordon and Magic on the Armor page.
+    // Rentable here at 50 rupees; always-eligible for now (the currently-worn
+    // outfit is still auto-hidden by the owned check) — gating can be tightened
+    // later if these should require having obtained them first.
+    // ============================================
+    { "Hero's Clothes",
+      (u8)dItemNo_WEAR_KOKIRI_e,   -1,      50,
+      "You know, I had an ancestor that swore he saw a legendary hero wear a garb like this.",
+      []() -> bool { return true; },
+      CAT_ARMOR },
+    { "Zora Armor",
+      (u8)dItemNo_WEAR_ZORA_e,     -1,      50,
+      "Sleek and slippery. Smells like the lake I used to fish at...when the Zoras weren't "
+      "looking....sigh...",
+      []() -> bool { return true; },
+      CAT_ARMOR },
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     { "Magic Armor",
       (u8)dItemNo_ARMOR_e,         -1,      500,
       "Legendary Golden protection, keep an eye on your wallet with this!",
@@ -253,7 +276,11 @@ enum VisibleKind {
     VISIBLE_ITEM,
     VISIBLE_SHADE_REFUGE,  // "Return to Last Shade Watcher" (above Oocoo)
     VISIBLE_OOCOO,
+    VISIBLE_SUMO_OUTFIT,   // ALBW Port: Sumo Outfit (model-swap state, Armor page)
 };
+
+// ALBW Port: Sumo Outfit shop price (a model-swap state, not a native clothes item).
+static constexpr int kSumoOutfitPrice = 50;
 
 struct VisibleEntry {
     VisibleKind kind;
@@ -261,7 +288,7 @@ struct VisibleEntry {
     bool        purchasable;
 };
 
-static constexpr int kVisibleListMax = 3 + kItemCount + 2;  // MQ rows + FA tier + services
+static constexpr int kVisibleListMax = 3 + kItemCount + 3;  // MQ rows + FA tier + services + sumo
 static VisibleEntry sVisibleList[kVisibleListMax];
 static int          sVisibleCount     = 0;  // total rows shown (inc. ?????)
 static int          sAvailCount       = 0;  // purchasable rows only (for button state)
@@ -472,15 +499,34 @@ static void rebuildVisibleList() {
         sVisibleCount++;
     }
 
+    // ALBW Port: the Sumo Outfit is a model-swap STATE (not a native clothes
+    // item), so it is injected here rather than in kItems.  Sits at the TOP of
+    // the Armor page (before Ordon Clothes); shown once eligible (True ALBW, or
+    // the Ordon sumo wrestler has been met) and not yet owned/stored.
+    if (cat == CAT_ARMOR && dAlbwSumoTest_isShopEligible() &&
+        sVisibleCount < (int)(sizeof(sVisibleList) / sizeof(sVisibleList[0]))) {
+        sVisibleList[sVisibleCount].kind        = VISIBLE_SUMO_OUTFIT;
+        sVisibleList[sVisibleCount].kItemsIdx   = -1;
+        sVisibleList[sVisibleCount].purchasable = true;
+        sAvailCount++;
+        sVisibleCount++;
+    }
+
     for (int i = 0; i < kItemCount; ++i) {
         const ALBWRentalEntry& entry = kItems[i];
         if (entry.category != cat) {
             continue;  // not on this page
         }
-        const bool eligible = entryEligible(entry);
-        const bool owned    = dMeter2_playerOwnsRentalItem(entry.itemNo);
+        // ALBW Port: clothes outfits (Ordon/Hero's/Zora) stay listed as buyable
+        // even while owned or worn, so the shop doubles as an outfit switcher
+        // (buying re-equips).  Other items keep the normal eligible/owned gating.
+        const bool wear     = entry.itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
+                              entry.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
+                              entry.itemNo == (u8)dItemNo_WEAR_ZORA_e;
+        const bool eligible = wear ? true : entryEligible(entry);
+        const bool owned    = wear ? false : dMeter2_playerOwnsRentalItem(entry.itemNo);
         if (eligible && owned) {
-            continue;  // hidden — player already owns this item
+            continue;  // hidden — player already owns this (non-outfit) item
         }
         sVisibleList[sVisibleCount].kind        = VISIBLE_ITEM;
         sVisibleList[sVisibleCount].kItemsIdx    = i;
@@ -619,6 +665,28 @@ static void tryPurchase(int visIdx) {
         return;
     }
 
+    if (sVisibleList[visIdx].kind == VISIBLE_SUMO_OUTFIT) {
+        const int price = kSumoOutfitPrice;
+        u16       rupees = dComIfGs_getRupee();
+        if (rupees < (u16)price) {
+            sStatusMsg          = "Sincerest apologies, but we can't return\nthat to you for that little..";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        if (!dAlbwSumoTest_tryPurchaseShop()) {
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)price);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
+        sStatusMsg            = "May you grapple your foes in style!\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
+        rebuildVisibleList();
+        return;
+    }
+
     if (sVisibleList[visIdx].kind == VISIBLE_SHADE_REFUGE) {
         if (!dShadeRefuge_tryPurchaseReturn()) {
             sStatusMsg          = "I'm afraid that's not enough to light the way back.";
@@ -672,11 +740,16 @@ static void tryPurchase(int visIdx) {
         dMeter2_grantRentalShield(e.itemNo);
     // ============================================
     // NEW CODE — ALBW Port (Outfits)
-    // Clothes outfits (Ordon casual wear) have no inventory slot — grant +
-    // auto-equip + swap the model in one call.  The shop is the only way to don
-    // the Ordon outfit; vanilla collection menus can switch it back off.
+    // Clothes outfits (Ordon, Hero's, Zora, Magic) have no inventory slot — grant
+    // + auto-equip + swap the model in one call so the change shows on shop exit.
+    // Buying a real outfit also drops the sumo overlay if it was worn, so the
+    // chosen clothes show instead of sumo re-applying over them.
     // ============================================
-    } else if (e.itemNo == (u8)dItemNo_WEAR_CASUAL_e) {
+    } else if (e.itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
+               e.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
+               e.itemNo == (u8)dItemNo_WEAR_ZORA_e   ||
+               e.itemNo == (u8)dItemNo_ARMOR_e) {
+        dAlbwSumoTest_clearWorn();
         dMeter2_grantRentalClothes(e.itemNo);
     // ============================================
     // NEW CODE ENDS HERE
@@ -1068,6 +1141,15 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].itemNo         = (u8)dItemNo_SWORD_e;
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
+        } else if (sVisibleList[i].kind == VISIBLE_SUMO_OUTFIT) {
+            sPubList[i].name           = "Sumo Outfit";
+            sPubList[i].price          = kSumoOutfitPrice;
+            sPubList[i].purchasable    = true;
+            sPubList[i].desc           = "Sir. I understand this is your home, but I must ask "
+                                         "that you undress elsewhere.";
+            sPubList[i].itemNo         = 0xff;  // no native wheel icon → fallback
+            sPubList[i].isOocooService = false;
+            sPubList[i].showNameWhenSoldOut = false;
         } else if (sVisibleList[i].kind == VISIBLE_SHADE_REFUGE) {
             sPubList[i].name           = dShadeRefuge_getServiceName();
             sPubList[i].price          = dShadeRefuge_getServicePrice();
