@@ -25,6 +25,7 @@
 namespace {
 
 bool sApplied     = false;  // sumo model currently swapped in
+bool sAppliedHat  = false;  // hat sub-mode active when applied (to detect a hat toggle)
 bool sShowWeapons = false;  // cached per frame: outfit on AND not fists-only
 
 // Phased load handle for "alSumou" (zero-initialized at static init).
@@ -52,7 +53,13 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
         return;
     }
 
+    const bool hat   = dusk::getSettings().game.sumoOutfitHat.getValue();
     const bool fists = dusk::getSettings().game.sumoOutfitFists.getValue();
+
+    // Re-apply (reload the model) if the Link-hat toggle changed while worn.
+    if (sApplied && hat != sAppliedHat) {
+        sApplied = false;
+    }
 
     if (!sApplied) {
         // Ensure alSumou is resident before the swap (avoids the null-model crash
@@ -63,7 +70,8 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
             return;
         }
         i_link->setClothesChange(1);
-        sApplied = true;
+        sApplied    = true;
+        sAppliedHat = hat;
     }
 
     sShowWeapons = !fists;  // sApplied is true here
@@ -75,6 +83,10 @@ bool dAlbwSumoTest_isOutfitActive() {
 
 bool dAlbwSumoTest_showWeapons() {
     return sShowWeapons;
+}
+
+bool dAlbwSumoTest_wantLinkCap() {
+    return dusk::getSettings().game.sumoOutfitHat.getValue();
 }
 
 #endif  // TARGET_PC

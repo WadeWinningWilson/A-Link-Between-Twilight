@@ -52,6 +52,7 @@ UserSettings g_userSettings = {
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
         .flurryRush {"game.flurryRush", false},
         .sumoOutfit {"game.sumoOutfit", false},
+        .sumoOutfitHat {"game.sumoOutfitHat", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
         .shieldDurability {"game.shieldDurability", false},
         .deathRecoveryOrb {"game.deathRecoveryOrb", false},
@@ -312,6 +313,7 @@ void registerSettings() {
     Register(g_userSettings.game.focusedArtsCheat);
     Register(g_userSettings.game.flurryRush);
     Register(g_userSettings.game.sumoOutfit);
+    Register(g_userSettings.game.sumoOutfitHat);
     Register(g_userSettings.game.sumoOutfitFists);
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);

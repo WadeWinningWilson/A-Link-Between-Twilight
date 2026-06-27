@@ -2153,6 +2153,11 @@ EditorWindow::EditorWindow() {
             "on a stage transition (toggle off/on to re-apply). Drives only the model — never the "
             "sumo minigame; not written to the game save." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitHat, "Link Hat",
+            "WIP: wear Link's cap on the sumo body instead of the sumo headpiece. Crash-safe, "
+            "but the cap does not render yet on the sumo skeleton." +
+                Rml::String(kAlbwUnfinishedDisclaimer),
+            [] { return !getSettings().game.sumoOutfit.getValue(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
             "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off." +
                 Rml::String(kAlbwUnfinishedDisclaimer),

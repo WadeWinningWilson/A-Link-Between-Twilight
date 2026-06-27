@@ -26,6 +26,9 @@ bool dAlbwSumoTest_isOutfitActive();
 // checkSwordDraw/checkShieldDraw to draw the sword/shield on the sumo body.
 bool dAlbwSumoTest_showWeapons();
 
+// True when the "Link Hat" sub-toggle is on — read by changeLink.
+bool dAlbwSumoTest_wantLinkCap();
+
 #endif  // TARGET_PC
 
 #endif /* D_ALBW_SUMO_TEST_H */

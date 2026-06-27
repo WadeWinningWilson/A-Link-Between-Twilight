@@ -323,7 +323,28 @@ void daAlink_c::changeLink(int param_0) {
 
         modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x31));
         mpLinkModel = mDoExt_J3DModel__create(modelData, 0x80000, 0x11000084);
-        mpLinkHatModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33)), 0);
+#if TARGET_PC
+        // Sumo Outfit "Link Hat": load Link's cap (Kmdl al_head.bmd) instead of
+        // the sumo headpiece (alSumou 0x33).  On a re-apply while already sumo,
+        // Kmdl may not be resident (the clothes-change skips the arc reload when
+        // the sumo flag is set), so getObjectRes can return NULL; fall back to
+        // the sumo headpiece (kept resident by the sumo module) so we never build
+        // a model from a null J3DModelData and crash.
+        // WIP: the cap loads but does not render on the BLS body (material/draw
+        // issue, not transform — position is correct via body head joint 4).
+        if (dAlbwSumoTest_wantLinkCap()) {
+            J3DModelData* capData =
+                static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_head.bmd"));
+            if (capData == NULL) {
+                capData = static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33));
+            }
+            mpLinkHatModel = initModel(capData, 0);
+        } else
+#endif
+        {
+            mpLinkHatModel =
+                initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33)), 0);
+        }
         mpLinkHandModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x32)), 0);
     } else if (checkCasualWearFlg()) {
         onNoResetFlg2(FLG2_UNK_100000);
