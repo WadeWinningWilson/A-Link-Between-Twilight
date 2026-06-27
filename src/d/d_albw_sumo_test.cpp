@@ -24,7 +24,8 @@
 
 namespace {
 
-bool sApplied = false;  // sumo model currently swapped in
+bool sApplied     = false;  // sumo model currently swapped in
+bool sShowWeapons = false;  // cached per frame: outfit on AND not fists-only
 
 // Phased load handle for "alSumou" (zero-initialized at static init).
 request_of_phase_process_class sPhase;
@@ -39,26 +40,41 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
         return;
     }
 
-    // Editor -> ALBW -> SumoTest toggle (game.sumoTest).  One read per frame.
-    const bool wantSumo = dusk::getSettings().game.sumoTest.getValue();
+    // Editor -> ALBW -> Sumo Outfit (game.sumoOutfit / *Hat / *Fists).
+    const bool want = dusk::getSettings().game.sumoOutfit.getValue();
 
-    if (wantSumo && !sApplied) {
-        // Ensure alSumou is resident before triggering the swap (avoids the
-        // null-model crash in changeLink()).  Phased load — retry next frame.
+    if (!want) {
+        if (sApplied) {
+            i_link->setClothesChange(0);  // revert to the player's equipped clothes
+            sApplied = false;
+        }
+        sShowWeapons = false;
+        return;
+    }
+
+    const bool fists = dusk::getSettings().game.sumoOutfitFists.getValue();
+
+    if (!sApplied) {
+        // Ensure alSumou is resident before the swap (avoids the null-model crash
+        // in changeLink()).  Phased load — retry next frame.
         if (dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) == NULL) {
             dComIfG_resLoad(&sPhase, "alSumou");
+            sShowWeapons = false;
             return;
         }
         i_link->setClothesChange(1);
         sApplied = true;
-    } else if (!wantSumo && sApplied) {
-        i_link->setClothesChange(0);
-        sApplied = false;
     }
+
+    sShowWeapons = !fists;  // sApplied is true here
 }
 
 bool dAlbwSumoTest_isOutfitActive() {
     return sApplied;
+}
+
+bool dAlbwSumoTest_showWeapons() {
+    return sShowWeapons;
 }
 
 #endif  // TARGET_PC

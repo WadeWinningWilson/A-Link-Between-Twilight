@@ -19,9 +19,11 @@
 
 ## What's implemented (builds clean, UNCOMMITTED)
 
-### The SumoTest toggle
-- Setting **`game.sumoTest`** (bool, default off) — `include/dusk/settings.h` + `src/dusk/settings.cpp` (init + Register).
-- UI: **RmlUi Editor → ALBW tab** (`src/dusk/ui/editor.cpp`, `add_tab("ALBW", …)`, alongside FATest / FlurryTEST / True ALBW Mode / Shade's Refuge), as a settings-backed `editor_bool_option`. (NOT the imgui Tools/Debug menu bar.)
+### The Sumo Outfit toggles (Editor → ALBW → "Sumo Outfit" section)
+- `game.sumoOutfit` (master on/off), `game.sumoOutfitHat` (wear Link's cap vs sumo headpiece), `game.sumoOutfitFists` (hide weapons, bare-knuckle) — `include/dusk/settings.h` + `src/dusk/settings.cpp`.
+- UI: **RmlUi Editor → ALBW tab** (`src/dusk/ui/editor.cpp`), under a `add_section("Sumo Outfit")` group, three `editor_bool_option`s (Hat/Fists disabled when the master is off). (NOT the imgui Tools/Debug menu bar. Renamed from the earlier single "SumoTest" toggle / `game.sumoTest`.)
+- **Fists Only:** `dAlbwSumoTest_showWeapons()` = applied && !fists (cached per frame); `checkSwordDraw`/`checkShieldDraw` use it to draw/hide the gear.
+- **Link Hat — PARKED (crashes).** Attempt: `changeLink` sumo branch loads `Kmdl/al_head.bmd` (Link's cap) instead of `alSumou 0x33`. Result: crash. ROOT-CAUSE LEAD: the hat draws via `daAlink_headModelCallBack` → `headModelCallBack(joint_no)` (d_a_alink.cpp:2482), which indexes fixed per-joint arrays (`field_0x3040[joint_no]`, `field_0x302c[joint_no]`, `field_0x3066[joint_no-7]`). Link's cap interacts with that callback differently on the BLS body than the sumo headpiece (which has only 6 head joints, never hitting the `joint_no>=6` branch). Reverted the cap load + toggle + setting for stability. To revisit: trace headModelCallBack / setHatAngle with the cap's joints on the BLS body, or load the cap as a separate overlay model with its own callback. Effort: moderate, focused crash investigation.
 
 ### The model swap module
 - `include/d/d_albw_sumo_test.h` + `src/d/d_albw_sumo_test.cpp` (`#if TARGET_PC`, in `files.cmake`).

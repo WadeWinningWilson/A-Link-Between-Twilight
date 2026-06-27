@@ -19648,7 +19648,7 @@ bool daAlink_c::checkSwordDraw() {
     // ============================================
     daPy_FLG2 drawSuppress = FLG2_UNK_2080000;
 #if TARGET_PC
-    if (dAlbwSumoTest_isOutfitActive()) {
+    if (dAlbwSumoTest_showWeapons()) {
         drawSuppress = FLG2_UNK_2000000;
     }
 #endif
@@ -19661,7 +19661,7 @@ bool daAlink_c::checkShieldDraw() {
     // shield suppression mask for the SumoTest dev outfit (see checkSwordDraw).
     daPy_FLG2 drawSuppress = FLG2_UNK_4080000;
 #if TARGET_PC
-    if (dAlbwSumoTest_isOutfitActive()) {
+    if (dAlbwSumoTest_showWeapons()) {
         drawSuppress = FLG2_UNK_4000000;
     }
 #endif

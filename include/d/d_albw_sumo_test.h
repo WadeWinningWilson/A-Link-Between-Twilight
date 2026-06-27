@@ -19,10 +19,12 @@ class daAlink_c;
 // (Editor -> ALBW tab) and applies/reverts the sumo model swap.
 void dAlbwSumoTest_exec(daAlink_c* i_link);
 
-// True while the SumoTest outfit is currently swapped in (cheap bool, no
-// settings read).  Used by checkSwordDraw/checkShieldDraw to keep weapons
-// visible for the dev outfit (the sumo-flag suppression is for the minigame).
+// True while the Sumo Outfit is currently swapped in (cheap bool, no settings read).
 bool dAlbwSumoTest_isOutfitActive();
+
+// True while the outfit is on AND not "Fists Only" (cheap cached bool).  Used by
+// checkSwordDraw/checkShieldDraw to draw the sword/shield on the sumo body.
+bool dAlbwSumoTest_showWeapons();
 
 #endif  // TARGET_PC
 

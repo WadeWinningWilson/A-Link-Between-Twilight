@@ -250,9 +250,13 @@ struct UserSettings {
         ConfigVar<FocusedArtsCheatMode> focusedArtsCheat;
         // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
         ConfigVar<bool> flurryRush;
-        // SumoTest (dev): swap Link's body to the shirtless sumo model in the field. Visual spike
-        // only; drives the model flag, never the sumo minigame; not written to the game save.
-        ConfigVar<bool> sumoTest;
+        // Sumo Outfit (dev): swap Link's body to the shirtless sumo model in the field. Drives the
+        // model flag only, never the sumo minigame; not written to the game save.
+        //   sumoOutfit      — master on/off
+        //   sumoOutfitFists — hide weapons (fists only)
+        // (Link-hat variant parked — crashes the head-model callback on the BLS body.)
+        ConfigVar<bool> sumoOutfit;
+        ConfigVar<bool> sumoOutfitFists;
         ConfigVar<bool> shieldDurability;
         // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
         ConfigVar<bool> deathRecoveryOrb;
