@@ -29,9 +29,11 @@
 #include "tracy/Tracy.hpp"
 #include <dusk/gamepad_color.h>
 #include <dusk/autosave.h>
+#include "d/d_albw_flurry_rush.h"
 #include "dusk/action_bindings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/menu_pointer.h"
+#include "dusk/sim_time_scale.h"
 #endif
 
 fapGm_HIO_c::fapGm_HIO_c() {
@@ -861,6 +863,12 @@ void fapGm_Execute() {
         DuskLog.debug("fapGm_Execute frame={}", sExecCount);
     }
     sExecCount++;
+
+#if TARGET_PC
+    // Keep world pace aligned with flurry state every sim tick (enemies, FX anims, posMove).
+    // Link stays at 1.0x via daPy_frameCtrl_c::updateFrame() and fopAcM_posMove ALINK exempt.
+    dusk::setSimTimeScale(dFlurryRush_getTimeScale());
+#endif
 
     #if DEBUG
     JUTDbPrint::getManager()->setCharColor(g_HIO.mColor);

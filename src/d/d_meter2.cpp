@@ -31,6 +31,7 @@
 #include "d/d_albw_rental.h"
 #include "d/d_albw_shield.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_flurry_rush.h"
 #include "d/d_attention.h"
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
@@ -270,6 +271,11 @@ static void albwRefreshLockoutState(bool i_playDecSound) {
 }
 
 static void albwDrainMeter(int amount, const std::chrono::steady_clock::time_point& i_now) {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
     sALBWMeter -= amount;
     sLastRecoveryTime = i_now;
     albwRefreshLockoutState(true);
@@ -473,22 +479,43 @@ bool dMeter2_canALBWDoubleHookshot() {
 // ============================================
 void dMeter2_onALBWSword() {
 #if TARGET_PC
-    if (dFocusedArts_shouldSuppressAlbwMeterDrain()) {
+    if (dFlurryRush_shouldSuppressAlbwSpend() || dFocusedArts_shouldSuppressAlbwMeterDrain()) {
         return;
     }
 #endif
     sSwordSwing = true;
 }
-void dMeter2_onALBWSidestep()    { sSidestep    = true; }
-void dMeter2_onALBWBackJump()    { sBackJump    = true; }
-void dMeter2_onALBWRollJump()    { sRollJump    = true; }
+void dMeter2_onALBWSidestep() {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
+    sSidestep = true;
+}
+void dMeter2_onALBWBackJump() {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
+    sBackJump = true;
+}
+void dMeter2_onALBWRollJump() {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
+    sRollJump = true;
+}
 void dMeter2_onALBWHiddenSkill() {
     if (sHiddenSkill) {
         return;
     }
 
 #if TARGET_PC
-    if (dFocusedArts_shouldSuppressAlbwMeterDrain()) {
+    if (dFlurryRush_shouldSuppressAlbwSpend() || dFocusedArts_shouldSuppressAlbwMeterDrain()) {
         return;
     }
 #endif

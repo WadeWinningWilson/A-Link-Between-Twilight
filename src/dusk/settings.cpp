@@ -50,6 +50,7 @@ UserSettings g_userSettings = {
         .hiddenSkillRework {"game.hiddenSkillRework", true},
         .focusedArtsTest {"game.focusedArtsTest", false},
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
+        .flurryRush {"game.flurryRush", false},
         .shieldDurability {"game.shieldDurability", false},
         .deathRecoveryOrb {"game.deathRecoveryOrb", false},
         .wolfLinkCombat {"game.wolfLinkCombat", false},
@@ -307,6 +308,7 @@ void registerSettings() {
     Register(g_userSettings.game.hiddenSkillRework);
     Register(g_userSettings.game.focusedArtsTest);
     Register(g_userSettings.game.focusedArtsCheat);
+    Register(g_userSettings.game.flurryRush);
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);
     Register(g_userSettings.game.wolfLinkCombat);

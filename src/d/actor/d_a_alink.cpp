@@ -56,6 +56,7 @@
 #include "d/d_albw_death_rupee.h"
 #include "d/d_albw_combat.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_flurry_rush.h"
 #include "d/d_albw_shield.h"
 #include "dusk/trace_noop.h"
 #include "d/d_albw_wolf_stun.h"
@@ -1379,6 +1380,7 @@ const daAlink_procInitTable daAlink_c::m_procInitTable[] = {
 #if TARGET_PC
     { &daAlink_c::procCutGsHurricane, 0x101 },
     { &daAlink_c::procCutGsHurricaneTired, 0x10001185 },
+    { &daAlink_c::procFlurryRush, 0x101 },
 #endif
 };
 
@@ -1927,6 +1929,7 @@ static dJntColData_c l_wolfJntColData[] = {
 #include "d/actor/d_a_alink_cut.inc"
 #if TARGET_PC
 #include "d/actor/d_a_alink_hurricane.inc"
+#include "d/actor/d_a_alink_flurry.inc"
 #endif
 
 #include "d/actor/d_a_alink_damage.inc"
@@ -11984,6 +11987,13 @@ BOOL daAlink_c::checkItemAction() {
         }
 #endif
         if (mEquipItem == 0x103) {
+#if TARGET_PC
+            if (dFlurryRush_isActive() && dFlurryRush_getMode() == dFlurryRushMode_Melee &&
+                mProcID != PROC_FLURRY_RUSH && swordSwingTrigger())
+            {
+                return procFlurryRushInit();
+            }
+#endif
             daPy_frameCtrl_c* frame_ctrl = &mUpperFrameCtrl[2];
 
             if ((checkUpperAnime(dRes_ID_ALANM_BCK_CUTDL_e) && frame_ctrl->getFrame() <= mpHIO->mCut.mCutDashLeft.m.mCutAnm.mCancelFrame) ||
@@ -15362,6 +15372,12 @@ void daAlink_c::changeWarpMaterial(daAlink_c::daAlink_WARP_MAT_MODE i_matMode) {
 void daAlink_c::commonProcInit(daAlink_c::daAlink_PROC i_procID) {
     int i;
 
+#if TARGET_PC
+    if (mProcID == PROC_FLURRY_RUSH && i_procID != PROC_FLURRY_RUSH) {
+        dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+#endif
+
     if (mProcID == PROC_TOOL_DEMO) {
         speed.y = 0.0f;
         resetDemoBck();
@@ -16216,6 +16232,9 @@ int daAlink_c::procSideStepInit(int i_jumpDirection) {
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
+    if (i_jumpDirection != DIR_BACKWARD) {
+        dFlurryRush_tryPerfectDodge(dFlurryPerfectDodge_SideStep);
+    }
 #endif
     if (i_jumpDirection == DIR_BACKWARD && !checkHeavyStateOn(TRUE, TRUE) &&
         (checkNoUpperAnime() || checkEquipAnime() || (field_0x2fcc != 0 && checkUpperGuardAnime())))
@@ -16296,6 +16315,15 @@ int daAlink_c::procSideStep() {
 }
 
 int daAlink_c::procSideStepLandInit() {
+#if TARGET_PC
+    if (dFlurryRush_tryEnterProcFromPerfectDodge()) {
+        const int flurryResult = procFlurryRushInit();
+        if (flurryResult != 0) {
+            return flurryResult;
+        }
+        dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+#endif
     commonProcInit(PROC_SIDESTEP_LAND);
 
     if (field_0x2f98 == 1) {
@@ -16974,6 +17002,11 @@ void daAlink_c::backJumpSpeedDec() {
 }
 
 int daAlink_c::procBackJumpInit(int param_0) {
+#if TARGET_PC
+    if (param_0 == 0) {
+        dFlurryRush_tryPerfectDodge(dFlurryPerfectDodge_BackJump);
+    }
+#endif
     u32 isHorseRide = checkHorseRide();
     BOOL is_prev_guardAnm = checkUpperGuardAnime();
     BOOL is_prev_ganonFinish = mProcID == PROC_GANON_FINISH;
@@ -17046,6 +17079,15 @@ int daAlink_c::procBackJump() {
 }
 
 int daAlink_c::procBackJumpLandInit(int i_cutDirection) {
+#if TARGET_PC
+    if (dFlurryRush_tryEnterProcFromPerfectDodge()) {
+        const int flurryResult = procFlurryRushInit();
+        if (flurryResult != 0) {
+            return flurryResult;
+        }
+        dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+#endif
     commonProcInit(PROC_BACK_JUMP_LAND);
     setSingleAnimeParam(ANM_BACKFLIP_LAND, &mpHIO->mBackJump.m.mLandAnm);
     mNormalSpeed = 0.0f;
@@ -18753,6 +18795,10 @@ int daAlink_c::execute() {
         dAlbwWolfStun_update();
         dAlbwLockout_update();
         dFocusedArts_update();
+        dFlurryRush_update();
+        if (dFlurryRush_isActive()) {
+            mDamageTimer = mpHIO->mDamage.m.mInvincibleTime;
+        }
         // ============================================
         // NEW CODE ENDS HERE
         // ============================================

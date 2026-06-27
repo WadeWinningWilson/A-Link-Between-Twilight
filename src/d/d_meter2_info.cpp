@@ -13,6 +13,10 @@
 #include "d/d_msg_object.h"
 #include "d/d_meter_HIO.h"
 
+#if TARGET_PC
+#include "d/d_albw_flurry_rush.h"
+#endif
+
 #include <cstring>
 
 #include "dusk/string.hpp"
@@ -1700,6 +1704,13 @@ void dMeter2Info_setSword(u8 i_itemId, bool i_offItemBit) {
     if (i_offItemBit && dComIfGs_getSelectEquipSword() != 0xFF) {
         dComIfGs_offItemFirstBit(dComIfGs_getSelectEquipSword());
     }
+
+#if TARGET_PC
+    const u8 prevSword = dComIfGs_getSelectEquipSword();
+    if (prevSword != i_itemId) {
+        dFlurryRush_cancelOnSwordEquipChange();
+    }
+#endif
 
     dComIfGs_setSelectEquipSword(i_itemId);
     dComIfGp_setSelectEquipSword(i_itemId);

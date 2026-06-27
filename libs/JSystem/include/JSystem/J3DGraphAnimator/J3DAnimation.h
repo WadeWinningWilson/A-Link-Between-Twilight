@@ -960,6 +960,7 @@ public:
     void init(int endFrame) { init((s16)endFrame); }
     BOOL checkPass(f32);
     void update();
+    void updateWithRateScale(f32 rateScale);
     virtual ~J3DFrameCtrl() {}
 
     u8 getAttribute() const { return mAttribute; }

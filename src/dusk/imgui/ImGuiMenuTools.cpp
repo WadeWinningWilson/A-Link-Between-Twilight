@@ -14,6 +14,8 @@
 #include "d/d_albw_hp_mult.h"
 #include "d/d_attention.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_flurry_rush.h"
+#include "dusk/sim_time_scale.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
 #include "f_op/f_op_actor.h"
@@ -551,6 +553,62 @@ namespace dusk {
             }
             if (ImGui::Button("Reset FA meter")) {
                 dFocusedArts_resetRuntimeState();
+            }
+            if (dFlurryRush_isEnabled()) {
+                ImGui::Separator();
+                ImGui::Text("Flurry Rush (FlurryTEST)");
+                const dFlurryRushSwordProfile profile = dFlurryRush_getEquippedSwordProfile();
+                const dFlurryRushProfile prof = dFlurryRush_getProfile(profile);
+                ImGuiStringViewText(fmt::format("Profile: {} (gate {} cost {} max {} hits)\n",
+                                                dFlurryRush_getProfileLabel(profile),
+                                                prof.spendGate, prof.barCost, prof.maxHits));
+                ImGuiStringViewText(fmt::format(
+                    "FA dodge spend: {} (bank {}/{} gate {} cost {})\n",
+                    dFlurryRush_canOfferPerfectDodgeSpend() ? "ready" : "blocked",
+                    dFocusedArts_getBankCount(), maxBank, prof.spendGate, prof.barCost));
+                ImGuiStringViewText(fmt::format("Active: {} mode={} hits={} started={}\n",
+                                                dFlurryRush_isActive() ? "yes" : "no",
+                                                dFlurryRush_getModeLabel(dFlurryRush_getMode()),
+                                                dFlurryRush_getHitCount(),
+                                                dFlurryRush_hasStartedAttack() ? "yes" : "no"));
+                if (dFlurryRush_isActive() && !dFlurryRush_hasStartedAttack()) {
+                    ImGuiStringViewText(fmt::format("Start gate: {:.2f}s\n",
+                                                    dFlurryRush_getStartGateRemainingSeconds()));
+                }
+                ImGuiStringViewText(fmt::format("World sim: {:.1f}x (live {:.1f}x)  Link: 1.0x  ALBW suppress: {}\n",
+                                                dFlurryRush_getTimeScale(),
+                                                dusk::getSimTimeScale(),
+                                                dFlurryRush_shouldSuppressAlbwSpend() ? "yes"
+                                                                                      : "no"));
+                ImGuiStringViewText(fmt::format("Lock telegraph: {}\n",
+                                                dFlurryRush_getTelegraphLabel(
+                                                    dFlurryRush_queryLockTargetTelegraph())));
+                if (dFlurryRush_hasPendingPerfectDodge()) {
+                    ImGuiStringViewText(fmt::format("Pending perfect dodge: {} (enter proc on land)\n",
+                                                    dFlurryRush_getDodgeKindLabel(
+                                                        dFlurryRush_getPendingDodgeKind())));
+                }
+                const char* lastDodge = dFlurryRush_getLastDodgeAttemptText();
+                if (lastDodge[0] != '\0') {
+                    ImGuiStringViewText(fmt::format("Last dodge try: {}\n", lastDodge));
+                }
+                const char* lastEvent = dFlurryRush_getLastEventText();
+                if (lastEvent[0] != '\0') {
+                    ImGuiStringViewText(fmt::format("Last: {}\n", lastEvent));
+                }
+                if (!dFlurryRush_isActive()) {
+                    if (ImGui::Button("Start Flurry Rush (debug)")) {
+                        dFlurryRush_debugBeginMeleeOnLockTarget();
+                    }
+                } else {
+                    if (ImGui::Button("Mark attack started (debug)")) {
+                        dFlurryRush_onAttackStarted();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("End Flurry Rush")) {
+                        dFlurryRush_end(dFlurryRushEnd_Debug);
+                    }
+                }
             }
         }
         ImGui::End();

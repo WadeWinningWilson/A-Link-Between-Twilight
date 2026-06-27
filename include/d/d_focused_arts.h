@@ -113,4 +113,8 @@ u16 dFocusedArts_getEndingBlowGreatSpinAoePower(u16 i_greatSpinAttackPower);
 bool dFocusedArts_shouldShowShopTierRow();
 int  dFocusedArts_getNextShopTierIndex();  // purchased + 1 (1..3); 0 if sold out
 
+// Flurry Rush perfect-dodge spend (Phase 5). Wood: gate/cost 0 → always allowed, no bank change.
+bool dFocusedArts_canPerfectDodgeSpend(int i_spendGate, int i_barCost);
+bool dFocusedArts_onPerfectDodgeSpend(int i_spendGate, int i_barCost);
+
 #endif

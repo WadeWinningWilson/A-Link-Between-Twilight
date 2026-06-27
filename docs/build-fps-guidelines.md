@@ -17,8 +17,9 @@
 | **5** | **[performance-leaning-2026-06-18.md](performance-leaning-2026-06-18.md)** | Historical drive evidence if you need SHAs / what was ruled out |
 | **6** | **[albw-hud-lop-layout-brief.md](albw-hud-lop-layout-brief.md)** | LoP layout *behavior* spec (feature agent); cross-ref §2 for FPS |
 | **7** | **§ [Addendum: Build artifact failures (2026-06-25)](#addendum-build-artifact-failures-2026-06-25)** (this file) | Symptom → cause, agent avoid/do, `build_run` vs `reconfigure`, recovery |
+| **8** | **§ [Addendum: GPU cache crash (2026-06-26)](#addendum-gpu-cache-crash-2026-06-26)** (this file) | `0xC0000409` / `unhandled tcg src 21` at boot — wipe **both** AppData GPU caches |
 
-**Feature-specific briefs** (read only if the diff touches that area): `boss-fights-handoff.md`, `TrueALBWWorld.md` (TRUETEST / open-world bootstrap), `albw-boss-hp-hud-tuning-brief.md`, `albw-hud-lop-layout-v3-instructions.md`, `testing-parry-rework.md` (RB parry + parry VFX/SFX test toggle).
+**Feature-specific briefs** (read only if the diff touches that area): `boss-fights-handoff.md`, `TrueALBWWorld.md` (TRUETEST / open-world bootstrap), `albw-boss-hp-hud-tuning-brief.md`, `albw-hud-lop-layout-v3-instructions.md`, `testing-parry-rework.md` (RB parry + parry VFX/SFX test toggle), [wind-waker-item-work.md](wind-waker-item-work.md) (retail `itemmdl.arc` WW view models — get-item / held experiments).
 
 ---
 
@@ -259,6 +260,64 @@ Named investigation stash containing bisect/profiling changes that caused **~77 
 3. Optional validation: `local_dev_backup/session/fps_drive_loop.ps1` (build + `load_save` drive until PASS).
 4. Copy `dusklight.exe` to main `build/windows-msvc-relwithdebinfo/` only after PASS if main artifact is suspect.
 5. Clear `DUSK_DRIVE*` before manual play (§2).
+
+---
+
+## Addendum: GPU cache crash (2026-06-26)
+
+**Context:** After agent rebuilds or gfx/material experiments, the game can die **10–45 s after launch** with Windows exit code **`0xC0000409`** (`STATUS_STACK_BUFFER_OVERRUN`). The log shows:
+
+```
+[FATAL | aurora::gfx::gx] unhandled tcg src 21
+```
+
+This is **not** a stack cookie bug in game C++. Aurora aborts when shader generation hits texgen source **`21`** = **`GX_MAX_TEXGENSRC`** (invalid / uninitialized texture coordinate generator). Windows often misreports Aurora fatals as `0xC0000409`.
+
+Typical trigger: **title / logo draw** or **opening Midna demo** (`s_md*.bmd` load) — not in-field gameplay.
+
+### Symptom → cause
+
+| Observed | Likely cause | First action |
+|----------|--------------|--------------|
+| Crash ~10–45 s, exit `0xC0000409` | Stale **GPU shader caches** in AppData | Wipe **both** caches below (game must be closed) |
+| Log ends with `unhandled tcg src 21` | Same — bad cached GX pipeline replay | Same |
+| Crash only after clearing `dawn_cache.db` | **`pipeline_cache.db`** still stale | Delete pipeline cache too |
+| Crash in field after Flurry / WW toggle | Unrelated unless log shows same FATAL | Read newest log under `%AppData%\TwilitRealm\Dusklight\logs\` |
+
+**Not the cause (2026-06-26 bisect):** Flurry Rush Phase 1 (`dFlurryRush_update()` runs from Link proc only). WW `itemmdl` when **not** listed in `files.cmake`.
+
+### Fix (local, safe)
+
+```powershell
+Get-Process dusklight -EA SilentlyContinue | Stop-Process -Force -EA SilentlyContinue
+$dir = "$env:APPDATA\TwilitRealm\Dusklight"
+Remove-Item "$dir\dawn_cache.db*" -Force -ErrorAction SilentlyContinue
+Remove-Item "$dir\pipeline_cache.db*" -Force -ErrorAction SilentlyContinue
+```
+
+Optional backup first: `Move-Item` each `*.db` to `*.db.bak-<timestamp>` instead of `Remove-Item`. Fresh caches rebuild on next launch.
+
+### Agent rules
+
+- After **`files.cmake`** gfx/material changes or Aurora submodule bumps: **launch smoke test** + check log tail — do not assume compile success = boot OK.
+- When bisecting boot crashes: **clear both caches** before each run; do not revert unrelated features on `tcg src 21` alone.
+- Read **`pipeline_cache.db`** in the symptom table — clearing only `dawn_cache.db` is insufficient.
+
+### PowerShell UTF-16 trap (source restore)
+
+**Never** restore tracked sources with:
+
+```powershell
+git show HEAD:path/to/file.cpp > path/to/file.cpp   # writes UTF-16 LE BOM on Windows
+```
+
+That corrupts `.cpp` / `.h` files and causes bizarre compile or runtime failures. **Safe restore:**
+
+```powershell
+python -c "import pathlib,subprocess as s; p=pathlib.Path('path/to/file.cpp'); p.write_bytes(s.check_output(['git','show','HEAD:path/to/file.cpp']))"
+```
+
+Prefer **`git restore path`** only when the user explicitly names the file.
 
 ---
 

@@ -180,6 +180,8 @@ set(DOLZEL_FILES
         src/d/d_albw_hp_mult.cpp
         src/d/d_albw_combat.cpp
         src/d/d_focused_arts.cpp
+        src/dusk/sim_time_scale.cpp
+        src/d/d_albw_flurry_rush.cpp
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp

@@ -554,6 +554,44 @@ void dFocusedArts_onConnectedItemHit() {
     logFaEvent(buf);
 }
 
+bool dFocusedArts_canPerfectDodgeSpend(int i_spendGate, int i_barCost) {
+    if (i_barCost <= 0) {
+        return true;
+    }
+
+    if (!dFocusedArts_isEnabled()) {
+        return false;
+    }
+
+    if (s_inSpendSequence) {
+        return false;
+    }
+
+    return s_bankCount >= i_spendGate && s_bankCount >= i_barCost;
+}
+
+bool dFocusedArts_onPerfectDodgeSpend(int i_spendGate, int i_barCost) {
+    if (i_barCost <= 0) {
+        return true;
+    }
+
+    if (!dFocusedArts_canPerfectDodgeSpend(i_spendGate, i_barCost)) {
+        return false;
+    }
+
+    s_bankCount -= i_barCost;
+    if (s_bankCount < 0) {
+        s_bankCount = 0;
+    }
+
+    clearFillProgress();
+    char buf[72];
+    std::snprintf(buf, sizeof(buf), "flurry dodge spend cost=%d bank=%d/%d", i_barCost, s_bankCount,
+                  dFocusedArts_getMaxBank());
+    logFaEvent(buf);
+    return true;
+}
+
 void dFocusedArts_onPlayerHiddenSkillUse() {
     if (!dFocusedArts_isEnabled()) {
         return;

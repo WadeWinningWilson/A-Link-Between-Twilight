@@ -87,6 +87,16 @@ public:
     daE_OC_c* getTalkOc() { return mpTalk; }
     J3DModel* getOcModel() { return mpMorf->getModel(); }
 
+#if TARGET_PC
+    // Flurry Rush Phase 3 — melee telegraph query (Bokoblin club swings).
+    enum FlurryTelegraphAxis {
+        FlurryTelegraph_None = 0,
+        FlurryTelegraph_Vertical,    // attack B — sidestep
+        FlurryTelegraph_Horizontal,  // attack C — backflip
+    };
+    FlurryTelegraphAxis queryFlurryMeleeTelegraph() const;
+#endif
+
 private:
     /* 0x5a0 */ request_of_phase_process_class mPhaseReqs[2];
     /* 0x5bc */ mDoExt_McaMorfSO* mpMorf;

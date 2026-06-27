@@ -248,6 +248,8 @@ struct UserSettings {
         ConfigVar<bool> focusedArtsTest;
         // Playtest cheat: effective shop tier 3; WithDebug shows in-game FA overlay.
         ConfigVar<FocusedArtsCheatMode> focusedArtsCheat;
+        // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
+        ConfigVar<bool> flurryRush;
         ConfigVar<bool> shieldDurability;
         // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
         ConfigVar<bool> deathRecoveryOrb;

@@ -4,7 +4,7 @@
 
 > Continue combat refinement work — read `docs/combat-refinements-handoff.md` first.
 
-**Related:** [boss-fights-handoff.md](boss-fights-handoff.md) (boss layer), [shield-combat.md](shield-combat.md) (parry/guard), [albw-port.md](albw-port.md) (settings overview).
+**Related:** [boss-fights-handoff.md](boss-fights-handoff.md) (boss layer), [shield-combat.md](shield-combat.md) (parry/guard), [albw-port.md](albw-port.md) (settings overview), [albw-flurry-rush-brief.md](albw-flurry-rush-brief.md) (Flurry Rush + FA spend-on-dodge).
 
 ---
 
@@ -14,6 +14,7 @@
 |---|--------|--------|
 | 1 | **Enemy windup targeting** (ALBW strafe-guard exposure) | **In progress** — Bokoblin patch landed; playtest + roll out to other enemies |
 | 2 | **Focused Arts** (Hidden Skill Rework) | **Tier API + test settings shipped** — combat hooks + shop rows + HUD next |
+| 3 | **Flurry Rush** (perfect dodge + Back Slice aerial bow) | **Phases 1–5 + snap landed** — Phase 6+ in [albw-flurry-rush-brief.md](albw-flurry-rush-brief.md) |
 
 ---
 
@@ -240,6 +241,7 @@ Purchased from shop: **Focused Arts tier 1 / 2 / 3** (Postman shop **Upgrades & 
 |--------|-------------------|
 | **Hidden Skill** (during spend sequence) | **Yes** |
 | **Damaging item** (during spend sequence) | **Yes** |
+| **Perfect dodge → Flurry Rush** | **Yes** — profile bar cost (wood **0**); gate Ordon **2**, Master/Light **3**; **not both** with HS on same full bank |
 | **Shield bash** | **Only** **connected bash** at **T1 spend Special Finisher** when **tier 3 purchased** |
 | Other bashes | **No** — bash damage follows FA **stage column** (15×1 … ×5); without tier 3 finisher, bash behaves like **T1 charged** (15×1) |
 

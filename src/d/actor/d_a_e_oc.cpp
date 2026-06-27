@@ -16,6 +16,10 @@
 #include "f_op/f_op_camera_mng.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "d/d_albw_flurry_rush.h"
+#endif
+
 
 enum OC_ACTIONS {
     E_OC_ACTION_WAIT,
@@ -2562,6 +2566,15 @@ void daE_OC_c::cc_set() {
     cXyz my_vec_lhs;
     cXyz my_vec_rhs;
     J3DModel *model = mpMorf->getModel();
+    f32 bodySphereR = 50.0f;
+    f32 bodySphereR2 = 45.0f;
+#if TARGET_PC
+    // Slow-mo anim desyncs hurt spheres from Link's 1.0x sword; widen only on the pinned target.
+    if (dFlurryRush_isTargetActor(this)) {
+        bodySphereR = 65.0f;
+        bodySphereR2 = 58.0f;
+    }
+#endif
     mDoMtx_stack_c::copy(model->getAnmMtx(0x11));
     my_vec_lhs.set(10.0f, 0.0f, 0.0f);
     mDoMtx_stack_c::multVec(&my_vec_lhs, &eyePos);
@@ -2571,13 +2584,13 @@ void daE_OC_c::cc_set() {
     my_vec_lhs.set(10.0f, 10.0f, 0.0f);
     mDoMtx_stack_c::multVec(&my_vec_lhs, &my_vec_rhs);
     mSphs_cc[0].SetC(my_vec_rhs);
-    mSphs_cc[0].SetR(50.0f);
+    mSphs_cc[0].SetR(bodySphereR);
     dComIfG_Ccsp()->Set(&mSphs_cc[0]);
     mDoMtx_stack_c::copy(model->getAnmMtx(0x11));
     my_vec_lhs.set(10.0f, 0.0f, 0.0f);
     mDoMtx_stack_c::multVec(&my_vec_lhs, &my_vec_rhs);
     mSphs_cc[1].SetC(my_vec_rhs);
-    mSphs_cc[1].SetR(45.0f);
+    mSphs_cc[1].SetR(bodySphereR2);
     dComIfG_Ccsp()->Set(&mSphs_cc[1]);
     mDoMtx_stack_c::copy(model->getAnmMtx(0xc));
     my_vec_lhs.set(0.0f, 0.0f, 70.0f);
@@ -2871,5 +2884,36 @@ DUSK_PROFILE actor_process_profile_definition DUSK_CONST g_profile_E_OC = {
     /* Group        */ fopAc_ENEMY_e,
     /* Cull Type    */ fopAc_CULLBOX_CUSTOM_e,
 };
+
+#if TARGET_PC
+daE_OC_c::FlurryTelegraphAxis daE_OC_c::queryFlurryMeleeTelegraph() const {
+    // E_OC club attacks: BCK 5 = vertical club (sidestep), BCK 6 = horizontal slash (backflip).
+    // Active hit spheres turn on at frame 14 (see executeAttack).
+    static constexpr int kOcActionAttack = E_OC_ACTION_ATTACK;
+    static constexpr f32 kTelegraphEndFrame = 14.0f;
+    static constexpr f32 kVerticalStartFrame = 8.0f;
+    static constexpr f32 kHorizontalStartFrame = 6.0f;
+
+    if (mActionMode != kOcActionAttack || mpMorf == nullptr) {
+        return FlurryTelegraph_None;
+    }
+
+    if (mOcState != 1 && mOcState != 2) {
+        return FlurryTelegraph_None;
+    }
+
+    const f32 frame = mpMorf->getFrame();
+    if (frame < kTelegraphEndFrame) {
+        if (mOcState == 1 && frame >= kVerticalStartFrame) {
+            return FlurryTelegraph_Vertical;
+        }
+        if (mOcState == 2 && frame >= kHorizontalStartFrame) {
+            return FlurryTelegraph_Horizontal;
+        }
+    }
+
+    return FlurryTelegraph_None;
+}
+#endif
 
 AUDIO_INSTANCES;

@@ -2035,6 +2035,11 @@ EditorWindow::EditorWindow() {
             "Enables the Focused Arts charge bank, meter fill, tier spend columns, and special "
             "finishers. Off keeps standard ALBW hidden-skill meter costs and rework combat only." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.flurryRush, "FlurryTEST",
+            "Enables Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial-bow finisher). "
+            "Requires Focused Arts Test." +
+                Rml::String(kAlbwUnfinishedDisclaimer),
+            [] { return !getSettings().game.focusedArtsTest.getValue(); });
         static constexpr std::array<const char*, 5> kFocusedArtsCheatModes = {
             "Off",
             "FA Cheat ON",

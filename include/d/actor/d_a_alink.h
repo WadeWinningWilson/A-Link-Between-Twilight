@@ -1369,6 +1369,7 @@ public:
         /* 0x15F */ PROC_QUAKE_WAIT,
         /* 0x160 */ PROC_CUT_GS_HURRICANE,
         /* 0x161 */ PROC_CUT_GS_HURRICANE_TIRED,
+        /* 0x162 */ PROC_FLURRY_RUSH,
 
         PROC_MAX,
     };
@@ -1920,6 +1921,18 @@ public:
     int procCutGsHurricane();
     int procCutGsHurricaneTiredInit();
     int procCutGsHurricaneTired();
+    int procFlurryRushInit();
+    int procFlurryRush();
+    f32 flurryEngageDistance() const;
+    bool flurryIsWithinEngageRange(fopAc_ac_c* i_target) const;
+    void flurryEnterWaitFirstSwing();
+    bool flurryUpdateSnapToTarget();
+    void flurryBeginSwing(int i_swingIndex);
+    bool flurryCheckSwordHit();
+    void flurryReserveChainInput();
+    bool flurryConsumeChainInput();
+    bool flurryTryChainSwing(int i_nextSwingIndex);
+    int flurryExitToWait(int i_reason);
 #endif
     int procCutTurnChargeInit();
     int procCutTurnCharge();

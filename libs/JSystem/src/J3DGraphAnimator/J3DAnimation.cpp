@@ -5,6 +5,10 @@
 #include "JSystem/J3DGraphBase/J3DStruct.h"
 #include "JSystem/JMath/JMath.h"
 
+#if TARGET_PC
+extern "C" float dusk_world_sim_time_scale;
+#endif
+
 void J3DFrameCtrl::init(s16 endFrame) {
     mAttribute = EMode_LOOP;
     mState = 0;
@@ -134,8 +138,20 @@ int J3DFrameCtrl::checkPass(f32 passFrame) {
 
 
 void J3DFrameCtrl::update() {
+#if TARGET_PC
+    updateWithRateScale(dusk_world_sim_time_scale);
+#else
+    updateWithRateScale(1.0f);
+#endif
+}
+
+#if TARGET_PC
+void J3DFrameCtrl::updateWithRateScale(f32 rateScale) {
+#else
+void J3DFrameCtrl::updateWithRateScale(f32 rateScale) {
+#endif
     mState = 0;
-    mFrame += mRate;
+    mFrame += mRate * rateScale;
 
     switch (mAttribute) {
     case EMode_NONE:
