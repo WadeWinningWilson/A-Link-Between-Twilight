@@ -42,10 +42,12 @@
 #include "d/d_focused_arts.h"
 #include "d/d_albw_sumo_test.h"
 #include "d/d_albw_outfit.h"
+#include "d/d_albw_wardrobe.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
 #include "dusk/settings.h"
+#include "dusk/action_bindings.h"
 #include "dusk/truetest.hpp"
 #include "dusk/ui/ui.hpp"
 #include "m_Do/m_Do_controller_pad.h"
@@ -78,14 +80,13 @@ struct ALBWShopPage {
     const char*      title;   // page heading + counter shown via dALBWRental_getPageTitle()
 };
 
-// Page order = left-to-right tab order.  Uncomment CAT_SWORDS (and tag entries)
-// to add the swords page later.
+// Page order = left-to-right tab order (Items → Swords → Shields → Outfits → Upgrades).
 static const ALBWShopPage kPages[] = {
-    { CAT_SHIELDS,  "Shields"             },
     { CAT_ITEMS,    "Items"               },
-    { CAT_ARMOR,    "Armor"               },
+    { CAT_SWORDS,   "Swords"              },
+    { CAT_SHIELDS,  "Shields"             },
+    { CAT_ARMOR,    "Outfits"             },
     { CAT_UPGRADES, "Upgrades & Services" },
-    // { CAT_SWORDS, "Swords" },
 };
 static constexpr int kPageCount = sizeof(kPages) / sizeof(kPages[0]);
 // ============================================
@@ -248,6 +249,38 @@ static const ALBWRentalEntry kItems[] = {
 };
 static constexpr int kItemCount = sizeof(kItems) / sizeof(kItems[0]);
 
+// Quick Swap wardrobe storage — swords page (storage/retrieve only when Quick Swap ON).
+struct ALBWSwordEntry {
+    const char* name;
+    u8          itemNo;
+    const char* desc;
+};
+
+static const ALBWSwordEntry kSwords[] = {
+    { "Wooden Sword",
+      (u8)dItemNo_WOOD_STICK_e,
+      "Is this a toy or a sword? I must say it was best suited as a gift you gave "
+      "that boy earlier!" },
+    { "Ordon Sword",
+      (u8)dItemNo_SWORD_e,
+      "Surely crafted by this town's best swordsman. The man who was here earlier "
+      "told me to send you his regards." },
+    { "Master Sword",
+      (u8)dItemNo_MASTER_SWORD_e,
+      "I'm quite honored you would even trust me with this!" },
+    { "Light Sword",
+      (u8)dItemNo_LIGHT_SWORD_e,
+      "This one seems to be emanating power…wait doesn't this look just like..?" },
+};
+static constexpr int kSwordCount = sizeof(kSwords) / sizeof(kSwords[0]);
+
+static constexpr const char* kStorageStoreDesc =
+    "Do you want to store this for later? A storage fee will apply upon its return.";
+static constexpr const char* kStorageStoreOkMsg =
+    "Stored safely with the Postman.\nYou can retrieve it anytime for 100 rupees.";
+static constexpr const char* kStorageRetrieveOkMsg =
+    "Returned to your active wardrobe.\nThank you for your patronage!";
+
 // ============================================
 // Timing constants (framerate-independent)
 // ============================================
@@ -286,10 +319,13 @@ static constexpr int kSumoOutfitPrice = 50;
 struct VisibleEntry {
     VisibleKind kind;
     int         kItemsIdx;   // index into kItems[] when kind == VISIBLE_ITEM
+    u8          rowItemNo;   // item id when kItemsIdx < 0 (sword storage rows)
     bool        purchasable;
+    bool        storageStore;
+    bool        storageRetrieve;
 };
 
-static constexpr int kVisibleListMax = 3 + kItemCount + 3;  // MQ rows + FA tier + services + sumo
+static constexpr int kVisibleListMax = 3 + kItemCount + kSwordCount + 3;
 static VisibleEntry sVisibleList[kVisibleListMax];
 static int          sVisibleCount     = 0;  // total rows shown (inc. ?????)
 static int          sAvailCount       = 0;  // purchasable rows only (for button state)
@@ -423,7 +459,109 @@ static bool categoryHasVisibleRows(ALBWShopCategory cat) {
             return true;
         }
     }
+    if (cat == CAT_SWORDS && dusk::isDpadQuickSwapEnabled()) {
+        for (int i = 0; i < kSwordCount; ++i) {
+            const u8 itemNo = kSwords[i].itemNo;
+            if (dAlbwWardrobe_isStoredItemNo(itemNo) || dAlbwWardrobe_isActiveSword(itemNo)) {
+                return true;
+            }
+        }
+    }
     return false;
+}
+
+static bool appendVisibleRow(const VisibleEntry& row) {
+    if (sVisibleCount >= kVisibleListMax) {
+        return false;
+    }
+    sVisibleList[sVisibleCount++] = row;
+    if (row.purchasable) {
+        sAvailCount++;
+    }
+    return true;
+}
+
+static dAlbwOutfitKind outfitKindForItemNo(u8 itemNo) {
+    switch (itemNo) {
+    case (u8)dItemNo_WEAR_CASUAL_e: return D_ALBW_OUTFIT_ORDON;
+    case (u8)dItemNo_WEAR_KOKIRI_e: return D_ALBW_OUTFIT_HEROS;
+    case (u8)dItemNo_WEAR_ZORA_e:   return D_ALBW_OUTFIT_ZORA;
+    case (u8)dItemNo_ARMOR_e:       return D_ALBW_OUTFIT_MAGIC;
+    case (u8)dItemNo_DEITY_ARMOR_e: return D_ALBW_OUTFIT_DEITY;
+    default:                        return D_ALBW_OUTFIT_COUNT;
+    }
+}
+
+static bool appendStorageRowsForItem(u8 itemNo, const char* desc) {
+    if (!dusk::isDpadQuickSwapEnabled() || !dAlbwWardrobe_isStorableItemNo(itemNo)) {
+        return false;
+    }
+    if (dAlbwWardrobe_isStoredItemNo(itemNo)) {
+        VisibleEntry row{};
+        row.kind             = VISIBLE_ITEM;
+        row.kItemsIdx        = -1;
+        row.rowItemNo        = itemNo;
+        row.purchasable      = true;
+        row.storageRetrieve  = true;
+        return appendVisibleRow(row);
+    }
+    if (dMeter2_isShieldItem(itemNo)) {
+        if (!dMeter2_shieldIsOwned(itemNo)) {
+            return false;
+        }
+    } else if (dComIfGs_isItemFirstBit(itemNo)) {
+        // swords and other first-bit items
+    } else {
+        const dAlbwOutfitKind kind = outfitKindForItemNo(itemNo);
+        if (kind >= D_ALBW_OUTFIT_COUNT || !dAlbwOutfit_isOwned(kind)) {
+            return false;
+        }
+    }
+    VisibleEntry row{};
+    row.kind            = VISIBLE_ITEM;
+    row.kItemsIdx       = -1;
+    row.rowItemNo       = itemNo;
+    row.purchasable     = true;
+    row.storageStore    = true;
+    (void)desc;
+    return appendVisibleRow(row);
+}
+
+static bool appendStorageRowsForOutfit(dAlbwOutfitKind kind) {
+    if (!dusk::isDpadQuickSwapEnabled() || !dAlbwWardrobe_isStorableOutfit(kind)) {
+        return false;
+    }
+    if (kind == D_ALBW_OUTFIT_SUMO) {
+        if (dAlbwWardrobe_isStoredOutfit(kind)) {
+            VisibleEntry row{};
+            row.kind            = VISIBLE_SUMO_OUTFIT;
+            row.purchasable     = true;
+            row.storageRetrieve = true;
+            return appendVisibleRow(row);
+        }
+        if (!dAlbwOutfit_isOwned(kind)) {
+            return false;
+        }
+        VisibleEntry row{};
+        row.kind         = VISIBLE_SUMO_OUTFIT;
+        row.purchasable  = true;
+        row.storageStore = true;
+        return appendVisibleRow(row);
+    }
+
+    int itemNo = -1;
+    switch (kind) {
+    case D_ALBW_OUTFIT_ORDON: itemNo = dItemNo_WEAR_CASUAL_e; break;
+    case D_ALBW_OUTFIT_HEROS: itemNo = dItemNo_WEAR_KOKIRI_e; break;
+    case D_ALBW_OUTFIT_ZORA:  itemNo = dItemNo_WEAR_ZORA_e; break;
+    case D_ALBW_OUTFIT_MAGIC: itemNo = dItemNo_ARMOR_e; break;
+    case D_ALBW_OUTFIT_DEITY: itemNo = dItemNo_DEITY_ARMOR_e; break;
+    default: break;
+    }
+    if (itemNo < 0) {
+        return false;
+    }
+    return appendStorageRowsForItem(static_cast<u8>(itemNo), nullptr);
 }
 
 // Rebuild the list of category pages that currently have content.  Called on
@@ -447,7 +585,7 @@ static void rebuildActivePages() {
 // Category of the page the player is currently viewing.
 static ALBWShopCategory currentCategory() {
     if (sActivePageCount <= 0) {
-        return CAT_SHIELDS;  // no active pages → empty list → "Not in stock yet"
+        return CAT_ITEMS;
     }
     if (sCurrentPageIdx < 0)                 sCurrentPageIdx = 0;
     if (sCurrentPageIdx >= sActivePageCount) sCurrentPageIdx = sActivePageCount - 1;
@@ -464,6 +602,7 @@ static ALBWShopCategory currentCategory() {
 static void rebuildVisibleList() {
     sVisibleCount = 0;
     sAvailCount   = 0;
+    std::memset(sVisibleList, 0, sizeof(sVisibleList));
 
     // ============================================
     // MODIFIED CODE — ALBW Port (Shop Category Pages)
@@ -504,13 +643,21 @@ static void rebuildVisibleList() {
     // item), so it is injected here rather than in kItems.  Sits at the TOP of
     // the Armor page (before Ordon Clothes); shown once eligible (True ALBW, or
     // the Ordon sumo wrestler has been met) and not yet owned/stored.
-    if (cat == CAT_ARMOR && dAlbwSumoTest_isShopEligible() &&
-        sVisibleCount < (int)(sizeof(sVisibleList) / sizeof(sVisibleList[0]))) {
-        sVisibleList[sVisibleCount].kind        = VISIBLE_SUMO_OUTFIT;
-        sVisibleList[sVisibleCount].kItemsIdx   = -1;
-        sVisibleList[sVisibleCount].purchasable = true;
-        sAvailCount++;
-        sVisibleCount++;
+    if (cat == CAT_ARMOR && sVisibleCount < kVisibleListMax) {
+        if (dusk::isDpadQuickSwapEnabled() && dAlbwOutfit_isOwned(D_ALBW_OUTFIT_SUMO)) {
+            appendStorageRowsForOutfit(D_ALBW_OUTFIT_SUMO);
+        } else if (dAlbwSumoTest_isShopEligible()) {
+            VisibleEntry row{};
+            row.kind        = VISIBLE_SUMO_OUTFIT;
+            row.purchasable = true;
+            appendVisibleRow(row);
+        }
+    }
+
+    if (cat == CAT_SWORDS && dusk::isDpadQuickSwapEnabled()) {
+        for (int i = 0; i < kSwordCount; ++i) {
+            appendStorageRowsForItem(kSwords[i].itemNo, kSwords[i].desc);
+        }
     }
 
     for (int i = 0; i < kItemCount; ++i) {
@@ -518,6 +665,22 @@ static void rebuildVisibleList() {
         if (entry.category != cat) {
             continue;  // not on this page
         }
+
+        const bool qsStorage = dusk::isDpadQuickSwapEnabled();
+        const dAlbwOutfitKind outfitKind = outfitKindForItemNo(entry.itemNo);
+
+        // Quick Swap: wardrobe storage rows for shields and armor outfits.
+        if (qsStorage && entry.category == CAT_SHIELDS) {
+            if (appendStorageRowsForItem(entry.itemNo, entry.desc)) {
+                continue;
+            }
+        }
+        if (qsStorage && outfitKind < D_ALBW_OUTFIT_COUNT) {
+            if (appendStorageRowsForOutfit(outfitKind)) {
+                continue;
+            }
+        }
+
         // ALBW Port: clothes outfits (Ordon/Hero's/Zora) stay listed as buyable
         // even while owned or worn, so the shop doubles as an outfit switcher
         // (buying re-equips).  Other items keep the normal eligible/owned gating.
@@ -529,13 +692,11 @@ static void rebuildVisibleList() {
         if (eligible && owned) {
             continue;  // hidden — player already owns this (non-outfit) item
         }
-        sVisibleList[sVisibleCount].kind        = VISIBLE_ITEM;
-        sVisibleList[sVisibleCount].kItemsIdx    = i;
-        sVisibleList[sVisibleCount].purchasable = eligible && !owned;
-        if (sVisibleList[sVisibleCount].purchasable) {
-            sAvailCount++;
-        }
-        sVisibleCount++;
+        VisibleEntry row{};
+        row.kind        = VISIBLE_ITEM;
+        row.kItemsIdx   = i;
+        row.purchasable = eligible && !owned;
+        appendVisibleRow(row);
     }
 
     // "Return to Last Shade Watcher" sits directly ABOVE Oocoo on the
@@ -588,8 +749,87 @@ static void changePage(int dir) {
 
 // Attempt to purchase the item currently selected in the visible list.
 // Silent no-op if the item is a ????? (not yet eligible).
+static const ALBWRentalEntry* rentalEntryForItemNo(u8 itemNo) {
+    for (int i = 0; i < kItemCount; ++i) {
+        if (kItems[i].itemNo == itemNo) {
+            return &kItems[i];
+        }
+    }
+    return nullptr;
+}
+
+static const char* swordNameForItemNo(u8 itemNo) {
+    for (int i = 0; i < kSwordCount; ++i) {
+        if (kSwords[i].itemNo == itemNo) {
+            return kSwords[i].name;
+        }
+    }
+    return "Sword";
+}
+
+static const char* swordDescForItemNo(u8 itemNo) {
+    for (int i = 0; i < kSwordCount; ++i) {
+        if (kSwords[i].itemNo == itemNo) {
+            return kSwords[i].desc;
+        }
+    }
+    return nullptr;
+}
+
+static u8 visibleRowItemNo(const VisibleEntry& row) {
+    if (row.kItemsIdx >= 0) {
+        return kItems[row.kItemsIdx].itemNo;
+    }
+    return row.rowItemNo;
+}
+
+static void tryStorageAction(int visIdx) {
+    if (visIdx < 0 || visIdx >= sVisibleCount) {
+        return;
+    }
+    const VisibleEntry& row = sVisibleList[visIdx];
+    if (!row.storageStore && !row.storageRetrieve) {
+        return;
+    }
+
+    char err[96] = {};
+    bool ok      = false;
+    if (row.kind == VISIBLE_SUMO_OUTFIT) {
+        if (row.storageStore) {
+            ok = dAlbwWardrobe_tryStoreOutfit(D_ALBW_OUTFIT_SUMO, err, static_cast<int>(sizeof(err)));
+        } else {
+            ok = dAlbwWardrobe_tryRetrieveOutfit(D_ALBW_OUTFIT_SUMO, err, static_cast<int>(sizeof(err)));
+        }
+    } else {
+        const u8 itemNo = visibleRowItemNo(row);
+        if (row.storageStore) {
+            ok = dAlbwWardrobe_tryStoreItemNo(itemNo, err, static_cast<int>(sizeof(err)));
+        } else {
+            ok = dAlbwWardrobe_tryRetrieveItemNo(itemNo, err, static_cast<int>(sizeof(err)));
+        }
+    }
+
+    if (!ok) {
+        sStatusMsg            = err[0] != '\0' ? err : "That cannot be stored right now.";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownFailure;
+        sJustFailedPurchase   = true;
+        return;
+    }
+
+    sPurchasedThisSession = true;
+    sJustPurchased        = row.storageRetrieve;
+    sStatusMsg            = row.storageStore ? kStorageStoreOkMsg : kStorageRetrieveOkMsg;
+    sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+    rebuildActivePages();
+    rebuildVisibleList();
+}
+
 static void tryPurchase(int visIdx) {
     if (visIdx < 0 || visIdx >= sVisibleCount) {
+        return;
+    }
+    if (sVisibleList[visIdx].storageStore || sVisibleList[visIdx].storageRetrieve) {
+        tryStorageAction(visIdx);
         return;
     }
     if (!sVisibleList[visIdx].purchasable) {
@@ -907,6 +1147,7 @@ void dALBWRental_open() {
     // NEW CODE ENDS HERE
     // ============================================
     rebuildVisibleList();
+    dAlbwWardrobe_debugLogRecoveryState();
 
     // Greeting A — returning customer (items stripped at least once).  One page.
     // Greeting B — first visit.  Three native boxes: intro, then one sentence each.
@@ -1125,6 +1366,8 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].itemNo         = (u8)dItemNo_KAKERA_HEART_e;
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
         } else if (sVisibleList[i].kind == VISIBLE_MQ_METER) {
             sPubList[i].name           = dAlbwMQ_getMeterShopName();
             sPubList[i].price          = sVisibleList[i].purchasable
@@ -1134,6 +1377,8 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].itemNo         = (u8)dItemNo_MAGIC_LV1_e;
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
         } else if (sVisibleList[i].kind == VISIBLE_FA_TIER) {
             const int tier = dFocusedArts_getNextShopTierIndex();
             sPubList[i].name           = dFocusedArts_getShopTierName(tier);
@@ -1144,40 +1389,77 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].itemNo         = (u8)dItemNo_SWORD_e;
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
         } else if (sVisibleList[i].kind == VISIBLE_SUMO_OUTFIT) {
-            sPubList[i].name           = "Sumo Outfit";
-            sPubList[i].price          = kSumoOutfitPrice;
-            sPubList[i].purchasable    = true;
-            sPubList[i].desc           = "Sir. I understand this is your home, but I must ask "
-                                         "that you undress elsewhere.";
-            sPubList[i].itemNo         = 0xff;  // no native wheel icon → fallback
-            sPubList[i].isOocooService = false;
-            sPubList[i].showNameWhenSoldOut = false;
+            sPubList[i].name                = "Sumo Outfit";
+            sPubList[i].isStorageStore      = sVisibleList[i].storageStore;
+            sPubList[i].isStorageRetrieve   = sVisibleList[i].storageRetrieve;
+            sPubList[i].purchasable         = sVisibleList[i].purchasable;
+            sPubList[i].isOocooService      = false;
+            sPubList[i].showNameWhenSoldOut   = false;
+            sPubList[i].itemNo              = 0xff;
+            if (sVisibleList[i].storageStore) {
+                sPubList[i].price = 0;
+                sPubList[i].desc  = kStorageStoreDesc;
+            } else if (sVisibleList[i].storageRetrieve) {
+                sPubList[i].price = kAlbwWardrobeStorageRetrievePrice;
+                sPubList[i].desc  = "Sir. I understand this is your home, but I must ask "
+                                    "that you undress elsewhere.";
+            } else {
+                sPubList[i].price = kSumoOutfitPrice;
+                sPubList[i].desc  = "Sir. I understand this is your home, but I must ask "
+                                    "that you undress elsewhere.";
+            }
         } else if (sVisibleList[i].kind == VISIBLE_SHADE_REFUGE) {
-            sPubList[i].name           = dShadeRefuge_getServiceName();
-            sPubList[i].price          = dShadeRefuge_getServicePrice();
-            sPubList[i].purchasable    = true;
-            sPubList[i].desc           = dShadeRefuge_getServiceDesc();
-            sPubList[i].itemNo         = 0xff;  // no wheel icon → letter/envelope fallback
-            sPubList[i].isOocooService = false;
+            sPubList[i].name                = dShadeRefuge_getServiceName();
+            sPubList[i].price               = dShadeRefuge_getServicePrice();
+            sPubList[i].purchasable         = true;
+            sPubList[i].desc                = dShadeRefuge_getServiceDesc();
+            sPubList[i].itemNo              = 0xff;
+            sPubList[i].isOocooService      = false;
             sPubList[i].showNameWhenSoldOut = false;
+            sPubList[i].isStorageStore      = false;
+            sPubList[i].isStorageRetrieve   = false;
         } else if (sVisibleList[i].kind == VISIBLE_OOCOO) {
-            sPubList[i].name           = dALBWOocoo_getServiceName();
-            sPubList[i].price          = dALBWOocoo_getServicePrice();
-            sPubList[i].purchasable    = true;
-            sPubList[i].desc           = dALBWOocoo_getServiceDesc();
-            sPubList[i].itemNo         = (u8)dItemNo_DUNGEON_BACK_e;
-            sPubList[i].isOocooService = true;
-            sPubList[i].showNameWhenSoldOut = false;
+            sPubList[i].name                = dALBWOocoo_getServiceName();
+            sPubList[i].price               = dALBWOocoo_getServicePrice();
+            sPubList[i].purchasable         = true;
+            sPubList[i].desc                = dALBWOocoo_getServiceDesc();
+            sPubList[i].itemNo              = (u8)dItemNo_DUNGEON_BACK_e;
+            sPubList[i].isOocooService      = true;
+            sPubList[i].showNameWhenSoldOut   = false;
+            sPubList[i].isStorageStore      = false;
+            sPubList[i].isStorageRetrieve   = false;
         } else {
-            const ALBWRentalEntry& e = kItems[sVisibleList[i].kItemsIdx];
-            sPubList[i].name           = e.name;
-            sPubList[i].price          = e.price;
-            sPubList[i].purchasable    = sVisibleList[i].purchasable;
-            sPubList[i].desc           = sVisibleList[i].purchasable ? e.desc : nullptr;
-            sPubList[i].itemNo         = e.itemNo;
-            sPubList[i].isOocooService = false;
+            const u8 itemNo = visibleRowItemNo(sVisibleList[i]);
+            const ALBWRentalEntry* rental = sVisibleList[i].kItemsIdx >= 0
+                                                ? &kItems[sVisibleList[i].kItemsIdx]
+                                                : rentalEntryForItemNo(itemNo);
+            sPubList[i].isStorageStore    = sVisibleList[i].storageStore;
+            sPubList[i].isStorageRetrieve = sVisibleList[i].storageRetrieve;
+            sPubList[i].purchasable       = sVisibleList[i].purchasable;
+            sPubList[i].isOocooService    = false;
             sPubList[i].showNameWhenSoldOut = false;
+            sPubList[i].itemNo            = itemNo;
+            if (rental != nullptr) {
+                sPubList[i].name = rental->name;
+            } else {
+                sPubList[i].name = swordNameForItemNo(itemNo);
+            }
+            if (sVisibleList[i].storageStore) {
+                sPubList[i].price = 0;
+                sPubList[i].desc  = kStorageStoreDesc;
+            } else if (sVisibleList[i].storageRetrieve) {
+                sPubList[i].price = kAlbwWardrobeStorageRetrievePrice;
+                sPubList[i].desc  = rental != nullptr ? rental->desc : swordDescForItemNo(itemNo);
+            } else if (rental != nullptr) {
+                sPubList[i].price = rental->price;
+                sPubList[i].desc  = sVisibleList[i].purchasable ? rental->desc : nullptr;
+            } else {
+                sPubList[i].price = 0;
+                sPubList[i].desc  = nullptr;
+            }
         }
     }
     *outCount = sVisibleCount;

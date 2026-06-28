@@ -29,6 +29,7 @@
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_master_quest.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_wardrobe.h"
 #include "d/d_albw_shield.h"
 #include "d/d_albw_sumo_test.h"
 #include "d/d_focused_arts.h"
@@ -2159,6 +2160,14 @@ void dMeter2_c::moveKantera() {
             allowPassiveRecovery = allowPassiveRecovery && dMeter2_isALBWLockoutZTargetRecovery();
         } else if (sALBWPlayerIdle) {
             sRecoveryRate = (sNormalRecovery * 105) / 100;
+        }
+
+        const f32 wardrobeMult = dAlbwWardrobe_getRecoveryMult();
+        if (wardrobeMult < 0.999f) {
+            sRecoveryRate = static_cast<int>(static_cast<f32>(sRecoveryRate) * wardrobeMult);
+            if (sRecoveryRate < 1) {
+                sRecoveryRate = 1;
+            }
         }
 
         sALBWPlayerIdle = false;

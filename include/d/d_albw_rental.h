@@ -55,6 +55,9 @@ struct dALBWVisibleEntry {
     u8          itemNo; ///< wheel item id for row icon (letter icon when !purchasable)
     bool        isOocooService;  ///< Cuckoo's Return (not a rental item row)
     bool        showNameWhenSoldOut;  ///< Master Quest rows: real name even when !purchasable
+    // Postman wardrobe storage (Quick Swap resistance — Quick-Resistance Work.md §4).
+    bool        isStorageStore;     ///< A = free store (owned, active wardrobe)
+    bool        isStorageRetrieve;  ///< A = 100 R retrieve from Postman storage
 };
 const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount);
 #if TARGET_PC_NATIVE_UI

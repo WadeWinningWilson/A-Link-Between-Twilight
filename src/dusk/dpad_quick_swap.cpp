@@ -5,6 +5,7 @@
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_outfit_debug.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_wardrobe.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
@@ -83,7 +84,13 @@ bool canUseDpadQuickSwap(u32 port) {
 }
 
 static bool isOwnedSword(u8 itemNo) {
-    return dComIfGs_isItemFirstBit(itemNo) != 0;
+    if (!dComIfGs_isItemFirstBit(itemNo)) {
+        return false;
+    }
+    if (isDpadQuickSwapEnabled() && dAlbwWardrobe_isStoredItemNo(itemNo)) {
+        return false;
+    }
+    return true;
 }
 
 void cycleNextSword() {
@@ -152,7 +159,29 @@ void cycleNextShield() {
     }
 
     const u8 current = dComIfGs_getSelectEquipShield();
-    const u8 next = dMeter2_getNextOwnedShield(current);
+    u8 next = dMeter2_getNextOwnedShield(current);
+    if (isDpadQuickSwapEnabled()) {
+        static constexpr u8 kShieldOrder[] = {
+            (u8)dItemNo_WOOD_SHIELD_e,
+            (u8)dItemNo_SHIELD_e,
+            (u8)dItemNo_HYLIA_SHIELD_e,
+        };
+        int start = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (kShieldOrder[i] == current) {
+                start = i + 1;
+                break;
+            }
+        }
+        next = current;
+        for (int step = 0; step < 3; ++step) {
+            const u8 candidate = kShieldOrder[(start + step) % 3];
+            if (candidate != current && dAlbwWardrobe_isActiveShield(candidate)) {
+                next = candidate;
+                break;
+            }
+        }
+    }
     if (next == dItemNo_NONE_e || next == current) {
         return;
     }

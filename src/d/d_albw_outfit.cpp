@@ -12,6 +12,7 @@
 
 #include "d/d_albw_outfit_debug.h"
 #include "d/d_albw_sumo_test.h"
+#include "d/d_albw_wardrobe.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_save.h"
 #include "d/d_item_data.h"
@@ -19,6 +20,7 @@
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_e_nz.h"
+#include "dusk/action_bindings.h"
 #include "dusk/settings.h"
 #include "f_op/f_op_overlap_mng.h"
 
@@ -261,7 +263,9 @@ dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current) {
         if (ci >= 0 && cand == current) {
             break;  // wrapped back to current
         }
-        if (dAlbwOutfit_isOwned(cand)) {
+        const bool inPool = dusk::isDpadQuickSwapEnabled() ? dAlbwWardrobe_isActiveOutfit(cand)
+                                                           : dAlbwOutfit_isOwned(cand);
+        if (inPool) {
             return cand;
         }
     }
