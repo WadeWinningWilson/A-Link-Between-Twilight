@@ -1,10 +1,31 @@
 # Sumo Combat — design & state handoff
 
-**Status:** WIP / dev spike. A dev-only **SumoTest** toggle swaps Link's body to the shirtless sumo model in the field. Spike **passed** (sumo Link moves/attacks/rides with Link's animations). Open issue: **held equipment (sword/shield/items) does not draw** while the sumo body is worn. Not save-persisting; not committed.
+**Status (2026-06-27):** SHIPPED & committed. The Sumo Outfit is a shop-bought, save-backed outfit that swaps Link's body to the shirtless sumo model, persists across transitions/warps/cutscenes, and is wired into the D-pad outfit quick-swap cycle. Equipment draws, the Link Hat works, and the sumo↔native / warp / cutscene crashes are fixed (commit `89ac586434`). Remaining bugs are tracked below (§ Current state) and in the interconnected doc. The historical spike notes further down are kept for reference (BLS skeleton, draw-gate fix) but predate the shop/cycle/crash work.
 
 **Chat origin:** ALBW shop-navigation feature work (Claude). Broader sumo research/spike notes were kept in that chat's handoff.
 
-**Interconnected chat (outfit cycle + quick-swap):** [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) — shared API contract, save bits, and cross-chat messages with the D-Pad Quick Swap session.
+**Interconnected chat (outfit cycle + quick-swap):** [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) — shared API contract, save bits, cross-chat messages, the crash post-mortem, and the live bug list with the D-Pad Quick Swap session.
+
+---
+
+## Current state (2026-06-27) — shop outfit + quick-swap cycle
+
+**Architecture.** Two modules:
+- `d_albw_sumo_test.{h,cpp}` — the sumo *overlay* (model-swap state). `dAlbwSumoTest_exec()` runs per-frame from `daAlink_c::execute()`; drives `setClothesChange` + the `FLG2_UNK_200000/80000` flags only (never the sumo minigame). Owns arc residency (`alSumou`, cap `Kmdl`, base clothes) and the stage-transition reset.
+- `d_albw_outfit.{h,cpp}` — the unified wardrobe API consumed by the D-pad cycle: `dAlbwOutfit_isOwned/equip/getActive/getNextOwned/isActive`, `setSumoWorn/isSumoWorn`, `syncWornOwnership`, and the `syncLinkModel`/`processPendingEquip` state machine (largely the Quick Swap chat's). Co-authored.
+
+**Worn state** is per-save **bit 700** (not the old `game.sumoOutfit` AppData toggle, which is retired). Ownership = wardrobe stash bits 689 (sumo) / 691–694 (Ordon/Hero's/Zora/Magic); "own what you wear" seeds them. Cap is `game.sumoOutfitHat` (Editor toggle still visible); Fists Only = `game.sumoOutfitFists`. The master Sumo Outfit editor toggle was removed (shop + d-pad drive it).
+
+**Crash fixes (commit `89ac586434`).** Root: `setClothesChange(0)` never clears `FLG2_UNK_200000`, so leaving sumo kept `loadModelDVD` on its **skip-path** (no clothes-arc reload) → `changeLink` built from a non-resident arc → crash. **Fix:** `applyTargetKind` clears `FLG2_UNK_200000 + FLG2_UNK_80000` *before* `setCloth` when leaving sumo, so the change runs `loadModelDVD`'s normal reload path (`resDelete`+`freeAll`+`setArcName`+reload, self-heals dangling arcs via `deleteObjectResMain`). Also: `nativeClothesResourcesReady()` resets the phase on equipped-clothes change; `setClothesChange` re-entrant guard. Reverted the `getRes`/face null-guards (band-aids that only relocated the crash).
+
+**Verified crash-free:** quick-swap across all armors, room transitions, warps, cutscenes.
+
+### Bug status (2026-06-27)
+**Fixed this batch:** the **dual-load removal** (`nativeClothesResourcesReady()` no longer double-loads clothes arcs alongside Link's `mPhaseReq`) was the big lever — it killed the cross-base/Zora crash, the **random teleport** (#2), and unblocked **cutscene swapping** (#5). Plus the **A+C** no-op fix (#1/#6: `sLeavingSumoReload` forces one rebuild on a same-base leave) and the **weapon-flicker** fix (#3: `sShowWeapons` driven by worn intent `want && !fists`, computed through the transition, not the live `has`).
+- ✅ #1 2-owned no-op · ✅ #2 random teleport · ✅ #3 weapon flicker · ✅ #5 cutscene swap · ✅ #6 post-Zora break
+
+### Open bug (Sumo-owned)
+- **Chin-area "strap" on the sumo chin — INTERMITTENT, cause UNKNOWN.** **Invariant to hat AND fists** (Fists Only did NOT hide it → rules out the cap *and* the sheath/equipment theory). Conflicting repro: earlier seen with **Zora unowned**; latest report — **appears after buying the Zora armor** (maybe only as the last purchase — unconfirmed). Suspects: the **face** (`al_face`/`zl_face`) selected while a Zora arc is involved, or a Zora-arc shape leak. User narrowing which base(s) trigger it. Low priority.
 
 ---
 

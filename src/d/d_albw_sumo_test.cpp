@@ -40,19 +40,16 @@ const char* baseClothesArc() {
 }
 
 bool nativeClothesResourcesReady() {
-    // Reset the phase whenever the equipped clothes change so resLoad targets the
-    // NEW base arc.  Without this, leaving sumo to an outfit DIFFERENT from the one
-    // worn underneath (e.g. sumo-over-Zora -> Ordon) returns a STALE COMPLETE for
-    // the old arc: the revert then fires while changeLink reads the new mArcName
-    // from an unloaded arc -> getObjectRes NULL -> face-model null deref crash.
-    // (processPendingEquip changes the clothes after maintainResources' own reset
-    // has already run for the frame, so the check must be self-correcting here.)
-    const u8 clothes = dComIfGs_getSelectEquipClothes();
-    if (clothes != sClothesPhaseFor) {
-        cPhs_Reset(&sClothesPhase);
-        sClothesPhaseFor = clothes;
-    }
-    return dComIfG_resLoad(&sClothesPhase, baseClothesArc()) == cPhs_COMPLEATE_e;
+    // DO NOT dual-load the base clothes arc.  Link's own mPhaseReq owns and keeps the
+    // equipped-clothes arc resident (loaded at create / each native clothes change,
+    // and retained through sumo's skip-path which never frees mpArcHeap).  A second
+    // loader here (sClothesPhase) created DUPLICATE/dangling registrations of the same
+    // arc name: when Link later reloaded e.g. Bmdl, getResInfoLoaded returned the
+    // stale entry with a freed archive -> getObjectRes NULL -> initModel(NULL) crash
+    // in changeLink (reproduced by sumo-over-Zora -> Ordon).  So just report ready;
+    // residency is the clothes-change pipeline's responsibility (it gates on its own
+    // resLoad COMPLETE before changeLink, and waits while clothesChangeWaitTimer != 0).
+    return true;
 }
 
 bool resourcesReady(bool needCap) {
@@ -139,7 +136,11 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
             sClothesPhaseFor = 0xFF;
             dAlbwOutfit_onStageTransitionBegin();
         }
-        sShowWeapons = false;
+        // Keep the gear visible through the transition based on the persistent worn
+        // intent (not the live model flag), so sumo's weapons/items don't blink out
+        // while Link re-creates and re-applies sumo on the new stage.
+        sShowWeapons = dAlbwOutfit_isSumoWorn() &&
+                       !dusk::getSettings().game.sumoOutfitFists.getValue();
         return;
     }
     sInStageTransition = false;
@@ -149,9 +150,14 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     dAlbwOutfit_syncLinkModel(i_link);
 
     const bool want  = dAlbwOutfit_isSumoWorn();
-    const bool has   = dAlbwSumoTest_isOutfitActive();
     const bool fists = dusk::getSettings().game.sumoOutfitFists.getValue();
-    sShowWeapons = want && has && !fists;
+    // Drive weapon visibility from the persistent worn intent, NOT the live model
+    // flag: requiring isOutfitActive() (FLG2_UNK_80000) re-hid the gear during the
+    // post-transition / re-apply window where the worn bit is set but the sumo body
+    // flag hasn't landed yet -> the disappearing-items flicker.  showWeapons() only
+    // DROPS the sumo-specific draw suppression, so native play (sumo bit never set)
+    // and other suppression reasons are unaffected.
+    sShowWeapons = want && !fists;
 }
 
 bool dAlbwSumoTest_isOutfitActive() {

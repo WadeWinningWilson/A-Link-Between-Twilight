@@ -89,6 +89,12 @@ dAlbwOutfitKind sPendingEquip = D_ALBW_OUTFIT_COUNT;
 u8            sSyncedNativeClothes = 0xFF;
 bool          sReloadPending        = false;
 bool          sLastAppliedHat       = false;
+// Set when leaving sumo via applyTargetKind (which clears FLG2_UNK_80000 up front,
+// so `has` reads false and syncLinkModel's revert branch is skipped).  Forces ONE
+// model rebuild even when the underlying clothes value is unchanged (sumo over the
+// SAME base, e.g. Sumo+Ordon) — otherwise nativeStable early-returns and the sumo
+// model stays on screen though the save says native.  Cleared once the reload fires.
+bool          sLeavingSumoReload    = false;
 
 bool requestClothesChange(int param) {
     daPy_py_c* player = daPy_getLinkPlayerActorClass();
@@ -114,6 +120,7 @@ bool isTargetStable(dAlbwOutfitKind kind) {
 void applyTargetKind(dAlbwOutfitKind kind) {
     if (kind == D_ALBW_OUTFIT_SUMO) {
         dAlbwOutfit_setSumoWorn(true);
+        sLeavingSumoReload = false;  // re-applying sumo cancels any pending leave-reload
         dAlbwOutfit_debugLog("target SUMO");
         return;
     }
@@ -137,6 +144,10 @@ void applyTargetKind(dAlbwOutfitKind kind) {
             link->offNoResetFlg2(daAlink_c::FLG2_UNK_200000);
             link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
         }
+        // Clearing FLG2_UNK_80000 makes `has` read false next frame, so syncLinkModel's
+        // revert branch is skipped; flag a forced rebuild so the sumo model is actually
+        // replaced even when the underlying clothes value didn't change.
+        sLeavingSumoReload = true;
     }
     if (dComIfGs_isItemFirstBit(itemNo) == 0) {
         dComIfGs_onItemFirstBit(itemNo);
@@ -323,6 +334,7 @@ void dAlbwOutfit_onStageTransitionBegin() {
     sSyncedNativeClothes = 0xFF;
     sReloadPending       = false;
     sLastAppliedHat      = false;
+    sLeavingSumoReload   = false;
 }
 
 void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
@@ -352,6 +364,10 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         if (!want) {
             sSyncedNativeClothes = clothes;
         }
+        // Outcome trace: a settled swap's final state.  Pairs with the "target ..."
+        // line so a stuck leave (target native, then no rebuild) is visible directly.
+        dAlbwOutfit_debugLog("settled want=%d has=%d clothes=%d synced=%d",
+                             want ? 1 : 0, has ? 1 : 0, clothes, sSyncedNativeClothes);
         return;
     }
 
@@ -360,7 +376,11 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
     }
 
     const bool sumoStable   = want && has && hat == sLastAppliedHat;
-    const bool nativeStable = !want && !has && clothes == sSyncedNativeClothes;
+    // nativeStable must also require no pending leave-reload: when sumo leaves onto the
+    // SAME base, clothes is unchanged so this would otherwise be true and early-return
+    // with the sumo model still on screen.
+    const bool nativeStable = !want && !has && clothes == sSyncedNativeClothes &&
+                              !sLeavingSumoReload;
 
     if (sumoStable || nativeStable) {
         return;
@@ -381,9 +401,24 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         if (!requestClothesChange(0)) {
             return;
         }
-        sLastAppliedHat = false;
-        sReloadPending  = true;
+        sLastAppliedHat    = false;
+        sReloadPending     = true;
+        sLeavingSumoReload = false;
         dAlbwOutfit_debugLog("sync revert sumo cloth=%d", clothes);
+        return;
+    }
+
+    // Same-base leave (applyTargetKind already cleared FLG2 -> has==0, so the revert
+    // branch above is skipped).  Force ONE reload so the sumo model is actually
+    // replaced by the native body even though the clothes value is unchanged.
+    if (sLeavingSumoReload && !want) {
+        if (!requestClothesChange(0)) {
+            return;
+        }
+        sLeavingSumoReload = false;
+        sLastAppliedHat    = false;
+        sReloadPending     = true;
+        dAlbwOutfit_debugLog("leave force-reload cloth=%d", clothes);
         return;
     }
 
