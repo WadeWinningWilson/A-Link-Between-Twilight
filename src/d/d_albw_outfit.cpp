@@ -18,6 +18,7 @@
 #include "d/d_meter2_info.h"
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
+#include "d/actor/d_a_e_nz.h"
 #include "dusk/settings.h"
 #include "f_op/f_op_overlap_mng.h"
 
@@ -284,9 +285,12 @@ bool dAlbwOutfit_isSwapBlockedState() {
     if (dMeter2_isALBWMovementExhausted()) {
         return true;
     }
-    // TODO (extend): Ghoul-Rat (E_RDB) cling slow.  Those rats also slow Link, but the
-    // slow isn't exposed as a Link-side flag/count (looks like the generic actor-attach
-    // weight), so no clean check yet — revisit once the mechanism is identified.
+    // Ghoul Rats (E_NZ) latched onto Link.  Blocks ONLY when a rat is actually stuck
+    // on him (any stick slot occupied) — not merely nearby — via the rat's own stick
+    // bitfield.  The bitfield self-clears on detach/death/room-unload.
+    if (dE_NZ_isRatStuckOnPlayer()) {
+        return true;
+    }
     return false;
 }
 

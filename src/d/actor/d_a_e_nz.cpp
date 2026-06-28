@@ -135,6 +135,19 @@ static daE_NZ_HIO_c l_HIO;
 
 static u8 data_8072C454[4];
 
+// ============================================================================
+// Ghoul-Rat "stuck on Link" query (Sumo Outfit quick-swap gate)
+// ----------------------------------------------------------------------------
+// data_8072C454[0] is the game's own stick-slot bitfield: one bit per rat that
+// has claimed a slot and latched onto Link (set when a rat commits to attaching,
+// held through ACTION_STICK, cleared on detach/death and in daE_NZ_Delete — so
+// it is self-cleaning on room unload).  Non-zero == at least one rat is ON Link
+// (not merely nearby).  Read by dAlbwOutfit_isSwapBlockedState().
+// ============================================================================
+bool dE_NZ_isRatStuckOnPlayer() {
+    return data_8072C454[0] != 0;
+}
+
 static void e_nz_normal(e_nz_class* i_this) {
     fopEn_enemy_c* a_this = (fopEn_enemy_c*)&i_this->enemy;
     f32 dVar9 = 0.0f;
