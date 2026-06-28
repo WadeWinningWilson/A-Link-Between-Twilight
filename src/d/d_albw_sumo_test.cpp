@@ -53,15 +53,15 @@ bool nativeClothesResourcesReady() {
 }
 
 bool resourcesReady(bool needCap) {
+    (void)needCap;  // Kmdl is now kept resident whenever sumo is worn — not only for the
+                    // cap, but because the sumo FACE pulls al_face.bmd from Kmdl so it is
+                    // base-independent (no Zora zl_face "chin strap").  See changeLink().
     if (dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) == NULL) {
         if (dComIfG_resLoad(&sPhase, "alSumou") != cPhs_COMPLEATE_e) {
             return false;
         }
     }
-    if (!nativeClothesResourcesReady()) {
-        return false;
-    }
-    if (needCap && dComIfG_resLoad(&sKmdlPhase, kCapArcName) != cPhs_COMPLEATE_e) {
+    if (dComIfG_resLoad(&sKmdlPhase, kCapArcName) != cPhs_COMPLEATE_e) {
         return false;
     }
     return true;

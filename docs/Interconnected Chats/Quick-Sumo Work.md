@@ -453,14 +453,14 @@ A+C+D was the right neighborhood (skip-path / residency) but the **true root was
 
 ### Post-fix bug list (2026-06-27) — owners tagged
 
-**STATUS — this batch fixes #1, #2, #3, #5, and #6; only #4 (chin strap) remains.** The big lever was the **dual-load removal** in `nativeClothesResourcesReady()` (the sumo module no longer double-loads clothes arcs alongside Link's `mPhaseReq`) — that killed the cross-base/Zora crash AND the random teleport AND unblocked cutscene swapping in one shot.
+**STATUS — #1, #3, #4, #5, #6 FIXED; only #2 (teleport) remains, now narrowed to IRON-BOOTS-only.** The **dual-load removal** in `nativeClothesResourcesReady()` was the big lever (killed the cross-base/Zora crash, the normal-play teleport, and unblocked cutscene swapping); #4 chin strap fixed by sourcing the sumo face from `Kmdl`'s `al_face`. The remaining #2 is a physics interaction: a quick-swap with iron boots on launches Link in his facing direction (active-play `changeLink` rebuild vs. live heavy-boots collision).
 
 | # | Bug | Owner | Status / notes |
 |---|-----|-------|----------------|
 | 1 | **2-owned cycle no-op** (Sumo+Ordon: Down jingles, stays sumo). | Sumo | ✅ **FIXED** — A+C: `sLeavingSumoReload` forces one rebuild on a same-base leave; `nativeStable` now requires the overlay actually off, not just the save flags. |
-| 2 | **Random teleport on swap** (Link jumps a random distance/direction). | Sumo | ✅ **FIXED** — resolved by the dual-load fix (dangling/partial model loads were handing `changeLink` a garbage transform). |
+| 2 | **Distance-skip / teleport on swap.** | Sumo | ⚠️ **REOPENED (iron-boots only).** Dual-load fix killed it for normal play, but it persists with **IRON BOOTS on**: every d-pad swap flings Link a large distance **in the facing/camera direction** (consistent), every outfit. Removing iron boots stops it entirely. Theory: our quick-swap runs `changeLink` (rebuilds the iron-boots model + heavy-boots collision) during *active* play, whereas vanilla clothes changes are always paused → the rebuild collides with live iron-boots physics → directional launch. Next: position log + investigate. |
 | 3 | **Weapon/items vanish on transition** in sumo. | Sumo | ✅ **FIXED** — `sShowWeapons` is now driven by worn intent (`want && !fists`) and computed through the transition, not the live `has` flag. |
-| 4 | **Chin-area "strap" on the sumo chin — INTERMITTENT, cause UNKNOWN.** | Sumo | OPEN. **Invariant to hat AND fists** (Fists Only did NOT hide it → rules out the cap *and* the sheath/equipment theory). Conflicting repro: earlier seen with Zora *unowned*; **latest report — appears after buying the Zora armor** (maybe only as the last purchase — unconfirmed). Suspects: the **face** (`al_face`/`zl_face`) selected while a Zora arc is involved, or a Zora-arc shape leak. User narrowing which base(s) trigger it. Low priority. |
+| 4 | **Chin strap on the sumo chin (was the Zora face).** | Sumo | ✅ **FIXED** (pending re-emergence) — root: sumo over a **Zora base** used `zl_face.bmd` because the sumo branch clears `FLG2_UNK_200000` before the face block, so the face condition fell to the Zora `else`. Fix: while sumo is worn, build the face from **`al_face.bmd` in `Kmdl`** (now kept resident through sumo regardless of hat), per-base path as fallback. Verified strap gone over Zora, other bases unchanged. |
 | 5 | **Quick-switching during cutscenes** (long-term goal). | Sumo + Quick Swap | ✅ **ACHIEVED** — works after the dual-load fix (no longer thrashes the model in demo). |
 | 6 | **Quick swap breaks after a Zora purchase.** | Sumo | ✅ **FIXED** — was #1 manifesting with Zora as the base; resolved by A+C + dual-load. |
 
@@ -557,4 +557,4 @@ This keeps the crash fix's normal-reload-path behavior while guaranteeing the vi
 
 ---
 
-*Last updated: Sumo chat — acknowledged bug #1 (fix plan A+C: force one reload on same-base leave, `nativeStable` must require overlay actually off). #4 chin-strap reclassified INTERMITTENT / NOT Zora-face (vanished w/o code change; sheath-joint theory). Added #6 quick-swap-breaks-after-Zora (likely #1 with Zora base; "Out of Stock" mitigation idea). Holding code per user.*
+*Last updated: Sumo chat — #4 chin strap FIXED (sumo face now from Kmdl `al_face`, base-independent; Kmdl kept resident through sumo). #1/#2(normal)/#3/#5/#6 already fixed in `c693afe316`. Only #2 remains, narrowed to IRON-BOOTS-only (every d-pad swap flings Link in his facing direction; gone without iron boots) — physics interaction, next up with a position log.*

@@ -426,13 +426,30 @@ void daAlink_c::changeLink(int param_0) {
     // NEW CODE ENDS HERE
     // ============================================
 
-    if (checkNoResetFlg2(FLG2_UNK_200000) || !checkZoraWearFlg()) {
-        mpLinkFaceModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd")), 0x20200);
-    } else {
-        mpLinkFaceModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "zl_face.bmd")), 0x20200);
+    J3DModelData* faceData = NULL;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Sumo Outfit face)
+    // The sumo body has no face of its own (alSumou 0x33 is only the topknot), so it
+    // uses Link's al_face.bmd.  Over a Zora base, mArcName is "Zmdl" which only has
+    // zl_face.bmd, so the Zora face's chin/neck geometry shows on the sumo body (the
+    // "chin strap").  While the sumo body flag is set, force the standard al_face from
+    // Kmdl (kept resident whenever sumo is worn) so the face is base-independent.  If
+    // it's somehow unavailable, fall through to the normal per-base selection below
+    // (never NULL where it wasn't before).
+    // ============================================
+    if (checkNoResetFlg2(FLG2_UNK_80000)) {
+        faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_face.bmd"));
     }
+#endif
+    if (faceData == NULL) {
+        if (checkNoResetFlg2(FLG2_UNK_200000) || !checkZoraWearFlg()) {
+            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd"));
+        } else {
+            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "zl_face.bmd"));
+        }
+    }
+    mpLinkFaceModel = initModel(faceData, 0x20200);
 
 #ifdef TARGET_PC
     // Update Adult Link's eye maxLOD to prevent the eyes from disappearing
