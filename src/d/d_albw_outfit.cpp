@@ -267,6 +267,29 @@ dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current) {
     return current;
 }
 
+bool dAlbwOutfit_isSwapBlockedState() {
+    daPy_py_c* player = daPy_getLinkPlayerActorClass();
+    if (player == nullptr) {
+        return false;
+    }
+    // Iron boots + depowered (heavy) Magic Armor — the vanilla heavy/slow-movement
+    // check, used all over the engine.  In these states Link's position is driven by
+    // a scripted/heavy action, and the quick-swap clothes-change rebuild launches him.
+    if (player->checkBootsOrArmorHeavy()) {
+        return true;
+    }
+    // ALBW item-lockout slow phase.  This flag is set when lockout begins and clears
+    // once the meter recovers to its base threshold (the "regain normal movement"
+    // point) — so it tracks exactly the slowed window, not the whole lockout.
+    if (dMeter2_isALBWMovementExhausted()) {
+        return true;
+    }
+    // TODO (extend): Ghoul-Rat (E_RDB) cling slow.  Those rats also slow Link, but the
+    // slow isn't exposed as a Link-side flag/count (looks like the generic actor-attach
+    // weight), so no clean check yet — revisit once the mechanism is identified.
+    return false;
+}
+
 void dAlbwOutfit_syncWornOwnership() {
     // You own what you wear: seed the stash bit for the equipped native outfit so
     // vanilla-acquired clothes register as owned without per-grant-site hooks.

@@ -56,6 +56,13 @@ bool            dAlbwOutfit_isActive(dAlbwOutfitKind kind);
 bool            dAlbwOutfit_equip(dAlbwOutfitKind kind);
 dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current);
 
+// True when quick-swap must be BLOCKED because Link is in a slow/heavy "scripted
+// movement" state — the clothes-change rebuild launches Link there.  Covers iron
+// boots + depowered Magic Armor (vanilla checkBootsOrArmorHeavy).  Extend as more
+// such states (item lockout, ghost-rat cling, ...) get clean checks.  The D-pad
+// cycle plays a deny SFX instead of switching when this is true.
+bool            dAlbwOutfit_isSwapBlockedState();
+
 // Own-what-you-wear: call once per frame.  Records the stash bit for the
 // currently equipped native outfit so vanilla-acquired clothes (Ordon at start,
 // Hero's post-Faron, Zora/Magic via story) register as owned for the cycle.

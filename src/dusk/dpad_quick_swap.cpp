@@ -175,6 +175,15 @@ void cycleNextOutfit() {
         return;
     }
 
+    // Block the swap in slow/heavy "scripted movement" states (iron boots, depowered
+    // Magic Armor, ...) where the clothes-change rebuild launches Link.  Play the parry
+    // "not allowed" SFX instead of the switch jingle.  Sumo owns the predicate.
+    if (dAlbwOutfit_isSwapBlockedState()) {
+        Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_USE_CANCEL, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        dAlbwOutfit_debugLog("cycle blocked: heavy/slow movement state");
+        return;
+    }
+
     const dAlbwOutfitKind current = dAlbwOutfit_getActive();
     const dAlbwOutfitKind next = dAlbwOutfit_getNextOwned(current);
     if (next == current) {

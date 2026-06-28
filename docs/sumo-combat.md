@@ -22,12 +22,14 @@
 
 ### Bug status (2026-06-27)
 **Fixed this batch:** the **dual-load removal** (`nativeClothesResourcesReady()` no longer double-loads clothes arcs alongside Link's `mPhaseReq`) was the big lever — it killed the cross-base/Zora crash, the **random teleport** (#2), and unblocked **cutscene swapping** (#5). Plus the **A+C** no-op fix (#1/#6: `sLeavingSumoReload` forces one rebuild on a same-base leave) and the **weapon-flicker** fix (#3: `sShowWeapons` driven by worn intent `want && !fists`, computed through the transition, not the live `has`).
-- ✅ #1 2-owned no-op · ✅ #3 weapon flicker · ✅ #4 chin strap (sumo face → Kmdl `al_face`) · ✅ #5 cutscene swap · ✅ #6 post-Zora break · ⚠️ #2 teleport: fixed for normal play, **reopened iron-boots-only**
+- ✅ #1 2-owned no-op · ✅ #3 weapon flicker · ✅ #4 chin strap (sumo face → Kmdl `al_face`) · ✅ #5 cutscene swap · ✅ #6 post-Zora break · ✅ #2 teleport: **gated** in slow/heavy states (rats TODO)
 
 **#4 chin strap fix:** sumo over a **Zora** base used `zl_face.bmd` (the sumo branch clears `FLG2_UNK_200000` before `changeLink`'s face block, so the condition fell to the Zora `else`). Fix: while `FLG2_UNK_80000` is set, build the face from **`al_face.bmd` in `Kmdl`** (now kept resident through sumo regardless of the hat — see `resourcesReady`), with the per-base path as fallback so it's never null.
 
-### Open bug (Sumo-owned)
-- **Distance-skip / teleport — IRON BOOTS only.** With iron boots on, **every** d-pad quick-swap flings Link a large distance **in his facing/camera direction** (consistent), for every outfit; removing the iron boots stops it entirely. Normal play is fine (dual-load fix handled that). Theory: our quick-swap runs `changeLink` (which rebuilds the iron-boots model `al_bootsH.bmd` + the heavy-boots collision state) during *active* play, whereas vanilla clothes changes are always **paused** — the rebuild collides with the live heavy-boots ground-stick → directional launch. Next: add a position log (`current.pos` before/after swap) and investigate.
+**#2 teleport fix (gate, not pin):** the clothes-change rebuild runs during *active* play and gets launched by Link's scripted slow/heavy movement (vanilla clothes changes are always paused). A position-pin (snapshot/restore `current.pos`) didn't hold, so instead quick-swap is **blocked** in those states — `cycleNextOutfit` plays the parry deny SFX (`Z2SE_SY_ITEM_USE_CANCEL`) when **`dAlbwOutfit_isSwapBlockedState()`** is true: iron boots + depowered Magic Armor (`checkBootsOrArmorHeavy`) and the ALBW lockout slow phase (`dMeter2_isALBWMovementExhausted`).
+
+### Open item (Sumo-owned)
+- **Extend the swap-block gate to Ghoul-Rat (`E_RDB`) cling.** Those rats also slow Link, but there's no clean Link-side flag/count for "a rat is on me" (the rat AI is complex; slow is generic attach-weight). Plan: a per-press scan of active `E_RDB` actors near Link in `dAlbwOutfit_isSwapBlockedState()` (cheap — only runs on a D-pad press). Areas: Hyrule Castle, Arbiter's Grounds.
 
 ---
 
