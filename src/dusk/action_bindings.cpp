@@ -31,6 +31,7 @@ ActionBindsMap& getActionBinds() {
         {ActionBinds::TURBO_SPEED_BUTTON,  {&getSettings().actionBindings.turboSpeedButton,  "Turbo Speed Button"}},
         {ActionBinds::CYCLE_SWORD,         {&getSettings().actionBindings.cycleSword,        "Cycle Sword"}},
         {ActionBinds::CYCLE_SHIELD,        {&getSettings().actionBindings.cycleShield,       "Cycle Shield"}},
+        {ActionBinds::CYCLE_OUTFIT,        {&getSettings().actionBindings.cycleOutfit,       "Cycle Outfit"}},
         {ActionBinds::QUICK_TRANSFORM,     {&getSettings().actionBindings.quickTransform,    "Quick Transform"}},
         {ActionBinds::OPEN_ITEM_WHEEL,     {&getSettings().actionBindings.openItemWheel,     "Open Item Wheel"}},
     };
@@ -223,6 +224,11 @@ bool dpadUpReservedForQuickSwap(u32 port) {
 }
 
 bool dpadDownReservedForQuickSwap(u32 port) {
+    return isDpadQuickSwapEnabled() &&
+           bindUsesPadButton(ActionBinds::CYCLE_OUTFIT, port, PAD_BUTTON_DOWN);
+}
+
+bool quickTransformBoundToDpadDown(u32 port) {
     return isDpadQuickSwapEnabled() &&
            bindUsesPadButton(ActionBinds::QUICK_TRANSFORM, port, PAD_BUTTON_DOWN);
 }

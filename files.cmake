@@ -175,6 +175,7 @@ set(DOLZEL_FILES
         src/d/d_albw_rental.cpp
         src/d/d_albw_sumo_test.cpp
         src/d/d_albw_outfit.cpp
+        src/d/d_albw_outfit_debug.cpp
         src/d/d_albw_master_quest.cpp
         src/d/d_albw_shop.cpp
         src/d/d_albw_dialogue.cpp

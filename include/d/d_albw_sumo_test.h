@@ -15,11 +15,18 @@
 
 class daAlink_c;
 
-// Per-frame driver, called from daAlink_c::execute().  Reads game.sumoTest
-// (Editor -> ALBW tab) and applies/reverts the sumo model swap.
+// Per-frame driver: keeps Link's sumo visual (FLG2_UNK_80000) in sync with save bit 700.
 void dAlbwSumoTest_exec(daAlink_c* i_link);
 
-// True while the Sumo Outfit is currently swapped in (cheap bool, no settings read).
+// Load alSumou + base-clothes arcs so changeLink() can build sumo on Link create/warp.
+// Returns true when resources are resident and FLG2_UNK_200000 may be set.
+bool dAlbwSumoTest_prepareChangeLink();
+
+// Load the equipped native-clothes arc so changeLink() can rebuild after the sumo
+// overlay is cleared.  Required before setClothesChange(0) when leaving sumo.
+bool dAlbwSumoTest_prepareNativeClothesChange();
+
+// True while the sumo body flag is on Link (reads FLG2_UNK_80000, not static state).
 bool dAlbwSumoTest_isOutfitActive();
 
 // True while the outfit is on AND not "Fists Only" (cheap cached bool).  Used by
@@ -44,6 +51,13 @@ bool dAlbwSumoTest_tryPurchaseShop();
 // Turn the sumo overlay OFF — called when the player buys a real clothes outfit
 // so the chosen clothes show instead of sumo re-applying over them.
 void dAlbwSumoTest_clearWorn();
+
+// Native outfit equip (shop / D-pad) took over from sumo — optional hook; sync is driven
+// by the worn bit vs Link visual flag.
+void dAlbwSumoTest_onNativeOutfitEquipped();
+
+// True while worn bit != Link sumo visual, or a clothes reload is in flight.
+bool dAlbwSumoTest_isSwapPending();
 
 // Marks the Ordon sumo-wrestler NPC as met — gates the shop row in non-True-ALBW
 // play.  Called from daNpcWrestler_c::talk().

@@ -256,6 +256,12 @@ UserSettings g_userSettings = {
             ActionBindConfigVar{"actionBindings.cycleShield_port2", PAD_NATIVE_BUTTON_INVALID},
             ActionBindConfigVar{"actionBindings.cycleShield_port3", PAD_NATIVE_BUTTON_INVALID},
         },
+        .cycleOutfit {
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port0", PAD_NATIVE_BUTTON_INVALID},
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port1", PAD_NATIVE_BUTTON_INVALID},
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port2", PAD_NATIVE_BUTTON_INVALID},
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port3", PAD_NATIVE_BUTTON_INVALID},
+        },
         .quickTransform {
             ActionBindConfigVar{"actionBindings.quickTransform_port0", PAD_NATIVE_BUTTON_INVALID},
             ActionBindConfigVar{"actionBindings.quickTransform_port1", PAD_NATIVE_BUTTON_INVALID},
@@ -478,6 +484,10 @@ void registerSettings() {
     Register(g_userSettings.actionBindings.cycleShield[1]);
     Register(g_userSettings.actionBindings.cycleShield[2]);
     Register(g_userSettings.actionBindings.cycleShield[3]);
+    Register(g_userSettings.actionBindings.cycleOutfit[0]);
+    Register(g_userSettings.actionBindings.cycleOutfit[1]);
+    Register(g_userSettings.actionBindings.cycleOutfit[2]);
+    Register(g_userSettings.actionBindings.cycleOutfit[3]);
     Register(g_userSettings.actionBindings.quickTransform[0]);
     Register(g_userSettings.actionBindings.quickTransform[1]);
     Register(g_userSettings.actionBindings.quickTransform[2]);

@@ -11,6 +11,7 @@ bool canUseDpadQuickSwap(u32 port = 0);
 
 void cycleNextSword();
 void cycleNextShield();
+void cycleNextOutfit();
 #endif
 
 }

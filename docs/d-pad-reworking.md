@@ -2,13 +2,15 @@
 
 Design + **completed research** for repurposing the d-pad cross (beyond Extra Item Slot / Midna on left) to support in-field sword cycling, shield cycling, and quick wolf transform.
 
-**Status:** Implemented (2026-06-19). **Shield cycle crash + L1 item wheel** fixed and playtested (2026-06-20).
+**Status:** Sword/shield cycle + L1 item wheel **shipped** (2026-06-20). **Outfit cycle on Down + R+Y transform** — **shipped** (2026-06-27). See [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md).
 
 **Feature name:** **D-Pad Quick Swap** (settings UI label; doc filename stays `d-pad-reworking.md`).
 
 **Decision:** Use **Option A** — extend the existing `ActionBinds` system (rebindable in controller config), not hardcoded PC-only intercepts.
 
 **Research date:** 2026-06-19 (Cursor session + product clarifications).
+
+**Interconnected chat (outfit cycle + sumo shop):** [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) — shared API contract, save bits, and cross-chat messages with the Sumo outfit / shop session.
 
 ---
 
@@ -80,8 +82,9 @@ Session work after initial Quick Swap ship. All builds validated with `build_run
 | Feature name | **D-Pad Quick Swap** |
 | Architecture | **Option A** — new `ActionBinds` entries + settings + controller config |
 | Settings UI | **Tree under Extra Item Slot** — not a separate always-visible bool. See § Extra Item Slot mode below. |
-| Proposed default mapping (Quick Swap mode) | **Left:** Call Midna · **Up:** cycle sword · **Right:** cycle shield · **Down:** quick wolf transform |
-| Quick Transform (R+Y) | **Replaced** when Quick Swap mode is active — do not run R+Y chord in `f_ap_game.cpp` while Quick Swap is on. Standalone `enableQuickTransform` still applies in **Extra, No Quick Swap** and **Off** modes. |
+| D-pad Down | **Cycle outfit** (`CYCLE_OUTFIT`) in Extra + Quick Swap — **shipped 2026-06-27** |
+| Quick Transform | **R+Y** in Quick Swap mode *(restored)*; Down = outfit cycle. Other modes: R+Y gated by `enableQuickTransform`. |
+| Outfit cycle | **Down** → `cycleNextOutfit()` via `dAlbwOutfit_*`. Order: Sumo → Ordon → Hero's → Zora → Magic; skip unowned; ≤1 owned → no-op. |
 | Map keyboard defaults | **Proposed only** (user has not locked keys) — see § Proposed keyboard map binds. Assign on entering Quick Swap mode if binds still invalid; user can rebind. |
 | ALBW shields | Today: **one shield at a time** (`dMeter2_canAcquireShield`). **Future upgrade:** player can purchase and hold **two shields** — cycle logic must be written to tolerate that without a rewrite. |
 | Menus / sub-screens | Open menus **correctly suppress** Quick Swap (same as Midna / vanilla). |
@@ -157,12 +160,14 @@ When `mLopHudActive`, `dMeter2Draw_c` **hides** `mpButtonCrossParent` (whole d-p
 
 When **Extra + Quick Swap** mode is active:
 
-| D-pad | Action | `ActionBinds` |
-|-------|--------|---------------|
-| **Left** | Call Midna | `CALL_MIDNA` *(existing)* |
-| **Up** | Cycle equipped sword | `CYCLE_SWORD` *(new)* |
-| **Right** | Cycle equipped shield | `CYCLE_SHIELD` *(new)* |
-| **Down** | Quick wolf ↔ human transform | `QUICK_TRANSFORM` *(new)* |
+| D-pad | Action (shipped / planned) | `ActionBinds` |
+|-------|----------------------------|---------------|
+| **Left** | Call Midna *(shipped)*; **proposed:** single tap = transform, double-tap = Midna — § Layered Left d-pad | `CALL_MIDNA` *(existing)* |
+| **Up** | Cycle equipped sword *(shipped)* | `CYCLE_SWORD` |
+| **Right** | Cycle equipped shield *(shipped)* | `CYCLE_SHIELD` |
+| **Down** | **Cycle outfit** *(shipped 2026-06-27)* | `CYCLE_OUTFIT` |
+
+**Transform when outfit cycle ships:** **R+Y** (same chord as QoL Quick Transform) runs in Quick Swap mode again; remove the `!isDpadQuickSwapEnabled()` guard on the R+Y block in `f_ap_game.cpp`.
 
 **Relocated vanilla functions (Quick Swap mode only):**
 
@@ -183,14 +188,59 @@ Applied **only when** entering Quick Swap mode **and** the bind is still `PAD_NA
 
 **Controller defaults (port 0)** when entering Quick Swap mode:
 
-| Bind | Default |
-|------|---------|
-| `CYCLE_SWORD` | D-pad Up (`SDL_GAMEPAD_BUTTON_DPAD_UP` / `PAD_BUTTON_UP`) |
-| `CYCLE_SHIELD` | D-pad Right |
-| `QUICK_TRANSFORM` | D-pad Down |
-| `CALL_MIDNA` | D-pad Left *(unchanged from Extra Item Slot)* |
+| Bind | Default (shipped) | After outfit cycle |
+|------|-------------------|---------------------|
+| `CYCLE_SWORD` | D-pad Up | unchanged |
+| `CYCLE_SHIELD` | D-pad Right | unchanged |
+| `CYCLE_OUTFIT` | — | D-pad Down *(replaces `QUICK_TRANSFORM` on Down)* |
+| `QUICK_TRANSFORM` | D-pad Down *(shipped)* | **Unbound on d-pad**; use **R+Y** only in Quick Swap mode |
+| `CALL_MIDNA` | D-pad Left | unchanged *(or layered handler — § below)* |
 
 **Not preset:** item ring — no default keyboard replacement in v1.
+
+---
+
+## Outfit cycle (shipped — Down, 2026-06-27)
+
+**Owner:** Quick Swap chat (`dpad_quick_swap.cpp`). **API owner:** Sumo chat (`include/d/d_albw_outfit.h` — not in tree yet).
+
+| Item | Detail |
+|------|--------|
+| Bind | `CYCLE_OUTFIT` in `action_bindings.h`; preset D-pad Down when entering Quick Swap mode (migrate preset from `QUICK_TRANSFORM`) |
+| Handler | `cycleNextOutfit()` — gates via `canUseDpadQuickSwap()`, wolf block, then `dAlbwOutfit_getActive()` → `getNextOwned()` → `equip()` |
+| Feedback | Same as sword/shield: `Z2SE_SY_ITEM_SET_X` + `dMeter2Info_set2DVibration()` |
+| Equip semantics | `dAlbwOutfit_equip()` is **async-initiate**; `getActive()` returns **target** outfit (see [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md)) |
+| Ownership | Stash bits 689 + 691–694 via `dAlbwOutfit_isOwned()` — not `playerOwnsRentalItem()` |
+| Transform | **R+Y** restored in `f_ap_game.cpp` when `isDpadQuickSwapEnabled()` |
+
+**Implementation order (Quick Swap):** wait for Sumo ping on `d_albw_outfit.h` → add bind + `cycleNextOutfit()` → re-enable R+Y → update Down reservation / presets → playtest → update patch notes.
+
+---
+
+## Layered Left d-pad (proposed — not locked)
+
+**Product ask:** On **Left** in Quick Swap mode, **single press** = quick wolf ↔ human transform; **double-tap** (within a short window) = Call Midna.
+
+**Feasibility:** Yes — small input layer, no new bind required if Left stays reserved for Midna in the bind table.
+
+**Suggested behavior:**
+
+| Input | Action |
+|-------|--------|
+| Left **single** tap (no second tap within ~250–350 ms) | `handleQuickTransform()` (same guards as today) |
+| Left **double** tap (second edge within window) | Existing Midna talk path (`midnaTalkTrigger()` / `CALL_MIDNA`) |
+| Left held or spam | Prefer **one** action per gesture — debounce transform until window closes |
+
+**Where to implement:** New helper e.g. `dusk::handleLayeredLeftDpad()` called from `daAlink_c::execute()` or `f_ap_game.cpp` **before** `midnaTalkTrigger()` reads a raw Left edge — only when `isDpadQuickSwapEnabled()` and Left is bound to d-pad Left. `midnaTalkTrigger()` would skip raw Left trig when layered mode is on.
+
+**Caveats:**
+
+- Slightly higher latency for Midna (must wait for double-tap window on single-tap path).
+- Accidental double-taps may summon Midna when player wanted transform — tune window + optional settings toggle.
+- Keyboard/custom `CALL_MIDNA` rebinds should **not** use layered logic unless bound to the same physical Left d-pad.
+- Rental shop already suppresses Midna on Left — keep that.
+
+**Ship timing:** After outfit cycle, or same milestone if scoped. Optional ALBW setting: **Layered Left d-pad** on/off under Extra + Quick Swap.
 
 ---
 
@@ -259,13 +309,14 @@ Under **ALBW Settings** — replace bool `game.extraItemSlot` with enum `game.ex
 
 **Relationship to `enableQuickTransform` (QoL — Quick Transform R+Y):**
 
-| Extra Item Slot mode | R+Y transform in `f_ap_game.cpp` | D-pad down transform |
-|----------------------|----------------------------------|----------------------|
-| Off | Runs if `enableQuickTransform` | N/A (vanilla d-pad down = item ring) |
-| Extra, No Quick Swap | Runs if `enableQuickTransform` | N/A (vanilla down) |
-| **Extra + Quick Swap** | **Disabled** (Quick Swap replaces it) | Runs via `QUICK_TRANSFORM` bind → `handleQuickTransform()` |
+| Extra Item Slot mode | R+Y transform in `f_ap_game.cpp` | D-pad Down | D-pad Left (proposed layered) |
+|----------------------|----------------------------------|------------|-------------------------------|
+| Off | Runs if `enableQuickTransform` | Vanilla item ring | Vanilla map |
+| Extra, No Quick Swap | Runs if `enableQuickTransform` | Vanilla down | Midna (single press) |
+| **Extra + Quick Swap (shipped today)** | **Disabled** when Quick Swap on | `QUICK_TRANSFORM` | Midna |
+| **Extra + Quick Swap (after outfit cycle)** | **Enabled** (restore guard removal) | **`CYCLE_OUTFIT`** | Midna *(or layered: single = transform, double = Midna)* |
 
-Inside `handleQuickTransform()`, gate on **`isDpadQuickSwapEnabled()` OR `enableQuickTransform`** so the shared function works from both code paths when allowed.
+Inside `handleQuickTransform()`, gate on **`isDpadQuickSwapEnabled()` OR `enableQuickTransform`** so the shared function works from R+Y, layered Left, or legacy QoL paths when allowed.
 
 ---
 
@@ -535,7 +586,7 @@ This feature does **not** require LoP layout edits or boss docs unless scope cre
 | 1 | Feature / settings name | **D-Pad Quick Swap**; 3-way **Extra Item Slot** tree under ALBW Settings |
 | 2 | Require Extra Item Slot? | **Yes** — Quick Swap only in mode 2; cannot enable alone |
 | 3 | Default keyboard map binds | **Proposed M + Tab** when entering Quick Swap if unbound — not product-locked; see § Proposed keyboard map binds |
-| 4 | R+Y quick transform | **Replaced** when Quick Swap mode on; R+Y remains in Off / Extra-only modes |
+| 4 | R+Y quick transform | **Restored** when outfit cycle ships; Down becomes outfit cycle instead |
 
 ## Open questions (remaining)
 
@@ -544,6 +595,8 @@ This feature does **not** require LoP layout edits or boss docs unless scope cre
 | 5 | **Two-shield upgrade** — event bit / setting name when spec'd (cycle code must not assume max 1) |
 | 6 | **Exact settings UI strings** for the 3-way control (Off / Extra only / Extra + Quick Swap) |
 | 7 | **Confirm M + Tab** map defaults after playtest on keyboard layout |
+| 8 | **Layered Left d-pad** — confirm window timing + optional settings toggle |
+| 9 | **Outfit cycle** — playtest async equip + mash Down during arc load |
 
 ---
 

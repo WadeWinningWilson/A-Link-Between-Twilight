@@ -16,6 +16,7 @@
 #include "d/d_item.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_outfit.h"
 #include "d/d_albw_sumo_test.h"
 #include "d/d_pane_class.h"
 #include "d/d_demo.h"

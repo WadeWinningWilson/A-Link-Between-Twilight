@@ -4,6 +4,8 @@
 
 **Chat origin:** ALBW shop-navigation feature work (Claude). Broader sumo research/spike notes were kept in that chat's handoff.
 
+**Interconnected chat (outfit cycle + quick-swap):** [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) — shared API contract, save bits, and cross-chat messages with the D-Pad Quick Swap session.
+
 ---
 
 ## Agent onboarding (read before coding)

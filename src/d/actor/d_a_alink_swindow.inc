@@ -82,6 +82,13 @@ void daAlink_c::setOriginalHeap(JKRExpHeap** i_ppheap, u32 i_size) {
 
 void daAlink_c::setClothesChange(int param_0) {
     if (!checkWolf()) {
+#if TARGET_PC
+        // Ignore re-entrant requests while a reload is in flight — resetting the
+        // timer mid-sequence corrupts loadModelDVD() and crashes under mash/warp.
+        if (mClothesChangeWaitTimer != 0) {
+            return;
+        }
+#endif
         mClothesChangeWaitTimer = 4;
 
         if (param_0 != 0) {

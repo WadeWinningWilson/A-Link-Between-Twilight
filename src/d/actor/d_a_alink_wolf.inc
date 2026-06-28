@@ -311,6 +311,11 @@ void daAlink_c::changeWolf() {
 
 void daAlink_c::changeLink(int param_0) {
     JKRHeap* current_heap = mAnmHeap3.setAnimeHeap();
+#if TARGET_PC
+    if (dAlbwOutfit_isSumoWorn() && dAlbwSumoTest_prepareChangeLink()) {
+        onNoResetFlg2(FLG2_UNK_200000);
+    }
+#endif
     offNoResetFlg2(daPy_FLG2(FLG2_UNK_100000 | FLG2_UNK_80000));
     mMagicArmorBodyBrk = NULL;
     mMagicArmorHeadBrk = NULL;

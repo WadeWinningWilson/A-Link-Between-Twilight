@@ -321,6 +321,21 @@ Prefer **`git restore path`** only when the user explicitly names the file.
 
 ---
 
+## Addendum: Sumo/outfit per-frame sync flag (2026-06-27)
+
+**Context:** Sumo Outfit / D-pad outfit quick-swap, step 3 (`d_albw_outfit`, commit `b21540ba7a`). Flagged by the feature chat for a measured FPS check — **not yet profiled**.
+
+**What was added (per-frame):** `dAlbwOutfit_syncWornOwnership()` is called from the **top of `dAlbwSumoTest_exec()`** (which `daAlink_c::execute()` runs every frame), **ahead of the sumo early-out**, so it executes every frame even when the sumo outfit is off.
+
+- **Cost:** `dComIfGs_getSelectEquipClothes()` (inline) + one `dComIfGs_isEventBit()` read; a single `dComIfGs_onEventBit()` write only on the first frame a newly-worn outfit is seen. No file I/O, no `getSettings().game.*.getValue()` in the loop.
+- Same step also changed `exec()`'s `want` from a `ConfigVar::getValue()` to an `isEventBit()` read (worn state moved to save bit 700) — roughly neutral.
+
+**Possible issue:** user reported a **possible, unconfirmed** FPS change after step 3 landed. Could be measurement noise or the version-string bump recompiling ~1400 files (timing shuffle), not the sync itself. Needs a measured **field `F_SP121` r0 p0** + **Armogohma** pass vs. baseline to confirm real vs. noise.
+
+**If it is real:** a clothes-change gate was **deliberately not** added — gating on "clothes changed since last frame" would skip seeding after an in-session save→load to a different file (stale cached clothes). Optimize with a **save-load-aware reset**, not by reverting the own-what-you-wear feature (see [hud-performance-handoff.md](hud-performance-handoff.md) hard constraint: optimize in place).
+
+---
+
 ## Related docs
 
 | Doc | Topic |

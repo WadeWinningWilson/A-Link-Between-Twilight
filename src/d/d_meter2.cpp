@@ -30,6 +30,7 @@
 #include "d/d_albw_master_quest.h"
 #include "d/d_albw_rental.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_sumo_test.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_flurry_rush.h"
 #include "d/d_attention.h"
@@ -1088,6 +1089,12 @@ void dMeter2_grantRentalClothes(u8 itemNo) {
     dComIfGs_onItemFirstBit(itemNo);
     dComIfGs_setSelectEquipClothes(itemNo);
     dComIfGp_setSelectEquipClothes(itemNo);
+#if TARGET_PC
+    // Sumo overlay revert owns the setClothesChange(0) when the body is swapped in.
+    if (dAlbwSumoTest_isOutfitActive()) {
+        return;
+    }
+#endif
     if (daPy_getPlayerActorClass() != NULL) {
         daPy_getPlayerActorClass()->setClothesChange(0);
     }

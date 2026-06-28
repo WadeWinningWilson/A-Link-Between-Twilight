@@ -2,6 +2,8 @@
 
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_player.h"
+#include "d/d_albw_outfit.h"
+#include "d/d_albw_outfit_debug.h"
 #include "d/d_albw_rental.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
@@ -32,7 +34,17 @@ void applyDpadQuickSwapPresetBinds() {
 
     presetIfUnset(binds.cycleSword[0], SDL_GAMEPAD_BUTTON_DPAD_UP);
     presetIfUnset(binds.cycleShield[0], SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
-    presetIfUnset(binds.quickTransform[0], SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+
+    // Down was quick transform at ship; migrate to outfit cycle (Down = CYCLE_OUTFIT, R+Y = transform).
+    if (binds.cycleOutfit[0].getValue() == PAD_NATIVE_BUTTON_INVALID) {
+        if (binds.quickTransform[0].getValue() == SDL_GAMEPAD_BUTTON_DPAD_DOWN) {
+            binds.cycleOutfit[0].setValue(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+            binds.quickTransform[0].setValue(PAD_NATIVE_BUTTON_INVALID);
+        } else {
+            binds.cycleOutfit[0].setValue(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        }
+    }
+
     presetIfUnset(binds.openMapScreen[0], SDL_SCANCODE_M);
     presetIfUnset(binds.toggleMinimap[0], SDL_SCANCODE_TAB);
     presetIfUnset(binds.openItemWheel[0], SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
@@ -148,6 +160,35 @@ void cycleNextShield() {
     if (!dMeter2_equipOwnedShield(next)) {
         return;
     }
+
+    Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    dMeter2Info_set2DVibration();
+}
+
+void cycleNextOutfit() {
+    if (!canUseDpadQuickSwap(0)) {
+        return;
+    }
+
+    daPy_py_c* player = daPy_getLinkPlayerActorClass();
+    if (player == nullptr || player->checkWolf()) {
+        return;
+    }
+
+    const dAlbwOutfitKind current = dAlbwOutfit_getActive();
+    const dAlbwOutfitKind next = dAlbwOutfit_getNextOwned(current);
+    if (next == current) {
+        dAlbwOutfit_debugLog("cycle no-op cur=%d next=%d clothTmr=%d", (int)current, (int)next,
+                             player->getClothesChangeWaitTimer());
+        return;
+    }
+
+    if (!dAlbwOutfit_equip(next)) {
+        dAlbwOutfit_debugLog("cycle queued cur=%d next=%d", (int)current, (int)next);
+        return;
+    }
+
+    dAlbwOutfit_debugLog("cycle ok cur=%d next=%d", (int)current, (int)next);
 
     Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
     dMeter2Info_set2DVibration();

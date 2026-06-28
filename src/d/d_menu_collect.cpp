@@ -37,6 +37,7 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 
 #if TARGET_PC
+#include "d/d_albw_sumo_test.h"
 #include "dusk/menu_pointer.h"
 #endif
 
@@ -580,6 +581,14 @@ void dMenu_Collect2D_c::screenSet() {
     field_0x22d[0][2] = 0;
     field_0x22d[1][2] = 0;
     field_0x22d[2][2] = 0;
+#if TARGET_PC
+    // ALBW wardrobe: show owned alternate outfits even while Ordon is equipped.
+    // Vanilla hides this row whenever WEAR_CASUAL is active, which breaks the
+    // collection screen after buying Ordon from the rental shop.
+    field_0x22d[3][2] = dComIfGs_isItemFirstBit(0x2F);
+    field_0x22d[4][2] = dComIfGs_isItemFirstBit(0x31);
+    field_0x22d[5][2] = dComIfGs_isItemFirstBit(0x30);
+#else
     if (dComIfGs_getSelectEquipClothes() == dItemNo_WEAR_CASUAL_e) {
         field_0x22d[3][2] = 0;
         field_0x22d[4][2] = 0;
@@ -589,6 +598,7 @@ void dMenu_Collect2D_c::screenSet() {
         field_0x22d[4][2] = dComIfGs_isItemFirstBit(0x31);
         field_0x22d[5][2] = dComIfGs_isItemFirstBit(0x30);
     }
+#endif
     field_0x22d[6][2] = 0;
     field_0x22d[0][3] = 1;
     if (checkItemGet(dItemNo_BOW_e, 1)) {
@@ -1282,6 +1292,9 @@ void dMenu_Collect2D_c::changeShield() {
 }
 
 void dMenu_Collect2D_c::changeClothe() {
+#if TARGET_PC
+    dAlbwSumoTest_clearWorn();
+#endif
     switch (mCursorX) {
     case 3:
         if (dComIfGs_getSelectEquipClothes() != dItemNo_WEAR_KOKIRI_e) {

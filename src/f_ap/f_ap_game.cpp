@@ -769,23 +769,29 @@ static void duskExecute() {
     }
 
     if (dusk::isPadModifierRHeldExclusive(PAD_1) && mDoCPd_c::getTrigY(PAD_1)) {
-        if (!dusk::isDpadQuickSwapEnabled()) {
-            if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
-                dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
-            }
+        if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
+            dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
         }
     }
 
     if (dusk::canUseDpadQuickSwap(0)) {
         if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
-            if (dusk::getActionBindTrig(dusk::ActionBinds::QUICK_TRANSFORM, 0)) {
-                dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
-            }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SWORD, 0)) {
                 dusk::cycleNextSword();
             }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SHIELD, 0)) {
                 dusk::cycleNextShield();
+            }
+            if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_OUTFIT, 0)) {
+                dusk::cycleNextOutfit();
+            }
+        }
+    }
+
+    if (dusk::getActionBindTrig(dusk::ActionBinds::QUICK_TRANSFORM, 0)) {
+        if (!dusk::quickTransformBoundToDpadDown(0)) {
+            if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
+                dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
             }
         }
     }

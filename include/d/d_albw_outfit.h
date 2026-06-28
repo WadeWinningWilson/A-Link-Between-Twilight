@@ -61,6 +61,25 @@ dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current);
 // Hero's post-Faron, Zora/Magic via story) register as owned for the cycle.
 void dAlbwOutfit_syncWornOwnership();
 
+// False while a stage transition, overlap load, or clothes reload is in flight —
+// outfit equip / sumo setClothesChange must not run (crashes on field warp).
+bool dAlbwOutfit_canTouchLinkModel();
+
+// True while a clothes reload or sumo overlay transition is active.
+bool dAlbwOutfit_isSwapInProgress();
+
+// Drain a single pending D-pad equip once the model is safe (call from Link execute).
+void dAlbwOutfit_processPendingEquip();
+
+// Single gateway: keep save-bit target and Link model in sync (call from sumo exec).
+void dAlbwOutfit_syncLinkModel(daAlink_c* link);
+
+// Reset model-sync tracking at warp/overlap (phased loads reset separately).
+void dAlbwOutfit_onStageTransitionBegin();
+
+// Stage warp / overlap only — revert path may still run during clothes reload.
+bool dAlbwOutfit_isStageTransitionUnsafe();
+
 #endif  // TARGET_PC
 
 #endif /* D_ALBW_OUTFIT_H */
