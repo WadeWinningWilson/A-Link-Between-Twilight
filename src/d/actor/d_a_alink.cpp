@@ -20014,6 +20014,36 @@ void daAlink_c::basicModelDraw(J3DModel* i_model) {
 }
 
 void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (freed-arc model backstop + instrumentation)
+    // The cycling crash (rva=0x3ab43a): under heavy outfit cycling a clothes change can
+    // leave one of Link's models pointing at a J3DModelData in an arc heap that was
+    // freed (freeAll) without that model being rebuilt — the model-lifecycle root.  The
+    // env-light pass below (setLightTevColorType_MAJI -> J3DMaterial::getFog) then walks
+    // freed material memory and faults on a garbage pointer.  The J3DModel object itself
+    // is still valid (stable heap), so a NULL check alone can't catch it — but a dangling
+    // J3DModelData reads back a wild material count (Link's real models have < ~20).  We
+    // read getMaterialNum() here, which is STRICTLY shallower than the faulting walk, so
+    // this never adds crash surface; if it looks corrupt, skip the draw (the model just
+    // misses a frame, already mid-cycle) and log WHICH model so the stale free->build
+    // handoff is pinpointed for the precise upstream fix.
+    // ============================================
+    if (i_model == NULL) {
+        return;
+    }
+    {
+        J3DModelData* md = i_model->getModelData();
+        u16 matNum = (md != NULL) ? md->getMaterialNum() : 0xFFFF;
+        if (md == NULL || matNum > 256) {
+            OSReport("daAlink_c::modelDraw: skip corrupt model=%p md=%p mat=%u "
+                     "[body=%p face=%p hat=%p hand=%p]\n",
+                     i_model, md, matNum, mpLinkModel, mpLinkFaceModel, mpLinkHatModel,
+                     mpLinkHandModel);
+            return;
+        }
+    }
+#endif
     g_env_light.setLightTevColorType_MAJI(i_model, &tevStr);
 
     if (param_1 == 0) {

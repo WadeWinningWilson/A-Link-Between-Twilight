@@ -36,11 +36,13 @@ A **checkpoint commit** was taken on top of the previous stable commit **`69e6aa
 - (A+B, D, cap-residency were tried and **reverted**; net Sumo change vs `69e6aaf5eb` = the Magic-draw safety + `C`.)
 - Plus the parallel chats' in-tree work (Magic Armor, wardrobe, Deity shop, etc.).
 
-**KNOWN-OPEN in this checkpoint:** the **cycling crash** — `rva=0x3ab43a` (`daAlink_c::draw → setLightTevColorType_MAJI → J3DMaterial::getFog`), a draw of a model whose `J3DModelData` was freed during heavy cycling (the freed-arc/model-lifecycle root). NOT fixed here; instrumentation lands next.
+**Cycling crash — BACKSTOPPED (2026-06-30, follow-up commit):** `rva=0x3ab43a` (`daAlink_c::draw → setLightTevColorType_MAJI → J3DMaterial::getFog`) was a draw of a model whose `J3DModelData` was freed during heavy cycling (the freed-arc/model-lifecycle root). **`daAlink_c::modelDraw` now skips any model whose data reads back a wild material count (> 256 vs Link's < ~20) and logs which model (`body`/`face`/`hat`/`hand`).** It reads a *shallower* field than the faulting env-light walk, so it adds no crash surface. **Result: free cycling through all outfits with no crash (user-verified).** This is a backstop, not the upstream cure — the model still goes momentarily stale (possible 1-frame flicker); the real fix is to stop a swap leaving a live model pointing at a freed arc. The `modelDraw` log names the stale model so that root can be chased next.
+
+**Cap-lost over Magic/Ordon base — KNOWN LIMITATION (not a regression):** user observed the sumo Link Hat renders with all four outfits owned (passing through Hero's/Zora bases) but **vanishes to the topknot once down to Magic + sumo**. Root: the cap model `al_head` lives in **`Kmdl`**, which is only resident on a **Hero's** base (it *is* Kmdl) or **Zora** (chin-strap face donor). On a **Magic/Ordon** base Kmdl isn't loaded → `getObjectRes(Kmdl, al_head)` NULL → topknot fallback. This is the committed `Kmdl`-Zora-only behavior. The *fix* (hold Kmdl on all bases) is exactly the cap-residency generalization that caused the shop-buy-Zora **shadow** crash (dangling cap via `addRealShadow`), and the current `modelDraw` backstop does NOT cover the shadow path — so cap-over-all-bases stays deferred to the **model-agnostic cap redesign** (or a safe Kmdl residency + a shadow-pass guard).
 
 **To roll back to `69e6aaf5eb` (the commit BEFORE this checkpoint):**
 - Full rollback, discard the checkpoint: `git reset --hard 69e6aaf5eb` *(destructive — loses uncommitted work; the checkpoint stays recoverable via `git reflog`)*.
-- Or undo just the checkpoint's changes as a new commit, keeping history: `git revert <checkpoint-hash>`.
+- Or undo just the checkpoint's changes as a new commit, keeping history: `git revert 3a345b5b5d`.
 - Or restore only the Sumo-draw files to the prior state (ask first — `git checkout` is gated): `git checkout 69e6aaf5eb -- src/d/actor/d_a_alink.cpp src/d/actor/d_a_alink_wolf.inc`.
 
 ---
