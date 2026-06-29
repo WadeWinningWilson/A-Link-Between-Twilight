@@ -378,12 +378,39 @@ void daAlink_c::changeLink(int param_0) {
         mpLinkHandModel =
             initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_zArcName, "al_hands.bmd")), 0);
     } else if (checkMagicArmorWearFlg()) {
-        mpLinkModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml.bmd")), 0x1000000);
-        mpLinkHatModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml_head.bmd")), 0x1000000);
-        mpLinkHandModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "al_hands.bmd")), 0);
+        J3DModelData* bodyData =
+            static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml.bmd"));
+        J3DModelData* headData =
+            static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml_head.bmd"));
+        J3DModelData* handData =
+            static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "al_hands.bmd"));
+        bool useMmdlFlags = bodyData != NULL && headData != NULL && handData != NULL;
+        // Tell draw() whether this is the REAL Magic model.  On the Kmdl fallback below,
+        // the body is Link's Hero's body but the wear flag stays Magic; draw() must NOT
+        // run its Magic-only material/Brk ops on it (it reads off the end and crashes).
+        s_albwMagicModelReady = useMmdlFlags;
+        if (!useMmdlFlags) {
+            // Log the Mmdl residency state so the ROOT (why ml.bmd isn't resolvable on a
+            // shop-buy under churn) is visible: a registered-but-null archive == freed /
+            // mid-read (aliasing class); not-registered == never loaded.
+            dRes_info_c* mmdlInfo = g_dComIfG_gameInfo.mResControl.getObjectResInfo(l_mArcName);
+            OSReport("changeLink Magic Armor: missing Mmdl part in %s (body=%p head=%p hand=%p) "
+                     "resInfo=%p archive=%p\n",
+                     l_mArcName, bodyData, headData, handData, mmdlInfo,
+                     mmdlInfo != NULL ? mmdlInfo->getArchive() : NULL);
+            bodyData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al.bmd"));
+            headData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_head.bmd"));
+            handData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_hands.bmd"));
+        }
+        if (bodyData != NULL) {
+            mpLinkModel = initModel(bodyData, useMmdlFlags ? 0x1000000 : 0);
+        }
+        if (headData != NULL) {
+            mpLinkHatModel = initModel(headData, useMmdlFlags ? 0x1000000 : 0);
+        }
+        if (handData != NULL) {
+            mpLinkHandModel = initModel(handData, 0);
+        }
 
 #if TARGET_PC
         if (dComIfGs_getRupee() != 0 || dusk::getSettings().game.armorRupeeDrain.getValue() != dusk::MagicArmorMode::NORMAL)
@@ -391,13 +418,14 @@ void daAlink_c::changeLink(int param_0) {
         if (dComIfGs_getRupee() != 0)
 #endif
         {
-            setMagicArmorBrk(1);
-        } else {
-            setMagicArmorBrk(0);
+            if (setMagicArmorBrk(1)) {
+                mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+            }
+        } else if (setMagicArmorBrk(0)) {
+            mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+            mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
         }
-
-        mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
-        mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
     } else {
         mpLinkModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al.bmd")), 0);
         mpLinkHatModel =

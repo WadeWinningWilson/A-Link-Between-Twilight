@@ -12,15 +12,86 @@
 
 ## ⚡ Session handoff (2026-06-28) — read first
 
-**Done & working:** native cross-base double-free **fixed** (removed the pre-emptive `setArcName(0)` in `requestClothesChange` — it made `loadModelDVD`'s `resDelete` target the new arc → leaked old slot → double-free); full rotation works (`getNextOwned(SUMO)` = **simple ring**, peel-to-base reverted — it caused an absorbing Sumo↔base 2-cycle); shop/Zora purchase works. *All in `d_albw_outfit.cpp`, **uncommitted**, on top of HEAD `fdbc6d4734`.*
+**Done & working:** native cross-base double-free **fixed** (removed the pre-emptive `setArcName(0)` in `requestClothesChange` — it made `loadModelDVD`'s `resDelete` target the new arc → leaked old slot → double-free); full rotation works (`getNextOwned(SUMO)` = **simple ring**, peel-to-base reverted — it caused an absorbing Sumo↔base 2-cycle); shop/Zora purchase works; **storage + quick-swap + cutscene persistence all verified**. *Committed as one working-build snapshot in **`69e6aaf5eb`** (not pushed).*
 
-**Active blocker — dual-`Kmdl`:** sumo face borrows `Kmdl` for `al_face` (chin-strap fix `415c763f48`), but **`Kmdl` IS Hero's clothes**. Two owners, different lifecycles → cycling **sumo→Hero's** crashes (`initModel(NULL)`, fault `0xc8`) and the **Zora chin strap is back**. Can't free the sumo `Kmdl` (shared with Hero's when base was Hero's → double-free; that was a `releaseSumoKmdl` attempt, reverted). **It worked before** — regression surfaced once the wardrobe + full rotation let you cycle sumo→Hero's.
+**✅ RESOLVED & COMMITTED (`69e6aaf5eb`, option b) — dual-`Kmdl` / chin strap:** Root was NOT "two owners of Hero's clothes." The resource manager (`d_resorce.cpp`) is **refcounted by arc NAME** (`setRes`→`incCount`, one `dRes_info_c` per name — not duplicate registrations). The real failure is **heap aliasing**: Link's clothes pipeline frees its arc heap with **`mpArcHeap->freeAll()`, which bypasses the refcount**, so a sumo-side hold on `Kmdl` dangled whenever `Kmdl` was the pipeline's resident base (Hero's) → `getObjectRes` NULL → `initModel(NULL)` crash + the `zl_face` strap fallback. **The strap is exclusively a Zora-base problem** (`Bmdl`/`Kmdl`/`Mmdl` all ship `al_face`; only `Zmdl` lacks it). **Fix:** `changeLink` sources the sumo face from the resident base arc `mArcName` for non-Zora bases, and borrows `Kmdl`'s `al_face` **only** for the Zora base; `d_albw_sumo_test` gates the `sKmdlPhase` donor to `checkZoraWearFlg()` (`releaseFaceDonor()` otherwise) — over Zora the pipeline holds `Zmdl`, so the donor `Kmdl` is an independent entry, never aliased, safe to free.
 
-**Next:** either (a) disable sumo's separate `Kmdl` residency (`resourcesReady` stops loading `sKmdlPhase`) → crash-free, Zora strap = cosmetic TODO, or (b) give the sumo face a **non-colliding `al_face` source** for the Zora base. Then commit the `d_albw_outfit.cpp` work.
+**⚠️ Before extending the cycle (Magic Armor / Fierce Deity): read "CAUTION — extending the cycle" below.** Magic ring + shop path **verified (2026-06-29)**. **Active fix:** cutscene desync + draw crash — **Sumo implements A–E + F (equip)**; **Quick Swap implements F (D-pad coalesce) + #6 storage guard**. Ship order **E → A+B → C+D+F** (see ownership decision below).
 
-**Still owed:** Quick Swap/Resistance **#6 storage guard** (`d_albw_wardrobe.cpp`) — can't store the base under the sumo overlay (`swapEquippedOutfitIfStored` is blind to it since `getActive()`==SUMO while worn).
+**Still owed:** Quick Swap/Resistance **#6 storage guard** (`d_albw_wardrobe.cpp`).
+
+**Outfit Stats chat (2026-06-28):** Magic Armor fixes + outfit damage/swim/Sumo kit are **mostly independent** of the D-pad cycle — full matrix in [Outfit Stats.md §7](../Outfit%20Stats.md#7-quick-swap-interactions-outfit-stats-chat--2026-06-28). Main couplings: depowered Magic blocks swap-away; sumo peel flips active mult; stat/armor work must not touch arc/`applyTargetKind`.
+
+**Deity Armor shop (2026-06-28 — locked):** **Never** in D-pad ring. Enter/exit via Postman shop only — [albw-deity-armor-shop.md](../albw-deity-armor-shop.md). Flag-on-Magic + 5000/session auto-store ceremony; Magic row = store/end Deity. Future FD **overlay** bring-up still obeys CAUTION § below; v1 shop spec is in that doc.
 
 **Crash triage:** main log `…/logs/dusklight-<ts>.log` has `rva=`; symbolize with `llvm-symbolizer --obj=…/dusklight.exe <0x140000000+rva>`. Swap trace: `outfit_swap_debug.txt`.
+
+---
+
+## 🔖 Checkpoint + rollback (2026-06-30)
+
+A **checkpoint commit** was taken on top of the previous stable commit **`69e6aaf5eb`** (chin strap + dual-Kmdl fixed; storage/quick-swap/cutscene verified). The checkpoint captures, on the Sumo side:
+- **Magic-Armor-buy crash FIXED** — `s_albwMagicModelReady` flag in `d_a_alink.cpp`/`changeLink`: when the Magic branch falls back to the Kmdl (Hero's) body, `draw()` no longer runs Magic-only material/Brk ops on it (was reading off the end → crash). Plus a Magic-Brk null-guard in `draw()`.
+- **`C`** — `sSyncedNativeClothes` re-seeded under the overlay (no `synced=255` spurious reloads).
+- (A+B, D, cap-residency were tried and **reverted**; net Sumo change vs `69e6aaf5eb` = the Magic-draw safety + `C`.)
+- Plus the parallel chats' in-tree work (Magic Armor, wardrobe, Deity shop, etc.).
+
+**KNOWN-OPEN in this checkpoint:** the **cycling crash** — `rva=0x3ab43a` (`daAlink_c::draw → setLightTevColorType_MAJI → J3DMaterial::getFog`), a draw of a model whose `J3DModelData` was freed during heavy cycling (the freed-arc/model-lifecycle root). NOT fixed here; instrumentation lands next.
+
+**To roll back to `69e6aaf5eb` (the commit BEFORE this checkpoint):**
+- Full rollback, discard the checkpoint: `git reset --hard 69e6aaf5eb` *(destructive — loses uncommitted work; the checkpoint stays recoverable via `git reflog`)*.
+- Or undo just the checkpoint's changes as a new commit, keeping history: `git revert <checkpoint-hash>`.
+- Or restore only the Sumo-draw files to the prior state (ask first — `git checkout` is gated): `git checkout 69e6aaf5eb -- src/d/actor/d_a_alink.cpp src/d/actor/d_a_alink_wolf.inc`.
+
+---
+
+## ⚠️ CAUTION — extending the cycle to Magic Armor / Fierce Deity (read before coding)
+
+**Sumo Chat (2026-06-28).** The storage + quick-swap + no-chin-strap system is a *stable whole* held together by a few non-obvious invariants (snapshot `69e6aaf5eb`). Adding **Magic Armor** and **Fierce Deity** to the rotation is exactly where they're easiest to break. This is the do/don't list — honor it or you re-introduce the dual-`Kmdl` crash class.
+
+### The one rule that matters most — the `freeAll`/refcount aliasing trap
+
+The resource manager (`d_resorce.cpp`) is **refcounted by arc NAME** (`setRes`→`incCount`, `deleteRes`→`decCount`; one `dRes_info_c` per name — NOT duplicate registrations). BUT Link's clothes pipeline (`loadModelDVD`) frees its arc heap with **`mpArcHeap->freeAll()`, which bypasses the refcount**. Therefore:
+
+> **NEVER keep a clothes-pipeline arc (`Bmdl`/`Zmdl`/`Mmdl`/`Kmdl`) resident via a *separate* phase request while that same arc can be Link's equipped base.** Your held reference dangles the instant the pipeline `freeAll()`s that base → `getObjectRes` NULL → `initModel(NULL)` crash (and any NULL-face fallback is a "strap"-class cosmetic bug).
+
+This is precisely what broke the chin strap. The fix only borrows `Kmdl` for the face **on the Zora base**, where the pipeline holds `Zmdl` instead — so the donor `Kmdl` is independent. **If a new overlay needs a base arc's part, gate the borrow to a base where the pipeline holds a *different* arc, or source it from the overlay's OWN arc.** (The old unconditional `releaseSumoKmdl()` double-freed for the same reason — it freed a `Kmdl` that aliased the pipeline's `mpArcHeap` copy.)
+
+### Magic Armor — native clothes (the easy one, but two gotchas)
+
+Magic Armor IS a native clothes type (`checkMagicArmorWearFlg()` → `Mmdl`), so most cycle machinery already covers it (enum `D_ALBW_OUTFIT_MAGIC`, ring slot after Zora, stash bit 694, own-what-you-wear).
+
+- **DO** rely on `Mmdl` shipping `al_face.bmd`: sumo-over-Magic and Magic-as-base need **no face donor** — the non-Zora branch in `changeLink` already reads `al_face` from `mArcName=Mmdl`. **No strap risk for Magic.**
+- **DON'T** let quick-swap cycle *away from* Magic Armor while it's **depowered/heavy** (0 rupees). Already blocked by `dAlbwOutfit_isSwapBlockedState()` (`checkBootsOrArmorHeavy`) → parry-deny SFX. Equipping *into* Magic is fine; it's the model rebuild during scripted heavy movement that teleports Link (bug #2). Keep the gate.
+- **WATCH** the `changeLink` Magic branch: it builds `ml.bmd`/`ml_head.bmd` with flag `0x1000000` and sets up the rupee-drain BRK anims (`mMagicArmorBodyBrk/HeadBrk`). If an overlay (sumo/Deity) ever sits *over* a Magic base, that path differs from the normal `al.bmd`/`Kmdl` body build — don't assume the standard path.
+
+### Fierce Deity — a model-swap OVERLAY, NOT native clothes (treat it like a second Sumo)
+
+There is **no Deity clothes arc** in the base set — Deity is a custom model like `alSumou`. Architecturally **Deity ≈ Sumo**: a per-frame model-swap STATE, not a `dItemNo_WEAR_*`. It inherits the entire Sumo gotcha list:
+
+- **DO** give Deity its **own arc + own phase request** (like `sPhase`/`alSumou`), resident only while worn, and **source its face/parts from its own arc** or a base-arc-gated donor (see the aliasing rule). Never borrow `Kmdl`/`Mmdl`/etc. unconditionally.
+- **DO** replicate the **leave discipline**: clear the overlay's model FLG2 bits **before** `setCloth` (the way `applyTargetKind` clears `FLG2_UNK_200000`+`FLG2_UNK_80000` for sumo) so `loadModelDVD` runs its **normal reload path**, not the skip-path (skip-path builds from non-resident arcs → crash; this was the original sumo↔native crash `89ac586434`).
+- **DO** claim a **new per-save "Deity worn" bit**. Sumo worn = 700; Deity *stash/ownership* = 695, but "currently worn" needs its own bit — take the next free one **past 700** (NOT 697–699, those are Quick Swap's limiter), document it in the save-bit map, and make `getActive()` return DEITY when set.
+- **DON'T** add Deity to the live ring until its overlay is crash-clean — keep `getNextOwned` skipping it (already `D_ALBW_OUTFIT_DEITY` reserved). Add it only after it passes the full retest.
+- **MIND** equipment joints + draw gates: sumo needed BLS joint indices (9/14/10/15) and the `checkSwordDraw`/`checkShieldDraw` sumo-bit drop. If Deity uses a different skeleton it needs its own joint map + draw handling; if it reuses Link's skeleton it may not.
+
+### Invariants that must stay true for ANY new entry
+
+1. **`nativeClothesResourcesReady()` stays a no-op (`return true`).** Do NOT add a second loader for a clothes arc — residency is the clothes pipeline's job; dual-loading was the cross-base/Zora crash.
+2. **`getActive()` = TARGET semantics; ring stays simple.** No peel-to-base 2-cycle (it stranded other outfits).
+3. **Storage guard (#6):** the wardrobe must not store the native base sitting *under* an overlay (`getActive()` returns the overlay while worn, so `swapEquippedOutfitIfStored` is blind to it). Any new overlay (Deity) must be covered by the same guard sumo uses.
+4. **Swap-block gate:** add any new slow/scripted-movement state (e.g. a Deity transform anim) to `dAlbwOutfit_isSwapBlockedState()` so cycling during it is **blocked**, not crashed/teleported.
+
+### Re-test matrix after adding Magic/Deity (all must pass)
+
+- [ ] Cycle into/out of Magic Armor with **0 rupees (depowered)** and with rupees — no teleport; swap-away blocked while heavy.
+- [ ] Sumo-over-Magic → other outfits — face correct, no crash.
+- [ ] Store Magic; store the base under sumo/Deity — no strand, no crash.
+- [ ] (Deity) cycle in/out; face correct; **cutscene** persistence; storage; warp.
+- [ ] Full ring through ALL owned (Sumo→Ordon→Hero's→Zora→Magic→Deity) — no crash, **no Zora strap regression**.
+- [ ] `outfit_swap_debug.txt`: one reload per transition, no apply/revert ping-pong.
+
+**Logger note:** `D_ALBW_OUTFIT_SWAP_DEBUG` stays **enabled** during this work (you'll want the swap trace for Magic/Deity bring-up). **Strip it before any upstream push.**
 
 ---
 
@@ -60,6 +131,9 @@ This file lives under `docs/Interconnected Chats/` — a shared workspace for **
 | Eviction (future) | Wearing evicted slot → Hero's default; vanilla forced outfit → vanilla wins |
 | **Sumo→base peel** | First Down off sumo peels to the base under the overlay (`kindForClothes(getSelectEquipClothes())`). **Only** pool-gate exception — defined as sumo-active + requested itemNo == equipped clothes; all other equips respect `isActiveOutfit`. Sumo implements in `d_albw_outfit.cpp` (2026-06-28) |
 | **Cross-base sumo leave** | Never performed in one step. `applyTargetKind` auto-decomposes any cross-base leave (any caller) into same-base peel + `sPendingEquip` for the real target |
+| **Magic shop equip timing** | **Immediate** on purchase — same path as Ordon/Hero's/Zora; fix Magic on the shared pipeline, do not defer shop equips (Quick Swap 2026-06-29) |
+| **Cutscene outfit cycling** | **Allowed** — D-pad stress during cutscenes is intentional; do not gate cycle on demo/event (Quick Swap 2026-06-29) |
+| **Sumo cap / synced=255 fixes** | A–E + F equip: **Sumo**; F D-pad coalesce: **Quick Swap**; ship **E → A+B → C+D+F** (Quick Swap sign-off 2026-06-29) |
 
 ---
 
@@ -857,6 +931,359 @@ D-pad path now: `getNextOwned(SUMO)` → base → `equip(base)` is a same-base p
 
 ---
 
+## Quick Swap Chat: outfit swap snapshot + Magic Armor intentions (2026-06-29)
+
+### Locked intention — Magic uses the **default** shop path (no defer)
+
+| Decision | Detail |
+|----------|--------|
+| **Shop UX** | Keep **immediate** equip on purchase for **all** native clothes (Ordon, Hero's, Zora, **Magic**). Buy → fanfare → model swap **while the shop is still open**. Responsiveness is intentional. |
+| **Do NOT** | Defer native outfit equips to shop close / farewell / `justClosed`. That would change every armor row, not just Magic. |
+| **Magic fix scope** | Make Magic **safe on the shared path** (`tryPurchase` → `dAlbwOutfit_equip` → `applyTargetKind` → `syncLinkModel` → `loadModelDVD` → `changeLink`). Harden the Magic-only `Mmdl` / BRK setup — do not special-case shop timing. |
+| **Deity (later)** | Flag-on-Magic only for now; not in the live ring until overlay design lands. |
+
+**Crash context (2026-06-28):** Shop buy Magic with debug rentable toggle → `outfit_swap_debug.txt` last line `target native kind=4 item=48`, no `sync`/`settled` → `EXCEPTION_ACCESS_VIOLATION` at `0x10` during TALK (shop). Likely null deref in `setMagicArmorBrk()` / Magic `changeLink` when `Mmdl` BRK or BMD lookups fail on first `Mmdl` load. D-pad Magic **can** work in the same session once `Mmdl` is hot — shop crash is not “Magic never works,” it’s “first/eager Magic reload not hardened.”
+
+**Editor aids (same session):** Hero's / Zora shop gating via `dMeter2_isHerosWearEligible` / `dMeter2_isZoraWearEligible`; `game.albwMagicArmorRentableDebug` lists Magic before story strip (save bits persist when toggle off).
+
+---
+
+### How outfit swapping works **right now** (functional, fragile)
+
+Snapshot as of **`69e6aaf5eb` + Quick Swap session work**. System is **working in play** (storage, quick-swap, cutscenes, no chin strap) but still has **timing / sumo-delay worries** — treat as a stable whole, not a finished pipeline.
+
+#### Actors and files
+
+| Layer | Role |
+|-------|------|
+| **`d_albw_outfit.cpp`** | Single funnel: ownership, `equip()`, `getNextOwned()` ring, `applyTargetKind()`, `syncLinkModel()`, pending queue, reload cooldown |
+| **`d_albw_sumo_test.cpp`** | Sumo overlay residency, `exec()` → `syncLinkModel` + `processPendingEquip`, cap/fists |
+| **`d_albw_rental.cpp`** | Shop purchase → `recordOwnedByItemNo` + **`dAlbwOutfit_equip`** for native clothes (immediate) |
+| **`dpad_quick_swap.cpp`** | Down → `cycleNextOutfit()` → `getNextOwned` + `equip`; blocked while shop open / swap in progress / heavy state |
+| **`d_a_alink_swindow.inc`** | `loadModelDVD()` — vanilla arc delete/load/`setArcName` timing |
+| **`d_a_alink_wolf.inc`** | `changeLink()` — body/face/hat build per clothes type; sumo + Magic branches |
+
+#### Ring order (live)
+
+`Sumo → Ordon → Hero's → Zora → Magic` — Deity **excluded**. `getNextOwned` scans forward; skips unowned or Postman-stored (Quick Swap pool = `dAlbwWardrobe_isActiveOutfit`). ≤1 owned → Down no-op.
+
+#### Equip funnel (`dAlbwOutfit_equip`)
+
+1. **Gates:** invalid kind; not owned / not in active pool (except **`isSumoPeel`** — peel onto equipped base always allowed, even if base is stored).
+2. **Busy:** clothes timer or `isSwapInProgress()` → queue `sPendingEquip`, return (D-pad logs `cycle queued`).
+3. **Cross-base sumo leave:** if sumo active and target native ≠ `getSelectEquipClothes()` → **decompose:** `applyTargetKind(baseKind)` peel + `sPendingEquip = target` (never overlay-clear + arc switch in one step).
+4. Else **`applyTargetKind(kind)`** → sets save clothes, clears sumo worn bit, FLG2 discipline on sumo leave, `dMeter2Info_setCloth`.
+
+#### Model sync (`dAlbwOutfit_syncLinkModel` — every frame from sumo `exec`)
+
+| State | Action |
+|-------|--------|
+| Clothes timer active | `sReloadPending = true`, return |
+| Pending reload settled | Record `sSyncedNativeClothes`, start cooldown (10 normal / 18 after sumo leave) |
+| Sumo worn ≠ sumo on body | Apply or revert via `requestClothesChange` (no pre-emptive `setArcName`) |
+| Native clothes ≠ synced | `requestClothesChange(0)` → `loadModelDVD` → `changeLink` |
+| Stable | Early return |
+
+**`requestClothesChange`:** only `setClothesChange(param)` — vanilla owns arc delete/load. Pre-emptive `setArcName(0)` was removed (double-free on cross-base native cycle).
+
+#### Shop native clothes (Ordon / Hero's / Zora / Magic)
+
+On **A-press in shop** (`tryPurchase`):
+
+```
+recordOwnedByItemNo → dAlbwOutfit_equip(kind)   // immediate, same for all four
+```
+
+Comment in rental says “change shows on shop exit” — **code does not defer**; swap starts while shop UI + talk event are active. Ordon/Hero's/Zora usually succeed because arcs are already hot. **Sumo shop buy** only sets worn bit; overlay applies via sync (closest to deferred, but still can appear before leaving).
+
+Shields/items: inventory grant only — no clothes pipeline.
+
+#### D-pad vs shop
+
+| | D-pad Down | Shop buy |
+|--|------------|----------|
+| When | Field, shop **closed** | Shop open |
+| Path | `cycleNextOutfit` → `equip` | `tryPurchase` → `equip` |
+| Blocked if | swap in progress, heavy magic, wolf, … | ????? row, insufficient rupees |
+
+Both converge on **`dAlbwOutfit_equip`**.
+
+#### Ownership / storage
+
+- Stash bits **691–694** (+ sumo **689**, worn **700**).
+- **Own what you wear:** `syncWornOwnership` seeds stash when native clothes equipped.
+- Postman **store** removes outfit from active pool (cycle skips); **retrieve** returns to pool (does not auto-equip).
+- **#6 storage guard** still owed: forbid storing native base under sumo overlay.
+
+#### Swap block (`dAlbwOutfit_isSwapBlockedState`)
+
+Depowered Magic (`checkBootsOrArmorHeavy`), ALBW movement exhausted, ghoul rats — D-pad plays cancel SFX; shop does not use this gate.
+
+#### Known worries (not regressions — watch items)
+
+1. **Sumo apply delay / FLG2 lag:** `want` (bit 700) vs `has` (FLG2_UNK_80000) can disagree for a few frames; sync uses `!want`-only gating on settle to avoid double `setClothesChange`. Rapid mash can still hit `cycle blocked: swap in progress`.
+2. **`synced=255` (0xFF):** unset sentinel visible in debug log after some sumo applies — indicates sync tracker drift; worth watching before Magic/Deity work.
+3. **First `Mmdl` load + Magic BRK:** was shop-crash class; **hardened (2026-06-29)** via null-safe `setMagicArmorBrk` + guarded Magic `changeLink`. Full-ring Magic cycling verified in play.
+4. **Cross-base native** without sumo: safe after `setArcName` pre-empt removal; still re-test when adding Magic/Deity to heavy use.
+5. **Cutscene / demo vs sumo cap + `synced=255`:** see **Cutscene stress test findings** below — Sumo chat owns proposal.
+
+#### Debug
+
+- **`outfit_swap_debug.txt`:** `%APPDATA%\TwilitRealm\Dusklight\logs\` (or next to main log).
+- **`D_ALBW_OUTFIT_SWAP_DEBUG`:** still on for bring-up; strip before push.
+
+---
+
+### Quick Swap Chat: Magic verified + cutscene stress test (2026-06-29)
+
+**Magic on default path — working.** Shop buy (debug rentable toggle), full D-pad ring (Sumo → Ordon → Hero's → Zora → Magic), warps, transitions, and cutscene cycling all exercised successfully in one session before stress limits hit. Magic hardening (`setMagicArmorBrk` null-guards + Magic `changeLink` BMD checks) appears sufficient for the shared immediate-equip path.
+
+Two issues surfaced under cutscene stress — both align with the pre-existing **`synced=255` / sumo-delay** worries, not a Magic regression.
+
+#### Issue A — Link cap lost after cutscene skip (sumo + `game.sumoOutfitHat` ON)
+
+**Symptom:** Sumo worn, cap toggle on in Editor; after entering and skipping a cutscene, sumo body shows **without** Link cap. Second cutscene stress pass continued cycling until crash.
+
+**Log signature (repeating pattern):** back-to-back sumo re-applies with **mismatched hat**, then **`synced=255`**:
+
+```
+sync apply sumo hat=0
+settled want=1 has=1 clothes=49 synced=49
+sync apply sumo hat=1
+settled want=1 has=1 clothes=49 synced=255
+```
+
+(Same on Magic base `clothes=48` at lines ~12632–12637 in the session log.)
+
+**Interpretation:**
+
+| Observation | Meaning |
+|-------------|---------|
+| `sync apply sumo hat=0` | Outfit sync applied sumo **without** cap that frame (`game.sumoOutfitHat` read false at apply time, **or** `sLastAppliedHat` drift forced a mismatched re-apply). |
+| Immediate `sync apply sumo hat=1` | Next frame re-applies sumo **with** cap — ping-pong. |
+| `synced=255` on second settle | `sSyncedNativeClothes` = **0xFF** (unset sentinel). Set by `dAlbwOutfit_onStageTransitionBegin()` during stage-transition-unsafe frames while sumo **still worn** (`want=1`). Settle does **not** refresh `synced` under overlay — tracker drifts. |
+| Cutscene/demo | Vanilla demo can call `changeLink()` **outside** outfit sync — rebuilds sumo body without cap path even though worn bit 700 + cap setting still true. `maintainResources` notes cap is **“parked”** (`d_albw_sumo_test.cpp`). |
+
+**Not** “cap setting turned off in save” — it’s **demo-driven model rebuild vs outfit sync desync**.
+
+Representative log anchors: **12178–12183**, **12219–12243**, **12628–12637** in `outfit_swap_debug.txt` (2026-06-28 ~20:05 session).
+
+#### Issue B — Crash during cutscene full-ring stress test
+
+**Symptom:** Mashing D-pad through all outfits during a cutscene (Link off-camera); eventual crash.
+
+**Outfit log tail:**
+
+```
+target native kind=4 item=48
+cycle ok cur=3 next=4
+sync native cloth=48
+```
+
+(no following `settled` — mid-reload death)
+
+**Main log (`dusklight-20260628-200501.log`):** immediately before crash, **rapid arc thrash** in one burst: `bl.bmd` → `al.bmd` → `zl.bmd` → `ml.bmd` (+ Magic BRKs) → repeat. Crash: `EXCEPTION_ACCESS_VIOLATION`, fault **`0x1b1d7470cf0`** (bad heap pointer — **not** the earlier Magic shop null deref at `0x10`).
+
+**Interpretation:** Historical **loadModelDVD / arc heap stress** class under extreme cross-base cycling, likely **worsened** by prior `synced=255` desync. Heavy-state gate did fire (`cycle blocked: heavy/slow movement state` ~12244+) but stress continued in later cutscene. **Not Magic-specific.**
+
+---
+
+### Response to Sumo chat: proposed fixes + product calls (2026-06-29)
+
+Quick Swap / product feedback on the investigation above. Sumo chat should draft its own implementation proposal; **do not block D-pad during cutscenes** (stress testing is intentional).
+
+| # | Proposal | Product call |
+|---|----------|--------------|
+| **1** | After `onStageTransitionBegin`, while sumo worn: re-seed `sSyncedNativeClothes` from `getSelectEquipClothes()` so `synced` isn’t 255 under overlay | **Desirable** if it does **not** increase lag between D-pad inputs / sumo apply feel |
+| **2** | After cutscene/demo ends: if `isSumoWorn()` && cap setting on, force one sumo re-sync (reconcile `sLastAppliedHat` vs `sumoOutfitHat` / demo `changeLink` drift) | **Desirable** under same **no extra input lag** constraint |
+| **3** | Block D-pad outfit cycle during demo/cutscene events | **Rejected** — stress testing exists to make cutscene cycling **feasible**, not to forbid it |
+| **4** | Treat `synced=255` + double sumo apply (hat flip) as one bug; fix (1) first and see if cap loss + crash threshold improve | **Perhaps** — only if it doesn’t conflict with **`69e6aaf5eb` stability invariants** (no peel-to-base regression, no dual-`Kmdl` borrow, no pre-emptive `setArcName`, simple ring) |
+
+**Sumo chat deliverable:** short proposal for **#1 / #2 / #4** — what to change in `d_albw_outfit.cpp` vs `d_albw_sumo_test.cpp` vs `changeLink` cap path; latency budget (must not regress sumo responsiveness); how to verify without disabling cutscene cycling.
+
+---
+
+### Logs for Sumo chat — read these first
+
+All paths Windows; session **2026-06-28 ~20:05** unless noted.
+
+| Log | Path | What to look for |
+|-----|------|------------------|
+| **Outfit swap trace (primary)** | `%APPDATA%\TwilitRealm\Dusklight\logs\outfit_swap_debug.txt` | **`synced=255`** (17 hits in stress session — grep the file); **`sync apply sumo hat=0`** immediately followed by **`hat=1`**; **`cross-base leave -> peel`** during cutscene stress; lines **12178–12183**, **12219–12243**, **12628–12637**, **12690–12698** (crash tail). |
+| **Main crash + resource load** | `%APPDATA%\TwilitRealm\Dusklight\logs\dusklight-20260628-200501.log` | **`DUSKLIGHT CRASHED`** at end; scrollback ~50 lines for `bl.bmd` / `al.bmd` / `zl.bmd` / `ml.bmd` load storm; `frameInterp` / event type 40 (ZEV) for cutscene context. Symbolize crash PC: `rva=0x3ab43a` (build `69e6aaf5eb` + Magic hardening dirty). |
+| **Earlier Magic shop crash (对比)** | `dusklight-20260628-194342.log` | Pre-hardening shop buy crash; fault **`0x10`**, TALK event — different class from cutscene stress crash. |
+| **Shop UI snapshot (optional)** | `Documents/dusklight/albw_shop_debug.txt` | Magic purchasable row; not needed for cap/cutscene work. |
+
+**Grep cheatsheet for Sumo chat:**
+
+```text
+synced=255
+sync apply sumo hat=0
+sync apply sumo hat=1
+cross-base leave
+cycle blocked
+settled want=
+leave force-reload
+```
+
+**Code anchors for proposal:** `dAlbwOutfit_onStageTransitionBegin` / `syncLinkModel` settle path (`d_albw_outfit.cpp`); `sLastAppliedHat` + sumo apply branch; `dAlbwSumoTest_wantLinkCap()` vs demo `changeLink` sumo branch (`d_a_alink_wolf.inc`); `maintainResources` cap “parked” comment (`d_albw_sumo_test.cpp`).
+
+---
+
+## Sumo Chat — desync + draw-time crash: root cause & proposal (2026-06-29)
+
+**Sumo Chat.** Read both logs. Confirmed the desync mechanism Quick Swap flagged **and** symbolized the crash — which is **not** where we assumed. No code yet; this is the proposal for sign-off.
+
+### What the outfit trace shows (desync)
+
+- **The sumo apply is not idempotent.** One SUMO press produces **2–5 consecutive `sync apply sumo`** lines with the **hat value oscillating** (e.g. `12628–12637`: `hat=1,0,1,1` for a single equip; pairs at `12180/12182`, `12219/12221`, `12240/12242`). Each line is another `setClothesChange(1)` attempt → another model rebuild request.
+- **`synced=255` is produced by that burst, not (only) by transitions.** All 17 hits land on the *last* apply of a multi-apply burst; 16/17 are `clothes=49` (**Zora base**), 1 is `clothes=48` (Magic). `255 = 0xFF` = `sSyncedNativeClothes` wiped to its sentinel **while sumo is worn over clothes** → every following leave must `leave force-reload` (`12188/12207/12227…`), adding reloads.
+- **The hat oscillation traces to the parked cap.** `sLastAppliedHat` vs `wantLinkCap()` (`game.sumoOutfitHat`) disagree and the apply branch re-fires to "reconcile" a cap that **doesn't even render** (parked). That reconcile is pure churn and is the engine of the multi-apply + `synced=255`.
+
+⇒ **Quick Swap #4 is correct: `synced=255` + double-apply (hat flip) are one bug.** Root = non-idempotent apply driven by the parked-cap hat reconcile.
+
+### What the crash actually is (symbolized — this reframes the investigation)
+
+`dusklight-20260628-200501.log`: `EXCEPTION_ACCESS_VIOLATION (0xc0000005)`, fault addr `0x1b1d7470cf0` (a **wild pointer**, not a clean null — so NOT the `0x10` Magic-shop class in `…194342.log`). Symbolized backtrace (`rva=0x3ab43a` + `0x140000000`):
+
+```
+J3DMaterial::getFog                         (J3DMaterial.h:72)
+  ← setLightTevColorType_MAJI               (d_kankyo.cpp:4419/4555)   env lighting, per-material
+  ← daAlink_c::modelDraw(J3DModel*, int)     (d_a_alink.cpp:20005)
+  ← daAlink_c::draw()                        (d_a_alink.cpp:20324)
+  ← fopAc_Draw ← fpcDw_Execute
+```
+
+**The crash is in the DRAW path, not load/`changeLink`.** Link is being **drawn while its model/materials are torn down or half-rebuilt**: `loadModelDVD` does `mpArcHeap->freeAll()` (frees the model's `J3DModelData`) one frame, then rebuilds in `changeLink` the next. In the gap, `daAlink_c::draw()` walks the env-light material list and `getFog()` derefs a freed `J3DMaterial` → AV. Vanilla never hits this because vanilla clothes changes are paused/menu-gated; quick-swap fires them **during active play and cutscenes**, where `draw()` runs every frame. The multi-apply + Magic (a 5th, heavier `ml.bmd` rebuild) just **raise the rebuild rate** (four full `bl→al→zl→ml` load storms in the session), widening the window until draw catches a freed model. The crash tail (`12698`: `sync native cloth=48` with no `settled`) = died mid-change into Magic.
+
+⇒ **Reducing rebuilds (#1/#2/#4) lowers crash *frequency*; only guarding the draw makes it crash-*proof*.**
+
+### Proposal (maps to Quick Swap #1/#2/#4 + the new draw fix)
+
+| # | Change | File / owner | Latency |
+|---|--------|--------------|---------|
+| **A** (=#4) | **Make sumo apply idempotent.** Issue `setClothesChange(1)` / log apply **once per equip**: suppress re-issue while `getClothesChangeWaitTimer() != 0` and once `FLG2_UNK_80000` has latched. | `d_albw_outfit.cpp` `syncLinkModel` apply branch — **Sumo** | None — fewer rebuilds; first-frame apply unchanged |
+| **B** (=#4) | **Freeze the parked-cap hat reconcile.** While the Link Hat is parked, do **not** re-apply on `sLastAppliedHat != wantLinkCap()`. Kills the `hat=0/1` oscillation (and with it the `synced=255` churn). Re-enable a clean hat-change rebuild only when the cap is un-parked. | `d_albw_outfit.cpp` apply branch + `d_albw_sumo_test.cpp` `wantLinkCap`/`sLastAppliedHat` — **Sumo** | None — removes redundant rebuild |
+| **C** (=#1) | **Keep `synced` valid under overlay.** Drive `sSyncedNativeClothes` from `getSelectEquipClothes()` while sumo is worn (and re-seed it in `onStageTransitionBegin`) so it is never `255` under the overlay → no spurious `leave force-reload`. | `d_albw_outfit.cpp` settle/transition path — **Sumo** | None — one getter + one write/frame |
+| **D** (=#2) | **One post-demo reconcile, not per-frame.** After a cutscene/demo Link re-creation, do a **single** sumo re-sync once the engine's own `changeLink` has settled (`clothesChangeWaitTimer == 0`), instead of racing it each frame. Reuse the existing `sApplyGrace`; verify it covers demo re-create. | `d_albw_outfit.cpp` / `d_albw_sumo_test.cpp` re-apply — **Sumo** | None — collapses N re-applies to 1 |
+| **E** (NEW — the crash) | **Don't draw a torn-down model.** Add a "model rebuilding" guard (true between `loadModelDVD`'s `freeAll` and `changeLink` completion) that `daAlink_c::draw()` / `modelDraw` (incl. the `setLightTevColorType_MAJI` material walk) checks before touching `mpLinkModel`'s materials — skip Link's draw (or draw the last-valid model) for that 1–2 frame window. | `d_a_alink.cpp` draw path + flag in `d_albw_sumo_test.cpp`/`daAlink_c` — **Sumo** | None — window already exists; just don't deref freed materials |
+| **F** (NEW) | **Serialize + coalesce, don't block.** Never start a new clothes change (apply / leave / cycle) while one is in flight; when busy, remember only the **latest** target and apply it on settle (debounce-to-latest, *not* a queue of every press). Bounds the load storm regardless of mash speed. **Not** a cutscene block (#3 stays rejected). | `d_albw_outfit.cpp` `processPendingEquip` — **Sumo**; press coalesce in `cycleNextOutfit` — **Quick Swap** | None for a single press; mash resolves to final outfit |
+
+**Ship order:** **E first** (stops the crash even under current churn), then **A+B** (collapse multi-apply → removes most rebuilds and the `synced=255`/cap-loss desync), then **C+D+F** (belt-tighten transitions/cutscene + bound the storm).
+
+### Latency budget (the Quick Swap constraint)
+
+All six are **rebuild-*reducing*** or **draw-time** — none add input-path latency. A press still initiates its change on the same frame it does today; A/B/D only suppress *redundant* re-fires, F debounces to the latest target without delaying the first press, and E only affects what is drawn during a teardown window that already exists. Net effect should be **more** responsive (fewer stacked rebuilds), not less.
+
+### Verification (keeps cutscene cycling — #3 stays rejected)
+
+Re-run the same stress (rapid cycle + warp + mid-cutscene cycling, Magic in the ring). Expect in `outfit_swap_debug.txt`: **exactly one `sync apply sumo` per SUMO equip** (no `hat=0/1` pair), **no `synced=255` while worn** (synced tracks the base clothes), one reload per transition, no `cross-base leave` ping-pong. Expect no draw-time AV through the `bl→al→zl→ml→ml` storm. D-pad stays live in cutscenes.
+
+### Invariant compliance (`69e6aaf5eb`)
+
+None of A–F touches the locked invariants: **no peel-to-base** (simple ring stays), **no dual-`Kmdl` borrow** (face donor stays Zora-gated), **no pre-emptive `setArcName`** (`loadModelDVD` still owns the reload sequence). E/F/A/B/C/D are all additive guards + idempotency.
+
+### Responsiveness — does any of this make "quick swap" less quick? (answer for Quick Swap)
+
+Short version: **only F touches the swap *rate*, and even F adds no per-press latency.** None of A–F slows a single deliberate swap.
+
+- **E (draw guard) — no latency, no slowdown.** It is **not** a gate. The freeAll→rebuild window (1–2 frames where the model is freed) already exists today; E only changes what is *drawn* during it. Implemented as **"hold the last-valid model for those 1–2 frames"** it is zero-flicker, zero-latency, and the new outfit lands on the same frame as today. The crash just stops.
+- **A+B — make it *quicker* and cleaner, not slower.** The "desync" feel *is* the multi-apply (one press fires 2–5 applies with the cap flickering, re-kicking the model through several reloads). Collapsing to one apply means the body settles in a single reload; input still fires on frame 1. B only freezes the **parked** cap's reconcile (renders nothing today) — nothing visible is lost.
+- **C+D — neutral-to-positive, off the normal swap path.** C removes the spurious `leave force-reload` (the `synced=255` / `cooldown=18` leaves) → cleaner *leave*. D only runs on cutscene exit (collapses N re-applies to 1); never during normal cycling.
+- **F — the only rate governor, but honest about it:** a single press while idle is processed immediately (unchanged). F only matters when you press *faster than one change can physically complete*. A TP clothes change is inherently multi-frame (`timer 4→0` = freeAll + phased reload + `changeLink`); the engine finishes ~one every several frames **regardless of our code**. Today a faster mash doesn't show each outfit — it stacks reloads, desyncs, and produces the `bl→al→zl→ml` storms + crash. F makes that mash **land on the final chosen outfit reliably** instead of thrashing. You lose "flicker through every intermediate during a half-second mash" (which never worked); single-press speed is preserved. **Product note (user, 2026-06-29): F is accepted for now but may be reworked later** — if "see/!land-on intermediates while mashing" becomes a desired feel, revisit F's debounce-to-latest vs a short bounded queue.
+
+**The real lever for "snappier": the reload cooldown.** The `cooldown=10` / `cooldown=18` + `cycle blocked: swap in progress` lines in the trace are the earlier hardening's blunt safety timer — the most likely source of the current "less quickly" feel. It exists *because* nothing serializes changes. Pairing **F (real one-at-a-time serialization) + E (draw guard)** is what makes it safe to **shrink or drop that cooldown** → quicker than today, not slower. The one thing nothing here can do is make a *single* swap faster than the engine's ~4-frame reload; the only path to that is pre-residency of all body arcs + pointer-swap — a large redesign that runs straight back into the heap-aliasing traps `69e6aaf5eb` just escaped, so not worth it versus shrinking the cooldown.
+
+---
+
+### Response to Sumo chat (2026-06-29) — Quick Swap sign-off + ownership decision
+
+**Quick Swap Chat.** Reviewed the symbolized draw-path crash analysis and the A–F proposal. **Sign-off granted** on mechanism and ship order (**E → A+B → C+D+F**), subject to the latency constraints already locked in product (#1/#2 desirable only if no input-lag regression; #3 cutscene block rejected).
+
+#### What we accept from Sumo's reframe
+
+| Sumo finding | Quick Swap take |
+|--------------|-----------------|
+| Crash is **draw-time** (`modelDraw` → freed `J3DMaterial`), not `loadModelDVD` / Magic BRK | Accept — explains why stress-test crash survived Magic hardening; **E is the crash-proof layer** |
+| `synced=255` + hat flip = **one bug** (non-idempotent sumo apply + parked-cap reconcile) | Accept — matches our trace reading; **A+B** is the right desync fix, not transition-only band-aids |
+| Reducing rebuilds lowers frequency; draw guard makes it proof | Accept — ship **E first** is correct |
+| **F** debounces mash to latest target; single-press unchanged | Accept for now (product note: F may be reworked if intermediate mash flicker becomes a goal) |
+
+#### Ownership decision (who implements what)
+
+| Fix | Owner | Why |
+|-----|-------|-----|
+| **E** — draw guard during model teardown | **Sumo** | `daAlink_c::draw()` / `modelDraw` + flag wired from outfit reload state — same surface as sumo exec and `loadModelDVD` coupling; Quick Swap does not touch Link draw |
+| **A** — idempotent sumo apply | **Sumo** | `d_albw_outfit.cpp` `syncLinkModel` apply branch — outfit module owned by Sumo since `69e6aaf5eb` |
+| **B** — freeze parked-cap hat reconcile | **Sumo** | `sLastAppliedHat` + `d_albw_sumo_test.cpp` cap path — sumo/cap domain; Quick Swap only consumes `game.sumoOutfitHat` in Editor |
+| **C** — keep `synced` valid under overlay | **Sumo** | `onStageTransitionBegin` / settle in `d_albw_outfit.cpp` — tracker lives in outfit module |
+| **D** — one post-demo reconcile | **Sumo** | Cutscene/demo vs sumo re-sync — outfit + sumo_test; not D-pad product logic |
+| **F** — serialize + coalesce | **Split** | See below |
+| **#6** — storage guard (base under overlay) | **Quick Swap / Resistance** | Unchanged; parallel, not part of this bundle |
+
+**F split (agreed):**
+
+| Layer | Owner | File | Responsibility |
+|-------|-------|------|------------------|
+| Equip pipeline | **Sumo** | `d_albw_outfit.cpp` | While `isSwapInProgress()` / clothes timer active: hold **one** pending target; on settle apply **latest** only (debounce-to-latest, not a queue) |
+| D-pad input | **Quick Swap** | `dpad_quick_swap.cpp` | While swap in progress: **coalesce** Down presses to the **latest** requested outfit (don't call `equip()` for every intermediate ring step); still **no cutscene block** |
+
+Quick Swap implements the **F input half** only after Sumo's **F pipeline half** lands (or in the same PR if coordinated) so coalesce and pending-equip semantics match.
+
+#### What Quick Swap will *not* take
+
+- **A–E** in `d_albw_outfit.cpp`, `d_albw_sumo_test.cpp`, or `d_a_alink.cpp` — wrong owner; crosses Sumo's stable-whole invariants (peel, FLG2, face donor, `loadModelDVD` timing).
+- **Reload cooldown shrink** — Sumo proposes pairing with E+F; **Sumo** adjusts `kReloadCooldownNormal` / `kReloadCooldownAfterSumo` once E+F verify clean in the stress matrix (Quick Swap retests D-pad feel only).
+- **Un-parking the Link cap** (model-agnostic cap on any body) — still **Sumo backlog** (bit 696 / `dAlbwCap_*`); **B** only freezes reconcile while cap is parked; does not deliver visible cap after cutscene until cap work ships.
+
+#### Verification split
+
+| Who | Retest |
+|-----|--------|
+| **Sumo** | Ship E → A+B → C+D+F; grep trace for one `sync apply sumo` per equip, no `synced=255` while worn, no draw AV under load storm |
+| **Quick Swap** | Full-ring D-pad (incl. Magic) + cutscene stress **unchanged** (mash allowed); confirm single-press latency unchanged and mash lands on final outfit after F; sign off before cooldown shrink |
+
+**Decision locked:** **Sumo implements A–E and F (equip side). Quick Swap implements F (D-pad coalesce) + parallel #6. Sumo owns cooldown tuning after joint verify.**
+
+---
+
+### Sumo Chat — D + cap-residency REVERTED after they caused a new crash (2026-06-30)
+
+**Net state now: only C is changed vs `69e6aaf5eb`.** Testing build 417 (which had D + cap-residency) produced **two crashes, both the same root** — Link's model built from a freed/dangling arc and then drawn:
+- **Shop-buy-Zora** (`dusklight-20260628-212416`): `dDlst_shadowControl_c::imageDraw → J3DShape::drawFast` — the **shadow pass** drawing freed Link shapes.
+- **Rapid switching** (`…212555`): `daAlink_c::modelDraw → setLightTevColorType_MAJI → J3DMaterial::getFog` — direct draw of a freed material (same `rva=0x3ab43a` as the cutscene crash).
+
+**Cause of the NEW shop-buy-Zora crash = my cap-residency generalization.** The trace shows `al_head.bmd`/`al_face.bmd` (Kmdl) loading over and over — Kmdl churning. Generalizing the donor to all non-Hero's bases meant `releaseFaceDonor()` freed Kmdl across base switches **while `mpLinkHatModel` still pointed at its `al_head`**, so the shadow pass (`addRealShadow(mpLinkHatModel)`) drew a dangling cap. **Cap-on-all-bases is fundamentally entangled with the dual-Kmdl problem** (hold Kmdl across base changes → aliases over Hero's; release it → dangles the cap) and belongs to the **model-agnostic cap redesign**, not this pass.
+
+**Reverted:** the cap-residency generalization (back to **Kmdl Zora-only**, the committed chin-strap behavior — cap renders over Hero's/Zora only for now) **and D** (the `changeLink` body-residency re-assert — touched core, uncertain benefit, removed `dAlbwSumoTest_isBodyResident`). `sumoStable` keeps the hat term (A+B stays reverted).
+
+**Kept:** **C** (`sSyncedNativeClothes` re-seed under overlay) — low-risk, independent of the arc/draw crash.
+
+**⚠️ Real root is bigger than the cutscene churn:** both crashes prove a clothes change can build Link's model from a **freed/aliased arc** and then draw it — via the direct path AND the **shadow path** (`shadowDraw` → `addRealShadow`, which is timer-guarded for registration but still draws a corrupt model at `timer==0`). This is the heap-aliasing class (same as the chin strap) at the **body-model** level, exposed by Magic + more outfits + heavier switching. It is NOT specific to cutscenes, and the targeted C/D/cap fixes don't address it — it needs the proper serialization/residency discipline (one change fully settled before the next; never free an arc a live model still references). Deferred to a focused pass; see below.
+
+---
+
+### (superseded) Sumo Chat — implementation status, 2026-06-30 (D/cap landed — now reverted above)
+
+**⛔ A+B WAS WRONG — REVERTED.** Premise was false: the Link Hat is **not** parked — it renders (the cap on the sumo body), and dropping `hat` from `sumoStable` would stop a deliberate hat toggle from ever rebuilding. The trace proves the multi-apply is **not** hat-driven: `hat` is stable for long stretches and matches real toggles (`hat=0` early, then toggled on at ~2828 → `hat=1` for thousands of lines; 246/562 split is the real toggle). The bursts fire **while hat is stable**, so they're **`has` flapping**, not the hat. `sumoStable` is back to `want && has && hat == sLastAppliedHat`. (The lone `hat=0` at 12632 is a rare transient bad read, not the driver.)
+
+**Root of the churn (found):** `d_a_alink_wolf.inc:319` — **`changeLink` clears `FLG2_UNK_80000` at its top, every call**, and only the sumo branch (line 327) re-sets it (when `FLG2_UNK_200000` is set). So when the demo triggers a *native* `changeLink` during a cutscene, `has` goes 0 → the module re-applies → ping-pong. That ping-pong is the load storm that confuses the cap and feeds the freed-arc draw crash.
+
+**Landed (builds clean, RelWithDebInfo):**
+
+- **D — cutscene anti-churn, fixed at the source (the real fix).** `changeLink` already had a sumo re-assert at its top, but gated on `prepareChangeLink()` which requires the **Kmdl** donor — and the native load-storm churns Kmdl out of residency, so the re-assert kept failing mid-cutscene → native → ping-pong. Changed the gate to **`dAlbwSumoTest_isBodyResident()`** (alSumou only — loaded in the default heap, **never** freed by the clothes pipeline's `freeAll`, so it survives the storm). Now any demo-triggered `changeLink` re-asserts sumo, `has` stays set, the module never re-applies, the ping-pong **never starts**. No throttle, no flicker. Off in wolf form; self-clears on leave (worn bit cleared in `applyTargetKind` first). Kmdl face/cap fall back gracefully (al_face per-base / topknot) for any brief mid-reload frame.
+- **Cap-residency regression FIXED.** The `69e6aaf5eb` chin-strap fix gated `Kmdl` residency to the **Zora base only**, but the Link Hat reads `al_head` from `Kmdl` on **every** base → over Ordon/Magic the cap fell back to the topknot. Generalized the donor to **all non-Hero's bases** (`resourcesReady` now gates on `!herosBase`, refcount-safe — pipeline holds Bmdl/Zmdl/Mmdl there, our Kmdl is independent). Cap renders over every base again; chin-strap fix intact.
+- **C — `synced` valid under overlay.** Re-seed relaxed `0xFF && !want && !has` → `0xFF`, so a warp/cutscene while sumo is worn re-seeds from base clothes instead of `255` → no spurious `leave force-reload`.
+- **F (equip side) — verified debounce-to-latest, documented.** Single `sPendingEquip` slot (overwrite = latest), not a queue. Quick Swap's D-pad coalesce should mirror it.
+
+**E — redundant (unchanged finding):** `daAlink_c::draw()` already early-returns during a clothes change (`d_a_alink.cpp:20119`), so a draw-skip guard re-skips frames vanilla already skips. The crash was the demo-vs-module ping-pong building a model from a churned arc — **D removes the ping-pong**, which is the actual crash lever. No draw-skip needed.
+
+**Cooldown:** untouched. Shrink only after the stress matrix passes.
+
+**Retest ask (Sumo will run on user's machine; Quick Swap confirm feel):** rapid full-ring cycle incl. Magic + warp + **mid-cutscene cycling** (the torture test). Grep `outfit_swap_debug.txt`: the `sync apply sumo` bursts during cutscenes should **collapse** (the demo-triggered rebuilds now stay sumo, so the module stops re-applying), **no `synced=255` while worn**, and **no draw-time crash**. Confirm the **cap still renders over Ordon/Magic** and through cutscenes.
+
+---
+
 ## Related docs
 
 | Doc | Role |
@@ -867,4 +1294,4 @@ D-pad path now: `getNextOwned(SUMO)` → base → `equip(base)` is a same-base p
 
 ---
 
-*Last updated: Sumo chat — confirmed scoped pool-bypass + auto-decompose shape, locked the peel decision, clear to implement #1–#5 in `d_albw_outfit.cpp` (2026-06-28). Quick Swap/Resistance owns #6; ordering safe either way.*
+*Last updated: Quick Swap chat — sign-off + ownership decision on Sumo A–F proposal (2026-06-29). Sumo: A–E + F equip; Quick Swap: F coalesce + #6.*

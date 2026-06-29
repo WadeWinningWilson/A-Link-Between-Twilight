@@ -273,6 +273,13 @@ bool dAlbwOutfit_equip(dAlbwOutfitKind kind) {
     const bool busy = (player != nullptr && player->getClothesChangeWaitTimer() != 0) ||
                       dAlbwOutfit_isSwapInProgress();
     if (busy) {
+        // F equip-side (Quick-Sumo Work.md) — DEBOUNCE-TO-LATEST, not a queue.
+        // `sPendingEquip` is a single slot: a press while a change is in flight
+        // OVERWRITES it with the newest target, so a mash resolves to the final outfit
+        // and never stacks N reloads (the bl->al->zl->ml load storm).  processPendingEquip
+        // drains this one latest target on settle.  Quick Swap's D-pad coalesce half
+        // mirrors this: it should also collapse rapid Down presses to the latest ring
+        // step rather than calling equip() for every intermediate.
         if (sPendingEquip == kind) {
             return false;
         }
@@ -484,10 +491,26 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         return;
     }
 
-    if (sSyncedNativeClothes == 0xFF && !want && !has) {
+    // ============================================
+    // C (Quick-Sumo Work.md): keep the native-clothes tracker valid UNDER the overlay.
+    // onStageTransitionBegin resets it to 0xFF; if we only re-seed while !want && !has,
+    // a transition / warp / cutscene taken WHILE sumo is worn leaves it stuck at 0xFF
+    // (the `synced=255` in the trace), which then forces a spurious `leave force-reload`
+    // on the next peel.  getSelectEquipClothes() is the BASE clothes and is valid
+    // regardless of the overlay, so seed it whenever it sits at the sentinel.  This
+    // never masks a needed leave reload: a same-base leave still rebuilds via
+    // sLeavingSumoReload (nativeStable requires !sLeavingSumoReload).  We are past the
+    // clothesTimer / sReloadPending early-returns here, so `clothes` is settled.
+    // ============================================
+    if (sSyncedNativeClothes == 0xFF) {
         sSyncedNativeClothes = clothes;
     }
 
+    // The hat term keeps a deliberate Link Hat toggle rebuilding the model so the cap
+    // shows/hides live (the cap DOES render — see changeLink's sumo branch).  Do NOT
+    // drop it for "idempotency": the multi-apply churn under cutscene stress is `has`
+    // flapping (the demo clears FLG2_UNK_80000 each frame, the module re-applies), not
+    // the hat — see the demo-aware re-apply work (item D) for the real fix.
     const bool sumoStable   = want && has && hat == sLastAppliedHat;
     // nativeStable must also require no pending leave-reload: when sumo leaves onto the
     // SAME base, clothes is unchanged so this would otherwise be true and early-return

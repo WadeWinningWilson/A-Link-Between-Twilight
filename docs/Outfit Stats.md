@@ -114,7 +114,8 @@ Zora already ignores oxygen timer (`checkOxygenTimer`); unchanged unless product
 | **Quick-Resistance recovery tax** | Separate axis — outfit stack penalties (Sumo 5%, Ordon 10%, …) still apply when Quick Swap wardrobe tax is active. Damage mult and recovery tax reinforce the same fantasy (light cloth = fast reg, fragile). |
 | **Magic Armor rupee drain** | Magic/Deity at **1.0×** received mult; rupee absorption unchanged. |
 | **`DOUBLE_DEFENSE` magic mode** | Halves damage **after** magnification — order must stay documented at implement. |
-| **Deity visual upgrade** | Out of scope for this doc — see Outfit Stats chat research (Fierce Deity texture swap on Magic + deity flag). |
+| **Deity shop / session** | **Not in D-pad cycle.** Enter/exit via Postman shop — full spec: [albw-deity-armor-shop.md](albw-deity-armor-shop.md) |
+| **Deity visual upgrade** | Fierce Deity on Magic + flag; overlay bring-up notes in Quick-Sumo CAUTION if model work expands beyond flag |
 
 ---
 
@@ -131,7 +132,159 @@ Zora already ignores oxygen timer (`checkOxygenTimer`); unchanged unless product
 
 ---
 
-## 6. Locked decisions log
+## 6. Implementation path (Outfit Stats chat — 2026-06-28)
+
+**Status:** Planning lock — **not implemented**. Ship **Magic Armor fixes first** (separate track, toggle-independent); then Outfit Stats phases below.
+
+### Recommended order
+
+```text
+Phase 0 — Product lock (both tracks)
+    ↓
+Phase 1 — Magic Armor ALBW fixes          ← ship first (~1 PR)
+    ↓
+Phase 2 — Outfit Stats foundation         (toggle + query helpers)
+    ↓
+Phase 3 — Received damage + Zora timer
+    ↓
+Phase 4 — Swimming (+5% / dive / Zora +10%)   (spike dive scope first)
+    ↓
+Phase 5 — Sumo offensive kit
+    ↓
+Phase 6 — Docs + playtest matrix
+```
+
+**Quick-Resistance** (recovery tax, provisional wood meter spend) is a **parallel track** — not blocking Outfit Stats except where Sumo wood HS meter rules need a single owner (see Phase 5).
+
+### Phase 0 — Lock before coding
+
+**Magic Armor**
+
+| Decision | Options |
+|----------|---------|
+| Under-500 body hit | Always depower (gray + `dMeter2_onALBWArmorHit` + heavy)? Block HP only when ≥500? Rupee cost when broke (none / drain-to-zero / −500 clamped)? |
+| Clean +300 reward | Keep “any armored body hit taints” (current), or taint only when HP actually damaged (`!armor_no_dmg`)? |
+
+**Outfit Stats**
+
+| # | Topic | Lean at implement |
+|---|--------|-------------------|
+| 1 | Master toggle | Gameplay or ALBW section; **does not require** Quick Swap mode |
+| 2 | Zora in-water | `MODE_SWIMMING` + depth (`mWaterY` vs Link Y) |
+| 3 | Sumo+wood edge cases | Any equipped shield disqualifies; decide Fists mode |
+| 4 | Zora swim stack | Confirm multiplicative **15.5%** vs flat **15%** total |
+| 5 | Non-Zora diving | Spike: surface dive only vs full submerged locomotion |
+
+### Phase 1 — Magic Armor ALBW fixes (separate PR)
+
+**Problem:** Below 500 rupees, `checkMagicArmorNoDamage()` is false → no `dMeter2_onALBWArmorHit()`, no gray, no −500, HP damage applies. Product expects **depower on any armored body hit**; wallet gates only block + rupee cost.
+
+**Design split**
+
+| Concern | Gate |
+|---------|------|
+| Block HP + −500 | Current: ≥500 rupees + `dMeter2_canALBWArmorBlock()` (+ Deity exception) |
+| Depower on hit | New: ALBW mode + `checkMagicArmorWearAbility()` + enemy **body** hit (not shield branch) → always `dMeter2_onALBWArmorHit()` |
+
+**Touchpoints:** `d_a_alink_damage.inc` (body-hit depower hook; optional encounter taint fix), `d_a_alink.cpp` (per-frame gray / golden restore when depleted but broke), `d_a_alink_wolf.inc` (model load respects `dMeter2_isALBWArmorDepleted()` in ALBW mode).
+
+**Suggested PR split:** (1) depower + visual/load fix; (2) encounter taint policy if changed.
+
+### Phase 2 — Outfit Stats foundation
+
+New helper surface (suggest `d_albw_outfit_stats.h/.cpp` or section in `d_albw_outfit.cpp`):
+
+- `dAlbwOutfitStats_isEnabled()` — master toggle
+- `dAlbwOutfitStats_getReceivedDamageMult()` — 3.5 / 2.5 / 1.5 / 1.0
+- `dAlbwOutfitStats_isSumoOffensiveKitActive()` — Sumo + wood + no shield
+- `dAlbwOutfitStats_tick()` / `dAlbwOutfitStats_isZoraWaterBuffActive()` — 180 s grace
+
+Settings: `include/dusk/settings.h`, `src/dusk/settings.cpp`, `src/dusk/ui/settings.cpp`. Default **Off**.
+
+**Identity rule:** Always `dAlbwOutfit_getActive()` (target outfit). Skip when wolf.
+
+### Phase 3 — Received damage (§1)
+
+Hook `damageMagnification()` **after** global `damageMultiplier`, **before** wolf 2× and Zora magnetic 10×.
+
+Stack: `base × damageMultiplier × outfitMult × (wolf / magnetic exceptions)`.
+
+Zora grace timer: set/refresh on water enter/exit from `d_a_alink_swim.inc`; tick from Link execute.
+
+### Phase 4 — Swimming (§3)
+
+`getSwimFrontMaxSpeed()` — ×1.05 all outfits when toggle on; extra ×1.10 when `checkZoraWearAbility()`.
+
+Diving: spike every `getZoraSwim()` / `checkZoraWearAbility()` gate in `d_a_alink_swim.inc` before committing to full non-Zora underwater scope.
+
+### Phase 5 — Sumo offensive kit (§2)
+
+`d_cc_uty.cpp` — ×4 outgoing sword damage when kit active (after FA resolve, before HP mult).
+
+`d_a_alink_cut.inc` + meter — wood HS when kit active; coordinate with Quick-Resistance §5 wood HS draft (pick one owner).
+
+Requires `hiddenSkillRework` / FA on.
+
+### Phase 6 — Playtest matrix
+
+| Area | Cases |
+|------|--------|
+| Magic Armor | &lt;500 hit → gray; ≥500 block; shield vs body; clean +300 |
+| Outfit mult | Ordon 4-piece → 2 hearts; Zora land/water/grace; Sumo 3.5× |
+| Quick Swap | Cycle during/after depower; sumo peel; stored-outfit pool |
+| Swim | +5% / Zora +15%; non-Zora dive entry |
+
+---
+
+## 7. Quick Swap interactions (Outfit Stats chat — 2026-06-28)
+
+**Related:** [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) · [Quick-Resistance Work.md](Interconnected%20Chats/Quick-Resistance%20Work.md)
+
+Outfit Stats and Magic Armor fixes are **mostly orthogonal** to the D-pad outfit cycle — they hook combat/swim/meter paths, not `dpad_quick_swap.cpp`. The exceptions below are where quick-swap state **does** matter.
+
+### Independence (no coupling required)
+
+| Feature | Why it’s safe |
+|---------|----------------|
+| **Outfit Stats master toggle** | Does **not** require `extraItemSlotMode == ExtraAndQuickSwap`. Works with Quick Swap on or off. |
+| **Received damage mults** | Read `dAlbwOutfit_getActive()` each hit — target semantics match what the player intended to wear, including mid-async equip. |
+| **Zora water 3 min grace** | Runtime timer on Link — should **persist across outfit swaps** (buff is on the player, not the cloth save bit). |
+| **Swim +5% / dive** | Key off swim procs + `checkZoraWearAbility()` for the Zora bonus — not the D-pad cycle. |
+| **Sumo 4× / wood HS** | Kit checks **target** Sumo + **equipped** sword/shield slots. D-pad Down cycles **outfits only** — sword/shield are separate slots; no new coupling unless product wants “stored wood disqualifies kit” (today: equipped slot only). |
+| **Magic Armor −500 / +300** | Key off `checkMagicArmorWearAbility()` (equipped native clothes) and ALBW meter — not outfit cycle API. |
+| **Quick-Resistance recovery tax** | Separate axis (wardrobe active pool when Quick Swap ON). Stacks narratively with Outfit Stats fragility; no shared code path with damage mult. |
+
+### Direct interactions (must respect quick-swap invariants)
+
+| Interaction | Behavior today | After Magic Armor + Outfit Stats work |
+|-------------|----------------|--------------------------------------|
+| **Swap blocked while heavy** | `dAlbwOutfit_isSwapBlockedState()` → deny SFX if `checkBootsOrArmorHeavy()` (depowered Magic) or ALBW lockout exhaustion or iron boots or ghoul rat | **Keep gate.** Under-500 depower fix **increases** how often depowered Magic blocks cycling away — **intended** (same as 0-rupee heavy today). |
+| **Equip into Magic** | Allowed while powered | Unchanged. Model reload uses `Mmdl` / magic BRK path — see Quick-Sumo “CAUTION — Magic Armor”. |
+| **Cycle away from depowered Magic** | Blocked via `checkMagicArmorHeavy()` → `dMeter2_isALBWArmorDepleted()` | Under-500 fix makes hits set depleted → **swap-away blocked** even when wallet &lt;500 (today broke players stay golden and can cycle away — fix closes that gap). |
+| **Swap in progress** | `dAlbwOutfit_isSwapInProgress()` blocks D-pad; `mClothesChangeWaitTimer` delays magic BRK gray/golden updates | Stats use **target** `getActive()` — during peel (sumo → base) mult may flip one frame before model catches up; acceptable if target semantics stay consistent. |
+| **Sumo overlay + stats** | `getActive()` returns **SUMO** while bit 700 set, even if native base is Hero's under the hood | Sumo **3.5×** + offensive kit apply while sumo is target; peeling to Hero's drops to Hero's **1.5×** on next target. First Down off sumo = peel to base, not ring advance (Quick-Sumo peel rule). |
+| **Stored outfits (Postman)** | When Quick Swap ON, `getNextOwned` skips non-active wardrobe entries | Player cannot cycle into stored outfits; stats for “what you’re wearing” still follow equipped/target state — no special stored-outfit mult. |
+| **Magic in rotation** | Native `Mmdl` in ring after Zora; sumo-over-Magic uses non-Zora face path (no Kmdl donor) | Magic Armor **fixes** touch damage/meter only — **do not** change `applyTargetKind` / arc residency (Quick-Sumo aliasing rule). |
+
+### Risk register (quick-swap bring-up)
+
+1. **Depowered Magic + under-500 fix** — More players will hit `checkMagicArmorHeavy()` without 0 rupees; confirm swap block + heavy movement feel correct before extending cycle to Deity.
+2. **Sumo peel mid-combat** — Offensive kit toggles off when target leaves Sumo; intentional but sharp — playtest D-pad mash during sumo+wood fights.
+3. **Zora grace + swap to dry outfit** — Exiting water in Zora then cycling to Ordon: grace timer should still run (Hero's-tier 1.5× on land until timer expires) unless product wants grace cleared on outfit change (**TBD** — recommend **keep grace**).
+4. **Concurrent chats** — Implement Magic Armor in damage/meter files only; Outfit Stats in magnification/swim/attack helpers; **avoid** edits to `getNextOwned` / `applyTargetKind` / `nativeClothesResourcesReady` unless Quick-Sumo chat signs off.
+
+### Suggested cross-chat test checklist
+
+After Magic Armor + Outfit Stats land, re-run Quick-Sumo re-test matrix subset:
+
+- Cycle into/out of Magic with **&lt;500 rupees after a body hit** (depowered, swap-away blocked).
+- Sumo + wood kit active → peel to Hero's via Down → kit drops, mult changes.
+- Zora water grace active → cycle to Hero's → grace still applies for remaining timer.
+- Full owned ring with Quick Swap ON + Outfit Stats ON — no crash regression (`outfit_swap_debug.txt`).
+
+---
+
+## 8. Locked decisions log
 
 | Date | Decision |
 |------|----------|
@@ -140,15 +293,20 @@ Zora already ignores oxygen timer (`checkOxygenTimer`); unchanged unless product
 | 2026-06-28 | Hero’s **1.5×**; Magic/Deity **1.0×** |
 | 2026-06-28 | Sumo + Wooden Sword + no shield → **4×** damage out + wood **Hidden Skills** enabled |
 | 2026-06-28 | Base swim **+5%** + diving; Zora armor **+10%** swim speed |
+| 2026-06-28 | Implementation path locked (§6); Magic Armor fixes ship before Outfit Stats phases |
+| 2026-06-28 | Outfit Stats **independent** of Quick Swap mode; interactions documented (§7) |
+| 2026-06-28 | Deity shop/session spec → [albw-deity-armor-shop.md](albw-deity-armor-shop.md) (not quick-swappable; 5000/session; Magic row = OFF) |
 
 ---
 
-## 7. Open confirmations (awaiting product)
+## 9. Open confirmations (awaiting product)
 
-| # | Topic |
-|---|--------|
-| 1 | Master toggle name, settings tab placement, and whether Outfit Stats requires Quick Swap mode |
-| 2 | Zora “in water” predicate (swim mode vs depth vs `FLG0_WATER_IN_MOVE`) |
-| 3 | Sumo+wood: Fists mode, broken-shield edge case |
-| 4 | Zora swim stack: multiplicative **15.5%** vs additive **15%** |
-| 5 | Non-Zora “allow diving” — surface dive only vs full underwater locomotion like Zora |
+| # | Topic | Notes |
+|---|--------|--------|
+| 1 | Master toggle name + settings tab | **Locked for implement:** does **not** require Quick Swap (see §6 Phase 0, §7) |
+| 2 | Zora “in water” predicate | Swim mode vs depth vs `FLG0_WATER_IN_MOVE` |
+| 3 | Sumo+wood: Fists mode, broken-shield edge case | |
+| 4 | Zora swim stack: multiplicative **15.5%** vs flat **15%** total | |
+| 5 | Non-Zora “allow diving” | Surface dive only vs full underwater locomotion like Zora |
+| 6 | Zora grace timer on outfit swap | Keep grace across cloth change vs clear on swap (**lean: keep**) |
+| 7 | Magic Armor under-500 rupee cost + clean +300 taint rule | See §6 Phase 0 |

@@ -1683,7 +1683,7 @@ public:
     void getBodyAngleXBasePos(cXyz* o_pos);
     s16 getBodyAngleXAtnActor(int);
     void setBodyAngleXReadyAnime(int);
-    void setMagicArmorBrk(int i_status);
+    BOOL setMagicArmorBrk(int i_status);
     BOOL checkMagicArmorHeavy() const;
     BOOL checkHeavyStateOn(BOOL, BOOL);
     void initGravity();

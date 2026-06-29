@@ -61,6 +61,13 @@ bool nativeClothesResourcesReady() {
 // therefore never frees memory out from under an mpArcHeap->freeAll() — the failure
 // mode that made an unconditional Kmdl release double-free over a Hero's base (where
 // the pipeline's Kmdl and a sumo-side Kmdl alias one refcount).
+//
+// NOTE (2026-06-30): an attempt to generalise this donor to ALL non-Hero's bases (so
+// the Link Hat's al_head would resolve over Ordon/Magic too) was REVERTED — it churned
+// Kmdl load/release across base switches and left mpLinkHatModel dangling at al_head
+// when releaseFaceDonor freed Kmdl, which the shadow pass (addRealShadow) then drew ->
+// J3DShape::drawFast crash on shop-buy-Zora / rapid switching.  Cap-on-all-bases is
+// entangled with the dual-Kmdl problem and belongs to the model-agnostic cap redesign.
 // ============================================
 void releaseFaceDonor() {
     if (sKmdlPhase.id == 2) {
@@ -81,7 +88,9 @@ bool resourcesReady() {
     // that base ALONE (changeLink()'s sumo face block falls back to Kmdl only when
     // checkZoraWearFlg()).  Gating the Kmdl load to the Zora base is what prevents the
     // dual-Kmdl heap aliasing: over a Hero's base the pipeline's Kmdl lives in Link's
-    // mpArcHeap and a second refcount here would dangle on that heap's freeAll().
+    // mpArcHeap and a second refcount here would dangle on that heap's freeAll().  (The
+    // Link Hat's al_head therefore resolves only over Hero's/Zora for now — see the
+    // releaseFaceDonor note; cap-on-all-bases waits on the model-agnostic cap work.)
     if (daAlink_c::checkZoraWearFlg()) {
         if (dComIfG_resLoad(&sKmdlPhase, kCapArcName) != cPhs_COMPLEATE_e) {
             return false;

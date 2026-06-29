@@ -94,6 +94,20 @@ static const char l_bArcName[] = "Bmdl";
 
 static const char l_kArcName[] = "Kmdl";
 
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Magic Armor model-validity flag)
+// Single source of truth for "the model currently built for Magic Armor is the REAL
+// Mmdl model (ml.bmd/ml_head.bmd), not the Kmdl fallback."  changeLink's Magic branch
+// can fall back to Link's Hero's body when Mmdl isn't resolvable (shop-buy under churn),
+// but the wear flag stays Magic — so draw()'s Magic-only ops (water-drop color material
+// indices, the rupee-drain Brk animators) would read off the end of the wrong model and
+// crash.  Gating those ops on this flag makes the DRAW match the MODEL: a fallback body
+// is drawn as a plain body (no Magic ops) until the real Mmdl model is built.
+// ============================================
+static bool s_albwMagicModelReady = false;
+#endif
+
 static const char l_zArcName[] = "Zmdl";
 
 static const char l_mArcName[] = "Mmdl";
@@ -12950,7 +12964,7 @@ void daAlink_c::setBodyAngleXReadyAnime(int param_0) {
     field_0x310a = mBodyAngle.x;
 }
 
-void daAlink_c::setMagicArmorBrk(int i_status) {
+BOOL daAlink_c::setMagicArmorBrk(int i_status) {
     static const char* bodyBrkName[3] = {
         "ml_body_power_down.brk",
         "ml_body_power_up_a.brk",
@@ -12963,19 +12977,42 @@ void daAlink_c::setMagicArmorBrk(int i_status) {
         "ml_head_power_up_b.brk",
     };
 
+    mMagicArmorBodyBrk = NULL;
+    mMagicArmorHeadBrk = NULL;
+
+    if (i_status < 0 || i_status > 2) {
+        return FALSE;
+    }
+    if (mpLinkModel == NULL || mpLinkHatModel == NULL) {
+        OSReport("setMagicArmorBrk: missing link model (body=%p hat=%p)\n", mpLinkModel, mpLinkHatModel);
+        return FALSE;
+    }
+
     J3DModelData* modelData = mpLinkModel->getModelData();
     mMagicArmorBodyBrk = (J3DAnmTevRegKey*)dComIfG_getObjectRes(l_mArcName, bodyBrkName[i_status]);
+    if (mMagicArmorBodyBrk == NULL || modelData == NULL) {
+        OSReport("setMagicArmorBrk: missing body BRK %s in %s\n", bodyBrkName[i_status], l_mArcName);
+        mMagicArmorBodyBrk = NULL;
+        return FALSE;
+    }
     mMagicArmorBodyBrk->searchUpdateMaterialID(modelData);
     modelData->entryTevRegAnimator(mMagicArmorBodyBrk);
     mMagicArmorBodyBrk->setFrame(0.0f);
 
     modelData = mpLinkHatModel->getModelData();
     mMagicArmorHeadBrk = (J3DAnmTevRegKey*)dComIfG_getObjectRes(l_mArcName, headBrkName[i_status]);
+    if (mMagicArmorHeadBrk == NULL || modelData == NULL) {
+        OSReport("setMagicArmorBrk: missing head BRK %s in %s\n", headBrkName[i_status], l_mArcName);
+        mMagicArmorBodyBrk = NULL;
+        mMagicArmorHeadBrk = NULL;
+        return FALSE;
+    }
     mMagicArmorHeadBrk->searchUpdateMaterialID(modelData);
     modelData->entryTevRegAnimator(mMagicArmorHeadBrk);
     mMagicArmorHeadBrk->setFrame(0.0f);
 
     field_0x2fd7 = i_status;
+    return TRUE;
 }
 
 BOOL daAlink_c::checkMagicArmorHeavy() const {
@@ -20017,7 +20054,15 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(1)->setTevColor(1, i_color);
             mpLinkHatModel->getModelData()->getMaterialNodePointer(1)->setTevColor(1, i_color);
             }
+#if TARGET_PC
+        // Only run the Magic Armor material ops on the REAL Mmdl model — the Kmdl
+        // fallback body lacks this material layout and getMaterialNodePointer(2) on its
+        // hat reads off the end (the shop-buy-Magic draw crash).  Fall through to the
+        // Hero's branch below, which matches the fallback body.
+        } else if (checkMagicArmorWearAbility() && s_albwMagicModelReady) {
+#else
         } else if (checkMagicArmorWearAbility()) {
+#endif
 #if TARGET_PC
             if (field_0x064C->getMaterialNum() >= 12)
 #endif
@@ -20174,7 +20219,19 @@ int daAlink_c::draw() {
 
     if (!checkWolf()) {
         if (var_r31) {
-            if (checkMagicArmorWearAbility() && mClothesChangeWaitTimer == 0) {
+            // ============================================
+            // NEW CODE — ALBW Port (Magic Armor BRK null backstop)
+            // The Magic Armor rupee-drain Brk animators (mMagicArmorBodyBrk/HeadBrk) are
+            // set up in changeLink's Magic branch via setMagicArmorBrk(), which can FAIL
+            // (and leave these NULL) when Magic is reached through the ALBW shop / a
+            // missing-Mmdl fallback build — paths vanilla never hits, so vanilla never
+            // null-checks here.  entry/removeTevRegAnimator(NULL) derefs null+0x10 and
+            // crashes in draw() (J3DMaterialTable::entryTevRegAnimator).  Guard both calls.
+            // Real fix lives in the Magic Armor changeLink setup (ensure the Brk is built);
+            // this is the crash-safe backstop.
+            // ============================================
+            if (checkMagicArmorWearAbility() && mClothesChangeWaitTimer == 0 &&
+                mMagicArmorBodyBrk != NULL && mMagicArmorHeadBrk != NULL) {
                 mpLinkModel->getModelData()->removeTevRegAnimator(mMagicArmorBodyBrk);
                 mpLinkHatModel->getModelData()->removeTevRegAnimator(mMagicArmorHeadBrk);
             }
@@ -20186,7 +20243,8 @@ int daAlink_c::draw() {
                 setWaterDropColor((J3DGXColorS10*)&tevStr.TevColor);
             }
         } else {
-            if (checkMagicArmorWearAbility()) {
+            if (checkMagicArmorWearAbility() &&
+                mMagicArmorBodyBrk != NULL && mMagicArmorHeadBrk != NULL) {
                 mpLinkModel->getModelData()->entryTevRegAnimator(mMagicArmorBodyBrk);
                 mpLinkHatModel->getModelData()->entryTevRegAnimator(mMagicArmorHeadBrk);
             }

@@ -54,7 +54,7 @@ Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 
 - On death, eligible inventory items can be **stripped** (13 rentable slots; same mapping as the ALBW design).
 - Save bits track which items were ever eligible for rental.
-- **Magic Armor** and **Deity Armor** use extra eligibility rules (wallet / prior armor strip).
+- **Magic Armor** and **Deity Armor** use extra eligibility rules (wallet / prior armor strip). **Deity session flow** (shop-only, not quick-swappable): [albw-deity-armor-shop.md](albw-deity-armor-shop.md).
 - Meter refills on death regardless of optional economy settings.
 
 ### Death — Recovery Orb (optional)

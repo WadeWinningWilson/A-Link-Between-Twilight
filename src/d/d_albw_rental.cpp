@@ -199,20 +199,18 @@ static const ALBWRentalEntry kItems[] = {
     // NEW CODE — ALBW Port (Outfits — Armors tab)
     // Hero's Clothes (the default green tunic, dItemNo_WEAR_KOKIRI_e) and Zora
     // Armor (dItemNo_WEAR_ZORA_e) sit between Ordon and Magic on the Armor page.
-    // Rentable here at 50 rupees; always-eligible for now (the currently-worn
-    // outfit is still auto-hidden by the owned check) — gating can be tightened
-    // later if these should require having obtained them first.
+    // Eligibility = worn/obtained once (collection or item-first-bit from story).
     // ============================================
     { "Hero's Clothes",
       (u8)dItemNo_WEAR_KOKIRI_e,   -1,      50,
       "You know, I had an ancestor that swore he saw a legendary hero wear a garb like this.",
-      []() -> bool { return true; },
+      []() -> bool { return dMeter2_isHerosWearEligible(); },
       CAT_ARMOR },
     { "Zora Armor",
       (u8)dItemNo_WEAR_ZORA_e,     -1,      50,
       "Sleek and slippery. Smells like the lake I used to fish at...when the Zoras weren't "
       "looking....sigh...",
-      []() -> bool { return true; },
+      []() -> bool { return dMeter2_isZoraWearEligible(); },
       CAT_ARMOR },
     // ============================================
     // NEW CODE ENDS HERE
@@ -220,7 +218,13 @@ static const ALBWRentalEntry kItems[] = {
     { "Magic Armor",
       (u8)dItemNo_ARMOR_e,         -1,      500,
       "Legendary Golden protection, keep an eye on your wallet with this!",
-      nullptr, CAT_ARMOR },
+      []() -> bool {
+          if (dusk::getSettings().game.albwMagicArmorRentableDebug.getValue()) {
+              return true;
+          }
+          return dMeter2_isALBWRentalEligible((u8)dItemNo_ARMOR_e);
+      },
+      CAT_ARMOR },
     // ============================================
     // NEW CODE — ALBW Port
     // Deity Armor: 13th rental entry.  Not a physical inventory item; it is
@@ -681,13 +685,13 @@ static void rebuildVisibleList() {
             }
         }
 
-        // ALBW Port: clothes outfits (Ordon/Hero's/Zora) stay listed as buyable
-        // even while owned or worn, so the shop doubles as an outfit switcher
-        // (buying re-equips).  Other items keep the normal eligible/owned gating.
-        const bool wear     = entry.itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
-                              entry.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
-                              entry.itemNo == (u8)dItemNo_WEAR_ZORA_e;
-        const bool eligible = wear ? true : entryEligible(entry);
+        // ALBW Port: clothes outfits (Ordon/Hero's/Zora) stay listed as outfit
+        // switcher rows once eligible (????? until worn/obtained once).  Owned
+        // is not used to hide them — buying re-equips even while worn.
+        const bool wear = entry.itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
+                          entry.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
+                          entry.itemNo == (u8)dItemNo_WEAR_ZORA_e;
+        const bool eligible = entryEligible(entry);
         const bool owned    = wear ? false : dMeter2_playerOwnsRentalItem(entry.itemNo);
         if (eligible && owned) {
             continue;  // hidden — player already owns this (non-outfit) item

@@ -941,11 +941,15 @@ bool dMeter2_grantShieldOwnership(u8 itemNo);
 // dMeter2_isCasualWearEligible() — "worn once" gate for the Ordon outfit: true
 //   once the player has escaped the Hyrule Castle Sewers (saveBitLabels[47]),
 //   i.e. has worn the Ordon clothes through the intro. True ALBW bypasses this.
+// dMeter2_isHerosWearEligible() / dMeter2_isZoraWearEligible() — same idea for
+//   Hero's Clothes and Zora Armor (collection / item-first-bit from story obtain).
 // dMeter2_grantRentalClothes() — grant + auto-equip a clothes item (e.g. casual
 //   wear) and trigger the model swap. The shop is the only way to don the Ordon
 //   outfit; vanilla collection menus can switch it back off.
 // ============================================
 bool dMeter2_isCasualWearEligible();
+bool dMeter2_isHerosWearEligible();
+bool dMeter2_isZoraWearEligible();
 void dMeter2_grantRentalClothes(u8 itemNo);
 // ============================================
 // NEW CODE ENDS HERE

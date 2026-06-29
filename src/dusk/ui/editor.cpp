@@ -2186,6 +2186,11 @@ EditorWindow::EditorWindow() {
             "active/stored wardrobe counts, equipped sword/shield/outfit, and passive recovery "
             "rates per 100ms (base vs taxed)." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.albwMagicArmorRentableDebug,
+            "Magic Armor Rentable (Debug)",
+            "Lists Magic Armor as rentable in the Postman shop before story strip. Turning this "
+            "off does not remove purchased ownership (save stash / equip bits are kept)." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showDarknutBashDebug,
             "Darknut Bash Debug Log",
             "Logs Darknut bash/guard-break state and shield bash-start charge snapshots to "

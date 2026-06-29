@@ -1092,6 +1092,15 @@ bool dMeter2_isCasualWearEligible() {
     return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[47]);
 }
 
+bool dMeter2_isHerosWearEligible() {
+    return dComIfGs_isCollectClothes(KOKIRI_CLOTHES_FLAG) != 0 ||
+           dComIfGs_isItemFirstBit((u8)dItemNo_WEAR_KOKIRI_e) != 0;
+}
+
+bool dMeter2_isZoraWearEligible() {
+    return dComIfGs_isItemFirstBit((u8)dItemNo_WEAR_ZORA_e) != 0;
+}
+
 // Grant + auto-equip a clothes item and trigger the model swap, mirroring the
 // vanilla collection-menu equip path (setSelectEquipClothes + setClothesChange).
 void dMeter2_grantRentalClothes(u8 itemNo) {

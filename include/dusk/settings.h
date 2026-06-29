@@ -307,6 +307,9 @@ struct UserSettings {
         ConfigVar<bool> showLockonHpDebug;
         // In-game Quick Swap wardrobe / ALBW recovery mult overlay (Editor → ALBW tab).
         ConfigVar<bool> showWardrobeRecoveryDebug;
+        // Editor-only: show Magic Armor as rentable before story strip. Save ownership is unchanged
+        // when this is turned off (stash / equip bits are not cleared).
+        ConfigVar<bool> albwMagicArmorRentableDebug;
         // File log of Darknut ALBW bash/guard-break state (Documents/dusklight/albw_darknut_debug.txt).
         ConfigVar<bool> showDarknutBashDebug;
         // Right stick cycles nearby battle enemies instead of manual lock-on camera.
