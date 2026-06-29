@@ -193,6 +193,22 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
 
     dAlbwOutfit_syncWornOwnership();
 
+    // ============================================
+    // NEW CODE — ALBW Port (death turns the sumo overlay OFF; user decision 2026-06-29)
+    // The sumo worn-bit (700) is a per-save event bit, so without this it survives a game-over
+    // and Link respawns in the sumo overlay — and a post-respawn vanilla-menu armor switch then
+    // crashes (statusWindowExecute -> changeLink builds the sumo skip-path from a non-resident
+    // arc -> initModel(NULL)).  On game-over, clear ONLY the worn bit and let the normal sync
+    // LEAVE path (syncLinkModel's `has && !want` branch) do the proper teardown — clear the FLG2
+    // flags AND rebuild the model to native together, keeping the model/flags/statics in sync.
+    // (An earlier version also cleared FLG2_80000 directly here; that desynced the state — model
+    // stayed sumo while the flag read native, so the draw guard skipped Link = the broken hybrid
+    // sumo after a cycle.  Do NOT clear FLG2 here.)  Idempotent; only on a real game-over.
+    // ============================================
+    if (i_link->checkGameOverWindow() && dAlbwOutfit_isSumoWorn()) {
+        dAlbwOutfit_setSumoWorn(false);
+    }
+
     if (dAlbwOutfit_isStageTransitionUnsafe()) {
         if (!sInStageTransition) {
             sInStageTransition = true;

@@ -615,6 +615,15 @@ void daAlink_c::changeLink(int param_0) {
                       (void*)mpLinkHatModel, (void*)hMd, (void*)mpLinkHandModel, (void*)nMd,
                       nMat, nPEB);
     }
+    // Cutscene-anim crash probe: dump the body anm-pack slots at the rebuild.  setDemoBodyBck
+    // binds a demo-arc BCK into a pack slot; the blend calc walks all 3.  resetDemoBck only
+    // re-sets slot 0 (via ANM_WAIT), so a demo BCK left in under1/upper1/upper2 survives the
+    // cutscene -> freed when the demo arc frees -> J3DMtxCalcAnimation null crash on rebuild.
+    // Compare these to the "setDemoBodyBck" pointers to spot the lingering freed slot.  STRIP.
+    DuskLog.debug("ALBW-LIFE ANMPACK under0={} under1={} under2={} upper0={} upper1={} upper2={}",
+                  (void*)getNowAnmPackUnder(UNDER_0), (void*)getNowAnmPackUnder(UNDER_1),
+                  (void*)getNowAnmPackUnder(UNDER_2), (void*)getNowAnmPackUpper(UPPER_0),
+                  (void*)getNowAnmPackUpper(UPPER_1), (void*)getNowAnmPackUpper(UPPER_2));
 #endif
 
     mDoExt_setCurrentHeap(current_heap);

@@ -1219,6 +1219,12 @@ void daAlink_c::setDemoBodyBck(dDemo_actor_c* i_demoActor, u16 i_resID) {
     daPy_anmHeap_c* anmHeap = mUnderAnmHeap;
     J3DAnmTransform* bck = (J3DAnmTransform*)anmHeap->loadDataDemoRID(i_resID, 0);
     if (bck != NULL) {
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+        // Cutscene-anim crash probe: log the demo BCK bound into the body pack so the rebuild
+        // ANMPACK dump can be matched against it (a freed demo BCK lingering in a pack slot is
+        // the J3DMtxCalcAnimation null crash).  STRIP before push.
+        DuskLog.debug("ALBW-LIFE setDemoBodyBck resID={} bck={} -> under0/upper0", i_resID, (void*)bck);
+#endif
         setFrameCtrl(mUnderFrameCtrl, bck->getAttribute(), 0, bck->getFrameMax(), 1.0f, 0.0f);
         mNowAnmPackUnder[0].setAnmTransform(bck);
         mNowAnmPackUpper[0].setAnmTransform(bck);

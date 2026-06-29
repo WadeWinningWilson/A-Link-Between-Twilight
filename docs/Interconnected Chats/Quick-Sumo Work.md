@@ -14,18 +14,25 @@
 
 > Written for a **fresh session** to resume with full knowledge. Everything below this box is older/detailed history; this box is the complete current picture. Sumo chat owns `d_albw_outfit.cpp`, `d_albw_sumo_test.cpp`, the sumo parts of `changeLink`/`draw` in `d_a_alink*`. The Magic Armor / wardrobe / Deity-shop changes in the tree are **other chats'** uncommitted work — leave them unless coordinating.
 
-### Commit state (branch `main`, fork `WadeWinningWilson/A-Link-Between-Dusklight`; NOT pushed)
-- **`d36141f297`** (HEAD) — backstop the cycling crash: `daAlink_c::modelDraw` skips freed-arc models.
-- **`3a345b5b5d`** — checkpoint: Magic-Armor-buy crash fixed (`s_albwMagicModelReady`) + `C` (sync re-seed).
-- **`69e6aaf5eb`** — last fully-verified base (chin strap + dual-Kmdl fixed; storage/quick-swap/cutscene OK). **Rollback target.** Roll back: `git reset --hard 69e6aaf5eb` (or `git revert 3a345b5b5d`). `git checkout` is GATED — ask the user first.
+### ⭐ LATEST (2026-06-29 PM) — THE CYCLING CRASH CLASS IS FIXED (build-then-swap). See the "🔬 2026-06-29" section below for the full chain. One narrower, PRE-EXISTING bug remains (cutscene animation).
 
-### What WORKS now (banked)
-Chin strap gone · native cross-base swap (Ordon↔Hero's) no crash · **Magic-Armor-buy works** · **simple/normal outfit cycling works (no flicker observed)** · storage (Postman) · cutscene persistence (basic) · startup OK *after GPU-cache clear*.
+### Commit state (branch `main`, fork `WadeWinningWilson/A-Link-Between-Dusklight`; NOT pushed)
+- **`8b73d91cf9`** (HEAD) — **Build-then-swap clothes load** (THE fix): loads the new arc into a 2nd heap while the old models stay live, builds, then frees the old heap + swaps. No freed-but-referenced window. VERIFIED: vanilla / quick-switch / Zora↔Magic all crash-free; detector reports 0 BUILD-CORRUPT over 352 swaps (the Zmdl→Mmdl hand corruption was same-slot heap reuse, gone with the fresh heap).
+- **`5108f1c0b0`** — checkpoint: lifecycle guards + build-time corruption DETECTOR (the diagnostic that pinned the root). **Rollback target if build-then-swap regresses:** `git reset --hard 5108f1c0b0`.
+- **`ddeacee06c`** — pre-session base (old master handoff). `69e6aaf5eb` = older fully-verified base. `git checkout` is GATED — ask the user first.
+- NOTE: `D_ALBW_ARC_LIFECYCLE_DEBUG` logger is ON (the detector/verifier). Keep it while finishing the cutscene fix; **strip before any upstream push.**
+
+### What WORKS now (banked, in-game verified)
+Chin strap gone · native cross-base swap · Magic-Armor-buy · **vanilla armor change, D-pad quick-switch, and Zora↔Magic cycling are all crash-free under stress** · storage (Postman) · cutscene persistence (basic) · startup OK *after GPU-cache clear*.
 
 ### What is STILL OPEN
-1. **THE cycling crash (the real root, task #7).** Under a *complex* sequence (load→add Zora→manual Zora/Hero's→warp→shop-buy Sumo+Magic→cycle) the game crashes drawing a Link model built from / left on a **freed-and-reused arc**. Last repro: `daAlink_c::modelDraw(mpLinkHandModel)` → `setLightTevColorType_MAJI` → `J3DMaterial::getFog`, `rva≈0x3ab43a/0x3ab6ea`, garbage fault addr. The `modelDraw` backstop (skip if `getMaterialNum() > 256`) catches gross corruption (fixed simple cycling) but **NOT reused-memory corruption** (plausible count, garbage material pointers) — heuristic is fundamentally unreliable. **Draw-side mitigation is exhausted; the fix must be upstream (arc/model lifecycle).**
-2. **Cap-lost over Magic/Ordon base** — KNOWN LIMITATION, not a regression. Cap (`al_head`) lives in `Kmdl`, resident only on Hero's (is Kmdl) / Zora (chin-strap donor); over Magic/Ordon → topknot. The cap is **sumo-overlay-only** by design right now (native-body caps = model-agnostic backlog, bit 696). Sumo cap *should* work over all bases but doesn't, because cap-over-all-bases = holding Kmdl everywhere = the dual-Kmdl crash. Deferred to model-agnostic cap redesign (needs a shadow-pass guard first).
-3. **Hero's not selectable at load until you manually pick Zora then Hero's** — cycle-pool/ownership-init. User notes their Ordon was bought from an OLD mod rendition, so this is likely a **stale-save artifact, probably not relevant** — low priority.
+1. **Cutscene animation crash (the one remaining; PRE-EXISTING, narrow).** Play a cutscene that animates Link's body with a **demo BCK**, then quick-switch a few frames later → crash. `modelCalc(mpLinkModel) → J3DModel::calc → J3DJointTree::calc → J3DMtxCalcAnimation::calc`, fault `0x10` (a body joint's skeletal-anim calculator has a **null/freed `J3DAnmTransform`**). NOT arc/clothes lifecycle (0 BUILD-CORRUPT, 0 freed clothes models) — it's an **animation lifecycle** bug: demo anims load from the demo arc (`getDemoArcName`), which frees at cutscene end; the body stays bound to it; the rebuild re-binds the freed anim → null deref. **User-verified causality:** crashes only if the cutscene is PLAYED (skip = no crash); survives ~3s after the cutscene, crashes on the next quick-switch (rebuild) → the rebuild is the trigger, the cutscene sets up the latent bad binding. **Fix direction (cutscene-agnostic):** stop the body being left bound to a freed demo animation across a rebuild — re-bind a valid gameplay anime on rebuild, or clear/replace the demo binding when the demo arc frees. **PAUSED 2026-06-29 (user) — teleport + game-over bugs take priority.** Diagnostic build is in (`setDemoBodyBck` + `ANMPACK` logs) for when we resume.
+2. **Teleport-on-swap (RESURFACED / more apparent — HIGH PRIORITY).** A clothes change intermittently shifts Link a distance on the **XY plane** — visible in-game on quick-switch AND on **vanilla outfit selection in the start menu** (jumps when the menu closes). So it is the **shared clothes-change pipeline / model rebuild**, not quick-switch-specific. Intermittent (not every swap). Egregious on small/isolated geometry (Link can be moved off a ledge); earlier it seemed rarer only because testing was in large rooms. This is the old "random teleport on swap" (memory `project_sumo_outfit.md` open list) — previously gated via `dAlbwOutfit_isSwapBlockedState()`/`checkBootsOrArmorHeavy` for heavy-movement states, but it clearly still fires outside those. **TO VERIFY:** whether build-then-swap (`8b73d91cf9`) changed its frequency vs `5108f1c0b0` (i.e. is this a regression or just more-apparent pre-existing). **Likely mechanism to investigate:** the model rebuild re-deriving Link's base TR matrix / a ground/collision re-snap during the change writing `current.pos`. NOT yet diagnosed.
+3. **Game-over / respawn bugs (HIGH PRIORITY) — two chained:**
+   - **(A) Respawn-in-sumo (root):** died wearing **Zora**, respawned in the **sumo overlay** (`flg80000=1`).  Worn-state error on the death/respawn path — sumo worn-bit **700** and/or the `FLG2_UNK_200000/80000` overlay flags are left/restored set when they should be clear.  Likely: bit 700 not cleared when switching sumo→native earlier, OR the respawn re-applies the overlay from a stale flag.  Investigate the worn-bit 700 lifecycle on switch-away-from-sumo and on game-over/respawn (`d_albw_outfit.cpp` / `d_albw_sumo_test.cpp`).  NOT a build-then-swap issue (worn-state is the outfit module, untouched recently).
+   - **(B) Crash on vanilla MENU armor switch while (erroneously) in sumo:** `dMw_c::_execute → statusWindowExecute → loadModelDVD → changeLink → initModel(NULL)`, fault `0xc8`.  The status-menu clothes change with sumo active took the **sumo skip-path** (`FLG2_UNK_280000` → `changeLink(1)` with no arc reload) and built the sumo model from a **non-resident arc** → `getObjectRes` NULL → `initModel(NULL)`.  This is the old skip-path-non-resident-arc crash class, surfaced via the STATUS WINDOW (`statusWindowExecute`), and downstream of (A).  **NOT a build-then-swap regression** (build-then-swap is gated to non-sumo/non-meta, so the sumo skip-path is unchanged).  Fixing (A) should prevent (B); also harden the skip-path to not `initModel(NULL)` (null-guard / ensure residency in the status-window context).
+4. **Cap-lost over Magic/Ordon base** — KNOWN LIMITATION, not a regression (cap `al_head` lives in `Kmdl`, resident only on Hero's/Zora). Deferred to the model-agnostic cap redesign.
+5. **Hero's not selectable at load until you manually pick Zora then Hero's** — likely a stale-save artifact; low priority.
 
 ### THE ROOT CAUSE (the recurring villain — internalize this)
 - The resource manager (`d_resorce.cpp`) is **refcounted by arc NAME** (`setRes`→`incCount`, `deleteRes`→`decCount`; one `dRes_info_c` per name). BUT Link's clothes pipeline (`loadModelDVD`) frees its arc heap with **`mpArcHeap->freeAll()`, which BYPASSES the refcount**, and then RELOADS the next arc into the **same heap slot** (reuse). So a model left pointing at a freed slot reads "valid-ish" but corrupt.
@@ -177,6 +184,47 @@ animators (setFaceBtk/Btp). Residual theoretical sites (e.g. the status-window f
 data is NEVER reachable by a running consumer — then the window doesn't exist and no consumer
 (known or future) can hit it.** The guards are the seatbelts; #1 is the cure. The state token +
 draw guard + execute guards make all THREE observed crashes impossible; #1 closes the class.
+
+### ✅ BUILD-THEN-SWAP — IMPLEMENTED & VERIFIED (commit `8b73d91cf9`) — the arc-lifecycle class is CLOSED
+This is "#1" done properly (not gates).  `loadModelDVD` no longer frees-then-reloads in place;
+the NORMAL clothes change (non-metamorphose, non-sumo) now:
+1. loads the NEW arc into a **second arc heap** (`s_albwArcHeapB`, ~651KB, allocated at init,
+   freed in the dtor) while the OLD models stay fully valid in `mpArcHeap`;
+2. builds the new models from it (`changeLink` repoints `mpLinkModel` etc.);
+3. THEN frees the old heap and **swaps** `mpArcHeap`↔`s_albwArcHeapB` + `mPhaseReq`↔`s_albwPhaseReqB`.
+Wolf metamorphose + the sumo skip-path keep the in-place flow; same-base re-equip rebuilds in
+place (no swap); falls back to in-place if the alt heap is NULL.  `setClothesChange` resets the
+swap flag so each change re-preps.  Files: `d_a_alink_swindow.inc` (loadModelDVD, setClothesChange),
+`d_a_alink.cpp` (statics `s_albwArcHeapB`/`s_albwPhaseReqB`/`s_albwSwapOldArc`/`s_albwSwapActive`,
+init alloc, dtor free).
+- **No live pointer ever references freed memory** → draw / calc / shadow / any consumer always
+  sees a valid model.  This is the real invariant at the source — the per-consumer gates
+  (modelDraw/shadowDraw/setWaterDropColor/setFaceBtk epoch+integrity guards) are now redundant
+  belt-and-suspenders; they can be simplified once we trust the swap.
+- **VERIFIED in-game:** vanilla armor changes, D-pad quick-switch, and Zora↔Magic stress are all
+  crash-free.  Detector/verifier over a full run: **352 swaps, 0 BUILD-CORRUPT, 0 in-place frees,
+  3 draw-skips.**  The deterministic Zmdl→Mmdl hand-material-8 corruption was **same-slot heap
+  reuse** and is GONE with the fresh alt heap (confirms the corruption root, not just hides it).
+
+### ⏳ REMAINING — cutscene animation crash (PRE-EXISTING; NOT arc lifecycle) — IN PROGRESS
+After build-then-swap, one crash remains, and it is a DIFFERENT subsystem (animation, not arc):
+`modelCalc(mpLinkModel) → J3DModel::calc → J3DJointTree::calc → J3DJoint::recursiveCalc →
+J3DMtxCalcAnimation::calc`, fault `0x10` — a body joint's skeletal-anim calculator has a
+**null/freed `J3DAnmTransform`** (`J3DJoint.h:195` `field_0x8.calc(this)` derefs null `mAnmTransform`).
+- **Mechanism:** demo/cutscene BCKs load from the **demo arc** (`getDemoArcName()`/`loadDataDemoRID`,
+  `d_a_alink.cpp:4311`); the demo arc frees at cutscene end; the body stays bound to that BCK; a
+  later rebuild (quick-switch) re-binds the now-freed anim → null deref in the joint calc.
+- **User-verified causality (decisive):** crashes ONLY if the cutscene is PLAYED (SKIP it → quick-
+  switch never crashes); survives ~3s of post-cutscene play (demo memory not yet reused → calc
+  fine), crashes on the NEXT quick-switch.  So: the cutscene sets up the latent bad binding, the
+  **rebuild is the trigger**.  Pre-existing (it was the co-occurring "crash #2"); build-then-swap
+  just removed the earlier freed-window death so this now surfaces alone.
+- **NOT a cooldown / per-cutscene patch:** the fix must be cutscene-agnostic (covers every cutscene)
+  and must not gate D-pad cycling (locked decision: cutscene cycling is intentional).  Fix
+  direction: stop the body being left bound to a freed demo animation across a rebuild — re-bind a
+  valid gameplay anime on rebuild, or clear/replace the demo binding when the demo arc frees.
+- **Next step:** locate the body-anim `.entry()` / anm-pack→model binding, instrument it to catch
+  the freed/null `J3DAnmTransform` at the post-cutscene rebuild, then fix that lifecycle.
 
 ---
 
