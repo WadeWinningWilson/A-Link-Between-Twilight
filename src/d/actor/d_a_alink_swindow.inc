@@ -90,11 +90,15 @@ void daAlink_c::setClothesChange(int param_0) {
         }
 #endif
         mClothesChangeWaitTimer = 4;
+#if TARGET_PC
+        // Each new change re-preps the build-then-swap; never inherit a stuck swap flag.
+        s_albwSwapActive = false;
+#endif
 
         if (param_0 != 0) {
             onNoResetFlg2(FLG2_UNK_200000);
         }
-    }    
+    }
 }
 
 void daAlink_c::setShieldChange() {
@@ -120,34 +124,45 @@ int daAlink_c::loadModelDVD() {
             mpWlMidnaHairModel = NULL;
 
             if (!checkNoResetFlg2(FLG2_UNK_280000)) {
+                const bool isMeta =
+                    (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY);
+#if TARGET_PC
+                // BUILD-THEN-SWAP prep (normal clothes change, alt heap available): keep the
+                // OLD models fully valid -- do NOT free here.  Just remember the old arc (to
+                // free after the swap) and point mArcName at the new arc.  Runs once; the
+                // timer 1->2 retry re-enters at ==1, never here.  See d_a_alink.cpp.
+                if (!isMeta && s_albwArcHeapB != NULL) {
+                    if (!s_albwSwapActive) {
+                        s_albwSwapOldArc = mArcName;
+                        setArcName(checkWolf());   // non-meta -> the new clothes arc
+                        cPhs_Reset(&s_albwPhaseReqB);
+                        s_albwSwapActive = true;
+                    }
+                } else
+#endif
+                {
+                    // In-place free-then-load: wolf metamorphose, or fallback (no alt heap).
 #if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
-                // TEMP: capture the arc + its live archive pointer the instant BEFORE the
-                // refcount-bypassing freeAll tears the heap down.  Match this archive ptr
-                // against the changeLink BUILD snapshot to see if any live model was built
-                // from it (and is therefore about to dangle).  STRIP before push.
-                DuskLog.debug("ALBW-LIFE loadModelDVD FREEALL mArcName={} arc={} heap={} procID={}",
-                              (mArcName ? mArcName : "(null)"), albwArcArchive(mArcName),
-                              (void*)mpArcHeap, mProcID);
+                    DuskLog.debug("ALBW-LIFE loadModelDVD FREEALL mArcName={} arc={} heap={} procID={}",
+                                  (mArcName ? mArcName : "(null)"), albwArcArchive(mArcName),
+                                  (void*)mpArcHeap, mProcID);
 #endif
-                if (!dComIfG_resDelete(&mPhaseReq, mArcName)) {
+                    if (!dComIfG_resDelete(&mPhaseReq, mArcName)) {
 #if TARGET_PC
-                    // resDelete no-ops if load was in-progress; force-unregister before freeAll
-                    dComIfG_deleteObjectResMain(mArcName);
+                        // resDelete no-ops if load in-progress; force-unregister before freeAll
+                        dComIfG_deleteObjectResMain(mArcName);
 #endif
-                }
-                cPhs_Reset(&mPhaseReq);
-                mpArcHeap->freeAll();
+                    }
+                    cPhs_Reset(&mPhaseReq);
+                    mpArcHeap->freeAll();
 #if TARGET_PC
-                // Heap freed in place (next arc reloads at the same address): any clothes
-                // model built in a prior epoch is now stale.  Bump so modelDraw/shadowDraw
-                // skip them until changeLink/changeWolf rebuilds and re-stamps the epoch.
-                ++s_albwArcEpoch;
+                    ++s_albwArcEpoch;  // in-place free: prior-epoch models are now stale
 #endif
-
-                if (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY) {
-                    setArcName(!checkWolf());
-                } else {
-                    setArcName(checkWolf());
+                    if (isMeta) {
+                        setArcName(!checkWolf());
+                    } else {
+                        setArcName(checkWolf());
+                    }
                 }
             }
         } else if (mClothesChangeWaitTimer == 1) {
@@ -155,23 +170,70 @@ int daAlink_c::loadModelDVD() {
                 mClothesChangeWaitTimer = 0;
                 changeLink(1);
             } else {
-                int phase_state = dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap);
-                if (phase_state == cPhs_COMPLEATE_e) {
-                    mClothesChangeWaitTimer = 0;
-
-                    if (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY) {
-                        if (checkWolf()) {
-                            changeLink(0);
-                        } else {
-                            changeWolf();
-                        }
-                    } else {
+                const bool isMeta =
+                    (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY);
+#if TARGET_PC
+                if (s_albwSwapActive) {
+                    // BUILD-THEN-SWAP: load the new arc into the alt heap, build from it, then
+                    // free the old heap and swap.  The old models stay valid until the swap,
+                    // so draw/calc/shadow never see freed memory -- no freed-window crash.
+                    if (mArcName == s_albwSwapOldArc) {
+                        // Same arc re-equipped: still resident in mpArcHeap -> rebuild in place.
+                        mClothesChangeWaitTimer = 0;
+                        s_albwSwapActive = false;
                         changeLink(1);
+                        return 1;
                     }
-
-                    return 1;
+                    if (dComIfG_resLoad(&s_albwPhaseReqB, mArcName, s_albwArcHeapB) ==
+                        cPhs_COMPLEATE_e) {
+                        mClothesChangeWaitTimer = 0;
+                        changeLink(1);  // builds the new models from the alt heap; repoints refs
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+                        DuskLog.debug("ALBW-LIFE SWAP newArc={} oldArc={} -> free old heap={}",
+                                      (mArcName ? mArcName : "(null)"),
+                                      (s_albwSwapOldArc ? s_albwSwapOldArc : "(null)"),
+                                      (void*)mpArcHeap);
+#endif
+                        // Live ptrs now reference the alt heap, so the old heap is free to drop.
+                        if (!dComIfG_resDelete(&mPhaseReq, s_albwSwapOldArc)) {
+                            dComIfG_deleteObjectResMain(s_albwSwapOldArc);
+                        }
+                        cPhs_Reset(&mPhaseReq);
+                        mpArcHeap->freeAll();
+                        // Swap heaps + phase requests so mpArcHeap / mPhaseReq track the live arc.
+                        {
+                            JKRExpHeap* l_th = mpArcHeap;
+                            mpArcHeap = s_albwArcHeapB;
+                            s_albwArcHeapB = l_th;
+                        }
+                        {
+                            request_of_phase_process_class l_tr = mPhaseReq;
+                            mPhaseReq = s_albwPhaseReqB;
+                            s_albwPhaseReqB = l_tr;
+                        }
+                        s_albwSwapActive = false;
+                        return 1;
+                    }
+                    mClothesChangeWaitTimer = 2;  // alt arc not loaded yet; retry
+                } else
+#endif
+                {
+                    // In-place load: wolf metamorphose, or fallback (no alt heap).
+                    if (dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap) == cPhs_COMPLEATE_e) {
+                        mClothesChangeWaitTimer = 0;
+                        if (isMeta) {
+                            if (checkWolf()) {
+                                changeLink(0);
+                            } else {
+                                changeWolf();
+                            }
+                        } else {
+                            changeLink(1);
+                        }
+                        return 1;
+                    }
+                    mClothesChangeWaitTimer = 2;
                 }
-                mClothesChangeWaitTimer = 2;
             }
         }
     } else {

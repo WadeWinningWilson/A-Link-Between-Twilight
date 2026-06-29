@@ -176,6 +176,22 @@ static int albwFirstCorruptMat(J3DModel* m) {
     }
     return -1;
 }
+
+// ============================================
+// NEW CODE — ALBW Port (build-then-swap clothes load: never free a live model)
+// Second arc heap + its own phase request.  loadModelDVD loads the NEW clothes arc into
+// the alt heap while the OLD models stay fully valid in mpArcHeap, builds the new models
+// from it (changeLink repoints mpLinkModel etc.), THEN frees the old heap and swaps the
+// two heaps/requests.  There is no instant where a live pointer references freed memory,
+// so draw / calc / shadow / any future consumer always sees a valid model — the real
+// invariant enforced at the source, not per-consumer gating.  Scoped to the NORMAL clothes
+// change (non-metamorphose, non-sumo); wolf transform + the sumo skip-path keep their
+// existing in-place flow.  Falls back to in-place free-then-load if the alt heap is NULL.
+// ============================================
+static JKRExpHeap*                    s_albwArcHeapB   = NULL;        // alt heap; ping-pongs with mpArcHeap
+static request_of_phase_process_class s_albwPhaseReqB  = {NULL, 0};   // alt heap's load request
+static const char*                    s_albwSwapOldArc = NULL;        // old arc to free after the swap
+static bool                           s_albwSwapActive = false;       // mid build-then-swap (guards retry re-init)
 #endif
 
 #if TARGET_PC
@@ -5114,6 +5130,15 @@ int daAlink_c::create() {
         setArcName(checkWolf());
         setOriginalHeap(&mpArcHeap, 0xA2800);
         JKRHEAP_NAME(mpArcHeap, "Alink ArcHeap");
+#if TARGET_PC
+        // Second arc heap for build-then-swap (same size as mpArcHeap).  The normal clothes
+        // change loads the next arc here while the old models stay live, then frees the old
+        // heap and swaps.  If this allocation fails, loadModelDVD falls back to in-place load.
+        if (s_albwArcHeapB == NULL) {
+            setOriginalHeap(&s_albwArcHeapB, 0xA2800);
+            JKRHEAP_NAME(s_albwArcHeapB, "Alink ArcHeapB");
+        }
+#endif
         if (dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap) != cPhs_COMPLEATE_e) {
             return cPhs_INIT_e;
         }
@@ -20768,6 +20793,17 @@ daAlink_c::~daAlink_c() {
     if (mpArcHeap != NULL) {
         mDoExt_destroyExpHeap(mpArcHeap);
     }
+#if TARGET_PC
+    // Free the build-then-swap alt heap too (file-static; would otherwise leak / dangle if
+    // Link is recreated, e.g. a cutscene rebuild).  Reset swap state for the next instance.
+    if (s_albwArcHeapB != NULL) {
+        mDoExt_destroyExpHeap(s_albwArcHeapB);
+        s_albwArcHeapB = NULL;
+    }
+    s_albwSwapActive = false;
+    s_albwSwapOldArc = NULL;
+    cPhs_Reset(&s_albwPhaseReqB);
+#endif
 
     dComIfG_resDelete(&mShieldPhaseReq, mShieldArcName);
     if (mpShieldArcHeap != NULL) {
