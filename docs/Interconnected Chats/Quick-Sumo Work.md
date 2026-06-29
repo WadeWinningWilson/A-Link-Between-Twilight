@@ -10,6 +10,65 @@
 
 ---
 
+## 🧭 MASTER SESSION HANDOFF (2026-06-30) — READ THIS FIRST (fresh-context entry point)
+
+> Written for a **fresh session** to resume with full knowledge. Everything below this box is older/detailed history; this box is the complete current picture. Sumo chat owns `d_albw_outfit.cpp`, `d_albw_sumo_test.cpp`, the sumo parts of `changeLink`/`draw` in `d_a_alink*`. The Magic Armor / wardrobe / Deity-shop changes in the tree are **other chats'** uncommitted work — leave them unless coordinating.
+
+### Commit state (branch `main`, fork `WadeWinningWilson/A-Link-Between-Dusklight`; NOT pushed)
+- **`d36141f297`** (HEAD) — backstop the cycling crash: `daAlink_c::modelDraw` skips freed-arc models.
+- **`3a345b5b5d`** — checkpoint: Magic-Armor-buy crash fixed (`s_albwMagicModelReady`) + `C` (sync re-seed).
+- **`69e6aaf5eb`** — last fully-verified base (chin strap + dual-Kmdl fixed; storage/quick-swap/cutscene OK). **Rollback target.** Roll back: `git reset --hard 69e6aaf5eb` (or `git revert 3a345b5b5d`). `git checkout` is GATED — ask the user first.
+
+### What WORKS now (banked)
+Chin strap gone · native cross-base swap (Ordon↔Hero's) no crash · **Magic-Armor-buy works** · **simple/normal outfit cycling works (no flicker observed)** · storage (Postman) · cutscene persistence (basic) · startup OK *after GPU-cache clear*.
+
+### What is STILL OPEN
+1. **THE cycling crash (the real root, task #7).** Under a *complex* sequence (load→add Zora→manual Zora/Hero's→warp→shop-buy Sumo+Magic→cycle) the game crashes drawing a Link model built from / left on a **freed-and-reused arc**. Last repro: `daAlink_c::modelDraw(mpLinkHandModel)` → `setLightTevColorType_MAJI` → `J3DMaterial::getFog`, `rva≈0x3ab43a/0x3ab6ea`, garbage fault addr. The `modelDraw` backstop (skip if `getMaterialNum() > 256`) catches gross corruption (fixed simple cycling) but **NOT reused-memory corruption** (plausible count, garbage material pointers) — heuristic is fundamentally unreliable. **Draw-side mitigation is exhausted; the fix must be upstream (arc/model lifecycle).**
+2. **Cap-lost over Magic/Ordon base** — KNOWN LIMITATION, not a regression. Cap (`al_head`) lives in `Kmdl`, resident only on Hero's (is Kmdl) / Zora (chin-strap donor); over Magic/Ordon → topknot. The cap is **sumo-overlay-only** by design right now (native-body caps = model-agnostic backlog, bit 696). Sumo cap *should* work over all bases but doesn't, because cap-over-all-bases = holding Kmdl everywhere = the dual-Kmdl crash. Deferred to model-agnostic cap redesign (needs a shadow-pass guard first).
+3. **Hero's not selectable at load until you manually pick Zora then Hero's** — cycle-pool/ownership-init. User notes their Ordon was bought from an OLD mod rendition, so this is likely a **stale-save artifact, probably not relevant** — low priority.
+
+### THE ROOT CAUSE (the recurring villain — internalize this)
+- The resource manager (`d_resorce.cpp`) is **refcounted by arc NAME** (`setRes`→`incCount`, `deleteRes`→`decCount`; one `dRes_info_c` per name). BUT Link's clothes pipeline (`loadModelDVD`) frees its arc heap with **`mpArcHeap->freeAll()`, which BYPASSES the refcount**, and then RELOADS the next arc into the **same heap slot** (reuse). So a model left pointing at a freed slot reads "valid-ish" but corrupt.
+- Crash always surfaces in **DRAW** of a Link model, two paths: (a) `daAlink_c::draw → modelDraw → setLightTevColorType_MAJI → J3DMaterial::getFog` (env light); (b) the **shadow pass** `dDlst_shadowControl_c::imageDraw → J3DShape::drawFast` (Link registers models via `daAlink_c::shadowDraw → addRealShadow`). **`draw()` already early-returns while `mClothesChangeWaitTimer != 0`, so the freed→rebuild window is guarded — the crash is at `timer==0` with a model built from / left on a reused arc.** The shadow path is NOT covered by the `modelDraw` backstop.
+- **Recurring trigger: the `Kmdl` "donor"** (sumo face over Zora + the sumo cap borrow `al_head`/`al_face` from `Kmdl`). It's a 2nd refcount on `Kmdl`; `releaseFaceDonor()` freeing it while a model still references it dangles that model. Gated to Zora-only specifically because over Hero's the pipeline's `Kmdl` (in `mpArcHeap`) would alias it and dangle on `freeAll`.
+
+### Session timeline — bugs, fixes, and fixes-that-caused-bugs (so we don't repeat)
+- **Chin strap + dual-Kmdl crash → FIXED** (`69e6aaf5eb`). Root = refcount/`freeAll` aliasing on `Kmdl`. Fix: sumo face from base arc (`mArcName`) for non-Zora; `Kmdl` donor gated Zora-only. Strap is EXCLUSIVELY a Zora-base issue (only `Zmdl` lacks `al_face`).
+- **A+B (drop hat from `sumoStable`) → TRIED, REVERTED.** False premise (thought cap was parked — it RENDERS). Trace proved the multi-apply churn is **`has` flapping** (demo clears `FLG2_UNK_80000` each frame, module re-applies), not hat. `sumoStable` keeps the hat term.
+- **C (re-seed `sSyncedNativeClothes` under overlay) → KEPT.** Stops `synced=255` spurious leave-reloads after a warp/cutscene while sumo worn.
+- **D (`changeLink` re-assert gated on body-residency) → TRIED, REVERTED.** Touched core, uncertain benefit.
+- **E (draw guard) → reframed.** `draw()` already guards `timer!=0`; the real gap is the **shadow path** + reused-arc-at-`timer==0`.
+- **F (equip-side debounce-to-latest) → already present** (single `sPendingEquip` slot).
+- **cap-residency generalization (hold `Kmdl` on all non-Hero's bases, to fix cap everywhere) → TRIED, REVERTED.** Caused the **shop-buy-Zora SHADOW crash**: `releaseFaceDonor` freed `Kmdl` while the cap referenced it → `addRealShadow(mpLinkHatModel)` drew a dangling cap → `J3DShape::drawFast`. Proves cap-over-all-bases is entangled with the dual-Kmdl problem.
+- **Startup crash → GPU cache, NOT code.** Stale `dawn_cache.db`/`pipeline_cache.db` after a rebuild die at the title/logo draw (`unhandled tcg src 21`, misreported `0xC0000409`). See `docs/build-fps-guidelines.md` GPU-cache addendum. **LESSON: clear both caches after EVERY rebuild.**
+- **Magic-Armor-buy crash → FIXED** (`3a345b5b5d`). Other chat's `changeLink` Magic branch falls back to the **Kmdl (Hero's) body** when `Mmdl` parts aren't resolvable, but keeps the Magic wear flag, so `draw()`'s Magic-only ops (`setWaterDropColor` material indices, the rupee-drain `Brk` animators) read off the wrong model → crash (`entryTevRegAnimator` null+0x10, then `setWaterDropColor`). Fix: **`s_albwMagicModelReady`** flag (true only for the real `Mmdl` build) gates the Magic draw ops so a fallback body draws as a plain body; + a Magic-`Brk` null-guard. The fallback now logs `Mmdl` `resInfo`/`archive` state.
+- **Cycling crash → BACKSTOPPED only** (`d36141f297`, see Open #1). Real fix pending.
+
+### ROADMAP — the next step (do this, don't patch the draw again)
+**Instrument the arc free→build→draw lifecycle, reproduce ONCE, then fix the exact hole.**
+1. Add logging (additive, zero behavior change): in `changeLink` log each model's source arc + `getObjectResInfo(arc)->getArchive()` ptr; in `loadModelDVD` log every `freeAll` (arc/heap); in `releaseFaceDonor` log the `Kmdl` free. (Pattern already used for the Magic fallback log.)
+2. Repro the complex cycling crash; the logs pinpoint WHICH model on WHICH arc went stale and what freed it (expected: a donor release or a reused heap slot at `timer==0`).
+3. Fix upstream: ensure no Link model is **drawn (direct OR shadow) while pointing at a freed/reused arc** — candidates: (a) don't `releaseFaceDonor` until the models are rebuilt off `Kmdl`; (b) a RELIABLE model-validity gate (track the arc each model came from, not a material-count heuristic) covering BOTH `modelDraw` and the shadow pass; (c) serialize so an arc isn't freed under a live model.
+4. Only after the lifecycle is solid, revisit cap-over-all-bases / model-agnostic cap (with the shadow guard).
+
+### Build / hygiene (MUST follow — these bit us this session)
+- Build: `cmd /c build_run.bat` (RelWithDebInfo; builds only, does NOT launch). It also does the 0-byte/config-state checks.
+- **AFTER EVERY REBUILD, CLEAR GPU CACHES** or the game crashes at the logo: delete `dawn_cache.db*` and `pipeline_cache.db*` in `%APPDATA%\TwilitRealm\Dusklight\` (game closed).
+- Symbolize: `"C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/Llvm/x64/bin/llvm-symbolizer.exe" --obj=build/windows-msvc-relwithdebinfo/dusklight.exe <VA>` where `VA = 0x140000000 + rva`.
+- Logs: `%APPDATA%\TwilitRealm\Dusklight\logs\dusklight-<ts>.log` (crash backtrace, `rva=`); `outfit_swap_debug.txt` (swap trace); `daAlink_c::modelDraw: skip corrupt model` lines = the backstop firing.
+- Commit only when the user asks; the user is OK with `git add -A` snapshots (privacy-grep first; no build artifacts / `*.db` / `_debug.txt`). **Never push** (goes to upstream fork). **Never `git checkout` without asking.** `D_ALBW_OUTFIT_SWAP_DEBUG` logger is ON — strip before any upstream push.
+
+### Key files & symbols
+- `src/d/d_albw_outfit.cpp` — outfit module: `syncLinkModel` (`sumoStable`/`nativeStable`, the `C` re-seed, apply/revert/leave branches), `applyTargetKind` (clears `FLG2_280000` before `setCloth` on leave; cross-base decompose), `processPendingEquip`, `requestClothesChange` (no pre-emptive `setArcName`), `dAlbwOutfit_equip` (debounce-to-latest), `sLeavingSumoReload`, `sOutfitReloadCooldown` (10/18), `sLastAppliedHat`.
+- `src/d/d_albw_sumo_test.cpp` — overlay: `resourcesReady` (loads `alSumou`; `Kmdl` donor gated `checkZoraWearFlg()`), `releaseFaceDonor` (the dangerous `Kmdl` `resDelete`), `maintainResources`, `dAlbwSumoTest_exec`, `prepareChangeLink`.
+- `src/d/actor/d_a_alink_wolf.inc` — `changeLink`: sumo re-assert (top, gated `prepareChangeLink`), sumo branch (`alSumou` body, face block [Zora→`Kmdl` al_face else `mArcName`], cap [Kmdl al_head else topknot]), Magic branch (other chat: `Mmdl` else `Kmdl` fallback + `s_albwMagicModelReady`), BLS joint remap (`FLG2_UNK_80000` → 9/14/10/15).
+- `src/d/actor/d_a_alink.cpp` — `draw()` (`timer!=0` early-return; the Magic `Brk` entry/remove w/ null-guard; `setWaterDropColor` Magic branch gated on `s_albwMagicModelReady`), `modelDraw` (the freed-arc backstop), `shadowDraw`/`addRealShadow` (UNGUARDED shadow path), `s_albwMagicModelReady` static.
+- `src/d/actor/d_a_alink_swindow.inc` — `loadModelDVD` (timer 2 `resDelete`+`freeAll`+`setArcName`, timer 1 `resLoad`+`changeLink`; skip-path when `FLG2_280000`), `setClothesChange`.
+- `src/d/d_resorce.cpp` — `getResInfoLoaded` (returns NULL when archive freed/"reading"), `setRes`/`deleteRes` (refcount), `freeAll` bypass.
+- Flags: `FLG2_UNK_200000` (sumo trigger) / `FLG2_UNK_80000` (sumo body) / `FLG2_UNK_280000` (both). Save bits: 700 sumo-worn, 689/691–695 stash, 696 cap. `s_albwMagicModelReady` (Magic real vs fallback).
+
+---
+
 ## ⚡ Session handoff (2026-06-28) — read first
 
 **Done & working:** native cross-base double-free **fixed** (removed the pre-emptive `setArcName(0)` in `requestClothesChange` — it made `loadModelDVD`'s `resDelete` target the new arc → leaked old slot → double-free); full rotation works (`getNextOwned(SUMO)` = **simple ring**, peel-to-base reverted — it caused an absorbing Sumo↔base 2-cycle); shop/Zora purchase works; **storage + quick-swap + cutscene persistence all verified**. *Committed as one working-build snapshot in **`69e6aaf5eb`** (not pushed).*
@@ -1296,4 +1355,4 @@ Quick Swap implements the **F input half** only after Sumo's **F pipeline half**
 
 ---
 
-*Last updated: Quick Swap chat — sign-off + ownership decision on Sumo A–F proposal (2026-06-29). Sumo: A–E + F equip; Quick Swap: F coalesce + #6.*
+*Last updated: Sumo chat — **🧭 MASTER SESSION HANDOFF added at top of file** (full bug/fix/revert timeline, root-cause model, roadmap, build/hygiene) for fresh-context resume. Commits: `d36141f297` cycling-crash backstop / `3a345b5b5d` Magic-buy fix + sync (C) / `69e6aaf5eb` verified base (rollback target). Open: cycling crash → upstream arc/model-lifecycle fix (instrument free→build→draw next); cap-over-all-bases deferred (2026-06-30).*
