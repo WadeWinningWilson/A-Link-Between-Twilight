@@ -16,7 +16,26 @@
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_phase.h"
 
+// ============================================
+// TEMP INSTRUMENTATION — arc/model lifecycle trace (cycling-crash Step 1).
+// Keep this toggle in sync with d_a_alink.cpp's D_ALBW_ARC_LIFECYCLE_DEBUG; STRIP
+// (set to 0) before any upstream push.  Event-driven (donor free only), not per-frame.
+// ============================================
+#define D_ALBW_ARC_LIFECYCLE_DEBUG 1
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+#include "dusk/logging.h"  // DuskLog — OSReport is disabled in-game (OSReportDisable), DuskLog reaches the log
+#endif
+
 namespace {
+
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+// Live archive pointer registered for an arc NAME (NULL if not registered / freed).
+void* albwArcArchive(const char* arc) {
+    if (arc == NULL) return NULL;
+    dRes_info_c* info = g_dComIfG_gameInfo.mResControl.getObjectResInfo(arc);
+    return (info != NULL) ? (void*)info->getArchive() : NULL;
+}
+#endif
 
 bool sShowWeapons         = false;
 bool sInStageTransition   = false;
@@ -71,6 +90,13 @@ bool nativeClothesResourcesReady() {
 // ============================================
 void releaseFaceDonor() {
     if (sKmdlPhase.id == 2) {
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+        // TEMP: log only the ACTUAL Kmdl donor free (id==2).  resourcesReady() calls this
+        // every frame over a non-Zora base, where id==0 and we only cPhs_Reset — logging
+        // that path was per-frame file I/O (the FPS regression).  STRIP before push.
+        DuskLog.debug("ALBW-LIFE releaseFaceDonor FREE Kmdl donor (id==2) arc={}",
+                      albwArcArchive(kCapArcName));
+#endif
         dComIfG_resDelete(&sKmdlPhase, kCapArcName);  // decCount; clears id to 0
     } else {
         cPhs_Reset(&sKmdlPhase);                      // abandon any in-flight / idle request

@@ -69,6 +69,7 @@
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include "dusk/hurricane_test.h"
+#include "dusk/logging.h"  // DuskLog — TEMP arc/model lifecycle trace (STRIP with D_ALBW_ARC_LIFECYCLE_DEBUG)
 #include "res/Object/Alink.h"
 #include <cstring>
 #include <dusk/string.hpp>
@@ -106,6 +107,100 @@ static const char l_kArcName[] = "Kmdl";
 // is drawn as a plain body (no Magic ops) until the real Mmdl model is built.
 // ============================================
 static bool s_albwMagicModelReady = false;
+#endif
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (arc epoch / generation gate for the cycling crash)
+// loadModelDVD frees Link's clothes arc heap (mpArcHeap->freeAll) and reloads the next
+// arc INTO THE SAME HEAP ADDRESS, so a model left from a prior load points at reloaded/
+// garbage data while its J3DModel/J3DModelData addresses AND material count all still look
+// valid — an archive-pointer compare or a matNum heuristic cannot detect this (proven by
+// the 2026-06-29 lifecycle trace: every base arc reloaded at the same 0x..a6c0 archive).
+// s_albwArcEpoch is bumped on every freeAll; changeLink/changeWolf stamp the epoch the
+// current clothes models were built in.  modelDraw/shadowDraw then skip the arc-heap
+// clothes models when the two differ (the heap was freed under them) — a reliable,
+// address-reuse-proof seatbelt that replaces the matNum heuristic for those models.
+// ============================================
+static u32 s_albwArcEpoch = 0;
+static u32 s_albwClothesModelEpoch = 0;
+
+// ============================================
+// NEW CODE — ALBW Port (universal model-state consistency token)
+// Encodes the draw-relevant identity of Link's clothes models (wolf / sumo-body / wear
+// kind).  changeLink/changeWolf stamp s_albwBuiltModelState with the token the models were
+// built for; draw() compares it to the live token and skips the WHOLE Link draw for the
+// frame if they disagree (or the arc epoch moved).  Because every crashing consumer
+// (modelDraw->getFog, setWaterDropColor material indices, the Magic Brk animators, the
+// shadow adds) runs inside draw(), this ONE choke-point guard prevents ALL of them from
+// ever walking stale/mismatched model state — the single method that replaces per-consumer
+// gating.  The serialization/coalescing fixes keep the tokens in agreement during normal
+// play, so the guard does not fire (no visible flicker); it is purely the crash seatbelt.
+// ============================================
+static u32 s_albwBuiltModelState = 0xFFFFFFFF;
+static inline u32 albwModelStateToken(bool wolf, bool sumoBody, bool casual, bool zora,
+                                      bool magic) {
+    return (wolf ? 1u : 0u) | (sumoBody ? 2u : 0u) | (casual ? 4u : 0u) | (zora ? 8u : 0u) |
+           (magic ? 16u : 0u);
+}
+
+// ============================================
+// NEW CODE — ALBW Port (build-time corruption DETECTOR)
+// We do not yet know WHY a clothes-model build occasionally comes out corrupt (a material
+// with a WILD mPEBlock -> the getFog crash).  Instead of gating the symptom per-consumer,
+// catch it AT BIRTH: at the end of changeLink, walk every clothes model's materials.  A
+// valid material's PEBlock is part of the same BMD as its J3DModelData (< ~1MB away); a
+// corrupt one is ~GBs off.  getPEBlock() is a member read (no deref), so the scan never
+// faults.  When a build is corrupt we log the FULL context (which model/material, current +
+// previous arc, sumo flag, arc/heap pointers, build #) so the pipeline cause is findable,
+// and flag the build so draw()'s guard skips Link until the next clean rebuild (insurance
+// that also keeps the session alive to collect MORE corrupt-build samples).
+// albwFirstCorruptMat returns the first bad material index, or -1 if the model is clean/absent.
+// ============================================
+static bool        s_albwBuildIntegrityOk = true;
+static const char* s_albwPrevArcName      = NULL;
+static u32         s_albwBuildCounter      = 0;
+static int albwFirstCorruptMat(J3DModel* m) {
+    if (m == NULL) return -1;            // absent model is not corrupt
+    J3DModelData* md = m->getModelData();
+    if (md == NULL) return -2;
+    u16 n = md->getMaterialNum();
+    if (n > 256) return -3;              // wild material count = corrupt
+    const intptr_t base  = (intptr_t)md;
+    const intptr_t kNear = (intptr_t)0x10000000;  // 256MB; BMD < 1MB, corruption ~GBs
+    for (u16 k = 0; k < n; k++) {
+        J3DMaterial* mat = md->getMaterialNodePointer(k);
+        if (mat == NULL) return (int)k;
+        intptr_t d = (intptr_t)mat->getPEBlock() - base;
+        if (d < -kNear || d > kNear) return (int)k;
+    }
+    return -1;
+}
+#endif
+
+#if TARGET_PC
+// ============================================
+// TEMP INSTRUMENTATION — ALBW Port (arc/model free->build->draw lifecycle trace)
+// Step 1 of the cycling-crash fix: pinpoint WHICH Link model is left pointing at a
+// freed/reused arc, and WHAT freed it.  All logs are EVENT-DRIVEN (a clothes-change
+// rebuild, an arc-heap freeAll, or the Kmdl donor free) — never per-frame — so they
+// add no hot-path cost.  Set the toggle to 0 (or delete this block + its call sites)
+// to STRIP before any upstream push.  Output lands in the main dusklight-<ts>.log
+// alongside the crash backtrace, so the BUILD / FREEALL / donor lines correlate
+// directly with the "modelDraw: skip corrupt model" line and the rva= fault.
+// ============================================
+#define D_ALBW_ARC_LIFECYCLE_DEBUG 1
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+// Live archive pointer registered for an arc NAME (NULL if not registered or freed/
+// mid-read).  Same lookup the Magic-fallback log uses; reading it at build, at freeAll,
+// and at donor-free lets one repro show exactly when a model's source arc was freed out
+// from under it (the freeAll-bypasses-refcount root).
+static void* albwArcArchive(const char* arc) {
+    if (arc == NULL) return NULL;
+    dRes_info_c* info = g_dComIfG_gameInfo.mResControl.getObjectResInfo(arc);
+    return (info != NULL) ? (void*)info->getArchive() : NULL;
+}
+#endif
 #endif
 
 static const char l_zArcName[] = "Zmdl";
@@ -8263,8 +8358,16 @@ void daAlink_c::setFaceBtp(u16 i_resIdx, BOOL i_isPriIdx, u16 i_arcNo) {
 
     if (btp != NULL) {
         mpFaceBtp = btp;
-        mpFaceBtp->searchUpdateMaterialID(field_0x06c0);
-        field_0x06c0->entryTexNoAnimator(mpFaceBtp);
+#if TARGET_PC
+        // Same execute-path clothes-change guard as setFaceBtk (see there): field_0x06c0 is
+        // freed while mClothesChangeWaitTimer != 0; skip wiring the animator onto it.  The
+        // latest btp is recorded above and changeModelDataDirect re-entries it after rebuild.
+        if (mClothesChangeWaitTimer == 0)
+#endif
+        {
+            mpFaceBtp->searchUpdateMaterialID(field_0x06c0);
+            field_0x06c0->entryTexNoAnimator(mpFaceBtp);
+        }
 
         if (i_arcNo == 0xFFFF) {
             if (i_resIdx == dRes_ID_ALANM_BTP_FMABA03_e || (i_resIdx == dRes_ID_ALANM_BTP_WL_FMABA01_e && checkUnderMove0BckNoArcWolf(WANM_WAIT_WIND))) {
@@ -8311,6 +8414,23 @@ void daAlink_c::setFaceBtk(u16 i_resIdx, BOOL i_isPriIdx, u16 i_arcNo) {
 
     if (btk != NULL) {
         mpFaceBtk = btk;
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (execute-path clothes-change guard)
+        // While a clothes change is in flight, loadModelDVD's freeAll has freed field_0x06c0
+        // (the cached face model data, = mpLinkFaceModel->getModelData()) until changeLink
+        // rebuilds it.  Wiring the animator onto it now walks freed memory — the
+        // procHorseWait -> setSyncRide -> setFaceBtk -> searchUpdateMaterialID ->
+        // JUTNameTab::getIndex crash seen while riding Epona and switching clothes.  This is
+        // the EXECUTE-path analogue of draw()'s clothes-timer early-return: the one rule is
+        // "no clothes-model data is safe to touch while mClothesChangeWaitTimer != 0".  The
+        // latest btk is recorded above, and changeModelDataDirect re-entries it onto the
+        // rebuilt model when the change completes, so the animation self-heals.
+        // ============================================
+        if (mClothesChangeWaitTimer != 0) {
+            return;
+        }
+#endif
         mpFaceBtk->searchUpdateMaterialID(field_0x06c0);
         field_0x06c0->entryTexMtxAnimator(mpFaceBtk);
         daAlink_matAnm_c::setMorfFrame(3);
@@ -19915,9 +20035,17 @@ void daAlink_c::shadowDraw() {
                     dComIfGd_addRealShadow(shadowID, mpWlMidnaHairModel);
                 }
             } else {
+#if TARGET_PC
+                // Generation gate (shadow path): skip the clothes-model shadow adds when the
+                // arc heap was freed under them.  addRealShadow -> J3DShape::drawFast walks the
+                // same freed model data the direct draw does (the documented shadow crash).
+                if (s_albwClothesModelEpoch == s_albwArcEpoch)
+#endif
+                {
                 dComIfGd_addRealShadow(shadowID, mpLinkFaceModel);
                 dComIfGd_addRealShadow(shadowID, mpLinkHatModel);
                 dComIfGd_addRealShadow(shadowID, mpLinkHandModel);
+                }
 
                 if (mLeftHandIndex == 0xFB) {
                     dComIfGd_addRealShadow(shadowID, mpDemoHLTmpModel);
@@ -19966,6 +20094,11 @@ void daAlink_c::shadowDraw() {
                     }
                 }
 
+#if TARGET_PC
+                // Generation gate (shadow path): kantera + boots are clothes models in mpArcHeap.
+                if (s_albwClothesModelEpoch == s_albwArcEpoch)
+#endif
+                {
                 if (checkNoResetFlg2(FLG2_UNK_1)) {
                     dComIfGd_addRealShadow(shadowID, mpKanteraModel);
                 }
@@ -19974,6 +20107,7 @@ void daAlink_c::shadowDraw() {
                     for (int i = 0; i < 2; i++) {
                         dComIfGd_addRealShadow(shadowID, mpLinkBootModels[i]);
                     }
+                }
                 }
 
                 if (checkSpinnerRide()) {
@@ -20032,14 +20166,38 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     if (i_model == NULL) {
         return;
     }
+    // ============================================
+    // NEW CODE — ALBW Port (arc epoch / generation gate)
+    // Reliable, address-reuse-proof replacement for the matNum heuristic on the clothes
+    // models: if the arc heap was freed (freeAll bumped s_albwArcEpoch) AFTER these models
+    // were built (changeLink/changeWolf stamped s_albwClothesModelEpoch) and they have NOT
+    // been rebuilt, this model's J3DModelData points at a freed/reloaded slot — skip it.
+    // Gate ONLY the mpArcHeap-derived clothes models; sword/shield/held items live in
+    // other heaps with their own lifecycle and must not be skipped on the clothes epoch.
+    // ============================================
+    if (s_albwClothesModelEpoch != s_albwArcEpoch &&
+        (i_model == mpLinkModel || i_model == mpLinkFaceModel || i_model == mpLinkHatModel ||
+         i_model == mpLinkHandModel || i_model == mpLinkBootModels[0] ||
+         i_model == mpLinkBootModels[1] || i_model == mpKanteraModel ||
+         i_model == mpKanteraGlowModel || i_model == mWoodSwordModel)) {
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+        DuskLog.debug("ALBW-LIFE modelDraw SKIP stale-epoch model={} modelEpoch={} arcEpoch={} "
+                      "[body={} face={} hat={} hand={}]",
+                      (void*)i_model, s_albwClothesModelEpoch, s_albwArcEpoch, (void*)mpLinkModel,
+                      (void*)mpLinkFaceModel, (void*)mpLinkHatModel, (void*)mpLinkHandModel);
+#endif
+        return;
+    }
     {
         J3DModelData* md = i_model->getModelData();
         u16 matNum = (md != NULL) ? md->getMaterialNum() : 0xFFFF;
         if (md == NULL || matNum > 256) {
-            OSReport("daAlink_c::modelDraw: skip corrupt model=%p md=%p mat=%u "
-                     "[body=%p face=%p hat=%p hand=%p]\n",
-                     i_model, md, matNum, mpLinkModel, mpLinkFaceModel, mpLinkHatModel,
-                     mpLinkHandModel);
+            // DuskLog (not OSReport — OSReportDisable() is called in-game, so OSReport is
+            // dropped during gameplay; DuskLog.debug reaches the dusklight-<ts>.log).
+            DuskLog.debug("ALBW-LIFE modelDraw SKIP corrupt model={} md={} mat={} "
+                          "[body={} face={} hat={} hand={}]",
+                          (void*)i_model, (void*)md, matNum, (void*)mpLinkModel,
+                          (void*)mpLinkFaceModel, (void*)mpLinkHatModel, (void*)mpLinkHandModel);
             return;
         }
     }
@@ -20184,6 +20342,33 @@ int daAlink_c::draw() {
         }
         return 1;
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (universal model-state consistency guard)
+    // THE single choke point that prevents every "use stale/mismatched clothes-model state"
+    // crash (getFog/mPEBlock, setWaterDropColor material indices, the Magic Brk animators,
+    // the shadow adds) — they ALL run below this point in draw().  If Link's models were not
+    // built for the current arc epoch AND the current wear/sumo state, the data they hold
+    // does not match what we are about to draw, so skip the whole Link draw this frame (the
+    // same safe early-out the clothes-change timer uses just above).  The serialization /
+    // sumo-flap coalescing keeps these tokens in agreement during normal play, so this does
+    // not fire (no flicker); it is the crash seatbelt for any residual/unforeseen mismatch.
+    // ============================================
+    {
+        u32 curState = albwModelStateToken(checkWolf(), checkNoResetFlg2(FLG2_UNK_80000),
+            checkCasualWearFlg(), checkZoraWearFlg(), checkMagicArmorWearFlg());
+        if (s_albwClothesModelEpoch != s_albwArcEpoch || s_albwBuiltModelState != curState ||
+            !s_albwBuildIntegrityOk) {
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+            DuskLog.debug("ALBW-LIFE draw SKIP inconsistent built={} cur={} epoch m/a={}/{} integrityOk={}",
+                          s_albwBuiltModelState, curState, s_albwClothesModelEpoch,
+                          s_albwArcEpoch, s_albwBuildIntegrityOk ? 1 : 0);
+#endif
+            return 1;
+        }
+    }
+#endif
 
     BOOL isPlayerNoDraw = checkPlayerNoDraw();
     BOOL var_r29 = FALSE;

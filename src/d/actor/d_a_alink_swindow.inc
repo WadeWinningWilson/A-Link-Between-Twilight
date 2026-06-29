@@ -120,6 +120,15 @@ int daAlink_c::loadModelDVD() {
             mpWlMidnaHairModel = NULL;
 
             if (!checkNoResetFlg2(FLG2_UNK_280000)) {
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+                // TEMP: capture the arc + its live archive pointer the instant BEFORE the
+                // refcount-bypassing freeAll tears the heap down.  Match this archive ptr
+                // against the changeLink BUILD snapshot to see if any live model was built
+                // from it (and is therefore about to dangle).  STRIP before push.
+                DuskLog.debug("ALBW-LIFE loadModelDVD FREEALL mArcName={} arc={} heap={} procID={}",
+                              (mArcName ? mArcName : "(null)"), albwArcArchive(mArcName),
+                              (void*)mpArcHeap, mProcID);
+#endif
                 if (!dComIfG_resDelete(&mPhaseReq, mArcName)) {
 #if TARGET_PC
                     // resDelete no-ops if load was in-progress; force-unregister before freeAll
@@ -128,6 +137,12 @@ int daAlink_c::loadModelDVD() {
                 }
                 cPhs_Reset(&mPhaseReq);
                 mpArcHeap->freeAll();
+#if TARGET_PC
+                // Heap freed in place (next arc reloads at the same address): any clothes
+                // model built in a prior epoch is now stale.  Bump so modelDraw/shadowDraw
+                // skip them until changeLink/changeWolf rebuilds and re-stamps the epoch.
+                ++s_albwArcEpoch;
+#endif
 
                 if (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY) {
                     setArcName(!checkWolf());

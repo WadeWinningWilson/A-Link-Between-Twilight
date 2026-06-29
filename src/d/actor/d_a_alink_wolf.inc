@@ -307,6 +307,15 @@ void daAlink_c::changeWolf() {
     mMagicArmorHeadBrk = NULL;
 
     field_0x2fc7 = dStage_stagInfo_GetWolfDashType(dComIfGp_getStage()->getStagInfo());
+
+#if TARGET_PC
+    // Wolf models also live in mpArcHeap (mpLinkModel = wolf body) — stamp the epoch and the
+    // state token so draw()'s consistency guard does not treat the fresh wolf build as stale.
+    s_albwClothesModelEpoch = s_albwArcEpoch;
+    s_albwBuiltModelState = albwModelStateToken(checkWolf(),
+        checkNoResetFlg2(FLG2_UNK_80000), checkCasualWearFlg(), checkZoraWearFlg(),
+        checkMagicArmorWearFlg());
+#endif
 }
 
 void daAlink_c::changeLink(int param_0) {
@@ -394,10 +403,10 @@ void daAlink_c::changeLink(int param_0) {
             // shop-buy under churn) is visible: a registered-but-null archive == freed /
             // mid-read (aliasing class); not-registered == never loaded.
             dRes_info_c* mmdlInfo = g_dComIfG_gameInfo.mResControl.getObjectResInfo(l_mArcName);
-            OSReport("changeLink Magic Armor: missing Mmdl part in %s (body=%p head=%p hand=%p) "
-                     "resInfo=%p archive=%p\n",
-                     l_mArcName, bodyData, headData, handData, mmdlInfo,
-                     mmdlInfo != NULL ? mmdlInfo->getArchive() : NULL);
+            DuskLog.debug("ALBW-LIFE changeLink Magic FALLBACK: missing Mmdl part in {} "
+                          "(body={} head={} hand={}) resInfo={} archive={}",
+                          l_mArcName, (void*)bodyData, (void*)headData, (void*)handData,
+                          (void*)mmdlInfo, (void*)(mmdlInfo != NULL ? mmdlInfo->getArchive() : NULL));
             bodyData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al.bmd"));
             headData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_head.bmd"));
             handData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_hands.bmd"));
@@ -528,6 +537,85 @@ void daAlink_c::changeLink(int param_0) {
     modelData->entryTexMtxAnimator(mpKanteraGlowBtk);
 
     mWoodSwordModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_SWB.bmd")), 0);
+
+#if TARGET_PC
+    // Clothes models just (re)built from the current arc heap — stamp the live epoch and the
+    // wear/sumo state they were built for so draw()'s consistency guard treats them as valid.
+    s_albwClothesModelEpoch = s_albwArcEpoch;
+    s_albwBuiltModelState = albwModelStateToken(checkWolf(),
+        checkNoResetFlg2(FLG2_UNK_80000), checkCasualWearFlg(), checkZoraWearFlg(),
+        checkMagicArmorWearFlg());
+
+    // Build-time corruption DETECTOR (see albwFirstCorruptMat): scan every clothes model the
+    // instant it is built.  Logs full context on a corrupt build and flags it so draw() skips
+    // Link until the next clean rebuild (no crash, session keeps running to collect samples).
+    {
+        struct { const char* name; J3DModel* m; } l_mdls[] = {
+            {"body", mpLinkModel},   {"face", mpLinkFaceModel}, {"hat", mpLinkHatModel},
+            {"hand", mpLinkHandModel}, {"boot0", mpLinkBootModels[0]},
+            {"boot1", mpLinkBootModels[1]}, {"kantera", mpKanteraModel},
+            {"wsword", mWoodSwordModel},
+        };
+        s_albwBuildIntegrityOk = true;
+        for (int l_i = 0; l_i < (int)(sizeof(l_mdls) / sizeof(l_mdls[0])); l_i++) {
+            int l_bad = albwFirstCorruptMat(l_mdls[l_i].m);
+            if (l_bad != -1) {
+                s_albwBuildIntegrityOk = false;
+                J3DModelData* l_bmd = l_mdls[l_i].m ? l_mdls[l_i].m->getModelData() : NULL;
+                // Bad material's PEBlock VALUE + its offset from md: a small offset (e.g. a few
+                // KB, or near 0) means an UNRELOCATED offset -> the arc wasn't fully loaded/
+                // patched when changeLink built (load-completion race); a wild ~GB-off pointer
+                // means it points at freed/aliased data (stale).  Decides which fix.
+                void* l_peb = NULL;
+                intptr_t l_pebOff = 0;
+                if (l_bmd != NULL && l_bad >= 0 && (u16)l_bad < l_bmd->getMaterialNum() &&
+                    l_bmd->getMaterialNodePointer((u16)l_bad) != NULL) {
+                    l_peb = (void*)l_bmd->getMaterialNodePointer((u16)l_bad)->getPEBlock();
+                    l_pebOff = (intptr_t)l_peb - (intptr_t)l_bmd;
+                }
+                DuskLog.debug("ALBW-LIFE *** BUILD-CORRUPT *** model={} badMat={} matNum={} md={} "
+                              "peb={} pebOff={} mArcName={} prevArc={} flg80000={} arc={} kmdl={} "
+                              "heap={} build#={}",
+                              l_mdls[l_i].name, l_bad, (l_bmd ? l_bmd->getMaterialNum() : 0),
+                              (void*)l_bmd, l_peb, (long long)l_pebOff,
+                              (mArcName ? mArcName : "(null)"),
+                              (s_albwPrevArcName ? s_albwPrevArcName : "(null)"),
+                              checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, albwArcArchive(mArcName),
+                              albwArcArchive(l_kArcName), (void*)mpArcHeap, s_albwBuildCounter);
+            }
+        }
+        s_albwPrevArcName = mArcName;
+        s_albwBuildCounter++;
+    }
+#endif
+
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+    // TEMP: build snapshot — ties each rebuilt Link model to the live archive pointers of
+    // the arcs it could have been built from (mArcName / Kmdl / alSumou).  A later FREEALL
+    // or releaseFaceDonor line freeing one of those archives, followed by the modelDraw
+    // "skip corrupt" line naming the same model pointer, pinpoints the exact stale
+    // free->build->draw handoff.  STRIP before push (see D_ALBW_ARC_LIFECYCLE_DEBUG).
+    {
+        J3DModelData* bMd = (mpLinkModel     != NULL) ? mpLinkModel->getModelData()     : NULL;
+        J3DModelData* fMd = (mpLinkFaceModel != NULL) ? mpLinkFaceModel->getModelData() : NULL;
+        J3DModelData* hMd = (mpLinkHatModel  != NULL) ? mpLinkHatModel->getModelData()  : NULL;
+        J3DModelData* nMd = (mpLinkHandModel != NULL) ? mpLinkHandModel->getModelData() : NULL;
+        // The crash is always the HAND in getFog (mPEBlock->getFog) — log the hand's matNum
+        // and material(0)'s PEBlock AT BUILD.  If the PEBlock is already wild here, the model
+        // is corrupt at build (load/relocate race); if it's sane here but the matching
+        // handDraw line below shows it wild, something stomps it after build.
+        u16 nMat = (nMd != NULL) ? nMd->getMaterialNum() : 0xFFFF;
+        void* nPEB = (nMd != NULL && nMat > 0 && nMat <= 256)
+                         ? (void*)nMd->getMaterialNodePointer(0)->getPEBlock() : NULL;
+        DuskLog.debug("ALBW-LIFE changeLink BUILD flg80000={} mArcName={} arc[m={} K={} sumo={}] "
+                      "body={}/{} face={}/{} hat={}/{} hand={}/{} handMat={} handPEB={}",
+                      checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, (mArcName ? mArcName : "(null)"),
+                      albwArcArchive(mArcName), albwArcArchive(l_kArcName), albwArcArchive("alSumou"),
+                      (void*)mpLinkModel, (void*)bMd, (void*)mpLinkFaceModel, (void*)fMd,
+                      (void*)mpLinkHatModel, (void*)hMd, (void*)mpLinkHandModel, (void*)nMd,
+                      nMat, nPEB);
+    }
+#endif
 
     mDoExt_setCurrentHeap(current_heap);
 

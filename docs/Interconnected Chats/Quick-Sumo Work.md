@@ -69,6 +69,117 @@ Chin strap gone · native cross-base swap (Ordon↔Hero's) no crash · **Magic-A
 
 ---
 
+## 🔬 2026-06-29 — Step 1 instrumentation results + generation-gate plan (LATEST — read after the handoff box)
+
+Worked the cycling crash (OPEN #1) with the lifecycle instrumentation. **All uncommitted** on top of `ddeacee06c`. Net new state vs the handoff box:
+
+### Instrumentation landed (TEMP — `#define D_ALBW_ARC_LIFECYCLE_DEBUG 1`; STRIP before push)
+- **`OSReport` is DEAD in-game** — `OSReportDisable()` is called in `f_op_actor.cpp:84` + `m_Do_machine.cpp:759`, so every in-game `OSReport` is dropped. This is why the pre-existing `modelDraw`/Magic diagnostics NEVER logged. **Use `DuskLog.debug(...)`** (the `[DEBUG | dusk]` channel, same as `d_resorce.cpp` "Loading Resource") — it reaches `dusklight-<ts>.log`. fmt-style `{}`, pass pointers as `(void*)`.
+- Added (all converted to `DuskLog`, prefix **`ALBW-LIFE`**): `changeLink BUILD` (flags, `mArcName`, archive ptrs for m/Kmdl/alSumou, all 4 models as `J3DModel/J3DModelData`); `loadModelDVD FREEALL` (arc + archive ptr before the heap free); `releaseFaceDonor FREE` (gated to the real `id==2` free only); converted the existing `modelDraw SKIP` backstop + Magic-fallback logs. Helper `albwArcArchive(arc)` (null-safe) in `d_a_alink.cpp` + `d_albw_sumo_test.cpp`.
+- **FPS regression I introduced + fixed:** the donor log first fired EVERY frame (`resourcesReady()` calls `releaseFaceDonor()` per-frame over a non-Zora base, `id==0`/`cPhs_Reset`) → ~1850 per-frame log writes/run. Now gated to `id==2`. If FPS dips during this work, suspect per-frame `DuskLog` in a churned path.
+
+### What the trace PROVED (crash reproduced twice, symbolized vs the dirty exe)
+- **Locus (both crashes):** `daAlink_c::draw → modelDraw(mpLinkHandModel) → setLightTevColorType_MAJI → J3DMaterial::getFog`, `rva=0x3ab6ea`, fault = wild ptr ~4 GB off the heap. It is the **HAND model**, **direct draw path** (NOT shadow this time). `draw()`'s `timer!=0` guard did not save it.
+- **THE KILLER FINDING — heap reloads into the SAME address.** Every base arc (`Bmdl`/`Kmdl`/`Zmdl`/`Mmdl`) loads into `mpArcHeap=0x2118361a570` at archive **`0x2118361a6c0`** — `freeAll()` + reload-same-slot. Model `J3DModelData` addresses reuse too; even the body `J3DModel*` is identical across builds (anim-heap slot reuse). **➜ This DISPROVES the archive-pointer validity gate from the review** — the archive ptr is *stable* across reloads, only contents change. Address-based identity is unreliable here. (Instrumenting before coding the gate paid off.)
+- Crash build = a **freshly-rebuilt** Mmdl hand: no `modelDraw SKIP` (matNum plausible), no `Magic FALLBACK` (real Mmdl parts). So a just-built hand walked garbage. Trigger = rapid post-shop-buy base thrash (`Mmdl→Mmdl+sumo→Bmdl→Kmdl→Zmdl→Mmdl`), ~20 frames apart each.
+
+### Remaining ambiguity (addresses can't separate)
+- **(a) Stale:** hand built in an earlier heap *generation* that a later `freeAll` wiped under it (deferred-draw-vs-resource-free race), or
+- **(b) Corrupt-at-build:** `changeLink` built the hand from a partially/incorrectly loaded Mmdl arc during the rapid switch.
+
+### NEXT (in progress) — generation-counter gate = reliable Step-3 safety net AND the (a)/(b) diagnostic
+- Bump a global `epoch` on every `mpArcHeap->freeAll()`; tag each Link model with the epoch at build in `changeLink`; in **`modelDraw` AND `shadowDraw`** skip any model whose tag ≠ current epoch (replaces the unreliable `matNum>256` heuristic; robust to same-address reuse).
+- **Reads as a diagnostic:** if it catches the hand right before the crash → model was **stale (a)**, crash prevented, upstream fix = ordering (don't free under a live/deferred model). If the crash persists → **corrupt-at-build (b)**, fix = serialize the build behind load-complete.
+- Reorders the plan (gate-as-diagnostic before the upstream ordering fix) deliberately, because the trigger is still ambiguous.
+
+### RESULTS — gate built, 3 repros (2026-06-29 PM): NOT stale → corrupt/mismatch → whack-a-mole confirmed
+- **Gate ruled out the stale theory (case a).** Across all repros: **0 `SKIP stale-epoch`**, 0 `SKIP corrupt`. The crashing models were epoch-current (`draw()` already early-returns while `mClothesChangeWaitTimer != 0`, so reload windows are guarded). The freed-under-live-model theory is **dead** for these crashes.
+- **Crash #1 (hand) = corrupt-at-build (case b).** `draw → modelDraw(mpLinkHandModel) → setLightTevColorType_MAJI → J3DMaterial::getFog` = a `J3DMaterial` with a **garbage `mPEBlock`**. Probe added (`handMat`/`handPEB` at BUILD vs `handDraw`): in the run where the hand stayed healthy, BUILD `handPEB` == draw `mat0PEB` (matNum 11, stable) — so when it DOES crash it's a fresh build from arc data that wasn't correctly present under rapid `freeAll`+reload-same-slot. INTERMITTENT (didn't repro under heavy stress in the 3rd run). `getObjectRes` is per-arc (no cross-arc name aliasing).
+- **Crash #2 (cutscene, far camera) = different consumer, same disease.** `draw → setWaterDropColor → fault 0xffffffffffffffff`. `field_0x064C = mpLinkModel->getModelData()` (cached body data, refreshed via `changeModelDataDirect` at end of `changeLink`, so epoch-current). Body `modelDraw` ran first WITHOUT crashing (body `mPEBlock` fine), so `setWaterDropColor` faults indexing material nodes (`getMaterialNodePointer(N)`/hat nodes) — a **wear-flag-vs-model mismatch** during the sumo flap (native Zora/Magic index path run against a hat/body left inconsistent by the demo churn + sumo re-apply). NOT epoch-stale.
+- **WHACK-A-MOLE CONFIRMED (the opening-review thesis).** Gating `modelDraw`+`shadowDraw` pushed the crash into `setWaterDropColor`; other ungated consumers remain (the Magic `Brk` `entry/removeTevRegAnimator` on `mpLinkModel`/`mpLinkHatModel` data in `draw()`, etc.). Per-consumer gates cannot converge — the consumer set is open-ended.
+- **Black flashes:** user reports an intermittent **whole-environment** single-frame black flash, NOT tied to switching. That is NOT the gate (the gate only blanks Link's own models). Separate rendering item — likely env-light/far-camera; investigate independently, do not conflate with the crash.
+
+### CONCLUSION + upstream direction (the pivot)
+Two distinct upstream bugs under the one symptom, both from driving the clothes pipeline faster than it settles (208 BUILDs/run, sumo flap during cutscenes):
+1. **Re-entrancy / serialization:** rapid clothes changes (manual cycle + sumo re-apply flap + demo churn) overlap `freeAll`+reload+build. Fix = SERIALIZE: do not start a new clothes change (freeAll/reload) until the prior `changeLink` has completed AND been drawn once; coalesce the sumo re-apply so the demo's per-frame flag-clear cannot trigger a rebuild storm.
+2. **Wear-flag↔model consistency:** `setWaterDropColor` (and the Magic `Brk` ops) assume the live model matches the wear flag; the sumo flap breaks that for a frame. Fix = gate those material ops on flag==model agreement (or skip while a sumo apply/revert is in flight), not per-index guards.
+The gate stays as the permanent seatbelt; the FPS donor-log regression is fixed (log only `id==2`). Keep `D_ALBW_ARC_LIFECYCLE_DEBUG` on; strip before push.
+
+### IMPLEMENTED — universal model-state consistency guard (the "prevent ANY state crash" method)
+Per the user's ask for ONE mechanism (not per-consumer whack-a-mole): every crashing consumer
+(`modelDraw`→`getFog`, `setWaterDropColor`, the Magic `Brk` ops, the shadow adds) runs inside
+`daAlink_c::draw()`. So a **single early-return at the top of `draw()`** covers them all:
+- `s_albwBuiltModelState` (a token of wolf/sumo-body/wear-kind) is stamped in `changeLink`/
+  `changeWolf` alongside `s_albwClothesModelEpoch`. `draw()` recomputes the live token and, if
+  epoch or token disagree, `return 1` (skip the whole Link draw this frame — the same safe
+  early-out the clothes-change timer already uses). Logs `ALBW-LIFE draw SKIP inconsistent`.
+- This makes ALL variants of the state crash impossible by construction; the per-consumer
+  `modelDraw`/`shadowDraw` epoch gates stay as cheap redundancy. Built + caches cleared @ 01:23.
+- **Black flash = GPU pipeline cache warm-up**, NOT the gate (gate logged 0 skips): caches are
+  wiped every rebuild, so pipelines recompile on first use → single-frame stalls throughout,
+  independent of switching. Should fade on a stable build; not a code regression.
+
+### PENDING — #1 serialization / sumo-flap coalescing (evidence-first)
+The guard prevents crashes but can flicker ONE frame IF the demo clears `FLG2_UNK_80000`
+between `execute()` (where `syncLinkModel` re-applies) and `draw()` — token mismatch → skip.
+Whether that actually happens is what the `draw SKIP inconsistent` log will show. The flap
+itself is in `dAlbwOutfit_syncLinkModel` (`want`/`has`, `sumoStable`): demo clears the sumo
+body flag each frame, module re-applies via `requestClothesChange(1)` (sets the timer, so the
+rebuild window IS timer-guarded). Fix when evidenced: re-assert `FLG2_UNK_80000` to match the
+loaded sumo model before `draw()` (or coalesce the re-apply) so the live token never lies.
+Do NOT guess the demo timing — drive it from the SKIP log.
+
+### Crash #3 (Epona, Ordon/Hero/Zora, light switching) — EXECUTE-path consumer, fixed
+`procHorseWait → setSyncRide → setSingleAnime → setFaceBasicAnime → setFaceBasicBtk →
+setFaceBtk → mpFaceBtk->searchUpdateMaterialID(field_0x06c0) → J3DAnmTexPattern::
+searchUpdateMaterialID → JUTNameTab::getIndex`, fault `0xffffffffffffffff`. Crashed right
+after a `FREEALL` (clothes change in flight). `field_0x06c0` = `mpLinkFaceModel->getModelData()`
+(cached in `changeModelDataDirect`); `loadModelDVD`'s `freeAll` frees it during the reload
+window, but the **execute/animation path does not honor the clothes timer the way `draw()`
+does**, so the horse-idle face-anime setup wired a texture animator onto freed model data.
+The draw()-choke-point guard can't see this (it's not in draw()). **Fixed** by guarding the
+two execute-path face animators that touch `field_0x06c0` (`setFaceBtk`, `setFaceBtp`) on
+`mClothesChangeWaitTimer != 0`; the latest animator is still recorded and `changeModelDataDirect`
+re-entries it after the rebuild (self-healing). `setFaceBck` is safe (separate animator).
+
+### BREAKTHROUGH (2026-06-29) — corruption is DETERMINISTIC: Zora→Magic, hand, material 8
+The build-time detector (end of `changeLink`, scans every clothes model's material PEBlocks
+md-relative) caught **20 corrupt builds in one stress run, ALL IDENTICAL**:
+> `model=hand badMat=8 matNum=11 mArcName=Mmdl prevArc=Zmdl flg80000=0 kmdl=0x0`
+i.e. the **hand** (`al_hands.bmd`), **material index 8**, building **Magic (Mmdl) immediately
+after Zora (Zmdl)**, native (non-sumo). Recurs every Zora→Magic pass (build# ~5-6 apart). So it
+is a **reproducible, specific defect in the Zmdl→Mmdl hand build — not a random race.** The
+user-visible tell was "Magic Armor sometimes didn't draw, reappeared when the scene moved" =
+the draw guard skipping these flagged builds. The detector flag also feeds the `draw()` guard
+(726 skips that run) so the draw-side crash is prevented.
+- **BUT a corrupt build still crashed via a NON-draw consumer:** `execute() → J3DModel::calc()
+  → J3DJointTree::calc → J3DMtxCalcAnimation::calc`, fault `0x10`. So the corrupt build is bad
+  in **joints too**, not just materials — confirming "don't keep the corrupt build" is the
+  endgame (gating draw alone can't cover the calc/execute consumers).
+- **Open decisive question (probe added, awaiting repro):** is material 8's PEBlock a small
+  **unrelocated offset** (→ Mmdl not fully loaded/patched when `changeLink` built = load-
+  completion race; Mmdl is a large arc) or a **wild ~GB pointer** (→ stale/aliased Zora data)?
+  The detector now logs `peb=` + `pebOff=`; ONE Zora→Magic repro answers it and picks the fix.
+- Note: the detector logs BUILD-CORRUPT *at build*, BEFORE any calc/draw, so the PEBlock value
+  is captured even if the calc consumer crashes a few frames later — no calc gate needed.
+
+### THE UNIFYING PRINCIPLE (answer to "prevent ANY state crash for these models")
+All of these crashes are the SAME thing: **`loadModelDVD`'s `freeAll` frees Link's clothes
+model data while the actor keeps running, and any consumer that touches that data during the
+reload window (or after a flag/model mismatch) faults.** The ONE invariant:
+> **No clothes-model data may be touched while `mClothesChangeWaitTimer != 0` (the freeAll→
+> rebuild window), and the live model must match the wear/sumo flags (epoch+state token).**
+Enforced at: (1) the `draw()` choke point — covers ALL draw-side consumers (modelDraw/getFog,
+setWaterDropColor, Magic Brk, shadow adds) in one early-return; (2) the execute-path face
+animators (setFaceBtk/Btp). Residual theoretical sites (e.g. the status-window face setup at
+`d_a_alink_swindow.inc:367-378`) share the pattern but don't race in practice.
+**The COMPLETE, bulletproof fix is #1 serialization: shrink/defer the `freeAll` so freed model
+data is NEVER reachable by a running consumer — then the window doesn't exist and no consumer
+(known or future) can hit it.** The guards are the seatbelts; #1 is the cure. The state token +
+draw guard + execute guards make all THREE observed crashes impossible; #1 closes the class.
+
+---
+
 ## ⚡ Session handoff (2026-06-28) — read first
 
 **Done & working:** native cross-base double-free **fixed** (removed the pre-emptive `setArcName(0)` in `requestClothesChange` — it made `loadModelDVD`'s `resDelete` target the new arc → leaked old slot → double-free); full rotation works (`getNextOwned(SUMO)` = **simple ring**, peel-to-base reverted — it caused an absorbing Sumo↔base 2-cycle); shop/Zora purchase works; **storage + quick-swap + cutscene persistence all verified**. *Committed as one working-build snapshot in **`69e6aaf5eb`** (not pushed).*
