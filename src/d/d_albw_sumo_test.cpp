@@ -52,17 +52,42 @@ bool nativeClothesResourcesReady() {
     return true;
 }
 
-bool resourcesReady(bool needCap) {
-    (void)needCap;  // Kmdl is now kept resident whenever sumo is worn — not only for the
-                    // cap, but because the sumo FACE pulls al_face.bmd from Kmdl so it is
-                    // base-independent (no Zora zl_face "chin strap").  See changeLink().
+// ============================================
+// Drop the Kmdl face-donor held for a Zora base.
+//
+// Refcount-safe BY CONSTRUCTION: sKmdlPhase only ever holds Kmdl while the base
+// clothes are Zora, where Link's clothes pipeline holds Zmdl in its own mpArcHeap
+// and our Kmdl is an INDEPENDENT resource-manager entry.  decCount via resDelete
+// therefore never frees memory out from under an mpArcHeap->freeAll() — the failure
+// mode that made an unconditional Kmdl release double-free over a Hero's base (where
+// the pipeline's Kmdl and a sumo-side Kmdl alias one refcount).
+// ============================================
+void releaseFaceDonor() {
+    if (sKmdlPhase.id == 2) {
+        dComIfG_resDelete(&sKmdlPhase, kCapArcName);  // decCount; clears id to 0
+    } else {
+        cPhs_Reset(&sKmdlPhase);                      // abandon any in-flight / idle request
+    }
+}
+
+bool resourcesReady() {
     if (dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) == NULL) {
         if (dComIfG_resLoad(&sPhase, "alSumou") != cPhs_COMPLEATE_e) {
             return false;
         }
     }
-    if (dComIfG_resLoad(&sKmdlPhase, kCapArcName) != cPhs_COMPLEATE_e) {
-        return false;
+    // Face donor: the sumo body borrows al_face.bmd from the resident base arc.  Only
+    // the Zora base (Zmdl) lacks al_face, so keep Kmdl resident as the face source for
+    // that base ALONE (changeLink()'s sumo face block falls back to Kmdl only when
+    // checkZoraWearFlg()).  Gating the Kmdl load to the Zora base is what prevents the
+    // dual-Kmdl heap aliasing: over a Hero's base the pipeline's Kmdl lives in Link's
+    // mpArcHeap and a second refcount here would dangle on that heap's freeAll().
+    if (daAlink_c::checkZoraWearFlg()) {
+        if (dComIfG_resLoad(&sKmdlPhase, kCapArcName) != cPhs_COMPLEATE_e) {
+            return false;
+        }
+    } else {
+        releaseFaceDonor();
     }
     return true;
 }
@@ -85,16 +110,23 @@ void maintainResources(daAlink_c* i_link) {
 
     // Leaving sumo: preload the target native arc only — do not touch setArcName
     // while the sumo body is still on Link (loadModelDVD fights that and crashes).
+    // Keep the Zora face donor resident here: the sumo body flag is still set, so
+    // changeLink may still read its face from Kmdl for one more frame.
     if (!want && has) {
         nativeClothesResourcesReady();
         return;
     }
 
     if (want) {
-        resourcesReady(hat);
+        (void)hat;  // hat (Link cap) is parked; resourcesReady gates Kmdl on the base
+        resourcesReady();
         if (nativeClothesResourcesReady()) {
             i_link->setArcName(0);
         }
+    } else {
+        // Fully native (sumo off and body flag cleared): drop the Zora face donor if
+        // we were still holding it.
+        releaseFaceDonor();
     }
 }
 
@@ -104,7 +136,7 @@ bool dAlbwSumoTest_prepareChangeLink() {
     if (!dAlbwOutfit_isSumoWorn()) {
         return false;
     }
-    return resourcesReady(dusk::getSettings().game.sumoOutfitHat.getValue());
+    return resourcesReady();
 }
 
 bool dAlbwSumoTest_prepareNativeClothesChange() {

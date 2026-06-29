@@ -431,15 +431,27 @@ void daAlink_c::changeLink(int param_0) {
     // ============================================
     // NEW CODE — ALBW Port (Sumo Outfit face)
     // The sumo body has no face of its own (alSumou 0x33 is only the topknot), so it
-    // uses Link's al_face.bmd.  Over a Zora base, mArcName is "Zmdl" which only has
-    // zl_face.bmd, so the Zora face's chin/neck geometry shows on the sumo body (the
-    // "chin strap").  While the sumo body flag is set, force the standard al_face from
-    // Kmdl (kept resident whenever sumo is worn) so the face is base-independent.  If
-    // it's somehow unavailable, fall through to the normal per-base selection below
-    // (never NULL where it wasn't before).
+    // borrows Link's standard al_face.bmd.  Source it from the RESIDENT BASE clothes
+    // arc (mArcName): Bmdl (Ordon), Kmdl (Hero's) and Mmdl (Magic) all ship al_face,
+    // so over those bases the sumo face is correct with no extra residency.  ONLY the
+    // Zora base (Zmdl) lacks al_face — it has just zl_face.bmd, whose chin/neck
+    // geometry reads as the "chin strap" on the sumo body — so there alone we fall
+    // back to Kmdl's al_face (the sumo module keeps Kmdl resident for the Zora base
+    // only; see d_albw_sumo_test.cpp resourcesReady()/releaseFaceDonor()).
+    //
+    // Why gate the Kmdl borrow to the Zora base: the resource manager is refcounted by
+    // arc NAME, but Link's clothes pipeline frees its arc heap with mpArcHeap->freeAll()
+    // (bypassing the refcount).  Over a Hero's base the pipeline's Kmdl lives in that
+    // heap, so a second sumo-side refcount on "Kmdl" dangles when the heap is freed —
+    // the dual-Kmdl crash / chin-strap regression.  Over the Zora base the pipeline
+    // holds Zmdl instead, so our Kmdl is an independent entry and never aliases it.
     // ============================================
     if (checkNoResetFlg2(FLG2_UNK_80000)) {
-        faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_face.bmd"));
+        if (checkZoraWearFlg()) {
+            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_face.bmd"));
+        } else {
+            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd"));
+        }
     }
 #endif
     if (faceData == NULL) {

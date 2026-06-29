@@ -758,6 +758,19 @@ void shieldIconDbg(const char* fmt, ...);  // TEMP fwd decl (defined below)
 //   Spur+Shield -> swap the inner picture to the shield emblem, keep starburst.
 //   Shield Only -> swap to shield emblem AND hide the starburst.
 // The HUD is rebuilt on mode change (see draw), so this only ever adds state.
+bool isUsableShieldIconTimg(const ResTIMG* i_timg) {
+    if (i_timg == NULL) {
+        return false;
+    }
+    if (i_timg->width == 0 || i_timg->height == 0) {
+        return false;
+    }
+    if (i_timg->width > 256 || i_timg->height > 256) {
+        return false;
+    }
+    return true;
+}
+
 void applyParryIcons(ShieldTier i_tier) {
     const dusk::ParryIcons mode = dusk::getSettings().game.parryIconsMode.getValue();
     sHudIconTier = i_tier;
@@ -797,7 +810,7 @@ void applyParryIcons(ShieldTier i_tier) {
             timg = static_cast<ResTIMG*>(arc->getIdxResource(idx));
         }
     }
-    if (timg == NULL) {
+    if (!isUsableShieldIconTimg(timg)) {
         return;
     }
 
@@ -1710,6 +1723,14 @@ bool dShield_isBashSpendChainActive() {
 }
 
 void dShield_drawBashCharges() {
+    static bool sPrevParryCombatEnabled = false;
+    const bool parryCombatEnabled = dShield_isParryCombatEnabled();
+    if (sPrevParryCombatEnabled && !parryCombatEnabled) {
+        deleteBashHud();
+        sShieldHudLingerFrames = 0;
+    }
+    sPrevParryCombatEnabled = parryCombatEnabled;
+
     daAlink_c* link = daAlink_getAlinkActorClass();
     updateShieldHudLinger(link);
 

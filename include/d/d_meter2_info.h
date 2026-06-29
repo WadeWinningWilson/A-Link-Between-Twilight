@@ -910,6 +910,8 @@ void dMeter2_addALBWFraction(int numerator, int denominator);
 void dMeter2_subALBWFraction(int numerator, int denominator);
 int dMeter2_getALBWMeterValue();
 int dMeter2_getALBWMaxValue();
+int dMeter2_getALBWNormalRecoveryRate();
+int dMeter2_getALBWLockoutRecoveryRate();
 void dMeter2_fillALBWMeter();
 void dMeter2_onALBWMeterShopPurchase();
 void dMeter2_onALBWRentalEligible(u8 itemNo);

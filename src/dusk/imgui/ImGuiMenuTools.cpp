@@ -15,6 +15,7 @@
 #include "d/d_attention.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_wardrobe.h"
 #include "dusk/sim_time_scale.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
@@ -610,6 +611,63 @@ namespace dusk {
                     }
                 }
             }
+        }
+        ImGui::End();
+        ImGui::PopFont();
+    }
+
+    void ImGuiMenuTools::ShowWardrobeRecoveryDebugOverlay() {
+        if (!dAlbwWardrobe_isDebugOverlayEnabled() || !dusk::IsGameLaunched ||
+            !isPlaySceneActive())
+        {
+            return;
+        }
+
+        dAlbwWardrobeDebugSnapshot snap{};
+        dAlbwWardrobe_fillDebugSnapshot(&snap);
+
+        ImGui::PushFont(ImGuiEngine::fontMono);
+
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav;
+        SetOverlayWindowLocation(2);
+        windowFlags |= ImGuiWindowFlags_NoMove;
+
+        ImGui::SetNextWindowBgAlpha(0.65f);
+        if (ImGui::Begin("Wardrobe Recovery", nullptr, windowFlags)) {
+            ImGui::Text("Quick Swap Resistance");
+            ImGui::Separator();
+            ImGuiStringViewText(
+                fmt::format("Quick Swap: {}  Resistance: {}  Wolf: {}\n",
+                            snap.quickSwapEnabled ? "ON" : "off",
+                            snap.resistanceActive ? "active" : "inactive",
+                            snap.wolfForm ? "yes" : "no"));
+            ImGuiStringViewText(fmt::format("Recovery mult: {:.2f}\n", snap.recoveryMult));
+            ImGuiStringViewText(
+                fmt::format("Penalties: sword {:.0f}%  shield {:.0f}%  outfit {:.0f}%\n",
+                            snap.swordPenalty * 100.0f, snap.shieldPenalty * 100.0f,
+                            snap.outfitPenalty * 100.0f));
+            ImGui::Separator();
+            ImGuiStringViewText(fmt::format("Equipped: {} / {} / {}\n", snap.equippedSword,
+                                            snap.equippedShield, snap.equippedOutfit));
+            ImGuiStringViewText(
+                fmt::format("Active wardrobe: {} swords, {} shields, {} outfits ({} owned)\n",
+                            snap.activeSwords, snap.activeShields, snap.activeOutfitTypes,
+                            snap.ownedOutfitTypes));
+            ImGuiStringViewText(fmt::format("Postman stored: {} swords, {} shields, {} outfits\n",
+                                            snap.storedSwords, snap.storedShields,
+                                            snap.storedOutfitTypes));
+            ImGui::Separator();
+            ImGuiStringViewText(
+                fmt::format("Passive recovery / 100ms: {} -> {} (normal)\n",
+                            snap.baseNormalRecoveryPer100ms, snap.taxedNormalRecoveryPer100ms));
+            ImGuiStringViewText(
+                fmt::format("Lockout recovery / 100ms: {} -> {} (lockout)\n",
+                            snap.baseLockoutRecoveryPer100ms, snap.taxedLockoutRecoveryPer100ms));
+            ImGuiStringViewText(
+                fmt::format("ALBW meter: {} / {}  locked={}\n", dMeter2_getALBWMeterValue(),
+                            dMeter2_getALBWMaxValue(), dMeter2_isALBWLocked() ? "yes" : "no"));
         }
         ImGui::End();
         ImGui::PopFont();

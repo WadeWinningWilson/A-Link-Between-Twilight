@@ -307,6 +307,14 @@ static int albwLockoutRecoveryRate() {
 
     return expansion / kALBWLockoutExpandRecoveryTicks;
 }
+
+int dMeter2_getALBWNormalRecoveryRate() {
+    return computeALBWRecoveryRate();
+}
+
+int dMeter2_getALBWLockoutRecoveryRate() {
+    return albwLockoutRecoveryRate();
+}
 // ============================================
 // NEW CODE ENDS HERE
 // ============================================

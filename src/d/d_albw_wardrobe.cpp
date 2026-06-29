@@ -14,6 +14,7 @@
 #include "d/d_save.h"
 #include "d/actor/d_a_player.h"
 #include "dusk/action_bindings.h"
+#include "dusk/settings.h"
 
 #include <cstdio>
 #include <cstring>
@@ -211,7 +212,10 @@ static void swapEquippedShieldIfStored(u8 storedItemNo) {
 }
 
 static void swapEquippedOutfitIfStored(dAlbwOutfitKind storedKind) {
-    if (!dAlbwOutfit_isActive(storedKind)) {
+    const bool storedIsEquipped =
+        dAlbwOutfit_isActive(storedKind) ||
+        (storedKind == D_ALBW_OUTFIT_SUMO && dAlbwSumoTest_isOutfitActive());
+    if (!storedIsEquipped) {
         return;
     }
     const dAlbwOutfitKind next = sFirstActiveOutfitExcept(storedKind);
@@ -225,7 +229,79 @@ static void swapEquippedOutfitIfStored(dAlbwOutfitKind storedKind) {
     }
 }
 
+static void copyLabel(char* dst, int cap, const char* src) {
+    if (dst == nullptr || cap <= 0) {
+        return;
+    }
+    std::snprintf(dst, static_cast<size_t>(cap), "%s", src != nullptr ? src : "?");
+}
+
+static const char* swordLabel(u8 itemNo) {
+    switch (itemNo) {
+    case (u8)dItemNo_WOOD_STICK_e:    return "Wooden Sword";
+    case (u8)dItemNo_SWORD_e:         return "Ordon Sword";
+    case (u8)dItemNo_MASTER_SWORD_e:  return "Master Sword";
+    case (u8)dItemNo_LIGHT_SWORD_e:   return "Light Sword";
+    default:                          return "None";
+    }
+}
+
+static const char* shieldLabel(u8 itemNo) {
+    switch (itemNo) {
+    case (u8)dItemNo_WOOD_SHIELD_e:   return "Ordon Shield";
+    case (u8)dItemNo_SHIELD_e:        return "Wooden Shield";
+    case (u8)dItemNo_HYLIA_SHIELD_e:  return "Hylian Shield";
+    default:                          return "None";
+    }
+}
+
+static const char* outfitKindLabel(dAlbwOutfitKind kind) {
+    switch (kind) {
+    case D_ALBW_OUTFIT_SUMO:  return "Sumo";
+    case D_ALBW_OUTFIT_ORDON: return "Ordon";
+    case D_ALBW_OUTFIT_HEROS: return "Hero's";
+    case D_ALBW_OUTFIT_ZORA:  return "Zora";
+    case D_ALBW_OUTFIT_MAGIC: return "Magic";
+    case D_ALBW_OUTFIT_DEITY: return "Deity";
+    default:                  return "None";
+    }
+}
+
+static int countStoredSwords() {
+    int count = 0;
+    for (u8 itemNo : kSwordItemNos) {
+        if (dAlbwWardrobe_isStoredItemNo(itemNo)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static int countStoredShields() {
+    int count = 0;
+    for (u8 itemNo : kShieldItemNos) {
+        if (dAlbwWardrobe_isStoredItemNo(itemNo)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static int countStoredOutfitTypes() {
+    int count = 0;
+    for (int i = 0; i < D_ALBW_OUTFIT_COUNT; ++i) {
+        if (dAlbwWardrobe_isStoredOutfit(static_cast<dAlbwOutfitKind>(i))) {
+            count++;
+        }
+    }
+    return count;
+}
+
 }  // namespace
+
+bool dAlbwWardrobe_isDebugOverlayEnabled() {
+    return dusk::getSettings().game.showWardrobeRecoveryDebug.getValue();
+}
 
 bool dAlbwWardrobe_isResistanceActive() {
     if (!dusk::isDpadQuickSwapEnabled()) {
@@ -312,6 +388,28 @@ int dAlbwWardrobe_countActiveOutfitTypes() {
     return count;
 }
 
+static f32 computeOutfitPenalty() {
+    if (dAlbwWardrobe_countOwnedOutfitTypes() < 2) {
+        return 0.0f;
+    }
+    f32 outfitPenalty = 0.0f;
+    for (int i = 0; i < D_ALBW_OUTFIT_COUNT; ++i) {
+        const dAlbwOutfitKind kind = static_cast<dAlbwOutfitKind>(i);
+        if (dAlbwWardrobe_isActiveOutfit(kind)) {
+            outfitPenalty += outfitStackRate(kind);
+        }
+    }
+    return outfitPenalty;
+}
+
+static int applyRecoveryTax(int baseRate, f32 mult) {
+    if (mult >= 0.999f) {
+        return baseRate;
+    }
+    int taxed = static_cast<int>(static_cast<f32>(baseRate) * mult);
+    return taxed < 1 ? 1 : taxed;
+}
+
 f32 dAlbwWardrobe_getRecoveryMult() {
     if (!dAlbwWardrobe_isResistanceActive()) {
         return 1.0f;
@@ -322,15 +420,7 @@ f32 dAlbwWardrobe_getRecoveryMult() {
     const f32 swordPenalty  = kSwordPenaltyPerExtra * static_cast<f32>(activeSwords - 1);
     const f32 shieldPenalty = kShieldPenaltyPerExtra * static_cast<f32>(activeShields - 1);
 
-    f32 outfitPenalty = 0.0f;
-    if (dAlbwWardrobe_countOwnedOutfitTypes() >= 2) {
-        for (int i = 0; i < D_ALBW_OUTFIT_COUNT; ++i) {
-            const dAlbwOutfitKind kind = static_cast<dAlbwOutfitKind>(i);
-            if (dAlbwWardrobe_isActiveOutfit(kind)) {
-                outfitPenalty += outfitStackRate(kind);
-            }
-        }
-    }
+    f32 outfitPenalty = computeOutfitPenalty();
 
     f32 mult = 1.0f - swordPenalty - shieldPenalty - outfitPenalty;
     if (mult < 0.05f) {
@@ -339,34 +429,43 @@ f32 dAlbwWardrobe_getRecoveryMult() {
     return mult;
 }
 
-void dAlbwWardrobe_debugLogRecoveryState() {
-    if (!dAlbwWardrobe_isResistanceActive()) {
-        OS_REPORT("[wardrobe] resistance OFF (Quick Swap disabled or wolf)\n");
+void dAlbwWardrobe_fillDebugSnapshot(dAlbwWardrobeDebugSnapshot* out) {
+    if (out == nullptr) {
         return;
     }
+    *out = {};
 
-    const int activeSwords   = dAlbwWardrobe_countActiveSwords();
-    const int activeShields  = dAlbwWardrobe_countActiveShields();
-    const int ownedOutfits   = dAlbwWardrobe_countOwnedOutfitTypes();
-    const int activeOutfits  = dAlbwWardrobe_countActiveOutfitTypes();
-    const f32 swordPenalty   = kSwordPenaltyPerExtra * static_cast<f32>(activeSwords - 1);
-    const f32 shieldPenalty  = kShieldPenaltyPerExtra * static_cast<f32>(activeShields - 1);
-    f32 outfitPenalty        = 0.0f;
-    if (ownedOutfits >= 2) {
-        for (int i = 0; i < D_ALBW_OUTFIT_COUNT; ++i) {
-            const dAlbwOutfitKind kind = static_cast<dAlbwOutfitKind>(i);
-            if (dAlbwWardrobe_isActiveOutfit(kind)) {
-                outfitPenalty += outfitStackRate(kind);
-            }
-        }
-    }
-    const f32 mult = dAlbwWardrobe_getRecoveryMult();
+    out->quickSwapEnabled = dusk::isDpadQuickSwapEnabled();
+    daPy_py_c* player       = daPy_getLinkPlayerActorClass();
+    out->wolfForm           = player != nullptr && player->checkWolf() != 0;
+    out->resistanceActive   = dAlbwWardrobe_isResistanceActive();
 
-    OS_REPORT(
-        "[wardrobe] active swords=%d shields=%d outfits=%d/%d owned | "
-        "penalties sword=%.0f%% shield=%.0f%% outfit=%.0f%% | recoveryMult=%.3f\n",
-        activeSwords, activeShields, activeOutfits, ownedOutfits, swordPenalty * 100.0f,
-        shieldPenalty * 100.0f, outfitPenalty * 100.0f, mult);
+    out->activeSwords       = dAlbwWardrobe_countActiveSwords();
+    out->activeShields      = dAlbwWardrobe_countActiveShields();
+    out->activeOutfitTypes  = dAlbwWardrobe_countActiveOutfitTypes();
+    out->ownedOutfitTypes   = dAlbwWardrobe_countOwnedOutfitTypes();
+    out->storedSwords       = countStoredSwords();
+    out->storedShields      = countStoredShields();
+    out->storedOutfitTypes  = countStoredOutfitTypes();
+
+    out->swordPenalty  = kSwordPenaltyPerExtra * static_cast<f32>(out->activeSwords - 1);
+    out->shieldPenalty = kShieldPenaltyPerExtra * static_cast<f32>(out->activeShields - 1);
+    out->outfitPenalty = computeOutfitPenalty();
+    out->recoveryMult  = dAlbwWardrobe_getRecoveryMult();
+
+    out->baseNormalRecoveryPer100ms   = dMeter2_getALBWNormalRecoveryRate();
+    out->baseLockoutRecoveryPer100ms  = dMeter2_getALBWLockoutRecoveryRate();
+    out->taxedNormalRecoveryPer100ms  =
+        applyRecoveryTax(out->baseNormalRecoveryPer100ms, out->recoveryMult);
+    out->taxedLockoutRecoveryPer100ms =
+        applyRecoveryTax(out->baseLockoutRecoveryPer100ms, out->recoveryMult);
+
+    copyLabel(out->equippedSword, static_cast<int>(sizeof(out->equippedSword)),
+              swordLabel(dComIfGs_getSelectEquipSword()));
+    copyLabel(out->equippedShield, static_cast<int>(sizeof(out->equippedShield)),
+              shieldLabel(dComIfGs_getSelectEquipShield()));
+    copyLabel(out->equippedOutfit, static_cast<int>(sizeof(out->equippedOutfit)),
+              outfitKindLabel(dAlbwOutfit_getActive()));
 }
 
 bool dAlbwWardrobe_tryStoreItemNo(u8 itemNo, char* errOut, int errCap) {
@@ -395,7 +494,6 @@ bool dAlbwWardrobe_tryStoreItemNo(u8 itemNo, char* errOut, int errCap) {
         }
         setStorageBit(bit, true);
         swapEquippedShieldIfStored(itemNo);
-        dAlbwWardrobe_debugLogRecoveryState();
         return true;
     }
 
@@ -413,7 +511,6 @@ bool dAlbwWardrobe_tryStoreItemNo(u8 itemNo, char* errOut, int errCap) {
         }
         setStorageBit(bit, true);
         swapEquippedSwordIfStored(itemNo);
-        dAlbwWardrobe_debugLogRecoveryState();
         return true;
     }
 
@@ -452,7 +549,6 @@ bool dAlbwWardrobe_tryRetrieveItemNo(u8 itemNo, char* errOut, int errCap) {
     }
     dComIfGs_setRupee(rupees - static_cast<u16>(kAlbwWardrobeStorageRetrievePrice));
     setStorageBit(storageBitForItemNo(itemNo), false);
-    dAlbwWardrobe_debugLogRecoveryState();
     return true;
 }
 
@@ -479,13 +575,8 @@ bool dAlbwWardrobe_tryStoreOutfit(dAlbwOutfitKind kind, char* errOut, int errCap
         return false;
     }
 
-    if (kind == D_ALBW_OUTFIT_SUMO) {
-        dAlbwSumoTest_clearWorn();
-    }
-
     setStorageBit(bit, true);
     swapEquippedOutfitIfStored(kind);
-    dAlbwWardrobe_debugLogRecoveryState();
     return true;
 }
 
@@ -506,7 +597,6 @@ bool dAlbwWardrobe_tryRetrieveOutfit(dAlbwOutfitKind kind, char* errOut, int err
     }
     dComIfGs_setRupee(rupees - static_cast<u16>(kAlbwWardrobeStorageRetrievePrice));
     setStorageBit(storageBitForOutfit(kind), false);
-    dAlbwWardrobe_debugLogRecoveryState();
     return true;
 }
 

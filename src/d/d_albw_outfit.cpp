@@ -98,12 +98,33 @@ bool          sLastAppliedHat       = false;
 // SAME base, e.g. Sumo+Ordon) — otherwise nativeStable early-returns and the sumo
 // model stays on screen though the save says native.  Cleared once the reload fires.
 bool          sLeavingSumoReload    = false;
+int           sOutfitReloadCooldown = 0;
+bool          sApplySumoLeaveCooldown = false;
+
+constexpr int kReloadCooldownNormal    = 10;
+constexpr int kReloadCooldownAfterSumo = 18;
+
+void tickReloadCooldown() {
+    if (sOutfitReloadCooldown > 0) {
+        sOutfitReloadCooldown--;
+    }
+}
 
 bool requestClothesChange(int param) {
     daPy_py_c* player = daPy_getLinkPlayerActorClass();
     if (player == nullptr || player->getClothesChangeWaitTimer() != 0) {
         return false;
     }
+    // Do NOT pre-call setArcName() here.  loadModelDVD() owns the reload sequence
+    // resDelete(OLD mArcName) -> freeAll -> setArcName(NEW) -> resLoad(NEW), and it reads
+    // mArcName at timer==2 to identify the arc to delete.  Repointing mArcName to the
+    // target arc before the timer runs makes resDelete target the NEW arc, so the OLD
+    // arc's dRes_info_c slot is never released (count stays >0) while freeAll() frees its
+    // heap -> the next change that reuses that arc name double-frees the dangling solid
+    // heap (JKRHeap::destroy on 0xffff... in ~dRes_info_c -> crash on native cross-base
+    // cycling, e.g. Ordon<->Hero's).  The pre-repoint was a Strategy-A band-aid for
+    // cross-base SUMO leaves; the peel rule (getNextOwned/equip + applyTargetKind
+    // decompose) removes those, so vanilla loadModelDVD's own setArcName timing is correct.
     player->setClothesChange(param);
     return player->getClothesChangeWaitTimer() != 0;
 }
@@ -118,6 +139,19 @@ bool isTargetStable(dAlbwOutfitKind kind) {
     }
     return !dAlbwOutfit_isSumoWorn() && !dAlbwSumoTest_isOutfitActive() &&
            dComIfGs_getSelectEquipClothes() == (u8)itemNo && sSyncedNativeClothes == (u8)itemNo;
+}
+
+// True when equipping `kind` would merely peel the sumo overlay off onto the base
+// already equipped on Link (same native arc, no switch).  This is the ONLY equip that
+// bypasses the ownership / active-wardrobe gate: the base physically on Link is always
+// peelable, even when Postman-stored.  Used by dAlbwOutfit_equip + getNextOwned so a
+// stored base under the overlay never bounces the cycle into a cross-base leave.
+bool isSumoPeel(dAlbwOutfitKind kind) {
+    if (kind == D_ALBW_OUTFIT_SUMO || !dAlbwSumoTest_isOutfitActive()) {
+        return false;
+    }
+    const int itemNo = itemNoForKind(kind);
+    return itemNo >= 0 && (u8)itemNo == dComIfGs_getSelectEquipClothes();
 }
 
 void applyTargetKind(dAlbwOutfitKind kind) {
@@ -135,6 +169,7 @@ void applyTargetKind(dAlbwOutfitKind kind) {
 
     const bool leavingSumo = dAlbwSumoTest_isOutfitActive();
     dAlbwOutfit_setSumoWorn(false);
+    daAlink_c* link = daAlink_getAlinkActorClass();
     if (leavingSumo) {
         // Clear the sumo model flags BEFORE the clothes change.  setClothesChange(0)
         // does not clear FLG2_UNK_200000, and if FLG2_UNK_80000 is still set when the
@@ -142,7 +177,6 @@ void applyTargetKind(dAlbwOutfitKind kind) {
         // clothes arc -> changeLink builds the native body from a non-resident arc ->
         // crash (e.g. rapid Zora->Sumo->Ordon).  This must run here, ahead of setCloth,
         // because setCloth can drive the change before syncLinkModel's revert runs.
-        daAlink_c* link = daAlink_getAlinkActorClass();
         if (link != NULL) {
             link->offNoResetFlg2(daAlink_c::FLG2_UNK_200000);
             link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
@@ -150,12 +184,16 @@ void applyTargetKind(dAlbwOutfitKind kind) {
         // Clearing FLG2_UNK_80000 makes `has` read false next frame, so syncLinkModel's
         // revert branch is skipped; flag a forced rebuild so the sumo model is actually
         // replaced even when the underlying clothes value didn't change.
-        sLeavingSumoReload = true;
+        sLeavingSumoReload    = true;
+        sApplySumoLeaveCooldown = true;
     }
     if (dComIfGs_isItemFirstBit(itemNo) == 0) {
         dComIfGs_onItemFirstBit(itemNo);
     }
     dMeter2Info_setCloth((u8)itemNo, false);
+    if (leavingSumo && link != NULL) {
+        link->setArcName(0);
+    }
     if (leavingSumo) {
         dAlbwSumoTest_onNativeOutfitEquipped();
         dAlbwOutfit_debugLog("target native kind=%d item=%d leaving sumo", (int)kind, itemNo);
@@ -210,8 +248,16 @@ bool dAlbwOutfit_equip(dAlbwOutfitKind kind) {
     if (kind >= D_ALBW_OUTFIT_COUNT) {
         return false;
     }
-    if (!dAlbwOutfit_isOwned(kind)) {
-        return false;
+    // A peel (removing the sumo overlay onto the base already on Link) is always allowed
+    // — even if that base is unowned-by-bit or Postman-stored — because it is physically
+    // equipped.  Every other equip respects ownership + the active wardrobe pool.
+    if (!isSumoPeel(kind)) {
+        if (!dAlbwOutfit_isOwned(kind)) {
+            return false;
+        }
+        if (dusk::isDpadQuickSwapEnabled() && !dAlbwWardrobe_isActiveOutfit(kind)) {
+            return false;
+        }
     }
 
     if (dAlbwOutfit_isStageTransitionUnsafe()) {
@@ -235,12 +281,37 @@ bool dAlbwOutfit_equip(dAlbwOutfitKind kind) {
         return true;
     }
 
+    // Cross-base sumo leave -> never clear the overlay AND switch the native arc in one
+    // step (that corrupts the resource manager -> crash on the next reload).  Decompose:
+    // peel onto the current base now (same-base, no arc switch), then queue the real
+    // target for a clean native->native step once the peel settles.  applyTargetKind is
+    // reached only through here, so this guards every caller (D-pad, shop, storage-evict).
+    if (dAlbwSumoTest_isOutfitActive() && kind != D_ALBW_OUTFIT_SUMO) {
+        const int itemNo = itemNoForKind(kind);
+        const u8 base = dComIfGs_getSelectEquipClothes();
+        if (itemNo >= 0 && (u8)itemNo != base) {
+            const dAlbwOutfitKind baseKind = kindForClothes(base);
+            applyTargetKind(baseKind);   // same-base peel
+            sPendingEquip = kind;        // finish the base change after the peel settles
+            dAlbwOutfit_debugLog("cross-base leave -> peel base=%d pending=%d",
+                                 (int)baseKind, (int)kind);
+            return true;
+        }
+    }
+
     applyTargetKind(kind);
     sPendingEquip = D_ALBW_OUTFIT_COUNT;
     return true;
 }
 
 dAlbwOutfitKind dAlbwOutfit_getNextOwned(dAlbwOutfitKind current) {
+    // Sumo is a normal ring entry: from SUMO the scan returns the next owned native,
+    // and applyTargetKind's decompose makes the (possibly cross-base) leave crash-safe.
+    // NOTE: do NOT special-case SUMO to "peel to the current base" here — that creates an
+    // absorbing Sumo<->base 2-cycle (peel back to base, ring forward to Sumo, repeat) that
+    // strands every other outfit.  Cross-base leaves are safe now that the loadModelDVD
+    // setArcName double-free is fixed (see requestClothesChange), so the ring can advance.
+    //
     // Fixed cycle order (Deity excluded from the v1 rotation).
     static const dAlbwOutfitKind kCycle[] = {
         D_ALBW_OUTFIT_SUMO,  D_ALBW_OUTFIT_ORDON, D_ALBW_OUTFIT_HEROS,
@@ -342,6 +413,9 @@ bool dAlbwOutfit_canTouchLinkModel() {
 }
 
 bool dAlbwOutfit_isSwapInProgress() {
+    if (sOutfitReloadCooldown > 0) {
+        return true;
+    }
     daPy_py_c* player = daPy_getLinkPlayerActorClass();
     if (player != nullptr && player->getClothesChangeWaitTimer() != 0) {
         return true;
@@ -362,16 +436,20 @@ bool dAlbwOutfit_isSwapInProgress() {
 }
 
 void dAlbwOutfit_onStageTransitionBegin() {
-    sSyncedNativeClothes = 0xFF;
-    sReloadPending       = false;
-    sLastAppliedHat      = false;
-    sLeavingSumoReload   = false;
+    sSyncedNativeClothes   = 0xFF;
+    sReloadPending         = false;
+    sLastAppliedHat        = false;
+    sLeavingSumoReload     = false;
+    sOutfitReloadCooldown  = 0;
+    sApplySumoLeaveCooldown = false;
 }
 
 void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
     if (link == NULL) {
         return;
     }
+
+    tickReloadCooldown();
 
     daPy_py_c* player = daPy_getLinkPlayerActorClass();
     const int clothesTimer = player != NULL ? player->getClothesChangeWaitTimer() : 0;
@@ -395,10 +473,14 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         if (!want) {
             sSyncedNativeClothes = clothes;
         }
+        sOutfitReloadCooldown = sApplySumoLeaveCooldown ? kReloadCooldownAfterSumo
+                                                        : kReloadCooldownNormal;
+        sApplySumoLeaveCooldown = false;
         // Outcome trace: a settled swap's final state.  Pairs with the "target ..."
         // line so a stuck leave (target native, then no rebuild) is visible directly.
-        dAlbwOutfit_debugLog("settled want=%d has=%d clothes=%d synced=%d",
-                             want ? 1 : 0, has ? 1 : 0, clothes, sSyncedNativeClothes);
+        dAlbwOutfit_debugLog("settled want=%d has=%d clothes=%d synced=%d cooldown=%d",
+                             want ? 1 : 0, has ? 1 : 0, clothes, sSyncedNativeClothes,
+                             sOutfitReloadCooldown);
         return;
     }
 
@@ -429,6 +511,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         // outfit-switch path that loads the arc itself and self-heals dangling regs.
         link->offNoResetFlg2(daAlink_c::FLG2_UNK_200000);
         link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
+        sApplySumoLeaveCooldown = true;
         if (!requestClothesChange(0)) {
             return;
         }

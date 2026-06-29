@@ -7,6 +7,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 
 namespace {
@@ -20,6 +21,8 @@ FILE* debugFile() {
     std::filesystem::path path = "outfit_swap_debug.txt";
     if (const char* logPath = dusk::GetLogFilePath()) {
         path = std::filesystem::path(logPath).parent_path() / "outfit_swap_debug.txt";
+    } else if (const char* user = std::getenv("USERPROFILE")) {
+        path = std::filesystem::path(user) / "Documents" / "dusklight" / "outfit_swap_debug.txt";
     }
 
     sFile = fopen(path.string().c_str(), "a");

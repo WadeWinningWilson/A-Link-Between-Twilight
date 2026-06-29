@@ -4,7 +4,7 @@
 
 > Continue trailer work — read `docs/trailer-handoff.md` first.
 
-**Related:** In-game boss HP HUD (not trailer) → [boss-fights-handoff.md](boss-fights-handoff.md), [albw-boss-hp-hud-tuning-brief.md](albw-boss-hp-hud-tuning-brief.md).
+**Related:** In-game boss HP HUD (not trailer) → [boss-fights-handoff.md](boss-fights-handoff.md), [albw-boss-hp-hud-tuning-brief.md](albw-boss-hp-hud-tuning-brief.md). In-game WW item props on disc (`itemmdl.arc`) → [wind-waker-item-work.md](wind-waker-item-work.md) (optional B-roll once viewer/get-item path exists).
 
 ---
 

@@ -10,11 +10,41 @@
 #if TARGET_PC
 
 #include "d/d_albw_outfit.h"
+#include "dolphin/types.h"
 
 constexpr int kAlbwWardrobeStorageRetrievePrice = 100;
 
+struct dAlbwWardrobeDebugSnapshot {
+    bool resistanceActive;
+    bool quickSwapEnabled;
+    bool wolfForm;
+    f32  recoveryMult;
+    f32  swordPenalty;
+    f32  shieldPenalty;
+    f32  outfitPenalty;
+    int  activeSwords;
+    int  activeShields;
+    int  activeOutfitTypes;
+    int  ownedOutfitTypes;
+    int  storedSwords;
+    int  storedShields;
+    int  storedOutfitTypes;
+    int  baseNormalRecoveryPer100ms;
+    int  baseLockoutRecoveryPer100ms;
+    int  taxedNormalRecoveryPer100ms;
+    int  taxedLockoutRecoveryPer100ms;
+    char equippedSword[32];
+    char equippedShield[32];
+    char equippedOutfit[32];
+};
+
 // True when resistance rules apply: human Link + D-pad Quick Swap ON.
 bool dAlbwWardrobe_isResistanceActive();
+
+// Editor toggle: game.showWardrobeRecoveryDebug (ALBW tab).
+bool dAlbwWardrobe_isDebugOverlayEnabled();
+
+void dAlbwWardrobe_fillDebugSnapshot(dAlbwWardrobeDebugSnapshot* out);
 
 // ---- Postman storage (save bits 697-699, 703-712; bit 700 = sumo worn) ----
 bool dAlbwWardrobe_isStorableItemNo(u8 itemNo);
@@ -36,9 +66,6 @@ int dAlbwWardrobe_countActiveOutfitTypes();
 // recoveryMult = 1 - swordPenalty - shieldPenalty - outfitPenalty (see spec §1).
 // Returns 1.0f when resistance is inactive.
 f32 dAlbwWardrobe_getRecoveryMult();
-
-// Logs active counts, penalties, and recoveryMult (OS_REPORT). Call after store/retrieve.
-void dAlbwWardrobe_debugLogRecoveryState();
 
 // Store (free) / retrieve (100 R).  errOut optional; truncated to errCap when non-null.
 bool dAlbwWardrobe_tryStoreItemNo(u8 itemNo, char* errOut, int errCap);

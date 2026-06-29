@@ -647,7 +647,13 @@ void dFocusedArts_onDamageTaken() {
 }
 
 void dFocusedArts_update() {
-    if (!dFocusedArts_isEnabled()) {
+    static bool s_prevEnabled = false;
+    const bool enabled = dFocusedArts_isEnabled();
+    if (enabled != s_prevEnabled) {
+        dFocusedArts_resetRuntimeState();
+        s_prevEnabled = enabled;
+    }
+    if (!enabled) {
         return;
     }
 

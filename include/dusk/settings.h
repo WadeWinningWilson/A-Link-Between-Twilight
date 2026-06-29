@@ -305,6 +305,8 @@ struct UserSettings {
         ConfigVar<int> linkDamageDecreaseMult;
         // On-screen HP readout while Z-targeting (health / max HP / category mult).
         ConfigVar<bool> showLockonHpDebug;
+        // In-game Quick Swap wardrobe / ALBW recovery mult overlay (Editor → ALBW tab).
+        ConfigVar<bool> showWardrobeRecoveryDebug;
         // File log of Darknut ALBW bash/guard-break state (Documents/dusklight/albw_darknut_debug.txt).
         ConfigVar<bool> showDarknutBashDebug;
         // Right stick cycles nearby battle enemies instead of manual lock-on camera.

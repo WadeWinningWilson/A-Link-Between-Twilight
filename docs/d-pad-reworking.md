@@ -615,3 +615,22 @@ After confirmation, implement in order:
 7. Settings UI (3-way tree) + controller config
 8. Test plan pass
 9. `build_run.bat` → build-analysis FPS handoff → `docs/albw-port.md` + patch notes *(when shipping)*
+
+---
+
+## Quick Swap × ALBW meter × shop storage
+
+**Status:** Spec locked for review — **not implemented.** Full detail + cross-chat contract: **[Quick-Resistance Work.md](Interconnected%20Chats/Quick-Resistance%20Work.md)**.
+
+**Scope:** Human Link only, **only when Quick Swap is ON**. Active wardrobe (owned − Postman-stored) slows **passive + lockout** ALBW recovery. Shop **store** (free) / **retrieve** (**100 rupees**) replaces evict-order limiter.
+
+| System | Summary |
+|--------|---------|
+| **Recovery reference** | 1 sword + 1 shield + 1 outfit (post–first Twilight). Swords/shields: **−10% / −15%** per extra. **One outfit owned → 0%** outfit tax. **≥2 outfits → stack** (includes worn): Sumo **5%**, Ordon **10%**, Hero's **25%**, Zora TBD. Magic/Deity equipped: **−30%** powered, **−50%** drained (replaces −30%). |
+| **Shield parry** | Ordon **10%** · Wooden **25%** · Hylian **20%** of `sOilMaxVar` (equipped shield). |
+| **Sword ALBW spend** | **Provisional** — see interconnected doc §5; product revision incoming. |
+| **Wood FR** | Allowed when FR ships **except** during meter lockout/empty (wood bonus TBD elsewhere). |
+
+**Open (product):** Zora stack rate · Magic owned-not-worn stack rule · `recoveryMult` floor · sword spend §5 · stored-item save bits.
+
+**Meter baseline (1:1:1, single outfit, today's code):** normal full **10.0 s → 15.5 s**; lockout **7.0 s** (base cap) or **10.0 s** (expanded). Wardrobe mult divides these — e.g. Sumo+Ordon+Hero's + heavy sword/shield stash ≈ **0.25×** → ~**62 s** normal at max tier.

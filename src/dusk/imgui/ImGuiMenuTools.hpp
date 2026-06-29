@@ -29,6 +29,7 @@ namespace dusk {
         void ShowInputViewer();
         void ShowLockonHpOverlay();
         void ShowFocusedArtsDebugOverlay();
+        void ShowWardrobeRecoveryDebugOverlay();
         void ShowActorSpawner();
 
     private:

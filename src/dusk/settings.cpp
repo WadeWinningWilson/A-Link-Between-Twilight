@@ -73,6 +73,7 @@ UserSettings g_userSettings = {
         .hpMultFinalBoss  {"game.hpMultFinalBoss",  1},
         .linkDamageDecreaseMult {"game.linkDamageDecreaseMult", 1},
         .showLockonHpDebug {"game.showLockonHpDebug", false},
+        .showWardrobeRecoveryDebug {"game.showWardrobeRecoveryDebug", false},
         .showDarknutBashDebug {"game.showDarknutBashDebug", false},
         .stickCycleLockon {"game.stickCycleLockon", false},
         .noHeartDrops {"game.noHeartDrops", false},
@@ -340,6 +341,7 @@ void registerSettings() {
     Register(g_userSettings.game.hpMultFinalBoss);
     Register(g_userSettings.game.linkDamageDecreaseMult);
     Register(g_userSettings.game.showLockonHpDebug);
+    Register(g_userSettings.game.showWardrobeRecoveryDebug);
     Register(g_userSettings.game.showDarknutBashDebug);
     Register(g_userSettings.game.stickCycleLockon);
     Register(g_userSettings.game.noHeartDrops);

@@ -213,6 +213,14 @@ void cycleNextOutfit() {
         return;
     }
 
+    // Do not queue a new target mid-reload — leaving sumo (or any clothes change)
+    // while FLG2/save disagree is the documented crash window (Quick-Sumo Work.md).
+    if (dAlbwOutfit_isSwapInProgress()) {
+        Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_USE_CANCEL, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        dAlbwOutfit_debugLog("cycle blocked: swap in progress");
+        return;
+    }
+
     const dAlbwOutfitKind current = dAlbwOutfit_getActive();
     const dAlbwOutfitKind next = dAlbwOutfit_getNextOwned(current);
     if (next == current) {

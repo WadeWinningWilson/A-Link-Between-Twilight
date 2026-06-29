@@ -158,6 +158,7 @@ When **Enemy Death Rupees** is on:
 | [shield-combat.md](shield-combat.md) | Shield design, Dawnlight port notes, playtest checklist |
 | [albw-death-recovery-orb-brief.md](albw-death-recovery-orb-brief.md) | Death orb state machine and spawn rules |
 | [albw-shop-icon-alignment.md](albw-shop-icon-alignment.md) | Shop row icons, footer layout constraints |
+| [wind-waker-item-work.md](wind-waker-item-work.md) | Unused WW item view models (`itemmdl.arc`) — dev toggles, get-item / held experiments (not shipping ALBW feature) |
 
 ---
 

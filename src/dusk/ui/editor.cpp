@@ -2180,6 +2180,12 @@ EditorWindow::EditorWindow() {
             "While Z-targeting, shows the locked enemy's current HP, max HP, ALBW category, "
             "and true HP multiplier in a small on-screen overlay." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.showWardrobeRecoveryDebug,
+            "Wardrobe Recovery Debug",
+            "In-game overlay for Quick Swap resistance: recovery mult, penalty breakdown, "
+            "active/stored wardrobe counts, equipped sword/shield/outfit, and passive recovery "
+            "rates per 100ms (base vs taxed)." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showDarknutBashDebug,
             "Darknut Bash Debug Log",
             "Logs Darknut bash/guard-break state and shield bash-start charge snapshots to "

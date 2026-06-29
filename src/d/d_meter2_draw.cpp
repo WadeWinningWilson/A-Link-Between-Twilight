@@ -183,7 +183,8 @@ bool lopFaMeterActive() {
     if (!dFocusedArts_isEnabled()) {
         return false;
     }
-    if (daPy_getPlayerActorClass()->checkWolf()) {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == NULL || player->checkWolf()) {
         return false;
     }
     return dComIfGs_getSelectEquipSword() != dItemNo_WOOD_STICK_e;

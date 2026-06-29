@@ -85,7 +85,7 @@ static const ALBWShopPage kPages[] = {
     { CAT_ITEMS,    "Items"               },
     { CAT_SWORDS,   "Swords"              },
     { CAT_SHIELDS,  "Shields"             },
-    { CAT_ARMOR,    "Outfits"             },
+    { CAT_ARMOR,    "Armor"               },
     { CAT_UPGRADES, "Upgrades & Services" },
 };
 static constexpr int kPageCount = sizeof(kPages) / sizeof(kPages[0]);
@@ -991,9 +991,17 @@ static void tryPurchase(int visIdx) {
                e.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
                e.itemNo == (u8)dItemNo_WEAR_ZORA_e   ||
                e.itemNo == (u8)dItemNo_ARMOR_e) {
-        dAlbwSumoTest_clearWorn();
-        dMeter2_grantRentalClothes(e.itemNo);
+        // Route through the outfit module so leaving sumo clears FLG2 and sets
+        // sLeavingSumoReload — clearWorn + grantRentalClothes alone left the
+        // skip-path window that crashes on the next quick-swap (Quick-Sumo Work.md).
         dAlbwOutfit_recordOwnedByItemNo(e.itemNo);
+        const dAlbwOutfitKind kind = outfitKindForItemNo(e.itemNo);
+        if (kind < D_ALBW_OUTFIT_COUNT) {
+            dAlbwOutfit_equip(kind);
+        } else {
+            dAlbwSumoTest_clearWorn();
+            dMeter2_grantRentalClothes(e.itemNo);
+        }
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
@@ -1147,7 +1155,6 @@ void dALBWRental_open() {
     // NEW CODE ENDS HERE
     // ============================================
     rebuildVisibleList();
-    dAlbwWardrobe_debugLogRecoveryState();
 
     // Greeting A — returning customer (items stripped at least once).  One page.
     // Greeting B — first visit.  Three native boxes: intro, then one sentence each.

@@ -251,6 +251,13 @@ void dFlurryRush_end(dFlurryRushEndReason i_reason) {
 }
 
 void dFlurryRush_update() {
+    if (!dFlurryRush_isEnabled()) {
+        if (s_state.active) {
+            dFlurryRush_end(dFlurryRushEnd_Interrupt);
+        }
+        return;
+    }
+
     if (!s_state.active) {
         return;
     }
@@ -270,6 +277,12 @@ void dFlurryRush_update() {
     const u16 linkProc = link != nullptr ? link->mProcID : 0;
 
     if (!s_state.hasStartedAttack) {
+        daPy_py_c* player = daPy_getPlayerActorClass();
+        if (player == nullptr || !player->checkAttentionLock()) {
+            dFlurryRush_end(dFlurryRushEnd_Interrupt);
+            return;
+        }
+
         if (link != nullptr && s_state.mode == dFlurryRushMode_Melee) {
             if (linkProc == daAlink_c::PROC_SIDESTEP || linkProc == daAlink_c::PROC_BACK_JUMP) {
                 if (link->swordSwingTrigger() && !link->manualShieldBlocksSwordInput()) {

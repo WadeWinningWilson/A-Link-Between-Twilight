@@ -163,6 +163,20 @@ When **Boss Refinement OFF**: vanilla egg logic (`field_0x1ad5 == 2` / arrow cou
 - HUD draws **`fillWidth = barW * fillRatio` only** — layout/name constants stay in `d_albw_boss_hp_hud.cpp`
 - Bow arrow vanilla damage suppressed in `d_cc_uty.cpp` when Refinement on; chip handled in `dAlbwBoss_armogohmaOnBowCoreHit()`
 
+### Backlog — beta tunnel-chase locomotion (unused anims on disc)
+
+GDC 2005 showed Armogohma **crawling through a tunnel** before the ceiling fight. Retail uses **dash / beam / egg / landing** loops only; several **`B_gm` BCKs exist but are never referenced** in `d_a_b_gm.cpp` (defines at top of file, no `anm_init` call sites):
+
+| Anim (B_gm.h) | `ANM_GOMA_*` index | Notes |
+|---------------|-------------------|--------|
+| `GOMA_ATTACK01` | 8 | Defined; retail uses `ATTACK_A/B/C` instead |
+| `GOMA_MOVE` | 22 | Crawl / walk — **unused** |
+| `GOMA_SLOW_MOVE` | 25 | Slow crawl — **unused** |
+| `GOMA_STEP_L` / `GOMA_STEP_R` | 26 / 27 | Step cycles — **unused** |
+| `GOMA_UP` / `GOMA_UP_02` | 28 / 29 | Climb / rise — **unused** |
+
+**Idea (not implemented):** Boss Refinement **special phase** — e.g. scripted ceiling→floor descent or short “chase corridor” segment using `GOMA_MOVE` / `GOMA_SLOW_MOVE` (+ optional `GOMA_UP*`) before returning to existing dash/egg loop. Assets already ship in `B_gm.arc`; wiring is actor/phase work only.
+
 ---
 
 ## Diababa — refined fight (Boss Refinement ON)
