@@ -788,6 +788,8 @@ static void duskExecute() {
         }
     }
 
+    dusk::tickLayeredLeftDpad(0);
+
     if (dusk::getActionBindTrig(dusk::ActionBinds::QUICK_TRANSFORM, 0)) {
         if (!dusk::quickTransformBoundToDpadDown(0)) {
             if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {

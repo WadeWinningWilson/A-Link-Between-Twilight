@@ -84,6 +84,9 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link);
 // Reset model-sync tracking at warp/overlap (phased loads reset separately).
 void dAlbwOutfit_onStageTransitionBegin();
 
+// Wolf->human metamorphose rebuilds vanilla human via changeLink(0); re-sync ALBW target.
+void dAlbwOutfit_onMetamorphoseToHuman(daAlink_c* link);
+
 // Stage warp / overlap only — revert path may still run during clothes reload.
 bool dAlbwOutfit_isStageTransitionUnsafe();
 

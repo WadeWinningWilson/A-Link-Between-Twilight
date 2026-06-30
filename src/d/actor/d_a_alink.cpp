@@ -66,6 +66,7 @@
 #include "d/d_albw_wolf_combat.h"
 #include "d/d_albw_wolf_charge_hud.h"
 #include "dusk/action_bindings.h"
+#include "dusk/dpad_quick_swap.h"
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include "dusk/hurricane_test.h"
@@ -192,6 +193,21 @@ static JKRExpHeap*                    s_albwArcHeapB   = NULL;        // alt hea
 static request_of_phase_process_class s_albwPhaseReqB  = {NULL, 0};   // alt heap's load request
 static const char*                    s_albwSwapOldArc = NULL;        // old arc to free after the swap
 static bool                           s_albwSwapActive = false;       // mid build-then-swap (guards retry re-init)
+
+// ============================================
+// NEW CODE — ALBW Port (root-motion foot re-anchor after a model rebuild)
+// A model rebuild (changeLink / changeWolf) swaps mpLinkModel, so the foot joint jumps vs
+// the stored previous foot position (field_0x37b0) -> setFootSpeed measures a huge per-frame
+// displacement -> speedF spikes -> Link teleports (only while the stick drives movement, so
+// field_0x33a0 feeds speedF).  This counter is armed at the end of each rebuild; while > 0,
+// setFootSpeed zeroes the foot speed for the frame AND lets its store loop re-anchor
+// field_0x37b0 to the (valid, calc'd) NEW-model foot in LOCAL space, so normal root motion
+// resumes from ~0 displacement.  The multi-frame window covers model-calc latency and the
+// metamorphose double-build (two changeLink calls re-arm it).  NOTE: the previous fix wrote
+// current.pos into field_0x37b0, but that is WORLD space while field_0x37b0/sp18 are LOCAL
+// (mInvMtx * getAnmMtx(foot)) -- the space mismatch left the displacement just as garbage.
+// ============================================
+static int                            s_albwFootReseedFrames = 0;
 #endif
 
 #if TARGET_PC
@@ -9613,6 +9629,12 @@ BOOL daAlink_c::midnaTalkTrigger() const {
     if (dShield_isTestingParryReworkEnabled() && checkPlayerGuard()) {
         return FALSE;
     }
+    if (dusk::isLayeredLeftDpadActive(0)) {
+        if (dusk::consumeLayeredLeftMidnaTrig(0)) {
+            return TRUE;
+        }
+        return FALSE;
+    }
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
@@ -13405,6 +13427,18 @@ void daAlink_c::setFootSpeed() {
         mDoMtx_concat(mInvMtx, mpLinkModel->getAnmMtx(field_0x30be), mDoMtx_stack_c::get());
         mDoMtx_stack_c::multVecZero(&sp18[1]);
 
+#if TARGET_PC
+        if (s_albwFootReseedFrames > 0) {
+            // Post-rebuild: field_0x37b0 holds the OLD model's foot, so the displacement vs the
+            // new-model foot (sp18) is garbage -> zero the foot speed this frame.  The store loop
+            // below re-anchors field_0x37b0 = sp18 (new model, LOCAL space) so the next frame
+            // measures ~0.  Decrement only on this old-frame-valid path so the window always
+            // lands on local-space seeds, never the else-branch's world-space current.pos.
+            s_albwFootReseedFrames--;
+            var_f31 = 0.0f;
+        } else
+#endif
+        {
         int var_r28;
         if (sp18[0].y < sp18[1].y) {
             var_r28 = 0;
@@ -13435,6 +13469,7 @@ void daAlink_c::setFootSpeed() {
                           (int)field_0x30bc, (int)field_0x30be);
         }
 #endif
+        }
     } else {
         var_f31 = 0.0f;
 

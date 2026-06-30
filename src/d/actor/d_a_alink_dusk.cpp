@@ -111,12 +111,6 @@ void daAlink_c::handleQuickTransform() {
         return;
     }
 
-    // Ensure that the Z Button is not dimmed
-    if (meterDrawPtr->getButtonZAlpha() != 1.f) {
-        Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
-        return;
-    }
-
     // The game will crash if trying to quick transform while holding the Ball and Chain
     if (mEquipItem == dItemNo_IRONBALL_e) {
         Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
@@ -129,18 +123,48 @@ void daAlink_c::handleQuickTransform() {
         return;
     }
 
+#if TARGET_PC
+    // Extra Item Slot only enables METER2_USEBUTTON_Z for human + down-slot item, so Z stays
+    // dim while wolf even when transform-back is allowed. Metamorphose eligibility is authoritative.
+    const bool skipZDimGate = dusk::isExtraItemSlotEnabled() && checkWolf();
+#else
+    const bool skipZDimGate = false;
+#endif
+
+    if (!skipZDimGate && meterDrawPtr->getButtonZAlpha() != 1.f) {
+        Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        return;
+    }
+
     bool canTransform = false;
 
     if (mLinkAcch.ChkGroundHit() && !checkModeFlg(MODE_PLAYER_FLY) && !checkMagneBootsOn()) {
         if (checkMidnaRide()) {
-            if ((checkWolf() &&
-                 (checkModeFlg(MODE_UNK_1000) || dComIfGp_checkPlayerStatus0(0, 0x10))) ||
+#if TARGET_PC
+            if ((checkField() || checkCastleTown()) && !checkStageName("R_SP161")) {
+                if ((checkWolf() && (checkModeFlg(MODE_UNK_1000) ||
+                                     dComIfGp_checkPlayerStatus0(0, 0x10))) ||
+                    (!checkWolf() &&
+                     (checkEventRun() || getMidnaActor()->checkMetamorphoseEnable()) &&
+                     (checkModeFlg(MODE_CLIMB) || dComIfGp_checkPlayerStatus0(0, 0x10))))
+                {
+                    canTransform = true;
+                }
+                // Bidirectional in open field when Midna allows transform (matches Z intent).
+                if (!canTransform && getMidnaActor()->checkMetamorphoseEnable()) {
+                    canTransform = true;
+                }
+            }
+#else
+            if ((checkWolf() && (checkModeFlg(MODE_UNK_1000) ||
+                                 dComIfGp_checkPlayerStatus0(0, 0x10))) ||
                 (!checkWolf() &&
                  (checkEventRun() || getMidnaActor()->checkMetamorphoseEnable()) &&
-                 (checkModeFlg(4) || dComIfGp_checkPlayerStatus0(0, 0x10))))
+                 (checkModeFlg(MODE_CLIMB) || dComIfGp_checkPlayerStatus0(0, 0x10))))
             {
                 canTransform = true;
             }
+#endif
         }
     }
 
@@ -150,7 +174,6 @@ void daAlink_c::handleQuickTransform() {
         return;
     }
 
-    OSReport("Running quick transform!");
     procCoMetamorphoseInit();
 }
 

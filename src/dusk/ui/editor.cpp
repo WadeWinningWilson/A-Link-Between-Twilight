@@ -1532,6 +1532,29 @@ EditorWindow::EditorWindow() {
                 .getValue = [] { return formNames[get_player_status()->getTransformStatus()]; },
             }),
             rightPane, [](Pane& pane) { populate_form_picker(pane); });
+        add_toggle_button(leftPane,
+                          ToggleEntry{
+                              .text = "End-Game Transform (Midna + Crystal)",
+                              .isSelected =
+                                  [] {
+                                      return dComIfGs_isEventBit(dSv_event_flag_c::M_077) &&
+                                             dComIfGs_isTransformLV(3) &&
+                                             dComIfGs_isEventBit(dSv_event_flag_c::F_0250);
+                                  },
+                              .setSelected =
+                                  [](bool selected) {
+                                      set_event_bit(dSv_event_flag_c::M_077, selected);
+                                      set_event_bit(dSv_event_flag_c::F_0250, selected);
+                                      auto* statusB = get_player_status_b();
+                                      for (int i = 0; i <= 3; ++i) {
+                                          if (selected) {
+                                              statusB->onTransformLV(i);
+                                          } else {
+                                              statusB->offTransformLV(i);
+                                          }
+                                      }
+                                  },
+                          });
 
         leftPane.add_section("World");
         leftPane.register_control(

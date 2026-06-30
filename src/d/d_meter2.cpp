@@ -37,6 +37,7 @@
 #include "d/d_attention.h"
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
+#include "d/actor/d_a_midna.h"
 #include "dusk/action_bindings.h"
 #include "dusk/memory.h"
 #include "dusk/settings.h"
@@ -1454,10 +1455,16 @@ int dMeter2_c::_execute() {
     dMeter2Info_allUseButton();
     dMeter2Info_offUseButton(0x800);
 #if TARGET_PC
-    if (dusk::isExtraItemSlotEnabled() && !daPy_getPlayerActorClass()->checkWolf()) {
-        const u8 zItem = dComIfGp_getSelectItem(SELECT_ITEM_DOWN);
-        if (zItem != dItemNo_NONE_e && zItem != 0) {
-            dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+    if (dusk::isExtraItemSlotEnabled()) {
+        if (!daPy_getPlayerActorClass()->checkWolf()) {
+            const u8 zItem = dComIfGp_getSelectItem(SELECT_ITEM_DOWN);
+            if (zItem != dItemNo_NONE_e && zItem != 0) {
+                dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+            }
+        } else if (daMidna_c* midna = daPy_py_c::getMidnaActor()) {
+            if (midna->checkMetamorphoseEnableBase()) {
+                dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+            }
         }
     }
 #endif

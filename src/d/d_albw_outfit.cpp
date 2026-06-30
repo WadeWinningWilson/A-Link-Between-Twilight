@@ -100,6 +100,7 @@ bool          sLastAppliedHat       = false;
 bool          sLeavingSumoReload    = false;
 int           sOutfitReloadCooldown = 0;
 bool          sApplySumoLeaveCooldown = false;
+bool          sPostMetamorphoseReapply = false;
 
 constexpr int kReloadCooldownNormal    = 10;
 constexpr int kReloadCooldownAfterSumo = 18;
@@ -447,8 +448,23 @@ void dAlbwOutfit_onStageTransitionBegin() {
     sReloadPending         = false;
     sLastAppliedHat        = false;
     sLeavingSumoReload     = false;
+    sPostMetamorphoseReapply = false;
     sOutfitReloadCooldown  = 0;
     sApplySumoLeaveCooldown = false;
+}
+
+void dAlbwOutfit_onMetamorphoseToHuman(daAlink_c* link) {
+    if (link == NULL) {
+        return;
+    }
+
+    // Metamorphose uses changeLink(0) while FLG1_IS_WOLF may still be set; the draw guard
+    // token is fixed at stamp time, but outfit sync state can still be stale vs the target.
+    sSyncedNativeClothes = 0xFF;
+    sReloadPending = false;
+    sLeavingSumoReload = false;
+    sOutfitReloadCooldown = 0;
+    sPostMetamorphoseReapply = true;
 }
 
 void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
@@ -466,7 +482,37 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
     const bool hat     = dusk::getSettings().game.sumoOutfitHat.getValue();
 
     if (clothesTimer != 0) {
-        sReloadPending = true;
+        if (!sPostMetamorphoseReapply) {
+            sReloadPending = true;
+        }
+        return;
+    }
+
+    // No outfit-driven clothes reloads during metamorphose — loadModelDVD's meta branch
+    // calls changeWolf() when !checkWolf(), undoing wolf->human mid-animation.
+    if (link->checkMetamorphoseProcActive()) {
+        return;
+    }
+
+    if (sPostMetamorphoseReapply) {
+        sPostMetamorphoseReapply = false;
+        if (want) {
+            if (dAlbwSumoTest_prepareChangeLink() && requestClothesChange(1)) {
+                sLastAppliedHat = hat;
+                sReloadPending = true;
+                dAlbwOutfit_debugLog("meta->human reapply sumo");
+            }
+            return;
+        }
+
+        link->offNoResetFlg2(daAlink_c::FLG2_UNK_200000);
+        link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
+        sLeavingSumoReload = true;
+        if (requestClothesChange(0)) {
+            sLastAppliedHat = false;
+            sReloadPending = true;
+            dAlbwOutfit_debugLog("meta->human reapply native cloth=%d", clothes);
+        }
         return;
     }
 

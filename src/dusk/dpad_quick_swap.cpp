@@ -13,9 +13,11 @@
 #include "dusk/action_bindings.h"
 #include "dusk/settings.h"
 #include "f_op/f_op_overlap_mng.h"
+#include "m_Do/m_Do_controller_pad.h"
 
 #include <SDL3/SDL_gamepad.h>
 #include <SDL3/SDL_scancode.h>
+#include <chrono>
 
 namespace dusk {
 
@@ -238,6 +240,83 @@ void cycleNextOutfit() {
 
     Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
     dMeter2Info_set2DVibration();
+}
+
+namespace {
+
+constexpr auto kLayeredLeftDoubleTapWindow = std::chrono::milliseconds(300);
+
+struct LayeredLeftState {
+    int tapCount = 0;
+    std::chrono::steady_clock::time_point firstTapTime{};
+    bool midnaTrig = false;
+};
+
+static LayeredLeftState sLayeredLeft{};
+
+static void resetLayeredLeftState() {
+    sLayeredLeft = {};
+}
+
+static bool getCallMidnaLeftEdge(u32 port) {
+    if (isActionBound(ActionBinds::CALL_MIDNA, port)) {
+        return getActionBindTrig(ActionBinds::CALL_MIDNA, port);
+    }
+
+    return mDoCPd_c::getTrigLeft(port) != 0;
+}
+
+}  // namespace
+
+bool isLayeredLeftDpadActive(u32 port) {
+    return isDpadQuickSwapEnabled() && callMidnaReservesDpadLeft(port);
+}
+
+bool consumeLayeredLeftMidnaTrig(u32 port) {
+    if (port != 0 || !sLayeredLeft.midnaTrig) {
+        return false;
+    }
+
+    sLayeredLeft.midnaTrig = false;
+    return true;
+}
+
+void tickLayeredLeftDpad(u32 port) {
+    if (port != 0 || !isLayeredLeftDpadActive(port)) {
+        resetLayeredLeftState();
+        return;
+    }
+
+    if (!canUseDpadQuickSwap(port)) {
+        resetLayeredLeftState();
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    const bool leftEdge = getCallMidnaLeftEdge(port);
+
+    if (leftEdge) {
+        if (sLayeredLeft.tapCount == 0) {
+            sLayeredLeft.tapCount = 1;
+            sLayeredLeft.firstTapTime = now;
+        } else if (sLayeredLeft.tapCount == 1 &&
+                   now - sLayeredLeft.firstTapTime <= kLayeredLeftDoubleTapWindow) {
+            sLayeredLeft.midnaTrig = true;
+            sLayeredLeft.tapCount = 0;
+            return;
+        } else {
+            sLayeredLeft.tapCount = 1;
+            sLayeredLeft.firstTapTime = now;
+        }
+    }
+
+    if (sLayeredLeft.tapCount == 1 &&
+        now - sLayeredLeft.firstTapTime > kLayeredLeftDoubleTapWindow) {
+        sLayeredLeft.tapCount = 0;
+        if (daPy_py_c* player = daPy_getLinkPlayerActorClass()) {
+            dynamic_cast<daAlink_c*>(player)->handleQuickTransform();
+        }
+    }
 }
 
 #endif

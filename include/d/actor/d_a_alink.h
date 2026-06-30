@@ -3429,6 +3429,9 @@ public:
     virtual BOOL checkMetamorphose() const {
         return mProcID == PROC_METAMORPHOSE && mProcVar1.field_0x300a == 0;
     }
+    BOOL checkMetamorphoseProcActive() const {
+        return mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY;
+    }
     virtual BOOL checkWolfDownAttackPullOut() const { return mProcID == PROC_WOLF_DOWN_AT_LAND; }
     virtual cXyz* getMidnaAtnPos() const { return (cXyz*)&mMidnaAtnPos; }
     virtual bool checkCopyRodEquip() const { return mEquipItem == dItemNo_COPY_ROD_e; }

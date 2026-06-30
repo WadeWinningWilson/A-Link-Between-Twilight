@@ -312,7 +312,7 @@ void daAlink_c::changeWolf() {
     // Wolf models also live in mpArcHeap (mpLinkModel = wolf body) — stamp the epoch and the
     // state token so draw()'s consistency guard does not treat the fresh wolf build as stale.
     s_albwClothesModelEpoch = s_albwArcEpoch;
-    s_albwBuiltModelState = albwModelStateToken(checkWolf(),
+    s_albwBuiltModelState = albwModelStateToken(true,
         checkNoResetFlg2(FLG2_UNK_80000), checkCasualWearFlg(), checkZoraWearFlg(),
         checkMagicArmorWearFlg());
 #endif
@@ -542,7 +542,9 @@ void daAlink_c::changeLink(int param_0) {
     // Clothes models just (re)built from the current arc heap — stamp the live epoch and the
     // wear/sumo state they were built for so draw()'s consistency guard treats them as valid.
     s_albwClothesModelEpoch = s_albwArcEpoch;
-    s_albwBuiltModelState = albwModelStateToken(checkWolf(),
+    // changeLink always builds human Link — stamp wolf=false even during metamorphose
+    // (FLG1_IS_WOLF may still be set until changeCommon() below).
+    s_albwBuiltModelState = albwModelStateToken(false,
         checkNoResetFlg2(FLG2_UNK_80000), checkCasualWearFlg(), checkZoraWearFlg(),
         checkMagicArmorWearFlg());
 
@@ -636,19 +638,19 @@ void daAlink_c::changeLink(int param_0) {
     changeModelDataDirect(param_0);
 #if TARGET_PC
     // ============================================
-    // NEW CODE — ALBW Port (root-motion foot-tracking reset on clothes rebuild)
+    // NEW CODE — ALBW Port (root-motion foot-tracking reset on clothes/transform rebuild)
     // field_0x33a0 is the per-frame foot-displacement "speed" (root motion): it measures how
-    // far the foot joint moved vs the stored previous foot position (field_0x37b0).  A clothes
-    // change rebuilds the model, so the foot joint is discontinuous vs the stored previous ->
-    // the "foot moved" distance comes out absurd (hundreds-to-thousands of units) -> speedF
-    // explodes -> Link teleports; the 0.7 smoothing in the foot-speed calc then latches it.
-    // changeWolf already zeroes field_0x33a0; do the same here AND re-anchor the previous-foot
-    // positions to current.pos (the engine's own no-old-frame reset) so the next frame measures
-    // ~0 displacement instead of the rebuild discontinuity.  Fixes the quick-switch / vanilla-
-    // menu teleport.
+    // far the foot joint moved vs the stored previous foot position (field_0x37b0).  A model
+    // rebuild makes the foot joint discontinuous vs the stored previous -> the "foot moved"
+    // distance comes out absurd (hundreds-to-thousands of units) -> speedF explodes -> Link
+    // teleports (the 0.7 smoothing latches it; only while the stick drives movement).
+    // Arm the foot-reseed window so setFootSpeed zeroes the spike and re-anchors field_0x37b0
+    // to the new model's foot in LOCAL space over the next few frames.  We do NOT write
+    // current.pos into field_0x37b0 here (the earlier fix did): current.pos is WORLD space but
+    // field_0x37b0/sp18 are LOCAL (mInvMtx * getAnmMtx(foot)), so that just swapped one garbage
+    // delta for another and did not fix the teleport.
     // ============================================
-    field_0x37b0[0] = current.pos;
-    field_0x37b0[1] = current.pos;
+    s_albwFootReseedFrames = 3;
     field_0x33a0 = 0.0f;
 #endif
     field_0x06e4 = NULL;

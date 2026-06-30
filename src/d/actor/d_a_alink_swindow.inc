@@ -224,6 +224,9 @@ int daAlink_c::loadModelDVD() {
                         if (isMeta) {
                             if (checkWolf()) {
                                 changeLink(0);
+#if TARGET_PC
+                                dAlbwOutfit_onMetamorphoseToHuman(this);
+#endif
                             } else {
                                 changeWolf();
                             }
