@@ -36,6 +36,10 @@ bool dAlbwSumoTest_showWeapons();
 // True when the "Link Hat" sub-toggle is on — read by changeLink.
 bool dAlbwSumoTest_wantLinkCap();
 
+// PROOF (Cap Wear): true when the sumo cap should be the Magic red helmet (ml_head/Mmdl)
+// instead of the green cap (al_head/Kmdl).  Read by changeLink's sumo cap block.
+bool dAlbwSumoTest_wantRedCap();
+
 // ---- Shop integration (Sumo Outfit purchase) ----------------------------------
 // True once the Sumo Outfit has been bought (save-backed ownership bit).  This is
 // the foundation brick of the planned stored-armors / quick-swap system.

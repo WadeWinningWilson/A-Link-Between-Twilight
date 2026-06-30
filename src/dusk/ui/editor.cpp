@@ -2188,6 +2188,12 @@ EditorWindow::EditorWindow() {
             "any base outfit.  Applies only while the Sumo Outfit is worn." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return !dAlbwOutfit_isSumoWorn(); });
+        editor_bool_option(leftPane, rightPane, getSettings().game.sumoCapRed, "Cap: Red (test)",
+            "PROOF: use the Magic red helmet as the sumo cap instead of the green cap. Needs the "
+            "Link Hat on. For now it shows only over the Magic base (where Mmdl is resident); "
+            "all-bases support + a green/red/blue selector come next." +
+                Rml::String(kAlbwUnfinishedDisclaimer),
+            [] { return !dAlbwOutfit_isSumoWorn(); });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
             "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
             "Applies only while the Sumo Outfit is worn." +

@@ -2630,6 +2630,18 @@ static int daAlink_modelCallBack(J3DJoint* i_joint, int param_1) {
 }
 
 int daAlink_c::headModelCallBack(int i_jointNo) {
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Cap Wear geometry safety)
+    // The per-joint cap-physics below indexes field_0x302c[]/field_0x3040[] (size 10).  The
+    // green cap (al_head) stays within that range, but a non-green cap (the Magic/Zora helmet)
+    // may have more joints -> out-of-bounds.  Skip the cap physics for any joint past the array
+    // range; that joint just keeps its default anim matrix (the helmet attaches rigidly there).
+    // ============================================
+    if (i_jointNo >= 10) {
+        return 1;
+    }
+#endif
     if (mpDemoHDTmpBck == NULL || !mpDemoHDTmpBck->getBckAnm() || (checkEndResetFlg1(ERFLG1_UNK_400000) && i_jointNo < 6)) {
         if (checkNoResetFlg2(FLG2_STATUS_WINDOW_DRAW)) {
             mDoMtx_stack_c::copy(J3DSys::mCurrentMtx);

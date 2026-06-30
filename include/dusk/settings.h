@@ -259,6 +259,11 @@ struct UserSettings {
         ConfigVar<bool> sumoOutfit;
         ConfigVar<bool> sumoOutfitHat;
         ConfigVar<bool> sumoOutfitFists;
+        //   sumoCapRed      — PROOF (Cap Wear): load the Magic red helmet (ml_head/Mmdl) as the
+        //                     sumo cap instead of the green cap (al_head/Kmdl).  Resolves where
+        //                     Mmdl is resident (Magic base for now); residency-on-all-bases + the
+        //                     full Cap Wear enum (green/red/blue) follow once the helmet renders.
+        ConfigVar<bool> sumoCapRed;
         ConfigVar<bool> shieldDurability;
         // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
         ConfigVar<bool> deathRecoveryOrb;

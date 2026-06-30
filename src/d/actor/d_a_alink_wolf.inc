@@ -347,31 +347,38 @@ void daAlink_c::changeLink(int param_0) {
         // WIP: the cap loads but does not render on the BLS body (material/draw
         // issue, not transform — position is correct via body head joint 4).
         if (dAlbwSumoTest_wantLinkCap()) {
+            // PROOF (Cap Wear): green cap = al_head (Kmdl); red cap = the Magic helmet ml_head
+            // (Mmdl).  Resolves where that arc is resident (Mmdl over the Magic base for now).
+            const bool  redCap  = dAlbwSumoTest_wantRedCap();
+            const char* capArc  = redCap ? l_mArcName : l_kArcName;
+            const char* capName = redCap ? "ml_head.bmd" : "al_head.bmd";
             J3DModelData* capData =
-                static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_head.bmd"));
+                static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
             // ============================================
-            // TEMP DIAGNOSTIC — ALBW Port (Link Hat falls back to the topknot)
-            // The draw log showed the sumo hat is a 1-material model = the alSumou topknot, not
-            // al_head (2 materials), even with the Link Hat toggle ON.  So capData (al_head from
-            // l_kArcName / Kmdl) is NULL at sumo-build time -> the fallback below.  Log WHY:
-            // kResInfo NULL  = Kmdl never registered (not loaded for this base).
-            // kResInfo set, kArchive NULL = registered but freed/mid-load (aliasing class).
-            // kArchive set but al_head NULL = arc resident but lacks al_head.bmd.
-            // Logged only when the resolved-state or base arc changes (event, not per-frame).
+            // TEMP DIAGNOSTIC — ALBW Port (cap resolution + geometry)
+            // A NULL capData means the cap arc isn't resident at build time -> topknot fallback
+            // (resInfo NULL = never registered; resInfo set + archive NULL = freed/aliased).
+            // joints/shapes/mats expose the helmet's geometry vs the green cap (al_head=2 mats;
+            // ml_head>=3) -- joints>10 would overflow the cap-physics arrays (guarded in
+            // headModelCallBack).  Logged on resolved/arc change only (event, not per-frame).
             // STRIP before push.
             // ============================================
             {
                 static const char* s_capDbgArc      = NULL;
                 static int         s_capDbgResolved  = -1;
                 const int resolved = (capData != NULL) ? 1 : 0;
-                if (resolved != s_capDbgResolved || l_kArcName != s_capDbgArc) {
+                if (resolved != s_capDbgResolved || capArc != s_capDbgArc) {
                     s_capDbgResolved = resolved;
-                    s_capDbgArc      = l_kArcName;
+                    s_capDbgArc      = capArc;
                     dRes_info_c* kInfo =
-                        g_dComIfG_gameInfo.mResControl.getObjectResInfo(l_kArcName);
-                    DuskLog.debug("ALBW-CAP build wantCap=1 arc={} al_head={} kResInfo={} kArchive={}",
-                                  l_kArcName, (void*)capData, (void*)kInfo,
-                                  (void*)(kInfo != NULL ? kInfo->getArchive() : NULL));
+                        g_dComIfG_gameInfo.mResControl.getObjectResInfo(capArc);
+                    DuskLog.debug("ALBW-CAP build red={} arc={} model={} data={} resInfo={} archive={} "
+                                  "joints={} shapes={} mats={}",
+                                  redCap ? 1 : 0, capArc, capName, (void*)capData, (void*)kInfo,
+                                  (void*)(kInfo != NULL ? kInfo->getArchive() : NULL),
+                                  capData ? capData->getJointNum() : 0xFFFF,
+                                  capData ? capData->getShapeNum() : 0xFFFF,
+                                  capData ? capData->getMaterialNum() : 0xFFFF);
                 }
             }
             if (capData == NULL) {

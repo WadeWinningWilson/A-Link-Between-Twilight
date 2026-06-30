@@ -281,6 +281,12 @@ bool dAlbwSumoTest_wantLinkCap() {
     return dusk::getSettings().game.sumoOutfitHat.getValue();
 }
 
+bool dAlbwSumoTest_wantRedCap() {
+    // Only meaningful when the cap is on at all (Link Hat).
+    return dusk::getSettings().game.sumoOutfitHat.getValue() &&
+           dusk::getSettings().game.sumoCapRed.getValue();
+}
+
 bool dAlbwSumoTest_isOwned() {
     return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kSumoOwnedBit]) != 0;
 }
