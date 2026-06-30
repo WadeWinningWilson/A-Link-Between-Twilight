@@ -347,7 +347,7 @@ void daAlink_c::changeLink(int param_0) {
         // WIP: the cap loads but does not render on the BLS body (material/draw
         // issue, not transform — position is correct via body head joint 4).
         if (dAlbwSumoTest_wantLinkCap()) {
-            // Cap Wear: the cap model + arc come from game.sumoCapColor -- green al_head/Kmdl,
+            // Cap Wear: the cap model + arc come from game.capWear -- green al_head/Kmdl,
             // red ml_head/Mmdl, blue zl_head/Zmdl.  The sumo module keeps the chosen arc resident
             // on any base (resourcesReady cap donor); a NULL here = not-yet-resident -> topknot.
             const char* capArc  = dAlbwSumoTest_capArcName();
@@ -493,6 +493,76 @@ void daAlink_c::changeLink(int param_0) {
         mpLinkHandModel =
             initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_hands.bmd")), 0);
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (GLOBAL Cap Wear — non-sumo override)
+    // The native cascade above built this outfit's OWN hat (mpLinkHatModel).  Apply the global
+    // Cap Wear setting (game.capWear) so the chosen cap/topknot shows on EVERY native outfit, not
+    // just the sumo body (the sumo branch near the top owns its own cap).  Skip the sumo body
+    // (FLG2_UNK_80000 -- handled there) and wolf.  The chosen arc is held resident off its owning
+    // base by the sumo module's non-sumo cap donor (nativeCapResourcesReady); a NULL here means
+    // not-yet-resident, so we LEAVE the native hat and let the outfit module self-heal
+    // (dAlbwAlink_nativeCapResolved) re-fire one rebuild once the donor lands.  We never build
+    // mpLinkHatModel from a NULL J3DModelData.  Risk #1 (a foreign cap's materials read off the
+    // end in setWaterDropColor) is bounded by ALBW_HAT_TEV / getMaterialNum (commit 55c30fb496).
+    // ============================================
+    s_albwNativeCapResolved = true;  // default: Off / sumo / wolf -> nothing to override
+    if (dusk::getSettings().game.capWear.getValue() != dusk::CapWearMode::Off &&
+        !checkNoResetFlg2(FLG2_UNK_80000) && !checkWolf()) {
+        const bool wantTopknot = dAlbwSumoTest_wantTopknot();
+        const char* capArc  = wantTopknot ? "alSumou" : dAlbwSumoTest_capArcName();
+        const char* capName = wantTopknot ? NULL : dAlbwSumoTest_capModelName();
+        J3DModelData* capData =
+            wantTopknot ? static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33))
+                        : static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
+
+        // ============================================
+        // TEMP DIAGNOSTIC — ALBW Port (#4: non-sumo Cap Wear resolution + geometry)
+        // Mirrors the sumo-branch ALBW-CAP probe for NATIVE Link: mode, base wear-flag, chosen
+        // arc, resolution (resInfo/archive), geometry (joints/shapes/mats).  Event-driven (logs
+        // only when the resolved state / arc changes), not per-frame.  STRIP before push.
+        // ============================================
+        {
+            static int         s_ncapResolved = -1;
+            static const char* s_ncapArc      = NULL;
+            const int resolved = (capData != NULL) ? 1 : 0;
+            if (resolved != s_ncapResolved || capArc != s_ncapArc) {
+                s_ncapResolved = resolved;
+                s_ncapArc      = capArc;
+                const char* base = checkCasualWearFlg()     ? "Ordon"
+                                   : checkZoraWearFlg()       ? "Zora"
+                                   : checkMagicArmorWearFlg() ? "Magic"
+                                                              : "Heros";
+                dRes_info_c* info = g_dComIfG_gameInfo.mResControl.getObjectResInfo(capArc);
+                DuskLog.debug("ALBW-CAP native mode={} base={} arc={} model={} data={} resInfo={} "
+                              "archive={} joints={} shapes={} mats={}",
+                              (int)dusk::getSettings().game.capWear.getValue(), base, capArc,
+                              capName ? capName : "topknot(0x33)", (void*)capData, (void*)info,
+                              (void*)(info != NULL ? info->getArchive() : NULL),
+                              capData ? capData->getJointNum() : 0xFFFF,
+                              capData ? capData->getShapeNum() : 0xFFFF,
+                              capData ? capData->getMaterialNum() : 0xFFFF);
+            }
+        }
+
+        if (capData != NULL) {
+            // On a Magic base the cascade bound mMagicArmorHeadBrk to the ml_head we are
+            // replacing; drop the head Brk so draw()'s Magic head shimmer does not animate the
+            // orphaned model (simpleAnmPlay null-guards).  The body Brk stays (the body is intact).
+            mMagicArmorHeadBrk = NULL;
+            mpLinkHatModel = initModel(capData, 0);
+            // Shape visibility lives on the shared J3DModelData; a prior use may have hidden
+            // shapes.  Force the cap's shapes visible (mirrors the sumo branch).
+            J3DModelData* capMd = mpLinkHatModel->getModelData();
+            for (u16 cs = 0; cs < capMd->getShapeNum(); cs++) {
+                capMd->getShapeNodePointer(cs)->show();
+            }
+        } else {
+            s_albwNativeCapResolved = false;  // not resident yet -> keep native hat; self-heal later
+        }
+    }
+#endif
 
     // ============================================
     // NEW CODE — ALBW Port (Sumo Outfit equipment attach)

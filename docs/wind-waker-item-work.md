@@ -10,6 +10,8 @@
 
 ## Track A progress (2026-06-26)
 
+> **⚠️ 2026-06-27 disconnect:** the toggle / Editor-replay / cmake / settings / editor hooks below were **removed from the build during a launch bisect**. The "Done" rows reflect the pre-disconnect state. Re-link them via **roadmap Phase 1** in [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) (which is the canonical phase numbering). Mesh-on-screen baseline was achieved before the disconnect.
+
 | Milestone | Status |
 |-----------|--------|
 | `game.wwItemmdlGetItem` toggle + Editor replay button | Done |
@@ -40,6 +42,7 @@
 | [trailer-handoff.md](trailer-handoff.md) | Trailer PNGs; optional use of in-game `itemmdl` props for B-roll once viewer exists |
 | [shield-ordon-quest-assets.md](shield-ordon-quest-assets.md) | TP shield quest asset IDs — different item pipeline |
 | [build-fps-guidelines.md](build-fps-guidelines.md) | Build / launch hygiene before playtesting |
+| [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) | **Cursor ↔ Claude** implementation roadmap + session log |
 | [zeldaret/tww](https://github.com/zeldaret/tww) | WW decomp — Rosetta stone for `d_item_data` rows and item behavior (not linkable object code) |
 | [zeldaret/ss](https://github.com/zeldaret/ss) | SS decomp — Wii-era lighting / `MA**` palette lineage; **not** WW ink or J3D item path (see SS section) |
 

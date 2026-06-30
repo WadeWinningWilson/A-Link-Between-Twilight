@@ -97,12 +97,20 @@ enum class TrueAlbwMode : int {
     TrueTest = 2,
 };
 
-// Which cap model the sumo body wears when "Link Hat" is on (decoupled, resolves on any base):
-// Green = al_head (Hero's cap), Red = ml_head (Magic helmet), Blue = zl_head (Zora helmet).
-enum class SumoCapColor : u8 {
-    Green = 0,
-    Red = 1,
-    Blue = 2,
+// Cap Wear: which headpiece Link wears, applied GLOBALLY to every outfit (the sumo body AND
+// the native clothes), decoupled so each cap resolves on any base via the cap donor.
+//   Off   — native: each outfit keeps its own hat (the sumo body keeps its topknot).
+//   None  — force the bald sumo topknot (alSumou 0x33) on every outfit.
+//   Green — Link's cap   al_head (Kmdl).
+//   Red   — Magic helmet ml_head (Mmdl).
+//   Blue  — Zora helmet  zl_head (Zmdl).
+// (Green/Red/Blue are the "Link cap" modes; see dAlbwSumoTest_wantLinkCap().)
+enum class CapWearMode : u8 {
+    Off = 0,
+    None = 1,
+    Green = 2,
+    Red = 3,
+    Blue = 4,
 };
 
 // Focused Arts playtest cheat: tier 3 without shop; WithDebug adds an in-game HUD overlay.
@@ -258,19 +266,21 @@ struct UserSettings {
         ConfigVar<FocusedArtsCheatMode> focusedArtsCheat;
         // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
         ConfigVar<bool> flurryRush;
+        // WW itemmdl Track A: use retail itemmdl.arc vbow for bow get-item (dev toggle).
+        ConfigVar<bool> wwItemmdlGetItem;
         // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
         // never the sumo minigame.
         //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).
         //                     Kept registered for back-compat; no code reads it.
-        //   sumoOutfitHat   — wear Link's green cap on the sumo body (works from any base)
         //   sumoOutfitFists — hide weapons (fists only)
         ConfigVar<bool> sumoOutfit;
-        ConfigVar<bool> sumoOutfitHat;
         ConfigVar<bool> sumoOutfitFists;
-        //   sumoCapColor    — which cap the Link Hat shows: Green (al_head), Red (Magic helmet
-        //                     ml_head), or Blue (Zora helmet zl_head).  Decoupled to resolve on
-        //                     any base.  Only applies when sumoOutfitHat is on.
-        ConfigVar<SumoCapColor> sumoCapColor;
+        //   capWear         — GLOBAL Cap Wear (Off/None/Green/Red/Blue): which headpiece Link
+        //                     wears across EVERY outfit (sumo body and native clothes alike).
+        //                     Off = each outfit's native hat; None = bald topknot everywhere;
+        //                     Green/Red/Blue = the Link/Magic/Zora cap on any base.  Replaces the
+        //                     old sumoOutfitHat bool + sumoCapColor (sumo-only) settings.
+        ConfigVar<CapWearMode> capWear;
         ConfigVar<bool> shieldDurability;
         // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
         ConfigVar<bool> deathRecoveryOrb;

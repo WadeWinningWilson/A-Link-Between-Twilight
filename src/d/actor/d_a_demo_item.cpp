@@ -15,6 +15,35 @@
 #include "Z2AudioLib/Z2Instances.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "d/d_ww_itemmdl_pc.h"
+#include "dusk/settings.h"
+#endif
+
+#if TARGET_PC
+static f32 demoItemRootHalfHeight(J3DModel* model) {
+    if (model == NULL) {
+        return 0.0f;
+    }
+
+    J3DModelData* model_data = model->getModelData();
+    if (model_data == NULL || model_data->getJointNum() == 0) {
+        return 0.0f;
+    }
+
+    J3DJoint* joint = model_data->getJointNodePointer(0);
+    if (joint == NULL || joint->getMax() == NULL) {
+        return 0.0f;
+    }
+
+    return joint->getMax()->y;
+}
+
+static bool useWwItemmdlBowGetItem(u8 item_no) {
+    return item_no == dItemNo_BOW_e && dusk::getSettings().game.wwItemmdlGetItem.getValue();
+}
+#endif
+
 static cXyz l_player_offset = cXyz(0.0f, 115.0f, 54.0f);
 
 static cXyz l_wolf_offset = cXyz(13.0f, 135.0f, 57.0f);
@@ -395,7 +424,7 @@ void daDitem_c::initEffectLight() {
 }
 
 void daDitem_c::settingEffectLight() {
-    f32 var_f31 = mpModel->getModelData()->getJointNodePointer(0)->getMax()->y;
+    f32 var_f31 = demoItemRootHalfHeight(mpModel);
     mLight.mPosition.set(current.pos.x, current.pos.y + (var_f31 * 0.5f), current.pos.z);
     mLightStrength = 8.0f;
 }
@@ -449,7 +478,12 @@ int daDitem_c::Delete() {
 
     endInsectEffect();
     mSound.deleteObject();
+#if TARGET_PC
+    const char* arc_name = useWwItemmdlBowGetItem(m_itemNo) ? "itemmdl" : dItem_data::getArcName(m_itemNo);
+    return DeleteBase(arc_name);
+#else
     return DeleteBase(dItem_data::getArcName(m_itemNo));
+#endif
 }
 
 static int daDitem_Delete(daDitem_c* i_this) {
@@ -462,6 +496,11 @@ int daDitem_c::create() {
     m_itemNo = daDitem_prm::getNo(this);
 
     const char* arc_name = dItem_data::getArcName(m_itemNo);
+#if TARGET_PC
+    if (useWwItemmdlBowGetItem(m_itemNo)) {
+        arc_name = "itemmdl";
+    }
+#endif
     s16 bmd_name = dItem_data::getBmdName(m_itemNo);
 
     if (bmd_name < 0 || arc_name == NULL) {
@@ -478,7 +517,7 @@ int daDitem_c::create() {
         m_itemNo = dItemNo_GREEN_RUPEE_e;
     }
 
-    int phase_state = dComIfG_resLoad(&mPhase, dItem_data::getArcName(m_itemNo));
+    int phase_state = dComIfG_resLoad(&mPhase, arc_name);
     if (phase_state == cPhs_COMPLEATE_e) {
         if (!fopAcM_entrySolidHeap(this, CheckItemCreateHeap, 0x80003390)) {
             return cPhs_ERROR_e;
@@ -517,7 +556,11 @@ int daDitem_c::execute() {
     set_mtx();
 
     eyePos = current.pos;
+#if TARGET_PC
+    eyePos.y += demoItemRootHalfHeight(mpModel) * 0.5f;
+#else
     eyePos.y += mpModel->getModelData()->getJointNodePointer(0)->getMax()->y * 0.5f;
+#endif
 
     if (m_itemNo == dItemNo_ORANGE_RUPEE_e || m_itemNo == dItemNo_SILVER_RUPEE_e) {
         field_0x99c = current.pos;
@@ -544,7 +587,21 @@ int daDitem_c::draw() {
         break;
     }
 
+#if TARGET_PC
+    const bool ww_bow = useWwItemmdlBowGetItem(m_itemNo);
+    if (ww_bow) {
+        dWwItemmdl_suppressOutlineForDraw(mpModel->getModelData());
+    }
+#endif
+
     DrawBase();
+
+#if TARGET_PC
+    if (ww_bow) {
+        dWwItemmdl_restoreOutlineAfterDraw(mpModel->getModelData());
+    }
+#endif
+
     return 1;
 }
 

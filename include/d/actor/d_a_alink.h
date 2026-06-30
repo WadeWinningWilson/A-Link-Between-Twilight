@@ -8520,6 +8520,11 @@ inline daAlink_c* daAlink_getAlinkActorClass() {
 // Defined in d_a_alink.cpp.
 // ============================================
 void dAlbwAlink_invalidateClothesEpoch();
+
+// GLOBAL Cap Wear: true when the last native changeLink built the requested cap/topknot, false
+// on fallback to the native hat (chosen arc not resident yet).  Read by the outfit module to
+// self-heal the cap after a base-boundary crossing without blocking outfit swaps.
+bool dAlbwAlink_nativeCapResolved();
 #endif
 
 #endif /* D_A_D_A_ALINK_H */

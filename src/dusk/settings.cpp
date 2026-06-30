@@ -51,10 +51,10 @@ UserSettings g_userSettings = {
         .focusedArtsTest {"game.focusedArtsTest", false},
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
         .flurryRush {"game.flurryRush", false},
+        .wwItemmdlGetItem {"game.wwItemmdlGetItem", false},
         .sumoOutfit {"game.sumoOutfit", false},
-        .sumoOutfitHat {"game.sumoOutfitHat", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
-        .sumoCapColor {"game.sumoCapColor", SumoCapColor::Green},
+        .capWear {"game.capWear", CapWearMode::Off},
         .shieldDurability {"game.shieldDurability", false},
         .deathRecoveryOrb {"game.deathRecoveryOrb", false},
         .wolfLinkCombat {"game.wolfLinkCombat", false},
@@ -322,10 +322,10 @@ void registerSettings() {
     Register(g_userSettings.game.focusedArtsTest);
     Register(g_userSettings.game.focusedArtsCheat);
     Register(g_userSettings.game.flurryRush);
+    Register(g_userSettings.game.wwItemmdlGetItem);
     Register(g_userSettings.game.sumoOutfit);
-    Register(g_userSettings.game.sumoOutfitHat);
     Register(g_userSettings.game.sumoOutfitFists);
-    Register(g_userSettings.game.sumoCapColor);
+    Register(g_userSettings.game.capWear);
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);
     Register(g_userSettings.game.wolfLinkCombat);

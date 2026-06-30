@@ -37,10 +37,14 @@ enum ReplayPhase {
 
 static ReplayPhase s_phase = REPLAY_NONE;
 static int s_waitFrames = 0;
+static int s_runningFrames = 0;
 static const char* s_replayStatus = nullptr;
 static fpc_ProcID s_itemId = fpcM_ERROR_PROCESS_ID_e;
 static request_of_phase_process_class s_arcPhase;
 static char s_demoArcName[32] = {};
+
+// 6 s @ 30 Hz logic frames (matches TP proc timing).
+static constexpr int kReplayDurationFrames = 180;
 
 static void debugLog(const char* message) {
     const char* user = getenv("USERPROFILE");
@@ -66,6 +70,25 @@ static void failReplay(const char* message) {
     s_replayStatus = message;
     s_phase = REPLAY_NONE;
     s_waitFrames = 0;
+    s_runningFrames = 0;
+    s_itemId = fpcM_ERROR_PROCESS_ID_e;
+    s_arcPhase.id = cPhs_INIT_e;
+    s_demoArcName[0] = '\0';
+}
+
+static void finishReplay(const char* statusMessage, daAlink_c* link) {
+    debugLog(statusMessage);
+    if (s_itemId != fpcM_ERROR_PROCESS_ID_e && fpcM_IsExecuting(s_itemId)) {
+        fopAcM_delete(s_itemId);
+    }
+    dComIfGp_event_setItemPartnerId(fpcM_ERROR_PROCESS_ID_e);
+    if (link != NULL) {
+        link->procWaitInit();
+    }
+    s_replayStatus = statusMessage;
+    s_phase = REPLAY_NONE;
+    s_waitFrames = 0;
+    s_runningFrames = 0;
     s_itemId = fpcM_ERROR_PROCESS_ID_e;
     s_arcPhase.id = cPhs_INIT_e;
     s_demoArcName[0] = '\0';
@@ -114,7 +137,8 @@ static void startDirectGetItemDemo(daAlink_c* link) {
     link->procCoGetItemInit();
     s_phase = REPLAY_RUNNING;
     s_waitFrames = 0;
-    debugLog("procCoGetItemInit returned (get-item message suppressed for dev replay)");
+    s_runningFrames = 0;
+    debugLog("procCoGetItemInit returned (dev replay; auto-end 6s)");
 }
 
 void requestBowGetItemDemoReplay() {
@@ -161,19 +185,19 @@ void tickBowGetItemDemoReplay() {
     }
 
     if (s_phase == REPLAY_RUNNING) {
-        if (getDemoItemActor() == NULL) {
-            debugLog("demo item finished — replay complete");
-            dComIfGp_event_setItemPartnerId(fpcM_ERROR_PROCESS_ID_e);
-            s_replayStatus = "Replay finished.";
-            s_phase = REPLAY_NONE;
-            s_itemId = fpcM_ERROR_PROCESS_ID_e;
-            s_waitFrames = 0;
-            s_arcPhase.id = cPhs_INIT_e;
-            s_demoArcName[0] = '\0';
+        s_runningFrames++;
+
+        if (s_runningFrames >= kReplayDurationFrames) {
+            finishReplay("Replay finished (6 s).", link);
             return;
         }
 
-        if (s_waitFrames > 900) {
+        if (getDemoItemActor() == NULL) {
+            finishReplay("Replay finished.", link);
+            return;
+        }
+
+        if (s_runningFrames > kReplayDurationFrames + 60) {
             failReplay("Get-item demo replay timed out.");
         }
         return;

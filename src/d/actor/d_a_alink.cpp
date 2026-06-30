@@ -109,6 +109,17 @@ static const char l_kArcName[] = "Kmdl";
 // is drawn as a plain body (no Magic ops) until the real Mmdl model is built.
 // ============================================
 static bool s_albwMagicModelReady = false;
+
+// ============================================
+// NEW CODE — ALBW Port (GLOBAL Cap Wear — native override resolution flag)
+// True when changeLink's non-sumo Cap Wear override actually built the requested cap/topknot
+// this build; false when it FELL BACK to the outfit's native hat (the chosen arc wasn't
+// resident yet -- e.g. right after crossing the owning-base boundary, before the non-sumo cap
+// donor finishes loading).  The outfit module reads it (dAlbwAlink_nativeCapResolved) to
+// self-heal: re-fire one native rebuild once the donor lands, so the cap appears on every base
+// without ever blocking a normal outfit swap.  Defaults true (nothing to resolve: Off/sumo/wolf).
+// ============================================
+static bool s_albwNativeCapResolved = true;
 #endif
 
 #if TARGET_PC
@@ -133,6 +144,10 @@ static u32 s_albwClothesModelEpoch = 0;
 // Kmdl cap/face donor (a free that, unlike the pipeline's freeAll, does not bump the epoch).
 // ============================================
 void dAlbwAlink_invalidateClothesEpoch() { ++s_albwArcEpoch; }
+
+// True when the last native changeLink resolved the requested Cap Wear cap/topknot (false on
+// fallback to the outfit's native hat).  The outfit module self-heals off this (see the static).
+bool dAlbwAlink_nativeCapResolved() { return s_albwNativeCapResolved; }
 
 // ============================================
 // NEW CODE — ALBW Port (universal model-state consistency token)

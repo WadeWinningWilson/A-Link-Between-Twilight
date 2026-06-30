@@ -396,7 +396,7 @@ Source-level answers to the nine feasibility questions. **FA charge bank is not 
 | Runtime meter fill / spend / combat hooks | ✅ v0 — sword/item fill, HS spend, damage drain, ImGui overlay |
 | FA damage resolver + item stacks | ✅ `dFocusedArts_resolveMeleeDamage`, `dFocusedArts_applyItemDamageBoost` |
 | Postman shop rows | ✅ FA tier on Upgrades & Services (`d_albw_rental.cpp`) |
-| HUD bars | ✅ Lilac FA meter in `d_meter2_draw.cpp` |
+| HUD bars | ✅ Lilac segmented FA meter — `drawFocusedArtsMeter`/`drawFocusedArtsMeterKantera` in `d_meter2_draw.cpp` (reuses kantera widget; vanilla top-left / LoP sword-strip; gated `dFocusedArts_isEnabled` && !wolf && !wooden, OFF ⇒ durability unchanged). Full notes: [[project-lop-hud]] memory |
 | GS finisher FA wiring | ✅ Tier-3 T1 spend → `procCutGsHurricaneInit` (+ cheat fallback) |
 | T1 finishers (JS/BackSlice/MD/Helm/EB) | ✅ v1 — JS lockout drain, Back Slice 3s suppress, MD/Helm damage, EB GS AOE 50% |
 | Item vanilla attack table | ⏳ Research before per-item baseline tuning |

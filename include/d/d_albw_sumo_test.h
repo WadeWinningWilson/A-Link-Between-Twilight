@@ -26,6 +26,10 @@ bool dAlbwSumoTest_prepareChangeLink();
 // overlay is cleared.  Required before setClothesChange(0) when leaving sumo.
 bool dAlbwSumoTest_prepareNativeClothesChange();
 
+// Hold the global Cap Wear arc resident for a NATIVE (sumo-off) rebuild; true once resident.
+// syncLinkModel gates its native cap rebuild on this so the changeLink override resolves.
+bool dAlbwSumoTest_prepareNativeCapChange();
+
 // True while the sumo body flag is on Link (reads FLG2_UNK_80000, not static state).
 bool dAlbwSumoTest_isOutfitActive();
 
@@ -33,11 +37,15 @@ bool dAlbwSumoTest_isOutfitActive();
 // checkSwordDraw/checkShieldDraw to draw the sword/shield on the sumo body.
 bool dAlbwSumoTest_showWeapons();
 
-// True when the "Link Hat" sub-toggle is on — read by changeLink.
+// True when game.capWear is a Link-cap mode (Green/Red/Blue) — read by changeLink to decide
+// whether to build a borrowed cap model.  False for Off (native hat) and None (topknot).
 bool dAlbwSumoTest_wantLinkCap();
 
-// The cap model the Link Hat shows, by game.sumoCapColor.  changeLink loads capModelName()
-// from capArcName(); both resolve on any base via the decoupled cap donor (resourcesReady).
+// True when game.capWear == None — force the bald sumo topknot (alSumou 0x33) on every outfit.
+bool dAlbwSumoTest_wantTopknot();
+
+// The cap model the Link cap shows, by game.capWear.  changeLink loads capModelName() from
+// capArcName(); both resolve on any base via the decoupled cap donor (resourcesReady).
 const char* dAlbwSumoTest_capArcName();    // "Kmdl" (green) / "Mmdl" (red) / "Zmdl" (blue)
 const char* dAlbwSumoTest_capModelName();  // "al_head.bmd" / "ml_head.bmd" / "zl_head.bmd"
 

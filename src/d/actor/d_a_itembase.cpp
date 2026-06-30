@@ -10,6 +10,11 @@
 #include "d/d_item_data.h"
 #include "f_op/f_op_actor_mng.h"
 
+#if TARGET_PC
+#include "d/d_ww_itemmdl_pc.h"
+#include "dusk/settings.h"
+#endif
+
 int daItemBase_c::DeleteBase(const char* i_resName) {
     dComIfG_resDelete(&mPhase, i_resName);
     return 1;
@@ -27,7 +32,19 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
                                  s16 i_bckName, s16 i_bxaName, s16 i_brkName, s16 i_btpName) {
     JUT_ASSERT(0, 0 <= m_itemNo && m_itemNo <= 255);
 
-    J3DModelData* modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+    J3DModelData* modelData = NULL;
+#if TARGET_PC
+    if (m_itemNo == dItemNo_BOW_e && dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
+        modelData = dWwItemmdl_getVbowModelData("itemmdl");
+        if (modelData != NULL) {
+            dWwItemmdl_patchModelForPc(modelData);
+        }
+    } else {
+        modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+    }
+#else
+    modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+#endif
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port

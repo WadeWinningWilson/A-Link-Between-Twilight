@@ -46,6 +46,7 @@
 #include "dusk/truetest.hpp"
 #endif
 #include "d/d_albw_death_rupee.h"
+#include "d/d_ww_itemmdl_test.h"
 #include "dusk/autosave.h"
 #include "dusk/memory.h"
 #include "dusk/ui/ui.hpp"
@@ -745,6 +746,7 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
 
 #if TARGET_PC
     dALBWDeathRupees_tickSpawn();
+    dWwItemmdl::tickBowGetItemDemoReplay();
 #endif
 
     if (!fopOvlpM_IsPeek()) {

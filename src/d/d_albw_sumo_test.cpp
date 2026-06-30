@@ -163,17 +163,15 @@ bool resourcesReady() {
     // while the Link Hat is on.  Releasing is epoch-bumped (releaseCapDonor).  We never reset an
     // in-flight load: release only fires when a DIFFERENT arc is already held.
     int wantCapKind = 0;
-    if (dusk::getSettings().game.sumoOutfitHat.getValue()) {
-        switch (dusk::getSettings().game.sumoCapColor.getValue()) {
-            case dusk::SumoCapColor::Red:
-                if (!daAlink_c::checkMagicArmorWearFlg()) wantCapKind = 1;  // hold Mmdl off-base
-                break;
-            case dusk::SumoCapColor::Blue:
-                if (!daAlink_c::checkZoraWearFlg()) wantCapKind = 2;        // hold Zmdl off-base
-                break;
-            default:
-                break;  // Green: covered by the Kmdl donor / pipeline
-        }
+    switch (dusk::getSettings().game.capWear.getValue()) {
+        case dusk::CapWearMode::Red:
+            if (!daAlink_c::checkMagicArmorWearFlg()) wantCapKind = 1;  // hold Mmdl off-base
+            break;
+        case dusk::CapWearMode::Blue:
+            if (!daAlink_c::checkZoraWearFlg()) wantCapKind = 2;        // hold Zmdl off-base
+            break;
+        default:
+            break;  // Off/None/Green: no red/blue donor (green rides Kmdl; topknot needs none)
     }
     if (sCapDonorKind != 0 && sCapDonorKind != wantCapKind) {
         releaseCapDonor();  // switching color, or the base now owns the arc -> free the old donor
@@ -189,10 +187,64 @@ bool resourcesReady() {
     return true;
 }
 
+// ============================================
+// NEW CODE — ALBW Port (GLOBAL Cap Wear — non-sumo residency, step #3)
+// While sumo is OFF and Cap Wear is on, hold the chosen cap arc resident so changeLink's
+// non-sumo override can build the cap/topknot on a native outfit.  Reuses the SAME donor phase
+// requests + epoch-bump-safe releases as the sumo cap donor (the proven-safe independent-entry
+// pattern): each arc is held only over the bases that do NOT own it in the clothes pipeline's
+// mpArcHeap, so our refcount never aliases a freeAll (the dual-Kmdl trap; releaseFaceDonor/
+// releaseCapDonor bump the clothes epoch so a freed donor can't be drawn).
+//   Off   -> release every cap donor (each outfit keeps its native hat).
+//   None  -> hold alSumou (topknot 0x33); no native base owns it.
+//   Green -> hold Kmdl (al_head) over non-Hero's bases (the Hero's base IS Kmdl -> pipeline owns it).
+//   Red   -> hold Mmdl over non-Magic bases.   Blue -> hold Zmdl over non-Zora bases.
+// alSumou is left resident until the next stage transition (cPhs_Reset(&sPhase) there); it is a
+// tiny arc shared with the sumo body, so we never resDelete it on the native path.  Returns true
+// only once the needed arc is resident, so syncLinkModel's rebuild waits for the donor.
+// ============================================
+bool nativeCapResourcesReady() {
+    const dusk::CapWearMode mode = dusk::getSettings().game.capWear.getValue();
+
+    if (mode == dusk::CapWearMode::Off) {
+        releaseFaceDonor();
+        releaseCapDonor();
+        return true;
+    }
+
+    if (mode == dusk::CapWearMode::None) {
+        releaseFaceDonor();
+        releaseCapDonor();
+        if (dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) == NULL) {
+            if (dComIfG_resLoad(&sPhase, "alSumou") != cPhs_COMPLEATE_e) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ============================================
+    // Green / Red / Blue — STABILIZED (clothes-arc donors REMOVED; model-agnostic load is WIP).
+    // The cap head models live in the clothes BASE arcs (al_head=Kmdl, ml_head=Mmdl, zl_head=Zmdl).
+    // Holding one as an off-base donor aliases the clothes pipeline's mpArcHeap->freeAll() (which
+    // bypasses the refcount and REUSES heap slots), so during rapid quick-switches the donor's
+    // archive dangles and the release path frees an already-freed archive -> dRes_info_c::
+    // deleteArchiveRes on 0xffffffffffffffff (the quick-switch crash).  Unlike alSumou (None),
+    // these arcs ARE the pipeline's, so they can never be safely held independently this way.
+    // So: drop every clothes-arc donor here.  changeLink's override then resolves the cap ONLY
+    // where the arc IS the live base (green=Hero's, red=Magic, blue=Zora) and keeps the native hat
+    // elsewhere -- crash-free.  TRUE any-cap-any-base comes next from the dedicated-heap cap load
+    // (an independent JKRArchive the clothes pipeline never frees -- the alSumou-style isolation
+    // that makes None bulletproof, applied to the caps).
+    // ============================================
+    releaseFaceDonor();
+    releaseCapDonor();
+    return true;
+}
+
 void maintainResources(daAlink_c* i_link) {
     const bool want = dAlbwOutfit_isSumoWorn();
     const bool has  = dAlbwSumoTest_isOutfitActive();
-    const bool hat  = dusk::getSettings().game.sumoOutfitHat.getValue();
 
     const u8 clothes = dComIfGs_getSelectEquipClothes();
     if (clothes != sLastClothes) {
@@ -215,16 +267,15 @@ void maintainResources(daAlink_c* i_link) {
     }
 
     if (want) {
-        (void)hat;  // resourcesReady reads sumoOutfitHat/sumoCapColor itself for the cap donor
+        // resourcesReady reads game.capWear itself for the cap donor.
         resourcesReady();
         if (nativeClothesResourcesReady()) {
             i_link->setArcName(0);
         }
     } else {
-        // Fully native (sumo off and body flag cleared): drop the Kmdl face/cap donor and the
-        // red/blue cap donor if we were still holding them.
-        releaseFaceDonor();
-        releaseCapDonor();
+        // Fully native (sumo off and body flag cleared): hold the global Cap Wear arc resident so
+        // changeLink's non-sumo override resolves on any base, or release all donors when Off.
+        nativeCapResourcesReady();
     }
 }
 
@@ -239,6 +290,16 @@ bool dAlbwSumoTest_prepareChangeLink() {
 
 bool dAlbwSumoTest_prepareNativeClothesChange() {
     return nativeClothesResourcesReady();
+}
+
+// True once the global Cap Wear arc is resident for a NATIVE rebuild (sumo off).  syncLinkModel
+// gates its native cap rebuild on this so changeLink's override resolves instead of falling back
+// (and so a genuinely-unavailable arc can't hang the rebuild -- it just keeps the native hat).
+bool dAlbwSumoTest_prepareNativeCapChange() {
+    if (dAlbwOutfit_isSumoWorn()) {
+        return false;  // sumo path owns the cap via prepareChangeLink/resourcesReady
+    }
+    return nativeCapResourcesReady();
 }
 
 void dAlbwSumoTest_onNativeOutfitEquipped() {
@@ -329,22 +390,31 @@ bool dAlbwSumoTest_showWeapons() {
 }
 
 bool dAlbwSumoTest_wantLinkCap() {
-    return dusk::getSettings().game.sumoOutfitHat.getValue();
+    // True only for the "Link cap" modes (Green/Red/Blue).  Off keeps each outfit's native
+    // hat; None forces the bald topknot -- neither builds a borrowed cap model.
+    const dusk::CapWearMode mode = dusk::getSettings().game.capWear.getValue();
+    return mode == dusk::CapWearMode::Green || mode == dusk::CapWearMode::Red ||
+           mode == dusk::CapWearMode::Blue;
+}
+
+bool dAlbwSumoTest_wantTopknot() {
+    // True for None: force the bald sumo topknot (alSumou 0x33) on every outfit.
+    return dusk::getSettings().game.capWear.getValue() == dusk::CapWearMode::None;
 }
 
 const char* dAlbwSumoTest_capArcName() {
-    switch (dusk::getSettings().game.sumoCapColor.getValue()) {
-        case dusk::SumoCapColor::Red:  return "Mmdl";  // Magic helmet ml_head
-        case dusk::SumoCapColor::Blue: return "Zmdl";  // Zora helmet zl_head
-        default:                       return "Kmdl";  // Green: Link's cap al_head
+    switch (dusk::getSettings().game.capWear.getValue()) {
+        case dusk::CapWearMode::Red:  return "Mmdl";  // Magic helmet ml_head
+        case dusk::CapWearMode::Blue: return "Zmdl";  // Zora helmet zl_head
+        default:                      return "Kmdl";  // Green: Link's cap al_head
     }
 }
 
 const char* dAlbwSumoTest_capModelName() {
-    switch (dusk::getSettings().game.sumoCapColor.getValue()) {
-        case dusk::SumoCapColor::Red:  return "ml_head.bmd";
-        case dusk::SumoCapColor::Blue: return "zl_head.bmd";
-        default:                       return "al_head.bmd";
+    switch (dusk::getSettings().game.capWear.getValue()) {
+        case dusk::CapWearMode::Red:  return "ml_head.bmd";
+        case dusk::CapWearMode::Blue: return "zl_head.bmd";
+        default:                      return "al_head.bmd";
     }
 }
 

@@ -91,7 +91,15 @@ int stashBitForItemNo(int itemNo) {
 dAlbwOutfitKind sPendingEquip = D_ALBW_OUTFIT_COUNT;
 u8            sSyncedNativeClothes = 0xFF;
 bool          sReloadPending        = false;
-bool          sLastAppliedHat       = false;
+// The Cap Wear mode applied at the last model rebuild.  syncLinkModel compares it to the live
+// game.capWear so a cap change (in EITHER sumo or native) forces exactly one rebuild; resets to
+// Off on stage transition / leave so the cap re-applies on the next build.
+dusk::CapWearMode sLastAppliedCap   = dusk::CapWearMode::Off;
+// Set once a native cap rebuild has been ATTEMPTED with the donor ready (prepareNativeCapChange
+// true) for the current (cap, base).  If the cap still fails to resolve (an arc that aliases its
+// base's heap slot, e.g. green over Magic), this stops the self-heal from looping a rebuild every
+// frame -- one attempt, then keep the native hat.  Reset when the cap mode or base changes.
+bool          sNativeCapTried       = false;
 // Set when leaving sumo via applyTargetKind (which clears FLG2_UNK_80000 up front,
 // so `has` reads false and syncLinkModel's revert branch is skipped).  Forces ONE
 // model rebuild even when the underlying clothes value is unchanged (sumo over the
@@ -446,7 +454,8 @@ bool dAlbwOutfit_isSwapInProgress() {
 void dAlbwOutfit_onStageTransitionBegin() {
     sSyncedNativeClothes   = 0xFF;
     sReloadPending         = false;
-    sLastAppliedHat        = false;
+    sLastAppliedCap        = dusk::CapWearMode::Off;
+    sNativeCapTried        = false;
     sLeavingSumoReload     = false;
     sPostMetamorphoseReapply = false;
     sOutfitReloadCooldown  = 0;
@@ -479,7 +488,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
     const bool want    = dAlbwOutfit_isSumoWorn();
     const bool has     = dAlbwSumoTest_isOutfitActive();
     const u8   clothes = dComIfGs_getSelectEquipClothes();
-    const bool hat     = dusk::getSettings().game.sumoOutfitHat.getValue();
+    const dusk::CapWearMode cap = dusk::getSettings().game.capWear.getValue();
 
     if (clothesTimer != 0) {
         if (!sPostMetamorphoseReapply) {
@@ -498,7 +507,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         sPostMetamorphoseReapply = false;
         if (want) {
             if (dAlbwSumoTest_prepareChangeLink() && requestClothesChange(1)) {
-                sLastAppliedHat = hat;
+                sLastAppliedCap = cap;
                 sReloadPending = true;
                 dAlbwOutfit_debugLog("meta->human reapply sumo");
             }
@@ -509,7 +518,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
         sLeavingSumoReload = true;
         if (requestClothesChange(0)) {
-            sLastAppliedHat = false;
+            sLastAppliedCap = cap;
             sReloadPending = true;
             dAlbwOutfit_debugLog("meta->human reapply native cloth=%d", clothes);
         }
@@ -552,17 +561,24 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         sSyncedNativeClothes = clothes;
     }
 
-    // The hat term keeps a deliberate Link Hat toggle rebuilding the model so the cap
-    // shows/hides live (the cap DOES render — see changeLink's sumo branch).  Do NOT
-    // drop it for "idempotency": the multi-apply churn under cutscene stress is `has`
-    // flapping (the demo clears FLG2_UNK_80000 each frame, the module re-applies), not
-    // the hat — see the demo-aware re-apply work (item D) for the real fix.
-    const bool sumoStable   = want && has && hat == sLastAppliedHat;
+    // The cap term keeps a deliberate Cap Wear change rebuilding the model so the cap
+    // shows/hides/recolors live (the cap DOES render — see changeLink's sumo branch and
+    // the non-sumo override).  Do NOT drop it for "idempotency": the multi-apply churn
+    // under cutscene stress is `has` flapping (the demo clears FLG2_UNK_80000 each frame,
+    // the module re-applies), not the cap — see the demo-aware re-apply work (item D).
+    const bool sumoStable   = want && has && cap == sLastAppliedCap;
+    // capSatisfied: a wanted cap (Green/Red/Blue/None) actually resolved on the last native build.
+    // When changeLink fell back to the native hat (donor not resident yet, e.g. just after
+    // crossing the owning-base boundary), this is false so nativeStable stays false and the
+    // cap-apply branch below self-heals once the donor lands.  Off needs nothing resolved.
+    const bool capSatisfied = cap == dusk::CapWearMode::Off || dAlbwAlink_nativeCapResolved();
     // nativeStable must also require no pending leave-reload: when sumo leaves onto the
     // SAME base, clothes is unchanged so this would otherwise be true and early-return
-    // with the sumo model still on screen.
+    // with the sumo model still on screen.  The cap terms force a native rebuild when the
+    // global Cap Wear changes or a wanted cap hasn't resolved (the cap-apply branch below
+    // does the actual reload).
     const bool nativeStable = !want && !has && clothes == sSyncedNativeClothes &&
-                              !sLeavingSumoReload;
+                              !sLeavingSumoReload && cap == sLastAppliedCap && capSatisfied;
 
     if (sumoStable || nativeStable) {
         return;
@@ -584,7 +600,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         if (!requestClothesChange(0)) {
             return;
         }
-        sLastAppliedHat    = false;
+        sLastAppliedCap    = cap;
         sReloadPending     = true;
         sLeavingSumoReload = false;
         dAlbwOutfit_debugLog("sync revert sumo cloth=%d", clothes);
@@ -599,7 +615,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
             return;
         }
         sLeavingSumoReload = false;
-        sLastAppliedHat    = false;
+        sLastAppliedCap    = cap;
         sReloadPending     = true;
         dAlbwOutfit_debugLog("leave force-reload cloth=%d", clothes);
         return;
@@ -612,9 +628,9 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         if (!requestClothesChange(1)) {
             return;
         }
-        sLastAppliedHat = hat;
+        sLastAppliedCap = cap;
         sReloadPending  = true;
-        dAlbwOutfit_debugLog("sync apply sumo hat=%d", hat ? 1 : 0);
+        dAlbwOutfit_debugLog("sync apply sumo cap=%d", (int)cap);
         return;
     }
 
@@ -622,8 +638,39 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
         if (!requestClothesChange(0)) {
             return;
         }
+        sLastAppliedCap = cap;
+        sNativeCapTried = false;  // new base -> allow a fresh cap attempt / self-heal
         sReloadPending = true;
         dAlbwOutfit_debugLog("sync native cloth=%d", clothes);
+        return;
+    }
+
+    // GLOBAL Cap Wear (native): rebuild the model when the cap mode CHANGED, or when a wanted cap
+    // FAILED TO RESOLVE on the last build (donor not resident yet -- e.g. just after crossing the
+    // owning-base boundary, where Green's Kmdl / Red's Mmdl / Blue's Zmdl must load fresh).  Both
+    // are gated on the cap donor being resident (prepareNativeCapChange), so changeLink's override
+    // resolves instead of falling back -- and so a genuinely-unavailable arc can NEVER hang the
+    // rebuild (we just keep the native hat and retry).  requestClothesChange(0) is the verified
+    // build-then-swap path; once the cap resolves, nativeStable above stops this from re-firing.
+    const bool capChanged = cap != sLastAppliedCap;
+    if (capChanged) {
+        sNativeCapTried = false;  // mode changed -> allow a fresh attempt
+    }
+    const bool capUnresolved = cap != dusk::CapWearMode::Off && !dAlbwAlink_nativeCapResolved();
+    if (capChanged || (capUnresolved && !sNativeCapTried)) {
+        if (!dAlbwSumoTest_prepareNativeCapChange()) {
+            // Donor still loading, or the cap is not providable on this base (e.g. green over
+            // Magic).  Return without latching/rebuilding: the legit self-heal retries once the
+            // donor lands; the unprovidable case just keeps the native hat (no rebuild, no loop).
+            return;
+        }
+        if (!requestClothesChange(0)) {
+            return;
+        }
+        sLastAppliedCap = cap;
+        sNativeCapTried = true;  // attempted with the donor ready; if it still fails, don't loop
+        sReloadPending = true;
+        dAlbwOutfit_debugLog("sync native cap apply cap=%d", (int)cap);
     }
 }
 

@@ -13,6 +13,7 @@
 #include "dusk/map_loader_definitions.h"
 #include "dusk/settings.h"
 #include "dusk/truetest.hpp"
+#include "d/d_ww_itemmdl_test.h"
 #include "m_Do/m_Do_audio.h"
 #include "number_button.hpp"
 #include "pane.hpp"
@@ -2171,56 +2172,55 @@ EditorWindow::EditorWindow() {
             "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         // ============================================
-        // NEW CODE — ALBW Port (Sumo Outfit — master toggle removed)
+        // NEW CODE — ALBW Port (Sumo Outfit — master toggle removed; GLOBAL Cap Wear)
         // The Sumo Outfit is now a shipped feature obtained from the ALBW rental
         // shop and worn via the D-pad outfit cycle, so the master "Sumo Outfit"
-        // toggle is no longer surfaced here.  Its Link Hat / Fists Only sub-options
-        // stay visible for tuning — they retain the same behavior and only apply
-        // while sumo is currently worn (the predicate greys them out otherwise).
-        // The sumoOutfitHat / sumoOutfitFists ConfigVars stay registered
-        // (settings.cpp) and tune the look.  "Worn" itself is now per-save
-        // (save bit 700, via dAlbwOutfit_*), so these greys-out track
-        // dAlbwOutfit_isSumoWorn() rather than the old game.sumoOutfit toggle.
+        // toggle is no longer surfaced here.  Fists Only stays a sumo-worn-only
+        // tuning sub-option (greyed by dAlbwOutfit_isSumoWorn()).
+        //
+        // "Cap Wear" replaces the old "Link Hat" bool + "Cap Color" dropdown with one
+        // GLOBAL setting (game.capWear): it skins Link's headpiece across EVERY outfit
+        // — the sumo body AND the native clothes — so it is NOT greyed by sumo-worn.
+        // Off = each outfit's native hat; None = bald topknot everywhere; Green/Red/Blue
+        // = the Link/Magic/Zora cap on any base.
         // ============================================
         leftPane.add_section("Sumo Outfit");
-        editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitHat, "Link Hat",
-            "Wear Link's green cap on the sumo body instead of the sumo headpiece. Works from "
-            "any base outfit.  Applies only while the Sumo Outfit is worn." +
-                Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return !dAlbwOutfit_isSumoWorn(); });
         leftPane.register_control(
             leftPane.add_select_button({
-                .key = "Cap Color",
+                .key = "Cap Wear",
                 .getValue =
                     [] {
-                        switch (getSettings().game.sumoCapColor.getValue()) {
-                            case SumoCapColor::Red:  return Rml::String("Red (Magic)");
-                            case SumoCapColor::Blue: return Rml::String("Blue (Zora)");
-                            default:                 return Rml::String("Green (Hero's)");
+                        switch (getSettings().game.capWear.getValue()) {
+                            case CapWearMode::None:  return Rml::String("None (topknot)");
+                            case CapWearMode::Green: return Rml::String("Green (Hero's)");
+                            case CapWearMode::Red:   return Rml::String("Red (Magic)");
+                            case CapWearMode::Blue:  return Rml::String("Blue (Zora)");
+                            default:                 return Rml::String("Off (native)");
                         }
                     },
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_section("Cap Color");
-                const auto opt = [&pane](const char* label, SumoCapColor mode) {
+                pane.add_section("Cap Wear");
+                const auto opt = [&pane](const char* label, CapWearMode mode) {
                     pane.add_button({
                                         .text = label,
                                         .isSelected =
                                             [mode] {
-                                                return getSettings().game.sumoCapColor.getValue() ==
-                                                       mode;
+                                                return getSettings().game.capWear.getValue() == mode;
                                             },
                                     })
                         .on_pressed([mode] {
                             mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.sumoCapColor.setValue(mode);
+                            getSettings().game.capWear.setValue(mode);
                             config::Save();
                         });
                 };
-                opt("Green (Hero's)", SumoCapColor::Green);
-                opt("Red (Magic)", SumoCapColor::Red);
-                opt("Blue (Zora)", SumoCapColor::Blue);
+                opt("Off (native)", CapWearMode::Off);
+                opt("None (topknot)", CapWearMode::None);
+                opt("Green (Hero's)", CapWearMode::Green);
+                opt("Red (Magic)", CapWearMode::Red);
+                opt("Blue (Zora)", CapWearMode::Blue);
             });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
             "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
@@ -2264,6 +2264,28 @@ EditorWindow::EditorWindow() {
             "ride @ 35%. Particle layout uses Interface → ALBW Visuals → Hurricane Spin Visual." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return getSettings().game.speedrunMode; });
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlGetItem,
+            "WW itemmdl get-item",
+            "Use retail itemmdl.arc vbow for Hero's Bow get-item spin (Phase 2 heap wiring). "
+            "Off = vanilla O_gD_bow." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        leftPane.register_control(
+            leftPane.add_button("Replay Bow Get-Item Demo")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dWwItemmdl::requestBowGetItemDemoReplay();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Dev replay: close the editor in the field to start the bow get-item spin. "
+                    "Auto-ends after <b>6 seconds</b>. WW itemmdl toggle selects which arc "
+                    "preloads (itemmdl vs O_gD_bow). Status: " +
+                    Rml::String(dWwItemmdl::getBowGetItemDemoReplayStatus() != nullptr
+                                    ? dWwItemmdl::getBowGetItemDemoReplayStatus()
+                                    : "idle") +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
     });
 }
 
