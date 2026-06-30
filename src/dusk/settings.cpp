@@ -54,7 +54,7 @@ UserSettings g_userSettings = {
         .sumoOutfit {"game.sumoOutfit", false},
         .sumoOutfitHat {"game.sumoOutfitHat", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
-        .sumoCapRed {"game.sumoCapRed", false},
+        .sumoCapColor {"game.sumoCapColor", SumoCapColor::Green},
         .shieldDurability {"game.shieldDurability", false},
         .deathRecoveryOrb {"game.deathRecoveryOrb", false},
         .wolfLinkCombat {"game.wolfLinkCombat", false},
@@ -325,7 +325,7 @@ void registerSettings() {
     Register(g_userSettings.game.sumoOutfit);
     Register(g_userSettings.game.sumoOutfitHat);
     Register(g_userSettings.game.sumoOutfitFists);
-    Register(g_userSettings.game.sumoCapRed);
+    Register(g_userSettings.game.sumoCapColor);
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);
     Register(g_userSettings.game.wolfLinkCombat);

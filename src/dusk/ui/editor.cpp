@@ -2188,12 +2188,40 @@ EditorWindow::EditorWindow() {
             "any base outfit.  Applies only while the Sumo Outfit is worn." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return !dAlbwOutfit_isSumoWorn(); });
-        editor_bool_option(leftPane, rightPane, getSettings().game.sumoCapRed, "Cap: Red (test)",
-            "PROOF: use the Magic red helmet as the sumo cap instead of the green cap. Needs the "
-            "Link Hat on. For now it shows only over the Magic base (where Mmdl is resident); "
-            "all-bases support + a green/red/blue selector come next." +
-                Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return !dAlbwOutfit_isSumoWorn(); });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Cap Color",
+                .getValue =
+                    [] {
+                        switch (getSettings().game.sumoCapColor.getValue()) {
+                            case SumoCapColor::Red:  return Rml::String("Red (Magic)");
+                            case SumoCapColor::Blue: return Rml::String("Blue (Zora)");
+                            default:                 return Rml::String("Green (Hero's)");
+                        }
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Cap Color");
+                const auto opt = [&pane](const char* label, SumoCapColor mode) {
+                    pane.add_button({
+                                        .text = label,
+                                        .isSelected =
+                                            [mode] {
+                                                return getSettings().game.sumoCapColor.getValue() ==
+                                                       mode;
+                                            },
+                                    })
+                        .on_pressed([mode] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.sumoCapColor.setValue(mode);
+                            config::Save();
+                        });
+                };
+                opt("Green (Hero's)", SumoCapColor::Green);
+                opt("Red (Magic)", SumoCapColor::Red);
+                opt("Blue (Zora)", SumoCapColor::Blue);
+            });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
             "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
             "Applies only while the Sumo Outfit is worn." +

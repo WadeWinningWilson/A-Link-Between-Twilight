@@ -97,6 +97,14 @@ enum class TrueAlbwMode : int {
     TrueTest = 2,
 };
 
+// Which cap model the sumo body wears when "Link Hat" is on (decoupled, resolves on any base):
+// Green = al_head (Hero's cap), Red = ml_head (Magic helmet), Blue = zl_head (Zora helmet).
+enum class SumoCapColor : u8 {
+    Green = 0,
+    Red = 1,
+    Blue = 2,
+};
+
 // Focused Arts playtest cheat: tier 3 without shop; WithDebug adds an in-game HUD overlay.
 enum class FocusedArtsCheatMode : int {
     Off = 0,
@@ -259,11 +267,10 @@ struct UserSettings {
         ConfigVar<bool> sumoOutfit;
         ConfigVar<bool> sumoOutfitHat;
         ConfigVar<bool> sumoOutfitFists;
-        //   sumoCapRed      — PROOF (Cap Wear): load the Magic red helmet (ml_head/Mmdl) as the
-        //                     sumo cap instead of the green cap (al_head/Kmdl).  Resolves where
-        //                     Mmdl is resident (Magic base for now); residency-on-all-bases + the
-        //                     full Cap Wear enum (green/red/blue) follow once the helmet renders.
-        ConfigVar<bool> sumoCapRed;
+        //   sumoCapColor    — which cap the Link Hat shows: Green (al_head), Red (Magic helmet
+        //                     ml_head), or Blue (Zora helmet zl_head).  Decoupled to resolve on
+        //                     any base.  Only applies when sumoOutfitHat is on.
+        ConfigVar<SumoCapColor> sumoCapColor;
         ConfigVar<bool> shieldDurability;
         // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
         ConfigVar<bool> deathRecoveryOrb;

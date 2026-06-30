@@ -347,11 +347,11 @@ void daAlink_c::changeLink(int param_0) {
         // WIP: the cap loads but does not render on the BLS body (material/draw
         // issue, not transform — position is correct via body head joint 4).
         if (dAlbwSumoTest_wantLinkCap()) {
-            // PROOF (Cap Wear): green cap = al_head (Kmdl); red cap = the Magic helmet ml_head
-            // (Mmdl).  Resolves where that arc is resident (Mmdl over the Magic base for now).
-            const bool  redCap  = dAlbwSumoTest_wantRedCap();
-            const char* capArc  = redCap ? l_mArcName : l_kArcName;
-            const char* capName = redCap ? "ml_head.bmd" : "al_head.bmd";
+            // Cap Wear: the cap model + arc come from game.sumoCapColor -- green al_head/Kmdl,
+            // red ml_head/Mmdl, blue zl_head/Zmdl.  The sumo module keeps the chosen arc resident
+            // on any base (resourcesReady cap donor); a NULL here = not-yet-resident -> topknot.
+            const char* capArc  = dAlbwSumoTest_capArcName();
+            const char* capName = dAlbwSumoTest_capModelName();
             J3DModelData* capData =
                 static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
             // ============================================
@@ -372,9 +372,9 @@ void daAlink_c::changeLink(int param_0) {
                     s_capDbgArc      = capArc;
                     dRes_info_c* kInfo =
                         g_dComIfG_gameInfo.mResControl.getObjectResInfo(capArc);
-                    DuskLog.debug("ALBW-CAP build red={} arc={} model={} data={} resInfo={} archive={} "
+                    DuskLog.debug("ALBW-CAP build arc={} model={} data={} resInfo={} archive={} "
                                   "joints={} shapes={} mats={}",
-                                  redCap ? 1 : 0, capArc, capName, (void*)capData, (void*)kInfo,
+                                  capArc, capName, (void*)capData, (void*)kInfo,
                                   (void*)(kInfo != NULL ? kInfo->getArchive() : NULL),
                                   capData ? capData->getJointNum() : 0xFFFF,
                                   capData ? capData->getShapeNum() : 0xFFFF,

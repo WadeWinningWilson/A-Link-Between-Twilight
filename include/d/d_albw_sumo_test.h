@@ -36,9 +36,10 @@ bool dAlbwSumoTest_showWeapons();
 // True when the "Link Hat" sub-toggle is on — read by changeLink.
 bool dAlbwSumoTest_wantLinkCap();
 
-// PROOF (Cap Wear): true when the sumo cap should be the Magic red helmet (ml_head/Mmdl)
-// instead of the green cap (al_head/Kmdl).  Read by changeLink's sumo cap block.
-bool dAlbwSumoTest_wantRedCap();
+// The cap model the Link Hat shows, by game.sumoCapColor.  changeLink loads capModelName()
+// from capArcName(); both resolve on any base via the decoupled cap donor (resourcesReady).
+const char* dAlbwSumoTest_capArcName();    // "Kmdl" (green) / "Mmdl" (red) / "Zmdl" (blue)
+const char* dAlbwSumoTest_capModelName();  // "al_head.bmd" / "ml_head.bmd" / "zl_head.bmd"
 
 // ---- Shop integration (Sumo Outfit purchase) ----------------------------------
 // True once the Sumo Outfit has been bought (save-backed ownership bit).  This is

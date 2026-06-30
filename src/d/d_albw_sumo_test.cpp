@@ -46,6 +46,8 @@ u8   sClothesPhaseFor     = 0xFF;  // equipped-clothes value sClothesPhase was (
 request_of_phase_process_class sPhase;
 request_of_phase_process_class sKmdlPhase;
 request_of_phase_process_class sClothesPhase;
+request_of_phase_process_class sCapPhase;  // red/blue cap donor (Mmdl/Zmdl), held independent of base
+int sCapDonorKind = 0;                       // arc sCapPhase holds: 0 none, 1 Mmdl (red), 2 Zmdl (blue)
 
 constexpr int kSumoBodyResIdx = 0x31;
 constexpr const char* kCapArcName = "Kmdl";
@@ -113,6 +115,22 @@ void releaseFaceDonor() {
     }
 }
 
+// ============================================
+// Drop the red/blue cap donor (Mmdl/Zmdl) held for the Magic/Zora helmet over a base that does
+// not own it.  Same independent-entry safety as releaseFaceDonor (the pipeline owns the base's
+// own arc, never this one), and the same clothes-epoch bump so a cap built from the freed helmet
+// is skipped by draw/shadow until the next changeLink rebuild.
+// ============================================
+void releaseCapDonor() {
+    if (sCapPhase.id == 2 && sCapDonorKind != 0) {
+        dComIfG_resDelete(&sCapPhase, sCapDonorKind == 1 ? "Mmdl" : "Zmdl");  // decCount
+        dAlbwAlink_invalidateClothesEpoch();
+    } else {
+        cPhs_Reset(&sCapPhase);
+    }
+    sCapDonorKind = 0;
+}
+
 bool resourcesReady() {
     if (dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) == NULL) {
         if (dComIfG_resLoad(&sPhase, "alSumou") != cPhs_COMPLEATE_e) {
@@ -137,6 +155,36 @@ bool resourcesReady() {
         }
     } else {
         releaseFaceDonor();
+    }
+
+    // Red/Blue cap donor: the Magic/Zora helmet head models (ml_head/Mmdl, zl_head/Zmdl) are not
+    // the base arc unless the player wears Magic/Zora, so hold the chosen one as an INDEPENDENT
+    // entry over the bases that don't own it (green's al_head rides the Kmdl donor above).  Only
+    // while the Link Hat is on.  Releasing is epoch-bumped (releaseCapDonor).  We never reset an
+    // in-flight load: release only fires when a DIFFERENT arc is already held.
+    int wantCapKind = 0;
+    if (dusk::getSettings().game.sumoOutfitHat.getValue()) {
+        switch (dusk::getSettings().game.sumoCapColor.getValue()) {
+            case dusk::SumoCapColor::Red:
+                if (!daAlink_c::checkMagicArmorWearFlg()) wantCapKind = 1;  // hold Mmdl off-base
+                break;
+            case dusk::SumoCapColor::Blue:
+                if (!daAlink_c::checkZoraWearFlg()) wantCapKind = 2;        // hold Zmdl off-base
+                break;
+            default:
+                break;  // Green: covered by the Kmdl donor / pipeline
+        }
+    }
+    if (sCapDonorKind != 0 && sCapDonorKind != wantCapKind) {
+        releaseCapDonor();  // switching color, or the base now owns the arc -> free the old donor
+    }
+    if (wantCapKind != 0) {
+        if (dComIfG_resLoad(&sCapPhase, wantCapKind == 1 ? "Mmdl" : "Zmdl") != cPhs_COMPLEATE_e) {
+            return false;
+        }
+        sCapDonorKind = wantCapKind;
+    } else if (sCapDonorKind != 0) {
+        releaseCapDonor();
     }
     return true;
 }
@@ -167,15 +215,16 @@ void maintainResources(daAlink_c* i_link) {
     }
 
     if (want) {
-        (void)hat;  // hat (Link cap) is parked; resourcesReady gates Kmdl on the base
+        (void)hat;  // resourcesReady reads sumoOutfitHat/sumoCapColor itself for the cap donor
         resourcesReady();
         if (nativeClothesResourcesReady()) {
             i_link->setArcName(0);
         }
     } else {
-        // Fully native (sumo off and body flag cleared): drop the Zora face donor if
-        // we were still holding it.
+        // Fully native (sumo off and body flag cleared): drop the Kmdl face/cap donor and the
+        // red/blue cap donor if we were still holding them.
         releaseFaceDonor();
+        releaseCapDonor();
     }
 }
 
@@ -239,6 +288,8 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
             sInStageTransition = true;
             cPhs_Reset(&sPhase);
             cPhs_Reset(&sKmdlPhase);
+            cPhs_Reset(&sCapPhase);
+            sCapDonorKind = 0;
             cPhs_Reset(&sClothesPhase);
             sLastClothes     = 0xFF;
             sClothesPhaseFor = 0xFF;
@@ -281,10 +332,20 @@ bool dAlbwSumoTest_wantLinkCap() {
     return dusk::getSettings().game.sumoOutfitHat.getValue();
 }
 
-bool dAlbwSumoTest_wantRedCap() {
-    // Only meaningful when the cap is on at all (Link Hat).
-    return dusk::getSettings().game.sumoOutfitHat.getValue() &&
-           dusk::getSettings().game.sumoCapRed.getValue();
+const char* dAlbwSumoTest_capArcName() {
+    switch (dusk::getSettings().game.sumoCapColor.getValue()) {
+        case dusk::SumoCapColor::Red:  return "Mmdl";  // Magic helmet ml_head
+        case dusk::SumoCapColor::Blue: return "Zmdl";  // Zora helmet zl_head
+        default:                       return "Kmdl";  // Green: Link's cap al_head
+    }
+}
+
+const char* dAlbwSumoTest_capModelName() {
+    switch (dusk::getSettings().game.sumoCapColor.getValue()) {
+        case dusk::SumoCapColor::Red:  return "ml_head.bmd";
+        case dusk::SumoCapColor::Blue: return "zl_head.bmd";
+        default:                       return "al_head.bmd";
+    }
 }
 
 bool dAlbwSumoTest_isOwned() {
