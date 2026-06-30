@@ -561,6 +561,7 @@ void daAlink_c::changeLink(int param_0) {
             int l_bad = albwFirstCorruptMat(l_mdls[l_i].m);
             if (l_bad != -1) {
                 s_albwBuildIntegrityOk = false;
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
                 J3DModelData* l_bmd = l_mdls[l_i].m ? l_mdls[l_i].m->getModelData() : NULL;
                 // Bad material's PEBlock VALUE + its offset from md: a small offset (e.g. a few
                 // KB, or near 0) means an UNRELOCATED offset -> the arc wasn't fully loaded/
@@ -582,6 +583,7 @@ void daAlink_c::changeLink(int param_0) {
                               (s_albwPrevArcName ? s_albwPrevArcName : "(null)"),
                               checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, albwArcArchive(mArcName),
                               albwArcArchive(l_kArcName), (void*)mpArcHeap, s_albwBuildCounter);
+#endif
             }
         }
         s_albwPrevArcName = mArcName;
@@ -632,6 +634,23 @@ void daAlink_c::changeLink(int param_0) {
     mpLinkModel->setUserArea((uintptr_t)this);
     mpLinkHatModel->setUserArea((uintptr_t)this);
     changeModelDataDirect(param_0);
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (root-motion foot-tracking reset on clothes rebuild)
+    // field_0x33a0 is the per-frame foot-displacement "speed" (root motion): it measures how
+    // far the foot joint moved vs the stored previous foot position (field_0x37b0).  A clothes
+    // change rebuilds the model, so the foot joint is discontinuous vs the stored previous ->
+    // the "foot moved" distance comes out absurd (hundreds-to-thousands of units) -> speedF
+    // explodes -> Link teleports; the 0.7 smoothing in the foot-speed calc then latches it.
+    // changeWolf already zeroes field_0x33a0; do the same here AND re-anchor the previous-foot
+    // positions to current.pos (the engine's own no-old-frame reset) so the next frame measures
+    // ~0 displacement instead of the rebuild discontinuity.  Fixes the quick-switch / vanilla-
+    // menu teleport.
+    // ============================================
+    field_0x37b0[0] = current.pos;
+    field_0x37b0[1] = current.pos;
+    field_0x33a0 = 0.0f;
+#endif
     field_0x06e4 = NULL;
 
     u8 var_r27;

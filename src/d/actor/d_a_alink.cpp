@@ -205,7 +205,7 @@ static bool                           s_albwSwapActive = false;       // mid bui
 // alongside the crash backtrace, so the BUILD / FREEALL / donor lines correlate
 // directly with the "modelDraw: skip corrupt model" line and the rva= fault.
 // ============================================
-#define D_ALBW_ARC_LIFECYCLE_DEBUG 1
+#define D_ALBW_ARC_LIFECYCLE_DEBUG 0
 #if D_ALBW_ARC_LIFECYCLE_DEBUG
 // Live archive pointer registered for an arc NAME (NULL if not registered or freed/
 // mid-read).  Same lookup the Magic-fallback log uses; reading it at build, at freeAll,
@@ -13419,6 +13419,22 @@ void daAlink_c::setFootSpeed() {
         if (fabsf(mSpeedModifier) < 1.0f && checkInputOnR() && fabsf(field_0x33a4 - mStickValue) < 0.2f) {
             var_f31 = (0.3f * var_f31) + (0.7f * field_0x33a0);
         }
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+        // TEMP teleport probe: when the foot-displacement spikes, dump the raw inputs so we can
+        // see WHICH term is garbage -- the current foot positions sp18 (mInvMtx*getAnmMtx), the
+        // stored previous foot field_0x37b0, the resulting delta sp8, and current.pos for scale.
+        // If sp18 is huge -> foot joint / mInvMtx discontinuity after rebuild.  If field_0x37b0 is
+        // huge (== current.pos) while sp18 is small -> a space mismatch (local vs world).  STRIP.
+        if (var_f31 > 200.0f) {
+            DuskLog.debug("ALBW-LIFE FOOT vf31={} sp18a=({},{},{}) sp18b=({},{},{}) prevA=({},{},{}) "
+                          "prevB=({},{},{}) sp8=({},{},{}) cpos=({},{},{}) jA={} jB={}",
+                          var_f31, sp18[0].x, sp18[0].y, sp18[0].z, sp18[1].x, sp18[1].y, sp18[1].z,
+                          field_0x37b0[0].x, field_0x37b0[0].y, field_0x37b0[0].z,
+                          field_0x37b0[1].x, field_0x37b0[1].y, field_0x37b0[1].z,
+                          sp8.x, sp8.y, sp8.z, current.pos.x, current.pos.y, current.pos.z,
+                          (int)field_0x30bc, (int)field_0x30be);
+        }
+#endif
     } else {
         var_f31 = 0.0f;
 
@@ -18464,6 +18480,46 @@ int daAlink_c::procGoronRideWait() {
 }
 
 int daAlink_c::execute() {
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+    // TEMP: teleport-on-swap probe.  A clothes change should not move Link; log current.pos +
+    // the one-frame XZ delta through every clothes change (clothesTimer != 0) and ~8 frames
+    // after, so the teleport frame stands out as a big dXZ.  procID lets us rule out a
+    // legit warp/respawn.  STRIP before push.
+    {
+        static f32  s_albwPrevX   = 0.0f;
+        static f32  s_albwPrevZ   = 0.0f;
+        static bool s_albwHavePrev = false;
+        static int  s_albwPosWatch = 0;
+        f32 dx = s_albwHavePrev ? (current.pos.x - s_albwPrevX) : 0.0f;
+        f32 dz = s_albwHavePrev ? (current.pos.z - s_albwPrevZ) : 0.0f;
+        if (mClothesChangeWaitTimer != 0) {
+            s_albwPosWatch = 8;
+        }
+        if (s_albwPosWatch > 0) {
+            // Log speedF/speed/angle too: at the snap frame, a huge speedF => velocity-driven
+            // (the move integrated a giant step); normal speedF with a big dXZ => a direct
+            // position write elsewhere.  Non-zero speedF during the dXZ=0 freeze => the
+            // position update is being blocked while speed persists (then released = snap).
+            DuskLog.debug("ALBW-LIFE POS timer={} pos=({},{},{}) dXZ=({},{}) spdF={} "
+                          "spd=({},{},{}) angY={} procID={} maxSpd={} normSpd={} hioMaxSpd={}",
+                          mClothesChangeWaitTimer, current.pos.x, current.pos.y, current.pos.z,
+                          dx, dz, speedF, speed.x, speed.y, speed.z, current.angle.y, mProcID,
+                          mMaxSpeed, mNormalSpeed,
+                          (mpHIO != NULL ? mpHIO->mMove.m.mMaxSpeed : -1.0f));
+            // The speedF spike comes from `mod = field_0x33a0 * (1 - getOldFrameRate()) *
+            // mSpeedModifier` (line ~13467).  Log the three terms: a wild getOldFrameRate
+            // (anim-blend frame rate, corrupted by the clothes-change model rebuild) is the
+            // prime suspect.  STRIP before push.
+            DuskLog.debug("ALBW-LIFE SPDTERMS f33a0={} spdMod={} oldFR={}",
+                          field_0x33a0, mSpeedModifier,
+                          (field_0x2060 != NULL ? field_0x2060->getOldFrameRate() : -999.0f));
+            s_albwPosWatch--;
+        }
+        s_albwPrevX = current.pos.x;
+        s_albwPrevZ = current.pos.z;
+        s_albwHavePrev = true;
+    }
+#endif
     // ============================================
     // NEW CODE — ALBW Port (Sumo Link visual test)
     // Dev-only model-swap driver (editor -> ALBW -> SumoTest).  Runs before the

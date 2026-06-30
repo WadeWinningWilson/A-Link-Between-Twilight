@@ -21,7 +21,7 @@
 // Keep this toggle in sync with d_a_alink.cpp's D_ALBW_ARC_LIFECYCLE_DEBUG; STRIP
 // (set to 0) before any upstream push.  Event-driven (donor free only), not per-frame.
 // ============================================
-#define D_ALBW_ARC_LIFECYCLE_DEBUG 1
+#define D_ALBW_ARC_LIFECYCLE_DEBUG 0
 #if D_ALBW_ARC_LIFECYCLE_DEBUG
 #include "dusk/logging.h"  // DuskLog — OSReport is disabled in-game (OSReportDisable), DuskLog reaches the log
 #endif
@@ -198,15 +198,25 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     // The sumo worn-bit (700) is a per-save event bit, so without this it survives a game-over
     // and Link respawns in the sumo overlay — and a post-respawn vanilla-menu armor switch then
     // crashes (statusWindowExecute -> changeLink builds the sumo skip-path from a non-resident
-    // arc -> initModel(NULL)).  On game-over, clear ONLY the worn bit and let the normal sync
-    // LEAVE path (syncLinkModel's `has && !want` branch) do the proper teardown — clear the FLG2
-    // flags AND rebuild the model to native together, keeping the model/flags/statics in sync.
-    // (An earlier version also cleared FLG2_80000 directly here; that desynced the state — model
-    // stayed sumo while the flag read native, so the draw guard skipped Link = the broken hybrid
-    // sumo after a cycle.  Do NOT clear FLG2 here.)  Idempotent; only on a real game-over.
+    // arc -> initModel(NULL)).  So on game-over clear ONLY the worn bit (NOT the FLG2 flags — an
+    // earlier version cleared FLG2_80000 here and desynced the state: model stayed sumo while the
+    // flag read native, so the draw guard skipped Link = the broken hybrid sumo after a cycle).
+    //
+    // CRITICAL: also DEFER the rebuild — return early, do NOT fall through to syncLinkModel here.
+    // The game-over / respawn sequence is actively tearing down and reloading Link's arcs, and
+    // firing a clothes-change rebuild into that churn desyncs the wear-flag<->mArcName state, so
+    // changeLink takes the default branch and builds Link's body from the (freed, non-resident)
+    // base arc l_kArcName ("Kmdl") -> initModel(NULL) -> EXCEPTION_ACCESS_VIOLATION (fault 0xc8 in
+    // J3DModelData::getTexture).  This is the death+quick-swap crash.  The worn bit is already
+    // cleared, so the native rebuild runs safely after respawn (game-over window gone, arcs
+    // resident).  Returning early also defers any quick-swap the player queues mid-death, which
+    // would otherwise race the same teardown.  Mirrors the stage-transition early-return below.
     // ============================================
-    if (i_link->checkGameOverWindow() && dAlbwOutfit_isSumoWorn()) {
-        dAlbwOutfit_setSumoWorn(false);
+    if (i_link->checkGameOverWindow()) {
+        if (dAlbwOutfit_isSumoWorn()) {
+            dAlbwOutfit_setSumoWorn(false);
+        }
+        return;
     }
 
     if (dAlbwOutfit_isStageTransitionUnsafe()) {
