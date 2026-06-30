@@ -18,6 +18,7 @@
 #include "d/d_albw_rental.h"
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_sumo_test.h"
+#include "d/d_albw_outfit_stats.h"
 #include "d/d_pane_class.h"
 #include "d/d_demo.h"
 #include "d/actor/d_a_crod.h"
@@ -13522,7 +13523,11 @@ void daAlink_c::posMove() {
         speedF += mod;
     }
 
-    if (getZoraSwim() && !checkZoraWearAbility()) {
+    if (getZoraSwim() && !checkZoraWearAbility()
+#if TARGET_PC
+        && !dAlbwOutfitStats_allowsSubmergedSwim(this)
+#endif
+    ) {
         speedF *= mpHIO->mSwim.m.mFloatUpSwimSpeedRate;
     }
 
@@ -13597,7 +13602,12 @@ void daAlink_c::posMove() {
                     speed.y = mpHIO->mWolf.mWlSwim.m.mMaxSurfacingSpeed;
                 }
             }
-        } else if (!checkEquipHeavyBoots() && getZoraSwim()) {
+        } else if (!checkEquipHeavyBoots() && (getZoraSwim()
+#if TARGET_PC
+                                                 || dAlbwOutfitStats_isSubmergedHumanSwim(this)
+#endif
+                                                 ))
+        {
             speed.y = -sp28 * cM_ssin(var_r26);
         } else if ((checkBootsOrArmorHeavy() && mProcID != PROC_DEAD) || mProcID == PROC_SWIM_DIVE)
         {
@@ -19553,11 +19563,15 @@ int daAlink_c::execute() {
                         mZ2Link.setLinkState(4);
                     }
                 } else if (armorMode == dusk::MagicArmorMode::ALBW) {
-                    if (dMeter2_isALBWArmorDepleted() && field_0x2fd7 != 0) {
+                    if ((dMeter2_isALBWArmorDepleted() || dComIfGs_getRupee() < 500) &&
+                        field_0x2fd7 != 0)
+                    {
                         setMagicArmorBrk(0);
                         seStartOnlyReverb(Z2SE_AL_M_ARMER_TURNOFF);
                         mZ2Link.setLinkState(5);
-                    } else if (!dMeter2_isALBWArmorDepleted() && dComIfGs_getRupee() >= 500 && field_0x2fd7 == 0) {
+                    } else if (!dMeter2_isALBWArmorDepleted() && dComIfGs_getRupee() >= 500 &&
+                               field_0x2fd7 == 0)
+                    {
                         setMagicArmorBrk(1);
                         seStartOnlyReverb(Z2SE_AL_M_ARMER_RECOVER);
                         mZ2Link.setLinkState(4);
@@ -20318,6 +20332,36 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
         }
     }
 #endif
+
+#if TARGET_PC
+    // ============================================
+    // TEMP DIAGNOSTIC — ALBW Port (Link Hat cap invisible on the BLS sumo body)
+    // The cap loads + positions correctly but does not render on the sumo body.  Prime
+    // suspect: setWaterDropColor (which applies the cap material's TevColor) is gated
+    // !checkNoResetFlg2(FLG2_UNK_80000), so on the sumo body the cap material color is NEVER
+    // applied and may stay black/zero -> invisible.  This logs the cap's draw-time state for
+    // BOTH the sumo body and normal Link so the TevColor (material 0, color index 1 -- the one
+    // setWaterDropColor writes at line ~20401) can be compared.  drawn=1 means it reached the
+    // entryDL submit (param_1==0).  Throttled to ~1 line / 2s, hat model only.  STRIP before push.
+    // ============================================
+    if (i_model == mpLinkHatModel) {
+        static int s_albwCapDbgThrottle = 0;
+        if (--s_albwCapDbgThrottle <= 0) {
+            s_albwCapDbgThrottle = 120;
+            J3DModelData* hmd = i_model->getModelData();
+            const J3DGXColorS10* tc = (hmd != NULL && hmd->getMaterialNum() > 0)
+                                          ? hmd->getMaterialNodePointer(0)->getTevColor(1)
+                                          : NULL;
+            DuskLog.debug(
+                "ALBW-CAP hat sumo={} mat={} shapes={} param1={} drawn={} tev0_mat0=({},{},{},{})",
+                checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, hmd ? hmd->getMaterialNum() : 0xFFFF,
+                hmd ? hmd->getShapeNum() : 0xFFFF, (int)param_1, (param_1 == 0) ? 1 : 0,
+                tc ? (int)tc->r : -999, tc ? (int)tc->g : -999, tc ? (int)tc->b : -999,
+                tc ? (int)tc->a : -999);
+        }
+    }
+#endif
+
     g_env_light.setLightTevColorType_MAJI(i_model, &tevStr);
 
     if (param_1 == 0) {

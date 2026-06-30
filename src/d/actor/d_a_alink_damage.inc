@@ -13,6 +13,7 @@
 #include "dusk/achievements.h"
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_outfit_stats.h"
 #endif
 
 #if DEBUG
@@ -163,6 +164,7 @@ f32 daAlink_c::damageMagnification(BOOL i_checkZoraMag, int param_1) {
     if (dusk::getSettings().game.instantDeath) {
         base_mag = 9999.0f;
     }
+    base_mag *= dAlbwOutfitStats_getReceivedDamageMult();
     #endif
 
     if (checkWolf() && !checkCargoCarry() && param_1 == 0) {
@@ -786,6 +788,27 @@ BOOL daAlink_c::checkDamageAction() {
             // ============================================
             if (checkMagicArmorWearAbility() && tghit_ac != NULL) {
                 dMeter2_onArmorEncounterHit(fopAcM_GetID(tghit_ac), true);
+            }
+            // ALBW magic armor: always depower on enemy body hit; block HP + −500
+            // only when the wallet and meter can fund it (see Outfit Stats §6 Phase 1).
+            if (checkMagicArmorWearAbility() &&
+                dusk::getSettings().game.armorRupeeDrain.getValue() == dusk::MagicArmorMode::ALBW)
+            {
+                const bool deityActive = dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e) &&
+                                         dComIfGs_getRupee() > 5000;
+                if (deityActive) {
+                    s32 newRupees = (s32)dComIfGs_getRupee() - 2500;
+                    dComIfGs_setRupee((u16)(newRupees < 0 ? 0 : newRupees));
+                    dmg = 0;
+                } else {
+                    const bool canBlock = dMeter2_canALBWArmorBlock() && dComIfGs_getRupee() >= 500;
+                    dMeter2_onALBWArmorHit();
+                    if (canBlock) {
+                        s32 newRupees = (s32)dComIfGs_getRupee() - 500;
+                        dComIfGs_setRupee((u16)(newRupees < 0 ? 0 : newRupees));
+                        dmg = 0;
+                    }
+                }
             }
             // ============================================
             // NEW CODE ENDS HERE

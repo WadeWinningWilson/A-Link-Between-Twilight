@@ -2209,6 +2209,10 @@ EditorWindow::EditorWindow() {
             "active/stored wardrobe counts, equipped sword/shield/outfit, and passive recovery "
             "rates per 100ms (base vs taxed)." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.outfitStats, "Outfit Stats",
+            "Per-outfit received-damage multipliers, Zora water grace, swim speed, non-Zora "
+            "diving, and Sumo + wooden-sword offensive kit. Off keeps vanilla cloth behavior." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.albwMagicArmorRentableDebug,
             "Magic Armor Rentable (Debug)",
             "Lists Magic Armor as rentable in the Postman shop before story strip. Turning this "

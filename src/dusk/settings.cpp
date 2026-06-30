@@ -75,6 +75,7 @@ UserSettings g_userSettings = {
         .showLockonHpDebug {"game.showLockonHpDebug", false},
         .showWardrobeRecoveryDebug {"game.showWardrobeRecoveryDebug", false},
         .albwMagicArmorRentableDebug {"game.albwMagicArmorRentableDebug", false},
+        .outfitStats {"game.outfitStats", false},
         .showDarknutBashDebug {"game.showDarknutBashDebug", false},
         .stickCycleLockon {"game.stickCycleLockon", false},
         .noHeartDrops {"game.noHeartDrops", false},
@@ -344,6 +345,7 @@ void registerSettings() {
     Register(g_userSettings.game.showLockonHpDebug);
     Register(g_userSettings.game.showWardrobeRecoveryDebug);
     Register(g_userSettings.game.albwMagicArmorRentableDebug);
+    Register(g_userSettings.game.outfitStats);
     Register(g_userSettings.game.showDarknutBashDebug);
     Register(g_userSettings.game.stickCycleLockon);
     Register(g_userSettings.game.noHeartDrops);

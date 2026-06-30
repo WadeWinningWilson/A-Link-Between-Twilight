@@ -6,6 +6,9 @@
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
 #include "f_op/f_op_kankyo_mng.h"
+#if TARGET_PC
+#include "d/d_albw_outfit_stats.h"
+#endif
 
 BOOL daAlink_c::checkZoraWearMaskDraw() {
     return checkZoraWearAbility() && !checkNoResetFlg0(FLG0_SWIM_UP);
@@ -30,15 +33,23 @@ bool daAlink_c::getZoraSwim() const {
 }
 
 f32 daAlink_c::getSwimFrontMaxSpeed() const {
+    f32 speed;
     if (checkBootsOrArmorHeavy()) {
-        return mpHIO->mSwim.m.mUnderwaterFallMaxSpeed;
+        speed = mpHIO->mSwim.m.mUnderwaterFallMaxSpeed;
     } else if (checkZoraWearAbility()) {
-        return 14.0f;
+        speed = 14.0f;
     } else if (checkSwimDashMode()) {
-        return mpHIO->mSwim.m.mDashMaxSpeed;
+        speed = mpHIO->mSwim.m.mDashMaxSpeed;
     } else {
-        return mpHIO->mSwim.m.mForwardMaxSpeed;
+        speed = mpHIO->mSwim.m.mForwardMaxSpeed;
     }
+
+#if TARGET_PC
+    if (!checkBootsOrArmorHeavy()) {
+        speed = dAlbwOutfitStats_scaleSwimSpeed(this, speed);
+    }
+#endif
+    return speed;
 }
 
 f32 daAlink_c::getSwimMaxFallSpeed() const {
@@ -186,7 +197,13 @@ void daAlink_c::swimBgCheck(f32 param_0) {
 
 void daAlink_c::setSpeedAndAngleSwim() {
     if (!checkBootsOrArmorHeavy() && dComIfGp_getDoStatus() == BUTTON_STATUS_NONE && (!checkHookshotAnime() || (checkHookshotItem(mEquipItem) && (mItemMode == 0 || mItemMode == 1)))) {
-        if (checkZoraWearAbility()) {
+#if TARGET_PC
+        const bool submergedSwim =
+            checkZoraWearAbility() || dAlbwOutfitStats_allowsSubmergedSwim(this);
+#else
+        const bool submergedSwim = checkZoraWearAbility();
+#endif
+        if (submergedSwim) {
             if (checkNoResetFlg0(FLG0_SWIM_UP)) {
                 if (field_0x2fcd == 0) {
                     setDoStatus(BUTTON_STATUS_DIVE);
@@ -276,7 +293,11 @@ void daAlink_c::setSpeedAndAngleSwim() {
     }
 
     f32 var_f28;
-    if (mpHIO->mSwim.m.mForwardMaxSpeed < mNormalSpeed && !checkZoraWearAbility()) {
+    if (mpHIO->mSwim.m.mForwardMaxSpeed < mNormalSpeed && !checkZoraWearAbility()
+#if TARGET_PC
+        && !dAlbwOutfitStats_allowsSubmergedSwim(this)
+#endif
+    ) {
         var_f28 = mpHIO->mSwim.m.mDashDeceleration;
     } else {
         var_f28 = mpHIO->mSwim.m.mDeceleration;
@@ -478,6 +499,12 @@ int daAlink_c::checkSwimAction(int param_0) {
             return procSwimWaitInit(0);
         }
 
+#if TARGET_PC
+        if (dAlbwOutfitStats_isSubmergedHumanSwim(this)) {
+            return procSwimWaitInit(0);
+        }
+#endif
+
         swimOutAfter(0);
 
         if (checkWolf()) {
@@ -501,6 +528,11 @@ int daAlink_c::checkSwimUpAction() {
     }
 
     if (!getZoraSwim()) {
+#if TARGET_PC
+        if (dAlbwOutfitStats_isSubmergedHumanSwim(this)) {
+            field_0x3480 = 65.0f;
+        } else
+#endif
         if (checkWolf()) {
             field_0x3480 = mpHIO->mWolf.mWlSwim.m.mStartHeight;
         } else {
@@ -519,10 +551,15 @@ int daAlink_c::checkSwimUpAction() {
 
     if (!checkBootsOrArmorHeavy() && !checkNoResetFlg0(FLG0_SWIM_UP)) {
         if (speed.y >= 0.0f && mWaterY - current.pos.y < var_f31) {
-            if (checkWolf()) {
-                return procWolfSwimUpInit();
-            } else {
-                return procSwimUpInit();
+#if TARGET_PC
+            if (!dAlbwOutfitStats_isSubmergedHumanSwim(this))
+#endif
+            {
+                if (checkWolf()) {
+                    return procWolfSwimUpInit();
+                } else {
+                    return procSwimUpInit();
+                }
             }
         }
     }
@@ -655,13 +692,21 @@ void daAlink_c::setSwimMoveAnime() {
     BOOL var_r25 = FALSE;
 
     if (field_0x2f98 == 4) {
+#if TARGET_PC
+        const f32 outfitSwimMult = dAlbwOutfitStats_getSwimSpeedMult(this);
+        f32 temp_f29 = (mpHIO->mSwim.m.mUnderwaterMaxSpeed + mpHIO->mSwim.m.mUnderwaterButtonAdditionalSpeed) *
+                       outfitSwimMult;
+        const f32 underwaterMax = mpHIO->mSwim.m.mUnderwaterMaxSpeed * outfitSwimMult;
+#else
         f32 temp_f29 = mpHIO->mSwim.m.mUnderwaterMaxSpeed + mpHIO->mSwim.m.mUnderwaterButtonAdditionalSpeed;
+        const f32 underwaterMax = mpHIO->mSwim.m.mUnderwaterMaxSpeed;
+#endif
 
         field_0x3478 = mpHIO->mSwim.m.mUnderwaterMinAnmSpeed;
         field_0x347c = mpHIO->mSwim.m.mUnderwaterMaxAnmSpeed;
 
-        if (mMaxSpeed < mpHIO->mSwim.m.mUnderwaterMaxSpeed) {
-            mMaxSpeed = mpHIO->mSwim.m.mUnderwaterMaxSpeed;
+        if (mMaxSpeed < underwaterMax) {
+            mMaxSpeed = underwaterMax;
         } else if (doTrigger()) {
             mMaxSpeed += 0.75f;
             if (mMaxSpeed > temp_f29) {
@@ -683,7 +728,7 @@ void daAlink_c::setSwimMoveAnime() {
                 mProcVar5.field_0x3012 = 1;
             }
         } else if (!checkSwimMoveHandAnime()) {
-            cLib_chaseF(&mMaxSpeed, mpHIO->mSwim.m.mUnderwaterMaxSpeed, 0.4f);
+            cLib_chaseF(&mMaxSpeed, underwaterMax, 0.4f);
         }
 
         var_f31 = 1.0f / mpHIO->mSwim.m.mUnderwaterMaxSpeed;
@@ -713,7 +758,11 @@ void daAlink_c::setSwimMoveAnime() {
         if (checkSwimDashMode()) {
             field_0x3478 = mpHIO->mSwim.m.mDashMinAnmSpeed;
             field_0x347c = mpHIO->mSwim.m.mDashMaxAnmSpeed;
+#if TARGET_PC
+            mMaxSpeed = dAlbwOutfitStats_scaleSwimSpeed(this, mpHIO->mSwim.m.mDashMaxSpeed);
+#else
             mMaxSpeed = mpHIO->mSwim.m.mDashMaxSpeed;
+#endif
         } else {
             field_0x3478 = mpHIO->mSwim.m.mForwardMinAnmSpeed;
             field_0x347c = mpHIO->mSwim.m.mForwardMaxAnmSpeed;
@@ -894,7 +943,11 @@ void daAlink_c::setSwimUpDownOffset() {
 int daAlink_c::procSwimUpInit() {
     commonProcInit(PROC_SWIM_UP);
 
-    if (field_0x3000 != 0 && !checkZoraWearAbility()) {
+    if (field_0x3000 != 0 && !checkZoraWearAbility()
+#if TARGET_PC
+        && !dAlbwOutfitStats_allowsSubmergedSwim(this)
+#endif
+    ) {
         mNormalSpeed = 0.0f;
     }
 

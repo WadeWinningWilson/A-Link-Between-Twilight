@@ -2,7 +2,7 @@
 
 **Status:** Product spec — **not implemented**. Research and design lock for the Outfit Stats chat.
 
-**Related:** [Quick-Resistance Work.md](Interconnected%20Chats/Quick-Resistance%20Work.md) · [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) · [sumo-combat.md](sumo-combat.md) · [albw-port.md](albw-port.md)
+**Related:** [Outfit Stats Roadmap.md](Outfit-Stats-Roadmap.md) · [albw-zora-barrier.md](albw-zora-barrier.md) · [Quick-Resistance Work.md](Interconnected%20Chats/Quick-Resistance%20Work.md) · [Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md) · [sumo-combat.md](sumo-combat.md) · [albw-port.md](albw-port.md)
 
 ---
 
@@ -105,6 +105,10 @@ When Outfit Stats is enabled:
 
 Zora already ignores oxygen timer (`checkOxygenTimer`); unchanged unless product says otherwise.
 
+### 3.3 Zora electric barrier (optional — separate spec)
+
+MM-inspired **hold R1 + B** electric field while submerged — **not** part of §3.1–3.2 speed/dive. Full spec: [albw-zora-barrier.md](albw-zora-barrier.md). Roadmap Phase D in [Outfit Stats Roadmap.md](Outfit-Stats-Roadmap.md).
+
 ---
 
 ## 4. Relationship to other ALBW systems
@@ -134,7 +138,7 @@ Zora already ignores oxygen timer (`checkOxygenTimer`); unchanged unless product
 
 ## 6. Implementation path (Outfit Stats chat — 2026-06-28)
 
-**Status:** Planning lock — **not implemented**. Ship **Magic Armor fixes first** (separate track, toggle-independent); then Outfit Stats phases below.
+**Status:** Planning lock — **not implemented**. **Executable roadmap:** [Outfit Stats Roadmap.md](Outfit-Stats-Roadmap.md). Ship **Magic Armor fixes first** (separate track); then Phases A–F below.
 
 ### Recommended order
 
@@ -154,7 +158,7 @@ Phase 5 — Sumo offensive kit
 Phase 6 — Docs + playtest matrix
 ```
 
-**Quick-Resistance** (recovery tax, provisional wood meter spend) is a **parallel track** — not blocking Outfit Stats except where Sumo wood HS meter rules need a single owner (see Phase 5).
+- **Sword / meter spend values** — **not** in Outfit Stats. Documented in [Quick-Resistance §5](Interconnected%20Chats/Quick-Resistance%20Work.md) as **⚠ PROVISIONAL** (do not ship until product revises). Live code has its own baseline drains in `d_meter2.cpp`.
 
 ### Phase 0 — Lock before coding
 
@@ -296,6 +300,7 @@ After Magic Armor + Outfit Stats land, re-run Quick-Sumo re-test matrix subset:
 | 2026-06-28 | Implementation path locked (§6); Magic Armor fixes ship before Outfit Stats phases |
 | 2026-06-28 | Outfit Stats **independent** of Quick Swap mode; interactions documented (§7) |
 | 2026-06-28 | Deity shop/session spec → [albw-deity-armor-shop.md](albw-deity-armor-shop.md) (not quick-swappable; 5000/session; Magic row = OFF) |
+| 2026-06-28 | Zora barrier (R1+B, swim only) → [albw-zora-barrier.md](albw-zora-barrier.md); roadmap → [Outfit-Stats-Roadmap.md](Outfit-Stats-Roadmap.md) |
 
 ---
 
@@ -310,3 +315,23 @@ After Magic Armor + Outfit Stats land, re-run Quick-Sumo re-test matrix subset:
 | 5 | Non-Zora “allow diving” | Surface dive only vs full underwater locomotion like Zora |
 | 6 | Zora grace timer on outfit swap | Keep grace across cloth change vs clear on swap (**lean: keep**) |
 | 7 | Magic Armor under-500 rupee cost + clean +300 taint rule | See §6 Phase 0 |
+
+### Zora grace HUD — handoff for visual pass (not implemented)
+
+**Goal:** Player can see when Zora **1.5×** water/grace buff is active (especially the **3 min post-water** grace on land).
+
+**Data already wired (no draw code):**
+
+- `dAlbwOutfitStats_isZoraWaterBuffActive()` — buff applies to damage mult
+- `dAlbwOutfitStats_getZoraGraceFramesRemaining()` — countdown frames (`kAlbwOutfitStatsZoraGraceFrames` = 180×30)
+- Timer tick: `dAlbwOutfitStats_updateSwimState()` from `dAlbwSumoTest_exec()`
+
+**Suggested approaches (pick one for Claude / HUD chat):**
+
+| Option | Hook | Notes |
+|--------|------|--------|
+| **A — Heart outline** | `dMeter2Draw_c::drawLife()` after `changeTextureLife` | Cyan/teal `mpHeartMark[i]` alpha pulse or extra BPK when buff active; LoP Health Bar mode may need a parallel branch. |
+| **B — Oxygen-adjacent bar** | After `drawOxygen()` in `d_meter2_draw.cpp` | Thin bar under oxygen: full = in water, draining = grace; hide when not Zora target or timer 0. |
+| **C — Debug-first** | Gate on `showWardrobeRecoveryDebug` or new `showOutfitStatsDebug` | Text: `Zora grace MM:SS` + in-water flag; ship art later. |
+
+**Constraints:** Gate on `game.outfitStats` + Zora target outfit; follow LoP HUD cache rules in [hud-performance-handoff.md](hud-performance-handoff.md); hide in wolf form.

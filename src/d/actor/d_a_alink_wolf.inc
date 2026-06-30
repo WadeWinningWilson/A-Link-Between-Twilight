@@ -349,6 +349,31 @@ void daAlink_c::changeLink(int param_0) {
         if (dAlbwSumoTest_wantLinkCap()) {
             J3DModelData* capData =
                 static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_head.bmd"));
+            // ============================================
+            // TEMP DIAGNOSTIC — ALBW Port (Link Hat falls back to the topknot)
+            // The draw log showed the sumo hat is a 1-material model = the alSumou topknot, not
+            // al_head (2 materials), even with the Link Hat toggle ON.  So capData (al_head from
+            // l_kArcName / Kmdl) is NULL at sumo-build time -> the fallback below.  Log WHY:
+            // kResInfo NULL  = Kmdl never registered (not loaded for this base).
+            // kResInfo set, kArchive NULL = registered but freed/mid-load (aliasing class).
+            // kArchive set but al_head NULL = arc resident but lacks al_head.bmd.
+            // Logged only when the resolved-state or base arc changes (event, not per-frame).
+            // STRIP before push.
+            // ============================================
+            {
+                static const char* s_capDbgArc      = NULL;
+                static int         s_capDbgResolved  = -1;
+                const int resolved = (capData != NULL) ? 1 : 0;
+                if (resolved != s_capDbgResolved || l_kArcName != s_capDbgArc) {
+                    s_capDbgResolved = resolved;
+                    s_capDbgArc      = l_kArcName;
+                    dRes_info_c* kInfo =
+                        g_dComIfG_gameInfo.mResControl.getObjectResInfo(l_kArcName);
+                    DuskLog.debug("ALBW-CAP build wantCap=1 arc={} al_head={} kResInfo={} kArchive={}",
+                                  l_kArcName, (void*)capData, (void*)kInfo,
+                                  (void*)(kInfo != NULL ? kInfo->getArchive() : NULL));
+                }
+            }
             if (capData == NULL) {
                 capData = static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33));
             }
@@ -422,10 +447,18 @@ void daAlink_c::changeLink(int param_0) {
         }
 
 #if TARGET_PC
-        if (dComIfGs_getRupee() != 0 || dusk::getSettings().game.armorRupeeDrain.getValue() != dusk::MagicArmorMode::NORMAL)
-#else
-        if (dComIfGs_getRupee() != 0)
-#endif
+        if (dusk::getSettings().game.armorRupeeDrain.getValue() == dusk::MagicArmorMode::ALBW) {
+            if (!dMeter2_isALBWArmorDepleted() && dComIfGs_getRupee() >= 500) {
+                if (setMagicArmorBrk(1)) {
+                    mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                    mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+                }
+            } else if (setMagicArmorBrk(0)) {
+                mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+            }
+        } else if (dComIfGs_getRupee() != 0 ||
+                   dusk::getSettings().game.armorRupeeDrain.getValue() != dusk::MagicArmorMode::NORMAL)
         {
             if (setMagicArmorBrk(1)) {
                 mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
@@ -435,6 +468,17 @@ void daAlink_c::changeLink(int param_0) {
             mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
             mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
         }
+#else
+        if (dComIfGs_getRupee() != 0) {
+            if (setMagicArmorBrk(1)) {
+                mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+            }
+        } else if (setMagicArmorBrk(0)) {
+            mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+            mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+        }
+#endif
     } else {
         mpLinkModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al.bmd")), 0);
         mpLinkHatModel =

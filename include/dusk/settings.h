@@ -310,6 +310,8 @@ struct UserSettings {
         // Editor-only: show Magic Armor as rentable before story strip. Save ownership is unchanged
         // when this is turned off (stash / equip bits are not cleared).
         ConfigVar<bool> albwMagicArmorRentableDebug;
+        // Cloth damage mults, swim buffs, Sumo offensive kit — see docs/Outfit Stats.md.
+        ConfigVar<bool> outfitStats;
         // File log of Darknut ALBW bash/guard-break state (Documents/dusklight/albw_darknut_debug.txt).
         ConfigVar<bool> showDarknutBashDebug;
         // Right stick cycles nearby battle enemies instead of manual lock-on camera.

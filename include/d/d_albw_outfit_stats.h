@@ -1,0 +1,42 @@
+#ifndef D_ALBW_OUTFIT_STATS_H
+#define D_ALBW_OUTFIT_STATS_H
+
+// ============================================
+// NEW CODE — ALBW Port (Outfit Stats)
+// Master toggle + query helpers for cloth damage mults, swim buffs, Sumo kit.
+// See docs/Outfit Stats.md and docs/Outfit-Stats-Roadmap.md.
+// ============================================
+#if TARGET_PC
+
+#include "d/d_albw_outfit.h"
+#include "dolphin/types.h"
+
+class daAlink_c;
+
+constexpr int kAlbwOutfitStatsZoraGraceFrames = 180 * 30;
+
+bool dAlbwOutfitStats_isEnabled();
+
+dAlbwOutfitKind dAlbwOutfitStats_getActiveOutfitKind();
+
+// Incoming damage mult when enabled (1.0 = vanilla). Phase B hooks damageMagnification().
+f32 dAlbwOutfitStats_getReceivedDamageMult();
+
+// Sumo + wooden sword + no shield offensive kit (Phase E).
+bool dAlbwOutfitStats_isSumoOffensiveKitActive();
+
+// Phase C — swim speed (+5% all, +10% Zora) and non-Zora submerged locomotion.
+f32 dAlbwOutfitStats_getSwimSpeedMult(const daAlink_c* link);
+f32 dAlbwOutfitStats_scaleSwimSpeed(const daAlink_c* link, f32 speed);
+bool dAlbwOutfitStats_allowsSubmergedSwim(const daAlink_c* link);
+// Non-Zora submerged locomotion active now (outfit-stats dive path).
+bool dAlbwOutfitStats_isSubmergedHumanSwim(const daAlink_c* link);
+
+// Zora water grace timer — call updateSwimState() from Link execute each frame.
+bool dAlbwOutfitStats_isZoraWaterBuffActive();
+int  dAlbwOutfitStats_getZoraGraceFramesRemaining();
+void dAlbwOutfitStats_updateSwimState(class daAlink_c* link);
+
+#endif  // TARGET_PC
+
+#endif /* D_ALBW_OUTFIT_STATS_H */

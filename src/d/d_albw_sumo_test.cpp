@@ -13,6 +13,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_save.h"
 #include "d/d_albw_outfit.h"
+#include "d/d_albw_outfit_stats.h"
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_phase.h"
 
@@ -192,6 +193,7 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     }
 
     dAlbwOutfit_syncWornOwnership();
+    dAlbwOutfitStats_updateSwimState(i_link);
 
     // ============================================
     // NEW CODE — ALBW Port (death turns the sumo overlay OFF; user decision 2026-06-29)
