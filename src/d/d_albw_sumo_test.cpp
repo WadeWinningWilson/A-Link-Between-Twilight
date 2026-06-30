@@ -82,12 +82,13 @@ bool nativeClothesResourcesReady() {
 // mode that made an unconditional Kmdl release double-free over a Hero's base (where
 // the pipeline's Kmdl and a sumo-side Kmdl alias one refcount).
 //
-// NOTE (2026-06-30): an attempt to generalise this donor to ALL non-Hero's bases (so
-// the Link Hat's al_head would resolve over Ordon/Magic too) was REVERTED — it churned
-// Kmdl load/release across base switches and left mpLinkHatModel dangling at al_head
-// when releaseFaceDonor freed Kmdl, which the shadow pass (addRealShadow) then drew ->
-// J3DShape::drawFast crash on shop-buy-Zora / rapid switching.  Cap-on-all-bases is
-// entangled with the dual-Kmdl problem and belongs to the model-agnostic cap redesign.
+// HISTORY (2026-06-30): an earlier generalise-to-all-non-Hero's attempt was REVERTED — it
+// left mpLinkHatModel dangling at al_head when this freed Kmdl, and the UNGUARDED shadow pass
+// (addRealShadow) drew it -> J3DShape::drawFast crash on shop-buy-Zora / rapid switching.
+// RE-IMPLEMENTED for cap-on-all-bases: the load is still gated to non-Hero's bases (where our
+// Kmdl is independent of the pipeline's mpArcHeap), AND the free below now bumps the clothes
+// epoch via dAlbwAlink_invalidateClothesEpoch(), so draw()/shadowDraw skip the stale cap until
+// the next changeLink rebuild — closing the exact shadow-crash vector that forced the revert.
 // ============================================
 void releaseFaceDonor() {
     if (sKmdlPhase.id == 2) {
@@ -99,6 +100,14 @@ void releaseFaceDonor() {
                       albwArcArchive(kCapArcName));
 #endif
         dComIfG_resDelete(&sKmdlPhase, kCapArcName);  // decCount; clears id to 0
+        // The sumo cap (mpLinkHatModel) and/or face may have been built from this Kmdl's
+        // al_head/al_face.  This decCount is OUTSIDE Link's own mpArcHeap->freeAll(), so it does
+        // NOT bump the clothes epoch -> draw()/shadowDraw would still treat the cap as live and
+        // the shadow pass (addRealShadow -> J3DShape::drawFast) would walk the freed al_head (the
+        // documented donor-release crash).  Invalidate the clothes generation so Link's models
+        // are skipped until the next changeLink rebuilds + re-stamps them (a <=1-frame skip on
+        // the transition, vs a crash).
+        dAlbwAlink_invalidateClothesEpoch();
     } else {
         cPhs_Reset(&sKmdlPhase);                      // abandon any in-flight / idle request
     }
@@ -110,15 +119,19 @@ bool resourcesReady() {
             return false;
         }
     }
-    // Face donor: the sumo body borrows al_face.bmd from the resident base arc.  Only
-    // the Zora base (Zmdl) lacks al_face, so keep Kmdl resident as the face source for
-    // that base ALONE (changeLink()'s sumo face block falls back to Kmdl only when
-    // checkZoraWearFlg()).  Gating the Kmdl load to the Zora base is what prevents the
-    // dual-Kmdl heap aliasing: over a Hero's base the pipeline's Kmdl lives in Link's
-    // mpArcHeap and a second refcount here would dangle on that heap's freeAll().  (The
-    // Link Hat's al_head therefore resolves only over Hero's/Zora for now — see the
-    // releaseFaceDonor note; cap-on-all-bases waits on the model-agnostic cap work.)
-    if (daAlink_c::checkZoraWearFlg()) {
+    // Cap + face donor: keep Kmdl resident over every NON-Hero's base so changeLink's sumo
+    // block resolves al_head.bmd (the Link cap) AND al_face.bmd there.  Over Hero's the clothes
+    // pipeline already owns Kmdl in its own mpArcHeap, so a second refcount here would dangle on
+    // that heap's freeAll() (the dual-Kmdl aliasing) -- keep EXCLUDING Hero's; the pipeline's
+    // Kmdl serves the cap there.  Over Ordon/Magic/Zora the pipeline owns Bmdl/Mmdl/Zmdl, so our
+    // Kmdl is an INDEPENDENT resource-manager entry -- the proven-safe Zora case, now generalised
+    // for cap-on-all-bases.  releaseFaceDonor()'s free is made shadow-safe by bumping the clothes
+    // epoch (see there).  Before generalising, al_head resolved only over Hero's/Zora and the cap
+    // fell back to the topknot over Ordon/Magic (confirmed by the ALBW-CAP build probe: kResInfo=0).
+    const bool pipelineOwnsKmdl = !daAlink_c::checkCasualWearFlg() &&
+                                  !daAlink_c::checkZoraWearFlg() &&
+                                  !daAlink_c::checkMagicArmorWearFlg();
+    if (!pipelineOwnsKmdl) {
         if (dComIfG_resLoad(&sKmdlPhase, kCapArcName) != cPhs_COMPLEATE_e) {
             return false;
         }

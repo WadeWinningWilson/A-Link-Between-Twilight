@@ -8509,4 +8509,17 @@ inline daAlink_c* daAlink_getAlinkActorClass() {
     return (daAlink_c*)dComIfGp_getLinkPlayer();
 }
 
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (cap/face-donor lifecycle safety)
+// Bump Link's clothes-model generation so draw()/shadowDraw skip the body/face/hat/hand
+// models until the next changeLink re-stamps the epoch.  The sumo module calls this when it
+// frees the Kmdl cap/face donor OUTSIDE Link's own freeAll (which is the only thing that
+// bumps the epoch normally), so the shadow pass (addRealShadow -> J3DShape::drawFast) cannot
+// draw a cap left dangling at the freed al_head — the documented releaseFaceDonor crash.
+// Defined in d_a_alink.cpp.
+// ============================================
+void dAlbwAlink_invalidateClothesEpoch();
+#endif
+
 #endif /* D_A_D_A_ALINK_H */

@@ -128,6 +128,13 @@ static u32 s_albwArcEpoch = 0;
 static u32 s_albwClothesModelEpoch = 0;
 
 // ============================================
+// NEW CODE — ALBW Port (cap/face-donor lifecycle safety — declared in d_a_alink.h)
+// External linkage so the sumo module can invalidate the clothes generation when it frees the
+// Kmdl cap/face donor (a free that, unlike the pipeline's freeAll, does not bump the epoch).
+// ============================================
+void dAlbwAlink_invalidateClothesEpoch() { ++s_albwArcEpoch; }
+
+// ============================================
 // NEW CODE — ALBW Port (universal model-state consistency token)
 // Encodes the draw-relevant identity of Link's clothes models (wolf / sumo-body / wear
 // kind).  changeLink/changeWolf stamp s_albwBuiltModelState with the token the models were
