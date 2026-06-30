@@ -20397,6 +20397,23 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
     static const GXColorS10 notColor0 = {0x00, 0x00, 0x00, 0xFF};
     J3DGXColorS10* var_r31;
 
+    // ============================================
+    // NEW CODE — ALBW Port (Cap Wear recolor safety)
+    // The recolor below indexes the HAT material by the wear-flag branch (Magic touches hat
+    // mats 1+2, Zora mat 1, Hero's/casual mat 0).  With Cap Wear a foreign cap can be on Link
+    // (e.g. the green al_head, 2 mats, over a Magic body whose branch writes hat mat 2) -> an
+    // off-the-end read.  Guard every mpLinkHatModel material write by the cap's ACTUAL count so
+    // a mismatched cap recolors only what it has.  ALBW_HAT_TEV is also used by the existing
+    // wear-flag branches (harmless: a native cap always has the expected material).
+    // ============================================
+    J3DModelData* const albwHatMd = (mpLinkHatModel != NULL) ? mpLinkHatModel->getModelData() : NULL;
+    const u16 albwHatMatNum = (albwHatMd != NULL) ? albwHatMd->getMaterialNum() : 0;
+#define ALBW_HAT_TEV(idx)                                                  \
+    do {                                                                   \
+        if (albwHatMd != NULL && albwHatMatNum > (u16)(idx))               \
+            albwHatMd->getMaterialNodePointer(idx)->setTevColor(1, i_color); \
+    } while (0)
+
     if (&field_0x32a0[0] == i_color) {
         if (checkNoResetFlg2(FLG2_UNK_80000) || checkZoraWearAbility() ||
             checkMagicArmorWearAbility())
@@ -20419,7 +20436,7 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(13)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(0)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(1)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(1)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(1);
             }
 #if TARGET_PC
         // Only run the Magic Armor material ops on the REAL Mmdl model — the Kmdl
@@ -20439,8 +20456,8 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(9)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(8)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(6)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(2)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(1)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(2);
+            ALBW_HAT_TEV(1);
             }
         } else if (checkCasualWearFlg()) {
 #if TARGET_PC
@@ -20448,7 +20465,7 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
 #endif
             {
             field_0x064C->getMaterialNodePointer(7)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(0)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(0);
             field_0x064C->getMaterialNodePointer(5)->setTevColor(1, var_r31);
             }
         } else {
@@ -20461,13 +20478,14 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(0)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(1)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(2)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(0)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(0);
             field_0x064C->getMaterialNodePointer(16)->setTevColor(1, var_r31);
             field_0x064C->getMaterialNodePointer(15)->setTevColor(1, var_r31);
             field_0x064C->getMaterialNodePointer(14)->setTevColor(1, var_r31);
             }
         }
     }
+#undef ALBW_HAT_TEV
 }
 
 void daAlink_c::initTevCustomColor() {
