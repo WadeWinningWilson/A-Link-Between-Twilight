@@ -512,10 +512,13 @@ void daAlink_c::changeLink(int param_0) {
         !checkNoResetFlg2(FLG2_UNK_80000) && !checkWolf()) {
         const bool wantTopknot = dAlbwSumoTest_wantTopknot();
         const char* capArc  = wantTopknot ? "alSumou" : dAlbwSumoTest_capArcName();
-        const char* capName = wantTopknot ? NULL : dAlbwSumoTest_capModelName();
+        const char* capName = wantTopknot ? "topknot(0x33)" : dAlbwSumoTest_capModelName();
+        // None uses the resident alSumou topknot; Green/Red/Blue come from the model-agnostic
+        // INDEPENDENT loader (private array+heap, base-independent, no aliasing).  NULL while it
+        // loads / on failure -> keep the native hat (self-heal re-fires once it's ready).
         J3DModelData* capData =
             wantTopknot ? static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33))
-                        : static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
+                        : dAlbwSumoTest_independentCapData();
 
         // ============================================
         // TEMP DIAGNOSTIC — ALBW Port (#4: non-sumo Cap Wear resolution + geometry)

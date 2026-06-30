@@ -49,6 +49,17 @@ bool dAlbwSumoTest_wantTopknot();
 const char* dAlbwSumoTest_capArcName();    // "Kmdl" (green) / "Mmdl" (red) / "Zmdl" (blue)
 const char* dAlbwSumoTest_capModelName();  // "al_head.bmd" / "ml_head.bmd" / "zl_head.bmd"
 
+// ---- Model-agnostic cap (Phase 2) ------------------------------------------------
+// The cap head models loaded into a PRIVATE resource array + heap the clothes pipeline never
+// indexes (mObjectInfo) and never frees (mpArcHeap->freeAll) -- so the chosen cap resolves on
+// ANY base with no aliasing (the alSumou-style isolation that makes the topknot bulletproof).
+class J3DModelData;
+// Drive the async load of the currently-selected cap arc one step (call once per frame, early).
+void dAlbwSumoTest_tickCapLoad();
+// The independent cap J3DModelData for the current game.capWear (Green/Red/Blue); NULL while
+// loading, on failure, or for Off/None.  changeLink's non-sumo override builds the cap from this.
+J3DModelData* dAlbwSumoTest_independentCapData();
+
 // ---- Shop integration (Sumo Outfit purchase) ----------------------------------
 // True once the Sumo Outfit has been bought (save-backed ownership bit).  This is
 // the foundation brick of the planned stored-armors / quick-swap system.

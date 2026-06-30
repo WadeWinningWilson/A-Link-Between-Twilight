@@ -16,7 +16,6 @@
 #include <cstring>
 
 #if TARGET_PC
-#include "d/d_ww_itemmdl_pc.h"
 #include "dusk/settings.h"
 #endif
 
@@ -444,7 +443,14 @@ void daDitem_c::set_mtx() {
 
 void daDitem_c::setTevStr() {
     g_env_light.settingTevStruct(14, &current.pos, &tevStr);
+#if TARGET_PC
+    // Locked WW bdl3 materials fault when MAJI patches lights/amb on them (first get-item draw).
+    if (!useWwItemmdlBowGetItem(m_itemNo)) {
+        g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
+    }
+#else
     g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
+#endif
 }
 
 void daDitem_c::setListStart() {}
@@ -587,21 +593,7 @@ int daDitem_c::draw() {
         break;
     }
 
-#if TARGET_PC
-    const bool ww_bow = useWwItemmdlBowGetItem(m_itemNo);
-    if (ww_bow) {
-        dWwItemmdl_suppressOutlineForDraw(mpModel->getModelData());
-    }
-#endif
-
     DrawBase();
-
-#if TARGET_PC
-    if (ww_bow) {
-        dWwItemmdl_restoreOutlineAfterDraw(mpModel->getModelData());
-    }
-#endif
-
     return 1;
 }
 

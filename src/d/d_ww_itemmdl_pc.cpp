@@ -110,11 +110,8 @@ static J3DModelData* loadFromResourcePointer(void* res) {
             J3DModelLoaderDataBase::loadBinaryDisplayList(res, kItemmdlBdlLoadFlags));
     }
 
-    J3DModelData* model_data = static_cast<J3DModelData*>(res);
-    if (model_data->getMaterialNum() > 0) {
-        return model_data;
-    }
-
+    // Aurora may return an already-instantiated J3DModelData* for BDL entries. That object is
+    // archive-resident; do not attach it to demo-item heap or mutate it during draw.
     return NULL;
 }
 

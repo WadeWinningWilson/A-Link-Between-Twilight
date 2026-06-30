@@ -11,11 +11,23 @@
 
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_resorce.h"
 #include "d/d_save.h"
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_outfit_stats.h"
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_phase.h"
+#include "m_Do/m_Do_ext.h"
+#include "JSystem/J3DGraphAnimator/J3DModelData.h"
+
+// ============================================
+// DEBUG — model-agnostic cap loader (Phase 2).  Logs the private mount/load lifecycle so the
+// independent cap path is diagnosable in-game.  STRIP (set 0) before any upstream push.
+// ============================================
+#define D_ALBW_CAP_DEBUG 1
+#if D_ALBW_CAP_DEBUG
+#include "dusk/logging.h"  // DuskLog (OSReport is disabled in-game; DuskLog reaches the log)
+#endif
 
 // ============================================
 // TEMP INSTRUMENTATION — arc/model lifecycle trace (cycling-crash Step 1).
@@ -53,6 +65,109 @@ constexpr int kSumoBodyResIdx = 0x31;
 constexpr const char* kCapArcName = "Kmdl";
 constexpr int kSumoOwnedBit       = 689;
 constexpr int kSumoWrestlerMetBit = 690;
+
+// ============================================
+// NEW CODE — ALBW Port (GLOBAL Cap Wear — model-agnostic independent cap loader, Phase 2)
+// Load each cap head model (al_head/Kmdl, ml_head/Mmdl, zl_head/Zmdl) through the ENGINE'S OWN
+// loader (mount + loaderBasicBmd + textures) but into a PRIVATE dRes_info_c array (s_capInfo) and a
+// private heap (s_capHeap) -- NOT the clothes pipeline's mObjectInfo / mpArcHeap.  dRes_control_c's
+// static setRes/syncRes/getRes search ONLY the array we pass, so this entry is invisible to the
+// pipeline and its mpArcHeap->freeAll() never frees it.  Result: the cap J3DModelData is persistent
+// and BASE-INDEPENDENT -- the chosen cap resolves on EVERY base with zero aliasing (the alSumou-style
+// isolation that makes the topknot bulletproof).  Loaded once on demand, kept for the session (never
+// released during play -> no deleteArchiveRes release-churn crash).  Fail-safe at every step: any
+// failure leaves s_capData NULL so changeLink keeps the native hat (never builds from NULL).
+// ============================================
+constexpr int kCapKindNum = 3;  // 0 green/Kmdl/al_head, 1 red/Mmdl/ml_head, 2 blue/Zmdl/zl_head
+const char* const kCapKindArc[kCapKindNum] = {"Kmdl", "Mmdl", "Zmdl"};
+const char* const kCapKindBmd[kCapKindNum] = {"al_head.bmd", "ml_head.bmd", "zl_head.bmd"};
+constexpr u32 kCapHeapSize = 0x100000;  // 1 MB / cap arc (clothes arc ~651 KB + data); fail-safe if short
+
+dRes_info_c   s_capInfo[kCapKindNum];                  // PRIVATE array (NOT the pipeline's mObjectInfo)
+JKRSolidHeap* s_capHeap[kCapKindNum]  = {NULL, NULL, NULL};
+J3DModelData* s_capData[kCapKindNum]  = {NULL, NULL, NULL};
+u8            s_capState[kCapKindNum] = {0, 0, 0};     // 0 idle, 1 loading, 2 ready, 3 failed
+
+// game.capWear -> cap kind index, or -1 for Off/None (no independent cap).
+int capWearKind() {
+    switch (dusk::getSettings().game.capWear.getValue()) {
+        case dusk::CapWearMode::Green: return 0;
+        case dusk::CapWearMode::Red:   return 1;
+        case dusk::CapWearMode::Blue:  return 2;
+        default:                       return -1;  // Off / None
+    }
+}
+
+// Drive the independent load for one cap kind one step.  Returns the model data when ready, else NULL.
+J3DModelData* ensureIndependentCap(int kind) {
+    if (kind < 0 || kind >= kCapKindNum) return NULL;
+    if (s_capState[kind] == 2) return s_capData[kind];  // ready
+    if (s_capState[kind] == 3) return NULL;             // failed (don't retry-spam / re-mount)
+
+    if (s_capHeap[kind] == NULL) {
+        s_capHeap[kind] = mDoExt_createSolidHeapFromGame(kCapHeapSize, 0x20);
+        if (s_capHeap[kind] == NULL) {
+#if D_ALBW_CAP_DEBUG
+            DuskLog.debug("ALBW-CAPLOAD kind={} arc={} HEAP ALLOC FAILED ({} bytes)", kind,
+                          kCapKindArc[kind], (u32)kCapHeapSize);
+#endif
+            s_capState[kind] = 3;
+            return NULL;
+        }
+    }
+
+    // loadResource() (run inside syncRes when the mount completes) allocates the model's aux data
+    // -- the J3DModelData, material anims, and shared display list -- from the CURRENT heap, not the
+    // heap passed to setRes.  Make our PRIVATE heap current across the load steps so all of it lands
+    // in s_capHeap[kind] (persistent, pipeline-isolated); a transient current heap would dangle.
+    JKRHeap* const prevHeap = JKRGetCurrentHeap();
+    mDoExt_setCurrentHeap(s_capHeap[kind]);
+    J3DModelData* result = NULL;
+
+    bool failed = false;
+    if (s_capState[kind] == 0) {
+        // Kick the mount ONCE (setRes incCounts on repeat -> never call it per-frame while loading).
+        if (dRes_control_c::setRes(kCapKindArc[kind], s_capInfo, kCapKindNum, "/res/Object/", 0,
+                                   s_capHeap[kind]) == 0) {
+#if D_ALBW_CAP_DEBUG
+            DuskLog.debug("ALBW-CAPLOAD kind={} arc={} setRes FAILED", kind, kCapKindArc[kind]);
+#endif
+            s_capState[kind] = 3;
+            failed = true;
+        } else {
+            s_capState[kind] = 1;
+        }
+    }
+
+    if (!failed && s_capState[kind] == 1) {
+        // Poll until the mount + resource load completes (syncRes: >0 loading, 0 done, <0 error).
+        const int sync = dRes_control_c::syncRes(kCapKindArc[kind], s_capInfo, kCapKindNum);
+        if (sync < 0) {
+#if D_ALBW_CAP_DEBUG
+            DuskLog.debug("ALBW-CAPLOAD kind={} arc={} syncRes ERROR={}", kind, kCapKindArc[kind],
+                          sync);
+#endif
+            s_capState[kind] = 3;
+        } else if (sync == 0) {
+            J3DModelData* md = static_cast<J3DModelData*>(
+                dRes_control_c::getRes(kCapKindArc[kind], kCapKindBmd[kind], s_capInfo, kCapKindNum));
+            s_capData[kind]  = md;
+            s_capState[kind] = (md != NULL) ? 2 : 3;
+            result           = md;
+#if D_ALBW_CAP_DEBUG
+            DuskLog.debug(
+                "ALBW-CAPLOAD kind={} arc={} bmd={} LOADED data={} joints={} shapes={} mats={}", kind,
+                kCapKindArc[kind], kCapKindBmd[kind], (void*)md,
+                md ? md->getJointNum() : 0xFFFF, md ? md->getShapeNum() : 0xFFFF,
+                md ? md->getMaterialNum() : 0xFFFF);
+#endif
+        }
+        // sync > 0: still loading -> result stays NULL.
+    }
+
+    mDoExt_setCurrentHeap(prevHeap);
+    return result;
+}
 
 const char* baseClothesArc() {
     if (daAlink_c::checkCasualWearFlg())     return "Bmdl";
@@ -224,22 +339,16 @@ bool nativeCapResourcesReady() {
     }
 
     // ============================================
-    // Green / Red / Blue — STABILIZED (clothes-arc donors REMOVED; model-agnostic load is WIP).
-    // The cap head models live in the clothes BASE arcs (al_head=Kmdl, ml_head=Mmdl, zl_head=Zmdl).
-    // Holding one as an off-base donor aliases the clothes pipeline's mpArcHeap->freeAll() (which
-    // bypasses the refcount and REUSES heap slots), so during rapid quick-switches the donor's
-    // archive dangles and the release path frees an already-freed archive -> dRes_info_c::
-    // deleteArchiveRes on 0xffffffffffffffff (the quick-switch crash).  Unlike alSumou (None),
-    // these arcs ARE the pipeline's, so they can never be safely held independently this way.
-    // So: drop every clothes-arc donor here.  changeLink's override then resolves the cap ONLY
-    // where the arc IS the live base (green=Hero's, red=Magic, blue=Zora) and keeps the native hat
-    // elsewhere -- crash-free.  TRUE any-cap-any-base comes next from the dedicated-heap cap load
-    // (an independent JKRArchive the clothes pipeline never frees -- the alSumou-style isolation
-    // that makes None bulletproof, applied to the caps).
+    // Green / Red / Blue (Phase 2 — model-agnostic): the cap now loads via the INDEPENDENT loader
+    // (ensureIndependentCap / dAlbwSumoTest_tickCapLoad) into a private array+heap the clothes
+    // pipeline never frees, so residency is BASE-INDEPENDENT and crash-free -- no clothes-arc donor
+    // (those aliased mpArcHeap->freeAll and crashed on release during quick-switch).  Drop any
+    // sumo-leftover donor and report ready only once the private cap data is loaded, so the override
+    // resolves on every base instead of falling back.
     // ============================================
     releaseFaceDonor();
     releaseCapDonor();
-    return true;
+    return dAlbwSumoTest_independentCapData() != NULL;
 }
 
 void maintainResources(daAlink_c* i_link) {
@@ -302,6 +411,21 @@ bool dAlbwSumoTest_prepareNativeCapChange() {
     return nativeCapResourcesReady();
 }
 
+void dAlbwSumoTest_tickCapLoad() {
+    const int kind = capWearKind();
+    if (kind >= 0) {
+        ensureIndependentCap(kind);  // drive the selected cap's independent load (cheap once ready)
+    }
+}
+
+J3DModelData* dAlbwSumoTest_independentCapData() {
+    const int kind = capWearKind();
+    if (kind < 0 || s_capState[kind] != 2) {
+        return NULL;
+    }
+    return s_capData[kind];
+}
+
 void dAlbwSumoTest_onNativeOutfitEquipped() {
     sShowWeapons = false;
 }
@@ -316,6 +440,7 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     }
 
     dAlbwOutfit_syncWornOwnership();
+    dAlbwSumoTest_tickCapLoad();  // drive the model-agnostic cap load (base-independent, once-only)
     dAlbwOutfitStats_updateSwimState(i_link);
 
     // ============================================
