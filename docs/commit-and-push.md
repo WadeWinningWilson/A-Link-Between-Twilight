@@ -40,14 +40,15 @@ Drive/CoNavigate tooling belongs in `local_dev_backup/` (gitignored) or on anoth
 ## Before commit
 
 1. **Only commit when you explicitly want to** (or after playtest approval).
-2. If gameplay/HUD changed, rebuild and spot-check:
+2. **Cross-chat scope — ASK the user.** The working tree usually holds uncommitted WIP from *other* feature chats (Magic Armor, wardrobe, HUD, quick-swap, etc.). Do **not** silently exclude another chat's work, hedge in the commit message about "whose chat it belongs to," or assume chat-scoped commits. **Ask the user whether they want all work committed regardless of chat source.** Standing user preference (2026-06-30): **commit everything** — a full `git add -A` snapshot, no splitting by chat ownership (debug dumps / build artifacts from "Never commit" still excluded).
+3. If gameplay/HUD changed, rebuild and spot-check:
 
 ```powershell
 cmd /c build_run.bat
 # Exe: build\windows-msvc-relwithdebinfo\dusklight.exe
 ```
 
-3. Review scope:
+4. Review scope:
 
 ```powershell
 git status
