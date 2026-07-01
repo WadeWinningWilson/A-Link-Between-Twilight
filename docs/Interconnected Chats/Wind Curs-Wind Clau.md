@@ -7,20 +7,20 @@
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
-| **Status (2026-06-30)** | **Get-item bow DONE** (geometry + steady WW orange). **Next:** #4 brightness (struct-0 + MAJI), callback lifetime audit (4A), warp test. Target = soft cel gradient + white tips + arrow (see TARGET below). |
+| **Status (2026-07-01)** | **Color ✅ stable** (4B ambient-only + 2B‴). **Still too bright** — tune 75% amb scalar down next; do not re-enable MAJI. |
 
 ---
 
 ## ▶ RESUME HERE (fresh-chat handoff — 2026-06-30)
 
-**One-line state:** **Get-item bow functionally complete** — whole bow + arrow, steady WW orange (persistent 2B‴ + struct-0). **Polish:** overbright wash hides orange gradient / white tips / arrow detail → **#4 brightness** (struct-0 + MAJI fair retest in tree). **Safety:** **4A** callback lifetime audit (owner id + room-change clear + replay cancel on warp).
+**One-line state:** **4B landed — stable WW orange** indoors/outdoors (struct-0 + ambient-only + persistent 2B‴). **Known nit:** still **too bright** vs reference; next = lower amb scale (not MAJI). Detail path preserved vs MAJI flat wash.
 
-**Active draw path:** 2N′ bake-once + single `modelUpdateDL` + persistent 2B‴ mat-post-DL hook + struct **0** + **MAJI** + `dComIfGd_setList()` + both materials (no 2K).
+**Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4B ambient-only** + `dComIfGd_setList()` + both materials (no 2K).
 
 **Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear.
 
 **Fresh Wind Clau opener (paste):**
-> Continue as Wind Clau on WW `itemmdl` bow. Read `docs/Interconnected Chats/Wind Curs-Wind Clau.md` — **▶ RESUME HERE** + **TARGET clarified**. Get-item bow done (steady orange). Tune #4 brightness against reference (soft cel gradient, white tips, arrow). 4A callback audit in tree. Test warp. Do not regress geometry or 2B‴ recipe.
+> Continue as Wind Clau on WW `itemmdl` bow. Read **▶ RESUME HERE** + **▶ Interconnected pass — MAJI kills detail (2026-06-30)**. struct-0 + MAJI improved exposure but erased tips/gradient/arrow detail; outdoor angle swing returned. 4B ambient-only in tree. Replay for detail + stable color. Target = soft cel gradient, white tips, nocked arrow.
 
 **Hard-won facts a new chat must not re-derive (all confirmed):**
 - The long "flaky crash" was a **CRT fast-fail `0xC0000409`** = **unhandled `std::out_of_range`** from `std::bitset<8>::set()` in Aurora `shader_info.cpp` `color_arg_reg_info` — a TEV stage read a texture with **`texMapId = GX_TEXMAP_NULL (0xFF)`**; `CHECK` is a **no-op under `NDEBUG`** so it wasn't caught. **Fixed by A+A′** (guard the `.set()` in `shader_info.cpp` + the WGSL codegen in `shader.cpp`; skip unbound/out-of-range texmaps). Do **not** revert A/A′.
@@ -32,6 +32,29 @@
 - **`shapeNum=2`, `matNum=2`, `jointNum=2`** — no third-shape inventory gap; per-shape dump at load **AVs** (removed; summary only).
 
 **Deep sections:** search this doc for `ROOT CAUSE FOUND`, `Fix A′ (approved)`, `Fix B step 1 — Wind Clau read`, `Fix B bind SUCCEEDED`, `REVERT the struct-0 delegate`, `Interconnected pass`, `First clean playtest`.
+
+---
+
+## ▶ Interconnected pass — MAJI kills detail (2026-06-30)
+
+**User report (post struct-0 + MAJI, commit `64726c4`):**
+- ✅ Color **way better** indoors and outdoors generally (MAJI fixed overbright skip-MAJI wash)
+- ❌ **Visual detail missing everywhere color shows:** white tips, arrow fletching/gold head, orange cel gradient — flat orange fill only
+- ❌ Outdoors: **color/black angle swing returns** at some camera angles (MAJI view-matrix lights on cel surfaces)
+
+**Mechanism (pinned from code + symptoms):**
+
+| Layer | Role | struct-0 + skip-MAJI | struct-0 + MAJI (#4) |
+|-------|------|----------------------|----------------------|
+| **2B‴** | Per-mat texgen+TEV after `callDL` | ✅ Texture samples → true orange + texel detail | ✅ Color samples |
+| **MAJI** | `setAmbColor` + **6 view-matrix lights** on materials | Skipped → amb ~255 → overbright flat | **Crushes cel:** view lights on locked `bdl3`; **SC_Vbow_v** 3-stage pass washed |
+| **Outdoor swing** | View-dependent diffuse | Reduced when textured + persistent hook | **Returns** via MAJI `setLight` + view matrix |
+
+**4B fix (Cursor, in tree):** struct-0 + **`dWwItemmdl_applyBowMaterialAmbientOnly`** (room `AmbCol` on both mats, **no** MAJI lights) + 75% amb scale. Keeps 2B‴ sampling; drops view lighting that erased detail.
+
+**Expected replay:** orange **with** gradient / tips / arrow detail; no outdoor black-out. Tune 75% scalar only if still bright — **do not re-enable MAJI**.
+
+**User replay (2026-07-01):** ✅ **Color stable** indoors/outdoors. ⚠️ **Still too bright** — commit checkpoint; next pass = reduce amb scale (e.g. 75% → 50–60%), not MAJI.
 
 ---
 

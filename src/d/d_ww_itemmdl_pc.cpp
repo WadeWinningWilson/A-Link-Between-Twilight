@@ -22,6 +22,7 @@
 #include "SSystem/SComponent/c_phase.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
+#include "d/d_kankyo.h"
 #include "d/d_resorce.h"
 #include "f_op/f_op_actor_mng.h"
 #include "aurora/lib/gx/gx.hpp"
@@ -1001,6 +1002,45 @@ void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data) {
     J3DMaterial* body_material = findMaterialByName(model_data, "Vbow_v");
     applyTexGenFromMaterial(body_material);
     applyTevOrderFromMaterial(body_material);
+}
+
+void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevstr_p) {
+    if (model == NULL || tevstr_p == NULL) {
+        return;
+    }
+
+    J3DModelData* model_data = model->getModelData();
+    if (model_data == NULL) {
+        return;
+    }
+
+    GXColor amb_col;
+    amb_col.r = tevstr_p->AmbCol.r;
+    amb_col.g = tevstr_p->AmbCol.g;
+    amb_col.b = tevstr_p->AmbCol.b;
+    amb_col.a = tevstr_p->AmbCol.a;
+
+    JUTNameTab* names = model_data->getMaterialTable().getMaterialName();
+    for (u16 i = 0; i < model_data->getMaterialNum(); i++) {
+        const char* name = names != NULL ? names->getName(i) : NULL;
+        if (!isTevDumpMaterial(name)) {
+            continue;
+        }
+
+        J3DMaterial* material = model_data->getMaterialNodePointer(i);
+        if (material != NULL) {
+            material->setAmbColor(0, (J3DGXColor*)&amb_col);
+        }
+    }
+
+    static bool s_logged_4b = false;
+    if (!s_logged_4b) {
+        char line[128];
+        snprintf(line, sizeof(line), "4B ambient-only: amb=%u,%u,%u (no MAJI lights)",
+                 amb_col.r, amb_col.g, amb_col.b);
+        dWwItemmdl_debugLog(line);
+        s_logged_4b = true;
+    }
 }
 
 void dWwItemmdl_beginBowDrawScope(J3DModel* model, fpc_ProcID owner_id) {

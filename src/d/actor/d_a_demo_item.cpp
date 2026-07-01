@@ -455,9 +455,12 @@ void daDitem_c::set_mtx() {
 void daDitem_c::setTevStr() {
 #if TARGET_PC
     if (useWwItemmdlBowMesh(m_itemNo)) {
-        // TWW daItemBase: TEV_TYPE_ACTOR (0) + MAJI (fair retest post-2B‴ texture bind).
+        // TWW struct-0 actor ambient; 4B ambient-only (MAJI kills cel detail + outdoor swing).
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
-        g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
+        tevStr.AmbCol.r = (u8)((u16)tevStr.AmbCol.r * 3 / 4);
+        tevStr.AmbCol.g = (u8)((u16)tevStr.AmbCol.g * 3 / 4);
+        tevStr.AmbCol.b = (u8)((u16)tevStr.AmbCol.b * 3 / 4);
+        dWwItemmdl_applyBowMaterialAmbientOnly(mpModel, &tevStr);
         return;
     }
 #endif
