@@ -33,7 +33,7 @@
 | `ace05ce875` | TWW draw recipe + persistent 2B mat hook |
 | `72a2f01194` | 4B ambient-only stable cel |
 | `6023333a8b` | 4D baseline (fixed warm amb, cap, SC ink, skip efplight) |
-| *(this commit)* | 4E polish (warmer/dim, darker ink, skip beams, SC A/B toggle) |
+| `d4f7066637` | 4E polish (warmer/dim, darker ink, skip beams, SC A/B toggle) |
 
 **Where the art lives:** All color data is **on-disc in TP** — `itemmdl.arc` → `vbow.bdl` ships with embedded textures (no external WW game files). Nothing is missing from the repo; Dusk loads the same retail archive as vanilla TP would, it was just never wired up.
 

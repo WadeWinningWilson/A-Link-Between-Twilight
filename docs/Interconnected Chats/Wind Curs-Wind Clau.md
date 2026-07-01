@@ -17,7 +17,7 @@
 
 **Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4E ambient-only** + skip `dKy_efplight_set` + skip demo GETITEM beams (`d_demo.cpp`) + `dComIfGd_setList()`.
 
-**Git (main, bow get-item):** `e0374888ed` 2N′ · `ace05ce875` 2B‴ · `72a2f01194` 4B · `6023333a8b` 4D · **HEAD** 4E polish.
+**Git (main, bow get-item):** `e0374888ed` 2N′ · `ace05ce875` 2B‴ · `72a2f01194` 4B · `6023333a8b` 4D · `d4f7066637` 4E.
 
 **Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear, MAJI for brightness, struct 14, % room ambient alone (4C).
 
