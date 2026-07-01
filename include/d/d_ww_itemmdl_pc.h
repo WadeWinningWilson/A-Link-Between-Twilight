@@ -7,6 +7,8 @@
 class J3DModelData;
 class J3DModel;
 
+#include "f_pc/f_pc_base.h"
+
 struct request_of_phase_process_class;
 
 
@@ -47,9 +49,10 @@ void dWwItemmdl_applyTevOrderForDraw(J3DModelData* model_data);
 // Fix B + 2B″: per-material texgen+TEV after mat callDL (see begin/end draw scope).
 void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data);
 
-// Persistent mat-post-DL hook for WW bow demo item (set at spawn, clear at Delete).
-void dWwItemmdl_beginBowDrawScope(J3DModel* model);
+// Persistent mat-post-DL hook for WW bow demo item (set at spawn, clear at Delete / room change).
+void dWwItemmdl_beginBowDrawScope(J3DModel* model, fpc_ProcID owner_id);
 void dWwItemmdl_clearBowDrawScope();
+void dWwItemmdl_notifyRoomChange(s32 room_no);
 
 // 2N: per-draw GX texgen bind from Vbow_v (body material; SC max bind mis-samples).
 void dWwItemmdl_applyTexGenForDraw(J3DModelData* model_data);

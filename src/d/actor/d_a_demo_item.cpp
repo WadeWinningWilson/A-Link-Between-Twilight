@@ -116,7 +116,7 @@ int daDitem_c::CreateInit() {
     set_mtx();
 #if TARGET_PC
     if (useWwItemmdlBowMesh(m_itemNo)) {
-        dWwItemmdl_beginBowDrawScope(mpModel);
+        dWwItemmdl_beginBowDrawScope(mpModel, fopAcM_GetID(this));
     }
 #endif
     return 1;
@@ -455,9 +455,9 @@ void daDitem_c::set_mtx() {
 void daDitem_c::setTevStr() {
 #if TARGET_PC
     if (useWwItemmdlBowMesh(m_itemNo)) {
-        // TWW daItemBase: TEV_TYPE_ACTOR (0), not TP get-item struct 14 dark ambient.
+        // TWW daItemBase: TEV_TYPE_ACTOR (0) + MAJI (fair retest post-2B‴ texture bind).
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
-        // Minimal override: skip MAJI so baked cel TEV + 2B‴ post-dl bind show through.
+        g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
         return;
     }
 #endif

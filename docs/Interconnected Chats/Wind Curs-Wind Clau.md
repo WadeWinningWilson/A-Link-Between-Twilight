@@ -7,22 +7,20 @@
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
-| **Status (2026-06-30)** | **Geometry ✅** · **Color ✅** (struct-0 + skip-MAJI + 2B‴ per-mat bind → true WW orange). **Flicker fix in tree:** persistent mat-post-DL callback (spawn→Delete), not per-OPA-flush. Awaiting replay. |
+| **Status (2026-06-30)** | **Get-item bow DONE** (geometry + steady WW orange). **Next:** #4 brightness (struct-0 + MAJI), callback lifetime audit (4A), warp test. Target = soft cel gradient + white tips + arrow (see TARGET below). |
 
 ---
 
 ## ▶ RESUME HERE (fresh-chat handoff — 2026-06-30)
 
-**One-line state:** **Geometry complete** (whole bow + nocked arrow, 2N′ bake-once + single-pass). **True WW orange color achieved** (struct-0 + skip-MAJI + 2B‴ per-material post-DL bind). **Flicker:** rapid color↔monochrome from per-flush callback clear vs frame-interp re-flush — **fix:** persistent callback (`beginBowDrawScope` at `CreateInit`, `clearBowDrawScope` at `Delete`; no longer cleared after `DB_OPA_LIST` flush).
+**One-line state:** **Get-item bow functionally complete** — whole bow + arrow, steady WW orange (persistent 2B‴ + struct-0). **Polish:** overbright wash hides orange gradient / white tips / arrow detail → **#4 brightness** (struct-0 + MAJI fair retest in tree). **Safety:** **4A** callback lifetime audit (owner id + room-change clear + replay cancel on warp).
 
-**Deliverable to Wind Clau:** Replay after persistent-callback build — expect **steady orange**, no flicker. Log `2B apply post-dl` still prints **twice only** (log-once guard); do not use count as fire rate.
-
-**Active draw path:** 2N′ bake-once + single `modelUpdateDL` + **persistent 2B‴ mat-post-DL hook** + struct **0** + skip-MAJI + `dComIfGd_setList()` (TWW mask-off stand-in) + both materials draw (no 2K).
+**Active draw path:** 2N′ bake-once + single `modelUpdateDL` + persistent 2B‴ mat-post-DL hook + struct **0** + **MAJI** + `dComIfGd_setList()` + both materials (no 2K).
 
 **Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear.
 
 **Fresh Wind Clau opener (paste):**
-> Continue as Wind Clau on WW `itemmdl` bow. Read `docs/Interconnected Chats/Wind Curs-Wind Clau.md` — **▶ RESUME HERE**. True WW orange achieved (struct-0 + skip-MAJI + 2B‴ per-mat bind). Flicker was per-flush callback clear vs frame-interp — persistent callback fix in tree (spawn→Delete). User replay pending for steady color. Do not regress geometry or the color recipe.
+> Continue as Wind Clau on WW `itemmdl` bow. Read `docs/Interconnected Chats/Wind Curs-Wind Clau.md` — **▶ RESUME HERE** + **TARGET clarified**. Get-item bow done (steady orange). Tune #4 brightness against reference (soft cel gradient, white tips, arrow). 4A callback audit in tree. Test warp. Do not regress geometry or 2B‴ recipe.
 
 **Hard-won facts a new chat must not re-derive (all confirmed):**
 - The long "flaky crash" was a **CRT fast-fail `0xC0000409`** = **unhandled `std::out_of_range`** from `std::bitset<8>::set()` in Aurora `shader_info.cpp` `color_arg_reg_info` — a TEV stage read a texture with **`texMapId = GX_TEXMAP_NULL (0xFF)`**; `CHECK` is a **no-op under `NDEBUG`** so it wasn't caught. **Fixed by A+A′** (guard the `.set()` in `shader_info.cpp` + the WGSL codegen in `shader.cpp`; skip unbound/out-of-range texmaps). Do **not** revert A/A′.
@@ -2299,13 +2297,39 @@ mDoGph_Painter  →  dComIfGd_drawOpaList()
 
 **Fix (low-risk): make the post-DL callback PERSISTENT for the bow's lifetime** — set at spawn/first-draw, clear at `Delete` — not per-OPA-flush. The callback already guards on material (`isVbowDrawMaterial`, `:905`) so it **no-ops for all other materials/draws** — safe to leave set. Then every flush (logic + interpolated + any 2nd pass) re-binds the correct per-material GX → steady color.
 
-**2B‴+ persistent (Cursor, in tree):** `dWwItemmdl_beginBowDrawScope` in `CreateInit` · `dWwItemmdl_clearBowDrawScope` in `Delete` · removed per-flush clear from `drawOpaDrawList`.
+**2B‴+ persistent (Cursor):** `beginBowDrawScope(model, ownerId)` in `CreateInit` · `clearBowDrawScope` in `Delete` · **4A:** owner-alive check in hook · `notifyRoomChange` + replay cancel on warp.
 
 **Confirm (optional):** drop the log-once guard for one replay → hook fires on logic frames, not on interp re-flushes = confirmed.
 
 **Fallback if persistent callback doesn't fix it:** interp is re-*presenting* a cached command buffer (not re-*flushing*) → bake GX into the packet, or exclude the get-item demo from interpolation.
 
 **Do NOT regress:** struct-0 + skip-MAJI + 2B‴ per-material bind (this is what produced true color), geometry, bake-once.
+
+### ✅ COLOR HOLDS — persistent callback fixed the flicker (2026-06-30). Next-steps roadmap.
+
+**Milestone:** persistent post-DL callback → bow holds true WW color **consistently indoors AND outdoors** (warp not yet tested). Get-item bow is functionally DONE (textured, whole, stable). Remaining = polish + scope. Recipe locked: `struct-0` + skip-MAJI + `2B‴` per-material bind + 2N′ bake-once + full geometry.
+
+**Immediate (before more polish):**
+1. **Checkpoint/commit** this working state (hard-won; guard against a revert).
+2. **Test WARP + repeated room changes** — untested, and transitions are the historically crash-prone path.
+3. **AUDIT the persistent callback lifetime (real risk).** `wwBowMatDrawPostDl` is now set persistently and holds `s_wwBowDrawModelData` — a **static pointer with a lifetime**, same bug class as the earlier `s_cached` / `s_suppressedOutlineShape` UAFs. Must be nulled on `Delete` and reset cleanly across warp, or it's the next use-after-free. Verify before trusting warp.
+
+**Polish (too bright / not-yet-cel):**
+4. **Brightness/washed detail:** current skip-MAJI leaves light regs at blown defaults → fill multiplied toward white. Try **struct-0 + MAJI** (real moderate light; only tried unfairly at 3.1′ pre-texture) — if MAJI overwrites baked cel colors, fall back to **skip-MAJI + a manual neutral ambient register**.
+5. **Ink outline (`SC_Vbow_v`):** the pass that gives WW its black cel outline — binding now; check if crisp vs washed (fixing #4 may reveal it), tune TEV/blend if needed. Biggest "actually-WW" lever.
+6. **Enable BTK spin (`dRes_INDEX_ITEMMDL_BTK_VBOW_e = 0x24`):** authentic WW get-item rotation, deferred until color stable — now viable. Cheap authenticity win.
+
+**Scope — "out of get-item state":**
+7. **Track B: held bow** — Link holds `vbow` when equipped (aim/shoot). Documented in `wind-waker-item-work.md` (Track B: `setBowModel()` in `d_a_alink_bow.inc`, hand-matrix tuning). New sub-project; the per-material bind + texgen/TEV recipe + deferred-draw timing all carry over.
+
+**Recommended order:** 1–3 (checkpoint + warp + callback-lifetime audit) → 4 (brightness) + 6 (BTK) cheap wins → 5 (ink outline) biggest look gain → 7 (held bow) scope jump.
+
+**Authenticity note:** rendering a WW asset through TP/Aurora — can get close (texture + ink + toned brightness + BTK spin) but not guaranteed pixel-perfect WW cel. Current state is already the hard 90%.
+
+**TARGET clarified (user, clean WW reference render):** in-game WW Hero's Bow = **bright orange recurve with SOFT cel gradient** (darker orange edges → lighter mid-limb), **white/silver ornamental tips**, **nocked arrow** (wood shaft, feather fletching, gold head). The get-item **light beams are reward-only flair, NOT the bow** — keep them in the get-item state but they wash the bow during evaluation. Implications:
+- **#4 brightness is THE priority** — current overbright blows out the orange gradient, white tips, and arrow detail this reference depends on. Tune exposure down until those read. This reference is the concrete bar to tune against.
+- **#5 ink outline = SUBTLE**, not heavy black — reference shows soft cel shading, not thick outlines. Don't over-do `SC_Vbow_v`.
+- **Judge the bow OUTSIDE the get-item flash** — held-bow (Track B / #7) shows the true lit look with no flash overlay, so #4 and #7 reinforce each other.
 
 ### Wind Clau — TWW-decomp-grounded plan (2026-06-30, user pointed back to the decomp research)
 

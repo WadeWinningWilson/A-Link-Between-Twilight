@@ -50,6 +50,7 @@ static request_of_phase_process_class s_arcPhase;
 static char s_demoArcName[32] = {};
 static int s_idleStableFrames = 0;
 static bool s_logged2VDefer = false;
+static s8 s_trackedRoomNo = -1;
 
 // 6 s @ 30 Hz logic frames (matches TP proc timing).
 static constexpr int kReplayDurationFrames = 180;
@@ -88,6 +89,7 @@ static void failReplay(const char* message) {
     s_demoArcName[0] = '\0';
     s_idleStableFrames = 0;
     s_logged2VDefer = false;
+    s_trackedRoomNo = -1;
 }
 
 static void finishReplay(const char* statusMessage, daAlink_c* link) {
@@ -109,6 +111,23 @@ static void finishReplay(const char* statusMessage, daAlink_c* link) {
     s_demoArcName[0] = '\0';
     s_idleStableFrames = 0;
     s_logged2VDefer = false;
+    s_trackedRoomNo = -1;
+}
+
+static void cancelReplayOnRoomChange(const char* message, daAlink_c* link) {
+    if (link != NULL) {
+        dWwItemmdl_notifyRoomChange(fopAcM_GetRoomNo(link));
+    }
+
+    if (s_phase == REPLAY_NONE) {
+        return;
+    }
+
+    if (s_phase == REPLAY_RUNNING && link != NULL) {
+        finishReplay(message, link);
+    } else {
+        failReplay(message);
+    }
 }
 
 static bool sceneHasPendingCreates(scene_class* scene) {
@@ -272,6 +291,12 @@ void tickBowGetItemDemoReplay() {
     if (dusk::ui::any_document_visible()) {
         return;
     }
+
+    const s8 roomNo = fopAcM_GetRoomNo(link);
+    if (s_trackedRoomNo >= 0 && roomNo != s_trackedRoomNo) {
+        cancelReplayOnRoomChange("Cancelled — room changed.", link);
+    }
+    s_trackedRoomNo = roomNo;
 
     if (s_phase == REPLAY_RUNNING) {
         s_runningFrames++;

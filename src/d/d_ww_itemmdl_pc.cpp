@@ -23,6 +23,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_resorce.h"
+#include "f_op/f_op_actor_mng.h"
 #include "aurora/lib/gx/gx.hpp"
 #include "dusk/settings.h"
 #include "m_Do/m_Do_ext.h"
@@ -137,6 +138,26 @@ static constexpr u32 kVbowRetainedHeapSize = 0x100000u;
 static J3DShape* s_suppressedOutlineShape = NULL;
 static J3DModelData* s_wwBowDrawModelData = NULL;
 static bool s_wwBowDrawScopeActive = false;
+static fpc_ProcID s_wwBowDrawOwnerId = fpcM_ERROR_PROCESS_ID_e;
+static s32 s_wwBowDrawRoomNo = -1;
+
+static void clearBowDrawScopeInternal(const char* reason) {
+    if (!s_wwBowDrawScopeActive) {
+        return;
+    }
+
+    s_wwBowDrawScopeActive = false;
+    j3dSys.setMatDrawPostDlCallback(nullptr);
+    s_wwBowDrawModelData = NULL;
+    s_wwBowDrawOwnerId = fpcM_ERROR_PROCESS_ID_e;
+    s_wwBowDrawRoomNo = -1;
+
+    if (reason != NULL) {
+        char line[128];
+        snprintf(line, sizeof(line), "4A: clearBowDrawScope (%s)", reason);
+        dWwItemmdl_debugLog(line);
+    }
+}
 
 static bool privateItemmdlArcReady() {
     return s_privateItemmdlState == 2;
@@ -901,7 +922,24 @@ static bool isVbowDrawMaterial(J3DMaterial* material) {
     return false;
 }
 
+static bool wwBowDrawScopeStillValid() {
+    if (!s_wwBowDrawScopeActive || s_wwBowDrawModelData == NULL) {
+        return false;
+    }
+
+    if (s_wwBowDrawOwnerId != fpcM_ERROR_PROCESS_ID_e && !fpcM_IsExecuting(s_wwBowDrawOwnerId)) {
+        clearBowDrawScopeInternal("owner not executing");
+        return false;
+    }
+
+    return true;
+}
+
 static void wwBowMatDrawPostDl(J3DMaterial* material) {
+    if (!wwBowDrawScopeStillValid()) {
+        return;
+    }
+
     if (!isVbowDrawMaterial(material)) {
         return;
     }
@@ -965,29 +1003,40 @@ void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data) {
     applyTevOrderFromMaterial(body_material);
 }
 
-void dWwItemmdl_beginBowDrawScope(J3DModel* model) {
+void dWwItemmdl_beginBowDrawScope(J3DModel* model, fpc_ProcID owner_id) {
     if (model == NULL || model->getModelData() == NULL) {
         return;
     }
 
     J3DModelData* model_data = model->getModelData();
-    if (s_wwBowDrawScopeActive && s_wwBowDrawModelData == model_data) {
+    if (s_wwBowDrawScopeActive && s_wwBowDrawModelData == model_data &&
+        s_wwBowDrawOwnerId == owner_id) {
         return;
+    }
+
+    if (s_wwBowDrawScopeActive) {
+        clearBowDrawScopeInternal("begin replaced");
     }
 
     s_wwBowDrawScopeActive = true;
     s_wwBowDrawModelData = model_data;
+    s_wwBowDrawOwnerId = owner_id;
+    s_wwBowDrawRoomNo = dComIfGp_roomControl_getStayNo();
     j3dSys.setMatDrawPostDlCallback(wwBowMatDrawPostDl);
 }
 
 void dWwItemmdl_clearBowDrawScope() {
+    clearBowDrawScopeInternal("Delete");
+}
+
+void dWwItemmdl_notifyRoomChange(s32 room_no) {
     if (!s_wwBowDrawScopeActive) {
         return;
     }
 
-    s_wwBowDrawScopeActive = false;
-    j3dSys.setMatDrawPostDlCallback(nullptr);
-    s_wwBowDrawModelData = NULL;
+    if (room_no < 0 || room_no != s_wwBowDrawRoomNo) {
+        clearBowDrawScopeInternal("room change");
+    }
 }
 
 void dWwItemmdl_drawWwBowModel(J3DModel* model) {
