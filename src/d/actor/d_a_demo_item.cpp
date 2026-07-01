@@ -448,17 +448,9 @@ void daDitem_c::set_mtx() {
 }
 
 void daDitem_c::setTevStr() {
-#if TARGET_PC
-    if (useWwItemmdlBowMesh(m_itemNo)) {
-        // Phase 3.1: struct 14 = dark ambient + view-matrix lighting (camera-angle swing outdoors).
-        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
-        g_env_light.setLightTevColorType(mpModel, &tevStr);
-        return;
-    }
-#endif
-
     g_env_light.settingTevStruct(14, &current.pos, &tevStr);
 #if TARGET_PC
+    // Fix B baseline: MAJI skipped on locked WW bdl3 cel materials (texmap bind handles sampling).
     if (!useWwItemmdlBowMesh(m_itemNo)) {
         g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
     }
@@ -468,15 +460,20 @@ void daDitem_c::setTevStr() {
 }
 
 #if TARGET_PC
+void daDitem_c::wwBowDrawModel() {
+    dWwItemmdl_drawWwBowModel(mpModel);
+}
+
 int daDitem_c::DrawBase() {
     setTevStr();
     animEntry();
     setListStart();
     settingBeforeDraw();
     if (useWwItemmdlBowMesh(m_itemNo)) {
-        dWwItemmdl_applyTevOrderForDraw(mpModel->getModelData());
+        wwBowDrawModel();
+    } else {
+        mDoExt_modelUpdateDL(mpModel);
     }
-    mDoExt_modelUpdateDL(mpModel);
     setListEnd();
     setShadow();
     return 1;
@@ -648,13 +645,6 @@ int daDitem_c::draw() {
     }
 
 #if TARGET_PC
-    const bool ww_body_only_2k = useWwItemmdlBowMesh(m_itemNo);
-    if (ww_body_only_2k) {
-        dWwItemmdl_suppressOutlineForDraw(mpModel->getModelData());
-    }
-#endif
-
-#if TARGET_PC
     if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
         static fpc_ProcID s_bracketDrawId = fpcM_ERROR_PROCESS_ID_e;
         const bool first_draw = s_bracketDrawId != fopAcM_GetID(this);
@@ -684,10 +674,10 @@ int daDitem_c::draw() {
             dWwItemmdl_bracketLog("draw: before modelUpdateDL");
             dWwItemmdl_log2QPrimeAudit("draw-pre-dl", mpModel->getModelData(),
                                         fopAcM_GetRoomNo(this));
+            dWwItemmdl_logShapeInventory(mpModel->getModelData(), "draw-pre-dl");
             dWwItemmdl_logTevOrderDump(mpModel->getModelData(), "draw-pre-dl",
                                         fopAcM_GetRoomNo(this), true);
-            dWwItemmdl_applyTevOrderForDraw(mpModel->getModelData());
-            mDoExt_modelUpdateDL(mpModel);
+            wwBowDrawModel();
             dWwItemmdl_bracketLog("draw: after modelUpdateDL");
             dWwItemmdl_logTevOrderDump(mpModel->getModelData(), "draw-post-dl",
                                         fopAcM_GetRoomNo(this), true);
@@ -699,28 +689,12 @@ int daDitem_c::draw() {
             dWwItemmdl_bracketLog("draw: before setShadow");
             setShadow();
             dWwItemmdl_bracketLog("draw: after setShadow");
-#if TARGET_PC
-            if (ww_body_only_2k) {
-                dWwItemmdl_restoreOutlineAfterDraw(mpModel->getModelData());
-            }
-#endif
             return 1;
         }
     }
 #endif
 
-#if TARGET_PC
-    if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
-        dWwItemmdl_log2QPrimeAudit("draw-pre-dl", mpModel->getModelData(), fopAcM_GetRoomNo(this));
-    }
-#endif
-
     DrawBase();
-#if TARGET_PC
-    if (ww_body_only_2k) {
-        dWwItemmdl_restoreOutlineAfterDraw(mpModel->getModelData());
-    }
-#endif
     return 1;
 }
 

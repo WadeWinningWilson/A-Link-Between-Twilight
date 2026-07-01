@@ -28,6 +28,7 @@
 #include "res/Object/itemmdl.h"
 
 #include <dolphin/gx/GXTev.h>
+#include <dolphin/gx/GXGeometry.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -268,6 +269,8 @@ static void log2OResourceAudit(const char* via, void* res) {
     s_2oPrevResPtr = res;
 }
 
+static void bakeLockedMaterialSharedDl(J3DModelData* model_data);
+
 static J3DModelData* finishLoadedModelData(J3DModelData* model_data) {
     if (model_data == NULL || model_data->getMaterialNum() == 0) {
         return NULL;
@@ -294,6 +297,7 @@ static J3DModelData* finishLoadedModelData(J3DModelData* model_data) {
 
     model_data->simpleCalcMaterial(const_cast<MtxP>(j3dDefaultMtx));
     model_data->makeSharedDL();
+    bakeLockedMaterialSharedDl(model_data);
     logTexGenDump(model_data, "after makeSharedDL");
     logTevOrderDumpInternal(model_data, "after makeSharedDL", -1, false);
     return model_data;
@@ -644,22 +648,37 @@ static void logModelSummary(J3DModelData* model_data, const char* label) {
     dWwItemmdl_debugLog(message);
 }
 
-static void patchModelInternal(J3DModelData* model_data) {
-    if (model_data == NULL || model_data->getMaterialNum() == 0) {
+static void bakeLockedMaterialSharedDl(J3DModelData* model_data) {
+    if (model_data == NULL) {
         return;
     }
 
-    JUTNameTab* names = model_data->getMaterialTable().getMaterialName();
-
-    for (u16 i = 0; i < model_data->getMaterialNum(); i++) {
-        const char* name = names != NULL ? names->getName(i) : NULL;
-        if (name != NULL) {
-            char message[96];
-            snprintf(message, sizeof(message), "patchModel: mat[%u]=%s edge=%d", i, name,
-                     isOutlineMaterial(name) ? 1 : 0);
-            dWwItemmdl_debugLog(message);
-        }
+    static J3DModelData* s_baked_model = NULL;
+    if (s_baked_model == model_data) {
+        return;
     }
+
+    j3dSys.setTexture(model_data->getTexture());
+    JUTNameTab* names = model_data->getMaterialTable().getMaterialName();
+    for (u16 i = 0; i < model_data->getMaterialNum(); i++) {
+        J3DMaterial* material = model_data->getMaterialNodePointer(i);
+        if (material == NULL || material->getSharedDisplayListObj() == NULL) {
+            continue;
+        }
+
+        // BDL locked materials override makeSharedDisplayList with a no-op; without this bake
+        // callDL replays an empty DL → numTexGens stays 0 while TEV samples texcoord 2 (tcg src 21).
+        material->J3DMaterial::makeSharedDisplayList();
+
+        const char* name = names != NULL ? names->getName(i) : NULL;
+        char message[128];
+        snprintf(message, sizeof(message), "2N': baked locked shared DL mat[%u]=%s nTexGen=%u nTev=%u",
+                 i, name != NULL ? name : "?", material->getTexGenNum(),
+                 material->getTevStageNum());
+        dWwItemmdl_debugLog(message);
+    }
+
+    s_baked_model = model_data;
 }
 
 static J3DModelData* loadVbowFromPrivateArcOnce() {
@@ -794,8 +813,12 @@ J3DModelData* dWwItemmdl_getVbowModelData(const char* arc_name) {
 
 void dWwItemmdl_patchModelForPc(J3DModelData* model_data) {
     logModelSummary(model_data, "patchModel");
-    patchModelInternal(model_data);
-    logTevOrderDumpInternal(model_data, "patchModel", -1, false);
+    static bool s_logged_patch_tevorder = false;
+    if (!s_logged_patch_tevorder) {
+        logTevOrderDumpInternal(model_data, "patchModel", -1, false);
+        dWwItemmdl_logShapeInventory(model_data, "patchModel");
+        s_logged_patch_tevorder = true;
+    }
     dWwItemmdl_debugLog("patchModel: done");
 }
 
@@ -804,27 +827,20 @@ void dWwItemmdl_logTevOrderDump(J3DModelData* model_data, const char* phase, s32
     logTevOrderDumpInternal(model_data, phase, room_no, log_gx_runtime);
 }
 
-void dWwItemmdl_applyTevOrderForDraw(J3DModelData* model_data) {
-    J3DMaterial* material = findMaterialByName(model_data, "Vbow_v");
+static void applyTevOrderFromMaterial(J3DMaterial* material) {
     if (material == NULL) {
-        dWwItemmdl_debugLog("2B apply: Vbow_v not found");
         return;
     }
 
     J3DTevBlock* tev_block = material->getTevBlock();
     if (tev_block == NULL) {
-        dWwItemmdl_debugLog("2B apply: Vbow_v tevBlock=NULL");
         return;
     }
 
     const u8 n_tev = tev_block->getTevStageNum();
     if (n_tev == 0) {
-        dWwItemmdl_debugLog("2B apply: Vbow_v nTev=0");
         return;
     }
-
-    char summary[192];
-    int summary_len = snprintf(summary, sizeof(summary), "2B apply: Vbow_v nTev=%u", n_tev);
 
     for (u32 st = 0; st < n_tev && st < 16; st++) {
         J3DTevOrder* order = tev_block->getTevOrder(st);
@@ -836,16 +852,77 @@ void dWwItemmdl_applyTevOrderForDraw(J3DModelData* model_data) {
         const GXTexMapID tex_map = static_cast<GXTexMapID>(order->getTexMap());
         GXSetTevOrder(static_cast<GXTevStageID>(GX_TEVSTAGE0 + st), tex_coord, tex_map,
                       GX_COLOR_NULL);
-
-        if (summary_len > 0 && summary_len < static_cast<int>(sizeof(summary))) {
-            summary_len += snprintf(summary + summary_len, sizeof(summary) - summary_len,
-                                    " st[%u] map=%u coord=%u", st,
-                                    static_cast<u8>(tex_map), static_cast<u8>(tex_coord));
-        }
     }
 
     GXSetNumTevStages(n_tev);
-    dWwItemmdl_debugLog(summary);
+}
+
+static void applyTexGenFromMaterial(J3DMaterial* material) {
+    if (material == NULL) {
+        return;
+    }
+
+    const u32 tex_gen_num = material->getTexGenNum();
+    if (tex_gen_num == 0) {
+        return;
+    }
+
+    GXSetNumTexGens(tex_gen_num);
+    for (u32 tg = 0; tg < tex_gen_num && tg < 8; tg++) {
+        J3DTexCoord* coord = material->getTexCoord(tg);
+        if (coord == NULL) {
+            continue;
+        }
+
+        GXSetTexCoordGen(static_cast<GXTexCoordID>(GX_TEXCOORD0 + tg),
+                         static_cast<GXTexGenType>(coord->getTexGenType()),
+                         static_cast<GXTexGenSrc>(coord->getTexGenSrc()), coord->getTexGenMtx());
+    }
+}
+
+static void logShapeInventoryInternal(J3DModelData* model_data, const char* phase) {
+    if (model_data == NULL) {
+        return;
+    }
+
+    char header[128];
+    snprintf(header, sizeof(header), "2S shape [%s]: count=%u mats=%u joints=%u", phase,
+             model_data->getShapeNum(), model_data->getMaterialNum(), model_data->getJointNum());
+    dWwItemmdl_debugLog(header);
+}
+
+void dWwItemmdl_logShapeInventory(J3DModelData* model_data, const char* phase) {
+    logShapeInventoryInternal(model_data, phase);
+}
+
+void dWwItemmdl_applyTevOrderForDraw(J3DModelData* model_data) {
+    applyTevOrderFromMaterial(findMaterialByName(model_data, "Vbow_v"));
+}
+
+void dWwItemmdl_applyTexGenForDraw(J3DModelData* model_data) {
+    applyTexGenFromMaterial(findMaterialByName(model_data, "Vbow_v"));
+}
+
+void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data) {
+    J3DMaterial* body_material = findMaterialByName(model_data, "Vbow_v");
+    applyTexGenFromMaterial(body_material);
+    applyTevOrderFromMaterial(body_material);
+}
+
+void dWwItemmdl_drawWwBowModel(J3DModel* model) {
+    if (model == NULL) {
+        return;
+    }
+
+    J3DModelData* model_data = model->getModelData();
+    if (model_data == NULL) {
+        return;
+    }
+
+    // Stable path: 2N' locked-DL bake (once at load) + Fix B pre-bind + single modelUpdateDL.
+    // Per-shape multi-pass draw removed — caused DRAW_INDEXED DL overrun / AV (2026-06-30).
+    dWwItemmdl_prepareWwBowGxForDraw(model_data);
+    mDoExt_modelUpdateDL(model);
 }
 
 void dWwItemmdl_suppressOutlineForDraw(J3DModelData* model_data) {

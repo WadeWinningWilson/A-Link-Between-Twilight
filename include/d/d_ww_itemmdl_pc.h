@@ -5,6 +5,7 @@
 
 
 class J3DModelData;
+class J3DModel;
 
 struct request_of_phase_process_class;
 
@@ -42,6 +43,18 @@ void dWwItemmdl_logTevOrderDump(J3DModelData* model_data, const char* phase, s32
 
 // Fix B step 2: per-draw GX TEV bind from Vbow_v struct (locked DL does not realize TevOrder).
 void dWwItemmdl_applyTevOrderForDraw(J3DModelData* model_data);
+
+// Fix B + 2N: Vbow_v texgen+TEV before locked-DL draw (not SC max — slot1 COLOR0 vs NRM).
+void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data);
+
+// 2N: per-draw GX texgen bind from Vbow_v (body material; SC max bind mis-samples).
+void dWwItemmdl_applyTexGenForDraw(J3DModelData* model_data);
+
+// 2N: two-pass draw — per-material texgen+TEV (SC_Vbow_v and Vbow_v disagree on GX state).
+void dWwItemmdl_drawWwBowModel(J3DModel* model);
+
+// 2S: shape count summary only (per-shape detail AVs at patchModel — do not iterate shapes).
+void dWwItemmdl_logShapeInventory(J3DModelData* model_data, const char* phase);
 
 // Hide SC_* outline for one draw without mutating shared arc-resident model state.
 

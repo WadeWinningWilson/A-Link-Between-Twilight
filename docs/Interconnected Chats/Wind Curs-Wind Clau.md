@@ -7,7 +7,90 @@
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
-| **Status (2026-06-30)** | **Stability gate GREEN** — Fix A+A′: **16+ replays, zero crashes**, all `Replay finished (6 s).` **Visual regression:** color OK rooms 1–3 → flicker at **room 4** → **colorless** rooms 5+. Screenshots → Wind Clau. **Next: Fix B / Phase 3** (bound texmap + TEV), not more Aurora guards. |
+| **Status (2026-06-30)** | **Geometry win ✅** — whole bow + arrow draws (2N′ bake-once + single-pass). **2N″:** bind **Vbow_v** texgen+TEV (not SC max) — fixes monochrome black↔white from COLOR0 vs NRM slot mismatch. **Next:** replay indoor+outdoor for body color; defer SC ink polish + struct-14 swing. |
+
+---
+
+## ▶ RESUME HERE (fresh-chat handoff — 2026-06-30)
+
+**One-line state:** **First successful playtest** of 2N′ + Fix B single-pass (after removing blocking 2S per-shape dump). **Functionally stable** — multiple `Replay finished (6 s)`, no crashes. **Color:** stable indoors, **swings outdoors** (expected struct-14 signature); user reports **very bright / almost white** overall (new — needs Wind Clau read vs screenshots). **Geometry:** screenshots en route to Wind Clau (whole bow vs fragments TBD from images).
+
+**Deliverable to Wind Clau (user):** Paste screenshots from this session + this doc's **▶ First clean playtest** section. Log tail: `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — last lines include `2S shape … count=2` and `Replay finished (6 s)` (e.g. frames 934→4392 in latest session).
+
+**Wind Clau — pick next branch from screenshots + symptoms:**
+
+| Observation | Likely read | Candidate fix |
+|-------------|-------------|---------------|
+| Glowing white / washed-out fill | Vbow_v sampling + struct-14 **or** SC pass adding unbound/overbright stages on top of body | Per-material GX; verify SC not doubling brightness; struct-14 swing polish **after** SC bound |
+| Missing arrow / ink / fragments | SC_Vbow_v shape draws but **Vbow_v-only TEV bind** → `vec4f(0.0)` or wrong texmap on SC stages | **Safe per-material draw** — SC gets 3-stage TEV+texgen at mat time (NOT double full-`modelUpdateDL`, NOT per-shape hide, NOT load-time shape dump) |
+| Stable indoors, swings outdoors | **`settingTevStruct(14)`** view-matrix lighting — known Fix B baseline nit | Defer custom ambient tevStr until geometry+SC color correct |
+
+**Active draw path (`dWwItemmdl_drawWwBowModel`):** `2N′` locked shared-DL bake (once) + Fix B `prepareWwBowGxForDraw` (max texgen + **Vbow_v-only** TEV bind) + **single** `mDoExt_modelUpdateDL`. Struct **14**, MAJI-skipped. **No 2K** (both materials draw).
+
+**Cursor must NOT retry (all crashed or blocked):**
+- Per-shape multi-pass draw via double full `modelUpdateDL` — **`DRAW_INDEXED` overrun**
+- `countVertex()` / per-shape dlBytes/name in dump — **AV at patchModel**
+- Re-baking shared DL every spawn — corrupts DL (bake **once** at parse via `2N′`)
+- struct-0 / non-MAJI lighting (regressed or stub)
+
+**Fresh Wind Clau opener (paste):**
+> Continue as Wind Clau on the WW `itemmdl` bow. Read `docs/Interconnected Chats/Wind Curs-Wind Clau.md` — start at **▶ RESUME HERE** and **▶ First clean playtest (2026-06-30)**. User playtest: **stable, no crashes**; color **bright/almost white**; indoor stable / outdoor unstable. Screenshots attached. Pick: safe per-material GX for SC_Vbow_v vs brightness/struct-14. Do not retry struct-0, non-MAJI, per-shape dump, or double-`modelUpdateDL`.
+
+**Hard-won facts a new chat must not re-derive (all confirmed):**
+- The long "flaky crash" was a **CRT fast-fail `0xC0000409`** = **unhandled `std::out_of_range`** from `std::bitset<8>::set()` in Aurora `shader_info.cpp` `color_arg_reg_info` — a TEV stage read a texture with **`texMapId = GX_TEXMAP_NULL (0xFF)`**; `CHECK` is a **no-op under `NDEBUG`** so it wasn't caught. **Fixed by A+A′** (guard the `.set()` in `shader_info.cpp` + the WGSL codegen in `shader.cpp`; skip unbound/out-of-range texmaps). Do **not** revert A/A′.
+- Colorless bow = same unbound-texmap → Aurora emits `vec4f(0.0)`. **Fix B** (per-draw `GXSetTevOrder` from the *valid* material struct) restored `Vbow_v` color. The material **struct TevOrder is VALID** (Vbow_v texMap 1/0; SC_Vbow_v texMap 2/0/1) — **not** a struct-repair job; the locked baked-DL just wasn't realizing it into Aurora's pipeline.
+- Aurora GX is a **deferred fifo** — `g_gxState` snapshot at draw ≠ what the shader builds from at drain; explains angle/room-dependent color and the `numTev=1/255` snapshots. Trust visuals + `2B apply` log over pre-drain snapshots.
+- **`setLightTevColorType` (non-MAJI) is an empty stub on PC** — only `_MAJI` works. `settingTevStruct(14)` = get-item dark-ambient + **view-matrix lighting** = the outdoor angle swing. struct-0 attempts (3.1/3.1′) **regressed** — reverted.
+- Earlier `[FATAL] unhandled tcg src 21` = `GX_MAX_TEXGENSRC` sentinel (numTexGens/texgen mismatch); addressed by **2N′** locked-DL bake + `GXSetNumTexGens` bind.
+- **Image 2 in chat = the COMPLETE WW Hero's Bow (with nocked arrow), NOT the TP bow.** The arrow is real geometry that must draw.
+- **`shapeNum=2`, `matNum=2`, `jointNum=2`** — no third-shape inventory gap; per-shape dump at load **AVs** (removed; summary only).
+
+**Deep sections:** search this doc for `ROOT CAUSE FOUND`, `Fix A′ (approved)`, `Fix B step 1 — Wind Clau read`, `Fix B bind SUCCEEDED`, `REVERT the struct-0 delegate`, `Interconnected pass`, `First clean playtest`.
+
+---
+
+## ▶ First clean playtest (2026-06-30) — user report + log
+
+**Build:** 2N′ bake-once + Fix B single-pass; 2S summary-only (`count=2 mats=2 joints=2`); per-shape dump removed; struct **14**, MAJI-skipped; no 2K.
+
+**User report (functionality):**
+- ✅ **Very stable** — no crashes across session
+- ✅ Color **stable indoors**
+- ⚠️ Color **unstable outdoors** (camera/room dependent — matches prior struct-14 outdoor swing)
+- ⚠️ Overall color **very bright, almost white** (new vs earlier Fix B baseline that read as normally colored fill — Wind Clau to compare screenshots)
+
+**User report (geometry):** Screenshots being sent to Wind Clau separately — assess whole bow vs fragments / missing arrow+ink from images.
+
+**Log evidence (latest session, post dump-fix):** consecutive `Replay finished (6 s)` at frames **934, 1299, 1828, 2617, 2963, 3824, 4392** (room 1). Draw completes: `bracket: draw: after setShadow` each replay. `2S shape [draw-pre-dl]: count=2 mats=2 joints=2`.
+
+**Wind Clau questions for screenshot review:**
+1. Is the bow **whole** (arrow + recurve + string) or still **fragments/glow**?
+2. Is brightness **washed-out white** on body, SC ink pass, or both?
+3. Does outdoor instability look like **angle swing** (struct-14) or **flicker/crash-adjacent**?
+
+**Recommended next code move (pending Wind Clau OK):** Safe **per-material GX** so `SC_Vbow_v` gets its own 3-stage TEV/texmap when its shape draws — root hypothesis for invisible SC / missing detail *and* possible overbright additive pass.
+
+### Wind Clau screenshot verdict (2026-06-30)
+
+**Q1 — whole or fragments? → WHOLE. This is the geometry win.** Close-up screenshot shows the complete bow: recurve limbs, grip, string, **and the nocked arrow**, all present. The missing-arrow/fragments problem is **SOLVED** by 2N′ bake-once + single-pass. Do not regress this.
+
+**Q2 — brightness location? → the whole thing reads MONOCHROME (black↔white), i.e. `Vbow_v` body is UNTEXTURED, not "washed white on the ink pass."** Screenshot 1 (dark angle) = near-black bow; screenshot 2 (bright angle) = blown-white. Same surface, lit-only, no wood/gold texture color.
+
+**Q3 — outdoor instability? → angle swing (struct-14), not crash-adjacent.** 7× `Replay finished`, fully stable. The black↔white is the struct-14 view-matrix swing acting on an *untextured* surface (no texel color to anchor it).
+
+**Root of the color regression (from the 2I dump — evidence, not guess):** 2N applies texgen from the **max-count material `SC_Vbow_v` (3 texgens)** globally, but the two materials' texgen layouts **differ at slot 1**:
+- `Vbow_v`: tg0=`TEX0`, tg1=**`COLOR0`**  (2 texgens)
+- `SC_Vbow_v`: tg0=`TEX0`, tg1=**`NRM`**, tg2=`COLOR0`  (3 texgens)
+
+Forcing `SC_Vbow_v`'s config onto the single pass feeds `Vbow_v` the **wrong texcoord at slot 1** (`NRM` vs `COLOR0`) → `Vbow_v` mis-samples its texture → untextured/monochrome. That's the regression from the earlier (colored) Fix B baseline, which used `Vbow_v`'s own texgen.
+
+**PRIMARY FIX (safe, single-pass, no crash path): bind `Vbow_v`'s OWN texgen+TEV in `prepareWwBowGxForDraw` — not `SC_Vbow_v`'s max.** Restores main-body texture color while KEEPING the complete geometry. `SC_Vbow_v` (ink/edge) renders imperfect under the 2-texgen config, but it's the secondary pass — far better than a monochrome whole bow. This is a small revert of 2N's "max material" choice.
+
+**Deferred (harder / polish):**
+- Perfect `SC_Vbow_v` too ⇒ true **per-material GX** (each shape its own texgen+TEV) via a **safe per-shape draw** — NOT double-`modelUpdateDL` (overran) and NOT per-shape DL-parse (AV). Only if imperfect ink is unacceptable.
+- struct-14 outdoor swing ⇒ optional ambient-only tevStr, *after* color is restored.
+
+**Do:** switch `prepareWwBowGxForDraw` texgen source `SC_Vbow_v` → `Vbow_v`, keep everything else (2N′ bake-once, single-pass, struct-14, MAJI-skip), rebuild, wipe caches, replay indoor+outdoor. Expect: whole bow + wood/gold body color back; only the outdoor brightness swing remaining.
 
 ---
 
@@ -1937,7 +2020,7 @@ Progression is **monotonic with replay count**, not random per spawn — matches
 | **A+A′ (Aurora robustness)** | **Done** — no more terminate / tex255 WGSL FATAL |
 | **Phase 2 mesh spin** | **Done** — bow visible, animates, survives many rooms |
 | **Phase 2 cel color / Phase 3** | **Not done** — expected until **Fix B** (bind texmap on TEV stages; `setTevStr` / material programming) |
-| **2N (tip / `SC_Vbow_v`)** | Still gated on Fix B baseline color |
+| **2N (tip / `SC_Vbow_v`)** | **Executed (2026-06-30)** — texgen bind + 2K suppress removed; user playtest gate pending |
 
 #### Deliverable to Wind Clau
 
@@ -2013,6 +2096,73 @@ Progression is **monotonic with replay count**, not random per spawn — matches
 **3.1 (Cursor):** WW bow `setTevStr`: `settingTevStruct(14)` → `settingTevStruct(0)` + `setLightTevColorType` (non-MAJI; MAJI fallback if fill looks wrong). Targets view-dependent outdoor darkening from struct-14 ambient/view-matrix lighting.
 
 **Playtest gate:** ≥5 replays indoor + outdoor — even flat fill, no camera-angle swing. Pass → **2N** edge/tip.
+
+#### 3.1 playtest fail (user, 2026-06-30) → **3.1′**
+
+**Symptom:** 2 indoor replays stable; **3rd replay (room 3, outdoor)** color unstable then **crash** ~frame 1753 (~1 s into spin). Log shows CPU draw path complete; no `Replay finished`.
+
+**Diagnosis:**
+- First 3.1 used `setLightTevColorType` — **empty stub on PC** (`d_kankyo.cpp`), so materials never received actor lighting; struct 0 tevStr alone couldn't fix outdoor swing and may have left GPU state mismatched outdoors.
+- Per-frame `2B apply` / `2Q'` logging (~180 lines/replay) added I/O noise; not root cause but throttled.
+
+**3.1′ (Cursor):**
+- WW bow: **`daItemBase_c::setTevStr()`** delegate = struct **0** + **`setLightTevColorType_MAJI`** (Wind Clau fallback; MAJI safe post–Fix B).
+- Fix B: **`GXSetTevOrder` before AND after** `mDoExt_modelUpdateDL` (fifo sees WW TEV after locked DL replay).
+- Throttle: patchModel tevorder dump once/process; remove per-frame apply log.
+
+**Retest:** ≥5 replays indoor + outdoor; need stable + even fill + no crash.
+
+#### 3.1′ playtest (user, 2026-06-30) — **stable, wrong direction** → Wind Clau review
+
+**What shipped (3.1′):** WW bow delegates to `daItemBase_c::setTevStr()` (struct **0** + **MAJI**); Fix B TEV bind **before and after** `mDoExt_modelUpdateDL`; diagnostic log throttled.
+
+**User report (3 replays, quit early):**
+- **Stability:** ✅ No crash (contrast with first 3.1: crash on replay 3 outdoors).
+- **Visual:** ❌ **Wrong direction** — not the expected flat/even outdoor fill. User did not finish ≥5-replay gate; stopped after 3 tries because stability was OK but lighting/color regressed vs the **Fix B baseline** (colored, struct-14 outdoor swing was the prior complaint; 3.1′ made things worse, not better).
+
+**Open questions for Wind Clau:**
+1. Is struct **0** + MAJI on **shared cached** `J3DModelData` the wrong pairing for WW locked `bdl3` (MAJI mutates materials every frame on the parse-once cache)?
+2. Should we **revert to struct 14 + MAJI** (or struct 14 + no MAJI) now that Fix B binds texmaps — i.e. keep Fix B bind, undo only the struct-0 delegate?
+3. Hybrid: struct **0** tevStr setup **without** MAJI material patch (manual amb only)? Or **3.1b**: struct 0 + MAJI but only on the **per-spawn** `J3DModel` instance, not shared `J3DModelData`?
+4. Double Fix B apply (pre+post `modelUpdateDL`) — keep, drop one side, or move post-only?
+
+**Cursor gate (superseded):** Wind Clau picked **revert + 2N** — see **Cursor executed: REVERT + 2N** below. No struct-0 or non-MAJI retries.
+
+**For Claude:** Read this file from **Fix B confirmed** through this section; baseline to beat is **Fix B only** (colored, stable, outdoor angle swing) — not the pre–Fix B colorless path.
+
+#### Wind Clau call (2026-06-30): REVERT the struct-0 delegate → keep Fix B baseline → go to 2N. Swing is optional polish.
+
+**My own correction first:** I recommended "try non-MAJI `setLightTevColorType` first." That was wrong for PC — it's an **empty stub** (`d_kankyo.cpp`), so it applies no lighting and left GX state mismatched outdoors → the 3.1 crash. **On PC, `setLightTevColorType_MAJI` is the only functional lighting apply; plain is a no-op. Don't retry non-MAJI.**
+
+**Where the two struct-0 attempts landed:**
+| Config | Stability | Color |
+|--------|-----------|-------|
+| **Fix B baseline** (struct 14, MAJI-skipped, + texmap bind) | ✅ | ✅ colored; mild outdoor angle swing (only remaining nit) |
+| 3.1 (struct 0 + non-MAJI stub) | ❌ crash outdoor | — (no lighting applied) |
+| 3.1′ (struct 0 + MAJI delegate) | ✅ | ❌ **worse** — wrong direction, not flatter |
+
+**Verdict: Fix B baseline is the best result; both struct-0 moves regressed. Revert to it.** My struct-14→0 hypothesis for the swing didn't pan out — struct 0 either does nothing (non-MAJI stub) or, with MAJI, feeds the WW cel material lighting values that push color the *wrong* way. The swing under struct 14 is a **minor, view-dependent nit** exaggerated by deliberately orbiting the camera; in a normal brief get-item spin it's unlikely to read as broken. It is **not worth trading the good colored baseline for.**
+
+**Answers to the open questions:**
+1. struct 0 + MAJI on the shared cached `J3DModelData` — plausibly part of why color went wrong (MAJI patches the cel material's TEV colors against struct-0 values it wasn't baked for), but not worth chasing — revert instead.
+2. **Yes — revert the struct-0 delegate; keep the Fix B texmap bind.** This is the pick.
+3. Hybrid amb-only / per-spawn-instance MAJI: possible *later* polish for the swing, but the non-MAJI path is a stub so "amb-only" needs custom tevStr code — **defer**, don't block on it.
+4. Double Fix B apply (pre+post `modelUpdateDL`): revert to whatever the **known-good colored Fix B baseline** used (minimize variables). If baseline was single-apply, drop the extra; if it was already fine, keep. Not the color problem either way.
+
+**Next: revert to Fix B baseline (struct 14 + texmap bind, MAJI-skipped), confirm colored+stable over ≥5 replays, then Execute 2N** (re-enable `SC_Vbow_v` edge/tip via the `GXSetNumTexGens` texgen fix) — that's the last piece of the WW look and is independent of fill lighting. **Outdoor-swing flattening = optional final polish**, only if it bothers in normal play; if pursued, it's a custom ambient-only tevStr, not another stock struct swap.
+
+#### Cursor executed: REVERT + 2N (2026-06-30)
+
+| Change | Detail |
+|--------|--------|
+| **3.1 / 3.1′ reverted** | `setTevStr()` back to `settingTevStruct(14)` + MAJI-skipped for WW bow (`d_a_demo_item.cpp`). |
+| **Double apply dropped** | Single `dWwItemmdl_prepareWwBowGxForDraw()` before `mDoExt_modelUpdateDL` only (`wwBowDrawModel`). |
+| **2K removed** | No `suppressOutlineForDraw` / `restoreOutlineAfterDraw` on draw path — both materials draw. |
+| **2N added** | `dWwItemmdl_applyTexGenForDraw()` — `GXSetNumTexGens` + per-slot `GXSetTexCoordGen` from material with max texgen count (usually `SC_Vbow_v` = 3); then Fix B TEV bind for `Vbow_v`. |
+| **Build** | `build_run.bat` ✅ |
+
+**Playtest gate:** WW itemmdl get-item ON, 2D isolate OFF. Run ≥5 replays (mix indoor/outdoor). Pass = colored body + visible ink edge/tip, no crash. Log: `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt`.
+
 #### Fix B step 1 — Wind Clau read of the dump (2026-06-30): struct VALID, runtime GX never has the WW TEV → per-draw `GXSetTevOrder`
 
 Read all 322 `2B tevorder` lines across the session (rooms 1→0→3→3→1→4→1→0→0). Result is clean and consistent:
@@ -2041,3 +2191,72 @@ Fix B bind landed (`2B apply: Vbow_v nTev=2 st[0] map=1 coord=0 st[1] map=0 coor
 **Execute 3.1:** in `daDitem_c::setTevStr()` (`d_a_demo_item.cpp:444`), for the WW bow switch `settingTevStruct(14)` → **`settingTevStruct(0)` (`TEV_TYPE_ACTOR`)** + `setLightTevColorType`. Try **non-MAJI `setLightTevColorType` first** (most TWW-faithful; TWW demo items don't use the get-item struct). MAJI is now likely safe (the old crash was the texmap bind, not MAJI) — fall back to it only if non-MAJI looks wrong. Expected: flat, even cel fill; no outdoor/angle darkening.
 
 **Then:** even texture-correct fill → **2N** (re-enable `SC_Vbow_v` edge/tip via the `GXSetNumTexGens` texgen fix). Sequence: Fix B (bind) ✅ → 3.1 (lighting) → 2N (edge).
+
+---
+
+## Interconnected pass — 2026-06-30 (Cursor + Wind Clau sync)
+
+### Session crashes (this build cycle)
+
+| Attempt | Symptom | Root cause | Fix |
+|---------|---------|------------|-----|
+| REVERT+2N (dual mat, no 2K) | `tcg src 21` index 2 `numTexGens 0` | `J3DLockedMaterial::makeSharedDisplayList()` is **no-op** → empty shared DL | **2N′** force `J3DMaterial::makeSharedDisplayList()` once at parse |
+| 2N′ + single pass | Stable colored fill; fragments / missing arrow | Dual-material **single GX state** — Fix B binds Vbow_v TEV only; SC needs 3 stages | Attempted two-pass / per-shape (below) |
+| Per-shape dump loop | **AV at patchModel** (countVertex, then dlBytes/name) | **Removed** — summary line only: `count=2 mats=2 joints=2` |
+
+GPU cache wipe required after each bad shader compile (`dawn_cache.db*` + `pipeline_cache.db*`).
+
+### 2S shape inventory (partial — crash truncated first run)
+
+```
+2S shape [patchModel]: count=2 mats=2 joints=2
+```
+
+(Log stopped before per-shape lines — `countVertex` AV. **Fixed** in latest build; next run should print both `sh[0]` and `sh[1]` with mat names.)
+
+**Wind Clau re-analysis (accepted):** Image 2 = full WW bow with nocked arrow (not TP). Color tuning was premature while geometry incomplete. With **count=2**, the “>2 shapes” branch is **closed**. Remaining geometry hypotheses:
+
+1. **Dual-material GX mismatch** — single pre-bind cannot serve SC (3 TEV / 3 texgen) and Vbow (2/2) in one `modelUpdateDL`; fragments / missing ink+arrow fit this better than missing shapes.
+2. **Submesh inside one shape** — arrow may live inside the `Vbow_v` shape DL; missing arrow = texmap/TEV stage not sampling, not a third shape.
+3. **`shape->hide()` on locked DL** — still untested on stable path; per-shape attempt was inconclusive due to crash.
+
+### Active code state (post interconnected pass)
+
+| Layer | State |
+|-------|--------|
+| **A+A′** | Keep — Aurora unbound texmap guards |
+| **2N′** | Bake locked shared DL **once** per cached `J3DModelData` |
+| **Fix B** | Single pre-`modelUpdateDL` texgen (max slot) + Vbow_v TEV bind |
+| **Lighting** | Struct **14**, MAJI-skipped (Fix B baseline) |
+| **2K** | Off — both materials draw |
+| **2S dump** | Safe metadata at `patchModel` + first `draw-pre-dl` |
+| **Draw** | Single `mDoExt_modelUpdateDL` — **not** per-shape multi-pass |
+
+### Wind Clau — pick next geometry branch (after user paste full 2S lines)
+
+| If dump shows… | Likely fix |
+|----------------|------------|
+| `sh[0]=SC_Vbow_v`, `sh[1]=Vbow_v`, both `dlBytes>0` | **Per-material sequential draw without hide** — e.g. two `modelUpdateDL` passes binding SC GX then Vbow GX, *without* rebaking DL / without `countVertex`; or Aurora hook after each mat `callDL` |
+| Arrow in `Vbow_v` shape (large `dlBytes`) but invisible | Fix B must bind **per-material TEV at mat draw time**, not one global Vbow-only bind before whole model |
+| `hidden=1` unexpectedly | Loader / visibility flag bug |
+
+**Do not:** struct-0, non-MAJI, `countVertex` in dump, per-shape hide loop, rebake shared DL every spawn.
+
+**Deferred:** struct-14 outdoor swing polish until SC per-material GX + screenshot geometry read complete.
+
+---
+
+## Interconnected pass — playtest sync (2026-06-30, post dump-fix)
+
+**Milestone:** First playtest where the bow **actually renders** (2S per-shape dump no longer AVs at load).
+
+| Gate | Result |
+|------|--------|
+| Crashes | ✅ None (user: "very stable") |
+| `Replay finished (6 s)` | ✅ 7× consecutive in log (frames 934–4392) |
+| Indoor color | ✅ Stable |
+| Outdoor color | ⚠️ Unstable (struct-14 swing pattern) |
+| Brightness | ⚠️ **Very bright / almost white** — new symptom; Wind Clau + screenshots |
+| Geometry | 📷 User screenshots → Wind Clau (whole bow TBD) |
+
+**For Claude chat:** Attach screenshots + paste **Fresh Wind Clau opener** from **▶ RESUME HERE** above.

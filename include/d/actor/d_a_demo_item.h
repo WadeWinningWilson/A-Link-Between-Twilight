@@ -39,6 +39,10 @@ public:
     void set_mtx();
     void draw_WOOD_STICK();
 
+#if TARGET_PC
+    void wwBowDrawModel();
+#endif
+
     virtual void setListStart();
     virtual void setTevStr();
 #if TARGET_PC
