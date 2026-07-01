@@ -224,6 +224,12 @@ void J3DMatPacket::draw() {
 
     callDL();
 
+#if TARGET_PC
+    if (J3DSys::MatDrawPostDlCallback callback = j3dSys.getMatDrawPostDlCallback()) {
+        callback(mpMaterial);
+    }
+#endif
+
     J3DShapePacket* packet = getShapePacket();
 #if TARGET_PC
     packet->mpModel->getVertexBuffer()->setArray();

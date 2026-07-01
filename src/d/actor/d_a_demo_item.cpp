@@ -114,6 +114,11 @@ int daDitem_c::CreateInit() {
 
     mSound.init(&current.pos, 1);
     set_mtx();
+#if TARGET_PC
+    if (useWwItemmdlBowMesh(m_itemNo)) {
+        dWwItemmdl_beginBowDrawScope(mpModel);
+    }
+#endif
     return 1;
 }
 
@@ -448,15 +453,16 @@ void daDitem_c::set_mtx() {
 }
 
 void daDitem_c::setTevStr() {
-    g_env_light.settingTevStruct(14, &current.pos, &tevStr);
 #if TARGET_PC
-    // Fix B baseline: MAJI skipped on locked WW bdl3 cel materials (texmap bind handles sampling).
-    if (!useWwItemmdlBowMesh(m_itemNo)) {
-        g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
+    if (useWwItemmdlBowMesh(m_itemNo)) {
+        // TWW daItemBase: TEV_TYPE_ACTOR (0), not TP get-item struct 14 dark ambient.
+        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+        // Minimal override: skip MAJI so baked cel TEV + 2B‴ post-dl bind show through.
+        return;
     }
-#else
-    g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
 #endif
+    g_env_light.settingTevStruct(14, &current.pos, &tevStr);
+    g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
 }
 
 #if TARGET_PC
@@ -480,7 +486,14 @@ int daDitem_c::DrawBase() {
 }
 #endif
 
-void daDitem_c::setListStart() {}
+void daDitem_c::setListStart() {
+#if TARGET_PC
+    if (useWwItemmdlBowMesh(m_itemNo)) {
+        // TWW daItemBase uses setListMaskOff; TP has no MaskOff buffer — regular OPA/XLU list.
+        dComIfGd_setList();
+    }
+#endif
+}
 
 void daDitem_c::draw_WOOD_STICK() {
     static const char nodisp_mat[] = "parts_m";
@@ -512,6 +525,7 @@ int daDitem_c::Delete() {
     endInsectEffect();
     mSound.deleteObject();
 #if TARGET_PC
+    dWwItemmdl_clearBowDrawScope();
     dWwItemmdl_clearOutlineSuppress();
     if (useWwItemmdlBowGetItem(m_itemNo) && dWwItemmdl_retainItemmdlArcOnDemoItemDelete()) {
         // 2Q: keep itemmdl.arc + parsed vbow resident — do not decCount/unmount on demo-item delete.

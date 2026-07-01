@@ -44,8 +44,12 @@ void dWwItemmdl_logTevOrderDump(J3DModelData* model_data, const char* phase, s32
 // Fix B step 2: per-draw GX TEV bind from Vbow_v struct (locked DL does not realize TevOrder).
 void dWwItemmdl_applyTevOrderForDraw(J3DModelData* model_data);
 
-// Fix B + 2N: Vbow_v texgen+TEV before locked-DL draw (not SC max — slot1 COLOR0 vs NRM).
+// Fix B + 2B″: per-material texgen+TEV after mat callDL (see begin/end draw scope).
 void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data);
+
+// Persistent mat-post-DL hook for WW bow demo item (set at spawn, clear at Delete).
+void dWwItemmdl_beginBowDrawScope(J3DModel* model);
+void dWwItemmdl_clearBowDrawScope();
 
 // 2N: per-draw GX texgen bind from Vbow_v (body material; SC max bind mis-samples).
 void dWwItemmdl_applyTexGenForDraw(J3DModelData* model_data);

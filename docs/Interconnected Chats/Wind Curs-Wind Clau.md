@@ -7,34 +7,22 @@
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
-| **Status (2026-06-30)** | **Geometry win ✅** — whole bow + arrow draws (2N′ bake-once + single-pass). **2N″:** bind **Vbow_v** texgen+TEV (not SC max) — fixes monochrome black↔white from COLOR0 vs NRM slot mismatch. **Next:** replay indoor+outdoor for body color; defer SC ink polish + struct-14 swing. |
+| **Status (2026-06-30)** | **Geometry ✅** · **Color ✅** (struct-0 + skip-MAJI + 2B‴ per-mat bind → true WW orange). **Flicker fix in tree:** persistent mat-post-DL callback (spawn→Delete), not per-OPA-flush. Awaiting replay. |
 
 ---
 
 ## ▶ RESUME HERE (fresh-chat handoff — 2026-06-30)
 
-**One-line state:** **First successful playtest** of 2N′ + Fix B single-pass (after removing blocking 2S per-shape dump). **Functionally stable** — multiple `Replay finished (6 s)`, no crashes. **Color:** stable indoors, **swings outdoors** (expected struct-14 signature); user reports **very bright / almost white** overall (new — needs Wind Clau read vs screenshots). **Geometry:** screenshots en route to Wind Clau (whole bow vs fragments TBD from images).
+**One-line state:** **Geometry complete** (whole bow + nocked arrow, 2N′ bake-once + single-pass). **True WW orange color achieved** (struct-0 + skip-MAJI + 2B‴ per-material post-DL bind). **Flicker:** rapid color↔monochrome from per-flush callback clear vs frame-interp re-flush — **fix:** persistent callback (`beginBowDrawScope` at `CreateInit`, `clearBowDrawScope` at `Delete`; no longer cleared after `DB_OPA_LIST` flush).
 
-**Deliverable to Wind Clau (user):** Paste screenshots from this session + this doc's **▶ First clean playtest** section. Log tail: `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — last lines include `2S shape … count=2` and `Replay finished (6 s)` (e.g. frames 934→4392 in latest session).
+**Deliverable to Wind Clau:** Replay after persistent-callback build — expect **steady orange**, no flicker. Log `2B apply post-dl` still prints **twice only** (log-once guard); do not use count as fire rate.
 
-**Wind Clau — pick next branch from screenshots + symptoms:**
+**Active draw path:** 2N′ bake-once + single `modelUpdateDL` + **persistent 2B‴ mat-post-DL hook** + struct **0** + skip-MAJI + `dComIfGd_setList()` (TWW mask-off stand-in) + both materials draw (no 2K).
 
-| Observation | Likely read | Candidate fix |
-|-------------|-------------|---------------|
-| Glowing white / washed-out fill | Vbow_v sampling + struct-14 **or** SC pass adding unbound/overbright stages on top of body | Per-material GX; verify SC not doubling brightness; struct-14 swing polish **after** SC bound |
-| Missing arrow / ink / fragments | SC_Vbow_v shape draws but **Vbow_v-only TEV bind** → `vec4f(0.0)` or wrong texmap on SC stages | **Safe per-material draw** — SC gets 3-stage TEV+texgen at mat time (NOT double full-`modelUpdateDL`, NOT per-shape hide, NOT load-time shape dump) |
-| Stable indoors, swings outdoors | **`settingTevStruct(14)`** view-matrix lighting — known Fix B baseline nit | Defer custom ambient tevStr until geometry+SC color correct |
-
-**Active draw path (`dWwItemmdl_drawWwBowModel`):** `2N′` locked shared-DL bake (once) + Fix B `prepareWwBowGxForDraw` (max texgen + **Vbow_v-only** TEV bind) + **single** `mDoExt_modelUpdateDL`. Struct **14**, MAJI-skipped. **No 2K** (both materials draw).
-
-**Cursor must NOT retry (all crashed or blocked):**
-- Per-shape multi-pass draw via double full `modelUpdateDL` — **`DRAW_INDEXED` overrun**
-- `countVertex()` / per-shape dlBytes/name in dump — **AV at patchModel**
-- Re-baking shared DL every spawn — corrupts DL (bake **once** at parse via `2N′`)
-- struct-0 / non-MAJI lighting (regressed or stub)
+**Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear.
 
 **Fresh Wind Clau opener (paste):**
-> Continue as Wind Clau on the WW `itemmdl` bow. Read `docs/Interconnected Chats/Wind Curs-Wind Clau.md` — start at **▶ RESUME HERE** and **▶ First clean playtest (2026-06-30)**. User playtest: **stable, no crashes**; color **bright/almost white**; indoor stable / outdoor unstable. Screenshots attached. Pick: safe per-material GX for SC_Vbow_v vs brightness/struct-14. Do not retry struct-0, non-MAJI, per-shape dump, or double-`modelUpdateDL`.
+> Continue as Wind Clau on WW `itemmdl` bow. Read `docs/Interconnected Chats/Wind Curs-Wind Clau.md` — **▶ RESUME HERE**. True WW orange achieved (struct-0 + skip-MAJI + 2B‴ per-mat bind). Flicker was per-flush callback clear vs frame-interp — persistent callback fix in tree (spawn→Delete). User replay pending for steady color. Do not regress geometry or the color recipe.
 
 **Hard-won facts a new chat must not re-derive (all confirmed):**
 - The long "flaky crash" was a **CRT fast-fail `0xC0000409`** = **unhandled `std::out_of_range`** from `std::bitset<8>::set()` in Aurora `shader_info.cpp` `color_arg_reg_info` — a TEV stage read a texture with **`texMapId = GX_TEXMAP_NULL (0xFF)`**; `CHECK` is a **no-op under `NDEBUG`** so it wasn't caught. **Fixed by A+A′** (guard the `.set()` in `shader_info.cpp` + the WGSL codegen in `shader.cpp`; skip unbound/out-of-range texmaps). Do **not** revert A/A′.
@@ -2260,3 +2248,81 @@ GPU cache wipe required after each bad shader compile (`dawn_cache.db*` + `pipel
 | Geometry | 📷 User screenshots → Wind Clau (whole bow TBD) |
 
 **For Claude chat:** Attach screenshots + paste **Fresh Wind Clau opener** from **▶ RESUME HERE** above.
+
+---
+
+## ▶ Interconnected pass — 2B″ playtest (2026-06-30)
+
+**User report (post 2N″ + 2B″):** Still **monochrome**, **unstable**; maybe **slightly more color indoors** (user unsure). Geometry unchanged (whole bow + arrow). Still stable.
+
+**Log verdict (grep `2B apply post-dl`):** **Zero matches** across full session. The 2B″ implementation never executed at mat-draw time.
+
+**Why 2B″ could not work (architecture):**
+
+```
+daDitem draw()  →  begin/end scope (2B″: only inside drawWwBowModel)
+    modelUpdateDL  →  entry() queues J3DMatPacket on DB_OPA_LIST
+    [callback cleared here in 2B″]
+… later same frame …
+mDoGph_Painter  →  dComIfGd_drawOpaList()
+    J3DMatPacket::draw  →  callDL(); [hook]; shape drawFast   ← hook must be live HERE
+```
+
+**Material struct still valid** (unchanged): `Vbow_v` texMap 1/0 · `SC_Vbow_v` 2/0/1 · texgen slot-1 COLOR0 vs NRM mismatch only matters for **global** pre-bind (2N″), not per-mat bind.
+
+**Attempts timeline (color):**
+
+| Step | Change | Color result | Log signal |
+|------|--------|--------------|------------|
+| Fix B baseline | Pre-bind Vbow TEV + 2K suppress SC | ✅ Colored body | `2B apply` (old path) |
+| REVERT+2N | SC max texgen, both mats | ❌ Monochrome | — |
+| 2N″ | Vbow global texgen pre-bind | ❌ Still monochrome | — |
+| 2B″ | Per-mat hook after `callDL` | ❌ Still monochrome | **No `2B apply post-dl`** |
+| **2B‴** | Hook scope → OPA list flush | **Pending replay** | Expect 2× `2B apply post-dl` |
+
+**2B‴ code (Cursor):** `beginBowDrawScope` in `DrawBase` / bracket path · `endBowDrawScopeIfActive` after `DB_OPA_LIST` in `drawOpaDrawList` · `J3DSys::MatDrawPostDlCallback` in `J3DMatPacket::draw` after `callDL`.
+
+**Wind Clau decision tree after 2B‴ replay:**
+1. **`2B apply post-dl` ×2 + colored** → struct-14 outdoor swing polish only (optional).
+2. **`2B apply post-dl` ×2 + still monochrome** → inspect Aurora `sampledTextures` / fifo drain; consider 2K suppress SC to restore Fix B baseline body color without losing Vbow geometry.
+3. **Still no hook lines** → demo item entries not on `DB_OPA_LIST`; bisect draw-buffer target.
+
+**Do not regress:** 2N′ bake-once, single-pass, full bow geometry.
+
+### Wind Clau — 2B‴ WORKS (true WW color achieved); flicker = per-flush callback scope (2026-06-30)
+
+**Milestone:** with `struct 0` + skip-MAJI + the `2B‴` per-material post-DL bind, the bow renders **true WW orange** (user screenshot). The TWW-decomp recipe is correct. Remaining issue is a **rapid, consistent every-frame flicker** between true-color and monochrome (esp. outdoors), reproducible every replay — NOT rare.
+
+**Log caveat:** `2B apply post-dl` has a **log-once guard** (`s_logged_vbow`/`s_logged_sc`, `d_ww_itemmdl_pc.cpp:912–933`) → prints twice regardless of fire rate. Count is NOT the fire rate.
+
+**Flicker mechanism:** `dWwItemmdl_beginBowDrawScope` sets the material callback; `dWwItemmdl_endBowDrawScopeIfActive` **clears it after one `DB_OPA_LIST` flush**. But Dusk **frame-interpolates** (258 FPS seen; `frameInterp` in logs) — logic-frame flush has the callback set → per-material GX → **color**; interpolated re-flushes run with the callback already cleared → vbow mats draw with stale/default GX → **monochrome**. ⇒ rapid logic-vs-interp flicker.
+
+**Fix (low-risk): make the post-DL callback PERSISTENT for the bow's lifetime** — set at spawn/first-draw, clear at `Delete` — not per-OPA-flush. The callback already guards on material (`isVbowDrawMaterial`, `:905`) so it **no-ops for all other materials/draws** — safe to leave set. Then every flush (logic + interpolated + any 2nd pass) re-binds the correct per-material GX → steady color.
+
+**2B‴+ persistent (Cursor, in tree):** `dWwItemmdl_beginBowDrawScope` in `CreateInit` · `dWwItemmdl_clearBowDrawScope` in `Delete` · removed per-flush clear from `drawOpaDrawList`.
+
+**Confirm (optional):** drop the log-once guard for one replay → hook fires on logic frames, not on interp re-flushes = confirmed.
+
+**Fallback if persistent callback doesn't fix it:** interp is re-*presenting* a cached command buffer (not re-*flushing*) → bake GX into the packet, or exclude the get-item demo from interpolation.
+
+**Do NOT regress:** struct-0 + skip-MAJI + 2B‴ per-material bind (this is what produced true color), geometry, bake-once.
+
+### Wind Clau — TWW-decomp-grounded plan (2026-06-30, user pointed back to the decomp research)
+
+2B‴ is the right fix for **texture sampling** (deferred J3D mat-packet draw). But even after it fires, we're still drawing with **TP's `struct 14`**, which the TWW decomp names as the cause of dark/muddy WW cel fill. **The flat WW look (reference: WW "You got the Hero's Bow" — even orange/tan, pale tips, no swing) needs the TWW draw recipe, not just per-material texgen.** Per [`wind-waker-item-work.md:116`](../wind-waker-item-work.md) TWW draws get-item demos with:
+- `settingTevStruct(**TEV_TYPE_ACTOR = 0**)` — NOT `struct 14`
+- `setLightTevColorType` (non-MAJI) — **PC stub**, so PC needs MAJI *or* minimal/no override (cel color is baked in the TEV)
+- **`setListMaskOff()`** — NOT dark list (**never tried** = the "wrong draw buffer" branch)
+
+**Two TWW pieces still un-landed** (both were blocked/unfairly tested before):
+- **struct-14 → struct-0:** "tried" at 3.1 but **before texture sampled** (2B″ hook was dead) → unfair; struct-0 applied no-op lighting to an untextured surface. **Re-test after 2B‴.**
+- **`setListMaskOff`:** never attempted.
+
+**Sequenced path to the flat look:**
+1. **2B‴** → confirm `2B apply post-dl` ×2 → texture samples (color returns, likely still dark/swinging).
+2. **Land the TWW draw recipe:** `struct 14 → 0` **+** `setListMaskOff`. PC lighting caveat: non-MAJI is a stub, so use **struct-0 + MAJI** *or* **skip the lighting override entirely** (let the baked cel TEV show) — try minimal-override first for a baked material.
+3. Residual outdoor swing → optional ambient polish.
+
+**Refined branch #2 (colored-hook fires but still monochrome/dark):** most likely **struct-14's dark ambient crushing the TEV**, not a fresh fifo bug → **land TWW draw (struct-0 + mask-off) before chasing `sampledTextures`.** Decomp says struct-14 darkens WW cel fill even with a sampling texture.
+
+**Do NOT retry:** struct-0 *without* fixing texture first (that was 3.1's unfair test), non-MAJI as the *sole* light apply (PC stub), per-shape dump, double-`modelUpdateDL`.

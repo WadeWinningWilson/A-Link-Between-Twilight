@@ -9,6 +9,7 @@
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.h"
 #include "JSystem/J3DGraphAnimator/J3DModel.h"
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"
+#include "JSystem/J3DGraphBase/J3DSys.h"
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "JSystem/J3DGraphBase/J3DTexture.h"
 #include "JSystem/J3DGraphBase/J3DShape.h"
@@ -134,6 +135,8 @@ static bool s_vbowParseFailed = false;
 static const void* s_parseRawPtr = NULL;
 static constexpr u32 kVbowRetainedHeapSize = 0x100000u;
 static J3DShape* s_suppressedOutlineShape = NULL;
+static J3DModelData* s_wwBowDrawModelData = NULL;
+static bool s_wwBowDrawScopeActive = false;
 
 static bool privateItemmdlArcReady() {
     return s_privateItemmdlState == 2;
@@ -880,6 +883,59 @@ static void applyTexGenFromMaterial(J3DMaterial* material) {
     }
 }
 
+static bool isVbowDrawMaterial(J3DMaterial* material) {
+    if (material == NULL || s_wwBowDrawModelData == NULL) {
+        return false;
+    }
+
+    JUTNameTab* names = s_wwBowDrawModelData->getMaterialTable().getMaterialName();
+    for (u16 i = 0; i < s_wwBowDrawModelData->getMaterialNum(); i++) {
+        if (s_wwBowDrawModelData->getMaterialNodePointer(i) != material) {
+            continue;
+        }
+
+        const char* name = names != NULL ? names->getName(i) : NULL;
+        return isTevDumpMaterial(name);
+    }
+
+    return false;
+}
+
+static void wwBowMatDrawPostDl(J3DMaterial* material) {
+    if (!isVbowDrawMaterial(material)) {
+        return;
+    }
+
+    applyTexGenFromMaterial(material);
+    applyTevOrderFromMaterial(material);
+
+    static bool s_logged_vbow = false;
+    static bool s_logged_sc = false;
+    JUTNameTab* names = s_wwBowDrawModelData->getMaterialTable().getMaterialName();
+    for (u16 i = 0; i < s_wwBowDrawModelData->getMaterialNum(); i++) {
+        if (s_wwBowDrawModelData->getMaterialNodePointer(i) != material) {
+            continue;
+        }
+
+        const char* name = names != NULL ? names->getName(i) : NULL;
+        const bool is_sc = name != NULL && strcmp(name, "SC_Vbow_v") == 0;
+        if ((is_sc && s_logged_sc) || (!is_sc && s_logged_vbow)) {
+            break;
+        }
+
+        char line[160];
+        snprintf(line, sizeof(line), "2B apply post-dl: mat=%s nTexGen=%u nTev=%u",
+                 name != NULL ? name : "?", material->getTexGenNum(), material->getTevStageNum());
+        dWwItemmdl_debugLog(line);
+        if (is_sc) {
+            s_logged_sc = true;
+        } else {
+            s_logged_vbow = true;
+        }
+        break;
+    }
+}
+
 static void logShapeInventoryInternal(J3DModelData* model_data, const char* phase) {
     if (model_data == NULL) {
         return;
@@ -909,19 +965,37 @@ void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data) {
     applyTevOrderFromMaterial(body_material);
 }
 
+void dWwItemmdl_beginBowDrawScope(J3DModel* model) {
+    if (model == NULL || model->getModelData() == NULL) {
+        return;
+    }
+
+    J3DModelData* model_data = model->getModelData();
+    if (s_wwBowDrawScopeActive && s_wwBowDrawModelData == model_data) {
+        return;
+    }
+
+    s_wwBowDrawScopeActive = true;
+    s_wwBowDrawModelData = model_data;
+    j3dSys.setMatDrawPostDlCallback(wwBowMatDrawPostDl);
+}
+
+void dWwItemmdl_clearBowDrawScope() {
+    if (!s_wwBowDrawScopeActive) {
+        return;
+    }
+
+    s_wwBowDrawScopeActive = false;
+    j3dSys.setMatDrawPostDlCallback(nullptr);
+    s_wwBowDrawModelData = NULL;
+}
+
 void dWwItemmdl_drawWwBowModel(J3DModel* model) {
     if (model == NULL) {
         return;
     }
 
-    J3DModelData* model_data = model->getModelData();
-    if (model_data == NULL) {
-        return;
-    }
-
-    // Stable path: 2N' locked-DL bake (once at load) + Fix B pre-bind + single modelUpdateDL.
-    // Per-shape multi-pass draw removed — caused DRAW_INDEXED DL overrun / AV (2026-06-30).
-    dWwItemmdl_prepareWwBowGxForDraw(model_data);
+    // 2N' bake-once + entry only here; MatPacket::draw runs later in painter (see draw scope).
     mDoExt_modelUpdateDL(model);
 }
 
