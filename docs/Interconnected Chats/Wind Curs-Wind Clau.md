@@ -7,15 +7,15 @@
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
-| **Status (2026-07-01)** | **Color ✅ stable** (4B ambient-only + 2B‴). **Still too bright** — tune 75% amb scalar down next; do not re-enable MAJI. |
+| **Status (2026-07-01)** | **4D baseline committed** — stable geometry + struct-0/no MAJI + efplight skip + warm fixed fill. Next = polish (SC A/B, warmth/dim, beam pass). |
 
 ---
 
 ## ▶ RESUME HERE (fresh-chat handoff — 2026-06-30)
 
-**One-line state:** **4B landed — stable WW orange** indoors/outdoors (struct-0 + ambient-only + persistent 2B‴). **Known nit:** still **too bright** vs reference; next = lower amb scale (not MAJI). Detail path preserved vs MAJI flat wash.
+**One-line state:** **4D brightness + orange** — fixed warm amb `(110,85,55)`, Vbow_v cap **90**, SC_Vbow_v absolute ink `(72,58,48)`, **no efplight** on WW bow (beams stay). Keep struct-0 + 4B ambient-only + 2B‴. **No MAJI.**
 
-**Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4B ambient-only** + `dComIfGd_setList()` + both materials (no 2K).
+**Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4D ambient-only** + skip `dKy_efplight_set` + `dComIfGd_setList()`.
 
 **Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear.
 
@@ -54,7 +54,58 @@
 
 **Expected replay:** orange **with** gradient / tips / arrow detail; no outdoor black-out. Tune 75% scalar only if still bright — **do not re-enable MAJI**.
 
-**User replay (2026-07-01):** ✅ **Color stable** indoors/outdoors. ⚠️ **Still too bright** — commit checkpoint; next pass = reduce amb scale (e.g. 75% → 50–60%), not MAJI.
+**User replay (2026-07-01):** ✅ **Color stable** indoors/outdoors. ⚠️ **Still too bright** — commit `72a2f01194`; **4C** lowered amb + skipped efplight + per-mat caps; screenshots still neon yellow / #FFF tips → **4D** (fixed warm + lower caps + absolute SC ink).
+
+---
+
+## ▶ Interconnected pass — 4D brightness + orange (2026-07-01)
+
+**Problem (4C replay):** stable but wrong exposure/hue — neon yellow body (neutral 50% room amb), cream tips → #FFF bloom, cave halo (beams + remaining self-glow on bright texels). WW target = goldenrod/amber body + cream tips + grey-brown ink, not lemon + emissive white.
+
+| Layer | 4C | 4D |
+|-------|----|----|
+| Room ambient | 50% of `settingTevStruct(0)` | **Fixed warm** `(110, 85, 55)` via `dWwItemmdl_setWwBowActorAmbient` |
+| Vbow_v body | Cap 120 | Cap **90** |
+| SC_Vbow_v ink | 65% of body amb | **Absolute** `(72, 58, 48)` — dark warm ink, not white fill |
+| efplight | Skipped | Unchanged (skipped) |
+| MAJI / struct 14 | Off | Off |
+
+**Constants:** `d_ww_itemmdl_pc.cpp` — `kWwBowFixedAmbR/G/B`, `kWwBowBodyAmbCap`, `kWwBowInkAmbR/G/B`. Log once: `4D ambient-only: body=… cap=90 ink=72,58,48`
+
+**Tune ladder (one knob at a time, screenshot after each):**
+- Muddy → raise all three body channels ~10 → `(120, 95, 65)`
+- Still bright → `(95, 75, 48)`; body cap 90 → **80**
+- Tips/arrow still bloom after close-up improves → A/B `dWwItemmdl_suppressOutlineForDraw()` during get-item draw (one test build); if fixed → SC pass is bloom source
+- Close-up OK, full cave pose washed → dim/skip **get-item beam particles** (not efplight), same pattern as efplight skip
+
+**Do not:** re-enable MAJI, struct 14, or only drop 50%→40% without warming (grey-yellow, not WW orange).
+
+**Acceptance gap (post-commit polish):** orange direction ✅ closest yet; still chase cream tips (#FFF bloom), cave full-pose halo (beams), less lemon / more amber.
+
+**Post-commit order (do not revisit MAJI / struct 14 / % room amb):**
+1. **SC A/B** — one build: `suppressOutlineForDraw` before draw, restore after → isolate tip bloom (ink vs body).
+2. **One constant tweak** — e.g. warmer `(105,78,48)`, dimmer `(95,75,48)`, or cap **80**; screenshot close-up vs WW ref.
+3. **Beam pass** — skip/dim get-item beam particles for WW bow only (mirror efplight skip); tune material on close-up, beams on full pose.
+4. **Ink polish** if A/B implicates SC — `(58,48,42)` or `(65,52,44)`; deferred: per-shape TEV for SC_Vbow_v.
+5. After color sign-off → BTK spin, Track B held bow (`d_a_alink_bow.inc`).
+
+---
+
+## ▶ Interconnected pass — 4C brightness tune (2026-07-01) — superseded by 4D
+
+**Problem:** stable color but over-exposed — white tips bloom, orange → yellow-white, arrow detail lost. Three stacked causes (external handoff + our tree):
+
+| Layer | Fix (4C) |
+|-------|----------|
+| Room ambient 75% | **50%** in `setTevStr` |
+| efplight `mLightStrength=8` | **Skip** `dKy_efplight_set` for WW bow (`actionStart`); beams/particles unchanged |
+| Same amb on body + SC | **Vbow_v** cap 120; **SC_Vbow_v** 65% of base |
+
+**Constants:** `d_ww_itemmdl_pc.cpp` — `kWwBowAmbScalePct`, `kWwBowBodyAmbCap`, `kWwBowOutlineAmbScalePct`. Log: `4C ambient-only: …`
+
+**Do not:** re-enable MAJI or struct 14 for brightness. If still bright → 40% amb or fixed neutral `(140,120,90)` per room compare.
+
+**Acceptance:** warm orange-tan body, visible gradient, cream tips (not #FFF bloom), readable arrow, no cave halo.
 
 ---
 

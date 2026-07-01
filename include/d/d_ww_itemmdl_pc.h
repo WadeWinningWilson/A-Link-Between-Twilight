@@ -55,7 +55,8 @@ void dWwItemmdl_beginBowDrawScope(J3DModel* model, fpc_ProcID owner_id);
 void dWwItemmdl_clearBowDrawScope();
 void dWwItemmdl_notifyRoomChange(s32 room_no);
 
-// 4B: actor ambient on Vbow_v/SC_Vbow_v only — no MAJI view lights (preserves cel detail).
+// 4B/4D: actor ambient on Vbow_v/SC_Vbow_v only — no MAJI view lights (preserves cel detail).
+void dWwItemmdl_setWwBowActorAmbient(dKy_tevstr_c* tevstr_p);
 void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevstr_p);
 
 // 2N: per-draw GX texgen bind from Vbow_v (body material; SC max bind mis-samples).

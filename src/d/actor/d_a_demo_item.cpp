@@ -144,12 +144,18 @@ void daDitem_c::action() {
 void daDitem_c::actionStart() {
     if (chkDraw()) {
         if (!chkArgFlag(0x2) && !chkArgFlag(0x4) && !mSetLightEff) {
-            mSetLightEff = true;
-            settingEffectLight();
-            dKy_efplight_set(&mLight);
+#if TARGET_PC
+            // 4C: WW bow — skip efplight (blooms cel in dark rooms); beams/particles unchanged.
+            if (!useWwItemmdlBowMesh(m_itemNo))
+#endif
+            {
+                mSetLightEff = true;
+                settingEffectLight();
+                dKy_efplight_set(&mLight);
 
-            // "Get Item: Effect Light set & display start!\n"
-            OS_REPORT("ゲットアイテム：エフェクトライトセット＆表示スタート！\n");
+                // "Get Item: Effect Light set & display start!\n"
+                OS_REPORT("ゲットアイテム：エフェクトライトセット＆表示スタート！\n");
+            }
         }
 
         if (m_itemNo == dItemNo_DUNGEON_EXIT_e || m_itemNo == dItemNo_DUNGEON_EXIT_2_e) {
@@ -455,11 +461,9 @@ void daDitem_c::set_mtx() {
 void daDitem_c::setTevStr() {
 #if TARGET_PC
     if (useWwItemmdlBowMesh(m_itemNo)) {
-        // TWW struct-0 actor ambient; 4B ambient-only (MAJI kills cel detail + outdoor swing).
+        // 4D: struct-0 + fixed warm ambient (goldenrod), not % room amb.
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
-        tevStr.AmbCol.r = (u8)((u16)tevStr.AmbCol.r * 3 / 4);
-        tevStr.AmbCol.g = (u8)((u16)tevStr.AmbCol.g * 3 / 4);
-        tevStr.AmbCol.b = (u8)((u16)tevStr.AmbCol.b * 3 / 4);
+        dWwItemmdl_setWwBowActorAmbient(&tevStr);
         dWwItemmdl_applyBowMaterialAmbientOnly(mpModel, &tevStr);
         return;
     }
@@ -626,7 +630,12 @@ int daDitem_c::execute() {
         scale.z = scale.x;
     }
 
-    settingEffectLight();
+#if TARGET_PC
+    if (!useWwItemmdlBowMesh(m_itemNo))
+#endif
+    {
+        settingEffectLight();
+    }
     set_mtx();
 
     eyePos = current.pos;

@@ -137,6 +137,16 @@ static bool s_vbowParseFailed = false;
 static const void* s_parseRawPtr = NULL;
 static constexpr u32 kVbowRetainedHeapSize = 0x100000u;
 static J3DShape* s_suppressedOutlineShape = NULL;
+#if TARGET_PC
+// 4D: fixed warm body fill + dark ink (not percentage room amb / white SC bloom).
+static constexpr u8 kWwBowFixedAmbR = 110;
+static constexpr u8 kWwBowFixedAmbG = 85;
+static constexpr u8 kWwBowFixedAmbB = 55;
+static constexpr u8 kWwBowBodyAmbCap = 90;
+static constexpr u8 kWwBowInkAmbR = 72;
+static constexpr u8 kWwBowInkAmbG = 58;
+static constexpr u8 kWwBowInkAmbB = 48;
+#endif
 static J3DModelData* s_wwBowDrawModelData = NULL;
 static bool s_wwBowDrawScopeActive = false;
 static fpc_ProcID s_wwBowDrawOwnerId = fpcM_ERROR_PROCESS_ID_e;
@@ -1004,6 +1014,16 @@ void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data) {
     applyTevOrderFromMaterial(body_material);
 }
 
+void dWwItemmdl_setWwBowActorAmbient(dKy_tevstr_c* tevstr_p) {
+    if (tevstr_p == NULL) {
+        return;
+    }
+
+    tevstr_p->AmbCol.r = kWwBowFixedAmbR;
+    tevstr_p->AmbCol.g = kWwBowFixedAmbG;
+    tevstr_p->AmbCol.b = kWwBowFixedAmbB;
+}
+
 void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevstr_p) {
     if (model == NULL || tevstr_p == NULL) {
         return;
@@ -1027,19 +1047,39 @@ void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevst
             continue;
         }
 
+        GXColor mat_amb = amb_col;
+        const bool is_sc = name != NULL && strcmp(name, "SC_Vbow_v") == 0;
+        if (is_sc) {
+            mat_amb.r = kWwBowInkAmbR;
+            mat_amb.g = kWwBowInkAmbG;
+            mat_amb.b = kWwBowInkAmbB;
+        } else {
+            if (mat_amb.r > kWwBowBodyAmbCap) {
+                mat_amb.r = kWwBowBodyAmbCap;
+            }
+            if (mat_amb.g > kWwBowBodyAmbCap) {
+                mat_amb.g = kWwBowBodyAmbCap;
+            }
+            if (mat_amb.b > kWwBowBodyAmbCap) {
+                mat_amb.b = kWwBowBodyAmbCap;
+            }
+        }
+
         J3DMaterial* material = model_data->getMaterialNodePointer(i);
         if (material != NULL) {
-            material->setAmbColor(0, (J3DGXColor*)&amb_col);
+            material->setAmbColor(0, (J3DGXColor*)&mat_amb);
         }
     }
 
-    static bool s_logged_4b = false;
-    if (!s_logged_4b) {
-        char line[128];
-        snprintf(line, sizeof(line), "4B ambient-only: amb=%u,%u,%u (no MAJI lights)",
-                 amb_col.r, amb_col.g, amb_col.b);
+    static bool s_logged_4d = false;
+    if (!s_logged_4d) {
+        char line[192];
+        snprintf(line, sizeof(line),
+                 "4D ambient-only: body=%u,%u,%u cap=%u ink=%u,%u,%u (no MAJI, no efplight)",
+                 amb_col.r, amb_col.g, amb_col.b, kWwBowBodyAmbCap, kWwBowInkAmbR, kWwBowInkAmbG,
+                 kWwBowInkAmbB);
         dWwItemmdl_debugLog(line);
-        s_logged_4b = true;
+        s_logged_4d = true;
     }
 }
 
