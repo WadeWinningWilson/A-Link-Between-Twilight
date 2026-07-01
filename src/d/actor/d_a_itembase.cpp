@@ -35,9 +35,22 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
     J3DModelData* modelData = NULL;
 #if TARGET_PC
     if (m_itemNo == dItemNo_BOW_e && dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
-        modelData = dWwItemmdl_getVbowModelData("itemmdl");
-        if (modelData != NULL) {
-            dWwItemmdl_patchModelForPc(modelData);
+        if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+            dWwItemmdl_bracketLog("CreateItemHeap: enter");
+            dWwItemmdl_logHeap("CreateItemHeap enter");
+        }
+
+        if (dWwItemmdl_use2DIsolateHeap()) {
+            dWwItemmdl_bracketLog("2D isolate: O_gD_bow mesh (itemmdl arc at create)");
+            modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+        } else {
+            modelData = dWwItemmdl_getVbowModelData("itemmdl");
+            if (modelData != NULL) {
+                dWwItemmdl_patchModelForPc(modelData);
+                if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+                    dWwItemmdl_log2QPrimeAudit("heap", modelData, fopAcM_GetRoomNo(this));
+                }
+            }
         }
     } else {
         modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
@@ -86,6 +99,16 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
     }
 
     mpModel = mDoExt_J3DModel__create(modelData, modelflags, flags);
+#if TARGET_PC
+    if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+        if (mpModel != NULL) {
+            dWwItemmdl_bracketLog("CreateItemHeap: after J3DModel__create OK");
+            dWwItemmdl_logHeap("after J3DModel__create");
+        } else {
+            dWwItemmdl_bracketLog("CreateItemHeap: J3DModel__create FAILED");
+        }
+    }
+#endif
     if (mpModel == NULL) {
         return 0;
     }
@@ -155,6 +178,15 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
     if (!clothCreate()) {
         return 0;
     }
+
+#if TARGET_PC
+    if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+        const int heap_result = __CreateHeap() ? TRUE : FALSE;
+        dWwItemmdl_bracketLog(heap_result ? "CreateItemHeap: __CreateHeap OK" :
+                                             "CreateItemHeap: __CreateHeap FAILED");
+        return heap_result;
+    }
+#endif
 
     return __CreateHeap() ? TRUE : FALSE;
 }

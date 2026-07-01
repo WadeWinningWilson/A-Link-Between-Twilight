@@ -52,6 +52,7 @@ UserSettings g_userSettings = {
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
         .flurryRush {"game.flurryRush", false},
         .wwItemmdlGetItem {"game.wwItemmdlGetItem", false},
+        .wwItemmdlGetItem2DIsolate {"game.wwItemmdlGetItem2DIsolate", false},
         .sumoOutfit {"game.sumoOutfit", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
         .capWear {"game.capWear", CapWearMode::Off},
@@ -323,6 +324,7 @@ void registerSettings() {
     Register(g_userSettings.game.focusedArtsCheat);
     Register(g_userSettings.game.flurryRush);
     Register(g_userSettings.game.wwItemmdlGetItem);
+    Register(g_userSettings.game.wwItemmdlGetItem2DIsolate);
     Register(g_userSettings.game.sumoOutfit);
     Register(g_userSettings.game.sumoOutfitFists);
     Register(g_userSettings.game.capWear);

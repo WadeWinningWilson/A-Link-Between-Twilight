@@ -2269,6 +2269,11 @@ EditorWindow::EditorWindow() {
             "Use retail itemmdl.arc vbow for Hero's Bow get-item spin (Phase 2 heap wiring). "
             "Off = vanilla O_gD_bow." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlGetItem2DIsolate,
+            "WW itemmdl 2D isolate",
+            "Diagnostic: itemmdl arc at create, O_gD_bow mesh on heap (Phase 2 branch 2D). "
+            "Requires WW itemmdl get-item ON. Log-only localize — not a shipping path." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
             leftPane.add_button("Replay Bow Get-Item Demo")
                 .on_pressed([] {

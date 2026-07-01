@@ -268,6 +268,8 @@ struct UserSettings {
         ConfigVar<bool> flurryRush;
         // WW itemmdl Track A: use retail itemmdl.arc vbow for bow get-item (dev toggle).
         ConfigVar<bool> wwItemmdlGetItem;
+        // Phase 2 diagnostic: itemmdl arc + O_gD_bow heap mesh (loader isolate 2D).
+        ConfigVar<bool> wwItemmdlGetItem2DIsolate;
         // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
         // never the sumo minigame.
         //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).

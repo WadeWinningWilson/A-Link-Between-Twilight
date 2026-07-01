@@ -41,6 +41,9 @@ public:
 
     virtual void setListStart();
     virtual void setTevStr();
+#if TARGET_PC
+    virtual int DrawBase();
+#endif
     virtual int __CreateHeap();
 
     inline int Delete();

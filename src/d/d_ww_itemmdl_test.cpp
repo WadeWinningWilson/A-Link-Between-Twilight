@@ -12,11 +12,16 @@
 #include "d/d_a_itembase_static.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
+#include "d/d_stage.h"
 #include "d/d_ww_itemmdl_pc.h"
 #include "dusk/settings.h"
 #include "dusk/ui/ui.hpp"
 #include "f_op/f_op_actor.h"
 #include "f_op/f_op_actor_mng.h"
+#include "f_op/f_op_scene_mng.h"
+#include "f_pc/f_pc_create_iter.h"
+#include "f_pc/f_pc_create_req.h"
+#include "f_pc/f_pc_node.h"
 #include "SSystem/SComponent/c_counter.h"
 #include "SSystem/SComponent/c_phase.h"
 
@@ -38,13 +43,19 @@ enum ReplayPhase {
 static ReplayPhase s_phase = REPLAY_NONE;
 static int s_waitFrames = 0;
 static int s_runningFrames = 0;
+static int s_preloadStep = 0;
 static const char* s_replayStatus = nullptr;
 static fpc_ProcID s_itemId = fpcM_ERROR_PROCESS_ID_e;
 static request_of_phase_process_class s_arcPhase;
 static char s_demoArcName[32] = {};
+static int s_idleStableFrames = 0;
+static bool s_logged2VDefer = false;
 
 // 6 s @ 30 Hz logic frames (matches TP proc timing).
 static constexpr int kReplayDurationFrames = 180;
+// 2V: require this many consecutive idle frames before spawning demo item.
+static constexpr int k2VIdleStableFrames = 30;
+static constexpr int k2VDeferTimeoutFrames = 900;
 
 static void debugLog(const char* message) {
     const char* user = getenv("USERPROFILE");
@@ -71,9 +82,12 @@ static void failReplay(const char* message) {
     s_phase = REPLAY_NONE;
     s_waitFrames = 0;
     s_runningFrames = 0;
+    s_preloadStep = 0;
     s_itemId = fpcM_ERROR_PROCESS_ID_e;
     s_arcPhase.id = cPhs_INIT_e;
     s_demoArcName[0] = '\0';
+    s_idleStableFrames = 0;
+    s_logged2VDefer = false;
 }
 
 static void finishReplay(const char* statusMessage, daAlink_c* link) {
@@ -89,18 +103,90 @@ static void finishReplay(const char* statusMessage, daAlink_c* link) {
     s_phase = REPLAY_NONE;
     s_waitFrames = 0;
     s_runningFrames = 0;
+    s_preloadStep = 0;
     s_itemId = fpcM_ERROR_PROCESS_ID_e;
     s_arcPhase.id = cPhs_INIT_e;
     s_demoArcName[0] = '\0';
+    s_idleStableFrames = 0;
+    s_logged2VDefer = false;
+}
+
+static bool sceneHasPendingCreates(scene_class* scene) {
+    return scene != NULL && fpcNd_IsCreatingFromUnder(scene) != NULL;
+}
+
+static void* pendingCreateOnLayerCallback(void* i_createTag, void* i_layerId) {
+    create_request* createReq = (create_request*)((create_tag*)i_createTag)->base.mpTagData;
+    if (createReq->layer->layer_id == *(fpc_ProcID*)i_layerId) {
+        return createReq;
+    }
+
+    return NULL;
+}
+
+static bool layerHasPendingCreateRequests(fpc_ProcID layerId) {
+    if (layerId == fpcM_ERROR_PROCESS_ID_e) {
+        return false;
+    }
+
+    return fpcCtIt_Judge((fpcCtIt_JudgeFunc)pendingCreateOnLayerCallback, &layerId) != NULL;
+}
+
+static const char* getRoomLoadIdleBlockReason(daAlink_c* link) {
+    scene_class* playScene = fopScnM_SearchByID(dStage_roomControl_c::getProcID());
+    if (playScene == NULL) {
+        return "no play scene";
+    }
+
+    if (sceneHasPendingCreates(playScene)) {
+        return "play scene pending creates";
+    }
+
+    if (layerHasPendingCreateRequests(fopScnM_LayerID(playScene))) {
+        return "play layer create queue";
+    }
+
+    if (dStage_roomControl_c::getRoomReadId() >= 0) {
+        return "room read in progress";
+    }
+
+    s8 roomNo = fopAcM_GetRoomNo(link);
+    if (roomNo >= 0) {
+        if (dComIfGp_roomControl_checkStatusFlag(roomNo, 0x02 | 0x04)) {
+            return "room status loading";
+        }
+
+        scene_class* roomScene = fopScnM_SearchByID(dStage_roomControl_c::getStatusProcID(roomNo));
+        if (roomScene != NULL) {
+            if (sceneHasPendingCreates(roomScene)) {
+                return "room scene pending creates";
+            }
+
+            if (layerHasPendingCreateRequests(fopScnM_LayerID(roomScene))) {
+                return "room layer create queue";
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static const char* getPreloadArcNameForStep(int step) {
+#if TARGET_PC
+    if (!dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
+        return dItem_data::getArcName(dItemNo_BOW_e);
+    }
+    if (dWwItemmdl_use2DIsolateHeap()) {
+        return step == 0 ? "itemmdl" : dItem_data::getArcName(dItemNo_BOW_e);
+    }
+    return "itemmdl";
+#else
+    return dItem_data::getArcName(dItemNo_BOW_e);
+#endif
 }
 
 static const char* getDemoArcNameForBow() {
-#if TARGET_PC
-    if (dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
-        return "itemmdl";
-    }
-#endif
-    return dItem_data::getArcName(dItemNo_BOW_e);
+    return getPreloadArcNameForStep(0);
 }
 
 static fopAc_ac_c* getDemoItemActor() {
@@ -158,6 +244,9 @@ void requestBowGetItemDemoReplay() {
     s_itemId = fpcM_ERROR_PROCESS_ID_e;
     s_arcPhase.id = cPhs_INIT_e;
     s_demoArcName[0] = '\0';
+    s_preloadStep = 0;
+    s_idleStableFrames = 0;
+    s_logged2VDefer = false;
     debugLog("replay requested");
 }
 
@@ -215,18 +304,54 @@ void tickBowGetItemDemoReplay() {
             return;
         }
 
-        const char* arcName = getDemoArcNameForBow();
+        const char* idleBlockReason = getRoomLoadIdleBlockReason(link);
+        if (idleBlockReason != NULL) {
+            s_idleStableFrames = 0;
+            if (!s_logged2VDefer) {
+                char message[128];
+                snprintf(message, sizeof(message), "2V: defer — %s", idleBlockReason);
+                debugLog(message);
+                s_logged2VDefer = true;
+            }
+
+            if (s_waitFrames > k2VDeferTimeoutFrames) {
+                failReplay("Timed out waiting for room load to finish — stand still and retry.");
+            }
+            return;
+        }
+
+        s_idleStableFrames++;
+        if (s_idleStableFrames < k2VIdleStableFrames) {
+            return;
+        }
+
+        s_logged2VDefer = false;
+        debugLog("2V: room load idle — preloading demo item archive");
+
+        const char* arcName = getPreloadArcNameForStep(s_preloadStep);
         strncpy(s_demoArcName, arcName, sizeof(s_demoArcName) - 1);
         s_demoArcName[sizeof(s_demoArcName) - 1] = '\0';
         s_arcPhase.id = cPhs_INIT_e;
         s_phase = REPLAY_PRELOAD_ARC;
         s_waitFrames = 0;
-        debugLog("preloading demo item archive");
+        if (dWwItemmdl_use2DIsolateHeap()) {
+            debugLog("preloading demo archives (2D: itemmdl then O_gD_bow)");
+        }
         return;
     }
 
     if (s_phase == REPLAY_PRELOAD_ARC) {
-        const int arcState = dComIfG_resLoad(&s_arcPhase, s_demoArcName);
+        int arcState;
+#if TARGET_PC
+        if (dusk::getSettings().game.wwItemmdlGetItem.getValue() &&
+            !dWwItemmdl_use2DIsolateHeap() && s_preloadStep == 0) {
+            arcState = dWwItemmdl_stepPrivateItemmdlArcLoad(&s_arcPhase);
+        } else {
+            arcState = dComIfG_resLoad(&s_arcPhase, s_demoArcName);
+        }
+#else
+        arcState = dComIfG_resLoad(&s_arcPhase, s_demoArcName);
+#endif
         if (arcState == cPhs_ERROR_e) {
             failReplay("Could not load the get-item demo archive (missing itemmdl.arc or O_gD_bow?).");
             return;
@@ -236,6 +361,17 @@ void tickBowGetItemDemoReplay() {
             if (s_waitFrames > 180) {
                 failReplay("Timed out preloading the get-item demo archive.");
             }
+            return;
+        }
+
+        if (dWwItemmdl_use2DIsolateHeap() && s_preloadStep == 0) {
+            s_preloadStep = 1;
+            const char* bowArc = getPreloadArcNameForStep(1);
+            strncpy(s_demoArcName, bowArc, sizeof(s_demoArcName) - 1);
+            s_demoArcName[sizeof(s_demoArcName) - 1] = '\0';
+            s_arcPhase.id = cPhs_INIT_e;
+            s_waitFrames = 0;
+            debugLog("2D isolate: itemmdl ready, preloading O_gD_bow");
             return;
         }
 
