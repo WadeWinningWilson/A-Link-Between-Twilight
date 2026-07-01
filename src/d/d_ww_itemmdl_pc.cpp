@@ -33,6 +33,7 @@
 
 #include <dolphin/gx/GXTev.h>
 #include <dolphin/gx/GXGeometry.h>
+#include <dolphin/gx/GXPixel.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -921,6 +922,203 @@ static void applyTexGenFromMaterial(J3DMaterial* material) {
     }
 }
 
+// Decode J3DTevStage BP fields (same layout as J2DTevStage — see J2DMatBlock::setGX).
+struct WwBowJ3DTevStageView {
+    explicit WwBowJ3DTevStageView(const J3DTevStage& stage) : mStage(stage) {}
+
+    u8 getColorA() const { return static_cast<u8>((mStage.mTevColorAB >> 4) & 0x0F); }
+    u8 getColorB() const { return static_cast<u8>(mStage.mTevColorAB & 0x0F); }
+    u8 getColorC() const { return static_cast<u8>((mStage.mTevColorCD >> 4) & 0x0F); }
+    u8 getColorD() const { return static_cast<u8>(mStage.mTevColorCD & 0x0F); }
+    u8 getAlphaA() const { return static_cast<u8>((mStage.mTevAlphaAB >> 5) & 0x07); }
+    u8 getAlphaB() const { return static_cast<u8>((mStage.mTevAlphaAB >> 2) & 0x07); }
+    u8 getAlphaC() const {
+        return static_cast<u8>(((mStage.mTevAlphaAB & 0x03) << 1) | ((mStage.mTevSwapModeInfo >> 7) & 0x01));
+    }
+    u8 getAlphaD() const { return static_cast<u8>((mStage.mTevSwapModeInfo >> 4) & 0x07); }
+    u8 getCBias() const { return static_cast<u8>(mStage.mTevColorOp & 0x03); }
+    u8 getCScale() const { return static_cast<u8>((mStage.mTevColorOp >> 4) & 0x03); }
+    u8 getCClamp() const { return static_cast<u8>((mStage.mTevColorOp >> 3) & 0x01); }
+    u8 getCReg() const { return static_cast<u8>((mStage.mTevColorOp >> 6) & 0x03); }
+    u8 getCOp() const {
+        if (getCBias() != 3) {
+            return static_cast<u8>((mStage.mTevColorOp >> 2) & 0x01);
+        }
+        return static_cast<u8>(((mStage.mTevColorOp >> 2) & 0x01) + 8 +
+                               ((mStage.mTevColorOp & 0x30) >> 3));
+    }
+    u8 getABias() const { return static_cast<u8>(mStage.mTevAlphaOp & 0x03); }
+    u8 getAScale() const { return static_cast<u8>((mStage.mTevAlphaOp >> 4) & 0x03); }
+    u8 getAClamp() const { return static_cast<u8>((mStage.mTevAlphaOp >> 3) & 0x01); }
+    u8 getAReg() const { return static_cast<u8>((mStage.mTevAlphaOp >> 6) & 0x03); }
+    u8 getAOp() const {
+        if (getABias() != 3) {
+            return static_cast<u8>((mStage.mTevAlphaOp >> 2) & 0x01);
+        }
+        return static_cast<u8>(((mStage.mTevAlphaOp >> 2) & 0x01) + 8 +
+                               ((mStage.mTevAlphaOp & 0x30) >> 3));
+    }
+    u8 getRasSel() const { return static_cast<u8>(mStage.mTevSwapModeInfo & 0x03); }
+    u8 getTexSel() const { return static_cast<u8>((mStage.mTevSwapModeInfo >> 2) & 0x03); }
+
+    const J3DTevStage& mStage;
+};
+
+static bool isScVbowDrawMaterial(J3DMaterial* material) {
+    if (material == NULL || s_wwBowDrawModelData == NULL) {
+        return false;
+    }
+
+    JUTNameTab* names = s_wwBowDrawModelData->getMaterialTable().getMaterialName();
+    for (u16 i = 0; i < s_wwBowDrawModelData->getMaterialNum(); i++) {
+        if (s_wwBowDrawModelData->getMaterialNodePointer(i) != material) {
+            continue;
+        }
+
+        const char* name = names != NULL ? names->getName(i) : NULL;
+        return name != NULL && strcmp(name, "SC_Vbow_v") == 0;
+    }
+
+    return false;
+}
+
+static void applyPeFromMaterial(J3DMaterial* material) {
+    if (material == NULL) {
+        return;
+    }
+
+    J3DBlend* blend = material->getBlend();
+    if (blend != NULL) {
+        GXSetBlendMode(blend->getBlendMode(), blend->getSrcFactor(), blend->getDstFactor(),
+                       blend->getLogicOp());
+    }
+
+    J3DPEBlock* pe = material->getPEBlock();
+    if (pe == NULL) {
+        return;
+    }
+
+    J3DAlphaComp* alpha = pe->getAlphaComp();
+    if (alpha != NULL) {
+        GXSetAlphaCompare(static_cast<GXCompare>(alpha->getComp0()), alpha->getRef0(),
+                          static_cast<GXAlphaOp>(alpha->getOp()),
+                          static_cast<GXCompare>(alpha->getComp1()), alpha->getRef1());
+    }
+}
+
+// 4a: replay baked SC TEV/PE into Aurora after callDL (no konst scaling — diagnostic root fix).
+static void applyScAuthenticTevAndPeFromMaterial(J3DMaterial* material) {
+    if (material == NULL) {
+        return;
+    }
+
+    J3DTevBlock* tev_block = material->getTevBlock();
+    if (tev_block == NULL) {
+        return;
+    }
+
+    if (material->isDrawModeOpaTexEdge()) {
+        j3dSys.setDrawModeOpaTexEdge();
+    }
+
+    applyPeFromMaterial(material);
+
+    for (u32 reg = 0; reg < 3; reg++) {
+        J3DGXColorS10* color = material->getTevColor(reg);
+        if (color == NULL) {
+            continue;
+        }
+
+        GXColorS10 gx_color;
+        gx_color.r = color->r;
+        gx_color.g = color->g;
+        gx_color.b = color->b;
+        gx_color.a = color->a;
+        GXSetTevColorS10(reg != 2 ? static_cast<GXTevRegID>(GX_TEVREG0 + reg + 1) : GX_TEVPREV,
+                         gx_color);
+    }
+
+    for (u32 reg = 0; reg < 4; reg++) {
+        J3DGXColor* kcolor = material->getTevKColor(reg);
+        if (kcolor == NULL) {
+            continue;
+        }
+
+        GXColor gx_kcolor;
+        gx_kcolor.r = kcolor->r;
+        gx_kcolor.g = kcolor->g;
+        gx_kcolor.b = kcolor->b;
+        gx_kcolor.a = kcolor->a;
+        GXSetTevKColor(static_cast<GXTevKColorID>(GX_KCOLOR0 + reg), gx_kcolor);
+    }
+
+    for (u32 table = 0; table < 4; table++) {
+        J3DTevSwapModeTable* swap_table = tev_block->getTevSwapModeTable(table);
+        if (swap_table == NULL) {
+            continue;
+        }
+
+        GXSetTevSwapModeTable(static_cast<GXTevSwapSel>(GX_TEV_SWAP0 + table),
+                              static_cast<GXTevColorChan>(swap_table->getR()),
+                              static_cast<GXTevColorChan>(swap_table->getG()),
+                              static_cast<GXTevColorChan>(swap_table->getB()),
+                              static_cast<GXTevColorChan>(swap_table->getA()));
+    }
+
+    const u8 n_tev = tev_block->getTevStageNum();
+    GXSetNumTevStages(n_tev);
+    for (u32 st = 0; st < n_tev && st < 16; st++) {
+        J3DTevOrder* order = tev_block->getTevOrder(st);
+        if (order != NULL) {
+            const u8 ras = order->mColorChan;
+            const GXChannelID channel =
+                ras >= 255 ? GX_COLOR_NULL : static_cast<GXChannelID>(ras);
+            GXSetTevOrder(static_cast<GXTevStageID>(GX_TEVSTAGE0 + st),
+                          static_cast<GXTexCoordID>(order->mTexCoord),
+                          static_cast<GXTexMapID>(order->getTexMap()), channel);
+        }
+
+        J3DTevStage* stage = tev_block->getTevStage(st);
+        if (stage == NULL) {
+            continue;
+        }
+
+        const WwBowJ3DTevStageView view(*stage);
+        const GXTevStageID stage_id = static_cast<GXTevStageID>(GX_TEVSTAGE0 + st);
+        GXSetTevColorIn(stage_id, static_cast<GXTevColorArg>(view.getColorA()),
+                        static_cast<GXTevColorArg>(view.getColorB()),
+                        static_cast<GXTevColorArg>(view.getColorC()),
+                        static_cast<GXTevColorArg>(view.getColorD()));
+        GXSetTevAlphaIn(stage_id, static_cast<GXTevAlphaArg>(view.getAlphaA()),
+                        static_cast<GXTevAlphaArg>(view.getAlphaB()),
+                        static_cast<GXTevAlphaArg>(view.getAlphaC()),
+                        static_cast<GXTevAlphaArg>(view.getAlphaD()));
+        GXSetTevColorOp(stage_id, static_cast<GXTevOp>(view.getCOp()),
+                        static_cast<GXTevBias>(view.getCBias()),
+                        static_cast<GXTevScale>(view.getCScale()), view.getCClamp(),
+                        static_cast<GXTevRegID>(view.getCReg()));
+        GXSetTevAlphaOp(stage_id, static_cast<GXTevOp>(view.getAOp()),
+                        static_cast<GXTevBias>(view.getABias()),
+                        static_cast<GXTevScale>(view.getAScale()), view.getAClamp(),
+                        static_cast<GXTevRegID>(view.getAReg()));
+
+        const u8 ksel = tev_block->getTevKColorSel(st);
+        const u8 kasel = tev_block->getTevKAlphaSel(st);
+        GXSetTevKColorSel(stage_id,
+                          ksel != 0xFF ? static_cast<GXTevKColorSel>(ksel) : GX_TEV_KCSEL_K0);
+        GXSetTevKAlphaSel(stage_id,
+                          kasel != 0xFF ? static_cast<GXTevKAlphaSel>(kasel) : GX_TEV_KASEL_K0_A);
+        GXSetTevSwapMode(stage_id, static_cast<GXTevSwapSel>(view.getRasSel()),
+                         static_cast<GXTevSwapSel>(view.getTexSel()));
+    }
+
+    static bool s_logged_4a = false;
+    if (!s_logged_4a) {
+        dWwItemmdl_debugLog("4a sc-tev: replay authentic SC TEV/PE (no scale)");
+        s_logged_4a = true;
+    }
+}
+
 static bool isVbowDrawMaterial(J3DMaterial* material) {
     if (material == NULL || s_wwBowDrawModelData == NULL) {
         return false;
@@ -1074,7 +1272,11 @@ static void wwBowMatDrawPostDl(J3DMaterial* material) {
     }
 
     applyTexGenFromMaterial(material);
-    applyTevOrderFromMaterial(material);
+    if (isScVbowDrawMaterial(material)) {
+        applyScAuthenticTevAndPeFromMaterial(material);
+    } else {
+        applyTevOrderFromMaterial(material);
+    }
 
     static bool s_logged_vbow = false;
     static bool s_logged_sc = false;
