@@ -59,6 +59,10 @@ void dWwItemmdl_notifyRoomChange(s32 room_no);
 void dWwItemmdl_setWwBowActorAmbient(dKy_tevstr_c* tevstr_p);
 void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevstr_p);
 
+// 4E: skip DEFAULT_GETITEM demo beam particles (flash/halo/star) during WW bow evaluation.
+void dWwItemmdl_setWwBowGetItemBeamSuppress(bool suppress);
+bool dWwItemmdl_shouldSuppressGetItemBeamParticle(u16 particle_id);
+
 // 2N: per-draw GX texgen bind from Vbow_v (body material; SC max bind mis-samples).
 void dWwItemmdl_applyTexGenForDraw(J3DModelData* model_data);
 

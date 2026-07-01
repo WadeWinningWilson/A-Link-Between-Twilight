@@ -23,6 +23,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_kankyo.h"
+#include "d/d_particle_name.h"
 #include "d/d_resorce.h"
 #include "f_op/f_op_actor_mng.h"
 #include "aurora/lib/gx/gx.hpp"
@@ -138,14 +139,17 @@ static const void* s_parseRawPtr = NULL;
 static constexpr u32 kVbowRetainedHeapSize = 0x100000u;
 static J3DShape* s_suppressedOutlineShape = NULL;
 #if TARGET_PC
-// 4D: fixed warm body fill + dark ink (not percentage room amb / white SC bloom).
-static constexpr u8 kWwBowFixedAmbR = 110;
-static constexpr u8 kWwBowFixedAmbG = 85;
-static constexpr u8 kWwBowFixedAmbB = 55;
-static constexpr u8 kWwBowBodyAmbCap = 90;
-static constexpr u8 kWwBowInkAmbR = 72;
-static constexpr u8 kWwBowInkAmbG = 58;
-static constexpr u8 kWwBowInkAmbB = 48;
+// 4E: warmer/less yellow body + lower cap + dark SC ink (4D baseline polish).
+static constexpr u8 kWwBowFixedAmbR = 105;
+static constexpr u8 kWwBowFixedAmbG = 78;
+static constexpr u8 kWwBowFixedAmbB = 48;
+static constexpr u8 kWwBowBodyAmbCap = 80;
+static constexpr u8 kWwBowInkAmbR = 58;
+static constexpr u8 kWwBowInkAmbG = 48;
+static constexpr u8 kWwBowInkAmbB = 42;
+// Step 1 A/B: true = body-only draw (isolate SC bloom); false = tuned ink pass.
+static constexpr bool kWwBowSuppressScInkPassForDraw = false;
+static bool s_wwBowGetItemBeamSuppress = false;
 #endif
 static J3DModelData* s_wwBowDrawModelData = NULL;
 static bool s_wwBowDrawScopeActive = false;
@@ -1075,9 +1079,10 @@ void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevst
     if (!s_logged_4d) {
         char line[192];
         snprintf(line, sizeof(line),
-                 "4D ambient-only: body=%u,%u,%u cap=%u ink=%u,%u,%u (no MAJI, no efplight)",
+                 "4E ambient-only: body=%u,%u,%u cap=%u ink=%u,%u,%u scSuppress=%d beams=%d",
                  amb_col.r, amb_col.g, amb_col.b, kWwBowBodyAmbCap, kWwBowInkAmbR, kWwBowInkAmbG,
-                 kWwBowInkAmbB);
+                 kWwBowInkAmbB, kWwBowSuppressScInkPassForDraw ? 1 : 0,
+                 s_wwBowGetItemBeamSuppress ? 1 : 0);
         dWwItemmdl_debugLog(line);
         s_logged_4d = true;
     }
@@ -1119,13 +1124,35 @@ void dWwItemmdl_notifyRoomChange(s32 room_no) {
     }
 }
 
+void dWwItemmdl_setWwBowGetItemBeamSuppress(bool suppress) {
+    s_wwBowGetItemBeamSuppress = suppress;
+}
+
+bool dWwItemmdl_shouldSuppressGetItemBeamParticle(u16 particle_id) {
+    if (!s_wwBowGetItemBeamSuppress) {
+        return false;
+    }
+
+    return particle_id == ID_IT_JN_GETITEM_FLASH_L00 || particle_id == ID_IT_JN_GETITEM_FLASH_S00 ||
+           particle_id == ID_IT_JN_GETITEM_HALO00 || particle_id == ID_IT_JN_GETITEM_STAR00;
+}
+
 void dWwItemmdl_drawWwBowModel(J3DModel* model) {
     if (model == NULL) {
         return;
     }
 
+    J3DModelData* model_data = model->getModelData();
+    if (kWwBowSuppressScInkPassForDraw) {
+        dWwItemmdl_suppressOutlineForDraw(model_data);
+    }
+
     // 2N' bake-once + entry only here; MatPacket::draw runs later in painter (see draw scope).
     mDoExt_modelUpdateDL(model);
+
+    if (kWwBowSuppressScInkPassForDraw) {
+        dWwItemmdl_restoreOutlineAfterDraw(model_data);
+    }
 }
 
 void dWwItemmdl_suppressOutlineForDraw(J3DModelData* model_data) {

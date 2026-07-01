@@ -117,6 +117,7 @@ int daDitem_c::CreateInit() {
 #if TARGET_PC
     if (useWwItemmdlBowMesh(m_itemNo)) {
         dWwItemmdl_beginBowDrawScope(mpModel, fopAcM_GetID(this));
+        dWwItemmdl_setWwBowGetItemBeamSuppress(true);
     }
 #endif
     return 1;
@@ -461,7 +462,7 @@ void daDitem_c::set_mtx() {
 void daDitem_c::setTevStr() {
 #if TARGET_PC
     if (useWwItemmdlBowMesh(m_itemNo)) {
-        // 4D: struct-0 + fixed warm ambient (goldenrod), not % room amb.
+        // 4E: struct-0 + fixed warm ambient (goldenrod), not % room amb.
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
         dWwItemmdl_setWwBowActorAmbient(&tevStr);
         dWwItemmdl_applyBowMaterialAmbientOnly(mpModel, &tevStr);
@@ -532,6 +533,7 @@ int daDitem_c::Delete() {
     endInsectEffect();
     mSound.deleteObject();
 #if TARGET_PC
+    dWwItemmdl_setWwBowGetItemBeamSuppress(false);
     dWwItemmdl_clearBowDrawScope();
     dWwItemmdl_clearOutlineSuppress();
     if (useWwItemmdlBowGetItem(m_itemNo) && dWwItemmdl_retainItemmdlArcOnDemoItemDelete()) {

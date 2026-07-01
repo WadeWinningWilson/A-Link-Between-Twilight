@@ -4,32 +4,48 @@
 
 > Continue Wind Waker / cut-content work — read `docs/wind-waker-item-work.md` first.
 
-**Status:** Itemmdl research complete; **Track A bow get-item pilot in progress** (mesh loads + draws; PC material pass tuning). Cut-enemy lineage documented; beta Moblin **not found** on retail GZ2E01 decomp map.
+**Status (2026-07-01):** **Track A bow get-item — 4E committed** (`6023333a8b` 4D baseline + 4E polish). Whole mesh + arrow + stable orange direction; polish cream tips / cel banding vs WW ref. Cut-enemy lineage documented; beta Moblin **not found** on retail GZ2E01 decomp map.
 
 ---
 
-## Track A progress (2026-06-26)
+## Track A progress (2026-06-26 → 2026-07-01)
 
-> **⚠️ 2026-06-27 disconnect:** the toggle / Editor-replay / cmake / settings / editor hooks below were **removed from the build during a launch bisect**. The "Done" rows reflect the pre-disconnect state. Re-link them via **roadmap Phase 1** in [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) (which is the canonical phase numbering). Mesh-on-screen baseline was achieved before the disconnect.
+> **Canonical session log:** [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) — **▶ RESUME HERE** for fresh chats.
 
 | Milestone | Status |
 |-----------|--------|
 | `game.wwItemmdlGetItem` toggle + Editor replay button | Done |
 | `itemmdl.arc` / `vbow.bdl` load on PC (`BDLM` + `bdl3` in retail TP `res/Object/`) | Done |
 | Get-item demo spawns WW bow mesh (2 materials, 3 embedded textures) | Done |
-| PC material pass — unlit texture colors (no TP scene-light crush) | **In progress** (this pass) |
-| WW cel ink outline (2nd material pass) | **Deferred** — outline hidden until edge TEV tuned on Aurora |
+| **2N′** bake-once locked DL + **2B‴** per-mat texgen/TEV post-`callDL` | Done |
+| **struct-0** + ambient-only (no MAJI) — stable cel color + detail | Done (`72a2f01194` 4B, `6023333a8b` 4D) |
+| Fixed warm ambient + per-mat caps + SC absolute ink | Done (4D/4E in `d_ww_itemmdl_pc.cpp`) |
+| Skip efplight + skip demo GETITEM beam particles (WW bow only) | Done (4D/4E in `d_a_demo_item.cpp`, `d_demo.cpp`) |
+| WW cel look vs reference (goldenrod body, cream tips, subtle ink) | **In progress** — tune constants / SC A/B |
+| BTK spin (`dRes_INDEX_ITEMMDL_BTK_VBOW_e`) | **Deferred** — after color sign-off |
 | Track B held bow | Not started |
+
+**Git milestones (main):**
+
+| Commit | Summary |
+|--------|---------|
+| `e0374888ed` | 2N′ geometry + Vbow_v texgen bind |
+| `ace05ce875` | TWW draw recipe + persistent 2B mat hook |
+| `72a2f01194` | 4B ambient-only stable cel |
+| `6023333a8b` | 4D baseline (fixed warm amb, cap, SC ink, skip efplight) |
+| *(this commit)* | 4E polish (warmer/dim, darker ink, skip beams, SC A/B toggle) |
 
 **Where the art lives:** All color data is **on-disc in TP** — `itemmdl.arc` → `vbow.bdl` ships with embedded textures (no external WW game files). Nothing is missing from the repo; Dusk loads the same retail archive as vanilla TP would, it was just never wired up.
 
-**PC rendering notes (`src/d/d_ww_itemmdl_pc.cpp`):**
+**PC rendering notes (`src/d/d_ww_itemmdl_pc.cpp`, `src/d/actor/d_a_demo_item.cpp`):**
 
 - `vbow.bdl` is a **binary display list** model (`bdl3`). Default loader used locked materials with null TEV blocks (baked WW cel math only) — fine on hardware, breaks under Aurora + TP get-item lighting.
-- PC load uses `J3DMLF_DoBdlMaterialCalc` so materials keep a real `TevBlockPatched`; stay on the locked baked-DL draw path (do **not** unlock for `diff()` — caused crashes).
-- Fill material: baked WW cel TEV for now (dark but stable). Unlit texture rewrite is deferred.
-- Edge material (`SC_Vbow_v`): suppressed **at draw time** only (hide before `DrawBase`, restore after) — do not hide on shared arc-resident `J3DModelData` during heap create (that correlated with post-`demo item ready` crashes).
-- Material names in `vbow.bdl`: **`Vbow_v`** = visible body, **`SC_Vbow_v`** = cel ink pass (must not hide both — `isDrawModeOpaTexEdge` is true on both).
+- **2N′** `bakeLockedMaterialSharedDl()` once at parse; single `mDoExt_modelUpdateDL` per frame.
+- **2B‴** persistent `MatDrawPostDlCallback` — per-mat texgen+TEV after `callDL` (`Vbow_v` body + `SC_Vbow_v` ink both draw).
+- **Lighting:** struct **0** + `dWwItemmdl_setWwBowActorAmbient` + `dWwItemmdl_applyBowMaterialAmbientOnly` — **no MAJI**, **no struct 14**. Skip `dKy_efplight_set` for WW bow.
+- **4E constants:** body `(105,78,48)` cap **80**; SC ink `(58,48,42)`; A/B toggle `kWwBowSuppressScInkPassForDraw` (default false).
+- **Beams:** skip `ID_IT_JN_GETITEM_*` in `dDemo_particle_c::emitter_create` while WW bow demo item lives.
+- Material names: **`Vbow_v`** = body, **`SC_Vbow_v`** = cel ink (grey-brown line art target — not white fill).
 
 **Debug log:** `Documents/dusklight/albw_ww_itemmdl_debug.txt`
 
@@ -166,11 +182,13 @@ Use when extending beyond bow; indices in `itemmdl.h` are TP-bundle layout, not 
 
 ### Color fix order (decomp-backed, bow first)
 
-1. **WW bow branch in `daDitem_c::setTevStr()`** — struct **0** + `setLightTevColorType` (or delegate to `daItemBase_c::setTevStr`) instead of struct 14 + MAJI.
-2. **Optional:** WW bow draw list — TWW uses mask-off, not `setListDark`; test if edge pass improves.
-3. **Defer** TEV stage rewrites / `clearLockedForPcDiff()` until (1) is playtested — TWW did not need them on hardware.
-4. **Then** enable `itemmdl` BTK index **0x24** for authentic spin.
-5. **Extend** same tev path to other `v*` items when scaling beyond bow.
+1. ~~**WW bow branch in `daDitem_c::setTevStr()`** — struct **0** instead of struct 14 + MAJI.~~ **Done.**
+2. ~~**Ambient-only material fill** — fixed warm RGB + per-mat caps (no view-matrix lights).~~ **Done (4B→4E).**
+3. ~~**Skip efplight + get-item beam particles** for WW bow evaluation.~~ **Done (4D/4E).**
+4. **Tune** body/ink constants vs WW reference; **SC A/B** via `kWwBowSuppressScInkPassForDraw`.
+5. **Then** enable `itemmdl` BTK index **0x24** for authentic spin.
+6. **Extend** same tev path to other `v*` items when scaling beyond bow.
+7. **Optional:** `setListMaskOff` (TWW mask-off list) — never tried on PC.
 
 ---
 
@@ -478,7 +496,8 @@ If you drop an extracted `Object/` listing (or point at an existing asset dump p
 - Dev toggles under **Advanced Settings** only — not shipping ALBW gameplay defaults.
 - Do **not** conflate with Boss Refinement or combat meter work.
 - Trailer use: once viewer or get-item path works, `v*` props are viable museum/B-roll assets ([trailer-handoff.md](trailer-handoff.md)).
-- Boot crash with log `unhandled tcg src 21` → wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*` ([build-fps-guidelines.md § GPU cache crash](build-fps-guidelines.md#addendum-gpu-cache-crash-2026-06-26)).
+- Boot crash with log `unhandled tcg src 21` → wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*` after **every** gfx rebuild ([build-fps-guidelines.md § GPU cache crash](build-fps-guidelines.md#addendum-gpu-cache-crash-2026-06-26)).
+- Debug log: `Documents/dusklight/albw_ww_itemmdl_debug.txt` — grep `4E ambient-only`, `2B apply post-dl`, `4E: skip get-item beam particle`.
 
 ### Agent pitfalls (2026-06-26)
 
@@ -486,7 +505,9 @@ If you drop an extracted `Object/` listing (or point at an existing asset dump p
 |--------|-----|
 | `git show HEAD:file.cpp > file.cpp` in PowerShell | Writes **UTF-16 LE BOM** — breaks compile/runtime. Use `git restore` (named file only) or Python `write_bytes` from `git show`. |
 | `loadFromResourcePointer()` in `d_ww_itemmdl_pc.cpp` | Unsafe — caused crashes; stay on heap `resLoad` + `createHeap` path. |
-| Hide **both** `Vbow_v` and `SC_Vbow_v` on shared arc-resident model data at create time | Correlates with post–get-item crashes; suppress edge pass at **draw time** only. |
+| Re-enable MAJI or struct 14 for brightness | Kills tips/gradient/arrow; outdoor angle swing |
+| Percentage room ambient alone (4C) | Neutral dim → neon yellow, not WW orange |
+| Hide **both** `Vbow_v` and `SC_Vbow_v` at create on shared model data | Post–get-item crash; suppress at **draw time** only if A/B |
 | Patch `d_a_alink_demo.inc` for message skip | Fix message timing in `d_ww_itemmdl_test.cpp` instead. |
 | Revert unrelated features when bisecting boot `tcg src 21` | Clear GPU caches first; WW track disconnected from `files.cmake` did not cause logo death. |
 

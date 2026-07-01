@@ -14,6 +14,8 @@
 #include "dusk/logging.h"
 
 #if TARGET_PC
+#include "d/d_ww_itemmdl_pc.h"
+#include "d/d_particle_name.h"
 #include "dusk/ui/ui.hpp"
 
 namespace {
@@ -1204,6 +1206,12 @@ void dDemo_c::reset() {
 
 JPABaseEmitter* dDemo_particle_c::emitter_create(u32 i_id) {
     cXyz pos(0.0f, 0.0f, 0.0f);
+#if TARGET_PC
+    if (dWwItemmdl_shouldSuppressGetItemBeamParticle((u16)i_id)) {
+        dWwItemmdl_debugLog("4E: skip get-item beam particle");
+        return NULL;
+    }
+#endif
     JPABaseEmitter* emitter = dComIfGp_particle_set(i_id, &pos, NULL, NULL, 0xFF, NULL, dComIfGp_roomControl_getStayNo(), NULL, NULL, NULL);
     return emitter;
 }

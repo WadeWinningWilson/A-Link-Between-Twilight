@@ -7,20 +7,41 @@
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
-| **Status (2026-07-01)** | **4D baseline committed** — stable geometry + struct-0/no MAJI + efplight skip + warm fixed fill. Next = polish (SC A/B, warmth/dim, beam pass). |
+| **Status (2026-07-01)** | **4E committed** — whole bow + struct-0/no MAJI + efplight/beam skip + warm ambient polish. Next = replay vs WW ref, SC A/B if tips bloom, BTK after sign-off. |
 
 ---
 
-## ▶ RESUME HERE (fresh-chat handoff — 2026-06-30)
+## ▶ RESUME HERE (fresh-chat handoff — 2026-07-01)
 
-**One-line state:** **4D brightness + orange** — fixed warm amb `(110,85,55)`, Vbow_v cap **90**, SC_Vbow_v absolute ink `(72,58,48)`, **no efplight** on WW bow (beams stay). Keep struct-0 + 4B ambient-only + 2B‴. **No MAJI.**
+**One-line state:** **4E committed** — body `(105,78,48)` cap **80**, SC ink `(58,48,42)`, skip **efplight** + demo **GETITEM beams**, SC A/B toggle `kWwBowSuppressScInkPassForDraw` (**false**). struct-0 + 2B‴ + 2N′. **No MAJI. No struct 14.**
 
-**Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4D ambient-only** + skip `dKy_efplight_set` + `dComIfGd_setList()`.
+**Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4E ambient-only** + skip `dKy_efplight_set` + skip demo GETITEM beams (`d_demo.cpp`) + `dComIfGd_setList()`.
 
-**Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear.
+**Git (main, bow get-item):** `e0374888ed` 2N′ · `ace05ce875` 2B‴ · `72a2f01194` 4B · `6023333a8b` 4D · **HEAD** 4E polish.
 
-**Fresh Wind Clau opener (paste):**
-> Continue as Wind Clau on WW `itemmdl` bow. Read **▶ RESUME HERE** + **▶ Interconnected pass — MAJI kills detail (2026-06-30)**. struct-0 + MAJI improved exposure but erased tips/gradient/arrow detail; outdoor angle swing returned. 4B ambient-only in tree. Replay for detail + stable color. Target = soft cel gradient, white tips, nocked arrow.
+**Cursor must NOT retry:** per-shape double `modelUpdateDL`, per-shape dump at load, re-bake every spawn, per-flush callback clear, MAJI for brightness, struct 14, % room ambient alone (4C).
+
+**Fresh chat opener (paste):**
+> Continue WW `itemmdl` Hero's Bow get-item (Track A). Read **`docs/wind-waker-item-work.md`** + this doc **▶ RESUME HERE**. Pipeline is locked: 2N′ + 2B‴ + struct-0 + ambient-only (4E). Do not re-enable MAJI or struct 14. Next: compare close-up + cave replay to WW reference; if tips still #FFF bloom, flip `kWwBowSuppressScInkPassForDraw` for SC A/B; after color sign-off enable BTK spin then Track B held bow.
+
+**Acceptance vs WW reference (still open):**
+
+| Check | State |
+|-------|--------|
+| Whole mesh + nocked arrow | ✅ locked |
+| Orange direction (not lemon) | ✅ closest at 4E — may need one more warmth tweak |
+| Cel limb gradient | Partial — texture/TEV, not just amb |
+| Cream tips (not #FFF bloom) | ❌ chase — SC A/B or ink/body split |
+| Cave full pose (no wash) | Beams skipped in 4E — judge close-up for material |
+
+**Next knobs (one at a time, screenshot after each):**
+1. **SC A/B** — set `kWwBowSuppressScInkPassForDraw = true` in `d_ww_itemmdl_pc.cpp`, rebuild, wipe caches, close-up only.
+2. **Warmth** — if still yellow: `(100,72,45)`; if muddy: `(110,82,50)`.
+3. **Cap-only** — body cap **70** without changing RGB.
+4. **Ink** — `(52,42,38)` if SC stays on and A/B implicates ink pass.
+5. **After color OK** — BTK `0x24`; Track B `d_a_alink_bow.inc`.
+
+**Log hygiene:** `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — once per session: `4E ambient-only: body=… scSuppress=… beams=1`. After gfx rebuild wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
 
 **Hard-won facts a new chat must not re-derive (all confirmed):**
 - The long "flaky crash" was a **CRT fast-fail `0xC0000409`** = **unhandled `std::out_of_range`** from `std::bitset<8>::set()` in Aurora `shader_info.cpp` `color_arg_reg_info` — a TEV stage read a texture with **`texMapId = GX_TEXMAP_NULL (0xFF)`**; `CHECK` is a **no-op under `NDEBUG`** so it wasn't caught. **Fixed by A+A′** (guard the `.set()` in `shader_info.cpp` + the WGSL codegen in `shader.cpp`; skip unbound/out-of-range texmaps). Do **not** revert A/A′.
@@ -83,11 +104,31 @@
 **Acceptance gap (post-commit polish):** orange direction ✅ closest yet; still chase cream tips (#FFF bloom), cave full-pose halo (beams), less lemon / more amber.
 
 **Post-commit order (do not revisit MAJI / struct 14 / % room amb):**
-1. **SC A/B** — one build: `suppressOutlineForDraw` before draw, restore after → isolate tip bloom (ink vs body).
-2. **One constant tweak** — e.g. warmer `(105,78,48)`, dimmer `(95,75,48)`, or cap **80**; screenshot close-up vs WW ref.
-3. **Beam pass** — skip/dim get-item beam particles for WW bow only (mirror efplight skip); tune material on close-up, beams on full pose.
-4. **Ink polish** if A/B implicates SC — `(58,48,42)` or `(65,52,44)`; deferred: per-shape TEV for SC_Vbow_v.
-5. After color sign-off → BTK spin, Track B held bow (`d_a_alink_bow.inc`).
+1. ~~**SC A/B wiring**~~ — `kWwBowSuppressScInkPassForDraw` in `drawWwBowModel` (default false).
+2. ~~**Constant tweak**~~ — `(105,78,48)` + cap **80** (4E).
+3. ~~**Beam pass**~~ — skip GETITEM flash/halo/star via `dWwItemmdl_shouldSuppressGetItemBeamParticle`.
+4. ~~**Ink polish**~~ — `(58,48,42)` (4E).
+5. **Replay + tune** — SC A/B flip, warmth/cap/ink one knob at a time.
+6. After color sign-off → BTK spin, Track B held bow (`d_a_alink_bow.inc`).
+
+---
+
+## ▶ Interconnected pass — 4E polish (2026-07-01)
+
+**Built on 4D baseline** (`6023333a8b`). User direction: pipeline locked; remaining work is exposure/hue vs WW reference, not recovery.
+
+| Layer | 4D | 4E |
+|-------|----|----|
+| Body ambient | `(110, 85, 55)` | `(105, 78, 48)` — warmer, less yellow |
+| Vbow_v cap | 90 | **80** |
+| SC_Vbow_v ink | `(72, 58, 48)` | `(58, 48, 42)` — darker grey-brown target |
+| efplight | Skipped | Unchanged |
+| Demo GETITEM beams | On | **Skipped** (`ID_IT_JN_GETITEM_FLASH/HALO/STAR` in `dDemo_particle_c::emitter_create`) |
+| SC draw A/B | — | `kWwBowSuppressScInkPassForDraw` (default **false**) |
+
+**Files:** `d_ww_itemmdl_pc.cpp` (constants + draw suppress), `d_a_demo_item.cpp` (beam suppress flag lifecycle), `d_demo.cpp` (particle hook), `d_ww_itemmdl_pc.h`.
+
+**Log:** `4E ambient-only: body=105,78,48 cap=80 ink=58,48,42 scSuppress=0 beams=1`
 
 ---
 
