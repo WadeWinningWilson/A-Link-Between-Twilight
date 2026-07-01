@@ -41,7 +41,7 @@
 4. **Body (`Vbow_v`) = SIGNED OFF.** Micro-tune warmth (`100,72,44`/cap 75) only AFTER tips read matte.
 5. **After color OK** — BTK `0x24`; Track B `d_a_alink_bow.inc`.
 
-**Log hygiene:** `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — once per session: `4E ambient-only: body=… scSuppress=… beams=1`. After gfx rebuild wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
+**Log hygiene:** `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — once per session: `4E ambient-only: body=… scSuppress=… beams=1`; after first SC draw also `2J sc-dump blend: …`, `2J sc-dump kColor[…]`, `2J sc-dump st[…] colorIn …`. After gfx rebuild wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
 
 **Hard-won facts a new chat must not re-derive (all confirmed):**
 - The long "flaky crash" was a **CRT fast-fail `0xC0000409`** = **unhandled `std::out_of_range`** from `std::bitset<8>::set()` in Aurora `shader_info.cpp` `color_arg_reg_info` — a TEV stage read a texture with **`texMapId = GX_TEXMAP_NULL (0xFF)`**; `CHECK` is a **no-op under `NDEBUG`** so it wasn't caught. **Fixed by A+A′** (guard the `.set()` in `shader_info.cpp` + the WGSL codegen in `shader.cpp`; skip unbound/out-of-range texmaps). Do **not** revert A/A′.

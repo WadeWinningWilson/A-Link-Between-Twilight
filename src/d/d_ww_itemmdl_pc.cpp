@@ -952,6 +952,118 @@ static bool wwBowDrawScopeStillValid() {
     return true;
 }
 
+static u8 tevStageColorA(const J3DTevStage& st) {
+    return static_cast<u8>((st.mTevColorAB >> 4) & 0x0F);
+}
+
+static u8 tevStageColorB(const J3DTevStage& st) {
+    return static_cast<u8>(st.mTevColorAB & 0x0F);
+}
+
+static u8 tevStageColorC(const J3DTevStage& st) {
+    return static_cast<u8>((st.mTevColorCD >> 4) & 0x0F);
+}
+
+static u8 tevStageColorD(const J3DTevStage& st) {
+    return static_cast<u8>(st.mTevColorCD & 0x0F);
+}
+
+static u8 tevStageAlphaA(const J3DTevStage& st) {
+    return static_cast<u8>((st.mTevAlphaAB >> 5) & 0x07);
+}
+
+static u8 tevStageAlphaB(const J3DTevStage& st) {
+    return static_cast<u8>((st.mTevAlphaAB >> 2) & 0x07);
+}
+
+static u8 tevStageAlphaC(const J3DTevStage& st) {
+    return static_cast<u8>(((st.mTevAlphaAB & 0x03) << 1) | ((st.mTevSwapModeInfo >> 7) & 0x01));
+}
+
+static u8 tevStageAlphaD(const J3DTevStage& st) {
+    return static_cast<u8>((st.mTevSwapModeInfo >> 4) & 0x07);
+}
+
+// 2J: log-only SC_Vbow_v blend + TEV konst dump (decides de-bloom fix; no render change).
+static void logScVbowMaterialDump(J3DMaterial* material) {
+    static bool s_logged = false;
+    if (s_logged || material == NULL) {
+        return;
+    }
+    s_logged = true;
+
+    J3DBlend* blend = material->getBlend();
+    if (blend != NULL) {
+        char line[224];
+        snprintf(line, sizeof(line),
+                 "2J sc-dump blend: type=%u src=%u dst=%u logicOp=%u matMode=0x%x opaTexEdge=%d",
+                 blend->mType, blend->mSrcFactor, blend->mDstFactor, blend->mOp,
+                 material->getMaterialMode(), material->isDrawModeOpaTexEdge() ? 1 : 0);
+        dWwItemmdl_debugLog(line);
+    } else {
+        dWwItemmdl_debugLog("2J sc-dump blend: NULL");
+    }
+
+    J3DTevBlock* tev_block = material->getTevBlock();
+    if (tev_block == NULL) {
+        dWwItemmdl_debugLog("2J sc-dump: tevBlock=NULL");
+        return;
+    }
+
+    for (u32 reg = 0; reg < 3; reg++) {
+        J3DGXColorS10* color = material->getTevColor(reg);
+        if (color == NULL) {
+            continue;
+        }
+
+        char line[160];
+        snprintf(line, sizeof(line), "2J sc-dump tevReg[%u]: r=%d g=%d b=%d a=%d", reg, color->r,
+                 color->g, color->b, color->a);
+        dWwItemmdl_debugLog(line);
+    }
+
+    for (u32 reg = 0; reg < 4; reg++) {
+        J3DGXColor* kcolor = material->getTevKColor(reg);
+        if (kcolor == NULL) {
+            continue;
+        }
+
+        const u8 ksel = tev_block->getTevKColorSel(reg);
+        char line[192];
+        snprintf(line, sizeof(line), "2J sc-dump kColor[%u]: r=%u g=%u b=%u a=%u kSel=%u", reg,
+                 kcolor->r, kcolor->g, kcolor->b, kcolor->a, ksel);
+        dWwItemmdl_debugLog(line);
+    }
+
+    const u8 n_tev = tev_block->getTevStageNum();
+    for (u32 st = 0; st < n_tev && st < 16; st++) {
+        J3DTevOrder* order = tev_block->getTevOrder(st);
+        if (order != NULL) {
+            char line[256];
+            snprintf(line, sizeof(line),
+                     "2J sc-dump st[%u] order: texMap=%u texCoord=%u rasColor=%u "
+                     "(2B forces GX_COLOR_NULL)",
+                     st, order->getTexMap(), order->mTexCoord, order->mColorChan);
+            dWwItemmdl_debugLog(line);
+        }
+
+        J3DTevStage* stage = tev_block->getTevStage(st);
+        if (stage == NULL) {
+            continue;
+        }
+
+        char line[384];
+        snprintf(line, sizeof(line),
+                 "2J sc-dump st[%u] colorIn A=%u B=%u C=%u D=%u colorOp=0x%02x "
+                 "alphaIn A=%u B=%u C=%u D=%u alphaOp=0x%02x swap=0x%02x",
+                 st, tevStageColorA(*stage), tevStageColorB(*stage), tevStageColorC(*stage),
+                 tevStageColorD(*stage), stage->mTevColorOp, tevStageAlphaA(*stage),
+                 tevStageAlphaB(*stage), tevStageAlphaC(*stage), tevStageAlphaD(*stage),
+                 stage->mTevAlphaOp, stage->mTevSwapModeInfo);
+        dWwItemmdl_debugLog(line);
+    }
+}
+
 static void wwBowMatDrawPostDl(J3DMaterial* material) {
     if (!wwBowDrawScopeStillValid()) {
         return;
@@ -983,6 +1095,7 @@ static void wwBowMatDrawPostDl(J3DMaterial* material) {
                  name != NULL ? name : "?", material->getTexGenNum(), material->getTevStageNum());
         dWwItemmdl_debugLog(line);
         if (is_sc) {
+            logScVbowMaterialDump(material);
             s_logged_sc = true;
         } else {
             s_logged_vbow = true;
