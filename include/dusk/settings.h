@@ -270,6 +270,8 @@ struct UserSettings {
         ConfigVar<bool> wwItemmdlGetItem;
         // Phase 2 diagnostic: itemmdl arc + O_gD_bow heap mesh (loader isolate 2D).
         ConfigVar<bool> wwItemmdlGetItem2DIsolate;
+        // Track A SC A/B: suppress SC_Vbow_v ink pass at draw (cream-tip bloom diagnostic).
+        ConfigVar<bool> wwItemmdlBowScSuppress;
         // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
         // never the sumo minigame.
         //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).

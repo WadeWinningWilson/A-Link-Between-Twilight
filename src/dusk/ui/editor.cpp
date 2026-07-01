@@ -2274,6 +2274,11 @@ EditorWindow::EditorWindow() {
             "Diagnostic: itemmdl arc at create, O_gD_bow mesh on heap (Phase 2 branch 2D). "
             "Requires WW itemmdl get-item ON. Log-only localize — not a shipping path." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlBowScSuppress,
+            "WW bow SC suppress (A/B)",
+            "Hide SC_Vbow_v ink pass during get-item draw. Compare close-up cream tips vs "
+            "cel outline. Requires WW itemmdl get-item ON." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
             leftPane.add_button("Replay Bow Get-Item Demo")
                 .on_pressed([] {

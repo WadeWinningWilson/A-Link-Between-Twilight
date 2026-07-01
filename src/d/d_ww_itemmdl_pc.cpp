@@ -147,9 +147,11 @@ static constexpr u8 kWwBowBodyAmbCap = 80;
 static constexpr u8 kWwBowInkAmbR = 58;
 static constexpr u8 kWwBowInkAmbG = 48;
 static constexpr u8 kWwBowInkAmbB = 42;
-// Step 1 A/B: true = body-only draw (isolate SC bloom); false = tuned ink pass.
-static constexpr bool kWwBowSuppressScInkPassForDraw = false;
 static bool s_wwBowGetItemBeamSuppress = false;
+
+static bool wwBowSuppressScInkPassForDraw() {
+    return dusk::getSettings().game.wwItemmdlBowScSuppress.getValue();
+}
 #endif
 static J3DModelData* s_wwBowDrawModelData = NULL;
 static bool s_wwBowDrawScopeActive = false;
@@ -1081,7 +1083,7 @@ void dWwItemmdl_applyBowMaterialAmbientOnly(J3DModel* model, dKy_tevstr_c* tevst
         snprintf(line, sizeof(line),
                  "4E ambient-only: body=%u,%u,%u cap=%u ink=%u,%u,%u scSuppress=%d beams=%d",
                  amb_col.r, amb_col.g, amb_col.b, kWwBowBodyAmbCap, kWwBowInkAmbR, kWwBowInkAmbG,
-                 kWwBowInkAmbB, kWwBowSuppressScInkPassForDraw ? 1 : 0,
+                 kWwBowInkAmbB, wwBowSuppressScInkPassForDraw() ? 1 : 0,
                  s_wwBowGetItemBeamSuppress ? 1 : 0);
         dWwItemmdl_debugLog(line);
         s_logged_4d = true;
@@ -1143,14 +1145,14 @@ void dWwItemmdl_drawWwBowModel(J3DModel* model) {
     }
 
     J3DModelData* model_data = model->getModelData();
-    if (kWwBowSuppressScInkPassForDraw) {
+    if (wwBowSuppressScInkPassForDraw()) {
         dWwItemmdl_suppressOutlineForDraw(model_data);
     }
 
     // 2N' bake-once + entry only here; MatPacket::draw runs later in painter (see draw scope).
     mDoExt_modelUpdateDL(model);
 
-    if (kWwBowSuppressScInkPassForDraw) {
+    if (wwBowSuppressScInkPassForDraw()) {
         dWwItemmdl_restoreOutlineAfterDraw(model_data);
     }
 }

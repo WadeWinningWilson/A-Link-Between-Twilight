@@ -13,7 +13,7 @@
 
 ## ▶ RESUME HERE (fresh-chat handoff — 2026-07-01)
 
-**One-line state:** **4E committed** — body `(105,78,48)` cap **80**, SC ink `(58,48,42)`, skip **efplight** + demo **GETITEM beams**, SC A/B toggle `kWwBowSuppressScInkPassForDraw` (**false**). struct-0 + 2B‴ + 2N′. **No MAJI. No struct 14.**
+**One-line state:** **4E committed** — body `(105,78,48)` cap **80**, SC ink `(58,48,42)`, skip **efplight** + demo **GETITEM beams**, SC A/B via Editor **`game.wwItemmdlBowScSuppress`** (default **off**). struct-0 + 2B‴ + 2N′. **No MAJI. No struct 14.**
 
 **Active draw path:** 2N′ + persistent 2B‴ + struct **0** + **4E ambient-only** + skip `dKy_efplight_set` + skip demo GETITEM beams (`d_demo.cpp`) + `dComIfGd_setList()`.
 
@@ -31,14 +31,14 @@
 | Whole mesh + nocked arrow | ✅ locked |
 | Orange direction (not lemon) | ✅ closest at 4E — may need one more warmth tweak |
 | Cel limb gradient | Partial — texture/TEV, not just amb |
-| Cream tips (not #FFF bloom) | ❌ chase — SC A/B or ink/body split |
+| Cream/silver tips + feather | ❌ SC pass = **geometry** that blooms; fix is TEV/blend, **not** suppress/ambient (see `▶ SC_Vbow_v is a geometry+TEV pass` below) |
 | Cave full pose (no wash) | Beams skipped in 4E — judge close-up for material |
 
-**Next knobs (one at a time, screenshot after each):**
-1. **SC A/B** — set `kWwBowSuppressScInkPassForDraw = true` in `d_ww_itemmdl_pc.cpp`, rebuild, wipe caches, close-up only.
-2. **Warmth** — if still yellow: `(100,72,45)`; if muddy: `(110,82,50)`.
-3. **Cap-only** — body cap **70** without changing RGB.
-4. **Ink** — `(52,42,38)` if SC stays on and A/B implicates ink pass.
+**Next knobs — SUPERSEDED by `▶ SC_Vbow_v is a geometry+TEV pass, not "ink ambient"` (2026-07-01) below. Summary:**
+1. **SC A/B result is in:** suppress ON amputates tips/arrowhead/feather ⇒ `SC_Vbow_v` = real geometry. **Diagnostic only, never ship ON.**
+2. **First move = DUMP SC blend mode + TEV konst (log-only), NOT ambient.** Dark SC ambient `(58,48,42)` already fails to tame the bloom; source shows 2B‴ never replays SC's TEV/blend.
+3. **Fix = extend 2B‴ to replay SC's full TEV/blend** (currently texgen + TEV order only), then de-bloom tips to matte cream/silver (~`205,195,175`).
+4. **Body (`Vbow_v`) = SIGNED OFF.** Micro-tune warmth (`100,72,44`/cap 75) only AFTER tips read matte.
 5. **After color OK** — BTK `0x24`; Track B `d_a_alink_bow.inc`.
 
 **Log hygiene:** `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — once per session: `4E ambient-only: body=… scSuppress=… beams=1`. After gfx rebuild wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
@@ -53,6 +53,34 @@
 - **`shapeNum=2`, `matNum=2`, `jointNum=2`** — no third-shape inventory gap; per-shape dump at load **AVs** (removed; summary only).
 
 **Deep sections:** search this doc for `ROOT CAUSE FOUND`, `Fix A′ (approved)`, `Fix B step 1 — Wind Clau read`, `Fix B bind SUCCEEDED`, `REVERT the struct-0 delegate`, `Interconnected pass`, `First clean playtest`.
+
+---
+
+## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)
+
+**Role:** Wind Clau = review / graphics-strategy / second-opinion. Reads Cursor's diffs, logs, and screenshots; picks branches; enforces the do-not-retry list. **Does not edit source** — Cursor implements. (Wind Clau may edit *this doc* and `wind-waker-item-work.md`.)
+
+**Read, in this order, to continue:**
+1. **`docs/wind-waker-item-work.md`** — canonical: 21-mesh table, TWW/SS decomp refs, the color-fix order, Track A/B plan, git milestones. **This is the source of truth for current technical state — trust it + the git commits over any chat's memory.**
+2. **This doc → `▶ RESUME HERE`** (above) — live pipeline state (4E), hard-won facts, do-not-retry list, next-knobs.
+3. Deep sections (above list) only if re-deriving the crash history.
+
+**Honesty note for the next Wind Clau:** the prior Wind Clau chat went behind on the 4C/4D/4E iterations (color-tuning commits landed faster than review turns). **Do not reconstruct state from a stale summary** — re-read `▶ RESUME HERE` + `wind-waker-item-work.md` Status + the git log each session.
+
+**Decided / locked (do not reopen):** Plan A (retail `bdl3` + code-side TEV); pipeline = 2N′ bake-once + 2B‴ persistent per-material bind + struct-0 + ambient-only (**no MAJI, no struct 14**); crash fixes A+A′ (Aurora unbound-texmap guards) and Fix B (per-draw `GXSetTevOrder`); geometry complete (2 shapes/2 mats). See do-not-retry list in `▶ RESUME HERE`.
+
+**Open (Cursor iterating, Wind Clau reviews):** final cel color vs WW reference — warmth, **cream tips (not `#FFF` bloom)**, subtle **grey-brown ink** (not heavy black), SC A/B toggle. Then BTK spin (`0x24`), then Track B held bow.
+
+**Wind Clau's job on the next inputs:** judge replay screenshots against the WW reference (goldenrod/orange body with soft cel gradient, cream ornamental tips, nocked arrow, *subtle* ink — the get-item light beams are reward flair, now skipped for the WW bow); confirm no MAJI/struct-14 regression; keep enforcing do-not-retry.
+
+**Forward strategy (Wind Clau assessments — captured for when the bow is signed off):**
+- **Scaling to the other 20 `itemmdl` items = feasible for DISPLAY** (get-item/field/viewer). Reusable as-is: retained `itemmdl` arc + heap (all 21 share the arc), A+A′ guards, bake-once, the dump tooling (2I/2S/2B), struct-0/ambient lighting, and the **2B‴ per-material bind** (it already reads each drawn material's *own* GX — just generalize the `isVbowDrawMaterial` guard to any `itemmdl` material). Per-item work is incremental: dump structure → generic bind → tune warmth → wire BTK/BRK. Far faster than the bow (infra + crash-playbook done).
+- **Gameplay ≠ rendering. Bones give animation; behavior comes from code.** The `v*` models are **2-bone display props**, not gameplay rigs. Held/Track-B = **stiff but functional** for items TP already has (bow, boomerang, hookshot, boots, bombs, bottles, magic armor, telescope→hawkeye) because TP's code drives them; **no-TP-analogue** items (Deku Leaf, Sail, WW baton, Grappling Hook, Tingle Tuner, Picto Box, bags, Skull Hammer) need **new procs** (big).
+- **Bone transplant (WW mesh → `AL_BOW` skeleton so TP's `BVJMPCL` BCK flexes it)** = possible but **asset-tool / Plan-B work**; shape mismatch (recurve vs TP) means retargeting the rig/anim is the hard part — visual-flex polish, not a functionality gain. **Enemy-weapon bones rarely help** (their motions ≠ item behavior). Full detail: see the "transplant bones" Q&A in chat history / summarize into Plan B if pursued.
+- **Plan B (BMD re-rig in external tools)** stays the escape hatch for held/animated fidelity.
+
+**Fresh Wind Clau opener (paste):**
+> Continue as Wind Clau (review/graphics-strategy) on the WW `itemmdl` bow. Read `docs/wind-waker-item-work.md` (canonical, trust it + git over memory) then this doc's `▶ RESUME HERE` and `▶ WIND CLAU HANDOFF`. Pipeline is locked (2N′ + 2B‴ + struct-0 + ambient-only, no MAJI/struct-14). I review Cursor's replay screenshots vs the WW reference (goldenrod body, cream tips, subtle ink) and pick next-knob branches; I don't edit source. Do not reopen locked decisions or the do-not-retry list. Next after color sign-off: BTK spin then Track B held bow; then generalize the display formula to the other 20 items.
 
 ---
 
@@ -129,6 +157,49 @@
 **Files:** `d_ww_itemmdl_pc.cpp` (constants + draw suppress), `d_a_demo_item.cpp` (beam suppress flag lifecycle), `d_demo.cpp` (particle hook), `d_ww_itemmdl_pc.h`.
 
 **Log:** `4E ambient-only: body=105,78,48 cap=80 ink=58,48,42 scSuppress=0 beams=1`
+
+---
+
+## ▶ Interconnected pass — `SC_Vbow_v` is a geometry+TEV pass, not "ink ambient" (2026-07-01)
+
+**Trigger:** SC A/B replay (user, close-up cave). **Suppress ON** = exposure under control but **amputates** ornamental limb-tip caps + silver arrowhead + back-half feather + string. **Suppress OFF** (4E default) = full silhouette, closest to WW ref, but the SC parts **bloom white with a halo**.
+
+**Verdict (Wind Clau — supersedes the "SC = grey-brown ink line-art" model in both docs):**
+`SC_Vbow_v` is a **second cel draw pass carrying real geometry** — white/silver limb-tip caps + teal wrap bands, silver arrowhead, string/nock art, back-half of the fletching — **plus** the ink lines. It is **not** an optional outline. Proven by the A/B: hiding it deletes those parts, and in the WW reference those parts are genuinely white/silver/teal *geometry*, not outlines. ⇒ **Never ship `wwItemmdlBowScSuppress` ON.** It is a bisect diagnostic only ("is SC the bloom source?" → yes). Two sibling chats converged on this independently.
+
+**Correction to the sibling-chat plan (which ranked ambient tweaks first, B→A→C): DUMP before ambient.** The evidence already falsifies "ambient controls SC brightness":
+- SC ink ambient is **already dark** `(58,48,42)` yet the tips **still bloom pure white**. If ambient were the lever, dark ambient would have darkened them. It didn't.
+- **Confirmed in source** (`d_ww_itemmdl_pc.cpp` `wwBowMatDrawPostDl` → `applyTexGenFromMaterial` + `applyTevOrderFromMaterial`): the 2B‴ post-DL hook replays **only** `GXSetNumTexGens`/`GXSetTexCoordGen` + `GXSetTevOrder`/`GXSetNumTevStages`, and forces **`GX_COLOR_NULL`** raster color on every stage. It does **NOT** replay TEV stage color/alpha ops, TEV/konst register colors, or blend mode.
+
+⇒ SC's brightness/glow is governed by exactly the state we are **not** replaying (TEV konst / stage ops / blend mode) — the same "Aurora didn't realize the baked GX" class as the original colorless-body bug (Fix B). Ambient A/B cannot reach it.
+
+**Mechanism (tips are the RIGHT color, just over-hot):** SC tips/string/bands are white/silver/teal in the WW ref too — our problem is they render **emissive-white with a halo**, i.e. an **attenuation** problem, not a recolor. Leading suspects, in order: (1) **additive / edge blend** on the SC PE block (`GX_BL_ONE,GX_BL_ONE` or `OpaTexEdge`) → blooms under any lighting + explains the halo; (2) a **hot TEV konst/register** near white; (3) engine **bloom post-threshold** catching bright texels. All three are downstream of TEV/blend; none are ambient. This also means the 4D→4E "darken ink toward grey-brown" moves were the **wrong axis** for the tips (ref tips are white/silver, not brown).
+
+**Precondition (from sibling chat — verified real):** both passes must reach the hook. Once per session in `albw_ww_itemmdl_debug.txt`:
+`2B apply post-dl: mat=Vbow_v nTexGen=2 nTev=2` **and** `2B apply post-dl: mat=SC_Vbow_v nTexGen=3 nTev=3`, plus `scSuppress=0` in the 4E line. If the SC line is missing → `isVbowDrawMaterial` / draw-scope bug; fix that first (no tuning helps until SC draws).
+
+**Decision tree (canonical — copy to Cursor):**
+```
+SC suppress OFF (4E default — permanent)
+  1. Log shows BOTH Vbow_v + SC_Vbow_v post-DL lines?
+       NO  → fix 2B‴ scope / isVbowDrawMaterial; STOP (nothing else matters yet).
+       YES → 2.
+  2. DUMP (log-only, NO render change; reuse 2I tooling): for SC_Vbow_v log
+       - blend mode (GXSetBlendMode type + src/dst factors)   <- additive test
+       - each TEV stage color/alpha in+op, and konst/register colors
+       - baked TevOrder rasColor (vs our forced GX_COLOR_NULL)
+  3. Pick fix from the dump (this is sibling option C, ELEVATED — the identified gap,
+     not a last resort; extend wwBowMatDrawPostDl to replay SC's full TEV/blend):
+       additive/edge blend  -> set normal alpha blend (or clamp output) for SC pass
+       hot konst/register   -> replay + scale SC konst toward matte cream/silver (~205,195,175)
+       raster mismatch      -> replay baked rasColor instead of GX_COLOR_NULL for SC stages
+  4. Only AFTER tips/head/feather read MATTE (no halo): micro-tune body warmth
+     (100,72,44 or cap 75). Vbow_v body is otherwise SIGNED OFF — do not retune it.
+```
+
+**Demoted (fallbacks only — current evidence says they won't fix the bloom):** sibling's "cream SC ambient `(95,88,72)`" (A) and "stop overriding SC ambient" (B). Keep for the case where the dump shows SC *is* ambient-controllable; do not spend the first cycles on them.
+
+**Do-not (carry forward + new):** don't ship suppress ON; don't darken SC toward brown (wrong axis — ref tips are white/silver); don't add body brightness to "fix" the tips (wrong material); don't re-enable MAJI / struct-14 / % room ambient.
 
 ---
 

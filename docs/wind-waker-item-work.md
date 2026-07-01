@@ -4,6 +4,12 @@
 
 > Continue Wind Waker / cut-content work — read `docs/wind-waker-item-work.md` first.
 
+**Two-chat handoff (Cursor ↔ Claude):** this feature runs as parallel chats — **Cursor (Wind Curs)** implements, **Claude (Wind Clau)** reviews. Both are handed off via [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md):
+> - **Implementation chat →** that doc's **▶ RESUME HERE**
+> - **Review chat →** that doc's **▶ WIND CLAU HANDOFF**
+>
+> Trust **this doc + the git log** as the current technical state — a prior chat's summary may lag the latest color-tuning commits.
+
 **Status (2026-07-01):** **Track A bow get-item — 4E committed** (`6023333a8b` 4D baseline + 4E polish). Whole mesh + arrow + stable orange direction; polish cream tips / cel banding vs WW ref. Cut-enemy lineage documented; beta Moblin **not found** on retail GZ2E01 decomp map.
 
 ---
@@ -43,9 +49,9 @@
 - **2N′** `bakeLockedMaterialSharedDl()` once at parse; single `mDoExt_modelUpdateDL` per frame.
 - **2B‴** persistent `MatDrawPostDlCallback` — per-mat texgen+TEV after `callDL` (`Vbow_v` body + `SC_Vbow_v` ink both draw).
 - **Lighting:** struct **0** + `dWwItemmdl_setWwBowActorAmbient` + `dWwItemmdl_applyBowMaterialAmbientOnly` — **no MAJI**, **no struct 14**. Skip `dKy_efplight_set` for WW bow.
-- **4E constants:** body `(105,78,48)` cap **80**; SC ink `(58,48,42)`; A/B toggle `kWwBowSuppressScInkPassForDraw` (default false).
+- **4E constants:** body `(105,78,48)` cap **80**; SC ink `(58,48,42)`; A/B toggle **`game.wwItemmdlBowScSuppress`** (Editor, default off).
 - **Beams:** skip `ID_IT_JN_GETITEM_*` in `dDemo_particle_c::emitter_create` while WW bow demo item lives.
-- Material names: **`Vbow_v`** = body, **`SC_Vbow_v`** = cel ink (grey-brown line art target — not white fill).
+- Material names: **`Vbow_v`** = body (gold limbs + arrow shaft). **`SC_Vbow_v`** = **second cel pass carrying real geometry** — white/silver limb-tip caps + teal bands, silver arrowhead, string/nock art, back-half feather — **plus** ink lines. **Not** an optional outline: suppressing it amputates those parts (A/B proven 2026-07-01). Ship it **on**; de-bloom via **TEV/blend**, not ambient (dark SC ambient `(58,48,42)` does not tame the bloom — the 2B‴ hook replays texgen+TEV order only, not TEV color/konst/blend). See [Wind Curs-Wind Clau.md → `▶ SC_Vbow_v is a geometry+TEV pass`](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md).
 
 **Debug log:** `Documents/dusklight/albw_ww_itemmdl_debug.txt`
 
@@ -329,6 +335,7 @@ User-approved roadmap: try **both** presentation and held, starting with bow.
    - `game.wwItemmdlGetItem` — Track A (**implemented** in Editor → ALBW)
    - `game.wwItemmdlHeldBow` — Track B
    - `game.wwItemmdlHeldBowNoBck` — default **on** for Track B
+   - `game.wwItemmdlBowScSuppress` — SC ink pass A/B (Editor → ALBW)
 3. Files: `include/dusk/settings.h`, `src/dusk/settings.cpp`, `src/dusk/ui/editor.cpp`, `src/d/d_ww_itemmdl_pc.cpp`, `src/d/d_ww_itemmdl_test.cpp`.
 
 ### Phase 1 — Track A (bow get-item)
