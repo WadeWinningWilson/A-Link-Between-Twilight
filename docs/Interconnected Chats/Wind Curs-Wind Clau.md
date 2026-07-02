@@ -92,6 +92,52 @@
 
 **DO-NOT (all roles):** ship suppress ON · darken SC toward brown · re-enable MAJI / struct-14 / % room ambient · change more than one knob per build.
 
+**✅ COMMITTED (2026-07-01):** `155e41f392` 4b source (K0 cap 150 + output ceiling 185 + full op decode + editor tunables); `96d6f8ea90` docs. Get-item color = **good-for-now** (user viewing at ceiling **255 = glow ON**; committed default **185 = matte**; get-item-default glow-vs-matte is a pending user call). **Not yet pushed** to upstream.
+
+---
+
+## ▶ TRACK B KICKOFF — held bow "skin" (Phase 5, 2026-07-01)
+
+**Goal:** WW `vbow` as a toggle skin for Link's **held** bow (aim/shoot), not just get-item. User plan (correct): setting toggle first, then scale/position to TP `AL_BOW` size. Expect **stiff-but-functional** (display ≠ behavior).
+
+**⚠️ Reality check — held is a DIFFERENT draw + lighting path than get-item.** All our color work (2B‴ per-mat bind + 4a SC TEV replay + K0/ceiling) lives in the **get-item draw scope owned by the demo-item actor**. Held bow draws every frame as part of Link's model. So:
+
+**STEP 1 ✅ ANSWERED (2026-07-01, Wind Clau solo) — BEST CASE:** the SC realization (`applyScAuthenticTevAndPeFromMaterial` + K0 + ceiling) runs **inside the global `wwBowMatDrawPostDl` callback** (`d_ww_itemmdl_pc.cpp:1362`), gated only by `isVbowDrawMaterial`/`isScVbowDrawMaterial` vs `s_wwBowDrawModelData` — **not** tied to the demo actor's `drawWwBowModel`. So the color pipeline is **model-data-driven + global** → **held reuses it with ZERO re-plumbing**, just by setting the scope on `mHeldItemModel`. Held bow = `mHeldItemModel`, loaded in `setBowModel()` (`d_a_alink_bow.inc:592`) via `initModel(loadAramBmd(AL_BOW))` → standard J3D draw path → callback fires.
+**Remaining risks:** (a) BCK coupling — `setBowModel` binds `BVJMPCL` and derives `field_0x33dc` from `getBckAnm()->getFrameMax()`; BVJMPCL targets AL_BOW bones (can't drive 2-bone vbow) so skip binding but still satisfy `field_0x33dc`; (b) single-static scope conflict (bow get-item *while* holding WW bow — rare; `begin()` logs "begin replaced"); (c) scope lifetime — begin/clear around Link's held-item draw each frame so the global per-material filter doesn't run game-wide (pin the held-draw site).
+
+**STEP 2 — swap + toggle (🟩 Cursor):** `game.wwItemmdlHeldBow` branch in `setBowModel()` (`d_a_alink_bow.inc`) → load `itemmdl` vbow instead of `AL_BOW`.
+
+**STEP 3 — skip TP bow BCK, default on (🟩 Cursor):** `game.wwItemmdlHeldBowNoBck`. TP `BVJMPCL` targets `AL_BOW` bones; our 2-bone vbow would deform to garbage. Skip = stiff (no draw-flex) but aim/shoot works.
+
+**STEP 4 — scale + hand matrix (🟩 Cursor + 🟦 user screenshot-tune):** vbow is WW-scale; start `transM(-1.3,0,-3)`, `XYZrotM(-74°,43.6°,1.9°)` in `d_a_alink.cpp ~6078`. Include Epona / left-hand path.
+
+**STEP 5 — held lighting re-tune (🟪 Wind Clau judges):** held uses normal gameplay env light, **not** demo ambient/struct-0. The **material** realization (4a/K0) carries; the get-item-specific bits (fixed warm ambient, beam/efplight skip, struct-0) do NOT. For held, **drop the SC output ceiling to ~185 (or lower)** — a held bow should NOT glow. Re-judge exposure vs a held-bow reference.
+
+**✅ STEP 2–4 BUILT (2026-07-01, Wind Clau solo; UNCOMMITTED, awaiting playtest):** `wwItemmdlHeldBow` + `wwItemmdlHeldBowScalePct` settings + editor controls; `setBowModel()` loads vbow (fallback AL_BOW); per-tick private-arc mount in `d_s_play` (`dWwItemmdl_tickHeldBowArcMount`) so held works without a get-item replay; scope-wrapped both `modelDraw(mHeldItemModel)` sites in `d_a_alink.cpp`; BVJMPCL entry skipped on vbow (stiff); live scale via `setBaseScale`. Build OK (30MB exe), caches wiped. Glow reuses the K0/ceiling sliders. **Pending:** playtest (appears? crash? scale?), then tune scale/hand-offset, then commit. **Left-hand/Epona path (`:20846`) wrapped too but untested.**
+
+**▶ HELD BODY BLOCKER + PATH DECISION (2026-07-01):** Held bow loads / scales / draws; SC arrowhead colors; **body renders untextured + angle-swings black↔white** — the get-item "monochrome + view-matrix swing" refight, but now through Link's `daAlink_c::modelDraw` (which runs MAJI + chan-ctrl + material re-processing the clean demo actor never did). Tried: no-MAJI struct-0/ambient branch inside modelDraw; `mDoExt_modelUpdateDL` instead of `modelEntryDL` (held draw was param1=0 → modelEntryDL, no re-bake); get-item create flags (moot — `initModel` already ORs diff `0x11000084` at `d_a_alink.cpp:4331`; the black→white change came from mdlFlags 0→0x80000). Callback **does** fire for the body (`2B apply post-dl: mat=Vbow_v nTexGen=2 nTev=2`), so texgens bind — yet body stays untextured.
+
+**DECISION (user, 2026-07-01): Path 1 — fix inside `modelDraw`** (not re-architecture, not pause). **Rationale: once the held bow renders correctly it is the implementation TEMPLATE for held versions of all 21 WW `itemmdl` items** — so it's worth the grind. Continue.
+
+**Next diagnostic:** throttled callback now logs `mat=Vbow_v … tg0src=N`; need a run of the **current** build (10:11 exe; earlier test ran a stale exe — log had no `tg0src`) to read the body texgen source → decides texgen-source fix vs deeper Link-draw realization issue.
+
+**✅✅ RESOLVED — HELD BOW FULLY COLORED (2026-07-01, build 23:02):** root cause was **scope lifetime, not color**. The `MatDrawPostDl` callback fires at draw-buffer **DRAIN** (after `modelDraw` returns) — but the held branch did `begin → modelUpdateDL → clear` all inside `modelDraw`, clearing the scope before the drain, so the callback **never ran** (no `2B apply` lines in the log despite `TrackB modelDraw` firing). SC showed as unrealized white-bloom, body untextured. **Fix: keep the scope active past `modelDraw`** — `beginBowDrawScope` re-points each frame, `clearBowDrawScope` only when the held item is no longer the WW bow (avoids dangling on item-switch). Gold body + silver caps + colored arrow now render on the held bow, matching get-item.
+
+**★ THE HELD TEMPLATE — reusable for held versions of all 21 WW `itemmdl` items. Working chain:**
+1. `setBowModel()` (`d_a_alink_bow.inc`): load via `dWwItemmdl_getVbowModelData("itemmdl")` + `patchModelForPc`; create with **`initModel(data, 0x80000, 0x11000084)`** (mdlFlags `0x80000` matters; `initModel` already ORs diff `0x11000084`).
+2. `dWwItemmdl_tickHeldBowArcMount()` per play-tick (`d_s_play`) so the private itemmdl arc stays resident (no get-item replay needed).
+3. `daAlink_c::modelDraw` branch for the WW model: **skip MAJI**; `g_env_light.settingTevStruct(0)` + `dWwItemmdl_setWwBowActorAmbient` + `dWwItemmdl_applyBowMaterialAmbientOnly` + **`mDoExt_modelUpdateDL`** (NOT `modelEntryDL`).
+4. **Draw scope must stay active to DRAIN**: `beginBowDrawScope` (re-point each frame), clear only on item-switch — this is what makes the SC/K0/texgen realization callback fire.
+5. Skip the item's BCK when it targets a different rig (stiff but functional); expose a live scale-% slider; glow reuses the shared K0 / SC-output-ceiling sliders.
+Generalizing to another item = swap the item-id / material-name guards; the render chain (steps 2–4) is item-agnostic.
+
+**Open (held polish, not blockers):**
+- **Double arrow / jut:** vbow has a permanently-nocked arrow baked into its 2 shapes (`Vbow_v` shaft + `SC_Vbow_v` head/fletch); TP still spawns its own `daArrow_c` over it, and the vbow arrow sits at a fixed angle (BCK skipped = no aim flex). The WW arrow is **not separable** from the bow model, so it can't be moved onto the TP arrow. Options: hide TP's nocked/held arrow during draw (show only the vbow's), or skin `daArrow_c` with a standalone WW arrow mesh (own mini-application of this template, if such an asset exists).
+- Scale / hand-position tuning.
+- **Strip diagnostics** (`dWwItemmdl_logHeldBowDraw`, throttled `2B` `tg0src` log) and **commit** the held-bow template.
+
+**Recommendation (deferred):** BTK `0x24` (get-item spin polish) and the 20-item generalization wait until held is cracked. Wind Clau BTK caveat still stands = confirm BTK animates texmtx (safe) not texgen src, and 2B‴ re-applies after BTK each frame.
+
 ---
 
 ## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)

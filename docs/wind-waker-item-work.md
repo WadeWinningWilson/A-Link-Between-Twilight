@@ -10,7 +10,38 @@
 >
 > Trust **this doc + the git log** as the current technical state — a prior chat's summary may lag the latest color-tuning commits.
 
-**Status (2026-07-01):** **Track A bow get-item — 4E committed** (`6023333a8b` 4D baseline + 4E polish). Whole mesh + arrow + stable orange direction; polish cream tips / cel banding vs WW ref. Cut-enemy lineage documented; beta Moblin **not found** on retail GZ2E01 decomp map.
+**Status (2026-07-01):** **Bow BOTH tracks working & committed.** Track A get-item — 4a authentic SC TEV replay + 4b K0 cap/output ceiling (`888f69392d` and prior). Track B **held skin** — vbow renders fully colored on Link's held bow (`game.wwItemmdlHeldBow`), committed `888f69392d`. **The bow is now a proven end-to-end reference — see [▶ PROVEN PATH](#-proven-path--bringing-a-ww-itemmdl-item-to-screen) below.** Next item: **Skull Hammer (`vhamm`)** — get-item generalization (no TP host for held). Cut-enemy lineage documented; beta Moblin **not found** on retail GZ2E01 decomp map.
+
+---
+
+## ▶ PROVEN PATH — bringing a WW `itemmdl` item to screen
+
+**Reference implementation: `vbow` (Hero's Bow), both layers shipped.** Two presentation layers; the render core is shared and item-agnostic.
+
+### Layer A — Get-item ("You got it!" spin)
+1. **Heap/arc swap:** branch `daItemBase_c::CreateItemHeap` on the item id → `dWwItemmdl_getVbowModelData("itemmdl")` + `dWwItemmdl_patchModelForPc` (`d_a_itembase.cpp`).
+2. **Demo draw override:** `daDitem_c::setTevStr` for the WW mesh = `settingTevStruct(0)` + `dWwItemmdl_setWwBowActorAmbient` + `applyBowMaterialAmbientOnly` (**no MAJI, no struct-14**); skip `dKy_efplight_set` + GETITEM beam particles (`d_a_demo_item.cpp`, `d_demo.cpp`).
+3. **PC material realization:** 2N′ bake-once locked DL + **2B‴ persistent `MatDrawPostDl` callback** — per-material texgen + TEV order; SC gets the **4a full TEV/konst replay**; body ambient-only fill (`d_ww_itemmdl_pc.cpp`).
+4. **Color tuning:** body ambient cap; SC **K0 cap** (→ matte silver) + **output ceiling** (bloom threshold). Live via Editor sliders.
+
+### Layer B — Held skin (equipped in Link's hand) — THE TEMPLATE
+1. **Arc residency:** `dWwItemmdl_tickHeldBowArcMount()` per play-tick (`d_s_play.cpp`) so the private itemmdl arc stays mounted (no get-item replay needed).
+2. **Model swap:** in the item's `set*Model()` → `getVbowModelData` + `patchModelForPc` + **`initModel(data, 0x80000, 0x11000084)`** (mdlFlags `0x80000` matters) (`d_a_alink_bow.inc`).
+3. **Draw override:** `daAlink_c::modelDraw` branch for the WW model — **skip MAJI**, `settingTevStruct(0)` + warm ambient + **`mDoExt_modelUpdateDL`** (not `modelEntryDL`) (`d_a_alink.cpp`).
+4. **Scope stays alive to DRAIN:** `beginBowDrawScope` re-point each frame, `clearBowDrawScope` only on item-switch — the realization callback fires at draw-buffer drain, **not** during `modelUpdateDL`. (This was the last blocker.)
+5. **Rig:** skip the item's aim/hold BCK when it targets a different skeleton (stiff but functional); expose a scale-% slider; glow reuses the shared K0 / output-ceiling sliders.
+
+**Shared core (A3/A4 == B3/B4):** retained itemmdl arc + heap, the 2B‴ callback, struct-0/ambient lighting, and the SC realization are all **item-agnostic** once the item-id + material-name guards are widened.
+
+### To add a NEW item
+- **Get-item:** branch `CreateItemHeap` on the new id; point at the item's BDL index (`itemmdl.h`).
+- **Held:** branch the item's `set*Model()` + `modelDraw` with the Layer-B recipe — **only if the item has a TP host** to equip (bow, boomerang, hookshot, boots, bombs, bottles, telescope→hawkeye). No-TP-analogue items (Skull Hammer, Deku Leaf, Sail, WW baton, Grappling Hook, Tingle Tuner, Picto Box, bags) are **get-item / viewer only** unless you write new procs.
+- **Generalize the guards:** `isTevDumpMaterial` / `isVbowDrawMaterial` currently hardcode `Vbow_v` / `SC_Vbow_v`; widen to the new item's material names (or match any itemmdl material). Tune ambient/scale; wire BTK/BRK if present.
+
+### Next item — Skull Hammer (`vhamm`)
+- **BDL:** `dRes_INDEX_ITEMMDL_BDL_VHAMM_e` (`itemmdl.h`); TWW arc `Vhamm`; **no BTK/BRK** (per the 21-mesh table below).
+- **No TP analogue** (TP's iron ball is a different weapon) → **get-item generalization pilot**: proves Layer A works on a 2nd, single-material item. Held-skin is N/A (nothing to equip it on) without new hammer procs.
+- **First test:** Layer A get-item for `vhamm` — swap the material guards off the `Vbow_v`-only assumption, tune ambient, confirm it spins in the get-item demo.
 
 ---
 
@@ -29,7 +60,7 @@
 | Skip efplight + skip demo GETITEM beam particles (WW bow only) | Done (4D/4E in `d_a_demo_item.cpp`, `d_demo.cpp`) |
 | WW cel look vs reference (goldenrod body, cream tips, subtle ink) | **~85%** — **4a** SC TEV replay restored detail (root fix, generalizes). Two gaps left: SC caps read **white** (want matte **silver** — temper st[2] `+HALF`); body **too bright/flat** (cap `80→70`, opt. Vbow_v TEV replay for amber gradient) |
 | BTK spin (`dRes_INDEX_ITEMMDL_BTK_VBOW_e`) | **Deferred** — after color sign-off |
-| Track B held bow | Not started |
+| Track B held bow | **WORKING (fully colored, 2026-07-01)** — vbow skin on Link's held bow via `game.wwItemmdlHeldBow` + live scale %. **This is the reusable template for held versions of all 21 items** (see [Wind Curs-Wind Clau.md → ★ THE HELD TEMPLATE](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md)). Uncommitted; polish = double-arrow, scale tune, strip diagnostics |
 
 **Git milestones (main):**
 
