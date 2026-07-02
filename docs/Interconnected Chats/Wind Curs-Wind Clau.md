@@ -140,6 +140,28 @@ Generalizing to another item = swap the item-id / material-name guards; the rend
 
 ---
 
+## ▶ VIEWER RESULTS + NEXT SKINS + KING BULBLIN AXE (2026-07-01/02)
+
+**✅ Viewer works for ALL 21 itemmdl meshes.** `game.wwItemmdlViewerBdlIndex` + the Replay button spins any BDL index through the proven get-item path — the generalized render core (per-index loader + `SC_`-prefix / accept-all guards) holds across the whole set. Findings (user):
+- **Color-perfect, ≤ bow brightness:** **Iron Boots** (`vboot` 0xE), **Hookshot** (`vhook` 0x14) — read correct, not over-bright (some items land better than the bow).
+- **Colored but angle-bright:** several swing nice-color ↔ washed-white monochrome at certain angles (view-lit on bright texels; the familiar per-item ceiling/ambient axis).
+- **~1 off-color** item (identify which on the next pass).
+⇒ Render core proven for all 21; remaining is **per-item** color tuning, not architecture.
+
+**Next skin pass (both TP-hosted → held works via the template):**
+- **Iron Boots** `vboot` 0xE → `dItemNo_HVY_BOOTS_e`; **Hookshot** `vhook` 0x14 → `dItemNo_HOOKSHOT_e`. Both already color-perfect in the viewer. Apply the held template to their model setters (analog of `setBowModel`) + the `modelDraw` no-MAJI branch keyed to those models; per-item scale/offset.
+
+**King Bulblin axe — weapon-reskin thread (research done, NO code):**
+- **Enemy:** King Bulblin = **`E_rdb`** (id `0x1D5`/469). (`E_rd` `0x1D4` regular rider, `E_rdy` `0x1D6` shadow — shared 32-bone `RD` skeleton.)
+- **Weapon:** **`RB_ONO`** = `dRes_INDEX_E_RDB_BMD_RB_ONO_e = 0x55` in the `E_rdb` arc. "ONO"=斧 (axe); **single-joint prop** (`RB_ONO_JNT_RB_ONO_e=0x0`); swung via `RB_ATTACK01/02/03` + `ATTACK03_SPIN` (confirmed by `Z2SE_EN_RDB_DEMO_ONO_LAND`).
+- **Feasibility:** **Phase 1 — Link wields it as a reskin over the sword** (`mSwordModel`, same `modelDraw` path) = **feasible**, same held template; Link swings the axe with his own sword moveset (stiff-but-functional, big-weapon scale tune). **Phase 2 — authentic Bulblin swings = NOT portable** (his attacks are on the 32-bone `RD` rig; Link's skeleton differs). **Phase 3 — unique moveset = new procs.**
+- **Loading:** `RB_ONO` is inside the big `E_rdb` boss arc → private-mount `E_rdb` (heavy, whole boss resident) or extract `RB_ONO` to a light arc (Plan B, cleaner).
+- **Integration (user's thoughts):** either graft into the **quick-switch sword system**, or a **standalone item/sword slot** if vanilla has unused slots (worth auditing slot availability). **Open question:** repurpose other item anims (**Dominion Rod**) or **cut Link animations** for a custom swing — decomp scan when this thread is picked up.
+
+**STATUS: WAIT — no code changes pending user direction. Queued: (1) per-item color tuning, (2) Iron Boots + Hookshot held skins, (3) King Bulblin axe Phase-1 reskin.**
+
+---
+
 ## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)
 
 **Role:** Wind Clau = review / graphics-strategy / second-opinion. Reads Cursor's diffs, logs, and screenshots; picks branches; enforces the do-not-retry list. **Does not edit source** — Cursor implements. (Wind Clau may edit *this doc* and `wind-waker-item-work.md`.)

@@ -48,6 +48,19 @@
 - **No TP item id** (TP has no Skull Hammer; iron ball is unrelated) → the get-item flow (keyed by `dItemNo`) and held-skin (needs a TP host) **cannot** trigger it. ⇒ **Test vehicle = a VIEWER / index spawn** using `dWwItemmdl_getItemmdlModelData(VHAMM)` + the realization draw scope, drawn at Link's feet. This is Phase 3 (ImGui itemmdl viewer) or a generalized demo-spawn that takes a BDL index instead of a `dItemNo`.
 - **This is the general answer for the ~13 no-TP-analogue items** (hammer, Deku Leaf, Sail, WW baton, grappling hook, Tingle Tuner, Picto Box, bags): viewer-only until new procs exist. TP-analogue items (boomerang, hookshot, boots, bombs, bottles, telescope) can use the get-item + held paths.
 
+### ✅ VIEWER RESULTS (2026-07-01) — all 21 meshes spin
+`game.wwItemmdlViewerBdlIndex` + Replay drew **all 21** WW meshes through the proven get-item path — the generalized render core works across the whole set. Per-item color varies under the shared recipe:
+- **Color-perfect, ≤ bow brightness:** **Iron Boots** (`vboot` 0xE), **Hookshot** (`vhook` 0x14) — correct, not over-bright.
+- **Colored but angle-bright:** several swing nice-color ↔ washed-white at certain camera angles (view-lit on bright texels — per-item ceiling/ambient tune).
+- **~1 off-color** item (TBD which).
+⇒ render core proven for all 21; remaining work is **per-item** color tuning, not architecture.
+
+### Next skin candidates (both TP-hosted → held works)
+- **Iron Boots** `vboot` 0xE → `dItemNo_HVY_BOOTS_e`, and **Hookshot** `vhook` 0x14 → `dItemNo_HOOKSHOT_e` — already color-perfect in the viewer + have TP equip slots. Prime **held-skin** targets: apply the held template to their model setters (analog of `setBowModel`), per-item scale/offset.
+
+### Related thread — King Bulblin axe as a Link weapon (research; see interconnected doc)
+- **Enemy** King Bulblin = `E_rdb` (`0x1D5`); **weapon** `RB_ONO` (`dRes_INDEX_E_RDB_BMD_RB_ONO_e=0x55`, "ono"=axe, single-joint prop). Phase-1 reskin over Link's sword = feasible via the held template; authentic Bulblin swings not portable (32-bone RD rig ≠ Link). Full feasibility + integration options in [Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md).
+
 ---
 
 ## Track A progress (2026-06-26 → 2026-07-01)
