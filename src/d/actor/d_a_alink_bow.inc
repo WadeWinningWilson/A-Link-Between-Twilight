@@ -589,8 +589,42 @@ void daAlink_c::setBowModel() {
     J3DAnmTransform* bck = (J3DAnmTransform*)mAnmHeap9.loadDataIdx(dRes_ID_ALANM_BCK_BVJMPCL_e);
     JKRHeap* heap = setItemHeap();
 
-    mHeldItemModel = initModel(loadAramBmd(dRes_ID_ALANM_BMD_AL_BOW_e, 0x4C00), 0);
-    
+    J3DModelData* bowModelData = NULL;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Track B held bow skin)
+    // When the toggle is on, swap Link's held bow mesh for the retail WW
+    // itemmdl vbow. Data comes from the cached retained heap (getVbowModelData
+    // manages its own heap + restores it); NULL falls back to vanilla AL_BOW.
+    // The BVJMPCL BCK still inits for shoot-timing (field_0x33dc) but is not
+    // applied to the 2-bone vbow (see d_a_alink.cpp calc) — stiff but functional.
+    // ============================================
+    bool wwSkin = false;
+    if (dusk::getSettings().game.wwItemmdlHeldBow.getValue()) {
+        bowModelData = dWwItemmdl_getVbowModelData("itemmdl");
+        if (bowModelData != NULL) {
+            dWwItemmdl_patchModelForPc(bowModelData);
+            wwSkin = true;
+        }
+    }
+#endif
+    if (bowModelData == NULL) {
+        bowModelData = loadAramBmd(dRes_ID_ALANM_BMD_AL_BOW_e, 0x4C00);
+    }
+#if TARGET_PC
+    if (wwSkin) {
+        // Match the get-item J3DModel create flags (mdl 0x80000, diff 0x11000084 — see
+        // daItemBase_c::CreateItemHeap) so mDoExt_modelUpdateDL realizes the locked bdl3 body
+        // material. initModel(data, 0) uses diff=0, leaving the body ambient unrealized (black)
+        // while SC self-colored via the post-DL callback.
+        mHeldItemModel = initModel(bowModelData, 0x80000, 0x11000084);
+    } else {
+        mHeldItemModel = initModel(bowModelData, 0);
+    }
+#else
+    mHeldItemModel = initModel(bowModelData, 0);
+#endif
+
     if (!mItemBck.init(bck, FALSE, 2, 1.0f, 0, -1, false)) {
         JUT_ASSERT(894, 0);
     }

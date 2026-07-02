@@ -70,6 +70,7 @@
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
+#include "d/d_ww_itemmdl_pc.h"
 #include "dusk/hurricane_test.h"
 #include "dusk/logging.h"  // DuskLog — TEMP arc/model lifecycle trace (STRIP with D_ALBW_ARC_LIFECYCLE_DEBUG)
 #include "res/Object/Alink.h"
@@ -6273,6 +6274,14 @@ void daAlink_c::setItemMatrix(int param_0) {
                 } else {
                     mHeldItemModel->setBaseTRMtx(mpLinkModel->getAnmMtx(mRightItemJntNo));
                 }
+#if TARGET_PC
+                // Track B: live-tunable held vbow scale (WW mesh differs in size from AL_BOW).
+                if (dusk::getSettings().game.wwItemmdlHeldBow.getValue() && checkBowItem(mEquipItem)) {
+                    const f32 s =
+                        dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
+                    mHeldItemModel->setBaseScale(cXyz(s, s, s));
+                }
+#endif
             } else if (checkHookshotItem(mEquipItem)) {
                 setHookshotPos();
             } else if (mEquipItem == dItemNo_IRONBALL_e) {
@@ -6294,7 +6303,13 @@ void daAlink_c::setItemMatrix(int param_0) {
                     field_0x33dc = mItemBck.getBckAnm()->getFrameMax() - 0.001f;
                 }
 
-                mItemBck.entry(mHeldItemModel->getModelData(), field_0x33dc);
+#if TARGET_PC
+                // Track B: the held vbow is a 2-bone prop; the BVJMPCL bow anim targets AL_BOW's
+                // rig and would garble/crash it. Skip the anim entry (stiff but functional).
+                if (!(dusk::getSettings().game.wwItemmdlHeldBow.getValue() &&
+                      checkBowItem(mEquipItem)))
+#endif
+                    mItemBck.entry(mHeldItemModel->getModelData(), field_0x33dc);
             }
 
             mHeldItemModel->calc();
@@ -20393,6 +20408,38 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
                 tc ? (int)tc->r : -999, tc ? (int)tc->g : -999, tc ? (int)tc->b : -999,
                 tc ? (int)tc->a : -999);
         }
+    }
+#endif
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Track B held WW bow skin)
+    // MAJI crushes the WW cel materials to black (same as the get-item saga). For the held
+    // vbow, replicate the get-item recipe instead: struct-0 + fixed warm ambient (no MAJI),
+    // and activate the SC realization draw scope so the callback colors SC + body texgen
+    // during modelEntryDL. Everything else (other models) keeps normal MAJI lighting.
+    // ============================================
+    const bool wwHeldBow = (i_model == mHeldItemModel &&
+                            dusk::getSettings().game.wwItemmdlHeldBow.getValue() &&
+                            checkBowItem(mEquipItem));
+    // Item switched away from the WW bow: drop the stale scope so the post-DL callback
+    // (fires at draw-buffer DRAIN) never dereferences a freed vbow model.
+    if (i_model == mHeldItemModel && !wwHeldBow) {
+        dWwItemmdl_clearBowDrawScope();
+    }
+    if (wwHeldBow) {
+        // WW cel bow: get-item recipe — struct-0 + warm ambient (NO MAJI) + modelUpdateDL.
+        // CRITICAL: the MatDrawPostDl callback fires at draw-buffer DRAIN (after this returns),
+        // like the get-item demo (begin at spawn, clear at Delete). Do NOT clear here — that
+        // killed the callback before drain, so SC/body never realized. Re-point each frame via
+        // begin (idempotent); cleared above on item switch.
+        dWwItemmdl_beginBowDrawScope(i_model, fopAcM_GetID(this));
+        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+        dWwItemmdl_setWwBowActorAmbient(&tevStr);
+        dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
+        mDoExt_modelUpdateDL(i_model);
+        daMirror_c::entry(i_model);
+        return;
     }
 #endif
 

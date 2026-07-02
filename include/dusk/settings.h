@@ -276,6 +276,10 @@ struct UserSettings {
         ConfigVar<int> wwItemmdlBowScK0Cap;
         // Track A SC 4b: cosmetic SC-pass output RGB ceiling (bloom threshold; 255=off).
         ConfigVar<int> wwItemmdlBowScOutputCeiling;
+        // Track B: use WW itemmdl vbow as Link's held bow skin (dev toggle; skin only, no BCK flex).
+        ConfigVar<bool> wwItemmdlHeldBow;
+        // Track B: held WW bow scale percent (100 = 1.0x; live hand-size tuning).
+        ConfigVar<int> wwItemmdlHeldBowScalePct;
         // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
         // never the sumo minigame.
         //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).

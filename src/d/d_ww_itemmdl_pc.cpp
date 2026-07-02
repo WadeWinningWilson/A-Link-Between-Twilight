@@ -909,6 +909,20 @@ J3DModelData* dWwItemmdl_getVbowModelData(const char* arc_name) {
     return model_data;
 }
 
+// Track B: while the held-bow skin toggle is on, drive the private itemmdl arc mount to
+// completion (stepPrivateItemmdlArcMount is a per-frame stepper) so setBowModel() can pull
+// vbow via getVbowModelData without requiring a prior get-item replay.
+void dWwItemmdl_tickHeldBowArcMount() {
+    if (!dusk::getSettings().game.wwItemmdlHeldBow.getValue()) {
+        return;
+    }
+    // state 2 = ready, 3 = failed — nothing more to do either way.
+    if (s_privateItemmdlState == 2 || s_privateItemmdlState == 3) {
+        return;
+    }
+    stepPrivateItemmdlArcMount();
+}
+
 void dWwItemmdl_patchModelForPc(J3DModelData* model_data) {
     logModelSummary(model_data, "patchModel");
     static bool s_logged_patch_tevorder = false;

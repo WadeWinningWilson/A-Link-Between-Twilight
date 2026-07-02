@@ -56,6 +56,8 @@ UserSettings g_userSettings = {
         .wwItemmdlBowScSuppress {"game.wwItemmdlBowScSuppress", false},
         .wwItemmdlBowScK0Cap {"game.wwItemmdlBowScK0Cap", 150},
         .wwItemmdlBowScOutputCeiling {"game.wwItemmdlBowScOutputCeiling", 185},
+        .wwItemmdlHeldBow {"game.wwItemmdlHeldBow", false},
+        .wwItemmdlHeldBowScalePct {"game.wwItemmdlHeldBowScalePct", 100},
         .sumoOutfit {"game.sumoOutfit", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
         .capWear {"game.capWear", CapWearMode::Off},
@@ -331,6 +333,8 @@ void registerSettings() {
     Register(g_userSettings.game.wwItemmdlBowScSuppress);
     Register(g_userSettings.game.wwItemmdlBowScK0Cap);
     Register(g_userSettings.game.wwItemmdlBowScOutputCeiling);
+    Register(g_userSettings.game.wwItemmdlHeldBow);
+    Register(g_userSettings.game.wwItemmdlHeldBowScalePct);
     Register(g_userSettings.game.sumoOutfit);
     Register(g_userSettings.game.sumoOutfitFists);
     Register(g_userSettings.game.capWear);

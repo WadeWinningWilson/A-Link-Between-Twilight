@@ -2330,6 +2330,36 @@ EditorWindow::EditorWindow() {
                     "Requires WW itemmdl get-item ON." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlHeldBow,
+            "WW held bow skin (Track B)",
+            "Reskin Link's HELD bow to the WW vbow mesh (skin only — does NOT add the bow to "
+            "inventory or map a button). Own + equip the bow normally, then draw it. Stiff "
+            "(no draw-flex). Shares the SC K0 / out-ceiling glow sliders above." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "WW held bow scale %",
+                .getValue = [] {
+                    return getSettings().game.wwItemmdlHeldBowScalePct.getValue();
+                },
+                .setValue = [](int value) {
+                    getSettings().game.wwItemmdlHeldBowScalePct.setValue(std::clamp(value, 1, 1000));
+                    config::Save();
+                },
+                .isModified = [] {
+                    return getSettings().game.wwItemmdlHeldBowScalePct.getValue() !=
+                           getSettings().game.wwItemmdlHeldBowScalePct.getDefaultValue();
+                },
+                .min = 1,
+                .max = 1000,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Held WW bow size in Link's hand, percent (100 = 1.0x). Live-tune while "
+                    "holding. Requires WW held bow skin ON." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
         leftPane.register_control(
             leftPane.add_button("Replay Bow Get-Item Demo")
                 .on_pressed([] {
