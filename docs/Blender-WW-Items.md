@@ -26,9 +26,11 @@
 
 ## Goals (priority order)
 
-1. **Iron Boots re-rig (ACTIVE BLOCKER)** — make `vboot` work as a worn boot on Link's feet.
+1. **Iron Boots re-rig — ✅ ASSET DONE (2026-07-02).** `vboot` re-rigged to al_bootsh's exact skeleton; textured `vboot.bdl` built & validated. See [Task 1 — DONE](#task-1--iron-boots-re-rig---the-current-blocker) below. Remaining = repack + in-game foot test + game-side code (drop `s_albwWwBootsSkinned` rig-gating).
 2. **Bow: extract the WW arrow** from `vbow` → a standalone mesh (to skin TP's arrow projectile).
 3. *(Later)* Re-rig held items for real flex; extract **King Bulblin axe** (`RB_ONO` from `E_rdb`) to a light arc.
+
+> **Design intent — TP↔WW toggle.** The whole reason to match al_bootsh's skeleton exactly (joints/indices 1/2/3) is so the re-rigged `vboot` is a **drop-in** the boot slot can load *instead of* al_bootsh, driven by the **same** vanilla foot rig. That makes a clean **player toggle: Iron Boots (TP) ↔ Iron Boots (WW)** — a pure model-swap, like the Cap Wear selector. The old stiff single-joint hack couldn't toggle cleanly; this can.
 
 ---
 
@@ -47,6 +49,27 @@
 ---
 
 ## Task 1 — Iron Boots re-rig  ← the current blocker
+
+### ✅ DONE — asset built & validated (2026-07-02)
+
+**Deliverable:** `D:\XXXXXXX\Ex TP\Blender workflow\DAE files\vboot.bdl` (re-rigged, textured, BDL format). **Blend:** `D:\XXXXXXX\Ex TP\Blender workflow\vboot_rerig_DONE.blend`. Validated by round-trip: **4 joints** (0=root, 1/2/3 = al_bootsHA/B/C — matches al_bootsh indices), **2 materials** (`SC_boot`, `boot`), textures embedded.
+
+**How it was actually driven — Claude ⇄ Blender socket bridge (NO Desktop MCP needed).** The Cowork/epitaxy build of Claude Desktop **ignores `claude_desktop_config.json` mcpServers** — no hammer ever appears, and editing that file is futile (the app rewrites it on launch; even a read-only lock didn't surface a hammer). **Bypass:** the `blender-mcp` addon runs a plain socket server on **`localhost:9876`**. A short Python client (`socket` → send `{"type":"execute_code","params":{"code":...}}` / `get_scene_info` / `get_viewport_screenshot`) drives Blender directly from a terminal — read scene, run `bpy`, screenshot to a PNG and view it. This is the reliable path; don't chase the Desktop hammer.
+
+**Key discoveries (a re-rig chat MUST know these — they invalidate the naive plan below):**
+- **al_bootsh's bones are runtime-driven / degenerate in the file.** All 4 report `head=(0,0,0) tail=(0,0,1)` — the game injects each bone's real transform at runtime from Link's foot bones. ⇒ **"parent with Automatic Weights" does NOT work** (no positioned bones to weight against). BUT the **mesh** is the real assembled boot in model space (segments A/B/C are spatially adjacent: A X[5,42], B X[-18,12], C center), so the mesh **is** a valid alignment reference.
+- **Weighting = region-match, not auto.** Clone al_bootsh's armature, then for each `vboot` vertex assign it (rigid, 100%) to whichever al_bootsh segment (A/B/C → bone 1/2/3) is **nearest** (KDTree over al_bootsh verts labeled by segment). Result mirrored al_bootsh's proportions (A=366, B=149, C=43 verts).
+- **Orientation/scale:** `vboot` long axis = **Y**, al_bootsh long axis = **X** → rotate **90° about Z**; **uniform** scale ≈ **1.64** (longest-axis match — do NOT non-uniform-scale, the WW boot is just chunkier and will overhang; that's fine, it must still read as WW). Then translate so bbox centers coincide.
+- **The pair split:** `vboot` is a standing PAIR, split by **material** (each of its 2 meshes spans both feet, symmetric across X=0), NOT by side. Cut at **X=0** (clean gap confirmed) and keep one side → single boot. (Loose-parts separate would fragment straps.)
+
+**SuperBMD / export gotchas (each cost a failed convert):**
+- Armature MUST be named exactly **`skeleton_root`** or SuperBMD errors "No Skeleton found."
+- Use the **`--bdl`** flag (or `superbmd_createbdl.bat`) — default output is `.bmd`; `itemmdl` items are **BDL** (they live in `bdlm/`).
+- **Clean geometry first**: `mesh.delete_loose` + `mesh.dissolve_degenerate`, else "a face … has less than 3 vertices (loose vertex or edge)."
+- **Rename materials back to `SC_boot` / `boot`** — Blender/SuperBMD import prefixes them `m0…`/`m1…`; the cel-shader keys on an **`SC_` prefix at the START**, so `m0SC_boot` would NOT match. (Kept: both link `V_boot.png`.)
+- **UV-JOIN TRAP (cost the "beige boot"):** joining the 2 vboot meshes gave the joined object **two UV layers** (`meshId0-tex0`, `meshId1-tex0`); each face has valid coords in only ONE, so faces sampling the empty layer land at (0,0) = flat beige. **Fix:** merge into one layer — for `material_index==1` faces copy their UVs from layer-2 into layer-1, then delete layer-2 (single `tex0`). This bug is in the BDL too, not just the viewport — re-export after fixing.
+
+**Baked transform before export** (`transform_apply` all) so SuperBMD exports from identity. Removed the stale old-armature modifier (parent-clear leaves the modifier behind → double-armature).
 
 ### Where it stands (the struggle)
 The mod already loads `vboot` onto Link's boot slot, but `vboot` is a **standing pair with no foot rig**, so:
@@ -159,6 +182,7 @@ print("Exported ->", out)
 
 ## Status / handoff notes
 
-- **Game side is done & committed** for bow + hookshot held skins and the get-item viewer (see the two related docs). The **iron-boots game code is on hold** (a stiff single-pair swap exists, uncommitted / too low on Y) pending this re-rigged `vboot` asset.
-- Once the re-rigged `vboot.bdl` exists, the code chat removes the `s_albwWwBootsSkinned` special-case and the vanilla boot rig drives it.
-- Keep `SC_`-prefixed material names on any edited mesh so the in-game cel renderer applies automatically.
+- **Iron boots ASSET = ✅ DONE (2026-07-02).** Re-rigged textured `vboot.bdl` built & validated (see [Task 1 — DONE](#-done--asset-built--validated-2026-07-02)). **Remaining, game-side:** (1) repack `vboot.bdl` into `itemmdl.arc` (GCFT), drop in `res/Object/`, wipe `dawn_cache.db*`/`pipeline_cache.db*`; (2) test in the **Item Viewer** (index `0xE`) = mesh/texture check; (3) test **on Link's foot** = rig check; (4) code chat **removes the `s_albwWwBootsSkinned` rig-gating** so vanilla `setAnmMtx(1/2/3)` drives it — and gate load-vboot-vs-al_bootsh behind the **TP↔WW toggle** flag.
+- **Game side is done & committed** for bow + hookshot held skins and the get-item viewer (see the two related docs).
+- Keep `SC_`-prefixed material names on any edited mesh so the in-game cel renderer applies automatically. **Strip SuperBMD's `m0`/`m1` import prefixes before export** (they defeat the `SC_`-at-start check).
+- **Tooling:** SuperBMD `2.5.0` at `D:\Extractuibs\Extractions 6.5\ALBW Blender workflow\SuperBMD_2.5.0(1)`; Blender **4.2 LTS** (5.x dropped Collada — needed for the DAE bridge); drive Blender via the **`localhost:9876` socket**, not the Desktop MCP hammer.

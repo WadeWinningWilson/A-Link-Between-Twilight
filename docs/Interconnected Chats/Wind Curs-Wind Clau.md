@@ -11,6 +11,21 @@
 
 ---
 
+## ▶ ASSET SIDE — Iron Boots WW re-rig DONE (2026-07-02)
+
+**New track (Blender/asset, not draw-time skin):** Iron Boots are a **worn** model (`al_bootsh`, foot-bone-driven joints 1/2/3), so WW `vboot` was **re-rigged in Blender** to al_bootsh's skeleton. **Result: `vboot.bdl` built & validated** — 4 joints (0=root,1/2/3=A/B/C matching al_bootsh), `SC_boot`/`boot` materials, `V_boot.png`. Files: `D:\XXXXXXX\Ex TP\Blender workflow\DAE files\vboot.bdl` + `vboot_rerig_DONE.blend`. Full method: **[Blender-WW-Items.md → Task 1 DONE](../Blender-WW-Items.md)**.
+
+**Hard-won facts (don't re-derive):**
+- The Cowork/epitaxy **Claude Desktop build ignores `claude_desktop_config.json` mcpServers** — no hammer, and it rewrites that file on launch (read-only lock didn't help). **Drive Blender via the addon's `localhost:9876` socket directly** (Python `socket` → `execute_code`/`get_scene_info`/`get_viewport_screenshot`). This works; don't chase the hammer.
+- **al_bootsh bones are runtime-driven** (all identity at origin) ⇒ Auto-Weights useless; **region-weight** each vboot vert to the nearest al_bootsh segment's bone (rigid). The **mesh** is still a valid alignment ref (segments spatially assembled).
+- Align: rotate **90° Z** (vboot long axis Y → al_bootsh X), **uniform** scale ≈1.64, center-match. WW boot is chunkier/overhangs — fine, must still read WW.
+- **UV-join beige trap:** joining vboot's 2 meshes → 2 UV layers, faces valid in only one → beige where they sample the empty one. Merge into one `tex0` layer (copy mat-1 faces' UVs over), re-export. Bug was in the BDL too.
+- SuperBMD: armature must be named **`skeleton_root`**; **`--bdl`** flag (default is .bmd); `delete_loose`+`dissolve_degenerate` first; **rename materials `SC_boot`/`boot`** (strip `m0/m1` import prefixes — cel-shader keys on `SC_` at start).
+
+**Design = TP↔WW Iron Boots toggle** (drop-in, same rig). **Game-side remaining (Cursor):** repack `vboot.bdl`→`itemmdl.arc`→`res/Object/`, wipe caches, Item-Viewer check (0xE), foot test, then **remove `s_albwWwBootsSkinned` rig-gating** in `d_a_alink*` and gate model choice (vboot vs al_bootsh) on the toggle flag so vanilla `setAnmMtx(1/2/3)` drives it.
+
+---
+
 ## ▶ RESUME HERE (fresh-chat handoff — 2026-07-01)
 
 **One-line state:** **4E committed** — body `(105,78,48)` cap **80**, SC ink `(58,48,42)`, skip **efplight** + demo **GETITEM beams**, SC A/B via Editor **`game.wwItemmdlBowScSuppress`** (default **off**). struct-0 + 2B‴ + 2N′. **No MAJI. No struct 14.**

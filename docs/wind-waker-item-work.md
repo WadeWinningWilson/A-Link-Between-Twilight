@@ -58,6 +58,11 @@
 ### Next skin candidates (both TP-hosted → held works)
 - **Iron Boots** `vboot` 0xE → `dItemNo_HVY_BOOTS_e`, and **Hookshot** `vhook` 0x14 → `dItemNo_HOOKSHOT_e` — already color-perfect in the viewer + have TP equip slots. Prime **held-skin** targets: apply the held template to their model setters (analog of `setBowModel`), per-item scale/offset.
 
+### ✅ Iron Boots WORN skin — asset re-rigged (2026-07-02)
+Iron Boots aren't a *held* prop like the bow — they're a **worn body model** (`al_bootsh`, instanced twice, driven by Link's foot bones at joint indices 1/2/3). So the WW `vboot` had to be **re-rigged in Blender** to al_bootsh's exact skeleton, not just skin-swapped at draw time. **Asset DONE:** re-rigged, textured `vboot.bdl` built & validated (4 joints matching al_bootsh, `SC_boot`/`boot` materials, `V_boot.png`). Full method + gotchas (runtime-driven bones ⇒ region-weight not auto-weight; UV-join beige trap; SuperBMD `--bdl` + `skeleton_root` naming; drive Blender via `localhost:9876` socket, the Cowork Desktop build has no MCP hammer) live in **[Blender-WW-Items.md → Task 1 DONE](Blender-WW-Items.md)**.
+
+**Design = TP↔WW toggle.** Because the re-rig matches al_bootsh's rig exactly, the boot slot can load **either** al_bootsh (TP) **or** `vboot` (WW) under the same vanilla foot rig → a clean player **Iron Boots TP ↔ WW toggle** (model-swap, like Cap Wear). **Game-side remaining:** repack → foot test → drop the `s_albwWwBootsSkinned` rig-gating (the old stiff single-joint hack) and gate the model choice on the toggle flag.
+
 ### Related thread — King Bulblin axe as a Link weapon (research; see interconnected doc)
 - **Enemy** King Bulblin = `E_rdb` (`0x1D5`); **weapon** `RB_ONO` (`dRes_INDEX_E_RDB_BMD_RB_ONO_e=0x55`, "ono"=axe, single-joint prop). Phase-1 reskin over Link's sword = feasible via the held template; authentic Bulblin swings not portable (32-bone RD rig ≠ Link). Full feasibility + integration options in [Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md).
 
