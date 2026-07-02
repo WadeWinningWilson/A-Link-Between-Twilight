@@ -2280,6 +2280,57 @@ EditorWindow::EditorWindow() {
             "cel outline. Requires WW itemmdl get-item ON." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "WW bow SC K0 cap",
+                .getValue = [] {
+                    return getSettings().game.wwItemmdlBowScK0Cap.getValue();
+                },
+                .setValue = [](int value) {
+                    getSettings().game.wwItemmdlBowScK0Cap.setValue(std::clamp(value, 0, 255));
+                    config::Save();
+                },
+                .isModified = [] {
+                    return getSettings().game.wwItemmdlBowScK0Cap.getValue() !=
+                           getSettings().game.wwItemmdlBowScK0Cap.getDefaultValue();
+                },
+                .min = 0,
+                .max = 255,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Cosmetic SC cap tone: scales kColor[0] (K0) RGB toward matte silver. "
+                    "150 = target pewter; 255 = baked authentic white. kColor[2] untouched "
+                    "(OpaTexEdge alpha threshold). Requires WW itemmdl get-item ON." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "WW bow SC out ceiling",
+                .getValue = [] {
+                    return getSettings().game.wwItemmdlBowScOutputCeiling.getValue();
+                },
+                .setValue = [](int value) {
+                    getSettings().game.wwItemmdlBowScOutputCeiling.setValue(
+                        std::clamp(value, 0, 255));
+                    config::Save();
+                },
+                .isModified = [] {
+                    return getSettings().game.wwItemmdlBowScOutputCeiling.getValue() !=
+                           getSettings().game.wwItemmdlBowScOutputCeiling.getDefaultValue();
+                },
+                .min = 0,
+                .max = 255,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Cosmetic SC-pass output RGB ceiling (bloom threshold). 185 = default; "
+                    "255 = off. Keeps K0-tuned caps, pulls string/nock below bloom. "
+                    "Requires WW itemmdl get-item ON." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
             leftPane.add_button("Replay Bow Get-Item Demo")
                 .on_pressed([] {
                     mDoAud_seStartMenu(kSoundItemChange);

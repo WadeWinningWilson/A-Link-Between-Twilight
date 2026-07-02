@@ -153,6 +153,62 @@ static bool s_wwBowGetItemBeamSuppress = false;
 static bool wwBowSuppressScInkPassForDraw() {
     return dusk::getSettings().game.wwItemmdlBowScSuppress.getValue();
 }
+
+static u8 wwBowScK0CapRgb() {
+    int cap = dusk::getSettings().game.wwItemmdlBowScK0Cap.getValue();
+    if (cap < 0) {
+        cap = 0;
+    } else if (cap > 255) {
+        cap = 255;
+    }
+    return static_cast<u8>(cap);
+}
+
+static u8 wwBowScOutputCeilingRgb() {
+    int ceiling = dusk::getSettings().game.wwItemmdlBowScOutputCeiling.getValue();
+    if (ceiling < 0) {
+        ceiling = 0;
+    } else if (ceiling > 255) {
+        ceiling = 255;
+    }
+    return static_cast<u8>(ceiling);
+}
+
+static void applyScOutputCeilingTevStage(u8 n_tev, u8 ceiling_rgb) {
+    if (ceiling_rgb >= 255 || n_tev >= 16) {
+        return;
+    }
+
+    const GXTevStageID clamp_st = static_cast<GXTevStageID>(GX_TEVSTAGE0 + n_tev);
+
+    GXColor gx_ceiling_k1;
+    gx_ceiling_k1.r = ceiling_rgb;
+    gx_ceiling_k1.g = ceiling_rgb;
+    gx_ceiling_k1.b = ceiling_rgb;
+    gx_ceiling_k1.a = 255;
+    GXSetTevKColor(GX_KCOLOR1, gx_ceiling_k1);
+
+    GXSetNumTevStages(n_tev + 1);
+    GXSetTevOrder(clamp_st, GX_TEXCOORD0, GX_TEXMAP_NULL, GX_COLOR_NULL);
+    // min(CPREV, K1): COMP_RGB8_GT selects KONST when CPREV > ceiling else CPREV.
+    GXSetTevColorIn(clamp_st, GX_CC_CPREV, GX_CC_KONST, GX_CC_CPREV, GX_CC_KONST);
+    GXSetTevColorOp(clamp_st, GX_TEV_COMP_RGB8_GT, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    GXSetTevKColorSel(clamp_st, GX_TEV_KCSEL_K1);
+    GXSetTevAlphaIn(clamp_st, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
+    GXSetTevAlphaOp(clamp_st, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    GXSetTevKAlphaSel(clamp_st, GX_TEV_KASEL_K0_A);
+    GXSetTevSwapMode(clamp_st, GX_TEV_SWAP0, GX_TEV_SWAP0);
+
+    static bool s_logged_ceiling = false;
+    if (!s_logged_ceiling) {
+        char line[160];
+        snprintf(line, sizeof(line),
+                 "4b sc-out-ceiling: clamp rgb ceiling=%u (cosmetic bloom threshold, K0=%u)",
+                 ceiling_rgb, wwBowScK0CapRgb());
+        dWwItemmdl_debugLog(line);
+        s_logged_ceiling = true;
+    }
+}
 #endif
 static J3DModelData* s_wwBowDrawModelData = NULL;
 static bool s_wwBowDrawScopeActive = false;
@@ -922,7 +978,36 @@ static void applyTexGenFromMaterial(J3DMaterial* material) {
     }
 }
 
-// Decode J3DTevStage BP fields (same layout as J2DTevStage — see J2DMatBlock::setGX).
+// Decode baked TEV op (full combiner register — matches Aurora command_processor, not J2D byte).
+static void decodeScTevOpFromCombinerBytes(u8 op_byte, u8 ab_byte, u8 cd_byte, GXTevOp* out_op,
+                                           GXTevBias* out_bias, GXTevScale* out_scale) {
+    const u32 reg =
+        (static_cast<u32>(op_byte) << 16) | (static_cast<u32>(ab_byte) << 8) | cd_byte;
+    const u32 bias_field = (reg >> 16) & 3;
+    if (bias_field == 3) {
+        const u32 hw_op = ((reg >> 18) & 1) | (((reg >> 20) & 3) << 1);
+        *out_op = static_cast<GXTevOp>(hw_op + 8);
+        *out_bias = GX_TB_ZERO;
+        *out_scale = GX_CS_SCALE_1;
+    } else {
+        *out_op = static_cast<GXTevOp>((reg >> 18) & 1);
+        *out_bias = static_cast<GXTevBias>(bias_field);
+        *out_scale = static_cast<GXTevScale>((reg >> 20) & 3);
+    }
+}
+
+static void decodeScTevColorOpFromStageBytes(const J3DTevStage& stage, GXTevOp* out_op,
+                                             GXTevBias* out_bias, GXTevScale* out_scale) {
+    decodeScTevOpFromCombinerBytes(stage.mTevColorOp, stage.mTevColorAB, stage.mTevColorCD, out_op,
+                                   out_bias, out_scale);
+}
+
+static void decodeScTevAlphaOpFromStageBytes(const J3DTevStage& stage, GXTevOp* out_op,
+                                             GXTevBias* out_bias, GXTevScale* out_scale) {
+    decodeScTevOpFromCombinerBytes(stage.mTevAlphaOp, stage.mTevAlphaAB, stage.mTevSwapModeInfo,
+                                   out_op, out_bias, out_scale);
+}
+
 struct WwBowJ3DTevStageView {
     explicit WwBowJ3DTevStageView(const J3DTevStage& stage) : mStage(stage) {}
 
@@ -936,30 +1021,18 @@ struct WwBowJ3DTevStageView {
         return static_cast<u8>(((mStage.mTevAlphaAB & 0x03) << 1) | ((mStage.mTevSwapModeInfo >> 7) & 0x01));
     }
     u8 getAlphaD() const { return static_cast<u8>((mStage.mTevSwapModeInfo >> 4) & 0x07); }
-    u8 getCBias() const { return static_cast<u8>(mStage.mTevColorOp & 0x03); }
-    u8 getCScale() const { return static_cast<u8>((mStage.mTevColorOp >> 4) & 0x03); }
     u8 getCClamp() const { return static_cast<u8>((mStage.mTevColorOp >> 3) & 0x01); }
     u8 getCReg() const { return static_cast<u8>((mStage.mTevColorOp >> 6) & 0x03); }
-    u8 getCOp() const {
-        if (getCBias() != 3) {
-            return static_cast<u8>((mStage.mTevColorOp >> 2) & 0x01);
-        }
-        return static_cast<u8>(((mStage.mTevColorOp >> 2) & 0x01) + 8 +
-                               ((mStage.mTevColorOp & 0x30) >> 3));
-    }
-    u8 getABias() const { return static_cast<u8>(mStage.mTevAlphaOp & 0x03); }
-    u8 getAScale() const { return static_cast<u8>((mStage.mTevAlphaOp >> 4) & 0x03); }
     u8 getAClamp() const { return static_cast<u8>((mStage.mTevAlphaOp >> 3) & 0x01); }
     u8 getAReg() const { return static_cast<u8>((mStage.mTevAlphaOp >> 6) & 0x03); }
-    u8 getAOp() const {
-        if (getABias() != 3) {
-            return static_cast<u8>((mStage.mTevAlphaOp >> 2) & 0x01);
-        }
-        return static_cast<u8>(((mStage.mTevAlphaOp >> 2) & 0x01) + 8 +
-                               ((mStage.mTevAlphaOp & 0x30) >> 3));
-    }
     u8 getRasSel() const { return static_cast<u8>(mStage.mTevSwapModeInfo & 0x03); }
     u8 getTexSel() const { return static_cast<u8>((mStage.mTevSwapModeInfo >> 2) & 0x03); }
+    void getCOpBiasScale(GXTevOp* op, GXTevBias* bias, GXTevScale* scale) const {
+        decodeScTevColorOpFromStageBytes(mStage, op, bias, scale);
+    }
+    void getAOpBiasScale(GXTevOp* op, GXTevBias* bias, GXTevScale* scale) const {
+        decodeScTevAlphaOpFromStageBytes(mStage, op, bias, scale);
+    }
 
     const J3DTevStage& mStage;
 };
@@ -1006,7 +1079,8 @@ static void applyPeFromMaterial(J3DMaterial* material) {
     }
 }
 
-// 4a: replay baked SC TEV/PE into Aurora after callDL (no konst scaling — diagnostic root fix).
+// 4a: replay baked SC TEV/PE into Aurora after callDL.
+// 4b: cosmetic K0 RGB cap (st[0] white-konst ceiling → matte silver).
 static void applyScAuthenticTevAndPeFromMaterial(J3DMaterial* material) {
     if (material == NULL) {
         return;
@@ -1038,6 +1112,8 @@ static void applyScAuthenticTevAndPeFromMaterial(J3DMaterial* material) {
                          gx_color);
     }
 
+    const u8 k0_cap = wwBowScK0CapRgb();
+    static bool s_logged_k0 = false;
     for (u32 reg = 0; reg < 4; reg++) {
         J3DGXColor* kcolor = material->getTevKColor(reg);
         if (kcolor == NULL) {
@@ -1049,6 +1125,19 @@ static void applyScAuthenticTevAndPeFromMaterial(J3DMaterial* material) {
         gx_kcolor.g = kcolor->g;
         gx_kcolor.b = kcolor->b;
         gx_kcolor.a = kcolor->a;
+        if (reg == 0) {
+            gx_kcolor.r = k0_cap;
+            gx_kcolor.g = k0_cap;
+            gx_kcolor.b = k0_cap;
+            if (!s_logged_k0) {
+                char line[128];
+                snprintf(line, sizeof(line),
+                         "4b sc-k0: K0 rgb=%u,%u,%u (cosmetic cap, baked 255,255,255)",
+                         k0_cap, k0_cap, k0_cap);
+                dWwItemmdl_debugLog(line);
+                s_logged_k0 = true;
+            }
+        }
         GXSetTevKColor(static_cast<GXTevKColorID>(GX_KCOLOR0 + reg), gx_kcolor);
     }
 
@@ -1093,13 +1182,19 @@ static void applyScAuthenticTevAndPeFromMaterial(J3DMaterial* material) {
                         static_cast<GXTevAlphaArg>(view.getAlphaB()),
                         static_cast<GXTevAlphaArg>(view.getAlphaC()),
                         static_cast<GXTevAlphaArg>(view.getAlphaD()));
-        GXSetTevColorOp(stage_id, static_cast<GXTevOp>(view.getCOp()),
-                        static_cast<GXTevBias>(view.getCBias()),
-                        static_cast<GXTevScale>(view.getCScale()), view.getCClamp(),
+
+        GXTevOp color_op;
+        GXTevBias color_bias;
+        GXTevScale color_scale;
+        view.getCOpBiasScale(&color_op, &color_bias, &color_scale);
+        GXSetTevColorOp(stage_id, color_op, color_bias, color_scale, view.getCClamp(),
                         static_cast<GXTevRegID>(view.getCReg()));
-        GXSetTevAlphaOp(stage_id, static_cast<GXTevOp>(view.getAOp()),
-                        static_cast<GXTevBias>(view.getABias()),
-                        static_cast<GXTevScale>(view.getAScale()), view.getAClamp(),
+
+        GXTevOp alpha_op;
+        GXTevBias alpha_bias;
+        GXTevScale alpha_scale;
+        view.getAOpBiasScale(&alpha_op, &alpha_bias, &alpha_scale);
+        GXSetTevAlphaOp(stage_id, alpha_op, alpha_bias, alpha_scale, view.getAClamp(),
                         static_cast<GXTevRegID>(view.getAReg()));
 
         const u8 ksel = tev_block->getTevKColorSel(st);
@@ -1112,9 +1207,11 @@ static void applyScAuthenticTevAndPeFromMaterial(J3DMaterial* material) {
                          static_cast<GXTevSwapSel>(view.getTexSel()));
     }
 
+    applyScOutputCeilingTevStage(n_tev, wwBowScOutputCeilingRgb());
+
     static bool s_logged_4a = false;
     if (!s_logged_4a) {
-        dWwItemmdl_debugLog("4a sc-tev: replay authentic SC TEV/PE (no scale)");
+        dWwItemmdl_debugLog("4a sc-tev: replay authentic SC TEV/PE (GXSetTev*, full-reg op decode)");
         s_logged_4a = true;
     }
 }

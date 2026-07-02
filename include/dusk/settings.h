@@ -272,6 +272,10 @@ struct UserSettings {
         ConfigVar<bool> wwItemmdlGetItem2DIsolate;
         // Track A SC A/B: suppress SC_Vbow_v ink pass at draw (cream-tip bloom diagnostic).
         ConfigVar<bool> wwItemmdlBowScSuppress;
+        // Track A SC 4b: cosmetic K0 konst RGB cap for silver caps (255=authentic white).
+        ConfigVar<int> wwItemmdlBowScK0Cap;
+        // Track A SC 4b: cosmetic SC-pass output RGB ceiling (bloom threshold; 255=off).
+        ConfigVar<int> wwItemmdlBowScOutputCeiling;
         // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
         // never the sumo minigame.
         //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).
