@@ -6276,7 +6276,9 @@ void daAlink_c::setItemMatrix(int param_0) {
                 }
 #if TARGET_PC
                 // Track B: live-tunable held vbow scale (WW mesh differs in size from AL_BOW).
-                if (dusk::getSettings().game.wwItemmdlHeldBow.getValue() && checkBowItem(mEquipItem)) {
+                if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                        dusk::WwHeldSkinMode::Bow &&
+                    checkBowItem(mEquipItem)) {
                     const f32 s =
                         dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
                     mHeldItemModel->setBaseScale(cXyz(s, s, s));
@@ -6284,6 +6286,16 @@ void daAlink_c::setItemMatrix(int param_0) {
 #endif
             } else if (checkHookshotItem(mEquipItem)) {
                 setHookshotPos();
+#if TARGET_PC
+                // Track B: live-tunable held vhook scale (WW mesh differs in size from AL_HS).
+                if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                        dusk::WwHeldSkinMode::Hookshot &&
+                    mHeldItemModel != NULL) {
+                    const f32 s =
+                        dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
+                    mHeldItemModel->setBaseScale(cXyz(s, s, s));
+                }
+#endif
             } else if (mEquipItem == dItemNo_IRONBALL_e) {
                 setIronBallPos();
             } else {
@@ -6304,10 +6316,14 @@ void daAlink_c::setItemMatrix(int param_0) {
                 }
 
 #if TARGET_PC
-                // Track B: the held vbow is a 2-bone prop; the BVJMPCL bow anim targets AL_BOW's
-                // rig and would garble/crash it. Skip the anim entry (stiff but functional).
-                if (!(dusk::getSettings().game.wwItemmdlHeldBow.getValue() &&
-                      checkBowItem(mEquipItem)))
+                // Track B: the held WW mesh is a low-bone prop; the vanilla item BCK targets a
+                // different rig and would garble it. Skip the anim entry (stiff but functional).
+                if (!((dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                           dusk::WwHeldSkinMode::Bow &&
+                       checkBowItem(mEquipItem)) ||
+                      (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                           dusk::WwHeldSkinMode::Hookshot &&
+                       checkHookshotItem(mEquipItem))))
 #endif
                     mItemBck.entry(mHeldItemModel->getModelData(), field_0x33dc);
             }
@@ -20419,11 +20435,13 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     // and activate the SC realization draw scope so the callback colors SC + body texgen
     // during modelEntryDL. Everything else (other models) keeps normal MAJI lighting.
     // ============================================
-    const bool wwHeldBow = (i_model == mHeldItemModel &&
-                            dusk::getSettings().game.wwItemmdlHeldBow.getValue() &&
-                            checkBowItem(mEquipItem));
-    // Item switched away from the WW bow: drop the stale scope so the post-DL callback
-    // (fires at draw-buffer DRAIN) never dereferences a freed vbow model.
+    const dusk::WwHeldSkinMode wwSkinMode = dusk::getSettings().game.wwItemmdlHeldSkin.getValue();
+    const bool wwHeldBow =
+        (i_model == mHeldItemModel) &&
+        ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
+         (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)));
+    // Item switched away from the WW held skin: drop the stale scope so the post-DL callback
+    // (fires at draw-buffer DRAIN) never dereferences a freed itemmdl model.
     if (i_model == mHeldItemModel && !wwHeldBow) {
         dWwItemmdl_clearBowDrawScope();
     }

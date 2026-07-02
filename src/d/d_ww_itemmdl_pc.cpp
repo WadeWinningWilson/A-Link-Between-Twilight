@@ -953,7 +953,7 @@ J3DModelData* dWwItemmdl_getItemmdlModelData(u16 bdl_index) {
 // completion (stepPrivateItemmdlArcMount is a per-frame stepper) so setBowModel() can pull
 // vbow via getVbowModelData without requiring a prior get-item replay.
 void dWwItemmdl_tickHeldBowArcMount() {
-    if (!dusk::getSettings().game.wwItemmdlHeldBow.getValue()) {
+    if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::Off) {
         return;
     }
     // state 2 = ready, 3 = failed — nothing more to do either way.

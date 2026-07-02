@@ -600,7 +600,7 @@ void daAlink_c::setBowModel() {
     // applied to the 2-bone vbow (see d_a_alink.cpp calc) — stiff but functional.
     // ============================================
     bool wwSkin = false;
-    if (dusk::getSettings().game.wwItemmdlHeldBow.getValue()) {
+    if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::Bow) {
         bowModelData = dWwItemmdl_getVbowModelData("itemmdl");
         if (bowModelData != NULL) {
             dWwItemmdl_patchModelForPc(bowModelData);

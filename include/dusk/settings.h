@@ -113,6 +113,16 @@ enum class CapWearMode : u8 {
     Blue = 4,
 };
 
+// Which WW itemmdl mesh replaces Link's held/worn item (dev skin selector). Single-select:
+// the chosen item's slot is skinned, others stay vanilla. Bow/Hookshot are held-in-hand
+// (bow-analog). IronBoots is worn/rigged — reversible via this selector while its mesh path lands.
+enum class WwHeldSkinMode : u8 {
+    Off = 0,
+    Bow = 1,
+    IronBoots = 2,
+    Hookshot = 3,
+};
+
 // Focused Arts playtest cheat: tier 3 without shop; WithDebug adds an in-game HUD overlay.
 enum class FocusedArtsCheatMode : int {
     Off = 0,
@@ -276,9 +286,9 @@ struct UserSettings {
         ConfigVar<int> wwItemmdlBowScK0Cap;
         // Track A SC 4b: cosmetic SC-pass output RGB ceiling (bloom threshold; 255=off).
         ConfigVar<int> wwItemmdlBowScOutputCeiling;
-        // Track B: use WW itemmdl vbow as Link's held bow skin (dev toggle; skin only, no BCK flex).
-        ConfigVar<bool> wwItemmdlHeldBow;
-        // Track B: held WW bow scale percent (100 = 1.0x; live hand-size tuning).
+        // Track B: which WW itemmdl mesh skins Link's held/worn item (Off/Bow/IronBoots/Hookshot).
+        ConfigVar<WwHeldSkinMode> wwItemmdlHeldSkin;
+        // Track B: held WW skin scale percent (100 = 1.0x; live hand-size tuning).
         ConfigVar<int> wwItemmdlHeldBowScalePct;
         // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
         // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.

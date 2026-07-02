@@ -471,7 +471,32 @@ void daAlink_c::setHookshotModel() {
         JUT_ASSERT(676, FALSE);
     }
 
-    mHeldItemModel = initModel(loadAramBmd(dRes_ID_ALANM_BMD_AL_HS_e, 0x5C00), 0);
+    J3DModelData* hookModelData = NULL;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Track B held WW hookshot skin)
+    // Skin the hookshot BODY (mHeldItemModel) with the WW itemmdl vhook (index 0x14) when
+    // selected. Same held template as the bow: create with the get-item flags so modelUpdateDL
+    // realizes the locked bdl3; NULL falls back to vanilla AL_HS. Tip + chain stay vanilla.
+    // ============================================
+    bool wwHookSkin = false;
+    if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::Hookshot) {
+        hookModelData = dWwItemmdl_getItemmdlModelData(0x14);  // dRes_INDEX_ITEMMDL_BDL_VHOOK_e
+        if (hookModelData != NULL) {
+            dWwItemmdl_patchModelForPc(hookModelData);
+            wwHookSkin = true;
+        }
+    }
+#endif
+    if (hookModelData == NULL) {
+        hookModelData = loadAramBmd(dRes_ID_ALANM_BMD_AL_HS_e, 0x5C00);
+    }
+#if TARGET_PC
+    mHeldItemModel = wwHookSkin ? initModel(hookModelData, 0x80000, 0x11000084)
+                                : initModel(hookModelData, 0);
+#else
+    mHeldItemModel = initModel(hookModelData, 0);
+#endif
     mpHookTipModel = initModel(loadAramBmd(dRes_ID_ALANM_BMD_AL_HS_TIP_e, 0x3800), 0);
     field_0x0710 = initModel(mHeldItemModel->getModelData(), 0);
     field_0x0714 = initModel(mpHookTipModel->getModelData(), 0);

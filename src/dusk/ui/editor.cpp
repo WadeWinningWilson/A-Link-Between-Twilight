@@ -1409,6 +1409,29 @@ void editor_bool_option(Pane& leftPane, Pane& rightPane, ConfigVar<bool>& var,
         });
 }
 
+// WW itemmdl viewer item list (label -> BDL index, from itemmdl.h). Drives the viewer dropdown.
+struct WwItemmdlViewerItem {
+    const char* label;
+    int index;
+};
+static const WwItemmdlViewerItem kWwItemmdlViewerItems[] = {
+    {"Bow", 0xF},           {"Skull Hammer", 0x12}, {"Bomb", 0xC},          {"Boomerang", 0xD},
+    {"Iron Boots", 0xE},    {"Picto Box", 0x10},    {"Tingle Tuner", 0x11}, {"Sail", 0x13},
+    {"Hookshot", 0x14},     {"Deku Leaf", 0x15},    {"Magic Armor", 0x16},  {"Grappling Hook", 0x17},
+    {"Wind Waker", 0x18},   {"Telescope", 0x19},    {"Spoils Bag", 0x5},    {"Bait Bag", 0x6},
+    {"Delivery Bag", 0x7},  {"Bottle (blue)", 0x8}, {"Bottle (green)", 0x9},{"Bottle (red)", 0xA},
+    {"Bottle (special)", 0xB},
+};
+static Rml::String wwItemmdlViewerLabel() {
+    const int idx = getSettings().game.wwItemmdlViewerBdlIndex.getValue();
+    for (const auto& e : kWwItemmdlViewerItems) {
+        if (e.index == idx) {
+            return Rml::String(e.label);
+        }
+    }
+    return Rml::String("Bow");
+}
+
 }  // namespace
 
 EditorWindow::EditorWindow() {
@@ -2264,9 +2287,9 @@ EditorWindow::EditorWindow() {
             "ride @ 35%. Particle layout uses Interface → ALBW Visuals → Hurricane Spin Visual." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return getSettings().game.speedrunMode; });
-        // Wind Waker Skins — one section per WW itemmdl item (open for later skins:
-        // add a sibling add_section("Wind Waker Skins - <Item>") block as items come online).
-        leftPane.add_section("Wind Waker Skins - Bow");
+        // Wind Waker Item Viewer — get-item toggle + SC color tuning + item dropdown + replay.
+        // The held/worn skin selector lives in its own "Wind Waker Skins" section below.
+        leftPane.add_section("Wind Waker Item Viewer");
         editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlGetItem,
             "WW itemmdl get-item",
             "Use retail itemmdl.arc vbow for Hero's Bow get-item spin (Phase 2 heap wiring). "
@@ -2333,64 +2356,35 @@ EditorWindow::EditorWindow() {
                     "Requires WW itemmdl get-item ON." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
-        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlHeldBow,
-            "WW held bow skin (Track B)",
-            "Reskin Link's HELD bow to the WW vbow mesh (skin only — does NOT add the bow to "
-            "inventory or map a button). Own + equip the bow normally, then draw it. Stiff "
-            "(no draw-flex). Shares the SC K0 / out-ceiling glow sliders above." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
-            leftPane.add_child<NumberButton>(NumberButton::Props{
-                .key = "WW held bow scale %",
-                .getValue = [] {
-                    return getSettings().game.wwItemmdlHeldBowScalePct.getValue();
-                },
-                .setValue = [](int value) {
-                    getSettings().game.wwItemmdlHeldBowScalePct.setValue(std::clamp(value, 1, 1000));
-                    config::Save();
-                },
-                .isModified = [] {
-                    return getSettings().game.wwItemmdlHeldBowScalePct.getValue() !=
-                           getSettings().game.wwItemmdlHeldBowScalePct.getDefaultValue();
-                },
-                .min = 1,
-                .max = 1000,
+            leftPane.add_select_button({
+                .key = "Viewer item",
+                .getValue = [] { return wwItemmdlViewerLabel(); },
             }),
-            rightPane,
-            [](Pane& pane) {
-                pane.add_rml(
-                    "Held WW bow size in Link's hand, percent (100 = 1.0x). Live-tune while "
-                    "holding. Requires WW held bow skin ON." +
-                    Rml::String(kAlbwUnfinishedDisclaimer));
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Wind Waker Item Viewer");
+                const auto opt = [&pane](const char* label, int index) {
+                    pane.add_button({
+                                        .text = label,
+                                        .isSelected =
+                                            [index] {
+                                                return getSettings().game.wwItemmdlViewerBdlIndex
+                                                           .getValue() == index;
+                                            },
+                                    })
+                        .on_pressed([index] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.wwItemmdlViewerBdlIndex.setValue(index);
+                            config::Save();
+                        });
+                };
+                for (const auto& e : kWwItemmdlViewerItems) {
+                    opt(e.label, e.index);
+                }
             });
         leftPane.register_control(
-            leftPane.add_child<NumberButton>(NumberButton::Props{
-                .key = "Viewer: itemmdl BDL index",
-                .getValue = [] {
-                    return getSettings().game.wwItemmdlViewerBdlIndex.getValue();
-                },
-                .setValue = [](int value) {
-                    getSettings().game.wwItemmdlViewerBdlIndex.setValue(std::clamp(value, 0x5, 0x19));
-                    config::Save();
-                },
-                .isModified = [] {
-                    return getSettings().game.wwItemmdlViewerBdlIndex.getValue() !=
-                           getSettings().game.wwItemmdlViewerBdlIndex.getDefaultValue();
-                },
-                .min = 0x5,
-                .max = 0x19,
-            }),
-            rightPane,
-            [](Pane& pane) {
-                pane.add_rml(
-                    "itemmdl BDL index the Replay below spins in the get-item demo (0xF = Bow, "
-                    "default). Requires WW itemmdl get-item ON. Indices: 0xC Bomb, 0xD Boomerang, "
-                    "0xE Boots, 0xF Bow, 0x10 PictoBox, 0x12 SkullHammer, 0x13 Sail, 0x14 Hookshot, "
-                    "0x15 DekuLeaf, 0x16 MagicArmor, 0x17 Grapple, 0x18 WindWaker, 0x19 Telescope." +
-                    Rml::String(kAlbwUnfinishedDisclaimer));
-            });
-        leftPane.register_control(
-            leftPane.add_button("Replay Bow Get-Item Demo")
+            leftPane.add_button("Replay Get-Item Demo (viewer item)")
                 .on_pressed([] {
                     mDoAud_seStartMenu(kSoundItemChange);
                     dWwItemmdl::requestBowGetItemDemoReplay();
@@ -2404,6 +2398,68 @@ EditorWindow::EditorWindow() {
                     Rml::String(dWwItemmdl::getBowGetItemDemoReplayStatus() != nullptr
                                     ? dWwItemmdl::getBowGetItemDemoReplayStatus()
                                     : "idle") +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.add_section("Wind Waker Skins");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Held/worn skin",
+                .getValue =
+                    [] {
+                        switch (getSettings().game.wwItemmdlHeldSkin.getValue()) {
+                            case WwHeldSkinMode::Bow:       return Rml::String("Bow");
+                            case WwHeldSkinMode::IronBoots: return Rml::String("Iron Boots (WIP)");
+                            case WwHeldSkinMode::Hookshot:  return Rml::String("Hookshot");
+                            default:                        return Rml::String("Off");
+                        }
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Wind Waker Skins");
+                const auto opt = [&pane](const char* label, WwHeldSkinMode mode) {
+                    pane.add_button({
+                                        .text = label,
+                                        .isSelected =
+                                            [mode] {
+                                                return getSettings().game.wwItemmdlHeldSkin
+                                                           .getValue() == mode;
+                                            },
+                                    })
+                        .on_pressed([mode] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.wwItemmdlHeldSkin.setValue(mode);
+                            config::Save();
+                        });
+                };
+                opt("Off", WwHeldSkinMode::Off);
+                opt("Bow", WwHeldSkinMode::Bow);
+                opt("Iron Boots (WIP)", WwHeldSkinMode::IronBoots);
+                opt("Hookshot", WwHeldSkinMode::Hookshot);
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Held skin scale %",
+                .getValue = [] { return getSettings().game.wwItemmdlHeldBowScalePct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wwItemmdlHeldBowScalePct.setValue(
+                            std::clamp(value, 1, 1000));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wwItemmdlHeldBowScalePct.getValue() !=
+                               getSettings().game.wwItemmdlHeldBowScalePct.getDefaultValue();
+                    },
+                .min = 1,
+                .max = 1000,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Held WW skin size in Link's hand, percent (100 = 1.0x). Live-tune the "
+                    "selected held skin (Bow / Hookshot). Iron Boots is worn/rigged (WIP)." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
     });
