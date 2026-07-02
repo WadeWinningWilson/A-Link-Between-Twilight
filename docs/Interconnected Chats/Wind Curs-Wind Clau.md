@@ -187,6 +187,29 @@ Generalizing to another item = swap the item-id / material-name guards; the rend
 
 ---
 
+## ▶ PLAN B — asset/rig workflow (add joints, re-rig, extract sub-meshes) (2026-07-02)
+
+Code can't add joints or split baked geometry — that's external asset work. Workflow:
+**unpack arc → edit/convert model → repack → `res/Object/` → test in the Item Viewer → wire the skin.**
+
+**Tools:** BMDView2 (inspect joints/mats/weights), SuperBMD / J3DUltra (BMD↔DAE), Blender + J3D addon (joint add + weighting), GCFT/arctool (unpack/repack RARC `.arc`).
+
+**Add joints to `vboot` (articulated iron boots, remove the stiff guard):**
+1. Unpack `itemmdl.arc` → `vboot.bdl` (2 joints: `ROOT`+`MODEL`).
+2. The boot rig wants joints **1/2/3** ← Link foot bones `0x13–0x15` (L) / `0x18–0x1A` (R). Reference `al_bootsH.bmd` (clothes arc `Bmdl`/`Kmdl`) for the ankle→foot→toe layout.
+3. `vboot.bdl → DAE` (SuperBMD), add the joint chain at indices 1/2/3 in Blender, weight the boot mesh to them, rebuild → repack.
+4. **Code:** drop the `s_albwWwBootsSkinned` OOB guard in `d_a_alink.cpp` (the full `setAnmMtx(1/2/3)` rig is now safe) → boots flex with the foot.
+
+**Analogous asset work:**
+- **Extract WW arrow from `vbow`** → standalone `warrow.bmd` (the arrow isn't a separable joint/shape in code) → skin `daArrow_c` via the held template.
+- **Re-rig any held item to Link's hand bone** (weight a joint to the hand) → removes the "skip BCK" stiffness; vanilla item BCK then flexes it.
+- **King Bulblin axe:** unpack `E_rdb.arc`, extract `RB_ONO` (BMD `0x55`) to a light arc (avoid mounting the whole boss) → feeds the sword-reskin path.
+- Keep material names on the WW convention (`<name>` + `SC_<name>`) so the render recipe (`SC_`-prefix guard) applies to edited/new meshes automatically.
+
+**Iron boots skin (stiff) IMPLEMENTED (2026-07-02, uncommitted pending playtest):** `mpLinkBootModels` ← `vboot` when skin==IronBoots (clothes builder); `setAnmMtx(2/3)` OOB guarded (pin to ankle via base matrix, right boot X-flipped); `modelDraw` WW branch extended to the boot models (both share cached vboot data → one scope); scale slider applies. Applies on next clothes rebuild (changeLink). Golden tint = the shared-tevStr warm-ambient effect (liked; recreate deliberately by setting warm ambient on a target model's tevStr before its MAJI draw).
+
+---
+
 ## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)
 
 **Role:** Wind Clau = review / graphics-strategy / second-opinion. Reads Cursor's diffs, logs, and screenshots; picks branches; enforces the do-not-retry list. **Does not edit source** — Cursor implements. (Wind Clau may edit *this doc* and `wind-waker-item-work.md`.)

@@ -114,6 +114,7 @@
 | [shield-ordon-quest-assets.md](shield-ordon-quest-assets.md) | TP shield quest asset IDs — different item pipeline |
 | [build-fps-guidelines.md](build-fps-guidelines.md) | Build / launch hygiene before playtesting |
 | [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) | **Cursor ↔ Claude** implementation roadmap + session log |
+| [Blender-WW-Items.md](Blender-WW-Items.md) | **Asset-side** (Blender) handoff — re-rig `vboot` for iron boots, extract WW arrow from `vbow`; SuperBMD/GCFT workflow + `bpy` scripts |
 | [zeldaret/tww](https://github.com/zeldaret/tww) | WW decomp — Rosetta stone for `d_item_data` rows and item behavior (not linkable object code) |
 | [zeldaret/ss](https://github.com/zeldaret/ss) | SS decomp — Wii-era lighting / `MA**` palette lineage; **not** WW ink or J3D item path (see SS section) |
 
