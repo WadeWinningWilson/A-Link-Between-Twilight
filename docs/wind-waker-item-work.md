@@ -27,7 +27,7 @@
 | **struct-0** + ambient-only (no MAJI) — stable cel color + detail | Done (`72a2f01194` 4B, `6023333a8b` 4D) |
 | Fixed warm ambient + per-mat caps + SC absolute ink | Done (4D/4E in `d_ww_itemmdl_pc.cpp`) |
 | Skip efplight + skip demo GETITEM beam particles (WW bow only) | Done (4D/4E in `d_a_demo_item.cpp`, `d_demo.cpp`) |
-| WW cel look vs reference (goldenrod body, cream tips, subtle ink) | **In progress** — tune constants / SC A/B |
+| WW cel look vs reference (goldenrod body, cream tips, subtle ink) | **~85%** — **4a** SC TEV replay restored detail (root fix, generalizes). Two gaps left: SC caps read **white** (want matte **silver** — temper st[2] `+HALF`); body **too bright/flat** (cap `80→70`, opt. Vbow_v TEV replay for amber gradient) |
 | BTK spin (`dRes_INDEX_ITEMMDL_BTK_VBOW_e`) | **Deferred** — after color sign-off |
 | Track B held bow | Not started |
 

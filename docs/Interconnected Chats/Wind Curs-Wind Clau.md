@@ -29,17 +29,17 @@
 | Check | State |
 |-------|--------|
 | Whole mesh + nocked arrow | ✅ locked |
-| Orange direction (not lemon) | ✅ closest at 4E — may need one more warmth tweak |
-| Cel limb gradient | Partial — texture/TEV, not just amb |
-| Cream/silver tips + feather | ❌ SC pass = **geometry** that blooms; fix is TEV/blend, **not** suppress/ambient (see `▶ SC_Vbow_v is a geometry+TEV pass` below) |
-| Cave full pose (no wash) | Beams skipped in 4E — judge close-up for material |
+| Orange direction (not lemon) | ⚠️ hue right but **body too bright + flat** vs ref amber gradient — cap `80→70`, opt. Vbow_v TEV replay |
+| SC detail present | ✅ restored by 4a SC TEV replay |
+| Silver caps (not white bloom) | ❌ caps read **white**, ref = matte **silver/pewter** — temper st[2] `+HALF` (4b, warranted) |
+| Cave full pose (no wash) | Beams skipped in 4E — geometry reads clean; brightness still hot |
 
-**Next knobs — SUPERSEDED by `▶ SC_Vbow_v is a geometry+TEV pass, not "ink ambient"` (2026-07-01) below. Summary:**
-1. **SC A/B result is in:** suppress ON amputates tips/arrowhead/feather ⇒ `SC_Vbow_v` = real geometry. **Diagnostic only, never ship ON.**
-2. **First move = DUMP SC blend mode + TEV konst (log-only), NOT ambient.** Dark SC ambient `(58,48,42)` already fails to tame the bloom; source shows 2B‴ never replays SC's TEV/blend.
-3. **Fix = extend 2B‴ to replay SC's full TEV/blend** (currently texgen + TEV order only), then de-bloom tips to matte cream/silver (~`205,195,175`).
-4. **Body (`Vbow_v`) = SIGNED OFF.** Micro-tune warmth (`100,72,44`/cap 75) only AFTER tips read matte.
-5. **After color OK** — BTK `0x24`; Track B `d_a_alink_bow.inc`.
+**Next knobs — color at NEAR-SIGN-OFF after 4a (see `▶ SC_Vbow_v is a geometry+TEV pass` below). Summary:**
+1. **SC A/B + dump + 4a all resolved:** `SC_Vbow_v` = real geometry (never ship suppress ON); blend = BM_NONE (not additive); **4a authentic TEV replay = ROOT FIX**, restored detail, generalizes to the other 20.
+2. **Commit 4a** (+ SC A/B toggle wiring as a separate commit). Update canonical progress table "WW cel look" → Done.
+3. **Optional 4b micro-matte** — only if tips still too hot: temper st[2] `+HALF` (single tunable, logged). Not required; teal cast on caps is correct.
+4. **Body (`Vbow_v`) = SIGNED OFF.**
+5. **Color signed off →** BTK `0x24` (verify texmtx-vs-texgen + 2B‴ re-applies after BTK each frame); then Track B `d_a_alink_bow.inc`; then generalize to 20.
 
 **Log hygiene:** `%USERPROFILE%\Documents\dusklight\albw_ww_itemmdl_debug.txt` — once per session: `4E ambient-only: body=… scSuppress=… beams=1`; after first SC draw also `2J sc-dump blend: …`, `2J sc-dump kColor[…]`, `2J sc-dump st[…] colorIn …`. After gfx rebuild wipe **both** `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
 
@@ -53,6 +53,44 @@
 - **`shapeNum=2`, `matNum=2`, `jointNum=2`** — no third-shape inventory gap; per-shape dump at load **AVs** (removed; summary only).
 
 **Deep sections:** search this doc for `ROOT CAUSE FOUND`, `Fix A′ (approved)`, `Fix B step 1 — Wind Clau read`, `Fix B bind SUCCEEDED`, `REVERT the struct-0 delegate`, `Interconnected pass`, `First clean playtest`.
+
+---
+
+## ▶ NEXT ACTIONS & ROLE SPLIT (2026-07-01 — color final passes)
+
+**Roles:** 🟩 **Cursor** = implements/builds source · 🟦 **User** = playtest / screenshot / commit-call · 🟪 **Wind Clau** = review + doc, no source edits. Details: [`▶ SC_Vbow_v is a geometry+TEV pass`](#-interconnected-pass--sc_vbow_v-is-a-geometrytev-pass-not-ink-ambient-2026-07-01).
+
+**COMMIT GATE (do first)** — 🟩 Cursor implements, 🟦 user approves:
+- Commit **4a** (SC full-TEV replay) as its own commit.
+- Commit the **SC A/B toggle wiring** (`wwItemmdlBowScSuppress`: `settings.h`/`settings.cpp`, `editor.cpp`, `d_ww_itemmdl_pc.cpp` runtime toggle) as a **separate** commit.
+- *Why:* three sessions of pipeline work are uncommitted — land before stacking color tweaks (commit-discipline rule).
+
+**STEP 1 — SC caps: white → matte silver** — 🟩 Cursor (one build):
+
+**❌ 1st attempt (st[2] +HALF temper) FAILED (2026-07-01):** caps still white/hot, detail present. ⇒ tone ceiling is **not** st[2]; it's set by an **earlier stage's konst**. Wind Clau miss — st[2] only adds on top of an already-white value.
+
+**✅ Correct lever — scale K0 konst (do this):** `st[0] = lerp(reg0=0.5, KONST=K0, TEXC)` with **K0 = white (255)** → caps clip toward white. 4a proved the texture samples (cap detail visible) + st[2] temper failed ⇒ the ceiling is K0.
+1. **Scale `kColor[0]` (K0) from `(255,255,255)` toward `~(160,160,160)`** — clamped 0–255. K0 feeds st[0] (B=KONST) and st[1] via `kSel=12 (KCSEL_K0)`. Pulls cap output ~0.8→~0.58 (silver), robust to exact texel. Single tunable + log.
+2. **Leave `kColor[2]` alone** (`a=50 kSel=30` = OpaTexEdge alpha threshold, not color). Revert/keep the st[2] temper small — K0 is dominant.
+3. Keep teal cap/nock bands. Also kills the string bloom. **STOP + screenshot** before body.
+
+**✅ K0=160→150 WORKED (2026-07-01):** caps resolve to silver, body gradient good ≈ ref. **Remaining gap = engine BLOOM on near-white string/nock**, not tone: string/nock texels ≈ 1.0 so K0's lerp can't pull them below the bloom threshold; their glow **bleeds onto adjacent caps** (why some caps look un-silver = spatial bloom bleed, not material). Body ≈ **match — Step 2 likely skippable**.
+
+**➡️ NEXT = 4b output ceiling (do NOT lower K0 further — would muddy good caps before taming string):** add **one SC-pass output clamp** — each channel ≤ ~**185–190** (or scale final output ~0.75), keep K0=150, single tunable + log. Leaves silver caps intact; pulls string/nock **below bloom threshold** → glow dies, string reads thin+matte like ref (half its apparent thickness is the halo). This is the reserved 4b attenuation, now correctly aimed at glow not tone; it's the per-item scalar for Phase 6.
+- 🟩 Cursor: also confirm the Step-1 op-replay did **not** cause the crash (see crash note below); clamp K0 so Aurora never gets an out-of-range konst.
+- 🟦 User: send crash log tail + when it hit; then replay K0 build, wipe **both** GPU caches, screenshot → Wind Clau.
+- 🟪 Wind Clau: classify crash, judge caps vs ref, adjust K0 target.
+
+**⚠️ CRASH (2026-07-01):** a crash accompanied the Step-1 build. **Classify before more tuning** — TEV-op/konst replay feeds the same Aurora material-config path as the original `tcg src 21` shader abort. Need: *when* (replay/load/spin/random) + last ~15 lines of `albw_ww_itemmdl_debug.txt` + Windows exit code. If Step-1 op replay destabilized it, that outranks tone.
+
+**STEP 2 — body exposure** — 🟩 Cursor (only after Step 1 signs off):
+1. Body cap `80→70` (or ambient `(105,78,48)→(95,70,44)`). Cheapest first.
+2. Only if still flat: **generalize 4a full-TEV replay to `Vbow_v`** for amber gradient — **A/B for regression** (body already reads colored).
+- 🟦 User: replay + screenshot. 🟪 Wind Clau: call **match** or next knob.
+
+**AFTER COLOR MATCH:** 🟪 Wind Clau hands 🟩 Cursor the **BTK `0x24`** checklist (texmtx-vs-texgen decode + 2B‴ re-apply-after-BTK each frame); then Track B; then generalize to the other 20.
+
+**DO-NOT (all roles):** ship suppress ON · darken SC toward brown · re-enable MAJI / struct-14 / % room ambient · change more than one knob per build.
 
 ---
 
@@ -196,6 +234,24 @@ SC suppress OFF (4E default — permanent)
   4. Only AFTER tips/head/feather read MATTE (no halo): micro-tune body warmth
      (100,72,44 or cap 75). Vbow_v body is otherwise SIGNED OFF — do not retune it.
 ```
+
+**Dump result (2026-07-01, suppress OFF, frame 725):** blend `type=0` = **GX_BM_NONE** ⇒ **additive blend RULED OUT**. `opaTexEdge=1`. Konst/regs **hot white** — `kColor[0/1/3]=#FFF (kSel=12=KCSEL_K0)`, `tevReg[1]=tevReg[2]=#FFF`; `kColor[2] a=50 kSel=30` is the OpaTexEdge alpha threshold, not color. Stages: st[0] `lerp(reg0=128, KONST=white, TEXC)`; st[1] `CPREV*TEXC`; **st[2] `CPREV + HALF` (konst selects the 0.5 term) = a +0.5 highlight add — prime halo amplifier**. 2B‴ replays none of these.
+
+**Caveat (Wind Clau — do not skip):** "hot white konst present" ≠ "konst is the cause." White konst is **normal** for a cel material that gets its color from the *texture*. The dump shows config, not the sampled texel — it does **not** distinguish (a) SC texture sampling correctly + engine **bloom-threshold** on legit-white tips, from (b) SC texture sampling **as white** (3-texgen binding issue) → stages collapse to white regardless of konst. Scaling konst blind papers over (b) with a wrong tint and won't generalize.
+
+**Step 4 — two sub-steps (don't collapse realize + attenuate):**
+- **4a — replay authentic FIRST, no scaling.** Extend `wwBowMatDrawPostDl` (SC only) to replay baked TEV konst/regs + stage color/alpha ops + OpaTexEdge/PE at their **real** values. Screenshot.
+  - Bloom changes / detail returns ⇒ Aurora wasn't realizing baked SC TEV; **realization is the authentic fix** (generalizes cleanly to the other 20 — best case).
+  - Bloom identical ⇒ tips genuinely white; halo is engine bloom threshold ⇒ 4b.
+- **4b — attenuate ONLY if 4a still blooms.** One tunable output scalar on the SC pass (toward ~`205,195,175`, or temper the st[2] `+HALF`) below the bloom threshold. Log it. Cosmetic workaround, **not** authentic — every white-tipped item inherits this scalar in Phase 6; flag it.
+
+**✅ RESULT (2026-07-01, 4a landed):** authentic SC TEV/regs/konst replay **CHANGED the bloom and RESTORED detail** — tip caps, arrowhead, string all read (user replay). ⇒ **4a is the ROOT FIX (Aurora was not realizing baked SC TEV); it generalizes to the other 20 items.** Commit 4a.
+
+**⚠️ REVISED after clearer side-by-side (2026-07-01):** two brightness gaps remain — earlier "body signed off / 4b not needed" was **too early**:
+- **SC caps must be matte SILVER/pewter (~RGB 160), not white.** Ref caps + arrowhead are brushed steel with teal bands; ours are near-white + glowing. Cause = **`st[2] CPREV + HALF`**: white konst makes it a constant **+0.5** that clips a mid-grey texel to white. **4b is now WARRANTED** — but first verify 4a faithfully replayed `st[2]` `colorOp=0x0b` **bias/scale** (≠ the 0x08 of other stages); if the op decode is right, **temper the `+HALF`** to reveal the silver (also kills the string bloom). Teal cast on caps/nock is **correct** — keep it.
+- **Body (`Vbow_v`) NOT signed off — too bright + flat vs ref's amber cel gradient.** Cheap fix: cap `80→70` or ambient `(105,78,48)→(95,70,44)`. Authentic fix (optional, A/B for regression): **generalize the 4a full-TEV replay to `Vbow_v`** so its own cel TEV restores the two-tone amber (body is currently ambient-only flat fill — same flatness SC had pre-4a).
+
+**Order (one knob/build):** 1) SC caps → silver (verify colorOp 0x0b, temper `+HALF`); 2) body cap `80→70`; 3) only if still flat, Vbow_v TEV-replay for gradient. Color at **~85%** — 1–2 cycles from a strong match.
 
 **Demoted (fallbacks only — current evidence says they won't fix the bloom):** sibling's "cream SC ambient `(95,88,72)`" (A) and "stop overriding SC ambient" (B). Keep for the case where the dump shows SC *is* ambient-controllable; do not spend the first cycles on them.
 
