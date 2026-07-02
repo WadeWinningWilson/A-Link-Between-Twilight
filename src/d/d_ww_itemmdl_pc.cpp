@@ -624,12 +624,11 @@ static void logTexGenDump(J3DModelData* model_data, const char* phase) {
     }
 }
 
+// Generalized: any named material of a scoped itemmdl model gets WW realization / ambient fill.
+// (Was bow-only Vbow_v/SC_Vbow_v. Every caller iterates an itemmdl model's own materials, so
+// accepting all of them is what makes the render core item-agnostic.)
 static bool isTevDumpMaterial(const char* name) {
-    if (name == NULL) {
-        return false;
-    }
-
-    return strcmp(name, "Vbow_v") == 0 || strcmp(name, "SC_Vbow_v") == 0;
+    return name != NULL;
 }
 
 static void logTevOrderMaterialDump(J3DModelData* model_data, const char* phase, s32 room_no) {
@@ -909,6 +908,47 @@ J3DModelData* dWwItemmdl_getVbowModelData(const char* arc_name) {
     return model_data;
 }
 
+// Generic itemmdl loader — any BDL index off the same private arc, cached per-index. The bow keeps
+// its proven, battle-tested path (getVbowModelData); this is the entry point for every OTHER item.
+static const int kItemmdlCacheMax = 16;
+static u16 s_itemmdlCacheIdx[kItemmdlCacheMax];
+static J3DModelData* s_itemmdlCacheModel[kItemmdlCacheMax];
+static int s_itemmdlCacheCount = 0;
+
+J3DModelData* dWwItemmdl_getItemmdlModelData(u16 bdl_index) {
+    if (bdl_index == static_cast<u16>(dRes_INDEX_ITEMMDL_BDL_VBOW_e)) {
+        return dWwItemmdl_getVbowModelData(kItemmdlArcName);  // proven bow path (2/2 mats+joints)
+    }
+
+    for (int i = 0; i < s_itemmdlCacheCount; i++) {
+        if (s_itemmdlCacheIdx[i] == bdl_index) {
+            return s_itemmdlCacheModel[i];
+        }
+    }
+
+    if (!privateItemmdlArcReady()) {
+        dWwItemmdl_debugLog("getItemmdlModelData: private arc not ready");
+        return NULL;
+    }
+
+    JKRHeap* const prev_heap = JKRGetCurrentHeap();
+    mDoExt_setCurrentHeap(s_vbowRetainedHeap);
+    J3DModelData* model_data = loadFromResourcePointer(
+        getPrivateObjectResByIndex(static_cast<s32>(bdl_index)), "itemmdl by index");
+    mDoExt_setCurrentHeap(prev_heap);
+
+    if (model_data != NULL && s_itemmdlCacheCount < kItemmdlCacheMax) {
+        s_itemmdlCacheIdx[s_itemmdlCacheCount] = bdl_index;
+        s_itemmdlCacheModel[s_itemmdlCacheCount] = model_data;
+        s_itemmdlCacheCount++;
+        char msg[96];
+        snprintf(msg, sizeof(msg), "getItemmdlModelData: loaded index=%u model=%p mats=%u joints=%u",
+                 bdl_index, model_data, model_data->getMaterialNum(), model_data->getJointNum());
+        dWwItemmdl_debugLog(msg);
+    }
+    return model_data;
+}
+
 // Track B: while the held-bow skin toggle is on, drive the private itemmdl arc mount to
 // completion (stepPrivateItemmdlArcMount is a per-frame stepper) so setBowModel() can pull
 // vbow via getVbowModelData without requiring a prior get-item replay.
@@ -1063,7 +1103,9 @@ static bool isScVbowDrawMaterial(J3DMaterial* material) {
         }
 
         const char* name = names != NULL ? names->getName(i) : NULL;
-        return name != NULL && strcmp(name, "SC_Vbow_v") == 0;
+        // WW cel convention: an "SC_"-prefixed material is the 2nd-pass ink/edge that needs the
+        // full TEV/konst replay. Generalized from the bow's exact "SC_Vbow_v".
+        return name != NULL && strncmp(name, "SC_", 3) == 0;
     }
 
     return false;

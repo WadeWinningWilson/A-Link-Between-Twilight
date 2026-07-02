@@ -38,10 +38,15 @@
 - **Held:** branch the item's `set*Model()` + `modelDraw` with the Layer-B recipe — **only if the item has a TP host** to equip (bow, boomerang, hookshot, boots, bombs, bottles, telescope→hawkeye). No-TP-analogue items (Skull Hammer, Deku Leaf, Sail, WW baton, Grappling Hook, Tingle Tuner, Picto Box, bags) are **get-item / viewer only** unless you write new procs.
 - **Generalize the guards:** `isTevDumpMaterial` / `isVbowDrawMaterial` currently hardcode `Vbow_v` / `SC_Vbow_v`; widen to the new item's material names (or match any itemmdl material). Tune ambient/scale; wire BTK/BRK if present.
 
+### Generalization progress (2026-07-01) — render core is now item-agnostic
+- **`dWwItemmdl_getItemmdlModelData(u16 bdlIndex)`** — generic per-index loader off the same private arc, cached per-index; bow reuses its proven path. Entry point for every other item.
+- **Material guards generalized:** `isTevDumpMaterial` accepts any material of a scoped itemmdl model; `isScVbowDrawMaterial` → any **`SC_`-prefixed** material (WW ink-pass convention). Bow behavior byte-identical.
+- **Still bow-specific (next):** `daItemBase_c::CreateItemHeap` id-branch + `d_a_demo_item.cpp` `useWwItemmdlBow*` gate (both keyed to `dItemNo_BOW_e`); per-item color constants.
+
 ### Next item — Skull Hammer (`vhamm`)
-- **BDL:** `dRes_INDEX_ITEMMDL_BDL_VHAMM_e` (`itemmdl.h`); TWW arc `Vhamm`; **no BTK/BRK** (per the 21-mesh table below).
-- **No TP analogue** (TP's iron ball is a different weapon) → **get-item generalization pilot**: proves Layer A works on a 2nd, single-material item. Held-skin is N/A (nothing to equip it on) without new hammer procs.
-- **First test:** Layer A get-item for `vhamm` — swap the material guards off the `Vbow_v`-only assumption, tune ambient, confirm it spins in the get-item demo.
+- **BDL:** `dRes_INDEX_ITEMMDL_BDL_VHAMM_e` (`itemmdl.h`); TWW arc `Vhamm`; **no BTK/BRK**.
+- **No TP item id** (TP has no Skull Hammer; iron ball is unrelated) → the get-item flow (keyed by `dItemNo`) and held-skin (needs a TP host) **cannot** trigger it. ⇒ **Test vehicle = a VIEWER / index spawn** using `dWwItemmdl_getItemmdlModelData(VHAMM)` + the realization draw scope, drawn at Link's feet. This is Phase 3 (ImGui itemmdl viewer) or a generalized demo-spawn that takes a BDL index instead of a `dItemNo`.
+- **This is the general answer for the ~13 no-TP-analogue items** (hammer, Deku Leaf, Sail, WW baton, grappling hook, Tingle Tuner, Picto Box, bags): viewer-only until new procs exist. TP-analogue items (boomerang, hookshot, boots, bombs, bottles, telescope) can use the get-item + held paths.
 
 ---
 

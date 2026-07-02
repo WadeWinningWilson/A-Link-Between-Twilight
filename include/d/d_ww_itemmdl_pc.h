@@ -30,6 +30,9 @@ bool dWwItemmdl_use2DIsolateHeap();
 
 J3DModelData* dWwItemmdl_getVbowModelData(const char* arc_name);
 
+// Generic: load any itemmdl BDL by index (bow reuses its proven path). Entry point for new items.
+J3DModelData* dWwItemmdl_getItemmdlModelData(u16 bdl_index);
+
 void dWwItemmdl_patchModelForPc(J3DModelData* model_data);
 
 // 2R: mount itemmdl on private dRes_info (not shared dComIfG slot). Returns cPhs_* or -1 if N/A.
