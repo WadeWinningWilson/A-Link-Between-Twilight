@@ -162,6 +162,31 @@ Generalizing to another item = swap the item-id / material-name guards; the rend
 
 ---
 
+## ▶ IRON BOOTS SKIN — path traced + plan (2026-07-02, research)
+
+**Visual path (not `setLinkBootsType` — that's audio):**
+- **Model:** `al_bootsH.bmd` (heavy boots), from Link's clothes arc (`mArcName`). Built in the clothes builder `d_a_alink_wolf.inc:647–650` as **two** instances → `mpLinkBootModels[0]` (L) + `[1]` (R).
+- **Rigging (every frame):** `d_a_alink.cpp:6205–6229` — `setBaseTRMtx(link base)` + `setAnmMtx(1/2/3, mpLinkModel->getAnmMtx(0x13–0x1A))` (foot/leg bones). Multi-joint, follows the foot.
+- **Draw:** via `modelDraw(mpLinkBootModels[i])` (+ shadow `d_a_alink.cpp:20303`, swindow `basicModelDraw`).
+- **Vanilla feet:** `field_0x06e0/6e4` shapes hidden when heavy boots equip (`setHeavyBoots`).
+
+**Skin plan (feasible = stiff static boot swap):**
+1. **Swap** in the clothes builder: when `wwItemmdlHeldSkin == IronBoots` (+ itemmdl arc ready), load `dWwItemmdl_getItemmdlModelData(0xE)` (`vboot`) into `mpLinkBootModels[i]` instead of `al_bootsH`; **fallback** `al_bootsH` if arc not ready.
+2. **MANDATORY guard** at `d_a_alink.cpp:6205–6229`: `vboot` has only **2 joints** (`ROOT`+`MODEL`) vs `al_bootsH` 3+ → the `setAnmMtx(2)`/`(3)` calls write **OOB → crash**. For the skinned case, position via `setBaseTRMtx`/`setAnmMtx(1)` at the ankle only; skip joints 2/3.
+3. **Draw recipe:** extend the `modelDraw` WW branch to also fire for `i_model == mpLinkBootModels[0]/[1]` when skin==IronBoots (struct-0 + ambient + scope + `modelUpdateDL`) → colors like the get-item `vboot`.
+4. **Reversibility:** gated on skin==IronBoots; Off ⇒ `al_bootsH` as normal.
+
+**Caveats / risks:**
+- **OOB `setAnmMtx` on 2-joint vboot = crash — guard is not optional.**
+- **Stiff:** no foot articulation (vboot won't flex with the ankle); static boot at the foot.
+- **Two feet, one mesh:** both models = `vboot`; L/R mirror/orientation may be off → tune.
+- **Timing wrinkle:** boots are built in `changeLink` (clothes build), so the swap applies on the **next clothes rebuild** (outfit change / area reload), not instantly on selecting the skin — may want to force a rebuild when the setting flips.
+- **Clothes epoch/lifecycle:** `mpLinkBootModels` are treated as clothes models (freed/rebuilt on arc epoch); vboot *data* lives in the retained heap (persists), the *instance* in the clothes heap (rebuilt) — should be fine but watch the epoch guard in `modelDraw`.
+
+**Status: research done; implement when the held pass (bow/hookshot) is verified.**
+
+---
+
 ## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)
 
 **Role:** Wind Clau = review / graphics-strategy / second-opinion. Reads Cursor's diffs, logs, and screenshots; picks branches; enforces the do-not-retry list. **Does not edit source** — Cursor implements. (Wind Clau may edit *this doc* and `wind-waker-item-work.md`.)
