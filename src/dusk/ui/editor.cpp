@@ -2264,6 +2264,9 @@ EditorWindow::EditorWindow() {
             "ride @ 35%. Particle layout uses Interface → ALBW Visuals → Hurricane Spin Visual." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return getSettings().game.speedrunMode; });
+        // Wind Waker Skins — one section per WW itemmdl item (open for later skins:
+        // add a sibling add_section("Wind Waker Skins - <Item>") block as items come online).
+        leftPane.add_section("Wind Waker Skins - Bow");
         editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlGetItem,
             "WW itemmdl get-item",
             "Use retail itemmdl.arc vbow for Hero's Bow get-item spin (Phase 2 heap wiring). "
