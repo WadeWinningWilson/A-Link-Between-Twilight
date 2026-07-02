@@ -44,7 +44,10 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
             dWwItemmdl_bracketLog("2D isolate: O_gD_bow mesh (itemmdl arc at create)");
             modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
         } else {
-            modelData = dWwItemmdl_getVbowModelData("itemmdl");
+            // Viewer: load the selected itemmdl BDL index (default 0xF = vbow → identical bow
+            // path). Set the index + Replay to preview any of the 21 WW meshes in the get-item spin.
+            modelData = dWwItemmdl_getItemmdlModelData(
+                static_cast<u16>(dusk::getSettings().game.wwItemmdlViewerBdlIndex.getValue()));
             if (modelData != NULL) {
                 dWwItemmdl_patchModelForPc(modelData);
                 if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {

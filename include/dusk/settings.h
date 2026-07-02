@@ -280,6 +280,9 @@ struct UserSettings {
         ConfigVar<bool> wwItemmdlHeldBow;
         // Track B: held WW bow scale percent (100 = 1.0x; live hand-size tuning).
         ConfigVar<int> wwItemmdlHeldBowScalePct;
+        // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
+        // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.
+        ConfigVar<int> wwItemmdlViewerBdlIndex;
         // Sumo Outfit: swap Link's body to the shirtless sumo model. Drives the model flag only,
         // never the sumo minigame.
         //   sumoOutfit      — LEGACY/unused: "worn" is now per-save (save bit 700, via dAlbwOutfit_*).

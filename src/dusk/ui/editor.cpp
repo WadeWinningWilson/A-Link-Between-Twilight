@@ -2364,6 +2364,32 @@ EditorWindow::EditorWindow() {
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Viewer: itemmdl BDL index",
+                .getValue = [] {
+                    return getSettings().game.wwItemmdlViewerBdlIndex.getValue();
+                },
+                .setValue = [](int value) {
+                    getSettings().game.wwItemmdlViewerBdlIndex.setValue(std::clamp(value, 0x5, 0x19));
+                    config::Save();
+                },
+                .isModified = [] {
+                    return getSettings().game.wwItemmdlViewerBdlIndex.getValue() !=
+                           getSettings().game.wwItemmdlViewerBdlIndex.getDefaultValue();
+                },
+                .min = 0x5,
+                .max = 0x19,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "itemmdl BDL index the Replay below spins in the get-item demo (0xF = Bow, "
+                    "default). Requires WW itemmdl get-item ON. Indices: 0xC Bomb, 0xD Boomerang, "
+                    "0xE Boots, 0xF Bow, 0x10 PictoBox, 0x12 SkullHammer, 0x13 Sail, 0x14 Hookshot, "
+                    "0x15 DekuLeaf, 0x16 MagicArmor, 0x17 Grapple, 0x18 WindWaker, 0x19 Telescope." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
             leftPane.add_button("Replay Bow Get-Item Demo")
                 .on_pressed([] {
                     mDoAud_seStartMenu(kSoundItemChange);
