@@ -802,7 +802,13 @@ void daAlink_c::setMagneBootsEffect() {
                     if (j == 1) {
                         emitter->setGlobalRTMatrix(mpLinkBootModels[i]->getAnmMtx(1));
                     } else {
+#if TARGET_PC
+                        // Track B: vboot has only 2 joints — getAnmMtx(2) would be OOB; use joint 1.
+                        emitter->setGlobalRTMatrix(
+                            mpLinkBootModels[i]->getAnmMtx(s_albwWwBootsSkinned ? 1 : 2));
+#else
                         emitter->setGlobalRTMatrix(mpLinkBootModels[i]->getAnmMtx(2));
+#endif
                     }
                 }
             }

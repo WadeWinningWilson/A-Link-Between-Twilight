@@ -646,8 +646,33 @@ void daAlink_c::changeLink(int param_0) {
 
     modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_bootsH.bmd"));
     u16 i;
-    for (i = 0; i < 2; i++) {
-        mpLinkBootModels[i] = initModel(modelData, 0);
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Track B iron-boots skin)
+    // When the WW skin selector is on Iron Boots and the itemmdl arc is resident, build both
+    // heavy-boot models from the WW vboot (index 0xE) instead of al_bootsH. vboot is a 2-joint
+    // prop, so the per-frame foot-rig is guarded elsewhere (setAnmMtx 2/3 would be OOB) and it
+    // pins to the ankle (stiff). NULL / arc-not-ready falls back to al_bootsH.
+    // ============================================
+    s_albwWwBootsSkinned = false;
+    J3DModelData* wwBootData = NULL;
+    if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::IronBoots) {
+        wwBootData = dWwItemmdl_getItemmdlModelData(0xE);  // dRes_INDEX_ITEMMDL_BDL_VBOOT_e
+        if (wwBootData != NULL) {
+            dWwItemmdl_patchModelForPc(wwBootData);
+        }
+    }
+    if (wwBootData != NULL) {
+        for (i = 0; i < 2; i++) {
+            mpLinkBootModels[i] = initModel(wwBootData, 0x80000, 0x11000084);
+        }
+        s_albwWwBootsSkinned = true;
+    } else
+#endif
+    {
+        for (i = 0; i < 2; i++) {
+            mpLinkBootModels[i] = initModel(modelData, 0);
+        }
     }
 
     mpKanteraModel = initModelEnv(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_kantera.bmd")), 0);

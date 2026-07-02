@@ -138,6 +138,9 @@ static bool s_albwNativeCapResolved = true;
 // ============================================
 static u32 s_albwArcEpoch = 0;
 static u32 s_albwClothesModelEpoch = 0;
+// Track B iron-boots skin: true when mpLinkBootModels were built as the WW vboot (2-joint prop)
+// instead of al_bootsH. Gates the foot-rig (skip OOB setAnmMtx) and the WW draw recipe.
+static bool s_albwWwBootsSkinned = false;
 
 // ============================================
 // NEW CODE — ALBW Port (cap/face-donor lifecycle safety — declared in d_a_alink.h)
@@ -6203,6 +6206,20 @@ void daAlink_c::setItemMatrix(int param_0) {
     modelCalc(mpLinkHatModel);
 
     if (checkEquipHeavyBoots()) {
+#if TARGET_PC
+        if (s_albwWwBootsSkinned) {
+            // Track B: vboot is a full PAIR of boots authored at the model origin (2-joint prop).
+            // Draw ONE instance at Link's base transform (feet, upright, front-facing) and SKIP
+            // the 2nd boot model in modelDraw (drawing both would double the pair). Also skips the
+            // per-joint foot rig (setAnmMtx(2/3) would be OOB on 2 joints). Stiff, no articulation.
+            const f32 wwBootScale =
+                dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
+            mpLinkBootModels[0]->setBaseTRMtx(mpLinkModel->getBaseTRMtx());
+            mpLinkBootModels[0]->setBaseScale(cXyz(wwBootScale, wwBootScale, wwBootScale));
+            modelCalc(mpLinkBootModels[0]);
+        } else
+#endif
+        {
         for (int i = 0; i < 2; i++) {
             mpLinkBootModels[i]->setBaseTRMtx(mpLinkModel->getBaseTRMtx());
             modelCalc(mpLinkBootModels[i]);
@@ -6230,6 +6247,7 @@ void daAlink_c::setItemMatrix(int param_0) {
 #ifdef TARGET_PC
         }
 #endif
+        }
     }
 
     if (!checkNoResetFlg2(FLG2_STATUS_WINDOW_DRAW)) {
@@ -20435,14 +20453,21 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     // and activate the SC realization draw scope so the callback colors SC + body texgen
     // during modelEntryDL. Everything else (other models) keeps normal MAJI lighting.
     // ============================================
+    // Iron-boots skin: vboot is a full PAIR — draw only boot[0]; skip boot[1] (would double it).
+    if (s_albwWwBootsSkinned && i_model == mpLinkBootModels[1]) {
+        return;
+    }
     const dusk::WwHeldSkinMode wwSkinMode = dusk::getSettings().game.wwItemmdlHeldSkin.getValue();
+    const bool wwBootModel = s_albwWwBootsSkinned && i_model == mpLinkBootModels[0];
     const bool wwHeldBow =
-        (i_model == mHeldItemModel) &&
-        ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
-         (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)));
+        ((i_model == mHeldItemModel) &&
+         ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
+          (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)))) ||
+        wwBootModel;
     // Item switched away from the WW held skin: drop the stale scope so the post-DL callback
-    // (fires at draw-buffer DRAIN) never dereferences a freed itemmdl model.
-    if (i_model == mHeldItemModel && !wwHeldBow) {
+    // (fires at draw-buffer DRAIN) never dereferences a freed itemmdl model. Do NOT clear while
+    // boots are WW-skinned — the boots own the scope then and draw after the held item.
+    if (i_model == mHeldItemModel && !wwHeldBow && !s_albwWwBootsSkinned) {
         dWwItemmdl_clearBowDrawScope();
     }
     if (wwHeldBow) {

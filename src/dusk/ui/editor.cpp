@@ -2408,7 +2408,7 @@ EditorWindow::EditorWindow() {
                     [] {
                         switch (getSettings().game.wwItemmdlHeldSkin.getValue()) {
                             case WwHeldSkinMode::Bow:       return Rml::String("Bow");
-                            case WwHeldSkinMode::IronBoots: return Rml::String("Iron Boots (WIP)");
+                            case WwHeldSkinMode::IronBoots: return Rml::String("Iron Boots");
                             case WwHeldSkinMode::Hookshot:  return Rml::String("Hookshot");
                             default:                        return Rml::String("Off");
                         }
@@ -2434,7 +2434,7 @@ EditorWindow::EditorWindow() {
                 };
                 opt("Off", WwHeldSkinMode::Off);
                 opt("Bow", WwHeldSkinMode::Bow);
-                opt("Iron Boots (WIP)", WwHeldSkinMode::IronBoots);
+                opt("Iron Boots", WwHeldSkinMode::IronBoots);
                 opt("Hookshot", WwHeldSkinMode::Hookshot);
             });
         leftPane.register_control(
@@ -2458,8 +2458,9 @@ EditorWindow::EditorWindow() {
             rightPane,
             [](Pane& pane) {
                 pane.add_rml(
-                    "Held WW skin size in Link's hand, percent (100 = 1.0x). Live-tune the "
-                    "selected held skin (Bow / Hookshot). Iron Boots is worn/rigged (WIP)." +
+                    "Scale % for the selected WW skin (100 = 1.0x), live-tunable. Bow / Hookshot "
+                    "are held; Iron Boots is worn (stiff, pinned to the ankle — applies on the "
+                    "next clothes rebuild: change outfit or reload the area after selecting it)." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
     });
