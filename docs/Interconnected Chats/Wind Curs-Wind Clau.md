@@ -225,6 +225,38 @@ Code can't add joints or split baked geometry — that's external asset work. Wo
 
 ---
 
+## ▶ IRON BOOTS INVISIBILITY — active investigation (2026-07-02, Wind Clau owns)
+
+**Symptom:** re-rigged `vboot.bdl` (4 joints matching al_bootsH: 0=root, 1/2/3 = A/B/C; 2 mats `SC_boot`/`boot`) loads fine (`vboot.bdl size 21696`) and renders in the Item Viewer — but with **skin=IronBoots + a clothes rebuild, Link's ENTIRE body goes invisible** (body/hat/hands/boots). World fine, **no crash**, runs 1200+ frames, **no `tcg src 21` / FATAL**. Skin Off + rebuild restores Link. ⇒ draw/state issue on the boot-slot path, not a load failure or crash.
+
+**Known-good baseline:** commit `44ab0a2f1a` (stiff single-pair swap) — draws ONE boot via `setBaseTRMtx` (no `setAnmMtx`), WW recipe, Link **visible**. The new (invisible) attempt drives the 4-joint vboot through the vanilla foot rig: `setAnmMtx(1/2/3)` on **both** boots + calc/draw both + (now) the vanilla clothes draw (`modelEntryDL`+MAJI).
+
+**✅ RULED OUT (proven in-code):**
+- **Create-flag mismatch — NO.** `0x80000` = `J3DMdlFlag_DifferedDLBuffer` (`J3DModel.h:17`). Vanilla al_bootsH `initModel(modelData, 0)` → 2-arg overload (`d_a_alink.h:3767`) → `initModel(data, 0x80000, 0)`; `initModel` ORs `0x11000084` into diff (`d_a_alink.cpp:4331`) ⇒ **`create(data, 0x80000, 0x11000084)`**. WW vboot `initModel(wwBootData, 0x80000, 0x11000084)` ⇒ **identical create call.** al_bootsH uses the DifferedDLBuffer flag too.
+- **`patchModelForPc` — benign** (log-only, `d_ww_itemmdl_pc.cpp:855`).
+- **Shared model-data across both instances — normal** (vanilla al_bootsH shares its `modelData` across both `mpLinkBootModels` too).
+
+**Reframe:** the code path is now ~identical to al_bootsH's. Remaining delta = **(1) `vboot` is a BDL (locked DL); al_bootsH is a BMD**, and **(2) the two things the visible stiff baseline never did** — `setAnmMtx(1/2/3)` on vboot, and calc/draw of a **2nd** instance sharing one BDL's data. The viewer renders vboot via `modelUpdateDL` and never exercises either.
+
+**Two leading hypotheses (both ⇒ modelDraw "SKIP corrupt model" drops Link's body ⇒ invisible, no crash):**
+- **H1 — two shared instances of a BDL locked-DL model conflict** (locked/baked DL lives in the shared data; two instances calc/draw over it → corruption). Stiff drew one → visible.
+- **H2 — `setAnmMtx(2/3)` OOB** if the runtime vboot has < 4 usable anm-matrix slots (SuperBMD BDL joint/matrix layout ≠ al_bootsH BMD) → writes past the buffer → corrupts adjacent clothes `J3DModelData` → body `matNum` garbage → corrupt-model guard skips it.
+
+**Decisive diagnostics (do first):**
+1. **Which guard drops Link:** in `modelDraw`, when `i_model == mpLinkModel`, log SKIP stale-epoch (`s_albwClothesModelEpoch != s_albwArcEpoch`) vs SKIP corrupt (`matNum>256` / `getModelData()==NULL`) + `matNum` + epoch values.
+2. **Runtime vboot joints:** after `initModel(wwBootData,…)`, log `getJointNum()` + `mMtxBuffer` anm capacity. <4 ⇒ H2.
+3. **Bisects (1 line each):** (a) remove `setAnmMtx(1/2/3)` → visible? ⇒ H2. (b) re-add boot[1] draw/calc skip (draw one) → visible? ⇒ H1.
+
+**Fixes by outcome:**
+- **H1 / general BDL trouble → re-export `vboot` as `.bmd` not `.bdl` (RECOMMENDED, cleanest):** al_bootsH is BMD; a BMD vboot is a true drop-in (shared data + `modelEntryDL` + 2 instances all work like vanilla; dissolves the locked-DL class of bugs). Asset-side (SuperBMD BMD output) — add to `docs/Blender-WW-Items.md` Task 1.
+- **H1 but must stay BDL:** per-instance model-data (each boot its own copy, not the cached shared `getItemmdlModelData`).
+- **H2:** verify vboot runtime joints==4 (BMDView2 vs al_bootsH; check draw/weight-matrix count, not just joints); re-export or guard `setAnmMtx` to the real count.
+- **stale-epoch:** vboot load during `changeLink` bumps `s_albwArcEpoch` after the stamp → mount the itemmdl arc before the clothes build (per-tick mount), or re-stamp `s_albwClothesModelEpoch` after the boot load.
+
+**Lead:** expect **SKIP corrupt** + the boot[1]-skip bisect restoring Link (H1) → fix = **re-export vboot as BMD**. **STATUS: analysis done; Wind Clau to implement on user's go (holding).**
+
+---
+
 ## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)
 
 **Role:** Wind Clau = review / graphics-strategy / second-opinion. Reads Cursor's diffs, logs, and screenshots; picks branches; enforces the do-not-retry list. **Does not edit source** — Cursor implements. (Wind Clau may edit *this doc* and `wind-waker-item-work.md`.)
