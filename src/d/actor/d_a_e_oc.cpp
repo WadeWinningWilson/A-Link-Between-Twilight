@@ -18,6 +18,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_wolf_stun.h"
 #endif
 
 
@@ -2604,7 +2605,43 @@ void daE_OC_c::cc_set() {
     mSphs_at[1].SetR(30.0f);
     dComIfG_Ccsp()->Set(&mSphs_at[0]);
     dComIfG_Ccsp()->Set(&mSphs_at[1]);
+
+#if TARGET_PC
+    if (dAlbwWolfStun_isStunned(this)) {
+        cCcD_Obj* tgObjs[] = {&mSphs_cc[0], &mSphs_cc[1]};
+        dAlbwWolfStun_syncColliders(this, tgObjs, 2);
+    }
+#endif
 }
+
+#if TARGET_PC
+void daE_OC_c::refreshStunHurtColliders() {
+    cXyz my_vec_lhs;
+    cXyz my_vec_rhs;
+    J3DModel* model = mpMorf->getModel();
+    f32 bodySphereR = 50.0f;
+    f32 bodySphereR2 = 45.0f;
+
+    if (dFlurryRush_isTargetActor(this)) {
+        bodySphereR = 65.0f;
+        bodySphereR2 = 58.0f;
+    }
+
+    mtx_set();
+
+    mDoMtx_stack_c::copy(model->getAnmMtx(1));
+    my_vec_lhs.set(10.0f, 10.0f, 0.0f);
+    mDoMtx_stack_c::multVec(&my_vec_lhs, &my_vec_rhs);
+    mSphs_cc[0].SetC(my_vec_rhs);
+    mSphs_cc[0].SetR(bodySphereR);
+
+    mDoMtx_stack_c::copy(model->getAnmMtx(0x11));
+    my_vec_lhs.set(10.0f, 0.0f, 0.0f);
+    mDoMtx_stack_c::multVec(&my_vec_lhs, &my_vec_rhs);
+    mSphs_cc[1].SetC(my_vec_rhs);
+    mSphs_cc[1].SetR(bodySphereR2);
+}
+#endif
 
 int daE_OC_c::execute() {
     if (field_0x6c0) {

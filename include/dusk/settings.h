@@ -321,6 +321,9 @@ struct UserSettings {
         // (watcher spawns, death-screen "Last Shade Watcher" option, shop return
         // service). Off = whole system disabled. WIP — default off.
         ConfigVar<bool> shadeRefuge;
+        // Hero's Shade Secret Boss: post-game real duel vs the Hero's Shade after
+        // all Hidden Skills (F_0344). Off = disabled. WIP — default off.
+        ConfigVar<bool> heroShadeSecretBoss;
         // Parry/bash charge HUD icon style: spur only, spur+shield, or shield only.
         ConfigVar<ParryIcons> parryIconsMode;
         // Boss health bar HUD (name + bar) for main dungeon bosses / Ganondorf duel.

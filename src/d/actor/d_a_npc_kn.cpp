@@ -287,8 +287,12 @@ static s8 l_loadResPtrnTeach07[3] = {
     -1,
 };
 
-static DUSK_CONSTEXPR s8 l_loadResPtrn0[2] = {
+// Type-7 (Hero's Shade Secret Boss idle). Loads KN_a + KN_tch01D — matching the
+// working teach01 set — so the ghost model has all its render/anim resources
+// (KN_a alone spawns the actor but renders invisible).
+static DUSK_CONSTEXPR s8 l_loadResPtrn0[3] = {
     1,
+    2,
     -1,
 };
 
@@ -556,7 +560,8 @@ int daNpc_Kn_c::create() {
 
     int phase_state = loadRes(l_loadResPtrnList[mType], (const char**)l_resNameList);
     if (phase_state == cPhs_COMPLEATE_e) {
-        static int const heapSize[8] = {0x4B10, 0x4B20, 0x4B10, 0x4B10, 0x5A00, 0x4B10, 0x4B20, 0x0000};
+        // heapSize[7] (was 0x0000): the Hero's Shade Secret Boss idle type-7 slot.
+        static int const heapSize[8] = {0x4B10, 0x4B20, 0x4B10, 0x4B10, 0x5A00, 0x4B10, 0x4B20, 0x4B10};
         if (!fopAcM_entrySolidHeap(this, createHeapCallBack, heapSize[mType])) {
             return cPhs_ERROR_e;
         }
@@ -805,6 +810,14 @@ BOOL daNpc_Kn_c::isDelete() {
         if (daNpcT_chkEvtBit(l_appearFlag[mType * 1]) && !daNpcT_chkEvtBit(l_delFlag[mType])) {
             return 0;
         }
+        break;
+    // ============================================
+    // NEW CODE — ALBW Port: Hero's Shade Secret Boss
+    // Type 7 = the idle secret-boss Shade. Spawn gating lives in d_s_room.cpp
+    // (stage/room/toggle), so it must never self-delete here.
+    // ============================================
+    case 7:
+        return 0;
     }
 
     return 1;
@@ -815,7 +828,7 @@ void daNpc_Kn_c::resetCol() {
     mCylCc.SetStts(&mCcStts);
     mCylCc.SetTgHitCallback(tgHitCallBack);
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         mSphCc[i].Set(mCcDSph);
         mSphCc[i].SetStts(&mCcStts);
         mSphCc[i].SetAtSe(dCcD_SE_HARD_BODY);
@@ -824,6 +837,12 @@ void daNpc_Kn_c::resetCol() {
         mSphCc[i].OnAtSPrmBit(0xc);
         mSphCc[i].OffAtNoConHit();
         mSphCc[i].OffCoSetBit();
+        // ALBW: Hero's Shade Secret Boss (mType 7) deals real damage. Vanilla
+        // lesson attacks default to atp 0 (harmless). atp is in quarter-hearts,
+        // so 12 ≈ 3 hearts (pre-outfit multipliers) — calibrate from playtest.
+        if (mType == 7) {
+            mSphCc[i].SetAtAtp(12);
+        }
     }
 }
 
@@ -848,8 +867,17 @@ void daNpc_Kn_c::reset() {
     field_0x15cc = 0;
     field_0x15cd = 0;
     field_0x15ce = 0;
+    field_0x15cf = 0;  // ALBW mType-7 "hasSwung" gate for the projectile barrage
     field_0x15bc = 0;
     field_0x15af = 1;
+
+    // Health pool (mType-7 combat Shade): 3x a vanilla Darknut phase-2 (no-armor)
+    // body HP (100) = 300, BEFORE any global HP multipliers. Uses the inherited
+    // fopEn_enemy_c `health` so the lock-on / battle-target systems see a valid
+    // target (this also stops the lock from dropping on a health==0 "dead" target).
+    if (mType == 7) {
+        health = 300;
+    }
 
     for (int i = 0; i < 3; i++) {
         mParticleMngr[i].mManager.init(&mAcch, 0.0f, 0.0f);
@@ -965,6 +993,18 @@ void daNpc_Kn_c::setParam() {
         break;
     case 6:
         attention_info.flags = setParamTeach07();
+        break;
+    // ============================================
+    // NEW CODE — ALBW Port: Hero's Shade Secret Boss
+    // mType 7 = combat Shade: a lockable BATTLE target with NO talk/speak prompt
+    // (turn off the "Speak" function). Intro dialogue can re-enable talk later.
+    // ============================================
+    case 7:
+        attention_info.distances[fopAc_attn_LOCK_e] = daNpcT_getDistTableIdx(attention_distance, attention_angle);
+        attention_info.distances[fopAc_attn_BATTLE_e] = daNpcT_getDistTableIdx(attention_distance, attention_angle);
+        attention_info.flags = fopAc_AttnFlag_BATTLE_e;
+        mAcchCir.SetWallR(mpHIO->m.common.width);
+        mAcchCir.SetWallH(mpHIO->m.common.knee_length);
         break;
     default:
         attention_info.distances[fopAc_attn_LOCK_e] = daNpcT_getDistTableIdx(attention_distance, attention_angle);
@@ -1204,6 +1244,29 @@ void daNpc_Kn_c::setCollision() {
             break;
         case 6:
             setCollisionTeach07();
+            break;
+        // Combat Shade (mType 7): body Tg is shielded in the normal fight state so
+        // Link's attacks hit the shield (blocked) — a shield BASH breaks the guard
+        // (heroShadeCombat -> mMode 4 stun). While stunned the shield drops so ALL
+        // attacks (Helm Splitter, hidden skills, basic) land.
+        case 7:
+            mCylCc.SetTgType(0xFFFFFFFF);
+            mCylCc.SetTgSPrm(0x13);
+            mCylCc.OffTgNoAtHitInfSet();
+            mCylCc.OnTgNoConHit();
+            if (mMode == 4 || mMode == 6) {
+                // Stunned (4) OR mid-barrage (6): body is VULNERABLE — MARK_1 +
+                // OffTgShield (mirrors vanilla teach04 case 10/11 stun). MARK_1 is the
+                // flesh-hit material; MARK_2 is the SHIELD/metal material (the clank).
+                // During the barrage this is deliberate: committing to the volley
+                // drops his guard, so rushing in + landing a hit is the counterplay.
+                mCylCc.SetTgHitMark(CcG_Tg_UNK_MARK_1);
+                mCylCc.OffTgShield();
+            } else {
+                mCylCc.SetTgHitMark(CcG_Tg_UNK_MARK_2);
+                mCylCc.OnTgShield();
+            }
+            break;
         }
 
         mDoMtx_stack_c::copy(mpModelMorf[0]->getModel()->getAnmMtx(getBackboneJointNo()));
@@ -1224,7 +1287,11 @@ void daNpc_Kn_c::setCollision() {
 }
 
 void daNpc_Kn_c::setCollisionSword() {
-    static DUSK_CONSTEXPR f32 l_swordOffset[2] = {60.0f, 120.0f};
+    // Vanilla uses two spheres along the blade (indices 0-1). The combat Shade
+    // (mType 7) adds a THIRD at the hilt/base (offset 0) so point-blank attacks —
+    // Link standing right at his body, under the two blade spheres — still connect.
+    static DUSK_CONSTEXPR f32 l_swordOffset[3] = {60.0f, 120.0f, 0.0f};
+    const int nSword = (mType == 7) ? 3 : 2;
 
     if (mMotionSeqMngr.getNo() == 0x19 && mMotionSeqMngr.getStepNo() == 0 &&
         mMotionSeqMngr.checkEntryNewMotion() == 0)
@@ -1234,9 +1301,20 @@ void daNpc_Kn_c::setCollisionSword() {
         field_0x15ce = 0;
     }
 
-    for (int i = 0; i < 2; i++) {
+    // Normal swing (0x19): blade At live frames 30-40. SUPPRESSED during the mType-7
+    // barrage (mMode 6) — motion 0x19 plays there too, but the thrown balls are the
+    // attack; the sword must not also melee-hit.
+    bool swingActive = field_0x15ce && mpModelMorf[0]->getFrame() >= 30.0f &&
+                       mpModelMorf[0]->getFrame() <= 40.0f && !(mType == 7 && mMode == 6);
+    // Great Spin (mType 7, motion 0x18): the first ~10 frames are the wind-up (At
+    // off); afterwards the 3 spheres are live and sweep a full 360 as joint 13
+    // rotates. stepNo 0 = the spin anim (step 1 is the idle follow-through).
+    bool spinActive = mType == 7 && mMotionSeqMngr.getNo() == 0x18 &&
+                      mMotionSeqMngr.getStepNo() == 0 && mpModelMorf[0]->getFrame() >= 10.0f;
+
+    for (int i = 0; i < nSword; i++) {
         if (field_0xe2c == 0) {
-            if (field_0x15ce && mpModelMorf[0]->getFrame() >= 30.0f && mpModelMorf[0]->getFrame() <= 40.0f) {
+            if (swingActive || spinActive) {
                 cXyz pos(l_swordOffset[i], 0.0f, 0.0f);
                 mSphCc[i].OnAtSetBit();
 
@@ -1245,7 +1323,10 @@ void daNpc_Kn_c::setCollisionSword() {
                 mDoMtx_stack_c::multVec(&pos, &pos);
 
                 mSphCc[i].SetC(pos);
-                mSphCc[i].SetR(30.0f);
+                // ALBW: +5% blade radius for the combat Shade (mType 7). NOTE:
+                // point-blank misses come from sphere POSITION (blade spheres sit
+                // 60-120u out), not radius — see chat notes / debug collider view.
+                mSphCc[i].SetR(mType == 7 ? 31.5f : 30.0f);
                 dComIfG_Ccsp()->Set(&mSphCc[i]);
             } else {
                 mSphCc[i].OffAtSetBit();
@@ -1504,6 +1585,15 @@ int daNpc_Kn_c::selectAction() {
                 teach07_selectAction();
             }
             break;
+        // ============================================
+        // NEW CODE — ALBW Port: Hero's Shade Secret Boss
+        // mType 7 = the post-game combat Shade. Run the combat AI instead of a
+        // lesson. First pass: approach + basic sword swing (motion 0x19), which
+        // arms the sword At-collision via setCollisionSword() for real damage.
+        // ============================================
+        case 7:
+            mpTeachAction = &daNpc_Kn_c::heroShadeCombat;
+            break;
         default:
             mpTeachAction = &daNpc_Kn_c::wait;
         }
@@ -1640,6 +1730,343 @@ int daNpc_Kn_c::wait(void* param_0) {
     default:
         return 1;
     }
+}
+
+// ============================================
+// NEW CODE — ALBW Port: Hero's Shade Secret Boss
+// mType-7 combat AI (first pass). Faces + approaches Link and swings his sword
+// (motion 0x19); the swing arms the sword At-collision via setCollisionSword()
+// (frames 30-40 of 0x19) for real damage. Motion-driven — no lesson event.
+// calcSwordAttackMove(1) approaches and triggers the swing when the attack timer
+// (field_0x15d0) expires and Link is within ~250u; we re-arm it after each swing.
+// ============================================
+int daNpc_Kn_c::heroShadeCombat(void* param_0) {
+    // Playback-speed default: reset BOTH model layers to 1.0x each frame; only the
+    // swing wind-up (mMode 3) and the barrage throws (mMode 6) bump them. Resetting
+    // BOTH morfs keeps the ghost/armor layers SYNCED (fixes the wind-up desync) and
+    // guarantees the stun (0xb), idle, guard, and reactions all play at 1.0x.
+    if (mpModelMorf[0] != NULL) {
+        mpModelMorf[0]->setPlaySpeed(1.0f);
+    }
+    if (mpModelMorf[1] != NULL) {
+        mpModelMorf[1]->setPlaySpeed(1.0f);
+    }
+    switch (mMode) {
+    case 0:
+    case 1:
+        mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+        mMotionSeqMngr.setNo(9, -1.0f, 0, 0);
+        mJntAnm.lookPlayer(0);
+        mTargetPos = current.pos;
+        field_0x15bc = 0;
+        field_0x15cc = 0;
+        // Intro delay (~3s @ 60fps): stand and face Link while his warp-in / spawn
+        // animation plays; don't engage yet.
+        field_0x15d0 = 180;
+        speedF = 0;
+        speed.zero();
+        mMode = 2;
+        // fallthrough
+    case 2:
+        mJntAnm.lookPlayer(0);
+        speedF = 0;
+        speed.zero();
+        if (cLib_calcTimer<s16>(&field_0x15d0) == 0) {
+            field_0x15d0 = cLib_getRndValue(51, 51);  // first attack timer (wait -15%)
+            mMode = 3;
+        }
+        break;
+    case 3: {
+        mCcStts.Move();
+        // Guard / shield-bash. Body Tg is shielded here (setCollision case 7), so
+        // Link's attacks hit the shield (blocked, no damage). A shield BASH
+        // (guard-attack) breaks the guard -> ~3s stun opening (mMode 4), where all
+        // attacks land.
+        if (mCylCc.ChkTgShieldHit()) {
+            if (daPy_getPlayerActorClass()->getCutType() == daPy_py_c::CUT_TYPE_GUARD_ATTACK) {
+                mSound.startCollisionSE(Z2SE_HIT_SHIELD_ATTACK, 0x28);
+                setAngle(fopAcM_searchPlayerAngleY(this));
+                mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+                mMotionSeqMngr.setNo(0xb, -1.0f, 1, 0);  // stunned / head-down
+                onHeadLockFlg();
+                speedF = 0.0f;
+                speed.zero();
+                field_0xdec = 120;  // ~2s open window
+                mMode = 4;
+                break;
+            }
+            mSound.startCollisionSE(Z2SE_HIT_SWORD, 0x28);  // blocked a normal attack
+            mCylCc.ClrTgHit();
+        }
+        calcSwordAttackMove(1);  // facing + swing trigger (motion 0x19, in-range <250u)
+        f32 kn_dist = (daPy_getPlayerActorClass()->current.pos - current.pos).absXZ();
+        // Projectile barrage (mMode 6): ONCE he's swung at least once (field_0x15cf),
+        // if Link backs off to >= n units, launch a 4-shot magic-ball volley instead
+        // of only charging — anti-kite pressure. Only THIS first launch is distance-
+        // gated; the volley then fires all 4. Gated behind the first swing so the
+        // fight always opens on melee, and on a cooldown so he also closes distance.
+        if (field_0x15bd > 0) {
+            field_0x15bd--;  // barrage cooldown tick
+        }
+        if (field_0x15cf != 0 && field_0x15bd == 0 && kn_dist >= 800.0f &&
+            mMotionSeqMngr.getNo() != 0x19)
+        {
+            field_0x15be = 0;                          // shots fired this volley
+            parentActorID = fpcM_ERROR_PROCESS_ID_e;   // no ball held yet
+            field_0xdec = 0;
+            setAngle(fopAcM_searchPlayerAngleY(this));
+            mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+            mMotionSeqMngr.setNo(0x19, -1.0f, 1, 0);   // first throw wind-up
+            mMode = 6;
+            break;
+        }
+        // Boss charge (7x the 2.0f lesson pace) while out of attack range.
+        if (field_0x15bc == 0 && field_0x15ce == 0 && kn_dist > 250.0f) {
+            speedF = 14.0f;
+        }
+        // Point-blank: if Link crowds him, swing soon instead of idling. (wait -15%)
+        if (kn_dist < 120.0f && mMotionSeqMngr.getNo() != 0x19 && field_0x15d0 > 17) {
+            field_0x15d0 = 17;
+        }
+        // Track Link through the swing until the last ~10% (hit window frames
+        // 30-40 of motion 0x19); calcSwordAttackMove locks facing at swing start,
+        // so override to keep re-aiming, then commit for the final frames.
+        if (mMotionSeqMngr.getNo() == 0x19 && mpModelMorf[0]->getFrame() < 36.0f) {
+            cLib_addCalcAngleS2(&mCurAngle.y, fopAcM_searchPlayerAngleY(this), 2, 0x1000);
+            setAngle(mCurAngle.y);
+            mJntAnm.lookPlayer(0);
+        }
+        // Swing lifecycle: once the swing (0x19) is past its hit window, drop back
+        // to the ready stance and re-arm the attack timer ONCE so he keeps
+        // attacking. (Previously 0x19 persisted and the every-frame re-arm meant
+        // the timer never re-expired -> he stopped after ~1-2 swings.)
+        if (mMotionSeqMngr.getNo() == 0x19 && mpModelMorf[0]->getFrame() >= 40.0f) {
+            mMotionSeqMngr.setNo(9, -1.0f, 0, 0);
+            field_0x15d0 = cLib_getRndValue(51, 51);  // re-arm attack timer (wait -15%)
+            field_0x15cf = 1;  // first swing landed -> projectile barrage now permitted
+        }
+        // Option 2: quicken ONLY the wind-up (frames 0-30) of the swing to 1.2x on BOTH
+        // morfs (synced — no ghost/armor desync). Strike + recovery (>=30) stay at 1.0x
+        // (top-of-function default), so the blade-active window (30-40) and follow-
+        // through read at normal speed — only his commitment to the swing is faster.
+        if (mMotionSeqMngr.getNo() == 0x19 && mpModelMorf[0] != NULL &&
+            mpModelMorf[0]->getFrame() < 30.0f) {
+            mpModelMorf[0]->setPlaySpeed(1.2f);
+            if (mpModelMorf[1] != NULL) {
+                mpModelMorf[1]->setPlaySpeed(1.2f);
+            }
+        }
+        break;
+    }
+    case 4: {
+        // Stunned / open (~2s): shield is down (setCollision case 7), so every
+        // attack lands — basic swings, Helm Splitter, and other hidden skills.
+        // React with a recoil flinch on ANY sword contact, whether it registers
+        // as a body hit (ChkTgHit, shield genuinely down) or a residual shield
+        // hit (ChkTgShieldHit) — so the open state visibly takes hits instead of
+        // silently absorbing them in the head-down pose.
+        mCcStts.Move();
+        speedF = 0.0f;
+        speed.zero();
+        // OPTION B hit reaction: re-trigger the head-down slump (0xb) on each hit.
+        // 0xb is two anims — bck8 (head snaps down) -> bck9 (sustained head-down
+        // hold) — so replaying it from frame 0 shows the head-snap flinch and then
+        // settles back into the SAME slump. One motion doubles as both the reaction
+        // and the between-hit "downed/vulnerable" pose (vanilla's teach04_finishWait
+        // holds 0xb the same way), so he never drifts to idle/guard. NOT 0x1E (that
+        // reels then idles); NOT 0x12/0xe (fly-back, reserved for the 1-HP finisher).
+        if (mCylCc.ChkTgHit() || mCylCc.ChkTgShieldHit()) {
+            setAngle(fopAcM_searchPlayerAngleY(this));
+            mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+            mMotionSeqMngr.setNo(0xb, -1.0f, 1, 0);  // replay head-snap flinch -> slump
+            mJntAnm.lookNone(0);
+            speedF = 0.0f;
+            speed.zero();
+            mSound.startCreatureVoice(Z2SE_KN_V_DAMAGE_L, -1);
+            mSound.startCollisionSE(Z2SE_HIT_SWORD, 0x1f);
+            mCylCc.ClrTgHit();
+            // Health pool: each landed hit takes 10 (same as a Darknut), so 300 HP =
+            // ~30 hits (3x a Darknut's ~10). Floored at 1 for now — no defeat event
+            // yet, and the final 1% is meant to fall only to a finishing blow later.
+            if (health > 1) {
+                health -= 10;
+                if (health < 1) health = 1;
+            }
+        }
+        if (cLib_calcTimer(&field_0xdec) == 0) {
+            offHeadLockFlg();
+            // Wake-up reversal: if Link stayed glued to him through the whole stun
+            // (within ~kSpinRange), punish on recovery with a GREAT SPIN (his
+            // teaching-demo "ougi" move, motion 0x18) instead of returning to the
+            // neutral swing. Otherwise recover normally.
+            f32 kn_dist = (daPy_getPlayerActorClass()->current.pos - current.pos).absXZ();
+            if (kn_dist < 100.0f) {  // kSpinRange — tune to taste ("5u from his body")
+                setAngle(fopAcM_searchPlayerAngleY(this));
+                mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+                mMotionSeqMngr.setNo(0x18, -1.0f, 1, 0);  // Great Spin (best-guess index)
+                mJntAnm.lookNone(0);
+                mSound.startCreatureVoice(Z2SE_KN_V_ATTACK, -1);
+                // Great Spin VFX: borrow Link's KAITENGIRI (Great Spin) particle effect
+                // so the wake-up spin reads as a real attack (he has no native spin FX).
+                {
+                    // Center on his TORSO (backbone joint), like Link emits at his own
+                    // body joint — current.pos+80 was off-center.
+                    cXyz fxPos;
+                    mDoMtx_stack_c::copy(mpModelMorf[0]->getModel()->getAnmMtx(getBackboneJointNo()));
+                    mDoMtx_stack_c::multVecZero(&fxPos);
+                    csXyz fxRot(0, mCurAngle.y, 0);
+                    // GREAT Spin = the LARGE 'D' variant (KAITENGIRID) at DEFAULT scale.
+                    // KAITENGIRI_A/B is the smaller REGULAR spin, and the 2.0 scale made
+                    // it too big / off-center. RAW ids (NO dPa_RM): ZI_J effects live in
+                    // the NORMAL bank (the way Link's setEmitter emits them).
+                    dComIfGp_particle_set(ID_ZI_J_KAITENGIRID_A, &fxPos, &fxRot, NULL);
+                    dComIfGp_particle_set(ID_ZI_J_KAITENGIRID_B, &fxPos, &fxRot, NULL);
+                }
+                // Great Spin SFX — the large-spin slash whoosh (matches the KAITENGIRID VFX).
+                Z2GetAudioMgr()->seStartLevel(Z2SE_AL_KAITEN_L_SLASH, &current.pos, 0,
+                                              dComIfGp_getReverb(fopAcM_GetRoomNo(this)),
+                                              1.0f, 1.0f, -1.0f, -1.0f, 0);
+                speedF = 0.0f;
+                speed.zero();
+                field_0xdec = 60;  // spin safety cap (in case the step never advances)
+                mMode = 5;
+            } else {
+                mMotionSeqMngr.setNo(9, -1.0f, 0, 0);
+                field_0x15d0 = cLib_getRndValue(51, 51);  // re-arm attack timer (wait -15%)
+                mMode = 3;
+            }
+        }
+        break;
+    }
+    case 5: {
+        // GREAT SPIN wake-up punish. The spin's own early frames read as the wind-up
+        // (the sword At stays off until ~frame 10 — see setCollisionSword), then the
+        // blade sweeps a full 360 as joint 13 rotates. Returns to the neutral combat
+        // loop once the spin animation finishes (step advances) or the safety cap hits.
+        mCcStts.Move();
+        speedF = 0.0f;
+        speed.zero();
+        setAngle(fopAcM_searchPlayerAngleY(this));  // keep him oriented at Link
+        if (mMotionSeqMngr.getStepNo() >= 1 || cLib_calcTimer(&field_0xdec) == 0) {
+            mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+            mMotionSeqMngr.setNo(9, -1.0f, 0, 0);
+            field_0x15d0 = cLib_getRndValue(51, 51);
+            mMode = 3;
+        }
+        break;
+    }
+    case 6: {
+        // ============================================
+        // NEW CODE — ALBW Port: PROJECTILE BARRAGE (Phase-1 anti-kite).
+        // 4 tracked wind-up->throw cycles firing KN_BULLET magic balls (particle-
+        // based, atp ~13 = ~3 hearts, shield-attack reflectable). Only the FIRST
+        // launch was distance-gated (mMode 3, kn_dist >= n); the volley then fires
+        // all 4. He is OffTgShield/MARK_1 (VULNERABLE) throughout — a landed hit
+        // CANCELS the volley and drops him into the stun (mMode 4), same as a shield
+        // bash. Throws sped up on BOTH morfs (synced, barely readable). field_0x15be
+        // = shots fired; parentActorID = the currently-held ball; field_0xdec = the
+        // short pause between launches.
+        // ============================================
+        mCcStts.Move();
+        speedF = 0.0f;
+        speed.zero();
+        // A clean hit cancels the barrage -> stun opening (the counterplay to rushing
+        // through the volley), identical to the shield-bash stun.
+        if (mCylCc.ChkTgHit() || mCylCc.ChkTgShieldHit()) {
+            // Delete the un-launched charging orb so it doesn't linger as a stray
+            // (harmless) visual while he's stunned.
+            fopAc_ac_c* held = NULL;
+            if (fopAcM_SearchByID(parentActorID, &held) && held != NULL &&
+                fopAcM_GetName(held) == fpcNm_KN_BULLET_e &&
+                ((daObjKnBullet_c*)held)->getActionMode() == 0) {
+                fopAcM_delete(held);
+            }
+            parentActorID = fpcM_ERROR_PROCESS_ID_e;
+            setAngle(fopAcM_searchPlayerAngleY(this));
+            mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+            mMotionSeqMngr.setNo(0xb, -1.0f, 1, 0);
+            mJntAnm.lookNone(0);
+            onHeadLockFlg();
+            mSound.startCreatureVoice(Z2SE_KN_V_DAMAGE_L, -1);
+            mSound.startCollisionSE(Z2SE_HIT_SWORD, 0x1f);
+            mCylCc.ClrTgHit();
+            if (health > 1) {  // the interrupting hit also counts
+                health -= 10;
+                if (health < 1) health = 1;
+            }
+            field_0xdec = 120;   // stun ~2s (same as a shield bash)
+            field_0x15bd = 90;   // barrage cooldown after recovery
+            mMode = 4;
+            break;
+        }
+        if (mMotionSeqMngr.getNo() == 0x19) {
+            f32 f = mpModelMorf[0]->getFrame();
+            // Track Link through each wind-up (same tracking as the basic swing).
+            if (f < 34.0f) {
+                cLib_addCalcAngleS2(&mCurAngle.y, fopAcM_searchPlayerAngleY(this), 2, 0x1000);
+                setAngle(mCurAngle.y);
+                mJntAnm.lookPlayer(0);
+            }
+            // Ball ORIGIN: a point in front of him at ~chest height, derived from his
+            // FACING — NOT the sword joint (joint 13 points skyward during the wind-up,
+            // which spawned the balls too high / firing over Link's head). This keeps
+            // the orb emanating toward Link at a height that connects.
+            cXyz origin(0.0f, 90.0f, 150.0f);
+            mDoMtx_stack_c::transS(current.pos);
+            mDoMtx_stack_c::YrotM(mCurAngle.y);
+            mDoMtx_stack_c::multVec(&origin, &origin);
+
+            fopAc_ac_c* ball_p = NULL;
+            bool haveBall = fopAcM_SearchByID(parentActorID, &ball_p) && ball_p != NULL &&
+                            fopAcM_GetName(ball_p) == fpcNm_KN_BULLET_e;
+            if (!haveBall) {
+                if (f >= 2.0f) {  // spawn the charging orb in front of him (held)
+                    parentActorID = fopAcM_createChild(fpcNm_KN_BULLET_e, fopAcM_GetID(this), 0,
+                                                       &origin, fopAcM_GetRoomNo(this), &current.angle, NULL, -1, NULL);
+                }
+            } else if (((daObjKnBullet_c*)ball_p)->getActionMode() == 0) {
+                daObjKnBullet_c* b = (daObjKnBullet_c*)ball_p;
+                b->current.pos = origin;   // keep it tracking in front while charging
+                b->setAtp(12);             // 3 hearts — set EVERY held frame so the first
+                                           // ball is armed too (a launch-only set raced the
+                                           // ball's Create -> 1st ball did only ~1 heart).
+                if (f >= 34.0f) {  // RELEASE at the forward strike, aimed at Link now
+                    b->setActionMode(1);
+                    b->setSpeedMul(12.0f);   // 12x the lesson's move speed (boss only)
+                    b->setRadiusMul(3.2f);   // scale the hitbox with speed (anti-tunnel at 12x)
+                    b->current.angle.y = mCurAngle.y;
+                    b->shape_angle.y = mCurAngle.y;
+                }
+            }
+            if (f >= 40.0f) {
+                // throw done -> next shot, or end the volley after the 4th
+                field_0x15be++;
+                parentActorID = fpcM_ERROR_PROCESS_ID_e;  // stop tracking; ball flies on
+                mMotionSeqMngr.setNo(9, -1.0f, 0, 0);
+                if (field_0x15be >= 7) {  // 7-shot volley
+                    field_0x15d0 = cLib_getRndValue(51, 51);
+                    field_0x15bd = 90;  // cooldown before the next barrage
+                    mMode = 3;
+                } else {
+                    field_0xdec = 7;  // short pause between launches (trimmed ~5%)
+                }
+            }
+        } else if (cLib_calcTimer(&field_0xdec) == 0) {
+            // pause elapsed -> start the next throw
+            mFaceMotionSeqMngr.setNo(1, -1.0f, 0, 0);
+            mMotionSeqMngr.setNo(0x19, -1.0f, 1, 0);
+        }
+        // Fast + synced: bump BOTH morfs so the volley reads fast but legible.
+        if (mMotionSeqMngr.getNo() == 0x19) {
+            if (mpModelMorf[0] != NULL) mpModelMorf[0]->setPlaySpeed(1.4f);
+            if (mpModelMorf[1] != NULL) mpModelMorf[1]->setPlaySpeed(1.4f);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return 1;
 }
 
 int daNpc_Kn_c::talk(void* param_0) {

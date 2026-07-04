@@ -22,6 +22,7 @@
 #if TARGET_PC
 #include "d/d_albw_death_rupee.h"
 #include "d/d_albw_shade_refuge.h"  // dShadeRefuge_isEnabled (master toggle)
+#include "d/d_albw_shade_boss.h"    // dShadeBoss_isEnabled (Hero's Shade secret boss)
 #include "d/d_item_data.h"
 #include "dusk/truetest.hpp"
 
@@ -300,6 +301,48 @@ static bool objectSetCheck(room_of_scene_class* i_this) {
                               &kPostPos, roomNo, &kPostAngle, &kPostScale, -1);
             }
 
+            // ============================================
+            // NEW CODE — ALBW Port: Hero's Shade Secret Boss — TEMP basement placement test
+            // Vanilla gold wolf (param 0x02 -> mType 2: sits in WAITSIT, pants via
+            // Z2SE_G_WLF_BREATH, never warps, never self-deletes) in Link's House
+            // basement (R_SP01 room 7). Coords/angle recorded via the F5 Player Info
+            // overlay. Placement proof only — no interaction yet; the wolf moves to
+            // its real overworld F_0344 gate + dialogue/warp in later milestones
+            // (see docs/heros-shade-secret-boss.md, Milestones A/B).
+            // ============================================
+            if (dShadeBoss_isEnabled() &&
+                strcmp(dComIfGp_getStartStageName(), "R_SP01") == 0 &&
+                roomNo == 7) {
+                static const cXyz  kShadeWolfPos   = { 35.7236f, -1082.5000f, -602.9236f };
+                static const csXyz kShadeWolfAngle = { 0, (s16)-14913, 0 };
+                static const cXyz  kShadeWolfScale = { 1.0f, 1.0f, 1.0f };
+                // Dedicated Hero's Shade summon actor (Shade-Watcher clone): sits,
+                // pants, has body collision + lock-on, and a "Test Your Will /
+                // Retreat" dialogue that warps to F_SP200 on accept. Param 0x0100
+                // -> type 0 / waitBrave idle (same as the Watcher table).
+                fopAcM_create(fpcNm_ALBW_SHADE_BOSS_WOLF_e, 0x0100,
+                              &kShadeWolfPos, roomNo, &kShadeWolfAngle, &kShadeWolfScale, -1);
+            }
+
+            // ============================================
+            // NEW CODE — ALBW Port: Hero's Shade Secret Boss — idle Shade in arena
+            // Spawn the idle Hero's Shade (d_a_npc_kn, param 0x0008 -> mType 7:
+            // stands, tracks Link, lockable/talkable, no lesson/event) in the room
+            // the "Duel" warp lands in (F_SP200 room 0). Gated on the toggle; safe
+            // from vanilla trials because the boss is post-all-skills (F_0344), by
+            // which point no vanilla lesson loads F_SP200. Coords are a best guess
+            // (floor Y=1000 from the vanilla arena) — refine via the F5 overlay.
+            // ============================================
+            if (dShadeBoss_isEnabled() &&
+                strcmp(dComIfGp_getStartStageName(), "F_SP200") == 0 &&
+                roomNo == 0) {
+                static const cXyz  kShadePos   = { 1258.5428f, 1000.0000f, -1307.8118f };
+                static const csXyz kShadeAngle = { 0, (s16)-6770, 0 };
+                static const cXyz  kShadeScale = { 1.0f, 1.0f, 1.0f };
+                fopAcM_create(fpcNm_NPC_KN_e, 0x0008,
+                              &kShadePos, roomNo, &kShadeAngle, &kShadeScale, -1);
+            }
+
             // Shade's Refuge — spawn each table watcher (kShadeWatchers, near
             // the top of this file) whose stage/room is loading and whose gate
             // passes. Adding a watcher is one table row. Gated behind the master
@@ -351,6 +394,19 @@ static bool objectSetCheck(room_of_scene_class* i_this) {
 
 static int dScnRoom_Execute(room_of_scene_class* i_this) {
     int roomNo = fopScnM_GetParam(i_this);
+
+#if TARGET_PC
+    // === NEW CODE — ALBW Port: Hero's Shade Secret Boss — TEMP basement BGM cut ===
+    // While the feature is on and the player is in Link's House basement
+    // (R_SP01 room 7, where the test wolf sits), silence the shared
+    // Ordon-interior BGM. Gated tightly to room 7 so the other Ordon houses
+    // (also stage R_SP01) keep their music. roomNo check first short-circuits
+    // every other room before the toggle read / stage strcmp.
+    if (roomNo == 7 && dShadeBoss_isEnabled() &&
+        strcmp(dComIfGp_getStartStageName(), "R_SP01") == 0) {
+        dShadeBoss_suppressHouseBgm();
+    }
+#endif
 
     if (dComIfGp_roomControl_checkStatusFlag(roomNo, 2)) {
         dComIfGp_roomControl_offStatusFlag(roomNo, 2);

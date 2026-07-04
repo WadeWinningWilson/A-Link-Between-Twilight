@@ -193,6 +193,7 @@ set(DOLZEL_FILES
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp
         src/d/d_albw_boss.cpp
+        src/d/d_albw_shade_boss.cpp
         src/d/d_albw_wolf_stun.cpp
         src/d/d_albw_wolf_charge_hud.cpp
         src/d/d_albw_rupee_popup.cpp
@@ -990,6 +991,7 @@ set(REL_FILES
         src/d/actor/d_a_npc_guard.cpp
         src/d/actor/d_a_npc_gwolf.cpp
         src/d/actor/d_a_albw_shade_watcher.cpp
+        src/d/actor/d_a_albw_shade_boss_wolf.cpp
         src/d/actor/d_a_npc_hanjo.cpp
         src/d/actor/d_a_npc_henna0.cpp
         src/d/actor/d_a_npc_hoz.cpp

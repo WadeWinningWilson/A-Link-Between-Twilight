@@ -3,6 +3,8 @@
 #include "d/d_cc_uty.h"
 #include "f_op/f_op_actor_mng.h"
 
+class Z2Creature;
+
 /**
  * @ingroup actors-enemies
  * @class e_sh_class
@@ -60,7 +62,15 @@ public:
     /* 0xCF8 */ u32 field_0xcf8;
     /* 0xCFC */ u8 field_0xcfc[0xd08 - 0xcfc];
     /* 0xD08 */ u8 mInitState;
+
+#if TARGET_PC
+    Z2Creature* getStunBridgeSound() { return &mSound; }
+#endif
 };
+
+#if TARGET_PC
+void e_sh_refreshStunHurtColliders(e_sh_class* i_this);
+#endif
 
 STATIC_ASSERT(sizeof(e_sh_class) == 0xd0c);
 

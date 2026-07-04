@@ -41,6 +41,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_boss.h"
+#include "d/d_albw_wolf_stun.h"
 #include "d/d_focused_arts.h"
 #if TARGET_PC
 #include "dusk/truetest.hpp"
@@ -560,7 +561,13 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     dStage_DebugDisp();
     #endif
 
+#if TARGET_PC
+    dAlbwWolfStun_beforeMove();
+#endif
     dComIfG_Ccsp()->Move();
+#if TARGET_PC
+    dAlbwWolfStun_afterMove();
+#endif
     dComIfG_Bgsp().ClrMoveFlag();
 
     if (!fopOvlpM_IsPeek() && !dComIfG_resetToOpening(i_this)) {

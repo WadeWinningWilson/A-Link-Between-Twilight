@@ -10,6 +10,10 @@
 #include "f_op/f_op_actor_enemy.h"
 #include "f_op/f_op_camera_mng.h"
 
+#if TARGET_PC
+#include "d/d_albw_wolf_stun.h"
+#endif
+
 class daE_SH_HIO_c : public JORReflexible {
 public:
     daE_SH_HIO_c();
@@ -1107,6 +1111,34 @@ static int daE_SH_Execute(e_sh_class* i_this) {
 
     return 1;
 }
+
+#if TARGET_PC
+void e_sh_refreshStunHurtColliders(e_sh_class* i_this) {
+    fopAc_ac_c* actor = (fopAc_ac_c*)&i_this->enemy;
+    if (!dAlbwWolfStun_isStunned(actor)) {
+        return;
+    }
+
+    // While stunned, execute() is skipped — including the hurt-sphere setup that
+    // teleports mSphArr off-body whenever field_0x6a0 != 0 (post-hit i-frames).
+    // Recompute TG centers from the frozen model pose without that offset.
+    J3DModel* model = i_this->mAnm_p->getModel();
+    cXyz local;
+    cXyz center;
+
+    MTXCopy(model->getAnmMtx(2), *calc_mtx);
+    local.set(15.0f, -20.0f, TREG_F(6));
+    MtxPosition(&local, &center);
+    i_this->mSphArr[1].SetC(center);
+    i_this->mSphArr[1].SetR((40.0f + TREG_F(7)) * l_HIO.mBaseSize);
+
+    MTXCopy(model->getAnmMtx(13), *calc_mtx);
+    local.set(5.0f, -5.0f, 0.0f);
+    MtxPosition(&local, &center);
+    i_this->mSphArr[0].SetC(center);
+    i_this->mSphArr[0].SetR(30.0f * l_HIO.mBaseSize);
+}
+#endif
 
 static int daE_SH_IsDelete(e_sh_class* i_this) {
     return TRUE;

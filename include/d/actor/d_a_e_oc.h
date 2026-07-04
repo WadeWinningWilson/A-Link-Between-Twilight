@@ -16,6 +16,7 @@
  * 
  */
 class daRotBridge_c;
+class Z2Creature;
 
 class daE_OC_c : public fopEn_enemy_c {
 public:
@@ -74,6 +75,11 @@ public:
     void action();
     void mtx_set();
     void cc_set();
+#if TARGET_PC
+    // Update hurt-sphere centers while pause-stunned (execute/cc_set skipped).
+    void refreshStunHurtColliders();
+    Z2Creature* getStunBridgeSound() { return &mSound; }
+#endif
     int execute();
     int _delete();
     int CreateHeap();

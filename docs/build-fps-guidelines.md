@@ -58,6 +58,7 @@
 
 **Hard rules (one-liners for any chat):**
 
+- **AI builds by default:** AI/agent instances **always run the build themselves** (`build_run.bat`, RelWithDebInfo) and report the result — do **not** ask the user to build, unless the user explicitly says they'll handle it. After any build, wipe the GPU caches (`dawn_cache.db*` + `pipeline_cache.db*` in `%AppData%\TwilitRealm\Dusklight`) per the [GPU cache crash addendum](#addendum-gpu-cache-crash-2026-06-26).
 - **Build:** `build/windows-msvc-relwithdebinfo/dusklight.exe` via `build_run.bat`
 - **Never commit:** `local_dev_backup/`, drive/conavigate sources, `albw_*_debug.txt`
 - **Don't revert features to fix FPS** — optimize in place; use the build-analysis chat

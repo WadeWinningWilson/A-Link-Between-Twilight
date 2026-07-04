@@ -6207,17 +6207,12 @@ void daAlink_c::setItemMatrix(int param_0) {
 
     if (checkEquipHeavyBoots()) {
 #if TARGET_PC
-        if (s_albwWwBootsSkinned) {
-            // Track B: vboot is a full PAIR of boots authored at the model origin (2-joint prop).
-            // Draw ONE instance at Link's base transform (feet, upright, front-facing) and SKIP
-            // the 2nd boot model in modelDraw (drawing both would double the pair). Also skips the
-            // per-joint foot rig (setAnmMtx(2/3) would be OOB on 2 joints). Stiff, no articulation.
-            const f32 wwBootScale =
-                dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
-            mpLinkBootModels[0]->setBaseTRMtx(mpLinkModel->getBaseTRMtx());
-            mpLinkBootModels[0]->setBaseScale(cXyz(wwBootScale, wwBootScale, wwBootScale));
-            modelCalc(mpLinkBootModels[0]);
-        } else
+        // ============================================
+        // NEW CODE — ALBW Port (WW iron-boots skin)
+        // The re-rigged vboot carries al_bootsH's exact 4-joint skeleton (indices 1/2/3), so it
+        // rides the vanilla per-foot rig below with NO special-casing — both instances, real
+        // setAnmMtx articulation. (The old stiff 2-joint pin is preserved in commit 44ab0a2f1a.)
+        // ============================================
 #endif
         {
         for (int i = 0; i < 2; i++) {
@@ -20453,21 +20448,23 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     // and activate the SC realization draw scope so the callback colors SC + body texgen
     // during modelEntryDL. Everything else (other models) keeps normal MAJI lighting.
     // ============================================
-    // Iron-boots skin: vboot is a full PAIR — draw only boot[0]; skip boot[1] (would double it).
-    if (s_albwWwBootsSkinned && i_model == mpLinkBootModels[1]) {
-        return;
-    }
+    // NEW CODE — ALBW Port (WW iron-boots skin — RIG-FIRST stage)
+    // The re-rigged vboot is worn as BOTH boot instances (per-foot, real setAnmMtx via the
+    // vanilla calc). They deliberately do NOT take the held-bow cel recipe: that path uses
+    // modelUpdateDL + a global SC scope built for ONE prop, and running it over the two boots'
+    // SHARED model data corrupted the deferred draw (took all of Link down). So the boots fall
+    // through to the normal clothes draw below (MAJI + modelEntryDL, exactly like al_bootsH).
+    // The SC pass may read dark under MAJI — cel color is the NEXT stage, done without the
+    // shared-data modelUpdateDL. This stage proves the rig/fit on the foot.
+    // ============================================
     const dusk::WwHeldSkinMode wwSkinMode = dusk::getSettings().game.wwItemmdlHeldSkin.getValue();
-    const bool wwBootModel = s_albwWwBootsSkinned && i_model == mpLinkBootModels[0];
     const bool wwHeldBow =
-        ((i_model == mHeldItemModel) &&
-         ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
-          (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)))) ||
-        wwBootModel;
+        (i_model == mHeldItemModel) &&
+        ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
+         (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)));
     // Item switched away from the WW held skin: drop the stale scope so the post-DL callback
-    // (fires at draw-buffer DRAIN) never dereferences a freed itemmdl model. Do NOT clear while
-    // boots are WW-skinned — the boots own the scope then and draw after the held item.
-    if (i_model == mHeldItemModel && !wwHeldBow && !s_albwWwBootsSkinned) {
+    // (fires at draw-buffer DRAIN) never dereferences a freed itemmdl model.
+    if (i_model == mHeldItemModel && !wwHeldBow) {
         dWwItemmdl_clearBowDrawScope();
     }
     if (wwHeldBow) {

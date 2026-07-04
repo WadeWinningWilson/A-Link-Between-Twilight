@@ -349,7 +349,13 @@ void daAlink_c::changeModelDataDirect(int param_0) {
 
         if (!checkNoResetFlg2(daPy_FLG2(FLG2_UNK_100000 | FLG2_UNK_80000))) {
             for (i = 6; i < 8; i++) {
-                modelData->getJointNodePointer(i)->setCallBack(daAlink_headModelCallBack);
+                // ALBW: guard against hat models with < 8 joints (some modded
+                // outfits) — getJointNodePointer(6/7) returns null there and the
+                // Collection/status menu crashed on setCallBack. Skip if absent.
+                J3DJoint* hatJoint = modelData->getJointNodePointer(i);
+                if (hatJoint != NULL) {
+                    hatJoint->setCallBack(daAlink_headModelCallBack);
+                }
             }
         }
     }

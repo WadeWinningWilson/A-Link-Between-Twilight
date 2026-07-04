@@ -21,6 +21,10 @@
 #include "f_pc/f_pc_priority.h"
 #include "m_Do/m_Do_controller_pad.h"
 
+#if TARGET_PC
+#include "d/d_albw_wolf_stun.h"
+#endif
+
 #include "tracy/Tracy.hpp"
 
 void fpcM_Draw(void* i_proc) {
@@ -92,6 +96,10 @@ void fpcM_Management(fpcM_ManagementFunc i_preExecuteFn, fpcM_ManagementFunc i_p
             if (!fapGm_HIO_c::isCaptureScreen()) {
                 fpcEx_Handler((fpcLnIt_QueueFunc)fpcM_Execute);
             }
+
+#if TARGET_PC
+            dAlbwWolfStun_captureAfterExecute();
+#endif
 
             if (!fapGm_HIO_c::isCaptureScreen() || fapGm_HIO_c::getCaptureScreenDivH() != 1) {
                 fpcDw_Handler((fpcDw_HandlerFuncFunc)fpcM_DrawIterater, (fpcDw_HandlerFunc)fpcM_Draw);

@@ -648,11 +648,12 @@ void daAlink_c::changeLink(int param_0) {
     u16 i;
 #if TARGET_PC
     // ============================================
-    // NEW CODE — ALBW Port (Track B iron-boots skin)
+    // NEW CODE — ALBW Port (WW iron-boots skin)
     // When the WW skin selector is on Iron Boots and the itemmdl arc is resident, build both
-    // heavy-boot models from the WW vboot (index 0xE) instead of al_bootsH. vboot is a 2-joint
-    // prop, so the per-frame foot-rig is guarded elsewhere (setAnmMtx 2/3 would be OOB) and it
-    // pins to the ankle (stiff). NULL / arc-not-ready falls back to al_bootsH.
+    // heavy-boot models from the re-rigged WW vboot (index 0xE) instead of al_bootsH. The vboot
+    // asset now carries al_bootsH's exact 4-joint skeleton (indices 1/2/3), so it rides the
+    // vanilla per-foot rig with no special-casing; the draw applies the WW cel recipe so the SC
+    // material isn't crushed by MAJI. NULL / arc-not-ready falls back to al_bootsH.
     // ============================================
     s_albwWwBootsSkinned = false;
     J3DModelData* wwBootData = NULL;

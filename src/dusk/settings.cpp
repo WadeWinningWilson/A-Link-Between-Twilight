@@ -69,6 +69,7 @@ UserSettings g_userSettings = {
         .masterQuest {"game.masterQuest", false},
         .bossRefinement {"game.bossRefinement", false},
         .shadeRefuge {"game.shadeRefuge", false},
+        .heroShadeSecretBoss {"game.heroShadeSecretBoss", false},
         .parryIconsMode {"game.parryIconsMode", ParryIcons::SpurShield},
         .bossHealthBars {"game.bossHealthBars", false},
         .lopHud {"game.lopHud", LopHudMode::Off},
@@ -347,6 +348,7 @@ void registerSettings() {
     Register(g_userSettings.game.masterQuest);
     Register(g_userSettings.game.bossRefinement);
     Register(g_userSettings.game.shadeRefuge);
+    Register(g_userSettings.game.heroShadeSecretBoss);
     Register(g_userSettings.game.parryIconsMode);
     Register(g_userSettings.game.bossHealthBars);
     Register(g_userSettings.game.lopHud);

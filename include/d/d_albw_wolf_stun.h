@@ -17,6 +17,8 @@
 
 #include "f_op/f_op_actor.h"
 
+class cCcD_Obj;
+
 // Stun duration: 300 frames = 5 seconds at 60 fps.
 static constexpr int WOLF_STUN_FRAMES = 300;
 
@@ -35,6 +37,21 @@ void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy);
 // Per-frame tick: decrement timers, unpause actors whose timer reaches 0.
 // Called from daAlink_c::execute() every frame.
 void dAlbwWolfStun_update();
+
+// True when i_enemy is currently in the wolf stun list.
+bool dAlbwWolfStun_isStunned(fopAc_ac_c* i_enemy);
+
+// Store TG collider pointers after cc_set (reliable for actors that call this).
+void dAlbwWolfStun_syncColliders(fopAc_ac_c* i_enemy, cCcD_Obj* const* i_objs, int i_count);
+
+// Scan the cc registry after all actors execute; fills missing snapshots.
+void dAlbwWolfStun_captureAfterExecute();
+
+// Draw-phase collision bridge (Option 1): re-register frozen TG colliders
+// before the global cc Move(), then dispatch cc_at_check for Link melee
+// hits (wolf bites, roll attack, human sword, field-attack refresh) after.
+void dAlbwWolfStun_beforeMove();
+void dAlbwWolfStun_afterMove();
 
 // ============================================
 // NEW CODE ENDS HERE

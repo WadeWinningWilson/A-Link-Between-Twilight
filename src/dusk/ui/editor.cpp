@@ -2255,6 +2255,12 @@ EditorWindow::EditorWindow() {
             "point, respawn at the last watcher on death, and buy a return-to-watcher service "
             "in the shop. Off disables the whole system." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.heroShadeSecretBoss,
+            "Hero's Shade Secret Boss",
+            "Post-game secret boss: after all Hidden Skills are learned, a final Hero's "
+            "Wolf Shade appears and warps you to the arena for a real duel vs the Hero's "
+            "Shade (full health bar + victory). Off disables the whole system." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showLockonHpDebug,
             "Show Lock-on HP Debug",
             "While Z-targeting, shows the locked enemy's current HP, max HP, ALBW category, "
@@ -2458,9 +2464,10 @@ EditorWindow::EditorWindow() {
             rightPane,
             [](Pane& pane) {
                 pane.add_rml(
-                    "Scale % for the selected WW skin (100 = 1.0x), live-tunable. Bow / Hookshot "
-                    "are held; Iron Boots is worn (stiff, pinned to the ankle — applies on the "
-                    "next clothes rebuild: change outfit or reload the area after selecting it)." +
+                    "Scale % for the selected WW skin (100 = 1.0x), live-tunable (Bow / Hookshot). "
+                    "Iron Boots is a worn re-rigged model driven by the vanilla foot rig (scale is "
+                    "baked in the asset, not this slider); applies on the next clothes rebuild: "
+                    "change outfit or reload the area after selecting it." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
     });
