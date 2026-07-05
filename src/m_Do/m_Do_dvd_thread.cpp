@@ -16,6 +16,61 @@
 #include "m_Do/m_Do_ext.h"
 #include "os_report.h"
 
+#if TARGET_PC
+#include "dusk/mod_override.hpp"
+#include "dusk/logging.h"
+#include "JSystem/JKernel/JKRHeap.h"
+#include <cstdio>
+
+// ============================================
+// NEW CODE — ALBW Port (mod override, Phase 2b)
+// Read a loose RARC arc from disk and mount it as a JKRMemArchive. The archive
+// owns the buffer (JKRMEMBREAK_FLAG_UNKNOWN1), so lifetime matches the arc.
+// Returns NULL on ANY failure so the caller hard-falls back to the ISO mount.
+// ============================================
+static JKRMemArchive* dusk_loadLooseArc(const char* path, JKRHeap* heap, u8 mountDir) {
+    FILE* fp = std::fopen(path, "rb");
+    if (fp == NULL) {
+        return NULL;
+    }
+    std::fseek(fp, 0, SEEK_END);
+    long size = std::ftell(fp);
+    std::fseek(fp, 0, SEEK_SET);
+    if (size <= 8) {
+        std::fclose(fp);
+        return NULL;
+    }
+    void* buffer = JKRAllocFromHeap(heap, static_cast<u32>(size), 0x20);
+    if (buffer == NULL) {
+        std::fclose(fp);
+        return NULL;
+    }
+    size_t got = std::fread(buffer, 1, static_cast<size_t>(size), fp);
+    std::fclose(fp);
+
+    // JKRMemArchive(void*) does not decompress — require raw RARC.
+    const u8* b = static_cast<const u8*>(buffer);
+    if (got != static_cast<size_t>(size) ||
+        !(b[0] == 'R' && b[1] == 'A' && b[2] == 'R' && b[3] == 'C')) {
+        JKRFreeToHeap(heap, buffer);
+        return NULL;
+    }
+
+    JKRMemArchive* arc =
+        (mountDir == 0)
+            ? JKR_NEW_ARGS(heap, 0) JKRMemArchive(buffer, static_cast<u32>(size), JKRMEMBREAK_FLAG_UNKNOWN1)
+            : JKR_NEW_ARGS(heap, -4) JKRMemArchive(buffer, static_cast<u32>(size), JKRMEMBREAK_FLAG_UNKNOWN1);
+    if (arc == NULL || !arc->isMounted()) {
+        if (arc != NULL) {
+            JKR_DELETE(arc);
+        }
+        JKRFreeToHeap(heap, buffer);
+        return NULL;
+    }
+    return arc;
+}
+#endif
+
 s32 mDoDvdThd::main(void* param_0) {
     JKRThread(OSGetCurrentThread(), 0);
 #if TARGET_PC
@@ -213,6 +268,9 @@ mDoDvdThd_mountArchive_c::mDoDvdThd_mountArchive_c(u8 param_0) {
     mEntryNumber = -1;
     mArchive = NULL;
     mHeap = NULL;
+#if TARGET_PC
+    mOverridePath = NULL;
+#endif
     if (param_0 == 0) {
         mMountDirection = sDefaultDirection;
     }
@@ -224,7 +282,15 @@ mDoDvdThd_mountArchive_c* mDoDvdThd_mountArchive_c::create(char const* pArchiveP
         JKR_NEW_ARGS (mDoExt_getCommandHeap(), -4) mDoDvdThd_mountArchive_c(mountDirection);
     if (mountArcCmd != NULL) {
         mountArcCmd->mEntryNumber = my_DVDConvertPathToEntrynum(pArchivePath);
-        if (mountArcCmd->mEntryNumber == -1) {
+#if TARGET_PC
+        // Register a loose-file override for this arc if a mod provides one.
+        mountArcCmd->mOverridePath = dusk::mod_override::find_override(pArchivePath);
+        const bool haveSource =
+            mountArcCmd->mEntryNumber != -1 || mountArcCmd->mOverridePath != NULL;
+#else
+        const bool haveSource = mountArcCmd->mEntryNumber != -1;
+#endif
+        if (!haveSource) {
             mountArcCmd->mIsDone = true;
             JKR_DELETE(mountArcCmd);
             mountArcCmd = NULL;
@@ -250,6 +316,22 @@ s32 mDoDvdThd_mountArchive_c::execute() {
     JKRMemArchive* memArchive = NULL;
 #if DEBUG
     OSTime time1 = OSGetTime();
+#endif
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (mod override, Phase 2b)
+    // Mount from the loose file if a mod override is registered; on ANY failure
+    // fall through to the ISO mount below (skipped only if there is no ISO entry).
+    // ============================================
+    if (mOverridePath != NULL) {
+        mArchive = dusk_loadLooseArc(mOverridePath, heap, mMountDirection);
+        if (mArchive != NULL) {
+            DuskLog.info("[mod_override] mounted loose arc: {}", mOverridePath);
+        } else {
+            DuskLog.warn("[mod_override] loose arc failed; ISO fallback: {}", mOverridePath);
+        }
+    }
+    if (mArchive == NULL && mEntryNumber != -1)
 #endif
     while (true) {
 #if PLATFORM_GCN

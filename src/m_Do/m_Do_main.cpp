@@ -89,6 +89,7 @@
 #include "dusk/settings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/texture_replacements.hpp"
+#include "dusk/mod_override.hpp"
 #include "dusk/io.hpp"
 #include "dusk/version.hpp"
 #include "dusk/discord_presence.hpp"
@@ -670,6 +671,7 @@ int game_main(int argc, char* argv[]) {
     }
 
     dusk::texture_replacements::reload();
+    dusk::mod_override::scan();  // Phase 2a: scan mod data-trees + build override map (log-only)
     dusk::ui::initialize();
     dusk::ui::push_document(std::make_unique<dusk::ui::Overlay>(), true, true);
     dusk::ui::push_document(std::make_unique<dusk::ui::TouchControls>(), false, true);

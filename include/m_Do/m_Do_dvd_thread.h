@@ -73,6 +73,9 @@ private:
     /* 0x18 */ s32 mEntryNumber;
     /* 0x1C */ JKRMemArchive* mArchive;
     /* 0x20 */ JKRHeap* mHeap;
+#if TARGET_PC
+    const char* mOverridePath;  // dusk::mod_override loose-file path, or NULL (no ABI on PC)
+#endif
 };  // Size = 0x24
 
 class mDoDvdThd_mountAramArchive_c : public mDoDvdThd_command_c {
