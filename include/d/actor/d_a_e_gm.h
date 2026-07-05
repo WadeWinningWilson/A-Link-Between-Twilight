@@ -55,6 +55,18 @@ public:
 
     void InstantKill() { field_0xa76 = 1; }
     u8 CheckDeath() { return field_0xa68; }
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Boss health-bar phase 2: expose the TYPE_GOMA hit counter (field_0xa74,
+    // starts at 3, decrements per meaningful core hit, 0 = death) so the
+    // composite Armogohma bar can map it without duplicating the private read.
+    // ============================================
+    u8 albwGetBossHitRemaining() const { return field_0xa74; }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
     void MoveStart(u8 param_1) {
         field_0xa71 = true;
         field_0xa5e = param_1;

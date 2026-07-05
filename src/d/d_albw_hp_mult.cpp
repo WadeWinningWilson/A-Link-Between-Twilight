@@ -67,6 +67,8 @@ static const s16 sBoss[] = {
     fpcNm_B_ZANTZ_e,  // Zant mobile helmet
     fpcNm_E_FM_e,     // 0x1D7 Fyrus (e_fm, not b_gm)
     fpcNm_E_HZELDA_e, // 0x1CB Possessed Zelda (Hyrule Castle)
+    fpcNm_NPC_KN_e,   // Hero's Shade secret boss (mType 7 combat Shade). Lesson
+                      // Shades have health 0 so the HP scaler leaves them alone.
 };
 
 // ---------------------------------------------------------------------------

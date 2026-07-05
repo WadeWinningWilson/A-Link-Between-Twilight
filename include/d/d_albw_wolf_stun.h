@@ -27,7 +27,7 @@ bool dAlbwWolfCombat_isEnabled();
 
 // Returns true when i_name is one of the shadow/twilight enemy types.
 // Twilight enemies receive 70 % damage from the field attack and are
-// NOT stunned; non-twilight receive 50 % damage and ARE stunned.
+// NOT stunned; non-twilight receive 25 % field-attack damage and ARE stunned.
 bool dAlbwWolfStun_isTwilightEnemy(s16 i_name);
 
 // Apply a WOLF_STUN_FRAMES-frame pause-stun to i_enemy.

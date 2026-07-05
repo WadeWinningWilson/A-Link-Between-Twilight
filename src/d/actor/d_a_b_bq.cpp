@@ -436,12 +436,105 @@ static void* s_bi_del_sub(void* i_actor, void* i_data) {
 
 #if TARGET_PC
 static constexpr f32 kAlbwBqRunawayAnimSpeed = 4.5f;
-static constexpr s16 kAlbwBqRunawayHoldFrames = 150;
-static constexpr s16 kAlbwBqRunawaySequenceIframe = 450;
-// field_0x6fb: 1=damage, 2=poison pause; 3=Refinement enrage hold (side-head frenzy)
+static constexpr s16 kAlbwBqConductorBeatGap = 50;
+static constexpr s16 kAlbwBqConductorInitialDelay = 20;
+static constexpr s16 kAlbwBqRunawaySequenceIframe = 720;
+static constexpr s16 kAlbwBqConductorBeatCount = 5;
+// field_0x6fb: 1=damage, 2=poison pause; 3=Refinement enrage conductor (side-head script)
 static constexpr s8 kAlbwBqFbEnrageSubmerged = 3;
 // Keep in sync with daB_BQ_ACT::ACTION_RUNAWAY_TEST.
 static constexpr s16 kAlbwBqActionRunawayTest = 5;
+// Keep in sync with ACTION_B_ATTACK_1 / ACTION_B_WAIT in d_a_b_bh.cpp.
+static constexpr s16 kAlbwBhActionBAttack1 = 21;
+static constexpr s16 kAlbwBhActionBWait = 20;
+
+static b_bh_class* b_bq_albwGetSideHead(b_bq_class* i_this, int id) {
+    return (b_bh_class*)fopAcM_SearchByID(i_this->mTentacleIDs[id]);
+}
+
+static bool b_bq_albwSideHeadIdle(b_bh_class* bh_p) {
+    if (bh_p == NULL) {
+        return true;
+    }
+
+    return bh_p->mAction == kAlbwBhActionBWait && bh_p->mMode == 1 && bh_p->mTimers[0] == 0;
+}
+
+static bool b_bq_albwConductorPlayerInRange(b_bq_class* i_this) {
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+
+    for (int i = 0; i < 2; i++) {
+        b_bh_class* bh_p = b_bq_albwGetSideHead(i_this, i);
+        if (bh_p != NULL && (bh_p->field_0x6b0 - player->current.pos).abs() < 2800.0f) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void b_bq_albwForceSideHeadAttack(b_bh_class* bh_p, bool paired) {
+    if (bh_p == NULL) {
+        return;
+    }
+
+    fopAc_ac_c* a_this = (fopAc_ac_c*)bh_p;
+    bh_p->field_0x6a0 = paired ? 1 : 0;
+    bh_p->mAction = kAlbwBhActionBAttack1;
+    bh_p->mMode = 0;
+    a_this->speedF = 0.0f;
+}
+
+static void b_bq_albwDispatchConductorBeat(b_bq_class* i_this, int beat) {
+    b_bh_class* bh0 = b_bq_albwGetSideHead(i_this, 0);
+    b_bh_class* bh1 = b_bq_albwGetSideHead(i_this, 1);
+
+    if (beat == kAlbwBqConductorBeatCount) {
+        b_bq_albwForceSideHeadAttack(bh0, true);
+        b_bq_albwForceSideHeadAttack(bh1, true);
+    } else if (beat == 1 || beat == 3) {
+        b_bq_albwForceSideHeadAttack(bh0, false);
+    } else {
+        b_bq_albwForceSideHeadAttack(bh1, false);
+    }
+
+    i_this->field_0x6fe = 0;
+}
+
+static bool b_bq_albwConductorBeatDone(b_bq_class* i_this, int beat) {
+    b_bh_class* bh0 = b_bq_albwGetSideHead(i_this, 0);
+    b_bh_class* bh1 = b_bq_albwGetSideHead(i_this, 1);
+
+    if (beat == kAlbwBqConductorBeatCount) {
+        return b_bq_albwSideHeadIdle(bh0) && b_bq_albwSideHeadIdle(bh1);
+    }
+
+    if (beat == 1 || beat == 3) {
+        return b_bq_albwSideHeadIdle(bh0);
+    }
+
+    return b_bq_albwSideHeadIdle(bh1);
+}
+
+static void b_bq_albwPrepareConductor(b_bq_class* i_this) {
+    for (int ti = 0; ti < 2; ti++) {
+        b_bh_class* bh_p = b_bq_albwGetSideHead(i_this, ti);
+        if (bh_p != NULL) {
+            fopAc_ac_c* a_this = (fopAc_ac_c*)bh_p;
+            bh_p->mAction = kAlbwBhActionBWait;
+            bh_p->mMode = 1;
+            bh_p->field_0x6a0 = 0;
+            bh_p->mTimers[0] = 0;
+            bh_p->mTimers[1] = 0;
+            a_this->speedF = 0.0f;
+        }
+    }
+
+    i_this->field_0x1393 = 0;
+    i_this->mTimers[2] = kAlbwBqConductorInitialDelay;
+    i_this->mTimers[3] = 0;
+    i_this->field_0x6fe = 0;
+}
 
 static void b_bq_albwSnapSideHeadSurfaceAnchors(b_bq_class* i_this) {
     for (int ti = 0; ti < 2; ti++) {
@@ -660,15 +753,39 @@ static void b_bq_runaway_test(b_bq_class* i_this) {
     case 1:
         if (i_this->mpMorf->isStop()) {
             i_this->mMode = 2;
-            i_this->mTimers[0] = kAlbwBqRunawayHoldFrames;
+            i_this->field_0x6fb = kAlbwBqFbEnrageSubmerged;
+            b_bq_albwPrepareConductor(i_this);
         }
         break;
     case 2:
         i_this->field_0x6fb = kAlbwBqFbEnrageSubmerged;
-        if (i_this->mTimers[0] == 0) {
-            i_this->mMode = 3;
-            anm_init(i_this, BCK_BQ_APPEAR, 1.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+
+        if (i_this->mTimers[3] != 0) {
+            if (b_bq_albwConductorBeatDone(i_this, i_this->field_0x1393)) {
+                i_this->mTimers[3] = 0;
+
+                if (i_this->field_0x1393 >= kAlbwBqConductorBeatCount) {
+                    i_this->field_0x6fb = 0;
+                    i_this->mMode = 3;
+                    anm_init(i_this, BCK_BQ_APPEAR, 1.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+                } else {
+                    i_this->mTimers[2] = kAlbwBqConductorBeatGap;
+                }
+            }
+            break;
         }
+
+        if (i_this->mTimers[2] != 0) {
+            break;
+        }
+
+        if (!b_bq_albwConductorPlayerInRange(i_this)) {
+            break;
+        }
+
+        i_this->field_0x1393++;
+        b_bq_albwDispatchConductorBeat(i_this, i_this->field_0x1393);
+        i_this->mTimers[3] = 1;
         break;
     case 3:
         if (i_this->mpMorf->isStop()) {

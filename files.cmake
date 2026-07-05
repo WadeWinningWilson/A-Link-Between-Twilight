@@ -1482,6 +1482,8 @@ set(DUSK_FILES
         src/dusk/speedrun.cpp
         src/dusk/string.cpp
         src/dusk/stubs.cpp
+        include/dusk/model_override.hpp
+        src/dusk/model_override.cpp
         include/dusk/texture_replacements.hpp
         src/dusk/texture_replacements.cpp
         src/dusk/touch_camera.cpp

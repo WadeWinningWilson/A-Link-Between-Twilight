@@ -16,6 +16,7 @@
 #include <cstring>
 #if TARGET_PC
 #include "d/d_albw_lockout.h"
+#include "d/d_albw_enemy_rupee.h"
 #endif
 
 class daE_DN_HIO_c : public JORReflexible {
@@ -986,6 +987,9 @@ static void e_dn_wolfbite(e_dn_class* i_this) {
                 S16_SUB(actor->health, 10);
                 if (actor->health <= 0) {
                     player->offWolfEnemyHangBite();
+#if TARGET_PC
+                    dAlbwEnemyRupees_onEnemyKill(actor);
+#endif
                     i_this->field_0x750 = (actor->shape_angle.y - 0x8000) - player->shape_angle.y;
                     i_this->field_0x74c = 150.0f;
                     i_this->action = ACTION_DAMAGE;

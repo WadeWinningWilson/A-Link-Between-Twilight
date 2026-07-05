@@ -112,6 +112,16 @@ void dAlbwBoss_armogohmaFillDisplayHp(fopAc_ac_c* i_boss, s16* o_current, s16* o
 struct dAlbwBoss_ArmogohmaBarState {
     bool visible;
     u8 phase;  // 1 = B_GM body, 2 = E_GM floor eye (TYPE_GOMA / param 3)
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Composite fill: the HUD draws layout.barW * fillRatio and does NO HP math.
+    // Phase 1 occupies the top half (1.0 .. 0.5), phase 2 the bottom (0.5 .. 0).
+    // current/max stay informational only (lock-on overlay / F5 debug).
+    // ============================================
+    f32 fillRatio;
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     s16 current;
     s16 max;
 };

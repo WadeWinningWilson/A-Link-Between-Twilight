@@ -154,6 +154,43 @@ void daAlink_c::makeArrow() {
 void daAlink_c::deleteArrow() {
     daArrow_c* arrow_p = (daArrow_c*)mItemAcKeep.getActor();
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (DIAGNOSTIC — remove after crash is pinned)
+    // Bomb-arrow interrupt crash: eye laser / any hit landing while Link holds a
+    // bomb arrow. Writes to albw_bombarrow_debug.txt — the mod's debug-log
+    // convention (OS_REPORT is not surfaced here). arrow_p is logged FIRST,
+    // before the fopAcM_GetName() deref below, so a dangling pointer (use-after-
+    // free) is still captured; selNum underflow vs a bad pointer tells us which.
+    // ============================================
+    {
+        static bool sBombArrowLogReset = false;
+        char path[512];
+        path[0] = '\0';
+        const char* user = getenv("USERPROFILE");
+        if (user && user[0] != '\0') {
+            snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_bombarrow_debug.txt", user);
+        } else {
+            strncpy(path, "albw_bombarrow_debug.txt", sizeof(path) - 1);
+        }
+        FILE* fp = fopen(path, sBombArrowLogReset ? "a" : "w");
+        if (fp == NULL) {
+            fp = fopen("albw_bombarrow_debug.txt", sBombArrowLogReset ? "a" : "w");
+        }
+        if (fp != NULL) {
+            sBombArrowLogReset = true;
+            fprintf(fp,
+                    "[deleteArrow] arrow_p=%p selItemId=%d selNum=%d dmgTimer=%d invT=%d modeFlg8=%d\n",
+                    (void*)arrow_p, (int)mSelectItemId, (int)dComIfGp_getSelectItemNum(mSelectItemId),
+                    (int)mDamageTimer, (int)mpHIO->mDamage.m.mInvincibleTime, (int)checkModeFlg(8));
+            fclose(fp);
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
+
     if (arrow_p != NULL && fopAcM_GetName(arrow_p) == fpcNm_ARROW_e) {
         if (arrow_p->checkBombArrow() &&
             (mDamageTimer == mpHIO->mDamage.m.mInvincibleTime || checkModeFlg(8)))

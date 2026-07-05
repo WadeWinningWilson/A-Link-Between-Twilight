@@ -10,6 +10,7 @@
 #include "d/actor/d_a_npc_gwolf.h"
 #include "d/actor/d_a_npc_kn.h"
 #include "d/actor/d_a_obj_knBullet.h"
+#include "d/d_cc_uty.h"  // cc_at_check / at_power_check — vanilla per-attack damage
 #include "d/d_meter2_info.h"
 #if DEBUG
 #include "JSystem/JHostIO/JORFile.h"
@@ -876,7 +877,11 @@ void daNpc_Kn_c::reset() {
     // fopEn_enemy_c `health` so the lock-on / battle-target systems see a valid
     // target (this also stops the lock from dropping on a health==0 "dead" target).
     if (mType == 7) {
+        // Set BOTH current (health) and MAX (field_0x560) — the lock-on/bar HP
+        // reads max from field_0x560 (falls back to health if 0), so without the
+        // max set the ratio would always read full as health drops.
         health = 300;
+        field_0x560 = 300;
     }
 
     for (int i = 0; i < 3; i++) {
@@ -1884,14 +1889,24 @@ int daNpc_Kn_c::heroShadeCombat(void* param_0) {
             speed.zero();
             mSound.startCreatureVoice(Z2SE_KN_V_DAMAGE_L, -1);
             mSound.startCollisionSE(Z2SE_HIT_SWORD, 0x1f);
-            mCylCc.ClrTgHit();
-            // Health pool: each landed hit takes 10 (same as a Darknut), so 300 HP =
-            // ~30 hits (3x a Darknut's ~10). Floored at 1 for now — no defeat event
-            // yet, and the final 1% is meant to fall only to a finishing blow later.
+            // Vanilla per-attack damage: read the hitting At's power and apply it
+            // through the shared damage pipeline (at_power_check + cc_at_check) — the
+            // same path the Darknut uses — so weapon/item/hidden-skill rates AND the
+            // mod's damage settings/multipliers all apply, instead of a flat amount.
+            // Must run BEFORE ClrTgHit (it reads the hit collider). Floored at 1 for
+            // now; the final 1% falls to the ending-blow opening (a later step).
             if (health > 1) {
-                health -= 10;
-                if (health < 1) health = 1;
+                dCcU_AtInfo atInfo = {};
+                atInfo.mpCollider = mCylCc.GetTgHitObj();
+                if (atInfo.mpCollider != NULL) {
+                    at_power_check(&atInfo);
+                    cc_at_check(this, &atInfo);
+                }
+                if (health < 1) {
+                    health = 1;
+                }
             }
+            mCylCc.ClrTgHit();
         }
         if (cLib_calcTimer(&field_0xdec) == 0) {
             offHeadLockFlg();
@@ -1989,11 +2004,19 @@ int daNpc_Kn_c::heroShadeCombat(void* param_0) {
             onHeadLockFlg();
             mSound.startCreatureVoice(Z2SE_KN_V_DAMAGE_L, -1);
             mSound.startCollisionSE(Z2SE_HIT_SWORD, 0x1f);
-            mCylCc.ClrTgHit();
-            if (health > 1) {  // the interrupting hit also counts
-                health -= 10;
-                if (health < 1) health = 1;
+            // The interrupting hit also deals vanilla per-attack damage (see mMode 4).
+            if (health > 1) {
+                dCcU_AtInfo atInfo = {};
+                atInfo.mpCollider = mCylCc.GetTgHitObj();
+                if (atInfo.mpCollider != NULL) {
+                    at_power_check(&atInfo);
+                    cc_at_check(this, &atInfo);
+                }
+                if (health < 1) {
+                    health = 1;
+                }
             }
+            mCylCc.ClrTgHit();
             field_0xdec = 120;   // stun ~2s (same as a shield bash)
             field_0x15bd = 90;   // barrage cooldown after recovery
             mMode = 4;

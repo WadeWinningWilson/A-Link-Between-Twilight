@@ -19,6 +19,10 @@
 #if TARGET_PC
 #include "d/d_albw_boss.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/actor/d_a_alink.h"  // equipped-item check: hookshot vs double clawshot
+#include "dusk/model_override.hpp"  // repack-free loose-BMD override for the GOMA model
+#include <cstdio>
+#include <cstdlib>
 #endif
 
 #define ANM_EYE_TEST            6
@@ -47,6 +51,28 @@
 #define ANM_GOMA_UP_02          29
 #define ANM_GOMA_WAIT           30
 
+// ============================================
+// NEW CODE — ALBW Port (giant floor-pursuit TEST, reversible)
+// Cut "tunnel-chase" recreation: a hookshot to the body kicks the giant into an
+// upright floor chase toward Link (mirrors Diababa's arrow-triggered cut-move
+// test). First pass uses the retail floor DASH anim + the shared speedF forward
+// integrator in action(); the slower GOMA_MOVE/SLOW_MOVE crawl anims can be
+// swapped in once their floor orientation is confirmed in a viewer. Set to 0 to
+// fully disable the trigger.
+// ============================================
+#define D_ALBW_ARMO_PURSUIT_TEST 0  // TEST triggers removed for now — set to 1 to restore
+
+// Pursuit flavors, split by trigger weapon (all TEST triggers — hookshot /
+// boomerang / slingshot are temporary and will be reverted):
+//   DASH    — fast, retail GOMA_DASH anim        → hookshot
+//   CRAWL   — slow, cut GOMA_MOVE crawl anim      → double clawshot / boomerang
+//   EYETEST — play the orphaned ANM_EYE_TEST in place (observe it) → slingshot
+enum ArmoPursuitMode {
+    ARMO_PURSUIT_DASH = 0,
+    ARMO_PURSUIT_CRAWL = 1,
+    ARMO_PURSUIT_EYETEST = 2,
+};
+
 enum daB_GM_ACTION {
     ACTION_WAIT,
     ACTION_MOVE,
@@ -56,7 +82,18 @@ enum daB_GM_ACTION {
 
     ACTION_DAMAGE = 10,
     ACTION_DROP,
+    ACTION_PURSUIT_TEST = 12,
 };
+
+#if TARGET_PC && D_ALBW_ARMO_PURSUIT_TEST
+// Single Armogohma at a time, so file-scope mode state is safe.
+static u8 s_armoPursuitMode = ARMO_PURSUIT_DASH;
+static void b_gm_beginPursuitTest(b_gm_class* i_this, u8 i_mode);
+static void b_gm_pursuit_test(b_gm_class* i_this);
+#endif
+// ============================================
+// NEW CODE ENDS HERE
+// ============================================
 
 class daB_GM_HIO_c {
 public:
@@ -283,6 +320,32 @@ static void damage_check(b_gm_class* i_this) {
         for (int i = 0; i < 8; i++) {
             if (i < 2 && i_this->mBodySph[i].ChkTgHit()) {
                 i_this->mInvincibilityTimer = 6;
+#if TARGET_PC && D_ALBW_ARMO_PURSUIT_TEST
+                // ============================================
+                // NEW CODE — ALBW Port (giant floor-pursuit TEST trigger)
+                // Weapon selects the flavor: arrow → orphaned ANM_EYE_TEST
+                // (TEMP observe hook — slingshot didn't register on the body
+                // sphere; REVERT this, arrow is a real damage method); boomerang
+                // → slow crawl; hookshot family → fast dash, unless it's the
+                // double clawshot (both fire AT_TYPE_HOOKSHOT, so split by the
+                // equipped item — the clawshot upgrade replaces the hookshot, so
+                // they never coexist).
+                // ============================================
+                if (i_this->mBodySph[i].GetTgHitObj()->ChkAtType(AT_TYPE_ARROW)) {
+                    b_gm_beginPursuitTest(i_this, ARMO_PURSUIT_EYETEST);  // TEMP: revert
+                } else if (i_this->mBodySph[i].GetTgHitObj()->ChkAtType(AT_TYPE_BOOMERANG)) {
+                    b_gm_beginPursuitTest(i_this, ARMO_PURSUIT_CRAWL);
+                } else if (i_this->mBodySph[i].GetTgHitObj()->ChkAtType(AT_TYPE_HOOKSHOT)) {
+                    daAlink_c* link = (daAlink_c*)daPy_getPlayerActorClass();
+                    u8 mode = (link != NULL && link->getReadyItem() == dItemNo_W_HOOKSHOT_e)
+                                  ? ARMO_PURSUIT_CRAWL
+                                  : ARMO_PURSUIT_DASH;
+                    b_gm_beginPursuitTest(i_this, mode);
+                }
+                // ============================================
+                // NEW CODE ENDS HERE
+                // ============================================
+#endif
                 if (i_this->mAction == ACTION_DROP && (i_this->mMode == 2 || i_this->mMode == 3)) {
                     if (i_this->mBodySph[i].GetTgHitObj()->ChkAtType(AT_TYPE_CSTATUE_BOSS_SWING)) {
                         i_this->mHitCount++;
@@ -500,10 +563,19 @@ static void b_gm_move(b_gm_class* i_this) {
                     i_this->mTimers[0] = 0;
                     i_this->mMode = 4;
 #if TARGET_PC
+                // ============================================
+                // MODIFIED CODE — ALBW Port
+                // Vanilla lays eggs when arrows run low (arrowNum <= 3) so the
+                // player can refill by killing babies. In ALBW arrows are never
+                // the resource (the meter is), so arrowNum sits <= 3 forever and
+                // eggs spawn endlessly. Circumvent that trigger even when Boss
+                // Refinement is OFF — keep only the post-rod batch (field_0x1ad5
+                // == 2). (Refinement path keeps its HP-gated egg system.)
+                // ============================================
                 } else if ((dAlbwBossRefinement_isEnabled() &&
                             dAlbwBoss_armogohmaTryBeginEggPhase(i_this)) ||
                            (!dAlbwBossRefinement_isEnabled() &&
-                            (i_this->field_0x1ad5 == 2 || dComIfGs_getArrowNum() <= 3)))
+                            i_this->field_0x1ad5 == 2))
                 {
                     i_this->mAction = ACTION_KOGOMA;
                     i_this->mMode = 0;
@@ -788,6 +860,111 @@ static void b_gm_drop(b_gm_class* i_this) {
     }
 }
 
+#if TARGET_PC && D_ALBW_ARMO_PURSUIT_TEST
+// ============================================
+// NEW CODE — ALBW Port (giant floor-pursuit TEST)
+// beginPursuitTest: snap the giant upright onto the floor and hand control to
+// the pursuit state. pursuit_test: steer yaw at Link and set forward speed —
+// the shared integrator at the tail of action() drives motion from speedF, so
+// no manual position math is needed here. Orientation matches the retail floor
+// state (angle.x = 0, floor height via field_0x73c.y = 0).
+// ============================================
+static void b_gm_beginPursuitTest(b_gm_class* i_this, u8 i_mode) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+
+    // ============================================
+    // NEW CODE — ALBW Port (DIAGNOSTIC — remove with the test triggers)
+    // Confirms a trigger actually fired and, for EYETEST, whether the orphaned
+    // ANM_EYE_TEST resource even exists. Writes albw_armo_pursuit_debug.txt.
+    // No log line after a slingshot ⇒ the trigger never fired (slingshot not
+    // registering on the body sphere). res=NULL ⇒ anim missing, guard skipped it.
+    // ============================================
+    {
+        static bool sReset = false;
+        char path[512];
+        path[0] = '\0';
+        const char* user = getenv("USERPROFILE");
+        if (user && user[0] != '\0') {
+            snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_armo_pursuit_debug.txt", user);
+        } else {
+            strncpy(path, "albw_armo_pursuit_debug.txt", sizeof(path) - 1);
+        }
+        FILE* fp = fopen(path, sReset ? "a" : "w");
+        if (fp == NULL) {
+            fp = fopen("albw_armo_pursuit_debug.txt", sReset ? "a" : "w");
+        }
+        if (fp != NULL) {
+            sReset = true;
+            void* eyeRes = (i_mode == ARMO_PURSUIT_EYETEST)
+                               ? dComIfG_getObjectRes("B_gm", ANM_EYE_TEST)
+                               : (void*)1;
+            fprintf(fp, "[beginPursuit] mode=%d (0=dash 1=crawl 2=eyetest) eyeTestRes=%p\n",
+                    (int)i_mode, eyeRes);
+            fclose(fp);
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+
+    // Already chasing in this flavor — nothing to do (but allow a mode switch).
+    if (i_this->mAction == ACTION_PURSUIT_TEST && s_armoPursuitMode == i_mode) {
+        return;
+    }
+
+    s_armoPursuitMode = i_mode;
+    i_this->mAction = ACTION_PURSUIT_TEST;
+    i_this->mMode = 0;
+    a_this->current.angle.x = 0;
+    a_this->shape_angle.x = 0;
+    i_this->field_0x73c.y = 0.0f;
+    i_this->mInvincibilityTimer = 30;
+}
+
+static void b_gm_pursuit_test(b_gm_class* i_this) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+
+    const bool eyeTest = (s_armoPursuitMode == ARMO_PURSUIT_EYETEST);
+    const bool crawl = (s_armoPursuitMode == ARMO_PURSUIT_CRAWL);
+    // EYETEST plays the orphaned ANM_EYE_TEST in place (stationary, faces Link)
+    // so it can be observed; CRAWL uses the cut GOMA_MOVE; DASH the floor skitter.
+    const int target_anm = eyeTest ? ANM_EYE_TEST : (crawl ? ANM_GOMA_MOVE : ANM_GOMA_DASH);
+    const f32 anm_speed = eyeTest ? 1.0f : (crawl ? l_HIO.dash_anm_speed * 0.5f : l_HIO.dash_anm_speed);
+    const f32 max_speed = eyeTest ? 0.0f : (crawl ? l_HIO.dash_speed * 0.35f : l_HIO.dash_speed);
+    const s16 turn_rate = crawl ? 0x180 : 0x300;
+
+    // Guard the resource: ANM_EYE_TEST is orphaned, so verify it exists before
+    // setAnm rather than risk a null-anim fault.
+    if (i_this->mAnmID != target_anm &&
+        dComIfG_getObjectRes("B_gm", target_anm) != NULL) {
+        anm_init(i_this, target_anm, 10.0f, J3DFrameCtrl::EMode_LOOP, anm_speed);
+    }
+
+    // Upright on the floor: no pitch, descend to floor height.
+    a_this->current.angle.x = 0;
+    cLib_addCalc2(&a_this->current.pos.y, 0.0f, 1.0f, 40.0f);
+
+    f32 target_speed = 0.0f;
+    if (player != NULL) {
+        s16 yaw = cM_atan2s(player->current.pos.x - a_this->current.pos.x,
+                            player->current.pos.z - a_this->current.pos.z);
+        cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 4, turn_rate);
+
+        // mPlayerDistance is refreshed at the top of action() each frame.
+        if (i_this->mPlayerDistance > 350.0f) {
+            target_speed = max_speed;
+        }
+    }
+
+    cLib_addCalc2(&a_this->speedF, target_speed, 1.0f, l_HIO.dash_speed * 0.5f + 1.0f);
+    i_this->mAcch.CrrPos(dComIfG_Bgsp());
+}
+// ============================================
+// NEW CODE ENDS HERE
+// ============================================
+#endif
+
 static void action(b_gm_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
     cXyz local_move;
@@ -819,6 +996,11 @@ static void action(b_gm_class* i_this) {
     case ACTION_DROP:
         b_gm_drop(i_this);
         break;
+#if TARGET_PC && D_ALBW_ARMO_PURSUIT_TEST
+    case ACTION_PURSUIT_TEST:
+        b_gm_pursuit_test(i_this);
+        break;
+#endif
     }
 
     cMtx_YrotS(*calc_mtx, a_this->current.angle.y);
@@ -2060,7 +2242,23 @@ static int daB_GM_Delete(b_gm_class* i_this) {
 static int useHeapInit(fopAc_ac_c* i_this) {
     b_gm_class* a_this = (b_gm_class*)i_this;
 
-    a_this->mpModelMorf = JKR_NEW mDoExt_McaMorfSO((J3DModelData*)dComIfG_getObjectRes("B_gm", 0x25), NULL, NULL, (J3DAnmTransform*)dComIfG_getObjectRes("B_gm", 30), 2, 0.6f, 0, -1, &a_this->mCreatureSound, 0, 0x11000284);
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Repack-free custom-model hook: use a loose GOMA BMD override from
+    // <config>/model_replacements/ if present, else the arc resource (identical to
+    // vanilla). First consumer of dusk::model_override.
+    // ============================================
+    J3DModelData* gomaModelData = NULL;
+#if TARGET_PC
+    gomaModelData = dusk::model_override::try_load("B_gm", 0x25);
+#endif
+    if (gomaModelData == NULL) {
+        gomaModelData = (J3DModelData*)dComIfG_getObjectRes("B_gm", 0x25);
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+    a_this->mpModelMorf = JKR_NEW mDoExt_McaMorfSO(gomaModelData, NULL, NULL, (J3DAnmTransform*)dComIfG_getObjectRes("B_gm", 30), 2, 0.6f, 0, -1, &a_this->mCreatureSound, 0, 0x11000284);
     if (a_this->mpModelMorf == NULL || a_this->mpModelMorf->getModel() == NULL) {
         return 0;
     }

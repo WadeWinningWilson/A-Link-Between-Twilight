@@ -76,6 +76,12 @@ bool dAlbwSumoTest_tryPurchaseShop();
 // so the chosen clothes show instead of sumo re-applying over them.
 void dAlbwSumoTest_clearWorn();
 
+// FIX (reversible, D_ALBW_SUMO_MENU_LEAVE_FIX): clear the on-actor sumo model flags so the vanilla
+// collection-menu ("workshop") clothes-change leaves sumo via the NORMAL build-then-swap reload
+// instead of the sumo skip-path (which crashes building a non-resident arc, fault 0xc8).  Call
+// per outfit-change case right before setClothesChange(0); no-op unless the sumo body flag is set.
+void dAlbwSumoTest_onVanillaClothesMenuLeave();
+
 // Native outfit equip (shop / D-pad) took over from sumo — optional hook; sync is driven
 // by the worn bit vs Link visual flag.
 void dAlbwSumoTest_onNativeOutfitEquipped();

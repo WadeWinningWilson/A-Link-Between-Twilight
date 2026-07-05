@@ -561,6 +561,38 @@ void dAlbwSumoTest_clearWorn() {
     dAlbwOutfit_setSumoWorn(false);
 }
 
+// ============================================
+// NEW CODE — ALBW Port (FIX: vanilla collection-menu / "workshop" clothes-change while sumo worn)
+// REVERSIBLE: set D_ALBW_SUMO_MENU_LEAVE_FIX to 0 to fully restore the prior (crashing) behavior
+// with no logic removed (the call site stays; this becomes a no-op).
+//
+// Crash root: while sumo is worn the sumo-body flag FLG2_UNK_80000 is set, so
+// checkNoResetFlg2(FLG2_UNK_280000) (a bitwise-ANY test, d_a_player.h) is true -> loadModelDVD
+// takes the sumo SKIP-PATH, which does NOT reload the arc, and changeLink then builds the
+// newly-selected native outfit from a NON-RESIDENT arc -> initModel(NULL) -> ACCESS_VIOLATION
+// (fault 0xc8, getTexture on null).  The gameplay leave (dAlbwOutfit_syncLinkModel) avoids this by
+// clearing the sumo model flags BEFORE setClothesChange(0); the collection menu runs its OWN
+// execute loop (dMw_c::_execute) and never does that.
+//
+// Fix: mirror the gameplay leave -- clear FLG2_UNK_200000 | FLG2_UNK_80000 so loadModelDVD runs the
+// NORMAL build-then-swap reload (loads the target arc AND safely defers until it is resident,
+// gating on cPhs_COMPLEATE_e).  MUST be called only when a real clothes change follows
+// (setClothesChange), so it is invoked per-case in dMenu_Collect2D_c::changeClothe right before
+// setClothesChange(0) -- NOT at menu-open -- else the "select the same outfit as the sumo base"
+// case (no rebuild) would leave native flags on a sumo model -> invisible Link.  No-op unless the
+// sumo body flag is set.
+// ============================================
+#define D_ALBW_SUMO_MENU_LEAVE_FIX 1
+void dAlbwSumoTest_onVanillaClothesMenuLeave() {
+#if D_ALBW_SUMO_MENU_LEAVE_FIX
+    daAlink_c* link = daAlink_getAlinkActorClass();
+    if (link != NULL && link->checkNoResetFlg2(daAlink_c::FLG2_UNK_80000)) {
+        link->offNoResetFlg2(daAlink_c::FLG2_UNK_200000);
+        link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
+    }
+#endif
+}
+
 void dAlbwSumoTest_onWrestlerMet() {
     dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kSumoWrestlerMetBit]);
 }

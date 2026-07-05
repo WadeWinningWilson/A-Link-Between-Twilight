@@ -4,6 +4,7 @@
 
 #include "Z2AudioLib/Z2Instances.h"
 #include "d/actor/d_a_b_gm.h"
+#include "d/actor/d_a_e_gm.h"
 #include "d/d_albw_hp_mult.h"
 #include "d/d_cc_uty.h"
 #include "d/actor/d_a_player.h"
@@ -28,6 +29,23 @@ static constexpr int kAlbwArmogohmaEggGatePct[kAlbwArmogohmaEggGateCount] = {85,
 static constexpr int kAlbwArmogohmaOpeningPct[3] = {75, 45, 15};
 static constexpr int kAlbwArmogohmaPostStatueSnapPct[2] = {60, 35};
 static constexpr int kAlbwArmogohmaBowChipPct = 4;
+
+// ============================================
+// NEW CODE — ALBW Port
+// Composite health-bar fill mapping (see docs/albw-armogohma-boss-bar-spec.md).
+// One bar, one fill ratio. Phase 1 (giant) fills the TOP half (1.0 .. 0.5),
+// phase 2 (floor eye) the BOTTOM half (0.5 .. 0.0). Phase-1 progress source is
+// mode-aware: Boss Refinement drains an HP pool, but vanilla B_GM.health is a
+// constant 500, so vanilla drives progress off the Dominion Rod statue-drop
+// counter (mHitCount 0..3) instead — mirroring phase 2's 3-hit counter.
+// ============================================
+static constexpr f32 kAlbwArmogohmaPhase1FillMin = 0.5f;  // giant segment floor
+static constexpr f32 kAlbwArmogohmaPhase2FillMax = 0.5f;  // eye segment ceiling
+static constexpr int kAlbwArmogohmaPhase1RodMax = 3;      // mHitCount statue drops
+static constexpr int kAlbwArmogohmaPhase2HitMax = 3;      // field_0xa74 (l_damage_count[TYPE_GOMA])
+// ============================================
+// NEW CODE ENDS HERE
+// ============================================
 
 static bool s_armogohmaInitialized = false;
 static s16 s_armogohmaMaxHp = 0;
@@ -346,6 +364,13 @@ bool dAlbwBoss_armogohmaResolveBarTarget(fopAc_ac_c** o_actor) {
     return true;
 }
 
+// ============================================
+// MODIFIED CODE — ALBW Port
+// Was: raw {current,max} per phase (phase 2 read the eye's useless 1/1 health,
+// leaving the bar stuck full). Now: normalized composite fillRatio. Phase 1 is
+// mode-aware (refinement pool vs vanilla rod-hit counter); phase 2 reads the
+// TYPE_GOMA hit counter. current/max are kept for the lock-on overlay / F5 only.
+// ============================================
 bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state) {
     if (o_state == NULL) {
         return false;
@@ -353,6 +378,7 @@ bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state) {
 
     o_state->visible = false;
     o_state->phase = 0;
+    o_state->fillRatio = 0.0f;
     o_state->current = 0;
     o_state->max = 0;
 
@@ -361,17 +387,39 @@ bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state) {
         return true;
     }
 
-    o_state->visible = true;
     o_state->phase = (fopAcM_GetName(target) == fpcNm_E_GM_e) ? 2 : 1;
 
+    f32 fill;
     if (o_state->phase == 1) {
+        // Phase 1 — giant body. Top half of the bar (1.0 .. 0.5).
         dAlbwBoss_armogohmaFillDisplayHp(target, &o_state->current, &o_state->max);
+
+        f32 progress;
+        if (dAlbwBossRefinement_isEnabled() && o_state->max > 0) {
+            // Refinement fight: the pool actually drains (rod snaps + bow chips).
+            progress = static_cast<f32>(o_state->current) / static_cast<f32>(o_state->max);
+        } else {
+            // Vanilla fight: B_GM.health is a constant 500 and never decrements,
+            // so drive progress off the Dominion Rod statue-drop counter instead.
+            int hits = static_cast<const b_gm_class*>(target)->mHitCount;
+            hits = std::max(0, std::min(hits, kAlbwArmogohmaPhase1RodMax));
+            progress = 1.0f - static_cast<f32>(hits) / static_cast<f32>(kAlbwArmogohmaPhase1RodMax);
+        }
+        progress = std::max(0.0f, std::min(progress, 1.0f));
+        fill = kAlbwArmogohmaPhase1FillMin + (1.0f - kAlbwArmogohmaPhase1FillMin) * progress;
     } else {
-        const dAlbwHP_LockonDisplay hp = dAlbwHP_getLockonDisplayHp(target);
-        o_state->current = hp.current;
-        o_state->max = hp.max;
+        // Phase 2 — floor eye (TYPE_GOMA). Bottom half of the bar (0.5 .. 0.0),
+        // driven by the hit counter (3 .. 0), NOT the eye's 1/1 health.
+        int hits = static_cast<daE_GM_c*>(target)->albwGetBossHitRemaining();
+        hits = std::max(0, std::min(hits, kAlbwArmogohmaPhase2HitMax));
+        o_state->current = static_cast<s16>(hits);
+        o_state->max = static_cast<s16>(kAlbwArmogohmaPhase2HitMax);
+        fill = kAlbwArmogohmaPhase2FillMax *
+               (static_cast<f32>(hits) / static_cast<f32>(kAlbwArmogohmaPhase2HitMax));
     }
 
+    o_state->fillRatio = fill;
+    o_state->visible = fill > 0.0f;  // phase 2 hits==0 hides the bar cleanly
     return true;
 }
 

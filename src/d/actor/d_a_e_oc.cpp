@@ -18,6 +18,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_wolf_stun.h"
 #endif
 
@@ -743,6 +744,9 @@ void daE_OC_c::damage_check() {
                 dComIfGp_setHitMark(3, this, &my_vec_0, NULL, NULL, 0);
                 setActionMode(E_OC_ACTION_BIG_DAMAGE, 0);
                 offTgSph();
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(this);
+#endif
                 mAtInfo.mHitDirection.y = fopAcM_searchPlayerAngleY(this);
                 return;
             }

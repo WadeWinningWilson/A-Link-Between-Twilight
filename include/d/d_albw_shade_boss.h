@@ -18,6 +18,14 @@ bool dShadeBoss_isEnabled();
 // Ordon-interior BGM so the basement is quiet while the feature is on.
 void dShadeBoss_suppressHouseBgm();
 
+// Boss health bar query for the combat Shade. Finds the active mType-7 Hero's
+// Shade (the only NPC_KN with HP > 0) and returns its current/max HP via the
+// shared lock-on HP source. Returns false (bar hidden) when the feature is off
+// or no live combat Shade is present. Single HP pool — no phase query needed
+// (later phases are planned to stay within one pool). Mirrors the Armogohma
+// query so the shared boss-bar HUD can show either boss.
+bool dShadeBoss_queryHealthBar(int* o_current, int* o_max);
+
 #endif // TARGET_PC
 
 #endif // D_ALBW_SHADE_BOSS_H

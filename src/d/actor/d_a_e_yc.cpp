@@ -15,6 +15,10 @@
 #include "f_pc/f_pc_name.h"
 #include "d/actor/d_a_e_rdy.h"
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 static f32 S_area_dis;
 
 static bool hio_set;
@@ -463,6 +467,9 @@ static void e_yc_wolfbite(e_yc_class* i_this) {
 
             if (_this->health <= 0) {
                 player->offWolfEnemyHangBite();
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(_this);
+#endif
                 anm_init(i_this, e_yc_class::ANM_HANGED_BRUSH2, 3.0f,
                          J3DFrameCtrl::EMode_NONE, 1.0f);
                 i_this->mMode = 3;

@@ -17,6 +17,9 @@
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include <cstring>
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
 
 class daE_S1_HIO_c {
 public:
@@ -325,6 +328,9 @@ static void e_s1_enter_fail_wait(e_s1_class* i_this) {
     i_this->mHitInvincibilityTimer = 10;
     a_this->speedF = 0.0f;
     i_this->mSound.startCreatureVoice(Z2SE_EN_NS_V_DEATH, -1);
+#if TARGET_PC
+    dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
 }
 
 static bool s_pack_any_above_1;
@@ -1415,6 +1421,9 @@ static void e_s1_wolfbite(e_s1_class* i_this) {
 
             if (i_this->health <= 0) {
                 player->offWolfEnemyHangBite();
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
                 if (i_this->mGroupID == 0xFF) {
                     i_this->mAction = ACT_FAIL;
                 } else {

@@ -14,6 +14,10 @@
 #include "dusk/settings.h"
 #include "f_op/f_op_actor_enemy.h"
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 enum E_yg_RES_File_ID {
     /* BCK */
     /* 0x04 */ BCK_YG_BITE_DIE = 0x4,
@@ -814,6 +818,9 @@ static void e_yg_wolfbite(e_yg_class* i_this) {
                 i_this->mActionMode = MODE_INIT;
                 i_this->mSound.startCreatureVoice(Z2SE_EN_YG_V_DEATH, -1);
                 actor->health = 0;
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(actor);
+#endif
 
                 if (player->checkWolfEnemyLeftThrow()) {
                     actor->current.angle.y = player->shape_angle.y - 0x4000;
@@ -854,6 +861,9 @@ static void damage_check(e_yg_class* i_this) {
                 i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_2000000)
             ) {
                 actor->health = 0;
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(actor);
+#endif
             }
 
             if (i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_UNK)) {

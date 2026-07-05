@@ -14,6 +14,10 @@
 #include "Z2AudioLib/Z2Instances.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 
 static s16 mAttackNo = 3;
 
@@ -757,6 +761,9 @@ static void e_po_wolfbite(e_po_class* i_this) {
                 i_this->mActionID = ACT_DEAD;
                 i_this->mType = 0;
                 a_this->health = 0;
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
                 if (mArg0Check(i_this, 0xFF) == 2) {
                     mRollHp = a_this->health;
                 }

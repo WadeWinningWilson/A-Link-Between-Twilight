@@ -1300,6 +1300,9 @@ void dMenu_Collect2D_c::changeClothe() {
         if (dComIfGs_getSelectEquipClothes() != dItemNo_WEAR_KOKIRI_e) {
             dMeter2Info_setCloth(dItemNo_WEAR_KOKIRI_e, false);
             setEquipItemFrameColorClothes(0);
+#if TARGET_PC
+            dAlbwSumoTest_onVanillaClothesMenuLeave();  // leave sumo via the safe reload path
+#endif
             daPy_getPlayerActorClass()->setClothesChange(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();
@@ -1309,6 +1312,9 @@ void dMenu_Collect2D_c::changeClothe() {
         if (dComIfGs_getSelectEquipClothes() != dItemNo_WEAR_ZORA_e) {
             dMeter2Info_setCloth(dItemNo_WEAR_ZORA_e, false);
             setEquipItemFrameColorClothes(1);
+#if TARGET_PC
+            dAlbwSumoTest_onVanillaClothesMenuLeave();  // leave sumo via the safe reload path
+#endif
             daPy_getPlayerActorClass()->setClothesChange(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();
@@ -1318,6 +1324,9 @@ void dMenu_Collect2D_c::changeClothe() {
         if (dComIfGs_getSelectEquipClothes() != dItemNo_ARMOR_e) {
             dMeter2Info_setCloth(dItemNo_ARMOR_e, false);
             setEquipItemFrameColorClothes(2);
+#if TARGET_PC
+            dAlbwSumoTest_onVanillaClothesMenuLeave();  // leave sumo via the safe reload path
+#endif
             daPy_getPlayerActorClass()->setClothesChange(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();

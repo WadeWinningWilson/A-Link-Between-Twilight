@@ -527,7 +527,7 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         //
         // Twilight enemies (shadow/dusk forms):  70 % of scaled damage,
         //   no stun; these enemies feel weaker against wolf form.
-        // Non-twilight enemies:                  50 % of scaled damage,
+        // Non-twilight enemies:                  25 % of scaled damage,
         //   compensated by the 300-frame stun dispatched after deduction.
         //
         // Zant excluded — his fight's phase scripts check AT_TYPE_WOLF_*
@@ -549,9 +549,9 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                     i_AtInfo->mAttackPower = 1;
                 }
             } else {
-                // Non-twilight: base × rawMult × 0.50, stun applied below
+                // Non-twilight: base × rawMult × 0.25, stun applied below
                 i_AtInfo->mAttackPower =
-                    (i_AtInfo->mAttackPower * rawMult * rawMult * 5) / 10;
+                    (i_AtInfo->mAttackPower * rawMult * rawMult * 25) / 100;
                 if (i_AtInfo->mAttackPower < 1) {
                     i_AtInfo->mAttackPower = 1;
                 }

@@ -15,6 +15,10 @@
 #include "SSystem/SComponent/c_math.h"
 #include "f_op/f_op_actor_enemy.h"
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 /**
  * @class daE_YK_HIO_c
  * @brief Shadow Keese Host Input Output class.
@@ -1036,6 +1040,9 @@ static void e_yk_wolfbite(e_yk_class* i_this) {
     case 3:
         if (i_this->mActionTimers[0] == 0) {
             yk_disappear(i_this);
+#if TARGET_PC
+            dAlbwEnemyRupees_onEnemyKill(i_this);
+#endif
             fopAcM_delete(i_this);
         }
     }
@@ -1212,6 +1219,9 @@ static void action(e_yk_class* i_this) {
 
             if (i_this->mKnockbackSpeed <= 1.0f || i_this->mActorCollisionHandler.ChkWallHit()) {
                 yk_disappear(i_this);
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(i_this);
+#endif
                 fopAcM_delete(i_this);
             }
         }

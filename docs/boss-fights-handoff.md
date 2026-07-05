@@ -131,51 +131,9 @@ Hooks:
 
 ## Armogohma — refined fight (Boss Refinement ON)
 
-### Design contract (locked in chat)
+> **📖 Canonical Armogohma doc:** the full, up-to-date record — HP bar, egg fix, bomb-arrow crash, cut moves, giant floor-pursuit test, the eye rig + guard mechanic, and the **beta single-eye reveal** research (model inspection + `eye_test.bck` + the phase-3 reveal plan) — now lives in **[Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md)**. The sections below are the earlier/original notes kept for history; prefer the RefinedGohma doc for anything current.
 
-| Rule | Value |
-|------|--------|
-| **Win condition** | Still **3 Dominion Rod statue hits** (`mHitCount >= 3`) |
-| **Max HP pool** | Scaled `field_0x560` after `dAlbwHP_tryApplyTrueMaxHp()` |
-| **Bow core hit** | **−4% of max HP** per eye/core arrow (`kAlbwArmogohmaBowChipPct`) |
-| **Egg waves** | **4 total**, queued on downward HP cross, consumed one-at-a-time on ceiling |
-| **Egg gates** | **85%, 75%, 65%, 20%** (“last cry”) |
-| **Floor openings** | **75%, 45%, 15%** — crossing sets `s_armogohmaPendingCeilingDrop` |
-| **Post-statue HP snap** | After hit 1 → **60%**, after hit 2 → **35%** |
-| **Eye hits** | Chip HP only — do **not** directly queue eggs |
-
-Eggs fire on ceiling path (`b_gm_move` case 3) via `dAlbwBoss_armogohmaTryBeginEggPhase()`.
-
-When **Boss Refinement OFF**: vanilla egg logic (`field_0x1ad5 == 2` / arrow count).
-
-### Known playtest feedback (tune next)
-
-- Fight can end **too quickly** if bow chip % is high relative to HP mult
-- Sometimes only **~2 egg drops** seen — likely skipped gates when statue snaps jump HP past multiple thresholds in one frame; may need staggered consumption or lower bow chip
-- **Opening gates** (75/45/15) queue ceiling drop — verify drop animation actually fires
-- Arrow damage may still feel strong — check if vanilla `cc_at_check` path also reduces HP outside Boss Refinement chip
-
-### Armogohma HP bar (composite meter — planned)
-
-**Spec (no code yet):** [albw-armogohma-boss-bar-spec.md](albw-armogohma-boss-bar-spec.md)
-
-- One bar, both actors: phase 1 = `B_GM` refinement pool → **fillRatio 1.0..0.5**; phase 2 = `E_GM` TYPE_GOMA hit counter (`field_0xa74`) → **0.5..0.0**
-- HUD draws **`fillWidth = barW * fillRatio` only** — layout/name constants stay in `d_albw_boss_hp_hud.cpp`
-- Bow arrow vanilla damage suppressed in `d_cc_uty.cpp` when Refinement on; chip handled in `dAlbwBoss_armogohmaOnBowCoreHit()`
-
-### Backlog — beta tunnel-chase locomotion (unused anims on disc)
-
-GDC 2005 showed Armogohma **crawling through a tunnel** before the ceiling fight. Retail uses **dash / beam / egg / landing** loops only; several **`B_gm` BCKs exist but are never referenced** in `d_a_b_gm.cpp` (defines at top of file, no `anm_init` call sites):
-
-| Anim (B_gm.h) | `ANM_GOMA_*` index | Notes |
-|---------------|-------------------|--------|
-| `GOMA_ATTACK01` | 8 | Defined; retail uses `ATTACK_A/B/C` instead |
-| `GOMA_MOVE` | 22 | Crawl / walk — **unused** |
-| `GOMA_SLOW_MOVE` | 25 | Slow crawl — **unused** |
-| `GOMA_STEP_L` / `GOMA_STEP_R` | 26 / 27 | Step cycles — **unused** |
-| `GOMA_UP` / `GOMA_UP_02` | 28 / 29 | Climb / rise — **unused** |
-
-**Idea (not implemented):** Boss Refinement **special phase** — e.g. scripted ceiling→floor descent or short “chase corridor” segment using `GOMA_MOVE` / `GOMA_SLOW_MOVE` (+ optional `GOMA_UP*`) before returning to existing dash/egg loop. Assets already ship in `B_gm.arc`; wiring is actor/phase work only.
+_Everything below the banner — refined-fight design contract, HP bar, egg fix, bomb-arrow crash, cut moves, giant floor-pursuit test, the eye rig + guard mechanic, and the **beta single-eye reveal** research + phase-3 plan — has moved to the canonical [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md)._
 
 ---
 
@@ -239,9 +197,9 @@ HP mult + Boss Health Bars already list `B_BQ` / `B_BH` in `d_albw_hp_mult.cpp`.
 
 | Phase | Mode | Behavior |
 |-------|------|----------|
-| A — RUNAWAY | 0→1 | `BCK_BQ_RUNAWAY` @ **4.5×**; side heads **decoupled** (frozen surface anchor, `field_0xa25 = 2`) |
-| B — Hold | 2 | Last RUNAWAY frame held **150f**; `field_0x6fb = 3` → side-head frenzy (faster rolls, half `field_0x6fe`) |
-| C — Rise | 3 | `BCK_BQ_APPEAR` → `ACTION_WAIT` + `BCK_BQ_WAIT01`; stems re-couple (`field_0xa25 = 1`) |
+| A — RUNAWAY | 0→1 | `BCK_BQ_RUNAWAY` @ **4.5×**; side heads **decoupled** (frozen surface anchor) |
+| B — Conductor | 2 | **L/R/L/R/BOTH** side-head script; main submerged |
+| C — Rise | 3 | `BCK_BQ_APPEAR` → `ACTION_WAIT` + `BCK_BQ_WAIT01`; stems re-couple |
 
 No damage-retreat SFX/particles on RUNAWAY. Sequence iframe **450f**. Files: `d_a_b_bq.cpp`, `d_a_b_bh.cpp` (decouple + frenzy only when Refinement on).
 
@@ -251,30 +209,25 @@ No damage-retreat SFX/particles on RUNAWAY. Sequence iframe **450f**. Files: `d_
 
 ---
 
-#### Enrage side-head attack conductor (planned — no code yet)
+#### Enrage side-head attack conductor (implemented)
 
-**Problem (playtest):** During submerged hold, independent fast timers make both heads attack **almost** together — mushy, not readable.
+**Pattern:** L → R → L → R → **BOTH** → main `BCK_BQ_APPEAR`. Event-driven (no fixed hold timer).
 
-**Target pattern (5 beats, then main rises):**
+| Beat | Attacker |
+|------|----------|
+| 1 | Left (`mID 0`) |
+| 2 | Right (`mID 1`) |
+| 3 | Left |
+| 4 | Right |
+| 5 | Both (`field_0x6a0` paired) |
 
-```text
-Beat 1 — Left (mID 0) solo lunge
-Beat 2 — Right (mID 1) solo lunge
-Beat 3 — Left solo
-Beat 4 — Right solo
-Beat 5 — BOTH simultaneous (reuse field_0x6a0 paired-attack path)
-→ then B_BQ APPEAR (main rise); hold timer becomes event-driven, not fixed 150f
-```
+**Conductors (`B_BQ` mode 2):** `field_0x1393` = beat index; `mTimers[2]` = inter-beat gap (**50f**); `mTimers[3]` = waiting for lunge finish; `field_0x6fb = 3`. Dispatches only if player within **2800** of a side-head anchor (pauses if out of range). **720f** sequence iframe.
 
-**Design rules:**
+**Side heads:** random attack rolls **disabled** during conductor; forced `ACTION_B_ATTACK_1`; faster windup/recovery (**22f** / **8f** vs vanilla). Surface decouple unchanged (`field_0xa25 = 2` during RUNAWAY modes 0–2).
 
-- **Quicker** solo beats (~**45–60f** between attack *starts**, tune in playtest) but **hard alternation** — only beat 5 overlaps.
-- **Hold phase ends on beat 5 completion** (prefer: dual lunge anim **stop**, not windup start).
-- **Out of range:** pause conductor if player leaves attack band; don’t fire beats into empty room.
-- **One head down:** skip that side’s solo beats; decide whether to shorten to 3 beats + dual or cancel enrage.
-- **Interrupt policy TBD:** bomb/core hit during conductor?
+**Tuning knobs** (`d_a_b_bq.cpp` `kAlbwBq*` constants): `ConductorBeatGap`, `ConductorInitialDelay`, `RunawayAnimSpeed`, `RunawaySequenceIframe`.
 
-**Implementation sketch:** small `B_BQ` “conductor” (beat index + allowed attacker mask); `B_BH` checks parent before attack rolls instead of lowering both heads’ random freq independently.
+**Open:** one head downed mid-sequence; interrupt during conductor.
 
 ---
 
@@ -406,7 +359,7 @@ General rule: **`bossHealPct = (damageUnits / 4) × 10%`** of `field_0x560` (or 
 
 - [x] `d_a_b_bq.cpp` — RUNAWAY arrow test (`ACTION_RUNAWAY_TEST`, phased: RUNAWAY / hold / APPEAR)
 - [x] `d_a_b_bh.cpp` — side-head surface decouple + enrage frenzy (Refinement only)
-- [ ] `d_a_b_bq.cpp` + `d_a_b_bh.cpp` — enrage **L/R/L/R/BOTH** conductor (beat 5 → APPEAR)
+- [x] `d_a_b_bq.cpp` + `d_a_b_bh.cpp` — enrage **L/R/L/R/BOTH** conductor (beat 5 → APPEAR)
 - [ ] Door volume + door-zone reach (middle poison snap and/or conditional lunge extend)
 - [ ] `d_albw_boss.h/cpp` — Diababa constants + `dAlbwBoss_diababaAttackIntervalMult()` (or inline 0.5f)
 - [ ] `d_a_b_bh.cpp` — apply mult to HIO reads + hardcoded waits when Refinement on

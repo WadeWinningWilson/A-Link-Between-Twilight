@@ -839,10 +839,11 @@ static const u8 sShieldRentalItemNos[3] = {
     (u8)dItemNo_HYLIA_SHIELD_e,
 };
 static constexpr int kShieldRentalEligibleBase = 685; // saveBitLabels[685..687]
-// Dusk: one-time shop upgrade — hold Ordon/Wooden/Hylian shields simultaneously (max 3).
-static constexpr int kMultiShieldUpgradeBit = 688; // saveBitLabels[688] — future shop purchase
-static constexpr int kMaxOwnedShieldsDefault = 1;
-static constexpr int kMaxOwnedShieldsUpgraded = 3;
+// Dusk: legacy multi-shield shop upgrade bit. The "one shield at a time" cap it
+// used to gate has been retired — shields are always carried simultaneously now —
+// so this bit and its getter/setter are inert. Kept only to avoid reshuffling
+// save-bit labels; safe to remove in a future save-format pass.
+static constexpr int kMultiShieldUpgradeBit = 688; // saveBitLabels[688] — inert (legacy)
 
 static void dMeter2_setCollectShieldForItem(u8 itemNo) {
     switch (itemNo) {
@@ -872,10 +873,6 @@ static void dMeter2_ensureShieldOwned(u8 itemNo) {
     dMeter2_setCollectShieldForItem(itemNo);
 }
 
-static int dMeter2_getMaxOwnedShields() {
-    return dMeter2_playerHasMultiShieldUpgrade() ? kMaxOwnedShieldsUpgraded : kMaxOwnedShieldsDefault;
-}
-
 bool dMeter2_isShieldItem(u8 itemNo) {
     return itemNo == (u8)dItemNo_WOOD_SHIELD_e || itemNo == (u8)dItemNo_SHIELD_e ||
            itemNo == (u8)dItemNo_HYLIA_SHIELD_e;
@@ -888,13 +885,6 @@ bool dMeter2_playerHasAnyShield() {
     return dComIfGs_isItemFirstBit((u8)dItemNo_WOOD_SHIELD_e) ||
            dComIfGs_isItemFirstBit((u8)dItemNo_SHIELD_e) ||
            dComIfGs_isItemFirstBit((u8)dItemNo_HYLIA_SHIELD_e);
-}
-
-static void dMeter2_clearAllShieldPossession() {
-    dComIfGs_offItemFirstBit((u8)dItemNo_WOOD_SHIELD_e);
-    dComIfGs_offItemFirstBit((u8)dItemNo_SHIELD_e);
-    dComIfGs_offItemFirstBit((u8)dItemNo_HYLIA_SHIELD_e);
-    dMeter2Info_setShield(dItemNo_NONE_e, false);
 }
 
 bool dMeter2_playerHasMultiShieldUpgrade() {
@@ -1021,12 +1011,12 @@ bool dMeter2_grantShieldOwnership(u8 itemNo) {
         return false;
     }
 
-    if (!dMeter2_playerHasMultiShieldUpgrade() && dMeter2_playerHasAnyShield() &&
-        !dMeter2_shieldIsOwned(itemNo))
-    {
-        dMeter2_clearAllShieldPossession();
-    }
-
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Shields now stack (one of each tier). The old "replace the previous shield"
+    // wipe is retired — grant simply marks this tier owned and leaves any other
+    // owned shields intact. Carry weight lives in Outfit Stats, not ownership.
+    // ============================================
     dMeter2_ensureShieldOwned(itemNo);
     return true;
 }
@@ -1036,20 +1026,16 @@ bool dMeter2_canAcquireShield(u8 itemNo) {
         return true;
     }
 
-    if (dMeter2_shieldIsOwned(itemNo)) {
-        return true;
-    }
-
-    if (dMeter2_countOwnedShields() == 0) {
-        return true;
-    }
-
-    if (dMeter2_playerHasMultiShieldUpgrade()) {
-        return dMeter2_countOwnedShields() < dMeter2_getMaxOwnedShields();
-    }
-
-    // Default: one shield at a time — rental/grant replaces the previous shield.
-    return false;
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Shields are carried simultaneously now — the one-shield-at-a-time cap (and
+    // the never-shipped multi-shield shop upgrade that used to lift it) are
+    // retired. Carry weight is modeled via Outfit Stats (heavier loadouts slow
+    // ALBW meter recovery), so shield ownership itself is unconstrained. Each
+    // tier is a distinct item first-bit, so this naturally caps at one of each
+    // (Ordon / Wooden / Hylian); re-acquiring an owned tier is a no-op grant.
+    // ============================================
+    return dMeter2_shieldIsOwned(itemNo) || dMeter2_countOwnedShields() < 3;
 }
 
 void dMeter2_onShieldDestroyedForRental(u8 itemNo) {

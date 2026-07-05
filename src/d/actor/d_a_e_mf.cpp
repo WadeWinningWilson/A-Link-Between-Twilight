@@ -15,6 +15,10 @@
 #include "d/d_com_inf_game.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 class daE_MF_HIO_c : public JORReflexible {
 public:
     daE_MF_HIO_c();
@@ -902,6 +906,9 @@ static void e_mf_wolfbite(e_mf_class* i_this) {
                 a_this->health -= 10;
                 if (a_this->health <= 0) {
                     player->offWolfEnemyHangBite();
+#if TARGET_PC
+                    dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
                     i_this->field_0x730 = (a_this->shape_angle.y - 0x8000) - player->shape_angle.y;
                     i_this->field_0x72c = 150.0f;
                     i_this->mAction = 21;

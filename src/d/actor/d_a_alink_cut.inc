@@ -10,6 +10,7 @@
 #include "dusk/settings.h"
 #if TARGET_PC
 #include "d/d_albw_combat.h"
+#include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_shield.h"
 #include "d/d_focused_arts.h"
 #include "dusk/hurricane_test.h"
@@ -2413,6 +2414,9 @@ int daAlink_c::procCutDownLandInit(fopEn_enemy_c* i_enemy) {
         mProcVar3.field_0x300e = 1;
         if (i_enemy != NULL) {
             i_enemy->onCutDownHitFlg();
+#if TARGET_PC
+            dAlbwEnemyRupees_onEnemyKill(reinterpret_cast<fopAc_ac_c*>(i_enemy));
+#endif
 
             csXyz angle(0x4000, shape_angle.y, 0);
             dComIfGp_setHitMark(3, NULL, &i_enemy->getDownPos(), &angle, NULL, 0);

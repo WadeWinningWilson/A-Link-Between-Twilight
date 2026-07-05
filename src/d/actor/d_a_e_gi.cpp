@@ -10,6 +10,10 @@
 #include "f_op/f_op_actor_enemy.h"
 #include "f_op/f_op_camera_mng.h"
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 class daE_GI_HIO_c : public JORReflexible {
 public:
     daE_GI_HIO_c();
@@ -716,6 +720,9 @@ void daE_GI_c::executeBiteDamage() {
             health -= 20;
             if (health < 0) {
                 player->offWolfEnemyHangBite();
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(this);
+#endif
                 mSound.startCollisionSE(Z2SE_HIT_WOLFBITE, 0x20);
                 setDamageEffect();
                 setActionMode(ACTION_DAMAGE_e, 10);
