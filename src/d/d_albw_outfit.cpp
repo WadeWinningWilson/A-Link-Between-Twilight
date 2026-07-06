@@ -692,4 +692,14 @@ void dAlbwOutfit_processPendingEquip() {
     dAlbwOutfit_equip(pending);
 }
 
+// ============================================
+// NEW CODE — ALBW Port (Custom Models: rebuild the outfit after an overlay change)
+// Arm the metamorphose-reapply path so the next syncLinkModel rebuilds the current
+// outfit from freshly-mounted arcs.  The sumo branch waits on prepareChangeLink()
+// (resourcesReady), so it only fires once the re-mounted alSumou is resident.
+// ============================================
+void dAlbwOutfit_forceReapply() {
+    sPostMetamorphoseReapply = true;
+}
+
 #endif  // TARGET_PC

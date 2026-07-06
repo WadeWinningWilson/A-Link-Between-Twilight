@@ -90,6 +90,12 @@ void dAlbwOutfit_onMetamorphoseToHuman(daAlink_c* link);
 // Stage warp / overlap only — revert path may still run during clothes reload.
 bool dAlbwOutfit_isStageTransitionUnsafe();
 
+// Force ONE model rebuild of the current outfit on the next syncLinkModel, via the
+// proven metamorphose-reapply path (sumo -> changeLink(1); native -> reload clothes).
+// Used after a Custom Models toggle re-mounts a resident arc (e.g. the sumo body) so
+// the visible model is rebuilt from the freshly-overlaid data.
+void dAlbwOutfit_forceReapply();
+
 #endif  // TARGET_PC
 
 #endif /* D_ALBW_OUTFIT_H */

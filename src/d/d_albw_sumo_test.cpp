@@ -16,6 +16,7 @@
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_outfit_stats.h"
 #include "dusk/settings.h"
+#include "dusk/custom_assets.hpp"  // overlay_generation() (Custom Models re-mount signal)
 #include "SSystem/SComponent/c_phase.h"
 #include "m_Do/m_Do_ext.h"
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"
@@ -54,6 +55,26 @@ bool sShowWeapons         = false;
 bool sInStageTransition   = false;
 u8   sLastClothes         = 0xFF;
 u8   sClothesPhaseFor     = 0xFF;  // equipped-clothes value sClothesPhase was (re)loaded for
+
+// ============================================
+// NEW CODE — ALBW Port (Custom Models: re-mount the resident sumo body on toggle)
+// alSumou is held session-resident, so a Custom Models toggle (which re-registers the
+// DVD overlay set) leaves the sumo body frozen at its first-load state while Kmdl (the
+// face) reloads and tracks the toggle -> the "half-Linkle" hybrid.  We watch the overlay
+// generation and, on a change, free alSumou so it re-mounts under the new set, then
+// rebuild.  REVERSIBLE: set to 0 to fully restore the prior (frozen-body) behavior.
+//
+// DISABLED (2026-07-06): freeing alSumou mid-play via resDelete reproduced the
+// documented dangling-solid-heap DOUBLE-FREE (EXCEPTION_ACCESS_VIOLATION, fault
+// 0xffff..., on toggle-on while sumo worn — the exact crash requestClothesChange's
+// comment warns about).  The resident sumo body cannot be hot-freed here; it must be
+// re-mounted through the game's own stage teardown (a transition), not resDelete.
+// ============================================
+#define D_ALBW_CUSTOM_MODEL_REAPPLY 0
+#if D_ALBW_CUSTOM_MODEL_REAPPLY
+int  sLastOverlayGen     = -1;     // -1 until baseline captured on first exec
+bool sCustomReapplyArmed = false;  // alSumou freed; rebuild once it re-mounts
+#endif
 
 request_of_phase_process_class sPhase;
 request_of_phase_process_class sKmdlPhase;
@@ -388,6 +409,47 @@ void maintainResources(daAlink_c* i_link) {
     }
 }
 
+#if D_ALBW_CUSTOM_MODEL_REAPPLY
+// ============================================
+// Custom Models toggle -> the DVD overlay set changed, so the session-resident sumo body
+// arc (alSumou) is stale.  Free it (independent resource-manager entry -> refcount-safe,
+// the releaseFaceDonor pattern) so resourcesReady() re-mounts it under the new overlay,
+// bump the clothes epoch so the stale body/topknot is skipped by draw/shadow until then,
+// and once alSumou is resident again force ONE reapply so changeLink rebuilds from it.
+// Called from exec() only in a safe frame (past the game-over / stage-transition guards).
+// ============================================
+void maybeReapplyForOverlayChange() {
+    const int gen = dusk::custom_assets::overlay_generation();
+    if (sLastOverlayGen == -1) {
+        sLastOverlayGen = gen;  // capture baseline on first exec; do NOT act
+        return;
+    }
+    if (gen != sLastOverlayGen) {
+        sLastOverlayGen = gen;
+        // Free the frozen resident arc (mirror releaseFaceDonor's id==2 guard).
+        if (sPhase.id == 2) {
+            dComIfG_resDelete(&sPhase, "alSumou");
+        } else {
+            cPhs_Reset(&sPhase);
+        }
+        // alSumou is visible geometry only while sumo is worn/active OR Cap Wear is None
+        // (its 0x33 topknot).  Only then hide the stale copy + schedule a rebuild; otherwise
+        // the plain free above is enough (next sumo wear re-loads fresh, native is untouched).
+        const bool visible =
+            dAlbwOutfit_isSumoWorn() || dAlbwSumoTest_isOutfitActive() ||
+            dusk::getSettings().game.capWear.getValue() == dusk::CapWearMode::None;
+        if (visible) {
+            dAlbwAlink_invalidateClothesEpoch();
+            sCustomReapplyArmed = true;
+        }
+    }
+    if (sCustomReapplyArmed && dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) != NULL) {
+        dAlbwOutfit_forceReapply();  // re-mounted -> rebuild the body/topknot from fresh data
+        sCustomReapplyArmed = false;
+    }
+}
+#endif
+
 }  // namespace
 
 bool dAlbwSumoTest_prepareChangeLink() {
@@ -490,6 +552,9 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     }
     sInStageTransition = false;
 
+#if D_ALBW_CUSTOM_MODEL_REAPPLY
+    maybeReapplyForOverlayChange();  // re-mount + rebuild the sumo body after a Custom Models toggle
+#endif
     maintainResources(i_link);
     dAlbwOutfit_processPendingEquip();
     dAlbwOutfit_syncLinkModel(i_link);
