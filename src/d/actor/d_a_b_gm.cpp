@@ -20,7 +20,7 @@
 #include "d/d_albw_boss.h"
 #include "d/d_albw_enemy_rupee.h"
 #include "d/actor/d_a_alink.h"  // equipped-item check: hookshot vs double clawshot
-#include "dusk/model_override.hpp"  // repack-free loose-BMD override for the GOMA model
+#include "dusk/custom_assets.hpp"  // repack-free loose-BMD override for the GOMA model
 #include <cstdio>
 #include <cstdlib>
 #endif
@@ -2246,11 +2246,11 @@ static int useHeapInit(fopAc_ac_c* i_this) {
     // NEW CODE — ALBW Port
     // Repack-free custom-model hook: use a loose GOMA BMD override from
     // <config>/model_replacements/ if present, else the arc resource (identical to
-    // vanilla). First consumer of dusk::model_override.
+    // vanilla). Layer-B consumer of dusk::custom_assets.
     // ============================================
     J3DModelData* gomaModelData = NULL;
 #if TARGET_PC
-    gomaModelData = dusk::model_override::try_load("B_gm", 0x25);
+    gomaModelData = dusk::custom_assets::try_load("B_gm", 0x25);
 #endif
     if (gomaModelData == NULL) {
         gomaModelData = (J3DModelData*)dComIfG_getObjectRes("B_gm", 0x25);

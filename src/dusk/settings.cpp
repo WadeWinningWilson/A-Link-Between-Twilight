@@ -51,6 +51,7 @@ UserSettings g_userSettings = {
         .focusedArtsTest {"game.focusedArtsTest", false},
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
         .flurryRush {"game.flurryRush", false},
+        .customModelsDisabled {"game.customModelsDisabled", ""},
         .wwItemmdlGetItem {"game.wwItemmdlGetItem", false},
         .wwItemmdlGetItem2DIsolate {"game.wwItemmdlGetItem2DIsolate", false},
         .wwItemmdlBowScSuppress {"game.wwItemmdlBowScSuppress", false},
@@ -330,6 +331,7 @@ void registerSettings() {
     Register(g_userSettings.game.focusedArtsTest);
     Register(g_userSettings.game.focusedArtsCheat);
     Register(g_userSettings.game.flurryRush);
+    Register(g_userSettings.game.customModelsDisabled);
     Register(g_userSettings.game.wwItemmdlGetItem);
     Register(g_userSettings.game.wwItemmdlGetItem2DIsolate);
     Register(g_userSettings.game.wwItemmdlBowScSuppress);

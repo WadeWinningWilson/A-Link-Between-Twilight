@@ -11,6 +11,7 @@
 #include "d/d_meter2_info.h"
 #include "dusk/config.hpp"
 #include "dusk/map_loader_definitions.h"
+#include "dusk/custom_assets.hpp"
 #include "dusk/settings.h"
 #include "dusk/truetest.hpp"
 #include "d/d_ww_itemmdl_test.h"
@@ -2468,6 +2469,67 @@ EditorWindow::EditorWindow() {
                     "Iron Boots is a worn re-rigged model driven by the vanilla foot rig (scale is "
                     "baked in the asset, not this slider); applies on the next clothes rebuild: "
                     "change outfit or reload the area after selecting it." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        // ============================================
+        // NEW CODE — ALBW Port (Custom Models multi-toggle list)
+        // One row per immediate subfolder of <config>/model_replacements/. Each is a
+        // toggle (like sword/shield equip): highlighted = enabled, click again to
+        // disable. Disabled folders are skipped by both the loose-BMD injector
+        // (Layer B) and the whole-mod DVD overlay (Layer A). State is persisted in
+        // game.customModelsDisabled ('|'-delimited disabled names); a toggle
+        // rescans + re-installs the overlay set (reload-scoped).
+        // ============================================
+        leftPane.add_section("Custom Models");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Custom Models",
+                .getValue =
+                    [] {
+                        const auto folders = dusk::custom_assets::list_folders();
+                        if (folders.empty()) {
+                            return Rml::String("(none found)");
+                        }
+                        int on = 0;
+                        for (const auto& f : folders) {
+                            if (dusk::custom_assets::is_folder_enabled(f.c_str())) {
+                                ++on;
+                            }
+                        }
+                        return Rml::String(fmt::format("{}/{} enabled", on, folders.size()));
+                    },
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Custom Models");
+                const auto folders = dusk::custom_assets::list_folders();
+                if (folders.empty()) {
+                    pane.add_rml(
+                        "No custom-model folders found. Drop a folder under "
+                        "<b>model_replacements/</b> (a loose <i>&lt;arc&gt;_&lt;idx&gt;.bmd</i>, or "
+                        "a full-mod <b>files/</b> data tree) and reopen this tab." +
+                        Rml::String(kAlbwUnfinishedDisclaimer));
+                    return;
+                }
+                for (const auto& folder : folders) {
+                    pane.add_button({
+                                        .text = folder,
+                                        .isSelected =
+                                            [folder] {
+                                                return dusk::custom_assets::is_folder_enabled(
+                                                    folder.c_str());
+                                            },
+                                    })
+                        .on_pressed([folder] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dusk::custom_assets::toggle_folder(folder.c_str());
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "Highlighted = enabled. Click a folder to toggle it. Changes to a model take "
+                    "effect the next time that asset loads (reload the area or reboot)." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
     });

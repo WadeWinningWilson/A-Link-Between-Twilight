@@ -276,6 +276,9 @@ struct UserSettings {
         ConfigVar<FocusedArtsCheatMode> focusedArtsCheat;
         // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
         ConfigVar<bool> flurryRush;
+        // Custom Models: '|'-delimited DISABLED folder names under model_replacements/
+        // (empty = all enabled). Toggled from the ALBW editor "Custom Models" list.
+        ConfigVar<std::string> customModelsDisabled;
         // WW itemmdl Track A: use retail itemmdl.arc vbow for bow get-item (dev toggle).
         ConfigVar<bool> wwItemmdlGetItem;
         // Phase 2 diagnostic: itemmdl arc + O_gD_bow heap mesh (loader isolate 2D).

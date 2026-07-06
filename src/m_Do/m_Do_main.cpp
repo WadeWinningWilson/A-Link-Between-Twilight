@@ -89,7 +89,7 @@
 #include "dusk/settings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/texture_replacements.hpp"
-#include "dusk/mod_override.hpp"
+#include "dusk/custom_assets.hpp"
 #include "dusk/io.hpp"
 #include "dusk/version.hpp"
 #include "dusk/discord_presence.hpp"
@@ -671,7 +671,7 @@ int game_main(int argc, char* argv[]) {
     }
 
     dusk::texture_replacements::reload();
-    dusk::mod_override::scan();  // Phase 2a: scan mod data-trees + build override map (log-only)
+    dusk::custom_assets::scan();  // Layer A: scan mod data-trees + build override map
     dusk::ui::initialize();
     dusk::ui::push_document(std::make_unique<dusk::ui::Overlay>(), true, true);
     dusk::ui::push_document(std::make_unique<dusk::ui::TouchControls>(), false, true);
@@ -769,6 +769,14 @@ int game_main(int argc, char* argv[]) {
 
         dusk::IsGameLaunched = true;
     }
+
+    // ============================================
+    // NEW CODE — ALBW Port (Custom Assets, Layer A)
+    // Disc is open now; register data-tree mod files as Aurora DVD overlays so
+    // audio (.baa / .aw), arcs, and streams transparently load from loose files.
+    // Must run after aurora_dvd_open and after scan() (which ran above).
+    // ============================================
+    dusk::custom_assets::install_overlays();
 
 #if DUSK_ENABLE_SENTRY_NATIVE
     if (dusk::crash_reporting::get_consent() == dusk::crash_reporting::Consent::Unknown) {
