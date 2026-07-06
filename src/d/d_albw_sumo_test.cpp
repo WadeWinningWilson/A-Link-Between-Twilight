@@ -25,7 +25,7 @@
 // DEBUG — model-agnostic cap loader (Phase 2).  Logs the private mount/load lifecycle so the
 // independent cap path is diagnosable in-game.  STRIP (set 0) before any upstream push.
 // ============================================
-#define D_ALBW_CAP_DEBUG 1
+#define D_ALBW_CAP_DEBUG 0
 #if D_ALBW_CAP_DEBUG
 #include "dusk/logging.h"  // DuskLog (OSReport is disabled in-game; DuskLog reaches the log)
 #endif
@@ -97,45 +97,28 @@ const char* const kCapKindArc[kCapKindNum] = {"Kmdl", "Mmdl", "Zmdl"};
 const char* const kCapKindBmd[kCapKindNum] = {"al_head.bmd", "ml_head.bmd", "zl_head.bmd"};
 constexpr u32 kCapHeapSize = 0x100000;  // 1 MB / cap arc (clothes arc ~651 KB + data); fail-safe if short
 
-dRes_info_c   s_capInfo[kCapKindNum];                  // PRIVATE array (NOT the pipeline's mObjectInfo)
-JKRSolidHeap* s_capHeap[kCapKindNum]  = {NULL, NULL, NULL};
-J3DModelData* s_capData[kCapKindNum]  = {NULL, NULL, NULL};
-u8            s_capState[kCapKindNum] = {0, 0, 0};     // 0 idle, 1 loading, 2 ready, 3 failed
+// TWO private slots per kind (each its own 1-arc dRes array + heap) for build-then-swap.
+constexpr int kCapSlots = 2;
+dRes_info_c   s_capInfo[kCapKindNum][kCapSlots][1];  // [kind][slot] = private 1-arc array
+JKRSolidHeap* s_capHeap[kCapKindNum][kCapSlots]  = {{NULL, NULL}, {NULL, NULL}, {NULL, NULL}};
+J3DModelData* s_capData[kCapKindNum][kCapSlots]  = {{NULL, NULL}, {NULL, NULL}, {NULL, NULL}};
+u8            s_capState[kCapKindNum][kCapSlots] = {{0, 0}, {0, 0}, {0, 0}};  // 0 idle 1 load 2 ok 3 fail
+int           s_capLive[kCapKindNum]    = {-1, -1, -1};   // slot providing this kind now
+int           s_capPending[kCapKindNum] = {-1, -1, -1};   // slot loading a fresh copy for a swap
 
 // ============================================
-// NEW CODE — ALBW Port (Custom Models: private head arcs track the toggle, Option 3b cont.)
-// The sumo face (al_face) and the color cap (al_head/ml_head/zl_head) both live in the
-// private head arcs Kmdl/Mmdl/Zmdl (loaded above).  So a Custom Models toggle must reload
-// them too, or the body (private, tracks) and the face/cap (frozen) disagree — the reported
-// hybrid.  On an overlay-generation change we release the loaded head kinds so they re-mount
-// fresh; the clothes-epoch bump keeps the stale head/face from drawing until changeLink
-// rebuilds (forceReapply), and the private isolation means the release can't alias a freeAll.
-// The face is sourced from the private Kmdl (kind 0), so it also becomes base-independent.
-// REVERSIBLE: set D_ALBW_SUMO_PRIVATE_FACECAP to 0 to restore the base-arc face + frozen cap.
-//
-// DISABLED (2026-07-06): the in-place head-arc free (freeCapKind) crashed under stress —
-// ACCESS_VIOLATION at a wild pointer during the changeLink rebuild, i.e. a cap/Kmdl heap freed
-// while its model was still referenced (the calc window this comment warned about).  The face
-// and color caps need the SAME build-then-swap the body uses (2-slot, load-fresh-then-free-old)
-// before they can hot-swap safely.  Until then this is OFF: body + native topknot track via the
-// build-then-swap body slot (crash-free); face + color cap are reload-scoped (track on the next
-// clothes change), matching the prior stable behavior.
+// NEW CODE — ALBW Port (Custom Models: private head arcs track the toggle, Option 3b — part b).
+// The sumo face (al_face) and the color cap (al_head/ml_head/zl_head) live in Kmdl/Mmdl/Zmdl.
+// A toggle refreshes them via the SAME 2-slot build-then-swap the body uses (load fresh into the
+// free slot -> changeLink repoints -> release the old slot next swap), so they hot-swap WITHOUT
+// the in-place-free crash (a head heap freed while its model was still referenced -- the calc
+// window; ACCESS_VIOLATION recorded @2d36ed8f24).  Face is sourced from the private Kmdl (kind 0)
+// so it also becomes base-independent.
+// REVERSIBLE: D_ALBW_SUMO_PRIVATE_FACECAP 0 -> base-arc face + reload-scoped cap.
 // ============================================
-#define D_ALBW_SUMO_PRIVATE_FACECAP 0
-#if D_ALBW_SUMO_PRIVATE_FACECAP
-// Release one private head kind (safe: pipeline-isolated + epoch-guarded before rebuild).
-void freeCapKind(int kind) {
-    if (s_capHeap[kind] != NULL) {
-        dRes_control_c::deleteRes(kCapKindArc[kind], s_capInfo, kCapKindNum);
-        mDoExt_destroySolidHeap(s_capHeap[kind]);
-        s_capHeap[kind] = NULL;
-    }
-    s_capData[kind]  = NULL;
-    s_capState[kind] = 0;
-}
-#endif
+#define D_ALBW_SUMO_PRIVATE_FACECAP 1
 
-// game.capWear -> cap kind index, or -1 for Off/None (no independent cap).
+// game.capWear -> cap kind index, or -1 for Off/None (no color cap).
 int capWearKind() {
     switch (dusk::getSettings().game.capWear.getValue()) {
         case dusk::CapWearMode::Green: return 0;
@@ -145,76 +128,110 @@ int capWearKind() {
     }
 }
 
-// Drive the independent load for one cap kind one step.  Returns the model data when ready, else NULL.
-J3DModelData* ensureIndependentCap(int kind) {
-    if (kind < 0 || kind >= kCapKindNum) return NULL;
-    if (s_capState[kind] == 2) return s_capData[kind];  // ready
-    if (s_capState[kind] == 3) return NULL;             // failed (don't retry-spam / re-mount)
-
-    if (s_capHeap[kind] == NULL) {
-        s_capHeap[kind] = mDoExt_createSolidHeapFromGame(kCapHeapSize, 0x20);
-        if (s_capHeap[kind] == NULL) {
-#if D_ALBW_CAP_DEBUG
-            DuskLog.debug("ALBW-CAPLOAD kind={} arc={} HEAP ALLOC FAILED ({} bytes)", kind,
-                          kCapKindArc[kind], (u32)kCapHeapSize);
-#endif
-            s_capState[kind] = 3;
-            return NULL;
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+// Drive one mount step for cap (kind, slot).  Aux allocs land in the slot's private heap
+// (setCurrentHeap) so nothing dangles.  Returns ready.
+bool ensureCapSlot(int kind, int slot) {
+    if (s_capState[kind][slot] == 2) return true;
+    if (s_capState[kind][slot] == 3) return false;
+    if (s_capHeap[kind][slot] == NULL) {
+        s_capHeap[kind][slot] = mDoExt_createSolidHeapFromGame(kCapHeapSize, 0x20);
+        if (s_capHeap[kind][slot] == NULL) {
+            s_capState[kind][slot] = 3;
+            return false;
         }
     }
-
-    // loadResource() (run inside syncRes when the mount completes) allocates the model's aux data
-    // -- the J3DModelData, material anims, and shared display list -- from the CURRENT heap, not the
-    // heap passed to setRes.  Make our PRIVATE heap current across the load steps so all of it lands
-    // in s_capHeap[kind] (persistent, pipeline-isolated); a transient current heap would dangle.
-    JKRHeap* const prevHeap = JKRGetCurrentHeap();
-    mDoExt_setCurrentHeap(s_capHeap[kind]);
-    J3DModelData* result = NULL;
-
-    bool failed = false;
-    if (s_capState[kind] == 0) {
-        // Kick the mount ONCE (setRes incCounts on repeat -> never call it per-frame while loading).
-        if (dRes_control_c::setRes(kCapKindArc[kind], s_capInfo, kCapKindNum, "/res/Object/", 0,
-                                   s_capHeap[kind]) == 0) {
-#if D_ALBW_CAP_DEBUG
-            DuskLog.debug("ALBW-CAPLOAD kind={} arc={} setRes FAILED", kind, kCapKindArc[kind]);
-#endif
-            s_capState[kind] = 3;
-            failed = true;
+    JKRHeap* const prev = JKRGetCurrentHeap();
+    mDoExt_setCurrentHeap(s_capHeap[kind][slot]);
+    if (s_capState[kind][slot] == 0) {
+        if (dRes_control_c::setRes(kCapKindArc[kind], s_capInfo[kind][slot], 1, "/res/Object/", 0,
+                                   s_capHeap[kind][slot]) == 0) {
+            s_capState[kind][slot] = 3;
         } else {
-            s_capState[kind] = 1;
+            s_capState[kind][slot] = 1;
         }
     }
-
-    if (!failed && s_capState[kind] == 1) {
-        // Poll until the mount + resource load completes (syncRes: >0 loading, 0 done, <0 error).
-        const int sync = dRes_control_c::syncRes(kCapKindArc[kind], s_capInfo, kCapKindNum);
+    if (s_capState[kind][slot] == 1) {
+        const int sync = dRes_control_c::syncRes(kCapKindArc[kind], s_capInfo[kind][slot], 1);
         if (sync < 0) {
-#if D_ALBW_CAP_DEBUG
-            DuskLog.debug("ALBW-CAPLOAD kind={} arc={} syncRes ERROR={}", kind, kCapKindArc[kind],
-                          sync);
-#endif
-            s_capState[kind] = 3;
+            s_capState[kind][slot] = 3;
         } else if (sync == 0) {
             J3DModelData* md = static_cast<J3DModelData*>(
-                dRes_control_c::getRes(kCapKindArc[kind], kCapKindBmd[kind], s_capInfo, kCapKindNum));
-            s_capData[kind]  = md;
-            s_capState[kind] = (md != NULL) ? 2 : 3;
-            result           = md;
+                dRes_control_c::getRes(kCapKindArc[kind], kCapKindBmd[kind], s_capInfo[kind][slot], 1));
+            s_capData[kind][slot]  = md;
+            s_capState[kind][slot] = (md != NULL) ? 2 : 3;
 #if D_ALBW_CAP_DEBUG
-            DuskLog.debug(
-                "ALBW-CAPLOAD kind={} arc={} bmd={} LOADED data={} joints={} shapes={} mats={}", kind,
-                kCapKindArc[kind], kCapKindBmd[kind], (void*)md,
-                md ? md->getJointNum() : 0xFFFF, md ? md->getShapeNum() : 0xFFFF,
-                md ? md->getMaterialNum() : 0xFFFF);
+            DuskLog.debug("ALBW-CAPLOAD kind={} slot={} arc={} LOADED data={} joints={}", kind, slot,
+                          kCapKindArc[kind], (void*)md, md ? md->getJointNum() : 0xFFFF);
 #endif
         }
-        // sync > 0: still loading -> result stays NULL.
     }
-
-    mDoExt_setCurrentHeap(prevHeap);
-    return result;
+    mDoExt_setCurrentHeap(prev);
+    return s_capState[kind][slot] == 2;
 }
+
+// Release one private cap slot (safe: isolated + only ever a slot a rebuild moved off).
+void releaseCapSlot(int kind, int slot) {
+    if (s_capHeap[kind][slot] != NULL) {
+        dRes_control_c::deleteRes(kCapKindArc[kind], s_capInfo[kind][slot], 1);
+        mDoExt_destroySolidHeap(s_capHeap[kind][slot]);
+        s_capHeap[kind][slot] = NULL;
+    }
+    s_capData[kind][slot]  = NULL;
+    s_capState[kind][slot] = 0;
+}
+
+// Ensure a kind's live slot exists (initial load into slot 0).  Returns whether it is resident.
+bool ensureCapLive(int kind) {
+    if (kind < 0 || kind >= kCapKindNum) return true;
+    if (s_capLive[kind] < 0) {
+        if (ensureCapSlot(kind, 0)) s_capLive[kind] = 0;
+        return s_capLive[kind] >= 0;
+    }
+    return s_capState[kind][s_capLive[kind]] == 2;
+}
+
+// Live model data / named resource for a kind (the color-cap head / al_face), or NULL.
+J3DModelData* capLiveData(int kind) {
+    if (kind < 0 || kind >= kCapKindNum || s_capLive[kind] < 0) return NULL;
+    const int s = s_capLive[kind];
+    return (s_capState[kind][s] == 2) ? s_capData[kind][s] : NULL;
+}
+void* capLiveRes(int kind, const char* resName) {
+    if (kind < 0 || kind >= kCapKindNum || s_capLive[kind] < 0) return NULL;
+    const int s = s_capLive[kind];
+    return (s_capState[kind][s] == 2)
+               ? dRes_control_c::getRes(kCapKindArc[kind], resName, s_capInfo[kind][s], 1)
+               : NULL;
+}
+
+// A kind's live slot resident OR failed (so a missing arc can't hang the coordinated rebuild).
+bool capLiveReadyOrFailed(int kind) {
+    if (kind < 0 || kind >= kCapKindNum || s_capLive[kind] < 0) return false;
+    const int s = s_capLive[kind];
+    return s_capState[kind][s] == 2 || s_capState[kind][s] == 3;
+}
+
+// Start a build-then-swap for a kind: load fresh into the free slot (live slot stays valid).
+void startCapSwap(int kind) {
+    if (kind < 0 || kind >= kCapKindNum || s_capLive[kind] < 0) return;
+    const int freeSlot = 1 - s_capLive[kind];
+    releaseCapSlot(kind, freeSlot);   // replaced a swap ago -> unreferenced
+    s_capPending[kind] = freeSlot;
+}
+
+// Promote a kind's pending slot to live once ready (drives its load).  True when nothing pending
+// or the pending slot has landed.
+bool tryPromoteCap(int kind) {
+    if (kind < 0 || kind >= kCapKindNum || s_capPending[kind] < 0) return true;
+    if (ensureCapSlot(kind, s_capPending[kind])) {
+        s_capLive[kind]    = s_capPending[kind];
+        s_capPending[kind] = -1;
+        return true;
+    }
+    return false;
+}
+#endif  // D_ALBW_SUMO_PRIVATE_FACECAP
 
 // ============================================
 // Private sumo body (Option 3b) — pipeline-isolated alSumou mount + build-then-swap.
@@ -287,17 +304,6 @@ void* sumoLiveRes(int index) {
     return dRes_control_c::getRes("alSumou", index, s_sumoInfo[s_sumoLiveSlot], 1);
 }
 
-// True when a private head kind is resident OR gave up (failed -> changeLink falls back), so a
-// genuinely-unavailable head arc can't hang the coordinated rebuild forever.
-bool capKindReadyOrFailed(int kind) {
-#if D_ALBW_SUMO_PRIVATE_FACECAP
-    return s_capState[kind] == 2 || s_capState[kind] == 3;
-#else
-    (void)kind;
-    return true;
-#endif
-}
-
 // True once a private body slot exists (used to gate the first sumo build in resourcesReady).
 bool sumoBodySlotReady() {
     return s_sumoLiveSlot >= 0;
@@ -354,10 +360,16 @@ void driveCustomHeadRefresh() {
     }
 #if D_ALBW_SUMO_PRIVATE_FACECAP
     if (needFace || capKind == 0) {
-        ensureIndependentCap(0);  // Kmdl: sumo face and/or Green cap
+        ensureCapLive(0);  // Kmdl live: sumo face and/or Green cap
     }
     if (capKind > 0) {
-        ensureIndependentCap(capKind);  // Red/Blue cap
+        ensureCapLive(capKind);  // Red/Blue cap live
+    }
+    if (s_capPending[0] >= 0) {
+        ensureCapSlot(0, s_capPending[0]);  // drive a Kmdl build-then-swap in flight
+    }
+    if (capKind > 0 && s_capPending[capKind] >= 0) {
+        ensureCapSlot(capKind, s_capPending[capKind]);
     }
 #endif
 
@@ -374,11 +386,8 @@ void driveCustomHeadRefresh() {
             s_sumoPendingSlot = freeSlot;             // build-then-swap into it
         }
 #if D_ALBW_SUMO_PRIVATE_FACECAP
-        for (int k = 0; k < kCapKindNum; ++k) {
-            if (s_capState[k] != 0) {
-                freeCapKind(k);  // in-place re-mount (epoch-guarded); reloaded by the loads above
-            }
-        }
+        if (needFace || capKind == 0) startCapSwap(0);        // Kmdl build-then-swap
+        if (capKind > 0) startCapSwap(capKind);               // Red/Blue build-then-swap
 #endif
         dAlbwAlink_invalidateClothesEpoch();  // hide stale head/face until the single rebuild
         s_headReapplyPending = true;
@@ -396,8 +405,12 @@ void driveCustomHeadRefresh() {
             }
         }
 #if D_ALBW_SUMO_PRIVATE_FACECAP
-        if ((needFace || capKind == 0) && !capKindReadyOrFailed(0)) ready = false;
-        if (capKind > 0 && !capKindReadyOrFailed(capKind)) ready = false;
+        if (needFace || capKind == 0) {
+            if (!tryPromoteCap(0) || !capLiveReadyOrFailed(0)) ready = false;
+        }
+        if (capKind > 0) {
+            if (!tryPromoteCap(capKind) || !capLiveReadyOrFailed(capKind)) ready = false;
+        }
 #endif
         if (ready) {
             dAlbwOutfit_forceReapply();  // one rebuild: body + face + cap/topknot all fresh
@@ -666,20 +679,22 @@ void dAlbwSumoTest_tickCapLoad() {
     // are fresh -- so no piece ever rebuilds stale (the topknot/cap wrong-source bug).
     driveCustomHeadRefresh();
 #endif
-    // Also ensure the selected color cap is loaded even if the coordinator is compiled out (kill
-    // switch); ensureIndependentCap is idempotent, so this is a no-op once resident.
+    // Also ensure the selected color cap's live slot exists even if the coordinator is compiled
+    // out (kill switch); ensureCapLive is idempotent, so this is a no-op once resident.
+#if D_ALBW_SUMO_PRIVATE_FACECAP
     const int kind = capWearKind();
     if (kind >= 0) {
-        ensureIndependentCap(kind);
+        ensureCapLive(kind);
     }
+#endif
 }
 
 J3DModelData* dAlbwSumoTest_independentCapData() {
-    const int kind = capWearKind();
-    if (kind < 0 || s_capState[kind] != 2) {
-        return NULL;
-    }
-    return s_capData[kind];
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+    return capLiveData(capWearKind());  // live build-then-swap slot for the selected color cap
+#else
+    return NULL;
+#endif
 }
 
 // Sumo face (al_face) from the private Kmdl mount (kind 0) — tracks the Custom Models toggle
@@ -687,50 +702,9 @@ J3DModelData* dAlbwSumoTest_independentCapData() {
 // base-arc al_face (prior behavior) until the private mount lands.
 void* dAlbwSumoTest_sumoFaceData() {
 #if D_ALBW_SUMO_PRIVATE_FACECAP
-    if (s_capState[0] == 2) {  // kind 0 == Kmdl
-        return dRes_control_c::getRes("Kmdl", "al_face.bmd", s_capInfo, kCapKindNum);
-    }
-#endif
+    return capLiveRes(0, "al_face.bmd");  // kind 0 == Kmdl, live slot
+#else
     return NULL;
-}
-
-// ============================================
-// TEMP DIAGNOSTIC (strip before push) — consolidated Custom-Models + outfit state.
-// Logs one line whenever any tracked field changes, so a "weird" visual can be correlated with
-// the exact settings: overlay generation + override count (0 = custom models OFF), Cap Wear
-// mode, sumo worn/active flags, and the private body slot the build will read.
-// ============================================
-#define D_ALBW_SUMO_STATE_DIAG 1
-void dAlbwSumoTest_logHeadState(const char* ctx) {
-#if D_ALBW_SUMO_STATE_DIAG
-    const int  gen    = dusk::custom_assets::overlay_generation();
-    const int  ovr    = dusk::custom_assets::count();
-    const int  cap    = static_cast<int>(dusk::getSettings().game.capWear.getValue());
-    const int  worn   = dAlbwOutfit_isSumoWorn() ? 1 : 0;
-    const int  active = dAlbwSumoTest_isOutfitActive() ? 1 : 0;
-#if D_ALBW_SUMO_PRIVATE_BODY
-    const int  slot   = s_sumoLiveSlot;
-    const int  facecap = D_ALBW_SUMO_PRIVATE_FACECAP;
-#else
-    const int  slot   = -2;
-    const int  facecap = -1;
-#endif
-    static const char* const kCap[5] = {"Off", "None", "Green", "Red", "Blue"};
-    const char* capName = (cap >= 0 && cap < 5) ? kCap[cap] : "?";
-
-    static int lGen = -99, lOvr = -99, lCap = -99, lWorn = -9, lActive = -9, lSlot = -99;
-    static const char* lCtx = "";
-    if (gen != lGen || ovr != lOvr || cap != lCap || worn != lWorn || active != lActive ||
-        slot != lSlot || ctx != lCtx) {
-        lGen = gen; lOvr = ovr; lCap = cap; lWorn = worn; lActive = active; lSlot = slot;
-        lCtx = ctx;
-        DuskLog.info(
-            "[albw-state] {} | customModels={} gen={} overridePaths={} capWear={} sumoWorn={} "
-            "sumoActive={} bodySlot={} facecap={}",
-            ctx, (ovr > 0 ? "ON" : "off"), gen, ovr, capName, worn, active, slot, facecap);
-    }
-#else
-    (void)ctx;
 #endif
 }
 

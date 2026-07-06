@@ -73,12 +73,6 @@ int count();
 // last-seen value to know the overlay set changed and they must re-mount.
 int overlay_generation();
 
-// --- TEMP DIAGNOSTIC (strip before upstream) ---
-// Called from the DVD entrynum chokepoint for every path resolution. When the
-// diag flag in the .cpp is on, logs each arc mount + whether the overlay covers
-// it ("[ca-diag] CONVERT ..."), to find arcs that bypass Layer A. No-op otherwise.
-void diag_convert(const char* game_path, int entrynum);
-
 }  // namespace dusk::custom_assets
 
 #endif  // DUSK_CUSTOM_ASSETS_HPP

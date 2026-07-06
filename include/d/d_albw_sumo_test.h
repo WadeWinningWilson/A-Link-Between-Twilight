@@ -74,11 +74,6 @@ void* dAlbwSumoTest_sumoRes(int index);
 // back to the base-arc al_face).
 void* dAlbwSumoTest_sumoFaceData();
 
-// TEMP DIAGNOSTIC (strip before push): log the consolidated Custom-Models + outfit state
-// (overlay generation, override count, Cap Wear mode, sumo worn/active, private body slot) on
-// each head build, event-driven (only when a field changes).  `ctx` tags the call site.
-void dAlbwSumoTest_logHeadState(const char* ctx);
-
 // ---- Shop integration (Sumo Outfit purchase) ----------------------------------
 // True once the Sumo Outfit has been bought (save-backed ownership bit).  This is
 // the foundation brick of the planned stored-armors / quick-swap system.

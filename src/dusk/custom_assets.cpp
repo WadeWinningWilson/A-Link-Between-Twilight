@@ -22,34 +22,14 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-// ============================================
-// TEMP DIAGNOSTIC — custom-asset coverage trace. Finds which arcs render vanilla
-// by logging (a) every overlay OPEN that is served from a loose file (arcs + .baa;
-// per-read .aw waves are skipped to avoid spam) and (b) every arc entrynum CONVERT
-// with overlaid=0/1. Grep the Dusklight log for "[ca-diag]".
-// STRIP (set to 0) before any upstream push.
-// ============================================
-#define D_ALBW_CA_DIAG 1
-
 namespace dusk::custom_assets {
 namespace {
-
-#if D_ALBW_CA_DIAG
-// True if 'path' ends (case-sensitive) with the given lowercase extension incl. dot.
-bool diag_has_ext(const char* path, const char* dotext) {
-    if (path == nullptr) return false;
-    const std::size_t n = std::strlen(path);
-    const std::size_t e = std::strlen(dotext);
-    return n >= e && std::strcmp(path + (n - e), dotext) == 0;
-}
-#endif
 
 // normalized game path ("res/object/kmdl.arc") -> absolute loose file path
 std::unordered_map<std::string, std::string> s_map;
@@ -209,22 +189,6 @@ int overlay_generation() {
     return s_generation;
 }
 
-void diag_convert(const char* game_path, int entrynum) {
-#if D_ALBW_CA_DIAG
-    // Arcs only (skip audio/other) to keep the model trace readable. s_map/normalize
-    // are file-scope (anon ns above) — reachable from the enclosing namespace here.
-    if (!diag_has_ext(game_path, ".arc")) {
-        return;
-    }
-    const bool overlaid = !s_map.empty() && s_map.find(normalize(game_path)) != s_map.end();
-    DuskLog.info("[ca-diag] CONVERT {} entry={} overlaid={}", game_path, entrynum,
-                 overlaid ? 1 : 0);
-#else
-    (void)game_path;
-    (void)entrynum;
-#endif
-}
-
 namespace {
 
 // Program-lifetime backing store for the absolute loose paths handed to the
@@ -247,15 +211,7 @@ const char* stable_path(const std::string& abs) {
 }
 
 void* overlay_open(void* userdata) {
-    const char* path = static_cast<const char*>(userdata);
-#if D_ALBW_CA_DIAG
-    // Log arc/.baa opens (an .aw opens per streamed read — skip to avoid spam and
-    // per-read file I/O on the DVD thread). This is the "served from loose" signal.
-    if (path != nullptr && !diag_has_ext(path, ".aw")) {
-        DuskLog.info("[ca-diag] overlay OPEN {}", path);
-    }
-#endif
-    return std::fopen(path, "rb");
+    return std::fopen(static_cast<const char*>(userdata), "rb");
 }
 
 void overlay_close(void* handle) {
@@ -449,7 +405,6 @@ bool is_folder_enabled(const char*) { return true; }
 void toggle_folder(const char*) {}
 int count() { return 0; }
 int overlay_generation() { return 0; }
-void diag_convert(const char*, int) {}
 }  // namespace dusk::custom_assets
 
 #endif  // TARGET_PC

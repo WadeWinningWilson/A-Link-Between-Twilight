@@ -15,7 +15,6 @@
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_ext.h"
 #include "os_report.h"
-#include "dusk/custom_assets.hpp"  // TEMP DIAGNOSTIC: diag_convert (strip with the .cpp flag)
 
 s32 mDoDvdThd::main(void* param_0) {
     JKRThread(OSGetCurrentThread(), 0);
@@ -101,7 +100,6 @@ static void dummy1() {
 
 static s32 my_DVDConvertPathToEntrynum(char const* path) {
     s32 entrynum = DVDConvertPathToEntrynum(path);
-    dusk::custom_assets::diag_convert(path, entrynum);  // TEMP DIAGNOSTIC (no-op when flag off)
 #if DEBUG
     if (entrynum < 0) {
         BOOL connected = mDoCPd_c::isConnect(2);

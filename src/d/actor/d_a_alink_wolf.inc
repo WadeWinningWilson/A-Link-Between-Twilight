@@ -335,9 +335,6 @@ void daAlink_c::changeLink(int param_0) {
         offNoResetFlg2(FLG2_UNK_200000);
         onNoResetFlg2(FLG2_UNK_80000);
 
-#if TARGET_PC
-        dAlbwSumoTest_logHeadState("sumo");  // TEMP DIAGNOSTIC (strip before push)
-#endif
         modelData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x31));  // 3b: private slot, global fallback
         mpLinkModel = mDoExt_J3DModel__create(modelData, 0x80000, 0x11000084);
 #if TARGET_PC
@@ -360,33 +357,6 @@ void daAlink_c::changeLink(int param_0) {
             J3DModelData* capData = dAlbwSumoTest_independentCapData();
             if (capData == NULL) {
                 capData = static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
-            }
-            // ============================================
-            // TEMP DIAGNOSTIC — ALBW Port (cap resolution + geometry)
-            // A NULL capData means the cap arc isn't resident at build time -> topknot fallback
-            // (resInfo NULL = never registered; resInfo set + archive NULL = freed/aliased).
-            // joints/shapes/mats expose the helmet's geometry vs the green cap (al_head=2 mats;
-            // ml_head>=3) -- joints>10 would overflow the cap-physics arrays (guarded in
-            // headModelCallBack).  Logged on resolved/arc change only (event, not per-frame).
-            // STRIP before push.
-            // ============================================
-            {
-                static const char* s_capDbgArc      = NULL;
-                static int         s_capDbgResolved  = -1;
-                const int resolved = (capData != NULL) ? 1 : 0;
-                if (resolved != s_capDbgResolved || capArc != s_capDbgArc) {
-                    s_capDbgResolved = resolved;
-                    s_capDbgArc      = capArc;
-                    dRes_info_c* kInfo =
-                        g_dComIfG_gameInfo.mResControl.getObjectResInfo(capArc);
-                    DuskLog.debug("ALBW-CAP build arc={} model={} data={} resInfo={} archive={} "
-                                  "joints={} shapes={} mats={}",
-                                  capArc, capName, (void*)capData, (void*)kInfo,
-                                  (void*)(kInfo != NULL ? kInfo->getArchive() : NULL),
-                                  capData ? capData->getJointNum() : 0xFFFF,
-                                  capData ? capData->getShapeNum() : 0xFFFF,
-                                  capData ? capData->getMaterialNum() : 0xFFFF);
-                }
             }
             if (capData == NULL) {
                 capData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33));  // 3b topknot fallback
@@ -517,47 +487,17 @@ void daAlink_c::changeLink(int param_0) {
     s_albwNativeCapResolved = true;  // default: Off / sumo / wolf -> nothing to override
     if (dusk::getSettings().game.capWear.getValue() != dusk::CapWearMode::Off &&
         !checkNoResetFlg2(FLG2_UNK_80000) && !checkWolf()) {
-#if TARGET_PC
-        dAlbwSumoTest_logHeadState("native");  // TEMP DIAGNOSTIC (strip before push)
-#endif
         const bool wantTopknot = dAlbwSumoTest_wantTopknot();
         const char* capArc  = wantTopknot ? "alSumou" : dAlbwSumoTest_capArcName();
         const char* capName = wantTopknot ? "topknot(0x33)" : dAlbwSumoTest_capModelName();
+        (void)capArc;
+        (void)capName;
         // None uses the resident alSumou topknot; Green/Red/Blue come from the model-agnostic
         // INDEPENDENT loader (private array+heap, base-independent, no aliasing).  NULL while it
         // loads / on failure -> keep the native hat (self-heal re-fires once it's ready).
         J3DModelData* capData =
             wantTopknot ? static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33))  // 3b: private, tracks toggle
                         : dAlbwSumoTest_independentCapData();
-
-        // ============================================
-        // TEMP DIAGNOSTIC — ALBW Port (#4: non-sumo Cap Wear resolution + geometry)
-        // Mirrors the sumo-branch ALBW-CAP probe for NATIVE Link: mode, base wear-flag, chosen
-        // arc, resolution (resInfo/archive), geometry (joints/shapes/mats).  Event-driven (logs
-        // only when the resolved state / arc changes), not per-frame.  STRIP before push.
-        // ============================================
-        {
-            static int         s_ncapResolved = -1;
-            static const char* s_ncapArc      = NULL;
-            const int resolved = (capData != NULL) ? 1 : 0;
-            if (resolved != s_ncapResolved || capArc != s_ncapArc) {
-                s_ncapResolved = resolved;
-                s_ncapArc      = capArc;
-                const char* base = checkCasualWearFlg()     ? "Ordon"
-                                   : checkZoraWearFlg()       ? "Zora"
-                                   : checkMagicArmorWearFlg() ? "Magic"
-                                                              : "Heros";
-                dRes_info_c* info = g_dComIfG_gameInfo.mResControl.getObjectResInfo(capArc);
-                DuskLog.debug("ALBW-CAP native mode={} base={} arc={} model={} data={} resInfo={} "
-                              "archive={} joints={} shapes={} mats={}",
-                              (int)dusk::getSettings().game.capWear.getValue(), base, capArc,
-                              capName ? capName : "topknot(0x33)", (void*)capData, (void*)info,
-                              (void*)(info != NULL ? info->getArchive() : NULL),
-                              capData ? capData->getJointNum() : 0xFFFF,
-                              capData ? capData->getShapeNum() : 0xFFFF,
-                              capData ? capData->getMaterialNum() : 0xFFFF);
-            }
-        }
 
         if (capData != NULL) {
             // On a Magic base the cascade bound mMagicArmorHeadBrk to the ml_head we are
