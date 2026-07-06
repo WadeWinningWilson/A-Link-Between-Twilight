@@ -153,22 +153,12 @@ already-open file handles keep their own `FILE*`. The persistent path pool
 (`s_pathPool`) means re-registration never dangles a previously-issued
 `userData`.
 
-**MANDATORY next phase — truly instant on-screen.** Reload-scoped is the interim
-state, **not** the finish line. A toggle must visibly swap the asset without an
-area reload. The file layer can't do that with re-register alone (already-loaded
-data persists), so instant needs one (or both) of:
-- **Callback-level disc fallback:** keep overlays always registered, but have the
-  overlay `open`/`read` serve the *original disc bytes* when the folder is
-  disabled (capture each replaced file's disc offset+length at install time). The
-  entry stays `isOverlay`, so the switch is per-open with no FST rebuild — the
-  cleanest analog to the texture per-draw model.
-- **Asset-reload nudge:** after a toggle, force the affected assets to re-request
-  (re-mount the arc / re-init the audio bank) so the already-loaded copy is
-  dropped. The engine already does this on area transition; the work is doing it
-  on demand for the specific assets a toggle touches.
-
-Design leans toward the disc-fallback approach (no FST churn, matches how
-textures behave). To be scoped and built next.
+**The instant-on-screen work chose the asset-reload nudge** (not disc fallback):
+once an arc/wave bank is in memory, changing the overlay does nothing to the
+loaded copy, so the only way to reflect a toggle without an area reload is to make
+the specific consumers **re-request** their assets. That's straightforward for
+assets the game reloads on a clothes/area change, but hard for **session-resident**
+assets that are deliberately never re-requested — which is the whole story of §5.
 
 **Complementary system:** `texture_replacements` is Aurora's *GPU-hash-keyed*
 pixel swap. Overlay (file-level) + texture replacements (GPU-level) together
@@ -176,7 +166,92 @@ cover raw disc files and in-memory textures.
 
 ---
 
-## 5. Positioning for a merge with the official Dusklight team
+## 5. Resident-asset live toggle — the sumo composite (Option 3b)
+
+The hardest part of the toggle story. Most model arcs (`Kmdl` etc.) reload on a
+clothes change, so they track a toggle for free. But some assets are held
+**session-resident** by design and never re-requested mid-play — so toggling the
+mod while they're on screen leaves them frozen. The ALBW **sumo outfit** is the
+worst case: it's a *composite* of several resident pieces, so a mid-session toggle
+produced "half-Linkle" hybrids (e.g. Linkle body + vanilla face).
+
+### Diagnosis (the `[ca-diag]` coverage trace)
+A temporary diagnostic (`D_ALBW_CA_DIAG` in `custom_assets.cpp`) logged every
+overlay `OPEN` (served-from-loose) and every arc `CONVERT` (`overlaid=0/1`). It
+proved this was **not** a coverage gap: `alSumou` *was* overlaid and served — it
+just loads **once** and is held resident, while `Kmdl` (the face donor) reloads
+and tracks. Frozen body vs. live face = the hybrid.
+
+### What DOESN'T work: freeing the resident arc
+First attempt: on toggle, `resDelete` the resident `alSumou` so it re-mounts.
+**Crashed** — `EXCEPTION_ACCESS_VIOLATION` at `0xffff…`, the documented
+dangling-solid-heap double-free (the clothes pipeline's `mpArcHeap->freeAll()`
+bypasses the refcount, so a hand `resDelete` on an aliased arc dangles). Recorded
+in git `1e5804185f`. **Rule: a resident model arc cannot be hot-freed via the
+global resource manager while a model references it.**
+
+### What works: private-heap mounts + build-then-swap (Option 3b)
+Adopt the proven **independent-cap pattern** — mount into a *private*
+`dRes_info_c` array + `JKRSolidHeap` that the clothes pipeline never indexes or
+frees. Because the private heap never aliases `mpArcHeap->freeAll`, it can be
+freed safely. A subtlety forces the shape: the resource manager is **name-cached**
+(re-`resLoad("alSumou")` returns the *old* content), so you cannot hold two
+versions of one arc name in the global manager — hence a **private** mount, and a
+**two-slot build-then-swap** to refresh it:
+- Load the fresh overlay content into the free slot while the old slot keeps the
+  live model valid; repoint `changeLink` to the new slot; release the old slot on
+  the *next* swap (so the slot freed is always one a rebuild already moved off).
+
+### The composite: every piece must pull from a toggle-tracking source
+`changeLink`'s sumo build reads from several arcs; each had to be moved onto a
+private, generation-swapped mount or it stayed frozen:
+
+| Sumo piece | Was | Now |
+|---|---|---|
+| Body / hand / topknot (`alSumou` 0x31/0x32/0x33) | global resident | private `alSumou` 2-slot build-then-swap |
+| Face (`al_face`) | base clothes arc `mArcName` (skip-path frozen) | private `Kmdl` (also base-independent) |
+| Color cap G/R/B (`al_head`/`ml_head`/`zl_head`) | global donor `getObjectRes` | private independent cap loader (gen-swap) |
+
+### One coordinator, one rebuild
+The body and cap originally had **separate** generation-swaps that each fired
+`forceReapply` — so the cap's rebuild ran before the body's build-then-swap
+finished, and the topknot (sourced from the body slot) rebuilt from the *stale*
+slot. Fixed by a single coordinator (`driveSumoPrivateBody`, called from
+`resourcesReady`): on a generation change it starts the body swap **and** frees
+the private head arcs, epoch-bumps so the stale head/face isn't drawn, and fires
+**exactly one** `forceReapply` — only once the new body slot **and** the head arcs
+are all resident (`headArcsReadyForRebuild`). The rebuild uses the shared
+metamorphose-reapply hook (`dAlbwOutfit_forceReapply`).
+
+### Status & risk
+- **Crash-free** through swaps, storage, warps, cutscenes (verified).
+- Body + face track the toggle cleanly; caps just re-routed to the private loader
+  (in testing).
+- **Kill switches:** `D_ALBW_SUMO_PRIVATE_BODY` (body), `D_ALBW_SUMO_PRIVATE_FACECAP`
+  (face + caps) — either → `0` restores the prior global path.
+- **Open risk:** the body uses crash-proof build-then-swap; the face/cap use
+  *in-place* free + epoch-guard (simpler). The epoch guard covers draw+shadow but
+  not `calc` — if a toggle-while-sumo-with-cap ever faults, that's the calc window
+  and the fix is to give the cap the same build-then-swap.
+- `alSumou` is small; the private heaps are game-heap-carved and (so far) survive
+  warps, so no stage-transition reload was needed (the doc's "STILL TO TEST" item
+  from `Quick-Sumo Work.md` — currently holding).
+
+### Files
+`src/d/d_albw_sumo_test.cpp` / `.h` (private loaders + coordinator + accessors),
+`src/d/actor/d_a_alink_wolf.inc` (`changeLink` sources body/hand/topknot/face/cap
+via the private accessors), `src/d/d_albw_outfit.cpp` / `.h`
+(`dAlbwOutfit_forceReapply`), `src/dusk/custom_assets.cpp` / `.hpp`
+(`overlay_generation()` — the re-mount signal).
+
+### Still reboot-scoped: audio
+The `.aw`/`.baa` wave banks are session-resident (JAudio2), so **voice does not
+revert on a mid-session toggle** — that's the separate "audio reapply" follow-up
+(model composite was done first). Audio applies cleanly when enabled at boot.
+
+---
+
+## 6. Positioning for a merge with the official Dusklight team
 
 - **Built on the official, upstream Aurora API**, used exactly as documented
   (`aurora_dvd_overlay_files` / `_callbacks`) — a purpose-built extension point.
@@ -189,35 +264,40 @@ cover raw disc files and in-memory textures.
   a single find-replace. The old non-standard arc-mount code is gone, shrinking
   the merge surface to just the Layer-B loose-BMD injector (which is small and
   self-contained).
+- **The sumo composite work (§5) is ALBW-specific**, not part of the general API —
+  it's what a resident-asset consumer must do to honor a live toggle. Kept behind
+  kill switches so it can be lifted out cleanly.
 
 ---
 
-## 6. Current file state
+## 7. Current file state
 
 | File | Role | Status |
 |------|------|--------|
-| `src/dusk/custom_assets.cpp` / `.hpp` | Whole system: Layer A (scan + overlay), Layer B (loose BMD), folder toggle | Working; audio confirmed in-game |
-| `src/m_Do/m_Do_main.cpp`               | Calls `scan()` (startup) + `install_overlays()` (after disc open) | Wired |
-| `src/m_Do/m_Do_dvd_thread.cpp`         | Stock arc mount (custom 2b mount **removed**) | Reverted to stock + note |
-| `src/m_Do/m_Do_main.cpp`               | Calls `scan()` + `install_overlays()` at startup | Wired |
+| `src/dusk/custom_assets.cpp` / `.hpp` | Whole system: Layer A (scan + overlay), Layer B (loose BMD), folder toggle, `overlay_generation()` | Working; audio confirmed in-game |
+| `src/m_Do/m_Do_main.cpp`               | `scan()` (startup) + `install_overlays()` (after disc open) | Wired |
+| `src/m_Do/m_Do_dvd_thread.cpp`         | Stock arc mount (custom 2b mount **removed**) + temp `[ca-diag]` hook | Reverted to stock |
 | `src/dusk/ui/editor.cpp`               | ALBW → Custom Models multi-toggle picker | Working |
 | `include/dusk/settings.h`, `src/dusk/settings.cpp` | `game.customModelsDisabled` setting | Working |
-| `include/dusk/settings.h`, `src/dusk/settings.cpp` | `game.customModelsDisabled` setting | Working |
-| `src/dusk/ui/editor.cpp`               | ALBW → Custom Models multi-toggle picker | Working |
-| `src/d/actor/d_a_b_gm.cpp`             | Layer-B consumer (Armogohma B_gm) | Working |
+| `src/d/actor/d_a_b_gm.cpp`             | Layer-B consumer (Armogohma `B_gm`) | Working |
+| `src/d/d_albw_sumo_test.{cpp,h}`, `d_a_alink_wolf.inc`, `d_albw_outfit.{cpp,h}` | §5 resident-asset live toggle (sumo composite) | Body/face working; caps in test |
 | `extern/aurora/lib/dolphin/dvd/{dvd,fst}.cpp` | Aurora overlay system (upstream, unmodified) | Used as-is |
 
 ---
 
-## 7. Open items / limitations
+## 8. Open items / limitations
 
-- **MANDATORY: truly-instant on-screen toggle** (see §4). Reload-scoped is the
-  current interim; instant-without-reload is the required next build, leaning
-  toward the callback-level disc-fallback design.
-- **Single-asset granularity:** sub-arc assets still need Layer B (loose BMD) or
-  a repacked arc; Layer A is whole-file only.
+- **Caps final verification** (§5) — color caps just re-routed to the private
+  loader; confirm they track on toggle across all Cap Wear modes.
+- **Audio live toggle** — `.aw`/`.baa` still reboot-scoped; the audio-reapply
+  follow-up (re-init the resident wave banks on toggle) is not built.
+- **Face/cap build-then-swap upgrade** — currently in-place + epoch-guard; upgrade
+  to build-then-swap if the calc window ever faults.
+- **Single-asset granularity:** sub-arc assets still need Layer B (loose BMD) or a
+  repacked arc; Layer A is whole-file only.
 - **Audio consistency (modder rule):** a mod that overlays `.aw` waves must also
-  overlay the matching `Z2Sound.baa` (its WSYS offsets are baked against those
-  waves). The Linkle mod ships both, so this holds.
-- **Verify a compressed arc** through Layer A (Linkle's are raw RARC). Architecture
-  says it works (stock loader decompresses the overlaid bytes); wants one test.
+  overlay the matching `Z2Sound.baa` (WSYS offsets are baked together). Linkle
+  ships both.
+- **Verify a compressed arc** through Layer A (Linkle's are raw RARC).
+- **Strip before push:** `[ca-diag]` (`custom_assets.cpp` + `m_Do_dvd_thread.cpp`),
+  `ALBW-CAP` / `ALBW-CAPLOAD` (`d_albw_sumo_test.cpp`, `d_a_alink_wolf.inc`).

@@ -60,6 +60,25 @@ void dAlbwSumoTest_tickCapLoad();
 // loading, on failure, or for Off/None.  changeLink's non-sumo override builds the cap from this.
 J3DModelData* dAlbwSumoTest_independentCapData();
 
+// ---- Private sumo body (Option 3b) ---------------------------------------------
+// Fetch an alSumou resource by index (body 0x31 / hand 0x32 / topknot 0x33) for
+// changeLink's sumo build.  When D_ALBW_SUMO_PRIVATE_BODY is on this returns the
+// resource from a PRIVATE pipeline-isolated mount (so a Custom Models toggle can
+// build-then-swap the body without the freeAll-aliasing crash); it transparently
+// falls back to the global getObjectRes("alSumou", index) when the private slot
+// isn't ready or the feature is off.  Never introduces a NULL the global path wouldn't.
+void* dAlbwSumoTest_sumoRes(int index);
+
+// Sumo face model (al_face) from the private Kmdl mount — tracks the Custom Models toggle
+// and is base-independent.  NULL until the private Kmdl is resident (changeLink then falls
+// back to the base-arc al_face).
+void* dAlbwSumoTest_sumoFaceData();
+
+// TEMP DIAGNOSTIC (strip before push): log the consolidated Custom-Models + outfit state
+// (overlay generation, override count, Cap Wear mode, sumo worn/active, private body slot) on
+// each head build, event-driven (only when a field changes).  `ctx` tags the call site.
+void dAlbwSumoTest_logHeadState(const char* ctx);
+
 // ---- Shop integration (Sumo Outfit purchase) ----------------------------------
 // True once the Sumo Outfit has been bought (save-backed ownership bit).  This is
 // the foundation brick of the planned stored-armors / quick-swap system.

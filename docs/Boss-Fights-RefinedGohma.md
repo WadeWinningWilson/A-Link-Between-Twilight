@@ -8,6 +8,13 @@ Armogohma-centric); that doc now cross-references here.
 **Actors:** `B_GM` (`d_a_b_gm.cpp`, giant body) + `E_GM` param 3 = `TYPE_GOMA`
 (`d_a_e_gm.cpp`, floor eye). Object arc: `B_gm.arc` (model `GOMA`).
 
+> **Custom-model delivery** (loading a modified `B_gm` model **without repacking
+> the arc**) is handled by the general Custom Models system — see
+> [Custom-Model-API-Work.md](Custom-Model-API-Work.md). `B_gm` is that system's
+> first **Layer-B** consumer (`dusk::custom_assets::try_load("B_gm", 0x25)` in
+> `useHeapInit`). This doc keeps only the Gohma-specific reveal design; the API
+> internals live there.
+
 **Overall status (2026-07-05):** HP bar + egg fix + name styling + crash diagnostic
 landed but **uncommitted**; pursuit test implemented then **disabled**; beta-eye
 research complete (proven in Blender), **no in-game reveal built yet**.
@@ -194,7 +201,7 @@ The reveal is *exposing shipped content*, not authoring it. The one wall: **the 
 
 **Tiers (cheapest → cleanest):**
 1. **Code-only:** trigger `eye_test.bck` on `B_GM` at a scripted beat — the eye slides to the face and the lids open using the shipped anim. *Caveat:* the carapace face is still present, so the eye **emerges through** the face rather than the face vanishing. Creepy, beta-ish, but not the clean "mask gone" look. Good as a first prototype.
-2. **One modified model (recommended):** in Blender, split the face-plate into its **own shape + material** (prototyped this session), re-export BMD via SuperBMD, repack `B_gm.arc`. Now the face is separately addressable → hide/fade **only** it at runtime.
+2. **One modified model (recommended):** in Blender, split the face-plate into its **own shape + material** (prototyped this session), re-export BMD via SuperBMD. Now the face is separately addressable → hide/fade **only** it at runtime. **No repack needed** — drop the modified `B_gm_37.bmd` (0x25) into a `model_replacements/` folder and the Layer-B loader picks it up (see [Custom-Model-API-Work.md](Custom-Model-API-Work.md)).
 3. **Full model swap** for phase 3 — heaviest, unnecessary if tier 2 is done.
 
 **Runtime levers (J3D, via the boss's `mpModelMorf`):** play a BCK (`eye_test.bck`), suppress a shape/material (no-draw flag or **material alpha → 0**, selective only with tier 2), and BTK texture anim (`eye_zoom.btk` = pupil dilation).
@@ -207,7 +214,7 @@ The reveal is *exposing shipped content*, not authoring it. The one wall: **the 
 3. The spider face melts away and the single beta eye emerges and locks onto Link — a transformation built almost entirely from shipped assets.
 
 **Caveats / open design:**
-- SuperBMD round-trip fidelity + arc repack are the main testing burden; the modified model must load/skin correctly in-engine.
+- SuperBMD round-trip fidelity is the main testing burden; the modified model must load/skin correctly in-engine. (Arc repack is no longer needed — Layer-B loose-BMD delivery.)
 - Timing the alpha fade + BCK + BTK is tuning.
 - The beta eye is on **`B_GM`** (giant); the retail phase-2/3 weak point is the separate **`E_GM`** floor eye — decide whether the reveal *replaces* or *precedes* the existing eye phase.
 

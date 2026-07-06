@@ -335,7 +335,10 @@ void daAlink_c::changeLink(int param_0) {
         offNoResetFlg2(FLG2_UNK_200000);
         onNoResetFlg2(FLG2_UNK_80000);
 
-        modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x31));
+#if TARGET_PC
+        dAlbwSumoTest_logHeadState("sumo");  // TEMP DIAGNOSTIC (strip before push)
+#endif
+        modelData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x31));  // 3b: private slot, global fallback
         mpLinkModel = mDoExt_J3DModel__create(modelData, 0x80000, 0x11000084);
 #if TARGET_PC
         // Sumo Outfit "Link Hat": load Link's cap (Kmdl al_head.bmd) instead of
@@ -352,8 +355,12 @@ void daAlink_c::changeLink(int param_0) {
             // on any base (resourcesReady cap donor); a NULL here = not-yet-resident -> topknot.
             const char* capArc  = dAlbwSumoTest_capArcName();
             const char* capName = dAlbwSumoTest_capModelName();
-            J3DModelData* capData =
-                static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
+            // 3b: prefer the PRIVATE independent cap (gen-swapped -> tracks the Custom Models
+            // toggle).  Fall back to the global donor arc (prior behavior) until it is resident.
+            J3DModelData* capData = dAlbwSumoTest_independentCapData();
+            if (capData == NULL) {
+                capData = static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
+            }
             // ============================================
             // TEMP DIAGNOSTIC — ALBW Port (cap resolution + geometry)
             // A NULL capData means the cap arc isn't resident at build time -> topknot fallback
@@ -382,16 +389,16 @@ void daAlink_c::changeLink(int param_0) {
                 }
             }
             if (capData == NULL) {
-                capData = static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33));
+                capData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33));  // 3b topknot fallback
             }
             mpLinkHatModel = initModel(capData, 0);
         } else
 #endif
         {
             mpLinkHatModel =
-                initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33)), 0);
+                initModel(static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33)), 0);  // 3b topknot
         }
-        mpLinkHandModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x32)), 0);
+        mpLinkHandModel = initModel(static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x32)), 0);  // 3b hand
 #if TARGET_PC
         // Link Hat: shape visibility lives on the shared al_head.bmd J3DModelData,
         // and a prior use of the model may have left shapes hidden.  Force every
@@ -510,6 +517,9 @@ void daAlink_c::changeLink(int param_0) {
     s_albwNativeCapResolved = true;  // default: Off / sumo / wolf -> nothing to override
     if (dusk::getSettings().game.capWear.getValue() != dusk::CapWearMode::Off &&
         !checkNoResetFlg2(FLG2_UNK_80000) && !checkWolf()) {
+#if TARGET_PC
+        dAlbwSumoTest_logHeadState("native");  // TEMP DIAGNOSTIC (strip before push)
+#endif
         const bool wantTopknot = dAlbwSumoTest_wantTopknot();
         const char* capArc  = wantTopknot ? "alSumou" : dAlbwSumoTest_capArcName();
         const char* capName = wantTopknot ? "topknot(0x33)" : dAlbwSumoTest_capModelName();
@@ -517,7 +527,7 @@ void daAlink_c::changeLink(int param_0) {
         // INDEPENDENT loader (private array+heap, base-independent, no aliasing).  NULL while it
         // loads / on failure -> keep the native hat (self-heal re-fires once it's ready).
         J3DModelData* capData =
-            wantTopknot ? static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33))
+            wantTopknot ? static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33))  // 3b: private, tracks toggle
                         : dAlbwSumoTest_independentCapData();
 
         // ============================================
@@ -608,10 +618,15 @@ void daAlink_c::changeLink(int param_0) {
     // holds Zmdl instead, so our Kmdl is an independent entry and never aliases it.
     // ============================================
     if (checkNoResetFlg2(FLG2_UNK_80000)) {
-        if (checkZoraWearFlg()) {
-            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_face.bmd"));
-        } else {
-            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd"));
+        // 3b: prefer the private Kmdl al_face (tracks the Custom Models toggle, base-independent).
+        faceData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoFaceData());
+        if (faceData == NULL) {
+            // Fallback (private Kmdl not resident yet / feature off): the base-arc al_face.
+            if (checkZoraWearFlg()) {
+                faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_face.bmd"));
+            } else {
+                faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd"));
+            }
         }
     }
 #endif

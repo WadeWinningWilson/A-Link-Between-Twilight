@@ -57,24 +57,17 @@ u8   sLastClothes         = 0xFF;
 u8   sClothesPhaseFor     = 0xFF;  // equipped-clothes value sClothesPhase was (re)loaded for
 
 // ============================================
-// NEW CODE — ALBW Port (Custom Models: re-mount the resident sumo body on toggle)
-// alSumou is held session-resident, so a Custom Models toggle (which re-registers the
-// DVD overlay set) leaves the sumo body frozen at its first-load state while Kmdl (the
-// face) reloads and tracks the toggle -> the "half-Linkle" hybrid.  We watch the overlay
-// generation and, on a change, free alSumou so it re-mounts under the new set, then
-// rebuild.  REVERSIBLE: set to 0 to fully restore the prior (frozen-body) behavior.
-//
-// DISABLED (2026-07-06): freeing alSumou mid-play via resDelete reproduced the
-// documented dangling-solid-heap DOUBLE-FREE (EXCEPTION_ACCESS_VIOLATION, fault
-// 0xffff..., on toggle-on while sumo worn — the exact crash requestClothesChange's
-// comment warns about).  The resident sumo body cannot be hot-freed here; it must be
-// re-mounted through the game's own stage teardown (a transition), not resDelete.
+// NEW CODE — ALBW Port (Custom Models: private-heap sumo body, Option 3b)
+// The sumo body/hand/topknot are mounted into a PRIVATE dRes_info_c array + JKRSolidHeap
+// (the proven independent-cap pattern) that the clothes pipeline never indexes or frees.
+// Because these heaps never alias mpArcHeap->freeAll, a Custom Models toggle can
+// BUILD-THEN-SWAP the body — load the fresh overlay content into the free slot, repoint
+// changeLink to it, then release the previous slot — with none of the dangling double-free
+// that killed the direct-resDelete approach (its crash is recorded in git @1e5804185f).
+// changeLink sources the body via dAlbwSumoTest_sumoRes() (private slot, global fallback).
+// REVERSIBLE: set D_ALBW_SUMO_PRIVATE_BODY to 0 to fully restore the global-only body path.
 // ============================================
-#define D_ALBW_CUSTOM_MODEL_REAPPLY 0
-#if D_ALBW_CUSTOM_MODEL_REAPPLY
-int  sLastOverlayGen     = -1;     // -1 until baseline captured on first exec
-bool sCustomReapplyArmed = false;  // alSumou freed; rebuild once it re-mounts
-#endif
+#define D_ALBW_SUMO_PRIVATE_BODY 1
 
 request_of_phase_process_class sPhase;
 request_of_phase_process_class sKmdlPhase;
@@ -108,6 +101,39 @@ dRes_info_c   s_capInfo[kCapKindNum];                  // PRIVATE array (NOT the
 JKRSolidHeap* s_capHeap[kCapKindNum]  = {NULL, NULL, NULL};
 J3DModelData* s_capData[kCapKindNum]  = {NULL, NULL, NULL};
 u8            s_capState[kCapKindNum] = {0, 0, 0};     // 0 idle, 1 loading, 2 ready, 3 failed
+
+// ============================================
+// NEW CODE — ALBW Port (Custom Models: private head arcs track the toggle, Option 3b cont.)
+// The sumo face (al_face) and the color cap (al_head/ml_head/zl_head) both live in the
+// private head arcs Kmdl/Mmdl/Zmdl (loaded above).  So a Custom Models toggle must reload
+// them too, or the body (private, tracks) and the face/cap (frozen) disagree — the reported
+// hybrid.  On an overlay-generation change we release the loaded head kinds so they re-mount
+// fresh; the clothes-epoch bump keeps the stale head/face from drawing until changeLink
+// rebuilds (forceReapply), and the private isolation means the release can't alias a freeAll.
+// The face is sourced from the private Kmdl (kind 0), so it also becomes base-independent.
+// REVERSIBLE: set D_ALBW_SUMO_PRIVATE_FACECAP to 0 to restore the base-arc face + frozen cap.
+//
+// DISABLED (2026-07-06): the in-place head-arc free (freeCapKind) crashed under stress —
+// ACCESS_VIOLATION at a wild pointer during the changeLink rebuild, i.e. a cap/Kmdl heap freed
+// while its model was still referenced (the calc window this comment warned about).  The face
+// and color caps need the SAME build-then-swap the body uses (2-slot, load-fresh-then-free-old)
+// before they can hot-swap safely.  Until then this is OFF: body + native topknot track via the
+// build-then-swap body slot (crash-free); face + color cap are reload-scoped (track on the next
+// clothes change), matching the prior stable behavior.
+// ============================================
+#define D_ALBW_SUMO_PRIVATE_FACECAP 0
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+// Release one private head kind (safe: pipeline-isolated + epoch-guarded before rebuild).
+void freeCapKind(int kind) {
+    if (s_capHeap[kind] != NULL) {
+        dRes_control_c::deleteRes(kCapKindArc[kind], s_capInfo, kCapKindNum);
+        mDoExt_destroySolidHeap(s_capHeap[kind]);
+        s_capHeap[kind] = NULL;
+    }
+    s_capData[kind]  = NULL;
+    s_capState[kind] = 0;
+}
+#endif
 
 // game.capWear -> cap kind index, or -1 for Off/None (no independent cap).
 int capWearKind() {
@@ -189,6 +215,199 @@ J3DModelData* ensureIndependentCap(int kind) {
     mDoExt_setCurrentHeap(prevHeap);
     return result;
 }
+
+// ============================================
+// Private sumo body (Option 3b) — pipeline-isolated alSumou mount + build-then-swap.
+// Two slots so a Custom Models toggle loads the fresh overlay content into the free slot
+// while the old slot keeps the live body valid; changeLink then repoints to the new slot
+// and the previous one is released on the following swap (so the slot we free is always
+// one that a rebuild moved off of — never a live reference).  Same private-heap isolation
+// as the cap loader, so releasing can't alias the clothes pipeline's mpArcHeap->freeAll.
+// ============================================
+#if D_ALBW_SUMO_PRIVATE_BODY
+constexpr int kSumoSlots    = 2;
+constexpr u32 kSumoHeapSize = 0x100000;  // alSumou is small; 1MB headroom (fail-safe if short)
+dRes_info_c   s_sumoInfo[kSumoSlots][1];
+JKRSolidHeap* s_sumoHeap[kSumoSlots]  = {NULL, NULL};
+u8            s_sumoState[kSumoSlots] = {0, 0};  // 0 idle 1 loading 2 ready 3 failed
+int           s_sumoLiveSlot          = -1;      // slot providing the body now (-1 = none)
+int           s_sumoPendingSlot       = -1;      // slot loading a fresh copy for a pending swap
+int           s_headGen               = -1;      // overlay generation the private head arcs are on
+bool          s_headReapplyPending    = false;   // gen changed; rebuild once all needed arcs fresh
+bool          s_headRebuildInFlight   = false;   // a forced rebuild fired; wait for it to fully cycle
+bool          s_headRebuildSawTimer   = false;   // observed the clothes timer go non-zero (rebuild began)
+
+// Drive one private alSumou mount step for `slot` (mirrors ensureIndependentCap).  All aux
+// allocs land in the slot's private heap (setCurrentHeap) so nothing dangles.  Returns ready.
+bool ensureSumoSlot(int slot) {
+    if (s_sumoState[slot] == 2) return true;
+    if (s_sumoState[slot] == 3) return false;
+    if (s_sumoHeap[slot] == NULL) {
+        s_sumoHeap[slot] = mDoExt_createSolidHeapFromGame(kSumoHeapSize, 0x20);
+        if (s_sumoHeap[slot] == NULL) {
+            s_sumoState[slot] = 3;
+            return false;
+        }
+    }
+    JKRHeap* const prev = JKRGetCurrentHeap();
+    mDoExt_setCurrentHeap(s_sumoHeap[slot]);
+    if (s_sumoState[slot] == 0) {
+        if (dRes_control_c::setRes("alSumou", s_sumoInfo[slot], 1, "/res/Object/", 0,
+                                   s_sumoHeap[slot]) == 0) {
+            s_sumoState[slot] = 3;
+        } else {
+            s_sumoState[slot] = 1;
+        }
+    }
+    if (s_sumoState[slot] == 1) {
+        const int sync = dRes_control_c::syncRes("alSumou", s_sumoInfo[slot], 1);
+        if (sync < 0) {
+            s_sumoState[slot] = 3;
+        } else if (sync == 0) {
+            s_sumoState[slot] = 2;
+        }
+    }
+    mDoExt_setCurrentHeap(prev);
+    return s_sumoState[slot] == 2;
+}
+
+// Release a private slot (safe: isolated + unreferenced — always a slot a rebuild moved off).
+void releaseSumoSlot(int slot) {
+    if (s_sumoHeap[slot] != NULL) {
+        dRes_control_c::deleteRes("alSumou", s_sumoInfo[slot], 1);
+        mDoExt_destroySolidHeap(s_sumoHeap[slot]);
+        s_sumoHeap[slot] = NULL;
+    }
+    s_sumoState[slot] = 0;
+}
+
+// A resource index (0x31/0x32/0x33) from the live private slot, or NULL if not ready.
+void* sumoLiveRes(int index) {
+    if (s_sumoLiveSlot < 0 || s_sumoState[s_sumoLiveSlot] != 2) return NULL;
+    return dRes_control_c::getRes("alSumou", index, s_sumoInfo[s_sumoLiveSlot], 1);
+}
+
+// True when a private head kind is resident OR gave up (failed -> changeLink falls back), so a
+// genuinely-unavailable head arc can't hang the coordinated rebuild forever.
+bool capKindReadyOrFailed(int kind) {
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+    return s_capState[kind] == 2 || s_capState[kind] == 3;
+#else
+    (void)kind;
+    return true;
+#endif
+}
+
+// True once a private body slot exists (used to gate the first sumo build in resourcesReady).
+bool sumoBodySlotReady() {
+    return s_sumoLiveSlot >= 0;
+}
+
+// ============================================
+// THE coordinator for the whole Custom-Models head refresh — sumo AND native.  Called every
+// frame from tickCapLoad.  Determines which private mounts are the VISIBLE source right now:
+//   alSumou  : sumo worn (body/hand/topknot) OR Cap Wear None (native topknot 0x33)
+//   Kmdl(0)  : sumo worn (al_face) and/or Green cap (al_head)
+//   cap kind : Cap Wear Green/Red/Blue (sumo or native)
+// It drives their loads, and on an overlay-generation change it starts the body build-then-swap
+// AND frees the head arcs, then fires exactly ONE forceReapply once every NEEDED mount is fresh —
+// so changeLink never rebuilds a mix of new + stale (the racing that broke topknot/cap tracking).
+// ============================================
+void driveCustomHeadRefresh() {
+    const int  gen        = dusk::custom_assets::overlay_generation();
+    const bool sumoWorn   = dAlbwOutfit_isSumoWorn();
+    const dusk::CapWearMode capMode = dusk::getSettings().game.capWear.getValue();
+    const bool needAlSumou = sumoWorn || capMode == dusk::CapWearMode::None;  // body/hand/topknot
+    const bool needFace    = sumoWorn;                                        // Kmdl al_face
+    const int  capKind     = capWearKind();                                   // >=0 Green/Red/Blue
+
+    if (s_headGen == -1) {
+        s_headGen = gen;  // baseline on first frame; don't act
+    }
+
+    // Track the forced-rebuild cycle: after we fire forceReapply, wait until the clothes change
+    // it triggers has gone non-zero AND back to zero (i.e. changeLink actually re-ran and
+    // repointed the models) before allowing the NEXT swap to release a slot.  Without this, a
+    // rapid re-toggle in the 1-frame gap before the timer is set would free a slot the pending
+    // rebuild still reads -> dangling model -> crash.
+    {
+        daPy_py_c* pl = daPy_getLinkPlayerActorClass();
+        const int timer = pl != NULL ? pl->getClothesChangeWaitTimer() : 0;
+        if (s_headRebuildInFlight) {
+            if (timer != 0) {
+                s_headRebuildSawTimer = true;
+            } else if (s_headRebuildSawTimer) {
+                s_headRebuildInFlight = false;
+                s_headRebuildSawTimer = false;
+            }
+        }
+    }
+
+    // --- Drive loads of the needed private mounts ---
+    if (needAlSumou) {
+        if (s_sumoLiveSlot < 0 && ensureSumoSlot(0)) {
+            s_sumoLiveSlot = 0;  // initial live body slot
+        }
+        if (s_sumoPendingSlot >= 0) {
+            ensureSumoSlot(s_sumoPendingSlot);  // pending build-then-swap load
+        }
+    }
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+    if (needFace || capKind == 0) {
+        ensureIndependentCap(0);  // Kmdl: sumo face and/or Green cap
+    }
+    if (capKind > 0) {
+        ensureIndependentCap(capKind);  // Red/Blue cap
+    }
+#endif
+
+    // --- Overlay changed -> start a coordinated refresh (once the prior change settled) ---
+    if (gen != s_headGen && !s_headReapplyPending && !s_headRebuildInFlight) {
+        daPy_py_c* p = daPy_getLinkPlayerActorClass();
+        if (p != NULL && p->getClothesChangeWaitTimer() != 0) {
+            return;  // a clothes change is in flight — defer a frame
+        }
+        s_headGen = gen;
+        if (needAlSumou && s_sumoLiveSlot >= 0) {
+            const int freeSlot = 1 - s_sumoLiveSlot;  // replaced a swap ago -> unreferenced
+            releaseSumoSlot(freeSlot);
+            s_sumoPendingSlot = freeSlot;             // build-then-swap into it
+        }
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+        for (int k = 0; k < kCapKindNum; ++k) {
+            if (s_capState[k] != 0) {
+                freeCapKind(k);  // in-place re-mount (epoch-guarded); reloaded by the loads above
+            }
+        }
+#endif
+        dAlbwAlink_invalidateClothesEpoch();  // hide stale head/face until the single rebuild
+        s_headReapplyPending = true;
+    }
+
+    // --- Fire ONE rebuild once every NEEDED mount is fresh ---
+    if (s_headReapplyPending) {
+        bool ready = true;
+        if (needAlSumou && s_sumoPendingSlot >= 0) {
+            if (ensureSumoSlot(s_sumoPendingSlot)) {
+                s_sumoLiveSlot    = s_sumoPendingSlot;  // promote the fresh slot
+                s_sumoPendingSlot = -1;
+            } else {
+                ready = false;  // new body slot still loading
+            }
+        }
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+        if ((needFace || capKind == 0) && !capKindReadyOrFailed(0)) ready = false;
+        if (capKind > 0 && !capKindReadyOrFailed(capKind)) ready = false;
+#endif
+        if (ready) {
+            dAlbwOutfit_forceReapply();  // one rebuild: body + face + cap/topknot all fresh
+            s_headReapplyPending  = false;
+            s_headRebuildInFlight = true;   // block the next swap until this rebuild fully cycles
+            s_headRebuildSawTimer = false;
+        }
+    }
+}
+#endif  // D_ALBW_SUMO_PRIVATE_BODY
 
 const char* baseClothesArc() {
     if (daAlink_c::checkCasualWearFlg())     return "Bmdl";
@@ -273,6 +492,14 @@ bool resourcesReady() {
             return false;
         }
     }
+#if D_ALBW_SUMO_PRIVATE_BODY
+    // The private head refresh is driven every frame in tickCapLoad (sumo + native).  Here we
+    // only gate the first sumo build until the private body slot is resident, so the body never
+    // briefly builds from the global fallback and then swaps.
+    if (!sumoBodySlotReady()) {
+        return false;
+    }
+#endif
     // Cap + face donor: keep Kmdl resident over every NON-Hero's base so changeLink's sumo
     // block resolves al_head.bmd (the Link cap) AND al_face.bmd there.  Over Hero's the clothes
     // pipeline already owns Kmdl in its own mpArcHeap, so a second refcount here would dangle on
@@ -409,47 +636,6 @@ void maintainResources(daAlink_c* i_link) {
     }
 }
 
-#if D_ALBW_CUSTOM_MODEL_REAPPLY
-// ============================================
-// Custom Models toggle -> the DVD overlay set changed, so the session-resident sumo body
-// arc (alSumou) is stale.  Free it (independent resource-manager entry -> refcount-safe,
-// the releaseFaceDonor pattern) so resourcesReady() re-mounts it under the new overlay,
-// bump the clothes epoch so the stale body/topknot is skipped by draw/shadow until then,
-// and once alSumou is resident again force ONE reapply so changeLink rebuilds from it.
-// Called from exec() only in a safe frame (past the game-over / stage-transition guards).
-// ============================================
-void maybeReapplyForOverlayChange() {
-    const int gen = dusk::custom_assets::overlay_generation();
-    if (sLastOverlayGen == -1) {
-        sLastOverlayGen = gen;  // capture baseline on first exec; do NOT act
-        return;
-    }
-    if (gen != sLastOverlayGen) {
-        sLastOverlayGen = gen;
-        // Free the frozen resident arc (mirror releaseFaceDonor's id==2 guard).
-        if (sPhase.id == 2) {
-            dComIfG_resDelete(&sPhase, "alSumou");
-        } else {
-            cPhs_Reset(&sPhase);
-        }
-        // alSumou is visible geometry only while sumo is worn/active OR Cap Wear is None
-        // (its 0x33 topknot).  Only then hide the stale copy + schedule a rebuild; otherwise
-        // the plain free above is enough (next sumo wear re-loads fresh, native is untouched).
-        const bool visible =
-            dAlbwOutfit_isSumoWorn() || dAlbwSumoTest_isOutfitActive() ||
-            dusk::getSettings().game.capWear.getValue() == dusk::CapWearMode::None;
-        if (visible) {
-            dAlbwAlink_invalidateClothesEpoch();
-            sCustomReapplyArmed = true;
-        }
-    }
-    if (sCustomReapplyArmed && dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) != NULL) {
-        dAlbwOutfit_forceReapply();  // re-mounted -> rebuild the body/topknot from fresh data
-        sCustomReapplyArmed = false;
-    }
-}
-#endif
-
 }  // namespace
 
 bool dAlbwSumoTest_prepareChangeLink() {
@@ -474,9 +660,17 @@ bool dAlbwSumoTest_prepareNativeCapChange() {
 }
 
 void dAlbwSumoTest_tickCapLoad() {
+#if D_ALBW_SUMO_PRIVATE_BODY
+    // THE per-frame coordinator for the whole head refresh (sumo body/hand/topknot/face + native
+    // topknot/cap).  Drives every needed private mount and fires ONE rebuild per toggle when all
+    // are fresh -- so no piece ever rebuilds stale (the topknot/cap wrong-source bug).
+    driveCustomHeadRefresh();
+#endif
+    // Also ensure the selected color cap is loaded even if the coordinator is compiled out (kill
+    // switch); ensureIndependentCap is idempotent, so this is a no-op once resident.
     const int kind = capWearKind();
     if (kind >= 0) {
-        ensureIndependentCap(kind);  // drive the selected cap's independent load (cheap once ready)
+        ensureIndependentCap(kind);
     }
 }
 
@@ -486,6 +680,69 @@ J3DModelData* dAlbwSumoTest_independentCapData() {
         return NULL;
     }
     return s_capData[kind];
+}
+
+// Sumo face (al_face) from the private Kmdl mount (kind 0) — tracks the Custom Models toggle
+// and is base-independent.  NULL until Kmdl is resident, so changeLink falls back to the
+// base-arc al_face (prior behavior) until the private mount lands.
+void* dAlbwSumoTest_sumoFaceData() {
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+    if (s_capState[0] == 2) {  // kind 0 == Kmdl
+        return dRes_control_c::getRes("Kmdl", "al_face.bmd", s_capInfo, kCapKindNum);
+    }
+#endif
+    return NULL;
+}
+
+// ============================================
+// TEMP DIAGNOSTIC (strip before push) — consolidated Custom-Models + outfit state.
+// Logs one line whenever any tracked field changes, so a "weird" visual can be correlated with
+// the exact settings: overlay generation + override count (0 = custom models OFF), Cap Wear
+// mode, sumo worn/active flags, and the private body slot the build will read.
+// ============================================
+#define D_ALBW_SUMO_STATE_DIAG 1
+void dAlbwSumoTest_logHeadState(const char* ctx) {
+#if D_ALBW_SUMO_STATE_DIAG
+    const int  gen    = dusk::custom_assets::overlay_generation();
+    const int  ovr    = dusk::custom_assets::count();
+    const int  cap    = static_cast<int>(dusk::getSettings().game.capWear.getValue());
+    const int  worn   = dAlbwOutfit_isSumoWorn() ? 1 : 0;
+    const int  active = dAlbwSumoTest_isOutfitActive() ? 1 : 0;
+#if D_ALBW_SUMO_PRIVATE_BODY
+    const int  slot   = s_sumoLiveSlot;
+    const int  facecap = D_ALBW_SUMO_PRIVATE_FACECAP;
+#else
+    const int  slot   = -2;
+    const int  facecap = -1;
+#endif
+    static const char* const kCap[5] = {"Off", "None", "Green", "Red", "Blue"};
+    const char* capName = (cap >= 0 && cap < 5) ? kCap[cap] : "?";
+
+    static int lGen = -99, lOvr = -99, lCap = -99, lWorn = -9, lActive = -9, lSlot = -99;
+    static const char* lCtx = "";
+    if (gen != lGen || ovr != lOvr || cap != lCap || worn != lWorn || active != lActive ||
+        slot != lSlot || ctx != lCtx) {
+        lGen = gen; lOvr = ovr; lCap = cap; lWorn = worn; lActive = active; lSlot = slot;
+        lCtx = ctx;
+        DuskLog.info(
+            "[albw-state] {} | customModels={} gen={} overridePaths={} capWear={} sumoWorn={} "
+            "sumoActive={} bodySlot={} facecap={}",
+            ctx, (ovr > 0 ? "ON" : "off"), gen, ovr, capName, worn, active, slot, facecap);
+    }
+#else
+    (void)ctx;
+#endif
+}
+
+// Private sumo body accessor (Option 3b) — live private-slot resource, else the global arc.
+void* dAlbwSumoTest_sumoRes(int index) {
+#if D_ALBW_SUMO_PRIVATE_BODY
+    void* r = sumoLiveRes(index);
+    if (r != NULL) {
+        return r;
+    }
+#endif
+    return dComIfG_getObjectRes("alSumou", index);
 }
 
 void dAlbwSumoTest_onNativeOutfitEquipped() {
@@ -552,9 +809,6 @@ void dAlbwSumoTest_exec(daAlink_c* i_link) {
     }
     sInStageTransition = false;
 
-#if D_ALBW_CUSTOM_MODEL_REAPPLY
-    maybeReapplyForOverlayChange();  // re-mount + rebuild the sumo body after a Custom Models toggle
-#endif
     maintainResources(i_link);
     dAlbwOutfit_processPendingEquip();
     dAlbwOutfit_syncLinkModel(i_link);
