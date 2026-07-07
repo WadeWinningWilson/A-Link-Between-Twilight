@@ -14,6 +14,10 @@
 #include "dusk/logging.h"
 #include "dusk/settings.h"  // game.customModelsDisabled
 #include "d/d_resorce.h"    // dRes_info_c::loaderBasicBmd (engine-standard BMDV finish)
+#include "dusk/audio/DuskDsp.hpp"  // dusk::audio shadow registry
+#include "JSystem/JAudio2/JASWSParser.h"   // WSYS descriptor structs (mod .baa parse)
+#include "JSystem/JAudio2/JASWaveInfo.h"   // JASWaveInfo (per-wave descriptor)
+#include "JSystem/JSupport/JSupport.h"     // JSULoHalf
 
 #include <aurora/dvd.h>     // aurora_dvd_overlay_files / _callbacks (virtual FST)
 
@@ -24,6 +28,8 @@
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
+#include <map>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -66,6 +72,205 @@ std::vector<std::string> disabled_list() {
     if (!cur.empty()) out.push_back(cur);
     return out;
 }
+
+#if D_ALBW_AUDIO_SHADOW
+// ============================================
+// Audio shadow state (see custom_assets.hpp / DuskDsp.hpp).
+// ============================================
+
+// Guards the three maps below against the DVD-load thread (acquire), the audio
+// setup thread (note), and the main thread (scan/toggle) touching them at once.
+// The DSP itself never touches these — it reads dusk::audio's own lock-free array.
+std::mutex s_audioMtx;
+
+// leaf wave filename ("z2sewave_0.aw", normalized) -> absolute mod .aw path.
+// Rebuilt by scan() from ALL mod folders (enabled OR not) so a boot-disabled mod
+// can still be toggled on live. (v1: single audio mod, last folder wins.)
+std::unordered_map<std::string, std::string> s_audioIndex;
+
+// DVD entrynum -> leaf wave filename, recorded at JASWaveArc::setFileName time so
+// the loader can identify a bank's source .aw from just its entrynum.
+std::unordered_map<int, std::string> s_entryToLeaf;
+
+// leaf wave filename -> retained twin bytes. Allocated once on first use and kept
+// for the whole run (never freed / never reallocated), so a pointer handed to the
+// DSP registry can never dangle under an in-flight mixer read. Bounded by the
+// total size of mod .aw files actually loaded this run.
+std::map<std::string, std::vector<u8>> s_audioBufs;
+
+// Leaf filename from a normalized relative path ("audiores/waves/x.aw" -> "x.aw").
+std::string path_leaf(const std::string& norm) {
+    const std::size_t slash = norm.find_last_of('/');
+    return slash == std::string::npos ? norm : norm.substr(slash + 1);
+}
+
+// A replaceable wave sample bank: Audiores/Waves/<name>.aw. These drive the
+// shadow system and are NEVER put in the model overlay.
+bool is_wave_aw(const std::string& norm) {
+    return norm.rfind("audiores/waves/", 0) == 0 &&
+           norm.size() > 3 && norm.compare(norm.size() - 3, 3, ".aw") == 0;
+}
+
+// Any audio-tree file. Excluded from the model overlay wholesale so vanilla audio
+// (wave table .baa, seq data, everything) stays the resident base; only .aw
+// sample banks are layered via the shadow system.
+bool is_audio_path(const std::string& norm) {
+    return norm.rfind("audiores/", 0) == 0;
+}
+
+// ============================================
+// Per-wave voice remap (see custom_assets.hpp / DuskDsp.hpp).
+//
+// A twin .aw that is NOT byte-identical to vanilla (re-encoded voices) can't be
+// swapped by a raw offset — its waves have different byte offsets and sample
+// counts. So we parse the mod's own .baa (WSYS) to recover the mod descriptor
+// for every wave, keyed by (.aw leaf, wave id). At noteOn we look up the wave
+// the game is about to play (it hands us the wave id + the vanilla ARAM addr),
+// substitute the MOD descriptor (offset/length/sampleCount/loop/format), and
+// point the ARAM address at the mod wave's offset — which the DSP redirect then
+// resolves into the resident mod buffer. Result: the correct, correctly-sized
+// mod sample plays. Fully generic: any mod that ships a structurally-matching
+// .baa works; this run is Linkle-specific only in that Linkle is what we test.
+//
+// NOTE (foundation): the DSP redirect is bank-range based, which is exact only
+// when EVERY wave in a shadowed bank has a twin (a "complete" audio mod — true
+// for Linkle). Partial-bank mods want per-wave exact keying; left as a follow-up.
+// ============================================
+
+// leaf .aw filename -> (wave id -> mod descriptor), parsed from the mod .baa.
+// Built enable-independently in scan(); read at noteOn.
+std::unordered_map<std::string, std::unordered_map<u32, JASWaveInfo>> s_modWaves;
+
+// A vanilla wave bank currently resident in ARAM that has a mod twin loaded.
+struct ResidentBank {
+    u32 aramBase;      // bank base (== JASWaveArc heap base == mWaveAramAddress bank part)
+    u32 vanillaSize;   // vanilla .aw byte size (for the noteOn containment test)
+    std::string leaf;  // .aw leaf filename (key into s_modWaves)
+};
+std::vector<ResidentBank> s_residentBanks;
+
+// Mirror JASWSParser's WSYS walk, collecting every wave's descriptor into
+// s_modWaves keyed by (leaf, wave id). Handles simple (1 group) and basic
+// (N groups) WSYS uniformly. `header` points at a 'WSYS' block inside the .baa.
+void parse_wsys(const u8* wsysBase) {
+    using P = JASWSParser;
+    const P::THeader* header = reinterpret_cast<const P::THeader*>(wsysBase);
+    const P::TCtrlGroup* ctrlGroup = header->mCtrlGroupOffset.ptr(header);
+    const P::TWaveArchiveBank* archiveBank = header->mArchiveBankOffset.ptr(header);
+    const u32 groupCount = ctrlGroup->mGroupCount;
+    for (u32 i = 0; i < groupCount; i++) {
+        const P::TCtrlScene* ctrlScene = ctrlGroup->mCtrlSceneOffsets[i].ptr(header);
+        const P::TCtrl* ctrl = ctrlScene->mCtrlOffset.ptr(header);
+        const P::TWaveArchive* archive = archiveBank->mArchiveOffsets[i].ptr(header);
+        const std::string leaf = path_leaf(normalize(archive->mFileName));
+        auto& waveMap = s_modWaves[leaf];
+        const u32 waveCount = ctrl->mWaveCount;
+        for (u32 j = 0; j < waveCount; j++) {
+            const P::TWave* wave = archive->mWaveOffsets[j].ptr(header);
+            const P::TCtrlWave* ctrlWave = ctrl->mCtrlWaveOffsets[j].ptr(header);
+            const u32 waveId = JSULoHalf(ctrlWave->_00);
+            JASWaveInfo info;  // ctor sets mBaseKey/field_0x20 defaults
+            info.mWaveFormat = wave->mWaveFormat;
+            info.mBaseKey = wave->mBaseKey;
+            info.mSampleRate = wave->mSampleRate;
+            info.mOffsetStart = wave->mAWOffsetStart;
+            info.mOffsetLength = wave->mAWOffsetEnd;
+            info.mLoopFlag = wave->mLoopFlags == 0 ? 0 : 0xff;
+            info.mLoopStartSample = wave->mLoopStartSample;
+            info.mLoopEndSample = wave->mLoopEndSample;
+            info.mSampleCount = wave->mSampleCount;
+            info.mpLast = wave->mpLast;
+            info.mpPenult = wave->mpPenult;
+            waveMap[waveId] = info;
+        }
+    }
+}
+
+// Walk the AAF/.baa command stream (mirrors JAUAudioArcInterpreter) and parse
+// every 'ws  ' WSYS block. Advancing past other commands requires their exact
+// arg counts, so we replicate the full command table (acting only on 'ws  ').
+void parse_mod_baa(const u8* baa, std::size_t size) {
+    auto rd = [](const u8* p) -> u32 {
+        return (u32(p[0]) << 24) | (u32(p[1]) << 16) | (u32(p[2]) << 8) | u32(p[3]);
+    };
+    std::size_t pos = 0;
+    if (size < 4 || rd(baa) != 'AA_<') {
+        return;
+    }
+    pos = 4;
+    int wsysCount = 0;
+    while (pos + 4 <= size) {
+        const u32 cmd = rd(baa + pos);
+        pos += 4;
+        if (cmd == '>_AA') {
+            break;
+        }
+        // args-per-command, from JAUAudioArcInterpreter::readCommand_.
+        int args = -1;
+        switch (cmd) {
+            case 'ws  ': {
+                if (pos + 12 > size) return;
+                const u32 wsysOff = rd(baa + pos + 4);
+                parse_wsys(baa + wsysOff);
+                ++wsysCount;
+                args = 3;
+                break;
+            }
+            case 'bnk ': case 'bl_<': case 'bsc ': case 'bst ':
+            case 'bstn': case 'vbnk':               args = 2; break;
+            case 'bms ':                            args = 3; break;
+            case 'bmsa': case 'dsqb': case 'bsft':
+            case 'sect':                            args = 1; break;
+            case '>_bl':                            args = 0; break;
+            default:
+                // Unknown command — can't know its length, so stop walking safely.
+                DuskLog.warn("[custom_assets] mod .baa: unknown cmd {:#x} at {} — stop",
+                             cmd, static_cast<int>(pos - 4));
+                return;
+        }
+        pos += static_cast<std::size_t>(args) * 4u;
+    }
+    DuskLog.info("[custom_assets] mod .baa parsed: {} WSYS block(s), {} .aw wave-map(s)",
+                 wsysCount, static_cast<int>(s_modWaves.size()));
+}
+
+// Find + read + parse the mod's Z2Sound.baa (enable-independent). Rebuilds
+// s_modWaves. Called from scan(). Single audio mod assumption: first found wins.
+void rebuild_mod_wave_descriptors() {
+    s_modWaves.clear();
+    const std::filesystem::path root = ConfigPath / "model_replacements";
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec)) {
+        return;
+    }
+    for (const auto& modDir : std::filesystem::directory_iterator(root, ec)) {
+        if (!modDir.is_directory(ec)) {
+            continue;
+        }
+        const std::filesystem::path baaPath =
+            modDir.path() / "files" / "Audiores" / "Z2Sound.baa";
+        if (!std::filesystem::exists(baaPath, ec)) {
+            continue;
+        }
+        FILE* fp = std::fopen(baaPath.string().c_str(), "rb");
+        if (fp == nullptr) {
+            continue;
+        }
+        std::fseek(fp, 0, SEEK_END);
+        const long sz = std::ftell(fp);
+        std::fseek(fp, 0, SEEK_SET);
+        if (sz > 0) {
+            std::vector<u8> buf(static_cast<std::size_t>(sz));
+            if (std::fread(buf.data(), 1, static_cast<std::size_t>(sz), fp) ==
+                static_cast<std::size_t>(sz)) {
+                parse_mod_baa(buf.data(), buf.size());
+            }
+        }
+        std::fclose(fp);
+        return;  // single audio mod (first found)
+    }
+}
+#endif  // D_ALBW_AUDIO_SHADOW
 
 }  // namespace
 
@@ -131,9 +336,23 @@ void toggle_folder(const char* folder) {
 void scan() {
     s_map.clear();
 
+#if D_ALBW_AUDIO_SHADOW
+    // Enable-independent audio-twin index, built into a local then swapped in
+    // under lock (so the DVD-load thread never sees a half-built index).
+    std::unordered_map<std::string, std::string> localAudio;
+    bool anyAudioEnabled = false;
+#endif
+
     const std::filesystem::path root = ConfigPath / "model_replacements";
     std::error_code ec;
     if (!std::filesystem::exists(root, ec)) {
+#if D_ALBW_AUDIO_SHADOW
+        {
+            std::lock_guard<std::mutex> lk(s_audioMtx);
+            s_audioIndex.clear();
+        }
+        dusk::audio::setShadowActive(false);
+#endif
         return;
     }
 
@@ -146,9 +365,10 @@ void scan() {
         if (!std::filesystem::is_directory(filesRoot, ec)) {
             continue;  // not a full-mod tree (e.g. a single-BMD Layer-B folder)
         }
-        if (!is_folder_enabled(modDir.path().filename().string().c_str())) {
-            continue;  // folder disabled in the Custom Models editor list
-        }
+        // NOTE: we walk DISABLED folders too — the model overlay (s_map) is
+        // enable-gated below, but the audio twin index is enable-INDEPENDENT so a
+        // boot-disabled audio mod can still be toggled on live.
+        const bool enabled = is_folder_enabled(modDir.path().filename().string().c_str());
 
         ++mods;
         int count_ = 0;
@@ -166,16 +386,48 @@ void scan() {
             if (rel.empty()) {
                 continue;
             }
-            s_map[normalize(rel)] = it->path().string();
+            const std::string norm = normalize(rel);
+
+#if D_ALBW_AUDIO_SHADOW
+            if (is_wave_aw(norm)) {
+                // A replaceable sample bank → shadow system (enable-independent);
+                // never overlaid, so the vanilla .aw always stays resident.
+                localAudio[path_leaf(norm)] = it->path().string();
+                if (enabled) {
+                    anyAudioEnabled = true;
+                }
+                continue;
+            }
+            if (is_audio_path(norm)) {
+                continue;  // other audio → forced vanilla; not overlaid, not shadowed
+            }
+#endif
+
+            if (!enabled) {
+                continue;  // model overlay is enable-gated
+            }
+            s_map[norm] = it->path().string();
             if (sample.empty()) {
-                sample = normalize(rel);
+                sample = norm;
             }
             ++count_;
         }
-        DuskLog.info("[custom_assets] '{}': {} override file(s) (e.g. {})",
-                     modDir.path().filename().string(), count_,
-                     sample.empty() ? "-" : sample);
+        DuskLog.info("[custom_assets] '{}'{}: {} overlay file(s) (e.g. {})",
+                     modDir.path().filename().string(), enabled ? "" : " [disabled]",
+                     count_, sample.empty() ? "-" : sample);
     }
+
+#if D_ALBW_AUDIO_SHADOW
+    int audioTwins = static_cast<int>(localAudio.size());
+    {
+        std::lock_guard<std::mutex> lk(s_audioMtx);
+        s_audioIndex.swap(localAudio);
+        rebuild_mod_wave_descriptors();  // parse mod .baa -> s_modWaves (per-wave)
+    }
+    dusk::audio::setShadowActive(anyAudioEnabled);
+    DuskLog.info("[custom_assets] audio: {} wave twin(s) indexed, custom audio {}",
+                 audioTwins, anyAudioEnabled ? "ACTIVE" : "inactive");
+#endif
 
     DuskLog.info("[custom_assets] scan complete: {} data-tree mod(s), {} override path(s)",
                  mods, static_cast<int>(s_map.size()));
@@ -391,6 +643,150 @@ J3DModelData* try_load(const char* arc_name, int res_index) {
     return model_data;
 }
 
+// ============================================
+// Audio — custom-wave shadow (see custom_assets.hpp / DuskDsp.hpp)
+// ============================================
+void note_audio_wave_arc(int entrynum, const char* rel_name) {
+#if D_ALBW_AUDIO_SHADOW
+    if (entrynum < 0 || rel_name == nullptr) {
+        return;
+    }
+    // rel_name is relative to the wave dir ("Z2SeWave_0.aw"); key by normalized leaf.
+    const std::string leaf = path_leaf(normalize(rel_name));
+    if (leaf.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lk(s_audioMtx);
+    s_entryToLeaf[entrynum] = leaf;
+#else
+    (void)entrynum;
+    (void)rel_name;
+#endif
+}
+
+void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int vanilla_size) {
+#if D_ALBW_AUDIO_SHADOW
+    if (entrynum < 0 || vanilla_size == 0) {
+        return;
+    }
+    std::lock_guard<std::mutex> lk(s_audioMtx);
+
+    const auto leafIt = s_entryToLeaf.find(entrynum);
+    if (leafIt == s_entryToLeaf.end()) {
+        return;  // not a wave arc we tracked at setFileName time
+    }
+    const std::string& leaf = leafIt->second;
+    const auto pathIt = s_audioIndex.find(leaf);
+    if (pathIt == s_audioIndex.end()) {
+        return;  // no mod provides a twin of this bank
+    }
+
+    // Read the mod twin once (ANY size — the per-wave remap handles layout diffs;
+    // no size guard anymore). std::map => node-stable addresses, and the buffer is
+    // kept for the whole run, so buf.data() handed to the DSP can never dangle.
+    std::vector<u8>& buf = s_audioBufs[leaf];
+    if (buf.empty()) {
+        FILE* fp = std::fopen(pathIt->second.c_str(), "rb");
+        if (fp == nullptr) {
+            s_audioBufs.erase(leaf);
+            return;
+        }
+        std::fseek(fp, 0, SEEK_END);
+        const long fsz = std::ftell(fp);
+        std::fseek(fp, 0, SEEK_SET);
+        if (fsz <= 0) {
+            std::fclose(fp);
+            s_audioBufs.erase(leaf);
+            return;
+        }
+        buf.assign(static_cast<size_t>(fsz), 0);
+        const size_t got = std::fread(buf.data(), 1, static_cast<size_t>(fsz), fp);
+        std::fclose(fp);
+        if (got != static_cast<size_t>(fsz)) {
+            s_audioBufs.erase(leaf);
+            return;
+        }
+        DuskLog.info("[custom_assets] audio twin '{}' resident ({} bytes, vanilla {}) @aram {:#x}",
+                     leaf, static_cast<long>(fsz), vanilla_size, aram_base);
+    }
+    // DSP redirect range = MOD buffer size (a remapped wave's addr = aram_base +
+    // mod offset, which is < mod size, so it falls inside this range).
+    dusk::audio::registerShadowWave(aram_base, static_cast<u32>(buf.size()), buf.data());
+
+    // Track the resident bank for remap_voice()'s containment test — which uses
+    // the VANILLA size, since noteOn sees the vanilla addr (aram_base + vanilla
+    // offset, and vanilla offsets can exceed the smaller mod bank).
+    bool found = false;
+    for (auto& b : s_residentBanks) {
+        if (b.aramBase == aram_base) {
+            b.vanillaSize = vanilla_size;
+            b.leaf = leaf;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        s_residentBanks.push_back({aram_base, vanilla_size, leaf});
+    }
+#else
+    (void)entrynum;
+    (void)aram_base;
+    (void)vanilla_size;
+#endif
+}
+
+void release_audio_shadow(unsigned int aram_base) {
+#if D_ALBW_AUDIO_SHADOW
+    // Drop the ARAM-base registration; the twin buffer is pooled by filename and
+    // kept for reuse (never freed mid-run) so an in-flight mixer read can't dangle.
+    // aram_base is reused across banks, so this must run on every erase.
+    dusk::audio::unregisterShadowWave(aram_base);
+    std::lock_guard<std::mutex> lk(s_audioMtx);
+    for (auto it = s_residentBanks.begin(); it != s_residentBanks.end(); ++it) {
+        if (it->aramBase == aram_base) {
+            s_residentBanks.erase(it);
+            break;
+        }
+    }
+#else
+    (void)aram_base;
+#endif
+}
+
+bool remap_voice(intptr_t* wave_ptr, unsigned int wave_id, JASWaveInfo* out_info) {
+#if D_ALBW_AUDIO_SHADOW
+    if (wave_ptr == nullptr || out_info == nullptr || !dusk::audio::shadowActive()) {
+        return false;
+    }
+    const u32 addr = static_cast<u32>(*wave_ptr);
+    std::lock_guard<std::mutex> lk(s_audioMtx);
+    for (const auto& b : s_residentBanks) {
+        if (addr < b.aramBase || addr >= b.aramBase + b.vanillaSize) {
+            continue;
+        }
+        const auto fileIt = s_modWaves.find(b.leaf);
+        if (fileIt == s_modWaves.end()) {
+            return false;
+        }
+        const auto wIt = fileIt->second.find(wave_id);
+        if (wIt == fileIt->second.end()) {
+            return false;  // no twin for this specific wave (partial mod)
+        }
+        // Substitute the mod descriptor and point the ARAM address at the mod
+        // wave's offset; the DSP redirect resolves that into the mod buffer.
+        *out_info = wIt->second;
+        *wave_ptr = static_cast<intptr_t>(b.aramBase + wIt->second.mOffsetStart);
+        return true;
+    }
+    return false;
+#else
+    (void)wave_ptr;
+    (void)wave_id;
+    (void)out_info;
+    return false;
+#endif
+}
+
 }  // namespace dusk::custom_assets
 
 #else  // !TARGET_PC
@@ -405,6 +801,10 @@ bool is_folder_enabled(const char*) { return true; }
 void toggle_folder(const char*) {}
 int count() { return 0; }
 int overlay_generation() { return 0; }
+void note_audio_wave_arc(int, const char*) {}
+void acquire_audio_shadow(int, unsigned int, unsigned int) {}
+void release_audio_shadow(unsigned int) {}
+bool remap_voice(intptr_t*, unsigned int, JASWaveInfo*) { return false; }
 }  // namespace dusk::custom_assets
 
 #endif  // TARGET_PC

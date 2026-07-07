@@ -10,6 +10,14 @@
 #include <stdint.h>
 
 #include "dusk/string.hpp"
+// ============================================
+// NEW CODE — ALBW Port / Dusklight
+// Custom-audio shadow-wave hooks: record each wave arc's entrynum->name, load
+// the mod twin into RAM as the vanilla bank loads to ARAM, and drop it on erase.
+// See dusk/custom_assets.hpp and dusk/audio/DuskDsp.hpp. All no-ops when the mod
+// provides no twin (or the D_ALBW_AUDIO_SHADOW kill switch is off).
+// ============================================
+#include "dusk/custom_assets.hpp"
 
 JASHeap* JASWaveArcLoader::sAramHeap;
 
@@ -83,6 +91,11 @@ void JASWaveArc::loadToAramCallback(void* this_) {
         JUT_WARN(129, "%s", "loadToAram Failed");
         return;
     }
+    // Vanilla bank is now resident at [mBase, mBase+mFileLength). If a mod
+    // provides a size-matched twin, load it into RAM and register the redirect.
+    dusk::custom_assets::acquire_audio_shadow(
+        tmp->mEntryNum, static_cast<unsigned int>(tmp->mBase),
+        static_cast<unsigned int>(wavArc->mFileLength));
     wavArc->_5a--;
     if (wavArc->loadSetup(tmp->_c)) {
         wavArc->onLoadDone();
@@ -144,6 +157,11 @@ bool JASWaveArc::loadTail(JASHeap* heap) {
 }
 
 bool JASWaveArc::erase() {
+    // Drop any mod-twin redirect for this bank's ARAM base BEFORE the vanilla
+    // heap is freed (the base is reused by later banks, so this must always run).
+    // C-style cast mirrors sendLoadCmd's `(uintptr_t)mHeap.getBase()` so this
+    // matches the u32 base registered at load time regardless of getBase()'s type.
+    dusk::custom_assets::release_audio_shadow((u32)(uintptr_t)mHeap.getBase());
     return mHeap.free();
 }
 
@@ -181,4 +199,6 @@ void JASWaveArc::setFileName(char const* fileName) {
         return;
     }
     setEntryNum(entryNum);
+    // Record entrynum -> leaf name so the ARAM-load hook can find the mod twin.
+    dusk::custom_assets::note_audio_wave_arc(entryNum, fileName);
 }

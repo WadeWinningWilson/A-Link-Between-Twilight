@@ -5,6 +5,13 @@
 #include "JSystem/JAudio2/JASBasicInst.h"
 #include "JSystem/JAudio2/JASBasicWaveBank.h"
 #include "JSystem/JAudio2/JASChannel.h"
+// ============================================
+// NEW CODE — ALBW Port / Dusklight
+// Custom-audio per-wave voice remap: at noteOn we know the wave id + its vanilla
+// ARAM address, so we can swap in a re-encoded mod wave (correct offset/length).
+// See dusk/custom_assets.hpp. No-op when no mod is active / no twin exists.
+// ============================================
+#include "dusk/custom_assets.hpp"
 
 // NONMATCHING JASPoolAllocObject_MultiThreaded<_> locations
 JASChannel* JASBank::noteOn(JASBank const* param_0, int param_1, u8 param_2, u8 param_3, u16 param_4,
@@ -35,6 +42,15 @@ JASChannel* JASBank::noteOn(JASBank const* param_0, int param_1, u8 param_2, u8 
     intptr_t wavePtr = waveHandle->getWavePtr();
     if (!wavePtr) {
         return NULL;
+    }
+
+    // If the active custom-audio mod ships a twin of this wave, swap in the mod
+    // descriptor and repoint wavePtr at the mod sample. Done BEFORE the channel is
+    // built so pitch/key/loop (below) all derive from the mod wave. albwModWave
+    // outlives every use of waveInfo in this function (copied into the channel).
+    JASWaveInfo albwModWave;
+    if (dusk::custom_assets::remap_voice(&wavePtr, stack_60.field_0x1a, &albwModWave)) {
+        waveInfo = &albwModWave;
     }
 
     JASChannel* channel = JKR_NEW JASChannel(param_5, param_6);

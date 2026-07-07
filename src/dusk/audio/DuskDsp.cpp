@@ -33,6 +33,26 @@ static int s_hurricaneSpinWaveAramCount = 0;
 static u32 s_hurricaneExcludedWaveAram[4] = {};
 static int s_hurricaneExcludedWaveCount = 0;
 
+// ============================================
+// NEW CODE — ALBW Port / Dusklight
+// Custom-audio shadow-wave redirect (see DuskDsp.hpp for the full rationale and
+// the D_ALBW_AUDIO_SHADOW kill switch, defined in the header).
+// ============================================
+#if D_ALBW_AUDIO_SHADOW
+namespace {
+struct ShadowWave {
+    u32 aramBase;   // bank's ARAM base offset (== JASWaveArc mHeap base)
+    u32 size;       // bank byte size (== vanilla .aw size; twin is size-matched)
+    const u8* buf;  // mod twin bytes, byte-compatible with the vanilla bank
+};
+// Sized above the count of wave banks resident at once (bounded by ARAM, ~dozens).
+constexpr int kMaxShadowWaves = 128;
+ShadowWave s_shadowWaves[kMaxShadowWaves] = {};
+int s_shadowWaveCount = 0;      // high-water slot count (monotonic within a run)
+bool s_shadowActive = false;    // does the mod set currently prevail
+}  // namespace
+#endif
+
 void dusk::audio::setHurricaneSpinSeLoopActive(bool active) {
     s_hurricaneSpinSeLoopActive = active;
     if (!active) {
@@ -91,6 +111,71 @@ static bool isExcludedHurricaneSpinWave(u32 aramAddress) {
 bool dusk::audio::isHurricaneSpinWaveExcluded(u32 aramAddress) {
     return isExcludedHurricaneSpinWave(aramAddress);
 }
+
+// ============================================
+// NEW CODE — ALBW Port / Dusklight
+// Custom-audio shadow-wave registry (register/free on the DVD-load thread;
+// resolve read lock-free on the audio thread — hurricane-spin convention).
+// ============================================
+#if D_ALBW_AUDIO_SHADOW
+void dusk::audio::registerShadowWave(u32 aramBase, u32 size, const u8* buf) {
+    if (buf == nullptr || size == 0) {
+        return;
+    }
+    // Reuse a slot already keyed to this bank base (bank reloaded in place), or
+    // a slot vacated by a prior unregister (buf == nullptr).
+    int slot = -1;
+    for (int i = 0; i < s_shadowWaveCount; i++) {
+        if (s_shadowWaves[i].aramBase == aramBase || s_shadowWaves[i].buf == nullptr) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) {
+        if (s_shadowWaveCount >= kMaxShadowWaves) {
+            return;  // registry full — bank just plays vanilla (safe)
+        }
+        slot = s_shadowWaveCount++;
+    }
+    // Publish range first, buffer last: a concurrent resolve either sees the old
+    // (null) buf and skips, or the fully-written entry. No torn pointer.
+    s_shadowWaves[slot].aramBase = aramBase;
+    s_shadowWaves[slot].size = size;
+    s_shadowWaves[slot].buf = buf;
+}
+
+void dusk::audio::unregisterShadowWave(u32 aramBase) {
+    for (int i = 0; i < s_shadowWaveCount; i++) {
+        if (s_shadowWaves[i].aramBase == aramBase) {
+            s_shadowWaves[i].buf = nullptr;  // null the pointer first → resolve skips it
+            s_shadowWaves[i].size = 0;
+            return;
+        }
+    }
+}
+
+void dusk::audio::setShadowActive(bool active) {
+    s_shadowActive = active;
+}
+
+bool dusk::audio::shadowActive() {
+    return s_shadowActive;
+}
+
+const u8* dusk::audio::resolveShadowWave(u32 waveAramAddress) {
+    if (!s_shadowActive) {
+        return nullptr;
+    }
+    for (int i = 0; i < s_shadowWaveCount; i++) {
+        const ShadowWave& w = s_shadowWaves[i];
+        if (w.buf != nullptr && waveAramAddress >= w.aramBase &&
+            waveAramAddress < w.aramBase + w.size) {
+            return w.buf + (waveAramAddress - w.aramBase);
+        }
+    }
+    return nullptr;
+}
+#endif
 
 static bool shouldForceHurricaneSpinLoop(u32 aramAddress) {
     if (!s_hurricaneSpinSeLoopActive || aramAddress == 0 || s_hurricaneSpinWaveAramCount == 0) {
@@ -557,7 +642,24 @@ static int ReadChannelSamplesChunk(
 
     assert(desiredSamples >= 0);
 
-    auto aramBase = static_cast<u8*>(ARGetStorageAddress()) + channel.mWaveAramAddress;
+    // ============================================
+    // NEW CODE — ALBW Port / Dusklight
+    // Custom-audio shadow redirect: if the mod is active and a byte-compatible
+    // twin covers this wave, decode from the mod buffer instead of vanilla ARAM.
+    // The twin is size-matched to the vanilla bank, so mSamplesPerBlock,
+    // mEndSample, dataPosition, block alignment — every downstream field derived
+    // from the (unchanged) wave descriptor — stays valid; only the source bytes
+    // change. One pointer swap, nothing else.
+    // ============================================
+    const u8* aramBase;
+#if D_ALBW_AUDIO_SHADOW
+    if (const u8* shadow = dusk::audio::resolveShadowWave(channel.mWaveAramAddress)) {
+        aramBase = shadow;
+    } else
+#endif
+    {
+        aramBase = static_cast<u8*>(ARGetStorageAddress()) + channel.mWaveAramAddress;
+    }
 
     // Streaming logic directly modifies mSamplesLeft.
     // So we use that as our tracking of where we are.

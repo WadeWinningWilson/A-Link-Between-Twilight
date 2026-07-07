@@ -141,4 +141,41 @@ namespace dusk::audio {
     void excludeHurricaneSpinWaveAram(u32 aramAddress);
     void clearHurricaneSpinWaveRegistration();
     bool isHurricaneSpinWaveExcluded(u32 aramAddress);
+
+    // ============================================
+    // NEW CODE — ALBW Port / Dusklight
+    // Custom-audio shadow-wave redirect.
+    //
+    // Lets a downloaded audio mod be toggled ON/OFF at RUNTIME (not just at boot):
+    // vanilla wave banks stay resident in ARAM as the untouched base, the mod's
+    // byte-compatible twin of each resident bank is held in a plain RAM buffer,
+    // and the live toggle picks which one the mixer decodes from. It is a pointer
+    // swap at the sample-fetch point in ReadChannelSamplesChunk() — no audio
+    // subsystem re-init, no section-heap rebuild, the audio thread is never
+    // touched. Both sets are always resident, so the toggle is instant.
+    //
+    // Registry is a plain fixed array read lock-free on the audio thread, exactly
+    // mirroring the hurricane-spin registration convention above (register/free
+    // happen rarely on the DVD/load thread; a torn read at worst blips one frame
+    // between vanilla and mod, which is inaudible).
+    // ============================================
+
+    // Kill switch: set to 0 to compile the whole shadow feature out (mixer then
+    // always decodes from vanilla ARAM, exactly as stock). Shared by DuskDsp.cpp,
+    // custom_assets.cpp, and the JASWaveArcLoader hooks.
+#ifndef D_ALBW_AUDIO_SHADOW
+#define D_ALBW_AUDIO_SHADOW 1
+#endif
+
+    // Register a resident bank's mod twin: [aramBase, aramBase+size) -> buf.
+    void registerShadowWave(u32 aramBase, u32 size, const u8* buf);
+    // Drop a bank's mod twin (called when the vanilla bank is erased).
+    void unregisterShadowWave(u32 aramBase);
+    // Flip whether the mod set prevails (follows the Custom Models toggle).
+    void setShadowActive(bool active);
+    bool shadowActive();
+    // If the mod is active and a byte-compatible twin covers waveAramAddress,
+    // returns the equivalent pointer INTO the mod buffer (buf + intra-bank
+    // offset); else nullptr, meaning "decode from vanilla ARAM as normal".
+    const u8* resolveShadowWave(u32 waveAramAddress);
 }

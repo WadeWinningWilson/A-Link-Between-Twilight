@@ -1,6 +1,7 @@
 #ifndef DUSK_CUSTOM_ASSETS_HPP
 #define DUSK_CUSTOM_ASSETS_HPP
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,7 @@
 // ============================================
 
 class J3DModelData;
+struct JASWaveInfo;
 
 namespace dusk::custom_assets {
 
@@ -72,6 +74,42 @@ int count();
 // asset built from an overlaid arc (e.g. the sumo body) compare this against their
 // last-seen value to know the overlay set changed and they must re-mount.
 int overlay_generation();
+
+// --- Audio: custom-wave shadow (RUNTIME-toggleable audio) ----------------
+//
+// Audio can't be hot-swapped the Layer-A way: wave samples are read into ARAM
+// once at boot and never re-read, and the JAudio2 subsystem cannot be re-init'd
+// (its init guards against a live audio thread). So audio uses a different
+// intermediary — see DuskDsp.hpp. The model overlay (Layer A) deliberately
+// EXCLUDES everything under Audiores/, so vanilla audio always stays the
+// resident base. Instead: the mod's byte-compatible twin of each .aw wave bank
+// is read into a retained RAM buffer as the bank loads, registered with the DSP
+// shadow registry, and the Custom Models toggle picks vanilla vs mod at the
+// sample-fetch point — instant, no re-init. (v1 assumes a single audio mod.)
+
+// Record a wave arc's DVD entrynum -> leaf filename (called from
+// JASWaveArc::setFileName) so the loader can find the mod twin at load time.
+void note_audio_wave_arc(int entrynum, const char* rel_name);
+
+// After a vanilla wave bank loads to ARAM at [aram_base, aram_base+size): if any
+// mod provides a size-matched twin of this .aw, read it into a pooled RAM buffer
+// and register it with the DSP shadow registry (enable-independent, so a boot-
+// disabled mod can still be toggled on live). Size mismatch -> skipped + logged.
+void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int size);
+
+// On wave-bank erase: drop the DSP shadow registration for this ARAM base. The
+// RAM twin buffer is pooled by filename and kept for reuse, never freed mid-run
+// (so an in-flight mixer read can never dangle).
+void release_audio_shadow(unsigned int aram_base);
+
+// Per-wave voice remap, called from JASBank::noteOn. Given the wave the game is
+// about to play (*wave_ptr = its vanilla ARAM address, wave_id = its bank-local
+// id), if the active mod ships a twin of it, fills *out_info with the MOD wave
+// descriptor (offset/length/sampleCount/loop/format) and rewrites *wave_ptr to
+// the mod wave's ARAM address (which the DSP redirect resolves into the mod
+// buffer). Returns true if remapped; false leaves both args untouched. This is
+// what makes re-encoded (differently-sized) mod voices play correctly.
+bool remap_voice(intptr_t* wave_ptr, unsigned int wave_id, JASWaveInfo* out_info);
 
 }  // namespace dusk::custom_assets
 
