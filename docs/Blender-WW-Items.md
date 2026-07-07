@@ -26,7 +26,8 @@
 
 ## Goals (priority order)
 
-1. **Iron Boots re-rig — ✅ ASSET DONE (2026-07-02).** `vboot` re-rigged to al_bootsh's exact skeleton; textured `vboot.bdl` built & validated. See [Task 1 — DONE](#task-1--iron-boots-re-rig---the-current-blocker) below. Remaining = repack + in-game foot test + game-side code (drop `s_albwWwBootsSkinned` rig-gating).
+1. **Iron Boots re-rig — ✅ ASSET DONE (2026-07-02).** `vboot` re-rigged to al_bootsh's exact skeleton; textured `vboot.bdl` built & validated. See [Task 1 — DONE](#task-1--iron-boots-re-rig---the-current-blocker) below.
+   - **⚠️ DELIVERY CHANGED (2026-07-06): ship it via the Custom Model API, NOT the game's boot-slot code.** The old code-injection swap crashed on the retail 2-joint vboot and is now `#if 0`'d (game commit `c57f98b366`). Instead, **export the re-rig as a `.bmd`** (SuperBMD; not `.bdl`) and deliver it as a **Layer-B loose BMD** (`<clothesArc>_<al_bootsH index>.bmd`) or a **Layer-A arc overlay** of `al_bootsH`, dropped into `%AppData%/TwilitRealm/Dusklight/model_replacements/<mod>/…` — the **vanilla clothes pipeline + foot rig** then draw it with zero special-casing. See [`Custom-Model-API-Work.md`](Custom-Model-API-Work.md). Remaining = **export BMD → drop into a model_replacements mod folder → toggle on → in-game foot test.**
 2. **Bow: extract the WW arrow** from `vbow` → a standalone mesh (to skin TP's arrow projectile).
 3. *(Later)* Re-rig held items for real flex; extract **King Bulblin axe** (`RB_ONO` from `E_rdb`) to a light arc.
 

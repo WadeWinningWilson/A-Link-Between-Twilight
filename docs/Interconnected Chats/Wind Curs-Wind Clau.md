@@ -225,7 +225,11 @@ Code can't add joints or split baked geometry — that's external asset work. Wo
 
 ---
 
-## ▶ IRON BOOTS INVISIBILITY — active investigation (2026-07-02, Wind Clau owns)
+## ▶ IRON BOOTS INVISIBILITY — ⛔ SUPERSEDED (2026-07-06) by the Custom Model API
+
+**Resolution: the invisibility was an artifact of the wrong DELIVERY mechanism, not a fixable bug in this path.** The code-injection swap (load WW `vboot` into the boot slot + drive it via the vanilla rig) is retired. Deliver the re-rigged `vboot` via the **Custom Model API** (`docs/Custom-Model-API-Work.md`): a **loose-BMD (Layer B) / arc overlay (Layer A)** replacing `al_bootsH`, so the **vanilla clothes pipeline + foot rig** draw it with zero special-casing — no custom load, no `setAnmMtx` OOB, no invisibility. That also makes it the clean TP↔WW toggle the Blender doc intended. The re-rig asset is still correct — **export it as BMD** (not BDL) for the al_bootsH drop-in. The code swap is now `#if 0`'d in `d_a_alink_wolf.inc` (`c57f98b366`) — always vanilla al_bootsH, safe on any ISO. Analysis below kept as record.
+
+## ▶ IRON BOOTS INVISIBILITY — investigation (2026-07-02, superseded)
 
 **Symptom:** re-rigged `vboot.bdl` (4 joints matching al_bootsH: 0=root, 1/2/3 = A/B/C; 2 mats `SC_boot`/`boot`) loads fine (`vboot.bdl size 21696`) and renders in the Item Viewer — but with **skin=IronBoots + a clothes rebuild, Link's ENTIRE body goes invisible** (body/hat/hands/boots). World fine, **no crash**, runs 1200+ frames, **no `tcg src 21` / FATAL**. Skin Off + rebuild restores Link. ⇒ draw/state issue on the boot-slot path, not a load failure or crash.
 

@@ -120,6 +120,9 @@ Iron Boots aren't a *held* prop like the bow — they're a **worn body model** (
 | [build-fps-guidelines.md](build-fps-guidelines.md) | Build / launch hygiene before playtesting |
 | [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) | **Cursor ↔ Claude** implementation roadmap + session log |
 | [Blender-WW-Items.md](Blender-WW-Items.md) | **Asset-side** (Blender) handoff — re-rig `vboot` for iron boots, extract WW arrow from `vbow`; SuperBMD/GCFT workflow + `bpy` scripts |
+| [Custom-Model-API-Work.md](Custom-Model-API-Work.md) | **Delivery** — repack-free disc-file/model overlay (Aurora VFST) + loose-BMD injection + toggle. Preferred path for SKINS that replace a vanilla model (e.g. re-rigged `vboot`→`al_bootsH`); supersedes the code-injection iron-boots swap |
+
+**▶ Delivery reframe (2026-07-06):** WW **skins that replace a vanilla model** (iron boots re-rigged `vboot`→`al_bootsH`; a future `AL_BOW`/`AL_HS` re-rig) should ship via the **[Custom Model API](Custom-Model-API-Work.md)** (loose-BMD/arc overlay, driven by the vanilla pipeline+rig) — cleaner, repack-free, a true TP↔WW toggle, no bespoke injection. The bespoke path stays for the **get-item viewer** (load-from-`itemmdl`-by-index) and the **SC cel realization recipe** (the API doesn't do either). Committed bow/hookshot held skins keep working as-is; migrating them to the API (needs re-rig to the vanilla skeleton → also gains real flex) is future polish. Iron-boots code-injection swap is `#if 0`'d (`c57f98b366`).
 | [zeldaret/tww](https://github.com/zeldaret/tww) | WW decomp — Rosetta stone for `d_item_data` rows and item behavior (not linkable object code) |
 | [zeldaret/ss](https://github.com/zeldaret/ss) | SS decomp — Wii-era lighting / `MA**` palette lineage; **not** WW ink or J3D item path (see SS section) |
 
