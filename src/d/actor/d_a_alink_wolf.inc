@@ -603,21 +603,26 @@ void daAlink_c::changeLink(int param_0) {
     u16 i;
 #if TARGET_PC
     // ============================================
-    // NEW CODE — ALBW Port (WW iron-boots skin)
-    // When the WW skin selector is on Iron Boots and the itemmdl arc is resident, build both
-    // heavy-boot models from the re-rigged WW vboot (index 0xE) instead of al_bootsH. The vboot
-    // asset now carries al_bootsH's exact 4-joint skeleton (indices 1/2/3), so it rides the
-    // vanilla per-foot rig with no special-casing; the draw applies the WW cel recipe so the SC
-    // material isn't crushed by MAJI. NULL / arc-not-ready falls back to al_bootsH.
+    // NEW CODE — ALBW Port (WW iron-boots skin) — DISABLED 2026-07-06
+    // The code-injection swap (load WW vboot into the heavy-boot slots + drive it via the vanilla
+    // foot rig) is SUPERSEDED by the Custom Model API: deliver the re-rigged vboot as a loose-BMD /
+    // arc overlay of al_bootsH (see docs/Custom-Model-API-Work.md + wind-waker-item-work.md), so
+    // the vanilla pipeline + rig draw it with zero special-casing. This path also assumed a
+    // re-rigged 4-JOINT vboot; on the retail 2-joint vboot (unmodified ISO) it drives
+    // setAnmMtx(2/3) OUT OF BOUNDS -> corrupt clothes build -> Link invisible. So the swap is
+    // #if 0'd: always load vanilla al_bootsH (4-joint, rig-safe); s_albwWwBootsSkinned stays
+    // false. Re-enable only via the API delivery, not this injection.
     // ============================================
     s_albwWwBootsSkinned = false;
     J3DModelData* wwBootData = NULL;
+#if 0
     if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::IronBoots) {
         wwBootData = dWwItemmdl_getItemmdlModelData(0xE);  // dRes_INDEX_ITEMMDL_BDL_VBOOT_e
         if (wwBootData != NULL) {
             dWwItemmdl_patchModelForPc(wwBootData);
         }
     }
+#endif
     if (wwBootData != NULL) {
         for (i = 0; i < 2; i++) {
             mpLinkBootModels[i] = initModel(wwBootData, 0x80000, 0x11000084);
