@@ -287,20 +287,41 @@ revert on a mid-session toggle** — that's the separate "audio reapply" follow-
 
 ## 8. Open items / limitations
 
+- **First-toggle clean apply (native clothes) — FOR LATER.** The sumo composite
+  tracks on the first toggle (private mounts), but **native Link clothes** (`al.bmd`
+  body / `al_face` from the pipeline clothes arc `Kmdl`/`Bmdl`/`Zmdl`/`Mmdl`) don't
+  re-read on a *same-outfit* toggle: the resource manager is name-cached AND
+  `loadModelDVD`'s same-arc re-equip path deliberately rebuilds in place without
+  reloading (that skip avoids the clothes-pipeline `freeAll` double-free). So the
+  first toggle shows a mix; it resolves on the next outfit switch (a *different* arc
+  reloads). Fix options: (a) accept (one quick-swap), (b) auto re-equip on toggle
+  (crash-safe, brief flicker), (c) move native clothes onto private mounts like the
+  sumo body (first-toggle-clean but a big/risky change in the crash-prone pipeline).
 - **Caps final verification** (§5) — color caps just re-routed to the private
   loader; confirm they track on toggle across all Cap Wear modes.
 - **Audio live toggle (2c)** — still **reboot-scoped** (audio applies at boot only).
-  - **Tried & reverted:** option-a = force the scene wave loader to erase + re-read
-    the banks on the next transition (`Z2SceneMgr::albwRequestWaveReload`). It
-    **broke SE/voice** ("only music plays") — erasing + reloading a bank at the same
-    ID doesn't reliably re-read (the wave mgr dedups by ID), and the resident common
-    SE bank (`field_0x19`) is especially fragile. Do NOT repeat that approach.
-  - **Deferred "gamble":** a full **audio soft-reboot on transition** — clear the
-    init flag, `freeAll` the audio solid heap, re-run `mDoAud_Create` (re-reads
-    `Z2Sound.baa` + all banks through the overlay). It's the only thing that reliably
-    re-reads the resident voice, but the audio subsystem has **no existing teardown**
-    and is singleton-heavy, so it's high-risk. Kill-switched, incremental, if attempted.
-  - Fallback (current): boot-scoped audio — toggle + restart to change audio.
+  Scene-level wave reload is a **confirmed dead end** (proven with a diagnostic).
+  - **Attempt 1 (reverted):** zero the loaded-wave trackers + let the loader reload.
+    **Broke SE/voice** — for a same-ID bank the loader's
+    `eraseSeWave(0) && loadSeWave(...)` short-circuits, so the common SE bank
+    (`field_0x19` = voice + shared SFX) got erased but never reloaded.
+  - **Attempt 2 (reverted):** DIRECT `erase`+`load` of each bank at its own ID from
+    `Z2SceneMgr::_load1stWaveInner_1/2` on the first scene load after a toggle. Safe
+    (no crash, SE survived), and the diagnostic confirmed the reload **ran**
+    (`[albw-audio] reloading SE: common=88 se1=… …`) — but the **audio never changed**.
+    Root: `JASWaveArc::load()` re-activates the wave data that was **bound at boot**
+    (`mDoAud_Create` → `g_mDoAud_zelAudio.init(..., Z2Sound.baa, ...)`); it does not
+    re-read the `.aw` from the overlay at the scene layer. So no scene-wave reload can
+    change mid-session audio.
+  - **Only remaining path = full audio re-init** ("the gamble"): clear `mInitFlag`,
+    tear down `g_mDoAud_zelAudio` / `freeAll` the audio solid heap, re-run
+    `mDoAud_Create` so it re-reads `Z2Sound.baa` + re-`init()`s through the overlay.
+    That WOULD re-read the resident voice — but there is **no existing teardown**, the
+    subsystem is singleton-heavy, and re-init mid-session is high-risk. Kill-switched,
+    incremental, only if the user opts in.
+  - Fallback (current, recommended): **boot-scoped audio** — enable the mod at boot;
+    to change it, toggle + restart. The visual side is fully live; audio is the one
+    piece JAudio2's boot-bound wave system won't hot-swap without a re-init.
 - **Face/cap build-then-swap** — DONE (2-slot per arc, in-game verified). Heap-robust:
   private slots retry on game-heap-full (transient, not permanent-fail), release the
   non-live slot after each rebuild (≈1 heap/arc), and free unused cap arcs when stable
