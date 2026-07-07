@@ -289,10 +289,22 @@ revert on a mid-session toggle** — that's the separate "audio reapply" follow-
 
 - **Caps final verification** (§5) — color caps just re-routed to the private
   loader; confirm they track on toggle across all Cap Wear modes.
-- **Audio live toggle** — `.aw`/`.baa` still reboot-scoped; the audio-reapply
-  follow-up (re-init the resident wave banks on toggle) is not built.
-- **Face/cap build-then-swap upgrade** — currently in-place + epoch-guard; upgrade
-  to build-then-swap if the calc window ever faults.
+- **Audio live toggle (2c)** — still **reboot-scoped** (audio applies at boot only).
+  - **Tried & reverted:** option-a = force the scene wave loader to erase + re-read
+    the banks on the next transition (`Z2SceneMgr::albwRequestWaveReload`). It
+    **broke SE/voice** ("only music plays") — erasing + reloading a bank at the same
+    ID doesn't reliably re-read (the wave mgr dedups by ID), and the resident common
+    SE bank (`field_0x19`) is especially fragile. Do NOT repeat that approach.
+  - **Deferred "gamble":** a full **audio soft-reboot on transition** — clear the
+    init flag, `freeAll` the audio solid heap, re-run `mDoAud_Create` (re-reads
+    `Z2Sound.baa` + all banks through the overlay). It's the only thing that reliably
+    re-reads the resident voice, but the audio subsystem has **no existing teardown**
+    and is singleton-heavy, so it's high-risk. Kill-switched, incremental, if attempted.
+  - Fallback (current): boot-scoped audio — toggle + restart to change audio.
+- **Face/cap build-then-swap** — DONE (2-slot per arc, in-game verified). Heap-robust:
+  private slots retry on game-heap-full (transient, not permanent-fail), release the
+  non-live slot after each rebuild (≈1 heap/arc), and free unused cap arcs when stable
+  — fixes the Zora+color-cap+sumo exhaustion that froze the body vanilla.
 - **Single-asset granularity:** sub-arc assets still need Layer B (loose BMD) or a
   repacked arc; Layer A is whole-file only.
 - **Audio consistency (modder rule):** a mod that overlays `.aw` waves must also

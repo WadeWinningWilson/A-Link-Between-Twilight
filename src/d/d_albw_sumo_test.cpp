@@ -137,8 +137,7 @@ bool ensureCapSlot(int kind, int slot) {
     if (s_capHeap[kind][slot] == NULL) {
         s_capHeap[kind][slot] = mDoExt_createSolidHeapFromGame(kCapHeapSize, 0x20);
         if (s_capHeap[kind][slot] == NULL) {
-            s_capState[kind][slot] = 3;
-            return false;
+            return false;  // game heap full -> retry next frame (transient; NOT a permanent fail)
         }
     }
     JKRHeap* const prev = JKRGetCurrentHeap();
@@ -220,17 +219,6 @@ void startCapSwap(int kind) {
     s_capPending[kind] = freeSlot;
 }
 
-// Promote a kind's pending slot to live once ready (drives its load).  True when nothing pending
-// or the pending slot has landed.
-bool tryPromoteCap(int kind) {
-    if (kind < 0 || kind >= kCapKindNum || s_capPending[kind] < 0) return true;
-    if (ensureCapSlot(kind, s_capPending[kind])) {
-        s_capLive[kind]    = s_capPending[kind];
-        s_capPending[kind] = -1;
-        return true;
-    }
-    return false;
-}
 #endif  // D_ALBW_SUMO_PRIVATE_FACECAP
 
 // ============================================
@@ -262,8 +250,7 @@ bool ensureSumoSlot(int slot) {
     if (s_sumoHeap[slot] == NULL) {
         s_sumoHeap[slot] = mDoExt_createSolidHeapFromGame(kSumoHeapSize, 0x20);
         if (s_sumoHeap[slot] == NULL) {
-            s_sumoState[slot] = 3;
-            return false;
+            return false;  // game heap full -> retry next frame (transient; NOT a permanent fail)
         }
     }
     JKRHeap* const prev = JKRGetCurrentHeap();
@@ -345,6 +332,20 @@ void driveCustomHeadRefresh() {
             } else if (s_headRebuildSawTimer) {
                 s_headRebuildInFlight = false;
                 s_headRebuildSawTimer = false;
+                // Rebuild fully cycled -> the models now reference the LIVE slots, so the previous
+                // (non-live) slots are unreferenced.  Release them so we hold ~1 private heap per
+                // arc instead of 2 (2-per-arc exhausts the game heap in heavy scenes: Zora base +
+                // color cap + sumo -> a slot alloc fails -> the frozen-vanilla-body bug).
+                if (s_sumoLiveSlot >= 0) {
+                    releaseSumoSlot(1 - s_sumoLiveSlot);
+                }
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+                for (int k = 0; k < kCapKindNum; ++k) {
+                    if (s_capLive[k] >= 0) {
+                        releaseCapSlot(k, 1 - s_capLive[k]);
+                    }
+                }
+#endif
             }
         }
     }
@@ -373,6 +374,37 @@ void driveCustomHeadRefresh() {
     }
 #endif
 
+    // Reclaim game heap + prevent STALE live slots: free any private arc that is NOT the visible
+    // source right now, but ONLY when the model is stable (no swap / clothes change in flight) so
+    // nothing references it.  A freed arc reloads FRESH (current overlay) the next time it is
+    // needed -- which is what stops a toggle while an arc is unused from leaving a stale slot that a
+    // later use would show (e.g. topknot -> Link+green-cap-not-sumo froze alSumou, then wearing
+    // sumo showed the stale Linkle body), and lets a heap-starved retry recover (a color cap turned
+    // off frees its arc for the alSumou body slot).
+    if (!s_headReapplyPending && !s_headRebuildInFlight) {
+        daPy_py_c* pp = daPy_getLinkPlayerActorClass();
+        if (pp == NULL || pp->getClothesChangeWaitTimer() == 0) {
+            if (!needAlSumou && (s_sumoHeap[0] != NULL || s_sumoHeap[1] != NULL)) {
+                releaseSumoSlot(0);
+                releaseSumoSlot(1);
+                s_sumoLiveSlot    = -1;
+                s_sumoPendingSlot = -1;
+            }
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+            for (int k = 0; k < kCapKindNum; ++k) {
+                const bool needed =
+                    (k == 0 && (needFace || capKind == 0)) || (k > 0 && k == capKind);
+                if (!needed && (s_capHeap[k][0] != NULL || s_capHeap[k][1] != NULL)) {
+                    releaseCapSlot(k, 0);
+                    releaseCapSlot(k, 1);
+                    s_capLive[k]    = -1;
+                    s_capPending[k] = -1;
+                }
+            }
+#endif
+        }
+    }
+
     // --- Overlay changed -> start a coordinated refresh (once the prior change settled) ---
     if (gen != s_headGen && !s_headReapplyPending && !s_headRebuildInFlight) {
         daPy_py_c* p = daPy_getLinkPlayerActorClass();
@@ -389,30 +421,52 @@ void driveCustomHeadRefresh() {
         if (needFace || capKind == 0) startCapSwap(0);        // Kmdl build-then-swap
         if (capKind > 0) startCapSwap(capKind);               // Red/Blue build-then-swap
 #endif
-        dAlbwAlink_invalidateClothesEpoch();  // hide stale head/face until the single rebuild
         s_headReapplyPending = true;
+        // NOTE: the epoch is invalidated only when the rebuild actually fires (below), NOT here —
+        // build-then-swap keeps the OLD slots valid, so the current model stays correct/visible
+        // during the (possibly heap-stalled) load, instead of going invisible for the whole wait.
     }
 
-    // --- Fire ONE rebuild once every NEEDED mount is fresh ---
+    // --- Fire ONE rebuild once every NEEDED mount is fresh.  CRITICAL: check that all pendings are
+    //     LOADED without promoting any (ensure*Slot just drives the load), then promote them ALL
+    //     ATOMICALLY and rebuild.  If we promoted a cap the instant it loaded (the old bug), a body
+    //     swap stalling on the game heap would leave new-cap + old-body -> the reported hybrid. ---
     if (s_headReapplyPending) {
         bool ready = true;
-        if (needAlSumou && s_sumoPendingSlot >= 0) {
-            if (ensureSumoSlot(s_sumoPendingSlot)) {
-                s_sumoLiveSlot    = s_sumoPendingSlot;  // promote the fresh slot
-                s_sumoPendingSlot = -1;
-            } else {
-                ready = false;  // new body slot still loading
-            }
+        if (needAlSumou) {
+            const bool loaded = (s_sumoPendingSlot >= 0) ? ensureSumoSlot(s_sumoPendingSlot)
+                                                         : (s_sumoLiveSlot >= 0);
+            if (!loaded) ready = false;
         }
 #if D_ALBW_SUMO_PRIVATE_FACECAP
         if (needFace || capKind == 0) {
-            if (!tryPromoteCap(0) || !capLiveReadyOrFailed(0)) ready = false;
+            const bool loaded = (s_capPending[0] >= 0) ? ensureCapSlot(0, s_capPending[0])
+                                                       : capLiveReadyOrFailed(0);
+            if (!loaded) ready = false;
         }
         if (capKind > 0) {
-            if (!tryPromoteCap(capKind) || !capLiveReadyOrFailed(capKind)) ready = false;
+            const bool loaded = (s_capPending[capKind] >= 0) ? ensureCapSlot(capKind, s_capPending[capKind])
+                                                             : capLiveReadyOrFailed(capKind);
+            if (!loaded) ready = false;
         }
 #endif
         if (ready) {
+            // Promote every arc at once, THEN one rebuild -> body + face + cap all switch together.
+            if (s_sumoPendingSlot >= 0) {
+                s_sumoLiveSlot    = s_sumoPendingSlot;
+                s_sumoPendingSlot = -1;
+            }
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+            if (s_capPending[0] >= 0) {
+                s_capLive[0]    = s_capPending[0];
+                s_capPending[0] = -1;
+            }
+            if (capKind > 0 && s_capPending[capKind] >= 0) {
+                s_capLive[capKind]    = s_capPending[capKind];
+                s_capPending[capKind] = -1;
+            }
+#endif
+            dAlbwAlink_invalidateClothesEpoch();  // hide the ~1 frame between here and the rebuild
             dAlbwOutfit_forceReapply();  // one rebuild: body + face + cap/topknot all fresh
             s_headReapplyPending  = false;
             s_headRebuildInFlight = true;   // block the next swap until this rebuild fully cycles
