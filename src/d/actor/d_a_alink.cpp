@@ -71,6 +71,7 @@
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include "d/d_ww_itemmdl_pc.h"
+#include "dusk/custom_assets.hpp"
 #include "dusk/hurricane_test.h"
 #include "dusk/logging.h"  // DuskLog — TEMP arc/model lifecycle trace (STRIP with D_ALBW_ARC_LIFECYCLE_DEBUG)
 #include "res/Object/Alink.h"

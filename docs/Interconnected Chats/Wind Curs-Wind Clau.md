@@ -261,6 +261,32 @@ Code can't add joints or split baked geometry — that's external asset work. Wo
 
 ---
 
+## ▶ IRON BOOTS via Custom Model API — Layer B IMPLEMENTED (2026-07-06)
+
+**Confirmed (user):** Layer B (loose per-arc BMD via `custom_assets::try_load`), toggled by a **"Wind Waker Skins" folder** in the Custom Models picker, **all four outfit arcs**. This is how all WW skins will ship going forward.
+
+**Implemented:** `d_a_alink_wolf.inc` boots load now = `modelData = dusk::custom_assets::try_load(mArcName, bootsHIdx)` → fallback `getObjectRes(mArcName, "al_bootsH.bmd")` → `initModel(modelData, 0)`. `bootsHIdx` = **0xD (Kmdl/Mmdl) / 0xC (Bmdl/Zmdl)**. The re-rigged 4-joint BMD rides the **vanilla foot rig** — no special-casing, `s_albwWwBootsSkinned` stays false (normal clothes draw). Old code-injection swap removed; `#include dusk/custom_assets.hpp` added to `d_a_alink.cpp`.
+
+**Layer-B target files — drop into `%AppData%/TwilitRealm/Dusklight/model_replacements/Wind Waker Skins/`:**
+| Outfit | Arc | al_bootsH idx | File |
+|---|---|---|---|
+| Default (Hero/green) | Kmdl | 0xD=13 | `Kmdl_13.bmd` |
+| Casual | Bmdl | 0xC=12 | `Bmdl_12.bmd` |
+| Zora armor | Zmdl | 0xC=12 | `Zmdl_12.bmd` |
+| Magic armor | Mmdl | 0xD=13 | `Mmdl_13.bmd` |
+Same re-rigged BMD, one copy per name (al_bootsH is the same mesh+skeleton across arcs). `Kmdl.arc` is YAZ0-compressed, but Layer B loads the **loose BMD** directly — no arc, no compression concern.
+
+**Interaction research (mostly clean):**
+- **Sumo:** boots load from base `mArcName` (NOT the sumo private composite — `wolf.inc:562` face is private, `:602` boots are not; `mArcName` stays the base clothes arc during sumo) → try_load fires the same → **sumo wears WW boots for free**.
+- **Toggle tracking:** Layer B reads the loose BMD fresh (bypasses the §9 `getObjectRes` name-cache lag) → tracks when `changeLink` rebuilds; sumo coordinator's `forceReapply`→`changeLink` rebuilds → tracks. Native same-outfit toggle may lag one outfit-switch (§9), acceptable.
+- **Build-integrity scan** (`albwFirstCorruptMat`, `wolf.inc:660`): a malformed WW boot BMD → Link skipped, **no crash** → the re-export MUST pass the material scan (verify in BMDView2).
+- **Caps:** separate private-mount path, no direct conflict. Explicitly test **toggle-while-sumo+cap+WW-boots** (§5's cap calc-window is the fragile spot, not the boots).
+- **Multiple mods:** Layer B (boot slot) wins over a Layer-A arc overlay; independent otherwise.
+
+**Test matrix:** default + all 4 arcs; + sumo; + each Cap Wear mode; toggle on/off mid-session (± sumo); + another custom model. **Blocked on the re-rig exported as BMD + placed in the folder.**
+
+---
+
 ## ▶ WIND CLAU HANDOFF (fresh review-chat — 2026-07-01)
 
 **Role:** Wind Clau = review / graphics-strategy / second-opinion. Reads Cursor's diffs, logs, and screenshots; picks branches; enforces the do-not-retry list. **Does not edit source** — Cursor implements. (Wind Clau may edit *this doc* and `wind-waker-item-work.md`.)

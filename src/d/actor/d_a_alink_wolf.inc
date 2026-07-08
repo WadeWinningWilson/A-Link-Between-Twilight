@@ -599,41 +599,28 @@ void daAlink_c::changeLink(int param_0) {
     }
 #endif
 
-    modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_bootsH.bmd"));
     u16 i;
 #if TARGET_PC
     // ============================================
-    // NEW CODE — ALBW Port (WW iron-boots skin) — DISABLED 2026-07-06
-    // The code-injection swap (load WW vboot into the heavy-boot slots + drive it via the vanilla
-    // foot rig) is SUPERSEDED by the Custom Model API: deliver the re-rigged vboot as a loose-BMD /
-    // arc overlay of al_bootsH (see docs/Custom-Model-API-Work.md + wind-waker-item-work.md), so
-    // the vanilla pipeline + rig draw it with zero special-casing. This path also assumed a
-    // re-rigged 4-JOINT vboot; on the retail 2-joint vboot (unmodified ISO) it drives
-    // setAnmMtx(2/3) OUT OF BOUNDS -> corrupt clothes build -> Link invisible. So the swap is
-    // #if 0'd: always load vanilla al_bootsH (4-joint, rig-safe); s_albwWwBootsSkinned stays
-    // false. Re-enable only via the API delivery, not this injection.
+    // NEW CODE — ALBW Port (WW iron-boots skin via Custom Model API — Layer B)
+    // Try a loose per-arc WW boot override "<arc>_<al_bootsH index>.bmd" from an enabled Custom
+    // Models folder (e.g. "Wind Waker Skins"). al_bootsH sits at index 0xD in Kmdl/Mmdl and 0xC
+    // in Bmdl/Zmdl. try_load returns NULL (folder disabled / file absent) -> vanilla al_bootsH.
+    // The re-rigged BMD carries al_bootsH's exact 4-joint skeleton, so the vanilla per-foot rig
+    // below drives it with zero special-casing (standard initModel + normal clothes draw path).
+    // s_albwWwBootsSkinned stays false; the boot draws through the normal (non-WW-cel) path.
     // ============================================
     s_albwWwBootsSkinned = false;
-    J3DModelData* wwBootData = NULL;
-#if 0
-    if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::IronBoots) {
-        wwBootData = dWwItemmdl_getItemmdlModelData(0xE);  // dRes_INDEX_ITEMMDL_BDL_VBOOT_e
-        if (wwBootData != NULL) {
-            dWwItemmdl_patchModelForPc(wwBootData);
-        }
-    }
-#endif
-    if (wwBootData != NULL) {
-        for (i = 0; i < 2; i++) {
-            mpLinkBootModels[i] = initModel(wwBootData, 0x80000, 0x11000084);
-        }
-        s_albwWwBootsSkinned = true;
-    } else
+    const int bootsHIdx = (mArcName == l_bArcName || mArcName == l_zArcName) ? 0xC : 0xD;
+    modelData = dusk::custom_assets::try_load(mArcName, bootsHIdx);
+    if (modelData == NULL)
 #endif
     {
-        for (i = 0; i < 2; i++) {
-            mpLinkBootModels[i] = initModel(modelData, 0);
-        }
+        modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_bootsH.bmd"));
+    }
+
+    for (i = 0; i < 2; i++) {
+        mpLinkBootModels[i] = initModel(modelData, 0);
     }
 
     mpKanteraModel = initModelEnv(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_kantera.bmd")), 0);

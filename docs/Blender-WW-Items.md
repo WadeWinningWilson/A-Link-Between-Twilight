@@ -27,7 +27,11 @@
 ## Goals (priority order)
 
 1. **Iron Boots re-rig — ✅ ASSET DONE (2026-07-02).** `vboot` re-rigged to al_bootsh's exact skeleton; textured `vboot.bdl` built & validated. See [Task 1 — DONE](#task-1--iron-boots-re-rig---the-current-blocker) below.
-   - **⚠️ DELIVERY CHANGED (2026-07-06): ship it via the Custom Model API, NOT the game's boot-slot code.** The old code-injection swap crashed on the retail 2-joint vboot and is now `#if 0`'d (game commit `c57f98b366`). Instead, **export the re-rig as a `.bmd`** (SuperBMD; not `.bdl`) and deliver it as a **Layer-B loose BMD** (`<clothesArc>_<al_bootsH index>.bmd`) or a **Layer-A arc overlay** of `al_bootsH`, dropped into `%AppData%/TwilitRealm/Dusklight/model_replacements/<mod>/…` — the **vanilla clothes pipeline + foot rig** then draw it with zero special-casing. See [`Custom-Model-API-Work.md`](Custom-Model-API-Work.md). Remaining = **export BMD → drop into a model_replacements mod folder → toggle on → in-game foot test.**
+   - **⚠️ DELIVERY = Custom Model API, Layer B (game hook DONE 2026-07-06).** The old code-injection swap is removed; the boot load now calls `custom_assets::try_load(mArcName, al_bootsH_index)` with a vanilla fallback, driven by the **vanilla foot rig** (zero special-casing). See [`Custom-Model-API-Work.md`](Custom-Model-API-Work.md). **What's left is 100% asset-side:**
+     1. **Export the re-rig as a `.bmd`** (SuperBMD, *not* `.bdl`), matching `al_bootsH`'s materials/textures. Verify in BMDView2: **4 joints** `WORLD_ROOT`(0)/`AL_BOOTSHA`(1)/`B`(2)/`C`(3), 2 mats, **clean material blocks** (a corrupt build makes Link skip — no crash, but no boots).
+     2. **Copy it under 4 names** into `%AppData%/TwilitRealm/Dusklight/model_replacements/Wind Waker Skins/` (`al_bootsH` is the same mesh+skeleton in every clothes arc, so one BMD → four names):
+        - `Kmdl_13.bmd` (default green / Hero) · `Bmdl_12.bmd` (casual) · `Zmdl_12.bmd` (Zora armor) · `Mmdl_13.bmd` (Magic armor)
+     3. **Enable "Wind Waker Skins"** in Editor → ALBW → Custom Models, wear an outfit, equip heavy boots → WW boots on the feet via the vanilla rig. (Applies on the next clothes rebuild — outfit switch / area reload.)
 2. **Bow: extract the WW arrow** from `vbow` → a standalone mesh (to skin TP's arrow projectile).
 3. *(Later)* Re-rig held items for real flex; extract **King Bulblin axe** (`RB_ONO` from `E_rdb`) to a light arc.
 
