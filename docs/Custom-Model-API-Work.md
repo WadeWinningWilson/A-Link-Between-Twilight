@@ -63,12 +63,15 @@ scan + toggle and two override layers.
   are installed exactly once; the file set is **re-registrable**.
 - Called at startup from `src/m_Do/m_Do_main.cpp` right after `aurora_dvd_open`
   (both disc-open paths converge there) and after `scan()`.
-- **Covers:** `Z2Sound.baa`, all `.aw` wave archives, BGM streams, **and arcs
-  (raw OR compressed)** — one hook, no edits to the vendored JAudio2 library.
-  Compression is handled by the stock loader because arcs mount through the
-  normal entrynum path against the overlay (this is exactly what retiring the old
-  custom mount unlocked).
-- **Status:** audio confirmed coming through in-game; arc redirect working.
+- **Covers:** arcs (raw OR compressed) and any whole disc file **except audio** —
+  one hook, no edits to the vendored JAudio2 library. Compression is handled by the
+  stock loader because arcs mount through the normal entrynum path against the
+  overlay (this is exactly what retiring the old custom mount unlocked).
+- **`Audiores/` is deliberately EXCLUDED** from this overlay (as of 2026-07-06). It
+  worked for *boot-scoped* audio, but wave samples are boot-bound so it could never
+  hot-swap. Audio now has its own runtime-toggleable layer — vanilla stays the
+  resident base, the mod is redirected in at the mixer. See **[§6](#6-runtime-toggleable-custom-audio-shadow-wave-redirect--per-wave-wsys-remap)**.
+- **Status:** arc/model redirect working in-game; audio moved to §6.
 
 ### Layer B — loose single-BMD injection  (was Phase 1)
 - `try_load(arc_name, res_index)` looks for `"<arc>_<index>.bmd"` in the
@@ -81,6 +84,33 @@ scan + toggle and two override layers.
 - Wired into Armogohma at `src/d/actor/d_a_b_gm.cpp` (`useHeapInit`, B_gm res
   0x25) with a hard arc fallback. Working; original (234912 B) and SuperBMD
   re-export (235648 B) both load.
+
+#### Layer-B crash-avoidance (learned the hard way — WW iron boots, 2026-07-08)
+Two crashes that will hit **any** Layer-B consumer whose caller runs during a
+clothes/actor rebuild (not just the boots). Both fixed in `try_load`:
+- **GameHeap pin (the important one).** `loaderBasicBmd` allocates the model's
+  derived arrays — notably `J3DMaterialTable::mMaterialNodePointer` — on
+  `JKRHeap::sCurrentHeap`, *outside* our retained raw buffer. When the caller is
+  e.g. `daAlink_c::changeLink`, the current heap is Link's **transient clothes
+  arc heap**, torn down every rebuild via `mpArcHeap->freeAll()`. Our
+  `J3DModelData` is cached for the session, so the array dangles after the next
+  rebuild → `getMaterialNodePointer(0)` reads `NULL[0]` → `EXCEPTION_ACCESS_VIOLATION`
+  at `0x0` (inside `mDoExt_J3DModel__create`). **Fix:** pin `mDoExt_getGameHeap()`
+  (the persistent parent, 20× on PC) around the `loaderBasicBmd` call, restore
+  after. Armogohma dodged this only because it loads on its actor *solid* heap.
+  Do **not** pin root/system heap — they hold almost no free space of their own
+  (carved into children) and the alloc aborts.
+- **Material-node validation guard.** After `loaderBasicBmd`, reject any model
+  with `getMaterialNum()==0` or `getMaterialNodePointer(0)==nullptr` (→ `nullptr`,
+  caller uses the arc). A SuperBMD BMD built **without its `-m` material JSON** has
+  a degenerate MAT3 that loads "successfully" yet NULL-crashes on first `initModel`.
+- **Asset-side corollary:** always build the loose BMD with SuperBMD `-m <mat>.json
+  -x <texhdr>.json`; without `-m` the material table is degenerate. See
+  [`Blender-WW-Items.md`](Blender-WW-Items.md) ▶ NEW CHAT block.
+- **Rigged model + original animations?** Editing a rigged BMD in Blender re-derives
+  every bone's local frame, so the game's shared animations tear the mesh (invisible
+  at rest; limbs shatter when animated). Blender/SuperBMD cannot avoid it — fix the
+  exported BMD with the reskin tool: [`BMD-Reskin-Tool.md`](BMD-Reskin-Tool.md).
 
 ### Retired — standalone arc mount (old Phase 2b)
 - The old `mDoDvdThd`-level custom mount (`dusk_loadLooseArc` +
@@ -244,14 +274,76 @@ via the private accessors), `src/d/d_albw_outfit.cpp` / `.h`
 (`dAlbwOutfit_forceReapply`), `src/dusk/custom_assets.cpp` / `.hpp`
 (`overlay_generation()` — the re-mount signal).
 
-### Still reboot-scoped: audio
-The `.aw`/`.baa` wave banks are session-resident (JAudio2), so **voice does not
-revert on a mid-session toggle** — that's the separate "audio reapply" follow-up
-(model composite was done first). Audio applies cleanly when enabled at boot.
+### Audio: now live too (2026-07-06)
+Originally reboot-scoped — `.aw`/`.baa` wave banks are session-resident (JAudio2),
+so voice didn't revert on a mid-session toggle. **This is now solved** by a
+different mechanism than the model composite (audio can't use private mounts or a
+re-init): a shadow-wave redirect in the software mixer. See **[§6](#6-runtime-toggleable-custom-audio-shadow-wave-redirect--per-wave-wsys-remap)**.
 
 ---
 
-## 6. Positioning for a merge with the official Dusklight team
+## 6. Runtime-toggleable custom audio (shadow-wave redirect + per-wave WSYS remap)
+
+**Status (2026-07-06): working, committed `6389807a6a`.** Custom voice/BGM now
+tracks the Custom Models toggle **mid-session, instantly** — including a mod that
+was **disabled at boot** (the case a downloaded mod always hits, since a download
+can't be enabled before first launch). Kill switch: `D_ALBW_AUDIO_SHADOW`
+(in `DuskDsp.hpp`) → 0 compiles it out to stock.
+
+### Why audio needed a different approach than models
+Models hot-swap via private-heap build-then-swap (§5). Audio can't:
+- Wave **samples are read into ARAM once at boot** and never re-read; redirecting
+  the file path after boot changes nothing (the consumer already cached).
+- The JAudio2 subsystem **cannot be re-init'd** — `JAU_JASInitializer::initJASystem`
+  hard-guards against a live audio thread (warns + no-ops), and there is **no
+  teardown anywhere** for its global mem-pools / section-heap singleton / the audio
+  thread. Every prior path (scene-wave reload; the full "re-init gamble") was a
+  confirmed dead end.
+
+### The intermediary: shadow-wave redirect (downstream of the boot cache)
+Instead of rebuilding vanilla, **vanilla stays the resident base and the mod is
+layered on at the sample-fetch point** in our own PC software mixer (`DuskDsp`):
+1. The model overlay (Layer A) now **excludes `Audiores/` wholesale**, so vanilla
+   audio always loads to ARAM as the untouched base.
+2. As each vanilla wave bank loads to ARAM, if a mod ships that `.aw`, its bytes
+   are read into a **pooled RAM buffer** (kept for the run so an in-flight mixer
+   read can't dangle) and registered against the bank's ARAM range.
+3. In `ReadChannelSamplesChunk` (the per-chunk sample fetch), one conditional picks
+   the mod buffer vs vanilla ARAM. The **toggle just flips an active flag** — both
+   sets are always resident, so it's instant. The audio thread is never touched.
+   Registry is read lock-free on the audio thread (the hurricane-spin idiom).
+
+### Per-wave WSYS remap (why re-encoded voices decode correctly)
+A re-skin's voices are **re-encoded to different lengths**, so their `.aw` is *not*
+byte-compatible with vanilla — a raw offset swap decodes garbage (this is why the
+mod ships its own `.baa`). Fix, fully generic:
+- Parse the **mod's own `.baa`** (WSYS — mirrors `JASWSParser`, handles simple &
+  basic banks) into per-wave descriptors keyed by **(`.aw` leaf, wave id)**.
+- At **`JASBank::noteOn`** the game hands us the wave id + the vanilla ARAM address,
+  so we substitute the **mod descriptor** (offset / length / sampleCount / loop /
+  format) and repoint at the mod sample. ADPCM coefficients live **per-frame** (fixed
+  global tables, read from the data itself), so no coefficient plumbing is needed —
+  the mod bytes decode correctly on their own.
+- The vanilla `.baa` stays resident, so all non-modded audio is untouched.
+
+### Files
+| File | Role |
+|------|------|
+| `src/dusk/audio/DuskDsp.{cpp,hpp}` | Shadow-wave registry + the redirect in `ReadChannelSamplesChunk`; `D_ALBW_AUDIO_SHADOW` kill switch |
+| `src/dusk/custom_assets.{cpp,hpp}` | `Audiores/` overlay exclusion; twin-buffer pool; active flag (follows toggle, enable-independent load); mod-`.baa` WSYS parse → per-wave descriptors; `remap_voice()` |
+| `libs/JSystem/src/JAudio2/JASWaveArcLoader.cpp` | Hooks: note `entrynum→name`, acquire twin on ARAM load, release on erase |
+| `libs/JSystem/src/JAudio2/JASBank.cpp` | `noteOn` per-wave remap hook |
+
+### Known follow-up
+The DSP redirect is **bank-range based**, which is exact only when *every* wave in
+a shadowed bank has a mod twin (a "complete" audio mod — true for Linkle). A
+**partial-bank** mod (only some waves replaced) wants **per-wave exact keying** (key
+the redirect on the exact vanilla wave address instead of the bank range). Clean
+generalization; not needed for complete re-skins.
+
+---
+
+## 7. Positioning for a merge with the official Dusklight team
 
 - **Built on the official, upstream Aurora API**, used exactly as documented
   (`aurora_dvd_overlay_files` / `_callbacks`) — a purpose-built extension point.
@@ -270,11 +362,12 @@ revert on a mid-session toggle** — that's the separate "audio reapply" follow-
 
 ---
 
-## 7. Current file state
+## 8. Current file state
 
 | File | Role | Status |
 |------|------|--------|
-| `src/dusk/custom_assets.cpp` / `.hpp` | Whole system: Layer A (scan + overlay), Layer B (loose BMD), folder toggle, `overlay_generation()` | Working; audio confirmed in-game |
+| `src/dusk/custom_assets.cpp` / `.hpp` | Layer A (scan + overlay), Layer B (loose BMD), folder toggle, `overlay_generation()`, **custom-audio shadow layer** (§6) | Working; models + audio live in-game |
+| `src/dusk/audio/DuskDsp.{cpp,hpp}`, `libs/JSystem/src/JAudio2/JASWaveArcLoader.cpp`, `.../JASBank.cpp` | Runtime custom audio — shadow-wave redirect + per-wave WSYS remap (§6) | Working; committed `6389807a6a` |
 | `src/m_Do/m_Do_main.cpp`               | `scan()` (startup) + `install_overlays()` (after disc open) | Wired |
 | `src/m_Do/m_Do_dvd_thread.cpp`         | Stock arc mount (custom 2b mount **removed**) + temp `[ca-diag]` hook | Reverted to stock |
 | `src/dusk/ui/editor.cpp`               | ALBW → Custom Models multi-toggle picker | Working |
@@ -285,7 +378,7 @@ revert on a mid-session toggle** — that's the separate "audio reapply" follow-
 
 ---
 
-## 8. Open items / limitations
+## 9. Open items / limitations
 
 - **First-toggle clean apply (native clothes) — FOR LATER.** The sumo composite
   tracks on the first toggle (private mounts), but **native Link clothes** (`al.bmd`
@@ -299,38 +392,44 @@ revert on a mid-session toggle** — that's the separate "audio reapply" follow-
   sumo body (first-toggle-clean but a big/risky change in the crash-prone pipeline).
 - **Caps final verification** (§5) — color caps just re-routed to the private
   loader; confirm they track on toggle across all Cap Wear modes.
-- **Audio live toggle (2c)** — still **reboot-scoped** (audio applies at boot only).
-  Scene-level wave reload is a **confirmed dead end** (proven with a diagnostic).
-  - **Attempt 1 (reverted):** zero the loaded-wave trackers + let the loader reload.
-    **Broke SE/voice** — for a same-ID bank the loader's
-    `eraseSeWave(0) && loadSeWave(...)` short-circuits, so the common SE bank
-    (`field_0x19` = voice + shared SFX) got erased but never reloaded.
-  - **Attempt 2 (reverted):** DIRECT `erase`+`load` of each bank at its own ID from
-    `Z2SceneMgr::_load1stWaveInner_1/2` on the first scene load after a toggle. Safe
-    (no crash, SE survived), and the diagnostic confirmed the reload **ran**
-    (`[albw-audio] reloading SE: common=88 se1=… …`) — but the **audio never changed**.
-    Root: `JASWaveArc::load()` re-activates the wave data that was **bound at boot**
-    (`mDoAud_Create` → `g_mDoAud_zelAudio.init(..., Z2Sound.baa, ...)`); it does not
-    re-read the `.aw` from the overlay at the scene layer. So no scene-wave reload can
-    change mid-session audio.
-  - **Only remaining path = full audio re-init** ("the gamble"): clear `mInitFlag`,
-    tear down `g_mDoAud_zelAudio` / `freeAll` the audio solid heap, re-run
-    `mDoAud_Create` so it re-reads `Z2Sound.baa` + re-`init()`s through the overlay.
-    That WOULD re-read the resident voice — but there is **no existing teardown**, the
-    subsystem is singleton-heavy, and re-init mid-session is high-risk. Kill-switched,
-    incremental, only if the user opts in.
-  - Fallback (current, recommended): **boot-scoped audio** — enable the mod at boot;
-    to change it, toggle + restart. The visual side is fully live; audio is the one
-    piece JAudio2's boot-bound wave system won't hot-swap without a re-init.
+- **Audio live toggle — SOLVED (2026-07-06), see [§6](#6-runtime-toggleable-custom-audio-shadow-wave-redirect--per-wave-wsys-remap).**
+  Custom voice/BGM now tracks the toggle mid-session (shadow-wave redirect in the PC
+  software mixer + per-wave WSYS remap). Historical dead ends, kept for the record:
+  - Scene-level wave reload (`Z2SceneMgr::_load1stWaveInner_1/2` erase+load): the
+    reload *ran* but audio never changed — `JASWaveArc::load()` re-activates data
+    **bound at boot**, it doesn't re-read the `.aw`.
+  - Full audio re-init ("the gamble"): abandoned — `initJASystem` hard-guards against
+    a live audio thread and there is no teardown for the singleton-heavy subsystem.
+  - The shadow-wave redirect sidesteps both: vanilla stays resident, the mod layers on
+    at the sample-fetch point — no reload, no re-init, audio thread untouched.
+  - Remaining follow-up: partial-bank mods want per-wave exact keying (§6).
 - **Face/cap build-then-swap** — DONE (2-slot per arc, in-game verified). Heap-robust:
   private slots retry on game-heap-full (transient, not permanent-fail), release the
   non-live slot after each rebuild (≈1 heap/arc), and free unused cap arcs when stable
   — fixes the Zora+color-cap+sumo exhaustion that froze the body vanilla.
 - **Single-asset granularity:** sub-arc assets still need Layer B (loose BMD) or a
   repacked arc; Layer A is whole-file only.
-- **Audio consistency (modder rule):** a mod that overlays `.aw` waves must also
-  overlay the matching `Z2Sound.baa` (WSYS offsets are baked together). Linkle
-  ships both.
+- **Audio consistency (modder rule):** a mod that replaces `.aw` waves must ship its
+  matching `Z2Sound.baa` — the audio layer parses that `.baa` for the mod's wave
+  descriptors (§6). (It is **not** overlaid onto vanilla; vanilla's `.baa` stays the
+  resident wave table. The mod `.baa` lives at `<mod>/files/Audiores/Z2Sound.baa`.)
+  Wave **ids** must line up with vanilla (a re-skin keeps them); differing byte
+  sizes/offsets are fine — that's what the remap handles. Linkle ships both.
 - **Verify a compressed arc** through Layer A (Linkle's are raw RARC).
 - **Strip before push:** `[ca-diag]` (`custom_assets.cpp` + `m_Do_dvd_thread.cpp`),
   `ALBW-CAP` / `ALBW-CAPLOAD` (`d_albw_sumo_test.cpp`, `d_a_alink_wolf.inc`).
+  (The audio layer ships only informative `[custom_assets]` logs — no temp probes.)
+
+---
+
+## Note for future chats — a dedicated Custom Audio API doc
+
+This doc is now **Custom *Models*** first, with the runtime-audio system folded in as
+§6 because it shares the `dusk::custom_assets` module, the mod-folder layout, and the
+same toggle. That's fine at today's size. **If the audio system grows** — partial-bank
+exact keying, multi-audio-mod support, streamed-BGM handling, sequence/`.bms`
+replacement, an authoring/validation tool for modders, or it graduates into its own
+`dusk::custom_audio` module — **split it into its own `Custom-Audio-API-Work.md`** and
+leave §6 here as a one-paragraph pointer. The natural seam already exists: the audio
+work lives in `DuskDsp` + the `JASWaveArcLoader`/`JASBank` hooks + the audio half of
+`custom_assets`, all behind `D_ALBW_AUDIO_SHADOW`, so lifting it out is a clean cut.

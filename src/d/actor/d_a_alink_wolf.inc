@@ -608,11 +608,16 @@ void daAlink_c::changeLink(int param_0) {
     // in Bmdl/Zmdl. try_load returns NULL (folder disabled / file absent) -> vanilla al_bootsH.
     // The re-rigged BMD carries al_bootsH's exact 4-joint skeleton, so the vanilla per-foot rig
     // below drives it with zero special-casing (standard initModel + normal clothes draw path).
-    // s_albwWwBootsSkinned stays false; the boot draws through the normal (non-WW-cel) path.
+    // When the WW boot loads, s_albwWwBootsSkinned flips true so modelDraw() renders it with the
+    // get-item cel lighting recipe (struct-0 + ambient-only) instead of MAJI, which crushes the
+    // WW cel materials to black (the get-item / held-bow saga).
     // ============================================
     s_albwWwBootsSkinned = false;
     const int bootsHIdx = (mArcName == l_bArcName || mArcName == l_zArcName) ? 0xC : 0xD;
     modelData = dusk::custom_assets::try_load(mArcName, bootsHIdx);
+    if (modelData != NULL) {
+        s_albwWwBootsSkinned = true;
+    }
     if (modelData == NULL)
 #endif
     {

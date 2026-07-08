@@ -654,6 +654,11 @@ int daAlink_c::checkSwimOutAction() {
     }
 
     if (!checkNoResetFlg0(FLG0_UNK_80) || mWaterY - mLinkAcch.GetGroundH() <= var_f31 - 5.0f) {
+#if TARGET_PC
+        if (dAlbwOutfitStats_isSubmergedHumanSwim(this)) {
+            return 0;
+        }
+#endif
         current.pos.y = mWaterY;
         swimOutAfter(1);
         return commonCheckNextAction(0);

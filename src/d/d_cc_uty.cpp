@@ -27,6 +27,7 @@
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_boss.h"
+#include "d/d_albw_outfit_stats.h"
 #endif
 
 static int plCutLRC[58] = {
@@ -464,6 +465,9 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                         dFocusedArts_getEndingBlowGreatSpinAoePower(i_AtInfo->mAttackPower);
                 }
             }
+
+            i_AtInfo->mAttackPower =
+                dAlbwOutfitStats_applyOutgoingDamageMult(i_AtInfo->mAttackPower);
         }
 
 #if TARGET_PC

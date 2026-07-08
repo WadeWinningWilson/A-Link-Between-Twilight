@@ -21,6 +21,35 @@ research complete (proven in Blender), **no in-game reveal built yet**.
 
 ---
 
+## ▶ New-chat handoff (2026-07-06)
+
+This picks up in a **fresh chat** after a long unrelated session (runtime-toggleable
+custom **audio** — now committed, not part of this fight). Start here:
+
+- **Goal for this thread:** build the **phase-3 "true Gohma reveal"** — see [§10](#10-phase-3-true-gohma-reveal--in-game-plan)
+  for the tiered plan. Recommended path is **tier 2**: split the face-plate into its
+  own shape+material in Blender (already prototyped), export `B_gm_37.bmd` (res `0x25`),
+  drop it in a `model_replacements/` folder (Layer-B loose-BMD — no arc repack), then at
+  phase 3 fade the face material alpha→0 **+** play `eye_test.bck` **+** `eye_zoom.btk`.
+  Tier 1 (`eye_test.bck` trigger only, eye emerges *through* the face) is the cheap
+  first prototype if you want a fast in-engine check before the Blender round-trip.
+- **Repo state:** the custom-audio feature is **committed** (`6389807a6a`, local only —
+  not pushed; user pushes manually). The Armogohma work below is still **uncommitted**
+  in the working tree (HP bar, egg fix, name styling, bomb-arrow diagnostic, disabled
+  pursuit test). Don't `git add -A` blindly — see the "Never commit" list in
+  [commit-and-push.md](commit-and-push.md); commit Armogohma work only when the user asks.
+- **Also open (not phase 3, pick up if asked):** bomb-arrow crash repro + guarded-
+  decrement fix; boss-name fill colour → white reset. See "Open threads" below.
+- **Watch item:** user reported a possible **FPS dip** after the audio session. Likely
+  the post-build GPU-cache-wipe shader-recompile transient (recovers when
+  `dawn_cache`/`pipeline_cache` warm). If it persists with custom audio **active**, it's
+  an audio-hot-path optimization for the **build-analysis chat**, not this fight.
+- **Build/commit discipline:** `build_run.bat` (RelWithDebInfo) + wipe GPU caches after;
+  read [build-fps-guidelines.md](build-fps-guidelines.md) + [commit-and-push.md](commit-and-push.md);
+  **never push** unless the user says so.
+
+---
+
 ## 0. Refined fight — design contract (Boss Refinement ON)
 
 Locked-in gameplay contract for the refined `B_GM` fight (values in `d_albw_boss.cpp`):
@@ -220,6 +249,126 @@ The reveal is *exposing shipped content*, not authoring it. The one wall: **the 
 
 ---
 
+## 11. Phase-3 damage model & defense tuning  *(verified 2026-07-07; base 50% divisor)*
+
+**Design:** reveal fires on the **2nd statue hit** (not 3rd). HP is set to **35%** there (existing `kAlbwArmogohmaPostStatueSnapPct[1]`), then the **ground-chase phase 3** drains that 35% → ~5% via real weapon damage, at which point the existing disappear cutscene (`mMode=20 / mDemoMode=30`) is **relocated** to fire here and hand off to the `E_GM` floor eye (3-hit finisher). A **phase-3-only defense divisor** (base ÷2 = 50%) tames incoming damage so a finisher can't one-shot the sliver pool. Handoff at ≤5% (not exactly 0) so a large last hit can't overshoot and the cutscene always fires cleanly.
+
+### Damage pipeline (all verified in code)
+- Enemy converts the attack code `atp` → HP via `at_power_get()` keyed on `mPowerType`. **B_GM never sets `mPowerType` → defaults to 0.** PowerType-0 table ([d_cc_uty.cpp:168](../src/d/d_cc_uty.cpp)): atp1→1, atp2→**10**, atp3→**30**, atp4+→**200**, atp6→80.
+- **Sword tier** (melee only, [d_cc_uty.cpp:437](../src/d/d_cc_uty.cpp)): Wood **÷2**, Ordon **×1**, Master & Light **×2** (`checkMasterSwordEquip` covers both — [d_a_player.cpp:460](../src/d/actor/d_a_player.cpp)). Sword tier does NOT change raw `atp`; the multiply is applied after the power table.
+- **Sword-attack-up buff** (`getSwordAtUpTime`): temporary ×2 (not tabled).
+- **Focused Arts** (only when FA enabled): hidden-skill finishers scaled `(4+2·tier)/10` = ×0.4 (t0) → ×1.0 (t3); items (arrow/bomb) `(10+5·tier)/10` = ×1.0 (t0) → ×2.5 (t3). Basic/standard slashes & normal spin are **not** hidden skills → FA-immune. Max tier = 3.
+- **Outfits do NOT affect damage.** `dAlbwOutfit_isActive` appears only in HUD / sumo body-swap / the recovery-penalty; the outfit "stack rates" (Sumo 0.05 … Deity 0.50) tax **heart recovery**, not attack. **"With outfit stats" == "without"** for phase-3 pacing.
+- **Global Link-damage-decrease** divisor (`linkDamageDecreaseMult`) applies before ours (not tabled).
+
+### Base per-hit damage (B_GM, PowerType 0)
+| Attack | atp | Base HP (Ordon) |
+|---|---|---|
+| Basic slash | 2 | 10 |
+| Vertical / thrust / normal spin | 3 | 30 |
+| Great Spin / hidden-skill finisher | 4 | 200 |
+| Arrow (bow) | 2 | 10 |
+| Bomb / Bomb Arrow | 4 | 200 |
+
+### Scenario tables — 35% pool (175 @1×, 700 @4×), base 50% defense (×0.5)
+
+**S1 — Vanilla, no refinement:** phase 3 **nonexistent** (reveal morf gated on `dAlbwBossRefinement_isEnabled()`; `rodMax` stays 3; `health` constant 500; no pool drain). No damage table — this is the gate working as intended.
+
+**S2 / S3-without-FA — Refinement (± outfit; outfit is a no-op):**
+
+| Attack | Tier | Eff. dmg | Hits @1× | Hits @4× |
+|---|---|---|---|---|
+| Basic slash | Wood / Ordon / Master·Light | 2 / 5 / 10 | 88 / 35 / 18 | 350 / 140 / 70 |
+| Standard slash / spin | Wood / Ordon / Master·Light | 7 / 15 / 30 | 25 / 12 / 6 | 100 / 47 / 24 |
+| Great Spin / finisher | Wood / Ordon / Master·Light | 50 / 100 / 200 | 4 / 2 / 1 | 14 / 7 / 4 |
+| Arrow (bow) | — | 5 | 35 | 140 |
+| Bomb / Bomb Arrow | — | 100 | 2 | 7 |
+
+**S3 / S4 — Refinement + FA:** FA moves only the finisher and item rows (Ordon shown):
+
+| Attack | FA tier 0 | FA tier 3 |
+|---|---|---|
+| Great Spin / finisher (base 200) | eff 40 → 5 @1× / 18 @4× | eff 100 → 2 @1× / 7 @4× |
+| — Master/Light finisher | eff 80 → 3 / 9 | eff 200 → 1 / 4 |
+| Arrow (bow) | eff 5 → 35 / 140 | eff 12 → 15 / 59 |
+| Bomb / Bomb Arrow | eff 100 → 2 / 7 | eff 250 → 1 / 3 |
+
+Read: FA never breaks phase 3. At low tier it *helps* pacing (finisher weakened to ×0.4); at max tier finishers return to baseline and items get spicy (tier-3 bomb one-shots @1×) — which supports treating **bomb-into-the-back-hole as intentional bonus damage** rather than something to suppress.
+
+### Tuning intent (start simple, adjust later — CONFIRMED better to defer)
+- Ship Stage 2 with ONE tunable: phase-3 defense = **÷2 (50%)**. Route all phase-3 damage through a single helper so per-source multipliers slot in later with no refactor.
+- Deferred, playtest-driven options: **per-source defense** (e.g. divide bombs/finishers harder than slashes), or a **reactive eye-close** — boss auto-shuts its eye vs bomb-arrows in phase 3 (input-read) **unless stunned**, making bombs situational instead of a one-shot. Both are behavior tweaks best judged after the base cycle *feels* right, so they are NOT in the first Stage 2 pass.
+
+---
+
+## 12. Phase-3 gameplay — implemented state machine + reveal-model fixes  *(2026-07-08)*
+
+**Stage 1 (DONE, builds, uncommitted):** reveal model built alongside vanilla in `useHeapInit` (gated `dAlbwBossRefinement_isEnabled()` + `dusk::custom_assets::try_load("B_gm",0x25)`); heap `0x8C00→0xC800`; load-once cache + leak diagnostic in `custom_assets.cpp`; `b_gm_activateReveal()` pointer-swap; statics reset in `daB_GM_Create`.
+
+**Stage 2 (DONE, builds, uncommitted) — the `ACTION_PHASE3` (=13) sub-state machine in `d_a_b_gm.cpp`:**
+- Trigger: 2nd statue hit → `dAlbwBoss_armogohmaOnRodHit` (35% snap) → `b_gm_beginPhase3()` (rodMax=2 only when the reveal loaded).
+- **P3_INTRO** — plays `ANM_GOMA_RETURN` (get-up) keeping the smashed upside-down orientation, snaps upright only on the anim's final frame, then swaps in the reveal model (`b_gm_activateReveal`) and starts the dash. Fixes the "instant-flip blows up the foot IK" model break.
+- **P3_DASH** — chases Link (GOMA_DASH, **anim ×0.95** per playtest), eye blink 5s / open 5s (`kAlbwArmoP3EyeCycleFrames=300`) driving `field_0x1ad6` (gates the core sphere = vulnerable window).
+- **P3_VULN** — 8s stationary stagger (`kAlbwArmoP3VulnFrames=480`), eye open, **`ANM_GOMA_WAIT`** (was `LANDING_WAIT`, which is authored for the on-back pose and sank under the floor upright). Counter resets after.
+- **P3_LASER** — 10s (`600`), eye INVULNERABLE (never raises `field_0x1ad6`), faces Link (turn `0x435`, +5%), beam ignites at 3s (`kAlbwArmoP3LaserFireAt=180`) by ramping `field_0x6c0` (0.105 rate) — reuses the vanilla beam-render (fires from eye joint 0x15 = the mouth on the reveal model, tracks Link with lag via `field_0x6c8`). NOTE: `eye_test.bck` is deliberately NOT played on the reveal model (it yanks the baked eye off the mouth); a neutral hold pose is used.
+- **Single hit counter** `s_gmPhase3HitCount` (damage_check phase-3 block): high threshold first — `≥5` → VULN (reset after), else `>3` → LASER (retained). Only counts in P3_DASH; entering either shuts/gates the eye so a burst can't multi-trigger.
+- HP drains through `dAlbwBoss_armogohmaPhase3Damage()` (÷2 defense, `kAlbwArmogohmaPhase3DefenseDiv`) whenever the eye is open; `≤5%` → `b_gm_beginPhase3Handoff()` relocates the vanilla `mMode=20/mDemoMode=30` disappear cutscene → E_GM eye.
+
+**Frame constants assume 60 fps — confirm on playtest.** Timing: cycle 300, vuln 480, laser 600/fire 180.
+
+### Reveal-model bugs — RESOLVED in sequence (2026-07-08)
+Three separate defects, each fixed and playtest/offline-verified:
+
+**(a) 180° inverted — FIXED (playtest-confirmed upright).** The reveal scene's objects (meshes +
+`skeleton_root`) carried a **+90°X `matrix_world`**, and the SuperBMD recipe *also* passed `--rotate`
+→ two 90° rotations → 180° flip. Fix: apply the +90°X object transform in Blender (armature + all
+meshes together) so `matrix_world` is identity, then re-export with the same `--rotate` = exactly one
+rotation. `D_ALBW_ARMO_P3_DIAG_NOSWAP` flipped back to `0`. (Details: `memory/armogohma_phase3_blender.md`.)
+
+**(b) Eye + eyelids snapped to the dorsal socket (mouth left a gaping hole) — FIXED (code anchor).**
+The BMD correctly bakes the eye/lids at the mouth (JNT1 eye 0x15 local = (455.6,−62,−7.1) rotZ −78.5°;
+vanilla = dorsal (214.3,10.9,0)). But **Nintendo BCK/ANK1 anims carry TRS tracks for every joint**, so
+each shared body anim drove the eye/lid joints to the vanilla dorsal each frame, and `nodeCallBack`
+only layered rotations, never re-asserting the mouth translation (the old "no body anim translates
+these joints" assumption was untested and wrong). Fix: `b_gm_revealAnchorMouthJoint()` in
+`d_a_b_gm.cpp` rebuilds joints 0x15/0x16/0x17 (reveal model only) as `getAnmMtx(0x6) [body] × baked
+mouth-local`, so they ride the animated body but ignore the BCK's dorsal translation.
+
+**(c) Legs shattered under animation — FIXED (binary "reskin", offline-verified).** The Blender
+round-trip re-derived every bone's local frame (positions survive to 0.3 u, frames don't; rigid verts
+are joint-local, so they weld to the wrong frames → shared vanilla anims tear long joint chains). Body
+/eye frames happened to match vanilla (0.0° diff) so only the legs broke. Neither Blender nor SuperBMD
+(`--transform_mode` is irrelevant) can reproduce vanilla frames → fixed post-export with
+**[`tools/bmd_reskin/bmd_reskin.py`](../tools/bmd_reskin/bmd_reskin.py)**: transplant vanilla's frames,
+re-express each rigid vertex/normal by `targetWorld_J⁻¹·sourceWorld_J`, rebuild EVP1 inverse-binds.
+Verified offline — rest-position drift **0.0032 u**, frame-match to vanilla **0.0001** ⇒ mesh intact +
+animates like vanilla. Deployed as a loose-BMD swap (no rebuild). Full writeup:
+**[BMD-Reskin-Tool.md](BMD-Reskin-Tool.md)**. This is a **reusable precedent for any Blender-edited
+rigged model reusing original animations.**
+
+**(d) Eye rendered as a pure white orb — FIXED (binary texture inject, playtest-confirmed).** The eye
+material is environment-mapped: TEV stage 1 = `(TexMap1·iris + TexMap1.alpha)×2`. Vanilla's TexMap1 is
+`goma_kankyo` (a low-alpha white reflection sphere) → soft highlight. SuperBMD only embeds the
+mesh-diffuse textures, so the env map + emboss (`eye_enbos`) were dropped and redirected to the
+**opaque** `goma_eye01` (alpha=1) → stage 1 = `(…+1)×2` → clamps to pure white. Neither Blender nor
+SuperBMD (`--transform_mode` irrelevant) can embed the non-diffuse maps. Fixed post-export with
+**[`tools/bmd_reskin/bmd_addtex.py`](../tools/bmd_reskin/bmd_addtex.py)**: copies `goma_kankyo`+`eye_enbos`
+from vanilla `goma.bmd` into the reveal BMD's TEX1 (both are the last sections, so rebuildable) and
+repoints the eye material's texNo slots to `[eye01, kankyo, enbos]`. Verified offline (5 textures, eye
+resolves to those indices, injected bytes match vanilla, reskin still intact). Result: authentic shiny
+env-mapped orange iris at the mouth. See [BMD-Reskin-Tool.md](BMD-Reskin-Tool.md) §Companion.
+
+### Playtest findings still open
+- HP bar drain / eye sword-vulnerability + `÷2` defense feel — re-validate now that the eye is at the
+  mouth (front, hittable head-on).
+- Optional polish: eye size (a ~5% shrink or eyelids-follow-eye was floated) — reassess now that it's a
+  proper iris rather than a glaring white blob; deferred pending a look.
+- Confirm the P3_VULN `WAIT` pose reads as "weak" (may want a distinct upright stun / OoT iris-spin).
+- Deferred: eye_test literal-anim option, per-source defense, reactive bomb-arrow eye-close, 60 fps
+  timing confirm, beam aim on the ground model.
+
+---
+
 ## Code / file state summary
 
 | File | State |
@@ -229,11 +378,16 @@ The reveal is *exposing shipped content*, not authoring it. The one wall: **the 
 | `d_albw_boss_hp_hud.cpp` (`D_ALBW_BOSS_BAR_INTRO_STYLE`) | Name styling — implemented; **white-colour reset pending** |
 | `d_a_alink_bow.inc` (`deleteArrow`) | Bomb-arrow diagnostic — **in place** (remove after crash pinned) |
 | `d_a_b_gm.cpp` (`D_ALBW_ARMO_PURSUIT_TEST`) | Giant pursuit test — **implemented, DISABLED (define 0)** |
+| `d_a_b_gm.cpp` (`nodeCallBack` / `b_gm_revealAnchorMouthJoint`) | Phase-3 eye/lid mouth anchor — **implemented, uncommitted, playtest-confirmed** |
+| `B_gm_37.bmd` (reveal model) | Orientation-fixed + **reskinned** (vanilla frames) → legs animate; **deployed to `model_replacements/`** |
+| `tools/bmd_reskin/bmd_reskin.py` (+ `B_gm_37_prereskin_SOURCE.bmd`) | Reusable BMD reskin tool — see [BMD-Reskin-Tool.md](BMD-Reskin-Tool.md) |
+| `tools/bmd_reskin/bmd_addtex.py` | Companion: inject donor textures into a BMD + repoint a material (restored the eye env/emboss) |
 | Diagnostics | `albw_bombarrow_debug.txt`, `albw_armo_pursuit_debug.txt` |
 
 ## Open threads / next steps
 - [ ] Reproduce the bomb-arrow crash (sumo + laser) → read `albw_bombarrow_debug.txt` tail → land the guarded-decrement fix.
 - [ ] Reset boss-name fill colour to white (keep ruby font + name).
 - [ ] Decide on the pursuit test (keep behind toggle / promote to a real move / drop).
-- [ ] Phase-3 reveal: start with tier-1 (`eye_test.bck` trigger) prototype, then tier-2 model split if the look warrants.
+- [x] Phase-3 reveal model: upright (orientation), eye/lids anchored at the mouth, legs animate (reskin). See §12.
+- [ ] Phase-3 reveal eye polish: restore env/emboss shading (kill the white orb), ~+3% eye shrink, then re-run the reskin from the updated Blender export.
 - [ ] Commit the HP-bar / egg / name work (strip diagnostics + pursuit-test probes first, per build guidelines) when the user asks.

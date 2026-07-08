@@ -79,6 +79,24 @@ bool dAlbwOutfitStats_isSumoOffensiveKitActive() {
     return dComIfGs_getSelectEquipShield() == dItemNo_NONE_e;
 }
 
+bool dAlbwOutfitStats_allowsWoodHiddenSkills() {
+    return dAlbwOutfitStats_isSumoOffensiveKitActive();
+}
+
+u16 dAlbwOutfitStats_applyOutgoingDamageMult(u16 attackPower) {
+    if (attackPower == 0 || !dAlbwOutfitStats_isSumoOffensiveKitActive()) {
+        return attackPower;
+    }
+
+    const u32 scaled =
+        static_cast<u32>(attackPower * kAlbwOutfitStatsSumoOffensiveDamageMult);
+    if (scaled > 0xFFFFu) {
+        return 0xFFFFu;
+    }
+
+    return static_cast<u16>(scaled);
+}
+
 f32 dAlbwOutfitStats_getSwimSpeedMult(const daAlink_c* link) {
     if (!dAlbwOutfitStats_isEnabled() || link == NULL || link->checkWolf()) {
         return 1.0f;
@@ -112,7 +130,12 @@ bool dAlbwOutfitStats_isSubmergedHumanSwim(const daAlink_c* link) {
         return false;
     }
 
-    return !link->checkSwimUp() || link->getZoraSwim();
+    if (!link->checkSwimUp() || link->getZoraSwim()) {
+        return true;
+    }
+
+    // Dive init can still have FLG0_SWIM_UP set briefly; keep buoyancy/eject guards active.
+    return link->mProcID == daAlink_c::PROC_SWIM_DIVE;
 }
 
 bool dAlbwOutfitStats_isZoraWaterBuffActive() {

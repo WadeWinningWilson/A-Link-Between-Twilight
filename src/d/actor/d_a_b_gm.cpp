@@ -62,6 +62,50 @@
 // ============================================
 #define D_ALBW_ARMO_PURSUIT_TEST 0  // TEST triggers removed for now — set to 1 to restore
 
+// ============================================
+// NEW CODE — ALBW Port
+// Phase-3 reveal (Stage 1: model swap). After the 2nd Dominion Rod statue hit the
+// giant's vanilla model is swapped to a custom "revealed" model (single eye slid
+// to the mouth). Gated three ways: Boss Refinement ON + Custom Models toggle ON +
+// the loose B_gm_37.bmd present (try_load returns NULL otherwise). If any is
+// missing the vanilla 3-statue refinement fight is untouched. Kill switch below.
+// State is file-scope (one Armogohma at a time) since the size-locked b_gm_class
+// struct can't take new members.
+// ============================================
+#define D_ALBW_ARMO_REVEAL 1
+// Temporary diagnostic: 1 = keep the vanilla model through phase 3 (no reveal swap)
+// to prove the upside-down break is the reveal BMD's export orientation. Set 0 to
+// restore the real reveal swap once the model is re-exported correctly.
+#define D_ALBW_ARMO_P3_DIAG_NOSWAP 0
+
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+static mDoExt_McaMorfSO* s_gmRevealMorf = NULL;  // built in useHeapInit, freed with the solid heap
+static bool s_gmRevealActive = false;            // set once the swap fires (one-way)
+
+// Phase-3 ground-chase state (single boss, so file-scope is safe). Sub-states live
+// in mMode; a single hit counter (s_gmPhase3HitCount) drives both reactions:
+//   >3 hits -> LASER interlude, 5 hits -> VULN stagger (then counter resets).
+// The eye open/shut cycle + the stagger drive field_0x1ad6, which gates the core
+// weak-point sphere -> "eye open" IS the vulnerable window. The laser keeps it 0
+// (invulnerable). Frame counts assume a 60 fps logic tick; halve if 30 fps. Tune.
+enum { P3_DASH = 0, P3_VULN = 1, P3_LASER = 2, P3_INTRO = 3 };
+static bool s_gmPhase3Active = false;
+static bool s_gmPhase3EyeOpen = false;
+static int s_gmPhase3HitCount = 0;
+static const int kAlbwArmoP3EyeCycleFrames = 300;  // 5s shut / 5s open (dash)
+static const int kAlbwArmoP3VulnFrames     = 480;  // 8s upright weak stagger
+static const int kAlbwArmoP3LaserFrames    = 600;  // 10s laser move
+static const int kAlbwArmoP3LaserFireAt    = 180;  // beam ignites at 3s (elapsed)
+static const int kAlbwArmoP3VulnHitCount   = 5;    // hits -> stagger
+static const int kAlbwArmoP3LaserHitCount  = 3;    // >this -> laser (same counter)
+static void b_gm_beginPhase3(b_gm_class* i_this);
+static void b_gm_phase3(b_gm_class* i_this);
+static void b_gm_beginPhase3Handoff(b_gm_class* i_this);
+static void b_gm_phase3EnterVuln(b_gm_class* i_this);
+static void b_gm_phase3EnterLaser(b_gm_class* i_this);
+#endif
+// ============================================
+
 // Pursuit flavors, split by trigger weapon (all TEST triggers — hookshot /
 // boomerang / slingshot are temporary and will be reverted):
 //   DASH    — fast, retail GOMA_DASH anim        → hookshot
@@ -83,6 +127,7 @@ enum daB_GM_ACTION {
     ACTION_DAMAGE = 10,
     ACTION_DROP,
     ACTION_PURSUIT_TEST = 12,
+    ACTION_PHASE3 = 13,  // reveal ground-chase (Boss Refinement, after 2nd statue hit)
 };
 
 #if TARGET_PC && D_ALBW_ARMO_PURSUIT_TEST
@@ -159,6 +204,33 @@ static void anm_init(b_gm_class* i_this, int i_anmID, f32 i_morf, u8 i_attr, f32
     i_this->mAnmID = i_anmID;
 }
 
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+// ============================================
+// NEW CODE — ALBW Port (phase-3 reveal eye/lid mouth anchor)
+// The shared vanilla Armogohma BCKs carry TRS tracks for the eye (0x15) and the
+// eyelids (0x16/0x17) that pin those joints to the DORSAL eye socket. The reveal
+// BMD bakes them at the MOUTH, but the animation overwrites the model's rest pose
+// every frame -- so without this the revealed eye/lids snap back into the (now
+// empty) dorsal hole and leave the mouth gaping. For the reveal model only, we
+// rebuild each joint's world matrix as
+//     body joint (0x6) world  x  baked mouth-local  (translations from B_gm_37.bmd
+//     JNT1; all three share rotZ = -78.5 deg)
+// so the eye/lids ride the animated body while ignoring the BCK's dorsal
+// translation. The blink / eye-tracking rotations are then layered on top exactly
+// as before (their aim is relative to this matrix, so it still tracks Link).
+// ============================================
+static const s16 kAlbwArmoRevealMouthRotZ = -14294;  // -78.5 deg, as baked in the reveal BMD
+
+static void b_gm_revealAnchorMouthJoint(J3DModel* model, f32 tx, f32 ty, f32 tz) {
+    Mtx local;
+    cMtx_ZrotS(local, kAlbwArmoRevealMouthRotZ);         // local = RotZ(-78.5)
+    local[0][3] = tx;                                    // + baked mouth translation ->
+    local[1][3] = ty;                                    //   local = Trans * RotZ (joint-local)
+    local[2][3] = tz;
+    cMtx_concat(model->getAnmMtx(6), local, *calc_mtx);  // *calc_mtx = body-world * mouth-local
+}
+#endif
+
 static int nodeCallBack(J3DJoint* i_joint, int param_1) {
     if (param_1 == 0) {
         int jnt_no = i_joint->getJntNo();
@@ -189,10 +261,25 @@ static int nodeCallBack(J3DJoint* i_joint, int param_1) {
             } else if (jnt_no >= 0x3E && jnt_no <= 0x40) {
                 cMtx_ZrotM(*calc_mtx, a_this->mFoot[8].field_0x8[jnt_no - 0x3E]);
             } else if (jnt_no == 0x16) {
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+                if (s_gmRevealActive && s_gmRevealMorf != NULL && model == s_gmRevealMorf->getModel()) {
+                    b_gm_revealAnchorMouthJoint(model, 438.2799f, -48.1853f, -7.1048f);  // eyelidT
+                }
+#endif
                 cMtx_ZrotM(*calc_mtx, a_this->field_0x1ad8);
             } else if (jnt_no == 0x17) {
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+                if (s_gmRevealActive && s_gmRevealMorf != NULL && model == s_gmRevealMorf->getModel()) {
+                    b_gm_revealAnchorMouthJoint(model, 437.6509f, -74.1303f, -5.1240f);  // eyelidU
+                }
+#endif
                 cMtx_ZrotM(*calc_mtx, -a_this->field_0x1ad8);
             } else if (jnt_no == 0x15) {
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+                if (s_gmRevealActive && s_gmRevealMorf != NULL && model == s_gmRevealMorf->getModel()) {
+                    b_gm_revealAnchorMouthJoint(model, 455.5993f, -62.0347f, -7.1048f);  // eye
+                }
+#endif
                 cMtx_YrotM(*calc_mtx, a_this->field_0x1ada);
                 cMtx_ZrotM(*calc_mtx, a_this->field_0x1adc);
             }
@@ -208,6 +295,32 @@ static int nodeCallBack(J3DJoint* i_joint, int param_1) {
 static u8 hio_set;
 
 static daB_GM_HIO_c l_HIO;
+
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+// ============================================
+// NEW CODE — ALBW Port
+// One-time swap to the revealed model. Both morfs are already resident (built in
+// useHeapInit), so this is a pointer flip + re-bind — no mid-fight allocation, and
+// leak-safe (daB_GM_Delete frees the solid heap, not mpModelMorf directly).
+// ============================================
+static void b_gm_activateReveal(b_gm_class* i_this) {
+    if (s_gmRevealMorf == NULL || s_gmRevealActive) {
+        return;
+    }
+    const int anm = i_this->mAnmID;
+    i_this->mpModelMorf = s_gmRevealMorf;
+    // Actor matrix was bound to the vanilla model's baseTRMtx in Create; re-point it
+    // at the reveal model so it tracks the actor's position.
+    fopAcM_SetMtx((fopAc_ac_c*)i_this, s_gmRevealMorf->getModel()->getBaseTRMtx());
+    // Re-init the pupil-dilation BTK against the reveal model's material list.
+    i_this->mpZoomBtk->init(s_gmRevealMorf->getModel()->getModelData(),
+                            (J3DAnmTextureSRTKey*)dComIfG_getObjectRes("B_gm", 0x28), 1, 0, 1.0f, 0, -1);
+    // Carry the current animation onto the fresh morf so the swap is seamless.
+    anm_init(i_this, anm, 0.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+    s_gmRevealActive = true;
+}
+// ============================================
+#endif
 
 static int daB_GM_Draw(b_gm_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
@@ -279,6 +392,48 @@ static void damage_check(b_gm_class* i_this) {
         if ((i_this->mAction != ACTION_DROP || (i_this->mMode != 2 && i_this->mMode != 3)) && i_this->mCoreSph.ChkTgHit()) {
             i_this->mAtInfo.mpCollider = i_this->mCoreSph.GetTgHitObj();
             cc_at_check(i_this, &i_this->mAtInfo);
+
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+            // ============================================
+            // NEW CODE — ALBW Port (phase-3 reveal drain)
+            // The core sphere only registers while the eye is open (field_0x1ad6
+            // gates it), so a hit here IS a valid open-eye hit. Drain the pool
+            // through the defended helper instead of the ceiling-fall flinch
+            // (ACTION_DAMAGE plays a ceiling anim, wrong for the floor chase).
+            // mAtInfo.mAttackPower already has sword tier / FA / bow / bomb folded in.
+            // ============================================
+            if (s_gmPhase3Active) {
+                i_this->mInvincibilityTimer = 8;
+                // Drain the pool (defended) whenever the eye is open. The laser keeps
+                // field_0x1ad6 == 0, so the core sphere never registers there -> no
+                // drain and no counting during the laser ("eye invulnerable").
+                bool p3handoff = dAlbwBoss_armogohmaPhase3Damage(
+                    (fopAc_ac_c*)i_this, i_this->mAtInfo.mAttackPower);
+                if (p3handoff) {
+                    b_gm_beginPhase3Handoff(i_this);  // <=5% -> disappear cutscene -> E_GM
+                } else if (i_this->mMode == P3_DASH) {
+                    // One counter, high threshold checked first: 5 -> stagger, else
+                    // >3 -> laser. Entering either closes/gates the eye so a burst
+                    // can't multi-trigger. Stagger hits don't count (guarded by mMode).
+                    s_gmPhase3HitCount++;
+                    if (s_gmPhase3HitCount >= kAlbwArmoP3VulnHitCount) {
+                        b_gm_phase3EnterVuln(i_this);
+                    } else if (s_gmPhase3HitCount > kAlbwArmoP3LaserHitCount) {
+                        b_gm_phase3EnterLaser(i_this);
+                    }
+                }
+                cXyz p3_pos;
+                MtxP p3_mtx = mDoMtx_stack_c::get();
+                MTXCopy(i_this->mpModelMorf->getModel()->getAnmMtx(0x15), p3_mtx);
+                mDoMtx_stack_c::multVecZero(&p3_pos);
+                for (int p3 = 0; p3 < 3; p3++) {
+                    static u16 p3name[] = {0x8B8C, 0x8B8D, 0x8B8E};
+                    dComIfGp_particle_set(p3name[p3], &p3_pos, NULL, NULL);
+                }
+                return;
+            }
+            // ============================================
+#endif
 
 #if TARGET_PC
             bool chipOnlyOnCeiling = false;
@@ -352,11 +507,36 @@ static void damage_check(b_gm_class* i_this) {
                         dComIfGs_onOneZoneSwitch(4, -1);
                         Z2GetAudioMgr()->changeBgmStatus(2);
 
-                        if (i_this->mHitCount >= 3) {
-                            i_this->mMode = 20;
-                            i_this->mDemoMode = 30;
-                            fpcM_Search(s_ko_del, i_this);
-                            Z2GetAudioMgr()->bgmStop(0x1E, 0);
+                        int rodMax = 3;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+                        // Reveal fight: 2 statue hits instead of 3, and the giant's
+                        // model swaps to the revealed one on the final hit. Only when
+                        // the reveal model actually loaded (Refinement + Custom Models
+                        // toggle + B_gm_37.bmd all present); otherwise the vanilla
+                        // 3-statue path below is untouched.
+                        if (s_gmRevealMorf != NULL) {
+                            rodMax = 2;
+                        }
+#endif
+                        if (i_this->mHitCount >= rodMax) {
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+                            if (s_gmRevealMorf != NULL) {
+                                // Reveal fight: land the 35% checkpoint (final statue
+                                // snap), then enter phase 3. The get-up intro plays
+                                // RETURN and swaps to the revealed model only once it
+                                // stands upright (b_gm_phase3 P3_INTRO), so the revealed
+                                // model never shows in the smashed/upside-down pose. The
+                                // E_GM handoff is relocated to phase3's <=5% drain.
+                                dAlbwBoss_armogohmaOnRodHit(a_this, i_this->mHitCount);
+                                b_gm_beginPhase3(i_this);
+                            } else
+#endif
+                            {
+                                i_this->mMode = 20;
+                                i_this->mDemoMode = 30;
+                                fpcM_Search(s_ko_del, i_this);
+                                Z2GetAudioMgr()->bgmStop(0x1E, 0);
+                            }
                         } else {
 #if TARGET_PC
                             dAlbwBoss_armogohmaOnRodHit(a_this, i_this->mHitCount);
@@ -965,6 +1145,168 @@ static void b_gm_pursuit_test(b_gm_class* i_this) {
 // ============================================
 #endif
 
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+// ============================================
+// NEW CODE — ALBW Port (phase-3 reveal ground chase)
+// Entered on the 2nd statue hit (after the 35% snap + model swap). Drains the
+// remaining pool via defended weapon hits during the eye-open windows; hands off
+// to the E_GM eye once the pool hits the sliver threshold.
+// ============================================
+static void b_gm_beginPhase3(b_gm_class* i_this) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    i_this->mAction = ACTION_PHASE3;
+    i_this->mMode = P3_INTRO;
+    // Do NOT snap the orientation here. The boss is smashed upside-down; the RETURN
+    // "get up" anim carries the reorientation (as vanilla does) and we snap upright
+    // only when it finishes. A one-frame flip would leave the foot IK targeting the
+    // ceiling and blow the model apart -- the "model breaks" seen in playtest.
+    i_this->field_0x73c.y = 0.0f;
+    i_this->mInvincibilityTimer = 60;
+    s_gmPhase3Active = true;
+    s_gmPhase3EyeOpen = false;
+    s_gmPhase3HitCount = 0;
+    anm_init(i_this, ANM_GOMA_RETURN, 5.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+}
+
+static void b_gm_phase3EnterVuln(b_gm_class* i_this) {
+    // Stagger: stop, stand exposed, eye open the whole 8s. The counter resets when it
+    // ends; hits here drain HP but don't re-count. NOTE: LANDING_WAIT is authored for
+    // the on-its-back (upside-down) drop pose and sinks under the floor when played
+    // upright, so use the upright-safe WAIT (vanilla plays it upright post-RETURN).
+    i_this->mMode = P3_VULN;
+    i_this->mTimers[0] = kAlbwArmoP3VulnFrames;
+    s_gmPhase3EyeOpen = true;
+    anm_init(i_this, ANM_GOMA_WAIT, 5.0f, J3DFrameCtrl::EMode_LOOP, l_HIO.wait_anm_speed);
+}
+
+static void b_gm_phase3EnterLaser(b_gm_class* i_this) {
+    // Laser interlude: lock in place, eye INVULNERABLE (field_0x1ad6 stays 0), track
+    // Link and fire the lagging beam from t=3s. Do NOT play eye_test.bck on the reveal
+    // model (it would yank the baked eye off the mouth) -- a neutral hold pose keeps
+    // the eye put; the beam-render block owns the tracking + laser.
+    i_this->mMode = P3_LASER;
+    i_this->mTimers[0] = kAlbwArmoP3LaserFrames;
+    s_gmPhase3EyeOpen = false;
+    i_this->field_0x6c0 = 0.0f;   // beam off until the ignite moment
+    i_this->field_0x6f4 = 0;      // re-init the beam aim when it lights
+    anm_init(i_this, ANM_GOMA_WAIT, 5.0f, J3DFrameCtrl::EMode_LOOP, l_HIO.wait_anm_speed);
+}
+
+static void b_gm_beginPhase3Handoff(b_gm_class* i_this) {
+    // Relocated vanilla transition: the same writes the 3rd statue hit made, just
+    // fired from the chase once the pool drains. demo_camera(mDemoMode=30) then
+    // runs the disappear cutscene and spawns the E_GM floor eye. b_gm_drop no-ops
+    // on mMode 20, matching the vanilla post-statue state.
+    s_gmPhase3Active = false;
+    i_this->field_0x6c0 = 0.0f;   // kill any lingering beam
+    i_this->mAction = ACTION_DROP;
+    i_this->mMode = 20;
+    i_this->mDemoMode = 30;
+    fpcM_Search(s_ko_del, i_this);
+    Z2GetAudioMgr()->bgmStop(0x1E, 0);
+}
+
+static void b_gm_phase3(b_gm_class* i_this) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+
+    // Get-up intro: keep the smashed (upside-down) orientation while RETURN plays,
+    // then on its final frame snap upright, swap in the revealed model, and start the
+    // chase. We stop "early" -- we never continue into the vanilla wall-climb. Handled
+    // before the upright logic below so we don't force angle.x = 0 mid-reorient.
+    if (i_this->mMode == P3_INTRO) {
+        cLib_addCalc2(&a_this->speedF, 0.0f, 1.0f, l_HIO.dash_speed * 0.5f + 1.0f);
+        cLib_addCalc2(&a_this->current.pos.y, 0.0f, 1.0f, 40.0f);
+        if (i_this->mpModelMorf->isStop()) {
+            a_this->current.angle.x = 0;
+            a_this->shape_angle.x = 0;
+#if D_ALBW_ARMO_P3_DIAG_NOSWAP
+            // DIAGNOSTIC (temporary): keep the vanilla model in phase 3 to isolate the
+            // upside-down break. If the vanilla body reorients + dashes upright cleanly,
+            // the fault is the reveal BMD's export orientation, not this code. Flip the
+            // define back to 0 to restore the reveal swap.
+#else
+            b_gm_activateReveal(i_this);  // reveal only once upright
+#endif
+            anm_init(i_this, ANM_GOMA_DASH, 10.0f, J3DFrameCtrl::EMode_LOOP, l_HIO.dash_anm_speed * 0.95f);
+            i_this->mMode = P3_DASH;
+            i_this->mTimers[0] = kAlbwArmoP3EyeCycleFrames;
+        }
+        i_this->mAcch.CrrPos(dComIfG_Bgsp());
+        return;
+    }
+
+    a_this->current.angle.x = 0;
+    cLib_addCalc2(&a_this->current.pos.y, 0.0f, 1.0f, 40.0f);
+
+    s16 yaw = a_this->current.angle.y;
+    if (player != NULL) {
+        yaw = cM_atan2s(player->current.pos.x - a_this->current.pos.x,
+                        player->current.pos.z - a_this->current.pos.z);
+    }
+
+    f32 target_speed = 0.0f;
+
+    switch (i_this->mMode) {
+    case P3_DASH:
+        // Eye blink/open cycle (5s each). field_0x1ad6 (cleared in action() this
+        // frame) gates the core sphere -> the open window IS the vulnerable window.
+        if (i_this->mTimers[0] == 0) {
+            s_gmPhase3EyeOpen = !s_gmPhase3EyeOpen;
+            i_this->mTimers[0] = kAlbwArmoP3EyeCycleFrames;
+        }
+        if (s_gmPhase3EyeOpen) {
+            i_this->field_0x1ad6 = 1;
+        }
+        // Keep chasing even while the eye is open (do NOT freeze). Dash anim slowed 5%.
+        if (i_this->mAnmID != ANM_GOMA_DASH &&
+            dComIfG_getObjectRes("B_gm", ANM_GOMA_DASH) != NULL) {
+            anm_init(i_this, ANM_GOMA_DASH, 10.0f, J3DFrameCtrl::EMode_LOOP, l_HIO.dash_anm_speed * 0.95f);
+        }
+        cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 4, 0x300);
+        if (i_this->mPlayerDistance > 350.0f) {
+            target_speed = l_HIO.dash_speed;
+        }
+        break;
+
+    case P3_VULN:
+        // Stationary, eye exposed the whole stagger. Slow face toward Link.
+        i_this->field_0x1ad6 = 1;
+        cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 4, 0x80);
+        if (i_this->mTimers[0] == 0) {
+            s_gmPhase3HitCount = 0;
+            s_gmPhase3EyeOpen = false;
+            i_this->mMode = P3_DASH;
+            i_this->mTimers[0] = kAlbwArmoP3EyeCycleFrames;
+        }
+        break;
+
+    case P3_LASER: {
+        // Locked, eye invulnerable (never raise field_0x1ad6). Face Link with a
+        // lagging turn; the beam ignites at 3s and the render block tracks Link.
+        // Tracking + ignite sped up ~5% per playtest.
+        cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 8, 0x435);
+        const int elapsed = kAlbwArmoP3LaserFrames - static_cast<int>(i_this->mTimers[0]);
+        if (elapsed >= kAlbwArmoP3LaserFireAt) {
+            cLib_addCalc2(&i_this->field_0x6c0, 1.0f, 1.0f, 0.105f);
+        }
+        if (i_this->mTimers[0] == 0) {
+            i_this->field_0x6c0 = 0.0f;
+            i_this->field_0x6f4 = 0;
+            s_gmPhase3EyeOpen = false;
+            i_this->mMode = P3_DASH;
+            i_this->mTimers[0] = kAlbwArmoP3EyeCycleFrames;
+        }
+        break;
+    }
+    }
+
+    cLib_addCalc2(&a_this->speedF, target_speed, 1.0f, l_HIO.dash_speed * 0.5f + 1.0f);
+    i_this->mAcch.CrrPos(dComIfG_Bgsp());
+}
+// ============================================
+#endif
+
 static void action(b_gm_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
     cXyz local_move;
@@ -999,6 +1341,11 @@ static void action(b_gm_class* i_this) {
 #if TARGET_PC && D_ALBW_ARMO_PURSUIT_TEST
     case ACTION_PURSUIT_TEST:
         b_gm_pursuit_test(i_this);
+        break;
+#endif
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+    case ACTION_PHASE3:
+        b_gm_phase3(i_this);
         break;
 #endif
     }
@@ -2177,7 +2524,15 @@ static int daB_GM_Execute(b_gm_class* i_this) {
     if (i_this->field_0x1ad6 != 0) {
         cLib_addCalcAngleS2(&i_this->field_0x1ad8, 6000, 4, 800);
     } else {
-        cLib_addCalcAngleS2(&i_this->field_0x1ad8, BREG_S(7) + -3900, 1, 800);
+        s16 shutTarget = BREG_S(7) + -3900;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        // The revealed model's eyelids were stretched to enclose the (relocated) eye;
+        // they need a deeper close than the vanilla lids to fully cover it.
+        if (s_gmRevealActive) {
+            shutTarget = BREG_S(7) + -8000;
+        }
+#endif
+        cLib_addCalcAngleS2(&i_this->field_0x1ad8, shutTarget, 1, 800);
     }
 
     f32 target_blend = 1.0f;
@@ -2244,17 +2599,13 @@ static int useHeapInit(fopAc_ac_c* i_this) {
 
     // ============================================
     // NEW CODE — ALBW Port
-    // Repack-free custom-model hook: use a loose GOMA BMD override from
-    // <config>/model_replacements/ if present, else the arc resource (identical to
-    // vanilla). Layer-B consumer of dusk::custom_assets.
+    // The fight uses the VANILLA GOMA model (arc) for phases 1-2. The custom
+    // "revealed" model is built separately below (Layer-B loose BMD) and swapped in
+    // after the 2nd statue hit — see b_gm_activateReveal(). (The prior always-on
+    // try_load replacement is superseded by the swap, so vanilla players and
+    // refinement-without-the-model players get the untouched arc model.)
     // ============================================
-    J3DModelData* gomaModelData = NULL;
-#if TARGET_PC
-    gomaModelData = dusk::custom_assets::try_load("B_gm", 0x25);
-#endif
-    if (gomaModelData == NULL) {
-        gomaModelData = (J3DModelData*)dComIfG_getObjectRes("B_gm", 0x25);
-    }
+    J3DModelData* gomaModelData = (J3DModelData*)dComIfG_getObjectRes("B_gm", 0x25);
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
@@ -2315,6 +2666,40 @@ static int useHeapInit(fopAc_ac_c* i_this) {
         return 0;
     }
 
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Build the phase-3 reveal model alongside the vanilla one (resident — no
+    // mid-fight allocation), swapped in by b_gm_activateReveal() after the 2nd statue
+    // hit. Built LAST so a heap-full reveal fails gracefully (s_gmRevealMorf stays
+    // NULL -> vanilla fight) without breaking the vanilla spawn above. Only when Boss
+    // Refinement is ON and the loose override is present (try_load is NULL if the
+    // Custom Models folder is disabled or B_gm_37.bmd is missing). The loose BMD is
+    // cached in custom_assets so respawns reuse it (no leak).
+    // ============================================
+    s_gmRevealMorf = NULL;
+    if (dAlbwBossRefinement_isEnabled()) {
+        J3DModelData* revealData = dusk::custom_assets::try_load("B_gm", 0x25);
+        if (revealData != NULL) {
+            // Bind the same mCreatureSound as the vanilla morf so daB_GM_Delete's
+            // stopZelAnime() is safe after the swap (only the active morf drives it).
+            mDoExt_McaMorfSO* rm = JKR_NEW mDoExt_McaMorfSO(
+                revealData, NULL, NULL, (J3DAnmTransform*)dComIfG_getObjectRes("B_gm", 30),
+                2, 0.6f, 0, -1, &a_this->mCreatureSound, 0, 0x11000284);
+            if (rm != NULL && rm->getModel() != NULL) {
+                J3DModel* rmodel = rm->getModel();
+                rmodel->setUserArea((uintptr_t)a_this);
+                for (u16 j = 0; j < rmodel->getModelData()->getJointNum(); j++) {
+                    rmodel->getModelData()->getJointNodePointer(j)->setCallBack(nodeCallBack);
+                }
+                s_gmRevealMorf = rm;
+            }
+            // Build failed (e.g. heap full): stay vanilla — do NOT fail the spawn.
+        }
+    }
+    // ============================================
+#endif
+
     return 1;
 }
 
@@ -2322,12 +2707,26 @@ static int daB_GM_Create(fopAc_ac_c* i_this) {
     b_gm_class* a_this = (b_gm_class*)i_this;
     fopAcM_ct(a_this, b_gm_class);
 
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+    // New spawn: clear reveal state. The morf is (re)built in useHeapInit; the active
+    // flag must not persist across a die-and-retry. Any prior morf lived in the
+    // previous (already-freed) solid heap, so this NULL prevents a dangling pointer.
+    s_gmRevealMorf = NULL;
+    s_gmRevealActive = false;
+    s_gmPhase3Active = false;
+    s_gmPhase3EyeOpen = false;
+    s_gmPhase3HitCount = 0;
+#endif
+
     int phase_state = dComIfG_resLoad(&a_this->mPhase, "B_gm");
     if (phase_state == cPhs_COMPLEATE_e) {
         OS_REPORT("B_gm PARAM %x\n", fopAcM_GetParam(i_this));
         OS_REPORT("B_gm//////////////B_GM SET 1 !!\n");
 
-        if (!fopAcM_entrySolidHeap(i_this, useHeapInit, 0x8C00)) {
+        // Heap 0x8C00 -> 0xC800: room for the second (reveal) model instance built in
+        // useHeapInit when the phase-3 reveal is active. (+0x4000 headroom; the reveal
+        // build is null-safe so an over-tight heap degrades to the vanilla fight.)
+        if (!fopAcM_entrySolidHeap(i_this, useHeapInit, 0xC800)) {
             OS_REPORT("//////////////B_GM SET NON !!\n");
             return cPhs_ERROR_e;
         }

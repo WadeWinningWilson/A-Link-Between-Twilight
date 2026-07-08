@@ -11,6 +11,7 @@
 #if TARGET_PC
 #include "d/d_albw_combat.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_shield.h"
 #include "d/d_focused_arts.h"
 #include "dusk/hurricane_test.h"
@@ -2140,7 +2141,7 @@ int daAlink_c::procCutTurnMoveInit(BOOL param_0) {
     field_0x2f98 = 0;
     mMaxSpeed = mpHIO->mCut.mCutTurn.m.mMaxSpeed;
 
-    if (!checkWoodSwordEquip()) {
+    if (!checkWoodSwordEquip() || dAlbwOutfitStats_allowsWoodHiddenSkills()) {
         simpleAnmPlay(m_nSwordBtk);
     } else {
         mProcVar0.field_0x3008 = 1;
@@ -2155,7 +2156,7 @@ int daAlink_c::procCutTurnMoveInit(BOOL param_0) {
 int daAlink_c::procCutTurnMove() {
     setShapeAngleToAtnActor(0);
 
-    if (!checkWoodSwordEquip()) {
+    if (!checkWoodSwordEquip() || dAlbwOutfitStats_allowsWoodHiddenSkills()) {
         simpleAnmPlay(m_nSwordBtk);
     } else {
         mProcVar0.field_0x3008++;

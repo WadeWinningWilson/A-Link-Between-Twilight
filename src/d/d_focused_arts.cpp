@@ -7,6 +7,7 @@
 
 #include "d/d_focused_arts.h"
 #include "d/d_albw_combat.h"
+#include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_shield.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
@@ -192,6 +193,9 @@ static u16 applyEquippedSwordAttackMult(u16 i_power) {
 static const char* getEquippedSwordLabel() {
     const u8 sword = dComIfGs_getSelectEquipSword();
     if (sword == dItemNo_WOOD_STICK_e) {
+        if (dAlbwOutfitStats_allowsWoodHiddenSkills()) {
+            return "Wood (Sumo kit)";
+        }
         return "Wood (no FA fill)";
     }
     if (sword == dItemNo_SWORD_e) {
@@ -263,6 +267,9 @@ static void applyCheatMaxBankIfEnabled() {
 static int getSwordFillStep() {
     const u8 sword = dComIfGs_getSelectEquipSword();
     if (sword == dItemNo_WOOD_STICK_e) {
+        if (dAlbwOutfitStats_allowsWoodHiddenSkills()) {
+            return kItemFillStep;
+        }
         return 0;
     }
     if (sword == dItemNo_SWORD_e) {

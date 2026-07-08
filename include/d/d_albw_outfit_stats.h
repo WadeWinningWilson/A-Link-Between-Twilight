@@ -14,6 +14,7 @@
 class daAlink_c;
 
 constexpr int kAlbwOutfitStatsZoraGraceFrames = 180 * 30;
+constexpr f32 kAlbwOutfitStatsSumoOffensiveDamageMult = 3.0f;
 
 bool dAlbwOutfitStats_isEnabled();
 
@@ -24,6 +25,8 @@ f32 dAlbwOutfitStats_getReceivedDamageMult();
 
 // Sumo + wooden sword + no shield offensive kit (Phase E).
 bool dAlbwOutfitStats_isSumoOffensiveKitActive();
+bool dAlbwOutfitStats_allowsWoodHiddenSkills();
+u16  dAlbwOutfitStats_applyOutgoingDamageMult(u16 attackPower);
 
 // Phase C — swim speed (+5% all, +10% Zora) and non-Zora submerged locomotion.
 f32 dAlbwOutfitStats_getSwimSpeedMult(const daAlink_c* link);

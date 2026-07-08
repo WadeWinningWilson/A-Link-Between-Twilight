@@ -19205,7 +19205,13 @@ int daAlink_c::execute() {
                 current.pos = pos;
             }
 
-            if (!mLinkAcch.ChkGroundHit() && !mLinkAcch.ChkRoofHit() && getZoraSwim()) {
+            if (!mLinkAcch.ChkGroundHit() && !mLinkAcch.ChkRoofHit()
+                && (getZoraSwim()
+#if TARGET_PC
+                    || dAlbwOutfitStats_isSubmergedHumanSwim(this)
+#endif
+                    ))
+            {
                 current.pos.y = pos.y;
             }
 
@@ -19228,7 +19234,12 @@ int daAlink_c::execute() {
                 if (!checkNoResetFlg0(FLG0_UNK_80) ||
                     mWaterY - var_f31 <= mpHIO->mSwim.m.mStartHeight - 5.0f)
                 {
-                    swimOutAfter(0);
+#if TARGET_PC
+                    if (!dAlbwOutfitStats_isSubmergedHumanSwim(this))
+#endif
+                    {
+                        swimOutAfter(0);
+                    }
                 }
             }
 
@@ -20479,6 +20490,32 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
         dWwItemmdl_setWwBowActorAmbient(&tevStr);
         dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
         mDoExt_modelUpdateDL(i_model);
+        daMirror_c::entry(i_model);
+        return;
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port (WW iron-boots skin — cel lighting recipe)
+    // The re-rigged vboot wears as BOTH boot instances. Under MAJI its WW cel materials crush to
+    // black (the same get-item / held-bow saga). Replicate the get-item LIGHTING recipe only:
+    // struct-0 + fixed warm ambient (no MAJI) + per-material ambient-only. Deliberately WITHOUT
+    // the held-bow SC draw scope + modelUpdateDL — the two boots SHARE one J3DModelData and that
+    // path corrupted the deferred draw (took all of Link down, see the held-bow note above). The
+    // normal modelEntryDL path is used instead (exactly like al_bootsH), so the shared-data draw
+    // stays valid. applyBowMaterialAmbientOnly is accept-any and the SC recipe keys on the "SC_"
+    // prefix, so SC_boot/boot are handled without bow-specific code.
+    // ============================================
+    if (s_albwWwBootsSkinned &&
+        (i_model == mpLinkBootModels[0] || i_model == mpLinkBootModels[1])) {
+        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+        dWwItemmdl_setWwBowActorAmbient(&tevStr);
+        dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
+        if (param_1 == 0) {
+            mDoExt_modelEntryDL(i_model);
+        } else {
+            i_model->calcMaterial();
+            i_model->diff();
+        }
         daMirror_c::entry(i_model);
         return;
     }

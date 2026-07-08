@@ -31,6 +31,17 @@ static constexpr int kAlbwArmogohmaPostStatueSnapPct[2] = {60, 35};
 static constexpr int kAlbwArmogohmaBowChipPct = 4;
 
 // ============================================
+// NEW CODE — ALBW Port (phase-3 reveal drain)
+// After the 2nd statue hit the reveal fight enters a ground-chase phase that
+// drains the last 35% -> handoff via real weapon damage. kPhase3DefenseDiv is the
+// single tunable "defense" (2 = 50% off; raise for a tankier eye). Per-source
+// defense / reactive eye-close are deferred (see docs Boss-Fights-RefinedGohma §11).
+// Handoff at <=5% (not 0) so a big last hit can't overshoot the disappear cutscene.
+// ============================================
+static constexpr int kAlbwArmogohmaPhase3DefenseDiv = 2;
+static constexpr int kAlbwArmogohmaPhase3HandoffPct = 5;
+
+// ============================================
 // NEW CODE — ALBW Port
 // Composite health-bar fill mapping (see docs/albw-armogohma-boss-bar-spec.md).
 // One bar, one fill ratio. Phase 1 (giant) fills the TOP half (1.0 .. 0.5),
@@ -436,6 +447,31 @@ void dAlbwBoss_armogohmaOnRodHit(fopAc_ac_c* i_boss, s8 i_hitCount) {
         armogohmaApplyHpChange(i_boss, armogohmaHpFromPercent(kAlbwArmogohmaPostStatueSnapPct[1]));
     }
 }
+
+// ============================================
+// NEW CODE — ALBW Port (phase-3 reveal drain)
+// ============================================
+bool dAlbwBoss_armogohmaPhase3Damage(fopAc_ac_c* i_boss, int i_rawPower) {
+    if (!dAlbwBossRefinement_isEnabled() || i_boss == NULL) {
+        return false;
+    }
+
+    dAlbwBoss_armogohmaEnsureInitialized(i_boss);
+
+    // Single tunable defense divisor (min 1 so a hit always lands something).
+    int dmg = i_rawPower / kAlbwArmogohmaPhase3DefenseDiv;
+    if (dmg < 1) {
+        dmg = 1;
+    }
+
+    const s16 newHp = static_cast<s16>(std::max(1, static_cast<int>(i_boss->health) - dmg));
+    armogohmaApplyHpChange(i_boss, newHp);
+
+    // Handoff to the E_GM eye once the pool reaches the sliver threshold.
+    const s16 handoffFloor = armogohmaHpFromPercent(kAlbwArmogohmaPhase3HandoffPct);
+    return i_boss->health <= handoffFloor;
+}
+// ============================================
 
 bool dAlbwBoss_armogohmaTryBeginEggPhase(b_gm_class* i_boss) {
     if (!dAlbwBossRefinement_isEnabled() || i_boss == NULL) {

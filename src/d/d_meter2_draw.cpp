@@ -26,6 +26,7 @@
 #include <cstring>
 #if TARGET_PC
 #include "d/d_albw_shield.h"
+#include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_wolf_charge_hud.h"
 #include "d/d_albw_rupee_popup.h"
 #include "d/d_albw_boss_hp_hud.h"
@@ -187,7 +188,10 @@ bool lopFaMeterActive() {
     if (player == NULL || player->checkWolf()) {
         return false;
     }
-    return dComIfGs_getSelectEquipSword() != dItemNo_WOOD_STICK_e;
+    if (dComIfGs_getSelectEquipSword() == dItemNo_WOOD_STICK_e) {
+        return dAlbwOutfitStats_allowsWoodHiddenSkills();
+    }
+    return true;
 }
 // ============================================
 // NEW CODE ENDS HERE

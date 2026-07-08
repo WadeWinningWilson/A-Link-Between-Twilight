@@ -14,6 +14,10 @@
 #include "dusk/logging.h"
 #include "dusk/settings.h"  // game.customModelsDisabled
 #include "d/d_resorce.h"    // dRes_info_c::loaderBasicBmd (engine-standard BMDV finish)
+#include "JSystem/J3DGraphAnimator/J3DModelData.h"  // getMaterialNum/getMaterialNodePointer (Layer-B validation)
+#include "JSystem/JKernel/JKRHeap.h"  // JKRHeap type for the persistent-heap pin
+#include "JSystem/JKernel/JKRExpHeap.h"  // JKRExpHeap : public JKRHeap (GameHeap upcast)
+#include "m_Do/m_Do_ext.h"            // mDoExt_getGameHeap / mDoExt_setCurrentHeap (Layer-B lifetime fix)
 #include "dusk/audio/DuskDsp.hpp"  // dusk::audio shadow registry
 #include "JSystem/JAudio2/JASWSParser.h"   // WSYS descriptor structs (mod .baa parse)
 #include "JSystem/JAudio2/JASWaveInfo.h"   // JASWaveInfo (per-wave descriptor)
@@ -42,6 +46,22 @@ std::unordered_map<std::string, std::string> s_map;
 
 // Bumped on each install_overlays() so resident-asset caches can detect a change.
 int s_generation = 0;
+
+// ============================================
+// NEW CODE — ALBW Port
+// Layer-B loose-BMD load-once cache + leak diagnostic.
+// A loose BMD is malloc'd and retained for the process lifetime (the model binds
+// to it in place), so WITHOUT a cache every actor spawn re-malloc's and leaks it
+// (e.g. the Armogohma reveal model re-loads on each die-and-retry). The cache is
+// keyed by "<arc>:<index>" so repeated spawns reuse the same data. The counters
+// feed a one-shot (never per-frame) diagnostic in try_load so we can confirm the
+// running malloc total stays flat across respawns.
+// ============================================
+std::map<std::string, J3DModelData*> s_looseBmdCache;
+std::mutex s_looseBmdMtx;
+std::size_t s_looseBmdTotalBytes = 0;
+int s_looseBmdLoadCount = 0;
+// ============================================
 
 std::string normalize(std::string p) {
     std::replace(p.begin(), p.end(), '\\', '/');
@@ -592,6 +612,25 @@ J3DModelData* try_load(const char* arc_name, int res_index) {
         return nullptr;
     }
 
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Load-once cache: return the already-loaded data if this arc:index was loaded
+    // before (avoids re-malloc'ing + leaking the retained buffer on every respawn).
+    // ============================================
+    char key[112];
+    std::snprintf(key, sizeof(key), "%s:%d", arc_name, res_index);
+    {
+        std::lock_guard<std::mutex> lk(s_looseBmdMtx);
+        const auto it = s_looseBmdCache.find(key);
+        if (it != s_looseBmdCache.end()) {
+            DuskLog.info(
+                "[custom_assets] Layer-B cache HIT {} -> no new alloc (retained {} B over {} load(s))",
+                key, s_looseBmdTotalBytes, s_looseBmdLoadCount);
+            return it->second;
+        }
+    }
+    // ============================================
+
     char fname[96];
     std::snprintf(fname, sizeof(fname), "%s_%d.bmd", arc_name, res_index);
 
@@ -630,16 +669,70 @@ J3DModelData* try_load(const char* arc_name, int res_index) {
         return nullptr;
     }
 
+    // ============================================
+    // NEW CODE — ALBW Port (Layer-B lifetime fix — pin the persistent GameHeap)
+    // J3DModelLoaderDataBase::load (inside loaderBasicBmd) allocates the model's derived
+    // arrays — notably J3DMaterialTable::mMaterialNodePointer — on the CURRENT JKRHeap,
+    // NOT inside our retained 'raw' buffer.  When a caller (e.g. daAlink_c::changeLink)
+    // invokes try_load, the current heap is a TRANSIENT actor sub-heap: Link's clothes
+    // arc heap is torn down every rebuild via mpArcHeap->freeAll() (see d_a_alink_wolf.inc).
+    // Our J3DModelData is cached for the whole session, so allocating its arrays there
+    // leaves mMaterialNodePointer dangling after the next freeAll() -> getMaterialNodePointer(0)
+    // reads NULL[0] -> crash at 0x0 on reuse.  Pin the GameHeap (the persistent parent the
+    // clothes heap is carved from, sized 20x on PC for mods) for the load so the cached
+    // model's arrays outlive every clothes rebuild.  Root/System heap is NOT usable here:
+    // it holds almost no free space of its own (carved into children), so allocating there
+    // aborts a later scene-heap request.  (Armogohma's Layer-B model survives today only
+    // because it loads on its actor solid heap, not on a freeAll()'d clothes heap.)
+    // ============================================
+    JKRHeap* gameHeap = mDoExt_getGameHeap();
+    JKRHeap* prevHeap = (gameHeap != nullptr) ? mDoExt_setCurrentHeap(gameHeap) : nullptr;
+
     J3DModelData* model_data = dRes_info_c::loaderBasicBmd('BMDV', buffer);
+
+    if (prevHeap != nullptr) {
+        mDoExt_setCurrentHeap(prevHeap);  // restore the caller's heap unconditionally
+    }
+
     if (model_data == nullptr) {
         std::free(raw);  // load failed; safe to release
         DuskLog.warn("[custom_assets] Layer-B load failed: {}", path.string());
         return nullptr;
     }
 
+    // ============================================
+    // NEW CODE — ALBW Port (Layer-B model validation — crash-proofing)
+    // A malformed BMD (classic case: SuperBMD output built WITHOUT its material JSON)
+    // can load "successfully" yet carry getMaterialNum()==0 or a NULL material node[0].
+    // mDoExt_J3DModel__create() derefs getMaterialNodePointer(0) unconditionally, so the
+    // engine NULL-crashes on the very next initModel().  Reject such a model here: return
+    // nullptr and every try_load caller falls back to the vanilla arc resource, so a bad
+    // drop-in in a Custom Models folder degrades gracefully instead of taking down the
+    // game.  (Rare error path — leak the tiny J3DModelData; free the larger raw buffer.
+    // model_data is never cached/returned on this path, so its dangling ref is never read.)
+    // ============================================
+    if (model_data->getMaterialNum() == 0 || model_data->getMaterialNodePointer(0) == nullptr) {
+        DuskLog.warn(
+            "[custom_assets] Layer-B REJECT {} — no valid material node[0] (mats={}); "
+            "falling back to vanilla arc resource",
+            path.string(), model_data->getMaterialNum());
+        std::free(raw);
+        return nullptr;
+    }
+
     // Retain 'raw' intentionally — the model references it. Falls back to the arc
     // automatically if we ever return nullptr, so this path is safe by construction.
-    DuskLog.info("[custom_assets] Layer-B using {} ({} bytes)", path.string(), size);
+    // Cache it so subsequent spawns reuse this buffer instead of re-malloc'ing (the
+    // one-shot log below is the leak diagnostic: total should stay flat on respawn).
+    {
+        std::lock_guard<std::mutex> lk(s_looseBmdMtx);
+        s_looseBmdCache[key] = model_data;
+        s_looseBmdTotalBytes += static_cast<std::size_t>(size);
+        s_looseBmdLoadCount += 1;
+        DuskLog.info(
+            "[custom_assets] Layer-B FRESH load {} ({} B) -> retained total {} B over {} load(s)",
+            path.string(), size, s_looseBmdTotalBytes, s_looseBmdLoadCount);
+    }
     return model_data;
 }
 

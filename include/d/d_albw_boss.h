@@ -131,6 +131,13 @@ bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state);
 
 void dAlbwBoss_armogohmaOnRodHit(fopAc_ac_c* i_boss, s8 i_hitCount);
 
+// Boss Refinement phase-3 (reveal) — apply one defended weapon hit to the drain
+// pool. i_rawPower is the already-resolved attack power (sword tier / FA / bow /
+// bomb all folded in). Halves it (the phase-3 defense divisor) before draining.
+// Returns true once HP falls to the handoff threshold, telling the caller to fire
+// the disappear cutscene + E_GM eye. No-op (returns false) unless Refinement is on.
+bool dAlbwBoss_armogohmaPhase3Damage(fopAc_ac_c* i_boss, int i_rawPower);
+
 bool dAlbwBoss_armogohmaTryBeginEggPhase(b_gm_class* i_boss);
 
 

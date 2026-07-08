@@ -8,6 +8,44 @@
 
 ---
 
+## ▶ NEW CHAT — START HERE (2026-07-08): WW Iron Boots — geometry re-rig (Option B)
+
+**Where we are:** The WW iron boots now **load, don't crash, and render in full color** on Link's feet in-game. The ONLY remaining problem is **geometry**: worn, the boot mesh **explodes into scattered shards** — even though it looks perfect standalone in the get-item viewer. This is a **skinning/weighting bug in the re-rig ASSET.** The game side is solved and must not be touched.
+
+**Your job (asset-only, Blender + SuperBMD — NO game code):** redo the `vboot` re-rig so its skin EXACTLY matches `al_bootsH`'s structure, then redeploy the BMD. **No game rebuild** — Layer-B loads loose BMDs at runtime.
+
+**Why it mangles (root cause, confirmed by diffing the two DAEs):** the game drives boot joints 1/2/3 → Link's ankle/foot/toe (`setAnmMtx(1,2,3)` ← bones `0x13/0x14/0x15`) and pins joint 0 (`world_root`) at Link's base. The deployed re-rig does NOT match `al_bootsH`:
+
+| | `al_bootsH` (TARGET) | current re-rig (BROKEN) |
+|---|---|---|
+| mesh | **3 separate rigid pieces** | 1 single mesh |
+| skin per piece | each piece → **exactly 1 joint** (HA=1 / HB=2 / HC=3), `count="1"` | one mesh weighted to **4 joints incl `world_root`**, `count="4"` |
+| `bind_shape_matrix` | identity | **+90° X** (`0 7.5e-8 1 / 0 -1 7.5e-8`) — Blender Z-up leak |
+| node above `world_root` | identity | **−90° X** (Blender armature) |
+
+⇒ verts weighted to `world_root` stay up at Link's waist while the HA/HB/HC verts fly down to the foot bones → radial explosion; the +90° `bind_shape` skew rotates the mesh relative to the joints.
+
+**Option B spec — replicate `al_bootsH` exactly:**
+1. **3 rigid segments** — each mesh region bound **100% to ONE joint**, matching al_bootsH's ankle/foot/toe split (region → HA=1 / HB=2 / HC=3). Reuse al_bootsH's own vertex→segment assignment as the map (nearest-segment / KDTree region-match — see the "Weighting = region-match" discovery in Task 1). **Single influence per vertex, no blending.**
+2. **NO `world_root` (joint 0) weighting** — al_bootsH weights nothing to it.
+3. **Identity `bind_shape_matrix`** — bake all transforms (`transform_apply`) so the mesh is in al_bootsH's Y-up space with no residual ±90°. Verify the exported DAE's `<bind_shape_matrix>` is identity AND the node above `world_root` is identity (compare against `al_bootsh.dae`).
+4. Keep joint **index order** 1/2/3 = ankle/foot/toe and material names `SC_boot` / `boot`.
+
+**CRITICAL — convert without re-crashing the game (these bit us this session):**
+- Build the BMD **WITH** `-m vboot_materials.json -x vboot_tex_headers.json` (both in `…\DAE files\`). **Building WITHOUT `-m` yields a degenerate MAT3 whose material node[0] is NULL → the engine NULL-crashes on load** (`mDoExt_J3DModel__create` derefs `getMaterialNodePointer(0)`). The material JSON is mandatory. **Export `.bmd`, not `.bdl`** for the Layer-B loose file.
+- Textures: the DAE's `library_images` must list all three PNGs (`V_boot`, `ZAtoon`, `V_hamm_spc`) — SuperBMD only embeds textures referenced there. (`ZAtoon`/`V_hamm_spc` are WW-shared toon/spec maps, not in the original `vboot.bmd`; they were added to `vboot_new.dae`.) Confirm with `Mapped V_boot→0 / ZAtoon→1 / V_hamm_spc→3` in the convert output.
+- **Deploy (no game rebuild):** copy the one BMD to **four** names in `%AppData%\Roaming\TwilitRealm\Dusklight\model_replacements\Wind Waker Skins\`: `Kmdl_13.bmd`, `Bmdl_12.bmd`, `Zmdl_12.bmd`, `Mmdl_13.bmd`. Relaunch → enable **Wind Waker Skins** → equip heavy boots → **walk through a room transition** (the reuse path the heap fix protects; must not crash).
+
+**Game side is DONE — do NOT modify (uncommitted at time of writing):**
+- `custom_assets.cpp` — **GameHeap pin** around `loaderBasicBmd` in `try_load` (`mDoExt_getGameHeap()`): the loose model's `mMaterialNodePointer` array must live on a heap that survives Link's clothes-heap `mpArcHeap->freeAll()` each rebuild, or it dangles → NULL-crash on reuse. **This is the core Layer-B lifetime fix for ALL custom models.** Plus a material-node validation guard (rejects a bad BMD → vanilla fallback instead of crash).
+- `d_a_alink.cpp` + `d_a_alink_wolf.inc` — `s_albwWwBootsSkinned` set true when `try_load` returns the WW boot, gating a **get-item cel-lighting branch** in `modelDraw` (`settingTevStruct(0)` + `setWwBowActorAmbient` + `applyBowMaterialAmbientOnly`, no MAJI). Uses the normal `modelEntryDL` — deliberately NOT the held-bow `modelUpdateDL` + SC scope, which corrupts the two boots' **shared** model data.
+
+**Cross-refs:** game-side heap/crash detail → [`Custom-Model-API-Work.md`](Custom-Model-API-Work.md); item pipeline + the get-item lighting recipe this borrowed → [`wind-waker-item-work.md`](wind-waker-item-work.md) (Layer A/B PROVEN PATH); implementation log → [`Interconnected Chats/Wind Curs-Wind Clau.md`](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md).
+
+**Files:** blend `D:\XXXXXXX\Ex TP\Blender workflow\vboot_rerig_DONE.blend`; DAEs + `vboot_materials.json` + `vboot_tex_headers.json` + the 3 PNGs in `…\DAE files\`; the current (broken) deployed BMD was `vboot_new.dae` → `vboot_tex.bmd`. Compare against `al_bootsh.dae` / `al_bootsh_hierarchy.json` (the target structure).
+
+---
+
 ## Environment
 
 - **Blender:** user has **5.x**. Workflow is identical to older versions, **BUT the Collada (`.dae`) importer/exporter** — which the BMD converter needs — has been deprioritized in new Blender:
@@ -55,7 +93,9 @@
 
 ## Task 1 — Iron Boots re-rig  ← the current blocker
 
-### ✅ DONE — asset built & validated (2026-07-02)
+> **⚠️ STATUS CORRECTION (2026-07-08): the re-rig below is NOT correct.** It loads/colors/doesn't-crash in-game, but the skin **mangles when worn** (explodes into shards) because it does not match `al_bootsH`'s structure — a single 4-joint blended mesh with a +90° `bind_shape` and `world_root` weighting, vs al_bootsH's 3 rigid single-joint pieces. **The real next step is the [▶ NEW CHAT — START HERE](#-new-chat--start-here-2026-07-08-ww-iron-boots--geometry-re-rig-option-b) block at the top (Option B).** The section below is retained as the build history + the correct "Weighting = region-match" insight to reuse.
+
+### ⚠️ Asset built 2026-07-02 — but skin structure is WRONG (see status correction above)
 
 **Deliverable:** `D:\XXXXXXX\Ex TP\Blender workflow\DAE files\vboot.bdl` (re-rigged, textured, BDL format). **Blend:** `D:\XXXXXXX\Ex TP\Blender workflow\vboot_rerig_DONE.blend`. Validated by round-trip: **4 joints** (0=root, 1/2/3 = al_bootsHA/B/C — matches al_bootsh indices), **2 materials** (`SC_boot`, `boot`), textures embedded.
 

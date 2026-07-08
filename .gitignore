@@ -98,3 +98,15 @@ extract
 # Trailer PNG assets (local copies; see docs/trailer-handoff.md)
 trailer/assets/*
 !trailer/assets/.gitkeep
+
+# Crash dumps + runtime logs (debug artifacts)
+crashdumps/
+myeasylog.log
+
+# Downloaded ProcDump tool (binaries)
+tools/procdump/
+
+# BMD reskin tool: python cache + regeneratable outputs (keep *.py + prereskin SOURCE)
+tools/bmd_reskin/__pycache__/
+tools/bmd_reskin/B_gm_37_reskinned.bmd
+tools/bmd_reskin/B_gm_37_final.bmd
