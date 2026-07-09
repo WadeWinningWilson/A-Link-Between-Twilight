@@ -458,8 +458,16 @@ bool dAlbwBoss_armogohmaPhase3Damage(fopAc_ac_c* i_boss, int i_rawPower) {
 
     dAlbwBoss_armogohmaEnsureInitialized(i_boss);
 
-    // Single tunable defense divisor (min 1 so a hit always lands something).
+    // Single tunable defense divisor, then floor every hit to a meaningful chip so
+    // ALL damage sources drain the pool -- not just the sword. Weak ranged hits
+    // (arrows/clawshot) otherwise divided down to ~1 HP and only nudged the hit
+    // counter; now every eye hit removes at least kAlbwArmogohmaBowChipPct% of max,
+    // while stronger hits still scale above the floor.
     int dmg = i_rawPower / kAlbwArmogohmaPhase3DefenseDiv;
+    const int chipFloor = static_cast<int>(s_armogohmaMaxHp) * kAlbwArmogohmaBowChipPct / 100;
+    if (dmg < chipFloor) {
+        dmg = chipFloor;
+    }
     if (dmg < 1) {
         dmg = 1;
     }

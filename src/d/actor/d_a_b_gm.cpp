@@ -77,6 +77,11 @@
 // to prove the upside-down break is the reveal BMD's export orientation. Set 0 to
 // restore the real reveal swap once the model is re-exported correctly.
 #define D_ALBW_ARMO_P3_DIAG_NOSWAP 0
+// Temporary: log every phase-3 core-sphere (eye) hit + the pool drain to
+// albw_armo_p3_debug.txt to confirm #4 (HP not draining). No lines ⇒ the eye is
+// never being hit (Tg mask / position); lines with power 0 ⇒ hit lands but no damage.
+// Set 0 (and strip) once the drain is confirmed.
+#define D_ALBW_ARMO_P3_HP_DIAG 1
 
 #if TARGET_PC && D_ALBW_ARMO_REVEAL
 static mDoExt_McaMorfSO* s_gmRevealMorf = NULL;  // built in useHeapInit, freed with the solid heap
@@ -407,8 +412,35 @@ static void damage_check(b_gm_class* i_this) {
                 // Drain the pool (defended) whenever the eye is open. The laser keeps
                 // field_0x1ad6 == 0, so the core sphere never registers there -> no
                 // drain and no counting during the laser ("eye invulnerable").
+#if D_ALBW_ARMO_P3_HP_DIAG
+                const s16 p3HpBefore = ((fopAc_ac_c*)i_this)->health;
+#endif
                 bool p3handoff = dAlbwBoss_armogohmaPhase3Damage(
                     (fopAc_ac_c*)i_this, i_this->mAtInfo.mAttackPower);
+#if D_ALBW_ARMO_P3_HP_DIAG
+                {
+                    // ============================================
+                    // NEW CODE — ALBW Port (DIAGNOSTIC #4 — strip with D_ALBW_ARMO_P3_HP_DIAG)
+                    // ============================================
+                    static bool sP3Reset = false;
+                    char path[512]; path[0] = '\0';
+                    const char* user = getenv("USERPROFILE");
+                    if (user && user[0] != '\0')
+                        snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_armo_p3_debug.txt", user);
+                    else
+                        strncpy(path, "albw_armo_p3_debug.txt", sizeof(path) - 1);
+                    FILE* fp = fopen(path, sP3Reset ? "a" : "w");
+                    if (fp == NULL) fp = fopen("albw_armo_p3_debug.txt", sP3Reset ? "a" : "w");
+                    if (fp != NULL) {
+                        sP3Reset = true;
+                        fprintf(fp, "[p3hit] mMode=%d rawPow=%d hp %d->%d hits=%d handoff=%d\n",
+                                (int)i_this->mMode, (int)i_this->mAtInfo.mAttackPower,
+                                (int)p3HpBefore, (int)((fopAc_ac_c*)i_this)->health,
+                                (int)s_gmPhase3HitCount, (int)p3handoff);
+                        fclose(fp);
+                    }
+                }
+#endif
                 if (p3handoff) {
                     b_gm_beginPhase3Handoff(i_this);  // <=5% -> disappear cutscene -> E_GM
                 } else if (i_this->mMode == P3_DASH) {
@@ -1265,7 +1297,9 @@ static void b_gm_phase3(b_gm_class* i_this) {
         }
         cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 4, 0x300);
         if (i_this->mPlayerDistance > 350.0f) {
-            target_speed = l_HIO.dash_speed;
+            // ALBW: phase-3 chase dash slowed a further 3% per playtest (movement only;
+            // the dash anim already runs at x0.95 above).
+            target_speed = l_HIO.dash_speed * 0.97f;
         }
         break;
 
@@ -2309,7 +2343,33 @@ static int daB_GM_Execute(b_gm_class* i_this) {
     }
 
     i_this->mCoreSph.SetC(spC8);
-    i_this->mCoreSph.SetR((JREG_F(11) + 160.0f) * sph_base_size);
+    // ============================================
+    // NEW CODE — ALBW Port (phase-3 eye: bigger, any-damage, dash-only contact hurt)
+    // In the floor chase the eye IS the drain target. (1) Widen it. (2) Accept ANY
+    // weapon: vanilla's Tg mask is a single narrow bit (the rod/bomb type), so Link's
+    // sword never registered on the eye -> the pool never drained (the "HP won't go
+    // down" bug). (3) While the DASH anim plays the eye also HURTS Link -> distance
+    // fighting is safer, but you can risk a close sword and trade a hit; the VULN
+    // stagger drops the At bit so up-close hits there are free. The sphere is already
+    // hidden while the eye is shut, so the contact only bites during the open window.
+    // All runtime-gated on s_gmPhase3Active -> the vanilla ceiling/wall fight is untouched.
+    // ============================================
+    f32 core_r = 160.0f;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+    if (s_gmPhase3Active) {
+        core_r = 200.0f;
+        i_this->mCoreSph.SetTgType(0xd8fbfdff);  // any player damage, not just the rod/bomb type
+        if (i_this->mAnmID == ANM_GOMA_DASH) {
+            i_this->mCoreSph.SetAtType(AT_TYPE_CSTATUE_SWING);
+            i_this->mCoreSph.SetAtAtp(16);        // actually DAMAGE Link (atp default 0 = harmless
+                                                  // reaction only); ~4 hearts. Tunable.
+            i_this->mCoreSph.OnAtSetBit();        // eye hurts Link while dashing
+        } else {
+            i_this->mCoreSph.OffAtSetBit();       // VULN stagger = free hits
+        }
+    }
+#endif
+    i_this->mCoreSph.SetR((JREG_F(11) + core_r) * sph_base_size);
     dComIfG_Ccsp()->Set(&i_this->mCoreSph);
 
     spD4.set(JREG_F(12) + 50.0f, JREG_F(13) + -20.0f, JREG_F(14) + 0.0f);
@@ -2352,11 +2412,32 @@ static int daB_GM_Execute(b_gm_class* i_this) {
         spD4.set(AREG_F(10) + 150.0f, AREG_F(11) + 0.0f, AREG_F(12) + 0.0f);
         MtxPosition(&spD4, &spC8);
 
-        i_this->mFootSph[i].SetR((TREG_F(13) + 50.0f) * sph_base_size);
+        // ============================================
+        // NEW CODE — ALBW Port (phase-3 leg contact-hurt)
+        // The legs (foot spheres, AT while dashing) are what hurt Link when the boss
+        // runs into him. Widen their radius ONLY in the phase-3 floor chase so the
+        // vanilla ceiling/wall fight is untouched. Tunable; verify with the debug
+        // collision-sphere overlay.
+        // ============================================
+        f32 foot_r = 50.0f;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        if (s_gmPhase3Active) {
+            foot_r = 90.0f;
+        }
+#endif
+        i_this->mFootSph[i].SetR((TREG_F(13) + foot_r) * sph_base_size);
         i_this->mFootSph[i].SetC(spC8);
 
         if (i_this->mAnmID == ANM_GOMA_DASH && a_this->current.angle.x < 0x1000 && a_this->current.angle.x > -0x1000) {
             i_this->mFootSph[i].OnAtSetBit();
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+            if (s_gmPhase3Active) {
+                // Legs actually DAMAGE Link in the floor chase (atp default 0 = harmless
+                // reaction only, per the Hero's Shade At-power finding); ~2 hearts,
+                // less than the eye so leg brushes sting but the eye is the real risk.
+                i_this->mFootSph[i].SetAtAtp(8);
+            }
+#endif
         } else {
             i_this->mFootSph[i].OffAtSetBit();
         }

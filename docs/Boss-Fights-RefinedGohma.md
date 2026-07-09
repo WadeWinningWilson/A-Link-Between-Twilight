@@ -358,11 +358,37 @@ repoints the eye material's texNo slots to `[eye01, kankyo, enbos]`. Verified of
 resolves to those indices, injected bytes match vanilla, reskin still intact). Result: authentic shiny
 env-mapped orange iris at the mouth. See [BMD-Reskin-Tool.md](BMD-Reskin-Tool.md) §Companion.
 
-### Playtest findings still open
-- HP bar drain / eye sword-vulnerability + `÷2` defense feel — re-validate now that the eye is at the
-  mouth (front, hittable head-on).
-- Optional polish: eye size (a ~5% shrink or eyelids-follow-eye was floated) — reassess now that it's a
-  proper iris rather than a glaring white blob; deferred pending a look.
+### Phase-3 gameplay tuning — layered pass (2026-07-08, uncommitted WIP on `fd2d9c2092`)
+DONE this pass (built, playtest-confirmed): dash movement −3% (`P3_DASH` `×0.97`); leg contact radius
+`50→90` (phase-3 only); **eye core sphere** widened `160→200` + `SetTgType(0xd8fbfdff)` (any weapon —
+vanilla's narrow `0x2000` Tg is why the sword never registered and **HP never drained**, the old #4);
+**eye + legs now actually damage Link** via `SetAtAtp` (eye 16 dash-only ≈4♥, legs 8 phase-3 ≈2♥ — the
+Hero's-Shade "atp default 0 = harmless reaction" fix); **drain floor** = every eye hit removes ≥
+`kAlbwArmogohmaBowChipPct` (4%) of max so ALL sources drain, not just the sword. HP diag active
+(`D_ALBW_ARMO_P3_HP_DIAG` → `albw_armo_p3_debug.txt`) — confirms dash hits drain 20/hit, handoff at ~5%.
+
+STILL OPEN (noted, not yet fixed):
+- **E_GM (floor eye) never spawns after the ≤5% handoff.** `b_gm_beginPhase3Handoff` sets
+  `mMode=20`/`mDemoMode=30` (mirrors the vanilla 3rd-statue transition), but that whole sequence —
+  `b_gm_drop` mMode 20 `ANM_GOMA_DEATH` + the `demo_camera` disappear (30→31→32) — is authored for the
+  **upside-down** vanilla giant. E_GM spawns at `mDemoMode==32` (line ~1948) positioned at
+  `a_this->eyePos`; on our rightside-up reveal model that's the **mouth (~250u up)**, not the
+  dorsal-near-floor, so it likely spawns high/mispositioned. Also the demo event handshake
+  (`checkCommandDemoAccrpt`, line ~1840) may stall since we arrive from `ACTION_PHASE3`, not the vanilla
+  drop. NEXT: log `mDemoMode` 30/31/32 + the E_GM createChild; for the reveal path force the body upright
+  and spawn E_GM at floor height (y≈0) rather than eyePos, and confirm the event actually fires.
+- **Dash-window hits report `rawPow=0`** (weapon power isn't propagating in the core-sphere hit during
+  DASH — VULN correctly reports the sword's 10). Masked for now by the 4% floor (all dash hits = 20). If
+  per-weapon scaling is wanted mid-dash, find why `mAtInfo.mAttackPower` is 0 there.
+- **Phase-3-end damage still needs tuning** — the 4% floor, `÷2` divisor, and eye/leg `atp` values.
+- **Eye contact radius = the hit-target radius** (one sphere, 200): a big hittable eye is also a big
+  "hurts Link" zone during dash. Tune together if the dash danger feels too far-reaching.
+- Optional polish: eye size (~5% shrink / eyelids-follow) — reassess now that it's a proper iris.
+
+### Not-yet-started
+- **Layer 1**: eye retract-on-blink (#1 — retract joint `0x15` inward while `field_0x1ad6==0`, return on
+  open) and the **laser** (#2 — lid-open exception during `P3_LASER` without ungating the core sphere;
+  re-aim the beam origin/sweep for the mouth position so it arcs across the room + tracks Link).
 - Confirm the P3_VULN `WAIT` pose reads as "weak" (may want a distinct upright stun / OoT iris-spin).
 - Deferred: eye_test literal-anim option, per-source defense, reactive bomb-arrow eye-close, 60 fps
   timing confirm, beam aim on the ground model.
