@@ -268,9 +268,9 @@ int daAlink_c::procCopyRodSubjectInit() {
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
-    // Block statue control activation while the meter is locked.
+    // Statue control needs meter > 0; lockout still allows confuse throws.
     // ============================================
-    if (!dMeter2_canALBWDomRod()) {
+    if (!dMeter2_canALBWDomRod() && !dMeter2_canALBWDomRodConfuseThrow()) {
         return 0;
     }
     // ============================================
@@ -338,9 +338,9 @@ int daAlink_c::procCopyRodMoveInit() {
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
-    // Block statue control activation while the meter is locked.
+    // Statue control needs meter > 0; lockout still allows confuse throws.
     // ============================================
-    if (!dMeter2_canALBWDomRod()) {
+    if (!dMeter2_canALBWDomRod() && !dMeter2_canALBWDomRodConfuseThrow()) {
         return 0;
     }
     // ============================================

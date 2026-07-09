@@ -1578,12 +1578,12 @@ void daB_TN_c::damage_check() {
                 mAtInfo.mpCollider->ChkAtType(AT_TYPE_40) ||
                 mAtInfo.mpCollider->ChkAtType(AT_TYPE_HOOKSHOT))
             {
-                mTimer9 = dAlbwLockout_getBoomerangStunFrames(15);
+                mTimer9 = 15;
             }
 
-            if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_BOOMERANG) ||
-                mAtInfo.mpCollider->ChkAtType(AT_TYPE_40)) {
-                dAlbwLockout_onBoomerangHitNative(this);
+            if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+                mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
+                dAlbwLockout_onSlingshotHitNative(this);
             }
         }
 
@@ -1797,9 +1797,15 @@ void daB_TN_c::damage_check() {
         if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_BOOMERANG) ||
             mAtInfo.mpCollider->ChkAtType(AT_TYPE_40))
         {
-            dAlbwLockout_onBoomerangHitNative(this);
             if (mActionMode1 < 8) {
-                mTimer9 = dAlbwLockout_getBoomerangStunFrames(15);
+                mTimer9 = 15;
+            } else {
+                setActionMode(ACT_GUARDL, ACTION2_10_e);
+            }
+        } else if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+            dAlbwLockout_onSlingshotHitNative(this);
+            if (mActionMode1 < 8) {
+                mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
             } else {
                 setActionMode(ACT_GUARDL, ACTION2_10_e);
             }

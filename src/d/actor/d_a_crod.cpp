@@ -10,6 +10,10 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_cstaF.h"
 #include "d/actor/d_a_cstatue.h"
+#if TARGET_PC
+#include "d/d_albw_lockout.h"
+#include "d/d_meter2_info.h"
+#endif
 
 #define RES_CROD_BALL_BMD 0x22
 #define RES_CROD_BALL_BRK 0x40
@@ -220,6 +224,12 @@ int daCrod_c::execute() {
             if (mAtCps.ChkAtHit()) {
                 fopAc_ac_c* hit_ac = mAtCps.GetAtHitAc();
 
+#if TARGET_PC
+                // Lockout confuse throws never attach to statues.
+                if (dMeter2_isALBWLocked()) {
+                    setReturn();
+                } else
+#endif
                 if (player->checkCopyRodEquip() && hit_ac != NULL &&
                     (fopAcM_GetName(hit_ac) == fpcNm_CSTATUE_e ||
                      fopAcM_GetName(hit_ac) == fpcNm_CSTAF_e))
@@ -307,6 +317,25 @@ int daCrod_c::execute() {
                 mAtCps.SetAtVec(sp50);
                 dComIfG_Ccsp()->Set(&mAtCps);
                 fopAcM_seStartLevel(this, Z2SE_AL_COPYROD_THROW, 0);
+
+#if TARGET_PC
+                // ============================================
+                // NEW CODE — ALBW Port
+                // Lockout Dom Rod confuse: ball AT type never hits enemy Tg,
+                // so use a short proximity search while flying.
+                // ============================================
+                if (dMeter2_isALBWLocked()) {
+                    fopAc_ac_c* victim =
+                        dAlbwLockout_searchDomRodConfuseVictim(current.pos, 80.0f);
+                    if (victim != NULL) {
+                        dAlbwLockout_onDomRodConfuseHit(victim);
+                        setReturn();
+                    }
+                }
+                // ============================================
+                // NEW CODE ENDS HERE
+                // ============================================
+#endif
 
                 f32 fly_max = player->getCopyRodBallDisFlyMax();
                 if (!player->checkCopyRodEquip() || field_0x731 ||

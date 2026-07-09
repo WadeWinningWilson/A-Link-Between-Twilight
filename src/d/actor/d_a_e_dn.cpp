@@ -19,6 +19,19 @@
 #include "d/d_albw_enemy_rupee.h"
 #endif
 
+static void albwDnApplyConfuseAim(e_dn_class* i_this) {
+#if TARGET_PC
+    fopEn_enemy_c* actor = (fopEn_enemy_c*)&i_this->actor;
+    if (dAlbwLockout_isConfused(actor)) {
+        i_this->pl_dir = dAlbwLockout_getConfuseAimDistanceXZ(actor);
+        i_this->search_angle_y = dAlbwLockout_getConfuseAimAngleY(actor);
+        i_this->search_angle_x = dAlbwLockout_getConfuseAimAngleX(actor);
+    }
+#else
+    (void)i_this;
+#endif
+}
+
 class daE_DN_HIO_c : public JORReflexible {
 public:
     daE_DN_HIO_c();
@@ -2445,6 +2458,7 @@ static void action(e_dn_class* i_this) {
     i_this->pl_dir = fopAcM_searchPlayerDistanceXZ(actor);
     i_this->search_angle_y = fopAcM_searchPlayerAngleY(actor);
     i_this->search_angle_x = fopAcM_searchPlayerAngleX(actor);
+    albwDnApplyConfuseAim(i_this);
     damage_check(i_this);
     i_this->snap_angle_y_flag = 0;
 
@@ -3227,6 +3241,9 @@ static int daE_DN_Execute(e_dn_class* i_this) {
         i_this->at_chk_flag = 0;
     }
 
+#if TARGET_PC
+    dAlbwLockout_syncConfuseAtBits((fopAc_ac_c*)&i_this->actor, &i_this->at_sph);
+#endif
     dComIfG_Ccsp()->Set(&i_this->at_sph);
 
     if (i_this->guard_flag != 0 && i_this->unk_timer_2 == 0) {

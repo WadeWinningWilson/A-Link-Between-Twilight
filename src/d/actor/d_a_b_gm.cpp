@@ -21,6 +21,7 @@
 #include "d/d_albw_enemy_rupee.h"
 #include "d/actor/d_a_alink.h"  // equipped-item check: hookshot vs double clawshot
 #include "dusk/custom_assets.hpp"  // repack-free loose-BMD override for the GOMA model
+#include "dusk/settings.h"         // collision-view toggles (isolated beam-capsule debug draw)
 #include <cstdio>
 #include <cstdlib>
 #endif
@@ -82,10 +83,16 @@
 // never being hit (Tg mask / position); lines with power 0 ⇒ hit lands but no damage.
 // Set 0 (and strip) once the drain is confirmed.
 #define D_ALBW_ARMO_P3_HP_DIAG 1
+// Temporary: log the death cutscene / E_GM spawn progression to albw_armo_death_debug.txt
+// (demo_camera modes 30/31/32 + each E_GM createChild). Confirms whether the disappear
+// cutscene reaches the spawn and where the eyes are placed. Set 0 (and strip) once E_GM
+// spawns reliably.
+#define D_ALBW_ARMO_DEATH_DIAG 1
 
 #if TARGET_PC && D_ALBW_ARMO_REVEAL
 static mDoExt_McaMorfSO* s_gmRevealMorf = NULL;  // built in useHeapInit, freed with the solid heap
 static bool s_gmRevealActive = false;            // set once the swap fires (one-way)
+static int s_gmRevealDrawLog = 0;                // DIAG: per-fight reveal-draw step log budget
 
 // Phase-3 ground-chase state (single boss, so file-scope is safe). Sub-states live
 // in mMode; a single hit counter (s_gmPhase3HitCount) drives both reactions:
@@ -93,11 +100,15 @@ static bool s_gmRevealActive = false;            // set once the swap fires (one
 // The eye open/shut cycle + the stagger drive field_0x1ad6, which gates the core
 // weak-point sphere -> "eye open" IS the vulnerable window. The laser keeps it 0
 // (invulnerable). Frame counts assume a 60 fps logic tick; halve if 30 fps. Tune.
-enum { P3_DASH = 0, P3_VULN = 1, P3_LASER = 2, P3_INTRO = 3 };
+enum { P3_DASH = 0, P3_VULN = 1, P3_LASER = 2, P3_INTRO = 3, P3_LIEDOWN = 4 };
 static bool s_gmPhase3Active = false;
 static bool s_gmPhase3EyeOpen = false;
 static int s_gmPhase3HitCount = 0;
+static s16 s_gmLaserSweepCenter = 0;  // yaw the laser sweep is centered on (Link at ignite)
 static const int kAlbwArmoP3EyeCycleFrames = 300;  // 5s shut / 5s open (dash)
+static const s16 kAlbwArmoLaserSweepHalf   = 0x4000;  // +/-90 deg = a 180 deg sweep arc
+static const int kAlbwArmoLaserTurns       = 6;       // number of alternating 180 deg sweeps
+static const f32 kAlbwArmoLaserTurnSpeedup = 0.8f;    // each turn's arc takes 0.8x the last (20% faster)
 static const int kAlbwArmoP3VulnFrames     = 480;  // 8s upright weak stagger
 static const int kAlbwArmoP3LaserFrames    = 600;  // 10s laser move
 static const int kAlbwArmoP3LaserFireAt    = 180;  // beam ignites at 3s (elapsed)
@@ -106,6 +117,25 @@ static const int kAlbwArmoP3LaserHitCount  = 3;    // >this -> laser (same count
 static void b_gm_beginPhase3(b_gm_class* i_this);
 static void b_gm_phase3(b_gm_class* i_this);
 static void b_gm_beginPhase3Handoff(b_gm_class* i_this);
+static void b_gm_beginPhase3Death(b_gm_class* i_this);
+
+#if D_ALBW_ARMO_DEATH_DIAG
+// Open (truncate first time, append after) the death/E_GM-spawn diagnostic log. Caller
+// writes one line and fcloses. Strip with D_ALBW_ARMO_DEATH_DIAG once E_GM is reliable.
+static FILE* b_gm_deathDiagOpen() {
+    static bool sReset = false;
+    char path[512]; path[0] = '\0';
+    const char* user = getenv("USERPROFILE");
+    if (user && user[0] != '\0')
+        snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_armo_death_debug.txt", user);
+    else
+        strncpy(path, "albw_armo_death_debug.txt", sizeof(path) - 1);
+    FILE* fp = fopen(path, sReset ? "a" : "w");
+    if (fp == NULL) fp = fopen("albw_armo_death_debug.txt", sReset ? "a" : "w");
+    if (fp != NULL) sReset = true;
+    return fp;
+}
+#endif
 static void b_gm_phase3EnterVuln(b_gm_class* i_this);
 static void b_gm_phase3EnterLaser(b_gm_class* i_this);
 #endif
@@ -225,6 +255,23 @@ static void anm_init(b_gm_class* i_this, int i_anmID, f32 i_morf, u8 i_attr, f32
 // as before (their aim is relative to this matrix, so it still tracks Link).
 // ============================================
 static const s16 kAlbwArmoRevealMouthRotZ = -14294;  // -78.5 deg, as baked in the reveal BMD
+// How far (mouth-local +X units) the eyeball retracts into the socket at a full blink.
+// Keyed to the lid angle so the eye hides during the closed window and slides back to
+// the tracked mouth position as the lid opens. Tunable (debug collider/eye view).
+static const f32 kAlbwArmoEyeRetract = 200.0f;
+// Small lift of the beam source so it emanates from the eyeball CENTER, not just below
+// the eye joint. (A big lift put it at the old dorsal socket -- rejected.) Tunable.
+static const f32 kAlbwArmoBeamOriginRaise = 50.0f;
+// Phase-3 laser: the beam fires straight forward from the eye onto the floor and the
+// body's in-place rotation sweeps it. This is the forward distance of the floor aim
+// point -- larger = flatter beam that reaches further out (wider sweep radius). Tunable.
+static const f32 kAlbwArmoBeamForward = 1200.0f;
+// Phase-3 laser damage is a capsule (pill) spanning the whole beam line -- Dark-Souls
+// style, the entire beam is the hurt zone. This is its radius; start it matched to the
+// beam's visual thickness, then grow it and the beam model together. Tunable.
+// Currently +5% over the ~20u visual so the pill peeks out of the glow and is catchable
+// in the AT (red) collision view -- a diagnostic to confirm it isn't just buried.
+static const f32 kAlbwArmoBeamRadius = 21.0f;
 
 static void b_gm_revealAnchorMouthJoint(J3DModel* model, f32 tx, f32 ty, f32 tz) {
     Mtx local;
@@ -282,7 +329,16 @@ static int nodeCallBack(J3DJoint* i_joint, int param_1) {
             } else if (jnt_no == 0x15) {
 #if TARGET_PC && D_ALBW_ARMO_REVEAL
                 if (s_gmRevealActive && s_gmRevealMorf != NULL && model == s_gmRevealMorf->getModel()) {
-                    b_gm_revealAnchorMouthJoint(model, 455.5993f, -62.0347f, -7.1048f);  // eye
+                    // Retract the eyeball into the socket while the lid is shut, keyed to
+                    // the lid angle (field_0x1ad8: +6000 open .. -8000 shut). The blink
+                    // hides the tracking pop-out; the eye slides back to the tracked mouth
+                    // position as the lid opens. Only the eyeball moves (lids stay put).
+                    // The laser forces the lid open, so the eye stays out through the beam.
+                    f32 retract = (6000.0f - (f32)a_this->field_0x1ad8) * (1.0f / 14000.0f);
+                    if (retract < 0.0f) retract = 0.0f;
+                    else if (retract > 1.0f) retract = 1.0f;
+                    b_gm_revealAnchorMouthJoint(model, 455.5993f - kAlbwArmoEyeRetract * retract,
+                                                -62.0347f, -7.1048f);  // eye
                 }
 #endif
                 cMtx_YrotM(*calc_mtx, a_this->field_0x1ada);
@@ -309,6 +365,12 @@ static daB_GM_HIO_c l_HIO;
 // leak-safe (daB_GM_Delete frees the solid heap, not mpModelMorf directly).
 // ============================================
 static void b_gm_activateReveal(b_gm_class* i_this) {
+#if D_ALBW_ARMO_DEATH_DIAG
+    { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+        fprintf(fp, "[reveal] activateReveal entry: morf=%p active=%d model=%p\n",
+                (void*)s_gmRevealMorf, (int)s_gmRevealActive,
+                (void*)(s_gmRevealMorf ? s_gmRevealMorf->getModel() : NULL)); fclose(fp); } }
+#endif
     if (s_gmRevealMorf == NULL || s_gmRevealActive) {
         return;
     }
@@ -317,12 +379,21 @@ static void b_gm_activateReveal(b_gm_class* i_this) {
     // Actor matrix was bound to the vanilla model's baseTRMtx in Create; re-point it
     // at the reveal model so it tracks the actor's position.
     fopAcM_SetMtx((fopAc_ac_c*)i_this, s_gmRevealMorf->getModel()->getBaseTRMtx());
+#if D_ALBW_ARMO_DEATH_DIAG
+    { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+        fprintf(fp, "[reveal] post SetMtx: modelData=%p mats=%d\n",
+                (void*)s_gmRevealMorf->getModel()->getModelData(),
+                (int)s_gmRevealMorf->getModel()->getModelData()->getMaterialNum()); fclose(fp); } }
+#endif
     // Re-init the pupil-dilation BTK against the reveal model's material list.
     i_this->mpZoomBtk->init(s_gmRevealMorf->getModel()->getModelData(),
                             (J3DAnmTextureSRTKey*)dComIfG_getObjectRes("B_gm", 0x28), 1, 0, 1.0f, 0, -1);
     // Carry the current animation onto the fresh morf so the swap is seamless.
     anm_init(i_this, anm, 0.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
     s_gmRevealActive = true;
+#if D_ALBW_ARMO_DEATH_DIAG
+    { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[reveal] activateReveal DONE\n"); fclose(fp); } }
+#endif
 }
 // ============================================
 #endif
@@ -348,9 +419,18 @@ static int daB_GM_Draw(b_gm_class* i_this) {
     #if DEBUG
     g_env_light.settingTevStruct(0, &a_this->current.pos, &a_this->tevStr);
     #endif
+#if D_ALBW_ARMO_DEATH_DIAG
+    const bool revealDbg = (s_gmRevealActive && s_gmRevealDrawLog < 2);
+    if (revealDbg) { s_gmRevealDrawLog++; FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+        fprintf(fp, "[reveal] draw: model=%p data=%p mats=%d -> pre setLight\n",
+                (void*)model, (void*)model->getModelData(), (int)model->getModelData()->getMaterialNum()); fclose(fp); } }
+#endif
     g_env_light.setLightTevColorType_MAJI(model, &a_this->tevStr);
-    
+
     i_this->mpZoomBtk->entry(model->getModelData());
+#if D_ALBW_ARMO_DEATH_DIAG
+    if (revealDbg) { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[reveal] draw: post zoomBtk entry -> pre material loop\n"); fclose(fp); } }
+#endif
 
     if (fabsf(i_this->mBodyColorIntensity) > 1.0f) {
         J3DModelData* modelData = model->getModelData();
@@ -362,8 +442,14 @@ static int daB_GM_Draw(b_gm_class* i_this) {
             material->getTevColor(0)->b = i_this->mBodyColorIntensity;
         }
     }
+#if D_ALBW_ARMO_DEATH_DIAG
+    if (revealDbg) { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[reveal] draw: post material loop -> pre entryDL\n"); fclose(fp); } }
+#endif
 
     i_this->mpModelMorf->entryDL();
+#if D_ALBW_ARMO_DEATH_DIAG
+    if (revealDbg) { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[reveal] draw: post entryDL (model drawn OK)\n"); fclose(fp); } }
+#endif
 
     cXyz shadow_pos;
     shadow_pos.set(a_this->current.pos.x, BREG_F(18) + (a_this->current.pos.y + l_HIO.model_size * 400.0f), a_this->current.pos.z);
@@ -1225,10 +1311,33 @@ static void b_gm_phase3EnterLaser(b_gm_class* i_this) {
 }
 
 static void b_gm_beginPhase3Handoff(b_gm_class* i_this) {
+    // Final drain hit: instead of snapping to the death, play the get-up (RETURN) in
+    // REVERSE so the boss lies back down into the upside-down smashed pose -- the mirror
+    // of how it stood up entering phase 3. Orientation stays anim-driven (angle.x
+    // untouched), so RETURN's frame-0 pose lands exactly on the pose ANM_GOMA_DEATH
+    // continues from. When the reverse finishes (P3_LIEDOWN in b_gm_phase3) we fire the
+    // real death handoff (b_gm_beginPhase3Death). Momentum is killed here so it doesn't
+    // drift through the lie-down / cutscene (which would drag eyePos -> the E_GM spawn).
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    a_this->speedF = 0.0f;
+    a_this->speed.set(0.0f, 0.0f, 0.0f);
+    i_this->field_0x6c0 = 0.0f;         // kill any lingering beam
+    s_gmPhase3EyeOpen = false;
+    i_this->mInvincibilityTimer = 120;  // ignore late hits through the transition
+    i_this->mMode = P3_LIEDOWN;
+    // A NEGATIVE rate makes setAnm seek to the last frame and set the loop boundary for
+    // reverse playback (m_Do_ext.cpp setAnm) -- the get-up runs backward as a lie-down.
+    // (Seeking manually after a positive-rate init left the loop frame at 0 and snapped
+    // straight to frame 0 -- the "instant flip".)
+    anm_init(i_this, ANM_GOMA_RETURN, 5.0f, J3DFrameCtrl::EMode_NONE, -1.0f);
+}
+
+static void b_gm_beginPhase3Death(b_gm_class* i_this) {
     // Relocated vanilla transition: the same writes the 3rd statue hit made, just
-    // fired from the chase once the pool drains. demo_camera(mDemoMode=30) then
-    // runs the disappear cutscene and spawns the E_GM floor eye. b_gm_drop no-ops
-    // on mMode 20, matching the vanilla post-statue state.
+    // fired from the chase once the pool drains AND the boss has laid back down
+    // (P3_LIEDOWN). demo_camera(mDemoMode=30) then runs the disappear cutscene and
+    // spawns the E_GM floor eye. b_gm_drop no-ops on mMode 20, matching the vanilla
+    // post-statue state.
     s_gmPhase3Active = false;
     i_this->field_0x6c0 = 0.0f;   // kill any lingering beam
     i_this->mAction = ACTION_DROP;
@@ -1236,6 +1345,10 @@ static void b_gm_beginPhase3Handoff(b_gm_class* i_this) {
     i_this->mDemoMode = 30;
     fpcM_Search(s_ko_del, i_this);
     Z2GetAudioMgr()->bgmStop(0x1E, 0);
+#if D_ALBW_ARMO_DEATH_DIAG
+    { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+        fprintf(fp, "[death] handoff fired -> ACTION_DROP mMode=20 mDemoMode=30\n"); fclose(fp); } }
+#endif
 }
 
 static void b_gm_phase3(b_gm_class* i_this) {
@@ -1263,6 +1376,22 @@ static void b_gm_phase3(b_gm_class* i_this) {
             anm_init(i_this, ANM_GOMA_DASH, 10.0f, J3DFrameCtrl::EMode_LOOP, l_HIO.dash_anm_speed * 0.95f);
             i_this->mMode = P3_DASH;
             i_this->mTimers[0] = kAlbwArmoP3EyeCycleFrames;
+        }
+        i_this->mAcch.CrrPos(dComIfG_Bgsp());
+        return;
+    }
+
+    // Final lie-down (mirror of the get-up): RETURN is playing in REVERSE (set up in
+    // b_gm_beginPhase3Handoff), laying the boss back into the upside-down smashed pose.
+    // Hold still; when the reverse reaches frame 0 the body is upside-down and we fire
+    // the real death handoff. angle.x stays 0 -- the reversed anim carries the flip, so
+    // it lands exactly on the pose ANM_GOMA_DEATH continues from.
+    if (i_this->mMode == P3_LIEDOWN) {
+        cLib_addCalc2(&a_this->speedF, 0.0f, 1.0f, 5.0f);
+        cLib_addCalc2(&a_this->current.pos.y, 0.0f, 1.0f, 40.0f);
+        i_this->mInvincibilityTimer = 5;
+        if (i_this->mpModelMorf->getFrame() <= 0.5f || i_this->mpModelMorf->isStop()) {
+            b_gm_beginPhase3Death(i_this);  // upside-down now -> disappear cutscene -> E_GM
         }
         i_this->mAcch.CrrPos(dComIfG_Bgsp());
         return;
@@ -1297,9 +1426,9 @@ static void b_gm_phase3(b_gm_class* i_this) {
         }
         cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 4, 0x300);
         if (i_this->mPlayerDistance > 350.0f) {
-            // ALBW: phase-3 chase dash slowed a further 3% per playtest (movement only;
-            // the dash anim already runs at x0.95 above).
-            target_speed = l_HIO.dash_speed * 0.97f;
+            // ALBW: phase-3 chase dash slowed 3% then a further 3% per playtest
+            // (0.97 * 0.97 = 0.9409; movement only -- the dash anim runs at x0.95 above).
+            target_speed = l_HIO.dash_speed * 0.9409f;
         }
         break;
 
@@ -1316,13 +1445,44 @@ static void b_gm_phase3(b_gm_class* i_this) {
         break;
 
     case P3_LASER: {
-        // Locked, eye invulnerable (never raise field_0x1ad6). Face Link with a
-        // lagging turn; the beam ignites at 3s and the render block tracks Link.
-        // Tracking + ignite sped up ~5% per playtest.
-        cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 8, 0x435);
+        // Locked, eye invulnerable (never raise field_0x1ad6). Wind-up faces Link; once
+        // the beam lights the body SWEEPS IN PLACE through kAlbwArmoLaserTurns alternating
+        // 180 deg turns, each completing its arc 20% faster than the last (the whole
+        // series scaled to fill the fire window). The eye-mounted beam (fired straight
+        // forward, see the beam block) arcs across the arena. Centered on Link at ignite.
         const int elapsed = kAlbwArmoP3LaserFrames - static_cast<int>(i_this->mTimers[0]);
-        if (elapsed >= kAlbwArmoP3LaserFireAt) {
+        if (elapsed < kAlbwArmoP3LaserFireAt) {
+            cLib_addCalcAngleS2(&a_this->current.angle.y, yaw, 8, 0x435);
+            s_gmLaserSweepCenter = a_this->current.angle.y;  // keep centered on Link until ignite
+        } else {
             cLib_addCalc2(&i_this->field_0x6c0, 1.0f, 1.0f, 0.105f);
+            const int fireDur = kAlbwArmoP3LaserFrames - kAlbwArmoP3LaserFireAt;
+            const int fe = elapsed - kAlbwArmoP3LaserFireAt;
+
+            // Geometric turn durations (each *0.8) scaled so all N turns fill fireDur.
+            f32 sum = 0.0f, w = 1.0f;
+            for (int t = 0; t < kAlbwArmoLaserTurns; t++) { sum += w; w *= kAlbwArmoLaserTurnSpeedup; }
+            f32 dur = (f32)fireDur / sum;   // turn-1 duration (frames)
+
+            int k = kAlbwArmoLaserTurns - 1;   // current turn (0-based)
+            f32 p = 1.0f;                      // progress within the turn (0..1)
+            f32 acc = 0.0f;
+            for (int t = 0; t < kAlbwArmoLaserTurns; t++) {
+                if ((f32)fe < acc + dur) { k = t; p = ((f32)fe - acc) / dur; break; }
+                acc += dur;
+                dur *= kAlbwArmoLaserTurnSpeedup;
+            }
+            if (p < 0.0f) p = 0.0f; else if (p > 1.0f) p = 1.0f;
+
+            // Alternate direction each turn: even turns sweep -90 -> +90, odd +90 -> -90.
+            const f32 span = (f32)(2 * (int)kAlbwArmoLaserSweepHalf) * p;
+            s16 off;
+            if ((k & 1) == 0) {
+                off = (s16)(-(f32)kAlbwArmoLaserSweepHalf + span);
+            } else {
+                off = (s16)((f32)kAlbwArmoLaserSweepHalf - span);
+            }
+            a_this->current.angle.y = s_gmLaserSweepCenter + off;
         }
         if (i_this->mTimers[0] == 0) {
             i_this->field_0x6c0 = 0.0f;
@@ -1843,6 +2003,10 @@ static void demo_camera(b_gm_class* i_this) {
             return;
         }
 
+#if D_ALBW_ARMO_DEATH_DIAG
+        { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+            fprintf(fp, "[death] demo30 event ACCEPTED -> 31\n"); fclose(fp); } }
+#endif
         camera->mCamera.Stop();
         i_this->mDemoMode = 31;
         i_this->mDemoModeTimer = 0;
@@ -1898,6 +2062,10 @@ static void demo_camera(b_gm_class* i_this) {
             fopAcM_createDisappear(a_this, &spC8, 49, 0, 0xFF);
             i_this->mIsDisappear = true;
             dComIfGs_onOneZoneSwitch(5, -1);
+#if D_ALBW_ARMO_DEATH_DIAG
+            { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+                fprintf(fp, "[death] demo31 disappear @timer280, mIsDisappear set\n"); fclose(fp); } }
+#endif
         }
 
         if (i_this->mDemoModeTimer == 320) {
@@ -1911,6 +2079,10 @@ static void demo_camera(b_gm_class* i_this) {
         i_this->mDemoMode = 32;
         i_this->mDemoModeTimer = 0;
         i_this->mDemoCamFovy = 65.0f;
+#if D_ALBW_ARMO_DEATH_DIAG
+        { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+            fprintf(fp, "[death] demo31 -> 32 (E_GM spawn window)\n"); fclose(fp); } }
+#endif
     case 32:
         cMtx_YrotS(*calc_mtx, player->shape_angle.y + 8000);
         spC8.x = 0.0f;
@@ -1944,8 +2116,24 @@ static void demo_camera(b_gm_class* i_this) {
             MtxPosition(&spC8, &spBC);
             spBC += a_this->eyePos;
 
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+            // The reveal death pose sinks the (mouth) eye far underground (eyePos.y is
+            // ~ -286), so the floor eyes would all spawn below the floor and never
+            // surface. Keep them at the boss's floor level for the reveal fight; the
+            // vanilla upside-down giant is unaffected (s_gmRevealActive is false there).
+            if (s_gmRevealActive && spBC.y < a_this->current.pos.y) {
+                spBC.y = a_this->current.pos.y;
+            }
+#endif
+
             csXyz angle(0, cM_rndF(0x10000), 0);
             fopAcM_createChild(fpcNm_E_GM_e, fopAcM_GetID(a_this), params, &spBC, fopAcM_GetRoomNo(a_this), &angle, NULL, -1, NULL);
+#if D_ALBW_ARMO_DEATH_DIAG
+            { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+                fprintf(fp, "[death] demo32 createChild E_GM params=%d timer=%d pos=(%.0f,%.0f,%.0f) eyePos=(%.0f,%.0f,%.0f)\n",
+                        params, (int)i_this->mDemoModeTimer, spBC.x, spBC.y, spBC.z,
+                        a_this->eyePos.x, a_this->eyePos.y, a_this->eyePos.z); fclose(fp); } }
+#endif
         }
 
         if (i_this->mDemoModeTimer == 90) {
@@ -2005,9 +2193,14 @@ static void demo_camera(b_gm_class* i_this) {
 
         i_this->field_0x1cdc = 0.0f;
         player->changeOriginalDemo();
-        
+
         a_this->current.pos = i_this->field_0x1cec;
         a_this->eyePos = i_this->field_0x1cec;
+#if D_ALBW_ARMO_DEATH_DIAG
+        { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+            fprintf(fp, "[death] demo40->41 (E_GM dead), boss/eye pos=(%.0f,%.0f,%.0f)\n",
+                    i_this->field_0x1cec.x, i_this->field_0x1cec.y, i_this->field_0x1cec.z); fclose(fp); } }
+#endif
 
         i_this->field_0x1ce4 = -25000;
         i_this->field_0x1ce8 = -2500;
@@ -2057,6 +2250,9 @@ static void demo_camera(b_gm_class* i_this) {
             fopAcM_create(fpcNm_OBJ_YSTONE_e, 0, &i_this->field_0x1cec, fopAcM_GetRoomNo(a_this), NULL, NULL, -1);
             i_this->mDemoMode = 42;
             i_this->mDemoModeTimer = 0;
+#if D_ALBW_ARMO_DEATH_DIAG
+            { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[death] demo41->42 (heart+ystone created)\n"); fclose(fp); } }
+#endif
         }
         break;
     case 42: {
@@ -2093,11 +2289,20 @@ static void demo_camera(b_gm_class* i_this) {
         if (i_this->mDemoModeTimer == 335) {
             cXyz pos(0.0f, 0.0f, 0.0f);
             csXyz angle(0, 0, 0);
+#if D_ALBW_ARMO_DEATH_DIAG
+            { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[death] demo42 t335: pre createWarpHole\n"); fclose(fp); } }
+#endif
             fopAcM_createWarpHole(&pos, &angle, fopAcM_GetRoomNo(a_this), 1, 1, 0xFF);
             dComIfGs_onStageBossEnemy();
+#if D_ALBW_ARMO_DEATH_DIAG
+            { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[death] demo42 t335: post warpHole, pre victory\n"); fclose(fp); } }
+#endif
 #if TARGET_PC
             dAlbwBoss_onArmogohmaVictory();
             dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_B_GM_e);
+#endif
+#if D_ALBW_ARMO_DEATH_DIAG
+            { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[death] demo42 t335: post victory calls (warp armed)\n"); fclose(fp); } }
 #endif
         }
 
@@ -2508,44 +2713,80 @@ static int daB_GM_Execute(b_gm_class* i_this) {
         spD4.set(XREG_F(8) + 120.0f, XREG_F(9), XREG_F(10));
         MtxPosition(&spD4, &spC8);
 
-        if (i_this->field_0x6f4 == 0) {
-            i_this->field_0x6cc = spC8;
-            i_this->field_0x6cc.y = 0.0f;
-            i_this->field_0x6c4 = 0.0f;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        // Lift the beam source so the low mouth eye still arcs the floor-sweep across
+        // the arena (see kAlbwArmoBeamOriginRaise). Phase-3 only.
+        if (s_gmPhase3Active) {
+            spC8.y += kAlbwArmoBeamOriginRaise;
         }
+#endif
 
-        cXyz spB0;
-        cLib_addCalc2(&i_this->field_0x6c4, AREG_F(17) + 40.0f, 1.0f, 1.0f);
-        spD4 = player->current.pos - i_this->field_0x6cc;
-
-        if (i_this->field_0x6f4 == 0) {
-            i_this->field_0x6c8 = cM_atan2s(spD4.x, spD4.z);
-        } else {
-            f32 var_f30 = (JMAFastSqrt((spD4.x * spD4.x) + (spD4.z * spD4.z)) - 400.0f);
-            var_f30 *= 10.0f;
-            if (var_f30 < 0.0f) {
-                var_f30 = 0.0f;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        if (s_gmPhase3Active) {
+            // Fire straight forward from the eye onto the floor; the body's in-place
+            // rotation (the P3_LASER sweep) arcs it across the arena. No per-frame
+            // player tracking here -- the sweep itself is the threat. Recomputed each
+            // frame from the current facing so it follows the rotation.
+            cMtx_YrotS(*calc_mtx, a_this->shape_angle.y);
+            spD4.set(0.0f, 0.0f, kAlbwArmoBeamForward);
+            MtxPosition(&spD4, &i_this->field_0x6cc);
+            i_this->field_0x6cc += spC8;
+            // Keep the target at eye height (do NOT drop it to the floor) so the beam
+            // fires in a straight HORIZONTAL line; the body's rotation sweeps it like a
+            // wall. Damage is relocated to where the beam passes nearest Link (below).
+            i_this->field_0x6cc.y = spC8.y;
+            i_this->field_0x6f4 = 1;
+        } else
+#endif
+        {
+            if (i_this->field_0x6f4 == 0) {
+                i_this->field_0x6cc = spC8;
+                i_this->field_0x6cc.y = 0.0f;
+                i_this->field_0x6c4 = 0.0f;
             }
 
-            if (var_f30 > 6000.0f) {
-                var_f30 = 6000.0f;
+            cXyz spB0;
+            cLib_addCalc2(&i_this->field_0x6c4, AREG_F(17) + 40.0f, 1.0f, 1.0f);
+            spD4 = player->current.pos - i_this->field_0x6cc;
+
+            if (i_this->field_0x6f4 == 0) {
+                i_this->field_0x6c8 = cM_atan2s(spD4.x, spD4.z);
+            } else {
+                f32 var_f30 = (JMAFastSqrt((spD4.x * spD4.x) + (spD4.z * spD4.z)) - 400.0f);
+                var_f30 *= 10.0f;
+                if (var_f30 < 0.0f) {
+                    var_f30 = 0.0f;
+                }
+
+                if (var_f30 > 6000.0f) {
+                    var_f30 = 6000.0f;
+                }
+
+                s16 spC = var_f30 * cM_ssin(i_this->mCounter * 1000);
+                cLib_addCalcAngleS2(&i_this->field_0x6c8, spC + cM_atan2s(spD4.x, spD4.z), 8, AREG_S(7) + 0x400);
             }
 
-            s16 spC = var_f30 * cM_ssin(i_this->mCounter * 1000);
-            cLib_addCalcAngleS2(&i_this->field_0x6c8, spC + cM_atan2s(spD4.x, spD4.z), 8, AREG_S(7) + 0x400);
+            i_this->field_0x6f4 = 1;
+
+            cMtx_YrotS(*calc_mtx, i_this->field_0x6c8);
+            spD4.x = 0.0f;
+            spD4.y = 0.0f;
+            spD4.z = i_this->field_0x6c4;
+            MtxPosition(&spD4, &spB0);
+            i_this->field_0x6cc += spB0;
         }
-
-        i_this->field_0x6f4 = 1;
-
-        cMtx_YrotS(*calc_mtx, i_this->field_0x6c8);
-        spD4.x = 0.0f;
-        spD4.y = 0.0f;
-        spD4.z = i_this->field_0x6c4;
-        MtxPosition(&spD4, &spB0);
-        i_this->field_0x6cc += spB0;
 
         spD4 = i_this->field_0x6cc - spC8;
-        spD4.y += 80.0f;
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        // The +80 aim-lift is tuned for the high dorsal eye; from the low mouth eye it
+        // makes the beam too shallow to reach the floor within its length -> no ground
+        // cross -> no mBeamSph -> the beam does no damage. Aim straight at the floor
+        // target in phase 3 so it crosses and the collision lands.
+        if (!s_gmPhase3Active)
+#endif
+        {
+            spD4.y += 80.0f;
+        }
 
         s16 spA = -cM_atan2s(spD4.y, spD4.z);
         s16 sp8 = (s16)cM_atan2s(spD4.x, JMAFastSqrt((spD4.y * spD4.y) + (spD4.z * spD4.z)));
@@ -2586,9 +2827,60 @@ static int daB_GM_Execute(b_gm_class* i_this) {
             f32 sp1C = 0.013f * (i_this->mCounter & 3);
             spD4 = spD4 + ((spC8 - spD4) * (sp1C));
 
-            i_this->mBeamSph.SetC(spD4);
-            dComIfG_Ccsp()->Set(&i_this->mBeamSph);
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+            // In phase 3 the beam is horizontal, so this cross is the far WALL -- keep
+            // the impact particles/sound there, but do NOT put the point-sphere on the
+            // wall; phase 3 uses a capsule spanning the whole beam instead (below).
+            if (!s_gmPhase3Active)
+#endif
+            {
+                i_this->mBeamSph.SetC(spD4);
+                dComIfG_Ccsp()->Set(&i_this->mBeamSph);
+            }
         }
+
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        if (s_gmPhase3Active) {
+            // Dark-Souls-style capsule (pill) hitbox: the WHOLE beam line is the hurt
+            // zone, not a point. Span the eye (spC8) -> beam-end (spD4) line with a
+            // radius matched to the beam's visual thickness, so Link is hit anywhere the
+            // pill crosses him. One static capsule (only one beam is ever active).
+            static dCcD_Cps s_beamCps;
+            static bool s_beamCpsReady = false;
+            if (!s_beamCpsReady) {
+                static const dCcD_SrcCps beam_cps_src = {
+                    {
+                        {0x0, {{AT_TYPE_CSTATUE_SWING, 0x4, 0x1f}, {0x0, 0x0}, 0x0}}, // mObj
+                        {dCcD_SE_NONE, 0x0, 0x1, 0x0, 0x0}, // mGObjAt
+                        {dCcD_SE_NONE, 0x0, 0x0, 0x0, 0x2}, // mGObjTg
+                        {0x0}, // mGObjCo
+                    }, // mObjInf
+                    {
+                        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 20.0f}, // mCps (radius re-set per frame)
+                    } // mCpsAttr
+                };
+                s_beamCps.Set(beam_cps_src);
+                s_beamCps.SetAtMtrl(dCcD_MTRL_FIRE);
+                s_beamCpsReady = true;
+            }
+            s_beamCps.SetStts(&i_this->mCcStts);
+            static_cast<cM3dGCps*>(&s_beamCps)->Set(spC8, spD4, kAlbwArmoBeamRadius);
+            s_beamCps.CalcAtVec();
+            dComIfG_Ccsp()->Set(&s_beamCps);
+
+            // Diagnostic: draw ONLY this capsule in light blue whenever the collision
+            // viewer is open, so it's unmistakable and independent of the framework's
+            // red AT wireframes. Explicit per-collider Draw() -- affects nothing else, and
+            // it's gated on the viewer so it never shows in normal play.
+            {
+                const auto& cv = dusk::getTransientSettings().collisionView;
+                if (cv.enableAtView || cv.enableTgView || cv.enableCoView) {
+                    GXColor beamDbg = {0x60, 0xC0, 0xFF, 0xC8}; // light blue
+                    s_beamCps.Draw(beamDbg);
+                }
+            }
+        }
+#endif
 
         i_this->mpBeamBtk->play();
         i_this->mpBeamModelMorf->play(NULL, 0, 0);
@@ -2602,7 +2894,18 @@ static int daB_GM_Execute(b_gm_class* i_this) {
 
     demo_camera(i_this);
 
-    if (i_this->field_0x1ad6 != 0) {
+    bool lidOpen = (i_this->field_0x1ad6 != 0);
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+    // Laser exception: while firing, keep the eye visually OPEN (reads as the eye
+    // shooting the beam) even though the core sphere stays gated/invulnerable
+    // (P3_LASER never raises field_0x1ad6). "Closed lid = invulnerable" stays true
+    // everywhere else. The eye-retract below keys off the lid, so an open lid here
+    // also keeps the eye extended (out) through the whole laser.
+    if (s_gmPhase3Active && i_this->mMode == P3_LASER) {
+        lidOpen = true;
+    }
+#endif
+    if (lidOpen) {
         cLib_addCalcAngleS2(&i_this->field_0x1ad8, 6000, 4, 800);
     } else {
         s16 shutTarget = BREG_S(7) + -3900;
@@ -2660,6 +2963,12 @@ static int daB_GM_IsDelete(b_gm_class* i_this) {
 
 static int daB_GM_Delete(b_gm_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+#if D_ALBW_ARMO_DEATH_DIAG
+    { FILE* fp = b_gm_deathDiagOpen(); if (fp) {
+        fprintf(fp, "[death] daB_GM_Delete entry: heap=%p morf=%p reveal=%p active=%d\n",
+                (void*)a_this->heap, (void*)i_this->mpModelMorf, (void*)s_gmRevealMorf,
+                (int)s_gmRevealActive); fclose(fp); } }
+#endif
 
     dComIfG_resDelete(&i_this->mPhase, "B_gm");
 
@@ -2671,6 +2980,9 @@ static int daB_GM_Delete(b_gm_class* i_this) {
         i_this->mpModelMorf->stopZelAnime();
         i_this->mBeamSound.deleteObject();
     }
+#if D_ALBW_ARMO_DEATH_DIAG
+    { FILE* fp = b_gm_deathDiagOpen(); if (fp) { fprintf(fp, "[death] daB_GM_Delete done\n"); fclose(fp); } }
+#endif
 
     return 1;
 }
@@ -2794,6 +3106,7 @@ static int daB_GM_Create(fopAc_ac_c* i_this) {
     // previous (already-freed) solid heap, so this NULL prevents a dangling pointer.
     s_gmRevealMorf = NULL;
     s_gmRevealActive = false;
+    s_gmRevealDrawLog = 0;
     s_gmPhase3Active = false;
     s_gmPhase3EyeOpen = false;
     s_gmPhase3HitCount = 0;

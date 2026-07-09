@@ -1,12 +1,14 @@
 # Boss fights — design handoff & session archive
 
-**Purpose:** Preserve critical boss-combat work from the long Cursor chat so you **do not need to reopen that session** (it will OOM). Start new chats with:
+**Purpose:** Preserve critical boss-combat work from the long Cursor chat so you **do not need to reopen that session** (it will OOM).
 
-> Continue boss fight work — read `docs/boss-fights-handoff.md` first.
+**Live state (read first):** [state/boss-fights.md](state/boss-fights.md) — status / next / playtest combo. **This file** remains the full design archive for revisions.
+
+> Continue boss fight work — read `docs/AGENT_INDEX.md` + `docs/state/boss-fights.md` first; use this handoff for detail.
 
 **Related docs:** [albw-port.md](albw-port.md) (docket), [combat-refinements-handoff.md](combat-refinements-handoff.md) (field combat: enemy targeting, hidden skills × meter), [albw-boss-hp-hud-tuning-brief.md](albw-boss-hp-hud-tuning-brief.md) (HUD art), [shield-combat.md](shield-combat.md) (parry/bash/durability).
 
-**FPS / golden build (separate doc):** [future-performance-leaning.md](future-performance-leaning.md) — not covered here.
+**FPS / golden build (separate doc):** [state/drive-fps.md](state/drive-fps.md) + [future-performance-leaning.md](future-performance-leaning.md) — not covered here.
 
 ---
 
@@ -404,7 +406,7 @@ Methods on `daB_TN_c` (see `d_a_b_tn.h`):
 - Phase 2 unarmored: `albwApplyPhase2BashGuardBreak()` → 75-frame window, `ACT_YOROKE`
 - Debug: `showDarknutBashDebug` → `albw_darknut_debug.txt`
 
-Integrates with `d_albw_shield.cpp` bash charge economy and `d_albw_lockout.cpp` boomerang stun (`onBoomerangHitNative` for Darknut).
+Integrates with `d_albw_shield.cpp` bash charge economy and `d_albw_lockout.cpp` slingshot stun (`onSlingshotHitNative` for Darknut).
 
 ---
 
@@ -442,8 +444,8 @@ Shield durability scaling: `dAlbwHP_applyDurabilityMult()` — mid-boss 1.5×, b
 When ALBW meter hits 0:
 
 - Ranged/magic/tool perks gated until meter recovers
-- Boomerang hit on enemy → 4s “ranged opened” window + stun
-- Darknut uses `dAlbwLockout_onBoomerangHitNative()` (native wobble, not fpcM_Pause)
+- Slingshot hit on enemy → 4s “ranged opened” window + stun
+- Darknut uses `dAlbwLockout_onSlingshotHitNative()` (native wobble, not fpcM_Pause)
 
 Future: visual feedback when `dAlbwLockout_isRangedOpened()` (shimmer/HUD).
 

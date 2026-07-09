@@ -1,4 +1,5 @@
 #include "dusk/autosave.h"
+#include "dusk/main.h"
 #include "dusk/ui/ui.hpp"
 #include "imgui/ImGuiConsole.hpp"
 
@@ -15,6 +16,15 @@ static AutoSaveFuncs AutoSaveFuncsProc[] = {
 void noAutoSave() {}
 
 bool canAutoSave() {
+    // ========================================================================
+    // Level Editor (Phase 1) — never autosave in an editor session. Gating the
+    // trigger keeps the autosave proc from ever starting (no card write, no
+    // state-machine risk). The loaded save is read-only world context.
+    // ========================================================================
+    if (dusk::g_levelEditorSession) {
+        return false;
+    }
+
     daAlink_c* player = (daAlink_c*)daAlink_getAlinkActorClass();
     if (player == nullptr) {
         return false;

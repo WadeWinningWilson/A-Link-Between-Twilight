@@ -1,10 +1,12 @@
 # Performance investigation — agent handoff
 
-**Read first:** [performance-leaning-2026-06-18.md](performance-leaning-2026-06-18.md) (full evidence tables Tracks B–J).
+**Live state (read first for drive/FPS turns):** [state/drive-fps.md](state/drive-fps.md) — status / next / pass-fail / ideal multi-agent loop. **This file** keeps full evidence, paths, and the Drive session protocol for revisions.
+
+**Read first (research depth):** [performance-leaning-2026-06-18.md](performance-leaning-2026-06-18.md) (full evidence tables Tracks B–J).
 
 **Build discipline:** [build-fps-guidelines.md](build-fps-guidelines.md) — canonical preset, launch hygiene, merge rules.
 
-**New instance?** For **build review / FPS optimization** (not feature implementation), use the **doc map** in [build-fps-guidelines.md](build-fps-guidelines.md) § “Doc map — read in this order”. HUD work also needs [hud-performance-handoff.md](hud-performance-handoff.md). This file is for hitch/profiler research; the build-analysis chat usually does not need Tracks B–J unless investigating cliffs.
+**New instance?** For **build review / FPS optimization** (not feature implementation), use the **doc map** in [build-fps-guidelines.md](build-fps-guidelines.md) § “Doc map — read in this order”, plus [state/drive-fps.md](state/drive-fps.md). HUD work also needs [hud-performance-handoff.md](hud-performance-handoff.md). This file is for hitch/profiler research; the build-analysis chat usually does not need Tracks B–J unless investigating cliffs.
 
 ## User goal (non-negotiable)
 

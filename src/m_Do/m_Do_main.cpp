@@ -131,6 +131,14 @@ std::filesystem::path dusk::ConfigPath;
 std::filesystem::path dusk::CachePath;
 #endif
 
+// ============================================================================
+// Level Editor (Phase 1) — session flag definition. Defined unconditionally so
+// it links on every platform; the cross-platform save guards reference it. Set
+// true only by the launch-menu "Level Editor" action (PC only), so it stays
+// false everywhere else.
+// ============================================================================
+bool dusk::g_levelEditorSession = false;
+
 void dusk::RequestRestart() noexcept {
     RestartRequested = SupportsProcessRestart;
     IsRunning = false;

@@ -1,12 +1,15 @@
 # Quick / Resistance Work
 
-**Interconnected chat doc** — D-Pad Quick Swap ↔ ALBW meter recovery tax ↔ Postman shop storage ↔ per-item spend / parry tuning.
+**Interconnected chat doc (ARCHIVE / session diary)** — D-Pad Quick Swap ↔ ALBW meter recovery tax ↔ Postman shop storage ↔ per-item spend / parry tuning.
+
+**Live tip:** create [`docs/state/`](../state/) entries when this track resumes; keep this file intact for locked specs and revision history.
 
 | | |
 |---|---|
 | **Quick Swap chat** | `dpad_quick_swap.cpp`, wardrobe cycle, gates, stored-count helper |
 | **Meter / shop chat** | `d_meter2.cpp`, `d_albw_rental.cpp`, `d_albw_shield.cpp`, recovery mult, shop store/return |
 | **Status** | **Spec locked for review** — not implemented. **Sword spend table provisional** (product update incoming). |
+| **Index** | [`docs/AGENT_INDEX.md`](../AGENT_INDEX.md) |
 
 **Related:** [d-pad-reworking.md](../d-pad-reworking.md) · [Quick-Sumo Work.md](Quick-Sumo%20Work.md) · [albw-port.md](../albw-port.md) · [shield-combat.md](../shield-combat.md)
 

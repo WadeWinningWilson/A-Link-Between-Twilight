@@ -1,12 +1,17 @@
 # Wind Curs ↔ Wind Clau
 
-**Interconnected chat doc** — WW `itemmdl` Track A (get-item bow pilot) ↔ Cursor implementation ↔ Claude review.
+**Interconnected chat doc (ARCHIVE / session diary)** — WW `itemmdl` Track A (get-item bow pilot) ↔ Cursor implementation ↔ Claude review.
+
+**New multi-agent work:** use [INTERCONNECTED-RUNS.md](INTERCONNECTED-RUNS.md) + [_RUN_TEMPLATE.md](_RUN_TEMPLATE.md) (dual sign-off, optional drive). Do not grow this file as the live bus.
+
+**Live tip for new chats:** [`docs/state/ww-itemmdl.md`](../state/ww-itemmdl.md) + [`docs/AGENT_INDEX.md`](../AGENT_INDEX.md). Prefer those over scrolling this file. Keep this document for hard-won archaeology and historical interconnected passes — **do not delete content**; update live state instead of appending new “RESUME HERE” novels here.
 
 | | |
 |---|---|
 | **Cursor (Wind Curs)** | In-repo edits, build/launch loop, surgical wiring, handoff doc updates |
 | **Claude (Wind Clau)** | Review roadmap, graphics strategy, Plan A vs Plan B, second opinion before big changes |
 | **Canonical detail** | [`docs/wind-waker-item-work.md`](../wind-waker-item-work.md) — mesh indices, TWW rows, cut-enemy notes |
+| **Live state** | [`docs/state/ww-itemmdl.md`](../state/ww-itemmdl.md) |
 | **Status (2026-07-01)** | **4E committed** — whole bow + struct-0/no MAJI + efplight/beam skip + warm ambient polish. Next = replay vs WW ref, SC A/B if tips bloom, BTK after sign-off. |
 
 ---

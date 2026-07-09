@@ -906,6 +906,7 @@ void dMeter2_drainALBWToLockout();
 void dMeter2_restoreALBWMeterToFull();
 bool dMeter2_canALBWSpinner();
 bool dMeter2_canALBWDomRod();
+bool dMeter2_canALBWDomRodConfuseThrow();
 void dMeter2_addALBWFraction(int numerator, int denominator);
 void dMeter2_subALBWFraction(int numerator, int denominator);
 int dMeter2_getALBWMeterValue();

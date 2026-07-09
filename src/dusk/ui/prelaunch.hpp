@@ -50,6 +50,8 @@ struct PrelaunchState {
     GameLanguage initialLanguage = GameLanguage::English;
     std::string initialGraphicsBackend;
     int initialCardFileType = 0;
+    // Level Editor (Phase 1) — value at init, for restart-pending detection.
+    bool initialLevelEditor = false;
     std::string errorString;
     std::string pendingDiscPath;
     iso::DiscInfo pendingDiscInfo{};

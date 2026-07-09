@@ -641,6 +641,7 @@ void ensure_initialized() noexcept {
     state.initialLanguage = getSettings().game.language;
     state.initialGraphicsBackend = getSettings().backend.graphicsBackend;
     state.initialCardFileType = getSettings().backend.cardFileType;
+    state.initialLevelEditor = getSettings().backend.enableLevelEditor;
     state.errorString.clear();
     state.initialized = true;
     refresh_configured_disc_state();
@@ -664,6 +665,11 @@ bool is_restart_pending() noexcept {
         return true;
     }
     if (getSettings().game.language.getValue() != state.initialLanguage) {
+        return true;
+    }
+    // Level Editor (Phase 1) — toggling it needs a relaunch to add/remove the
+    // launch-menu entry, so prompt the restart like the other backend options.
+    if (getSettings().backend.enableLevelEditor.getValue() != state.initialLevelEditor) {
         return true;
     }
     return false;
@@ -718,6 +724,42 @@ Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementB
             pop(false);
         });
         apply_intro_animation(mMenuButtons.back()->root(), "delay-1");
+
+        // ====================================================================
+        // Level Editor (Phase 1) — opt-in launch entry. Shown only when the
+        // feature is enabled AND a disc is loaded. Launches exactly like Play
+        // but marks the session so editor code activates. A normal Play launch
+        // leaves g_levelEditorSession false, so nothing else changes.
+        // ====================================================================
+        if (getSettings().backend.enableLevelEditor.getValue() && activeDiscLoaded) {
+            mMenuButtons.push_back(std::make_unique<Button>(menuList, "Level Editor"));
+            mMenuButtons.back()->on_pressed([this] {
+                if (prelaunch_state().activeDiscPath.empty()) {
+                    open_iso_picker();
+                    return;
+                }
+
+                mDoAud_seStartMenu(kSoundPlay);
+                show_menu_notification();
+
+                if (getSettings().audio.menuSounds) {
+                    JAISoundHandle* handle = g_mEnvSeMgr.field_0x144.getHandle();
+                    if (*handle) {
+                        (*handle)->stop(60);
+                        (*handle)->releaseHandle();
+                    }
+                }
+
+                if (g_mDoMemCd_control.mCardCommand == mDoMemCd_Ctrl_c::Command_e::COMM_NONE_e) {
+                    mDoMemCd_ThdInit();
+                }
+
+                g_levelEditorSession = true;
+                IsGameLaunched = true;
+                pop(false);
+            });
+            apply_intro_animation(mMenuButtons.back()->root(), "delay-2");
+        }
 
         mMenuButtons.push_back(std::make_unique<Button>(menuList, "Settings"));
         mMenuButtons.back()->on_pressed([this] {

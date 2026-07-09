@@ -1736,6 +1736,25 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     },
                 .isDisabled = [] { return getSettings().game.speedrunMode; },
             });
+        // ====================================================================
+        // Level Editor (Phase 1) — opt-in toggle. Requires Advanced Settings
+        // (the editor relies on the debug camera + advanced tooling). Adds a
+        // "Level Editor" entry to the launch menu after a relaunch.
+        // ====================================================================
+        config_bool_select(leftPane, rightPane, getSettings().backend.enableLevelEditor,
+            {
+                .key = "Enable Level Editor",
+                .icon = "warning",
+                .helpText = "Add a Level Editor entry to the Dusklight launch menu. "
+                            "A relaunch is required for it to appear.<br/><br/>"
+                            "<icon class=\"warning\"/> For authoring only — do not use "
+                            "on a regular save.",
+                .isDisabled =
+                    [] {
+                        return getSettings().game.speedrunMode ||
+                               !getSettings().backend.enableAdvancedSettings;
+                    },
+            });
         config_bool_select(leftPane, rightPane, getSettings().game.showInputViewer,
             {
                 .key = "Show Input Viewer",

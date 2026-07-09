@@ -390,9 +390,8 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
 #if TARGET_PC
         if (dMeter2_isALBWLocked() && i_AtInfo->mpCollider != NULL &&
             fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e &&
-            (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_BOOMERANG) ||
-             i_AtInfo->mpCollider->ChkAtType(AT_TYPE_40))) {
-            dAlbwLockout_onBoomerangHit(i_enemy);
+            i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+            dAlbwLockout_onSlingshotHit(i_enemy);
         }
 #endif
         cXyz tmp = i_AtInfo->mpActor->speed;

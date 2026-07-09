@@ -20,7 +20,17 @@
 #include "d/d_albw_flurry_rush.h"
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_wolf_stun.h"
+#include "d/d_albw_lockout.h"
 #endif
+
+static s16 albwOcAimAngleY(fopAc_ac_c* i_actor) {
+#if TARGET_PC
+    if (dAlbwLockout_isConfused(i_actor)) {
+        return dAlbwLockout_getConfuseAimAngleY(i_actor);
+    }
+#endif
+    return fopAcM_searchPlayerAngleY(i_actor);
+}
 
 
 enum OC_ACTIONS {
@@ -312,7 +322,7 @@ bool daE_OC_c::setWatchMode() {
 
 bool daE_OC_c::searchPlayer() {
     if (fopAcM_searchPlayerDistance(this) < mPlayerRange) {
-        s16 diff = shape_angle.y - fopAcM_searchPlayerAngleY(this);
+        s16 diff = shape_angle.y - albwOcAimAngleY(this);
         if (fopAcM_searchPlayerDistance(this) < l_HIO.plyr_srch_min_radius) {
             if (daPy_getPlayerActorClass()->speedF > 12.0f) {
                 return true;
@@ -401,7 +411,7 @@ bool daE_OC_c::searchPlayerShakeHead() {
     }
 
     if (fopAcM_searchPlayerDistance(this) < mPlayerRange) {
-        s16 diff = getHeadAngle() - fopAcM_searchPlayerAngleY(this);
+        s16 diff = getHeadAngle() - albwOcAimAngleY(this);
         if (abs(diff) < 0x2000) {
             if (fopAcM_otherBgCheck(this, dComIfGp_getPlayer(0)) == FALSE) {
                 return true;
@@ -480,7 +490,7 @@ bool daE_OC_c::checkBeforeBgFind() {
     cXyz oc_pos;
     cXyz plyr_pos;
     cXyz my_vec_2;
-    s16 pl_ang = fopAcM_searchPlayerAngleY(this);
+    s16 pl_ang = albwOcAimAngleY(this);
     oc_pos = current.pos;
     oc_pos.y += 100.0f;
     plyr_pos = daPy_getPlayerActorClass()->current.pos;
@@ -747,7 +757,7 @@ void daE_OC_c::damage_check() {
 #if TARGET_PC
                 dAlbwEnemyRupees_onEnemyKill(this);
 #endif
-                mAtInfo.mHitDirection.y = fopAcM_searchPlayerAngleY(this);
+                mAtInfo.mHitDirection.y = albwOcAimAngleY(this);
                 return;
             }
         } else {
@@ -1145,7 +1155,7 @@ void daE_OC_c::executeTalk() {
 }
 
 void daE_OC_c::executeFind() {
-    s16 pl_ang = fopAcM_searchPlayerAngleY(this);
+    s16 pl_ang = albwOcAimAngleY(this);
     f32 pl_dist = fopAcM_searchPlayerDistance(this);
     if (mOcState < 3 || !setWatchMode()) {
         if (field_0x6b4 == 2 && !dComIfGp_event_runCheck()) {
@@ -1238,7 +1248,7 @@ void daE_OC_c::executeFind() {
                         }
 
                         if (pl_dist < 400.0f && pl_dist > 200.0f) {
-                            if (abs(shape_angle.y - fopAcM_searchPlayerAngleY(this)) < 0x1000) {
+                            if (abs(shape_angle.y - albwOcAimAngleY(this)) < 0x1000) {
                                 if (!dComIfGp_event_runCheck()) {
                                     setActionMode(E_OC_ACTION_ATTACK, 0);
                                 }
@@ -1438,7 +1448,7 @@ void daE_OC_c::executeAttack() {
             // Club windup locks shape_angle at attack start; track Link through the swing
             // so lunges stay aligned when the player strafes (ALBW hold-to-guard without Z-target).
             if (mpMorf->getFrame() < 22.0f) {
-                s16 pl_ang = fopAcM_searchPlayerAngleY(this);
+                s16 pl_ang = albwOcAimAngleY(this);
                 if ((s16)cLib_distanceAngleS(shape_angle.y, pl_ang) >= 0x400) {
                     cLib_addCalcAngleS(&shape_angle.y, pl_ang, 4, 0x800, 0x100);
                 }
@@ -1476,7 +1486,7 @@ void daE_OC_c::executeAttack() {
             }
 
             if (mpMorf->getFrame() >= 22.0f) {
-                mPrevShapeAngle = fopAcM_searchPlayerAngleY(this);
+                mPrevShapeAngle = albwOcAimAngleY(this);
             }
 
             u8 my_bool = 0;
@@ -1535,7 +1545,7 @@ void daE_OC_c::executeAttack() {
             }
 
             if (field_0x6ca && fopAcM_searchPlayerDistance(this) < 500.0f) {
-                if (abs(shape_angle.y - fopAcM_searchPlayerAngleY(this)) < 0x1000) {
+                if (abs(shape_angle.y - albwOcAimAngleY(this)) < 0x1000) {
                     mOcState = 0;
                     break;
                 }
@@ -1576,7 +1586,7 @@ void daE_OC_c::executeDamage() {
             setBck(0x8, 0, 0.0f, 1.0f);
             mSound.startCreatureVoice(Z2SE_EN_OC_V_DAMAGE, -1);
             mOcState = 5;
-            if (s16(cLib_distanceAngleS(shape_angle.y, fopAcM_searchPlayerAngleY(this))) < 0x4000) {
+            if (s16(cLib_distanceAngleS(shape_angle.y, albwOcAimAngleY(this))) < 0x4000) {
                 speedF = -20.0f;
             } else {
                 speedF = 20.0f;
@@ -1784,7 +1794,7 @@ void daE_OC_c::executeWatch() {
             }
             break;
         case 4:
-            mPrevShapeAngle = fopAcM_searchPlayerAngleY(this);
+            mPrevShapeAngle = albwOcAimAngleY(this);
             if (mpMorf->isStop()) {
                 setActionMode(E_OC_ACTION_FIND, 2);
             }
@@ -2002,7 +2012,7 @@ void daE_OC_c::executeDemoMaster() {
             field_0x6bc = 0x5000;
             daPy_getPlayerActorClass()->setPlayerPosAndAngle(&my_vec_1, field_0x6bc, 0);
             p_camera->mCamera.SetTrimSize(3);
-            shape_angle.y = current.angle.y = fopAcM_searchPlayerAngleY(this);
+            shape_angle.y = current.angle.y = albwOcAimAngleY(this);
             return;
         case 1:
             mSound.startCreatureVoice(Z2SE_EN_OC_V_SAKEBU, -1);
@@ -2031,7 +2041,7 @@ void daE_OC_c::executeDemoMaster() {
                     mSound.startCreatureSound(Z2SE_EN_OC_ATTACK_C, 0, -1);
                 }
 
-                cLib_chaseAngleS(&field_0x6bc, fopAcM_searchPlayerAngleY(this) + 0x8000, 0x200);
+                cLib_chaseAngleS(&field_0x6bc, albwOcAimAngleY(this) + 0x8000, 0x200);
                 if (mpMorf->isStop()) {
                     mOcState = 6;
                     setBck(0x10, 0, 5.0f, 1.0f);
@@ -2062,7 +2072,7 @@ void daE_OC_c::executeDemoMaster() {
                 field_0x704 = 37.0f;
                 current.pos.set(16449.0f, 3300.0f, 7879.0f);
                 current.pos += my_vec_0;
-                shape_angle.y = current.angle.y =  fopAcM_searchPlayerAngleY(this);
+                shape_angle.y = current.angle.y =  albwOcAimAngleY(this);
                 speedF = 0.0f;
                 field_0x6c0 = 10;
             }
@@ -2140,7 +2150,7 @@ void daE_OC_c::executeDemoChild() {
                 if (mpParent->mOcState == 7) {
                     current.pos.set(16249.0f, 4000.0f, 8036.0f);
                     current.pos += local_18;
-                    shape_angle.y = current.angle.y = fopAcM_searchPlayerAngleY(this);
+                    shape_angle.y = current.angle.y = albwOcAimAngleY(this);
                     speedF = speed.y = 0.0f;
                     mOcState = 7;
                 }
@@ -2261,7 +2271,7 @@ void daE_OC_c::executeFall() {
 }
 
 void daE_OC_c::executeFindStay() {
-    s16 target_angle = fopAcM_searchPlayerAngleY(this);
+    s16 target_angle = albwOcAimAngleY(this);
     f32 target_dist = fopAcM_searchPlayerDistance(this);
     mPrevShapeAngle = target_angle;
     mBattleOn = true;
@@ -2304,7 +2314,7 @@ void daE_OC_c::executeFindStay() {
 
             current.angle.y = shape_angle.y;
             if (target_dist < 400.0f && target_dist > 200.0f) {
-                if (abs(shape_angle.y - fopAcM_searchPlayerAngleY(this)) < 0x1000 && checkBeforeFloorBg(100.0f)
+                if (abs(shape_angle.y - albwOcAimAngleY(this)) < 0x1000 && checkBeforeFloorBg(100.0f)
                     && !dComIfGp_event_runCheck()) {
                     setActionMode(E_OC_ACTION_ATTACK, 0);
                 }
@@ -2322,7 +2332,7 @@ void daE_OC_c::executeFindStay() {
 
 void daE_OC_c::executeMoveOut() {
     f32 player_distance = fopAcM_searchPlayerDistance(this);
-    s16 target_angle = fopAcM_searchPlayerAngleY(this);
+    s16 target_angle = albwOcAimAngleY(this);
     s16 home_angle = cLib_targetAngleY(&home.pos, &current.pos);
     mBattleOn = true;
     mPrevShapeAngle = shape_angle.y;
@@ -2402,7 +2412,7 @@ void daE_OC_c::executeMoveOut() {
                 }
 
                 if (player_distance < 400.0f && player_distance > 200.0f) {
-                    if (abs(shape_angle.y - fopAcM_searchPlayerAngleY(this)) < 0x1000
+                    if (abs(shape_angle.y - albwOcAimAngleY(this)) < 0x1000
                         && !dComIfGp_event_runCheck()) {
                         setActionMode(E_OC_ACTION_ATTACK, 0);
                     }
@@ -2607,6 +2617,10 @@ void daE_OC_c::cc_set() {
     mDoMtx_stack_c::multVec(&my_vec_lhs, &my_vec_rhs);
     mSphs_at[1].SetC(my_vec_rhs);
     mSphs_at[1].SetR(30.0f);
+#if TARGET_PC
+    dAlbwLockout_syncConfuseAtBits(this, &mSphs_at[0]);
+    dAlbwLockout_syncConfuseAtBits(this, &mSphs_at[1]);
+#endif
     dComIfG_Ccsp()->Set(&mSphs_at[0]);
     dComIfG_Ccsp()->Set(&mSphs_at[1]);
 

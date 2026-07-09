@@ -139,10 +139,12 @@ static bool sALBWPlayerIdle = false;
 // NEW CODE — ALBW Port
 // Meter lockout latch.
 // Set when internal sALBWMeter reaches zero or below (debt); cleared at sOilMaxVar.
-// Spending may push the meter negative on the action that caused depletion; HUD
-// shows max(0, internal) until debt is repaid. Lockout blocks new sword/agility/
+// Pre-lockout: depleting actions may overspend down to kALBWMaxDebt (-5450);
+// HUD shows max(0, internal) until debt is repaid. Lockout: further drains floor
+// at 0 so item uses cannot dig endlessly. Lockout blocks new sword/agility/
 // hidden-skill actions; the proc already in progress is not interrupted.
-// Spinner and Dominion Rod are blocked while internal meter <= 0.
+// Spinner and Dominion Rod statue control are blocked while internal meter <= 0.
+// Dom Rod confuse throw is allowed during lockout (see canALBWDomRodConfuseThrow).
 // sALBWMovementExhausted clears at sOilBaseMax; lockout perks still apply until full.
 // ============================================
 static bool sALBWLocked = false;
@@ -273,6 +275,9 @@ static void albwRefreshLockoutState(bool i_playDecSound) {
     }
 }
 
+// Max repayable overspend before lockout (one half-base / HS-sized spend).
+static constexpr int kALBWMaxDebt = -5450;
+
 static void albwDrainMeter(int amount, const std::chrono::steady_clock::time_point& i_now) {
 #if TARGET_PC
     if (dFlurryRush_shouldSuppressAlbwSpend()) {
@@ -280,6 +285,15 @@ static void albwDrainMeter(int amount, const std::chrono::steady_clock::time_poi
     }
 #endif
     sALBWMeter -= amount;
+    if (sALBWLocked) {
+        // Lockout: no further dig past empty.
+        if (sALBWMeter < 0) {
+            sALBWMeter = 0;
+        }
+    } else if (sALBWMeter < kALBWMaxDebt) {
+        // Pre-lockout: allow repayable debt down to one half-meter overspend.
+        sALBWMeter = kALBWMaxDebt;
+    }
     sLastRecoveryTime = i_now;
     albwRefreshLockoutState(true);
 }
@@ -338,9 +352,6 @@ int dMeter2_getALBWLockoutRecoveryRate() {
 #if TARGET_PC
 void dMeter2_onALBWSling() {
     sSlingMade = true;
-    if (sALBWLocked) {
-        dAlbwLockout_onSlingFired();
-    }
 }
 
 void dMeter2_onALBWBoom() {
@@ -397,11 +408,9 @@ static bool dMeter2_isALBWLockoutZTargetRecovery() {
 // Continuous-drain items are forced off when internal meter is at or below zero.
 bool dMeter2_canALBWSpinner() { return sALBWMeter > 0; }
 bool dMeter2_canALBWDomRod() { return sALBWMeter > 0; }
+bool dMeter2_canALBWDomRodConfuseThrow() { return sALBWLocked; }
 
 bool dMeter2_canALBWSling() {
-    if (sALBWLocked) {
-        return dAlbwLockout_canFireSling();
-    }
     return true;
 }
 
@@ -485,7 +494,7 @@ bool dMeter2_canALBWDoubleHookshot() {
 // Gate functions let the procInit caller decide whether to proceed:
 //   canALBWSword/Sidestep/BackJump/RollJump/HiddenSkill: blocked while sALBWLocked
 //     (internal meter at or below zero). No minimum meter while unlocked — a
-//     started action may push the meter into debt; lockout blocks the next action.
+//     started action may drain to 0 and enter lockout; lockout blocks the next action.
 //   Ranged/items: no minimum while unlocked; lockout perks apply while locked.
 // ============================================
 void dMeter2_onALBWSword() {
@@ -547,8 +556,9 @@ void dMeter2_commitALBWHiddenSkillIfPending() {
     commitALBWHiddenSkillDrain(std::chrono::steady_clock::now());
 }
 // Sword, agility, and hidden skills: no minimum meter while lockout is clear
-// (drain may push internal meter into debt). Once internal hits zero, lockout
-// latches and NEW actions are blocked — the current animation still finishes.
+// (drain may push internal meter into debt down to kALBWMaxDebt). Once
+// internal hits zero, lockout latches and NEW actions are blocked — the
+// current animation still finishes.
 bool dMeter2_canALBWSword()       { return !sALBWLocked; }
 bool dMeter2_canALBWSidestep()    { return !sALBWLocked; }
 bool dMeter2_canALBWBackJump()    { return !sALBWLocked; }
@@ -2057,7 +2067,7 @@ void dMeter2_c::moveKantera() {
             sBombAmmo = false;
         } else if (sBoomThrow) {
             if (sALBWLocked) {
-                dMeter2_addALBWFraction(3, 20);
+                dMeter2_addALBWFraction(1, 5); // 20% meter refill during lockout
             } else {
                 albwDrainMeter(2725, sNow);
             }
@@ -2159,7 +2169,7 @@ void dMeter2_c::moveKantera() {
         // ============================================
         // NEW CODE — ALBW Port
         // Passive recovery: normal rates while unlocked; faster 7s/3s rates during lockout.
-        // Internal meter may be negative (debt); HUD shows max(0, internal).
+        // Internal meter may be negative (pre-lockout debt); HUD shows max(0, internal).
         // ============================================
         const int sNormalRecovery = computeALBWRecoveryRate();
         const bool sALBWGuarding = dMeter2_isALBWRecoveryPausedByGuard();

@@ -1,14 +1,14 @@
 # Wind Waker item work — handoff & roadmap
 
-**Purpose:** Track **WW-era leftovers on the TP disc** — primarily `itemmdl.arc` item view models, plus related cut-enemy / orphan-asset research (Moblin, Shadow Beast prototype). Start new chats with:
+**Purpose:** Track **WW-era leftovers on the TP disc** — primarily `itemmdl.arc` item view models, plus related cut-enemy / orphan-asset research (Moblin, Shadow Beast prototype).
 
-> Continue Wind Waker / cut-content work — read `docs/wind-waker-item-work.md` first.
+**Live state (read first):** [state/ww-itemmdl.md](state/ww-itemmdl.md) — status / next / do-not / roles. **This file** is the canonical technical roadmap (proven path, tables, generalization). Session diary: [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) (archive — do not treat as live tip).
 
-**Two-chat handoff (Cursor ↔ Claude):** this feature runs as parallel chats — **Cursor (Wind Curs)** implements, **Claude (Wind Clau)** reviews. Both are handed off via [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md):
-> - **Implementation chat →** that doc's **▶ RESUME HERE**
-> - **Review chat →** that doc's **▶ WIND CLAU HANDOFF**
->
-> Trust **this doc + the git log** as the current technical state — a prior chat's summary may lag the latest color-tuning commits.
+> Continue Wind Waker / cut-content work — read `docs/AGENT_INDEX.md` + `docs/state/ww-itemmdl.md` first; use this doc for proven path + tables.
+
+**Two-chat handoff (Cursor ↔ Claude):** **Cursor (Wind Curs)** implements, **Claude (Wind Clau)** reviews. Openers live on the state file; interconnected doc keeps historical passes.
+
+> Trust **this doc + the git log + live state** as technical truth — a prior chat's summary may lag.
 
 **Status (2026-07-01):** **Bow BOTH tracks working & committed.** Track A get-item — 4a authentic SC TEV replay + 4b K0 cap/output ceiling (`888f69392d` and prior). Track B **held skin** — vbow renders fully colored on Link's held bow (`game.wwItemmdlHeldBow`), committed `888f69392d`. **The bow is now a proven end-to-end reference — see [▶ PROVEN PATH](#-proven-path--bringing-a-ww-itemmdl-item-to-screen) below.** Next item: **Skull Hammer (`vhamm`)** — get-item generalization (no TP host for held). Cut-enemy lineage documented; beta Moblin **not found** on retail GZ2E01 decomp map.
 
@@ -70,7 +70,7 @@ Iron Boots aren't a *held* prop like the bow — they're a **worn body model** (
 
 ## Track A progress (2026-06-26 → 2026-07-01)
 
-> **Canonical session log:** [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) — **▶ RESUME HERE** for fresh chats.
+> **Canonical session log (archive):** [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md). **Live tip:** [state/ww-itemmdl.md](state/ww-itemmdl.md).
 
 | Milestone | Status |
 |-----------|--------|

@@ -385,10 +385,23 @@ STILL OPEN (noted, not yet fixed):
   "hurts Link" zone during dash. Tune together if the dash danger feels too far-reaching.
 - Optional polish: eye size (~5% shrink / eyelids-follow) — reassess now that it's a proper iris.
 
-### Not-yet-started
-- **Layer 1**: eye retract-on-blink (#1 — retract joint `0x15` inward while `field_0x1ad6==0`, return on
-  open) and the **laser** (#2 — lid-open exception during `P3_LASER` without ungating the core sphere;
-  re-aim the beam origin/sweep for the mouth position so it arcs across the room + tracks Link).
+### Layer 1 (2026-07-08) — eye/blink/laser
+DONE (built, playtest-confirmed):
+- **#1 eye retract-on-blink** — `nodeCallBack` retracts eyeball joint `0x15` into the socket keyed to the
+  lid angle `field_0x1ad8` (+6000 open .. -8000 shut), sliding back to the tracked mouth position as the
+  lid opens; hides the tracking pop-out. Only the eyeball moves. `kAlbwArmoEyeRetract=200` (tunable).
+- **#2a laser lid-open exception** — `P3_LASER` forces the lid open (eye reads as firing) while the core
+  sphere stays gated/invulnerable ("closed lid = invulnerable" holds elsewhere); the retract keys off the
+  lid so the eye stays extended through the beam.
+- **Beam placement** — beam now fires FROM the relocated mouth eye (`kAlbwArmoBeamOriginRaise=0`; a lift
+  test put the source at the old dorsal socket — rejected).
+
+LASER SWEEP — redesign (user direction, not yet built): replace the vanilla ground-target sweep
+(`field_0x6cc`/`field_0x6c8`) with the **boss body rotating in place**: sweep `current.angle.y` ~180°
+one way while firing, then reverse ~180°, so the eye-mounted beam sweeps the arena. Widen the **beam
+model AND its collision sphere (`mBeamSph`) together** (beam length `field_0x6c0*(XREG_F(6)+2400)` @ ~L2574;
+`mBeamSph` radius from `beam_sph_src` = 20). Beam must accurately track/lead Link during the sweep. User
+will tune the beam+sphere width after placement is confirmed.
 - Confirm the P3_VULN `WAIT` pose reads as "weak" (may want a distinct upright stun / OoT iris-spin).
 - Deferred: eye_test literal-anim option, per-source defense, reactive bomb-arrow eye-close, 60 fps
   timing confirm, beam aim on the ground model.

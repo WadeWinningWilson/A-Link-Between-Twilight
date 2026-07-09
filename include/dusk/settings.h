@@ -496,6 +496,11 @@ struct UserSettings {
         ConfigVar<bool> checkForUpdates;
         ConfigVar<int> cardFileType;
         ConfigVar<bool> enableAdvancedSettings;
+        // ====================================================================
+        // Level Editor (Phase 1) — surfaces the launch-menu "Level Editor"
+        // entry. Requires enableAdvancedSettings; takes effect after relaunch.
+        // ====================================================================
+        ConfigVar<bool> enableLevelEditor;
     } backend;
 
     // Arrays of size 4 for 4 ports

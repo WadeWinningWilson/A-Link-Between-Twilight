@@ -2,7 +2,9 @@
 
 **Purpose:** Track **field combat** refinements (not boss-specific scripts) so new chats can continue without reopening old sessions.
 
-> Continue combat refinement work — read `docs/combat-refinements-handoff.md` first.
+**Live state (read first):** [state/combat-refinements.md](state/combat-refinements.md) — status / next / do-not. **This file** keeps the full backlog, FA design, and file maps for revisions.
+
+> Continue combat refinement work — read `docs/AGENT_INDEX.md` + `docs/state/combat-refinements.md` first; use this handoff for detail.
 
 **Related:** [boss-fights-handoff.md](boss-fights-handoff.md) (boss layer), [shield-combat.md](shield-combat.md) (parry/guard), [albw-port.md](albw-port.md) (settings overview), [albw-flurry-rush-brief.md](albw-flurry-rush-brief.md) (Flurry Rush + FA spend-on-dodge).
 

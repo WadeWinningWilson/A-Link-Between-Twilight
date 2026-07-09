@@ -217,6 +217,8 @@ UserSettings g_userSettings = {
         .checkForUpdates {"backend.checkForUpdates", true},
         .cardFileType {"backend.cardFileType", static_cast<int>(CARD_GCIFOLDER)},
         .enableAdvancedSettings {"backend.enableAdvancedSettings", false},
+        // Level Editor (Phase 1) — off by default; opt-in via advanced settings.
+        .enableLevelEditor {"backend.enableLevelEditor", false},
     },
 
     // Not sure if there's a better way to declare this
@@ -477,6 +479,7 @@ void registerSettings() {
     Register(g_userSettings.backend.checkForUpdates);
     Register(g_userSettings.backend.cardFileType);
     Register(g_userSettings.backend.enableAdvancedSettings);
+    Register(g_userSettings.backend.enableLevelEditor);
 
     Register(g_userSettings.actionBindings.firstPersonCamera[0]);
     Register(g_userSettings.actionBindings.firstPersonCamera[1]);

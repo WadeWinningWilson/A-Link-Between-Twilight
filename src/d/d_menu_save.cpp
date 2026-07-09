@@ -25,6 +25,7 @@
 #include "dusk/frame_interpolation.h"
 #include "dusk/menu_pointer.h"
 #include "dusk/settings.h"
+#include "dusk/main.h"
 #endif
 
 static int SelStartFrameTbl[3] = {
@@ -1361,6 +1362,22 @@ void dMenu_save_c::dataWrite() {
         mDoMemCdRWm_TestCheckSumGameData(save);
         save += QUEST_LOG_SIZE;
     }
+
+#if TARGET_PC
+    // ========================================================================
+    // Level Editor (Phase 1) — never write the player's memory card in an
+    // editor session. Skipping dataSave() alone would hang the menu, because
+    // memCardDataSaveWait() polls SaveSync() which returns 0 in
+    // CARD_STATE_READY_e. Instead we set the success sentinel and jump to the
+    // completion proc, so the menu finishes cleanly with no card I/O. The
+    // in-RAM buffer prep above is harmless.
+    // ========================================================================
+    if (dusk::g_levelEditorSession) {
+        mCmdState = 1;
+        mMenuProc = PROC_MEMCARD_DATA_SAVE_WAIT2;
+        return;
+    }
+#endif
 
     dataSave();
 }

@@ -9,6 +9,15 @@ extern bool IsRunning;
 extern bool IsShuttingDown;
 extern bool IsGameLaunched;
 extern bool RestartRequested;
+
+// ============================================================================
+// Level Editor (Phase 1) — session flag. True only when the game was launched
+// via the launch-menu "Level Editor" entry. Master gate for all editor code;
+// every editor path early-outs on !g_levelEditorSession, so normal Play is
+// unaffected. Never persisted, never stored in a save. Always false on
+// platforms without the PC launch menu.
+// ============================================================================
+extern bool g_levelEditorSession;
 extern std::filesystem::path ConfigPath;
 extern std::filesystem::path CachePath;
 

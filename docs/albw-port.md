@@ -191,9 +191,9 @@ Replace (or offer alongside) today's **attack-power division** intercept in `dAl
 
 **Touch points:** `d_albw_hp_mult.cpp`, enemy init paths (`health` / `mMaxHp` fields per actor), `d_cc_uty.cpp` (remove or gate divide path), wolf charge scaling in `d_cc_uty.cpp` (today uses `dAlbwHP_getRawMult()` to undo the divide).
 
-### 4. Lockout boomerang — visual “ranged open” feedback (future)
+### 4. Lockout slingshot — visual “ranged open” feedback (future)
 
-Gameplay debuff (`dAlbwLockout_onBoomerangHit`, 4s window) is in; **no dedicated VFX/HUD yet**. Later: enemy shimmer / status icon / lock-on tint while `dAlbwLockout_isRangedOpened()` so players know bow / bomb / iron ball will connect before the timer expires.
+Gameplay debuff (`dAlbwLockout_onSlingshotHit`, 4s window) is in; **no dedicated VFX/HUD yet**. Later: enemy shimmer / status icon / lock-on tint while `dAlbwLockout_isRangedOpened()` so players know bow / bomb / iron ball will connect before the timer expires.
 
 ### 5. Zant & Ganon boss changes
 

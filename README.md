@@ -31,7 +31,7 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | Colossal Wallet / final pricing pass | ⏳ |
 | Upstream Dusklight v1.3.1 merge | ⏳ |
 | Postman shop — heart & ALBW meter upgrades (Master Quest) | ✅ (stamina row icon swap pending) |
-| Lockout boomerang — visual ranged-open feedback | ⏳ |
+| Lockout slingshot — visual ranged-open feedback | ⏳ |
 | Enemy HP multiplier — finish true max-HP migration | ⏳ |
 | Zant & Ganon finale boss changes | ⏳ |
 

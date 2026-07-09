@@ -1,12 +1,15 @@
 # Quick / Sumo Work
 
-**Interconnected chat doc** — D-Pad outfit quick-swap ↔ Sumo outfit / rental shop.
+**Interconnected chat doc (ARCHIVE / session diary)** — D-Pad outfit quick-swap ↔ Sumo outfit / rental shop.
+
+**Live tip:** when the next outfit/sumo session starts, create [`docs/state/outfit-sumo.md`](../state/outfit-sumo.md) from the MASTER SESSION HANDOFF below and point fresh chats there. **Keep all content in this file** for revisions; do not delete session updates.
 
 | | |
 |---|---|
 | **Quick Swap chat** | D-pad Down outfit cycle, `dpad_quick_swap.cpp`, product rules for cycle/limiter |
 | **Sumo chat** | Sumo overlay, shop-as-switcher, cap decoupling, `d_albw_sumo_test.cpp`, outfit module API |
 | **Status** | **Outfit cycle wired** (Quick Swap): `CYCLE_OUTFIT` on Down, R+Y transform restored. Sumo API complete; cap (696) still pending on Sumo side |
+| **Index** | [`docs/AGENT_INDEX.md`](../AGENT_INDEX.md) |
 
 ---
 
