@@ -82,6 +82,10 @@ bool dShield_tryBeginHelmSplitter();
 
 void dShield_onGuardAttackConnect();
 
+// After a successful bash vs an enemy: next damaging hit from Link deals +5% (no stack; consumed).
+void dShield_armBashNextHitBoost();
+bool dShield_tryConsumeBashNextHitBoost(u16& io_attackPower);
+
 u8 dShield_getBashCharges();
 u8 dShield_getMaxBashCharges();
 void dShield_fillBashChargesToMax();

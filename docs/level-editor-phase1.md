@@ -413,7 +413,7 @@ Two in-play commit sites persist editor-session progress and must be blocked; th
   returns **false** when `g_levelEditorSession`. The autosave proc never starts →
   zero state-machine risk. This is the important one (autosave is the automatic,
   silent corruptor).
-- **Manual field save (statue / pause "Save") — proc-safe redirect.** Do **not** skip
+- **Manual field save (pause / collection "Save") — proc-safe redirect.** Do **not** skip
   the commit at `dataSave()`: the wait proc polls `SaveSync()`, which returns 0 while
   `mCardState == CARD_STATE_READY_e` ([m_Do_MemCard.cpp:321](../src/m_Do/m_Do_MemCard.cpp)),
   so a naive skip **hangs** the menu. Instead guard `dataWrite()`
@@ -438,10 +438,11 @@ Two in-play commit sites persist editor-session progress and must be blocked; th
 3. Click it → `g_levelEditorSession == true`; a normal `Play` boot leaves it false and
    field FPS is unchanged (`F_SP121` r0 p0 per build guidelines).
 4. Speedrun mode → the Level Editor toggle is disabled/forced off; button never appears.
-5. Editor session: autosave never fires; a manual/statue save completes the menu but
-   writes nothing to the card (verify the slot's timestamp is unchanged).
+5. Editor session: autosave never fires; a manual collection Save is denied at selection
+   (1x.1) or, if somehow reached, completes the menu but writes nothing to the card
+   (verify the slot's timestamp is unchanged).
 
-### 10.5 Save-block UX refinement — deny at selection (PLANNED, no code; supersedes §10.3 caveat)
+### 10.5 Save-block UX refinement — deny at selection (IMPLEMENTED 2026-07-09; supersedes §10.3 caveat)
 
 **Playtest outcome (2026-07-09):** all six §10.4 checks pass; FPS unchanged. User
 directed a UX improvement: instead of letting the save flow run and silently no-op'ing
@@ -454,25 +455,17 @@ silent **guarantee** (defense in depth). Buzzer = `Z2GetAudioMgr()->seStart(Z2SE
 NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0)` — the generic denied-action SE used in
 [d_a_alink_dusk.cpp](../src/d/actor/d_a_alink_dusk.cpp) / [d_menu_fmap.cpp](../src/d/d_menu_fmap.cpp).
 
-**Two save-entry surfaces → two deny hooks** (both `#if TARGET_PC` + `if (g_levelEditorSession)`):
+**Primary surface (playtested 2026-07-09):** START → collection menu → Save.
 
 | Surface | Selection point | Deny action |
 |---|---|---|
-| START → collection menu → Save | `getSubWindowOpenCheck()==1 → SAVE_OPEN`, [d_menu_window.cpp:781](../src/d/d_menu_window.cpp) (`dMw_c::collect_close_proc`); deepest/best-feel hook is the Save-icon confirm inside `dMenu_collect`) | play `Z2SE_SYS_ERROR`; do **not** enter `SAVE_OPEN` — stay in / reopen the collection menu |
-| Owl/bird statue prompt | `saveQuestion()` `mYesNoCursor == CURSOR_YES`, [d_menu_save.cpp:825](../src/d/d_menu_save.cpp) | play `Z2SE_SYS_ERROR`; route to the existing No/cancel branch ([:845](../src/d/d_menu_save.cpp)) — no new proc, no `SaveSync` dependency, no hang |
+| START → collection menu → Save | `wait_proc` / `pointerActivateCurrent` Save icon (`mCursorX==0 && mCursorY==5`); belt in `collect_move_proc`; secondary in `collect_close_proc` | play `Z2SE_SYS_ERROR`; do **not** set `mSubWindowOpenCheck=1` / never enter `SAVE_OPEN` — cursor stays |
 
-**Keep as silent backstops:** `canAutoSave()` → false (autosave, no menu — unchanged);
-the `dataWrite()` guard (§10.3) as a no-write safety net (never reached once selection
-is denied, so the "Saved" text no longer appears).
+**Correction (2026-07-09):** There is **no owl/bird statue save in Twilight Princess** (that was a Majora's Mask feature). An earlier draft mislabeled `saveQuestion()` as “statue save.” In dusklight, `TYPE_WHITE_EVENT` / `TYPE_BLACK_EVENT` are set from **game-over / ending** flows ([d_gameover.cpp:243-247](../src/d/d_gameover.cpp)), not field statues. A deny on `saveQuestion()` Yes remains as optional defense-in-depth for those rare prompts; the **user-facing 1x.1 bar is collection Save only**.
 
-**Open verifications (implementation time):**
-1. Do the collection-menu Save and the owl-statue save both funnel through `saveQuestion`
-   (one hook) or need the two separate hooks above? Depends on `dMenu_save_c::mUseType`.
-2. Exact Save-icon confirm line inside `dMenu_collect` (cursor-stays hook) vs. the simpler
-   `collect_close_proc` fallback (momentary close→reopen).
-3. Confirm `Z2SE_SYS_ERROR` (generic denied buzzer) is preferred over `Z2SE_SY_FILE_ERROR`.
+**Keep as silent backstops:** `canAutoSave()` → false; the `dataWrite()` guard (§10.3).
 
-**Roadmap placement:** small **1x.1** follow-up; land alongside or just before milestone
-1a (both touch editor-session UX).
-</content>
-</invoke>
+**Playtest (2026-07-09):** Collection Save deny + normal Play Save regression **pass**. “Statue” checklist item was invalid — dropped.
+
+**Roadmap placement:** **1x.1 done**; next is milestone 1a.
+

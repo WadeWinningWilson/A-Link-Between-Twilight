@@ -6,6 +6,7 @@
 #include "ImGuiConfig.hpp"
 #include "ImGuiConsole.hpp"
 #include "ImGuiMenuTools.hpp"
+#include "dusk/leveledit/enumerate.hpp"
 #include "dusk/settings.h"
 
 namespace dusk {
@@ -55,7 +56,9 @@ namespace dusk {
 
         ImGui::SeparatorText("Options");
 
-        bool eventRunning = (dComIfGp_event_runCheck() || dComIfGp_isPauseFlag()) && !getSettings().game.debugFlyCam;
+        const bool flyActive = leveledit::editor_fly_cam_active();
+        bool eventRunning =
+            (dComIfGp_event_runCheck() || dComIfGp_isPauseFlag()) && !flyActive;
         if (eventRunning) {
             ImGui::BeginDisabled();
         }
@@ -74,18 +77,18 @@ namespace dusk {
             ImGui::EndDisabled();
         }
 
-        if (!getSettings().game.debugFlyCam) {
+        if (!flyActive) {
             ImGui::BeginDisabled();
         }
         config::ImGuiCheckbox("Freeze Time", getSettings().game.debugFlyCamLockEvents);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-            if (!getSettings().game.debugFlyCam) {
+            if (!flyActive) {
                 ImGui::SetTooltip("Enable Fly Mode first.");
             } else {
                 ImGui::SetTooltip("Freezes the game while flying.");
             }
         }
-        if (!getSettings().game.debugFlyCam) {
+        if (!flyActive) {
             ImGui::EndDisabled();
         }
 

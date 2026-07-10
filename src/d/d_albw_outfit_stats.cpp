@@ -138,6 +138,36 @@ bool dAlbwOutfitStats_isSubmergedHumanSwim(const daAlink_c* link) {
     return link->mProcID == daAlink_c::PROC_SWIM_DIVE;
 }
 
+bool dAlbwOutfitStats_hasActiveDiveIntent(const daAlink_c* link) {
+    if (!dAlbwOutfitStats_isSubmergedHumanSwim(link)) {
+        return false;
+    }
+
+    if (link->mProcID == daAlink_c::PROC_SWIM_DIVE) {
+        return true;
+    }
+
+    const f32 depth = link->mWaterY - link->current.pos.y;
+
+    // At / near the waterline, holding A is shore swim — not dive sustain.
+    if (depth <= kAlbwOutfitStatsWaterlineSoftDepth) {
+        return false;
+    }
+
+    // Clearly below the float-up band: stay submerged even if stroke briefly drops.
+    if (depth > link->mpHIO->mSwim.m.mFloatUpHeight) {
+        return true;
+    }
+
+    // Mid-depth: only while stroke / swim button is active.
+    if (link->field_0x3000 != 0) {
+        return true;
+    }
+
+    daAlink_c* mut = const_cast<daAlink_c*>(link);
+    return mut->checkSwimButtonMove() || mut->checkZoraSwimMove();
+}
+
 bool dAlbwOutfitStats_isZoraWaterBuffActive() {
     if (!dAlbwOutfitStats_isEnabled()) {
         return false;

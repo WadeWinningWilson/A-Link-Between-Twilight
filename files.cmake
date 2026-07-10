@@ -1523,6 +1523,9 @@ set(DUSK_FILES
         src/dusk/ui/document.hpp
         src/dusk/ui/editor.cpp
         src/dusk/ui/editor.hpp
+        src/dusk/leveledit/enumerate.cpp
+        src/dusk/leveledit/pick.cpp
+        include/dusk/leveledit/enumerate.hpp
         src/dusk/ui/event.cpp
         src/dusk/ui/event.hpp
         src/dusk/ui/graphics_tuner.cpp

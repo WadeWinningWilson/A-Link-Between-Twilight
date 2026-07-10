@@ -19234,12 +19234,8 @@ int daAlink_c::execute() {
                 if (!checkNoResetFlg0(FLG0_UNK_80) ||
                     mWaterY - var_f31 <= mpHIO->mSwim.m.mStartHeight - 5.0f)
                 {
-#if TARGET_PC
-                    if (!dAlbwOutfitStats_isSubmergedHumanSwim(this))
-#endif
-                    {
-                        swimOutAfter(0);
-                    }
+                    // Geometry land-exit: always allow for Outfit Stats too.
+                    swimOutAfter(0);
                 }
             }
 

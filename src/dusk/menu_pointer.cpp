@@ -4,7 +4,9 @@
 #include "dusk/settings.h"
 #include "m_Do/m_Do_graphic.h"
 
+#include <aurora/lib/window.hpp>
 #include <aurora/rmlui.hpp>
+#include <aurora/lib/webgpu/gpu.hpp>
 #include <dolphin/pad.h>
 
 #include <algorithm>
@@ -509,6 +511,48 @@ bool hit_pane(J2DPane* pane, f32 padding) noexcept {
 
     const JGeometry::TBox2<f32>& bounds = pane->getBounds();
     return hit_rect(bounds.i.x, bounds.i.y, bounds.f.x, bounds.f.y, padding);
+}
+
+bool map_window_mouse_to_game_screen(f32 windowX, f32 windowY, f32& outX, f32& outY) noexcept {
+    auto* context = aurora::rmlui::get_context();
+    if (context == nullptr) {
+        return false;
+    }
+
+    const auto size = aurora::window::get_window_size();
+    const Rml::Vector2i contentSize = context->GetDimensions();
+    if (size.width == 0 || size.height == 0 || contentSize.x <= 0 || contentSize.y <= 0) {
+        return false;
+    }
+
+    const auto viewport = aurora::webgpu::calculate_present_viewport(
+        size.native_fb_width, size.native_fb_height, static_cast<uint32_t>(contentSize.x),
+        static_cast<uint32_t>(contentSize.y));
+    if (viewport.width <= 0.f || viewport.height <= 0.f) {
+        return false;
+    }
+
+    const float nativeX =
+        windowX * static_cast<float>(size.native_fb_width) / static_cast<float>(size.width);
+    const float nativeY =
+        windowY * static_cast<float>(size.native_fb_height) / static_cast<float>(size.height);
+    const float right = viewport.left + viewport.width;
+    const float bottom = viewport.top + viewport.height;
+    if (nativeX < viewport.left || nativeY < viewport.top || nativeX >= right ||
+        nativeY >= bottom) {
+        return false;
+    }
+
+    const f32 contentX =
+        (nativeX - viewport.left) * static_cast<f32>(contentSize.x) / viewport.width;
+    const f32 contentY =
+        (nativeY - viewport.top) * static_cast<f32>(contentSize.y) / viewport.height;
+
+    const f32 width = std::max(static_cast<f32>(contentSize.x), 1.0f);
+    const f32 height = std::max(static_cast<f32>(contentSize.y), 1.0f);
+    outX = mDoGph_gInf_c::getMinXF() + contentX / width * mDoGph_gInf_c::getWidthF();
+    outY = mDoGph_gInf_c::getMinYF() + contentY / height * mDoGph_gInf_c::getHeightF();
+    return true;
 }
 
 }  // namespace dusk::menu_pointer

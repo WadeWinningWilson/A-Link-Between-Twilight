@@ -241,6 +241,7 @@ u16 sShieldDurabilityMax = 0;
 bool sShieldBroken = false;
 u8 sLastDurabilityEquipShield = 0xFF;
 bool sBashAlbwGranted = false;
+bool sBashNextHitBoostPending = false;
 
 f32 sDenyPikariFrame = 0.0f;
 
@@ -1062,6 +1063,7 @@ void dShield_resetSession() {
     sShieldBroken = false;
     sLastDurabilityEquipShield = 0xFF;
     sBashAlbwGranted = false;
+    sBashNextHitBoostPending = false;
     sShieldHudLingerFrames = 0;
 }
 
@@ -1675,7 +1677,30 @@ void dShield_onGuardAttackConnect() {
     fopAc_ac_c* hitActor = hitObj->GetAc();
     if (hitActor != NULL && fopAcM_GetGroup(hitActor) == fopAc_ENEMY_e) {
         dShield_tryGrantHelmPunishCredit((fopEn_enemy_c*)hitActor);
+        dShield_armBashNextHitBoost();
     }
+}
+
+void dShield_armBashNextHitBoost() {
+    if (!dShield_isParryCombatEnabled()) {
+        return;
+    }
+    // No stack — refresh to a single pending +5% hit.
+    sBashNextHitBoostPending = true;
+}
+
+bool dShield_tryConsumeBashNextHitBoost(u16& io_attackPower) {
+    if (!sBashNextHitBoostPending || io_attackPower == 0) {
+        return false;
+    }
+
+    sBashNextHitBoostPending = false;
+    const u32 boosted = (static_cast<u32>(io_attackPower) * 105u) / 100u;
+    io_attackPower = static_cast<u16>(boosted > 0xFFFFu ? 0xFFFFu : boosted);
+    if (io_attackPower < 1) {
+        io_attackPower = 1;
+    }
+    return true;
 }
 
 u8 dShield_getBashCharges() {

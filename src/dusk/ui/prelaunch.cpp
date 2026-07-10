@@ -5,6 +5,7 @@
 #include "dusk/file_select.hpp"
 #include "dusk/iso_validate.hpp"
 #include "dusk/main.h"
+#include "dusk/leveledit/enumerate.hpp"
 #include "dusk/settings.h"
 #include "dusk/update_check.hpp"
 #include "modal.hpp"
@@ -641,7 +642,7 @@ void ensure_initialized() noexcept {
     state.initialLanguage = getSettings().game.language;
     state.initialGraphicsBackend = getSettings().backend.graphicsBackend;
     state.initialCardFileType = getSettings().backend.cardFileType;
-    state.initialLevelEditor = getSettings().backend.enableLevelEditor;
+    state.initialLevelEditor = getSettings().backend.enableLevelEditor.getValue();
     state.errorString.clear();
     state.initialized = true;
     refresh_configured_disc_state();
@@ -755,6 +756,7 @@ Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementB
                 }
 
                 g_levelEditorSession = true;
+                dusk::leveledit::enable_session_fly_cam(true);
                 IsGameLaunched = true;
                 pop(false);
             });
@@ -809,44 +811,56 @@ Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementB
     });
 }
 
+void Prelaunch::try_show_restart_modal() {
+    if (!is_restart_pending()) {
+        // Nothing pending — allow a future toggle to prompt again (e.g. user
+        // dismissed "Restart later", then flipped Level Editor again).
+        mRestartSuppressed = false;
+        return;
+    }
+    if (mRestartSuppressed) {
+        return;
+    }
+
+    const auto dismiss = [this](Modal& modal) {
+        mRestartSuppressed = true;
+        modal.pop();
+    };
+    std::vector<ModalAction> actions;
+    if constexpr (dusk::SupportsProcessRestart) {
+        actions.push_back(ModalAction{
+            .label = "Restart later",
+            .onPressed = dismiss,
+        });
+        actions.push_back(ModalAction{
+            .label = "Restart now",
+            .onPressed = [](Modal&) { dusk::RequestRestart(); },
+        });
+    } else {
+        actions.push_back(ModalAction{
+            .label = "OK",
+            .onPressed = dismiss,
+        });
+    }
+    push(std::make_unique<Modal>(Modal::Props{
+        .title = "Apply Options",
+        .bodyRml =
+            dusk::SupportsProcessRestart ?
+                "A restart is required to apply selected options.<br/><br/>Restart now to "
+                "apply them immediately?" :
+                "A restart is required to apply selected options.<br/><br/>Close and reopen "
+                "Dusklight to apply them.",
+        .actions = std::move(actions),
+        .onDismiss = dismiss,
+    }));
+}
+
 void Prelaunch::show() {
     Document::show();
     mDocument->SetAttribute("open", "");
     mRoot->SetAttribute("open", "");
 
-    if (is_restart_pending() && !mRestartSuppressed) {
-        const auto dismiss = [this](Modal& modal) {
-            mRestartSuppressed = true;
-            modal.pop();
-        };
-        std::vector<ModalAction> actions;
-        if constexpr (dusk::SupportsProcessRestart) {
-            actions.push_back(ModalAction{
-                .label = "Restart later",
-                .onPressed = dismiss,
-            });
-            actions.push_back(ModalAction{
-                .label = "Restart now",
-                .onPressed = [](Modal&) { dusk::RequestRestart(); },
-            });
-        } else {
-            actions.push_back(ModalAction{
-                .label = "OK",
-                .onPressed = dismiss,
-            });
-        }
-        push(std::make_unique<Modal>(Modal::Props{
-            .title = "Apply Options",
-            .bodyRml =
-                dusk::SupportsProcessRestart ?
-                    "A restart is required to apply selected options.<br/><br/>Restart now to "
-                    "apply them immediately?" :
-                    "A restart is required to apply selected options.<br/><br/>Close and reopen "
-                    "Dusklight to apply them.",
-            .actions = std::move(actions),
-            .onDismiss = dismiss,
-        }));
-    }
+    try_show_restart_modal();
 }
 
 void Prelaunch::hide(bool close) {

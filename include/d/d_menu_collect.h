@@ -171,6 +171,9 @@ public:
     dMenu_save_c* getSaveScreen() { return mpSaveScrn; }
     J2DPicture* getBlackTex() { return mpBlackTex; }
     u8 getSubWindowOpenCheck() { return mSubWindowOpenCheck; }
+#if TARGET_PC
+    void clearSubWindowOpenCheck() { mSubWindowOpenCheck = 0; }
+#endif
 
 private:
     /* 0x004 */ JKRExpHeap* mpHeap;
@@ -300,6 +303,9 @@ public:
     virtual ~dMenu_Collect_c();
 
     u8 getSubWindowOpenCheck() { return mpCollect2D->getSubWindowOpenCheck(); }
+#if TARGET_PC
+    void clearSubWindowOpenCheck() { mpCollect2D->clearSubWindowOpenCheck(); }
+#endif
     bool isKeyCheck() { return mpCollect2D->isKeyCheck(); }
     bool isOutCheck() { return mpCollect2D->isOutCheck(); }
 

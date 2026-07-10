@@ -224,12 +224,6 @@ int daCrod_c::execute() {
             if (mAtCps.ChkAtHit()) {
                 fopAc_ac_c* hit_ac = mAtCps.GetAtHitAc();
 
-#if TARGET_PC
-                // Lockout confuse throws never attach to statues.
-                if (dMeter2_isALBWLocked()) {
-                    setReturn();
-                } else
-#endif
                 if (player->checkCopyRodEquip() && hit_ac != NULL &&
                     (fopAcM_GetName(hit_ac) == fpcNm_CSTATUE_e ||
                      fopAcM_GetName(hit_ac) == fpcNm_CSTAF_e))

@@ -24,6 +24,8 @@ protected:
     bool handle_nav_command(Rml::Event& event, NavCommand cmd) override;
 
 private:
+    void try_show_restart_modal();
+
     bool mEntranceAnimationStarted = false;
     bool mRestartSuppressed = false;
     std::vector<std::unique_ptr<Button> > mMenuButtons;
@@ -51,6 +53,8 @@ struct PrelaunchState {
     std::string initialGraphicsBackend;
     int initialCardFileType = 0;
     // Level Editor (Phase 1) — value at init, for restart-pending detection.
+    // Compared with getValue() in is_restart_pending(); also drives the
+    // settings-row "modified" highlight (same pattern as language / graphics).
     bool initialLevelEditor = false;
     std::string errorString;
     std::string pendingDiscPath;

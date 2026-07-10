@@ -28,6 +28,7 @@
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_boss.h"
 #include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_shield.h"
 #endif
 
 static int plCutLRC[58] = {
@@ -567,6 +568,13 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         // ============================================
         // NEW CODE ENDS HERE
         // ============================================
+#endif
+
+#if TARGET_PC
+        // Successful shield bash arms +5% on the next damaging hit (any source).
+        if (i_AtInfo->mAttackPower > 0 && fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
+            dShield_tryConsumeBashNextHitBoost(i_AtInfo->mAttackPower);
+        }
 #endif
 
         if (i_AtInfo->mAttackPower != 0) {

@@ -8,6 +8,34 @@
 #include "f_op/f_op_kankyo_mng.h"
 #if TARGET_PC
 #include "d/d_albw_outfit_stats.h"
+#include "dusk/logging.h"
+#endif
+
+#if TARGET_PC
+namespace {
+// Rate-limited swim surface diagnostics → dusklight-<ts>.log (search ALBW-SWIM).
+int sAlbwSwimSurfLogCooldown = 0;
+
+void albwSwimSurfLog(const char* where, const daAlink_c* link, const char* action) {
+    if (sAlbwSwimSurfLogCooldown > 0) {
+        --sAlbwSwimSurfLogCooldown;
+        return;
+    }
+    sAlbwSwimSurfLogCooldown = 20;  // ~1/3s at 60fps; still catches every force path
+
+    const f32 depth = link->mWaterY - link->current.pos.y;
+    DuskLog.debug(
+        "ALBW-SWIM {} action={} proc={} swimUp={} zoraWear={} zoraSwim={} "
+        "field3000={} pitch={:#x} depth={:.1f} spdY={:.2f} groundDepth={:.1f} "
+        "outfitSub={} diveIntent={}",
+        where, action, (int)link->mProcID, link->checkSwimUp() ? 1 : 0,
+        link->checkZoraWearAbility() ? 1 : 0, link->getZoraSwim() ? 1 : 0,
+        (int)link->field_0x3000, (u16)link->field_0x3080, depth, link->speed.y,
+        link->mWaterY - link->mLinkAcch.GetGroundH(),
+        dAlbwOutfitStats_isSubmergedHumanSwim(link) ? 1 : 0,
+        dAlbwOutfitStats_hasActiveDiveIntent(link) ? 1 : 0);
+}
+}  // namespace
 #endif
 
 BOOL daAlink_c::checkZoraWearMaskDraw() {
@@ -332,7 +360,15 @@ void daAlink_c::setSpeedAndAngleSwim() {
 }
 
 int daAlink_c::checkNextActionSwim() {
-    if (checkSwimButtonMove() && getZoraSwim()) {
+    // Refresh underwater stroke window. Vanilla only did this for Zora's ANM_SWIM_C;
+    // Outfit Stats non-Zora: only while clearly below the waterline (not shore swim).
+    if (checkSwimButtonMove() &&
+        (getZoraSwim()
+#if TARGET_PC
+         || (dAlbwOutfitStats_isSubmergedHumanSwim(this) &&
+             (mWaterY - current.pos.y) > kAlbwOutfitStatsWaterlineSoftDepth)
+#endif
+         )) {
         field_0x3000 = 30;
     }
 
@@ -488,6 +524,14 @@ int daAlink_c::checkSwimAction(int param_0) {
                 return procWolfSwimUpInit();
             }
 
+#if TARGET_PC
+            // Outfit Stats: non-Zora water entry skips ANM_SWIM_RESURFACE.
+            if (dAlbwOutfitStats_allowsSubmergedSwim(this) && !checkZoraWearAbility()) {
+                albwSwimSurfLog("checkSwimAction", this, "entry_softWait");
+                return procSwimWaitInit(1);
+            }
+#endif
+            albwSwimSurfLog("checkSwimAction", this, "entry_procSwimUp");
             return procSwimUpInit();
         }
     } else if (!checkNoResetFlg0(FLG0_SWIM_UP) && !checkBootsOrArmorHeavy() && !checkPossibleWaterInMode() && !checkModeFlg(0x40000)) {
@@ -500,9 +544,8 @@ int daAlink_c::checkSwimAction(int param_0) {
         }
 
 #if TARGET_PC
-        if (dAlbwOutfitStats_isSubmergedHumanSwim(this)) {
-            return procSwimWaitInit(0);
-        }
+        // Geometry land-exit: never block for Outfit Stats (shore / ledge stand).
+        albwSwimSurfLog("checkSwimAction", this, "ALLOW_shallowExit");
 #endif
 
         swimOutAfter(0);
@@ -552,14 +595,42 @@ int daAlink_c::checkSwimUpAction() {
     if (!checkBootsOrArmorHeavy() && !checkNoResetFlg0(FLG0_SWIM_UP)) {
         if (speed.y >= 0.0f && mWaterY - current.pos.y < var_f31) {
 #if TARGET_PC
-            if (!dAlbwOutfitStats_isSubmergedHumanSwim(this))
-#endif
-            {
-                if (checkWolf()) {
-                    return procWolfSwimUpInit();
-                } else {
-                    return procSwimUpInit();
+            // Dive sustain vs shore:
+            // - Active dive / mid-depth stroke → stay submerged (no snap).
+            // - Idle at waterline only → soft-surface (no ANM_SWIM_RESURFACE).
+            // - Mid float-up band without dive intent → hold submerged (do NOT
+            //   soft-surface; that was killing Ordon dives at depth ~19).
+            if (dAlbwOutfitStats_allowsSubmergedSwim(this) && !checkZoraWearAbility()) {
+                const f32 depth = mWaterY - current.pos.y;
+                if (dAlbwOutfitStats_hasActiveDiveIntent(this)) {
+                    albwSwimSurfLog("checkSwimUpAction", this, "BLOCK_floatUp");
+                    return 0;
                 }
+
+                if (depth <= kAlbwOutfitStatsWaterlineSoftDepth) {
+                    albwSwimSurfLog("checkSwimUpAction", this, "ALLOW_softSurface");
+                    speed.y = 0.0f;
+                    current.pos.y = mWaterY;
+                    onNoResetFlg0(FLG0_SWIM_UP);
+                    mZ2Link.setInWater(false);
+                    field_0x3000 = 0;
+                    return procSwimWaitInit(0);
+                }
+
+                albwSwimSurfLog("checkSwimUpAction", this, "HOLD_submerged");
+                return 0;
+            }
+#endif
+            if (checkWolf()) {
+#if TARGET_PC
+                albwSwimSurfLog("checkSwimUpAction", this, "wolfSwimUp");
+#endif
+                return procWolfSwimUpInit();
+            } else {
+#if TARGET_PC
+                albwSwimSurfLog("checkSwimUpAction", this, "procSwimUp");
+#endif
+                return procSwimUpInit();
             }
         }
     }
@@ -655,9 +726,8 @@ int daAlink_c::checkSwimOutAction() {
 
     if (!checkNoResetFlg0(FLG0_UNK_80) || mWaterY - mLinkAcch.GetGroundH() <= var_f31 - 5.0f) {
 #if TARGET_PC
-        if (dAlbwOutfitStats_isSubmergedHumanSwim(this)) {
-            return 0;
-        }
+        // Geometry land-exit: always allow (stand / ledge). Never gate on dive intent.
+        albwSwimSurfLog("checkSwimOutAction", this, "ALLOW_shallowEject");
 #endif
         current.pos.y = mWaterY;
         swimOutAfter(1);
@@ -876,7 +946,15 @@ void daAlink_c::setSwimMoveAnime() {
     maxFallSpeed = getSwimMaxFallSpeed();
 
     if (anm == ANM_SWIM_C || anm == ANM_SWIM_ZORA_START) {
-        if (!checkZoraWearAbility()) {
+#if TARGET_PC
+        // Vanilla non-Zora locks pitch to -0x3800 (look up). With Outfit Stats pitch-Y
+        // buoyancy that constantly surfaces (~spdY +12). Use Zora stick pitch instead.
+        const bool freePitchSwim =
+            checkZoraWearAbility() || dAlbwOutfitStats_isSubmergedHumanSwim(this);
+#else
+        const bool freePitchSwim = checkZoraWearAbility();
+#endif
+        if (!freePitchSwim) {
             if (field_0x3080 != -0x3800) {
                 setOldRootQuaternion(0x4000, 0, 0);
             }
@@ -901,7 +979,11 @@ void daAlink_c::setSwimMoveAnime() {
         field_0x3080 = 0;
         mProcVar4.field_0x3010 = 0;
 
-        if (!checkZoraWearAbility()) {
+        if (!checkZoraWearAbility()
+#if TARGET_PC
+            && !dAlbwOutfitStats_isSubmergedHumanSwim(this)
+#endif
+        ) {
             mNormalSpeed = 0.0f;
         }
     }
@@ -946,6 +1028,28 @@ void daAlink_c::setSwimUpDownOffset() {
 }
 
 int daAlink_c::procSwimUpInit() {
+#if TARGET_PC
+    // Outfit Stats: non-Zora never plays ANM_SWIM_RESURFACE.
+    // Active dive → refuse. Idle submerged / water entry → soft surface wait.
+    if (dAlbwOutfitStats_allowsSubmergedSwim(this) && !checkZoraWearAbility()) {
+        if (dAlbwOutfitStats_hasActiveDiveIntent(this)) {
+            albwSwimSurfLog("procSwimUpInit", this, "REFUSE_diveIntent");
+            return 0;
+        }
+
+        albwSwimSurfLog("procSwimUpInit", this, "ALLOW_softWait");
+        speed.y = 0.0f;
+        current.pos.y = mWaterY;
+        field_0x3080 = 0;
+        onNoResetFlg0(FLG0_SWIM_UP);
+        mZ2Link.setInWater(false);
+        field_0x3000 = 0;
+        field_0x3480 = mpHIO->mSwim.m.mStartHeight;
+        swimDeleteItem();
+        return procSwimWaitInit(1);
+    }
+    albwSwimSurfLog("procSwimUpInit", this, "vanilla_resurface");
+#endif
     commonProcInit(PROC_SWIM_UP);
 
     if (field_0x3000 != 0 && !checkZoraWearAbility()
@@ -1155,6 +1259,14 @@ int daAlink_c::procSwimMove() {
     if (checkUpSwimButtonAccept() && doButton()) {
         field_0x3000 = 30;
     }
+#if TARGET_PC
+    // Outfit Stats: refresh stroke only while below the waterline soft-surface band.
+    else if (dAlbwOutfitStats_isSubmergedHumanSwim(this) && checkSwimButtonAccept() &&
+             doButton() &&
+             (mWaterY - current.pos.y) > kAlbwOutfitStatsWaterlineSoftDepth) {
+        field_0x3000 = 30;
+    }
+#endif
 
     setSwimMoveAnime();
 

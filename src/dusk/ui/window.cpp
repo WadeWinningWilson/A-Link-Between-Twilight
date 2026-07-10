@@ -172,11 +172,15 @@ void Window::refresh_active_tab() {
 
 void Window::add_tab(const Rml::String& title, TabBuilder builder) {
     mTabBar->add_tab(title, [this, builder = std::move(builder)] {
-        clear_content();
-        if (builder) {
-            builder(mContentRoot);
-        }
+        replace_content(builder);
     });
+}
+
+void Window::replace_content(TabBuilder builder) {
+    clear_content();
+    if (builder) {
+        builder(mContentRoot);
+    }
 }
 
 void Window::clear_content() noexcept {

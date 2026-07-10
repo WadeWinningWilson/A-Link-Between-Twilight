@@ -27,8 +27,9 @@
 #include "m_Do/m_Do_controller_pad.h"
 
 #ifdef TARGET_PC
-#include "dusk/frame_interpolation.h"
 #include "dusk/action_bindings.h"
+#include "dusk/frame_interpolation.h"
+#include "dusk/main.h"
 #endif
 
 class dDlst_MENU_CAPTURE_c : public dDlst_base_c {
@@ -767,6 +768,16 @@ void dMw_c::collect_open_proc() {
 }
 
 void dMw_c::collect_move_proc() {
+#if TARGET_PC
+    // Level Editor — belt deny before COLLECT_CLOSE fade (1x.1). If Save was
+    // somehow requested, clear it here so we never fade-out→SAVE_OPEN.
+    if (dusk::g_levelEditorSession && mpMenuCollect->getSubWindowOpenCheck() == 1) {
+        Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        mpMenuCollect->clearSubWindowOpenCheck();
+        mpMenuCollect->_move();
+        return;
+    }
+#endif
     if (mpMenuCollect->getSubWindowOpenCheck()) {
         mMenuProc = COLLECT_CLOSE;
     } else if ((dMw_isPush_S_Button() && !mpMenuCollect->isKeyCheck()) || mpMenuCollect->isOutCheck()) {
@@ -779,6 +790,20 @@ void dMw_c::collect_move_proc() {
 void dMw_c::collect_close_proc() {
     if (mDoGph_gInf_c::getFader()->getStatus() == 0) {
         if (mpMenuCollect->getSubWindowOpenCheck() == 1) {
+#if TARGET_PC
+            // Level Editor — required secondary deny (1x.1). Primary deny is in
+            // wait_proc / pointerActivateCurrent; this catches any path that
+            // still set check==1 (brittle Save-icon coords) so SAVE_OPEN never
+            // runs. collect_close_init already faded out — fade back in and
+            // stay on collect (collect was not deleted; only SAVE_OPEN deletes).
+            if (dusk::g_levelEditorSession) {
+                Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+                mpMenuCollect->clearSubWindowOpenCheck();
+                dMw_fade_in();
+                mMenuProc = COLLECT_MOVE;
+                return;
+            }
+#endif
             mMenuProc = SAVE_OPEN;
         } else if (mpMenuCollect->getSubWindowOpenCheck() == 2) {
             mMenuProc = OPTIONS_OPEN;

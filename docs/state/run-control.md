@@ -10,15 +10,15 @@ User (or later `run-control.ps1`) is the only authority that changes `mode`.
 
 | Field | Value |
 |-------|--------|
-| **mode** | idle |
-| **run_name** | — |
-| **run_doc** | — |
-| **feature_state** | — |
-| **active_workers** | — |
+| **mode** | running |
+| **run_name** | Level Editor — Cursor ↔ Claude |
+| **run_doc** | docs/Interconnected Chats/Level-Editor-Cursor-Claude.md |
+| **feature_state** | docs/state/level-editor.md |
+| **active_workers** | cursor,claude |
 | **drive_in_scope** | no |
 | **pause_question** | — |
 | **drive_pid** | — |
-| **updated** | — |
+| **updated** | 2026-07-09 |
 
 ---
 

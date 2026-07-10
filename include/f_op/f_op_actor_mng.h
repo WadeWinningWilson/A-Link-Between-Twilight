@@ -822,7 +822,7 @@ void fopAcM_setWarningMessage_f(const fopAc_ac_c* i_actor, const char* i_filenam
 #define fopAcM_setWarningMessage(...)
 #endif
 
-BOOL fopAcM_getNameString(const fopAc_ac_c*, char*);
+BOOL fopAcM_getNameString(const fopAc_ac_c*, TEXT_SPAN);
 
 inline void fopAcM_SetStatusMap(fopAc_ac_c*, u32) {}
 

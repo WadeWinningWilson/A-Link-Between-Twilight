@@ -298,15 +298,14 @@ int daAlink_c::procCopyRodSubject() {
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
-    // Drain the ALBW meter while actively controlling a statue.
-    // getCopyRodControllActor() is non-NULL only when the rod is
-    // thrown and linked to a statue — that's the window we bill.
-    // If the meter is fully depleted, force-recall the rod
-    // (restores mItemAcKeep from mCopyRodAcKeep) so the control
-    // state exits naturally on the next checkNextAction() call.
+    // Drain ALBW while controlling a statue (pre-lockout only).
+    // During lockout, statue control is free so vanilla Dom Rod
+    // abilities remain usable alongside confuse throws.
     // ============================================
     if (getCopyRodControllActor() != NULL) {
-        if (dMeter2_isALBWDepleted()) {
+        if (dMeter2_isALBWLocked()) {
+            // Free control during lockout — no drain / no force-recall.
+        } else if (dMeter2_isALBWDepleted()) {
             returnCopyRod();
         } else {
             dMeter2_onALBWDomRod();
@@ -370,12 +369,13 @@ int daAlink_c::procCopyRodMove() {
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
-    // Same drain / force-recall logic as procCopyRodSubject() above.
-    // Both procs run while the statue is under control; we bill in both
-    // so the meter drains whether Link is standing still or walking.
+    // Same drain / force-recall as procCopyRodSubject (pre-lockout only).
+    // Lockout: free statue control alongside confuse perk.
     // ============================================
     if (getCopyRodControllActor() != NULL) {
-        if (dMeter2_isALBWDepleted()) {
+        if (dMeter2_isALBWLocked()) {
+            // Free control during lockout — no drain / no force-recall.
+        } else if (dMeter2_isALBWDepleted()) {
             returnCopyRod();
         } else {
             dMeter2_onALBWDomRod();

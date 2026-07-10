@@ -823,6 +823,29 @@ void dMenu_save_c::memCardWatch() {
 void dMenu_save_c::saveQuestion() {
     if (YesNoSelect()) {
         if (mYesNoCursor == CURSOR_YES) {
+#if TARGET_PC
+            // Level Editor — deny saveQuestion Yes (1x.1). Used by game-over /
+            // ending prompts (TYPE_WHITE/BLACK_EVENT), not field statues (TP
+            // has none). Buzzer + existing No/cancel branch; no SaveSync hang.
+            if (dusk::g_levelEditorSession) {
+                Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+                switch (mUseType) {
+                case TYPE_WHITE_EVENT:
+                    mEndStatus = 1;
+                    mSaveStatus = 3;
+                    mMenuProc = PROC_SAVE_WAIT;
+                    break;
+                case TYPE_BLACK_EVENT:
+                    field_0x2190 = 0;
+                    msgTxtSet(0x4E4, true);  // To save your progress, press START then choose Save
+                    mMenuProc = PROC_SAVE_GUIDE;
+                    break;
+                default:
+                    break;
+                }
+                return;
+            }
+#endif
             field_0x1c0 = 1;
 
             J2DPane* pane = mSaveSel.Scr->search(MULTI_CHAR('Nm_02'));

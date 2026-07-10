@@ -7,9 +7,13 @@
 #include "button.hpp"
 #include "d/actor/d_a_player.h"
 #include "d/d_albw_outfit.h"
+#include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
 #include "d/d_meter2_info.h"
 #include "dusk/config.hpp"
+#include "dusk/leveledit/enumerate.hpp"
+#include "dusk/logging.h"
+#include "dusk/main.h"
 #include "dusk/map_loader_definitions.h"
 #include "dusk/custom_assets.hpp"
 #include "dusk/settings.h"
@@ -28,6 +32,8 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1435,6 +1441,346 @@ static Rml::String wwItemmdlViewerLabel() {
 
 }  // namespace
 
+// Bug gate 2 — Stage tab deferred refresh + RAII alive (dual APPROVED).
+// Raw Pane*/Button* are only safe while alive==true (flipped false before
+// mContentComponents destroy on hide/clear_content/dtor).
+struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::StageTabState> {
+    // G2: one expanded name-group at a time; rows capped (show more raises limit).
+    static constexpr size_t kPerGroupCap = 150;
+
+    Pane* left = nullptr;
+    Pane* right = nullptr;
+    Button* flyCamBtn = nullptr;
+    bool needsRefresh = false;
+    bool alive = true;
+    std::string expandedName;  // empty = all groups collapsed
+    size_t expandedLimit = kPerGroupCap;
+    std::string scrollToName;  // gate 5: ScrollIntoView this header after rebuild
+
+    void invalidate(const char* reason) noexcept {
+        DuskLog.info("StageTab invalidate reason={} alive={} left={} right={} fly={} needs={}",
+                     reason, alive, static_cast<const void*>(left),
+                     static_cast<const void*>(right), static_cast<const void*>(flyCamBtn),
+                     needsRefresh);
+        alive = false;
+        needsRefresh = false;
+        expandedName.clear();
+        expandedLimit = kPerGroupCap;
+        scrollToName.clear();
+        left = nullptr;
+        right = nullptr;
+        flyCamBtn = nullptr;
+        dusk::leveledit::set_selection_detail_handler({});
+    }
+
+    static void fill_selection_detail(Pane* right, const dusk::leveledit::PlacedActor& sel) {
+        right->clear();
+        right->add_section(sel.name);
+        right->add_rml(dusk::leveledit::format_placed_actor_detail_rml(sel));
+    }
+
+    static const char* fly_cam_label() {
+        return dusk::leveledit::session_fly_cam_enabled() ? "Fly Cam: On (click to disable)"
+                                                          : "Fly Cam: Off (click to enable)";
+    }
+
+    void refresh() {
+        if (!alive || left == nullptr || right == nullptr) {
+            DuskLog.info("StageRefresh skipped alive={} left={} right={}", alive,
+                         static_cast<const void*>(left), static_cast<const void*>(right));
+            return;
+        }
+        DuskLog.info("StageRefresh begin left={} right={}", static_cast<const void*>(left),
+                     static_cast<const void*>(right));
+        left->clear();
+        right->clear();
+        flyCamBtn = nullptr;
+
+        auto self = shared_from_this();
+        dusk::leveledit::set_selection_detail_handler([self](const dusk::leveledit::PlacedActor& sel) {
+            if (!self->alive || self->right == nullptr) {
+                return;
+            }
+            fill_selection_detail(self->right, sel);
+        });
+
+        auto result = dusk::leveledit::enumerate_room_actors();
+        const char* srcLabel =
+            result.source == dusk::leveledit::EnumSource::Buffer ? "buffer" : "live fallback";
+        int joinedCount = 0;
+        int unspawnedCount = 0;
+        int spawnPointCount = 0;
+        for (const auto& a : result.actors) {
+            if (a.isSpawnPoint) {
+                ++spawnPointCount;
+            } else if (a.unspawned) {
+                ++unspawnedCount;
+            } else {
+                ++joinedCount;
+            }
+        }
+
+        left->add_section(fmt::format(
+            "{} · {} placed · {} joined · {} unspawned · {} PLYR · "
+            "{} live-in-room · room {}",
+            srcLabel, result.actors.size(), joinedCount, unspawnedCount, spawnPointCount,
+            result.liveActorsInRoom, dComIfGp_roomControl_getStayNo()));
+        left->add_rml(fmt::format(
+            "Resource: <b>{}</b><br/>"
+            "List = authored placements. Kill an enemy → Refresh → that row becomes "
+            "<b>unspawned</b> (join is live).",
+            result.resourceKey));
+
+        // Option B: defer rebuild — never clear() from this callback.
+        left->add_button("Refresh").on_pressed([self] {
+            if (!self->alive) {
+                return;
+            }
+            DuskLog.info("StageRefresh queued");
+            // Collapse groups on full re-enum (bounded teardown).
+            self->expandedName.clear();
+            self->expandedLimit = kPerGroupCap;
+            self->needsRefresh = true;
+        });
+        left->add_button("Clear selection").on_pressed([self] {
+            dusk::leveledit::clear_selection();
+            if (self->alive && self->right != nullptr) {
+                self->right->clear();
+            }
+            DuskLog.info("StageSelection cleared");
+        });
+
+        // Option A: toggle latch + in-place label; no refresh().
+        auto& flyBtn = left->add_button(fly_cam_label());
+        flyCamBtn = &flyBtn;
+        flyBtn.on_pressed([self] {
+            if (!self->alive || self->flyCamBtn == nullptr) {
+                return;
+            }
+            dusk::leveledit::enable_session_fly_cam(!dusk::leveledit::session_fly_cam_enabled());
+            DuskLog.info("StageFlyCam toggle enabled={} btn={}",
+                         dusk::leveledit::session_fly_cam_enabled(),
+                         static_cast<const void*>(self->flyCamBtn));
+            self->flyCamBtn->set_text(fly_cam_label());
+        });
+
+        auto shared = std::make_shared<dusk::leveledit::EnumerateResult>(std::move(result));
+        const size_t total = shared->actors.size();
+
+        // G2: group by actor name (proc as secondary label). Collapsed headers only
+        // until expand — expand/collapse queues deferred refresh (gate-3).
+        std::map<std::string, std::vector<size_t>> groups;
+        for (size_t i = 0; i < shared->actors.size(); ++i) {
+            groups[shared->actors[i].name].push_back(i);
+        }
+
+        left->add_rml(fmt::format(
+            "<i>{} name groups · expand one group (max {} rows + Show more). "
+            "chunkTag / layer on each row.</i>",
+            groups.size(), kPerGroupCap));
+
+        size_t rowButtons = 0;
+        Button* scrollTarget = nullptr;
+        Button* firstRowUnderScroll = nullptr;
+        for (const auto& [name, indices] : groups) {
+            const bool expanded = (expandedName == name);
+            s16 procSample = -1;
+            if (!indices.empty() && indices.front() < shared->actors.size()) {
+                procSample = shared->actors[indices.front()].procname;
+            }
+            const Rml::String header = fmt::format(
+                "{} {} ({}) · proc {}", expanded ? "[-]" : "[+]", name, indices.size(), procSample);
+            auto& headerBtn = left->add_button(header);
+            if (!scrollToName.empty() && scrollToName == name) {
+                scrollTarget = &headerBtn;
+            }
+            headerBtn.on_pressed([self, name] {
+                if (!self->alive) {
+                    return;
+                }
+                // Always scroll back to this header after rebuild (expand or collapse).
+                self->scrollToName = name;
+                if (self->expandedName == name) {
+                    self->expandedName.clear();
+                    self->expandedLimit = kPerGroupCap;
+                } else {
+                    self->expandedName = name;
+                    self->expandedLimit = kPerGroupCap;
+                }
+                DuskLog.info("StageGroupExpand queued name={} open={}", name,
+                             !self->expandedName.empty());
+                self->needsRefresh = true;
+            });
+
+            if (!expanded) {
+                continue;
+            }
+
+            const size_t shown = std::min(indices.size(), expandedLimit);
+            for (size_t j = 0; j < shown; ++j) {
+                const size_t i = indices[j];
+                const auto& a = shared->actors[i];
+                const char* status = a.isSpawnPoint ? " · spawn"
+                                    : a.unspawned   ? " · unspawned"
+                                                    : " · live";
+                const Rml::String label = fmt::format("{} · #{} · L{}{}", a.chunkTag, a.setID,
+                                                      a.layer, status);
+                ++rowButtons;
+                auto& rowBtn = left->add_button(label);
+                if (scrollTarget != nullptr && firstRowUnderScroll == nullptr && j == 0 &&
+                    scrollToName == name) {
+                    firstRowUnderScroll = &rowBtn;
+                }
+                rowBtn.on_pressed([self, shared, i] {
+                    if (!self->alive || self->right == nullptr) {
+                        return;
+                    }
+                    if (i >= shared->actors.size()) {
+                        return;
+                    }
+                    const auto& sel = shared->actors[i];
+                    dusk::leveledit::set_selected_index(static_cast<int>(i));
+                    dusk::leveledit::set_selection_snapshot(sel, true);
+                });
+            }
+            if (indices.size() > shown) {
+                left->add_button(fmt::format("Show more ({} remaining in {})",
+                                             indices.size() - shown, name))
+                    .on_pressed([self, name] {
+                        if (!self->alive) {
+                            return;
+                        }
+                        self->scrollToName = name;
+                        self->expandedLimit += kPerGroupCap;
+                        DuskLog.info("StageGroupShowMore queued limit={}", self->expandedLimit);
+                        self->needsRefresh = true;
+                    });
+            }
+        }
+
+        // Gate 5 S1/S3: after rebuild, land on toggled header (+ first row if expanded).
+        if (scrollTarget != nullptr && scrollTarget->root() != nullptr) {
+            scrollTarget->root()->ScrollIntoView(Rml::ScrollIntoViewOptions{
+                Rml::ScrollAlignment::Start,
+                Rml::ScrollAlignment::Nearest,
+                Rml::ScrollBehavior::Instant,
+                Rml::ScrollParentage::Closest,
+            });
+            if (firstRowUnderScroll != nullptr && firstRowUnderScroll->root() != nullptr) {
+                firstRowUnderScroll->root()->ScrollIntoView(Rml::ScrollIntoViewOptions{
+                    Rml::ScrollAlignment::Nearest,
+                    Rml::ScrollAlignment::Nearest,
+                    Rml::ScrollBehavior::Instant,
+                    Rml::ScrollParentage::Closest,
+                });
+            }
+            DuskLog.info("StageScrollIntoView name={}", scrollToName.c_str());
+        }
+        scrollToName.clear();
+
+        DuskLog.info("StageRefresh end actors={} groups={} expanded={} rowButtons={}", total,
+                     groups.size(), expandedName.empty() ? "(none)" : expandedName.c_str(),
+                     rowButtons);
+    }
+
+    void drain_deferred_refresh() {
+        // No per-frame log — only breadcrumb when a deferred rebuild actually runs.
+        if (!alive || !needsRefresh) {
+            return;
+        }
+        DuskLog.info("StageTick drain alive={} left={} right={}", alive,
+                     static_cast<const void*>(left), static_cast<const void*>(right));
+        needsRefresh = false;
+        if (left == nullptr || right == nullptr) {
+            return;
+        }
+        refresh();
+    }
+};
+
+void EditorWindow::teardown_stage_tab(const char* reason) noexcept {
+    DuskLog.info("EditorStageTeardown reason={} hasTick={} hasState={}", reason,
+                 static_cast<bool>(mStageTabTick), static_cast<bool>(mStageTabState));
+    mStageTabTick = nullptr;
+    if (mStageTabState) {
+        mStageTabState->invalidate(reason);
+        mStageTabState.reset();
+    }
+    // Keep selection for in-world highlight after Editor/Stage closes (1a).
+    // Drop only the live pointer — placement pos remains; draw re-resolves or uses pos.
+    dusk::leveledit::set_selection_detail_handler({});
+    dusk::leveledit::detach_selection_live();
+}
+
+void EditorWindow::clear_content_now(const char* reason) noexcept {
+    teardown_stage_tab(reason);
+    const size_t n = mContentComponents.size();
+    Window::clear_content();
+    DuskLog.info("StageContentCleared reason={} components={}", reason, n);
+}
+
+void EditorWindow::drain_deferred_ui() {
+    // Order: clear/rebuild first (leave Stage), then hide — all outside Rml dispatch.
+    if (mPendingClearOnly) {
+        mPendingClearOnly = false;
+        clear_content_now("deferred_clear");
+    }
+    if (mPendingTabBuilder) {
+        auto builder = std::move(*mPendingTabBuilder);
+        mPendingTabBuilder.reset();
+        clear_content_now("deferred_tab_replace");
+        if (builder) {
+            builder(mContentRoot);
+        }
+        DuskLog.info("StageContentRebuilt deferred");
+    }
+    if (mPendingHide) {
+        const bool close = mPendingHideClose;
+        mPendingHide = false;
+        mPendingHideClose = false;
+        DuskLog.info("EditorHide deferred close={} visible={}", close, visible());
+        // Gate 4: clear Stage widget list BEFORE Window::hide / document teardown.
+        clear_content_now(close ? "hide_clear_close" : "hide_clear");
+        Window::hide(close);
+    }
+}
+
+void EditorWindow::update() {
+    drain_deferred_ui();
+    if (mStageTabTick) {
+        mStageTabTick();
+    }
+    Window::update();
+}
+
+void EditorWindow::hide(bool close) {
+    // Defer hide so Transitionend / close click is not mid-destroy of Stage list.
+    DuskLog.info("EditorHide queue close={} visible={}", close, visible());
+    mPendingHide = true;
+    mPendingHideClose = close;
+}
+
+void EditorWindow::clear_content() noexcept {
+    // Called from tab switch path only via replace_content now; keep sync path
+    // for any direct callers — still tear down Stage state immediately.
+    clear_content_now("clear_content_sync");
+}
+
+void EditorWindow::replace_content(TabBuilder builder) {
+    // Gate 3 H-B: never destroy hundreds of Stage buttons inside tab Click.
+    DuskLog.info("EditorReplaceContent queue");
+    mPendingClearOnly = false;
+    mPendingTabBuilder = std::move(builder);
+}
+
+EditorWindow::~EditorWindow() {
+    // Flush any pending work without going through Rml; then hard teardown.
+    mPendingTabBuilder.reset();
+    mPendingClearOnly = false;
+    mPendingHide = false;
+    teardown_stage_tab("dtor");
+}
+
 EditorWindow::EditorWindow() {
     add_tab("Player Status", [this](Rml::Element* content) {
         auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
@@ -1578,6 +1924,18 @@ EditorWindow::EditorWindow() {
                                               statusB->offTransformLV(i);
                                           }
                                       }
+                                  },
+                          });
+        add_toggle_button(leftPane,
+                          ToggleEntry{
+                              .text = "Dominion Rod Restored (Shad)",
+                              .isSelected =
+                                  [] {
+                                      return dComIfGs_isEventBit(dSv_event_flag_c::F_0302);
+                                  },
+                              .setSelected =
+                                  [](bool selected) {
+                                      set_event_bit(dSv_event_flag_c::F_0302, selected);
                                   },
                           });
 
@@ -2533,6 +2891,34 @@ EditorWindow::EditorWindow() {
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
     });
+
+    // ========================================================================
+    // Level Editor — Stage Inspector (1a). Gated on g_levelEditorSession.
+    // Zero mutation: enumerate + list + detail only.
+    // ========================================================================
+    if (g_levelEditorSession) {
+        add_tab("Stage", [this](Rml::Element* content) {
+            // Tab switch / reopen: drop any prior Stage state before new panes.
+            teardown_stage_tab("stage_tab_open");
+
+            auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
+            auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
+
+            auto state = std::make_shared<StageTabState>();
+            state->left = &leftPane;
+            state->right = &rightPane;
+            mStageTabState = state;
+            // weak_ptr: if Editor/Stage closes before the tick, lock fails.
+            mStageTabTick = [weak = std::weak_ptr<StageTabState>(state)] {
+                if (auto s = weak.lock()) {
+                    s->drain_deferred_refresh();
+                }
+            };
+            DuskLog.info("StageTab open left={} right={}", static_cast<const void*>(state->left),
+                         static_cast<const void*>(state->right));
+            state->refresh();
+        });
+    }
 }
 
 }  // namespace dusk::ui

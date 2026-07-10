@@ -30,6 +30,7 @@
 
 #if TARGET_PC
 #include "dusk/frame_interpolation.h"
+#include "dusk/leveledit/enumerate.hpp"
 #include "dusk/logging.h"
 #include "dusk/action_bindings.h"
 #include "dusk/mouse.h"
@@ -7526,7 +7527,14 @@ bool dCamera_c::isAimActive() {
 }
 
 bool dCamera_c::executeDebugFlyCam() {
-    if (!dusk::getSettings().game.debugFlyCam) {
+#if TARGET_PC
+    // Level Editor — session latch OR ConfigVar. Latch is toggleable and never
+    // written to config (unified plan pt 1).
+    const bool flyActive = dusk::leveledit::editor_fly_cam_active();
+#else
+    const bool flyActive = dusk::getSettings().game.debugFlyCam;
+#endif
+    if (!flyActive) {
         if (mDebugFlyCam.initialized) {
             deactivateDebugFlyCam();
         }
@@ -7540,7 +7548,17 @@ bool dCamera_c::executeDebugFlyCam() {
     }
 
     if (!mDebugFlyCam.initialized && (event->mEventStatus != 0 || dComIfGp_isPauseFlag())) {
+#if TARGET_PC
+        // Prefer clearing the session latch; only clear ConfigVar if that was
+        // the sole enable source.
+        if (dusk::leveledit::session_fly_cam_enabled()) {
+            dusk::leveledit::enable_session_fly_cam(false);
+        } else {
+            dusk::getSettings().game.debugFlyCam.setValue(false);
+        }
+#else
         dusk::getSettings().game.debugFlyCam.setValue(false);
+#endif
         return false;
     }
 

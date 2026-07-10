@@ -39,6 +39,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_midna.h"
 #include "dusk/action_bindings.h"
+#include "dusk/leveledit/enumerate.hpp"
 #include "dusk/memory.h"
 #include "dusk/settings.h"
 #include <chrono>
@@ -1479,7 +1480,7 @@ int dMeter2_c::_execute() {
 int dMeter2_c::_draw() {
     #if TARGET_PC
     if (dusk::getSettings().game.recordingMode || dusk::getSettings().game.minimalHUD ||
-        dusk::getSettings().game.debugFlyCam)
+        dusk::leveledit::editor_fly_cam_active())
     {
         return 1;
     }
@@ -2067,7 +2068,9 @@ void dMeter2_c::moveKantera() {
             sBombAmmo = false;
         } else if (sBoomThrow) {
             if (sALBWLocked) {
-                dMeter2_addALBWFraction(1, 5); // 20% meter refill during lockout
+                // 30% of base meter capacity during lockout.
+                sALBWMeter += (sOilBaseMax * 3) / 10;
+                albwRefreshLockoutState(false);
             } else {
                 albwDrainMeter(2725, sNow);
             }

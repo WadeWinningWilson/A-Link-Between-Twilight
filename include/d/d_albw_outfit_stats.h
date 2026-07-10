@@ -34,6 +34,12 @@ f32 dAlbwOutfitStats_scaleSwimSpeed(const daAlink_c* link, f32 speed);
 bool dAlbwOutfitStats_allowsSubmergedSwim(const daAlink_c* link);
 // Non-Zora submerged locomotion active now (outfit-stats dive path).
 bool dAlbwOutfitStats_isSubmergedHumanSwim(const daAlink_c* link);
+// True only while actually underwater with dive intent. Holding Swim at the
+// waterline (shore approach) must return false. Soft-surface uses a tighter
+// waterline threshold separately — see swim.inc.
+bool dAlbwOutfitStats_hasActiveDiveIntent(const daAlink_c* link);
+// Depth below which idle soft-surface is allowed (units).
+constexpr f32 kAlbwOutfitStatsWaterlineSoftDepth = 5.0f;
 
 // Zora water grace timer — call updateSwimState() from Link execute each frame.
 bool dAlbwOutfitStats_isZoraWaterBuffActive();

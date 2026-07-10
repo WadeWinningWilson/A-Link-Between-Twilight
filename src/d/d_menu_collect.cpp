@@ -38,6 +38,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_sumo_test.h"
+#include "dusk/main.h"
 #include "dusk/menu_pointer.h"
 #endif
 
@@ -1834,6 +1835,16 @@ void dMenu_Collect2D_c::wait_proc() {
     if (dMw_A_TRIGGER()) {
         if (mCursorX == 0 && mCursorY == 5) {
             if (mDoGph_gInf_c::getFader()->mStatus == 1) {
+#if TARGET_PC
+                // Level Editor — deny Save at selection (1x.1). Cursor stays;
+                // never open SAVE. Secondary never-enter-SAVE_OPEN guard lives
+                // in dMw_c::collect_close_proc.
+                if (dusk::g_levelEditorSession) {
+                    Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
+                                             -1.0f, 0);
+                    return;
+                }
+#endif
                 mSubWindowOpenCheck = 1;
                 Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_CHANGE_WINDOW, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
                                          -1.0f, 0);
@@ -1936,6 +1947,11 @@ void dMenu_Collect2D_c::wait_proc() {
 void dMenu_Collect2D_c::pointerActivateCurrent() {
     if (mCursorX == 0 && mCursorY == 5) {
         if (mDoGph_gInf_c::getFader()->mStatus == 1) {
+            // Level Editor — deny Save at selection (1x.1); pointer path.
+            if (dusk::g_levelEditorSession) {
+                Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+                return;
+            }
             mSubWindowOpenCheck = 1;
             Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_CHANGE_WINDOW, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
                                      -1.0f, 0);

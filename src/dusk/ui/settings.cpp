@@ -435,6 +435,8 @@ struct ConfigBoolProps {
     Rml::String helpText;
     std::function<void(bool)> onChange;
     std::function<bool()> isDisabled;
+    // Optional: override default "differs from default value" modified highlight.
+    std::function<bool()> isModified;
 };
 
 SelectButton& config_bool_select(
@@ -455,7 +457,10 @@ SelectButton& config_bool_select(
                 }
             },
         .isDisabled = std::move(props.isDisabled),
-        .isModified = [&var] { return var.getValue() != var.getDefaultValue(); },
+        .isModified =
+            props.isModified
+                ? std::move(props.isModified)
+                : std::function<bool()>{[&var] { return var.getValue() != var.getDefaultValue(); }},
     });
     leftPane.register_control(
         button, rightPane, [helpText = std::move(props.helpText)](Pane& pane) {
@@ -1753,6 +1758,13 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     [] {
                         return getSettings().game.speedrunMode ||
                                !getSettings().backend.enableAdvancedSettings;
+                    },
+                // Dirty when differs from boot-time value (restart pending), same
+                // pattern as Language / Graphics Backend — not "differs from default".
+                .isModified =
+                    [] {
+                        return getSettings().backend.enableLevelEditor.getValue() !=
+                               prelaunch_state().initialLevelEditor;
                     },
             });
         config_bool_select(leftPane, rightPane, getSettings().game.showInputViewer,

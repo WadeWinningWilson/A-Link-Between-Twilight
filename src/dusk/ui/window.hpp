@@ -36,7 +36,9 @@ protected:
     void add_tab(const Rml::String& title, TabBuilder builder);
     void refresh_active_tab();
     void update_safe_area() noexcept;
-    void clear_content() noexcept;
+    virtual void clear_content() noexcept;
+    // Tab switch: default clears+builds sync. Editor defers off Rml dispatch (gate 3).
+    virtual void replace_content(TabBuilder builder);
     bool handle_nav_command(Rml::Event& event, NavCommand cmd) override;
     bool handle_content_nav(Rml::Event& event, NavCommand cmd) noexcept;
     bool mSuppressNavFallback = false;
