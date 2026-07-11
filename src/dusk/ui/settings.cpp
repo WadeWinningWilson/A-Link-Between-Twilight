@@ -98,6 +98,13 @@ constexpr std::array kParryIconModes = {
     "Shield Only",
 };
 
+constexpr std::array kShieldHudVisibilityModes = {
+    "Off",
+    "Durability Meter Always On",
+    "Parry Charge Always On",
+    "Durability + Parry",
+};
+
 constexpr std::array kLopHudModes = {
     "Off",
     "Vanilla Hearts",
@@ -1862,6 +1869,48 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "<b>Spur Only</b>: original Epona-spur graphic.<br/>"
                     "<b>Spur+Shield</b>: spur with your equipped shield's emblem.<br/>"
                     "<b>Shield Only</b>: just the shield emblem.");
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Shield HUD Visibility",
+                .getValue =
+                    [] {
+                        return kShieldHudVisibilityModes[static_cast<u8>(
+                            getSettings().game.shieldHudVisibility.getValue())];
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.shieldHudVisibility;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kShieldHudVisibilityModes.size()); ++i) {
+                    pane
+                        .add_button({
+                            .text = kShieldHudVisibilityModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.shieldHudVisibility.getValue() ==
+                                           static_cast<ShieldHudVisibility>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.shieldHudVisibility.setValue(
+                                static_cast<ShieldHudVisibility>(i));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>When the shield durability meter and parry charge icons appear.<br/><br/>"
+                    "<b>Off</b>: only while guarding (+ brief linger after).<br/>"
+                    "<b>Durability Meter Always On</b> / <b>Parry Charge Always On</b> / "
+                    "<b>Durability + Parry</b>: keep the chosen element(s) visible in the "
+                    "field.<br/><br/>"
+                    "Still hidden during cutscenes, dialogue, shops, pause, and other "
+                    "vanilla HUD-suppressed states. Requires the matching Shield Durability or "
+                    "Shield Parry feature to be enabled.");
             });
         config_bool_select(leftPane, rightPane, getSettings().game.bossHealthBars,
             {

@@ -71,6 +71,9 @@ public:
     void executeFall();
     void executeFindStay();
     void executeMoveOut();
+#if TARGET_PC
+    void executeConfuse();
+#endif
     bool checkWaterSurface();
     void action();
     void mtx_set();

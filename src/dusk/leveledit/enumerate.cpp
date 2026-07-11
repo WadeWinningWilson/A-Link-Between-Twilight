@@ -9,6 +9,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_debug_viewer.h"
 #include "d/d_stage.h"
+#include "d/d_camera.h"
 #include "dusk/main.h"
 #include "dusk/settings.h"
 #include "dusk/string.hpp"
@@ -24,8 +25,44 @@
 
 #include <fmt/format.h>
 
+#if TARGET_PC
+#include <aurora/rmlui.hpp>
+#include <RmlUi/Core/Element.h>
+#include <imgui.h>
+#include <SDL3/SDL_keyboard.h>
+#endif
+
 namespace dusk::leveledit {
 namespace {
+
+#if TARGET_PC
+bool rml_text_input_focused() {
+    auto* context = aurora::rmlui::get_context();
+    if (context == nullptr) {
+        return false;
+    }
+    const Rml::Element* focus = context->GetFocusElement();
+    if (focus == nullptr) {
+        return false;
+    }
+    const Rml::String& tag = focus->GetTagName();
+    return tag == "input" || tag == "textarea" || tag == "select";
+}
+
+bool scancode_pressed_edge(SDL_Scancode scancode) {
+    static bool s_prevDown[SDL_SCANCODE_COUNT]{};
+    if (scancode < 0 || scancode >= SDL_SCANCODE_COUNT) {
+        return false;
+    }
+    int keyCount = 0;
+    const bool* keys = SDL_GetKeyboardState(&keyCount);
+    const bool down =
+        keys != nullptr && scancode < keyCount && keys[scancode];
+    const bool edge = down && !s_prevDown[scancode];
+    s_prevDown[scancode] = down;
+    return edge;
+}
+#endif
 
 STATIC_ASSERT(sizeof(fopAcM_prmBase_class) == 0x18);
 STATIC_ASSERT(sizeof(stage_actor_data_class) == 0x20);
@@ -38,6 +75,8 @@ int sSelectedIndex = -1;
 bool sSelectionValid = false;
 PlacedActor sSelection{};
 bool sSessionFlyCam = false;
+bool sSessionSelectMode = false;
+bool sSessionPcHotkeys = true;
 SelectionDetailHandler sSelectionDetailHandler;
 
 struct LiveKey {
@@ -465,7 +504,17 @@ void draw_selection_highlight() {
     // Must be called from Draw (after BeforeOfDraw). Execute-time queues are
     // deleted by dDbVw_deleteDrawPacketList before paint — never visible.
     // Selection persists after Editor/Stage UI closes until clear_selection().
-    if (!g_levelEditorSession || !sSelectionValid) {
+    if (!g_levelEditorSession) {
+        return;
+    }
+
+    if (session_select_mode_enabled()) {
+        dDbVw_Report(20, 180, "SELECT MODE - V to exit");
+    } else if (editor_pc_hotkeys_active()) {
+        dDbVw_Report(20, 180, "PC hotkeys on - V = select mode");
+    }
+
+    if (!sSelectionValid) {
         return;
     }
 
@@ -512,6 +561,9 @@ void draw_selection_highlight() {
 
 void enable_session_fly_cam(bool enable) {
     sSessionFlyCam = enable;
+    if (!enable) {
+        enable_session_select_mode(false);
+    }
 }
 
 bool session_fly_cam_enabled() {
@@ -523,6 +575,52 @@ bool editor_fly_cam_active() {
         return false;
     }
     return sSessionFlyCam || dusk::getSettings().game.debugFlyCam.getValue();
+}
+
+void enable_session_select_mode(bool enable) {
+    if (!g_levelEditorSession) {
+        sSessionSelectMode = false;
+        return;
+    }
+    if (sSessionSelectMode == enable) {
+        return;
+    }
+    sSessionSelectMode = enable;
+    dCamera_c::resetEditorFlyCamMouseLook();
+}
+
+bool session_select_mode_enabled() {
+    return g_levelEditorSession && sSessionSelectMode && editor_fly_cam_active();
+}
+
+void enable_session_pc_hotkeys(bool enable) {
+    sSessionPcHotkeys = enable;
+}
+
+bool session_pc_hotkeys_enabled() {
+    return g_levelEditorSession && sSessionPcHotkeys;
+}
+
+bool editor_pc_hotkeys_active() {
+#if TARGET_PC
+    if (!session_pc_hotkeys_enabled() || rml_text_input_focused()) {
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
+void tick_editor_session_input() {
+#if TARGET_PC
+    if (!g_levelEditorSession || !editor_fly_cam_active() || !editor_pc_hotkeys_active()) {
+        return;
+    }
+    if (scancode_pressed_edge(SDL_SCANCODE_V)) {
+        enable_session_select_mode(!sSessionSelectMode);
+    }
+#endif
 }
 
 }  // namespace dusk::leveledit

@@ -382,6 +382,7 @@ template class ConfigImpl<dusk::MenuScaling>;
 template class ConfigImpl<dusk::Resampler>;
 template class ConfigImpl<dusk::MagicArmorMode>;
 template class ConfigImpl<dusk::ParryIcons>;
+template class ConfigImpl<dusk::ShieldHudVisibility>;
 template class ConfigImpl<dusk::LopHudMode>;
 template class ConfigImpl<dusk::ExtraItemSlotMode>;
 template class ConfigImpl<dusk::TrueAlbwMode>;

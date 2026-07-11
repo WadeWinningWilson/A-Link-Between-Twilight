@@ -7,11 +7,13 @@
 #include "button.hpp"
 #include "d/actor/d_a_player.h"
 #include "d/d_albw_outfit.h"
+#include "d/d_albw_potion.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
 #include "d/d_meter2_info.h"
 #include "dusk/config.hpp"
 #include "dusk/leveledit/enumerate.hpp"
+#include "dusk/ui/input.hpp"
 #include "dusk/logging.h"
 #include "dusk/main.h"
 #include "dusk/map_loader_definitions.h"
@@ -662,7 +664,7 @@ constexpr std::array<DefaultInventoryEntry, 22> defaultInventory = {
     DefaultInventoryEntry{SLOT_8, dItemNo_COPY_ROD_e},
     DefaultInventoryEntry{SLOT_9, dItemNo_HOOKSHOT_e},
     DefaultInventoryEntry{SLOT_10, dItemNo_W_HOOKSHOT_e},
-    DefaultInventoryEntry{SLOT_11, dItemNo_EMPTY_BOTTLE_e},
+    DefaultInventoryEntry{SLOT_11, dItemNo_RED_BOTTLE_e},
     DefaultInventoryEntry{SLOT_12, dItemNo_EMPTY_BOTTLE_e},
     DefaultInventoryEntry{SLOT_13, dItemNo_EMPTY_BOTTLE_e},
     DefaultInventoryEntry{SLOT_14, dItemNo_EMPTY_BOTTLE_e},
@@ -1451,6 +1453,8 @@ struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::
     Pane* left = nullptr;
     Pane* right = nullptr;
     Button* flyCamBtn = nullptr;
+    Button* selectModeBtn = nullptr;
+    Button* pcHotkeysBtn = nullptr;
     bool needsRefresh = false;
     bool alive = true;
     std::string expandedName;  // empty = all groups collapsed
@@ -1458,10 +1462,11 @@ struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::
     std::string scrollToName;  // gate 5: ScrollIntoView this header after rebuild
 
     void invalidate(const char* reason) noexcept {
-        DuskLog.info("StageTab invalidate reason={} alive={} left={} right={} fly={} needs={}",
+        DuskLog.info("StageTab invalidate reason={} alive={} left={} right={} fly={} select={} pc={} needs={}",
                      reason, alive, static_cast<const void*>(left),
                      static_cast<const void*>(right), static_cast<const void*>(flyCamBtn),
-                     needsRefresh);
+                     static_cast<const void*>(selectModeBtn),
+                     static_cast<const void*>(pcHotkeysBtn), needsRefresh);
         alive = false;
         needsRefresh = false;
         expandedName.clear();
@@ -1470,6 +1475,8 @@ struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::
         left = nullptr;
         right = nullptr;
         flyCamBtn = nullptr;
+        selectModeBtn = nullptr;
+        pcHotkeysBtn = nullptr;
         dusk::leveledit::set_selection_detail_handler({});
     }
 
@@ -1477,6 +1484,18 @@ struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::
         right->clear();
         right->add_section(sel.name);
         right->add_rml(dusk::leveledit::format_placed_actor_detail_rml(sel));
+    }
+
+    static const char* pc_hotkeys_label() {
+        return dusk::leveledit::session_pc_hotkeys_enabled()
+                   ? "PC Hotkeys: On (keyboard + mouse with controller)"
+                   : "PC Hotkeys: Off (UI blocks keyboard)";
+    }
+
+    static const char* select_mode_label() {
+        return dusk::leveledit::session_select_mode_enabled()
+                   ? "Select Mode: On (V or click to disable)"
+                   : "Select Mode: Off (V or click to enable)";
     }
 
     static const char* fly_cam_label() {
@@ -1495,6 +1514,8 @@ struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::
         left->clear();
         right->clear();
         flyCamBtn = nullptr;
+        selectModeBtn = nullptr;
+        pcHotkeysBtn = nullptr;
 
         auto self = shared_from_this();
         dusk::leveledit::set_selection_detail_handler([self](const dusk::leveledit::PlacedActor& sel) {
@@ -1562,6 +1583,39 @@ struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::
                          dusk::leveledit::session_fly_cam_enabled(),
                          static_cast<const void*>(self->flyCamBtn));
             self->flyCamBtn->set_text(fly_cam_label());
+        });
+
+        auto& selectBtn = left->add_button(select_mode_label());
+        selectModeBtn = &selectBtn;
+        selectBtn.on_pressed([self] {
+            if (!self->alive || self->selectModeBtn == nullptr) {
+                return;
+            }
+            if (!dusk::leveledit::editor_fly_cam_active()) {
+                DuskLog.info("StageSelectMode ignored — fly cam inactive");
+                return;
+            }
+            dusk::leveledit::enable_session_select_mode(
+                !dusk::leveledit::session_select_mode_enabled());
+            DuskLog.info("StageSelectMode toggle enabled={} btn={}",
+                         dusk::leveledit::session_select_mode_enabled(),
+                         static_cast<const void*>(self->selectModeBtn));
+            self->selectModeBtn->set_text(select_mode_label());
+        });
+
+        auto& pcBtn = left->add_button(pc_hotkeys_label());
+        pcHotkeysBtn = &pcBtn;
+        pcBtn.on_pressed([self] {
+            if (!self->alive || self->pcHotkeysBtn == nullptr) {
+                return;
+            }
+            dusk::leveledit::enable_session_pc_hotkeys(
+                !dusk::leveledit::session_pc_hotkeys_enabled());
+            DuskLog.info("StagePcHotkeys toggle enabled={} btn={}",
+                         dusk::leveledit::session_pc_hotkeys_enabled(),
+                         static_cast<const void*>(self->pcHotkeysBtn));
+            self->pcHotkeysBtn->set_text(pc_hotkeys_label());
+            dusk::ui::input::sync_input_block();
         });
 
         auto shared = std::make_shared<dusk::leveledit::EnumerateResult>(std::move(result));
@@ -2124,6 +2178,9 @@ EditorWindow::EditorWindow() {
             for (int slot = 0; slot < 24; ++slot) {
                 dComIfGs_setItem(slot, get_slot_default(slot));
             }
+#if TARGET_PC
+            dAlbwPotion_applyDefaultInventorySlot11();
+#endif
             rightPane.clear();
         }),
             rightPane, {});
@@ -2549,6 +2606,33 @@ EditorWindow::EditorWindow() {
                     "bootstrap. Change at file select or title — locked during field play." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
+        leftPane.add_section("ALBW WIP");
+        leftPane.register_control(
+            leftPane.add_child<BoolButton>(BoolButton::Props{
+                .key = "Soulbound Red Potion (Slot 11)",
+                .getValue = [] { return getSettings().game.albwSoulboundRedPotion.getValue(); },
+                .setValue =
+                    [](bool value) {
+                        getSettings().game.albwSoulboundRedPotion.setValue(value);
+                        config::Save();
+                        dAlbwPotion_editorSetSoulboundEnabled(value);
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.albwSoulboundRedPotion.getValue() !=
+                               getSettings().game.albwSoulboundRedPotion.getDefaultValue();
+                    },
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.clear();
+                pane.add_rml(
+                    "Dedicated red potion bottle in inventory <b>slot 11</b> (2 charges). "
+                    "<b>On</b> = set slot 11 to red potion; <b>Off</b> = remove red from slot "
+                    "11 and restore an empty bottle. Future slices add soulbound fill rules, "
+                    "multi-use drink, and move-while-drinking." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
         editor_bool_option(leftPane, rightPane, getSettings().game.bossRefinement, "Boss Refinement",
             "Treat Ordon, Wooden, and Master swords as valid boss swords (Zant, Ganondorf, "
             "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
@@ -2827,67 +2911,6 @@ EditorWindow::EditorWindow() {
                     "Iron Boots is a worn re-rigged model driven by the vanilla foot rig (scale is "
                     "baked in the asset, not this slider); applies on the next clothes rebuild: "
                     "change outfit or reload the area after selecting it." +
-                    Rml::String(kAlbwUnfinishedDisclaimer));
-            });
-        // ============================================
-        // NEW CODE — ALBW Port (Custom Models multi-toggle list)
-        // One row per immediate subfolder of <config>/model_replacements/. Each is a
-        // toggle (like sword/shield equip): highlighted = enabled, click again to
-        // disable. Disabled folders are skipped by both the loose-BMD injector
-        // (Layer B) and the whole-mod DVD overlay (Layer A). State is persisted in
-        // game.customModelsDisabled ('|'-delimited disabled names); a toggle
-        // rescans + re-installs the overlay set (reload-scoped).
-        // ============================================
-        leftPane.add_section("Custom Models");
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Custom Models",
-                .getValue =
-                    [] {
-                        const auto folders = dusk::custom_assets::list_folders();
-                        if (folders.empty()) {
-                            return Rml::String("(none found)");
-                        }
-                        int on = 0;
-                        for (const auto& f : folders) {
-                            if (dusk::custom_assets::is_folder_enabled(f.c_str())) {
-                                ++on;
-                            }
-                        }
-                        return Rml::String(fmt::format("{}/{} enabled", on, folders.size()));
-                    },
-            }),
-            rightPane,
-            [](Pane& pane) {
-                pane.clear();
-                pane.add_section("Custom Models");
-                const auto folders = dusk::custom_assets::list_folders();
-                if (folders.empty()) {
-                    pane.add_rml(
-                        "No custom-model folders found. Drop a folder under "
-                        "<b>model_replacements/</b> (a loose <i>&lt;arc&gt;_&lt;idx&gt;.bmd</i>, or "
-                        "a full-mod <b>files/</b> data tree) and reopen this tab." +
-                        Rml::String(kAlbwUnfinishedDisclaimer));
-                    return;
-                }
-                for (const auto& folder : folders) {
-                    pane.add_button({
-                                        .text = folder,
-                                        .isSelected =
-                                            [folder] {
-                                                return dusk::custom_assets::is_folder_enabled(
-                                                    folder.c_str());
-                                            },
-                                    })
-                        .on_pressed([folder] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            dusk::custom_assets::toggle_folder(folder.c_str());
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "Highlighted = enabled. Click a folder to toggle it. Changes to a model take "
-                    "effect the next time that asset loads (reload the area or reboot)." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
     });

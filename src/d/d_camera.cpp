@@ -7612,7 +7612,8 @@ bool dCamera_c::executeDebugFlyCam() {
 
     {
         ImGuiIO& io = ImGui::GetIO();
-        if (!io.WantCaptureKeyboard) {
+        const bool editorKb = dusk::leveledit::editor_pc_hotkeys_active();
+        if (!io.WantCaptureKeyboard || editorKb) {
             f32 kbX = 0.0f, kbY = 0.0f;
             if (ImGui::IsKeyDown(ImGuiKey_W) || ImGui::IsKeyDown(ImGuiKey_UpArrow)) kbY += 1.f;
             if (ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_DownArrow)) kbY -= 1.f;
@@ -7629,11 +7630,12 @@ bool dCamera_c::executeDebugFlyCam() {
             if (ImGui::IsKeyDown(ImGuiKey_E)) rollInput += 1.0f;
         }
         bool mouseValid = !io.WantCaptureMouse && io.MousePos.x >= 0.0f && io.MousePos.y >= 0.0f;
-        if (mouseValid && sFlyCamLastMousePos.x >= 0.0f) {
+        const bool selectMode = dusk::leveledit::session_select_mode_enabled();
+        if (!selectMode && mouseValid && sFlyCamLastMousePos.x >= 0.0f) {
             cStickX -= (io.MousePos.x - sFlyCamLastMousePos.x) * 2.0f;
             cStickY -= (io.MousePos.y - sFlyCamLastMousePos.y) * 2.0f;
         }
-        sFlyCamLastMousePos = mouseValid ? io.MousePos : ImVec2{-1.0f, -1.0f};
+        sFlyCamLastMousePos = (!selectMode && mouseValid) ? io.MousePos : ImVec2{-1.0f, -1.0f};
     }
 
     f32 verticalDisp = 0.0f;
@@ -7671,6 +7673,10 @@ bool dCamera_c::executeDebugFlyCam() {
     mDebugFlyCam.pitch = std::clamp(mDebugFlyCam.pitch + cStickY * FLYCAM_ROTATION_SPEED, minPitch, maxPitch);
 
     return true;
+}
+
+void dCamera_c::resetEditorFlyCamMouseLook() {
+    sFlyCamLastMousePos = {-1.f, -1.f};
 }
 
 void dCamera_c::deactivateDebugFlyCam() {

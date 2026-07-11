@@ -647,6 +647,50 @@ bool isShieldAuxHudVisible(const daAlink_c* i_link) {
     return i_link->checkPlayerGuard();
 }
 
+bool isShieldHudPinnedDurability() {
+    if (!dShield_isDurabilityEnabled()) {
+        return false;
+    }
+
+    const dusk::ShieldHudVisibility mode = dusk::getSettings().game.shieldHudVisibility.getValue();
+    return mode == dusk::ShieldHudVisibility::DurabilityAlways ||
+           mode == dusk::ShieldHudVisibility::BothAlways;
+}
+
+bool isShieldHudPinnedParry() {
+    if (!dShield_isParryCombatEnabled()) {
+        return false;
+    }
+
+    const dusk::ShieldHudVisibility mode = dusk::getSettings().game.shieldHudVisibility.getValue();
+    return mode == dusk::ShieldHudVisibility::ParryAlways ||
+           mode == dusk::ShieldHudVisibility::BothAlways;
+}
+
+bool isShieldDurabilityHudVisible(const daAlink_c* i_link) {
+    if (i_link == NULL || dALBWRental_isOpen()) {
+        return false;
+    }
+
+    if (isShieldHudPinnedDurability()) {
+        return true;
+    }
+
+    return isShieldAuxHudVisible(i_link);
+}
+
+bool isShieldParryHudVisible(const daAlink_c* i_link) {
+    if (i_link == NULL || dALBWRental_isOpen()) {
+        return false;
+    }
+
+    if (isShieldHudPinnedParry()) {
+        return true;
+    }
+
+    return isShieldAuxHudVisible(i_link);
+}
+
 bool shouldShowDurabilityHud() {
     if (!dShield_isDurabilityEnabled()) {
         return false;
@@ -657,7 +701,7 @@ bool shouldShowDurabilityHud() {
         return false;
     }
 
-    return isShieldAuxHudVisible(link);
+    return isShieldDurabilityHudVisible(link);
 }
 
 bool shouldShowBashHud() {
@@ -674,7 +718,7 @@ bool shouldShowBashHud() {
         return false;
     }
 
-    return isShieldAuxHudVisible(link);
+    return isShieldParryHudVisible(link);
 }
 
 // ============================================
@@ -1369,6 +1413,20 @@ bool dShield_shouldDrawDurabilityHud() {
     return shouldShowDurabilityHud();
 }
 
+f32 dShield_getShieldHudDrawAlpha() {
+    dMeter2_c* meter = dMeter2Info_getMeterClass();
+    if (meter == NULL) {
+        return 0.0f;
+    }
+
+    dMeter2Draw_c* draw = meter->getMeterDrawPtr();
+    if (draw == NULL) {
+        return 0.0f;
+    }
+
+    return draw->getMeterGaugeAlphaRate(0);
+}
+
 u16 dShield_getDurability() {
     return sShieldDurability;
 }
@@ -1782,6 +1840,11 @@ void dShield_drawBashCharges() {
         return;
     }
 
+    const f32 hudAlpha = dShield_getShieldHudDrawAlpha();
+    if (hudAlpha <= 0.0f) {
+        return;
+    }
+
     // Keep the HUD icon matching the equipped shield + selected mode
     // (re-applies on shield swap or mode change).
     const ShieldTier curIconTier = shieldTierFromLink(link);
@@ -1880,18 +1943,18 @@ void dShield_drawBashCharges() {
             }
             sHud.mpIconOn->hide();
             sHud.mpIconOff->show();
-            sHud.mpIconOff->setAlphaRate(1.0f);
+            sHud.mpIconOff->setAlphaRate(hudAlpha);
             sHudShieldOffPic->setBlackWhite(JUtility::TColor(0, 0, 0, 0),
                                             filled ? JUtility::TColor(255, 255, 255, 255)
                                                    : JUtility::TColor(105, 105, 105, 255));
         } else if (filled) {
             sHud.mpIconOn->show();
             sHud.mpIconOff->hide();
-            sHud.mpIconOn->setAlphaRate(1.0f);
+            sHud.mpIconOn->setAlphaRate(hudAlpha);
         } else {
             sHud.mpIconOn->hide();
             sHud.mpIconOff->show();
-            sHud.mpIconOff->setAlphaRate(1.0f);
+            sHud.mpIconOff->setAlphaRate(hudAlpha);
         }
 
         sHud.mpIconOn->translate(posX, posY);

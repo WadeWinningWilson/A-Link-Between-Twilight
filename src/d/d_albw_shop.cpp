@@ -31,6 +31,7 @@
 #include "d/d_item.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
+#include "dusk/custom_assets.hpp"  // custom shop-icon override (write_item_icon_timg)
 #include "d/d_meter_HIO.h"
 #include "dolphin/os/OSCache.h"
 #include "JSystem/JKernel/JKRArchive.h"
@@ -198,6 +199,19 @@ static ResTIMG* loadShopItemIconTimg(JKRArchive* arc, u8 itemNo, void* texBuf) {
     }
 
     const u8 iconItemNo = shopWheelIconItemNo(itemNo);
+
+#if D_ALBW_CUSTOM_ICONS
+    // ============================================
+    // NEW CODE — ALBW Port / Dusklight
+    // Custom shop icon: the shop loads wheel/row icons here (NOT through
+    // readItemTexture), so it needs its own override hook. If an enabled mod ships
+    // icons/item_<iconItemNo>.png, encode it straight into texBuf and use it.
+    // ============================================
+    if (dusk::custom_assets::write_item_icon_timg(iconItemNo, texBuf, 0xC00)) {
+        DCStoreRangeNoSync(texBuf, 0xC00);
+        return (ResTIMG*)texBuf;
+    }
+#endif
 
     if (const char* name = shopRentalItemBtiName(iconItemNo)) {
         void* res = JKRGetNameResource(name, arc);
@@ -698,8 +712,28 @@ static void setRowLetterGraphicsVisible(J2DPane* gfxPane, J2DWindow* win, JUTTex
 }
 
 // Ring-style baseline, clamped to the letter icon square inside each row.
+// fillSlot (custom named icons): size to FILL the slot box, ignoring the
+// item-id texScale — a named icon borrows a fallback itemNo whose scale was
+// tuned for a DIFFERENT texture (e.g. the small Magic Jar), which shrank
+// custom icons to a fraction of the icons beside them. Custom PNGs are
+// authored to fill their canvas, so the slot box is their natural size.
 static void calcWheelIconDrawSize(u8 itemNo, const ResTIMG* timg, f32 slotH, f32* outW,
-                                  f32* outH) {
+                                  f32* outH, bool fillSlot = false) {
+    const f32 maxH = std::max(slotH - kRowWheelIconInsetY * 2.0f, 12.0f);
+    const f32 maxW = std::min(maxH, kRowLetterIconBoxMaxW);
+    if (fillSlot) {
+        f32 tw = kWheelIconBaselinePx;
+        f32 th = kWheelIconBaselinePx;
+        if (timg && timg->width > 0 && timg->height > 0) {
+            tw = (f32)timg->width;
+            th = (f32)timg->height;
+        }
+        // Fit the texture's aspect inside the slot box, touching it.
+        const f32 s = std::min(maxW / tw, maxH / th);
+        *outW = tw * s;
+        *outH = th * s;
+        return;
+    }
     const f32 itemScale = dItem_data::getTexScale(itemNo) / 100.0f;
     f32       tw        = kWheelIconBaselinePx;
     f32       th        = kWheelIconBaselinePx;
@@ -713,8 +747,6 @@ static void calcWheelIconDrawSize(u8 itemNo, const ResTIMG* timg, f32 slotH, f32
     f32 w = (tw / kWheelIconBaselinePx) * kWheelIconBaselinePx * itemScale;
     f32 h = (th / kWheelIconBaselinePx) * kWheelIconBaselinePx * itemScale;
 
-    const f32 maxH = std::max(slotH - kRowWheelIconInsetY * 2.0f, 12.0f);
-    const f32 maxW = std::min(maxH, kRowLetterIconBoxMaxW);
     const f32 s    = std::min(maxW / w, maxH / h);
     if (s < 1.0f) {
         w *= s;
@@ -2005,7 +2037,8 @@ void dALBWShop_c::populateRows() {
     updateDescParchment(showItemBox, itemNo);
 }
 
-bool dALBWShop_c::ensureRowWheelPic(int row, u8 itemNo, JKRArchive* arc) {
+bool dALBWShop_c::ensureRowWheelPic(int row, u8 itemNo, JKRArchive* arc,
+                                    const char* customIconName) {
     if (!arc || itemNo == 0xff || row < 0 || row >= 6) {
         return false;
     }
@@ -2022,9 +2055,23 @@ bool dALBWShop_c::ensureRowWheelPic(int row, u8 itemNo, JKRArchive* arc) {
     JKR_DELETE(mpRowItemPic[row]);
     mpRowItemPic[row]       = nullptr;
     mRowItemPicItemNo[row]  = 0xff;
+    mRowItemPicCustom[row]  = false;
 
     const u8 iconItemNo = shopWheelIconItemNo(itemNo);
-    ResTIMG* timg       = loadShopItemIconTimg(arc, itemNo, mRowItemTexBuf[row]);
+    ResTIMG*  timg       = nullptr;
+#if D_ALBW_CUSTOM_ICONS
+    // Dedicated named custom icon (e.g. the Stamina Upgrade row) takes priority;
+    // if none is supplied it falls through to the normal item-id icon below.
+    if (customIconName != nullptr &&
+        dusk::custom_assets::write_named_icon_timg(customIconName, mRowItemTexBuf[row], 0xC00)) {
+        DCStoreRangeNoSync(mRowItemTexBuf[row], 0xC00);
+        timg = (ResTIMG*)mRowItemTexBuf[row];
+        mRowItemPicCustom[row] = true;
+    }
+#endif
+    if (timg == nullptr) {
+        timg = loadShopItemIconTimg(arc, itemNo, mRowItemTexBuf[row]);
+    }
     if (!timg) {
         OSReport("ALBW Shop: ensureRowWheelPic failed row=%d itemNo=%u iconNo=%u idx=%d\n", row,
                  (unsigned)itemNo, (unsigned)iconItemNo, (int)shopItemIconTexIdx(iconItemNo));
@@ -2128,7 +2175,8 @@ void dALBWShop_c::dumpRowIconDebug(JKRArchive* iconArc, int visCount,
         int ensure = 0;
         if (purch && itemNo != 0xff && dComIfGp_getItemIconArchive()) {
             cacheRowLetterSlotBounds(row);
-            ensure = ensureRowWheelPic(row, itemNo, dComIfGp_getItemIconArchive()) ? 1 : 0;
+            ensure = ensureRowWheelPic(row, itemNo, dComIfGp_getItemIconArchive(),
+                                       visList[itemIdx].customIconName) ? 1 : 0;
         }
         u32 kind = 0;
         if (mpRowLetterPane[row]) {
@@ -2212,7 +2260,8 @@ void dALBWShop_c::drawRowWheelIcons(J2DGrafContext* gfx, int visCount) {
 
         const u8 itemNo     = visList[itemIdx].itemNo;
         const u8 iconItemNo = shopWheelIconItemNo(itemNo);
-        if (!ensureRowWheelPic(row, itemNo, iconArc) || !ensureItemBoxPic()) {
+        if (!ensureRowWheelPic(row, itemNo, iconArc, visList[itemIdx].customIconName) ||
+            !ensureItemBoxPic()) {
             continue;
         }
 
@@ -2239,7 +2288,8 @@ void dALBWShop_c::drawRowWheelIcons(J2DGrafContext* gfx, int visCount) {
         f32            drawH = 0.0f;
         const f32      slotHNorm =
             boxHg / (mDoGph_gInf_c::getHeightF() / FB_HEIGHT);
-        calcWheelIconDrawSize(iconItemNo, timg, slotHNorm, &drawW, &drawH);
+        calcWheelIconDrawSize(iconItemNo, timg, slotHNorm, &drawW, &drawH,
+                              mRowItemPicCustom[row]);
 
         const f32 scY = mDoGph_gInf_c::getHeightF() / FB_HEIGHT;
         const f32 drawWg = drawW * scY;
@@ -2317,7 +2367,7 @@ void dALBWShop_c::updateRowLetters(int visCount, int sel) {
             // Rentable rows draw the wheel icon in heap — keep let_* at unselect scale (flame_* shows selection).
             const bool rentableRow =
                 ve.purchasable && dComIfGp_getItemIconArchive() &&
-                ensureRowWheelPic(row, ve.itemNo, dComIfGp_getItemIconArchive());
+                ensureRowWheelPic(row, ve.itemNo, dComIfGp_getItemIconArchive(), ve.customIconName);
             const f32 scale =
                 (isSel && !rentableRow) ? hio.mSelectBarScale : hio.mUnselectBarScale;
             mgr->scale(scale, scale);
@@ -2335,7 +2385,7 @@ void dALBWShop_c::updateRowLetters(int visCount, int sel) {
         }
 
         if (ve.purchasable && dComIfGp_getItemIconArchive() &&
-            ensureRowWheelPic(row, ve.itemNo, dComIfGp_getItemIconArchive())) {
+            ensureRowWheelPic(row, ve.itemNo, dComIfGp_getItemIconArchive(), ve.customIconName)) {
             const f32 listIconLeft =
                 calcShopListIconLeft(mpRowFrame, mpRowLetterGfx, mpRowLetter, mpRowLetterMgr,
                                      mScrollTop, visCount, visList);
@@ -2406,7 +2456,7 @@ void dALBWShop_c::hideRentableCenterBloIcons(int visCount, f32 listIconLeft) {
 
         const dALBWVisibleEntry& ve = visList[itemIdx];
         if (!ve.purchasable || !dComIfGp_getItemIconArchive() ||
-            !ensureRowWheelPic(row, ve.itemNo, dComIfGp_getItemIconArchive())) {
+            !ensureRowWheelPic(row, ve.itemNo, dComIfGp_getItemIconArchive(), ve.customIconName)) {
             continue;
         }
 

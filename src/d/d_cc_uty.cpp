@@ -383,18 +383,21 @@ fopAc_ac_c* at_power_check(dCcU_AtInfo* i_AtInfo) {
 
 fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
     daPy_py_c* player_p = (daPy_py_c*)dComIfGp_getPlayer(0);
+
+#if TARGET_PC
+    // Lockout slingshot: pause + ranged-open tag for every enemy that reaches cc_at_check.
+    if (dMeter2_isALBWLocked() && i_AtInfo->mpCollider != NULL &&
+        fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e &&
+        i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+        dAlbwLockout_onSlingshotHit(i_enemy);
+    }
+#endif
+
     i_AtInfo->mpActor = at_power_check(i_AtInfo);
 
     f32 x_diff;
     f32 z_diff;
     if (i_AtInfo->mpActor != NULL) {
-#if TARGET_PC
-        if (dMeter2_isALBWLocked() && i_AtInfo->mpCollider != NULL &&
-            fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e &&
-            i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
-            dAlbwLockout_onSlingshotHit(i_enemy);
-        }
-#endif
         cXyz tmp = i_AtInfo->mpActor->speed;
         tmp.y = 0.0f;
         if (tmp.abs() > 100.0f) {
@@ -582,6 +585,15 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
 #if TARGET_PC
             if (fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
                 dAlbwEnemyRupees_tryKillAfterDamage(i_enemy, i_AtInfo->mAttackPower);
+                if (dMeter2_isALBWLocked() && i_AtInfo->mpActor != NULL &&
+                    fopAcM_GetGroup(i_AtInfo->mpActor) == fopAc_ENEMY_e &&
+                    dAlbwLockout_isConfused(i_AtInfo->mpActor))
+                {
+                    cXyz hitPos = i_enemy->current.pos;
+                    hitPos.y += 100.0f;
+                    dComIfGp_setHitMark(3, i_enemy, &hitPos, NULL, NULL, 0);
+                    dAlbwLockout_onConfuseFriendlyFireHit(i_enemy, i_AtInfo->mpActor);
+                }
                 if (i_AtInfo->mpCollider != NULL &&
                     !i_AtInfo->mpCollider->ChkAtType(AT_TYPE_NORMAL_SWORD) &&
                     !i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MASTER_SWORD) &&
@@ -683,6 +695,7 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                 }
             }
         }
+
         // ============================================
         // NEW CODE ENDS HERE
         // ============================================

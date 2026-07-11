@@ -163,17 +163,21 @@ bool dusk::audio::shadowActive() {
 }
 
 const u8* dusk::audio::resolveShadowWave(u32 waveAramAddress) {
-    if (!s_shadowActive) {
-        return nullptr;
+    // Route by ADDRESS, not by the active flag: only addresses remap_voice
+    // minted (>= kShadowVirtualBase) ever resolve to the mod set, so a voice
+    // keeps its noteOn-latched source across mid-session toggles (the flag
+    // gates new noteOns only — see the header block).
+    if (waveAramAddress < kShadowVirtualBase) {
+        return nullptr;  // real ARAM address — always vanilla
     }
+    const u32 real = waveAramAddress - kShadowVirtualBase;
     for (int i = 0; i < s_shadowWaveCount; i++) {
         const ShadowWave& w = s_shadowWaves[i];
-        if (w.buf != nullptr && waveAramAddress >= w.aramBase &&
-            waveAramAddress < w.aramBase + w.size) {
-            return w.buf + (waveAramAddress - w.aramBase);
+        if (w.buf != nullptr && real >= w.aramBase && real < w.aramBase + w.size) {
+            return w.buf + (real - w.aramBase);
         }
     }
-    return nullptr;
+    return nullptr;  // stale virtual address — caller must silence, not read ARAM
 }
 #endif
 
@@ -653,8 +657,18 @@ static int ReadChannelSamplesChunk(
     // ============================================
     const u8* aramBase;
 #if D_ALBW_AUDIO_SHADOW
-    if (const u8* shadow = dusk::audio::resolveShadowWave(channel.mWaveAramAddress)) {
-        aramBase = shadow;
+    if (channel.mWaveAramAddress >= dusk::audio::kShadowVirtualBase) {
+        // Mod-latched voice (address minted by remap_voice at noteOn).
+        aramBase = dusk::audio::resolveShadowWave(channel.mWaveAramAddress);
+        if (aramBase == nullptr) {
+            // Stale virtual address (its bank was erased mid-note): a virtual
+            // offset is meaningless in real ARAM, so silence + drain the voice
+            // instead of decoding garbage. Loop must be cleared or FillDecodeBuf
+            // would re-arm mSamplesLeft and spin forever.
+            channel.mSamplesLeft = 0;
+            channel.mLoopFlag = 0;
+            return 0;
+        }
     } else
 #endif
     {

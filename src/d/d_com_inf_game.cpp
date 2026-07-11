@@ -30,6 +30,7 @@
 #if TARGET_PC
 #include "d/d_albw_master_quest.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_potion.h"
 #include "dusk/action_bindings.h"
 #include "d/d_kankyo.h"
 #include "dusk/truetest.hpp"
@@ -2237,6 +2238,13 @@ s16 dComIfGp_getSelectItemNum(int i_selItemIdx) {
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
         u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
         itemNum = dComIfGs_getBottleNum(slot_no);
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            itemNum = dComIfGs_getBottleNum(kAlbwPotionSoulboundBottleIdx);
+        }
+#endif
     }
 
     return itemNum;
@@ -2256,6 +2264,13 @@ int dComIfGp_getSelectItemMaxNum(int i_selItemIdx) {
         itemNum = dComIfGs_getPachinkoMax();
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
         itemNum = dComIfGs_getBottleMax();
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            itemNum = dAlbwPotion_getMaxUses();
+        }
+#endif
     }
 
     return itemNum;
@@ -2282,6 +2297,16 @@ void dComIfGp_setSelectItemNum(int i_selItemIdx, s16 i_num) {
             i_num = dComIfGs_getBottleMax();
         }
         dComIfGs_setBottleNum(bottle_slot_no, i_num);
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            if (i_num > dAlbwPotion_getMaxUses()) {
+                i_num = dAlbwPotion_getMaxUses();
+            }
+            dComIfGs_setBottleNum(kAlbwPotionSoulboundBottleIdx, i_num);
+        }
+#endif
     }
 }
 
@@ -2298,6 +2323,13 @@ void dComIfGp_addSelectItemNum(int i_selItemIdx, s16 i_num) {
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
         u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
         dComIfGs_addBottleNum(slot_no, i_num);
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            dComIfGs_addBottleNum(kAlbwPotionSoulboundBottleIdx, i_num);
+        }
+#endif
     }
 }
 

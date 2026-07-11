@@ -36,6 +36,7 @@ void dShield_destroyFromDurability(daAlink_c* i_link);
 void dShield_repairDurabilityFraction(int numerator, int denominator);
 
 bool dShield_shouldDrawDurabilityHud();
+f32 dShield_getShieldHudDrawAlpha();
 u16 dShield_getDurability();
 u16 dShield_getDurabilityMax();
 // 0 = Ordon, 1 = Wooden, 2 = Hylian (for meter tint).

@@ -120,15 +120,27 @@ clothes/actor rebuild (not just the boots). Both fixed in `try_load`:
   is back to a stock mount path plus a one-line note.
 
 ### Custom Models settings tree  (`src/dusk/ui/editor.cpp`, ALBW tab)
-- `game.customModelsDisabled` setting: `|`-delimited list of **disabled** folder
-  names (empty = all enabled), persisted in config.
-- `custom_assets::list_folders() / is_folder_enabled() / toggle_folder()` drive a
-  multi-toggle picker (highlight = enabled, click again to disable — same feel as
-  sword/shield equip). Left button summarizes `N/M enabled`.
-- **One toggle gates both layers.** `toggle_folder()` updates the setting, then
-  `scan()` + `install_overlays()` so the change lands on the **next asset load**
-  (reload-scoped — see §4). Layer B checks the toggle at load time.
-- **Status:** working.
+- **Load-ordered since 2026-07-11** (Phase 1 of
+  [Mod-Load-Order-Design.md](Mod-Load-Order-Design.md) §10 — uncommitted, awaiting
+  playtest): `game.customModelsOrder` is the authoritative setting — `|`-delimited
+  folder names in **priority order** (top = wins conflicts, decision D1), `-` prefix =
+  disabled. One rule at every conflict site (Layer-A `s_map`, audio
+  `s_audioIndex`/`s_modWaves`, icons, Layer-B subfolder search): iterate mods
+  top-first, first provider of an asset claims it.
+- `game.customModelsDisabled` is now LEGACY: dual-read (fallback for folders not yet
+  in the order) + mirrored on every write, for one release; then retire.
+- Migration: an empty order is seeded from the alphabetical folder list with the
+  legacy disabled flags carried verbatim (in `scan()`, idempotent).
+- `custom_assets::list_folders()` (now priority-ordered) / `is_folder_enabled()` /
+  `toggle_folder()` / **`move_folder()`** / **`order_view()`** drive a reorderable
+  multi-toggle picker: numbered rows (highlight = enabled, click to toggle — same
+  feel as sword/shield equip) with a `^ swap v` row between neighbours to reorder.
+  Pane is labelled "load order (top wins)". Left button summarizes `N/M enabled`.
+- **One toggle gates both layers.** `toggle_folder()` / `move_folder()` update the
+  setting, then `scan()` + `install_overlays()` so the change lands on the **next
+  asset load** (reload-scoped — see §4). Layer B checks the toggle at load time.
+  The Layer-B root-direct "always-on" slot is unchanged (still beats everything).
+- **Status:** toggle picker working; ordering implemented, awaiting playtest.
 
 ---
 
@@ -370,10 +382,11 @@ generalization; not needed for complete re-skins.
 | `src/dusk/audio/DuskDsp.{cpp,hpp}`, `libs/JSystem/src/JAudio2/JASWaveArcLoader.cpp`, `.../JASBank.cpp` | Runtime custom audio — shadow-wave redirect + per-wave WSYS remap (§6) | Working; committed `6389807a6a` |
 | `src/m_Do/m_Do_main.cpp`               | `scan()` (startup) + `install_overlays()` (after disc open) | Wired |
 | `src/m_Do/m_Do_dvd_thread.cpp`         | Stock arc mount (custom 2b mount **removed**) + temp `[ca-diag]` hook | Reverted to stock |
-| `src/dusk/ui/editor.cpp`               | ALBW → Custom Models multi-toggle picker | Working |
-| `include/dusk/settings.h`, `src/dusk/settings.cpp` | `game.customModelsDisabled` setting | Working |
+| `src/dusk/ui/editor.cpp`               | ALBW → Custom Models reorderable multi-toggle picker (load order, top wins) | Ordering uncommitted, awaiting playtest |
+| `include/dusk/settings.h`, `src/dusk/settings.cpp` | `game.customModelsOrder` (authoritative) + legacy `game.customModelsDisabled` (dual-read/mirrored one release) | Order setting uncommitted |
 | `src/d/actor/d_a_b_gm.cpp`             | Layer-B consumer (Armogohma `B_gm`) | Working |
 | `src/d/d_albw_sumo_test.{cpp,h}`, `d_a_alink_wolf.inc`, `d_albw_outfit.{cpp,h}` | §5 resident-asset live toggle (sumo composite) | Body/face working; caps in test |
+| `src/d/d_albw_menu_res.cpp`, `include/d/d_albw_menu_res.h`, hook in `d_s_play.cpp` | §5-class live re-mount of boot-resident menu 2D arcs (itemicon/clctres/dmapres) on overlay change — build-then-swap, menu-closed gate; kill switch `D_ALBW_MENU_RES_REMOUNT` (see Mod-Load-Order-Design.md §10) | Uncommitted, awaiting playtest |
 | `extern/aurora/lib/dolphin/dvd/{dvd,fst}.cpp` | Aurora overlay system (upstream, unmodified) | Used as-is |
 
 ---

@@ -7,6 +7,9 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_insect.h"
 #include "SSystem/SComponent/c_math.h"
+#if TARGET_PC
+#include "d/d_albw_potion.h"
+#endif
 
 static int daAlink_bottleModelCallBack(J3DJoint* i_joint, int param_1);
 
@@ -182,7 +185,12 @@ int daAlink_c::commonBottleDrink(BOOL param_0) {
                 } else if (mEquipItem == dItemNo_RED_BOTTLE_e || mEquipItem == dItemNo_CHUCHU_RED_e ||
                            mEquipItem == dItemNo_RED_BOTTLE_2_e)
                 {
+#if TARGET_PC
+                    dComIfGp_setItemLifeCount(
+                        dAlbwPotion_getHealQuarters(mSelectItemId, mEquipItem), 0);
+#else
                     dComIfGp_setItemLifeCount(32, 0);
+#endif
                 } else if (mEquipItem == dItemNo_MILK_BOTTLE_e || mEquipItem == dItemNo_HALF_MILK_BOTTLE_e) {
                     dComIfGp_setItemLifeCount(12, 0);
                 } else if (mEquipItem == dItemNo_BLUE_BOTTLE_e || mEquipItem == dItemNo_CHUCHU_BLUE_e ||
@@ -281,7 +289,16 @@ int daAlink_c::commonBottleDrink(BOOL param_0) {
 
                 field_0x072c->setFrame(2.0f);
                 if (mDemo.getDemoType() == daPy_demo_c::DEMO_TYPE_SPECIAL_e) {
-                    dComIfGs_setEquipBottleItemEmpty(mSelectItemId);
+#if TARGET_PC
+                    if (dAlbwPotion_isSoulboundRedInSlot(
+                            dComIfGs_getSelectItemIndex(mSelectItemId)))
+                    {
+                        dAlbwPotion_consumeSoulboundDrink(mSelectItemId);
+                    } else
+#endif
+                    {
+                        dComIfGs_setEquipBottleItemEmpty(mSelectItemId);
+                    }
                 }
 
                 if (mEquipItem == dItemNo_CHUCHU_RARE_e || mEquipItem == dItemNo_FAIRY_DROP_e) {
@@ -367,6 +384,11 @@ fopAc_ac_c* daAlink_c::makeFairy(cXyz* i_pos, u32 i_params) {
 }
 
 int daAlink_c::procBottleDrinkInit(u16 i_itemNo) {
+#if TARGET_PC
+    if (!dAlbwPotion_canDrinkSelectItem(mSelectItemId, (u8)i_itemNo)) {
+        return 0;
+    }
+#endif
     if (mDemo.getDemoMode() == daPy_demo_c::DEMO_UNK_42_e) {
         if (mProcID == PROC_BOTTLE_DRINK) {
             return 1;
@@ -409,6 +431,11 @@ int daAlink_c::procBottleDrink() {
 }
 
 int daAlink_c::procBottleOpenInit(u16 i_itemNo) {
+#if TARGET_PC
+    if (dAlbwPotion_isSoulboundBottleSlot(dComIfGs_getSelectItemIndex(mSelectItemId))) {
+        return checkWaitAction();
+    }
+#endif
     if (!dComIfGp_event_compulsory(this, NULL, 0xFFFF)) {
         return 0;
     }
@@ -540,6 +567,11 @@ int daAlink_c::procBottleOpen() {
 }
 
 int daAlink_c::procBottleSwingInit(fopAc_ac_c* i_catchActor, int param_1) {
+#if TARGET_PC
+    if (dAlbwPotion_isSoulboundBottleSlot(dComIfGs_getSelectItemIndex(mSelectItemId))) {
+        return checkWaitAction();
+    }
+#endif
     if (i_catchActor != NULL && mEquipItem != dItemNo_KANTERA_e) {
         return procPreActionUnequipInit(PROC_BOTTLE_SWING, NULL);
     }

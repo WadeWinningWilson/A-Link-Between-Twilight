@@ -41,6 +41,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_boss.h"
+#include "d/d_albw_menu_res.h"
 #include "d/d_albw_wolf_stun.h"
 #include "d/d_focused_arts.h"
 #if TARGET_PC
@@ -564,6 +565,13 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     #endif
 
 #if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (load-order Phase 1 follow-up)
+    // Re-mount boot-resident menu 2D arcs (itemicon/clctres/dmapres) when the
+    // Custom Models overlay changes, so menu/outfit icons track a toggle like
+    // everything else. Idle cost: one int compare. See d_albw_menu_res.h.
+    // ============================================
+    dAlbwMenuRes_drive();
     dAlbwWolfStun_beforeMove();
 #endif
     dComIfG_Ccsp()->Move();
@@ -857,6 +865,7 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
 
 #if TARGET_PC
     if (dusk::g_levelEditorSession) {
+        dusk::leveledit::tick_editor_session_input();
         dusk::leveledit::try_world_pick_on_click();
     }
 #endif

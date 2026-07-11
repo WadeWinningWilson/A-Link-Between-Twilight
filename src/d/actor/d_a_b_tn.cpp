@@ -19,6 +19,7 @@
 #include "d/d_albw_hp_mult.h"
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_shield.h"
+#include "d/d_meter2_info.h"
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_counter.h"
 #include <cstdarg>
@@ -1582,8 +1583,15 @@ void daB_TN_c::damage_check() {
             }
 
             if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
-                mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
-                dAlbwLockout_onSlingshotHitNative(this);
+#if TARGET_PC
+                if (dMeter2_isALBWLocked()) {
+                    dAlbwLockout_onSlingshotHit(this);
+                } else
+#endif
+                {
+                    mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
+                    dAlbwLockout_onSlingshotHitNative(this);
+                }
             }
         }
 
@@ -1803,6 +1811,17 @@ void daB_TN_c::damage_check() {
                 setActionMode(ACT_GUARDL, ACTION2_10_e);
             }
         } else if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+#if TARGET_PC
+            if (dMeter2_isALBWLocked()) {
+                dAlbwLockout_onSlingshotHit(this);
+                if (mActionMode1 < 8) {
+                    mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
+                } else {
+                    setActionMode(ACT_GUARDL, ACTION2_10_e);
+                }
+                return;
+            }
+#endif
             dAlbwLockout_onSlingshotHitNative(this);
             if (mActionMode1 < 8) {
                 mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);

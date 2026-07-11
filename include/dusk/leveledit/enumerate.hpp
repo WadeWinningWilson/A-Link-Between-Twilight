@@ -74,4 +74,13 @@ void enable_session_fly_cam(bool enable);
 bool session_fly_cam_enabled();
 bool editor_fly_cam_active();  // session latch || debugFlyCam setting
 
+// Gate 7 — Select Mode: freeze fly-cam mouse-look so cursor can click-pick (1b).
+void enable_session_select_mode(bool enable);
+bool session_select_mode_enabled();
+// PC keyboard/mouse hotkeys alongside controller while Editor Stage is open.
+void enable_session_pc_hotkeys(bool enable);
+bool session_pc_hotkeys_enabled();
+bool editor_pc_hotkeys_active();
+void tick_editor_session_input();
+
 }  // namespace dusk::leveledit

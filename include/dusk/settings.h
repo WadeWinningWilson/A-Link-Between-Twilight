@@ -68,6 +68,14 @@ enum class ParryIcons : u8 {
     ShieldOnly = 2,  // shield emblem only (starburst hidden)
 };
 
+// Shield aux HUD visibility (durability meter + parry charge icons).
+enum class ShieldHudVisibility : u8 {
+    Off = 0,               // guard + 2s linger (vanilla ALBW behavior)
+    DurabilityAlways = 1,  // durability meter always on when eligible
+    ParryAlways = 2,       // parry charge icons always on when eligible
+    BothAlways = 3,        // both always on when eligible
+};
+
 // ============================================
 // NEW CODE — ALBW Port (Lies of Link HUD mode)
 // Lies of Link HUD layout/health style. Off keeps the vanilla corner HUD; the two
@@ -188,6 +196,12 @@ struct ConfigEnumRange<ParryIcons> {
 };
 
 template <>
+struct ConfigEnumRange<ShieldHudVisibility> {
+    static constexpr auto min = ShieldHudVisibility::Off;
+    static constexpr auto max = ShieldHudVisibility::BothAlways;
+};
+
+template <>
 struct ConfigEnumRange<LopHudMode> {
     static constexpr auto min = LopHudMode::Off;
     static constexpr auto max = LopHudMode::HealthBar;
@@ -277,8 +291,32 @@ struct UserSettings {
         // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
         ConfigVar<bool> flurryRush;
         // Custom Models: '|'-delimited DISABLED folder names under model_replacements/
-        // (empty = all enabled). Toggled from the ALBW editor "Custom Models" list.
+        // (empty = all enabled). LEGACY (pre-load-order): superseded by
+        // customModelsOrder; still dual-read for one release as the fallback for
+        // folders not yet in the order list, and mirrored on every write so a
+        // downgrade keeps the same enabled/disabled state. Retire after that.
         ConfigVar<std::string> customModelsDisabled;
+        // ============================================
+        // NEW CODE — ALBW Port (load-order mod system, Phase 1)
+        // Custom Models LOAD ORDER: '|'-delimited folder names under
+        // model_replacements/ in PRIORITY order — TOP (first) wins conflicts
+        // (decision D1, docs/Mod-Load-Order-Design.md). A '-' prefix marks a
+        // DISABLED folder (e.g. "linkle|-oldboss|sumo"); order + enabled state
+        // live in this ONE setting (decision D2). Empty = not yet migrated:
+        // seeded on first scan() from the alphabetical folder list with the
+        // legacy customModelsDisabled flags carried verbatim.
+        // ============================================
+        ConfigVar<std::string> customModelsOrder;
+        // ============================================
+        // NEW CODE — ALBW Port (load-order mod system, Phase 2 — Core tier D4)
+        // Allow USER mods to override CORE pack assets (<exe>/content/core/).
+        // OFF (default): core wins every conflict with a user mod — overriding
+        // core content can break boss fights / features, so it is opt-in with
+        // a warning in the editor. ON: user mods win (MO2 "base at the bottom,
+        // mods on top" layering, §4.1). Flipping rescans + re-installs the
+        // overlay set (reload-scoped, like a toggle).
+        // ============================================
+        ConfigVar<bool> customModelsAllowCoreOverride;
         // WW itemmdl Track A: use retail itemmdl.arc vbow for bow get-item (dev toggle).
         ConfigVar<bool> wwItemmdlGetItem;
         // Phase 2 diagnostic: itemmdl arc + O_gD_bow heap mesh (loader isolate 2D).
@@ -327,8 +365,12 @@ struct UserSettings {
         // Hero's Shade Secret Boss: post-game real duel vs the Hero's Shade after
         // all Hidden Skills (F_0344). Off = disabled. WIP — default off.
         ConfigVar<bool> heroShadeSecretBoss;
+        // Editor ALBW WIP: grant/remove soulbound red potion in inventory slot 11.
+        ConfigVar<bool> albwSoulboundRedPotion;
         // Parry/bash charge HUD icon style: spur only, spur+shield, or shield only.
         ConfigVar<ParryIcons> parryIconsMode;
+        // Durability meter / parry charge HUD visibility (orthogonal to parry icon style).
+        ConfigVar<ShieldHudVisibility> shieldHudVisibility;
         // Boss health bar HUD (name + bar) for main dungeon bosses / Ganondorf duel.
         ConfigVar<bool> bossHealthBars;
         // Lies of Link HUD: relayout vanilla HUD into a Lies-of-P spatial arrangement
@@ -403,6 +445,7 @@ struct UserSettings {
         ConfigVar<DepthOfFieldMode> depthOfFieldMode;
         ConfigVar<bool> disableWaterRefraction;
         ConfigVar<bool> enableTextureReplacements;
+        ConfigVar<bool> allowTextureDumps;  ///< dump every texture (hash-named) for making replacements
         ConfigVar<FrameInterpMode> enableFrameInterpolation;
         ConfigVar<int> internalResolutionScale;
         ConfigVar<int> shadowResolutionMultiplier;

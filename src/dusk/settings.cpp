@@ -52,6 +52,8 @@ UserSettings g_userSettings = {
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
         .flurryRush {"game.flurryRush", false},
         .customModelsDisabled {"game.customModelsDisabled", ""},
+        .customModelsOrder {"game.customModelsOrder", ""},
+        .customModelsAllowCoreOverride {"game.customModelsAllowCoreOverride", false},
         .wwItemmdlGetItem {"game.wwItemmdlGetItem", false},
         .wwItemmdlGetItem2DIsolate {"game.wwItemmdlGetItem2DIsolate", false},
         .wwItemmdlBowScSuppress {"game.wwItemmdlBowScSuppress", false},
@@ -71,7 +73,9 @@ UserSettings g_userSettings = {
         .bossRefinement {"game.bossRefinement", false},
         .shadeRefuge {"game.shadeRefuge", false},
         .heroShadeSecretBoss {"game.heroShadeSecretBoss", false},
+        .albwSoulboundRedPotion {"game.albwSoulboundRedPotion", false},
         .parryIconsMode {"game.parryIconsMode", ParryIcons::SpurShield},
+        .shieldHudVisibility {"game.shieldHudVisibility", ShieldHudVisibility::Off},
         .bossHealthBars {"game.bossHealthBars", false},
         .lopHud {"game.lopHud", LopHudMode::Off},
         .showEponaSpurHud {"game.showEponaSpurHud", true},
@@ -119,6 +123,7 @@ UserSettings g_userSettings = {
         .depthOfFieldMode{"game.depthOfFieldMode", DepthOfFieldMode::Dusk},
         .disableWaterRefraction {"game.disableWaterRefraction", false},
         .enableTextureReplacements {"game.enableTextureReplacements", true},
+        .allowTextureDumps {"game.allowTextureDumps", false},
         .enableFrameInterpolation {"game.enableFrameInterpolation", FrameInterpMode::Off},
         .internalResolutionScale {"game.internalResolutionScale", 0},
         .shadowResolutionMultiplier {"game.shadowResolutionMultiplier", 1},
@@ -334,6 +339,8 @@ void registerSettings() {
     Register(g_userSettings.game.focusedArtsCheat);
     Register(g_userSettings.game.flurryRush);
     Register(g_userSettings.game.customModelsDisabled);
+    Register(g_userSettings.game.customModelsOrder);
+    Register(g_userSettings.game.customModelsAllowCoreOverride);
     Register(g_userSettings.game.wwItemmdlGetItem);
     Register(g_userSettings.game.wwItemmdlGetItem2DIsolate);
     Register(g_userSettings.game.wwItemmdlBowScSuppress);
@@ -353,7 +360,9 @@ void registerSettings() {
     Register(g_userSettings.game.bossRefinement);
     Register(g_userSettings.game.shadeRefuge);
     Register(g_userSettings.game.heroShadeSecretBoss);
+    Register(g_userSettings.game.albwSoulboundRedPotion);
     Register(g_userSettings.game.parryIconsMode);
+    Register(g_userSettings.game.shieldHudVisibility);
     Register(g_userSettings.game.bossHealthBars);
     Register(g_userSettings.game.lopHud);
     Register(g_userSettings.game.showEponaSpurHud);
@@ -402,6 +411,7 @@ void registerSettings() {
     Register(g_userSettings.game.depthOfFieldMode);
     Register(g_userSettings.game.disableWaterRefraction);
     Register(g_userSettings.game.enableTextureReplacements);
+    Register(g_userSettings.game.allowTextureDumps);
     Register(g_userSettings.game.internalResolutionScale);
     Register(g_userSettings.game.resampler);
     Register(g_userSettings.game.shadowResolutionMultiplier);

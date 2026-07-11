@@ -34,6 +34,7 @@
 #include "d/d_albw_sumo_test.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_potion.h"
 #include "d/d_attention.h"
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
@@ -4175,7 +4176,10 @@ void dMeter2_c::moveBombNum() {
 
 void dMeter2_c::moveBottleNum() {
     for (int i = 0; i < 4; i++) {
-        if (dComIfGs_getItem((u8)(i + SLOT_11), true) == dItemNo_BEE_CHILD_e) {
+        const u8 slotItem = dComIfGs_getItem((u8)(i + SLOT_11), true);
+        if (slotItem == dItemNo_BEE_CHILD_e ||
+            dAlbwPotion_isSoulboundRedInSlot((u8)(i + SLOT_11)))
+        {
             if (mBottleNum[i] != dComIfGs_getBottleNum(i)) {
                 for (int j = 0; j < 2; j++) {
                     if (i + SLOT_11 == dComIfGs_getSelectItemIndex(j)) {

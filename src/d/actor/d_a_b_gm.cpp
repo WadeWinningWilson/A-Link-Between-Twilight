@@ -93,6 +93,12 @@
 static mDoExt_McaMorfSO* s_gmRevealMorf = NULL;  // built in useHeapInit, freed with the solid heap
 static bool s_gmRevealActive = false;            // set once the swap fires (one-way)
 static int s_gmRevealDrawLog = 0;                // DIAG: per-fight reveal-draw step log budget
+// Phase-3 laser hit capsule. File-scope (only one beam is ever active) so the collision
+// debug wireframe can be issued from daB_GM_Draw (the draw phase) -- an Execute-phase
+// Draw() gets dropped before the debug-view list flushes, which is why it never showed.
+static dCcD_Cps s_gmBeamCps;
+static bool s_gmBeamCpsReady = false;
+static bool s_gmBeamCpsLive = false;             // set each frame the capsule is registered
 
 // Phase-3 ground-chase state (single boss, so file-scope is safe). Sub-states live
 // in mMode; a single hit counter (s_gmPhase3HitCount) drives both reactions:
@@ -266,12 +272,14 @@ static const f32 kAlbwArmoBeamOriginRaise = 50.0f;
 // body's in-place rotation sweeps it. This is the forward distance of the floor aim
 // point -- larger = flatter beam that reaches further out (wider sweep radius). Tunable.
 static const f32 kAlbwArmoBeamForward = 1200.0f;
-// Phase-3 laser damage is a capsule (pill) spanning the whole beam line -- Dark-Souls
-// style, the entire beam is the hurt zone. This is its radius; start it matched to the
-// beam's visual thickness, then grow it and the beam model together. Tunable.
-// Currently +5% over the ~20u visual so the pill peeks out of the glow and is catchable
-// in the AT (red) collision view -- a diagnostic to confirm it isn't just buried.
-static const f32 kAlbwArmoBeamRadius = 21.0f;
+// Phase-3 laser damage capsule (pill). The visible beam is HORIZONTAL at eye height, so
+// a thin pill on that line floats above a floor-standing Link (his body tops ~180, the
+// mouth eye is ~200-300) and only grazes his head -- "sometimes doesn't hit". Instead we
+// lay the capsule along the beam's GROUND TRACK at Link's body height with a radius that
+// spans his full height: a sweeping vertical wall. The wide radius also stops the fast
+// late turns from tunneling the beam past Link between per-frame checks. Tunable.
+static const f32 kAlbwArmoBeamRadius = 100.0f;  // ~ covers Link's body + lateral bite
+static const f32 kAlbwArmoBeamCpsRise = 90.0f;  // pill-axis height above the boss's floor
 
 static void b_gm_revealAnchorMouthJoint(J3DModel* model, f32 tx, f32 ty, f32 tz) {
     Mtx local;
@@ -461,6 +469,21 @@ static int daB_GM_Draw(b_gm_class* i_this) {
         i_this->mpBeamBtk->entry(model->getModelData());
         i_this->mpBeamModelMorf->entryDL();
     }
+
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+    // Beam hit-capsule debug wireframe. Issued HERE (draw phase) so it survives the
+    // debug-view flush -- an Execute-phase Draw() is dropped before the flush, which is
+    // why it never showed. Light blue, only this collider, only while the collision
+    // viewer is open. s_gmBeamCpsLive was set by this frame's Execute if it registered.
+    if (s_gmBeamCpsLive) {
+        const auto& cv = dusk::getTransientSettings().collisionView;
+        if (cv.enableAtView || cv.enableTgView || cv.enableCoView) {
+            GXColor beamDbg = {0x60, 0xC0, 0xFF, 0xC8};  // light blue
+            s_gmBeamCps.Draw(beamDbg);
+        }
+        s_gmBeamCpsLive = false;
+    }
+#endif
 
     return 1;
 }
@@ -2841,13 +2864,12 @@ static int daB_GM_Execute(b_gm_class* i_this) {
 
 #if TARGET_PC && D_ALBW_ARMO_REVEAL
         if (s_gmPhase3Active) {
-            // Dark-Souls-style capsule (pill) hitbox: the WHOLE beam line is the hurt
-            // zone, not a point. Span the eye (spC8) -> beam-end (spD4) line with a
-            // radius matched to the beam's visual thickness, so Link is hit anywhere the
-            // pill crosses him. One static capsule (only one beam is ever active).
-            static dCcD_Cps s_beamCps;
-            static bool s_beamCpsReady = false;
-            if (!s_beamCpsReady) {
+            // Capsule (pill) hitbox laid along the beam's GROUND TRACK at Link's body
+            // height -- a sweeping vertical wall. The visible beam is horizontal at eye
+            // height (above a floor-standing Link), so we keep the eye->end XZ line but
+            // drop the axis to floor + rise and use a body-spanning radius; Link is then
+            // hit wherever the beam's plane crosses him, at any height, at any distance.
+            if (!s_gmBeamCpsReady) {
                 static const dCcD_SrcCps beam_cps_src = {
                     {
                         {0x0, {{AT_TYPE_CSTATUE_SWING, 0x4, 0x1f}, {0x0, 0x0}, 0x0}}, // mObj
@@ -2856,29 +2878,21 @@ static int daB_GM_Execute(b_gm_class* i_this) {
                         {0x0}, // mGObjCo
                     }, // mObjInf
                     {
-                        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 20.0f}, // mCps (radius re-set per frame)
+                        {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 20.0f}, // mCps (re-set per frame)
                     } // mCpsAttr
                 };
-                s_beamCps.Set(beam_cps_src);
-                s_beamCps.SetAtMtrl(dCcD_MTRL_FIRE);
-                s_beamCpsReady = true;
+                s_gmBeamCps.Set(beam_cps_src);
+                s_gmBeamCps.SetAtMtrl(dCcD_MTRL_FIRE);
+                s_gmBeamCpsReady = true;
             }
-            s_beamCps.SetStts(&i_this->mCcStts);
-            static_cast<cM3dGCps*>(&s_beamCps)->Set(spC8, spD4, kAlbwArmoBeamRadius);
-            s_beamCps.CalcAtVec();
-            dComIfG_Ccsp()->Set(&s_beamCps);
-
-            // Diagnostic: draw ONLY this capsule in light blue whenever the collision
-            // viewer is open, so it's unmistakable and independent of the framework's
-            // red AT wireframes. Explicit per-collider Draw() -- affects nothing else, and
-            // it's gated on the viewer so it never shows in normal play.
-            {
-                const auto& cv = dusk::getTransientSettings().collisionView;
-                if (cv.enableAtView || cv.enableTgView || cv.enableCoView) {
-                    GXColor beamDbg = {0x60, 0xC0, 0xFF, 0xC8}; // light blue
-                    s_beamCps.Draw(beamDbg);
-                }
-            }
+            const f32 cpsY = a_this->current.pos.y + kAlbwArmoBeamCpsRise;
+            cXyz cpsA(spC8.x, cpsY, spC8.z);
+            cXyz cpsB(spD4.x, cpsY, spD4.z);
+            s_gmBeamCps.SetStts(&i_this->mCcStts);
+            static_cast<cM3dGCps*>(&s_gmBeamCps)->Set(cpsA, cpsB, kAlbwArmoBeamRadius);
+            s_gmBeamCps.CalcAtVec();
+            dComIfG_Ccsp()->Set(&s_gmBeamCps);
+            s_gmBeamCpsLive = true;  // daB_GM_Draw issues the debug wireframe (draw phase)
         }
 #endif
 
@@ -3066,13 +3080,18 @@ static int useHeapInit(fopAc_ac_c* i_this) {
     // mid-fight allocation), swapped in by b_gm_activateReveal() after the 2nd statue
     // hit. Built LAST so a heap-full reveal fails gracefully (s_gmRevealMorf stays
     // NULL -> vanilla fight) without breaking the vanilla spawn above. Only when Boss
-    // Refinement is ON and the loose override is present (try_load is NULL if the
-    // Custom Models folder is disabled or B_gm_37.bmd is missing). The loose BMD is
-    // cached in custom_assets so respawns reuse it (no leak).
+    // Refinement is ON and the loose override is present (try_load_uncached is NULL if
+    // the Custom Models folder is disabled or B_gm_37.bmd is missing).
+    //
+    // PER-FIGHT load (try_load_uncached, NOT the cached try_load): this boss respawns, so
+    // its reveal model must load on THIS actor's solid heap and free with it. The cached
+    // try_load shares one J3DModelData across boss instances -> the second fight's fresh
+    // model wraps the first (freed) boss's heap-bound draw state -> crash on the re-entry
+    // reveal swap. Per-fight loading mirrors the vanilla arc model, which survives re-entry.
     // ============================================
     s_gmRevealMorf = NULL;
     if (dAlbwBossRefinement_isEnabled()) {
-        J3DModelData* revealData = dusk::custom_assets::try_load("B_gm", 0x25);
+        J3DModelData* revealData = dusk::custom_assets::try_load_uncached("B_gm", 0x25);
         if (revealData != NULL) {
             // Bind the same mCreatureSound as the vanilla morf so daB_GM_Delete's
             // stopZelAnime() is safe after the swap (only the active morf drives it).
@@ -3117,10 +3136,18 @@ static int daB_GM_Create(fopAc_ac_c* i_this) {
         OS_REPORT("B_gm PARAM %x\n", fopAcM_GetParam(i_this));
         OS_REPORT("B_gm//////////////B_GM SET 1 !!\n");
 
-        // Heap 0x8C00 -> 0xC800: room for the second (reveal) model instance built in
-        // useHeapInit when the phase-3 reveal is active. (+0x4000 headroom; the reveal
-        // build is null-safe so an over-tight heap degrades to the vanilla fight.)
-        if (!fopAcM_entrySolidHeap(i_this, useHeapInit, 0xC800)) {
+        // Heap sizing. GC/Wii (no reveal): 0xC800 -- room for the reveal model INSTANCE
+        // only (its DATA lived on GameHeap via the old cached try_load). TARGET_PC now
+        // loads the ~263 KB reveal BMD + its derived arrays PER-FIGHT on THIS solid heap
+        // (try_load_uncached) so it frees with the boss and never dangles across a
+        // die-and-retry -- that needs far more room. Null-safe: an over-tight heap just
+        // degrades to the vanilla fight.
+#if TARGET_PC && D_ALBW_ARMO_REVEAL
+        const u32 kB_gmSolidHeapSize = 0x80000;  // ~512 KB: 263 KB BMD + derived + instances
+#else
+        const u32 kB_gmSolidHeapSize = 0xC800;
+#endif
+        if (!fopAcM_entrySolidHeap(i_this, useHeapInit, kB_gmSolidHeapSize)) {
             OS_REPORT("//////////////B_GM SET NON !!\n");
             return cPhs_ERROR_e;
         }

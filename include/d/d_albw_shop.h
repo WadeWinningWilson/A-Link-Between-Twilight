@@ -49,7 +49,8 @@ private:
     void populateRows();
     void updateRowLetters(int visCount, int sel);
     void hideRentableCenterBloIcons(int visCount, f32 listIconLeft);
-    bool ensureRowWheelPic(int row, u8 itemNo, JKRArchive* arc);
+    bool ensureRowWheelPic(int row, u8 itemNo, JKRArchive* arc,
+                           const char* customIconName = nullptr);
     bool ensureItemBoxPic();
     void cacheRowLetterSlotBounds(int row);
     void drawRowListText(J2DGrafContext* gfx, int visCount);
@@ -122,6 +123,11 @@ private:
     u8                        mRowItemPicItemNo[6] = {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     };  ///< itemNo cached in mpRowItemPic[row]
+    // Row uses a CUSTOM named icon (write_named_icon_timg): drawn to FILL the
+    // slot box instead of texture-size x the BORROWED item's getTexScale —
+    // the borrowed id's scale (e.g. the small Magic Jar) shrank custom icons
+    // to a fraction of their neighbours.
+    bool                      mRowItemPicCustom[6] = {};
     CPaneMgr*                 mpRowLetterMgr[6] = {};  ///< vanilla letter-icon parent mgr
     ResTIMG*                  mRowLetterTimg    = nullptr;
     f32                       mRowLetterBaseW[6] = {};

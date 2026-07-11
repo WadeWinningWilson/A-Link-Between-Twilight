@@ -31,6 +31,7 @@ Shared workspace for **parallel Cursor chats** on Quick Swap loadout pressure an
 |-------|----------|
 | Scope gate | **Human Link only**; active **only when D-Pad Quick Swap is ON** (`extraItemSlotMode == Extra + Quick Swap`). Wolf unaffected. Quick Swap OFF → no wardrobe recovery tax. |
 | Core loop | **Active wardrobe** (owned − shop-stored) slows **passive + lockout** ALBW recovery; **Postman storage** sheds load. Replaces evict-order limiter (697–699). |
+| Collection menu | **Planned:** enforce active wardrobe on START → Collection equip (§4a). Postman + D-pad already respect storage. |
 | Recovery reference | **1 sword + 1 shield + 1 outfit** after first Twilight (Hero's + Ordon sword + Ordon shield). |
 | Extra swords / shields | **−10%** recovery per extra sword · **−15%** per extra shield (beyond 1 each). |
 | Outfit recovery | **One outfit owned → 0%** outfit penalty. **Two or more outfits owned** → **stack** penalties (includes **currently equipped** outfit). |
@@ -176,6 +177,90 @@ Quick Swap cycles **owned, non-stored** items (exact skip rules TBD at implement
 
 ---
 
+## 4a. UI surfaces — terminology & store/own scope
+
+**Do not confuse these two UIs.** Older session notes (e.g. Quick-Sumo) sometimes say **“vanilla workshop”** — that means the **Collection menu**, **not** the Postman shop.
+
+| Name | Player path | Code | Store/own today |
+|------|-------------|------|-----------------|
+| **Collection menu** | **START** → Quest / Collection screen (sword, shield, clothes, save) | `d_menu_collect.cpp`, `d_menu_window.cpp` (`COLLECT_OPEN`) | **Gap** — equip uses `isItemFirstBit` only; ignores Postman storage |
+| **Postman shop** | Talk to Ordon rental Postman → **Postman's Lending Service** | `d_albw_rental.cpp`, `d_albw_shop.cpp`, `d_a_npc_post.cpp` | **Implemented** — free store, 100 R retrieve; `dAlbwWardrobe_tryStore*` / `tryRetrieve*` |
+
+**Related but different:** D-pad Quick Swap (`dpad_quick_swap.cpp`) cycles the **active wardrobe** in the field. It is not a third equip UI — it shares the same active-pool rules as the shop.
+
+### Active wardrobe (shared rule)
+
+```text
+owned (first-bit / stash)  AND  NOT Postman-stored (bits 697–712)
+```
+
+- **Storing** does **not** clear ownership bits — it only sets Postman storage bits and auto-swaps if equipped.
+- **Retrieve** clears storage only (100 R); does not auto-equip.
+
+### Collection menu — what it equips today
+
+| Row | Slots | Items | Icons |
+|-----|-------|-------|-------|
+| Swords | 3 columns | Ordon wood / Master / Light | `ken_n*` in `clctres.arc` |
+| Shields | 3 columns | Wooden / Ordon / Hylian | `tate_n*` in `clctres.arc` |
+| **Clothes** | **3 columns only** | Hero's (`0x31`), Zora (`0x2F`), Magic (`0x30`) | **`fuku_n0/1/2`** — baked into `clctres.arc`, **not** `itemicon.arc` |
+
+**Not in the Collection menu (wardrobe exists elsewhere):**
+
+| Outfit | Wardrobe / D-pad / Postman | Collection menu |
+|--------|---------------------------|-----------------|
+| **Ordon** (`WEAR_CASUAL` `0x2E`) | Yes — default start clothes | **No slot** (baseline casual; no `fuku_n*` cell) |
+| **Sumo** | Yes — overlay state (`D_ALBW_OUTFIT_SUMO`) | **No slot** — `dAlbwOutfit_equip` / shop only |
+| **Deity** (`DEITY_ARMOR` `0x38`) | Yes — shop session only; **never** D-pad cycle | **No slot** — flag on Magic, not native `setCloth` |
+
+Equip handlers: `changeSword()` / `changeShield()` / `changeClothe()` → `dMeter2Info_set*` with **no** `dAlbwWardrobe_isActive*` check. Visibility: `screenSet()` → `field_0x22d` from **first-bits only**.
+
+### Postman shop — what store/own covers today
+
+| Category | Store (free) | Retrieve (100 R) | Equip on buy |
+|----------|--------------|------------------|--------------|
+| Swords | `dAlbwWardrobe_tryStoreItemNo` | `tryRetrieveItemNo` | Shop grant path |
+| Shields | same | same | same |
+| Outfits (incl. Sumo) | `tryStoreOutfit` | `tryRetrieveOutfit` | `dAlbwOutfit_recordOwnedByItemNo` + equip |
+| Deity | Session ceremony (separate spec) | Free restore on Magic store | [albw-deity-armor-shop.md](../albw-deity-armor-shop.md) |
+
+Quick Swap is **suppressed** while the shop is open (`dALBWRental_isOpen()`). Shield HUD is also suppressed over the shop.
+
+### Planned: extend store/own to the Collection menu
+
+**Goal:** Storing an item at Postman must also prevent re-equipping it from the Collection menu (and close the recovery-tax bypass).
+
+**Phase 1 (minimal risk)** — `d_menu_collect.cpp` only, gated on `dAlbwWardrobe_isResistanceActive()`:
+
+1. **`screenSet`** — hide sword/shield/clothes cells when `dAlbwWardrobe_isStoredItemNo` / `isStoredOutfit`.
+2. **`changeSword` / `changeShield` / `changeClothe`** — deny equip (cancel SFX) when target is Postman-stored.
+3. **Carve-outs unchanged:** shop purchase equip, story `initClothes`, death strip, sumo peel, `swapEquipped*IfStored`.
+
+**Phase 2 (optional, larger)** — add missing outfits to the Collection menu (Ordon slot; Sumo/Deity policy TBD) + route clothes through `dAlbwOutfit_equip` when Quick Swap on. See icons below.
+
+**Out of Phase 1:** Adding new menu slots; central gating inside `dMeter2Info_set*` (unless editor paths must align).
+
+### Icons & custom mod API (Collection vs shop)
+
+| Surface | How icons load | Custom mod API today |
+|---------|----------------|----------------------|
+| **Postman shop rows** | `dMeter2Info_readItemTexture` → `itemicon.arc` | **`icons/item_<itemNo>.png`** works (CI8 48×48 via `custom_assets`) |
+| **Collection clothes row** | Static `fuku_n0/1/2` panes in **`clctres.arc`** | **Does not** use `readItemTexture` — per-item PNGs do **not** change `fuku_*` unless code is refactored or mod replaces whole `clctres.arc` |
+| **Menu arc overlays** | Boot-resident; live re-mount on toggle | `d_albw_menu_res.cpp` — `itemicon.arc`, `clctres.arc`, `dmapres.arc` ([Mod-Load-Order-Design.md](../Mod-Load-Order-Design.md) §10) |
+
+**If Phase 2 adds Ordon/Sumo/Deity slots:** prefer refactoring the clothes row to `readItemTexture` (then `icons/item_46.png` etc. work) or **named icons** (`icons/sumo_outfit.png`) for non-`WEAR_*` entries. Sumo/Deity need a **product call** on whether they belong in the Collection menu at all.
+
+### Open product questions (Collection extension)
+
+| # | Question |
+|---|----------|
+| 1 | **Ordon** — add a 4th clothes slot in Collection, or only enforce store/own on the existing three? |
+| 2 | **Sumo** — Collection equip ever, or stay shop + D-pad only? |
+| 3 | **Deity** — stay shop-only per [albw-deity-armor-shop.md](../albw-deity-armor-shop.md)? |
+| 4 | Phase 2 icons — `readItemTexture` refactor vs full `clctres` mod packs? |
+
+---
+
 ## 5. Sword ALBW spending — ⚠ PROVISIONAL
 
 **Product will revise this section.** Do not ship until updated.
@@ -212,8 +297,10 @@ Agility costs unchanged unless product says otherwise.
                     │  (owned − stored)   │
                     └──────────┬──────────┘
                                │
-         Quick Swap ON         │         Shop “Store” (free)
+         Quick Swap ON         │         Postman “Store” (free)
          (human only)          │
+         Collection menu       │  ← PLANNED: same active-pool gate (§4a)
+         (START → equip)       │
                                ▼
               ┌────────────────────────────────┐
               │  recoveryMult → passive +        │
@@ -234,8 +321,9 @@ Agility costs unchanged unless product says otherwise.
 | `recoveryMult` + Magic/Deity worn | `d_meter2.cpp` |
 | Per-sword spend + wood HS block | `d_meter2.cpp`, `d_a_alink_cut.inc` |
 | Per-shield parry % | `d_albw_shield.cpp` |
-| Shop store/return + stored state | `d_albw_rental.cpp`, `d_albw_shop.cpp` |
-| Stored count API | new helper; consumed by meter + Quick Swap |
+| Shop store/return + stored state | `d_albw_rental.cpp`, `d_albw_shop.cpp`, `d_albw_wardrobe.cpp` |
+| Collection menu store/own enforcement | `d_menu_collect.cpp` — **planned §4a** |
+| Stored count API | `d_albw_wardrobe.cpp`; consumed by meter + Quick Swap |
 | Quick Swap gate | `dpad_quick_swap.cpp`, `action_bindings.cpp` |
 
 ---

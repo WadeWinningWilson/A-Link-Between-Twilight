@@ -192,6 +192,7 @@ set(DOLZEL_FILES
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp
+        src/d/d_albw_potion.cpp
         src/d/d_albw_boss.cpp
         src/d/d_albw_shade_boss.cpp
         src/d/d_albw_wolf_stun.cpp
@@ -199,6 +200,7 @@ set(DOLZEL_FILES
         src/d/d_albw_rupee_popup.cpp
         src/d/d_albw_boss_hp_hud.cpp
         src/d/d_albw_lop_item_belt.cpp
+        src/d/d_albw_menu_res.cpp
         src/dusk/truetest.cpp
         src/d/d_kankyo.cpp
         src/d/d_kyeff.cpp
@@ -1567,6 +1569,7 @@ set(DUSK_FILES
         src/dusk/ui/touch_controls_editor.hpp
         src/dusk/ui/ui.cpp
         src/dusk/ui/ui.hpp
+        src/dusk/ui/mods.cpp
         src/dusk/ui/warp.cpp
         src/dusk/ui/warp.hpp
         src/dusk/ui/window.cpp

@@ -2,6 +2,7 @@
 #include "dusk/menu_pointer.h"
 #include "dusk/settings.h"
 #include "dusk/ui/ui.hpp"
+#include "dusk/leveledit/enumerate.hpp"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
 
@@ -43,6 +44,9 @@ bool isWindowFocused(SDL_Window* window) {
 
 bool shouldCaptureMouse(SDL_Window* window) {
     if (window == nullptr || ui::any_document_visible() || menu_pointer::active()) {
+        return false;
+    }
+    if (leveledit::session_select_mode_enabled()) {
         return false;
     }
     return wantMouseCapture() && isWindowFocused(window);
@@ -116,6 +120,12 @@ void set_cursor_visible(bool visible) {
 
 void update_cursor_visibility(SDL_Window* window, bool captured) {
     if (window == nullptr || !isWindowFocused(window)) {
+        return;
+    }
+
+    if (leveledit::session_select_mode_enabled()) {
+        s_idle_frames = 0;
+        set_cursor_visible(true);
         return;
     }
 

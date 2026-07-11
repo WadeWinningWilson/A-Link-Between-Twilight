@@ -320,7 +320,7 @@ int daCrod_c::execute() {
                 // ============================================
                 if (dMeter2_isALBWLocked()) {
                     fopAc_ac_c* victim =
-                        dAlbwLockout_searchDomRodConfuseVictim(current.pos, 80.0f);
+                        dAlbwLockout_searchDomRodConfuseVictim(old.pos, current.pos, 140.0f);
                     if (victim != NULL) {
                         dAlbwLockout_onDomRodConfuseHit(victim);
                         setReturn();

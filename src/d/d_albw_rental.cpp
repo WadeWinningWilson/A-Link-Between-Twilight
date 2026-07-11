@@ -39,6 +39,7 @@
 #include "d/d_albw_oocoo.h"
 #include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_master_quest.h"
+#include "d/d_albw_potion.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_sumo_test.h"
 #include "d/d_albw_outfit.h"
@@ -310,6 +311,7 @@ static ALBWRentalState sState = STATE_CLOSED;
 enum VisibleKind {
     VISIBLE_MQ_HEART = 0,
     VISIBLE_MQ_METER,
+    VISIBLE_POTION_CAPACITY,
     VISIBLE_FA_TIER,
     VISIBLE_ITEM,
     VISIBLE_SHADE_REFUGE,  // "Return to Last Shade Watcher" (above Oocoo)
@@ -458,7 +460,8 @@ static bool categoryHasVisibleRows(ALBWShopCategory cat) {
         // MQ heart/meter rows always show when Master Quest is on; the Shade
         // Watcher return and Oocoo's Return are contextual.  Any one of them
         // makes the Upgrades & Services page non-empty.
-        if (dAlbwMQ_isEnabled() || dShadeRefuge_canShowInShop() ||
+        if (dAlbwMQ_isEnabled() || dAlbwPotion_shouldShowCapacityShopRow() ||
+            dShadeRefuge_canShowInShop() ||
             dALBWOocoo_canShowInShop() || dFocusedArts_shouldShowShopTierRow()) {
             return true;
         }
@@ -627,6 +630,16 @@ static void rebuildVisibleList() {
         sVisibleList[sVisibleCount].kind        = VISIBLE_MQ_METER;
         sVisibleList[sVisibleCount].kItemsIdx   = -1;
         sVisibleList[sVisibleCount].purchasable = dAlbwMQ_canPurchaseMeterShop();
+        if (sVisibleList[sVisibleCount].purchasable) {
+            sAvailCount++;
+        }
+        sVisibleCount++;
+    }
+
+    if (cat == CAT_UPGRADES && dAlbwPotion_shouldShowCapacityShopRow()) {
+        sVisibleList[sVisibleCount].kind        = VISIBLE_POTION_CAPACITY;
+        sVisibleList[sVisibleCount].kItemsIdx   = -1;
+        sVisibleList[sVisibleCount].purchasable = dAlbwPotion_canPurchaseCapacityShop();
         if (sVisibleList[sVisibleCount].purchasable) {
             sAvailCount++;
         }
@@ -880,6 +893,31 @@ static void tryPurchase(int visIdx) {
         sStatusMsg            = "May your stamina carry you far.\nThank you for your patronage!";
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();  // a purchase can empty the current page
+        rebuildVisibleList();
+        return;
+    }
+
+    if (sVisibleList[visIdx].kind == VISIBLE_POTION_CAPACITY) {
+        const int price = dAlbwPotion_getCapacityShopPrice();
+        u16 rupees      = dComIfGs_getRupee();
+        if (price <= 0) {
+            return;
+        }
+        if (rupees < (u16)price) {
+            sStatusMsg          = "Sincerest apologies, but we can't return\nthat to you for that little..";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        if (!dAlbwPotion_tryPurchaseCapacityShop()) {
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)price);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
+        sStatusMsg            = "Your bottle holds a little more now.\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
         rebuildVisibleList();
         return;
     }
@@ -1368,6 +1406,7 @@ void dALBWRental_tick() {
 const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
     static dALBWVisibleEntry sPubList[kVisibleListMax];
     for (int i = 0; i < sVisibleCount; ++i) {
+        sPubList[i].customIconName = nullptr;  // default: use itemNo for the icon
         if (sVisibleList[i].kind == VISIBLE_MQ_HEART) {
             sPubList[i].name           = dAlbwMQ_getHeartShopName();
             sPubList[i].price          = sVisibleList[i].purchasable
@@ -1385,7 +1424,19 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
                 ? dAlbwMQ_getMeterShopPrice(dAlbwMQ_getMeterShopTier()) : 0;
             sPubList[i].purchasable    = sVisibleList[i].purchasable;
             sPubList[i].desc           = dAlbwMQ_getMeterShopDesc();
-            sPubList[i].itemNo         = (u8)dItemNo_MAGIC_LV1_e;
+            sPubList[i].itemNo         = (u8)dItemNo_MAGIC_LV1_e;  // fallback icon
+            sPubList[i].customIconName = "stamina_upgrade";  // dedicated custom slot
+            sPubList[i].isOocooService = false;
+            sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
+        } else if (sVisibleList[i].kind == VISIBLE_POTION_CAPACITY) {
+            sPubList[i].name           = dAlbwPotion_getCapacityShopName();
+            sPubList[i].price          = sVisibleList[i].purchasable
+                ? dAlbwPotion_getCapacityShopPrice() : 0;
+            sPubList[i].purchasable    = sVisibleList[i].purchasable;
+            sPubList[i].desc           = dAlbwPotion_getCapacityShopDesc();
+            sPubList[i].itemNo         = (u8)dItemNo_RED_BOTTLE_e;
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
             sPubList[i].isStorageStore = false;

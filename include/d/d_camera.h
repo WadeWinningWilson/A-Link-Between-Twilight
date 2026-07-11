@@ -1041,6 +1041,7 @@ public:
     bool freeCamera();
     bool executeDebugFlyCam();
     void deactivateDebugFlyCam();
+    static void resetEditorFlyCamMouseLook();
     #endif
     bool towerCamera(s32);
     bool hookshotCamera(s32);

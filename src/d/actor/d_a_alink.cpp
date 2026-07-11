@@ -6225,6 +6225,35 @@ void daAlink_c::setItemMatrix(int param_0) {
         mpLinkBootModels[0]->setAnmMtx(2, mpLinkModel->getAnmMtx(0x14));
         mpLinkBootModels[0]->setAnmMtx(3, mpLinkModel->getAnmMtx(0x15));
 
+#if TARGET_PC
+        // ============================================
+        // TEMP DIAG — ALBW-BOOT-DIAG (WW iron-boots shard measurement). STRIP before push.
+        // Dumps the EXACT matrices the boot rig injects (base TR + ankle/foot/toe anm mtx
+        // 0x13/0x14/0x15) so an offline script can multiply them against al_bootsh's verts
+        // vs the WW re-rig's verts and MEASURE the shard magnitude / required Z-slimming.
+        // Throttled ~1 sample / 2s; boots-equipped only. Parse tag: "ALBW-BOOT-DIAG".
+        // ============================================
+        {
+            static int s_albwBootDiagThrottle = 0;
+            if (--s_albwBootDiagThrottle <= 0) {
+                s_albwBootDiagThrottle = 120;
+                static int s_albwBootDiagSample = 0;
+                s_albwBootDiagSample++;
+                MtxP diagMtx[4] = {mpLinkModel->getBaseTRMtx(), mpLinkModel->getAnmMtx(0x13),
+                                   mpLinkModel->getAnmMtx(0x14), mpLinkModel->getAnmMtx(0x15)};
+                static const char* diagName[4] = {"base", "j1_ankle13", "j2_foot14", "j3_toe15"};
+                for (int d = 0; d < 4; d++) {
+                    MtxP m = diagMtx[d];
+                    DuskLog.debug("ALBW-BOOT-DIAG s={} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+                                  s_albwBootDiagSample, diagName[d],
+                                  m[0][0], m[0][1], m[0][2], m[0][3],
+                                  m[1][0], m[1][1], m[1][2], m[1][3],
+                                  m[2][0], m[2][1], m[2][2], m[2][3]);
+                }
+            }
+        }
+#endif
+
         mDoMtx_stack_c::XrotS(-0x8000);
 #ifdef TARGET_PC
         if (dusk::frame_interp::is_enabled()) {

@@ -167,15 +167,36 @@ namespace dusk::audio {
 #define D_ALBW_AUDIO_SHADOW 1
 #endif
 
-    // Register a resident bank's mod twin: [aramBase, aramBase+size) -> buf.
+    // ============================================
+    // NEW CODE — ALBW Port (toggle-corruption fix, 2026-07-11)
+    // Mod waves live in a VIRTUAL address space: remap_voice hands a new note
+    // kShadowVirtualBase + aramBase + modOffset instead of a raw in-bank ARAM
+    // address. The mixer then routes each fetch BY ADDRESS ALONE — virtual =
+    // mod buffer, real = vanilla ARAM — with no global flag consulted at fetch
+    // time. Why: the old design gated fetches on setShadowActive(), so a
+    // mid-session toggle re-routed IN-FLIGHT voices to the other data set at
+    // their now-meaningless offsets (mod offsets read against vanilla bytes and
+    // vice versa) → audibly corrupted sustained/looping notes until they died.
+    // With per-note address latching, live voices keep their correct source
+    // forever (mod twins are pooled for the run, never freed) and the active
+    // flag only gates NEW noteOns (checked in custom_assets::remap_voice).
+    // ARAM is ≤ ~24 MB, so 0x40000000 can never collide with a real address.
+    // ============================================
+    constexpr u32 kShadowVirtualBase = 0x40000000u;
+
+    // Register a resident bank's mod twin: [aramBase, aramBase+size) -> buf
+    // (addressed by new notes as kShadowVirtualBase + aramBase + offset).
     void registerShadowWave(u32 aramBase, u32 size, const u8* buf);
     // Drop a bank's mod twin (called when the vanilla bank is erased).
     void unregisterShadowWave(u32 aramBase);
-    // Flip whether the mod set prevails (follows the Custom Models toggle).
+    // Flip whether NEW notes remap to the mod set (follows the Custom Models
+    // toggle; in-flight notes keep the source their address latched at noteOn).
     void setShadowActive(bool active);
     bool shadowActive();
-    // If the mod is active and a byte-compatible twin covers waveAramAddress,
-    // returns the equivalent pointer INTO the mod buffer (buf + intra-bank
-    // offset); else nullptr, meaning "decode from vanilla ARAM as normal".
+    // VIRTUAL address (>= kShadowVirtualBase) -> equivalent pointer into the
+    // mod twin buffer; REAL address -> nullptr ("decode from vanilla ARAM").
+    // A stale virtual address (bank erased mid-note) also returns nullptr —
+    // the fetch site must then SILENCE the voice, never fall back to ARAM
+    // (the virtual offset would be out of bounds there).
     const u8* resolveShadowWave(u32 waveAramAddress);
 }

@@ -31,6 +31,7 @@
 
 #if TARGET_PC
 #include "dusk/game_clock.h"
+#include "d/d_albw_potion.h"
 #include "dusk/menu_pointer.h"
 #include "dusk/settings.h"
 #include "dusk/action_bindings.h"
@@ -1966,6 +1967,15 @@ u8 dMenu_Ring_c::getItemNum(u8 i_slotNo) {
     case dItemNo_BEE_CHILD_e:
         ret = dComIfGs_getBottleNum(i_slotNo - 0xB);
         break;
+#if TARGET_PC
+    case dItemNo_RED_BOTTLE_e:
+    case dItemNo_RED_BOTTLE_2_e:
+    case dItemNo_CHUCHU_RED_e:
+        if (dAlbwPotion_isSoulboundRedInSlot(i_slotNo)) {
+            ret = dComIfGs_getBottleNum(kAlbwPotionSoulboundBottleIdx);
+        }
+        break;
+#endif
     case dItemNo_BOW_e:
     case dItemNo_LIGHT_ARROW_e:
     case dItemNo_ARROW_LV1_e:
@@ -2005,6 +2015,15 @@ u8 dMenu_Ring_c::getItemMaxNum(u8 i_slotNo) {
     case dItemNo_BEE_CHILD_e:
         ret = dComIfGs_getBottleMax();
         break;
+#if TARGET_PC
+    case dItemNo_RED_BOTTLE_e:
+    case dItemNo_RED_BOTTLE_2_e:
+    case dItemNo_CHUCHU_RED_e:
+        if (dAlbwPotion_isSoulboundRedInSlot(i_slotNo)) {
+            ret = dAlbwPotion_getMaxUses();
+        }
+        break;
+#endif
     case dItemNo_BOW_e:
     case dItemNo_LIGHT_ARROW_e:
     case dItemNo_ARROW_LV1_e:

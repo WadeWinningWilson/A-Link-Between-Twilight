@@ -18,6 +18,10 @@
 
 #include "dusk/version.hpp"
 
+#if TARGET_PC
+#include "d/d_albw_potion.h"
+#endif
+
 #if PLATFORM_WII || PLATFORM_SHIELD
 #include <revolution/sc.h>
 #include <revolution/wpad.h>
@@ -482,6 +486,13 @@ void dSv_player_item_c::setBottleItemIn(u8 curItemIn, u8 newItemIn) {
 
     for (int i = 0; i < 4; i++) {
         if (curItemIn == mItems[i + SLOT_11]) {
+#if TARGET_PC
+            if (dAlbwPotion_isSoulboundRedInSlot(i + SLOT_11) &&
+                !dAlbwPotion_isSoulboundRedItem(newItemIn))
+            {
+                return;
+            }
+#endif
             setItem(i + SLOT_11, newItemIn);
             if (newItemIn == dItemNo_HOT_SPRING_e) {
                 dMeter2Info_setHotSpringTimer(i + SLOT_11);

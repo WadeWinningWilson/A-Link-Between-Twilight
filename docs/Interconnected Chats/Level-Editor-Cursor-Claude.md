@@ -1237,6 +1237,99 @@ cursor + left-click edge in Rml's space). Refinements:
 
 ---
 
+## Bug gate 7 — 1b click-pick fails: fly-cam owns the mouse → freeze-look "Select Mode" (2026-07-10)
+
+**User playtest:** click-pick did **not** work. **User steer:** keep **mouse-click** (more accurate/clean than a reticle — reticle idea rejected); add a **key/mouse button that "holds the mouse in place"** so the user can click the desired actor.
+
+**Root cause (Claude, verified):** `pick.cpp` is correct, but the editor fly-cam consumes **mouse motion for camera look** ([d_camera.cpp:7631-7636] — `io.MousePos` deltas → yaw/pitch). Moving the cursor toward an actor rotates the camera *away*, so a free cursor can never rest on a screen actor. Cursor-pick is incompatible with mouse-look-always.
+
+### Phase A — Claude proposed plan (Select Mode)
+
+**Keep `pick.cpp` (mouse-click) unchanged** — it works the moment the camera stops eating the mouse. Add a **Select Mode** that freezes fly-cam mouse-look so the cursor is free to click:
+- **Mechanism:** while Select Mode is active, `executeDebugFlyCam` **skips the mouse-look delta** (camera doesn't rotate with the mouse). Cursor free + visible; **left-click → `try_world_pick_on_click`** (existing). Keep WASD camera *move* (only mouse-*look* freezes) so you can still nudge while selecting.
+- **Trigger — recommend TOGGLE** for precise clicking (press key → Select Mode; click freely; press again → fly). Toggle beats hold because you don't fight holding-a-key while aiming+clicking precisely. **HOLD** (e.g. Alt / RMB held) offered as an alternative.
+- **Configurable:** make it a **mapped binding** (reuse the action-bindings / key-mapping framework the mod already has); sensible default, user-rebindable.
+- **Feedback:** show the OS cursor + a small "SELECT MODE" indicator; hide in fly mode so the state is obvious.
+- **UI gate unchanged** (pick still skips over Rml/ImGui/menu).
+
+**For Cursor's Phase A (independent):** default key/button; toggle vs hold as the shipped default; freeze WASD too or look-only; cursor show/hide plumbing (SDL_ShowCursor / relative-mode) per mode; does `mouseValid`/`io.WantCaptureMouse` already suppress look when cursor is over UI (partial precedent).
+
+### Phase A — Cursor proposed plan (Select Mode)
+
+**Agree with root cause and scope:** `pick.cpp` stays; fix is **fly-cam must not consume mouse motion** while the user is aiming to click.
+
+**Mechanism (look-only freeze):**
+1. Session latch `g_levelEditorSelectMode` (or `session_select_mode_enabled()` in `dusk::leveledit`) — **toggle**, default off.
+2. In `dCamera_c::executeDebugFlyCam` ([d_camera.cpp:7631-7636]): when latch on **and** `editor_fly_cam_active()`, **skip** the `io.MousePos` delta → yaw/pitch block. **Keep** WASD / stick / triggers / Q-E roll — only mouse-*look* freezes.
+3. While Select Mode on: **release relative mouse capture** (`SDL_SetWindowRelativeMouseMode(false)` + `SDL_ShowCursor`) so the OS cursor is free to rest on a projected actor. On exit: restore prior fly-cam capture state (same path as `dusk::mouse::read` / fly-cam already uses ImGui mouse when `!WantCaptureMouse`).
+4. **Left-click release** → existing `try_world_pick_on_click()` (unchanged). UI gate unchanged.
+
+**Trigger — ship TOGGLE (not hold):** matches user steer (“hold mouse in place” = freeze look until toggled off, not fight a held key while clicking). Hold (Alt/RMB) = optional fast-follow, not default.
+
+**Default binding (PC):**
+- **Primary:** `V` key (editor-only, `g_levelEditorSession` gated — not a global ActionBind yet; avoids polluting controller-config until 1c modes toolbar).
+- **Fast-follow:** middle-mouse **hold** could toggle look-freeze while held (same latch, inverted semantics) — defer unless playtest wants it.
+
+**Feedback:**
+- Stage tab: **“Select Mode: On/Off”** button beside Fly Cam (mirrors Fly Cam latch UX).
+- Small on-screen label when active (ImGui overlay or Stage status line): `SELECT MODE` — cursor visible is the main cue.
+
+**Precedent check:** `mouseValid = !io.WantCaptureMouse` already suppresses look when ImGui wants the mouse — partial, but **not** when cursor is over empty world (the failure case). Select Mode is the explicit “I want to click the world” override.
+
+**OUT of gate 7:** reticle pick; changing pick radius/depth; Stage list row sync; new `menu_pointer` context.
+
+**Playtest bar:** Field + fly cam → toggle Select Mode → cursor free, camera doesn't spin when moving mouse → click Bokoblin → live + box + right pane → toggle off → mouse-look returns; Editor/ImGui still no pick-through.
+
+### Phase B — Claude critique of Cursor's plan
+
+Strong plan, converges with mine. **Endorse:** toggle (not hold); look-only freeze by skipping the
+`io.MousePos`→yaw/pitch delta; keep `pick.cpp`; Stage "Select Mode" button + on-screen label; UI gate
+unchanged; the OUT list + playtest bar.
+
+**Concede `V`-key-not-ActionBind:** fine for v1 (editor-only, session-gated; the Stage button gives
+discoverability; defer a rebindable ActionBind to the 1c modes toolbar). One ask: the on-screen label
+should **name the key** (`SELECT MODE — V to exit`) so it's self-documenting; confirm `V` is unused by
+fly-cam/ImGui (WASD/QE/Space/Ctrl/Shift are taken — `V` is free).
+
+**Critical refinement — the cursor-ownership race (step 3):** the fly-cam uses **absolute `io.MousePos`**,
+so the cursor is *already free* during fly. BUT **`dusk/mouse.cpp` re-applies SDL relative-capture EVERY
+FRAME** ([mouse.cpp:57-60]) when `enableMouseCamera`/`enableMouseAim` is on — so a **one-shot**
+`SetWindowRelativeMouseMode(false)`/`ShowCursor` in Select Mode is **overwritten next frame** and the
+cursor re-hides. Resolve one of two ways:
+- **(preferred) If the cursor is already free in an editor fly-cam session** (mouse-cam typically off) →
+  **step 2 (skip the look-delta) is the ENTIRE fix; drop the SDL capture juggling (step 3)** — simplest, safest.
+- **If mouse-cam CAN be on**, don't one-shot the release — **gate `mouse.cpp`'s per-frame `should_capture`
+  on `!select_mode`** (and save/restore the *actual* prior relative-mode + cursor-visible state on
+  enter/exit), so the free cursor sticks. A one-shot SDL call that `mouse.cpp` re-captures = a failed playtest.
+- **First step: verify the actual cursor state during an editor fly-cam session** (is `mouse.cpp` capturing?) — that decides which path.
+
+**Minor:** reset `sFlyCamLastMousePos` on Select-Mode enter **and** exit → avoids a camera snap when
+returning to fly (stale last-pos). Perf: latch is a bool, session-gated → zero cost when off. ✓
+
+### Phase C — Unified plan + sign-off
+
+**Select Mode (fix gate-7 click-pick), zero change to `pick.cpp`:**
+1. **Latch** `g_levelEditorSelectMode` (toggle, default off), `g_levelEditorSession`-gated.
+2. **Freeze look:** in `executeDebugFlyCam` ([d_camera.cpp:7631-7636]), when latch on + `editor_fly_cam_active()`,
+   **skip the `io.MousePos`→yaw/pitch delta**; keep WASD/stick/triggers/roll. Reset `sFlyCamLastMousePos` on toggle.
+3. **Cursor free — race-safe:** first verify whether the cursor is already free in an editor fly-cam session.
+   If yes → nothing more. If `mouse.cpp` can capture (mouse-cam on) → **gate its per-frame `should_capture` on
+   `!select_mode`** + save/restore prior state; **do not** rely on a one-shot SDL release.
+4. **Click:** left-click → existing `try_world_pick_on_click()` (unchanged); UI gate unchanged.
+5. **Trigger:** TOGGLE via **`V`** + Stage "Select Mode" button; on-screen `SELECT MODE — V to exit` label.
+6. **OUT:** reticle; pick radius/depth changes; list-row sync; ActionBind rebind (→ 1c); hold-variant (fast-follow).
+7. **Playtest:** Field + fly cam → toggle Select Mode → cursor stays free (test with mouse-cam BOTH off and on),
+   camera doesn't spin on mouse-move → click Bokoblin → live+box+right-pane → toggle off → look returns; Editor/ImGui no pick-through; no crash; FPS.
+
+| Role | Sign-off | Notes | When |
+|------|----------|-------|------|
+| Cursor | **APPROVED** | Toggle + look-only freeze + `V` + Stage button + cursor release; `pick.cpp` untouched. Awaiting Claude Phase B. | 2026-07-10 |
+| Claude | **APPROVED** | +cursor-ownership race fix (verify already-free; else gate mouse.cpp `should_capture` on `!select_mode`, don't one-shot); reset sFlyCamLastMousePos on toggle; label names `V`. Implement. | 2026-07-10 |
+
+- **2026-07-10 (Cursor):** Gate 7 implemented — `session_select_mode` latch, `V` toggle, Stage button, fly-cam look freeze, `mouse.cpp` capture gate, HUD label. `pick.cpp` unchanged. RelWithDebInfo OK. Awaiting playtest (mouse-cam on + off).
+
+---
+
 ## North-star collage — target product feel (2026-07-09)
 
 **User aim:** final Level Editor = **collage** of Ultimate Doom Builder, SLADE, GMod sandbox, and Portal 2 / Hammer — not a clone of any one.

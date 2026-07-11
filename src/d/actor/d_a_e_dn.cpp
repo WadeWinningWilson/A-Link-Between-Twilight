@@ -22,10 +22,10 @@
 static void albwDnApplyConfuseAim(e_dn_class* i_this) {
 #if TARGET_PC
     fopEn_enemy_c* actor = (fopEn_enemy_c*)&i_this->actor;
-    if (dAlbwLockout_isConfused(actor)) {
-        i_this->pl_dir = dAlbwLockout_getConfuseAimDistanceXZ(actor);
-        i_this->search_angle_y = dAlbwLockout_getConfuseAimAngleY(actor);
-        i_this->search_angle_x = dAlbwLockout_getConfuseAimAngleX(actor);
+    if (dAlbwLockout_hasRivalTarget(actor)) {
+        i_this->pl_dir = dAlbwLockout_getRivalAimDistanceXZ(actor);
+        i_this->search_angle_y = dAlbwLockout_getRivalAimAngleY(actor);
+        i_this->search_angle_x = dAlbwLockout_getRivalAimAngleX(actor);
     }
 #else
     (void)i_this;
@@ -379,6 +379,73 @@ static u8 hio_set;
 
 static daE_DN_HIO_c l_HIO;
 
+#if TARGET_PC
+static void e_dn_confuse_fight(e_dn_class* i_this) {
+    fopEn_enemy_c* actor = (fopEn_enemy_c*)&i_this->actor;
+
+    if (dAlbwLockout_getRivalTarget(actor) == NULL) {
+        return;
+    }
+
+    i_this->snap_angle_y_flag = 1;
+    i_this->field_0x6f4 = 1;
+    i_this->unk_timer_1 = 40;
+
+    const f32 dist = i_this->pl_dir;
+    cLib_addCalcAngleS2(&actor->shape_angle.y, i_this->search_angle_y, 4, 0x1000);
+    actor->current.angle.y = actor->shape_angle.y;
+
+    if (dist > l_HIO.battle_init_range + 150.0f) {
+        if (i_this->anm_no != ANM_RUN) {
+            anm_init(i_this, ANM_RUN, 5.0f, J3DFrameCtrl::EMode_LOOP, 1.05f);
+        }
+        i_this->mode = 1;
+        cLib_addCalc2(&actor->speedF, l_HIO.dash_speed, 1.0f, 6.0f);
+        return;
+    }
+
+    if (dist > l_HIO.attack_init_range) {
+        if (i_this->anm_no != ANM_RUN) {
+            anm_init(i_this, ANM_RUN, 5.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+        }
+        cLib_addCalc2(&actor->speedF, l_HIO.dash_speed * 0.65f, 1.0f, 5.0f);
+        if (i_this->timer[2] == 0 &&
+            abs(cLib_distanceAngleS(actor->shape_angle.y, i_this->search_angle_y)) < 0x2800)
+        {
+            i_this->timer[2] = 6;
+            i_this->action = ACTION_ATTACK;
+            i_this->mode = 0;
+        }
+        return;
+    }
+
+    cLib_addCalc0(&actor->speedF, 1.0f, 4.0f);
+    if (i_this->timer[2] == 0) {
+        i_this->timer[2] = 6;
+        i_this->action =
+            dist < (l_HIO.attack_init_range - 80.0f) ? ACTION_ATTACK_0 : ACTION_ATTACK;
+        i_this->mode = 0;
+    }
+}
+
+static void e_dn_confuse_idle(e_dn_class* i_this) {
+    fopEn_enemy_c* actor = (fopEn_enemy_c*)&i_this->actor;
+
+    actor->speedF = 0.0f;
+    switch (i_this->mode) {
+        case 90:
+            anm_init(i_this, ANM_WAIT_01, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+            i_this->mode = 91;
+            break;
+        case 91:
+            break;
+        default:
+            i_this->mode = 90;
+            break;
+    }
+}
+#endif
+
 static fopAc_ac_c* target_info[10];
 
 static int target_info_count;
@@ -489,6 +556,24 @@ static BOOL player_way_check(e_dn_class* i_this) {
 static int pl_check(e_dn_class* i_this, f32 search_area, s16 search_angle) {
     fopEn_enemy_c* actor = (fopEn_enemy_c*)&i_this->actor;
     daPy_py_c* player = (daPy_py_c*)dComIfGp_getPlayer(0);
+
+#if TARGET_PC
+    if (dAlbwLockout_hasRivalTarget(actor)) {
+        fopAc_ac_c* confuseTarget = dAlbwLockout_getRivalTarget(actor);
+        if (confuseTarget == NULL) {
+            return 0;
+        }
+
+        if (i_this->pl_dir < search_area) {
+            s16 angle = actor->shape_angle.y - i_this->search_angle_y;
+            if (angle < search_angle && angle > (s16)-search_angle) {
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+#endif
 
     if (i_this->pl_dir < search_area) {
         s16 angle = actor->shape_angle.y - i_this->search_angle_y;
@@ -1078,6 +1163,13 @@ static void e_dn_fight_run(e_dn_class* i_this) {
     int frame = i_this->anm_p->getFrame();
     s8 sVar4 = 1;
 
+#if TARGET_PC
+    if (dAlbwLockout_hasRivalTarget(actor)) {
+        e_dn_confuse_fight(i_this);
+        return;
+    }
+#endif
+
     if (pl_check(i_this, i_this->pl_range + 50.0f, 0x7FFF) == 0 && i_this->timer[0] == 0) {
         if (i_this->unk_timer_1 == 0) {
             sVar4 = 0;
@@ -1507,6 +1599,11 @@ static void e_dn_attack_0(e_dn_class* i_this) {
             if (i_this->anm_p->isStop()) {
                 i_this->action = ACTION_FIGHT_RUN;
                 i_this->mode = 0;
+#if TARGET_PC
+                if (dAlbwLockout_hasRivalTarget(actor)) {
+                    i_this->timer[2] = 0;
+                }
+#endif
             }
     }
 
@@ -1536,7 +1633,13 @@ static void e_dn_attack(e_dn_class* i_this) {
         case 1:
             if (frame < 10 || (frame >= 25 && frame <= 30)) {
                 sVar1 = actor->current.angle.y;
+#if TARGET_PC
+                const s16 turnStep =
+                    dAlbwLockout_hasRivalTarget(actor) ? 0x1000 : 0x800;
+                cLib_addCalcAngleS2(&actor->current.angle.y, i_this->search_angle_y, 2, turnStep);
+#else
                 cLib_addCalcAngleS2(&actor->current.angle.y, i_this->search_angle_y, 2, 0x800);
+#endif
                 sVar1 -= actor->current.angle.y;
                 ANGLE_MULT(sVar1, YREG_S(5) + 2);
                 s16 sVar3 = YREG_S(6) + 0x1000;
@@ -1567,6 +1670,11 @@ static void e_dn_attack(e_dn_class* i_this) {
             if (i_this->anm_p->isStop()) {
                 i_this->action = ACTION_FIGHT_RUN;
                 i_this->mode = 0;
+#if TARGET_PC
+                if (dAlbwLockout_hasRivalTarget(actor)) {
+                    i_this->timer[2] = 0;
+                }
+#endif
             }
     }
 
@@ -2473,6 +2581,35 @@ static void action(e_dn_class* i_this) {
         actor->attention_info.flags = fopAc_AttnFlag_BATTLE_e;
     }
 
+#if TARGET_PC
+    s8 albwConfuseOverride = 0;
+    if (dAlbwLockout_isConfused(actor)) {
+        if (dAlbwLockout_getConfuseTarget(actor) == NULL) {
+            e_dn_confuse_idle(i_this);
+            albwConfuseOverride = 1;
+        } else if (i_this->action != ACTION_ATTACK && i_this->action != ACTION_ATTACK_0 &&
+                   i_this->action != ACTION_FIGHT_RUN && i_this->action != ACTION_TAIL_ATTACK &&
+                   i_this->action != ACTION_DAMAGE && i_this->action != ACTION_S_DAMAGE &&
+                   i_this->action != ACTION_GUARD)
+        {
+            i_this->action = ACTION_FIGHT_RUN;
+            i_this->mode = 0;
+        }
+    } else if (dAlbwLockout_isProvoked(actor)) {
+        if (dAlbwLockout_getProvokeSource(actor) == NULL) {
+            albwConfuseOverride = 1;
+        } else if (i_this->action != ACTION_ATTACK && i_this->action != ACTION_ATTACK_0 &&
+                   i_this->action != ACTION_FIGHT_RUN && i_this->action != ACTION_TAIL_ATTACK &&
+                   i_this->action != ACTION_DAMAGE && i_this->action != ACTION_S_DAMAGE &&
+                   i_this->action != ACTION_GUARD)
+        {
+            i_this->action = ACTION_FIGHT_RUN;
+            i_this->mode = 0;
+        }
+    }
+
+    if (!albwConfuseOverride) {
+#endif
     switch (i_this->action) {
         case ACTION_NORMAL:
             e_dn_normal(i_this);
@@ -2555,6 +2692,9 @@ static void action(e_dn_class* i_this) {
             e_dn_reg(i_this);
             break;
     }
+#if TARGET_PC
+    }
+#endif
 
     if (bVar2) {
         dBgS_ObjGndChk obj_gnd_chk;

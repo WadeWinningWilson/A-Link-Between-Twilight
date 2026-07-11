@@ -15,6 +15,7 @@
 namespace {
 
 int sZoraGraceTimer = 0;
+f32 sNonZoraOxygenDrainAccum = 0.0f;
 
 f32 receivedMultForKind(dAlbwOutfitKind kind, bool zoraWaterBuff) {
     switch (kind) {
@@ -113,6 +114,14 @@ f32 dAlbwOutfitStats_scaleSwimSpeed(const daAlink_c* link, f32 speed) {
     return speed * dAlbwOutfitStats_getSwimSpeedMult(link);
 }
 
+f32 dAlbwOutfitStats_getSubmergedHumanSwimSpeedMult(const daAlink_c* link) {
+    if (dAlbwOutfitStats_isSubmergedHumanSwim(link)) {
+        return kAlbwOutfitStatsSubmergedHumanSwimMult;
+    }
+
+    return 1.0f;
+}
+
 bool dAlbwOutfitStats_allowsSubmergedSwim(const daAlink_c* link) {
     if (!dAlbwOutfitStats_isEnabled() || link == NULL || link->checkWolf()) {
         return false;
@@ -136,6 +145,18 @@ bool dAlbwOutfitStats_isSubmergedHumanSwim(const daAlink_c* link) {
 
     // Dive init can still have FLG0_SWIM_UP set briefly; keep buoyancy/eject guards active.
     return link->mProcID == daAlink_c::PROC_SWIM_DIVE;
+}
+
+void dAlbwOutfitStats_resetOxygenDrainAccum() {
+    sNonZoraOxygenDrainAccum = 0.0f;
+}
+
+void dAlbwOutfitStats_tickNonZoraOxygenDrain() {
+    sNonZoraOxygenDrainAccum += kAlbwOutfitStatsNonZoraOxygenDrainMult;
+    while (sNonZoraOxygenDrainAccum >= 1.0f) {
+        dComIfGp_setOxygenCount(-1);
+        sNonZoraOxygenDrainAccum -= 1.0f;
+    }
 }
 
 bool dAlbwOutfitStats_hasActiveDiveIntent(const daAlink_c* link) {

@@ -21,16 +21,26 @@
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_wolf_stun.h"
 #include "d/d_albw_lockout.h"
+#include "d/d_meter2_info.h"
 #endif
 
 static s16 albwOcAimAngleY(fopAc_ac_c* i_actor) {
 #if TARGET_PC
-    if (dAlbwLockout_isConfused(i_actor)) {
-        return dAlbwLockout_getConfuseAimAngleY(i_actor);
+    if (dAlbwLockout_hasRivalTarget(i_actor)) {
+        return dAlbwLockout_getRivalAimAngleY(i_actor);
     }
 #endif
     return fopAcM_searchPlayerAngleY(i_actor);
 }
+
+#if TARGET_PC
+static f32 albwOcAimDistance(fopAc_ac_c* i_actor) {
+    if (dAlbwLockout_hasRivalTarget(i_actor)) {
+        return dAlbwLockout_getRivalAimDistanceXZ(i_actor);
+    }
+    return fopAcM_searchPlayerDistanceXZ(i_actor);
+}
+#endif
 
 
 enum OC_ACTIONS {
@@ -225,6 +235,29 @@ static void* s_other_oc(void* arg_lhs, void* arg_rhs) {
     f32 dist;
     if (arg_lhs != arg_rhs && fopAcM_IsActor(arg_lhs)) {
         if (fpcM_IsCreating(fopAcM_GetID(arg_lhs)) == 0 && fopAcM_GetName(arg_lhs) == fpcNm_E_OC_e) {
+#if TARGET_PC
+            // Lockout Dom Rod confuse: do not pull nearby OCs into player battle
+            // because the confused host has mBattleOn while fighting other enemies.
+            if (dMeter2_isALBWLocked() && dAlbwLockout_isConfused((fopAc_ac_c*)arg_lhs)) {
+                switch (((daE_OC_c*)arg_lhs)->getActionMode()) {
+                    case E_OC_ACTION_BIG_DAMAGE:
+                        dist = fopAcM_searchActorDistance((fopAc_ac_c*)arg_lhs, (fopAc_ac_c*)arg_rhs);
+                        if (dist < l_HIO.teammate_attention_radius) {
+                            E_OC_n::m_damage_oc = (daE_OC_c*)arg_lhs;
+                        }
+                        break;
+                    case E_OC_ACTION_DEATH:
+                        dist = fopAcM_searchActorDistance((fopAc_ac_c*)arg_lhs, (fopAc_ac_c*)arg_rhs);
+                        if (dist < l_HIO.teammate_attention_radius) {
+                            E_OC_n::m_death_oc = (daE_OC_c*)arg_lhs;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                return NULL;
+            }
+#endif
             if (((daE_OC_c*) arg_lhs)->isBattleOn()) {
                 dist = fopAcM_searchActorDistance((fopAc_ac_c*) arg_lhs, (fopAc_ac_c*) arg_rhs);
                 if (dist < l_HIO.battle_participation_radius) {
@@ -740,6 +773,33 @@ void daE_OC_c::damage_check() {
     } else if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_40)) {
         S16_ADD(health, 10);
     } else if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+#if TARGET_PC
+        // Lockout slingshot: same pause tag as cc_at_check (boomerang ranged-open table).
+        if (dMeter2_isALBWLocked()) {
+#if AVOID_UB
+            if (strcmp(mName, "E_OC") == 0) {
+#else
+            if (mName == "E_OC") {
+#endif
+                S16_SUB(health, 5);
+                if (health < 0) {
+                    health = 0;
+                    mSound.startCollisionSE(0x40007, 0x20);
+                    dComIfGp_setHitMark(3, this, &my_vec_0, NULL, NULL, 0);
+                    setActionMode(E_OC_ACTION_BIG_DAMAGE, 0);
+                    offTgSph();
+                    dAlbwEnemyRupees_onEnemyKill(this);
+                    mAtInfo.mHitDirection.y = albwOcAimAngleY(this);
+                    return;
+                }
+            }
+
+            dAlbwLockout_onSlingshotHit(this);
+            field_0x6cc = 10 + KREG_S(8);
+            mSound.startCollisionSE(0x40018, 0x2d);
+            return;
+        }
+#endif
         // This happens to work with MWCC since the member will only ever be initialized a pointer to a
         // string in this TU's .data section, but comparing against a string literal is still UB.
 #if AVOID_UB
@@ -1157,6 +1217,11 @@ void daE_OC_c::executeTalk() {
 void daE_OC_c::executeFind() {
     s16 pl_ang = albwOcAimAngleY(this);
     f32 pl_dist = fopAcM_searchPlayerDistance(this);
+#if TARGET_PC
+    if (dAlbwLockout_isConfused(this)) {
+        pl_dist = albwOcAimDistance(this);
+    }
+#endif
     if (mOcState < 3 || !setWatchMode()) {
         if (field_0x6b4 == 2 && !dComIfGp_event_runCheck()) {
             fopAcM_OffStatus(this, fopAcStts_UNK_0x4000_e);
@@ -1449,9 +1514,7 @@ void daE_OC_c::executeAttack() {
             // so lunges stay aligned when the player strafes (ALBW hold-to-guard without Z-target).
             if (mpMorf->getFrame() < 22.0f) {
                 s16 pl_ang = albwOcAimAngleY(this);
-                if ((s16)cLib_distanceAngleS(shape_angle.y, pl_ang) >= 0x400) {
-                    cLib_addCalcAngleS(&shape_angle.y, pl_ang, 4, 0x800, 0x100);
-                }
+                cLib_addCalcAngleS(&shape_angle.y, pl_ang, 4, 0x1000, 0x200);
                 current.angle.y = shape_angle.y;
             }
 
@@ -1505,7 +1568,13 @@ void daE_OC_c::executeAttack() {
                 }
             }
 
-            if (my_bool && daPy_getPlayerActorClass()->checkPlayerGuard()) {
+#if TARGET_PC
+            if (my_bool && !dAlbwLockout_isConfused(this) &&
+                daPy_getPlayerActorClass()->checkPlayerGuard())
+#else
+            if (my_bool && daPy_getPlayerActorClass()->checkPlayerGuard())
+#endif
+            {
                 mpMorf->setPlaySpeed(-1.0);
                 mOcState = 3;
                 dComIfGp_getVibration().StartShock(3, 0x1f, cXyz(0.0f, 1.0f, 0.0f));
@@ -1515,6 +1584,15 @@ void daE_OC_c::executeAttack() {
             current.pos.z += (my_float - field_0x6a0) * cM_scos(shape_angle.y);
             field_0x6a0 = my_float;
             if (mpMorf->isStop()) {
+#if TARGET_PC
+                if (dAlbwLockout_isConfused(this) &&
+                    dAlbwLockout_getConfuseTarget(this) != NULL)
+                {
+                    mOcState = 0;
+                    speedF = 0.0f;
+                    break;
+                }
+#endif
                 setBck(0x1c, 2, 0.0f, 1.0f);
                 mSound.startCreatureVoice(Z2SE_EN_OC_V_WAIT_ST, -1);
                 if (field_0x6e3) {
@@ -1536,6 +1614,14 @@ void daE_OC_c::executeAttack() {
             if (!mpMorf->isStop()) {
                 break;
             }
+
+#if TARGET_PC
+            if (dAlbwLockout_isConfused(this) && dAlbwLockout_getConfuseTarget(this) != NULL) {
+                mOcState = 0;
+                speedF = 0.0f;
+                break;
+            }
+#endif
 
             setBck(0x1c, 2, 5.0f, 1.0f);
             mSound.startCreatureVoice(Z2SE_EN_OC_V_WAIT_ST, -1);
@@ -2273,6 +2359,11 @@ void daE_OC_c::executeFall() {
 void daE_OC_c::executeFindStay() {
     s16 target_angle = albwOcAimAngleY(this);
     f32 target_dist = fopAcM_searchPlayerDistance(this);
+#if TARGET_PC
+    if (dAlbwLockout_isConfused(this)) {
+        target_dist = albwOcAimDistance(this);
+    }
+#endif
     mPrevShapeAngle = target_angle;
     mBattleOn = true;
 
@@ -2322,6 +2413,14 @@ void daE_OC_c::executeFindStay() {
                 return;
             }
 
+#if TARGET_PC
+            if (dAlbwLockout_isConfused(this)) {
+                if (dAlbwLockout_getConfuseTarget(this) == NULL) {
+                    setActionMode(E_OC_ACTION_WAIT, 0);
+                }
+                return;
+            }
+#endif
             if (!searchPlayer2()) {
                 setActionMode(E_OC_ACTION_WAIT, 0);
                 return;
@@ -2329,6 +2428,68 @@ void daE_OC_c::executeFindStay() {
         }
     }
 }
+
+#if TARGET_PC
+void daE_OC_c::executeConfuse() {
+    fopAc_ac_c* confuseTarget = dAlbwLockout_getRivalTarget(this);
+    s16 target_angle = albwOcAimAngleY(this);
+    f32 target_dist = albwOcAimDistance(this);
+
+    mPrevShapeAngle = target_angle;
+    mBattleOn = true;
+    field_0x6ce = 0;
+
+    if (confuseTarget == NULL) {
+        speedF = 0.0f;
+        if (!checkBck(0x1b)) {
+            setBck(0x1b, 2, 5.0f, 1.0f);
+        }
+        return;
+    }
+
+    cLib_addCalcAngleS(&shape_angle.y, target_angle, 4, 0x1000, 0x200);
+    current.angle.y = shape_angle.y;
+
+    const bool canAdvance = checkBeforeFloorBg(200.0f);
+    if (!canAdvance) {
+        cLib_chaseF(&speedF, 0.0f, 1.0f);
+        if (target_dist < 520.0f &&
+            abs(cLib_distanceAngleS(shape_angle.y, target_angle)) < 0x3000 &&
+            !dComIfGp_event_runCheck())
+        {
+            setActionMode(E_OC_ACTION_ATTACK, 0);
+        }
+        return;
+    }
+
+    if (target_dist > 450.0f) {
+        if (!checkBck(0xb)) {
+            setBck(0xb, 2, 5.0f, 1.2f);
+        }
+        cLib_chaseF(&speedF, 22.0f + nREG_F(0), 1.0f);
+    } else if (target_dist > 250.0f) {
+        if (!checkBck(0x1e)) {
+            setBck(0x1e, 2, 5.0f, 1.3f);
+        }
+        cLib_chaseF(&speedF, 12.0f + nREG_F(0), 1.0f);
+    } else {
+        cLib_chaseF(&speedF, 0.0f, 1.0f);
+        if (!checkBck(0x1c)) {
+            setBck(0x1c, 2, 5.0f, 1.0f);
+        }
+    }
+
+    cLib_addCalcAngleS(&shape_angle.y, target_angle, 4, 0x1000, 0x200);
+    current.angle.y = shape_angle.y;
+
+    if (target_dist < 520.0f &&
+        abs(cLib_distanceAngleS(shape_angle.y, target_angle)) < 0x3000 &&
+        !dComIfGp_event_runCheck())
+    {
+        setActionMode(E_OC_ACTION_ATTACK, 0);
+    }
+}
+#endif
 
 void daE_OC_c::executeMoveOut() {
     f32 player_distance = fopAcM_searchPlayerDistance(this);
@@ -2477,6 +2638,28 @@ void daE_OC_c::action() {
 
     checkFall();
     field_0x566 = 0;
+#if TARGET_PC
+    bool albwConfuseOverride = false;
+    if (dAlbwLockout_isConfused(this)) {
+        albwConfuseOverride = true;
+        mBattleOn = true;
+        if (mActionMode == E_OC_ACTION_ATTACK) {
+            executeAttack();
+        } else {
+            executeConfuse();
+        }
+    } else if (dAlbwLockout_isProvoked(this) && dAlbwLockout_getProvokeSource(this) != NULL) {
+        albwConfuseOverride = true;
+        mBattleOn = true;
+        if (mActionMode == E_OC_ACTION_ATTACK) {
+            executeAttack();
+        } else {
+            executeFind();
+        }
+    }
+
+    if (!albwConfuseOverride) {
+#endif
     switch (mActionMode) {
     case E_OC_ACTION_WAIT:
         executeWait();
@@ -2536,6 +2719,9 @@ void daE_OC_c::action() {
         executeMoveOut();
         break;
     }
+#if TARGET_PC
+    }
+#endif
 
     mSound.setLinkSearch(field_0x566);
     setFootNoteSound();

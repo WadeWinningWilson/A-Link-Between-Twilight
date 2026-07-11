@@ -2696,6 +2696,7 @@ void dMeter2Draw_c::drawShieldDurabilityBelowAlbw() {
     f32 widthScale = dShield_getDurabilityMeterWidthScale();
 
     f32 barX, barY;
+    bool useLopRowLayout = false;
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port (Lies of Link HUD)
@@ -2704,35 +2705,37 @@ void dMeter2Draw_c::drawShieldDurabilityBelowAlbw() {
     // in its screen's local space (scale 1, fixed root offset vs the global ortho).
     // Convert the global target to local by subtracting that offset — measured once
     // from the just-drawn ALBW meter (its global corner0 minus its paneTrans). Width
-    // spans the shield row.
+    // spans the shield row. When parry icons are not drawn (durability-only always-on),
+    // fall back to the ALBW anchor below.
     // ============================================
     if (mLopHudActive) {
         ShieldRowLayout row;
-        if (!dShield_getLastRowLayout(&row) || row.iconW < 1.0f) {
-            return;
-        }
-        const f32 rowSpan =
-            row.slotCount > 1 ? row.spacing * (f32)(row.slotCount - 1) + row.iconW : row.iconW;
-        const f32 targetX = row.firstCenterX - row.iconW * 0.5f + kLopDurabilityOffX;
-        const f32 targetY = row.centerY + row.iconW * 0.5f + kLopDurabilityGapPx;
+        if (dShield_getLastRowLayout(&row) && row.iconW >= 1.0f) {
+            useLopRowLayout = true;
+            const f32 rowSpan =
+                row.slotCount > 1 ? row.spacing * (f32)(row.slotCount - 1) + row.iconW : row.iconW;
+            const f32 targetX = row.firstCenterX - row.iconW * 0.5f + kLopDurabilityOffX;
+            const f32 targetY = row.centerY + row.iconW * 0.5f + kLopDurabilityGapPx;
 
-        static bool sKanteraOffCached = false;
-        static f32 sKanteraOffX = 0.0f;
-        static f32 sKanteraOffY = 0.0f;
-        if (!sKanteraOffCached) {
-            Mtx m;
-            J2DPane* mp = mpMagicParent->getPanePtr();
-            const Vec c0 = mpMagicParent->getGlobalVtx(mp, &m, 0, false, 0);
-            sKanteraOffX = c0.x - field_0x5e4[0];
-            sKanteraOffY = c0.y - field_0x5f0[0];
-            sKanteraOffCached = true;
-        }
-        barX = targetX - sKanteraOffX;
-        barY = targetY - sKanteraOffY;
+            static bool sKanteraOffCached = false;
+            static f32 sKanteraOffX = 0.0f;
+            static f32 sKanteraOffY = 0.0f;
+            if (!sKanteraOffCached) {
+                Mtx m;
+                J2DPane* mp = mpMagicParent->getPanePtr();
+                const Vec c0 = mpMagicParent->getGlobalVtx(mp, &m, 0, false, 0);
+                sKanteraOffX = c0.x - field_0x5e4[0];
+                sKanteraOffY = c0.y - field_0x5f0[0];
+                sKanteraOffCached = true;
+            }
+            barX = targetX - sKanteraOffX;
+            barY = targetY - sKanteraOffY;
 
-        const f32 baseW = mpMagicBase->getInitSizeX() * g_drawHIO.mMagicMeterScale;
-        widthScale = (baseW > 0.0f) ? (rowSpan / baseW) : widthScale;
-    } else
+            const f32 baseW = mpMagicBase->getInitSizeX() * g_drawHIO.mMagicMeterScale;
+            widthScale = (baseW > 0.0f) ? (rowSpan / baseW) : widthScale;
+        }
+    }
+    if (!useLopRowLayout)
 #endif
     {
         const f32 albwX = field_0x5e4[0];

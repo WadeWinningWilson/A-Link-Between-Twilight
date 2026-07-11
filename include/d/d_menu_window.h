@@ -113,6 +113,14 @@ public:
     void insect_open2_init(u8);
     void insect_move_init(u8);
     void insect_close_init(u8);
+    // ============================================
+    // NEW CODE — ALBW Port (load-order Phase 1 follow-up, d_albw_menu_res)
+    // "Is any start-menu screen active?" — the dMw_c PROC itself lives for the
+    // whole play session (created with the HUD meter), so its existence says
+    // nothing; the state machine does. NO_MENU = fully closed and idle.
+    // ============================================
+    bool isMenuActive() const { return mMenuProc != NO_MENU; }
+
     void key_wait_proc();
     void ring_open_proc();
     void ring_move_proc();

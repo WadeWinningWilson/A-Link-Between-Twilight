@@ -3,6 +3,7 @@
 #include "d/d_gameover.h"
 #if TARGET_PC
 #include "d/d_albw_death_rupee.h"
+#include "d/d_albw_potion.h"
 #endif
 #include "JSystem/J2DGraph/J2DScreen.h"
 #include "d/d_com_inf_game.h"
@@ -484,6 +485,10 @@ void dGameover_c::saveClose_proc() {
             dComIfGp_setGameoverStatus(2);
             dComIfGp_offPauseFlag();
         }
+
+#if TARGET_PC
+        dAlbwPotion_refillSoulboundIfEmpty();
+#endif
 
         // Reset Monkey lantern steal sequence flags if player hasn't regained lantern
         if (!dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[226])) {

@@ -151,7 +151,13 @@ void daAlink_c::throwCopyRod() {
     daCrod_c* copy_rod = ((daCrod_c*)mItemAcKeep.getActor());
     onNoResetFlg1(FLG1_UNK_10000);
 
-    if (checkCopyRodTopUse()) {
+#if TARGET_PC
+    const bool canThrow =
+        checkCopyRodTopUse() || dMeter2_canALBWDomRodConfuseThrow();
+#else
+    const bool canThrow = checkCopyRodTopUse();
+#endif
+    if (canThrow) {
         copy_rod->setThrow();
         mCopyRodAcKeep = mItemAcKeep;
         onNoResetFlg3(FLG3_COPY_ROD_THROW_AFTER);

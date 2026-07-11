@@ -108,13 +108,24 @@ void daAlink_c::checkOxygenTimer() {
             offOxygenTimer();
         } else if (is_hide_timer) {
             dComIfGp_setOxygenCount(dComIfGp_getMaxOxygen());
+#if TARGET_PC
+            dAlbwOutfitStats_resetOxygenDrainAccum();
+#endif
             if (field_0x2fbe < 90) {
                 field_0x2fbe++;
             } else {
                 offOxygenTimer();
             }
         } else if (!checkEventRun()) {
+#if TARGET_PC
+            if (dAlbwOutfitStats_isEnabled() && !checkWolf()) {
+                dAlbwOutfitStats_tickNonZoraOxygenDrain();
+            } else {
+                dComIfGp_setOxygenCount(-1);
+            }
+#else
             dComIfGp_setOxygenCount(-1);
+#endif
         }
     } else if (!is_hide_timer && !checkZoraWearAbility()) {
         if (field_0x2fbe != 0) {
@@ -131,6 +142,9 @@ void daAlink_c::offOxygenTimer() {
     dComIfGp_setOxygen(dComIfGp_getMaxOxygen());
 
     field_0x2fbe = 90;
+#if TARGET_PC
+    dAlbwOutfitStats_resetOxygenDrainAccum();
+#endif
 }
 
 BOOL daAlink_c::checkPossibleWaterInMode() const {
@@ -769,12 +783,16 @@ void daAlink_c::setSwimMoveAnime() {
     if (field_0x2f98 == 4) {
 #if TARGET_PC
         const f32 outfitSwimMult = dAlbwOutfitStats_getSwimSpeedMult(this);
+        const f32 submergedHumanMult = dAlbwOutfitStats_getSubmergedHumanSwimSpeedMult(this);
+        const f32 underwaterSpeedMult = outfitSwimMult * submergedHumanMult;
         f32 temp_f29 = (mpHIO->mSwim.m.mUnderwaterMaxSpeed + mpHIO->mSwim.m.mUnderwaterButtonAdditionalSpeed) *
-                       outfitSwimMult;
-        const f32 underwaterMax = mpHIO->mSwim.m.mUnderwaterMaxSpeed * outfitSwimMult;
+                       underwaterSpeedMult;
+        const f32 underwaterMax = mpHIO->mSwim.m.mUnderwaterMaxSpeed * underwaterSpeedMult;
+        const f32 underwaterTapStep = 0.75f * submergedHumanMult;
 #else
         f32 temp_f29 = mpHIO->mSwim.m.mUnderwaterMaxSpeed + mpHIO->mSwim.m.mUnderwaterButtonAdditionalSpeed;
         const f32 underwaterMax = mpHIO->mSwim.m.mUnderwaterMaxSpeed;
+        const f32 underwaterTapStep = 0.75f;
 #endif
 
         field_0x3478 = mpHIO->mSwim.m.mUnderwaterMinAnmSpeed;
@@ -783,7 +801,7 @@ void daAlink_c::setSwimMoveAnime() {
         if (mMaxSpeed < underwaterMax) {
             mMaxSpeed = underwaterMax;
         } else if (doTrigger()) {
-            mMaxSpeed += 0.75f;
+            mMaxSpeed += underwaterTapStep;
             if (mMaxSpeed > temp_f29) {
                 mMaxSpeed = temp_f29;
             }

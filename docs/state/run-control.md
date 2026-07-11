@@ -18,7 +18,7 @@ User (or later `run-control.ps1`) is the only authority that changes `mode`.
 | **drive_in_scope** | no |
 | **pause_question** | — |
 | **drive_pid** | — |
-| **updated** | 2026-07-09 |
+| **updated** | 2026-07-10 (user resume — running; at gate 7) |
 
 ---
 

@@ -16,6 +16,7 @@
 #include "f_pc/f_pc_name.h"
 #include "imgui.h"
 #include "modal.hpp"
+#include "mods.hpp"
 #include "settings.hpp"
 #include "ui.hpp"
 #include "warp.hpp"
@@ -56,6 +57,13 @@ MenuBar::MenuBar() : Document(kDocumentSource), mRoot(mDocument->GetElementById(
         mTabBar->add_tab("Warp", [this] { push(std::make_unique<WarpWindow>()); });
         mTabBar->add_tab("Editor", [this] { push(std::make_unique<EditorWindow>()); });
     }
+
+    // ============================================
+    // NEW CODE — ALBW Port (Mods — load-order mod manager, its own menu entry)
+    // A first-class end-user page (sits after Editor when advanced settings are
+    // on), NOT an editor tab — mod management shouldn't require dev tooling.
+    // ============================================
+    mTabBar->add_tab("Mods", [this] { push(std::make_unique<ModsWindow>()); });
 
     mTabBar->add_tab("Achievements", [this] { push(std::make_unique<AchievementsWindow>()); });
 
