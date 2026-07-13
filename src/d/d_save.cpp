@@ -790,12 +790,26 @@ void dSv_player_item_record_c::setBombNum(u8 i_bagIdx, u8 i_bombNum) {
     }
 #endif
 
+#if TARGET_PC
+    // Bomb ammo arrays are only for SLOT_15..17 (bagIdx 0..2). Callers that pass
+    // inventory slot math for non-bag slots must not crash.
+    if (i_bagIdx >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return;
+    }
+#else
     JUT_ASSERT(1651, 0 <= i_bagIdx && i_bagIdx < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     mBombNum[i_bagIdx] = i_bombNum;
 }
 
 u8 dSv_player_item_record_c::getBombNum(u8 i_bagIdx) const {
+#if TARGET_PC
+    if (i_bagIdx >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return 0;
+    }
+#else
     JUT_ASSERT(1718, 0 <= i_bagIdx && i_bagIdx < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     return mBombNum[i_bagIdx];
 }
 

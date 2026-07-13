@@ -2,6 +2,9 @@
 #define D_MENU_D_MENU_SKILL_H
 
 #include "d/d_drawlist.h"
+#if TARGET_PC
+#include "d/d_albw_skill_scroll.h"
+#endif
 
 class CPaneMgr;
 struct CSTControl;
@@ -51,6 +54,12 @@ public:
 
 #if TARGET_PC
     bool pointerWait();
+    void setNameStringRaw(const char* text);
+    void setRowVisibility();
+    void changePage(int delta);
+    bool isAlbwScrollPage() const;
+    void updatePageTitle();
+    void setDetailPage(int page);
 #endif
 
     virtual void draw() { _draw(); }
@@ -96,10 +105,24 @@ private:
     /* 0x205 */ u8 mProcess;
     /* 0x206 */ u8 mIndex;
     /* 0x207 */ u8 mSkillNum;
-    /* 0x208 */ u8 mRemainder;
-    /* 0x209 */ u8 field_0x209; // Initialized but never used
-    /* 0x20A */ u8 field_0x20a; // Initialized but never used
+    /* 0x208 */ u8 mRemainder;   // page count (vanilla stub; used on PC for L/R pages)
+    /* 0x209 */ u8 mPageIndex;   // current page (0..mRemainder-1); was unused
+    /* 0x20A */ u8 mPageKind;    // 0 = vanilla HS, 1 = ALBW scrolls; was unused
     /* 0x20B */ u8 mTotalSkillNum;
-};  // Size: 0x20C
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Window title textbox (f_t00); rewritten with a page indicator
+    // ("Skills (1/2)") whenever more than one page exists.
+    // Detail view: ALBW bodies are auto-wrapped into mDetailPages and
+    // paged with A / D-pad / L / R (see setDetailPage / read_move_move).
+    // ============================================
+    J2DTextBox* mpTitleString;
+    u8 mDetailPage;
+    u8 mDetailPageCount;
+    char mDetailTitle[0x40];
+    char mDetailPages[kAlbwSkillScrollMaxPages][kAlbwSkillScrollPageBufLen];
+#endif
+};  // Size: 0x20C (GC layout; PC appends members)
 
 #endif /* D_MENU_D_MENU_SKILL_H */

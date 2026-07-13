@@ -242,6 +242,39 @@ bool          s_headReapplyPending    = false;   // gen changed; rebuild once al
 bool          s_headRebuildInFlight   = false;   // a forced rebuild fired; wait for it to fully cycle
 bool          s_headRebuildSawTimer   = false;   // observed the clothes timer go non-zero (rebuild began)
 
+// ============================================
+// NEW CODE — ALBW Port (storm hardening, 2026-07-11)
+// WINNER-COMPARE gate for the generation signal. overlay_generation() bumps on
+// EVERY mod toggle/move — including icon-only mods and Mods-window reorders
+// that never touch a model arc. Reacting to the raw counter made every such
+// bump start a full private-mount refresh, and under a rapid burst (a
+// grab-and-place drag used to emit one bump PER STEP) a mount could complete
+// against a mid-flight FST flip yet be recorded as current — the persistent
+// Linkle-body/Link-hair hybrid that no quick-swap could fix (the stale piece
+// was the LIVE private slot, and the tracker believed it was fresh).
+// Fix: on a gen bump, compare what OUR four arcs actually resolve to now
+// (custom_assets::overlay_path_for) against what the live mounts were built
+// from; identical -> record the gen and do nothing. Additionally, every
+// completed rebuild schedules ONE verify pass (s_headVerifyWinners) so a flip
+// that landed mid-load is caught and re-kicked — the refresh converges on the
+// true overlay state no matter how the bumps raced.
+// ============================================
+std::string   s_headWinners;                     // winners the live mounts were built from
+bool          s_headVerifyWinners     = false;   // one-shot re-check after a rebuild completes
+
+std::string headArcWinners() {
+    static const char* const kHeadArcs[] = {
+        "/res/Object/alSumou.arc", "/res/Object/Kmdl.arc",
+        "/res/Object/Mmdl.arc",    "/res/Object/Zmdl.arc",
+    };
+    std::string s;
+    for (const char* arc : kHeadArcs) {
+        s += dusk::custom_assets::overlay_path_for(arc);
+        s.push_back('|');
+    }
+    return s;
+}
+
 // Drive one private alSumou mount step for `slot` (mirrors ensureIndependentCap).  All aux
 // allocs land in the slot's private heap (setCurrentHeap) so nothing dangles.  Returns ready.
 bool ensureSumoSlot(int slot) {
@@ -316,6 +349,7 @@ void driveCustomHeadRefresh() {
 
     if (s_headGen == -1) {
         s_headGen = gen;  // baseline on first frame; don't act
+        s_headWinners = headArcWinners();  // boot mounts read the current FST
     }
 
     // Track the forced-rebuild cycle: after we fire forceReapply, wait until the clothes change
@@ -332,6 +366,9 @@ void driveCustomHeadRefresh() {
             } else if (s_headRebuildSawTimer) {
                 s_headRebuildInFlight = false;
                 s_headRebuildSawTimer = false;
+                // Verify once the dust settles: if the overlay flipped while our
+                // loads were in flight, the winner compare below re-kicks.
+                s_headVerifyWinners = true;
                 // Rebuild fully cycled -> the models now reference the LIVE slots, so the previous
                 // (non-live) slots are unreferenced.  Release them so we hold ~1 private heap per
                 // arc instead of 2 (2-per-arc exhausts the game heap in heavy scenes: Zora base +
@@ -406,12 +443,22 @@ void driveCustomHeadRefresh() {
     }
 
     // --- Overlay changed -> start a coordinated refresh (once the prior change settled) ---
-    if (gen != s_headGen && !s_headReapplyPending && !s_headRebuildInFlight) {
+    if ((gen != s_headGen || s_headVerifyWinners) && !s_headReapplyPending &&
+        !s_headRebuildInFlight)
+    {
         daPy_py_c* p = daPy_getLinkPlayerActorClass();
         if (p != NULL && p->getClothesChangeWaitTimer() != 0) {
             return;  // a clothes change is in flight — defer a frame
         }
         s_headGen = gen;
+        s_headVerifyWinners = false;
+        // Winner-compare gate (see the block comment at s_headWinners): only
+        // refresh when one of OUR arcs actually resolves differently now.
+        const std::string winners = headArcWinners();
+        if (winners == s_headWinners) {
+            return;  // icon-only toggle / reorder — none of our arcs changed
+        }
+        s_headWinners = winners;
         if (needAlSumou && s_sumoLiveSlot >= 0) {
             const int freeSlot = 1 - s_sumoLiveSlot;  // replaced a swap ago -> unreferenced
             releaseSumoSlot(freeSlot);

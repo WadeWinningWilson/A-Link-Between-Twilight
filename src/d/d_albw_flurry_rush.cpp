@@ -161,7 +161,7 @@ void refreshTargetPointer() {
 
 bool dFlurryRush_isEnabled() {
     const auto& settings = dusk::getSettings().game;
-    return settings.focusedArtsTest.getValue() && settings.flurryRush.getValue();
+    return settings.focusedArts.getValue() && settings.flurryRush.getValue();
 }
 
 bool dFlurryRush_canOfferPerfectDodgeSpend() {

@@ -93,10 +93,18 @@ bool is_folder_enabled(const char* folder);
 void toggle_folder(const char* folder);
 
 // Move a folder one slot up (delta -1 = higher priority) or down (delta +1)
-// in the load order, then rescan() + re-install_overlays() (an order change
-// can change conflict winners). Returns false if it could not move (unknown
-// folder, or already at that end of the list).
-bool move_folder(const char* folder, int delta);
+// in the load order. apply=true rescans + re-installs overlays immediately (an
+// order change can change conflict winners). apply=false only persists the
+// order — used by the Mods window while a grabbed mod is being dragged, so a
+// 10-step drag is ONE rescan (at place) instead of ten: every scan bumps
+// overlay_generation() and re-registers the FST, and a bump storm is what let
+// the resident-model refresh latch a stale mount (the Linkle/Link hybrid).
+// Callers passing false MUST eventually call apply_order_changes(). Returns
+// false if it could not move (unknown folder, or already at that end).
+bool move_folder(const char* folder, int delta, bool apply = true);
+
+// Rescan + re-install overlays after one or more deferred (apply=false) moves.
+void apply_order_changes();
 
 // Move a folder to an arbitrary VISIBLE slot (0 = top = wins) in one step —
 // one rescan total, unlike chaining move_folder. Used by the Mods tab's

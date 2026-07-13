@@ -90,6 +90,8 @@ bool dShield_tryConsumeBashNextHitBoost(u16& io_attackPower);
 u8 dShield_getBashCharges();
 u8 dShield_getMaxBashCharges();
 void dShield_fillBashChargesToMax();
+// Grant one bash charge (clamped to max). Used by lockout bombling block perk.
+void dShield_addBashCharge(u8 i_amount);
 u8 dShield_getBashThreshold();
 u8 dShield_getDenyFlashFrames();
 bool dShield_canSpendBash();

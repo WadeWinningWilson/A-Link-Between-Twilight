@@ -44,6 +44,7 @@
 #include "d/d_albw_sumo_test.h"
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_wardrobe.h"
+#include "d/d_albw_wolf_stun.h"  // dAlbwWolfArts_* (Wolf Howl shop-unlock row)
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
@@ -313,6 +314,7 @@ enum VisibleKind {
     VISIBLE_MQ_METER,
     VISIBLE_POTION_CAPACITY,
     VISIBLE_FA_TIER,
+    VISIBLE_WOLF_HOWL,     // ALBW Port: Wolf Howl art unlock (Upgrades page, state purchase)
     VISIBLE_ITEM,
     VISIBLE_SHADE_REFUGE,  // "Return to Last Shade Watcher" (above Oocoo)
     VISIBLE_OOCOO,
@@ -656,6 +658,16 @@ static void rebuildVisibleList() {
         sVisibleCount++;
     }
 
+    // ALBW Port: Wolf Howl art unlock (state purchase, not a native item) — Upgrades page.
+    if (cat == CAT_UPGRADES && dAlbwWolfArts_shouldShowHowlShopRow() &&
+        sVisibleCount < kVisibleListMax) {
+        sVisibleList[sVisibleCount].kind        = VISIBLE_WOLF_HOWL;
+        sVisibleList[sVisibleCount].kItemsIdx   = -1;
+        sVisibleList[sVisibleCount].purchasable = true;
+        sAvailCount++;
+        sVisibleCount++;
+    }
+
     // ALBW Port: the Sumo Outfit is a model-swap STATE (not a native clothes
     // item), so it is injected here rather than in kItems.  Sits at the TOP of
     // the Armor page (before Ordon Clothes); shown once eligible (True ALBW, or
@@ -942,6 +954,31 @@ static void tryPurchase(int visIdx) {
         sPurchasedThisSession = true;
         sJustPurchased        = true;
         sStatusMsg            = "Your hidden arts will sharpen with practice.\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
+        rebuildVisibleList();
+        return;
+    }
+
+    if (sVisibleList[visIdx].kind == VISIBLE_WOLF_HOWL) {
+        const int price = dAlbwWolfArts_getHowlShopPrice();
+        u16 rupees      = dComIfGs_getRupee();
+        if (price <= 0) {
+            return;
+        }
+        if (rupees < (u16)price) {
+            sStatusMsg          = "Sincerest apologies, but we can't return\nthat to you for that little..";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        if (!dAlbwWolfArts_tryPurchaseHowl()) {
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)price);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
+        sStatusMsg            = "Off it goes with the meat.. and you.\nThank you for your patronage!";
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();
         rebuildVisibleList();
@@ -1448,7 +1485,19 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
                 ? dFocusedArts_getNextShopTierPrice() : 0;
             sPubList[i].purchasable    = sVisibleList[i].purchasable;
             sPubList[i].desc           = dFocusedArts_getShopTierDesc(tier);
-            sPubList[i].itemNo         = (u8)dItemNo_SWORD_e;
+            sPubList[i].itemNo         = 0xFD;  // makimono scroll (shop sentinel)
+            sPubList[i].isOocooService = false;
+            sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
+        } else if (sVisibleList[i].kind == VISIBLE_WOLF_HOWL) {
+            sPubList[i].name           = dAlbwWolfArts_getHowlShopName();
+            sPubList[i].price          = sVisibleList[i].purchasable
+                ? dAlbwWolfArts_getHowlShopPrice() : 0;
+            sPubList[i].purchasable    = sVisibleList[i].purchasable;
+            sPubList[i].desc           = dAlbwWolfArts_getHowlShopDesc();
+            sPubList[i].itemNo         = 0xFD;         // fallback icon (renders until wolf_howl.png)
+            sPubList[i].customIconName = "wolf_howl";  // wolf-charge silhouette PNG (custom-icon slot)
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
             sPubList[i].isStorageStore = false;

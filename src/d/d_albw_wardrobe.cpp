@@ -348,6 +348,35 @@ bool dAlbwWardrobe_isActiveOutfit(dAlbwOutfitKind kind) {
     return !dAlbwWardrobe_isStoredOutfit(kind);
 }
 
+dAlbwOutfitKind dAlbwWardrobe_outfitKindForItemNo(u8 itemNo) {
+    switch (itemNo) {
+    case (u8)dItemNo_WEAR_CASUAL_e: return D_ALBW_OUTFIT_ORDON;
+    case (u8)dItemNo_WEAR_KOKIRI_e: return D_ALBW_OUTFIT_HEROS;
+    case (u8)dItemNo_WEAR_ZORA_e:   return D_ALBW_OUTFIT_ZORA;
+    case (u8)dItemNo_ARMOR_e:       return D_ALBW_OUTFIT_MAGIC;
+    case (u8)dItemNo_DEITY_ARMOR_e: return D_ALBW_OUTFIT_DEITY;
+    default:                        return D_ALBW_OUTFIT_COUNT;
+    }
+}
+
+bool dAlbwWardrobe_canEquipItemNo(u8 itemNo) {
+    if (!dAlbwWardrobe_isResistanceActive()) {
+        return true;
+    }
+    const dAlbwOutfitKind kind = dAlbwWardrobe_outfitKindForItemNo(itemNo);
+    if (kind < D_ALBW_OUTFIT_COUNT) {
+        return dAlbwWardrobe_isActiveOutfit(kind);
+    }
+    if (dMeter2_isShieldItem(itemNo)) {
+        return dAlbwWardrobe_isActiveShield(itemNo);
+    }
+    return dAlbwWardrobe_isActiveSword(itemNo);
+}
+
+bool dAlbwWardrobe_canShowItemNo(u8 itemNo) {
+    return dAlbwWardrobe_canEquipItemNo(itemNo);
+}
+
 int dAlbwWardrobe_countActiveSwords() {
     int count = 0;
     for (u8 itemNo : kSwordItemNos) {

@@ -179,6 +179,8 @@ set(DOLZEL_FILES
         src/d/d_albw_outfit_stats.cpp
         src/d/d_albw_wardrobe.cpp
         src/d/d_albw_master_quest.cpp
+        src/d/d_albw_mail.cpp
+        src/d/d_albw_skill_scroll.cpp
         src/d/d_albw_shop.cpp
         src/d/d_albw_dialogue.cpp
         src/d/d_albw_ui_text.cpp

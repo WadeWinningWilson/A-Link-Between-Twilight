@@ -15,6 +15,11 @@
 #include "d/actor/d_a_mirror.h"
 #include "JSystem/JAudio2/JAUSectionHeap.h"
 #include <cstring>
+#if TARGET_PC
+#include "d/d_meter2_info.h"
+#include "d/d_albw_lockout.h"
+#include "d/d_focused_arts.h"
+#endif
 
 void daNbomb_c::coHitCallback(fopAc_ac_c* i_hitActor) {
     if (fopAcM_GetGroup(i_hitActor) == fopAc_ENEMY_e ||
@@ -272,6 +277,16 @@ int daNbomb_c::create() {
 
             if (fopAcM_GetParam(this) == PRM_WATER_BOMB_PLAYER) {
                 onStateFlg0(FLG0_WATER_BOMB);
+#if TARGET_PC
+                // Lockout water bomb: giant rising meter-restore bomb (0 explosion damage).
+                // Consequence: clear one Focused Arts bank charge on use.
+                if (dMeter2_isALBWLocked()) {
+                    onStateFlg0(FLG0_ALBW_LOCKOUT_WATER);
+                    scale.set(5.0f, 5.0f, 5.0f);
+                    mpModel->setBaseScale(scale);
+                    dFocusedArts_clearOneBankCharge();
+                }
+#endif
             }
 
             if (checkWaterIn()) {
@@ -319,6 +334,18 @@ int daNbomb_c::create() {
             field_0xbfc.set(cM_ssin(shape_angle.y), 0.0f, cM_scos(shape_angle.y));
             field_0xc08.set(field_0xbfc.z, 0.0f, -field_0xbfc.x);
 
+#if TARGET_PC
+            // Lockout bombling: orbit Link instead of wall-crawl; explode on enemy impact.
+            // Keep NO_HIT_PLAYER so CoHit only arms via enemy group (not Link body).
+            if (dMeter2_isALBWLocked()) {
+                onStateFlg0(FLG0_ALBW_LOCKOUT_BOMBLING);
+                dAlbwLockout_onBomblingDeployed(this);
+                mCcSph.OnCoSetBit();
+                mCcSph.SetCoHitCallback(daNbomb_coHitCallback);
+                procWaitInit();
+            } else
+#endif
+            {
             cXyz start = current.pos + (field_0xbf0 * 5.0f);
             cXyz end = current.pos - (field_0xbf0 * 100.0f);
             mLineChk.Set(&start, &end, this);
@@ -336,6 +363,7 @@ int daNbomb_c::create() {
                     procExplodeInit();
                     onStateFlg0(FLG0_UNK_2000);
                 }
+            }
             }
         } else {
             procWaitInit();
@@ -373,6 +401,11 @@ static int daNbomb_Create(fopAc_ac_c* i_this) {
 }
 
 daNbomb_c::~daNbomb_c() {
+#if TARGET_PC
+    if (checkStateFlg0(FLG0_ALBW_LOCKOUT_BOMBLING)) {
+        dAlbwLockout_onBomblingDestroyed(this);
+    }
+#endif
     if (mExplodeMode < 2) {
         dKy_actor_addcol_set(0, 0, 0, 0.0f);
     }
@@ -613,6 +646,13 @@ BOOL daNbomb_c::procExplodeInit() {
     scale.x = player->getBombEffScale();
     scale.y = scale.x;
     scale.z = scale.x;
+#if TARGET_PC
+    if (checkStateFlg0(FLG0_ALBW_LOCKOUT_WATER)) {
+        scale.x *= 5.0f;
+        scale.y = scale.x;
+        scale.z = scale.x;
+    }
+#endif
 
     shape_angle.y = cM_rndF(0x10000);
     field_0xbe4 = cXyz::Zero;
@@ -684,7 +724,18 @@ BOOL daNbomb_c::procExplodeInit() {
     mCcSph.OffTgSetBit();
     mCcSph.OffCoSetBit();
     mCcSph.OnAtSetBit();
+#if TARGET_PC
+    if (checkStateFlg0(FLG0_ALBW_LOCKOUT_WATER)) {
+        // Giant harmless blast that fully restores the ALBW meter.
+        mCcSph.SetAtAtp(0);
+        mCcSph.SetR(player->getBombAtR() * 5.0f);
+        dMeter2_restoreALBWMeterToFull();
+    } else {
+        mCcSph.SetR(player->getBombAtR());
+    }
+#else
     mCcSph.SetR(player->getBombAtR());
+#endif
     mCcSph.SetC(current.pos);
     dComIfG_Ccsp()->Set(&mCcSph);
     dComIfG_Ccsp()->SetMass(&mCcSph, 1);
@@ -877,6 +928,32 @@ BOOL daNbomb_c::procWait() {
     if (fopAcM_checkCarryNow(this)) {
         return procCarryInit();
     }
+
+#if TARGET_PC
+    // Lockout bombling: circle Link until fuse/enemy impact.
+    if (checkStateFlg0(FLG0_ALBW_LOCKOUT_BOMBLING) &&
+        dAlbwLockout_updateBomblingOrbit(this))
+    {
+        mDoMtx_stack_c::transS(current.pos);
+        mDoMtx_stack_c::YrotM(shape_angle.y);
+        mpModel->setBaseTRMtx(mDoMtx_stack_c::get());
+        mCcSph.SetC(current.pos);
+        // Lockout bombling: +5% enemy CoHit radius vs base (scale * 30).
+        mCcSph.SetR(scale.x * 30.0f * 1.05f);
+        dComIfG_Ccsp()->Set(&mCcSph);
+        return true;
+    }
+
+    // Lockout water bomb: float upward on land or in water until fuse ends.
+    if (checkStateFlg0(FLG0_ALBW_LOCKOUT_WATER)) {
+        scale.set(5.0f, 5.0f, 5.0f);
+        mpModel->setBaseScale(scale);
+        gravity = 0.0f;
+        maxFallSpeed = 0.0f;
+        cLib_chaseF(&speed.y, 8.0f, 0.4f);
+        speedF *= 0.9f;
+    }
+#endif
 
     f32 prev_speedf = speedF;
 
@@ -1526,6 +1603,12 @@ int daNbomb_c::execute() {
         mDoMtx_multVec(mpModel->getBaseTRMtx(), &l_localCenterOffset, &attention_info.position);
         eyePos = attention_info.position;
         mCcSph.SetC(attention_info.position);
+#if TARGET_PC
+        if (checkStateFlg0(FLG0_ALBW_LOCKOUT_WATER)) {
+            scale.set(5.0f, 5.0f, 5.0f);
+            mpModel->setBaseScale(scale);
+        }
+#endif
         mCcSph.SetR(scale.x * 30.0f);
         dComIfG_Ccsp()->Set(&mCcSph);
 

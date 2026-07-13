@@ -22,6 +22,7 @@
 #include "dusk/truetest.hpp"
 #include "d/d_ww_itemmdl_test.h"
 #include "m_Do/m_Do_audio.h"
+#include "Z2AudioLib/Z2SeqMgr.h"  // Wolf Howl tune preview (Z2BGM_* ids, Z2GetSeqMgr)
 #include "number_button.hpp"
 #include "pane.hpp"
 #include "select_button.hpp"
@@ -907,7 +908,17 @@ void populate_item_slot_picker(Pane& pane, int slot) {
     pane.add_button(fmt::format("Default ({})", get_item_name(get_slot_default(slot))))
         .on_pressed([slot] {
             mDoAud_seStartMenu(kSoundItemChange);
-            dComIfGs_setItem(slot, get_slot_default(slot));
+            const u8 itemId = get_slot_default(slot);
+            dComIfGs_setItem(slot, itemId);
+            if (itemId == dItemNo_NORMAL_BOMB_e || itemId == dItemNo_WATER_BOMB_e ||
+                itemId == dItemNo_POKE_BOMB_e)
+            {
+                const int bagIdx = slot - SLOT_15;
+                if (bagIdx >= 0 && bagIdx < 3 && dComIfGs_getBombNum(bagIdx) == 0) {
+                    u8 maxNum = dComIfGs_getBombMax(itemId);
+                    dComIfGs_setBombNum(bagIdx, maxNum > 0 ? maxNum : 30);
+                }
+            }
         });
 
     pane.add_section("Items");
@@ -931,7 +942,41 @@ void populate_item_slot_picker(Pane& pane, int slot) {
             })
             .on_pressed([slot, itemId] {
                 mDoAud_seStartMenu(kSoundItemChange);
-                dComIfGs_setItem(slot, static_cast<u8>(itemId));
+                const u8 id = static_cast<u8>(itemId);
+                // Bomb types MUST live in SLOT_15/16/17 — ammo/HUD use (slot-15) as bag
+                // index. Placing them elsewhere OOBs and crashes. Redirect to the
+                // canonical bag slot; XY buttons should point at that bag slot.
+                int bagSlot = -1;
+                if (id == dItemNo_NORMAL_BOMB_e) {
+                    bagSlot = SLOT_15;
+                } else if (id == dItemNo_WATER_BOMB_e) {
+                    bagSlot = SLOT_16;
+                } else if (id == dItemNo_POKE_BOMB_e) {
+                    bagSlot = SLOT_17;
+                }
+
+                if (bagSlot >= 0) {
+                    dComIfGs_setItem(static_cast<u8>(bagSlot), id);
+                    dComIfGs_onItemFirstBit(id);
+                    const int bagIdx = bagSlot - SLOT_15;
+                    u8 maxNum = dComIfGs_getBombMax(id);
+                    if (maxNum == 0) {
+                        maxNum = 30;
+                    }
+                    if (dComIfGs_getBombNum(bagIdx) == 0) {
+                        dComIfGs_setBombNum(bagIdx, maxNum);
+                    }
+                    // If the user edited a non-bag slot, do not leave a bomb type there.
+                    if (slot != bagSlot &&
+                        (get_player_item()->mItems[slot] == dItemNo_NORMAL_BOMB_e ||
+                         get_player_item()->mItems[slot] == dItemNo_WATER_BOMB_e ||
+                         get_player_item()->mItems[slot] == dItemNo_POKE_BOMB_e))
+                    {
+                        dComIfGs_setItem(slot, dItemNo_NONE_e);
+                    }
+                } else {
+                    dComIfGs_setItem(slot, id);
+                }
             });
     }
 }
@@ -2178,6 +2223,14 @@ EditorWindow::EditorWindow() {
             for (int slot = 0; slot < 24; ++slot) {
                 dComIfGs_setItem(slot, get_slot_default(slot));
             }
+            // Bomb bag ammo is separate from the item IDs — fill if empty so bombs are usable.
+            for (int bag = 0; bag < 3; ++bag) {
+                if (dComIfGs_getBombNum(bag) == 0) {
+                    const u8 bombItem = dComIfGs_getItem(static_cast<u8>(bag + SLOT_15), false);
+                    u8 maxNum = dComIfGs_getBombMax(bombItem);
+                    dComIfGs_setBombNum(bag, maxNum > 0 ? maxNum : 30);
+                }
+            }
 #if TARGET_PC
             dAlbwPotion_applyDefaultInventorySlot11();
 #endif
@@ -2494,16 +2547,110 @@ EditorWindow::EditorWindow() {
         leftPane.add_text(
             "Experimental ALBW settings. Enable the editor from the main menu to access this "
             "tab.");
-        editor_bool_option(leftPane, rightPane, getSettings().game.focusedArtsTest,
-            "Focused Arts Test",
-            "Enables the Focused Arts charge bank, meter fill, tier spend columns, and special "
-            "finishers. Off keeps standard ALBW hidden-skill meter costs and rework combat only." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
-        editor_bool_option(leftPane, rightPane, getSettings().game.flurryRush, "FlurryTEST",
+        editor_bool_option(leftPane, rightPane, getSettings().game.flurryRush, "FlurryTest",
             "Enables Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial-bow finisher). "
-            "Requires Focused Arts Test." +
+            "Requires Focused Arts." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return !getSettings().game.focusedArtsTest.getValue(); });
+            [] { return !getSettings().game.focusedArts.getValue(); });
+        editor_bool_option(leftPane, rightPane, getSettings().game.wolfArtsDevTest,
+            "Wolf Arts Dev Test",
+            "DEV/TEST: bypass the wolf-art shop unlocks AND the wolf-charge cost so the Wolf arts "
+            "(howl / punch / giant) fire immediately. Needs Wolf Link Combat + quick-swap on; wolf "
+            "form; D-pad Up = Howl. Keep OFF for normal play." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wolfHowlVfxOverride,
+            "Wolf Howl VFX: Apply Slider Overrides",
+            "OFF = show the exact finisher base ring untouched (no extra tilt, 1.0x scale). ON = apply "
+            "the Tilt / Scale sliders below. Flip OFF to see the intended effect, ON to tweak." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Tilt (deg)",
+                .getValue = [] { return getSettings().game.wolfHowlTiltDeg.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlTiltDeg.setValue(std::clamp(value, 0, 180));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlTiltDeg.getValue() !=
+                               getSettings().game.wolfHowlTiltDeg.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 180,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring X-pitch in degrees (KAITENGIRIL). 0 = default upright spray; ~90 "
+                    "= laid flat / edge-on. Live-tunable during a howl — sweep to find the "
+                    "\"whirlwind\" look, then tell me the value to lock in." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Scale %",
+                .getValue = [] { return getSettings().game.wolfHowlScalePct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlScalePct.setValue(std::clamp(value, 10, 400));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlScalePct.getValue() !=
+                               getSettings().game.wolfHowlScalePct.getDefaultValue();
+                    },
+                .min = 10,
+                .max = 400,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring particle scale (100 = 1.0x). Live-tunable during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        // ============================================
+        // NEW CODE — ALBW Port (Wolf Howl tune audition)
+        // Preview the candidate howl tunes: select one to play it (cutting off the current), so we
+        // can confirm which actually play (some Z2BGM_HOWL_* ids are silent) and which sound like
+        // the Hero's-Shade / wolf duet.  HOWL / DUO (sing-with-the-wolf) / STONE variants.
+        // ============================================
+        static const struct { const char* name; u32 bgm; } kHowlTunes[] = {
+            // The 6 DUETS (current move pool — all confirmed working).
+            {"DUO LightPrld", Z2BGM_LIGHT_PRLD_DUO}, {"DUO SoulReq", Z2BGM_SOUL_REQ_DUO},
+            {"DUO Healing", Z2BGM_HEALING_DUO},      {"DUO New01", Z2BGM_NEW_01_DUO},
+            {"DUO New02", Z2BGM_NEW_02_DUO},         {"DUO New03", Z2BGM_NEW_03_DUO},
+            // Working solo howls (the rest are silent; STONE variants intentionally omitted).
+            {"HOWL Tobikusa", Z2BGM_HOWL_TOBIKUSA},  {"HOWL Umakusa", Z2BGM_HOWL_UMAKUSA},
+            {"HOWL ZeldaSong", Z2BGM_HOWL_ZELDASONG},
+        };
+        static constexpr int kHowlTuneCount = (int)(sizeof(kHowlTunes) / sizeof(kHowlTunes[0]));
+        static int s_howlPreviewIdx = 0;
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key      = "Preview Howl Tune",
+                .getValue = [] { return Rml::String(kHowlTunes[s_howlPreviewIdx].name); },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Preview Howl Tune (audition)");
+                for (int i = 0; i < kHowlTuneCount; i++) {
+                    pane.add_button({
+                                        .text = kHowlTunes[i].name,
+                                        .isSelected = [i] { return s_howlPreviewIdx == i; },
+                                    })
+                        .on_pressed([i] {
+                            s_howlPreviewIdx = i;
+                            Z2GetSeqMgr()->stopWolfHowlSong();  // cut off the current preview
+                            mDoAud_subBgmStart(kHowlTunes[i].bgm);
+                        });
+                }
+                pane.add_button({.text = "-- Stop --"}).on_pressed([] {
+                    Z2GetSeqMgr()->stopWolfHowlSong();
+                });
+            });
         static constexpr std::array<const char*, 5> kFocusedArtsCheatModes = {
             "Off",
             "FA Cheat ON",
@@ -2524,7 +2671,7 @@ EditorWindow::EditorWindow() {
                 .isDisabled =
                     [] {
                         return getSettings().game.speedrunMode ||
-                               !getSettings().game.focusedArtsTest.getValue();
+                               !getSettings().game.focusedArts.getValue();
                     },
                 .isModified =
                     [] {
@@ -2557,7 +2704,8 @@ EditorWindow::EditorWindow() {
                     "<b>With Debug</b>: same as ON plus an in-game FA overlay (bank, fill, ALBW, "
                     "recent events) — no need to open the dev console.<br/>"
                     "<b>FA Cheat + Max Bank</b>: tier 3 cheat and bank starts full (3/3) on load.<br/>"
-                    "<b>With Debug + Max Bank</b>: max bank cheat plus the debug overlay." +
+                    "<b>With Debug + Max Bank</b>: max bank cheat plus the debug overlay.<br/>"
+                    "Requires <b>Settings → Gameplay → Focused Arts</b>." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         static constexpr std::array<const char*, 3> kTrueAlbwModes = {
@@ -2703,6 +2851,12 @@ EditorWindow::EditorWindow() {
             "Post-game secret boss: after all Hidden Skills are learned, a final Hero's "
             "Wolf Shade appears and warps you to the arena for a real duel vs the Hero's "
             "Shade (full health bar + victory). Off disables the whole system." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.albwJuniorMailTest,
+            "Junior Postman Mail Test",
+            "Phase 0 onboarding mail in North Faron (F_SP108 room 6): spawns the deliver "
+            "Postman and queues the strip-feature letter while ignoring story/delivered save "
+            "gates. Leave off for normal F_0601 && !delivered gating." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showLockonHpDebug,
             "Show Lock-on HP Debug",

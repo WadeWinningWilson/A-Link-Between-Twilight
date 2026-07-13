@@ -632,3 +632,77 @@ fpcPf_Get + the dScnPly hook precedent), recommendation = embedded Lua 5.4
 budgets), script actors placed via the LEVEL EDITOR (the §4.4 synthesis), load-order
 integration (scripts/ as recognized content, top-runs-last, Requirement enforcement),
 dummy test mods for the build phase. Native plugins: deferred indefinitely.
+
+---
+
+## 19. Playtest-5 fix — the returned Linkle/Link hybrid (2026-07-11, uncommitted)
+
+**Symptom:** Linkle body (Ordon clothes) with vanilla Link hair, NOT healed by
+quick-swaps — a regression of the resident-composite hybrid class that the sumo §5
+work had fixed. The stale piece is the CAP+HAIR (served by the sumo-test PRIVATE Kmdl
+mount when Cap Wear is on); the body tracks via the normal clothes pipeline.
+
+**Root cause (from the session log): a generation-bump STORM.** `overlay_generation()`
+bumps on every scan+install — and the Mods window's grab-and-place fired a FULL
+scan+install per Up/Down STEP (log: gens 2→25 in one burst, then 26–33 as Linkle
+toggled off/on). `driveCustomHeadRefresh` reacts to the raw counter: each bump starts
+a private-mount build-then-swap whose DVD loads read the FST at THEIR execution time,
+while the coordinator records the generation up front — under the storm a mount
+completed against a mid-flight FST flip (vanilla) yet was recorded current. The live
+private slot then held vanilla hair while the tracker believed it was fresh → no
+quick-swap could heal it (rebuilds re-read the same stale private mount).
+
+**Fixes (both):**
+1. **Storm at the source — drag debounce.** `move_folder` gains `apply=false`; the
+   Mods window's grabbed Up/Down steps persist ONLY the order and set a dirty flag;
+   ONE `apply_order_changes()` (scan+install) fires at place / drop / window close /
+   next window build. A 10-step drag = 1 generation bump, not 10.
+2. **Winner-compare gate + verify in the head coordinator** (the menu_res pattern,
+   applied to `d_albw_sumo_test`): on a gen bump it now compares what its four arcs
+   (alSumou/Kmdl/Mmdl/Zmdl) actually resolve to (`overlay_path_for`) against what the
+   live mounts were built from — identical → record gen, do nothing (icon-only
+   toggles and reorders become complete no-ops for the composite). And every
+   completed rebuild schedules ONE verify pass (`s_headVerifyWinners`), so a flip
+   that lands mid-load is detected and re-kicked — the refresh CONVERGES on the true
+   overlay state regardless of how bumps race. Slot machinery untouched.
+
+**Recovering an already-latched save:** with the fix built, toggle any model-arc mod
+once (or reboot) — the winner compare sees the mismatch and re-mounts.
+
+**Systemic lesson (3rd occurrence): `overlay_generation()` alone is NOT a re-mount
+signal.** Consumers must compare THEIR asset's winner (`overlay_path_for`) — gen says
+"something changed", winner says "MY thing changed". menu_res was built this way;
+sumo-test now is; any future resident-asset consumer must be.
+
+---
+
+## 20. Playtest-6 fix — parry-overlay static + stuck Linkle icons (2026-07-11, uncommitted)
+
+**One underlying issue (as suspected in the report): persistent ALBW consumers caching
+into the swapped menu arcs.** Vanilla consumers re-fetch their archive per menu open,
+so §10's retire-one-swap policy was safe for THEM. Our ALBW additions are
+session-persistent and cache:
+
+- **Shield/parry HUD** (`d_albw_shield.cpp applyParryIcons`): `changeTexture` with a
+  pointer INTO the itemicon archive's resource data, latched behind
+  `sHudShieldApplied`. After a Linkle OFF→ON cycle (two landed swaps — confirmed in
+  the log), the SECOND swap frees the instance the pictures still reference → the
+  recurring "parry overlay static/garbage".
+- **Postman shop** (`dALBWShop_c`): cached itemicon archive pointer + per-row icon
+  pictures survive the whole session → old mod's icons "stuck on" with the mod off
+  (row pics hold pixel COPIES — stale, not dangling; the archive pointer could
+  dangle after the free).
+
+**Fix — `dAlbwMenuRes_swapGeneration()` (pull-based, mirrors overlay_generation):**
+menu_res bumps a counter each time a pointer swap LANDS. Persistent caches compare it
+per frame/use and re-resolve on change — at that moment the retired instance is still
+alive (freed only on the NEXT swap), so re-resolving promptly leaves **no dangle
+window**. Wired into: the shield HUD draw gate (third re-apply trigger beside
+tier/mode change) and `dALBWShop_c::drawRowWheelIcons` (drops cached archive + own
+mount + all row pics → same-draw rebuild from the current instance).
+
+**Rule for future code (2nd systemic lesson of the day):** anything that keeps a
+pointer into `itemicon/clctres/dmapres` resource data — or caches those archive
+pointers — across frames MUST watch `dAlbwMenuRes_swapGeneration()`. Copy-based
+consumers (readItemTexture memcpy) only go stale, never dangle, but stale ALSO reads
+as a bug to users (this report), so invalidate those too.

@@ -9,7 +9,9 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_focused_arts.h"
 #include "d/d_meter2_info.h"
+#include "d/actor/d_a_alink.h"
 #include "SSystem/SComponent/c_cc_d.h"
+#include "SSystem/SComponent/c_math.h"
 #include "f_op/f_op_actor_iter.h"
 #include "f_op/f_op_actor_mng.h"
 #include "f_pc/f_pc_manager.h"
@@ -20,13 +22,14 @@ namespace {
 
 constexpr u8 kLockoutBowShotsMax           = 3;
 constexpr u8 kLockoutBombArrowShotsMax     = 2;
-constexpr u8 kLockoutHookshotHitsHeal      = 10;
-constexpr u16 kLockoutHeartHealUnits       = 12; // 3 hearts (quarter-heart units)
+constexpr u8 kLockoutBomblingUsesMax       = 2;
 constexpr int kLockoutSlingshotDebuffFrames = 120; // 4 seconds @ 30fps
 constexpr int kLockoutDomRodConfuseFrames   = 300; // 10 seconds @ 30fps
 constexpr f32 kLockoutConfuseRetargetRange2 = 2500.0f * 2500.0f;
 constexpr int kLockoutProvokedMax           = 8;
 constexpr int kLockoutProvokedFrames        = 300; // 10 seconds @ 30fps
+constexpr f32 kLockoutBomblingOrbitRadius   = 200.0f; // ~10u at Link body scale
+constexpr s16 kLockoutBomblingOrbitStep     = 0x433;  // ~5% faster than prior 0x400
 
 constexpr int kLockoutTaggedMax = 16;
 
@@ -50,8 +53,10 @@ struct ProvokedEnemy {
 
 u8 sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
 u8 sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
-u8 sLockoutHookshotHits       = 0;
+u8 sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
 bool sLockoutDoubleClawUsed   = false;
+fpc_ProcID sLockoutBomblingId = fpcM_ERROR_PROCESS_ID_e;
+s16 sLockoutBomblingOrbitAngle = 0;
 
 LockoutTaggedEnemy sTaggedEnemies[kLockoutTaggedMax];
 int              sTaggedCount = 0;
@@ -317,8 +322,10 @@ void tickProvokedEnemies() {
 void dAlbwLockout_onBegin() {
     sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
     sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
-    sLockoutHookshotHits        = 0;
+    sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
     sLockoutDoubleClawUsed      = false;
+    sLockoutBomblingId          = fpcM_ERROR_PROCESS_ID_e;
+    sLockoutBomblingOrbitAngle  = 0;
     clearAllTaggedEnemies();
     clearConfuse();
     clearAllProvoked();
@@ -327,8 +334,10 @@ void dAlbwLockout_onBegin() {
 void dAlbwLockout_onEnd() {
     sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
     sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
-    sLockoutHookshotHits        = 0;
+    sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
     sLockoutDoubleClawUsed      = false;
+    sLockoutBomblingId          = fpcM_ERROR_PROCESS_ID_e;
+    sLockoutBomblingOrbitAngle  = 0;
     clearAllTaggedEnemies();
     clearConfuse();
     clearAllProvoked();
@@ -386,15 +395,9 @@ void dAlbwLockout_onHookshotFired() {
         return;
     }
 
-    sLockoutHookshotHits++;
-    if (sLockoutHookshotHits < kLockoutHookshotHitsHeal) {
-        return;
-    }
-
-    sLockoutHookshotHits = 0;
-    const u16 life = dComIfGs_getLife();
-    const u16 maxLife = dComIfGs_getMaxLife();
-    dComIfGs_setLife((u16)std::min<u32>(maxLife, life + kLockoutHeartHealUnits));
+    // Lockout single-claw perk: pin meter at 0 (cancels partial recovery) and
+    // enable tip contact damage via SetAtAtp while the shot flies (see setAtCollision).
+    dMeter2_drainALBWToLockout();
 }
 
 void dAlbwLockout_onDoubleHookshotFired() {
@@ -417,6 +420,93 @@ bool dAlbwLockout_canFireBombArrow() {
 bool dAlbwLockout_canUseDoubleHookshot() {
     return dMeter2_isALBWLocked() && !sLockoutDoubleClawUsed &&
            dMeter2_getALBWMeterValue() >= lockoutMeterThresholdPct(50);
+}
+
+u8 dAlbwLockout_getHookshotContactAtp() {
+    // Mirror Hero's Shade secret-boss At construction (npc_kn SetAtAtp): give the
+    // claw tip real ATP so cc_at_check deals damage. atp 2 ≈ Ordon light hit after
+    // at_power_get for common power types. Double claw keeps grab-only (atp 0).
+    if (!dMeter2_isALBWLocked()) {
+        return 0;
+    }
+    return 2;
+}
+
+bool dAlbwLockout_canUseBombling() {
+    if (!dMeter2_isALBWLocked()) {
+        return true;
+    }
+    // One orbiting bombling at a time; 2 uses per lockout session.
+    if (sLockoutBomblingUsesRemaining == 0) {
+        return false;
+    }
+    if (sLockoutBomblingId != fpcM_ERROR_PROCESS_ID_e &&
+        fopAcM_SearchByID(sLockoutBomblingId) != NULL)
+    {
+        return false;
+    }
+    return true;
+}
+
+void dAlbwLockout_onBomblingDeployed(fopAc_ac_c* i_bombling) {
+    if (!dMeter2_isALBWLocked() || i_bombling == NULL) {
+        return;
+    }
+    if (sLockoutBomblingUsesRemaining == 0) {
+        return;
+    }
+    sLockoutBomblingUsesRemaining--;
+    sLockoutBomblingId = i_bombling->id;
+    sLockoutBomblingOrbitAngle = 0;
+    // Each lockout use restores 30% of base meter (same fraction as boom refill).
+    dMeter2_addALBWBaseFraction(3, 10);
+}
+
+void dAlbwLockout_onBomblingDestroyed(fopAc_ac_c* i_bombling) {
+    if (i_bombling == NULL || i_bombling->id != sLockoutBomblingId) {
+        return;
+    }
+    sLockoutBomblingId = fpcM_ERROR_PROCESS_ID_e;
+}
+
+bool dAlbwLockout_isBomblingActive() {
+    if (sLockoutBomblingId == fpcM_ERROR_PROCESS_ID_e || !dMeter2_isALBWLocked()) {
+        return false;
+    }
+    return fopAcM_SearchByID(sLockoutBomblingId) != NULL;
+}
+
+bool dAlbwLockout_updateBomblingOrbit(fopAc_ac_c* i_bombling) {
+    if (i_bombling == NULL || i_bombling->id != sLockoutBomblingId || !dMeter2_isALBWLocked()) {
+        return false;
+    }
+
+    daAlink_c* player = daAlink_getAlinkActorClass();
+    if (player == NULL) {
+        return true;
+    }
+
+    sLockoutBomblingOrbitAngle += kLockoutBomblingOrbitStep;
+    const f32 radius = kLockoutBomblingOrbitRadius;
+    i_bombling->current.pos.x =
+        player->current.pos.x + radius * cM_ssin(sLockoutBomblingOrbitAngle);
+    i_bombling->current.pos.z =
+        player->current.pos.z + radius * cM_scos(sLockoutBomblingOrbitAngle);
+    i_bombling->current.pos.y = player->current.pos.y + 40.0f;
+    i_bombling->old.pos = i_bombling->current.pos;
+    i_bombling->speedF = 0.0f;
+    i_bombling->speed = cXyz::Zero;
+    i_bombling->gravity = 0.0f;
+    i_bombling->shape_angle.y = sLockoutBomblingOrbitAngle + 0x4000;
+    i_bombling->current.angle.y = i_bombling->shape_angle.y;
+    return true;
+}
+
+void dAlbwLockout_onBlockWhileBomblingActive() {
+    if (!dAlbwLockout_isBomblingActive()) {
+        return;
+    }
+    dShield_addBashCharge(1);
 }
 
 void dAlbwLockout_onSlingshotHit(fopAc_ac_c* i_enemy) {

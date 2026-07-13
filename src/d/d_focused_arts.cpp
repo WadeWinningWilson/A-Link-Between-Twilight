@@ -9,9 +9,11 @@
 #include "d/d_albw_combat.h"
 #include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_wolf_combat.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
+#include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_player.h"
 #include "dusk/settings.h"
 #include "dusk/trace_noop.h"
@@ -24,9 +26,9 @@ namespace {
 static constexpr u16 kFocusedArtsShopTierReg = static_cast<u16>(103 << 8) | 0xFF;
 
 static constexpr int kFocusedArtsShopPrices[kFocusedArtsMaxTier] = {
+    100,
+    300,
     500,
-    1500,
-    3500,
 };
 
 static constexpr int kItemFillStep = 2;  // +1/6 of 12
@@ -42,10 +44,60 @@ static int s_backSliceAlbwSuppressFrames = 0;
 static int s_maintainStackedFrames = 0;
 static bool s_gsHurricaneFinisherArmed = false;
 static int s_ebGreatSpinAoeFrames = 0;
+// MD T1 @ ≤1 heart: keep asserting wolf until transformed, then count down; 0 = idle.
+// Frame budget matches other FA timers (~30 sim Hz): 15s → 450.
+static int s_mdForcedWolfFrames = 0;
+static bool s_mdForcedWolfSawWolf = false;
+static bool s_mdForcedWolfForceHuman = false;
+// True for this T1 MD finisher when it opened on ≤1 heart (300% path; may or may not force wolf).
+static bool s_mdCriticalFinisher = false;
 static char s_recentEvents[kRecentEventLines][72] = {};
 static int s_recentEventHead = 0;
 
 static constexpr int kEbGreatSpinAoeDurationFrames = 30;
+static constexpr int kMdForcedWolfDurationFrames = 450;
+// TP life is quarter-hearts; 1 heart = 4.
+static constexpr u16 kMdCriticalLifeQuarters = 4;
+
+static void logFaEvent(const char* i_msg);
+
+static bool isMdCriticalLife(u16 i_life) {
+    return i_life <= kMdCriticalLifeQuarters;
+}
+
+static void clearMdForcedWolfWindow() {
+    s_mdForcedWolfFrames = 0;
+    s_mdForcedWolfSawWolf = false;
+    s_mdForcedWolfForceHuman = false;
+}
+
+// End-reset flags are cleared at the end of Link execute, after dFocusedArts_update.
+// Setting the flag alone (after mpProcFunc) never reaches checkGroundSpecialMode —
+// kick metamorphose in the same frame while the flag is still live.
+static void kickForceWolfTransform(daPy_py_c* i_player) {
+    if (i_player == NULL || daPy_py_c::checkNowWolf()) {
+        return;
+    }
+    i_player->onForceWolfChange();
+    static_cast<daAlink_c*>(i_player)->checkGroundSpecialMode();
+}
+
+static void kickForceHumanTransform(daPy_py_c* i_player) {
+    if (i_player == NULL || !daPy_py_c::checkNowWolf()) {
+        return;
+    }
+    i_player->onEndResetFlg0(daPy_py_c::ERFLG0_UNK_1);
+    static_cast<daAlink_c*>(i_player)->checkWolfGroundSpecialMode();
+}
+
+static void beginMdForcedWolfWindow() {
+    s_mdForcedWolfFrames = kMdForcedWolfDurationFrames;
+    s_mdForcedWolfSawWolf = false;
+    s_mdForcedWolfForceHuman = false;
+    // Do not kick here — this runs inside procCutFinishInit after commonProcInit.
+    // dFocusedArts_update (post-proc same frame) calls kickForceWolfTransform.
+    logFaEvent("MD T1 finisher -> forced wolf @ <=1 heart (15s / manual)");
+}
 
 static bool isHiddenSkillCutType(int i_cutType) {
     switch (i_cutType) {
@@ -112,7 +164,7 @@ static u16 previewFaMeleeDamage(u16 i_vanillaPower, int i_cutType, int tierSteps
         switch (i_cutType) {
         case daPy_py_c::CUT_TYPE_MORTAL_DRAW_A:
         case daPy_py_c::CUT_TYPE_MORTAL_DRAW_B:
-            if (dComIfGs_getLife() <= 1) {
+            if (isMdCriticalLife(dComIfGs_getLife()) || s_mdCriticalFinisher) {
                 resolved = applyPercentMult(resolved, 3, 1);
             } else {
                 resolved = applyPercentMult(resolved, 3, 2);
@@ -333,7 +385,7 @@ static void beginSpendCharge(int i_spendColumn) {
 }  // namespace
 
 bool dFocusedArts_isEnabled() {
-    return dusk::getSettings().game.focusedArtsTest.getValue();
+    return dusk::getSettings().game.focusedArts.getValue();
 }
 
 bool dFocusedArts_isDebugOverlayEnabled() {
@@ -400,10 +452,7 @@ int dFocusedArts_getNextShopTierPrice() {
 }
 
 bool dFocusedArts_canPurchaseShopTier() {
-    if (!dFocusedArts_isEnabled()) {
-        return false;
-    }
-    if (isCheatAllTiers()) {
+    if (!dFocusedArts_shouldShowShopTierRow()) {
         return false;
     }
     return dFocusedArts_getPurchasedTier() < kFocusedArtsMaxTier;
@@ -430,17 +479,9 @@ const char* dFocusedArts_getShopTierName(int tier) {
     }
 }
 
-const char* dFocusedArts_getShopTierDesc(int tier) {
-    switch (tier) {
-    case 1:
-        return "Bank one Focused Arts charge. Hidden skills use the first spend column.";
-    case 2:
-        return "Bank two charges. Spend from the second column, then the first.";
-    case 3:
-        return "Bank three charges and unlock Special Finishers on the final spend.";
-    default:
-        return "";
-    }
+const char* dFocusedArts_getShopTierDesc(int /*tier*/) {
+    return "I noticed you are adept with that sword you carry! I found this scroll "
+           "left discarded on the Hyrule Castle grounds. Care to take a look?";
 }
 
 void dFocusedArts_resetRuntimeState() {
@@ -454,6 +495,8 @@ void dFocusedArts_resetRuntimeState() {
     s_maintainStackedFrames = 0;
     s_gsHurricaneFinisherArmed = false;
     s_ebGreatSpinAoeFrames = 0;
+    clearMdForcedWolfWindow();
+    s_mdCriticalFinisher = false;
     s_recentEventHead = 0;
     for (int i = 0; i < kRecentEventLines; i++) {
         s_recentEvents[i][0] = '\0';
@@ -472,6 +515,17 @@ void dFocusedArts_onStageLoad() {
 
 int dFocusedArts_getBankCount() {
     return s_bankCount;
+}
+
+void dFocusedArts_clearOneBankCharge() {
+    if (!dFocusedArts_isEnabled() || s_bankCount <= 0) {
+        return;
+    }
+    s_bankCount--;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "clear 1 bank -> %d/%d", s_bankCount,
+                  dFocusedArts_getMaxBank());
+    logFaEvent(buf);
 }
 
 int dFocusedArts_getFillNumerator() {
@@ -676,6 +730,35 @@ void dFocusedArts_update() {
         s_ebGreatSpinAoeFrames--;
     }
 
+    if (s_mdForcedWolfForceHuman || s_mdForcedWolfFrames > 0) {
+        daPy_py_c* player = daPy_getPlayerActorClass();
+        if (player == NULL) {
+            clearMdForcedWolfWindow();
+        } else if (s_mdForcedWolfForceHuman) {
+            if (!daPy_py_c::checkNowWolf()) {
+                clearMdForcedWolfWindow();
+            } else {
+                kickForceHumanTransform(player);
+            }
+        } else if (!daPy_py_c::checkNowWolf()) {
+            if (s_mdForcedWolfSawWolf) {
+                // Manual transform back ends the window early.
+                clearMdForcedWolfWindow();
+                logFaEvent("MD forced wolf ended (manual transform)");
+            } else {
+                kickForceWolfTransform(player);
+            }
+        } else {
+            s_mdForcedWolfSawWolf = true;
+            s_mdForcedWolfFrames--;
+            if (s_mdForcedWolfFrames <= 0) {
+                s_mdForcedWolfForceHuman = true;
+                kickForceHumanTransform(player);
+                logFaEvent("MD forced wolf ended (10s timer)");
+            }
+        }
+    }
+
     if (s_jsFinisherLockoutActive && !dMeter2_isALBWLocked()) {
         s_jsFinisherLockoutActive = false;
         logFaEvent("JS finisher bonus ended (lockout cleared)");
@@ -705,19 +788,17 @@ void dFocusedArts_onHiddenSkillProcStarted(int i_cutType) {
     case daPy_py_c::CUT_TYPE_MORTAL_DRAW_B: {
         const u16 life = dComIfGs_getLife();
         const u16 maxLife = dComIfGs_getMaxLifeGauge();
-        if (life > 1 && maxLife > 0) {
+        s_mdCriticalFinisher = isMdCriticalLife(life);
+        if (!s_mdCriticalFinisher && life > 0 && maxLife > 0) {
             const u16 drain = std::max<u16>(1, static_cast<u16>(maxLife / 2));
             dComIfGs_setLife(life > drain ? static_cast<u8>(life - drain) : 1);
-        }
-        if (dComIfGs_getLife() <= 1) {
-            if (daPy_getPlayerActorClass()->checkEndResetFlg0(daPy_py_c::ERFLG0_FORCE_WOLF_CHANGE)) {
-                daPy_getPlayerActorClass()->onForceWolfChange();
-                logFaEvent("MD T1 finisher -> forced wolf @ 1 HP");
-            } else {
-                logFaEvent("MD T1 finisher @ 1 HP (wolf transform unavailable)");
-            }
-        } else {
             logFaEvent("MD T1 finisher -> -half HP");
+        } else if (s_mdCriticalFinisher) {
+            if (dAlbwWolfCombat_isEnabled()) {
+                beginMdForcedWolfWindow();
+            } else {
+                logFaEvent("MD T1 finisher @ <=1 heart (Wolf Link Combat off — no forced wolf)");
+            }
         }
         break;
     }
@@ -747,7 +828,7 @@ u16 dFocusedArts_resolveMeleeDamage(u16 i_vanillaPower, int i_cutType) {
         switch (i_cutType) {
         case daPy_py_c::CUT_TYPE_MORTAL_DRAW_A:
         case daPy_py_c::CUT_TYPE_MORTAL_DRAW_B:
-            if (dComIfGs_getLife() <= 1) {
+            if (isMdCriticalLife(dComIfGs_getLife()) || s_mdCriticalFinisher) {
                 resolved = applyPercentMult(resolved, 3, 1);
             } else {
                 resolved = applyPercentMult(resolved, 3, 2);
@@ -847,6 +928,10 @@ bool dFocusedArts_shouldShowShopTierRow() {
     if (!dFocusedArts_isEnabled() || isCheatAllTiers()) {
         return false;
     }
+    // Unlocks after Hero's Shade teaches Ending Blow (first sword hidden skill).
+    if (!dComIfGs_isEventBit(dSv_event_flag_c::F_0339)) {
+        return false;
+    }
     return dFocusedArts_getPurchasedTier() < kFocusedArtsMaxTier;
 }
 
@@ -929,6 +1014,10 @@ void dFocusedArts_formatHiddenSkillAttackDebugLine(int i_index, char* o_buf, siz
 
     std::snprintf(o_buf, i_bufSize, "[x] %-11s V=%-3u now=%u T1/2/3=%u/%u/%u", spec.shortName, vanilla,
                   now, t1, t2, t3);
+}
+
+bool dFocusedArts_isMdForcedWolfActive() {
+    return dFocusedArts_isEnabled() && s_mdForcedWolfFrames > 0;
 }
 
 #endif

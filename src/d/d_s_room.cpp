@@ -358,6 +358,8 @@ static bool objectSetCheck(room_of_scene_class* i_this) {
                                   &w.pos, roomNo, &kWatcherAngle, &kWatcherScale, -1);
                 }
             }
+
+            // Junior Postman mail — spawned from dAlbwMail_tickNorthFaron().
 #endif
 // ============================================
 // NEW CODE ENDS HERE

@@ -27,4 +27,13 @@
 // per frame from the play scene. No-op on non-PC builds.
 void dAlbwMenuRes_drive();
 
+// Bumped once every time a menu-arc pointer swap LANDS. Any consumer that
+// caches pointers INTO these archives' resource data (shield HUD icon TIMG,
+// the shop's cached archive pointer, ...) MUST compare this per use/frame and
+// re-resolve on change — the instance they hold is retired at swap time and
+// FREED one swap later, so re-resolving promptly (while the retired instance
+// is still alive) is what keeps them dangle-free. Vanilla consumers re-fetch
+// per menu open and never need this; it exists for OUR persistent caches.
+int dAlbwMenuRes_swapGeneration();
+
 #endif  // D_ALBW_MENU_RES_H

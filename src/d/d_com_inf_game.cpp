@@ -104,7 +104,13 @@ void dComIfG_play_c::setItemBombNumCount(u8 i_item, s16 count) {
         return;
     }
 #endif
+#if TARGET_PC
+    if (i_item >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return;
+    }
+#else
     JUT_ASSERT(176, 0 <= i_item && i_item < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     mItemInfo.mItemBombNumCount[i_item] += count;
 }
 
@@ -114,7 +120,13 @@ s16 dComIfG_play_c::getItemBombNumCount(u8 i_item) {
         return mItemInfo.field_0x4ec8;
     }
 #endif
+#if TARGET_PC
+    if (i_item >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return 0;
+    }
+#else
     JUT_ASSERT(197, 0 <= i_item && i_item < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     return mItemInfo.mItemBombNumCount[i_item];
 }
 
@@ -125,7 +137,13 @@ void dComIfG_play_c::clearItemBombNumCount(u8 i_item) {
         return;
     }
 #endif
+#if TARGET_PC
+    if (i_item >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return;
+    }
+#else
     JUT_ASSERT(220, 0 <= i_item && i_item < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     mItemInfo.mItemBombNumCount[i_item] = 0;
 }
 
@@ -2231,8 +2249,26 @@ s16 dComIfGp_getSelectItemNum(int i_selItemIdx) {
     if (selectItem == dItemNo_NORMAL_BOMB_e || selectItem == dItemNo_WATER_BOMB_e || selectItem == dItemNo_POKE_BOMB_e ||
         selectItem == dItemNo_BOMB_ARROW_e)
     {
-        u8 slot_no = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx) - SLOT_15;
-        itemNum = dComIfGs_getBombNum(slot_no);
+        u8 bagSlot = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx);
+        if (bagSlot >= SLOT_15 && bagSlot < SLOT_18) {
+            itemNum = dComIfGs_getBombNum(bagSlot - SLOT_15);
+        } else {
+            // Select button points at a non-bag inventory slot that still holds a
+            // bomb type (editor / custom assign). Prefer the bag that stores that
+            // type; fall back to first matching bag contents.
+            for (int i = 0; i < dSv_player_item_c::BOMB_BAG_MAX; i++) {
+                if (dComIfGs_getItem((u8)(i + SLOT_15), false) == selectItem) {
+                    itemNum = dComIfGs_getBombNum(i);
+                    break;
+                }
+            }
+#if TARGET_PC
+            // ALBW ammo is meter-gated; show at least 1 so HUD/router never look empty.
+            if (itemNum <= 0) {
+                itemNum = 1;
+            }
+#endif
+        }
     } else if (selectItem == dItemNo_PACHINKO_e) {
         itemNum = dComIfGs_getPachinkoNum();
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
@@ -2282,7 +2318,11 @@ void dComIfGp_setSelectItemNum(int i_selItemIdx, s16 i_num) {
     if (selectItem == dItemNo_NORMAL_BOMB_e || selectItem == dItemNo_WATER_BOMB_e || selectItem == dItemNo_POKE_BOMB_e ||
         selectItem == dItemNo_BOMB_ARROW_e)
     {
-        u8 mix_slotNo = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx) - SLOT_15;
+        u8 bagSlot = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx);
+        if (bagSlot < SLOT_15 || bagSlot >= SLOT_18) {
+            return;
+        }
+        u8 mix_slotNo = bagSlot - SLOT_15;
 
         if (i_num > dComIfGs_getBombMax(selectItem)) {
             i_num = dComIfGs_getBombMax(selectItem);
@@ -2316,7 +2356,11 @@ void dComIfGp_addSelectItemNum(int i_selItemIdx, s16 i_num) {
     if (selectItem == dItemNo_NORMAL_BOMB_e || selectItem == dItemNo_WATER_BOMB_e || selectItem == dItemNo_POKE_BOMB_e ||
         selectItem == dItemNo_BOMB_ARROW_e)
     {
-        u8 slot_no = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx) - SLOT_15;
+        u8 bagSlot = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx);
+        if (bagSlot < SLOT_15 || bagSlot >= SLOT_18) {
+            return;
+        }
+        u8 slot_no = bagSlot - SLOT_15;
         dComIfGp_setItemBombNumCount(slot_no, i_num);
     } else if (selectItem == dItemNo_PACHINKO_e) {
         dComIfGp_setItemPachinkoNumCount(i_num);

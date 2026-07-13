@@ -862,7 +862,29 @@ namespace dusk {
                         if (itemMap.find(i)->second.m_type != ITEMTYPE_EQUIP_e) continue;
 
                         if (ImGui::Selectable(fmt::format("{0}##item_{1}{2}", itemMap.find(i)->second.m_name, slot, i).c_str())) {
-                            dComIfGs_setItem(slot, itemMap.find(i)->first);
+                            const u8 id = itemMap.find(i)->first;
+                            int bagSlot = -1;
+                            if (id == dItemNo_NORMAL_BOMB_e) {
+                                bagSlot = SLOT_15;
+                            } else if (id == dItemNo_WATER_BOMB_e) {
+                                bagSlot = SLOT_16;
+                            } else if (id == dItemNo_POKE_BOMB_e) {
+                                bagSlot = SLOT_17;
+                            }
+                            if (bagSlot >= 0) {
+                                dComIfGs_setItem(static_cast<u8>(bagSlot), id);
+                                dComIfGs_onItemFirstBit(id);
+                                const int bagIdx = bagSlot - SLOT_15;
+                                u8 maxNum = dComIfGs_getBombMax(id);
+                                if (maxNum == 0) {
+                                    maxNum = 30;
+                                }
+                                if (dComIfGs_getBombNum(bagIdx) == 0) {
+                                    dComIfGs_setBombNum(bagIdx, maxNum);
+                                }
+                            } else {
+                                dComIfGs_setItem(slot, id);
+                            }
                         }
                     }
                     ImGui::EndCombo();

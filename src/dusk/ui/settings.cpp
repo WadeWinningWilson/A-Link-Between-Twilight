@@ -1372,6 +1372,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "ALBW wolf form: bite charges for Midna field attacks, twilight/non-twilight damage "
             "split, non-twilight stun, and low-HP bite healing. Off uses vanilla Twilight Princess "
             "wolf combat.");
+        addOption("Focused Arts", getSettings().game.focusedArts,
+            "Charge bank and spend columns for Hidden Skills, Special Finishers, and Postman "
+            "Focused Arts scroll upgrades. Off keeps standard ALBW hidden-skill meter costs.");
         addOption("Enemy Death Rupees", getSettings().game.enemyDeathRupees,
             "Credit rupees directly to your wallet when enemies die and when boss fights end. "
             "Vanilla drop tables (hearts, jars, ground rupees) are unchanged.");

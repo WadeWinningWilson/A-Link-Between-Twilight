@@ -498,7 +498,7 @@ namespace dusk {
             const int fillDen = dFocusedArts_getFillDenominator();
             const int spendCol = dFocusedArts_getSpendColumn();
 
-            ImGui::Text("Focused Arts (test)");
+            ImGui::Text("Focused Arts");
             ImGui::Separator();
             ImGuiStringViewText(fmt::format("Tier: {} (purchased {})\n",
                                             dFocusedArts_getEffectiveTier(),

@@ -2988,6 +2988,10 @@ public:
     int procWolfBackJumpLand();
     int procWolfHowlInit(int);
     int procWolfHowl();
+#if TARGET_PC
+    int  procWolfHowlCombat();     // ALBW Port: song-driven combat-howl lifecycle (duet pose + AOE)
+    void setWolfHowlSpinEffect();  // ALBW Port: emit the base KAITENGIRIL Great-Spin ring
+#endif
     int procWolfAutoJumpInit(int);
     int procWolfAutoJump();
     int procWolfFallInit(int, f32 i_morf);
@@ -4589,6 +4593,9 @@ public:
 
 #if TARGET_PC
     void handleWolfHowl();
+    // Wolf Art (D-pad Up): combat howl AOE. Gated on wolf form + Wolf Combat + quick-swap mode +
+    // howl unlocked (or the dev toggle), spends 1 wolf charge, triggers the howl.
+    void handleWolfHowlBurst();
     void handleQuickTransform();
     bool checkAimContext();
     bool checkAimInputContext();
@@ -4627,6 +4634,19 @@ public:
     u8   mWolfChargeCount      = 0;
     u8   mWolfBiteCount        = 0;
     bool mWolfSpendChainActive = false;
+    // Wolf Art — Howl AOE in progress: set by handleWolfHowlBurst(), read by procWolfHowl and
+    // (later increments) the AOE collider / looped Great-Spin VFX / howl music.  Cleared when the
+    // howl proc ends.
+    bool mWolfCombatHowlActive = false;
+    // One-shot "this howl is a combat howl" request: set by handleWolfHowlBurst, consumed by
+    // procWolfHowlInit into mWolfCombatHowlActive (so a vanilla demo howl is never a combat one).
+    bool mWolfHowlWantCombat   = false;
+    // Combat howl is in its WANM_HOWL_END exit anim (returning to gameplay).
+    bool mWolfHowlEnding       = false;
+    // Post-song buffer countdown (frames): after the song ends, wait this long before the exit anim.
+    u16  mWolfHowlFramesLeft   = 0;
+    // Total combat-howl frames elapsed (startup grace for the song poll + hard-cap failsafe).
+    u16  mWolfHowlElapsed      = 0;
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================

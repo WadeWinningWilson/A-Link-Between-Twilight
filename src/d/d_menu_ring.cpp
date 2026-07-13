@@ -1961,7 +1961,17 @@ u8 dMenu_Ring_c::getItemNum(u8 i_slotNo) {
     case dItemNo_NORMAL_BOMB_e:
     case dItemNo_WATER_BOMB_e:
     case dItemNo_POKE_BOMB_e:
-        ret = dComIfGs_getBombNum(i_slotNo - 0xF);
+        // Ammo lives only in bag indices 0..2 (inventory SLOT_15..17).
+        if (i_slotNo >= SLOT_15 && i_slotNo < SLOT_18) {
+            ret = dComIfGs_getBombNum(i_slotNo - SLOT_15);
+        } else {
+            for (int i = 0; i < dSv_player_item_c::BOMB_BAG_MAX; i++) {
+                if (dComIfGs_getItem((u8)(i + SLOT_15), false) == item) {
+                    ret = dComIfGs_getBombNum(i);
+                    break;
+                }
+            }
+        }
         break;
 
     case dItemNo_BEE_CHILD_e:

@@ -16,6 +16,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_mail.h"
 #endif
 
 #include <cstring>
@@ -1811,6 +1812,15 @@ dMenu_LetterData dMenu_Letter::letter_data[64] = {
     {0x0000, 0x0000, 0x0000, 0x0000}, {0x0000, 0x0000, 0x0000, 0x0000},
 };
 
+#if TARGET_PC
+namespace {
+struct AlbwMailLetterSlotInit {
+    AlbwMailLetterSlotInit() { dAlbwMail_init(); }
+};
+static AlbwMailLetterSlotInit sAlbwMailLetterSlotInit;
+}  // namespace
+#endif
+
 u8 dMeter2Info_getRecieveLetterNum() {
     u8 letterNum = 0;
 
@@ -1869,6 +1879,12 @@ int dMeter2Info_recieveLetter() {
             u16 eventFlag = dMenu_Letter::getLetterEventFlag(i);
             if (dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[eventFlag])) {
                 dComIfGs_onLetterGetFlag(i);
+
+#if TARGET_PC
+                if (dAlbwMail_isRuntimeLetter(i)) {
+                    dAlbwMail_onDeliveryComplete();
+                }
+#endif
 
                 if (dComIfGs_getGetNumber(letterNum) == 0) {
                     dComIfGs_setGetNumber(letterNum, i + 1);

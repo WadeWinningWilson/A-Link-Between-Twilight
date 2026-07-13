@@ -60,6 +60,7 @@ private:
     void updateDescParchment(bool showItemBox, u8 itemNo);
     void drawDescMesgText(J2DGrafContext* gfx, f32 x, f32 y, f32 w, f32 h, f32 ruledLinePitch);
     JKRArchive* ensureItemIconArchive();
+    void releaseItemIconArchive();  // menu-arc swap invalidation (drawRowWheelIcons)
 
     J2DPicture*     mpFooterStickPic = nullptr;
     dALBWPaneBounds mFooterBar;          ///< single full-width footer strip (Cursor-defined content)

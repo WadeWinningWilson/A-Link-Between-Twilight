@@ -284,11 +284,13 @@ struct UserSettings {
         // Helm punish flow, hidden-skill dispatch, ALBW meter costs, Jump Strike charge gate.
         // Always on (ALBW core); retained for save compat — not shown in settings UI.
         ConfigVar<bool> hiddenSkillRework;
-        // Focused Arts charge bank + spend columns (Gameplay → ALBW Unfinished Settings).
+        // Focused Arts charge bank + spend columns (Settings → Gameplay).
+        ConfigVar<bool> focusedArts;
+        // Legacy key game.focusedArtsTest — migrated into focusedArts on load; kept registered.
         ConfigVar<bool> focusedArtsTest;
-        // Playtest cheat: effective shop tier 3; WithDebug shows in-game FA overlay.
+        // Playtest cheat (Editor → ALBW): effective shop tier 3; WithDebug shows in-game FA overlay.
         ConfigVar<FocusedArtsCheatMode> focusedArtsCheat;
-        // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires focusedArtsTest.
+        // Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial bow). Requires Focused Arts.
         ConfigVar<bool> flurryRush;
         // Custom Models: '|'-delimited DISABLED folder names under model_replacements/
         // (empty = all enabled). LEGACY (pre-load-order): superseded by
@@ -352,6 +354,18 @@ struct UserSettings {
         ConfigVar<bool> deathRecoveryOrb;
         // Wolf charge economy, field attack damage/stun, bite healing. Off = vanilla TP wolf.
         ConfigVar<bool> wolfLinkCombat;
+        // DEV/TEST: bypass the wolf-art shop unlocks AND the wolf-charge cost so the arts
+        // (howl / punch / giant) can be triggered immediately without grinding or the story
+        // unlock. Keep OFF for release. Only meaningful with wolfLinkCombat + quick-swap on.
+        ConfigVar<bool> wolfArtsDevTest;
+        // Master on/off for the two Wolf Howl VFX sliders below.  OFF = the exact finisher base
+        // (no extra tilt, 1.0x scale) so you can see the untouched effect; ON = apply the sliders.
+        ConfigVar<bool> wolfHowlVfxOverride;
+        // Wolf Howl ring VFX tuning (live-tunable in the editor; only applied when the override above
+        // is ON).  wolfHowlTiltDeg = extra global X-pitch in degrees on top of the finisher tilt.
+        // wolfHowlScalePct = particle scale (100 = 1.0x).  Cosmetic only.
+        ConfigVar<int> wolfHowlTiltDeg;
+        ConfigVar<int> wolfHowlScalePct;
         // Direct wallet credit on enemy kill and boss fight victory (additive; vanilla drops unchanged).
         ConfigVar<bool> enemyDeathRupees;
         // Master Quest: Postman heart/stamina upgrades; halved heart container/piece grants.
@@ -365,6 +379,8 @@ struct UserSettings {
         // Hero's Shade Secret Boss: post-game real duel vs the Hero's Shade after
         // all Hidden Skills (F_0344). Off = disabled. WIP — default off.
         ConfigVar<bool> heroShadeSecretBoss;
+        // Junior Postman mail Phase 0 test: ignore story/delivered save gates for spawn.
+        ConfigVar<bool> albwJuniorMailTest;
         // Editor ALBW WIP: grant/remove soulbound red potion in inventory slot 11.
         ConfigVar<bool> albwSoulboundRedPotion;
         // Parry/bash charge HUD icon style: spur only, spur+shield, or shield only.

@@ -69,6 +69,18 @@ private:
 // File-scope because the row lambdas outlive the build function; reset on
 // every window build.
 int s_grabbedSlot = -1;
+// Deferred-apply flag: Up/Down steps during a grab persist ONLY the order
+// (move_folder apply=false); the rescan happens ONCE at place/drop/close.
+// A 10-step drag used to fire 10 scans + 10 overlay generations — the bump
+// storm that let resident-model refreshes latch stale (Linkle/Link hybrid).
+bool s_orderDirty = false;
+
+void apply_pending_order() {
+    if (s_orderDirty) {
+        s_orderDirty = false;
+        dusk::custom_assets::apply_order_changes();
+    }
+}
 
 // ============================================
 // modinfo.ini screenshot preview (modshot:// texture provider)
@@ -151,12 +163,18 @@ std::string rml_multiline(const std::string& text) {
 
 }  // namespace
 
+void ModsWindow::hide(bool close) {
+    apply_pending_order();  // drag interrupted by closing the window
+    Window::hide(close);
+}
+
 ModsWindow::ModsWindow() {
     add_tab("Mods", [this](Rml::Element* content) {
         auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
         auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
 
         s_grabbedSlot = -1;  // never carry a grab across window rebuilds
+        apply_pending_order();  // defensive: stale dirty order from a prior build
         ensure_modshot_provider();
 
         leftPane.add_section("Load Order — top wins");
@@ -213,14 +231,20 @@ ModsWindow::ModsWindow() {
                         if (s_grabbedSlot < 0) {
                             s_grabbedSlot = slot;  // grab
                         } else if (s_grabbedSlot == slot) {
-                            s_grabbedSlot = -1;    // place here (no move)
+                            s_grabbedSlot = -1;    // place: apply the drag's moves once
+                            apply_pending_order();
                         } else {
                             // Holding another mod: drop it AT this row (mouse path).
+                            // move_folder_to rescans internally, which also covers
+                            // any deferred Up/Down steps taken before the drop.
                             if (s_grabbedSlot < static_cast<int>(view.size()) &&
                                 dusk::custom_assets::move_folder_to(
                                     view[s_grabbedSlot].first.c_str(), slot))
                             {
                                 config::Save();
+                                s_orderDirty = false;
+                            } else {
+                                apply_pending_order();
                             }
                             s_grabbedSlot = -1;
                         }
@@ -238,8 +262,11 @@ ModsWindow::ModsWindow() {
                         {
                             return true;  // list edge: consume so the grab stays put
                         }
-                        if (dusk::custom_assets::move_folder(view[i].first.c_str(), delta)) {
+                        // Deferred apply: persist the order only; ONE rescan at place.
+                        if (dusk::custom_assets::move_folder(view[i].first.c_str(), delta,
+                                                             /*apply=*/false)) {
                             s_grabbedSlot = target;
+                            s_orderDirty = true;
                             config::Save();
                             mDoAud_seStartMenu(kSoundItemChange);
                         }

@@ -9,6 +9,7 @@
 #include "d/d_albw_shield.h"
 #include "d/d_albw_combat.h"
 #include "d/d_albw_hp_mult.h"
+#include "d/d_albw_lockout.h"
 #include "d/d_albw_wolf_combat.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
@@ -17,6 +18,7 @@
 #include "d/d_meter2.h"
 #include "d/d_meter2_info.h"
 #include "d/d_meter2_draw.h"
+#include "d/d_albw_menu_res.h"  // swapGeneration (re-apply icons after a menu-arc swap)
 #include "d/d_albw_rental.h"  // suppress shield HUD while the rental shop owns input
 #include "m_Do/m_Do_controller_pad.h"
 #include "d/d_meter_HIO.h"
@@ -1204,6 +1206,12 @@ bool dShield_onShieldHit(daAlink_c* i_link, int i_atSpl, fopAc_ac_c* i_attacker)
         logChargeEvent("parry+");
     }
 
+#if TARGET_PC
+    // Lockout bombling perk: successful block/parry while orbiting bombling is out
+    // grants one extra bash charge (clamped in dShield_addBashCharge).
+    dAlbwLockout_onBlockWhileBomblingActive();
+#endif
+
     repairDurabilityOnParry(i_link);
 
     return true;
@@ -1780,6 +1788,22 @@ void dShield_fillBashChargesToMax() {
     sBashCharges = maxCharges;
 }
 
+void dShield_addBashCharge(u8 i_amount) {
+    if (!dShield_isParryCombatEnabled() || i_amount == 0) {
+        return;
+    }
+    const u8 maxCharges = dShield_getMaxBashCharges();
+    if (maxCharges == 0) {
+        return;
+    }
+    if (sBashCharges + i_amount >= maxCharges) {
+        sBashCharges = maxCharges;
+    } else {
+        sBashCharges = static_cast<u8>(sBashCharges + i_amount);
+    }
+    logChargeEvent("bombling-block+");
+}
+
 u8 dShield_getBashThreshold() {
     return currentTierCfg(daAlink_getAlinkActorClass()).bashThreshold;
 }
@@ -1862,7 +1886,22 @@ void dShield_drawBashCharges() {
                           desiredMode);
         }
     }
-    if (curIconTier != sHudIconTier || desiredMode != sHudAppliedMode) {
+    // ============================================
+    // NEW CODE — ALBW Port (menu-arc swap tracking, 2026-07-11)
+    // The applied icon TIMG POINTS INTO the itemicon archive's resource data
+    // (applyParryIcons -> arc->getResource -> changeTexture, no copy). A mod
+    // toggle swaps that archive instance (d_albw_menu_res) and FREES the old
+    // one a swap later — the latched pictures then drew freed memory (the
+    // recurring "parry overlay static" breakage). Re-apply whenever a swap
+    // lands: the retired instance is still alive at that moment, so the
+    // pictures re-point to the CURRENT archive with no dangle window.
+    // ============================================
+    static int sLastMenuResSwapGen = -1;
+    const int menuResSwapGen = dAlbwMenuRes_swapGeneration();
+    if (curIconTier != sHudIconTier || desiredMode != sHudAppliedMode ||
+        menuResSwapGen != sLastMenuResSwapGen)
+    {
+        sLastMenuResSwapGen = menuResSwapGen;
         applyParryIcons(curIconTier);
     }
 

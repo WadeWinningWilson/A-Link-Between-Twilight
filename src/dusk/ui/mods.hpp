@@ -15,6 +15,9 @@ namespace dusk::ui {
 class ModsWindow : public Window {
 public:
     ModsWindow();
+    // Safety net: closing the window while holding a grabbed mod must still
+    // apply the drag's deferred order changes (one rescan).
+    void hide(bool close) override;
 };
 
 }  // namespace dusk::ui

@@ -3485,6 +3485,37 @@ int daAlink_c::procWolfHowlInit(int param_0) {
 
     commonProcInit(PROC_WOLF_HOWL);
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Wolf Howl combat, increment 3 — correct duet pose)
+    // Consume the one-shot combat-howl request (set by handleWolfHowlBurst).  A vanilla demo howl
+    // (d_a_alink_demo.inc) leaves the request false, so it plays a plain howl — never the combat
+    // pose/AOE, even if a prior combat howl was interrupted and left state behind.
+    // ============================================
+    mWolfCombatHowlActive = mWolfHowlWantCombat;
+    mWolfHowlWantCombat   = false;
+
+    if (mWolfCombatHowlActive) {
+        // The DUET "singing with the Golden Wolf" pose (WANM_HOWL_SUCCESS / WL_HOWLC), looped — this
+        // is the pose wolf Link plays in the Hero's-Shade room while the duet songs sound.  Mirrors
+        // the vanilla success branch in procWolfHowlDemo (setLoop(27)/setAttribute(2) hold the
+        // sustained-sing portion).  procWolfHowlCombat drives its duration off the song length.
+        setSingleAnimeWolfBase(WANM_HOWL_SUCCESS);
+        mUnderFrameCtrl[0].setLoop(27);
+        mUnderFrameCtrl[0].setAttribute(2);
+        setFaceBasicTexture(FTANM_WL_HOWLC);
+        mProcVar3.field_0x300e = 0;
+        mProcVar2.field_0x300c = 0;
+        mNormalSpeed = 0.0f;
+        // Link-centered radial AOE collider (roll-attack pattern; placed by setWolfAtCollision's
+        // PROC_WOLF_HOWL branch, armed each singing frame in procWolfHowlCombat).  Placeholders to
+        // tune toward Great Spin.
+        setCylAtParam(AT_TYPE_WOLF_CUT_TURN, dCcG_At_Spl_UNK_1, 3, dCcD_SE_WOLF_BITE, 8, 300.0f,
+                      155.0f);
+        return 1;
+    }
+#endif
+
     if (param_0 != 0) {
         setSingleAnimeWolfParam(WANM_HOWL_SIT, &mpHIO->mWolf.mWlHowl.m.mSittingHowlAnm);
         onModeFlg(0x800000);
@@ -3504,6 +3535,13 @@ int daAlink_c::procWolfHowlInit(int param_0) {
 
 int daAlink_c::procWolfHowl() {
     daPy_frameCtrl_c* frameCtrl_p = mUnderFrameCtrl;
+
+#if TARGET_PC
+    // A combat howl has its own song-driven lifecycle (looping duet pose + AOE + song-length timing).
+    if (mWolfCombatHowlActive) {
+        return procWolfHowlCombat();
+    }
+#endif
 
     if (checkAnmEnd(frameCtrl_p)) {
         if (doButton()) {
@@ -3537,6 +3575,95 @@ int daAlink_c::procWolfHowl() {
 
     return 1;
 }
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Wolf Howl VFX — base KAITENGIRIL)
+// The plain KAITENGIRIL "Light" set (A-D) with its OWN authored colors + sparkle: emitted
+// fire-and-forget through the NULL-tevStr overload so nothing tints or alters its particles, and
+// each burst lives out its natural lifetime (NO immortal / forced continuous emission — that was
+// what changed the particles).  Re-emitted on a cadence from procWolfHowlCombat to sustain for the
+// song.  wolfHowlTiltDeg / wolfHowlScalePct apply an optional global pitch / scale, gated behind
+// wolfHowlVfxOverride (off = untouched base).
+// ============================================
+static const int l_wolfHowlVfxPeriod  = 20;     // re-emit cadence (frames) — sustains the ring
+static const f32 l_wolfHowlVfxYOffset = 30.0f;  // wolf mid-body height above his feet
+
+void daAlink_c::setWolfHowlSpinEffect() {
+    const bool useOverride = dusk::getSettings().game.wolfHowlVfxOverride.getValue();
+    const int  tiltDeg     = useOverride ? dusk::getSettings().game.wolfHowlTiltDeg.getValue() : 0;
+    const int  scalePct    = useOverride ? dusk::getSettings().game.wolfHowlScalePct.getValue() : 100;
+
+    cXyz  fxPos(current.pos.x, current.pos.y + l_wolfHowlVfxYOffset, current.pos.z);
+    csXyz fxRot((s16)cM_deg2s((f32)tiltDeg), shape_angle.y, 0);
+
+    cXyz        scaleVec((f32)scalePct * 0.01f, (f32)scalePct * 0.01f, (f32)scalePct * 0.01f);
+    const cXyz* scaleArg = (scalePct != 100) ? &scaleVec : NULL;  // NULL = the effect's own 1.0x
+
+    // Base KAITENGIRIL (A-D), fire-and-forget with NULL tevStr (4-arg overload keeps the effect's own
+    // colors + particles).  No local tilt, no immortal — just the plain effect.
+    static const u16 effNames[4] = {
+        ID_ZI_J_KAITENGIRIL_A, ID_ZI_J_KAITENGIRIL_B, ID_ZI_J_KAITENGIRIL_C, ID_ZI_J_KAITENGIRIL_D,
+    };
+    for (int i = 0; i < 4; i++) {
+        dComIfGp_particle_set(effNames[i], &fxPos, &fxRot, scaleArg);
+    }
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Wolf Howl combat lifecycle — song-driven duration + AOE, increment 3)
+// The combat howl plays the looping WANM_HOWL_SUCCESS duet pose (set in procWolfHowlInit) and lasts
+// exactly as long as the chosen song, then a 1 s buffer, then the WANM_HOWL_END exit -> gameplay.
+//   * "Song still playing" = Z2SeqMgr::isItemGetDemo() — true from song start (it covers the ~49-frame
+//     fanfare ramp via mFanfareCount) through playback, and flips false when the non-looping tune
+//     ends.  This auto-fits every tune's length, so no per-song timer is needed.
+//   * A short startup grace (mWolfHowlElapsed > 15) ignores the 1-frame pre-attach gap so it can't
+//     false-trigger the end on frame 0.
+//   * A hard cap (~30 s) force-ends a stuck howl (e.g. a silent tune, or another fanfare holding the
+//     shared isItemGetDemo() flag true).
+//   * The Link-centered AOE collider is armed every singing frame (placed by setWolfAtCollision).
+// ============================================
+int daAlink_c::procWolfHowlCombat() {
+    // Exit phase: the WANM_HOWL_END anim is playing -> return to gameplay when it finishes.
+    if (mWolfHowlEnding) {
+        if (checkAnmEnd(mUnderFrameCtrl)) {
+            mWolfCombatHowlActive = false;
+            mWolfHowlEnding       = false;
+            checkNextActionWolf(0);
+        }
+        return 1;
+    }
+
+    if (mWolfHowlElapsed < 0xFFFF) {
+        mWolfHowlElapsed++;
+    }
+
+    const bool songPlaying = Z2GetSeqMgr()->isItemGetDemo();
+    const bool songEnded   = mWolfHowlElapsed > 15 && !songPlaying;
+    const bool hardCap     = mWolfHowlElapsed > 1800;  // ~30 s failsafe
+
+    if (songEnded || hardCap) {
+        if (mWolfHowlFramesLeft > 0) {
+            mWolfHowlFramesLeft--;  // 1 s buffer after the song, for a clean return to gameplay
+        } else {
+            Z2GetSeqMgr()->stopWolfHowlSong();  // safety (already ended); field BGM fades back
+            setSingleAnimeWolfBase(WANM_HOWL_END);
+            mWolfHowlEnding = true;
+        }
+    } else {
+        mWolfHowlFramesLeft = 60;  // still singing -> keep the 1 s buffer fresh
+        // Re-emit the base KAITENGIRIL ring on a fixed cadence so it sustains for the song (first
+        // burst on frame 1, then every l_wolfHowlVfxPeriod frames), tied to the same AOE window.
+        if (mWolfHowlElapsed % l_wolfHowlVfxPeriod == 1) {
+            setWolfHowlSpinEffect();
+        }
+    }
+
+    // Keep the Link-centered AOE collider armed while singing.
+    onResetFlg0(RFLG0_UNK_2);
+    return 1;
+}
+#endif
 
 int daAlink_c::procWolfAutoJumpInit(int param_0) {
     commonProcInit(PROC_WOLF_AUTO_JUMP);

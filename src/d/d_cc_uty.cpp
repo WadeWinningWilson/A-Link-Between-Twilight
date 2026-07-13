@@ -676,22 +676,31 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                             link->mWolfChargeCount++;
                             dAlbwWolfChargeHud_notify();
                         }
-                        // Heal 1/4 heart when at or below 50 % max HP
+                        // Heal 1/4 heart when at or below 50 % max HP (normal wolf combat).
                         const u16 curHP = dComIfGs_getLife();
                         const u16 maxHP = dComIfGs_getMaxLifeGauge();
-                        if (curHP * 2 <= maxHP) {
+                        if (!dFocusedArts_isMdForcedWolfActive() && curHP * 2 <= maxHP) {
                             dComIfGp_setItemLifeCount(1.0f, 0);
                         }
+                    }
+                    // MD forced-wolf finisher: every damaging attack restores 1 heart.
+                    if (dFocusedArts_isMdForcedWolfActive()) {
+                        dComIfGp_setItemLifeCount(4.0f, 0);
                     }
                 }
 
                 // --- Wolf field attack: stun non-twilight survivors ---
                 if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK) &&
-                    i_AtInfo->mAttackPower > 0 &&
-                    i_enemy->health > 0 &&
-                    !dAlbwWolfStun_isTwilightEnemy(fopAcM_GetName(i_enemy)))
+                    i_AtInfo->mAttackPower > 0)
                 {
-                    dAlbwWolfStun_apply(i_enemy);
+                    if (dFocusedArts_isMdForcedWolfActive()) {
+                        dComIfGp_setItemLifeCount(4.0f, 0);
+                    }
+                    if (i_enemy->health > 0 &&
+                        !dAlbwWolfStun_isTwilightEnemy(fopAcM_GetName(i_enemy)))
+                    {
+                        dAlbwWolfStun_apply(i_enemy);
+                    }
                 }
             }
         }

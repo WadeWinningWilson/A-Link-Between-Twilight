@@ -990,7 +990,7 @@ void toggle_folder(const char* folder) {
     install_overlays();
 }
 
-bool move_folder(const char* folder, int delta) {
+bool move_folder(const char* folder, int delta, bool apply) {
     if (folder == nullptr || (delta != -1 && delta != 1)) {
         return false;
     }
@@ -1027,10 +1027,18 @@ bool move_folder(const char* folder, int delta) {
     persist_order(list);
 
     // An order change can change conflict winners at every site — re-resolve.
-    // Reload-scoped like a toggle: lands on the next asset load.
+    // Reload-scoped like a toggle: lands on the next asset load. Deferred
+    // (apply=false) during a Mods-window drag; apply_order_changes() finishes.
+    if (apply) {
+        scan();
+        install_overlays();
+    }
+    return true;
+}
+
+void apply_order_changes() {
     scan();
     install_overlays();
-    return true;
 }
 
 bool move_folder_to(const char* folder, int slot) {
@@ -2164,8 +2172,9 @@ J3DModelData* try_load_uncached(const char*, int) { return nullptr; }
 std::vector<std::string> list_folders() { return {}; }
 bool is_folder_enabled(const char*) { return true; }
 void toggle_folder(const char*) {}
-bool move_folder(const char*, int) { return false; }
+bool move_folder(const char*, int, bool) { return false; }
 bool move_folder_to(const char*, int) { return false; }
+void apply_order_changes() {}
 std::vector<std::pair<std::string, bool>> order_view(const std::vector<std::string>&) { return {}; }
 std::vector<std::string> list_core_packs() { return {}; }
 void rebuild_texture_packs() {}

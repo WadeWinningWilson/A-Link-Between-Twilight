@@ -54,6 +54,21 @@ void dAlbwWolfStun_beforeMove();
 void dAlbwWolfStun_afterMove();
 
 // ============================================
+// NEW CODE — ALBW Port (Wolf Arts — Focused-Arts-style wolf abilities, shop-unlock hooks)
+// The wolf "arts" (howl / Midna punch / giant) are unlocked via rental-shop purchases gated
+// behind story milestones.  Save-backed per-save event bits (713 = howl; 714/715 reserved for
+// punch/giant).  The rental shop (d_albw_rental.cpp) calls these to draw + purchase the row,
+// mirroring the Focused-Arts-tier row pattern.
+// ============================================
+bool        dAlbwWolfArts_isHowlUnlocked();
+void        dAlbwWolfArts_unlockHowl();
+bool        dAlbwWolfArts_shouldShowHowlShopRow();  // Wolf Combat on AND not yet unlocked
+int         dAlbwWolfArts_getHowlShopPrice();       // 100 rupees
+const char* dAlbwWolfArts_getHowlShopName();
+const char* dAlbwWolfArts_getHowlShopDesc();
+bool        dAlbwWolfArts_tryPurchaseHowl();        // sets the save bit; false if already owned
+
+// ============================================
 // NEW CODE ENDS HERE
 // ============================================
 

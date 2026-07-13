@@ -48,6 +48,7 @@ UserSettings g_userSettings = {
         .manualShielding {"game.manualShielding", false},
         .shieldParryCombat {"game.shieldParryCombat", true},
         .hiddenSkillRework {"game.hiddenSkillRework", true},
+        .focusedArts {"game.focusedArts", false},
         .focusedArtsTest {"game.focusedArtsTest", false},
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
         .flurryRush {"game.flurryRush", false},
@@ -68,11 +69,16 @@ UserSettings g_userSettings = {
         .shieldDurability {"game.shieldDurability", false},
         .deathRecoveryOrb {"game.deathRecoveryOrb", false},
         .wolfLinkCombat {"game.wolfLinkCombat", false},
+        .wolfArtsDevTest {"game.wolfArtsDevTest", false},
+        .wolfHowlVfxOverride {"game.wolfHowlVfxOverride", false},
+        .wolfHowlTiltDeg {"game.wolfHowlTiltDeg", 0},
+        .wolfHowlScalePct {"game.wolfHowlScalePct", 100},
         .enemyDeathRupees {"game.enemyDeathRupees", false},
         .masterQuest {"game.masterQuest", false},
         .bossRefinement {"game.bossRefinement", false},
         .shadeRefuge {"game.shadeRefuge", false},
         .heroShadeSecretBoss {"game.heroShadeSecretBoss", false},
+        .albwJuniorMailTest {"game.albwJuniorMailTest", false},
         .albwSoulboundRedPotion {"game.albwSoulboundRedPotion", false},
         .parryIconsMode {"game.parryIconsMode", ParryIcons::SpurShield},
         .shieldHudVisibility {"game.shieldHudVisibility", ShieldHudVisibility::Off},
@@ -335,6 +341,7 @@ void registerSettings() {
     Register(g_userSettings.game.manualShielding);
     Register(g_userSettings.game.shieldParryCombat);
     Register(g_userSettings.game.hiddenSkillRework);
+    Register(g_userSettings.game.focusedArts);
     Register(g_userSettings.game.focusedArtsTest);
     Register(g_userSettings.game.focusedArtsCheat);
     Register(g_userSettings.game.flurryRush);
@@ -355,11 +362,16 @@ void registerSettings() {
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);
     Register(g_userSettings.game.wolfLinkCombat);
+    Register(g_userSettings.game.wolfArtsDevTest);
+    Register(g_userSettings.game.wolfHowlVfxOverride);
+    Register(g_userSettings.game.wolfHowlTiltDeg);
+    Register(g_userSettings.game.wolfHowlScalePct);
     Register(g_userSettings.game.enemyDeathRupees);
     Register(g_userSettings.game.masterQuest);
     Register(g_userSettings.game.bossRefinement);
     Register(g_userSettings.game.shadeRefuge);
     Register(g_userSettings.game.heroShadeSecretBoss);
+    Register(g_userSettings.game.albwJuniorMailTest);
     Register(g_userSettings.game.albwSoulboundRedPotion);
     Register(g_userSettings.game.parryIconsMode);
     Register(g_userSettings.game.shieldHudVisibility);

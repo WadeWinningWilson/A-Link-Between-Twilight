@@ -48,6 +48,7 @@
 #include "dusk/truetest.hpp"
 #endif
 #include "d/d_albw_death_rupee.h"
+#include "d/d_albw_mail.h"
 #include "d/d_ww_itemmdl_test.h"
 #include "d/d_ww_itemmdl_pc.h"
 #include "dusk/autosave.h"
@@ -770,6 +771,7 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
 
 #if TARGET_PC
     dALBWDeathRupees_tickSpawn();
+    dAlbwMail_tickNorthFaron();
     dWwItemmdl::tickBowGetItemDemoReplay();
     dWwItemmdl_tickHeldBowArcMount();
 #endif

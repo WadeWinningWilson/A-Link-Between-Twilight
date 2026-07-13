@@ -13,6 +13,7 @@
 #include "JSystem/JHostIO/JORServer.h"
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "SSystem/SComponent/c_math.h"
+#include "Z2AudioLib/Z2SeqMgr.h"  // Z2GetSeqMgr / stopWolfHowlSong (Wolf Howl music stop)
 #include "d/d_item.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_albw_rental.h"
@@ -6587,7 +6588,12 @@ void daAlink_c::setWolfAtCollision() {
             setSwordHitVibration(&mTgCyls[2]);
         }
 
-        if (mProcID == PROC_WOLF_ROLL_ATTACK) {
+        if (mProcID == PROC_WOLF_ROLL_ATTACK
+#if TARGET_PC
+            // Wolf Howl AOE: the combat howl uses the same Link-centered radial collider.
+            || (mProcID == PROC_WOLF_HOWL && mWolfCombatHowlActive)
+#endif
+        ) {
             mAtCyl.SetC(current.pos);
 
             dComIfG_Ccsp()->Set(&mAtCyl);
@@ -6793,6 +6799,15 @@ void daAlink_c::setAtCollision() {
                 mAtCps[0].SetStartEnd(spBC, spB0);
                 spA4 = spB0 - spBC;
                 mAtCps[0].SetAtVec(spA4);
+#if TARGET_PC
+                // Lockout single-claw contact damage (Hero's Shade AtAtp pattern).
+                // Only on the flying tip (mode 3 / HS_MODE_SHOOT); double claw stays grab-only.
+                if (mEquipItem == dItemNo_HOOKSHOT_e && mItemMode == 3) {
+                    mAtCps[0].SetAtAtp(dAlbwLockout_getHookshotContactAtp());
+                } else {
+                    mAtCps[0].SetAtAtp(0);
+                }
+#endif
                 dComIfG_Ccsp()->Set(&mAtCps[0]);
             } else {
                 mAtCps[0].ResetAtHit();
@@ -15367,8 +15382,13 @@ int daAlink_c::checkNewItemChange(u8 i_selItemIdx) {
                     if (acceptSubjectModeChange()) {
                         return ITEM_PROC_SUBJECTIVITY;
                     }
-                } else if (sel_item == dItemNo_POKE_BOMB_e && dComIfGp_getSelectItemNum(i_selItemIdx) &&
+                } else if (sel_item == dItemNo_POKE_BOMB_e &&
+#if TARGET_PC
+                           // Ammo decoupling: bag count is cosmetic on PC; lockout uses canALBWBombling.
                            field_0x2fcf < 2)
+#else
+                           dComIfGp_getSelectItemNum(i_selItemIdx) && field_0x2fcf < 2)
+#endif
                 {
                     return ITEM_PROC_PICK_PUT;
                 }

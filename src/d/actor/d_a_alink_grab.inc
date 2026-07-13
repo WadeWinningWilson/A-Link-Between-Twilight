@@ -1365,7 +1365,8 @@ int daAlink_c::procPickPut() {
 // Ammo decoupling: decrement also skipped on PC.
 // ============================================
 #if TARGET_PC
-            if (dMeter2_canALBWBomb() && checkReadyItem() && dBomb_c::createInsectBombPlayer(&current.pos)) {
+            if (dMeter2_canALBWBombling() && checkReadyItem() &&
+                dBomb_c::createInsectBombPlayer(&current.pos)) {
 #else
             if (checkReadyItem() && dBomb_c::createInsectBombPlayer(&current.pos)) {
 #endif
@@ -1381,7 +1382,11 @@ int daAlink_c::procPickPut() {
 #if !TARGET_PC
                 dComIfGp_addSelectItemNum(mSelectItemId, -1);
 #else
-                dMeter2_onALBWBomb();
+                // Lockout bombling: deploy hooks (uses/refill) live on the actor create path.
+                // Outside lockout, still bill the shared bomb drain.
+                if (!dMeter2_isALBWLocked()) {
+                    dMeter2_onALBWBomb();
+                }
 #endif
 // ============================================
 // MODIFIED CODE ENDS HERE

@@ -462,6 +462,14 @@ static void LoadFromPath(const char* path) {
 
     // Hidden Skill Rework is always on; normalize legacy saves that disabled it.
     dusk::getSettings().game.hiddenSkillRework.setValue(true, false);
+
+    // Promote legacy Focused Arts Test into the official Gameplay toggle.
+    if (dusk::getSettings().game.focusedArtsTest.getValue() &&
+        !dusk::getSettings().game.focusedArts.getValue())
+    {
+        dusk::getSettings().game.focusedArts.setValue(true, false);
+    }
+    dusk::getSettings().game.focusedArtsTest.setValue(false, false);
 }
 
 void dusk::config::LoadFromFileName(const char* path) {

@@ -434,6 +434,13 @@ bool dMeter2_canALBWBomb() {
     return true;
 }
 
+bool dMeter2_canALBWBombling() {
+    if (sALBWLocked) {
+        return dAlbwLockout_canUseBombling();
+    }
+    return true;
+}
+
 bool dMeter2_canALBWBombArrow() {
     if (sALBWLocked) {
         return dAlbwLockout_canFireBombArrow();
@@ -661,6 +668,18 @@ bool dMeter2_isInCombatEncounter() {
 void dMeter2_addALBWFraction(int numerator, int denominator) {
     int amount = (sOilMaxVar * numerator) / denominator;
     sALBWMeter += amount;
+    albwRefreshLockoutState(false);
+}
+
+void dMeter2_addALBWBaseFraction(int numerator, int denominator) {
+    if (denominator <= 0) {
+        return;
+    }
+    int amount = (sOilBaseMax * numerator) / denominator;
+    sALBWMeter += amount;
+    if (sALBWMeter > sOilMaxVar) {
+        sALBWMeter = sOilMaxVar;
+    }
     albwRefreshLockoutState(false);
 }
 

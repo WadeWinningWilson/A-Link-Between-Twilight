@@ -30,6 +30,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_item.h"
 #include "d/d_item_data.h"
+#include "d/d_albw_menu_res.h"  // swapGeneration (drop cached icons after a menu-arc swap)
 #include "d/d_meter2_info.h"
 #include "dusk/custom_assets.hpp"  // custom shop-icon override (write_item_icon_timg)
 #include "d/d_meter_HIO.h"
@@ -141,6 +142,10 @@ static s16 shopItemIconTexIdx(u8 itemNo) {
     if (itemNo == 0xff) {
         return -1;
     }
+    // Focused Arts scroll — itemicon.arc ni_item_icon_makimono (same as skill menu).
+    if (itemNo == 0xFD) {
+        return 0x3D;
+    }
     u8 loadNo = itemNo;
     if (loadNo == (u8)dItemNo_DEITY_ARMOR_e) {
         loadNo = (u8)dItemNo_ARMOR_e;
@@ -188,6 +193,9 @@ static const char* shopRentalItemBtiName(u8 itemNo) {
         return "ni_magicarmor_48.bti";
     case (u8)dItemNo_DUNGEON_BACK_e:
         return "im_musuko_48.bti";
+    // Shop-only sentinel for Focused Arts (hidden-skill scroll / makimono).
+    case 0xFD:
+        return "ni_item_icon_makimono.bti";
     default:
         return nullptr;
     }
@@ -1487,6 +1495,18 @@ dALBWShop_c::~dALBWShop_c() {
     mpItemIconArchive = nullptr;
 }
 
+// Drop the shop's cached itemicon references so the next ensure re-resolves the
+// CURRENT global instance (menu-arc swap invalidation — see drawRowWheelIcons).
+// destroy() kills only the mount COMMAND; an archive we may have published as
+// the global stays alive, so nothing the global points at is touched here.
+void dALBWShop_c::releaseItemIconArchive() {
+    if (mpItemIconMount) {
+        mpItemIconMount->destroy();
+        mpItemIconMount = nullptr;
+    }
+    mpItemIconArchive = nullptr;
+}
+
 JKRArchive* dALBWShop_c::ensureItemIconArchive() {
     JKRArchive* arc = dComIfGp_getItemIconArchive();
     if (arc) {
@@ -2230,6 +2250,31 @@ void dALBWShop_c::dumpRowIconDebug(JKRArchive* iconArc, int visCount,
 }
 
 void dALBWShop_c::drawRowWheelIcons(J2DGrafContext* gfx, int visCount) {
+    // ============================================
+    // NEW CODE — ALBW Port (menu-arc swap tracking, 2026-07-11)
+    // The shop caches the itemicon archive pointer and its per-row icon
+    // pictures across the whole session. A mod toggle swaps the global archive
+    // instance (d_albw_menu_res) — the cached pointer then aims at a retired
+    // instance (freed one swap later → garbage reads), and the row pictures
+    // keep the OLD mod's pixels (Linkle icons "stuck on" with the mod off).
+    // On a landed swap: drop the cached archive + own mount + every row pic so
+    // everything re-resolves from the CURRENT instance this same draw.
+    // ============================================
+    {
+        static int sLastMenuResSwapGen = -1;
+        const int swapGen = dAlbwMenuRes_swapGeneration();
+        if (swapGen != sLastMenuResSwapGen) {
+            sLastMenuResSwapGen = swapGen;
+            releaseItemIconArchive();
+            for (int row = 0; row < 6; ++row) {
+                JKR_DELETE(mpRowItemPic[row]);
+                mpRowItemPic[row]      = nullptr;
+                mRowItemPicItemNo[row] = 0xff;
+                mRowItemPicCustom[row] = false;
+            }
+        }
+    }
+
     JKRArchive* iconArc = dComIfGp_getItemIconArchive();
     if (!iconArc) {
         iconArc = ensureItemIconArchive();

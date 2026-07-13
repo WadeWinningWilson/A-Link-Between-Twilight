@@ -270,3 +270,139 @@ and B1 is where "code mods exist" becomes true.
   keep the event surface deterministic-friendly (no wall-clock, seeded RNG API).
 - Where does the script pump live relative to pause (menus open) — probably emit
   `frame` only when actors execute, plus a separate `ui_frame` if ever needed.
+
+---
+
+## 12. Deep dive: PARRY COMBAT as a standalone mod (directive: must ship as one)
+
+Direction from 2026-07-11: parry combat is the flagship — it WILL ship as a standalone
+mod; "engine surgery can't be a mod" is not an acceptable end state for it.
+
+### 12.1 The audit changes everything
+
+Measured, not assumed:
+
+- The entire feature is **one module**: `d_albw_shield.cpp` (~1,980 lines) +
+  `d_albw_combat.cpp` (74). The `shieldParryCombat` ConfigVar is read in exactly ONE
+  place inside the feature; everything else is settings plumbing.
+- The engine talks to it through an API that ALREADY EXISTS:
+  [d_albw_shield.h](../include/d/d_albw_shield.h) — ~45 `dShield_*` functions
+  (guard tracking, block/parry outcomes, bash charge economy, punish tiers,
+  durability, HUD row layout), called from **52 sites in 11 engine files**
+  (alink guard/damage/cut, `d_cc_uty` damage plumbing, meters/HUD, focused arts,
+  b_tn, com_inf_game).
+
+So parry combat is NOT diffuse engine surgery — it is a plugin talking through a
+de-facto interface, whose interface just isn't formalized yet. The engine calls INTO
+the feature at fixed seams; the feature never needed to own the engine.
+
+### 12.2 The enabling refactor: the Shield Combat Hook Table (H1)
+
+Invert the linkage. Replace direct `dShield_*` calls with a registered hook struct:
+
+```cpp
+struct dCombatShieldHooks {           // one entry per current dShield_* fn
+    bool (*onBlockHit)(daAlink_c*, int, bool, fopAc_ac_c*) = nullptr;  // etc.
+};
+// Engine-side: g_shieldHooks.onBlockHit ? g_shieldHooks.onBlockHit(...) : vanillaDefault;
+```
+
+- Defaults = inert (vanilla behavior). The 52 call sites become null-checked
+  dispatches — mechanical, verifiable, zero behavior change when parry registers at
+  boot exactly as today.
+- This table IS the product: a versioned **Combat Hook API v1**. It's also precisely
+  what any OTHER combat overhaul mod would need — parry stops being special-cased
+  and becomes the first client.
+
+### 12.3 Delivery ladder (all three stand on H1)
+
+1. **H2 — "Phantom mod" (ship THIS first).** Parry's code stays compiled in the exe,
+   but registration is gated on the presence + enabled state of a real mod folder
+   (`ALBD Parry Combat/` with `modinfo.ini`, its SFX/VFX/icon assets, and a manifest
+   key like `feature=albd_parry`). Distributable as a zip; delete the folder and the
+   feature is gone (code dormant); it lists/orders/badges in the Mods window like
+   anything else. 100% of the mod UX, 0% new failure modes — the battle-tested C++
+   (all the crash fixes the sumo/cap/heap sagas paid for) keeps running unchanged.
+2. **H3 — First-party native plugin channel (true detach, later).** The hook table is
+   the ABI; `plugin.dll` in the mod folder registers its implementation through ONE
+   exported function. Version-locked to the exe build id (mismatch → mod disabled
+   with a panel badge, exactly like apiversion). First-party-only posture: we sign
+   what we ship; third-party DLLs remain out of scope (see §3C). This is what makes
+   parry installable on a Dusklight build that didn't compile it — the actual
+   "standalone" dream — and it's tractable BECAUSE the ABI is one struct.
+3. **DuskScript port — NOT the vehicle for parry.** The hook table could be exposed
+   to Lua, and simpler combat mods should get that. But parry's hooks sit in the
+   per-frame damage/guard hot path with frame-exact timing windows; rewriting 2,000
+   battle-tested lines into a budgeted VM trades proven stability for regression
+   risk with no user-visible gain. Revisit only if community remixing of parry
+   internals becomes a goal.
+
+### 12.4 Sequencing
+
+H1 (hook table, behavior-identical) → H2 (phantom mod folder; parry ships as a mod)
+→ H3 (DLL channel) whenever a second compatible exe target actually exists. H1+H2
+do not depend on DuskScript at all and can precede it.
+
+---
+
+## 13. GAME PLAN — the dummy-mod track (DuskScript bring-up)
+
+Directive: validate the code-mod structure with DUMMY mods first, not ALBD features.
+Each milestone = one dummy mod that forces exactly one slice of infrastructure, with
+acceptance criteria. FPS discipline applies throughout (field `F_SP121` r0 p0 spot
+check per milestone; oracle run at M1 and M4).
+
+### M0 — "hello-dusk" (foundation)
+Build: vendor Lua 5.4 as plain sources in the tree (NOT FetchContent — see the
+reconfigure hazards in build-fps-guidelines); `dusk::script` module skeleton behind
+`D_DUSK_SCRIPT` kill switch; one sandboxed `lua_State` per mod (env table built by
+hand; no io/os/package/debug; text chunks only); `scripts/` recognized by
+`folder_content()`; states created at play-scene entry, destroyed on toggle-off;
+events `save_loaded` + `area_load`; API: `dusk.log`, `dusk.api_version`, minimal
+`hud.text` (existing HUD text path).
+**Accept:** drop folder → mod listed (script content) → log lines fire on load and
+area change; toggle off kills it live; on re-enables; delete folder → clean; FPS
+unchanged.
+
+### M1 — "busy-loop" (safety BEFORE features)
+Build: per-frame instruction budget (`lua_sethook` count mask), suspension +
+strike-count auto-disable, Mods-panel badge ("suspended — over frame budget"),
+per-mod memory cap via custom `lua_Alloc`, stepped GC.
+**Accept:** busy-loop enabled → game holds ~144 (oracle pass), badge shows, hello-dusk
+unaffected. This gate is non-negotiable before any `frame`-event API ships.
+
+### M2 — "rupee-rain" (acting on the world)
+Build: `frame` event (play scene, unpaused); `actors.spawn` (whitelisted
+`fopAcM_create` wrapper), `items.give`, `audio.se`; input v0 = ONE registered dev
+combo (full named-actions integration with the bindings UI is its own later step —
+decision pending from the user).
+**Accept:** combo rains rupees, wallet counts, budget holds, toggle mid-rain safe.
+
+### M3 — "shop-extender" (data tier — no VM, parallelizable any time)
+Build: `shop.json` in a mod folder → `dALBWVisibleEntry` row (name, price, named
+icon via the existing customIconName system, description, grant item id);
+Requirement enforcement debut.
+**Accept:** new Postman-shop row with custom icon; purchase grants; remove folder →
+row gone; saves untouched.
+
+### M4 — "patrol-keese" (script actors — the crown jewel)
+Build: generic `d_a_script` shell actor + reserved proc id; `dStage_searchName()`
+side-table for mod-declared 8-char names; `dusk.actors.define` with
+create/execute/delete trampolines; model binding via Layer-B loose BMD.
+Placement: interim = repacked stage arc through Layer A (works today); proper =
+`placements.json` additive merge (step A1 — build alongside, it is ALSO the level
+editor's Phase-2 export format).
+**Accept:** keese patrols in Ordon placed via the editor; mod removed → stage loads
+clean (verified: `dStage_searchName` already logs + skips unknown names — vanilla-
+safe by construction); die/reload/warp safe; budget holds.
+
+### M5 — hardening + modder docs
+`apiversion` gate; determinism rules (`dusk.rng` seeded, no wall clock); per-mod GC
+tuning; `docs/Modding-Scripts.md` (the modder-facing manual: folder shape, API
+reference, budgets, the icons/screenshot conventions).
+
+### Track interleave
+The H-track (§12: hook table → phantom parry mod) is independent of M0–M5 and can
+run before or between them. Recommended order given "parry ships definitely":
+**H1 → H2 (parry is a mod) → M0 → M1 → M2 → M3/M4 → M5**, with A1
+(placements.json) attached to M4 or pulled earlier for the level editor's benefit.

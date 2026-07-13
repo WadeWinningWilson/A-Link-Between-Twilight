@@ -893,6 +893,7 @@ bool dMeter2_canALBWSling();
 bool dMeter2_canALBWBoom();
 bool dMeter2_canALBWArrow();
 bool dMeter2_canALBWBomb();
+bool dMeter2_canALBWBombling();
 bool dMeter2_canALBWBombArrow();
 bool dMeter2_canALBWIronball();
 bool dMeter2_canALBWHookshot();
@@ -908,6 +909,8 @@ bool dMeter2_canALBWSpinner();
 bool dMeter2_canALBWDomRod();
 bool dMeter2_canALBWDomRodConfuseThrow();
 void dMeter2_addALBWFraction(int numerator, int denominator);
+// Refill a fraction of base capacity (sOilBaseMax), not expanded max — lockout perk restores.
+void dMeter2_addALBWBaseFraction(int numerator, int denominator);
 void dMeter2_subALBWFraction(int numerator, int denominator);
 int dMeter2_getALBWMeterValue();
 int dMeter2_getALBWMaxValue();

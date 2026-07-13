@@ -85,6 +85,7 @@ TrackedArc s_arcs[] = {
 
 int s_lastGen = -1;
 bool s_anyPending = false;
+int s_swapGeneration = 0;  // bumped per landed pointer swap (see the header)
 
 // True while any start-menu 2D screen (ring / collect / map / save / ...) is
 // up. NOTE the trap this replaces: dMeter2Info_getMenuWindowClass() alone is
@@ -180,6 +181,7 @@ void dAlbwMenuRes_drive() {
         }
         arc.retired = old;
         arc.mountedWinner = arc.kickWinner;
+        ++s_swapGeneration;  // tell persistent caches (shield HUD, shop) to re-resolve
         DuskLog.info("[menu_res] {}: swapped in ({})", arc.discPath,
                      arc.mountedWinner.empty() ? "vanilla" : arc.mountedWinner.c_str());
 
@@ -196,8 +198,15 @@ void dAlbwMenuRes_drive() {
     s_anyPending = anyPending;
 }
 
+int dAlbwMenuRes_swapGeneration() {
+    return s_swapGeneration;
+}
+
 #else  // !TARGET_PC || !D_ALBW_MENU_RES_REMOUNT
 
 void dAlbwMenuRes_drive() {}
+int dAlbwMenuRes_swapGeneration() {
+    return 0;
+}
 
 #endif

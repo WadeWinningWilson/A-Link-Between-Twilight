@@ -777,7 +777,11 @@ static void duskExecute() {
     if (dusk::canUseDpadQuickSwap(0)) {
         if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SWORD, 0)) {
-                dusk::cycleNextSword();
+                dusk::cycleNextSword();  // human form: sword cycle (no-ops in wolf form)
+                // ALBW Port: D-pad Up in WOLF form = Wolf Howl art.  handleWolfHowlBurst()
+                // self-gates on wolf + Wolf Combat + unlock/charge, so it no-ops in human form;
+                // cycleNextSword() likewise no-ops in wolf form — the two are form-exclusive.
+                dynamic_cast<daAlink_c*>(link)->handleWolfHowlBurst();
             }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SHIELD, 0)) {
                 dusk::cycleNextShield();

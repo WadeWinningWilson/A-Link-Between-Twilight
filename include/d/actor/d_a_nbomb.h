@@ -33,6 +33,12 @@ public:
         FLG0_UNK_8000 = 0x8000,
         FLG0_UNK_10000 = 0x10000,
         FLG0_UNK_20000 = 0x20000,
+#if TARGET_PC
+        // ALBW lockout water-bomb perk: rise, ×5 size, 0-damage explode, meter→max.
+        FLG0_ALBW_LOCKOUT_WATER = 0x40000,
+        // ALBW lockout bombling perk: orbit Link, explode on impact.
+        FLG0_ALBW_LOCKOUT_BOMBLING = 0x80000,
+#endif
     };
 
     enum daNbomb_TYPE {

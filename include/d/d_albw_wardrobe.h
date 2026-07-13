@@ -58,6 +58,12 @@ bool dAlbwWardrobe_isActiveSword(u8 itemNo);
 bool dAlbwWardrobe_isActiveShield(u8 itemNo);
 bool dAlbwWardrobe_isActiveOutfit(dAlbwOutfitKind kind);
 
+dAlbwOutfitKind dAlbwWardrobe_outfitKindForItemNo(u8 itemNo);
+
+// Collection menu: hide/block Postman-stored items when resistance is active.
+bool dAlbwWardrobe_canShowItemNo(u8 itemNo);
+bool dAlbwWardrobe_canEquipItemNo(u8 itemNo);
+
 int dAlbwWardrobe_countActiveSwords();
 int dAlbwWardrobe_countActiveShields();
 int dAlbwWardrobe_countOwnedOutfitTypes();

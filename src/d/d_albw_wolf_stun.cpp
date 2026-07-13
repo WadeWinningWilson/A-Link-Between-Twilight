@@ -26,6 +26,7 @@
 #include "d/d_cc_d.h"
 #include "d/d_cc_uty.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_save.h"
 #include "d/dolzel.h"
 #include "d/actor/d_a_e_oc.h"
 #include "d/actor/d_a_e_sh.h"
@@ -467,6 +468,57 @@ void processBridgeHit(fopAc_ac_c* i_enemy, cCcD_Obj* i_atObj, cCcD_Obj* i_tgObj)
 
 bool dAlbwWolfCombat_isEnabled() {
     return dusk::getSettings().game.wolfLinkCombat.getValue();
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Wolf Arts — howl shop-unlock)
+// The Wolf Howl art is unlocked by a 100-rupee rental-shop purchase (per-save event bit 713).
+// Mirrors the Focused-Arts-tier shop-row pattern.  The howl MOVE (built next) reads
+// dAlbwWolfArts_isHowlUnlocked() to gate itself; a dev test toggle will bypass this during
+// development.  STORY GATE: the shop row should also require Eldin/Kakariko Twilight cleared --
+// left as a TODO until that milestone's exact save/event flag is pinned (see
+// docs/wolf-combat-layers-research.md §R0).
+// ============================================
+namespace {
+constexpr int kWolfHowlUnlockedBit = 713;  // per-save event bit (714/715 reserved: punch/giant)
+constexpr int kWolfHowlShopPrice   = 100;
+}  // namespace
+
+bool dAlbwWolfArts_isHowlUnlocked() {
+    return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kWolfHowlUnlockedBit]) != 0;
+}
+
+void dAlbwWolfArts_unlockHowl() {
+    dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kWolfHowlUnlockedBit]);
+}
+
+bool dAlbwWolfArts_shouldShowHowlShopRow() {
+    // Show only while Wolf Combat is on and the howl isn't already unlocked.
+    // TODO(story gate): also require Eldin/Kakariko Twilight cleared once that milestone's
+    // save/event flag is pinned.
+    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isHowlUnlocked();
+}
+
+int dAlbwWolfArts_getHowlShopPrice() {
+    return kWolfHowlShopPrice;
+}
+
+const char* dAlbwWolfArts_getHowlShopName() {
+    return "Wolf Howl";
+}
+
+const char* dAlbwWolfArts_getHowlShopDesc() {
+    return "Do you..ah..have a pet wolf that passed by here? Can you feed it this meat? "
+           "A cook from Old Kakariko never picked up the order.. Hopefully it will follow you "
+           "and not come near me anymore.";
+}
+
+bool dAlbwWolfArts_tryPurchaseHowl() {
+    if (dAlbwWolfArts_isHowlUnlocked()) {
+        return false;
+    }
+    dAlbwWolfArts_unlockHowl();
+    return true;
 }
 
 bool dAlbwWolfStun_isTwilightEnemy(s16 i_name) {
