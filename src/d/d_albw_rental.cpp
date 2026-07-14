@@ -315,6 +315,7 @@ enum VisibleKind {
     VISIBLE_POTION_CAPACITY,
     VISIBLE_FA_TIER,
     VISIBLE_WOLF_HOWL,     // ALBW Port: Wolf Howl art unlock (Upgrades page, state purchase)
+    VISIBLE_MIDNA_ARM,     // ALBW Port: "Midna's Grasp" arm art unlock (Upgrades page)
     VISIBLE_ITEM,
     VISIBLE_SHADE_REFUGE,  // "Return to Last Shade Watcher" (above Oocoo)
     VISIBLE_OOCOO,
@@ -668,6 +669,16 @@ static void rebuildVisibleList() {
         sVisibleCount++;
     }
 
+    // ALBW Port: "Midna's Grasp" (Midna Arm art) unlock — Upgrades page, same pattern.
+    if (cat == CAT_UPGRADES && dAlbwWolfArts_shouldShowArmShopRow() &&
+        sVisibleCount < kVisibleListMax) {
+        sVisibleList[sVisibleCount].kind        = VISIBLE_MIDNA_ARM;
+        sVisibleList[sVisibleCount].kItemsIdx   = -1;
+        sVisibleList[sVisibleCount].purchasable = true;
+        sAvailCount++;
+        sVisibleCount++;
+    }
+
     // ALBW Port: the Sumo Outfit is a model-swap STATE (not a native clothes
     // item), so it is injected here rather than in kItems.  Sits at the TOP of
     // the Armor page (before Ordon Clothes); shown once eligible (True ALBW, or
@@ -979,6 +990,31 @@ static void tryPurchase(int visIdx) {
         sPurchasedThisSession = true;
         sJustPurchased        = true;
         sStatusMsg            = "Off it goes with the meat.. and you.\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
+        rebuildVisibleList();
+        return;
+    }
+
+    if (sVisibleList[visIdx].kind == VISIBLE_MIDNA_ARM) {
+        const int price = dAlbwWolfArts_getArmShopPrice();
+        u16 rupees      = dComIfGs_getRupee();
+        if (price <= 0) {
+            return;
+        }
+        if (rupees < (u16)price) {
+            sStatusMsg          = "Sincerest apologies, but we can't return\nthat to you for that little..";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        if (!dAlbwWolfArts_tryPurchaseArm()) {
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)price);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
+        sStatusMsg            = "A glove that small, gone at last.\nThank you for your patronage!";
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();
         rebuildVisibleList();
@@ -1498,6 +1534,18 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].desc           = dAlbwWolfArts_getHowlShopDesc();
             sPubList[i].itemNo         = 0xFD;         // fallback icon (renders until wolf_howl.png)
             sPubList[i].customIconName = "wolf_howl";  // wolf-charge silhouette PNG (custom-icon slot)
+            sPubList[i].isOocooService = false;
+            sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
+        } else if (sVisibleList[i].kind == VISIBLE_MIDNA_ARM) {
+            sPubList[i].name           = dAlbwWolfArts_getArmShopName();
+            sPubList[i].price          = sVisibleList[i].purchasable
+                ? dAlbwWolfArts_getArmShopPrice() : 0;
+            sPubList[i].purchasable    = sVisibleList[i].purchasable;
+            sPubList[i].desc           = dAlbwWolfArts_getArmShopDesc();
+            sPubList[i].itemNo         = 0xFD;         // fallback icon (renders until midna_arm.png)
+            sPubList[i].customIconName = "midna_arm";  // custom-icon slot (PNG to be provided)
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
             sPubList[i].isStorageStore = false;

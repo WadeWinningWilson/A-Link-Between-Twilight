@@ -1,6 +1,7 @@
 #if TARGET_PC
 
 #include "d/d_albw_combat.h"
+#include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_b_tn.h"
 #include "dusk/trace_noop.h"
 #include "dusk/settings.h"
@@ -52,6 +53,47 @@ bool dAlbw_tryConsumeJumpStrikeChargeReady() {
     s_jumpStrikeChargeReady = false;
     CONAV_LOG("jsready", "consume ok");
     return true;
+}
+
+// ============================================
+// Guard-opener classification. Disambiguation is the whole job here:
+//  - Hurricane shares CUT_TYPE_LARGE_TURN_* with Great Spin, so the check
+//    keys on the PROC_CUT_GS_HURRICANE(_TIRED) proc — Great Spin stays a
+//    clank by design.
+//  - The Combat Howl AOE rides AT_TYPE_WOLF_CUT_TURN on the ALINK collider,
+//    the same AT type as the ordinary wolf spin — mWolfCombatHowlActive
+//    disambiguates (Link cannot wolf-spin mid-howl).
+//  - The Midna arm is its own actor, so its name is sufficient.
+// ============================================
+bool dAlbwCombat_isGuardOpenerHit(cCcD_Obj* i_hitObj) {
+    if (i_hitObj == NULL) {
+        return false;
+    }
+
+    fopAc_ac_c* attacker = i_hitObj->GetAc();
+    if (attacker == NULL) {
+        return false;
+    }
+
+    const s16 name = fopAcM_GetName(attacker);
+    if (name == fpcNm_ALBW_MIDNA_ARM_e) {
+        return true;
+    }
+    if (name != fpcNm_ALINK_e) {
+        return false;
+    }
+
+    const daAlink_c* link = daAlink_getAlinkActorClass();
+    if (link == NULL) {
+        return false;
+    }
+
+    if (link->mWolfCombatHowlActive && i_hitObj->ChkAtType(AT_TYPE_WOLF_CUT_TURN)) {
+        return true;
+    }
+
+    return link->mProcID == daAlink_c::PROC_CUT_GS_HURRICANE ||
+           link->mProcID == daAlink_c::PROC_CUT_GS_HURRICANE_TIRED;
 }
 
 dAlbwHelmBashTier dAlbwCombat_getHelmBashTier(fopAc_ac_c* i_actor) {

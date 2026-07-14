@@ -350,7 +350,14 @@ BOOL daAlink_c::setSwordHitVibration(dCcD_GObjInf* i_gobj) {
                 checkMagicArmorWearAbility()) {
                 dMeter2_onArmorAttackHit(fopAcM_GetID(hitAc));
             }
-            if (hitAc != NULL && fopAcM_GetGroup(hitAc) == fopAc_ENEMY_e && !checkWolf()) {
+            // ============================================
+            // FA fill requires a clean connect: AtShieldHit covers both
+            // enemy shield TGs (dCcS::ChkShield) and invulnerable armor
+            // clank surfaces (TgHitMark 8), and both paths skip PlusDmg —
+            // a guarded hit deals no damage, so it grants no meter.
+            // ============================================
+            if (hitAc != NULL && fopAcM_GetGroup(hitAc) == fopAc_ENEMY_e && !checkWolf() &&
+                !i_gobj->ChkAtShieldHit()) {
                 dFocusedArts_onConnectedSwordHit();
             }
         }

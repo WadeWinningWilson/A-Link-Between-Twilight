@@ -7,8 +7,9 @@
 #if TARGET_PC
 #include "dusk/action_bindings.h"
 #include "dusk/settings.h"
-#include "d/d_albw_wolf_stun.h"        // dAlbwWolfCombat_isEnabled, dAlbwWolfArts_isHowlUnlocked
+#include "d/d_albw_wolf_stun.h"        // dAlbwWolfCombat_isEnabled, dAlbwWolfArts_is*Unlocked
 #include "d/d_albw_wolf_charge_hud.h"  // dAlbwWolfChargeHud_notify / _notifyDeny
+#include "d/actor/d_a_albw_midna_arm.h"  // Midna Arm helper actor (D-pad Right art)
 #include "m_Do/m_Do_audio.h"           // mDoAud_subBgmStart (Wolf Howl music)
 #include "Z2AudioLib/Z2SeqMgr.h"       // Z2BGM_HOWL_* howl-tune IDs
 
@@ -134,9 +135,10 @@ void daAlink_c::handleWolfHowlBurst() {
         return;
     }
 
-    // Charge gate: need >= 1, spend 1.  The dev toggle skips both cost and requirement.
+    // Charge gate: NEED 2 charges to fire, SPEND 1 (the Midna-arm art needs 2 / spends 2; decoupled
+    // need-vs-spend per design).  The dev toggle skips both cost and requirement.
     if (!devTest) {
-        if (mWolfChargeCount < 1) {
+        if (mWolfChargeCount < 2) {
             Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dAlbwWolfChargeHud_notifyDeny();
             return;
@@ -155,7 +157,7 @@ void daAlink_c::handleWolfHowlBurst() {
     mWolfHowlWantCombat = true;
     mWolfHowlEnding     = false;
     mWolfHowlElapsed    = 0;
-    mWolfHowlFramesLeft = 60;  // 1 s post-song buffer (re-armed each singing frame)
+    mWolfHowlFramesLeft = 30;  // 1 s post-song buffer at the 30 Hz sim tick (re-armed while singing)
 
     // Build the pool from FOUND songs (3 always-on solos + each learned DUO), then pick one at
     // RANDOM and start it once for this howl.  The fanfare path ducks other audio; procWolfHowl
@@ -182,6 +184,52 @@ void daAlink_c::handleWolfHowlBurst() {
     // param is ignored for a combat howl (procWolfHowlInit's combat branch overrides the anim to
     // the WANM_HOWL_SUCCESS duet pose once it consumes mWolfHowlWantCombat).
     procWolfHowlInit(0);
+#endif
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Wolf Art 2: "Midna's Grasp" — D-pad Right)
+// Spawns the auto-attacking Midna-arm helper actor (d_a_albw_midna_arm): ~15 s of
+// stretch -> sword-hit-the-Z-lock-target -> retract, fully in parallel — wolf Link keeps
+// fighting.  Gate cascade mirrors handleWolfHowlBurst: Wolf Combat + quick-swap + shop unlock
+// (bit 714) + charges, all dev-bypassable.  Charge economy: NEEDS 2, SPENDS 2 (the howl needs
+// 2 / spends 1).  One arm at a time.
+// ============================================
+void daAlink_c::handleWolfArmBurst() {
+#if TARGET_PC
+    if (!checkWolf() || !dAlbwWolfCombat_isEnabled() || !dusk::isDpadQuickSwapEnabled()) {
+        return;
+    }
+
+    const bool devTest = dusk::getSettings().game.wolfArtsDevTest.getValue();
+
+    // Unlock gate (dev toggle bypasses).
+    if (!devTest && !dAlbwWolfArts_isArmUnlocked()) {
+        return;
+    }
+
+    // Not during a cutscene; only one arm at a time.
+    if (checkEventRun() || daAlbwMidnaArm_c::isAlive()) {
+        Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        return;
+    }
+
+    // Charge gate: NEED 2, SPEND 2.  The dev toggle skips both cost and requirement.
+    if (!devTest) {
+        if (mWolfChargeCount < 2) {
+            Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+            dAlbwWolfChargeHud_notifyDeny();
+            return;
+        }
+        mWolfChargeCount -= 2;
+        dAlbwWolfChargeHud_notify();
+    }
+
+    // Consume the D-pad edge so it doesn't leak to the vanilla item-ring/menu layer.
+    mDoCPd_c::getCpadInfo(PAD_1).mPressedButtonFlags = 0;
+
+    // Spawn the arm helper (it manages its own 15 s lifetime + targeting + collider).
+    fopAcM_create(fpcNm_ALBW_MIDNA_ARM_e, 0, &current.pos, fopAcM_GetRoomNo(this), NULL, NULL, -1);
 #endif
 }
 

@@ -19,7 +19,8 @@
 
 class cCcD_Obj;
 
-// Stun duration: 300 frames = 5 seconds at 60 fps.
+// Stun duration: 300 frames = 10 seconds (actor execute runs on the fixed 30 Hz sim tick —
+// dusk/game_clock.h sim_pace = 1/30; the old "5 seconds at 60 fps" note was wrong).
 static constexpr int WOLF_STUN_FRAMES = 300;
 
 // True when the Wolf Link Combat setting is enabled (Dusk settings menu).
@@ -67,6 +68,28 @@ int         dAlbwWolfArts_getHowlShopPrice();       // 100 rupees
 const char* dAlbwWolfArts_getHowlShopName();
 const char* dAlbwWolfArts_getHowlShopDesc();
 bool        dAlbwWolfArts_tryPurchaseHowl();        // sets the save bit; false if already owned
+
+// Midna Arm (D-pad Right art) — shop unlock (save event bit 714).
+bool        dAlbwWolfArts_isArmUnlocked();
+void        dAlbwWolfArts_unlockArm();
+bool        dAlbwWolfArts_shouldShowArmShopRow();   // Wolf Combat on AND not yet unlocked
+int         dAlbwWolfArts_getArmShopPrice();        // 100 rupees
+const char* dAlbwWolfArts_getArmShopName();
+const char* dAlbwWolfArts_getArmShopDesc();
+bool        dAlbwWolfArts_tryPurchaseArm();         // sets the save bit; false if already owned
+
+// ============================================
+// NEW CODE — ALBW Port (Midna Arm art — hair-reach visual bridge)
+// The arm actor (d_a_albw_midna_arm) publishes its current reach target here each frame; daAlink's
+// setNeckAngle re-applies it to FLG1_MIDNA_HAIR_ATN_POS / mMidnaHairAtnPos (which it clears every
+// frame), so daMidna_c's hair visibly reaches toward the strike point regardless of execute order.
+// ============================================
+// i_striking distinguishes the STRIKE reach (hair stretches to 3x length toward the enemy) from
+// the READY/idle hover (normal hair scale, hovering above Midna so players see the hand is armed).
+void        dAlbwMidnaArm_setReachPos(const cXyz& i_pos, bool i_striking);
+void        dAlbwMidnaArm_clearReachPos();                 // called when the art ends / actor dies
+bool        dAlbwMidnaArm_getReachPos(cXyz* o_pos);        // true + pos when a reach is active
+bool        dAlbwMidnaArm_isReachStriking();               // true only during stretch/hit
 
 // ============================================
 // NEW CODE ENDS HERE

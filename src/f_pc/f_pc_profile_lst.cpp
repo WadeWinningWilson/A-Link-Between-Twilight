@@ -1611,6 +1611,9 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     // ALBW Port — "Hero's Shade Secret Boss": index MUST match
     // fpcNm_ALBW_SHADE_BOSS_WOLF_e (0x319).
     &g_profile_ALBW_SHADE_BOSS_WOLF.base.base,
+    // ALBW Port — "Midna Arm" wolf art helper: index MUST match
+    // fpcNm_ALBW_MIDNA_ARM_e (0x31A).
+    &g_profile_ALBW_MIDNA_ARM.base.base,
     NULL,
 };
 #endif

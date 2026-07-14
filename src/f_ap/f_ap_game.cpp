@@ -784,7 +784,11 @@ static void duskExecute() {
                 dynamic_cast<daAlink_c*>(link)->handleWolfHowlBurst();
             }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SHIELD, 0)) {
-                dusk::cycleNextShield();
+                dusk::cycleNextShield();  // human form: shield cycle (no-ops in wolf form)
+                // ALBW Port: D-pad Right in WOLF form = "Midna's Grasp" art.  Self-gates on
+                // wolf + Wolf Combat + unlock/charges, so it no-ops in human form (form-exclusive
+                // with cycleNextShield, same pattern as the Wolf Howl above).
+                dynamic_cast<daAlink_c*>(link)->handleWolfArmBurst();
             }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_OUTFIT, 0)) {
                 dusk::cycleNextOutfit();

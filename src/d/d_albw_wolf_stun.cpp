@@ -521,6 +521,86 @@ bool dAlbwWolfArts_tryPurchaseHowl() {
     return true;
 }
 
+// ============================================
+// NEW CODE — ALBW Port (Wolf Arts — Midna Arm shop-unlock, save event bit 714)
+// Same pattern as the howl above.  STORY GATE: should also require Lanayru Twilight cleared --
+// TODO until that milestone's flag is pinned (docs/wolf-combat-layers-research.md §R0).
+// ============================================
+namespace {
+constexpr int kMidnaArmUnlockedBit = 714;  // per-save event bit (715 reserved: giant)
+constexpr int kMidnaArmShopPrice   = 100;
+}  // namespace
+
+bool dAlbwWolfArts_isArmUnlocked() {
+    return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kMidnaArmUnlockedBit]) != 0;
+}
+
+void dAlbwWolfArts_unlockArm() {
+    dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[kMidnaArmUnlockedBit]);
+}
+
+bool dAlbwWolfArts_shouldShowArmShopRow() {
+    // Show only while Wolf Combat is on and the arm isn't already unlocked.
+    // TODO(story gate): also require Lanayru Twilight cleared once that flag is pinned.
+    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isArmUnlocked();
+}
+
+int dAlbwWolfArts_getArmShopPrice() {
+    return kMidnaArmShopPrice;
+}
+
+const char* dAlbwWolfArts_getArmShopName() {
+    return "Midna's Grasp";
+}
+
+const char* dAlbwWolfArts_getArmShopDesc() {
+    return "An old glove from the western desert. It's said an imp once wore it to box "
+           "three shadow beasts at once. It's far too small for you... maybe someone "
+           "riding along could make use of it?";
+}
+
+bool dAlbwWolfArts_tryPurchaseArm() {
+    if (dAlbwWolfArts_isArmUnlocked()) {
+        return false;
+    }
+    dAlbwWolfArts_unlockArm();
+    return true;
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Midna Arm art — hair-reach visual bridge)
+// The arm actor publishes its reach target; daAlink_c::setNeckAngle re-applies it into
+// FLG1_MIDNA_HAIR_ATN_POS / mMidnaHairAtnPos after its own per-frame clear, so daMidna_c's hair
+// reaches toward the strike point regardless of actor execute order.  Session-only.
+// ============================================
+namespace {
+bool s_midnaArmReachActive   = false;
+bool s_midnaArmReachStriking = false;
+cXyz s_midnaArmReachPos(0.0f, 0.0f, 0.0f);
+}  // namespace
+
+void dAlbwMidnaArm_setReachPos(const cXyz& i_pos, bool i_striking) {
+    s_midnaArmReachActive   = true;
+    s_midnaArmReachStriking = i_striking;
+    s_midnaArmReachPos      = i_pos;
+}
+
+void dAlbwMidnaArm_clearReachPos() {
+    s_midnaArmReachActive   = false;
+    s_midnaArmReachStriking = false;
+}
+
+bool dAlbwMidnaArm_getReachPos(cXyz* o_pos) {
+    if (s_midnaArmReachActive && o_pos != NULL) {
+        *o_pos = s_midnaArmReachPos;
+    }
+    return s_midnaArmReachActive;
+}
+
+bool dAlbwMidnaArm_isReachStriking() {
+    return s_midnaArmReachStriking;
+}
+
 bool dAlbwWolfStun_isTwilightEnemy(s16 i_name) {
     switch (i_name) {
     case fpcNm_E_MD_e:

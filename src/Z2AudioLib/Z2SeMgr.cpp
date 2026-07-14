@@ -1030,6 +1030,21 @@ bool Z2SeMgr::isLevelSe(JAISoundID soundID) {
 
 bool Z2SeMgr::isSoundCulling(JAISoundID soundID) {
     if (Z2GetSeqMgr()->isItemGetDemo()) {
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (Wolf Howl combat art — enemy SFX during the howl song)
+        // The fanfare window normally culls every SE not on the whitelist below, which silences
+        // enemies being hit by the combat howl's AOE.  During the WOLF-HOWL tunes ONLY (not item-get
+        // jingles etc.), let through:
+        //   * the enemy block  [0x30000, 0x40000)  — Z2SE_EN_* voices / damage / death etc.
+        //   * the impact block [0x40000, 0x50000)  — Z2SE_HIT_* weapon-hit thunks.
+        // Everything else keeps the vanilla culling, and the BGM duck is untouched.
+        // ============================================
+        const u32 seId = (u32)soundID;
+        if (seId >= 0x30000 && seId < 0x50000 && Z2GetSeqMgr()->isWolfHowlSong()) {
+            return false;
+        }
+#endif
         switch (soundID) {
         case Z2SE_HP_GAUGE_INC:
         case Z2SE_SY_TALK_NEXT:

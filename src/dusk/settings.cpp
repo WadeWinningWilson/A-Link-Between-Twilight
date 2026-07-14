@@ -71,8 +71,15 @@ UserSettings g_userSettings = {
         .wolfLinkCombat {"game.wolfLinkCombat", false},
         .wolfArtsDevTest {"game.wolfArtsDevTest", false},
         .wolfHowlVfxOverride {"game.wolfHowlVfxOverride", false},
+        // Defaults = the finalized wolf-howl ring look (user-tuned 2026-07-13); the l_wolfHowlVfx*
+        // constants in d_a_alink_wolf.inc mirror these for the override-OFF path.
         .wolfHowlTiltDeg {"game.wolfHowlTiltDeg", 0},
-        .wolfHowlScalePct {"game.wolfHowlScalePct", 100},
+        .wolfHowlRollDeg {"game.wolfHowlRollDeg", 0},
+        .wolfHowlWidthPct {"game.wolfHowlWidthPct", 90},
+        .wolfHowlHeightPct {"game.wolfHowlHeightPct", 90},
+        .wolfHowlSweepRate {"game.wolfHowlSweepRate", 300},
+        .wolfHowlOrbit {"game.wolfHowlOrbit", 0},
+        .wolfHowlPeriod {"game.wolfHowlPeriod", 1},
         .enemyDeathRupees {"game.enemyDeathRupees", false},
         .masterQuest {"game.masterQuest", false},
         .bossRefinement {"game.bossRefinement", false},
@@ -365,7 +372,12 @@ void registerSettings() {
     Register(g_userSettings.game.wolfArtsDevTest);
     Register(g_userSettings.game.wolfHowlVfxOverride);
     Register(g_userSettings.game.wolfHowlTiltDeg);
-    Register(g_userSettings.game.wolfHowlScalePct);
+    Register(g_userSettings.game.wolfHowlRollDeg);
+    Register(g_userSettings.game.wolfHowlWidthPct);
+    Register(g_userSettings.game.wolfHowlHeightPct);
+    Register(g_userSettings.game.wolfHowlSweepRate);
+    Register(g_userSettings.game.wolfHowlOrbit);
+    Register(g_userSettings.game.wolfHowlPeriod);
     Register(g_userSettings.game.enemyDeathRupees);
     Register(g_userSettings.game.masterQuest);
     Register(g_userSettings.game.bossRefinement);

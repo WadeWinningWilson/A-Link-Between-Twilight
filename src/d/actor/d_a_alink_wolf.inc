@@ -3583,22 +3583,52 @@ int daAlink_c::procWolfHowl() {
 // fire-and-forget through the NULL-tevStr overload so nothing tints or alters its particles, and
 // each burst lives out its natural lifetime (NO immortal / forced continuous emission — that was
 // what changed the particles).  Re-emitted on a cadence from procWolfHowlCombat to sustain for the
-// song.  wolfHowlTiltDeg / wolfHowlScalePct apply an optional global pitch / scale, gated behind
-// wolfHowlVfxOverride (off = untouched base).
+// song.
+// FINAL LOOK (user-tuned 2026-07-13, baked as the l_wolfHowlVfx* defaults below): natural angle
+// (tilt/roll 0), 90% width/height, sweep 300 (~one rev / 3.6 s), no orbit, burst every frame.
+// The editor tuner ("Wolf Howl VFX: Apply Tuner" + sliders) still overrides these live for later
+// re-tuning; with the override OFF this baked look is what ships.
 // ============================================
-static const int l_wolfHowlVfxPeriod  = 20;     // re-emit cadence (frames) — sustains the ring
-static const f32 l_wolfHowlVfxYOffset = 30.0f;  // wolf mid-body height above his feet
+static const int l_wolfHowlVfxPeriod    = 1;      // re-emit cadence (frames) — every frame
+static const f32 l_wolfHowlVfxYOffset   = 30.0f;  // wolf mid-body height above his feet
+static const s16 l_wolfHowlVfxSweepRate = 300;    // emit-yaw wind per elapsed frame (~one rev / 3.6 s)
+static const f32 l_wolfHowlVfxOrbit     = 0.0f;   // emission-point orbit radius (0 = centered)
+static const int l_wolfHowlVfxTiltDeg   = 0;      // global X-pitch (0 = the effect's natural angle)
+static const int l_wolfHowlVfxRollDeg   = 0;      // global Z-roll
+static const int l_wolfHowlVfxWidthPct  = 90;     // particle scale X/Z
+static const int l_wolfHowlVfxHeightPct = 90;     // particle scale Y
 
 void daAlink_c::setWolfHowlSpinEffect() {
+    // Tuner (editor); when the master override is OFF, use the baked defaults above (the finalized
+    // shipping look).
     const bool useOverride = dusk::getSettings().game.wolfHowlVfxOverride.getValue();
-    const int  tiltDeg     = useOverride ? dusk::getSettings().game.wolfHowlTiltDeg.getValue() : 0;
-    const int  scalePct    = useOverride ? dusk::getSettings().game.wolfHowlScalePct.getValue() : 100;
+    const int  tiltDeg   = useOverride ? dusk::getSettings().game.wolfHowlTiltDeg.getValue()
+                                       : l_wolfHowlVfxTiltDeg;
+    const int  rollDeg   = useOverride ? dusk::getSettings().game.wolfHowlRollDeg.getValue()
+                                       : l_wolfHowlVfxRollDeg;
+    const int  widthPct  = useOverride ? dusk::getSettings().game.wolfHowlWidthPct.getValue()
+                                       : l_wolfHowlVfxWidthPct;
+    const int  heightPct = useOverride ? dusk::getSettings().game.wolfHowlHeightPct.getValue()
+                                       : l_wolfHowlVfxHeightPct;
+    const int  sweepRate = useOverride ? dusk::getSettings().game.wolfHowlSweepRate.getValue()
+                                       : l_wolfHowlVfxSweepRate;
+    const int  orbit     = useOverride ? dusk::getSettings().game.wolfHowlOrbit.getValue()
+                                       : (int)l_wolfHowlVfxOrbit;
 
-    cXyz  fxPos(current.pos.x, current.pos.y + l_wolfHowlVfxYOffset, current.pos.z);
-    csXyz fxRot((s16)cM_deg2s((f32)tiltDeg), shape_angle.y, 0);
+    // Effect rotation (the goal): a yaw that winds over the howl so the ring SWEEPS around the wolf —
+    // the wolf himself never turns.  The emission point also orbits a little so the sweep reads even
+    // though KAITENGIRIL's spray is nearly symmetric about its vertical axis.  Driven off
+    // mWolfHowlElapsed so it advances continuously across the bursts.
+    const s16 sweep = (s16)(shape_angle.y + (s16)(mWolfHowlElapsed * sweepRate));
 
-    cXyz        scaleVec((f32)scalePct * 0.01f, (f32)scalePct * 0.01f, (f32)scalePct * 0.01f);
-    const cXyz* scaleArg = (scalePct != 100) ? &scaleVec : NULL;  // NULL = the effect's own 1.0x
+    cXyz  fxPos(current.pos.x + cM_ssin(sweep) * (f32)orbit,
+                current.pos.y + l_wolfHowlVfxYOffset,
+                current.pos.z + cM_scos(sweep) * (f32)orbit);
+    csXyz fxRot((s16)cM_deg2s((f32)tiltDeg), sweep, (s16)cM_deg2s((f32)rollDeg));
+
+    // Width scales X/Z (horizontal spread), Height scales Y (vertical) — split scale tuner.
+    cXyz        scaleVec((f32)widthPct * 0.01f, (f32)heightPct * 0.01f, (f32)widthPct * 0.01f);
+    const cXyz* scaleArg = (widthPct != 100 || heightPct != 100) ? &scaleVec : NULL;
 
     // Base KAITENGIRIL (A-D), fire-and-forget with NULL tevStr (4-arg overload keeps the effect's own
     // colors + particles).  No local tilt, no immortal — just the plain effect.
@@ -3640,7 +3670,7 @@ int daAlink_c::procWolfHowlCombat() {
 
     const bool songPlaying = Z2GetSeqMgr()->isItemGetDemo();
     const bool songEnded   = mWolfHowlElapsed > 15 && !songPlaying;
-    const bool hardCap     = mWolfHowlElapsed > 1800;  // ~30 s failsafe
+    const bool hardCap     = mWolfHowlElapsed > 1800;  // 60 s failsafe (30 Hz sim tick)
 
     if (songEnded || hardCap) {
         if (mWolfHowlFramesLeft > 0) {
@@ -3651,10 +3681,17 @@ int daAlink_c::procWolfHowlCombat() {
             mWolfHowlEnding = true;
         }
     } else {
-        mWolfHowlFramesLeft = 60;  // still singing -> keep the 1 s buffer fresh
-        // Re-emit the base KAITENGIRIL ring on a fixed cadence so it sustains for the song (first
-        // burst on frame 1, then every l_wolfHowlVfxPeriod frames), tied to the same AOE window.
-        if (mWolfHowlElapsed % l_wolfHowlVfxPeriod == 1) {
+        mWolfHowlFramesLeft = 30;  // still singing -> keep the 1 s (30 Hz) buffer fresh
+        // Re-emit the ring on a cadence so it sustains for the song (first burst on frame 1, then
+        // every `period` frames), tied to the same AOE window.  Period is tuner-driven (default when
+        // the override is off).
+        int period = dusk::getSettings().game.wolfHowlVfxOverride.getValue()
+                         ? dusk::getSettings().game.wolfHowlPeriod.getValue()
+                         : l_wolfHowlVfxPeriod;
+        if (period < 1) {
+            period = 1;
+        }
+        if ((mWolfHowlElapsed - 1) % period == 0) {
             setWolfHowlSpinEffect();
         }
     }

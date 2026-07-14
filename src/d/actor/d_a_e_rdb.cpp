@@ -16,7 +16,18 @@
 #include "f_op/f_op_camera_mng.h"
 #include <cstring>
 #if TARGET_PC
+#include "d/d_albw_combat.h"
 #include "d/d_albw_enemy_rupee.h"
+
+// ============================================
+// NEW CODE — ALBW Port (alpha cleanup)
+// Guard-opener support: while > 0, opener hits (Hurricane / Combat Howl /
+// Midna arm) may score on the body spheres even during ACTION_DEFENCE
+// recoil (field_0x6c0 gate). Cooldown throttles the sustained Hurricane
+// re-hit so the opener can't chain-stun. File statics are safe — one
+// King Bulblin exists per fight; reset in daE_RDB_Create.
+// ============================================
+static s16 sAlbwRdbOpenerCooldown = 0;
 #endif
 
 class daE_RDB_HIO_c : public JORReflexible {
@@ -732,7 +743,36 @@ static void damage_check(e_rdb_class* i_this) {
     u32 i_soundID = 0;
     s8 bVar1 = 0;
     s8 bVar2 = 0;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (alpha cleanup)
+    // Opener bypass for the body-sphere gate: during ACTION_DEFENCE the
+    // gate (field_0x6c0 != 0) discards every body hit, so even a 360-degree
+    // sweep overlapping his exposed side spheres scores nothing. Opener
+    // attacks are allowed through on a cooldown so a sustained Hurricane
+    // connects roughly once per opener window instead of every frame.
+    // ============================================
+    if (sAlbwRdbOpenerCooldown > 0) {
+        sAlbwRdbOpenerCooldown--;
+    }
+
+    bool albwOpenerBypass = false;
+    if (i_this->field_0x6c0 != 0 && sAlbwRdbOpenerCooldown == 0) {
+        for (int i = 0; i <= 2; i++) {
+            if (i_this->field_0x944[i].ChkTgHit() != 0 &&
+                dAlbwCombat_isGuardOpenerHit(i_this->field_0x944[i].GetTgHitObj()))
+            {
+                albwOpenerBypass = true;
+                sAlbwRdbOpenerCooldown = kAlbwGuardOpenerWindowFrames;
+                break;
+            }
+        }
+    }
+
+    if (i_this->field_0x6c0 == 0 || albwOpenerBypass) {
+#else
     if (i_this->field_0x6c0 == 0) {
+#endif
         for (int i = 0; i <= 2; i = i + 1) {
             if (i_this->field_0x944[i].ChkTgHit() != 0) {
                 i_this->mAtInfo.mpCollider = i_this->field_0x944[i].GetTgHitObj();
@@ -1892,6 +1932,12 @@ static int daE_RDB_Create(fopAc_ac_c* actor) {
         i_this->mSound.setEnemyName("E_rdb");
         i_this->mAtInfo.mpSound = &i_this->mSound;
         i_this->mAtInfo.mPowerType = 6;
+
+#if TARGET_PC
+        // Fresh fight — clear the guard-opener cooldown carried in a file
+        // static so a prior encounter can't suppress the first opener here.
+        sAlbwRdbOpenerCooldown = 0;
+#endif
 
         if (strcmp(dComIfGp_getStartStageName(), "D_MN09") == 0) {
             i_this->mAction = ACTION_START;

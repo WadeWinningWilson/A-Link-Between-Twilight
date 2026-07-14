@@ -2559,9 +2559,10 @@ EditorWindow::EditorWindow() {
             "form; D-pad Up = Howl. Keep OFF for normal play." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.wolfHowlVfxOverride,
-            "Wolf Howl VFX: Apply Slider Overrides",
-            "OFF = show the exact finisher base ring untouched (no extra tilt, 1.0x scale). ON = apply "
-            "the Tilt / Scale sliders below. Flip OFF to see the intended effect, ON to tweak." +
+            "Wolf Howl VFX: Apply Tuner",
+            "OFF = the built-in default ring look (rotation on, no extra tilt, 1.0x). ON = apply the "
+            "Tilt / Width / Height / Sweep Rate / Orbit / Period sliders below. Flip OFF to compare "
+            "against the default, ON to tune." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
             leftPane.add_child<NumberButton>(NumberButton::Props{
@@ -2569,7 +2570,7 @@ EditorWindow::EditorWindow() {
                 .getValue = [] { return getSettings().game.wolfHowlTiltDeg.getValue(); },
                 .setValue =
                     [](int value) {
-                        getSettings().game.wolfHowlTiltDeg.setValue(std::clamp(value, 0, 180));
+                        getSettings().game.wolfHowlTiltDeg.setValue(std::clamp(value, 0, 360));
                         config::Save();
                     },
                 .isModified =
@@ -2578,29 +2579,54 @@ EditorWindow::EditorWindow() {
                                getSettings().game.wolfHowlTiltDeg.getDefaultValue();
                     },
                 .min = 0,
-                .max = 180,
+                .max = 360,
             }),
             rightPane,
             [](Pane& pane) {
                 pane.add_rml(
-                    "Wolf Howl ring X-pitch in degrees (KAITENGIRIL). 0 = default upright spray; ~90 "
-                    "= laid flat / edge-on. Live-tunable during a howl — sweep to find the "
-                    "\"whirlwind\" look, then tell me the value to lock in." +
+                    "Wolf Howl ring X-pitch in degrees (KAITENGIRIL). Full 0-360 sweep — KAITENGIRIL "
+                    "sits at a natural angle, so sweep past 90/270 to find the value where it lies "
+                    "completely horizontal. Live-tunable during a howl." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         leftPane.register_control(
             leftPane.add_child<NumberButton>(NumberButton::Props{
-                .key = "Wolf Howl Scale %",
-                .getValue = [] { return getSettings().game.wolfHowlScalePct.getValue(); },
+                .key = "Wolf Howl Roll (deg)",
+                .getValue = [] { return getSettings().game.wolfHowlRollDeg.getValue(); },
                 .setValue =
                     [](int value) {
-                        getSettings().game.wolfHowlScalePct.setValue(std::clamp(value, 10, 400));
+                        getSettings().game.wolfHowlRollDeg.setValue(std::clamp(value, 0, 360));
                         config::Save();
                     },
                 .isModified =
                     [] {
-                        return getSettings().game.wolfHowlScalePct.getValue() !=
-                               getSettings().game.wolfHowlScalePct.getDefaultValue();
+                        return getSettings().game.wolfHowlRollDeg.getValue() !=
+                               getSettings().game.wolfHowlRollDeg.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 360,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring Z-roll in degrees (KAITENGIRIL). The second leveling axis — pair "
+                    "with Tilt to cancel KAITENGIRIL's natural angle on both axes for a fully "
+                    "horizontal ring. Full 0-360 sweep, live-tunable during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Width %",
+                .getValue = [] { return getSettings().game.wolfHowlWidthPct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlWidthPct.setValue(std::clamp(value, 10, 400));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlWidthPct.getValue() !=
+                               getSettings().game.wolfHowlWidthPct.getDefaultValue();
                     },
                 .min = 10,
                 .max = 400,
@@ -2608,7 +2634,106 @@ EditorWindow::EditorWindow() {
             rightPane,
             [](Pane& pane) {
                 pane.add_rml(
-                    "Wolf Howl ring particle scale (100 = 1.0x). Live-tunable during a howl." +
+                    "Wolf Howl ring particle scale on X/Z, the horizontal spread (100 = 1.0x). "
+                    "Live-tunable during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Height %",
+                .getValue = [] { return getSettings().game.wolfHowlHeightPct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlHeightPct.setValue(std::clamp(value, 10, 400));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlHeightPct.getValue() !=
+                               getSettings().game.wolfHowlHeightPct.getDefaultValue();
+                    },
+                .min = 10,
+                .max = 400,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring particle scale on Y, the vertical size (100 = 1.0x). Live-tunable "
+                    "during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Sweep Rate",
+                .getValue = [] { return getSettings().game.wolfHowlSweepRate.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlSweepRate.setValue(std::clamp(value, 0, 4000));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlSweepRate.getValue() !=
+                               getSettings().game.wolfHowlSweepRate.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 4000,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "How fast the ring sweeps around the wolf (emit-yaw wind per frame). 0 = no "
+                    "rotation; ~500 = one revolution every ~2 s; higher = faster. The wolf never "
+                    "turns — only the effect." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Orbit",
+                .getValue = [] { return getSettings().game.wolfHowlOrbit.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlOrbit.setValue(std::clamp(value, 0, 300));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlOrbit.getValue() !=
+                               getSettings().game.wolfHowlOrbit.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 300,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "How far off-center the sweep swings (emission-point orbit radius). 0 = centered "
+                    "on the wolf; higher = a wider circling ring. Helps the rotation read on the "
+                    "near-symmetric spray." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Period",
+                .getValue = [] { return getSettings().game.wolfHowlPeriod.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlPeriod.setValue(std::clamp(value, 1, 60));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlPeriod.getValue() !=
+                               getSettings().game.wolfHowlPeriod.getDefaultValue();
+                    },
+                .min = 1,
+                .max = 60,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Re-emit cadence in frames — burst density. Lower = denser / smoother sweep "
+                    "(1 = every frame); higher = sparser." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         // ============================================

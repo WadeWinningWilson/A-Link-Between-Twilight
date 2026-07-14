@@ -92,6 +92,9 @@ public:
     void menuOutBgm();
     void fanfareFramework();
     void stopWolfHowlSong();
+#if TARGET_PC
+    bool isWolfHowlSong();  // ALBW Port: is the current fanfare one of the wolf-howl tunes?
+#endif
     void setHeightVolMod(bool isVolMod, u32 fadeTime);
     void setTimeProcVolMod(bool isVolMod, u32 fadeTime);
     void processBgmFramework();

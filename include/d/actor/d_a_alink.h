@@ -4596,6 +4596,7 @@ public:
     // Wolf Art (D-pad Up): combat howl AOE. Gated on wolf form + Wolf Combat + quick-swap mode +
     // howl unlocked (or the dev toggle), spends 1 wolf charge, triggers the howl.
     void handleWolfHowlBurst();
+    void handleWolfArmBurst();  // ALBW Port: D-pad Right — spawn the Midna Arm auto-attack art
     void handleQuickTransform();
     bool checkAimContext();
     bool checkAimInputContext();

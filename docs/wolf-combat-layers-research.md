@@ -235,8 +235,27 @@ The first art (**D-pad Up = combat Howl AOE**) is built and playtested. How the 
 ### Ring VFX — **base KAITENGIRIL, plain fire-and-forget** ([`setWolfHowlSpinEffect`](../src/d/actor/d_a_alink_wolf.inc))
 This is the current, deliberately-minimal state after a long detour (see the lessons below):
 - Emits the **4-emitter KAITENGIRIL "Light" set (A–D)** via the **NULL-tevStr** overload `dComIfGp_particle_set(effId, &pos, &rot, scaleArg)` ([d_com_inf_game.h:3368](../include/d/d_com_inf_game.h)). NULL tevStr is essential — it makes the effect keep its **own authored colors (white) + sparkle** instead of being tinted by the actor's `tevStr`.
-- **Fire-and-forget only.** Re-emitted from `procWolfHowlCombat` on a **20-frame cadence** (`l_wolfHowlVfxPeriod`); each burst lives its natural lifetime. Centered at `current.pos + Y30`, facing `shape_angle.y`.
-- Two editor sliders — **Wolf Howl Tilt (deg)** (global X-pitch on the emit rotation) and **Wolf Howl Scale %** — are **gated behind the master toggle `game.wolfHowlVfxOverride`** ("Wolf Howl VFX: Apply Slider Overrides"). **Override OFF (default) = untouched base** (tilt 0, scale 1.0×); ON applies the sliders. All cosmetic.
+- **Fire-and-forget only.** Re-emitted from `procWolfHowlCombat` on a cadence (`period`); each burst lives its natural lifetime. Centered at `current.pos + Y30`. A **sweep** yaw (`shape_angle.y + elapsed × sweepRate`) winds over the howl so the ring rotates around the static wolf (the wolf never turns); an optional **orbit** offsets the emission point along the sweep.
+- **FINALIZED LOOK (user-tuned 2026-07-13, baked as both the `l_wolfHowlVfx*` constants and the ConfigVar defaults):**
+
+  | Param | Value |
+  |---|---|
+  | Tilt (X) | 0 (natural angle) |
+  | Roll (Z) | 0 |
+  | Width % | 90 |
+  | Height % | 90 |
+  | Sweep Rate | 300 (~one rev / 3.6 s) |
+  | Orbit | 0 (centered) |
+  | Period | 1 (burst every frame) |
+
+- The editor tuner remains for later re-tuning: master toggle **"Wolf Howl VFX: Apply Tuner"** (`game.wolfHowlVfxOverride`) + six sliders (Tilt 0–360 / Roll 0–360 / Width / Height / Sweep Rate / Orbit / Period). **Override OFF = the baked finalized look**; ON applies the sliders live mid-howl. All cosmetic.
+
+### Audio — enemy SFX punch through the howl song
+The howl song (fanfare path) normally **culls almost every sound effect** while it plays — `Z2SeMgr::isSoundCulling` ([Z2SeMgr.cpp](../src/Z2AudioLib/Z2SeMgr.cpp)) whitelists ~18 SE during `isItemGetDemo()` and drops the rest, which silenced enemies being hit by the AOE. (The music-side duck, `mFanfareMute`, only scales the 3 BGM handles — it never touched SE and is untouched.) Fix: during the **wolf-howl tunes ONLY** — detected by `Z2SeqMgr::isWolfHowlSong()` (mirrors `stopWolfHowlSong`'s case list) — the culling gate lets through the **enemy block `[0x30000, 0x40000)`** (`Z2SE_EN_*` voices/damage/death) and the **impact block `[0x40000, 0x50000)`** (`Z2SE_HIT_*` weapon thunks). Item-get and other jingles keep the vanilla culling.
+
+### Charges — the arts never build them, and the howl needs 2
+- **Charge economy (confirmed):** both D-pad arts NEED 2 charges to fire; the **howl spends 1**, the **Midna arm spends 2**. `handleWolfHowlBurst` gates `mWolfChargeCount < 2`, decrements 1.
+- **Arts don't feed the counter:** the howl AOE rides Link's own collider (`AT_TYPE_WOLF_CUT_TURN`, owner = ALINK) so it passed the bite-counter guard — a latent bug. Excluded via `!link->mWolfCombatHowlActive` at the increment ([d_cc_uty.cpp](../src/d/d_cc_uty.cpp) `cc_at_check`); Link can't bite mid-howl so the flag exactly identifies howl-AOE hits, and the vanilla roll attack (same AT type) still counts. The Midna-arm art will be a separate non-ALINK actor, so its hits are excluded automatically (`mHitType` stays generic — the guard requires `HIT_TYPE_LINK_NORMAL_ATTACK`).
 
 ### Lessons learned (why it looks the way it does)
 - **The FA great-spin finisher uses a DIFFERENT bank.** Captured at runtime (a since-removed `ALBW-GSDIAG` probe in `setCutTurnEffect`): it is **6× `KAITENGIRID` "Large" (A–F)**, immortal + continuously re-driven every frame, with per-emitter staggered local tilt (`leftRotLarge`: X 180° / Y 45°–60° / Z 13°) + lift (`leftTransLarge` Y 0/35/0/45/30/50), global rot = body yaw. The "whirlwind vs base" the user recalled is **spin direction** (`getCutTurnDirection` → sign of `field_0x3180`), *not* sword angle; the two-variant switch was a removed `hurricaneTestVfx` setting (tilt-on = "base" flat ring vs tilt-off = "whirlwind" upright spray).

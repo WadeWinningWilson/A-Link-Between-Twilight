@@ -996,6 +996,7 @@ set(REL_FILES
         src/d/actor/d_a_npc_gwolf.cpp
         src/d/actor/d_a_albw_shade_watcher.cpp
         src/d/actor/d_a_albw_shade_boss_wolf.cpp
+        src/d/actor/d_a_albw_midna_arm.cpp
         src/d/actor/d_a_npc_hanjo.cpp
         src/d/actor/d_a_npc_henna0.cpp
         src/d/actor/d_a_npc_hoz.cpp

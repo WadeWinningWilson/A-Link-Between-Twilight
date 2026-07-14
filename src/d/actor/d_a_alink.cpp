@@ -3598,6 +3598,23 @@ void daAlink_c::setNeckAngle() {
     int sp14 = 2;
 
     offNoResetFlg1(FLG1_MIDNA_HAIR_ATN_POS);
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Midna Arm art — hair-reach visual)
+    // Re-apply the arm actor's published reach target after the per-frame clear above, so
+    // daMidna_c's hair visibly reaches toward the strike point while the art runs (the same
+    // mechanism the Wchain / Beast-Ganon aim uses below).
+    // ============================================
+    {
+        cXyz reachPos;
+        if (dAlbwMidnaArm_getReachPos(&reachPos)) {
+            onNoResetFlg1(FLG1_MIDNA_HAIR_ATN_POS);
+            mMidnaHairAtnPos = reachPos;
+        }
+    }
+#endif
+
     cXyz* var_r30 = getNeckAimPos(&sp18, &sp14, 1);
 
     if (var_r30 != NULL && checkModeFlg(0x08000100)) {
@@ -15748,6 +15765,20 @@ void daAlink_c::commonProcInit(daAlink_c::daAlink_PROC i_procID) {
 #if TARGET_PC
     if (mProcID == PROC_FLURRY_RUSH && i_procID != PROC_FLURRY_RUSH) {
         dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port (Wolf Howl combat art — interruption cleanup)
+    // If ANY proc other than the howl takes over (damage knockback, dodge, transform, ...) while a
+    // combat howl is active, clear the combat-howl flags here at the single proc-change chokepoint.
+    // Without this the flags stay stuck TRUE after an interrupted howl — which, among other things,
+    // permanently blocked the wolf-charge counter (its earn guard excludes howl-AOE hits via
+    // mWolfCombatHowlActive).  A clean howl exit also passes through here (checkNextActionWolf),
+    // which is fine — the flags are being cleared at that point anyway.
+    // ============================================
+    if (mWolfCombatHowlActive && i_procID != PROC_WOLF_HOWL) {
+        mWolfCombatHowlActive = false;
+        mWolfHowlEnding       = false;
     }
 #endif
 

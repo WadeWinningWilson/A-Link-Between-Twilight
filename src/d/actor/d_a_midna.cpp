@@ -15,6 +15,9 @@
 #include "d/d_s_play.h"
 #include "d/d_debug_viewer.h"
 #include "dusk/frame_interpolation.h"
+#if TARGET_PC
+#include "d/d_albw_wolf_stun.h"  // dAlbwMidnaArm_getReachPos ("Midna's Grasp" extended hair reach)
+#endif
 
 static f32 dummy_lit_3777(int idx, u8 foo) {
     Vec dummy_vec = {0.0f, 0.0f, 0.0f};
@@ -2712,6 +2715,23 @@ void daMidna_c::setHairAngle() {
 
     for (i = 0; i < 5; i++, pos++, dir++, angle_z++, angle_y++, scale++) {
         if (checkStateFlg0(FLG0_UNK_10000000)) {
+#if TARGET_PC
+            // ============================================
+            // NEW CODE — ALBW Port ("Midna's Grasp" arm art — extended reach)
+            // While OUR arm art is actively reaching (module-gated — NOT the FLG0 flag, which the
+            // vanilla Wchain/Beast-Ganon aim also sets), stretch the chain LENGTH-ONLY: z is the
+            // bone-length axis (the software chain is hairOffset {0,0,28} × scale.z), so boosting z
+            // alone lengthens the hair ~3x (~140 -> ~420 units) without fattening it.  x/y stay 1.0.
+            // A faster chase step (0.3) lets the stretch keep up with the jab pacing.  mHairScale is
+            // the shared array, so this single site feeds BOTH consumers (the render joint scales in
+            // McaMorfCB1 and the software chain).  Vanilla contexts keep the {1,1,1} target below.
+            // ============================================
+            if (dAlbwMidnaArm_getReachPos(NULL) && dAlbwMidnaArm_isReachStriking()) {
+                static Vec const l_armReachScale = {1.0f, 1.0f, 3.0f};
+                cLib_chasePos(scale, l_armReachScale, 0.3f);
+            } else
+            // (the READY/idle hover falls through to the vanilla {1,1,1} reach target below)
+#endif
             cLib_chasePos(scale, l_hairScale[4], 0.1f);
         } else {
             cLib_chasePos(scale, l_hairScale[i], 0.1f);

@@ -563,8 +563,17 @@ bool isMountSpearGuardBreakExempt(fopAc_ac_c* i_attacker) {
         return false;
     }
 
+    // ============================================
+    // E_RDB removed from the exemption (alpha cleanup): King Bulblin never
+    // attacks while mounted — the joust hits come from E_WB (AtSpl 7) and
+    // E_RD (AtSpl 0), neither of which is a guard-break attack, so the
+    // E_RDB entry only ever blocked parries in the on-foot AXE fights
+    // (camp / F_SP118 / castle). Dropping it makes the axe swing and spin
+    // deferrable: successful parry cancels, failed parry still guard-breaks
+    // at 1.5x durability. B_GND (mounted Ganondorf) stays exempt.
+    // ============================================
     const s16 name = fopAcM_GetName(i_attacker);
-    return name == fpcNm_E_RDB_e || name == fpcNm_B_GND_e;
+    return name == fpcNm_B_GND_e;
 }
 
 bool isMeterGameplayHudVisible() {
@@ -1518,6 +1527,17 @@ bool dShield_tryBeginGuardAttack() {
     if (sBashCharges == 0) {
         sBashSpendChainActive = false;
     }
+
+    // ============================================
+    // BUG FIX (alpha cleanup): re-arm the bash-connect ALBW grant for this
+    // swing. sBashAlbwGranted exists to de-dupe the two connect call paths
+    // for ONE hit (pollGuardAttackHit per-frame + onGuardAttackConnect
+    // per-proc), but it was only ever cleared in dShield_resetSession()
+    // (reset-to-title) — so the +5% meter grant fired once per session and
+    // every later bash paid nothing. Clearing it per spent swing restores
+    // the intended once-per-connect payout.
+    // ============================================
+    sBashAlbwGranted = false;
 
     logChargeEvent("bash-start");
     dShield_debugLogToFile(

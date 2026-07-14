@@ -544,9 +544,15 @@ void dGameover_c::warpChoice_init() {
     sALBWWarpInDungeon = (stage[0] == 'D' && stage[1] == '_' &&
                           stage[2] == 'M' && stage[3] == 'N');
 
-    const char* content = sALBWWarpInDungeon
-        ? "A: Dungeon Entrance\nB: Ordon Village"
-        : "A: Continue Here\nB: Ordon Village";
+    // ============================================
+    // Relabel (alpha cleanup): choice 0 never warps — it takes the vanilla
+    // continue path (setGameoverStatus(2) → restart-room data = the last
+    // door you walked through), so the old "Dungeon Entrance" label
+    // over-promised. Same label in and out of dungeons now.
+    // sALBWWarpInDungeon is kept updated for future use, but Oocoo's
+    // died-in-dungeon eligibility has its own capture (onDeathWarpContext).
+    // ============================================
+    const char* content = "A: Continue Here\nB: Ordon Village";
 #if TARGET_PC
     // Shade's Refuge: once Link has rested at a Shade Watcher, the A slot
     // becomes "Last Shade Watcher" everywhere (overrides Dungeon Entrance /

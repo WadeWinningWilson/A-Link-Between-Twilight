@@ -358,14 +358,24 @@ struct UserSettings {
         // (howl / punch / giant) can be triggered immediately without grinding or the story
         // unlock. Keep OFF for release. Only meaningful with wolfLinkCombat + quick-swap on.
         ConfigVar<bool> wolfArtsDevTest;
-        // Master on/off for the two Wolf Howl VFX sliders below.  OFF = the exact finisher base
-        // (no extra tilt, 1.0x scale) so you can see the untouched effect; ON = apply the sliders.
+        // Master on/off for the Wolf Howl VFX tuner sliders below.  OFF = the built-in default look
+        // (rotation on, no extra tilt, 1.0x); ON = apply the sliders.  Cosmetic only.
         ConfigVar<bool> wolfHowlVfxOverride;
-        // Wolf Howl ring VFX tuning (live-tunable in the editor; only applied when the override above
-        // is ON).  wolfHowlTiltDeg = extra global X-pitch in degrees on top of the finisher tilt.
-        // wolfHowlScalePct = particle scale (100 = 1.0x).  Cosmetic only.
+        // Wolf Howl ring VFX tuner (live in the editor; applied only when the override above is ON):
+        //   Tilt      = global X-pitch in degrees (0-360).
+        //   Roll      = global Z-roll in degrees (0-360) — level the other axis for a flat ring.
+        //   Width     = ring particle scale on X/Z (100 = 1.0x).
+        //   Height    = ring particle scale on Y   (100 = 1.0x).
+        //   SweepRate = emit-yaw wind per elapsed frame (the rotation; 0 = no spin).
+        //   Orbit     = emission-point orbit radius (how far off-center the sweep swings).
+        //   Period    = re-emit cadence in frames (burst density; 1 = every frame).
         ConfigVar<int> wolfHowlTiltDeg;
-        ConfigVar<int> wolfHowlScalePct;
+        ConfigVar<int> wolfHowlRollDeg;
+        ConfigVar<int> wolfHowlWidthPct;
+        ConfigVar<int> wolfHowlHeightPct;
+        ConfigVar<int> wolfHowlSweepRate;
+        ConfigVar<int> wolfHowlOrbit;
+        ConfigVar<int> wolfHowlPeriod;
         // Direct wallet credit on enemy kill and boss fight victory (additive; vanilla drops unchanged).
         ConfigVar<bool> enemyDeathRupees;
         // Master Quest: Postman heart/stamina upgrades; halved heart container/piece grants.

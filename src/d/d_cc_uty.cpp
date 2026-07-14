@@ -665,8 +665,15 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
             if (link != NULL && daPy_py_c::checkNowWolf()) {
 
                 // --- Wolf normal bite: charge accumulation ---
+                // Special D-pad ARTS never build charges: the combat-howl AOE rides Link's own
+                // collider (AT_TYPE_WOLF_CUT_TURN, owner = ALINK) so it would otherwise pass this
+                // guard — exclude it via mWolfCombatHowlActive (Link can't bite mid-howl, so the
+                // flag exactly identifies howl-AOE hits; the vanilla roll attack, same AT type,
+                // still counts).  The Midna-arm art is a separate non-ALINK actor and is excluded
+                // automatically (mHitType stays generic).
                 if (i_AtInfo->mHitType == HIT_TYPE_LINK_NORMAL_ATTACK &&
                     !i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK) &&
+                    !link->mWolfCombatHowlActive &&
                     i_AtInfo->mAttackPower > 0)
                 {
                     link->mWolfBiteCount++;
