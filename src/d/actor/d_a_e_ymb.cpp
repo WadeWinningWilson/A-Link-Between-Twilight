@@ -15,6 +15,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 struct daE_YMB_HIO_c {
@@ -1718,6 +1719,14 @@ void daE_YMB_c::executeDamage() {
                 dComIfGp_getVibration().StartShock(3, 31, cXyz(0.0f, 1.0f, 0.0f));
                 offWolfBiteDamage();
                 field_0x6f0++;
+#if TARGET_PC
+                // ============================================
+                // NEW CODE — ALBW Port (alpha cleanup)
+                // Hang-bite damage is internal (bypasses cc_at_check, the
+                // charge-accrual site) — credit each mash at 1/15 charge.
+                // ============================================
+                dAlbwWolfCombat_onChestMashHit();
+#endif
 
                 if (field_0x6f0 >= 5) {
                     field_0x6ec++;

@@ -49,6 +49,15 @@ public:
     int CreateHeap();
     int create();
 
+#if TARGET_PC
+    // Wolf-freeze coverage: true in states the freeze must not pause —
+    // shatter/death (mActionMode 10), thrown lance (field_0x679 == 1),
+    // ironball carry (field_0x679 == 2).
+    bool albwIsFreezeUnsafeState() const {
+        return mActionMode == 10 || field_0x679 == 1 || field_0x679 == 2;
+    }
+#endif
+
 private:
     /* 0x05AC */ request_of_phase_process_class mPhaseReq;
     /* 0x05B4 */ mDoExt_McaMorfSO* mpMorfSO;

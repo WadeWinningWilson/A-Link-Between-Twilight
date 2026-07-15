@@ -20,6 +20,8 @@
 #if TARGET_PC
 
 #include "d/d_albw_wolf_stun.h"
+#include "d/d_albw_wolf_charge_hud.h"
+#include "d/d_focused_arts.h"
 #include "SSystem/SComponent/c_cc_d.h"
 #include "SSystem/SComponent/c_counter.h"
 #include "SSystem/SComponent/c_sxyz.h"
@@ -28,10 +30,20 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_save.h"
 #include "d/dolzel.h"
+#include "d/actor/d_a_e_db.h"
+#include "d/actor/d_a_e_gb.h"
+#include "d/actor/d_a_e_gi.h"
+#include "d/actor/d_a_e_gob.h"
+#include "d/actor/d_a_e_kk.h"
+#include "d/actor/d_a_e_nz.h"
 #include "d/actor/d_a_e_oc.h"
+#include "d/actor/d_a_e_rb.h"
+#include "d/actor/d_a_e_rd.h"
+#include "d/actor/d_a_e_rdb.h"
 #include "d/actor/d_a_e_sh.h"
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_player.h"
+#include <cstring>
 #include "dusk/settings.h"
 #include "Z2AudioLib/Z2Creature.h"
 #include "f_pc/f_pc_manager.h"
@@ -241,6 +253,60 @@ void prepareStunnedEnemyForBridge(fopAc_ac_c* i_enemy, WolfStunEntry* i_entry) {
     } else if (name == fpcNm_E_SH_e) {
         e_sh_refreshStunHurtColliders(reinterpret_cast<e_sh_class*>(i_enemy));
     }
+    // ============================================
+    // Coverage-campaign refresh cases: these three set an i-frame timer on
+    // the freeze-frame hit, and the SAME execute pass then position-hides
+    // the hurt sphere (+10000/+30000 park offsets). Frozen = the timer never
+    // ticks, so the captured sphere stays parked and follow-up melee whiffs.
+    // Re-center to eyePos (all three track the head/body from the frozen
+    // anim matrix, so this is idempotent per bridge frame).
+    // ============================================
+    else if (name == fpcNm_E_DB_e) {
+        e_db_class* db = reinterpret_cast<e_db_class*>(i_enemy);
+        db->ccSph.SetC(i_enemy->eyePos);
+    } else if (name == fpcNm_E_GB_e) {
+        e_gb_class* gb = reinterpret_cast<e_gb_class*>(i_enemy);
+        gb->headSph.SetC(i_enemy->eyePos);
+    } else if (name == fpcNm_E_RB_e) {
+        e_rb_class* rb = reinterpret_cast<e_rb_class*>(i_enemy);
+        rb->ccSph.SetC(i_enemy->eyePos);
+    }
+
+    // ============================================
+    // GENERIC UN-PARK (root fix, playtest-diagnosed). The standard TP
+    // i-frame idiom parks hurt colliders 10k-200k units off-body while a
+    // damage timer runs (E_RD, E_FS, E_BA, E_BU, E_BS, E_BI, ...). The
+    // freeze always fires inside the damage frame that STARTS that timer,
+    // and the pause keeps it alive — so the snapshot is parked forever and
+    // the engine's broadphase never pairs Link's sword with it (confirmed:
+    // Bulblins/Puppets took zero bridge hits while Tektite, which never
+    // parks, took all of them). Any captured collider found implausibly
+    // far from its frozen owner snaps back to the body. Idempotent, runs
+    // only on frozen enemies, covers every current and future actor —
+    // the per-actor cases above remain as exact-position overrides.
+    // GetCoCP() is the real center for Sph/Cyl shapes (the vast majority
+    // of enemy TGs); for other shapes the base returns a dummy — no-op.
+    // ============================================
+    constexpr f32 kParkDistance = 2000.0f;
+    for (int c = 0; c < i_entry->mColliderCount; c++) {
+        cCcD_Obj* obj = i_entry->mColliders[c];
+        if (obj == NULL) {
+            continue;
+        }
+        cCcD_ShapeAttr* shape = obj->GetShapeAttr();
+        if (shape == NULL) {
+            continue;
+        }
+        cXyz& center = shape->GetCoCP();
+        const f32 dx = center.x - i_enemy->current.pos.x;
+        const f32 dy = center.y - i_enemy->current.pos.y;
+        const f32 dz = center.z - i_enemy->current.pos.z;
+        if (dx * dx + dy * dy + dz * dz > kParkDistance * kParkDistance) {
+            center = i_enemy->eyePos;
+            wolfStun_debugLog("f=%06d evt=unpark id=%u name=%d coll=%d\n",
+                              g_Counter.mCounter0, i_entry->mId, name, c);
+        }
+    }
 
     cCcD_Stts* stts = i_entry->mColliders[0]->GetStts();
     if (stts != NULL) {
@@ -275,6 +341,63 @@ void prepareStunnedEnemyForBridge(fopAc_ac_c* i_enemy, WolfStunEntry* i_entry) {
     }
 }
 
+// ============================================
+// Post-thaw kill watchdog (alpha cleanup, playtest edge case). A bridge
+// kill drops health to 0 and grants rupees, but most actors only process
+// death inside their own damage flow — which their (paused-then-stale)
+// i-frame timer gates shut on thaw — so they could keep running at 0 HP
+// and be "killed again". After a lethal bridge hit, give the actor a
+// grace window to die naturally on thaw; if it is still alive-at-0HP
+// when the grace expires, despawn it (rupees were already granted; the
+// paired ring-evict fix in d_albw_enemy_rupee kills the double payout).
+// ============================================
+struct PostThawKillEntry {
+    fpc_ProcID mId;
+    s16 mFrames;
+};
+constexpr int kPostThawKillMax = 8;
+constexpr s16 kPostThawGraceFrames = 30;
+PostThawKillEntry sPostThawKills[kPostThawKillMax];
+int sPostThawKillCount = 0;
+
+void armPostThawKill(fpc_ProcID i_id) {
+    for (int i = 0; i < sPostThawKillCount; i++) {
+        if (sPostThawKills[i].mId == i_id) {
+            return;
+        }
+    }
+    if (sPostThawKillCount >= kPostThawKillMax) {
+        return;
+    }
+    sPostThawKills[sPostThawKillCount].mId = i_id;
+    sPostThawKills[sPostThawKillCount].mFrames = kPostThawGraceFrames;
+    sPostThawKillCount++;
+}
+
+void tickPostThawKills() {
+    for (int i = 0; i < sPostThawKillCount; i++) {
+        fopAc_ac_c* actor = static_cast<fopAc_ac_c*>(fpcM_SearchByID(sPostThawKills[i].mId));
+        bool done = false;
+
+        if (actor == NULL) {
+            done = true;  // died/deleted naturally
+        } else if (--sPostThawKills[i].mFrames <= 0) {
+            if (actor->health <= 0) {
+                wolfStun_debugLog("f=%06d evt=zombie-despawn id=%u\n", g_Counter.mCounter0,
+                                  sPostThawKills[i].mId);
+                fopAcM_delete(actor);
+            }
+            done = true;
+        }
+
+        if (done) {
+            sPostThawKills[i] = sPostThawKills[sPostThawKillCount - 1];
+            sPostThawKillCount--;
+            i--;
+        }
+    }
+}
+
 void removeStunEntry(int i_index) {
     restoreStunColliderFlags(&sStunList[i_index]);
     base_process_class* proc = fpcM_SearchByID(sStunList[i_index].mId);
@@ -292,6 +415,11 @@ constexpr u32 BRIDGE_LINK_MELEE_AT_TYPES =
     AT_TYPE_WOLF_ATTACK | AT_TYPE_WOLF_CUT_TURN | AT_TYPE_NORMAL_SWORD |
     AT_TYPE_MASTER_SWORD | AT_TYPE_MIDNA_LOCK;
 
+// Link-owned projectile actors (alpha cleanup: "every Link attack must be
+// viable" vs frozen enemies). Enemy projectiles use different actor names
+// (e.g. E_ARROW), so the name whitelist keeps enemy fire from bridging.
+constexpr u32 BRIDGE_LINK_RANGED_AT_TYPES = AT_TYPE_ARROW | AT_TYPE_BOMB | AT_TYPE_BOOMERANG;
+
 constexpr u32 BRIDGE_WOLF_BITE_AT_TYPES = AT_TYPE_WOLF_ATTACK | AT_TYPE_WOLF_CUT_TURN;
 
 bool isBridgeLinkMeleeAt(cCcD_Obj* i_atObj) {
@@ -299,12 +427,21 @@ bool isBridgeLinkMeleeAt(cCcD_Obj* i_atObj) {
         return false;
     }
 
+    fopAc_ac_c* atAc = i_atObj->GetAc();
+
+    if (i_atObj->ChkAtType(BRIDGE_LINK_RANGED_AT_TYPES) != 0 && atAc != NULL) {
+        const s16 atName = fopAcM_GetName(atAc);
+        if (atName == fpcNm_ARROW_e || atName == fpcNm_NBOMB_e ||
+            atName == fpcNm_BOOMERANG_e) {
+            return true;
+        }
+    }
+
     if (i_atObj->ChkAtType(BRIDGE_LINK_MELEE_AT_TYPES) == 0) {
         return false;
     }
 
     fopAc_ac_c* link = daPy_getPlayerActorClass();
-    fopAc_ac_c* atAc = i_atObj->GetAc();
     if (atAc == NULL) {
         return link != NULL;
     }
@@ -355,13 +492,14 @@ void spawnBridgeHitMark(fopAc_ac_c* i_enemy, cCcD_Obj* i_atObj, cCcD_Obj* i_tgOb
         return;
     }
 
-    if ((atGObj->GetAtType() &
-         (AT_TYPE_WOLF_ATTACK | AT_TYPE_WOLF_CUT_TURN | AT_TYPE_10000000 | AT_TYPE_MIDNA_LOCK |
-          AT_TYPE_HOOKSHOT | AT_TYPE_SHIELD_ATTACK | AT_TYPE_NORMAL_SWORD)) != 0 &&
-        tgGObj->GetTgSpl() == dCcG_Tg_Spl_UNK_1)
-    {
-        return;
-    }
+    // ============================================
+    // Alpha cleanup (user directive): the engine's TgSpl-based hitmark
+    // suppression assumed a LIVE enemy would play its own hit reaction —
+    // a frozen enemy cannot, so suppressing here meant sword hits landed
+    // in total silence (playtest: Bulblin/Puppet/Tektite). Every damaging
+    // bridge hit now spawns a hitmark; only explicit NoHitMark flags and
+    // the wolf-bite branch (which has its own feedback) still skip.
+    // ============================================
 
     cXyz* hitPosP = tgGObj->GetTgHitPosP();
     if (hitPosP == NULL) {
@@ -449,6 +587,18 @@ void processBridgeHit(fopAc_ac_c* i_enemy, cCcD_Obj* i_atObj, cCcD_Obj* i_tgObj)
     prepareBridgeAtInfo(i_enemy, &atInfo);
     cc_at_check(i_enemy, &atInfo);
 
+    // ============================================
+    // King Bulblin deferred defeat (user design): his defeat is knockdown-
+    // count-driven and his own damage flow is paused while frozen, so the
+    // only frozen-hit risk is health reaching 0 (an undefined state for a
+    // count-defeated boss). Clamp health at 1 while frozen — hits still
+    // land with full visual feedback (bridge hit sparks below), but the
+    // finishing blow only counts once he is moving again.
+    // ============================================
+    if (fopAcM_GetName(i_enemy) == fpcNm_E_RDB_e && i_enemy->health < 1) {
+        i_enemy->health = 1;
+    }
+
     wolfStun_debugLog("f=%06d evt=bridge-hit id=%u dmg=%u hp=%d mpActor=%p sound=%p wolf=%d\n",
                       g_Counter.mCounter0, i_enemy->id, atInfo.mAttackPower, i_enemy->health,
                       atInfo.mpActor, atInfo.mpSound, daPy_py_c::checkNowWolf() ? 1 : 0);
@@ -494,9 +644,10 @@ void dAlbwWolfArts_unlockHowl() {
 
 bool dAlbwWolfArts_shouldShowHowlShopRow() {
     // Show only while Wolf Combat is on and the howl isn't already unlocked.
-    // TODO(story gate): also require Eldin/Kakariko Twilight cleared once that milestone's
-    // save/event flag is pinned.
-    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isHowlUnlocked();
+    // STORY GATE (user-pinned 2026-07-15): requires the FIRST twilight
+    // (Faron/Ordon, DarkClearLV bit 0) cleared.
+    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isHowlUnlocked() &&
+           dComIfGs_isDarkClearLV(0);
 }
 
 int dAlbwWolfArts_getHowlShopPrice() {
@@ -541,8 +692,10 @@ void dAlbwWolfArts_unlockArm() {
 
 bool dAlbwWolfArts_shouldShowArmShopRow() {
     // Show only while Wolf Combat is on and the arm isn't already unlocked.
-    // TODO(story gate): also require Lanayru Twilight cleared once that flag is pinned.
-    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isArmUnlocked();
+    // STORY GATE (user-pinned 2026-07-15, supersedes the old Lanayru TODO):
+    // requires the Eldin twilight (DarkClearLV bit 1) cleared.
+    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isArmUnlocked() &&
+           dComIfGs_isDarkClearLV(1);
 }
 
 int dAlbwWolfArts_getArmShopPrice() {
@@ -601,16 +754,39 @@ bool dAlbwMidnaArm_isReachStriking() {
     return s_midnaArmReachStriking;
 }
 
+// ============================================
+// BUG FIX (alpha cleanup): the list originally had fpcNm_E_MD_e commented
+// "Shadow Beast (twilight messenger)" — but E_MD is the SUIT OF ARMOR.
+// The REAL shadow beast is E_S1 (d_a_e_s1.h: "Shadow Beast" — resurrection
+// howl, pack-finish, warp-appear, chest-mash). NOT E_SH, which is the
+// STALHOUND (d_a_e_sh.h) — a normal night enemy that must stay freezable
+// (its per-actor frozen-collider bridge exists for exactly that). Result
+// of the old entry: shadow beasts fell to the non-twilight branch (0.25x
+// + 300f freeze) instead of 0.70x-no-freeze, and the Suit of Armor was
+// wrongly freeze-immune. Both consult sites (damage split + stun dispatch
+// in cc_at_check) call this classifier, so this one entry fixes damage
+// AND freeze. Keep the per-case comments — their earlier removal is how
+// the mislabel survived review.
+// ============================================
 bool dAlbwWolfStun_isTwilightEnemy(s16 i_name) {
     switch (i_name) {
-    case fpcNm_E_MD_e:
-    case fpcNm_E_YD_e:
-    case fpcNm_E_YH_e:
-    case fpcNm_E_YD_LEAF_e:
-    case fpcNm_E_YMB_e:
-    case fpcNm_E_YK_e:
-    case fpcNm_E_YR_e:
-    case fpcNm_E_YG_e:
+    case fpcNm_E_S1_e:       // Shadow Beast (twilit messenger)
+    case fpcNm_E_YD_e:       // Twilight Deku Baba
+    case fpcNm_E_YH_e:       // Twilight Hebi Baba
+    case fpcNm_E_YD_LEAF_e:  // Twilight Deku Baba - Leaf
+    case fpcNm_E_YMB_e:      // Twilight Insect Boss
+    case fpcNm_E_YK_e:       // Twilight Keese
+    case fpcNm_E_YR_e:       // Twilight Kargarok (standard solo dive-attacker)
+    case fpcNm_E_YG_e:       // Twilight Vermin
+    // ============================================
+    // Coverage-campaign adds (verified vs dark-render + dark-vanish marker
+    // sweep): twilight enemies take the 0.70x damage boost and NEVER freeze.
+    // E_YC is the strongest add — it runs a shared scripted demo with its
+    // E_RDY rider over Lake Hylia; freezing the carrier desynced the pair.
+    // ============================================
+    case fpcNm_E_YM_e:       // Shadow Insect (Vessel-of-Light bugs)
+    case fpcNm_E_YC_e:       // Twilit Carrier Kargarok (bulblin-rider carrier)
+    case fpcNm_E_RDY_e:      // Shadow Bulblin
         return true;
     default:
         return false;
@@ -622,6 +798,71 @@ bool dAlbwWolfStun_isStunned(fopAc_ac_c* i_enemy) {
         return false;
     }
     return findEntry(i_enemy->id) != NULL;
+}
+
+// ============================================
+// Shared charge tally (alpha cleanup). Extracted from the inline block in
+// cc_at_check (d_cc_uty.cpp) so enemies whose bite damage never flows
+// through cc_at_check — hang-bite grabs and chest-mash internal health
+// decrements — can award charge too. One source of truth for the tally,
+// the cap, and the low-HP heal.
+//
+// Units are FIFTEENTHS of a charge (user-tuned economy):
+//   normal bite      = 3/15  (so 5 bites = 1 charge, unchanged feel)
+//   chest/mash hit   = 1/15  (15 mash hits = 1 charge)
+// Fractions from both sources share one accumulator (mWolfBiteCount) and
+// carry across a completed charge — EXCEPT when the completion lands on
+// the 2-charge cap, where the leftover fraction is dropped by design.
+// ============================================
+namespace {
+
+constexpr int kWolfChargeStepsPerCharge = 15;
+constexpr int kWolfChargeBiteSteps = 3;
+constexpr int kWolfChargeMashSteps = 1;
+
+void addWolfChargeSteps(int i_steps) {
+    if (!dAlbwWolfCombat_isEnabled() || !daPy_py_c::checkNowWolf()) {
+        return;
+    }
+
+    daAlink_c* link = daAlink_getAlinkActorClass();
+    if (link == NULL) {
+        return;
+    }
+
+    link->mWolfBiteCount += i_steps;
+    if (link->mWolfBiteCount >= kWolfChargeStepsPerCharge) {
+        if (link->mWolfChargeCount < 2) {
+            link->mWolfChargeCount++;
+            dAlbwWolfChargeHud_notify();
+        }
+        if (link->mWolfChargeCount >= 2) {
+            // Cap reached: drop the leftover fraction (user rule).
+            link->mWolfBiteCount = 0;
+        } else {
+            link->mWolfBiteCount -= kWolfChargeStepsPerCharge;
+        }
+        // Heal 1/4 heart when at or below 50 % max HP (normal wolf combat).
+        const u16 curHP = dComIfGs_getLife();
+        const u16 maxHP = dComIfGs_getMaxLifeGauge();
+        if (!dFocusedArts_isMdForcedWolfActive() && curHP * 2 <= maxHP) {
+            dComIfGp_setItemLifeCount(1.0f, 0);
+        }
+    }
+    // MD forced-wolf finisher: every damaging attack restores 1 heart.
+    if (dFocusedArts_isMdForcedWolfActive()) {
+        dComIfGp_setItemLifeCount(4.0f, 0);
+    }
+}
+
+}  // namespace
+
+void dAlbwWolfCombat_onBiteConnect() {
+    addWolfChargeSteps(kWolfChargeBiteSteps);
+}
+
+void dAlbwWolfCombat_onChestMashHit() {
+    addWolfChargeSteps(kWolfChargeMashSteps);
 }
 
 void dAlbwWolfStun_syncColliders(fopAc_ac_c* i_enemy, cCcD_Obj* const* i_objs, int i_count) {
@@ -666,8 +907,74 @@ void dAlbwWolfStun_captureAfterExecute() {
     }
 }
 
+// ============================================
+// Central freeze gate (coverage campaign). ALL freeze eligibility beyond the
+// cc_at_check dispatch lives here so every caller (shared path + bespoke
+// actor hooks like E_FK) inherits it, and so sweeping rule changes stay a
+// one-place edit.
+//
+// Name exclusions (design): E_VT Death Sword (Zant-class invisibility/phase
+// scripting) and E_PZ Phantom Zant (demo modes + illusion puzzle).
+//
+// State guards (per-actor audit): skip the freeze when the actor is in a
+// state that pausing execute() would corrupt. Freeze simply doesn't apply;
+// the damage/knockback of the triggering hit still lands normally.
+// ============================================
+static bool isFreezeExcludedName(s16 i_name) {
+    return i_name == fpcNm_E_VT_e || i_name == fpcNm_E_PZ_e;
+}
+
+static bool isFreezeUnsafeState(fopAc_ac_c* i_enemy, s16 i_name) {
+    switch (i_name) {
+    case fpcNm_E_RD_e:
+        // Mounted/joust bulblin: frozen rider desyncs from the boar.
+        return reinterpret_cast<e_rd_class*>(i_enemy)->ride_mode != 0;
+    case fpcNm_E_GI_e:
+        // Active screamer owns a process-global (m_cry_gi) + camera force-
+        // lock that only release in execute(); freezing it stalls both.
+        return daE_GI_isScreamOwner(i_enemy);
+    case fpcNm_E_NZ_e:
+        // Latched Ghoul Rat: freezing strands its stick-slot bit and a
+        // floating invisible collider. ACTION_STICK == 3.
+        return reinterpret_cast<e_nz_class*>(i_enemy)->mAction == 3;
+    case fpcNm_E_KK_e:
+        // Chilfos: shatter/death, thrown-lance, ironball-carry states.
+        return static_cast<const daE_KK_c*>(i_enemy)->albwIsFreezeUnsafeState();
+    case fpcNm_E_GOB_e: {
+        // Dangoro: never yank him out of ball roll (5), Link-grab (8), the
+        // lava jump (9), or a demo-camera sequence — the same state list the
+        // ALBW bash-knockdown uses.
+        const e_gob_class* gob = reinterpret_cast<const e_gob_class*>(i_enemy);
+        return gob->mAction == 5 || gob->mAction == 8 || gob->mAction == 9 ||
+               gob->mDemoCamMode != 0;
+    }
+    case fpcNm_E_RDB_e: {
+        // King Bulblin: his defeat fires on the knockdown COUNT while
+        // health > 0 — freeze's exact firing condition — so freezing the
+        // defeat-crossing knockdown would stall the defeat demo. Skip the
+        // freeze while he is knocked down / defeated (mAction 6/7) and on
+        // the final pre-defeat knockdown count (threshold-1). Paired with
+        // the bridge-side health clamp so frozen hits can't finish him.
+        const e_rdb_class* rdb = reinterpret_cast<const e_rdb_class*>(i_enemy);
+        const bool castle = strcmp(dComIfGp_getStartStageName(), "D_MN09") == 0;
+        const s8 lastKnockdown = castle ? 5 : 3;
+        return rdb->mAction == 6 || rdb->mAction == 7 ||
+               rdb->field_0xfcc >= lastKnockdown;
+    }
+    default:
+        return false;
+    }
+}
+
 void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy) {
     if (!dAlbwWolfCombat_isEnabled() || i_enemy == NULL) {
+        return;
+    }
+
+    const s16 applyName = fopAcM_GetName(i_enemy);
+    if (isFreezeExcludedName(applyName) || isFreezeUnsafeState(i_enemy, applyName)) {
+        wolfStun_debugLog("f=%06d evt=apply-skip id=%u name=%d\n", g_Counter.mCounter0,
+                          i_enemy->id, applyName);
         return;
     }
 
@@ -712,6 +1019,9 @@ void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy) {
 }
 
 void dAlbwWolfStun_update() {
+    // Post-thaw zombie watchdog runs regardless of stun-list state.
+    tickPostThawKills();
+
     if (!dAlbwWolfCombat_isEnabled()) {
         for (int i = 0; i < sStunCount; i++) {
             restoreStunColliderFlags(&sStunList[i]);
@@ -827,6 +1137,9 @@ void dAlbwWolfStun_afterMove() {
             processBridgeHit(enemy, atObj, tgObj);
 
             if (enemy->health <= 0) {
+                // Arm the zombie watchdog BEFORE unpausing: the actor
+                // either dies naturally in the grace window or despawns.
+                armPostThawKill(sStunList[i].mId);
                 removeStunEntry(i);
                 i--;
                 break;

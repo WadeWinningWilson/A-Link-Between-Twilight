@@ -64,8 +64,18 @@ static void markKillGranted(fopAc_ac_c* enemy) {
             return;
         }
     }
+    // ============================================
+    // BUG FIX (alpha cleanup): at capacity this used to RESET THE WHOLE
+    // TABLE (sGrantedKillIdCount = 0), forgetting every granted kill at
+    // once — in long sessions (Cave of Ordeals) that let an enemy killed
+    // while wolf-frozen pay out a second time after thawing. Evict as a
+    // ring instead: only the single oldest entry is forgotten per insert.
+    // ============================================
     if (sGrantedKillIdCount >= kGrantedKillIdCap) {
-        sGrantedKillIdCount = 0;
+        static int sGrantedKillEvictIdx = 0;
+        sGrantedKillActorIds[sGrantedKillEvictIdx] = actorId;
+        sGrantedKillEvictIdx = (sGrantedKillEvictIdx + 1) % kGrantedKillIdCap;
+        return;
     }
     sGrantedKillActorIds[sGrantedKillIdCount++] = actorId;
 }
@@ -252,6 +262,15 @@ static u16 lookupKillRupees(s16 profName, fopAc_ac_c* enemy) {
     case fpcNm_E_YM_e:
         return 1;
     case fpcNm_E_YC_e:
+        return 15;
+    // ============================================
+    // BUG FIX (alpha cleanup): E_YR — the STANDARD solo twilight kargarok
+    // (patrol/dive attacker; the decomp brief "Rider?" is misleading —
+    // E_YC is the one carrying the Shadow Bulblin rider) — was missing
+    // here entirely, so it fell to the default 0 payout. Match the E_KR /
+    // E_YC kargarok rate.
+    // ============================================
+    case fpcNm_E_YR_e:
         return 15;
     case fpcNm_E_YK_e:
         return 1;

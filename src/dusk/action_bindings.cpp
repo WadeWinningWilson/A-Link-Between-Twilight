@@ -53,6 +53,21 @@ bool isActionBound(ActionBinds action, u32 port) {
 }
 
 void updateActionBindings() {
+    // ============================================
+    // One-shot preset re-apply on first controller connect (alpha
+    // cleanup, map-button fix): the boot-time
+    // applyDpadQuickSwapPresetBinds() call in m_Do_main runs before pads
+    // initialize, so its device-aware map preset (touchpad on controller
+    // vs M on keyboard) sees no controller at boot. Re-run once when
+    // port 0's controller appears so existing configs migrate without a
+    // settings-menu visit.
+    // ============================================
+    static bool sPresetReappliedForPad = false;
+    if (!sPresetReappliedForPad && aurora::input::get_controller_for_player(0)) {
+        sPresetReappliedForPad = true;
+        applyDpadQuickSwapPresetBinds();
+    }
+
     for (u32 port = 0; port < PAD_CHANMAX; ++port) {
         // Move the current press to the previous frame
         for (auto& pressData : actionPressData[port]) {

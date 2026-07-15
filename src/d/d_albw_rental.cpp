@@ -161,13 +161,13 @@ static const ALBWRentalEntry kItems[] = {
       (u8)dItemNo_POKE_BOMB_e,    SLOT_17, 50,
       "These little fellows roll themselves...why did my boss bring these here" },
     { "Water Bombs",
-      (u8)dItemNo_BOMB_BAG_LV2_e, SLOT_16, 100,
+      (u8)dItemNo_BOMB_BAG_LV2_e, SLOT_16, 150,
       "Specially sealed for aquatic demolition..." },
     { "Dominion Rod",
-      (u8)dItemNo_COPY_ROD_e,     SLOT_8,  100,
+      (u8)dItemNo_COPY_ROD_e,     SLOT_8,  150,
       "Bring to life statues of old...no refunds if broken on transit" },
     { "Clawshot",
-      (u8)dItemNo_HOOKSHOT_e,     SLOT_9,  110,
+      (u8)dItemNo_HOOKSHOT_e,     SLOT_9,  100,
       "Long gone are the days of single hook traversal" },
     { "Bow",
       (u8)dItemNo_BOW_e,           SLOT_4,  150,
@@ -217,40 +217,25 @@ static const ALBWRentalEntry kItems[] = {
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
-    { "Magic Armor",
-      (u8)dItemNo_ARMOR_e,         -1,      500,
-      "Legendary Golden protection, keep an eye on your wallet with this!",
-      []() -> bool {
-          if (dusk::getSettings().game.albwMagicArmorRentableDebug.getValue()) {
-              return true;
-          }
-          return dMeter2_isALBWRentalEligible((u8)dItemNo_ARMOR_e);
-      },
-      CAT_ARMOR },
     // ============================================
-    // NEW CODE — ALBW Port
-    // Deity Armor: 13th rental entry.  Not a physical inventory item; it is
-    // an ability flag (dItemNo_DEITY_ARMOR_e) that enhances Magic Armor once
-    // purchased.  Requires the player to have held Magic Armor at least once
-    // (ARMOR_e rental eligibility) AND to own the Colossal Wallet (9999 cap,
-    // granted on Cave of Ordeals completion).  Full behavior implementation
-    // is deferred; purchasing the entry sets the flag, unlocking the armor's
-    // upgraded mechanics when they are wired up.
+    // Magic Armor 500r purchase row RETIRED (alpha cleanup): Magic now
+    // lives entirely in the wardrobe/outfit economy — death confiscates
+    // it into Postman storage (dMeter2_stripRentalItemOnDeath) and the
+    // existing storage Retrieve row is the buy-back. The Deity row below
+    // still gates on Magic's PERMANENT rental-eligibility bit (set on
+    // first strip via sALBWItemNos — untouched by this retirement).
+    // NOTE for True-ALBW mode: the row was that mode's early Magic
+    // acquisition surface; story acquisition (wear once) remains.
     // ============================================
-    { "Deity Armor",
-      (u8)dItemNo_DEITY_ARMOR_e,   -1,   5000,
-      "Oooh a priceless treasure. but perhaps far too expensive for you!",
-      []() -> bool {
-          // Show as real name only when both conditions are satisfied:
-          //   1. Magic Armor has been stripped at least once (rental-eligible).
-          //   2. Colossal Wallet is held (rewarded from Cave of Ordeals).
-          return dMeter2_isALBWRentalEligible((u8)dItemNo_ARMOR_e)
-              && dComIfGs_getWalletSize() == COLOSSAL_WALLET;
-      },
-      CAT_ARMOR, true
-    },
     // ============================================
-    // NEW CODE ENDS HERE
+    // Deity Armor kItems entry MIGRATED to a dedicated outfit-tab row
+    // (VISIBLE_DEITY, alpha cleanup 2026-07-15): it is a state/outfit
+    // upgrade, not an inventory item, so it now builds alongside the Sumo
+    // Outfit row in the CAT_ARMOR page and purchases through the outfit
+    // economy (first-bit + wardrobe stash ownership) — the deferred Deity
+    // ceremony (albw-deity-armor-shop.md) bolts onto that path later.
+    // Eligibility semantics preserved: Magic rental-eligible + Colossal
+    // Wallet, never bypassed by True-ALBW (row computes its own gate).
     // ============================================
 };
 static constexpr int kItemCount = sizeof(kItems) / sizeof(kItems[0]);
@@ -320,10 +305,22 @@ enum VisibleKind {
     VISIBLE_SHADE_REFUGE,  // "Return to Last Shade Watcher" (above Oocoo)
     VISIBLE_OOCOO,
     VISIBLE_SUMO_OUTFIT,   // ALBW Port: Sumo Outfit (model-swap state, Armor page)
+    VISIBLE_DEITY,         // ALBW Port: Deity Armor upgrade (outfit-economy row, Armor page)
 };
 
 // ALBW Port: Sumo Outfit shop price (a model-swap state, not a native clothes item).
 static constexpr int kSumoOutfitPrice = 50;
+
+// Deity Armor: 5000r per session (repurchased after each death-strip).
+static constexpr int kDeityArmorPrice = 5000;
+
+// Deity eligibility (semantics preserved from the retired kItems entry):
+// Magic Armor stripped at least once (permanent rental-eligible bit) AND the
+// Colossal Wallet held. Deliberately NOT bypassed by True-ALBW mode.
+static bool deityRowEligible() {
+    return dMeter2_isALBWRentalEligible((u8)dItemNo_ARMOR_e) &&
+           dComIfGs_getWalletSize() == COLOSSAL_WALLET;
+}
 
 struct VisibleEntry {
     VisibleKind kind;
@@ -694,6 +691,19 @@ static void rebuildVisibleList() {
         }
     }
 
+    // ============================================
+    // Deity Armor outfit-economy row (migrated from kItems). Shown while
+    // not owned; displays as "?????" until eligible (Magic stripped once +
+    // Colossal Wallet) — same presentation the alwaysGated kItems entry had.
+    // ============================================
+    if (cat == CAT_ARMOR && sVisibleCount < kVisibleListMax &&
+        !dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e)) {
+        VisibleEntry row{};
+        row.kind        = VISIBLE_DEITY;
+        row.purchasable = deityRowEligible();
+        appendVisibleRow(row);
+    }
+
     if (cat == CAT_SWORDS && dusk::isDpadQuickSwapEnabled()) {
         for (int i = 0; i < kSwordCount; ++i) {
             appendStorageRowsForItem(kSwords[i].itemNo, kSwords[i].desc);
@@ -1015,6 +1025,35 @@ static void tryPurchase(int visIdx) {
         sPurchasedThisSession = true;
         sJustPurchased        = true;
         sStatusMsg            = "A glove that small, gone at last.\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
+        rebuildVisibleList();
+        return;
+    }
+
+    // ============================================
+    // Deity Armor purchase (outfit economy). Sets the ability first-bit
+    // (existing behavior — upgraded mechanics key off it) AND records
+    // wardrobe stash ownership (bit 695) so the outfit systems see it;
+    // the deferred purchase ceremony (auto-store + equip Magic + rollback,
+    // albw-deity-armor-shop.md) extends this exact path later.
+    // ============================================
+    if (sVisibleList[visIdx].kind == VISIBLE_DEITY) {
+        if (!deityRowEligible()) {
+            return;
+        }
+        u16 rupees = dComIfGs_getRupee();
+        if (rupees < (u16)kDeityArmorPrice) {
+            sStatusMsg          = "Oooh a priceless treasure. but perhaps far too\nexpensive for you!";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)kDeityArmorPrice);
+        dComIfGs_onItemFirstBit((u8)dItemNo_DEITY_ARMOR_e);
+        dAlbwOutfit_recordOwnedByItemNo((u8)dItemNo_DEITY_ARMOR_e);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();
         rebuildVisibleList();
@@ -1570,6 +1609,17 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
                 sPubList[i].desc  = "Sir. I understand this is your home, but I must ask "
                                     "that you undress elsewhere.";
             }
+        } else if (sVisibleList[i].kind == VISIBLE_DEITY) {
+            sPubList[i].name                = "Deity Armor";
+            sPubList[i].price               = sVisibleList[i].purchasable ? kDeityArmorPrice : 0;
+            sPubList[i].purchasable         = sVisibleList[i].purchasable;
+            sPubList[i].desc                = "Oooh a priceless treasure. but perhaps far too "
+                                              "expensive for you!";
+            sPubList[i].itemNo              = (u8)dItemNo_DEITY_ARMOR_e;
+            sPubList[i].isOocooService      = false;
+            sPubList[i].showNameWhenSoldOut = false;  // "?????" until eligible
+            sPubList[i].isStorageStore      = false;
+            sPubList[i].isStorageRetrieve   = false;
         } else if (sVisibleList[i].kind == VISIBLE_SHADE_REFUGE) {
             sPubList[i].name                = dShadeRefuge_getServiceName();
             sPubList[i].price               = dShadeRefuge_getServicePrice();

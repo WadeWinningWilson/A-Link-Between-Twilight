@@ -609,6 +609,25 @@ bool dAlbwWardrobe_tryStoreOutfit(dAlbwOutfitKind kind, char* errOut, int errCap
     return true;
 }
 
+// ============================================
+// Death confiscation (alpha cleanup — Magic loss on death). Sets the
+// stored bit directly, bypassing tryStoreOutfit's gates on purpose:
+// death is authoritative (no Quick-Swap requirement, no keep-one-ready
+// guard — the strip resets clothes to Hero's itself, and the wardrobe
+// per-frame sync latches Hero's ownership, so an active outfit always
+// remains). Ownership (stash bit) is deliberately KEPT — clearing it
+// while stored would orphan the outfit (retrieve clears only the stored
+// bit and never re-grants ownership). Re-acquisition = the existing
+// Postman storage Retrieve row.
+// ============================================
+void dAlbwWardrobe_storeOutfitOnDeath(dAlbwOutfitKind kind) {
+    const int bit = storageBitForOutfit(kind);
+    if (bit < 0) {
+        return;
+    }
+    setStorageBit(bit, true);
+}
+
 bool dAlbwWardrobe_tryRetrieveOutfit(dAlbwOutfitKind kind, char* errOut, int errCap) {
     if (!dAlbwWardrobe_isResistanceActive()) {
         copyErr(errOut, errCap, "Storage is only available with Quick Swap enabled.");

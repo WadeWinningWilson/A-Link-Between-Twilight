@@ -265,6 +265,12 @@ The howl song (fanfare path) normally **culls almost every sound effect** while 
 ### Next on this art
 - **Recreate the finisher *look* on base KAITENGIRIL via effect-rotation-over-time** (user goal): wind the emit yaw a little per burst so the ring **sweeps around the static wolf** (the wolf never spins) — the single biggest "great spin" cue — plus optional per-emitter position lift/spread for a layered ring. All particle-safe (orientation/position only, still fire-and-forget).
 
+### FUTURE IDEAS (user, 2026-07-13 — banked, not yet researched/built)
+- **Per-song special effects on the howl:** each howl tune gets its own flavor of VFX while it plays (the song is already known at pick time in `handleWolfHowlBurst`; a song→effect table would drive extra emitters/tints in `procWolfHowlCombat`).
+- **Per-song KAITENGIRIL color:** tint the howl ring by the playing song — e.g. **Song of Healing = light red/pink/violet**. Note the current emit deliberately passes NULL tevStr to keep the effect's own white; a per-song tint would pass a prm/env color (the `dComIfGp_particle_set` overloads accept GXColor prm/env args) — needs a visual test to confirm KAITENGIRIL's particles take a prm-color tint well.
+- **New wolf art candidate — Midna's rideable Twilit Kargarok:** spawn the Carrier Kargarok (E_YC — the actor the player already rides in vanilla Lake Hylia/City sequences) as an attack: strikes enemies **from above** and/or **dashes into them**. Precedent: the arm art proved the spawned-helper-actor pattern (own collider, non-ALINK owner, auto-excluded from the charge counter); E_YC already has flight + carry logic to borrow.
+- **Giant "demo" Midna (D-pad Down ultimate)** — pursue next; see the research pass.
+
 ---
 
 *Research pass only — no code written. Source maps: three Explore sub-agents (wolf combat/charges, FA system, giant-Midna/transforms) + Lies of P Guard Regain (Samurai Gamers, GodisaGeek, Lies of P Wiki). Related memories: [[project-lop-hud]] (FA meter + wolf health bar), [[reference-bmd-reskin]] / [[armogohma-phase3-blender]] (BMD authoring pipeline for a giant model).*

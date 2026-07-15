@@ -34,4 +34,9 @@ private:
 
 STATIC_ASSERT(sizeof(daTwGate_c) == 0x5fc);
 
+#if TARGET_PC
+// Province index (DarkClearLV bit) for a gate type; -1 = invalid.
+s32 daObjTwGate_albwProvinceForType(int i_type);
+#endif
+
 #endif /* D_A_OBJ_TWGATE_H */

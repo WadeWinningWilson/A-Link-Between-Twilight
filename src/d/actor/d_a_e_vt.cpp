@@ -19,6 +19,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 #define WL_CUT_TYPE_SMALL 1
@@ -2081,6 +2082,14 @@ void daE_VA_c::executeTransBiteDamage() {
             offWolfBiteDamage();
             field_0x135c++;
             field_0x1324++;
+#if TARGET_PC
+            // ============================================
+            // NEW CODE — ALBW Port (alpha cleanup)
+            // Hang-bite damage is internal (bypasses cc_at_check, the
+            // charge-accrual site) — credit each mash at 1/15 charge.
+            // ============================================
+            dAlbwWolfCombat_onChestMashHit();
+#endif
 
             if (field_0x135c >= l_HIO.mBiteCount) {
                 field_0x135c = 0;

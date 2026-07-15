@@ -27,6 +27,7 @@
 #if TARGET_PC
 
 #include "d/d_albw_wolf_charge_hud.h"
+#include "d/d_albw_shield.h"
 #include "d/d_albw_wolf_combat.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
@@ -141,12 +142,23 @@ void dAlbwWolfChargeHud_draw() {
 
     daAlink_c* link = daAlink_getAlinkActorClass();
 
+    // ============================================
+    // Follow the parry-icon visibility setting (alpha cleanup): when the
+    // Shield HUD Visibility mode pins the parry icons (ParryAlways /
+    // BothAlways), the wolf charges stay pinned too — the wolf pips are
+    // the wolf-form counterpart of the parry pips and obey the same mode.
+    // In Off mode the summon/linger below is the wolf-form analogue of
+    // the guard-held+linger behavior. Single getValue() per frame per
+    // hud-performance rules.
+    // ============================================
+    const bool parryPinned = dShield_isParryHudPinned();
+
     // Shield button or a genuine enemy lock-on summons the HUD and holds
     // it open; otherwise the window decays.  LockonTruth() requires an
     // actual target actor, so a free Z-press (talk to Midna, wall-facing
     // Z-target) does not summon the icons.
     const bool enemyLockon = dComIfGp_getAttention()->LockonTruth();
-    if (link != NULL && (link->manualShieldButton() || enemyLockon)) {
+    if (parryPinned || (link != NULL && (link->manualShieldButton() || enemyLockon))) {
         sLingerFrames = WOLF_HUD_LINGER_FRAMES;
     } else if (sLingerFrames > 0) {
         sLingerFrames--;
@@ -155,6 +167,22 @@ void dAlbwWolfChargeHud_draw() {
     tickWolfDenyPikari();
 
     if (sLingerFrames == 0) {
+        return;
+    }
+
+    // ============================================
+    // Vanilla HUD hide compliance (alpha cleanup): the shared meter-gauge
+    // alpha (slot 0) is the master hide signal for cutscenes, dialogue,
+    // menus and the map fade — the parry icons' early-out on it is their
+    // ENTIRE hide logic. Drawing without it kept the wolf icons up during
+    // cutscenes/dialogue AND painted the raw icon quad over the map fade
+    // (the "dark square" — every other HUD element had already stopped
+    // drawing). Fetch once per frame per hud-performance rules; icons
+    // also scale their fixed opacities by it so they fade in lockstep
+    // with the rest of the HUD instead of popping.
+    // ============================================
+    const f32 hudAlpha = dShield_getShieldHudDrawAlpha();
+    if (hudAlpha <= 0.0f) {
         return;
     }
 
@@ -221,15 +249,15 @@ void dAlbwWolfChargeHud_draw() {
         if (filled) {
             // Red halo under-draw: same silhouette, slightly larger, tinted
             // the Midna charge energy color.
-            sWolfIcon->setAlpha(WOLF_HALO_ALPHA);
+            sWolfIcon->setAlpha(static_cast<u8>(WOLF_HALO_ALPHA * hudAlpha));
             sWolfIcon->setWhite(JUtility::TColor(WOLF_HALO_R, WOLF_HALO_G,
                                                  WOLF_HALO_B, 255));
             sWolfIcon->draw(posX - halfHalo, posY - halfHalo,
                             haloSize, haloSize, false, false, false);
 
-            sWolfIcon->setAlpha(WOLF_ICON_ALPHA_FULL);
+            sWolfIcon->setAlpha(static_cast<u8>(WOLF_ICON_ALPHA_FULL * hudAlpha));
         } else {
-            sWolfIcon->setAlpha(WOLF_ICON_ALPHA_EMPTY);
+            sWolfIcon->setAlpha(static_cast<u8>(WOLF_ICON_ALPHA_EMPTY * hudAlpha));
         }
 
         sWolfIcon->setWhite(JUtility::TColor(255, 255, 255, 255));

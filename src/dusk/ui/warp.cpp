@@ -3,10 +3,29 @@
 #include "editor.hpp"
 #include "pane.hpp"
 
+#include "dusk/debug_warp.h"
 #include "dusk/map_loader_definitions.h"
 #include "fmt/format.h"
 
 namespace dusk::ui {
+
+// ============================================
+// NEW CODE — ALBW Port (alpha cleanup: warp-menu safety)
+// One-shot suppression of arrival story triggers for warp-menu
+// transitions. See dusk/debug_warp.h.
+// ============================================
+static bool sDebugWarpStorySuppress = false;
+
+void markDebugWarpStorySuppress() {
+    sDebugWarpStorySuppress = true;
+}
+
+bool consumeDebugWarpStorySuppress() {
+    const bool pending = sDebugWarpStorySuppress;
+    sDebugWarpStorySuppress = false;
+    return pending;
+}
+
 namespace {
 
 constexpr int kMinLayer = -1;
@@ -322,7 +341,22 @@ WarpWindow::WarpWindow() {
                     const auto& region = gameRegions[state.regionIdx];
                     const auto& map = region.maps[state.mapIdx];
                     const auto& room = map.mapRooms[state.roomIdx];
+                    // ============================================
+                    // Warp-menu safety (alpha cleanup):
+                    // 1. Suppress arrival story triggers for this one
+                    //    transition (Lanayru/Eldin DarkClearLV etc.) so a
+                    //    debug warp can't silently mutate progression.
+                    // 2. Reset the Layer selector to auto after every
+                    //    warp — a stale forced layer (e.g. twilight 14)
+                    //    used to persist and desync enemy layout from the
+                    //    province-flag-driven atmosphere.
+                    // True-ALBW note: both are transition-scoped; the
+                    // TRUETEST bootstrap/twilight-bubble policies run in
+                    // dusk::truetest::onStageLoad and are unaffected.
+                    // ============================================
+                    markDebugWarpStorySuppress();
                     dComIfGp_setNextStage( map.mapFile, room.roomPoints[state.pointIdx], room.roomNo, state.layer);
+                    state.layer = kMinLayer;
                 }),
             rightPane, [](Pane& pane) {
                 pane.clear();

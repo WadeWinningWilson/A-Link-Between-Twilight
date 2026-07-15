@@ -26,6 +26,19 @@ static constexpr int WOLF_STUN_FRAMES = 300;
 // True when the Wolf Link Combat setting is enabled (Dusk settings menu).
 bool dAlbwWolfCombat_isEnabled();
 
+// ============================================
+// Charge tally credits (shared fractional accumulator in FIFTEENTHS of a
+// charge; cap 2 charges; leftover fraction is dropped when a completion
+// lands on the cap). Public so enemies whose bite handling bypasses
+// cc_at_check (hang-bite grabs / chest-mash internal health decrements,
+// e.g. Shadow Beast E_S1) can still award charge per hit. Both no-op
+// unless wolf combat is enabled and Link is currently a wolf.
+//   onBiteConnect  — normal connected wolf bite: +3/15 (5 bites = 1 charge)
+//   onChestMashHit — grab/chest A-mash hit:      +1/15 (15 hits = 1 charge)
+// ============================================
+void dAlbwWolfCombat_onBiteConnect();
+void dAlbwWolfCombat_onChestMashHit();
+
 // Returns true when i_name is one of the shadow/twilight enemy types.
 // Twilight enemies receive 70 % damage from the field attack and are
 // NOT stunned; non-twilight receive 25 % field-attack damage and ARE stunned.

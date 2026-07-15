@@ -2727,7 +2727,8 @@ void daMidna_c::setHairAngle() {
             // McaMorfCB1 and the software chain).  Vanilla contexts keep the {1,1,1} target below.
             // ============================================
             if (dAlbwMidnaArm_getReachPos(NULL) && dAlbwMidnaArm_isReachStriking()) {
-                static Vec const l_armReachScale = {1.0f, 1.0f, 3.0f};
+                // z = 3.57 -> 5 segments x 28 x 3.57 = ~500 units of reach (length-only, no fatten).
+                static Vec const l_armReachScale = {1.0f, 1.0f, 3.57f};
                 cLib_chasePos(scale, l_armReachScale, 0.3f);
             } else
             // (the READY/idle hover falls through to the vanilla {1,1,1} reach target below)
@@ -2753,6 +2754,21 @@ void daMidna_c::setHairAngle() {
             prev_pos = *pos;
         } else if (atn_pos != NULL) {
             vec = *atn_pos - prev_pos;
+#if TARGET_PC
+            // ============================================
+            // NEW CODE — ALBW Port ("Midna's Grasp" arm art — riding aim-frame correction)
+            // This aim math was authored for COMPANION Midna, whose shape_angle.y = linkYaw + 0x8000
+            // (she hovers facing back toward Link, :904).  While RIDING the wolf, setMatrix copies
+            // shape_angle verbatim from the wolf (:939) — 0x8000 off from the authored frame, which
+            // rotated the local target vector 180° and made the hair aim OPPOSITE the target.  When
+            // OUR arm art is driving the reach (module-gated), supply the missing 0x8000 so the
+            // frame matches what the math expects.  Vanilla users (Wchain / Beast Ganon, companion
+            // contexts) keep the stock transform.
+            // ============================================
+            if (dAlbwMidnaArm_getReachPos(NULL)) {
+                mDoMtx_stack_c::YrotS((s16)(-(shape_angle.y + 0x8000)));
+            } else
+#endif
             mDoMtx_stack_c::YrotS(-shape_angle.y);
             mDoMtx_stack_c::multVec(&vec, &vec);
             target_angle_y = fVar1 * cM_atan2s(vec.x, JMAFastSqrt(vec.y * vec.y + vec.z * vec.z));

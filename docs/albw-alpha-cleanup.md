@@ -412,10 +412,38 @@ charge, no meter → connect +5% (post-fix, per connect) → failed block −10%
 | **Great Spin as opener** | Excluded by user decision; classifier is proc-keyed so adding it back = one condition. May be revisited. |
 | **Stamina recovery retune** | DEFERRED until bash fix is felt: `kALBWRecoveryPerStep` picks (315 flat / 421 reward / 244 modest) + NEW idea: +10% regen when no shield equipped, applied at root so wardrobe stacks (§10). |
 | **`BASH_ALBW_HIT_GAIN` magnitude** | Kept 5% for now; raise only if unbugged feel is still weak. |
-| **Wolf freeze-move coverage report** | User saw it fail vs King Bulblin (camp axe fight); wants practical coverage across all fights. Not yet researched. |
+| **Wolf freeze coverage gaps** | Coverage report DONE (round-3 §1); remaining levers: blocked-hit no-freeze tradeoff, per-actor frozen hurt-sphere refresh, non-Zant boss audit. |
+| **Wolf charge HUD toggle compliance** | **DONE 2026-07-14 (built, awaiting playtest):** new exported mode verdict `dShield_isParryHudPinned()` (ParryAlways/BothAlways of `ShieldHudVisibility`; mode-only, no shield-possession conditions) consulted once per frame in `dAlbwWolfChargeHud_draw` — pinned modes hold the wolf pips open; Off keeps the wolf-form summon/linger (shield button / enemy lock-on + 120f), the wolf analogue of guard+linger. DurabilityAlways correctly leaves wolf pips on linger (follows PARRY icons only). |
+| **13 strippable items pricing** | Research DONE + user tweaks IMPLEMENTED 2026-07-14 (built): Slingshot 15 / Boomerang 30 / Bombs 50 / Bomblings 50 / **Water Bombs 150** / **Dominion Rod 150** / **Clawshot 100** / Bow 150 / Dbl Clawshot 200 / Spinner 200 / Ball&Chain 350 / Magic Armor 500 / Deity 5000-per-session (`kItems[]`, d_albw_rental.cpp). The 13 = `sALBWItemNos[12]` (d_meter2.cpp:721) + Deity flag; all perpetual rentals, no rent-vs-own tier. Doc gap: Deity purchase ceremony (auto-store+rollback per albw-deity-armor-shop.md) NOT implemented — flag+charge only, code-marked deferred. |
+| **Magic Armor item-page row + auto-strip status** | RESEARCHED 2026-07-14 (no code yet — user decision pending). **Why strip stopped: two ownership models drifted apart.** The strip (d_meter2.cpp:842-855, unchanged since b270cb7765) works on the LEGACY model (item first-bit + worn clothes); the wardrobe/outfit system (built later) owns Magic via event bit 694 (`kStashMagic`, latched every frame by `dAlbwOutfit_syncWornOwnership` the moment Magic is ever worn, NEVER cleared by anything) + store bit 711. So: (cause 2) dying while NOT wearing Magic → worn-only ownership gate (d_meter2.cpp:832-835) makes the strip no-op entirely; (cause 1) dying while wearing it → strip clears first-bit + unequips but bit 694 keeps it in the D-pad cycle. Either way the wardrobe never loses it. **Bonus bug: 500r double-charge surface** — the row's visibility uses the worn-only test, so with Magic owned-but-stored the row shows as rentable and the player can pay 500r for an outfit they already have free. **Options (ranked):** (1-best/doc-aligned) remove the item-page row, move Magic fully to the wardrobe economy — strip parks/clears bits 694/711, re-acquire via Postman wardrobe (matches albw-deity-armor-shop.md's Magic-row-as-Store/OFF-switch design); (2-minimal) keep the row, make the strip clear bit 694+711 and the row visibility read `dAlbwOutfit_isOwned(MAGIC)` instead of worn-only; (3) hybrid context-sensitive row (doc end-state if Deity ceremony ships). |
+| **Stalhound focused work** | Bite whiffs from i-frame hurt-sphere displacement + charge crediting; user flagged as its own pass. |
+| **MQ shop uncap** | Future: allow continuous heart/stamina purchases past current tier caps. T20=3033 typo confirm pending. |
+| **Magic Armor loss-on-death + row retirement** | **IMPLEMENTED 2026-07-14 (built, awaiting playtest)** after full cross-system research (both agent reports clean). Death now CONFISCATES Magic into Postman wardrobe storage: strip fires on wardrobe ownership (stash bit 694) not just worn (`dMeter2_stripRentalItemOnDeath` ARMOR_e branch precedes the worn-only gate), sets stored bit 711 via new gate-free `dAlbwWardrobe_storeOutfitOnDeath()`, KEEPS ownership (clearing-while-stored would orphan — Retrieve never re-grants), keeps `onALBWRentalEligible` (Deity gate reads that permanent bit), keeps the synchronous Kokiri clothes reset (defeats the per-frame syncWornOwnership re-latch). 500r kItems row REMOVED (eligibility bits are keyed by `sALBWItemNos` itemNo, NOT table position — verified no bit shift; `sALBWItemNos` untouched). Save-state only during the gameover window — no changeLink rebuild fires, so all documented sumo/cap swap-crash classes (FLG2 skip-path, initModel(NULL), demo-BCK, cap donor) are unreachable; model rebuilds fresh at respawn. **Buy-back = existing storage Retrieve row (100r).** CAVEATS flagged: (a) Retrieve requires Quick Swap ON — a Quick-Swap-OFF player who dies wearing Magic can't retrieve until enabling it (policy call pending); (b) True-ALBW mode lost its early Magic acquisition surface (story wear-once remains); (c) `game.albwMagicArmorRentableDebug` setting is now unused; (d) retrieve price is the standard 100r — separate death-buy-back price is a one-constant change if wanted. Playtest: die wearing Magic / owning-not-wearing / wearing sumo-over-Magic / capped — Magic leaves D-pad cycle, appears in Postman storage, retrieve restores it; Deity row still gates correctly. |
+| **Fierce Deity → outfit tab migration** | **IMPLEMENTED 2026-07-15 (built, awaiting playtest).** Deity is no longer a kItems inventory row: new `VISIBLE_DEITY` outfit-economy row (d_albw_rental.cpp) appended in the CAT_ARMOR page next to the Sumo row while not owned. Eligibility semantics preserved exactly (Magic rental-eligible bit + Colossal Wallet, `deityRowEligible()`; still NEVER bypassed by True-ALBW; shows "?????" until eligible via showNameWhenSoldOut=false). Purchase (5000r, `kDeityArmorPrice`) sets the ability first-bit AND `dAlbwOutfit_recordOwnedByItemNo` (wardrobe stash bit 695) so the outfit systems own it — the deferred ceremony (albw-deity-armor-shop.md auto-store + rollback) bolts onto this path. Death-strip coherence: `stripAllALBWInventoryOnDeath` (d_meter2.cpp) now clears stash 695 + store 712 alongside the first-bit (same 694/711 rule as Magic). STILL OPEN: death mid-Deity restore-or-park product question; dual-mode Magic row as Deity OFF-switch (ceremony spec). Playtest: eligible save → Deity shows on Armor tab as named row, buys at 5000r, disappears once owned; ineligible → "?????"; die after buying → gone from shop-owned state, row returns. |
+| **Wolf freeze on EVERY enemy actor** | STARTED 2026-07-14 — full mapping done from the TP actor spreadsheet: **[wolf-freeze-coverage.md](wolf-freeze-coverage.md)** (46 regular enemies in scope, 11 bosses + traps excluded, 11 mid-bosses awaiting per-case calls, and 3 TWILIGHT CLASSIFIER GAPS found: e_ym Shadow Insect / e_yc Carrier Kargarok / e_rdy Shadow Bulblin currently freeze when they should get ×0.70-no-freeze). Phase 1 = user decisions; phase 2 = batched per-actor code sweep; phase 3 = batched implementation. |
+| **LANAYRU TWILIGHT BORDER — root-caused through 4 research passes (2026-07-15)** | FINAL STATE: user save is NON-truetest, Twilight Clear Level 2 (Lanayru bit CLEAR — no corruption; both original hypotheses REFUTED: early-wolf writes no save state; Fyrus boss actor sets no flags and no mines bit feeds F_SP121 layers). MECHANISM (empirically confirmed): F_SP121 locks ONE layer at stage entry from the START room's province; Eldin-side entry (room 7, Eldin cleared) → day layer 0 → the border wall didn't load, while base-layer twilight enemies (flag-gated, correctly uncleared) did. Warp to room 9 **point 10** layer auto → twilight layer 14 loads WITH the gate (verified in-game). Tmp-bit theory DEAD (0x0601/0x0602 = Telma-escort layers 3/2, runtime-only mTmp never saved — reload wipes them, but irrelevant to the wall). Wall pieces enumerated: dedicated LIGHT-SIDE piece `twGtK0709` (obj_twGate type 2, Lanayru-gated, self-deletes on province clear) exists in the resource table — vanilla shows it day-side, so its day-layer placement should load; why it didn't for this session is the ONE open question. **GROUND TRUTH (user's Stage Inspector, 2026-07-15): room 9 `twGate` authored ONLY on
+ACTd/L13 + ACTe/L14 — no day-layer placement exists.** Content gap, not corruption; the
+inspector also photographed the black-screen hang from inside (stage fully loaded, 47
+actors live, only the PLYR spawn missing → hang = no player placement on resolved layer).
+**FIX IMPLEMENTED (built, awaiting playtest): `d_albw_twilight_border` fallback module**
+(new files src/d/d_albw_twilight_border.cpp + .h; driven per-frame from d_s_play next to
+the wolf-stun bridge). STRICTLY FALLBACK per user requirement: per stay-room (60f cadence
++ room change), reads authored placements via `leveledit::enumerate_room_actors` (new
+`systemUse` bypass of the editor-session gate); spawns `twGate` walls (type remapped to
+the light-side twGt* variant where one exists: 6→0/7→1/8→2) and `TgTGate` entry triggers
+from authored transform/params IFF: authored-in-room AND province uncleared
+(`daObjTwGate_albwProvinceForType` / `daTagTWGate_albwProvinceForType`, new exported
+helpers) AND no instance of that group is live (vanilla-spawned ⇒ no-op) AND not already
+fallback-spawned (proc+room+500u position dedupe — L13/L14 double-author safe). Spawned
+actors keep vanilla self-guards (despawn on legit clear). Border-generic + cause-agnostic;
+logs `evt=fallback-spawn` to albw_tw_border_debug.txt. Playtest: original day-side route →
+wall + entry trigger appear at the border; twilight-side warp → fallback stays silent
+(vanilla instances live); cleared provinces → nothing. SHIPPED ALONG THE WAY: warp layer auto-reset, warp story-trigger suppression, truetest bubble self-heal (vessel-gated), vessel gating on all province-clear arrival triggers. ALSO: black-screen warp hangs = table points are LAYER-SPECIFIC (missing point on resolved layer = hang; Gerudo Desert same class) — separate warp-hazard item. |
+| **WOLF ARTS FINISHING BATCH — resolved 2026-07-15** | (1) **HUD FIXED (built):** wolf charge icons never consulted the shared meter-gauge alpha (`getMeterGaugeAlphaRate(0)` — THE canonical hide signal covering cutscenes/dialogue/menus/map; the parry icons' early-out on it is their entire hide logic). Fix = fetch `dShield_getShieldHudDrawAlpha()` once per frame, early-out at <=0 (kills both the cutscene visibility AND the dark-square map artifact, which was the raw icon quad drawing over the map fade after every other HUD element stopped), + scale the three fixed icon alphas by it so they fade in lockstep. (2-4) **NO CODE BUGS — dev toggles were ON in the user's config (verified):** `wolfArtsDevTest=true` (bypasses BOTH art shop-unlock and charge cost — this IS the requested spam toggle, already in the editor ALBW tab, default off) and `albwJuniorMailTest=true` (bypasses the Junior Postman story/one-shot gates — the encounter is already save-gated on F_0601 + F_0813, the setting is a repeat-test bypass). Arts are save-gated on bits 713/714, purchases set them, dispatch checks them, rows hide once owned. USER ACTION: flip both toggles OFF in the editor ALBW tab for normal-play behavior; also `albwMagicArmorRentableDebug=true` is vestigial post-row-retirement (harmless, can be turned off / setting removed later). FOLLOW-UP FIXES (built 2026-07-15): **Postman story gate corrected** — was F_0601 "spoke to IMPRISONED Talo" (end-of-chase, dialogue-dependent — why a fresh game never armed the encounter); now F_0094 "Talo went after the monkey" (quest-start), so the encounter arms on the first North Faron visit DURING the save-Talo questline. **Art shop story gates pinned (user calls):** Wolf Howl row requires first twilight cleared (DarkClearLV 0); Midna's Grasp row requires Eldin twilight cleared (DarkClearLV 1, supersedes old Lanayru TODO). Playtest: fresh-game North Faron during Talo chase → mail encounter fires with toggles OFF; art rows absent until their twilight clears. |
 | **Other-enemy parry knockdown reactions** | Dangoro bash→knockdown (§5) is the first instance of the pattern; extending reactions to other enemies deferred. |
 | **Failed-block health slip-through layer** | User idea (§4): some HP damage through failed blocks vs heavy hitters. Post-cleanup. |
 | **Howl `setCutType` hardening** | One-liner, fold into next wolf-combat edit. |
+| **D-pad move damage tweaking** | QUEUED 2026-07-15 (user report): the d-pad wolf arts' damage output "feels like it is being boosted by a wolf damage multiplier" — audit whether the arts' attack power passes through a wolf-form damage multiplier unintentionally, then tune. |
 | **FA shield-gate revert decision** | §1 — user testing enemy-type feel. |
 
 ### Playtest checklist for the 2026-07-14 batches
@@ -424,13 +452,127 @@ Batch 1 (verified in play: "fixes seem great"):
    deaths land in the arena sub-stage — expected, see §2 note)
 2. **King Bulblin axe parry** ✔ · 3. **Dangoro bash→knockdown** ✔ · 4. **FA no-fill on clank** ✔
 
-Batch 2 (built 2026-07-14, NOT yet playtested):
-1. **Bash stamina:** every connecting bash should now visibly refill ~5% meter (not just
-   the first of the session).
-2. **Guard openers vs Darknut:** Hurricane / Combat Howl / Midna arm clank once then land
-   damage for ~40 frames (armored AND unarmored phases); Great Spin and normal spin still
-   clank throughout; bash→helm flow unchanged.
-3. **Guard openers vs King Bulblin (axe fights):** same three attacks connect through his
-   raised-guard recoil roughly once per 40 frames; normal swings still clank.
-4. **Death toast:** A choice now reads "Continue Here" in dungeons too and behaves as
-   before (last-door respawn).
+Batch 2 (built 2026-07-14, partial playtest):
+1. **Bash stamina:** every connecting bash should now visibly refill ~5% meter — NOT YET
+   TESTED.
+2. **Guard openers:** Combat Howl + Midna arm CONFIRMED working better (user, 2026-07-14);
+   **Hurricane NOT YET TESTED**; Great Spin / normal spin should still clank.
+3. **Death toast "Continue Here":** NOT YET TESTED.
+(Deferred confirmations — fold into the next playtest session.)
+
+### Batch 3 — IMPLEMENTED 2026-07-14 (built, uncommitted, awaiting playtest)
+1. **Freeze classifier fixed — CORRECTED SAME DAY:** the true shadow beast is **E_S1**
+   ([d_a_e_s1.h](../include/d/actor/d_a_e_s1.h) "Shadow Beast" — resurrection howl,
+   pack-finish, warp-appear, chest-mash), NOT E_SH (**Stalhound**, must stay freezable —
+   its stun-collider bridge exists for exactly that). Final classifier entry:
+   `fpcNm_E_S1_e` in `dAlbwWolfStun_isTwilightEnemy` (E_MD/Suit-of-Armor removed,
+   per-case comments restored). An intermediate build briefly listed E_SH — superseded,
+   never playtested. TWO actor-name mislabels are now documented here: E_MD≠Shadow
+   Beast (it's Suit of Armor) and E_SH≠Shadow Beast (it's Stalhound).
+   Playtest: shadow beasts (twilight arenas) take boosted Midna-charge damage with NO
+   freeze; Stalhounds and Suit of Armor freeze normally.
+
+1b. **Wolf charge on Shadow Beasts + chest-mash counter — IMPLEMENTED (fifteenths
+   economy, user-tuned).** Root cause: a normal wolf bite on E_S1 triggers the hang-bite
+   grab and returns before cc_at_check (the ONLY charge-accrual site), and the
+   chest-mash applies `health -= 5` internally — zero charge for the whole sequence
+   (only jump attacks counted).
+   **Economy (user spec):** shared fractional accumulator (`mWolfBiteCount`) in
+   FIFTEENTHS of a charge — normal bite = 3/15 (5 bites = 1 charge, unchanged feel),
+   grab/chest-mash hit = 1/15 (15 mashes = 1 charge); fractions from both sources
+   combine and carry across a completed charge, EXCEPT when the completion lands on the
+   2-charge cap: leftover fraction is dropped. Helpers
+   `dAlbwWolfCombat_onBiteConnect()` / `onChestMashHit()`
+   ([d_albw_wolf_stun.cpp](../src/d/d_albw_wolf_stun.cpp), single source of truth —
+   cc_at_check calls onBiteConnect too).
+   **Wired enemies:** E_S1 + E_YC credit the initial grab chomp as a bite (3/15) and
+   each A-mash at 1/15; Dynalfos (E_MF), Poe (E_PO), Lizalfos (E_DN), Death Sword
+   (E_VT), Gibdo (E_GI), Twilight Insect Boss (E_YMB) credit each mash at 1/15 at their
+   `checkWolfBiteDamage` sites. **Skipped:** B_MGN (boss, deliberate). **Deferred:**
+   Stalhound (E_SH) — its bite whiffs come from i-frame hurt-sphere displacement
+   (10-20f off-body), needs focused work per user.
+
+1c. **MQ shop repricing — IMPLEMENTED (user curves,
+   [d_albw_master_quest.cpp](../src/d/d_albw_master_quest.cpp)).** Hearts T1-10 →
+   225/250/275/325/375/425/500/575/675/800 (T11-17 kept: 1000...9999). Stamina T1-20 →
+   100..1000 (linear), 1200..2000 (+200), 2250..3000 (+250), then **3033** (T21-23 kept
+   at 3333). NOTE: T20=3033 implemented as literally specified — flagged as a possible
+   typo for 3333 (would make the tail 3333×4). Future idea on record: uncap both shops
+   for continuous purchases.
+2. **Twilight Kargarok rupees:** `E_YR` added to `lookupKillRupees` at 15 (identity
+   verified by behavior: E_YR = STANDARD solo dive-attacking twilight kargarok; E_YC =
+   the Lake Hylia one carrying the Shadow Bulblin rider — decomp briefs are crossed) +
+   manual `onEnemyKill` grant in E_YR's cut-down finisher (health zeroed outside
+   cc_at_check; grant idempotent).
+3. **Map button (FIXED TWICE — final form 2026-07-14):** first attempt wrote TOUCHPAD to
+   `openMapScreen[1]` — WRONG: bind slots are PER-PORT (player), not multiple bindings,
+   so that was player 2's slot; worse, the stored int is interpreted per the port's
+   active device (keyboard scancode vs SDL gamepad button), so the old keyboard-M preset
+   read as gamepad button 16 (paddle) on controllers — map dead on pad regardless.
+   **Final fix:** device-aware preset in `applyDpadQuickSwapPresetBinds` — port 0 gets
+   TOUCHPAD when a controller drives it (with M→TOUCHPAD migration for existing
+   configs), M when keyboard does; plus a one-shot re-apply in `updateActionBindings`
+   on first controller connect (the boot-time preset call in m_Do_main runs before pads
+   init). No-touchpad pads: rebind in Controller Config, L3 recommended. Also: D-pad
+   quick-swap reservations now suppress menu-window triggers only while UNPAUSED —
+   paused UIs (item/map screens) get full D-pad navigation back. Known quirk: a config
+   migrated to TOUCHPAD (20) reads as scancode 20 (Q) if the port later switches to
+   keyboard — acceptable, rebindable.
+4. **Shade Watcher return re-priced 50 → 15** (placeholder TODO resolved; shares the
+   Oocoo death-convenience tier).
+
+**In-flight research:** shadow-beast wolf-charge registration + chest-attack (A-mash)
+charge counter — agent running; implementation follows its report.
+
+### New investigation round (2026-07-14) — ALL FOUR RESEARCHED, fixes designed
+
+1. **Wolf freeze "twilight regression" — actually a LATENT DATA BUG, root-caused.**
+   `dAlbwWolfStun_isTwilightEnemy` ([d_albw_wolf_stun.cpp:604-618](../src/d/d_albw_wolf_stun.cpp))
+   lists `fpcNm_E_MD_e` commented "Shadow Beast" — but **E_MD is the Suit of Armor**;
+   the real shadow beast **E_SH is missing**, so shadow beasts take the non-twilight
+   branch (×0.25 + 300f freeze) instead of ×0.70-no-freeze. Git forensics CLEARED the
+   suspected commits (fb0a4c0dcf/1ba40cfc5d — twilight branch byte-identical since
+   a4e91484c7); 7ee0c23aa8's E_SH stun-bridge merely surfaced the mislabel. Authoritative
+   spec confirmed ([d_albw_wolf_stun.h:29-32](../include/d/d_albw_wolf_stun.h)): twilight
+   ×0.70 no stun / non-twilight ×0.25 + 300f stun. **Fix = swap E_MD→E_SH in the list +
+   restore per-case comments** (one site fixes damage AND freeze; both consult sites call
+   the same classifier). Side effects: E_MD (Suit of Armor) becomes freezable as intended
+   (verify frozen pose); E_SH stun-bridge code becomes dead (harmless; prune deliberately
+   or leave).
+   **Freeze coverage matrix (non-twilight):** stun = `fpcM_PauseEnable`, works on any
+   ENEMY-group actor that takes a DAMAGING Midna-lock hit and survives; only B_ZANT is
+   name-excluded; E_RDB DOES respond (earlier report was the arts-vs-guard issue).
+   Gaps ranked: (1) blocked hits never freeze (`mAttackPower>0` gate — by-design
+   tradeoff); (2) only E_OC/E_SH have per-actor frozen hurt-sphere refresh — other
+   enemies may whiff follow-up bites while frozen (add per-actor refresh if playtests
+   show it); (3) non-Zant bosses technically freezable — low-priority audit.
+
+2. **Twilight Kargarok rupees — root-caused, two-line fix.** The twilight kargarok is
+   actor **E_YR** ("Twilight Kargorok Rider") and is **missing from `lookupKillRupees`**
+   ([d_albw_enemy_rupee.cpp:171-292](../src/d/d_albw_enemy_rupee.cpp); default → 0).
+   Fix: `case fpcNm_E_YR_e: return 15;` (match E_KR/E_YC) + mirror E_YC's manual
+   `dAlbwEnemyRupees_onEnemyKill()` call in E_YR's cut-down finisher
+   ([d_a_e_yr.cpp:1762](../src/d/actor/d_a_e_yr.cpp) — sets health=0 outside cc_at_check;
+   grant is idempotent). All other twilight variants verified wired.
+
+3. **Map button vs Extra+Quick Swap — gap, not bug.** Vanilla map = D-pad Left OR Right;
+   Extra reserves Left (Call Midna), Quick Swap reserves Right (shield cycle) → both dead
+   on controller; replacement binds `OPEN_MAP_SCREEN`/`TOGGLE_MINIMAP` are preset only to
+   keyboard M/Tab ([dpad_quick_swap.cpp:51-52](../src/dusk/dpad_quick_swap.cpp)) — **no
+   controller default was ever chosen** (docs/d-pad-reworking.md left it open). Fix plan:
+   (1) preset a free controller button (R3 recommended; L3/touchpad free) for
+   OPEN_MAP_SCREEN in `applyDpadQuickSwapPresetBinds` — action binds read SDL directly so
+   this dodges the GC-profile analog-suppression trap; plus (3) narrow
+   `dpadRightReservedForQuickSwap` to gameplay-only so D-pad Right works in pause/menus
+   again ([action_bindings.cpp:236-239](../src/dusk/action_bindings.cpp)). Option 2
+   (R-chord) available if preferred.
+
+4. **Heart & stamina price table — researched.** Both are Master-Quest-only Postman shop
+   rows ([d_albw_master_quest.cpp:23-30](../src/d/d_albw_master_quest.cpp)): hearts 17
+   tiers 44→9999r (+½ heart each, cap 20 hearts, reg 100; MQ also halves found
+   pieces/containers), stamina 23 tiers 100→3333r (+632 units, reg 101, replaces
+   dungeon-clear expansion under MQ). The two +8480 tier bonuses are earned (10 hearts /
+   Magic Armor), never sold. **Balance-pass flags:** Shade Watcher return 50r is a marked
+   PLACEHOLDER (same service class as the 15r Oocoo); Wolf Howl/Midna's Grasp 100r each
+   unreviewed post-rework; MQ curves unreviewed post-rework; FA docs stale
+   (combat-refinements-handoff.md says 500/1500/3500, code is 100/300/500).

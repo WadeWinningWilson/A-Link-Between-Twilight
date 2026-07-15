@@ -17,6 +17,7 @@
 #if TARGET_PC
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 static void albwDnApplyConfuseAim(e_dn_class* i_this) {
@@ -1083,6 +1084,14 @@ static void e_dn_wolfbite(e_dn_class* i_this) {
                 enemy->offWolfBiteDamage();
                 anm_init(i_this, ANM_HANGED_DAMAGE, 2.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
                 S16_SUB(actor->health, 10);
+#if TARGET_PC
+                // ============================================
+                // NEW CODE — ALBW Port (alpha cleanup)
+                // Hang-bite damage is internal (bypasses cc_at_check, the
+                // charge-accrual site) — credit each mash at 1/15 charge.
+                // ============================================
+                dAlbwWolfCombat_onChestMashHit();
+#endif
                 if (actor->health <= 0) {
                     player->offWolfEnemyHangBite();
 #if TARGET_PC

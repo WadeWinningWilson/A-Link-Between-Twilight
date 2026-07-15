@@ -51,7 +51,9 @@
 #include "d/d_albw_mail.h"
 #include "d/d_ww_itemmdl_test.h"
 #include "d/d_ww_itemmdl_pc.h"
+#include "d/d_albw_twilight_border.h"
 #include "dusk/autosave.h"
+#include "dusk/debug_warp.h"
 #include "dusk/leveledit/enumerate.hpp"
 #include "dusk/main.h"
 #include "dusk/memory.h"
@@ -573,6 +575,9 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     // everything else. Idle cost: one int compare. See d_albw_menu_res.h.
     // ============================================
     dAlbwMenuRes_drive();
+    // Twilight-border fallback: restore missing province walls (see
+    // d_albw_twilight_border.h — strictly no-op when vanilla spawned them).
+    dAlbwTwilightBorder_drive();
     dAlbwWolfStun_beforeMove();
 #endif
     dComIfG_Ccsp()->Move();
@@ -1218,10 +1223,35 @@ static int phase_1(dScnPly_c* i_this) {
     dusk::truetest::onStageLoad();
 #endif
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (alpha cleanup: warp-menu safety)
+    // Arrival story triggers below permanently mutate progression
+    // (DarkClearLV bits, item grants). When this stage load came from the
+    // level-editor warp menu, skip them — a debug warp to e.g. Lake Hylia
+    // spring p20 used to mark Lanayru "twilight cleared" without the
+    // vessel, suppressing the twilight gate. One-shot, transition-scoped;
+    // normal play and TRUETEST policies (truetest::onStageLoad above) are
+    // untouched.
+    // ============================================
+    const bool albwDebugWarpSuppress = dusk::ui::consumeDebugWarpStorySuppress();
+    if (!albwDebugWarpSuppress) {
+#endif
+    // ============================================
+    // Vessel gating (alpha cleanup): in vanilla these spawn points are only
+    // reachable via the post-vessel cutscenes, so requiring the Vessel of
+    // Light is behavior-neutral for normal play — but it stops any
+    // sequence-broken arrival (warps, future mod paths) from permanently
+    // marking a province "twilight cleared" without earning it, which
+    // despawns that province's twilight gate.
+    // ============================================
     // Stage: Faron Woods, Room: Faron Spring
     if (!strcmp(dComIfGp_getStartStageName(), "F_SP108") && dComIfGp_getStartStageRoomNo() == 1 &&
         dComIfGp_getStartStagePoint() == 3)
     {
+#if TARGET_PC
+        if (dComIfGs_isLightDropGetFlag(0))
+#endif
         dComIfGs_onDarkClearLV(0);
         execItemGet(dItemNo_WEAR_KOKIRI_e);
     }
@@ -1229,12 +1259,18 @@ static int phase_1(dScnPly_c* i_this) {
     else if (!strcmp(dComIfGp_getStartStageName(), "F_SP109") &&
              dComIfGp_getStartStageRoomNo() == 0 && dComIfGp_getStartStagePoint() == 30)
     {
+#if TARGET_PC
+        if (dComIfGs_isLightDropGetFlag(1))
+#endif
         dComIfGs_onDarkClearLV(1);
     }
     // Stage: Lake Hylia, Room: Fountain
     else if (!strcmp(dComIfGp_getStartStageName(), "F_SP115") &&
              dComIfGp_getStartStageRoomNo() == 1 && dComIfGp_getStartStagePoint() == 20)
     {
+#if TARGET_PC
+        if (dComIfGs_isLightDropGetFlag(2))
+#endif
         dComIfGs_onDarkClearLV(2);
     }
     // Stage: Sacred Grove, Room: Lost Woods
@@ -1251,6 +1287,9 @@ static int phase_1(dScnPly_c* i_this) {
         dComIfGs_onItemFirstBit(dItemNo_HORSE_FLUTE_e);
         dComIfGs_setItem(SLOT_21, dItemNo_HORSE_FLUTE_e);
     }
+#if TARGET_PC
+    }
+#endif
 
     if ((u8)dKy_darkworld_stage_check(dComIfGp_getStartStageName(),
                                       dComIfGp_getStartStageRoomNo()) == true)

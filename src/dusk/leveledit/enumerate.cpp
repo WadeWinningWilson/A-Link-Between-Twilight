@@ -401,13 +401,13 @@ void* try_resolve_buffer(int roomNo, char (&keyOut)[48]) {
 
 }  // namespace
 
-EnumerateResult enumerate_room_actors(int i_roomNo) {
+EnumerateResult enumerate_room_actors(int i_roomNo, bool i_systemUse) {
     EnumerateResult result{};
 
 #if !TARGET_PC
     return result;
 #else
-    if (!g_levelEditorSession) {
+    if (!g_levelEditorSession && !i_systemUse) {
         return result;
     }
 

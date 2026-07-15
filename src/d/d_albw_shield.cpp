@@ -1430,6 +1430,19 @@ bool dShield_shouldDrawDurabilityHud() {
     return shouldShowDurabilityHud();
 }
 
+// ============================================
+// Exported MODE-ONLY verdict (alpha cleanup): true when the Shield HUD
+// Visibility setting pins the parry icons (ParryAlways / BothAlways).
+// Deliberately carries none of shouldShowBashHud()'s human-form-only
+// conditions (shield owned, not riding, tier charges) so the wolf charge
+// HUD — which must render in wolf form, where those are all false — can
+// follow the same setting. In Off mode callers keep their own
+// guard/linger behavior.
+// ============================================
+bool dShield_isParryHudPinned() {
+    return isShieldHudPinnedParry();
+}
+
 f32 dShield_getShieldHudDrawAlpha() {
     dMeter2_c* meter = dMeter2Info_getMeterClass();
     if (meter == NULL) {

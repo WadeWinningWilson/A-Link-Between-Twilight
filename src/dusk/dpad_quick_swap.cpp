@@ -10,6 +10,7 @@
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
 #include "d/dolzel.h" // IWYU pragma: keep
+#include "aurora/lib/input.hpp"
 #include "dusk/action_bindings.h"
 #include "dusk/settings.h"
 #include "f_op/f_op_overlap_mng.h"
@@ -48,9 +49,31 @@ void applyDpadQuickSwapPresetBinds() {
         }
     }
 
-    presetIfUnset(binds.openMapScreen[0], SDL_SCANCODE_M);
     presetIfUnset(binds.toggleMinimap[0], SDL_SCANCODE_TAB);
     presetIfUnset(binds.openItemWheel[0], SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+
+    // ============================================
+    // Alpha cleanup (map button, take 2): the bind slots are PER-PORT
+    // (player), one value per action — NOT multiple bindings — and the
+    // stored int is interpreted per the port's active device (keyboard
+    // scancode when a keyboard profile drives the port, SDL gamepad
+    // button otherwise). So the old keyboard-M preset in port 0's slot
+    // read as gamepad button 16 (a paddle) on controllers: the map was
+    // dead on pad. Pick the preset by the device actually driving port 0
+    // — TOUCHPAD click for controllers (no touchpad? rebind in Controller
+    // Config; L3 recommended), M for keyboard — and migrate the old
+    // keyboard-M value to TOUCHPAD when a controller is active (runs at
+    // boot from m_Do_main, so existing configs heal on next launch).
+    // ============================================
+    const bool port0Controller = aurora::input::get_controller_for_player(0) != nullptr;
+    if (port0Controller) {
+        if (binds.openMapScreen[0].getValue() == SDL_SCANCODE_M) {
+            binds.openMapScreen[0].setValue(SDL_GAMEPAD_BUTTON_TOUCHPAD);
+        }
+        presetIfUnset(binds.openMapScreen[0], SDL_GAMEPAD_BUTTON_TOUCHPAD);
+    } else {
+        presetIfUnset(binds.openMapScreen[0], SDL_SCANCODE_M);
+    }
 }
 
 bool canUseDpadQuickSwap(u32 port) {

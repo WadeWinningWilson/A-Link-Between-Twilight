@@ -28,6 +28,7 @@
 #if TARGET_PC
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_master_quest.h"
+#include "d/d_albw_outfit.h"
 #include "d/d_albw_rental.h"
 #include "d/d_albw_wardrobe.h"
 #include "d/d_albw_shield.h"
@@ -840,17 +841,43 @@ bool dMeter2_playerOwnsRentalItem(u8 itemNo) {
 }
 
 void dMeter2_stripRentalItemOnDeath(u8 itemNo) {
+    // ============================================
+    // Magic Armor (alpha cleanup): handled BEFORE the worn-only ownership
+    // gate below, which made the strip a no-op whenever the player died
+    // with Magic owned-but-not-worn — the wardrobe/outfit system tracks
+    // ownership via its own stash bit that the old strip never consulted,
+    // so Magic silently survived every death. New behavior: death
+    // CONFISCATES Magic into Postman wardrobe storage (stored bit set,
+    // ownership kept — clearing ownership while stored would orphan it,
+    // since Retrieve never re-grants the stash bit). Save-state only; no
+    // clothes-change rebuild fires here (respawn rebuilds the model), so
+    // none of the sumo/cap swap-crash classes are reachable. The clothes
+    // reset to Hero's stays synchronous with the confiscation so the
+    // per-frame syncWornOwnership latch seeds Hero's, not Magic.
+    // onALBWRentalEligible is kept: the Deity gate reads that permanent
+    // bit and must survive Magic loss.
+    // ============================================
+    if (itemNo == (u8)dItemNo_ARMOR_e) {
+        const bool worn = dComIfGs_getSelectEquipClothes() == itemNo;
+        const bool owned = dAlbwOutfit_isOwned(D_ALBW_OUTFIT_MAGIC);
+        if (!worn && !owned && !dComIfGs_isItemFirstBit(itemNo)) {
+            return;
+        }
+        dMeter2_onALBWRentalEligible(itemNo);
+        dComIfGs_offItemFirstBit(itemNo);
+        if (worn) {
+            dComIfGs_setSelectEquipClothes((u8)dItemNo_WEAR_KOKIRI_e);
+        }
+        if (owned && !dAlbwWardrobe_isStoredOutfit(D_ALBW_OUTFIT_MAGIC)) {
+            dAlbwWardrobe_storeOutfitOnDeath(D_ALBW_OUTFIT_MAGIC);
+        }
+        return;
+    }
+
     if (!dMeter2_playerOwnsRentalItem(itemNo)) {
         return;
     }
     dMeter2_onALBWRentalEligible(itemNo);
-    if (itemNo == (u8)dItemNo_ARMOR_e) {
-        dComIfGs_offItemFirstBit(itemNo);
-        if (dComIfGs_getSelectEquipClothes() == itemNo) {
-            dComIfGs_setSelectEquipClothes((u8)dItemNo_WEAR_KOKIRI_e);
-        }
-        return;
-    }
     dMeter2_clearAllPossessionForms(itemNo);
 }
 
@@ -862,6 +889,15 @@ void dMeter2_stripAllALBWInventoryOnDeath() {
     if (dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e)) {
         dComIfGs_offItemFirstBit((u8)dItemNo_DEITY_ARMOR_e);
     }
+    // ============================================
+    // Deity wardrobe coherence (outfit-tab migration): purchases now also
+    // record wardrobe stash ownership (bit 695), so death must clear the
+    // stash + stored bits alongside the ability first-bit — the same
+    // 694/711 coherence rule the Magic confiscation follows (an owned-but-
+    // stored orphan would linger in wardrobe UIs otherwise).
+    // ============================================
+    dComIfGs_offEventBit(dSv_event_flag_c::saveBitLabels[695]);
+    dComIfGs_offEventBit(dSv_event_flag_c::saveBitLabels[712]);
 }
 
 static const u8 sShieldRentalItemNos[3] = {

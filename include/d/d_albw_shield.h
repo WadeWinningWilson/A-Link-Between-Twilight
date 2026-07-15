@@ -36,6 +36,9 @@ void dShield_destroyFromDurability(daAlink_c* i_link);
 void dShield_repairDurabilityFraction(int numerator, int denominator);
 
 bool dShield_shouldDrawDurabilityHud();
+// True when Shield HUD Visibility pins the parry icons (ParryAlways/BothAlways).
+// Mode verdict only — no shield-possession conditions; safe in wolf form.
+bool dShield_isParryHudPinned();
 f32 dShield_getShieldHudDrawAlpha();
 u16 dShield_getDurability();
 u16 dShield_getDurabilityMax();

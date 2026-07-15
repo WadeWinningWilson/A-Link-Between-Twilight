@@ -143,9 +143,23 @@ private:
 #endif
 };
 
+// ============================================
+// Alpha cleanup: the Quick-Swap / Call-Midna D-pad reservations only apply
+// during live gameplay — while the game is paused (item screen, map
+// screens) the quick-swap actions self-gate anyway, so suppressing the
+// D-pad there just killed menu navigation for no benefit. Reserved
+// directions stay suppressed in the field (that is where quick swap owns
+// them); paused UIs get the full D-pad back.
+// ============================================
+#if TARGET_PC
+static bool dMw_quickSwapReservationActive() {
+    return !dComIfGp_isPauseFlag();
+}
+#endif
+
 BOOL dMw_UP_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadUpReservedForQuickSwap(0)) {
+    if (dusk::dpadUpReservedForQuickSwap(0) && dMw_quickSwapReservationActive()) {
         return false;
     }
 #endif
@@ -154,7 +168,7 @@ BOOL dMw_UP_TRIGGER() {
 
 BOOL dMw_DOWN_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadDownReservedForQuickSwap(0)) {
+    if (dusk::dpadDownReservedForQuickSwap(0) && dMw_quickSwapReservationActive()) {
         return false;
     }
 #endif
@@ -163,7 +177,7 @@ BOOL dMw_DOWN_TRIGGER() {
 
 BOOL dMw_LEFT_TRIGGER() {
 #if TARGET_PC
-    if (dusk::callMidnaReservesDpadLeft(0)) {
+    if (dusk::callMidnaReservesDpadLeft(0) && dMw_quickSwapReservationActive()) {
         return false;
     }
 #endif
@@ -176,7 +190,7 @@ BOOL dMw_LEFT_TRIGGER() {
 
 BOOL dMw_RIGHT_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadRightReservedForQuickSwap(0)) {
+    if (dusk::dpadRightReservedForQuickSwap(0) && dMw_quickSwapReservationActive()) {
         return false;
     }
 #endif

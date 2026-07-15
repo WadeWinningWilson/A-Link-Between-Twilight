@@ -17,6 +17,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 static f32 S_area_dis;
@@ -445,6 +446,15 @@ static void e_yc_wolfbite(e_yc_class* i_this) {
         i_this->mMode = 1;
         i_this->mCreatureSound.startCreatureVoice(Z2SE_EN_DN_V_DRAWBACK, -1);
         _this->health -= 5;
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (alpha cleanup)
+        // Hang-bite damage is internal (never reaches cc_at_check, the
+        // charge-accrual site), so this sequence earned zero wolf charge.
+        // Initial grab chomp = normal bite (3/15); each mash = 1/15.
+        // ============================================
+        dAlbwWolfCombat_onBiteConnect();
+#endif
         i_this->mWolfBiteDamageCount = 0;
         break;
 
@@ -464,6 +474,10 @@ static void e_yc_wolfbite(e_yc_class* i_this) {
             i_this->offWolfBiteDamage();
             anm_init(i_this, e_yc_class::ANM_HANGED_DAMAGE, 2.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
             i_this->health -= 5;
+#if TARGET_PC
+            // Per-mash charge credit: 1/15 of a charge (see case 0 comment).
+            dAlbwWolfCombat_onChestMashHit();
+#endif
 
             if (_this->health <= 0) {
                 player->offWolfEnemyHangBite();

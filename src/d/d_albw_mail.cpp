@@ -24,7 +24,15 @@
 
 namespace {
 
-constexpr u16 kTaloSpokeEventIndex = 601;  // F_0601 — spoke to imprisoned Talo
+// ============================================
+// STORY GATE FIX (alpha cleanup): was F_0601 "Spoke to IMPRISONED Talo" —
+// the END of the chase (and dialogue-dependent), so a fresh game entering
+// North Faron mid-quest never armed the encounter. Intended trigger is the
+// player's FIRST visit to the area DURING the save-Talo questline, so gate
+// on F_0094 "Talo went after the monkey" — the quest-start flag, set
+// before Link ever enters the woods.
+// ============================================
+constexpr u16 kTaloQuestStartEventIndex = 94;  // F_0094 — Talo went after the monkey
 
 static bool sNorthFaronActorsSpawned = false;
 static int sNorthFaronLastStayRoom = -1;
@@ -57,7 +65,7 @@ bool storyGatePassed() {
     if (dAlbwMail_isTestMode()) {
         return true;
     }
-    return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kTaloSpokeEventIndex]);
+    return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kTaloQuestStartEventIndex]);
 }
 
 bool deliveredGateOpen() {

@@ -77,6 +77,19 @@ static daTagTWGate_zevParam const l_zevParamTbl[4] = {
     },
 };
 
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (twilight-border fallback)
+// Province index (DarkClearLV bit) for a tag gate type; -1 = invalid.
+// ============================================
+s32 daTagTWGate_albwProvinceForType(int i_type) {
+    if (i_type < 0 || i_type >= (int)(sizeof(l_zevParamTbl) / sizeof(l_zevParamTbl[0]))) {
+        return -1;
+    }
+    return l_zevParamTbl[i_type].mLv;
+}
+#endif
+
 static DUSK_CONSTEXPR const char* l_myName = "Gate";
 
 const actionFunc daTagTWGate_c::ActionTable[][2] = {

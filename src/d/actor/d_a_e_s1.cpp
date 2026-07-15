@@ -19,6 +19,7 @@
 #include <cstring>
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 class daE_S1_HIO_c {
@@ -1400,6 +1401,17 @@ static void e_s1_wolfbite(e_s1_class* i_this) {
         i_this->mMode = 1;
         i_this->mSound.startCreatureVoice(Z2SE_EN_NS_V_HANGED, -1);
         a_this->health -= 5;
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (alpha cleanup)
+        // The chest-grab applies damage internally, so cc_at_check (the
+        // only vanilla charge-accrual site) never sees these bites and
+        // the whole sequence earned zero wolf charge. Credit the initial
+        // chomp as a normal bite (3/15) and each A-mash hit below at
+        // 1/15 of a charge (helper no-ops outside wolf combat).
+        // ============================================
+        dAlbwWolfCombat_onBiteConnect();
+#endif
         i_this->field_0x6bb = 0;
         break;
     case 1:
@@ -1418,6 +1430,10 @@ static void e_s1_wolfbite(e_s1_class* i_this) {
             anm_init(i_this, ANM_HANG_DAMAGE, 2.0f, 0, 1.0f);
             i_this->mSound.startCreatureVoice(Z2SE_EN_NS_V_HANGEDAMAGE, -1);
             a_this->health -= 5;
+#if TARGET_PC
+            // Per-mash charge credit: 1/15 of a charge (see case 0 comment).
+            dAlbwWolfCombat_onChestMashHit();
+#endif
 
             if (i_this->health <= 0) {
                 player->offWolfEnemyHangBite();

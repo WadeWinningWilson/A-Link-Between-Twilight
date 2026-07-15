@@ -126,8 +126,9 @@ void dShadeRefuge_resolveLinkSpawn(const char* i_stage, s8 i_roomNo,
 // proven game-over refuge sequence (setRestartRoom + setNextStage, point -1).
 // ============================================
 namespace {
-// TODO(user): confirm the rupee price for this shop row (placeholder).
-constexpr int kReturnPrice     = 50;
+// Priced with Oocoo's Return (alpha cleanup): both are death/travel
+// conveniences in the post-death-economy era, so they share the 15r tier.
+constexpr int kReturnPrice     = 15;
 bool          sPendingReturnWarp = false;
 }  // namespace
 

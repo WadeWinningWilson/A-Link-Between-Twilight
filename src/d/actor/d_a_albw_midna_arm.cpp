@@ -55,9 +55,11 @@ constexpr int kArmAtp           = 4;    // sword attack power (Hurricane initCut
 constexpr f32 kArmStrikeRadius  = 80.0f;   // strike cylinder radius at the target
 constexpr f32 kArmStrikeHeight  = 120.0f;  // strike cylinder height at the target
 constexpr f32 kArmReachYOffset  = 80.0f;   // reach origin above wolf Link's feet (Midna's perch)
-// Accept targets only within the hair's actual extended reach (~3x scale x 5 segments x 28 units
-// = ~420 from the hair base) so the hand always visually connects with what it hits.
-constexpr f32 kArmMaxRange      = 400.0f;
+// Accept targets only within the hair's actual extended reach (3.57x scale x 5 segments x 28 units
+// = ~500 from the hair base) so the hand always visually connects with what it hits.  Measured to
+// the target's eyePos (the strike anchor) — large/aerial mid-bosses (Twilit Bloat E_YMB, Carrier
+// Kargarok E_YC) have origins far from the wolf even when engaged, so origin-distance rejected them.
+constexpr f32 kArmMaxRange      = 480.0f;
 
 bool s_armAlive = false;  // one-at-a-time gate
 
@@ -97,7 +99,9 @@ fopAc_ac_c* daAlbwMidnaArm_c::getLockTarget() {
         return NULL;
     }
     daPy_py_c* link = daPy_getPlayerActorClass();
-    if (link != NULL && link->current.pos.abs(tgt->current.pos) > kArmMaxRange) {
+    // Range to the EYE position (the strike anchor), not the actor origin — big fliers' origins sit
+    // hundreds of units out even when their bodies are on top of you.
+    if (link != NULL && link->current.pos.abs(tgt->eyePos) > kArmMaxRange) {
         return NULL;
     }
     return tgt;

@@ -676,24 +676,10 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                     !link->mWolfCombatHowlActive &&
                     i_AtInfo->mAttackPower > 0)
                 {
-                    link->mWolfBiteCount++;
-                    if (link->mWolfBiteCount >= 5) {
-                        link->mWolfBiteCount = 0;
-                        if (link->mWolfChargeCount < 2) {
-                            link->mWolfChargeCount++;
-                            dAlbwWolfChargeHud_notify();
-                        }
-                        // Heal 1/4 heart when at or below 50 % max HP (normal wolf combat).
-                        const u16 curHP = dComIfGs_getLife();
-                        const u16 maxHP = dComIfGs_getMaxLifeGauge();
-                        if (!dFocusedArts_isMdForcedWolfActive() && curHP * 2 <= maxHP) {
-                            dComIfGp_setItemLifeCount(1.0f, 0);
-                        }
-                    }
-                    // MD forced-wolf finisher: every damaging attack restores 1 heart.
-                    if (dFocusedArts_isMdForcedWolfActive()) {
-                        dComIfGp_setItemLifeCount(4.0f, 0);
-                    }
+                    // Tally lives in dAlbwWolfCombat_onBiteConnect (alpha cleanup:
+                    // extracted so hang-bite/chest-mash paths that bypass
+                    // cc_at_check can award the same economy).
+                    dAlbwWolfCombat_onBiteConnect();
                 }
 
                 // --- Wolf field attack: stun non-twilight survivors ---

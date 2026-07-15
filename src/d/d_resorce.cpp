@@ -211,6 +211,27 @@ void dRes_info_c::offWarpMaterial(J3DModelData* i_modelData) {
 
 void dRes_info_c::setWarpSRT(J3DModelData* i_modelData, const cXyz& i_pos, f32 i_transX,
                              f32 i_transY) {
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Layer-B custom models: warp tex-scroll null guard)
+    // Vanilla assumes every Link model's material[0] carries a tex matrix at slot
+    // texGenNum-1 — true for all stock clothing materials. WW itemmdl materials end
+    // with an SRTG/Color0 texgen that uses NO tex matrix (SC_boot: 3 texgens, texMtx
+    // slots {0,1} only), so getTexMtx(texGenNum-1) returns NULL and the mSRT write
+    // below faults at +0x1c. warpModelTexScroll scrolls the boot model on EVERY
+    // human-form warp (equipped or not), so the WW boot skin crashed every warp-out
+    // (e.g. post-boss escape warps). Skip the scroll for such models — they simply
+    // don't get the swirl effect. See Custom-Model-API-Work.md (Layer-B crash-avoidance).
+    // ============================================
+    {
+        J3DMaterial* mat0 = (i_modelData != NULL) ? i_modelData->getMaterialNodePointer(0) : NULL;
+        J3DTexGenBlock* tgb = (mat0 != NULL) ? mat0->getTexGenBlock() : NULL;
+        if (tgb == NULL || tgb->getTexGenNum() == 0 ||
+            tgb->getTexMtx(tgb->getTexGenNum() - 1) == NULL) {
+            return;
+        }
+    }
+#endif
     J3DMaterial* material = i_modelData->getMaterialNodePointer(0);
     J3DTexGenBlock* texGenBlock = material->getTexGenBlock();
     u32 texGenNum = texGenBlock->getTexGenNum();

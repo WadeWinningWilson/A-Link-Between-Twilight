@@ -4628,7 +4628,9 @@ public:
     // ============================================
     // NEW CODE — ALBW Port
     // Wolf charge economy (gated on game.wolfLinkCombat). mWolfChargeCount: earned by wolf bites (5 bites =
-    // +1 charge, cap 2 base). mWolfBiteCount: running bite tally, resets at 5.
+    // +1 charge, cap 2 base). mWolfBiteCount: fractional charge accumulator in FIFTEENTHS
+    // (bite = 3, chest/grab-mash = 1; completes at 15; leftover dropped when a completion
+    // lands on the cap — see dAlbwWolfCombat_onBiteConnect/onChestMashHit).
     // mWolfSpendChainActive: set on first spend when ≥2 charges; allows
     // chaining field attacks down to 0 before the chain closes.
     // ============================================

@@ -12,6 +12,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 class daE_GI_HIO_c : public JORReflexible {
@@ -286,6 +287,20 @@ void daE_GI_c::setWeaponAtBit(u8 i_onBit) {
 }
 
 static daE_GI_c* m_cry_gi;
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (wolf freeze coverage)
+// True while this actor owns the active scream: m_cry_gi is a file-static
+// and its release (camera ForceLockOff + null) runs only in execute(), so
+// the freeze system must not pause the owner mid-scream — it queries this
+// to skip the freeze in that state.
+// ============================================
+bool daE_GI_isScreamOwner(fopAc_ac_c* i_actor) {
+    return m_cry_gi != NULL && static_cast<fopAc_ac_c*>(m_cry_gi) == i_actor &&
+           m_cry_gi->albwCryTimerActive();
+}
+#endif
 
 bool daE_GI_c::setCryStop() {
     if (m_cry_gi == NULL) {
@@ -718,6 +733,16 @@ void daE_GI_c::executeBiteDamage() {
             mWolfBiteCount++;
 
             health -= 20;
+#if TARGET_PC
+            // ============================================
+            // NEW CODE — ALBW Port (alpha cleanup)
+            // Hang-bite damage is internal (bypasses cc_at_check, the
+            // charge-accrual site) — credit each mash at 1/15 charge.
+            // (mWolfBiteCount here is the Gibdo's OWN 5-mash brush-off
+            // counter, unrelated to Link's charge tally.)
+            // ============================================
+            dAlbwWolfCombat_onChestMashHit();
+#endif
             if (health < 0) {
                 player->offWolfEnemyHangBite();
 #if TARGET_PC

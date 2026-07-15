@@ -16,6 +16,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
 #endif
 
 
@@ -753,6 +754,14 @@ static void e_po_wolfbite(e_po_class* i_this) {
         if (a_this->health <= 0 || a_this->checkWolfBiteDamage()) {
             a_this->offWolfBiteDamage();
             a_this->health -= 4;
+#if TARGET_PC
+            // ============================================
+            // NEW CODE — ALBW Port (alpha cleanup)
+            // Hang-bite damage is internal (bypasses cc_at_check, the
+            // charge-accrual site) — credit each mash at 1/15 charge.
+            // ============================================
+            dAlbwWolfCombat_onChestMashHit();
+#endif
             if (mArg0Check(i_this, 0xFF) == 2) {
                 mRollHp = a_this->health;
             }

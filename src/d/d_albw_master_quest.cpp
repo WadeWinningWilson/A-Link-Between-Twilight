@@ -20,13 +20,22 @@ static constexpr u16 kBonusHalfHeartsReg    = static_cast<u16>(102 << 8) | 0xFF;
 
 static constexpr int kAlbwMQMaxLifeQuarters = 80;  // 20 hearts
 
+// ============================================
+// Alpha-cleanup repricing (2026-07-14): the old early tiers (44/56/72...)
+// predated the death-economy rework and made the first half-hearts nearly
+// free. Tiers 1-10 raised per user curve; tiers 11-17 kept as-is.
+// ============================================
 static constexpr int kHeartShopPrices[kAlbwMQHeartShopTiers] = {
-    44, 56, 72, 92, 117, 149, 191, 244, 311, 500, 1000, 2100, 3200, 4000, 5000, 8000, 9999,
+    225, 250, 275, 325, 375, 425, 500, 575, 675, 800,
+    1000, 2100, 3200, 4000, 5000, 8000, 9999,
 };
 
+// Tiers 1-20 replaced per user curve (linear 100..1000, then +200 steps,
+// then +250 steps); tiers 21-23 kept at 3333. T20 = 3033 as specified.
 static constexpr int kMeterShopPrices[kAlbwMQMeterShopTiers] = {
-    100, 110, 120, 130, 140, 150, 200, 210, 220, 230, 240, 250,
-    300, 400, 500, 800, 1000, 2000, 2500, 2500, 3333, 3333, 3333,
+    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
+    1200, 1400, 1600, 1800, 2000, 2250, 2500, 2750, 3000, 3033,
+    3333, 3333, 3333,
 };
 
 static u8 readTierReg(u16 reg) {

@@ -78,6 +78,9 @@ bool dAlbwWardrobe_tryStoreItemNo(u8 itemNo, char* errOut, int errCap);
 bool dAlbwWardrobe_tryRetrieveItemNo(u8 itemNo, char* errOut, int errCap);
 bool dAlbwWardrobe_tryStoreOutfit(dAlbwOutfitKind kind, char* errOut, int errCap);
 bool dAlbwWardrobe_tryRetrieveOutfit(dAlbwOutfitKind kind, char* errOut, int errCap);
+// Death confiscation: force-store an outfit (no Quick-Swap/keep-one gates,
+// ownership kept). Re-acquire via the Postman storage Retrieve row.
+void dAlbwWardrobe_storeOutfitOnDeath(dAlbwOutfitKind kind);
 
 #endif  // TARGET_PC
 

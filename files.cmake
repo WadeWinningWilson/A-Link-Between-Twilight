@@ -171,6 +171,7 @@ set(DOLZEL_FILES
         src/d/d_gameover.cpp
         src/d/d_albw_oocoo.cpp
         src/d/d_albw_shade_refuge.cpp
+        src/d/d_albw_twilight_border.cpp
         src/d/d_albw_death_rupee.cpp
         src/d/d_albw_rental.cpp
         src/d/d_albw_sumo_test.cpp

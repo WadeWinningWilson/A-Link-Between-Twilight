@@ -46,7 +46,9 @@ struct EnumerateResult {
     std::vector<PlacedActor> actors;
 };
 
-EnumerateResult enumerate_room_actors(int i_roomNo = -1);
+// i_systemUse: allow non-editor-session callers (e.g. the twilight-border
+// fallback) to read authored placements; the editor UI passes false.
+EnumerateResult enumerate_room_actors(int i_roomNo = -1, bool i_systemUse = false);
 
 // Selection for in-world highlight (session only). -1 = none.
 void set_selected_index(int index);
