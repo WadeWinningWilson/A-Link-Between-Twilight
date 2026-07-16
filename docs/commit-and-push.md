@@ -79,6 +79,43 @@ git commit -m "Short summary of why" -m "Optional detail: what changed and what 
 
 ---
 
+## Privacy gating (BEFORE pushing — public repo)
+
+The `upstream` fork is **public**. A local commit leaks nothing, but a **push** publishes file
+*contents*. Scan the range about to be pushed for personal/machine-specific data and scrub it first.
+This applies to **pushes only** — do not block or rewrite local commits over it.
+
+**What to look for** (most common offender: hardcoded absolute paths in tooling/docs/scripts):
+
+| Leak | Pattern | Fix |
+|------|---------|-----|
+| Windows username | `C:\Users\<name>\…` | `%USERPROFILE%\…` or a relative / env-var root |
+| Machine drive paths | `D:\XXXXXXX\…`, other absolute local roots | a configurable `ROOT`/env var, or relative path |
+| Personal contact | email, real name in file *contents* | remove (committer identity in git metadata is separate) |
+| Secrets | tokens, keys, passwords | remove + rotate |
+
+**Run before every push** (scans the exact commits going out):
+
+```powershell
+# what will be pushed:
+git log --oneline upstream/main..HEAD
+# scan those files for personal paths / PII (adjust the name):
+git grep -niE 'Users\\[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+|D:\\|toocoolfordeadpool' `
+  $(git diff --name-only upstream/main..HEAD)
+```
+
+If hits: **scrub the strings** (paths still work via `%USERPROFILE%`/env/relative) — do **not** delete
+files (un-tracking ≠ scrubbing, and the work is preserved either way). Amend or add a follow-up commit,
+then push. Core game source (`src/`, `include/`) is usually clean; companion-mod tooling, Blender
+scripts, and handoff docs are the usual carriers.
+
+> **Known standing item (2026-07):** the MM-SkullKid / companion-mod tooling under
+> `tools/companion_mod/`, `tools/blender_socket/`, and `docs/Blender-MM-SkullKid.md` contain
+> `C:\Users\xxxxx\…` / `D:\XXXXXXX\…` literals. Scrub (or un-track, since `companion_mods/` data is
+> already gitignored for legal isolation) **before** those files are ever pushed.
+
+---
+
 ## Push (ALBW fork)
 
 If remote moved ahead (e.g. README edit on GitHub), merge first — **avoid rebase** if submodule conflicts appear:
@@ -110,6 +147,8 @@ On GitHub: confirm latest commit on `WadeWinningWilson/A-Link-Between-Dusklight`
 # Full happy path (after review)
 git add <paths>
 git commit -m "..."
+# PRIVACY GATE before push (public repo) — scan outgoing files for personal paths / PII:
+git grep -niE 'Users\\[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+|D:\\' $(git diff --name-only upstream/main..HEAD)
 git fetch upstream
 git merge upstream/main    # if push rejected
 git push upstream main
