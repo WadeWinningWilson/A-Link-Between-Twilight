@@ -10,9 +10,11 @@
  * d_albw_shield.cpp: holding the shield button (or any charge event —
  * gain, spend, deny) refreshes a 120-frame linger window; the icons hide
  * once it runs out.  The Midna-talk button does not summon the HUD.
- * Cutscene/pause hiding comes from the dMeter2Draw_c::draw() call site,
- * which already gates on !isPauseFlag && heapLock != 6 — the same setup
- * the spur icons use.
+ * Pause hiding comes from the dMeter2Draw_c::draw() call site, which
+ * already gates on !isPauseFlag && heapLock != 6 — the same setup the spur
+ * icons use.  Cutscene / dialogue / map-fade hiding rides the rupee
+ * counter's alpha (see the draw tick): it is the fade signal that stays
+ * live in wolf form, unlike the ALBW meter's own slot-0 alpha.
  *
  * Filled icons get a red halo (a slightly larger tinted under-draw of the
  * same silhouette) in the Midna charge attack energy color.  A denied
@@ -171,19 +173,37 @@ void dAlbwWolfChargeHud_draw() {
     }
 
     // ============================================
-    // Vanilla HUD hide compliance (alpha cleanup): the shared meter-gauge
-    // alpha (slot 0) is the master hide signal for cutscenes, dialogue,
-    // menus and the map fade — the parry icons' early-out on it is their
-    // ENTIRE hide logic. Drawing without it kept the wolf icons up during
-    // cutscenes/dialogue AND painted the raw icon quad over the map fade
-    // (the "dark square" — every other HUD element had already stopped
-    // drawing). Fetch once per frame per hud-performance rules; icons
-    // also scale their fixed opacities by it so they fade in lockstep
-    // with the rest of the HUD instead of popping.
+    // Vanilla HUD hide compliance (alpha cleanup — CORRECTED 2026-07-15):
+    // follow the RUPEE counter's own fade, the same row this HUD anchors to
+    // and sizes from, exactly as dAlbwRupeePopup_draw() does.
+    //
+    // NOT dShield_getShieldHudDrawAlpha(): that returns meter-gauge slot 0,
+    // which is the ALBW stamina meter's PRIVATE alpha, and alphaAnimeKantera
+    // pins it to zero in wolf form on purpose (dMeter2_isWolfForm(),
+    // d_meter2.cpp) — the very condition that lets this HUD draw at all, so
+    // the icons could never appear. The parry spurs may read slot 0 only
+    // because dShield_drawBashCharges() bails out in wolf form before
+    // reaching it; that idiom does not transfer to a wolf-only HUD.
+    //
+    // alphaAnimeRupee() (d_meter2.cpp) carries the same cutscene / dialogue
+    // / menu hide set with NO wolf term, plus dMeter2Info_isSub2DStatus(1)
+    // for the map fade — the "dark square" was this raw icon quad still
+    // painting after the rupee row it sits in had already faded out.
     // ============================================
-    const f32 hudAlpha = dShield_getShieldHudDrawAlpha();
+    dMeter2_c* meter = dMeter2Info_getMeterClass();
+    dMeter2Draw_c* meterDraw = (meter != NULL) ? meter->getMeterDrawPtr() : NULL;
+    if (meterDraw == NULL) {
+        return;
+    }
+
+    f32 hudAlpha = meterDraw->getRupeeHudAlphaRate();
     if (hudAlpha <= 0.0f) {
         return;
+    }
+    if (hudAlpha > 1.0f) {
+        // HIO product (rupee x parent x rupeeKey) can exceed 1.0 — clamp
+        // before it wraps the u8 alpha casts below.
+        hudAlpha = 1.0f;
     }
 
     if (!ensureWolfIcon()) {
@@ -196,25 +216,16 @@ void dAlbwWolfChargeHud_draw() {
     rupeeCenter.y = g_drawHIO.mRupeePosY;
     rupeeCenter.z = 0.0f;
 
-    dMeter2_c* meter = dMeter2Info_getMeterClass();
-    dMeter2Draw_c* meterDraw = NULL;
-    if (meter != NULL) {
-        meterDraw = meter->getMeterDrawPtr();
-        if (meterDraw != NULL) {
-            // Prefer shield anchor if present; fall back to rupee anchor.
-            if (!meterDraw->getShieldHudAnchorCenter(&rupeeCenter)) {
-                meterDraw->getRupeeAnchorCenter(&rupeeCenter);
-            }
-        }
+    // Prefer shield anchor if present; fall back to rupee anchor.
+    if (!meterDraw->getShieldHudAnchorCenter(&rupeeCenter)) {
+        meterDraw->getRupeeAnchorCenter(&rupeeCenter);
     }
 
     // ---- Layout (mirrors computeBashHudLayout()) -------------------------
     f32 rupeeSize = g_drawHIO.mRupeeScale * 24.0f;  // fallback
-    if (meterDraw != NULL) {
-        const f32 ref = meterDraw->getRupeeHudReferenceSize();
-        if (ref > 0.0f) {
-            rupeeSize = ref;
-        }
+    const f32 ref = meterDraw->getRupeeHudReferenceSize();
+    if (ref > 0.0f) {
+        rupeeSize = ref;
     }
 
     const f32 iconScale  = g_drawHIO.mSpurIconScale * (rupeeSize / WOLF_ICON_NATIVE_SIZE);
@@ -266,7 +277,7 @@ void dAlbwWolfChargeHud_draw() {
 
         // Deny flash: identical pikari sparkle to the spur deny, same
         // HIO colors and animation cadence.
-        if (denyFlash && meterDraw != NULL) {
+        if (denyFlash) {
             meterDraw->drawPikariHakusha(
                 posX, posY, sDenyPikariFrame, pikariScale,
                 g_drawHIO.mSpurIconPikariFrontOuter, g_drawHIO.mSpurIconPikariFrontInner,

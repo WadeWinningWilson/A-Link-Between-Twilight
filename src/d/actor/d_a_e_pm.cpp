@@ -19,6 +19,7 @@
 #include "d/actor/d_a_obj_smw_stone.h"
 #include "f_op/f_op_actor_enemy.h"
 #include "f_op/f_op_camera_mng.h"
+#include "dusk/custom_assets.hpp"
 
 class daE_PM_HIO_c {
 public:
@@ -173,7 +174,15 @@ int daE_PM_c::DemoSkipCallBack(void* i_this, int param_1) {
 }
 
 int daE_PM_c::CreateHeap() {
-    J3DModelData* model_data = (J3DModelData*)dComIfG_getObjectRes("E_PM", 0x1d);
+    auto pmBmd = [](int res_index) -> J3DModelData* {
+        J3DModelData* custom = dusk::custom_assets::try_load("E_PM", res_index);
+        if (custom != nullptr) {
+            return custom;
+        }
+        return (J3DModelData*)dComIfG_getObjectRes("E_PM", res_index);
+    };
+
+    J3DModelData* model_data = pmBmd(0x1d);
     mpMorf = JKR_NEW mDoExt_McaMorfSO(model_data, NULL, NULL,
                                   (J3DAnmTransform*)dComIfG_getObjectRes("E_PM", 0x10),
                                   J3DFrameCtrl::EMode_NONE, 1.0f, 0, -1,
@@ -192,13 +201,13 @@ int daE_PM_c::CreateHeap() {
         return 5;
     }
 
-    model_data = (J3DModelData*)dComIfG_getObjectRes("E_PM", 0x1e);
+    model_data = pmBmd(0x1e);
     mpLampModel = mDoExt_J3DModel__create(model_data, 0x80000, 0x11000084);
     if (mpLampModel == NULL) {
         return 0;
     }
 
-    mpTrumpetMorf = JKR_NEW mDoExt_McaMorf((J3DModelData*)dComIfG_getObjectRes("E_PM", 0x1f), NULL,
+    mpTrumpetMorf = JKR_NEW mDoExt_McaMorf(pmBmd(0x1f), NULL,
                                        NULL, (J3DAnmTransform*)dComIfG_getObjectRes("E_PM", 0x19),
                                        J3DFrameCtrl::EMode_NONE, 0.0f, 0, -1, 1, NULL,
                                        0x80000, 0x11000084);
@@ -206,7 +215,7 @@ int daE_PM_c::CreateHeap() {
         return 0;
     }
 
-    mpGlowEffectMorf = JKR_NEW mDoExt_McaMorf((J3DModelData*)dComIfG_getObjectRes("E_PM", 0x1c), NULL,
+    mpGlowEffectMorf = JKR_NEW mDoExt_McaMorf(pmBmd(0x1c), NULL,
                                           NULL, (J3DAnmTransform*)dComIfG_getObjectRes("E_PM", 5),
                                           J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1, 1, NULL,
                                           0x80000, 0x11000084);

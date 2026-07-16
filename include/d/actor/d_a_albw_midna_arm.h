@@ -22,9 +22,9 @@ class daAlbwMidnaArm_c : public fopAc_ac_c {
 public:
     enum State {
         STATE_IDLE_e,     // no target: hair hovers in the READY stance above Midna, waiting
-        STATE_STRETCH_e,  // hair extending toward the target (striking: 3x reach)
+        STATE_STRETCH_e,  // hair extending toward the target (striking)
         STATE_HIT_e,      // strike window: AT collider armed at the target (striking)
-        STATE_RETRACT_e,  // hair gliding back (guided, normal scale)
+        STATE_RETRACT_e,  // release-return: reach dropped, the hair's own easing carries it home
         STATE_PAUSE_e,    // brief rest between punches (READY hover)
     };
 

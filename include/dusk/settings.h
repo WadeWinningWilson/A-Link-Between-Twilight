@@ -333,6 +333,9 @@ struct UserSettings {
         ConfigVar<WwHeldSkinMode> wwItemmdlHeldSkin;
         // Track B: held WW skin scale percent (100 = 1.0x; live hand-size tuning).
         ConfigVar<int> wwItemmdlHeldBowScalePct;
+        // Track B A/B: render the held WW skin boots-style — ambient-only, NO SC draw
+        // scope / authentic TEV replay (the scope's white-konst spec pass is what blooms).
+        ConfigVar<bool> wwItemmdlHeldBootsStyle;
         // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
         // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.
         ConfigVar<int> wwItemmdlViewerBdlIndex;

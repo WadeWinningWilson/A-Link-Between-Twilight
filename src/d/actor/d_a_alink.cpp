@@ -143,6 +143,14 @@ static u32 s_albwClothesModelEpoch = 0;
 // Track B iron-boots skin: true when mpLinkBootModels were built as the WW vboot (2-joint prop)
 // instead of al_bootsH. Gates the foot-rig (skip OOB setAnmMtx) and the WW draw recipe.
 static bool s_albwWwBootsSkinned = false;
+// ============================================
+// NEW CODE — ALBW Port (native WW bow skin: Layer-B al_bow replacement)
+// Non-NULL when Link's held bow model data came from the loose rebuilt WW bow BMD
+// (AlAnm_788.bmd, authored in al_bow model space). Gates the boots-style ambient
+// draw for that model (WW materials crush under MAJI) and disables the legacy
+// wwItemmdlHeldSkin scope path while active.
+// ============================================
+static J3DModelData* s_albwWwBowNative = NULL;
 
 // ============================================
 // NEW CODE — ALBW Port (cap/face-donor lifecycle safety — declared in d_a_alink.h)
@@ -284,6 +292,14 @@ static const char l_arcName[] = "Alink";
 const char* daAlink_c::getAlinkArcName() {
     return l_arcName;
 }
+
+#if TARGET_PC
+// NEW CODE — ALBW Port (native WW bow skin): expose the bow-active state so the
+// arrow actor can gate its own WW skin on it (arrow WW <=> bow WW).
+bool daAlink_c::checkWwBowSkinActive() {
+    return s_albwWwBowNative != NULL;
+}
+#endif
 
 static void daAlink_tgHitCallback(fopAc_ac_c* i_tgActor, dCcD_GObjInf* i_tgObjInf, fopAc_ac_c* i_atActor,
                                   dCcD_GObjInf* i_atObjInf) {
@@ -5040,6 +5056,10 @@ int daAlink_c::setStartProcInit() {
                 if (start_mode == 1) {
                     if (checkWolf()) {
                         mNormalSpeed = 0.5f * mpHIO->mWolf.mWlSwim.m.mMaxSpeed;
+#if TARGET_PC
+                        // Match wolf swim +20% cap (see kAlbwWolfSwimSpeedMul).
+                        mNormalSpeed *= 1.20f;
+#endif
                     } else {
                         mNormalSpeed = 0.5f * mpHIO->mSwim.m.mForwardMaxSpeed;
                     }
@@ -5059,6 +5079,10 @@ int daAlink_c::setStartProcInit() {
             } else if (start_mode == 1) {
                 if (checkWolf()) {
                     mNormalSpeed = mpHIO->mWolf.mWlMove.m.mIdleToWalkRate * mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+                    // Match wolf land run +5% cap (see kAlbwWolfLandRunSpeedMul).
+                    mNormalSpeed *= 1.05f;
+#endif
                     speedF = mNormalSpeed;
                     procWolfMoveInit();
                 } else {
@@ -5084,8 +5108,12 @@ int daAlink_c::setStartProcInit() {
                     procCrawlMoveInit(0, 0);
                 }
             } else if (checkWolf()) {
-                if (mNormalSpeed > mpHIO->mWolf.mWlMove.m.mMaxSpeed) {
-                    mNormalSpeed = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+                f32 wolfRunMax = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+                wolfRunMax *= 1.05f;
+#endif
+                if (mNormalSpeed > wolfRunMax) {
+                    mNormalSpeed = wolfRunMax;
                 }
                 speedF = mNormalSpeed;
                 procWolfMoveInit();
@@ -20546,8 +20574,11 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     // shared-data modelUpdateDL. This stage proves the rig/fit on the foot.
     // ============================================
     const dusk::WwHeldSkinMode wwSkinMode = dusk::getSettings().game.wwItemmdlHeldSkin.getValue();
+    // Legacy itemmdl scope path is disabled while the native al_bow-replacement skin is
+    // active (its post-DL callback keys on the same Vbow_v material names and would
+    // replay the white-konst spec over the native BMD -> bloom).
     const bool wwHeldBow =
-        (i_model == mHeldItemModel) &&
+        (i_model == mHeldItemModel) && s_albwWwBowNative == NULL &&
         ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
          (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)));
     // Item switched away from the WW held skin: drop the stale scope so the post-DL callback
@@ -20556,6 +20587,26 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
         dWwItemmdl_clearBowDrawScope();
     }
     if (wwHeldBow) {
+        // ============================================
+        // NEW CODE — ALBW Port (held WW skin: boots-style lighting A/B toggle)
+        // Render the held WW item EXACTLY like the boots: ambient-only, NO SC draw scope /
+        // authentic TEV replay. The scope's white-konst spec/ink replay is what blooms; this
+        // shows the matte alternative. May leave SC parts unrealized (the scope exists
+        // because the retail BDL's exotic stages don't survive TP's draw path unaided) —
+        // that trade-off is exactly what the A/B is for.
+        // ============================================
+        // The custom rebuilt vbow BMD (no MDL3) takes this path AUTOMATICALLY — its
+        // materials render natively, so the scope's TEV replay is unnecessary.
+        if (dusk::getSettings().game.wwItemmdlHeldBootsStyle.getValue() ||
+            dWwItemmdl_usingCustomHeldModel(i_model)) {
+            dWwItemmdl_clearBowDrawScope();
+            g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+            dWwItemmdl_setWwBowActorAmbient(&tevStr);
+            dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
+            mDoExt_modelUpdateDL(i_model);
+            daMirror_c::entry(i_model);
+            return;
+        }
         // WW cel bow: get-item recipe — struct-0 + warm ambient (NO MAJI) + modelUpdateDL.
         // CRITICAL: the MatDrawPostDl callback fires at draw-buffer DRAIN (after this returns),
         // like the get-item demo (begin at spawn, clear at Delete). Do NOT clear here — that
@@ -20581,8 +20632,10 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     // stays valid. applyBowMaterialAmbientOnly is accept-any and the SC recipe keys on the "SC_"
     // prefix, so SC_boot/boot are handled without bow-specific code.
     // ============================================
-    if (s_albwWwBootsSkinned &&
-        (i_model == mpLinkBootModels[0] || i_model == mpLinkBootModels[1])) {
+    if ((s_albwWwBootsSkinned &&
+         (i_model == mpLinkBootModels[0] || i_model == mpLinkBootModels[1])) ||
+        (s_albwWwBowNative != NULL && i_model == mHeldItemModel &&
+         i_model->getModelData() == s_albwWwBowNative)) {
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
         dWwItemmdl_setWwBowActorAmbient(&tevStr);
         dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);

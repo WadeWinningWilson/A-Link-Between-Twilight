@@ -55,10 +55,16 @@ constexpr int kArmAtp           = 4;    // sword attack power (Hurricane initCut
 constexpr f32 kArmStrikeRadius  = 80.0f;   // strike cylinder radius at the target
 constexpr f32 kArmStrikeHeight  = 120.0f;  // strike cylinder height at the target
 constexpr f32 kArmReachYOffset  = 80.0f;   // reach origin above wolf Link's feet (Midna's perch)
-// Accept targets only within the hair's actual extended reach (3.57x scale x 5 segments x 28 units
-// = ~500 from the hair base) so the hand always visually connects with what it hits.  Measured to
-// the target's eyePos (the strike anchor) — large/aerial mid-bosses (Twilit Bloat E_YMB, Carrier
-// Kargarok E_YC) have origins far from the wolf even when engaged, so origin-distance rejected them.
+// Range gate, measured to the target's eyePos (the strike anchor) — large/aerial mid-bosses
+// (Twilit Bloat E_YMB, Carrier Kargarok E_YC) have origins far from the wolf even when engaged,
+// so origin-distance rejected them.
+// CORRECTED 2026-07-15: this file previously claimed "3.57x scale x 5 segments x 28 units = ~500
+// units of reach".  That is FALSE and it misdirected a whole debugging session.  Measured live
+// (ALBW-ARMIK reachLen): the hair SKELETON stays ~75-110 units at EVERY scale — the joint
+// translations never scale (J3D scale handling), only the per-segment MESH does.  The visible arm
+// is that mesh magnified ~3.57x hanging off an unscaled skeleton, so the visual reach is real but
+// unmeasured, and 480 is a GAMEPLAY range (kept for the mid-boss fix above), not a geometric one.
+// If long-range strikes visibly fall short of the enemy, this constant is the honest knob to cut.
 constexpr f32 kArmMaxRange      = 480.0f;
 
 bool s_armAlive = false;  // one-at-a-time gate
@@ -147,7 +153,9 @@ int daAlbwMidnaArm_c::Execute() {
     daPy_py_c* link = daPy_getPlayerActorClass();
 
     // Expire / bail: lifetime over, Link gone, transformed back to human, or the
-    // wolf-combat feature switched off.
+    // wolf-combat feature switched off.  Immediate delete is jut-safe under the vanilla-behavior
+    // build (2026-07-16): nothing inflates the hair scale anymore, so clearing the reach just
+    // returns normal-size hair to its anim pose — the same thing vanilla does when a lock drops.
     mLifeFrames--;
     if (mLifeFrames <= 0 || link == NULL || !daPy_py_c::checkNowWolf() ||
         !dAlbwWolfCombat_isEnabled())
@@ -220,8 +228,16 @@ int daAlbwMidnaArm_c::Execute() {
     }
 
     case STATE_RETRACT_e: {
-        // Rendition-2 return (user preference after A/B): release the reach and let the hair's own
-        // easing carry it home; the PAUSE state then re-establishes the READY rest.
+        // ============================================
+        // RELEASE-RETURN (restored 2026-07-16, vanilla-behavior build).  Drop the reach and let
+        // the hair's own easing carry it home — the user's original A/B preference, and exactly
+        // what vanilla hair does when a Beast-Ganon lock releases.  HISTORY: a guided glide
+        // briefly replaced this because releasing at the old 3.57 STRIKE SCALE rendered 12 f of
+        // giant anim-pose hair (the post-impact jut).  With every scale hack removed the hair is
+        // normal size here, the release is jut-proof, and the glide was reverted.  If a strike
+        // scale is ever reintroduced, this release becomes the jut again — see the JUT! tripwire
+        // in d_a_midna.cpp setHairAngle.
+        // ============================================
         dAlbwMidnaArm_clearReachPos();
         if (--mStateTimer <= 0) {
             enterState(STATE_PAUSE_e);

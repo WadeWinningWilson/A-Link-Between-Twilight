@@ -4,9 +4,11 @@
 
 > Continue Flurry Rush work — read `docs/albw-flurry-rush-brief.md` first.
 
-**Status:** Phase 0 locked (2026-06). **Phases 1–5 + snap-to-target landed** (melee perfect-dodge rush through FA spend and lunge entry). **Phase 6–8 not complete** — see [Next steps](#next-steps) below.
+**Status:** Phase 0 locked (2026-06). **Phases 1–5 + snap-to-target landed** (commit `09eb67aa22`: melee perfect-dodge rush through FA spend and snap lunge). **Phase 6–8 not complete** — see [Next steps](#next-steps) below.
 
-**Related:** [combat-refinements-handoff.md](combat-refinements-handoff.md) (FA economy), [shield-combat.md](shield-combat.md) (parry vs dodge), [albw-junior-postman-mail-handoff.md](albw-junior-postman-mail-handoff.md) (unrelated mail track), [albw-port.md](albw-port.md) (settings overview).
+**Ownership (2026-06-27):** Flurry implementation may continue in a dedicated chat; this brief remains canonical. Sumo outfit for the wood+sumo gate is **shipped** — see [sumo-combat.md](sumo-combat.md) (`getSumouMode()` hook still **not enforced** in FlurryTEST).
+
+**Related:** [combat-refinements-handoff.md](combat-refinements-handoff.md) (FA economy), [shield-combat.md](shield-combat.md) (parry vs dodge), [parry-fa-crash-handoff.md](parry-fa-crash-handoff.md) (parry walk-away crash — not Flurry-specific; hardening 2026-06-27), [albw-port.md](albw-port.md) (settings overview).
 
 ---
 
@@ -16,7 +18,7 @@ Work in roadmap order unless playtest reprioritizes.
 
 | Priority | Phase | What | Gate / done when |
 |----------|-------|------|------------------|
-| **Now** | **6 — Polish** | Sumo + wood entry gate (`getSumouMode()` — **blocked until sumo outfit ready**); hit connect; `setSwordModel` on rush start; post-rush parry cleanup; Master/Light cap tuning; multi-enemy interrupt; HUD hint | Melee rush shippable on all sword tiers; wood follows sumo rule |
+| **Now** | **6 — Polish** | Enforce wood + **sumo outfit** gate (`getSumouMode()` — sumo **shipped**, gate still deferred in FlurryTEST); hit connect; `setSwordModel` on rush start; post-rush parry cleanup; Master/Light cap tuning; multi-enemy interrupt; HUD hint | Melee rush shippable on all sword tiers; wood follows sumo rule |
 | **Next** | **7 — Aerial bow** | Back Slice T1 finisher → hover bow at apex; replaces `s_backSliceAlbwSuppressFrames`; 2.0 real s shot start gate | T3 T1 spend Back Slice → hover → aim → shot → clean exit |
 | **Then** | **8 — Rollout** | More perfect-dodge enemy families; boss/wolf exclusions; player-facing docs | Content coverage + `albw-port.md` blurb |
 
@@ -33,7 +35,7 @@ Flurry Rush is **off by default**. Requires **both**:
 | Setting | Config key | Default |
 |---------|------------|---------|
 | Focused Arts test | `game.focusedArtsTest` | Off |
-| Flurry Rush | `game.flurryRush` *(new — add to `settings.h` + UI)* | Off |
+| Flurry Rush | `game.flurryRush` (Settings → **FlurryTEST**) | Off |
 
 Implementation must check a single helper, e.g. `dFlurryRush_isEnabled()` → `focusedArtsTest && flurryRush`.
 
@@ -280,7 +282,8 @@ Tables in this doc. Tweak numbers here before code.
 
 ### Phase 6 — Sword profile polish *(in progress — next)*
 
-- Wooden flurry **sumo outfit** gate — **future; sumo not ready** (see § Wooden sword exception)
+- Wooden flurry **sumo outfit** gate — **enforce when product-ready** (sumo outfit shipped per [sumo-combat.md](sumo-combat.md); playtest still skips gate)
+- **Orphan-rush hygiene (2026-06-27):** `dFlurryRush_update()` ends rush + restores 1.0× sim when FlurryTEST toggled off or Z-lock lost before first attack (walk-away safety)
 - Master/Light 5-hit cap tuning
 - Multi-enemy interrupt
 - HUD hint (“Flurry Rush!”)
@@ -355,6 +358,7 @@ Known follow-ups from FlurryTEST; safe to ship later.
 | Perfect dodge false positives | One enemy family first |
 | Air bow anim pop | Snap to bow wait at apex; iterate in Phase 7 |
 | Double spend HS + dodge | Mutex in `dFocusedArts_onPerfectDodgeSpend` |
+| Parry → walk-away crash (FA/shield HUD) | See [parry-fa-crash-handoff.md](parry-fa-crash-handoff.md); hardening in FA meter null-check, FA toggle reset, bash HUD teardown (2026-06-27) — **not confirmed fixed; needs playtest** |
 
 ---
 

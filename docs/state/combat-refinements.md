@@ -2,12 +2,12 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | Windup targeting: Bokoblin landed (needs playtest). FA tier API + test settings shipped. Flurry Rush Phases 1–5 + snap landed |
-| **owner_impl** | Cursor |
+| **status** | Windup targeting: Bokoblin landed (needs playtest). FA tier API + test settings shipped. Flurry Rush Phases 1–5 + snap landed (`09eb67aa22`) |
+| **owner_impl** | Cursor (Flurry may hand off — see flurry brief) |
 | **owner_review** | — |
-| **next** | Playtest Bokoblin windup matrix; then roll pattern to Stalfos / Dynalfos / etc. FA: combat hooks + shop rows + HUD. Flurry: Phase 6+ per flurry brief |
+| **next** | Playtest Bokoblin windup matrix; FA hooks/shop/HUD. Flurry Phase 6+ → [albw-flurry-rush-brief.md](../albw-flurry-rush-brief.md). Parry walk-away crash → [parry-fa-crash-handoff.md](../parry-fa-crash-handoff.md) |
 | **do_not** | Full-animation homing; treat Boss Refinement as cause of field whiffs; strip Hidden Skills via FA |
-| **updated** | 2026-06 (from handoff; refresh on next session) |
+| **updated** | 2026-06-27 |
 | **detail** | [combat-refinements-handoff.md](../combat-refinements-handoff.md) — full backlog, FA design, file maps |
 
 ---

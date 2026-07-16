@@ -1433,6 +1433,12 @@ public:
 
     static BOOL getE3Zhint();
     static const char* getAlinkArcName();
+#if TARGET_PC
+    // NEW CODE — ALBW Port: true when Link's held bow is the native WW skin
+    // (Layer-B al_bow replacement is loaded). Lets the arrow actor couple its
+    // WW skin to the bow skin. See d_a_alink_bow.inc / s_albwWwBowNative.
+    static bool checkWwBowSkinActive();
+#endif
     static bool checkStageName(char const* i_stageName);
     void tgHitCallback(fopAc_ac_c* i_atActor, dCcD_GObjInf* i_tgObjInf, dCcD_GObjInf* i_atObjInf);
     void coHitCallback(fopAc_ac_c* i_coHitActor, dCcD_GObjInf* i_coHitObj);

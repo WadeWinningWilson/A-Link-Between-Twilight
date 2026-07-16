@@ -311,6 +311,13 @@ bool dAlbwWardrobe_isResistanceActive() {
     return player != nullptr && !player->checkWolf();
 }
 
+int dAlbwWardrobe_retrievePriceForItemNo(u8 itemNo) {
+    if (itemNo == (u8)dItemNo_ARMOR_e) {
+        return kAlbwWardrobeMagicRetrievePrice;
+    }
+    return kAlbwWardrobeStorageRetrievePrice;
+}
+
 bool dAlbwWardrobe_isStorableItemNo(u8 itemNo) {
     return storageBitForItemNo(itemNo) >= 0;
 }
@@ -571,12 +578,13 @@ bool dAlbwWardrobe_tryRetrieveItemNo(u8 itemNo, char* errOut, int errCap) {
         return false;
     }
 
+    const int price = dAlbwWardrobe_retrievePriceForItemNo(itemNo);
     u16 rupees = dComIfGs_getRupee();
-    if (rupees < static_cast<u16>(kAlbwWardrobeStorageRetrievePrice)) {
+    if (rupees < static_cast<u16>(price)) {
         copyErr(errOut, errCap, "Not enough rupees.");
         return false;
     }
-    dComIfGs_setRupee(rupees - static_cast<u16>(kAlbwWardrobeStorageRetrievePrice));
+    dComIfGs_setRupee(rupees - static_cast<u16>(price));
     setStorageBit(storageBitForItemNo(itemNo), false);
     return true;
 }

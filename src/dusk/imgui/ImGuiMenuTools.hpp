@@ -63,6 +63,7 @@ namespace dusk {
         bool m_showActorSpawner = false;
         int m_inputOverlayCorner = 3;
         std::string m_controllerName;
+        std::string m_lastBmdExportMessage;
     };
 }
 

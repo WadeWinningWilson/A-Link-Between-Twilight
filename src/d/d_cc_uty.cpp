@@ -381,6 +381,20 @@ fopAc_ac_c* at_power_check(dCcU_AtInfo* i_AtInfo) {
     return i_AtInfo->mpActor;
 }
 
+// ============================================
+// NEW CODE — ALBW Port
+// D-pad wolf-art fixed hit powers (tuning knobs). Both arts' raw atp
+// (howl AOE 8, Midna arm 4) fall on the vanilla at_power_get
+// ">= 4 -> 200" ending-blow tier — ~7-10x a wolf bite (20-30) — so
+// their damage is pinned in cc_at_check instead (Hurricane-override
+// pattern). User-tuned 2026-07-15: 100 each.
+// ============================================
+static const int kAlbwHowlAoeHitPower  = 100;
+static const int kAlbwMidnaArmHitPower = 100;
+// ============================================
+// NEW CODE ENDS HERE
+// ============================================
+
 fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
     daPy_py_c* player_p = (daPy_py_c*)dComIfGp_getPlayer(0);
 
@@ -474,6 +488,34 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         }
 
 #if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port
+        // D-pad wolf-art damage overrides. Pinned AFTER the vanilla
+        // modifiers (so the 200-tier table value is replaced outright)
+        // but BEFORE the global sliders below (invincibleEnemies /
+        // dAlbwHP_applyMult / bash +5%) so those still stack. Running
+        // inside cc_at_check also covers frozen-enemy bridge hits.
+        //  - Combat Howl AOE: ALINK-owned WOLF_CUT_TURN collider while
+        //    mWolfCombatHowlActive — same disambiguation as the
+        //    guard-opener classifier (Link cannot wolf-spin mid-howl).
+        //  - Midna arm: its own actor, so its name is sufficient.
+        // ============================================
+        if (dAlbwWolfCombat_isEnabled() && i_AtInfo->mAttackPower > 0 &&
+            fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
+            if (i_AtInfo->mpActor != NULL &&
+                fopAcM_GetName(i_AtInfo->mpActor) == fpcNm_ALBW_MIDNA_ARM_e) {
+                i_AtInfo->mAttackPower = kAlbwMidnaArmHitPower;
+            } else if (i_AtInfo->mHitType == HIT_TYPE_LINK_NORMAL_ATTACK &&
+                       i_AtInfo->mpCollider->ChkAtType(AT_TYPE_WOLF_CUT_TURN)) {
+                const daAlink_c* link = daAlink_getAlinkActorClass();
+                if (link != NULL && link->mWolfCombatHowlActive) {
+                    i_AtInfo->mAttackPower = kAlbwHowlAoeHitPower;
+                }
+            }
+        }
+        // ============================================
+        // NEW CODE ENDS HERE
+        // ============================================
         if (dusk::getSettings().game.invincibleEnemies &&
             fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
             i_AtInfo->mAttackPower = 0;

@@ -56,6 +56,9 @@ void dWwItemmdl_prepareWwBowGxForDraw(J3DModelData* model_data);
 // Persistent mat-post-DL hook for WW bow demo item (set at spawn, clear at Delete / room change).
 void dWwItemmdl_beginBowDrawScope(J3DModel* model, fpc_ProcID owner_id);
 void dWwItemmdl_clearBowDrawScope();
+// True when the held/get-item vbow is the loose rebuilt BMD (no MDL3) — caller
+// should draw it boots-style (ambient-only, no scope). NEW CODE — ALBW Port.
+bool dWwItemmdl_usingCustomHeldModel(J3DModel* i_model);
 void dWwItemmdl_notifyRoomChange(s32 room_no);
 
 // Track B: drive the private itemmdl arc mount each play tick while the held-bow skin is on,

@@ -629,6 +629,20 @@ void daAlink_c::setBowModel() {
     J3DModelData* bowModelData = NULL;
 #if TARGET_PC
     // ============================================
+    // NEW CODE — ALBW Port (native WW bow skin: Layer-B al_bow replacement)
+    // A rebuilt WW bow BMD authored in al_bow's model space replaces Link's held bow
+    // wholesale — driven by the vanilla held-bow path everywhere (incl. first person)
+    // with TP's own arrow. Rigid single joint: the 7-joint BVJMPCL BCK still inits
+    // for shoot timing, and J3D applies anims per MODEL joint, so the 1-joint mesh
+    // is safe (same contract as the old 2-joint itemmdl swap below). Draw side:
+    // modelDraw's boots-style ambient branch keys on s_albwWwBowNative (WW materials
+    // crush under MAJI). When present this wins over the legacy scope path.
+    // ============================================
+    s_albwWwBowNative = dusk::custom_assets::try_load("AlAnm", dRes_INDEX_ALANM_BMD_AL_BOW_e);
+    if (s_albwWwBowNative != NULL) {
+        bowModelData = s_albwWwBowNative;
+    }
+    // ============================================
     // NEW CODE — ALBW Port (Track B held bow skin)
     // When the toggle is on, swap Link's held bow mesh for the retail WW
     // itemmdl vbow. Data comes from the cached retained heap (getVbowModelData
@@ -637,7 +651,8 @@ void daAlink_c::setBowModel() {
     // applied to the 2-bone vbow (see d_a_alink.cpp calc) — stiff but functional.
     // ============================================
     bool wwSkin = false;
-    if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::Bow) {
+    if (bowModelData == NULL &&
+        dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::Bow) {
         bowModelData = dWwItemmdl_getVbowModelData("itemmdl");
         if (bowModelData != NULL) {
             dWwItemmdl_patchModelForPc(bowModelData);

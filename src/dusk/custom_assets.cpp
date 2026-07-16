@@ -14,6 +14,7 @@
 #include "dusk/logging.h"
 #include "dusk/settings.h"  // game.customModelsDisabled
 #include "d/d_resorce.h"    // dRes_info_c::loaderBasicBmd (engine-standard BMDV finish)
+#include "dusk/bmd_export.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"  // getMaterialNum/getMaterialNodePointer (Layer-B validation)
 #include "JSystem/JKernel/JKRHeap.h"  // JKRHeap type for the persistent-heap pin
 #include "JSystem/JKernel/JKRExpHeap.h"  // JKRExpHeap : public JKRHeap (GameHeap upcast)
@@ -1717,6 +1718,47 @@ std::filesystem::path resolve_override(const char* fname) {
 
 }  // namespace
 
+// Shared Layer-B finish: sniff format, pick loader tag, pin GameHeap when requested.
+static J3DModelData* load_loose_bmd_buffer(void* buffer, std::size_t size, bool pin_game_heap,
+                                           const char* log_path) {
+    const bmd_export::LooseBmdFormat fmt = bmd_export::sniff_loose_bmd(buffer, size);
+    if (fmt == bmd_export::LooseBmdFormat::Unknown) {
+        DuskLog.warn("[custom_assets] Layer-B unknown format ({} bytes): {}", size, log_path);
+        return nullptr;
+    }
+
+    const u32 loader_tag = bmd_export::loader_tag_for_loose(fmt);
+    JKRHeap* gameHeap = nullptr;
+    JKRHeap* prevHeap = nullptr;
+    if (pin_game_heap) {
+        gameHeap = mDoExt_getGameHeap();
+        prevHeap = (gameHeap != nullptr) ? mDoExt_setCurrentHeap(gameHeap) : nullptr;
+    }
+
+    J3DModelData* model_data = dRes_info_c::loaderBasicBmd(loader_tag, buffer);
+
+    if (prevHeap != nullptr) {
+        mDoExt_setCurrentHeap(prevHeap);
+    }
+
+    if (model_data == nullptr) {
+        DuskLog.warn("[custom_assets] Layer-B load failed ({}, tag={:c}{:c}{:c}{:c}): {}",
+                     fmt == bmd_export::LooseBmdFormat::J3d2 ? "J3D2" : "BMDR",
+                     (loader_tag >> 24) & 0xFF, (loader_tag >> 16) & 0xFF, (loader_tag >> 8) & 0xFF,
+                     loader_tag & 0xFF, log_path);
+        return nullptr;
+    }
+
+    if (model_data->getMaterialNum() == 0 || model_data->getMaterialNodePointer(0) == nullptr) {
+        DuskLog.warn(
+            "[custom_assets] Layer-B REJECT {} — no valid material node[0] (mats={})",
+            log_path, model_data->getMaterialNum());
+        return nullptr;
+    }
+
+    return model_data;
+}
+
 J3DModelData* try_load(const char* arc_name, int res_index) {
     if (arc_name == nullptr) {
         return nullptr;
@@ -1724,8 +1766,25 @@ J3DModelData* try_load(const char* arc_name, int res_index) {
 
     // ============================================
     // NEW CODE — ALBW Port
+    // Resolve BEFORE the cache: the enabled-folder walk must always run so that
+    // disabling a mod folder (or losing the file) takes effect at the next model
+    // build (re-equip / clothes rebuild) instead of requiring a relaunch. The
+    // cache previously short-circuited this — a disabled "Wind Waker Skins" kept
+    // serving the WW bow/boots for the whole session.
+    // ============================================
+    char fname[96];
+    std::snprintf(fname, sizeof(fname), "%s_%d.bmd", arc_name, res_index);
+
+    const std::filesystem::path path = resolve_override(fname);
+    if (path.empty()) {
+        return nullptr;  // no ENABLED override — caller uses the arc (even if cached)
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port
     // Load-once cache: return the already-loaded data if this arc:index was loaded
     // before (avoids re-malloc'ing + leaking the retained buffer on every respawn).
+    // Entries are retained for the session; re-enabling a folder is an instant HIT.
     // ============================================
     char key[112];
     std::snprintf(key, sizeof(key), "%s:%d", arc_name, res_index);
@@ -1740,14 +1799,6 @@ J3DModelData* try_load(const char* arc_name, int res_index) {
         }
     }
     // ============================================
-
-    char fname[96];
-    std::snprintf(fname, sizeof(fname), "%s_%d.bmd", arc_name, res_index);
-
-    const std::filesystem::path path = resolve_override(fname);
-    if (path.empty()) {
-        return nullptr;  // no override — caller uses the arc
-    }
 
     FILE* fp = std::fopen(path.string().c_str(), "rb");
     if (fp == nullptr) {
@@ -1795,38 +1846,11 @@ J3DModelData* try_load(const char* arc_name, int res_index) {
     // aborts a later scene-heap request.  (Armogohma's Layer-B model survives today only
     // because it loads on its actor solid heap, not on a freeAll()'d clothes heap.)
     // ============================================
-    JKRHeap* gameHeap = mDoExt_getGameHeap();
-    JKRHeap* prevHeap = (gameHeap != nullptr) ? mDoExt_setCurrentHeap(gameHeap) : nullptr;
-
-    J3DModelData* model_data = dRes_info_c::loaderBasicBmd('BMDV', buffer);
-
-    if (prevHeap != nullptr) {
-        mDoExt_setCurrentHeap(prevHeap);  // restore the caller's heap unconditionally
-    }
+    J3DModelData* model_data =
+        load_loose_bmd_buffer(buffer, static_cast<std::size_t>(size), true, path.string().c_str());
 
     if (model_data == nullptr) {
         std::free(raw);  // load failed; safe to release
-        DuskLog.warn("[custom_assets] Layer-B load failed: {}", path.string());
-        return nullptr;
-    }
-
-    // ============================================
-    // NEW CODE — ALBW Port (Layer-B model validation — crash-proofing)
-    // A malformed BMD (classic case: SuperBMD output built WITHOUT its material JSON)
-    // can load "successfully" yet carry getMaterialNum()==0 or a NULL material node[0].
-    // mDoExt_J3DModel__create() derefs getMaterialNodePointer(0) unconditionally, so the
-    // engine NULL-crashes on the very next initModel().  Reject such a model here: return
-    // nullptr and every try_load caller falls back to the vanilla arc resource, so a bad
-    // drop-in in a Custom Models folder degrades gracefully instead of taking down the
-    // game.  (Rare error path — leak the tiny J3DModelData; free the larger raw buffer.
-    // model_data is never cached/returned on this path, so its dangling ref is never read.)
-    // ============================================
-    if (model_data->getMaterialNum() == 0 || model_data->getMaterialNodePointer(0) == nullptr) {
-        DuskLog.warn(
-            "[custom_assets] Layer-B REJECT {} — no valid material node[0] (mats={}); "
-            "falling back to vanilla arc resource",
-            path.string(), model_data->getMaterialNum());
-        std::free(raw);
         return nullptr;
     }
 
@@ -1913,19 +1937,10 @@ J3DModelData* try_load_uncached(const char* arc_name, int res_index) {
 
     // Load derived arrays on the current (solid) heap too -- no GameHeap pin -- so the
     // whole model is per-fight and frees with the actor.
-    J3DModelData* model_data = dRes_info_c::loaderBasicBmd('BMDV', buffer);
+    J3DModelData* model_data =
+        load_loose_bmd_buffer(buffer, static_cast<std::size_t>(size), false, path.string().c_str());
     if (model_data == nullptr) {
-        DuskLog.warn("[custom_assets] Layer-B per-fight load failed: {}", path.string());
         return nullptr;
-    }
-
-    // Same guard as try_load(): reject a malformed BMD (no valid material node[0]) so a
-    // bad drop-in degrades to the vanilla arc instead of NULL-crashing initModel().
-    if (model_data->getMaterialNum() == 0 || model_data->getMaterialNodePointer(0) == nullptr) {
-        DuskLog.warn(
-            "[custom_assets] Layer-B per-fight REJECT {} — no valid material node[0] (mats={})",
-            path.string(), model_data->getMaterialNum());
-        return nullptr;  // model_data + buffer free with the solid heap on death
     }
 
     DuskLog.info("[custom_assets] Layer-B per-fight load {} ({} B) on solid heap", path.string(), size);

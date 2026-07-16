@@ -17,6 +17,7 @@
 #include "dusk/frame_interpolation.h"
 #if TARGET_PC
 #include "d/d_albw_wolf_stun.h"  // dAlbwMidnaArm_getReachPos ("Midna's Grasp" extended hair reach)
+#include "dusk/logging.h"        // DuskLog — ALBW-ARMIK overshoot diagnostic (strip once confirmed)
 #endif
 
 static f32 dummy_lit_3777(int idx, u8 foo) {
@@ -2680,6 +2681,11 @@ void daMidna_c::setHairAngle() {
     s16 head_angle = head_dir.atan2sX_Z();
     s16 inv_head_angle = head_angle + 0x8000;
     cXyz vec, old_pos;
+#if TARGET_PC
+    // ALBW-ARMIK (probe-only): the i==0 LOCAL aim vector — its y/z signs select the bVar4 unwrap
+    // branch below.  Logged by the whole-chain probe at the end of this function.
+    cXyz armLocalVec0(0.0f, 0.0f, 0.0f);
+#endif
 
     int i;
     cXyz* pos = mHairPos;
@@ -2713,26 +2719,31 @@ void daMidna_c::setHairAngle() {
         offStateFlg0(FLG0_UNK_10000000);
     }
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port ("Midna's Grasp"): the hair pipeline is deliberately 100% VANILLA.
+    //
+    // DECISION 2026-07-16 (user): the strike look = the stock Beast-Ganon/Wchain hair reach —
+    // the same fan/slew/scale mechanism the approved READY idle already renders through, aimed
+    // at the enemy instead of the hover point.  Every behavioral modification that used to live
+    // here (strike scale 3.57, straight-fan collapse, slew boost, fast decay, IK overshoot
+    // clamp) is REMOVED, not gated off: the scale hacks were the root of every "fires opposite"
+    // jut (a magnified non-aimed pose), and the scale never lengthened the skeleton anyway
+    // (measured: reachLen ~75-110 at every scaleZ 1.0->3.1 — it only fattens the mesh).
+    // History + revert recipes: docs\wolf-combat-layers-research.md.
+    //
+    // Only the ALBW-ARMIK probe (instrumentation, non-behavioral) remains below.
+    // ============================================
+    // Root-to-target distance, probe-only (prev_pos is JNT_HAIR_1's world origin here).
+    f32 armTgtDist = 0.0f;
+    if (atn_pos != NULL) {
+        armTgtDist = (*atn_pos - prev_pos).abs();
+    }
+#endif
+
+
     for (i = 0; i < 5; i++, pos++, dir++, angle_z++, angle_y++, scale++) {
         if (checkStateFlg0(FLG0_UNK_10000000)) {
-#if TARGET_PC
-            // ============================================
-            // NEW CODE — ALBW Port ("Midna's Grasp" arm art — extended reach)
-            // While OUR arm art is actively reaching (module-gated — NOT the FLG0 flag, which the
-            // vanilla Wchain/Beast-Ganon aim also sets), stretch the chain LENGTH-ONLY: z is the
-            // bone-length axis (the software chain is hairOffset {0,0,28} × scale.z), so boosting z
-            // alone lengthens the hair ~3x (~140 -> ~420 units) without fattening it.  x/y stay 1.0.
-            // A faster chase step (0.3) lets the stretch keep up with the jab pacing.  mHairScale is
-            // the shared array, so this single site feeds BOTH consumers (the render joint scales in
-            // McaMorfCB1 and the software chain).  Vanilla contexts keep the {1,1,1} target below.
-            // ============================================
-            if (dAlbwMidnaArm_getReachPos(NULL) && dAlbwMidnaArm_isReachStriking()) {
-                // z = 3.57 -> 5 segments x 28 x 3.57 = ~500 units of reach (length-only, no fatten).
-                static Vec const l_armReachScale = {1.0f, 1.0f, 3.57f};
-                cLib_chasePos(scale, l_armReachScale, 0.3f);
-            } else
-            // (the READY/idle hover falls through to the vanilla {1,1,1} reach target below)
-#endif
             cLib_chasePos(scale, l_hairScale[4], 0.1f);
         } else {
             cLib_chasePos(scale, l_hairScale[i], 0.1f);
@@ -2754,23 +2765,13 @@ void daMidna_c::setHairAngle() {
             prev_pos = *pos;
         } else if (atn_pos != NULL) {
             vec = *atn_pos - prev_pos;
-#if TARGET_PC
-            // ============================================
-            // NEW CODE — ALBW Port ("Midna's Grasp" arm art — riding aim-frame correction)
-            // This aim math was authored for COMPANION Midna, whose shape_angle.y = linkYaw + 0x8000
-            // (she hovers facing back toward Link, :904).  While RIDING the wolf, setMatrix copies
-            // shape_angle verbatim from the wolf (:939) — 0x8000 off from the authored frame, which
-            // rotated the local target vector 180° and made the hair aim OPPOSITE the target.  When
-            // OUR arm art is driving the reach (module-gated), supply the missing 0x8000 so the
-            // frame matches what the math expects.  Vanilla users (Wchain / Beast Ganon, companion
-            // contexts) keep the stock transform.
-            // ============================================
-            if (dAlbwMidnaArm_getReachPos(NULL)) {
-                mDoMtx_stack_c::YrotS((s16)(-(shape_angle.y + 0x8000)));
-            } else
-#endif
             mDoMtx_stack_c::YrotS(-shape_angle.y);
             mDoMtx_stack_c::multVec(&vec, &vec);
+#if TARGET_PC
+            if (i == 0) {
+                armLocalVec0 = vec;  // pre-clamp: these signs decide bVar4 on the next line
+            }
+#endif
             target_angle_y = fVar1 * cM_atan2s(vec.x, JMAFastSqrt(vec.y * vec.y + vec.z * vec.z));
             if (i == 0 && (vec.z < 0.0f || vec.y >= 0.0f)) {
                 bVar4 = true;
@@ -2865,6 +2866,108 @@ void daMidna_c::setHairAngle() {
         prev_pos = *pos;
         fVar4 -= 0.1f;
     }
+
+#if TARGET_PC
+    // ============================================
+    // DIAGNOSTIC (ALBW-ARMIK) — WHOLE-CHAIN readout.  Stays in until the flip is confirmed dead.
+    //
+    // WHY THE OLD TIP-ONLY PROBE MISSED IT (2026-07-15): it logged angZ4 + a dotFwd off JNT_HAIR_5,
+    // i.e. the TIP only.  The tip is not where this lives — the whole-chain FAN is.  All five
+    // indices do render (modelCallBack ~:275-287 undoes the PARENT's index h-1, then applies the
+    // joint's OWN index h — a clean absolute-angle chain), so the tip reading was real, just
+    // useless on its own: it kept reporting a healthy tip under a visibly wrong hair because the
+    // tip genuinely does settle near the target while segments 0..3 sweep somewhere else entirely.
+    //
+    // Reading the fields:
+    //   angZ/angY[0..4] -> THE FAN.  This is the payload.  Convention (verified both consumers):
+    //                      0 = BACK, -0x4000 = UP, +/-0x8000 = FORWARD, +0x4000 = DOWN.  Unwrap the
+    //                      s16s into a continuous sweep before judging them; a "jump" from -25092
+    //                      to +30529 is just a wrap, not a discontinuity.
+    //   lvec     -> the i==0 LOCAL aim vector (pre-clamp).  Its length is the TARGET DISTANCE from
+    //               the hair root — compare against the ~500-unit rendered chain (28 * 3.57 * 5).
+    //   bVar4    -> which unwrap branch ran.  NOTE: the idle takes bVar4=0 too (its lvec.y is
+    //               negative), so this does NOT distinguish idle from strike.  Kept for the record.
+    //   dot[i]   -> world BaseX of joint HAIR_(i+2) vs its direction to the target: +1 at it,
+    //               -1 away.  ONLY MEANINGFUL WHEN striking=1.  On idle rows the target is a
+    //               synthetic hover handle that shapes a pose the hair is NOT meant to point at —
+    //               dot ~ -1 there is the approved arch working.  See the idle lock in
+    //               docs\wolf-combat-layers-research.md.
+    // ============================================
+    if (atn_pos != NULL && dAlbwMidnaArm_getReachPos(NULL)) {
+        static int s_armIkThrottle = 0;
+        if (++s_armIkThrottle >= 15) {
+            s_armIkThrottle = 0;
+            // ============================================
+            // GROUND TRUTH — POSITIONS ONLY.  The old dot[] used each joint's BaseX as its forward
+            // axis, but the BMD hair bone axis is UNVERIFIED (the code implies +X, the software
+            // chain uses +Z) — so dot[] read 0.95+ "aimed at the enemy" while the arm visibly
+            // punched the opposite way.  An unverified axis assumption cannot arbitrate that.
+            // Joint ORIGINS involve no axis, no angle and no atan2 convention.  Where the hand IS
+            // relative to the root and the enemy is not a matter of interpretation.
+            //   dotReach = (hand - root) . (target - root), normalized.  This is THE number:
+            //     +1 -> the arm extends TOWARD the enemy.   -1 -> it extends AWAY.  No convention.
+            //   handToTgt -> world distance from the hand to what it is hitting.  If damage lands
+            //     while this is huge, the hair and the collider are simply in different places.
+            //   reachLen -> actual rendered chain length; sanity-checks kArmChainUnitLen (~140 x
+            //     scaleZ expected).  If reachLen disagrees, the length model is wrong.
+            // ============================================
+            cXyz rootPos, handPos, preTipPos;
+            mDoMtx_multVecZero(mpShadowModel->getAnmMtx(JNT_HAIR_1), &rootPos);
+            mDoMtx_multVecZero(mpShadowModel->getAnmMtx(JNT_HAIR_5), &handPos);
+            mDoMtx_multVecZero(mpShadowModel->getAnmMtx(JNT_HAIR_4), &preTipPos);
+            const cXyz reachVec = handPos - rootPos;
+            const cXyz tgtVec = *atn_pos - rootPos;
+            const f32 reachLen = reachVec.abs();
+            const f32 tgtLen = tgtVec.abs();
+            const f32 dotReach = (reachLen > 0.01f && tgtLen > 0.01f)
+                                     ? ((reachVec.x * tgtVec.x + reachVec.y * tgtVec.y +
+                                         reachVec.z * tgtVec.z) / (reachLen * tgtLen))
+                                     : 0.0f;
+            const f32 handToTgt = (*atn_pos - handPos).abs();
+            // TIP SEGMENT direction (HAIR_4 -> HAIR_5) vs to-target — pure positions, no bone-axis
+            // assumption.  The tip bone carries the big scaled hand mesh, so THIS is the visible
+            // punch direction: DOTREACH can sit at +0.99 (chain leans in) while TIPDOT is negative
+            // (tip — and therefore the magnified hand — fires the other way).
+            const cXyz tipSeg = handPos - preTipPos;
+            const cXyz tipToTgt = *atn_pos - preTipPos;
+            const f32 tipSegLen = tipSeg.abs();
+            const f32 tipToTgtLen = tipToTgt.abs();
+            const f32 tipDot = (tipSegLen > 0.01f && tipToTgtLen > 0.01f)
+                                   ? ((tipSeg.x * tipToTgt.x + tipSeg.y * tipToTgt.y +
+                                       tipSeg.z * tipToTgt.z) / (tipSegLen * tipToTgtLen))
+                                   : 0.0f;
+            DuskLog.debug("ALBW-ARMIK striking={} DOTREACH={} TIPDOT={} handToTgt={} "
+                          "reachLen={} dist={} scaleZ={} root=({},{},{}) hand=({},{},{}) "
+                          "atn=({},{},{}) lvec=({},{},{}) angZ=({},{},{},{}|{})",
+                          (int)dAlbwMidnaArm_isReachStriking(), dotReach,
+                          tipDot, handToTgt, reachLen, armTgtDist, mHairScale[0].z, rootPos.x,
+                          rootPos.y, rootPos.z, handPos.x, handPos.y, handPos.z, atn_pos->x,
+                          atn_pos->y, atn_pos->z, armLocalVec0.x, armLocalVec0.y, armLocalVec0.z,
+                          (int)mHairAngleZ[0], (int)mHairAngleZ[1], (int)mHairAngleZ[2],
+                          (int)mHairAngleZ[3], (int)mHairAngleZ[4]);
+        }
+    }
+    // ============================================
+    // JUT DETECTOR — regression tripwire.  With the vanilla-behavior build (2026-07-16) NOTHING
+    // inflates the hair scale anymore, so this can never fire; if it EVER does, someone has
+    // reintroduced a scale hack and the hair is rendering a non-aimed pose at magnification —
+    // the exact mechanism behind every historical "fires opposite" jut.
+    // ============================================
+    else if (mHairScale[0].z > 1.15f) {
+        static int s_armJutThrottle = 0;
+        if (++s_armJutThrottle >= 5) {
+            s_armJutThrottle = 0;
+            cXyz rootPos, handPos;
+            mDoMtx_multVecZero(mpShadowModel->getAnmMtx(JNT_HAIR_1), &rootPos);
+            mDoMtx_multVecZero(mpShadowModel->getAnmMtx(JNT_HAIR_5), &handPos);
+            DuskLog.debug("ALBW-ARMIK JUT! aimOff scaleZ={} reachUp={} flg0={} root=({},{},{}) "
+                          "hand=({},{},{})",
+                          mHairScale[0].z, (int)dAlbwMidnaArm_getReachPos(NULL),
+                          (int)(checkStateFlg0(FLG0_UNK_10000000) != 0), rootPos.x, rootPos.y,
+                          rootPos.z, handPos.x, handPos.y, handPos.z);
+        }
+    }
+#endif
 }
 
 void daMidna_c::setDemoData() {

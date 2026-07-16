@@ -256,7 +256,18 @@ J3DModelData* dRes_info_c::loaderBasicBmd(u32 i_tag, void* i_data) {
         flags ^= 0x60020;
     }
 
-    i_data = J3DModelLoaderDataBase::load(i_data, flags);
+    void* loaded = J3DModelLoaderDataBase::load(i_data, flags);
+#if TARGET_PC
+    // TP object BMDR: baked blobs may lack a J3D2 wrapper — try the binary DL loader before failing.
+    if (loaded == NULL && (i_tag == 'BMDR' || i_tag == 'BMWR')) {
+        loaded = J3DModelLoaderDataBase::loadBinaryDisplayList(i_data, flags);
+        if (loaded == NULL) {
+            const u32 head = i_data != NULL ? *(const u32*)i_data : 0;
+            DuskLog.warn("[dRes] BMDR load+bdl fallback failed (head={:08x})", head);
+        }
+    }
+#endif
+    i_data = loaded;
     if (i_data == NULL) {
         return NULL;
     }

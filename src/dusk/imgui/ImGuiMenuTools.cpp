@@ -25,6 +25,7 @@
 #include "dusk/data.hpp"
 #include "dusk/dusk.h"
 #include "dusk/main.h"
+#include "dusk/bmd_export.hpp"
 #include "m_Do/m_Do_main.h"
 
 #include <aurora/lib/internal.hpp>
@@ -115,6 +116,32 @@ namespace dusk {
             ImGui::MenuItem("Bloom", nullptr, &m_showBloomWindow);
             ImGui::MenuItem("Stub Log", nullptr, &m_showStubLog);
             ImGui::MenuItem("Actor Spawner", nullptr, &m_showActorSpawner);
+
+            if (dusk::IsGameLaunched && ImGui::BeginMenu("BMD Export (dev)")) {
+                if (ImGui::MenuItem("Export E_PM body (0x1D)")) {
+                    const auto out = dusk::ConfigPath / "bmd_export" / "E_PM_29_EDITABLE.bmd";
+                    const auto result = dusk::bmd_export::dump_object_res_bmd(
+                        "E_PM", 0x1d, out.string().c_str());
+                    m_lastBmdExportMessage = result.message;
+                }
+                if (ImGui::MenuItem("Export E_PM lamp (0x1E)")) {
+                    const auto out = dusk::ConfigPath / "bmd_export" / "E_PM_30_lamp.bmd";
+                    const auto result = dusk::bmd_export::dump_object_res_bmd(
+                        "E_PM", 0x1e, out.string().c_str());
+                    m_lastBmdExportMessage = result.message;
+                }
+                if (ImGui::MenuItem("Export E_PM trumpet (0x1F)")) {
+                    const auto out = dusk::ConfigPath / "bmd_export" / "E_PM_31_trumpet.bmd";
+                    const auto result = dusk::bmd_export::dump_object_res_bmd(
+                        "E_PM", 0x1f, out.string().c_str());
+                    m_lastBmdExportMessage = result.message;
+                }
+                if (!m_lastBmdExportMessage.empty()) {
+                    ImGui::Separator();
+                    ImGui::TextWrapped("%s", m_lastBmdExportMessage.c_str());
+                }
+                ImGui::EndMenu();
+            }
 
             if (!dusk::IsGameLaunched) {
                 ImGui::EndDisabled();

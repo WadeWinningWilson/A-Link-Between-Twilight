@@ -269,7 +269,358 @@ The howl song (fanfare path) normally **culls almost every sound effect** while 
 - **Per-song special effects on the howl:** each howl tune gets its own flavor of VFX while it plays (the song is already known at pick time in `handleWolfHowlBurst`; a song→effect table would drive extra emitters/tints in `procWolfHowlCombat`).
 - **Per-song KAITENGIRIL color:** tint the howl ring by the playing song — e.g. **Song of Healing = light red/pink/violet**. Note the current emit deliberately passes NULL tevStr to keep the effect's own white; a per-song tint would pass a prm/env color (the `dComIfGp_particle_set` overloads accept GXColor prm/env args) — needs a visual test to confirm KAITENGIRIL's particles take a prm-color tint well.
 - **New wolf art candidate — Midna's rideable Twilit Kargarok:** spawn the Carrier Kargarok (E_YC — the actor the player already rides in vanilla Lake Hylia/City sequences) as an attack: strikes enemies **from above** and/or **dashes into them**. Precedent: the arm art proved the spawned-helper-actor pattern (own collider, non-ALINK owner, auto-excluded from the charge counter); E_YC already has flight + carry logic to borrow.
-- **Giant "demo" Midna (D-pad Down ultimate)** — pursue next; see the research pass.
+- **Giant "demo" Midna (D-pad Down ultimate)** — pursue next; findings below.
+
+### GIANT MIDNA — research findings (2026-07-13)
+**The demo giant EXISTS in the game files** (the old "no asset" conclusion was wrong): the Fused-Shadow
+barrier-destruction giant is real-time geometry — a **4-part composite** `demo00_Midna_cut00_BD_*`
+(body `_tmp` 0x6C + Fused-Shadow mask 0x57 + hands 0x56 + giant hair-hand 0x6B) living in the
+cutscene archives ([Demo30_01.h](../assets/GZ2E01/res/Object/Demo30_01.h):79-98, also Demo24_02 /
+Demo30_02). No pre-rendered video exists (zero `.thp` in the game). `daMidna_c::createHeap` loads
+these only while a demo arc is mounted ([d_a_midna.cpp:387-500](../src/d/actor/d_a_midna.cpp)) —
+they are not resident in free gameplay as-is.
+
+Other key findings:
+- **Whole-model giant scale already exists**: `mpHIO->m.scale` → `setBaseScale` on both Midna models
+  ([d_a_midna.cpp:853-859](../src/d/actor/d_a_midna.cpp)); the devs left a 0–5× debug slider on it.
+  An up-scaled imp Midna is essentially free (the mechanic-first scaffold).
+- **The base `Midna.arc` already carries the fused-shadow parts** (mask / hands / halo / giant
+  hair-hand, loaded at [d_a_midna.cpp:549-664](../src/d/actor/d_a_midna.cpp)) — a "fused-shadow
+  hand slam" is assemblable without the demo composite.
+- **The SLAM animation exists**: Midna's boss **catch-and-hurl** set `ANM_MGN*`
+  (resIDs 0x1CD–0x1D2 + `MDN_V_MGN_CATCH/TAME/THROW` voice, table
+  [d_a_midna.cpp:242-247](../src/d/actor/d_a_midna.cpp)) — reads as a grab/slam attack.
+- **Mortal Draw damage = atp 4** ([d_a_alink_cut.inc:1383](../src/d/actor/d_a_alink_cut.inc)) — the
+  arm already uses 4; a giant slam wants 4–5 with a ~250–400 radius.
+- **D-pad Down is FREE** (Quick Transform is D-pad LEFT single-tap in the current binding setup) —
+  no input conflict for the giant.
+- **Charge-cap ripple**: need-3/spend-3 requires raising the cap 2 → 3 (earn cap, spend gates,
+  HUD max pips).
+- **Recommended path**: build the mechanic end-to-end on the up-scaled scaffold first (always-resident
+  assets, arm-actor pattern), then swap the visual to the repackaged demo giant as a pure upgrade.
+
+### GIANT MIDNA — the pipeline (research pass 2, 2026-07-13)
+**Reframing discovery: the BD giant is a SKIN, not a creature.** The 4 `demo00_Midna_cut00_BD_*`
+models share the ordinary imp-Midna skeleton: at runtime `BD_tmp` is driven by **copying every joint
+matrix from the standard animated Midna model** ([d_a_midna.cpp:1107-1111](../src/d/actor/d_a_midna.cpp)),
+mask/hands/hairhand are joint-parented (HEAD / HAND_L+R / HAIR_5, `setBodyPartMatrix` :975-1172), the
+skin swap is one pointer switch (`initMidnaModel` :3018-3025, toggled by STB flag `FLG1_UNK_1`
+:1561-1569), and the **giant size is just the runtime scale knob** (`setMatrix` :852-859 — default
+1.0; the cutscene scales it up). There are **no BD-specific animations** — the giant plays normal
+Midna body/face anims, so **the `ANM_MGN*` catch/slam works on the BD skin directly.**
+
+**Loading is trivial:** arc resolution is a raw string → `/res/Object/<name>.arc` (no manifest;
+[d_resorce.cpp:53-70](../src/d/d_resorce.cpp)), so `dComIfG_resLoad(&phase, "Demo24_02")` (the lean
+stock arc carrying the BD set, indices 0x35/0x2A/0x29/0x34) works from any gameplay actor — same
+call the Shade Boss Wolf uses for "GWolf". Even better: the **Aurora overlay** (custom_assets Layer A)
+resolves paths the game never shipped, so a **tiny custom arc with ONLY the 4 BD BMDs** can be dropped
+in `model_replacements/` and loaded by name — needs an external RARC packer (wszst/GCFT; no packer in
+tools/). Animation comes from the resident `Midna` arc regardless, so the custom arc stays tiny.
+
+**Build recipe (two options):**
+- **Option A (least code):** drive the real daMidna_c — mount a BD-carrying arc, set `FLG1_UNK_1`,
+  write the scale knob big. Her existing compositor/draw does everything.
+- **Option B (standalone, recommended for a combat art):** a spawned actor (arm-art pattern) that
+  loads the BD arc + the `Midna` arc, builds one McaMorf on the Midna skeleton (arc idx 14) as the
+  anim driver + the 4 BD models as plain J3D models, per-frame joint-parents them exactly as
+  `setBodyPartMatrix` does, `setBaseScale(6-8x)`, plays `ANM_MGN*` as the slam, owns a big sword
+  collider (atp 4-5, non-ALINK owner). Gotchas: arc must stay mounted for the actor's life;
+  BD_tmp cannot animate without the Midna skeleton; per-frame tevStr + `modelEntryDL` per part.
+
+**Load strategy:** preload + pin the slim arc at shop-unlock into a retained heap
+(`d_ww_itemmdl_pc.cpp:285` pattern) → D-pad press spawns instantly, no DVD stall. (Async cPhs on
+spawn = Shade-Wolf pattern is the lazy fallback; micro-stall on first use.)
+
+### ⛔ THE IDLE IS FINAL — DO NOT TOUCH, DO NOT "DIAGNOSE" (locked 2026-07-15)
+
+**The READY idle arch is EXACTLY what the user wants, as of this version. It is a settled PREFERENCE,
+not an open question, not a symptom, and not evidence of anything. Any future work that proposes
+changing it, or cites it as a defect, is WRONG BEFORE IT STARTS.**
+
+Reference look: one D-pad press, no enemies — Midna's hair arcs up and forward over the wolf's head,
+hand hanging at the snout. If a change alters that silhouette, the change is wrong.
+
+**The specific error that produced this lock, so it is never repeated:** the ALBW-ARMIK probe reports
+`dot ≈ -1` on the idle (all four rendered segments "pointing away from the target"), and this was
+written up as "the idle is a myth / the idle is broken too." **That reading is invalid.** The idle's
+`atn_pos` is a *synthetic hover point* — a puppet handle invented by `d_a_albw_midna_arm.cpp` to
+SHAPE a pose. The hair is not supposed to point at it. `dot ≈ -1` there means the arch is working.
+
+**Rule: `dot[]` is only meaningful while `striking=1`.** On idle rows it measures nothing. More
+generally: **a telemetry number cannot refute a stated preference.** The idle is defined by what the
+user sees and has approved, full stop.
+
+### ARM — VANILLA-GRAB BUILD (2026-07-16, CURRENT, awaiting playtest)
+
+**Playtest verdict on the stab build: REJECTED — "starts rolling into itself and looking clumsy."
+User decision: KEEP the idle exactly as-is; everything non-idle = the stock vanilla hair reach,
+specifically the Beast-Ganon lock-on grab look.**
+
+**What this build IS:** `d_a_midna.cpp`'s hair pipeline is now **100% vanilla** — every behavioral
+modification is DELETED (not gated off): strike scale 3.57, straight-fan collapse, stab slew boost,
+fast decay, fast-shed net, IK overshoot clamp, wind-down support.  Only the ALBW-ARMIK probe
+(non-behavioral) remains, plus a JUT! tripwire (fires only if someone reintroduces a scale hack).
+The arm actor keeps its state machine (idle hover / stretch / hit / release-return retract / pause)
+publishing reach points; the hair renders them through the untouched vanilla fan — the exact
+mechanism the approved idle arch uses, aimed at the enemy.  RETRACT is back to `clearReachPos()`
+(release-return, the user's original A/B preference — jut-proof now because nothing is magnified).
+WINDDOWN state removed (nothing to shed).
+
+**Consequences to expect (by design, not bugs):**
+- Strikes are NORMAL-SIZE hair doing the Ganon-style reach — the big 3.57 arm is GONE.  It was the
+  root of every jut (magnified non-aimed pose) and never lengthened the skeleton anyway.
+- At long range the hand reaches TOWARD the enemy without touching (like Ganon).  `kArmMaxRange`
+  stays 480 (gameplay range, mid-boss fix); cut it toward ~140-200 if hand-contact matters.
+- If a big arm is ever wanted again, it needs a NEW lever (mesh/model work), NOT mHairScale.
+
+**Revert map:** the current d_a_midna.cpp IS vanilla — nothing to revert there.  The stab build and
+the screenshot baseline are both re-buildable from the recipes/history in the superseded sections
+below; the 5-step recipe below (stab-era) no longer matches the file and is kept as history only.
+
+### (superseded — REJECTED in play) ARM — THE STAB BUILD (2026-07-16) + its revert recipe
+
+**Intent correction (user): the attack was always meant to be a quick STAB/jut — the baseline's
+energy, aimed AT the enemy.  The "slap" was never a goal; it was the aimed pose arriving with no
+speed left (vanilla slew cap 0x1800/frame low-pass-filters the 12 f published thrust).  Do not
+frame "hand touches enemy gently" as success — the target is a fast stab that points correctly.**
+
+Playtest verdicts folded in: direction improved with the straight aim (user-confirmed); residual
+opposite-jut at MOVE END confirmed by instrument — 14 `JUT!` lines, all `reachUp=0`, scaleZ decaying
+2.43→1.34 at exactly the vanilla 0.1 rate = actor death cleared the reach while the scale was still
+strike-sized, and both safeguards were gated behind reach-active so neither engaged.
+
+**CURRENT BUILD (2026-07-16) = reverted baseline + one coherent layer, five pieces:**
+1. Straight aim while the art aims (fVar1 collapse, gate `striking || scaleZ>1.15`) — d_a_midna.cpp.
+2. **STAB SNAP** — slew boost while aiming (`kArmJabSlewMax=0x4000, Div=3` vs stock 0x1800/5): the
+   pose whips to the strike line in ~4 f and holds through impact.  The stab energy, aimed.
+3. Guided RETRACT (striking held true, ease-out glide back) — kills the post-impact jut window.
+4. **STATE_WINDDOWN_e** — life expiry no longer dies on the spot; 18 f holding the hover while the
+   scale sheds fast, THEN clean death.  Kills the measured end-of-move jut.
+5. Fast-shed safety net in d_a_midna.cpp vanilla branch (`scale->z>1.15` → 0.3): covers abrupt
+   deaths (transform-out, feature off) the actor can't wind down.  Idle-proof — vanilla hair scale
+   never exceeds ~1.0.
+Every piece is dead in the idle by construction (striking=false + scale 1.0 fail both gate terms).
+
+**⛔ REVERT RECIPE — TO THE SCREENSHOT BASELINE (surgical, verified-complete as of 2026-07-16).**
+The older recipe further below is STALE (predates the fan/retract work — executing it alone leaves
+a hybrid).  To restore the baseline (big 3.57 arm, vanilla fan+slew, release-return, fires-opposite
+bug intact, idle arch perfect):
+1. `d_a_midna.cpp` — delete the "STAB" `#if TARGET_PC` gate block after the FLG0 set/clear (the
+   `kArm*`/`armReachActive`/`armJabStraight` block).
+2. `d_a_midna.cpp` aim branch — restore stock slew + ramp: the two
+   `cLib_addCalcAngleS(angle_*, target_angle_*, 5, 0x1800, 0x100)` calls unconditional, plain
+   `fVar1 += 0.3f;` (delete the armJabStraight ternary + boosted-slew branch).
+3. `d_a_midna.cpp` scale site — keep the striking→3.57@0.3 branch; delete the reach-not-striking
+   fast-decay `else if` and the fast-shed net in the vanilla `else`.
+4. `d_a_albw_midna_arm.cpp` STATE_RETRACT — replace the guided-glide block with the single line
+   `dAlbwMidnaArm_clearReachPos();`.
+5. `d_a_albw_midna_arm.cpp` — remove STATE_WINDDOWN_e (enum in the header, enterState case, the
+   bail split back to one combined `if`, the switch case) + `kArmWinddownFrames`.
+KEEP regardless (non-behavioral): the ALBW-ARMIK probe + JUT! detector, `armLocalVec0` capture,
+the corrected `kArmMaxRange` comment.  The IDLE is not touched by ANY step above.
+
+### (superseded) ARM AIM — MECHANISM FOUND + GUIDED-RETRACT FIX BUILT (2026-07-15, awaiting playtest)
+
+**The "arm fires opposite" was never an aiming bug.  It was the post-impact window.**  Frame-by-frame
+(34 f cycle): STRETCH 12 f + HIT 4 f render the aimed pose (the user's "slap" — correct); then the
+old RETRACT called `clearReachPos()`, dropping the aim flag, so for 12 f the hair rendered the RAW
+riding BCK animation — at a strike scale that decays far too slowly to matter (fixed-step
+`cLib_chasePos`, c_lib.cpp:368 — ~44 f home vs an 18 f gap) — followed by 6 f of PAUSE arch, still
+huge.  18 of every 34 frames were a giant non-aimed pose.  **The probe was gated on the reach being
+active, so those exact frames were never logged** — every "healthy" log row was a STRETCH/HIT frame.
+
+**Load-bearing measurement (position-only probe): `reachLen` ~75–110 units at EVERY scaleZ 1.0→3.1.**
+The hair scale does NOT lengthen the skeleton — joint translations never scale, only the per-segment
+mesh magnifies.  Consequences:
+- The visible arm = mesh magnified ~3.57× hanging off a ~100-unit skeleton.  Its direction is the
+  TIP's orientation, amplified — which is why small tip errors read as huge wrong-way limbs.
+- The old "3.57 × 5 × 28 = ~500 reach" justification for `kArmMaxRange=480` was FICTION (comment now
+  corrected in the actor).  480 is a gameplay range, not a geometric one.
+- Distance-adaptive scale is pointless (tried, refuted, removed) — scale is a pure look knob.
+
+**THE FIX (built, uncommitted):**
+1. **Guided RETRACT** (`d_a_albw_midna_arm.cpp`) — RETRACT now publishes an ease-out glide from the
+   strike point back to the READY hover with `striking=true`, instead of `clearReachPos()`.  The
+   hair stays aimed + at strike scale the whole cycle; the jut window ceases to exist.  NOTE: this
+   changes the A/B'd release-return feel — accepted cost; re-tune the glide, never restore
+   clearReachPos.
+2. **Straight-fan gate** (`d_a_midna.cpp`) = `striking || scaleZ > 1.15` (backstop for tails).  Two
+   failed gates are documented in the code comment — striking-only (arch snapped back early) and
+   scale-only+adaptive-scale (close targets fell under the threshold: `dist=117 scaleZ=1 straight=0`).
+3. **Fast decay on disengage** — reach-active-not-striking sheds scale at 0.3 (~15 f) vs vanilla 0.1.
+4. **Probe additions**: `TIPDOT` (HAIR_4→HAIR_5 vs to-target, pure positions — the visible punch
+   direction) and a `JUT!` detector that fires iff a non-aimed pose renders at strike scale (the old
+   blind window).  A silent log after a strike session = the jut is dead.
+
+**Playtest verdict keys:** slap still correct; hair visibly PULLS BACK from the enemy instead of
+snapping to giant anim-hair; no `JUT!` lines; TIPDOT positive during strikes.
+
+### (superseded) ARM AIM — OPEN BUG + FULL HANDOFF (2026-07-15)
+
+**STATE: the art is functionally complete and playtest-approved EXCEPT the hair visually fires ~180°
+opposite the target. Damage is correct (the collider is placed at the target independently of the
+hair render). Everything below is UNCOMMITTED.**
+
+#### What is GOOD and must be preserved
+| Thing | Value / state | Notes |
+|---|---|---|
+| **Reach scale** | **UNIFORM `{3.57, 3.57, 3.57}`** (`d_a_midna.cpp` ~:2732) | **User: "I do LIKE the visual size of it."** Keep this size. It fattens vs. the old z-only scale — user accepted the look. |
+| **Idle READY stance** | forward rest, `kArmIdleForward=150`, `kArmIdleHoverY=20` | **Works, user-approved** ("idle position still remains great"). Probe shows `dotFwd=+0.998` here. |
+| Jab pacing | 12f out / 4f hit / 12f back + 6f pause ≈ 1.13 s/punch | 30 Hz sim tick. User-approved. |
+| Motion style | ease-out jab out, release-return | User A/B'd and preferred this. |
+| Range gate | `kArmMaxRange=480`, measured to `tgt->eyePos` | Fixes mid-boss targeting (Twilit Bloat E_YMB, Carrier Kargarok E_YC — both ENEMY group; the group gate was never the problem, the origin-distance was). |
+| Free targeting | `LockonTarget(0)` returns the soft attention candidate — no Z-lock needed | User: keeper. |
+| IK overshoot clamp | in `setHairAngle`, module-gated | Harmless + correct-by-construction; left in although the bug it targeted was refuted. |
+
+#### DEAD ENDS — all four REFUTED BY EVIDENCE. Do not re-tread.
+1. **Companion-vs-riding frame mismatch (`shape_angle` 0x8000).** REFUTED twice. `shape_angle`
+   **cancels** — both the aim frame (`YrotS(-shape_angle.y)`) and the render base
+   (`shape_angle.y + 0x4000`, `modelCallBack` ~:281) key on it, so only their constant 0x4000
+   relationship survives the world→local→world round trip. Patching the aim alone broke the idle;
+   patching **both** = behaviourally identical to stock (verified in play). **Also: the vanilla
+   `atn_pos` users (Obj_Wchain, B_MGN) are WOLF-Link contexts, not companion — the whole premise
+   was fiction.**
+2. **Software-chain overshoot.** REFUTED by its own probe. During a punch the IK scratch chain
+   **converges monotonically**: `r = 355.6 → 338.1 → 276.6 → 176.7 → 79.4`, stopping 79 units short.
+   It never sails past the target; the clamp never even engages (`armRemain` 177 > `step` 100).
+3. **Non-uniform scale shear / wrong bone axis.** REFUTED: **uniform `{3.57,3.57,3.57}` still flips.**
+   (Also disproved analytically: positive-diagonal scale can't mirror — det > 0 and it preserves
+   every component's sign; and vanilla ships worse anisotropy (7:1 in `l_hairScale`) through the same
+   path with no flip.)
+4. **Render path broken.** REFUTED: `mDoMtx_XYZrotM` = `M * Rz(z) * Ry(y)` (`m_Do_mtx.cpp:58-73`), so
+   the non-root undo `YrotM(-y); ZrotM(-z)` is an **exact inverse** — the render is a clean
+   absolute-angle chain.
+5. **Scale magnitude drives the flip.** REFUTED IN PLAY (2026-07-15): forced to `{1,1,1}` — the idle's
+   own scale — the strike **still fires opposite**, just smaller. The scale is innocent. It is a pure
+   look knob; leave it at the approved `{3.57,3.57,3.57}`.
+6. **`bVar4` unwrap-branch selection.** REFUTED BY THE PROBE (2026-07-15): predicted the idle takes
+   `bVar4=1` and the strike `bVar4=0`. **Both take `bVar4=0`** — the idle's local `y` is NEGATIVE
+   (`lvec=(1.0,-35.7,176.0)`), because `kArmIdleHoverY=+20` is measured off the wolf's ORIGIN and
+   still lands below Midna's hair root. Same branch in both states; not the difference.
+7. **The probe samples the wrong model (`mpShadowModel` vs `mpModel`).** REFUTED BY READING:
+   `d_a_midna.cpp:1107-1112` copies `mpShadowModel`'s BaseTRMtx and every AnmMtx straight into
+   `mpModel`. They are the same pose by construction.
+
+#### Verified reference facts (don't re-derive)
+- **The `mHairPos` software chain is an IK SCRATCH — it does NOT render.** Its only output is the
+  angles. The visible hair is posed by `daMidna_c::modelCallBack` (~:260-294) from `mHairAngleY/Z`.
+  Visible length comes from the BMD bone offsets, never from `hairOffset`.
+- **`angle_z` convention** (cross-verified against BOTH consumers): `0` = BACK, `-0x4000` = UP,
+  `+0x8000` = FORWARD, `+0x4000` = DOWN. So a settled tip angle of ~26000 (~143°) is **correct**
+  (forward-and-down), not an anomaly.
+- `scaleM` post-multiplies ⇒ the software step is exactly `28 * scale.z`; `scale.x`/`scale.y` are
+  **exact no-ops** on the software chain (they multiply `hairOffset`'s x=0, y=0).
+- The aim math is a **cosmetic look-at spline** with no termination condition or overshoot guard.
+  Vanilla is safe only because its 140-unit chain can never reach Wchain / Beast Ganon.
+- J3D composes joints **T * R * S**, S inherited by children unless the joint's `scaleCompensate`
+  bit is set. **`scaleCompensate` for the hair joints is UNREAD** — one of two unverified links.
+- **The BMD hair bone axis is UNVERIFIED** — the other unverified link. Code samples `BaseX` for the
+  head forward (:2678) and the hair tip (:2746), implying +X, but the software chain uses +Z.
+
+#### ★ THE CONFOUND — the most important thing for the next attempt
+**`striking` and `scale 3.57` are the SAME CONDITION in our code.** The scale branch keys on
+`dAlbwMidnaArm_isReachStriking()`, so every observation so far changed both at once:
+
+| Condition | scale | `dotFwd` | Visual |
+|---|---|---|---|
+| **idle** (`striking=0`) | 1.0 | **+0.998** | **correct** (user-confirmed) |
+| **strike** (`striking=1`) | 3.57 | +0.72 | **flipped** |
+| decaying | 2.07 | −0.11 | (`r[]` rises 226→275→317) |
+
+**We have NEVER observed a strike at scale 1.0.** So "the scale causes the flip" and "something about
+the strike path causes the flip" are indistinguishable on the current evidence.
+
+**NEXT TEST (cheap, decisive):** make the scale branch ignore `isReachStriking()` — i.e. use scale
+**1.0 while striking** (or drop the striking gate so both states use the same scale). Then:
+- **Strike at 1.0 points CORRECTLY** ⇒ the flip is **scale-magnitude**-driven; the render cannot take
+  a 3.57× hair. Answer = accept a smaller reach, or find the real length lever.
+- **Strike at 1.0 STILL flips** ⇒ **the scale is innocent entirely** and the flip lives in the STRIKE
+  path — i.e. in what the arm publishes. Suspect then: the idle publishes a point derived from the
+  **wolf's facing** (`kArmIdleForward` ahead of the perch) while the strike publishes the **enemy's
+  world `eyePos`**. Look there, not in `d_a_midna.cpp`.
+
+#### The probe — ALBW-ARMIK (LEAVE IT IN until the bug is dead)
+In `setHairAngle` (end of the segment loop), gated on `dAlbwMidnaArm_getReachPos(NULL)`, throttled 15f.
+Grep `dusklight-*.log` for `ALBW-ARMIK`. Logs the **outcome**, not the intermediate math:
+- `r[0..4]` — remaining-distance ladder (does the scratch chain converge or sail past?)
+- `dotFwd` — tip's world `BaseX` vs. direction to target: **+1 = points at it, −1 = points away**
+- `step`, `scaleZ`, settled `angZ4`, `tipPos`, `atn`
+
+**Reading it:** `r[]` falling + `dotFwd` > 0 = aim solved correctly. `r[]` rising = chain diverging.
+`r[]` clean but `dotFwd` < 0 = aim right, render misreading. **Note the trap that bit us: the software
+tip and the render tip are DIFFERENT PLACES** (measured: 79 vs 288 units from the target) — `r[]`
+describes the scratch chain, `dotFwd`/`tipPos` describe what you actually see.
+
+**A probe should have been added before the first fix, and must not be stripped before the bug is
+confirmed dead.** (It was stripped early once; that was a mistake and cost a round.)
+
+#### If the next attempt also fails: REVERT-TO-BASELINE (surgical edits, NEVER git checkout)
+1. `d_a_midna.cpp` `setHairAngle` — delete the `l_armReachScale` branch so reach mode chases the stock
+   `l_hairScale[4]` (`{1,1,1}`); delete the IK overshoot clamp (`armRemain`, `segOffset`) and the
+   ALBW-ARMIK probe block + the `dusk/logging.h` include.
+2. `d_a_albw_midna_arm.cpp` — drop `kArmMaxRange` back to ~140 to match the unscaled chain.
+3. KEEP everything in the "GOOD" table above that doesn't depend on the scale (pacing, motion, idle,
+   free targeting, eyePos range measurement).
+Result: a shorter-reach arm that aims correctly — a working, shippable art.
+
+### (superseded) ARM AIM — KNOWN COSMETIC BUG: hair fires ~180° opposite the target
+**Status:** REVERTED TO BASELINE and parked. The art is functionally correct (damage lands on the
+right enemy — the collider is placed at the target independently of the hair render); only the hair's
+visual direction is wrong. Two fix attempts failed; **the ruled-out ground below is the valuable part
+— do not re-tread it.**
+
+**Symptom:** with an enemy in front of the wolf, Midna's hair/hand visually extends ~opposite. The
+READY idle also wants to sit above/behind her rather than forward.
+
+**Runtime evidence (ALBW-ARMAIM probe, since stripped).** For an enemy provably in front (target
+world yaw ≈ 6383 vs `linkYaw` 6275, `headAng` 6392):
+- The published reach point is CORRECT (`atn - base` = world yaw ≈ 35° ≈ the wolf's facing).
+- While riding, `shape_angle.y == linkYaw` exactly, and `head_angle ≈ shape_angle` within ±24°
+  (never 180° apart) — so head-vs-body divergence is NOT the cause.
+- `bVar4=1` in every sample of the round-4 build → fires the clamp
+  `if (vec.y < 1.0f && i < 4) vec.y = 1.0f` → forces the base segments upward. **That clamp is the
+  upside-down-hand-over-her-face symptom**, and it is a signature of the aim vector having negative
+  z (i.e. of the round-4 patch), not an independent bug.
+
+**RULED OUT — do not retry:**
+1. **The `mHairPos` software chain is NOT the render path.** It is built with
+   `YrotM(inv_head_angle) · XrotM(angle_z)` ([d_a_midna.cpp](../src/d/actor/d_a_midna.cpp) ~:2830),
+   but the VISIBLE joints are posed by `daMidna_c::modelCallBack` (~:279-287):
+   `YrotM(shape_angle.y + 0x4000) · XrotM(0x8000)` then per-joint
+   `XYZrotM(0, mHairAngleY[j], mHairAngleZ[j])` — note angle_z applied about **Z**, not X. Analyzing
+   the software chain is a dead end for anything visual.
+2. **`shape_angle` cannot be the cause — it CANCELS.** Both the aim frame (`YrotS(-shape_angle.y)`)
+   and the render base (`shape_angle.y + 0x4000`) key on `shape_angle`, so only their *relationship*
+   (a constant 0x4000) survives the world→local→world round trip. The companion-vs-riding 0x8000
+   difference in `shape_angle` therefore has no effect on aim direction. Corollary: patching the aim
+   alone (round 4) breaks the relationship to −0x4000 (→ the clamp/idle bug); patching **both**
+   (round 5) restores 0x4000 = **behaviourally identical to stock** (verified in play: idle returned
+   to baseline, flip unchanged).
+3. The 90° in the render base (`+0x4000`) is almost certainly the deliberate **axis remap** that makes
+   a Z-rotation there equivalent to the X-rotation semantics the aim math computes — i.e. stock is
+   self-consistent by design.
+
+**Where a future attempt should look:** not at the shape/head yaw frames. Candidates: the hair bones'
+REST axis in the Midna bmd vs. what the angle formulas assume; `XYZrotM`'s rotation ORDER; the
+sign/handedness of `mHairAngleY` in the render (`YrotM(-mHairAngleY[j-1])` un-rotates the parent —
+verify that hierarchy unwind is correct when the chain is scaled 3.57×); or whether the riding
+seat matrix (`getWolfMidnaMatrix` + `ZXYrotM(-0x4000,-0x4000,0)`) leaves `J3DSys::mCurrentMtx` in a
+handedness the root's `transS`-only rebuild doesn't account for. A probe that logs the FINAL world
+matrix of `JNT_HAIR_5` (not the intermediate angles) would settle it in one capture.
+
+**Baseline state (what shipped):** both 0x8000 patches removed; `setHairAngle`'s `atn_pos` branch and
+`modelCallBack`'s hair root are stock. KEPT (all independent of the bug and playtest-approved):
+500-unit length-only reach (`l_armReachScale z=3.57`, module-gated), 480/eyePos range gate
+(mid-boss targeting), jab ease-out stretch, release-return, 6f inter-punch pause, the READY forward
+idle rest, and the striking-vs-idle bridge API.
+
+### NEW IDEA — slam finisher on the hair (arm) attack (user, 2026-07-13)
+While **Midna's Grasp is active** and the player is **Z-targeted on a viable actor**, pressing
+**Triangle/Y (the Dig bind — normally inactive while Z-targeted on a lock target)** triggers the
+**`ANM_MGN*` catch/throw slam** through the hair attack — a manual finisher layered on the auto-punch
+loop. Gating: arm art active + Z-lock held + the Dig input's Z-target dead slot. (Input seam: the
+Dig bind dispatch; the slam anim would play on the Midna actor while the arm actor drives a heavier
+strike window.)
 
 ---
 

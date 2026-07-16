@@ -19,6 +19,14 @@
 #include "d/actor/d_a_hozelda.h"
 #if TARGET_PC
 #include "dusk/achievements.h"
+#include "dusk/custom_assets.hpp"
+#include "d/d_ww_itemmdl_pc.h"
+#endif
+
+#if TARGET_PC
+// NEW CODE — ALBW Port: cached WW arrow model data (from try_load, shared across all
+// arrow instances). Non-NULL => draw boots-style. See createHeap / draw.
+static J3DModelData* s_albwWwArrowNative = NULL;
 #endif
 
 int daArrow_c::createHeap() {
@@ -28,7 +36,7 @@ int daArrow_c::createHeap() {
         model_data = (J3DModelData*)dComIfG_getObjectRes("HoZelda", 0x1f);
     } else {
         u16 index;
-        
+
         if (mArrowType == 4) {
             index = 0x20;
         } else if (mArrowType == 1) {
@@ -37,6 +45,24 @@ int daArrow_c::createHeap() {
             index = 0x1c;
         }
         model_data = (J3DModelData*)dComIfG_getObjectRes(daAlink_c::getAlinkArcName(), index);
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (native WW arrow skin: Layer-B al_arrow replacement)
+        // The plain (non-bomb, non-light) arrow — index 0x1c — swaps to the rebuilt WW
+        // arrow BMD when Link's WW bow skin is active (arrow WW <=> bow WW) and the
+        // "Wind Waker Skins" folder is enabled (try_load's own gate). Single rigid joint
+        // authored in al_arrow model space, so the vanilla flight/positioning path drives
+        // it unchanged. Draw side keys on s_albwWwArrowNative for boots-style ambient
+        // (WW materials crush under MAJI). Bomb/light/HoZelda arrows keep vanilla.
+        // ============================================
+        if (index == 0x1c && daAlink_c::checkWwBowSkinActive()) {
+            J3DModelData* ww = dusk::custom_assets::try_load(daAlink_c::getAlinkArcName(), 0x1c);
+            if (ww != NULL) {
+                model_data = ww;
+                s_albwWwArrowNative = ww;
+            }
+        }
+#endif
     }
 
     mpModel = mDoExt_J3DModel__create(model_data, 0x80000, 0x11000084);
@@ -1114,6 +1140,22 @@ int daArrow_c::draw() {
         tevStr.TevColor.g = link->getFreezeG();
         tevStr.TevColor.b = link->getFreezeB();
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (native WW arrow skin: boots-style lighting)
+    // The WW arrow's cel materials crush to black under MAJI (same as the boots/bow).
+    // Replace the room-lit MAJI pass with the fixed-ambient recipe: struct-0 ambient +
+    // per-material ambient-only (SC_ ink handled by name). modelUpdateDL still submits.
+    // ============================================
+    if (s_albwWwArrowNative != NULL && mpModel != NULL &&
+        mpModel->getModelData() == s_albwWwArrowNative) {
+        dWwItemmdl_setWwBowActorAmbient(&tevStr);
+        dWwItemmdl_applyBowMaterialAmbientOnly(mpModel, &tevStr);
+        mDoExt_modelUpdateDL(mpModel);
+        return TRUE;
+    }
+#endif
 
     g_env_light.setLightTevColorType_MAJI(mpModel, &tevStr);
     mDoExt_modelUpdateDL(mpModel);

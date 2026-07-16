@@ -445,8 +445,30 @@ static bool entryEligible(const ALBWRentalEntry& entry) {
 }
 
 // A row is shown (as ????? or rentable) unless the player already owns it.
+// ============================================
+// Clothes outfit rows (Ordon / Hero's / Zora) are outfit-switcher rows: they
+// stay listed even once owned (buying re-equips, even while worn), unlike the
+// consumable/item rows.  Shared by itemRowVisible() (the page-existence gate)
+// and rebuildVisibleList() (the row builder) so the two can never disagree
+// about them — that exact divergence dropped the whole Armor tab once every
+// clothes row was owned (the retired Deity/Magic alwaysGated rows had been
+// masking it: an always-visible row kept the page's OR true).
+// ============================================
+static bool isClothesWearItemNo(u8 itemNo) {
+    return itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
+           itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
+           itemNo == (u8)dItemNo_WEAR_ZORA_e;
+}
+
 static bool itemRowVisible(const ALBWRentalEntry& entry) {
-    return !(entryEligible(entry) && dMeter2_playerOwnsRentalItem(entry.itemNo));
+    // Wear (clothes) rows are never hidden by ownership; every other row hides
+    // once eligible AND owned.  Must match the identical exemption applied in
+    // rebuildVisibleList() (see isClothesWearItemNo) or this page-existence
+    // gate will disagree with the builder and drop a non-empty page.
+    const bool owned = isClothesWearItemNo(entry.itemNo)
+                           ? false
+                           : dMeter2_playerOwnsRentalItem(entry.itemNo);
+    return !(entryEligible(entry) && owned);
 }
 
 // True if the given category page currently has at least one visible row.
@@ -471,6 +493,33 @@ static bool categoryHasVisibleRows(ALBWShopCategory cat) {
             const u8 itemNo = kSwords[i].itemNo;
             if (dAlbwWardrobe_isStoredItemNo(itemNo) || dAlbwWardrobe_isActiveSword(itemNo)) {
                 return true;
+            }
+        }
+    }
+    // ============================================
+    // Armor page keep-alive for rows that live OUTSIDE kItems[] — invisible to
+    // the loop above, so nothing here counted them for page existence: the sumo
+    // outfit row, the migrated Deity row, and Quick-Swap wardrobe storage rows
+    // (Store for owned / Retrieve for stored) for any outfit. Mirrors the build
+    // conditions in rebuildVisibleList() so the page gate can never again drop
+    // the tab while those rows would render (same shape as the CAT_SWORDS /
+    // CAT_UPGRADES keep-alive clauses above). The clothes rows already hold the
+    // page open via the loop, but this makes the coupling explicit and future-
+    // proofs it against the clothes rows ever changing.
+    // ============================================
+    if (cat == CAT_ARMOR) {
+        if (dAlbwSumoTest_isShopEligible()) {
+            return true;  // sumo purchase row
+        }
+        if (!dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e)) {
+            return true;  // Deity row shows (????? or eligible) until owned
+        }
+        if (dusk::isDpadQuickSwapEnabled()) {
+            for (int k = 0; k < D_ALBW_OUTFIT_COUNT; ++k) {
+                const dAlbwOutfitKind kind = static_cast<dAlbwOutfitKind>(k);
+                if (dAlbwWardrobe_isStoredOutfit(kind) || dAlbwOutfit_isOwned(kind)) {
+                    return true;  // a Retrieve (stored) or Store (owned) row builds
+                }
             }
         }
     }
@@ -691,18 +740,9 @@ static void rebuildVisibleList() {
         }
     }
 
-    // ============================================
-    // Deity Armor outfit-economy row (migrated from kItems). Shown while
-    // not owned; displays as "?????" until eligible (Magic stripped once +
-    // Colossal Wallet) — same presentation the alwaysGated kItems entry had.
-    // ============================================
-    if (cat == CAT_ARMOR && sVisibleCount < kVisibleListMax &&
-        !dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e)) {
-        VisibleEntry row{};
-        row.kind        = VISIBLE_DEITY;
-        row.purchasable = deityRowEligible();
-        appendVisibleRow(row);
-    }
+    // NOTE: the Magic Armor and Deity rows are injected AFTER the clothes loop
+    // below, so the Armor page reads top-to-bottom:
+    //   Sumo -> Ordon -> Hero's -> Zora -> Magic Armor -> ????? (Deity).
 
     if (cat == CAT_SWORDS && dusk::isDpadQuickSwapEnabled()) {
         for (int i = 0; i < kSwordCount; ++i) {
@@ -734,9 +774,7 @@ static void rebuildVisibleList() {
         // ALBW Port: clothes outfits (Ordon/Hero's/Zora) stay listed as outfit
         // switcher rows once eligible (????? until worn/obtained once).  Owned
         // is not used to hide them — buying re-equips even while worn.
-        const bool wear = entry.itemNo == (u8)dItemNo_WEAR_CASUAL_e ||
-                          entry.itemNo == (u8)dItemNo_WEAR_KOKIRI_e ||
-                          entry.itemNo == (u8)dItemNo_WEAR_ZORA_e;
+        const bool wear = isClothesWearItemNo(entry.itemNo);
         const bool eligible = entryEligible(entry);
         const bool owned    = wear ? false : dMeter2_playerOwnsRentalItem(entry.itemNo);
         if (eligible && owned) {
@@ -746,6 +784,33 @@ static void rebuildVisibleList() {
         row.kind        = VISIBLE_ITEM;
         row.kItemsIdx   = i;
         row.purchasable = eligible && !owned;
+        appendVisibleRow(row);
+    }
+
+    // ============================================
+    // Magic Armor storage rows (Magic 500r row retirement + Deity migration).
+    // Placed AFTER the clothes loop so Magic sits below Zora on the Armor page.
+    // Magic's kItems entry was retired, so the loop never reaches ARMOR_e —
+    // inject its Quick-Swap Store/Retrieve rows here directly. Without this,
+    // death confiscates Magic into wardrobe storage (bit 711) with NO row to
+    // buy it back from — the "buy-back = existing storage Retrieve row" the
+    // retirement promised. appendStorageRowsForItem no-ops when Quick Swap is
+    // off or Magic is neither owned nor stored, so this is inert until relevant.
+    // ============================================
+    if (cat == CAT_ARMOR && sVisibleCount < kVisibleListMax) {
+        appendStorageRowsForItem((u8)dItemNo_ARMOR_e, nullptr);
+    }
+
+    // ============================================
+    // Deity Armor outfit-economy row (migrated from kItems). LAST on the Armor
+    // page: displays as "?????" until eligible (Magic stripped once + Colossal
+    // Wallet) — same presentation the alwaysGated kItems entry had.
+    // ============================================
+    if (cat == CAT_ARMOR && sVisibleCount < kVisibleListMax &&
+        !dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e)) {
+        VisibleEntry row{};
+        row.kind        = VISIBLE_DEITY;
+        row.purchasable = deityRowEligible();
         appendVisibleRow(row);
     }
 
@@ -824,6 +889,32 @@ static const char* swordDescForItemNo(u8 itemNo) {
         }
     }
     return nullptr;
+}
+
+// ============================================
+// Display name / desc for outfit itemNos that no longer carry a kItems entry
+// (Magic Armor, Deity) but can still surface as wardrobe storage rows. Without
+// these the storage-row display falls through to swordNameForItemNo() and
+// renders a Magic Retrieve row as a nameless "Sword". Returns nullptr for
+// anything else so callers chain to the sword fallback unchanged.
+// ============================================
+static const char* outfitStorageNameForItemNo(u8 itemNo) {
+    switch (itemNo) {
+    case (u8)dItemNo_ARMOR_e:       return "Magic Armor";
+    case (u8)dItemNo_DEITY_ARMOR_e: return "Deity Armor";
+    default:                        return nullptr;
+    }
+}
+
+static const char* outfitStorageDescForItemNo(u8 itemNo) {
+    switch (itemNo) {
+    case (u8)dItemNo_ARMOR_e:
+        return "Your enchanted armor, kept safe here. A modest fee to return it.";
+    case (u8)dItemNo_DEITY_ARMOR_e:
+        return "A fearsome power, held in trust. Yours to reclaim.";
+    default:
+        return nullptr;
+    }
 }
 
 static u8 visibleRowItemNo(const VisibleEntry& row) {
@@ -1651,8 +1742,11 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].isOocooService    = false;
             sPubList[i].showNameWhenSoldOut = false;
             sPubList[i].itemNo            = itemNo;
+            const char* outfitName = outfitStorageNameForItemNo(itemNo);
             if (rental != nullptr) {
                 sPubList[i].name = rental->name;
+            } else if (outfitName != nullptr) {
+                sPubList[i].name = outfitName;  // Magic/Deity storage row (no kItems entry)
             } else {
                 sPubList[i].name = swordNameForItemNo(itemNo);
             }
@@ -1660,8 +1754,14 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
                 sPubList[i].price = 0;
                 sPubList[i].desc  = kStorageStoreDesc;
             } else if (sVisibleList[i].storageRetrieve) {
-                sPubList[i].price = kAlbwWardrobeStorageRetrievePrice;
-                sPubList[i].desc  = rental != nullptr ? rental->desc : swordDescForItemNo(itemNo);
+                sPubList[i].price = dAlbwWardrobe_retrievePriceForItemNo(itemNo);
+                if (rental != nullptr) {
+                    sPubList[i].desc = rental->desc;
+                } else {
+                    const char* outfitDesc = outfitStorageDescForItemNo(itemNo);
+                    sPubList[i].desc = outfitDesc != nullptr ? outfitDesc
+                                                             : swordDescForItemNo(itemNo);
+                }
             } else if (rental != nullptr) {
                 sPubList[i].price = rental->price;
                 sPubList[i].desc  = sVisibleList[i].purchasable ? rental->desc : nullptr;

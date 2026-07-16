@@ -27,6 +27,7 @@
 #include "d/d_resorce.h"
 #include "f_op/f_op_actor_mng.h"
 #include "aurora/lib/gx/gx.hpp"
+#include "dusk/custom_assets.hpp"
 #include "dusk/settings.h"
 #include "m_Do/m_Do_ext.h"
 #include "res/Object/itemmdl.h"
@@ -778,7 +779,30 @@ static void bakeLockedMaterialSharedDl(J3DModelData* model_data) {
     s_baked_model = model_data;
 }
 
+// ============================================
+// NEW CODE — ALBW Port (custom vbow BMD: Layer-B override)
+// Set when the held/get-item vbow came from a loose rebuilt .bmd instead of the
+// retail BDL. A rebuilt BMD has NO MDL3 locked display lists — its materials load
+// through J3D's runtime path, which Aurora renders natively — so the draw-scope
+// TEV replay (and its white-konst bloom) is unnecessary and the boots-style
+// ambient-only draw is used instead (see daAlink_c held-skin branch).
+// ============================================
+static J3DModelData* s_customVbowModelData = NULL;
+
 static J3DModelData* loadVbowFromPrivateArcOnce() {
+    // Layer-B first: <mods>/itemmdl_15.bmd (vbow, index 0xF). GameHeap pin + material
+    // guard live inside try_load. Retail vbow.bdl (locked-DL + scope) is the fallback.
+    {
+        J3DModelData* custom = dusk::custom_assets::try_load(
+            kItemmdlArcName, static_cast<int>(dRes_INDEX_ITEMMDL_BDL_VBOW_e));
+        if (custom != NULL) {
+            s_customVbowModelData = custom;
+            dWwItemmdl_debugLog("getVbowModelData: CUSTOM loose BMD active (no draw scope)");
+            return custom;
+        }
+        s_customVbowModelData = NULL;
+    }
+
     static const char* const kNames[] = {"vbow.bdl", "vbow", "vbow.bmd", "Vbow.bdl", "Vbow",
                                          "VBOW.bdl", NULL};
     for (int i = 0; kNames[i] != NULL; i++) {
@@ -808,6 +832,16 @@ static J3DModelData* loadVbowFromPrivateArcOnce() {
 }
 
 }  // namespace
+
+// ============================================
+// NEW CODE — ALBW Port (custom vbow BMD: Layer-B override)
+// True when i_model is backed by the loose rebuilt vbow BMD — the caller should
+// use the boots-style ambient-only draw (no scope) for it.
+// ============================================
+bool dWwItemmdl_usingCustomHeldModel(J3DModel* i_model) {
+    return s_customVbowModelData != NULL && i_model != NULL &&
+           i_model->getModelData() == s_customVbowModelData;
+}
 
 int dWwItemmdl_stepPrivateItemmdlArcLoad(request_of_phase_process_class* phase) {
     if (!dusk::getSettings().game.wwItemmdlGetItem.getValue() ||

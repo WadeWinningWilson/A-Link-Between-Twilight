@@ -38,6 +38,16 @@ int daAlink_kandelaarModelCallBack(J3DJoint* param_0, int param_1);
 extern BOOL l_debugMode;
 extern const char l_wArcName[];
 extern const char l_bArcName[];
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (wolf loco speed)
+// Normal land run +5%, swim +20%. Applied only to run-cap and swim-cap
+// assignments (not A-dash, gaze/atn, slope climb, or attack leaps).
+// ============================================
+static constexpr f32 kAlbwWolfLandRunSpeedMul = 1.05f;
+static constexpr f32 kAlbwWolfSwimSpeedMul    = 1.20f;
+#endif
 extern const char l_kArcName[];
 extern const char l_zArcName[];
 extern const char l_mArcName[];
@@ -236,6 +246,9 @@ void daAlink_c::changeWolf() {
     mHeight = 115.0f;
     mLinkAcch.SetRoofCrrHeight(mHeight);
     mMaxSpeed = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+    mMaxSpeed *= kAlbwWolfLandRunSpeedMul;
+#endif
 
     l_autoUpHeight = mpHIO->mWolf.mWlWallHang.m.mAutoWalkHeight + 0.01f;
     l_autoDownHeight = -l_autoUpHeight;
@@ -1816,8 +1829,14 @@ int daAlink_c::checkNextActionWolf(int param_0) {
         }
     } else if (checkWolfDashMode()) {
         mMaxSpeed = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+        mMaxSpeed *= kAlbwWolfLandRunSpeedMul;
+#endif
     } else {
         mMaxSpeed = mpHIO->mWolf.mWlMoveNoP.m.mMaxSpeed;
+#if TARGET_PC
+        mMaxSpeed *= kAlbwWolfLandRunSpeedMul;
+#endif
     }
 
     if (checkWolfGroundSpecialMode()) {
@@ -7013,6 +7032,9 @@ void daAlink_c::setSpeedAndAngleSwimWolf() {
     } else {
         mMaxSpeed = mpHIO->mWolf.mWlSwim.m.mMaxSpeedWeak;
     }
+#if TARGET_PC
+    mMaxSpeed *= kAlbwWolfSwimSpeedMul;
+#endif
 
     f32 speed;
     s16 prev_angle;

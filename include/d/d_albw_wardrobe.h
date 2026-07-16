@@ -13,6 +13,14 @@
 #include "dolphin/types.h"
 
 constexpr int kAlbwWardrobeStorageRetrievePrice = 100;
+// Magic Armor's wardrobe buy-back costs more than the standard retrieve — the
+// enchanted-armor recovery is a deliberate mini rupee sink (alpha cleanup).
+constexpr int kAlbwWardrobeMagicRetrievePrice = 350;
+
+// Per-item retrieve price (defaults to kAlbwWardrobeStorageRetrievePrice; Magic
+// Armor overrides to kAlbwWardrobeMagicRetrievePrice). Single source of truth
+// for both the shop DISPLAY and the actual CHARGE so they can never disagree.
+int dAlbwWardrobe_retrievePriceForItemNo(u8 itemNo);
 
 struct dAlbwWardrobeDebugSnapshot {
     bool resistanceActive;

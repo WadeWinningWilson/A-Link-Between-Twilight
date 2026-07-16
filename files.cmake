@@ -1490,6 +1490,10 @@ set(DUSK_FILES
         src/dusk/stubs.cpp
         include/dusk/custom_assets.hpp
         src/dusk/custom_assets.cpp
+        include/dusk/bmd_export.hpp
+        include/dusk/bmd_endian_restore.hpp
+        src/dusk/bmd_export.cpp
+        src/dusk/bmd_endian_restore.cpp
         include/dusk/texture_replacements.hpp
         src/dusk/texture_replacements.cpp
         src/dusk/touch_camera.cpp

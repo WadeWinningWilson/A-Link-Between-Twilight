@@ -3033,6 +3033,12 @@ EditorWindow::EditorWindow() {
             "Hide SC_Vbow_v ink pass during get-item draw. Compare close-up cream tips vs "
             "cel outline. Requires WW itemmdl get-item ON." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlHeldBootsStyle,
+            "WW held skin: boots-style light (A/B)",
+            "Render the held WW skin exactly like the WW boots: ambient-only, no SC draw "
+            "scope / authentic TEV replay. Matte + bloom-free; SC ink/spec parts may read "
+            "flat or unrealized — that trade-off is the experiment." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
             leftPane.add_child<NumberButton>(NumberButton::Props{
                 .key = "WW bow SC K0 cap",
