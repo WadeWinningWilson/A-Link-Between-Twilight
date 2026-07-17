@@ -571,10 +571,18 @@ bool session_fly_cam_enabled() {
 }
 
 bool editor_fly_cam_active() {
-    if (!g_levelEditorSession) {
-        return false;
-    }
-    return sSessionFlyCam || dusk::getSettings().game.debugFlyCam.getValue();
+    // ============================================================
+    // Fly cam has TWO independent enable sources:
+    //   1. the standalone debug fly-cam ConfigVar (works ANYWHERE),
+    //   2. the level-editor session latch (editor mode only).
+    // Regression fix: the old early-out `if (!g_levelEditorSession)
+    // return false;` gated the ConfigVar behind an active editor
+    // session, so the general debug fly cam was dead outside the
+    // editor. session_fly_cam_enabled() already carries the
+    // g_levelEditorSession guard, so editor-only behaviour is intact.
+    // ============================================================
+    return session_fly_cam_enabled()
+        || dusk::getSettings().game.debugFlyCam.getValue();
 }
 
 void enable_session_select_mode(bool enable) {

@@ -364,11 +364,30 @@ gets: invisible slow forward creep -> single-frame backward snap = "it shot back
 scaling with how far the aim had swung (= enemy's relative position).  Every probe was throttled
 STATIC snapshots — structurally blind to a temporal discontinuity.  Retro-fits: the frozen
 screenshot's backward arm = the anim pose post-snap; "usually when the move ended" = the biggest
-snap (actor death).  **BUILT 2026-07-16 late (clean, caches cleared, UNCOMMITTED, awaiting
-playtest): RETRACT publishes an eased glide strike->hover with striking=false — pure vanilla fan,
-aim flag never drops mid-cycle, nothing can snap.**  (Distinct from the stab-era guided retract,
-which was stacked on fan-collapse/slew/scale hacks.)  The flag now drops only at actor death,
-from the hover pose — the smallest possible transition; soften later if it reads.
+snap (actor death).  **PLAYTESTED: THE BACKWARDS SHOT IS DEAD** — the user's snap diagnosis was
+the answer; the no-snap retract (eased glide strike->hover, striking=false, aim flag never drops
+mid-cycle) is permanent.  **COMMITTED `ab6a1b500f`** (+ `4e3dbb9562` vendor-gitlink fix).
+
+**What playtest revealed next: the fan is a WEATHERVANE** — angle-only, it orients toward the
+published point and CANNOT extend (enemy dead ahead = hand does not move at all, its direction was
+already right; off-axis = hand yaws to face the enemy, then stops).  Distance to target has zero
+effect on the pose.  Corollary: when vanilla hair actually EXTENDS (Ganon/Wchain grabs) that is
+the ANM_MGN catch ANIMATIONS via the FLG0_UNK_200000 skeleton-driven path — the fan only ever did
+the pre-grab aiming.  We spent sessions trying to get a thrust out of the aiming system; vanilla
+never got one out of it either.
+
+**STRIKE UNCURL — PLAYTESTED WORKING** (2026-07-16): "the hand reaches forward to the enemy" —
+correct shape + direction; the fan collapse was always right, the confounds were what sank it.
+Speed then tuned in two steps (both playtested): vanilla slew = too slow (10-14 f) -> div3/0x4000
+(~4 f) = "faster" -> **1-FRAME SNAP (current): while striking the pose is ASSIGNED to the strike
+line** (`*angle_z = target_angle_z` at the slew site; 1 f = the 30 Hz floor).  Striking-gated:
+idle + return glide keep the vanilla ease — crack out, soft back.  User verdict: max pose speed
+reached, **still not fast enough overall** -> the remaining speed lives in the PUBLISHED POINT:
+STRETCH eases hover->enemy over `kArmStretchFrames=12` (0.4 s), so the snapped pose rides a
+12-frame-slow aim line.  NEXT SPEED LEVERS (in order): kArmStretchFrames 12->6ish (the jab
+itself), kArmHitFrames/kArmPauseFrames (cycle cadence).  Reach question still open after speed
+(physical ~140-150 from Midna's head vs 480 accept gate; options: cut gate / ANM_MGN catch-anim
+extension research).
 
 ### (superseded — NULL RESULT, reverted) ARM — ELEVATED STRIKE POINT (2026-07-16 evening)
 

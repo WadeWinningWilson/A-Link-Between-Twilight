@@ -204,25 +204,50 @@ class BMD:
     def save(self,path): open(path,'wb').write(self.b)
 
 
-def reskin(source_path, vanilla_path, out_path, keep=(), evp_joints=()):
+def reskin(source_path, vanilla_path, out_path, keep=(), evp_joints=(), vanilla_root=False):
     """source_path: Blender-round-tripped BMD (custom mesh, re-derived frames).
     vanilla_path : the ORIGINAL game BMD whose animations must drive it.
     keep         : joints whose WORLD to preserve instead of adopting vanilla's frame
-                   (moved/added joints, e.g. a relocated eye). Root is always kept.
+                   (moved/added joints, e.g. a relocated eye). Root is always kept
+                   unless vanilla_root is set.
     evp_joints   : joint indices referenced by EVP1 weighted envelopes (rebuild their
-                   inverse-bind). Read them from the tool's parse output (evp indices)."""
+                   inverse-bind). Read them from the tool's parse output (evp indices).
+    vanilla_root : adopt vanilla's frame for the ROOT too (target = pure vanilla
+                   worlds, no source-root anchor). REQUIRED when the vanilla root
+                   joint is not identity (e.g. E_PM 'center' carries +90Z and a
+                   translation) -- keeping the source root there breaks the FK of
+                   every vanilla-local child, and at runtime the BCKs drive the
+                   root with vanilla-convention locals anyway."""
     R=BMD(source_path); V=BMD(vanilla_path)
     wr=R.fk(); wv=V.fk()
     root=[i for i in R.joint_order if R.parent[i]<0][0]
-    KEPT={root}|set(keep)
-    Rroot=wr[root]                       # source root frame (e.g. +90X from --rotate); preserved
+    KEPT=(set(keep) if vanilla_root else {root}|set(keep))
+    Rroot=(np.eye(4) if vanilla_root else wr[root])  # anchor for target worlds
+    # Model-space alignment A: the source rest can live in a globally rotated
+    # space vs vanilla (e.g. Z-up from SuperBMD --rotate parking +90X on an
+    # ANIMATED root -- Gohma's static root absorbed it, E_PM's 'center' cannot).
+    # Fit a pure rotation about the origin from source joint worlds onto
+    # vanilla joint worlds; identity when spaces already agree.
+    A=np.eye(4)
+    if vanilla_root:
+        fit_joints=[i for i in R.joint_order if R.parent[i]>=0]  # root pos is bookkeeping
+        P=np.array([wr[i][:3,3] for i in fit_joints])
+        Q=np.array([wv[i][:3,3] for i in fit_joints])
+        H=P.T@Q; U,_,Vt=np.linalg.svd(H)
+        D=np.diag([1,1,np.sign(np.linalg.det(Vt.T@U.T))])
+        Rot=Vt.T@D@U.T
+        A[:3,:3]=Rot
+        res=float(np.abs((A[:3,:3]@P.T).T-Q).max())
+        print(f"  model-space align A residual: {res:.4f}u"
+              f"  (A=identity: {np.allclose(A,np.eye(4),atol=1e-4)})")
+        assert res<0.5, f"source/vanilla joint layouts don't align rigidly (res {res})"
     tw={i:(wr[i].copy() if i in KEPT else Rroot@wv[i]) for i in R.joint_order}
     tl={i:(tw[i] if R.parent[i]<0 else np.linalg.inv(tw[R.parent[i]])@tw[i]) for i in R.joint_order}
-    S={i:np.linalg.inv(tw[i])@wr[i] for i in R.joint_order}
+    S={i:np.linalg.inv(tw[i])@A@wr[i] for i in R.joint_order}
     p2j,n2j,pw,nw,conf,nconf=R.build_vert_joint_map()
     assert not conf, f"position-joint conflicts: {conf}"
     for i in R.joint_order:
-        if i==root: continue
+        if i==root and i in KEPT: continue
         if i in KEPT: R.write_joint_trs(i,*decompose_zyx(tl[i]))   # reparented under vanilla frames
         else:         R.copy_joint_trs_from(i,V)                    # adopt vanilla local exactly
     changed=0
@@ -233,27 +258,52 @@ def reskin(source_path, vanilla_path, out_path, keep=(), evp_joints=()):
     for idx,j in n2j.items():
         if np.allclose(S[j][:3,:3],np.eye(3),atol=1e-6): continue
         R.write_nrm(idx,S[j][:3,:3]@R.read_nrm(idx)); nch+=1
+    # Weighted verts live in MODEL space -> bring them into the vanilla model
+    # space with A (rigid verts got A folded into S_J above).
+    wch=0
+    if not np.allclose(A,np.eye(4),atol=1e-9):
+        for idx in pw:
+            R.write_pos(idx,A@R.read_pos(idx)); wch+=1
+        for idx in nw:
+            R.write_nrm(idx,A[:3,:3]@R.read_nrm(idx))
     # Weighted (EVP1) inverse-binds: carry the ORIGINAL bind to the new frame with the same S_J
     # used for rigid verts (do NOT assume invBind == inv(world_rest) -- it isn't; abdomen weights
     # use a different bind convention). Read old before writing (EVP1 not yet modified here).
-    for j in evp_joints: R.write_inv_bind(j, S[j] @ R.inv_bind(j))
+    # With alignment: newInvBind = inv(tw_J) @ A @ wr_J @ oldInvBind ... but the
+    # weighted VERTS were already moved by A, so the bind must consume A-space
+    # model verts: newInvBind = S_J @ oldInvBind @ inv(A).
+    Ainv=np.linalg.inv(A)
+    for j in evp_joints: R.write_inv_bind(j, S[j] @ R.inv_bind(j) @ Ainv)
     R.save(out_path)
     return dict(R=R,V=V,tw=tw,tl=tl,S=S,p2j=p2j,changed=changed,nch=nch,nconf=nconf,root=root,KEPT=KEPT)
 
 
-def verify(out_path, source_path, vanilla_path, keep=(), evp_joints=()):
-    A=BMD(source_path); wr=A.fk(); p2j=A.build_vert_joint_map()[0]
-    orig={idx:(wr[j]@A.read_pos(idx))[:3] for idx,j in p2j.items()}
+def verify(out_path, source_path, vanilla_path, keep=(), evp_joints=(), vanilla_root=False):
+    SRC=BMD(source_path); wr=SRC.fk(); p2j=SRC.build_vert_joint_map()[0]
+    orig={idx:(wr[j]@SRC.read_pos(idx))[:3] for idx,j in p2j.items()}
     B=BMD(out_path); wt=B.fk(); maxd=0.0; worst=None
-    for idx,j in p2j.items():                       # rigid: model-space rest preserved
-        d=np.linalg.norm((wt[j]@B.read_pos(idx))[:3]-orig[idx])
+    V=BMD(vanilla_path); wv=V.fk()
+    root=[i for i in B.joint_order if B.parent[i]<0][0]
+    Rroot=(np.eye(4) if vanilla_root else wr[root])
+    KEPT=(set(keep) if vanilla_root else {root}|set(keep))
+    # model-space alignment (must mirror reskin()): source rest mapped into
+    # the vanilla model space by A; identity when spaces already agree
+    A=np.eye(4)
+    if vanilla_root:
+        fit_joints=[i for i in SRC.joint_order if SRC.parent[i]>=0]
+        P=np.array([wr[i][:3,3] for i in fit_joints])
+        Q=np.array([wv[i][:3,3] for i in fit_joints])
+        H=P.T@Q; U,_,Vt=np.linalg.svd(H)
+        D=np.diag([1,1,np.sign(np.linalg.det(Vt.T@U.T))])
+        A[:3,:3]=Vt.T@D@U.T
+    for idx,j in p2j.items():                       # rigid: rest preserved (in vanilla space)
+        d=np.linalg.norm((wt[j]@B.read_pos(idx))[:3]-(A@np.append(orig[idx],1.0))[:3])
         if d>maxd: maxd=d; worst=(idx,j)
-    # weighted (EVP1): per-joint rest condition  wt[j]@newInvBind == wr[j]@oldInvBind
+    # weighted (EVP1): rest condition  wt[j]@newInvBind@A == A@wr[j]@oldInvBind
     ew=0.0
     for j in evp_joints:
-        ew=max(ew,np.abs((wt[j]@B.inv_bind(j))-(wr[j]@A.inv_bind(j))).max())
-    V=BMD(vanilla_path); wv=V.fk()
-    root=[i for i in B.joint_order if B.parent[i]<0][0]; Rroot=wr[root]; KEPT={root}|set(keep); fr=0.0
+        ew=max(ew,np.abs((wt[j]@B.inv_bind(j)@A)-(A@wr[j]@SRC.inv_bind(j))).max())
+    fr=0.0
     for i in B.joint_order:
         if i in KEPT: continue
         fr=max(fr,np.linalg.norm((Rroot@wv[i])-wt[i]))
@@ -276,13 +326,16 @@ if __name__=='__main__':
                     help='Comma joint indices whose WORLD to preserve (moved/added joints). Root always kept. Default = Gohma eye/eyelids.')
     ap.add_argument('--evp', default='1,2,3',
                     help='Comma joint indices referenced by EVP1 weighted envelopes (rebuild their inverse-bind). Default = Gohma.')
+    ap.add_argument('--vanilla-root', action='store_true',
+                    help="Adopt vanilla's frame for the root joint too (pure vanilla target worlds). "
+                         "Required when the vanilla root is not identity (e.g. E_PM 'center').")
     a=ap.parse_args()
     keep=_hexset(a.keep); evp=_hexset(a.evp)
-    r=reskin(a.source,a.vanilla,a.out,keep=keep,evp_joints=evp)
+    r=reskin(a.source,a.vanilla,a.out,keep=keep,evp_joints=evp,vanilla_root=a.vanilla_root)
     print(f"reskin -> {a.out}")
     print(f"  root (kept +root frame): 0x{r['root']:02X}   kept-world joints: {[hex(i) for i in sorted(r['KEPT'])]}")
     print(f"  rigid positions re-expressed: {r['changed']}/{len(r['p2j'])}  normals: {r['nch']}  nrm-conflicts: {len(r['nconf'])}")
-    maxd,worst,fr,ew=verify(a.out,a.source,a.vanilla,keep=keep,evp_joints=evp)
+    maxd,worst,fr,ew=verify(a.out,a.source,a.vanilla,keep=keep,evp_joints=evp,vanilla_root=a.vanilla_root)
     print(f"  VERIFY rigid rest-position drift: max {maxd:.4f}u (worst joint 0x{worst[1]:02X})")
     print(f"  VERIFY weighted (EVP1) rest residual: max {ew:.5f}")
     print(f"  VERIFY frame-match to vanilla: max {fr:.4f}")

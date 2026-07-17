@@ -2721,7 +2721,8 @@ void daMidna_c::setHairAngle() {
 
 #if TARGET_PC
     // ============================================
-    // NEW CODE — ALBW Port ("Midna's Grasp"): the hair pipeline is deliberately 100% VANILLA.
+    // NEW CODE — ALBW Port ("Midna's Grasp"): the hair pipeline is vanilla EXCEPT one
+    // strike-gated fan collapse (STRIKE UNCURL, below).
     //
     // DECISION 2026-07-16 (user): the strike look = the stock Beast-Ganon/Wchain hair reach —
     // the same fan/slew/scale mechanism the approved READY idle already renders through, aimed
@@ -2732,8 +2733,34 @@ void daMidna_c::setHairAngle() {
     // (measured: reachLen ~75-110 at every scaleZ 1.0->3.1 — it only fattens the mesh).
     // History + revert recipes: docs\wolf-combat-layers-research.md.
     //
-    // Only the ALBW-ARMIK probe (instrumentation, non-behavioral) remains below.
+    // Only the ALBW-ARMIK probe (instrumentation, non-behavioral) remains below —
+    // plus ONE behavioral change, the strike-gated fan collapse right here:
+    //
+    // STRIKE UNCURL (2026-07-16, applied ALONE on the committed no-snap baseline ab6a1b500f).
+    // The fan is angle-only — a weathervane: it orients toward the published point but cannot
+    // extend (playtested: enemy dead ahead = hand doesn't move at all; off-axis = hand yaws and
+    // stops).  The one extension the chain can express is UNCURLING: collapsing fVar1 toward 1.0
+    // straightens the arch into a line at the target — the hand translates forward by the
+    // arch-vs-line difference, then re-arches on the glide back.  Two earlier collapse builds
+    // were confounded (slew boost + 3.57 scale + strike-scale retract = the rejected "rolling");
+    // this is the collapse by itself, at vanilla scale, with vanilla slew easing both ways and
+    // the no-snap retract already in place.  Striking-gated: the IDLE (striking=false) keeps the
+    // vanilla fan and the approved arch — the idle is FINAL (doc lock).
+    // TUNING: kArmJabFanBase 1.0 = rigid line, lower = more residual curl.
     // ============================================
+    static const f32 kArmJabFanBase = 0.85f;
+    static const f32 kArmJabFanStep = 0.15f;
+    // STAB SPEED (user-tuned 2026-07-16): INSTANT — while striking the pose is assigned straight
+    // to the strike line, landing in 1 frame (the floor: fixed 30 Hz sim tick, 1 f = 1/30 s).
+    // History: vanilla slew (div 5 / cap 0x1800) took 10-14 f = slow reach; div 3 / 0x4000 took
+    // ~4 f = "faster" but not enough.  OUT-ONLY by the striking gate: the return glide and the
+    // idle keep the vanilla ease — fast out, soft back.  To retune slower, swap the direct
+    // assignment at the slew site back to cLib_addCalcAngleS with div/cap of choice.
+    const BOOL armJabStraight = atn_pos != NULL && dAlbwMidnaArm_getReachPos(NULL) &&
+                                dAlbwMidnaArm_isReachStriking();
+    if (armJabStraight) {
+        fVar1 = kArmJabFanBase;
+    }
     // Root-to-target distance, probe-only (prev_pos is JNT_HAIR_1's world origin here).
     f32 armTgtDist = 0.0f;
     if (atn_pos != NULL) {
@@ -2786,9 +2813,23 @@ void daMidna_c::setHairAngle() {
                 target_angle_z = fVar1 * (cM_atan2s(-vec.y, -vec.z) - 0x10000) - (1.0f - fVar1) * 0x4000;
             }
 
+#if TARGET_PC
+            // STRIKE UNCURL + STAB SPEED (see the block above the loop): 1-frame snap to the
+            // strike line while striking; vanilla slew + 0.3 fan otherwise (incl. the idle and
+            // the return glide).
+            if (armJabStraight) {
+                *angle_z = target_angle_z;
+                *angle_y = target_angle_y;
+            } else {
+                cLib_addCalcAngleS(angle_z, target_angle_z, 5, 0x1800, 0x100);
+                cLib_addCalcAngleS(angle_y, target_angle_y, 5, 0x1800, 0x100);
+            }
+            fVar1 += armJabStraight ? kArmJabFanStep : 0.3f;
+#else
             cLib_addCalcAngleS(angle_z, target_angle_z, 5, 0x1800, 0x100);
             cLib_addCalcAngleS(angle_y, target_angle_y, 5, 0x1800, 0x100);
             fVar1 += 0.3f;
+#endif
             if (fVar1 > 1.0f) {
                 fVar1 = 1.0f;
             }
