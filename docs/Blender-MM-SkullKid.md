@@ -15,6 +15,8 @@
 | Blender | **4.2.22 LTS** |
 | Socket | **127.0.0.1:9876** — Variant A (`get_scene_info` / `execute_code`) verified |
 | Working `.blend` | `D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend` |
+| **Side-by-side (step 1)** | **BROKEN — see [`MM-SkullKid-SideBySide-HANDOFF.md`](MM-SkullKid-SideBySide-HANDOFF.md)** |
+| MM mesh export (broken) | `tools/companion_mod/mm_stk_f3dex2_mesh.py` — do not use until replaced |
 | Source DAE (body) | `%AppData%\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae` |
 | **Vanilla PNG baseline** | `...\MM\textures_vanilla\` — **use this for Blender preview** (256×256 head, 64×128 leaf, 16×16 eye) |
 | **MM-painted refs** | `...\MM\textures_mm\` — same filenames, same dimensions, MM look painted onto TP UVs |
@@ -71,6 +73,8 @@ Re-import body if the scene is empty:
 ```powershell
 python tools/blender_socket/mm_skullkid_import.py
 ```
+
+**Side-by-side (step 1 — NOT WORKING):** Previous attempt produced corrupted MM geometry. Read **[`MM-SkullKid-SideBySide-HANDOFF.md`](MM-SkullKid-SideBySide-HANDOFF.md)** before retrying. Do **not** run `mm_skullkid_side_by_side.py` or trust `mesh_export/MM_SkullKid_body.obj`.
 
 ---
 

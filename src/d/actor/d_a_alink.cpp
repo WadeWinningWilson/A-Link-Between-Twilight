@@ -301,6 +301,19 @@ bool daAlink_c::checkWwBowSkinActive() {
 }
 #endif
 
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
+// "Leaf out" predicate that re-gates the cucco-glide chassis. Debug toggle for now; becomes
+// a real leaf-item/equip check later. Kept out of non-PC builds (settings are PC-only).
+// ============================================
+bool daAlink_c::checkDekuLeafGlide() const {
+#if TARGET_PC
+    return dusk::getSettings().game.dekuLeafGlideTest.getValue();
+#else
+    return false;
+#endif
+}
+
 static void daAlink_tgHitCallback(fopAc_ac_c* i_tgActor, dCcD_GObjInf* i_tgObjInf, fopAc_ac_c* i_atActor,
                                   dCcD_GObjInf* i_atObjInf) {
     static_cast<daAlink_c*>(i_tgActor)->tgHitCallback(i_atActor, i_tgObjInf, i_atObjInf);
@@ -17698,6 +17711,18 @@ int daAlink_c::procAutoJumpInit(int param_0) {
             angle = mpHIO->mAutoJump.m.mCuccoJumpAngle;
             isCuccoJump = true;
         }
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
+    // No cucco held, but the leaf is out: enter the same glide profile (reuse cucco tuning) so
+    // the auto-jump becomes a Deku-Leaf float. Later this maps to dedicated mDekuLeaf* HIO.
+    // ============================================
+    } else if (checkDekuLeafGlide()) {
+        mMaxSpeed = mpHIO->mAutoJump.m.mCuccoJumpMaxSpeed;
+        field_0x3478 = mpHIO->mAutoJump.m.mCuccoFallMaxSpeed;
+        angle = mpHIO->mAutoJump.m.mCuccoJumpAngle;
+        isCuccoJump = true;
+#endif
     } else {
         mMaxSpeed = mpHIO->mAutoJump.m.mMaxJumpSpeed;
     }
@@ -17855,6 +17880,17 @@ int daAlink_c::procAutoJump() {
                                 mpHIO->mAutoJump.m.mJumpFallInterpolation);
 
         if (mProcVar2.field_0x300c != 0) {
+#if TARGET_PC
+            // ============================================
+            // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1 — arm pose)
+            // A grabbed cucco sets the CARRYD (overhead-carry) base upper pose; the leaf glide
+            // holds no actor, so establish it here so the arms match cucco+glide before WALKHBS
+            // layers the glide sway on top.
+            // ============================================
+            if (checkDekuLeafGlide() && !checkGrabRooster()) {
+                setUpperAnimeBaseSpeed(dRes_ID_ALANM_BCK_CARRYD_e, 0.0f, 3.0f);
+            }
+#endif
             setUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e, UPPER_1, 1.0f, 0.0f, -1, 3.0f);
         }
 

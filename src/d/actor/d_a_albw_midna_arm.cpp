@@ -229,16 +229,25 @@ int daAlbwMidnaArm_c::Execute() {
 
     case STATE_RETRACT_e: {
         // ============================================
-        // RELEASE-RETURN (restored 2026-07-16, vanilla-behavior build).  Drop the reach and let
-        // the hair's own easing carry it home — the user's original A/B preference, and exactly
-        // what vanilla hair does when a Beast-Ganon lock releases.  HISTORY: a guided glide
-        // briefly replaced this because releasing at the old 3.57 STRIKE SCALE rendered 12 f of
-        // giant anim-pose hair (the post-impact jut).  With every scale hack removed the hair is
-        // normal size here, the release is jut-proof, and the glide was reverted.  If a strike
-        // scale is ever reintroduced, this release becomes the jut again — see the JUT! tripwire
-        // in d_a_midna.cpp setHairAngle.
+        // NO-SNAP RETRACT (2026-07-16, user-diagnosed).  The old clearReachPos() here IS the
+        // "shoots backwards" artifact: dropping the aim flag makes daMidna_c::modelCallBack
+        // (which gates per-frame) SNAP the whole rendered chain from the aimed pose to the
+        // riding-anim pose (up/back) in ONE frame — while the outbound reach is slew-limited
+        // (0x1800/frame, 11-17 f needed vs a 16 f window) and barely draws.  The eye reads:
+        // invisible forward creep -> single-frame backward snap = "it shot backwards", snap size
+        // scaling with how far the aim had swung (= the enemy's relative position).  Confirmed
+        // by elimination: chain/tip/hand were all measured aiming correctly, and moving the
+        // outbound aim point (elevated strike test) changed NOTHING visible.
+        // Fix: keep publishing through the retract — an eased glide from the strike point back
+        // to the READY hover, striking=false — so the aim flag never drops mid-cycle and the
+        // pose can never snap.  PURE VANILLA FAN throughout (unlike the rejected stab-era glide,
+        // which was confounded with fan-collapse/slew/scale hacks).  The flag now only drops at
+        // actor death, from the hover pose — the smallest possible transition.
         // ============================================
-        dAlbwMidnaArm_clearReachPos();
+        const f32 lin = 1.0f - (f32)mStateTimer / (f32)kArmRetractFrames;
+        const f32 t   = 1.0f - (1.0f - lin) * (1.0f - lin);
+        cXyz reach    = mReachTarget + (hoverPos - mReachTarget) * t;
+        dAlbwMidnaArm_setReachPos(reach, false);
         if (--mStateTimer <= 0) {
             enterState(STATE_PAUSE_e);
         }

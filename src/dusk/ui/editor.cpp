@@ -3039,6 +3039,12 @@ EditorWindow::EditorWindow() {
             "scope / authentic TEV replay. Matte + bloom-free; SC ink/spec parts may read "
             "flat or unrealized — that trade-off is the experiment." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.dekuLeafGlideTest,
+            "Deku Leaf glide (P1 test)",
+            "Re-gates TP's cucco-glide onto a 'leaf out' state — no cucco needed. While ON, "
+            "run/jump off a ledge to float: gentle fall, stick-steer, wind updrafts lift you. "
+            "Reuses cucco tuning (Alink HIO). Model/billow/gust/cost are later phases." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
             leftPane.add_child<NumberButton>(NumberButton::Props{
                 .key = "WW bow SC K0 cap",

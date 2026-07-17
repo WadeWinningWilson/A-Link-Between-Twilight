@@ -350,7 +350,70 @@ SHAPE a pose. The hair is not supposed to point at it. `dot ≈ -1` there means 
 generally: **a telemetry number cannot refute a stated preference.** The idle is defined by what the
 user sees and has approved, full stop.
 
-### ARM — VANILLA-GRAB BUILD (2026-07-16, CURRENT, awaiting playtest)
+### ★ ARM — CURRENT = the idle+vanilla baseline; NEXT LEAD = the RETRACT SNAP (user epiphany)
+
+**2026-07-16 late: elevated strike point tested — "didn't have any change" — REVERTED (clean).
+That null result is itself evidence: moving the outbound aim point dramatically (ground vs
+elevated) changed NOTHING visible ⇒ the visible artifact is not produced by the outbound aim.**
+
+**USER EPIPHANY (the live lead): what reads as "shooting backwards" is the RETRACTION —**
+`clearReachPos()` drops the aim flag and `modelCallBack` gates per-frame, so the whole rendered
+chain SNAPS from aimed pose to the riding-anim pose (up/back) in ONE frame, while the outbound
+reach is slew-limited (0x1800/frame, 11-17 f needed vs a 16 f window) and barely draws.  Eye
+gets: invisible slow forward creep -> single-frame backward snap = "it shot backwards," snap size
+scaling with how far the aim had swung (= enemy's relative position).  Every probe was throttled
+STATIC snapshots — structurally blind to a temporal discontinuity.  Retro-fits: the frozen
+screenshot's backward arm = the anim pose post-snap; "usually when the move ended" = the biggest
+snap (actor death).  **BUILT 2026-07-16 late (clean, caches cleared, UNCOMMITTED, awaiting
+playtest): RETRACT publishes an eased glide strike->hover with striking=false — pure vanilla fan,
+aim flag never drops mid-cycle, nothing can snap.**  (Distinct from the stab-era guided retract,
+which was stacked on fan-collapse/slew/scale hacks.)  The flag now drops only at actor death,
+from the hover pose — the smallest possible transition; soften later if it reads.
+
+### (superseded — NULL RESULT, reverted) ARM — ELEVATED STRIKE POINT (2026-07-16 evening)
+
+**The hand-aim fix below was BUILT, TESTED, REFUTED, and surgically REVERTED** (still fired
+backwards; its ARMHAND probe data — 35 rows — showed the hand matrix X-axis at +0.96..0.995
+toward the enemy DURING the wrong-looking strikes, matching the approved idle's +0.9999).  That
+completes the elimination: chain joints ✓, tip segment ✓, hand matrix ✓ — every component aims
+correctly and the move still reads backwards.  **The read is the fan's whole ARC, and the arc's
+character is set by TARGET ELEVATION**: the fan is anchored UP at the root — high target (Ganon,
+the idle hover) = small graceful forward arc; low target (ground enemy eyePos, 50-140 below the
+root) = ~190-deg up-and-over sweep that reads as firing backwards.  Ganon looks right because
+Ganon is TALL.
+
+**CURRENT BUILD:** d_a_midna.cpp = 100% vanilla (hand-aim insertion deleted).  ONE change, in OUR
+actor only (`d_a_albw_midna_arm.cpp`): STRETCH/HIT clamp the published aim point to never sit
+below `mReachFrom.y + kArmStrikeElevate(40)` — the enemy's column at/above Midna's head height,
+a touch above the READY hover.  The fan stays in its happy regime (Ganon-style forward reach
+toward/over the enemy); the COLLIDER still sits on the real enemy (`tgt->current.pos`, untouched);
+flying/tall enemies keep their real eyePos (max, not override).  Expected look: reach/grab toward
+the enemy from above, not a straight punch.  Tuning knob: kArmStrikeElevate.
+
+### (superseded — REFUTED IN PLAY + REVERTED) ARM — TRUE ROOT CAUSE hypothesis: HAND-AIM FIX (2026-07-16)
+
+**THE "FIRES OPPOSITE" BUG WAS NEVER IN THE CHAIN.  It was the HAND MODEL, unoriented.**
+Found via the user's Beast-Ganon probe capture (16 vanilla-lock rows): the working Ganon grab and
+our wrong-looking strike produce NEAR-IDENTICAL chain geometry (TIPDOT 0.90-0.995 vs 0.86-0.9999).
+The difference is `setBodyPartMatrix` (d_a_midna.cpp ~:1009-1053): the hand BMD
+(`mpShadowHairhandBmd` — the big directional shape that visually IS the move) is oriented by
+exactly two vanilla branches: "no aim" (natural correction) and "wolf lock"
+(`getWolfLockActorEnd()` → explicit face-the-target `XrotM(vec.atan2sX_Z() - shape_angle.y)` +
+`bvar8=true` → material node 2 = the big dome GRAB hand).  Our art publishes an aim point with NO
+wolf lock → NEITHER branch ran → the hand rendered with a raw unaimed matrix, visibly firing the
+wrong way while the thin chain aimed right.  The user's eyes were correct the entire time; every
+chain-side probe was measuring joints and could not see this model's orientation; every chain-side
+"fix" (scale/fan/slew, all sessions) was tuning the part that was already right.
+
+**FIX BUILT (one block):** third arm on that if-chain — module- and STRIKING-gated — the vanilla
+wolf-lock formula verbatim fed our published reach point, `bvar8=true` so strikes show the dome
+grab hand (the Beast-Ganon look, user decision).  Idle byte-identical (striking=false never enters
+the branch); vanilla untouched (runs only when the wolf-lock branch did not).
+
+**Verdict = the user's eyes** (the probe cannot see hand orientation): during punches the big grab
+hand should face the enemy; the idle arch unchanged.
+
+### (superseded) ARM — VANILLA-GRAB BUILD (2026-07-16 — chain reverted to pure vanilla; carried forward into the hand-aim build above)
 
 **Playtest verdict on the stab build: REJECTED — "starts rolling into itself and looking clumsy."
 User decision: KEEP the idle exactly as-is; everything non-idle = the stock vanilla hair reach,

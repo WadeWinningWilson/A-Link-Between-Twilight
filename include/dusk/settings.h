@@ -336,6 +336,10 @@ struct UserSettings {
         // Track B A/B: render the held WW skin boots-style — ambient-only, NO SC draw
         // scope / authentic TEV replay (the scope's white-konst spec pass is what blooms).
         ConfigVar<bool> wwItemmdlHeldBootsStyle;
+        // Deku Leaf glide (WIP P1): debug toggle that re-gates TP's cucco-glide chassis onto a
+        // "leaf out" state — while ON, running/jumping off a ledge floats (gentle terminal
+        // velocity, stick-steer, wind updraft) with no cucco held. Reuses the cucco HIO tuning.
+        ConfigVar<bool> dekuLeafGlideTest;
         // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
         // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.
         ConfigVar<int> wwItemmdlViewerBdlIndex;

@@ -3784,7 +3784,14 @@ public:
 
     bool checkResetRootMtx(int param_0) const { return field_0x2f90 != 0 && param_0 == 1; }
 
-    BOOL checkGrabGlide() { return checkGrabRooster(); }
+    // ============================================
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
+    // The glide chassis keys entirely off checkGrabGlide(); OR the leaf state in so all the
+    // float/steer/updraft/land sites light up without a cucco held. checkDekuLeafGlide() is a
+    // debug toggle for now (settings.game.dekuLeafGlideTest) — later becomes "leaf item out".
+    // ============================================
+    bool checkDekuLeafGlide() const;
+    BOOL checkGrabGlide() { return checkGrabRooster() || checkDekuLeafGlide(); }
 
     bool checkCopyRodRevive() const { return mProcID == PROC_COPY_ROD_REVIVE; }
     bool checkHorseGetOffMode() const { return mProcID == PROC_HORSE_GETOFF; }

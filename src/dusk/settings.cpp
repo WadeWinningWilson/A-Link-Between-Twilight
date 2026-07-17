@@ -63,6 +63,7 @@ UserSettings g_userSettings = {
         .wwItemmdlHeldSkin {"game.wwItemmdlHeldSkin", WwHeldSkinMode::Off},
         .wwItemmdlHeldBowScalePct {"game.wwItemmdlHeldBowScalePct", 100},
         .wwItemmdlHeldBootsStyle {"game.wwItemmdlHeldBootsStyle", false},
+        .dekuLeafGlideTest {"game.dekuLeafGlideTest", false},
         .wwItemmdlViewerBdlIndex {"game.wwItemmdlViewerBdlIndex", 0xF},
         .sumoOutfit {"game.sumoOutfit", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
@@ -364,6 +365,7 @@ void registerSettings() {
     Register(g_userSettings.game.wwItemmdlHeldSkin);
     Register(g_userSettings.game.wwItemmdlHeldBowScalePct);
     Register(g_userSettings.game.wwItemmdlHeldBootsStyle);
+    Register(g_userSettings.game.dekuLeafGlideTest);
     Register(g_userSettings.game.wwItemmdlViewerBdlIndex);
     Register(g_userSettings.game.sumoOutfit);
     Register(g_userSettings.game.sumoOutfitFists);

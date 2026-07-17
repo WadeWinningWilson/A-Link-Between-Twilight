@@ -202,3 +202,12 @@ setAtParam(AT_TYPE_FAN_SWING, 1, dCcG_At_Spl_UNK0, dCcG_SE_WOOD, dCcG_AtHitMark_
 via `setCylAtParam(AT_TYPE_BOOMERANG, <mild spl>, hitMark, AtSe, atp=0, R≈50, H≈70)`, emitted from
 Link forward (~100) / at lock-on target, `Ccsp()->Set` + `SetMass(1)`. CUT_TYPE_NONE ≡ our `atp=0`.
 Two player actions to add: **leaf glide** (float, §1 chassis) + **leaf swing** (the gust).
+
+## 11. P1 test notes (2026-07, in-game)
+- **Arm pose fix (done):** leaf glide now sets the `CARRYD` overhead-carry base pose (a grabbed
+  cucco sets it; the leaf holds no actor) before `WALKHBS` layers, so the upper body matches
+  cucco+glide. [d_a_alink.cpp ~17882].
+- **Later:** auto-engage the glide on *any* drop (height delta with ground below), not only the
+  ledge-run-off entry — needs a fall→glide entry hook when the leaf is out.
+- **Later (conflict):** collides with the dive animation when **water is below** — the auto-jump/
+  glide vs `procDiveJump` selection needs a water-below guard so diving still wins over gliding.
