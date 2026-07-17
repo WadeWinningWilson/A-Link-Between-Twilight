@@ -114,3 +114,6 @@ tools/procdump/
 tools/bmd_reskin/__pycache__/
 tools/bmd_reskin/B_gm_37_reskinned.bmd
 tools/bmd_reskin/B_gm_37_final.bmd
+
+# Vendor tool clones (embedded git repos - not project content; would commit as broken gitlinks)
+tools/vendor/
