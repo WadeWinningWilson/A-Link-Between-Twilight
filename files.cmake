@@ -194,6 +194,7 @@ set(DOLZEL_FILES
         src/d/d_ww_itemmdl_test.cpp
         src/d/d_demo_leftover_viewer.cpp
         src/d/d_cut_actor_spawn.cpp
+        src/d/d_ext_npc_mount.cpp
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp
@@ -1537,7 +1538,9 @@ set(DUSK_FILES
         src/dusk/ui/editor.hpp
         src/dusk/leveledit/enumerate.cpp
         src/dusk/leveledit/pick.cpp
+        src/dusk/leveledit/raycast.cpp
         include/dusk/leveledit/enumerate.hpp
+        include/dusk/leveledit/raycast.hpp
         src/dusk/ui/event.cpp
         src/dusk/ui/event.hpp
         src/dusk/ui/graphics_tuner.cpp

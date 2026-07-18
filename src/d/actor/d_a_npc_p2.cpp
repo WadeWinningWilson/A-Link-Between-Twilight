@@ -1,12 +1,42 @@
 /**
  * @file d_a_npc_p2.cpp
- * 
-*/
+ *
+ */
 
 #include "d/dolzel_rel.h" // IWYU pragma: keep
 
 #include "d/actor/d_a_npc_p2.h"
+#if TARGET_PC
+#include "d/d_ext_npc_mount.h"
+#include "d/d_stub_watch.h"
+#endif
 
+#if TARGET_PC
+static int daNpc_P2Create(void* i_this) {
+    dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
+    fopAcM_ct(a, dExtNpcMount_c);
+    if (dExtNpcMount_hasPayload("NPC_P2")) {
+        return dExtNpcMount_create(a, "NPC_P2");
+    }
+    return dStubWatch_refuseCreate(a, "NPC_P2");
+}
+
+static int daNpc_P2Delete(void* i_this) {
+    return dExtNpcMount_delete((dExtNpcMount_c*)i_this);
+}
+
+static int daNpc_P2Execute(void* i_this) {
+    return dExtNpcMount_execute((dExtNpcMount_c*)i_this);
+}
+
+static int daNpc_P2Draw(void* i_this) {
+    return dExtNpcMount_draw((dExtNpcMount_c*)i_this);
+}
+
+static int daNpc_P2IsDelete(void* param_0) {
+    return 1;
+}
+#else
 static BOOL daNpc_P2Create(void* param_0) {
     return TRUE;
 }
@@ -26,6 +56,7 @@ static BOOL daNpc_P2Draw(void* param_0) {
 static BOOL daNpc_P2IsDelete(void* param_0) {
     return TRUE;
 }
+#endif
 
 static DUSK_CONST actor_method_class daNpc_P2MethodTable = {
     (process_method_func)daNpc_P2Create,
@@ -41,7 +72,11 @@ DUSK_PROFILE actor_process_profile_definition DUSK_CONST g_profile_NPC_P2 = {
     /* List Prio    */ fpcPi_CURRENT_e,
     /* Proc Name    */ fpcNm_NPC_P2_e,
     /* Proc SubMtd  */ &g_fpcLf_Method.base,
+#if TARGET_PC
+    /* Size         */ sizeof(dExtNpcMount_c),
+#else
     /* Size         */ 0x00000001,
+#endif
     /* Size Other   */ 0,
     /* Parameters   */ 0,
     /* Leaf SubMtd  */ &g_fopAc_Method.base,

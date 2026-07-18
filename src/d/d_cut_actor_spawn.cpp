@@ -14,6 +14,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
 #include "d/actor/d_a_e_dt.h"
+#include "d/d_ext_npc_mount.h"
 #include "dusk/logging.h"
 #include "f_op/f_op_actor_iter.h"
 #include "f_op/f_op_actor_mng.h"
@@ -30,8 +31,10 @@ static const Entry kEntries[] = {
      "Shipped rat (playtest №2). params=0xFFFF0000 kill+enable sentinels."},
     {"E_dt — Deku Toad (shipped midboss)? (probable)", fpcNm_E_DT_e, 0, 0, true,
      "Opening demo teleports to world (0,4000,0). Cut spawn forces ACT_WAIT + feet pos."},
-    {"E_S1 — Shadow Beast (shipped; loads E_S2)", fpcNm_E_S1_e, 0, 0, true,
-     "Retail loads E_S2 mesh. Beta beasts: Demo viewer Sample/file2 + E_s1/s1."},
+    {"E_S1 — Shadow Beast (shipped; loads E_S2)", fpcNm_E_S1_e, 0, 0xFFFFFFFF, true,
+     "Retail E_S2 mesh. params=0xFFFFFFFF (solo/search/no-path/no-kill) — params=0 freezes/never aggros."},
+    {"E_s1 — gen-2 proto (live AI)", fpcNm_E_S1_e, 0x0E51, 0xFFFFFFFF, true,
+     "angle.x=0x0E51 → E_s1.arc + mapAnm; params=0xFFFFFFFF. Scale: WREG_F(29) on gen-2. Hang/shout degraded."},
     {"E_IS — Armos Titan (unused) — CONFIRMED", fpcNm_E_IS_e, 0, 0, true,
      "Visual confirm playtest №2. Snap to ground — air spawn can trap/death."},
     {"B_GO — Goron Golem boss", fpcNm_B_GO_e, 0, 0, true,
@@ -39,8 +42,8 @@ static const Entry kEntries[] = {
     {"E_GS — ghost gatekeeper (Wolf Sense) — CONFIRMED", fpcNm_E_GS_e, 0, 0, true,
      "Playtest №5: visible under Wolf Sense. Opacity fades to 0 without it. D_MN09 R03/R09/R12."},
     {"E_OC — Bokoblin (club)", fpcNm_E_OC_e, 0, 0, true, "Shipping club bokoblin."},
-    {"E_OC2 (alt mesh)? (unverified)", fpcNm_E_OC_e, 0x0100, 0, true,
-     "Same proc as E_OC; Angle X high byte selects OC2 / nata mesh. Folk label demoted."},
+    {"E_OC2 — shipped orc retexture + heavy cleaver — CONFIRMED", fpcNm_E_OC_e, 0x0100, 0, true,
+     "39 retail placements (ToT/Ordeals/Field). rot.x byte → resLoad(E_OC2). Folk Moblin label dead."},
     {"Obj_Lv6bemos — ToT Beamos unused", fpcNm_Obj_Lv6bemos_e, 0, 0, true,
      "Cut Temple of Time beamos variant."},
     {"Obj_Lv6bemos2 — ToT Beamos shipped", fpcNm_Obj_Lv6bemos2_e, 0, 0, true,
@@ -50,14 +53,14 @@ static const Entry kEntries[] = {
      "Methods are #if DEBUG only — RelWithDebInfo profile has NULL SubMtd (crash). "
      "Spawn refused outside DEBUG. Assets K_cube00/01 exist for later restore."},
     // Stub RELs — PARKED (playtest №1: NPC_MK procSize=1 → ACCESS_VIOLATION)
-    {"NPC_MK — Makar STUB (parked)", fpcNm_NPC_MK_e, 0, 0, true,
-     "PARKED: profile Size=0x1 — fopAc base writes OOB (crash confirmed 2026-07-17)."},
-    {"NPC_P2 — Medli STUB (parked)", fpcNm_NPC_P2_e, 0, 0, true,
-     "PARKED: profile Size=0x1 — same crash class as Makar."},
+    {"NPC_MK — Ivan socket (Mk.arc; Plan R)", fpcNm_NPC_MK_e, 0, 0, true,
+     "Socket: needs WW-Crew-Restoration arcs/Mk.arc. Absent → StubWatch ERROR. Present → L1 idle mount."},
+    {"NPC_P2 — Medli socket (Plan R)", fpcNm_NPC_P2_e, 0, 0, true,
+     "Socket: needs WW-Crew-Restoration arcs/P2.arc. Absent → StubWatch ERROR. Present → L1 idle mount."},
     {"NPC_KDK — cut NPC STUB (parked)", fpcNm_NPC_KDK_e, 0, 0, true,
-     "PARKED: Actor SubMtd NULL — same crash class as TestCube."},
+     "PARKED: StubWatch-safe ERROR. Jailer experiment — retail R_SP107/R03 only."},
     {"NPC_HENNA0 — cut NPC STUB (parked)", fpcNm_NPC_HENNA0_e, 0, 0, true,
-     "PARKED: Actor SubMtd NULL — same crash class as TestCube."},
+     "PARKED: StubWatch-safe ERROR (no assets)."},
 };
 
 static constexpr int kCount = (int)(sizeof(kEntries) / sizeof(kEntries[0]));
@@ -112,8 +115,14 @@ void trackId(fpc_ProcID id) {
 }
 
 bool isParkedStub(s16 actorId) {
-    return actorId == fpcNm_NPC_MK_e || actorId == fpcNm_NPC_P2_e || actorId == fpcNm_NPC_KDK_e ||
-           actorId == fpcNm_NPC_HENNA0_e;
+    // MK/P2 unparked when Plan R payload present; KDK/HENNA0 stay refuse-spawn.
+    if (actorId == fpcNm_NPC_MK_e) {
+        return !dExtNpcMount_hasPayload("NPC_MK");
+    }
+    if (actorId == fpcNm_NPC_P2_e) {
+        return !dExtNpcMount_hasPayload("NPC_P2");
+    }
+    return actorId == fpcNm_NPC_KDK_e || actorId == fpcNm_NPC_HENNA0_e;
 }
 
 int deleteAllOtama(void* actor, void* data) {
@@ -147,13 +156,19 @@ void finishPending(const char* phaseTag) {
             int otamaDeleted = 0;
             fopAcIt_Executor(deleteAllOtama, &otamaDeleted);
             dt->setActionMode(0, 0);  // ACT_WAIT
-            dt->current.pos = s_pending.spawnPos;
-            dt->old.pos = s_pending.spawnPos;
-            dt->home.pos = s_pending.spawnPos;
+            cXyz feet = s_pending.spawnPos;
+            if (fopAcM_gc_c::gndCheck(&feet)) {
+                feet.y = fopAcM_gc_c::getGroundY();
+            }
+            dt->current.pos = feet;
+            dt->old.pos = feet;
+            dt->home.pos = feet;
+            dt->speed.y = 0.0f;
+            dt->speedF = 0.0f;
             dt->shape_angle.x = 0;
             dt->gravity = -5.0f;
-            DuskLog.debug("[CutActorSpawn] E_dt forced ACT_WAIT at feet; deleted {} otama",
-                          otamaDeleted);
+            DuskLog.debug("[CutActorSpawn] E_dt forced ACT_WAIT + ground snap y={}; deleted {} otama",
+                          feet.y, otamaDeleted);
         }
     }
     char line[256];
@@ -282,6 +297,26 @@ bool requestSpawn() {
 void requestDespawn() {
     int deleted = 0;
     int missing = 0;
+
+    // Plan W2a: if Link's hang-bite keep points at a tracked cut actor, clear it
+    // before delete — otherwise field_0x281c goes stale and every future latch fails.
+    {
+        daAlink_c* link = (daAlink_c*)daPy_getPlayerActorClass();
+        if (link != NULL) {
+            fopAc_ac_c* keep = link->field_0x281c.getActor();
+            if (keep != NULL) {
+                const fpc_ProcID keepId = fopAcM_GetID(keep);
+                for (int i = 0; i < s_trackedCount; ++i) {
+                    if (s_tracked[i] == keepId) {
+                        link->resetWolfEnemyBiteAll();
+                        DuskLog.debug("[CutActorSpawn] resetWolfEnemyBiteAll (latched tracked id={:08x})",
+                                      (u32)keepId);
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     // Cascade createChild lineage (B_GO → B_GOS) before deleting parents.
     ChildDeleteCtx childCtx = {};

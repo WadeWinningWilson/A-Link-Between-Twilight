@@ -5,6 +5,7 @@
 #include "d/dolzel.h"  // IWYU pragma: keep
 
 #include "dusk/leveledit/enumerate.hpp"
+#include "dusk/leveledit/raycast.hpp"
 
 #include "d/d_com_inf_game.h"
 #include "d/d_debug_viewer.h"
@@ -573,23 +574,21 @@ void draw_selection_highlight() {
         pos = sSelection.pos;
     }
 
-    // Z-test OFF (clipZ=0) so fly-cam can see the marker through geometry.
-    // Cube always Z-tests — keep it as a local solid cue; sphere/arrow pierce.
-    // Future: size highlight to actor collision bounds.
-    cXyz size(80.0f, 80.0f, 80.0f);
-    csXyz angle(0, 0, 0);
-    const GXColor boxColor = {0x40, 0xC0, 0xFF, 0xA0};
-    dDbVw_drawCubeXlu(pos, size, angle, boxColor);
+    // Gate 11b (Path A): model-tight highlight — one translucent box per model
+    // joint (hugs the actor) instead of the oversized cull box. Cyan = selected.
+    // Marker/arrow keep it legible for actors that fall back to the cull box.
+    constexpr GXColor kSelectMarker = {0xFF, 0xE0, 0x40, 0xFF};
+    if (sSelection.live != nullptr && !sSelection.unspawned && !sSelection.isSpawnPoint) {
+        draw_actor_volume_highlight(sSelection.live, 0x40, 0xC0, 0xFF, 0x60);
+    }
 
-    const GXColor sphereColor = {0x40, 0xC0, 0xFF, 0xC0};
-    dDbVw_drawSphereXlu(pos, 100.0f, sphereColor, /*clipZ=*/0);
-
+    cXyz markerPos = pos;
+    markerPos.y += 40.0f;
+    dDbVw_drawSphereXlu(markerPos, 35.0f, kSelectMarker, /*clipZ=*/0);
     cXyz up = pos;
-    up.y += 200.0f;
-    const GXColor arrowColor = {0xFF, 0xE0, 0x40, 0xFF};
-    dDbVw_drawArrowXlu(pos, up, arrowColor, /*clipZ=*/0, /*width=*/12);
+    up.y += 180.0f;
+    dDbVw_drawArrowXlu(pos, up, kSelectMarker, /*clipZ=*/0, /*width=*/10);
 
-    // On-screen confirm so playtest can tell the path is live (incl. fly cam).
     dDbVw_Report(20, 200, "SEL %s #%d %s", sSelection.name, sSelection.setID,
                  sSelection.isSpawnPoint ? "spawn"
                  : sSelection.unspawned  ? "unspawned"

@@ -1,0 +1,8 @@
+# Sample dialogue file — Plan R L3 will load these when talkable mounts land.
+# Format TBD (ALBW NPC dialogue recipe). Placeholder only.
+
+[mk.greet]
+Makar: ... (drop your WW arcs and we'll hear him)
+
+[p2.greet]
+Medli: ... (same — arcs/P2.arc)

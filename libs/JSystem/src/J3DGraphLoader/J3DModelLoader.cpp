@@ -208,9 +208,17 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
                 readTexture((J3DTextureBlock*)block);
                 break;
             case 'MDL3':
+#if TARGET_PC
+                // WW BDL4 carries an MDL3 (prebuilt material DL) block that the
+                // port's material-DL walker cannot safely consume. Skip it —
+                // MAT3 / INF1 / SHP1 / … still build a usable J3DModelData.
+                // Archive bytes are left pristine (read-only walk).
+                break;
+#else
                 readMaterialDL((J3DMaterialDLBlock*)block, i_flags);
                 modifyMaterial(i_flags);
                 break;
+#endif
             case 'MAT3':
                 flags = 0x50100000;
                 flags |= (i_flags & 0x3000000);

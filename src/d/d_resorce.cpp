@@ -24,6 +24,9 @@
 #include "dusk/extras.h"
 #include "dusk/logging.h"
 #endif
+#if TARGET_PC
+#include "d/d_ext_npc_mount.h"
+#endif
 
 dRes_info_c::dRes_info_c() {
     mCount = 0;
@@ -539,9 +542,24 @@ int dRes_info_c::loadResource() {
                            nodeType == 'BRK ' || nodeType == 'BLK ' || nodeType == 'BVA ' ||
                            nodeType == 'BXA ')
                 {
-                    res = J3DAnmLoaderDataBase::load(res);
-                    if (res == NULL) {
-                        return -1;
+#if TARGET_PC
+                    // D2 A/B: ExtNpc manifests may ask to leave BTP unparsed (WW blink
+                    // tables are a near-NULL suspect; mount L1 does not bind BTP yet).
+                    if (nodeType == 'BTP ' && dExtNpcMount_shouldSkipBtp(mArchiveName)) {
+                        DuskLog.info("[dRes] skip_btp: leaving '{}' raw in arc '{}'",
+                                     mArchive->mStringTable +
+                                         (mArchive->findIdxResource(fileIndex)
+                                              ->type_flags_and_name_offset &
+                                          0xFFFFFF),
+                                     mArchiveName);
+                        // Keep archive pointer so index stays valid; do not instantiate.
+                    } else
+#endif
+                    {
+                        res = J3DAnmLoaderDataBase::load(res);
+                        if (res == NULL) {
+                            return -1;
+                        }
                     }
                 } else if (nodeType == 'DZB ') {
                     res = cBgS::ConvDzb(res);

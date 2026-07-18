@@ -32,6 +32,7 @@
 #include "d/d_albw_shield.h"
 #include "d/d_albw_potion.h"
 #include "dusk/action_bindings.h"
+#include "dusk/debug_warp.h"
 #include "d/d_kankyo.h"
 #include "dusk/truetest.hpp"
 #endif
@@ -922,6 +923,16 @@ int dComIfG_play_c::getLayerNo_common(char const* i_stageName, int i_roomID, int
 
 int dComIfG_play_c::getLayerNo(int param_1) {
     UNUSED(param_1);
+#if TARGET_PC
+    // Warp-menu Room layer override (Jailer LAYER-0 SPAWN): force the
+    // d_stage layerActorLoader / StubWatch site to the selected layer.
+    {
+        const s8 forced = dusk::ui::getRoomLayerOverride();
+        if (forced >= 0) {
+            return forced;
+        }
+    }
+#endif
     int layerNo = 0;
     int roomNo = dComIfGp_roomControl_getStayNo();
 

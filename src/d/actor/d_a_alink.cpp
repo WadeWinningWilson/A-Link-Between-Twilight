@@ -361,15 +361,21 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
     return 1;
 }
 
+// =============================================================================================
+// Deku Leaf overhead mount — CONFIRMED-WORKING orientation (playtested 2026-07-18)
+// ---------------------------------------------------------------------------------------------
 // Overhead mount, expressed in Link's FACING frame (x=right, y=up, z=forward) relative to the
-// head, plus a blade tilt. World-anchored (not head-bone-local) so "up" is actually up. Tuning
-// targets — dial these to seat the leaf overhead like the held cucco.
+// head. World-anchored (not head-bone-local) so "up" is actually up. Rotations applied in the
+// order Y then X after the yaw+offset; 0x4000 = 90 deg per axis.
+//   Y = +0x4000, X = -0x4000  -> canopy arced flat overhead, peak up, like WW's parasol. LOCKED.
+// Path to it: X=-0x4000 alone = canopy "facing up"; the extra 90 had to be on Y (a further
+// -0x8000 X only stood it vertical like a stalk). Do NOT add a Z axis (tried, unnecessary).
+// PENDING: offset Y still 55 (leaf sits a touch high); lowering is gated on fixing Link's hands
+// clipping through the leaf's hold points (needs a proper WW-style hold pose first).
+// =============================================================================================
 static cXyz s_dekuLeafOffset(0.0f, 55.0f, 0.0f);
-// Base orientation: the domed canopy's peak is +Z in model space. With no rotation it faces
-// forward; a single -90 X pitches the peak to WORLD-UP so the canopy lies horizontal overhead
-// like WW's parasol (Link hangs under it). Y flips the leaf tip fore/aft if wanted.
-static s16 s_dekuLeafBaseRotY = 0x0000;
-static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X -> dome peak up, canopy horizontal
+static s16 s_dekuLeafBaseRotY = 0x4000;   // 90 deg Y  (WORKING)
+static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X (WORKING) -> canopy peak up
 
 void daAlink_c::updateDekuLeafModel() {
     if (s_dekuLeafModel == NULL) {

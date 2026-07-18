@@ -13,6 +13,7 @@
 #include "dusk/main.h"      // ConfigPath
 #include "dusk/logging.h"
 #include "dusk/settings.h"  // game.customModelsDisabled
+#include "d/d_ext_npc_mount.h"  // Plan R provider rescan after arc overlays
 #include "d/d_resorce.h"    // dRes_info_c::loaderBasicBmd (engine-standard BMDV finish)
 #include "dusk/bmd_export.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"  // getMaterialNum/getMaterialNodePointer (Layer-B validation)
@@ -39,6 +40,7 @@
 #include <cstring>
 #include <deque>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <string>
@@ -48,6 +50,76 @@
 
 namespace dusk::custom_assets {
 namespace {
+
+// Plan R: seed ready-to-receive WW-Crew-Restoration/ once (never overwrites user arcs).
+void ensure_ww_crew_skeleton() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dest = ConfigPath / "model_replacements" / "WW-Crew-Restoration";
+    if (fs::exists(dest / "modinfo.ini", ec)) {
+        return;
+    }
+    fs::create_directories(dest / "arcs", ec);
+    fs::create_directories(dest / "npc", ec);
+    fs::create_directories(dest / "dialogue", ec);
+
+    // Prefer copying the repo template when running from a source checkout.
+    const char* base = SDL_GetBasePath();
+    fs::path copiedFrom;
+    if (base != nullptr) {
+        const fs::path candidates[] = {
+            fs::path(base) / "tools" / "ww_crew_restoration_skeleton",
+            fs::path(base) / ".." / ".." / "tools" / "ww_crew_restoration_skeleton",
+            fs::path(base) / ".." / ".." / ".." / "tools" / "ww_crew_restoration_skeleton",
+        };
+        for (const fs::path& src : candidates) {
+            if (fs::is_directory(src, ec) && fs::exists(src / "modinfo.ini", ec)) {
+                fs::copy(src, dest, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
+                copiedFrom = src;
+                break;
+            }
+        }
+    }
+
+    auto writeIfMissing = [&](const fs::path& rel, const char* body) {
+        const fs::path p = dest / rel;
+        if (fs::exists(p, ec)) {
+            return;
+        }
+        fs::create_directories(p.parent_path(), ec);
+        std::ofstream out(p, std::ios::binary);
+        if (out) {
+            out << body;
+        }
+    };
+
+    // Always ensure critical files exist (covers copy failure / shipped builds).
+    writeIfMissing("modinfo.ini",
+                   "name=WW Crew Restoration\n"
+                   "version=0.1.0\n"
+                   "author=Dusklight Cut Actors / Plan R\n"
+                   "description=Drop Wind Waker Mk.arc and P2.arc into arcs/ (your own extraction).\\n"
+                   "Never commit Nintendo assets.\\nWith arcs absent this mod is inert.\n"
+                   "category=NPCs\n");
+    writeIfMissing("arcs/README.txt",
+                   "Place Mk.arc and P2.arc here (your WW extraction — never commit).\n"
+                   "Optional: Md.arc. Empty arcs/ => TP stubs stay safe (StubWatch).\n");
+    writeIfMissing("npc/mk.ini",
+                   "proc=NPC_MK\narc=Mk\nmodel=mk.bdl\nidle=mk_wait.bck\n"
+                   "talk1=mk_talk01.bck\ntalk2=mk_talk02.bck\n"
+                   "display_name=Makar\nneck_joint=head\ncyl_radius=40\ncyl_height=100\n");
+    writeIfMissing("npc/p2.ini",
+                   "proc=NPC_P2\narc=P2\nmodel=p2.bdl\nidle=p2_wait.bck\n"
+                   "talk1=p2_talk01.bck\ntalk2=p2_talk02.bck\n"
+                   "display_name=Medli\nneck_joint=head\ncyl_radius=45\ncyl_height=140\n"
+                   "dagger_slot=hand_r\n\n[subtype.0]\nname=P2a\narg=0\n\n"
+                   "[subtype.1]\nname=P2b\narg=1\n\n[subtype.2]\nname=P2c\narg=2\n");
+    writeIfMissing("dialogue/sample.txt",
+                   "# Plan R L3 placeholder — drop arcs first.\n[mk.greet]\nMakar: ...\n");
+
+    DuskLog.info("[custom_assets] seeded WW-Crew-Restoration skeleton at {}{}", dest.string(),
+                 copiedFrom.empty() ? "" : fmt::format(" (from {})", copiedFrom.string()));
+}
 
 // normalized game path ("res/object/kmdl.arc") -> absolute loose file path
 std::unordered_map<std::string, std::string> s_map;
@@ -1443,6 +1515,9 @@ void scan() {
 
     std::error_code ec;
 
+    // Plan R: create ready-to-receive mod folder before order/scan (inert without arcs).
+    ensure_ww_crew_skeleton();
+
     // ============================================
     // NEW CODE — ALBW Port (load-order mod system, Phase 1 + 2)
     // Canonicalize the order setting (idempotent): on the very first run this
@@ -1462,8 +1537,11 @@ void scan() {
     int mods = 0;
     for (const Source& mod : sources) {
         const std::filesystem::path filesRoot = mod.root / "files";
-        if (!std::filesystem::is_directory(filesRoot, ec)) {
-            continue;  // stale entry, or not a full-mod tree (e.g. a Layer-B folder)
+        const std::filesystem::path arcsRoot = mod.root / "arcs";
+        const bool hasFiles = std::filesystem::is_directory(filesRoot, ec);
+        const bool hasArcs = std::filesystem::is_directory(arcsRoot, ec);
+        if (!hasFiles && !hasArcs) {
+            continue;  // stale entry, or Layer-B-only / empty folder
         }
         // NOTE: we walk DISABLED folders too — the model overlay (s_map) is
         // enable-gated below, but the audio twin index is enable-INDEPENDENT so a
@@ -1474,53 +1552,87 @@ void scan() {
         int count_ = 0;
         int shadowed = 0;  // claimed by a higher-priority mod (top wins)
         std::string sample;
-        for (auto it = std::filesystem::recursive_directory_iterator(filesRoot, ec);
-             it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
-            if (ec) {
-                break;
-            }
-            if (!it->is_regular_file(ec)) {
-                continue;
-            }
-            const std::string rel =
-                std::filesystem::relative(it->path(), filesRoot, ec).string();
-            if (rel.empty()) {
-                continue;
-            }
-            const std::string norm = normalize(rel);
+        if (hasFiles) {
+            for (auto it = std::filesystem::recursive_directory_iterator(filesRoot, ec);
+                 it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+                if (ec) {
+                    break;
+                }
+                if (!it->is_regular_file(ec)) {
+                    continue;
+                }
+                const std::string rel =
+                    std::filesystem::relative(it->path(), filesRoot, ec).string();
+                if (rel.empty()) {
+                    continue;
+                }
+                const std::string norm = normalize(rel);
 
 #if D_ALBW_AUDIO_SHADOW
-            if (is_wave_aw(norm)) {
-                // A replaceable sample bank → shadow system (enable-independent);
-                // never overlaid, so the vanilla .aw always stays resident.
-                // emplace = first (highest-priority) provider wins.
-                localAudio.emplace(path_leaf(norm), it->path().string());
-                if (enabled) {
-                    anyAudioEnabled = true;
+                if (is_wave_aw(norm)) {
+                    // A replaceable sample bank → shadow system (enable-independent);
+                    // never overlaid, so the vanilla .aw always stays resident.
+                    // emplace = first (highest-priority) provider wins.
+                    localAudio.emplace(path_leaf(norm), it->path().string());
+                    if (enabled) {
+                        anyAudioEnabled = true;
+                    }
+                    continue;
                 }
-                continue;
-            }
-            if (is_audio_path(norm)) {
-                continue;  // other audio → forced vanilla; not overlaid, not shadowed
-            }
+                if (is_audio_path(norm)) {
+                    continue;  // other audio → forced vanilla; not overlaid, not shadowed
+                }
 #endif
 
-            if (!enabled) {
-                continue;  // model overlay is enable-gated
-            }
-            // emplace-if-absent: a lower-priority mod never displaces a claimed
-            // path ("top wins" — was last-scanned-wins assignment).
-            if (s_map.emplace(norm, it->path().string()).second) {
-                claimedBy.emplace(norm, &mod);
-                if (sample.empty()) {
-                    sample = norm;
+                if (!enabled) {
+                    continue;  // model overlay is enable-gated
                 }
-                ++count_;
-            } else {
-                ++shadowed;
-                record_conflict(*claimedBy[norm], mod);  // Phase 3 (§4.5)
+                // emplace-if-absent: a lower-priority mod never displaces a claimed
+                // path ("top wins" — was last-scanned-wins assignment).
+                if (s_map.emplace(norm, it->path().string()).second) {
+                    claimedBy.emplace(norm, &mod);
+                    if (sample.empty()) {
+                        sample = norm;
+                    }
+                    ++count_;
+                } else {
+                    ++shadowed;
+                    record_conflict(*claimedBy[norm], mod);  // Phase 3 (§4.5)
+                }
             }
         }
+
+        // Plan R2: arcs/<Name>.arc → DVD overlay as res/Object/<Name>.arc (stock loader).
+        // Never commits WW bytes; inert when arcs/ is empty.
+        if (hasArcs && enabled) {
+            for (auto it = std::filesystem::directory_iterator(arcsRoot, ec);
+                 it != std::filesystem::directory_iterator(); it.increment(ec)) {
+                if (ec || !it->is_regular_file(ec)) {
+                    continue;
+                }
+                const auto ext = it->path().extension().string();
+                if (ext != ".arc" && ext != ".ARC") {
+                    continue;
+                }
+                const std::string stem = it->path().stem().string();
+                if (stem.empty()) {
+                    continue;
+                }
+                const std::string norm = normalize("res/Object/" + stem + ".arc");
+                if (s_map.emplace(norm, it->path().string()).second) {
+                    claimedBy.emplace(norm, &mod);
+                    if (sample.empty()) {
+                        sample = norm;
+                    }
+                    ++count_;
+                    DuskLog.info("[custom_assets] R2 arc-mount '{}' → {}", stem, norm);
+                } else {
+                    ++shadowed;
+                    record_conflict(*claimedBy[norm], mod);
+                }
+            }
+        }
+
         DuskLog.info("[custom_assets] '{}'{}{}: {} overlay file(s){} (e.g. {})",
                      mod.name, mod.core ? " [core]" : "", enabled ? "" : " [disabled]",
                      count_,
@@ -1588,6 +1700,9 @@ void scan() {
 
     DuskLog.info("[custom_assets] scan complete: {} data-tree source(s), {} override path(s)",
                  mods, static_cast<int>(s_map.size()));
+
+    // Plan R1/R3: rebuild NPC socket providers from enabled mods with arcs+manifests.
+    dExtNpcMount_rescanProviders();
 }
 
 // ============================================

@@ -25,6 +25,7 @@
 #include "dusk/logging.h"
 #include "dusk/string.hpp"
 #if TARGET_PC
+#include "d/d_stub_watch.h"
 #include <format>
 #include <fmt/ranges.h>
 #endif
@@ -2645,6 +2646,11 @@ static void layerActorLoader(void* i_data, dStage_dt_c* i_stage, int param_2) {
         {"Doo0", dStage_roomDrtgInfoInit},
 #endif
     };
+
+#if TARGET_PC
+    // Jailer experiment: which ACT-layer fires in Castle Sewers (R_SP107).
+    dStubWatch_logLayerR_SP107(param_2 >= 0 ? param_2 : dComIfGp_getStartStageRoomNo());
+#endif
 
     dStage_setLayerTagName(l_layerFuncTable, 4, dComIfG_play_c::getLayerNo(0));
     dStage_dt_c_decode(i_data, i_stage, l_layerFuncTable, ARRAY_SIZEU(l_layerFuncTable));

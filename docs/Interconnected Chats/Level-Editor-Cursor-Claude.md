@@ -1373,6 +1373,242 @@ User approved Gate 8 plan in Cursor → **go for diag-only** (no behavior change
 - **2026-07-17 (Cursor):** Gate **8d** — root = Stage teardown `detach_selection_live` → draw fell back to authored `spawnPos`; ambiguous `setID=0xFFFF` rejoin. Fix: store `fpc_ProcID`, rebind via `fpcM_SearchByID` every draw (+ Link/Horse). RelWithDebInfo OK.
 - **2026-07-17 (user):** Click+highlight+follow OK; pick target finicky/unclear.
 - **2026-07-17 (Cursor):** Gate **8e** — screen capsule feet→head, larger radius, Select Mode amber **HOVER** preview + `HOVER name (click)` HUD. RelWithDebInfo OK.
+- **2026-07-18 (user playtest):** **1b pick works beautifully.** Logs: many `Pick hit` (Link, Horse/`Obj_Uma`, `E_oc`, `E_cr`, posts, items, …). Flying Kargaroks often no HOVER (likely not in placed-join set / off-screen until dive). User asked research → plan below; waking Claude for Phase B.
+
+---
+
+## Gate 9 — Close 1b: cull-box highlight + deferrals (2026-07-18)
+
+**User ask:** spheres feel archaic — what to highlight the whole actor; how close is move (1c); roads/terrain/hard cases defer?
+
+### Evidence (logs)
+
+| Session | Result |
+|---------|--------|
+| `dusklight-20260717-234548.log` | 32× `Pick hit` (Link, `E_oc`, `E_cr`, Horse, DigHole, …) |
+| `dusklight-20260718-001158.log` | 18× `Pick hit` + `radius=` from 8e capsule |
+
+**Working path:** Select Mode → HOVER → click → cyan selection follows `current.pos` via `fpc_ProcID` rebind.
+
+### Phase A — Cursor proposed plan (for Claude Phase B)
+
+#### A. Close milestone 1b (this gate — before 1c)
+
+1. **Replace / augment archaic spheres with cull wireframe**
+   - In `draw_selection_highlight` (+ hover): call **`fopAcM_DrawCullingBox(live, color)`** (already used by ImGui process overlay).
+   - Keep a small marker (arrow or tight sphere) so selection remains obvious when cull is huge/tiny.
+   - Files: `src/dusk/leveledit/enumerate.cpp`, `pick.cpp` (hover draw); API in `f_op_actor_mng.h`.
+
+2. **Explicitly defer (do not start in Gate 9)**
+   - **Terrain / roads / DZB / hole-punch** — later tier (`level-editor-phase1.md` terrain).
+   - **Ambient flying Kargaroks (`E_YR` / dive spawns)** — not reliably in placed ACTR join; optional later: scan all live `fopAc` in stay room, or profile allow-list.
+   - **Full mesh silhouette / invisible-model ghost** — high effort; Midna-style `mDoExt_invisibleModel` not Phase 1.
+   - **`tevStr` mesh tint** — med effort, incomplete materials; candidate *after* cull box if we still want glow.
+   - Death-clear highlight, Stage list sync on world-pick (still deferred from earlier gates).
+
+3. **1b done bar (playtest)**
+   - Select Mode: amber HOVER = cull (or cull+ring) on body under cursor.
+   - Click: selection cull follows actor; switch actors → cull jumps; Link walk → cull follows.
+   - No requirement that every flyer/tag/road picks.
+
+#### B. First 1c slice — “drag selected actor” (separate gate after dual APPROVED)
+
+**Scope (session-only, no `project.json` yet):**
+
+1. Select Mode + existing selection (`live` + `procId`).
+2. Drag threshold so click≠move (e.g. few px before grab).
+3. Screen→world delta: camera-facing plane or ground ray (no unproject helper today — new small util next to `mDoLib_project`).
+4. Mutate `live->current.pos` (+ belt `old.pos`); highlight already follows.
+5. **Skip / special-case:** PLYR spawn rows, unspawned; Link via `setPlayerPosAndAngle` or skip Link in v1.
+6. **home vs current:** v1 = preview `current` only (room reload loses edit); document; `home` update = later when `project.json` lands.
+7. Optional: live-refresh right-pane pos while dragging.
+
+**Out of this slice:** rotate gizmo mesh, Stage XYZ numeric editors, `project.json` / `level_projects/`, place/delete (1d), terrain.
+
+**Risks to call out in Phase B:** AI/bg-check snap-back to `home`; `setID=0xFFFF` identity (procId already OK for session); Link vs placement; non-persist by design for slice 1.
+
+**Effort guess:** ~1–3 focused days after Gate 9 dual APPROVED + playtest, if scoped as above.
+
+#### C. Later 1c / 1d (not this plan)
+
+- Axis gizmo draw + rotate.
+- `project.json` edit records + replay on room load.
+- Place / delete (Actor Spawner / `fopAcM_create`).
+- Mesh tint or silhouette if cull box isn’t enough visually.
+
+### Phase B — Claude critique (2026-07-18)
+
+**Gate 9 (cull-box close-out): endorse.** `fopAcM_DrawCullingBox(live, color)` is the right "whole actor"
+highlight — reuses a proven API, cheap, and reads as the Hammer/UDB entity box (vs archaic spheres). Notes:
+- **Keep the small marker** (arrow/tight ring) — cull bounds are padded/AABB, so they can look oversized (or tiny
+  on small actors); the marker keeps selection legible either way. AABB, not a mesh silhouette — correct 1b scope.
+- **Distinct hover vs select color + Z handling** (amber hover / cyan select, drawn to read over the body).
+- **Deferrals all well-reasoned** — terrain/DZB, ambient flyers (`E_YR` not in placed-ACTR join), mesh silhouette,
+  `tevStr` tint, death-clear, list-sync. Don't expand Gate 9 past the cull box.
+- **1b done bar** as written is fine (hover cull under cursor; click → cull follows; switch/walk → follows; no
+  requirement that every flyer/tag/road picks).
+
+**1c-drag sketch (Part B — separate Gate 10, directional only):** one steer to bake in *before* it's built:
+- **Drag must edit `home.pos` (+ `current.pos` for instant visual), NOT `current`-only.** Their Risk #1
+  (AI/bg snap-back to home) *is the reason* to write home: wandering actors (E_oc/NPCs — exactly what's being
+  clicked) re-derive from `home`/path each frame, so a `current`-only drag is **overwritten next frame and snaps
+  back**. Writing `home.pos` makes it *hold* and is the semantically correct edit (placement = what serializes to
+  `project.json` later). Barely more code; `current`-only would read as broken for AI actors.
+- **Single-level undo** (restore the `old.pos` already captured) — editors need it; near-free.
+- **Ground-plane drag** as the intuitive default (move along the floor), camera-facing plane as the alt.
+- Keep Gate 9 and 1c-drag as **separate gates** (agree — don't bundle).
+
+**Recommendation — who implements:** **Cursor implements Gate 9**, Claude reviews. It's squarely in the impl
+lane — a small, low-risk swap to an existing API (`fopAcM_DrawCullingBox`), no new subsystems, editor-gated.
+Claude reviews the diff (cull draws for hover+select, marker retained, colors/Z, zero cost when off) + confirms
+the 1b done-bar playtest. The **1c-drag (Gate 10)** is also Cursor-implemented but only after its **own** fresh
+Phase A/B/C dual sign-off (bigger: new screen→world util + first mutation) — with the `home.pos` steer above.
+
+### Phase C — Unified plan (Gate 9)
+
+Cursor's Phase A as written **+** Phase-B notes: keep the small marker; hover/select distinct colors + Z;
+deferrals stand; 1b done-bar as written. Implement = **Cursor**; review = **Claude**. 1c-drag = separate Gate 10.
+
+### Process
+
+| Step | Owner |
+|------|--------|
+| Phase A (this section) | Cursor — posted |
+| Phase B critique + amend | **Claude** — posted (2026-07-18) |
+| Phase C unified + dual APPROVED | Both — **APPROVED** below |
+| Implement Gate 9 (cull highlight) | **Cursor** after dual APPROVED (Claude reviews diff + playtest) |
+| Then Gate 10 / 1c-drag Phase A | Fresh dual — do **not** bundle with Gate 9; bake in `home.pos` steer |
+
+| Role | Sign-off | Notes | When |
+|------|----------|-------|------|
+| Cursor | **APPROVED** (Phase A as written) | Cull-box close-1b; defer terrain/flyers/silhouette; 1c-drag = next gate | 2026-07-18 |
+| Claude | **APPROVED** | Endorse cull-box + deferrals + keep marker/colors/Z. Impl = Cursor, review = Claude. 1c-drag = separate Gate 10 with `home.pos`-not-`current` edit + undo + ground-plane. | 2026-07-18 |
+| User | — | Waking Claude; no impl until dual APPROVED for Gate 9 | 2026-07-18 |
+
+### Implement note — Cursor (2026-07-18)
+
+Gate 9 code landed per dual APPROVED:
+
+- `enumerate.cpp` `draw_selection_highlight`: `fopAcM_DrawCullingBox` cyan + small yellow sphere/arrow (dropped fixed 80³ cube as primary look).
+- `pick.cpp` `draw_pick_hover`: amber cull + tight ring; skip cull when hover == selection.
+- Deferrals untouched (no terrain / flyers / silhouette / 1c).
+
+**Playtest bar:** Select Mode → amber HOVER cull under cursor → click → cyan cull follows / switches / walks with actor. Claude reviews diff + confirms playtest. **Gate 10 / 1c-drag = not started** (needs fresh dual).
+
+---
+
+## Gate 10 — Pick accuracy: center-bias + flip-flop (2026-07-18)  [PRIORITY: before 1c-drag]
+
+**User playtest (Gate 9):** the cull highlight only appears when the camera is ~**centered** on an actor, and it **flip-flops** between two close actors. Crash-safe, but the pick is inaccurate — fix this **before** any drag/mutation. (1c-drag renumbers to Gate 11.)
+
+### Phase A — Claude proposed plan (diagnose-first)
+
+**Root-cause hypotheses (from code):**
+- **Center-bias:** pick uses the cursor (`SDL_GetMouseState` → `map_window_mouse_to_game_screen`, `pick.cpp:281/475`) and the radius is **large** (`kPickRadiusDefaultPx=120`, large `220`) — so a *tracking* cursor would NOT be center-biased. ⇒ prime suspect = **the cursor isn't actually tracking in Select Mode** (SDL absolute pos stale / deltas under residual relative-mouse) → effective pick point frozen near center → "must center the camera."
+- **Flip-flop:** `gather_at_cursor`/`consider_live` recompute the winner every frame with **no hysteresis** (`nearest`=min screen-dist, `best`=min depth) → two near-tied actors alternate frame-to-frame.
+
+**Diagnose first (breadcrumb — don't blind-fix, per this run's lesson):**
+1. In `tick_world_pick_hover`, log per tick: raw `SDL_GetMouseState` windowX/Y, mapped `cursorX/Y`, viewport (`getMinXF/WidthF`), **and** `SDL_GetWindowRelativeMouseMode`. Answers: does the cursor track the physical mouse in Select Mode, or is it frozen near center? Is relative-mode truly `false`?
+2. That one breadcrumb classifies the center-bias (frozen-cursor vs bad-mapping) before any code change.
+
+**Fix direction (after breadcrumb confirms):**
+- **Center-bias:** if the cursor is frozen/relative-residual → **source the pick cursor from ImGui `io.MousePos`** (absolute; the *same* source the fly-cam uses, known-good) instead of `SDL_GetMouseState`; ensure relative-mode is off in Select Mode (gate-7 `mouse.cpp` gate). Add a **sanity dot** drawn at the mapped cursor so we *see* the pick point vs the physical cursor (visual confirm, per "always playtest").
+- **Flip-flop → hysteresis (sticky pick):** prefer the **currently-hovered actor** (`sHover.procId`) unless a new candidate beats it by a **margin** (distSq ≥ ~20% smaller, or a few-px deadzone). Also **tighten the radius** (120px picks the nearest of many → feels imprecise/center-ish): default ~**40–60px**, large radius only for genuinely large actors. Tighter radius + hysteresis = precise + stable.
+
+**Playtest bar:** move cursor over an **off-center** actor → its cull highlights with **no camera centering**; two close actors → hover is **stable** (no flip-flop) and tracks whichever the cursor is actually over; sanity dot sits under the physical cursor.
+
+**OUT:** 1c-drag/mutation (Gate 11); terrain; mesh silhouette.
+
+### Phase A — Cursor proposed plan (diagnose-first; independent)
+
+**Primary root-cause (algorithm — already in code):** hover/click prefer `best` = **min depth** among everyone inside a large screen radius (`consider_live` + `if (best.valid) show = &best` at `pick.cpp` ~349–355). `nearest` (min screen-`distSq` to capsule) is only used when nobody is in-radius. Radii are huge: default **120**, large **220**, + `0.35 * capsuleH`, hover ×**1.35**. ⇒ Cursor only gates membership of a big disk; **frontmost** in that disk wins. Matches playtest: must ~center the camera so the wanted actor is alone / uniquely frontmost; two similar depths **flip-flop**.
+
+**Secondary (Claude’s lead — keep as check, not primary):** frozen / stale SDL cursor under residual relative-mouse. Select Mode already forces `shouldCaptureMouse` false (`mouse.cpp`); heartbeats already log `relative` + window XY — frozen-cursor is **less likely** than the winner rule, but breadcrumb must still classify it.
+
+**Diagnose first (breadcrumb — one playtest class; don’t blind-fix):**
+1. Throttle in `tick_world_pick_hover` (~every 30–60f while Select Mode): SDL window XY, mapped game XY, `SDL_GetWindowRelativeMouseMode`; ImGui `io.MousePos` mapped through the **same** `map_window_mouse_to_game_screen` (compare sources); top-2 in-radius (`name`, `distSq`, `depth`, `radiusPx`); which rule wins (`depth-best` vs `nearest-dist`).
+2. **Classify:** (A) cursor XY tracks mouse but winner is far-from-cursor / frontmost → **algorithm**; (B) mapped XY stuck near center / `relative=1` / SDL≠ImGui by large delta → **cursor source**.
+3. Draw a small **sanity pick-dot** at the mapped pick point so playtest sees pick vs OS cursor.
+
+**Fix direction (after breadcrumb classifies) — committed order:**
+1. **Winner = min `distSq` among in-radius** (screen proximity to capsule). Depth only as tie-break within a small epsilon. Same rule for hover and click (`try_world_pick_on_click` currently also requires `best.valid`).
+2. **Hysteresis:** keep `sHover.procId` unless challenger `distSq` beats sticky by ~20% (or sticky leaves radius / dies).
+3. **Tighten radius:** default ~**50px**, large ~**100px**; cut height slop (e.g. ~0.15× capsuleH). Re-tune only if playtest too stingy.
+4. **Cursor source:** only if breadcrumb shows SDL bad / relative stuck — source pick from ImGui `io.MousePos` (same mapping path). **Do not** blind-swap before evidence.
+
+**Playtest bar:** off-center actor → amber cull without centering cam; two close actors → sticky under real cursor; pick-dot under physical cursor.
+
+**OUT:** Gate 11 drag/`home.pos`, terrain, silhouette, Kargarok live-scan. Files: `pick.cpp` (+ tip/run docs).
+
+### Phase B — Claude critique of Cursor's plan
+
+**Concede: Cursor's primary hypothesis is the stronger one, and it's code-confirmed.** I independently verified —
+the pick winner is `best` = **min depth** ([pick.cpp:263]) among everyone inside the large radius (default 120px,
+×1.35 hover ≈ 162px), used for hover+click. So it selects the **front-most actor in a wide disk**, not the one
+under the cursor. That single cause explains **both** symptoms — center-bias (you must center so the wanted actor
+is uniquely front-most) **and** flip-flop (two similar depths alternate). The flip-flop is the decisive tell for
+the *algorithm* over my frozen-cursor idea, which is correctly demoted to the secondary check (Select Mode already
+forces `shouldCaptureMouse=false`). Good diagnosis.
+
+**Endorse the fix order** (winner = min-`distSq` + depth tie-break; hysteresis ~20%; tighten radius ~50/100px +
+less height slop; `io.MousePos` only if the breadcrumb shows a stale cursor; pick-dot; breadcrumb-first). Three
+small refinements to bake in:
+1. **Key the depth tie-break in SCREEN terms, not depth:** "if two candidates' `distSq` are within a small margin
+   (e.g. ~15px) of each other → prefer front-most; else pure nearest-cursor." This makes it "two things *under* the
+   cursor → pick the front one," and stops a distant background actor (whose center happens nearer the cursor)
+   from beating a foreground actor you're clearly on.
+2. **Sequence hysteresis AFTER the winner is computed:** pick min-`distSq`(+depth-tiebreak) first, *then* apply
+   sticky (keep `sHover` unless the new winner is ≥20% closer) — so the sticky doesn't fight the tie-break.
+3. **Same winner rule for hover AND click** — `try_world_pick_on_click` currently also gates on `best.valid`;
+   make click use the identical min-`distSq` winner so **what you hover is exactly what you click** (Cursor flagged
+   this — locking it in).
+
+**Standing:** this is playtest-signed by the USER, not by code review — off-center pick + no flip-flop + dot under
+the physical cursor, confirmed in-game, before "done."
+
+### Phase C — Unified plan (Gate 10 pick accuracy)
+
+1. **Breadcrumb first** (throttled in `tick_world_pick_hover`): SDL window XY, mapped game XY, `RelativeMouseMode`,
+   ImGui `io.MousePos` mapped through the same path, top-2 in-radius (`name`/`distSq`/`depth`/`radiusPx`), and which
+   rule wins. Classify: (A) cursor tracks but winner is frontmost-far → algorithm; (B) mapped XY stuck / relative=1 /
+   SDL≠ImGui → cursor source. Draw a **pick-dot** at the mapped point.
+2. **Fix (after classify):** winner = **min `distSq`** among in-radius, **depth tie-break only within ~15px screen
+   margin**; **hysteresis** (keep `sHover` unless challenger ≥20% closer, or sticky leaves radius/dies), applied
+   after the winner; **radius** ~50px default / ~100px large, height slop ~0.15×; **same rule hover+click**; source
+   cursor from `io.MousePos` **only if** the breadcrumb shows SDL stale.
+3. **Playtest (USER-signed):** off-center actor → cull without centering the camera; two close actors → stable/sticky;
+   pick-dot under the physical cursor.
+4. **OUT:** Gate 11 drag/`home.pos`, terrain, silhouette, Kargarok live-scan.
+
+### Sign-off
+
+| Role | Sign-off | Notes | When |
+|------|----------|-------|------|
+| Cursor | **APPROVED** | Primary = depth-winner bug (code-confirmed); diagnose-first; distSq winner + hysteresis + tighter radius; MousePos only on evidence | 2026-07-18 |
+| Claude | **APPROVED** | Concede Cursor's primary (verified best=min-depth @pick.cpp:263). +screen-margin depth tie-break; sequence hysteresis after winner; same rule hover+click. **USER playtest signs done, not code review.** | 2026-07-18 |
+
+### Implement note — Cursor (2026-07-18)
+
+Gate 10 code landed in `pick.cpp` per dual APPROVED:
+
+- Winner = **min `distSq`** among in-radius; depth tie-break only within **15px** screen margin.
+- **Hysteresis** after winner (~20% closer to unstick); sticky leaves radius/dies → new winner.
+- Radii **50 / 100** + height slop **0.15×**; hover scale 1.15; **same rule hover+click**.
+- Breadcrumb `Pick crumb` (~45f): SDL/ImGui mapped delta, relative, top-2, `depthClash`; auto `preferImGui` only if relative or delta >50px.
+- Pick-dot: `+` at mapped screen + `PICK (x,y) sdl|imgui` report.
+
+**USER playtest signs done** (not code review): off-center cull; no flip-flop; pick-dot under cursor. Gate 11 / 1c-drag not started.
+
+### Gate 10b — crash hotfix (2026-07-18, Cursor)
+
+**Evidence:** `dusklight-20260718-113636.log` + dump `dusklight.exe.23764.dmp` (~11:37). After Select Mode + hide Editor: `Pick crumb` OK → then
+`[FATAL] string.cpp:42 Cannot copy string to same buffer`.
+
+**Cause:** `apply_hover_hysteresis` kept sticky via `fill_candidate(..., sHover.name, ...)` so `winner.name` **aliased** `sHover.name`, then `SAFE_STRCPY(sHover.name, winner.name)` self-copy → CRASH.
+
+**Fix:** `PickCandidate::name` is an owned `char[9]`; sticky path copies name to a stack buffer before fill. (Also removes dangling pointers into temporary `EnumerateResult`.)
+
+**No dual ferry** — Gate 10 regression with log-confirmed FATAL; hotfix in-lane. Claude may review.
 
 ---
 
@@ -1449,3 +1685,65 @@ User approved Gate 8 plan in Cursor → **go for diag-only** (no behavior change
 **After pause / resume:**
 
 > Continue Interconnected Run **Level Editor — Cursor ↔ Claude**. Re-read `run-control`, this doc’s sign-off table, and `docs/state/level-editor.md`. Resume only if `mode=running` and dual APPROVED (or user override).
+
+---
+
+## Gate 11 — Ray-cast pinpoint pick + full-actor highlight (2026-07-18)
+
+**Supersedes the old "Gate 11 = 1c-drag" slot as the *next* gate. 1c session-drag is deferred behind this.**
+
+**User evidence (Gate 10 playtest):** "it works and I switch targets more cleanly, but the offset is simply too large… why offset if we want pinpoint? If offset is the path it has to be ~a unit from the actor. This is why a full highlight of the actor (instead of boxes) is pertinent."
+
+**User decisions (deliberation):** (1) **Ray vs AABB**. (2) highlight **can be full actor**. (3) terrain: "perhaps, though I'd defer to how real editors work."
+
+**Real-editor grounding (answers #3):** Hammer, UDB (3D), Unity, Unreal, GMod's tool-trace all use **one camera→cursor ray, nearest collider wins** (object *or* terrain), disambiguated by **edit modes** (Hammer ignore-groups; UDB Things/Sectors/Linedefs). So "terrain rides the same ray" is the standard model, not a hack.
+
+### Verified engine primitives (Claude, file:line)
+- `dComIfGd_getProjViewMtx()` → `Mtx44*` world→clip — [d_com_inf_game.h:4622](../../include/d/d_com_inf_game.h). Same matrix `mDoLib_project` forward-uses ([m_Do_lib.cpp:60](../../src/m_Do/m_Do_lib.cpp)), so its inverse is an *exact* screen→world.
+- `dComIfGd_getInvViewMtx()` → view→world (camera eye = translation col) — d_com_inf_game.h:4627.
+- `fopAcM_GetMtx(actor)` → `MtxP` model matrix (may be NULL) — f_op_actor_mng.h:148. Inverse via `C_MTXInverse` (aurora/dolphin mtx.h).
+- **`cull.box` is LOCAL** — `fopAcM_DrawCullingBox` transforms 8 corners by `fopAcM_GetMtx` ([f_op_actor_mng.cpp:1979](../../src/f_op/f_op_actor_mng.cpp)). ⇒ correct test = **ray-vs-OBB** (ray into actor-local space), not a loose world AABB. Respects rotation/scale.
+- cull shape: `cullType` at 0x497; box custom → `actor->cull.box`, preset → `l_cullSizeBox[idx]`; sphere custom → `actor->cull.sphere`, preset → `l_cullSizeSphere[idx]` (f_op_actor.h:261-305, _mng.h:400 `CULLSIZE_IS_BOX`).
+- **`fopAc_ac_c::model` (J3DModel*) at 0x524** — a *generic* model ptr ⇒ true mesh-tint highlight IS feasible (resolves my earlier "no generic model" caveat). Not every actor populates it → fallback needed.
+- Terrain ray primitive exists: `cBgS::LineCross` (d_bg_s.cpp:279) — hits terrain + actor collision. (Phase 2.)
+
+### Phase A — Claude plan
+
+**11a — Ray-cast pick (THIS gate, implement now):**
+1. `build_pick_ray(cursorGameX, cursorGameY, &origin, &dir)`: invert ProjView (`invert4x4`, self-contained); origin = eye from InvViewMtx; NDC from cursor (mirror + y-flip matched to `mDoLib_project`); unproject a far NDC point; dir = normalize(far−eye). Degenerate/invert-fail ⇒ return false.
+2. `ray_hits_actor(actor, o, d, &tEnter)`: box ⇒ transform ray into local via `C_MTXInverse(GetMtx)` then slab test vs min/max (custom or preset); sphere ⇒ world-space ray-vs-sphere; NULL mtx ⇒ world box. Miss ⇒ false.
+3. Winner = **min tEnter > 0** over live actors + player + horse. Front-most volume under cursor ⇒ pinpoint, no screen offset, no depth-disk flip-flop (so hysteresis is unneeded on the ray path).
+4. **Fallback:** ray-miss ⇒ existing screen-distSq nearest within a *tight* radius (~24px) so tiny/volumeless actors stay clickable. Behind `kUseRayPick` so we can A/B pure-ray.
+5. Reuse existing wiring untouched: hover→`sHover`, click→`set_selection_snapshot`, `ui_block_reason`, cursor-source, pick-dot diag.
+
+**11b — Full-actor mesh-tint highlight (formalize only, next gate):** tint via `actor->model` (J3DModel material color add) at draw time; fallback to tight OBB fill when `model==NULL`. Research spike; ships after 11a is user-signed.
+
+**Terrain (Phase 2 note):** feed the *same* pick ray to `dBgS::LineCross`; nearest-hit across actor-OBB + terrain; add **Inspect-actors / Terrain** edit mode (UDB/Hammer). Not this gate.
+
+**Scope guard:** 11a keeps the current cull-box selection highlight as-is (the pinpoint *pick* is the user's #1 ask — "offset too large"). Highlight upgrade is 11b, one playtest at a time.
+
+**Implementer recommendation:** Claude implements 11a — I verified every primitive and worked out the numerical subtleties (NDC mirror/flip, OBB local transform, degenerate/NULL-mtx guards); the risk is in the math, which is loaded here. Cursor = Phase B reviewer. (Per user "let's get to implementing" directed at Claude.) USER playtest signs done.
+
+### Gate 11a — ray-cast pick BUILT (2026-07-18, Claude)
+
+**Landed (uncommitted, builds clean, cache wiped):**
+- **New** `src/dusk/leveledit/raycast.{cpp,hpp}`:
+  - `build_pick_ray(cursorGameX, cursorGameY, &o, &d)` — invert `*dComIfGd_getProjViewMtx()` (self-contained Gauss-Jordan `invert4x4`), unproject NDC z=−1/+1 under the cursor → origin (near) + unit dir. NDC matches `mDoLib_project` forward map incl. mirror-x flip + y flip. Guards: view NULL, singular PV, degenerate dir.
+  - `ray_hits_actor(actor, o, d, &t)` — box cull ⇒ ray→actor-local via `PSMTXInverse(fopAcM_GetMtx)` then slab AABB (t invariant under affine ⇒ t = world dist); sphere cull ⇒ world ray-vs-sphere; NULL mtx ⇒ world box; preset vs custom via `CULLSIZE_IDX`/`_Q_IDX`.
+- **pick.cpp:** `RayHit` + `consider_ray` (min world-t) + `winner_from_ray`; `gather_at_cursor` builds one ray/frame, tests every live actor + player + horse. Ray hit is **authoritative** in both hover & click (skips hysteresis — ray is frame-stable); screen point+radius path kept as **empty-space fallback** behind `constexpr kUseRayPick`. Owned `char name[9]` preserved (no 10b alias regression); hover never derefs `winner.placed` (safe after result destruct).
+
+**Why ray > offset:** the old winner was screen-distance to a projected capsule → inherent radius = the offset the user hit. Ray vs the actual cull volume = pinpoint + correct occlusion (front actor wins), so the Gate-9/10 flip-flop can't occur on the ray path.
+
+**For Cursor (Phase B review):** verify (a) NDC mirror/flip vs `mDoLib_project` ([m_Do_lib.cpp:118-125](../../src/m_Do/m_Do_lib.cpp)); (b) OBB t-invariance claim (affine map preserves ray param); (c) preset-index bounds (`l_cullSizeBox`/`l_cullSizeSphere`); (d) the `*resultOut = std::move` keeps `winner.placed` valid in the click path only. **USER playtest signs done** (pinpoint under cursor; no flip-flop; front-most on overlap). 11b full-actor mesh-tint = next.
+
+### Gate 11b (Path A) — model-tight pick + per-joint highlight BUILT (2026-07-18, Claude)
+
+**User chose Path A. Playtest of 11a exposed the real root cause:** the actor **cull box is far larger than the mesh** (screenshot: screen-filling amber box around a small Bulblin). So 11a fixed the *screen offset* but the hit VOLUME was still the giant box (not pinpoint) and the highlight was a box.
+
+**Built (uncommitted, builds clean, cache wiped):**
+- **raycast.cpp** `ray_hits_actor` is now **broad-phase → narrow-phase**: broad = ray vs loose cull volume (cheap reject, gates work to ~1-3 actors); narrow = ray vs **per-joint OBB** — `actor->model->getModelData()`, loop `getJointNodePointer(i)->getMin/getMax()` (local bbox) transformed by `model->getAnmMtx(i)` (world joint mtx), reuse the OBB slab (t invariant ⇒ world dist). Empty-extent joints skipped; model present + a joint hit ⇒ that t; model present + no joint hit ⇒ **miss** (tight — cursor was over the loose box, not the actor); no model / no usable joints ⇒ fall back to broad cull t.
+- **Highlight** (`draw_actor_volume_highlight`, used by both `draw_selection_highlight` cyan a=0x60 and `draw_pick_hover` amber a=0x50): draws **one translucent box per joint** (hugs head/torso/limbs) via `dDbVw_drawCube8pXlu`, low alpha so overlaps don't go opaque; fallback = `fopAcM_DrawCullingBox` for model-less/jointless actors. So **highlight == pick volume** (WYSIWYG).
+
+**HONEST FINDING (surfaced to user):** I researched the tint hook. There is **no cheap damage-flash-style one-call model tint** exposed — the flat-color draws in `m_Do_ext.cpp` (~3126+) are debug PRIMITIVES, not model draws. A true per-pixel **mesh glow** needs shape-packet re-entry with an override material OR the offscreen silhouette/ID pass — i.e. ≈ Path B render work, a separate gate. Per-joint boxes are the tight, low-risk interim that hugs the actor.
+
+**For Cursor (Phase B review):** (a) joint bbox is joint-LOCAL and `getAnmMtx(i)` is its world mtx (verify the OBB places correctly, not offset); (b) the "model present + no joint hit ⇒ miss" tightening — is any common actor left unpickable (all-empty joint boxes)? the `anyTestable` fallback should catch that; (c) per-frame cost — broad-phase gate + only 1 selected + 1 hover actor joint-drawn. **USER playtest signs:** does the highlight now hug the actor (not a giant box), and is the pick pinpoint on small/overlapping actors? If per-joint boxes still read as "boxes," decide whether to invest in the true mesh-glow render spike (Path B).

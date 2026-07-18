@@ -1210,6 +1210,11 @@ static int phase_0(dScnPly_c* i_this) {
 static int phase_1(dScnPly_c* i_this) {
     dStage_roomControl_c::setProcID(fopScnM_GetID(i_this));
 
+#if TARGET_PC
+    // Room layer override: survives the warp that set it, clears on the next load.
+    dusk::ui::onStageLoadRoomLayerOverride();
+#endif
+
     dComIfGp_setStartStage(dComIfGp_getNextStartStage());
 
     if (dComIfGp_getStartStageLayer() < 0 && daPy_py_c::checkRoomRestartStart()) {

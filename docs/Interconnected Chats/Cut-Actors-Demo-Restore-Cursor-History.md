@@ -55,6 +55,7 @@
 - Alias table may land in docs/state or run-doc decisions; viewer UI soft-labels only after APPROVED.
 - Drive session: **not requested**.
 - **User process (2026-07-17):** All deliberation and progress goes in the **run doc** (and live-state tip). Do not rely on chat-paste ferrying as the record. When a **unified plan** is ready, **tell the user once** so they can give it a pass before continue/execute — then wait.
+- **User process (2026-07-18):** Cursor must **always** put the **Paste for History** block in the **run doc** (verbatim ferry text under a clear heading). Chat may mirror it; the doc is the source History reads.
 
 ### Drive
 
@@ -457,6 +458,11 @@ Phase C verbatim.
 
 ### Phase D — Execute notes (short)
 
+- **2026-07-18 Phase C′:** user pass after commit `728b5fd71e`. Cursor implementing
+  gen-2 live AI: Cut Actors preset `E_s1 — gen-2 proto` (`angle.x=0x0E51`) →
+  `mUseEs1Arc`, `mapAnm`, S1 `jc_data`, hang/shout stubs. Shipping E_S1 preset unchanged.
+  E_dt COMPLEATE: re-gndCheck + zero vertical speed (no private `mAcch` from spawner).
+
 **History — playtest report №1 vs A1 predictions (2026-07-17):** user reports (1) E_ms
 no spawn, (2) E_gs no spawn, (3) **CRASH on Makar preset**.
 
@@ -730,10 +736,10 @@ joint count. Fail create loudly if init fails.
 | Role | Sign-off | Notes | When |
 |------|----------|-------|------|
 | Cursor | APPROVED | Plan author | 2026-07-18 |
-| History | — | Critique when Moblin H2 yields; joint/audio risks | |
-| User | — | **Pass required before Phase D impl** | |
+| History | **POSTED** (follow-up) | Moblin leaves + E_s1 scope; EN_NS wire proposal → Cursor corrected (already live) | 2026-07-18 |
+| User | **PASS** | “Let's try it” after commit — Slice A–E started | 2026-07-18 |
 
-**Implementation gate:** user **pass** required; History APPROVED preferred before Slice A.
+**Implementation gate:** user **pass** received 2026-07-18. History critique still welcome as follow-up.
 
 **History — MOBLIN HUNT CONCLUDED (2026-07-17): defensible NULL result.**
 
@@ -862,6 +868,612 @@ Full write-up in TPHistory **§3.8**; highlights:
    (`S1_HOOK/PULL/DEFEND/SHRINK/STICK/…`). Cursor: wire an anim-cycle control into the leftover
    viewer for out-of-Demo entries (same pattern as existing viewer anim support) so the beta
    beast moves. Needs no new policy — display-side only.
+
+**History — MOBLIN PATH: ALL LEAVES TURNED (2026-07-18). Full synthesis in TPHistory §3.9.**
+
+Ten lanes run to completion (user directive: "turn over every leaf"). Headlines:
+
+1. **E_OC2 folk label DEAD — it SHIPS**: 39/126 retail E_oc placements select OC2 via placement
+   rot.x byte 1 (≠0/FF → `resLoad("E_OC2")`, d_a_e_oc.cpp:2998); homes = ToT R11/13/14, Cave of
+   Ordeals, Hyrule Field. Same body as oc.bmd (retexture) + own 2×-size weapon. Debug name
+   オーク "Orc". → Alias demotion: `E_OC2 — shipped orc retexture w/ heavy cleaver (confirmed)`.
+2. **Orphan-arc sweep**: exactly ONE enemy-prefixed arc no code ever names — `E_wpa` =
+   `ef_warphole` unused warp-hole EFFECT (viewer candidate, misfiled E_ prefix). All other
+   E_/B_ arcs accounted.
+3. **All axes accounted** (member-name sweep, 1,397 arcs): Dynalfos `mf_axe`, King Bulblin
+   `rb_ono` (斧), OC2 cleaver — no orphaned axe model anywhere.
+4. **Cross-master diff (9 discs)**: only the known rev0 E_base leak. Stage arcs: doors only.
+5. **FIVE orphaned enemy-audio families discovered** (no actor/arc/code): **EN_NS = beta Shadow
+   Beast audio, high confidence** (22 ids; FALLTREE/arm-swing/L-R hands+feet/HANGED/
+   **V_DEMO04_HIPPARU** = pulling in the drag-Link-into-twilight cutscene; ≥8 verb matches vs
+   E_s1 anims — the S1/S2 line had audio before the E_md rewrite); EN_GF (eater-pod —
+   Like-Like profile); EN_ZZ (snorter); EN_GBA (egg-layer w/ hatch); EN_HG (Demo28/Bullbo-arc
+   heavy). Candidate viewer/annex labels — each needs Cursor countersign for display.
+6. **Moblin verdict (final)**: purged before all nine masters AND before audio mastering froze
+   (five other cut enemies left audio scars; the Moblin left none) — its home was the §3.8
+   dev-stage network. Retail descendants are design-lineage only (King Bulblin, OC2). No
+   disc-side restoration path exists; beta-Moblin restoration = mod-import class (WW Mo2 port
+   through custom-assets or recreation) — same class as the parked stubs, which aligns with the
+   user's declared next phase (unpark stubs → external-asset load path).
+
+**History — E_s1 scope refinement (2026-07-18, answering user's "does it still have logic tied
+to each of its animations?"):**
+
+- **The AI is 100% alive — `d_a_e_s1.cpp` (2,538 lines) IS the retail Shadow Beast** (proc E_S1
+  placed across the twilight overworld; loads the E_S2 retail model; `E_md` = Midna's family,
+  not the messenger). Live behaviors: roof-ambush (`e_s1_roof`), patrol paths, fight/run, flinch
+  (`bibiri`), damage/down, and the signature pack mechanic (`s_pack_*`/`all_fail`/`all_wakeup` —
+  last-beast revive shout). Cursor's 0x0E51 variant already runs the gen-2 model INSIDE this
+  live AI with an anim index remap — "fit into Cut Actors" is substantially done.
+- **Anim coverage split (the real remaining scope):**
+  - Retail logic ↔ gen-2 arc BOTH have: attack/attack02, damaged, dash01/02, dead/deadwait
+    families, down, shrink/shrink_down, stick, wait01/02, walk — all drive correctly.
+  - Retail logic WANTS but gen-2 arc LACKS: `HANGED/HANG_DAMAGE/HANG_BRUSH/BRUSH2/HANG_WAIT`,
+    `SHOUT`, `DEADWAKE_02-04` → Cursor's fallback stubs are the right call; revive-shout will
+    play a fallback pose.
+  - **Gen-2 EXCLUSIVES with NO retail driver: `HOOK`, `PULL`, `DEFEND`, `CHANGE`
+    (+ `ATTACK03`)** — vestigial gen-2 behaviors. Design reading (cross-evidence with the
+    orphaned EN_NS audio: `HIPPARU` pull + `HANGED/HANGEDBRUSH` ids): the gen-2 beast was a
+    GRABBER — it hooked/latched onto (wolf-)Link and was shaken off ("brush"), and dragged prey
+    (Demo04 pull). Reviving that moveset = NEW action states (small, but new gameplay — its own
+    sign-off if wanted). Without it, gen-2-in-Cut-Actors is complete but plays like a
+    reskinned retail beast.
+- Standing proposal unchanged: wire EN_NS ids as the gen-2 voice (V_ATTACK/DAMAGE/DEATH/SEARCH/
+  WAIT/FN_L/R; HANGED ids if the grab states ever land). Needs Cursor countersign.
+
+**Cursor — countersign / absorb History 2026-07-18 (Moblin leaves + E_s1 scope):**
+
+| History claim | Cursor stance |
+|---|---|
+| Moblin final NULL / mod-import class | **ACCEPT** — closes hunt for this run |
+| E_OC2 ships (rot.x selector) | **ACCEPT** — soft-label demotion in Cut Actors UI |
+| `E_wpa` unused warphole effect | **ACCEPT** as viewer candidate (backlog; not Slice now) |
+| EN_NS = orphaned beta beast audio → wire for gen-2 | **CORRECTED — already live.** `d_a_e_s1.cpp` already calls ~all `Z2SE_EN_NS_*` (attack/damage/death/search/wait/fn/hand/hanged/shout/…) and `setEnemyName("E_s1")`. Gen-2 `0x0E51` profile inherits that bank unchanged. TPHistory §3.9 “no source reference” is false for the family; sole likely orphaned id in-family is `Z2SE_EN_NS_V_DEMO04_HIPPARU` (no `.cpp` callers) — interesting for a future PULL action, not a rewire |
+| Grabber exclusives HOOK/PULL/DEFEND/CHANGE/ATTACK03 | **ACCEPT reading** — out of C′; needs own mini-plan + user pass if we revive gameplay |
+| Hang/shout stubs | History affirms — keep |
+
+**No EN_NS rewire work.** Playtest still the gate for C′ acceptance. Optional next (user): E_OC2 label fix (trivial), E_wpa viewer row, or grabber mini-plan.
+
+#### Paste for History (2026-07-18 — Cursor countersign)
+
+```
+Cursor countersigned your 2026-07-18 Moblin wrap + E_s1 scope (run doc).
+
+ACCEPT: Moblin closed/mod-import; E_OC2 ships; E_wpa viewer candidate; grabber exclusives = optional later plan; hang/shout stubs stay.
+
+CORRECT EN_NS: not orphaned — d_a_e_s1.cpp already calls the bank; gen-2 0x0E51 inherits it. No rewire. Sole unused id looks like Z2SE_EN_NS_V_DEMO04_HIPPARU (no cpp callers) — save for PULL if we ever do grabber.
+
+E_OC2 Cut Actors soft-label demoted. Waiting user playtest of gen-2 preset.
+```
+
+**History — audio retraction + THE `mo2` FOSSIL + unpark plan (2026-07-18):**
+
+1. **RETRACTION (extending Cursor's EN_NS catch to all five):** the "five cut-enemy audio
+   families" claim is dead — my token-matching method was flawed. Code-usage grep: EN_NS=`e_s1`
+   (Shadow Beast), EN_GF=`e_gb` (**Deku Like**), EN_ZZ=`b_zant_mobile`, EN_GBA=`e_gm`
+   (Gohma egg/hatch), EN_HG=`b_gnd` (beast Ganon). **Zero orphaned audio families exist** —
+   strengthens the Moblin timing argument (no scar at any layer). TPHistory §3.9 corrected.
+2. **THE MOBLIN TRACE EXISTS — user vindicated.** `res/ActorDat/ActorDat.bin` (1,984 B, outside
+   all prior sweep scopes): **WW's enemy item-drop database, BYTE-IDENTICAL to the WW disc copy,
+   shipped on retail TP, read by no TP code — and its enemy roster includes the literal string
+   `mo2` (Moblin)** alongside nezumi/keeth/chuchus/Stal/amos/Fmaster/Rdead/wiz/Oship. The only
+   Moblin bytes on any TP master: a fossil of WW's drop table. Also swept to closure: all ~130
+   STB cutscene scripts (no cut-stage/enemy tokens; Demo90/98 unremarkable).
+3. **Unpark plan (proposal for Phase C″ deliberation — needs Cursor plan + dual sign-off):**
+   - **Tier 1 — TestCube** (assets ON disc): activate the deferred H-2/C-1 mini-plan —
+     `DEBUG || TARGET_PC` method gate + non-NULL profile; smallest, first.
+   - **Tier 1b — E_wpa warp-hole effect** (assets on disc, no proc): leftover-viewer entry
+     (display-only) — trivial win.
+   - **Tier 2 — Makar (npc_mk) + Medli (npc_p2)**: models DO exist — on the WW extraction
+     (D:\XXXXXXX\Ex WW). Path: WW arc → custom-assets import (Beta-Link Kmdl remount precedent)
+     → display spawn (viewer category or minimal idle-BCK NPC actor). Their stub rels are
+     unrestorable (procSize=1, code gone; symbol maps = names only) — new minimal actor, not
+     resurrection. Optional Tier 2+: dialogue/behavior later via DuskScript (code-mods lane).
+   - **Tier 3 — obj_damCps** (222 real lines survive): evaluate compile-in under TARGET_PC.
+   - **Tier 4 — tag_* minigame family** (arena/escape/instruction/…): logic-only actors, no
+     models needed, but code gutted → best served as DuskScript script-actor prototypes
+     (dovetails the code-mods END GOAL), guided by surviving symbol-map function names.
+   - **Parked indefinitely — KDK/HENNA0** (no models on any disc or extraction we hold).
+   Suggested order: 1 → 1b → 2 (Makar first) → 3 → 4.
+
+**History — playtest №6 diagnosis (2026-07-18): gen-2 freeze ROOT-CAUSED from log + source —
+it's the E_ms dormancy lesson again: `params=00000000`.**
+
+Log `dusklight-20260718-005235` lines 2060-2141: first gen-2 spawn hit **phase=ERROR**, retry
+COMPLEATE — both with `params=00000000`. daE_S1 create-param table (source-verified,
+d_a_e_s1.cpp:2376-2431):
+
+| Bits | Field | With 0x00 | With 0xFF (sentinel) |
+|---|---|---|---|
+| 0-3 | roof-spawn | 0 = ground ✓ | 0xF→0 = ground |
+| 4-7 | pack group | group 0 | 0xF→0xFF = solo |
+| 8-15 | search range ×100 | **0 = NEVER AGGROS** | 0xFF→20 = 2000 units |
+| 16-23 | path number | **path 0 — ERROR if room lacks it; hijacks it if present** | 0xFF = no path |
+| 24-31 | kill-switch | switch 0 (room-dependent) | 0xFF = none |
+
+Explains everything observed: ERROR-then-work flakiness (room path 0 existence), "not
+interactible" (searchRange 0 — aggro impossible), "half an animation then froze" (ACT_WAIT →
+`path_check2` → ACT_PATH onto a foreign room path → patrol stall mid-morf-blend).
+**Prescription (Cursor, one-liner tier): both E_S1 presets spawn with `params=0xFFFFFFFF`** —
+same fix class as E_ms. Anim-index shim is NOT the fault (BMD 0x1F / WAIT01 0x1A verified
+against dRes_INDEX_E_S1_* table; viewer cycling works).
+
+**Scale (user: gen-2 must match final beast size — trailers confirm):** draw path multiplies
+`l_HIO.mBaseSize * scale.x` (d_a_e_s1.cpp:2148). Suggestion: on `mUseEs1Arc`, apply a gen-2
+size factor there (or via `fopAcM_SetScale` post-create in the spawner) exposed as a live-tune
+reg (WREG_F) — user calibrates by spawning retail E_S1 preset beside gen-2 and matching
+silhouettes; then freeze the constant. No evidence on the exact authored-unit ratio; empirical
+tune is the honest method.
+
+**Cursor — absorb playtest №6 + ship fix (2026-07-18):**
+
+- **ACCEPT** root cause (`params=0` → searchRange 0 + path 0). Anim shim not at fault.
+- **Shipped:** both Cut Actors E_S1 presets now `params=0xFFFFFFFF`.
+- **Scale:** gen-2 create sets `scale = 1.25 + WREG_F(29)` (draw only; Cc stays on `mBaseSize`). Calibrate vs shipping preset, then we freeze the constant.
+- **Unpark C″:** noted — Cursor counterplan after gen-2 playtest confirms aggro/fight; do not start Tier 1 TestCube until that pass + dual sign-off on C″.
+
+#### Paste for History (2026-07-18 — playtest №6 fix)
+
+```
+Cursor absorbed playtest №6 diagnosis — ACCEPT root cause (params=0).
+
+Shipped: both E_S1 Cut Actors presets → params=0xFFFFFFFF.
+Gen-2 scale: create sets scale=1.25+WREG_F(29) (draw via mBaseSize*scale.x; hitboxes stay HIO).
+Waiting user re-playtest (aggro/fight + size vs shipping side-by-side).
+
+Unpark C″: acknowledged; Cursor counterplan after gen-2 confirms — no TestCube yet.
+Audio retraction + mo2 fossil: ACCEPT (ActorDat.bin WW drop table). EN_NS correction stands.
+```
+
+**History — playtest №7 analysis + PROPOSED PLANS (2026-07-18): wolf-latch failure, negative
+HP, anim breadth, and the parked-actor C″ plan.**
+
+**№7 findings (great result overall — params fix + 1.25 scale confirmed working):**
+
+- **The 4 anims seen (follow / hit / attack / death) are CORRECT for a solo beast** — not a
+  bug. WAIT/WALK/DASH + DAMAGED + ATTACK + DEAD is the complete solo repertoire. The rest
+  need context: BIBIRI (scare) triggers on readied attacks in reaction range; DOWN + SHOUT +
+  fail/wakeup are PACK mechanics (≥2 beasts, shared group id); HOOK/PULL/DEFEND/CHANGE are
+  gen-2 exclusives with no logic (grabber mini-plan).
+- **Wolf lunge: no damage / no reaction — mechanism identified (source):** `damage_check`
+  (d_a_e_s1.cpp:490-503): WOLF_ATTACK hits that aren't bite cut-types route to
+  `player->onWolfEnemyHangBite()` → on FALSE the function does a bare `return` — no damage
+  processing, no state change, no death check. `onWolfEnemyBiteAll`
+  (d_a_alink_wolf.inc:7354) returns FALSE unless (a) `mCutType == CUT_TYPE_WOLF_JUMP`
+  exactly, AND (b) the latch keep `field_0x281c` is EMPTY. Two prime suspects, both
+  fork-specific: **(1) ALBW wolf-arts combat mods may present a different cutType for the
+  modded lunge**; **(2) STALE LATCH KEEP — despawning a latched enemy via Cut Actors never
+  runs `resetWolfEnemyBiteAll` → every later latch on ANY enemy fails silently.** (2) is new
+  territory created by our own tooling.
+- **Negative HP:** with the early-return, the actor never evaluates `health <= 0` (that
+  happens only inside the processed-damage branch, line 573) — yet health still fell ⇒ a
+  fork-side hit hook applies damage outside the actor's handler. First bite → branch runs →
+  death. Negative HP is an actor-blind decrement, not an engine overflow.
+
+**PLAN W — wolf-latch + HP integrity (Cursor slice; History-proposed, needs countersign):**
+1. **W1 instrument first** (one build): log on the early-return path — `mCutType`,
+   `field_0x281c` occupancy, `health` — and grep/flag the fork-side site that decrements
+   `health` without the actor's damage branch (suspect: ALBW damage/multiplier hook).
+2. **W2 fix per log evidence:** (a) stale keep → call `resetWolfEnemyBiteAll()` from the
+   Cut Actors despawn path (and on enemy delete while latched — general robustness win);
+   (b) cutType divergence → under TARGET_PC accept the modded lunge cutType(s) as
+   latch-eligible in `onWolfEnemyBiteAll` (or normalize the art-lunge to WOLF_JUMP);
+   (c) **HP guard (do regardless):** in daE_S1 execute, `health <= 0 && mAction not in
+   {FAIL*, WOLFBITE}` → route to fail path; clamp health floor at 0. Actor-local.
+3. **W3 gen-2 hang anchor:** once latch fires, Link hangs from a chest joint matrix —
+   verify the gen-2 rig's anchor joint index so the hang lands on the chest.
+   Acceptance: lunge latches on both presets, mash-bite works, HP floor 0, retail beast
+   unaffected, despawn-while-latched leaves player clean.
+
+**PLAN P — gen-2 completeness (small, after W):** pack preset ("gen-2 ×3", shared group in
+params bits 4-7) to unlock DOWN/SHOUT/fail/wakeup; optional portal-entrance preset via
+`ACT_WARP_APPEAR` (=20); grabber states (HOOK/PULL/DEFEND/CHANGE) stay a separate
+sign-off item.
+
+**PLAN C″ — parked actors (formalizing the earlier tier proposal; needs Cursor counterplan +
+dual sign-off before any code):**
+| Tier | Actor(s) | Assets | Path | Acceptance |
+|---|---|---|---|---|
+| 1 | **TestCube** | on disc (K_cube00/01, K_cyli00) | `DEBUG \|\| TARGET_PC` method gate + non-NULL profile (deferred H-2/C-1 mini-plan) | spawns + draws + collides on RelWithDebInfo; no crash on non-PC |
+| 1b | **E_wpa warp-hole** | on disc | leftover-viewer entry (display-only) | visible in viewer |
+| 2 | **WW crew (Makar npc_mk, Medli npc_p2) — PHASE 1: TP BYTES ONLY (user directive 2026-07-18).** Any WW-sourced restoration is RELEGATED to a future SEPARATE mod in its own folder — not in the game. | TP disc only | **TP-only inventory (History, verified):** spawn table still carries them first-class — `Mk` + **THREE Medli subtypes `P2a`/`P2b`/`P2c` (args 0x00-0x02)** — and both sit in the debug spawn roster (`NPC_MK`/`NPC_P2`, f_pc_debug_sv.cpp:622ff). NO models on any TP master (SHA-proven), NO placements (the R_SP116 "Mk" byte-hit = false positive, mid-entry bytes), NO msg-bank text (decompressed Msgus sweep: 0 hits EN+JP), maps = 8-byte return-0 shells (no behavior vocabulary — "full symbol maps" memory claim corrected). Roster fix: **npc_kdk is NOT WW crew** (no WW counterpart) — TP-original cut NPC with **ONE real retail ghost placement: Castle Sewers R_SP107/R03 layer-0, params 000FAFFF, pos (19676, 4500, 2633)**; its map is 14 lines, zero named symbols. **Phase-1 deliverables:** (a) **safe-stub hardening** — make stub procs no-op like retail (create → cPhs_ERROR + log) so table names are placeable/spawnable without the procSize=1 crash; (b) Cut Actors parked entries become **evidence panels** ("TP knows: table name(s), subtypes, debug roster, placement if any"); (c) **Kdk ghost-placement visit (USER-REQUESTED)**: teleport/marker to `R_SP107` (Castle Sewers stage) room 3 — **Zelda's tower-top room** — pos **(19676, 4500, 2633)**, which is 660 units from `zdoor` (Zelda's chamber door) at the same floor height; suggest a Cut Actors "Visit Kdk's spot" button (warp to stage/room/pos) + a small in-world marker (editor gizmo or viewer beacon) at the exact coordinates; (d) dossier lands in TPHistory (§3.8b, done). Kdk facts for the panel: rel = 276 B, NO methods (NULL-profile = TestCube crash class — safe-stub hardening covers it), spawn-table `Kdk`, debug roster `NPC_KDK`, params 000FAFFF undecodable, identity unknown (folk: tower guard / jailer / scene escort). | stubs safe on RelWithDebInfo; evidence panels accurate; Kdk spot visitable; zero WW bytes in game |
+| 3 | **obj_damCps** | 222 real lines survive | TARGET_PC compile-in eval | builds + parks safely if create fails |
+| 4 | **tag_* minigame family** | logic-only, no models | DuskScript script-actor prototypes (code-mods lane), symbol-map names as behavior guide | deferred until DuskScript M0/M1 |
+| — | KDK / HENNA0 | none anywhere we hold | parked indefinitely | n/a |
+Sequencing: W → P → C″T1 → C″T1b → C″T2 → C″T3; T4 rides the DuskScript milestones.
+
+**PLAN A — Anim Audition mode (user request, 2026-07-18: "eventually we'll want to GIVE logic
+to all animations present"):** extend Cut Actors with a per-spawned-actor **Anim Override**
+control: freeze the actor's AI dispatch (hold current action, zero speed), then cycle/select
+any BCK in its loaded arc (the leftover viewer already enumerates + plays BCKs — reuse that
+machinery on the live actor's morf), with loop/once + speed control. Purpose: the user
+auditions each animation in-world on the REAL actor at the REAL scale and assigns intended
+behaviors; History captures the mapping into mini-specs (e.g., HOOK = latch-onto-wolf counter,
+PULL = drag toward pack, DEFEND = frontal block, CHANGE = ???); Cursor implements as new
+action states, one sign-off per behavior batch. First customer: gen-2 grabber set; second:
+Makar/Medli BCK kits once Tier 2 mounts them. Pipeline: **audition → assign → spec → state.**
+
+**Cursor — Plan W countersign + first ship (2026-07-18):**
+
+| Plan | Stance |
+|---|---|
+| **W** | **APPROVED** — ship W1+W2a+W2c now; W2b cutType expand waits on `S1 BITE HANG FAIL` log line; W3 hang joint after latch works |
+| **P** | ACCEPT after W playtest (pack ×3 preset) |
+| **C″** | ACCEPT TP-bytes-only Phase 1 framing; counterplan after W confirms (TestCube gate first); Kdk visit = user ask |
+| **A** | ACCEPT direction — backlog after W/P; first customer gen-2 grabber |
+
+**Shipped in this build (TARGET_PC):**
+1. **W1** — `OS_REPORT("S1 BITE HANG FAIL cut=%d keep=%08x health=%d gen2=%d")` on refuse.
+2. **W2 hang mute** — refuse no longer bare-returns; falls through to normal damage.
+3. **W2a** — `resetWolfEnemyBiteAll` on Cut Actors despawn (if keep is tracked) + on `daE_S1_Delete` if latched.
+4. **W2c** — clamp `health` floor 0; if `health<=0` and not FAIL*/WOLFBITE → `e_s1_enter_fail_wait`.
+
+#### Paste for History (2026-07-18 — Plan W countersign + ship)
+
+```
+Cursor countersigned Plans W/P/C″/A (run doc).
+
+W APPROVED — shipped TARGET_PC: W1 FAIL log (cut/keep/health/gen2); hang-refuse falls through to damage (no mute); W2a resetWolfEnemyBiteAll on cut despawn + E_S1 delete; W2c HP floor + fail-route.
+W2b cutType expand deferred until FAIL log shows which cutType; W3 hang joint after latch works.
+P/C″/A accepted as sequenced — no Tier1 TestCube yet.
+
+Please re-playtest wolf lunge on gen-2 + shipping; if latch still fails, paste the S1 BITE HANG FAIL line (cut=).
+```
+
+**History — KDK JAILER EXPERIMENT: implementation-grade spec (user-ordered, 2026-07-18;
+Cursor implements — small, self-contained, pairs with safe-stub hardening):**
+
+Goal: determine whether the retail story flow ever attempts to spawn `Kdk` during/after the
+Demo07 Zelda-visit cutscene (user hypothesis: Kdk = the unseen jailer).
+
+1. **Stub create-attempt log** — at the framework create site (or per-stub profile create),
+   when procName ∈ {NPC_KDK, NPC_MK, NPC_P2, NPC_HENNA0}: log
+   `[StubWatch] create-attempt proc=<name> stage=<> room=<> layer=<> params=<%08x>
+   pos=(<x,y,z>)` then return `cPhs_ERROR_e` safely (the hardening behavior). Kdk's expected
+   fingerprint if the hypothesis is right: stage=R_SP107 room=3 params=000FAFFF
+   pos=(19676,4500,2633).
+2. **Layer-change log (the decisive instrument)** — at the DZR layer-selection site in
+   d_stage.cpp (where the ACT0..ACTe chunk set is chosen per room load/relayer): when
+   stage==R_SP107, log `[StubWatch] R_SP107 room=<n> layer=<k>`. Even if create is never
+   attempted, this tells us which layers the intro sequence actually activates in R03 —
+   layer 0 activation at the jailer beat = the hypothesis confirmed at the data level.
+3. **User protocol**: fresh-ish save through the intro → sewers → tower climb → Zelda scene →
+   exit; then grep the session log for `StubWatch`. History analyzes the trace.
+
+**Cursor — StubWatch shipped (2026-07-18, user-ordered):**
+
+- `include/d/d_stub_watch.h` — shared refuse + R_SP107 layer log (DuskLog + OS_REPORT).
+- **NPC_MK / NPC_P2:** Size=`sizeof(fopAc_ac_c)` on TARGET_PC (was 0x1); Create → StubWatch + `cPhs_ERROR`.
+- **NPC_KDK / NPC_HENNA0:** non-NULL method table on TARGET_PC; Create → StubWatch + `cPhs_ERROR`.
+- **d_stage `layerActorLoader`:** `[StubWatch] R_SP107 room= layer=` when stage matches.
+- Cut Actors UI still parks these presets (refuse spawn); retail DZR create path is the experiment.
+- **Plan R** (receiver infra): noted — counterplan after jailer trace; no WW bytes this slice.
+
+#### Paste for History (2026-07-18 — StubWatch shipped)
+
+```
+Cursor shipped StubWatch (user-ordered jailer experiment).
+
+TARGET_PC: MK/P2/KDK/HENNA0 create → [StubWatch] create-attempt … then cPhs_ERROR (safe).
+MK/P2 size fixed (was 0x1). KDK/HENNA0 got method tables (were NULL).
+d_stage layerActorLoader logs [StubWatch] R_SP107 room= layer= on that stage.
+
+User protocol: intro → sewers → Zelda scene → exit; grep session log for StubWatch.
+Kdk fingerprint if hit: R_SP107 room=3 params=000FAFFF pos≈(19676,4500,2633).
+
+Plan R (receiver): acknowledged — Cursor counterplan after jailer trace; no WW mount.
+```
+
+**History — deliberation answer logged (stub-socket route vs blind custom port):** see
+TPHistory §3.8b addendum; summary — the sockets (proc ids `fpcNm_NPC_MK/P2/KDK_e`, dylink
+module routes c_dylink.cpp:589/692/694, spawn-table names incl. Medli's 3 subtypes, debug
+roster) mean restoration = FILLING existing slots, not grafting new ones; assets + behavior
+are equal work either way, but identity, registry, subtype plumbing, and ghost-placement
+service (the Kdk experiment itself) come free only on the socket route.
+
+**PLAN R — "The Receiver": TP-side infrastructure for a self-contained WW-crew mod
+(History proposal 2026-07-18; needs Cursor counterplan + dual sign-off + user OK. Principle:
+TP ships machinery that can RECEIVE the characters but implements none of them — with the mod
+folder absent, behavior is byte-for-byte phase-1 vanilla incl. safe stubs).**
+
+**TP-side (base game, wholly TP-purposed, inert without payload):**
+| # | Component | What it is | What it is NOT |
+|---|---|---|---|
+| R1 | **Socket adapter** | Stub creates (NPC_MK/P2/KDK/HENNA0) consult a provider registry: no provider → safe `cPhs_ERROR` (phase-1 behavior); provider present → delegate create/execute/draw to the generic mount | no character logic |
+| R2 | **Arc-mount capability** in the existing load-order mod manager | a mod declares `arcs/<Name>.arc` → mounted into the res system under that archive name via the STOCK RARC loader, sourced from the mod folder (never the game tree) | no WW bytes in repo/game; generic — serves every future mod |
+| R3 | **NPC manifest schema + parser** (Fluffy-style ini, consistent with modinfo.ini) | fields: arc, model member, idle/talk/greet BCKs, collision cylinder, attention+talk config, display name, neck joint (head-tracking), **subtype table** (P2a/b/c arg 0-2 → per-variant anims/attachment/props), optional dialogue file, optional future DuskScript hook (ignored until code-mods lane lands) | no defaults that conjure content |
+| R4 | **Generic external-NPC mount actor** | reads manifest → resLoad mounted arc → J3D model + idle BCK + ground snap (L1) → cc cylinder + attention/Z-target/talk prompt (L2) → native dialogue box from mod text (L3, reuse the ALBW NPC dialogue recipe) → TP NPC head-tracking via manifest joint (L1.5) | knows nothing about Makar/Medli specifically |
+| R5 | **Cut Actors evidence-panel tie-in** | parked entries show `socket: payload absent/present (<mod name>)` | — |
+
+**Mod folder (self-contained, in the mod manager's scan dir):**
+`modinfo.ini` · `arcs/Mk.arc` + `arcs/P2.arc` (user's own WW extraction, unmodified — never
+committed) · `npc/mk.ini` (arc=Mk, model=mk.bdl, idle=mk_wait, talks=mk_talk01/02, name,
+neck joint) · `npc/p2.ini` (+ subtype table: P2a/P2b/P2c variant configs, dagger attachment
+option) · `dialogue/*.txt` (text we author) · later `scripts/` (DuskScript behaviors).
+
+**Sequencing:** R-phase after C″ Tier 1/1b (safe stubs are R1's foundation). R1+R2+R3+R4-L1
+first (visible, idle, head-tracking Makar via mod folder); R4-L2 next (solid, targetable);
+R4-L3 (talkable) after. Acceptance at every step: delete the mod folder → vanilla phase-1
+behavior, zero WW bytes anywhere in the game tree, all sockets safe.
+
+**SIGN-OFF: USER GO (2026-07-18, "tell Cursor to do it") + History APPROVED.** Added
+deliverable: **Cursor creates the ready-to-receive folder** — `WW-Crew-Restoration/` skeleton
+in the mod manager's scan dir: filled `modinfo.ini`; `arcs/` + README naming the exact files
+the user drops in (`Mk.arc`, `P2.arc`, optional `Md.arc`) with a never-commit warning;
+`npc/mk.ini` + `npc/p2.ini` PRE-FILLED from History's census (model members, idle/talk BCK
+names, P2a/b/c subtype table, dagger-attachment slot, neck joints for head-tracking);
+`dialogue/` sample. Cursor countersign closes the dual requirement.
+
+**Cursor — Plan R first ship (2026-07-18, USER GO):**
+
+| Piece | Status |
+|---|---|
+| Skeleton | `tools/ww_crew_restoration_skeleton/` + boot seed → `%AppData%/…/model_replacements/WW-Crew-Restoration/` |
+| R2 | `arcs/<Name>.arc` → DVD overlay `res/Object/<Name>.arc` (enabled mods) |
+| R3 | `npc/*.ini` parser → provider map |
+| R1 | NPC_MK/P2 Create → mount if payload else StubWatch ERROR |
+| R4-L1 | `d_ext_npc_mount` — resLoad + idle McaMorf + ground snap + draw |
+| R4-L2/L3 | not yet (collision/talk) |
+| R5 | Cut Actors labels note socket; MK/P2 unpark when payload present |
+| Invariant | delete/disable mod or empty arcs/ → StubWatch phase-1 |
+
+#### Paste for History (2026-07-18 — Plan R first ship)
+
+```
+Cursor shipped Plan R vertical slice (USER GO).
+
+Seeded WW-Crew-Restoration in model_replacements (modinfo + arcs/README + npc/mk.ini + p2.ini + dialogue/sample). Repo template: tools/ww_crew_restoration_skeleton/.
+R2: arcs/*.arc overlay as res/Object/<Name>.arc.
+R1+R3+R4-L1: NPC_MK/P2 mount idle when arcs+manifest present; else StubWatch ERROR.
+Cut Actors unparks MK/P2 only when payload present.
+
+User: drop Mk.arc / P2.arc into arcs/, enable mod, spawn NPC_MK from Cut Actors (or retail Mk placement).
+L2 collision / L3 talk / head-track still TODO. No WW bytes in repo.
+```
+
+**History — playtest №8 analysis (2026-07-18): jailer NEGATIVE, Makar crash diagnosed, anims
+answer.**
+
+1. **E_s1 anim count:** still correct-as-coded for a solo spawn — the unlock vehicles are
+   Plan P (pack ×3 preset) and Plan A (Anim Audition mode), neither shipped yet. Queue after
+   Plan R stabilization.
+2. **Jailer experiment: RUNTIME NEGATIVE, cleanly.** Full intro trace: R_SP107 room 3 loads
+   ONLY layers 14, 8, 10 (other rooms also 7/11) — **layer 0 never activates; no
+   `create-attempt proc=NPC_KDK` ever fires.** Verdict: the Kdk placement is a
+   **layer-orphaned ghost** — retail flow never even tries to spawn it. The jailer-identity
+   hypothesis stays circumstantial (placement+scene fit) and cannot be confirmed at runtime
+   by normal play. Optional follow-up (small, sign-off): a debug "force layer" toggle or
+   editor layer-view would prove the MECHANISM (engine attempts Kdk on layer 0) but not the
+   identity — History's recommendation: record as layer-orphaned, folk-tier identity, move on.
+3. **Makar crash: Plan R worked END-TO-END until J3D instantiation.** Log: provider
+   registered, R2 arc-mount OK, socket create fired (procSize=2200), **all 14 resources
+   enumerated + loaded by name from the mounted WW arc (13 BCKs + mk.bdl 47,008 B +
+   mk_maba.btp)** — then `EXCEPTION_ACCESS_VIOLATION`, fault addr `0x20000000200` (garbage
+   pointer with big-endian smell) right after the model data load. **Diagnosis: WW's `mk.bdl`
+   is BDL4 with an `MDL3` section (precompiled GX display lists); TP's own content is
+   near-uniformly BMD3, so the port's J3D loader likely mis-walks the BDL4/MDL3 layout →
+   wild pointer.** History correction: my "TP provably loads WW-vintage J3D" premise cited
+   the itemmdl BDLs *shipping* on disc — whether retail TP ever *runtime-loads* one was
+   untested; this crash says the PC port path doesn't handle it. **Fix lane (Cursor):
+   receiver-side BDL4 handling — parse standard sections, skip/ignore MDL3 (community J3D
+   tools' standard approach), as an IN-MEMORY adaptation in the mount layer (mod bytes stay
+   pristine on disk — consistent with the separation directive).** Quick validation asset:
+   P2's `p2.bdl` will hit the same path; a BMD-only test (any TP bmd via the same mount)
+   would isolate loader-vs-mount if needed.
+
+**History — LAYER-0 SPAWN spec (user-ordered 2026-07-18, "via the warp menu"; Cursor
+implements — small):**
+
+Goal: pursue the Kdk trace by making retail's never-activated layer selectable.
+
+1. **Warp-menu field: `Room layer override` = Auto / 0–14 (default Auto).** Implementation
+   point: the SAME d_stage layer-selection site StubWatch already instruments — when override
+   set, return it instead of the computed layer (all chunk families: ACTx, and naturally
+   Envx/LGTx/PALx variants follow — expected side effect, fine for a debug tool). Persist only
+   for the current warp (reset to Auto on next stage load) to avoid story-flow weirdness.
+2. **Expected result on warp → R_SP107 room 3, layer 0:** StubWatch logs `layer=0`, then
+   **`create-attempt proc=NPC_KDK params=000fafff pos=(19676,4500,2633)`** and safe-ERROR —
+   the engine executing Nintendo's authored Kdk placement for the first time. Nothing visible
+   spawns (no model exists, no provider registered) — the log line IS the artifact. Layer 0
+   in R03 contains ONLY Kdk (census), so no other scene changes expected there; other rooms
+   under layer 0 may differ (also interesting).
+3. **Acceptance:** no crash (safe stubs), StubWatch shows the attempt, Auto restores normal
+   behavior.
+4. **Flagged for later (separate sign-off, not now): a Kdk PAYLOAD via Plan R** — the socket
+   adapter means a provider could give Kdk a body using TP-ONLY bytes (e.g., an existing TP
+   soldier arc as a stand-in) — speculative visual, folk-tier, clearly labeled if ever done.
+
+**Cursor — LAYER-0 + BDL4 ship (2026-07-18, after №8):**
+
+| Piece | Status |
+|---|---|
+| Room layer override | Warp UI `Room layer override` Auto/0–14; `setRoomLayerOverride` → `getLayerNo` force; clears on *next* stage load |
+| BDL4/MDL3 | `J3DModelLoader::loadBinaryDisplayList` skips `MDL3` on TARGET_PC; ExtNpc mount sniffs raw `J3D2bdl4`/`bdl3` (BDLM folder) → in-memory parse + SharedDL (mod bytes pristine; itemmdl raw path untouched) |
+| Plan P / Plan A | still queued after playtest |
+
+#### Paste for History (2026-07-18 — LAYER-0 + BDL4)
+
+```
+Cursor shipped №8 blockers (USER GO layer-0 + Makar BDL4).
+
+1) Warp menu: "Room layer override" Auto/0-14. Forces dComIfG_play_c::getLayerNo (StubWatch /
+   layerActorLoader site). Persists for the warp's stage load; clears on the following stage load.
+   UI snaps to Auto after Warp press.
+   Expect: warp R_SP107 room 3 @ layer 0 → StubWatch layer=0 then
+   create-attempt proc=NPC_KDK params=000fafff pos≈(19676,4500,2633) + safe ERROR.
+
+2) Makar/BDL4: Mk.arc folder type is BDLM (raw J3D2bdl4 + MDL3+MAT3). Mount-layer resolve in
+   d_ext_npc_mount: loadBinaryDisplayList + SharedDL finish. TARGET_PC skips MDL3 walk
+   (archive bytes read-only). Did NOT global-instantiate BDLM in loadResource (would break
+   itemmdl private raw path). P2.bdl hits same path.
+
+Playtest: wipe dawn_cache.db* / pipeline_cache.db*; enable WW-Crew-Restoration; Cut Actors
+NPC_MK; warp Jailer @ layer 0. Plan P + Plan A still queued.
+```
+
+**History — playtest №9 analysis (2026-07-18): KDK MECHANISM PROVEN; Makar crash moved — next
+diagnostic ladder.**
+
+1. **KDK LAYER-0 EXPERIMENT: SUCCESS.** Log 110801 line 6715:
+   `[StubWatch] create-attempt proc=NPC_KDK stage=R_SP107 room=3 layer=0 params=000fafff
+   pos=(19676,4500,2633)` — the layer override worked and **the engine executed Nintendo's
+   authored Kdk placement for the first time**, exact predicted fingerprint, safe-declined.
+   Trace closed at mechanism level; identity remains folk-tier (jailer hypothesis,
+   circumstantial). TPHistory §3.8b addendum to follow.
+2. **Makar crash MOVED (BDL4/MDL3 fix engaged):** fault `0x20000000200` → `0x10` (near-NULL
+   deref), rva 0xd6258 → 0xd604a, same neighborhood; all 14 resources still load; crash
+   right after `mk_maba.btp`. Reading: MDL3 skip worked; now a later stage returns NULL and
+   is dereferenced. **Diagnostic ladder for Cursor (cheap→deep):**
+   - **D1 stage-pinpoint logging**: NULL-check + log each mount stage (`J3DModelData` create /
+     `J3DModel` create / BTP bind / morf-anim attach) — name the failing call.
+   - **D2 A/B: drop `mk_maba.btp` from the manifest** — crash sits right after its load; WW
+     `J3D1btp1` binding to WW material name tables is a prime near-NULL suspect. If Makar
+     appears without it: blink anim deferred (cosmetic), root found.
+   - **D3 A/B: mount a TP-native bmd** through the same path (any TP NPC model) — fences
+     mount-machinery vs WW-format tolerance.
+   - **D4 systematic: WW bdl4 vs TP bmd3 divergence audit** in the port loader (MAT3 entry
+     layout/indirect block, TEX1 name-table, SHP1 attribute lists — the classic normalization
+     points community J3D loaders handle).
+   - **D5 Plan B (the Beta Link road)**: offline adaptation tool in `tools/` (python, cousin
+     of bmd_reskin) rewriting bdl4 → TP-shaped bmd3 into the MOD FOLDER as adapted members —
+     precedent: the playable Beta Link pack is an "adapted remount, NOT raw extracts."
+     Directive-compliant (mod folder owns its bytes); keeps receiver simple. Choose D4 vs D5
+     by D1-D3 findings.
+
+**Cursor — D1–D3 ship (2026-07-18, after №9 ladder):**
+
+| Piece | Status |
+|---|---|
+| D1 | `[ExtNpcMount:D1]` logs each stage (resolve / finish / heap / McaMorf); null-guards material[0] before McaMorf (AV at +0x10 hot path) |
+| BDL flags | loadBinaryDisplayList now uses itemmdl flags `0x59020010\|0x2000` (`DoBdlMaterialCalc` → patched MAT3) — likely root of post-MDL3 near-NULL |
+| D2 | manifest `skip_btp=1` (mk.ini default on); `d_resorce` leaves BTP raw for that arc during resLoad |
+| D3 | `source=dvd` + `npc/mk_d3_tp.ini.example` (npc_ks / saru) — flip over mk.ini for TP-native A/B |
+| D4/D5 | wait on D1–D3 playtest |
+
+#### Paste for History (2026-07-18 — D1–D3 ladder)
+
+```
+Cursor shipped №9 Makar diagnostic ladder D1–D3 (+ likely fix).
+
+D1: [ExtNpcMount:D1] stage logs + null-guard material[0] before McaMorf
+    (create() deref at +0x10 matches fault 0x10).
+BDL flags: now 0x59020010|0x2000 like itemmdl (DoBdlMaterialCalc / patched MAT3).
+    Prior mount used plain 0x59020010 → wrong MAT3 path after MDL3 skip.
+
+D2: mk.ini skip_btp=1 → d_resorce leaves mk_maba.btp unparsed (L1 never binds it).
+    Flip skip_btp=0 for B side.
+
+D3: source=dvd supported; npc/mk_d3_tp.ini.example → npc_ks/saru.bmd + saru_wait_a.bck
+    through same mount (copy over mk.ini to run).
+
+Playtest: wipe caches; enable WW-Crew-Restoration; Cut Actors NPC_MK.
+Expect either COMPLEATE + visible Makar, or last [ExtNpcMount:D1] line naming the fail.
+Then D3 flip if WW still dies. D4 vs D5 after findings.
+```
+
+**History — playtest №11 analysis (2026-07-18): D5 ADAPTATION WORKS (WW actor renders in TP!)
+— but MAJOR IDENTITY CORRECTION (History's error, user + WWHD naming caught it):**
+
+1. **The mount + offline adaptation SUCCEEDED** — a Wind Waker character model loaded,
+   instantiated, and DREW in TP for the first time. Remaining visual defect: all-black body
+   with glowing eyes = the predicted no-light-binding failure (eye materials are unlit →
+   render; body channels are lit → receive zero bound lights → black). **Cursor fix: standard
+   TP actor lighting in the mount (settingTevStruct / setLightTevColorType + light entry per
+   frame) — the §"TP lighting" deliberation's murk risk at maximum.**
+2. **IDENTITY CORRECTION (mine, not Cursor's — Cursor copied exactly the arcs History named):**
+   WW's `Mk.arc` is NOT Makar — it is **Ivan of the Killer Bees (Windfall kid)**: user
+   recognized the silhouette instantly; WWHD names Makar `cb.szs`; and the anims agree
+   (`mk_jida*` = jidanda foot-stamping tantrum). Verified on our WW extraction:
+   **Makar = `Cb.arc`** (`cb.bdl` + `cb_face.bdl` LEAF FACE + `cb_cello.bdl` + nut/sow
+   ceremony + play/fly/bow anims; actor `d_a_npc_cb1`), **Medli = `Md.arc`** (`d_a_npc_md`).
+   **And `P2.arc` is NOT Medli: it is the small-pirate SHARED BODY with THREE HEADS**
+   (`p2head01/02/03` + book/telescope/daggers = Tetra's small crew) — so TP's
+   `P2a`/`P2b`/`P2c` subtypes are almost certainly the THREE PIRATES (head-variant
+   selection), not "three Medli configurations." §3.8b will be rewritten: **TP's stub
+   roster is WW-branch RESIDUE (a Windfall kid + a pirate body), not a planned sage cameo**
+   — less romantic, but stronger dolzel2-branch evidence (WW's town-NPC roster survived in
+   TP's tree to mastering). TP has NO cb/md stubs — the true sages were never in TP's roster.
+3. **Makar (real one) is READY: adapted `Cb.arc` now in the mod folder.** Manifest note for
+   Cursor: Makar's face is a SEPARATE model (`cb_face.bdl`) — the mount manifest needs an
+   attachment-model concept (model + joint bind), same machinery the pirate heads and
+   Medli's harp will want. Minimal Makar = `cb.bdl` body + `cb_face.bdl` face + `wait01`
+   idle. Socket policy decision for user+Cursor: bind NPC_MK socket → Cb (user's sage goal)
+   and keep Ivan/pirates as bonus generic entries, or keep sockets historically faithful.
+   History recommendation: sockets serve the user's goal (sages); the residue truth lives in
+   the docs.
+
+**USER DIRECTIVE (2026-07-18): forward push order — (1) IVAN RENDERS PERFECTLY first, then
+(2) present Makar + Medli. TP side stays purely receptive throughout.**
+
+**Slice I — "Ivan, perfectly" (Cursor; acceptance = user screenshot):**
+- I1 **Light binding** in the mount's frame path: `settingTevStruct(TEV_TYPE_ACTOR)` /
+  `setLightTevColorType` + kankyo light entry each frame (the all-black cause; eyes glow
+  because their materials are unlit). Expect full color + scene-lit shading + fog/twilight
+  participation.
+- I2 **Re-enable the blink**: `skip_btp=0` for mk.ini once stable — `mk_maba.btp` = まばたき
+  blink pattern; it was exonerated as crash cause (crash persisted with it skipped). If it
+  crashes on bind now, defer (cosmetic) and log.
+- I3 Idle sanity: `mk_wait` loops, ground snap, scale sane vs Link (Ivan is a child — eyeball
+  vs the screenshot), shadow present.
+- Acceptance: colored, lit, blinking(±), idling Ivan in Ordon daylight + one twilight zone
+  screenshot (lighting deliberation's murk risk check).
+
+**Slice II — "Present the sages" (after I; receiver stays generic):**
+- II1 Manifest **attachment-model support** (model + joint bind, per-subtype): needed for
+  Makar's separate `cb_face.bdl` (leaf face), later pirate heads (`p2head01-03`) + Medli's
+  harp. Generic mechanism, zero character knowledge in TP code.
+- II2 Socket assignment per user decision: **NPC_MK socket → `Cb.arc` (Makar: cb.bdl +
+  cb_face attachment + `wait01` idle)**; **NPC_P2 socket → `Md.arc` (Medli: md.bdl +
+  `wait` idle; harp optional attachment)**. Ivan + pirates remain in the mod folder as
+  future generic entries (one multiplexed slot can host all four later).
+- II3 Same acceptance bar as Ivan: colored, lit, idling; screenshots.
+- Both slices data+generic-code only; delete mod folder ⇒ vanilla. No character logic in TP.
+
+**Cursor — Slice I ship (2026-07-18, USER DIRECTIVE "Ivan perfectly"):**
+
+| Piece | Status |
+|---|---|
+| I1 Light | `settingTevStruct(0/4)` daylight/twilight + `setLightTevColorType_MAJI` each draw; `dKy_tevstr_init` on create; **light-mask pass** (loaderBasicBmd equivalent; force `0xFF` if mask collapses to 0 — WW body channels) |
+| I2 Blink | `skip_btp=0`, `btp=mk_maba.btp`; `mDoExt_btpAnm` loop bind — fail soft + log if bind dies |
+| I3 Idle | `mk_wait` loop; ground snap; `scale=` manifest; simple shadow; Cut Actors label → Ivan |
+| Slice II | waiting user screenshot acceptance of I |
+
+#### Paste for History (2026-07-18 — Slice I Ivan)
+
+```
+Cursor shipped Slice I "Ivan perfectly" (USER DIRECTIVE).
+
+I1: actor tev 0/4 + MAJI every frame; tevstr_init; light-mask pass (zero→0xFF) so lit body
+    channels receive kankyo lights (all-black cause).
+I2: skip_btp=0 + btp=mk_maba.btp bound as looping mDoExt_btpAnm (defer+log if bind fails).
+I3: idle loop, ground snap, scale manifest, simple shadow. Cut Actors label = Ivan socket.
+
+Acceptance: screenshot Ordon daylight + one twilight — colored, lit, blinking(±), idling.
+Slice II (attachments + MK→Cb Makar / P2→Md Medli) waits on that pass.
+```
+
+**History — №12 (2026-07-18): Slice I still black; MAT3 healthy ⇒ mount light path.**
+Live-state tip: I1-REVISED — copy leftover viewer draw sequence.
+
+**Cursor — I1-REVISED (2026-07-18, after №12):**
+
+Draw path now matches `d_demo_leftover_viewer::draw` verbatim intent:
+`setLightTevColorType_MAJI(model, &Link->tevStr)` → `dComIfGd_setList()` → `entryDL`.
+(Viewer never lights from a private tevStr — Link's is already `Material_use_fg==124`.)
+Also: material `change()` before MAJI so SharedDL amb patches land; private tevStr still
+filled via `settingTevStruct(0,…)` for shadow. Shadow from attempt-1 kept.
+
+#### Paste for History (2026-07-18 — I1-REVISED)
+
+```
+Cursor I1-REVISED after №12 (still black; History MAT3 clear).
+
+Root read: leftover viewer lights arbitrary models by reusing Link->tevStr + MAJI + setList
++ entryDL — not a private settingTevStruct tevStr. Mount now does that.
+
+Also material->change() before MAJI (SharedDL amb patch). Shadow kept.
+Re-test Ivan NPC_MK daylight; if still black next suspect is SharedDL bake / non-MAJI path.
+```
 
 ### Phase E — Drive results (if in scope)
 

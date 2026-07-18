@@ -1,9 +1,10 @@
 // ============================================================================
 // Level Editor — 1b click-to-select in world (zero mutation).
-// Gate 8e: screen capsule hit + depth-scaled radius + Select Mode hover preview.
+// Gate 10: min-distSq winner + hysteresis + tighter radius (not min-depth).
 // ============================================================================
 
 #include "dusk/leveledit/enumerate.hpp"
+#include "dusk/leveledit/raycast.hpp"
 
 #if TARGET_PC
 
@@ -35,14 +36,32 @@
 namespace dusk::leveledit {
 namespace {
 
-// Gate 8e: body capsule + larger base; hover shows what a click would grab.
-constexpr f32 kPickRadiusDefaultPx = 120.0f;
-constexpr f32 kPickRadiusLargePx = 220.0f;
-constexpr f32 kHoverRadiusScale = 1.35f;
+// Gate 10: tighter screen radii; winner = nearest capsule, not frontmost-in-disk.
+constexpr f32 kPickRadiusDefaultPx = 50.0f;
+constexpr f32 kPickRadiusLargePx = 100.0f;
+constexpr f32 kHoverRadiusScale = 1.15f;
+constexpr f32 kCapsuleHeightSlop = 0.15f;
+constexpr f32 kDepthTieMarginPx = 15.0f;
+constexpr f32 kHysteresisCloserFrac = 0.80f;  // challenger must be ≤80% of sticky dist (≥20% closer)
 constexpr int kSelectHeartbeatFrames = 120;
+constexpr int kBreadcrumbFrames = 45;
+constexpr f32 kCursorSourceDeltaPx = 50.0f;
+
+// Gate 11a: camera→cursor ray vs actor cull-volume is authoritative (pinpoint,
+// depth-ordered — front-most volume under the cursor wins). The screen-space
+// point+radius path below is kept only as a fallback when the ray hits nothing
+// (cursor over empty space / volumeless actor). Flip to false to A/B the old
+// screen-only behaviour.
+constexpr bool kUseRayPick = true;
 
 bool s_prevLeftDown = false;
 int s_selectHeartbeat = 0;
+int s_breadcrumbFrames = 0;
+bool sPreferImGuiCursor = false;
+
+f32 sPickDotX = 0.0f;
+f32 sPickDotY = 0.0f;
+bool sPickDotValid = false;
 
 struct HoverState {
     bool valid = false;
@@ -163,7 +182,6 @@ struct ActorScreenPick {
     bool valid = false;
 };
 
-// Screen-space capsule from feet → attention/eyes. Radius grows with on-screen height.
 ActorScreenPick measure_actor_pick(fopAc_ac_c* live, const char* name, f32 cursorX, f32 cursorY) {
     ActorScreenPick out{};
     if (live == nullptr) {
@@ -172,12 +190,10 @@ ActorScreenPick measure_actor_pick(fopAc_ac_c* live, const char* name, f32 curso
 
     const cXyz feet = live->current.pos;
     cXyz head = live->eyePos;
-    // Fallback head if eye == feet (some actors).
     if (std::fabs(head.x - feet.x) < 1.0f && std::fabs(head.y - feet.y) < 1.0f &&
         std::fabs(head.z - feet.z) < 1.0f) {
         head.y += is_large_pick_name(name) ? 180.0f : 120.0f;
     }
-    // Prefer attention lock point when it's meaningfully above feet.
     const cXyz& attn = live->attention_info.position;
     if (attn.y > feet.y + 20.0f) {
         head = attn;
@@ -194,8 +210,7 @@ ActorScreenPick measure_actor_pick(fopAc_ac_c* live, const char* name, f32 curso
     const f32 capsuleH =
         std::sqrt((headS.x - feetS.x) * (headS.x - feetS.x) + (headS.y - feetS.y) * (headS.y - feetS.y));
     const f32 base = is_large_pick_name(name) ? kPickRadiusLargePx : kPickRadiusDefaultPx;
-    // ~35% of body screen height as extra slop so torso/legs are easy clicks.
-    out.radiusPx = base + 0.35f * capsuleH;
+    out.radiusPx = base + kCapsuleHeightSlop * capsuleH;
     out.distSq = dist_sq_point_to_segment_2d(cursorX, cursorY, feetS.x, feetS.y, headS.x, headS.y);
     out.depth = 0.5f * (feetS.z + headS.z);
     out.worldAnchor = cXyz(0.5f * (feet.x + head.x), 0.5f * (feet.y + head.y), 0.5f * (feet.z + head.z));
@@ -226,7 +241,8 @@ struct PickCandidate {
     const PlacedActor* placed = nullptr;
     PlacedActor snapshot{};
     fopAc_ac_c* live = nullptr;
-    const char* name = "(none)";
+    // Owned copy — never alias sHover.name or EnumerateResult storage (SAFE_STRCPY / UAF).
+    char name[9]{"(none)"};
     f32 distSq = FLT_MAX;
     f32 depth = 0.0f;
     f32 radiusPx = kPickRadiusDefaultPx;
@@ -234,25 +250,96 @@ struct PickCandidate {
     bool valid = false;
 };
 
-void consider_live(PickCandidate& nearest, PickCandidate& best, fopAc_ac_c* live, const char* name,
-                   const PlacedActor* placed, f32 cursorX, f32 cursorY, f32 radiusScale) {
+void fill_candidate(PickCandidate& dest, const ActorScreenPick& m, fopAc_ac_c* live, const char* name,
+                    const PlacedActor* placed) {
+    dest.valid = true;
+    dest.distSq = m.distSq;
+    dest.depth = m.depth;
+    dest.radiusPx = m.radiusPx;
+    dest.anchor = m.worldAnchor;
+    if (name != nullptr) {
+        SAFE_STRCPY(dest.name, name);
+    } else {
+        SAFE_STRCPY(dest.name, "(none)");
+    }
+    dest.live = live;
+    dest.placed = placed;
+    if (placed == nullptr) {
+        fill_live_snapshot(dest.snapshot, live, dest.name);
+    }
+}
+
+// ============================================================================
+// Gate 11a — ray pick. Front-most cull-volume the camera→cursor ray enters.
+// ============================================================================
+struct RayHit {
+    fopAc_ac_c* live = nullptr;
+    const PlacedActor* placed = nullptr;
+    char name[9]{"(none)"};
+    f32 t = FLT_MAX;
+    cXyz hit{};
+    bool valid = false;
+};
+
+void consider_ray(RayHit& best, fopAc_ac_c* live, const char* name, const PlacedActor* placed,
+                  const cXyz& origin, const cXyz& dir) {
+    if (live == nullptr) {
+        return;
+    }
+    f32 t = FLT_MAX;
+    if (!ray_hits_actor(live, origin, dir, t)) {
+        return;
+    }
+    if (t >= best.t) {
+        return;
+    }
+    best.t = t;
+    best.live = live;
+    best.placed = placed;
+    SAFE_STRCPY(best.name, name != nullptr ? name : "(none)");
+    best.hit.set(origin.x + dir.x * t, origin.y + dir.y * t, origin.z + dir.z * t);
+    best.valid = true;
+}
+
+// Promote a ray hit into the shared PickCandidate the hover/click paths consume.
+void winner_from_ray(PickCandidate& winner, const RayHit& ray) {
+    winner = {};
+    winner.valid = true;
+    winner.live = ray.live;
+    winner.placed = ray.placed;
+    SAFE_STRCPY(winner.name, ray.name);
+    winner.anchor = ray.hit;
+    winner.depth = ray.t;
+    winner.distSq = 0.0f;
+    winner.radiusPx = kPickRadiusDefaultPx;
+    if (ray.placed == nullptr) {
+        fill_live_snapshot(winner.snapshot, ray.live, winner.name);
+    }
+}
+
+// Gate 10: min screen-dist among in-radius; depth only within ~15px screen margin.
+bool beats_in_radius(const ActorScreenPick& cand, const PickCandidate& cur) {
+    if (!cur.valid) {
+        return true;
+    }
+    const f32 da = std::sqrt(cand.distSq);
+    const f32 db = std::sqrt(cur.distSq);
+    if (std::fabs(da - db) <= kDepthTieMarginPx) {
+        return cand.depth < cur.depth;
+    }
+    return cand.distSq < cur.distSq;
+}
+
+void consider_live(PickCandidate& nearest, PickCandidate& winner, PickCandidate& runnerUp,
+                   fopAc_ac_c* live, const char* name, const PlacedActor* placed, f32 cursorX,
+                   f32 cursorY, f32 radiusScale) {
     const ActorScreenPick m = measure_actor_pick(live, name, cursorX, cursorY);
     if (!m.valid) {
         return;
     }
 
     if (m.distSq < nearest.distSq) {
-        nearest.distSq = m.distSq;
-        nearest.name = name;
-        nearest.live = live;
-        nearest.placed = placed;
-        nearest.depth = m.depth;
-        nearest.radiusPx = m.radiusPx;
-        nearest.anchor = m.worldAnchor;
-        nearest.valid = true;
-        if (placed == nullptr) {
-            fill_live_snapshot(nearest.snapshot, live, name);
-        }
+        fill_candidate(nearest, m, live, name, placed);
     }
 
     const f32 limit = m.radiusPx * radiusScale;
@@ -260,25 +347,15 @@ void consider_live(PickCandidate& nearest, PickCandidate& best, fopAc_ac_c* live
         return;
     }
 
-    if (!best.valid || m.depth < best.depth) {
-        best.valid = true;
-        best.distSq = m.distSq;
-        best.depth = m.depth;
-        best.name = name;
-        best.live = live;
-        best.placed = placed;
-        best.radiusPx = m.radiusPx;
-        best.anchor = m.worldAnchor;
-        if (placed == nullptr) {
-            fill_live_snapshot(best.snapshot, live, name);
-        }
+    if (beats_in_radius(m, winner)) {
+        runnerUp = winner;
+        fill_candidate(winner, m, live, name, placed);
+    } else if (beats_in_radius(m, runnerUp)) {
+        fill_candidate(runnerUp, m, live, name, placed);
     }
 }
 
-bool map_cursor_game(f32& outX, f32& outY) {
-    float windowX = 0.0f;
-    float windowY = 0.0f;
-    SDL_GetMouseState(&windowX, &windowY);
+bool map_window_xy_to_game(f32 windowX, f32 windowY, f32& outX, f32& outY) {
     if (!dusk::menu_pointer::map_window_mouse_to_game_screen(windowX, windowY, outX, outY)) {
         return false;
     }
@@ -286,10 +363,40 @@ bool map_cursor_game(f32& outX, f32& outY) {
     return true;
 }
 
+bool map_cursor_game(f32& outX, f32& outY, f32* outWinX, f32* outWinY) {
+    float sdlX = 0.0f;
+    float sdlY = 0.0f;
+    SDL_GetMouseState(&sdlX, &sdlY);
+
+    float srcX = sdlX;
+    float srcY = sdlY;
+    const ImGuiIO& io = ImGui::GetIO();
+    if (sPreferImGuiCursor && io.MousePos.x >= 0.0f && io.MousePos.y >= 0.0f) {
+        srcX = io.MousePos.x;
+        srcY = io.MousePos.y;
+    }
+
+    if (outWinX != nullptr) {
+        *outWinX = srcX;
+    }
+    if (outWinY != nullptr) {
+        *outWinY = srcY;
+    }
+    return map_window_xy_to_game(srcX, srcY, outX, outY);
+}
+
 void gather_at_cursor(f32 cursorX, f32 cursorY, f32 radiusScale, PickCandidate& nearest,
-                      PickCandidate& best, int* liveOnScreenOut, EnumerateResult* resultOut) {
+                      PickCandidate& winner, PickCandidate& runnerUp, int* liveOnScreenOut,
+                      EnumerateResult* resultOut, RayHit* rayOut) {
     EnumerateResult result = enumerate_room_actors();
     int liveOnScreen = 0;
+
+    // Gate 11a: one camera→cursor ray, reused across every actor this frame.
+    RayHit rayBest{};
+    cXyz rayOrigin{};
+    cXyz rayDir{};
+    const bool rayValid =
+        kUseRayPick && rayOut != nullptr && build_pick_ray(cursorX, cursorY, rayOrigin, rayDir);
 
     for (size_t i = 0; i < result.actors.size(); ++i) {
         const PlacedActor& actor = result.actors[i];
@@ -301,14 +408,26 @@ void gather_at_cursor(f32 cursorX, f32 cursorY, f32 radiusScale, PickCandidate& 
         if (on_screen(probe)) {
             ++liveOnScreen;
         }
-        consider_live(nearest, best, actor.live, actor.name, &actor, cursorX, cursorY, radiusScale);
+        consider_live(nearest, winner, runnerUp, actor.live, actor.name, &actor, cursorX, cursorY,
+                      radiusScale);
+        if (rayValid) {
+            consider_ray(rayBest, actor.live, actor.name, &actor, rayOrigin, rayDir);
+        }
     }
 
     if (fopAc_ac_c* player = dComIfGp_getPlayer(0)) {
-        consider_live(nearest, best, player, "Link", nullptr, cursorX, cursorY, radiusScale);
+        consider_live(nearest, winner, runnerUp, player, "Link", nullptr, cursorX, cursorY,
+                      radiusScale);
+        if (rayValid) {
+            consider_ray(rayBest, player, "Link", nullptr, rayOrigin, rayDir);
+        }
     }
     if (fopAc_ac_c* horse = reinterpret_cast<fopAc_ac_c*>(dComIfGp_getHorseActor())) {
-        consider_live(nearest, best, horse, "Horse", nullptr, cursorX, cursorY, radiusScale);
+        consider_live(nearest, winner, runnerUp, horse, "Horse", nullptr, cursorX, cursorY,
+                      radiusScale);
+        if (rayValid) {
+            consider_ray(rayBest, horse, "Horse", nullptr, rayOrigin, rayDir);
+        }
     }
 
     if (liveOnScreenOut != nullptr) {
@@ -317,15 +436,101 @@ void gather_at_cursor(f32 cursorX, f32 cursorY, f32 radiusScale, PickCandidate& 
     if (resultOut != nullptr) {
         *resultOut = std::move(result);
     }
+    if (rayOut != nullptr) {
+        *rayOut = rayBest;
+    }
 }
 
 void clear_hover() {
     sHover = {};
 }
 
+// Hysteresis after winner: keep sticky unless challenger is ≥20% closer, or sticky left radius/died.
+void apply_hover_hysteresis(PickCandidate& winner, f32 cursorX, f32 cursorY, f32 radiusScale) {
+    if (!winner.valid || !sHover.valid || sHover.procId == fpcM_ERROR_PROCESS_ID_e) {
+        return;
+    }
+    if (winner.live != nullptr && fopAcM_GetID(winner.live) == sHover.procId) {
+        return;
+    }
+
+    base_process_class* base = fpcM_SearchByID(sHover.procId);
+    if (base == nullptr) {
+        return;  // sticky dead → take new winner
+    }
+    fopAc_ac_c* stickyLive = static_cast<fopAc_ac_c*>(base);
+    const ActorScreenPick stickyM = measure_actor_pick(stickyLive, sHover.name, cursorX, cursorY);
+    if (!stickyM.valid) {
+        return;
+    }
+    const f32 stickyLimit = stickyM.radiusPx * radiusScale;
+    if (stickyM.distSq > stickyLimit * stickyLimit) {
+        return;  // sticky left radius → take new winner
+    }
+    // Keep sticky unless winner is clearly closer (≥20%).
+    // Pass a stack copy of the name — never sHover.name (SAFE_STRCPY same-buffer FATAL).
+    if (winner.distSq > stickyM.distSq * kHysteresisCloserFrac) {
+        char stickyName[9]{};
+        SAFE_STRCPY(stickyName, sHover.name);
+        fill_candidate(winner, stickyM, stickyLive, stickyName, nullptr);
+    }
+}
+
+void maybe_breadcrumb(f32 sdlWinX, f32 sdlWinY, f32 cursorX, f32 cursorY, bool relative,
+                      const PickCandidate& winner, const PickCandidate& runnerUp,
+                      const PickCandidate& nearest) {
+    if (++s_breadcrumbFrames < kBreadcrumbFrames) {
+        return;
+    }
+    s_breadcrumbFrames = 0;
+
+    f32 imguiGameX = 0.0f;
+    f32 imguiGameY = 0.0f;
+    const ImGuiIO& io = ImGui::GetIO();
+    const bool imguiMapped =
+        io.MousePos.x >= 0.0f && io.MousePos.y >= 0.0f &&
+        map_window_xy_to_game(io.MousePos.x, io.MousePos.y, imguiGameX, imguiGameY);
+
+    f32 sdlGameX = 0.0f;
+    f32 sdlGameY = 0.0f;
+    const bool sdlMapped = map_window_xy_to_game(sdlWinX, sdlWinY, sdlGameX, sdlGameY);
+
+    f32 sourceDelta = -1.0f;
+    if (imguiMapped && sdlMapped) {
+        const f32 dx = sdlGameX - imguiGameX;
+        const f32 dy = sdlGameY - imguiGameY;
+        sourceDelta = std::sqrt(dx * dx + dy * dy);
+        if (!sPreferImGuiCursor && (relative || sourceDelta > kCursorSourceDeltaPx)) {
+            sPreferImGuiCursor = true;
+            DuskLog.info(
+                "Pick cursor-source → ImGui (relative={} delta={:.1f})", relative, sourceDelta);
+        }
+    }
+
+    const char* rule = !winner.valid             ? "none"
+                       : (nearest.valid && nearest.live == winner.live) ? "nearest-dist"
+                                                                        : "in-radius-distSq";
+    // If old depth-winner would differ, note it for classify (algorithm path).
+    const bool depthWouldDiffer =
+        winner.valid && runnerUp.valid && runnerUp.depth < winner.depth &&
+        runnerUp.distSq > winner.distSq;
+
+    DuskLog.info(
+        "Pick crumb win=({:.0f},{:.0f}) map=({:.1f},{:.1f}) imguiMap=({:.1f},{:.1f}) "
+        "delta={:.1f} relative={} preferImGui={} rule={} depthClash={} "
+        "w1={} d1={:.1f} z1={:.3f} r1={:.0f} w2={} d2={:.1f} z2={:.3f}",
+        sdlWinX, sdlWinY, cursorX, cursorY, imguiMapped ? imguiGameX : -1.0f,
+        imguiMapped ? imguiGameY : -1.0f, sourceDelta, relative, sPreferImGuiCursor, rule,
+        depthWouldDiffer, winner.valid ? winner.name : "(none)",
+        winner.valid ? winner.distSq : -1.0f, winner.valid ? winner.depth : -1.0f,
+        winner.valid ? winner.radiusPx : 0.0f, runnerUp.valid ? runnerUp.name : "(none)",
+        runnerUp.valid ? runnerUp.distSq : -1.0f, runnerUp.valid ? runnerUp.depth : -1.0f);
+}
+
 }  // namespace
 
 void tick_world_pick_hover() {
+    sPickDotValid = false;
     if (!dusk::g_levelEditorSession || !session_select_mode_enabled()) {
         clear_hover();
         return;
@@ -335,43 +540,67 @@ void tick_world_pick_hover() {
         return;
     }
 
+    float sdlWinX = 0.0f;
+    float sdlWinY = 0.0f;
+    SDL_GetMouseState(&sdlWinX, &sdlWinY);
+
     f32 cursorX = 0.0f;
     f32 cursorY = 0.0f;
-    if (!map_cursor_game(cursorX, cursorY)) {
+    if (!map_cursor_game(cursorX, cursorY, nullptr, nullptr)) {
         clear_hover();
         return;
     }
 
-    PickCandidate nearest{};
-    PickCandidate best{};
-    gather_at_cursor(cursorX, cursorY, kHoverRadiusScale, nearest, best, nullptr, nullptr);
+    sPickDotX = cursorX;
+    sPickDotY = cursorY;
+    sPickDotValid = true;
 
-    // Prefer in-radius best; else show nearest ghost only if reasonably close (2× radius).
-    PickCandidate* show = nullptr;
-    if (best.valid) {
-        show = &best;
-    } else if (nearest.valid && nearest.distSq <= (nearest.radiusPx * 2.0f) * (nearest.radiusPx * 2.0f)) {
-        show = &nearest;
+    PickCandidate nearest{};
+    PickCandidate winner{};
+    PickCandidate runnerUp{};
+    RayHit rayBest{};
+    gather_at_cursor(cursorX, cursorY, kHoverRadiusScale, nearest, winner, runnerUp, nullptr,
+                     nullptr, &rayBest);
+
+    SDL_Window* const sdlWindow = aurora::window::get_sdl_window();
+    const bool relative = sdlWindow != nullptr && SDL_GetWindowRelativeMouseMode(sdlWindow);
+    maybe_breadcrumb(sdlWinX, sdlWinY, cursorX, cursorY, relative, winner, runnerUp, nearest);
+
+    if (rayBest.valid) {
+        // Ray hit is authoritative & stable frame-to-frame — no hysteresis needed.
+        winner_from_ray(winner, rayBest);
+    } else {
+        apply_hover_hysteresis(winner, cursorX, cursorY, kHoverRadiusScale);
     }
 
-    if (show == nullptr || show->live == nullptr) {
+    if (!winner.valid || winner.live == nullptr) {
         clear_hover();
         return;
     }
 
     sHover.valid = true;
-    sHover.live = show->live;
-    sHover.procId = fopAcM_GetID(show->live);
-    SAFE_STRCPY(sHover.name, show->name);
-    sHover.pos = show->anchor;
+    sHover.live = winner.live;
+    sHover.procId = fopAcM_GetID(winner.live);
+    SAFE_STRCPY(sHover.name, winner.name);
+    sHover.pos = winner.anchor;
 }
 
 void draw_pick_hover() {
-    if (!dusk::g_levelEditorSession || !session_select_mode_enabled() || !sHover.valid) {
+    if (!dusk::g_levelEditorSession || !session_select_mode_enabled()) {
         return;
     }
 
-    // Rebind if Stage churn invalidated the pointer.
+    // Gate 10: sanity pick-dot at mapped cursor (screen report under physical aim).
+    if (sPickDotValid) {
+        dDbVw_Report(static_cast<int>(sPickDotX), static_cast<int>(sPickDotY), "+");
+        dDbVw_Report(20, 240, "PICK (%.0f,%.0f)%s", sPickDotX, sPickDotY,
+                     sPreferImGuiCursor ? " imgui" : " sdl");
+    }
+
+    if (!sHover.valid) {
+        return;
+    }
+
     if (sHover.procId != fpcM_ERROR_PROCESS_ID_e) {
         if (base_process_class* base = fpcM_SearchByID(sHover.procId)) {
             sHover.live = static_cast<fopAc_ac_c*>(base);
@@ -384,12 +613,25 @@ void draw_pick_hover() {
         return;
     }
 
-    cXyz pos(sHover.live->current.pos.x,
-             0.5f * (sHover.live->current.pos.y + sHover.live->eyePos.y),
-             sHover.live->current.pos.z);
+    if (const PlacedActor* sel = get_selection()) {
+        const bool sameLive = sel->live != nullptr && sel->live == sHover.live;
+        const bool sameProc =
+            sel->live != nullptr && sHover.procId != fpcM_ERROR_PROCESS_ID_e &&
+            sHover.procId == fopAcM_GetID(sel->live);
+        if (sameLive || sameProc) {
+            dDbVw_Report(20, 220, "HOVER %s  (selected)", sHover.name);
+            return;
+        }
+    }
 
-    const GXColor ring = {0xFF, 0xC0, 0x40, 0x90};
-    dDbVw_drawSphereXlu(pos, 70.0f, ring, /*clipZ=*/0);
+    // Gate 11b (Path A): model-tight hover highlight (per-joint boxes) — amber.
+    constexpr GXColor kHoverRing = {0xFF, 0xE0, 0x80, 0xA0};
+    draw_actor_volume_highlight(sHover.live, 0xFF, 0xC0, 0x40, 0x50);
+
+    cXyz ringPos(sHover.live->current.pos.x,
+                 0.5f * (sHover.live->current.pos.y + sHover.live->eyePos.y),
+                 sHover.live->current.pos.z);
+    dDbVw_drawSphereXlu(ringPos, 40.0f, kHoverRing, /*clipZ=*/0);
     dDbVw_Report(20, 220, "HOVER %s  (click)", sHover.name);
 }
 
@@ -418,8 +660,9 @@ void try_world_pick_on_click() {
             s_selectHeartbeat = 0;
             DuskLog.info(
                 "Pick heart selectMode=1 pcHotkeys={} buttons=0x{:x} sdlDown={} wantMouse={} "
-                "relative={} win=({:.0f},{:.0f})",
-                pcHotkeys, mouseButtons, leftDown, wantMouse, relative, windowX, windowY);
+                "relative={} preferImGui={} win=({:.0f},{:.0f})",
+                pcHotkeys, mouseButtons, leftDown, wantMouse, relative, sPreferImGuiCursor, windowX,
+                windowY);
         }
     } else {
         s_selectHeartbeat = 0;
@@ -455,22 +698,31 @@ void try_world_pick_on_click() {
         return;
     }
 
+    // Same cursor source + winner rule as hover.
     f32 clickX = 0.0f;
     f32 clickY = 0.0f;
-    if (!dusk::menu_pointer::map_window_mouse_to_game_screen(windowX, windowY, clickX, clickY)) {
+    if (!map_cursor_game(clickX, clickY, nullptr, nullptr)) {
         DuskLog.info("Pick skip map selectMode={} pcHotkeys={} win=({:.0f},{:.0f})", selectMode,
                      pcHotkeys, windowX, windowY);
         return;
     }
-    clickX = mirror_screen_x(clickX);
 
     PickCandidate nearest{};
-    PickCandidate best{};
+    PickCandidate winner{};
+    PickCandidate runnerUp{};
+    RayHit rayBest{};
     int liveOnScreen = 0;
     EnumerateResult result{};
-    gather_at_cursor(clickX, clickY, 1.0f, nearest, best, &liveOnScreen, &result);
+    gather_at_cursor(clickX, clickY, 1.0f, nearest, winner, runnerUp, &liveOnScreen, &result,
+                     &rayBest);
 
-    if (!best.valid) {
+    // Gate 11a: ray hit wins outright (pinpoint, depth-ordered). Screen path is
+    // the empty-space fallback below.
+    if (rayBest.valid) {
+        winner_from_ray(winner, rayBest);
+    }
+
+    if (!winner.valid) {
         DuskLog.info(
             "Pick miss click=({:.1f},{:.1f}) radiusDefault={:.0f} liveOnScreen={} nearest={} "
             "setID={} distSq={:.1f} nearR={:.0f} selectMode={} pcHotkeys={} actors={}",
@@ -482,11 +734,11 @@ void try_world_pick_on_click() {
         return;
     }
 
-    const PlacedActor& picked = best.placed != nullptr ? *best.placed : best.snapshot;
-    if (best.placed != nullptr) {
+    const PlacedActor& picked = winner.placed != nullptr ? *winner.placed : winner.snapshot;
+    if (winner.placed != nullptr) {
         int idx = -1;
         for (size_t i = 0; i < result.actors.size(); ++i) {
-            if (&result.actors[i] == best.placed) {
+            if (&result.actors[i] == winner.placed) {
                 idx = static_cast<int>(i);
                 break;
             }
@@ -499,8 +751,8 @@ void try_world_pick_on_click() {
     DuskLog.info(
         "Pick hit name={} setID={} depth={:.4f} distSq={:.1f} radius={:.0f} selectMode={} "
         "pcHotkeys={} edge={}",
-        picked.name, picked.setID, best.depth, best.distSq, best.radiusPx, selectMode, pcHotkeys,
-        edge);
+        picked.name, picked.setID, winner.depth, winner.distSq, winner.radiusPx, selectMode,
+        pcHotkeys, edge);
     set_selection_snapshot(picked, true);
 }
 

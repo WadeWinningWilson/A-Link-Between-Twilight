@@ -7,6 +7,8 @@
 #include "dusk/map_loader_definitions.h"
 #include "fmt/format.h"
 
+#include <string>
+
 namespace dusk::ui {
 
 // ============================================
@@ -15,6 +17,8 @@ namespace dusk::ui {
 // transitions. See dusk/debug_warp.h.
 // ============================================
 static bool sDebugWarpStorySuppress = false;
+static s8 sRoomLayerOverride = -1;
+static bool sClearRoomLayerOverrideOnStageLoad = false;
 
 void markDebugWarpStorySuppress() {
     sDebugWarpStorySuppress = true;
@@ -24,6 +28,23 @@ bool consumeDebugWarpStorySuppress() {
     const bool pending = sDebugWarpStorySuppress;
     sDebugWarpStorySuppress = false;
     return pending;
+}
+
+void setRoomLayerOverride(s8 layer) {
+    sRoomLayerOverride = layer;
+    // Keep the override through the stage load this warp is about to trigger.
+    sClearRoomLayerOverrideOnStageLoad = false;
+}
+
+s8 getRoomLayerOverride() {
+    return sRoomLayerOverride;
+}
+
+void onStageLoadRoomLayerOverride() {
+    if (sClearRoomLayerOverrideOnStageLoad) {
+        sRoomLayerOverride = -1;
+    }
+    sClearRoomLayerOverrideOnStageLoad = true;
 }
 
 namespace {
@@ -303,14 +324,17 @@ WarpWindow::WarpWindow() {
 
         leftPane.register_control(
             leftPane.add_select_button({
-                .key = "Layer",
-                .getValue = [&state] { return fmt::format("{}", state.layer); },
+                .key = "Room layer override",
+                .getValue =
+                    [&state] {
+                        return state.layer < 0 ? std::string("Auto") : fmt::format("{}", state.layer);
+                    },
             }),
             rightPane, [&state](Pane& pane) {
                 pane.clear();
                 for (int layer = kMinLayer; layer <= kMaxLayer; ++layer) {
                     pane.add_button({
-                                    .text = fmt::format("{}", layer),
+                                    .text = layer < 0 ? std::string("Auto") : fmt::format("{}", layer),
                                     .isSelected = [layer, &state] { return state.layer == layer; },
                                 })
                         .on_pressed([layer, &state] {
@@ -355,7 +379,10 @@ WarpWindow::WarpWindow() {
                     // dusk::truetest::onStageLoad and are unaffected.
                     // ============================================
                     markDebugWarpStorySuppress();
-                    dComIfGp_setNextStage( map.mapFile, room.roomPoints[state.pointIdx], room.roomNo, state.layer);
+                    setRoomLayerOverride(static_cast<s8>(state.layer));
+                    dComIfGp_setNextStage(map.mapFile, room.roomPoints[state.pointIdx], room.roomNo,
+                                          state.layer);
+                    // UI snaps back to Auto; override persists for this stage load only.
                     state.layer = kMinLayer;
                 }),
             rightPane, [](Pane& pane) {

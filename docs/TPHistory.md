@@ -223,6 +223,33 @@ FALSIFIES TCRF's claim (§6.1) that Sample.arc contains the GDC 2005 early Shado
 visually confirmed in-game as the trailer-style beast. `file1.bmd` (2,784 B, `world_root`)
 is a trivial test primitive.
 
+**2026-07-18 — the horse LINEAGE, structured TEX1/JNT1 parse (verifies the community
+"pixel-for-pixel" claim + the Ganon-steed question):**
+
+- **`file2.bmd` doesn't just share Epona's rig — it names Epona's textures.** Its 12
+  texture slots are literally `hs_body`/`hs_eye`(.1-.3)/`hs_hair`/`hs_tail` — the shipped
+  Horse arc's own `hs_` prefix — in the SAME formats (CMPR/C8) and SAME dimensions
+  (256×256 body, 4× 32×32 eyes, 128×128 hair, 64×128 tail) as shipped `hs.bmd`'s 12
+  slots. Only the payloads differ (some intact → the correctly-textured patches seen
+  in-game; some rotted/placeholder → the garbage patches). **The community claim that
+  Epona's textures fit the prototype "pixel for pixel" is data-verified at the interface
+  level: identical slot names, counts, formats, and dimensions.** file2.bmd isn't a
+  different horse that resembles Epona — it IS an earlier revision of the same `hs`
+  asset.
+- **Ganondorf's steed (`B_hg.arc/hg.bmd`, loaded by `d_a_b_gnd` alongside B_gnd) IS a
+  re-dressed member of the same lineage: the IDENTICAL 38-joint skeleton, name-for-name
+  — including Epona's `kura1` saddle and `belt/abumi` stirrup joints, retained under the
+  armor.** Its textures are its own (`hg_yoroi` 鎧 = armor, plus body/hair/tail at
+  Epona's exact slot dimensions), and its animation set reuses Epona's core movement
+  stems (`jump_start/middle/end`, `run_dash`, `stand`, renamed `hg_`) plus boss-only
+  additions (`down`, `standturnl/r`, `wait`, `walk`, `stop`). One rig serves all three
+  horses on the disc — prototype, Epona, and the boss steed — meaning their animations
+  are cross-compatible.
+- **`EN_HG` audio family attribution REFINED (corrects §3.9's correction): HG = "Horse
+  Ganon" — the steed itself**, not beast-Ganon footfalls: the ids (`V_BREATH`,
+  `FOOTNOTE_L/R`, `SLIP`, `LAND`, `V_STAND`, `V_STANDTURN`, `D28_STAND*`) align
+  one-for-one with `hg_stand`/`hg_standturnl/r` anims and the Demo28 rampage cutscene.
+
 ### 3.6 What was NOT found
 
 - **No test stages on retail TP GC USA**: 79 stages, systematic names, nothing like
@@ -292,6 +319,128 @@ demo forest content. The stage names, exit links, and env/wolf/rain scripting al
 shipped; the stage archives themselves (and any enemy they contained) did not. If the
 beta Moblin existed as data, this network is where it lived — and it was purged with
 the stages, consistent with the Object-arc fingerprint NULL.
+
+### 3.8b The WW crew on TP — everything the retail disc knows (2026-07-18)
+
+**IDENTITY CORRECTION (same day, via in-game visual + WWHD naming + Cb.arc verification):
+the stubs are NOT the sage pair.** WW's `Mk` = **Ivan of the Killer Bees** (Windfall kid;
+`mk_jida*` = his foot-stamp tantrum) and WW's `P2` = **the small-pirate shared body with
+THREE heads** (`p2head01/02/03`, book/telescope/daggers — Tetra's small crew). The real
+sages are `Cb.arc` (Makar: `cb_face.bdl` leaf face, `cb_cello.bdl`, nut-sowing ceremony;
+actor `d_a_npc_cb1`) and `Md.arc` (Medli, `d_a_npc_md`) — **TP has NO cb/md stubs; the
+sages were never in TP's roster.** What TP's stub roster actually is: **WW-branch
+RESIDUE** — a Windfall kid and a pirate body surviving as gutted actors in dolzel2's tree
+all the way to mastering. Weaker romance, stronger branch evidence. Table below kept with
+corrected identities:
+
+| Evidence | Ivan (`npc_mk`, ex-"Makar") | Small pirates (`npc_p2`, ex-"Medli") |
+|---|---|---|
+| Spawn table (`l_objectName`) | `Mk` | **`P2a`, `P2b`, `P2c` — THREE placement subtypes (args 0x00-0x02): almost certainly the three pirate HEAD variants**, mirroring `p2head01/02/03` |
+| Debug spawn roster (`f_pc_debug_sv.cpp`) | `NPC_MK` ✓ | `NPC_P2` ✓ |
+| REL on disc | 308-byte safe stub | 308-byte safe stub |
+| Model/anims on any TP master | **none** (SHA sweep) | **none** |
+| Retail placements | none (one byte-scan hit = false positive) | none |
+| Message-bank text (EN+JP, decompressed) | none | none |
+| Symbol map | 5 × 8-byte return-0 shells (`Create/Delete/Execute/Draw/IsDelete`) — no behavior vocabulary survives | same |
+
+The stub anatomy documents Nintendo's cut method: gut the REL to safe no-op entry
+points, keep the profile and the spawn-table names — ghost placements would silently
+fail rather than crash. (Dusklight phase-1 corollary: our port's stubs should be
+hardened to match retail's safety.)
+
+**Roster correction: `npc_kdk` is NOT WW crew** (no WW counterpart exists) — a
+TP-original cut NPC, even barer than the sages: its rel is **276 bytes with NO methods
+at all** (map = executor prologue + `g_profile_NPC_KDK` only; the sages at least kept
+8-byte named stubs) — the NULL-method profile is exactly the TestCube crash class.
+But it has the distinction the sages lack: **one real retail ghost placement — and the
+location is remarkable: `R_SP107/R03` is ZELDA'S TOWER-TOP room** (base layer: `zdoor`
+— the door to Zelda's chamber — a save point, two carryables). **Kdk stands alone on
+layer 0 at (19676, 4500, 2633), 660 units from Zelda's door at the same floor height —
+a cut NPC in the first-Zelda-meeting scene.** Params `000FAFFF` (undecodable — no code
+survives). Retail survival hypothesis: that layer combination never activates in the
+shipped story flow (the sewers sequence runs on other layers), so the methodless
+profile never loads. Identity: **USER HYPOTHESIS (2026-07-18, promoted to evidence-alias candidate): Kdk =
+the UNSEEN JAILER** — in retail, the cutscene after Midna and wolf Link first visit
+Zelda confirms a guard/jailer approaching (light + footsteps, always off-camera;
+Midna spirits Link away before he renders). That cutscene (Demo07 — robed-Zelda
+`zelr*` models + flashback soldiers) plays in THIS room; Kdk stands at its door on a
+layer the shipped flow may never activate. Location-exact, scene-exact — but
+circumstantial until runtime evidence. **Phase-1 experiment (with safe-stub
+hardening's create-attempt logging): replay the intro sequence to the Zelda visit —
+if the game's layer state ever flips R03 to layer 0 during/after the scene, the
+engine will literally attempt to spawn Kdk at the jailer's arrival beat, and the log
+will show it. A positive = confirmation; a negative = the placement was already
+orphaned by the layer flow when the scene was staged off-camera.**
+
+**EXPERIMENT RESULTS (2026-07-18, both halves run):** (a) full intro replay — R03
+loads ONLY layers 14/8/10; layer 0 never activates; no create-attempt ⇒ **Kdk is a
+layer-orphaned ghost; retail never tries.** (b) forced layer-0 via debug warp
+override — `[StubWatch] create-attempt proc=NPC_KDK stage=R_SP107 room=3 layer=0
+params=000fafff pos=(19676,4500,2633)` — **Nintendo's authored Kdk placement executed
+for the first time since mastering** (safe-declined; no payload exists). Mechanism
+proven; identity (unseen-jailer hypothesis) remains circumstantial — the placement +
+scene fit is the strongest evidence obtainable from the disc.
+
+WW-side note (for the separate restoration mod, outside the base game): all relevant
+arcs exist on the WW disc — `Cb.arc` (Makar), `Md.arc` (Medli), plus the residue pair
+`Mk.arc` (Ivan) / `P2.arc` (pirates). Runtime lesson from the mod work: raw WW BDL4
+crashes the port's never-exercised BDL loader; the working path is offline adaptation
+(strip MDL3, retag BMD3 — `tools/ww_crew_restoration_skeleton/adapt_bdl_arcs.py`),
+after which WW characters load, draw, and animate in TP (first confirmed render:
+2026-07-18 — Ivan, all-black pending mount light binding).
+
+### 3.9 The path to the Moblin — final synthesis (2026-07-18, all lanes exhausted)
+
+Ten independent evidence lanes, run to completion:
+
+| # | Lane | Result |
+|---|------|--------|
+| 1 | WW Mo2 fingerprint vs all 1,397 Object arcs | NULL |
+| 2 | Symbol-map contents (all .map files) | NULL (only `getBokoFlamePos`, §3.7) |
+| 3 | Orphan placement names (all 645 rooms) | `_partic` only — no enemy ghosts |
+| 4 | Cut dev-stage network | names/exits/scripting survive; data purged (§3.8) |
+| 5 | Cross-master Object roster diff (9 discs) | only the known Wii-rev0 `E_base` leak |
+| 6 | Orphan-arc sweep (arcs no code names) | **`E_wpa` = unused `ef_warphole` warp effect** — every E_/B_ arc else accounted |
+| 7 | E_OC2 identity | **SHIPS — 39/126 retail E_oc placements select OC2** (variant = placement rot.x byte 1 ≠ 0/FF; ToT R11/13/14, Cave of Ordeals D_SB01, Hyrule Field). Same 39,520 B body/joints as oc.bmd (retexture) + own 2× larger weapon `oc2_wepon.bmd`. HIO debug name: オーク "Orc". Folk label "Moblin mesh" dead. |
+| 8 | Weapon-model sweep (all member names) | every axe accounted: `E_mf/mf_axe` = **Dynalfos** (shipped, 11 placements), `E_rdb/rb_ono` (斧) = **King Bulblin** (shipped), oc2 cleaver ships. No orphaned axe. |
+| 9 | Stage-arc embedded models | door hardware only |
+| 10 | Orphaned enemy-audio audit | **5 cut-enemy audio families, no moblin** (below) |
+
+**CORRECTION (2026-07-18, same day — the "five cut-enemy audio families" claim is
+RETRACTED.** The family-token→actor-filename matching method was flawed: audio family
+names need not match actor names. Code-usage grep shows ALL FIVE belong to shipped
+actors: **`EN_NS` = `d_a_e_s1` (the retail Shadow Beast — Cursor caught this first)**,
+`EN_GF` = `d_a_e_gb` (**Deku Like** — eat/burst/open/close/bound + `demo_dropkey`),
+`EN_ZZ` = `d_a_b_zant_mobile` (Zant's snorting head phase), `EN_GBA` = `d_a_e_gm`
+(Gohma young; arc holds `goma_egg.bmd` — Armogohma's lay/hatch mechanic), `EN_HG` =
+`d_a_b_gnd` (beast Ganon footfalls/stand). **Conclusion: ZERO orphaned enemy audio
+families exist** — the audio lane is fully accounted, which makes the Moblin timing
+argument STRONGER: no scar of any kind at the audio layer. Residue: individual unused
+ids only (e.g. `EN_NS_V_DEMO04_HIPPARU` — the gen-2 "pull", unused by retail logic).)
+
+**STB cutscene-script sweep + ActorDat (2026-07-18, final string sources):** all ~130
+JStudio `.stb` scripts token-swept — no cut-stage refs, no unknown enemy tokens
+(Demo90/98 hold nothing anomalous). BUT `res/ActorDat/ActorDat.bin` (1,984 B) —
+outside every prior sweep — is **WIND WAKER's enemy item-drop database, BYTE-IDENTICAL
+to WW's own copy, shipped on retail TP and read by nothing**: sections
+ACFN/ACNA/TACDS/LARG, `N_ITEM0-15`/`percent` drop slots, and a WW enemy roster —
+`nezumi, keeth, magtail, bbaba, p_hat, c_red/green/blue/black/kiiro` (chuchus),
+`kuro_s, Stal, gmos, bable, amos/amos2, Fmaster, Rdead1/2, wiz_r/s/m/o, sea_hat,
+Oship` — **and `mo2`: the Moblin, by name.** This falsifies §3.9-lane-1's "zero
+`mo2` occurrences" as stated (that sweep covered Object arcs only) and adds ~2KB to
+the §1 byte-identical WW payload. **The only Moblin trace on any TP master is this
+one string — a fossil of WW's drop table, not TP-Moblin content.**
+
+**Verdict — the Moblin's path (amended):** the 2004-trailer axe-wielder was a
+vertical-slice asset whose home was the dev-stage network (§3.8; likeliest the
+Level-2 shape-check / demo-dungeon tree). It was purged from the asset tree before
+ANY of the nine shipped masters, before audio mastering froze (zero audio scar), and
+survives on disc only as the string `mo2` inside WW's fossilized drop database.
+Retail descendants are design-lineage only: King Bulblin (armor + `rb_ono` axe) and
+the shipped OC2 heavy-cleaver orc. No disc-side restoration path; bringing the beta
+Moblin back is mod-import work (WW Mo2 port or recreation), same class as
+Makar/Medli. The hunt's yield: the dev-stage network, `E_wpa`, the OC2 correction,
+the `mo2` fossil, and a fully-accounted audio map.
 
 ---
 

@@ -1,0 +1,14 @@
+# D3 A/B — TP-native BMD through the same ExtNpc mount path.
+# To run: copy over npc/mk.ini (or rename this to mk.ini) and disable/rename the WW mk.ini.
+# source=dvd loads from the game disc — no arcs/Npc_ks.arc in the mod folder.
+#
+# proc=NPC_MK
+# source=dvd
+# arc=Npc_ks
+# model=saru.bmd
+# idle=saru_wait_a.bck
+# display_name=TP-probe (saru)
+# skip_btp=0
+# neck_joint=head
+# cyl_radius=40
+# cyl_height=100
