@@ -1105,6 +1105,204 @@ bool move_folder_to(const char* folder, int slot) {
     return true;
 }
 
+std::string mod_group_key(const char* folder) {
+    if (folder == nullptr) {
+        return {};
+    }
+    const std::string path(folder);
+    const auto slash = path.find('/');
+    return slash == std::string::npos ? path : path.substr(0, slash);
+}
+
+bool mod_is_collection_variant(const char* folder) {
+    return folder != nullptr && std::strchr(folder, '/') != nullptr;
+}
+
+static std::vector<std::vector<OrderEntry>> order_as_group_blocks(
+    const std::vector<OrderEntry>& list) {
+    std::vector<std::string> key_order;
+    std::unordered_map<std::string, std::vector<OrderEntry>> blocks;
+    for (const OrderEntry& e : list) {
+        const std::string key = mod_group_key(e.name.c_str());
+        if (blocks.find(key) == blocks.end()) {
+            key_order.push_back(key);
+        }
+        blocks[key].push_back(e);
+    }
+    std::vector<std::vector<OrderEntry>> out;
+    out.reserve(key_order.size());
+    for (const std::string& key : key_order) {
+        out.push_back(blocks[key]);
+    }
+    return out;
+}
+
+static std::vector<OrderEntry> flatten_group_blocks(
+    const std::vector<std::vector<OrderEntry>>& blocks) {
+    std::vector<OrderEntry> out;
+    for (const std::vector<OrderEntry>& block : blocks) {
+        out.insert(out.end(), block.begin(), block.end());
+    }
+    return out;
+}
+
+static bool group_block_on_disk(const std::vector<OrderEntry>& block) {
+    const std::filesystem::path root = ConfigPath / "model_replacements";
+    std::error_code ec;
+    for (const OrderEntry& e : block) {
+        if (std::filesystem::is_directory(root / e.name, ec)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int find_group_block_index(const std::vector<std::vector<OrderEntry>>& blocks,
+                                  const char* group_key) {
+    if (group_key == nullptr) {
+        return -1;
+    }
+    for (int i = 0; i < static_cast<int>(blocks.size()); ++i) {
+        if (!blocks[i].empty() && mod_group_key(blocks[i][0].name.c_str()) == group_key) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool select_collection_variant(const char* variant_folder) {
+    if (variant_folder == nullptr || !mod_is_collection_variant(variant_folder)) {
+        return false;
+    }
+    const std::string root = mod_group_key(variant_folder);
+    std::vector<OrderEntry> list = full_order_list();
+    bool changed = false;
+    for (OrderEntry& e : list) {
+        if (mod_group_key(e.name.c_str()) != root) {
+            continue;
+        }
+        const bool want = e.name == variant_folder;
+        if (e.enabled != want) {
+            e.enabled = want;
+            changed = true;
+        }
+    }
+    if (!changed) {
+        return false;
+    }
+    persist_order(list);
+    scan();
+    install_overlays();
+    return true;
+}
+
+bool move_mod_group(const char* group_key, int delta, bool apply) {
+    if (group_key == nullptr || (delta != -1 && delta != 1)) {
+        return false;
+    }
+    std::vector<OrderEntry> list = full_order_list();
+    std::vector<std::vector<OrderEntry>> blocks = order_as_group_blocks(list);
+
+    std::vector<int> visible;
+    for (int i = 0; i < static_cast<int>(blocks.size()); ++i) {
+        if (group_block_on_disk(blocks[i])) {
+            visible.push_back(i);
+        }
+    }
+
+    const int selfBlock = find_group_block_index(blocks, group_key);
+    if (selfBlock < 0) {
+        return false;
+    }
+
+    int selfSlot = -1;
+    for (int v = 0; v < static_cast<int>(visible.size()); ++v) {
+        if (visible[v] == selfBlock) {
+            selfSlot = v;
+            break;
+        }
+    }
+    if (selfSlot < 0) {
+        return false;
+    }
+
+    const int targetSlot = selfSlot + delta;
+    if (targetSlot < 0 || targetSlot >= static_cast<int>(visible.size())) {
+        return false;
+    }
+
+    std::swap(blocks[visible[selfSlot]], blocks[visible[targetSlot]]);
+    list = flatten_group_blocks(blocks);
+    persist_order(list);
+
+    if (apply) {
+        scan();
+        install_overlays();
+    }
+    return true;
+}
+
+bool move_mod_group_to(const char* group_key, int slot, bool apply) {
+    if (group_key == nullptr || slot < 0) {
+        return false;
+    }
+    std::vector<OrderEntry> list = full_order_list();
+    std::vector<std::vector<OrderEntry>> blocks = order_as_group_blocks(list);
+
+    std::vector<int> visible;
+    for (int i = 0; i < static_cast<int>(blocks.size()); ++i) {
+        if (group_block_on_disk(blocks[i])) {
+            visible.push_back(i);
+        }
+    }
+
+    const int selfBlock = find_group_block_index(blocks, group_key);
+    if (selfBlock < 0) {
+        return false;
+    }
+
+    int selfSlot = -1;
+    for (int v = 0; v < static_cast<int>(visible.size()); ++v) {
+        if (visible[v] == selfBlock) {
+            selfSlot = v;
+            break;
+        }
+    }
+    if (selfSlot < 0) {
+        return false;
+    }
+
+    slot = std::min(slot, static_cast<int>(visible.size()) - 1);
+    if (slot == selfSlot) {
+        return false;
+    }
+
+    const std::vector<OrderEntry> moved = blocks[selfBlock];
+    blocks.erase(blocks.begin() + selfBlock);
+
+    int insertBlock;
+    if (slot >= static_cast<int>(visible.size()) - 1 &&
+        selfSlot < static_cast<int>(visible.size()) - 1) {
+        insertBlock = static_cast<int>(blocks.size());
+    } else {
+        const int belowSlot = slot + (slot > selfSlot ? 1 : 0);
+        insertBlock = visible[belowSlot];
+        if (insertBlock > selfBlock) {
+            --insertBlock;
+        }
+    }
+    blocks.insert(blocks.begin() + insertBlock, moved);
+
+    list = flatten_group_blocks(blocks);
+    persist_order(list);
+
+    if (apply) {
+        scan();
+        install_overlays();
+    }
+    return true;
+}
+
 std::vector<std::pair<std::string, bool>> order_view(const std::vector<std::string>& folders) {
     // Cheap per-frame view for the editor: order-setting parse only, NO disk.
     std::vector<std::pair<std::string, bool>> out;
@@ -2190,6 +2388,11 @@ void toggle_folder(const char*) {}
 bool move_folder(const char*, int, bool) { return false; }
 bool move_folder_to(const char*, int) { return false; }
 void apply_order_changes() {}
+std::string mod_group_key(const char* folder) { return folder ? folder : ""; }
+bool mod_is_collection_variant(const char*) { return false; }
+bool select_collection_variant(const char*) { return false; }
+bool move_mod_group(const char*, int, bool) { return false; }
+bool move_mod_group_to(const char*, int, bool) { return false; }
 std::vector<std::pair<std::string, bool>> order_view(const std::vector<std::string>&) { return {}; }
 std::vector<std::string> list_core_packs() { return {}; }
 void rebuild_texture_packs() {}

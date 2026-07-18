@@ -72,6 +72,7 @@
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include "d/d_ww_itemmdl_pc.h"
+#include "d/d_demo_leftover_viewer.h"
 #include "dusk/custom_assets.hpp"
 #include "dusk/hurricane_test.h"
 #include "dusk/logging.h"  // DuskLog — TEMP arc/model lifecycle trace (STRIP with D_ALBW_ARC_LIFECYCLE_DEBUG)
@@ -303,16 +304,111 @@ bool daAlink_c::checkWwBowSkinActive() {
 
 // ============================================
 // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
-// "Leaf out" predicate that re-gates the cucco-glide chassis. Debug toggle for now; becomes
-// a real leaf-item/equip check later. Kept out of non-PC builds (settings are PC-only).
+// Runtime glide-active state: the debug toggle only ENABLES the leaf; the player engages the
+// glide by pressing A mid-air (A again = let go → fall), à la WW (doTrigger toggle). One Link,
+// so a file-static is fine; reset at each auto-jump entry so every ledge jump starts un-glided.
 // ============================================
+static bool s_dekuLeafGlideActive = false;
+
+// "Leaf out AND engaged" predicate that re-gates the cucco-glide chassis. Kept out of non-PC
+// builds (settings are PC-only). Becomes a real leaf-item/equip check later.
 bool daAlink_c::checkDekuLeafGlide() const {
 #if TARGET_PC
-    return dusk::getSettings().game.dekuLeafGlideTest.getValue();
+    return dusk::getSettings().game.dekuLeafGlideTest.getValue() && s_dekuLeafGlideActive;
 #else
     return false;
 #endif
 }
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P3b — leaf model load + hold)
+// The WW Deku Leaf (vleaf, itemmdl 0x15) has no TP model to override, so we load it as a
+// standalone Layer-B loose BMD ("Wind Waker Deku Leaf" mod) and hold it on Link ourselves.
+// Session-cached J3DModel on the persistent game heap (survives clothes-heap rebuilds);
+// positioned above the head (joint 4) each frame while gliding, drawn boots-style (no MAJI).
+// ============================================
+static J3DModel* s_dekuLeafModel = NULL;
+// Billow phase, advanced each frame while gliding (WW uses 0x82f/frame). Drives the rib flap.
+static s16 s_dekuLeafBillowPhase = 0;
+
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P3d — rib billow)
+// Re-implements WW's parachute rib articulation with our OWN math (no WW source): a per-joint
+// callback that applies a sin-driven local rotation to the canopy's rib joints during modelCalc,
+// so the leaf flaps in flight. Root(0) stays put; arm-roots (1,3,5,7) and tips (2,4,6,8) flap,
+// tips more, each arm phase-offset so it billows rather than pulsing in lockstep.
+// ============================================
+static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
+    if (param_1 != 0) {
+        return 1;
+    }
+    J3DModel* model = j3dSys.getModel();
+    if (model == NULL) {
+        return 1;
+    }
+    int jnt = i_joint->getJntNo();
+    if (jnt >= 1 && jnt <= 8) {
+        Mtx m;
+        MTXCopy(model->getAnmMtx(jnt), m);
+        const s16 amp = (jnt % 2 == 0) ? 0x0900 : 0x0480;      // tips flap ~2x the arm-roots
+        const s16 phase = (s16)(s_dekuLeafBillowPhase + jnt * 0x1800);  // per-arm offset
+        const s16 ang = (s16)(amp * cM_ssin(phase));
+        cMtx_ZrotM(m, ang);
+        model->setAnmMtx(jnt, m);
+        MTXCopy(m, J3DSys::mCurrentMtx);
+    }
+    return 1;
+}
+
+// Overhead mount, expressed in Link's FACING frame (x=right, y=up, z=forward) relative to the
+// head, plus a blade tilt. World-anchored (not head-bone-local) so "up" is actually up. Tuning
+// targets — dial these to seat the leaf overhead like the held cucco.
+static cXyz s_dekuLeafOffset(0.0f, 55.0f, 0.0f);
+// Base orientation: the domed canopy's peak is +Z in model space. With no rotation it faces
+// forward; a single -90 X pitches the peak to WORLD-UP so the canopy lies horizontal overhead
+// like WW's parasol (Link hangs under it). Y flips the leaf tip fore/aft if wanted.
+static s16 s_dekuLeafBaseRotY = 0x0000;
+static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X -> dome peak up, canopy horizontal
+
+void daAlink_c::updateDekuLeafModel() {
+    if (s_dekuLeafModel == NULL) {
+        J3DModelData* data = dusk::custom_assets::try_load("itemmdl", 0x15);
+        if (data == NULL) {
+            return;  // mod folder disabled / file missing — no leaf this frame
+        }
+        JKRHeap* gameHeap = mDoExt_getGameHeap();
+        JKRHeap* prevHeap = (gameHeap != NULL) ? mDoExt_setCurrentHeap(gameHeap) : NULL;
+        s_dekuLeafModel = mDoExt_J3DModel__create(data, 0x80000, 0x11000084);
+        if (prevHeap != NULL) {
+            mDoExt_setCurrentHeap(prevHeap);
+        }
+        if (s_dekuLeafModel == NULL) {
+            return;
+        }
+        // Install the rib billow callback on the canopy's arm joints (1..8; root 0 static).
+        for (u16 jn = 1; jn <= 8; jn++) {
+            data->getJointNodePointer(jn)->setCallBack(dekuLeafJointCB);
+        }
+    }
+
+    // advance the billow phase each frame (WW cadence)
+    s_dekuLeafBillowPhase += 0x82f;
+
+    // World-anchor: head joint (4) WORLD position, then build an upright frame facing Link's yaw,
+    // offset in that facing frame (up/forward/right), then tilt the blade. This avoids the head
+    // bone's local axes (which sent the offset backward = leaf-on-back).
+    cXyz headPos;
+    mDoMtx_multVecZero(mpLinkModel->getAnmMtx(4), &headPos);
+    mDoMtx_stack_c::transS(headPos.x, headPos.y, headPos.z);
+    mDoMtx_stack_c::YrotM(shape_angle.y);
+    mDoMtx_stack_c::transM(s_dekuLeafOffset.x, s_dekuLeafOffset.y, s_dekuLeafOffset.z);
+    mDoMtx_stack_c::YrotM(s_dekuLeafBaseRotY);  // reorient the canopy peak to world-up
+    mDoMtx_stack_c::XrotM(s_dekuLeafBaseRotX);
+    s_dekuLeafModel->setBaseTRMtx(mDoMtx_stack_c::get());
+    modelCalc(s_dekuLeafModel);
+}
+#endif
 
 static void daAlink_tgHitCallback(fopAc_ac_c* i_tgActor, dCcD_GObjInf* i_tgObjInf, fopAc_ac_c* i_atActor,
                                   dCcD_GObjInf* i_atObjInf) {
@@ -17711,21 +17807,15 @@ int daAlink_c::procAutoJumpInit(int param_0) {
             angle = mpHIO->mAutoJump.m.mCuccoJumpAngle;
             isCuccoJump = true;
         }
-#if TARGET_PC
-    // ============================================
-    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
-    // No cucco held, but the leaf is out: enter the same glide profile (reuse cucco tuning) so
-    // the auto-jump becomes a Deku-Leaf float. Later this maps to dedicated mDekuLeaf* HIO.
-    // ============================================
-    } else if (checkDekuLeafGlide()) {
-        mMaxSpeed = mpHIO->mAutoJump.m.mCuccoJumpMaxSpeed;
-        field_0x3478 = mpHIO->mAutoJump.m.mCuccoFallMaxSpeed;
-        angle = mpHIO->mAutoJump.m.mCuccoJumpAngle;
-        isCuccoJump = true;
-#endif
     } else {
         mMaxSpeed = mpHIO->mAutoJump.m.mMaxJumpSpeed;
     }
+
+#if TARGET_PC
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1): every ledge jump starts un-glided; the
+    // player presses A mid-air to engage the float (handled in procAutoJump).
+    s_dekuLeafGlideActive = false;
+#endif
 
     if (checkGrabGlide()) {
         offModeFlg(4);
@@ -17763,6 +17853,39 @@ int daAlink_c::procAutoJumpInit(int param_0) {
 
 int daAlink_c::procAutoJump() {
     int direction = getDirectionFromCurrentAngle();
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1 — A-toggle activation)
+    // Mid-air after a ledge jump, A engages the leaf float; A again lets go → immediate fall
+    // (WW uses the same doTrigger toggle). Only when the debug toggle is ON and we're not
+    // holding a cucco — so vanilla A behaviour / combat is untouched when the leaf is off.
+    // ============================================
+    if (dusk::getSettings().game.dekuLeafGlideTest.getValue() && !checkGrabRooster() && doTrigger()) {
+        s_dekuLeafGlideActive = !s_dekuLeafGlideActive;
+        if (s_dekuLeafGlideActive) {
+            // engage: cucco-tuned glide profile + gentle terminal velocity
+            mMaxSpeed = mpHIO->mAutoJump.m.mCuccoJumpMaxSpeed;
+            field_0x3478 = mpHIO->mAutoJump.m.mCuccoFallMaxSpeed;
+            setSpecialGravity(-1.0f, field_0x3478, FALSE);
+            mProcVar2.field_0x300c = 1;
+        } else {
+            // let go: restore normal gravity so Link drops immediately
+            mProcVar2.field_0x300c = 0;
+            setSpecialGravity(mpHIO->mAutoJump.m.mGravity, mpHIO->mAutoJump.m.mMaxFallSpeed, TRUE);
+        }
+    }
+    // Per-frame pose assertion while gliding: the normal auto-jump anim logic re-runs each frame
+    // and clobbers a one-shot set (the "only via weird jumps" symptom). Re-assert the overhead
+    // cucco hold — GRABD base + WALKHBS layer — whenever WALKHBS isn't the active upper anime.
+    if (checkDekuLeafGlide()) {
+        mProcVar2.field_0x300c = 1;
+        if (!checkUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e)) {
+            setUpperAnimeBaseSpeed(dRes_ID_ALANM_BCK_GRABD_e, 0.0f, 3.0f);
+            setUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e, UPPER_1, 1.0f, 0.0f, -1, 3.0f);
+        }
+    }
+#endif
 
     #if VERSION == VERSION_SHIELD_DEBUG
     if (!checkStageName("F_SP115") && mGrabItemAcKeep.getActor() != NULL) {
@@ -17880,17 +18003,6 @@ int daAlink_c::procAutoJump() {
                                 mpHIO->mAutoJump.m.mJumpFallInterpolation);
 
         if (mProcVar2.field_0x300c != 0) {
-#if TARGET_PC
-            // ============================================
-            // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1 — arm pose)
-            // A grabbed cucco sets the CARRYD (overhead-carry) base upper pose; the leaf glide
-            // holds no actor, so establish it here so the arms match cucco+glide before WALKHBS
-            // layers the glide sway on top.
-            // ============================================
-            if (checkDekuLeafGlide() && !checkGrabRooster()) {
-                setUpperAnimeBaseSpeed(dRes_ID_ALANM_BCK_CARRYD_e, 0.0f, 3.0f);
-            }
-#endif
             setUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e, UPPER_1, 1.0f, 0.0f, -1, 3.0f);
         }
 
@@ -18163,6 +18275,12 @@ int daAlink_c::procLandInit(f32 param_0) {
     } else if (checkNoResetFlg0(FLG0_WATER_IN_MOVE)) {
         mUnderFrameCtrl[0].setRate(mUnderFrameCtrl[0].getRate() * 0.34999999f);
     }
+
+#if TARGET_PC
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P3): landing ends the glide — clear the engaged
+    // flag (after the cushioned-land check above) so the leaf disappears on touchdown.
+    s_dekuLeafGlideActive = false;
+#endif
 
     field_0x2f9d = 4;
     setFootEffectProcType(4);
@@ -20671,7 +20789,9 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     if ((s_albwWwBootsSkinned &&
          (i_model == mpLinkBootModels[0] || i_model == mpLinkBootModels[1])) ||
         (s_albwWwBowNative != NULL && i_model == mHeldItemModel &&
-         i_model->getModelData() == s_albwWwBowNative)) {
+         i_model->getModelData() == s_albwWwBowNative) ||
+        (s_dekuLeafModel != NULL && i_model == s_dekuLeafModel)) {
+        // WW Deku Leaf shares the boots/bow anti-MAJI ambient recipe (matte WW cel).
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
         dWwItemmdl_setWwBowActorAmbient(&tevStr);
         dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
@@ -21036,6 +21156,20 @@ int daAlink_c::draw() {
 
         modelDraw(mpLinkModel, isPlayerNoDraw);
 
+#if TARGET_PC
+        // NEW CODE — ALBW Port (Deku Leaf glide, WIP P3b): while gliding, hold the WW Deku Leaf
+        // overhead and draw it boots-style. Loaded lazily; skipped entirely when not gliding.
+        if (checkDekuLeafGlide()) {
+            updateDekuLeafModel();
+            if (s_dekuLeafModel != NULL) {
+                modelDraw(s_dekuLeafModel, isPlayerNoDraw);
+                // The boots-style recipe left the leaf's warm ambient in the shared tevStr; restore
+                // Link's environment tevStr so the face/hands drawn after don't inherit it.
+                g_env_light.settingTevStruct(checkWolf() ? 9 : 10, &current.pos, &tevStr);
+            }
+        }
+#endif
+
         if (dComIfGp_checkCameraAttentionStatus(field_0x317c, 0x20)) {
 #if PLATFORM_SHIELD
             if (mProcID == PROC_HOOKSHOT_WALL_SHOOT || mProcID == PROC_HOOKSHOT_SUBJECT) {
@@ -21234,6 +21368,11 @@ int daAlink_c::draw() {
     if (m_swordBlur.field_0x14 > 0) {
         dComIfGd_entryZSortXluList(&m_swordBlur, m_swordBlur.field_0x308[0]);
     }
+
+#if TARGET_PC
+    // Demo leftover viewer (orphan Demo*.arc BMDs at Link's feet).
+    dDemoLeftoverViewer::draw();
+#endif
 
     return 1;
 }

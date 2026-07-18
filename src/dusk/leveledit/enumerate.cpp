@@ -16,6 +16,7 @@
 #include "f_op/f_op_actor.h"
 #include "f_op/f_op_actor_iter.h"
 #include "f_op/f_op_actor_mng.h"
+#include "f_pc/f_pc_manager.h"
 
 #include <cmath>
 #include <cstring>
@@ -74,6 +75,7 @@ constexpr f32 kJoinPosEpsilon = 50.0f;  // cm — spawn vs live can drift slight
 int sSelectedIndex = -1;
 bool sSelectionValid = false;
 PlacedActor sSelection{};
+fpc_ProcID sSelectionProcId = fpcM_ERROR_PROCESS_ID_e;
 bool sSessionFlyCam = false;
 bool sSessionSelectMode = false;
 bool sSessionPcHotkeys = true;
@@ -295,26 +297,54 @@ void fill_common(PlacedActor* placed, const char* tagStr, s8 layer, int roomNo,
     }
 }
 
-// Re-bind selection.live from the live actor list (safe after UI detach / despawn).
+// Re-bind selection.live (safe after Stage UI teardown / despawn).
+// Prefer process ID — setID 0xFFFF joins are ambiguous and froze the highlight on spawnPos.
 void refresh_selection_live() {
     if (!sSelectionValid || sSelection.isSpawnPoint) {
         return;
     }
 
-    LiveBySetId bySetId;
-    std::vector<LiveActorRef> all;
-    const int roomNo = sSelection.roomNo;
-    LiveBuildCtx mapCtx{&bySetId, &all, 0, roomNo};
-    fopAcIt_Executor(build_live_cb, &mapCtx);
+    fopAc_ac_c* live = nullptr;
 
-    sSelection.live =
-        join_live(roomNo, sSelection.setID, sSelection.name, sSelection.spawnPos, bySetId, all);
-    sSelection.unspawned = sSelection.live == nullptr;
-    if (sSelection.live != nullptr) {
-        sSelection.pos = sSelection.live->current.pos;
-        sSelection.angle = sSelection.live->shape_angle;
-    } else {
-        sSelection.pos = sSelection.spawnPos;
+    if (sSelectionProcId != fpcM_ERROR_PROCESS_ID_e) {
+        if (base_process_class* base = fpcM_SearchByID(sSelectionProcId)) {
+            live = static_cast<fopAc_ac_c*>(base);
+        }
+    }
+
+    if (live == nullptr) {
+        if (std::strncmp(sSelection.name, "Link", 8) == 0) {
+            live = dComIfGp_getPlayer(0);
+        } else if (std::strncmp(sSelection.name, "Horse", 8) == 0) {
+            live = reinterpret_cast<fopAc_ac_c*>(dComIfGp_getHorseActor());
+        }
+        if (live != nullptr) {
+            sSelectionProcId = fopAcM_GetID(live);
+        }
+    }
+
+    if (live == nullptr) {
+        LiveBySetId bySetId;
+        std::vector<LiveActorRef> all;
+        const int roomNo = sSelection.roomNo;
+        LiveBuildCtx mapCtx{&bySetId, &all, 0, roomNo};
+        fopAcIt_Executor(build_live_cb, &mapCtx);
+        // Prefer last known pos (current at pick time) over authored spawn for 0xFFFF joins.
+        const cXyz hint =
+            (sSelection.pos.x != 0.0f || sSelection.pos.y != 0.0f || sSelection.pos.z != 0.0f)
+                ? sSelection.pos
+                : sSelection.spawnPos;
+        live = join_live(roomNo, sSelection.setID, sSelection.name, hint, bySetId, all);
+        if (live != nullptr) {
+            sSelectionProcId = fopAcM_GetID(live);
+        }
+    }
+
+    sSelection.live = live;
+    sSelection.unspawned = live == nullptr;
+    if (live != nullptr) {
+        sSelection.pos = live->current.pos;
+        sSelection.angle = live->shape_angle;
     }
 }
 
@@ -452,10 +482,19 @@ void set_selection_snapshot(const PlacedActor& actor, bool valid) {
     sSelectionValid = valid;
     if (!valid) {
         sSelectedIndex = -1;
+        sSelectionProcId = fpcM_ERROR_PROCESS_ID_e;
         return;
     }
+    if (sSelection.live != nullptr) {
+        sSelectionProcId = fopAcM_GetID(sSelection.live);
+        sSelection.pos = sSelection.live->current.pos;
+        sSelection.angle = sSelection.live->shape_angle;
+        sSelection.unspawned = false;
+    } else {
+        sSelectionProcId = fpcM_ERROR_PROCESS_ID_e;
+    }
     if (sSelectionDetailHandler) {
-        sSelectionDetailHandler(actor);
+        sSelectionDetailHandler(sSelection);
     }
 }
 
@@ -484,10 +523,13 @@ std::string format_placed_actor_detail_rml(const PlacedActor& sel) {
 void clear_selection() {
     sSelectionValid = false;
     sSelectedIndex = -1;
+    sSelectionProcId = fpcM_ERROR_PROCESS_ID_e;
     sSelection = {};
 }
 
 void detach_selection_live() {
+    // Keep sSelectionProcId — draw rebinds via fpcM_SearchByID so highlight follows
+    // the picked actor after Stage/Editor teardown (Gate 8d).
     sSelection.live = nullptr;
 }
 
@@ -518,20 +560,16 @@ void draw_selection_highlight() {
         return;
     }
 
-    // Gate 6: after UI detach (live==null), re-bind once; then follow current.pos
-    // every frame like native collision debug boxes. spawnPos keeps join stable.
-    if (!sSelection.isSpawnPoint && sSelection.live == nullptr) {
+    // Gate 8d: always rebind by process ID (Stage teardown nulls live every hide).
+    if (!sSelection.isSpawnPoint) {
         refresh_selection_live();
     }
 
-    cXyz pos = sSelection.spawnPos;
+    cXyz pos = sSelection.pos;
     if (sSelection.live != nullptr && !sSelection.unspawned && !sSelection.isSpawnPoint) {
         pos = sSelection.live->current.pos;
         sSelection.pos = pos;
-    } else if (!sSelection.isSpawnPoint) {
-        pos = sSelection.spawnPos;
-        sSelection.pos = pos;
-    } else {
+    } else if (sSelection.isSpawnPoint) {
         pos = sSelection.pos;
     }
 

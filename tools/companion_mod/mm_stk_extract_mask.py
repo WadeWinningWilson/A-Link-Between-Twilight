@@ -3,110 +3,114 @@
 # Extract MM Skull Kid's Majora's Mask geometry (head-local space) to JSON
 # ============================================================================
 # The mask is drawn in DmStk_PostLimbDraw in the HEAD limb's matrix with NO
-# offset (Context A / mask-worn-on-face), so its vertices are authored in
-# head-local space. This walks gSkullKidMajorasMask{Eyes,1,2}DL with pygfxd,
-# collects per-triangle verts (pos + uv) tagged by their bound texture, and
-# writes _work/object_stk/gen_c/mask_geo.json for Blender to build a mesh
-# that we then hang off the head bone (identity), exactly like the game.
+# offset (Context A / mask-worn-on-face), so its verts are in head-local
+# space. Parses the already-generated ZAPD-style C (object_stk_gen.c): reads
+# the Vtx arrays, walks gSkullKidMajorasMask{Eyes,1,2}DL (gsSPVertex +
+# gsSP1Triangle/gsSP2Triangles + gsDPLoadTextureBlock), and writes
+# mask_geo.json for Blender to build a mesh hung off the head bone (identity),
+# exactly as the game draws it.
 # ============================================================================
 from __future__ import annotations
 
 import json
-import struct
+import re
 from pathlib import Path
 
-from pygfxd import (
-    GfxdEndian, gfxd_endian, gfxd_execute, gfxd_f3dex2, gfxd_input_buffer,
-    gfxd_macro_fn, gfxd_output_buffer, gfxd_target, gfxd_tri1_callback,
-    gfxd_tri2_callback, gfxd_vtx_callback, gfxd_timg_callback, gfxd_macro_dflt,
-)
+from mm_stk_gen_object_c import XML, Symbols
 
-from mm_stk_gen_object_c import ROM, XML, Symbols, extract_object_stk, dl_slice
+import sys
 
-MASK_DLS = ["gSkullKidMajorasMaskEyesDL", "gSkullKidMajorasMask1DL",
-            "gSkullKidMajorasMask2DL"]
-OUT = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin"
-           r"\_work\object_stk\gen_c\mask_geo.json")
-SCALE = 1.0  # keep raw N64 units; Blender side scales to match the import
+GEN = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin"
+           r"\_work\object_stk\gen_c\object_stk_gen.c")
+# DL sets: mask (worn), and the head DL (reference geometry already imported
+# into Blender, used to derive the head-local -> Blender transform).
+DL_SETS = {
+    "mask": (["gSkullKidMajorasMaskEyesDL", "gSkullKidMajorasMask1DL",
+              "gSkullKidMajorasMask2DL"], GEN.parent / "mask_geo.json"),
+    "head": (["gSkullKidNormalHeadDL"], GEN.parent / "head_geo.json"),
+}
+SET = sys.argv[1] if len(sys.argv) > 1 else "mask"
+MASK_DLS, OUT = DL_SETS[SET]
+
+VTX_RE = re.compile(
+    r"\{\{\s*\{\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\},\s*-?\d+,"
+    r"\s*\{\s*(-?\d+),\s*(-?\d+)\s*\}")
 
 
-class MaskWalker:
-    def __init__(self, blob, syms):
-        self.blob = blob
-        self.syms = syms
-        self.vbuf = [None] * 64          # loaded vertex slots (pos, uv)
-        self.cur_tex = None
-        self.tris = []                   # (i0,i1,i2, tex) as resolved verts
-        self.verts = []                  # flat [(x,y,z,u,v,tex)]
+def parse_vtx_arrays(src: str) -> dict[str, list[tuple]]:
+    out = {}
+    for m in re.finditer(r"Vtx (gSkullKidVtx_[0-9A-Fa-f]+)\[\] = \{(.*?)\n\};",
+                         src, re.DOTALL):
+        name, body = m.group(1), m.group(2)
+        out[name] = [(int(a), int(b), int(c), int(s), int(t))
+                     for a, b, c, s, t in VTX_RE.findall(body)]
+    return out
 
-    def vtx_cb(self, seg, num, start):
-        addr = seg & 0xFFFFFF
-        for i in range(num):
-            o = addr + i * 16
-            x, y, z = struct.unpack_from(">hhh", self.blob, o)
-            u, v = struct.unpack_from(">hh", self.blob, o + 8)
-            self.vbuf[start + i] = (x, y, z, u / 32.0, v / 32.0)
-        return 1
 
-    def timg_cb(self, timg, fmt, siz, width, height, pal):
-        name = self.syms.texture_for_addr(timg & 0xFFFFFF)
-        self.cur_tex = name or self.cur_tex
-        return 1
-
-    def _emit(self, a, b, c):
-        for idx in (a, b, c):
-            vt = self.vbuf[idx]
-            if vt is None:
-                return
-        base = len(self.verts)
-        for idx in (a, b, c):
-            x, y, z, u, v = self.vbuf[idx]
-            self.verts.append((x, y, z, u, v, self.cur_tex))
-        self.tris.append((base, base + 1, base + 2))
-
-    def tri1_cb(self, a, b, c):
-        self._emit(a, b, c)
-        return 1
-
-    def tri2_cb(self, a, b, c, d, e, f):
-        self._emit(a, b, c)
-        self._emit(d, e, f)
-        return 1
+def dl_body(src: str, name: str) -> str:
+    m = re.search(r"Gfx " + re.escape(name) + r"\[\] = \{(.*?)\n\};", src, re.DOTALL)
+    if not m:
+        raise SystemExit(f"DL {name} not found")
+    return m.group(1)
 
 
 def main() -> int:
-    rom = ROM.read_bytes()
-    blob, vrom = extract_object_stk(rom)
+    src = GEN.read_text(encoding="utf-8")
+    vtx = parse_vtx_arrays(src)
     syms = Symbols(XML)
+    texdim = {t["name"]: (t["w"], t["h"]) for t in syms.textures.values()}
 
-    walker = MaskWalker(blob, syms)
-    gfxd_target(gfxd_f3dex2)
-    gfxd_endian(GfxdEndian.big, 4)
-    gfxd_vtx_callback(walker.vtx_cb)
-    gfxd_timg_callback(walker.timg_cb)
-    gfxd_tri1_callback(walker.tri1_cb)
-    gfxd_tri2_callback(walker.tri2_cb)
-    gfxd_macro_fn(gfxd_macro_dflt)
+    verts, tris = [], []
+    for dl in MASK_DLS:
+        slots = [None] * 64
+        cur_tex = None
+        for line in dl_body(src, dl).splitlines():
+            line = line.strip()
+            m = re.match(r"gsSPVertex\((?:&)?(gSkullKidVtx_[0-9A-Fa-f]+)"
+                         r"(?:\[(\d+)\])?,\s*(\d+),\s*(\d+)\)", line)
+            if m:
+                arr, off, num, start = m.group(1), int(m.group(2) or 0), \
+                    int(m.group(3)), int(m.group(4))
+                for i in range(num):
+                    slots[start + i] = vtx[arr][off + i]
+                continue
+            m = re.match(r"gsDPLoadTextureBlock\((gSkullKid\w+Tex)", line)
+            if m:
+                cur_tex = m.group(1).replace("gSkullKid", "").replace("Tex", "")
+                cur_tex = re.sub(r"(?<!^)(?=[A-Z])", "_", cur_tex).lower()
+                cur_tex = "gSkullKid" + m.group(1)[9:]  # keep symbol form
+                cur_tex = m.group(1)
+                continue
+            m = re.match(r"gsSP1Triangle\((\d+),\s*(\d+),\s*(\d+)", line)
+            if m:
+                idxs = [int(x) for x in m.groups()]
+                emit(verts, tris, slots, idxs, cur_tex, texdim)
+                continue
+            m = re.match(r"gsSP2Triangles\((\d+),\s*(\d+),\s*(\d+),\s*\d+,"
+                         r"\s*(\d+),\s*(\d+),\s*(\d+)", line)
+            if m:
+                g = [int(x) for x in m.groups()]
+                emit(verts, tris, slots, g[0:3], cur_tex, texdim)
+                emit(verts, tris, slots, g[3:6], cur_tex, texdim)
 
-    dl_offsets = {n: off for off, n in syms.dlists.items()}
-    for name in MASK_DLS:
-        off = dl_offsets[name]
-        data = dl_slice(blob, off)
-        gfxd_input_buffer(data)
-        gfxd_output_buffer(bytes(len(data) * 64))
-        if gfxd_execute() != 0:
-            raise SystemExit(f"gfxd failed on {name}")
-
-    OUT.write_text(json.dumps({
-        "verts": walker.verts, "tris": walker.tris,
-        "textures": sorted({v[5] for v in walker.verts if v[5]}),
-    }))
-    print(f"mask: {len(walker.verts)} verts, {len(walker.tris)} tris")
-    print("textures:", sorted({v[5] for v in walker.verts if v[5]}))
-    xs = [v[0] for v in walker.verts]; ys = [v[1] for v in walker.verts]; zs = [v[2] for v in walker.verts]
+    OUT.write_text(json.dumps({"verts": verts, "tris": tris}))
+    xs = [v[0] for v in verts]; ys = [v[1] for v in verts]; zs = [v[2] for v in verts]
+    print(f"mask: {len(verts)} verts, {len(tris)} tris")
+    print("textures:", sorted({v[5] for v in verts if v[5]}))
     print(f"head-local bbox: x[{min(xs)},{max(xs)}] y[{min(ys)},{max(ys)}] z[{min(zs)},{max(zs)}]")
     print("wrote", OUT)
     return 0
+
+
+def emit(verts, tris, slots, idxs, tex, texdim):
+    if any(slots[i] is None for i in idxs):
+        return
+    w, h = texdim.get(tex, (32, 32))
+    base = len(verts)
+    for i in idxs:
+        x, y, z, s, t = slots[i]
+        verts.append((x, y, z, (s / 32.0) / w, 1.0 - (t / 32.0) / h, tex))
+    tris.append((base, base + 1, base + 2))
 
 
 if __name__ == "__main__":

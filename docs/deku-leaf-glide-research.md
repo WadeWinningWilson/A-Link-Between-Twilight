@@ -211,3 +211,38 @@ Two player actions to add: **leaf glide** (float, §1 chassis) + **leaf swing** 
   ledge-run-off entry — needs a fall→glide entry hook when the leaf is out.
 - **Later (conflict):** collides with the dive animation when **water is below** — the auto-jump/
   glide vs `procDiveJump` selection needs a water-below guard so diving still wins over gliding.
+
+## 12. Build order revised (2026-07) — P3 before P2
+Rationale: can't meaningfully test the gust without the leaf visible in-hand. New order:
+**P1 (done) → P1.5 (entry polish) → P3 (model+billow) → P2 (gust) → P4 (cost, last)** → P5/P6.
+
+### P3 — leaf model + billow (next). vleaf = bdl4+MDL3, 2 joints (Vleaf/leaf_model), mats
+### Vleaf+leaf, tex V_leaf+ZAtoon. NO existing TP item slot to override → load standalone.
+- **P3a Convert** `vleaf` (itemmdl 0x15) BDL→DAE→**BMD** with `-m`/`-x` (bow/arrow recipe; strips
+  MDL3 so Aurora renders it natively). Verify 2 joints, mats, textures embedded. Deploy loose as
+  `itemmdl_21.bmd` in "Wind Waker Skins".
+- **P3b Load + hold** on glide-engage: `custom_assets::try_load("itemmdl", 0x15)` → build a
+  `J3DModel` (file-static `s_dekuLeafModel`, like `s_albwWwBowNative` — no class-member add).
+  Attach overhead each frame: `setBaseTRMtx` from a head/hand joint + the cucco overhead offset
+  (mirror `setGrabItemPos`). Destroy/hide on let-go/land.
+- **P3c Draw boots-style ambient** (no MAJI): `settingTevStruct(0)` + `setWwBowActorAmbient` +
+  `applyBowMaterialAmbientOnly`, `modelEntryDL`. NOTE: `applyBowMaterialAmbientOnly` exact-matches
+  `"SC_Vbow_v"` for the ink branch; leaf mats are `Vleaf`/`leaf` (no SC) → all get body-ambient
+  (fine, matte green). Generalize the SC check to a `SC_` *prefix* if any WW item later needs it.
+- **P3d Billow (procedural)**: sin-scale the `leaf_model` joint (idx 1) — one-shot open on engage
+  (folded base → full), then `scale = 1.0 + amp*sin(rate*t)` breathe aloft (WW firefly idiom).
+  Tunable amp/rate.
+- **P3e Lifecycle**: leaf appears on A-engage, tracks Link through the glide, vanishes on let-go/
+  land. Reserve the leaf-hide-on-empty cue for P4.
+- **P3f Build + test**: renders overhead, matte (no bloom), billows, tracks Link.
+- **Open decision:** exact mount point/offset (overhead like the cucco, or one-hand parasol like WW)
+  — a tuning pass once it's on-screen.
+
+## 13. DEFERRED — mod-manager API request (container with multi-select promotion)
+Desired (distinct from current behavior): a **container folder holding N sub-mods/variants** where
+the user **multi-selects which ones are promoted to the left/load-order pane** — each independently
+enable/disable-able and orderable. NOT the current collection model (single mutually-exclusive
+variant picker), and NOT N separate top-level mods. Use case: bundle the WW skins (boots/bow/arrow/
+leaf) under one "Wind Waker Skins" container, pick which are active. Owner: load-order/mods chat
+(custom_assets.cpp disk_entries/collection logic + mods.cpp UI). For now the Deku Leaf ships as its
+own top-level mod ("Wind Waker Deku Leaf") — works, just not grouped.

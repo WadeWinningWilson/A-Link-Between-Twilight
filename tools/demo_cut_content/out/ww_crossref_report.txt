@@ -1,0 +1,176 @@
+
+=== BYTE-IDENTICAL WW members inside TP arcs ===
+
+-- Alink.arc (2 identical member(s))
+   blur.bti  (96 B)  == WW Link.arc/blur.bti
+   rock_mark.bti  (544 B)  == WW Link.arc/rock_mark.bti
+
+-- Always.arc  [known] (6 identical member(s))
+   item_table.bin  (128 B)  == WW Always.arc/item_table.bin
+   txa_ring_a_32hafe.bti  (544 B)  == WW Always.arc/txa_ring_a_32hafe.bti
+   txa_tuki_as.bti  (2080 B)  == WW Always.arc/txa_tuki_as.bti
+   txa_tuki_bs.bti  (2080 B)  == WW Always.arc/txa_tuki_bs.bti
+   txa_tuki_cs.bti  (2080 B)  == WW Always.arc/txa_tuki_cs.bti
+   txa_tuki_ds.bti  (2080 B)  == WW Always.arc/txa_tuki_ds.bti
+
+-- Besu2.arc (1 identical member(s))
+   besu_f_amazed_b.btp  (192 B)  == WW Demo07.arc/07_km_cut3waita.btp
+
+-- Dalways.arc  [known] (2 identical member(s))
+   boxa.brk  (416 B)  == WW Dalways.arc/boxa.brk
+   boxa.btk  (416 B)  == WW Dalways.arc/boxa.btk
+
+-- Demo04_00.arc (3 identical member(s))
+   demo04_yelia_cut04_gp_10_l.btp  (192 B)  == WW Demo10.arc/10_zk_cut06_torink.btp
+   demo04_yelia_cut04_gp_12_l.btp  (192 B)  == WW Demo10.arc/10_zk_cut06_torink.btp
+   demo04_yelia_cut04_gp_6_l.btp  (192 B)  == WW Demo10.arc/10_zk_cut06_torink.btp
+
+-- Demo13_00.arc (1 identical member(s))
+   demo13_lud_cut23_gp_1_l.btp  (192 B)  == WW Demo17.arc/17_p2_zwait01_l.btp
+
+-- Demo14_01.arc (2 identical member(s))
+   demo14_01kolin_cut11_gp_conver6_l.btp  (224 B)  == WW Demo10.arc/10_zk_cut09_walk.btp
+   demo14_01lud_cut14_gp_wait_l.btp  (224 B)  == WW Demo10.arc/10_zk_cut09_walk.btp
+
+-- Demo16_00.arc (4 identical member(s))
+   demo16_besu_cut06_gp_2_l.btp  (192 B)  == WW Demo07.arc/07_km_cut3waita.btp
+   demo16_kolin_cut11_gp_2_l.btp  (192 B)  == WW Demo17.arc/17_p2_zwait01_l.btp
+   demo16_maro_cut11_gp_2_l.btp  (192 B)  == WW Demo07.arc/07_km_cut3waita.btp
+   demo16_taro_cut06_gp_2_l.btp  (192 B)  == WW Demo10.arc/10_zk_cut01_wait01.btp
+
+-- Demo17_00.arc (1 identical member(s))
+   demo17_kolin_cut07_gp_4_l.btp  (192 B)  == WW Demo10.arc/10_zk_cut06_torink.btp
+
+-- Demo35_02.arc (1 identical member(s))
+   demo35_kolin_cut04_gp_2_l.btp  (224 B)  == WW Demo10.arc/10_zk_cut09_walk.btp
+
+-- Hoz1.arc (1 identical member(s))
+   hoz_f_fear_e.btp  (224 B)  == WW Demo10.arc/10_zk_cut09_walk.btp
+
+-- LogoUs.arc (2 identical member(s))
+   progressive_no.bti  (2592 B)  == WW Logo.arc/progressive_no.bti
+   progressive_yes.bti  (2848 B)  == WW Logo.arc/progressive_yes.bti
+
+-- Lud2.arc (2 identical member(s))
+   lud_f_amazed_b.btp  (192 B)  == WW Demo07.arc/07_km_cut3waita.btp
+   lud_f_glare_wait.btp  (192 B)  == WW Demo37.arc/37_p2a_cut21_handswing_l.btp
+
+-- Obj_Bef.arc (1 identical member(s))
+   kkiba_00.dzb  (608 B)  == WW Kkiba_00.arc/kkiba_00.dzb
+
+-- TKS.arc (1 identical member(s))
+   tks_tubo_hide.bck  (256 B)  == WW Demo17.arc/taru_initial.bck
+
+-- grA_Spa.arc (1 identical member(s))
+   gra_spa_sit.btp  (224 B)  == WW Demo10.arc/10_zk_cut09_walk.btp
+
+-- itemmdl.arc  [known] (33 identical member(s))
+   vbage.bdl  (19712 B)  == WW VbagE.arc/vbage.bdl
+   vbagf.bdl  (22304 B)  == WW VbagF.arc/vbagf.bdl
+   vbagh.bdl  (19264 B)  == WW Demo10.arc/vbagh.bdl
+   vbina_b.btk  (448 B)  == WW Bin.arc/vbina_x.btk
+   vbina_g.btk  (448 B)  == WW Bin.arc/vbina_x.btk
+   vbina_r.btk  (448 B)  == WW Bin.arc/vbina_x.btk
+   vbina_x.btk  (448 B)  == WW Bin.arc/vbina_x.btk
+   vbinb.bdl  (20736 B)  == WW Med_b.arc/vbinb.bdl
+   vbing.bdl  (20736 B)  == WW Med_g.arc/vbing.bdl
+   vbinr.bdl  (20736 B)  == WW Med_r.arc/vbinr.bdl
+   vbinx.bdl  (18976 B)  == WW Bin.arc/vbinx.bdl
+   vbomb.bdl  (21184 B)  == WW Bomb_00.arc/vbomb.bdl
+   vboom.bdl  (21248 B)  == WW Boom.arc/vboom.bdl
+   vboot.bdl  (27168 B)  == WW Vboot.arc/vboot.bdl
+   vboot.btk  (320 B)  == WW Vboot.arc/vboot.btk
+   vbow.bdl  (24960 B)  == WW Vbow.arc/vbow.bdl
+   vbow.btk  (320 B)  == WW Vbow.arc/vbow.btk
+   vboxn.bdl  (24896 B)  == WW VboxN.arc/vboxn.bdl
+   vboxn.btk  (320 B)  == WW VboxA.arc/vboxa.btk
+   vchin.bdl  (20864 B)  == WW Vchin.arc/vchin.bdl
+   vhamm.bdl  (21952 B)  == WW Vhamm.arc/vhamm.bdl
+   vho.bdl  (16608 B)  == WW Vho.arc/vho.bdl
+   vhook.bdl  (21920 B)  == WW Vhook.arc/vhook.bdl
+   vhook.btk  (320 B)  == WW Vhook.arc/vhook.btk
+   vleaf.bdl  (18016 B)  == WW Vleaf.arc/vleaf.bdl
+   vmags.bdl  (13536 B)  == WW VmagS.arc/vmags.bdl
+   vmags.brk  (320 B)  == WW VmagS.arc/vmags.brk
+   vmags.btk  (480 B)  == WW VmagS.arc/vmags.btk
+   vrope.bdl  (18880 B)  == WW Vrope.arc/vrope.bdl
+   vrope.btk  (320 B)  == WW Vrope.arc/vrope.btk
+   vtact.bdl  (13952 B)  == WW Vtact.arc/vtact.bdl
+   vtele.bdl  (22720 B)  == WW tele_00.arc/vtele.bdl
+   vtele.btk  (320 B)  == WW tele_00.arc/vtele.btk
+
+-- ykM3.arc (1 identical member(s))
+   leaf_wait_b.bck  (256 B)  == WW Demo17.arc/taru_initial.bck
+
+=== NAME-MATCH near-misses (same member name, different bytes; model/anim/tex only) === (71)
+   AlAnm.arc/binget.bck (4507 B)  vs WW LkAnm.arc (6930 B)
+   AlAnm.arc/binswings.bck (2885 B)  vs WW LkAnm.arc (4487 B)
+   AlAnm.arc/binswingu.bck (3937 B)  vs WW LkAnm.arc (4615 B)
+   AlAnm.arc/boomcatch.bck (3421 B)  vs WW LkAnm.arc (5470 B)
+   AlAnm.arc/boomthrow.bck (2509 B)  vs WW LkAnm.arc (3718 B)
+   AlAnm.arc/crouch.bck (1689 B)  vs WW LkAnm.arc (2407 B)
+   AlAnm.arc/cuta.bck (7497 B)  vs WW LkAnm.arc (7814 B)
+   AlAnm.arc/cutea.bck (6331 B)  vs WW LkAnm.arc (6897 B)
+   AlAnm.arc/cuteb.bck (7118 B)  vs WW LkAnm.arc (6883 B)
+   AlAnm.arc/cutl.bck (8324 B)  vs WW LkAnm.arc (7447 B)
+   AlAnm.arc/cutr.bck (7660 B)  vs WW LkAnm.arc (7667 B)
+   AlAnm.arc/cutrel.bck (5625 B)  vs WW LkAnm.arc (7625 B)
+   AlAnm.arc/cutrer.bck (5742 B)  vs WW LkAnm.arc (7679 B)
+   AlAnm.arc/dam.bck (3007 B)  vs WW LkAnm.arc (4769 B)
+   AlAnm.arc/damf.bck (2311 B)  vs WW LkAnm.arc (4235 B)
+   AlAnm.arc/damfb.bck (785 B)  vs WW LkAnm.arc (870 B)
+   AlAnm.arc/damfbup.bck (6888 B)  vs WW LkAnm.arc (9320 B)
+   AlAnm.arc/damff.bck (811 B)  vs WW LkAnm.arc (837 B)
+   AlAnm.arc/damffup.bck (7427 B)  vs WW LkAnm.arc (11935 B)
+   AlAnm.arc/damfl.bck (751 B)  vs WW LkAnm.arc (909 B)
+   AlAnm.arc/damflup.bck (7907 B)  vs WW LkAnm.arc (11581 B)
+   AlAnm.arc/damfr.bck (756 B)  vs WW LkAnm.arc (913 B)
+   AlAnm.arc/damfrup.bck (7483 B)  vs WW LkAnm.arc (11689 B)
+   AlAnm.arc/daml.bck (1872 B)  vs WW LkAnm.arc (3032 B)
+   AlAnm.arc/damr.bck (2068 B)  vs WW LkAnm.arc (3050 B)
+   AlAnm.arc/dashs.bck (3704 B)  vs WW LkAnm.arc (6365 B)
+   AlAnm.arc/grabng.bck (3547 B)  vs WW LkAnm.arc (3499 B)
+   AlAnm.arc/grabp.bck (2181 B)  vs WW LkAnm.arc (2520 B)
+   AlAnm.arc/grabthrow.bck (5115 B)  vs WW LkAnm.arc (5145 B)
+   AlAnm.arc/grabup.bck (3022 B)  vs WW LkAnm.arc (3530 B)
+   AlAnm.arc/hangl.bck (4573 B)  vs WW LkAnm.arc (4664 B)
+   AlAnm.arc/hangup.bck (2847 B)  vs WW LkAnm.arc (4963 B)
+   AlAnm.arc/landdama.bck (3735 B)  vs WW LkAnm.arc (3996 B)
+   AlAnm.arc/landdamast.bck (3378 B)  vs WW LkAnm.arc (3203 B)
+   AlAnm.arc/lie.bck (2772 B)  vs WW LkAnm.arc (3794 B)
+   AlAnm.arc/mrolll.bck (5395 B)  vs WW LkAnm.arc (6419 B)
+   AlAnm.arc/mrollr.bck (5365 B)  vs WW LkAnm.arc (6588 B)
+   AlAnm.arc/pickup.bck (3614 B)  vs WW LkAnm.arc (6644 B)
+   AlAnm.arc/rollf.bck (8499 B)  vs WW LkAnm.arc (6792 B)
+   AlAnm.arc/rollfmis.bck (8298 B)  vs WW LkAnm.arc (10359 B)
+   AlAnm.arc/slideb.bck (1572 B)  vs WW LkAnm.arc (3069 B)
+   AlAnm.arc/slidef.bck (3602 B)  vs WW LkAnm.arc (4922 B)
+   AlAnm.arc/slip.bck (2774 B)  vs WW LkAnm.arc (3891 B)
+   AlAnm.arc/take.bck (2155 B)  vs WW LkAnm.arc (3494 B)
+   AlAnm.arc/talka.bck (1966 B)  vs WW LkAnm.arc (2441 B)
+   AlAnm.arc/turnback.bck (4012 B)  vs WW LkAnm.arc (7877 B)
+   AlAnm.arc/vjmp.bck (2139 B)  vs WW LkAnm.arc (3722 B)
+   AlAnm.arc/vjmpcha.bck (3442 B)  vs WW LkAnm.arc (3322 B)
+   AlAnm.arc/vjmpchb.bck (2428 B)  vs WW LkAnm.arc (3369 B)
+   AlAnm.arc/vjmpcl.bck (5865 B)  vs WW LkAnm.arc (9642 B)
+   AlAnm.arc/walks.bck (3259 B)  vs WW LkAnm.arc (4323 B)
+   Always.arc/rope.bti (160 B)  vs WW Always.arc (160 B)
+   B_dr.arc/dr.bmd (328640 B)  vs WW Dr2.arc (229792 B)
+   E_bs.arc/bs_wait01.bck (2656 B)  vs WW Bs.arc (2272 B)
+   E_ga.arc/ga.bmd (2432 B)  vs WW Kantera.arc (2432 B)
+   E_kg.arc/kg_wait01.bck (4736 B)  vs WW Kg.arc (2464 B)
+   E_kk.arc/kk_wait01.bck (2304 B)  vs WW Kk.arc (2816 B)
+   E_kk.arc/kk_wait02.bck (2784 B)  vs WW Kk.arc (2912 B)
+   E_kk.arc/kk_walk.bck (6080 B)  vs WW Kk.arc (4160 B)
+   E_mk.arc/mk_run.bck (5440 B)  vs WW Mk.arc (3712 B)
+   E_mk.arc/mk_wait.bck (4960 B)  vs WW Mk.arc (2560 B)
+   E_nz.arc/nz_run.bck (3008 B)  vs WW Nz.arc (4000 B)
+   E_nz.arc/nz_wait.bck (2208 B)  vs WW Nz.arc (3136 B)
+   E_ws.arc/ws.bmd (27744 B)  vs WW Kwood_00.arc (19872 B)
+   Gover.arc/black.bti (64 B)  vs WW Open1.arc (64 B)
+   LogoUs.arc/nintendo_376x104.bti (78240 B)  vs WW Logo.arc (78240 B)
+   LogoUs.arc/progressive_choice.bti (15008 B)  vs WW Logo.arc (15008 B)
+   LogoUs.arc/progressive_inter.bti (15008 B)  vs WW Logo.arc (29696 B)
+   LogoUs.arc/progressive_pro.bti (15008 B)  vs WW Logo.arc (29696 B)
+   Lv7Gate.arc/dr.bmd (262624 B)  vs WW Dr2.arc (229792 B)
+   Npc_tr.arc/lf.bmd (6336 B)  vs WW Jb.arc (5760 B)

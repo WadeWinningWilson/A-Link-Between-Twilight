@@ -112,6 +112,29 @@ void apply_order_changes();
 // Returns false if the folder is unknown or already at that slot.
 bool move_folder_to(const char* folder, int slot);
 
+// --- Collection UI grouping (Mods window) ---------------------------------
+//
+// Variants are stored as "Collection/Variant" in the order setting (unchanged).
+// The Mods window collapses them into one load-order row per collection root;
+// move_mod_group* reorders the whole block of variant entries together.
+
+// Load-order group key: collection root, or the folder name for a plain mod.
+std::string mod_group_key(const char* folder);
+
+// True when folder is an exploded collection variant ("Coll/Var").
+bool mod_is_collection_variant(const char* folder);
+
+// Enable one variant and disable all siblings under the same collection root.
+// Returns false if folder is not a variant or already the sole enabled sibling.
+bool select_collection_variant(const char* variant_folder);
+
+// Move every order entry sharing group_key as one block (plain mods: same as
+// move_folder). apply=false defers scan until apply_order_changes().
+bool move_mod_group(const char* group_key, int delta, bool apply = true);
+
+// Grab-and-place for a collapsed collection row (visible group slot).
+bool move_mod_group_to(const char* group_key, int slot, bool apply = true);
+
 // Priority-ordered (name, enabled) view of the GIVEN folder names — a disk
 // snapshot the caller already holds. CHEAP: parses the order setting (+ legacy
 // dual-read) only, touches no filesystem, so the editor can poll it per frame.

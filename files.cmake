@@ -192,6 +192,8 @@ set(DOLZEL_FILES
         src/d/d_albw_flurry_rush.cpp
         src/d/d_ww_itemmdl_pc.cpp
         src/d/d_ww_itemmdl_test.cpp
+        src/d/d_demo_leftover_viewer.cpp
+        src/d/d_cut_actor_spawn.cpp
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp

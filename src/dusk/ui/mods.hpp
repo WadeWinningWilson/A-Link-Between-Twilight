@@ -9,8 +9,7 @@ namespace dusk::ui {
 // A top-level Dusklight menu entry (menu bar, after Editor), NOT an editor
 // tab: end users manage mods without touching developer tooling. Left pane =
 // the load order with grab-and-place reorder; right pane = per-mod detail
-// panel (Enabled toggle, conflicts, core/variant info) — the future home of
-// modder-supplied descriptions (readme) + logos and collection sub-pages.
+// panel (plain Enabled toggle or collection variant picker).
 // ============================================
 class ModsWindow : public Window {
 public:

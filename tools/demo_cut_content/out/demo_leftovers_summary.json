@@ -1,0 +1,771 @@
+{
+  "demo_arc_count": 89,
+  "tagged_file_count": 817,
+  "arcs_with_hits": 60,
+  "priority_model_count": 210,
+  "by_arc_hits": {
+    "Demo01_00.arc": 24,
+    "Demo01_01.arc": 10,
+    "Demo01_02.arc": 4,
+    "Demo01_03.arc": 4,
+    "Demo01_04.arc": 2,
+    "Demo01_05.arc": 2,
+    "Demo02_00.arc": 40,
+    "Demo04_00.arc": 31,
+    "Demo04_01.arc": 20,
+    "Demo06_01.arc": 12,
+    "Demo06_02.arc": 3,
+    "Demo07_01.arc": 41,
+    "Demo07_03.arc": 1,
+    "Demo08_00.arc": 10,
+    "Demo08_01.arc": 8,
+    "Demo09_00.arc": 4,
+    "Demo10_01.arc": 8,
+    "Demo11_00.arc": 16,
+    "Demo14_00.arc": 10,
+    "Demo14_01.arc": 12,
+    "Demo15_00.arc": 22,
+    "Demo16_00.arc": 36,
+    "Demo17_00.arc": 36,
+    "Demo18_00.arc": 31,
+    "Demo19_01.arc": 17,
+    "Demo19_02.arc": 8,
+    "Demo20_01.arc": 18,
+    "Demo20_02.arc": 2,
+    "Demo21_00.arc": 10,
+    "Demo21_02.arc": 14,
+    "Demo22_01.arc": 23,
+    "Demo22_02.arc": 27,
+    "Demo23_01.arc": 16,
+    "Demo23_03.arc": 11,
+    "Demo23_04.arc": 1,
+    "Demo23_06.arc": 20,
+    "Demo24_01.arc": 15,
+    "Demo24_02.arc": 11,
+    "Demo24_03.arc": 11,
+    "Demo24_04.arc": 15,
+    "Demo25_01.arc": 24,
+    "Demo26_00.arc": 10,
+    "Demo27_01.arc": 23,
+    "Demo27_02.arc": 8,
+    "Demo28_01.arc": 20,
+    "Demo28_02.arc": 13,
+    "Demo28_03.arc": 3,
+    "Demo29_00.arc": 1,
+    "Demo30_01.arc": 13,
+    "Demo30_02.arc": 9,
+    "Demo31_16.arc": 3,
+    "Demo32_02.arc": 11,
+    "Demo32_05.arc": 14,
+    "Demo33_01.arc": 18,
+    "Demo33_03.arc": 5,
+    "Demo35_01.arc": 6,
+    "Demo35_02.arc": 15,
+    "Demo36_00.arc": 11,
+    "Demo37_02.arc": 3,
+    "Demo90_00.arc": 1
+  },
+  "tag_histogram": {
+    "anim": 578,
+    "beta_cast": 35,
+    "henkei": 3,
+    "hiface": 1,
+    "high": 6,
+    "lantern": 0,
+    "link_body": 463,
+    "model": 210,
+    "original": 2,
+    "tmp": 325
+  },
+  "compare": {
+    "beta_kmdl": {
+      "path": "D:\\Decomps\\beta link\\Kmdl.arc",
+      "disk_size": 551360,
+      "files": {
+        "al.bmd": {
+          "size": 313440,
+          "sha16": "a5a70f00641a812f"
+        },
+        "al_bootsh.bmd": {
+          "size": 22048,
+          "sha16": "2e3c1c4a811767bc"
+        },
+        "al_face.bmd": {
+          "size": 74464,
+          "sha16": "915cba2f25e3129a"
+        },
+        "al_hands.bmd": {
+          "size": 61056,
+          "sha16": "04f9b59844bc4a3d"
+        },
+        "al_head.bmd": {
+          "size": 31424,
+          "sha16": "6ffa1b8b2f3b6523"
+        },
+        "al_kantera.bmd": {
+          "size": 21024,
+          "sha16": "ca986d3aeb99cb9a"
+        },
+        "al_swb.bmd": {
+          "size": 23552,
+          "sha16": "b300b2e91ea183ed"
+        },
+        "ef_ktglow.bmd": {
+          "size": 3040,
+          "sha16": "4d67aa1524589139"
+        },
+        "ef_ktglow.btk": {
+          "size": 512,
+          "sha16": "4008cecf131834c7"
+        }
+      }
+    },
+    "retail_kmdl": {
+      "path": "D:\\Decomps\\Ex TP\\files\\res\\Object\\Kmdl.arc",
+      "disk_size": 245914,
+      "files": {
+        "al.bmd": {
+          "size": 140448,
+          "sha16": "291975862d1abaaa"
+        },
+        "al_bootsh.bmd": {
+          "size": 22048,
+          "sha16": "2e3c1c4a811767bc"
+        },
+        "al_face.bmd": {
+          "size": 72576,
+          "sha16": "378394702c412229"
+        },
+        "al_hands.bmd": {
+          "size": 61056,
+          "sha16": "04f9b59844bc4a3d"
+        },
+        "al_head.bmd": {
+          "size": 34400,
+          "sha16": "6e65334716ba33ee"
+        },
+        "al_kantera.bmd": {
+          "size": 21024,
+          "sha16": "ca986d3aeb99cb9a"
+        },
+        "al_swb.bmd": {
+          "size": 23552,
+          "sha16": "b300b2e91ea183ed"
+        },
+        "ef_ktglow.bmd": {
+          "size": 3040,
+          "sha16": "4d67aa1524589139"
+        },
+        "ef_ktglow.btk": {
+          "size": 512,
+          "sha16": "4008cecf131834c7"
+        }
+      }
+    },
+    "demo_matches": [],
+    "kmdl_diffs": [
+      {
+        "name": "al.bmd",
+        "beta": {
+          "size": 313440,
+          "sha16": "a5a70f00641a812f"
+        },
+        "retail": {
+          "size": 140448,
+          "sha16": "291975862d1abaaa"
+        }
+      },
+      {
+        "name": "al_face.bmd",
+        "beta": {
+          "size": 74464,
+          "sha16": "915cba2f25e3129a"
+        },
+        "retail": {
+          "size": 72576,
+          "sha16": "378394702c412229"
+        }
+      },
+      {
+        "name": "al_head.bmd",
+        "beta": {
+          "size": 31424,
+          "sha16": "6ffa1b8b2f3b6523"
+        },
+        "retail": {
+          "size": 34400,
+          "sha16": "6e65334716ba33ee"
+        }
+      }
+    ]
+  },
+  "seed_arc_highlights": {
+    "Demo01_00.arc": [
+      {
+        "name": "demo01_ctz1_cut00_gp_talk_l.bmd",
+        "size": 31072,
+        "sha16": "a01739dc3ec05548"
+      },
+      {
+        "name": "demo01_link_cut00_bd_high_o.bmd",
+        "size": 406272,
+        "sha16": "20bc3b78b79f4eff"
+      },
+      {
+        "name": "demo01_link_cut00_bd_original_o.bmd",
+        "size": 380576,
+        "sha16": "8a1abe5947f531ed"
+      },
+      {
+        "name": "demo01_link_cut00_bd_sleep_o.bck",
+        "size": 61856,
+        "sha16": "19a8efa3695188af"
+      },
+      {
+        "name": "demo01_link_cut00_bd_sleep_o.btk",
+        "size": 768,
+        "sha16": "8dfea0d2260f9399"
+      },
+      {
+        "name": "demo01_link_cut00_bd_talk_l.bck",
+        "size": 78240,
+        "sha16": "b8e3a476ecfc10be"
+      },
+      {
+        "name": "demo01_link_cut04_bd_lookhand_o.bck",
+        "size": 14912,
+        "sha16": "cd39f127a1bcf94f"
+      },
+      {
+        "name": "demo01_link_cut05_bd_turnround_o.bck",
+        "size": 44704,
+        "sha16": "9a8a6e4f73f3770b"
+      },
+      {
+        "name": "demo01_link_cut06_bd_standup_o.bck",
+        "size": 44864,
+        "sha16": "561d7caf374de37d"
+      },
+      {
+        "name": "demo01_link_cut07_bd_whistle_o.bck",
+        "size": 60736,
+        "sha16": "31ce6e1df372b41f"
+      },
+      {
+        "name": "demo01_link_cut07_bd_whistle_o.btk",
+        "size": 384,
+        "sha16": "0b5b57f7f684cc1f"
+      },
+      {
+        "name": "demo01_link_cut10_bd_lookaround_o.bck",
+        "size": 41024,
+        "sha16": "8c07d4eca5391d51"
+      },
+      {
+        "name": "demo01_link_cut10_bd_lookaround_o.btk",
+        "size": 480,
+        "sha16": "b48b848d0d562c30"
+      },
+      {
+        "name": "demo01_link_cut11_bd_lookaround_o.bck",
+        "size": 48640,
+        "sha16": "e276c9bd10d00a0d"
+      },
+      {
+        "name": "demo01_link_cut12_bd_lookoutover_o.bck",
+        "size": 43040,
+        "sha16": "6514b008f80ae23a"
+      },
+      {
+        "name": "demo01_link_cut12_bd_lookoutover_o.btk",
+        "size": 512,
+        "sha16": "80c6a965d35eff75"
+      },
+      {
+        "name": "demo01_link_cut13_bd_lookoutover_o.bck",
+        "size": 52160,
+        "sha16": "03d127f1b0c3dd65"
+      },
+      {
+        "name": "demo01_wb_cut00_gp_original_o.bmd",
+        "size": 77088,
+        "sha16": "e64a458df70ff12a"
+      },
+      {
+        "name": "demo01_wb_cut05_bd_eat_o.bck",
+        "size": 1920,
+        "sha16": "90f6e555f9974d80"
+      },
+      {
+        "name": "demo01_wb_cut08_bd_notice1_o.bck",
+        "size": 2048,
+        "sha16": "8d2ae6b16f73eb7c"
+      },
+      {
+        "name": "demo01_wb_cut08_bd_notice2_o.bck",
+        "size": 2048,
+        "sha16": "e236ccec50587c6c"
+      },
+      {
+        "name": "demo01_wb_cut08_bd_notice3_o.bck",
+        "size": 2048,
+        "sha16": "f9893bc0c82b2d7f"
+      },
+      {
+        "name": "demo01_wb_cut99_gp_walk_l.bck",
+        "size": 7200,
+        "sha16": "b507039778107f10"
+      },
+      {
+        "name": "demo01_wb_cut99_gp_walk_l.bmd",
+        "size": 68384,
+        "sha16": "b72944ed0b60fa7d"
+      }
+    ],
+    "Demo04_01.arc": [
+      {
+        "name": "demo00_link_cut00_hl_tmp.bck",
+        "size": 1984,
+        "sha16": "4819deb6a60f5a85"
+      },
+      {
+        "name": "demo00_link_cut00_hl_tmp.bmd",
+        "size": 75680,
+        "sha16": "c4c9f14784e11d5c"
+      },
+      {
+        "name": "demo04_link_cut01_bd_1_o.bck",
+        "size": 6208,
+        "sha16": "5f23e537f3d4c920"
+      },
+      {
+        "name": "demo04_link_cut01_fc_1_o.bck",
+        "size": 3136,
+        "sha16": "05edd04757257b44"
+      },
+      {
+        "name": "demo04_link_cut01_fc_1_o.btk",
+        "size": 832,
+        "sha16": "7d7bb4160a260744"
+      },
+      {
+        "name": "demo04_link_cut01_fc_1_o.btp",
+        "size": 480,
+        "sha16": "f9c72f458fe62640"
+      },
+      {
+        "name": "demo04_link_cut03_bd_1_o.bck",
+        "size": 11584,
+        "sha16": "a289486f480ef68a"
+      },
+      {
+        "name": "demo04_link_cut03_fc_1_o.bck",
+        "size": 480,
+        "sha16": "f94b149174842e6a"
+      },
+      {
+        "name": "demo04_link_cut03_fc_1_o.btk",
+        "size": 320,
+        "sha16": "bcfd0641cf4bba8c"
+      },
+      {
+        "name": "demo04_link_cut03_fc_1_o.btp",
+        "size": 480,
+        "sha16": "2a900ee4771b1b2c"
+      },
+      {
+        "name": "demo04_link_cut04_bd_1_o.bck",
+        "size": 5408,
+        "sha16": "6155a15e8dcfa21c"
+      },
+      {
+        "name": "demo04_link_cut04_fc_1_o.bck",
+        "size": 1824,
+        "sha16": "e1186d44324a7229"
+      },
+      {
+        "name": "demo04_link_cut04_fc_1_o.btk",
+        "size": 544,
+        "sha16": "fca09a573d73b4f6"
+      },
+      {
+        "name": "demo04_link_cut04_fc_1_o.btp",
+        "size": 768,
+        "sha16": "e4f76880c4ea1c8d"
+      },
+      {
+        "name": "demo04_link_cut04_hl_1_o.bck",
+        "size": 2080,
+        "sha16": "6bb13b546a6a0173"
+      },
+      {
+        "name": "demo04_link_cut04_hl_1_o.brk",
+        "size": 768,
+        "sha16": "0575e0b0b8f0b2a2"
+      },
+      {
+        "name": "demo04_link_cut05_bd_1_o.bck",
+        "size": 4480,
+        "sha16": "4c04ab7b4b7c1c6b"
+      },
+      {
+        "name": "demo04_link_cut05_bd_2_o.bck",
+        "size": 5056,
+        "sha16": "8de04bfe05ae148e"
+      },
+      {
+        "name": "demo04_link_cut05_fc_1_o.bck",
+        "size": 512,
+        "sha16": "feac747ad5eb9021"
+      },
+      {
+        "name": "demo04_link_cut05_fc_1_o.btk",
+        "size": 384,
+        "sha16": "7f69c006f4548c84"
+      },
+      {
+        "name": "demo04_link_cut05_fc_1_o.btp",
+        "size": 288,
+        "sha16": "48415f24bce2d9c3"
+      },
+      {
+        "name": "demo04_link_cut05_fc_2_o.bck",
+        "size": 1344,
+        "sha16": "72c57be57a800bdb"
+      },
+      {
+        "name": "demo04_link_cut05_fc_2_o.btk",
+        "size": 384,
+        "sha16": "1396f188607e26a1"
+      },
+      {
+        "name": "demo04_link_cut05_fc_2_o.btp",
+        "size": 288,
+        "sha16": "a79e8bf146ba715f"
+      },
+      {
+        "name": "demo04_link_cut05_hl_2_o.brk",
+        "size": 480,
+        "sha16": "4c11f3e9dcfd7657"
+      },
+      {
+        "name": "demo04_link_cut06_bd_1_o.bck",
+        "size": 23232,
+        "sha16": "ca02a3fa31dfdfae"
+      },
+      {
+        "name": "demo04_link_cut06_fc_1_o.bck",
+        "size": 2368,
+        "sha16": "61c59cd59db3e9c7"
+      },
+      {
+        "name": "demo04_link_cut06_fc_1_o.btk",
+        "size": 352,
+        "sha16": "18e7e8eb72c72d8d"
+      },
+      {
+        "name": "demo04_link_cut06_fc_1_o.btp",
+        "size": 832,
+        "sha16": "72acf5b7c9f20ccd"
+      },
+      {
+        "name": "demo04_link_cut08_bd_1_o.bck",
+        "size": 14048,
+        "sha16": "fb29f3ecfd221e8f"
+      },
+      {
+        "name": "demo04_link_cut08_fc_1_o.bck",
+        "size": 3936,
+        "sha16": "8c73ac34a7dc3752"
+      },
+      {
+        "name": "demo04_link_cut08_fc_1_o.btk",
+        "size": 352,
+        "sha16": "b382c085026c11e1"
+      },
+      {
+        "name": "demo04_link_cut08_fc_1_o.btp",
+        "size": 928,
+        "sha16": "311e1b404fc77f09"
+      },
+      {
+        "name": "demo04_link_cut09_gp_body1_o.bck",
+        "size": 35936,
+        "sha16": "bcc68f630406ec49"
+      },
+      {
+        "name": "demo04_link_cut09_gp_body2_o.bck",
+        "size": 6368,
+        "sha16": "c438b9606f7f75d7"
+      },
+      {
+        "name": "demo04_link_cut09_gp_body3_o.bck",
+        "size": 20704,
+        "sha16": "e82c7504241b1081"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face1_o.bck",
+        "size": 35872,
+        "sha16": "42ff7eb49987c6f5"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face1_o.btk",
+        "size": 736,
+        "sha16": "5c32c83f4d7b29d8"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face1_o.btp",
+        "size": 96,
+        "sha16": "b86eaf3aac7dfa37"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face2_o.bck",
+        "size": 7776,
+        "sha16": "778953936f5e8125"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face2_o.btk",
+        "size": 544,
+        "sha16": "0658e39b649edd0c"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face2_o.btp",
+        "size": 96,
+        "sha16": "0907eb5fe0cde1ad"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face3_o.bck",
+        "size": 9632,
+        "sha16": "e98acb9f98eda7f2"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face3_o.btk",
+        "size": 352,
+        "sha16": "57d11192ebfdc48f"
+      },
+      {
+        "name": "demo04_link_cut09_gp_face3_o.btp",
+        "size": 96,
+        "sha16": "1583a42355a3dba4"
+      },
+      {
+        "name": "demo04_link_cut09_gp_handl2_o.bck",
+        "size": 2336,
+        "sha16": "f9adebf59a03b0ec"
+      },
+      {
+        "name": "demo04_link_cut09_gp_head1_o.bck",
+        "size": 11584,
+        "sha16": "8327f129607823bf"
+      },
+      {
+        "name": "demo04_link_cut09_gp_head2_o.bck",
+        "size": 3072,
+        "sha16": "bfb46d9bd14c7453"
+      },
+      {
+        "name": "demo04_link_cut09_gp_head3_o.bck",
+        "size": 10432,
+        "sha16": "88f966f4c7215599"
+      },
+      {
+        "name": "demo04_link_cut09_gp_henkei3_o.bck",
+        "size": 8256,
+        "sha16": "7b4e27980b94c109"
+      },
+      {
+        "name": "demo04_link_cut09_gp_hl1_o.bck",
+        "size": 8320,
+        "sha16": "9bb8b90ff2265cd0"
+      },
+      {
+        "name": "demo04_link_cut09_gp_hl1_o.brk",
+        "size": 480,
+        "sha16": "4c11f3e9dcfd7657"
+      },
+      {
+        "name": "demo04_link_cut99_gp_blnohandl_o.bmd",
+        "size": 132736,
+        "sha16": "7b8267a2dac85c6a"
+      },
+      {
+        "name": "demo04_link_cut99_gp_henkeiface_o.bmd",
+        "size": 36064,
+        "sha16": "1faf0f8252fd567d"
+      },
+      {
+        "name": "demo04_link_cut99_gp_hiface_o.bmd",
+        "size": 81344,
+        "sha16": "ae15bf9ca47b230d"
+      },
+      {
+        "name": "demo04_link_cut99_gp_hihead_o.bmd",
+        "size": 30048,
+        "sha16": "d7894d39b0741742"
+      },
+      {
+        "name": "demo04_link_cut99_gp_hl_o.bmd",
+        "size": 221760,
+        "sha16": "2c8774146a3f31bb"
+      },
+      {
+        "name": "demo04_wl_cut99_gp_henkei_o.bmd",
+        "size": 31104,
+        "sha16": "08e1ab3a005a6abb"
+      }
+    ],
+    "Demo01_01.arc": [
+      {
+        "name": "demo00_link_cut00_hd_tmp.bck",
+        "size": 1824,
+        "sha16": "191e35cea679d1b9"
+      },
+      {
+        "name": "demo01_link_cut01_bd_1_l.bck",
+        "size": 5600,
+        "sha16": "c1f3e6a4c8725f6c"
+      },
+      {
+        "name": "demo01_link_cut02_bd_1_o.bck",
+        "size": 6368,
+        "sha16": "f54470faa265a390"
+      },
+      {
+        "name": "demo01_link_cut02_fc_1_o.bck",
+        "size": 2240,
+        "sha16": "5f28fc90c7894468"
+      },
+      {
+        "name": "demo01_link_cut02_fc_1_o.btk",
+        "size": 416,
+        "sha16": "7622b79acc258384"
+      },
+      {
+        "name": "demo01_link_cut02_fc_1_o.btp",
+        "size": 928,
+        "sha16": "cb061da56d31f2a2"
+      },
+      {
+        "name": "demo01_link_cut03_bd_1_l.bck",
+        "size": 4512,
+        "sha16": "e10fb8bc198df805"
+      },
+      {
+        "name": "demo01_link_cut03_bd_2_o.bck",
+        "size": 12224,
+        "sha16": "573bbaa2c0c9835e"
+      },
+      {
+        "name": "demo01_link_cut03_fc_1_l.bck",
+        "size": 1248,
+        "sha16": "60984fc54a50b74c"
+      },
+      {
+        "name": "demo01_link_cut03_fc_1_l.btk",
+        "size": 384,
+        "sha16": "063ad3920af4e362"
+      },
+      {
+        "name": "demo01_link_cut03_fc_1_l.btp",
+        "size": 416,
+        "sha16": "053df0e7a80e59e6"
+      },
+      {
+        "name": "demo01_link_cut03_fc_2_o.bck",
+        "size": 1920,
+        "sha16": "6443b69e0cee7f5b"
+      },
+      {
+        "name": "demo01_link_cut03_fc_2_o.btk",
+        "size": 544,
+        "sha16": "6d320de4d6c43052"
+      },
+      {
+        "name": "demo01_link_cut03_fc_2_o.btp",
+        "size": 864,
+        "sha16": "f8927a6e44189cfd"
+      },
+      {
+        "name": "demo01_link_cut05_bd_1_o.bck",
+        "size": 5184,
+        "sha16": "4b359f846ef28c5b"
+      },
+      {
+        "name": "demo01_link_cut05_fc_1_o.bck",
+        "size": 1696,
+        "sha16": "9559279976f7f5a9"
+      },
+      {
+        "name": "demo01_link_cut05_fc_1_o.btk",
+        "size": 352,
+        "sha16": "b393889b5e99896f"
+      },
+      {
+        "name": "demo01_link_cut05_fc_1_o.btp",
+        "size": 480,
+        "sha16": "281ec97f4973cc3d"
+      },
+      {
+        "name": "demo01_link_cut06_bd_1_l.bck",
+        "size": 5600,
+        "sha16": "177653e3fb6e3e39"
+      },
+      {
+        "name": "demo01_link_cut07_bd_1_o.bck",
+        "size": 7424,
+        "sha16": "4a207d47b990a5b3"
+      },
+      {
+        "name": "demo01_link_cut07_bd_2_o.bck",
+        "size": 50272,
+        "sha16": "e35ce4ce36b21398"
+      },
+      {
+        "name": "demo01_link_cut07_fc_1_o.bck",
+        "size": 1792,
+        "sha16": "5285a038161ab59e"
+      },
+      {
+        "name": "demo01_link_cut07_fc_1_o.btk",
+        "size": 416,
+        "sha16": "e03d7a08d969bcb3"
+      },
+      {
+        "name": "demo01_link_cut07_fc_1_o.btp",
+        "size": 896,
+        "sha16": "382e97834252fc2f"
+      },
+      {
+        "name": "demo01_link_cut07_fc_2_o.bck",
+        "size": 2624,
+        "sha16": "4bfccb7d5ed57793"
+      },
+      {
+        "name": "demo01_link_cut07_fc_2_o.btk",
+        "size": 608,
+        "sha16": "41d1c373218e4dec"
+      },
+      {
+        "name": "demo01_link_cut07_fc_2_o.btp",
+        "size": 928,
+        "sha16": "cb03ae9fd95049db"
+      },
+      {
+        "name": "demo01_link_cut07_hd_1_o.bck",
+        "size": 1824,
+        "sha16": "191e35cea679d1b9"
+      },
+      {
+        "name": "demo01_link_cut07_hd_2_o.bck",
+        "size": 1440,
+        "sha16": "c925a4b07ca04b08"
+      },
+      {
+        "name": "demo01_link_cut08_bd_1_o.bck",
+        "size": 22144,
+        "sha16": "df6f7a23204c0b96"
+      }
+    ]
+  },
+  "csv": "C:\\Users\\xxxxx\\Documents\\dusklight\\tools\\demo_cut_content\\out\\demo_leftovers.csv"
+}

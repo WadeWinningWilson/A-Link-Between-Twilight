@@ -3792,6 +3792,9 @@ public:
     // ============================================
     bool checkDekuLeafGlide() const;
     BOOL checkGrabGlide() { return checkGrabRooster() || checkDekuLeafGlide(); }
+#if TARGET_PC
+    void updateDekuLeafModel();  // P3b: lazy-load + position the held WW Deku Leaf model
+#endif
 
     bool checkCopyRodRevive() const { return mProcID == PROC_COPY_ROD_REVIVE; }
     bool checkHorseGetOffMode() const { return mProcID == PROC_HORSE_GETOFF; }

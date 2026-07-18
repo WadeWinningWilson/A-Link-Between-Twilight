@@ -24,7 +24,8 @@
 |-----|------|
 | [INTERCONNECTED-RUNS.md](Interconnected%20Chats/INTERCONNECTED-RUNS.md) | Protocol: brief → plans → critique → unified plan → **both sign off** → execute; optional drive |
 | [_RUN_TEMPLATE.md](Interconnected%20Chats/_RUN_TEMPLATE.md) | Copy per run into `Interconnected Chats/<Run-Name>.md` |
-| [Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) | **Active run (preemptive)** — level editor Phase 1; Claude review + Cursor impl |
+| [Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md) | **Active run** — cut actors / Demo restore; History archaeology + Cursor impl |
+| [Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) | Prior run — level editor Phase 1; superseded for run-control while Cut Actors run is active |
 | [state/run-control.md](state/run-control.md) | idle / running / paused / stopped — user Start/Pause/Resume/Stop |
 
 **Deliberation (short):** each instance proposes a plan → each critically answers the other → unified plan → **both APPROVED** → then implement. Not simultaneous. Drive is **not** inherent — only if the user requests it for that run.
@@ -44,6 +45,7 @@
 | Build / FPS review | [state/drive-fps.md](state/drive-fps.md) | [build-fps-guidelines.md](build-fps-guidelines.md) (has its own doc map) |
 | Shield / parry | — | [shield-combat.md](shield-combat.md) |
 | ALBW port overview | — | [albw-port.md](albw-port.md) |
+| Cut Actors / Demo Restore | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) | [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md), [TPHistory.md](TPHistory.md) §7 |
 | Level Editor (Phase 1) | [state/level-editor.md](state/level-editor.md) | [level-editor-phase1.md](level-editor-phase1.md), [Interconnected Chats/Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) |
 | Outfit / sumo / quick-swap | *(add `state/outfit-sumo.md` when next session starts)* | [Interconnected Chats/Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md), [Outfit Stats.md](Outfit%20Stats.md), [sumo-combat.md](sumo-combat.md) |
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |

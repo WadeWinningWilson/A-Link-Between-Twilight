@@ -1327,6 +1327,52 @@ returning to fly (stale last-pos). Perf: latch is a bool, session-gated → zero
 | Claude | **APPROVED** | +cursor-ownership race fix (verify already-free; else gate mouse.cpp `should_capture` on `!select_mode`, don't one-shot); reset sFlyCamLastMousePos on toggle; label names `V`. Implement. | 2026-07-10 |
 
 - **2026-07-10 (Cursor):** Gate 7 implemented — `session_select_mode` latch, `V` toggle, Stage button, fly-cam look freeze, `mouse.cpp` capture gate, HUD label. `pick.cpp` unchanged. RelWithDebInfo OK. Awaiting playtest (mouse-cam on + off).
+- **2026-07-10 (user):** Select Mode **button works**; **`V` did not** → PC Hotkeys (SDL `V` + controller live) landed. **Click → select still failed** (definitive).
+- **2026-07-17 (user resume):** Confirmed click-pick never worked; ordered Gate 8 plan implement.
+
+---
+
+## Bug gate 8 — Click-pick still fails after Select Mode → diagnose then fix (2026-07-17)
+
+**User:** Clicking a live actor did **not** work (definitive). Select Mode freeze-look is OK; world pick is not. Do **not** blind-tweak radius/coords — instrument first.
+
+### Phase A — Cursor proposed plan (diag-first)
+
+**Keep Select Mode / PC Hotkeys.** Instrument [`pick.cpp`](../../src/dusk/leveledit/pick.cpp) `try_world_pick_on_click` on the **left-release edge only** (zero cost when not clicking):
+
+| Breadcrumb | When |
+|------------|------|
+| `Pick skip ui` | which of: `menu_pointer` / `WantCaptureMouse` / Rml interactive |
+| `Pick skip map` | `map_window_mouse_to_game_screen` failed |
+| `Pick miss` | click `(x,y)`, nearest live distSq + name, candidate count; Select Mode + PC Hotkeys flags |
+| `Pick hit` | name, setID, depth |
+
+**Playtest script:** Level Editor → Field → Fly Cam → **close Editor** → Select Mode on → confirm camera doesn't spin → click Bokoblin/E_oc → paste `Pick*` lines. Control: Stage list select still highlights. Optional: Editor open click-through → expect `Pick skip ui`.
+
+**Top suspects:** UI gate; coord mismatch; 28px radius vs body click; release-edge / hook not firing.
+
+**OUT:** gizmo/1c; death-clear; list-row sync; reticle; collision box.
+
+### Phase B / C — Unified (user-approved plan 2026-07-17)
+
+User approved Gate 8 plan in Cursor → **go for diag-only** (no behavior change until logs name the failure class). Claude may still post Phase B critique; Cursor proceeds on user override for the diag patch.
+
+| Role | Sign-off | Notes | When |
+|------|----------|-------|------|
+| Cursor | **APPROVED** | Diag breadcrumbs only; then playtest → fix from log class. | 2026-07-17 |
+| Claude | — | Welcome to critique; user ordered implement diag now | 2026-07-17 |
+| User | **APPROVED** | Plan attach → implement | 2026-07-17 |
+
+- **2026-07-17 (Cursor):** Gate 8 Phase A posted; dual via user plan approval for **diag**. Implementing `Pick*` breadcrumbs.
+- **2026-07-17 (Cursor):** Diag landed in `pick.cpp` — `Pick skip ui` / `Pick skip map` / `Pick miss` / `Pick hit` (+ Select Mode / PC Hotkeys). RelWithDebInfo OK. **No behavior change** (per plan). **Blocked on user:** paste `Pick*` lines → Cursor opens fix pass.
+- **2026-07-17 (user playtest):** Multiple sessions — Select Mode armed, Editor hidden, clicks claimed; **zero `Pick*`** (SDL left-release poll never fired). Stage button spam also produced no `Pick skip ui`.
+- **2026-07-17 (Cursor, user ordered):** Gate **8b** — richer diag + edge fix: `Pick down` / `Pick heart` / `Pick edge imgui-only` / `Pick release`; pick edge = SDL **or** ImGui left-release; hook moved before `pauseTimer` early-return. RelWithDebInfo OK. Retest for new `Pick*` lines.
+- **2026-07-17 (user playtest 8b):** Path works (`down`/`release`); all **`Pick miss`**. Near-misses ~70–170px (`Obj_Uma`/`E_oc`); Link/Epona clicks explained (PLYR not live; body≠root; 28px radius).
+- **2026-07-17 (Cursor, user ordered):** Gate **8c** miss fix in `pick.cpp` — gInf Y align, multi-point (feet/mid/eyes), radius 80/140, Link+Horse LIVE pick. RelWithDebInfo OK. Awaiting playtest `Pick hit`.
+- **2026-07-17 (user):** Pick hit / highlight appeared but **far from actors** and **same place** when changing selection.
+- **2026-07-17 (Cursor):** Gate **8d** — root = Stage teardown `detach_selection_live` → draw fell back to authored `spawnPos`; ambiguous `setID=0xFFFF` rejoin. Fix: store `fpc_ProcID`, rebind via `fpcM_SearchByID` every draw (+ Link/Horse). RelWithDebInfo OK.
+- **2026-07-17 (user):** Click+highlight+follow OK; pick target finicky/unclear.
+- **2026-07-17 (Cursor):** Gate **8e** — screen capsule feet→head, larger radius, Select Mode amber **HOVER** preview + `HOVER name (click)` HUD. RelWithDebInfo OK.
 
 ---
 

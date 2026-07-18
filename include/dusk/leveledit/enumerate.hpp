@@ -65,8 +65,10 @@ using SelectionDetailHandler = std::function<void(const PlacedActor&)>;
 void set_selection_detail_handler(SelectionDetailHandler handler);
 std::string format_placed_actor_detail_rml(const PlacedActor& sel);
 
-// 1b — click-to-select in world (call from dScnPly_Execute).
+// 1b — click-to-select in world (call from dScnPly_Execute / Draw).
 void try_world_pick_on_click();
+void tick_world_pick_hover();  // Select Mode: amber preview under cursor
+void draw_pick_hover();
 
 // Draw highlight for current selection. Early-outs when !g_levelEditorSession.
 void draw_selection_highlight();

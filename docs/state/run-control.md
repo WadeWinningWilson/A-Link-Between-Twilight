@@ -11,14 +11,14 @@ User (or later `run-control.ps1`) is the only authority that changes `mode`.
 | Field | Value |
 |-------|--------|
 | **mode** | running |
-| **run_name** | Level Editor — Cursor ↔ Claude |
-| **run_doc** | docs/Interconnected Chats/Level-Editor-Cursor-Claude.md |
-| **feature_state** | docs/state/level-editor.md |
-| **active_workers** | cursor,claude |
+| **run_name** | Cut Actors / Demo Restore — Cursor ↔ History |
+| **run_doc** | docs/Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md |
+| **feature_state** | docs/state/cut-actors-demo-restore.md |
+| **active_workers** | cursor,history |
 | **drive_in_scope** | no |
 | **pause_question** | — |
 | **drive_pid** | — |
-| **updated** | 2026-07-10 (user resume — running; at gate 7) |
+| **updated** | 2026-07-17 (user Start — supersedes Level Editor run-control while this run is active) |
 
 ---
 
@@ -43,5 +43,6 @@ User (or later `run-control.ps1`) is the only authority that changes `mode`.
 ## Active workers (examples)
 
 - `cursor,claude` — deliberation / execute only  
+- `cursor,history` — implement + archaeology/critique  
 - `cursor,claude,drive` — user requested drive for this run  
 - `cursor` — single-sided work still under run-control (rare)

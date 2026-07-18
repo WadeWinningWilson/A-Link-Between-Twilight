@@ -119,28 +119,39 @@ clothes/actor rebuild (not just the boots). Both fixed in `try_load`:
   compressed-arc support (the old mount was raw-RARC only). `m_Do_dvd_thread.cpp`
   is back to a stock mount path plus a one-line note.
 
-### Custom Models settings tree  (`src/dusk/ui/editor.cpp`, ALBW tab)
-- **Load-ordered since 2026-07-11** (Phase 1 of
-  [Mod-Load-Order-Design.md](Mod-Load-Order-Design.md) §10 — uncommitted, awaiting
-  playtest): `game.customModelsOrder` is the authoritative setting — `|`-delimited
-  folder names in **priority order** (top = wins conflicts, decision D1), `-` prefix =
-  disabled. One rule at every conflict site (Layer-A `s_map`, audio
-  `s_audioIndex`/`s_modWaves`, icons, Layer-B subfolder search): iterate mods
-  top-first, first provider of an asset claims it.
-- `game.customModelsDisabled` is now LEGACY: dual-read (fallback for folders not yet
-  in the order) + mirrored on every write, for one release; then retire.
-- Migration: an empty order is seeded from the alphabetical folder list with the
-  legacy disabled flags carried verbatim (in `scan()`, idempotent).
-- `custom_assets::list_folders()` (now priority-ordered) / `is_folder_enabled()` /
-  `toggle_folder()` / **`move_folder()`** / **`order_view()`** drive a reorderable
-  multi-toggle picker: numbered rows (highlight = enabled, click to toggle — same
-  feel as sword/shield equip) with a `^ swap v` row between neighbours to reorder.
-  Pane is labelled "load order (top wins)". Left button summarizes `N/M enabled`.
-- **One toggle gates both layers.** `toggle_folder()` / `move_folder()` update the
-  setting, then `scan()` + `install_overlays()` so the change lands on the **next
-  asset load** (reload-scoped — see §4). Layer B checks the toggle at load time.
-  The Layer-B root-direct "always-on" slot is unchanged (still beats everything).
-- **Status:** toggle picker working; ordering implemented, awaiting playtest.
+### Mods window — load order UI  (`src/dusk/ui/mods.cpp`, title screen → Mods)
+
+Full design + playtest notes: **[Mod-Load-Order-Design.md §18](Mod-Load-Order-Design.md#18-collection-ui-subgroups--mods-right-pane-scroll-2026-07-17)**.
+
+- **Load-ordered since 2026-07-11** ([Mod-Load-Order-Design.md](Mod-Load-Order-Design.md) §10):
+  `game.customModelsOrder` is the authoritative setting — `|`-delimited folder names
+  in **priority order** (top = wins conflicts, decision D1), `-` prefix = disabled.
+  One rule at every conflict site (Layer-A `s_map`, audio `s_audioIndex`/`s_modWaves`,
+  icons, Layer-B subfolder search): iterate mods top-first, first provider of an asset
+  claims it.
+- `game.customModelsDisabled` is LEGACY: dual-read + mirrored on every write, for one
+  release; then retire.
+- **Left pane:** one position-bound row per **mod group** — plain mods use the folder
+  name; collections collapse to one row (`HD Tunics (17 variants) — ON — Kokiri Green`).
+  Labels refresh each frame via `order_view()` + `group_keys_in_priority_order()`.
+  Grab-and-place reorder calls **`move_mod_group()`** / **`move_mod_group_to()`**
+  (whole variant block moves together).
+- **Right pane:** plain mod = **Enabled** toggle; collection = **Variants** picker
+  (`select_collection_variant()`). modinfo screenshot/description + conflict/core info.
+  Tall panels scroll via **`Pane::scroll_by()`** on Uncontrolled panes (wheel + pad
+  Up/Down after focusable children — see §10 below).
+- **One toggle gates both layers.** `toggle_folder()` / `move_folder()` /
+  `select_collection_variant()` / `move_mod_group*()` update the setting, then
+  `scan()` + `install_overlays()` so the change lands on the **next asset load**
+  (reload-scoped — see §4). Layer B checks the toggle at load time.
+- **Disk format unchanged:** collections still store every variant as
+  `Collection/Variant` in `customModelsOrder`; only UI presentation + group-move
+  helpers were added.
+- **Status:** Mods window shipped in tree; collection subgroups + right-pane scroll
+  added 2026-07-17 (§10).
+
+> **Editor note.** The old ALBW-tab Custom Models picker in `editor.cpp` is superseded
+> by the standalone Mods window for load-order management.
 
 ---
 
@@ -378,11 +389,13 @@ generalization; not needed for complete re-skins.
 
 | File | Role | Status |
 |------|------|--------|
-| `src/dusk/custom_assets.cpp` / `.hpp` | Layer A (scan + overlay), Layer B (loose BMD), folder toggle, `overlay_generation()`, **custom-audio shadow layer** (§6) | Working; models + audio live in-game |
+| `src/dusk/custom_assets.cpp` / `.hpp` | Layer A (scan + overlay), Layer B (loose BMD), folder toggle, **collection grouping API** (§10), `overlay_generation()`, **custom-audio shadow layer** (§6) | Working; models + audio live in-game |
+| `src/dusk/ui/mods.cpp` / `.hpp` | Title-screen **Mods** window — collapsed collection rows, variant picker, grab-and-place group reorder | 2026-07-17 (§10) |
+| `src/dusk/ui/pane.cpp` / `.hpp` | Uncontrolled pane scroll (`reset_scroll`, `scroll_by`, wheel + pad) | 2026-07-17 (§10) |
 | `src/dusk/audio/DuskDsp.{cpp,hpp}`, `libs/JSystem/src/JAudio2/JASWaveArcLoader.cpp`, `.../JASBank.cpp` | Runtime custom audio — shadow-wave redirect + per-wave WSYS remap (§6) | Working; committed `6389807a6a` |
 | `src/m_Do/m_Do_main.cpp`               | `scan()` (startup) + `install_overlays()` (after disc open) | Wired |
 | `src/m_Do/m_Do_dvd_thread.cpp`         | Stock arc mount (custom 2b mount **removed**) + temp `[ca-diag]` hook | Reverted to stock |
-| `src/dusk/ui/editor.cpp`               | ALBW → Custom Models reorderable multi-toggle picker (load order, top wins) | Ordering uncommitted, awaiting playtest |
+| `src/dusk/ui/editor.cpp`               | ALBW tab (legacy Custom Models picker — superseded by Mods window) | Superseded |
 | `include/dusk/settings.h`, `src/dusk/settings.cpp` | `game.customModelsOrder` (authoritative) + legacy `game.customModelsDisabled` (dual-read/mirrored one release) | Order setting uncommitted |
 | `src/d/actor/d_a_b_gm.cpp`             | Layer-B consumer (Armogohma `B_gm`) | Working |
 | `src/d/d_albw_sumo_test.{cpp,h}`, `d_a_alink_wolf.inc`, `d_albw_outfit.{cpp,h}` | §5 resident-asset live toggle (sumo composite) | Body/face working; caps in test |
@@ -432,6 +445,70 @@ generalization; not needed for complete re-skins.
 - **Strip before push:** `[ca-diag]` (`custom_assets.cpp` + `m_Do_dvd_thread.cpp`),
   `ALBW-CAP` / `ALBW-CAPLOAD` (`d_albw_sumo_test.cpp`, `d_a_alink_wolf.inc`).
   (The audio layer ships only informative `[custom_assets]` logs — no temp probes.)
+
+---
+
+## 10. Mods window — collection UI subgroups + right-pane scroll (2026-07-17)
+
+Implements collapsed **collection subgroups** in the Mods load-order UI and
+**Uncontrolled pane scrolling** for tall right-pane mod panels. Full UX tables,
+playtest checklist, and build note: **[Mod-Load-Order-Design.md §18](Mod-Load-Order-Design.md#18-collection-ui-subgroups--mods-right-pane-scroll-2026-07-17)**.
+
+**Design constraint:** `game.customModelsOrder` still stores every variant as
+`Collection/Variant`. Scan, conflict resolution, and `list_folders()` are unchanged.
+
+### Public API — `include/dusk/custom_assets.hpp`
+
+| Symbol | Line | Role |
+|--------|------|------|
+| *(comment block)* | **115–119** | Collection UI grouping overview |
+| `mod_group_key(folder)` | **122** | `"Coll/Var"` → `"Coll"`; plain mod → folder name |
+| `mod_is_collection_variant(folder)` | **125** | True when path contains `/` |
+| `select_collection_variant(variant_folder)` | **129** | Enable one variant; disable siblings; `scan()` + `install_overlays()` |
+| `move_mod_group(group_key, delta, apply)` | **133** | Move whole group one visible slot (`apply=false` defers rescan) |
+| `move_mod_group_to(group_key, slot, apply)` | **136** | Grab-and-place at visible group slot |
+
+### Implementation — `src/dusk/custom_assets.cpp`
+
+| Block | Lines | Notes |
+|-------|-------|-------|
+| `mod_group_key` | **1108–1115** | |
+| `mod_is_collection_variant` | **1117–1119** | |
+| `order_as_group_blocks` (static) | **1121–1138** | Partition order into contiguous group blocks |
+| `flatten_group_blocks` (static) | **1140–1147** | |
+| `group_block_on_disk` (static) | **1149–1158** | |
+| `find_group_block_index` (static) | **1160–1171** | |
+| `select_collection_variant` | **1173–1197** | |
+| `move_mod_group` | **1199–1243** | Swaps visible group blocks |
+| `move_mod_group_to` | **1245–1304** | Mirrors `move_folder_to` on group blocks |
+| Non-PC stubs | **2391–2395** | No-op returns for `!TARGET_PC` |
+
+**Side effect:** reordering a collection may normalize scattered variant entries into
+one contiguous block (equivalent resolver output; list layout may change).
+
+### Mods UI — `src/dusk/ui/mods.cpp`
+
+| Block | Lines | Notes |
+|-------|-------|-------|
+| Header comment (interaction model) | **1–18** | Collapsed collections + grab-and-place |
+| `ModUiGroup` + `build_ui_groups` | **49–72** | Build member lists from `list_folders()` at window open |
+| `ModUiGroupMap` + `build_ui_group_map` | **74–82** | |
+| `group_keys_in_priority_order` | **84–94** | Per-frame slot order from `order_view()` |
+| `group_at_slot` | **96–107** | Row index → group for labels + right panel |
+| `group_row_title` / `group_any_enabled` / `group_active_variant_name` / `group_conflicts` | **109–155** | Row label + conflict aggregation |
+| `group_panel_folder` | **157–167** | Enabled variant for modinfo, else first member |
+| `populate_mod_detail_panel` | **285–377** | Plain: Enabled toggle. Collection: variant buttons |
+| Left-pane loop (group rows, grab uses `move_mod_group*`) | **409–507** | Drop uses **`keys[s_grabbedSlot]`** (grabbed group) |
+
+### Right-pane scroll — `src/dusk/ui/pane.{hpp,cpp}`
+
+| Symbol / behavior | Lines | Notes |
+|-------------------|-------|-------|
+| `Pane::reset_scroll()` | **pane.hpp 37**, **pane.cpp 247–249** | `SetScrollTop(0)` |
+| `Pane::scroll_by(delta)` | **pane.hpp 38**, **pane.cpp 253–257** | |
+| `Pane::clear()` | **pane.cpp 259–264** | Calls `reset_scroll()` after clearing children |
+| Uncontrolled **Mousescroll** | **pane.cpp 75–81** | Wheel scroll; capture phase |
+| Uncontrolled **Up/Down scroll** | **pane.cpp 83–115** | After focusable children exhausted, scroll 48px/step |
 
 ---
 

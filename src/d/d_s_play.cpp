@@ -50,6 +50,8 @@
 #include "d/d_albw_death_rupee.h"
 #include "d/d_albw_mail.h"
 #include "d/d_ww_itemmdl_test.h"
+#include "d/d_demo_leftover_viewer.h"
+#include "d/d_cut_actor_spawn.h"
 #include "d/d_ww_itemmdl_pc.h"
 #include "d/d_albw_twilight_border.h"
 #include "dusk/autosave.h"
@@ -719,6 +721,7 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     // Level Editor — queue AFTER BeforeOfDraw cleared the packet list.
     // Queuing from Execute was wiped every frame (never painted).
     dusk::leveledit::draw_selection_highlight();
+    dusk::leveledit::draw_pick_hover();
 #endif
 
     #if DEBUG
@@ -779,6 +782,14 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     dAlbwMail_tickNorthFaron();
     dWwItemmdl::tickBowGetItemDemoReplay();
     dWwItemmdl_tickHeldBowArcMount();
+    dDemoLeftoverViewer::tick();
+    dCutActorSpawn::tick();
+    // Gate 8: before pauseTimer early-return — hitlag must not silence click pick/diag.
+    if (dusk::g_levelEditorSession) {
+        dusk::leveledit::tick_editor_session_input();
+        dusk::leveledit::tick_world_pick_hover();
+        dusk::leveledit::try_world_pick_on_click();
+    }
 #endif
 
     if (!fopOvlpM_IsPeek()) {
@@ -869,13 +880,6 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     fapGm_HIO_c::stopCpuTimer("ã‚²ãƒ¼ãƒ ç®¡ç†ï¼ˆè¨ˆç®—å‡¦ç†ï¼‘ï¼‰");
     fapGm_HIO_c::printCpuTimer("");
     #endif
-
-#if TARGET_PC
-    if (dusk::g_levelEditorSession) {
-        dusk::leveledit::tick_editor_session_input();
-        dusk::leveledit::try_world_pick_on_click();
-    }
-#endif
 
     return 1;
 }

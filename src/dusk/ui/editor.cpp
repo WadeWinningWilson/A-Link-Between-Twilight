@@ -21,6 +21,8 @@
 #include "dusk/settings.h"
 #include "dusk/truetest.hpp"
 #include "d/d_ww_itemmdl_test.h"
+#include "d/d_demo_leftover_viewer.h"
+#include "d/d_cut_actor_spawn.h"
 #include "m_Do/m_Do_audio.h"
 #include "Z2AudioLib/Z2SeqMgr.h"  // Wolf Howl tune preview (Z2BGM_* ids, Z2GetSeqMgr)
 #include "number_button.hpp"
@@ -1805,8 +1807,8 @@ void EditorWindow::teardown_stage_tab(const char* reason) noexcept {
         mStageTabState->invalidate(reason);
         mStageTabState.reset();
     }
-    // Keep selection for in-world highlight after Editor/Stage closes (1a).
-    // Drop only the live pointer — placement pos remains; draw re-resolves or uses pos.
+    // Keep selection for in-world highlight after Editor/Stage closes (1a/1b).
+    // Drop raw live ptr only — process ID stays so draw can rebind (Gate 8d).
     dusk::leveledit::set_selection_detail_handler({});
     dusk::leveledit::detach_selection_live();
 }
@@ -3015,6 +3017,189 @@ EditorWindow::EditorWindow() {
             "ride @ 35%. Particle layout uses Interface → ALBW Visuals → Hurricane Spin Visual." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
             [] { return getSettings().game.speedrunMode; });
+        // ============================================
+        // NEW CODE — ALBW Port (Demo Leftover Viewer + Cut Actors)
+        // Demo lane: all unique BMD/BDL from retail Demo*.arc (365), category filter.
+        // Cut-actor lane: E_ms / E_dt / stubs / titan presets via fopAcM_create.
+        // ============================================
+        leftPane.add_section("Demo Leftover Viewer");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Demo category",
+                .getValue =
+                    [] {
+                        return Rml::String(dDemoLeftoverViewer::categoryName(
+                            dDemoLeftoverViewer::categoryFilter()));
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Demo category");
+                static const int kCats[] = {
+                    dDemoLeftoverViewer::CAT_GOLD,  dDemoLeftoverViewer::CAT_LINK,
+                    dDemoLeftoverViewer::CAT_MIDNA, dDemoLeftoverViewer::CAT_WOLF,
+                    dDemoLeftoverViewer::CAT_NPC,   dDemoLeftoverViewer::CAT_BOSS,
+                    dDemoLeftoverViewer::CAT_PROP,  dDemoLeftoverViewer::CAT_ALL,
+                };
+                for (int cat : kCats) {
+                    pane
+                        .add_button({
+                            .text = dDemoLeftoverViewer::categoryName(cat),
+                            .isSelected =
+                                [cat] {
+                                    return dDemoLeftoverViewer::categoryFilter() == cat;
+                                },
+                        })
+                        .on_pressed([cat] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dDemoLeftoverViewer::setCategoryFilter(cat);
+                        });
+                }
+                pane.add_rml(
+                    "Filters the <b>365</b> unique Demo*.arc meshes. "
+                    "<b>Gold leftovers</b> = original/high/henkei/demo00 crumbs. "
+                    "Labels show [body]/[face]/[hand]/… — partials are often intentional "
+                    "cutscene pieces." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Demo model",
+                .getValue =
+                    [] {
+                        const auto* e =
+                            dDemoLeftoverViewer::entry(dDemoLeftoverViewer::selectedIndex());
+                        return Rml::String(e != nullptr ? e->label : "(none)");
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Demo model");
+                const int n = dDemoLeftoverViewer::filteredCount();
+                // Cap list length so RmlUi stays responsive; prefer category filter.
+                constexpr int kMaxButtons = 120;
+                const int show = n < kMaxButtons ? n : kMaxButtons;
+                for (int fi = 0; fi < show; ++fi) {
+                    const int ci = dDemoLeftoverViewer::filteredCatalogIndex(fi);
+                    const auto* e = dDemoLeftoverViewer::entry(ci);
+                    if (e == nullptr) {
+                        continue;
+                    }
+                    pane
+                        .add_button({
+                            .text = e->label,
+                            .isSelected =
+                                [ci] {
+                                    return dDemoLeftoverViewer::selectedIndex() == ci;
+                                },
+                        })
+                        .on_pressed([ci] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dDemoLeftoverViewer::setSelectedIndex(ci);
+                        });
+                }
+                if (n > kMaxButtons) {
+                    pane.add_rml(fmt::format(
+                        "<br/>Showing {0}/{1} — narrow the category filter to see the rest.",
+                        kMaxButtons, n));
+                }
+                pane.add_rml(
+                    "<br/>Spawn draws at Link's feet (no AI actor)." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Spawn demo model at feet")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dDemoLeftoverViewer::requestSpawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Load the selected Demo mesh ~1.5 m in front of Link. Status: " +
+                    Rml::String(dDemoLeftoverViewer::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Despawn demo model")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dDemoLeftoverViewer::requestDespawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml("Free viewer model + Demo arc. Status: " +
+                             Rml::String(dDemoLeftoverViewer::status()) +
+                             Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+
+        leftPane.add_section("Cut Actors");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Cut actor",
+                .getValue =
+                    [] {
+                        const auto* e = dCutActorSpawn::entry(dCutActorSpawn::selectedIndex());
+                        return Rml::String(e != nullptr ? e->label : "(none)");
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Cut / stub actors");
+                for (int i = 0; i < dCutActorSpawn::entryCount(); ++i) {
+                    const auto* e = dCutActorSpawn::entry(i);
+                    if (e == nullptr) {
+                        continue;
+                    }
+                    pane
+                        .add_button({
+                            .text = e->label,
+                            .isSelected =
+                                [i] { return dCutActorSpawn::selectedIndex() == i; },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dCutActorSpawn::setSelectedIndex(i);
+                        });
+                }
+                const auto* cur = dCutActorSpawn::entry(dCutActorSpawn::selectedIndex());
+                pane.add_rml(
+                    Rml::String("<br/>") +
+                    (cur != nullptr ? cur->note : "") +
+                    "<br/><br/>Real enemies create live procs. "
+                    "<b>STUB</b> entries (Makar/Medli/…) are roster shells — often invisible." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Spawn cut actor at feet")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dCutActorSpawn::requestSpawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "fopAcM_create at Link's feet (same path as Actor Spawner). "
+                    "Tracked for despawn: " +
+                    Rml::String(fmt::format("{}", dCutActorSpawn::trackedCount())) +
+                    ". Status: " + Rml::String(dCutActorSpawn::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Despawn cut actors")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dCutActorSpawn::requestDespawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Delete every cut actor this tool still tracks (up to 32). "
+                    "Safe if they already died or left the room. Status: " +
+                    Rml::String(dCutActorSpawn::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+
         // Wind Waker Item Viewer — get-item toggle + SC color tuning + item dropdown + replay.
         // The held/worn skin selector lives in its own "Wind Waker Skins" section below.
         leftPane.add_section("Wind Waker Item Viewer");

@@ -4,6 +4,8 @@
 #include "m_Do/m_Do_audio.h"
 #include "ui.hpp"
 
+#include <algorithm>
+
 namespace dusk::ui {
 namespace {
 
@@ -65,6 +67,53 @@ Pane::Pane(Rml::Element* parent, Type type) : FluentComponent(createRoot(parent)
             i += direction;
         }
     });
+
+    if (type == Type::Uncontrolled) {
+        // Wheel + pad scroll: detail panes are mostly static text/images with few
+        // focusables, so Up/Down would otherwise dead-end (Window eats Down) or jump
+        // to the tab bar without moving the scroll offset.
+        listen(Rml::EventId::Mousescroll, [this](Rml::Event& event) {
+            const float delta_y = event.GetParameter<float>("delta_y", 0.0f);
+            if (delta_y != 0.0f) {
+                scroll_by(-delta_y * 32.0f);
+                event.StopPropagation();
+            }
+        }, true);
+
+        listen(Rml::EventId::Keydown, [this](Rml::Event& event) {
+            const auto cmd = map_nav_event(event);
+            if (cmd != NavCommand::Up && cmd != NavCommand::Down) {
+                return;
+            }
+            auto* target = event.GetTargetElement();
+            if (!contains(target)) {
+                return;
+            }
+
+            const int direction = cmd == NavCommand::Down ? 1 : -1;
+            int focusedChild = -1;
+            for (size_t i = 0; i < mChildren.size(); ++i) {
+                if (mChildren[i]->contains(target)) {
+                    focusedChild = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            int i = focusedChild + direction;
+            while (i >= 0 && i < static_cast<int>(mChildren.size())) {
+                if (mChildren[i]->focus()) {
+                    mDoAud_seStartMenu(kSoundItemFocus);
+                    event.StopPropagation();
+                    return;
+                }
+                i += direction;
+            }
+
+            scroll_by(static_cast<float>(direction) * 48.0f);
+            mDoAud_seStartMenu(kSoundItemFocus);
+            event.StopPropagation();
+        }, true);
+    }
 
     if (type == Type::Controlled) {
         // For controlled panes, handle SelectButton Submit events for item selection
@@ -195,9 +244,24 @@ void Pane::finalize() {
     append(mRoot, "spacer");
 }
 
+void Pane::reset_scroll() {
+    if (mRoot != nullptr) {
+        mRoot->SetScrollTop(0.0f);
+    }
+}
+
+void Pane::scroll_by(float delta_pixels) {
+    if (mRoot == nullptr || delta_pixels == 0.0f) {
+        return;
+    }
+    const float next = std::max(0.0f, mRoot->GetScrollTop() + delta_pixels);
+    mRoot->SetScrollTop(next);
+}
+
 void Pane::clear() {
     clear_children();
     finalized = false;
+    reset_scroll();
 }
 
 }  // namespace dusk::ui

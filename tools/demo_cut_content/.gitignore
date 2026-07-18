@@ -1,0 +1,3 @@
+# Large binary extracts and staged packs — regenerate with the scripts.
+out/extract/
+out/packs/

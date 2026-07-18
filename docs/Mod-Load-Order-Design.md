@@ -526,16 +526,17 @@ buffer.)
 
 Custom Models now has its own editor tab ("Mods", like the level editor's Stage tab):
 
-- **Left pane — Load Order (top wins):** one position-bound row per mod
-  (`{n}. {name} - ON/OFF [badges]`), per-frame labels via `order_view`.
+- **Left pane — Load Order (top wins):** one position-bound row per mod **or
+  collapsed collection** (variants on the right — §18). Per-frame labels via
+  `order_view` / `group_keys_in_priority_order`.
   **Grab-and-place reorder:** A/click grabs the focused mod (highlight + `> <`
   markers), Up/Down moves it a slot per press (the pane's natural focus move follows
   the mod because rows are position-bound), A places it; clicking a DIFFERENT row while
   holding drops the mod at that row (`move_folder_to`, new API — arbitrary slot in one
   rescan). Edge presses while grabbed are consumed so the grab can't escape the list.
-- **Right pane — per-mod panel:** Enabled toggle button + conflict/core/variant info.
-  This is the future home of modder-supplied descriptions (readme) + logos, per the
-  planned collection sub-pages.
+- **Right pane — per-mod panel:** Enabled toggle (plain mods) or **Variants** picker
+  (collections). modinfo screenshot/description + conflict/core info. See **§18**
+  (collection subgroups + right-pane scroll, 2026-07-17).
 - "Allow Core Override" (D4) moved here under **Options**.
 - The old ALBW-tab section (summary button + toggle rows + `^ swap v`) is gone.
 
@@ -623,7 +624,104 @@ which maps onto our collection sub-pages).
 
 ---
 
-## 18. Code mods — research complete (2026-07-11)
+## 18. Collection UI subgroups + Mods right-pane scroll (2026-07-17)
+
+Implements the long-planned **collection sub-pages** (§14 “planned collection
+sub-pages”, §16 `AddonFor`/`NameAsBundle` reserved keys): collections no longer
+explode into N left-pane load-order rows; variants are picked on the right. Also
+fixes **Uncontrolled pane scroll** (wheel + pad) for tall mod panels.
+
+**Design constraint (unchanged on disk):** `game.customModelsOrder` still stores
+every variant as `Collection/Variant` (see §13). Scan, conflict resolution, and
+`list_folders()` semantics are unchanged — only the **Mods window presentation**
+and **group-aware reorder** helpers were added.
+
+### Mods window UX (after this change)
+
+| Pane | Plain mod | Collection (`Coll/Var` on disk) |
+|------|-----------|-----------------------------------|
+| **Left** | One load-order row | **One** row: `HD Tunics (17 variants) — ON — Kokiri Green` |
+| **Right** | **Enabled** toggle + modinfo/conflicts | **Variants** list (one button per variant; pick = enable that variant, disable siblings) + shared modinfo/conflicts |
+| **Reorder** | Grab-and-place one row | Grab-and-place moves **all** variant entries as one block |
+
+Left rows remain **position-bound** (row *i* shows whichever group is at priority
+slot *i* via `group_keys_in_priority_order()` + `order_view()` each frame).
+
+### New public API — `include/dusk/custom_assets.hpp`
+
+| Symbol | Lines (approx.) | Role |
+|--------|-----------------|------|
+| `mod_group_key(folder)` | **122** | `"Coll/Var"` → `"Coll"`; plain mod → folder name |
+| `mod_is_collection_variant(folder)` | **125** | True when path contains `/` |
+| `select_collection_variant(variant_folder)` | **129** | Enable one variant; disable siblings; `scan()` + `install_overlays()` |
+| `move_mod_group(group_key, delta, apply)` | **133** | Move group one visible slot (`apply=false` defers rescan) |
+| `move_mod_group_to(group_key, slot, apply)` | **136** | Grab-and-place at visible group slot |
+
+Decl block: **lines 115–136** in `include/dusk/custom_assets.hpp`.
+
+### Implementation — `src/dusk/custom_assets.cpp`
+
+| Block | Lines (approx.) | Notes |
+|-------|-----------------|-------|
+| `mod_group_key` | **1108–1115** | |
+| `mod_is_collection_variant` | **1117–1119** | |
+| `order_as_group_blocks` (static) | **1121–1138** | Partition order list into contiguous group blocks (first-seen key order) |
+| `flatten_group_blocks` (static) | **1140–1147** | |
+| `group_block_on_disk` (static) | **1149–1158** | |
+| `find_group_block_index` (static) | **1160–1171** | |
+| `select_collection_variant` | **1173–1197** | |
+| `move_mod_group` | **1199–1243** | Swaps visible group blocks |
+| `move_mod_group_to` | **1245–1304** | Mirrors `move_folder_to` logic on group blocks |
+| Non-PC stubs | **~2390–2395** (search `mod_group_key`) | No-op returns for `!TARGET_PC` |
+
+**Side effect:** reordering a collection may **normalize** scattered variant entries
+into one contiguous block in the persisted order (same relative order within the
+group). Resolver output is equivalent; only list layout may change.
+
+### Mods UI — `src/dusk/ui/mods.cpp`
+
+| Block | Lines (approx.) | Notes |
+|-------|-----------------|-------|
+| `ModUiGroup` + `build_ui_groups` | **49–72** | Build member lists from `list_folders()` snapshot at window open |
+| `ModUiGroupMap` + `build_ui_group_map` | **74–82** | |
+| `group_keys_in_priority_order` | **84–94** | Per-frame slot order from `order_view()` |
+| `group_at_slot` | **96–107** | Map row index → group for labels + right panel |
+| `group_row_title` / `group_any_enabled` / `group_active_variant_name` / `group_conflicts` | **109–155** | Row label + conflict aggregation |
+| `group_panel_folder` | **157–167** | Enabled variant for modinfo, else first member |
+| `populate_mod_detail_panel` | **285–377** | Plain: Enabled toggle. Collection: variant buttons → `select_collection_variant` |
+| Left-pane loop (group rows, grab uses `move_mod_group*`) | **409–507** | Drop uses **`keys[s_grabbedSlot]`** (grabbed group), not destination row key |
+
+Header comment block: **lines 1–18** (documents collapsed collections + right pane).
+
+### Right-pane scroll — `src/dusk/ui/pane.{hpp,cpp}`
+
+| Symbol / behavior | Lines (approx.) | Notes |
+|-------------------|-----------------|-------|
+| `Pane::reset_scroll()` | **pane.hpp 37**, **pane.cpp 247–249** | `SetScrollTop(0)` |
+| `Pane::scroll_by(delta)` | **pane.hpp 38**, **pane.cpp 253–257** | |
+| `Pane::clear()` | **pane.cpp 259–263** | Calls `reset_scroll()` after clearing children |
+| Uncontrolled **Mousescroll** | **pane.cpp 75–81** | Wheel scroll; capture phase |
+| Uncontrolled **Up/Down scroll** | **pane.cpp 83–115** | After focusable children exhausted, scroll 48px/step; stops propagation so Window does not swallow Down |
+
+Affects all **Uncontrolled** panes (Mods detail, Editor detail panels, etc.).
+
+### Build note
+
+Agent session introduced a **use-before-declaration** compile error by placing
+`populate_mod_detail_panel` above `screenshot_rml` / `rml_multiline`. Fixed by
+moving `populate_mod_detail_panel` to **after** those helpers (~**285+**). Build
+per `docs/building.md`: `cmake --build --preset windows-msvc-relwithdebinfo`.
+
+### Still to playtest
+
+- Collection with 10+ variants: left list stays short; right variant list scrolls.
+- Grab collection block, move above/below plain mod; conflict badges update.
+- Enable variant A, then B — only B active; textures apply on next load.
+- Plain mod reorder/toggle unchanged.
+
+---
+
+## 19. Code mods — research complete (2026-07-11)
 
 The end-goal research is written up in **[Code-Mods-Research.md](Code-Mods-Research.md)**:
 tiered model (data / script / native), engine seam audit (l_objectName +
@@ -635,7 +733,7 @@ dummy test mods for the build phase. Native plugins: deferred indefinitely.
 
 ---
 
-## 19. Playtest-5 fix — the returned Linkle/Link hybrid (2026-07-11, uncommitted)
+## 20. Playtest-5 fix — the returned Linkle/Link hybrid (2026-07-11, uncommitted)
 
 **Symptom:** Linkle body (Ordon clothes) with vanilla Link hair, NOT healed by
 quick-swaps — a regression of the resident-composite hybrid class that the sumo §5
@@ -676,7 +774,7 @@ sumo-test now is; any future resident-asset consumer must be.
 
 ---
 
-## 20. Playtest-6 fix — parry-overlay static + stuck Linkle icons (2026-07-11, uncommitted)
+## 21. Playtest-6 fix — parry-overlay static + stuck Linkle icons (2026-07-11, uncommitted)
 
 **One underlying issue (as suspected in the report): persistent ALBW consumers caching
 into the swapped menu arcs.** Vanilla consumers re-fetch their archive per menu open,

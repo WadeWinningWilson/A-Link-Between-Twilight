@@ -34,6 +34,8 @@ public:
     Rml::Element* add_rml(const Rml::String& rml);
     void finalize();
     void clear();
+    void reset_scroll();
+    void scroll_by(float delta_pixels);
 
 private:
     Type mType;
