@@ -198,11 +198,26 @@ void dExtNpcMount_forceNextSpawnSrc(const char* src);
 
 // №44/№45: pin proc/src/head for the next Create. Prefer pushPendingSpawn BEFORE
 // fopAcM_create (FIFO — Create may run before an id bind lands). Id bind is a backup.
-void dExtNpcMount_pushPendingSpawn(const char* procName, const char* src, const char* headModel,
+u32 dExtNpcMount_pushPendingSpawn(const char* procName, const char* src, const char* headModel,
                                    const char* headJoint);
 void dExtNpcMount_bindPendingSpawn(fpc_ProcID id, const char* procName, const char* src,
                                    const char* headModel, const char* headJoint);
 // Take+erase: id map first, else FIFO front. NULL outs ignored.
+// №130: if this spawn's entry is still queued after create, move it OUT of the
+// order-sensitive FIFO and re-key it to the owning actor id. Kills the whole
+// leak/misassignment class: a late or forgetful actor can neither be served
+// another's entry nor cause another to be served its own. Safe for deferred
+// creates — the entry survives, it just stops being order-dependent.
+bool dExtNpcMount_reapPendingSpawn(u32 seq, fpc_ProcID id);
+// №131: is the №130 guard active? Overridable mod-side without a rebuild via
+// population/engine_overrides.ini (`pending_spawn_guard=0` ⇒ vanilla FIFO order).
+bool dExtNpcMount_pendingGuardEnabled();
+// №131: drop id-keyed entries whose actor is gone. Process ids are recycled, and
+// vanilla re-spawns the cast on every story/layer change, so this must run each
+// population pass or a recycled id can inherit a dead row's head.
+void dExtNpcMount_sweepPendingById();
+// №133: record a pass boundary on the guard's own clock (no vanilla state read).
+void dExtNpcMount_markPendingPass();
 bool dExtNpcMount_takePendingSpawn(fpc_ProcID id, char* procOut, u32 procBytes, char* srcOut,
                                    u32 srcBytes, char* headOut, u32 headBytes, char* jointOut,
                                    u32 jointBytes);

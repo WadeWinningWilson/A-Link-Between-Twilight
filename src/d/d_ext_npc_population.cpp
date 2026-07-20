@@ -444,6 +444,12 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
     int spawned = 0;
     int skipped = 0;
     std::unordered_set<std::string> uniqueNames;
+    // №131: clear entries owned by actors that no longer exist before spawning.
+    // Vanilla drives story variation by re-running this pass per layer
+    // (dComIfG_play_c::getLayerNo), so ids recycle constantly and a stale entry
+    // would eventually be inherited by an unrelated actor.
+    dExtNpcMount_sweepPendingById();
+    dExtNpcMount_markPendingPass();
     layer_class* savedLayer = fpcLy_CurrentLayer();
     base_process_class* playScene = fpcM_SearchByName(fpcNm_PLAY_SCENE_e);
     if (playScene != NULL) {
@@ -644,10 +650,16 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
         std::snprintf(src, sizeof(src), "census:%s@(%.0f,%.0f,%.0f)", name.c_str(), wx, wy, wz);
         // №45: FIFO push before create (id-bind after was too late when Create ran sync).
         // Head pin still passed for P1a/P1b same-arg collisions; registry pull covers the rest.
-        dExtNpcMount_pushPendingSpawn(me.proc, src, headModel[0] ? headModel : NULL,
-                                      me.headJoint[0] ? me.headJoint : "head");
+        const u32 pendingSeq =
+            dExtNpcMount_pushPendingSpawn(me.proc, src, headModel[0] ? headModel : NULL,
+                                          me.headJoint[0] ? me.headJoint : "head");
         const fpc_ProcID id =
             fopAcM_create(actorId, params, &pos, roomNo, &angle, &scale, -1);
+        // №130: reclaim our own entry if the actor did not consume it. This makes
+        // the whole leak class impossible instead of relying on every actor
+        // author remembering — the failure mode (a stale entry served to the NEXT
+        // actor) is silent, and its blast radius is the entire remaining cast.
+        dExtNpcMount_reapPendingSpawn(pendingSeq, id);
         if (id != fpcM_ERROR_PROCESS_ID_e) {
             ++spawned;
             if (me.unique) {
@@ -661,9 +673,9 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
                     pos.x, pos.y, pos.z);
             }
         } else {
-            char discard[8];
-            dExtNpcMount_takePendingSpawn(fpcM_ERROR_PROCESS_ID_e, discard, sizeof(discard), NULL,
-                                          0, NULL, 0, NULL, 0);
+            // №130: the reap above already dropped it — and by TOKEN, not by
+            // position. The old front-pop could discard a DIFFERENT actor's
+            // entry when anything else was queued.
             ++skipped;
         }
     }

@@ -2975,7 +2975,14 @@ struct PendingSpawn {
     char src[96]{};
     char headModel[64]{};
     char headJoint[32]{};
+    // №130: identity token. The spawner reclaims its own entry by this value
+    // after create, so an actor that forgets to consume cannot leave a stale
+    // entry for the NEXT actor to pull. Order-based reaping was not safe —
+    // popping the front can discard somebody else's entry.
+    u32 seq{};
 };
+static u32 s_pendingSeq = 0;
+static std::deque<u32> s_passWatermark;
 static std::unordered_map<u32, PendingSpawn> s_pendingById;
 static std::deque<PendingSpawn> s_pendingFifo;
 
@@ -2995,11 +3002,158 @@ static void fillPending(PendingSpawn* p, const char* procName, const char* src,
     }
 }
 
-void dExtNpcMount_pushPendingSpawn(const char* procName, const char* src, const char* headModel,
-                                   const char* headJoint) {
+u32 dExtNpcMount_pushPendingSpawn(const char* procName, const char* src, const char* headModel,
+                                  const char* headJoint) {
     PendingSpawn p{};
     fillPending(&p, procName, src, headModel, headJoint);
+    p.seq = ++s_pendingSeq;
     s_pendingFifo.push_back(p);
+    return p.seq;
+}
+
+// №130 STRUCTURAL GUARD. Every census spawn pushes an entry that the created
+// actor is supposed to consume in its create. Historically that was a rule each
+// actor author had to remember, and forgetting it was silent and catastrophic:
+// the stale entry is pulled by the NEXT actor, so every later actor wears an
+// earlier row's head. It has bitten twice (№64 orphan-entry, №129 ported
+// actors) and the blast radius scales with cast size — one leak on a
+// fully-populated Great Sea would shift hundreds of actors.
+//
+// So the queue is no longer trust-based. The spawner reclaims its own entry by
+// token after create; anything unconsumed is dropped THERE, before it can be
+// mis-served. Actors that consume correctly are unaffected (their entry is
+// already gone). Actors that forget now degrade to "no head pinned" instead of
+// corrupting the whole cast — a local, visible defect instead of a global,
+// invisible one.
+// №131 OVERRIDE. If the №130 guard itself turns out to be wrong, it must be
+// switchable WITHOUT a rebuild — an escape hatch that needs a compile is not an
+// escape hatch. Read mod-side: population/engine_overrides.ini, key
+// `pending_spawn_guard` (default 1 = guard on; 0 = vanilla FIFO order only).
+static int s_pendingGuard = -1;  // -1 = not yet read
+bool dExtNpcMount_pendingGuardEnabled() {
+    if (s_pendingGuard >= 0) {
+        return s_pendingGuard != 0;
+    }
+    s_pendingGuard = 1;
+    const fs::path root = fs::path(dusk::ConfigPath) / "model_replacements";
+    std::error_code ec;
+    if (fs::is_directory(root, ec)) {
+        for (const auto& entry : fs::directory_iterator(root, ec)) {
+            if (!entry.is_directory()) {
+                continue;
+            }
+            std::ifstream in(entry.path() / "population" / "engine_overrides.ini");
+            if (!in) {
+                continue;
+            }
+            std::string line;
+            while (std::getline(in, line)) {
+                if (line.empty() || line[0] == '#' || line[0] == ';') {
+                    continue;
+                }
+                const size_t eq = line.find('=');
+                if (eq == std::string::npos) {
+                    continue;
+                }
+                std::string key = line.substr(0, eq);
+                std::string val = line.substr(eq + 1);
+                while (!key.empty() && (key.back() == ' ' || key.back() == 0x0D)) key.pop_back();
+                while (!val.empty() && (val.back() == ' ' || val.back() == 0x0D)) val.pop_back();
+                if (key == "pending_spawn_guard" && (val == "0" || val == "off" || val == "false")) {
+                    s_pendingGuard = 0;
+                }
+            }
+        }
+    }
+    if (s_pendingGuard == 0) {
+        DuskLog.warn(
+            "[ExtNpcMount] №131 OVERRIDE ACTIVE — pending-spawn guard DISABLED via "
+            "population/engine_overrides.ini. Head/identity binding falls back to vanilla "
+            "FIFO ORDER, which is order-dependent: any actor that does not consume its entry "
+            "will shift every actor created after it.");
+        DuskLog.warn(
+            "[ExtNpcMount] №131 BEFORE RELYING ON THIS BUILD: (1) snapshot the current engine "
+            "+ mod-folder state so it can be restored, (2) re-verify actor identities AND "
+            "placements on every affected space and story layer — a mis-bind is silent and "
+            "keeps correct dialogue, so it will NOT announce itself.");
+    }
+    return s_pendingGuard != 0;
+}
+
+// №131: entries are keyed by actor id, and process ids are RECYCLED. An entry
+// whose actor died without consuming would otherwise sit here until some later
+// actor is handed the same id and pulls a dead row's head — the same corruption
+// by a slower route, and story/layer changes (vanilla re-spawns the cast per
+// dComIfG_play_c::getLayerNo) make repeats routine. Sweep before every pass.
+void dExtNpcMount_sweepPendingById() {
+    // №133: this used to ask vanilla whether each actor was still alive
+    // (fopAcM_SearchByID / fpcM_IsCreating). That was the wrong instinct: it put
+    // our bookkeeping inside vanilla's actor lifecycle, where it kept colliding
+    // with meanings that are vanilla's to define — "not found" also means "still
+    // creating", culling is a status bit and not a death, room unload is a real
+    // death, and story layers re-spawn the whole cast. Every one of those had to
+    // be re-taught to the guard, and each re-teaching was a chance to get
+    // vanilla's semantics wrong.
+    //
+    // The guard has no business knowing any of that. It only needs to bound its
+    // OWN side table, so it does that on its OWN clock: an entry that has
+    // survived two full population passes was never going to be claimed. No
+    // vanilla state is inspected, so vanilla's lifecycle — cull, drop, recall,
+    // layer change, save/restore — proceeds exactly as it always did and simply
+    // cannot be fought by this code.
+    if (s_passWatermark.size() < 2) {
+        return;
+    }
+    const u32 cutoff = s_passWatermark.front();
+    for (auto it = s_pendingById.begin(); it != s_pendingById.end();) {
+        it = (it->second.seq != 0 && it->second.seq < cutoff) ? s_pendingById.erase(it)
+                                                             : std::next(it);
+    }
+}
+
+// Ring of the last two pass-start token values. Purely our own clock.
+void dExtNpcMount_markPendingPass() {
+    s_passWatermark.push_back(s_pendingSeq);
+    while (s_passWatermark.size() > 2) {
+        s_passWatermark.pop_front();
+    }
+}
+
+bool dExtNpcMount_reapPendingSpawn(u32 seq, fpc_ProcID id) {
+    if (!dExtNpcMount_pendingGuardEnabled()) {
+        return false;  // №131: vanilla FIFO order, by explicit override
+    }
+    if (seq == 0) {
+        return false;
+    }
+    for (auto it = s_pendingFifo.begin(); it != s_pendingFifo.end(); ++it) {
+        if (it->seq != seq) {
+            continue;
+        }
+        // Still queued, so this actor's create has NOT consumed it yet.
+        //
+        // It matters enormously which way we resolve that. fopAcM_create may run
+        // create synchronously OR defer it (that is why the push happens first —
+        // see №45). Simply erasing here would be correct for a sync actor that
+        // forgot, and CATASTROPHIC for a phase-based actor that was going to
+        // consume on a later frame: we would delete the entry out from under it.
+        //
+        // So don't erase — RE-KEY. Move it out of the order-sensitive queue and
+        // into the id map, where the owning actor can still claim it by its own
+        // id whenever its create actually runs. Order-dependence, which is the
+        // root of this entire bug class, disappears: a late or forgetful actor
+        // can no longer be served somebody else's entry, and can no longer
+        // cause somebody else to be served its own.
+        PendingSpawn p = *it;
+        char procName[32];
+        snprintf(procName, sizeof(procName), "%s", p.proc);
+        s_pendingFifo.erase(it);
+        if (id != fpcM_ERROR_PROCESS_ID_e) {
+            s_pendingById[static_cast<u32>(id)] = p;
+        }
+        return true;
+    }
+    return false;
 }
 
 void dExtNpcMount_bindPendingSpawn(fpc_ProcID id, const char* procName, const char* src,
@@ -3193,14 +3347,12 @@ static fpc_ProcID createBgMountAtHost(const dExtNpcManifest& man, const char* sr
         // SearchByName can miss mid-phase. Stay on current layer (do not defer).
     }
     const u32 params = man.socketArg >= 0 ? (u32)man.socketArg : 0;
-    dExtNpcMount_pushPendingSpawn(man.proc, spawnSrc, NULL, NULL);
+    const u32 pendingSeq = dExtNpcMount_pushPendingSpawn(man.proc, spawnSrc, NULL, NULL);
     const fpc_ProcID id =
         fopAcM_create(actorId, params, &man.hostPos, roomNo, &angle, &scale, -1);
     fpcLy_SetCurrentLayer(savedLayer);
+    dExtNpcMount_reapPendingSpawn(pendingSeq, id);  // №130
     if (id == fpcM_ERROR_PROCESS_ID_e) {
-        char discard[8];
-        dExtNpcMount_takePendingSpawn(fpcM_ERROR_PROCESS_ID_e, discard, sizeof(discard), NULL, 0,
-                                      NULL, 0, NULL, 0);
         std::snprintf(s_bgCreateFailReason, sizeof(s_bgCreateFailReason),
                       "fopAcM_create ERROR actorId=%d room=%d layer=-1 params=%08x", (int)actorId,
                       roomNo, params);
