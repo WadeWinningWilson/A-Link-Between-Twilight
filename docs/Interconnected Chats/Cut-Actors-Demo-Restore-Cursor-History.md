@@ -1475,6 +1475,381 @@ Also material->change() before MAJI (SharedDL amb patch). Shadow kept.
 Re-test Ivan NPC_MK daylight; if still black next suspect is SharedDL bake / non-MAJI path.
 ```
 
+**Cursor — boots/leaf litMask absorb (2026-07-18, user ask):**
+
+Honest: I1-REVISED was leftover-viewer tevStr, **not** the WW boots/leaf recipe. History
+№12c already fixed data-side (`adapt_bdl_arcs.normalize_litmask` → 0x01; AppData Mk.arc
+verified `J3D2bmd3` + enabled masks `[0,1]`). Mount had been forcing litMask `0xFF` on
+zero — that fights the boots recipe. **Now clamp ENABLED channels to `0x01` (Kmdl_13 /
+boots-proven); leave unlit eyes alone.** Draw path still uses Link tevStr + MAJI.
+
+#### Paste for History (2026-07-18 — boots litMask on mount)
+
+```
+Cursor absorb №12c boots/leaf litMask (user check).
+
+Prior I1-REVISED = leftover viewer Link->tevStr (not boots). History already regenerated
+arcs with normalize_litmask→0x01. Mount applyActorLightMask now matches boots: enabled
+channels → 0x01 (was wrongly 0xFF). Unlit untouched. Retest Ivan.
+```
+
+**Cursor — I1 boots/leaf DRAW path (2026-07-18, after №13b USER tip):**
+
+Mount draw now matches `d_a_alink` WW boots/leaf/bow cel branch (Blender-WW-Items.md:41 —
+**no MAJI**):
+`settingTevStruct(0)` → `dWwItemmdl_setWwBowActorAmbient` →
+`dWwItemmdl_applyBowMaterialAmbientOnly` → amb forced onto every material → `entryDL`.
+Link-tevStr/MAJI path removed. Flattened-ramp arcs stay for max visibility.
+
+#### Paste for History (2026-07-18 — boots ambient draw)
+
+```
+Cursor shipped №13b: mount draw = WW boots/leaf recipe (no MAJI).
+
+settingTevStruct(0) → setWwBowActorAmbient → applyBowMaterialAmbientOnly → entryDL
+(+ amb on every material; name==NULL covered). Same helpers as iron boots / deku leaf.
+Retest Ivan — expect warm lit body. Then History can A/B authentic toon ramps.
+```
+
+**Cursor — №14 bloom lever (2026-07-18): mount ambient tunable**
+
+Mount no longer uses bow `kWwBowFixedAmb*` (105/78/48). Manifest `amb=RRGGBB` (default
+`5a5a5a` / 90,90,90 neutral) + live `WREG_F(30/31/32)` R/G/B offsets. Draw still
+boots-path (no MAJI). History authentic-ramp regen is data-only retest.
+
+#### Paste for History (2026-07-18 — amb tune)
+
+```
+Cursor №14 bloom lever: mount amb owned by NPC, not bow tint.
+
+amb=5a5a5a in mk.ini (90/90/90). Live: WREG_F(30)=R WREG_F(31)=G WREG_F(32)=B offsets.
+settingTevStruct(0) → write amb to all mats → entryDL. No MAJI / no setWwBowActorAmbient.
+Dial bloom down with negative WREG or darker amb= in ini. Slice II after user OK.
+```
+
+#### Paste for History (2026-07-18 — Slice II ship)
+
+```
+Cursor shipped Slice II GO (attachment support + manifests; `cmd /c build_run.bat` passed).
+
+Mount parser now reads top-level attach_model[/2] + attach_joint[/2] and [subtype.N] arg,
+idle, attach_model, attach_joint, display_name. P2 params 0/1/2 select P2a/P2b/P2c,
+override label/idle, and bind the matching head BDL to joint "head". Attachments use the
+same BDL resolve/light-mask/ambient draw path as the body; after modelCalc they follow the
+resolved joint matrix. Missing model/joint is warn-and-skip, never a create crash; joint
+failures log available body names (important for Medli's requested hand_l harp bind).
+
+NPC_HENNA0 is now a guarded mount socket: params 0→NPC_MD (Md.arc/Medli + optional harp),
+1→NPC_GND (Gnd.arc/Ganondorf). Cut Actors exposes all three pirates plus Medli/Ganondorf,
+and only unparks HENNA0 when either matching manifest is loaded. Exact p2/md/gnd manifests
+were written to the repo skeleton and live AppData mod; no WW archive bytes were added.
+```
+
+#### Paste for History (2026-07-18 — №17+№18 fix)
+
+```
+Cursor shipped №17 wiring + Medli arms + №18 lifetime (`cmd /c build_run.bat` passed).
+
+ROOT CAUSE №17 Ganon→Medli: Cut Actors Entry is (label, actorId, angleX, params, …).
+Slice II put subtype 1/2 into angleX and left params=0 — HENNA0 create reads
+GetParam()&0xFF so Ganon always selected NPC_MD. Same bug hit P2b/P2c. Fixed entries
+to put 0/1/2 in params; HENNA0 logs params→proc at create.
+
+Medli hands: not a prop attach — mdarm.bdl is a second skinned piece with
+mdarm_wait01.bck. Mount gained companion_model/companion_idle (synced base TRMtx +
+own McaMorf). Harp joint is WW `handL` (was wrong `hand_l`); joint search prefers
+companion table so harp binds to the arm model.
+
+№18: killed s_skipBtpArc create-time global — shouldSkipBtp is now provider lookup by
+arc. acquireMountedModel GameHeap-pins load/finish and session-caches by "arc/model";
+actors keep own J3DModel/McaMorf over shared ModelData; never write actor-heap pointers
+into dRes slots. Multi-spawn should no longer cross-dangle.
+```
+
+**History — OUTSET ISLAND FEASIBILITY (user-ordered research, 2026-07-18): all three
+unknowns GREEN.**
+
+1. **Assets located + tiny**: `Ex WW/res/Stage/sea/Room44.arc` (729KB total): island
+   `model.bdl` 400KB + water `model1.bdl` 111KB (+`model1.btk` scroll anim — shared
+   format, plays in TP) + `model3.bdl` 3KB + **`room.dzb` collision 124KB** + `room.dzr`
+   placements + minimap bits. (`LOD44.arc` distant-LOD optional.)
+2. **Collision compatibility: PROVEN BY NINTENDO.** TP ships WW's byte-identical
+   `kkiba_00.dzb` in `Obj_Bef.arc` AND retail code loads it as collision:
+   `d_a_obj_brakeeff.cpp:176` — `mpDBgW->Set((cBgD_t*)getObjectRes("Obj_Bef", 13))`,
+   index 13 = `DZB_KKIBA_00` (Obj_Bef.h:0xD). **A TP actor registering a WW-authored
+   dzb through dBgW is shipped retail behavior — the exact diorama mechanism.** Caveat
+   (minor): tri attribute semantics (sand/water sound codes) may map differently —
+   cosmetic, not structural.
+3. **Stage materials = the EASY lighting path**: Outset's materials are mostly UNLIT +
+   vertex-colored (chan pool: 1 lit / 2-3 unlit, vtx sources; tevRegs already sane —
+   whites + real colors incl. the sea-blue (70,90,150); no 128-gray placeholders
+   sampled). The entire Ivan cel saga does not apply to the island — it renders on the
+   simplest path. Water = model1 + btk texture scroll; skybox optional for diorama
+   (TP host-stage sky works; WW vrbox adaptation later for the full-stage road).
+4. **Scale precondition already banked**: Ivan correct at scale 1.0 ⇒ WW and TP agree
+   on world units.
+**Diorama road engineering remaining (Cursor, post-Slice-III):** mount "BG mode" —
+manifest declares model+dzb; actor draws (BG tev type) + `dBgW::Set` + placement mtx.
+Full-stage road (stage receiver: tables/kankyo/exits) remains the later tier.
+
+**PHASE O — OUTSET ISLAND WARPABLE (user-ordered 2026-07-18; History data-prep DONE,
+Cursor implements; rides the GameHeap cache + Slice III):**
+
+**History-shipped (data, in mod folder):**
+- `arcs/Outset.arc` — adapted Room44 (island `model.bdl` 396KB + water `model1.bdl`
+  + `model1.btk` scroll + `model3.bdl` + `room.dzb` 4,221 tris + `room.dzr`).
+- `npc/outset.ini` — bg-mode manifest (spec-by-example): `type=bg`, models,
+  `collision=room.dzb`, **`anchor=-200000,0,315000`** (the island is authored at its
+  GREAT SEA coordinates — bbox X[-250k,-150k] Z[250k,350k]; the mount translates by
+  `host_pos - anchor`), `spawn_rel=-1651,183,-3011` (village flat, dzb-verified;
+  beach alternative `4199,77,5117`).
+
+**Cursor implementation points:**
+1. **Mount `type=bg` mode**: no morf/idle — static J3DModels (×3) + btk on model2;
+   draw via BG tev type (materials are mostly unlit/vertex-colored — no cel work);
+   translate-all matrix = `host_pos - anchor`.
+2. **Collision**: `mpDBgW->Set((cBgD_t*)getObjectRes(arc, room.dzb), …)` + same
+   translate mtx — the EXACT shipped-retail mechanism (d_a_obj_brakeeff.cpp:176 loads
+   WW's byte-identical kkiba dzb). RegistN before first Move. ~4.2k tris = modest.
+3. **Warp menu entry** (`src/dusk/ui/warp.cpp`): "Outset Island (WW)" → host stage +
+   `host_pos + spawn_rel` as Link's spawn. Gate on `dExtNpcMount_hasPayload` so the
+   entry only appears with the mod enabled.
+4. **Host stage suggestion**: an open-sky flat expanse far from native geometry —
+   Lake Hylia region (island offshore in TP water = free ocean!) or Gerudo flats;
+   pick `host_pos` in unused airspace (e.g. high +Y offset island) — Cursor's call
+   with user. Sky/fog come from the host stage for the diorama tier.
+5. Acceptance: warp lands Link on Outset village flat, collision walkable end-to-end,
+   water plane animating, no despawn crash on leaving (BG mount despawns with stage).
+
+**SLICE III DETAIL — full interaction + collision for the crew (History spec, 2026-07-18;
+user confirms all five spawn correctly incl. multi-spawn):**
+
+**L2 — solid + targetable (three components, manifest fields already staged):**
+1. **Collision cylinder**: `dCcD_Cyl` from `cyl_radius`/`cyl_height` (already in manifests),
+   registered per-frame in execute via the mount's CcStts — gives Link bump/push. (NPCs don't
+   need dzb-solidity; ground-snap + cylinder is the TP NPC standard.)
+2. **Attention**: `attention_info.flags |= TALK` + distances table → Z-target lock + the (A)
+   Talk prompt appearing at range. `display_name` feeds the lock-on label where supported.
+3. **Head-tracking polish**: `neck_joint` already in manifests; per-frame look-at within a
+   yaw/pitch clamp, ease in/out (TP NPC standard behavior).
+
+**L3 — dialogue (reuse the ALBW native-dialogue recipe — two-screen BLO layout, font sizing,
+input cooldown — from the fork's existing NPC work), text from `dialogue/*.txt` per NPC.**
+
+**L3 CRASH GUARD (user-mandated, design-in-from-start — fail CLOSED, never softlock):**
+- **G1 pre-open validation**: at talk-trigger, verify (a) dialogue file present + parsed,
+  (b) message-window archive resident (the known archive-clearance crash trap from the ALBW
+  dialogue work), (c) no other dialogue open. ANY failure → log `[ExtNpcMount] talk refused:
+  <reason>` + play the NPC's talk anim WITHOUT opening a box — never a half-open state.
+- **G2 softlock escape**: while a mount dialogue is open — B closes unconditionally; hard
+  timeout (~30s no-input advance) force-closes and returns control; on close always restore
+  player state even if the box died mid-open (RAII-style cleanup, not sequential teardown).
+- **G3 re-entry guard**: one mount dialogue globally; talk re-trigger during close-cooldown
+  ignored (input cooldown from the recipe).
+- **G4 despawn safety**: despawn-while-talking (Cut Actors despawn or room change) →
+  force-close the box FIRST, then despawn (the wolf-latch lesson applied to dialogue).
+Acceptance: talk works on all five; deleting a dialogue file yields refusal-not-crash;
+B always exits; despawn mid-talk is clean.
+
+**PHASE M — THE REHOMING (History plan, 2026-07-18; user-ordered): purge all WW-specific
+content from vanilla code into the mod folders. TP stays purely receptive. Executes AFTER
+Phase O (Outset) is confirmed. Cursor layers implementation detail onto this plan, then
+dual sign-off + user OK.**
+
+**M0 — CURSOR DISCLOSURE LEDGER (first step, run this immediately after Outset ships):**
+Cursor enumerates EVERYTHING they know to be WW-specific that lives in game source — from
+the Outset work or any earlier slice. Known from History's audit (starting checklist, not
+exhaustive — Cursor extends):
+- `d_cut_actor_spawn.cpp:56-70` — hardcoded entry labels (Ivan/Pirate A-C/Medli/Ganondorf
+  + arc names in strings).
+- `custom_assets.cpp:110-135` — **embedded manifest templates + dialogue text** (the big
+  leak: character identities and words in the binary as folder-seeding strings).
+- Suspected (Cursor confirms where these live — code defaults vs manifest): Medli's
+  `companion_model=mdarm` + `mdarm_wait01.bck` pairing, `handL` harp joint preference,
+  pirate-head `attach_joint=head` defaults, `proc=OUTSET` warp wiring + host-stage/anchor
+  constants, any character-named comments that describe BEHAVIOR rather than history.
+- Anything else: greps for `Ivan|Makar|Medli|Ganondorf|pirate|Killer|Windfall|Outset|
+  mdarm|handL|Mk\.arc|P2\.arc|Gnd\.arc` over src/ tell the rest.
+
+**M1 — Classify each ledger item:** {bytes | name/label | words/dialogue | behavior-default},
+current home, target home (which mod-folder file+section), and runtime role
+(seed-only / fallback / live-read). Seed-only items delete cleanly; fallbacks convert to
+G1-style refusal; live-reads mean the schema is missing a field → M2.
+
+**M2 — Schema completion (Cursor designs):** the manifest must be able to express
+everything currently hardcoded: per-subtype display names (P2a/b/c), companion models +
+their idle anims, attachment joint tables/preferences, dialogue section keys, bg-mount
+warp entries (label + host stage + host_pos + spawn_rel), ambient defaults. Rule: if code
+needs a character fact, the manifest says it or the feature refuses.
+
+**M3 — The moves:** delete exe-embedded templates; Cut Actors spawn list + warp menu
+ENUMERATE dynamically from discovered payloads (labels = manifest `display_name`; vanilla
+shows neutral socket entries "payload: none"); character-specific code defaults become
+manifest fields with NEUTRAL code fallbacks.
+
+**M4 — Seeding responsibility moves to the skeleton:** `tools/ww_crew_restoration_skeleton/`
+= the mod's source-of-truth templates (no WW bytes there — config text only); install =
+folder copy (manual or a tools script beside adapt_bdl_arcs.py). The exe NEVER writes mod
+content. (User option, decide at execution: keep skeleton in tools/ vs relocate beside
+companion_mods/ for visual absoluteness.)
+
+**M5 — Verification gates (acceptance):**
+(a) **binary grep gate**: built exe contains ZERO character strings (Ivan, Makar, Medli,
+Ganondorf, Killer, Windfall, pirate-as-character, Outset-as-label);
+(b) **folder-removal boot**: mod absent → neutral socket list, no WW names in any UI, no
+crashes, byte-for-byte receiver-only behavior;
+(c) **folder-present boot**: everything that works today still works identically;
+(d) boundary statement: docs/ and tools/ are not shipped game code — exempt (they hold no
+WW bytes; never-commit rule for arcs stands).
+
+**M6 — THE RECEIVER COVENANT (standing rule going forward):** every future feature —
+starting with the WW Link skin — must pass M5's gates at introduction: labels from
+manifests, zero character knowledge in code, exe-grep clean. Add the grep gate to the
+push-hygiene checklist.
+
+**PHASE GS SKETCH — THE GREAT SEA + SAILING (History deliberation, 2026-07-18; design
+only, sequenced after Phase O + M):**
+- **Key mapping**: WW's sea = 7×7 grid of 100k-unit rooms (Room44 bbox = exactly one
+  cell) ↔ TP's own multi-room field-stage pattern (per-room offsets + proximity
+  streaming). GreatSea = stage-receiver stage: 49 adapted sea rooms anchored by grid
+  math; PC RAM trivializes streaming (~35MB whole-sea); WW `LODxx.arc` silhouettes =
+  horizon vistas (same adapt tool); f32 at 700k proven by WW itself.
+- **Boat = the E_s1 lesson applied**: TP's Iza CANOE is a shipped rideable-watercraft
+  chassis (mount/steer/camera). KoRL = adapted WW ship arc worn by that chassis;
+  sail speed modulated by TP's own `dKyw` wind vector (the rope-bridge wind system).
+  Sea surface v1 = diorama water (proven); wavier custom sea actor later.
+- **Phases**: GS-1 multi-island diorama + LOD horizon → GS-2 GreatSea stage (grid
+  manifest, warp-to-island) → GS-3 boat (KoRL on canoe chassis, docks per manifest)
+  → GS-4 waves/weather/sea-enemies/charts (DuskScript). Receiver-clean throughout.
+
+**PHASE O ACCEPTED (2026-07-18): OUTSET ISLAND TRAVERSED END-TO-END IN TP.** Split-transform
+convention (№22: models cell-local, dzb world-baked) + ti through-fix closed it. The complete
+WW-import formula now covers models, characters, lighting, AND rooms+collision.
+
+**USER DIRECTIVE — SEQUENCE LOCKED:** (1) **PHASE M REHOME NOW** (Cursor M0 ledger incoming;
+M1-M6 per plan; gates: exe-grep clean + folder-removal boot). (2) **PHASE O2 AFTER RE-ENTRY:
+FULL OUTSET POPULATION — all quests, functionalities, actors — ENTIRELY MOD-FOLDER-SIDE**
+under the M2-completed schema.
+
+**History parallel lane (during M): OUTSET POPULATION BLUEPRINT** from the authentic
+`room.dzr` census (DONE, 480 entities, 31 chunk types incl. 15 story layers):
+- **P1 props/foliage** (112 grass, flowers, trees ×21, pots, crates, signs, rocks, 11 bridge
+  segments, 10 palms): per-item decision — WW prop mount vs native TP substitute (TP has
+  grass/pots with behaviors).
+- **P2 ambient critters**: 6 pigs (catchable!), 9 seagulls, 2 crabs, forest keese ×26 +
+  chuchus — crew pipeline + simple wander/flee behaviors via Anim Audition.
+- **P3 residents**: named NPCs (Ls1/Zl1/Ob1/Ko1/Ko2/Ym1/Ym2/Ah/Aj1/Bm1/P1a…) — identities
+  to VERIFY against WW actor maps (no guessing); each gets crew-pipeline manifest + dialogue.
+- **P4 structure/quests**: 10 SCLS exits → house interiors (separate WW stages to adapt),
+  4 doors, tags/switches, item spawns ×14, salvage points, **story-layer mapping (ACT0-b) →
+  quest states** (DuskScript-era scripting; simplified flags first).
+- **SHIP ×2** = KoRL moorings → Phase GS-3 hooks.
+Full blueprint doc: `docs/outset-population-blueprint.md` (History authors during M).
+
+**PHASE M CLOSED (2026-07-18, History gate audit): REHOME CONFIRMED.** Exe grep = 0 across the
+full greplist (incl. dialogue tripwires); bare "Ganondorf" ×18 adjudicated TP-NATIVE (npc_gnd,
+achievements, editor — he's a TP principal; greplist correctly uses "Ganondorf (WW)").
+Embedded seeds gone; SoT skeleton + greplist.txt + install_skeleton.py in tools/; `EXT_BG0`
+neutral proc (A1 applied); user re-entered Outset folder-present. Outstanding (non-blocking):
+M5b folder-absent boot smoke; A2 alignment (state says first-wins; amendment = load-order
+top-wins).
+
+**PHASE O2 — OUTSET ALIVE (user GO): population + the GAME-START QUEST LINE, all folder-side.**
+
+**Generic receiver capabilities needed first (Cursor designs; zero WW knowledge in code):**
+- **R-O2a Mod flag store**: per-mod persistent key-value namespace (save-file-scoped), read/
+  written by dialogue actions and spawn conditions. The quest backbone.
+- **R-O2b Conditional dialogue**: manifest grammar — `[section]` gains `if_flag=` /
+  `unless_flag=` / `set_flag=` / `next=` (sequences); G1 refusal semantics preserved.
+- **R-O2c Grant action**: `action=grant:<tp_item_id>` from dialogue (TP inventory hosts the
+  telescope-as-item? or flag-only first — Cursor proposes).
+- **R-O2d Carryable payloads**: mount flag `carryable=1` hooking TP's carry/throw system
+  (pigs; TP already carries cuccos/pots — same interface).
+- **R-O2e Spawn conditions**: manifest `spawn_if_flag=` / layer-equivalent selection so
+  placements track quest state (mirrors WW's ACT0-b layer encoding from the census).
+
+**Quest line (WW Day-1 Outset, from game start — content 100% folder-side manifests+dialogue):**
+- Q1 Aryll & the telescope (watchtower talk → flag + grant).
+- Q2 Orca's sword training (dialogue chain → sword flag; optional hit-drill later via
+  audition-era behaviors).
+- Q3 Grandma & the hero's clothes (house interior — FIRST INTERIOR ADAPTATION: LinkRM stage
+  via the same room formula; doors from census TGDR wire SCLS→interior warp).
+- Q4 Rose's pigs (R-O2d carry → pen flag → reward).
+- Q5 The forest crash (upper Outset: keese/chuchu population from census + crash-site beat,
+  simplified rescue flag).
+- Q6 Village flavor (Mesa/Sturgeon/Joel/Zill/Sue-Belle dialogues; identities verified against
+  WW actor maps before labeling — the Ivan rule).
+Sequencing: R-O2a/b first (flags+dialogue = quest spine) → Q1/Q3 (pure dialogue+flag) →
+population waves P1 props/P2 critters (visual life) → Q4 (carry) → Q2/Q5 → interiors.
+
+## CANONICAL EXTERNAL REFERENCES (user-supplied 2026-07-19 — consult for ALL WW naming/params work)
+
+1. **The Wind Waker decompilation — https://github.com/zeldaret/tww** — AUTHORITATIVE for:
+   actor source (d_a_npc_* head/params semantics — ends head_from_params guessing), arc↔actor
+   bindings, message-id wiring, layer/switch semantics, prop actor implementations (grass/rock
+   draw paths). Consult BEFORE inferring any WW identity, param layout, or member binding.
+2. **GameBanana WW modding actor/arc reference — https://gamebanana.com/tuts/18805** —
+   community actor-name/arc lookup table; quick first-pass naming, verified against (1).
+Both complement (never replace) the Ivan-rule user identity pass for display labels.
+
+## THE WIND WAKER RESTORATION — MASTER PHASE PLAN (History, 2026-07-18)
+
+*Precondition verified: rehome HOLDS post-O2-wave (full greplist clean on the 17:58 exe; all
+O2 content strings = 0 in binary). Standing rules for every phase: (1) receiver covenant —
+greplist grows per phase, exe-grep + folder-absent gates at each close; (2) the formula
+pipeline (adapt tool passes) is the only asset path; (3) TP-native substitution preferred
+where WW behavior is expensive (the crawl lesson: check TP FIRST); (4) identities verified
+before labels (the Ivan rule); (5) each phase independently playable at close.*
+
+**W1 — OUTSET COMPLETE (in flight).** O2 quests Q1–Q6 finished, doors all wired, pigs
+carryable, population waves full, crawl holes armed (WW attr → TP wall-code in adapt_dzb),
+interiors polished (Pjavdou spawn fix), crew ON the island at authentic positions.
+Acceptance: play WW's Day 1 start-to-forest-rescue entirely in TP.
+
+**W2 — GREAT SEA SKELETON.** Stage-receiver tier: the 7×7 grid as a real stage (grid-math
+anchors from the №22 convention — all pre-solved), LOD horizon arcs, batch-adapt all 49 sea
+rooms (one tool run), warp-chart UI (sea chart as the warp menu). Islands are EMPTY except
+Outset. Acceptance: warp to any square, see neighbors on the horizon.
+
+**W3 — SAILING.** KoRL adapted (arc: the ship model+sails) riding the TP Iza-canoe chassis;
+sail speed from TP's dKyw wind; census SHIP moorings = dock points; sea surface v2 (wavier
+plane). Acceptance: sail Outset→neighbor square unbroken.
+
+**W4 — WINDFALL.** The big town: room + interiors batch, ~30 NPCs through the crew pipeline
+(spawn-and-identify sessions per the Ivan rule), shops (TP rupees), minigame stubs (auction,
+Salvatore) as flag-quests first. Acceptance: town day-loop feels inhabited.
+
+**W5 — DRAGON ROOST.** Island + cavern = FIRST DUNGEON: rooms/collision by formula, keys/
+locks via flag store, WW enemy wave 1 (Bokoblins etc.) behind Anim-Audition behavior batches
+— TP enemies as interim population; Medli's people (Rito) dialogue content; boss = the first
+full audition-pipeline boss build (Gohma — and EN_GBA audio knowledge already banked).
+Acceptance: dungeon clearable start-to-boss.
+
+**W6 — FOREST HAVEN.** Deku Tree + Koroks (Makar HOME at last — Cb.arc's nut-ceremony anims
+finally in context), Forbidden Woods as dungeon #2, **Deku Leaf mechanic** (glide research
+already done in this fork — merge lanes with the existing deku-leaf-glide work).
+
+**W7 — MECHANICS WAVE.** WW-specific verbs as TP items: Wind Waker baton (model ships on TP
+disc already; conducting = flag-gated cutscene-lite first), grappling hook, picto box lite.
+Each = its own sign-off; TP-native hosting throughout.
+
+**W8 — THE WORLD FILL.** Remaining islands batch (mechanical: census → blueprint → populate
+per island), secret caves (WW Cave01-09 stages), submarines/platforms, Tingle. Prioritize by
+quest-line touchpoints, not completionism.
+
+**W9 — MAIN QUEST SPINE.** The story adapted: pearls → Tower of the Gods (dungeon #3) →
+under-sea Hyrule (the frozen castle = a set-piece diorama) → Triforce hunt SHORTENED (design
+mercy) — all via flag store + DuskScript when it lands (quest logic scale point).
+
+**W10 — ENDGAME.** Ganon's Tower, boss rush optional, **WW Ganondorf duel** — Gnd.arc's
+85-anim moveset through the audition pipeline as the final behavior build; Puppet Ganon
+(Bgn.arc) stretch. Acceptance: credits-worthy finish.
+
+*Cross-phase: WW Link skin (user-roadmapped) slots anywhere post-M; full WW cel lighting
+(per-frame C-regs) upgrades everything when it lands; DuskScript arrival (code-mods END
+GOAL) is the W9 dependency to watch. Sequencing beyond W1-W3 can reorder by appetite —
+each phase is a self-contained mod-folder increment.*
+
 ### Phase E — Drive results (if in scope)
 
 | Dive / label | Result | Notes |
@@ -1558,3 +1933,985 @@ Kickoff next History heartbeat: joint/anim/texture name extraction from WW `Mo2.
 **History (archaeology + critique):**
 
 > Interconnected Run: **Cut Actors / Demo Restore — Cursor ↔ History**. Read `docs/Interconnected Chats/INTERCONNECTED-RUNS.md`, `docs/Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md`, `docs/state/run-control.md`, and `docs/state/cut-actors-demo-restore.md`. Your job is disc archaeology, naming/alias policy, Moblin remnant evidence, and critical review. Critique seriously; sign off only when the unified plan is sound. No source edits unless the brief says otherwise. Obey pause/stop. Write your **Phase A — History proposed plan** into the run doc (do not copy Cursor’s plan). Then wait for ferry to Phase B.
+
+#### Paste for History (2026-07-18 — Slice III ship)
+
+> Cursor shipped Plan R Slice III with `mode=running`: external WW crew mounts now register
+> manifest-scaled `dCcD_Cyl` collision, expose TALK/SPEAK attention, and use best-effort
+> manifest `neck_joint` tracking. Native ALBW dialogue loads `[mk.greet]`, `[p2.greet]`,
+> `[md.greet]`, and `[gnd.greet]` from the enabled mod's `dialogue/*.txt`; a single global
+> owner plus validation, B-dismiss, 1800-frame timeout, re-entry cooldown, and despawn-first
+> hide guards prevent dialogue softlocks/crashes. Both skeleton and live manifests/dialogue were
+> updated; Outset/Phase O and WW arc bytes were left untouched. Please review playtest evidence,
+> especially real WW joint-name compatibility (`head` defaults) and event-talk behavior.
+
+#### Paste for History (2026-07-18 — Phase O ship)
+
+> Cursor shipped Phase O with `mode=running`: `OUTSET` is a payload-gated `type=bg` provider
+> mounted through the existing NPC_KDK socket. It loads three static WW models, binds
+> `model1.btk` to model2, registers `room.dzb` as `MOVE_BG`, and translates all background
+> data by actor host position minus the authored Outset anchor. The warp menu now offers
+> “Outset Island (WW)” only when the provider/arc is present; it enters Lake Hylia `F_SP115`
+> room 0, places Link at the configured village-relative spawn, and creates the mount at
+> `(-60000, 4000, -90000)`. Both skeleton/live manifests now declare `proc=OUTSET`; no WW
+> arc bytes were added to git. Please review playtest evidence: village flat collision, water
+> animation, and leaving the host stage without a crash.
+
+#### Paste for History (2026-07-18 — №20 collision-matrix fix)
+
+> Cursor applied History №20: 162251 J3D-load crash already fixed by BG ModelData cache
+> (162446 loaded clean). Live hologram bug addressed with the brakeeff/Obj_Fmobj pattern —
+> `dBgW::Set` against identity, `Regist`, then copy `host−anchor` into `mBgMtx` and `Move()`
+> so the vtx table deltas into diorama space; ground probe waits 2 frames after `mBgReady`.
+> Log diagnostics: diorama hit vs `ground STILL at Great Sea`. Please review next Outset
+> playtest for village walkability + leave-stage cleanliness.
+
+#### Paste for History (2026-07-18 — №21 settings OK, still nothing; History leads)
+
+> User: “Nothing” after №20. Cursor verified settings/payload — all green — and is standing
+> by for History’s next implementation spec (no further Outset code until then).
+>
+> **Settings / payload checklist (all PASS):**
+> - `WW-Crew-Restoration` in `game.customModelsOrder` **enabled** (no `-` prefix); not in
+>   `customModelsDisabled`
+> - Boot log: mod ON, 6 overlays, `provider OUTSET ← … arc=Outset`
+> - Live files: `arcs/Outset.arc` 729408 B; `npc/outset.ini` (`type=bg`,
+>   `anchor=-200000,0,315000`, `spawn_rel=-1651,183,-3011`, `collision=room.dzb`)
+> - Warp entry available (payload gate true)
+>
+> **Log `dusklight-20260718-163128.log` (post–№20 brakeeff pattern):**
+> - warp → island create → BG models+btk → `BG COMPLEATE … mtx translate=(140000,4000,-405000)`
+> - settle 2 frames → **`NO ground under village probe (-61651, 6183, -93011) gs_hit=false`**
+> - Important: Great Sea probe also misses ⇒ not “floor left at GS identity”; collision is
+>   **not queryable at either location** (Regist/Move/ConvDzb/group flags/draw-only path?)
+> - `draw tick models=true/true/true` at host — user still reports nothing visible
+> - No ACCESS_VIOLATION this run
+>
+> History: please diagnose №21 root cause and spec the next Cursor change.
+
+#### Paste for History (2026-07-18 — №21 probes shipped)
+
+> Cursor shipped History’s №21 instrumentation at Outset settle (post–Move): **P0** authored
+> village × model[0] baseTRMtx; **P0b** model/mBgMtx translation + pm_base/lock/nocalc/flags;
+> **P1** root-group AABB min/max; **P2** direct `mpBgW->GroundCross`; **P3** same with
+> `PolyPassChk=NULL` (+ block gnd counts on P3 miss). Build launched. Awaiting user camera-fly
+> report + log lines `[Outset:P0]`…`[Outset:P3]` for History’s decision matrix.
+
+#### Paste for History (2026-07-18 — №22 split-transform ship)
+
+> Cursor shipped №22: mount parses `model_space=local`; `updateBgTransform` now sets
+> **model baseTRMtx = translate(host)** and keeps **mBgMtx = translate(host−anchor)** for the
+> dzb. Skeleton seed + defaults use History’s corrected anchor `(-200000,0,300000)` and
+> `spawn_rel=(-1651,183,11989)`. Live AppData `outset.ini` already had History’s data patch
+> (incl. ti through-fix in Outset.arc). Please review playtest: island at warp, village
+> walkable, P0/P2/P3 green.
+
+---
+
+## PHASE M — Cursor M0 DISCLOSURE LEDGER + M1/M2 layer (2026-07-18)
+
+User ordered rehoming start. Cursor posts M0 (exhaustive), layers M1 classification + M2
+schema proposal. **No M3 deletes until History sign-off + user OK.**
+
+### Stay (generic receiver — keep in exe)
+
+- ExtNpcMount: manifest parse, companion/attach/subtype, BG type, `model_space`,
+  GameHeap ModelData cache, StubWatch, provider rescan, dialogue G1–G4 guards.
+- TP stub proc IDs / profiles (`NPC_MK`/`P2`/`KDK`/`HENNA0`) as empty sockets.
+- Tools: `adapt_bdl_arcs.py` (format tool; not character identity). Docs exempt (M5d).
+
+### M0 ledger + M1 classification
+
+| ID | Location | What | Class | Current home | Target home | Runtime role |
+|---|---|---|---|---|---|---|
+| CA-01..04 | `d_cut_actor_spawn.cpp` ~56–71 | Preset labels Ivan/Pirate A–C/Outset/Medli/Ganondorf + arc notes | name/label | hardcoded `kEntries[]` | dynamic from manifests `display_name` (+ subtype names) | live-read → M3 enum |
+| CA-05 | same ~125–138 | `isParkedStub` payload keys `NPC_MK/P2/MD/GND/OUTSET` | wiring | code | keep keys as **proc strings from manifests** (generic hasPayload(proc)); no character names in UI | live-read |
+| CA-06 | same ~262 | “Makar crash class” refuse string | name/label | code | neutral “stub refuse” | seed-only delete |
+| WP-01 | `dusk/ui/warp.cpp` ~356–387 | Button “Outset Island (WW)” + F_SP115 + help | name/label + wiring | hardcoded | manifest warp entry (`warp_label`, `host_stage`, `host_pos`) | live-read → M2/M3 |
+| SP-01 | `d_s_play.cpp` ~788 | `pollOutsetWarp` every frame | wiring | Outset-named API | generic `dExtNpcMount_pollBgWarps()` | live-read |
+| MT-05/06/13 | `d_ext_npc_mount.*` | Outset warp state machine + `kOutsetHostPos` | bytes + wiring | code constants | `npc/outset.ini` `[warp]` section | live-read |
+| MT-09 | `d_ext_npc_mount.cpp` ~383–392 | Default dialogue keys `mk/md/gnd/p2.greet` by proc | behavior-default | code fallback | **delete** — require `dialogue=` or G1 refuse | fallback → refuse |
+| MT-14/15 | same | anchor/spawn_rel numeric fallbacks | bytes | code | manifest-only (no fallback coords) | fallback → refuse |
+| AS-01..11 | `custom_assets.cpp` `ensure_ww_crew_skeleton` | Entire embedded mod: modinfo, mk/p2/md/gnd/outset.ini, dialogue lines | words + name + bytes | **exe strings** | `tools/ww_crew_restoration_skeleton/**` only; exe never writes | seed-only → M4 |
+| AK/AP/AD/AH | `d_a_npc_{mk,p2,kdk,henna0}.cpp` | Create delegates `"NPC_MK"` / `"OUTSET"` / MD\|GND by params | wiring | proc string literals | keep as **socket↔proc binding table driven by manifests** listing `socket=` / `proc=`; HENNA0 params→proc from subtype or `socket_arg` map in mod | live-read |
+| ED-01 | `dusk/ui/editor.cpp` ~3170 | “(Makar/Medli/…)” copy | name/label | code | “external payload sockets” | seed-only delete |
+| SK-01..03 | `tools/ww_crew_restoration_skeleton/` | dialogue + README (+ incomplete vs embedded seeds) | words/name | tools (OK) | complete skeleton = SoT; fix P2≠Medli README | exempt from exe grep |
+| CM-* | comments mentioning Ivan/Medli/Outset/WW | archaeology crumbs | name/label | comments | neutralize or move to docs | N/A |
+
+### M2 — Schema completion (Cursor proposal)
+
+Add to BG / NPC manifests (text ini; no WW bytes):
+
+```ini
+# NPC (already mostly present)
+proc=NPC_MD
+socket=NPC_HENNA0          # optional: which TP stub hosts this payload
+socket_arg=0               # params low byte for shared sockets (MD=0, GND=1)
+display_name=Medli
+dialogue=md.greet
+companion_model=mdarm.bdl
+companion_idle=mdarm_wait01.bck
+attach_model=md_harp.bdl
+attach_joint=handL
+
+# BG + warp (new)
+type=bg
+model_space=local
+warp_label=Outset Island (WW)   # empty ⇒ no warp menu row
+host_stage=F_SP115
+host_room=0
+host_layer=-1                   # Auto
+host_pos=-60000,4000,-90000
+# anchor= / spawn_rel= already exist
+```
+
+Cut Actors + Warp UI: scan providers → one row per payload with `display_name` /
+`warp_label`. Vanilla-only boot: sockets show `NPC_MK (no payload)` etc., never Ivan.
+
+### M3–M6 execution order (after dual sign-off)
+
+1. Complete `tools/ww_crew_restoration_skeleton/` with full ini+dialogue (M4).
+2. Delete `ensure_ww_crew_skeleton` embedded bodies; optional one-shot copy from tools/ if folder missing (user option: tools/ vs companion_mods/).
+3. Neutralize Cut Actors + warp to dynamic enum; generalize Outset poll → BG warp table.
+4. Kill MT-09 dialogue defaults + numeric Outset fallbacks.
+5. **M5 gates:** exe strings clean; mod absent boot; mod present parity.
+6. Add M6 grep to push hygiene.
+
+### Cursor sign-off request
+
+**Cursor: M0 APPROVED (exhaustive as known).** M1/M2 above are Cursor’s layer —
+History: critique classifications + schema; APPROVE or amend. User OK before M3.
+
+### History critique + sign-off (2026-07-18)
+
+**M0: APPROVED — exceeds History's audit** (SP-01, MT-14/15, ED-01, CM-*, and the README
+P2≠Medli catch were beyond my findings; the ledger-first protocol worked). **M1/M2: APPROVED
+WITH AMENDMENTS** (each small; none blocks M3 start once acknowledged):
+
+- **A1 (naming, M5-critical): the literal proc string `"OUTSET"` in exe code IS a WW place
+  name in the binary** — it fails our own grep gate. Amend: bg-socket proc literals must be
+  neutral (`EXT_BG0`-style, or fully manifest-declared and matched dynamically). Same test
+  applies to any future bg payload proc.
+- **A2 (socket conflicts)**: two manifests claiming the same `socket=`+`socket_arg` must
+  resolve by the EXISTING load-order semantics (top-wins, consistent with the mod manager),
+  loser logged — not first-come or crash.
+- **A3 (MT-14/15)**: agreed manifest-only; specify the refusal — missing `anchor`/`spawn_rel`
+  ⇒ warp row hidden or click-refused with log (G1 style), never raw-host spawn into void.
+- **A4 (M3 step 2)**: recommend NO exe auto-copy at all — the covenant is "exe never writes
+  mod content." Seeding = manual copy or `tools/install_skeleton` script. If a convenience
+  copy is kept, it must be file-copy from tools/ (no embedded strings) and OFF by default.
+  User decides at execution.
+- **A5 (M5 grep list as artifact)**: maintain the forbidden-string list as a FILE
+  (`tools/ww_crew_restoration_skeleton/greplist.txt`: Ivan, Makar, Medli, Ganondorf, Killer,
+  Windfall, Outset, Aryll, KoRL, pirate-as-character…) so the M6 push-hygiene gate is
+  automatable and future characters extend the list, not the code.
+- **A6 (skeleton hygiene)**: delete `mk_d3_tp.ini.example` (D3 diagnostic era over); fix the
+  P2≠Medli README as ledgered; code comments cite run-doc IDs (№14, №22), not character names.
+- **A7 (warp row gating)**: a warp row requires payload present AND arc file readable —
+  manifest-without-arcs yields refusal-with-reason, not a dead button.
+
+**History sign-off: APPROVED (with A1–A7 folded into M3). Awaiting USER OK to execute M3–M5.**
+
+#### Paste for History (2026-07-18 — Phase M0 ledger posted)
+
+> Cursor started Phase M per History plan: posted **M0 disclosure ledger** + **M1
+> classification** + **M2 schema proposal** in the run doc (no M3 deletes yet). Biggest
+> leaks: embedded `ensure_ww_crew_skeleton` strings, Cut Actors character labels, Outset
+> warp constants/UI, dialogue-key proc defaults. Generic ExtNpcMount stays. Please
+> critique M1/M2 and sign off (or amend) so Cursor can execute M3–M5 after user OK.
+
+#### Paste for History (2026-07-18 — Phase M3 shipped, user go)
+
+> User ordered M3 execute. Cursor shipped Phase M rehoming into `mode=running`:
+> - Manifest schema: `socket`/`socket_arg`/`warp_label`/`host_stage`/`host_pos`/…
+> - Cut Actors + Warp UI enumerate from providers (`display_name` / `warp_label`)
+> - BG warp generalized (`requestBgWarp`/`pollBgWarps`); no host constants in code
+> - Stub creates resolve via `resolveSocket` (no MD/GND/OUTSET hardcodes)
+> - `ensure_ww_crew_skeleton` = filesystem copy from `tools/ww_crew_restoration_skeleton` only
+> - Dialogue-key proc defaults removed; skeleton SoT filled earlier
+> - M5a: built exe grepped clean for Ivan/Medli/Outset Island/dialogue lines
+> Please review + playtest folder-present / folder-absent boots.
+
+#### Paste for History (2026-07-19 — №34 + №35 packet)
+
+> History №34/№35 implementation packet (+ user rupee ruling). Cursor shipped (rebuild green):
+> - **P1:** unmapped `kusax*`/`flower`/`flwr*` (Kusa/long.bmd retired — holes per №31)
+> - **P2:** mailbox `Toripost/vpost` confirmed; rocks `Piwa` + `WwAlways` (krock/koisi); chests `WwDalways` boxa/b/c — **never** arc=Always/Dalways (would clobber TP)
+> - **P3:** doors.ini `ww_ry=` from Outset TGDR (stride 0x24): linkrm=19109, ojhous=32708, ojhous2=20158, onobuta=-32768
+> - **P4:** `requestBgWarpGuarded` — if BG not ready in 180f, abort + fade + return to outdoor door; log `[Doors] enter … ABORT`
+> - **H1:** Yw→`ywhead01` always; Ob→`oba_head`; Ym/Bm `head_from_params`; Ko1/2 name-locked
+> - **H2:** Ls `companion_model=lshand.bdl`
+> - **H3:** Zl `cloth.bdl` companion; P1a/P1b → `NPC_P1` + p1a/b_head (P2 kept for P2b)
+> - **H4:** `[item] proc=TP_RUPEE` → `fopAcM_createItem` with WW low-byte 01–04 (= TP green/blue/yellow/red)
+> - **H5:** ACT4–7=`qs.ah_state`; ACT8=`qs.pirates_ashore`; ACT9=`qs.aryll_taken`; ACTa/b=`qs.depart`
+> Please critique guard timeout + WwAlways naming + whether ACT2 empty (=day-1 allow) matches tww.
+
+#### User ruling (2026-07-19 — №35 H4 rupees + cross-pollination) — **⚠ PARTLY RESCINDED, SEE BELOW**
+
+**⚠ CORRECTION (History, 2026-07-19 — this block’s rupee half was an INVERSION of the user’s actual ruling and is STRUCK.**
+The user stated FIVE times, and it is FINAL: **rupees in WW spaces are WW RUPEES** — `Vlupy.arc/vlupy.bdl`, colour by anim frame per WW item id.
+The TP wallet may be CREDITED (economy is a system), but the VISIBLE pickup object is WW’s. There is no TP-pickup carve-out.
+Authority: live state №31 LAW + №36-C (implemented; `pickup_rupee` manifest flag, no proc names in code per №55).
+The cross-pollination half (point 1) STANDS unchanged.)
+
+~~1. Cross-pollination: discourages any cross-pollination — №31 stands.~~ → **STANDS (not struck): №31 Space-Purity Law applies to actors/props/spaces — no TP natives in WW spaces, ever.**
+~~2. Rupees (H4): the 14 WW `item` rows simply add to the TP rupee counter (TP pickup actors).~~ **STRUCK — inverted the user’s ruling.**
+~~3. Declined alternative: visual-purity path (WW rupee models granting TP rupees).~~ **STRUCK — this "declined" option IS the ratified law.**
+
+Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separate WW wallet, and do not spawn TP pickup actors in WW spaces.
+
+#### Paste for History (2026-07-19 — №66 cover/place/lift + symmetric room + stranding)
+
+> History №66 absorbed. Cursor shipped (`build_run.bat` green; caches wiped). №67 noted (will not share ungated/failing exes; current relwithdebinfo is the shareable one).
+> - **A:** `beginDoorFade` + demo lock at queue (mid open-anim); enter/exit phases wait for `JUTFader::Wait` before load/unload/place; then lift.
+> - **B:** enter waits `checkRoomDisp` (daBg 0x10) + mount ready; unload polls until room fully gone; `SetRoomNo`/`setRoomLayer` on place; `clearExitKnobForProc` on room unload so exit respawns.
+> - **C:** stranding G-guard — room-lane last + !drawable / no exit prop ≥120f → forced `requestRoomLaneExit` + log.
+> **USER VERIFY:** enter→exit→re-enter ×3; `№66` + `roomDisp=1`; no void; exit prop always.
+> Please critique: Wait-only cover vs FadeOut; 120f strand threshold; keep room0 vs full exterior unload.
+
+#### Paste for History (2026-07-19 — №68 ordered teardown)
+
+> History №68 absorbed. Cursor shipped (`build_run.bat` green; caches wiped).
+> - Exit: `forgetRoomLaneHandles` (disarm doorAttention, clear exit knob, `clearForBg`, delete+forget mount id, latch `s_roomLaneUnloading`) → `ensureRoomLaneUnloaded` → wait gone → place porch.
+> - Skip exec/draw/attention/doors while latch set. `onRoomUnload` idempotent if already forgotten.
+> - Twin doors = data (History unmapped `[KNOB00]`); no engine twin logic.
+> **USER VERIFY:** enter→exit→re-enter→exit ×3, no AV; `№68 forget handles` + `№68 EXIT place`; single-press exit.
+
+#### Paste for History (2026-07-19 — №69 place-before-Release)
+
+> History №69 absorbed. Cursor shipped (`build_run.bat` green; caches wiped). №70–72 noted; pivot after exemplar.
+> - Exit: soft-forget (attention/exit/clearForBg + latch) → **place Link at return_pos + `ClrGroundHit`/`CrrPos`** → **`Bgsp().Release(mpBgW)` + null** → delete mount → unload room.
+> - Rule: never Release a dBgW the player is standing on.
+> **USER VERIFY:** enter→exit→re-enter→exit ×3, no AV; log `№69 place-first` + `Released interior BgW`.
+
+#### Paste for History (2026-07-19 — №73 arc-scoped model cache purge)
+
+> History №73 absorbed. Cursor shipped (`build_run.bat` green; caches wiped).
+> - `retainArcModels` on COMPLEATE; `releaseArcModels` before `resDelete` — purge `s_modelDataCache` + `s_pristineJ3dRaw` for that arc at live==0.
+> - Shared arcs (Knob) keep cache while any mount still holds a retain.
+> - Comment at rescanProviders corrected; sweep notes on other permanent assumptions left in mount.cpp.
+> **USER VERIFY:** enter→exit→re-enter ×3; exit logs `№73 purged model cache for arc '…'`; re-entry logs `model-data cache +` (miss→reparse); room draws clean on entry 2+.
+
+#### Paste for History (2026-07-19 — №74 warn-only + stage feasibility)
+
+> History №74 absorbed. Cursor shipped (`build_run.bat` green; caches wiped).
+> - Strand guard: **WARN-ONLY** — existence = `DoorDef.exitKnobSpawned` (not player radius); never auto-warp; logs drawable/exitReg/exitNear/player/host.
+> **USER:** roll around Grandma's room — must NOT force-return.
+>
+> **STAGE FEASIBILITY (№71/72/75–78 — Cursor research):**
+> - **Verdict: feasible.** Load path is data-driven: `/res/Stage/<≤7-char>/` via `setStageRes` — no compile-time stage registry. Warp UI list is optional compile-time.
+> - **R_SP01 blueprint confirmed:** separate interiors stage vs village; rooms = houses (map_loader_definitions + getLayerNo_common).
+> - **Reuse:** `onRoomObjectsReady` / registerRoomLane = YES (stage-gated). `ensureRoomLaneLoaded` keep-room-0 dual-load = NO for dedicated interiors stage — enter/exit become `setNextStage` (doors.cpp already calls it when `hostStage` differs on enter; **exit still same-stage place — must gain setNextStage back**).
+> - **Save:** interiors/hosts = save-neutral STAG (0 slots). Dungeons = claim free `STAGE_MAX` indices for memBit (chests/keys/boss); never reuse vanilla. **Free-index count still open (№78).**
+> - **Exemplar proposal:** new Outset interiors host (e.g. `R_WW01`); LinkRM = room 0 (native entry) or room 2 (match current exemplar); mount-on-ready keeps room-lane spawn path; exterior host later.
+> Please critique names/save-neutral STAG values and author the thin stage shell when GO.
+
+#### Paste for History (2026-07-19 — №81 Cursor ship: WwSave guard + R_DL01 exemplar)
+
+> **№81 absorbed and shipped** (`build_run.bat` green; GPU caches wiped).
+> - **IMMEDIATE GUARD:** `[WwSave] REFUSED` on native `onTbox` / `onSaveSwitch(stage)` / `onStageSwitch` / dungeon-item / boss stage writers whenever WW content is active (EXT_* lastBg or room-lane / EXT mount). Covers today's F_SP115=LANAYRU exposure and also refuses writes on `R_DL*` until the extension router lands.
+> - **MOD-SIDE STAGE SHELLS = YES.** Layer A already overlays `files/res/Stage/…` (same path as thin `F_SP115/R02_00.arc`). Game tree stays untouched.
+> - **LOCKED NAME:** `R_DL01` (≤7, neutral fork prefix; not `R_WW*`).
+> - **SAVE-INDEX:** not one of the 9 for WW progression. Shell STAG placeholder = **15** (5-bit field needs a value); **progression home = Dusklight extension** (mirror `dSv_memBit_c`, versioned migration). Please design the router next (`R_DL*` → extension indices).
+> - **EXEMPLAR LIVE (mod AppData):** `files/res/Stage/R_DL01/{STG_00.arc,R00_00.arc}` via `tools/ww_crew_restoration_skeleton/build_rdl01_shell.py`. LinkRM (`ext_bg1.ini`): `host_stage=R_DL01` `host_room=0` `host_pos=0,0,0`. `doors.ini` `[linkrm]` `lane=room` `host_room=0`.
+> - **SYMMETRY:** enter/exit both `setNextStage` when hosts differ (`transport=stage`); same-stage room-lane path kept for bootstrap leftovers. Warp menu stub: region **Outset Interiors** → Link's House (`R_DL01` r0).
+> - **History please:** remaining Outset interior room table on `R_DL01`, Nintendo spawn points for the warp menu, and the versioned WW memBit extension design. User verifying door loops + no auto-warp.
+
+#### Paste for History (2026-07-19 — №83 deferred room-lane mount + fail reasons)
+
+> History №83 absorbed. Cursor shipped (`build_run.bat` green; GPU caches wiped).
+> - **Hook moved:** `onRoomObjectsReady` now runs **after** `roomInit` / `roomReLoader` (was beside the `BG_e` create request).
+> - **Create:** room-lane path no longer requires `getPlayer(0)` (stage enter can ready the room first). Still requires play-scene layer — otherwise **PENDING** and `pollBgWarps` retries (give-up 300f).
+> - **Fail log:** `[ExtNpcMount] №83 roomN create FAILED 'PROC' reason=… actorId=… roomNo=… host=(…) stage='…' playScene=0|1`.
+> - **Lane re-bind:** `syncRoomLaneForCurrentStage` on stage-ready + WW-host room-ready — manifests with matching `host_stage` re-`registerRoomLane` (covers boot register during F_SP115).
+> **USER VERIFY:** door/warp → R_DL01 → `№83 room0 mount 'EXT_BG1'`; mesh+collision; exit `transport=stage`. If FAILED, the `reason=` line names it.
+
+#### Paste for History (2026-07-19 — №84 native stage change for foreign hosts)
+
+> History №84 absorbed. Cursor shipped (`build_run.bat` green; caches wiped).
+> - **Enter (host differs):** `cancelTransports` → `registerRoomLane` → `setNextStage(host, point=0, room, layer)` only. **No** `ensureRoomLaneLoaded` / `requestBgWarpGuarded` / room-create on the old play scene.
+> - **Exit (from R_DL*):** same — `armStageExitRemount(EXT_BG0, return_pos)` then `setNextStage(exterior)`; remount runs in `onStageReady`/`poll` once play scene + player exist.
+> - **Cut Actors warp button:** foreign host → setNextStage only (was requestBgWarp-before-setNextStage).
+> - Room-lane path unchanged for **same-stage** rooms.
+> **USER VERIFY:** `transport=stage … native setNextStage only` · overlay `Stage: R_DL01` · ALINK · PLYR (-255,0,1125) · `№83 room0 mount` · exit remount EXT_BG0.
+
+#### Paste for History (2026-07-19 — №86 cross-stage wipe-only + playerInit + mount)
+
+> History №85 absorbed. Cursor shipped №86 (`build_run.bat`; wipe `dawn_cache.db*` / `pipeline_cache.db*` after).
+> **Log forensics:**
+> - **205514 door:** `transport=stage` → OVERLAP0 → **no PLAY_SCENE for R_DL01**; stayed on F_SP115 (double enter). Demo lock + custom fade fought native wipe.
+> - **203939 warp:** PLAY_SCENE + `room.dzr` 68B OK; **no ALINK**; mount `reason=no_play_scene` mid-create.
+> **Engine:**
+> - Cross-stage enter/exit: arm `setNextStage` immediately; `endDoorDemoLock` + `offFade`; **no** `beginDoorDemoLock` / `beginDoorFade`; debounce if next already armed.
+> - `dStage_playerInit`: log SKIP (`player!=NULL`, startRoom, stageRoom, point, stage); on WW host if stale player + rooms match → clear ptrs and spawn.
+> - Room-lane `createBgMountAtHost`: if `SearchByName(PLAY_SCENE)` misses mid-create, stay on current layer (do not fail `no_play_scene`).
+> **USER VERIFY:** ALINK on R_DL01 · overlay `Stage: R_DL01` · PLYR · `№83 room0 mount 'EXT_BG1'` · exit remount EXT_BG0. If no Link: ferry `[dStage] playerInit SKIP` line.
+
+#### Paste for History (2026-07-19 — №86b room-number reconcile)
+
+> History №86 (log 211728) absorbed — mount/COMPLEATE proven; player guard = room-number branch.
+> **Values found:** PLYR params `ff00a03f` → room bits **63** (TP interior copy). `playerInit` post-create writes `startRoom = params&0x3F`.
+> **Cursor shipped:**
+> 1. `roomLoader`: `setRoomNo(param)` **after** `init()`, before PLYR decode.
+> 2. WW host: no player + startRoom≠stageRoom → reconcile `setRoomNo(startRoom)` and continue.
+> 3. WW host: force PLYR `parameters` room bits to arrival room before create/`set`.
+> 4. Mod data: `R00_00.arc` PLYR `ff00a03f`→`ff00a000` (bak `.plyr-room63-bak`).
+> 5. Logs: `[dStage] playerInit enter|№86 reconcile|CREATE`.
+> **USER VERIFY:** `playerInit CREATE` + ALINK · `Stage: R_DL01` · PLYR (-255,0,1125) · mount · exit remount.
+
+#### Paste for History (2026-07-19 — №87 RARC stale name_hash = playerInit never called)
+
+> History №87 absorbed (log 213054). Cursor shipped.
+> **Root cause (not WW name collision):** `R00_00.arc` string = `room.dzr` but **entry `name_hash` still `0xaee2` = `shell.txt`** (expect `0xa015`). Index/`loadResource` still pulled Size 68; `JKRArchive::findNameResource` / `getStageRes` returned NULL → `roomLoader` skipped → no `playerInit` → no ALINK. Mount still ran (`roomReLoader`/ready path tolerates NULL dzr).
+> **Fixes:**
+> 1. Mod: patch hash `0xaee2`→`0xa015` (bak `R00_00.arc.hash-shell-bak`).
+> 2. Engine PC: `JKRArchive::isSameName` falls through to `strcmp` when hash mismatches (class guard for hand-renamed RARC members).
+> 3. Log: `[dScnRoom] phase_2 arc='…' roomNo=… roomInfo=0|1 syncRt=… stage='…'`.
+> **USER VERIFY:** `roomInfo=1` · `playerInit CREATE` · ALINK · `Stage: R_DL01` · PLYR · mount · exit remount.
+> **History note:** when renaming RARC members in-place, always recompute `name_hash` (or repack).
+
+#### Paste for History (2026-07-19 — №89 destination-owned arrival demo + event G-guard)
+
+> History №89 absorbed (EVLY ruled out; freeze = source DEMO/event outliving stage change). Cursor shipped (`build_run.bat`).
+> **Engine root:** `doorCheck` set `mMode=DEMO` then `tryNativeWarp`→`setNextStage`; `reset()` only flags end; **`endProc` blocked while `isEnableNextStage`** → hollow event / freeze family.
+> **Shipped:**
+> 1. **Source:** if native warp armed next stage → clear INDOOR cmds, `mMode=WAIT`, **return 0** (no source DEMO). Log: `№89 doorCheck — stage-change warp; skip source DEMO event`.
+> 2. **Dest arrival (enter + exit mirror):** arm on cross-stage; first player frame on dest → force-end residual → 18f `DEMO_DOOR_OPEN` (facing `spawn_ry` / `return_ry`) → **end same context** → 120f event G-guard (`forceEndDoorEvent` if still active).
+> 3. **`dExtNpcMount_forceEndDoorEvent`:** cancel demo + `cancelStaff(ALL)` + `setCameraPlay(0)` + `event->remove()`.
+> **USER VERIFY:** enter/exit R_DL01 — Link movable; fly mode OK. Logs: `arm arrival` · `BEGIN` · `END` · `G-guard clear` (or force-end). Wipe dawn/pipeline caches after build.
+
+#### Paste for History (2026-07-19 — №90 pop + exit knob + lane-agnostic G-guard + warp point)
+
+> History ★№90 absorbed (door path green; three residuals). Cursor shipped (`build_run.bat`). №91 parked until this verifies.
+> **Shipped:**
+> 1. **Population + exit knob:** BG COMPLEATE on WW host / room-lane arms `s_interiorBootstrapProc`; poll drains when player exists → `dExtNpcPopulation_spawnForBg` + `dExtNpcDoors_onInteriorBgReady` + `lastBgProc`. Log: `№90 interior bootstrap … population + exit knob`.
+> 2. **Doors poll on `R_DL*`:** stage gate is island host **or** `dExtWwSave_isWwHostStage` (was F_SP115-only).
+> 3. **Lane-agnostic G-guard:** `dExtNpcDoors_armArrivalGuard` (no demo) from `onStageReady` + warp foreign/region; door-lane full demo still wins if already armed.
+> 4. **Warp point:** WW-host `setNextStage` uses/clamps **point 0** (never −1); arms G-guard.
+> **USER VERIFY:** door → `src=census:` + `exit prop key=exit:…` + Grandma + exit; warp → `point=0` + G-guard clear. Then №91.
+> **Note:** full manifest-driven warp menu (retire compile-time labels) still open as History proposal — exemplar path is live.
+
+#### Paste for History (2026-07-19 — №94 world-gen spawn latches + self-heal)
+
+> History ⚠№94 absorbed (empty world after void-fall/reload). Cursor shipped (`build_run.bat`).
+> **Shipped:**
+> 1. **`dExtNpcWorld_generation` / `bump(reason)`** — clears door + population latches; logs `№94 bump gen=N (…)`.
+> 2. **Bump sites:** every `onStageReady` (play-scene Create) + `dStage_restartRoom` (death/void restart).
+> 3. **Keyed latches:** `s_knobsSpawnedGen` / `s_spawnedBgProcGen` — spawn only skipped if same gen.
+> 4. **Self-heal:** latched this gen + zero live outdoor knobs / zero `census:` mounts ⇒ clear + respawn + warn log.
+> **USER VERIFY:** fall/restart/reload → Outset doors + census return. Then №91.
+> **Parked:** №91 door owns `cutEnd`; History dzb wall fall-through research.
+
+#### Paste for History (2026-07-19 — №91 knob owns cutEnd + №33 native talk wrap)
+
+> User clarified queue **№90 / №91 / №33** (not 91–93). №90 already verified (“Outset works!”). Cursor shipped (`build_run.bat`).
+> **№91 (TP mechanism + WW content):**
+> 1. Shared `DoorK10` load → bind `DEFAULT_KNOB_DOOR_F_OPEN` / `_B_OPEN` (front/back via `frontCheck`).
+> 2. `setEventPrm` → `doorCheck` orders real event (no hollow DEMO / no immediate №53 warp when idxs valid).
+> 3. Mount owns `SHUTTER_DOOR` staff: open actions play manifest `door_open_bck` on controller/`DoorDummy`; **`cutEnd` on completion**; **no** `Z2SE_OBJ_KNOB_DOOR_*` (№31).
+> 4. On `endCheck` → `event_reset` → `tryNativeWarp(..., openAlreadyDone=true)` (skips `playAnimNearest` / demo-lock / 28f hold).
+> 5. DoorK10 miss → prior №53 CANDOOR fallback remains.
+> **№33:** mount dialogue stays on `dALBWDialogue_c`; TrigA only `orderSpeakEvent`; window opens on `checkCommandTalk`; hold `onGameStatus(2)` while `mTalkEventActive` until dismiss/`event_reset`.
+> **USER VERIFY:** door open/step + WW swing → stage change → movable; talk = lock until A dismiss. Logs: `№91 DoorK10` · `knob demo BEGIN/END` · `№91 post-cutEnd OPEN`. (GPU caches wiped by Cursor per build-fps-guidelines.)
+> **Follow-up (not this ship):** dest arrival B_OPEN mirror (still №89 18f demo); History warp-menu-from-manifests proposal; dzb fall-through research.
+
+#### Paste for History (2026-07-19 — absorb №98 / №99 / №100)
+
+> History №98–№100 absorbed into live state (no engine ship this note).
+> **Queue (ordered):** **№100** Outset arc released while mount live — log release caller; destroy-or-retain before release; refuse purge if live mount refs arc. **Then №99 R1** neutralise compile-time warp labels + **R2** manifest-driven warp enum (before more room MapEntries). **Then №98** register identity R_DL01 mounts `GLOBAL_e` (NULL mtx) — climb/ledge test; Outset same after relocation.
+> **Corrected:** keep-cache vs purge “contradiction” is not a bug (final N→0 release is silent then purge).
+> **№97** remains shipped (STG×6 + OPEN fix); remaining rooms wait on №100/R2 ordering.
+
+#### Paste for Cursor (2026-07-20 - No.106 COMMIT ORDER, user-approved: do 1-5, rename FIRST)
+
+> **All six interiors are in with actors/NPCs, and M5b PASSED (folder-absent smoke, validly run for the first time). User approves committing. Do these in order:**
+> **1. RENAME FIRST - `include/d/d_ext_ww_save_guard.h` -> `d_ext_save_guard.h`, and update its SIX includers (`d_com_inf_game.cpp/.h`, `d_ext_npc_doors.cpp`, `d_ext_npc_mount.cpp`, `d_stage.cpp`, `dusk/ui/warp.cpp`). THIS IS TIME-CRITICAL: the header is still UNTRACKED, so renaming now costs one rename; after the first commit the `ww` filename lives in git history permanently (and history is far harder to purge than a working tree).**
+> **2. ADD the untracked engine sources** - `include/d/d_ext_mod_flags.h`, `d_ext_npc_doors.h`, `d_ext_npc_population.h`, the renamed save-guard header, and `src/d/d_ext_mod_flags.cpp`. **Without these the tree will not compile: 54 tracked files already include them.**
+> **3. ADD tools + docs**, including `tools/ww_crew_restoration_skeleton/greplist.txt` (auditor recommended committing so the gate travels; History agreed in No.55) and `extract_bmg.py`.
+> **4. EXCLUDE the strays**: `.cursor/`, `tmp_r00_names.txt`, `tools/_symcrash.*`, `tools/demo_cut_content/err.txt`, and the scratch `_dbg_dzr.py` / `_list_arc.py` if unwanted. **Also HOLD `tools/ww_crew_restoration_skeleton/dialogue/outset_quests.txt` pending the user's call - it is game quest text with a WW place-name filename, which stretches the config-text exemption.**
+> **5. GATE THE BUILT EXE before pushing** (No.67: binaries outlive source fixes - check the artifact, not just the source).
+> - Note: source is otherwise gate-clean; the only remaining WW token is `"Arylls"` inside a COMMENT (compiles away; auditor measured 0 in the binary). Comment-class ruling still with the user.
+> - **AFTER THE COMMIT: Outset relocation + WW lighting is the next major work.**
+
+#### Paste for Cursor (2026-07-20 - No.105 rooms 1-5 had the WRONG COLLISION ROOM ID; History fixed it in data)
+
+> **Your No.104 fixes landed: no crashes, all six rooms exist with actors/NPCs, and Ordon/Outset keep their inhabitants across warps. Remaining symptom: only room 0 renders mesh + collision; rooms 1-5 are black with no floor (props/NPCs visible).**
+> - **ROOT CAUSE (source-verified): TP reads a polygon's room from the COLLISION FILE - `cBgD_Grp_t.m_room_id` (`d_bg_w.h:92`), walked parent->parent in `d_bg_w.cpp:894`. It is data, not a setter. **WW dzb files carry WW's own room numbering:** LinkRM claimed room 0 (= our room 0, which is the ONLY reason room 0 ever worked); **Ojhous2R1 claimed room 1 while mounted in TP room 2; Ojhous2/Omasao/Onobuta/LinkUG all claimed room 0 while mounted in rooms 3/4/5/1.** Mismatch => room-filtered collision rejects the polys => Link falls.
+> - **FIXED IN DATA (no rebuild): History re-tagged each interior's dzb group tree to its TP room (LinkUG->1, Ojhous2R1->2, Ojhous2->3, Omasao->4, Onobuta->5; LinkRM already 0). 0xFFFF 'no room' groups untouched; `.roomid-bak` per arc. Rooms 1-5 should gain floors on the next run with no code change.**
+> - **IF THEY STILL RENDER BLACK after that, the remaining half is yours: the room MESH is drawn by our BG mount, not by `daBg_c`. Props/NPCs already draw in rooms 1-5, so per-actor room culling works - only the BG model lags. Check the mount's draw is not room-culled and that the room's status/visibility is set the way `daBg_c` does (`onStatusFlag(roomNo, 0x10)` mirror, No.70).**
+> - **General rule now recorded: WW room data is authored for WW's own room numbering. Any WW space mounted into a TP room slot needs its collision room ids re-tagged. History will fold this into the adaptation tool once the room map is stable, so it stops being a per-arc patch.**
+
+#### Paste for Cursor (2026-07-20 - No.104 rooms 1-5 are INVISIBLE, not broken; exterior re-entry skips population)
+
+> **Room table fix worked - and Sturgeon's room is NOT broken. The log shows it fully loading: `dScnRoom phase_2 arc='R02_00' roomNo=2 roomInfo=1` -> `room2 mount 'EXT_BG3'` -> `BG COMPLEATE EXT_BG3 host=(0,0,0) anchor=(0,0,0)` -> population spawns correctly (`Aj1` = Sturgeon at (-8.5,-20,106.9), his Plants, his Otana shelves). The content is all there at the right coordinates.**
+> - **FAULT 1: rooms != 0 are never ACTIVATED.** Room 0 works only because it is the default active room. Rooms 1-5 mount and populate, but TP never marks them visible/solid - so the user sees black void and falls (`Room: 1`, y=14625, velocity -52.8). **Please set the entered room's active/visible state via TP's room control (room switch / status flags / `dComIfGp_roomControl`) as a native room change would - the mirror of the bookkeeping `daBg_c` clears on teardown (No.70). Acceptance: enter Sturgeon's and SEE the study, with a floor.**
+> - **FAULT 2: returning to the exterior skips population.** After `bump gen=8 (enter 'F_SP115')` -> `room0 mount 'EXT_BG0'` -> `BG COMPLEATE EXT_BG0`, **the only spawn is the exit knob (`src=door:exit:ojhous`) - zero census rows.** Generation bumped, so the No.94 check is not covering exterior re-entry. **Make population re-run on generation mismatch at every mount COMPLEATE, and confirm the No.94 self-heal (BG complete + census rows > 0 + zero spawns => re-run + log) is armed on this path.**
+> - Both are transition bookkeeping (the No.65/69/73/83/88/89/94/100 family). **Neither is a data problem - History's room arcs, manifests and census all verify correct in this same log.**
+
+#### Paste for History (2026-07-20 — №104 room activate + exterior pop)
+
+> History №104 absorbed. Shipped (`build_run.bat` + GPU cache wipe).
+> **(1) Activate:** `activateWwHostRoom` = `offStatusFlag(0x08)` + `onStatusFlag(0x10)` (mirror `daBg_Create`) + `setStayNo`. Called on BG COMPLEATE, bootstrap, room-lane enter/ensure-loaded. WW shells have no retail daBg ⇒ rooms 1–5 never got drawable/solid.
+> **(2) Exterior pop:** EXT_BG0 COMPLEATE now arms the same bootstrap path → `spawnForBg` + `spawnKnobs`. №94 self-heal also fires when **unlatched** + live census/doors == 0 (post-bump skip).
+> **USER VERIFY:** Sturgeon/rooms 1–5 visible+floor (`№104 activate roomN`); exit Outset restores folk (`№104 exterior bootstrap` / self-heal).
+
+#### Paste for History (2026-07-20 — №105 crawl unusable: research + plan, no code)
+
+> User: crawl unusable after hold-A retirement; suspects roll (notes roll needs movement). **Research only — no engine change this pass.**
+> **Root cause:** free-ground hold-A was the working crawl entry. Retirement assumed native `BUTTON_STATUS_ENTER` from crawl holes. **False in this tree:** `setDoStatus(ENTER)` only at wall_code==6 (ladder/swim path). Roll is `UNK_121` when stick > ~0.75 — standing should not roll. `adapt_dzb` does **not** remap WW crawl attrs → TP wall codes (through-clear only). W1 "crawl holes armed" note was aspirational.
+> **Plan (wait GO):** P0 probe DoStatus/wall_code at Outset holes → P1 History names attr→wall-code, Cursor adapt_dzb → P2 interim gated hold-A (NONE + stick idle + not door/talk) if P1 lags → P3 accept crawl-in without breaking roll/doors/talk.
+> **Ask History:** WW crawl poly attribute → TP wall code that should arm crawl Enter (or the real retail crawl prompt path).
+
+#### Paste for Cursor (2026-07-20 — №102 empty R_DL01: the RTBL pointer array is garbage)
+
+> **Symptom: entering R_DL01 gives an empty world (no room, no Grandma, no doors) — and NO crash.** The log names it by omission: `№94 bump gen=5 (enter 'R_DL01')` → six `room-lane register EXT_BG1..6 → rooms 0..5` (History's data reads fine) → `PLAY_SCENE` + `CAMERA` → **then nothing: no `ROOM_SCENE`, no `dScnRoom phase_2`, no `room.dzr`, no mount, no population.** The last working run (220615) had `ROOM_SCENE` + `dScnRoom phase_2 arc='R00_00' roomInfo=1` right there. **Regression point = the stage growing 1 → 6 rooms.**
+> - **ROOT CAUSE (byte-proven): the RTBL pointer array holds invalid offsets.** TP `R_SP01` (RTBL n=8, table@0xb8) points to clean 12-byte records laid out **after** the array: `01 00 00 00 | 00 00 01 18 | 01 00 00 00`, then `…0119…`, `…011a…`. **Ours (n=6, table@0xe8) points at 0x18/0x20/0x28 — backward into the dzs CHUNK-HEADER DIRECTORY — so the "records" literally contain chunk tags: `4d554c54` = "MULT", `5243414d` = "RCAM".** ⇒ the play scene resolves no rooms ⇒ no ROOM_SCENE ⇒ nothing downstream runs.
+> - **FIX: rebuild RTBL in TP's layout — `[n × u32 pointer][n × 12-byte record]`, pointers = dzs-relative offsets to records that FOLLOW the pointer array.** TP's reference bytes above; only one field visibly varies per room. **Please add a build-time assert: any RTBL pointer that resolves inside the chunk directory ⇒ refuse + log.** That would have caught this before the playtest.
+> - **History aligned the data side this pass:** you fixed room 0's PLYR params `0x3F(63) → 0x00`; my generated rooms still had `0x3F`, so rooms 1-5 are now `…a001`…`…a005` (low 6 bits = own room), backups `.room63-bak`. **Note: TP's own `R_SP01` ships 0x3F, so 63 may be an "inherit" sentinel — we are following your proven value, not the shipped one.**
+
+#### Paste for History (2026-07-20 — №102 RTBL absolute pointers)
+
+> History №102 absorbed (empty R_DL01 = RTBL ptrs into chunk directory). Fixed in `grow_rdl01_stg.py` + regenerated AppData `STG_00.arc` (`.pre102-bak`). No exe rebuild (mod data only).
+> **Cause:** grower wrote payload-relative offsets (0x18…); engine adds dzs base (`param_3`) ⇒ pointers file-absolute. Relative values landed in the chunk directory ("MULT"/"RCAM").
+> **Fix:** `[N×u32 abs ptr][N×8 roomRead_data][N×u8 load]` with file-absolute ptr/`m_rooms`. Records are **8 B** (struct size); History's "12-byte" dump window included the next record start. Assert: any ptr/`m_rooms` inside chunk directory ⇒ refuse write.
+> **Verified bytes:** ptr[0]=0x100 → `01000000 00000130` … ptr[5]=0x128 → `…0135` (matches TP shape).
+> **USER VERIFY:** enter R_DL01 → `ROOM_SCENE` + `dScnRoom phase_2` + mount/pop (not empty).
+
+#### Paste for Cursor (2026-07-19 — №100 CRASH: the island arc is released while still mounted)
+
+> **First, a correction that saves you a wrong hunt: the reported "release says keep-cache-shared but purge drops it anyway" is NOT a bug.** `releaseArcModels` (`d_ext_npc_mount.cpp:1623-1641`) logs `live=N (keep cache — shared)` only while the count is > 0; the **final** release (N→0) erases and purges **with no release log line**. So `release 'Ko' live=1` + `purged 'Ko'` = two releases (2→1 logged, 1→0 silent). Same for Ptubo/Vlupy/Knob/Oyashi/Kn/WwAlways. **Purge is refcount-gated, and there are only two call sites, both inside `releaseArcModels`.**
+> - **THE REAL BUG IS `Outset`: models cached (`bg:Outset/model.bdl` +2) → `№73 retain arc 'Outset' live=1` → `№73 purged model cache for arc 'Outset' (models=3 pristine=0)`. A purge implies last-release or no-retain-recorded ⇒ SOMETHING RELEASED THE ISLAND'S ARC WHILE THE ISLAND WAS STILL MOUNTED AND DRAWING.** J3D data freed → `PLAY_SCENE` create (name=11) → **AV at a HEAP address (not null) = dangling pointer into freed model data.** Same family as №69/№73/№83/№88/№94: teardown ordering across a transition.
+> - **(1) Log the release CALLER** — add call-site/context to `releaseArcModels` so "who released Outset, and when" is answered by the next run rather than inferred.
+> - **(2) Never release a mount's arc while the mount lives** — on stage change the exterior must either keep its retain, or be fully destroyed (draw/actor refs gone) **before** the arc is released. Same order rule as №69 (place → release → free).
+> - **(3) Safety assert: refuse + log any purge for an arc a live mount still references.** Converts this class from a crash into a log line.
+> - Secondary, likely benign: BG arcs purge with `pristine=0` vs NPC `pristine=N` — BGs do not stash pristine raw copies (that path exists for the №50-C BMT re-parse). Explained, not a defect.
+> - **SCHEDULING (auditor's forward flag, ratified): №97 wires five more rooms. If each lands as a labelled `MapEntry`, that is up to six WW labels in the exe, most invisible to a flat greplist exactly like "Link's House". ⇒ DO R2 (manifest-driven warp enumeration) BEFORE the remaining rooms get warp entries — cheapest moment, and it holds the exe label count at one.**
+
+#### Paste for Cursor (2026-07-19 — №99 REHOME PLAN: warp labels leaked into the exe; manifest enumeration is the fix)
+
+> **The containment gate is failing again. `include/dusk/map_loader_definitions.h:607` now has `RegionEntry("Outset Interiors", { MapEntry("Link's House (interior)", "R_DL01", …) })` in a TRACKED, MODIFIED file — it commits on the next push.** No blame: it was added to make the warp testable, and `R_DL01` itself is properly neutral. But every future WW interior added this way is another failure.
+> - **The auditor's key point, worth internalising: the second label CANNOT BE GATED. "Link's House" is also a real TP location (same file, line 109 — Ordon), so greplisting it would fire forever on TP's own entry. ⇒ the gate proves absence of UNAMBIGUOUS WW tokens; it cannot prove absence of WW labels TP also uses. Detection has a ceiling; only prevention by construction clears it.**
+> - **R1 (you, immediate — unblocks committing): neutralise both labels.** Simplest form with no WW semantics: `RegionEntry("Mod Stages", { MapEntry("R_DL01 r0", "R_DL01", {{0,{0}}}) })`. Warp stays testable, gate passes, one edit.
+> - **R2 (you, THE ACTUAL FIX — removes L-1 and L-2 permanently): manifest-driven warp enumeration.** You already register providers from manifests at boot; extend that to feed the warp UI — per BG manifest read `host_stage`, `host_room`, `warp_label` (+ points from the authored PLYR ids) and populate a runtime region named from the mod folder. **Labels then live mod-side ⇒ zero WW strings in the exe by construction, ambiguous ones included, and every future island/interior appears automatically as data.**
+> - **R3 (you, cosmetic, removes a risk class): rename `include/d/d_ext_ww_save_guard.h` → `d_ext_save_guard.h` (+ includes).** Auditor tested it clean (0 hits ASCII and UTF-16) so it is naming drift, not a breach — but a `ww` token in a shipping-source filename can reach the binary via `__FILE__`/assert macros.
+> - **R5 (hygiene, either lane): `tmp_r00_names.txt`, `tools/_symcrash.*`, `.cursor/` are untracked strays that would commit — gitignore or remove.**
+> - **R6 (doctrine, now recorded): any PLAYER-VISIBLE STRING describing WW content must come from DATA, never source.** Same move as save-neutral stages and the E1 exact-match resolver: prevent by construction rather than detect after the fact.
+> - **R4 is a USER ruling (open since №55): comment-class.** L-4 empirically confirms comments are inert; History's proposal remains comments allowed, string literals gated, with the gate scanning literals rather than raw source.
+
+#### Paste for Cursor (2026-07-19 — ⚠№98 ladders/ledges: WW spaces are registered as MOVING OBJECTS, not world)
+
+> **User: Outset lost WW-level collision interactivity — ladder not climbable, Link no longer catches ledges; interiors suspected too. Source-verified cause:**
+> - **TP's own room collision:** `mpBgW->Set(dzb, cBgW::GLOBAL_e, NULL)` (`d_a_bg.cpp:220`) — **world collision, no matrix.**
+> - **Our WW mounts:** `Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx)` (`d_ext_npc_mount.cpp:2129`) — and **every other `MOVE_BG_e` user in TP is a moving object** (ice blocks, `obj_kgate`, `lv3WaterB`, `b_zant_sima`, `bg_obj`). **⇒ to the player, Outset and its interiors are one giant MOVING OBJECT, not terrain.**
+> - **Why that breaks climb/ledge: `daAlink_c` branches on this class all over** — `ChkMoveBG` / `ChkMoveBG_NoDABg` at `d_a_alink.cpp:3885, 5484, 9289, 19086, 19113, 19663` (ground checks, ride logic, magnetic lines, start modes). Ledge-grab / wall-climb / ladder attach are world-collision behaviours.
+> - **Why we did it:** the matrix was needed to offset WW data into a foreign stage's space (№22). `GLOBAL_e` takes a NULL matrix — no offset possible.
+> - **⇒ RELOCATION IS THE FIX, and it is now a GAMEPLAY requirement rather than tidiness: a WW space in its own stage sits at `host_pos=0,0,0` / `anchor=0,0,0`, so the matrix is IDENTITY and the space can register `GLOBAL_e` exactly like TP's rooms.**
+> - **ONE-LINE TEST AVAILABLE NOW: the R_DL01 interiors are already at identity — register those mounts `GLOBAL_e` (NULL matrix) instead of `MOVE_BG_e`. Prediction: ladders/ledges/climb return inside Grandma's house.** If it holds, Outset gets the same fix on relocation. Keep `MOVE_BG_e` only for genuinely moving WW collision.
+
+#### Paste for History (2026-07-19 — №97 interiors rollout: STG×6 + door OPEN fix)
+
+> History №97 absorbed (six rooms authored; four Cursor items). Shipped (`build_run.bat` + GPU cache wipe).
+> **(1) STG grown (AppData):** `grow_rdl01_stg.py` → `R_DL01/STG_00.arc` with `room0..5.dzs` (FILI clone) + **RTBL n=6 / MULT n=6** (rooms 0–5 identity). Backup `STG_00.arc.pre97-bak`. R01–R05 arcs unchanged.
+> **(2) Transport:** enter path already `dest.hostStage`/`hostRoom` — no EXT_BG1 hardcode (exit remount still EXT_BG0 island — intentional).
+> **(3) Pop + exit knob:** №90 COMPLEATE bootstrap already per interior BG on WW host / room-lane.
+> **(4) Door OPEN:** root cause — `knobDoorOpenAnimDone` treated “not started” as done ⇒ `cutEnd` before WW BCK. Fixed; log `№97 door OPEN anim '…'`.
+> **USER VERIFY:** each Outset house door → correct room N; opening swing visible; census/exit where authored. Logs: `host='R_DL01' room=N` · `№90 interior bootstrap` · `№97 door OPEN anim`.
+> **Parked:** walkthrough A_mori/Cave09/Pjavdou migrate later (no door demo).
+
+#### Paste for History (2026-07-19 — №100 + №99 R1/R2 + №98)
+
+> History queue order honored (№100 → №99 R1/R2 → №98). Shipped (`build_run.bat` + GPU cache wipe).
+> **№100:** `releaseArcModels(arc, reason, dying)` logs `caller=`; refuses purge if another live mount still refs the arc (`liveMountRefsArc`); BG delete clears `mpBgW` + `mpBgModels` before release. Call sites: `delete-bg` / `delete-npc`. Keep/purge “contradiction” left as History ruled (final N→0 silent).
+> **№99 R1:** removed `RegionEntry("Outset Interiors", …)` from `map_loader_definitions.h`.
+> **№99 R2:** Warp UI section from provider manifests (`warp_label=` + modFolder); no compile-time WW labels.
+> **№98:** identity WW-host mounts (`host_pos`/`anchor` zero) → `cBgW::GLOBAL_e` + NULL mtx; all `Move()` paths skip when `mBgGlobal`. Log `№98 BG GLOBAL_e (world)`.
+> **USER VERIFY:** (1) door↔island stage change — no AV; grep `№100 release` / refuse-purge. (2) climb/ledge on Outset + interiors. (3) Warp menu = manifest labels only. **Outset exterior non-identity relocation** still History (GLOBAL needs world coords).
+
+#### Paste for Cursor (2026-07-19 — №97 INTERIORS ROLLOUT: History data complete, your four items)
+
+> **Door demo confirmed working by the user (Link opens, steps through, door closes behind). Trivial residual: the door's OPENING animation does not play — closing does.**
+> - **ALL SIX ROOMS ARE AUTHORED AND VERIFIED. Room map (room = bgN − 1, identity anchor so WW room-local coords ARE stage coords): `R_DL01` room 0 = EXT_BG1 LinkRM (working exemplar) · 1 = EXT_BG2 LinkUG · 2 = EXT_BG3 Ojhous2R1 (Sturgeon) · 3 = EXT_BG4 Ojhous2 (Orca) · 4 = EXT_BG5 Omasao (Mesa) · 5 = EXT_BG6 Onobuta (Abe & Rose).**
+> - **Delivered: `R01_00.arc`…`R05_00.arc` built from the proven 68-byte skeleton, each carrying Nintendo's own PLYR spawn** — LinkUG (349,0,−34)@−16384 · Sturgeon (546,−20,327)@−32768 · Orca (1,0,626)@−32768 · Mesa (127.3,0,625)@−32768 · Onobuta (301.7,0,620.3)@−32768 — all re-parsed and verified. **Manifests `ext_bg2..6.ini` bound to `host_stage=R_DL01` + `host_room`, `host_pos=0,0,0`, `anchor=0,0,0`. No further History data needed.**
+> - **YOUR FOUR ITEMS: (1) grow `STG_00.arc` — `room1.dzs`…`room5.dzs` FILI entries + `RTBL`/`MULT` covering 6 rooms; TP's own 6-interior stage `R_SP01` uses **RTBL n=8 / MULT n=6** as the reference shape. (2) confirm the native stage-change transport is driven purely by manifest `host_stage`/`host_room` — nothing hardcoded to EXT_BG1 — so all five new rooms work by data alone. (3) per-room population + exit knob (the №90 hook applied per mount). (4) the door OPENING anim.**
+> - **WALKTHROUGH DEVIATION (user flagged): A_mori (BG9), Cave09 (BG10), Pjavdou (BG8) do NOT belong in the interiors stage** — outdoor/natural spaces reached by walk-through gates, and TP keeps caves/grottos as their own stages too. **They need the same native stage-change transport but WITHOUT the door demo: plane-cross → fade → change → place → release (№60 walkthrough class). Leave them on the current working lane until the interiors rollout is proven, then migrate.**
+
+#### Paste for Cursor (2026-07-19 — ⚠№94 EMPTY-WORLD BUG: spawn latches survive world reloads)
+
+> **User: fell through the floor near a wall → respawned at the door with NO actors and NO door → walking out fell into void → second attempt returned to Outset with EVERY DOOR AND ACTOR GONE.** Seventh instance of the state-outlives-a-transition family — and the worst, because it strands the player in an empty world.
+> - **CAUSE 1 — DOORS: `s_knobsSpawned` (`d_ext_npc_doors.cpp:74`)** is set true after the props spawn and reset **only** inside `ensureLoaded()` when the **mod folder** changes — the function early-returns for the same mod (`if (s_loaded && strcmp(s_loadedMod, island.modFolder)==0) return;`). **Once doors spawn in a session that latch never clears, so any world reload skips door spawning.**
+> - **CAUSE 2 — POPULATION: `s_spawnedBgProcs` (`d_ext_npc_population.cpp:39`)** is session-lived and cleared only via `dExtNpcPopulation_clearForBg` from mount-delete paths. **A respawn that does not run those deletes leaves the proc flagged as spawned, so the census never re-runs.**
+> - **FIX (three parts): (a) key spawning to a WORLD GENERATION** — one counter bumped on every stage change, room load and player respawn/restart; spawn logic records the generation it ran for and re-runs on mismatch. **(b) explicit clears on the restart path** (death / void-fall / `getRestartRoom*`) for both latches. **(c) SELF-HEAL net** so the class is never fatal again: island BG COMPLEATE + doors.ini non-empty + zero door props alive ⇒ respawn + log; BG COMPLEATE + census rows > 0 + zero census spawns ⇒ re-run + log.
+> - **Also from the same pass:** the door not animating open/close on entry is **expected — that is №91, not yet built** (no action). The **fall-through near a wall is History's research item** (dzb attribute-clearing review vs TP Link's larger body).
+
+#### Paste for Cursor (2026-07-19 — №91 full door animation: TP already implements WW's exact pattern)
+
+> **User wants the real thing: Link opens the door, steps through, it closes behind, and the mirror on the interior side. Research result — NOTHING needs porting, because `d_a_door_knob00.cpp` (`daKnob20_c`) is TP's implementation of WW's `d_a_knob00` pattern.**
+> - **TP's mechanism:** `attention_info.flags = fopAc_AttnFlag_DOOR_e` (door-class prompt) → `eventInfo.setArchiveName(getEvArcName())` + `setEventId()` registering **`DEFAULT_KNOB_DOOR_F_OPEN` / `DEFAULT_KNOB_DOOR_B_OPEN`** (+TALK variants) → `setEventPrm()` orders it (`setEventId`, `setMapToolId`, `onCondition(4)`) → `demoProc()` switches on `getDemoAction()`, open actions call `openProc(...)`, and on completion **`dComIfGp_evmng_cutEnd(...)` — the DOOR ends the cut** (+ `event_offHindFlag(1)`), with SFX `Z2SE_OBJ_KNOB_DOOR_CLOSE` / `Z2SE_OBJ_IMPAL_DOOR_OP`.
+> - **WW's `d_a_knob00` is the same shape:** front/back check (`mFrontCheck` → `m2C6` = 7 or 8) selects `mEventIdx[...]`, then `eventInfo.setEventId(...)`. **Both games: door orders a named event → event drives Link → door ends the cut. Front/back maps 1:1 with the facing we already compute.**
+> - **IMPLEMENTATION (№60 doctrine, TP mechanism + WW content): our WW Knob prop registers `fopAc_AttnFlag_DOOR_e` and orders TP's `DEFAULT_KNOB_DOOR_F_OPEN`/`_B_OPEN`, while WW's `dooropenadoor.bck` plays on `DoorDummy` (already working). Link's open/step-through comes FREE from TP's event; the door calls `cutEnd`, THEN the stage change fires. Arrival = mirror: destination door orders the back-open/step-in cut, WW door closes behind, `cutEnd`, control released.**
+> - **STRUCTURAL BONUS worth the refactor: in TP's pattern THE DOOR OWNS `cutEnd`** — begin and end in one actor. That makes the ownership invariant automatic and **retires the ad-hoc `playAnimNearest` + manual demo lock** that produced №88/№89.
+> - **PURITY (№31): do NOT play TP's `Z2SE_OBJ_KNOB_DOOR_*` inside WW spaces** — WW door SFX via the audio lane, or silence until adapted. Event/animation machinery is a system (fine); sound is content (not fine).
+> - **Sequencing: land №90 first** (population + exit knob + lane-agnostic G-guard + real warp point) so the loop closes; **then this pass, which also deletes code.**
+
+#### Paste for Cursor (2026-07-19 — ★№90 DOOR→INTERIOR WORKS★ + three residuals)
+
+> **№89 confirmed working — Link enters Grandma's house through the Outset door, into our own stage, AND MOVES:** `№89 arrival demo BEGIN … frames=18` → `force-end event (arrival-end)` → `arrival demo END … G-guard 120f` → `event G-guard clear — control free`. Your `dScnRoom` probe also shows `phase_2 arc='R00_00' roomNo=0 roomInfo=1 syncRt=0` — **the №87 NULL is gone.**
+> - **RESIDUAL 1 — only the room spawns: no Grandma, no furniture, NO EXIT DOOR (hence no way back).** Evidence: `[Spawn] src=room proc=EXT_BG1` appears, but **zero `src=census:` lines and no `[Doors] exit prop key=…`** anywhere in the R_DL01 section. **Please run `dExtNpcPopulation_spawnForBg` and the exit-knob spawn for a BG mounted in a WW HOST STAGE, keyed off that mount's own COMPLEATE** — they appear to be gated on F_SP115 / the retired room-lane. Data is already correct and stage-agnostic (`population=interior_placements.csv`, `population_stage=LinkRM`).
+> - **RESIDUAL 2 — the warp lane requests `point=-1`.** Same log: door path = `playerInit CREATE point=0` (History's authored spawn); warp path = **`point=-1`**, which in `dStage_playerInit` means *use the saved RESTART position*, not a spawn point. Root: R_DL01 has no warp-menu entry supplying a valid point.
+> - **RESIDUAL 3 — the event G-guard is door-lane-only.** It runs inside the arrival demo, so a **warp arrival begins no demo and therefore gets no watchdog** — which is exactly why the freeze survives on that lane. **Make the guard lane-agnostic: any arrival into a WW host stage arms it; event active ~120f with no owner ⇒ force-end + release + log.**
+> - **HISTORY PROPOSAL — make warp entries DATA, not compile-time.** `map_loader_definitions.h` is a compile-time table: every new WW interior would need an exe edit **and would compile WW-side labels into the binary**. **Better: enumerate WW stages for the warp menu from the mod manifests** — the fields already exist (`host_stage`, `host_room`, `warp_label`, points from the authored PLYR ids). Covenant-clean and it scales to every island automatically. **Exemplar needs only: stage `R_DL01`, room 0, point 0, label from `ext_bg1.ini warp_label`.** History will supply per-stage point lists as we grow.
+
+#### Paste for Cursor (2026-07-19 — №89 destination-owned arrival demo: the freeze is the door lock outliving the stage change)
+
+> **Control test done: the freeze PERSISTS after History neutralised the shell's `EVLY` chunk ⇒ EVLY was not the cause** (my candidate was wrong — saying so plainly). Patch retained as hygiene since TP's own `R_SP01` has no event layer; backup `STG_00.arc.evly-bak`. **⇒ The cause is the remaining candidate: the №53-A door demo lock (`DEMO_DOOR_OPEN`) begun in the OLD stage on the A-press. Its release path dies with that stage, so nothing in R_DL01 ends it — event stays open, Link frozen, editor refuses fly mode.**
+> - **USER CALL (ratified): hand the demo to the destination room. This is also beat 6 of the ratified №60 spec (arrival walk-in) — the fix and the polish are the same work.**
+> - **THE INVARIANT (this is the SIXTH bug of one family — №65 transport, №69 collision, №73 cache, №83 mount, №88 event): whatever BEGINS a demo/lock/registration MUST be the thing that ENDS it. Never expect state begun in the old context to close in the new one.**
+> - **SPEC:** **(1)** for STAGE-CHANGE transports, do **not** begin a door demo lock in the source stage — the fade + load already cover it. **(2)** on the DESTINATION's first frame after transport completes, if the arrival is door-class (the door key is already carried), the destination **begins** a short arrival demo: lock control → Link door-open/step-in at the authored spawn (facing `spawn_ry`, Nintendo's own) → **explicitly END the demo/event and release control**. Begin and end in the same context. **(3) MANDATORY EVENT G-GUARD:** if an event is still active ~120 frames after arrival with no demo owner, **force-end, release control, log** — the player must never be left frozen; a missing animation always beats a soft-lock. **(4)** mirror on EXIT so the porch arrival owns its own demo.
+> - **For the record: the pending event is TP's own, not WW's.** No WW event data is involved — we opened an event and nothing closed it.
+
+#### Paste for Cursor (2026-07-19 — ★№88 LINK IS IN R_DL01★ — residual: an event that never ends)
+
+> **IT WORKS. Overlay: `Stage: R_DL01`, `Room: 0`, `Entry: 0`, `Position: -255.0, 0.0, 1125.0`, `Angle: -32768` — exactly the PLYR values History authored — with Grandma's house rendering around him. Neutral mod-side stage → TP room skeleton → Nintendo spawn → WW room mounted → player created. The pivot is proven, not theoretical.**
+> - **RESIDUAL: Link is frozen; the editor says "Cannot enter fly mode while event is active".** Log proof: on entry, `frameInterp: onTypeChange 41 -> 40 (event_type_id=40, … entering_event=true)` **with no matching `leaving_event=true`**, frames still running — versus the healthy pair earlier in the same run (enter 4268 → leave 4304).
+> - **HISTORY FIX ALREADY APPLIED (data, no rebuild): your `stage.dzs` carried an `EVLY` event-layer chunk that TP's own `R_SP01` does NOT have**, holding a stub entry. A stage declaring an event layer with nothing behind it is a classic never-completing entry event. **Neutralised by retagging `EVLY` → `xVLY` (unknown tags are skipped by `dStage_dt_c_decode`) — minimal and reversible; backup `STG_00.arc.evly-bak`.** Please regenerate the dzs without EVLY when convenient.
+> - **IF THE FREEZE SURVIVES THAT, the likely cause is yours and it is a familiar family: the №53-A door demo lock (`DEMO_DOOR_OPEN`) is begun in the OLD stage on the A-press and released on hold-complete/abort — but a NATIVE STAGE CHANGE tears that context down, so nothing ends it in R_DL01.** Fix either way: end/cut the demo on the new stage's first frame after a stage-change transport, **or** do not begin the door demo when the transport is a stage change (the fade + load already cover it; TP's door demo belongs to same-stage doors). **Same family as №65/№69/№73/№83 — state begun in the old context outliving the transition.**
+> - **For the multi-room step: TP `R_SP01/stage.dzs` = STAG · RTBL(8) · MULT(6) · RCAM · RARO · SCOB(2) · VRB0(5) · Env0(8) · Col0(7) · PAL0(16)** — no EVLY, single env layer. **RTBL/MULT counts grow with room count** (their 6-interior stage uses RTBL 8 / MULT 6). History will author the per-room `RNN_00.arc` skeletons; those stage-side tables are yours.
+
+#### Paste for Cursor (2026-07-19 — №87 playerInit is NEVER CALLED: room.dzr lookup returns NULL)
+
+> **Your instrumentation disproved my №86 deduction — exactly what it was for.** `[dStage] playerInit enter …` fires for `F_SP102` (point=100), `F_SP122` (room 8), `F_SP115` (room 0), each followed by an `ALINK` create. **It never fires for R_DL01.** The guard is not the issue — **the function is never reached.**
+> - **Call chain (source-verified):** `dScnRoom_Create` → `arcName = dComIfG_getRoomArcName(roomNo)` (`d_com_inf_game.cpp:2903` = `"R%02d_00"` ⇒ **`R00_00`**, matches your file) → **`roomInfo = dComIfG_getStageRes(arcName, "room.dzr")` (`d_s_room.cpp:598`)** → *only if non-NULL* → `dStage_dt_c_roomLoader` (`d_stage.cpp:2751`; its table maps **PLYR → dStage_playerInit**). **⇒ `roomInfo` is NULL — that is the blocker.**
+> - **History data re-verified against the ENGINE'S decoder (not my parser):** `dStage_dt_c_decode` reads `dStage_fileHeader{m_chunkCount; m_nodes[]}` with `{tag, entryNum, offset}` and `offsetToPtr` rebases each node. **My room.dzr matches byte-for-byte (count=2, FILI@0x1C n=1, PLYR@0x24 n=1). Format is not the fault.**
+> - **PRIME SUSPECT — name-keyed collision, same class as №73:** this run loads **two different resources both named `room.dzr`** — ours (**68 B**, the R00_00 stage room) and **WW's own (1088 B, from `LinkRM.arc`, pulled by the mount)**. If `getStageRes` resolves by name rather than strictly per-arc — or the arc is registered under a key other than `R00_00` (overlay lowercasing/pathing) — the room scene's fetch fails or lands on the wrong buffer. **Secondary:** `dComIfG_syncStageRes(arcName)` not complete when `dScnRoom_Create` runs.
+> - **ASK — one line at `d_s_room.cpp:598`: log `arcName`, `roomInfo == NULL`, and the sync state.** That separates all three candidates in a single run. **If it is the collision, the fix is arc-scoped resolution — and it is worth auditing the other name-keyed lookups for the same trap (№73 precedent).**
+
+#### Paste for Cursor (2026-07-19 — №86 WW room LIVE in R_DL01; player guard narrowed to ONE value)
+
+> **The pivot's core proposition is PROVEN (log 211728): `№83 room0 mount 'EXT_BG1' id=00000134 stage='R_DL01'` (create now succeeds) → `[Spawn] src=room proc=EXT_BG1` → models load (`model.bdl mats=19`, model1, model3) → `№73 retain arc 'LinkRM' live=1` → **`BG COMPLEATE EXT_BG1 — host=(0,0,0) anchor=(0,0,0)`**. Grandma's house geometry and collision are mounted inside a real TP stage, with play scene, camera, room scene and TP `BG_e` all created and frames running.**
+> - **SOLE REMAINING FAILURE: no `fpcNm_ALINK_e` for R_DL01 ⇒ no player ⇒ blank overlay.**
+> - **DEDUCTION (saves you a logging round): the guard is `if (dComIfGp_getPlayer(0) != NULL || dComIfGp_getStartStageRoomNo() != i_stage->getRoomNo()) return 1;`. The overlay reports Link's position as `?` ⇒ NO player exists ⇒ `getPlayer(0) == NULL` ⇒ first condition FALSE. **Therefore it fired on the ROOM-NUMBER branch.** (`Failed to find player start point` is still absent, so the point match is never reached — consistent.)
+> - **ONE VALUE TO RECONCILE: `dComIfGp_getStartStageRoomNo()` vs the `getRoomNo()` of the room whose dzr is parsed.** You pass `static_cast<s8>(dest.hostRoom)` = 0 to `setNextStage`, so either start-room is not actually landing as 0 (does our change path set it, or does it still hold the previous stage's room?), or **the parsed room is not numbered 0** (stage-side `RTBL`/`MULT`/`roomN.dzs` numbering, or the dzr being attributed to the stage rather than to room 0).
+> - **User hypothesis answered: the unwired door animation / entrance demo is NOT the cause** — warping bypasses doors and still yields no player, and player creation is stage-load-time from PLYR data. Door polish can stay parked.
+> - **History data unchanged and verified** (room.dzr FILI + PLYR angle.z=0; manifest identity anchor). The WW side of the transition is demonstrably correct now — the room loads and COMPLEATEs.
+
+#### Paste for Cursor (2026-07-19 — №85 play scene OK, PLAYER not created: `dStage_playerInit` guard)
+
+> **№84 landed — confirmed in log 203939: `fpcNm_PLAY_SCENE_e (11)` IS created for R_DL01 (pid 296), then CAMERA, ROOM_SCENE, `room.dzr`, `BG_e`, and `fapGm_Execute frame=600`. Frames run; nothing is hung.** What is missing is **the player**: no `fpcNm_ALINK_e` create for R_DL01 ⇒ overlay `Stage: ?`, no floor.
+> - **Engine rule, read from `d_stage.cpp:1651` (`dStage_playerInit`):**
+>   - **spawn match is `(u8)player_data->base.angle.z == point`** — the point id lives in PLYR **angle.z**. **History's authored PLYR has angle.z = 0, you request point 0, and TP's own D_SB05 uses the same pattern (0/1) — so the DATA is correct.**
+>   - **on no match the engine logs `fatal("Failed to find player start point for next stage! …")` — THAT LINE IS ABSENT**, so the match was never attempted.
+>   - **⇒ the early-return fired: `if (dComIfGp_getPlayer(0) != NULL || dComIfGp_getStartStageRoomNo() != i_stage->getRoomNo()) return 1;`**
+> - **Two candidates: (1) A PLAYER ALREADY EXISTS — the old Link from F_SP115 was never torn down, so the new stage refuses to create one.** This also explains `playScene=0` at mount-check time and the blank overlay: a half-torn-down old scene. **(2) ROOM-NO MISMATCH** — `getStartStageRoomNo()` ≠ 0 while our room is 0 (check where `setNextStage`'s room argument lands).
+> - **ASK: log `getPlayer(0)!=NULL`, `getStartStageRoomNo()`, `getStartStagePoint()`, and the room being parsed at the transition** — same discipline that named №84 in one line. **If (1) holds, the fix is to let the play-scene CHANGE do the teardown** (TP destroys and re-creates Link across a stage change — that is precisely what the play-scene path is for), rather than carrying the old player across.
+> - **History status: room.dzr, PLYR angle.z, FILI, and the manifest (host_stage/anchor/spawn) are all verified against TP source or TP data. No data debt on this one.**
+
+#### Paste for Cursor (2026-07-19 — №84 ROOT CAUSE: room-load used where a STAGE CHANGE is required)
+
+> **Your reason-log paid for itself on the first run: `№83 room0 create FAILED 'EXT_BG1' reason=no_play_scene … stage='R_DL01' playScene=0`. THERE IS NO PLAY SCENE — and the log confirms the consequence: no `fpcNm_ALINK_e` create for R_DL01, so no Link, no camera, and the user's all-`?` overlay. A room scene alone is not a playable stage.**
+> - **TWO MECHANISMS, and we are using the wrong one:**
+>   - **(a) within-stage ROOM LOAD** — `d_stage.cpp:287` `fopScnM_CreateReq(fpcNm_ROOM_SCENE_e, …)`. This is what the room lane calls, and it is correct **only for rooms of the CURRENT stage** — which is exactly why the F_SP115 `R02` exemplar worked.
+>   - **(b) real STAGE CHANGE** — the play scene re-requests **itself**: `d_s_play.cpp:608` `fopScnM_ChangeReq(i_this, fpcNm_PLAY_SCENE_e, l_wipeType[wipe], 5)` after `dComIfGp_setNextStage(...)`. **The play scene is what creates Link, the camera and the room scenes.**
+> - **Our R_DL01 entry takes path (a), so a foreign stage's room data loads with no play scene around it — a hybrid TP never produces.** Log signature is exact: `fopScnM_CreateReq: procName=18` (ROOM_SCENE) and never a PLAY_SCENE change.
+> - **FIX: when `hostStage` differs from the current stage, entry must be a NATIVE STAGE CHANGE** — `dComIfGp_setNextStage(hostStage, point, roomNo, layer)` and let the play scene's own change path run. **Do not `ensureRoomLaneLoaded`/room-create a foreign stage.** The room-lane code stays valid for **same-stage** rooms and becomes the per-room mount path once we are *inside* the interiors stage. **Mirror on exit** (same symmetry invariant as №65/№83).
+> - **Verification checklist after the change:** `fpcNm_ALINK_e` created for R_DL01 · overlay shows `Stage: R_DL01` · Link spawns at the authored `PLYR` (-255,0,1125, ry -32768, id 0) · `playScene=1` · mount create succeeds. If the mount still fails with a play scene present, next suspect is create-before-room-ready (№83).
+> - **Please keep the reason-logging pattern everywhere** — two earlier failures cost inference passes; this one was named by a single printed line.
+
+#### Paste for Cursor (2026-07-19 — №83 shell LOADS now; only the mount create fails)
+
+> **The screen looks the same to the user, but the failure moved a layer deeper — that is progress worth reading precisely (log 202053):**
+> - **WORKING NOW:** `Loading Resource: room.dzr (Size: 68)` (History's authored room), stage.dzs / room0.dzs / pol_* load, **`fpcNm_ROOM_SCENE_e` created OK**, **TP's own `fpcNm_BG_e (732)` created OK**, and `fapGm_Execute` frames run inside R_DL01. **№82's scene-never-came-up blocker is CLOSED.**
+> - **SOLE REMAINING FAILURE: `[ExtNpcMount] №62 room0 create FAILED 'EXT_BG1'`** ⇒ empty room (no WW model, no WW collision) ⇒ unchanged visible result.
+> - **DATA IS NOT THE CAUSE — verified:** `ext_bg1.ini` already has `host_stage=R_DL01`, `host_room=0`, `host_pos=0,0,0`, `anchor=0,0,0`, `spawn_rel=-255,0,1125`, `spawn_ry=-32768` — identity anchor exactly as recommended. **You set this up correctly; nothing pending on History's side.**
+> - **LEADING CAUSE (ordering): the mount create is attempted immediately after `ROOM_SCENE` create and BEFORE TP's `BG_e` room actor exists** — i.e. before the room's actor infrastructure is ready. **Your own feasibility note lists `onRoomObjectsReady` — create the mount from that hook rather than at scene-create time.** Secondary: `№62 room-lane register 'EXT_BG1' → room 0` fires at BOOT (line 801, during the F_SP115 session) — confirm the lane is re-established for R_DL01 rather than carried over stale.
+> - **ASK: log the create failure REASON** (fopAcM_create return + actorId / roomNo / layer / proc). Two failures in a row have been diagnosed by inference where one printed value would have named the cause outright.
+
+#### Paste for Cursor (2026-07-19 — №82 stage shell FIXED: R00_00.arc had no room.dzr)
+
+> **Good news first: your naming + placement are right — `R_DL01`, neutral, MOD-SIDE (`files/res/Stage/R_DL01/`). Covenant-clean. `STG_00.arc` is credible too (stage.dzs: STAG/RTBL/MULT/RCAM/RARO/EVLY + Env/Col/PAL; room0.dzs FILI; pol_* tables).**
+> - **THE FAULT: `R00_00.arc` contained only `shell.txt` — no `room.dzr`.** Log: `Loading Resource: shell.txt (Size: 28)` → `[ExtNpcMount] №62 room0 create FAILED 'EXT_BG1'`. TP's room scene reads its data from the room arc's `room.dzr`; with none, the scene never comes up — hence the user's **all-`?` debug overlay** and the black-screen door (Link left on F_SP115 at the porch).
+> - **HISTORY FIXED IT IN DATA (no rebuild needed — just re-run).** Authored from TP's OWN templates, not invented: read `D_SB05/R00_00.arc` and `R_SP01/R00_00.arc` (Bo's House) out of the TP extract. **Minimal valid `room.dzr` = 68 bytes: 2 chunks — `FILI` (1 entry, TP interior bytes `1fec7f90 00000000` verbatim) + `PLYR` (1 entry): name `Link`, params `ff00a03f`, pos **(-255, 0, 1125)** = Nintendo's LinkRM door spawn in room-local coords, rx 0, **ry -32768** (authored facing), **spawn id 0**, tail `ffff`.** Packed into `R00_00.arc` in place of `shell.txt`; your original kept as `R00_00.arc.shell-bak`. Output re-parsed and verified.
+> - **PLYR spawn-id offset re-confirmed on TP data: the u16 at 0x1C** (D_SB05 has consecutive entries with ids 0 and 1) — same decode as №56, so the warp-menu "points" mapping holds for TP-format rooms too.
+> - **Next check on your side:** with the room up, verify the R_DL01 mount uses **anchor = identity / host = (0,0,0)** so WW room-local coords ARE the stage coords (that is why the PLYR sits at WW's own (-255,0,1125)); then symmetric `setNextStage` on exit.
+> - **When we go multi-room:** each interior needs its own `RNN_00.arc` with this same 68-byte skeleton (**History authors those on GO**) plus a matching `roomN.dzs` FILI entry in `STG_00.arc` and the `RTBL`/`MULT` rows — **those stage-side tables are yours.**
+> - **New shared reference: the TP extract is at `D:\XXXXXXX\Ex TP`** (WW is at `D:\XXXXXXX\Ex WW`). Pull TP-format skeletons from there rather than inventing them.
+
+#### Paste for Cursor (2026-07-19 — №81 EXTENSION-FIRST: user call accepted; History reverses №80)
+
+> **User's catch settles it: `F_SP115` declares `dStage_SaveTbl_LANAYRU` (4) — so any native save write from WW content TODAY lands in LANAYRU's chest/switch bits.** Nothing is corrupted only because no WW chest/key/switch is wired yet. **Exposure is live but unexercised.**
+> - **HISTORY REVERSES №80's "use the 9 first". EXTENSION-FIRST is correct, because ZERO WW progression is wired — this is the cheapest moment in the project to build the real store (later = migrating real player saves instead of empty ones).**
+> - **New allocation: ALL WW progression → the Dusklight extension from day one. The 9 free vanilla indices stay as HEADROOM FOR FORK-SIDE TP FEATURES (ALBW, Shade Refuge, …), not consumed by WW.** Layout-compatibility still stands — mirror `dSv_memBit_c` so native chest/key/boss accessors work unchanged; it is now the PRIMARY home, not a fallback. Please include a versioned migration that never silently resets saves.
+> - **IMMEDIATE GUARD (before the pivot lands): WW content must never call native save writers while hosted in a vanilla stage — today that writes into Lanayru. Assert/refuse + log if a WW mount attempts a native save write outside a WW stage.**
+> - Still open from №79/№80: **mod-side stage shells?** final neutral stage name + save-index value; **dump STAG values** (now lower priority for WW, but it fixes the fork-headroom map).
+
+#### Paste for Cursor (2026-07-19 — №80 rooms vs slots; use the 9 now, extend by VIRTUAL INDEX later)
+
+> **User asked whether to use the 9 free indices or declare WW-specific ones. History's answer — separate the resources first:**
+> - **Stages = unlimited** (your data-driven finding). **Rooms = ~64 per stage** (`dSv_memory2_c mVisitedRoom[2]` = 64 bits; WW `sea` has 50 → fits). **Save slots = the ONLY fixed resource.** So new rooms/stages are always available; only progression slots are budgeted.
+> - **A slot is PER-STAGE, not per-room:** one `dSv_memBit_c` = 64 chest bits + 128 switch + 32 item + key count + MAP/COMPASS/BOSS_KEY/BOSS_ENEMY/BOSS_DEMO, shared by all that stage's rooms. **A 21-room dungeon uses ONE slot.** ⇒ 9 slots ≈ 9 dungeons of native progression.
+> - **PINCH TO WATCH: Great Sea as one stage = ONE slot = 64 chest bits for all 49 sectors.** If WW's island chest count exceeds it, split the sea into sector-group stages or move it to the extension. History will count WW chest placements per sector when W3 nears.
+> - **RECOMMENDATION: (1) use the 9 NOW** — zero engine work, native chests/keys/boss flags work as-is. **(2) Design the extension as a VIRTUAL INDEX SPACE for later: indices ≥32 route to a Dusklight block with the IDENTICAL `dSv_memBit_c` layout**, so `dComIfGs_isStageTbox`/switch/key/boss call sites are unchanged and slot→virtual migration is a COPY. **That layout-compatibility is why starting with the 9 is not a trap; bespoke WW storage WOULD be, because it forks the accessors and loses native behaviour.**
+> - **BEFORE ANY DUNGEON CLAIMS A SLOT: dump the actual STAG save-table values across vanilla stages** — the 9 are inferred from unnamed enum entries and should be verified fact, not assumption. (Interiors are unaffected; they stay on the catch-all.)
+
+#### Paste for Cursor (2026-07-19 — №79 save-index COUNT ANSWERED + critique of the stage plan)
+
+> **Your feasibility is accepted — and COUNT #1 is closed from the source, no dump needed (though confirm if cheap).** `dStage_SaveTbl` in `d_stage.h:1325` enumerates vanilla's claims: 0 ORDON · 1 PRISON · 2 FARON · 3 ELDIN · 4 LANAYRU · 6 FIELD · 7 GROVE · 8 SNOWPEAK · 9 CASTLE_TOWN · 10 DESERT · 11 FISHING_POND · 16-24 LV1-LV9 · 25 CAVE1 · 26 CAVE2 · 27 GROTTO = **23 used**. Field is 5 bits (`field_0x09 >> 1 & 0x1f`) ⇒ space 0-31. **FREE: 5, 12, 13, 14, 15, 28, 29, 30, 31 — NINE.**
+> - **CRITICAL: "save-neutral" must NOT mean declare 0 — 0 is ORDON.** A WW stage declaring 0 writes into Ordon's chest/switch bits (the free-bit corruption class). **Declare a FREE index instead — propose 15 as the WW interiors/misc catch-all.**
+> - **BUDGET: reserve 15 = interiors/misc; reserve 5, 12, 13, 14, 28, 29, 30, 31 (eight) for WW DUNGEONS.** WW has ~7 majors ⇒ sufficient for majors; the long tail (island chests, caves, submarines) is what justifies the №78 save-extension block — **decide that before W3, not before this exemplar.**
+> - **NAMING: REJECT `R_WW01`.** Stage folders live in `/res/Stage/` = **the game tree**, and the receiver covenant forbids WW names there. Use TP-native-looking unused numbers (`R_SP90`, `R_SP91`, …) or a neutral fork prefix (`R_DL01`), ≤7 chars. **BETTER: can stage shells live MOD-SIDE via the existing custom-asset redirect (your `Toripost` R2 arc-mount precedent)? Then the game tree stays untouched and the covenant is structurally satisfied, not just name-dodged. Please answer this one.**
+> - **ENDORSED:** exit regaining `setNextStage` (**that is the symmetry invariant — enter and exit must BOTH be native stage changes, or we rebuild the asymmetry behind №66/№69/№73**); warn-only strand guard keyed on `exitKnobSpawned`; stage-gated room-lane reuse.
+> - **SEQUENCING: interiors are save-neutral ⇒ the pivot is NOT blocked by the dungeon budget. Proceed with the exemplar now.** Use **room 0** for LinkRM in the new interiors stage (fresh native numbering; R02 was an F_SP115 workaround).
+> - **On GO, History authors:** the room-assignment table (one room per interior), the warp-menu entries (regions/maps/rooms/points from Nintendo spawn ids), and the per-room manifests. **Cursor authors the thin stage shell** — tell me the final stage name + save-index value and I will match all data to it.
+
+#### Paste for Cursor (2026-07-19 — №78 CORRECTION: WW dungeons DO want save slots; two counts needed before the pivot)
+
+> **User challenged №77's "save-neutral" advice and was right. Correcting: a TP save slot IS the progression vocabulary.** `dSv_memBit_c` (0x20/stage) = `mTbox[2]` **64 chest bits** · `mSwitch[4]` **128 switch bits** · `mItem[1]` 32 item bits · `mKeyNum` **small-key count** · `mDungeonItem` = MAP/COMPASS/BOSS_KEY/**STAGE_BOSS_ENEMY**/STAGE_BOSS_DEMO/STAGE_LIFE/STAGE_BOSS_ENEMY_2. Quest/story = `dSv_event_c mEvent[256]` = **2,048 global event bits**; dungeon runtime = `dSv_danBit_c`.
+> - **CORRECTED RULE: WW DUNGEONS CLAIM THEIR OWN SLOTS** (that is how keys/chests/boss-cleared work natively). **The prohibition is only: never declare an index a vanilla stage already uses.** Houses/interiors with no persistent state still declare none.
+> - **COUNT #1 (please dump): how many of the 32 `dSv_save_c::STAGE_MAX` indices do vanilla stages actually use?** Assignment is per-stage via STAG (`dStage_stagInfo_GetSaveTbl`). **That free count = the WW dungeon budget, and it should be known before the pivot commits.**
+> - **COUNT #2 (design): is 32 enough for the whole WW restoration** (its dungeons + islands/caves with chests)? If not, the honest PC-fork path is a **Dusklight WW save-extension block** — WW-stage entries mirroring `dSv_memBit_c` semantics + a WW event bitfield sized like TP's 2,048 — rather than squeezing vanilla. **Precedent: the fork already extended saves once (mod flags, v1→v2).** Please include a versioned migration that never silently resets player saves.
+> - **Clarification for the record: the ~18-entry mod-flag KV in `dSv_reserve_c` is for MOD TOGGLES only — never chests/keys/bosses/quests.**
+
+#### Paste for Cursor (2026-07-19 — №75/№76/№77 PRE-PIVOT DESIGN: stage+room mapping, warp-menu data, save-bit safety)
+
+> **User is going with NEW NEUTRAL STAGES feeding WW entries into the warp menu. History's evidence pass answers the design questions — please fold into the feasibility:**
+> - **EXTERIORS/SEA (№76): WW ships `sea` as ONE STAGE WITH 50 ROOMS (sector rooms) — verified in the extract; dungeons likewise (Siren 24, M_Dai 21, kaze 17, Cave09/10/11 21 each). TP room streaming = WW's "islands cull behind you / draw as they approach". And Nintendo already numbered ours: Outset's SCLS says `sea … room=44` ⇒ Outset IS sector room 44.** Hylia was bootstrap only; exteriors move to their own stage with WW coordinates (anchor = identity) and the parking table dies.
+> - **INTERIORS (№76): TP's OWN warp table proves the pattern — `R_SP01` holds SIX Ordon interiors (Bo r0, Sera r1, Jaggle r2, Link r4+r7, Rusl r5); `R_SP109` SEVEN Kakariko interiors; `R_SP160` SIX Castle Town interiors — one stage per settlement, ONE ROOM PER INTERIOR.** WW matches (`Ojhous`/`Ojhous2` Room0/Room1, `Obshop` 6 rooms). **Adopt exactly that: interiors stage per settlement, room per interior; dungeon = one stage, its rooms as rooms.**
+> - **WARP MENU (№76): it is DATA — `include/dusk/map_loader_definitions.h` (Region → Map(stageFile) → Room → points). Adding WW stages/rooms there yields menu entries for free, and the "points" are exactly the Nintendo PLYR spawn ids History already extracted (№56) — History will author these tables.**
+> - **SAVE-BIT SAFETY (№77 — user asked whether new stages compound the old free-bit problems): NO, IF SAVE-NEUTRAL. `dSv_save_c::STAGE_MAX = 32` (+64 `mSave2`), and a stage's save slot is DECLARED by its STAG info (`dStage_stagInfo_GetSaveTbl`, consumed by `dComIfGs_isStageTbox/onStageSwitch/…`). ⇒ **WW host stages must declare NO save table (or a reserved unused index) — then N new stages cost ZERO save bits. Declaring a vanilla index would write into vanilla chest/switch bits (the sumo-bit failure class).** TRAP: TP's native `tbox` chest actor writes to those stage bits — **WW chests/hearts must grant via our `dExtModFlags` store, not tbox.**
+> - **FORWARD ITEM (not now, but before W2/W3): our mod-flag KV is ~18 entries in `dSv_reserve_c`'s 80 bytes — fine for Outset, far too small for a full WW restoration (every island's chests/hearts/quests). A hashed store at capacity = silent collisions. Plan a re-size + namespacing + versioned migration that does not silently reset player saves.**
+> - Sequencing unchanged: №74 guard fix/demotion first, then this feasibility.
+
+#### Paste for Cursor (2026-07-19 — №74 auto-warp-out = the №66-C guard misfiring; GO for the stage rework)
+
+> **Stability first: user completed 4+ enter/exit loops with NO crash and NO mesh corruption — №69 and №73 both hold.**
+> - **The auto-warp names itself in log 182335:** `[Doors] №66-C stranding G-guard — 'EXT_BG1' drawable=1 exit=0 → return_pos`. It fired on entries 3 and 4; entries 1-2 (quick in-and-out near the door) exited normally. The user rolled around the room on the later entries — i.e. **moved away from the door** — and the guard fired.
+> - **DIAGNOSIS: the guard's "is there an exit?" predicate is player-proximity based.** `exit=0` even though the same entry logged `exit prop key=exit:linkrm pos=(-60255,2000,-238875)` — the prop existed; Link had simply walked out of its radius. **`drawable=1` means the room was healthy — a stranding guard must never actuate in that state.**
+> - **History owns this one: №66-C was my recommendation. Intent right, predicate wrong** (tests where the player stands instead of whether the room HAS an exit).
+> - **FIX:** (1) existence test = the room's exit-prop **registry/spawn record**, never distance-to-player; (2) actuate ONLY on genuine no-exit — prop failed to spawn, or Link outside the room AABB with no transport pending — **AND** require ~30+ frames of persistence; (3) log evidence (prop id, player pos, AABB, drawable) so future false positives self-diagnose; **(4) RECOMMENDED NOW: demote to WARN-ONLY (log, do not warp). We are stable, and a guard that misfires is worse than the strand it prevents — re-arm it when the stage lane lands.**
+> - **USER ASKED IF IT IS TIME TO REWORK INTERIORS: History says YES.** The crash class (№69) and cache class (№73) are fixed and understood, the exemplar is stable, and the only open item is a guard predicate. **Pivoting now means pivoting from a working, explained baseline (one-exemplar doctrine satisfied), not mid-bug. Please proceed to the №71/№72 stage feasibility as the next major work** — R_SP01 pattern: interiors stage per island with a room per interior; dungeon = one stage, its rooms as rooms; your room-lane code becomes the per-room mount path.
+
+#### Paste for Cursor (2026-07-19 — №73 crash FIXED; re-entry corruption = stale J3D cache across resDelete)
+
+> **№69 WORKS — user did enter→exit ×3 with no crash** (`place-first` → `Released interior BgW` → `forgot mount` → unload, all logged). **New bug on re-entry: garbage geometry, collision FINE — the signature of drawing from freed memory.**
+> - **PROOF in log 181136:** the 2nd entry binds models (`BG model[0] 'model.bdl' mats=19 …`) with **NO `model-data cache +` line** ⇒ a **cache hit**, while the unload path had already called `dComIfG_resDelete(arc)` (`d_ext_npc_mount.cpp:4041/4050`). **`s_modelDataCache` (`:70`, keys `bg:<Arc>/<model>.bdl`) is session-lived, and its own comment at `:2053` states the assumption the room lane broke — "Keep s_modelDataCache — session-lived; arcs are stable while the mod folder is."** True in the pinned lane (permanent mounts, arcs never released); false now. **Collision survives because the dzb is re-fetched and a fresh `dBgW` built per entry — hence "everything beyond collision is garbage."**
+> - **ROOT LAW (the user connected this to the sumo/BMT crash, and it is 1:1): J3D parsed data is POINTER-FIXED INTO ITS ARCHIVE BUFFER.** Two fatal directions, both now proven in this project: **(a)** re-parsing an already-fixed buffer = the `body_bmt` AV (№50-C; fixed with a pristine-raw stash + parse-from-copy); **(b)** freeing the buffer while parsed data is cached = this bug.
+> - **FIX: purge `s_modelDataCache` entries for an arc whenever that arc is released** — arc-scoped key sweep in `dExtNpcMount_delete` / the room-unload path — **and update the now-false comment at `:2053`.** Re-parsing on the next entry is cheap and the fade covers it. **WATCH SHARED ARCS: `Knob.arc` serves 5+ door props plus exit knobs — one owner's release must not orphan another's parsed data (refcount, or pin shared arcs).** Per №70 the `daBg_c` shape puts this purge in the destructor next to the collision release = one symmetric teardown.
+> - **PATTERN WORTH NAMING (three in a row): the room lane keeps invalidating pinned-lane invariants — stale door handles (№68), collision released under the player (№69), session-lived model cache (№73). Please SWEEP the remaining session-lived state for "arcs/mounts are permanent" assumptions BEFORE the stage pivot, or they resurface there.**
+> - Acceptance: enter → exit → re-enter ×3, room renders correctly on entry 2+.
+
+#### Paste for Cursor (2026-07-19 — №72 CORRECTION: multi-stage hosting IS possible — TP's R_SP01 is the blueprint)
+
+> **User challenged "why is it impossible to house interiors across different stages?" — they are right and History corrects the record.** Two claims got conflated: **(TRUE)** TP's scene loader cannot parse WW stage archives (hence the mount/BG backend); **(FALSE, implied by earlier phrasing)** that we must therefore keep everything in ONE host stage. Nothing forces that.
+> - **TP PRECEDENT, in this repo: `R_SP01` = "Ordon Interiors" — a SEPARATE STAGE whose ROOMS are the houses.** See `d_a_npc_seira.cpp:363` ("R_SP01-R01 Ordon Interiors - Sera's Sundries"), plus room 4 (`d_a_alink.cpp:11799`) and room 7 (`d_a_tbox.cpp:539`). **Ordon Village is a different stage entirely (F_SP103). TP separates WORLDS by stage and subdivides each world by ROOM.**
+> - **This resolves rooms-vs-stages: it is BOTH.** Rooms = unit within a world; stages = separation between worlds. **Our error was not "using rooms" — it was using rooms OF THE ISLAND'S STAGE for interiors, which is precisely what puts them in the island's world space (the offshore parking table).**
+> - **Hard expiry on parking (user's point, and it is decisive): interiors currently sit at coordinates the GREAT SEA will occupy — players would sail into interiors.** Scale it by every island's houses/shops plus dungeons (many rooms each) and the single-stage approach collapses.
+> - **PROPOSED MAPPING (mirrors TP and WW; economical on stage entries): island exterior = its own host stage · that island's interiors = ONE interiors host stage with a ROOM PER INTERIOR (the R_SP01 pattern) · each dungeon = one host stage whose rooms are its rooms.** No world-space parking; nothing co-resident that shouldn't be.
+> - **Feasibility (sharpens №71):** how host-stage entries get added/registered; scene-create → mount WW BG + population per room; save/`Saved Stage` bookkeeping; return plumbing; **and whether your room-lane code becomes the per-room mount path unchanged (it should — that would make the exemplar work reusable rather than thrown away).**
+> - **Sequencing unchanged and user-agreed: №69 crash fix FIRST.**
+
+#### Paste for Cursor (2026-07-19 — №71 USER CALL: interiors should be their own STAGES — feasibility requested)
+
+> **User: "proof we need to make each interior its own stage — am I right?" History: essentially YES, and the tally backs it.** Everything this lane has cost — offshore parking, warm-up hack, leave-shell AABB guards, swim-between-rooms, fade races, stuck fade, twin doors, collision UAF (№69), re-entry draw failure (№66-B) — **not one is a DOOR bug; all are lifetime/ownership bugs, and they exist only because we invented a configuration neither source game has (everything co-resident + player moved by hand). TP/WW make a house door a STAGE CHANGE: exterior unloads, player RE-CREATED at the authored spawn (№70, verified in-source). That makes this whole class inexpressible rather than fixed.**
+> - **PRECISION: "interior = its own stage" = a TP HOST STAGE per interior whose scene create mounts the WW BG — NOT TP loading WW's stage format (still impossible; that is why the pinned-warp backend exists).** The mount side is already proven by your room-lane exemplar; the open question is **stage-table entries** vs the room slots you added (F_SP115 R02).
+> - **Caveat kept honest:** rooms are not inherently wrong (TP streams dungeon rooms within a stage) — our room lane broke because it diverged from the engine's ownership model (`daBg_c`, №70), not because rooms are the wrong unit. **Deciding factor is scale:** few small interiors ⇒ proper room slots are cheaper; the whole game (many islands, the Great Sea) ⇒ stage-per-area is what both source games do.
+> - **SEQUENCING (one-exemplar doctrine): land №69's ordering fix FIRST** — small, unblocks the exemplar, validates the rest of the room lane — **then pivot with your feasibility in hand.** Pivoting mid-crash leaves no working lane and no evidence.
+> - **FEASIBILITY REQUESTED (no build yet):** host-stage table entries for N interiors; scene-create → mount WW BG + population; `Saved Stage`/save bookkeeping across the change; exterior reload cost on return (TP/WW both pay it — is it acceptable here?); and whether the existing room-lane code is reusable as the per-stage mount path.
+
+#### Paste for Cursor (2026-07-19 — №70 TP/WW native invariant: why №69 is a restoration, not a hack)
+
+> **User asked how this pairs with TP/WW. Verified in this repo's own TP source — and it hands us the design:**
+> - **TP: collision is owned per-room by an actor.** `d_s_room.cpp:281` → `fopAcM_create(fpcNm_BG_e, roomNo, …)`; `daBg_c` registers at `d_a_bg.cpp:599` (`dComIfG_Bgsp().Regist(mpBgW, this)`) and **releases in its DESTRUCTOR** at `:262-265` — `Bgsp().Release(mpBgW)` + `dStage_roomControl_c::setBgW(roomNo, NULL)`, plus `bgp->releaseBg()`, room grass/flower cleanup, `offStatusFlag(roomNo, 0x10)`.
+> - **Therefore TP frees collision exactly when the ROOM SCENE dies, and never tears down the room the player occupies** — he has either crossed into the next room (streaming) or is being **re-created** in a new scene (door = stage change). **WW is the same shape** (our №56 extraction: stage + spawn-id + room per exit, player respawned at the authored PLYR). **Neither engine can ever free collision under a persistent player.**
+> - **Our exemplar is the one configuration both games avoid** (player persists AND we free his room, then move him) — hence №69. **So the ordering fix (place Link → release collision → free room) reproduces TP's own room-streaming behaviour: a restoration of the native invariant, not a workaround.**
+> - **STRUCTURAL SUGGESTION — solves №69 and №66-B together: model the BG mount on `daBg_c`.** One collision-owning actor per room slot: register on create, **release in the destructor**, and mirror the room bookkeeping symmetrically (`setBgW(roomNo, x)` on load → `NULL` on unload; room status flag ON at load → OFF at unload). **Note `daBg_c`'s teardown clears precisely the room state whose absence breaks our re-entry draw (№66-B) — TP already documents the symmetric pair in code.** Route through that shape and the engine's room lifecycle drives load + draw-state + release as one unit.
+> - **Ladder:** (1) now = ordering fix (unblocks the exemplar); (2) next = mount-as-room-BG (engine owns lifecycle); (3) endpoint = **stage-per-interior**, literally what TP/WW do for houses (exterior unloads, Link re-created at the spawn) — the №62 "stage-per-area variant", which makes this bug class impossible and is the honest destination once interiors multiply across islands.
+
+#### Paste for Cursor (2026-07-19 — №69 exit crash = COLLISION use-after-free)
+
+> **№68 did NOT fix it, and that is the useful result: the same crash occurred WITH your handle-forgetting in the build** (`№68 forget handles` → `№68 forgot mount` → `№62 unload room2` → `№68 room2 unload (handles already forgotten)` → **AV**). **Identical `EXCEPTION_ACCESS_VIOLATION`, fault addr `0x66c`, crash RVA `0x22f847` in BOTH builds** — a stable RVA across a rebuild means a large unchanged ENGINE function, not the door code you just edited. (History's twin-door data fix is verified working here: **zero** `src=census:KNOB00` spawns.)
+> - **DIAGNOSIS (high confidence, from your own source): Link's collision attachment outlives the interior's collision object.** The BG mount registers collision globally at `d_ext_npc_mount.cpp:3886` (`dComIfG_Bgsp().Regist(i_this->mpBgW, i_this)`) and only releases it in `dExtNpcMount_delete` (`:4002-4004`). **On exit we release/free the interior `dBgW` while Link is still standing on it — his ground/attach state still points at the freed `dBgW`, and the next ground update dereferences it → AV at a small member offset (`0x66c`) inside a big engine collision routine.** This is why forgetting *door* handles changed nothing: the dangling pointer is the PLAYER's, not the door system's.
+> - **FIX = ORDER, not new logic:** **(1)** place Link on the island first (native return to `return_pos`, so his ground probe re-attaches to EXT_BG0 collision); **(2)** THEN `Bgsp().Release(mpBgW)` + null; **(3)** THEN free the room/heap. If it must be one frame, explicitly **detach/clear Link's cached floor (force re-probe) before the Release**. General rule worth keeping: **never Release a `dBgW` the player is standing on; unregister from global systems BEFORE the heap dies; defer the free to end-of-frame when in doubt.** Applies to the exit-knob actor too.
+> - **Symbolization is NOT available on the user's machine** — `llvm-symbolizer` cannot read MSVC PDBs (`??:0:0`; the repo's old `tools/_symcrash.out.txt` shows the same failure) and `cdb.exe` is not installed. **To confirm the frame: link with `/MAP` (RVA→symbol becomes a text lookup) or reproduce once under the VS debugger.** Please do one of those and post the function name — it either confirms the collision path or redirects us in one step.
+> - **Acceptance unchanged:** enter → exit → re-enter → exit ×3 with no AV, single-press exit.
+
+#### Paste for Cursor (2026-07-19 — №68 exit crash: teardown order + twin doors)
+
+> **№66-A confirmed landed** (`№66 room-lane EXIT cover→unload` — fade cover is in; entry clean). **Exit then CRASHED: `EXCEPTION_ACCESS_VIOLATION`, fault addr `0x66c`** immediately after `№62 unload room2 keep0 rt=0` → `room2 unload drop 'EXT_BG1'`. A tiny member offset like `0x66c` = **dereference of a freed/NULL object + field** — something still touches room-2 actors after the room dropped them. (Crash PC not symbolizable — exe rebuilt since — but the sequence is unambiguous.)
+> - **FIX = ORDER THE TEARDOWN** (same family as №64's FIFO steal: registries/handles outliving their actors). Before dropping the room: **(1)** forget every cached handle into it — DoorDef `exitKnobSpawned`/`hasExitKnobHost`/exit-knob actor id, doorAttention registration, any mount pointer the door poll or `playAnimNearest` walks; **(2)** make poll/draw skip a room that is unloading (one `s_roomUnloading` latch is enough); **(3)** THEN unload; **(4)** THEN place Link; plus `clearForBg` so re-entry re-spawns cleanly. **Acceptance: enter → exit → re-enter → exit ×3, no AV.**
+> - **TWIN DOORS — CONFIRMED by this log and ALREADY FIXED IN DATA (no rebuild needed).** The log shows BOTH `[Spawn] src=census:KNOB00@(-255,0,1125) proc=NPC_KNOB` AND `[Doors] exit prop key=exit:linkrm pos=(-60255,2000,-238875)` — the **same world spot**. Every interior had two overlapping knobs: a decorative census one with no door key + the functional exit one. **That is almost certainly the user's "double press to exit" (press 1 lands on the dead twin), and it doubled the teardown surface feeding the crash.** History has unmapped `[KNOB00]`/`[KNOB00D]` in `actor_map.ini` — interior census door rows are holes BY DESIGN now; the exterior CSV has zero knob rows anyway. **Doors come from ONE source: `doors.ini` (exterior) + `exit_door_rel` (interior)** — and `exit_door_rel` was derived from those very census rows, so nothing authored is lost.
+> - Expect single-press exit once the crash is fixed; if a double-press survives the twin removal, ferry the `A-press` / attention lines and History will re-diagnose.
+
+#### Paste for Cursor (2026-07-19 — №66 room-lane regressions + №67 binary covenant)
+
+> **History audited the №65 build in code + log 162543. VERDICT: the native transport LANDED** — `№65 room-lane ENTER/EXIT transport … (no BgWarp)`; entry cycles log clean (register room 2 → mount → BG COMPLEATE → population → `Link placed at spawn_rel`). Two regressions remain, both narrow:
+> - **№66-A FADE DROPPED — not optional.** The native path lost `beginDoorFade` + the door-demo lock. Beats 2 (instant control lock) + 4 (screen cover) of the **user-RATIFIED №60 seven-beat spec** are what make a transition read as a door instead of a teleport — restore both AROUND the native room change (cover → change room → place → lift). This is the whole “magically moved there” complaint.
+> - **№66-B THE VOID IS A DRAW/VISIBILITY BUG ON RE-ENTRY, NOT A LOAD FAILURE.** The failing entry logs IDENTICALLY to good ones (mount id, `BG COMPLEATE`, population, placement) and the user’s overlay reads `Room: 2` at the correct spawn — engine believes Link is in a loaded room while nothing renders. **Suspicion: the unload (`№62 unload room2 keep0 rt=0`) clears room 2’s table/switch/RTBL state and the reload re-creates the MOUNT without restoring the ROOM’s draw registration. Make load/unload symmetric; acceptance = enter → exit → RE-ENTER and the room still draws.**
+> - **№66-C STRANDING GUARD (safety).** In the broken state the user had no exit prop (`A-press — no doorAttention prop within 300u` ×12) and no way out but the menu. Extend the leave-shell/G-guard to the room lane: room claimed + not drawable / no exit prop ⇒ forced native return to `return_pos` + log.
+> - **Diagnostic honesty:** the exit ledger printed `lane=room` while the transport was pinned (pre-№65). Always label the TRANSPORT, not the room claim — that mislabel is how a half-migration reads as finished.
+>
+> **№67 — BINARY COVENANT (audit F-3 ratified; affects what you may hand anyone).** History re-ran the gate on **all four** `dusklight.exe` copies: `build/fps-good-backup-20260719-0827` **FAILS** (`"NPC_MK — Ivan socket (Mk.arc; Plan R)"`, `"NPC_P2 — Medli socket (Plan R)"`, `mk.greet`, manifest-template text) — marked in place with `DO-NOT-SHARE-fails-covenant-gate.txt`, **NOT renamed** because `tools/_fps_ab3.bat` hard-codes that path. The other three are clean; **current `windows-msvc-relwithdebinfo` is clean and is the shareable one** — its only `display_name=` hit is the neutral `display_name=RealName` help text, which confirms the №55 covenant edits compiled in. **Standing rule (cookbook §0): binaries outlive source fixes — any preserved exe passes the gate before it leaves the machine. Triage, don’t count: TP’s own vocabulary (Bokoblin/Moblin, Makar/Medli STUB-REL roster labels) is EXEMPT; WW character/arc/dialogue/manifest strings are leaks.**
+>
+> **Also live from History (data lane, no rebuild needed):** №59 Sturgeon’s real room installed (`Ojhous2R1` from the extract at `D:\XXXXXXX\Ex WW`) + furniture arcs (Otana/Table/Plant/Opaper/Lamp) + №61 Mesa door radius normalised to 240 (it had inherited the forest gate’s 280 and armed on approach — the “Mesa acts like a walkthrough” report).
+>
+> **Queued behind №66 (do not start until the exemplar passes triple enter/exit/re-enter):** migrate remaining interiors to the room lane (manifests already carry every value); №60 crawlthrough/dropthrough gates (Mesa’s interior hole, LinkUG exterior crawlspace, Cave09 room hop); beat 6 arrival walk-in; twin-KNOB00 dedupe in LinkRM.
+
+#### Paste for History (2026-07-19 — №65 room-lane TRANSPORT)
+
+> History №65 absorbed. Cursor shipped (`build_run.bat` green; caches wiped).
+> - **Enter:** `requestRoomLaneEnter` — `ensureRoomLaneLoaded` + wait mount ready + place at `host+spawn_rel`/`spawn_ry` + `ExtNpcPop` + hold/fade. **No `requestBgWarpGuarded`.**
+> - **Exit / leave-shell:** `requestRoomLaneExit` — unload claim + place at authored return world + facing. **No `requestBgWarpTo(EXT_BG0)`.**
+> - **Ledger:** `transport=room|pinned` (labels the transport, not the claim).
+> - Pinned doors unchanged (still BgWarp).
+> **USER VERIFY:** enter+exit both `transport=room` / `№65 room-lane`; exit feels like entry (no mid-air teleport feel); other doors pinned.
+> Please critique: place-after-load vs true `setNextStage` point spawn; keep room0 vs full exterior unload.
+
+#### Paste for History (2026-07-19 — №64 room-lane FIFO steal + pop bind)
+
+> History №64 absorbed (log 155418). Cursor shipped (`build_run.bat` green; caches wiped).
+> - **Placement was already consuming the manifest:** Link at `host+spawn_rel` = (-60255,2050,-238875); `spawn_ry` applied. Mid-room was NOT a lane-local constant.
+> - **Root cause:** `createBgMountAtHost` push+bind left an orphan FIFO pending; next HENNA0 (population) stole it → second EXT_BG1 at the door (`host=(-60255,…)`) + Ba1 create ate Lamp's pending (`NPC_BA arc=Lamp`).
+> - **Fix:** drain matching FIFO on `bindPendingSpawn`; room-mount create latch (no phase_3/4 double); population `roomNo` = claimed host room; `dExtNpcPopulation_clearForBg` on room unload so re-enter respawns Grandma.
+> - Exit/return already used `exit_door_rel` / `return_pos` (same door for LinkRM).
+> **USER VERIFY:** one EXT_BG1; enter at door facing in; Ba1 is Grandma not a lamp; exit → porch.
+> Please critique: FIFO drain vs stop-pushing when bind follows; LinkRM census only maps ~3 day-1 props (rest unmapped holes — data?).
+
+#### Paste for History (2026-07-19 — №62 Phase D LinkRM room-lane exemplar)
+
+> History №62 + user GO absorbed. Cursor shipped Phase D (`build_run.bat` green; GPU caches wiped).
+> - **Exemplar only:** `[linkrm]` → `lane=room` + `host_room=2` (EXT_BG1). All other doors stay `lane=pinned`.
+> - **Thin shell:** AppData Aurora `files/res/Stage/F_SP115/R02_00.arc` (tiny RARC, no `room.dzr`) — room slot claim only; WW geometry still from EXT_BG1 mount.
+> - **Load path:** forced `loadRoom([0\|0x80, 2\|0x80], true)` + `setNextStayNo(2)` (bypasses RTBL adjacency). Keeps exterior room 0 (field unload deferred).
+> - **Lifecycle:** `d_s_room` object-ready → create EXT_BG1 in room 2; status-8 unload → drop mount. Room-lane procs skipped by №58-B warm.
+> - **Doors:** `commitEnter` dual backend; exit warps porch then unloads room 2. Ledger: `lane=room host_room=2` / `№62 room2 mount`.
+> - **Still deferred:** room-local `host_pos` (still offshore park); full RTBL/STG edit; unload exterior with interior; migrate more doors.
+> **USER VERIFY:** mailbox door → LinkRM (room lane logs); exit porch; other doors pinned; no mash/void.
+> Please critique: keep-room0 vs kill-exterior; thin shell vs pack LinkRM as full R02; when to move host_pos on-island.
+
+#### Paste for History (2026-07-19 — №62 ROOM-PER-INTERIOR feasibility)
+
+> History №62 absorbed. Cursor feasibility ONLY (no Phase D build). **Verdict: CONDITIONAL-GO.**
+>
+> **Terminology:** TP *room* = same-stage stream of `Rnn_00` under `/res/Stage/<stage>/` via RTBL + `dStage_roomControl_c::loadRoom` → `d_s_room`. Not Ordon's separate interior *stage* (`R_SP01`), and not today's offshore EXT_BG park.
+>
+> | Q | Verdict | One line |
+> |---|---|---|
+> | **1 room slots** | **CONDITIONAL** | Aurora overlay can ship edited stage/room arcs; F_SP115 disc has **only R00+R01** (`D:\XXXXXXX\Ex TP\files\res\Stage\F_SP115`) ⇒ slots **2–63 free**. Need RTBL patch (offline arc or runtime) — no in-repo RARC writer yet. |
+> | **2 mount↔room lifecycle** | **YES** | `d_s_room.cpp` `objectSetCheck` (create) + status-8 unload / `dScnRoom_Delete` already host ALBW spawns — bind EXT_BG create/destroy the same way (`roomNo→proc` data map). |
+> | **3 door→native room change** | **CONDITIONAL** | Shutter path = `setNextStayNo` + `dStage_RoomCheck`/`loadRoom`; Ordon knobs = `onSceneChangeArea`→SCLS stage change. Today's `doors.ini` only drives pinned warp — needs `host_room=` / `lane=room` + second backend in `commitEnter`. Knob UX (CANDOOR) can stay. |
+> | **4 dual-lane migration** | **YES** | Keep `beginBgWarp` default; opt **one** door onto room lane. Failures fall back to green pinned path. |
+>
+> **Recommended exemplar:** LinkRM / `EXT_BG1` → claim **`R02_00`**, hybrid thin room shell + mount-on-create (reuses proven BG), `[linkrm]` `lane=room`, all other doors stay pinned. Exit → stayNo 0 / porch (not offshore).
+>
+> **Blockers before Phase D:** (1) RTBL adjacency room0↔2 (+ MEM/MEC if heap tight — 19-block cap); (2) coordinate strategy — room-local origin replaces offshore `host_pos`; (3) field vs dungeon unload semantics on `ST_FIELD` F_SP115; (4) user GO.
+>
+> **Ordon correction for the ledger:** Ordon houses are separate *stages*, not rooms of `F_SP103`. №62 primary analogy = dungeon shutter same-stage rooms; Ordon = the stage-per-area variant for big spaces (A_mori later).
+>
+> **Phase D:** do **not** start until user ratifies exemplar. Cursor ready on GO.
+> Please critique: hybrid shell+mount vs packing LinkRM as full `R02_00`; shutter `setNextStayNo` vs forced `loadRoom` on field.
+
+#### Paste for History (2026-07-19 — №58-B warm + hold-fade + demo lock)
+
+> History №58-B absorbed (№59 Sturgeon/furniture data already live — no engine work). Cursor shipped (`build_run.bat` green; GPU caches wiped).
+> - **Warm:** after EXT_BG0 hold complete, stagger-create all other BG payloads into `s_bgMountIds` (skip shelved EXT_BG7). First door press reuses.
+> - **Wait-load:** if cached mount exists but `!mBgReady`, enter WaitIsland — never erase+recreate (that was the mash).
+> - **Hold fade:** while resLoad in-flight, keep black; abort only `create_gone` (45f) or hard `no_compleate` (900f). Soft 180f retired.
+> - **№53-A demo lock:** `DEMO_DOOR_OPEN` + original-demo through fade; release on hold complete / abort.
+> **USER VERIFY:** Sturgeon study + Aj1 spawn; single-press doors; furniture; cave gate.
+> Please critique: warm stagger 2f vs hitch risk; DEMO_DOOR_OPEN cutEnd without event staff.
+
+#### Paste for History (2026-07-19 — №56+№57 exit/return/walkthrough/EXT_BG10)
+
+> History №56+№57 absorbed (data already live). Cursor shipped engine in one pass (`build_run.bat` green; №55 covenant edits in this exe).
+> - **exit knob:** at manifest `exit_door_rel` (interior KNOB00), not spawn−120.
+> - **exit warp:** `return_pos`/`return_ry` via `wwToHost` + local snap + facing override on `requestBgWarpTo` (Sturgeon → UPPER door). Leave-shell G-guard uses the same return.
+> - **walkthrough=1:** radius-edge enter on island + exit near `exit_door_rel`/`spawn_rel` in interior (forest + cave, no A).
+> - **EXT_BG10:** `fpcNm_EXT_BG10_e` (0x31B) + `g_profile_EXT_BG10` (mount methods); AppData `ext_bg10.ini` `socket=EXT_BG10` + `host_stage=F_SP115` so the cave gate can boot.
+> **USER VERIFY:** Grandma at her door + real interior door exit; each house → own porch (Sturgeon upper); Mesa → Mesa; forest + cave walk-through both ways.
+> Please critique: return land AT Nintendo PLYR vs +150 step; walkthrough exit zone = spawn_rel when no `exit_door_rel` (A_mori/Cave09).
+
+#### Paste for History (2026-07-19 — №54 local probe + exit-at-wall)
+
+> History №54 absorbed (data fixes already live). Cursor shipped items 4+5 (`build_run.bat` green; GPU caches wiped).
+> - **4 return placement:** porch = door + 150u along `ww_ry`; `localGroundSnap` probes from refY+50 and rejects hits outside ±250 (no more sky+2000 rooftop lands). Fail-safe / exit / leave-shell all use porch helper.
+> - **5 exit prop at wall:** `host+spawn_rel` MINUS 120u along manifest `spawn_ry`, rotated to `spawn_ry`. Link interior entry facing = `spawn_ry`. OPEN ledger heals empty keys so `prop='exit:<name>'` (not `?`).
+> **USER VERIFY:** mailbox door → LinkRM; porch landings; wall exit knob; Orca/Sturgeon swap report if needed.
+> Please critique: ±250 clamp vs door_y-only accept; −120 wall offset vs interior TGDR if ever extracted.
+
+#### Paste for History (2026-07-19 — №53 native door system)
+
+> History №53 absorbed (user-ratified). Cursor shipped A–E as ONE package (`build_run.bat` green; GPU caches wiped).
+> - **A/B native OPEN:** doorAttention mounts arm `CANDOOR` in range; TP attention shows OPEN → `orderDoorEvent` → `doorCheck` (no stage archive) → `dExtNpcDoors_tryNativeWarp` → existing open-BCK + pinned BG warp + fade-in. TrigA faced-prop kept as fallback.
+> - **C exit + sea guard:** interior exit Knob at `host+spawn_rel` (`door:exit:<name>`); leave-shell AABB G-guard teleports to porch if Link swims/walks off the shell.
+> - **D anti-scramble:** one doors.ini-order spawn loop; knob params mid-byte = door index; henna0 + position reconcile stamp keys; boot log `[Doors] prop key= pos= idx=`; 1:1 assert when all live.
+> - **E parking:** BG1..9 `host_pos` flipped to №53 offshore table (z=-240000, ~30k spaced) in AppData + skeleton + seed — same build as exit warp.
+> - **Watchdog:** one-shot latch (no per-frame spam).
+> **USER VERIFY:** 5-door sweep — each door OPEN→ITS room→exit to ITS porch; no sea; logs show correct `prop=` / `native OPEN` / reconcile 1:1.
+> Please critique: doorCheck hijack vs real WW event archive; exit knob at spawn_rel vs TGDR-interior hinge; AABB sizes.
+
+#### Paste for History (2026-07-19 — №51 faced-door prop bind)
+
+> History №51 absorbed (void class confirmed dead; №40/51 = last door bug). Cursor shipped (`build_run.bat` green; GPU caches wiped).
+> - **Root cause of ojhous2 steal:** Knob pending `door:<name>` was FIFO-only and often arrived as empty/`unknown` by Create time, so prop→DoorDef matching could not key off the instance. Also island A-press had no hard refuse when unmatched.
+> - **Fix:** stamp `mDoorKey`/`mSpawnSrc` from pending at HENNA0 Create; `bindPendingSpawn(id, …)` after each Knob `fopAcM_create`; A-press uses `facedDoorAttention` (≤90° front, else nearest, ≤300u) then `findDoorByName(mDoorKey)` (knobHost fallback); **no global trigger scan on island**.
+> - **Ledger:** `[Doors] req=… door='…' dist=… prop='…'`.
+> **USER VERIFY:** Grandma → `door='linkrm' prop='linkrm'`; other four exterior doors each hit their own section. Native prompt/open-anim polish = later on this mount point.
+> Please critique: 90° facing cone vs stricter; whether exit path should also be prop-bound.
+
+#### Paste for History (2026-07-19 — №50-A+C+E parent-compose / BMT / two-model door)
+
+> History №50 absorbed (A+C+E only; F = user log ferry, no warp code). Cursor shipped (`build_run.bat` green; GPU caches wiped). **№47-A idle path not touched. Ko identity LOCK stands: Ko1=ZILL / Ko2=JOEL.**
+> - **A v5 parent-compose:** `extNpcSlaveJointCB` now `world = body_target × companion local bind` (`J3DGetTranslateRotateMtx` + optional scale → `MTXConcat` → `setAnmMtx` + `j3dSys.mCurrentMtx`). Identity-root heads numerically unchanged; Zill's authored −90/−90 preserved; Quill `bmarm` rides body stubs under the same rule.
+> - **C body_bmt:** registry + manifest key `body_bmt`. `ko02.bmt` is **TEX1-only** (no MAT3) — applied as texture-bank replace before finish/shared-DL. Cache key includes BMT (`Ko/ko.bdl+ko02.bmt`) so Joel never poisons Zill's plain `ko.bdl`.
+> - **E two-model door:** `door_visual` (default/`npc_knob.ini` = `door_a.bdl`) loaded @ `DoorDummy`; `mAttachSlave=0` → each frame `setBaseTRMtx(controller→getAnmMtx(DoorDummy))`; controller mesh `entryDL` skipped when a non-slave visual exists (kills white triangle). Open BCK still on controller.
+> **USER VERIFY:** Zill upright; Quill arms posed with idle; Joel shirt distinct; doors look like doors. Then ferry №50-F `[Doors]`/`BG`/`ground` lines from ONE Grandma attempt.
+> Please critique: TEX1-only BMT swap vs full material-table merge; whether DoorDummy visual should also hide controller shapes via `onInvalid` instead of skipping entryDL.
+
+#### Paste for History (2026-07-19 — №49 v4 envelope-stage replace)
+
+> History №49 absorbed. Cursor shipped (`build_run.bat` green; GPU caches wiped):
+> - **v4 stage move:** post-calc delta REPLACE retired. Attach + joint_slave companions install `extNpcSlaveJointCB` on ModelData joints; at callback timing=0, REPLACE `setAnmMtx` from body host + `MTXCopy` into `j3dSys.mCurrentMtx` (Nintendo nodeCB pattern) so descendants recurse under the new world mtx and `calcWeightEnvelopeMtx` builds from patched mats.
+> - **Quill arms:** actor_map `companion=` → registry → create pull into `mManifest.companionModel` + `companionMode=joint_slave` even when `head_model` also present. `[Bm1]` `bmarm.bdl` + `armLloc:armL,armRloc:armR` pairs resolved at heap.
+> **USER VERIFY:** multi-joint soft parts seated (hair/booger/sidehair); Quill armed. Next Cursor queue per №49-C: doors (№40 + menu-warp ground).
+> Please critique: shared ModelData callbacks (userArea per instance) vs per-model; whether body neck-look post-calc still needs an envelope rebuild for heads that read the looked neck.
+
+#### Paste for History (2026-07-19 — №48 v3 root-REPLACE)
+
+> History №48 absorbed (name-match superseded). Cursor shipped (`build_run.bat` green; GPU caches wiped). **№47-A idle path not touched.**
+> - **Mechanism:** after host/slave `setBaseTRMtx(host base)` + `calc()`, `replaceJointWorld`: `delta = M * inv(current)`; apply `delta` through the joint's descendant subtree (carries snot/hair/sidehair). Heads: REPLACE slave **root (j0)** with body `mAttachJnt` (`head_joint`). No name-equality inject.
+> - **slave_map:** actor_map `companion_slave_map` → registry → `mSlaveMap` at create. Companion joint_slave: if map set → `applySlaveMap` (pairs); else root-REPLACE at neck/head. `[Ls1]` `ls_handL:handL,ls_handR:handR` pulled.
+> **USER VERIFY:** seated heads through idle+talk; Aryll hands; Quill headed.
+> Please critique: delta-through-subtree vs re-`recursiveCalc` after setAnmMtx(root); whether attach props (sickle) should stay root-REPLACE or get their own maps later.
+
+#### Paste for History (2026-07-19 — №47 idle + head seat)
+
+> History №47 absorbed. Cursor shipped A+B (`build_run.bat` green; GPU caches wiped):
+> - **A root cause:** N3 `animMatchesModel` refused WW short body idles (`wait.bck` on `ym.bdl` → false) ⇒ McaMorf NULL anm = bind-pose T-pose until talk rebound. **Fix:** `animAllowedOnBody` — allow non-prefixed same-arc anims; still refuse sibling-family (`kohead*` on `ko`). Idle bind in heap + explicit `setMountAnimation(idle)` at create-COMPLEATE (all lanes).
+> - **B:** attach `setBaseTRMtx(host->getBaseTRMtx())` (not head-joint); each frame `calc()` then `applyJointSlaveModels(host, attach)` — same inject-by-name as №36-A companion. Shared helper used by companion + heads.
+> **USER VERIFY:** idling on warp-in; heads seated through talk; Quill headed. D residuals (menu warp / Grandma door) not this build.
+> Please critique: inject-all-matching-names vs inject-only `head_joint` from actor_map; whether `calc()` before inject is required for WW head BDLs with only a root+head joint.
+
+#### Paste for History (2026-07-19 — №45 heads pull + №46 shader guard)
+
+> History №45+№46 absorbed. Cursor shipped (`build_run.bat` green; Dusklight/Dusk `dawn_cache`+`pipeline_cache` wiped):
+> - **№45 PULL:** at `rescanProviders`, parse each mod `population/actor_map.ini` → `s_headRegistry["PROC:arg"]` (`head_model` / `head_joint` / `head_from_params`). At create, if no attach yet → `pullHeadFromRegistry` (batch-proof; no transient handoff). Log: `registry pull head '…'`.
+> - **№45 FIFO:** population + knobs `pushPendingSpawn` **before** `fopAcM_create` (id-bind-after was too late when Create ran sync). Failed create drains FIFO. Stubs still `takePending` → force attach/src for that Create (P1a/P1b same-arg collisions).
+> - **№45 ledger:** `src=` from pending; LS/companion → `head=companion:<model>` (not MISS).
+> - **№46 F1:** `tev_alpha_op` COMP_* uses scalar `round(tev_overflow_f32(…) * 255.0)` — no `.r`/`.rg` on f32 (fixes hash `d386602d549677f` class).
+> - **№46 F2:** UncapturedErrorCallback: Validation mentioning ShaderModule/WGSL/RenderPipeline → `Log.error` only when initialized; `pipeline.cpp` null-shader guard; `get_pipeline` false on null → skip-draw.
+> **USER VERIFY next** (hold was correct — old build was headless): Outset folk heads; grep `[Spawn]` zero MISS for YM/YM2/YW/KO/KO2/OB/LS; Tetra/P1 no FATAL. Then №43 checklist.
+> Please critique: registry key uses `socketArg` if ≥0 else params arg — OK vs actor_map `arg=`?; whether companion should also register from actor_map (LS is manifest-only today).
+
+#### Paste for History (2026-07-19 — №44 head race + ExtNpc pick)
+
+> Log `dusklight-20260719-092849` smoking gun: `[ExtNpcMount] NPC_KNOB forced attach 'p1a_head.bdl'` then every folk `[Spawn] … head=MISS:no_head_attach` / `src=unknown`. **Root cause (engine):** single-slot `forceNextAttach`/`forceNextCreateProc`/`forceNextSpawnSrc` overwritten across async `fopAcM_create` (same class as №18a skipBtp). Population set pins; knobs/later rows stole them before Create ran.
+> **Fix:** `dExtNpcMount_bindPendingSpawn(id,…)` after create returns; stubs `takePendingSpawn` by `fopAcM_GetID` then sync-apply attach/src for that Create only. Pop + doors converted; BG warp still may use forceNext (single).
+> **Pick:** Editor clicks registered but hit TP `Mhint` — ExtNpc setID `0xFFFF` not in DZR buffer join. `pick.cpp` now also considers live ExtNpc mounts (skips EXT_BG cull giants). HUD: `ID #n … proc=… head=…@…`.
+> Please critique: pending map lifetime if Create never runs; whether BG warp should also id-bind.
+
+#### Paste for History (2026-07-19 — №43 rebuild clear)
+
+> History №43 absorbed — `ext_bg9` full schema + `[amori] knob=1` confirmed on disk. Cursor: `build_run.bat` green (prior sky-park + №38–40 already in tree); GPU caches wiped. **Handed to USER VERIFY PASS** per №43 checklist (Grandma→LinkRM; forest→Tetra+3Bk no Moblins; `[Spawn]`; heads/hands; Vlupy; facing doors). Ferry play log lines if anything mismatches.
+
+#### Paste for History (2026-07-19 — №42 absorb + sky-park engine)
+
+> History №42 absorbed — **Cursor did NOT re-author** mo2/bk/lwood manifests or actor_map (your values stand; Zl1 global `beat.tetra` removal noted).
+> **Engine shipped:** №42 sky-park skip in `d_ext_npc_population` — `pos.y > hostY+20000` → skip + `[ExtNpcPop] skip sky-parked …` (covers A_mori P1a @ y=34707).
+> **BLOCKER (History data — Cursor will not invent):** live `npc/ext_bg9.ini` still lacks `population=interior_placements.csv`, `socket=NPC_KDK`/`socket_arg=9`, and `host_stage`+`host_pos` (warp refuse path needs them — see other EXT_BG*). `[amori]` also missing `knob=1`. Until those land, forest door cannot green-transit / cannot pop ACT0 Tetra+Bk. A_mori rows are already in `interior_placements.csv` (172). Please complete ext_bg9+[amori] knob; Cursor rebuilds after.
+
+#### Paste for History (2026-07-19 — №38 E1/E2 + №40 door select)
+
+> History №38–№40. Cursor engine (sources in main; **not yet on clean-HEAD play exe** — FPS factory soft-poison, separate chat):
+> - **E1:** `resolveSocket` — exact socket+arg only; **removed** `socket_arg<0` wildcard fallback; REFUSE + `[Spawn] … REFUSED` / E1 warn (no Ganondorf-by-default).
+> - **E2:** `[Spawn] src= proc= arg= mod= head=` after head pin (census:/door:/unknown); pop sets `census:Name@(x,y,z)`; knobs `door:<id>`.
+> - **E3:** pop warns when folk row lacks head_model; ledger `head=MISS:no_head_attach` when empty on non-static.
+> - **№40:** A-press enter uses **nearest doorAttention Knob ≤300u**, then DoorDef by knobHost bind from spawn — not global `doors.ini` radius scan (fixes Grandma→Ojhous2).
+> Please critique: knobHost bind vs storing fpc id; whether exit path needs the same; E1 impact on any intentional wildcard manifests.
+
+#### Paste for History (2026-07-19 — №36+№37 ship)
+
+> User “yes get started on all” after №36 decomp + №37 no-grey-area packets. Cursor shipped (investigate incremental rebuild green; main CMake re-ran once → exe recovered via `dusklight-fps-investigate` + copy; GPU caches wiped):
+> - **№36 A:** `companion_mode=joint_slave` — after body `modelCalc`, copy body anmMtx → companion joints by **name** (no hand BCK). `NPC_LS` + `lshand.bdl`.
+> - **№36 B / №37.2:** census heads fixed — Ym1→`ymhead01`, Ym2→`ymhead02`, Ko1/Ko2/Yw1/Ob1 as table; `disable_pos=` skips Sue-Belle alt `(-203752,481,317449)` + Joel alt `(-203870,495,317220)`.
+> - **№36 C / №31:** `[item]→NPC_VLUPY` (`vlupy.bdl`+`vlupy.brk`/`vlupy.btk`); tev frame = item−1 (silver 0x0F→6); near Link → `execItemGet` TP wallet (WW 0x0F→TP 0x07) + delete. Visual-purity path; №35 TP-pickup carve-out for **models** rescinded.
+> - **№37.1:** door A-press logs `[Doors] req=/resolved=/anchor=/spawn=`; guarded warp aborts on `no_compleate` / `no_ground` with reason.
+> - **№37.3:** Knob = `door.bdl` + `door_open_bck=dooropenadoor.bck`; TGDR pos+rotY (no Y nudge); play open BCK ~28f then warp.
+> - **Folder:** live `WW-Crew-Restoration` (Vlupy/Knob present); seed ran AppData+skeleton.
+> Please critique joint_slave name-copy vs Nintendo hand callbacks; Vlupy frame map vs tww `mTevFrm`; whether dooropen needs DoorDummy attach for knob variants `door_a..h`.
+
+#### Paste for History (2026-07-19 — №32 B1–B10)
+
+> History №32 consolidated build list. Cursor shipped all B1–B10 (rebuild green; accuracy-first):
+> - **B10:** `acquire_audio_shadow` size-mismatch ⇒ REFUSE + log + vanilla bank (№28 invariant)
+> - **B1:** real `arcs/Knob.arc` / `door_d.bdl`; `static=1`+`door=1`; walk-through retired; near+A → `startFadeOut` → pinned `requestBgWarp`; log `[Doors] enter <proc> → <proc> (pinned BG warp via door '…')`
+> - **B2:** Omori door removed from `doors.ini`; EXT_BG7 label “Forest Haven (shelved W6)”, no warp row
+> - **B3:** `population=interior_placements.csv` + `population_stage=<arc>` on LinkRM/Ojhous/Ojhous2/Omasao/Onobuta; CSV stage-col parse; `Ba.arc`/`Ji.arc` restored; `NPC_BA`/`NPC_JI` (+ ba_cloth companion)
+> - **B4:** WW-native props only (№31): Kusa/`long.bmd`, Rflw, Yaflw00, Ptubo, Toripost, Oyashi, Kanban — mapped kusax*/flower/pflower/kotubo/ootubo1/Tpost/…
+> - **B5:** Ko1→`kohead01.bdl`, Ko2→`kohead02.bdl` (name-locked, not params)
+> - **B6:** dialogue honors literal `\n` + real newlines + legacy ` / `
+> - **B7:** pigs `carryable=1` ⇒ CARRY attention only (no SPEAK/dialogue)
+> - **B8:** Zl1 `spawn_if_flag=beat.tetra`, Dk `beat.helmaroc` (invisible until flags)
+> - **B9:** Cycle head / Lock identity path unchanged; Ko heads fixed as above
+> Seed: `python tools/ww_crew_restoration_skeleton/seed_o2_content.py`. Overlay count ~42 curated (+Knob/Ji/props). Mesa outdoor TGDR still absent (no invented coords). Please critique door pin log + interior Ba1 + audio refuse.
+
+#### Paste for History (2026-07-19 — №27 N1–N6 + F3)
+
+> History №27 village-alive + next course. Cursor shipped (rebuild green):
+> - **N1:** ACTR/SCO* + ACT0 only; `[layers]` gates ACT2+ via mod flags; `unique=1` folk dedupe (herds `unique=0`)
+> - **N2:** `head_from_params=` / `head_model=` → `forceNextAttach`; skip `*head*` census names as bodies
+> - **N3:** `animMatchesModel` prefix bind; mismatch/missing idle → static NULL anm; Ko body uses `ko_wait01` (not kohead BCKs)
+> - **N4:** display = `Census ? (unverified)`; Cut Actors **Cycle head** + **Lock identity** → `population/identity.ini` (no invented names)
+> - **N5:** dialogue `ww_ref=N` loads `ww_dialogue_full.txt`; Q1–Q6 + folk + `depart.offer` on pirates
+> - **N6:** Kamome orbit; `hide_vrbox` on EXT_BG0; `NPC_KNOB` Kanban stand-ins at doors; Dk scenery + `dk_kamen` attach
+> - **F3:** ModelData cache publish-on-success + abort eviction
+> Expect: one Ls1/Yw1/Ko1; headed kids; no shatter on Joel; gulls move; no yellow void; departure lines from BMG.
+
+#### Paste for History (2026-07-18 — №25 F1+F2 + actor_map)
+
+> History №25: doors→Ojhous + actors on seafloor.
+> Cursor shipped:
+> - **F1:** door enter = pinned `requestBgWarp` (same as menu); BG reuse validates `mManifest.proc`; closest-door pick; erase stale cache entries
+> - **F2:** populate at Link-place after BG settle; ground-snap sanity (reject probe >500 below authored home; retry ≤90f); skip salvage rows `world_y < host−2000`
+> - **actor_map:** day-1 census → folk procs (Ls/Zl/Ob/Ko/Ym/Yw/Ah/Aj/Dk/Kb/Kn/Bb/Kamome + pirates/Mk); labels `? (unverified)`; Oyashi/Kanban deferred (no BCK)
+> Rebuild green. Expect: door log `enter 'EXT_BG1' … (pinned BG warp)` + `BG COMPLEATE EXT_BG1`; pop actors stay near authored Y (not y≈-948).
+
+#### Paste for History (2026-07-18 — №24 D1+D2+D3)
+
+> History №24 diagnosed: warp `EXT_BG1` created as `EXT_BG0` (wildcard `socket_arg=-1`).
+> Cursor shipped:
+> - **D1:** `resolveSocket` exact `socket_arg` first; wildcard last; `forceNextCreateProc` on BG warp + population; stubs consume force; `EXT_BG0` now `socket_arg=0`
+> - **D2:** BG create refuses missing `anchor=`; interiors already `anchor=0,0,0`
+> - **D3:** population formula unchanged (`host+(ww−anchor)`) + logs first 8 world pos + host/anchor on summary
+> Rebuild green. Expect log: `BG COMPLEATE EXT_BG1` (not BG0) on LinkRM; `[ExtNpcPop] spawn #N … world=(near -60k)`.
+
+#### Paste for History (2026-07-18 — Phase O2 full-GO wave)
+
+> User FULL O2 GO. Cursor shipped continuous wave (rebuild green):
+> - **R-O2a v2**: 616-bit field in reserve (v1 migrates → flags reset once). `set(false)` clears bit.
+> - **R-O2b/c**: `action=grant:0x3E` (Hawk Eye), `clear_flag=`, plus prior if/unless/set/next/else
+> - **R-O2d**: `carryable=1` → CARRY attention + LIGHT carry type (pickup polish still open)
+> - **R-O2e**: `spawn_if_flag=` / `spawn_unless_flag=` on manifests + actor_map rows
+> - **Population**: BG `population=csv` + `population/actor_map.ini`; spawn after BG hold (`host+(csv−anchor)`); day-1 chunks ACTR/ACT0/SCOB/SCO0
+> - **Interiors**: EXT_BG1..8 warp rows (LinkRM/UG/Ojhous/…/Pjavdou), socket NPC_KDK args 1–8, anchor=0 local
+> - **Quests folder**: `dialogue/outset_quests.txt` Q1–Q6; stand-ins NPC_Q1/Q2/Q3 (Watchtower/Trainer/Caretaker) on HENNA0 args 2–4; grants Hawk Eye / Sword / Kokiri clothes
+> Seed: `python tools/ww_crew_restoration_skeleton/seed_o2_content.py`
+> Please review actor_map coverage, interior host_pos layout, and v1→v2 reset.
+
+#### Paste for History (2026-07-18 — Phase O2 R-O2a/b shipped)
+
+> User GO on Phase O2. Cursor shipped generic receivers (zero WW names in code):
+> - **R-O2a** `d_ext_mod_flags`: per-mod bool KV in `dSv_reserve_c` bytes 1–79 (magic/ver + 18 u32 entries). Save/autosave/slot-copy for free.
+> - **R-O2b** dialogue directives under `[section]`: `if_flag=` / `unless_flag=` / `set_flag=` / `next=` / `else=` (else = branch when gate fails). G1 refuse preserved. `set_flag` on successful open; `next` chains on dismiss; empty+next = silent hop.
+> Sample `dialogue/sample.txt` demonstrates Ivan first-meet → return line via `mk.met`.
+> Rebuild green. Please critique capacity (18 flags) + else= addition before Q1 content / R-O2c grant.
+
+#### Paste for History (2026-07-18 — A1–A7 folded + rebuild)
+
+> User “go for it” + History A1–A7 folded on top of M3:
+> - **A1:** proc literal is `EXT_BG0` (manifest `npc/ext_bg0.ini`); no `"OUTSET"` in exe
+> - **A2:** socket+arg claim map — first claim wins, conflict logged
+> - **A3:** warp refused without `anchor` + `spawn_rel`
+> - **A4:** exe never auto-copies mod content; seed via `tools/.../install_skeleton.py`
+> - **A5:** `tools/ww_crew_restoration_skeleton/greplist.txt` exists
+> - **A6:** example ini removed; skeleton file renamed off Outset place-name
+> - **A7:** warp row needs payload + readable arc
+> Rebuild green. Full greplist against `dusklight.exe` = clean (incl. Outset/Ivan/Medli/…).
+> AppData seeded with installer. Ready for folder-present / folder-absent playtest.

@@ -1,6 +1,6 @@
 # Build & FPS maintenance guidelines
 
-**Audience:** Cursor agents and anyone building uncommitted WIP. Goal: keep **~139–144 FPS mean** under natural user play without the **~50–127 tank** that often follows agent builds.
+**Audience:** Cursor agents and anyone building uncommitted WIP. Goal: keep **field ~220–250 FPS** (stable ~250, dips ~220; Outset often ~220–280) under natural user play after the 2026-07-19 RelWithDebInfo factory fix. **~139–144** below is the older VSync-capped oracle band — do **not** treat 144 as healthy field performance anymore. Alarm bands: **~100–127** soft-poison / bad link; **~33** broken CMake flags (no `/O2`).
 
 **Role:** This is the **build-analysis chat** doc set. Feature agents (HUD, bosses, combat) implement; **this chat** reviews builds, diagnoses FPS drift, and optimizes in place. If you are a new instance and the user sent you here after a build — read the map below before changing code.
 
@@ -18,6 +18,7 @@
 | **6** | **[albw-hud-lop-layout-brief.md](albw-hud-lop-layout-brief.md)** | LoP layout *behavior* spec (feature agent); cross-ref §2 for FPS |
 | **7** | **§ [Addendum: Build artifact failures (2026-06-25)](#addendum-build-artifact-failures-2026-06-25)** (this file) | Symptom → cause, agent avoid/do, `build_run` vs `reconfigure`, recovery |
 | **8** | **§ [Addendum: GPU cache crash (2026-06-26)](#addendum-gpu-cache-crash-2026-06-26)** (this file) | `0xC0000409` / `unhandled tcg src 21` at boot — wipe **both** AppData GPU caches |
+| **9** | **§ [Addendum: CMake re-run / ~33 FPS (2026-07-19)](#addendum-cmake-re-run--33-fps-2026-07-19)** (this file) | **Do not** `cmake --preset` on a healthy tree; ninja “Re-running CMake…” can brick main FPS |
 
 **Feature-specific briefs** (read only if the diff touches that area): `boss-fights-handoff.md`, `TrueALBWWorld.md` (TRUETEST / open-world bootstrap), `albw-boss-hp-hud-tuning-brief.md`, `albw-hud-lop-layout-v3-instructions.md`, `testing-parry-rework.md` (RB parry + parry VFX/SFX test toggle), [wind-waker-item-work.md](wind-waker-item-work.md) (retail `itemmdl.arc` WW view models — get-item / held experiments).
 
@@ -51,15 +52,18 @@
 **Short prompt (paste into any new feature chat):**
 
 > Before coding: read `docs/build-fps-guidelines.md` and `docs/commit-and-push.md`.  
-> Build with `build_run.bat` only (RelWithDebInfo). No drive/conavigate code in `src/`.  
+> Build with `build_run.bat` only (RelWithDebInfo). **Never** `cmake --preset` / `reconfigure_build.bat` on a healthy tree.  
+> No drive/conavigate code in `src/`.  
 > If HUD/meter/shield: also read `docs/hud-performance-handoff.md`.  
 > When done: git diff summary + build result → build-analysis chat for FPS check before commit.  
-> Push to **upstream** (ALBW-Dusklight), not origin.
+> Push to **upstream** (ALBW-Dusklight), not origin.  
+> Field ~30–70 after a CMake re-run → investigate worktree rebuild + copy exe; do not blame WIP features first.
 
 **Hard rules (one-liners for any chat):**
 
 - **AI builds by default:** AI/agent instances **always run the build themselves** (`build_run.bat`, RelWithDebInfo) and report the result — do **not** ask the user to build, unless the user explicitly says they'll handle it. After any build, wipe the GPU caches (`dawn_cache.db*` + `pipeline_cache.db*` in `%AppData%\TwilitRealm\Dusklight`) per the [GPU cache crash addendum](#addendum-gpu-cache-crash-2026-06-26).
-- **Build:** `build/windows-msvc-relwithdebinfo/dusklight.exe` via `build_run.bat`
+- **Build:** `build/windows-msvc-relwithdebinfo/dusklight.exe` via **`build_run.bat` only** (incremental ninja).
+- **CMake:** **Never** run `cmake --preset` / `reconfigure_build.bat` on a tree that already has `build.ninja` unless configure is actually broken. A surprise `Re-running CMake...` during ninja has repeatedly left main at **~33 FPS** with healthy WIP — recover via investigate worktree, do not bisect features first. See [§ CMake re-run addendum](#addendum-cmake-re-run--33-fps-2026-07-19).
 - **Never commit:** `local_dev_backup/`, drive/conavigate sources, `albw_*_debug.txt`
 - **Don't revert features to fix FPS** — optimize in place; use the build-analysis chat
 - **Don't commit/push unless the user explicitly asks**
@@ -79,9 +83,21 @@
 
 ---
 
-## What “144-capable” means on current WIP
+## Healthy field FPS (current — 2026-07-19 factory)
 
-Under the **user-natural oracle** (saved AppData preset, no drive env, correct exe), WIP averages **~143.8–144.2** on good runs. User accepts **~143.8 avg**; the open problem is **constant** 144 (single-frame cliffs), not mean FPS.
+| Band | Meaning |
+|------|---------|
+| **~220–250 field** (stable ~250, dips ~220) | **Healthy** RelWithDebInfo with `/O2` — **this is the acceptance bar** |
+| **~220–280 Outset** | Healthy with WW mounts warm |
+| **~139–144** | Legacy VSync/`maxFrameRate=144` oracle band — **not** the field health target |
+| **~100–127** | Soft-poison / bad incremental link — investigate, don't ship |
+| **~33 stable** | CMake RelWithDebInfo flags empty (no `/O2`) — recover factory, don't bisect features |
+
+User-confirmed healthy after factory pins: field **~250 stable** (dips ~220). See [§ soft-poison root cause](#soft-poison-root-cause-2026-07-19-forensics--empty-relwithdebinfo-flags-in-cmakecache).
+
+### Legacy note — “144-capable” oracle
+
+Under the **user-natural oracle** with `maxFrameRate=144`, WIP can average **~143.8–144.2**. That measures cap-headroom / cliffs, **not** whether the RelWithDebInfo factory is healthy. For agent post-build checks, prefer uncapped / high-cap field `F_SP121` and expect **~220+**.
 
 ---
 
@@ -91,20 +107,23 @@ Under the **user-natural oracle** (saved AppData preset, no drive env, correct e
 |------|--------|
 | **Preset** | `windows-msvc-relwithdebinfo` only for FPS validation |
 | **Exe** | `build/windows-msvc-relwithdebinfo/dusklight.exe` |
-| **Never** | `windows-msvc-debug`, plain `Debug`, or ASAN presets for perf checks |
-| **Configure** | Reuse existing build dir; avoid wipe/reconfigure unless necessary |
-| **Worktrees** | Historical bisect trees: `CloneMainBuild.ps1` + submodule seed — **not** raw cmake |
+| **Routine build** | **`build_run.bat` only** — ninja incremental; configures **only** if `build.ninja` is missing |
+| **Never (routine)** | `cmake --preset …`, `reconfigure_build.bat`, wiping `build/`, or “just reconfigure to be safe” |
+| **Never (perf check)** | `windows-msvc-debug`, plain `Debug`, or ASAN presets |
+| **Worktrees** | Historical bisect trees: `CloneMainBuild.ps1` + submodule seed — **not** raw cmake on main |
 
 `cmake-variants.yaml` defaults to **Debug**. Debug enables `DUSK_GFX_DEBUG_GROUPS`, unoptimized game code, and very different runtime cost than RelWithDebInfo.
 
-**Standard agent build:**
+**Standard agent build (healthy tree — this is the whole recipe):**
 
 ```powershell
-cmake --preset windows-msvc-relwithdebinfo
-cmake --build build/windows-msvc-relwithdebinfo --target dusklight
+cmd /c build_run.bat
+# then wipe dawn_cache.db* + pipeline_cache.db* under %AppData%\TwilitRealm\Dusklight
 ```
 
-Default CMake build type when unset is `RelWithDebInfo` (`CMakeLists.txt`); the preset above is still the explicit contract.
+**Do not** paste `cmake --preset windows-msvc-relwithdebinfo` into a session that already builds. That was the old “standard” snippet; it is **unsafe** on an existing RelWithDebInfo dir and is a primary cause of post-agent ~33 FPS.
+
+Default CMake build type when unset is `RelWithDebInfo` (`CMakeLists.txt`). The preset is still the contract **when** configure is required (missing `build.ninja` only).
 
 ---
 
@@ -168,8 +187,8 @@ Drives set `DUSK_DRIVE_USER_CONFIG=1` to load this. Manual play should use AppDa
 
 1. Confirm exe: `build/windows-msvc-relwithdebinfo/dusklight.exe`
 2. Confirm **no** `DUSK_DRIVE*` env in shell / shortcut
-3. Field `F_SP121` r0 p0 — steady play **~140–144**
-4. Optional oracle: `local_dev_backup/session/run_track_g_user_natural.ps1` — pass = `play_avg` ≥ 140, `play_n` ≥ 200, no 125 gate fail
+3. Field `F_SP121` r0 p0 — steady play **~220–250** (alarm if ≤~127 or ~33)
+4. Optional oracle: `local_dev_backup/session/run_track_g_user_natural.ps1` — still valid for VSync-144 cliff tracking; for factory health use uncapped field measure ≥ ~190
 
 If field is **~50–70** on RelWithDebInfo with clean env, suspect **wrong exe, Debug build, or drive env still set** — not “WIP is inherently slow.”
 
@@ -196,7 +215,8 @@ If field is **~50–70** on RelWithDebInfo with clean env, suspect **wrong exe, 
 | ~77 on WIP commit | **Dirty investigation source** on main (`fps-probe-temp` stash) **or** bad main `build/` exe | Clean tree or worktree build; same-commit exe A/B |
 | ~32 on all exes | **Broken build environment** after main `reconfigure_build.bat` / fresh CMake without seeded `_deps` | Recover via worktree (`build_fps_probe.bat`); do not bisect HUD |
 | ~105 single-sample cliff | Intermittent hitch (WIP and v1.4.1) | [performance-handoff.md](performance-handoff.md) profiler follow-up |
-| ~140–144 field | Healthy RelWithDebInfo + clean source + good exe | Baseline |
+| ~220–250 field | Healthy RelWithDebInfo (`/O2`) + clean source + good exe | **Baseline (current)** |
+| ~140–144 field | Only if `maxFrameRate` capped at 144 — not factory health | Legacy oracle |
 
 ### Three-layer incident (plain language)
 
@@ -210,7 +230,8 @@ If field is **~50–70** on RelWithDebInfo with clean env, suspect **wrong exe, 
 
 - Leave **investigation stubs** in main `src/` (bisect env checks, `game_clock` profiling, file-select stubs, etc.).
 - **Pop `fps-probe-temp`** (or similar investigation stashes) onto main without a deliberate bisect plan.
-- Use **`reconfigure_build.bat`** as the default build — only when CMake configure is genuinely broken.
+- Use **`reconfigure_build.bat`** or bare **`cmake --preset`** as the default build — only when configure is genuinely broken (no `build.ninja`).
+- Treat ninja’s **`[0/1] Re-running CMake...`** as normal — it is a **red flag**. Stop feature FPS bisects; recover the exe via investigate worktree ([§ July 2026](#addendum-cmake-re-run--33-fps-2026-07-19)).
 - **Delete or full-reconfigure** main `build/` as the first FPS fix attempt.
 - Conclude **“WIP is slow”** when `build_run.bat` exits 0 but FPS is still low — suspect **source or exe**, not compile failure.
 - Trust FPS during **manual play** with `DUSK_DRIVE*` or `DUSK_DRIVE_STUB_*` still set.
@@ -219,8 +240,8 @@ If field is **~50–70** on RelWithDebInfo with clean env, suspect **wrong exe, 
 ### Do instead
 
 - **Incremental build:** `build_run.bat` → `build/windows-msvc-relwithdebinfo/dusklight.exe` on an **existing** RelWithDebInfo dir.
-- **If main build is suspect:** build in `dusklight-fps-investigate` via `build_fps_probe.bat` (seeds `_deps` from main), then copy exe if needed.
-- **Same-commit exe A/B:** worktree exe vs main `build/` exe before blaming gameplay code.
+- **If main build is suspect (~30–70 field after a CMake re-run):** build dirty sources in `dusklight-fps-investigate` via `build_fps_probe.bat` / `_b0_rebuild.bat`, then **copy** `dusklight.exe` (+ `.pdb`) into main’s build folder.
+- **Same-commit / same-WIP exe A/B:** worktree exe vs main `build/` exe before blaming gameplay code.
 - **Clear drive env** before manual FPS reports (§2).
 - **Optimize in place** per [hud-performance-handoff.md](hud-performance-handoff.md) when HUD changed.
 
@@ -322,6 +343,125 @@ Prefer **`git restore path`** only when the user explicitly names the file.
 
 ---
 
+## Addendum: CMake re-run / ~33 FPS (2026-07-19)
+
+**Context:** Cut Actors / WW WIP FPS bisect ([ww-fps-bisect.md](state/ww-fps-bisect.md)). Clean HEAD investigate exe was **~200–228** field. Dirty main stuck at **~33** stable. Feature toggles A1–B2 (polls, sockets, mod folder off, alink→HEAD, ExtNpc→HEAD) **did not move** field FPS. Dirty sources built in `dusklight-fps-investigate` restored **~190–250** field / **~220–280** Outset. Copying that exe into main’s build folder fixed main.
+
+**Root cause class:** same as June **~32 broken reconfigure** — not WW content, not ExtNpc, not alink. Main RelWithDebInfo went bad after ninja logged **`[0/1] Re-running CMake...`** (triggered by `files.cmake` / configure-side edits during the bisect) and/or agents running **`cmake --preset`** on an already-configured tree.
+
+### Hard CMake rules (agents)
+
+| Do | Do not |
+|----|--------|
+| `cmd /c build_run.bat` for every routine rebuild | `cmake --preset windows-msvc-relwithdebinfo` “to be safe” |
+| Let `build_run.bat` configure **only** when `build.ninja` is missing | `reconfigure_build.bat` as default |
+| If ninja prints **`Re-running CMake...`**, treat FPS as **untrusted** until exe A/B | Start a long feature FPS bisect after a reconfigure |
+| Recover: sync WIP → `dusklight-fps-investigate`, `build_fps_probe.bat` / `_b0_rebuild.bat`, **copy exe (+ pdb) to main** | Wipe/reconfigure main `build/` as first FPS fix |
+| Prefer not editing `files.cmake` / CMake inputs mid-session unless required; expect a reconfigure if you must | Assume compile success + dirty WIP = “gameplay regressor” when field is ~33 |
+
+### Symptom table (add to June table)
+
+| Observed FPS | Likely cause | First action |
+|--------------|--------------|--------------|
+| ~33 stable field, clean/investigate same WIP ~200+ | **Broken main build env / bad exe** after CMake re-run | Investigate rebuild + copy exe — **not** feature revert |
+| ~33 after agent session that touched `files.cmake` | Ninja reconfigured mid-build | Same |
+| ~200+ on investigate dirty, ~33 on main dirty | Confirmed artifact | Copy investigate → main build folder |
+| ~120 field after agent build / CMake noise | **Mid-tier:** often still artifact *or* real WIP tax — A/B first | Confirm exe identity vs investigate; if identical, measure with WW folder off before feature bisect |
+
+### Agent build guard (2026-07-19 evening)
+
+`build_run.bat` dry-runs ninja and **exits 99** if it would print `Re-running CMake...`, unless `ALLOW_CMAKE_RERUN=1`.  
+Cursor rule: `.cursor/rules/build-fps-safe.mdc` (`alwaysApply`).
+
+**Why cmake re-runs without agents calling cmake:** `CMakeLists.txt` adds `CMAKE_CONFIGURE_DEPENDS` on git `HEAD` / branch ref — commits, checkouts, and some git ops invalidate the stamp; ninja then reconfigures (FetchContent noise) and can poison RelWithDebInfo the same way as an explicit `cmake --preset`.
+
+### CLEANr WIN (2026-07-19) — factory, not feature
+
+Clean HEAD exe (`dusklight-fps-clean` @ `5e9669348f`) restored field **~190–250**. Dirty/investigate builds stayed **~100–115** even with B0 WIP sources. Project-root CMake files are normal — do not delete them.
+
+### Soft-poison root cause (2026-07-19 forensics) — empty RelWithDebInfo flags in CMakeCache
+
+**Do not invent endless worktrees.** The durable bug is in the RelWithDebInfo **CMake flag cache / ninja graph**, not WW sources.
+
+| Tree | `CMAKE_CXX_FLAGS_RELWITHDEBINFO` in cache | Ninja `FLAGS` with `/O2` | Link flags | Field FPS class |
+|------|-------------------------------------------|--------------------------|------------|-----------------|
+| **main** (poisoned factory) | **empty string** | **0 / 2135** — no `/O2 /Ob1 /DNDEBUG` | missing `/debug /INCREMENTAL` (only `/subsystem:windows`) | Any rebuild from this graph → ~33 (full) or mid-tier (partial) |
+| **investigate** | `/O2 /Ob1 /DNDEBUG` | 2132 / 2135 | `/debug /INCREMENTAL` + **~189 MB `.ilk`** | Soft ~100–115 after reuse (objs≈clean; suspect incremental-link image) |
+| **clean** (CLEANr) | `/O2 /Ob1 /DNDEBUG` | 2192 / 2195 | `/debug /INCREMENTAL` | ~190–250 |
+
+**Mechanism:**
+
+1. A CMake re-run (explicit `cmake --preset`, ninja `[0/1] Re-running CMake...`, or `CMAKE_CONFIGURE_DEPENDS` on git `HEAD`) rewrote `build.ninja` from a **poisoned cache** where `CMAKE_CXX_FLAGS*` / `CMAKE_EXE_LINKER_FLAGS*_RELWITHDEBINFO` were **empty**. CMake treats empty cache entries as intentional overrides, so RelWithDebInfo **drops** its normal `/O2 /Ob1 /DNDEBUG` (and linker `/debug`).
+2. Main’s good play exe (~08:27, ~32.5 MB, embeds `UNKNOWN-VERSION` + `5e96693`) is a **foreign CLEANr copy**, not a product of main’s current ninja. Main `.obj` mtimes (~07:45) sit under a **no-`/O2`** graph — do not rebuild on main until flags are restored.
+3. Investigate can show correct `/O2` in ninja while the **linked** exe stays soft-poisoned (large `.ilk` after many incremental links through reconfigure eras). Objs vs clean are ~1.00× size — not a missing-`/O2` story there.
+
+**Approved one-time recovery (main tree — prefer this over new worktrees):**
+
+1. Back up the good play `dusklight.exe` + `.pdb` somewhere outside `build/` (e.g. `build/fps-good-backup-*`).
+2. **Pin** RelWithDebInfo flags in `CMakePresets.json` + refuse-empty in `CMakeLists.txt`:  
+   `CMAKE_C/CXX_FLAGS_RELWITHDEBINFO=/O2 /Ob1 /DNDEBUG`,  
+   `CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO=/debug /INCREMENTAL:NO` (no `.ilk` soft-poison).
+3. One intentional reconfigure on main with vcvars: `ALLOW_CMAKE_RERUN=1` + `cmake --preset windows-msvc-relwithdebinfo` (or `tools\_factory_recover.bat`).
+4. Verify: `build.ninja` `FLAGS` lines contain `/O2` (expect ~all CXX lines). If not — **stop**.
+5. Full rebuild (`ninja -t clean dusklight` + `ninja dusklight`; delete any `dusklight.ilk`). Measure **field** `F_SP121` / Outset — menu alone is not enough. Target **~190+**.
+6. Retire investigate as a build host until its `build/` is wiped + first-configured from the pinned preset. Do not spawn folders forever.
+7. `build_run.bat`: exit **98** if RelWithDebInfo ninja lacks `/O2`; exit **99** if ninja would `Re-running CMake...`.
+
+**Applied + field-confirmed 2026-07-19:** pins landed; main reconfigured + full rebuilt; ninja **2132/2135** FLAGS with `/O2`; link `/INCREMENTAL:NO`. User: field **~250 stable** (dips ~220). Pre-fix CLEANr exe remains under `build/fps-good-backup-20260719-0827/` if needed. **Main RelWithDebInfo factory is healthy** — dirty rebuilds via `build_run.bat` are the normal path again (including Outset №36–40).
+
+**Outset / feature chats:** factory forensics closed; implement on main with `build_run.bat` only.
+
+### Maintaining optimization (2026-07-19 evening) — factory + play-scene
+
+**A/B (dirty afternoon exe, same machine):**
+
+| Condition | Field |
+|-----------|--------|
+| Dirty · Ordon `F_SP121` | 219–265 |
+| Dirty · Outset · WW folder **off** | 228–270 |
+| CLEANr morning · TP field | 202–242 |
+
+**Read:** swings of ~40–50 FPS inside **~200–270** are normal variance (CLEANr does it too). Not factory poison. WW mod folder is not the regressor. Alarm only if field **floors** (~100–127 soft / ~33 hard) or **typical** drops below ~220 with a tight band.
+
+#### Layer 1 — keep the RelWithDebInfo factory
+
+| Rule | Why |
+|------|-----|
+| `build_run.bat` only | Exit **98** = no `/O2` in ninja; **99** = would Re-run CMake |
+| Do not clear / omit `CMAKE_*_FLAGS_RELWITHDEBINFO` | Empty cache → unoptimized compile |
+| Keep `/INCREMENTAL:NO` for RelWithDebInfo | Avoids `.ilk` soft-poison |
+| After any intentional reconfigure | Verify ninja has `/O2`, then full rebuild + **field** measure |
+| Wipe GPU caches after builds | Separate crash class (`tcg src 21`) |
+
+#### Layer 2 — ExtNpc / Outset play-scene (optimize in place; do not strip features)
+
+Called every play frame from `d_s_play` (TARGET_PC): `dExtNpcMount_pollBgWarps()` + `dExtNpcDoors_poll()`.
+
+| Hot spot | File / behavior | Maintenance rule |
+|----------|-----------------|------------------|
+| **BG island draw** | `dExtNpcMount_draw` — `changeFar(1e6)`, per-model `calc()`, show-all shapes, `modelUpdateDL` | Comment already marks this FPS hot path. No per-draw logs. Avoid extra BG models / unconditional far overrides. Prefer room-lane unload when off-island. |
+| **NPC execute** | morf `play` + `modelCalc` + companion `modelCalc` (joint_slave) + attach `calc` | Cost scales with **live population**. Don't add second full skeleton calcs “for polish” without a gate. Heads/attachments stay necessary — batch or skip off-screen later if typical dips. |
+| **Doors poll** | `reconcileOutdoorKnobs()` while knobs spawned | Must stay **edge / until-1:1**, not eternal per-frame search+log. Watchdog logs = one-shot. |
+| **Warm interiors** | `pollWarmInteriors` staggers BG creates when warp idle | Keep stagger; don't warm room-lane procs; don't scan filesystem every frame (scan stays on load). |
+| **Logging** | Many `DuskLog.info` on create/warp | OK on transitions. **Ban** new per-frame / per-draw info logs on mounts. |
+| **Filesystem** | `directory_iterator` in provider scan | Load-time / ensureLoaded only — never from `execute`/`draw`. |
+| **Settings** | HUD rules still apply | No repeated `getSettings().game.*.getValue()` in ExtNpc exec/draw. |
+
+#### Acceptance for Outset agents (after each meaningful rebuild)
+
+1. Confirm build was `build_run.bat` (not a silent CMake re-run).
+2. Field `F_SP121`: typical **≥ ~220**, min not stuck ~100/33.
+3. Outset (WW on): typical **≥ ~220**; wild 200↔270 OK if typical stays high.
+4. Menu slightly softer than field is OK; menu-only “fine” does **not** clear a field dip.
+5. If typical collapses → A/B Ordon vs Outset vs WW-off **before** reverting features; check `/O2` first if floor is poison-shaped.
+
+### Related
+
+- [§ Build artifact failures (2026-06-25)](#addendum-build-artifact-failures-2026-06-25) — original ~77 / ~32 playbook  
+- [ww-fps-bisect.md](state/ww-fps-bisect.md) — full A1–B0 log for this incident  
+
+---
+
 ## Addendum: Sumo/outfit per-frame sync flag (2026-06-27)
 
 **Context:** Sumo Outfit / D-pad outfit quick-swap, step 3 (`d_albw_outfit`, commit `b21540ba7a`). Flagged by the feature chat for a measured FPS check — **not yet profiled**.
@@ -349,3 +489,4 @@ Prefer **`git restore path`** only when the user explicitly names the file.
 | [commit-and-push.md](commit-and-push.md) | Fork remotes, commit/push workflow |
 | [hud-performance-handoff.md](hud-performance-handoff.md) | **LoP HUD FPS — for Claude/feature agents** |
 | [TrueALBWWorld.md](TrueALBWWorld.md) | TRUETEST / open-world bootstrap design handoff |
+| [state/ww-fps-bisect.md](state/ww-fps-bisect.md) | 2026-07-19 ~33 FPS: CMake re-run vs WIP (B0 win) |

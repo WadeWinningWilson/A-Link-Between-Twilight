@@ -29,6 +29,7 @@
 #include "f_op/f_op_scene_mng.h"
 #include "m_Do/m_Do_lib.h"
 #if TARGET_PC
+#include "d/d_menu_ring.h"
 #include "dusk/sim_time_scale.h"
 #endif
 #include <cstring>
@@ -824,8 +825,11 @@ void fopAcM_posMove(fopAc_ac_c* i_actor, const cXyz* i_movePos) {
     cXyz* speed = fopAcM_GetSpeed_p(i_actor);
 #if TARGET_PC
     // Flurry Rush: world/enemies at 0.1x; Link moves at full speed for quick hits.
+    // Quick-equip live wheel: Link is soft-locked (execute skipped) — no ALINK exempt needed.
     f32 simScale = dusk::getSimTimeScale();
-    if (i_actor != nullptr && fopAcM_GetName(i_actor) == fpcNm_ALINK_e) {
+    if (i_actor != nullptr && fopAcM_GetName(i_actor) == fpcNm_ALINK_e &&
+        !dMenu_Ring_c::isQuickEquipLiveWorld())
+    {
         simScale = 1.0f;
     }
 #else

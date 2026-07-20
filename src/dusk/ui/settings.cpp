@@ -1355,6 +1355,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "in combat with you instead of manually rotating the lock-on camera.");
         addOption("No Ammo Drops", getSettings().game.noAmmoDrops,
             "Bombs, arrows, and seeds will not drop from enemies. Magic pickups (seed drops) replace them.");
+        // Option removed from UI: free-ground hold-A crawl raced door/dialogue prompts.
+        // Native crawl-hole A (Enter) still works. Config key kept for save compat.
         addOption("Manual Shielding", getSettings().game.manualShielding,
             "Hold ZR to raise your shield without Z-target lock-on; move freely while guarding. "
             "Shield bash is ZR+B. Off preserves vanilla auto-guard on Z-target.");
@@ -1425,6 +1427,20 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "cycle shield, and wolf transform. Map moves to M / Tab and the "
                     "controller touchpad by default (no touchpad? rebind Open Map in "
                     "Controller Config — L3 recommended).");
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.quickEquipWheel,
+            {
+                .key = "Quick Equip Wheel",
+                .helpText =
+                    "Hold the Item Wheel bind (L1 under Extra + Quick Swap) to open a "
+                    "filtered tools ring. Release over an item to assign it to Z only — "
+                    "X and Y stay unchanged. Tap still opens the full wheel. Requires "
+                    "Extra Item Slot (Extra Only or Extra + Quick Swap).",
+                .isDisabled =
+                    [] {
+                        return getSettings().game.extraItemSlotMode.getValue() ==
+                               ExtraItemSlotMode::Off;
+                    },
             });
         // ============================================
         // NEW CODE ENDS HERE

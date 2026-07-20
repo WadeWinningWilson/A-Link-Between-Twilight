@@ -23,6 +23,8 @@
 #include "d/d_ww_itemmdl_test.h"
 #include "d/d_demo_leftover_viewer.h"
 #include "d/d_cut_actor_spawn.h"
+#include "d/d_ext_npc_mount.h"
+#include "f_op/f_op_actor_mng.h"
 #include "m_Do/m_Do_audio.h"
 #include "Z2AudioLib/Z2SeqMgr.h"  // Wolf Howl tune preview (Z2BGM_* ids, Z2GetSeqMgr)
 #include "number_button.hpp"
@@ -3167,7 +3169,7 @@ EditorWindow::EditorWindow() {
                     Rml::String("<br/>") +
                     (cur != nullptr ? cur->note : "") +
                     "<br/><br/>Real enemies create live procs. "
-                    "<b>STUB</b> entries (Makar/Medli/…) are roster shells — often invisible." +
+                    "<b>STUB</b> entries are external-payload sockets — invisible without a mod." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         leftPane.register_control(
@@ -3197,6 +3199,56 @@ EditorWindow::EditorWindow() {
                     "Delete every cut actor this tool still tracks (up to 32). "
                     "Safe if they already died or left the room. Status: " +
                     Rml::String(dCutActorSpawn::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+
+        // №27 N4: identity audition — cycle head / lock name (user is the WW expert).
+        leftPane.register_control(
+            leftPane.add_button("Cycle head (nearest ExtNpc)")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+                    if (player == NULL) {
+                        return;
+                    }
+                    dExtNpcMount_cycleHeadNearest(player->current.pos, 800.0f);
+                }),
+            rightPane,
+            [](Pane& pane) {
+                fopAc_ac_c* player = dComIfGp_getPlayer(0);
+                const char* name = "";
+                if (player != NULL) {
+                    name = dExtNpcMount_nearestDisplayName(player->current.pos, 800.0f);
+                }
+                pane.add_rml(
+                    "№27 N4: cycle head attach on the nearest external NPC (body+head split). "
+                    "Nearest: <b>" +
+                    Rml::String(name != nullptr && name[0] ? name : "(none)") + "</b>." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Lock identity = census key (nearest)")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+                    if (player == NULL) {
+                        return;
+                    }
+                    // Placeholder lock: keeps current display_name into identity.ini.
+                    // User renames via editing identity.ini after visual confirm, or
+                    // replaces this button's name string once an input field exists.
+                    const char* cur =
+                        dExtNpcMount_nearestDisplayName(player->current.pos, 800.0f);
+                    if (cur != NULL && cur[0]) {
+                        dExtNpcMount_setDisplayNameNearest(player->current.pos, 800.0f, cur);
+                    }
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Writes <code>population/identity.ini</code> for the nearest ExtNpc. "
+                    "After you recognize someone, edit that file to the real name "
+                    "(e.g. <code>display_name=RealName</code>) — Cursor must not invent names." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
 

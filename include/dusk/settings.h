@@ -270,6 +270,8 @@ struct UserSettings {
         ConfigVar<bool> enableQuickTransform;
         // Off | Extra only (Midna + Z item) | Extra + Quick Swap (d-pad equip/transform).
         ConfigVar<ExtraItemSlotMode> extraItemSlotMode;
+        // Hold OPEN_ITEM_WHEEL → filtered tools → release assigns Z only (needs Extra Item Slot).
+        ConfigVar<bool> quickEquipWheel;
         ConfigVar<bool> hideTvSettingsScreen;
         ConfigVar<bool> biggerWallets;
         ConfigVar<bool> noReturnRupees;
@@ -340,6 +342,9 @@ struct UserSettings {
         // "leaf out" state — while ON, running/jumping off a ledge floats (gentle terminal
         // velocity, stick-steer, wind updraft) with no cucco held. Reuses the cucco HIO tuning.
         ConfigVar<bool> dekuLeafGlideTest;
+        // Legacy: free-ground hold-A crawl (retired — raced door/talk A prompts).
+        // Crawl uses native TP/WW hole prompting (BUTTON_STATUS_ENTER) only.
+        ConfigVar<bool> enableHoldACrawl;
         // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
         // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.
         ConfigVar<int> wwItemmdlViewerBdlIndex;

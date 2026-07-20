@@ -19,6 +19,10 @@
 
 #include "tracy/Tracy.hpp"
 
+#if TARGET_PC
+#include "d/d_ext_save_guard.h"
+#endif
+
 enum dComIfG_ButtonStatus {
     /* 0x00 */ BUTTON_STATUS_NONE,
     /* 0x01 */ BUTTON_STATUS_LET_GO,
@@ -1941,10 +1945,20 @@ inline BOOL dComIfGs_isSaveTbox(int i_stageNo, int i_no) {
 }
 
 inline void dComIfGs_onSaveSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onSaveSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getSavedata().getSave(i_stageNo).getBit().onSwitch(i_no);
 }
 
 inline void dComIfGs_offSaveSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("offSaveSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getSavedata().getSave(i_stageNo).getBit().offSwitch(i_no);
 }
 
@@ -2117,10 +2131,20 @@ inline BOOL dComIfGs_isStageMiddleBoss() {
 }
 
 inline void dComIfGs_onTbox(int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onTbox", -1, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getMemory().getBit().onTbox(i_no);
 }
 
 inline void dComIfGs_offTbox(int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("offTbox", -1, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getMemory().getBit().offTbox(i_no);
 }
 

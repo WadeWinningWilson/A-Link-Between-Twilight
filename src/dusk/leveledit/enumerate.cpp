@@ -593,6 +593,9 @@ void draw_selection_highlight() {
                  sSelection.isSpawnPoint ? "spawn"
                  : sSelection.unspawned  ? "unspawned"
                                          : "live");
+    if (const char* idLine = get_pick_identify_hud_line()) {
+        dDbVw_Report(20, 216, "%s", idLine);
+    }
 #endif
 }
 

@@ -11,14 +11,14 @@ User (or later `run-control.ps1`) is the only authority that changes `mode`.
 | Field | Value |
 |-------|--------|
 | **mode** | running |
-| **run_name** | Cut Actors / Demo Restore — Cursor ↔ History |
-| **run_doc** | docs/Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md |
-| **feature_state** | docs/state/cut-actors-demo-restore.md |
-| **active_workers** | cursor,history |
+| **run_name** | WW Bridge Tool — Bridge ↔ Housing Security |
+| **run_doc** | docs/Interconnected Chats/WW-Bridge-Tool-Cursor-History.md |
+| **feature_state** | docs/state/ww-bridge-tool.md |
+| **active_workers** | cursor,housing-security |
 | **drive_in_scope** | no |
 | **pause_question** | — |
 | **drive_pid** | — |
-| **updated** | 2026-07-17 (user Start — supersedes Level Editor run-control while this run is active) |
+| **updated** | 2026-07-19 (two-party lane; History not in this run) |
 
 ---
 
@@ -44,5 +44,5 @@ User (or later `run-control.ps1`) is the only authority that changes `mode`.
 
 - `cursor,claude` — deliberation / execute only  
 - `cursor,history` — implement + archaeology/critique  
-- `cursor,claude,drive` — user requested drive for this run  
+- `cursor,claude,drive` — user requested drive for that run  
 - `cursor` — single-sided work still under run-control (rare)

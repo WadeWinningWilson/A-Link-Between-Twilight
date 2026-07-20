@@ -40,6 +40,7 @@ UserSettings g_userSettings = {
         // Quality of Life
         .enableQuickTransform {"game.enableQuickTransform", false},
         .extraItemSlotMode {"game.extraItemSlot", ExtraItemSlotMode::Off},
+        .quickEquipWheel {"game.quickEquipWheel", false},
         .hideTvSettingsScreen {"game.hideTvSettingsScreen", true},
         .biggerWallets {"game.biggerWallets", false},
         .noReturnRupees {"game.noReturnRupees", false},
@@ -64,6 +65,9 @@ UserSettings g_userSettings = {
         .wwItemmdlHeldBowScalePct {"game.wwItemmdlHeldBowScalePct", 100},
         .wwItemmdlHeldBootsStyle {"game.wwItemmdlHeldBootsStyle", false},
         .dekuLeafGlideTest {"game.dekuLeafGlideTest", false},
+        // Legacy key: free-ground hold-A crawl retired (raced door/talk prompts).
+        // Kept registered so old configs still load; value is unused.
+        .enableHoldACrawl {"game.enableHoldACrawl", false},
         .wwItemmdlViewerBdlIndex {"game.wwItemmdlViewerBdlIndex", 0xF},
         .sumoOutfit {"game.sumoOutfit", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},
@@ -342,6 +346,7 @@ void registerSettings() {
     Register(g_userSettings.game.language);
     Register(g_userSettings.game.enableQuickTransform);
     Register(g_userSettings.game.extraItemSlotMode);
+    Register(g_userSettings.game.quickEquipWheel);
     Register(g_userSettings.game.hideTvSettingsScreen);
     Register(g_userSettings.game.biggerWallets);
     Register(g_userSettings.game.noReturnRupees);
@@ -366,6 +371,7 @@ void registerSettings() {
     Register(g_userSettings.game.wwItemmdlHeldBowScalePct);
     Register(g_userSettings.game.wwItemmdlHeldBootsStyle);
     Register(g_userSettings.game.dekuLeafGlideTest);
+    Register(g_userSettings.game.enableHoldACrawl);
     Register(g_userSettings.game.wwItemmdlViewerBdlIndex);
     Register(g_userSettings.game.sumoOutfit);
     Register(g_userSettings.game.sumoOutfitFists);

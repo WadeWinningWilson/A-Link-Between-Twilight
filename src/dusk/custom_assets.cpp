@@ -51,75 +51,8 @@
 namespace dusk::custom_assets {
 namespace {
 
-// Plan R: seed ready-to-receive WW-Crew-Restoration/ once (never overwrites user arcs).
-void ensure_ww_crew_skeleton() {
-    namespace fs = std::filesystem;
-    std::error_code ec;
-    const fs::path dest = ConfigPath / "model_replacements" / "WW-Crew-Restoration";
-    if (fs::exists(dest / "modinfo.ini", ec)) {
-        return;
-    }
-    fs::create_directories(dest / "arcs", ec);
-    fs::create_directories(dest / "npc", ec);
-    fs::create_directories(dest / "dialogue", ec);
-
-    // Prefer copying the repo template when running from a source checkout.
-    const char* base = SDL_GetBasePath();
-    fs::path copiedFrom;
-    if (base != nullptr) {
-        const fs::path candidates[] = {
-            fs::path(base) / "tools" / "ww_crew_restoration_skeleton",
-            fs::path(base) / ".." / ".." / "tools" / "ww_crew_restoration_skeleton",
-            fs::path(base) / ".." / ".." / ".." / "tools" / "ww_crew_restoration_skeleton",
-        };
-        for (const fs::path& src : candidates) {
-            if (fs::is_directory(src, ec) && fs::exists(src / "modinfo.ini", ec)) {
-                fs::copy(src, dest, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
-                copiedFrom = src;
-                break;
-            }
-        }
-    }
-
-    auto writeIfMissing = [&](const fs::path& rel, const char* body) {
-        const fs::path p = dest / rel;
-        if (fs::exists(p, ec)) {
-            return;
-        }
-        fs::create_directories(p.parent_path(), ec);
-        std::ofstream out(p, std::ios::binary);
-        if (out) {
-            out << body;
-        }
-    };
-
-    // Always ensure critical files exist (covers copy failure / shipped builds).
-    writeIfMissing("modinfo.ini",
-                   "name=WW Crew Restoration\n"
-                   "version=0.1.0\n"
-                   "author=Dusklight Cut Actors / Plan R\n"
-                   "description=Drop Wind Waker Mk.arc and P2.arc into arcs/ (your own extraction).\\n"
-                   "Never commit Nintendo assets.\\nWith arcs absent this mod is inert.\n"
-                   "category=NPCs\n");
-    writeIfMissing("arcs/README.txt",
-                   "Place Mk.arc and P2.arc here (your WW extraction — never commit).\n"
-                   "Optional: Md.arc. Empty arcs/ => TP stubs stay safe (StubWatch).\n");
-    writeIfMissing("npc/mk.ini",
-                   "proc=NPC_MK\narc=Mk\nmodel=mk.bdl\nidle=mk_wait.bck\n"
-                   "talk1=mk_talk01.bck\ntalk2=mk_talk02.bck\n"
-                   "display_name=Makar\nneck_joint=head\ncyl_radius=40\ncyl_height=100\n");
-    writeIfMissing("npc/p2.ini",
-                   "proc=NPC_P2\narc=P2\nmodel=p2.bdl\nidle=p2_wait.bck\n"
-                   "talk1=p2_talk01.bck\ntalk2=p2_talk02.bck\n"
-                   "display_name=Medli\nneck_joint=head\ncyl_radius=45\ncyl_height=140\n"
-                   "dagger_slot=hand_r\n\n[subtype.0]\nname=P2a\narg=0\n\n"
-                   "[subtype.1]\nname=P2b\narg=1\n\n[subtype.2]\nname=P2c\narg=2\n");
-    writeIfMissing("dialogue/sample.txt",
-                   "# Plan R L3 placeholder — drop arcs first.\n[mk.greet]\nMakar: ...\n");
-
-    DuskLog.info("[custom_assets] seeded WW-Crew-Restoration skeleton at {}{}", dest.string(),
-                 copiedFrom.empty() ? "" : fmt::format(" (from {})", copiedFrom.string()));
-}
+// Phase M4/A4: exe never writes mod content. Seed via
+// tools/ww_crew_restoration_skeleton/install_skeleton.py
 
 // normalized game path ("res/object/kmdl.arc") -> absolute loose file path
 std::unordered_map<std::string, std::string> s_map;
@@ -143,6 +76,9 @@ std::unordered_map<std::string, FolderConflicts> s_texConflicts;
 // Folder -> modinfo.ini display name, rebuilt by scan() so list rows can
 // resolve names per frame without touching the disk.
 std::unordered_map<std::string, std::string> s_displayNames;
+// Folder -> runtime status note for Mods badges (schema refuse, etc.). Not
+// cleared by scan() — set by feature code (e.g. ExtNpc population).
+std::unordered_map<std::string, std::string> s_statusNotes;
 
 // ============================================
 // NEW CODE — ALBW Port
@@ -1515,9 +1451,6 @@ void scan() {
 
     std::error_code ec;
 
-    // Plan R: create ready-to-receive mod folder before order/scan (inert without arcs).
-    ensure_ww_crew_skeleton();
-
     // ============================================
     // NEW CODE — ALBW Port (load-order mod system, Phase 1 + 2)
     // Canonicalize the order setting (idempotent): on the very first run this
@@ -1641,6 +1574,14 @@ void scan() {
                                        shadowed)
                          : "",
                      sample.empty() ? "-" : sample);
+        // R2 mounts every arcs/*.arc as res/Object/<Name>.arc. A full WW Object
+        // dump here (hundreds of overlays) has crashed OPENING_SCENE create.
+        if (enabled && hasArcs && count_ > 80) {
+            DuskLog.warn(
+                "[custom_assets] '{}' has {} overlays — arcs/ should be curated "
+                "(~tens), not a full Object dump",
+                mod.name, count_);
+        }
     }
 
 #if D_ALBW_AUDIO_SHADOW
@@ -1863,6 +1804,28 @@ FolderConflicts folder_conflicts(const char* folder) {
         out.overriddenByCore = out.overriddenByCore || texIt->second.overriddenByCore;
     }
     return out;
+}
+
+void set_mod_status_note(const char* folder, const char* note) {
+    if (folder == nullptr || folder[0] == '\0') {
+        return;
+    }
+    if (note == nullptr || note[0] == '\0') {
+        s_statusNotes.erase(folder);
+        return;
+    }
+    s_statusNotes[folder] = note;
+}
+
+const char* mod_status_note(const char* folder) {
+    if (folder == nullptr || folder[0] == '\0') {
+        return "";
+    }
+    const auto it = s_statusNotes.find(folder);
+    if (it == s_statusNotes.end()) {
+        return "";
+    }
+    return it->second.c_str();
 }
 
 int count() {
@@ -2298,9 +2261,10 @@ void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int van
         return;  // no mod provides a twin of this bank
     }
 
-    // Read the mod twin once (ANY size — the per-wave remap handles layout diffs;
-    // no size guard anymore). std::map => node-stable addresses, and the buffer is
-    // kept for the whole run, so buf.data() handed to the DSP can never dangle.
+    // №28 / №32 B10: in-place .aw twins are OFFSET-INDEXED by WSYS. A size mismatch
+    // (repacked/shrunk bank) + vanilla offsets ⇒ garbage wave headers ⇒ AV. Refuse and
+    // keep the vanilla bank resident. Larger/repacked waves must use the shadow-wave
+    // redirect path (per-wave), not a whole-bank twin of a different size.
     std::vector<u8>& buf = s_audioBufs[leaf];
     if (buf.empty()) {
         FILE* fp = std::fopen(pathIt->second.c_str(), "rb");
@@ -2314,6 +2278,15 @@ void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int van
         if (fsz <= 0) {
             std::fclose(fp);
             s_audioBufs.erase(leaf);
+            return;
+        }
+        if (static_cast<unsigned long>(fsz) != static_cast<unsigned long>(vanilla_size)) {
+            std::fclose(fp);
+            s_audioBufs.erase(leaf);
+            DuskLog.warn(
+                "[custom_assets] audio twin '{}' REFUSED — size {} != vanilla {} "
+                "(fall back to vanilla bank)",
+                leaf, static_cast<long>(fsz), vanilla_size);
             return;
         }
         buf.assign(static_cast<size_t>(fsz), 0);
@@ -2512,6 +2485,8 @@ std::vector<std::pair<std::string, bool>> order_view(const std::vector<std::stri
 std::vector<std::string> list_core_packs() { return {}; }
 void rebuild_texture_packs() {}
 FolderConflicts folder_conflicts(const char*) { return {}; }
+void set_mod_status_note(const char*, const char*) {}
+const char* mod_status_note(const char*) { return ""; }
 ModInfo mod_info(const char*) { return {}; }
 std::string display_name(const char* folder) { return folder ? folder : ""; }
 int count() { return 0; }

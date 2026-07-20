@@ -195,6 +195,9 @@ set(DOLZEL_FILES
         src/d/d_demo_leftover_viewer.cpp
         src/d/d_cut_actor_spawn.cpp
         src/d/d_ext_npc_mount.cpp
+        src/d/d_ext_mod_flags.cpp
+        src/d/d_ext_npc_doors.cpp
+        src/d/d_ext_npc_population.cpp
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp

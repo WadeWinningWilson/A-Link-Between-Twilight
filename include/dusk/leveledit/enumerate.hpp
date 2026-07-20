@@ -70,6 +70,10 @@ void try_world_pick_on_click();
 void tick_world_pick_hover();  // Select Mode: amber preview under cursor
 void draw_pick_hover();
 
+// Gate 11c — click-only actor identify journal (TP + mod mounts; zero cost when not clicking).
+int get_pick_identify_count();
+const char* get_pick_identify_hud_line();
+
 // Draw highlight for current selection. Early-outs when !g_levelEditorSession.
 void draw_selection_highlight();
 

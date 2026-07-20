@@ -185,6 +185,12 @@ struct FolderConflicts {
 // struct if the source had no conflicts in the last scan. Cheap map lookup.
 FolderConflicts folder_conflicts(const char* folder);
 
+// Runtime status note for Mods UI badges (e.g. population schema refuse).
+// Survives scan(); pass empty note to clear. Neutral wording only (A-4 / M6).
+void set_mod_status_note(const char* folder, const char* note);
+// "" if none. Pointer valid until next set_mod_status_note for that folder.
+const char* mod_status_note(const char* folder);
+
 // --- modinfo.ini (mod metadata, Fluffy-Manager-compatible keys) -----------
 //
 // A mod may ship <mod-root>/modinfo.ini (key=value lines, keys

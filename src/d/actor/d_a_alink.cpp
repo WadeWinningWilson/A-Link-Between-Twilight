@@ -333,6 +333,21 @@ static J3DModel* s_dekuLeafModel = NULL;
 static s16 s_dekuLeafBillowPhase = 0;
 
 // ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P3e — hand weld). REVERTIBLE: comment out the
+// #define to fall back to the plain midpoint anchor + all-ribs-flutter (no pin, no freeze).
+// Diagnostic (ALBW-LEAF-GRIP, 17/17 samples) proved the two grip ribs nearest Link's hands are:
+//   LEFT hand  <-> joint 8 (model-name "Barm2");  RIGHT hand <-> joint 6 (model-name "Farm2").
+// (Model names do NOT match world sides — pairing was measured, not assumed.) We pin those two
+// rib tips to the hand world positions and freeze billow on both grip ribs (joints 5-8), leaving
+// the free ribs (Larm 1,2 / Rarm 3,4) to flutter — mirrors WW keeping grip roots still.
+// ============================================
+#define DEKU_LEAF_HAND_WELD 1
+#if DEKU_LEAF_HAND_WELD
+static cXyz s_dekuLeafLHandW(0.0f, 0.0f, 0.0f);  // left  hand world pos, refreshed pre-calc
+static cXyz s_dekuLeafRHandW(0.0f, 0.0f, 0.0f);  // right hand world pos, refreshed pre-calc
+#endif
+
+// ============================================
 // NEW CODE — ALBW Port (Deku Leaf glide, WIP P3d — rib billow)
 // Re-implements WW's parachute rib articulation with our OWN math (no WW source): a per-joint
 // callback that applies a sin-driven local rotation to the canopy's rib joints during modelCalc,
@@ -348,6 +363,25 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
         return 1;
     }
     int jnt = i_joint->getJntNo();
+#if DEKU_LEAF_HAND_WELD
+    // Grip ribs held by the hands: pin the two tips to the hand world positions (jnt 8 -> left,
+    // jnt 6 -> right) and freeze both grip ribs (5-8) so they don't flutter out of the grip.
+    if (jnt == 6 || jnt == 8) {
+        Mtx m;
+        MTXCopy(model->getAnmMtx(jnt), m);      // keep the rib's orientation...
+        const cXyz& hp = (jnt == 8) ? s_dekuLeafLHandW : s_dekuLeafRHandW;
+        m[0][3] = hp.x;                          // ...but snap its origin onto the hand
+        m[1][3] = hp.y;
+        m[2][3] = hp.z;
+        model->setAnmMtx(jnt, m);
+        MTXCopy(m, J3DSys::mCurrentMtx);
+        return 1;
+    }
+    if (jnt == 5 || jnt == 7) {                  // grip-rib inner segment: frozen (no billow)
+        MTXCopy(model->getAnmMtx(jnt), J3DSys::mCurrentMtx);
+        return 1;
+    }
+#endif
     if (jnt >= 1 && jnt <= 8) {
         Mtx m;
         MTXCopy(model->getAnmMtx(jnt), m);
@@ -362,18 +396,19 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
 }
 
 // =============================================================================================
-// Deku Leaf overhead mount — CONFIRMED-WORKING orientation (playtested 2026-07-18)
+// Deku Leaf overhead mount — Route B: weld the STEM to Link's hands (playtested orientation)
 // ---------------------------------------------------------------------------------------------
-// Overhead mount, expressed in Link's FACING frame (x=right, y=up, z=forward) relative to the
-// head. World-anchored (not head-bone-local) so "up" is actually up. Rotations applied in the
-// order Y then X after the yaw+offset; 0x4000 = 90 deg per axis.
-//   Y = +0x4000, X = -0x4000  -> canopy arced flat overhead, peak up, like WW's parasol. LOCKED.
-// Path to it: X=-0x4000 alone = canopy "facing up"; the extra 90 had to be on Y (a further
-// -0x8000 X only stood it vertical like a stalk). Do NOT add a Z axis (tried, unnecessary).
-// PENDING: offset Y still 55 (leaf sits a touch high); lowering is gated on fixing Link's hands
-// clipping through the leaf's hold points (needs a proper WW-style hold pose first).
+// The leaf's model origin sits at the stem/grab end (bbox Z starts at 0 = stem, 42 = canopy top).
+// We anchor that origin to the MIDPOINT of Link's two hand matrices every frame, so the grab
+// point tracks the hands. Scale is applied via setBaseScale, which pivots about the model origin
+// (= the anchored grab point) -> the stem stays welded to the hands at ANY scale; only the canopy
+// grows above. Offset is now expressed relative to the hand midpoint (small nudge, keep ~0 so the
+// grab point stays on the hands). Orientation rotations are the CONFIRMED-WORKING pair:
+//   Y = +0x4000, X = -0x4000  -> canopy arced flat overhead, peak up (order Y then X after yaw).
+//   Do NOT add a Z axis (tried, unnecessary).
 // =============================================================================================
-static cXyz s_dekuLeafOffset(0.0f, 55.0f, 0.0f);
+static cXyz s_dekuLeafOffset(0.0f, 0.0f, 0.0f);  // nudge in facing frame from the hand midpoint
+static f32  s_dekuLeafScale = 1.0f;              // uniform scale about the welded grab point
 static s16 s_dekuLeafBaseRotY = 0x4000;   // 90 deg Y  (WORKING)
 static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X (WORKING) -> canopy peak up
 
@@ -401,18 +436,67 @@ void daAlink_c::updateDekuLeafModel() {
     // advance the billow phase each frame (WW cadence)
     s_dekuLeafBillowPhase += 0x82f;
 
-    // World-anchor: head joint (4) WORLD position, then build an upright frame facing Link's yaw,
-    // offset in that facing frame (up/forward/right), then tilt the blade. This avoids the head
-    // bone's local axes (which sent the offset backward = leaf-on-back).
-    cXyz headPos;
-    mDoMtx_multVecZero(mpLinkModel->getAnmMtx(4), &headPos);
-    mDoMtx_stack_c::transS(headPos.x, headPos.y, headPos.z);
+    // Route B weld-anchor: midpoint of Link's two hand matrices (WORLD). The leaf's stem origin
+    // rides this point, so the grab point tracks the hands; scale (below) pivots about it, keeping
+    // the stem welded to the hands regardless of scale while only the canopy grows.
+    cXyz lHand, rHand;
+    mDoMtx_multVecZero(getLeftHandMatrix(), &lHand);
+    mDoMtx_multVecZero(getRightHandMatrix(), &rHand);
+#if DEKU_LEAF_HAND_WELD
+    s_dekuLeafLHandW = lHand;  // grip-rib pin targets, read by dekuLeafJointCB during modelCalc
+    s_dekuLeafRHandW = rHand;
+#endif
+    cXyz anchor((lHand.x + rHand.x) * 0.5f, (lHand.y + rHand.y) * 0.5f, (lHand.z + rHand.z) * 0.5f);
+    mDoMtx_stack_c::transS(anchor.x, anchor.y, anchor.z);
     mDoMtx_stack_c::YrotM(shape_angle.y);
     mDoMtx_stack_c::transM(s_dekuLeafOffset.x, s_dekuLeafOffset.y, s_dekuLeafOffset.z);
     mDoMtx_stack_c::YrotM(s_dekuLeafBaseRotY);  // reorient the canopy peak to world-up
     mDoMtx_stack_c::XrotM(s_dekuLeafBaseRotX);
     s_dekuLeafModel->setBaseTRMtx(mDoMtx_stack_c::get());
+    // Scale pivots about the model origin (the welded grab point) so the stem stays on the hands.
+    s_dekuLeafModel->setBaseScale(cXyz(s_dekuLeafScale, s_dekuLeafScale, s_dekuLeafScale));
     modelCalc(s_dekuLeafModel);
+
+    // ============================================
+    // TEMP DIAG — ALBW-LEAF-GRIP (rib-tip vs hand pairing). STRIP before push.
+    // After the leaf is placed+calc'd, dump each rib-tip (arm2 joints 2/4/6/8) WORLD pos and both
+    // hand WORLD positions, then pick the nearest rib tip to each hand. Proves which two ribs to
+    // weld to the hands and whether the pairing is stable (names can't be trusted post-rotation).
+    // Throttled ~1 sample / 2s. Parse tag: "ALBW-LEAF-GRIP".
+    // ============================================
+    {
+        static int s_leafGripThrottle = 0;
+        if (--s_leafGripThrottle <= 0) {
+            s_leafGripThrottle = 120;
+            static int s_leafGripSample = 0;
+            s_leafGripSample++;
+            static const int ribJnt[4] = {2, 4, 6, 8};
+            static const char* ribName[4] = {"Larm2", "Rarm2", "Farm2", "Barm2"};
+            cXyz ribPos[4];
+            for (int r = 0; r < 4; r++) {
+                MtxP m = s_dekuLeafModel->getAnmMtx(ribJnt[r]);
+                ribPos[r] = cXyz(m[0][3], m[1][3], m[2][3]);
+                DuskLog.debug("ALBW-LEAF-GRIP s={} rib {} idx={} world {} {} {}", s_leafGripSample,
+                              ribName[r], ribJnt[r], ribPos[r].x, ribPos[r].y, ribPos[r].z);
+            }
+            cXyz hands[2] = {lHand, rHand};
+            static const char* handName[2] = {"L", "R"};
+            for (int h = 0; h < 2; h++) {
+                DuskLog.debug("ALBW-LEAF-GRIP s={} hand {} world {} {} {}", s_leafGripSample,
+                              handName[h], hands[h].x, hands[h].y, hands[h].z);
+                int best = -1;
+                f32 bestD2 = 1e30f;
+                for (int r = 0; r < 4; r++) {
+                    f32 dx = hands[h].x - ribPos[r].x, dy = hands[h].y - ribPos[r].y,
+                        dz = hands[h].z - ribPos[r].z;
+                    f32 d2 = dx * dx + dy * dy + dz * dz;
+                    if (d2 < bestD2) { bestD2 = d2; best = r; }
+                }
+                DuskLog.debug("ALBW-LEAF-GRIP s={} hand {} NEAREST rib {} idx={} dist2 {}",
+                              s_leafGripSample, handName[h], ribName[best], ribJnt[best], bestD2);
+            }
+        }
+    }
 }
 #endif
 
@@ -12232,6 +12316,9 @@ int daAlink_c::checkNormalAction() {
     }
 #endif
 
+    // Crawl / wolf-lie: native do-status only (BUTTON_STATUS_ENTER from crawl holes /
+    // wall codes). Free-ground hold-A crawl was removed — it raced door/talk prompts
+    // whenever DoStatus looked empty for a frame.
     if (doTrigger()) {
         if (dComIfGp_getDoStatus() == BUTTON_STATUS_UNK_137) {
             orderPeep();

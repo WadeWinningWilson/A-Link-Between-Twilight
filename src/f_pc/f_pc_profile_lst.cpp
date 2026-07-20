@@ -1614,6 +1614,8 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     // ALBW Port — "Midna Arm" wolf art helper: index MUST match
     // fpcNm_ALBW_MIDNA_ARM_e (0x31A).
     &g_profile_ALBW_MIDNA_ARM.base.base,
+    // №57 Cave09 BG socket: index MUST match fpcNm_EXT_BG10_e (0x31B).
+    &g_profile_EXT_BG10.base.base,
     NULL,
 };
 #endif

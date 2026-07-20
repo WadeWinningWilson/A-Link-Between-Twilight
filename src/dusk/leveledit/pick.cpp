@@ -10,13 +10,16 @@
 
 #include "d/d_com_inf_game.h"
 #include "d/d_debug_viewer.h"
+#include "d/d_ext_npc_mount.h"
 #include "dusk/logging.h"
 #include "dusk/main.h"
 #include "dusk/menu_pointer.h"
 #include "dusk/settings.h"
 #include "dusk/string.hpp"
+#include "f_op/f_op_actor_iter.h"
 #include "f_op/f_op_actor_mng.h"
 #include "f_pc/f_pc_manager.h"
+#include "f_pc/f_pc_name.h"
 #include "m_Do/m_Do_graphic.h"
 #include "m_Do/m_Do_lib.h"
 
@@ -415,6 +418,53 @@ void gather_at_cursor(f32 cursorX, f32 cursorY, f32 radiusScale, PickCandidate& 
         }
     }
 
+    // №44: ExtNpc mounts use setID 0xFFFF — not joined into DZR buffer rows. Still pickable.
+    struct ExtPickCtx {
+        f32 cursorX;
+        f32 cursorY;
+        f32 radiusScale;
+        bool rayValid;
+        cXyz* rayOrigin;
+        cXyz* rayDir;
+        PickCandidate* nearest;
+        PickCandidate* winner;
+        PickCandidate* runnerUp;
+        RayHit* rayBest;
+        int* liveOnScreen;
+    };
+    ExtPickCtx extCtx{cursorX, cursorY, radiusScale, rayValid, &rayOrigin, &rayDir, &nearest,
+                      &winner, &runnerUp, &rayBest, &liveOnScreen};
+    fopAcIt_Executor(
+        [](void* i_actor, void* i_data) -> int {
+            auto* actor = static_cast<fopAc_ac_c*>(i_actor);
+            auto* ctx = static_cast<ExtPickCtx*>(i_data);
+            if (actor == nullptr || ctx == nullptr) {
+                return 0;
+            }
+            dExtNpcIdentifyInfo mount{};
+            if (!dExtNpcMount_queryActor(actor, &mount) || !mount.valid) {
+                return 0;
+            }
+            // Skip BGs for click-identify (huge cull volumes steal every click).
+            if (mount.proc[0] && std::strncmp(mount.proc, "EXT_BG", 6) == 0) {
+                return 0;
+            }
+            const char* label =
+                mount.displayName[0] ? mount.displayName : (mount.proc[0] ? mount.proc : "ExtNpc");
+            Vec probe{};
+            project_world(actor->current.pos, probe);
+            if (on_screen(probe)) {
+                ++(*ctx->liveOnScreen);
+            }
+            consider_live(*ctx->nearest, *ctx->winner, *ctx->runnerUp, actor, label, nullptr,
+                          ctx->cursorX, ctx->cursorY, ctx->radiusScale);
+            if (ctx->rayValid) {
+                consider_ray(*ctx->rayBest, actor, label, nullptr, *ctx->rayOrigin, *ctx->rayDir);
+            }
+            return 0;
+        },
+        &extCtx);
+
     if (fopAc_ac_c* player = dComIfGp_getPlayer(0)) {
         consider_live(nearest, winner, runnerUp, player, "Link", nullptr, cursorX, cursorY,
                       radiusScale);
@@ -527,7 +577,56 @@ void maybe_breadcrumb(f32 sdlWinX, f32 sdlWinY, f32 cursorX, f32 cursorY, bool r
         runnerUp.valid ? runnerUp.distSq : -1.0f, runnerUp.valid ? runnerUp.depth : -1.0f);
 }
 
+// Gate 11c: click-only identify journal (TP buffer row + optional mod mount enrich).
+int sPickIdentifyCount = 0;
+char sPickIdentifyHud[160]{};
+
+void log_pick_identify(int clickN, const PlacedActor& picked, fopAc_ac_c* live, bool usedRay) {
+    const fpc_ProcID procId =
+        live != nullptr ? fopAcM_GetID(live) : fpcM_ERROR_PROCESS_ID_e;
+    const u32 liveParams = live != nullptr ? fopAcM_GetParam(live) : 0;
+
+    dExtNpcIdentifyInfo mount{};
+    if (live != nullptr) {
+        dExtNpcMount_queryActor(live, &mount);
+    }
+
+    DuskLog.info(
+        "Pick identify #{} procId=0x{:x} tag={} name={} proc={} arg={} params=0x{:08x} "
+        "liveParams=0x{:08x} setID={} layer={} room={} pos=({:.1f},{:.1f},{:.1f}) "
+        "home=({:.1f},{:.1f},{:.1f}) spawn=({:.1f},{:.1f},{:.1f}) ray={} join={} "
+        "mount={} disp={} head={}@{} mod={}",
+        clickN, static_cast<unsigned>(procId), picked.chunkTag, picked.name, picked.procname,
+        picked.argument, picked.params, liveParams, picked.setID, picked.layer, picked.roomNo,
+        picked.pos.x, picked.pos.y, picked.pos.z, live != nullptr ? live->home.pos.x : 0.0f,
+        live != nullptr ? live->home.pos.y : 0.0f, live != nullptr ? live->home.pos.z : 0.0f,
+        picked.spawnPos.x, picked.spawnPos.y, picked.spawnPos.z, usedRay ? 1 : 0,
+        picked.unspawned ? "unspawned" : picked.isSpawnPoint ? "spawn" : "live",
+        mount.valid ? mount.proc : "-", mount.valid ? mount.displayName : "-",
+        mount.valid && mount.headModel[0] ? mount.headModel : "-",
+        mount.valid && mount.headJoint[0] ? mount.headJoint : "-",
+        mount.valid ? mount.modFolder : "-");
+
+    if (mount.valid && mount.headModel[0]) {
+        std::snprintf(sPickIdentifyHud, sizeof(sPickIdentifyHud),
+                      "ID #%d %s proc=%s head=%s@%s", clickN, picked.name, mount.proc,
+                      mount.headModel, mount.headJoint);
+    } else {
+        std::snprintf(sPickIdentifyHud, sizeof(sPickIdentifyHud),
+                      "ID #%d %s proc=%d arg=%d setID=%u", clickN, picked.name, picked.procname,
+                      picked.argument, static_cast<unsigned>(picked.setID));
+    }
+}
+
 }  // namespace
+
+int get_pick_identify_count() {
+    return sPickIdentifyCount;
+}
+
+const char* get_pick_identify_hud_line() {
+    return sPickIdentifyHud[0] ? sPickIdentifyHud : nullptr;
+}
 
 void tick_world_pick_hover() {
     sPickDotValid = false;
@@ -754,6 +853,8 @@ void try_world_pick_on_click() {
         picked.name, picked.setID, winner.depth, winner.distSq, winner.radiusPx, selectMode,
         pcHotkeys, edge);
     set_selection_snapshot(picked, true);
+    ++sPickIdentifyCount;
+    log_pick_identify(sPickIdentifyCount, picked, winner.live, rayBest.valid);
 }
 
 }  // namespace dusk::leveledit
@@ -765,6 +866,12 @@ namespace dusk::leveledit {
 void try_world_pick_on_click() {}
 void tick_world_pick_hover() {}
 void draw_pick_hover() {}
+int get_pick_identify_count() {
+    return 0;
+}
+const char* get_pick_identify_hud_line() {
+    return nullptr;
+}
 
 }  // namespace dusk::leveledit
 

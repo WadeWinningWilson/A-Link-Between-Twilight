@@ -77,6 +77,16 @@ public:
     u8 openExplain(u8);
 #if TARGET_PC
     bool pointerMove();
+    bool isQuickEquipMode() const { return mQuickEquipMode; }
+    /** Call before constructing a ring to open the filtered hold-to-Z tools wheel. */
+    static void setPendingQuickEquip(bool quick);
+    /** Peek pending flag before ctor consumes it (for live-world open path). */
+    static bool peekPendingQuickEquip();
+    /** Live quick-wheel: no pause; world at reduced sim scale. */
+    static bool isQuickEquipLiveWorld();
+    /** 0.3 while live quick-wheel open (70% slowdown), else 1.0. */
+    static f32 getQuickEquipSimScale();
+    static void setQuickEquipLiveWorld(bool live);
 #endif
 
     virtual void draw() { _draw(); }
@@ -220,6 +230,7 @@ private:
     bool mCursorInterpCurrAngular;
     bool mCursorInterpInit;
     bool mPointerTouchPressHoveredCurrent;
+    bool mQuickEquipMode;
 #endif
 };
 

@@ -139,6 +139,16 @@ std::string group_active_variant_name(const ModUiGroup& group) {
     return {};
 }
 
+std::string group_status_note(const ModUiGroup& group) {
+    for (const std::string& member : group.members) {
+        const char* note = dusk::custom_assets::mod_status_note(member.c_str());
+        if (note != nullptr && note[0] != '\0') {
+            return note;
+        }
+    }
+    return {};
+}
+
 dusk::custom_assets::FolderConflicts group_conflicts(const ModUiGroup& group) {
     dusk::custom_assets::FolderConflicts total;
     for (const std::string& member : group.members) {
@@ -351,7 +361,11 @@ void populate_mod_detail_panel(Pane& pane, const ModUiGroup& group) {
     }
 
     const auto c = group_conflicts(group);
+    const std::string statusNote = group_status_note(group);
     std::string info;
+    if (!statusNote.empty()) {
+        info += fmt::format("<b>Status:</b> {}<br/>", escape(statusNote));
+    }
     if (c.wins != 0 || c.losses != 0) {
         info += fmt::format("Conflicts: wins <b>{}</b> asset(s), loses <b>{}</b> to higher "
                             "mods.<br/>",
@@ -424,11 +438,14 @@ ModsWindow::ModsWindow() {
                         }
                         const auto c = group_conflicts(*group);
                         std::string badge;
+                        if (!group_status_note(*group).empty()) {
+                            badge += "  [POP!]";
+                        }
                         if (c.wins != 0 || c.losses != 0) {
-                            badge = fmt::format("  [{}w/{}l{}]", c.wins, c.losses,
-                                                c.overridesCore       ? " CORE!"
-                                                : c.overriddenByCore  ? " core"
-                                                                      : "");
+                            badge += fmt::format("  [{}w/{}l{}]", c.wins, c.losses,
+                                                 c.overridesCore       ? " CORE!"
+                                                 : c.overriddenByCore  ? " core"
+                                                                       : "");
                         }
                         const bool grabbed = s_grabbedSlot == static_cast<int>(i);
                         std::string title = group_row_title(*group);

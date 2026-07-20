@@ -30,6 +30,7 @@
 #include <dusk/gamepad_color.h>
 #include <dusk/autosave.h>
 #include "d/d_albw_flurry_rush.h"
+#include "d/d_menu_ring.h"
 #include "dusk/action_bindings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/menu_pointer.h"
@@ -881,9 +882,14 @@ void fapGm_Execute() {
     sExecCount++;
 
 #if TARGET_PC
-    // Keep world pace aligned with flurry state every sim tick (enemies, FX anims, posMove).
-    // Link stays at 1.0x via daPy_frameCtrl_c::updateFrame() and fopAcM_posMove ALINK exempt.
-    dusk::setSimTimeScale(dFlurryRush_getTimeScale());
+    // Keep world pace aligned with flurry / quick-equip every sim tick.
+    // Link stays at 1.0x during Flurry only (see fopAcM_posMove + daPy_frameCtrl_c).
+    // Quick-equip live wheel: 0.3x world (70% slowdown), no pause flag.
+    f32 simScale = dFlurryRush_getTimeScale();
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+        simScale = dMenu_Ring_c::getQuickEquipSimScale();
+    }
+    dusk::setSimTimeScale(simScale);
 #endif
 
     #if DEBUG

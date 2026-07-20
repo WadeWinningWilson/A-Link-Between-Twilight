@@ -14,6 +14,10 @@
 #include <cstring>
 
 #include "dusk/string.hpp"
+#if TARGET_PC
+#include "d/d_ext_npc_doors.h"
+#include "dusk/logging.h"
+#endif
 
 namespace {
 static u8 event_debug_evnt() {
@@ -518,6 +522,31 @@ int dEvt_control_c::doorCheck(dEvt_order_c* order) {
                 JUT_ASSERT(773, FALSE);
             }
         } else {
+#if TARGET_PC
+            // №53: WW mount knobs have no stage event archive — fire pinned-BG warp backend.
+            if (actor2 != NULL && dExtNpcDoors_tryNativeWarp(actor2)) {
+                mEventId = -1;
+                // №89: stage-change arms next stage; endProc is blocked while
+                // isEnableNextStage, so a source DEMO event never finishes.
+                // Abort door-event entry — destination owns the arrival demo.
+                if (dComIfGp_isEnableNextStage()) {
+                    mMode = dEvt_mode_WAIT_e;
+                    fopAc_ac_c* a1 = getPt1();
+                    if (a1 != NULL) {
+                        a1->eventInfo.setCommand(dEvtCmd_NONE_e);
+                    }
+                    fopAc_ac_c* a2 = getPt2();
+                    if (a2 != NULL) {
+                        a2->eventInfo.setCommand(dEvtCmd_NONE_e);
+                    }
+                    DuskLog.info(
+                        "[Doors] №89 doorCheck — stage-change warp; skip source DEMO event");
+                    return 0;
+                }
+                reset();
+                return 1;
+            }
+#endif
             mEventId = -1;
             reset();
         }

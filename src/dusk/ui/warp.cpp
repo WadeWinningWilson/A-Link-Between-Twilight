@@ -7,6 +7,14 @@
 #include "dusk/map_loader_definitions.h"
 #include "fmt/format.h"
 
+#if TARGET_PC
+#include "d/d_com_inf_game.h"
+#include "d/d_ext_npc_doors.h"
+#include "d/d_ext_npc_mount.h"
+#include "d/d_ext_save_guard.h"
+#include "m_Do/m_Do_graphic.h"
+#endif
+
 #include <string>
 
 namespace dusk::ui {
@@ -347,6 +355,82 @@ WarpWindow::WarpWindow() {
             });
 
         leftPane.add_section("Action");
+#if TARGET_PC
+        // №99 R2: warp rows from mod manifests (warp_label=). Labels stay data-side —
+        // never compile WW-facing strings into map_loader_definitions.h.
+        {
+            const int nProv = dExtNpcMount_providerCount();
+            bool sectionOpened = false;
+            for (int pi = 0; pi < nProv; ++pi) {
+                dExtNpcManifest man{};
+                if (!dExtNpcMount_providerAt(pi, &man) || !man.isBg || man.warpLabel[0] == '\0' ||
+                    !man.hasHostPos || !man.hasAnchor || !man.hasSpawnRel ||
+                    man.hostStage[0] == '\0') {
+                    continue;
+                }
+                if (!sectionOpened) {
+                    leftPane.add_section(man.modFolder[0] ? man.modFolder : "Mod Stages");
+                    sectionOpened = true;
+                }
+                const std::string proc = man.proc;
+                const std::string label = man.warpLabel;
+                const std::string hostStage = man.hostStage;
+                const int hostRoom = man.hostRoom;
+                const int hostLayer = man.hostLayer;
+                leftPane.register_control(
+                    leftPane
+                        .add_button({
+                            .text = label,
+                            .isDisabled =
+                                [proc] { return !dExtNpcMount_hasPayload(proc.c_str()); },
+                        })
+                        .on_pressed([proc, hostStage, hostRoom, hostLayer] {
+                            if (!dExtNpcMount_hasPayload(proc.c_str())) {
+                                return;
+                            }
+                            mDoAud_seStartMenu(kSoundClick);
+                            markDebugWarpStorySuppress();
+                            setRoomLayerOverride(static_cast<s8>(hostLayer));
+                            const char* cur = dComIfGp_getStartStageName();
+                            const bool foreign =
+                                cur == NULL || std::strcmp(cur, hostStage.c_str()) != 0;
+                            if (foreign) {
+                                // №84/№85: foreign host = native stage change only. Room-lane
+                                // mount binds onRoomObjectsReady inside the new play scene.
+                                // Clear door fade/demo so ChangeReq wipe can finish.
+                                dExtNpcManifest man{};
+                                if (dExtNpcMount_lookup(proc.c_str(), &man) && man.isBg &&
+                                    man.hostRoom >= 0) {
+                                    dExtNpcMount_registerRoomLane(proc.c_str(), man.hostRoom);
+                                }
+                                dExtNpcMount_cancelTransports();
+                                dExtNpcMount_endDoorDemoLock();
+                                mDoGph_gInf_c::offFade();
+                                if (!dComIfGp_isEnableNextStage()) {
+                                    // №90: WW hosts always use authored PLYR point 0 (never -1).
+                                    const s8 point = 0;
+                                    dComIfGp_setNextStage(hostStage.c_str(), point,
+                                                          static_cast<s8>(hostRoom),
+                                                          static_cast<s8>(hostLayer));
+                                    dExtNpcDoors_armArrivalGuard(hostStage.c_str());
+                                }
+                            } else if (!dExtNpcMount_requestBgWarp(proc.c_str())) {
+                                return;
+                            }
+                        }),
+                    rightPane, [label, hostStage, hostRoom, proc](Pane& pane) {
+                        pane.clear();
+                        pane.add_text(fmt::format(
+                            "{} — BG warp:\n"
+                            "1) If host stage {} differs from current → native setNextStage "
+                            "(play scene recreates; mount on room-ready).\n"
+                            "2) Same host → pinned BG warp + relocate to spawn_rel for '{}'.\n"
+                            "3) Needs the mod providing that payload enabled with arc + ini.",
+                            label, hostStage, proc));
+                    });
+            }
+        }
+#endif
         leftPane.register_control(
             leftPane.add_button({
                         .text = "Warp",
@@ -380,8 +464,15 @@ WarpWindow::WarpWindow() {
                     // ============================================
                     markDebugWarpStorySuppress();
                     setRoomLayerOverride(static_cast<s8>(state.layer));
-                    dComIfGp_setNextStage(map.mapFile, room.roomPoints[state.pointIdx], room.roomNo,
-                                          state.layer);
+                    s16 point = room.roomPoints[state.pointIdx];
+                    // №90: WW host stages must never arm restart point (-1).
+                    if (dExtWwSave_isWwHostStage(map.mapFile) && point < 0) {
+                        point = 0;
+                    }
+                    dComIfGp_setNextStage(map.mapFile, point, room.roomNo, state.layer);
+                    if (dExtWwSave_isWwHostStage(map.mapFile)) {
+                        dExtNpcDoors_armArrivalGuard(map.mapFile);
+                    }
                     // UI snaps back to Auto; override persists for this stage load only.
                     state.layer = kMinLayer;
                 }),

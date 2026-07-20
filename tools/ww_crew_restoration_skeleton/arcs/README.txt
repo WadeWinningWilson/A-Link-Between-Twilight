@@ -1,8 +1,9 @@
-Place Wind Waker archive files here (YOUR extraction — never commit):
+Place your own Wind Waker extractions here (never commit Nintendo assets):
 
-  Mk.arc   — Makar (required for NPC_MK socket)
-  P2.arc   — Medli (required for NPC_P2 socket)
-  Md.arc   — optional story-Medli (future)
+  Mk.arc   — Ivan / Killer Bees (NPC_MK)
+  P2.arc   — Pirates (NPC_P2 subtypes P2a/P2b/P2c)
+  Md.arc   — Medli (NPC_MD; includes mdarm + harp)
+  Gnd.arc  — Ganondorf WW (NPC_GND)
+  Outset.arc — Outset Island BG (Room44 adapted; proc=OUTSET)
 
-These mount at runtime as res/Object/<Name>.arc via the mod manager.
-If this folder is empty or the mod is disabled, TP stubs refuse create safely (StubWatch).
+Empty arcs/ => TP stub sockets stay safe (StubWatch). Adapt BDLs with adapt_bdl_arcs.py.

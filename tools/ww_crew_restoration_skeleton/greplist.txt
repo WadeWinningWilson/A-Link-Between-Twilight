@@ -1,0 +1,56 @@
+# Phase M5/M6 — forbidden character/place strings in the shipped exe.
+# One pattern per line. Tools and docs/ are exempt. Extend when adding characters.
+#
+# FILE MUST STAY LF-ENDED. With CRLF, a naive `while read` gate greps for
+# "Ivan\r" and every pattern returns zero — a FALSE CLEAN that hides real
+# leaks. (Observed 2026-07-19: the CRLF pass reported all-zero including the
+# known-good Ganondorf hits; the LF pass found two real leaks.)
+Ivan
+Makar
+Medli
+Ganondorf (WW)
+Killer
+Windfall
+Outset
+Aryll
+KoRL
+Wanna race
+Earth Temple awaits
+landlubber
+Pirate A
+Pirate B
+Pirate C
+mdarm_wait
+
+# =============================================================================
+# ADJUDICATED / EXEMPT — do not re-flag these in audit runs
+# =============================================================================
+#
+# 1. TP-NATIVE WW LEFTOVERS (user ruling, 2026-07-19)
+#    Nintendo shipped Wind Waker data inside Twilight Princess itself:
+#    res/Object/itemmdl.h is present in ALL retail asset trees (DZDE01,
+#    GZ2E01/J01/P01, RZDE01_00/_02, RZDJ01, RZDP01, Shield, ShieldD) and is
+#    tracked in-repo as vanilla data. Strings naming those assets therefore
+#    describe TP-NATIVE content, not imported WW content, and the Receiver
+#    Covenant does not reach them.
+#    Covered: the itemmdl viewer label table (src/dusk/ui/editor.cpp ~1475)
+#    and its ~10 WW-exclusive item names — Skull Hammer, Picto Box, Tingle
+#    Tuner, Spoils Bag, Bait Bag, Delivery Bag, Grappling Hook, Wind Waker,
+#    Deku Leaf, Telescope. Also the "Wind Waker Item Viewer" UI section.
+#
+# 2. WW SKINS LANE (user ruling, 2026-07-19)
+#    The "Wind Waker Skins" / WW-gear mod lane and its UI sections are
+#    out of audit scope. Same basis: it renders TP's own leftover data.
+#
+# 3. BARE "Ganondorf" — TP PRINCIPAL (Phase M close, 2026-07-18)
+#    He is a TP main character (d_a_npc_gnd, d_a_b_gnd, achievements, editor
+#    copy). Expect nonzero hits in every clean build; 13 at the 2026-07-19
+#    baseline. The pattern above is deliberately "Ganondorf (WW)" so it
+#    matches nothing literally — it documents that WW-Ganondorf-as-payload is
+#    forbidden while leaving TP's own usage alone. Do NOT "fix" it to bare
+#    "Ganondorf": that converts it into a permanent false positive.
+#
+# 4. NOT exempt, for contrast — names of WW content NOT shipped in TP
+#    (characters, places, dialogue, imported arcs) remain fully gated, and
+#    engine code must use neutral tokens only (EXT_BG0, NPC_TPOST). New WW
+#    content added by History extends the FORBIDDEN list above.

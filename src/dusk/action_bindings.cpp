@@ -148,6 +148,10 @@ bool getActionBindHold(ActionBinds action, u32 port) {
            actionPressData[port][static_cast<int>(action)].pressedPrevFrame;
 }
 
+bool getActionBindDown(ActionBinds action, u32 port) {
+    return actionPressData[port][static_cast<int>(action)].pressedCurFrame;
+}
+
 bool getActionBindHoldAnyPort(ActionBinds action) {
     for (u32 port = 0; port < PAD_CHANMAX; ++port) {
         if (getActionBindHold(action, port)) {
@@ -218,6 +222,10 @@ bool isExtraItemSlotEnabled() {
 
 bool isDpadQuickSwapEnabled() {
     return getSettings().game.extraItemSlotMode.getValue() == ExtraItemSlotMode::ExtraAndQuickSwap;
+}
+
+bool isQuickEquipWheelEnabled() {
+    return getSettings().game.quickEquipWheel.getValue() && isExtraItemSlotEnabled();
 }
 
 bool callMidnaReservesDpadLeft(u32 port) {

@@ -806,6 +806,7 @@ PROCS_NOT_WII \
 /* 0x318 */ X(fpcNm_ALBW_SHADE_WATCHER_e) \
 /* 0x319 */ X(fpcNm_ALBW_SHADE_BOSS_WOLF_e) \
 /* 0x31A */ X(fpcNm_ALBW_MIDNA_ARM_e) \
+/* 0x31B */ X(fpcNm_EXT_BG10_e) \
 
 #define X(name) name,
 enum {

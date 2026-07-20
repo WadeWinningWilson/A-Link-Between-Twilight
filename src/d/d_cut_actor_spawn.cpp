@@ -52,26 +52,86 @@ static const Entry kEntries[] = {
     {"Obj_TestCube — DEBUG-only (parked)", fpcNm_Obj_TestCube_e, 0, 0, true,
      "Methods are #if DEBUG only — RelWithDebInfo profile has NULL SubMtd (crash). "
      "Spawn refused outside DEBUG. Assets K_cube00/01 exist for later restore."},
-    // Stub RELs — PARKED (playtest №1: NPC_MK procSize=1 → ACCESS_VIOLATION)
-    {"NPC_MK — Ivan socket (Mk.arc; Plan R)", fpcNm_NPC_MK_e, 0, 0, true,
-     "Socket: needs WW-Crew-Restoration arcs/Mk.arc. Absent → StubWatch ERROR. Present → L1 idle mount."},
-    {"NPC_P2 — Medli socket (Plan R)", fpcNm_NPC_P2_e, 0, 0, true,
-     "Socket: needs WW-Crew-Restoration arcs/P2.arc. Absent → StubWatch ERROR. Present → L1 idle mount."},
-    {"NPC_KDK — cut NPC STUB (parked)", fpcNm_NPC_KDK_e, 0, 0, true,
-     "PARKED: StubWatch-safe ERROR. Jailer experiment — retail R_SP107/R03 only."},
-    {"NPC_HENNA0 — cut NPC STUB (parked)", fpcNm_NPC_HENNA0_e, 0, 0, true,
-     "PARKED: StubWatch-safe ERROR (no assets)."},
+    // External payload sockets: appended dynamically from manifests (Phase M).
 };
 
-static constexpr int kCount = (int)(sizeof(kEntries) / sizeof(kEntries[0]));
+static constexpr int kStaticCount = (int)(sizeof(kEntries) / sizeof(kEntries[0]));
 static constexpr int kTrackMax = 32;
 static constexpr int kPhaseTimeoutFrames = 90;
+static constexpr int kDynMax = 64;
+
+struct DynSlot {
+    char label[96];
+    char note[128];
+    Entry entry;
+};
+
+static DynSlot s_dyn[kDynMax];
+static int s_dynCount = 0;
+static Entry s_merged[kStaticCount + kDynMax];
+static int s_mergedCount = 0;
 
 static int s_selected = 0;
 static char s_statusBuf[256] = "Pick a cut actor and Spawn at feet.";
 static const char* s_status = s_statusBuf;
 static fpc_ProcID s_tracked[kTrackMax];
 static int s_trackedCount = 0;
+
+void rebuildMergedEntries() {
+    s_dynCount = 0;
+    const int n = dExtNpcMount_providerCount();
+    for (int i = 0; i < n && s_dynCount < kDynMax; ++i) {
+        dExtNpcManifest man{};
+        if (!dExtNpcMount_providerAt(i, &man)) {
+            continue;
+        }
+        const char* socket = man.socket[0] ? man.socket : man.proc;
+        const s16 actorId = dExtNpcMount_socketActorId(socket);
+        if (actorId < 0) {
+            continue;
+        }
+        auto pushOne = [&](const char* name, u32 params, bool snap) {
+            if (s_dynCount >= kDynMax || name == NULL || name[0] == '\0') {
+                return;
+            }
+            DynSlot& slot = s_dyn[s_dynCount++];
+            snprintf(slot.label, sizeof(slot.label), "%s", name);
+            snprintf(slot.note, sizeof(slot.note), "External payload proc=%s socket=%s", man.proc,
+                     socket);
+            slot.entry.label = slot.label;
+            slot.entry.actorId = actorId;
+            slot.entry.angleX = 0;
+            slot.entry.params = params;
+            slot.entry.snapToGround = snap;
+            slot.entry.note = slot.note;
+        };
+        if (man.subtypeCount > 0) {
+            for (int s = 0; s < man.subtypeCount; ++s) {
+                if (!man.subtypes[s].valid) {
+                    continue;
+                }
+                const char* dn = man.subtypes[s].displayName[0] ? man.subtypes[s].displayName :
+                                                                   man.displayName;
+                pushOne(dn, (u32)man.subtypes[s].arg, !man.isBg);
+            }
+        } else {
+            const char* dn = man.displayName[0] ? man.displayName : man.proc;
+            const u32 params = man.socketArg >= 0 ? (u32)man.socketArg : 0;
+            pushOne(dn, params, !man.isBg);
+        }
+    }
+
+    s_mergedCount = 0;
+    for (int i = 0; i < kStaticCount; ++i) {
+        s_merged[s_mergedCount++] = kEntries[i];
+    }
+    for (int i = 0; i < s_dynCount; ++i) {
+        s_merged[s_mergedCount++] = s_dyn[i].entry;
+    }
+    if (s_selected >= s_mergedCount) {
+        s_selected = 0;
+    }
+}
 
 struct PendingObserve {
     bool active;
@@ -115,14 +175,19 @@ void trackId(fpc_ProcID id) {
 }
 
 bool isParkedStub(s16 actorId) {
-    // MK/P2 unparked when Plan R payload present; KDK/HENNA0 stay refuse-spawn.
+    const char* socket = NULL;
     if (actorId == fpcNm_NPC_MK_e) {
-        return !dExtNpcMount_hasPayload("NPC_MK");
+        socket = "NPC_MK";
+    } else if (actorId == fpcNm_NPC_P2_e) {
+        socket = "NPC_P2";
+    } else if (actorId == fpcNm_NPC_HENNA0_e) {
+        socket = "NPC_HENNA0";
+    } else if (actorId == fpcNm_NPC_KDK_e) {
+        socket = "NPC_KDK";
+    } else {
+        return false;
     }
-    if (actorId == fpcNm_NPC_P2_e) {
-        return !dExtNpcMount_hasPayload("NPC_P2");
-    }
-    return actorId == fpcNm_NPC_KDK_e || actorId == fpcNm_NPC_HENNA0_e;
+    return !dExtNpcMount_hasSocketPayload(socket);
 }
 
 int deleteAllOtama(void* actor, void* data) {
@@ -209,14 +274,20 @@ int deleteChildrenOfTracked(void* actor, void* data) {
 }  // namespace
 
 int entryCount() {
-    return kCount;
+    if (s_mergedCount == 0) {
+        rebuildMergedEntries();
+    }
+    return s_mergedCount;
 }
 
 const Entry* entry(int index) {
-    if (index < 0 || index >= kCount) {
+    if (s_mergedCount == 0) {
+        rebuildMergedEntries();
+    }
+    if (index < 0 || index >= s_mergedCount) {
         return NULL;
     }
-    return &kEntries[index];
+    return &s_merged[index];
 }
 
 int selectedIndex() {
@@ -224,7 +295,10 @@ int selectedIndex() {
 }
 
 void setSelectedIndex(int index) {
-    if (index >= 0 && index < kCount) {
+    if (s_mergedCount == 0) {
+        rebuildMergedEntries();
+    }
+    if (index >= 0 && index < s_mergedCount) {
         s_selected = index;
     }
 }
@@ -236,7 +310,12 @@ bool requestSpawn() {
         return false;
     }
 
-    const Entry& e = kEntries[s_selected];
+    rebuildMergedEntries();
+    if (s_selected < 0 || s_selected >= s_mergedCount) {
+        setStatus("Failed — no spawn entry selected.");
+        return false;
+    }
+    const Entry& e = s_merged[s_selected];
 
 #if !DEBUG
     if (e.actorId == fpcNm_Obj_TestCube_e) {
@@ -246,7 +325,7 @@ bool requestSpawn() {
     }
 #endif
     if (isParkedStub(e.actorId)) {
-        setStatus("Stub parked: Size=0x1 or NULL SubMtd (Makar crash class) — spawn refused.");
+        setStatus("Stub parked: no external payload for this socket — spawn refused.");
         DuskLog.debug("[CutActorSpawn] refuse stub actor={} label={}", (int)e.actorId, e.label);
         return false;
     }

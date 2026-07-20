@@ -39,6 +39,12 @@ public:
     J3DTexture* getTexture() const { return mTexture; }
     JUTNameTab* getTextureName() const { return mTextureName; }
 
+    // №50-C: BMT TEX1-only tables (e.g. ko02.bmt) replace the model's texture bank.
+    void replaceTextures(J3DTexture* texture, JUTNameTab* textureName) {
+        mTexture = texture;
+        mTextureName = textureName;
+    }
+
     JUTNameTab* getMaterialName() const { return mMaterialName; }
 
     u16 getMaterialNum() const { return mMaterialNum; }

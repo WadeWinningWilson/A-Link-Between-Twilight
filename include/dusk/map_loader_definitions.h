@@ -603,6 +603,8 @@ static const auto gameRegions = std::to_array({
             {4, {0, 1}},
         }),
     }),
+    // №99 R1/R2: WW interior warps come from mod manifests (warp_label=) at runtime —
+    // never compile-time labels here (gate-invisible / TP-ambiguous names).
     RegionEntry("Misc", {
         MapEntry("Title Screen / King Bulblin 1", "F_SP102", {
             {0, {0, 1, 2, 3, 4, 5, 20, 53, 100, 101}},

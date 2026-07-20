@@ -628,7 +628,9 @@ int daAlink_c::procCrawlMove() {
 
     cM3dGPla sp60;
 
-    if ((var_r27 != 0 && mProcVar3.field_0x300e == 0) || getSlidePolygon(&sp60) || checkCrawlWaterIn()) {
+    // Vanilla: stand up as soon as there is overhead clearance (crawl holes).
+    BOOL standReady = (var_r27 != 0 && mProcVar3.field_0x300e == 0);
+    if (standReady || getSlidePolygon(&sp60) || checkCrawlWaterIn()) {
         procCrawlEndInit(1, shape_angle.x, shape_angle.z);
     } else {
         BOOL var_r26 = FALSE;

@@ -946,6 +946,12 @@ public:
         }
     }
 
+    // Bytes 1..79: ExtModFlags blob (Phase O2). Byte 0 remains dusk policy bits.
+    static const int EXT_MOD_FLAGS_OFF = 1;
+    static const int EXT_MOD_FLAGS_SIZE = 79;
+    u8* getExtModFlags() { return mData + EXT_MOD_FLAGS_OFF; }
+    const u8* getExtModFlags() const { return mData + EXT_MOD_FLAGS_OFF; }
+
 private:
     u8 mData[80];
 };

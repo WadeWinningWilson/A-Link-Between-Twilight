@@ -51,8 +51,16 @@ JKRArchive::~JKRArchive() {
 
 bool JKRArchive::isSameName(JKRArchive::CArcName& name, u32 nameOffset, u16 nameHash) const {
     u16 hash = name.getHash();
-    if (hash != nameHash)
+    if (hash != nameHash) {
+#if TARGET_PC
+        // №87: hand-renamed RARC members (shell.txt→room.dzr) can leave a stale
+        // name_hash. Index iteration still loads the file; findNameResource would
+        // miss. Accept an exact string match as a PC-side safety net.
+        return strcmp(mStringTable + nameOffset, name.getString()) == 0;
+#else
         return false;
+#endif
+    }
     return strcmp(mStringTable + nameOffset, name.getString()) == 0;
 }
 

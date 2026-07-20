@@ -23,7 +23,9 @@
 #include "d/d_albw_death_rupee.h"
 #include "d/d_albw_shade_refuge.h"  // dShadeRefuge_isEnabled (master toggle)
 #include "d/d_albw_shade_boss.h"    // dShadeBoss_isEnabled (Hero's Shade secret boss)
+#include "d/d_ext_npc_mount.h"
 #include "d/d_item_data.h"
+#include "dusk/logging.h"
 #include "dusk/truetest.hpp"
 
 // ============================================
@@ -368,6 +370,12 @@ static bool objectSetCheck(room_of_scene_class* i_this) {
             dComIfGp_getPEvtManager()->roomInit(roomNo);
             dStage_dt_c_roomReLoader(i_this->roomInfo, i_this->roomDt, roomNo);
             dComIfGp_ret_wp_set(roomNo);
+#if TARGET_PC
+            // №83: WW room-lane mounts AFTER roomInit/reLoader (not beside the BG_e
+            // create request). TP's BG_e + dzr actors are scheduled; mount create
+            // still defers internally until player/layer are usable.
+            dExtNpcMount_onRoomObjectsReady(dComIfGp_getStartStageName(), roomNo);
+#endif
             i_this->field_0x1d4 = -1;
             i_this->field_0x1d5 = 1;
         }
@@ -375,6 +383,11 @@ static bool objectSetCheck(room_of_scene_class* i_this) {
         if (isCreating(fpcM_LayerID(i_this))) {
             return 0;
         }
+
+#if TARGET_PC
+        // №62: drop room-lane mounts before the room layer judge deletes actors.
+        dExtNpcMount_onRoomUnload(dComIfGp_getStartStageName(), roomNo);
+#endif
 
         fpcM_LyJudge(&i_this->base, (fpcLyIt_JudgeFunc)deleteJugge, NULL);
         g_dComIfG_gameInfo.play.getParticle()->levelAllForceOnEventMove();
@@ -584,6 +597,23 @@ static int phase_2(room_of_scene_class* i_this) {
     i_this->roomDt = dComIfGp_roomControl_getStatusRoomDt(roomNo);
     i_this->roomDt->setRoomNo(roomNo);
     i_this->roomInfo = dComIfG_getStageRes(arcName, "room.dzr");
+#if TARGET_PC
+    // №87: name-lookup can miss when RARC string was renamed but entry hash was not
+    // (shell.txt→room.dzr). Log separates NULL vs sync-incomplete vs collision.
+    {
+        const char* stage = dComIfGp_getStartStageName();
+        DuskLog.info(
+            "[dScnRoom] phase_2 arc='{}' roomNo={} roomInfo={} syncRt={} stage='{}'",
+            arcName != NULL ? arcName : "?", roomNo, i_this->roomInfo != NULL ? 1 : 0, rt,
+            stage != NULL ? stage : "?");
+        if (i_this->roomInfo == NULL) {
+            DuskLog.warn(
+                "[dScnRoom] №87 room.dzr MISSING in arc='{}' roomNo={} stage='{}' "
+                "(check RARC name_hash vs string — index load can succeed while findName fails)",
+                arcName != NULL ? arcName : "?", roomNo, stage != NULL ? stage : "?");
+        }
+    }
+#endif
 
     if (i_this->roomInfo != NULL) {
         dStage_dt_c_roomLoader(i_this->roomInfo, i_this->roomDt, roomNo);

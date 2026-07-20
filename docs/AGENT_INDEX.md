@@ -48,6 +48,7 @@
 | Cut Actors / Demo Restore | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) | [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md), [TPHistory.md](TPHistory.md) §7 |
 | Level Editor (Phase 1) | [state/level-editor.md](state/level-editor.md) | [level-editor-phase1.md](level-editor-phase1.md), [Interconnected Chats/Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) |
 | Outfit / sumo / quick-swap | *(add `state/outfit-sumo.md` when next session starts)* | [Interconnected Chats/Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md), [Outfit Stats.md](Outfit%20Stats.md), [sumo-combat.md](sumo-combat.md) |
+| Quick-equip wheel + page 2 | [state/quick-equip-wheel.md](state/quick-equip-wheel.md) | `~/.cursor/plans/next_slice_shop_potion_stagger.plan.md` (original hold sketch); [deku-leaf-glide-research.md](deku-leaf-glide-research.md) P4; [d-pad-reworking.md](d-pad-reworking.md) |
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |
 
 ---

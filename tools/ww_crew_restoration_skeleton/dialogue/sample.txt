@@ -1,8 +1,31 @@
-# Sample dialogue file — Plan R L3 will load these when talkable mounts land.
-# Format TBD (ALBW NPC dialogue recipe). Placeholder only.
+# ExtNpc dialogue — Phase O2 grammar (folder-side only).
+# Directives (optional, under the [section] header):
+#   if_flag=key       — section plays only when mod flag is set
+#   unless_flag=key   — section plays only when mod flag is clear
+#   set_flag=key      — set mod flag true when section successfully opens
+#   next=section      — after dismiss, open another section (same NPC)
+#   else=section      — if if/unless fails, try this section instead
+#   clear_flag=key    — clear mod flag when section opens
+#   action=grant:N    — give TP item id N (dec or 0xhex), e.g. grant:0x3E Hawk Eye
+#   action=set_flag:k / clear_flag:k — alternate flag forms
+# Flags persist in the save (dExtModFlags). Missing flag = false.
+# Quest spine: see outset_quests.txt
 
 [mk.greet]
-Makar: ... (drop your WW arcs and we'll hear him)
+unless_flag=mk.met
+else=mk.again
+set_flag=mk.met
+Ivan: The Killer Bees never sleep!\nWanna race?
+
+[mk.again]
+if_flag=mk.met
+Ivan: Back for another race?\nI'll be waiting!
 
 [p2.greet]
-Medli: ... (same — arcs/P2.arc)
+Pirate: Ye look lost, landlubber.\nShip's that way!
+
+[md.greet]
+Medli: Oh! Hello there.\nThe Earth Temple awaits...
+
+[gnd.greet]
+Ganondorf: Hmph. You again.\nThis world is already mine.

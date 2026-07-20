@@ -383,11 +383,33 @@ scene fit is the strongest evidence obtainable from the disc.
 
 WW-side note (for the separate restoration mod, outside the base game): all relevant
 arcs exist on the WW disc — `Cb.arc` (Makar), `Md.arc` (Medli), plus the residue pair
-`Mk.arc` (Ivan) / `P2.arc` (pirates). Runtime lesson from the mod work: raw WW BDL4
-crashes the port's never-exercised BDL loader; the working path is offline adaptation
-(strip MDL3, retag BMD3 — `tools/ww_crew_restoration_skeleton/adapt_bdl_arcs.py`),
-after which WW characters load, draw, and animate in TP (first confirmed render:
-2026-07-18 — Ivan, all-black pending mount light binding).
+`Mk.arc` (Ivan) / `P2.arc` (pirates).
+
+**THE COMPLETE WW-CHARACTER-IN-TP FORMULA (proven + MEASURED 2026-07-18 — Ivan
+rendered 1:1 to his GC colors in Faron: shirt sampled `#609cd8` vs authored/WW target
+`#6090cc`; R exact, G/B within 6-8% = TP scene-light contribution):**
+1. **Offline arc adaptation** (`tools/ww_crew_restoration_skeleton/adapt_bdl_arcs.py`,
+   Yaz0-aware, in-place RARC patch), FOUR passes per .bdl:
+   - strip `MDL3` + retag `J3D2bdl4`→`J3D2bmd3` (the port's BDL loader is
+     never-exercised decomp code and crashes);
+   - `normalize_litmask`: clamp enabled channel litMask→0x01 (WW lights slots 0+1;
+     TP feeds slot 0 — proven by the WW-boots overlay);
+   - **`normalize_tevregs` (the ×0.50 killer): promote TEV register color
+     (128,128,128) → white.** WW's runtime overwrites C-regs per frame with live
+     light/shadow colors; the file's 50%-gray placeholder otherwise multiplies the
+     whole character to exactly half brightness, immune to ambient;
+   - keep `ZAtoon`/`ZBtoonEX` AUTHENTIC (hard 0/15 two-tone = WW's cel edge;
+     whitening is a diagnostic flag `--flat-toon` only).
+2. **Runtime draw = the WW boots/leaf cel branch, NOT MAJI** (`d_ww_itemmdl_pc.cpp`):
+   `settingTevStruct(0)` → fixed ambient into tevStr → `applyBowMaterialAmbientOnly`
+   → normal `entryDL`. Neutral gray ambient `0x5a` + live WREG_F(30/31/32) trim.
+3. **Socket delivery**: Plan-R receiver (stub-socket adapter + mod-folder arc mount +
+   manifest) — TP ships machinery only; characters live in the mod folder.
+Diagnostic ladder for future cases: black-with-glowing-eyes = lit channels starved
+(unlit materials render); "cleaner but still black" = toon ramp sampling dark end;
+"uniform exactly-half, dial-immune" = the 128-gray TEV register placeholder.
+**Forward implication (user): per-frame C-reg writes from tevStr (light+shadow
+colors) = the road to FULL WW lighting (day/night-tracked cel) inside TP.**
 
 ### 3.9 The path to the Moblin — final synthesis (2026-07-18, all lanes exhausted)
 

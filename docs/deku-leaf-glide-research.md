@@ -246,3 +246,27 @@ variant picker), and NOT N separate top-level mods. Use case: bundle the WW skin
 leaf) under one "Wind Waker Skins" container, pick which are active. Owner: load-order/mods chat
 (custom_assets.cpp disk_entries/collection logic + mods.cpp UI). For now the Deku Leaf ships as its
 own top-level mod ("Wind Waker Deku Leaf") — works, just not grouped.
+
+---
+
+## §14. WW Deku Leaf HOLD mechanics (from zeldaret/tww decomp, researched 2026-07-18)
+
+Source: `src/d/actor/d_a_player_fan.inc` (included into `d_a_player_main.cpp`), `d_a_player_main_data.inc`, `include/d/actor/d_a_player_main.h`. Glide (parachute) is a SEPARATE state from the swing (attack).
+
+1. **Body animation:** `ANM_USEFANB` (0xA2). Set in `procFanGlide_init()` via `setSingleMoveAnime(ANM_USEFANB, ...)`. Table entry (`d_a_player_main_data.inc`): under+upper bck both = `dRes_INDEX_LKANM_BCK_USEFANB_e` (`usefanb.bck`), hands = `HANDS_JNT_CL_LHANDD_e`/`CL_RHANDD_e` (closed grip "D" hand models, BOTH hands). Fully authored two-handed overhead grip — no procedural arm posing.
+
+2. **Leaf attachment:** glide canopy = separate `J3DModel` (`mpParachuteFanMorf`/`mpEquipItemModel`), model `dRes_INDEX_LINK_BDL_FANB_e`, bck `FANBA`. Attached in `setItemModel()` for `daPyItem_UNK102_e`: `mpEquipItemModel->setBaseTRMtx(mpCLModel->getAnmMtx(CL_JNT_CHEST_JNT_e))` — anchored to the CHEST joint, NO offset, NO scale. (Contrast: the SWING fan attaches to left hand `CL_LHANDA`.)
+
+3. **Hands<->leaf:** NO IK, NO coupling. Hands placed by bck; leaf placed by chest matrix. They align ONLY because `usefanb.bck` was authored to seat the hands on the canopy's grip arms. Leaf follows the body (chest); hands follow the body anim; neither follows the other.
+
+4. **Billow:** `parachuteJointCB()` — `FANB_JNT_LARMB/RARMB` (ribs): `transS(m3600,0,0)`; `FANB_JNT_LROOT/RROOT` (grip roots where hands sit): `YrotS(m355E)`. Drive (end of `procFanGlide`): `m3600 = (1.5 + 0.75*x + rnd(0.3))*ssin(m355C)`; `m355E = (600 + rnd(100))*ssin(m355C)`; `m355C += (6000+..)+(12000+..)*rnd()`. Grip roots barely move (small yaw); ribs flutter more. Hands stay put under the authored pose.
+
+5. **Scale:** none (native).
+
+### Implication for TP recreation
+WW hands don't clip because `usefanb.bck` was custom-authored to match the chest-anchored canopy grips. We use the CUCCO-HOLD pose instead, so the cucco hands won't naturally land on our leaf's grips regardless of anchor. Two routes:
+- **Route A (WW-structural):** anchor leaf to TP chest joint, no offset, keep working orientation rotations. Lowers it naturally; but cucco hands not authored to grips -> may still clip.
+- **Route B (adapt-to-pose, RECOMMENDED):** measure TP L/R hand joint world positions in the cucco-glide pose; position (and maybe modestly scale) the leaf so its two grip-root arms meet the hands. Possibly anchor between the two hands rather than the head.
+
+### CONFIRMED-WORKING orientation (do not lose)
+Leaf overhead orientation locked (playtested): head-anchor, `s_dekuLeafOffset(0,55,0)`, `s_dekuLeafBaseRotY=+0x4000`, `s_dekuLeafBaseRotX=-0x4000`, applied order Y then X after yaw. Z axis tried and removed. Offset still 55 (a touch high); lowering gated on the hand-hold fix above.

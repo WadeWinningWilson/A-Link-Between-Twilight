@@ -25,6 +25,8 @@
 #include "dusk/logging.h"
 #include "dusk/string.hpp"
 #if TARGET_PC
+#include "d/d_ext_npc_mount.h"
+#include "d/d_ext_save_guard.h"
 #include "d/d_stub_watch.h"
 #include <format>
 #include <fmt/ranges.h>
@@ -318,6 +320,12 @@ int dStage_roomControl_c::loadRoom(int roomCount, u8* rooms, bool param_2) {
     for (int roomNo = 0; roomNo < ARRAY_SIZE(mStatus); roomNo++) {
         if (dStage_roomControl_c::checkStatusFlag(roomNo, 0x01)) {
             if (!stayRoomCheck(roomCount, rooms, roomNo)) {
+#if TARGET_PC
+                // №62: room-lane claims survive alink RoomCheck RTBL (room0-only).
+                if (dExtNpcMount_isRoomLaneProtected(roomNo)) {
+                    continue;
+                }
+#endif
                 onStatusFlag(roomNo, 0xc);
                 OS_REPORT("kill !!<%d>\n", roomNo);
                 r26 = FALSE;
@@ -1648,8 +1656,52 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
     i_stage->setPlayer(player);
     i_stage->setPlayerNum(num);
 
-    if (dComIfGp_getPlayer(0) != NULL || dComIfGp_getStartStageRoomNo() != i_stage->getRoomNo()) {
-        return 1;
+    {
+        bool havePlayer = dComIfGp_getPlayer(0) != NULL;
+        s8 startRoom = dComIfGp_getStartStageRoomNo();
+        s8 stageRoom = i_stage->getRoomNo();
+#if TARGET_PC
+        const char* sn = dComIfGp_getStartStageName();
+        const bool wwHost = sn != NULL && dExtWwSave_isWwHostStage(sn);
+        DuskLog.info(
+            "[dStage] playerInit enter player!=NULL={} startRoom={} stageRoom={} point={} "
+            "stage='{}' plyrNum={}",
+            havePlayer ? 1 : 0, (int)startRoom, (int)stageRoom,
+            (int)dComIfGp_getStartStagePoint(), sn != NULL ? sn : "?", num);
+        // №86: WW host room-number reconcile — trust setNextStage's start room when the
+        // parsed roomDt disagrees (shell/template PLYR params often carry foreign room bits;
+        // roomLoader now pins roomNo after init, but keep this belt).
+        if (wwHost && !havePlayer && startRoom >= 0 && startRoom != stageRoom) {
+            DuskLog.warn(
+                "[dStage] playerInit №86 reconcile stageRoom {} → startRoom {} on '{}'",
+                (int)stageRoom, (int)startRoom, sn);
+            i_stage->setRoomNo(startRoom);
+            stageRoom = startRoom;
+        }
+#endif
+        if (havePlayer || startRoom != stageRoom) {
+#if TARGET_PC
+            // №85: diagnose empty R_DL* arrivals — guard skips PLYR match entirely.
+            DuskLog.warn(
+                "[dStage] playerInit SKIP create player!=NULL={} startRoom={} stageRoom={} "
+                "point={} stage='{}'",
+                havePlayer ? 1 : 0, (int)startRoom, (int)stageRoom,
+                (int)dComIfGp_getStartStagePoint(), sn != NULL ? sn : "?");
+            // Stale player ptr across ChangeReq on WW hosts: clear and spawn at PLYR.
+            if (havePlayer && startRoom == stageRoom && wwHost) {
+                DuskLog.warn(
+                    "[dStage] playerInit №85 clearing stale player for WW host '{}'", sn);
+                dComIfGp_setPlayerInfo(0, NULL, 0);
+                for (int i = 0; i < 2; i++) {
+                    dComIfGp_setPlayerPtr(i, NULL);
+                }
+            } else {
+                return 1;
+            }
+#else
+            return 1;
+#endif
+        }
     }
 
     fopAcM_prm_class* appen = fopAcM_CreateAppend();
@@ -1708,6 +1760,18 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
             appen->base.parameters =
                 (appen->base.parameters & 0xFFFFFFC0) | (dComIfGp_getStartStageRoomNo() & 0x3F);
         }
+#if TARGET_PC
+        // №86: shell PLYR often copies TP interior params with foreign room bits (e.g. 0x3F).
+        // The set() below writes those bits into startStage room — keep them = arrival room.
+        {
+            const char* sn = dComIfGp_getStartStageName();
+            if (sn != NULL && dExtWwSave_isWwHostStage(sn)) {
+                const s8 sr = dComIfGp_getStartStageRoomNo();
+                appen->base.parameters =
+                    (appen->base.parameters & 0xFFFFFFC0) | (u32)(sr & 0x3F);
+            }
+        }
+#endif
     }
 
     dComIfGs_setRestartRoomParam(0);
@@ -1716,6 +1780,12 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
 
     dComIfGp_getStartStage()->set(dComIfGp_getStartStageName(), appen->base.parameters & 0x3F,
                                   dComIfGp_getStartStagePoint(), dComIfGp_getStartStageLayer());
+#if TARGET_PC
+    DuskLog.info(
+        "[dStage] playerInit CREATE point={} roomBits={} stage='{}'",
+        (int)dComIfGp_getStartStagePoint(), (int)(appen->base.parameters & 0x3F),
+        dComIfGp_getStartStageName() != NULL ? dComIfGp_getStartStageName() : "?");
+#endif
     dStage_actorCreate(player_data, appen);
 
     base_process_class* stageProc =
@@ -2691,6 +2761,11 @@ void dStage_dt_c_roomLoader(void* i_data, dStage_dt_c* i_stage, int param_2) {
 
     dStage_dt_c_offsetToPtr(i_data);
     i_stage->init();
+    // №86: pin room number AFTER init() and BEFORE PLYR — playerInit guards on
+    // getRoomNo() == getStartStageRoomNo(); a stale/unset roomNo skips Link.
+    if (param_2 >= 0 && param_2 < 0x40) {
+        i_stage->setRoomNo((s8)param_2);
+    }
     dStage_dt_c_decode(i_data, i_stage, l_funcTable, ARRAY_SIZEU(l_funcTable));
     layerTableLoader(i_data, i_stage, param_2);
 }
@@ -2949,6 +3024,10 @@ static void dummy6() {
 }
 
 void dStage_restartRoom(u32 roomParam, u32 mode, int param_2) {
+#if TARGET_PC
+    // №94: void-fall / death restart — clear spawn latches before the wipe.
+    dExtNpcWorld_bump("restartRoom");
+#endif
     dComIfGp_setNextStage(dComIfGp_getStartStageName(), -1, dComIfGs_getRestartRoomNo(), -1, 0.0f,
                           mode, 0, 0, 0, param_2, 0);
     dComIfGs_setRestartRoomParam(roomParam);

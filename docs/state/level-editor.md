@@ -2,15 +2,15 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | **Gate 11b (Path A) — model-tight pick + per-joint highlight BUILT (uncommitted), awaiting USER playtest.** Playtest of 11a exposed root cause: cull box ≫ mesh (giant amber box), so ray-vs-cull-box wasn't pinpoint & highlight was a box. Fix: pick is now broad-phase cull reject → **narrow-phase per-joint OBB** (`model->getModelData()` joints, `getMin/getMax` + `getAnmMtx(i)`), so the hit volume hugs the mesh; highlight = **one translucent box per joint** (`draw_actor_volume_highlight`) instead of the oversized cull box (fallback = cull box for model-less/jointless actors). Builds clean, cache wiped. **HONEST CAVEAT (told user):** true per-pixel mesh *glow* isn't a cheap one-call tint here — it needs render work ≈ Path B silhouette; per-joint boxes are the tight interim. |
+| **status** | **Gate 11c Pick Identify BUILT** — click-only `Pick identify #N` log (TP core + buffer join + optional ExtNpc mount/head/mod); HUD `ID #N …` under SEL. Gate 11b model-tight highlight still awaiting playtest. Build via `build_run.bat`; factory recovered after accidental CMake root deletes. |
 | **owner_impl** | Cursor (Auto — conservative) |
 | **owner_review** | Claude |
 | **interconnected_run** | [Level-Editor-Cursor-Claude.md](../Interconnected%20Chats/Level-Editor-Cursor-Claude.md) |
-| **next** | Re-playtest Gate 10 after 10b hotfix (Select Mode off-center + sticky; no FATAL). No Gate 11 until fresh dual APPROVED. |
+| **next** | Playtest: Select Mode click TP + Outset actors → grep `Pick identify`; use journal for identity pass. No drag until 11a/11b signed. |
 | **perf_bar** | ~250 / 270–300 fps; editor gated by `g_levelEditorSession` |
 | **do_not** | 1c-drag / terrain / 11b mesh-tint before 11a signs; Phase 2 RARC |
 | **drive_in_scope** | no |
-| **updated** | 2026-07-18 |
+| **updated** | 2026-07-19 |
 | **detail** | [level-editor-phase1.md](../level-editor-phase1.md) |
 
 ---
@@ -21,7 +21,14 @@
 |---|-----------|--------|
 | 1x / 1x.1 | Launch + deny Save | **Done** |
 | 1a | Stage Inspector | **Done** (death-clear deferred) |
-| 1b | Click-to-select in world | **Gate 11a ray pick — BUILT, user playtest** |
+| 1b | Click-to-select in world | **Gate 11c identify + 11b highlight — playtest** |
+
+## Gate 11c (Pick Identify) — general TP + mod
+
+- **On click only:** `Pick identify #N` in log — procId, stage name, proc/arg/params, setID, layer, pos/home/spawn, buffer join, optional mount proc/head/mod
+- **HUD:** `ID #N …` under `SEL …` on screen
+- **Outset:** use click journal for identity pass (pairs with `population/identity.ini`); not Outset-specific code
+
 | 1c / 1d | Gizmo + project.json; place/delete | **Later** — session drag (`home.pos`) after 11a/11b sign |
 
 ## Gate 10 (pick accuracy) — impl landed

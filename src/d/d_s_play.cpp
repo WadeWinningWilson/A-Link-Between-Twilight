@@ -52,6 +52,8 @@
 #include "d/d_ww_itemmdl_test.h"
 #include "d/d_demo_leftover_viewer.h"
 #include "d/d_cut_actor_spawn.h"
+#include "d/d_ext_npc_mount.h"
+#include "d/d_ext_npc_doors.h"
 #include "d/d_ww_itemmdl_pc.h"
 #include "d/d_albw_twilight_border.h"
 #include "dusk/autosave.h"
@@ -784,6 +786,9 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     dWwItemmdl_tickHeldBowArcMount();
     dDemoLeftoverViewer::tick();
     dCutActorSpawn::tick();
+    // FPS_BISECT_A1b: RULED OUT (2026-07-19) — menu ~288 / field still ~100–115 with polls off.
+    dExtNpcMount_pollBgWarps();
+    dExtNpcDoors_poll();
     // Gate 8: before pauseTimer early-return — hitlag must not silence click pick/diag.
     if (dusk::g_levelEditorSession) {
         dusk::leveledit::tick_editor_session_input();
@@ -1603,6 +1608,7 @@ static int phase_4(dScnPly_c* i_this) {
 
     dAttention_c* attention = dComIfGp_getAttention();
     JKR_NEW_ARGS (attention) dAttention_c(dComIfGp_getPlayer(0), 0);
+    dExtNpcMount_onStageReady();
     dComIfGp_getVibration().Init();
     daYkgr_c::init();
 

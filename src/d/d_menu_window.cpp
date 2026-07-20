@@ -30,6 +30,7 @@
 #include "dusk/action_bindings.h"
 #include "dusk/frame_interpolation.h"
 #include "dusk/main.h"
+#include "dusk/settings.h"
 #endif
 
 class dDlst_MENU_CAPTURE_c : public dDlst_base_c {
@@ -709,7 +710,8 @@ void dMw_c::key_wait_proc() {
             }
         } else if ((((dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER()
 #if TARGET_PC
-                      || (dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
+                      || (!dusk::isQuickEquipWheelEnabled() &&
+                          dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
                           dusk::getActionBindTrig(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0))
 #endif
                       ) && !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER()) || dMeter2Info_isMenuInForce(2) || dMeter2Info_isTouchKeyCheck(2)) &&
@@ -747,6 +749,88 @@ void dMw_c::key_wait_proc() {
             field_0x14B = 0;
             dComIfGp_setHeapLockFlag(1);
         }
+#if TARGET_PC
+        // Tap vs hold on OPEN_ITEM_WHEEL when Quick Equip Wheel is enabled.
+        {
+            static bool s_wheelHoldActive = false;
+            static u16 s_wheelHoldFrames = 0;
+            static bool s_openedQuickRing = false;
+            constexpr u16 kQuickHoldFrames = 8;  // ~250ms at 30Hz sim
+
+            const bool featureOn = dusk::isQuickEquipWheelEnabled() &&
+                                   dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+            const bool canOpen =
+                featureOn && dMeter2Info_isWindowAccept(2) &&
+                (dMeter2Info_getMapStatus() == 0 || dMeter2Info_getMapStatus() == 1) &&
+                dMeter2Info_isItemOpenCheck() && !dComIfGp_isEnableNextStage() &&
+                !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER() && !dMw_UP_TRIGGER() &&
+                !dMw_DOWN_TRIGGER() && mMenuProc == NO_MENU;
+
+            if (!featureOn) {
+                s_wheelHoldActive = false;
+                s_wheelHoldFrames = 0;
+                s_openedQuickRing = false;
+            } else if (canOpen) {
+                // Use Down (pressed this frame), not Hold — Hold is false on the press edge
+                // and was incorrectly treated as a tap-release (always opened full wheel).
+                const bool down =
+                    dusk::getActionBindDown(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+                const bool pressed =
+                    dusk::getActionBindTrig(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+
+                if (pressed) {
+                    s_wheelHoldActive = true;
+                    s_wheelHoldFrames = 0;
+                    s_openedQuickRing = false;
+                }
+
+                if (s_wheelHoldActive && down) {
+                    if (s_wheelHoldFrames < 0xFFFF) {
+                        s_wheelHoldFrames++;
+                    }
+                    if (!s_openedQuickRing && s_wheelHoldFrames >= kQuickHoldFrames) {
+                        dMsgObject_setKillMessageFlag();
+                        if (dComIfGp_isHeapLockFlag() == 5) {
+                            dMeter2Info_getMeterClass()->emphasisButtonDelete();
+                        }
+                        u8 ringOrigin = 0;
+                        daPy_py_c* player = daPy_getPlayerActorClass();
+                        if (player != nullptr && player->checkWolf()) {
+                            ringOrigin = 2;
+                        }
+                        dMenu_Ring_c::setPendingQuickEquip(true);
+                        field_0x14B = 2;
+                        dMw_ring_create(ringOrigin);
+                        mMenuProc = RING_OPEN;
+                        field_0x14B = 0;
+                        dComIfGp_setHeapLockFlag(1);
+                        s_openedQuickRing = true;
+                    }
+                } else if (s_wheelHoldActive && !down) {
+                    if (!s_openedQuickRing) {
+                        dMsgObject_setKillMessageFlag();
+                        if (dComIfGp_isHeapLockFlag() == 5) {
+                            dMeter2Info_getMeterClass()->emphasisButtonDelete();
+                        }
+                        u8 ringOrigin = 0;
+                        daPy_py_c* player = daPy_getPlayerActorClass();
+                        if (player != nullptr && player->checkWolf()) {
+                            ringOrigin = 2;
+                        }
+                        dMenu_Ring_c::setPendingQuickEquip(false);
+                        field_0x14B = 2;
+                        dMw_ring_create(ringOrigin);
+                        mMenuProc = RING_OPEN;
+                        field_0x14B = 0;
+                        dComIfGp_setHeapLockFlag(1);
+                    }
+                    s_wheelHoldActive = false;
+                    s_wheelHoldFrames = 0;
+                    s_openedQuickRing = false;
+                }
+            }
+        }
+#endif
     }
 }
 
@@ -1179,16 +1263,29 @@ void dMw_c::dMw_ring_create(u8 i_origin) {
     markMemSize();
     dComIfGp_setHeapLockFlag(1);
 
+#if TARGET_PC
+    // Peek before ctor consumes pending — live quick-wheel skips freeze-frame pause.
+    const bool liveQuick = dMenu_Ring_c::peekPendingQuickEquip();
+#endif
+
     mpMenuRing = JKR_NEW dMenu_Ring_c(mpHeap, mpStick, mpCStick, i_origin);
     JUT_ASSERT(2038, mpMenuRing != NULL);
     mpMenuRing->_create();
 
-    if (mpCapture == NULL) {
-        mpCapture = JKR_NEW dDlst_MENU_CAPTURE_c();
-        JUT_ASSERT(2043, mpCapture != NULL);
-    }
+#if TARGET_PC
+    if (liveQuick && mpMenuRing->isQuickEquipMode()) {
+        // No capture / no onPauseFlag — world keeps ticking at reduced sim scale.
+        dMenu_Ring_c::setQuickEquipLiveWorld(true);
+    } else
+#endif
+    {
+        if (mpCapture == NULL) {
+            mpCapture = JKR_NEW dDlst_MENU_CAPTURE_c();
+            JUT_ASSERT(2043, mpCapture != NULL);
+        }
 
-    mpCapture->setCaptureFlag();
+        mpCapture->setCaptureFlag();
+    }
 
 #ifdef TARGET_PC
     dusk::frame_interp::request_presentation_sync();
@@ -1196,6 +1293,9 @@ void dMw_c::dMw_ring_create(u8 i_origin) {
 }
 
 bool dMw_c::dMw_ring_delete() {
+#if TARGET_PC
+    dMenu_Ring_c::setQuickEquipLiveWorld(false);
+#endif
     if (mpMenuRing != NULL) {
         mpMenuRing->_delete();
         JKR_DELETE(mpMenuRing);

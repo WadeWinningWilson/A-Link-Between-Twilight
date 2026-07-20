@@ -75,6 +75,71 @@ def normalize_litmask(buf):
     return 0
 
 
+def flatten_toon(buf):
+    """WW cel-shading: body TEV multiplies texture by a toon ramp (ZAtoon /
+    ZBtoonEX, I4 8x8) sampled by light level — an unlit channel samples the
+    ramp's BLACK end, annihilating the texture. Flatten the ramp to white so
+    the multiplier is 1.0 (flat-lit WW look) until channel lighting lands."""
+    off = 0x20
+    seccnt = be32(buf, 12)
+    for _ in range(seccnt):
+        tag = bytes(buf[off:off + 4])
+        ssize = be32(buf, off + 4)
+        if tag == b"TEX1":
+            base = off
+            cnt = struct.unpack_from(">H", buf, base + 8)[0]
+            hdrs = base + be32(buf, base + 0xC)
+            nametab = base + be32(buf, base + 0x10)
+            n = struct.unpack_from(">H", buf, nametab)[0]
+            names = []
+            for i in range(n):
+                so = struct.unpack_from(">H", buf, nametab + 4 + i * 4 + 2)[0]
+                end = buf.index(b"\0", nametab + so)
+                names.append(buf[nametab + so:end].decode("ascii", "replace"))
+            patched = 0
+            for i in range(cnt):
+                if i >= len(names) or not names[i].lower().startswith(("zatoon", "zbtoon")):
+                    continue
+                h = hdrs + i * 0x20
+                w, ht = struct.unpack_from(">HH", buf, h + 2)
+                dataoff = be32(buf, h + 0x1C)
+                size = max(32, (w * ht) // 2)  # I4 = 4bpp
+                buf[h + dataoff:h + dataoff + size] = b"\xFF" * size
+                patched += 1
+            return patched
+        off += ssize
+    return 0
+
+
+def normalize_tevregs(buf):
+    """WW's runtime overwrites material TEV register colors per frame (C-regs =
+    live light/shadow colors); the file ships a 50%-gray placeholder
+    (128,128,128,255) that our mount never replaces -> everything renders at
+    exactly half brightness, immune to ambient. Promote the gray placeholder to
+    full white (lit-side multiplier = 1.0)."""
+    off = 0x20
+    seccnt = be32(buf, 12)
+    for _ in range(seccnt):
+        tag = bytes(buf[off:off + 4])
+        ssize = be32(buf, off + 4)
+        if tag == b"MAT3":
+            base = off
+            offs = [struct.unpack_from(">i", buf, base + 0x0C + i * 4)[0] for i in range(30)]
+            o = offs[17]  # tevColor S10 (s16 RGBA)
+            if o <= 0:
+                return 0
+            nxt = min((x for x in offs if x > o), default=ssize)
+            patched = 0
+            for e in range(base + o, base + nxt - 7, 8):
+                r, g, bl, a = struct.unpack_from(">hhhh", buf, e)
+                if (r, g, bl) == (128, 128, 128):
+                    struct.pack_into(">hhhh", buf, e, 255, 255, 255, a)
+                    patched += 1
+            return patched
+        off += ssize
+    return 0
+
+
 def adapt_bdl(buf):
     """buf = bytearray of one .bdl file. Returns new size, or None if not bdl4."""
     if bytes(buf[:8]) != b"J3D2bdl4":
@@ -101,7 +166,32 @@ def adapt_bdl(buf):
     struct.pack_into(">I", buf, 8, new_size)
     struct.pack_into(">I", buf, 12, seccnt - 1)
     normalize_litmask(buf)
+    normalize_tevregs(buf)
+    if "--flat-toon" in sys.argv:
+        flatten_toon(buf)
     return new_size
+
+
+def adapt_dzb(buf):
+    """№21 verdict: WW dzb poly-property word0 carries 0x7FF across bits 16-26;
+    TP reads bits 14-23 as through-flags (obj/cam/LINK/arrow/stick/boomerang/
+    rope/bomb) -> every WW triangle is pass-through under TP semantics (P2 miss,
+    P3 hit). Clear the TP through cluster; keep material/sound bits."""
+    if len(buf) < 48:
+        return 0
+    w = struct.unpack_from(">12I", buf, 0)
+    ti_n, ti_o = w[10], w[11]
+    if ti_n <= 0 or ti_o + ti_n * 16 > len(buf):
+        return 0
+    patched = 0
+    for i in range(ti_n):
+        e = ti_o + i * 16
+        w0 = struct.unpack_from(">I", buf, e)[0]
+        nw0 = w0 & ~0x00FFC000
+        if nw0 != w0:
+            struct.pack_into(">I", buf, e, nw0)
+            patched += 1
+    return patched
 
 
 def adapt_arc(src, dst):
@@ -124,7 +214,15 @@ def adapt_arc(src, dst):
         end = d.index(b"\0", strs + name_off)
         name = d[strs + name_off:end].decode("ascii", "replace")
         off, size = be32(d, e + 8), be32(d, e + 12)
-        if not name.lower().endswith(".bdl"):
+        lname = name.lower()
+        if lname.endswith(".dzb"):
+            member = bytearray(d[data_abs + off:data_abs + off + size])
+            n = adapt_dzb(member)
+            if n:
+                d[data_abs + off:data_abs + off + size] = member
+                converted.append(f"{name}: {n} ti through-cluster cleared")
+            continue
+        if not lname.endswith(".bdl"):
             continue
         member = bytearray(d[data_abs + off:data_abs + off + size])
         new_size = adapt_bdl(member)

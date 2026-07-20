@@ -31,6 +31,7 @@
 #include "d/d_albw_master_quest.h"
 #include "d/d_albw_shield.h"
 #include "d/d_albw_potion.h"
+#include "d/d_ext_save_guard.h"
 #include "dusk/action_bindings.h"
 #include "dusk/debug_warp.h"
 #include "d/d_kankyo.h"
@@ -1559,6 +1560,11 @@ BOOL dComIfGs_isStageTbox(int i_stageNo, int i_no) {
 }
 
 void dComIfGs_onStageSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onSwitch(i_no, -1);
     }
@@ -1567,6 +1573,11 @@ void dComIfGs_onStageSwitch(int i_stageNo, int i_no) {
 }
 
 void dComIfGs_offStageSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("offStageSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_offSwitch(i_no, -1);
     }
@@ -1583,6 +1594,11 @@ BOOL dComIfGs_isStageSwitch(int i_stageNo, int i_no) {
 }
 
 void dComIfGs_onDungeonItemMap(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onDungeonItemMap", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onDungeonItemMap();
     }
@@ -1607,6 +1623,11 @@ s32 dComIfGs_isDungeonItemMap(int i_stageNo) {
 }
 
 void dComIfGs_onDungeonItemCompass(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onDungeonItemCompass", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onDungeonItemCompass();
     }
@@ -1631,6 +1652,11 @@ s32 dComIfGs_isDungeonItemCompass(int i_stageNo) {
 }
 
 void dComIfGs_onDungeonItemBossKey(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onDungeonItemBossKey", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onDungeonItemBossKey();
     }
@@ -1655,6 +1681,11 @@ s32 dComIfGs_isDungeonItemBossKey(int i_stageNo) {
 }
 
 void dComIfGs_onStageBossEnemy(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageBossEnemy", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageBossEnemy();
     }
@@ -1679,6 +1710,11 @@ s32 dComIfGs_isStageBossEnemy(int i_stageNo) {
 }
 
 void dComIfGs_onStageMiddleBoss(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageMiddleBoss", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageMiddleBoss();
     }
@@ -1703,6 +1739,11 @@ s32 dComIfGs_isStageMiddleBoss(int i_stageNo) {
 }
 
 void dComIfGs_onStageLife(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageLife", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageLife();
     }
@@ -1727,6 +1768,11 @@ s32 dComIfGs_isStageLife(int i_stageNo) {
 }
 
 void dComIfGs_onStageBossDemo(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageBossDemo", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageBossDemo();
     }

@@ -22,6 +22,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_hp_mult.h"
+#include "d/d_menu_ring.h"
 #endif
 
 #if DEBUG
@@ -322,6 +323,15 @@ static int fopAc_Execute(void* i_this) {
     #endif
 
     if (!dComIfGp_isPauseFlag() && !dScnPly_c::isPause() && !dComIfA_PauseCheck()) {
+#if TARGET_PC
+        // Quick-equip live wheel: soft-lock Link so stick drives the ring only;
+        // enemies/world keep ticking at reduced sim scale.
+        if (dMenu_Ring_c::isQuickEquipLiveWorld() &&
+            fopAcM_GetName(actor) == fpcNm_ALINK_e)
+        {
+            return 1;
+        }
+#endif
         daSus_c::check(actor);
         actor->eventInfo.beforeProc();
         s32 move = dComIfGp_event_moveApproval(actor);

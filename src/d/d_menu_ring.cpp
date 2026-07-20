@@ -54,6 +54,74 @@ static procFunc stick_proc[] = {
     /* STATUS_EXPLAIN_FORCE */ &dMenu_Ring_c::stick_explain_force_proc,
 };
 
+#if TARGET_PC
+namespace {
+bool s_pendingQuickEquipRing = false;
+bool s_quickEquipLiveWorld = false;
+// 70% slowdown → world runs at 30% sim rate (flurry uses dusk::setSimTimeScale).
+constexpr f32 kQuickEquipSimTimeScale = 0.3f;
+
+bool isQuickEquipToolItem(u8 item) {
+    switch (item) {
+    case dItemNo_BOOMERANG_e:
+    case dItemNo_SPINNER_e:
+    case dItemNo_IRONBALL_e:
+    case dItemNo_BOW_e:
+    case dItemNo_LIGHT_ARROW_e:
+    case dItemNo_ARROW_LV1_e:
+    case dItemNo_ARROW_LV2_e:
+    case dItemNo_ARROW_LV3_e:
+    case dItemNo_BOMB_ARROW_e:
+    case dItemNo_HAWK_ARROW_e:
+    case dItemNo_HOOKSHOT_e:
+    case dItemNo_W_HOOKSHOT_e:
+    case dItemNo_HVY_BOOTS_e:
+    case dItemNo_COPY_ROD_e:
+    case dItemNo_COPY_ROD_2_e:
+    case dItemNo_KANTERA_e:
+    case dItemNo_FISHING_ROD_1_e:
+    case dItemNo_LURE_ROD_e:
+    case dItemNo_BEE_ROD_e:
+    case dItemNo_JEWEL_ROD_e:
+    case dItemNo_WORM_ROD_e:
+    case dItemNo_JEWEL_BEE_ROD_e:
+    case dItemNo_JEWEL_WORM_ROD_e:
+    case dItemNo_PACHINKO_e:
+    case dItemNo_HAWK_EYE_e:
+    case dItemNo_BOMB_BAG_LV1_e:
+    case dItemNo_BOMB_BAG_LV2_e:
+    case dItemNo_BOMB_IN_BAG_e:
+    case dItemNo_NORMAL_BOMB_e:
+    case dItemNo_WATER_BOMB_e:
+    case dItemNo_POKE_BOMB_e:
+        return true;
+    default:
+        return false;
+    }
+}
+}  // namespace
+
+void dMenu_Ring_c::setPendingQuickEquip(bool quick) {
+    s_pendingQuickEquipRing = quick;
+}
+
+bool dMenu_Ring_c::peekPendingQuickEquip() {
+    return s_pendingQuickEquipRing;
+}
+
+bool dMenu_Ring_c::isQuickEquipLiveWorld() {
+    return s_quickEquipLiveWorld;
+}
+
+f32 dMenu_Ring_c::getQuickEquipSimScale() {
+    return s_quickEquipLiveWorld ? kQuickEquipSimTimeScale : 1.0f;
+}
+
+void dMenu_Ring_c::setQuickEquipLiveWorld(bool live) {
+    s_quickEquipLiveWorld = live;
+}
+#endif
+
 dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i_cStick,
                            u8 i_ringOrigin) {
     static const u64 xy_text[5] = {
@@ -201,6 +269,8 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     mCursorInterpCurrAngular = false;
     mCursorInterpInit = false;
     mPointerTouchPressHoveredCurrent = false;
+    mQuickEquipMode = s_pendingQuickEquipRing;
+    s_pendingQuickEquipRing = false;
 #endif
     for (int i = 0; i < 4; i++) {
         field_0x674[i] = 0;
@@ -261,6 +331,40 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             field_0x6ac = i;
         }
     }
+#if TARGET_PC
+    if (mQuickEquipMode && !mPlayerIsWolf) {
+        u8 filtered[MAX_ITEM_SLOTS];
+        u8 n = 0;
+        for (int i = 0; i < mItemsTotal && n < MAX_ITEM_SLOTS; i++) {
+            const u8 invSlot = mItemSlots[i];
+            const u8 item = dComIfGs_getItem(invSlot, false);
+            if (item != dItemNo_NONE_e && isQuickEquipToolItem(item)) {
+                filtered[n++] = invSlot;
+            }
+        }
+        if (n == 0) {
+            mItemsTotal = 1;
+            mItemSlots[0] = 0xFF;
+            mTotalItemTexToAlloc = 1;
+        } else {
+            mItemsTotal = n;
+            mTotalItemTexToAlloc = n;
+            for (int i = 0; i < n; i++) {
+                mItemSlots[i] = filtered[i];
+            }
+        }
+        mXButtonSlot = 0xff;
+        mYButtonSlot = 0xff;
+        field_0x6ac = 0xff;
+        mCurrentSlot = 0;
+        for (int i = 0; i < mItemsTotal; i++) {
+            if (dComIfGs_getSelectItemIndex(SELECT_ITEM_DOWN) == mItemSlots[i]) {
+                field_0x6ac = i;
+                mCurrentSlot = i;
+            }
+        }
+    }
+#endif
     mRingRadiusH = g_ringHIO.mRingRadiusH;
     mRingRadiusV = g_ringHIO.mRingRadiusV;
     field_0x66e = 0x8000;
@@ -829,6 +933,44 @@ bool dMenu_Ring_c::isOpen() {
 bool dMenu_Ring_c::isMoveEnd() {
     bool ret = 0;
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN) {
+#if TARGET_PC
+        if (mQuickEquipMode) {
+            const bool stillDown =
+                dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
+                dusk::getActionBindDown(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+            if (!stillDown) {
+                // Release → assign hovered tool to Z only (never rewrite X/Y).
+                if (!mPlayerIsWolf && dusk::isExtraItemSlotEnabled() &&
+                    mCurrentSlot < mItemsTotal)
+                {
+                    const u8 invSlot = mItemSlots[mCurrentSlot];
+                    const u8 item =
+                        invSlot != 0xFF ? dComIfGs_getItem(invSlot, false) : dItemNo_NONE_e;
+                    if (item != dItemNo_NONE_e && isQuickEquipToolItem(item)) {
+                        dComIfGs_setSelectItemIndex(SELECT_ITEM_DOWN, invSlot);
+                        field_0x6ac = mCurrentSlot;
+                    }
+                }
+                mRingOrigin = 0xff;
+                Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_OUT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
+                                         0);
+                dMeter2Info_set2DVibrationM();
+                return true;
+            }
+            // B cancels without assigning; Up/Down also cancel in quick mode.
+            if (dMw_B_TRIGGER() || dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER() ||
+                dMeter2Info_getWarpStatus() == 2 || dMeter2Info_getWarpStatus() == 1 ||
+                dMeter2Info_isTouchKeyCheck(0xe))
+            {
+                mRingOrigin = 0xff;
+                Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_OUT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
+                                         0);
+                dMeter2Info_set2DVibrationM();
+                return true;
+            }
+            return false;
+        }
+#endif
         if (dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER() || dMw_B_TRIGGER() ||
             dMeter2Info_getWarpStatus() == 2 || dMeter2Info_getWarpStatus() == 1 ||
             dMeter2Info_isTouchKeyCheck(0xe))
@@ -1328,6 +1470,10 @@ void dMenu_Ring_c::setActiveCursor() {
     u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN && mpItemExplain->getStatus() == 0) {
 #if TARGET_PC
+        // Quick-equip: release-to-Z only — ignore X/Y/Z face-button assigns while held open.
+        if (mQuickEquipMode) {
+            return;
+        }
         // Standard PC gamepads map RB/R1 to PAD_TRIGGER_Z; R is often unmapped.
         const bool combineTrig =
             mDoCPd_c::getTrigR(PAD_1) ||
@@ -1590,6 +1736,11 @@ void dMenu_Ring_c::stick_wait_init() {
     } else {
         mWaitFrames = g_ringHIO.mCursorChangeWaitFrames;
     }
+#if TARGET_PC
+    if (mQuickEquipMode && mWaitFrames > 1) {
+        mWaitFrames = static_cast<s16>(mWaitFrames / 2);
+    }
+#endif
     field_0x63a = 0;
     mDirectSelectActive = false;
 }
@@ -1693,8 +1844,18 @@ bool dMenu_Ring_c::pointerMove() {
 void dMenu_Ring_c::stick_move_init() {
     if (mCursorSpeed == 0) {
         mCursorSpeed = g_ringHIO.mCursorInitSpeed;
+#if TARGET_PC
+        if (mQuickEquipMode) {
+            mCursorSpeed = static_cast<s16>(mCursorSpeed + g_ringHIO.mCursorAccel * 2);
+        }
+#endif
     } else if (mCursorSpeed < g_ringHIO.mCursorMax) {
         mCursorSpeed += g_ringHIO.mCursorAccel;
+#if TARGET_PC
+        if (mQuickEquipMode) {
+            mCursorSpeed += g_ringHIO.mCursorAccel;
+        }
+#endif
         if (mCursorSpeed > g_ringHIO.mCursorMax) {
             mCursorSpeed = g_ringHIO.mCursorMax;
         }

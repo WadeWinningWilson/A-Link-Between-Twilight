@@ -15,8 +15,25 @@
 static int daNpc_Mk_Create(void* i_this) {
     dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
     fopAcM_ct(a, dExtNpcMount_c);
-    if (dExtNpcMount_hasPayload("NPC_MK")) {
-        return dExtNpcMount_create(a, "NPC_MK");
+    char proc[32] = {};
+    char src[96] = {};
+    char head[64] = {};
+    char joint[32] = {};
+    if (dExtNpcMount_takePendingSpawn(fopAcM_GetID(a), proc, sizeof(proc), src, sizeof(src),
+                                      head, sizeof(head), joint, sizeof(joint)) &&
+        proc[0]) {
+        if (src[0]) {
+            dExtNpcMount_forceNextSpawnSrc(src);
+        }
+        if (head[0]) {
+            dExtNpcMount_forceNextAttach(head, joint[0] ? joint : "head");
+        }
+        return dExtNpcMount_create(a, proc);
+    }
+    if (dExtNpcMount_consumeForcedCreateProc(proc, sizeof(proc)) ||
+        dExtNpcMount_resolveSocket("NPC_MK", (int)(fopAcM_GetParam(a) & 0xFF), proc,
+                                     sizeof(proc))) {
+        return dExtNpcMount_create(a, proc);
     }
     return dStubWatch_refuseCreate(a, "NPC_MK");
 }
