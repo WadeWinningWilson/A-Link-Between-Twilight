@@ -28,6 +28,7 @@
 #include "SSystem/SComponent/c_math.h"
 #include <cmath>
 #include "d/d_com_inf_game.h"
+#include "d/d_stage.h"
 #include "d/d_albw_dialogue.h"
 #include "d/d_ext_mod_flags.h"
 #include "d/d_ext_npc_doors.h"
@@ -136,10 +137,14 @@ bool s_roomLaneMountCreating[0x40] = {};
 // №68: set before room teardown; poll/draw/attention skip until cleared.
 bool s_roomLaneUnloading[0x40] = {};
 char s_roomLaneUnloadingProc[32] = {};
-// №58-B: after island COMPLEATE, cold-create interior BGs so first door press is warm.
+// №58-B: after island COMPLEATE, cold-create same-stage interior BGs (first press = warm).
+// №115: abort on heap fail; foreign host_stage / warm=0 skipped; one create per N frames.
 bool s_warmInteriors = false;
 int s_warmProviderIndex = 0;
 int s_warmCooldown = 0;
+static constexpr int kWarmCooldownFrames = 30;  // ~0.5s @60 — one provider per N frames
+// entrySolidHeap size 0x120000 is doubled on TARGET_PC; keep margin for models/cache.
+static constexpr s32 kWarmBgHeapNeed = 0x280000;
 bool s_doorDemoLocked = false;
 
 // One native window is shared by all external mounts.  It is deliberately never
@@ -1049,6 +1054,7 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
     out->hostRoom = 0;
     out->hostLayer = -1;
     out->colorFrame = -1.0f;  // №36 C: <0 ⇒ derive from create params / item id
+    out->allowWarm = true;    // №115: warm=0 opts out of №58-B storm
     // Neutral gray ambient default (manifest may override).
     out->ambR = 90;
     out->ambG = 90;
@@ -1256,12 +1262,17 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
             out->carryable = parseBoolVal(val);
         } else if (key == "static") {
             out->isStatic = parseBoolVal(val);
+        } else if (key == "codegen") {
+            out->isCodeGeom = parseBoolVal(val);
         } else if (key == "door") {
             out->doorAttention = parseBoolVal(val);
         } else if (key == "door_visual") {
             set(out->doorVisual, sizeof(out->doorVisual));
         } else if (key == "body_bmt") {
             set(out->bodyBmt, sizeof(out->bodyBmt));
+        } else if (key == "warm") {
+            // №115: warm=0 / false — never №58-B cold-create this BG from the island.
+            out->allowWarm = parseBoolVal(val);
         }
     }
     // №50-E: door controller (door.bdl) needs a visible variant; Nintendo default = door_a.
@@ -1272,20 +1283,48 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
     if (out->socket[0] == '\0' && out->proc[0]) {
         snprintf(out->socket, sizeof(out->socket), "%s", out->proc);
     }
-    // №32: static props/doors may omit idle (NULL anm). BG still needs collision=.
-    out->valid = out->proc[0] && out->arc[0] && out->model[0] &&
-                 (out->isBg ? out->collision[0] : (out->idle[0] || out->isStatic));
+    // №32: static props/doors may omit idle (NULL anm). BG needs collision=.
+    // №117: collision-only props (Akabe) — static + collision, model optional.
+    if (out->isCodeGeom) {
+        // №126: code-driven geometry (ported vegetation lane). No arc, no model
+        // — the actor builds its own draw from an extracted asset pack, so the
+        // only thing that must be present is the proc the spawner routes to.
+        out->valid = out->proc[0] != '\0';
+    } else if (out->isBg) {
+        out->valid = out->proc[0] && out->arc[0] && out->collision[0] != '\0';
+    } else {
+        out->valid = out->proc[0] && out->arc[0] &&
+                     (out->model[0] || (out->isStatic && out->collision[0])) &&
+                     (out->idle[0] || out->isStatic);
+    }
     return out->valid;
 }
 
-bool arcFilePresent(const fs::path& modRoot, const char* arcName) {
-    if (arcName == NULL || arcName[0] == '\0') {
+bool arcNameEqualsIgnoreCase(const std::string& stem, const char* arcName) {
+    if (arcName == NULL || stem.size() != std::strlen(arcName)) {
         return false;
     }
+    for (size_t i = 0; i < stem.size(); ++i) {
+        char a = stem[i];
+        char b = arcName[i];
+        if (a >= 'A' && a <= 'Z') {
+            a = static_cast<char>(a - 'A' + 'a');
+        }
+        if (b >= 'A' && b <= 'Z') {
+            b = static_cast<char>(b - 'A' + 'a');
+        }
+        if (a != b) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool arcFilePresentInDir(const fs::path& arcsDir, const char* arcName) {
     std::error_code ec;
-    // №52-C: same resolution custom_assets R2 uses — modRoot/arcs/<Name>.arc
-    // (also accept .ARC). Path is absolute under ConfigPath/model_replacements/<mod>.
-    const fs::path arcsDir = modRoot / "arcs";
+    if (!fs::is_directory(arcsDir, ec)) {
+        return false;
+    }
     const fs::path lower = arcsDir / (std::string(arcName) + ".arc");
     if (fs::is_regular_file(lower, ec)) {
         return true;
@@ -1294,42 +1333,29 @@ bool arcFilePresent(const fs::path& modRoot, const char* arcName) {
     if (fs::is_regular_file(upper, ec)) {
         return true;
     }
-    // Case-insensitive stem scan (Windows usually OK; still covers odd mounts).
-    if (fs::is_directory(arcsDir, ec)) {
-        for (auto it = fs::directory_iterator(arcsDir, ec); it != fs::directory_iterator();
-             it.increment(ec)) {
-            if (ec || !it->is_regular_file(ec)) {
-                continue;
-            }
-            const auto ext = it->path().extension().string();
-            if (ext != ".arc" && ext != ".ARC") {
-                continue;
-            }
-            const std::string stem = it->path().stem().string();
-            if (stem.size() != std::strlen(arcName)) {
-                continue;
-            }
-            bool same = true;
-            for (size_t i = 0; i < stem.size(); ++i) {
-                char a = stem[i];
-                char b = arcName[i];
-                if (a >= 'A' && a <= 'Z') {
-                    a = static_cast<char>(a - 'A' + 'a');
-                }
-                if (b >= 'A' && b <= 'Z') {
-                    b = static_cast<char>(b - 'A' + 'a');
-                }
-                if (a != b) {
-                    same = false;
-                    break;
-                }
-            }
-            if (same) {
-                return true;
-            }
+    for (auto it = fs::directory_iterator(arcsDir, ec); it != fs::directory_iterator();
+         it.increment(ec)) {
+        if (ec || !it->is_regular_file(ec)) {
+            continue;
+        }
+        const auto ext = it->path().extension().string();
+        if (ext != ".arc" && ext != ".ARC") {
+            continue;
+        }
+        if (arcNameEqualsIgnoreCase(it->path().stem().string(), arcName)) {
+            return true;
         }
     }
     return false;
+}
+
+bool arcFilePresent(const fs::path& modRoot, const char* arcName) {
+    if (arcName == NULL || arcName[0] == '\0') {
+        return false;
+    }
+    // №52-C / №110: arcs/ first, then arcs_lib/ library fallback (never dump the lib).
+    return arcFilePresentInDir(modRoot / "arcs", arcName) ||
+           arcFilePresentInDir(modRoot / "arcs_lib", arcName);
 }
 
 bool shouldSkipModFolder(const std::string& modName) {
@@ -1847,6 +1873,203 @@ J3DModelData* acquireBgModel(const char* arc, const char* modelName, void* res) 
     return data;
 }
 
+// №108: WW sea-stage sky (mod arcs/WwSky.arc → Object/WwSky.arc). Camera-follow
+// like WW daVrbox/daVrbox2. TP stub vrbox stays hidden (N6).
+static constexpr int kWwSkyModelCount = 4;
+static const char* const kWwSkyModelNames[kWwSkyModelCount] = {
+    "vr_sky.bdl",         // VRBOX dome
+    "vr_uso_umi.bdl",     // false-sea horizon
+    "vr_kasumi_mae.bdl",  // haze
+    "vr_back_cloud.bdl",  // clouds (+100 Y in WW)
+};
+static request_of_phase_process_class s_wwSkyPhase;
+static int s_wwSkyPhaseState = cPhs_INIT_e;
+static J3DModel* s_wwSkyModels[kWwSkyModelCount] = {};
+static bool s_wwSkyReady = false;
+static int s_wwSkyUsers = 0;
+
+static bool mountWantsWwSky(const dExtNpcMount_c* a) {
+    if (a == NULL || !a->mIsBg || a->mManifest.proc[0] == '\0') {
+        return false;
+    }
+    // Outdoor F_DL* hosts only (Outset / forest). Interiors keep hide_vrbox alone.
+    if (std::strcmp(a->mManifest.proc, "EXT_BG0") != 0 &&
+        std::strcmp(a->mManifest.proc, "EXT_BG9") != 0) {
+        return false;
+    }
+    const char* stage = dComIfGp_getStartStageName();
+    return stage != NULL && dExtWwSave_isWwHostStage(stage) && stage[0] == 'F';
+}
+
+static void wwSkyRelease(const char* reason) {
+    for (int i = 0; i < kWwSkyModelCount; ++i) {
+        s_wwSkyModels[i] = NULL;
+    }
+    s_wwSkyReady = false;
+    if (s_wwSkyPhaseState == cPhs_COMPLEATE_e) {
+        purgeModelCacheForArc("WwSky");
+        dComIfG_resDelete(&s_wwSkyPhase, "WwSky");
+    }
+    s_wwSkyPhase = {};
+    s_wwSkyPhaseState = cPhs_INIT_e;
+    DuskLog.info("[ExtNpcMount] №108 WwSky release ({})", reason != NULL ? reason : "?");
+}
+
+static bool wwSkyEnsure() {
+    if (s_wwSkyReady) {
+        return true;
+    }
+    s_wwSkyPhaseState = dComIfG_resLoad(&s_wwSkyPhase, "WwSky");
+    if (s_wwSkyPhaseState != cPhs_COMPLEATE_e) {
+        return false;
+    }
+    for (int i = 0; i < kWwSkyModelCount; ++i) {
+        void* raw = dComIfG_getObjectRes("WwSky", kWwSkyModelNames[i]);
+        J3DModelData* data = acquireBgModel("WwSky", kWwSkyModelNames[i], raw);
+        if (data == NULL) {
+            DuskLog.warn("[ExtNpcMount] №108 WwSky missing '{}'", kWwSkyModelNames[i]);
+            wwSkyRelease("model-fail");
+            return false;
+        }
+        // Same create flags as WW/TP vrbox (sky list / fog-friendly).
+        s_wwSkyModels[i] = mDoExt_J3DModel__create(data, 0x80000, 0x11020202);
+        if (s_wwSkyModels[i] == NULL) {
+            DuskLog.warn("[ExtNpcMount] №108 WwSky create failed '{}'", kWwSkyModelNames[i]);
+            wwSkyRelease("create-fail");
+            return false;
+        }
+    }
+    s_wwSkyReady = true;
+    DuskLog.info("[ExtNpcMount] №108 WwSky ready (4 models)");
+    return true;
+}
+
+static void wwSkyRetain() {
+    if (s_wwSkyUsers++ == 0) {
+        wwSkyEnsure();
+    }
+}
+
+static void wwSkyReleaseUser() {
+    if (s_wwSkyUsers <= 0) {
+        return;
+    }
+    if (--s_wwSkyUsers == 0) {
+        wwSkyRelease("last-user");
+    }
+}
+
+// №121 Ask 1 / №116: WwSky is not TP's mpSoraModel — daVrbox_color_set never
+// touches these. Drive TEV reg0 per frame like daVrbox_color_set (setCullMode +
+// change + setTevColor), and call model->calc() before updateDL (island BG loop
+// already does; prior №116 missed calc so material state never pushed).
+// Bake stopgap RETRACTED — runtime path only. №113 VRB0 already feeds g_env_light.
+static void wwSkyApplyTev(J3DModel* model, const GXColorS10& mat0, s16 mat0Alpha,
+                          bool hasMat1Inner) {
+    if (model == NULL) {
+        return;
+    }
+    model->calc();
+    J3DModelData* data = model->getModelData();
+    if (data == NULL) {
+        return;
+    }
+    J3DGXColorS10 color;
+    J3DMaterial* m0 = data->getMaterialNodePointer(0);
+    if (m0 != NULL) {
+        m0->setCullMode(0);
+        m0->change();
+        color.r = mat0.r;
+        color.g = mat0.g;
+        color.b = mat0.b;
+        color.a = mat0Alpha;
+        m0->setTevColor(0, &color);
+    }
+    // Mirror daVrbox_color_set: material 1 = kasumi_inner when the dome has two mats.
+    if (hasMat1Inner) {
+        J3DMaterial* m1 = data->getMaterialNodePointer(1);
+        if (m1 != NULL) {
+            m1->setCullMode(0);
+            m1->change();
+            color.r = g_env_light.vrbox_kasumi_inner_col.r;
+            color.g = g_env_light.vrbox_kasumi_inner_col.g;
+            color.b = g_env_light.vrbox_kasumi_inner_col.b;
+            color.a = g_env_light.vrbox_kasumi_inner_col.a;
+            m1->setTevColor(0, &color);
+        }
+    }
+}
+
+static void wwSkyDraw() {
+    if (!s_wwSkyReady || dComIfGd_getView() == NULL) {
+        return;
+    }
+    f32 yOrigin = 0.0f;
+    const s8 stay = dComIfGp_roomControl_getStayNo();
+    if (stay >= 0) {
+        dStage_roomDt_c* roomDt = dComIfGp_roomControl_getStatusRoomDt(stay);
+        if (roomDt != NULL) {
+            dStage_FileList_dt_c* fili = roomDt->getFileListInfo();
+            if (fili != NULL) {
+                yOrigin = dStage_FileList_dt_SeaLevel(fili);
+            }
+        }
+    }
+    const f32 yOff = (dComIfGd_getInvViewMtx()[1][3] - yOrigin) * 0.09f;
+    const f32 cx = dComIfGd_getInvViewMtx()[0][3];
+    const f32 cy = dComIfGd_getInvViewMtx()[1][3] - yOff;
+    const f32 cz = dComIfGd_getInvViewMtx()[2][3];
+    mDoMtx_stack_c::transS(cx, cy, cz);
+    MtxP base = mDoMtx_stack_c::get();
+
+    dComIfGd_setListSky();
+    // WW order: sky → uso_umi → kasumi → back_cloud (+100 Y).
+    // Colours: sky+uso ← vrbox_sky_col; kasumi ← vrbox_kasumi_inner_col; cloud ← kumo_top.
+    if (s_wwSkyModels[0] != NULL) {
+        s_wwSkyModels[0]->setBaseTRMtx(base);
+        // №125 DIAGNOSTIC (one-shot, ~5s cadence): the converted VRB0 resolves
+        // to sky (80,120,255) at daytime 225, but the dome renders pale/warm —
+        // the tone of a DIFFERENT band. Print what the runtime actually chose so
+        // the next playtest settles data-vs-application instead of inference.
+        // Remove once the sky is confirmed.
+        {
+            static int s_skyDiagTick = 0;
+            if ((s_skyDiagTick++ % 300) == 0) {
+                DuskLog.info(
+                    "[WwSky] №125 daytime={:.1f} sky=({},{},{}) kasumiIn=({},{},{}) "
+                    "kumoTop=({},{},{}) hide_vrbox={}",
+                    g_env_light.getDaytime(), g_env_light.vrbox_sky_col.r,
+                    g_env_light.vrbox_sky_col.g, g_env_light.vrbox_sky_col.b,
+                    g_env_light.vrbox_kasumi_inner_col.r, g_env_light.vrbox_kasumi_inner_col.g,
+                    g_env_light.vrbox_kasumi_inner_col.b, g_env_light.vrbox_kumo_top_col.r,
+                    g_env_light.vrbox_kumo_top_col.g, g_env_light.vrbox_kumo_top_col.b,
+                    g_env_light.hide_vrbox ? 1 : 0);
+            }
+        }
+        wwSkyApplyTev(s_wwSkyModels[0], g_env_light.vrbox_sky_col, 255, true);
+        mDoExt_modelUpdateDL(s_wwSkyModels[0]);
+    }
+    if (s_wwSkyModels[1] != NULL) {
+        s_wwSkyModels[1]->setBaseTRMtx(base);
+        wwSkyApplyTev(s_wwSkyModels[1], g_env_light.vrbox_sky_col, 255, false);
+        mDoExt_modelUpdateDL(s_wwSkyModels[1]);
+    }
+    if (s_wwSkyModels[2] != NULL) {
+        s_wwSkyModels[2]->setBaseTRMtx(base);
+        wwSkyApplyTev(s_wwSkyModels[2], g_env_light.vrbox_kasumi_inner_col,
+                      g_env_light.vrbox_kasumi_inner_col.a, false);
+        mDoExt_modelUpdateDL(s_wwSkyModels[2]);
+    }
+    if (s_wwSkyModels[3] != NULL) {
+        mDoMtx_stack_c::transS(cx, cy + 100.0f, cz);
+        s_wwSkyModels[3]->setBaseTRMtx(mDoMtx_stack_c::get());
+        wwSkyApplyTev(s_wwSkyModels[3], g_env_light.vrbox_kumo_top_col,
+                      g_env_light.vrbox_kumo_top_col.a, false);
+        mDoExt_modelUpdateDL(s_wwSkyModels[3]);
+    }
+    dComIfGd_setList();
+}
+
 bool tryBindBtp(dExtNpcMount_c* a, J3DModelData* data) {
     a->mpBtp = NULL;
     a->mBtpBound = false;
@@ -2002,6 +2225,36 @@ bool addDoorVisual(dExtNpcMount_c* a, J3DModelData* bodyData) {
 
 int useHeapInit(fopAc_ac_c* i_this) {
     dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
+
+    // №117: collision-only static prop (Akabe.arc = dzb, no bdl). Invisible wall.
+    if (a->mManifest.model[0] == '\0' && a->mManifest.isStatic && a->mManifest.collision[0]) {
+        stageLog("heap", "collision-only (no model)");
+        void* dzb = dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.collision);
+        if (dzb == NULL) {
+            DuskLog.warn("[ExtNpcMount] №117 collision-only '{}' missing in '{}'",
+                         a->mManifest.collision, a->mManifest.arc);
+            return 0;
+        }
+        a->mpBgW = JKR_NEW dBgW();
+        if (a->mpBgW == NULL) {
+            return 0;
+        }
+        MTXIdentity(a->mBgMtx);
+        mDoMtx_stack_c::transS(a->current.pos.x, a->current.pos.y, a->current.pos.z);
+        mDoMtx_stack_c::YrotM(a->current.angle.y);
+        MTXCopy(mDoMtx_stack_c::get(), a->mBgMtx);
+        if (a->mpBgW->Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx) == 1) {
+            DuskLog.warn("[ExtNpcMount] №117 collision-only Set failed '{}'",
+                         a->mManifest.collision);
+            return 0;
+        }
+        a->mpBgW->SetCrrFunc(dBgS_MoveBGProc_Typical);
+        a->mBgReady = true;
+        a->mpMorf = NULL;
+        stageLog("heap", "ok — collision-only");
+        return 1;
+    }
+
     stageLog("heap", "getObjectRes model");
     void* raw = dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.model);
     if (raw == NULL) {
@@ -2198,17 +2451,18 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
         DuskLog.warn("[ExtNpcMount] BG dBgW alloc failed for '{}'", a->mManifest.collision);
         return 0;
     }
-    // №98: identity WW-host rooms = world collision (GLOBAL_e), matching TP d_a_bg.
-    // MOVE_BG_e makes the whole space a "moving object" ⇒ climb/ledge break.
+    // №98/№107: identity dzb transform (host − anchor == 0) = world collision
+    // (GLOBAL_e), matching TP d_a_bg. MOVE_BG_e makes the space a "moving object"
+    // ⇒ climb/ledge break. Outset identity is host=anchor=cell (not 0,0,0).
     a->mBgGlobal = false;
     {
         const char* stage = dComIfGp_getStartStageName();
         const bool onWwHost = stage != NULL && dExtWwSave_isWwHostStage(stage);
         const bool identity =
             a->mManifest.hasHostPos && a->mManifest.hasAnchor &&
-            cM3d_IsZero(a->mManifest.hostPos.x) && cM3d_IsZero(a->mManifest.hostPos.y) &&
-            cM3d_IsZero(a->mManifest.hostPos.z) && cM3d_IsZero(a->mManifest.anchor.x) &&
-            cM3d_IsZero(a->mManifest.anchor.y) && cM3d_IsZero(a->mManifest.anchor.z);
+            cM3d_IsZero(a->mManifest.hostPos.x - a->mManifest.anchor.x) &&
+            cM3d_IsZero(a->mManifest.hostPos.y - a->mManifest.anchor.y) &&
+            cM3d_IsZero(a->mManifest.hostPos.z - a->mManifest.anchor.z);
         if (onWwHost && identity) {
             if (a->mpBgW->Set((cBgD_t*)dzb, cBgW::GLOBAL_e, NULL) == 1) {
                 DuskLog.warn("[ExtNpcMount] BG dBgW::Set GLOBAL failed for '{}'",
@@ -2216,7 +2470,7 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
                 return 0;
             }
             a->mBgGlobal = true;
-            DuskLog.info("[ExtNpcMount] №98 BG GLOBAL_e (world) proc='{}' arc='{}'",
+            DuskLog.info("[ExtNpcMount] №107 BG GLOBAL_e (identity) proc='{}' arc='{}'",
                          a->mManifest.proc, a->mManifest.arc);
             return 1;
         }
@@ -2442,6 +2696,25 @@ bool pullBodyBmtFromRegistry(const char* procName, int registryArg, char* bmtOut
 
 }  // namespace
 
+J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName) {
+    if (arc == NULL || arc[0] == '\0' || modelName == NULL || modelName[0] == '\0') {
+        return NULL;
+    }
+    void* res = dComIfG_getObjectRes(arc, modelName);
+    if (res == NULL) {
+        return NULL;
+    }
+    return acquireMountedModel(arc, modelName, res);
+}
+
+void dExtNpcMount_retainArc(const char* arc) {
+    retainArcModels(arc);
+}
+
+void dExtNpcMount_releaseArc(const char* arc) {
+    releaseArcModels(arc, "knob00-release");
+}
+
 void dExtNpcMount_rescanProviders() {
     s_providers.clear();
     s_providerOrder.clear();
@@ -2485,7 +2758,12 @@ void dExtNpcMount_rescanProviders() {
             if (!parseManifestFile(nit->path(), modName.c_str(), &man)) {
                 continue;
             }
-            if (!man.fromDvd && !arcFilePresent(modRoot, man.arc)) {
+            // №122: a manifest may legitimately name NO arc. Ported systems
+            // (the vegetation lane) carry their geometry in an extracted asset
+            // pack and create their own profile rather than mounting a model,
+            // so there is nothing to look for under arcs/. Only enforce arc
+            // presence when the manifest actually declares one.
+            if (man.arc[0] != '\0' && !man.fromDvd && !arcFilePresent(modRoot, man.arc)) {
                 DuskLog.debug(
                     "[ExtNpcMount] '{}' manifest ok but arc missing under {} — socket idle",
                     man.proc, (modRoot / "arcs" / (std::string(man.arc) + ".arc")).string());
@@ -2623,6 +2901,12 @@ s16 dExtNpcMount_socketActorId(const char* socketName) {
     }
     if (strcmp(socketName, "EXT_BG10") == 0) {
         return fpcNm_EXT_BG10_e;
+    }
+    if (strcmp(socketName, "WWGRASS") == 0) {
+        return fpcNm_WWGRASS_e;
+    }
+    if (strcmp(socketName, "WWBRIDGE") == 0) {
+        return fpcNm_WWBRIDGE_e;
     }
     return -1;
 }
@@ -3295,6 +3579,24 @@ void dExtNpcMount_onRoomUnload(const char* stageName, int roomNo) {
     DuskLog.info("[ExtNpcMount] №62 room{} unload drop '{}'", roomNo, it->second);
 }
 
+static void abortWarmInteriors(const char* reason) {
+    if (!s_warmInteriors) {
+        return;
+    }
+    s_warmInteriors = false;
+    s_warmCooldown = 0;
+    DuskLog.warn("[ExtNpcMount] №115 warm storm ABORT — {} (idx={})",
+                 reason != NULL ? reason : "?", s_warmProviderIndex);
+}
+
+static bool warmHeapHasHeadroom() {
+    JKRHeap* heap = (JKRHeap*)mDoExt_getGameHeap();
+    if (heap == NULL) {
+        return false;
+    }
+    return heap->getTotalFreeSize() >= kWarmBgHeapNeed;
+}
+
 static void pollWarmInteriors() {
     if (!s_warmInteriors || s_bgWarpPhase != kBgWarpIdle) {
         return;
@@ -3303,6 +3605,15 @@ static void pollWarmInteriors() {
         --s_warmCooldown;
         return;
     }
+    // №115: abort the storm when the heap cannot host another BG solid heap.
+    if (!warmHeapHasHeadroom()) {
+        abortWarmInteriors("free-heap below headroom");
+        return;
+    }
+
+    dExtNpcManifest island{};
+    const bool haveIsland = dExtNpcMount_lookup("EXT_BG0", &island) && island.hostStage[0] != '\0';
+
     const int n = dExtNpcMount_providerCount();
     while (s_warmProviderIndex < n) {
         dExtNpcManifest man{};
@@ -3321,6 +3632,15 @@ static void pollWarmInteriors() {
         if (s_roomLaneRooms.count(man.proc) != 0) {
             continue;
         }
+        // №115: data opt-out.
+        if (!man.allowWarm) {
+            continue;
+        }
+        // №115: foreign-stage BGs (forest/cave/fountain own stages) must not warm on island.
+        if (haveIsland && man.hostStage[0] != '\0' &&
+            std::strcmp(man.hostStage, island.hostStage) != 0) {
+            continue;
+        }
         auto it = s_bgMountIds.find(man.proc);
         if (it != s_bgMountIds.end()) {
             fopAc_ac_c* existing = fopAcM_SearchByID(it->second);
@@ -3331,11 +3651,14 @@ static void pollWarmInteriors() {
         }
         const fpc_ProcID id = createBgMountAtHost(man, "warm");
         if (id == fpcM_ERROR_PROCESS_ID_e) {
-            DuskLog.warn("[ExtNpcMount] №58-B warm create FAILED '{}'", man.proc);
-            continue;
+            DuskLog.warn("[ExtNpcMount] №58-B warm create FAILED '{}' reason='{}'", man.proc,
+                         s_bgCreateFailReason[0] ? s_bgCreateFailReason : "?");
+            // №115: first hard fail ends the storm (do not walk into heap exhaustion).
+            abortWarmInteriors("create FAILED");
+            return;
         }
         s_bgMountIds[man.proc] = id;
-        s_warmCooldown = 2;  // stagger resLoads
+        s_warmCooldown = kWarmCooldownFrames;
         DuskLog.info("[ExtNpcMount] №58-B warm create '{}' id={:08x}", man.proc, (u32)id);
         return;
     }
@@ -4663,7 +4986,8 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
     }
 
     // Already heap-bound (should not re-enter Create after COMPLEATE).
-    if (i_this->mpMorf != NULL || (i_this->mIsBg && i_this->mBgReady)) {
+    // №117: collision-only statics set mBgReady without mpMorf / without mIsBg.
+    if (i_this->mpMorf != NULL || i_this->mBgReady) {
         return cPhs_COMPLEATE_e;
     }
 
@@ -4681,6 +5005,10 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
     if (i_this->mIsBg) {
         if (!fopAcM_entrySolidHeap(i_this, useBgHeapInit, 0x120000)) {
             DuskLog.warn("[ExtNpcMount] BG heap fail for {}", procName);
+            // №115: warm-storm hang signature — first heap fail must stop further warms.
+            if (std::strcmp(i_this->mSpawnSrc, "warm") == 0) {
+                abortWarmInteriors("BG heap fail");
+            }
             abortCreateCacheTrack();
             return cPhs_ERROR_e;
         }
@@ -4696,17 +5024,25 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             i_this->mpBgW->Move();
         }
         i_this->mBgReady = true;
-        fopAcM_SetMtx(i_this, i_this->mpBgModels[0]->getBaseTRMtx());
+        if (i_this->mpBgModels[0] != NULL) {
+            fopAcM_SetMtx(i_this, i_this->mpBgModels[0]->getBaseTRMtx());
+        } else {
+            // №117: model-less BG — bind actor mtx to collision transform.
+            fopAcM_SetMtx(i_this, i_this->mBgMtx);
+        }
         // Outset's authored span is ~100k units. Never frustum-cull the actor away.
         fopAcM_SetMin(i_this, -120000.0f, -20000.0f, -120000.0f);
         fopAcM_SetMax(i_this, 120000.0f, 20000.0f, 120000.0f);
         fopAcM_OffStatus(i_this, fopAcStts_CULL_e);
         dKy_tevstr_init(&i_this->tevStr, fopAcM_GetRoomNo(i_this), 0xFF);
         i_this->tevStr.room_no = fopAcM_GetRoomNo(i_this);
-        // №27 N6: TP vrbox paints a yellow void over the WW diorama — hide while island is up.
-        if (strcmp(procName, "EXT_BG0") == 0) {
+        // №27 N6 / №108: hide TP stub vrbox; outdoor F_DL* mounts WwSky instead.
+        if (strcmp(procName, "EXT_BG0") == 0 || strcmp(procName, "EXT_BG9") == 0) {
             g_env_light.hide_vrbox = true;
-            DuskLog.info("[ExtNpcMount] N6 hide_vrbox for EXT_BG0");
+            DuskLog.info("[ExtNpcMount] N6 hide_vrbox for '{}'", procName);
+        }
+        if (mountWantsWwSky(i_this)) {
+            wwSkyRetain();
         }
         commitCreateCacheTrack();
         retainArcModels(i_this->mManifest.arc);
@@ -4755,6 +5091,24 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
 
     dKy_tevstr_init(&i_this->tevStr, fopAcM_GetRoomNo(i_this), 0xFF);
     i_this->tevStr.room_no = fopAcM_GetRoomNo(i_this);
+
+    // №117: collision-only static — no model / morf; regist dzb and finish.
+    if (i_this->mpMorf == NULL && i_this->mpBgW != NULL && i_this->mBgReady) {
+        if (dComIfG_Bgsp().Regist(i_this->mpBgW, i_this)) {
+            DuskLog.warn("[ExtNpcMount] №117 collision-only Regist failed for {}", procName);
+            abortCreateCacheTrack();
+            return cPhs_ERROR_e;
+        }
+        i_this->mpBgW->Move();
+        fopAcM_SetMtx(i_this, i_this->mBgMtx);
+        fopAcM_SetMin(i_this, -200.0f * s, -20.0f * s, -200.0f * s);
+        fopAcM_SetMax(i_this, 200.0f * s, 400.0f * s, 200.0f * s);
+        commitCreateCacheTrack();
+        retainArcModels(i_this->mManifest.arc);
+        DuskLog.info("[ExtNpcMount] №117 COMPLEATE collision-only {} arc={} dzb={}", procName,
+                     i_this->mManifest.arc, i_this->mManifest.collision);
+        return cPhs_COMPLEATE_e;
+    }
 
     fopAcM_SetMtx(i_this, i_this->mpMorf->getModel()->getBaseTRMtx());
     fopAcM_SetMin(i_this, -80.0f * s, -20.0f * s, -80.0f * s);
@@ -4836,6 +5190,13 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
 
 int dExtNpcMount_delete(dExtNpcMount_c* i_this) {
     if (i_this != NULL && i_this->mIsBg) {
+        if (mountWantsWwSky(i_this) ||
+            (i_this->mManifest.proc[0] &&
+             (std::strcmp(i_this->mManifest.proc, "EXT_BG0") == 0 ||
+              std::strcmp(i_this->mManifest.proc, "EXT_BG9") == 0))) {
+            // Stage may already have changed; always drop a user if we retained on COMPLEATE.
+            wwSkyReleaseUser();
+        }
         // №100: drop collision + draw refs before releasing the arc cache.
         if (i_this->mpBgW != NULL) {
             dComIfG_Bgsp().Release(i_this->mpBgW);
@@ -4872,6 +5233,9 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
         return 1;
     }
     if (i_this->mIsBg) {
+        if (mountWantsWwSky(i_this) || s_wwSkyUsers > 0) {
+            wwSkyEnsure();
+        }
         updateBgTransform(i_this);
         if (i_this->mpBgBtk != NULL) {
             i_this->mpBgBtk->play();
@@ -4882,7 +5246,15 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
         }
         return 1;
     }
+    // №117: collision-only static prop — keep dzb aligned with actor pose.
     if (i_this->mpMorf == NULL) {
+        if (i_this->mpBgW != NULL && i_this->mBgReady) {
+            mDoMtx_stack_c::transS(i_this->current.pos.x, i_this->current.pos.y,
+                                   i_this->current.pos.z);
+            mDoMtx_stack_c::YrotM(i_this->current.angle.y);
+            MTXCopy(mDoMtx_stack_c::get(), i_this->mBgMtx);
+            i_this->mpBgW->Move();
+        }
         return 1;
     }
     tryGroundSnapSanity(i_this);
@@ -5078,6 +5450,11 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
         return 1;
     }
     if (i_this->mIsBg) {
+        // №108: sky before island geometry (camera-follow; sky draw list).
+        if (std::strcmp(i_this->mManifest.proc, "EXT_BG0") == 0 ||
+            std::strcmp(i_this->mManifest.proc, "EXT_BG9") == 0) {
+            wwSkyDraw();
+        }
         // Obj_Fmobj-style draw on the normal actor list. setListBG from an NPC draw
         // priority is too late — the BG list was already flushed (invisible island).
         // No per-draw logging — Outset BG is already the FPS hot path.
@@ -5559,6 +5936,32 @@ bool dExtNpcMount_isMountActor(const fopAc_ac_c* actor) {
     return m->mIsBg || m->mpMorf != NULL || m->mManifest.valid;
 }
 
+// §41: expose census code already retained on the mount (no new state).
+static void fillCensusNameFromSpawnSrc(const char* spawnSrc, char* out, size_t n) {
+    if (out == NULL || n == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (spawnSrc == NULL || spawnSrc[0] == '\0') {
+        return;
+    }
+    if (std::strncmp(spawnSrc, "census:", 7) == 0) {
+        const char* start = spawnSrc + 7;
+        const char* at = std::strchr(start, '@');
+        size_t len = at != NULL ? static_cast<size_t>(at - start) : std::strlen(start);
+        if (len >= n) {
+            len = n - 1;
+        }
+        if (len > 0) {
+            std::memcpy(out, start, len);
+        }
+        out[len] = '\0';
+        return;
+    }
+    // Door / warm / other lanes — keep the raw source; an unexpected src is information.
+    std::snprintf(out, n, "%s", spawnSrc);
+}
+
 bool dExtNpcMount_queryActor(const fopAc_ac_c* actor, dExtNpcIdentifyInfo* out) {
     if (out == NULL) {
         return false;
@@ -5575,6 +5978,7 @@ bool dExtNpcMount_queryActor(const fopAc_ac_c* actor, dExtNpcIdentifyInfo* out) 
                   man.displayName[0] ? man.displayName : "-");
     std::snprintf(out->modFolder, sizeof(out->modFolder), "%s",
                   man.modFolder[0] ? man.modFolder : "-");
+    fillCensusNameFromSpawnSrc(m->mSpawnSrc, out->censusName, sizeof(out->censusName));
     out->socketArg = man.socketArg;
     out->headVariant = m->mHeadVariant;
     if (man.attachCount > 0 && man.attach[0].model[0]) {
@@ -5585,12 +5989,39 @@ bool dExtNpcMount_queryActor(const fopAc_ac_c* actor, dExtNpcIdentifyInfo* out) 
     return true;
 }
 
+// §41: Z-target identity probe — one pointer compare/frame; log only on target change.
+void dExtNpcMount_pollIdentifyProbe() {
+    static fopAc_ac_c* s_lastLockTarget = NULL;
+    static int s_identifySeq = 0;
+
+    dAttention_c* attn = dComIfGp_getAttention();
+    fopAc_ac_c* target = attn != NULL ? attn->LockonTarget(0) : NULL;
+    if (target == s_lastLockTarget) {
+        return;
+    }
+    s_lastLockTarget = target;
+    if (target == NULL || !dExtNpcMount_isMountActor(target)) {
+        return;
+    }
+    dExtNpcIdentifyInfo info{};
+    if (!dExtNpcMount_queryActor(target, &info)) {
+        return;
+    }
+    ++s_identifySeq;
+    DuskLog.info("[ExtNpcId] #{} census={} proc={} arg={} head={} display={}", s_identifySeq,
+                 info.censusName[0] ? info.censusName : "-", info.proc, info.socketArg,
+                 info.headModel[0] ? info.headModel : "-",
+                 info.displayName[0] ? info.displayName : "-");
+}
+
 // --- №81 EXTENSION-FIRST: native save write refuse ---------------------------------
 
 bool dExtWwSave_isWwHostStage(const char* stageName) {
-    // Neutral fork prefix — stage folders live under /res/Stage/ (game tree / overlays).
-    return stageName != NULL && stageName[0] == 'R' && stageName[1] == '_' && stageName[2] == 'D' &&
-           stageName[3] == 'L';
+    // Neutral fork prefixes under /res/Stage/: R_DL* (interiors) + F_DL* (fields).
+    if (stageName == NULL || stageName[1] != '_' || stageName[2] != 'D' || stageName[3] != 'L') {
+        return false;
+    }
+    return stageName[0] == 'R' || stageName[0] == 'F';
 }
 
 bool dExtWwSave_isWwContentActive() {

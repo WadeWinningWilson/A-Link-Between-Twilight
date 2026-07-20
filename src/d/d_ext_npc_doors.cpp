@@ -17,10 +17,13 @@
 #include <string>
 #include <vector>
 
+#include "d/actor/d_a_knob00.h"
+#include "d/d_camera.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_event.h"
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_save_guard.h"
+#include "f_pc/f_pc_name.h"
 #include "dusk/logging.h"
 #include "dusk/main.h"
 #include "f_op/f_op_actor_iter.h"
@@ -85,6 +88,7 @@ struct ArrivalDemo {
     bool demoStarted;
     bool demoEnded;
     bool withDemo;        // false = №90 guard-only (warp / no door demo)
+    bool cameraSnapped;   // №110: QuickStart once after Link exists on dest
     int demoFramesLeft;   // DEMO_DOOR_OPEN hold on dest (same context)
     int guardFramesLeft;  // after demo end; force-end if event still active
     char stage[12];
@@ -440,6 +444,49 @@ dExtNpcMount_c* findKnobNear(const cXyz& pos, f32 maxDist) {
     return ctx.best;
 }
 
+daKnob00_c* findKnob00Near(const cXyz& pos, f32 maxDist) {
+    struct Ctx {
+        const cXyz* from;
+        f32 bestD2;
+        daKnob00_c* best;
+    } ctx{&pos, maxDist * maxDist, NULL};
+    fopAcIt_Executor(
+        [](void* actor, void* data) -> int {
+            fopAc_ac_c* ac = (fopAc_ac_c*)actor;
+            Ctx* c = (Ctx*)data;
+            if (ac == NULL || fopAcM_GetName(ac) != fpcNm_KNOB00_e) {
+                return 0;
+            }
+            const f32 dx = ac->current.pos.x - c->from->x;
+            const f32 dy = ac->current.pos.y - c->from->y;
+            const f32 dz = ac->current.pos.z - c->from->z;
+            if (dy > 120.0f || dy < -120.0f) {
+                return 0;
+            }
+            const f32 d2 = dx * dx + dz * dz;
+            if (d2 < c->bestD2) {
+                c->bestD2 = d2;
+                c->best = static_cast<daKnob00_c*>(ac);
+            }
+            return 0;
+        },
+        &ctx);
+    return ctx.best;
+}
+
+void stampKnob00(daKnob00_c* knob, DoorDef& d, bool isExit) {
+    if (knob == NULL) {
+        return;
+    }
+    if (isExit) {
+        char ek[32];
+        std::snprintf(ek, sizeof(ek), "exit:%s", d.name);
+        knob->setDoorKey(ek);
+    } else {
+        knob->setDoorKey(d.name);
+    }
+}
+
 // №53-D: 1:1 stamp by doors.ini order + boot log. Heals FIFO scramble.
 void reconcileOutdoorKnobs() {
     if (s_reconcileDone) {
@@ -452,6 +499,18 @@ void reconcileOutdoorKnobs() {
             continue;
         }
         ++want;
+        // §27: prefer real KNOB00; fall back to ExtNpc mount knobs.
+        if (daKnob00_c* k00 = findKnob00Near(d.knobHost, 60.0f)) {
+            stampKnob00(k00, d, false);
+            ++ok;
+            if (!d.bootLogged) {
+                DuskLog.info("[Doors] prop key={} pos=({:.1f},{:.1f},{:.1f}) idx={} (§27 KNOB00)",
+                             d.name, k00->current.pos.x, k00->current.pos.y, k00->current.pos.z,
+                             d.doorIndex);
+                d.bootLogged = true;
+            }
+            continue;
+        }
         dExtNpcMount_c* knob = findKnobNear(d.knobHost, 60.0f);
         if (knob == NULL) {
             continue;
@@ -744,20 +803,33 @@ bool tickPending(const dExtNpcManifest& island) {
 }
 
 bool createKnobAt(const char* src, const cXyz& pos, s16 ry, int roomNo, u32 params) {
+    csXyz angle;
+    angle.set(0, ry, 0);
+    cXyz scale(1.0f, 1.0f, 1.0f);
+
+    // §27: prefer real KNOB00 port; fall back to ExtNpc NPC_KNOB mount.
+    dExtNpcMount_pushPendingSpawn("NPC_KNOB", src, NULL, NULL);
+    const fpc_ProcID kid00 =
+        fopAcM_create(fpcNm_KNOB00_e, params, &pos, roomNo, &angle, &scale, -1);
+    if (kid00 != fpcM_ERROR_PROCESS_ID_e) {
+        dExtNpcMount_bindPendingSpawn(kid00, "NPC_KNOB", src, NULL, NULL);
+        DuskLog.info("[Doors] §27 spawn KNOB00 src='{}'", src != NULL ? src : "?");
+        return true;
+    }
+    char discard[8];
+    dExtNpcMount_takePendingSpawn(fpcM_ERROR_PROCESS_ID_e, discard, sizeof(discard), NULL, 0,
+                                  NULL, 0, NULL, 0);
+
     const s16 actorId = dExtNpcMount_socketActorId("NPC_HENNA0");
     if (actorId < 0) {
         return false;
     }
-    csXyz angle;
-    angle.set(0, ry, 0);
-    cXyz scale(1.0f, 1.0f, 1.0f);
     dExtNpcMount_pushPendingSpawn("NPC_KNOB", src, NULL, NULL);
     const fpc_ProcID kid = fopAcM_create(actorId, params, &pos, roomNo, &angle, &scale, -1);
     if (kid != fpcM_ERROR_PROCESS_ID_e) {
         dExtNpcMount_bindPendingSpawn(kid, "NPC_KNOB", src, NULL, NULL);
         return true;
     }
-    char discard[8];
     dExtNpcMount_takePendingSpawn(fpcM_ERROR_PROCESS_ID_e, discard, sizeof(discard), NULL, 0,
                                   NULL, 0, NULL, 0);
     return false;
@@ -814,6 +886,10 @@ void spawnExitKnobIfNeeded(const char* interiorProc) {
 
 void reconcileExitKnob(DoorDef& d) {
     if (!d.hasExitKnobHost) {
+        return;
+    }
+    if (daKnob00_c* k00 = findKnob00Near(d.exitKnobHost, 80.0f)) {
+        stampKnob00(k00, d, true);
         return;
     }
     dExtNpcMount_c* knob = findKnobNear(d.exitKnobHost, 80.0f);
@@ -996,6 +1072,16 @@ int dExtNpcDoors_countLiveOutdoorKnobs() {
                 return 0;
             }
             const s16 name = fopAcM_GetName(ac);
+            if (name == fpcNm_KNOB00_e) {
+                daKnob00_c* k = (daKnob00_c*)ac;
+                if (std::strncmp(k->spawnSrc(), "door:", 5) == 0 &&
+                    std::strncmp(k->spawnSrc(), "door:exit:", 10) != 0) {
+                    ++c->n;
+                } else if (k->doorKey()[0] != '\0' && std::strncmp(k->doorKey(), "exit:", 5) != 0) {
+                    ++c->n;
+                }
+                return 0;
+            }
             if (name != fpcNm_NPC_HENNA0_e && name != fpcNm_NPC_MK_e && name != fpcNm_NPC_P2_e &&
                 name != fpcNm_NPC_KDK_e) {
                 return 0;
@@ -1051,12 +1137,42 @@ bool dExtNpcDoors_isMountDoor(fopAc_ac_c* actor) {
         return false;
     }
     const s16 name = fopAcM_GetName(actor);
+    if (name == fpcNm_KNOB00_e) {
+        return true;
+    }
     if (name != fpcNm_NPC_HENNA0_e && name != fpcNm_NPC_MK_e && name != fpcNm_NPC_P2_e &&
         name != fpcNm_NPC_KDK_e) {
         return false;
     }
     dExtNpcMount_c* m = (dExtNpcMount_c*)actor;
     return !m->mIsBg && m->mManifest.doorAttention;
+}
+
+void dExtNpcDoors_stampKnob00(fopAc_ac_c* knob, const char* doorKey) {
+    if (knob == NULL || fopAcM_GetName(knob) != fpcNm_KNOB00_e || doorKey == NULL) {
+        return;
+    }
+    static_cast<daKnob00_c*>(knob)->setDoorKey(doorKey);
+}
+
+static bool tryWarpFromKey(const char* key, const cXyz& pos, fopAc_ac_c* player, f32 distXZ,
+                           bool openAlreadyDone) {
+    dExtNpcManifest island{};
+    if (!dExtNpcMount_lookup("EXT_BG0", &island) || key == NULL || key[0] == '\0') {
+        return false;
+    }
+    const bool isExit = (std::strncmp(key, "exit:", 5) == 0);
+    DoorDef* d = findDoorByName(key);
+    if (d == NULL) {
+        d = findDoorByKnobHost(pos);
+    }
+    if (d == NULL) {
+        return false;
+    }
+    if (isExit) {
+        return queueExit(*d, island, player, openAlreadyDone);
+    }
+    return queueEnter(*d, island, player, distXZ, key, openAlreadyDone);
 }
 
 bool dExtNpcDoors_tryNativeWarp(fopAc_ac_c* doorActor, bool openAlreadyDone) {
@@ -1070,6 +1186,46 @@ bool dExtNpcDoors_tryNativeWarp(fopAc_ac_c* doorActor, bool openAlreadyDone) {
         return false;
     }
     fopAc_ac_c* player = dComIfGp_getPlayer(0);
+
+    // §27 KNOB00 path — key on the actor; heal from spawn src / host pos.
+    if (fopAcM_GetName(doorActor) == fpcNm_KNOB00_e) {
+        daKnob00_c* k00 = static_cast<daKnob00_c*>(doorActor);
+        const f32 dist =
+            player != NULL ? (player->current.pos - k00->current.pos).absXZ() : -1.0f;
+        char keyBuf[32] = {};
+        const char* key = k00->doorKey();
+        if (key == NULL || key[0] == '\0') {
+            if (std::strncmp(k00->spawnSrc(), "door:", 5) == 0 && k00->spawnSrc()[5]) {
+                std::snprintf(keyBuf, sizeof(keyBuf), "%s", k00->spawnSrc() + 5);
+                k00->setDoorKey(keyBuf);
+                key = k00->doorKey();
+            } else {
+                DoorDef* byHost = findDoorByKnobHost(k00->current.pos);
+                if (byHost != NULL) {
+                    k00->setDoorKey(byHost->name);
+                    key = k00->doorKey();
+                }
+                for (DoorDef& d : s_doors) {
+                    if (!d.hasExitKnobHost) {
+                        continue;
+                    }
+                    const f32 dx = k00->current.pos.x - d.exitKnobHost.x;
+                    const f32 dz = k00->current.pos.z - d.exitKnobHost.z;
+                    if (dx * dx + dz * dz < 80.0f * 80.0f) {
+                        char ek[32];
+                        std::snprintf(ek, sizeof(ek), "exit:%s", d.name);
+                        k00->setDoorKey(ek);
+                        key = k00->doorKey();
+                        break;
+                    }
+                }
+            }
+        }
+        DuskLog.info("[Doors] {} OPEN → KNOB00 key='{}'",
+                     openAlreadyDone ? "§27 post-cutEnd" : "§27 native", key != NULL ? key : "?");
+        return tryWarpFromKey(key, k00->current.pos, player, dist, openAlreadyDone);
+    }
+
     dExtNpcMount_c* knob = (dExtNpcMount_c*)doorActor;
     const f32 dist =
         player != NULL ? (player->current.pos - knob->current.pos).absXZ() : -1.0f;
@@ -1191,6 +1347,22 @@ void dExtNpcDoors_pollArrival() {
         return;
     }
 
+    // №121 Ask 3 / №110: WW hosts sit 200k+ from origin — Start() interpolates from
+    // the old/default eye (map-edge fly-in). Snap only AFTER Link exists. For door
+    // arrivals, snap AFTER the arrival demo ends — demo lock / event camera was
+    // overwriting an early QuickStart (snap-before-demo was the №110 miss).
+    auto snapArrivalCamera = [&]() {
+        if (s_arrival.cameraSnapped) {
+            return;
+        }
+        if (dCamera_c* cam = dCam_getBody()) {
+            cam->QuickStart();
+            s_arrival.cameraSnapped = true;
+            DuskLog.info("[Doors] №110 QuickStart snap stage='{}' exit={}", s_arrival.stage,
+                         s_arrival.isExit ? 1 : 0);
+        }
+    };
+
     // №90: warp / non-door arrival — residual clear then G-guard only.
     if (!s_arrival.withDemo) {
         if (!s_arrival.demoStarted) {
@@ -1200,6 +1372,7 @@ void dExtNpcDoors_pollArrival() {
             s_arrival.demoStarted = true;
             s_arrival.demoEnded = true;
             s_arrival.guardFramesLeft = kArrivalGuardFrames;
+            snapArrivalCamera();
             DuskLog.info("[Doors] №90 arrival G-guard START stage='{}' frames={}", s_arrival.stage,
                          kArrivalGuardFrames);
         }
@@ -1230,10 +1403,14 @@ void dExtNpcDoors_pollArrival() {
         dExtNpcMount_forceEndDoorEvent("arrival-end");
         s_arrival.demoEnded = true;
         s_arrival.guardFramesLeft = kArrivalGuardFrames;
+        snapArrivalCamera();
         DuskLog.info("[Doors] №89 arrival demo END stage='{}' — G-guard {}f", s_arrival.stage,
                      kArrivalGuardFrames);
         return;
     }
+
+    // Retry snap if cam body was null on the first opportunity.
+    snapArrivalCamera();
 
     if (s_arrival.guardFramesLeft > 0) {
         --s_arrival.guardFramesLeft;
@@ -1282,7 +1459,7 @@ void dExtNpcDoors_poll() {
     const char* stage = dComIfGp_getStartStageName();
     const bool onIslandHost =
         stage != NULL && std::strcmp(stage, island.hostStage) == 0;
-    // №90: WW host stages (R_DL*) must poll exit knobs — not F_SP115-only.
+    // №90/№107: WW host stages (R_DL* / F_DL*) must poll exit knobs — not F_SP115-only.
     const bool onWwHost = dExtWwSave_isWwHostStage(stage);
     if (!onIslandHost && !onWwHost) {
         return;

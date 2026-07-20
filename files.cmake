@@ -1015,6 +1015,9 @@ set(REL_FILES
         src/d/actor/d_a_npc_kasi_kyu.cpp
         src/d/actor/d_a_npc_kasi_mich.cpp
         src/d/actor/d_a_npc_kdk.cpp
+        src/d/actor/d_a_knob00.cpp
+        src/d/actor/d_a_ww_grass.cpp
+        src/d/actor/d_a_ww_bridge.cpp
         src/d/actor/d_a_npc_kn.cpp
         src/d/actor/d_a_npc_knj.cpp
         src/d/actor/d_a_npc_kolinb.cpp

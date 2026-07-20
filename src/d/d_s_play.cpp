@@ -789,6 +789,7 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     // FPS_BISECT_A1b: RULED OUT (2026-07-19) — menu ~288 / field still ~100–115 with polls off.
     dExtNpcMount_pollBgWarps();
     dExtNpcDoors_poll();
+    dExtNpcMount_pollIdentifyProbe();  // §41: Z-target identity probe (change-only log)
     // Gate 8: before pauseTimer early-return — hitlag must not silence click pick/diag.
     if (dusk::g_levelEditorSession) {
         dusk::leveledit::tick_editor_session_input();

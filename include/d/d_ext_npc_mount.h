@@ -97,7 +97,15 @@ struct dExtNpcManifest {
     bool skipBtp;
     bool carryable;  // R-O2d: expose TP carry attention
     bool isStatic;   // №32: prop/door — idle optional (NULL anm)
+    // №126: geometry comes from CODE + an extracted asset pack, not an arc
+    // (the ported vegetation lane). Such a manifest legitimately has no arc=
+    // and no model=, and exists only so the population spawner's payload and
+    // lookup gates pass. Without this flag the validity check rejects it.
+    bool isCodeGeom;
     bool doorAttention;  // №32 B1: A-press ENTER attention (not SPEAK)
+    // №115: №58-B warm storm may create this BG after island COMPLEATE. Default true;
+    // `warm=0` opts out (foreign-stage / heavy arcs). Engine also filters by host_stage.
+    bool allowWarm;
     bool fromDvd;
     bool valid;
 };
@@ -227,12 +235,15 @@ struct dExtNpcIdentifyInfo {
     char modFolder[128]{};
     char headModel[64]{};
     char headJoint[32]{};
+    char censusName[32]{};  // §41: from mSpawnSrc — "census:<Name>@…" → "<Name>"; else raw src
     int socketArg = -1;
     u8 headVariant = 0;
     bool valid = false;
 };
 
 bool dExtNpcMount_queryActor(const fopAc_ac_c* actor, dExtNpcIdentifyInfo* out);
+// §41: Z-target identity probe — log once per LockonTarget change (d_s_play poll).
+void dExtNpcMount_pollIdentifyProbe();
 
 // Manifest-driven BG warps.
 bool dExtNpcMount_requestBgWarp(const char* procName);
@@ -295,6 +306,12 @@ bool dExtNpcMount_roomLaneTransportBusy();
 // Provider enumeration for UI (Cut Actors / Warp).
 int dExtNpcMount_providerCount();
 bool dExtNpcMount_providerAt(int index, dExtNpcManifest* out);
+
+// §27: WW bmd3/bdl arcs need ExtNpc load+finish (never cast getObjectRes → J3DModelData*).
+// acquire pins ModelData in the session cache; retain/release keep the arc buffer alive (№73).
+J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName);
+void dExtNpcMount_retainArc(const char* arc);
+void dExtNpcMount_releaseArc(const char* arc);
 
 #endif  // TARGET_PC
 

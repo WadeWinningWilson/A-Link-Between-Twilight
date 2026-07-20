@@ -8,7 +8,7 @@
 
 #if TARGET_PC
 
-// True if stage name is a Dusklight WW host (R_DL*).
+// True if stage name is a Dusklight WW host (R_DL* interiors / F_DL* fields).
 bool dExtWwSave_isWwHostStage(const char* stageName);
 
 // True if a WW BG / room-lane interior is currently active.

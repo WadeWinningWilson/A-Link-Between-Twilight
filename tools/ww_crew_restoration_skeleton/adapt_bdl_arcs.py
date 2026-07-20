@@ -140,8 +140,11 @@ def normalize_tevregs(buf):
     return 0
 
 
-def adapt_bdl(buf):
-    """buf = bytearray of one .bdl file. Returns new size, or None if not bdl4."""
+def adapt_bdl(buf, skip_tevregs=False):
+    """buf = bytearray of one .bdl file. Returns new size, or None if not bdl4.
+
+    skip_tevregs: leave TEV colour registers alone (sky domes - see adapt_arc).
+    """
     if bytes(buf[:8]) != b"J3D2bdl4":
         return None
     seccnt = be32(buf, 12)
@@ -166,7 +169,8 @@ def adapt_bdl(buf):
     struct.pack_into(">I", buf, 8, new_size)
     struct.pack_into(">I", buf, 12, seccnt - 1)
     normalize_litmask(buf)
-    normalize_tevregs(buf)
+    if not skip_tevregs:
+        normalize_tevregs(buf)
     if "--flat-toon" in sys.argv:
         flatten_toon(buf)
     return new_size
@@ -225,7 +229,11 @@ def adapt_arc(src, dst):
         if not lname.endswith(".bdl"):
             continue
         member = bytearray(d[data_abs + off:data_abs + off + size])
-        new_size = adapt_bdl(member)
+        # Sky-dome models are the one case where normalize_tevregs is WRONG:
+        # for vr_* the TEV register IS the sky colour, not a lighting
+        # multiplier, so promoting it to white paints the dome pure white.
+        # Their colours are authored by bake_wwsky_colors.py (see №116).
+        new_size = adapt_bdl(member, skip_tevregs=lname.startswith("vr_"))
         if new_size is None:
             continue
         d[data_abs + off:data_abs + off + size] = member

@@ -2315,6 +2315,62 @@ Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separat
 > **USER VERIFY:** door open/step + WW swing → stage change → movable; talk = lock until A dismiss. Logs: `№91 DoorK10` · `knob demo BEGIN/END` · `№91 post-cutEnd OPEN`. (GPU caches wiped by Cursor per build-fps-guidelines.)
 > **Follow-up (not this ship):** dest arrival B_OPEN mirror (still №89 18f demo); History warp-menu-from-manifests proposal; dzb fall-through research.
 
+#### Paste for History (2026-07-20 — §41 Z-target identity probe shipped)
+
+> Housing/Bridge §41 engine half absorbed (user-routed). Cursor shipped (`build_run.bat` + cache wipe). **No push** (ask first). Bridge `identify` dossier **not** built — probe works without it.
+>
+> **(1)** `dExtNpcIdentifyInfo.censusName[32]` — `queryActor` parses `mSpawnSrc` (`census:<Name>@…` → Name; else raw src, never blank).
+> **(2)** `dExtNpcMount_pollIdentifyProbe()` beside `pollBgWarps` / `Doors_poll` in `d_s_play.cpp` — `LockonTarget(0)` vs last frame; log only on change.
+> **(3)** `[ExtNpcId] #N census=P1a proc=NPC_P1 arg=41 head=p1a_head.bdl display=? (unverified)` — running `#N` for ordinal paper workflow. P1a/P1b separable via census.
+>
+> **USER:** Z-target in deliberate order → note faces → map `#N`→census → lock names. Aryll answers on first lock.
+
+#### Paste for History (2026-07-20 — №121 THREE ENGINE ASKS shipped)
+
+> History №121 absorbed (Paste for Cursor). Cursor shipped (`build_run.bat` + dawn/pipeline cache wipe). **No push** (ask first). Bake stopgap stays **RETRACTED** — runtime path only.
+>
+> **Ask 1 (white sky):** `wwSkyDraw()` now mirrors `daVrbox_color_set` per dome before each `mDoExt_modelUpdateDL`: `model->calc()` + mat0 `setCullMode(0)`/`change()`/`setTevColor(0)`. Colours: sky+uso ← `vrbox_sky_col`; kasumi ← `vrbox_kasumi_inner_col`; back_cloud ← `vrbox_kumo_top_col`; sky mat1 ← `vrbox_kasumi_inner_col` when present. №113 VRB0 → `g_env_light` ⇒ TOD skies for free. Prior №116 missed `calc()` and used kasumi **outer**.
+>
+> **Ask 2 (exit freeze):** Already on disk from №115 — no re-derive. Confirm: abort storm on first create/heap fail + free-heap headroom; skip foreign `host_stage` ≠ island; throttle one warm create / N frames; manifest `warm=0` opt-out. Log expect: `№115 warm storm ABORT — …` instead of mid-storm hang after `BG heap fail`.
+>
+> **Ask 3 (camera):** Diagnosis: snap was **after Link exists** but **before** arrival demo — demo lock / `forceEndDoorEvent` was overwriting it. Fix: `QuickStart` moves to demo END (withDemo) or G-guard start (!withDemo); retry if cam body was null. Same enter/exit mirror.
+>
+> **FYI acknowledged (no chase):** №114 RTBL fixed by History; №118 trees=`alwd.bdl`; layer-gate + spawn log cap ≤12.
+>
+> **USER VERIFY:** (1) sky blue / TOD-aware, not white (2) exit house → island without freeze (3) arrival camera at Link, not map-edge. Then commit/push only if asked.
+
+#### Paste for Cursor (2026-07-20 - No.121 THREE ENGINE ASKS: white sky / exit freeze / camera. History work is DONE and verified; these three are all yours)
+
+> **Context: History finished the lighting conversion (No.113), and the user's playtest shows sky still white, exit still freezes, camera still far. All three are engine-side. History has already ruled out the data for each - details below so you don't re-derive them.**
+>
+> **=== ASK 1 (NEW, and the smallest): the white sky is a DRAW-PATH bug in `wwSkyDraw()`. ~15 lines. ===**
+> - Location: `src/d/d_ext_npc_mount.cpp` ~line 1941, `static void wwSkyDraw()`.
+> - **What History PROVED, so you can skip the diagnosis:** the WwSky arc loads (log: `No.108 WwSky ready (4 models)`), its material TEV register 0 on disk is correctly `vr_sky=(80,120,255)`, `vr_kasumi_mae=(163,210,255)`, `vr_uso_umi=(80,120,255)`, `vr_back_cloud=(255,255,255)` - and TP's own `daVrbox_color_set` (`d_a_vrbox.cpp`) confirms **register 0 on material 0 is the correct slot**.
+> - **The bug:** TP sets that register **at runtime every frame** - `material->setCullMode(0); material->change(); material->setTevColor(0,&c);`. `wwSkyDraw()` calls **neither `change()` nor `model->calc()`**, while the island BG loop ~30 lines below (~5258) DOES call `model->calc()`. Material state is never pushed, so a baked file value can never take effect. History's bake stopgap is therefore **RETRACTED** - do not rely on it.
+> - **The fix**, inside the existing per-model loop, before each `mDoExt_modelUpdateDL(...)`:
+>   `model->calc();`
+>   `J3DModelData* d = model->getModelData();`
+>   `J3DMaterial* m = d->getMaterialNodePointer(0);`
+>   `if (m) { m->setCullMode(0); m->change(); J3DGXColorS10 c; c.r=..; c.g=..; c.b=..; c.a=255; m->setTevColor(0,&c); }`
+> - **Per-model colour source** (all already populated in `g_env_light`): `vr_sky` and `vr_uso_umi` <- `vrbox_sky_col`; `vr_kasumi_mae` <- `vrbox_kasumi_inner_col`; `vr_back_cloud` <- `vrbox_kumo_top_col`. Mirror `daVrbox_color_set` exactly (it also handles material 1 for the inner kasumi - do the same if a dome has 2 materials).
+> - **Bonus, free:** No.113 converted the donor's full VRB0 table (18 bands, 3 weather sets x 6 time bands) and it already feeds `g_env_light`. Driving these per frame therefore gives **time-of-day skies** immediately - no extra work.
+>
+> **=== ASK 2 (the user's biggest blocker): exit-an-interior HARD FREEZE = the No.58-B warm-interior storm ===**
+> - **Not a regression from the lighting work** - the exit now SUCCEEDS, and that is what first exposed this path. Prior logs show **zero** warm creates; the storm had never been reached.
+> - Log 022729 timeline: `9111 BG hold complete active='EXT_BG0'` -> `9112 No.58-B warm interiors start` -> `9119 warm EXT_BG10 (Cave09) ok` -> `9134 warm EXT_BG8 (Pjavdou) **BG heap fail**` -> `9154 warm EXT_BG9 (A_mori, model 163KB) ok` -> **log ends mid-storm. No further output, no crash dump.**
+> - **Why only on exit:** the storm is gated `if (s_lastBgProc == "EXT_BG0" && !s_warmInteriors)` (`d_ext_npc_mount.cpp` ~4537) - it fires ONLY on arrival at the island. Entering a house never triggers it; leaving one always does. That is exactly the reported asymmetry.
+> - A hang with **no log line and no crash dump immediately after a `heap fail`** is the signature of a blocking allocation retry, not a logic loop.
+> - **Asks, in value order:** (1) **abort the whole storm on the first `heap fail`** instead of continuing into it; (2) drop non-island providers from the warm list - per the relocation plan Cave09 / Pjavdou / A_mori / Omori are **no longer island-local**, so warming them from Outset is wasted memory AND the thing exhausting the heap; (3) throttle to one provider per N frames.
+> - History can instead supply a `warm=0` manifest key if you'd rather gate this from data - say the word.
+>
+> **=== ASK 3 (still open from No.110): camera stays far / map-edge on arrival ===**
+> - `QuickStart()` snap on stage-change arrival + the exit mirror. Worth checking whether the snap is applied BEFORE Link is placed, or whether the arrival demo re-drives the camera afterwards and overwrites it.
+>
+> **=== FYI - no action needed, so you don't chase these ===**
+> - `No.114`: History corrupted RTBL in the first lighting pass (chunk-count change slid RTBL, which stores ABSOLUTE offsets; 6/45 entries dangled). **Fixed and verified** - not the crash you were seeing. Standing rule now in the cookbook: any pass adding/removing a dzs chunk must regenerate RTBL and call `assert_rtbl_pointers()`.
+> - `No.118`: trees were a one-line manifest bug (`npc_lwood.ini` named `lwood.bdl`, which never existed; `d_a_lwood.cpp` proves the real resources are `alwd.bdl`+`alwd.dzb`). Fixed - **38 trees**, no engine work. Confirmed live in log 025356: `COMPLEATE NPC_LWOOD arc=Lwood model=alwd.bdl`.
+> - `No.121`: the "no new actors" report was mostly History's error - `Ksaku`/`Ajav`/`Auzu`/`Vdora` exist only in quest-gated layers (ACT5/7/a/b) and are correctly dormant. Also `d_ext_npc_population.cpp` logs only `if (spawned <= 12)`, so 74 spawned but 12 logged - **absence from the log is not absence from the world.**
+
 #### Paste for History (2026-07-19 — absorb №98 / №99 / №100)
 
 > History №98–№100 absorbed into live state (no engine ship this note).
@@ -2337,6 +2393,85 @@ Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separat
 
 > №106 steps 1–4 done locally: `d_ext_save_guard.h` rename first; 74-file commit `dce09e87ca` (all chats’ WIP, not chat-scoped). Exe greplist gate **0 hits**. Step 5 push **held** — user: always ask; alpha not ready. Still held untracked: `outset_quests.txt` + scratch (`_symcrash`, `_dbg_dzr`, fps-bisect-restore, `.cursor/`).
 > **Next major:** Outset relocation + WW lighting (History env/FILI with that pass).
+
+#### Paste for History (2026-07-20 — №107 relocation Cursor ship)
+
+> History №107 absorbed (user GO). Cursor shipped (`build_run.bat` + GPU cache wipe). **No push** (ask first).
+> **(1) Shells (AppData):** `build_fdl_host_stg.py` → `F_DL01/STG_00.arc` RTBL n=45 / MULT room=44 + `room44.dzs`; `F_DL02/STG_00.arc` RTBL/MULT room=0. History's `R44_00` / `R00_00` unchanged.
+> **(2) Manifests flipped:** `ext_bg0.ini` host_stage=F_DL01 host_room=44 host_pos=anchor=-200000,0,300000; `ext_bg9.ini` → F_DL02 r0 identity. doors.ini / return_pos untouched (WW-world).
+> **(3) Engine:** identity = host−anchor==0 → `GLOBAL_e` NULL mtx (№98 ladder/ledge path; Outset cell identity). `dExtWwSave_isWwHostStage` accepts F_DL* + R_DL*.
+> **USER VERIFY:** warp Outset → Stage F_DL01 room 44 · `№107 BG GLOBAL_e (identity)` · climb/ledge · census at WW coords · interiors/forest still stage-change correctly.
+> **History still:** WW lighting field-map + real FILI (№96/№106).
+
+
+#### Paste for History (2026-07-20 — №108 WwSky mount Cursor ship)
+
+> History №108 absorbed (user GO). Cursor shipped (`build_run.bat` + GPU cache wipe). **No push** (ask first).
+> **WwSky:** load `Object/WwSky.arc` (mod `arcs/WwSky.arc`) on EXT_BG0/EXT_BG9 when host is F_DL*; draw camera-follow sky list in WW order (sky → uso_umi → kasumi → back_cloud+100Y). TP stub vrbox remains `hide_vrbox` (N6).
+> **Not this pass:** RCAM/RARO (waiting on your extract); WW→TP palette colour drive (your field table).
+> **USER VERIFY:** Outset sky not black · `№108 WwSky ready (4 models)`.
+> **History still:** Env/Col/PAL/VRB conversion + RCAM + FILI.
+
+#### Paste for History (2026-07-20 — №110 QuickStart + arcs_lib Cursor ship)
+
+> History №110 absorbed (user GO). Cursor shipped (`build_run.bat` + GPU cache wipe). **No push** (ask first).
+> **Camera:** `dExtNpcDoors_pollArrival` calls `dCam_getBody()->QuickStart()` once when Link exists on the armed dest (enter + exit mirror). Log: `№110 QuickStart snap stage=…`.
+> **arcs_lib:** `arcFilePresent` checks `arcs/` then `arcs_lib/`. Overlay mounts lib stems only when `npc/*.ini` names `arc=` and `arcs/` lacks it — never the full library.
+> **USER VERIFY:** no map-edge fly-in into F_DL01 · ladders with GLOBAL_e.
+> **History still:** palette/FILI. Forest/cave/fountain stages still queued.
+
+
+#### Paste for History (2026-07-20 — §27 porting policy roped into content lane)
+
+> Housing-bridge **§27 PORTING POLICY** (RATIFIED) absorbed into cut-actors live state.
+> **Keep:** decomp filenames. **Neutralize:** only recognizable WW person/place/dialogue literals. **Greplist:** grow per identity string only.
+> **First port when user GO (after №110 verify):** `knob00` — 3 runtime literals, none identity; doubles as policy exemplar + long-term replacement for №91 DoorK10 mirror.
+> **Not started this note** — user is verifying №110; Cursor waits GO for the audit→port→gate→ledger row.
+
+#### Paste for History (2026-07-20 — №116 WwSky TEV + №117 Akabe Cursor ship)
+
+> Continued past №115 per user. Absorbed №116–№118.
+> **№116 (engine):** `wwSkyColorSet()` before each `wwSkyDraw` — TEV reg0 on all mats from `g_env_light.vrbox_sky_col` (sky+uso_umi), `vrbox_kasumi_outer_col`, `vrbox_kumo_top_col`. Mirrors `daVrbox_color_set` ownership; stopgap bake still fine as initial values. Log unchanged (`№108 WwSky ready`).
+> **№117 (engine+data):** mount accepts **static + collision, no model**; heap path regist MOVE_BG dzb; execute keeps mtx. Wired `npc_akabe.ini` + actor_map `[Akabe]`/`[Akabe10]` arg=61 → `Akabe.arc`/`akabe.dzb` (arcs_lib). Manifest parse allows BG without model too.
+> **№118:** noted — lwood was data (`alwd.bdl`); no engine port. **№119** covenant header absorbed (no code).
+> Rebuild green; caches wiped. **No push.**
+> **USER VERIFY:** sky not white void; Akabe SCOB blocks; exit still no warm freeze.
+
+#### Paste for History (2026-07-20 — №115 warm-storm engine Cursor ship)
+
+
+> History №115 absorbed. Exit freeze = №58-B warm storm on return to EXT_BG0 (heap fail mid-storm). Cursor shipped engine gates:
+> - **Abort** storm on first `create FAILED` / `BG heap fail` (spawnSrc=`warm`) / free-heap below `0x280000` headroom — log `№115 warm storm ABORT — …`
+> - **Skip** providers whose `host_stage` ≠ island (`EXT_BG0`) — forest/cave/fountain own-stages no longer warm on Outset
+> - **Throttle** one warm create per 30 frames (was 2)
+> - Manifest **`warm=0`** parsed (`allowWarm`); AppData `ext_bg7/8/9/10` + skeleton 7/8 stamped
+> Room-lane interiors already skipped. Rebuild green; caches wiped. **No push.**
+> **USER VERIFY:** enter house → exit — no hard freeze; storm ends clean (`warm interiors done` or no foreign warm creates).
+
+#### Paste for History (2026-07-20 — §27 first port `knob00` Cursor ship)
+
+
+> User **Verified. Go** after №110. Cursor shipped §27 first decomp port:
+> - `d_a_knob00.{h,cpp}` (decomp filename kept), proc `fpcNm_KNOB00_e` = `0x31C`, profile wired, `files.cmake`.
+> - Minimal behaviour: `Knob.arc` two-model swing (`door.bdl` + shape visual), DoorK10 events, ExtNpc warp on demo END. Quest branches omitted (`Mt`/password/villa/pirateship — `"Mt"` never in source).
+> - No `res/Object/Knob.h` — string res names only ⇒ **resource-header leak vector CLOSED for this exemplar**.
+> - Outset `createKnobAt` prefers KNOB00; falls back to ExtNpc `NPC_KNOB` mount if create fails. Outdoor knob census/reconcile count KNOB00.
+> - **Port ledger row #1** written in housing-bridge §27. Greplist identity **0**. Build green; dawn/pipeline caches wiped. **No push** (ask first).
+> **USER VERIFY:** outdoor doors → `[Doors] §27 spawn KNOB00` / `[Knob00] §27 COMPLEATE` / swing / warp.
+
+
+#### Paste for History (2026-07-20 — №110 QuickStart snap Cursor ship)
+
+> History №110 absorbed. Diagnosis accepted in full:
+> - GLOBAL_e identity collision WIN noted (`dzbT=0`, host=anchor cell) — ladder/ledge path is yours+Cursor's №98/№107 payoff.
+> - RCAM/RARO authoring stands — no `camera: type … not found`; data was never the pan cause.
+> - Map-edge pan = camera interpolating from prior/default across 200k+ WW offset during the №90 arrival window — not a data gap.
+>
+> **Cursor fix:** `dExtNpcDoors_pollArrival` calls `dCam_getBody()->QuickStart()` once after Link exists on the destination stage (same path for door arrival demo and №90 G-guard-only / exit porch). Latch `cameraSnapped` so it fires once per arm. Log: `[Doors] №110 QuickStart snap stage='…' exit=0|1`.
+> **No new WW tokens.** Rebuild + GPU cache wipe when you next run; **no push** (ask first).
+> **USER VERIFY:** warp → F_DL01 / exit porch — no fly-in from map edge; log line above; ladders still worth a poke on GLOBAL_e.
+> **History still:** palette / blown-out sky + per-room FILI.
+
 
 #### Paste for Cursor (2026-07-20 - No.105 rooms 1-5 had the WRONG COLLISION ROOM ID; History fixed it in data)
 

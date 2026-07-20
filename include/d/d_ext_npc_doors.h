@@ -27,8 +27,10 @@ int dExtNpcDoors_countLiveOutdoorKnobs();
 int dExtNpcDoors_wantOutdoorKnobCount();
 // Spawn outdoor Knob props once per island session (doors.ini order).
 void dExtNpcDoors_spawnKnobs(const dExtNpcManifest& island);
-// True if actor is a WW mount doorAttention knob (enter or exit).
+// True if actor is a WW mount doorAttention knob (enter or exit), or §27 KNOB00.
 bool dExtNpcDoors_isMountDoor(fopAc_ac_c* actor);
+// §27: stamp door key onto a live KNOB00 (reconcile / spawn).
+void dExtNpcDoors_stampKnob00(fopAc_ac_c* knob, const char* doorKey);
 // №53-A/B: called from doorCheck when no stage event archive — queue pinned warp.
 // №91: openAlreadyDone=true when the door already owned DEFAULT_KNOB_* + cutEnd
 // (skip playAnimNearest / demo-lock / 28f hold — warp immediately).

@@ -45,6 +45,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>  // std::get_if (Aurora ReplacementKey → texture-conflict badges)
 #include <vector>
 
@@ -1563,6 +1564,70 @@ void scan() {
                     ++shadowed;
                     record_conflict(*claimedBy[norm], mod);
                 }
+            }
+        }
+
+        // №110: arcs_lib/ = library fallback. Only overlay stems named by npc/*.ini
+        // arc= that are missing from arcs/ — never dump the whole library (hundreds).
+        const std::filesystem::path arcsLibRoot = mod.root / "arcs_lib";
+        const bool hasArcsLib = std::filesystem::is_directory(arcsLibRoot, ec);
+        if (enabled && hasArcsLib) {
+            std::unordered_set<std::string> needed;
+            const std::filesystem::path npcRoot = mod.root / "npc";
+            if (std::filesystem::is_directory(npcRoot, ec)) {
+                for (auto it = std::filesystem::directory_iterator(npcRoot, ec);
+                     it != std::filesystem::directory_iterator(); it.increment(ec)) {
+                    if (ec || !it->is_regular_file(ec)) {
+                        continue;
+                    }
+                    const auto ext = it->path().extension().string();
+                    if (ext != ".ini" && ext != ".INI") {
+                        continue;
+                    }
+                    std::ifstream in(it->path());
+                    std::string line;
+                    while (std::getline(in, line)) {
+                        if (line.rfind("arc=", 0) != 0) {
+                            continue;
+                        }
+                        std::string name = line.substr(4);
+                        while (!name.empty() &&
+                               (name.back() == '\r' || name.back() == '\n' || name.back() == ' ' ||
+                                name.back() == '\t')) {
+                            name.pop_back();
+                        }
+                        if (!name.empty()) {
+                            needed.insert(name);
+                        }
+                    }
+                }
+            }
+            int libMounted = 0;
+            for (const std::string& stem : needed) {
+                const std::string norm = normalize("res/Object/" + stem + ".arc");
+                if (s_map.find(norm) != s_map.end()) {
+                    continue;  // arcs/ (or higher mod) already owns it
+                }
+                std::filesystem::path libPath = arcsLibRoot / (stem + ".arc");
+                if (!std::filesystem::is_regular_file(libPath, ec)) {
+                    libPath = arcsLibRoot / (stem + ".ARC");
+                    if (!std::filesystem::is_regular_file(libPath, ec)) {
+                        continue;
+                    }
+                }
+                if (s_map.emplace(norm, libPath.string()).second) {
+                    claimedBy.emplace(norm, &mod);
+                    if (sample.empty()) {
+                        sample = norm;
+                    }
+                    ++count_;
+                    ++libMounted;
+                    DuskLog.info("[custom_assets] №110 arcs_lib fallback '{}' → {}", stem, norm);
+                }
+            }
+            if (libMounted > 0) {
+                DuskLog.info("[custom_assets] '{}' arcs_lib fallback mounted {} arc(s)", mod.name,
+                             libMounted);
             }
         }
 

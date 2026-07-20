@@ -1616,6 +1616,12 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     &g_profile_ALBW_MIDNA_ARM.base.base,
     // №57 Cave09 BG socket: index MUST match fpcNm_EXT_BG10_e (0x31B).
     &g_profile_EXT_BG10.base.base,
+    // §27 WW knob door port: index MUST match fpcNm_KNOB00_e (0x31C).
+    &g_profile_KNOB00.base.base,
+    // №122 donor grass: index MUST match fpcNm_WWGRASS_e (0x31D).
+    &g_profile_WWGRASS.base.base,
+    // No.124 donor bridge: index MUST match fpcNm_WWBRIDGE_e (0x31E).
+    &g_profile_WWBRIDGE.base.base,
     NULL,
 };
 #endif
