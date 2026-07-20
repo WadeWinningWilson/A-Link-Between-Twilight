@@ -8,8 +8,8 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | **№106 COMMIT SHIPPED.** Renamed `d_ext_ww_save_guard.h` → `d_ext_save_guard.h` (before first track); added untracked engine sources (mod_flags/doors/population/save_guard); tools+docs incl. `greplist.txt` + `extract_bmg.py`; held `outset_quests.txt` + scratch strays. Exe greplist gate: **0 hits**. Prior: №104 activate + exterior pop; №105 crawl research; №102 RTBL. |
-| **next** | **OUTSET RELOCATION + WW LIGHTING** (ladders/ledges №98 + WW palettes №96 + end offshore parking №76). History: lighting field-map + real FILI per room (№106). User verify interiors floors after History room-id dzb retag (№105 data). Crawl restore still queued (№105 plan). |
+| **status** | **№106 COMMIT LOCAL (`dce09e87ca`) — not pushed.** Renamed `d_ext_ww_save_guard.h` → `d_ext_save_guard.h` first; 74-file snapshot (all chats’ WIP). Exe greplist gate **0 hits**. Held: `outset_quests.txt` + scratch. User: always ask before push (alpha not ready). |
+| **next** | **OUTSET RELOCATION + WW LIGHTING** (ladders/ledges №98 + WW palettes №96 + end offshore parking №76). History: lighting field-map + real FILI per room. Push only when user says. |
 | **№32** | **SHIPPED** (prior). |
 | **№34+35** | **SHIPPED.** Residuals: kusa/flower holes until WW grass port; Mesa outdoor door still absent; Omori shelved; wood/lamp holes; chest open behavior not wired (static box models). |
 | **№28** | **B10 shipped:** size-mismatch twin ⇒ refuse + vanilla fallback (Linkle bad twin no longer boots AV). |
@@ -100,7 +100,7 @@ es\Stage` — `D_SB05/R00_00.arc` and `R_SP01/R00_00.arc` (Bo's House, the close
 | **workorder** | **W1-COMPLETION** — acceptance after Outset whole through pirate-departure offer. |
 | **rupees** | **FINAL (№31+№36 C):** WW visual `Vlupy.arc/vlupy.bdl` + brk/btk frame; pickup grants TP wallet item. №35 H4 “TP pickup carve-out” for visuals is **rescinded**. |
 | **folder** | Live mod = `WW-Crew-Restoration` (51 arcs; skeleton bak = `.SKELETON_BAK`). №37 alert about `.DISABLED` is stale. |
-| **updated** | 2026-07-20 (Cursor №106 commit 1–5 done; exe gate clean; next = Outset relocation + lighting) |
+| **updated** | 2026-07-20 (№106 local commit `dce09e87ca`; no push — ask first) |
 
 ---
 

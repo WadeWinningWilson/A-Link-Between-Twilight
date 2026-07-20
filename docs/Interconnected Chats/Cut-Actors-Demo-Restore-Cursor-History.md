@@ -2333,6 +2333,11 @@ Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separat
 > - Note: source is otherwise gate-clean; the only remaining WW token is `"Arylls"` inside a COMMENT (compiles away; auditor measured 0 in the binary). Comment-class ruling still with the user.
 > - **AFTER THE COMMIT: Outset relocation + WW lighting is the next major work.**
 
+#### Paste for History (2026-07-20 — №106 commit local, no push)
+
+> №106 steps 1–4 done locally: `d_ext_save_guard.h` rename first; 74-file commit `dce09e87ca` (all chats’ WIP, not chat-scoped). Exe greplist gate **0 hits**. Step 5 push **held** — user: always ask; alpha not ready. Still held untracked: `outset_quests.txt` + scratch (`_symcrash`, `_dbg_dzr`, fps-bisect-restore, `.cursor/`).
+> **Next major:** Outset relocation + WW lighting (History env/FILI with that pass).
+
 #### Paste for Cursor (2026-07-20 - No.105 rooms 1-5 had the WRONG COLLISION ROOM ID; History fixed it in data)
 
 > **Your No.104 fixes landed: no crashes, all six rooms exist with actors/NPCs, and Ordon/Outset keep their inhabitants across warps. Remaining symptom: only room 0 renders mesh + collision; rooms 1-5 are black with no floor (props/NPCs visible).**
