@@ -109,7 +109,7 @@ Four-table chain, same in both engines, different records:
 | `EnvR` 0x08 | `Env0` 0x41 | per-room → palette sets |
 | `Colo` 0x0C | `Col0` 0x0C | **identical layout** |
 | `Pale` 0x2C | `PAL0` 0x34 | +6 trailing fields |
-| `Virt` 0x24 | `VRB0` 0x18 | reordered |
+| `Virt` 0x24 | `VRB0` 0x15 | reordered (21 B — matches PC `sizeof` + dm defaults; do not pad to 0x18) |
 
 Run `convert_lighting.py`. Two things that are not obvious:
 

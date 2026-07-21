@@ -62,6 +62,7 @@
 #include "d/d_focused_arts.h"
 #include "d/d_albw_flurry_rush.h"
 #include "d/d_albw_shield.h"
+#include "d/d_menu_ring.h"
 #include "dusk/trace_noop.h"
 #include "d/d_albw_wolf_stun.h"
 #include "d/d_albw_lockout.h"
@@ -364,12 +365,14 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
     }
     int jnt = i_joint->getJntNo();
 #if DEKU_LEAF_HAND_WELD
-    // Grip ribs held by the hands: pin the two tips to the hand world positions (jnt 8 -> left,
-    // jnt 6 -> right) and freeze both grip ribs (5-8) so they don't flutter out of the grip.
-    if (jnt == 6 || jnt == 8) {
+    // Grip ribs held by the hands. After the 90 deg dome-axis spin the grips moved to the
+    // PERPENDICULAR rib pair: jnt 2 (Larm2) -> RIGHT hand, jnt 4 (Rarm2) -> LEFT hand.
+    // (Old pairing was 6/8; those are now free tails and billow again.) The grip ribs are
+    // weighted to their own strand only, so pinning them can't drag the canopy.
+    if (jnt == 2 || jnt == 4) {
         Mtx m;
         MTXCopy(model->getAnmMtx(jnt), m);      // keep the rib's orientation...
-        const cXyz& hp = (jnt == 8) ? s_dekuLeafLHandW : s_dekuLeafRHandW;
+        const cXyz& hp = (jnt == 4) ? s_dekuLeafLHandW : s_dekuLeafRHandW;
         m[0][3] = hp.x;                          // ...but snap its origin onto the hand
         m[1][3] = hp.y;
         m[2][3] = hp.z;
@@ -377,7 +380,7 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
         MTXCopy(m, J3DSys::mCurrentMtx);
         return 1;
     }
-    if (jnt == 5 || jnt == 7) {                  // grip-rib inner segment: frozen (no billow)
+    if (jnt == 1 || jnt == 3) {                  // grip-rib inner segment: frozen (no billow)
         MTXCopy(model->getAnmMtx(jnt), J3DSys::mCurrentMtx);
         return 1;
     }
@@ -410,7 +413,11 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
 static cXyz s_dekuLeafOffset(0.0f, 0.0f, 0.0f);  // nudge in facing frame from the hand midpoint
 static f32  s_dekuLeafScale = 1.0f;              // uniform scale about the welded grab point
 static s16 s_dekuLeafBaseRotY = 0x4000;   // 90 deg Y  (WORKING)
-static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X (WORKING) -> canopy peak up
+static s16 s_dekuLeafBaseRotX = 0x4000;   // +90 deg X (was -0x4000; +180 applied after the spin)
+// Spin about the leaf's OWN dome axis (applied innermost, after X). Canopy stays flat overhead;
+// this only changes WHICH ribs face the hands. Playtest showed Link gripping the wrong pair, so
+// spin 90 deg to bring the perpendicular ribs (Larm2/Rarm2) around to the hands.
+static s16 s_dekuLeafSpin = 0x4000;       // 90 deg spin (flip sign if it lands the wrong way)
 
 void daAlink_c::updateDekuLeafModel() {
     if (s_dekuLeafModel == NULL) {
@@ -452,6 +459,7 @@ void daAlink_c::updateDekuLeafModel() {
     mDoMtx_stack_c::transM(s_dekuLeafOffset.x, s_dekuLeafOffset.y, s_dekuLeafOffset.z);
     mDoMtx_stack_c::YrotM(s_dekuLeafBaseRotY);  // reorient the canopy peak to world-up
     mDoMtx_stack_c::XrotM(s_dekuLeafBaseRotX);
+    mDoMtx_stack_c::ZrotM(s_dekuLeafSpin);      // innermost: spin ribs about the dome axis
     s_dekuLeafModel->setBaseTRMtx(mDoMtx_stack_c::get());
     // Scale pivots about the model origin (the welded grab point) so the stem stays on the hands.
     s_dekuLeafModel->setBaseScale(cXyz(s_dekuLeafScale, s_dekuLeafScale, s_dekuLeafScale));
@@ -10088,11 +10096,20 @@ void daAlink_c::setStickData() {
         }
         mMoveAngle = mDemo.getMoveAngle();
         mMoveValue = mStickValue;
-    } else if (checkDeadHP() || dMeter2Info_getPauseStatus() == 1) {
+    } else if (checkDeadHP() || dMeter2Info_getPauseStatus() == 1
+#if TARGET_PC
+               || dMenu_Ring_c::isQuickEquipLiveWorld()
+#endif
+    ) {
         mStickValue = 0.0f;
         mMoveValue = 0.0f;
         mStickAngle = 0;
         mMoveAngle = 0;
+#if TARGET_PC
+        if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+            mNormalSpeed = 0.0f;
+        }
+#endif
     } else if (checkMidnaLockJumpPoint() && getMidnaActor()->checkNoInput()) {
         mStickValue = 0.0f;
         mMoveValue = 0.0f;
@@ -12316,9 +12333,26 @@ int daAlink_c::checkNormalAction() {
     }
 #endif
 
-    // Crawl / wolf-lie: native do-status only (BUTTON_STATUS_ENTER from crawl holes /
-    // wall codes). Free-ground hold-A crawl was removed — it raced door/talk prompts
-    // whenever DoStatus looked empty for a frame.
+#if TARGET_PC
+    // №105 P2: gated hold-A crawl (interim — native ENTER only arms wall_code==6 /
+    // ladder here; WW crawl holes have no adapt_dzb wall-code remap yet).
+    // Gates: DoStatus NONE (never steal OPEN/SPEAK/ENTER/roll), stick ≤ front-roll
+    // rate (standing A crawls; push-stick A still rolls), ground + wait procs.
+    if (dusk::getSettings().game.enableHoldACrawl.getValue() && !checkWolf() &&
+        !checkEventRun() && mLinkAcch.ChkGroundHit() && doButton() &&
+        dComIfGp_getDoStatus() == BUTTON_STATUS_NONE &&
+        mStickValue <= getFrontRollRate() &&
+        (mProcID == PROC_WAIT || mProcID == PROC_TIRED_WAIT || mProcID == PROC_SERVICE_WAIT))
+    {
+        field_0x306e = (s16)(shape_angle.y + 0x8000);
+        field_0x34ec = current.pos;
+        field_0x34ec.x -= 35.0f * cM_ssin(field_0x306e);
+        field_0x34ec.z -= 35.0f * cM_scos(field_0x306e);
+        return procCrawlStartInit();
+    }
+#endif
+
+    // Crawl / wolf-lie: native BUTTON_STATUS_ENTER (ladder / future hole wall-codes).
     if (doTrigger()) {
         if (dComIfGp_getDoStatus() == BUTTON_STATUS_UNK_137) {
             orderPeep();
@@ -13114,6 +13148,16 @@ int daAlink_c::checkNextAction(int param_0) {
     if (checkDeadAction(1)) {
         return 1;
     }
+
+#if TARGET_PC
+    // Live quick-equip: control-lock voluntary move/item; Cc/damage still run.
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+        mNormalSpeed = 0.0f;
+        mStickValue = 0.0f;
+        mMoveValue = 0.0f;
+        return 1;
+    }
+#endif
 
     if (checkGroundSpecialMode()) {
         return 1;
@@ -17994,7 +18038,15 @@ int daAlink_c::procAutoJump() {
     if (checkInputOnR() && direction == DIR_BACKWARD) {
         cLib_chaseF(&mNormalSpeed, 0.0f, mStickValue * 0.2f);
     } else if (checkGrabGlide()) {
-        cLib_chaseF(&mNormalSpeed, mMaxSpeed, 0.1f);
+        // ============================================
+        // NEW CODE — ALBW Port (Deku Leaf glide): the leaf flies 20% faster than the vanilla
+        // cucco glide (playtested: 10% read good, 20% preferred). Scoped to checkDekuLeafGlide()
+        // so the cucco keeps its stock top speed. Tune s_dekuLeafGlideSpeedScale to adjust.
+        // ============================================
+        const f32 s_dekuLeafGlideSpeedScale = 1.20f;
+        const f32 glideMaxSpeed =
+            checkDekuLeafGlide() ? (mMaxSpeed * s_dekuLeafGlideSpeedScale) : mMaxSpeed;
+        cLib_chaseF(&mNormalSpeed, glideMaxSpeed, 0.1f);
     } else if (!checkInputOnR()) {
         cLib_chaseF(&mNormalSpeed, 0.0f, 0.1f);
     }

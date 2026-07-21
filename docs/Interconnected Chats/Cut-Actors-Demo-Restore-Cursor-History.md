@@ -2339,6 +2339,230 @@ Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separat
 >
 > **USER VERIFY:** (1) sky blue / TOD-aware, not white (2) exit house → island without freeze (3) arrival camera at Link, not map-edge. Then commit/push only if asked.
 
+#### Paste for History (2026-07-20 — §52 JA1 sequence execution wired)
+
+> Housing: wire JA1 behind existing gate, ownership before parser. Cursor shipped. **No push.**
+>
+> **Ordering (№89):** `stopOwned()` on stage-change / leave-foreign **before** any JA2 resume. ExtSeq owns every `JASChannel*` started from JA1 noteOn. `dExtSeqSpace_shouldSuppressJa2Bgm()` gates `mDoAud_sceneBgmStart` in `d_s_play`.
+>
+> **Execution:** package load (BMS from manifest) → `ExtSeq::Ja1Track` root → `Ja1Parser::parseSeq` (WW dialect: note/wait/openTrack/call/jmp/loop/reg/tempo/timebase/finish; other C0+ ops consume Arglist sizes and nop). Tick from `dExtSeqSpace_poll`. Voices via `JASBank::noteOnOsc` (proves dialect + ownership; IBNK/.aw residency is next layer).
+>
+> **Logs:** `[ExtSeq] §52 package loaded…` / `startOwned…` / `stopOwned…` / periodic `playing ticks=`.
+>
+> **USER VERIFY:** warp Outset → no TP field BGM; hear oscillator tones or at least startOwned+playing logs; leave to Ordon → stopOwned then TP BGM returns; enter house → house.bms selected when present.
+
+#### Paste for History (2026-07-20 — §57 tempo rate VERIFY-FIRST)
+
+> Housing §57: verify-first — log dacRate + WW accumulator prediction before any rate port. Cursor shipped. **No push.** Velocity curve untouched (§55).
+>
+> At `startOwned` after kick parse: `[ExtSeq] §57 tempo={} timebase={} engine_ticks/s={:.2f} dacRate={:.3f} ww_inc={:.6f} ww_ticks/s={:.2f} (verify-only)`.
+> - `engine_ticks/s` = still `t×tb/30` (unchanged `tickOwned` path).
+> - `dacRate` = `JASDriver::getDacRate()` — PC skips the ×1.0008897 trim (`JASAiCtrl.cpp:112-114`), so expect **32000.000** under `OUTPUT_RATE_0`.
+> - `ww_inc` = WW `field_0x368` = `t×tb/dac×4/3` (accumulator / subframe, not ticks/s).
+> - `ww_ticks/s` = `ww_inc × (dacRate / DSP_SUBFRAME_SIZE)` under 1-callback-per-subframe assumption.
+>
+> **№31-B lane:** WW timing arithmetic stays in `src/d/ext_seq/` when/if ported — not shared JAudio2, not mod folder.
+>
+> **USER/Housing:** warp Outset (i_link + house) → ferry the §57 line. Compare dacRate; check whether engine/ww ratio matches the 1.5 hypothesis or something else. **Do not port until the three verifies land.**
+
+#### Paste for History (2026-07-20 — §56 tempo/timebase diagnostic)
+
+> Housing §56: one log line at startOwned — parsed tempo, timebase, derived ticks/s. No behaviour change. Cursor shipped. **No push.**
+>
+> After kick `parseSeq`: `[ExtSeq] §56 tempo={} timebase={} ticks/s={:.2f}` where ticks/s mirrors `tickOwned` (`t*tb/1800` steps/frame × 60). Defaults remain 120/48 until BMS 0xFD/0xFE lands in that first parse. Tempo fan-out already on disk (not re-asked). Velocity-exponent toggle withdrawn — not built.
+>
+> **USER/Housing:** warp Outset → ferry the §56 line; compare to Bridge’s sequence numbers + WW conversion formula.
+
+#### Paste for History (2026-07-20 — №31-B WW velocity→volume curve)
+
+> Housing: name WW fields 0xac/0x5c/0x98, then ExtSeq uses WW curve with TP neutralized. Cursor shipped. **No push.**
+>
+> **Named (WW DP):** `volume = field_0xac * (field_0x5c * field_0x98)` where **ac** = track/mgr vol, **5c** = `initVol*(vel/127)²` baked at noteOn (`BankMgr::noteOnOsc` — WAVE noteOn still nonmatching but same shape), **98** = envelope osc. **WW does square velocity** — once, into 5c.
+>
+> **№31-B fix:** ExtSeq bakes 5c into `mSoundParams`, stamps owner tag, sets vel=127 (TP re-square → identity). Mix path for tagged voices: `sound*env*track` only — no TP tremolo term. Probe logs `[ExtSeq] vol3#… WW:ac/… 5c/… 98/…`.
+>
+> **USER VERIFY:** Outset dynamics; then re-assess speed. Hold tempo judgment until curve is right.
+
+#### Paste for History (2026-07-20 — setParam timed ramps)
+
+> Engine lane: implement `setParam` with timed ramping (WW move-param). Cursor shipped. **No push.** Bridge unaffected.
+>
+> **WW authority (`TTrack::setParam` / `updateTimedParam` / `initTimed`):** target + moveTime → `mMoveAmount`/`mMoveTime`; each tick advances `mCurrent`; moveTime≤0 snaps immediate. VolumeMode 0 squares volume; children multiply parent.
+>
+> **Cursor:** `Ja1Track` MoveParam[18]; `setParam`/`updateTimedParam`/`applyVoiceParams` → live `JASChannel::mParams` (vol/pan/fx/dolby). noteOn latches current mix. Tick: updateTimed → parse → apply → children. Rebuild green.
+>
+> **USER VERIFY:** Outset mix — fades/mutes that BMS authored should now ramp (not stuck loud/silent); then re-assess speed against a correct mix. Both gate classes after rebuild.
+
+#### Paste for History (2026-07-20 — tempo/timebase child sync)
+
+> User/History diagnosis: exterior `i_link` layers drift; interior `house` better — copy-at-spawn tempo, no fan-out. Cursor checked WW decomp + shipped. **No push.**
+>
+> **WW authority (`JASTrack::setTempo`/`setTimebase`/`updateTempo`):** root write → `updateTempo()`; children take parent's timebase (+ rate); recurse. Copy-at-open alone is wrong after a later 0xFD/0xFE.
+>
+> **Cursor fix:** `Ja1Track::updateTempo` fan-out; `getTempo`/`getTimebase` walk to root; `setTempo`/`setTimebase` call update on root. **Also:** tick order was children→self (inverted vs WW/JA2) — now self parse then children so `openTrack` runs same tick.
+>
+> **USER VERIFY:** Outset exterior parts stay locked together (not early/late layers); house still good; leave-host clean.
+
+#### Paste for History (2026-07-20 — §53 bank residency via shadow-wave)
+
+> Housing §53: replace `noteOnOsc` with real WW instruments using existing DuskDsp virtual wave space. Cursor shipped. **No push.** Bridge lane idle.
+>
+> **Shape:** parse staged `aaf_slices/ibnk_*.bin` + `wsys_*.bin` → load ExtSeq-owned `.aw` → `registerShadowWave(virtBase, size, buf)` at `0x01000000` / `0x02000000` (not ARAM twins; sidesteps №28 B10). Mint `kShadowVirtualBase + virtBase + wsysOffset`. WAVE `noteOn` carries IBNK region (base key, envelope osc tables, loop) + that address.
+>
+> **Lifetime (UAF family):** `stopOwned` → release voices → `ja1Bank_unregister`; `startOwned` → `ja1Bank_register` → start seq. Stale virt addr → `resolveShadowWave` nullptr → silence (№91), never ARAM fallback.
+>
+> **Files:** `src/d/ext_seq/ja1_bank.cpp` + wire in `d_ext_seq_space` / `ja1_track`. Rebuild green; dawn/pipeline caches wiped. Mix/loudness deferred (wrong reference against osc).
+>
+> **USER VERIFY:** warp Outset → WW instruments (not square tones); leave host → stopOwned then TP BGM; no crash on mid-space leave while notes sound.
+
+#### Paste for History (2026-07-20 — housing §41/§45/model2(b)/§52 ownership)
+
+> Housing four-item queue absorbed. Cursor shipped. **No push.**
+>
+> **§41 Z-target identity probe:** already on disk (`censusName` + `dExtNpcMount_pollIdentifyProbe` in `d_s_play`). Confirmed — no code change this pass. User: Z-target in order → `[ExtNpcId] #N census=…` → lock names.
+>
+> **§45 + L-5:** genericized + renamed. `d_a_ww_grass`/`d_a_ww_bridge` → `d_a_ext_vegetation` / `d_a_ext_plank_span`; procs `NPC_EXTVEG`/`NPC_EXTSPAN`; sockets `EXT_VEG`/`EXT_SPAN`; logs `[ExtVeg]`/`[ExtSpan]`. Plank arc/model from `bridges.ini` (`plank_arc`/`plank_model` — refuse if missing). Grass blobs from `veg_manifest.ini` `[pack]` — refuse if missing. Mod manifests updated; old `npc_ww_*.ini` retired to `.pre45-bak`.
+>
+> **model2= ruling: (b).** BG mount probes optional slots; absent members WARN+skip (not FAIL). Empty override keys fall back to `model.bdl`/`model1.bdl`/`model3.bdl`. Bridge ASK-4 knock-on: optional-probe slots are legitimate.
+>
+> **§52 JAudio1:** ownership model written (`d_ext_seq_space.h` — gate + №89 begin/end owner + parser). Stub polls: foreign-host gate + scan for `schema=*jaudio1_v1*` (no hardcoded folder marker). Logs `[ExtSeq]`. **Parser not wired — package stays inert.** (A) retarget must never enter the JA1 package folder.
+>
+> **USER VERIFY:** (1) Z-target → ExtNpcId lines (2) bridges still span (3) LinkUG/Pjavdou mount without model1 fail (4) log `[ExtSeq] … pkg=` on Outset (5) no `WwGrass`/`WwBridge`/`d_a_ww_` in exe strings.
+
+#### Paste for History (2026-07-21 — §59 ASK 17 engine event dump)
+
+> Housing §59 / ASK 17 companion shipped. **No push.**
+>
+> **Flag:** `DUSK_EXTSEQ_EVENT_DUMP=1` → first `startOwned` writes `seq_events_engine_{i_link,house}.csv` beside Bridge goldens under the mod `audio/ww_jaudio1/` folder.
+>
+> **How:** offline walk of each BMS through engine `Ja1Parser` (scratch tracks, no noteOn audio, no Bridge code). Columns match ASK: `tick,track_id,event,note_param,velocity`. Per-track local ticks; song-loop backward jmp followed once; loop bodies capped at 256 (same finite-stream rules as Bridge).
+>
+> **Not changed:** `tickOwned`, velocity curve, tempo — dump only.
+>
+> **Next (Human / HS):** diff Bridge `seq_events_*.csv` vs engine `seq_events_engine_*.csv`. First disagreeing line = bug target. No fix until then.
+
+#### Paste for History (2026-07-21 — §58 tempo retraction + units answer)
+
+> Housing §58 absorbed: DAC hypothesis dead; **no rate change**. Cursor answered units only. **No push.**
+>
+> **DEAD:** `dacRate≈32028.5` (GC-native), not 48000 — the 1.5 lead was coincidence. Discarded.
+>
+> **Units (WW DP `TTrack::rootCallback` + `TAudioThread` DSP sync):** `field_0x368` is added to `field_0x364` **once per SubFrameCallback**. When the accumulator crosses 1.0, `mainProc()` advances one wait tick. Callbacks fire from `updateDSP` on each DSP subframe interrupt (`getSubFrames()` per DAC frame, `DSP_SUBFRAME_SIZE=80` samples each) — **not per sample**. So `ww_ticks/s = ww_inc × (dacRate/80) ≈ 238` is the correct wall-clock wait-tick rate; a per-sample reading (~19040) is wrong.
+>
+> **Still obeying §58:** `tickOwned` unchanged. The arithmetic 476 vs 238 remains, but Housing forbids halving on that alone (user said "slightly"; entrances ≠ global rate). Log line retagged `[ExtSeq] §58 units: … (no rate change)`.
+>
+> **Redirect if tempo stays closed:** OpenTrack / per-track placement, not global rate.
+
+#### Paste for History (2026-07-21 — №145 vr_sky uses KONST / setTevKColor)
+
+> History №145 absorbed (clouds white = feed OK; dome still white = per-model). Cursor shipped. **No push.**
+>
+> **Cause:** WW `d_a_vrbox` colours `vr_sky` with **`setTevKColor`**, not C0. TEV dump: `vr_sky`/`vr_uso_umi` colorIn=`KONST`; `vr_kasumi_mae`=`C0`; `vr_back_cloud`=`TEXC` (white day clouds looked “correct” without proving C0). We had copied TP’s `setTevColor` — C0 unused, K left file-white → white dome. Bake-to-C0 failing was the same clue.
+>
+> **Fix:** mirror WW — sky mat0 K=kasumi / mat1 K=sky; uso K=sky; kasumi C0+K.a; clouds K on all mats. Build green.
+>
+> **USER VERIFY:** Outset dome blue; day clouds white; TOD.
+
+#### Paste for History (2026-07-20 — №144 sky VRB0 stride 0x15)
+
+> History №144 absorbed (AmbCol proof + GX notes). Cursor shipped. **No push.**
+>
+> **Sky root cause (narrowed past №133):** feed indexed `vr=2` correctly, but converted VRB0 was stride **0x18** while PC `sizeof(stage_vrboxcol_info_class)` is **0x15** (same as dm `dKyd_l_vr_box_data_struct[21]`). Index 2 landed mid-entry1 → `sky=(230,220,255) kasumiIn=(153,0,80) kumoTop=(0,0,0)` — the №125 magenta/black. On-disk VRB0[2] was already `(80,120,255)/(255,255,255)/(163,210,255)`.
+>
+> **Fix:** stripped 3-byte pads in live `F_DL01`/`R_DL01`/`F_DL02` VRB0; `convert_lighting.py` no longer pads; struct comment + `static_assert(sizeof==0x15)`. Log `[WwSky] №144 feed … sky=(80,120,255)… sizeof_vrb=21`.
+>
+> **GX notes:** recorded (AmbCol + `dKy_setLight_again`) — grass already on that path. Camera Reset+QuickStart still on disk (№133); verify timing if still map-edge.
+>
+> **USER VERIFY:** Outset blue sky + TOD; ferry №144 feed line.
+
+#### Paste for History (2026-07-20 — №133 sky feed + camera Reset + actor-contract hook)
+
+> History №133 Paste for Cursor absorbed. Cursor shipped (`build_run.bat` + cache wipe). **No push.** Spawn-guard note absorbed (will not re-add engine-liveness queries). Actor-contract gate OK (6 actors, 0 violations). Hook script at `tools/git-hooks/pre-commit` — enable with `git config core.hooksPath tools/git-hooks` (Cursor will not set config; ask first).
+>
+> **Sky (Ask 3 / №125):** №125 5s diagnostic **removed**. Diagnosis accepted: `wwSkyApplyTev` was fine; `g_env_light.vrbox_*` was garbage. Likely `envcolor_init` latched dm Env0 (2 entries) while `UseCol=room44` → OOB palette walk → magenta/black. **Fix:** on WwSky draw, rebind Env0/Col0/PAL0/VRB0 from stage (room VRB0 fallback), then **drive vrbox_* directly** from the Env0→Col0→PAL0→VRB0 chain + light schedule (no addcol/ratio). One-shot log `[WwSky] №133 feed … sky=(80,120,255)…`. If still on dm tables: warn about Elst env-layer vs Env0-only inject.
+>
+> **Camera (Ask 4):** QuickStart alone left eye at map-edge. Now **Reset(center,eye) behind Link** (Shade Refuge pattern) + QuickStart, still after demo end / G-guard start.
+>
+> **USER VERIFY:** (1) sky blue/TOD — log line shows reference blues not magenta (2) arrival camera on Link (3) exit still no freeze (№115).
+
+#### Paste for Cursor (2026-07-21 - No.145 SKY: data VERIFIED correct; defect is now isolated to the vr_sky MODEL, not the data and not the feed)
+
+> **Your fix moved it: clouds are WHITE (correct) and the magenta kasumi is GONE. Sky dome is still white. That combination is very informative - it rules out both of the things we were previously chasing.**
+>
+> **=== 1. THE VRB0 DATA IS VERIFIED CORRECT - stop suspecting it ===**
+> The `0x15`-vs-`0x18` stride issue was real and is FIXED: `convert_lighting.py` emits 21-byte records and `F_DL01/STG_00.arc` has been regenerated. I re-read the shipped file at the engine's own `0x15` stride and **all 18 entries decode exactly to Nintendo's Virt table**:
+> - `VRB0[ 0] sky=(79,70,78)` `VRB0[ 1] sky=(180,188,201)` **`VRB0[ 2] sky=(80,120,255) kumoTop=(255,255,255) kasumiIn=(163,210,255)`** `VRB0[ 3] sky=(219,154,99)` ... through `[17]`.
+> - **Band 2 is the day band** (receiver schedule `{135-240 -> 2,2}`, hour 15 = daytime 225), and it holds the exact reference blue. There is nothing left to fix on the data side.
+>
+> **=== 2. THE FEED DEMONSTRABLY WORKS FOR AT LEAST ONE MODEL ===**
+> `VRB0[2].kumo_top = (255,255,255)` and the clouds now render **white** - correct. So `g_env_light.vrbox_kumo_top_col` is being populated AND `wwSkyApplyTev` is successfully driving `vr_back_cloud` (models[3]).
+> Meanwhile `VRB0[2].sky_col = (80,120,255)` and `vr_sky` (models[0]) renders **white**.
+> **Same table, same frame, same apply function - one model takes its colour and another does not.**
+>
+> **=== 3. SO THE DEFECT IS PER-MODEL, ON `vr_sky` ===**
+> Suggested order of attack, cheapest first:
+> - **Material count.** `wwSkyApplyTev` sets material 0 (and material 1 when `hasMat1Inner`). If `vr_sky.bdl` has MORE than one material, or its visible surface is not material 0, the colour is being written to a material that is not the one being seen. Dump `getModelData()->getMaterialNum()` for each of the 4 dome models - that single number may end this.
+> - **Register mismatch.** The native `daVrbox_color_set` writes `setTevColor(0, ...)` for the sky and `setTevColor(0, ...)` on material 1 for the inner kasumi. If `vr_sky`'s TEV stage consumes a different register (K-colour, or C1/C2) than the one being written, the write lands somewhere unused. Worth confirming against the material's actual TEV stage config rather than assuming reg 0.
+> - **Texture dominance.** If `vr_sky`'s TEV stage is `TEXC`-only (no `C0`/`RASC` term), the register can never affect it and the dome will always be its texture's colour - which, after the adapter's white promotion, is white. **NOTE the related trap:** `adapt_bdl_arcs.normalize_tevregs` whitens gray TEV placeholders; `adapt_arc` now passes `skip_tevregs=True` for `vr_*`, but any dome arc adapted BEFORE that guard landed still carries whitened registers. If in doubt, re-adapt `WwSky.arc` from the extract.
+> - History's earlier `bake_wwsky_colors.py` wrote `(80,120,255)` directly into `vr_sky`'s material TEV reg0 in the FILE and the dome still rendered white. That is independent evidence that **reg 0 on material 0 is not what colours this model** - it points at the material-count or register-select possibilities above rather than at the feed.
+>
+> **=== 4. Unchanged and still yours: camera map-edge (No.110) ===**
+> `QuickStart()` snap on stage-change arrival + exit mirror.
+>
+> **=== 5. FYI ===**
+> Grass is finished and green (No.143). The two GX findings from No.144 still stand and are worth keeping in mind for any raw-GX work: `TevColor`/`TevKColor` are not populated by `settingTevStruct` (use `AmbCol`), and a raw-GX draw must call `dKy_setLight_again()` or a lit channel rasterises black.
+
+#### Paste for Cursor (2026-07-20 - No.144 SKY NARROWED with runtime proof; + two GX findings you will need)
+
+> **Grass is DONE and green (No.143). It took six passes and every defect was a missing SETUP line, not geometry. Two of those findings are directly useful to you, and one of them narrows the sky problem a long way.**
+>
+> **=== 1. SKY - NARROWED. The environment feed WORKS; only `vrbox_*` is unpopulated. ===**
+> A one-shot probe inside the grass draw printed, on a live Outset run:
+> `[ExtVeg] No.142 tevStr after settingTevStruct: TevColor=(0,0,0,0) TevKColor=(0,0,0,0) **AmbCol=(36,24,59)** room=44`
+> - **`AmbCol=(36,24,59)` is `bg0` of `PAL0[2]` from the No.113 conversion, VERBATIM.** So the converted palettes are reaching `g_env_light` correctly at runtime on a `hide_vrbox=1` mounted host stage.
+> - **This rules out "the whole environment path is broken on mounted stages".** Palettes arrive. The defect is specifically that `g_env_light.vrbox_sky_col / vrbox_kasumi_inner_col / vrbox_kumo_top_col` are never populated from the stage's `VRB0` - which the earlier No.125 probe showed as `sky=(230,220,255) kasumiIn=(153,0,80) kumoTop=(0,0,0)`, i.e. **magenta kasumi and BLACK kumo, nothing resembling our table.**
+> - Our `VRB0[2]` is `sky=(80,120,255) kasumiIn=(163,210,255) kumoTop=(255,255,255)` and the full chain was traced in the shipped file (`Env0[44] -> Col0[0] -> palette 2 -> PAL0[2] -> VRB0[2]`). **The data is correct and waiting.** Look at where kankyo fills the vrbox colour set, not at `wwSkyApplyTev` - your TEV code is fine and is being handed wrong values.
+> - Fixing the feed also gives **time-of-day skies for free** - the converted table carries all 18 bands (3 weather sets x 6 time bands).
+>
+> **=== 2. TWO GX FINDINGS - apply these if you write ANY raw-GX draw ===**
+> - **`TevColor`/`TevKColor` on `dKy_tevstr_c` are NOT populated by `settingTevStruct`.** They are filled by `setLightTevColorType_MAJI`, which pushes into a **J3D MODEL's materials**. On a raw-GX path nothing fills them and they read `(0,0,0,0)`. They look like the exact analogue of the donor's `mColorC0`/`mColorK0` and they are the wrong field. **Use `AmbCol`.** This cost two playtests.
+> - **A raw-GX draw must call `dKy_setLight_again()`** (native `d_grass.inc` does, right after `GXSetNumIndStages(0)`). Without it, a material DL that enables a LIT colour channel rasterises BLACK, so any TEV stage consuming `RASC` is black **regardless of vertex colours or colour registers** - while the alpha silhouette stays perfect. That symptom (correct shape, pure black) is now a known signature.
+>
+> **=== 3. STILL YOURS - camera map-edge (unchanged since No.110) ===**
+> `QuickStart()` snap on stage-change arrival + exit mirror. Worth checking whether the snap is applied BEFORE Link is placed, or whether the arrival demo re-drives the camera afterwards.
+>
+> **=== 4. FYI, no action ===**
+> - **Vegetation checklist** (five lines every ported packet draw needs, learned the hard way): `entryImm` draw-phase registration; `dKy_setLight_again()`; `GXInitTexObj`+`GXLoadTexObj`; the **view-matrix concat** (`GXLoadPosMtxImm` takes MODEL-VIEW, not world - drawing inline in an actor Draw callback gives a stale/identity view and puts geometry around the camera); `J3DShape::resetVcdVatCache()` on the way out.
+> - **Bridge**: Outset's two spans are `mTypeBits=0x0A` -> `modelNum=0` -> **`obm_bridge.bdl` only**. `obm_bridge2.bdl`/`obm_chain1.bdl` load only when `modelNum==1`, so they are OTHER variants - nothing is missing for Outset. Suspender ropes are **not models**: `mDoExt_3DlineMat1_c` per plank, 4 runs via `update(5, colour, &tevStr)`. Own small system, deferred. Plank collision (`mbrdg.dzb`) also still unmounted - visible, not walkable.
+> - `d_a_ww_grass/bridge.cpp` were renamed to `d_a_ext_vegetation/plank_span.cpp` (procs `NPC_EXTVEG`/`NPC_EXTSPAN`) per the no-'ww'-names rule. Verified end-to-end.
+
+#### Paste for Cursor (2026-07-20 - No.133 NEW ACTOR CONTRACT GATE + spawn-guard change you must know about; sky/camera STILL YOURS)
+
+> **Two commits landed (local only, not pushed): `d291bfde6b` ports, `6b28431077` spawn-identity guard. Playtest confirms exterior + interior actors are correct. Read the first section before you write or touch ANY census-spawnable actor.**
+>
+> **=== 1. NEW: `tools/check_actor_contracts.py` — run it before you commit an actor ===**
+> Three contracts, each one a bug that actually shipped today and cost a playtest cycle to find. All three are SILENT at runtime and the symptom lands on OTHER actors, not the one at fault:
+> - **C1** a census-spawnable actor MUST call `dExtNpcMount_takePendingSpawn(fopAcM_GetID(this), ...)` in create. The spawner pushes an entry for every census row and the entry carries the **proc name that selects the manifest** (`d_a_npc_henna0.cpp` -> `return dExtNpcMount_create(a, proc)`). Leak it and a LATER actor mounts YOUR manifest — that is how ~86 leaked grass entries made most of the cast mount an arc-less manifest and vanish with no model and no collision.
+> - **C2** ...and MUST NOT return `cPhs_ERROR_e` from create. `fopAcM_create` already returned a valid id, so the spawner cannot discard the entry. Fail INERT: `return cPhs_COMPLEATE_e` having built nothing.
+> - **C3** any custom GX vertex-descriptor block MUST end with `J3DShape::resetVcdVatCache()`. Both engines' own grass packets do. Omitting it makes every model drawn AFTER your actor render as nothing.
+> Reachability is parsed from `socketActorId()`, not guessed. `--list` shows what it checks. **Suggest wiring it as a pre-commit hook** — a gate you have to remember has the same weakness as a doc.
+>
+> **=== 2. Spawn-identity binding changed (No.130-133) — behavioural note ===**
+> - Identity binding is no longer ORDER-dependent. Each push returns a token; after create the spawner re-keys the entry to the owning actor id. A forgetful actor can now only fail to pin its OWN head instead of shifting everyone after it.
+> - The bookkeeping deliberately inspects **no engine state**. An earlier cut called `fopAcM_SearchByID`/`fpcM_IsCreating` and kept colliding with vanilla meanings ("not found" also means "still creating", culling is a status bit not a death, layers re-spawn the cast). It now expires entries on its own clock (two population passes). **Please do not re-add engine-liveness queries to it** — that was the bug, not the fix.
+> - Mod-side override, no rebuild: `population/engine_overrides.ini` `pending_spawn_guard=0` returns to plain queue order (what the donor does natively). It logs a snapshot-and-re-verify advisory when engaged.
+> - Layer/story remains 100% vanilla: `getLayerNo` + flags stored in `dSv_reserve_c` inside the save. Nothing was reimplemented.
+>
+> **=== 3. STILL YOURS — sky (unchanged since No.121/No.125) ===**
+> Diagnostic `[WwSky] No.125` in a real run printed: `daytime=194.1 sky=(230,220,255) kasumiIn=(153,0,80) kumoTop=(0,0,0) hide_vrbox=1`.
+> Our converted `VRB0[2]` is `sky=(80,120,255) kasumiIn=(163,210,255) kumoTop=(255,255,255)`. The runtime has **magenta kasumi and BLACK kumo** — nothing resembling the table, so it is not a band-selection issue: daytime 194 IS correctly slot 2, and History traced the full chain in the shipped file (`Env0[44] -> Col0[0] -> palette 2 -> PAL0[2] -> VRB0[2]`) to the exact reference blue. **Conclusion: `g_env_light.vrbox_sky_col / vrbox_kasumi_inner_col / vrbox_kumo_top_col` are never populated from the stage's VRB0 on a `hide_vrbox=1` stage.** Your `wwSkyApplyTev` is correct and is being fed wrong values. Look upstream in the kankyo vrbox-colour path. The 18-band table is already in place, so fixing the feed also gives time-of-day for free. Remove the No.125 diagnostic once confirmed.
+>
+> **=== 4. STILL YOURS — camera map-edge (unchanged since No.110) ===**
+> `QuickStart()` snap on stage-change arrival + exit mirror. Worth checking whether the snap is applied BEFORE Link is placed, or whether the arrival demo re-drives the camera afterwards and overwrites it.
+>
+> **=== 5. FYI, no action ===**
+> Bridge is ported and live (18 + 17 planks from the donor's own path data + spacing formula); geometry only — `mbrdg.dzb` is not mounted, so it cannot be walked yet. Grass is being re-enabled now that the leak (not its footprint) is understood as the cause of the vanishing.
+
 #### Paste for Cursor (2026-07-20 - No.121 THREE ENGINE ASKS: white sky / exit freeze / camera. History work is DONE and verified; these three are all yours)
 
 > **Context: History finished the lighting conversion (No.113), and the user's playtest shows sky still white, exit still freezes, camera still far. All three are engine-side. History has already ruled out the data for each - details below so you don't re-derive them.**

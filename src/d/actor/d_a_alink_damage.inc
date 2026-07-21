@@ -10,6 +10,7 @@
 #include "d/d_msg_object.h"
 #ifdef TARGET_PC
 #include "d/actor/d_a_obj_carry.h"
+#include "d/d_menu_ring.h"
 #include "dusk/achievements.h"
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_shield.h"
@@ -239,6 +240,9 @@ int daAlink_c::setDamagePoint(int i_dmgAmount, BOOL i_checkZoraMag, BOOL i_setDm
 
 #if TARGET_PC
     dusk::AchievementSystem::get().signal("player_damaged");
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+        dMenu_Ring_c::forceQuickConfirmClose();
+    }
 #endif
     onResetFlg1(RFLG1_DAMAGE_IMPACT);
     mSwordUpTimer = 0;

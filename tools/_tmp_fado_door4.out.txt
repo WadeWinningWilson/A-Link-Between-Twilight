@@ -1,0 +1,94 @@
+chunk directory:
+  'SCLS' num=26 off=0x22c
+    SCLS[0] -> F_SP103 spawn=0 room=1
+    SCLS[1] -> F_SP00 spawn=1 room=0
+    SCLS[2] -> OPENING spawn=1 room=1
+    SCLS[3] -> F_SP00 spawn=0 room=0
+    SCLS[4] -> R_SP01 spawn=0 room=0
+    SCLS[5] -> R_SP01 spawn=0 room=1
+    SCLS[6] -> R_SP01 spawn=0 room=2
+    SCLS[7] -> R_SP01 spawn=0 room=3
+    SCLS[8] -> OPENING spawn=0 room=255
+    SCLS[9] -> R_SP01 spawn=0 room=5
+    SCLS[10] -> R_SP01 spawn=1 room=0
+    SCLS[11] -> F_SP00 spawn=7 room=0
+    SCLS[12] -> F_SP103 spawn=101 room=0
+    SCLS[13] -> F_SP124 spawn=53 room=0
+    SCLS[14] -> OPENING spawn=0 room=255
+    SCLS[15] -> OPENING spawn=0 room=255
+    SCLS[16] -> OPENING spawn=0 room=255
+    SCLS[17] -> OPENING spawn=0 room=255
+    SCLS[18] -> OPENING spawn=0 room=255
+    SCLS[19] -> OPENING spawn=0 room=255
+    SCLS[20] -> F_SP103 spawn=25 room=0
+    SCLS[21] -> F_SP103 spawn=24 room=0
+    SCLS[22] -> R_SP01 spawn=2 room=2
+    SCLS[23] -> R_SP01 spawn=1 room=2
+    SCLS[24] -> R_SP01 spawn=2 room=0
+    SCLS[25] -> R_SP01 spawn=1 room=5
+  'REVT' num=13 off=0x2344
+  'FILI' num=1 off=0x380
+  'LBNK' num=15 off=0x3a0
+  'RPAT' num=74 off=0x3d0
+  'RPPN' num=390 off=0x748
+  'RCAM' num=21 off=0x1fa8
+  'RARO' num=21 off=0x21a0
+  'PLYR' num=26 off=0x24b0
+  'ACTR' num=43 off=0x2830
+  'SCOB' num=9 off=0x2d90
+  'SOND' num=1 off=0x2814
+  'Door' num=1 off=0x27f0
+  'ACT0' num=113 off=0x2f88
+  'SCO0' num=9 off=0x3da8
+  'Doo0' num=5 off=0x2ed4
+  'ACT1' num=96 off=0x3fa0
+  'SCO1' num=29 off=0x4ba0
+  'Doo1' num=5 off=0x3eec
+  'ACT2' num=99 off=0x5068
+  'SCO2' num=3 off=0x5cc8
+  'Doo2' num=5 off=0x4fb4
+  'ACT3' num=93 off=0x5de8
+  'SCO3' num=3 off=0x6988
+  'Doo3' num=5 off=0x5d34
+  'ACT4' num=126 off=0x6aa8
+  'SCO4' num=4 off=0x7a68
+  'Doo4' num=5 off=0x69f4
+  'ACT5' num=119 off=0x7bac
+  'SCO5' num=3 off=0x8a8c
+  'Doo5' num=5 off=0x7af8
+  'ACT6' num=99 off=0x8bac
+  'SCO6' num=1 off=0x980c
+  'Doo6' num=5 off=0x8af8
+  'ACT7' num=109 off=0x98e4
+  'SCO7' num=3 off=0xa684
+  'Doo7' num=5 off=0x9830
+  'ACT8' num=1 off=0xa7bc
+  'LGT8' num=3 off=0xa75c
+  'Doo8' num=3 off=0xa6f0
+  'ACTa' num=87 off=0xa930
+  'LGTa' num=5 off=0xa890
+  'Dooa' num=5 off=0xa7dc
+  'ACTb' num=87 off=0xb564
+  'LGTb' num=5 off=0xb4c4
+  'Doob' num=5 off=0xb410
+
+Unique kdoor placements (11):
+  exit= 4 msg=0x0191(  401) model=1 ay= 14199 pos=(   470.48,  500.19,  5323.13) p=0x88000627 -> R_SP01 s=0 r=0 @0x2f40
+  exit= 4 msg=0xffff(65535) model=1 ay= 14199 pos=(   470.48,  500.19,  5323.13) p=0x08000627 -> R_SP01 s=0 r=0 @0x6a18
+  exit= 5 msg=0xffff(65535) model=0 ay= -8192 pos=(   517.72,   87.50,  -860.36) p=0x0a000607 -> R_SP01 s=0 r=1 @0x2ef8
+  exit= 5 msg=0x0191(  401) model=0 ay= -8192 pos=(   517.72,   87.50,  -860.36) p=0x8a000607 -> R_SP01 s=0 r=1 @0x3f7c
+  exit= 6 msg=0xffff(65535) model=0 ay= -1638 pos=(  3161.38,  186.86,  1505.21) p=0x0c000507 -> R_SP01 s=0 r=2 @0x2ed4
+  exit= 6 msg=0x0191(  401) model=0 ay= -1638 pos=(  3161.38,  186.86,  1505.21) p=0x8c000507 -> R_SP01 s=0 r=2 @0x3f58
+  exit= 7 msg=0x0191(  401) model=0 ay= 21845 pos=( -1605.02,  394.65,   550.02) p=0x8e000107 -> R_SP01 s=0 r=3 @0x27f0
+  exit= 9 msg=0xffff(65535) model=0 ay= 10922 pos=( -3849.76,  644.18,  2665.12) p=0x12000307 -> R_SP01 s=0 r=5 @0x2f1c
+  exit= 9 msg=0x0191(  401) model=0 ay= 10922 pos=( -3849.76,  644.18,  2665.12) p=0x92000307 -> R_SP01 s=0 r=5 @0x3f34
+  exit=10 msg=0x0191(  401) model=1 ay=-18568 pos=(   500.71,  500.19,  5172.27) p=0x94000627 -> R_SP01 s=1 r=0 @0x2f64
+  exit=10 msg=0xffff(65535) model=1 ay=-18568 pos=(   500.71,  500.19,  5172.27) p=0x14000627 -> R_SP01 s=1 r=0 @0x6a3c
+
+Locked doors (msgNo != 0xFFFF):
+  *** exit=4 msg=0x0191 pos=(470.48,500.19,5323.13) -> R_SP01 s=0 r=0
+  *** exit=5 msg=0x0191 pos=(517.72,87.50,-860.36) -> R_SP01 s=0 r=1
+  *** exit=6 msg=0x0191 pos=(3161.38,186.86,1505.21) -> R_SP01 s=0 r=2
+  *** exit=7 msg=0x0191 pos=(-1605.02,394.65,550.02) -> R_SP01 s=0 r=3
+  *** exit=9 msg=0x0191 pos=(-3849.76,644.18,2665.12) -> R_SP01 s=0 r=5
+  *** exit=10 msg=0x0191 pos=(500.71,500.19,5172.27) -> R_SP01 s=1 r=0

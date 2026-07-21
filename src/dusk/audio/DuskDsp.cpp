@@ -51,6 +51,8 @@ ShadowWave s_shadowWaves[kMaxShadowWaves] = {};
 int s_shadowWaveCount = 0;      // high-water slot count (monotonic within a run)
 bool s_shadowActive = false;    // does the mod set currently prevail
 }  // namespace
+
+char dusk::audio::g_extSeqOwnerTag = 0;
 #endif
 
 void dusk::audio::setHurricaneSpinSeLoopActive(bool active) {

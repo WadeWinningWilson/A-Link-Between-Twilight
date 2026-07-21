@@ -198,6 +198,12 @@ set(DOLZEL_FILES
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp
         src/d/d_ext_npc_population.cpp
+        src/d/d_ext_seq_space.cpp
+        src/d/ext_seq/ja1_seq_ctrl.cpp
+        src/d/ext_seq/ja1_track.cpp
+        src/d/ext_seq/ja1_parser.cpp
+        src/d/ext_seq/ja1_event_dump.cpp
+        src/d/ext_seq/ja1_bank.cpp
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp
@@ -1016,8 +1022,8 @@ set(REL_FILES
         src/d/actor/d_a_npc_kasi_mich.cpp
         src/d/actor/d_a_npc_kdk.cpp
         src/d/actor/d_a_knob00.cpp
-        src/d/actor/d_a_ww_grass.cpp
-        src/d/actor/d_a_ww_bridge.cpp
+        src/d/actor/d_a_ext_vegetation.cpp
+        src/d/actor/d_a_ext_plank_span.cpp
         src/d/actor/d_a_npc_kn.cpp
         src/d/actor/d_a_npc_knj.cpp
         src/d/actor/d_a_npc_kolinb.cpp

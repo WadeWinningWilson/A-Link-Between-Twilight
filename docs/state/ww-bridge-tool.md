@@ -1,26 +1,43 @@
 # WW Bridge Tool — live state
 
-**Tip (overwrite, don’t append):** §16 ACCEPTED. GAP-3 closed. User: F-1 engine fix not necessary (gitignored local parked folders).
+**Tip (overwrite, don’t append):** ASK 17 engine event dump shipped — set `DUSK_EXTSEQ_EVENT_DUMP=1`, enter Outset/house once; CSVs land next to Bridge goldens. **Diff streams; no fix until disagreement is a line.**
 
 | Field | Value |
 |-------|--------|
-| **status** | Bridge slice done (B0–B4 + v2 + handshake + GAP-3) |
-| **next** | Optional: skeleton reconcile / `[POP!]` playtest when convenient |
-| **do-not** | Chase F-1 custom_assets skip unless audit reopens; share ungated backup exes |
+| **status** | Both streams ready for mechanical diff |
+| **next** | Diff `seq_events_*.csv` vs `seq_events_engine_*.csv`; fix the first disagreement |
+| **do-not** | Change rates/exponents; share decoder with Bridge; fix from theory |
 | **tool_root** | `C:\Users\xxxxx\Documents\albt bridge` |
+| **tool_version** | **0.18.0** |
+| **decomp** | `D:\XXXXXXX\WW DP` (`WW_DECOMP`) |
+| **ww_extract** | `D:\XXXXXXX\Ex WW` (`WW_EXTRACT`) |
 | **schema_version** | **2** |
-| **updated** | 2026-07-19 |
+| **updated** | 2026-07-21 |
 
-## Bridge closed
+## Commands (recent)
 
-| Item | State |
+| Cmd | Role |
+|-----|------|
+| `seq-events` | **ASK 17** independent BMS event decode (Bridge golden) |
+| `tempo-map` | ASK 16 tempo/timebase |
+| `vel-calib` | ASK 15 velocity hist + initVol |
+
+## Headline (ASK 17)
+
+| Side | Artifact |
+|------|----------|
+| Bridge | `seq_events_{i_link,house}.csv` |
+| Engine | `seq_events_engine_{i_link,house}.csv` (flag `DUSK_EXTSEQ_EVENT_DUMP=1`) |
+
+Columns: `tick,track_id,event,note_param,velocity` · per-track local ticks
+
+## Open
+
+| Item | Owner |
 |------|--------|
-| B0 / B4 / schema v2 / handshake | ACCEPTED (§16) |
-| GAP-3 parked siblings | WARN in `verify` (SKELETON_BAK caught) |
-| Fail-open harden | negative/unreadable meta ⇒ mismatch |
+| Diff Bridge vs engine → first disagreeing line | user / HS |
+| Fix that line only | engine (after diff) |
 
-## Out of lane (standing)
+## Closed this lane
 
-- F-1 / parked overlay — **noted, not necessary** (user 2026-07-19): AppData backups gitignored; GAP-3 WARN sufficient
-- Skeleton half-built vs live (23+ WARNs) — content when ready
-- Live census rotation refresh (§12) — content when ready
+ASK 1–17 · §52 (B) · §53b · engine dump companion · …

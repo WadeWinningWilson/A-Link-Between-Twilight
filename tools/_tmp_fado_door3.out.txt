@@ -1,0 +1,335 @@
+=== R00_00.arc
+  bytehit b'door' @0x27f1 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008e000107c4c8a09843c552e94409817c01915555ffff00ff
+  bytehit b'door' @0x2ed5 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'door' @0x2ef9 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'door' @0x2f1d around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'door' @0x2f41 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x2f65 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0x3eed around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x3f11 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0x3f35 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'door' @0x3f59 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'door' @0x3f7d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'door' @0x4fb5 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x4fd9 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0x4ffd around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'door' @0x5021 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'door' @0x5045 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'door' @0x5d35 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'door' @0x5d59 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x5d7d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0x5da1 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'door' @0x5dc5 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'door' @0x69f5 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'door' @0x6a19 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000800062743eb3dd143fa185245a65908ffff3777ffff00ff
+  bytehit b'door' @0x6a3d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000001400062743fa5b0843fa185245a1a223ffffb778ffff00ff
+  bytehit b'door' @0x6a61 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'door' @0x6a85 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'door' @0x7af9 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'door' @0x7b1d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x7b41 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0x7b65 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'door' @0x7b89 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'door' @0x8af9 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x8b1d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0x8b41 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'door' @0x8b65 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'door' @0x8b89 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'door' @0x9831 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'door' @0x9855 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'door' @0x9879 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'door' @0x989d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0x98c1 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0xa6f1 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0xa715 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0xa739 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'door' @0xa7dd around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0xa801 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0xa825 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'door' @0xa849 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'door' @0xa86d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'door' @0xb411 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'door' @0xb435 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'door' @0xb459 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'door' @0xb47d around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'door' @0xb4a1 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'Door' @0x94 around=b'Door\x00\x00\x00\x01' hex=446f6f7200000001000027f0414354300000007100002f8853434f3000000009
+  bytehit b'kdoo' @0x27f0 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008e000107c4c8a09843c552e94409817c01915555ffff00ff
+  bytehit b'kdoo' @0x2ed4 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'kdoo' @0x2ef8 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'kdoo' @0x2f1c around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'kdoo' @0x2f40 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x2f64 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0x3eec around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x3f10 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0x3f34 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'kdoo' @0x3f58 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'kdoo' @0x3f7c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'kdoo' @0x4fb4 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x4fd8 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0x4ffc around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'kdoo' @0x5020 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'kdoo' @0x5044 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'kdoo' @0x5d34 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'kdoo' @0x5d58 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x5d7c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0x5da0 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'kdoo' @0x5dc4 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'kdoo' @0x69f4 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'kdoo' @0x6a18 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000800062743eb3dd143fa185245a65908ffff3777ffff00ff
+  bytehit b'kdoo' @0x6a3c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000001400062743fa5b0843fa185245a1a223ffffb778ffff00ff
+  bytehit b'kdoo' @0x6a60 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'kdoo' @0x6a84 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'kdoo' @0x7af8 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'kdoo' @0x7b1c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x7b40 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0x7b64 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'kdoo' @0x7b88 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'kdoo' @0x8af8 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x8b1c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0x8b40 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'kdoo' @0x8b64 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'kdoo' @0x8b88 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'kdoo' @0x9830 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000c00050745459618433adc2f44bc26dbfffff99affff00ff
+  bytehit b'kdoo' @0x9854 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000000a00060744016e1c42af0000c45716ffffffe000ffff00ff
+  bytehit b'kdoo' @0x9878 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'kdoo' @0x989c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0x98c0 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0xa6f0 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0xa714 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0xa738 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000012000307c5709c2f44210b85452691e5ffff2aaaffff00ff
+  bytehit b'kdoo' @0xa7dc around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0xa800 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0xa824 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'kdoo' @0xa848 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'kdoo' @0xa86c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+  bytehit b'kdoo' @0xb410 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008800062743eb3dd143fa185245a6590801913777ffff00ff
+  bytehit b'kdoo' @0xb434 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000009400062743fa5b0843fa185245a1a2230191b778ffff00ff
+  bytehit b'kdoo' @0xb458 around=b'kdoor\x00\x00\x00' hex=6b646f6f7200000092000307c5709c2f44210b85452691e501912aaaffff00ff
+  bytehit b'kdoo' @0xb47c around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008c00050745459618433adc2f44bc26db0191f99affff00ff
+  bytehit b'kdoo' @0xb4a0 around=b'kdoor\x00\x00\x00' hex=6b646f6f720000008a00060744016e1c42af0000c45716ff0191e000ffff00ff
+ACTR num=43 stride=0x20
+  ALL ACTR names:
+    [  0] 'Obj_sui'  exit=63 msg=    0 p=0xffffffff
+    [  1] 'NPC_TK'   exit= 0 msg=62806 p=0x000003ff
+    [  2] 'flwr7'    exit= 0 msg=    0 p=0x00ff0024
+    [  3] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [  4] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [  5] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [  6] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [  7] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [  8] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [  9] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [ 10] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [ 11] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [ 12] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [ 13] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [ 14] 'pflwrx7'  exit= 0 msg=    0 p=0x00ff0036
+    [ 15] 'pflower'  exit= 0 msg=    0 p=0x00ffff30
+    [ 16] 'pflower'  exit= 0 msg=    0 p=0x00ffff30
+    [ 17] 'Obj_nmp'  exit= 0 msg=    0 p=0x00000195
+    [ 18] 'Obj_nmp'  exit= 0 msg=    0 p=0x00000196
+    [ 19] 'Obj_nmp'  exit= 0 msg=    0 p=0x0000018f
+    [ 20] 'Obj_nmp'  exit= 0 msg=    0 p=0x00000194
+    [ 21] 'Obj_nmp'  exit= 0 msg=    0 p=0x00000193
+    [ 22] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff02
+    [ 23] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff04
+    [ 24] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff04
+    [ 25] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff04
+    [ 26] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff04
+    [ 27] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff04
+    [ 28] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff04
+    [ 29] 'Wljump'   exit= 0 msg=    0 p=0x000f2145
+    [ 30] 'Wljump'   exit= 0 msg=    0 p=0x000f1f43
+    [ 31] 'Wljump'   exit= 0 msg=    0 p=0x000f2544
+    [ 32] 'Wljump'   exit= 0 msg=    0 p=0x000f2141
+    [ 33] 'AND_SW2'  exit=48 msg=65535 p=0xe0800101
+    [ 34] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [ 35] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [ 36] 'flwr17'   exit= 0 msg=    0 p=0x00ff0025
+    [ 37] 'flwr7'    exit= 0 msg=    0 p=0x00ff0024
+    [ 38] 'AND_SW'   exit=63 msg=    0 p=0xffff211f
+    [ 39] 'mmvbg'    exit=15 msg=65535 p=0x1fe00034
+    [ 40] 'item'     exit=57 msg=    0 p=0xf3ff8003
+    [ 41] 'item'     exit=57 msg=    0 p=0xf3ff8b03
+    [ 42] 'T_Maki'   exit= 0 msg=    0 p=0x00000001
+SCOB num=9 stride=0x24
+  ALL SCOB names:
+    [  0] 'CamArea'  exit= 2 msg=    0 pos=(1427.6,-106.4,2591.0) p=0x0502ffff
+    [  1] 'CamArea'  exit= 1 msg=    0 pos=(-1674.9,900.0,1724.2) p=0x02ffffff
+    [  2] 'CamArea'  exit= 1 msg=    0 pos=(-1665.6,2438.9,766.2) p=0x02ffffff
+    [  3] 'CamChg'   exit= 7 msg=    0 pos=(-8490.8,4547.8,-522.0) p=0x0f00ffff
+    [  4] 'KMsg'     exit= 0 msg=33023 pos=(-692.9,364.7,6355.3) p=0x00967883
+    [  5] 'CamChg'   exit= 8 msg=    0 pos=(-8433.2,4547.8,-514.3) p=0x100bffff
+    [  6] 'ClearB'   exit= 0 msg=16201 pos=(-3377.3,793.7,2746.0) p=0x0000ff80
+    [  7] 'ClearB'   exit= 0 msg=16384 pos=(1176.2,155.0,3695.0) p=0x0000ff00
+    [  8] 'ClearB'   exit= 0 msg=16384 pos=(1139.1,155.0,3629.4) p=0x0000ff00
+ACT0 num=113 stride=0x20
+  ALL ACT0 names:
+    [  0] 'item'     exit=57 msg=    0 p=0xf3ff8103
+    [  1] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [  2] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [  3] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [  4] 'Fish'     exit=63 msg=    0 p=0xffffff68
+    [  5] 'Fish'     exit=63 msg=    0 p=0xffffff68
+    [  6] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [  7] 'Fish'     exit=63 msg=    0 p=0xffffff68
+    [  8] 'Fish'     exit=63 msg=    0 p=0xffffff68
+    [  9] 'Fish'     exit=63 msg=    0 p=0xffffff68
+    [ 10] 'Obj_kn2'  exit=63 msg=  398 p=0xffffffff
+    [ 11] 'Obj_knk'  exit=63 msg=    0 p=0xffffffff
+    [ 12] 'E_nest'   exit=63 msg=    0 p=0xff141403
+    [ 13] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff1f
+    [ 14] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff4d
+    [ 15] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffffbe
+    [ 16] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff0a
+    [ 17] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff4c
+    [ 18] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff1f
+    [ 19] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff19
+    [ 20] 'Pumpkin'  exit=56 msg=    0 p=0xf0ffff4c
+    [ 21] 'Pleaf'    exit=63 msg=    0 p=0xffffffff
+    [ 22] 'Pleaf'    exit=63 msg=    0 p=0xffffffff
+    [ 23] 'Cow'      exit=63 msg=    0 p=0xff003003
+    [ 24] 'Uri'      exit= 0 msg=  309 p=0x00ff0001
+    [ 25] 'OnKago'   exit= 0 msg=    0 p=0x00ff0000
+    [ 26] 'OnKago'   exit= 0 msg=    0 p=0x00ff0002
+    [ 27] 'Jagar'    exit= 0 msg=   81 p=0x0000ff00
+    [ 28] 'Npc_ne'   exit=63 msg=    0 p=0xfffff102
+    [ 29] 'Ni'       exit=63 msg=  220 p=0xffff0007
+    [ 30] 'Hanjo'    exit= 0 msg=   86 p=0x00002d00
+    [ 31] 'Bou'      exit= 0 msg=   51 p=0x0000ff04
+    [ 32] 'Ni'       exit=63 msg=  222 p=0xffff0207
+    [ 33] 'Ni'       exit=63 msg=  221 p=0xffff0007
+    [ 34] 'Obj_Lrp'  exit= 0 msg=    0 p=0x000032ff
+    [ 35] 'Fr'       exit=63 msg=    0 p=0xffffffff
+    [ 36] 'Fr'       exit=63 msg=    0 p=0xffffffff
+    [ 37] 'Fr'       exit=63 msg=    0 p=0xffffffff
+    [ 38] 'Bd'       exit= 0 msg=    0 p=0x00ffff02
+    [ 39] 'Bd'       exit= 0 msg=    0 p=0x00ffffff
+    [ 40] 'Bd'       exit= 0 msg=    0 p=0x00ffff03
+    [ 41] 'item'     exit=57 msg=    0 p=0xf3ff8902
+    [ 42] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2f
+    [ 43] 'BbKago'   exit= 0 msg=    0 p=0x00ff0000
+    [ 44] 'Grass'    exit= 0 msg=    2 p=0x00ffff00
+    [ 45] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 46] 'Grass'    exit= 0 msg=    2 p=0x0008ff00
+    [ 47] 'Grass'    exit= 0 msg=    2 p=0x0008ff00
+    [ 48] 'Grass'    exit= 0 msg=    1 p=0x0019ff00
+    [ 49] 'Grass'    exit= 0 msg=    1 p=0x0019ff00
+    [ 50] 'Grass'    exit= 0 msg=    1 p=0x0000ff00
+    [ 51] 'Grass'    exit= 0 msg=    1 p=0x0000ff00
+    [ 52] 'Grass'    exit= 0 msg=    2 p=0x00ffff00
+    [ 53] 'Grass'    exit= 0 msg=    1 p=0x004cff00
+    [ 54] 'Grass'    exit= 0 msg=    2 p=0x00ffff00
+    [ 55] 'Grass'    exit= 0 msg=    1 p=0x00beff00
+    [ 56] 'Grass'    exit= 0 msg=    2 p=0x0008ff00
+    [ 57] 'Grass'    exit= 0 msg=    3 p=0x0001ff00
+    [ 58] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 59] 'Grass'    exit= 0 msg=    3 p=0x0001ff00
+    [ 60] 'Grass'    exit= 0 msg=    2 p=0x0001ff00
+    [ 61] 'Grass'    exit= 0 msg=    2 p=0x0007ff00
+    [ 62] 'Grass'    exit= 0 msg=    3 p=0x0001ff00
+    [ 63] 'Grass'    exit= 0 msg=    2 p=0x0006ff00
+    [ 64] 'stone'    exit= 0 msg=    0 p=0x00ff0a10
+    [ 65] 'stone'    exit= 0 msg=    0 p=0x00ff0b10
+    [ 66] 'stone'    exit= 0 msg=    0 p=0x00ff0b10
+    [ 67] 'stone'    exit= 0 msg=    0 p=0x00ff0a10
+    [ 68] 'stone'    exit= 0 msg=    0 p=0x00ff4c10
+    [ 69] 'stone'    exit= 0 msg=    0 p=0x00ff4c10
+    [ 70] 'mmvbg'    exit=15 msg=65535 p=0x1fe0004e
+    [ 71] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2e
+    [ 72] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2e
+    [ 73] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2e
+    [ 74] 'Npc_ks'   exit=63 msg=    0 p=0xffffff16
+    [ 75] 'Obj_nd'   exit=63 msg=    0 p=0xffffffff
+    [ 76] 'Savmem'   exit= 0 msg=65535 p=0x0000ff01
+    [ 77] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2e
+    [ 78] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2e
+    [ 79] 'Obj_Tbi'  exit= 0 msg=    0 p=0x0000ff2e
+    [ 80] 'Obj_lp'   exit=63 msg=    0 p=0xffff0206
+    [ 81] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [ 82] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [ 83] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [ 84] 'Fish'     exit=63 msg=    0 p=0xffffff64
+    [ 85] 'E_ga'     exit= 0 msg=    0 p=0x00020102
+    [ 86] 'E_ga'     exit= 0 msg=    0 p=0x00030100
+    [ 87] 'E_ga'     exit= 0 msg=    0 p=0x00020101
+    [ 88] 'E_ga'     exit= 0 msg=    0 p=0x00010100
+    [ 89] 'Pumpkin'  exit=16 msg=    0 p=0x20ff004c
+    [ 90] 'Pumpkin'  exit=16 msg=    0 p=0x20ff004d
+    [ 91] 'Grass'    exit= 0 msg=    1 p=0x00b4ff00
+    [ 92] 'TagAtt'   exit=63 msg=    0 p=0xffff00ff
+    [ 93] 'item'     exit=57 msg=    0 p=0xf3ff8701
+    [ 94] 'item'     exit=57 msg=    0 p=0xf3ff8701
+    [ 95] 'Pumpkin'  exit=16 msg=    0 p=0x20ff000a
+    [ 96] 'Pumpkin'  exit=16 msg=    0 p=0x20ff000b
+    [ 97] 'item'     exit=57 msg=    0 p=0xf3ff8103
+    [ 98] 'item'     exit=57 msg=    0 p=0xf3ff8806
+    [ 99] 'item'     exit=57 msg=    0 p=0xf3ff8601
+    [100] 'item'     exit=57 msg=    0 p=0xf3ff8601
+    [101] 'item'     exit= 9 msg=    0 p=0x13ff8201
+    [102] 'item'     exit=57 msg=    0 p=0xf3ffff01
+    [103] 'item'     exit=57 msg=    0 p=0xf3ffff01
+    [104] 'item'     exit=57 msg=    0 p=0xf3ffff01
+    [105] 'item'     exit=57 msg=    0 p=0xf3ffff01
+    [106] 'Grass'    exit= 0 msg=    2 p=0x00ffff00
+    [107] 'Grass'    exit= 0 msg=    1 p=0x00ffff00
+    [108] 'Grass'    exit= 0 msg=    1 p=0x00ffff00
+    [109] 'item'     exit= 9 msg=    0 p=0x13ff9501
+    [110] 'item'     exit= 9 msg=    0 p=0x13ff9501
+    [111] 'item'     exit= 9 msg=    0 p=0x13ff9601
+    [112] 'item'     exit=57 msg=    0 p=0xf3ff9703
+=== R01_00.arc
+  bytehit b'door' @0xa49 around=b'kdoor\x00\x00\x00' hex=6b646f6f72000000040004074424de67449c4000c53cb72fffff0000ffff00ff
+  bytehit b'Door' @0x94 around=b'lDoor\x00\x00\x00' hex=6c446f6f720000000100000a48414354300000000f00000e4853434f30000000
+  bytehit b'kdoo' @0xa48 around=b'kdoor\x00\x00\x00' hex=6b646f6f72000000040004074424de67449c4000c53cb72fffff0000ffff00ff
+ACTR num=21 stride=0x20
+  ALL ACTR names:
+    [  0] 'Bd'       exit= 0 msg=    0 p=0x00ffffff
+    [  1] 'Bd'       exit= 0 msg=    0 p=0x00ffffff
+    [  2] 'PPHole'   exit= 0 msg=    0 p=0x00000104
+    [  3] 'NPC_TK'   exit= 0 msg=    0 p=0x0000ffff
+    [  4] 'Obj_nmp'  exit= 0 msg=    0 p=0x00000192
+    [  5] 'Obj_Tie'  exit=63 msg=    0 p=0xffffff03
+    [  6] 'Savmem'   exit= 0 msg=   56 p=0x0000ff04
+    [  7] 'AND_SW2'  exit=48 msg=65535 p=0xe0800101
+    [  8] 'Digpl'    exit=56 msg=    0 p=0xf05ff5ff
+    [  9] 'Grass'    exit= 0 msg=    3 p=0x0002ff00
+    [ 10] 'Grass'    exit= 0 msg=    3 p=0x0001ff00
+    [ 11] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 12] 'Grass'    exit= 0 msg=    3 p=0x0003ff00
+    [ 13] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 14] 'Grass'    exit= 0 msg=    3 p=0x0001ff00
+    [ 15] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 16] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 17] 'Grass'    exit= 0 msg=    3 p=0x0007ff00
+    [ 18] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+    [ 19] 'Grass'    exit= 0 msg=    3 p=0x0001ff00
+    [ 20] 'Grass'    exit= 0 msg=    3 p=0x00ffff00
+SCOB num=8 stride=0x24
+  ALL SCOB names:
+    [  0] 'EvtArea'  exit= 0 msg=65535 pos=(62.8,690.9,-1266.4) p=0x00ffffff
+    [  1] 'CamArea'  exit= 3 msg=    0 pos=(657.4,1242.0,-2949.2) p=0x06ffedf0
+    [  2] 'CamChg'   exit= 2 msg=    0 pos=(-382.8,5768.9,3474.0) p=0x0500ffff
+    [  3] 'SwAreaS'  exit=63 msg=  511 pos=(149.1,1242.0,-2846.2) p=0xff00ffed
+    [  4] 'SwAreaS'  exit=63 msg=  511 pos=(1229.5,1242.0,-2919.9) p=0xff00ffed
+    [  5] 'SwAreaS'  exit=63 msg=  511 pos=(654.1,1242.0,-2576.1) p=0xff00ffed
+    [  6] 'SwAreaS'  exit=63 msg=  511 pos=(660.4,1242.0,-3015.7) p=0xff00ffed
+    [  7] 'SwAreaS'  exit=63 msg=  511 pos=(613.5,1146.3,-2500.6) p=0xff00ffed
+ACT0 num=15 stride=0x20
+  ALL ACT0 names:
+    [  0] 'Savmem'   exit= 0 msg=65535 p=0x0000ff08
+    [  1] 'Kakashi'  exit=56 msg=    0 p=0xf0ffff01
+    [  2] 'Taro'     exit=63 msg=   27 p=0xffff0100
+    [  3] 'Besu'     exit= 0 msg=   84 p=0x00ffff00
+    [  4] 'Maro'     exit=63 msg=   85 p=0xffffff01
+    [  5] 'Maro'     exit=63 msg=   27 p=0xffffff00
+    [  6] 'Taro'     exit=63 msg=   85 p=0xffffff01
+    [  7] 'Besu'     exit= 0 msg=   84 p=0x00ffff01
+    [  8] 'Kolin'    exit= 0 msg=   48 p=0x00ff0200
+    [  9] 'Sq'       exit= 0 msg=    0 p=0x00ff00ff
+    [ 10] 'ItaMato'  exit= 0 msg=    0 p=0x00ffffff
+    [ 11] 'ItaMato'  exit= 0 msg=    0 p=0x00ffffff
+    [ 12] 'ItaMato'  exit= 0 msg=    0 p=0x00ffffff
+    [ 13] 'ItaMato'  exit= 0 msg=    0 p=0x00ffffff
+    [ 14] 'ItaMato'  exit= 0 msg=    0 p=0x00ffffff

@@ -53,6 +53,7 @@
 #include "d/d_demo_leftover_viewer.h"
 #include "d/d_cut_actor_spawn.h"
 #include "d/d_ext_npc_mount.h"
+#include "d/d_ext_seq_space.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ww_itemmdl_pc.h"
 #include "d/d_albw_twilight_border.h"
@@ -790,6 +791,7 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     dExtNpcMount_pollBgWarps();
     dExtNpcDoors_poll();
     dExtNpcMount_pollIdentifyProbe();  // §41: Z-target identity probe (change-only log)
+    dExtSeqSpace_poll();                  // §52 (B): JA1 space gate + package detect (no parser yet)
     // Gate 8: before pauseTimer early-return — hitlag must not silence click pick/diag.
     if (dusk::g_levelEditorSession) {
         dusk::leveledit::tick_editor_session_input();
@@ -800,7 +802,15 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
 
     if (!fopOvlpM_IsPeek()) {
         if (mDoAud_zelAudio_c::isBgmSet()) {
+#if TARGET_PC
+            // §52: ExtSeq owns BGM on foreign hosts — never start TP scene BGM
+            // while the JA1 path is suppressing (silence beats a foreign sound).
+            if (!dExtSeqSpace_shouldSuppressJa2Bgm()) {
+                mDoAud_sceneBgmStart();
+            }
+#else
             mDoAud_sceneBgmStart();
+#endif
             mDoAud_load2ndDynamicWave();
             mDoAud_zelAudio_c::offBgmSet();
         }

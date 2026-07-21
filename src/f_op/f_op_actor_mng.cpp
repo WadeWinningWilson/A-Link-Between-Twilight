@@ -825,7 +825,7 @@ void fopAcM_posMove(fopAc_ac_c* i_actor, const cXyz* i_movePos) {
     cXyz* speed = fopAcM_GetSpeed_p(i_actor);
 #if TARGET_PC
     // Flurry Rush: world/enemies at 0.1x; Link moves at full speed for quick hits.
-    // Quick-equip live wheel: Link is soft-locked (execute skipped) — no ALINK exempt needed.
+    // Quick-equip live wheel: control-locked (stick zeroed); keep Link on sim scale.
     f32 simScale = dusk::getSimTimeScale();
     if (i_actor != nullptr && fopAcM_GetName(i_actor) == fpcNm_ALINK_e &&
         !dMenu_Ring_c::isQuickEquipLiveWorld())

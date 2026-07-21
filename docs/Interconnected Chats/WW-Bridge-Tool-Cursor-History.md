@@ -237,14 +237,249 @@ No changes to B0/B4, schema v2, the handshake, or GAP-3 — all accepted and una
 | 2026-07-19 | User | F-1 engine fix **declined** (gitignored local only) |
 | optional | User | mismatch→`[POP!]` playtest (§16 step 2); skeleton reconcile when ready |
 | 2026-07-19 | History *(informational — no turn held)* | Posted delimited **HISTORY SECTION** above at user request: `[POP!]` test **valid now** · M5b **run twice** (expanded after stage pivot) · §12 rotations **accepted as History debt** · save **EXTENSION-FIRST** (F_SP115 = LANAYRU exposure; 9 free indices reserved as fork headroom) · **neutral stage names** for the gate. **Turn unchanged: Bridge ↔ Housing Security ↔ User.** |
+| 2026-07-20 | Bridge | §26 ASK 1→3 implemented; reports for Housing Security |
+| 2026-07-20 | Housing Security | §27 port policy RATIFIED; §28 ASK 4/5 posted |
+| 2026-07-20 | Bridge | §28 ASK 4+5 shipped (`verify` deep RARC + `diag symbolize`) |
+| 2026-07-20 | Housing Security | §29 ASK 1–5 **ALL ACCEPTED**; B2 unblocked |
+| 2026-07-20 | Bridge | B2 `scls` shipped (0.4.0); ASK 5 exit=2 confirmed |
+| 2026-07-20 | Housing Security | §30 ledger greenlit + ASK 4 triage |
+| 2026-07-20 | Bridge | §30 `ledger` shipped (0.5.0); Outset work-order proven |
+| 2026-07-20 | Housing Security | §31 B2+ledger **ACCEPTED**; §32/§33 ASK-4 BG; §34 ASK 6 |
+| 2026-07-20 | Bridge | ASK 6 `quest-triggers` shipped (0.6.0); hybrid verdict |
+| 2026-07-20 | Housing Security | §35 ASK 6 **ACCEPTED**; §36 EVNT table decompressed |
+| 2026-07-20 | Bridge | §36 eventNo→names (`evnt` + quest-triggers, 0.7.0) |
+| 2026-07-20 | Housing Security | §38 ASK 7+8 **GREENLIT** |
+| 2026-07-20 | Bridge | ASK 7 `anim-ledger` + ASK 8 `beh-ledger` (0.8.0) |
+| 2026-07-20 | Housing Security | §39 ASK 7/8 **ACCEPTED**; §40–45 specs; **ASK 9** posted |
+| 2026-07-20 | Bridge | ASK 9 `day1-guard` + `identify` (0.9.0) |
+| 2026-07-20 | Housing Security | §46 ASK 10 `space-report` posted |
+| 2026-07-20 | Bridge | ASK 10 `space-report` → Outset/inventory.md (0.10.0) |
+| 2026-07-20 | Housing Security | §47 ASK 11 `audio-map` posted |
+| 2026-07-20 | Bridge | ASK 11 `audio-map` — split CONFIRMED; Outset sequenced (0.11.0) |
+| 2026-07-20 | Housing Security | §48 ASK 11 **ACCEPTED**; recommend ASK 12 BMS→instruments |
+| 2026-07-20 | User / Bridge | “go for it” → ASK 12 `seq-banks` (0.12.0) |
+| 2026-07-20 | Housing Security | §49 ASK 12 **ACCEPTED**; §50 ASK 13 dialect-first |
+| 2026-07-20 | Bridge | ASK 13.1 `bms-dialect` → **incompatible**; item 2 blocked (0.13.0) |
+| 2026-07-20 | Housing Security | §51 (A) then §52 **(B) destination**; (A) throwaway |
+| 2026-07-20 | Bridge | §52 (B) `bgm-package` → mod `audio/ww_jaudio1/` (0.14.0) |
+| 2026-07-20 | Housing Security | §53 bank residency (engine); Bridge offline escape hatch |
+| 2026-07-20 | Bridge | §53b `bank-map` → wave/program CSVs (0.15.0) |
+| 2026-07-20 | Housing Security | §54 ASK 15 velocity hist + IBNK initVol |
+| 2026-07-20 | Bridge | ASK 15 `vel-calib` (0.16.0) |
+| 2026-07-20 | Housing Security | §55 ASK 16 tempo/timebase (exponent CLEARED) |
+| 2026-07-20 | Bridge | ASK 16 `tempo-map` — TB=120 both BMS (0.17.0) |
+| 2026-07-20 | Engine / HS | §56–58 tempo units; DAC hypothesis DEAD |
+| 2026-07-21 | Housing Security | §59 ASK 17 independent BMS event decode |
+| 2026-07-21 | Bridge | ASK 17 `seq-events` golden stream (0.18.0) |
+| 2026-07-21 | Engine | ASK 17 event dump companion (`DUSK_EXTSEQ_EVENT_DUMP`) |
+| next | User / HS | diff Bridge vs engine CSVs → first disagreeing line |
+| content | User / content | §12 census refresh (PLYR+rot) — highest visible deploy |
 
 ---
+
+## §59 / ASK 17 Engine dump companion (2026-07-21)
+
+Housing ask: stop hypothesising; mechanical diff. Bridge golden already on disk. Engine shipped:
+
+- Flag: **`DUSK_EXTSEQ_EVENT_DUMP=1`** (once at first `startOwned`)
+- Offline walk via **`Ja1Parser`** (scratch tracks; no audio; no Bridge code)
+- Writes `audio/ww_jaudio1/seq_events_engine_{i_link,house}.csv`
+- Columns: `tick,track_id,event,note_param,velocity` (per-track local ticks; backward jmp once; loop cap 256)
+
+**No playback / rate / velocity change.** Diff against Bridge `seq_events_*.csv`; disagreement = bug line.
+
+## §59 / ASK 17 Bridge implementation (2026-07-21)
+
+Housing §59: stop hypothesising; independent decoder for mechanical diff. Bridge shipped:
+
+- **`python -m ww_bridge seq-events`** — fresh walker from §50b + WW Arglist/cmdNoteOn
+- **No shared code** with `Ja1Parser` or `vel_calib`/`tempo_map`
+- Columns: `tick, track_id, event, note_param, velocity`
+- `i_link` 5215 events / 731 note_on · `house` 1978 / 314
+- Artifacts: `seq_events_{i_link,house}.csv`
+
+Tool **0.18.0**. Bus: interconnected §59 Bridge response.
+
+## §55 / ASK 16 Bridge implementation (2026-07-20)
+
+Housing §55: exponent cleared by measurement; extract BMS tempo/timebase. Bridge shipped:
+
+- **`python -m ww_bridge tempo-map`**
+- Defaults: tempo 120 / timebase **48**
+- **Both** `i_link` and `house` set timebase **120** at tick 0; tempos 119 / 146; no later changes
+- Hint: if engine kept default 48 vs specified 120 → ~2.5× too slow (matches fault class)
+
+Tool **0.17.0**. Bus: interconnected §55 Bridge response.
+
+## §54 / ASK 15 Bridge implementation (2026-07-20)
+
+Housing §54 ASK 15: offline inputs for balance calibration. Bridge shipped:
+
+- **`python -m ww_bridge vel-calib`** — per-track BMS velocity hist + IBNK initVol/vel-region CSV
+- **i_link:** 731 scored · span 20–124 · **house:** 314 · span 47–115 (narrower — supports interior hypothesis as input fact)
+- **initVol:** INST volumes all 1.0; resolved dips only on bank0 prog 9/24 (~0.80) — compounding hypothesis weak
+- Does **not** infer WW curve (ASK constraint)
+
+Tool **0.16.0**. Bus: interconnected §54 Bridge response.
+
+## §53b / bank-map Bridge implementation (2026-07-20)
+
+Housing §53: engine owns residency; Bridge optional if offline preprocess needed. User routed Bridge; shipped:
+
+- **`python -m ww_bridge bank-map`** — parse staged `aaf_slices/` → `bank_waves.csv` + `bank_programs.csv`
+- **vir 0:** 51 waves / 36 programs → `n_zelda_0.aw`
+- **vir 2:** 8 waves / 7 programs → `n2i_link_0.aw`
+- Engine still owns shadow register / `noteOnOsc` replace / №89 nest.
+
+Tool **0.15.0**. Bus: interconnected §53b Bridge response.
+
+## §52b / path (B) Bridge implementation (2026-07-20)
+
+Housing §52: (B) destination packaging. Bridge shipped:
+
+- **`python -m ww_bridge bgm-package`** — raw `i_link`/`house` BMS + `n_zelda`/`n2i_link` `.aw` + IBNK/WSYS slices + `manifest.ini`
+- Stage: live mod `audio/ww_jaudio1/` (AppData; not repo). Inert until engine JA1 hook.
+- (A) retarget probe **not** built; must not land in that folder.
+
+Tool **0.14.0**. Bus: interconnected §52b Bridge response.
+
+## §50b / ASK 13.1 Bridge implementation (2026-07-20)
+
+Housing §50: dialect before packaging. Bridge compared WW `parseSeq` vs JA2 `parse` (dispatch, not greps).
+
+- **Verdict: `incompatible`.** Waits/perf/bank encodings conflict; `0xA4` bank is NULL on JA2.
+- Item 2 raw BMS packaging **blocked**. Recommend ASK: retarget (A) or dual parser (B).
+- Artifact `reports/bms_dialect.md`. CLI: `python -m ww_bridge bms-dialect`.
+
+Tool **0.13.0**. Bus: interconnected §50b Bridge response.
+
+## §48b / ASK 12 Bridge implementation (2026-07-20)
+
+Housing §48 recommended BMS instrument ownership before conversion. User greenlit. Bridge shipped:
+
+- **`python -m ww_bridge seq-banks`** — BMS `writeRegParam` 0x20/0x21 → vir→IBNK→WSYS→`.aw`
+- **`ISLAND_LINK`:** `i_link.bms` → banks 0+2 → **`n_zelda_0.aw` + `n2i_link_0.aw`**
+- **`HOUSE`:** `house.bms` → bank 0 → **`n_zelda_0.aw`**
+- ASK 11 `IsleLink`/`Ojhous` name-hints corrected: area SE, not BGM instruments.
+- Artifact `reports/seq_banks.md`.
+
+Tool **0.12.0**. Bus: interconnected §48b Bridge response.
+
+## §47 / ASK 11 Bridge implementation (2026-07-20)
+
+Housing §47: audio research before any conversion. Bridge shipped:
+
+- **`python -m ww_bridge audio-map [--bgm …]`** — parse `JAZelAudio_BGM.h`; class via `JAISoundID_Type_*`.
+- **Split CONFIRMED** (header comments + type masks + stream dispatch) — not count-correlation alone.
+- Default: `ISLAND_LINK` + `HOUSE` both **`sequenced_portable`** (`IsleLink_0.aw` / `Ojhous_0.aw` + `JaiSeqs.arc`).
+- Streams → `stream_needs_transcode` (`.afc` heuristic). No conversion; №28 B10 twin ban noted.
+- Artifact `reports/audio_map.md`.
+
+Tool **0.11.0**. Bus: interconnected §47b Bridge response.
+
+## §46 / ASK 10 Bridge implementation (2026-07-20)
+
+Housing §46: stop hand-transcribing island work-docs. Bridge shipped:
+
+- **`python -m ww_bridge space-report Outset`** → `docs/WW Linked/islands/Outset/inventory.md`
+- Pure join over day1-guard / beh / exceptions / coverage / ledger / quest-triggers / EVNT / live vs golden.
+- README points at inventory; prose not overwritten. IVAN RULE on prefix families.
+
+Tool **0.10.0**. Bus: interconnected §46 Bridge response.
+
+## §44 / ASK 9 Bridge implementation (2026-07-20)
+
+Housing §44: day-1 foundation guard. Bridge shipped:
+
+- **`day1-guard <log>`** — census×layers×exceptions×spawn ledger; exit 2 on drift.
+- Reviewed `goldens/day1_exceptions.ini` (kusax/swood). Sample log: **2 missing `bridge`**.
+- **`identify <code>`** — §40 dossier join (no invented names).
+
+Tool **0.9.0**. Bus: interconnected §44 Bridge response. Engine §41 / auditor §43 not Bridge.
+
+## §38 Bridge implementation (2026-07-20)
+
+Housing §38: ASK 7 animations + ASK 8 behaviour GREENLIT. Bridge shipped:
+
+- **`anim-ledger`**: 34 Outset arcs; Kb **20 slots = 20 members** (gap closed via full BAS/BCK/BTP header).
+- **`beh-ledger`**: inert=19 · minimal=24 · **7** `inert_but_portable` (item/bridge/lwood…).
+- Report-only / suggest-never-fill. Tier 3 semantic mapping not attempted.
+
+Tool **0.8.0**. Bus: interconnected §38 Bridge response.
+
+## §36 Bridge implementation (2026-07-20)
+
+Housing §36: EVNT table on disk (Yaz0 Stage.arc). Bridge shipped name resolve:
+
+- **`python -m ww_bridge evnt --lookup 1 15 53`** → `STOLENSISTER` / `AJ_SPEAK` / `PUROLO_RETURN`
+- `quest-triggers` auto-loads Ex WW `sea/Stage.arc`; success test **PASS** (3/3 named).
+- No invented names. Artifact `reports/sea_evnt.csv` (57 entries).
+
+Tool **0.7.0**. Bus: interconnected §36 Bridge response.
+
+## §34 / ASK 6 Bridge implementation (2026-07-20)
+
+Housing §34: decode Tag* quest triggers. Bridge shipped:
+
+- **`python -m ww_bridge quest-triggers`** — Outset report-only.
+- 25 placements / 9 names; all decomp sources via `d_stage.cpp` OBJNAME aliases.
+- **Verdict: hybrid** — data selectors (eventNo / message / switches) + TagEv type code paths.
+- Success test **PASS (partial):** msg `0x9c5`,`0x168b` · eventNo `1,15,53`. No EVNT in adapted Outset.arc.
+
+Tool **0.6.0**. Bus: interconnected §34 Bridge response. §33 verify change **not built**.
+
+## §30 Bridge implementation (2026-07-20)
+
+Housing §30: socket ledger GREENLIT. Bridge shipped:
+
+- **`python -m ww_bridge ledger`** — Outset JOIN census × actor_map × ASK3 × ASK4.
+- Report-only / suggest-never-fill. Artifact `reports/outset_socket_ledger.csv`.
+- Success test: **5** `unfilled_candidate` (SalvagE/Salvage/Salvag2/Akabe/HyoiKam) — better work order than skip-list restatement.
+- Live `lwood` already `alwd.bdl` → ledger `filled_ok` (content ratified №118 off-bus).
+
+Tool **0.5.0**. Bus: interconnected §30 Bridge response.
+
+## §29 / B2 Bridge implementation (2026-07-20)
+
+Housing §29: ASK 1–5 ACCEPTED; B2 unblocked. Bridge shipped:
+
+- **`python -m ww_bridge scls <arc> --out exits.csv`** — SCLS → CSV (ASK 1 struct).
+- Outset 10 exits + interior→`sea` room 44 returns proven vs №56.
+- Does **not** overwrite live `doors.ini`.
+- ASK 5 refuse exit code **2** confirmed (age 29≠30).
+
+Tool **0.4.0**. Bus: interconnected §29 Bridge response.
+
+## §28 Bridge implementation (2026-07-20)
+
+| Ask | Where | Proof |
+|-----|-------|--------|
+| ASK 4 | `ww_bridge/arc_contents.py` → `verify` | Live mod: 3 real FAILs (LinkUG/Pjavdou `model1.bdl`, Lwood `lwood` vs `alwd`) |
+| ASK 5 | sibling `diag/` (`python -m diag symbolize`) | Fail-closed on age 29≠30; matching smoke → `mDoExt_J3DModel__create` |
+
+Full write-up: interconnected bus §28 Bridge response. Tool **0.3.0**.
+
+## §26 Bridge implementation (2026-07-20)
+
+Sibling tool (`C:\Users\xxxxx\Documents\albt bridge`), decomp `D:\XXXXXXX\WW DP`.
+
+| Ask | CLI | Artifact |
+|-----|-----|----------|
+| ASK 1 | `python -m ww_bridge chunk-ref` | `reports/chunk_semantics.md` |
+| ASK 3 | `python -m ww_bridge coverage --census goldens/outset_placements.csv` | `reports/actor_coverage.csv` |
+| ASK 2 | `python -m ww_bridge decode-params --census … [--annotate-out …]` | `reports/params_decoder.md` |
+
+**ASK 1:** Decomp-confirmed roles; corrected auditor guesses — **LBNK ≠ lights**, **RPPN ≠ NPCs**.
+**ASK 3:** Outset golden `87` names → `31` present / `56` absent (file heuristic; not match%).
+**ASK 2:** `11/87` names with scraped `GetParam` fields; annotate adds `params_decoded`.
+
+Full write-up posted on the interconnected bus (§26 Bridge response).
 
 ## Sign-off mirror
 
 | Party | Status | When |
 |-------|--------|------|
-| Housing Security | §16 ALL ACCEPTED; §17 GAP-3 open→Bridge | 2026-07-19 |
-| Bridge (Cursor) | Bridge lane clear (GAP-3 closed) | 2026-07-19 |
+| Housing Security | §52 (B) destination; awaiting engine | 2026-07-20 |
+| Bridge (Cursor) | bgm-package 0.14.0; dialect 0.13.0 | 2026-07-20 |
 | User | content/F-1/F-2 routing | 2026-07-19 |
 | History | **not in lane** | — |

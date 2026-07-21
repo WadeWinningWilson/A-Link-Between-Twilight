@@ -65,9 +65,9 @@ UserSettings g_userSettings = {
         .wwItemmdlHeldBowScalePct {"game.wwItemmdlHeldBowScalePct", 100},
         .wwItemmdlHeldBootsStyle {"game.wwItemmdlHeldBootsStyle", false},
         .dekuLeafGlideTest {"game.dekuLeafGlideTest", false},
-        // Legacy key: free-ground hold-A crawl retired (raced door/talk prompts).
-        // Kept registered so old configs still load; value is unused.
-        .enableHoldACrawl {"game.enableHoldACrawl", false},
+        // №105 P2: gated hold-A crawl (DoStatus NONE + stick ≤ roll rate). Default ON —
+        // native ENTER does not arm WW crawl holes until adapt_dzb wall-codes land.
+        .enableHoldACrawl {"game.enableHoldACrawl", true},
         .wwItemmdlViewerBdlIndex {"game.wwItemmdlViewerBdlIndex", 0xF},
         .sumoOutfit {"game.sumoOutfit", false},
         .sumoOutfitFists {"game.sumoOutfitFists", false},

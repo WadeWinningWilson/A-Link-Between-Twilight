@@ -1,0 +1,187 @@
+=== F_SP103 D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R00_00.arc
+member room.dzr len=49280
+SCLS num=26 off=0x22c
+hex: 465f5350313033000001f09f13465f5350303000000100f09f134f50454e494e47000101f01f09465f5350303000000000f01f09525f5350303100000000f09f12525f5350303100000001f09f12525f5350303100000002f09f12525f5350303100000003f09f124f50454e494e470000fff01f00525f5350303100000005f09f12525f5350303100000100f09f12465f5350303000000700f01f01465f5350313033006500f00b0d465f5350313234003500f01b0d4f50454e494e470000fff01f004f50454e494e470000fff01f004f50454e494e470000fff01f004f50454e494e470000fff01f004f50454e494e470000fff01f004f50454e494e470000fff01f00465f5350313033001900f07800465f5350313033001800f01f0d525f5350303100000202f01f00525f5350303100000102f01f00
+  [ 0] 'F_SP103'  spawn=  0 room=  1 b10=0xf0 b11=0x9f
+  [ 1] '\x13F_SP00' spawn=  0 room=  1 b10=0x00 b11=0xf0
+  [ 2] '�\x13OPENIN' spawn= 71 room=  0 b10=0x01 b11=0x01
+  [ 3] '�\x1f\tF_SP0' spawn= 48 room=  0 b10=0x00 b11=0x00
+  [ 4] ''         spawn= 48 room= 49 b10=0x00 b11=0x00
+  [ 5] ''         spawn= 80 room= 48 b10=0x31 b11=0x00
+  [ 6] ''         spawn= 83 room= 80 b10=0x30 b11=0x31
+  [ 7] ''         spawn= 95 room= 83 b10=0x50 b11=0x30
+  [ 8] '1'        spawn= 79 room= 80 b10=0x45 b11=0x4e
+  [ 9] 'ING'      spawn=  0 room= 82 b10=0x5f b11=0x53
+  [10] 'P01'      spawn=159 room= 18 b10=0x52 b11=0x5f
+  [11] 'SP01'     spawn=240 room=159 b10=0x12 b11=0x46
+  [12] '_SP00'    spawn=  0 room=240 b10=0x1f b11=0x01
+  [13] 'F_SP103'  spawn=101 room=  0 b10=0xf0 b11=0x0b
+  [14] '\rF_SP124' spawn=  0 room= 53 b10=0x00 b11=0xf0
+  [15] '\x1b\rOPENIN' spawn= 71 room=  0 b10=0x00 b11=0xff
+  [16] '�\x1f'    spawn= 78 room= 71 b10=0x00 b11=0x00
+  [17] '��\x1f'   spawn= 73 room= 78 b10=0x47 b11=0x00
+  [18] ''         spawn= 78 room= 73 b10=0x4e b11=0x47
+  [19] ''         spawn= 69 room= 78 b10=0x49 b11=0x4e
+  [20] 'G'        spawn= 80 room= 69 b10=0x4e b11=0x49
+  [21] 'NG'       spawn= 70 room= 95 b10=0x53 b11=0x50
+  [22] '103'      spawn=  0 room= 70 b10=0x5f b11=0x53
+  [23] 'P103'     spawn= 31 room= 13 b10=0x52 b11=0x5f
+  [24] 'SP01'     spawn=240 room= 31 b10=0x00 b11=0x52
+  [25] '_SP01'    spawn=  2 room=240 b10=0x1f b11=0x00
+ACTR num=43 off=0x2830
+  count : 3
+  count �CamA: 1
+  count AND_SW: 1
+  count ClearB: 1
+  count C�ZE��|: 1
+  count C�[C�R: 1
+  count E&����*�: 1
+  count Obj_Tie: 4
+  count Obj_nmp: 2
+  count Obj_sui: 1
+  count T_Maki: 1
+  count Wljump: 2
+  count flwr17: 4
+  count flwr7: 1
+  count item: 1
+  count pflower: 1
+  count pflwrx7: 4
+  count �: 1
+  count ��: 1
+  count ���D�@: 1
+  count ���E)�: 1
+  count ���LD�`: 1
+  count ���dE_��: 1
+  count ���d��u2: 1
+  count ���hE�Cs: 1
+  count ���hE��5: 1
+  count ���hE���: 1
+  count ����D��: 1
+  count ����E/��: 1
+  count ����E7p: 1
+SCOB num=9 off=0x2d90
+  count : 1
+  count 
+
+(�kdoo: 1
+  count CamArea: 1
+  count C�RE�Y: 1
+  count rB: 1
+  count �~^: 1
+  count ���E�: 1
+  count ���: 1
+  count ������9: 1
+ACT0 num=113 off=0x2f88
+  count : 25
+  count 
+#dHD��: 1
+  count �����p: 1
+  count ������: 1
+  count ��E5u: 1
+  count P�ED��: 1
+  count �: 1
+  count  �: 2
+  count *: 1
+  count +�: 1
+  count -(-�TagE: 1
+  count B: 1
+  count Bd: 2
+  count B�: 1
+  count DnB�: 1
+  count E&���*�: 1
+  count E_ga: 2
+  count E_nest: 1
+  count Fish: 6
+  count Fr: 1
+  count Grass: 12
+  count Hanjo: 1
+  count IC: 1
+  count Ni: 1
+  count Npc_ks: 1
+  count Npc_ne: 1
+  count Obj_Lrp: 1
+  count Obj_Tbi: 3
+  count Obj_kn2: 1
+  count Obj_lp: 1
+  count OnKago: 1
+  count Pleaf: 1
+  count Pumpkin: 6
+  count Savmem: 1
+  count TagAtt: 1
+  count Uri: 1
+  count atkItem: 1
+  count item: 8
+  count mmvbg: 1
+  count stone: 3
+  count �A�V����: 1
+  count �o�����: 1
+  count ��: 1
+  count ��� �: 1
+  count ���G�: 1
+  count ���: 2
+  count ���D�@: 1
+  count ���LE7p: 1
+  count ���hE�: 1
+  count ���hEE�M: 1
+  count ����D�T): 1
+  count �����
+�: 1
+  count ������X: 1
+=== F_SP103 D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R01_00.arc
+member room.dzr len=10432
+SCLS num=17 off=0x178
+hex: 465f5350313033000100f09f13465f5350313034000001f09f13525f5350303100000004f09f12465f5350313033000101201f0d525f5350303100000304f03f09525f5350303100000404b00f01525f5350303100001504f01400465f5350313034000001f01f00465f5350313033001a00509f10465f5350313033000101201f0d465f5350313033000901f01501465f5350313033000a01f01401465f5350313033001401f01801465f5350313033001701f01401465f5350313033006600f09611465f53503130380064
+  [ 0] 'F_SP103'  spawn=  1 room=  0 b10=0xf0 b11=0x9f
+  [ 1] '\x13F_SP104' spawn=  0 room=  0 b10=0x01 b11=0xf0
+  [ 2] '�\x13R_SP01' spawn=  0 room=  0 b10=0x00 b11=0x04
+  [ 3] '��\x12F_SP1' spawn= 48 room= 51 b10=0x00 b11=0x01
+  [ 4] '\x01 \x1f\rR_SP' spawn= 48 room= 49 b10=0x00 b11=0x00
+  [ 5] '\x03\x04�?\tR_S' spawn= 80 room= 48 b10=0x31 b11=0x00
+  [ 6] ''         spawn= 83 room= 80 b10=0x30 b11=0x31
+  [ 7] ''         spawn= 95 room= 83 b10=0x50 b11=0x31
+  [ 8] '04'       spawn= 70 room= 95 b10=0x53 b11=0x50
+  [ 9] '103'      spawn= 16 room= 70 b10=0x5f b11=0x53
+  [10] 'P103'     spawn= 31 room= 13 b10=0x46 b11=0x5f
+  [11] 'SP103'    spawn=240 room= 21 b10=0x01 b11=0x46
+  [12] '_SP103'   spawn=  1 room=240 b10=0x14 b11=0x01
+  [13] 'F_SP103'  spawn= 20 room=  1 b10=0xf0 b11=0x18
+  [14] '\x01F_SP103' spawn=  0 room= 23 b10=0x01 b11=0xf0
+  [15] '\x14\x01F_SP10' spawn= 51 room=  0 b10=0x66 b11=0x00
+  [16] '��\x11F_SP1' spawn= 48 room= 56 b10=0x00 b11=0x64
+ACTR num=21 off=0xa88
+  count : 1
+  count Bd: 1
+  count Digpl: 1
+  count D�@��6~L: 1
+  count Grass: 6
+  count ItaMato: 1
+  count Kolin: 1
+  count Maro: 1
+  count Obj_nmp: 1
+  count PPHole: 1
+  count Savmem: 2
+  count Taro: 2
+  count �: 1
+  count �2�CamA: 1
+SCOB num=8 off=0xd28
+  count : 1
+  count Besu: 1
+  count D#�-D�@�: 1
+  count EvtArea: 1
+  count Kakashi: 1
+  count Maro: 1
+  count eaS: 1
+  count �1�: 1
+ACT0 num=15 off=0xe48
+  count : 2
+  count D�: 1
+  count ItaMato: 3
+  count K2K�Push: 1
+  count Kolin: 1
+  count Maro: 1
+  count Savmem: 1
+  count Taro: 2
+  count atkItem: 1
+  count ��: 1
+  count ��eD��>: 1
+=== R_SP01 files: R00_00.arc, R01_00.arc, R02_00.arc, R04_00.arc, R05_00.arc, R07_00.arc, STG_00.arc

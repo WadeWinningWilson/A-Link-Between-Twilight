@@ -25,6 +25,7 @@
 #include "dusk/logging.h"
 #include "dusk/string.hpp"
 #if TARGET_PC
+#include "d/d_ext_fado_door.h"
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_save_guard.h"
 #include "d/d_stub_watch.h"
@@ -2930,6 +2931,18 @@ int dStage_changeSceneExitId(cBgS_PolyInfo& param_0, f32 speed, u32 mode, s8 roo
 }
 
 int dStage_changeScene(int i_exitId, f32 speed, u32 mode, s8 room_no, s16 angle, int param_5) {
+#if TARGET_PC
+    {
+        const int fado = dFadoDoor_tryInterceptChangeScene(i_exitId, speed, mode, room_no, angle,
+                                                           param_5);
+        if (fado == 1) {
+            return 1;
+        }
+        if (fado == -1) {
+            return 0;
+        }
+    }
+#endif
     stage_scls_info_dummy_class* scls;
 
     if (room_no == -1) {

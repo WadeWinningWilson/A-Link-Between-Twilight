@@ -1,0 +1,192 @@
+# Sky & Environment Recipe — donor islands
+
+Written after getting Outset's sky from "blown out" to correct. It is written
+for **any** donor island, not just Outset: nothing below is Outset-specific
+except the worked example values. Reuse it verbatim for the rest of the sea.
+
+Companion: [WW-Restoration-Cookbook.md](../../../WW-Restoration-Cookbook.md) §4
+(the conversion) and §7 (how to cost a port). This doc is the *sky* slice, with
+the failure modes attached to their symptoms.
+
+---
+
+## 0. What a working sky actually requires
+
+Five separate things must all be right. Each one failed independently during
+Outset, and each produced a **different** wrong picture, which is what makes
+this worth writing down:
+
+| # | requirement | symptom when wrong |
+|---|---|---|
+| 1 | converted `Env0/Col0/PAL0/VRB0` tables in the stage | blown-out / wrong ambient, wrong fog |
+| 2 | correct `VRB0` **record stride** | first entry fine, later bands garbage |
+| 3 | the dome models mounted and drawn | flat clear-colour sky, nothing but haze |
+| 4 | `g_env_light.vrbox_*` populated from `VRB0` | magenta/black nonsense colours |
+| 5 | each dome model actually *taking* its colour | one dome right, another still white |
+
+A partial fix moves the picture without fixing it. Diagnose by which of the five
+the current symptom belongs to, rather than by trying colours.
+
+---
+
+## 1. Convert the tables
+
+Run `tools/ww_crew_restoration_skeleton/convert_lighting.py`. It reads the donor
+room's chain and writes the receiver's four tables into the mod-side stage arc.
+
+The chain, and it is the same in both engines:
+
+```
+EnvR/Env0 [room]  ->  pselect id
+Colo/Col0 [pselect].palette_id[band]  ->  palette id
+Pale/PAL0 [palette].vrboxcol_id       ->  vrbox colour id
+Virt/VRB0 [vrboxcol]                  ->  sky/kumo/kasumi colours
+```
+
+**Record sizes differ and this matters:**
+
+| donor | receiver | note |
+|---|---|---|
+| `EnvR` 0x08 | `Env0` 0x41 | per-room → palette sets |
+| `Colo` 0x0C | `Col0` 0x0C | identical layout, straight copy |
+| `Pale` 0x2C | `PAL0` 0x34 | +6 trailing fields with no donor source |
+| `Virt` 0x24 | `VRB0` **0x15** | reordered; **21 bytes, do NOT pad to 0x18** |
+
+### 1a. `PAL0`'s six trailing fields are not optional
+
+They have no donor source, and **zero is not neutral**. Every native outdoor
+stage sets them. Sampled from `F_SP00/102/103/108/121`:
+
+```
+bg_light_influence   = 100
+cloud_shadow_density = 45
+unk_0x2f             = 200   (0 on indoor stages)
+bloom_tbl_id         = 4 + band      <-- cycles 4..9 per 6-band group
+BG1/2/3_amb_alpha    = 255,255,255
+```
+
+A zero `bloom_tbl_id` selects a *different bloom table* — that alone reads as
+"blown out" even when every colour is correct.
+
+### 1b. The `VRB0` stride trap
+
+`stage_vrboxcol_info_class` declares `Size: 0x18` in the header, but its fields
+end at `0x15` and the PC build's `sizeof` is **21**. Emitting 24-byte records
+puts entry 0 in the right place and skews every later entry by 3 bytes more
+than the last — so the *day* band, which is index 2, reads garbage while the
+first band looks fine.
+
+**Verify, do not assume.** Read the shipped file back at the engine's stride:
+
+```python
+for i in range(n):
+    r = dzs[vrb0_off + i*0x15 : vrb0_off + i*0x15 + 21]
+    sky = tuple(r[0:3]); kumo_top = tuple(r[3:6]); kasumi_in = tuple(r[17:20])
+```
+
+Every entry must decode to plausible colours matching the donor's `Virt`. Do
+not measure stride from the chunk span — chunks are padded, so `span/n` lies.
+
+### 1c. Which band is "day"
+
+Both engines' light schedules make **slot 2** the long daytime band
+(receiver `{135-240 -> 2,2}`, donor `{150-270 -> 2,2}`), and time runs 0..360
+for 24 h, so **hour 15 = daytime 225 = band 2**. When checking a screenshot
+against the table, that is the row to compare.
+
+---
+
+## 2. Mount the dome
+
+The donor sky is four separate models, drawn in this order:
+
+```
+vr_sky          <- vrbox_sky_col
+vr_uso_umi      <- vrbox_sky_col          (horizon sea band)
+vr_kasumi_mae   <- vrbox_kasumi_inner_col (near haze)
+vr_back_cloud   <- vrbox_kumo_top_col     (clouds, drawn +100 Y)
+```
+
+The receiver's own vrbox is suppressed on these stages (`hide_vrbox = true` for
+the island/forest mounts), so **if the donor dome is not mounted you get the
+clear colour and nothing else** — a flat white sky with a faint haze band.
+
+---
+
+## 3. Two adapter traps specific to sky models
+
+**3a. Do not let `normalize_tevregs` touch `vr_*`.** The adapter promotes a
+50 %-grey TEV placeholder to white, which is right for characters and terrain
+because their runtime overwrites those registers per frame. For a sky dome the
+TEV register *is* the colour, so whitening paints the dome white. `adapt_arc`
+passes `skip_tevregs=True` for `vr_*` — **any dome arc adapted before that guard
+landed still carries whitened registers, so re-adapt it if in doubt.**
+
+**3b. Baking colours into the file does not work, and the reason is useful.**
+Writing the colour into the material's TEV register in the arc leaves it inert:
+the draw path never pushes material state unless something calls
+`material->change()`. The native `daVrbox_color_set` does
+`setCullMode(0)` + `change()` + `setTevColor(...)` **every frame**. Sky colour
+is a per-frame runtime write, full stop.
+
+---
+
+## 4. Drive the colours per frame
+
+Mirror `daVrbox_color_set` (`d_a_vrbox.cpp`): for each dome model call
+`model->calc()`, then on its material `setCullMode(0)`, `change()`,
+`setTevColor(0, &c)`. Feed each model from the `g_env_light.vrbox_*` field
+listed in §2.
+
+Because the converted `VRB0` carries all bands (3 weather sets × 6 time bands),
+driving this per frame gives **time-of-day skies for free** — no extra work.
+
+---
+
+## 5. Symptom → cause (the fast path)
+
+| what you see | where it is |
+|---|---|
+| flat white sky, faint haze only | dome not mounted, or `hide_vrbox` with no replacement (§2) |
+| whole sky washed out / blown | `PAL0` trailing fields zeroed, esp. `bloom_tbl_id` (§1a) |
+| first band fine, others nonsense | `VRB0` stride padded to 0x18 (§1b) |
+| magenta / black / impossible colours | `g_env_light.vrbox_*` not populated from `VRB0` (§4) |
+| **one dome right, another still white** | per-model material issue on the wrong dome (§6) |
+| colours right but never change with time | driving from a baked value, not per frame (§3b) |
+
+---
+
+## 6. When one dome is right and another is not
+
+This is the subtle one and it is worth recognising quickly, because it looks
+identical to "the sky is broken" while actually meaning **almost everything is
+working**.
+
+Outset's case: `VRB0[2].kumo_top = (255,255,255)` and clouds rendered white —
+correct. `VRB0[2].sky_col = (80,120,255)` and the dome rendered white — wrong.
+Same table, same frame, same apply function. That combination proves the data
+*and* the feed are fine and isolates the fault to one model.
+
+Check, cheapest first:
+
+1. **Material count** — `getModelData()->getMaterialNum()` per dome. If a dome
+   has more than one material, or its visible surface is not material 0, the
+   colour is being written to a material nobody sees.
+2. **Register select** — confirm the material's TEV stage actually consumes the
+   register being written, rather than assuming register 0.
+3. **Texture dominance** — if the stage is `TEXC`-only with no `C0`/`RASC`
+   term, no register can affect it and the dome is always its texture's colour
+   (see §3a).
+
+---
+
+## 7. Checklist for the next island
+
+1. Convert tables; confirm `VRB0` at **0x15** by reading the shipped file back.
+2. Confirm `PAL0` trailing fields are the native-sampled values, not zero.
+3. Mount the four dome models; confirm the receiver vrbox is suppressed.
+4. Confirm the dome arc was adapted with `skip_tevregs` for `vr_*`.
+5. Drive `vrbox_*` per frame with `change()` + `setTevColor`.
+6. Compare a **daytime** screenshot against `VRB0[band 2]`, not against memory.
+
+If all six hold, the sky is correct and will follow time of day.

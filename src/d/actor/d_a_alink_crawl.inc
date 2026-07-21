@@ -629,7 +629,14 @@ int daAlink_c::procCrawlMove() {
     cM3dGPla sp60;
 
     // Vanilla: stand up as soon as there is overhead clearance (crawl holes).
+    // №105: hold-A stay-down while the gated crawl setting is on — release A with
+    // clearance to stand. Keeps hole traversal usable; open-ground exit is intentional.
     BOOL standReady = (var_r27 != 0 && mProcVar3.field_0x300e == 0);
+#if TARGET_PC
+    if (standReady && dusk::getSettings().game.enableHoldACrawl.getValue() && doButton()) {
+        standReady = FALSE;
+    }
+#endif
     if (standReady || getSlidePolygon(&sp60) || checkCrawlWaterIn()) {
         procCrawlEndInit(1, shape_angle.x, shape_angle.z);
     } else {

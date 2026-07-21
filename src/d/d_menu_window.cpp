@@ -1878,6 +1878,16 @@ int dMw_c::_draw() {
             dComIfGd_set2DOpa(mpMenuRing);
         }
     }
+#if TARGET_PC
+    // Live quick-equip skips pause/capture — still submit the ring so icons draw.
+    else if (dMenu_Ring_c::isQuickEquipLiveWorld() && dMeter2Info_getWindowStatus() == 2 &&
+             mpMenuRing != NULL)
+    {
+        mpMenuRing->drawFlag0();
+        dComIfGd_set2DOpa(mpMenuRing);
+        dComIfGd_set2DOpa(mpMenuRing);
+    }
+#endif
     return 1;
 }
 

@@ -1,0 +1,2621 @@
+/**
+ * d_ext_npc_mount.cpp — Plan R generic external-NPC mount (L1 + Slice I lighting/blink).
+ */
+#include "d/d_ext_npc_mount.h"
+
+#if TARGET_PC
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+
+#include "JSystem/J3DGraphAnimator/J3DMaterialAnm.h"
+#include "JSystem/J3DGraphLoader/J3DModelLoader.h"
+#include "SSystem/SComponent/c_math.h"
+#include "d/d_com_inf_game.h"
+#include "d/d_albw_dialogue.h"
+#include "d/d_ext_mod_flags.h"
+#include "d/d_ext_npc_doors.h"
+#include "d/d_ext_npc_population.h"
+#include "d/d_item.h"
+#include "d/d_bg_s_gnd_chk.h"
+#include "d/d_drawlist.h"
+#include "d/d_kankyo.h"
+#include "d/d_s_play.h"
+#include "global.h"
+#include "d/actor/d_a_alink.h"
+#include "dusk/custom_assets.hpp"
+#include "dusk/logging.h"
+#include "dusk/main.h"
+#include "f_op/f_op_actor_iter.h"
+#include "f_op/f_op_actor_mng.h"
+#include "f_pc/f_pc_manager.h"
+#include "f_pc/f_pc_name.h"
+#include <vector>
+#include "JSystem/JKernel/JKRHeap.h"
+#include "m_Do/m_Do_ext.h"
+#include "m_Do/m_Do_lib.h"
+#include "m_Do/m_Do_controller_pad.h"
+#include "m_Do/m_Do_graphic.h"
+#include "m_Do/m_Do_mtx.h"
+
+// Live-tune NPC cel ambient offsets (additive on manifest amb_*).
+// WREG_F(30)=R, WREG_F(31)=G, WREG_F(32)=B — e.g. -20 to pull bloom down.
+
+namespace {
+
+namespace fs = std::filesystem;
+
+std::unordered_map<std::string, dExtNpcManifest> s_providers;
+std::vector<std::string> s_providerOrder;  // stable UI order
+
+// Session-lived ModelData cache (GameHeap-pinned). Key = "arc/model".
+// Actors hold their own J3DModel / McaMorf over shared cached ModelData — never
+// store actor-solid-heap pointers in dRes slots (№18 / Layer-B lifetime).
+std::unordered_map<std::string, J3DModelData*> s_modelDataCache;
+bool s_bgWarpPending = false;
+char s_bgWarpProc[32] = {};
+char s_lastBgProc[32] = {};
+bool s_bgSpawnOverrideValid = false;
+cXyz s_bgSpawnOverride;
+std::unordered_map<std::string, fpc_ProcID> s_bgMountIds;
+
+// One native window is shared by all external mounts.  It is deliberately never
+// actor-owned: actors can despawn while the UI draw list is still processing.
+#if TARGET_PC_NATIVE_UI
+dALBWDialogue_c* s_mountDialogue = NULL;
+#endif
+dExtNpcMount_c* s_mountDialogueOwner = NULL;
+
+const dCcD_SrcCyl s_mountCylSrc = {
+    {{0x0, {{0x0, 0x0, 0x0}, {0, 0}, 0x79}},
+     {dCcD_SE_NONE, 0x0, 0x0, 0x0, 0x0},
+     {dCcD_SE_NONE, 0x0, 0x0, 0x0, 0},
+     {0x0}},
+    {{{0.0f, 0.0f, 0.0f}, 0.0f, 0.0f}},
+};
+
+// №27 N3: refuse cross-rig anims (e.g. kohead01_wait on ko.bdl).
+// Model stem must be a prefix of the anim stem, and must not be a strict
+// shorter prefix of a longer sibling (ko vs kohead).
+bool animMatchesModel(const char* modelName, const char* animName) {
+    if (modelName == NULL || animName == NULL || modelName[0] == '\0' || animName[0] == '\0') {
+        return false;
+    }
+    auto stem = [](const char* s, char* out, size_t n) {
+        size_t i = 0;
+        while (s[i] && s[i] != '.' && i + 1 < n) {
+            char c = s[i];
+            if (c >= 'A' && c <= 'Z') {
+                c = (char)(c - 'A' + 'a');
+            }
+            out[i++] = c;
+        }
+        out[i] = '\0';
+    };
+    char mStem[64];
+    char aStem[64];
+    stem(modelName, mStem, sizeof(mStem));
+    stem(animName, aStem, sizeof(aStem));
+    const size_t mLen = std::strlen(mStem);
+    if (mLen == 0 || std::strlen(aStem) < mLen) {
+        return false;
+    }
+    for (size_t i = 0; i < mLen; ++i) {
+        if (aStem[i] != mStem[i]) {
+            return false;
+        }
+    }
+    // Allow exact stem, stem_, or stem followed by digit — reject stem+letter that
+    // starts a longer family (ko + head… → kohead).
+    const char next = aStem[mLen];
+    if (next == '\0' || next == '_' || (next >= '0' && next <= '9')) {
+        return true;
+    }
+    return false;
+}
+
+void setMountAnimation(dExtNpcMount_c* a, const char* name, u8 mode) {
+    if (a == NULL || a->mpMorf == NULL || name == NULL || name[0] == '\0') {
+        return;
+    }
+    if (!animMatchesModel(a->mManifest.model, name)) {
+        DuskLog.warn("[ExtNpcMount] N3 skip anim '{}' for model '{}' (cross-rig)", name,
+                     a->mManifest.model);
+        return;
+    }
+    J3DAnmTransform* anm = (J3DAnmTransform*)dComIfG_getObjectRes(a->mManifest.arc, name);
+    if (anm != NULL) {
+        a->mpMorf->setAnm(anm, mode, 3.0f, 1.0f, 0.0f, -1.0f, NULL);
+    }
+}
+
+// №25 F2: snap to ground only when probe is within 500 of authored home Y.
+// Rejects seafloor under the island while Outset dzb is still settling.
+bool tryGroundSnapSanity(dExtNpcMount_c* a) {
+    if (a == NULL || a->mIsBg || a->mGroundSnapped) {
+        return a != NULL && a->mGroundSnapped;
+    }
+    cXyz probe = a->current.pos;
+    probe.y = a->home.pos.y + 200.0f;
+    if (!fopAcM_gc_c::gndCheck(&probe)) {
+        if (++a->mGroundSnapTries > 90) {
+            a->current.pos.y = a->home.pos.y;
+            a->old.pos = a->current.pos;
+            a->mGroundSnapped = true;
+        }
+        return a->mGroundSnapped;
+    }
+    const f32 gy = fopAcM_gc_c::getGroundY();
+    if (gy < a->home.pos.y - 500.0f) {
+        if (++a->mGroundSnapTries > 90) {
+            // Island never reported — keep authored (never seat in salvage zone).
+            a->current.pos.y = a->home.pos.y;
+            a->old.pos = a->current.pos;
+            a->mGroundSnapped = true;
+            DuskLog.warn("[ExtNpcMount] ground snap rejected seafloor y={} for {} (keep {})",
+                         gy, a->mManifest.proc, a->home.pos.y);
+        }
+        return a->mGroundSnapped;
+    }
+    a->current.pos.y = gy;
+    a->old.pos = a->current.pos;
+    a->mGroundSnapped = true;
+    return true;
+}
+
+void closeMountDialogue(dExtNpcMount_c* a) {
+    if (a == NULL) {
+        return;
+    }
+#if TARGET_PC_NATIVE_UI
+    if (s_mountDialogue != NULL) {
+        s_mountDialogue->hide();
+    }
+#endif
+    if (a->mTalkEventActive) {
+        dComIfGp_event_reset();
+    }
+    a->mTalking = false;
+    a->mTalkEventActive = false;
+    a->mTalkFrames = 0;
+    a->mCloseCooldown = 12;
+    if (s_mountDialogueOwner == a) {
+        s_mountDialogueOwner = NULL;
+    }
+    setMountAnimation(a, a->mManifest.idle, J3DFrameCtrl::EMode_LOOP);
+}
+
+struct DialogueSectionParsed {
+    std::string text;
+    std::string ifFlag;
+    std::string unlessFlag;
+    std::string setFlag;
+    std::string clearFlag;
+    std::string next;
+    std::string elseSection;
+    std::string action;  // e.g. grant:62 or grant:0x3E
+};
+
+void applyDialogueAction(const dExtNpcMount_c* a, const std::string& action) {
+    if (a == NULL || action.empty()) {
+        return;
+    }
+    if (action.rfind("grant:", 0) == 0) {
+        const char* spec = action.c_str() + 6;
+        char* end = NULL;
+        unsigned long id = std::strtoul(spec, &end, 0);
+        if (end == spec || id > 255) {
+            DuskLog.warn("[ExtNpcMount] bad grant action '{}'", action);
+            return;
+        }
+        execItemGet(static_cast<u8>(id));
+        DuskLog.info("[ExtNpcMount] grant item {} via '{}'", (int)id, a->mManifest.proc);
+        return;
+    }
+    if (action.rfind("clear_flag:", 0) == 0) {
+        dExtModFlags_set(a->mManifest.modFolder, action.c_str() + 11, false);
+        return;
+    }
+    if (action.rfind("set_flag:", 0) == 0) {
+        dExtModFlags_set(a->mManifest.modFolder, action.c_str() + 9, true);
+        return;
+    }
+    DuskLog.warn("[ExtNpcMount] unknown dialogue action '{}'", action);
+}
+
+bool isDialogueDirective(const std::string& line, const char* key, std::string* valueOut) {
+    const size_t keyLen = std::strlen(key);
+    if (line.size() <= keyLen || line.compare(0, keyLen, key) != 0 || line[keyLen] != '=') {
+        return false;
+    }
+    *valueOut = line.substr(keyLen + 1);
+    return true;
+}
+
+bool loadDialogueSectionRaw(const dExtNpcMount_c* a, const char* sectionKey,
+                            DialogueSectionParsed* out) {
+    if (a == NULL || out == NULL || sectionKey == NULL || sectionKey[0] == '\0') {
+        return false;
+    }
+    const fs::path dir = dusk::ConfigPath / "model_replacements" / a->mManifest.modFolder / "dialogue";
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) {
+        return false;
+    }
+    const std::string wanted = std::string("[") + sectionKey + "]";
+    const auto trim = [](std::string& line) {
+        while (!line.empty() &&
+               (line.back() == '\r' || line.back() == '\n' || line.back() == ' ' ||
+                line.back() == '\t')) {
+            line.pop_back();
+        }
+        const size_t first = line.find_first_not_of(" \t");
+        line.erase(0, first == std::string::npos ? line.size() : first);
+    };
+    for (fs::directory_iterator it(dir, ec); !ec && it != fs::directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file(ec) || it->path().extension() != ".txt") {
+            continue;
+        }
+        std::ifstream in(it->path());
+        std::string line;
+        bool inSection = false;
+        DialogueSectionParsed parsed;
+        bool found = false;
+        while (std::getline(in, line)) {
+            trim(line);
+            if (!inSection) {
+                inSection = line == wanted;
+                continue;
+            }
+            if (!line.empty() && line[0] == '[') {
+                break;
+            }
+            if (line.empty() || line[0] == '#' || line[0] == ';') {
+                continue;
+            }
+            found = true;
+            std::string dirVal;
+            if (isDialogueDirective(line, "if_flag", &dirVal)) {
+                parsed.ifFlag = dirVal;
+                continue;
+            }
+            if (isDialogueDirective(line, "unless_flag", &dirVal)) {
+                parsed.unlessFlag = dirVal;
+                continue;
+            }
+            if (isDialogueDirective(line, "set_flag", &dirVal)) {
+                parsed.setFlag = dirVal;
+                continue;
+            }
+            if (isDialogueDirective(line, "clear_flag", &dirVal)) {
+                parsed.clearFlag = dirVal;
+                continue;
+            }
+            if (isDialogueDirective(line, "next", &dirVal)) {
+                parsed.next = dirVal;
+                continue;
+            }
+            if (isDialogueDirective(line, "else", &dirVal)) {
+                parsed.elseSection = dirVal;
+                continue;
+            }
+            if (isDialogueDirective(line, "action", &dirVal)) {
+                parsed.action = dirVal;
+                continue;
+            }
+            // №27 N5: ww_ref=N pulls authentic BMG line from population/ww_dialogue_full.txt.
+            if (isDialogueDirective(line, "ww_ref", &dirVal)) {
+                const int idx = atoi(dirVal.c_str());
+                const fs::path catalog = dusk::ConfigPath / "model_replacements" /
+                                        a->mManifest.modFolder / "population" /
+                                        "ww_dialogue_full.txt";
+                std::ifstream cat(catalog);
+                std::string catLine;
+                char wanted[32];
+                std::snprintf(wanted, sizeof(wanted), "[%d]", idx);
+                while (std::getline(cat, catLine)) {
+                    trim(catLine);
+                    if (catLine.compare(0, std::strlen(wanted), wanted) != 0) {
+                        continue;
+                    }
+                    std::string body = catLine.substr(std::strlen(wanted));
+                    while (!body.empty() && (body[0] == ' ' || body[0] == '\t')) {
+                        body.erase(0, 1);
+                    }
+                    // №32 B6 / №29 C3: honor literal "\n", real newlines, and legacy " / ".
+                    std::string flat;
+                    for (size_t i = 0; i < body.size(); ++i) {
+                        if (body[i] == '\\' && i + 1 < body.size() &&
+                            (body[i + 1] == 'n' || body[i + 1] == 'N')) {
+                            flat += '\n';
+                            ++i;
+                            continue;
+                        }
+                        if (body[i] == '/' && (i == 0 || body[i - 1] == ' ') &&
+                            i + 1 < body.size() && body[i + 1] == ' ') {
+                            flat += '\n';
+                            ++i;  // skip space after /
+                            continue;
+                        }
+                        flat += body[i];
+                    }
+                    if (!parsed.text.empty()) {
+                        parsed.text += '\n';
+                    }
+                    // Keep Speaker: prefix if the section already started one; else raw.
+                    parsed.text += flat;
+                    break;
+                }
+                continue;
+            }
+            if (!parsed.text.empty()) {
+                parsed.text += '\n';
+            }
+            for (size_t i = 0; i < line.size(); ++i) {
+                if (line[i] == '\\' && i + 1 < line.size() && line[i + 1] == 'n') {
+                    parsed.text += '\n';
+                    ++i;
+                } else {
+                    parsed.text += line[i];
+                }
+            }
+        }
+        if (found) {
+            *out = std::move(parsed);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool sectionConditionsOk(const dExtNpcMount_c* a, const DialogueSectionParsed& sec) {
+    const char* mod = a->mManifest.modFolder;
+    if (!sec.ifFlag.empty() && !dExtModFlags_get(mod, sec.ifFlag.c_str())) {
+        return false;
+    }
+    if (!sec.unlessFlag.empty() && dExtModFlags_get(mod, sec.unlessFlag.c_str())) {
+        return false;
+    }
+    return true;
+}
+
+bool beginMountDialogue(dExtNpcMount_c* a, bool fromEvent) {
+    if (a == NULL || a->mCloseCooldown > 0 || s_mountDialogueOwner != NULL) {
+        return false;
+    }
+    const auto refuse = [&](const char* reason, bool playTalk) {
+        DuskLog.warn("[ExtNpcMount] talk refused: {}", reason);
+        if (playTalk) {
+            setMountAnimation(a, a->mManifest.talk1, J3DFrameCtrl::EMode_LOOP);
+        }
+        if (fromEvent) {
+            dComIfGp_event_reset();
+        }
+        a->mDialogueNext[0] = '\0';
+        return false;
+    };
+
+    if (a->mDialogueSection[0] == '\0') {
+        std::snprintf(a->mDialogueSection, sizeof(a->mDialogueSection), "%s",
+                      a->mManifest.dialogueKey);
+    }
+
+    char key[64];
+    std::snprintf(key, sizeof(key), "%s", a->mDialogueSection);
+    DialogueSectionParsed sec;
+    bool resolved = false;
+    for (int depth = 0; depth < 8; ++depth) {
+        DialogueSectionParsed loaded;
+        if (!loadDialogueSectionRaw(a, key, &loaded)) {
+            return refuse("dialogue section missing or empty", true);
+        }
+        if (!sectionConditionsOk(a, loaded)) {
+            if (!loaded.elseSection.empty()) {
+                std::snprintf(key, sizeof(key), "%s", loaded.elseSection.c_str());
+                continue;
+            }
+            return refuse("dialogue gated by flag", true);
+        }
+        if (!loaded.setFlag.empty()) {
+            dExtModFlags_set(a->mManifest.modFolder, loaded.setFlag.c_str(), true);
+        }
+        if (!loaded.clearFlag.empty()) {
+            dExtModFlags_set(a->mManifest.modFolder, loaded.clearFlag.c_str(), false);
+        }
+        if (!loaded.action.empty()) {
+            applyDialogueAction(a, loaded.action);
+        }
+        // Empty body + next= ⇒ silent hop (flag-only / router sections).
+        if (loaded.text.empty() && !loaded.next.empty()) {
+            std::snprintf(key, sizeof(key), "%s", loaded.next.c_str());
+            continue;
+        }
+        sec = std::move(loaded);
+        resolved = true;
+        break;
+    }
+    if (!resolved || sec.text.empty()) {
+        return refuse("dialogue section missing or empty", true);
+    }
+
+    if (dComIfGp_getMsgCommonArchive() == NULL) {
+        return refuse("message archive unavailable", true);
+    }
+#if TARGET_PC_NATIVE_UI
+    if (s_mountDialogue == NULL) {
+        s_mountDialogue = JKR_NEW dALBWDialogue_c();
+    }
+    if (s_mountDialogue == NULL) {
+        return refuse("dialogue allocation failed", false);
+    }
+    s_mountDialogue->tryCreate();
+    if (!s_mountDialogue->isReady() || s_mountDialogue->isVisible()) {
+        return refuse("dialogue window unavailable", false);
+    }
+    s_mountDialogue->showWithText(sec.text.c_str());
+    if (!sec.next.empty()) {
+        std::snprintf(a->mDialogueNext, sizeof(a->mDialogueNext), "%s", sec.next.c_str());
+    } else {
+        a->mDialogueNext[0] = '\0';
+    }
+    std::snprintf(a->mDialogueSection, sizeof(a->mDialogueSection), "%s", key);
+    a->mTalking = true;
+    a->mTalkEventActive = fromEvent;
+    a->mTalkFrames = 0;
+    s_mountDialogueOwner = a;
+    setMountAnimation(a, a->mManifest.talk1, J3DFrameCtrl::EMode_LOOP);
+    return true;
+#else
+    return refuse("native dialogue disabled", false);
+#endif
+}
+
+// Match itemmdl BDL path: DoBdlMaterialCalc → readPatchedMaterial.
+static constexpr u32 kExtNpcBdlFlags = 0x59020010u | 0x2000u;
+
+void trimInPlace(std::string& s) {
+    while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ' || s.back() == '\t')) {
+        s.pop_back();
+    }
+    size_t i = 0;
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t')) {
+        ++i;
+    }
+    if (i > 0) {
+        s.erase(0, i);
+    }
+}
+
+bool parseBoolVal(const std::string& val) {
+    return val == "1" || val == "true" || val == "yes" || val == "on";
+}
+
+bool parseVec3(const std::string& value, cXyz* out) {
+    return out != NULL &&
+           sscanf(value.c_str(), "%f,%f,%f", &out->x, &out->y, &out->z) == 3;
+}
+
+bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManifest* out) {
+    std::ifstream in(path);
+    if (!in) {
+        return false;
+    }
+    memset(out, 0, sizeof(*out));
+    out->cylRadius = 40.0f;
+    out->cylHeight = 100.0f;
+    out->scale = 1.0f;
+    out->socketArg = -1;
+    out->hostRoom = 0;
+    out->hostLayer = -1;
+    // Neutral gray ambient default (manifest may override).
+    out->ambR = 90;
+    out->ambG = 90;
+    out->ambB = 90;
+    snprintf(out->modFolder, sizeof(out->modFolder), "%s", modFolder);
+
+    dExtNpcSubtype* subtype = NULL;
+    std::string line;
+    while (std::getline(in, line)) {
+        trimInPlace(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        if (line[0] == '[') {
+            subtype = NULL;
+            int index = -1;
+            if (sscanf(line.c_str(), "[subtype.%d]", &index) == 1 &&
+                index >= 0 && index < kExtNpcMaxSubtype) {
+                subtype = &out->subtypes[index];
+                subtype->valid = true;
+                if (index + 1 > out->subtypeCount) {
+                    out->subtypeCount = index + 1;
+                }
+            }
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+        trimInPlace(key);
+        trimInPlace(val);
+        for (char& c : key) {
+            if (c >= 'A' && c <= 'Z') {
+                c = (char)(c - 'A' + 'a');
+            }
+        }
+        auto set = [&](char* dst, size_t n) { snprintf(dst, n, "%s", val.c_str()); };
+        if (subtype != NULL) {
+            if (key == "arg") {
+                subtype->arg = atoi(val.c_str());
+            } else if (key == "idle") {
+                set(subtype->idle, sizeof(subtype->idle));
+            } else if (key == "attach_model") {
+                set(subtype->attachModel, sizeof(subtype->attachModel));
+            } else if (key == "attach_joint") {
+                set(subtype->attachJoint, sizeof(subtype->attachJoint));
+            } else if (key == "display_name") {
+                set(subtype->displayName, sizeof(subtype->displayName));
+            }
+        } else if (key == "proc") {
+            set(out->proc, sizeof(out->proc));
+        } else if (key == "socket") {
+            set(out->socket, sizeof(out->socket));
+        } else if (key == "socket_arg") {
+            out->socketArg = atoi(val.c_str());
+        } else if (key == "warp_label") {
+            set(out->warpLabel, sizeof(out->warpLabel));
+        } else if (key == "host_stage") {
+            set(out->hostStage, sizeof(out->hostStage));
+        } else if (key == "host_room") {
+            out->hostRoom = atoi(val.c_str());
+        } else if (key == "host_layer") {
+            out->hostLayer = atoi(val.c_str());
+        } else if (key == "host_pos") {
+            if (parseVec3(val, &out->hostPos)) {
+                out->hasHostPos = true;
+            }
+        } else if (key == "arc") {
+            set(out->arc, sizeof(out->arc));
+        } else if (key == "model") {
+            set(out->model, sizeof(out->model));
+        } else if (key == "model2") {
+            set(out->model2, sizeof(out->model2));
+        } else if (key == "model3") {
+            set(out->model3, sizeof(out->model3));
+        } else if (key == "model2_btk") {
+            set(out->model2Btk, sizeof(out->model2Btk));
+        } else if (key == "collision") {
+            set(out->collision, sizeof(out->collision));
+        } else if (key == "type") {
+            out->isBg = val == "bg";
+        } else if (key == "model_space") {
+            out->modelSpaceLocal = (val == "local");
+        } else if (key == "anchor") {
+            if (parseVec3(val, &out->anchor)) {
+                out->hasAnchor = true;
+            }
+        } else if (key == "spawn_rel") {
+            if (parseVec3(val, &out->spawnRel)) {
+                out->hasSpawnRel = true;
+            }
+        } else if (key == "idle") {
+            set(out->idle, sizeof(out->idle));
+        } else if (key == "talk1") {
+            set(out->talk1, sizeof(out->talk1));
+        } else if (key == "talk2") {
+            set(out->talk2, sizeof(out->talk2));
+        } else if (key == "btp") {
+            set(out->btp, sizeof(out->btp));
+        } else if (key == "display_name") {
+            set(out->displayName, sizeof(out->displayName));
+        } else if (key == "neck_joint") {
+            set(out->neckJoint, sizeof(out->neckJoint));
+        } else if (key == "dialogue") {
+            set(out->dialogueKey, sizeof(out->dialogueKey));
+        } else if (key == "attach_model" || key == "attach_model2") {
+            const int index = key == "attach_model2" ? 1 : 0;
+            set(out->attach[index].model, sizeof(out->attach[index].model));
+            if (index + 1 > out->attachCount) {
+                out->attachCount = index + 1;
+            }
+        } else if (key == "attach_joint" || key == "attach_joint2") {
+            const int index = key == "attach_joint2" ? 1 : 0;
+            set(out->attach[index].joint, sizeof(out->attach[index].joint));
+            if (index + 1 > out->attachCount) {
+                out->attachCount = index + 1;
+            }
+        } else if (key == "companion_model") {
+            set(out->companionModel, sizeof(out->companionModel));
+        } else if (key == "companion_idle") {
+            set(out->companionIdle, sizeof(out->companionIdle));
+        } else if (key == "cyl_radius") {
+            out->cylRadius = (f32)atof(val.c_str());
+        } else if (key == "cyl_height") {
+            out->cylHeight = (f32)atof(val.c_str());
+        } else if (key == "scale") {
+            out->scale = (f32)atof(val.c_str());
+            if (out->scale <= 0.01f) {
+                out->scale = 1.0f;
+            }
+        } else if (key == "skip_btp") {
+            out->skipBtp = parseBoolVal(val);
+        } else if (key == "amb" || key == "ambient") {
+            // amb=RRGGBB | #RRGGBB | R,G,B
+            std::string v = val;
+            if (!v.empty() && v[0] == '#') {
+                v.erase(0, 1);
+            }
+            unsigned r = 90, g = 90, b = 90;
+            if (v.find(',') != std::string::npos) {
+                sscanf(v.c_str(), "%u,%u,%u", &r, &g, &b);
+            } else if (v.size() >= 6) {
+                sscanf(v.c_str(), "%02x%02x%02x", &r, &g, &b);
+            }
+            out->ambR = (u8)(r > 255 ? 255 : r);
+            out->ambG = (u8)(g > 255 ? 255 : g);
+            out->ambB = (u8)(b > 255 ? 255 : b);
+        } else if (key == "amb_r") {
+            out->ambR = (u8)(atoi(val.c_str()) & 0xFF);
+        } else if (key == "amb_g") {
+            out->ambG = (u8)(atoi(val.c_str()) & 0xFF);
+        } else if (key == "amb_b") {
+            out->ambB = (u8)(atoi(val.c_str()) & 0xFF);
+        } else if (key == "source") {
+            for (char& c : val) {
+                if (c >= 'A' && c <= 'Z') {
+                    c = (char)(c - 'A' + 'a');
+                }
+            }
+            out->fromDvd = (val == "dvd" || val == "game" || val == "tp");
+        } else if (key == "population") {
+            set(out->populationCsv, sizeof(out->populationCsv));
+        } else if (key == "population_stage") {
+            set(out->populationStage, sizeof(out->populationStage));
+        } else if (key == "spawn_if_flag") {
+            set(out->spawnIfFlag, sizeof(out->spawnIfFlag));
+        } else if (key == "spawn_unless_flag") {
+            set(out->spawnUnlessFlag, sizeof(out->spawnUnlessFlag));
+        } else if (key == "carryable") {
+            out->carryable = parseBoolVal(val);
+        } else if (key == "static") {
+            out->isStatic = parseBoolVal(val);
+        } else if (key == "door") {
+            out->doorAttention = parseBoolVal(val);
+        }
+    }
+    // Phase M: no character dialogue defaults in code — require dialogue= or G1 refuse.
+    if (out->socket[0] == '\0' && out->proc[0]) {
+        snprintf(out->socket, sizeof(out->socket), "%s", out->proc);
+    }
+    // №32: static props/doors may omit idle (NULL anm). BG still needs collision=.
+    out->valid = out->proc[0] && out->arc[0] && out->model[0] &&
+                 (out->isBg ? out->collision[0] : (out->idle[0] || out->isStatic));
+    return out->valid;
+}
+
+bool arcFilePresent(const fs::path& modRoot, const char* arcName) {
+    std::error_code ec;
+    return fs::is_regular_file(modRoot / "arcs" / (std::string(arcName) + ".arc"), ec);
+}
+
+void stageLog(const char* stage, const char* detail) {
+    DuskLog.info("[ExtNpcMount:D1] {} — {}", stage, detail != NULL ? detail : "");
+}
+
+// I1 (boots/leaf recipe — History №12c): WW lit channels ship litMask 0x03 (slots 0+1).
+// TP actor/itemmdl host path only reliably fills slot 0; slot-1 garbage → black body
+// (eyes stay bright because unlit). Working WW-boots overlay Kmdl_13.bmd uses 0x01.
+// Clamp ENABLED channels to 0x01; leave unlit channels alone. Do NOT force 0xFF.
+void applyActorLightMask(J3DModelData* modelData) {
+    if (modelData == NULL) {
+        return;
+    }
+    for (u16 i = 0; i < modelData->getMaterialNum(); i++) {
+        J3DMaterial* material = modelData->getMaterialNodePointer(i);
+        if (material == NULL || material->getColorChan(0) == NULL) {
+            continue;
+        }
+        J3DColorChan* chan = material->getColorChan(0);
+        if (chan->getEnable() == 0) {
+            continue;  // unlit (eyes) — leave pristine
+        }
+        const u8 lightMask = chan->getLightMask();
+        if (lightMask != 0x01) {
+            chan->setLightMask(0x01);
+            material->change();
+        }
+    }
+}
+
+J3DModelData* finishMountedModelData(J3DModelData* modelData) {
+    stageLog("finish", "enter");
+    if (modelData == NULL) {
+        stageLog("finish", "FAIL modelData=NULL");
+        return NULL;
+    }
+    const u16 matNum = modelData->getMaterialNum();
+    char buf[96];
+    snprintf(buf, sizeof(buf), "matNum=%u jointNum=%u", matNum, modelData->getJointNum());
+    stageLog("finish", buf);
+    if (matNum == 0) {
+        stageLog("finish", "FAIL matNum=0");
+        return NULL;
+    }
+    J3DMaterial* mat0 = modelData->getMaterialNodePointer(0);
+    if (mat0 == NULL) {
+        stageLog("finish", "FAIL material[0]=NULL");
+        return NULL;
+    }
+
+    applyActorLightMask(modelData);
+
+    for (u16 i = 0; i < matNum; i++) {
+        J3DMaterial* material = modelData->getMaterialNodePointer(i);
+        if (material == NULL) {
+            snprintf(buf, sizeof(buf), "FAIL material[%u]=NULL", i);
+            stageLog("finish", buf);
+            return NULL;
+        }
+        material->change();
+        J3DMaterialAnm* materialAnm = JKR_NEW J3DMaterialAnm();
+        if (materialAnm == NULL) {
+            stageLog("finish", "FAIL J3DMaterialAnm alloc");
+            return NULL;
+        }
+        material->setMaterialAnm(materialAnm);
+    }
+    if (modelData->newSharedDisplayList(J3DMdlFlag_UseSingleDL) != kJ3DError_Success) {
+        stageLog("finish", "FAIL newSharedDisplayList");
+        return NULL;
+    }
+    modelData->simpleCalcMaterial(const_cast<MtxP>(j3dDefaultMtx));
+    modelData->makeSharedDL();
+    stageLog("finish", "ok");
+    return modelData;
+}
+
+J3DModelData* resolveMountedModelUncached(void* res) {
+    if (res == NULL) {
+        stageLog("resolve", "FAIL res=NULL");
+        return NULL;
+    }
+    const J3DModelFileData* header = (const J3DModelFileData*)res;
+    char magicBuf[64];
+    snprintf(magicBuf, sizeof(magicBuf), "magic1=%08x magic2=%08x", (u32)header->mMagic1,
+             (u32)header->mMagic2);
+    stageLog("resolve", magicBuf);
+
+    if (header->mMagic1 == 'J3D2' &&
+        (header->mMagic2 == 'bdl4' || header->mMagic2 == 'bdl3')) {
+        stageLog("resolve", "path=loadBinaryDisplayList");
+        J3DModelData* loaded =
+            J3DModelLoaderDataBase::loadBinaryDisplayList(res, kExtNpcBdlFlags);
+        if (loaded == NULL) {
+            stageLog("resolve", "FAIL loadBinaryDisplayList NULL");
+            return NULL;
+        }
+        return finishMountedModelData(loaded);
+    }
+    if (header->mMagic1 == 'J3D2' &&
+        (header->mMagic2 == 'bmd3' || header->mMagic2 == 'bmd2')) {
+        stageLog("resolve", "path=load (bmd)");
+        J3DModelData* loaded = (J3DModelData*)J3DModelLoaderDataBase::load(res, 0x59020010);
+        if (loaded == NULL) {
+            stageLog("resolve", "FAIL load(bmd) NULL");
+            return NULL;
+        }
+        return finishMountedModelData(loaded);
+    }
+    stageLog("resolve", "path=preinstantiated J3DModelData*");
+    J3DModelData* data = (J3DModelData*)res;
+    if (data->getMaterialNum() == 0 || data->getMaterialNodePointer(0) == NULL) {
+        stageLog("resolve", "FAIL preinstantiated model has no material[0]");
+        return NULL;
+    }
+    applyActorLightMask(data);
+    return data;
+}
+
+// №26 F3: keys published during the current create — evicted on abort.
+std::vector<std::string> s_createPublishedKeys;
+bool s_createPublishTrack = false;
+
+void beginCreateCacheTrack() {
+    s_createPublishedKeys.clear();
+    s_createPublishTrack = true;
+}
+
+void abortCreateCacheTrack() {
+    if (!s_createPublishTrack) {
+        return;
+    }
+    for (const std::string& key : s_createPublishedKeys) {
+        auto it = s_modelDataCache.find(key);
+        if (it != s_modelDataCache.end()) {
+            DuskLog.warn("[ExtNpcMount] F3 cache eviction on abort: {}", key);
+            s_modelDataCache.erase(it);
+        }
+    }
+    s_createPublishedKeys.clear();
+    s_createPublishTrack = false;
+}
+
+void commitCreateCacheTrack() {
+    s_createPublishedKeys.clear();
+    s_createPublishTrack = false;
+}
+
+// GameHeap-pin + session cache. Never mutates dRes slots; safe for N concurrent mounts.
+// №26 F3: publish-on-success only; track keys for abort eviction.
+J3DModelData* acquireMountedModel(const char* arc, const char* modelName, void* res) {
+    if (arc == NULL || modelName == NULL) {
+        return NULL;
+    }
+    const std::string key = std::string(arc) + "/" + modelName;
+    auto it = s_modelDataCache.find(key);
+    if (it != s_modelDataCache.end()) {
+        stageLog("resolve", "path=session-cache hit");
+        return it->second;
+    }
+
+    JKRHeap* gameHeap = (JKRHeap*)mDoExt_getGameHeap();
+    JKRHeap* prevHeap = gameHeap != NULL ? mDoExt_setCurrentHeap(gameHeap) : NULL;
+    J3DModelData* data = resolveMountedModelUncached(res);
+    if (prevHeap != NULL) {
+        mDoExt_setCurrentHeap(prevHeap);
+    }
+    if (data == NULL) {
+        return NULL;
+    }
+    // Publish only after full resolve/finish succeeded.
+    s_modelDataCache[key] = data;
+    if (s_createPublishTrack) {
+        s_createPublishedKeys.push_back(key);
+    }
+    DuskLog.info("[ExtNpcMount] model-data cache + {} heap={} (publish-on-success)", key,
+                 gameHeap != NULL ? "GameHeap" : "?");
+    return data;
+}
+
+// BG/room meshes: load raw J3D2 if dRes left the file unparsed (Outset BDLM path),
+// but NEVER applyActorLightMask — that kills unlit/vertex-colored WW room mats.
+J3DModelData* finishBgModelData(J3DModelData* modelData) {
+    if (modelData == NULL || modelData->getMaterialNum() == 0 ||
+        modelData->getMaterialNodePointer(0) == NULL) {
+        return NULL;
+    }
+    for (u16 i = 0; i < modelData->getMaterialNum(); i++) {
+        J3DMaterial* material = modelData->getMaterialNodePointer(i);
+        if (material == NULL) {
+            return NULL;
+        }
+        material->change();
+        J3DMaterialAnm* materialAnm = JKR_NEW J3DMaterialAnm();
+        if (materialAnm == NULL) {
+            return NULL;
+        }
+        material->setMaterialAnm(materialAnm);
+    }
+    if (modelData->newSharedDisplayList(J3DMdlFlag_UseSingleDL) != kJ3DError_Success) {
+        return NULL;
+    }
+    modelData->simpleCalcMaterial(const_cast<MtxP>(j3dDefaultMtx));
+    modelData->makeSharedDL();
+    return modelData;
+}
+
+J3DModelData* resolveBgModelUncached(void* res) {
+    if (res == NULL) {
+        return NULL;
+    }
+    const J3DModelFileData* header = (const J3DModelFileData*)res;
+    if (header->mMagic1 == 'J3D2' &&
+        (header->mMagic2 == 'bdl4' || header->mMagic2 == 'bdl3')) {
+        J3DModelData* loaded =
+            J3DModelLoaderDataBase::loadBinaryDisplayList(res, kExtNpcBdlFlags);
+        return finishBgModelData(loaded);
+    }
+    if (header->mMagic1 == 'J3D2' &&
+        (header->mMagic2 == 'bmd3' || header->mMagic2 == 'bmd2')) {
+        J3DModelData* loaded = (J3DModelData*)J3DModelLoaderDataBase::load(res, 0x59020010);
+        return finishBgModelData(loaded);
+    }
+    // Already a live J3DModelData* from dRes — use as-is (no NPC light-mask).
+    J3DModelData* data = (J3DModelData*)res;
+    if (data->getMaterialNum() == 0 || data->getMaterialNodePointer(0) == NULL) {
+        return NULL;
+    }
+    return data;
+}
+
+J3DModelData* acquireBgModel(const char* arc, const char* modelName, void* res) {
+    if (arc == NULL || modelName == NULL) {
+        return NULL;
+    }
+    const std::string key = std::string("bg:") + arc + "/" + modelName;
+    auto it = s_modelDataCache.find(key);
+    if (it != s_modelDataCache.end()) {
+        return it->second;
+    }
+    JKRHeap* gameHeap = (JKRHeap*)mDoExt_getGameHeap();
+    JKRHeap* prevHeap = gameHeap != NULL ? mDoExt_setCurrentHeap(gameHeap) : NULL;
+    J3DModelData* data = resolveBgModelUncached(res);
+    if (prevHeap != NULL) {
+        mDoExt_setCurrentHeap(prevHeap);
+    }
+    if (data == NULL) {
+        return NULL;
+    }
+    s_modelDataCache[key] = data;
+    if (s_createPublishTrack) {
+        s_createPublishedKeys.push_back(key);
+    }
+    DuskLog.info("[ExtNpcMount] BG model-data cache + {} (publish-on-success)", key);
+    return data;
+}
+
+bool tryBindBtp(dExtNpcMount_c* a, J3DModelData* data) {
+    a->mpBtp = NULL;
+    a->mBtpBound = false;
+    if (a->mManifest.skipBtp || a->mManifest.btp[0] == '\0') {
+        stageLog("btp", "skipped (skip_btp or no btp=)");
+        return true;
+    }
+    J3DAnmTexPattern* pat =
+        (J3DAnmTexPattern*)dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.btp);
+    if (pat == NULL) {
+        DuskLog.warn("[ExtNpcMount] btp '{}' missing in arc '{}' — blink deferred",
+                     a->mManifest.btp, a->mManifest.arc);
+        stageLog("btp", "FAIL res NULL (cosmetic defer)");
+        return true;  // non-fatal
+    }
+    a->mpBtp = JKR_NEW mDoExt_btpAnm();
+    if (a->mpBtp == NULL) {
+        stageLog("btp", "FAIL alloc");
+        return true;
+    }
+    // Loop blink: attribute EMode_LOOP (2) like npc_ks relief path.
+    if (a->mpBtp->init(data, pat, 1, J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1) == 0) {
+        DuskLog.warn("[ExtNpcMount] btp '{}' bind failed — blink deferred", a->mManifest.btp);
+        stageLog("btp", "FAIL init (cosmetic defer)");
+        a->mpBtp = NULL;
+        return true;
+    }
+    a->mBtpBound = true;
+    stageLog("btp", "bound ok");
+    return true;
+}
+
+void applyModelAmbient(J3DModel* model, const GXColor& amb) {
+    if (model == NULL || model->getModelData() == NULL) {
+        return;
+    }
+    J3DModelData* data = model->getModelData();
+    for (u16 i = 0; i < data->getMaterialNum(); ++i) {
+        J3DMaterial* mat = data->getMaterialNodePointer(i);
+        if (mat != NULL) {
+            mat->change();
+            mat->setAmbColor(0, (J3DGXColor*)&amb);
+        }
+    }
+}
+
+void logJointNames(J3DModelData* data) {
+    JUTNameTab* names = data != NULL ? data->getJointTree().getJointName() : NULL;
+    if (names == NULL) {
+        DuskLog.warn("[ExtNpcMount] body has no joint-name table");
+        return;
+    }
+    for (u16 i = 0; i < data->getJointNum(); ++i) {
+        DuskLog.warn("[ExtNpcMount] body joint[{}]={}", i, names->getName(i));
+    }
+}
+
+bool addAttachment(dExtNpcMount_c* a, J3DModelData* bodyData, const dExtNpcAttachSpec& spec) {
+    if (spec.model[0] == '\0' || a->mAttachCount >= kExtNpcMaxAttach) {
+        return true;
+    }
+    void* raw = dComIfG_getObjectRes(a->mManifest.arc, spec.model);
+    J3DModelData* data = acquireMountedModel(a->mManifest.arc, spec.model, raw);
+    if (data == NULL) {
+        DuskLog.warn("[ExtNpcMount] attachment '{}' missing/unparseable in arc '{}'", spec.model,
+                     a->mManifest.arc);
+        return true;
+    }
+
+    // Prefer companion joint table when present.
+    J3DModelData* jointHost = bodyData;
+    bool onCompanion = false;
+    if (a->mpCompanion != NULL && a->mpCompanion->getModel() != NULL) {
+        J3DModelData* companionData = a->mpCompanion->getModel()->getModelData();
+        JUTNameTab* cNames = companionData != NULL ? companionData->getJointTree().getJointName() : NULL;
+        const char* joint = spec.joint[0] ? spec.joint : "head";
+        if (cNames != NULL && cNames->getIndex(joint) >= 0) {
+            jointHost = companionData;
+            onCompanion = true;
+        }
+    }
+
+    JUTNameTab* names = jointHost->getJointTree().getJointName();
+    const char* joint = spec.joint[0] ? spec.joint : "head";
+    const s32 jointIndex = names != NULL ? names->getIndex(joint) : -1;
+    if (jointIndex < 0 || jointIndex >= jointHost->getJointNum()) {
+        DuskLog.warn("[ExtNpcMount] attachment '{}' skipped: joint '{}' not found", spec.model, joint);
+        logJointNames(jointHost);
+        if (jointHost != bodyData) {
+            logJointNames(bodyData);
+        }
+        return true;
+    }
+    J3DModel* model = mDoExt_J3DModel__create(data, 0, 1);
+    if (model == NULL) {
+        DuskLog.warn("[ExtNpcMount] attachment '{}' model allocation failed", spec.model);
+        return true;
+    }
+    const int slot = a->mAttachCount++;
+    a->mpAttach[slot] = model;
+    a->mAttachJnt[slot] = (s16)jointIndex;
+    a->mAttachOnCompanion[slot] = onCompanion ? 1 : 0;
+    J3DModel* hostModel =
+        onCompanion ? a->mpCompanion->getModel() : a->mpMorf->getModel();
+    model->setBaseTRMtx(hostModel->getAnmMtx(jointIndex));
+    DuskLog.info("[ExtNpcMount] attachment '{}' bound to {} ({}) on {}", spec.model, joint,
+                 jointIndex, onCompanion ? "companion" : "body");
+    return true;
+}
+
+int useHeapInit(fopAc_ac_c* i_this) {
+    dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
+    stageLog("heap", "getObjectRes model");
+    void* raw = dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.model);
+    if (raw == NULL) {
+        stageLog("heap", "FAIL model res NULL");
+        return 0;
+    }
+    J3DModelData* data = acquireMountedModel(a->mManifest.arc, a->mManifest.model, raw);
+    if (data == NULL) {
+        DuskLog.warn("[ExtNpcMount] model '{}' missing/unparseable in arc '{}'", a->mManifest.model,
+                     a->mManifest.arc);
+        return 0;
+    }
+
+    // №27 N3: bind idle only when it matches the body model prefix; else static (NULL anm).
+    stageLog("heap", "getObjectRes idle BCK");
+    J3DAnmTransform* anm = NULL;
+    if (a->mManifest.idle[0] && animMatchesModel(a->mManifest.model, a->mManifest.idle)) {
+        anm = (J3DAnmTransform*)dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.idle);
+        if (anm == NULL) {
+            DuskLog.warn("[ExtNpcMount] idle '{}' missing — static pose", a->mManifest.idle);
+        }
+    } else if (a->mManifest.idle[0]) {
+        DuskLog.warn("[ExtNpcMount] N3 refuse idle '{}' for model '{}' — static pose",
+                     a->mManifest.idle, a->mManifest.model);
+    }
+
+    J3DMaterial* mat0 = data->getMaterialNodePointer(0);
+    if (mat0 == NULL) {
+        stageLog("heap", "FAIL pre-McaMorf material[0]=NULL");
+        return 0;
+    }
+
+    stageLog("heap", "McaMorf ctor");
+    a->mpMorf = JKR_NEW mDoExt_McaMorf(data, NULL, NULL, anm, J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1,
+                                       1, NULL, 0x80000, 0x11000084);
+    if (a->mpMorf == NULL || a->mpMorf->getModel() == NULL) {
+        stageLog("heap", "FAIL McaMorf");
+        a->mpMorf = NULL;
+        return 0;
+    }
+
+    a->mpCompanion = NULL;
+    if (a->mManifest.companionModel[0]) {
+        const char* cIdle = a->mManifest.companionIdle[0] ? a->mManifest.companionIdle :
+                                                           a->mManifest.idle;
+        void* cRaw = dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.companionModel);
+        J3DModelData* cData =
+            acquireMountedModel(a->mManifest.arc, a->mManifest.companionModel, cRaw);
+        J3DAnmTransform* cAnm =
+            (J3DAnmTransform*)dComIfG_getObjectRes(a->mManifest.arc, cIdle);
+        if (cData != NULL && cAnm != NULL) {
+            a->mpCompanion =
+                JKR_NEW mDoExt_McaMorf(cData, NULL, NULL, cAnm, J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1,
+                                       1, NULL, 0x80000, 0x11000084);
+            if (a->mpCompanion == NULL || a->mpCompanion->getModel() == NULL) {
+                DuskLog.warn("[ExtNpcMount] companion '{}' McaMorf failed — continuing without",
+                             a->mManifest.companionModel);
+                a->mpCompanion = NULL;
+            } else {
+                DuskLog.info("[ExtNpcMount] companion '{}' idle='{}' bound",
+                             a->mManifest.companionModel, cIdle);
+            }
+        } else {
+            DuskLog.warn("[ExtNpcMount] companion '{}' / idle '{}' missing — continuing without",
+                         a->mManifest.companionModel, cIdle);
+        }
+    }
+
+    tryBindBtp(a, data);
+    a->mAttachCount = 0;
+    for (int i = 0; i < kExtNpcMaxAttach; ++i) {
+        a->mpAttach[i] = NULL;
+        a->mAttachJnt[i] = -1;
+        a->mAttachOnCompanion[i] = 0;
+        addAttachment(a, data, a->mManifest.attach[i]);
+    }
+    stageLog("heap", "ok — model bound");
+    return 1;
+}
+
+void updateBgTransform(dExtNpcMount_c* a);
+
+int useBgHeapInit(fopAc_ac_c* i_this) {
+    dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
+    // Outset's models stay raw J3D2 in dRes (BDLM) — must loadBinaryDisplayList /
+    // load before touching ModelData. Do NOT use the NPC light-mask finish.
+    const char* names[] = {a->mManifest.model, a->mManifest.model2, a->mManifest.model3};
+    for (int i = 0; i < 3; ++i) {
+        a->mpBgModels[i] = NULL;
+        if (names[i][0] == '\0') {
+            continue;
+        }
+        void* raw = dComIfG_getObjectRes(a->mManifest.arc, names[i]);
+        J3DModelData* data = acquireBgModel(a->mManifest.arc, names[i], raw);
+        if (data == NULL) {
+            DuskLog.warn("[ExtNpcMount] BG model '{}' resolve failed in '{}'", names[i],
+                         a->mManifest.arc);
+            return 0;
+        }
+        a->mpBgModels[i] = mDoExt_J3DModel__create(data, 0x80000, 0x11000084);
+        if (a->mpBgModels[i] == NULL) {
+            DuskLog.warn("[ExtNpcMount] BG model '{}' J3DModel__create failed", names[i]);
+            return 0;
+        }
+        DuskLog.info("[ExtNpcMount] BG model[{}] '{}' mats={} joints={} shapes={}", i, names[i],
+                     data->getMaterialNum(), data->getJointNum(), data->getShapeNum());
+    }
+    a->mpBgBtk = NULL;
+    if (a->mManifest.model2Btk[0] && a->mpBgModels[1] != NULL) {
+        J3DAnmTextureSRTKey* btk = (J3DAnmTextureSRTKey*)dComIfG_getObjectRes(
+            a->mManifest.arc, a->mManifest.model2Btk);
+        a->mpBgBtk = JKR_NEW mDoExt_btkAnm();
+        if (btk == NULL || a->mpBgBtk == NULL ||
+            !a->mpBgBtk->init(a->mpBgModels[1]->getModelData(), btk, TRUE,
+                               J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1)) {
+            DuskLog.warn("[ExtNpcMount] BG btk '{}' unavailable", a->mManifest.model2Btk);
+            a->mpBgBtk = NULL;
+        } else {
+            DuskLog.info("[ExtNpcMount] BG btk '{}' bound", a->mManifest.model2Btk);
+        }
+    }
+    // brakeeff / Obj_Fmobj pattern: Set against IDENTITY, then copy the real
+    // host−anchor mtx and Move() AFTER Regist. GlobalVtx-at-Set with the final
+    // translate left the dzb stranded at Great Sea (№20 hologram).
+    MTXIdentity(a->mBgMtx);
+    void* dzb = dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.collision);
+    if (dzb == NULL) {
+        DuskLog.warn("[ExtNpcMount] BG collision '{}' missing in arc '{}'", a->mManifest.collision,
+                     a->mManifest.arc);
+        return 0;
+    }
+    a->mpBgW = JKR_NEW dBgW();
+    if (a->mpBgW == NULL || a->mpBgW->Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx) == 1) {
+        DuskLog.warn("[ExtNpcMount] BG dBgW::Set failed for '{}'", a->mManifest.collision);
+        return 0;
+    }
+    a->mpBgW->SetCrrFunc(dBgS_MoveBGProc_Typical);
+    return 1;
+}
+
+void updateBgTransform(dExtNpcMount_c* a) {
+    // DZB (world-baked): always host − anchor.
+    mDoMtx_stack_c::transS(a->current.pos.x - a->mManifest.anchor.x,
+                           a->current.pos.y - a->mManifest.anchor.y,
+                           a->current.pos.z - a->mManifest.anchor.z);
+    MTXCopy(mDoMtx_stack_c::get(), a->mBgMtx);
+
+    // Models: №22 — WW sea-room meshes are cell-LOCAL; one shared mtx cannot align
+    // them with a world-baked dzb. Local ⇒ translate(host) only.
+    if (a->mManifest.modelSpaceLocal) {
+        mDoMtx_stack_c::transS(a->current.pos.x, a->current.pos.y, a->current.pos.z);
+    }
+    MtxP modelBase = mDoMtx_stack_c::get();
+    for (int i = 0; i < 3; ++i) {
+        if (a->mpBgModels[i] != NULL) {
+            a->mpBgModels[i]->setBaseTRMtx(modelBase);
+            a->mpBgModels[i]->calc();  // without this, meshes stay at world origin
+        }
+    }
+}
+
+}  // namespace
+
+void dExtNpcMount_rescanProviders() {
+    s_providers.clear();
+    s_providerOrder.clear();
+    // Keep s_modelDataCache — session-lived; arcs are stable while the mod folder is.
+    std::error_code ec;
+    const fs::path userRoot = dusk::ConfigPath / "model_replacements";
+    if (!fs::is_directory(userRoot, ec)) {
+        return;
+    }
+    // A2: socket+arg first-claim wins (directory walk order; top mod list is separate).
+    std::unordered_map<std::string, std::string> claimedSocketArg;  // "SOCKET:arg" → proc
+    for (auto it = fs::directory_iterator(userRoot, ec); it != fs::directory_iterator();
+         it.increment(ec)) {
+        if (ec || !it->is_directory(ec)) {
+            continue;
+        }
+        const fs::path modRoot = it->path();
+        const std::string modName = modRoot.filename().string();
+        if (!dusk::custom_assets::is_folder_enabled(modName.c_str())) {
+            continue;
+        }
+        const fs::path npcDir = modRoot / "npc";
+        if (!fs::is_directory(npcDir, ec)) {
+            continue;
+        }
+        for (auto nit = fs::directory_iterator(npcDir, ec); nit != fs::directory_iterator();
+             nit.increment(ec)) {
+            if (ec || !nit->is_regular_file(ec)) {
+                continue;
+            }
+            if (nit->path().extension() != ".ini") {
+                continue;
+            }
+            dExtNpcManifest man{};
+            if (!parseManifestFile(nit->path(), modName.c_str(), &man)) {
+                continue;
+            }
+            if (!man.fromDvd && !arcFilePresent(modRoot, man.arc)) {
+                DuskLog.debug("[ExtNpcMount] '{}' manifest ok but arcs/{}.arc missing — socket idle",
+                              man.proc, man.arc);
+                continue;
+            }
+            const char* sock = man.socket[0] ? man.socket : man.proc;
+            const int sarg = man.socketArg >= 0 ? man.socketArg : 0;
+            const std::string claimKey = std::string(sock) + ":" + std::to_string(sarg);
+            auto claimed = claimedSocketArg.find(claimKey);
+            if (claimed != claimedSocketArg.end() && claimed->second != man.proc) {
+                DuskLog.warn(
+                    "[ExtNpcMount] socket claim lost: {} arg={} kept proc={} rejected '{}' (mod {})",
+                    sock, sarg, claimed->second, man.proc, modName);
+                continue;
+            }
+            claimedSocketArg[claimKey] = man.proc;
+            s_providers[man.proc] = man;
+            s_providerOrder.push_back(man.proc);
+            DuskLog.info("[ExtNpcMount] provider {} ← mod '{}' arc={} skip_btp={} btp={} scale={}",
+                         man.proc, modName, man.arc, man.skipBtp ? 1 : 0,
+                         man.btp[0] ? man.btp : "-", man.scale);
+        }
+
+        // №27 N4: overlay user-locked identities from population/identity.ini.
+        const fs::path idPath = modRoot / "population" / "identity.ini";
+        std::ifstream idIn(idPath);
+        if (idIn) {
+            std::string line;
+            std::string section;
+            while (std::getline(idIn, line)) {
+                while (!line.empty() &&
+                       (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
+                    line.pop_back();
+                }
+                if (line.empty() || line[0] == '#' || line[0] == ';') {
+                    continue;
+                }
+                if (line[0] == '[') {
+                    const size_t end = line.find(']');
+                    section = end == std::string::npos ? "" : line.substr(1, end - 1);
+                    continue;
+                }
+                const size_t eq = line.find('=');
+                if (eq == std::string::npos || section.empty()) {
+                    continue;
+                }
+                std::string key = line.substr(0, eq);
+                std::string val = line.substr(eq + 1);
+                while (!key.empty() && key.back() == ' ') {
+                    key.pop_back();
+                }
+                while (!val.empty() && val[0] == ' ') {
+                    val.erase(0, 1);
+                }
+                if (key != "display_name" && key != "proc") {
+                    continue;
+                }
+                // Section may be census name (Ls1) or proc (NPC_LS).
+                std::string procKey = section;
+                if (key == "proc") {
+                    procKey = val;
+                    continue;
+                }
+                // Prefer matching by proc; also try census→proc via common NPC_ prefix guess.
+                auto pit = s_providers.find(procKey);
+                if (pit == s_providers.end()) {
+                    // Try NPC_<SECTION> uppercased stem.
+                    std::string guess = "NPC_";
+                    for (char c : section) {
+                        if (c >= 'a' && c <= 'z') {
+                            guess += (char)(c - 'a' + 'A');
+                        } else if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+                            guess += c;
+                        }
+                    }
+                    // Strip trailing digits for Ls1 → NPC_LS
+                    while (!guess.empty() && guess.back() >= '0' && guess.back() <= '9') {
+                        guess.pop_back();
+                    }
+                    pit = s_providers.find(guess);
+                }
+                if (pit != s_providers.end() && !val.empty()) {
+                    snprintf(pit->second.displayName, sizeof(pit->second.displayName), "%s",
+                             val.c_str());
+                    DuskLog.info("[ExtNpcMount] N4 identity lock {} → '{}'", pit->first, val);
+                }
+            }
+        }
+    }
+}
+
+bool dExtNpcMount_hasPayload(const char* procName) {
+    return procName != NULL && s_providers.find(procName) != s_providers.end();
+}
+
+bool dExtNpcMount_lookup(const char* procName, dExtNpcManifest* out) {
+    auto it = s_providers.find(procName != NULL ? procName : "");
+    if (it == s_providers.end() || out == NULL) {
+        return false;
+    }
+    *out = it->second;
+    return true;
+}
+
+int dExtNpcMount_providerCount() {
+    return (int)s_providerOrder.size();
+}
+
+bool dExtNpcMount_providerAt(int index, dExtNpcManifest* out) {
+    if (out == NULL || index < 0 || index >= (int)s_providerOrder.size()) {
+        return false;
+    }
+    return dExtNpcMount_lookup(s_providerOrder[index].c_str(), out);
+}
+
+s16 dExtNpcMount_socketActorId(const char* socketName) {
+    if (socketName == NULL) {
+        return -1;
+    }
+    if (strcmp(socketName, "NPC_MK") == 0) {
+        return fpcNm_NPC_MK_e;
+    }
+    if (strcmp(socketName, "NPC_P2") == 0) {
+        return fpcNm_NPC_P2_e;
+    }
+    if (strcmp(socketName, "NPC_HENNA0") == 0) {
+        return fpcNm_NPC_HENNA0_e;
+    }
+    if (strcmp(socketName, "NPC_KDK") == 0) {
+        return fpcNm_NPC_KDK_e;
+    }
+    return -1;
+}
+
+static const char* providerSocket(const dExtNpcManifest& man) {
+    return man.socket[0] ? man.socket : man.proc;
+}
+
+bool dExtNpcMount_hasSocketPayload(const char* socketName) {
+    if (socketName == NULL || socketName[0] == '\0') {
+        return false;
+    }
+    for (const auto& kv : s_providers) {
+        if (strcmp(providerSocket(kv.second), socketName) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// №24 D1: exact socket_arg wins; wildcard (socket_arg omitted / -1) is last resort.
+// Old "socketArg < 0 matches any arg" returned EXT_BG0 for every NPC_KDK create.
+bool dExtNpcMount_resolveSocket(const char* socketName, int arg, char* procOut, u32 procOutBytes) {
+    if (socketName == NULL || procOut == NULL || procOutBytes == 0) {
+        return false;
+    }
+    procOut[0] = '\0';
+
+    for (const auto& kv : s_providers) {
+        const dExtNpcManifest& man = kv.second;
+        if (strcmp(providerSocket(man), socketName) != 0) {
+            continue;
+        }
+        if (man.socketArg == arg) {
+            snprintf(procOut, procOutBytes, "%s", man.proc);
+            return true;
+        }
+    }
+    for (const auto& kv : s_providers) {
+        const dExtNpcManifest& man = kv.second;
+        if (strcmp(providerSocket(man), socketName) != 0) {
+            continue;
+        }
+        for (int i = 0; i < man.subtypeCount; ++i) {
+            if (man.subtypes[i].valid && man.subtypes[i].arg == arg) {
+                snprintf(procOut, procOutBytes, "%s", man.proc);
+                return true;
+            }
+        }
+    }
+    for (const auto& kv : s_providers) {
+        const dExtNpcManifest& man = kv.second;
+        if (strcmp(providerSocket(man), socketName) != 0) {
+            continue;
+        }
+        if (man.socketArg < 0) {
+            snprintf(procOut, procOutBytes, "%s", man.proc);
+            return true;
+        }
+    }
+    return false;
+}
+
+static char s_forcedCreateProc[32] = {};
+static bool s_forcedCreateProcSet = false;
+static char s_forcedAttachModel[64] = {};
+static char s_forcedAttachJoint[32] = {};
+static bool s_forcedAttachSet = false;
+
+void dExtNpcMount_forceNextCreateProc(const char* procName) {
+    if (procName == NULL || procName[0] == '\0') {
+        s_forcedCreateProcSet = false;
+        s_forcedCreateProc[0] = '\0';
+        return;
+    }
+    snprintf(s_forcedCreateProc, sizeof(s_forcedCreateProc), "%s", procName);
+    s_forcedCreateProcSet = true;
+}
+
+bool dExtNpcMount_consumeForcedCreateProc(char* procOut, u32 procOutBytes) {
+    if (!s_forcedCreateProcSet || procOut == NULL || procOutBytes == 0) {
+        return false;
+    }
+    snprintf(procOut, procOutBytes, "%s", s_forcedCreateProc);
+    s_forcedCreateProcSet = false;
+    s_forcedCreateProc[0] = '\0';
+    return true;
+}
+
+void dExtNpcMount_forceNextAttach(const char* modelName, const char* jointName) {
+    if (modelName == NULL || modelName[0] == '\0') {
+        s_forcedAttachSet = false;
+        s_forcedAttachModel[0] = '\0';
+        s_forcedAttachJoint[0] = '\0';
+        return;
+    }
+    snprintf(s_forcedAttachModel, sizeof(s_forcedAttachModel), "%s", modelName);
+    snprintf(s_forcedAttachJoint, sizeof(s_forcedAttachJoint), "%s",
+             jointName != NULL && jointName[0] ? jointName : "head");
+    s_forcedAttachSet = true;
+}
+
+bool dExtNpcMount_consumeForcedAttach(char* modelOut, u32 modelBytes, char* jointOut,
+                                      u32 jointBytes) {
+    if (!s_forcedAttachSet || modelOut == NULL || modelBytes == 0) {
+        return false;
+    }
+    snprintf(modelOut, modelBytes, "%s", s_forcedAttachModel);
+    if (jointOut != NULL && jointBytes > 0) {
+        snprintf(jointOut, jointBytes, "%s", s_forcedAttachJoint);
+    }
+    s_forcedAttachSet = false;
+    s_forcedAttachModel[0] = '\0';
+    s_forcedAttachJoint[0] = '\0';
+    return true;
+}
+
+bool dExtNpcMount_shouldSkipBtp(const char* arcName) {
+    // Per-manifest, not a create-time global (№18a — interleaved creates stomped s_skipBtpArc).
+    if (arcName == NULL || arcName[0] == '\0') {
+        return false;
+    }
+    for (const auto& kv : s_providers) {
+        if (kv.second.skipBtp && strcmp(kv.second.arc, arcName) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Manifest-driven BG warp latch (Phase M). Host stage/pos/spawn from ini.
+enum {
+    kBgWarpIdle = 0,
+    kBgWarpWaitPlayer = 1,
+    kBgWarpWaitIsland = 2,
+    kBgWarpWaitBg = 3,
+    kBgWarpHold = 4,
+};
+static int s_bgWarpPhase = kBgWarpIdle;
+static fpc_ProcID s_bgIslandId = fpcM_ERROR_PROCESS_ID_e;
+static cXyz s_bgHoldPos;
+static cXyz s_bgHostPos;
+static int s_bgHoldFrames = 0;
+static int s_bgSettleFrames = 0;
+// №34 P4: frames waiting for BG ready; abort → fail-safe outdoor spawn.
+static int s_bgReadyWaitFrames = 0;
+static bool s_bgFailSafeValid = false;
+static cXyz s_bgFailSafeSpawn;
+static constexpr int kBgReadyTimeout = 180;  // ~3s at 60fps
+
+static bool beginBgWarp(const char* procName, bool hasSpawnOverride, const cXyz& spawnWorld) {
+    dExtNpcManifest man{};
+    if (procName == NULL || !dExtNpcMount_lookup(procName, &man) || !man.isBg ||
+        !man.hasHostPos || !man.hasAnchor || !man.hasSpawnRel || man.hostStage[0] == '\0') {
+        DuskLog.warn(
+            "[ExtNpcMount] BG warp refused — need type=bg + host_stage + host_pos + "
+            "anchor + spawn_rel");
+        return false;
+    }
+    s_bgSpawnOverrideValid = hasSpawnOverride;
+    if (hasSpawnOverride) {
+        s_bgSpawnOverride = spawnWorld;
+    }
+    s_bgWarpPending = true;
+    s_bgWarpPhase = kBgWarpWaitPlayer;
+    s_bgIslandId = fpcM_ERROR_PROCESS_ID_e;
+    s_bgHoldFrames = 0;
+    s_bgSettleFrames = 0;
+    s_bgReadyWaitFrames = 0;
+    s_bgHostPos = man.hostPos;
+    snprintf(s_bgWarpProc, sizeof(s_bgWarpProc), "%s", procName);
+    DuskLog.info("[ExtNpcMount] BG warp '{}' → host {} r{} then relocate{}", procName,
+                 man.hostStage, man.hostRoom, hasSpawnOverride ? " (spawn override)" : "");
+    return true;
+}
+
+bool dExtNpcMount_requestBgWarp(const char* procName) {
+    s_bgFailSafeValid = false;
+    return beginBgWarp(procName, false, cXyz());
+}
+
+bool dExtNpcMount_requestBgWarpTo(const char* procName, const cXyz& spawnWorld) {
+    s_bgFailSafeValid = false;
+    return beginBgWarp(procName, true, spawnWorld);
+}
+
+bool dExtNpcMount_requestBgWarpGuarded(const char* procName, const cXyz& failSafeSpawn) {
+    s_bgFailSafeValid = true;
+    s_bgFailSafeSpawn = failSafeSpawn;
+    return beginBgWarp(procName, false, cXyz());
+}
+
+const char* dExtNpcMount_lastBgProc() {
+    return s_lastBgProc;
+}
+
+bool dExtNpcMount_bgWarpBusy() {
+    return s_bgWarpPhase != kBgWarpIdle;
+}
+
+void dExtNpcMount_onStageReady() {
+    // Kept as a no-op entry point; real work is dExtNpcMount_pollBgWarps().
+}
+
+static void placeLinkAt(fopAc_ac_c* player, const cXyz& spawn) {
+    player->current.pos = spawn;
+    player->old.pos = spawn;
+    player->home.pos = spawn;
+    player->speed.x = 0.0f;
+    player->speed.y = 0.0f;
+    player->speed.z = 0.0f;
+    player->speedF = 0.0f;
+}
+
+// №21 probes — classify draw vs dBgW vs cBgS routing (kept for BG warps).
+static void logBgWarpProbes(dExtNpcMount_c* mount, const cXyz& hostVillage) {
+    if (mount == NULL || mount->mpBgW == NULL) {
+        DuskLog.warn("[ExtNpcMount:BG] probe aborted — mount/bgw null");
+        return;
+    }
+    dBgW* bgw = mount->mpBgW;
+    // №22: local models use cell-local village; world-baked path used absolute GS vtx.
+    const cXyz probeVtx = mount->mManifest.modelSpaceLocal ?
+                              cXyz(-1651.0f, 163.0f, 11989.0f) :
+                              cXyz(-201651.0f, 163.0f, 311989.0f);
+    const f32 expectX = hostVillage.x;
+    const f32 expectY = hostVillage.y - 20.0f;  // spawn_rel has +20 clearance
+    const f32 expectZ = hostVillage.z;
+
+    // P0 / P0b — draw pipeline
+    if (mount->mpBgModels[0] != NULL) {
+        MtxP base = mount->mpBgModels[0]->getBaseTRMtx();
+        cXyz drawn;
+        cMtx_multVec(base, &probeVtx, &drawn);
+        DuskLog.info(
+            "[ExtNpcMount:P0] village vtx via model[0] baseTRMtx → ({}, {}, {}) "
+            "expect≈({},{},{}) model_space={}",
+            drawn.x, drawn.y, drawn.z, expectX, expectY, expectZ,
+            mount->mManifest.modelSpaceLocal ? "local" : "world");
+        DuskLog.info("[ExtNpcMount:P0b] model[0] baseTRMtx T=({}, {}, {})", base[0][3], base[1][3],
+                     base[2][3]);
+    } else {
+        DuskLog.warn("[ExtNpcMount:P0] model[0] NULL");
+    }
+    DuskLog.info(
+        "[ExtNpcMount:P0b] mBgMtx T=({}, {}, {}) pm_base={} same_ptr={} lock={} nocalc={} flags={:02x} "
+        "moveCtr={} model_space={}",
+        mount->mBgMtx[0][3], mount->mBgMtx[1][3], mount->mBgMtx[2][3], (void*)bgw->pm_base,
+        bgw->pm_base == &mount->mBgMtx, bgw->ChkLock(), (int)bgw->ChkNoCalcVtx(), bgw->mFlags,
+        bgw->mMoveCounter, mount->mManifest.modelSpaceLocal ? "local" : "world");
+
+    // P1 — collision tree AABB location
+    if (bgw->pm_grp != NULL) {
+        const u16 root = bgw->m_rootGrpIdx;
+        const cM3dGAab& aab = bgw->pm_grp[root].m_aab;
+        DuskLog.info(
+            "[ExtNpcMount:P1] rootGrp={} aab min=({}, {}, {}) max=({}, {}, {}) "
+            "(host≈-60k/-90k, GS≈-200k/+315k)",
+            root, aab.GetMinX(), aab.GetMinY(), aab.GetMinZ(), aab.GetMaxX(), aab.GetMaxY(),
+            aab.GetMaxZ());
+    } else {
+        DuskLog.warn("[ExtNpcMount:P1] pm_grp NULL");
+    }
+
+    // P2 — direct dBgW GroundCross (bypass cBgS list)
+    cXyz probe(hostVillage.x, hostVillage.y + 2000.0f, hostVillage.z);
+    dBgS_ObjGndChk chk;
+    chk.SetPos(&probe);
+    chk.SetNowY(-G_CM3D_F_INF);
+    const bool p2 = bgw->GroundCross(&chk);
+    DuskLog.info("[ExtNpcMount:P2] direct GroundCross hit={} y={} probe=({}, {}, {})", p2,
+                 chk.GetNowY(), probe.x, probe.y, probe.z);
+
+    // P3 — same with PolyPassChk cleared (ti through-filter test)
+    dBgS_ObjGndChk chk3;
+    chk3.SetPos(&probe);
+    chk3.SetNowY(-G_CM3D_F_INF);
+    chk3.SetPolyPassChk(NULL);
+    const bool p3 = bgw->GroundCross(&chk3);
+    DuskLog.info("[ExtNpcMount:P3] GroundCross PolyPassChk=NULL hit={} y={}", p3, chk3.GetNowY());
+
+    if (!p3 && bgw->pm_blk != NULL && bgw->pm_bgd != NULL) {
+        int withGnd = 0;
+        int emptyGnd = 0;
+        const int bnum = bgw->pm_bgd->m_b_num;
+        for (int i = 0; i < bnum; ++i) {
+            if (bgw->pm_blk[i].m_gnd_idx != 0xFFFF) {
+                ++withGnd;
+            } else {
+                ++emptyGnd;
+            }
+        }
+        DuskLog.warn(
+            "[ExtNpcMount:P3miss] blocks={} with_gnd={} empty_gnd={} vtx_num={} tri_num={} "
+            "vtx_tbl={}",
+            bnum, withGnd, emptyGnd, bgw->GetVtxNum(), (int)bgw->pm_bgd->m_t_num,
+            (void*)bgw->GetVtxTbl());
+    }
+}
+
+void dExtNpcMount_pollBgWarps() {
+    if (s_bgWarpPhase == kBgWarpIdle) {
+        return;
+    }
+
+    dExtNpcManifest man{};
+    if (!dExtNpcMount_lookup(s_bgWarpProc, &man) || !man.isBg || !man.hasHostPos) {
+        DuskLog.warn("[ExtNpcMount] BG warp aborted — payload '{}' missing/incomplete", s_bgWarpProc);
+        s_bgWarpPhase = kBgWarpIdle;
+        s_bgWarpPending = false;
+        return;
+    }
+    s_bgHostPos = man.hostPos;
+
+    if (s_bgWarpPhase == kBgWarpWaitPlayer) {
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        if (player == NULL) {
+            return;
+        }
+        const char* stage = dComIfGp_getStartStageName();
+        if (stage == NULL || strcmp(stage, man.hostStage) != 0) {
+            return;
+        }
+
+        // Reuse an existing ready BG mount for this proc (door house↔island).
+        // №25 F1: refuse reuse unless mManifest.proc still matches the request —
+        // stale pre-D1 IDs / wrong-socket mounts must not pin every door to Ojhous.
+        {
+            auto it = s_bgMountIds.find(s_bgWarpProc);
+            if (it != s_bgMountIds.end()) {
+                fopAc_ac_c* existing = fopAcM_SearchByID(it->second);
+                if (existing != NULL) {
+                    dExtNpcMount_c* mount = (dExtNpcMount_c*)existing;
+                    if (mount->mIsBg && mount->mBgReady && mount->mpBgW != NULL &&
+                        strcmp(mount->mManifest.proc, s_bgWarpProc) == 0) {
+                        s_bgIslandId = it->second;
+                        s_bgSettleFrames = 4;
+                        s_bgWarpPhase = kBgWarpWaitBg;
+                        DuskLog.info("[ExtNpcMount] BG reuse '{}' id={:08x}", s_bgWarpProc,
+                                     (u32)s_bgIslandId);
+                        return;
+                    }
+                    DuskLog.warn(
+                        "[ExtNpcMount] BG reuse rejected '{}' — cached id={:08x} proc='{}' "
+                        "ready={}",
+                        s_bgWarpProc, (u32)it->second, mount->mManifest.proc,
+                        mount->mIsBg && mount->mBgReady);
+                }
+                s_bgMountIds.erase(it);
+            }
+        }
+
+        const s16 actorId = dExtNpcMount_socketActorId(providerSocket(man));
+        if (actorId < 0) {
+            DuskLog.warn("[ExtNpcMount] BG warp: unknown socket '{}'", providerSocket(man));
+            s_bgWarpPhase = kBgWarpIdle;
+            s_bgWarpPending = false;
+            return;
+        }
+
+        csXyz angle;
+        angle.set(0, player->shape_angle.y, 0);
+        cXyz scale(1.0f, 1.0f, 1.0f);
+        const int roomNo = fopAcM_GetRoomNo(player);
+        layer_class* savedLayer = fpcLy_CurrentLayer();
+        base_process_class* playScene = fpcM_SearchByName(fpcNm_PLAY_SCENE_e);
+        if (playScene != NULL) {
+            fpcLy_SetCurrentLayer(&((process_node_class*)playScene)->layer);
+        }
+        const u32 params = man.socketArg >= 0 ? (u32)man.socketArg : 0;
+        // №24 D1: Create must mount THIS proc, not whatever socket_arg resolves to.
+        dExtNpcMount_forceNextCreateProc(s_bgWarpProc);
+        s_bgIslandId = fopAcM_create(actorId, params, &s_bgHostPos, roomNo, &angle, &scale, -1);
+        fpcLy_SetCurrentLayer(savedLayer);
+
+        if (s_bgIslandId == fpcM_ERROR_PROCESS_ID_e) {
+            dExtNpcMount_forceNextCreateProc(NULL);
+            DuskLog.warn("[ExtNpcMount] BG island fopAcM_create FAILED for '{}'", s_bgWarpProc);
+            s_bgWarpPhase = kBgWarpIdle;
+            s_bgWarpPending = false;
+            return;
+        }
+        s_bgMountIds[s_bgWarpProc] = s_bgIslandId;
+        DuskLog.info(
+            "[ExtNpcMount] BG create '{}' id={:08x} host=({}, {}, {}) spawn_rel=({}, {}, {})",
+            s_bgWarpProc, (u32)s_bgIslandId, s_bgHostPos.x, s_bgHostPos.y, s_bgHostPos.z,
+            man.spawnRel.x, man.spawnRel.y, man.spawnRel.z);
+        s_bgWarpPhase = kBgWarpWaitIsland;
+        return;
+    }
+
+    if (s_bgWarpPhase == kBgWarpWaitIsland) {
+        fopAc_ac_c* island = fopAcM_SearchByID(s_bgIslandId);
+        dExtNpcMount_c* mount =
+            island != NULL ? (dExtNpcMount_c*)island : NULL;
+        const bool ready =
+            mount != NULL && mount->mIsBg && mount->mBgReady && mount->mpBgW != NULL;
+        if (!ready) {
+            ++s_bgReadyWaitFrames;
+            // №34 P4: never leave Link in a black void if the interior never becomes ready.
+            if (s_bgFailSafeValid && s_bgReadyWaitFrames >= kBgReadyTimeout) {
+                DuskLog.warn(
+                    "[Doors] enter {} → ABORT (BG not ready after {}f) — return to fail-safe",
+                    s_bgWarpProc, s_bgReadyWaitFrames);
+                mDoGph_gInf_c::startFadeOut(10);
+                const cXyz back = s_bgFailSafeSpawn;
+                s_bgFailSafeValid = false;
+                s_bgWarpPhase = kBgWarpIdle;
+                s_bgWarpPending = false;
+                s_bgIslandId = fpcM_ERROR_PROCESS_ID_e;
+                s_bgReadyWaitFrames = 0;
+                // Bounce back to island at the outdoor door.
+                beginBgWarp("EXT_BG0", true, back);
+                return;
+            }
+            return;
+        }
+        s_bgFailSafeValid = false;
+        s_bgReadyWaitFrames = 0;
+        s_bgSettleFrames = 2;
+        s_bgWarpPhase = kBgWarpWaitBg;
+        return;
+    }
+
+    if (s_bgWarpPhase == kBgWarpWaitBg) {
+        fopAc_ac_c* island = fopAcM_SearchByID(s_bgIslandId);
+        if (island != NULL) {
+            dExtNpcMount_c* mount = (dExtNpcMount_c*)island;
+            if (mount->mpBgW != NULL) {
+                updateBgTransform(mount);
+                mount->mpBgW->Move();
+            }
+        }
+        if (--s_bgSettleFrames > 0) {
+            return;
+        }
+
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        if (player == NULL) {
+            return;
+        }
+
+        cXyz spawn =
+            s_bgSpawnOverrideValid ? s_bgSpawnOverride : (s_bgHostPos + man.spawnRel);
+        if (island != NULL && !s_bgSpawnOverrideValid) {
+            logBgWarpProbes((dExtNpcMount_c*)island, spawn);
+        }
+
+        cXyz probe(spawn.x, spawn.y + 2000.0f, spawn.z);
+        if (fopAcM_gc_c::gndCheck(&probe)) {
+            spawn.y = fopAcM_gc_c::getGroundY() + 50.0f;
+            DuskLog.info("[ExtNpcMount] BG ground hit y={}", spawn.y);
+        } else {
+            DuskLog.warn("[ExtNpcMount] BG NO ground under probe ({}, {}, {}) — placing anyway",
+                         probe.x, probe.y, probe.z);
+        }
+
+        placeLinkAt(player, spawn);
+        s_bgHoldPos = spawn;
+        s_bgHoldFrames = s_bgSpawnOverrideValid ? 45 : 120;
+        s_bgSpawnOverrideValid = false;
+        DuskLog.info("[ExtNpcMount] Link placed on BG spawn ({}, {}, {})", spawn.x, spawn.y,
+                     spawn.z);
+        // №25 F2: populate once BG is ready + Link seated (not at create-time of the BG).
+        dExtNpcPopulation_spawnForBg(man);
+        // №27 N6: door-knob visual props at TGDR positions (island only).
+        if (std::strcmp(s_bgWarpProc, "EXT_BG0") == 0) {
+            dExtNpcDoors_spawnKnobs(man);
+        }
+        s_bgWarpPhase = kBgWarpHold;
+        return;
+    }
+
+    if (s_bgWarpPhase == kBgWarpHold) {
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        if (player != NULL) {
+            const f32 dx = player->current.pos.x - s_bgHoldPos.x;
+            const f32 dz = player->current.pos.z - s_bgHoldPos.z;
+            if ((dx * dx + dz * dz) > (5000.0f * 5000.0f)) {
+                DuskLog.warn("[ExtNpcMount] Link drifted off BG — re-anchoring");
+                placeLinkAt(player, s_bgHoldPos);
+            } else {
+                player->speed.x = 0.0f;
+                player->speed.z = 0.0f;
+                if (player->speed.y < -50.0f) {
+                    player->speed.y = -50.0f;
+                }
+            }
+        }
+        // Keep island MOVE_BG ticking while actors retry ground-snap.
+        {
+            fopAc_ac_c* island = fopAcM_SearchByID(s_bgIslandId);
+            if (island != NULL) {
+                dExtNpcMount_c* mount = (dExtNpcMount_c*)island;
+                if (mount->mpBgW != NULL) {
+                    updateBgTransform(mount);
+                    mount->mpBgW->Move();
+                }
+            }
+        }
+        if (--s_bgHoldFrames <= 0) {
+            std::snprintf(s_lastBgProc, sizeof(s_lastBgProc), "%s", s_bgWarpProc);
+            s_bgWarpPhase = kBgWarpIdle;
+            s_bgWarpPending = false;
+            DuskLog.info("[ExtNpcMount] BG hold complete — active '{}'", s_lastBgProc);
+        }
+    }
+}
+
+int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
+    if (i_this == NULL || !dExtNpcMount_lookup(procName, &i_this->mManifest)) {
+        return cPhs_ERROR_e;
+    }
+
+    // №24 D2: BG payloads require explicit anchor= (never invent 0).
+    if (i_this->mManifest.isBg && !i_this->mManifest.hasAnchor) {
+        DuskLog.warn("[ExtNpcMount] create '{}' refused — BG missing anchor=", procName);
+        return cPhs_ERROR_e;
+    }
+
+    // R-O2e: folder-side spawn gates (missing flag = false).
+    if (i_this->mManifest.spawnIfFlag[0] &&
+        !dExtModFlags_get(i_this->mManifest.modFolder, i_this->mManifest.spawnIfFlag)) {
+        DuskLog.debug("[ExtNpcMount] create '{}' refused — spawn_if_flag '{}'", procName,
+                      i_this->mManifest.spawnIfFlag);
+        return cPhs_ERROR_e;
+    }
+    if (i_this->mManifest.spawnUnlessFlag[0] &&
+        dExtModFlags_get(i_this->mManifest.modFolder, i_this->mManifest.spawnUnlessFlag)) {
+        DuskLog.debug("[ExtNpcMount] create '{}' refused — spawn_unless_flag '{}'", procName,
+                      i_this->mManifest.spawnUnlessFlag);
+        return cPhs_ERROR_e;
+    }
+
+    i_this->mpBtp = NULL;
+    i_this->mpCompanion = NULL;
+    i_this->mpBgBtk = NULL;
+    i_this->mpBgW = NULL;
+    i_this->mIsBg = i_this->mManifest.isBg;
+    i_this->mBgReady = false;
+    for (int i = 0; i < 3; ++i) {
+        i_this->mpBgModels[i] = NULL;
+    }
+    i_this->mBtpBound = false;
+    i_this->mAttachCount = 0;
+    i_this->mNeckJnt = -1;
+    i_this->mLookYaw = 0;
+    i_this->mLookPitch = 0;
+    i_this->mTalking = false;
+    i_this->mCcReady = false;
+    i_this->mTalkEventActive = false;
+    i_this->mTalkFrames = 0;
+    i_this->mCloseCooldown = 0;
+    i_this->mOrbitPhase = 0;
+    i_this->mHeadVariant = 0;
+    std::snprintf(i_this->mDialogueSection, sizeof(i_this->mDialogueSection), "%s",
+                  i_this->mManifest.dialogueKey);
+    i_this->mDialogueNext[0] = '\0';
+    for (int i = 0; i < kExtNpcMaxAttach; ++i) {
+        i_this->mpAttach[i] = NULL;
+        i_this->mAttachJnt[i] = -1;
+        i_this->mAttachOnCompanion[i] = 0;
+    }
+
+    const int arg = fopAcM_GetParam(i_this) & 0xFF;
+    for (int i = 0; i < i_this->mManifest.subtypeCount; ++i) {
+        const dExtNpcSubtype& subtype = i_this->mManifest.subtypes[i];
+        if (!subtype.valid || subtype.arg != arg) {
+            continue;
+        }
+        if (subtype.idle[0]) {
+            snprintf(i_this->mManifest.idle, sizeof(i_this->mManifest.idle), "%s", subtype.idle);
+        }
+        if (subtype.displayName[0]) {
+            snprintf(i_this->mManifest.displayName, sizeof(i_this->mManifest.displayName), "%s",
+                     subtype.displayName);
+        }
+        if (subtype.attachModel[0] && i_this->mManifest.attachCount < kExtNpcMaxAttach) {
+            const int slot = i_this->mManifest.attachCount++;
+            snprintf(i_this->mManifest.attach[slot].model,
+                     sizeof(i_this->mManifest.attach[slot].model), "%s", subtype.attachModel);
+            snprintf(i_this->mManifest.attach[slot].joint,
+                     sizeof(i_this->mManifest.attach[slot].joint), "%s",
+                     subtype.attachJoint[0] ? subtype.attachJoint : "head");
+        }
+        DuskLog.info("[ExtNpcMount] {} subtype arg={} selected", procName, arg);
+        break;
+    }
+
+    // №27 N2: population-forced head attach (overrides / adds after subtype).
+    {
+        char headModel[64];
+        char headJoint[32];
+        if (dExtNpcMount_consumeForcedAttach(headModel, sizeof(headModel), headJoint,
+                                             sizeof(headJoint))) {
+            if (i_this->mManifest.attachCount < kExtNpcMaxAttach) {
+                const int slot = i_this->mManifest.attachCount++;
+                snprintf(i_this->mManifest.attach[slot].model,
+                         sizeof(i_this->mManifest.attach[slot].model), "%s", headModel);
+                snprintf(i_this->mManifest.attach[slot].joint,
+                         sizeof(i_this->mManifest.attach[slot].joint), "%s", headJoint);
+                // Parse variant index from …01.bdl / …02.bdl for N4 cycle.
+                const char* dot = std::strstr(headModel, ".bdl");
+                if (dot != NULL && dot >= headModel + 2 &&
+                    dot[-2] >= '0' && dot[-2] <= '9' && dot[-1] >= '0' && dot[-1] <= '9') {
+                    i_this->mHeadVariant = (u8)((dot[-2] - '0') * 10 + (dot[-1] - '0'));
+                } else {
+                    i_this->mHeadVariant = 1;
+                }
+                DuskLog.info("[ExtNpcMount] {} forced attach '{}' @ '{}'", procName, headModel,
+                             headJoint);
+            }
+        }
+    }
+
+    stageLog("create", "resLoad begin");
+    int phase = dComIfG_resLoad(&i_this->mPhase, i_this->mManifest.arc);
+    if (phase != cPhs_COMPLEATE_e) {
+        if (phase == cPhs_ERROR_e) {
+            stageLog("create", "FAIL resLoad ERROR");
+            dExtNpcMount_forceNextAttach(NULL, NULL);
+        }
+        return phase;
+    }
+    stageLog("create", "resLoad COMPLEATE → solid heap");
+
+    beginCreateCacheTrack();
+    if (i_this->mIsBg) {
+        if (!fopAcM_entrySolidHeap(i_this, useBgHeapInit, 0x120000)) {
+            DuskLog.warn("[ExtNpcMount] BG heap fail for {}", procName);
+            abortCreateCacheTrack();
+            return cPhs_ERROR_e;
+        }
+        // Regist BEFORE first Move (History Phase O / №20). Matrix was identity at Set;
+        // apply host−anchor now so Move() deltas the vtx table into diorama space.
+        if (dComIfG_Bgsp().Regist(i_this->mpBgW, i_this)) {
+            DuskLog.warn("[ExtNpcMount] BG Regist failed for {}", procName);
+            abortCreateCacheTrack();
+            return cPhs_ERROR_e;
+        }
+        updateBgTransform(i_this);
+        i_this->mpBgW->Move();
+        i_this->mBgReady = true;
+        fopAcM_SetMtx(i_this, i_this->mpBgModels[0]->getBaseTRMtx());
+        // Outset's authored span is ~100k units. Never frustum-cull the actor away.
+        fopAcM_SetMin(i_this, -120000.0f, -20000.0f, -120000.0f);
+        fopAcM_SetMax(i_this, 120000.0f, 20000.0f, 120000.0f);
+        fopAcM_OffStatus(i_this, fopAcStts_CULL_e);
+        dKy_tevstr_init(&i_this->tevStr, fopAcM_GetRoomNo(i_this), 0xFF);
+        i_this->tevStr.room_no = fopAcM_GetRoomNo(i_this);
+        // №27 N6: TP vrbox paints a yellow void over the WW diorama — hide while island is up.
+        if (strcmp(procName, "EXT_BG0") == 0) {
+            g_env_light.hide_vrbox = true;
+            DuskLog.info("[ExtNpcMount] N6 hide_vrbox for EXT_BG0");
+        }
+        commitCreateCacheTrack();
+        DuskLog.info(
+            "[ExtNpcMount] BG COMPLEATE {} — dzbT=({}, {}, {}) model_space={} host=({}, {}, {}) "
+            "anchor=({}, {}, {})",
+            procName, i_this->current.pos.x - i_this->mManifest.anchor.x,
+            i_this->current.pos.y - i_this->mManifest.anchor.y,
+            i_this->current.pos.z - i_this->mManifest.anchor.z,
+            i_this->mManifest.modelSpaceLocal ? "local" : "world", i_this->current.pos.x,
+            i_this->current.pos.y, i_this->current.pos.z, i_this->mManifest.anchor.x,
+            i_this->mManifest.anchor.y, i_this->mManifest.anchor.z);
+        return cPhs_COMPLEATE_e;
+    }
+
+    if (!fopAcM_entrySolidHeap(i_this, useHeapInit, 0x80000)) {
+        DuskLog.warn("[ExtNpcMount] heap fail for {}", procName);
+        stageLog("create", "FAIL entrySolidHeap");
+        abortCreateCacheTrack();
+        return cPhs_ERROR_e;
+    }
+
+    const f32 s = i_this->mManifest.scale;
+    i_this->scale.set(s, s, s);
+
+    dKy_tevstr_init(&i_this->tevStr, fopAcM_GetRoomNo(i_this), 0xFF);
+    i_this->tevStr.room_no = fopAcM_GetRoomNo(i_this);
+
+    fopAcM_SetMtx(i_this, i_this->mpMorf->getModel()->getBaseTRMtx());
+    fopAcM_SetMin(i_this, -80.0f * s, -20.0f * s, -80.0f * s);
+    fopAcM_SetMax(i_this, 80.0f * s, 200.0f * s, 80.0f * s);
+    // №32 B7: carryable = PICKUP only (never SPEAK). B1: door=1 → DOOR attention.
+    if (i_this->mManifest.carryable) {
+        i_this->attention_info.flags = fopAc_AttnFlag_CARRY_e;
+        fopAcM_OnCarryType(i_this, fopAcM_CARRY_LIGHT);
+    } else if (i_this->mManifest.doorAttention) {
+        i_this->attention_info.flags = fopAc_AttnFlag_DOOR_e;
+    } else if (i_this->mManifest.isStatic && i_this->mManifest.dialogueKey[0] == '\0') {
+        i_this->attention_info.flags = 0;
+    } else {
+        i_this->attention_info.flags = fopAc_AttnFlag_TALK_e | fopAc_AttnFlag_SPEAK_e;
+    }
+    // Attention distances are table indices (daNpcT_getDistTableIdx formula), not world units.
+    auto distIdx = [](int dist, int angle) -> u8 {
+        return (u8)(dist + angle * 0x14 + 0x5e);
+    };
+    i_this->attention_info.distances[fopAc_attn_LOCK_e] = distIdx(5, 6);
+    i_this->attention_info.distances[fopAc_attn_TALK_e] = distIdx(5, 6);
+    i_this->attention_info.distances[fopAc_attn_SPEAK_e] = distIdx(3, 6);
+    if (i_this->mManifest.carryable) {
+        i_this->attention_info.distances[fopAc_attn_CARRY_e] = distIdx(3, 6);
+    }
+    if (i_this->mManifest.doorAttention) {
+        i_this->attention_info.distances[fopAc_attn_DOOR_e] = distIdx(3, 6);
+    }
+    i_this->attention_info.position = i_this->current.pos;
+    i_this->attention_info.position.y += i_this->mManifest.cylHeight * s * 0.85f;
+    i_this->mCcStts.Init(0xFF, 0, i_this);
+    i_this->mCyl.Set(s_mountCylSrc);
+    i_this->mCyl.SetStts(&i_this->mCcStts);
+    i_this->mCyl.SetR(i_this->mManifest.cylRadius * s);
+    i_this->mCyl.SetH(i_this->mManifest.cylHeight * s);
+    i_this->mCcReady = true;
+    JUTNameTab* jointNames = i_this->mpMorf->getModel()->getModelData()->getJointTree().getJointName();
+    if (jointNames != NULL && i_this->mManifest.neckJoint[0]) {
+        const s32 index = jointNames->getIndex(i_this->mManifest.neckJoint);
+        if (index >= 0 && index < i_this->mpMorf->getModel()->getModelData()->getJointNum()) {
+            i_this->mNeckJnt = (s16)index;
+        }
+    }
+    // №25 F2: authored home Y is the placement floor; never seat below it into seafloor.
+    i_this->home.pos = i_this->current.pos;
+    i_this->mGroundSnapped = false;
+    i_this->mGroundSnapTries = 0;
+    tryGroundSnapSanity(i_this);
+
+    // N6: seagulls start orbiting after ground settle (phase ticks in execute).
+    if (std::strcmp(i_this->mManifest.arc, "Kamome") == 0 ||
+        std::strcmp(procName, "NPC_KAMOME") == 0) {
+        i_this->mOrbitPhase = 1;
+    }
+
+    commitCreateCacheTrack();
+    DuskLog.info("[ExtNpcMount] COMPLEATE {} arc={} model={} btp={} scale={} mod={}", procName,
+                 i_this->mManifest.arc, i_this->mManifest.model,
+                 i_this->mBtpBound ? i_this->mManifest.btp : "(none)", s,
+                 i_this->mManifest.modFolder);
+    stageLog("create", "COMPLEATE");
+    return cPhs_COMPLEATE_e;
+}
+
+int dExtNpcMount_delete(dExtNpcMount_c* i_this) {
+    if (i_this != NULL && i_this->mIsBg) {
+        if (i_this->mpBgW != NULL) {
+            dComIfG_Bgsp().Release(i_this->mpBgW);
+            i_this->mpBgW = NULL;
+        }
+        if (i_this->mManifest.arc[0]) {
+            dComIfG_resDelete(&i_this->mPhase, i_this->mManifest.arc);
+        }
+        return 1;
+    }
+    // G4: the draw-list dialogue must be hidden before the owner actor goes away.
+    if (i_this != NULL && (i_this->mTalking || s_mountDialogueOwner == i_this)) {
+        closeMountDialogue(i_this);
+    }
+    if (i_this != NULL && i_this->mManifest.arc[0]) {
+        dComIfG_resDelete(&i_this->mPhase, i_this->mManifest.arc);
+    }
+    return 1;
+}
+
+int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
+    if (i_this == NULL) {
+        return 1;
+    }
+    if (i_this->mIsBg) {
+        updateBgTransform(i_this);
+        if (i_this->mpBgBtk != NULL) {
+            i_this->mpBgBtk->play();
+        }
+        if (i_this->mpBgW != NULL) {
+            i_this->mpBgW->Move();
+        }
+        return 1;
+    }
+    if (i_this->mpMorf == NULL) {
+        return 1;
+    }
+    tryGroundSnapSanity(i_this);
+
+    // №27 N6: simple seagull orbit around authored home (no AI arc — folder-side motion).
+    if (i_this->mOrbitPhase > 0 && !i_this->mTalking) {
+        ++i_this->mOrbitPhase;
+        const s16 ang = (s16)(i_this->mOrbitPhase * 180);
+        const s16 bob = (s16)(i_this->mOrbitPhase * 310);
+        const f32 radius = 220.0f;
+        i_this->current.pos.x = i_this->home.pos.x + radius * cM_scos(ang);
+        i_this->current.pos.z = i_this->home.pos.z + radius * cM_ssin(ang);
+        i_this->current.pos.y = i_this->home.pos.y + 40.0f * cM_ssin(bob);
+        i_this->shape_angle.y = (s16)(ang + 0x4000);
+        i_this->current.angle.y = i_this->shape_angle.y;
+    }
+
+    const f32 s = i_this->scale.x;
+    i_this->attention_info.position = i_this->current.pos;
+    i_this->attention_info.position.y += i_this->mManifest.cylHeight * s * 0.85f;
+    if (i_this->mCcReady) {
+        i_this->mCyl.SetC(i_this->current.pos);
+        i_this->mCyl.SetR(i_this->mManifest.cylRadius * s);
+        i_this->mCyl.SetH(i_this->mManifest.cylHeight * s);
+        i_this->mCyl.ClrCoHit();
+        dComIfG_Ccsp()->Set(&i_this->mCyl);
+    }
+
+    if (i_this->mCloseCooldown > 0) {
+        --i_this->mCloseCooldown;
+    }
+    if (i_this->mTalking) {
+        ++i_this->mTalkFrames;
+#if TARGET_PC_NATIVE_UI
+        if (s_mountDialogue == NULL || !s_mountDialogue->isVisible() ||
+            s_mountDialogue->checkDismiss() || i_this->mTalkFrames >= 1800) {
+            char pendingNext[64];
+            std::snprintf(pendingNext, sizeof(pendingNext), "%s", i_this->mDialogueNext);
+            const bool wasEvent = i_this->mTalkEventActive;
+            closeMountDialogue(i_this);
+            if (pendingNext[0] != '\0') {
+                std::snprintf(i_this->mDialogueSection, sizeof(i_this->mDialogueSection), "%s",
+                              pendingNext);
+                i_this->mDialogueNext[0] = '\0';
+                i_this->mCloseCooldown = 0;
+                beginMountDialogue(i_this, wasEvent);
+            } else {
+                // Next talk starts at the manifest entry key (else=/gates re-evaluate).
+                std::snprintf(i_this->mDialogueSection, sizeof(i_this->mDialogueSection), "%s",
+                              i_this->mManifest.dialogueKey);
+            }
+        }
+#else
+        closeMountDialogue(i_this);
+#endif
+    } else if (i_this->mCloseCooldown == 0) {
+        // The event path provides normal target-talk integration.  The input fallback
+        // keeps these lightweight non-daNpcT actors usable when no event command lands.
+        i_this->eventInfo.onCondition(dEvtCnd_CANTALK_e);
+        const bool eventTalk = i_this->eventInfo.checkCommandTalk();
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        const bool fallbackTalk =
+            player != NULL && (player->current.pos - i_this->current.pos).absXZ() < 160.0f &&
+            mDoCPd_c::getTrigA(PAD_1) != 0 &&
+            (i_this->attention_info.flags & fopAc_AttnFlag_SPEAK_e) != 0;
+        if (eventTalk || fallbackTalk) {
+            beginMountDialogue(i_this, eventTalk);
+        }
+    }
+
+    mDoMtx_stack_c::transS(i_this->current.pos.x, i_this->current.pos.y, i_this->current.pos.z);
+    mDoMtx_stack_c::YrotM(i_this->shape_angle.y);
+    mDoMtx_stack_c::scaleM(s, s, s);
+    MtxP base = mDoMtx_stack_c::get();
+    i_this->mpMorf->getModel()->setBaseTRMtx(base);
+    i_this->mpMorf->play(NULL, 0, 0);
+    if (i_this->mBtpBound && i_this->mpBtp != NULL) {
+        i_this->mpBtp->play();
+    }
+    i_this->mpMorf->modelCalc();
+    if (i_this->mNeckJnt >= 0) {
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        if (player != NULL) {
+            cXyz from;
+            mDoMtx_stack_c::copy(i_this->mpMorf->getModel()->getAnmMtx(i_this->mNeckJnt));
+            mDoMtx_stack_c::multVecZero(&from);
+            cXyz to = player->current.pos - from;
+            s16 yaw = (s16)(to.atan2sX_Z() - i_this->shape_angle.y);
+            s16 pitch = (s16)-to.atan2sY_XZ();
+            if (yaw > 0x2000) yaw = 0x2000;
+            if (yaw < -0x2000) yaw = -0x2000;
+            if (pitch > 0x1000) pitch = 0x1000;
+            if (pitch < -0x1000) pitch = -0x1000;
+            cLib_addCalcAngleS(&i_this->mLookYaw, yaw, 8, 0x400, 0x20);
+            cLib_addCalcAngleS(&i_this->mLookPitch, pitch, 8, 0x200, 0x20);
+        } else {
+            cLib_addCalcAngleS(&i_this->mLookYaw, 0, 8, 0x400, 0x20);
+            cLib_addCalcAngleS(&i_this->mLookPitch, 0, 8, 0x200, 0x20);
+        }
+        mDoMtx_stack_c::copy(i_this->mpMorf->getModel()->getAnmMtx(i_this->mNeckJnt));
+        mDoMtx_stack_c::YrotM(i_this->mLookYaw);
+        mDoMtx_stack_c::XrotM(i_this->mLookPitch);
+        i_this->mpMorf->getModel()->setAnmMtx(i_this->mNeckJnt, mDoMtx_stack_c::get());
+    }
+    if (i_this->mpCompanion != NULL && i_this->mpCompanion->getModel() != NULL) {
+        i_this->mpCompanion->getModel()->setBaseTRMtx(base);
+        i_this->mpCompanion->play(NULL, 0, 0);
+        i_this->mpCompanion->modelCalc();
+    }
+    J3DModel* body = i_this->mpMorf->getModel();
+    J3DModel* companion =
+        i_this->mpCompanion != NULL ? i_this->mpCompanion->getModel() : NULL;
+    for (int i = 0; i < i_this->mAttachCount; ++i) {
+        if (i_this->mpAttach[i] == NULL || i_this->mAttachJnt[i] < 0) {
+            continue;
+        }
+        J3DModel* host =
+            (i_this->mAttachOnCompanion[i] && companion != NULL) ? companion : body;
+        i_this->mpAttach[i]->setBaseTRMtx(host->getAnmMtx(i_this->mAttachJnt[i]));
+        i_this->mpAttach[i]->calc();
+    }
+    return 1;
+}
+
+static u8 clampAmbChannel(int base, f32 wregOffset) {
+    int v = base + (int)wregOffset;
+    if (v < 0) {
+        return 0;
+    }
+    if (v > 255) {
+        return 255;
+    }
+    return (u8)v;
+}
+
+int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
+    if (i_this == NULL) {
+        return 1;
+    }
+    if (i_this->mIsBg) {
+        // Obj_Fmobj-style draw on the normal actor list. setListBG from an NPC draw
+        // priority is too late — the BG list was already flushed (invisible island).
+        // No per-draw logging — Outset BG is already the FPS hot path.
+        mDoLib_clipper::changeFar(1000000.0f);
+        g_env_light.settingTevStruct(0x40, &i_this->current.pos, &i_this->tevStr);
+        for (int i = 0; i < 3; ++i) {
+            if (i_this->mpBgModels[i] == NULL) {
+                continue;
+            }
+            J3DModel* model = i_this->mpBgModels[i];
+            model->calc();
+            J3DModelData* data = model->getModelData();
+            if (data != NULL) {
+                for (u16 s = 0; s < data->getShapeNum(); ++s) {
+                    J3DShape* shape = data->getShapeNodePointer(s);
+                    if (shape != NULL) {
+                        shape->show();
+                    }
+                }
+            }
+            g_env_light.setLightTevColorType_MAJI(model, &i_this->tevStr);
+            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {
+                i_this->mpBgBtk->entry(data);
+            }
+            mDoExt_modelUpdateDL(model);
+            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {
+                i_this->mpBgBtk->remove(data);
+            }
+        }
+        mDoLib_clipper::resetFar();
+        return 1;
+    }
+    if (i_this->mpMorf == NULL) {
+        return 1;
+    }
+
+    J3DModel* model = i_this->mpMorf->getModel();
+
+    // Boots/leaf recipe (no MAJI): settingTevStruct(0) → NPC ambient → entryDL.
+    // Ambient is mount-owned (manifest amb= + WREG_F(30..32)), NOT bow warm tint —
+    // that 105/78/48 cast was the №14 orange bloom on skin/cloth.
+    g_env_light.settingTevStruct(0, &i_this->current.pos, &i_this->tevStr);
+
+    GXColor amb_col;
+    amb_col.r = clampAmbChannel(i_this->mManifest.ambR, WREG_F(30));
+    amb_col.g = clampAmbChannel(i_this->mManifest.ambG, WREG_F(31));
+    amb_col.b = clampAmbChannel(i_this->mManifest.ambB, WREG_F(32));
+    amb_col.a = 255;
+    i_this->tevStr.AmbCol.r = amb_col.r;
+    i_this->tevStr.AmbCol.g = amb_col.g;
+    i_this->tevStr.AmbCol.b = amb_col.b;
+    i_this->tevStr.AmbCol.a = amb_col.a;
+
+    applyModelAmbient(model, amb_col);
+
+    if (i_this->mBtpBound && i_this->mpBtp != NULL) {
+        i_this->mpBtp->entry(model->getModelData());
+    }
+
+    dComIfGd_setList();
+    i_this->mpMorf->entryDL();
+    if (i_this->mpCompanion != NULL && i_this->mpCompanion->getModel() != NULL) {
+        applyModelAmbient(i_this->mpCompanion->getModel(), amb_col);
+        i_this->mpCompanion->entryDL();
+    }
+    for (int i = 0; i < i_this->mAttachCount; ++i) {
+        if (i_this->mpAttach[i] != NULL) {
+            applyModelAmbient(i_this->mpAttach[i], amb_col);
+            i_this->mpAttach[i]->entry();
+        }
+    }
+
+    // I3: simple ground shadow (no Acch — use up-normal).
+    cXyz gndNrm(0.0f, 1.0f, 0.0f);
+    dComIfGd_setSimpleShadow(&i_this->current.pos, i_this->current.pos.y, 50.0f * i_this->scale.x,
+                             &gndNrm, 0, 1.0f, dDlst_shadowControl_c::getSimpleTex());
+#if TARGET_PC_NATIVE_UI
+    if (s_mountDialogue != NULL && s_mountDialogue->isVisible()) {
+        s_mountDialogue->registerDraw();
+    }
+#endif
+    return 1;
+}
+
+// №27 N4 helpers — operate on the nearest live ExtNpc mount to `from`.
+namespace {
+
+dExtNpcMount_c* findNearestMount(const cXyz& from, f32 maxDist) {
+    dExtNpcMount_c* best = NULL;
+    f32 bestD2 = maxDist * maxDist;
+    // Walk tracked providers' live actors via name search is awkward; scan room players' peers
+    // via fopAcIt is heavier. Use a simple iterative search of known stub IDs.
+    struct Ctx {
+        const cXyz* from;
+        f32 bestD2;
+        dExtNpcMount_c* best;
+    } ctx{&from, bestD2, NULL};
+    fopAcIt_Executor(
+        [](void* actor, void* data) -> int {
+            fopAc_ac_c* ac = (fopAc_ac_c*)actor;
+            Ctx* c = (Ctx*)data;
+            if (ac == NULL) {
+                return 0;
+            }
+            const s16 name = fopAcM_GetName(ac);
+            if (name != fpcNm_NPC_HENNA0_e && name != fpcNm_NPC_MK_e && name != fpcNm_NPC_P2_e &&
+                name != fpcNm_NPC_KDK_e) {
+                return 0;
+            }
+            dExtNpcMount_c* m = (dExtNpcMount_c*)ac;
+            if (m->mIsBg || m->mpMorf == NULL) {
+                return 0;
+            }
+            const f32 dx = ac->current.pos.x - c->from->x;
+            const f32 dz = ac->current.pos.z - c->from->z;
+            const f32 d2 = dx * dx + dz * dz;
+            if (d2 < c->bestD2) {
+                c->bestD2 = d2;
+                c->best = m;
+            }
+            return 0;
+        },
+        &ctx);
+    return ctx.best;
+}
+
+bool rewriteIdentityIni(const char* modFolder, const char* proc, const char* displayName) {
+    if (modFolder == NULL || proc == NULL || displayName == NULL) {
+        return false;
+    }
+    const fs::path path =
+        dusk::ConfigPath / "model_replacements" / modFolder / "population" / "identity.ini";
+    std::error_code ec;
+    fs::create_directories(path.parent_path(), ec);
+    // Read existing, replace/append [proc] display_name=.
+    std::string existing;
+    {
+        std::ifstream in(path);
+        if (in) {
+            existing.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        }
+    }
+    const std::string header = std::string("[") + proc + "]";
+    std::string out;
+    bool replaced = false;
+    std::istringstream iss(existing);
+    std::string line;
+    bool inSection = false;
+    while (std::getline(iss, line)) {
+        std::string trimmed = line;
+        while (!trimmed.empty() && (trimmed.back() == '\r' || trimmed.back() == '\n')) {
+            trimmed.pop_back();
+        }
+        if (!trimmed.empty() && trimmed[0] == '[') {
+            if (inSection && !replaced) {
+                out += "display_name=";
+                out += displayName;
+                out += "\n";
+                replaced = true;
+            }
+            inSection = (trimmed == header);
+            out += trimmed;
+            out += "\n";
+            continue;
+        }
+        if (inSection) {
+            size_t eq = trimmed.find('=');
+            std::string key = eq == std::string::npos ? trimmed : trimmed.substr(0, eq);
+            while (!key.empty() && key.back() == ' ') {
+                key.pop_back();
+            }
+            if (key == "display_name") {
+                out += "display_name=";
+                out += displayName;
+                out += "\n";
+                replaced = true;
+                continue;
+            }
+        }
+        out += trimmed;
+        out += "\n";
+    }
+    if (inSection && !replaced) {
+        out += "display_name=";
+        out += displayName;
+        out += "\n";
+        replaced = true;
+    }
+    if (!replaced) {
+        out += "\n";
+        out += header;
+        out += "\ndisplay_name=";
+        out += displayName;
+        out += "\n";
+    }
+    std::ofstream ofs(path, std::ios::trunc);
+    if (!ofs) {
+        return false;
+    }
+    ofs << out;
+    return true;
+}
+
+}  // namespace
+
+bool dExtNpcMount_cycleHeadNearest(const cXyz& from, f32 maxDist) {
+    dExtNpcMount_c* m = findNearestMount(from, maxDist);
+    if (m == NULL) {
+        return false;
+    }
+    // Cycle 1→2→3→1 among attach slot 0 if it looks like a numbered head.
+    if (m->mManifest.attachCount <= 0 || m->mManifest.attach[0].model[0] == '\0') {
+        DuskLog.warn("[ExtNpcMount] N4 cycle: nearest '{}' has no head attach", m->mManifest.proc);
+        return false;
+    }
+    char model[64];
+    std::snprintf(model, sizeof(model), "%s", m->mManifest.attach[0].model);
+    char* dot = std::strstr(model, ".bdl");
+    if (dot == NULL || dot < model + 2) {
+        return false;
+    }
+    int idx = (dot[-2] - '0') * 10 + (dot[-1] - '0');
+    if (idx < 1) {
+        idx = 1;
+    }
+    idx += 1;
+    if (idx > 8) {
+        idx = 1;
+    }
+    // Rewrite digits in place.
+    char prefix[64];
+    const size_t preLen = (size_t)(dot - model - 2);
+    if (preLen >= sizeof(prefix)) {
+        return false;
+    }
+    std::memcpy(prefix, model, preLen);
+    prefix[preLen] = '\0';
+    char nextModel[64];
+    std::snprintf(nextModel, sizeof(nextModel), "%s%02d.bdl", prefix, idx);
+    // Probe arc for the next head; if missing, wrap to 01.
+    if (dComIfG_getObjectRes(m->mManifest.arc, nextModel) == NULL) {
+        idx = 1;
+        std::snprintf(nextModel, sizeof(nextModel), "%s%02d.bdl", prefix, idx);
+        if (dComIfG_getObjectRes(m->mManifest.arc, nextModel) == NULL) {
+            return false;
+        }
+    }
+    std::snprintf(m->mManifest.attach[0].model, sizeof(m->mManifest.attach[0].model), "%s",
+                  nextModel);
+    m->mHeadVariant = (u8)idx;
+    // Rebuild attach slot 0 model on the actor solid heap path is hard mid-frame;
+    // force a soft rebind via acquireMountedModel + replace J3DModel.
+    void* raw = dComIfG_getObjectRes(m->mManifest.arc, nextModel);
+    J3DModelData* data = acquireMountedModel(m->mManifest.arc, nextModel, raw);
+    if (data == NULL) {
+        return false;
+    }
+    J3DModel* modelObj = mDoExt_J3DModel__create(data, 0, 1);
+    if (modelObj == NULL) {
+        return false;
+    }
+    m->mpAttach[0] = modelObj;
+    DuskLog.info("[ExtNpcMount] N4 cycle head '{}' → {} (var {})", m->mManifest.proc, nextModel,
+                 idx);
+    return true;
+}
+
+bool dExtNpcMount_setDisplayNameNearest(const cXyz& from, f32 maxDist, const char* name) {
+    dExtNpcMount_c* m = findNearestMount(from, maxDist);
+    if (m == NULL || name == NULL || name[0] == '\0') {
+        return false;
+    }
+    std::snprintf(m->mManifest.displayName, sizeof(m->mManifest.displayName), "%s", name);
+    auto it = s_providers.find(m->mManifest.proc);
+    if (it != s_providers.end()) {
+        std::snprintf(it->second.displayName, sizeof(it->second.displayName), "%s", name);
+    }
+    const bool ok =
+        rewriteIdentityIni(m->mManifest.modFolder, m->mManifest.proc, name);
+    DuskLog.info("[ExtNpcMount] N4 lock identity '{}' → '{}' ({})", m->mManifest.proc, name,
+                 ok ? "identity.ini ok" : "identity.ini FAIL");
+    return ok;
+}
+
+const char* dExtNpcMount_nearestDisplayName(const cXyz& from, f32 maxDist) {
+    dExtNpcMount_c* m = findNearestMount(from, maxDist);
+    if (m == NULL) {
+        return "";
+    }
+    return m->mManifest.displayName[0] ? m->mManifest.displayName : m->mManifest.proc;
+}
+
+#endif  // TARGET_PC

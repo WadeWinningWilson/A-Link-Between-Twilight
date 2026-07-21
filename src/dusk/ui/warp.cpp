@@ -9,6 +9,7 @@
 
 #if TARGET_PC
 #include "d/d_com_inf_game.h"
+#include "d/d_ext_fado_door.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_save_guard.h"
@@ -480,6 +481,73 @@ WarpWindow::WarpWindow() {
                 pane.clear();
                 pane.add_text("Warp to the selected destination.");
             });
+
+#if TARGET_PC
+        leftPane.add_section("Fado Door (Ordon exit 7)");
+        leftPane.register_control(
+            leftPane
+                .add_button({
+                    .text = "Toggle Fado door unlock",
+                })
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundClick);
+                    dFadoDoor_setUnlocked(!dFadoDoor_isUnlocked());
+                }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_text(fmt::format(
+                    "Save-scoped unlock (dusklight / fado.door.unlock).\n"
+                    "Currently: {}.\n"
+                    "Unlocked + no command keeps the lock message (never loads "
+                    "missing R_SP01 room 3).",
+                    dFadoDoor_isUnlocked() ? "UNLOCKED" : "locked"));
+            });
+        leftPane.register_control(
+            leftPane
+                .add_button({
+                    .text = "Arm Fado door → selection",
+                    .isDisabled = [&state] {
+                        clamp_indices(state);
+                        return !can_warp(state);
+                    },
+                })
+                .on_pressed([&state] {
+                    clamp_indices(state);
+                    if (!can_warp(state)) {
+                        return;
+                    }
+                    mDoAud_seStartMenu(kSoundClick);
+                    const auto& map = gameRegions[state.regionIdx].maps[state.mapIdx];
+                    const auto& room = map.mapRooms[state.roomIdx];
+                    s16 point = room.roomPoints[state.pointIdx];
+                    if (point < 0) {
+                        point = 0;
+                    }
+                    dFadoDoor_setUnlocked(true);
+                    dFadoDoor_setWarpCommand(map.mapFile, room.roomNo, point,
+                                            static_cast<s16>(state.layer));
+                }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_text(
+                    "Unlocks the door and sets its session warp command to the "
+                    "current Warp selection. Open the village door on F_SP103.");
+            });
+        leftPane.register_control(
+            leftPane
+                .add_button({
+                    .text = "Clear Fado warp command",
+                    .isDisabled = [] { return !dFadoDoor_hasWarpCommand(); },
+                })
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundClick);
+                    dFadoDoor_clearWarpCommand();
+                }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_text("Clears the session destination (unlock flag stays).");
+            });
+#endif
     });
 }
 

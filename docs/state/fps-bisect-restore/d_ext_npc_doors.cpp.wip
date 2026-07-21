@@ -1,0 +1,393 @@
+/**
+ * d_ext_npc_doors.cpp — №32 B1: A-press ENTER door warps (folder-side).
+ *
+ * population/doors.ini sections:
+ *   ww_pos=x,y,z     — outdoor door in WW world space (Outset.arc TGDR)
+ *   radius=220
+ *   enter_proc=EXT_BG1
+ *   exit_radius=200  — optional; at interior spawn_rel (default 200)
+ *   knob=1           — spawn real Knob.arc prop (NPC_KNOB)
+ *
+ * Walk-through zones RETIRED. Near door + A → fade → pinned BG warp.
+ * Log: [Doors] enter <proc> → <resolved>
+ */
+#include "d/d_ext_npc_doors.h"
+
+#if TARGET_PC
+
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
+#include "d/d_com_inf_game.h"
+#include "d/d_ext_npc_mount.h"
+#include "dusk/logging.h"
+#include "dusk/main.h"
+#include "f_op/f_op_actor_mng.h"
+#include "f_pc/f_pc_manager.h"
+#include "m_Do/m_Do_controller_pad.h"
+#include "m_Do/m_Do_graphic.h"
+
+namespace fs = std::filesystem;
+
+namespace {
+
+struct DoorDef {
+    char name[32];
+    cXyz wwPos;
+    f32 radius;
+    char enterProc[32];
+    f32 exitRadius;
+    s16 wwRy;  // №34 P3: authored TGDR rotY
+    bool hasWwRy;
+    bool wantKnob;
+    bool wasInEnter;
+    bool wasInExit;
+};
+
+std::vector<DoorDef> s_doors;
+bool s_loaded = false;
+bool s_knobsSpawned = false;
+int s_cooldown = 0;
+char s_loadedMod[128] = {};
+
+void trim(std::string& s) {
+    while (!s.empty() && (s.back() == '\r' || s.back() == '\n' || s.back() == ' ' ||
+                          s.back() == '\t')) {
+        s.pop_back();
+    }
+    size_t i = 0;
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t')) {
+        ++i;
+    }
+    if (i > 0) {
+        s.erase(0, i);
+    }
+}
+
+bool parseVec(const std::string& v, cXyz* out) {
+    return out != NULL && sscanf(v.c_str(), "%f,%f,%f", &out->x, &out->y, &out->z) == 3;
+}
+
+void ensureLoaded() {
+    dExtNpcManifest island{};
+    if (!dExtNpcMount_lookup("EXT_BG0", &island) || island.modFolder[0] == '\0') {
+        return;
+    }
+    if (s_loaded && std::strcmp(s_loadedMod, island.modFolder) == 0) {
+        return;
+    }
+    s_doors.clear();
+    s_loaded = false;
+    std::snprintf(s_loadedMod, sizeof(s_loadedMod), "%s", island.modFolder);
+
+    const fs::path path = dusk::ConfigPath / "model_replacements" / island.modFolder /
+                          "population" / "doors.ini";
+    std::ifstream in(path);
+    if (!in) {
+        DuskLog.debug("[ExtNpcDoors] no doors.ini in {}", island.modFolder);
+        s_loaded = true;
+        return;
+    }
+
+    DoorDef* cur = NULL;
+    std::string line;
+    while (std::getline(in, line)) {
+        trim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        if (line[0] == '[') {
+            const size_t end = line.find(']');
+            if (end == std::string::npos) {
+                continue;
+            }
+            DoorDef d{};
+            std::snprintf(d.name, sizeof(d.name), "%s", line.substr(1, end - 1).c_str());
+            d.radius = 220.0f;
+            d.exitRadius = 200.0f;
+            d.wwRy = 0;
+            d.hasWwRy = false;
+            d.wantKnob = false;
+            d.wasInEnter = false;
+            d.wasInExit = false;
+            s_doors.push_back(d);
+            s_knobsSpawned = false;
+            cur = &s_doors.back();
+            continue;
+        }
+        if (cur == NULL) {
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+        trim(key);
+        trim(val);
+        for (char& c : key) {
+            if (c >= 'A' && c <= 'Z') {
+                c = static_cast<char>(c - 'A' + 'a');
+            }
+        }
+        if (key == "ww_pos" || key == "pos") {
+            parseVec(val, &cur->wwPos);
+        } else if (key == "radius") {
+            cur->radius = static_cast<f32>(atof(val.c_str()));
+        } else if (key == "exit_radius") {
+            cur->exitRadius = static_cast<f32>(atof(val.c_str()));
+        } else if (key == "enter_proc" || key == "proc") {
+            std::snprintf(cur->enterProc, sizeof(cur->enterProc), "%s", val.c_str());
+        } else if (key == "ww_ry" || key == "ry") {
+            cur->wwRy = static_cast<s16>(atoi(val.c_str()));
+            cur->hasWwRy = true;
+        } else if (key == "knob") {
+            cur->wantKnob = !(val == "0" || val == "false" || val == "no");
+        }
+    }
+    s_loaded = true;
+    DuskLog.info("[ExtNpcDoors] loaded {} door triggers from {}", (int)s_doors.size(),
+                 path.string());
+}
+
+cXyz wwToHost(const dExtNpcManifest& island, const cXyz& ww) {
+    cXyz out;
+    out.x = island.hostPos.x + (ww.x - island.anchor.x);
+    out.y = island.hostPos.y + (ww.y - island.anchor.y);
+    out.z = island.hostPos.z + (ww.z - island.anchor.z);
+    return out;
+}
+
+bool nearXZ(const cXyz& a, const cXyz& b, f32 radius) {
+    const f32 dx = a.x - b.x;
+    const f32 dz = a.z - b.z;
+    const f32 dy = a.y - b.y;
+    if (dy > 400.0f || dy < -200.0f) {
+        return false;
+    }
+    return (dx * dx + dz * dz) <= (radius * radius);
+}
+
+bool aPressedNearDoor() {
+    return mDoCPd_c::getTrigA(PAD_1) != 0;
+}
+
+void beginDoorFade() {
+    mDoGph_gInf_c::startFadeOut(15);
+}
+
+bool tryEnter(const DoorDef& d, const dExtNpcManifest& island, fopAc_ac_c* player) {
+    if (d.enterProc[0] == '\0' || !dExtNpcMount_hasPayload(d.enterProc)) {
+        DuskLog.warn("[Doors] enter {} via door {} — payload missing", d.enterProc, d.name);
+        return false;
+    }
+    dExtNpcManifest dest{};
+    if (!dExtNpcMount_lookup(d.enterProc, &dest) || !dest.isBg) {
+        return false;
+    }
+    const char* stage = dComIfGp_getStartStageName();
+    if (stage == NULL || std::strcmp(stage, dest.hostStage) != 0) {
+        dComIfGp_setNextStage(dest.hostStage, 0, dest.hostRoom, dest.hostLayer);
+    }
+    beginDoorFade();
+    // №34 P4: guarded enter — abort to outdoor door if interior never becomes ready.
+    const cXyz outdoor = wwToHost(island, d.wwPos);
+    cXyz failSafe = outdoor;
+    failSafe.y += 50.0f;
+    if (!dExtNpcMount_requestBgWarpGuarded(d.enterProc, failSafe)) {
+        return false;
+    }
+    // №32 B1 / №34: fire-time pin proof on the DOOR path (not only Warp menu).
+    DuskLog.info("[Doors] enter {} → {} (pinned BG warp via door '{}')", d.enterProc, d.enterProc,
+                 d.name);
+    (void)player;
+    (void)island;
+    return true;
+}
+
+bool tryExit(const DoorDef& d, const dExtNpcManifest& island, fopAc_ac_c* player) {
+    dExtNpcManifest dest{};
+    if (!dExtNpcMount_lookup(d.enterProc, &dest) || !dest.isBg) {
+        return false;
+    }
+    if (!dExtNpcMount_hasPayload("EXT_BG0")) {
+        return false;
+    }
+    const cXyz outdoor = wwToHost(island, d.wwPos);
+    cXyz spawn = outdoor;
+    spawn.y += 50.0f;
+    beginDoorFade();
+    if (!dExtNpcMount_requestBgWarpTo("EXT_BG0", spawn)) {
+        return false;
+    }
+    DuskLog.info("[Doors] enter EXT_BG0 → EXT_BG0 (exit '{}' via door '{}')", d.enterProc, d.name);
+    (void)player;
+    return true;
+}
+
+}  // namespace
+
+void dExtNpcDoors_spawnKnobs(const dExtNpcManifest& island) {
+    ensureLoaded();
+    if (s_knobsSpawned || s_doors.empty()) {
+        return;
+    }
+    if (!dExtNpcMount_hasPayload("NPC_KNOB")) {
+        DuskLog.debug("[ExtNpcDoors] knobs skipped — no NPC_KNOB payload (need arcs/Knob.arc)");
+        s_knobsSpawned = true;
+        return;
+    }
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+    const int roomNo = fopAcM_GetRoomNo(player);
+    int n = 0;
+    for (const DoorDef& d : s_doors) {
+        if (!d.wantKnob) {
+            continue;
+        }
+        cXyz pos = wwToHost(island, d.wwPos);
+        pos.y += 20.0f;
+        csXyz angle;
+        // №34 P3: face as WW TGDR authored (doors.ini ww_ry=).
+        angle.set(0, d.hasWwRy ? d.wwRy : (s16)0, 0);
+        cXyz scale(1.0f, 1.0f, 1.0f);
+        dExtNpcMount_forceNextCreateProc("NPC_KNOB");
+        const s16 actorId = dExtNpcMount_socketActorId("NPC_HENNA0");
+        if (actorId < 0) {
+            continue;
+        }
+        if (fopAcM_create(actorId, 25, &pos, roomNo, &angle, &scale, -1) !=
+            fpcM_ERROR_PROCESS_ID_e) {
+            ++n;
+        } else {
+            dExtNpcMount_forceNextCreateProc(NULL);
+        }
+    }
+    s_knobsSpawned = true;
+    DuskLog.info("[ExtNpcDoors] spawned {} Knob.arc door props", n);
+}
+
+void dExtNpcDoors_poll() {
+    if (dExtNpcMount_bgWarpBusy()) {
+        return;
+    }
+    ensureLoaded();
+    if (s_doors.empty()) {
+        return;
+    }
+    if (s_cooldown > 0) {
+        --s_cooldown;
+        return;
+    }
+
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+    dExtNpcManifest island{};
+    if (!dExtNpcMount_lookup("EXT_BG0", &island) || !island.hasHostPos || !island.hasAnchor) {
+        return;
+    }
+    // Field / other stages: no door work until Link is on the island host stage.
+    {
+        const char* stage = dComIfGp_getStartStageName();
+        if (stage == NULL || std::strcmp(stage, island.hostStage) != 0) {
+            return;
+        }
+    }
+
+    // №32 B1: A-press ENTER only — no walk-through auto-warp.
+    if (!aPressedNearDoor()) {
+        // Still track edge state so we don't spam when holding A across cooldown.
+        const char* last = dExtNpcMount_lastBgProc();
+        const bool onIsland = last != NULL && std::strcmp(last, "EXT_BG0") == 0;
+        for (DoorDef& d : s_doors) {
+            if (d.enterProc[0] == '\0') {
+                continue;
+            }
+            if (onIsland) {
+                const cXyz doorHost = wwToHost(island, d.wwPos);
+                d.wasInEnter = nearXZ(player->current.pos, doorHost, d.radius);
+            } else if (last != NULL && std::strcmp(last, d.enterProc) == 0) {
+                dExtNpcManifest dest{};
+                if (dExtNpcMount_lookup(d.enterProc, &dest)) {
+                    const cXyz exitCenter = dest.hostPos + dest.spawnRel;
+                    d.wasInExit = nearXZ(player->current.pos, exitCenter, d.exitRadius);
+                }
+            }
+        }
+        return;
+    }
+
+    const char* last = dExtNpcMount_lastBgProc();
+    const bool onIsland = last != NULL && std::strcmp(last, "EXT_BG0") == 0;
+
+    if (onIsland) {
+        DoorDef* best = NULL;
+        f32 bestDist2 = 0.0f;
+        for (DoorDef& d : s_doors) {
+            if (d.enterProc[0] == '\0') {
+                continue;
+            }
+            const cXyz doorHost = wwToHost(island, d.wwPos);
+            if (!nearXZ(player->current.pos, doorHost, d.radius)) {
+                d.wasInEnter = false;
+                continue;
+            }
+            const f32 dx = player->current.pos.x - doorHost.x;
+            const f32 dz = player->current.pos.z - doorHost.z;
+            const f32 dist2 = dx * dx + dz * dz;
+            if (best == NULL || dist2 < bestDist2) {
+                best = &d;
+                bestDist2 = dist2;
+            }
+            d.wasInEnter = true;
+        }
+        if (best != NULL && tryEnter(*best, island, player)) {
+            s_cooldown = 90;
+            for (DoorDef& e : s_doors) {
+                e.wasInEnter = true;
+                e.wasInExit = true;
+            }
+            return;
+        }
+    }
+
+    for (DoorDef& d : s_doors) {
+        if (d.enterProc[0] == '\0') {
+            continue;
+        }
+        if (onIsland) {
+            continue;
+        }
+        if (last == NULL || std::strcmp(last, d.enterProc) != 0) {
+            continue;
+        }
+        dExtNpcManifest dest{};
+        if (!dExtNpcMount_lookup(d.enterProc, &dest)) {
+            continue;
+        }
+        const cXyz exitCenter = dest.hostPos + dest.spawnRel;
+        if (!nearXZ(player->current.pos, exitCenter, d.exitRadius)) {
+            d.wasInExit = false;
+            continue;
+        }
+        if (tryExit(d, island, player)) {
+            s_cooldown = 90;
+            for (DoorDef& e : s_doors) {
+                e.wasInEnter = true;
+                e.wasInExit = true;
+            }
+            return;
+        }
+        d.wasInExit = true;
+    }
+}
+
+#endif  // TARGET_PC

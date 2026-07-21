@@ -1,0 +1,16 @@
+#ifndef D_EXT_NPC_DOORS_H
+#define D_EXT_NPC_DOORS_H
+
+#if TARGET_PC
+
+struct dExtNpcManifest;
+
+// Folder-side door triggers (population/doors.ini). №32 B1: near + A → fade →
+// pinned BG warp (walk-through retired). Exit = A at interior spawn_rel.
+void dExtNpcDoors_poll();
+// Spawn real Knob.arc door props (NPC_KNOB) once per island session.
+void dExtNpcDoors_spawnKnobs(const dExtNpcManifest& island);
+
+#endif  // TARGET_PC
+
+#endif /* D_EXT_NPC_DOORS_H */

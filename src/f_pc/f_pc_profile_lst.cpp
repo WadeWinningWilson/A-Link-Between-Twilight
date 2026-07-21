@@ -1618,10 +1618,10 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     &g_profile_EXT_BG10.base.base,
     // §27 WW knob door port: index MUST match fpcNm_KNOB00_e (0x31C).
     &g_profile_KNOB00.base.base,
-    // №122 donor grass: index MUST match fpcNm_WWGRASS_e (0x31D).
-    &g_profile_WWGRASS.base.base,
-    // No.124 donor bridge: index MUST match fpcNm_WWBRIDGE_e (0x31E).
-    &g_profile_WWBRIDGE.base.base,
+    // §45 ExtVeg: index MUST match fpcNm_EXT_VEG_e (0x31D).
+    &g_profile_EXT_VEG.base.base,
+    // §45 ExtSpan: index MUST match fpcNm_EXT_SPAN_e (0x31E).
+    &g_profile_EXT_SPAN.base.base,
     NULL,
 };
 #endif

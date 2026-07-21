@@ -342,8 +342,8 @@ struct UserSettings {
         // "leaf out" state — while ON, running/jumping off a ledge floats (gentle terminal
         // velocity, stick-steer, wind updraft) with no cucco held. Reuses the cucco HIO tuning.
         ConfigVar<bool> dekuLeafGlideTest;
-        // Legacy: free-ground hold-A crawl (retired — raced door/talk A prompts).
-        // Crawl uses native TP/WW hole prompting (BUTTON_STATUS_ENTER) only.
+        // №105 P2: gated hold-A crawl — DoStatus NONE + stick ≤ front-roll rate so it
+        // never steals door/talk/ENTER and does not fight stick-forward roll.
         ConfigVar<bool> enableHoldACrawl;
         // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
         // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.

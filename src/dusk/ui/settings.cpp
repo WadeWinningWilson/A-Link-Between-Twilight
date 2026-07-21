@@ -1355,8 +1355,11 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "in combat with you instead of manually rotating the lock-on camera.");
         addOption("No Ammo Drops", getSettings().game.noAmmoDrops,
             "Bombs, arrows, and seeds will not drop from enemies. Magic pickups (seed drops) replace them.");
-        // Option removed from UI: free-ground hold-A crawl raced door/dialogue prompts.
-        // Native crawl-hole A (Enter) still works. Config key kept for save compat.
+        addOption("Hold-A Crawl", getSettings().game.enableHoldACrawl,
+            "Hold A while standing (little/no stick) to crawl. Gated so it never steals "
+            "door Open, talk Speak, or Enter prompts, and stick-forward A still rolls. "
+            "Keep holding A under clearance to stay down; release A to stand. "
+            "Interim until WW crawl-hole wall codes arm native Enter.");
         addOption("Manual Shielding", getSettings().game.manualShielding,
             "Hold ZR to raise your shield without Z-target lock-on; move freely while guarding. "
             "Shield bash is ZR+B. Off preserves vanilla auto-guard on Z-target.");

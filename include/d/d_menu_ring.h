@@ -87,6 +87,8 @@ public:
     /** 0.3 while live quick-wheel open (70% slowdown), else 1.0. */
     static f32 getQuickEquipSimScale();
     static void setQuickEquipLiveWorld(bool live);
+    /** Damage interrupt: assign hover → Z and request close (live quick only). */
+    static void forceQuickConfirmClose();
 #endif
 
     virtual void draw() { _draw(); }
@@ -231,6 +233,7 @@ private:
     bool mCursorInterpInit;
     bool mPointerTouchPressHoveredCurrent;
     bool mQuickEquipMode;
+    bool mQuickEquipForceClose;
 #endif
 };
 

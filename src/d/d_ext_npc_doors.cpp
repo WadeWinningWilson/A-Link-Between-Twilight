@@ -32,6 +32,7 @@
 #include "f_pc/f_pc_name.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_graphic.h"
+#include "SSystem/SComponent/c_math.h"
 
 namespace fs = std::filesystem;
 
@@ -1347,20 +1348,32 @@ void dExtNpcDoors_pollArrival() {
         return;
     }
 
-    // №121 Ask 3 / №110: WW hosts sit 200k+ from origin — Start() interpolates from
-    // the old/default eye (map-edge fly-in). Snap only AFTER Link exists. For door
-    // arrivals, snap AFTER the arrival demo ends — demo lock / event camera was
-    // overwriting an early QuickStart (snap-before-demo was the №110 miss).
+    // №121 Ask 3 / №133: WW hosts sit 200k+ from origin. QuickStart alone leaves eye/center
+    // at the prior stage's map-edge. Snap like Shade Refuge: Reset behind Link, then
+    // QuickStart. Fire after Link exists; for door arrivals wait until demo ends so the
+    // demo lock cannot overwrite it.
     auto snapArrivalCamera = [&]() {
         if (s_arrival.cameraSnapped) {
             return;
         }
-        if (dCamera_c* cam = dCam_getBody()) {
-            cam->QuickStart();
-            s_arrival.cameraSnapped = true;
-            DuskLog.info("[Doors] №110 QuickStart snap stage='{}' exit={}", s_arrival.stage,
-                         s_arrival.isExit ? 1 : 0);
+        dCamera_c* cam = dCam_getBody();
+        if (cam == NULL || player == NULL) {
+            return;
         }
+        const f32 kDist = 420.0f;
+        const f32 kEyeH = 200.0f;
+        const f32 kLookH = 140.0f;
+        const s16 a = player->shape_angle.y;
+        const f32 fwdX = cM_ssin(a);
+        const f32 fwdZ = cM_scos(a);
+        cXyz center(player->current.pos.x, player->current.pos.y + kLookH, player->current.pos.z);
+        cXyz eye(player->current.pos.x - fwdX * kDist, player->current.pos.y + kEyeH,
+                 player->current.pos.z - fwdZ * kDist);
+        cam->Reset(center, eye);
+        cam->QuickStart();
+        s_arrival.cameraSnapped = true;
+        DuskLog.info("[Doors] №110 QuickStart snap stage='{}' exit={}", s_arrival.stage,
+                     s_arrival.isExit ? 1 : 0);
     };
 
     // №90: warp / non-door arrival — residual clear then G-guard only.

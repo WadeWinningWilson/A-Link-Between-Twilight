@@ -184,6 +184,13 @@ namespace dusk::audio {
     // ============================================
     constexpr u32 kShadowVirtualBase = 0x40000000u;
 
+    // №31-B: ExtSeq stamps JASChannel::mBankDisposeID with this address so the
+    // TP mix path can detect WW-owned voices without a d/→JSystem dependency.
+    extern char g_extSeqOwnerTag;
+    inline bool isExtSeqOwned(const void* bankDisposeId) {
+        return bankDisposeId == &g_extSeqOwnerTag;
+    }
+
     // Register a resident bank's mod twin: [aramBase, aramBase+size) -> buf
     // (addressed by new notes as kShadowVirtualBase + aramBase + offset).
     void registerShadowWave(u32 aramBase, u32 size, const u8* buf);

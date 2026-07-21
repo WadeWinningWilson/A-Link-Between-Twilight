@@ -15,10 +15,35 @@ reference). Consult BEFORE guessing any WW name or param.
 
 ## 0. Doctrine (non-negotiable)
 
-- **SPACE-PURITY LAW (№31, user-decreed FINAL):** WW spaces get ONLY WW assets; TP spaces
-  ONLY TP assets. No cross-pollination ever — **including rupees** (WW `Vlupy` visual; the
-  grant may credit the TP wallet because the *economy* is a system). A missing prop (a
+- **SPACE-PURITY LAW (№31, user-decreed FINAL — BROADENED 2026-07-20):** WW spaces get ONLY WW
+  assets; TP spaces ONLY TP assets. No cross-pollination ever — **including rupees** (WW `Vlupy`
+  visual; the grant may credit the TP wallet because the *economy* is a system). A missing prop (a
   HOLE) is always preferable to a foreign one.
+
+  **№31-B — PURITY COVERS SHAPING, NOT JUST SUPPLY.** №31 was written about *assets* and was read
+  that way for months. **It applies equally to any receiver system that MODIFIES donor content on
+  its way to the player** — not only to systems that supply it. Assets, **music, lighting, sound
+  mixing, animation blending, physics response — everything.**
+
+  **The test:** if donor content passes through a receiver stage that changes what is seen or heard,
+  that stage is a purity surface. **Decide explicitly which engine owns it, and neutralise the other
+  side to identity.**
+
+  **Why this exists (both caught the same week, same shape, neither predicted):**
+  - **Lighting:** WW grass takes colour from `dKy_tevstr_c` per room. Fed by TP's environment system,
+    donor grass renders wrong — correct asset, foreign shaping.
+  - **Audio:** WW sequences played through JAudio2's channel, whose volume chain applies **TP's
+    velocity curve** (`JASChannel.cpp:194`, velocity applied twice ⇒ squared). Correct donor bytes,
+    byte-verified against the player's extract, **still wrong at the speaker** — because purity was
+    verified at the byte level and never at the audible one.
+
+  **The trap:** each looks compliant under the old reading. Donor content ✓, receiver system ✓ —
+  and §0's *"systems don't port, content ports"* actively points toward using the receiver's system.
+  **The two rules collide precisely at shaping stages, and №31-B resolves the collision in favour of
+  purity.**
+
+  **Corollary:** verifying donor bytes are unmodified proves nothing about output. **Verify at the
+  stage the player perceives**, not at the stage that is easiest to hash.
 - **RECEIVER COVENANT:** the vanilla exe/game tree contains ZERO WW content — no bytes, no
   names, no dialogue. Everything lives in the mod folder
   (`%AppData%\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\`).

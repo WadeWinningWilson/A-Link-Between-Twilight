@@ -1,0 +1,174 @@
+#ifndef D_EXT_NPC_MOUNT_H
+#define D_EXT_NPC_MOUNT_H
+
+#if TARGET_PC
+
+#include "f_op/f_op_actor_mng.h"
+#include "m_Do/m_Do_ext.h"
+#include "SSystem/SComponent/c_phase.h"
+#include "d/d_bg_w.h"
+#include "d/d_cc_d.h"
+
+// Generic external-NPC / BG mount. Stub sockets delegate here when a mod
+// provides a payload (manifest + arc). Character identity lives in manifests only.
+
+static constexpr int kExtNpcMaxAttach = 2;
+static constexpr int kExtNpcMaxSubtype = 4;
+
+struct dExtNpcAttachSpec {
+    char model[64];
+    char joint[32];
+};
+
+struct dExtNpcSubtype {
+    bool valid;
+    int arg;  // matches params low byte
+    char idle[64];
+    char attachModel[64];
+    char attachJoint[32];
+    char displayName[64];
+};
+
+struct dExtNpcManifest {
+    char proc[32];
+    char socket[32];       // TP stub host, e.g. NPC_HENNA0 (default = proc)
+    int socketArg;         // params low byte when sharing a socket (-1 = any/0)
+    char arc[16];
+    char model[64];
+    char model2[64];
+    char model3[64];
+    char model2Btk[64];
+    char collision[64];
+    char idle[64];
+    char talk1[64];
+    char talk2[64];
+    char btp[64];
+    char displayName[64];
+    char neckJoint[32];
+    char dialogueKey[64];
+    char modFolder[128];
+    char companionModel[64];
+    char companionIdle[64];
+    char warpLabel[64];    // empty ⇒ no warp-menu row
+    char hostStage[16];
+    int hostRoom;
+    int hostLayer;
+    cXyz hostPos;
+    bool hasHostPos;
+    bool hasAnchor;
+    bool hasSpawnRel;
+    char populationCsv[64];     // relative to mod population/ (BG only)
+    char populationStage[16];   // №32: when CSV has stage col, only rows matching this (e.g. LinkRM)
+    char spawnIfFlag[64];       // R-O2e: require flag set to create
+    char spawnUnlessFlag[64];   // R-O2e: refuse create if flag set
+    dExtNpcAttachSpec attach[kExtNpcMaxAttach];
+    int attachCount;
+    dExtNpcSubtype subtypes[kExtNpcMaxSubtype];
+    int subtypeCount;
+    f32 cylRadius;
+    f32 cylHeight;
+    f32 scale;
+    cXyz anchor;
+    cXyz spawnRel;
+    u8 ambR;
+    u8 ambG;
+    u8 ambB;
+    bool isBg;
+    // When true: model baseTRMtx = translate(host); mBgMtx = translate(host−anchor).
+    bool modelSpaceLocal;
+    bool skipBtp;
+    bool carryable;  // R-O2d: expose TP carry attention
+    bool isStatic;   // №32: prop/door — idle optional (NULL anm)
+    bool doorAttention;  // №32 B1: A-press ENTER attention (not SPEAK)
+    bool fromDvd;
+    bool valid;
+};
+
+class dExtNpcMount_c : public fopAc_ac_c {
+public:
+    request_of_phase_process_class mPhase;
+    mDoExt_McaMorf* mpMorf;
+    mDoExt_McaMorf* mpCompanion;
+    mDoExt_btpAnm* mpBtp;
+    J3DModel* mpBgModels[3];
+    mDoExt_btkAnm* mpBgBtk;
+    dBgW* mpBgW;
+    Mtx mBgMtx;
+    bool mIsBg;
+    bool mBgReady;
+    J3DModel* mpAttach[kExtNpcMaxAttach];
+    s16 mAttachJnt[kExtNpcMaxAttach];
+    u8 mAttachOnCompanion[kExtNpcMaxAttach];
+    int mAttachCount;
+    dExtNpcManifest mManifest;
+    bool mGroundSnapped;
+    s16 mGroundSnapTries;  // №25 F2: retry island dzb before accepting seafloor
+    s16 mOrbitPhase;       // №27 N6: Kamome orbit phase (0 = grounded/static)
+    u8 mHeadVariant;       // №27 N2/N4: current head index (1-based; 0 = none)
+    bool mBtpBound;
+    dCcD_Stts mCcStts;
+    dCcD_Cyl mCyl;
+    s16 mNeckJnt;
+    s16 mLookYaw;
+    s16 mLookPitch;
+    bool mTalking;
+    bool mCcReady;
+    bool mTalkEventActive;
+    s16 mTalkFrames;
+    s16 mCloseCooldown;
+    // Phase O2: dialogue section cursor + pending next= hop after dismiss.
+    char mDialogueSection[64];
+    char mDialogueNext[64];
+};
+
+bool dExtNpcMount_hasPayload(const char* procName);
+bool dExtNpcMount_lookup(const char* procName, dExtNpcManifest* out);
+
+// Socket helpers (Phase M): resolve which proc a stub should mount.
+bool dExtNpcMount_hasSocketPayload(const char* socketName);
+bool dExtNpcMount_resolveSocket(const char* socketName, int arg, char* procOut, u32 procOutBytes);
+s16 dExtNpcMount_socketActorId(const char* socketName);
+
+// №24 D1: pin the next stub Create to a proc key (BG warp / population).
+// Consumed once by the stub Create path — bypasses socket-arg ambiguity.
+void dExtNpcMount_forceNextCreateProc(const char* procName);
+bool dExtNpcMount_consumeForcedCreateProc(char* procOut, u32 procOutBytes);
+
+// №27 N2: pin the next Create's head/prop attach (population head_from_params).
+void dExtNpcMount_forceNextAttach(const char* modelName, const char* jointName);
+bool dExtNpcMount_consumeForcedAttach(char* modelOut, u32 modelBytes, char* jointOut,
+                                      u32 jointBytes);
+
+int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName);
+int dExtNpcMount_delete(dExtNpcMount_c* i_this);
+int dExtNpcMount_execute(dExtNpcMount_c* i_this);
+int dExtNpcMount_draw(dExtNpcMount_c* i_this);
+
+void dExtNpcMount_rescanProviders();
+bool dExtNpcMount_shouldSkipBtp(const char* arcName);
+
+// №27 N4: identity audition — cycle head / lock display name on nearest mount.
+bool dExtNpcMount_cycleHeadNearest(const cXyz& from, f32 maxDist);
+bool dExtNpcMount_setDisplayNameNearest(const cXyz& from, f32 maxDist, const char* name);
+const char* dExtNpcMount_nearestDisplayName(const cXyz& from, f32 maxDist);
+
+// Manifest-driven BG warps.
+bool dExtNpcMount_requestBgWarp(const char* procName);
+// Same as requestBgWarp, but place Link at absolute world spawn (door returns).
+bool dExtNpcMount_requestBgWarpTo(const char* procName, const cXyz& spawnWorld);
+// №34 P4: door enter with black-void guard — if target BG never becomes ready,
+// abort and return Link to failSafeSpawn (outdoor door).
+bool dExtNpcMount_requestBgWarpGuarded(const char* procName, const cXyz& failSafeSpawn);
+void dExtNpcMount_onStageReady();
+void dExtNpcMount_pollBgWarps();
+// Last successfully completed BG warp proc (empty if none); for door triggers.
+const char* dExtNpcMount_lastBgProc();
+bool dExtNpcMount_bgWarpBusy();
+
+// Provider enumeration for UI (Cut Actors / Warp).
+int dExtNpcMount_providerCount();
+bool dExtNpcMount_providerAt(int index, dExtNpcManifest* out);
+
+#endif  // TARGET_PC
+
+#endif /* D_EXT_NPC_MOUNT_H */

@@ -13,6 +13,10 @@
 #include "SSystem/SComponent/c_math.h"
 #include <cstdio>
 #include <cstring>
+#if TARGET_PC
+#include "d/d_ext_fado_door.h"
+#include "dusk/logging.h"
+#endif
 
 u32 knob_param_c::getDoorModel(fopAc_ac_c* i_this) {
     return fopAcM_GetParamBit(i_this, 5, 3);
@@ -154,6 +158,17 @@ int daKnob20_c::create() {
 }
 
 int daKnob20_c::checkOpenDoor(int* param_1) {
+#if TARGET_PC
+    // Fado’s Ordon door (exit 7): unlocked + command → open like msg 0xffff;
+    // unlocked without command → keep locked talk (never load missing room 3).
+    if (dFadoDoor_isTargetKnob(this) && dFadoDoor_isUnlocked()) {
+        if (dFadoDoor_hasWarpCommand()) {
+            *param_1 = 0;
+            return 1;
+        }
+        DuskLog.info("[FadoDoor] unlocked but no warp command — keeping lock msg");
+    }
+#endif
     int msgNo = knob_param_c::getMsgNo(this);
     if (msgNo == 0xffff) {
         *param_1 = 0;

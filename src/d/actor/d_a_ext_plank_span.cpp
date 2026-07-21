@@ -1,5 +1,5 @@
 /**
- * d_a_ww_bridge.cpp
+ * d_a_ext_plank_span.cpp
  *
  * №124: donor rope bridge — a PLANK-INSTANCING actor, not a static prop.
  *
@@ -69,9 +69,12 @@ struct Span {
 };
 
 std::vector<Span> s_spans;
+std::string s_plankArc;
+std::string s_plankModel;
+std::string s_chainModel;  // optional; reserved for chain variant (§45)
 bool s_spansTried = false;
 
-// Endpoints authored from the donor room's own path data. Loaded once.
+// §45: span endpoints + plank/arc names from data. No hardcoded model strings.
 void loadSpans() {
     if (s_spansTried) {
         return;
@@ -105,8 +108,24 @@ void loadSpans() {
                 continue;
             }
             const std::string key = line.substr(0, eq);
+            std::string val = line.substr(eq + 1);
+            while (!val.empty() && (val.back() == '\r' || val.back() == ' ')) {
+                val.pop_back();
+            }
+            if (key == "plank_arc" || key == "arc") {
+                s_plankArc = val;
+                continue;
+            }
+            if (key == "plank_model") {
+                s_plankModel = val;
+                continue;
+            }
+            if (key == "chain_model") {
+                s_chainModel = val;
+                continue;
+            }
             float x = 0.0f, y = 0.0f, z = 0.0f;
-            if (std::sscanf(line.c_str() + eq + 1, "%f,%f,%f", &x, &y, &z) != 3) {
+            if (std::sscanf(val.c_str(), "%f,%f,%f", &x, &y, &z) != 3) {
                 continue;
             }
             if (key == "start") {
@@ -119,21 +138,22 @@ void loadSpans() {
             }
         }
         if (!s_spans.empty()) {
-            DuskLog.info("[WwBridge] №124 {} span(s) loaded from '{}'", s_spans.size(),
-                         entry.path().filename().string());
+            DuskLog.info("[ExtSpan] №124 {} span(s) loaded from '{}' plank={}", s_spans.size(),
+                         entry.path().filename().string(), s_plankModel);
+            if (!s_chainModel.empty()) {
+                DuskLog.info("[ExtSpan] §45 chain_model='{}' reserved (not wired)", s_chainModel);
+            }
             return;
         }
     }
-    DuskLog.warn("[WwBridge] №124 no bridges.ini found — bridges disabled");
+    DuskLog.warn("[ExtSpan] №124 no bridges.ini found — bridges disabled");
 }
 
-const char* const kArc = "Bridge";
-const char* const kPlank = "obm_bridge.bdl";
 const int kMaxPlanks = 50;  // donor rejects >= 50
 
 }  // namespace
 
-class daWwBridge_c : public fopAc_ac_c {
+class daExtSpan_c : public fopAc_ac_c {
 public:
     int create();
     int execute() { return 1; }
@@ -146,9 +166,9 @@ public:
     bool mBuilt;
 };
 
-int daWwBridge_c::create() {
+int daExtSpan_c::create() {
     if (!mBuilt) {
-        fopAcM_ct(this, daWwBridge_c);
+        fopAcM_ct(this, daExtSpan_c);
         mCount = 0;
         mBuilt = true;
         std::memset(mpPlanks, 0, sizeof(mpPlanks));
@@ -170,21 +190,20 @@ int daWwBridge_c::create() {
     }
     }
 
-    // The plank model lives in an arc that nothing else keeps resident, so load
-    // it through a phase exactly like the donor does (dComIfG_resLoad "Bridge").
-    // acquireModelData() only wraps dComIfG_getObjectRes and CANNOT load — that
-    // is why the first cut logged "missing/unparseable obm_bridge.bdl".
-    const int phase = dComIfG_resLoad(&mPhase, kArc);
+    // §45: arc + plank model come from bridges.ini (refuse if missing — no
+    // hardcoded donor names). Phase-load like the donor; acquireModelData only
+    // wraps getObjectRes and cannot load the arc itself.
+    loadSpans();
+    if (s_plankArc.empty() || s_plankModel.empty()) {
+        DuskLog.warn("[ExtSpan] §45 refuse — bridges.ini missing plank_arc/plank_model");
+        return cPhs_COMPLEATE_e;
+    }
+    const int phase = dComIfG_resLoad(&mPhase, s_plankArc.c_str());
     if (phase != cPhs_COMPLEATE_e) {
         return phase;  // NEXT/LOADING — stay alive and retry, never fail
     }
 
-    // №126: NEVER return cPhs_ERROR_e past this point. fopAcM_create already
-    // returned a valid id to the population spawner, so the spawner will not
-    // discard its pending-spawn FIFO entry, and an unconsumed entry shifts
-    // every LATER actor's head/identity by one. That is precisely how this
-    // actor scrambled the cast. Fail INERT instead.
-    loadSpans();
+    // №126: NEVER return cPhs_ERROR_e past this point. Fail INERT instead.
     if (s_spans.empty()) {
         return cPhs_COMPLEATE_e;
     }
@@ -222,9 +241,11 @@ int daWwBridge_c::create() {
         count = kMaxPlanks - 1;
     }
 
-    J3DModelData* modelData = dExtNpcMount_acquireModelData(kArc, kPlank);
+    J3DModelData* modelData =
+        dExtNpcMount_acquireModelData(s_plankArc.c_str(), s_plankModel.c_str());
     if (modelData == NULL) {
-        DuskLog.warn("[WwBridge] №124 missing/unparseable {} in '{}' — inert", kPlank, kArc);
+        DuskLog.warn("[ExtSpan] №124 missing/unparseable {} in '{}' — inert", s_plankModel,
+                     s_plankArc);
         return cPhs_COMPLEATE_e;
     }
 
@@ -260,12 +281,12 @@ int daWwBridge_c::create() {
     dKy_tevstr_init(&tevStr, fopAcM_GetRoomNo(this), 0xFF);
     tevStr.room_no = fopAcM_GetRoomNo(this);
 
-    DuskLog.info("[WwBridge] №124 span len={:.1f} -> {} planks at ({:.0f},{:.0f},{:.0f})", len,
+    DuskLog.info("[ExtSpan] №124 span len={:.1f} -> {} planks at ({:.0f},{:.0f},{:.0f})", len,
                  mCount, best->start.x, best->start.y, best->start.z);
     return cPhs_COMPLEATE_e;
 }
 
-int daWwBridge_c::draw() {
+int daExtSpan_c::draw() {
     if (mCount == 0) {
         return 1;
     }
@@ -284,41 +305,41 @@ int daWwBridge_c::draw() {
 // ==========================================================================
 // Profile
 // ==========================================================================
-static int daWwBridge_Create(fopAc_ac_c* i_this) {
-    return static_cast<daWwBridge_c*>(i_this)->create();
+static int daExtSpan_Create(fopAc_ac_c* i_this) {
+    return static_cast<daExtSpan_c*>(i_this)->create();
 }
-static int daWwBridge_Delete(void* i_this) {
-    return static_cast<daWwBridge_c*>(i_this)->deleteMe();
+static int daExtSpan_Delete(void* i_this) {
+    return static_cast<daExtSpan_c*>(i_this)->deleteMe();
 }
-static int daWwBridge_Execute(void* i_this) {
-    return static_cast<daWwBridge_c*>(i_this)->execute();
+static int daExtSpan_Execute(void* i_this) {
+    return static_cast<daExtSpan_c*>(i_this)->execute();
 }
-static int daWwBridge_Draw(void* i_this) {
-    return static_cast<daWwBridge_c*>(i_this)->draw();
+static int daExtSpan_Draw(void* i_this) {
+    return static_cast<daExtSpan_c*>(i_this)->draw();
 }
-static int daWwBridge_IsDelete(void* i_this) {
+static int daExtSpan_IsDelete(void* i_this) {
     (void)i_this;
     return 1;
 }
 
-static DUSK_CONST actor_method_class l_daWwBridge_Method = {
-    (process_method_func)daWwBridge_Create,  (process_method_func)daWwBridge_Delete,
-    (process_method_func)daWwBridge_Execute, (process_method_func)daWwBridge_IsDelete,
-    (process_method_func)daWwBridge_Draw,
+static DUSK_CONST actor_method_class l_daExtSpan_Method = {
+    (process_method_func)daExtSpan_Create,  (process_method_func)daExtSpan_Delete,
+    (process_method_func)daExtSpan_Execute, (process_method_func)daExtSpan_IsDelete,
+    (process_method_func)daExtSpan_Draw,
 };
 
-DUSK_PROFILE actor_process_profile_definition DUSK_CONST g_profile_WWBRIDGE = {
+DUSK_PROFILE actor_process_profile_definition DUSK_CONST g_profile_EXT_SPAN = {
     /* Layer ID     */ fpcLy_CURRENT_e,
     /* List ID      */ 7,
     /* List Prio    */ fpcPi_CURRENT_e,
-    /* Proc Name    */ fpcNm_WWBRIDGE_e,
+    /* Proc Name    */ fpcNm_EXT_SPAN_e,
     /* Proc SubMtd  */ &g_fpcLf_Method.base,
-    /* Size         */ sizeof(daWwBridge_c),
+    /* Size         */ sizeof(daExtSpan_c),
     /* Size Other   */ 0,
     /* Parameters   */ 0,
     /* Leaf SubMtd  */ &g_fopAc_Method.base,
     /* Draw Prio    */ fpcDwPi_KNOB20_e,
-    /* Actor SubMtd */ &l_daWwBridge_Method,
+    /* Actor SubMtd */ &l_daExtSpan_Method,
     /* Status       */ fopAcStts_UNK_0x40000_e | fopAcStts_UNK_0x4000_e,
     /* Group        */ fopAc_ACTOR_e,
     /* Cull Type    */ fopAc_CULLBOX_CUSTOM_e,

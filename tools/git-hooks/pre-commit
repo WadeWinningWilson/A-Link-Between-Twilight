@@ -1,0 +1,7 @@
+#!/bin/sh
+# №133: census-spawnable actor contracts (C1 consume / C2 no ERROR / C3 VcdVat restore).
+# Enable:  git config core.hooksPath tools/git-hooks
+# (Cursor will not set this for you — ask before changing git config.)
+set -e
+cd "$(git rev-parse --show-toplevel)"
+python tools/check_actor_contracts.py

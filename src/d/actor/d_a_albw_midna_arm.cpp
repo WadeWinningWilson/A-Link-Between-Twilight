@@ -41,11 +41,19 @@ namespace {
 // NOTE: actor execute runs on the FIXED 30 Hz sim tick (dusk/game_clock.h sim_pace = 1/30) —
 // N frames = N/30 seconds.
 constexpr int kArmLifeFrames    = 450;  // 15 s at the 30 Hz sim tick
-constexpr int kArmStretchFrames = 12;   // jab OUT: 0.4 s — hair snaps toward the target
+// SPEED PASS (user-tuned 2026-07-16, after the 1-frame pose snap hit the 30 Hz floor).  The POSE
+// is now instant, so all remaining "slowness" lives in the PUBLISHED POINT these frame counts
+// pace: STRETCH eases the aim from hover to enemy, so the snapped pose rides a slow aim line.
+//   jab    +50% faster: 12 -> 8 f  (0.40 -> 0.27 s)
+//   cadence +20% faster: 34 -> 28 f (1.13 -> 0.93 s punch-to-punch)
+// kArmHitFrames deliberately UNCHANGED: it is the damage window (collider armed at the target),
+// not a pacing knob — shrinking it trades hit reliability for a speed the player cannot see.
+// The 20% came out of RETRACT/PAUSE instead (the phases with no gameplay contract).
+constexpr int kArmStretchFrames = 8;    // jab OUT: 0.27 s (was 12 f / 0.40 s)
 constexpr int kArmHitFrames     = 4;    // strike window: ~0.13 s (collider armed at the target)
-constexpr int kArmRetractFrames = 12;   // jab RETURN: 0.4 s (guided glide back, rendition-1 style)
-constexpr int kArmPauseFrames   = 6;    // rest between punches: 0.2 s in the READY hover
-                                        // punch-to-punch = 34 f ≈ 1.13 s (was 44 f ≈ 1.47 s)
+constexpr int kArmRetractFrames = 11;   // jab RETURN: 0.37 s (guided glide back, no-snap)
+constexpr int kArmPauseFrames   = 5;    // rest between punches: 0.17 s in the READY hover
+                                        // punch-to-punch = 28 f ≈ 0.93 s (was 34 f ≈ 1.13 s)
 // READY stance: rest the hair aimed FORWARD of the wolf (like its pose when Z-targeting a boss —
 // the Wchain/Beast-Ganon aim), not straight up (aiming the chain vertically flipped the hand
 // backwards).  The rest point sits ahead of the perch along the wolf's facing, slightly raised.

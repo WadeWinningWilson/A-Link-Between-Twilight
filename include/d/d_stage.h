@@ -41,7 +41,12 @@ struct stage_vrboxcol_info_class {
     /* 0x09 */ GXColor kumo_shadow_col;
     /* 0x0D */ GXColor kasumi_outer_col;
     /* 0x11 */ GXColor kasumi_inner_col;
-};  // Size: 0x18
+};  // Size: 0x15 — matches dm defaults (dKyd_l_vr_box_data_struct) and PC sizeof.
+    // №144: a prior "0x18" comment caused convert_lighting to insert a 3-byte pad;
+    // indexing then landed mid-record (magenta kasumi / black kumo at vr=2).
+
+static_assert(sizeof(stage_vrboxcol_info_class) == 0x15,
+              "VRB0 record must stay 21 bytes (no pad)");
 
 // Virt
 struct stage_vrbox_info_class {

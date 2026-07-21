@@ -31,6 +31,7 @@
 #include "d/d_stage.h"
 #include "d/d_albw_dialogue.h"
 #include "d/d_ext_mod_flags.h"
+#include "d/d_ext_fado_door.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_population.h"
 #include "d/d_ext_save_guard.h"
@@ -1959,44 +1960,208 @@ static void wwSkyReleaseUser() {
     }
 }
 
-// №121 Ask 1 / №116: WwSky is not TP's mpSoraModel — daVrbox_color_set never
-// touches these. Drive TEV reg0 per frame like daVrbox_color_set (setCullMode +
-// change + setTevColor), and call model->calc() before updateDL (island BG loop
-// already does; prior №116 missed calc so material state never pushed).
-// Bake stopgap RETRACTED — runtime path only. №113 VRB0 already feeds g_env_light.
-static void wwSkyApplyTev(J3DModel* model, const GXColorS10& mat0, s16 mat0Alpha,
-                          bool hasMat1Inner) {
+// №121 / №145: WwSky is WW's dome set, not TP's mpSoraModel.
+// WW d_a_vrbox / d_a_vrbox2 colour sky+uso+clouds via setTevKColor (TEV
+// colorIn = KONST); only kasumi_mae uses setTevColor (C0). TP's
+// daVrbox_color_set writes C0 because TP's models consume C0 — copying that
+// onto WW's KONST stages left C0 unused and K stuck at file white → white dome.
+// №145: back_cloud looked "correct" white because its stage is TEXC-only and
+// the day-band kumo is white; that did not prove C0 was live.
+static void wwSkyPaintMatC0(J3DMaterial* mat, s16 r, s16 g, s16 b, s16 a) {
+    if (mat == NULL) {
+        return;
+    }
+    mat->setCullMode(0);
+    mat->change();
+    J3DGXColorS10 color;
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    mat->setTevColor(0, &color);
+}
+
+static void wwSkyPaintMatK0(J3DMaterial* mat, u8 r, u8 g, u8 b, u8 a) {
+    if (mat == NULL) {
+        return;
+    }
+    mat->setCullMode(0);
+    mat->change();
+    J3DGXColor color;
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    mat->setTevKColor(0, &color);
+}
+
+static void wwSkyApplyModel(J3DModel* model) {
     if (model == NULL) {
         return;
     }
     model->calc();
-    J3DModelData* data = model->getModelData();
-    if (data == NULL) {
+}
+
+// №133/№144: g_env_light.vrbox_* was wrong (magenta kasumi / black kumo) while
+// the stage VRB0 table was correct. Root causes:
+//   (1) envcolor_init can latch dm* defaults; UseCol=room44 then indexes OOB —
+//       rebind stage tables before draw.
+//   (2) №144: converted VRB0 was authored at stride 0x18 but
+//       sizeof(stage_vrboxcol_info_class)==0x15 — index 2 read mid-record.
+//       Data fixed to 0x15; feed still drives colours from the Env0→Col0→PAL0→VRB0
+//       chain (no addcol/ratio scale).
+static bool wwSkyRebindStageLighting() {
+    bool changed = false;
+    auto tryRebind = [&](auto*& slot, auto* fresh, const char* name) {
+        if (fresh != NULL && slot != fresh) {
+            slot = fresh;
+            changed = true;
+            DuskLog.info("[WwSky] №133 rebound {} from stage", name);
+        }
+    };
+    tryRebind(g_env_light.stage_envr_info, dComIfGp_getStageEnvrInfo(), "Env0");
+    tryRebind(g_env_light.stage_pselect_info, dComIfGp_getStagePselectInfo(), "Col0");
+    tryRebind(g_env_light.stage_palette_info, dComIfGp_getStagePaletteInfo(), "PAL0");
+    tryRebind(g_env_light.stage_vrboxcol_info, dComIfGp_getStageVrboxcolInfo(), "VRB0");
+
+    // Room-local VRB0 fallback if stage still on the 18-entry dm default.
+    if (g_env_light.stage_vrboxcol_info == NULL ||
+        g_env_light.stage_vrboxcol_info ==
+            (stage_vrboxcol_info_class*)dKyd_dmvrbox_getp()) {
+        const s8 stay = dComIfGp_roomControl_getStayNo();
+        if (stay >= 0) {
+            dStage_roomDt_c* roomDt = dComIfGp_roomControl_getStatusRoomDt(stay);
+            if (roomDt != NULL) {
+                stage_vrboxcol_info_class* roomVrb = roomDt->getVrboxcolInfo();
+                if (roomVrb != NULL && g_env_light.stage_vrboxcol_info != roomVrb) {
+                    g_env_light.stage_vrboxcol_info = roomVrb;
+                    changed = true;
+                    DuskLog.info("[WwSky] №133 rebound VRB0 from room{}", (int)stay);
+                }
+            }
+        }
+    }
+    return changed;
+}
+
+static s16 wwSkyLerpU8(u8 a, u8 b, f32 t) {
+    return (s16)(a + (b - a) * t);
+}
+
+static void wwSkyFeedEnvFromStageVrbox() {
+    wwSkyRebindStageLighting();
+
+    if (g_env_light.stage_envr_info == NULL || g_env_light.stage_pselect_info == NULL ||
+        g_env_light.stage_palette_info == NULL || g_env_light.stage_vrboxcol_info == NULL) {
         return;
     }
-    J3DGXColorS10 color;
-    J3DMaterial* m0 = data->getMaterialNodePointer(0);
-    if (m0 != NULL) {
-        m0->setCullMode(0);
-        m0->change();
-        color.r = mat0.r;
-        color.g = mat0.g;
-        color.b = mat0.b;
-        color.a = mat0Alpha;
-        m0->setTevColor(0, &color);
-    }
-    // Mirror daVrbox_color_set: material 1 = kasumi_inner when the dome has two mats.
-    if (hasMat1Inner) {
-        J3DMaterial* m1 = data->getMaterialNodePointer(1);
-        if (m1 != NULL) {
-            m1->setCullMode(0);
-            m1->change();
-            color.r = g_env_light.vrbox_kasumi_inner_col.r;
-            color.g = g_env_light.vrbox_kasumi_inner_col.g;
-            color.b = g_env_light.vrbox_kasumi_inner_col.b;
-            color.a = g_env_light.vrbox_kasumi_inner_col.a;
-            m1->setTevColor(0, &color);
+    // Still on dm defaults → cannot safely index room 44.
+    if (g_env_light.stage_envr_info == (stage_envr_info_class*)dKyd_dmenvr_getp() ||
+        g_env_light.stage_vrboxcol_info ==
+            (stage_vrboxcol_info_class*)dKyd_dmvrbox_getp()) {
+        static bool s_warnedDm = false;
+        if (!s_warnedDm) {
+            s_warnedDm = true;
+            DuskLog.warn(
+                "[WwSky] №133 still on dm Env0/VRB0 — stage lighting tables not loaded "
+                "(check Elst env-layer vs Env0-only inject)");
         }
+        return;
+    }
+
+    int room = g_env_light.UseCol;
+    if (room < 0) {
+        room = dComIfGp_roomControl_getStayNo();
+    }
+    if (room < 0) {
+        room = 0;
+    }
+
+    stage_envr_info_class* envr = &g_env_light.stage_envr_info[room];
+    u8 weather = g_env_light.wether_pat0;
+    if (weather > 7) {
+        weather = 0;
+    }
+    u8 pselIdx = envr->pselect_id[weather];
+    stage_pselect_info_class* psel = &g_env_light.stage_pselect_info[pselIdx];
+
+    f32 daytime = g_env_light.getDaytime();
+    u8 startL = 2;
+    u8 endL = 2;
+    f32 t = 0.0f;
+    dKyd_lightSchejule* sch = dKyd_schejule_getp();
+    if (sch != NULL) {
+        for (int i = 0; i < 11; ++i) {
+            if (daytime >= sch[i].startTime && daytime <= sch[i].endTime) {
+                startL = sch[i].startTimeLight;
+                endL = sch[i].endTimeLight;
+                const f32 span = sch[i].endTime - sch[i].startTime;
+                t = (span > 0.0001f) ? (daytime - sch[i].startTime) / span : 0.0f;
+                if (t < 0.0f) {
+                    t = 0.0f;
+                }
+                if (t > 1.0f) {
+                    t = 1.0f;
+                }
+                break;
+            }
+        }
+    }
+    if (startL > 5) {
+        startL = 2;
+    }
+    if (endL > 5) {
+        endL = 2;
+    }
+
+    const u8 pal0 = psel->palette_id[startL];
+    const u8 pal1 = psel->palette_id[endL];
+    const u8 vr0 = g_env_light.stage_palette_info[pal0].vrboxcol_id;
+    const u8 vr1 = g_env_light.stage_palette_info[pal1].vrboxcol_id;
+    const stage_vrboxcol_info_class& A = g_env_light.stage_vrboxcol_info[vr0];
+    const stage_vrboxcol_info_class& B = g_env_light.stage_vrboxcol_info[vr1];
+
+    g_env_light.vrbox_sky_col.r = wwSkyLerpU8(A.sky_col.r, B.sky_col.r, t);
+    g_env_light.vrbox_sky_col.g = wwSkyLerpU8(A.sky_col.g, B.sky_col.g, t);
+    g_env_light.vrbox_sky_col.b = wwSkyLerpU8(A.sky_col.b, B.sky_col.b, t);
+    g_env_light.vrbox_sky_col.a = 255;
+
+    g_env_light.vrbox_kumo_top_col.r = wwSkyLerpU8(A.kumo_top_col.r, B.kumo_top_col.r, t);
+    g_env_light.vrbox_kumo_top_col.g = wwSkyLerpU8(A.kumo_top_col.g, B.kumo_top_col.g, t);
+    g_env_light.vrbox_kumo_top_col.b = wwSkyLerpU8(A.kumo_top_col.b, B.kumo_top_col.b, t);
+    g_env_light.vrbox_kumo_top_col.a =
+        wwSkyLerpU8(A.kumo_shadow_col.a, B.kumo_shadow_col.a, t);
+
+    g_env_light.vrbox_kasumi_inner_col.r =
+        wwSkyLerpU8(A.kasumi_inner_col.r, B.kasumi_inner_col.r, t);
+    g_env_light.vrbox_kasumi_inner_col.g =
+        wwSkyLerpU8(A.kasumi_inner_col.g, B.kasumi_inner_col.g, t);
+    g_env_light.vrbox_kasumi_inner_col.b =
+        wwSkyLerpU8(A.kasumi_inner_col.b, B.kasumi_inner_col.b, t);
+    g_env_light.vrbox_kasumi_inner_col.a =
+        wwSkyLerpU8(A.kasumi_inner_col.a, B.kasumi_inner_col.a, t);
+
+    g_env_light.vrbox_kasumi_outer_col.r =
+        wwSkyLerpU8(A.kasumi_outer_col.r, B.kasumi_outer_col.r, t);
+    g_env_light.vrbox_kasumi_outer_col.g =
+        wwSkyLerpU8(A.kasumi_outer_col.g, B.kasumi_outer_col.g, t);
+    g_env_light.vrbox_kasumi_outer_col.b =
+        wwSkyLerpU8(A.kasumi_outer_col.b, B.kasumi_outer_col.b, t);
+    g_env_light.vrbox_kasumi_outer_col.a =
+        wwSkyLerpU8(A.kasumi_outer_col.a, B.kasumi_outer_col.a, t);
+
+    static bool s_fedOnce = false;
+    if (!s_fedOnce) {
+        s_fedOnce = true;
+        DuskLog.info(
+            "[WwSky] №144 feed daytime={:.1f} room={} weather={} pal=({},{}) vr=({},{}) "
+            "sky=({},{},{}) kasumiIn=({},{},{}) kumoTop=({},{},{}) sizeof_vrb={}",
+            daytime, room, (int)weather, (int)pal0, (int)pal1, (int)vr0, (int)vr1,
+            g_env_light.vrbox_sky_col.r, g_env_light.vrbox_sky_col.g,
+            g_env_light.vrbox_sky_col.b, g_env_light.vrbox_kasumi_inner_col.r,
+            g_env_light.vrbox_kasumi_inner_col.g, g_env_light.vrbox_kasumi_inner_col.b,
+            g_env_light.vrbox_kumo_top_col.r, g_env_light.vrbox_kumo_top_col.g,
+            g_env_light.vrbox_kumo_top_col.b, (int)sizeof(stage_vrboxcol_info_class));
     }
 }
 
@@ -2004,6 +2169,7 @@ static void wwSkyDraw() {
     if (!s_wwSkyReady || dComIfGd_getView() == NULL) {
         return;
     }
+    wwSkyFeedEnvFromStageVrbox();
     f32 yOrigin = 0.0f;
     const s8 stay = dComIfGp_roomControl_getStayNo();
     if (stay >= 0) {
@@ -2022,49 +2188,61 @@ static void wwSkyDraw() {
     mDoMtx_stack_c::transS(cx, cy, cz);
     MtxP base = mDoMtx_stack_c::get();
 
+    const GXColorS10& sky = g_env_light.vrbox_sky_col;
+    const GXColorS10& kasumi = g_env_light.vrbox_kasumi_inner_col;
+    const GXColorS10& kumo = g_env_light.vrbox_kumo_top_col;
+
     dComIfGd_setListSky();
     // WW order: sky → uso_umi → kasumi → back_cloud (+100 Y).
-    // Colours: sky+uso ← vrbox_sky_col; kasumi ← vrbox_kasumi_inner_col; cloud ← kumo_top.
+    // vr_sky.bdl (WW d_a_vrbox): mat0 K=kasumi, mat1 K=sky.
     if (s_wwSkyModels[0] != NULL) {
         s_wwSkyModels[0]->setBaseTRMtx(base);
-        // №125 DIAGNOSTIC (one-shot, ~5s cadence): the converted VRB0 resolves
-        // to sky (80,120,255) at daytime 225, but the dome renders pale/warm —
-        // the tone of a DIFFERENT band. Print what the runtime actually chose so
-        // the next playtest settles data-vs-application instead of inference.
-        // Remove once the sky is confirmed.
-        {
-            static int s_skyDiagTick = 0;
-            if ((s_skyDiagTick++ % 300) == 0) {
-                DuskLog.info(
-                    "[WwSky] №125 daytime={:.1f} sky=({},{},{}) kasumiIn=({},{},{}) "
-                    "kumoTop=({},{},{}) hide_vrbox={}",
-                    g_env_light.getDaytime(), g_env_light.vrbox_sky_col.r,
-                    g_env_light.vrbox_sky_col.g, g_env_light.vrbox_sky_col.b,
-                    g_env_light.vrbox_kasumi_inner_col.r, g_env_light.vrbox_kasumi_inner_col.g,
-                    g_env_light.vrbox_kasumi_inner_col.b, g_env_light.vrbox_kumo_top_col.r,
-                    g_env_light.vrbox_kumo_top_col.g, g_env_light.vrbox_kumo_top_col.b,
-                    g_env_light.hide_vrbox ? 1 : 0);
-            }
+        wwSkyApplyModel(s_wwSkyModels[0]);
+        J3DModelData* data = s_wwSkyModels[0]->getModelData();
+        if (data != NULL) {
+            wwSkyPaintMatK0(data->getMaterialNodePointer(0), (u8)kasumi.r, (u8)kasumi.g,
+                            (u8)kasumi.b, 255);
+            wwSkyPaintMatK0(data->getMaterialNodePointer(1), (u8)sky.r, (u8)sky.g, (u8)sky.b,
+                            255);
         }
-        wwSkyApplyTev(s_wwSkyModels[0], g_env_light.vrbox_sky_col, 255, true);
         mDoExt_modelUpdateDL(s_wwSkyModels[0]);
     }
+    // vr_uso_umi.bdl: K = uso/sky colour (WW mVrUsoUmiColor; we share sky_col).
     if (s_wwSkyModels[1] != NULL) {
         s_wwSkyModels[1]->setBaseTRMtx(base);
-        wwSkyApplyTev(s_wwSkyModels[1], g_env_light.vrbox_sky_col, 255, false);
+        wwSkyApplyModel(s_wwSkyModels[1]);
+        J3DModelData* data = s_wwSkyModels[1]->getModelData();
+        if (data != NULL) {
+            wwSkyPaintMatK0(data->getMaterialNodePointer(0), (u8)sky.r, (u8)sky.g, (u8)sky.b,
+                            255);
+        }
         mDoExt_modelUpdateDL(s_wwSkyModels[1]);
     }
+    // vr_kasumi_mae.bdl: C0 = kasumi (WW); K.a carries cloud alpha.
     if (s_wwSkyModels[2] != NULL) {
         s_wwSkyModels[2]->setBaseTRMtx(base);
-        wwSkyApplyTev(s_wwSkyModels[2], g_env_light.vrbox_kasumi_inner_col,
-                      g_env_light.vrbox_kasumi_inner_col.a, false);
+        wwSkyApplyModel(s_wwSkyModels[2]);
+        J3DModelData* data = s_wwSkyModels[2]->getModelData();
+        if (data != NULL) {
+            J3DMaterial* mat = data->getMaterialNodePointer(0);
+            wwSkyPaintMatC0(mat, kasumi.r, kasumi.g, kasumi.b, kasumi.a);
+            wwSkyPaintMatK0(mat, (u8)kumo.a, 0, 0, 0);
+        }
         mDoExt_modelUpdateDL(s_wwSkyModels[2]);
     }
+    // vr_back_cloud.bdl: K on every material (WW d_a_vrbox2); TEXC*K path.
     if (s_wwSkyModels[3] != NULL) {
         mDoMtx_stack_c::transS(cx, cy + 100.0f, cz);
         s_wwSkyModels[3]->setBaseTRMtx(mDoMtx_stack_c::get());
-        wwSkyApplyTev(s_wwSkyModels[3], g_env_light.vrbox_kumo_top_col,
-                      g_env_light.vrbox_kumo_top_col.a, false);
+        wwSkyApplyModel(s_wwSkyModels[3]);
+        J3DModelData* data = s_wwSkyModels[3]->getModelData();
+        if (data != NULL) {
+            const u16 n = data->getMaterialNum();
+            for (u16 i = 0; i < n; ++i) {
+                wwSkyPaintMatK0(data->getMaterialNodePointer(i), (u8)kumo.r, (u8)kumo.g,
+                                (u8)kumo.b, 255);
+            }
+        }
         mDoExt_modelUpdateDL(s_wwSkyModels[3]);
     }
     dComIfGd_setList();
@@ -2399,41 +2577,69 @@ void updateBgTransform(dExtNpcMount_c* a);
 
 int useBgHeapInit(fopAc_ac_c* i_this) {
     dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
-    // Outset's models stay raw J3D2 in dRes (BDLM) — must loadBinaryDisplayList /
-    // load before touching ModelData. Do NOT use the NPC light-mask finish.
-    const char* names[] = {a->mManifest.model, a->mManifest.model2, a->mManifest.model3};
+    // Housing §33 ruling (b): probe optional BG slots like daBg_c — use what
+    // exists, skip what doesn't. Manifest model/model2/model3 are overrides;
+    // empty keys fall back to model.bdl / model1.bdl / model3.bdl (donor table
+    // also has model2; we only have three mount slots). Missing members are
+    // WARN+continue, never FAIL — LinkUG/Pjavdou legitimately omit model1.
+    static const char* const kProbeDefault[3] = {"model.bdl", "model1.bdl", "model3.bdl"};
+    char slotName[3][64] = {};
+    const char* override[3] = {a->mManifest.model, a->mManifest.model2, a->mManifest.model3};
+    const bool anyOverride =
+        override[0][0] != '\0' || override[1][0] != '\0' || override[2][0] != '\0';
+    for (int i = 0; i < 3; ++i) {
+        if (override[i][0] != '\0') {
+            std::snprintf(slotName[i], sizeof(slotName[i]), "%s", override[i]);
+        } else if (!anyOverride) {
+            std::snprintf(slotName[i], sizeof(slotName[i]), "%s", kProbeDefault[i]);
+        }
+    }
+    int loaded = 0;
     for (int i = 0; i < 3; ++i) {
         a->mpBgModels[i] = NULL;
-        if (names[i][0] == '\0') {
+        if (slotName[i][0] == '\0') {
             continue;
         }
-        void* raw = dComIfG_getObjectRes(a->mManifest.arc, names[i]);
-        J3DModelData* data = acquireBgModel(a->mManifest.arc, names[i], raw);
+        void* raw = dComIfG_getObjectRes(a->mManifest.arc, slotName[i]);
+        J3DModelData* data = acquireBgModel(a->mManifest.arc, slotName[i], raw);
         if (data == NULL) {
-            DuskLog.warn("[ExtNpcMount] BG model '{}' resolve failed in '{}'", names[i],
+            DuskLog.warn("[ExtNpcMount] BG model '{}' absent in '{}' — skip (probe)", slotName[i],
                          a->mManifest.arc);
-            return 0;
+            continue;
         }
         a->mpBgModels[i] = mDoExt_J3DModel__create(data, 0x80000, 0x11000084);
         if (a->mpBgModels[i] == NULL) {
-            DuskLog.warn("[ExtNpcMount] BG model '{}' J3DModel__create failed", names[i]);
-            return 0;
+            DuskLog.warn("[ExtNpcMount] BG model '{}' J3DModel__create failed — skip",
+                         slotName[i]);
+            continue;
         }
-        DuskLog.info("[ExtNpcMount] BG model[{}] '{}' mats={} joints={} shapes={}", i, names[i],
+        ++loaded;
+        DuskLog.info("[ExtNpcMount] BG model[{}] '{}' mats={} joints={} shapes={}", i, slotName[i],
                      data->getMaterialNum(), data->getJointNum(), data->getShapeNum());
     }
+    if (loaded == 0) {
+        DuskLog.warn("[ExtNpcMount] BG '{}' — no models resolved", a->mManifest.arc);
+        return 0;
+    }
     a->mpBgBtk = NULL;
-    if (a->mManifest.model2Btk[0] && a->mpBgModels[1] != NULL) {
-        J3DAnmTextureSRTKey* btk = (J3DAnmTextureSRTKey*)dComIfG_getObjectRes(
-            a->mManifest.arc, a->mManifest.model2Btk);
-        a->mpBgBtk = JKR_NEW mDoExt_btkAnm();
-        if (btk == NULL || a->mpBgBtk == NULL ||
-            !a->mpBgBtk->init(a->mpBgModels[1]->getModelData(), btk, TRUE,
-                               J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1)) {
-            DuskLog.warn("[ExtNpcMount] BG btk '{}' unavailable", a->mManifest.model2Btk);
-            a->mpBgBtk = NULL;
-        } else {
-            DuskLog.info("[ExtNpcMount] BG btk '{}' bound", a->mManifest.model2Btk);
+    if (a->mpBgModels[1] != NULL) {
+        const char* btkName = a->mManifest.model2Btk[0] ? a->mManifest.model2Btk : "model1.btk";
+        J3DAnmTextureSRTKey* btk =
+            (J3DAnmTextureSRTKey*)dComIfG_getObjectRes(a->mManifest.arc, btkName);
+        if (btk == NULL && a->mManifest.model2Btk[0] == '\0') {
+            btk = (J3DAnmTextureSRTKey*)dComIfG_getObjectRes(a->mManifest.arc, "model.btk");
+            btkName = "model.btk";
+        }
+        if (btk != NULL) {
+            a->mpBgBtk = JKR_NEW mDoExt_btkAnm();
+            if (a->mpBgBtk == NULL ||
+                !a->mpBgBtk->init(a->mpBgModels[1]->getModelData(), btk, TRUE,
+                                   J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1)) {
+                DuskLog.warn("[ExtNpcMount] BG btk '{}' unavailable — skip", btkName);
+                a->mpBgBtk = NULL;
+            } else {
+                DuskLog.info("[ExtNpcMount] BG btk '{}' bound", btkName);
+            }
         }
     }
     // brakeeff / Obj_Fmobj pattern: Set against IDENTITY, then copy the real
@@ -2902,11 +3108,11 @@ s16 dExtNpcMount_socketActorId(const char* socketName) {
     if (strcmp(socketName, "EXT_BG10") == 0) {
         return fpcNm_EXT_BG10_e;
     }
-    if (strcmp(socketName, "WWGRASS") == 0) {
-        return fpcNm_WWGRASS_e;
+    if (strcmp(socketName, "EXT_VEG") == 0) {
+        return fpcNm_EXT_VEG_e;
     }
-    if (strcmp(socketName, "WWBRIDGE") == 0) {
-        return fpcNm_WWBRIDGE_e;
+    if (strcmp(socketName, "EXT_SPAN") == 0) {
+        return fpcNm_EXT_SPAN_e;
     }
     return -1;
 }
@@ -4324,9 +4530,70 @@ void dExtNpcWorld_bump(const char* reason) {
                  reason != NULL ? reason : "?");
 }
 
+// §46/№153: the crossing INTO the donor world, and the opening beat once there.
+//
+// The door lane shipped the mechanism (unlock flag + runtime warp command,
+// `d_ext_fado_door.h`) and explicitly left "real callers" open. This is that
+// caller. Destination is set as a COMMAND rather than hard-coded in the door,
+// which is the shape that lane chose so the door stays generic.
+static void dExtWw_wireFadoCrossing(const char* stage) {
+    if (stage == NULL) {
+        return;
+    }
+    // Ordon village: make the door usable and point it at the island.
+    if (std::strcmp(stage, "F_SP103") == 0) {
+        if (!dFadoDoor_isUnlocked()) {
+            dFadoDoor_setUnlocked(true);
+            DuskLog.info("[ExtWw] §46 Fado door unlocked (save-scoped)");
+        }
+        if (!dFadoDoor_hasWarpCommand()) {
+            // Outset exterior host: F_DL01 room 44, the stage No.107 built.
+            dFadoDoor_setWarpCommand("F_DL01", 44, 0, -1, -1);
+            DuskLog.info("[ExtWw] §46 Fado warp command -> F_DL01 room 44 spawn 0");
+        }
+    }
+}
+
+// §46/№153: order the opening event on arrival. UNPROVEN — this is the first
+// attempt to run donor cutscene data through the receiver's event system, and
+// it is deliberately instrumented rather than assumed:
+//   * `awake` was authored into F_DL01's own event_list.dat by merge_event.py
+//     (№152) and reads back correctly, so getEventIdx SHOULD resolve it.
+//   * whether the JStage adaptor then binds the storyboard's actors ('Link',
+//     'Ls1') to ours is the real unknown (№151).
+// Logging both the index and the order tells us which half failed, if either.
+static bool s_openingOrdered = false;
+static void dExtWw_orderOpening(const char* stage) {
+    if (stage == NULL || std::strcmp(stage, "F_DL01") != 0 || s_openingOrdered) {
+        return;
+    }
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;  // retry next stage-ready; the player is not up yet
+    }
+    const s16 idx = dComIfGp_getEventManager().getEventIdx(player, "awake", 0xff);
+    DuskLog.info("[ExtWw] §46 opening 'awake' getEventIdx -> {}", (int)idx);
+    if (idx < 0) {
+        DuskLog.warn(
+            "[ExtWw] §46 'awake' not resolved — the stage event_list.dat is present and "
+            "round-trip verified (№152), so this is the event MANAGER not picking up the "
+            "stage list, not missing data");
+        s_openingOrdered = true;  // do not spam every stage-ready
+        return;
+    }
+    s_openingOrdered = true;
+    player->eventInfo.setArchiveName("Demo02");  // holds awake.stb + the cast anims
+    player->eventInfo.setEventId(idx);
+    player->eventInfo.setMapToolId(0xff);
+    player->eventInfo.onCondition(dEvtCnd_CANDEMO_e);
+    DuskLog.info("[ExtWw] §46 opening ordered (archive Demo02, event {})", (int)idx);
+}
+
 void dExtNpcMount_onStageReady() {
     // №94: every play-scene Create tears down actors — bump so spawn latches re-arm.
     const char* stage = dComIfGp_getStartStageName();
+    dExtWw_wireFadoCrossing(stage);
+    dExtWw_orderOpening(stage);
     char reason[48];
     if (stage != NULL && s_worldGenStage[0] != '\0' &&
         std::strcmp(stage, s_worldGenStage) == 0) {

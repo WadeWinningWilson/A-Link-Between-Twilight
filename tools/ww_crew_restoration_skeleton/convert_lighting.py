@@ -8,7 +8,7 @@ record layouts diverged between them:
     EnvR  0x08      Env0  0x41      per-room -> palette-set ids
     Colo  0x0C      Col0  0x0C      palette-set -> 6 palettes (IDENTICAL layout)
     Pale  0x2C      PAL0  0x34      the actual ambient/fog colours
-    Virt  0x24      VRB0  0x18      sky / cloud / haze colours
+    Virt  0x24      VRB0  0x15      sky / cloud / haze colours
 
 Two findings drive this converter:
 
@@ -127,13 +127,17 @@ class SrcLighting:
 
 
 def conv_vrb0(v: bytes) -> bytes:
-    """Virt(0x24) -> VRB0(0x18).
+    """Virt(0x24) -> VRB0(0x15).
 
     Donor packs cloud colours as GXColor and the three horizon bands as RGB.
     This engine wants sky/kumo_top/kumo_bottom as RGB then three GXColors.
     There is no donor source for kumo_shadow, so it is derived from the cloud
     colour at 60% - a shadow that is a darker version of its own cloud is the
     only defensible reading, and it keeps the alpha the donor authored.
+
+    Size is 0x15 (21), NOT 0x18: that matches ``sizeof(stage_vrboxcol_info_class)``
+    on PC and the dm defaults (``dKyd_l_vr_box_data_struct``). A prior pad-to-0x18
+    made index 2 read mid-record (№144 magenta/black sky).
     """
     kumo = v[0x10:0x14]          # GXColor
     kumo_center = v[0x14:0x18]   # GXColor
@@ -149,8 +153,7 @@ def conv_vrb0(v: bytes) -> bytes:
     out += shadow                                # 0x09 kumo_shadow_col
     out += uso_umi + b"\xff"                     # 0x0D kasumi_outer_col
     out += kasumi_mae + b"\xff"                  # 0x11 kasumi_inner_col
-    out += b"\x00" * 3                           # 0x15 pad to 0x18
-    assert len(out) == 0x18
+    assert len(out) == 0x15
     return bytes(out)
 
 

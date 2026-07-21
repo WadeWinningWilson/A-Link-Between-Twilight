@@ -58,6 +58,7 @@ static procFunc stick_proc[] = {
 namespace {
 bool s_pendingQuickEquipRing = false;
 bool s_quickEquipLiveWorld = false;
+dMenu_Ring_c* s_liveQuickRing = nullptr;
 // 70% slowdown → world runs at 30% sim rate (flurry uses dusk::setSimTimeScale).
 constexpr f32 kQuickEquipSimTimeScale = 0.3f;
 
@@ -119,6 +120,24 @@ f32 dMenu_Ring_c::getQuickEquipSimScale() {
 
 void dMenu_Ring_c::setQuickEquipLiveWorld(bool live) {
     s_quickEquipLiveWorld = live;
+}
+
+void dMenu_Ring_c::forceQuickConfirmClose() {
+    if (s_liveQuickRing == nullptr || !s_liveQuickRing->mQuickEquipMode) {
+        return;
+    }
+    dMenu_Ring_c* ring = s_liveQuickRing;
+    if (!ring->mPlayerIsWolf && dusk::isExtraItemSlotEnabled() &&
+        ring->mCurrentSlot < ring->mItemsTotal)
+    {
+        const u8 invSlot = ring->mItemSlots[ring->mCurrentSlot];
+        const u8 item = invSlot != 0xFF ? dComIfGs_getItem(invSlot, false) : dItemNo_NONE_e;
+        if (item != dItemNo_NONE_e && isQuickEquipToolItem(item)) {
+            dComIfGs_setSelectItemIndex(SELECT_ITEM_DOWN, invSlot);
+            ring->field_0x6ac = ring->mCurrentSlot;
+        }
+    }
+    ring->mQuickEquipForceClose = true;
 }
 #endif
 
@@ -271,6 +290,10 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     mPointerTouchPressHoveredCurrent = false;
     mQuickEquipMode = s_pendingQuickEquipRing;
     s_pendingQuickEquipRing = false;
+    mQuickEquipForceClose = false;
+    if (mQuickEquipMode) {
+        s_liveQuickRing = this;
+    }
 #endif
     for (int i = 0; i < 4; i++) {
         field_0x674[i] = 0;
@@ -626,6 +649,11 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
 }
 
 dMenu_Ring_c::~dMenu_Ring_c() {
+#if TARGET_PC
+    if (s_liveQuickRing == this) {
+        s_liveQuickRing = nullptr;
+    }
+#endif
     mpHeap->getTotalFreeSize();
     dMeter2Info_setItemExplainWindowStatus(0);
     for (int i = 0; i < 4; i++) {
@@ -935,6 +963,13 @@ bool dMenu_Ring_c::isMoveEnd() {
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN) {
 #if TARGET_PC
         if (mQuickEquipMode) {
+            if (mQuickEquipForceClose) {
+                mRingOrigin = 0xff;
+                Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_OUT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
+                                         0);
+                dMeter2Info_set2DVibrationM();
+                return true;
+            }
             const bool stillDown =
                 dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
                 dusk::getActionBindDown(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);

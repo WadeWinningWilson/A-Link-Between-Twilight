@@ -1,0 +1,14 @@
+#ifndef D_EXT_NPC_POPULATION_H
+#define D_EXT_NPC_POPULATION_H
+
+#if TARGET_PC
+
+struct dExtNpcManifest;
+
+// Spawn folder-side population for a ready BG mount (CSV + actor_map.ini).
+// Coordinates: world = host + (csvPos − anchor). Idempotent per BG proc/session.
+void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg);
+
+#endif  // TARGET_PC
+
+#endif /* D_EXT_NPC_POPULATION_H */

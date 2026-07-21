@@ -1,0 +1,50 @@
+--- SCLS stride13 F_SP103/R00 ---
+[ 0] F_SP103  spawn=  0 room=  1 b2=0xf0 b3=0x9f b4=0x13
+[ 1] F_SP00   spawn=  1 room=  0 b2=0xf0 b3=0x9f b4=0x13
+[ 2] OPENING  spawn=  1 room=  1 b2=0xf0 b3=0x1f b4=0x09
+[ 3] F_SP00   spawn=  0 room=  0 b2=0xf0 b3=0x1f b4=0x09
+[ 4] R_SP01   spawn=  0 room=  0 b2=0xf0 b3=0x9f b4=0x12
+[ 5] R_SP01   spawn=  0 room=  1 b2=0xf0 b3=0x9f b4=0x12
+[ 6] R_SP01   spawn=  0 room=  2 b2=0xf0 b3=0x9f b4=0x12
+[ 7] R_SP01   spawn=  0 room=  3 b2=0xf0 b3=0x9f b4=0x12
+[ 8] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[ 9] R_SP01   spawn=  0 room=  5 b2=0xf0 b3=0x9f b4=0x12
+[10] R_SP01   spawn=  1 room=  0 b2=0xf0 b3=0x9f b4=0x12
+[11] F_SP00   spawn=  7 room=  0 b2=0xf0 b3=0x1f b4=0x01
+[12] F_SP103  spawn=101 room=  0 b2=0xf0 b3=0x0b b4=0x0d
+[13] F_SP124  spawn= 53 room=  0 b2=0xf0 b3=0x1b b4=0x0d
+[14] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[15] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[16] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[17] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[18] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[19] OPENING  spawn=  0 room=255 b2=0xf0 b3=0x1f b4=0x00
+[20] F_SP103  spawn= 25 room=  0 b2=0xf0 b3=0x78 b4=0x00
+[21] F_SP103  spawn= 24 room=  0 b2=0xf0 b3=0x1f b4=0x0d
+[22] R_SP01   spawn=  2 room=  2 b2=0xf0 b3=0x1f b4=0x00
+[23] R_SP01   spawn=  1 room=  2 b2=0xf0 b3=0x1f b4=0x00
+[24] R_SP01   spawn=  2 room=  0 b2=0xf0 b3=0x1f b4=0x09
+[25] R_SP01   spawn=  1 room=  5 b2=0x50 b3=0x10 b4=0x00
+--- SCLS stride13 F_SP103/R01 ---
+[ 0] F_SP103  spawn=  1 room=  0 b2=0xf0 b3=0x9f b4=0x13
+[ 1] F_SP104  spawn=  0 room=  1 b2=0xf0 b3=0x9f b4=0x13
+[ 2] R_SP01   spawn=  0 room=  4 b2=0xf0 b3=0x9f b4=0x12
+[ 3] F_SP103  spawn=  1 room=  1 b2=0x20 b3=0x1f b4=0x0d
+[ 4] R_SP01   spawn=  3 room=  4 b2=0xf0 b3=0x3f b4=0x09
+[ 5] R_SP01   spawn=  4 room=  4 b2=0xb0 b3=0x0f b4=0x01
+[ 6] R_SP01   spawn= 21 room=  4 b2=0xf0 b3=0x14 b4=0x00
+[ 7] F_SP104  spawn=  0 room=  1 b2=0xf0 b3=0x1f b4=0x00
+[ 8] F_SP103  spawn= 26 room=  0 b2=0x50 b3=0x9f b4=0x10
+[ 9] F_SP103  spawn=  1 room=  1 b2=0x20 b3=0x1f b4=0x0d
+[10] F_SP103  spawn=  9 room=  1 b2=0xf0 b3=0x15 b4=0x01
+[11] F_SP103  spawn= 10 room=  1 b2=0xf0 b3=0x14 b4=0x01
+[12] F_SP103  spawn= 20 room=  1 b2=0xf0 b3=0x18 b4=0x01
+[13] F_SP103  spawn= 23 room=  1 b2=0xf0 b3=0x14 b4=0x01
+[14] F_SP103  spawn=102 room=  0 b2=0xf0 b3=0x96 b4=0x11
+[15] F_SP108  spawn=100 room=  0 b2=0xf0 b3=0x14 b4=0x0d
+[16] F_SP103  spawn= 11 room=  1 b2=0xf0 b3=0x1f b4=0x01
+--- global knob00 hits in Stage (first 40) ---
+HIT D_MN01/STG_00.arc/door-knob_00.bmd needle=b'Knob00'
+HIT D_MN09/STG_00.arc/door-knob_00.bmd needle=b'Knob00'
+HIT D_MN09A/STG_00.arc/door-knob_00.bmd needle=b'Knob00'
+HIT D_SB00/STG_00.arc/door-knob_00.bmd needle=b'Knob00'

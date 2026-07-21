@@ -808,8 +808,8 @@ PROCS_NOT_WII \
 /* 0x31A */ X(fpcNm_ALBW_MIDNA_ARM_e) \
 /* 0x31B */ X(fpcNm_EXT_BG10_e) \
 /* 0x31C */ X(fpcNm_KNOB00_e) \
-/* 0x31D */ X(fpcNm_WWGRASS_e) \
-/* 0x31E */ X(fpcNm_WWBRIDGE_e) \
+/* 0x31D */ X(fpcNm_EXT_VEG_e) \
+/* 0x31E */ X(fpcNm_EXT_SPAN_e) \
 
 #define X(name) name,
 enum {
