@@ -297,6 +297,8 @@ No changes to B0/B4, schema v2, the handshake, or GAP-3 — all accepted and una
 | 2026-07-22 | Bridge | §85c `voice-map` INF1→charVoice→CharVoice_0.aw (0.26.0) |
 | 2026-07-22 | Bridge | §86b stage CharVoice_0.aw + ibnk_135/wsys_135; CLEAR (0.26.1) |
 | 2026-07-22 | Bridge | §88b `voice-listen` CharVoice WAV pack (0.27.0) |
+| 2026-07-23 | Housing→Bridge | §110/§110b loss-protection BOTH (mod+receiver+bridge tool) |
+| 2026-07-23 | Bridge | §109 predictions-as-code verdict engine (0.32.0) |
 | 2026-07-23 | Bridge | §108 nledger-as-database schema/ingest/views (0.31.0) |
 | 2026-07-22 | Bridge | §101c SC_01_mizu* TEV/blend/vtxα ref (0.30.2) |
 | 2026-07-22 | Bridge | §99c model1=mizu/nami beach stack (0.30.1) |
@@ -330,6 +332,21 @@ Wired package `voice/` cues at `dExtWw_handleDemoMessage`: SE 0x481F / wave(port
 ## §84 / Engine type-7 + SoundTable vol (2026-07-22)
 
 Ported Bridge `control/` CSVs: type-7 → DuskDsp freeverb + AutoMixer send; SoundTable `vol_over_127` → ExtSeq master. Runtime chases paused. Bus: §84.
+
+## §110 / §110b loss-protection (2026-07-23)
+
+Housing: BOTH — mod local-only git `cb6ba2b` + snapshot; receiver local `6c5e9cd4e5` (no push).
+Bridge handoff: renumbered bus §108→§110 (collision with nledger); init local-only git for
+`albt bridge`; tip/bus follow-up commit. Push still gated on Ivan + gate CLEAN + user go.
+
+## §109 / predictions-as-code verdict (2026-07-23)
+
+Log-pattern engine. Per-build `verdict.ini` by shipping lane (Engine / History).
+Tool **0.32.0**. Example: `verdicts/example_265.ini`.
+
+```bat
+python -m ww_bridge verdict --ini verdicts\example_265.ini
+```
 
 ## §108 / №-ledger-as-database (2026-07-23)
 

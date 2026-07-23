@@ -8215,3 +8215,64 @@ beyond `unclassified`.
 **Lanes — History:** classify drafts → `ledger/entries/` (`status`, `supersedes` /
 `superseded_by`, `summary`); re-run `nledger build`. **Bridge:** CLEAR on order #1 mechanical
 half.
+
+---
+
+## §109 Bridge CLEAR — predictions-as-code / verdict (Cursor, 2026-07-23)
+
+**Order:** Predictions-as-code (verdict) — Bridge builds the **log-pattern engine**;
+`verdict.ini` authoring is **per-build by whichever lane ships** (mostly Engine; History for
+data-only ships).
+
+**Tool 0.32.0**
+
+```bat
+python -m ww_bridge verdict --ini verdicts\example_265.ini
+python -m ww_bridge verdict --ini path\to\verdict.ini --log %APPDATA%\TwilitRealm\Dusklight\logs\dusklight-….log
+```
+
+| Piece | Path |
+|-------|------|
+| Engine | `ww_bridge/verdict.py` |
+| Authoring guide | `verdicts/README.md` |
+| Example sheet | `verdicts/example_265.ini` (№265 SetRoomId expects) |
+| Report | `reports/verdict.md` |
+
+**INI:** `[meta]` + `must.*` / `forbid.*` / `soft.*` sections; `pattern=` (+ optional
+`mode=substr|regex`, `min`/`max`, `after`/`before` window, `severity=fail|soft`).
+Exit: `0` PASS · `1` FAIL · `2` INCONCLUSIVE (missing/empty log) · `3` bad ini.
+
+**Lanes — Engine/History:** drop a fresh `verdict.ini` with each ship (bump `build=`).
+**Bridge:** CLEAR on the runner; does not author playtest expects.
+
+## §110 LOSS-PROTECTION EXECUTED — both sides committed, separately (Housing, 2026-07-23)
+
+> **Key note:** Housing labeled this §108 while Bridge had already taken §108 (nledger) and
+> §109 (verdict). Renumbered **§110** by Bridge while picking up Housing's usage-limit handoff.
+> Substance unchanged.
+
+User asked: commit receiver, mod, or both? **Answer: BOTH, into separate repositories; executed:**
+1. **Mod folder:** (a) dated snapshot → `dusklight-backups/modfolder-SNAPSHOT-20260723-011447`
+   (918 files, 114 MB); (b) **local-only git repo initialized INSIDE the mod folder** — first
+   checkpoint `cb6ba2b`, **zero remotes, and none may ever be added** (donor bytes; local-only is
+   a legal boundary per the covenant/TTW posture, not a preference).
+2. **Receiver repo:** local checkpoint commit `6c5e9cd4e5` (water campaign, voice pipeline,
+   cookbook ruling, audio docs). Untracked scanned first — no forbidden payloads. **PUSH REMAINS
+   GATED** (Ivan literal still unfixed; gate must pass + user go; verified 94 local commits ahead
+   of upstream, nothing sent).
+Residue noted: `extern/aurora` submodule pointer left uncommitted (its own state); a few tmp files
+(`tmp_r00_names.txt`, `tools/_tmp_*`) rode into the checkpoint — harmless, cleanup candidates for
+the post-gate tidy commit.
+
+**The standing pattern going forward:** mod-folder commits + snapshots at every milestone (the
+local mod repo makes this one command); receiver local commits freely; push only through M6.
+
+## §110b Bridge follow-through (Cursor, 2026-07-23 — Housing usage-limit handoff)
+
+Verified Housing's §110 artifacts: snapshot **present**, mod repo `cb6ba2b` **clean / no remotes**,
+receiver `6c5e9cd4e5` **local-only**. Gaps closed:
+1. Bus key collision §108×2 → Housing loss-protection renumbered **§110**.
+2. **`albt bridge` had no git repo** — initialized **local-only** (same legal posture as the mod:
+   never remote / never push) so nledger+verdict tool work is not a third loss vector.
+3. Receiver follow-up local commit for Bridge tip/bus/history after `6c5e9cd4e5` (this handoff).
+`extern/aurora` still left dirty on purpose.

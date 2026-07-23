@@ -1,14 +1,14 @@
 # WW Bridge Tool — live state
 
-**Tip (overwrite, don't append):** Bridge **№-ledger-as-database SHIPPED** — tool **0.31.0**; `nledger extract|validate|build`. Mechanical drafts **246** unclassified → History classifies into `ledger/entries/` (status/supersedes/summary). Schema: `albt bridge/ledger/SCHEMA.md`.
+**Tip (overwrite, don't append):** Housing **§110 loss-protection** verified + Bridge **§110b** follow-through — receiver `6c5e9cd4e5` local-only; mod `cb6ba2b` local-only (no remotes); snapshot `dusklight-backups/modfolder-SNAPSHOT-20260723-011447`; `albt bridge` now local-only git too. Push still gated. Tool **0.32.0**.
 
 | Field | Value |
 |-------|--------|
-| **status** | nledger mechanical half CLEAR; History migration pending |
-| **next** | History classifies drafts; optional bus-doc linter later |
-| **do-not** | Bridge inventing which № supersedes which |
+| **status** | Loss-proofed (receiver + mod + bridge tool); push gated |
+| **next** | Engine Ivan literal → gate CLEAN; History nledger classify |
+| **do-not** | Push; add remotes to mod or albt-bridge repos |
 | **tool_root** | `C:\Users\xxxxx\Documents\albt bridge` |
-| **tool_version** | **0.31.0** |
+| **tool_version** | **0.32.0** |
 | **decomp** | `D:\XXXXXXX\WW DP` (`WW_DECOMP`) |
 | **ww_extract** | `D:\XXXXXXX\Ex WW` (`WW_EXTRACT`) |
 | **schema_version** | **2** |
@@ -18,20 +18,18 @@
 
 | Cmd | Role |
 |-----|------|
-| `nledger extract` | Prose → `ledger/drafts/*.jsonl` (unclassified) |
-| `nledger validate` | Schema + dangling-ref warnings |
-| `nledger build` | Generated views → `reports/nledger_*.md` |
-| `model1-dump` | §99+§101 materials/BTK + TEV/blend ref |
-| `waterline-inv` | §97 room inventory + Always BTI index |
+| `verdict --ini …` | Predictions-as-code vs dusklight log |
+| `nledger extract\|build` | №-ledger drafts + views |
+| `model1-dump` | §99+§101 materials/BTK + TEV ref |
 
 ## Open (not Bridge)
 
 | Item | Owner |
 |------|--------|
-| Classify ~246 draft № rows (live/dead/supersedes) | History |
-| system-4 fidelity vs mat-ref sheet | Engine |
-| Tip rewrite from `status=live\|standing` views | History/user |
+| Ivan log-literal fix → gate CLEAN → push go | Engine / user |
+| Classify nledger drafts | History |
+| Per-build `verdict.ini` on ships | Engine / History |
 
 ## Closed this lane
 
-… · **nledger 0.31.0** · §101c mizu mat-ref · §99 model1-dump · …
+… · **§110/§110b loss-protection** · verdict 0.32.0 · nledger 0.31.0 · …
