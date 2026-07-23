@@ -297,6 +297,7 @@ No changes to B0/B4, schema v2, the handshake, or GAP-3 — all accepted and una
 | 2026-07-22 | Bridge | §85c `voice-map` INF1→charVoice→CharVoice_0.aw (0.26.0) |
 | 2026-07-22 | Bridge | §86b stage CharVoice_0.aw + ibnk_135/wsys_135; CLEAR (0.26.1) |
 | 2026-07-22 | Bridge | §88b `voice-listen` CharVoice WAV pack (0.27.0) |
+| 2026-07-23 | Bridge | §111 acceptance drives harness (0.33.0) |
 | 2026-07-23 | Housing→Bridge | §110/§110b loss-protection BOTH (mod+receiver+bridge tool) |
 | 2026-07-23 | Bridge | §109 predictions-as-code verdict engine (0.32.0) |
 | 2026-07-23 | Bridge | §108 nledger-as-database schema/ingest/views (0.31.0) |
@@ -332,6 +333,15 @@ Wired package `voice/` cues at `dExtWw_handleDemoMessage`: SE 0x481F / wave(port
 ## §84 / Engine type-7 + SoundTable vol (2026-07-22)
 
 Ported Bridge `control/` CSVs: type-7 → DuskDsp freeverb + AutoMixer send; SoundTable `vol_over_127` → ExtSeq master. Runtime chases paused. Bus: §84.
+
+## §111 / acceptance drives (2026-07-23)
+
+External launcher + `verdict.ini` log assertions. Scrubs `DUSK_DRIVE*`. No `src/` drive
+code. Tool **0.33.0**.
+
+```bat
+python -m ww_bridge accept --ini verdicts\example_265.ini --launch
+```
 
 ## §110 / §110b loss-protection (2026-07-23)
 

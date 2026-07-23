@@ -8245,6 +8245,34 @@ Exit: `0` PASS · `1` FAIL · `2` INCONCLUSIVE (missing/empty log) · `3` bad in
 **Lanes — Engine/History:** drop a fresh `verdict.ini` with each ship (bump `build=`).
 **Bridge:** CLEAR on the runner; does not author playtest expects.
 
+---
+
+## §111 Bridge CLEAR — acceptance drives harness (Cursor, 2026-07-23)
+
+**Order:** Acceptance drives — Bridge builds the **external launcher + log assertions**
+harness (keeps drive code out of `src/` per build-FPS rules). Not the FPS `DUSK_DRIVE*`
+oracle (`local_dev_backup/` only).
+
+**Tool 0.33.0**
+
+```bat
+python -m ww_bridge accept --ini verdicts\example_265.ini
+python -m ww_bridge accept --ini verdicts\example_265.ini --watch --timeout 300
+python -m ww_bridge accept --ini verdicts\example_265.ini --launch --timeout 180
+```
+
+| Piece | Path |
+|-------|------|
+| Harness | `ww_bridge/acceptance.py` |
+| Guide | `acceptance/README.md` |
+| Expects | same `verdict.ini` as §109 (Engine/History author) |
+
+**Behavior:** scrubs `DUSK_DRIVE*` before launch; polls newest log; early-PASS when hard
+checks clear; optional terminate. Default without `--launch`/`--watch` = score once.
+Exit codes mirror `verdict`.
+
+**Lanes — Engine/History:** author the ini. **Bridge:** CLEAR on harness.
+
 ## §110 LOSS-PROTECTION EXECUTED — both sides committed, separately (Housing, 2026-07-23)
 
 > **Key note:** Housing labeled this §108 while Bridge had already taken §108 (nledger) and
