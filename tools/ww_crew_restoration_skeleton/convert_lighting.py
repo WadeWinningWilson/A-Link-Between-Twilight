@@ -162,19 +162,24 @@ def conv_pal0(p: bytes, vrbcol_id: int, band: int, exterior: bool) -> bytes:
     actor_c0 = p[0x00:0x03]
     actor_k0 = p[0x03:0x06]
     bg0_c0 = p[0x06:0x09]
+    bg0_k0 = p[0x09:0x0C]
     bg1_c0 = p[0x0C:0x0F]
+    bg1_k0 = p[0x0F:0x12]
     bg2_c0 = p[0x12:0x15]
+    bg2_k0 = p[0x15:0x18]
     bg3_c0 = p[0x18:0x1B]
+    bg3_k0 = p[0x1B:0x1E]
     fog = p[0x1E:0x21]
     fog_z = p[0x24:0x2C]   # start/end floats sit at the same offset in both
 
     out = bytearray()
     out += actor_c0                              # 0x00 actor_amb_col
     out += bg0_c0 + bg1_c0 + bg2_c0 + bg3_c0     # 0x03 bg_amb_col[4]
-    # No donor source for the 6 point-light colours. The donor's actor konstant
-    # is the scene key-light tint, so it is the tonally correct neutral: it can
-    # never blow out, and it only applies if a LGHT entry exists at all.
-    out += actor_k0 * 6                          # 0x0F plight_col[6]
+    # PAL0 has no BG*_K0 slots. Stash donor K0s in plight_col so sea/water TEV
+    # (dKy_get_seacolor / §98) can read BG1_K0 at runtime via dungeonlight_col[2].
+    # Slot 0 stays actor_k0 (LGHT key-light tint). Slot 5 repeats actor_k0.
+    # Noon Outset: BG1_C0=(255,255,255) BG1_K0=(9,99,224) — dropping K0 made foam white.
+    out += actor_k0 + bg0_k0 + bg1_k0 + bg2_k0 + bg3_k0 + actor_k0  # 0x0F plight_col[6]
     out += fog                                   # 0x21 fog_col
     out += fog_z                                 # 0x24 fog_start_z / fog_end_z
     out.append(vrbcol_id)                        # 0x2C vrboxcol_id

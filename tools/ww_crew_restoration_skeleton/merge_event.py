@@ -132,15 +132,75 @@ def collect(src: EventFile, ev_idx: int):
     return ev, staff_ids, cut_ids, data_ids
 
 
+def report_offsetpos(ef: "EventFile", ev_name: str) -> None:
+    """Print the merged event's OffsetPos next to its camera target.
+
+    WHY THIS IS IN THE TOOL AND NOT A NOTE
+    --------------------------------------
+    `OffsetPos` is handed straight to `dDemo_c::start(demo_data, xyzdata, ...)`
+    and is the origin the storyboard stages its CAST from. It crosses over from
+    the donor VERBATIM, and donor world coordinates are not receiver world
+    coordinates. Outset's opening carries -220000/0/320000 while the island sits
+    near -195000 — ~24,600 units out in X. A cast staged off the wrong origin
+    lands in open ocean, which on screen is indistinguishable from "the actor
+    never appears" (ledger №165, №175 — raised once, then forgotten for ten
+    entries while the symptom was chased somewhere else).
+
+    The camera proves nothing about the cast: Center/Eye come from a DIFFERENT
+    field and are usually already correct, so a scene can frame the right spot
+    while the performers are miles away. Printing both side by side is the whole
+    point — a human can see the disagreement in one line instead of rediscovering
+    it per island.
+    """
+    cam, off = None, None
+    for d in range(ef.dnum):
+        r = ef.rec(ef.dtop, d, DSZ)
+        nm = bytes(r[:32]).split(b"\0")[0].decode("ascii", "replace")
+        ty, di, num, _ = struct.unpack_from(">iiii", r, 0x24)
+        if ty != 1:  # VEC only
+            continue
+        vals = struct.unpack_from(">3f", ef.raw, ef.ftop + di * 4)
+        if nm == "OffsetPos":
+            off = vals
+        elif nm in ("Center", "Eye") and cam is None:
+            cam = (nm, vals)
+
+    print("\n--- OffsetPos check (affects EVERY Great Sea space) ---")
+    if off is None:
+        print("  no OffsetPos in this event — nothing to reconcile")
+        return
+    print(f"  OffsetPos      = ({off[0]:.0f}, {off[1]:.0f}, {off[2]:.0f})   <- cast origin")
+    if cam is not None:
+        nm, c = cam
+        print(f"  camera {nm:<7}= ({c[0]:.0f}, {c[1]:.0f}, {c[2]:.0f})   <- usually already correct")
+        dx, dz = abs(off[0] - c[0]), abs(off[2] - c[2])
+        if dx > 5000 or dz > 5000:
+            print(f"  ** MISMATCH: dX={dx:.0f} dZ={dz:.0f} **")
+            print("  The cast will stage away from where the camera looks. Reconcile OffsetPos")
+            print("  against the receiver-space position of the scene. It is DATA - no rebuild.")
+        else:
+            print(f"  agreement within dX={dx:.0f} dZ={dz:.0f} — cast should stage on camera")
+    else:
+        print("  no camera Center/Eye found to compare against — reconcile by hand")
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     ev_name = sys.argv[1]
     dry = "--dry-run" in sys.argv
 
-    donor_raw = arc_member(DONOR_STAGE, "event_list.dat")
+    # №237: events live per-stage in the donor (Ba1_Get_Itm is in LinkRM's
+    # Stage.arc, not sea's) but our interiors are BG mounts inside F_DL01, so
+    # the TARGET stays the F_DL01 stage list for every donor stage. Only the
+    # donor is selectable.
+    donor_stage = DONOR_STAGE
+    if "--donor" in sys.argv:
+        donor_stage = Path(sys.argv[sys.argv.index("--donor") + 1])
+
+    donor_raw = arc_member(donor_stage, "event_list.dat")
     if donor_raw is None:
-        raise SystemExit(f"no event_list.dat in {DONOR_STAGE}")
+        raise SystemExit(f"no event_list.dat in {donor_stage}")
     tgt_members = dict(g.list_rarc_files(TARGET_STG.read_bytes()))
     if "event_list.dat" not in tgt_members:
         # No stage event list yet — and that is SAFE to create here, proven by
@@ -264,6 +324,8 @@ def main() -> int:
         raise SystemExit("merge produced a file the reader cannot find the event in")
     print(f"merged: events={chk.enum} staff={chk.snum} cuts={chk.cnum} data={chk.dnum} "
           f"({len(out)} bytes)  '{ev_name}' at index {idx}")
+
+    report_offsetpos(chk, ev_name)
 
     files = [(n, b) for n, b in g.list_rarc_files(TARGET_STG.read_bytes())
              if n != "event_list.dat"]

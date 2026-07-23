@@ -933,6 +933,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             mPrelaunch);
 
         leftPane.add_section("Rendering");
+        config_bool_select(leftPane, rightPane, getSettings().game.wwPlayerDonorLook,
+            {
+                .key = "Match Player Lighting in Restored Areas",
+                .helpText = "In restored island areas, light the player the same way the "
+                            "residents there are lit rather than with the standard actor "
+                            "lighting, so he no longer reads far brighter than everything "
+                            "around him. No effect anywhere else in the game.",
+            });
+
         graphics_tuner_control(*this, leftPane, rightPane,
             getSettings().game.enableTextureReplacements,
             GraphicsTunerProps{
@@ -1356,9 +1365,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         addOption("No Ammo Drops", getSettings().game.noAmmoDrops,
             "Bombs, arrows, and seeds will not drop from enemies. Magic pickups (seed drops) replace them.");
         addOption("Hold-A Crawl", getSettings().game.enableHoldACrawl,
-            "Hold A while standing (little/no stick) to crawl. Gated so it never steals "
-            "door Open, talk Speak, or Enter prompts, and stick-forward A still rolls. "
-            "Keep holding A under clearance to stay down; release A to stand. "
+            "Hold A for 1 second while standing (little/no stick) to crawl. Gated so it "
+            "never steals door Open, talk Speak, or Enter prompts, and stick-forward A "
+            "still rolls. Keep holding A under clearance to stay down; release A to stand. "
             "Interim until WW crawl-hole wall codes arm native Enter.");
         addOption("Manual Shielding", getSettings().game.manualShielding,
             "Hold ZR to raise your shield without Z-target lock-on; move freely while guarding. "

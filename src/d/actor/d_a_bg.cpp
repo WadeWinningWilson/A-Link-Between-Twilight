@@ -13,6 +13,11 @@
 #include "d/d_bg_parts.h"
 #include "m_Do/m_Do_lib.h"
 #include "d/d_demo.h"
+#if TARGET_PC
+#include "d/d_ext_npc_mount.h"
+#include "d/d_ext_save_guard.h"
+#include "dusk/logging.h"
+#endif
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "JSystem/JKernel/JKRSolidHeap.h"
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.h"
@@ -208,6 +213,21 @@ int daBg_c::createHeap() {
 
         bgPart++;
     }
+
+    // №257: WW room-lane mounts own collision (GLOBAL_e + setBgW). A stub
+    // room.dzb here dual-registers at PRIORITY_0 and steals WallCorrect from
+    // the mount ladder/ledge polys (Verdict 2: wallCode=4 wallHit=0).
+#if TARGET_PC
+    {
+        const char* stage = dComIfGp_getStartStageName();
+        if (dExtWwSave_isWwHostStage(stage) && dExtNpcMount_isRoomLaneRoom(roomNo)) {
+            mpBgW = NULL;
+            mpKCol = NULL;
+            DuskLog.info("[daBg] №257 skip room{} collision — room-lane mount owns BgW", roomNo);
+            return 1;
+        }
+    }
+#endif
 
     cBgD_t* dzb = (cBgD_t*)dComIfG_getStageRes(arcName, "room.dzb");
     if (dzb != NULL) {

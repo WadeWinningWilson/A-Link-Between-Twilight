@@ -287,6 +287,7 @@ void loadTexNo(u32 param_0, const u16& texNo) {
     J3DSys::sTexCoordScaleTable[param_0].field_0x00 = (u16)resTIMG->width;
     J3DSys::sTexCoordScaleTable[param_0].field_0x02 = (u16)resTIMG->height;
 
+#if !TARGET_PC
     GDOverflowCheck(0x14);
     J3DGDSetTexImgPtr(GXTexMapID(param_0), (u8*)resTIMG + resTIMG->imageOffset);
     J3DGDSetTexImgAttr(GXTexMapID(param_0), resTIMG->width, resTIMG->height, GXTexFmt(resTIMG->format & 0x0f));
@@ -298,6 +299,32 @@ void loadTexNo(u32 param_0, const u16& texNo) {
         J3DGDLoadTlut((u8*)resTIMG + resTIMG->paletteOffset, (param_0 << 13) + 0xf0000, tlutSize);
         J3DGDSetTexTlut(GXTexMapID(param_0), (param_0 << 13) + 0xf0000, GXTlutFmt(resTIMG->colorFormat));
     }
+#else
+    // ============================================================================
+    // WW RESTORATION №216 — stale-DL texture-attr clobber fix (garbled BTP mouth)
+    // ============================================================================
+    // On PC, every J3DMaterial::load()/loadSharedDL() calls mTevBlock->loadTexture()
+    // -> J3DTexture::loadGX -> GXLoadTexObj, which emits the COMPLETE, CURRENT
+    // texture bind (mode0/1, image0, image3, tlut reg + the aurora full-texObj
+    // metadata carrying the data pointer, format, dims, and TLUT). The GD writes
+    // below, baked into the material display list at makeDisplayList() time, then
+    // re-execute AFTER that correct bind and clobber it with COMPILE-TIME attrs:
+    // aurora's BP Image0 handler wipes the texObj's format/dims back to the DL's
+    // baked values, and the DL's TLUT commands are already stubbed (J3DGDLoadTlut).
+    //
+    // Vanilla TP never notices because a material's texture format never changes
+    // at runtime — the stale attr equals the current attr. A BTP that swaps a
+    // material between formats (WW ls.bdl SC_kuchi: CMPR frames + one C8 frame)
+    // breaks: the C8 mouth bound correctly by loadTexture() reverts to the DL's
+    // CMPR attr and 4096 palette indices render as S3TC blocks (§60 verdict:
+    // br=DIRECT fmt=14 with ls_kuchi.3's data). A DL-only texture bind cannot
+    // work on PC anyway (BP image3 carries an index that is never resolved to a
+    // pointer), so these writes are pure vestige here: emit nothing and let
+    // loadTexture()'s bind stand. sTexCoordScaleTable above must still update —
+    // loadTexCoordScale consumes it.
+    // ============================================================================
+    (void)resTIMG;
+#endif
 }
 
 void patchTexNo_PtrToIdx(u32 texID, const u16& idx) {

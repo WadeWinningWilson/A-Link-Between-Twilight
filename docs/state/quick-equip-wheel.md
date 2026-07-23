@@ -1,68 +1,54 @@
-# Quick-equip wheel + page 2
+# Quick-equip wheel + sockets
 
-**Status:** Phase A + draw/damage fix shipped (2026-07-20)  
-**Next:** Page 2 (swords / WW overflow) when product asks  
-**Do not:** use B / `SELECT_ITEM_B`; expand `mItems[24]` without a dedicated save plan
+**Status:** Phase 0 corrective shipped (occupied-only, page cue, tap+hold paging, exclusive L/R) + nested bag stub + mod `claims.ini`  
+**Next:** Playtest pages; Link run-in-place polish (deferred)  
+**Do not:** expand `mItems[24]` without a save plan; put WW names in ring/registry source
 
 ---
 
-## Phase A + live-world fixes (in tree)
+## Product
 
 | Piece | Behavior |
 |-------|----------|
-| Setting | **Quick Equip Wheel** under Extra Item Slot (`game.quickEquipWheel`, default **off**) |
-| Gate | Extra Item Slot must be on (Extra Only or Extra + Quick Swap) |
-| **Tap** `OPEN_ITEM_WHEEL` | Full wheel (unchanged X/Y/Z assign) — **paused** capture like vanilla |
-| **Hold** ~250ms (8 sim frames) | Filtered **tools** ring, **live world** (no pause flag / no freeze capture) |
-| World pace | **0.3×** sim scale via `dusk::setSimTimeScale` (70% slowdown; same hook as Flurry) |
-| Link | Control-locked (stick zeroed / `checkNextAction` early); **Cc/damage still run** |
-| Draw | Live path submits ring in `dMw_c::_draw` even without pause |
-| **Release** (hold wheel) | Assign hovered tool to **Z only** — X/Y untouched; close |
-| **Damage** | `setDamagePoint` → `forceQuickConfirmClose()` (hover→Z + close); flinch continues |
-| B / Up / Down while held | Cancel, no Z change |
-| Cycle speed | Slightly faster wait / cursor accel in quick mode |
-
-**Bug fixed earlier:** press-edge used `getActionBindHold` (false on first frame) → always full vanilla wheel. Now uses `getActionBindDown`.
-
-**Touchpoints:** `d_menu_window.cpp`, `d_menu_ring.cpp` / `.h`, `d_a_alink` stick + `checkNextAction`, `d_a_alink_damage.inc`, `f_op_actor.cpp` (no ALINK execute skip), settings / action_bindings.
-
-### Tool allowlist (page 1)
-
-Boomerang, spinner, iron ball, bow (+ arrow/hawk/bomb variants), hookshot / clawshot, boots, Dom Rod, lantern, fishing rods, slingshot, hawkeye, bomb bags / bomb types.
-
-Bottles, letters, dungeon items, quest paper — **excluded** (tap wheel).
+| Setting | **Quick Equip Wheel** (`game.quickEquipWheel`, default **off**) |
+| Gate | Extra Item Slot on |
+| **Tap** | Paused wheel using `dQe_` pages (when feature on) |
+| **Hold** | Live socket ring (0.3× sim), release → confirm by kind |
+| Layout | **Occupied-only** draw (capacity still pages×24) |
+| Pages | Registry `dQe_getPageCount()` (default **2**, max **4**) |
+| Cue | On-screen `page / pageCount` (or `BAG n` in nested view) |
+| **D-pad L/R** | Flip pages (tap + hold); exclusive vs Midna/Quick Swap while open |
+| Bags | `dQeKind_Bag` → A opens nested ≤8 children; B closes |
+| Charts / songs | **Ext Status** — not on this wheel |
 
 ---
 
-## Page 2 (not coded)
+## Socket registry (WW-agnostic)
 
-| | |
-|--|--|
-| **Likely?** | Yes — medium-low after Phase A (swap slot list mid-hold) |
-| **More slots?** | **Save inventory stays 24** (`mItems[24]`). Page 2 shows another ≤24 **entries** (swords/equip bits / WW stubs), not more save slots. Past 24/page → grow ring arrays or add page 3. |
+**Header:** [`include/d/d_ext_quick_equip.h`](../../include/d/d_ext_quick_equip.h)  
+**Impl:** folded into [`src/d/d_ext_mod_flags.cpp`](../../src/d/d_ext_mod_flags.cpp) (no new cmake TU)
 
-Release dispatch (planned): tools/WW → Z; swords → sword equip; shields optional.
+| API | Role |
+|-----|------|
+| `dQe_setPageCount` / `getPageCount` | 1..4 pages |
+| `dQe_claim` / `clear` / … | Occupy / free sockets |
+| `dQe_claimBagChild` / `peekBagChild` | Nested bag |
+| `dQe_deepLinkAssignZ` | Tools-tab → Z assign |
+| `dQe_seedTpBuiltin` | TP **tools only** on page 0 (vanilla wheel contents). Page 1+ are mod sockets — no TP sword/shield seed |
 
----
+**Kinds:** `Empty`, `InvSlot_Z`, `SwordEquip`, `ShieldEquip`, `ZSelect`, `Custom`, `Bag`.
 
-## Product shape (locked)
-
-| Input | Mode | On release |
-|-------|------|------------|
-| Tap | Full wheel | X/Y/Z assign |
-| Hold page 1 | Tools | → **Z-slot** |
-| Hold page 2 | Swords / WW | Category equip |
+Confirm dispatch is by kind only. `SwordEquip` / `ShieldEquip` exist for **mod** claims (e.g. WW weapons), not vanilla Collect gear. Mod claims: `ext_inv/claims.ini` via `dExtInv_rescanClaims()`.
 
 ---
 
-## Playtest
+## Capacity vs WW bag (decomp / №103)
 
-1. Extra Item Slot → Extra + Quick Swap; enable **Quick Equip Wheel**.
-2. Tap L1 (or wheel bind) → full wheel; assign X/Y as usual.
-3. Hold L1 → tools-only ring **visible**; release on spinner → Z shows spinner; X/Y unchanged.
-4. Hold wheel near enemies → take a hit → wheel closes with hovered tool on Z; Link flinches.
-5. Toggle Quick Equip Wheel **off** → L1 opens full wheel on press again.
-6. Extra Off → setting disabled / feature inert.
+| Content | Count | Host |
+|---------|------:|------|
+| WW XYZ bag | **21** | Track A pages |
+| Nested spoils/bait/mail | 8+8+8 | Nested bag sockets |
+| Charts / songs / quest | ~70+ | **Ext Status** |
 
 ---
 
@@ -70,7 +56,7 @@ Release dispatch (planned): tools/WW → Z; swords → sword equip; shields opti
 
 | Doc | Role |
 |-----|------|
-| [d-pad-reworking.md](../d-pad-reworking.md) | Extra Item Slot + Z + L1 |
-| [deku-leaf-glide-research.md](../deku-leaf-glide-research.md) | P4 → future Z / page-2 resident |
+| [ext-start-status.md](ext-start-status.md) | Collect sibling Tools/Quest/Atlas |
+| [cut-actors-demo-restore.md](cut-actors-demo-restore.md) №103 | Full TP id table; two-inventory |
+| [wind-waker-item-work.md](../wind-waker-item-work.md) | 21 `itemmdl` bag meshes |
 | [WW-Restoration-Cookbook.md](../WW%20Linked/WW-Restoration-Cookbook.md) | TP owns inventory |
-| [fado-door-warp.md](fado-door-warp.md) | Parallel Ordon door unlock / warp sink |

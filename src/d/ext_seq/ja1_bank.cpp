@@ -11,7 +11,10 @@
 
 #if TARGET_PC
 
+#include <algorithm>
 #include <bit>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -27,6 +30,7 @@
 #include "JSystem/JAudio2/JASWaveInfo.h"
 #include "JSystem/JAudio2/JASWSParser.h"
 #include "JSystem/JSupport/JSupport.h"
+#include "d/d_com_inf_game.h"
 #include "dusk/audio/DuskDsp.hpp"
 #include "dusk/endian.h"
 #include "dusk/logging.h"
@@ -40,6 +44,7 @@ namespace fs = std::filesystem;
 // kShadowVirtualBase). Distinct ranges — not twins of any vanilla bank.
 constexpr u32 kVirtBaseZelda = 0x01000000u;
 constexpr u32 kVirtBaseLink = 0x02000000u;
+constexpr u32 kVirtBaseCharVoice = 0x03000000u;
 
 struct VeloRegion {
     u8 maxVel = 127;
@@ -82,6 +87,28 @@ std::vector<WaveArc> s_arcs;
 std::vector<Bank> s_banks;
 bool s_loaded = false;
 bool s_registered = false;
+
+/** §87 CharVoice — separate from BGM so stopOwned unregister cannot mute lines. */
+WaveArc s_voiceArc{};
+bool s_voiceLoaded = false;
+bool s_voiceRegistered = false;
+u16 s_voiceSeId = 0x481F;  // from manifest se_id= (default donor JA_SE_CV_COMMON_PEOPLE)
+struct VoiceCue {
+    u8 sound = 0;
+    u16 port = 0;
+    bool hasPort = false;
+};
+std::unordered_map<u32, VoiceCue> s_voiceCues;
+JASChannel* s_voiceCh = nullptr;
+
+void voiceCallback(u32 type, JASChannel* ch, JASDsp::TChannel*, void*) {
+    if (type != JASChannel::CB_STOP || ch == nullptr) {
+        return;
+    }
+    if (s_voiceCh == ch) {
+        s_voiceCh = nullptr;
+    }
+}
 
 bool readFile(const fs::path& p, std::vector<u8>* out) {
     std::ifstream in(p, std::ios::binary);
@@ -286,24 +313,40 @@ bool parseIbnk(Bank* bank) {
     return !bank->insts.empty();
 }
 
-bool resolveInst(const Inst& inst, u8 key, u8 vel, u16* waveId, f32* vol, f32* pitch) {
+bool resolveInst(const Inst& inst, u8 key, u8 vel, u16* waveId, f32* vol, f32* pitch,
+                 u8* outHighKey, u8* outMaxVel, u32* outKeyIdx, u32* outVelIdx) {
     *vol = inst.volume;
     *pitch = inst.pitch;
     const KeyRegion* kr = nullptr;
-    for (const auto& k : inst.keys) {
-        if (key <= k.highKey) {
-            kr = &k;
+    u32 keyIdx = 0;
+    for (u32 i = 0; i < inst.keys.size(); i++) {
+        if (key <= inst.keys[i].highKey) {
+            kr = &inst.keys[i];
+            keyIdx = i;
             break;
         }
     }
     if (kr == nullptr) {
         return false;
     }
-    for (const auto& v : kr->velos) {
+    for (u32 vi = 0; vi < kr->velos.size(); vi++) {
+        const auto& v = kr->velos[vi];
         if (vel <= v.maxVel) {
             *vol *= v.volScale;
             *pitch *= v.pitchScale;
             *waveId = v.waveId;
+            if (outHighKey != nullptr) {
+                *outHighKey = kr->highKey;
+            }
+            if (outMaxVel != nullptr) {
+                *outMaxVel = v.maxVel;
+            }
+            if (outKeyIdx != nullptr) {
+                *outKeyIdx = keyIdx;
+            }
+            if (outVelIdx != nullptr) {
+                *outVelIdx = vi;
+            }
             return true;
         }
     }
@@ -400,6 +443,9 @@ bool ja1Bank_loadPackage(const fs::path& packageRoot) {
     if (s_loaded) {
         DuskLog.info("[ExtSeq] §53 banks loaded ({} banks, {} arcs)", s_banks.size(),
                      s_arcs.size());
+        // §76 key-region audit artifact (diff vs Bridge ibnk_initvol.csv).
+        const fs::path keyCsv = packageRoot / "seq_key_regions_engine.csv";
+        ja1Bank_dumpKeyRegionsCsv(keyCsv.string().c_str());
     }
     return s_loaded;
 }
@@ -466,7 +512,12 @@ JASChannel* ja1Bank_noteOn(u8 bankId, u8 prog, u8 key, u8 vel, u16 prio,
     u16 waveId = 0;
     f32 vol = 1.0f;
     f32 pitch = 1.0f;
-    if (!resolveInst(it->second, key, vel, &waveId, &vol, &pitch)) {
+    u8 highKey = 0;
+    u8 maxVel = 0;
+    u32 keyIdx = 0;
+    u32 velIdx = 0;
+    if (!resolveInst(it->second, key, vel, &waveId, &vol, &pitch, &highKey, &maxVel, &keyIdx,
+                     &velIdx)) {
         return nullptr;
     }
     auto wit = arc->waves.find(waveId);
@@ -474,6 +525,23 @@ JASChannel* ja1Bank_noteOn(u8 bankId, u8 prog, u8 key, u8 vel, u16 prio,
         return nullptr;
     }
     const JASWaveInfo& wi = wit->second;
+    {
+        const char* kp = std::getenv("DUSK_EXTSEQ_KEY_AUDIT");
+        const bool on = kp != nullptr && kp[0] != '\0' && !(kp[0] == '0' && kp[1] == '\0');
+        if (on) {
+            static u32 s_keyAuditLeft = 48;
+            if (s_keyAuditLeft > 0) {
+                s_keyAuditLeft--;
+                DuskLog.info(
+                    "[ExtSeq] §76 keyAudit bank={} prog={} key={} vel={} → wave={} "
+                    "highKey={} keyReg={} velReg={} baseKey={} pitchScale={:.4f}",
+                    static_cast<unsigned>(bankId), static_cast<unsigned>(prog),
+                    static_cast<unsigned>(key), static_cast<unsigned>(vel),
+                    static_cast<unsigned>(waveId), static_cast<unsigned>(highKey), keyIdx,
+                    velIdx, static_cast<unsigned>(wi.mBaseKey), pitch);
+            }
+        }
+    }
     const u32 start = static_cast<u32>(wi.mOffsetStart);
     if (start >= arc->bytes.size()) {
         return nullptr;
@@ -493,7 +561,11 @@ JASChannel* ja1Bank_noteOn(u8 bankId, u8 prog, u8 key, u8 vel, u16 prio,
     // №31-B: bake WW field_0x5c = initVol*(vel/127)²; neutralize TP vel².
     ja1Bank_applyWwVelocityCurve(channel, vol, vel);
     channel->setInitPan(0.5f);
-    channel->setInitFxmix(0.0f);
+    // §81: type-7 wetness is scene Fxline + mixer path — BMS fxmix is 0.
+    // Put ExtSeq on AutoMixer (dolby) so DuskDsp freeverb receives mAutoMixerFxMix,
+    // and seed initFxmix from the active scene send derived from type-7 buses.
+    channel->mMixConfig[0].whole = 0xffff;
+    channel->setInitFxmix(dusk::audio::getExtSeqFxSend());
     channel->setInitDolby(0.0f);
     for (u8 i = 0; i < it->second.oscCount; i++) {
         if (it->second.osc[i] != nullptr) {
@@ -531,6 +603,300 @@ bool ja1Bank_isExtSeqChannel(const JASChannel* ch) {
     return ch != nullptr && dusk::audio::isExtSeqOwned(ch->mBankDisposeID);
 }
 
+u32 ja1Bank_dumpKeyRegionsCsv(const char* outPath) {
+    if (outPath == nullptr || !s_loaded || s_banks.empty()) {
+        return 0;
+    }
+    FILE* f = std::fopen(outPath, "wb");
+    if (f == nullptr) {
+        DuskLog.warn("[ExtSeq] §76 key-region dump: cannot write {}", outPath);
+        return 0;
+    }
+    // Columns match Bridge ibnk_initvol.csv for direct diff.
+    std::fputs(
+        "bms_vir,phys_ibnk,prog,key_region,high_key,vel_region,max_vel,"
+        "inst_volume,vel_vol_scale,resolved_init_vol,wave_id,pitch_scale\n",
+        f);
+    u32 rows = 0;
+    for (u32 bi = 0; bi < s_banks.size(); bi++) {
+        const Bank& bank = s_banks[bi];
+        // Stable iteration by prog id.
+        std::vector<u32> progs;
+        progs.reserve(bank.insts.size());
+        for (const auto& kv : bank.insts) {
+            progs.push_back(kv.first);
+        }
+        std::sort(progs.begin(), progs.end());
+        for (u32 prog : progs) {
+            const Inst& inst = bank.insts.at(prog);
+            for (u32 ki = 0; ki < inst.keys.size(); ki++) {
+                const KeyRegion& kr = inst.keys[ki];
+                for (u32 vi = 0; vi < kr.velos.size(); vi++) {
+                    const VeloRegion& vr = kr.velos[vi];
+                    const f32 resolved = inst.volume * vr.volScale;
+                    std::fprintf(f,
+                                 "0,%u,%u,%u,%u,%u,%u,%.6f,%.6f,%.6f,%u,%.6f\n", bi, prog, ki,
+                                 static_cast<unsigned>(kr.highKey), vi,
+                                 static_cast<unsigned>(vr.maxVel), inst.volume, vr.volScale,
+                                 resolved, static_cast<unsigned>(vr.waveId), vr.pitchScale);
+                    rows++;
+                }
+            }
+        }
+    }
+    std::fclose(f);
+    DuskLog.info("[ExtSeq] §76 key-region dump: {} rows → {}", rows, outPath);
+    return rows;
+}
+
+namespace {
+
+bool playCharVoiceWave(u16 waveId) {
+    if (!s_voiceLoaded || !s_voiceRegistered) {
+        return false;
+    }
+    auto wit = s_voiceArc.waves.find(waveId);
+    if (wit == s_voiceArc.waves.end()) {
+        DuskLog.warn("[ExtSeq] §87 CharVoice wave {} missing in WSYS",
+                     static_cast<unsigned>(waveId));
+        return false;
+    }
+    const JASWaveInfo& wi = wit->second;
+    const u32 start = static_cast<u32>(wi.mOffsetStart);
+    if (start >= s_voiceArc.bytes.size()) {
+        return false;
+    }
+    // Donor charVoicePlay stops the prior common-people handle before restart.
+    if (s_voiceCh != nullptr) {
+        s_voiceCh->release(0);
+        s_voiceCh = nullptr;
+    }
+    JASChannel* channel = JKR_NEW JASChannel(voiceCallback, nullptr);
+    if (channel == nullptr) {
+        return false;
+    }
+    const u32 waveAddr =
+        dusk::audio::kShadowVirtualBase + s_voiceArc.virtBase + start;
+    channel->setPriority(0x7F);
+    channel->field_0xdc.mWaveInfo = wi;
+    channel->mWaveAramAddress = waveAddr;
+    channel->field_0xdc.mChannelType = 0;
+    channel->setInitPitch(wi.mSampleRate / JASDriver::getDacRate());
+    channel->setKey(0);  // one-shot at sample baseKey; no transpose
+    // SoundTable SE class vol_u8=127 — full; do NOT apply BGM master (~0.47).
+    ja1Bank_applyWwVelocityCurve(channel, 1.0f, 0x7F);
+    channel->setInitPan(0.5f);
+    channel->mMixConfig[0].whole = 0xffff;
+    // §93: voice one-shots use per-room reverb like messageSePlay / playOneShotVoice
+    // (dComIfGp_getReverb(room)/127) — NOT the §81 music-scene Fxline send (~0.5).
+    // TP callers pass reverb=0 when stayNo==0; same gate here.
+    const s32 stayNo = dComIfGp_roomControl_getStayNo();
+    const s8 roomRev =
+        (stayNo != 0) ? dComIfGp_getReverb(stayNo) : static_cast<s8>(0);
+    f32 voiceFx = static_cast<f32>(static_cast<u8>(roomRev & 0x7F)) / 127.0f;
+    if (voiceFx < 0.0f) {
+        voiceFx = 0.0f;
+    }
+    if (voiceFx > 1.0f) {
+        voiceFx = 1.0f;
+    }
+    const f32 musicSend = dusk::audio::getExtSeqFxSend();
+    DuskLog.info(
+        "[ExtSeq] §93 voice fxmix: music_send={:.3f} room={} reverb_s8={} voice_send={:.3f} "
+        "(messageSePlay law)",
+        musicSend, stayNo, static_cast<int>(roomRev), voiceFx);
+    channel->setInitFxmix(voiceFx);
+    channel->setInitDolby(0.0f);
+    if (!channel->play()) {
+        return false;
+    }
+    s_voiceCh = channel;
+    return true;
+}
+
+void trimInPlace(std::string* s) {
+    while (!s->empty() && (s->front() == ' ' || s->front() == '\t')) {
+        s->erase(s->begin());
+    }
+    while (!s->empty() && (s->back() == ' ' || s->back() == '\t' || s->back() == '\r')) {
+        s->pop_back();
+    }
+}
+
+}  // namespace
+
+bool ja1Voice_loadPackage(const fs::path& voiceRoot) {
+    if (s_voiceLoaded) {
+        return true;
+    }
+    s_voiceCues.clear();
+    s_voiceArc = {};
+    s_voiceArc.virtBase = kVirtBaseCharVoice;
+
+    const fs::path mani = voiceRoot / "manifest.ini";
+    std::ifstream in(mani);
+    if (!in) {
+        DuskLog.warn("[ExtSeq] §87 missing {}", mani.string());
+        return false;
+    }
+
+    std::string awRel;
+    std::string wsysRel;
+    std::string ibnkRel;
+    std::string line;
+    while (std::getline(in, line)) {
+        trimInPlace(&line);
+        if (line.empty() || line[0] == '#' || line[0] == ';' || line[0] == '[') {
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+        trimInPlace(&key);
+        trimInPlace(&val);
+        if (key == "se_id") {
+            s_voiceSeId = static_cast<u16>(std::strtoul(val.c_str(), nullptr, 0));
+            continue;
+        }
+        if (key.size() > 5 && key.substr(key.size() - 5) == ".file") {
+            awRel = val;
+            continue;
+        }
+        if (key.size() > 11 && key.substr(key.size() - 11) == ".wsys_slice") {
+            wsysRel = val;
+            continue;
+        }
+        if (key.size() > 11 && key.substr(key.size() - 11) == ".ibnk_slice") {
+            ibnkRel = val;
+            continue;
+        }
+        // msg.0x357.sound=104 / msg.0x357.port=0x1910
+        if (key.rfind("msg.", 0) == 0) {
+            const size_t dot2 = key.find('.', 4);
+            if (dot2 == std::string::npos) {
+                continue;
+            }
+            const u32 msgId =
+                static_cast<u32>(std::strtoul(key.substr(4, dot2 - 4).c_str(), nullptr, 0));
+            const std::string field = key.substr(dot2 + 1);
+            VoiceCue& cue = s_voiceCues[msgId];
+            if (field == "sound") {
+                cue.sound = static_cast<u8>(std::strtoul(val.c_str(), nullptr, 0));
+            } else if (field == "port") {
+                cue.port = static_cast<u16>(std::strtoul(val.c_str(), nullptr, 0));
+                cue.hasPort = true;
+            }
+        }
+    }
+
+    if (awRel.empty() || wsysRel.empty()) {
+        DuskLog.warn("[ExtSeq] §87 voice manifest missing .file / .wsys_slice");
+        return false;
+    }
+    std::vector<u8> wsys;
+    if (!readFile(voiceRoot / wsysRel, &wsys)) {
+        DuskLog.warn("[ExtSeq] §87 missing {}", wsysRel);
+        return false;
+    }
+    if (!parseWsys(wsys.data(), wsys.size(), &s_voiceArc)) {
+        DuskLog.warn("[ExtSeq] §87 WSYS parse failed");
+        return false;
+    }
+    // Prefer manifest leaf; fall back to WSYS-embedded name.
+    if (!awRel.empty()) {
+        s_voiceArc.leaf = pathLeaf(awRel.c_str());
+    }
+    if (!readFile(voiceRoot / awRel, &s_voiceArc.bytes)) {
+        // try banks/<leaf> if relative path failed oddly
+        if (!readFile(voiceRoot / "banks" / s_voiceArc.leaf, &s_voiceArc.bytes)) {
+            DuskLog.warn("[ExtSeq] §87 missing {}", awRel);
+            return false;
+        }
+    }
+    (void)ibnkRel;  // staged for twin; wave-direct one-shot does not need INST keys
+
+    s_voiceLoaded = true;
+    DuskLog.info(
+        "[ExtSeq] §87 CharVoice loaded se_id=0x{:04X} waves={} aw={}b cues={} virt=0x{:08X}",
+        static_cast<unsigned>(s_voiceSeId), s_voiceArc.waves.size(), s_voiceArc.bytes.size(),
+        s_voiceCues.size(), kVirtBaseCharVoice);
+    return true;
+}
+
+bool ja1Voice_ready() {
+    return s_voiceLoaded;
+}
+
+void ja1Voice_register() {
+    if (!s_voiceLoaded || s_voiceRegistered) {
+        return;
+    }
+    if (s_voiceArc.bytes.empty()) {
+        return;
+    }
+    dusk::audio::registerShadowWave(s_voiceArc.virtBase,
+                                    static_cast<u32>(s_voiceArc.bytes.size()),
+                                    s_voiceArc.bytes.data());
+    s_voiceArc.registered = true;
+    s_voiceRegistered = true;
+    DuskLog.info("[ExtSeq] §87 CharVoice shadow-wave registered");
+}
+
+void ja1Voice_unregister() {
+    if (!s_voiceRegistered) {
+        return;
+    }
+    if (s_voiceCh != nullptr) {
+        s_voiceCh->release(0);
+        s_voiceCh = nullptr;
+    }
+    if (s_voiceArc.registered) {
+        dusk::audio::unregisterShadowWave(s_voiceArc.virtBase);
+        s_voiceArc.registered = false;
+    }
+    s_voiceRegistered = false;
+}
+
+void ja1Voice_clear() {
+    ja1Voice_unregister();
+    s_voiceArc = {};
+    s_voiceCues.clear();
+    s_voiceLoaded = false;
+}
+
+void ja1Voice_onDemoMessageOpen(u32 donorMsgId) {
+    if (!s_voiceLoaded) {
+        return;
+    }
+    const auto it = s_voiceCues.find(donorMsgId);
+    if (it == s_voiceCues.end()) {
+        return;  // not in package map — do not invent
+    }
+    const VoiceCue& cue = it->second;
+    if (cue.sound == 0) {
+        DuskLog.info("[ExtSeq] §87 msg 0x{:X} silent (sound=0, donor)", donorMsgId);
+        return;
+    }
+    if (!cue.hasPort) {
+        DuskLog.warn("[ExtSeq] §87 msg 0x{:X} sound={} but no port in map", donorMsgId,
+                     static_cast<unsigned>(cue.sound));
+        return;
+    }
+    ja1Voice_register();
+    // Donor: JA_SE_CV_COMMON_PEOPLE + setPortData(8, port). PC: port low = WSYS wave id
+    // (sizes match Lago Aryll clips; SE BMS not ported).
+    const u16 waveId = static_cast<u16>(cue.port & 0xFF);
+    const bool ok = playCharVoiceWave(waveId);
+    DuskLog.info(
+        "[ExtSeq] §87 msg 0x{:X} se=0x{:04X} sound={} port=0x{:04X} wave={} → {}",
+        donorMsgId, static_cast<unsigned>(s_voiceSeId), static_cast<unsigned>(cue.sound),
+        static_cast<unsigned>(cue.port), static_cast<unsigned>(waveId),
+        ok ? "play" : "FAIL");
+}
+
 }  // namespace ExtSeq
 
 #else  // !TARGET_PC
@@ -548,6 +914,13 @@ JASChannel* ja1Bank_noteOn(u8, u8, u8, u8, u16, void (*)(u32, JASChannel*, JASDs
 }
 void ja1Bank_applyWwVelocityCurve(JASChannel*, f32, u8) {}
 bool ja1Bank_isExtSeqChannel(const JASChannel*) { return false; }
+u32 ja1Bank_dumpKeyRegionsCsv(const char*) { return 0; }
+bool ja1Voice_loadPackage(const std::filesystem::path&) { return false; }
+bool ja1Voice_ready() { return false; }
+void ja1Voice_register() {}
+void ja1Voice_unregister() {}
+void ja1Voice_clear() {}
+void ja1Voice_onDemoMessageOpen(u32) {}
 
 }  // namespace ExtSeq
 

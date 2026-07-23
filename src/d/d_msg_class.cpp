@@ -13,6 +13,7 @@
 #include "JSystem/JUtility/JUTFont.h"
 
 #if TARGET_PC
+#include "d/d_ww_itemmdl_pc.h"
 #include "dusk/menu_pointer.h"
 #include "dusk/scope_guard.hpp"
 #endif
@@ -1823,6 +1824,12 @@ jmessage_tSequenceProcessor::jmessage_tSequenceProcessor(jmessage_tReference con
 void jmessage_tSequenceProcessor::do_reset() {}
 
 void jmessage_tSequenceProcessor::do_begin(void const* pEntry, char const* pszText) {
+#if TARGET_PC
+    // Clothes get-box kit: swap BMG body for config get_text (host item + 0x65).
+    if (const char* kitText = dWwItemmdl_clothesBundleGetTextForMessage(dMsgObject_getMessageID())) {
+        pszText = kitText;
+    }
+#endif
     mpEntry = pEntry;
     mpText = pszText;
 

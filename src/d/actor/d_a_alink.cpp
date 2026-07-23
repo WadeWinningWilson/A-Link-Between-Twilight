@@ -14,6 +14,7 @@
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "SSystem/SComponent/c_math.h"
 #include "Z2AudioLib/Z2SeqMgr.h"  // Z2GetSeqMgr / stopWolfHowlSong (Wolf Howl music stop)
+#include "d/d_ext_save_guard.h"  // §47: donor-space player ambient tuner
 #include "d/d_item.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_albw_rental.h"
@@ -346,6 +347,14 @@ static s16 s_dekuLeafBillowPhase = 0;
 #if DEKU_LEAF_HAND_WELD
 static cXyz s_dekuLeafLHandW(0.0f, 0.0f, 0.0f);  // left  hand world pos, refreshed pre-calc
 static cXyz s_dekuLeafRHandW(0.0f, 0.0f, 0.0f);  // right hand world pos, refreshed pre-calc
+// TIP-TARGETED PIN: snapping the joint ORIGIN to the hand parked the joint in Link's palm while
+// the visible grip tip flew ~40 units away. Instead we place the joint so its grip TIP lands on
+// the hand: origin = hand - R * tipLocal, with R the joint's runtime rotation. tipLocal measured
+// in Blender (joint-local space) off the grip strands: Larm2 |39.4|, Rarm2 |41.7|.
+// Set DEKU_LEAF_TIP_PIN 0 to fall back to the old origin-pin if the joint frames don't match.
+#define DEKU_LEAF_TIP_PIN 1
+static cXyz s_dekuLeafTipLocal2(-17.98f, 30.07f, 17.93f);  // jnt 2 (Larm2 -> RIGHT hand)
+static cXyz s_dekuLeafTipLocal4(8.35f, 39.61f, 10.00f);    // jnt 4 (Rarm2 -> LEFT  hand)
 #endif
 
 // ============================================
@@ -365,17 +374,28 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
     }
     int jnt = i_joint->getJntNo();
 #if DEKU_LEAF_HAND_WELD
-    // Grip ribs held by the hands. After the 90 deg dome-axis spin the grips moved to the
-    // PERPENDICULAR rib pair: jnt 2 (Larm2) -> RIGHT hand, jnt 4 (Rarm2) -> LEFT hand.
-    // (Old pairing was 6/8; those are now free tails and billow again.) The grip ribs are
-    // weighted to their own strand only, so pinning them can't drag the canopy.
+    // Grip ribs held by the hands: jnt 2 (Larm2) -> LEFT hand, jnt 4 (Rarm2) -> RIGHT hand.
+    // Pairing re-measured after the +180 baseRotY facing turn swapped the leaf's sides
+    // (ALBW-LEAF-GRIP: 9/9 L->idx2, R->idx4; was 2->right/4->left before the turn). Grip ribs
+    // are weighted to their own strand only, so pinning them can't drag the canopy.
     if (jnt == 2 || jnt == 4) {
         Mtx m;
         MTXCopy(model->getAnmMtx(jnt), m);      // keep the rib's orientation...
-        const cXyz& hp = (jnt == 4) ? s_dekuLeafLHandW : s_dekuLeafRHandW;
-        m[0][3] = hp.x;                          // ...but snap its origin onto the hand
+        const cXyz& hp = (jnt == 2) ? s_dekuLeafLHandW : s_dekuLeafRHandW;
+#if DEKU_LEAF_TIP_PIN
+        // ...and offset the origin so the grip TIP (not the joint) rests in the hand.
+        const cXyz& tl = (jnt == 4) ? s_dekuLeafTipLocal4 : s_dekuLeafTipLocal2;
+        const f32 ox = m[0][0] * tl.x + m[0][1] * tl.y + m[0][2] * tl.z;
+        const f32 oy = m[1][0] * tl.x + m[1][1] * tl.y + m[1][2] * tl.z;
+        const f32 oz = m[2][0] * tl.x + m[2][1] * tl.y + m[2][2] * tl.z;
+        m[0][3] = hp.x - ox;
+        m[1][3] = hp.y - oy;
+        m[2][3] = hp.z - oz;
+#else
+        m[0][3] = hp.x;                          // legacy: snap the joint origin onto the hand
         m[1][3] = hp.y;
         m[2][3] = hp.z;
+#endif
         model->setAnmMtx(jnt, m);
         MTXCopy(m, J3DSys::mCurrentMtx);
         return 1;
@@ -412,12 +432,21 @@ static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
 // =============================================================================================
 static cXyz s_dekuLeafOffset(0.0f, 0.0f, 0.0f);  // nudge in facing frame from the hand midpoint
 static f32  s_dekuLeafScale = 1.0f;              // uniform scale about the welded grab point
-static s16 s_dekuLeafBaseRotY = 0x4000;   // 90 deg Y  (WORKING)
-static s16 s_dekuLeafBaseRotX = 0x4000;   // +90 deg X (was -0x4000; +180 applied after the spin)
+static s16 s_dekuLeafBaseRotY = 0xC000;   // 90 -> 270 (+180): turns the leaf to face front about the
+                                          // VERTICAL axis (calibrated sim: azimuth +15 -> -165, canopy
+                                          // stays up). This is the real "front facing" fix, NOT an X flip.
+static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X (the confirmed-good "It's in!" orientation)
 // Spin about the leaf's OWN dome axis (applied innermost, after X). Canopy stays flat overhead;
 // this only changes WHICH ribs face the hands. Playtest showed Link gripping the wrong pair, so
 // spin 90 deg to bring the perpendicular ribs (Larm2/Rarm2) around to the hands.
 static s16 s_dekuLeafSpin = 0x4000;       // 90 deg spin (flip sign if it lands the wrong way)
+// Dedicated 180 X flip, applied INNERMOST (after the spin) so it flips the finished leaf about
+// its own local X without recombining the tuned trio above. Kept separate on purpose: setting
+// baseRotX to +0x4000 is the same 180 but it collapsed the leaf into a stalk. 0 disables; flip
+// sign or move before YrotM(baseRotY) if it lands the wrong way. The tip-pin recomputes from the
+// live joint matrix, so the grips stay welded to the hands through this flip.
+static s16 s_dekuLeafFlipX = 0x0000;      // DISABLED: 180 X flipped it upside down; the real facing
+                                          // fix is the +180 on baseRotY above (rotation about vertical).
 
 void daAlink_c::updateDekuLeafModel() {
     if (s_dekuLeafModel == NULL) {
@@ -459,7 +488,8 @@ void daAlink_c::updateDekuLeafModel() {
     mDoMtx_stack_c::transM(s_dekuLeafOffset.x, s_dekuLeafOffset.y, s_dekuLeafOffset.z);
     mDoMtx_stack_c::YrotM(s_dekuLeafBaseRotY);  // reorient the canopy peak to world-up
     mDoMtx_stack_c::XrotM(s_dekuLeafBaseRotX);
-    mDoMtx_stack_c::ZrotM(s_dekuLeafSpin);      // innermost: spin ribs about the dome axis
+    mDoMtx_stack_c::ZrotM(s_dekuLeafSpin);      // spin ribs about the dome axis
+    mDoMtx_stack_c::XrotM(s_dekuLeafFlipX);     // innermost: 180 X flip of the finished leaf
     s_dekuLeafModel->setBaseTRMtx(mDoMtx_stack_c::get());
     // Scale pivots about the model origin (the welded grab point) so the stem stays on the hands.
     s_dekuLeafModel->setBaseScale(cXyz(s_dekuLeafScale, s_dekuLeafScale, s_dekuLeafScale));
@@ -6726,6 +6756,20 @@ void daAlink_c::setHandIndex(daAlink_c::daAlink_ANM i_anmID) {
 void daAlink_c::setSwordAtCollision(int param_0) {
     cXyz work;
 
+    // ========================================================================
+    // §61 — feed-side probe (H1/H9 of the grass cut-detection round): prove
+    // the sword AT actually enters the mass system on WW host stages, and
+    // when, so the veg-side massN=0 line can be attributed (never-fed vs
+    // cleared-before-poll). Remove with the rest of §61.
+    // ========================================================================
+    {
+        static u32 s_swN = 0;
+        if ((s_swN++ % 20) == 0) {
+            DuskLog.warn("[Alink] §61 swordAT set proc={} pos=({:.0f},{:.0f},{:.0f})",
+                         (int)mProcID, current.pos.x, current.pos.y, current.pos.z);
+        }
+    }
+
     if (checkCutDashAnime() && (checkCutDashEnemyHit(mAtCps[0]) ||
                                 checkCutDashEnemyHit(mAtCps[1]) || checkCutDashEnemyHit(mAtCps[2])))
     {
@@ -7421,6 +7465,24 @@ void daAlink_c::setCollision() {
 
     dComIfG_Ccsp()->Set(&mTgCyls[0]);
     dComIfG_Ccsp()->SetMass(&mTgCyls[0], 1);
+
+    // ========================================================================
+    // §61 r2 — feed-side count witness: this SetMass runs EVERY frame from
+    // execute (list 5), so the mass list can never be empty at a later list-7
+    // poll... yet 247/247 veg polls read massN=0. Log the count RIGHT AFTER
+    // registering, through the SAME accessor the veg side reads — if this says
+    // 0 too, the accessor is broken (H10); if >0 here and 0 at veg, something
+    // clears in between (H2/H4) or the phases differ (H1). Also log the Ccsp
+    // pointer identity (H9: two instances).
+    // ========================================================================
+    {
+        static u32 s_mzN = 0;
+        if ((s_mzN++ % 120) == 0) {
+            DuskLog.warn("[Alink] §61 tgMass set massN={} ccsp={:x}",
+                         (int)dComIfG_Ccsp()->mMass_Mng.mMassObjCount,
+                         (uintptr_t)dComIfG_Ccsp() & 0xFFFF);
+        }
+    }
 
     if (checkWolf()) {
         setWolfAtCollision();
@@ -9268,6 +9330,48 @@ void daAlink_c::setFrontWallType() {
             }
 
             int var_r29 = dComIfG_Bgsp().GetWallCode(mLinkLinChk);
+            // ================================================================
+            // §63 — ladder-regression probe (№242 item 4). The interior dzb's
+            // wall codes are PROVEN intact (ti rows carry 4/5 in word1, donor
+            // == mod), so the fault is runtime: either the line check never
+            // resolves the ladder poly (BG-type filtering — the №110
+            // "ladder/ledge on GLOBAL_e" suspicion) or the code arrives and a
+            // later gate eats it. Log the code + wall-hit state when nonzero
+            // or when pushing a wall, rate-limited.
+            // №257 / Verdict 2: tag phase pre|in|post so after-exit wallCode
+            // splits "attributes destroyed" (0) from "present but unadmitted"
+            // (4, hit=0).
+            // ================================================================
+            {
+                static u32 s_ldN = 0;
+                static u8 s_ldPhase = 0;  // 0=pre, 1=in, 2=post
+                const char* stage = dComIfGp_getStartStageName();
+                if (dExtWwSave_isWwHostStage(stage)) {
+                    if (stage[0] == 'R') {
+                        s_ldPhase = 1;
+                    } else if (stage[0] == 'F' && s_ldPhase == 1) {
+                        s_ldPhase = 2;
+                    }
+                }
+                if ((var_r29 != 0 || mLinkAcch.ChkWallHit()) && (s_ldN++ % 30) == 0) {
+                    // §63 r2: wallCode=0 with wallHit=1 at the interior ladder
+                    // (log 173414) means the line check resolves a poly WITHOUT
+                    // the code — name WHICH BG owns the resolved poly (the
+                    // №110 GLOBAL_e suspicion needs the owner to be readable).
+                    fopAc_ac_c* bgOwner =
+                        dComIfG_Bgsp().GetActorPointer(mLinkLinChk);
+                    dBgW_Base* bgw = dComIfG_Bgsp().GetBgWBasePointer(mLinkLinChk);
+                    const char* phase =
+                        s_ldPhase == 0 ? "pre" : (s_ldPhase == 1 ? "in" : "post");
+                    DuskLog.warn(
+                        "[Alink] §63 phase={} wallCode={} wallHit={} proc={} bgOwner={} "
+                        "bgName={} roomId={}",
+                        phase, var_r29, mLinkAcch.ChkWallHit() ? 1 : 0, (int)mProcID,
+                        bgOwner != NULL ? 1 : 0,
+                        bgOwner != NULL ? (int)fopAcM_GetName(bgOwner) : -1,
+                        bgw != NULL ? bgw->GetRoomId() : -1);
+                }
+            }
             dBgW_Base* sp3C = dComIfG_Bgsp().GetBgWBasePointer(mLinkLinChk);
 
             if ((var_r29 == 3 || var_r29 == 1) && (sp4C || (sp3C != NULL && !sp3C->ChkPushPullOk()))) {
@@ -9285,6 +9389,10 @@ void daAlink_c::setFrontWallType() {
                 offNoResetFlg3(FLG3_UNK_400000);
             }
 
+            // №256: do NOT relax ChkWallHit for ladder codes — that parallel gate
+            // restored interior climb but stripped exterior ladder SFX + ledge-grab
+            // (wrong poly/attribute path). Interior mounts must join TP's daBg
+            // registration (PRIORITY_0 GLOBAL_e) so wallHit arrives honestly.
             if (!mLinkAcch.ChkWallHit() && !checkWolf() && (var_r29 != 1 || mProcID != PROC_HANG_READY) && (var_r29 != 3 || checkModeFlg(0x40000) || checkModeFlg(2) || !(sp40 <= 51.0f)) && mProcID != PROC_HOOKSHOT_FLY && !checkModeFlg(0x200000)) {
                 offNoResetFlg3(FLG3_UNK_400000);
                 return;
@@ -12338,17 +12446,40 @@ int daAlink_c::checkNormalAction() {
     // ladder here; WW crawl holes have no adapt_dzb wall-code remap yet).
     // Gates: DoStatus NONE (never steal OPEN/SPEAK/ENTER/roll), stick ≤ front-roll
     // rate (standing A crawls; push-stick A still rolls), ground + wait procs.
-    if (dusk::getSettings().game.enableHoldACrawl.getValue() && !checkWolf() &&
-        !checkEventRun() && mLinkAcch.ChkGroundHit() && doButton() &&
-        dComIfGp_getDoStatus() == BUTTON_STATUS_NONE &&
-        mStickValue <= getFrontRollRate() &&
-        (mProcID == PROC_WAIT || mProcID == PROC_TIRED_WAIT || mProcID == PROC_SERVICE_WAIT))
+    // Require A held ≥ 1.0s while gates stay true; reset on release / gate break;
+    // one fire per hold (re-arm when A is released).
     {
-        field_0x306e = (s16)(shape_angle.y + 0x8000);
-        field_0x34ec = current.pos;
-        field_0x34ec.x -= 35.0f * cM_ssin(field_0x306e);
-        field_0x34ec.z -= 35.0f * cM_scos(field_0x306e);
-        return procCrawlStartInit();
+        static u16 s_holdACrawlFrames = 0;
+        static bool s_holdACrawlLatched = false;
+        constexpr u16 kHoldACrawlFrames = 30;  // 1.0s at 30Hz sim
+
+        const bool aDown = doButton();
+        const bool gates =
+            dusk::getSettings().game.enableHoldACrawl.getValue() && !checkWolf() &&
+            !checkEventRun() && mLinkAcch.ChkGroundHit() &&
+            dComIfGp_getDoStatus() == BUTTON_STATUS_NONE &&
+            mStickValue <= getFrontRollRate() &&
+            (mProcID == PROC_WAIT || mProcID == PROC_TIRED_WAIT || mProcID == PROC_SERVICE_WAIT);
+
+        if (!aDown) {
+            s_holdACrawlFrames = 0;
+            s_holdACrawlLatched = false;
+        } else if (!gates) {
+            s_holdACrawlFrames = 0;
+        } else if (!s_holdACrawlLatched) {
+            if (s_holdACrawlFrames < 0xFFFF) {
+                s_holdACrawlFrames++;
+            }
+            if (s_holdACrawlFrames >= kHoldACrawlFrames) {
+                s_holdACrawlLatched = true;
+                s_holdACrawlFrames = 0;
+                field_0x306e = (s16)(shape_angle.y + 0x8000);
+                field_0x34ec = current.pos;
+                field_0x34ec.x -= 35.0f * cM_ssin(field_0x306e);
+                field_0x34ec.z -= 35.0f * cM_scos(field_0x306e);
+                return procCrawlStartInit();
+            }
+        }
     }
 #endif
 
@@ -17999,6 +18130,10 @@ int daAlink_c::procAutoJump() {
     // holding a cucco — so vanilla A behaviour / combat is untouched when the leaf is off.
     // ============================================
     if (dusk::getSettings().game.dekuLeafGlideTest.getValue() && !checkGrabRooster() && doTrigger()) {
+        // Meter gate: can't open the leaf on an empty meter (WW likewise refuses at 0 magic).
+        if (!s_dekuLeafGlideActive && !dMeter2_canALBWDekuLeaf()) {
+            // no charge — leave the toggle alone and fall normally
+        } else {
         s_dekuLeafGlideActive = !s_dekuLeafGlideActive;
         if (s_dekuLeafGlideActive) {
             // engage: cucco-tuned glide profile + gentle terminal velocity
@@ -18006,20 +18141,35 @@ int daAlink_c::procAutoJump() {
             field_0x3478 = mpHIO->mAutoJump.m.mCuccoFallMaxSpeed;
             setSpecialGravity(-1.0f, field_0x3478, FALSE);
             mProcVar2.field_0x300c = 1;
+            dMeter2_onALBWDekuLeafStart();   // WW charges 1 unit up front
         } else {
             // let go: restore normal gravity so Link drops immediately
             mProcVar2.field_0x300c = 0;
             setSpecialGravity(mpHIO->mAutoJump.m.mGravity, mpHIO->mAutoJump.m.mMaxFallSpeed, TRUE);
+        }
         }
     }
     // Per-frame pose assertion while gliding: the normal auto-jump anim logic re-runs each frame
     // and clobbers a one-shot set (the "only via weird jumps" symptom). Re-assert the overhead
     // cucco hold — GRABD base + WALKHBS layer — whenever WALKHBS isn't the active upper anime.
     if (checkDekuLeafGlide()) {
-        mProcVar2.field_0x300c = 1;
-        if (!checkUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e)) {
-            setUpperAnimeBaseSpeed(dRes_ID_ALANM_BCK_GRABD_e, 0.0f, 3.0f);
-            setUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e, UPPER_1, 1.0f, 0.0f, -1, 3.0f);
+        // ============================================
+        // NEW CODE — ALBW Port (Deku Leaf glide, P4 — meter cost)
+        // Bleed the ALBW meter every frame we're gliding (d_meter2 does the 100ms tick at
+        // WW's faithful rate). When it runs dry, drop the leaf and restore normal gravity —
+        // WW does the same, dumping Link out of the float once magic hits zero.
+        // ============================================
+        if (!dMeter2_canALBWDekuLeaf()) {
+            s_dekuLeafGlideActive = false;
+            mProcVar2.field_0x300c = 0;
+            setSpecialGravity(mpHIO->mAutoJump.m.mGravity, mpHIO->mAutoJump.m.mMaxFallSpeed, TRUE);
+        } else {
+            dMeter2_onALBWDekuLeaf();
+            mProcVar2.field_0x300c = 1;
+            if (!checkUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e)) {
+                setUpperAnimeBaseSpeed(dRes_ID_ALANM_BCK_GRABD_e, 0.0f, 3.0f);
+                setUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e, UPPER_1, 1.0f, 0.0f, -1, 3.0f);
+            }
         }
     }
 #endif
@@ -20951,7 +21101,14 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
     }
 #endif
 
-    g_env_light.setLightTevColorType_MAJI(i_model, &tevStr);
+    // §47: donor-space lighting recipe for the player. When it handles the
+    // lighting it returns true and MAJI is SKIPPED — that bypass is the whole
+    // point, since MAJI is where the excess light comes from (the donor cast
+    // never runs it). Outside donor stages, and at the default setting, this is
+    // false and the receiver's path is untouched.
+    if (!dExtWw_applyPlayerDonorLook(i_model, &tevStr)) {
+        g_env_light.setLightTevColorType_MAJI(i_model, &tevStr);
+    }
 
     if (param_1 == 0) {
         mDoExt_modelEntryDL(i_model);

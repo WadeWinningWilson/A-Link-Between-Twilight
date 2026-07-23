@@ -8,6 +8,7 @@
 #include "d/d_albw_wardrobe.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
+#include "d/d_menu_ring.h"
 #include "d/d_meter2_info.h"
 #include "d/dolzel.h" // IWYU pragma: keep
 #include "aurora/lib/input.hpp"
@@ -102,6 +103,11 @@ bool canUseDpadQuickSwap(u32 port) {
     if (dComIfGp_isPauseFlag() || dComIfGp_getMesgStatus() != 0 || dComIfGp_isEnableNextStage() ||
         fopOvlpM_IsDoingReq())
     {
+        return false;
+    }
+
+    // Live quick-equip wheel: D-pad Left/Right flip inventory pages instead.
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
         return false;
     }
 

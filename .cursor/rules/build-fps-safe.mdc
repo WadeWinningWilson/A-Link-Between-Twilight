@@ -1,0 +1,34 @@
+---
+description: Prevent bad RelWithDebInfo builds (empty /O2 flags → field FPS collapse)
+alwaysApply: true
+---
+
+# Build / FPS safety (Windows RelWithDebInfo)
+
+## Hard bans
+
+- Do **not** run `cmake --preset`, `reconfigure_build.bat`, or wipe `build/` for routine compiles.
+- Do **not** set `ALLOW_CMAKE_RERUN=1` unless the user explicitly asked to reconfigure **or** you are executing the documented one-time factory recovery.
+- Do **not** edit `files.cmake` / `CMakeLists.txt` mid-session unless required for a new translation unit — expect a CMake re-run if you must.
+- Do **not** spawn new git worktrees as the routine build path. Soft-poison is a **main CMakeCache / ninja flag** bug (empty RelWithDebInfo `/O2`), not “need another folder.”
+
+## How to build
+
+1. Prefer: `cmd /c build_run.bat` in the main repo.
+2. Before trusting any rebuild: confirm `build/windows-msvc-relwithdebinfo/build.ninja` CXX `FLAGS` include `/O2`. **Zero `/O2` = poisoned factory** — stop; do not feature-bisect.
+3. If `build_run.bat` exits **99** (would Re-run CMake) **or** ninja prints `Re-running CMake...`:
+   - Treat FPS as untrusted until factory checks pass.
+   - Recovery is **main-tree** flag pin + one intentional reconfigure + full rebuild (see guidelines). Worktree copy is emergency-only legacy.
+4. After every successful build: wipe `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
+5. Do **not** casually overwrite a known-good play `dusklight.exe` without a field FPS measure after.
+
+## FPS triage (do not feature-bisect first)
+
+| Field FPS | Action |
+|-----------|--------|
+| ~33 stable | Hard poison — main ninja missing `/O2` (empty `CMAKE_CXX_FLAGS_RELWITHDEBINFO` in cache). Recover factory; do not revert WIP. |
+| ~100–120 after reconfigure / investigate reuse | Soft-poison — A/B exe identity + `/O2` in ninja + `.ilk` full-relink before blaming features |
+| ~200–270 swinging | Usually normal variance if typical ≥ ~220 — A/B Ordon vs Outset before blaming factory |
+| ~220–250+ typical | Healthy baseline (factory fix confirmed; maintain ExtNpc hot paths in place) |
+
+Canonical detail: `docs/build-fps-guidelines.md` (§ soft-poison + **Maintaining optimization**).

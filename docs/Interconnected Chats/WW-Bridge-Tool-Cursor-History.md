@@ -1,3 +1,7 @@
+## §62 Engine — remainder-carry (2026-07-21)
+
+Trunc confirmed; fixed-point carry on `/1800`; clamps logged. Await user re-test.
+
 # WW Bridge Tool — Bridge (Cursor) ↔ Housing Security
 
 **Interconnected Run** — offline `ww_bridge` toolchain (TTW model): player’s legal US WW copy → census + adapted arcs; distribute zero Nintendo bytes.
@@ -272,10 +276,259 @@ No changes to B0/B4, schema v2, the handshake, or GAP-3 — all accepted and una
 | 2026-07-21 | Housing Security | §59 ASK 17 independent BMS event decode |
 | 2026-07-21 | Bridge | ASK 17 `seq-events` golden stream (0.18.0) |
 | 2026-07-21 | Engine | ASK 17 event dump companion (`DUSK_EXTSEQ_EVENT_DUMP`) |
-| next | User / HS | diff Bridge vs engine CSVs → first disagreeing line |
+| 2026-07-21 | Engine | §60 loop-point wait = BMS song loop (dump policy only) |
+| 2026-07-21 | Housing Security | gate false-CLEAN (npat=0) + greplist path |
+| 2026-07-21 | Bridge | gate №31-C / §61b (0.19.0) |
+| 2026-07-21 | Housing Security | §64 inst_volume zero-variance question |
+| 2026-07-21 | Bridge | §64b ibnk-vol-check — literal 1.0f (0.20.0) |
+| 2026-07-22 | Bridge | §C.1b seq-events set_param target+value (0.21.0) |
+| 2026-07-22 | Housing Security | §70 cutscene audio scope; Bridge stream→.afc ask |
+| 2026-07-22 | Bridge | §70c `stream-map` BSM 75/75 (0.22.0) |
+| 2026-07-22 | Housing Security | §72 donor variant BGM; Bridge seq→bms unblock |
+| 2026-07-22 | Bridge | §72b `seq-map` + extract `i_linkin` (0.23.0) |
+| 2026-07-22 | Housing Security | §77/77b live-ab + wav-compare ask |
+| 2026-07-22 | Bridge | §77e `live-ab` + `wav-compare` (0.24.0) |
+| 2026-07-22 | Housing Security | §78 round-2 verdict; 3 Bridge defects |
+| 2026-07-22 | Bridge | §78c zero-frame/tempo/--b-start (0.24.1) |
+| 2026-07-22 | Engine | §88 CharVoice SE at demo message-open (package cues) |
+| 2026-07-22 | Engine | §84 type-7 Fxline + SoundTable vol into ExtSeq/DuskDsp |
+| 2026-07-22 | Bridge | §81b `aaf-control` type 6/7 + SoundTable BGM (0.25.0) |
+| 2026-07-22 | Engine | §93 voice fxmix = room reverb (messageSePlay law) |
+| 2026-07-22 | Bridge | §85c `voice-map` INF1→charVoice→CharVoice_0.aw (0.26.0) |
+| 2026-07-22 | Bridge | §86b stage CharVoice_0.aw + ibnk_135/wsys_135; CLEAR (0.26.1) |
+| 2026-07-22 | Bridge | §88b `voice-listen` CharVoice WAV pack (0.27.0) |
+| 2026-07-23 | Bridge | §108 nledger-as-database schema/ingest/views (0.31.0) |
+| 2026-07-22 | Bridge | §101c SC_01_mizu* TEV/blend/vtxα ref (0.30.2) |
+| 2026-07-22 | Bridge | §99c model1=mizu/nami beach stack (0.30.1) |
+| 2026-07-22 | Bridge | §97c waterline-inv + Always BTI 0x8B/0x8C (0.30.0) |
+| 2026-07-22 | Bridge | §93b type-6=SeMgr concurrency ≠ getReverb (0.29.1) |
+| 2026-07-22 | Bridge | §90b IsleLink payload + cue map (0.29.0) |
+| 2026-07-22 | Bridge | §89c five-pack `CharVoice_0_wave094`…105 (0.28.1) |
+| 2026-07-22 | Bridge | §89b voice-diag; Aryll=IsleLink not CharVoice (0.28.0) |
+| 2026-07-21 | Engine | §60b re-dump MATCH + openTrack depth warn |
+| 2026-07-21 | Engine | §62 tickOwned remainder-carry + clamp logs |
+| next | User | re-test tempo; if drift remains → resolve/mix |
 | content | User / content | §12 census refresh (PLYR+rot) — highest visible deploy |
 
 ---
+
+
+
+
+
+
+## §93 / Engine voice fxmix = room reverb (2026-07-22)
+
+Voice one-shots no longer use §81 music-scene send (~0.5). Now `messageSePlay` law:
+`dComIfGp_getReverb(stayNo)/127` (0 when stayNo==0). Log: `[ExtSeq] §93 voice fxmix:
+music_send=… room=… reverb_s8=… voice_send=…`. User re-listen for echo. Bus: §93.
+
+## §88 / Engine CharVoice message-open (2026-07-22)
+
+Wired package `voice/` cues at `dExtWw_handleDemoMessage`: SE 0x481F / wave(port&0xFF); 0x359 silent. User full-scene listen next. Bus: §88.
+
+## §84 / Engine type-7 + SoundTable vol (2026-07-22)
+
+Ported Bridge `control/` CSVs: type-7 → DuskDsp freeverb + AutoMixer send; SoundTable `vol_over_127` → ExtSeq master. Runtime chases paused. Bus: §84.
+
+## §108 / №-ledger-as-database (2026-07-23)
+
+Mechanical half of Housing order #1. Schema + JSONL ingest + generated views.
+**246** unclassified drafts extracted; History classifies (`status` / supersedes / summary).
+Tool **0.31.0**.
+
+```bat
+python -m ww_bridge nledger extract
+python -m ww_bridge nledger build
+```
+
+See `albt bridge/ledger/SCHEMA.md` + `reports/nledger_unclassified.md`.
+
+## §101c / SC_01_mizu* TEV/blend/vertex-alpha ref (2026-07-22)
+
+Reference sheet for Engine system-4 fidelity. 7/8 XLU `BM_BLEND` SRCALPHA×INVSRCALPHA;
+matSrc=VTX; RASA/COLOR0A0 on key stages; VTX1 Color0 present; Z-write off on XLU.
+Tex slots corrected to MAT3 +0x84 (§99 CSV had texGen @+0x28). Tool **0.30.2**.
+
+Artifacts: `reports/model1_mizu_mat_ref.md` + `model1_mizu_mat_ref.csv` +
+`model1_mizu_tev_stages.csv`.
+
+```bat
+python -m ww_bridge model1-dump
+```
+
+## §99c / model1 beach water dump (2026-07-22)
+
+`model1.bdl` = 8× `SC_01_mizu*` + `Txa_nami_*`/`umi_*`; BTK 16 tracks @100f. System-4
+**SUPPORTED**. Tool **0.30.1**. Fidelity next, not a new port.
+
+## §97c / waterline inventory + BTI index (2026-07-22)
+
+Outset rooms: 0 water-named members; `model1.bdl`+`btk` present (unclaimed). Foam BTIs
+**0x8B/0x8C** index-PASS. Tool **0.30.0**.
+
+```bat
+python -m ww_bridge waterline-inv
+```
+
+## §93b / type-6 ≠ getReverb (2026-07-22)
+
+Type-6 `0x04` = SeMgr category concurrency (4 slots/cat). Voice reverb = stage RTBL
+`field_0x1&0x7F`. Tool **0.29.1**. No hand-tune from type-6.
+
+## §90b / IsleLink payload staged (2026-07-22)
+
+`IsleLink_0.aw` (296544) + `ibnk_217`/`wsys_217` + cue map (25/28/26/27). Tool **0.29.0**.
+Cues provisional pending ordering-listen. AppData mod only.
+
+```bat
+python -m ww_bridge voice-map --islelink-payload
+```
+
+## §89c / vanilla five-pack (2026-07-22)
+
+`local_diag/charvoice_five/`: `CharVoice_0_wave094`…`097` + `_wave105` + CSV. Tool **0.28.1**. Fan labels never in filenames.
+
+```bat
+python -m ww_bridge voice-diag --five --open
+```
+
+## §89b / decoder + dayjo corr — Aryll in IsleLink (2026-07-22)
+
+Decoder PASS; neutral `wave000`…`159` in `local_diag/`; dayjo Aryll 0/9 in CharVoice, **8/9 in IsleLink_0.aw** (Hoy1→025). Tool **0.28.0**. Bus: §89b. Files never repo/package.
+
+```bat
+python -m ww_bridge voice-diag
+```
+
+## §88b / CharVoice listen pack (2026-07-22)
+
+Decoded waves 16–19, 104–107, and keyRgn 132/133 (prog 0x19) from staged CharVoice to PCM WAVs. Tool **0.27.0**. Bus: §88b.
+
+```bat
+python -m ww_bridge voice-listen --open
+```
+
+## §86b / CharVoice payload staged — Bridge CLEAR (2026-07-22)
+
+Staged `CharVoice_0.aw` (1,057,984) + `ibnk_135.bin` + `wsys_135.bin` under mod `voice/`. Bank id is inner **135** (not AAF cid 1). Tool **0.26.1**. Bus: §86b. Bridge clear.
+
+```bat
+python -m ww_bridge voice-map --payload
+```
+
+## §85c / voice-map Aryll opening SE chain (2026-07-22)
+
+INF1 `mInitialSound` for `0x357/358/050/359/35A` → DOL `charVoiceTable` → `JA_SE_CV_COMMON_PEOPLE` (`0x481F`) + port → WSYS/IBNK inner **135** → `CharVoice_0.aw`. Sounds 104–107 (0x359 silent); `0x050` anim=5. Tool **0.26.0**. Bus: §85c.
+
+```bat
+python -m ww_bridge voice-map --stage
+```
+
+## §81b / aaf-control type 6/7 + SoundTable BGM (2026-07-22)
+
+Decoded the three §81 how-to-play tables. Type 7 Fxline: 2 scenes × 4 lines, all enabled; scenes differ on L2/L3. Type 6: mostly `0x04`. SoundTable BGM: 97/97 offsetNo↔JaiSeqs MATCH; Outset vol_u8=60. Tool **0.25.0**. Bus: §81b.
+
+```bat
+python -m ww_bridge aaf-control --stage
+```
+
+## §78c / wav-compare + live-ab defects (2026-07-22)
+
+Three §78 defects: zero-frame WARN+exit3; loop-period tempo (~1.3% class); `--b-start`/`--a-start` + onset-density table. Tool **0.24.1**. Bus: §78c.
+
+## §77e / live-ab + wav-compare Bridge implementation (2026-07-22)
+
+§77 offline + §77b live analyzer. Shipped:
+
+```bat
+pip install -r requirements-audio.txt
+python -m ww_bridge live-ab --list-devices
+python -m ww_bridge live-ab --device-a N --device-b M --tag ilinkin
+python -m ww_bridge wav-compare A.wav B.wav
+```
+
+- Dual WASAPI **device** loopback; live 8-band meters + DIVERGE; auto-WAV → `Videos\WW comparisons\round2\`
+- Same session feeds §77 `wav-compare` (silence-align, tempo, band envelopes, onset deltas, verdict)
+- Setup/privacy: `reports/live_ab_setup.md` (mode a routing; no screen capture)
+
+Tool **0.24.0**. Bus: interconnected §77e.
+
+## §72b / seq-map Bridge implementation (2026-07-22)
+
+§72 unblock: BGM id→BMS (Lago first). JaiSeqs.arc is **alphabetical**, not id-ordered — rule is Lago id → filename → open member.
+
+```bat
+python -m ww_bridge seq-map --extract
+```
+
+| id | symbol | bms | vs base |
+|----|--------|-----|---------|
+| `0x38` | `ISLAND_LINK_0` | **`i_linkin.bms` 19552** | **DISTINCT** |
+| `0x0E` | `ISLAND_LINK_2` | `i_link2.bms` 13088 | byte-identical to `i_link` |
+| `0x55` | `ISLAND_LINK_3` | `i_link3.bms` 9920 | DISTINCT |
+| `0x18` | `HOUSE_G` | `house_g.bms` 3584 | DISTINCT vs `house` |
+
+Twin OK on all four extracts into `audio/ww_jaudio1/`. Tool **0.23.0**. Bus: §72b.
+
+## §70c / stream-map Bridge implementation (2026-07-22)
+
+§70 ask: stream-id→`.afc` (LagoLunatic first). Finding: Lago `BGM Sequences.txt` is **sequence-only**. Authority = `JaiInit.aaf` BSM (AAF type 5).
+
+```bat
+python -m ww_bridge stream-map
+```
+
+- **75/75** `JA_STRM_*` ↔ BSM names; all `.afc` on disk under `Audiores/Stream/`
+- **`JA_STRM_PROLOGUE` → `e3title.afc`** (idx 0) — **not** `1tale.afc`
+- **`JA_STRM_DEMO_01_01` → `1tale.afc`** (idx 36); `TITLE` → `title.afc`; `BPW_START` → `bp_start.afc`
+
+Tool **0.22.0**. Bus: interconnected §70c Bridge response.
+
+## §C.1b / seq-events set_param target Bridge implementation (2026-07-22)
+
+Housing §C.1 Bridge ask: mirror target+value in golden stream. Shipped:
+
+- **`set_param`**: `note_param`=target (`flag`), `velocity`=`data/32767.0` (6 dp)
+- **i_link:** 1080/1140 targets are **0** (volume-dominated)
+- Engine dump emit still open — format documented for mirror
+
+Tool **0.21.0**. Bus: interconnected §C.1b Bridge response.
+
+## §64b / ibnk-vol-check Bridge implementation (2026-07-21)
+
+Housing §64: is `inst_volume` constant or a fallback? Bridge shipped two independent readers:
+
+- **`python -m ww_bridge ibnk-vol-check`**
+- BANK-table + magic-scan both see literal `3f800000` on every INST (36+7)
+- **Reading (1) confirmed** — not a decode fallback; soft layers not explained by INST vol
+
+Tool **0.20.0**. Bus: interconnected §64b Bridge response.
+
+## §61b / gate №31-C Bridge implementation (2026-07-21)
+
+Auditor: empty greplist → false CLEAN; silent greplist fallback. Bridge shipped:
+
+- **`GATE INCONCLUSIVE`** + exit **3** when `npat == 0`
+- Always print `greplist=<resolved path>` with `exe=`
+- Narrowed `arc_contents.py` `_load_arc_index` except
+
+Tool **0.19.0**. Bus: interconnected §61b Bridge response.
+
+## §60b Engine — re-dump MATCH (2026-07-21)
+
+`dusklight --extseq-dump …/ww_jaudio1` → engine CSVs **byte-identical** to Bridge (`i_link` 5215, `house` 1978). openTrack 8-level warn shipped. Drift (if any) = new target.
+
+## §60 Engine response (2026-07-21)
+
+Check 1/2 answered. **No live parser fix** — the wait is the BMS song-loop target.
+
+- `i_link`: `@69 wait 12480; @72 jmp 69`
+- `house`: `@42 wait 7680; @45 jmp 42`
+- Dump had re-entered once (looked like “extra wait”); Bridge `pc_call_seen` never re-enters.
+- Dump now stops on first backward jmp. Playback still follows forever (WW-correct).
+
+Re-dump with `DUSK_EXTSEQ_EVENT_DUMP=1` to confirm parity.
 
 ## §59 / ASK 17 Engine dump companion (2026-07-21)
 

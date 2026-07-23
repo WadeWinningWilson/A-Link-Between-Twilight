@@ -29,6 +29,11 @@ Prose / decisions stay here; if a number here disagrees with `inventory.md`, **t
 
 ## 1. NPCs / identity
 
+> **Per-character detail lives in [characters/](characters/README.md)** — one subfolder each (assets,
+> cutscene beats, expression maps, open bugs). Aryll (`Ls1`) is the first; others get folders as work
+> reaches them. Keep this section to the island-wide census/identity picture; character specifics go
+> in the subfolders.
+
 | status | detail |
 |---|---|
 | Mapped folk on the exterior | 16 codes — `Ah` `Aj1` `Ajav` `Bb` `Bm1` `Dk` `Ko1` `Ko2` `Ls1` `Ob1` `P1a` `P1b` `P2b` `Ym1` `Ym2` `Zl1` |

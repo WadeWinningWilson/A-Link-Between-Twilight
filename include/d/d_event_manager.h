@@ -112,6 +112,18 @@ public:
     dEvM_HIO_c& getEventHIO();
     #endif
 
+#if TARGET_PC
+    // §67 probe (№265 follow-up): read-only slot inspection for the opening
+    // resolve diagnostic in d_ext_npc_mount.cpp.
+    dEvDtBase_c& probeSlot(int type) { return mEventList[type]; }
+    // №266: late BASE_STAGE init — the warp path can reach create() before the
+    // stage resource is queryable, leaving the stage list empty FOREVER (the
+    // engine has no retry; §67 proved slot 3 empty). Re-runs the SAME donor
+    // init once the resource exists. 0 = still unavailable, 1 = already
+    // loaded, 2 = loaded just now (caller should roomInit too).
+    int lateStageListInit();
+#endif
+
 private:
     /* 0x000 */ dEvDtBase_c mEventList[BASE_MAX];
     /* 0x18C */ int mCameraPlay;

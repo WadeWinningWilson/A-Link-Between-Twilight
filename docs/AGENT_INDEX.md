@@ -1,5 +1,10 @@
 # Agent index — where live memory lives
 
+> ⛔ **[DO-NOT.md](DO-NOT.md) — hard stops. Read it before touching BG/collision
+> registration, room identity, or any surface it names. Entries are permanent
+> rejections with the failure mechanism spelled out; no AI instance may
+> self-approve an exception (escalate to the user).**
+
 **Purpose:** One map for fresh Cursor/Claude chats. Prefer **live state** over reopening old sessions or reading interconnected megadocs end-to-end.
 
 **How to use (paste opener pattern):**
@@ -49,8 +54,10 @@
 | Level Editor (Phase 1) | [state/level-editor.md](state/level-editor.md) | [level-editor-phase1.md](level-editor-phase1.md), [Interconnected Chats/Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) |
 | Outfit / sumo / quick-swap | *(add `state/outfit-sumo.md` when next session starts)* | [Interconnected Chats/Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md), [Outfit Stats.md](Outfit%20Stats.md), [sumo-combat.md](sumo-combat.md) |
 | Quick-equip wheel + page 2 | [state/quick-equip-wheel.md](state/quick-equip-wheel.md) | `~/.cursor/plans/next_slice_shop_potion_stagger.plan.md` (original hold sketch); [deku-leaf-glide-research.md](deku-leaf-glide-research.md) P4; [d-pad-reworking.md](d-pad-reworking.md) |
+| Ext Status (Collect sibling) | [state/ext-start-status.md](state/ext-start-status.md) | Tools/Quest/Atlas; `ext_inv/claims.ini`; №103 |
 | Fado Ordon door unlock + warp sink | [state/fado-door-warp.md](state/fado-door-warp.md) | cut-actors №101; `d_a_door_knob00`; `d_ext_mod_flags` |
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |
+| Mod API port (main `.dusk` extraction) | [state/mod-api-port.md](state/mod-api-port.md) | [state/mod-api-port-albw-meter.md](state/mod-api-port-albw-meter.md) (#1 plan); port canvases; `albw-port.md` |
 
 ---
 

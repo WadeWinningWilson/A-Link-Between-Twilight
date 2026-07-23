@@ -5,6 +5,24 @@ if (NOT CMAKE_BUILD_TYPE)
             "Build type options: Debug Release RelWithDebInfo MinSizeRel" FORCE)
 endif ()
 
+# RelWithDebInfo factory pin (2026-07-19): empty cache entries are treated as
+# intentional overrides and drop /O2 → ~33 FPS. Refuse-empty + FORCE restore.
+if (MSVC AND CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    if ("${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" STREQUAL "" OR NOT "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" MATCHES "/O2")
+        set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /DNDEBUG" CACHE STRING
+                "Flags used by the CXX compiler during RelWithDebInfo builds." FORCE)
+        message(WARNING "RelWithDebInfo CXX flags were empty/missing /O2 — restored factory pin")
+    endif ()
+    if ("${CMAKE_C_FLAGS_RELWITHDEBINFO}" STREQUAL "" OR NOT "${CMAKE_C_FLAGS_RELWITHDEBINFO}" MATCHES "/O2")
+        set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /DNDEBUG" CACHE STRING
+                "Flags used by the C compiler during RelWithDebInfo builds." FORCE)
+    endif ()
+    if ("${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO}" STREQUAL "" OR NOT "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO}" MATCHES "/INCREMENTAL:NO")
+        set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/debug /INCREMENTAL:NO" CACHE STRING
+                "Flags used for linking binaries during RelWithDebInfo builds." FORCE)
+    endif ()
+endif ()
+
 set(DUSK_VERSION_OVERRIDE "" CACHE STRING "Override version string (skips git detection and format validation)")
 
 if (DUSK_VERSION_OVERRIDE)

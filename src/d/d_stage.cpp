@@ -543,6 +543,14 @@ static dStage_objectNameInf l_objectName[] = {
     OBJNAME("NoneCam", fpcNm_CAMERA_e,            -1),
     OBJNAME("NormCam", fpcNm_CAMERA_e,            -1),
     OBJNAME("Link",    fpcNm_ALINK_e,             -1),
+    // §46/№154: storyboard actor binding. JStage resolves a JACT block by its
+    // ID string through dStage_searchName -> (proc, argument), then finds a LIVE
+    // actor matching BOTH (f_op_actor_mng.cpp fopAcM_findObjectCB). "Link" above
+    // already binds; "Ls1" had no row, so that actor was never found and the demo
+    // reported no performer. Our Ls1 spawns via socket NPC_HENNA0 with arg 5 —
+    // the arg is what distinguishes her from every other islander sharing that
+    // proc (Ko1=8, Ob1=7, ...), so it must be exact, not -1.
+    OBJNAME("Ls1",     fpcNm_NPC_HENNA0_e,         5),
     OBJNAME("carry00", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry01", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry02", fpcNm_Obj_Carry_e,         -1),

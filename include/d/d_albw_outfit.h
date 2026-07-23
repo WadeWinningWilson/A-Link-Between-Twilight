@@ -37,6 +37,11 @@ bool dAlbwOutfit_isOwned(dAlbwOutfitKind kind);
 // itemNo.  Call alongside dMeter2_grantRentalClothes().
 void dAlbwOutfit_recordOwnedByItemNo(int itemNo);
 
+// №238: the dItemNo_* value backing an outfit kind (HEROS -> WEAR_KOKIRI, ...).
+// Public wrapper over the module's kind<->item map so grant sites (the Grandma
+// clothes handover) can record-then-equip without duplicating the mapping.
+int dAlbwOutfit_itemNoForKind(dAlbwOutfitKind kind);
+
 // ---- Currently-worn sumo state (per-save, save bit 700) -----------------------
 // The sumo overlay's "is worn" flag lives in the save (not AppData config), so it
 // is per-file and survives the removal of the editor toggle.  The sumo module

@@ -21,9 +21,11 @@
  *    every channel. Bank register/unregister nests inside stopOwned/startOwned.
  */
 
+#include <types.h>
+
 #if TARGET_PC
 
-/** Poll: gate, ownership transitions, package load, JA1 tick. */
+/** Poll: gate, ownership transitions, package load, JA1 tick / handoff. */
 void dExtSeqSpace_poll();
 
 /**
@@ -31,6 +33,22 @@ void dExtSeqSpace_poll();
  * this foreign host (or is silencing until the package is ready).
  */
 bool dExtSeqSpace_shouldSuppressJa2Bgm();
+
+/**
+ * Cutscene / bus handoff into the current foreign-host field BMS (island or
+ * house from stage). Fades prior JA2 (`mDoAud_bgmStop`) or prior ExtSeq root
+ * volume over `fadeFrames` (default 30 = WW prologue `stop(30)`), then starts.
+ * Opening music source (seq vs stream) is NOT selected here — stream playback
+ * stays blocked until History confirms stream.
+ */
+void dExtSeqSpace_requestHandoffToField(u32 fadeFrames = 30);
+
+/**
+ * §60b — offline Ja1Parser event dump (no audio). Reads `*.file=` paths from
+ * packageRoot/manifest.ini, writes seq_events_engine_<stem>.csv beside the
+ * package root. Returns 0 on success.
+ */
+int dExtSeqSpace_cliDumpEvents(const char* packageRoot);
 
 #endif  // TARGET_PC
 

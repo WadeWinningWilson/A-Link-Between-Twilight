@@ -34,7 +34,23 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
 
     J3DModelData* modelData = NULL;
 #if TARGET_PC
-    if (m_itemNo == dItemNo_BOW_e && dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
+    if (dWwItemmdl_clothesBundleForItem(m_itemNo)) {
+        // Grandma clothes: mount/API create path (acquire+finish), not bow-era raw getObjectRes.
+        // Host WEAR_KOKIRI still carries F_gD_rupy BRK indices; donor FUKU has no anms
+        // (mSrtIdx/mTevIdx = -1). Binding that BRK against vfuku's material table AVs in
+        // J3DAnmTevRegKey::searchUpdateMaterialID — clear TP anm indices (donor-faithful).
+        // §66: CheckItemCreateHeap already passes kit arc + -1 anms; keep the clear here so
+        // any non-kit caller (field path) cannot reintroduce the BRK AV.
+        i_btkName = -1;
+        i_bpkName = -1;
+        i_bckName = -1;
+        i_bxaName = -1;
+        i_brkName = -1;
+        i_btpName = -1;
+        modelData = dWwItemmdl_getClothesBundleModelData();
+        (void)i_arcName;
+        (void)i_bmdName;
+    } else if (m_itemNo == dItemNo_BOW_e && dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
         if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
             dWwItemmdl_bracketLog("CreateItemHeap: enter");
             dWwItemmdl_logHeap("CreateItemHeap enter");

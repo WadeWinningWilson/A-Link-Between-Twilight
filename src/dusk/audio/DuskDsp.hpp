@@ -191,6 +191,18 @@ namespace dusk::audio {
         return bankDisposeId == &g_extSeqOwnerTag;
     }
 
+    /**
+     * §81 — WW type-7 Fxline → freeverb + ExtSeq AutoMixer send.
+     * scene: 0 = field (F_DL*), 1 = interior (R_DL*). Donor Fx::init scene index.
+     * busGain01 / room01 / damp01 are derived from FxlineConfig_ bus/coefs/buf sizes.
+     */
+    void applyExtSeqFxScene(u8 scene, f32 busGain01, f32 room01, f32 damp01);
+    /** Current ExtSeq→reverb send (0..1), applied as initFxmix on ExtSeq voices. */
+    f32 getExtSeqFxSend();
+    /** SoundTable BGM vol_u8/127 master (default 1 until control table loads). */
+    void setExtSeqMasterVol(f32 vol01);
+    f32 getExtSeqMasterVol();
+
     // Register a resident bank's mod twin: [aramBase, aramBase+size) -> buf
     // (addressed by new notes as kShadowVirtualBase + aramBase + offset).
     void registerShadowWave(u32 aramBase, u32 size, const u8* buf);

@@ -17,6 +17,7 @@
 
 #if TARGET_PC
 #include "d/d_ww_itemmdl_pc.h"
+#include "dusk/logging.h"  // §66 probe
 #include "dusk/settings.h"
 #endif
 
@@ -46,6 +47,25 @@ static bool useWwItemmdlBowGetItem(u8 item_no) {
 static bool useWwItemmdlBowMesh(u8 item_no) {
     return useWwItemmdlBowGetItem(item_no) &&
            !dusk::getSettings().game.wwItemmdlGetItem2DIsolate.getValue();
+}
+
+/** Clothes bundle (mod getitem/clothes_bundle.ini) — boots/Ivan light path, not bow TEV scope. */
+static bool useWwClothesBundleGetItem(u8 item_no) {
+    return dWwItemmdl_clothesBundleForItem(item_no);
+}
+
+static bool useWwClothesBundleMesh(u8 item_no) {
+    return useWwClothesBundleGetItem(item_no);
+}
+
+/** Bow locked-BDL get-item: draw scope + TEV replay. */
+static bool useWwBowGetItemMesh(u8 item_no) {
+    return useWwItemmdlBowMesh(item_no);
+}
+
+/** Any WW get-item mesh that skips MAJI (bow scope OR clothes boots-style). */
+static bool useWwGetItemNoMaji(u8 item_no) {
+    return useWwBowGetItemMesh(item_no) || useWwClothesBundleMesh(item_no);
 }
 #endif
 
@@ -112,11 +132,23 @@ int daDitem_c::CreateInit() {
         scale.setall(0.0f);
     }
 
+#if TARGET_PC
+    if (useWwClothesBundleMesh(m_itemNo)) {
+        const f32 kitScale = dWwItemmdl_clothesBundleMaxScale();
+        if (kitScale > 0.0f) {
+            setMaxScale(kitScale);
+        }
+    }
+#endif
+
     mSound.init(&current.pos, 1);
     set_mtx();
 #if TARGET_PC
-    if (useWwItemmdlBowMesh(m_itemNo)) {
+    if (useWwBowGetItemMesh(m_itemNo)) {
         dWwItemmdl_beginBowDrawScope(mpModel, fopAcM_GetID(this));
+        dWwItemmdl_setWwBowGetItemBeamSuppress(true);
+    } else if (useWwClothesBundleMesh(m_itemNo)) {
+        // Boots/Ivan era: no MatDrawPostDl scope — adapted bmd3 draws via modelUpdateDL.
         dWwItemmdl_setWwBowGetItemBeamSuppress(true);
     }
 #endif
@@ -146,8 +178,8 @@ void daDitem_c::actionStart() {
     if (chkDraw()) {
         if (!chkArgFlag(0x2) && !chkArgFlag(0x4) && !mSetLightEff) {
 #if TARGET_PC
-            // 4C: WW bow — skip efplight (blooms cel in dark rooms); beams/particles unchanged.
-            if (!useWwItemmdlBowMesh(m_itemNo))
+            // 4C: WW get-item mesh — skip efplight (blooms cel in dark rooms).
+            if (!useWwGetItemNoMaji(m_itemNo))
 #endif
             {
                 mSetLightEff = true;
@@ -419,7 +451,22 @@ void daDitem_c::set_pos() {
     } else if (player->checkHorseRide()) {
         offset = l_horse_offset;
     } else {
-        offset = l_player_offset;
+#if TARGET_PC
+        // Clothes get-box kit: config hand_offset_* replaces TP l_player_offset
+        // so the bundle sits in the raised-hands pose (not forearm/shoulder).
+        f32 hx, hy, hz;
+        if (useWwClothesBundleMesh(m_itemNo) &&
+            dWwItemmdl_clothesBundleHandOffset(&hx, &hy, &hz)) {
+            // §66 arm 4 — which offset actually applies (one-shot).
+            if (m_timer <= 2) {
+                DuskLog.warn("[DemoItem] §66 offset: kit hand_offset ({},{},{})", hx, hy, hz);
+            }
+            offset.set(hx, hy, hz);
+        } else
+#endif
+        {
+            offset = l_player_offset;
+        }
         sp38.y = player->getLeftFootPosP()->y;
     }
 
@@ -461,10 +508,20 @@ void daDitem_c::set_mtx() {
 
 void daDitem_c::setTevStr() {
 #if TARGET_PC
-    if (useWwItemmdlBowMesh(m_itemNo)) {
+    if (useWwBowGetItemMesh(m_itemNo)) {
         // 4E: struct-0 + fixed warm ambient (goldenrod), not % room amb.
         g_env_light.settingTevStruct(0, &current.pos, &tevStr);
         dWwItemmdl_setWwBowActorAmbient(&tevStr);
+        dWwItemmdl_applyBowMaterialAmbientOnly(mpModel, &tevStr);
+        return;
+    }
+    if (useWwClothesBundleMesh(m_itemNo)) {
+        // Ivan/boots recipe: settingTevStruct(0) + neutral ambient, no MAJI, no bow warm tint.
+        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+        tevStr.AmbCol.r = 90;
+        tevStr.AmbCol.g = 90;
+        tevStr.AmbCol.b = 90;
+        tevStr.AmbCol.a = 255;
         dWwItemmdl_applyBowMaterialAmbientOnly(mpModel, &tevStr);
         return;
     }
@@ -479,11 +536,20 @@ void daDitem_c::wwBowDrawModel() {
 }
 
 int daDitem_c::DrawBase() {
+    // §66 arm 5 — the bundle's FIRST actual draw (absent = this never logs).
+    if (useWwClothesBundleMesh(m_itemNo)) {
+        static fpc_ProcID s66DrawId = fpcM_ERROR_PROCESS_ID_e;
+        if (s66DrawId != fopAcM_GetID(this)) {
+            s66DrawId = fopAcM_GetID(this);
+            DuskLog.warn("[DemoItem] §66 draw: bundle first draw (item={} scale={:.2f})",
+                         (int)m_itemNo, scale.x);
+        }
+    }
     setTevStr();
     animEntry();
     setListStart();
     settingBeforeDraw();
-    if (useWwItemmdlBowMesh(m_itemNo)) {
+    if (useWwBowGetItemMesh(m_itemNo)) {
         wwBowDrawModel();
     } else {
         mDoExt_modelUpdateDL(mpModel);
@@ -496,7 +562,7 @@ int daDitem_c::DrawBase() {
 
 void daDitem_c::setListStart() {
 #if TARGET_PC
-    if (useWwItemmdlBowMesh(m_itemNo)) {
+    if (useWwGetItemNoMaji(m_itemNo)) {
         // TWW daItemBase uses setListMaskOff; TP has no MaskOff buffer — regular OPA/XLU list.
         dComIfGd_setList();
     }
@@ -540,7 +606,16 @@ int daDitem_c::Delete() {
         // 2Q: keep itemmdl.arc + parsed vbow resident — do not decCount/unmount on demo-item delete.
         return 1;
     }
-    const char* arc_name = useWwItemmdlBowGetItem(m_itemNo) ? "itemmdl" : dItem_data::getArcName(m_itemNo);
+    const char* arc_name = dItem_data::getArcName(m_itemNo);
+    if (useWwClothesBundleGetItem(m_itemNo)) {
+        dWwItemmdl_clearClothesBundleCache();
+        const char* clothes_arc = dWwItemmdl_clothesBundleArcName();
+        if (clothes_arc != NULL) {
+            arc_name = clothes_arc;
+        }
+    } else if (useWwItemmdlBowGetItem(m_itemNo)) {
+        arc_name = "itemmdl";
+    }
     return DeleteBase(arc_name);
 #else
     return DeleteBase(dItem_data::getArcName(m_itemNo));
@@ -558,12 +633,31 @@ int daDitem_c::create() {
 
     const char* arc_name = dItem_data::getArcName(m_itemNo);
 #if TARGET_PC
-    if (useWwItemmdlBowGetItem(m_itemNo)) {
+    if (useWwClothesBundleGetItem(m_itemNo)) {
+        // Overlay mod arc (getitem/clothes_bundle.ini) — not private itemmdl.
+        const char* clothes_arc = dWwItemmdl_clothesBundleArcName();
+        if (clothes_arc != NULL) {
+            arc_name = clothes_arc;
+        }
+    } else if (useWwItemmdlBowGetItem(m_itemNo)) {
         arc_name = "itemmdl";
     }
 #endif
     s16 bmd_name = dItem_data::getBmdName(m_itemNo);
 
+#if TARGET_PC
+    // ========================================================================
+    // §66 probe — get-item bundle ABSENT-vs-MISPLACED discriminator, arm 1:
+    // item resolution. The silent GREEN_RUPEE fallback is the "simply not
+    // appearing" branch (user's earlier rupee-box screenshot); this names it.
+    // ========================================================================
+    if (useWwClothesBundleGetItem(m_itemNo) || m_itemNo == dItemNo_WEAR_KOKIRI_e) {
+        DuskLog.warn("[DemoItem] §66 create: item={} kit={} arc='{}' bmd={} {}", (int)m_itemNo,
+                     useWwClothesBundleGetItem(m_itemNo) ? 1 : 0,
+                     arc_name != NULL ? arc_name : "NULL", (int)bmd_name,
+                     (bmd_name < 0 || arc_name == NULL) ? "→ GREEN_RUPEE FALLBACK" : "ok");
+    }
+#endif
     if (bmd_name < 0 || arc_name == NULL) {
         if (bmd_name == 0) {
             // "It's an item with no model data! [%d]\n"
@@ -615,6 +709,20 @@ int daDitem_c::execute() {
         dWwItemmdl_bracketLog("execute: first frame");
         dWwItemmdl_logHeap("execute first frame");
     }
+    // ========================================================================
+    // §66 probe, arm 3 — LIVE state for the bundle get-item, once per second:
+    // draw flag + scale (0 = invisible even when placed right) + position vs
+    // Link. Answers ABSENT (never drawn / scale 0) vs MISPLACED (drawn, far
+    // from Link's hands) in one line.
+    // ========================================================================
+    if (useWwClothesBundleMesh(m_itemNo) && (m_timer == 1 || m_timer % 60 == 0)) {
+        fopAc_ac_c* p66 = dComIfGp_getPlayer(0);
+        const f32 dx = p66 != NULL ? current.pos.x - p66->current.pos.x : 0.0f;
+        const f32 dy = p66 != NULL ? current.pos.y - p66->current.pos.y : 0.0f;
+        const f32 dz = p66 != NULL ? current.pos.z - p66->current.pos.z : 0.0f;
+        DuskLog.warn("[DemoItem] §66 live t={}: draw={} scale={:.2f} max={:.2f} dPlayer=({:.0f},{:.0f},{:.0f})",
+                     (int)m_timer, chkDraw() ? 1 : 0, scale.x, mMaxScale, dx, dy, dz);
+    }
 #endif
 
     action();
@@ -633,7 +741,7 @@ int daDitem_c::execute() {
     }
 
 #if TARGET_PC
-    if (!useWwItemmdlBowMesh(m_itemNo))
+    if (!useWwGetItemNoMaji(m_itemNo))
 #endif
     {
         settingEffectLight();

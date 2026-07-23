@@ -55,6 +55,7 @@
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_seq_space.h"
 #include "d/d_ext_npc_doors.h"
+#include "d/d_ext_save_guard.h"  // §49: storyboard dialogue poll + draw
 #include "d/d_ww_itemmdl_pc.h"
 #include "d/d_albw_twilight_border.h"
 #include "dusk/autosave.h"
@@ -725,6 +726,9 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     // Queuing from Execute was wiped every frame (never painted).
     dusk::leveledit::draw_selection_highlight();
     dusk::leveledit::draw_pick_hover();
+    // §49: storyboard dialogue. Same constraint as the editor above — the
+    // widget ends in set2DOpa, so it must be queued from Draw, not Execute.
+    dExtWw_drawDemoMessage();
 #endif
 
     #if DEBUG
@@ -789,8 +793,10 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     dCutActorSpawn::tick();
     // FPS_BISECT_A1b: RULED OUT (2026-07-19) — menu ~288 / field still ~100–115 with polls off.
     dExtNpcMount_pollBgWarps();
+    dExtWw_pollDemoMessage();  // §49: show/replace/dismiss storyboard lines
     dExtNpcDoors_poll();
     dExtNpcMount_pollIdentifyProbe();  // §41: Z-target identity probe (change-only log)
+    dExtNpcMount_pollCullProbe();      // §95: tree/mount cull probe (DUSK_CULL_PROBE=1)
     dExtSeqSpace_poll();                  // §52 (B): JA1 space gate + package detect (no parser yet)
     // Gate 8: before pauseTimer early-return — hitlag must not silence click pick/diag.
     if (dusk::g_levelEditorSession) {

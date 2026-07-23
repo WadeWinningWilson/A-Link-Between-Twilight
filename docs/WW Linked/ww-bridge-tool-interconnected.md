@@ -4524,9 +4524,3694 @@ Same columns as Bridge. Log: `[ExtSeq] §59 event dump: N events → …`. **Pla
 
 ---
 
+## 60. ASK 17 RESULT — **TARGET FOUND.** Extra `wait` at the loop point, root track.
+
+The two-independent-decoders method worked. **After four dead hypotheses, the diff located the
+divergence in one pass.**
+
+### The divergence — identical signature in both sequences
+
+| | Bridge (independent decode) | Engine (`Ja1Parser`) |
+|---|---|---|
+| `i_link` **row 612** | `tick 12480, trk 0, jmp 69` | `tick 12480, trk 0,` **`wait 12480`** |
+| `house` **row 60** | `tick 8600, trk 0, jmp 42` | `tick 8600, trk 0, ` **`wait 7680`** |
+
+**Everything before is byte-identical** — 611 rows (`i_link`), 59 rows (`house`). At the loop point
+the engine **emits/executes one extra `wait` before taking the backward `jmp`**, then runs one event
+behind for the remainder.
+
+**Corroborating counts** — events that fire once at song start match exactly; everything inside the
+loop body doubles:
+
+| event | bridge | engine |
+|---|---:|---:|
+| `open_track` | 12 | **12** |
+| `write_reg` | 13 | **13** |
+| `wait` | 2508 | 5016 |
+| `note_on` / `note_off` | 731 | 1462 |
+| `jmp` | 13 | 26 |
+
+Track sets identical on both sides — **track structure and entrances are NOT the defect.**
+
+### Why this fits every symptom (auditor reading — CONFIRM BEFORE FIXING)
+
+The extra wait lands on **track 0, the root**. If the root pauses an extra ~7,680 ticks per loop and
+children do not, **tracks desynchronise at every loop boundary and the displacement compounds.**
+
+- Relative to a lagging root, child layers arrive **early** — the user's most consistent symptom
+  since the first build.
+- It **worsens over time**, matching "some parts arrive sooner than they should" better than any
+  global-rate theory.
+- It reconciles the one hard measurement: **aggregate dynamic range is correct (§55)** because notes
+  and levels are right — only *placement* drifts. **Drifted layers stacking reads as "louder."**
+  **One root cause, both symptoms** — exactly the user's own hypothesis.
+
+### ENGINE — the target
+
+**`Ja1Parser` handling at the backward-`jmp` loop point on the root track.** It consumes or emits one
+`wait` that an independent decode of the same bytes does not.
+
+Two checks first, in order:
+
+1. **Is the extra wait EXECUTED, or only LOGGED by the dump path?** A dump-only artifact is far less
+   serious than a playback one, and the fix differs completely. **Determine this before changing
+   parser behaviour.**
+2. **Why do the two parameters differ in shape?** `i_link`'s extra wait is `12480` — *identical to
+   the current tick* — while `house`'s is `7680`, *matching the preceding legitimate waits*. Those
+   are not the same pattern, and the difference may localise the fault further.
+
+### Auditor caveat
+
+**The divergence is factual and reproduces in both sequences.** The desync *mechanism* above is
+auditor interpretation of its consequence — and this auditor has produced **four confident wrong
+readings** on this problem (mixer interference, velocity exponent, DAC rate, frame clock). **Confirm
+the effect before fixing toward it.**
+
+### Method note — worth keeping
+
+Four hypotheses over many hours produced nothing. **Two independent decoders and one diff produced
+the target immediately.** Same lesson as B0's byte-identical regeneration: *when reasoning stalls,
+build a second implementation and diff it.* Applicable well beyond audio.
+
+---
+
+
+## §60 Engine response — loop-point wait is BMS song loop, not a phantom (2026-07-21)
+
+### Check 1 — executed or dump-only?
+
+**Both, for different reasons — and neither is a Ja1Parser inventing a wait.**
+
+Root song loops are literally:
+
+| BMS | bytes |
+|-----|-------|
+| `i_link` | `@69 wait 12480` → `@72 jmp 69` |
+| `house` | `@42 wait 7680` → `@45 jmp 42` |
+
+- **Live playback:** `cmdJmp` follows forever (WW). The wait at the target **runs every loop**. That is correct; do not strip it.
+- **§59 dump vs Bridge golden:** Bridge stops re-entry via `pc_call_seen` at the jmp target (never re-emits the wait). Engine dump had followed backward jmp **once**, so it re-emitted that wait — the “extra” row. Counts doubled (wait/note/jmp ≈ 2×) because the body ran a second pass.
+
+**Dump finite-policy aligned:** on backward jmp while dumping, emit `jmp` and stop the track (no re-entry). **Playback unchanged.**
+
+### Check 2 — why `12480` vs `7680`?
+
+Same shape: parameter = the wait opcode at the jmp target. i_link’s loop body *is* `wait 12480`, so after the first pass `tick == 12480` and the re-entry wait looks identical to the tick. house’s loop wait is `7680`.
+
+### Desync theory
+
+Auditor’s “root extra wait → children early” assumed a phantom wait. **Falsified for the dump divergence.** If timing symptoms remain after CSV parity, the target is elsewhere — not “remove the song-loop wait.”
+
+---
+
 ### Sources (§1)
 
 [The Fallout Wiki — Tale of Two Wastelands](https://fallout.wiki/wiki/Mod:Tale_of_Two_Wastelands) ·
 [The Best of Times — Installing TTW](https://thebestoftimes.moddinglinked.com/ttw.html) ·
 [The Best of Times — Introduction](https://thebestoftimes.moddinglinked.com/intro.html) ·
 [DSOGaming — TTW merges Fallout 3 into New Vegas](https://www.dsogaming.com/news/tale-of-two-wastelands-is-a-mod-that-seamlessly-merges-fallout-3-and-its-dlcs-into-fallout-new-vegas/)
+
+---
+
+## §61 SILENT-FAILURE AUDIT — all tools (Housing Security, 2026-07-21)
+
+**Origin.** History observed that WW's failure paths use `OS_WARNING` with Japanese text that never
+reaches the dusk log — "which is why we've seen nothing." User then widened the question from audio
+to **all tools**. This is that audit.
+
+**The generalised defect: a ported guard without a ported report is a silent failure.** The port
+inherited WW's guard *conditions* and dropped its guard *reporting*. Same shape as №31-B: verifying
+the input proves nothing about whether the check ran.
+
+### Measured — engine receiver (`DuskLog` calls vs bare early-returns)
+
+| file | DuskLog | bare-ret | ratio |
+|---|---:|---:|---:|
+| **`ja1_parser.cpp`** | **0** | **22** | **0.00** |
+| **`ja1_track.cpp`** | **0** | **5** | **0.00** |
+| `ja1_bank.cpp` | 10 | 25 | 0.40 |
+| `d_ext_seq_space.cpp` | 8 | 7 | 1.14 |
+| `d_ext_npc_mount.cpp` | 188 | 149 | 1.26 |
+| `d_ext_npc_population.cpp` | 10 | 9 | 1.11 |
+| `d_ext_npc_doors.cpp` | 37 | 40 | 0.93 |
+| `d_ext_mod_flags.cpp` | 10 | 10 | 1.00 |
+| `d_a_ext_vegetation.cpp` | 3 | 5 | 0.60 |
+| `d_a_knob00.cpp` | 16 | 11 | 1.45 |
+
+The receiver is broadly instrumented (~1.0). **`ja1_parser` + `ja1_track` are the outliers: 27
+silent early-returns, zero logging** — and they are precisely the two files that own the §60
+loop-point behaviour. Donor for comparison: `JASTrack.cpp` 25 guard sites, `JASSeqParser.cpp` 11.
+
+Note `JASTrack.cpp:977` — warns when track hierarchy exceeds 8 levels and an invalid track ID is
+generated. Adjacent to the §60 divergence. **Whether our port has that limit at all is unchecked.**
+
+### Measured — Bridge (`ww_bridge`, python)
+
+Comparatively disciplined: 86 `except` clauses, nearly all narrowly typed; **3 full swallows**
+(`day1_guard.py:112,140`, `space_report.py:110` — parse-skip inside loops, defensible).
+One broad `except Exception:` at **`arc_contents.py:88`** worth narrowing.
+
+### Measured — MY OWN GATE (two false-CLEAN paths, `ww_bridge/__main__.py cmd_gate`)
+
+Self-directed finding. The gate is the instrument my whole lane's reports rest on.
+
+1. **Empty greplist ⇒ GATE CLEAN.** `run_gate` returns `len(patterns)` and `cmd_gate` prints it,
+   but **nothing asserts it is non-zero.** An emptied / truncated / all-comment greplist yields
+   `patterns=0`, `hits=0`, `GATE CLEAN`, exit 0. The gate would pass an exe full of WW strings.
+   *This is the same class of bug as the CRLF false-CLEAN fixed 2026-07-19 — the fix hardened the
+   parser but not the caller.*
+2. **Silent greplist substitution.** When the sibling dusklight skeleton greplist is absent,
+   `cmd_gate` falls back to `package_root()/greplist.txt` — a **different file** — without saying
+   so. Output prints `exe=` but **never prints which greplist was used.** The gate can scan against
+   a stale/shorter list and report CLEAN with no way to tell from the output.
+
+**Proposed minimal fix (Bridge owns this code):**
+- fail with a distinct non-zero exit + `GATE INCONCLUSIVE` when `npat == 0`
+- print `greplist=<resolved path>` alongside `exe=` on every run
+- optionally: pin an expected minimum pattern count so silent shrinkage is caught
+
+### Rule proposed for the cookbook §0
+
+**№31-C — A CHECK THAT CANNOT RUN MUST REPORT `UNKNOWN`, NEVER `CLEAN`.** Green must prove the
+check executed, not merely that it found nothing. Corollary: any tool reporting a pass must also
+report *what it inspected* (path, count, version), so a pass is falsifiable from its own output.
+Companion to №31-B — that one says verify at the stage the player perceives; this one says a
+verification's silence is not evidence.
+
+### Standing on causality
+
+The §60 loop bug is **not** claimed to be caused by any of the above. Four prior hypotheses on this
+problem died. Silent guards explain **why we would not have seen** a failure; they do not establish
+that one occurred. Instrument first, then conclude — Engine confirms before anything is fixed toward.
+
+---
+
+## §61b Bridge response — gate №31-C + arc_contents narrow (2026-07-21)
+
+Tool **0.19.0**. Auditor self-finding on `cmd_gate` absorbed; no ferry needed.
+
+### Gate
+
+- `npat == 0` → **`GATE INCONCLUSIVE`**, exit **3** (never CLEAN).
+- Every run prints `greplist=<resolved path>` next to `exe=` / `patterns=`.
+- Smoke: empty/comment-only list → exit 3; live greplist → `patterns=16` + sibling skeleton path.
+
+### Optional
+
+- `arc_contents.py` `_load_arc_index`: `except Exception` →
+  `(OSError, AssertionError, struct.error, ValueError, IndexError)`.
+
+### Not done (auditor optional)
+
+- Pinned minimum pattern count — not required for the two false-CLEAN paths; add if HS asks.
+
+---
+
+
+## §60b Engine — re-dump MATCH + openTrack depth guard (2026-07-21)
+
+### Re-dump (finite-stream dump)
+
+`dusklight --extseq-dump <…/audio/ww_jaudio1>`
+
+| BMS | events | vs Bridge |
+|-----|-------:|-----------|
+| `i_link` | 5215 | **byte-identical** |
+| `house` | 1978 | **byte-identical** |
+
+§60 “extra wait” was dump re-entry vs Bridge `pc_call_seen`. With dump aligned, streams match. **If timing drift persists, it is a new target** — not the song-loop wait.
+
+### openTrack 8-level guard (JASTrack.cpp:977)
+
+Was missing. Now packs WW `field_0x36c` hierarchy id and **warns** when depth ≥ 8 (WW does not refuse the child). Independent of drift; low-cost fidelity.
+
+---
+
+
+## §62 Engine response — remainder-carry + clamp logs (2026-07-21)
+
+**Confirmed:** `tickOwned` used integer `(tempo×timebase)/1800` and discarded the remainder every frame. Diagnostic logged the true f32; playback did not.
+
+**Approach:** fixed-point remainder carry (same `/1800` target as the §58 log — not a DAC-rate change):
+
+```
+numer = tempo×timebase + remain
+steps = numer / 1800
+remain = numer % 1800
+```
+
+Long-run average matches `true_ticks/frame` (i_link ≈7.933, house ≈9.733).
+
+**Clamps:** `[1,48]` kept; first hit per `startOwned` logs `[ExtSeq] §62 tickOwned clamp LO/HI:…`. Neither fires for shipped songs.
+
+**User:** re-test. If drift persists with exact tick rate → resolution/mixing; “layers louder” is the remaining target.
+
+---
+
+
+## §C.1b Bridge response — seq-events set_param target+value (2026-07-22)
+
+Tool **0.21.0**. Bridge half of §C.1 landed so streams stay diffable when Engine's dump emit matches.
+
+```bat
+python -m ww_bridge seq-events
+```
+
+### Format (Engine must emit the same)
+
+| column | `set_param` meaning |
+|--------|---------------------|
+| `note_param` | param **target** (`flag`) decimal |
+| `velocity` | resolved value `data/32767.0` (6 dp); empty if reg-indirect |
+
+Replaces the old opcode-width dump (`0x9X`) that made volume invisible.
+
+### Headline (`i_link` 1140 `set_param`)
+
+| target | count | likely role (WW timed-param index) |
+|-------:|------:|--------------------------------------|
+| **0** | **1080** | volume (dominant) |
+| 2 | 24 | |
+| 1 / 3 / 4 | 12 each | |
+
+**Almost all `set_param` traffic is target 0.** Soft-layer balance is now readable from the golden
+stream.
+
+### §C.1 Engine — shipped (2026-07-22)
+
+Dump emit + `:252` first-hit warn landed. `--extseq-dump` → engine CSVs **schema/target MATCH** vs
+Bridge goldens (i_link 5215 / house 1978; set_param 1140 / 402). No OOB ≥18 (warn quiet on dump).
+23 velocity rows differ by ±1 ULP only (`0.543291` vs `0.543290`) — printf rounding, not decode.
+§C.2 remains dismissed for field; outer `mTrackVolumes` stays boss-lane.
+
+---
+
+### Sources (§1)
+
+[The Fallout Wiki — Tale of Two Wastelands](https://fallout.wiki/wiki/Mod:Tale_of_Two_Wastelands) ·
+[The Best of Times — Installing TTW](https://thebestoftimes.moddinglinked.com/ttw.html) ·
+[The Best of Times — Introduction](https://thebestoftimes.moddinglinked.com/intro.html) ·
+[DSOGaming — TTW merges Fallout 3 into New Vegas](https://www.dsogaming.com/news/tale-of-two-wastelands-is-a-mod-that-seamlessly-merges-fallout-3-and-its-dlcs-into-fallout-new-vegas/)
+
+## §61c Housing Security — Bridge 0.19.0 gate fixes INDEPENDENTLY VERIFIED (2026-07-21)
+
+Bridge reported the §61 fixes shipped. Housing Security does not accept "shipped" on report — the
+gate is the instrument this lane's every CLEAN rests on, so it was re-tested directly. `__version__`
+confirmed `0.19.0`.
+
+| test | expected | observed | |
+|---|---|---|---|
+| A. normal run | prints resolved `greplist=`, CLEAN | `patterns=16 exe=... greplist=...\tools\ww_crew_restoration_skeleton\greplist.txt` → `GATE CLEAN`, **exit 0** | PASS |
+| B. all-comment greplist | INCONCLUSIVE, never CLEAN | `GATE INCONCLUSIVE (0 patterns...)`, **exit 3** | PASS |
+| C. zero-byte greplist | INCONCLUSIVE, never CLEAN | `GATE INCONCLUSIVE (0 patterns...)`, **exit 3** | PASS |
+
+**Both false-CLEAN paths are closed.** A gate pass is now falsifiable from its own output: it states
+the pattern count *and* which greplist produced it, so a silently substituted or shrunken list is
+visible in the result rather than hidden behind a green word. Resolution correctly prefers the
+dusklight skeleton greplist (16 patterns), not the package fallback.
+
+**№31-C is now demonstrated, not just proposed** — still awaiting user ratification into cookbook §0.
+
+### §60 closure noted
+
+Engine's Check 1/2 resolve §60 as a **dump-side diff artifact**, not a defect: the "extra wait" is
+the BMS song-loop target (`i_link @69 wait 12480; jmp 69`, `house @42 wait 7680; jmp 42`), which live
+playback executes every loop — WW-correct. The engine dump followed the backward jmp once while
+Bridge's golden omits re-entry, producing the phantom row and ~2× counts. Fix is dump-only;
+`cmdJmp` playback untouched; **song-loop waits must not be stripped.**
+
+Housing Security note: §61 explicitly declined to attribute the loop bug to silent guards. That
+caution was correct — the guards were never implicated. The instrumentation gap in `ja1_parser` /
+`ja1_track` (27 silent returns) remains real and worth closing on its own merits, but it is **not**
+the audio drift and must not be pursued as though it were. If the re-dumped CSVs match and drift
+persists, the next target is elsewhere by Engine's own statement.
+
+---
+
+## §62 AUDIO — Check D clears the supply; arithmetic defect found in `tickOwned` (Housing Security, 2026-07-21)
+
+### Part 1 — CHECK D (audio twin invariant, №28 B10): PASS at every reachable level
+
+| artefact | donor | shipped | result |
+|---|---|---|---|
+| `n2i_link_0.aw` | 73,664 b | 73,664 b | **md5 identical** `bf702fb8…` |
+| `n_zelda_0.aw` | 925,760 b | 925,760 b | **md5 identical** `6dcbf41a…` |
+
+Donor root: `D:\XXXXXXX\Ex WW\files\Audiores\`. Stronger than the invariant requires — it demands
+byte-size identity; these are byte-identical.
+
+**Slices also verified** (a *shaping* stage, per №31-B — extraction can corrupt what copying cannot).
+Each shipped slice was searched for verbatim in the 540,416-byte donor `JaiInit.aaf`:
+
+| slice | size | tag | donor offset | occurrences |
+|---|---:|---|---|---:|
+| `ibnk_0.bin` | 8,288 | `IBNK` | `0x009b30` | 1 |
+| `ibnk_21.bin` | 2,208 | `IBNK` | `0x00fdb0` | 1 |
+| `wsys_0.bin` | 5,888 | `WSYS` | `0x0473b0` | 1 |
+| `wsys_2.bin` | 1,216 | `WSYS` | `0x04cb70` | 1 |
+
+All four are **exact, unique sub-ranges** — no boundary error, no truncation, no modification.
+
+**Consequence — this is the useful part:** combined with Engine's byte-identical event streams
+(`i_link` 5215 / `house` 1978), **the entire supply chain is now proven pristine.** Donor bytes,
+extraction, slicing, and event decode all verify. **Every remaining audio defect is receiver-side:**
+tick→time conversion, wave/program resolution, or mixing. The content lane is eliminated from this
+investigation and should not be re-searched.
+
+### Part 2 — CONFIRMED ARITHMETIC DEFECT: `d_ext_seq_space.cpp:279` truncates the tick advance
+
+```cpp
+steps = static_cast<u32>((s_root.getTempo() * s_root.getTimebase()) / 1800);  // INTEGER division
+if (steps < 1)  steps = 1;
+if (steps > 48) steps = 48;
+```
+
+**Integer division, and the discarded remainder is never carried.** There is no fractional
+accumulator, so the sub-tick fraction is destroyed *every frame* rather than accruing into the next.
+
+Computed against the **actual shipped `tempo_map.csv`** (not hypothetical values):
+
+| bms | tempo | timebase | true ticks/frame | played | error |
+|---|---:|---:|---:|---:|---:|
+| `i_link` (Outset ext.) | 119 | 120 | **7.933** | **7** | **−11.8 %** |
+| `house` (Grandma's) | 146 | 120 | **9.733** | **9** | **−7.5 %** |
+
+Both songs are single-tempo, so within a song this is a constant rate error, not internal drift —
+but the two songs are wrong by **different amounts**, and 11.8 % is a large, plainly audible tempo
+error (~14 s of displacement over a two-minute loop).
+
+**Why this survives the earlier refutations.** The "frame clock" hypothesis died on the user's point
+that dusklight's high FPS is interpolated — that killed *"high FPS plays it fast."* **This is
+independent of frame rate:** at a perfect 60 fps the truncation is identical. It also does **not**
+descend from the DAC-rate line Engine fenced off at `d_ext_seq_space.cpp:236-242` (§58) — it is
+arithmetic in the integer path, not a claim about clock domains. The fence is respected.
+
+**Note the two-path structure**, which is №31-C's corollary appearing in live code: the diagnostic
+block at `:243-266` computes `ticksPerFrame` as **`f32`** — the correct fractional value — and logs
+it. The playback path at `:279` uses the truncated integer. **The rate that is reported is not the
+rate that is played.**
+
+### Part 3 — two silent guards in the same function (§61 class)
+
+`steps` is clamped to `[1, 48]` with **no log on either bound**. Neither fires for these two songs
+(7 and 9), so **not implicated here** — but any sequence with `tempo × timebase > 86,400` (e.g.
+timebase 480 @ tempo 180) silently caps and plays slow with no trace. Same defect class as §61.
+
+### Honest limits on this finding
+
+- The defect and its magnitudes are **arithmetic fact**, computed from shipped data.
+- **Direction is SLOW.** The user reported "some parts arrive *sooner* than they should." A uniform
+  −11.8 % makes everything arrive *later*. **The direction does not obviously match**, and four
+  prior hypotheses died on exactly this kind of over-fitting of mechanism to symptom.
+- This finding therefore stands as **a real defect that must be fixed regardless**, and only
+  **possibly** the drift the user hears. It does not explain "some layers sound louder."
+- **Engine adjudicates.** Housing Security reports; it does not design the fix.
+
+**ENGINE ASK:** confirm the truncation, decide the remainder-carry approach, and log both clamps.
+Then re-test — if drift persists after the tick rate is exact, the remaining symptom is isolated to
+resolution/mixing, and "layers louder" becomes the sole target.
+
+---
+
+## §63 ANIMATION PORT READINESS — supply complete, addressing is the blocker (Housing Security, 2026-07-21)
+
+User asked, ahead of the cutscene test, whether animations can be ported now. Housing Security does
+not build this — the answer below is porting-policy scope: **what is housed, and what blocks use.**
+
+Run: `ww_bridge anim-ledger --mod-root <mod> --decomp-root "D:\XXXXXXX\WW DP"` →
+`arcs=34 headers=32 missing_arcs=0 orphan_arcs=2`, exit 0, `SUGGEST NEVER FILL` respected.
+
+> **Root gotcha:** anim-ledger wants the **decomp source** (`D:\XXXXXXX\WW DP`), *not* the disc
+> extract (`D:\XXXXXXX\Ex WW`). Given the extract it fails with `missing …\include\d\d_stage.h`.
+> It failed **loudly and named the missing file** — №31-C behaving correctly in the wild.
+
+### Supply: COMPLETE. Nothing to port.
+
+Across all 34 arcs: **`missing = 0`, `orphaned = 0`, `present == slot_count` everywhere.**
+
+| arc | slots | present | bound |
+|---|---:|---:|---:|
+| `Bm` | 69 | 69 | **2** |
+| `Zl` | 43 | 43 | **2** |
+| `Bb` / `Ko` | 33 | 33 | 2 / 4 |
+| `P2` | 31 | 31 | **1** |
+| `Ls` | 28 | 28 | 2 |
+| `Ba` | 22 | 22 | 2 |
+| `Kb` / `P1` | 20 | 20 | 1 / 2 |
+| `Ym` | 15 | 15 | 4 |
+| `Kamome` | 14 | 14 | 2 |
+
+**The animations are already ported.** ~370 animation slots are present on disk.
+
+### The actual blocker: the binding vocabulary, not the data
+
+Every `notes` field binds only `idle` and `talk1` (a few add `.brk`/`.btk`). **`Bm` has 69
+animations and binds 2 of them.** This is the same constraint the Outset README §2 recorded from a
+different direction: *"the whole behaviour vocabulary is three manifest keys (`idle`, `talk1`,
+`dialogue`)."* Two independent findings, one cause.
+
+So "can we port animations" resolves to a better question: **the port is done; there is no way to
+address what was ported.** A cutscene needs to drive *named* animations on *specific* actors at
+*specific* times — precisely the addressing the manifest schema does not express. **The cutscene
+test will be limited to `idle`/`talk1` regardless of what the arcs contain.**
+
+### `WwAlways` / `WwDalways` — checked, NOT what the name suggests
+
+The ledger flags these as the only two orphan arcs (55 members, `no_res_header`). They are the mod's
+namespaced copies of the donor's `Object\Always.arc` / `Dalways.arc` (present verbatim in
+`arcs_lib/`; the `Ww` prefix is applied on the `arcs/` copies).
+
+**IVAN RULE check performed before characterising them.** `WwAlways`/`WwDalways` appear **nowhere in
+the WW decomp source** — they are our names, not WW's. Reading actual members:
+
+- `Always.arc` (546,688 b) — 31 `bdl`, 30 `bti`, 16 `bck`, 12 `btk`, 8 `brk`: `vbell.bck`,
+  `mpm_tubo.btp`, `mpi_kibako_taru.btp`, `mpa_simi.brk`, `obm_syougekisw.bck`
+- `Dalways.arc` (256,704 b) — `boxopenbox.bck`, `boxopenshortbox.bck`, `it_takara_flash.bck/.brk`,
+  `box_shadow.brk`, `boxa/b/c.brk`
+
+**These are prop and effect libraries — treasure chests, pots, crates, bells, switches. They are NOT
+character or cutscene animation banks.** Housing Security's first instinct was that "Always" meant
+the shared demo-animation archive; that was a name-based inference of exactly the kind that produced
+the `IsleLink_0.aw` IVAN violation in §47, and it was **wrong**. Recorded so no one re-derives it.
+
+Their `no_res_header` status is therefore **expected, not a defect** — they are libraries with no
+per-actor enum header, not actors missing one. **Do not open work to "fix" it.**
+
+### Lane assignment
+
+- **Bridge + Engine (joint):** the gap is manifest-schema expressiveness — a way to name an arbitrary
+  animation member per actor, and a consumer that can drive it. Neither half is useful alone.
+- **History:** cutscene authoring is blocked on the above; per-actor animation *choice* is content.
+- **Housing Security:** no covenant issue found. Supply is housed correctly; `arcs_lib/` holds donor
+  names verbatim and `arcs/` holds the `Ww`-prefixed copies. Nothing leaks.
+
+## §63b CORRECTION — §63's cutscene conclusion was WRONG (Housing Security, 2026-07-21)
+
+**History is right; I retract the §63 conclusion.** It was based on an unexamined assumption and it
+was heading straight for doctrine.
+
+**What I claimed (§63):** "A cutscene needs to drive *named* animations on *specific* actors at
+*specific* times — precisely the addressing the manifest schema does not express. The cutscene test
+will be limited to `idle`/`talk1` regardless of what the arcs contain."
+
+**What is actually true.** The demo path **never consults manifest keys.** Per `d_demo.cpp:364-382`,
+it resolves by **resource index**:
+
+```cpp
+if (anmID & 0x10000) a_name = getDemoArcName();          // Demo02
+i_key = dComIfG_getObjectIDRes(a_name, anmID & 0xffff);  // by RESOURCE INDEX
+```
+
+History verified against our own ported arc rather than assuming: Aryll's JACT commands decode as
+`00010043` / `00010045` — bit `0x10000` set, indices `0x43`/`0x45` — and resolving those in
+`arcs/Demo02.arc` lands on `47_ls_bwait_l.bck` / `47_ls_kyoro_l.bck`, with matching `.btp` at
+`0x39`/`0x3A` and `.btk` at `0x4C`/`0x4F`. **They hit the right files by name, so our port preserved
+the donor's resource ordering.**
+
+**The three-manifest-key wall is real for behaviour and irrelevant to cutscenes.** They are two
+different resolution paths and I collapsed them into one.
+
+**Practical consequence, and why this mattered:** I told the user to expect a flat cutscene and to
+read it as *expected*. That is the opposite of correct — **a flat animation result in the cutscene
+is a REAL FAULT worth chasing.** Had this stood, it would have trained us to dismiss the exact
+symptom that indicates a defect. Corrected before the test, not after.
+
+**Method note against myself.** §63 checked `WwAlways` properly (IVAN RULE, decomp-verified) and
+then, in the same document, asserted the cutscene limitation **without checking the demo path at
+all** — the ledger data was measured, the conclusion drawn from it was assumed. Measuring one claim
+carefully does not immunise the next one in the same breath. №31-C's spirit applies to reasoning,
+not only to tools: **an unchecked inference is not a result.**
+
+**Library inventory recorded** (user request): `docs/WW Linked/shared-libraries.md` — full 137-member
+listing of `Always.arc` / `Dalways.arc`, with a cross-reference table to open work items
+(suspender-rope textures, Vlupy + pickup family, sun/moon for the lighting-grass problem, sea/wave
+surface, full treasure-chest set incl. 7 collision `.dzb`). Marked as a search index, not identity
+claims; №31 still governs use.
+
+---
+
+## §64 AUDIO — "layers louder": a zero-variance field worth one question (Housing Security, 2026-07-21)
+
+With supply proven pristine (§62 Check D) and the tick rate now fixed by Engine, "some layers sound
+louder than they should be" is receiver-side. One measurement from the shipped
+`ibnk_initvol.csv` (111 rows, `phys_ibnk` 0 ×103 / 21 ×8, 36 distinct programs):
+
+| column | distinct values | distribution |
+|---|---:|---|
+| **`inst_volume`** | **1** | **`1.000000` × 111** |
+| `vel_vol_scale` | 3 | `1.0`×107, `0.850394`×2, `0.803150`×2 |
+| `resolved_init_vol` | 3 | `1.0`×107, `0.850394`×2, `0.803150`×2 |
+| `pitch_scale` | 4 | `1.0`×106, `0.125`×3, `3.563595`×1, `3.174802`×1 |
+
+**The asymmetry is the finding, not the constant.** `inst_volume` has **zero variance across every
+instrument in both banks**, while neighbouring fields decoded from the same structures show real
+variation (3 and 4 distinct values, including non-round numbers that look like genuine decoded
+floats). A decoder that finds varying data in adjacent fields but a single constant in this one is
+worth one question.
+
+**Two readings, and I cannot distinguish them from this data:**
+
+1. **WW genuinely sets every instrument volume to 1.0**, balancing entirely via velocity and
+   sequence volume. Entirely plausible; several banks normalise this way.
+2. **The decoder is not locating the instrument-volume field** and is falling back to a `1.0`
+   default.
+
+**No claim is made as to which.** Reading (2) would fit the reported symptom well — flat instrument
+volume means per-instrument balance collapses to velocity alone, which is exactly "some layers
+louder than they should be" — and that is *precisely* the reason not to assert it. Four hypotheses
+on this problem died from fitting mechanism to symptom, and §63 died from an unchecked inference
+one paragraph after a carefully checked one.
+
+**Note also:** if reading (1) is true, that is *equally useful* — it eliminates instrument volume
+and moves the mixing question elsewhere. Either answer narrows the search, which is why the question
+is worth asking before anything is built.
+
+**BRIDGE ASK.** Bridge owns the IBNK decoder. Confirm whether `inst_volume` is genuinely constant in
+the donor bytes or is a decode fallback. **Suggested method: the one that already cracked this
+problem** — ASK 17 resolved the sequence question immediately, after four failed hypotheses, via two
+independent decoders and one diff. A second independent read of the instrument-volume field against
+the raw `ibnk_0.bin` / `ibnk_21.bin` (both verified in §62 as exact donor sub-ranges, so the input
+is trustworthy) would settle it the same way.
+
+**Not an engine ask yet.** Nothing should be changed in the mixer on the strength of this. It is a
+question about a decoder, and the answer determines whether there is an engine ask at all.
+
+**Scope note:** the CSVs (`ibnk_initvol`, `bank_programs`, `bank_waves`, `tempo_map`, `vel_*`) are
+Bridge *report* outputs, not runtime inputs — verified unreferenced anywhere in `src/`/`include/`.
+That is **expected and not a defect**; they are goldens for offline diffing. Recorded so the
+zero-reference result is not later mistaken for a §61-class "shipped but never read" finding.
+
+---
+
+## §64b Bridge response — ibnk-vol-check: reading (1) CONFIRMED (2026-07-21)
+
+Tool **0.20.0**. ASK pattern from §64 / ASK 17: two independent readers, one diff. No shared code
+with `vel_calib` / `bank_map`.
+
+```bat
+python -m ww_bridge ibnk-vol-check
+```
+
+### Methods
+
+| | how |
+|---|---|
+| A | BANK inst-offset table → `INST+8` be-f32 (WW `TInst::field_0x8`) |
+| B | naive `b'INST'` scan → `+8` be-f32 |
+
+Both methods agree on every INST offset and every byte.
+
+### Result
+
+| slice | INST count | `+8` raw hex | unique vols |
+|---|---:|---|---|
+| `ibnk_0.bin` | 36 | **`3f800000`** only | **1.0** |
+| `ibnk_21.bin` | 7 | **`3f800000`** only | **1.0** |
+
+**Reading (1) confirmed:** WW sets every instrument volume in these Outset banks to literal
+`1.0f`. The ASK 15 `ibnk_initvol.csv` column is **not** a decode fallback.
+
+Adjacent Vmap+8 `vel_vol_scale` still varies (`1.0` / `0.850394` / `0.803150`) — the reader is on
+the right structure; only INST volume is constant.
+
+### Consequence
+
+Soft-layer balance is **not** explained by missing per-INST volumes in these banks. Eliminates
+instrument-volume as the "layers louder" cause for this supply. Mixer / sequence-volume /
+wave loudness remain engine-side if the symptom persists after §62 tick carry.
+
+### Artifacts
+
+`ibnk_vol_check.csv` · `reports/ibnk_vol_check.md`
+
+---
+
+## §65 STRATEGY — would DuskScript (code-mods) help the WW restoration? (Housing Security, 2026-07-21)
+
+User question. Answered against `docs/Code-Mods-Research.md` (read, not recalled), sorting it
+against the problems that have **actually cost us time**, not the ones it sounds like it addresses.
+
+### Where it would NOT help — most of the audio work
+
+| problem | why DuskScript is the wrong tool |
+|---|---|
+| `tickOwned` `/1800` truncation (§62) | C++ per-frame audio path, integer arithmetic. The design's own §7 mandates the **whole** script tier fit ~0.2 ms at 144 fps and that "most mods should never register `frame` at all." Driving sequence ticking from Lua is the opposite of that discipline. The defect was arithmetic, not architecture — a script layer would have inherited it. |
+| `inst_volume` decode question (§64) | offline Python in Bridge. No runtime component at all. |
+| BMS event-stream decode (ASK 17 / §60) | offline. |
+| census defects — 24 `PLYR` spawns, zeroed rotations (§12/§42) | Bridge data pipeline. |
+| silent guard sites (§61) | a discipline problem, not an architecture one — **and a script tier adds a new silent-failure surface rather than removing one.** |
+
+**Audio is essentially untouched by this.** Worth saying plainly, because "would the plugin work help"
+most naturally reads as "would it help the thing currently hurting," and there the answer is no.
+
+### Where it would genuinely help — and it is the *better* answer to a wall we already documented
+
+**The three-manifest-key behaviour wall.** The Outset README §2 recorded the constraint and named two
+ways out: *"richer behaviour needs either schema growth or a ported actor driving states itself."*
+
+**DuskScript §4.4 is a third and better option:** `d_a_script`, one generic C++ actor registered once,
+trampolining `create/execute/draw2D/delete` into per-mod Lua handlers. That is "an actor driving
+states itself" **without porting an actor per WW folk code.** Against 43 minimal/inert actors on
+Outset alone, that changes the arithmetic of the whole content lane.
+
+The v0 API already contains most of what the restoration specifically needs:
+
+- `actors.spawn(name, pos, rot, params)` via `fopAcM_create` → population
+- `dialogue.show(...)` → reuses the existing NPC dialogue workflow → folk dialogue
+- `flags.event(bit)` / `flags.set_event` → **story layers ACT0–ACTb**, which are exactly quest flags
+- `audio.se` / `audio.bgm` → per-space audio triggering
+
+**`placements.json` (§4.4b) is the same shape as our population problem.** An additive stage-placement
+file merged after DZR parse, mergeable across mods and load-ordered, is a general form of what the
+census/manifest pipeline does by hand today. **Suspected convergence, not proven** — nobody has
+compared the two schemas. If they converge, that is a significant consolidation; if they don't, the
+overlap is still worth knowing before either is extended.
+
+### THE COVENANT PROBLEM — and this is the part that must be settled before it is built
+
+**A script tier is both a new shaping stage and a new distribution surface. №31-B says shaping stages
+are where purity dies.** Three concrete gaps, none covered by any gate we currently run:
+
+1. **`actors.spawn` routes around №31 entirely.** Space purity is enforced today by manifest and
+   census discipline — content reaches a space through a pipeline we audit. A script calling
+   `actors.spawn(name, pos)` can place **any actor in any space at runtime**, with no manifest, no
+   census row, and no audit point. **This is not a hypothetical: it is the literal mechanism №31
+   exists to prevent**, reintroduced at a layer below where the law is enforced.
+2. **The greplist gate (M5a/M6) scans the exe. It does not scan a mod package.** If DuskScript mods
+   are distributable, a mod can carry WW strings, names, or bytes and pass every check we have.
+   The Receiver Covenant would have a hole the size of the entire mod format.
+3. **New silent-failure surface (§61 class).** Load-time failure has a panel badge per the design,
+   but per-frame script errors, budget overruns, and clamped handlers need §31-C treatment from day
+   one — a mod that silently stops running must not look like a mod that is running fine.
+
+**None of these are arguments against building it.** They are three gate specifications that are
+cheap to write now and expensive to retrofit after a mod format ships and third parties depend on it.
+
+### Open practical question
+
+The WW restoration is a **fork**; the bridge tool was deliberately placed outside the main project
+for that reason. `Code-Mods-Research.md` lives in this repo, but **whether DuskScript would be
+available to the fork, or would require the restoration to rebase onto main, is unestablished** and
+materially changes the answer. **Flagging, not assuming.**
+
+### Recommendation
+
+**No for audio and the tooling problems. Yes — strongly — for the behaviour wall and story layers**,
+where it beats both options previously identified. **Conditional on the three covenant gates above
+being specified before the mod format is fixed**, since gate 1 (`actors.spawn` vs №31) is a genuine
+conflict between two designs that were written without reference to each other.
+
+**Lane note:** Housing Security specs gates; it does not design or build the script tier. Gates 1–3
+are Housing Security's to write when the user wants them. The convergence question
+(`placements.json` vs the census/manifest schema) is Bridge's.
+
+---
+
+## §66 AUDIO — "layers louder": we are blind in exactly the place the symptom points (Housing Security, 2026-07-21)
+
+Bridge settled §64 (`inst_volume` genuinely `3f800000` on every INST, two independent readers, tool
+0.20.0). **That is a useful elimination:** with per-instrument volume flat at 1.0, WW's soft-layer
+balance must come from velocity, **track-level param events**, or envelopes. This section follows the
+middle one.
+
+### What the stream contains
+
+From the now byte-identical `seq_events_i_link.csv` (5215 events) / `_house.csv` (1978):
+
+| event | i_link | house |
+|---|---:|---:|
+| `wait` | 2508 | 875 |
+| **`set_param`** | **1140** | **402** |
+| `note_on` / `note_off` | 731 / 731 | 314 / 314 |
+| `open_track` | 12 | 6 |
+
+`set_param` is the second-largest event class and the only plausible carrier of per-track volume.
+Opcode variants present: `0x9C` ×1091, `0x98` ×37, `0x9A` ×12, spread across 12 tracks.
+
+### Two things VERIFIED CORRECT (both checked against the donor, not assumed)
+
+1. **Dispatch and application are present.** `0x9x` → `cmdSetParam(track, flag & 0xF)` →
+   `track->setParam(flag, data/32767.0f, val)`. Not a silent drop at this level.
+2. **`cmdSetParam` is byte-faithful to the donor.** Compared line-for-line against
+   `WW DP/src/JSystem/JAudio/JASSeqParser.cpp:751-793`. The `case 4` raw-byte read that looked like
+   a scaling defect (`byte / 32767` ≈ 0, vs `case 8`'s `byte<<8|byte<<1` expansion) is **WW's own
+   behaviour, identical in the donor.** Not a port defect. *This would have been hypothesis six;
+   it died on inspection before it was reported as anything.* `case 4` (`0x94`–`0x97`) is also not
+   exercised by either song — `0x9C`→case 12, `0x98`/`0x9A`→case 8, all correctly scaled.
+3. **`TIMED_PARAMS = 18` is correct.** Counted against the donor's `TTrack` layout: `mVolume`,
+   `mPitch`, `mFxmix`, `mPan`, `mDolby`, `_50`, `mOsc0{Width,Rate,Vertex}`,
+   `mOsc1{Width,Rate,Vertex}`, `mIIRs[4]`, `_100`, `_110` = **18.** No bound mismatch.
+
+### What is WRONG — §61's thesis, in the volume path exactly
+
+**`ja1_track.cpp:252`**
+```cpp
+if (target >= TIMED_PARAMS) { return; }   // silent
+```
+**Donor, `JASTrack.cpp:814-816`**
+```cpp
+JUT_ASSERT(1236, target >= 0);
+JUT_ASSERT(1237, target < TIMED_PARAMS);  // reports
+```
+
+**The bound was ported. The report was not.** WW raises on an out-of-range param target; we discard
+the write and continue. This is the precise defect class History identified and §61 documented —
+now located in the one function that sets track volume.
+
+### The instrumentation gap that blocks the diagnosis
+
+`cmdSetParam` reads the param **target** into `flag` as its first byte, then emits to the dump:
+
+```cpp
+std::snprintf(buf, ..., "0x%02X", 0x90 | (param_2 & 0xF));   // the OPCODE VARIANT
+dumpEmit("set_param", buf, "");                              // target `flag` NOT emitted
+```
+
+**The dump records the opcode width-mode and discards which parameter was set.** So we have 1140
+`set_param` events and **no way to tell which are volume, pan, pitch, or oscillator** — and no way
+to tell whether any were silently dropped at `:252`.
+
+**We are blind in exactly the place the symptom points.** Both halves are one-line fixes to one
+function.
+
+### ENGINE ASK (dump/log only — no behaviour change, same shape as the §60 fix)
+
+1. Emit the param **target** (`flag`) and the resolved value in the `set_param` dump row.
+2. Log the `target >= TIMED_PARAMS` drop at `ja1_track.cpp:252` — first-hit warn, matching the
+   treatment already applied to the `[1,48]` tick clamps.
+
+### BRIDGE ASK
+
+Mirror (1) in `seq-events` so the two streams stay diffable. **The paired-decoder-plus-diff method
+is what settled ASK 17 and §64;** with the target field present on both sides it is directly
+applicable to the volume question.
+
+### Standing caveat
+
+**No claim that the silent drop is firing.** It may never trigger for these two songs — that is
+precisely what cannot currently be known, and why the ask is instrumentation rather than a fix.
+Five hypotheses have died on this problem and a sixth died inside this section. **Measure, then
+conclude.**
+
+---
+
+## §67 REHOMING SWEEP + RECEIVER-AGNOSTICISM AUDIT (research only, Housing Security, 2026-07-21)
+
+User question, three parts: (1) is the receiver truly WW-agnostic, or curated specifically for WW?
+(2) if curated, is that in line with TTW? (3) does it seep into legality? Answered from source
+evidence, not posture. **No code changed.**
+
+### Part 1 — Is the receiver WW-agnostic? STRUCTURALLY YES. WW is a *tenant*, not *built-in*.
+
+Seven sweeps across `src/`, `include/` for WW knowledge baked into the exe:
+
+| what was searched | result |
+|---|---|
+| WW stage names (`sea`/`Outset`/`LinkRM`/`Ojhous`/…) as code literals | **none** |
+| mod-folder name `WW-Crew-Restoration` anywhere in source | **0 occurrences** |
+| island/BG table hardcoding a WW folder | **none** — no static island table exists |
+| how `modFolder` gets its value | **`modRoot.filename().string()`** — the on-disk directory name, whatever it is (`d_ext_npc_mount.cpp:2948`) |
+| what folders are scanned | **every** directory under `model_replacements/`, manifest-driven (`:2942`) |
+| demo/cutscene arc name | **`dStage_roomControl_c::getDemoArcName()`** — data-driven from room control, no WW literal |
+| socket→actor map (`NPC_MK`/`NPC_P2`/`NPC_HENNA0`/`NPC_KDK`) | **TP-native host enums** — defined in `include/f_pc/f_pc_name.h`, the TP decomp's own actor table. The receiver enumerates the *host's* sockets, not the donor's. |
+
+**The core is a generic tenant-loader.** It discovers folders on disk, reads manifests for
+proc/socket/arc/dialogue/flags, and mounts against **TP's own** actor sockets. A Majora's-Mask or
+any other restoration would use the identical machinery with a different mod folder — the receiver
+would never know the difference. This is the TTW-correct shape (§0 of the prior-art analysis: *"it is
+one-way; nobody mods the host to make the tenant work"*). The receiver does not mod toward WW; WW
+supplies data into a generic surface.
+
+### Part 2 — The ONE real seepage, and it is minor
+
+`d_ext_seq_space.cpp:356-357`, inside the `§60b` CLI dump routine:
+```cpp
+const Item items[] = {
+    {"i_link", "seq_events_engine_i_link.csv"},
+    {"house",  "seq_events_engine_house.csv"},
+};
+```
+`i_link` and `house` are **WW sequence stems**, hardcoded in the shipped binary. This is the *only*
+WW proper-noun string literal in runtime engine code — a final net over `d_ext_*.cpp` / `ext_seq/` /
+`d_demo.cpp` returned nothing else (the two other hits, `"LinkRM"` at `:1606` and `"Arylls"` at
+`:93`, are **comments**, not code).
+
+**Severity: low, but real.**
+- It is a **diagnostic** path (developer BMS→CSV dump), not gameplay. It does not shape player output.
+- File-name stems are functional identifiers, not creative content — the weakest possible covenant
+  category. But the covenant text is literal: *"no WW file names"* in the exe.
+- **It is NOT gated and NOT adjudicated.** `greplist.txt` does not list `i_link`/`house`, and its
+  EXEMPT block does not mention them. So it is an *un-tracked* exception, which is the part worth
+  fixing — not the byte, the blind spot.
+
+**Proposed minimal fix (Engine owns the code; routed via user):** parameterise the two stems from
+the package `manifest.ini` (the dump already receives `packageRoot`), so the engine carries no WW
+seq names at all. Failing that, add both to the greplist EXEMPT block with the §60b rationale so the
+exception is *adjudicated* rather than silent. Either satisfies the covenant; the first is cleaner
+and makes the dump work for any future tenant's sequences.
+
+### Part 3 — Legality: byte-clean and TTW-aligned; two softer items are branding, not containment
+
+**I am not a lawyer; this separates containment fact from questions that are the user's to decide.**
+
+1. **Copyright — asset bytes: CLEAN.** Zero WW asset bytes in the exe; all WW content lives in the
+   mod folder, greplist-gated, never committed (§62 Check D proved the payload is pristine *and*
+   housed). This matches the TTW model our own analysis recorded — *"convert on the player's
+   machine, distribute zero Nintendo assets"* (bus §377) — and is arguably **stricter**: TTW ships
+   an installer that merges assets the user owns; dusklight ships an engine that never contains the
+   assets at any stage.
+
+2. **Copyright — file names (`i_link`/`house`): negligible legal risk.** Short functional names are
+   not copyrightable. This is a covenant-hygiene item (Part 2), not a legal exposure.
+
+3. **Trademark — "Wind Waker" as UI labels** (`editor.cpp` "Wind Waker Item Viewer" / "Wind Waker
+   Skins"; `mods.cpp` "Wind Waker gear"): these ship in the exe. **This is already adjudicated** —
+   the greplist EXEMPT block explicitly lists the "Wind Waker Item Viewer" UI and the WW-Skins
+   sections as accepted. Nominative use of a mark to name what a feature is *for* is the ordinary
+   modding-scene posture, and it is **consistent with TTW**, which uses "Fallout 3" throughout its
+   own UI and name. This is a **branding decision that belongs to the user**, distinct from
+   byte-containment, and Housing Security does not adjudicate it — only notes it is present,
+   deliberate, and prior-art-aligned.
+
+4. **The actual legal foundation is the TP decomp fork itself** — shared by *all* of dusklight, not
+   introduced or worsened by the WW work. WW containment is orthogonal to it: tightening or loosening
+   the covenant does not move that baseline. Naming it so the WW audit is not mistaken for the
+   project's whole legal surface.
+
+### Verdict
+
+**The receiver is genuinely WW-agnostic**; WW is data flowing into a generic tenant-loader that
+speaks only to TP's own sockets. **One un-adjudicated seepage** (`i_link`/`house` dump stems) —
+minor, diagnostic, fixable by parameterisation. **Byte-containment is TTW-aligned or stricter.** The
+"Wind Waker" UI strings are an already-accepted, prior-art-consistent branding choice, not a
+containment breach.
+
+### Lane assignment
+
+- **Engine:** parameterise `d_ext_seq_space.cpp:356-357` stems from `manifest.ini` (preferred), OR
+  accept the greplist-EXEMPT route. Small, either way. Routed via user.
+- **Housing Security (me):** fold `i_link`/`house` into the greplist decision now (EXEMPT-with-note
+  is the interim covenant-correct state until Engine parameterises). This also feeds the standing
+  **§43 marker-class gate** work — the gate should eventually flag *un-adjudicated* WW literals like
+  this one, not only forbidden-name hits. This audit is exactly the case §43 exists to catch
+  automatically.
+- **Bridge:** nothing.
+- **History:** nothing — no content/identity implication.
+- **User:** the trademark-label posture (Part 3.3) is yours to affirm or change; it is deliberate and
+  prior-art-aligned, and is flagged for awareness, not because anything is wrong.
+
+---
+
+## §68 AUDIO — the channel-mask lead, traced end to end (Housing Security, 2026-07-21)
+
+User forwarded a WW-community discussion: `JAIZelBasic::bgmMute` applies **per-channel mute masks** to
+sequences (Jalhalla example: mask `0xFFFFFFDF` disables channel 6), suggesting "layers louder than
+they should be" = channels WW mutes that our port plays. Traced every link against the decomp and our
+own port. **The lead is real and valuable — but not for i_link/house.**
+
+### What `bgmMute` actually is: BOSS channel-masking
+
+In `WW DP/src/JAZelAudio/JAIZelBasic.cpp` the mute family is entirely boss/event-scoped:
+`mbossBgmMuteProcess` (802A5818), `bgmMuteMtDragon` (Gohma/dragon), and
+`bgmMute(&mpSubBgmSound, JA_BGM_SEA_ENEMY, …)`. The mask is applied by the **boss actor** at a
+gameplay event (the community's own trace: `torituki_execute` in `d_a_bpw.cpp` mutes/unmutes
+xylophone vs glockenspiel channels when Jalhalla possesses Link) from a per-BGM-ID mask table.
+**This is dynamic, boss-driven, and lives above the sequence.**
+
+### Why it does NOT explain i_link/house (verified, not assumed)
+
+1. **Field music has no `bgmMute` path.** i_link (Outset ext.) and house (Grandma's) are not bosses;
+   nothing invokes the mute family for them.
+2. **Their streams contain zero channel-layer commands.** Every exotic opcode in both dumps:
+
+   | stream | present exotic opcodes |
+   |---|---|
+   | i_link | `E6`×26, `E7`×12, `F4`×3 |
+   | house | `E6`×32, `E7`×6, `F4`×2 |
+
+   Decoded against WW's 64-entry `sCmdPList` (`JASSeqParser.cpp:15`, index = opcode−0xC0):
+   **`E6` = `cmdVibDepthMidi`, `E7` = `cmdSyncCPU`, `F4` = `cmdVibPitch`.** Vibrato and CPU-sync.
+   **No `outSwitch` (0xDB), no `volumeMode` (0xF3), no envelope (0xD6/0xD7), no channel mask.**
+   The layer-control mechanisms the community described are simply **not in these two tracks.**
+
+### Verified GOOD NEWS: no stream desync (the scariest hypothesis, dead on arrival)
+
+Our port implements ~12 of 64 commands directly and nops the rest — but it mirrors WW's `Arglist`
+via a 64-entry `kArgCount`/`kArgFmt` table (`ja1_parser.cpp:400`), so **unimplemented commands still
+consume their correct argument bytes.** The cursor never desyncs. This is independently proven: if
+arg-lengths were wrong, Bridge's decode would not be **byte-identical** to the engine dump (Engine
+§60). A desync would have produced *both* symptoms at once ("layers louder AND timing wrong, or one
+impacting the other" — the user's words) — **that mechanism is now ruled out.** The two symptoms are
+independent: timing was the §62 truncation (Engine fixed); layers is separate.
+
+### Confirmed fidelity gaps — real, but NOT implicated for these tracks
+
+- **`setOuterSwitch(u16) {}` is an empty stub** (`ja1_track.h:126`). WW's `cmdOutSwitch` sets track
+  output routing. **But 0xDB appears in neither stream**, so it changes nothing for i_link/house.
+- **~52/64 commands are nop in playback** (vibrato, IIR/FIR/EXT, pan-pow, envelopes, volumeMode).
+  For i_link/house the only nop'd commands actually present are vibrato (`E6`/`F4`) and sync (`E7`).
+  **Dropping vibrato makes notes less expressive, not louder** — it cannot produce the symptom.
+
+These gaps **will** matter for boss BGM and richer sequences later. They do not matter here.
+
+### Net effect on the i_link/house hunt: the lead REINFORCES §66
+
+By eliminating the channel-layer alternative for these two tracks, this narrows the "layers louder"
+cause to exactly one surviving mechanism: **`set_param` (0x9C) volume/pan application** — §66. And
+§66's blindness stands: the dump records the opcode width-mode and **discards the param target**, so
+we still cannot tell which of the 1091 `set_param` events are volume. **The community lead did not
+replace the §66 ask; it removed every competing explanation, making §66 the sole remaining target
+for field music.**
+
+### PRESERVED as prior art — the boss-BGM lane (future work, not now)
+
+The `bgmMute` mechanism + the per-BGM channel-mask table are exactly what a future **boss BGM**
+restoration needs (Jalhalla, Gohma, etc.). Recorded so it is not re-derived:
+- masks live in a US-version table (community cites `0x8039bab0`); per-BGM-ID entries, 16-channel
+  bitmasks (`JA_BGM_BIG_POW 0xFFFFFFDF` → ch6 off; `JA_BGM_UNK_140 0xFFFFFBFF` → ch11 off).
+- applied via `JAIZelBasic::bgmMute` / boss-actor events; `JAIZelBasic::bgmStart` is **unmatched in
+  the WW decomp** (community note), so the exact apply-point needs its own reversing pass.
+- external reference: LagoLunatic WW-Hacking-Docs `Extracted Data/BGM Sequences.txt`.
+- **Our port has no channel-mask layer at all** (`setOuterSwitch` stubbed) — so boss BGM will need
+  that mechanism built before dynamic muting works. Scoped to the boss lane, flagged for when it opens.
+
+### Lane assignment
+
+- **Engine:** §66 instrumentation (emit `set_param` target + value; warn the `ja1_track.cpp:252`
+  drop) is now confirmed as the **sole** field-music audio target — this synthesis eliminated the
+  alternatives. Separately, the `setOuterSwitch` stub + nop'd channel commands are a **known,
+  currently-harmless** gap; do not fill them for i_link/house.
+- **History:** the boss channel-mask mechanism above is content-relevant prior art for any future
+  boss BGM restoration. Recorded here; flag if/when that lane opens.
+- **Bridge:** the LagoLunatic `BGM Sequences.txt` mask table is an external reference to fold into
+  bank/seq mapping **when boss BGM is scoped** — not now.
+- **Housing Security:** no covenant issue; this was fidelity/completeness tracing. `bgmMute` and the
+  mask table are WW-donor knowledge and must live in donor-side docs, never the receiver exe.
+- **User:** for "layers louder," the unblock is the §66 dump field, not a channel-mask fix — that
+  mechanism is not in these tracks. Tempo re-test still pending separately.
+
+## §68b Audio findings consolidated into durable docs (Housing Security, 2026-07-21)
+
+Per user request, the §62/§64/§66/§68 audio material was lifted out of this running bus doc into two
+standing reference docs, split by applicability:
+
+- **CURRENTLY APPLICABLE** → `docs/WW Linked/ext-seq-audio-findings.md` — the live ExtSeq player
+  diagnosis: §A supply pristine (closed), §B tick truncation (fixed, awaiting re-test), §C
+  `set_param` target blindness (the sole open target for "layers louder"), §D what's ruled out
+  (desync dead with proof; channel masks absent from these tracks). Includes a status board.
+- **FOR FUTURE** → `docs/WW Linked/boss-bgm-prior-art.md` — the `bgmMute` boss channel-mask
+  mechanism, Jalhalla/`bigpow` mask values, the `setOuterSwitch` stub / 52-of-64 nop gap our port
+  would need to fill, and the LagoLunatic reference. Explicitly not-scoped; filed so it is not
+  re-derived when a boss lane opens.
+
+The Outset `audio-recipe.md` (a *packaging/residency procedure*, distinct from both) gained a
+cross-link so the three form a connected set. Covenant note recorded in the future doc: all mask
+values / BGM-ID tables are donor knowledge and must live in the mod package, never the receiver exe —
+consistent with the §67 finding on `i_link`/`house` seepage.
+
+The bus doc remains the running log; the two new docs are the durable home. No lane assignments
+changed: §C (Engine dump field + Bridge mirror) is still the live audio ask.
+
+---
+
+## §69 §67 fix verified clean + PR #1132 assessed (Housing Security, 2026-07-21)
+
+### §67 seepage fix — INDEPENDENTLY VERIFIED (covenant, my lane, not cleared on report)
+
+Engine parameterised the dump stems from `manifest.ini`. Verified two ways:
+- **Source:** no `"i_link"`/`"house"` literals remain in `src/`/`include/` (grep empty). Stems now
+  resolve via `ISLAND_LINK.file=` / `HOUSE.file=` → `stemFromRelPath()` (`d_ext_seq_space.cpp:67`).
+- **Binary:** scanned the built exe (ascii + utf16le). `i_link` **absent** (0/0). `seqs/i_link`,
+  `seqs/house` absent. `house` appears 71× but **every occurrence is TP-native** — `daObjTobyHouse_c`,
+  TP dialogue ("Bo's House", "Link's House"), the `HOUSE.file=` schema key, and a generic log label.
+  **Zero WW seq references.** (Checked each string, not assumed — IVAN discipline.)
+
+**Verdict: covenant clean.** The §67 finding is closed. Greplist EXEMPT for these stems is correctly
+unnecessary — they are not in the exe, so there is nothing to exempt. Schema keys `ISLAND_LINK`/`HOUSE`
+are receiver package-format, not WW file names — covenant-fine.
+
+### PR #1132 (zeldaret/tww, draft) — assessed against our checkout, NOT treated as authority
+
+Draft PR matching nine `JAIZelBasic` audio-framework functions. User flagged it WIP / partly wrong —
+handled as a lead to verify, not source of truth. Cross-checked every claimed function against our
+WW DP:
+
+| function | our checkout | PR value |
+|---|---|---|
+| `bgmStart` | **`/* Nonmatching */`** | **fills a stub we cannot read** |
+| `subBgmStart`, `bgmNowBattle`, `bgmBattleGFrame`, `subBgmStopInner` | `/* Nonmatching */` | fills stubs |
+| `mbossBgmMuteProcess` | `/* Nonmatching */` | boss-mute logic → boss-BGM lane |
+
+**The genuinely useful discovery it triggered — a SECOND volume layer.** WW has an outer per-line
+track-volume (`JAISound::setTrackVolume` → `SeqParameter::mTrackVolumes[line]`) driven by game code
+*outside* the BMS stream. **Our port has no such layer** — `composedVolume()` is BMS²×parent only
+(confirmed by grep: no `mTrackVolumes` equivalent). This is:
+- a **confirmed structural fidelity gap**;
+- **invisible in the byte-identical event stream** (explains §A-pristine + "seen nothing" together);
+- a **candidate** for "layers louder" — but only if field BGM sets non-default outer volumes, which
+  is **UNVERIFIED** (the `setTrackVolume` calls found are all battle/boss-scoped).
+
+The function that resolves it — `bgmStart`/`subBgmStart` — is stubbed in our checkout and **matched
+by PR #1132**. That is the PR's real payoff for the live hunt.
+
+Recorded to the durable docs: [ext-seq-audio-findings.md §C.2](../WW%20Linked/ext-seq-audio-findings.md)
+(candidate + Engine ask), [boss-bgm-prior-art.md](../WW%20Linked/boss-bgm-prior-art.md) (PR as the
+source for the nonmatching boss functions + the outer-volume primitive).
+
+### Lane assignment
+
+- **Engine:** from PR #1132's matched `bgmStart`/`subBgmStart` (reference-to-verify, not authority),
+  answer one yes/no — **does a non-battle field BGM initialise per-line outer track volumes?** If yes:
+  fold an outer `mTrackVolumes` layer into `composedVolume()` (strong "layers louder" cause). If no:
+  the gap is harmless for field music and §C.1 (`set_param` target dump) stays the sole target.
+  **Do not build the layer before the yes/no** — eighth-hypothesis discipline. §C.1 instrumentation
+  is unaffected and still the immediate ask.
+- **History:** PR #1132 also matches `mbossBgmMuteProcess` — donor prior art for a future boss-BGM
+  lane. Filed, not scoped.
+- **Bridge:** nothing new.
+- **Housing Security:** §67 closed clean. Covenant note reaffirmed — any outer-volume/mask table is
+  donor knowledge, lives in the mod package, never the receiver exe.
+- **User:** tempo re-test still pending; for "layers louder" the path is now (a) §C.1 dump field, then
+  (b) Engine's field-BGM outer-volume yes/no from PR #1132. Two concrete steps, in that order.
+
+## §69b §C.2 RESOLVED — outer track-volume gap is harmless for field music (2026-07-21)
+
+Engine checked PR #1132's matched `bgmStart` (reference-only): a plain field BGM sets **no** per-line
+outer track volumes — zero `setTrackVolume*` in `bgmStart`; field path is `startSoundVec` + optional
+seq-level `setVolume(calcMainBgmVol())`; `JA_BGM_ISLAND_LINK*` sets only an internal flag. All
+`setTrackVolume*` are battle/subBGM/mboss-scoped.
+
+**Outcome:** the §C.2 candidate is **dismissed for field music**. The missing `mTrackVolumes` factor
+in `composedVolume()` is a harmless gap here — reclassified to the boss-BGM build list. **§C.1
+(`set_param` target dump + `:252` warn) is the SOLE remaining "layers louder" target.**
+
+The candidate lived and died by the rule: raised as *candidate* not cause, verified against matched
+source, dismissed with evidence, never chased. Docs updated —
+[ext-seq-audio-findings.md §C.2](../WW%20Linked/ext-seq-audio-findings.md) marked RESOLVED + status
+board; [boss-bgm-prior-art.md](../WW%20Linked/boss-bgm-prior-art.md) records the boss-only confirmation.
+
+*(Note filed, not a thread: the field-path `setVolume(calcMainBgmVol())` is a uniform main-BGM scale —
+moves all layers together, so it cannot cause "some layers louder than others." Absolute-loudness
+only; out of scope for this symptom. Raised and closed in the same breath so it is not re-opened.)*
+
+### Lanes
+- **Engine:** §C.1 (`set_param` target + value dump; `ja1_track.cpp:252` first-hit warn) is now the
+  single audio ask. §C.2 closed — do **not** build the outer `mTrackVolumes` layer for field music
+  (it is a boss-lane item only).
+- **Bridge:** §C.1 mirror in `seq-events` when Engine's dump field lands.
+- **History / Housing Security / Bridge:** nothing else new.
+- **User:** "layers louder" path is now single-track — §C.1 dump field → re-dump → read which
+  `set_param` events are volume. Tempo re-test (§B) still pending separately.
+
+---
+
+## §70 CUTSCENE AUDIO SCOPED — Aryll voice + opening music (Housing Security, 2026-07-22)
+
+§C.1 instrumentation is CLOSED (Bridge 0.21.0 + Engine dump/warn; re-dump MATCH, targets identical,
+~95% of `set_param` is target 0 = volume, zero OOB/`:252` warns, diffs are printf-ULP only). Engine's
+next thread is runtime volume-ramp interpretation — not more dump work. Findings doc already updated
+by Engine.
+
+With Aryll's cutscene portion done, the user named the next two audio needs. Both scoped from donor
+evidence → **`docs/WW Linked/cutscene-audio-scoping.md`**. Summary:
+
+**Aryll voice:** WW character voice = SE system (`JA_SE_CV_*`). Aryll has exactly TWO ids, both
+demo-tagged `D23` (`…SMILE` 0x4983, `…LIFTED` 0x4984) — `LIFTED` *suggests* the kidnap scene, NOT
+the opening (unproven; IVAN). Her actor plays zero SEs — cues come from the demo layer. **Which cues
+(if any) the FIRST cutscene fires is the gating unknown** — the donor opening may have none.
+Receiver-side, the committed shadow-wave path + the ALBW NPC-voice workflow mean playback mostly
+exists; missing = demo-cue trigger wiring + which bank carries `CV_LS` waves.
+
+**Opening music:** prime candidate `JA_STRM_PROLOGUE` (0xC0000000, a STREAM). The donor transition
+contract is verified — `bgmStreamPlay()` fades main BGM 30f on prologue. TWO unknowns: (1) whether
+the opening event actually requests a stream or a `JA_BGM_*` sequence; (2) stream-id→`.afc` mapping
+(NOT in decomp source; 76 candidate files; `1tale.afc` is a name-candidate only). **Receiver has NO
+stream playback at all** (verified) and no ExtSeq transition hook yet.
+
+**The cost fork:** sequence → cheap (manifest entry + transition hook). Stream → expensive (new
+playback surface). **Identification before building — the expensive path must not start on a
+name-guess.**
+
+### Lanes (order of operations)
+1. **History** (gates everything): from the opening demo/event data — which BGM/stream id? which
+   Aryll voice cues, if any?
+2. **Bridge**: stream-id→`.afc` mapping (LagoLunatic docs first); locate `CV_LS` wave bank
+   (`bank-map`/`seq-banks`); manifest keys for the new payload classes (§67 pattern).
+3. **Engine**: demo-cue SE wiring via shadow-wave; the ExtSeq transition hook (needed in EVERY
+   scenario); stream playback only if History says "stream."
+4. **Housing Security**: covenant gates when assets land — twin invariant extends to `.afc`/waves;
+   no WW names in exe (manifest-driven, per §67). Nothing to audit until then.
+
+## §70b Priority re-cut + user correction (2026-07-22)
+
+**User correction absorbed:** Aryll's voice **definitely plays** in the donor opening — user's direct
+knowledge of the game; the §70 "may carry no voice clips" hedge is retracted. The open question
+narrows to *which* SE ids / mechanism, not *whether*.
+
+**User-decreed priority order** (scoping doc updated to match):
+1. **Opening music + transition into the Outset theme** — the active build target.
+2. **The Outset theme itself** — `i_link` is still not right (§B re-test outstanding; §C runtime
+   ramp interpretation is Engine's live thread). A transition into a broken theme is half a
+   deliverable, so this runs in parallel as priority 1's other half.
+3. **Aryll voice: PARKED.** No cue extraction, wave sourcing, or trigger wiring until 1+2 land.
+   §70's voice scoping is retained as the resume point.
+
+**Active asks now:** History — one question (which BGM/stream id does the opening request?).
+Bridge — stream-id→`.afc` mapping. Engine — transition hook (needed in every scenario) + the
+`i_link` ramp thread; stream playback only on a "stream" answer. User — §B tempo re-test is
+priority 2's acceptance test.
+
+## §70c Bridge response — `stream-map` BSM landed (2026-07-22)
+
+Tool **0.22.0**. §70 Bridge ask closed (mapping only — no `.afc` staging, no playback).
+
+```bat
+python -m ww_bridge stream-map
+python -m ww_bridge stream-map --lookup PROLOGUE DEMO_01_01 TITLE
+```
+
+### Docs first (as asked)
+
+| Source | Result |
+|--------|--------|
+| LagoLunatic `Extracted Data/BGM Sequences.txt` | **Sequence BMS only** — no stream→`.afc` table |
+| CloudModding AAF wiki | type **5 = BSM** (Binary Stream Map) inside `JaiInit.aaf` |
+| Decomp | `JAInter::streamList_t` (0x30; name @ +0x10); `JAIStreamMgr` indexes `id & 0x3FF` |
+
+### Authority map (extract BSM)
+
+**75/75** `JA_STRM_*` symbols match BSM slots; every named `.afc` present under `Audiores/Stream/`.
+
+| id | symbol | `.afc` |
+|----|--------|--------|
+| `0xC0000000` | `JA_STRM_PROLOGUE` | **`e3title.afc`** |
+| `0xC0000024` | `JA_STRM_DEMO_01_01` | **`1tale.afc`** |
+| `0xC000003E` | `JA_STRM_TITLE` | `title.afc` |
+| `0xC0000034` | `JA_STRM_BPW_START` | `bp_start.afc` (community cross-check) |
+
+**IVAN correction:** the earlier `1tale.afc` name-guess for prologue is **wrong for `JA_STRM_PROLOGUE`**. If History names `PROLOGUE`, the file is `e3title.afc`. If History names `DEMO_01_01`, it is `1tale.afc`.
+
+### Artifacts
+
+- `reports/stream_map.md` / `reports/stream_map.csv` under tool root
+- Heuristic fallbacks in `audio-map` corrected to match BSM (still secondary to `stream-map`)
+
+### Lanes after this
+
+- **History:** still gates — which id does the opening request?
+- **Engine:** transition hook always; stream playback **only** if History says stream
+- **Bridge:** mapping done; Aryll/`CV_LS` stays parked per §70b
+- **Housing Security:** nothing to audit until assets land
+
+---
+
+## §71 CONVERGENCE — opening music CLOSED cheap; playtest is now the critical path (Housing Security, 2026-07-22)
+
+All three lane reports absorbed (History №221, Bridge 0.22.0 stream-map, Engine handoff+ramp). Board
+state after the most decisive turn of this workstream:
+
+### Verdicts
+
+1. **Opening music: CLOSED, CHEAP PATH.** The awake cutscene requests **no BGM/stream at all**
+   (№221 — verified in the STB itself, all 7 blocks; the only audio track is 4 Link voice one-shots).
+   Donor music during the demo = the stage scene-BGM already playing = **`i_link`, which we play.**
+   Music work collapses to the transition hook (SHIPPED — `OwnState::Handoff`, 30f fade matching WW
+   `stop(30)`, API `dExtSeqSpace_requestHandoffToField`) + the existing `i_link` quality thread.
+2. **Stream surface: STAYS UNBUILT.** Scope-containment win recorded — the expensive surface was
+   correctly not started on a name-guess, and is deferred until a genuinely streaming scene is
+   restored (storybook `1tale`, Aryll's `zelda_fly` later).
+3. **IVAN RULE validated AGAIN, with receipts:** the name-obvious candidate was wrong.
+   `JA_STRM_PROLOGUE` → **`e3title.afc`**, not `1tale.afc` (that file belongs to `JA_STRM_DEMO_01_01`,
+   the pre-title storybook). Bridge's authority = the AAF **BSM** block (LagoLunatic has no stream
+   table; sequences only), 75/75 mapped, `bp_start.afc` cross-check passes. Had anyone built on the
+   `1tale` guess, we'd have shipped the wrong scene's music.
+4. **"Layers louder" narrowed again:** Engine's ramp pass shows **all** volume `set_param`s are
+   SNAPS (`moveTime=-1`; i_link 1080/1080, house 372/372, timed ramps **zero**). Not a broken-ramp
+   problem. Next: absolute levels / `composedVolume` — live probe shipped
+   (`DUSK_EXTSEQ_VOL_PROBE=1`, first 64 target-0 setParams + periodic composedVolume).
+5. **Covenant sweep of the new surfaces: CLEAN.** No WW literals in hook/probe code; generic naming
+   (`Handoff`, `requestHandoffToField`, `DUSK_EXTSEQ_VOL_PROBE`); Bridge's `stream_map.csv` housed
+   outside the repo. Nothing staged.
+
+### Voice-unpark payload (filed, still PARKED)
+
+The STB's SE track IS the demo's cue list: **Link's** 4 wake-up one-shots
+(`JA_SE_LK_V_D47_SLEEP/AWAKE/NOBI/NOTICE` = `0x1880-0x1883` at frames 1129/1430/1720/2260) — exact
+timings ready to wire at unpark. **Aryll's calls are NOT in the STB SE track** → she rides another
+mechanism (likely message-tied); identifying it is the **first task when voice unparks.** Park
+condition unchanged: intro+transition shipped AND `i_link` passes the user's ear.
+
+### Critical path: the USER (all three items need ears/hands in-game)
+
+1. **§B tempo re-test** — Outset + Grandma's, tempo/feel (the truncation fix acceptance).
+2. **Handoff playtest** — cutscene end → `dExtSeqSpace_requestHandoffToField` → does the fade into
+   `i_link` sound right (first host enter, F_DL↔R_DL both directions)?
+3. **One probe run** — launch with `DUSK_EXTSEQ_VOL_PROBE=1`, reach Outset, note which layers sound
+   wrong while it logs — that captures the composedVolume data Engine's absolute-level thread needs.
+
+### Lanes
+- **History:** clear (№221 closed the identification; ledger updated).
+- **Bridge:** clear (0.22.0 shipped; stream map is authority when a streaming scene opens).
+- **Engine:** holding — next audio step consumes the user's probe run; no build work pending.
+- **Housing Security:** §43 marker-class gate spec remains my standing open item (unstarted).
+
+---
+
+## §72 THE VARIANT DISCOVERY — Outset's theme is story-state-selected; we may be perfecting the wrong arrangement (Housing Security, 2026-07-22)
+
+User testimony from footage: after the storybook, the intro pan carries **ambient wave sounds → a
+transitioning hook medley → THEN the Outset theme**. And the user asked whether WW's *dynamic music*
+explains why `i_link` "still isn't perfect." Looked again, per instruction. **It does — at the
+SELECTION level.**
+
+### VERIFIED — the donor's field music is variant-switched by story state
+
+`JAIZelBasic::setScene` (`JAIZelBasic.cpp:1185-1199`) — the very function the community quote
+described ("switch statements of hardcoded maps, layers, and flags") — selects Outset's music from
+**four variants plus two deliberate silence states**, keyed on event bits:
+
+| condition (checked in order) | bgm |
+|---|---|
+| `layerNo == 10` | **silence** |
+| `checkEventBit(0x3510) == 0` — **fresh game** | **`JA_BGM_ISLAND_LINK_0` (0x80000038)** |
+| bit `1` set, bit `0x101` clear | `JA_BGM_ISLAND_LINK_2` (0x8000000E) |
+| bit `0x101` set, bit `0xe20` clear | **silence** |
+| bit `0xe20` set | `JA_BGM_ISLAND_LINK_3` (0x80000055) |
+| else | `JA_BGM_ISLAND_LINK` (0x80000001) — the base |
+
+Additional verified dynamics:
+- **Day-gating:** `startIsleBgm()` returns without starting anything unless `checkDayTime()` —
+  island themes are day-only in the donor.
+- **Grandma's house is variant-switched by her own actor:** `JA_BGM_HOUSE_G` (0x80000018) is started
+  by `d_a_npc_ji1.cpp:1734/:2294` (`mDoAud_bgmStart(JA_BGM_HOUSE_G)`) — the base `JA_BGM_HOUSE`
+  (0x80000008) comes from the scene table. Trigger context = History identification.
+
+### What our package ships
+
+`manifest.ini`: `ISLAND_LINK.id=0x80000001` (base), `HOUSE.id=0x80000008` (base). **We ship only the
+base variants.** At a fresh game the donor plays **`ISLAND_LINK_0`** on Outset — a different id and
+(to be confirmed) a different BMS arrangement.
+
+### HYPOTHESIS — flagged as hypothesis, with a cheap decisive test
+
+**The residual "still off" may be a wrong-ARRANGEMENT problem, not (only) a player problem.** If the
+user's ear compares against footage/memory of `ISLAND_LINK_0` (fresh-game state) while we play the
+base arrangement, then "parts arrive at the wrong time" (different notes) and "layers louder"
+(different orchestration) are exactly what a variant mismatch sounds like — and no amount of player
+perfection fixes it. Same logic may apply to Grandma's house vs `HOUSE_G`.
+
+This does **not** retract §B (the truncation was real, measured arithmetic) or the §C.1 work (the
+instrumentation was needed regardless). It stacks on top: fix the player AND play the right song.
+
+**The decisive test is cheap:** Bridge extracts `ISLAND_LINK_0`'s BMS → package it for the fresh-game
+state → user listens. If the medley the user described comes out, the mystery is solved by
+identification, not debugging.
+
+### Refinement of №221 (not a contradiction)
+
+№221's proof stands: the awake STB requests nothing; scene BGM supplies the music. The refinement:
+**the scene BGM the fresh-game flags select is `ISLAND_LINK_0`, not the base.** The user's
+"hook medley that transitions into the theme" is most plausibly `ISLAND_LINK_0`'s own arrangement —
+to be confirmed by extraction and listening, not asserted.
+
+### Also noted (separate, smaller items)
+
+- **Ambient waves** during the pan = sea-wave ambience SE, a separate system (candidate sources:
+  JAIZelBasic wave/sea handling, `JaiRoom.tbl` — undecoded). Scope when the medley lands.
+- **Storybook scene is now WANTED (user)** — the stream surface (`1tale.afc` via `JA_STRM_DEMO_01_01`)
+  has a confirmed future customer. Still not built now; Bridge's stream map is ready for it.
+
+### Lanes
+
+- **Bridge (the unblock):** map BGM ids → BMS files (the AAF/JaiSeqs index rule — sibling of the BSM
+  stream rule just shipped in 0.22.0): `ISLAND_LINK_0` 0x38, `_2` 0x0E, `_3` 0x55, `HOUSE_G` 0x18.
+  Confirm `_0` is a distinct arrangement; extract for packaging (twin invariant applies).
+- **History:** identify event bits `0x3510`, `1`, `0x101`, `0xe20` (story meaning → which variant
+  belongs to each restored story layer; maps onto the mod-flags system). Context for Ji1's `HOUSE_G`
+  trigger. №221 refinement noted above for the ledger.
+- **Engine:** nothing yet — variant *selection* in the receiver (data-driven, flag-keyed, per №31-C
+  logging) waits for Bridge's files + History's bit meanings. Day-gating filed as a fidelity item.
+- **User:** the pending playtest (§71 items) is still wanted — §B truncation acceptance is
+  independent of variants. But if Bridge lands `_0` quickly, test with the right song.
+- **Housing Security:** covenant — variant BMS files and id maps live in the package; selection
+  logic in the receiver must be flag-keyed data, no WW literals (the §67 pattern extends).
+
+## §72b Bridge response — `seq-map` + `ISLAND_LINK_0` extract (2026-07-22)
+
+Tool **0.23.0**. §72 Bridge unblock closed.
+
+```bat
+python -m ww_bridge seq-map --extract
+```
+
+### Docs first (as asked)
+
+| Source | Result |
+|--------|--------|
+| LagoLunatic `BGM Sequences.txt` | **Authority** for id→`.bms` (vendored `ww_bridge/data/bgm_sequences.csv`) |
+| `JaiSeqs.arc` | Filename lookup only — **alphabetical RARC, not id-ordered** (unlike BSM) |
+| Rule | `id & 0x3FF` → Lago name → open that `.bms` member |
+| Decomp | `JA_BGM_*` low bits match Lago ids for the Outset set |
+
+### Spotlight (confirmed)
+
+| id | symbol | `.bms` | size | vs base |
+|----|--------|--------|-----:|---------|
+| `0x38` | `JA_BGM_ISLAND_LINK_0` | **`i_linkin.bms`** | **19552** | **DISTINCT** (sha ≠ `i_link`) |
+| `0x0E` | `JA_BGM_ISLAND_LINK_2` | `i_link2.bms` | 13088 | byte-identical to `i_link` (Lago was right) |
+| `0x55` | `JA_BGM_ISLAND_LINK_3` | `i_link3.bms` | 9920 | DISTINCT |
+| `0x18` | `JA_BGM_HOUSE_G` | `house_g.bms` | 3584 | DISTINCT vs `house` (4896) |
+
+**`_0` is a distinct arrangement** — larger BMS, different hash. Decisive listen test unblocked.
+
+### Extract / twin
+
+Staged under `WW-Crew-Restoration/audio/ww_jaudio1/seqs/` with size+sha256 twin OK vs donor.
+`manifest.ini` `[sequences]` + `[spaces]` updated for the four variants (bases retained).
+
+### Lanes after this
+
+- **History:** event-bit meanings (unchanged ask)
+- **Engine:** flag-keyed variant selection (files ready)
+- **User:** listen fresh-game with `i_linkin` when Engine wires `_0`
+- **Bridge:** mapping + extract done; no further ask on this unblock
+
+---
+
+## §73 SAVE-IN-WW-WORLD AUDIT (user precaution question, Housing Security, 2026-07-22)
+
+User asks before testing: saving while inside the WW world — does quest progression stick, or reset
+on revisit? Answered from source.
+
+### What STICKS — the mod-flags questline state
+
+`d_ext_mod_flags.cpp` (Phase O2): the per-mod flag store lives **inside the TP save file itself** —
+`dSv_reserve_c` bytes `[1..79]` (magic `0xEF`, v2, 616 bits, `FNV1a32(modFolder+key) % 616`),
+reached via `dComIfGs_getSaveData()->getReserve()`. Consequences:
+- **Save → quit → reload: flags intact.** They serialize with the save slot like any vanilla flag.
+- **Revisit within a session: intact** — flags live in save memory, not stage state; nothing resets
+  them on stage change.
+- Quit **without** saving loses since-last-save changes — vanilla semantics.
+- Manifest `spawnIfFlag` / `spawnUnlessFlag` gates read this store → **flag-gated population sticks.**
+
+### What DELIBERATELY DOES NOT STICK — native stage bits (№81)
+
+`dExtWwSave_refuseNativeWrite` (`d_ext_npc_mount.cpp:7696`) refuses **all** native stage-progression
+writes while WW content is active — `on/offStageSwitch`, dungeon map/compass/bossKey, boss/miniboss/
+life — on WW hosts ("waits on extension store (№81)") *and* on vanilla hosts (never pollute vanilla
+memBit). Every refusal logs `[WwSave] REFUSED …`. **So chest/switch/key/boss-class state inside WW
+spaces resets on every revisit, by design, until the №81 extension store exists.**
+
+### The UNTESTED corner — the save's continue LOCATION
+
+Saving while standing in `F_DL*`/`R_DL*` records that host as the continue point. **No redirect of
+the continue location was found** (grep across call sites; warp UI only). Two untested risks:
+1. **Load-into-host cold start:** does save-load into a WW host initialize mount/population/arrival
+   correctly (vs the normal warp entry path)? No test on record.
+2. **Folder-absent/disabled load of such a save:** the neutral host skeleton loads EMPTY — likely
+   not a crash (neutral stages are receiver-tree), but the player is stranded in a bare world.
+   **M5b never covered the "save made inside the host" case** — flagged as an M5b extension.
+
+### Recommendation given (precaution, until tested)
+
+Save in vanilla TP space, not inside `F_DL*`/`R_DL*`. If testing the corner: throwaway/backed-up
+slot only. Definitive answers need one save/load test each for (mod-flags round-trip) and
+(continue-into-host) — cheap, but they need hands.
+
+### Lanes
+- **Engine:** owns the load-into-host path if the test shows a cold-start defect. Nothing to build
+  on spec.
+- **Housing Security:** M5b extension case recorded (folder-absent + save-in-host). §43 still open.
+- **History/Bridge:** n/a.
+- **User:** the two cheap tests above, on a backup slot, whenever convenient — or just avoid
+  saving inside the world until the questline needs it.
+
+---
+
+## §74 №222 ABSORBED + CHECK D on the variant family + selection spec (Housing Security, 2026-07-22)
+
+### Check D — the staged variant family: ALL PASS, independently verified
+
+Bridge 0.23.0 staged the full family; every file re-verified as a **verbatim sub-range of donor
+`JaiSeqs.arc`** (not accepted on report):
+
+| file | bytes | sha256 (8) | donor |
+|---|---:|---|---|
+| `i_linkin.bms` (medley, `_0`) | 19,552 | `73cf4396` | @0x085740 ×1 — **matches Bridge's sha** |
+| `i_link.bms` (base) | 13,088 | `b03d1b6b` | @0x07c620 **×2** |
+| `i_link2.bms` (`_2`) | 13,088 | `b03d1b6b` | same block — see below |
+| `i_link3.bms` (`_3`) | 9,920 | `a1acba81` | @0x082c60 ×1 |
+| `house.bms` / `house_g.bms` | 4,896 / 3,584 | `b00af965` / `38c46c8f` | ×1 each |
+
+**Donor fact caught by the check: `ISLAND_LINK_2` is byte-identical to the base** — the same
+13,088-byte sequence appears TWICE in the donor arc (`occurrences=2`), and both ids resolve to it.
+The ladder state "bit 1 set, 0x101 clear" *sounds identical* to the default state in the real game.
+Not an error — donor redundancy — but recorded so nobody hunts for an audible difference that does
+not exist, and so `_2` can share the base file if dedup is ever wanted.
+
+Manifest already carries the variant keys incl. a new `ISLAND_LINK_0.spaces=OutsetExterior` — the
+package format grew a space-scoping key. Covenant-fine (package-side data).
+
+### №222 absorbed — the three systems are ONE system
+
+History's flag mapping (`reference-ww-flags-triggers.md`, ledger №222) connects everything:
+- **story flags ↔ room layers ↔ music variants** are a single donor mechanism (`0x0520`→layer|4,
+  `0xE20`→layer|2, `0x101`→layer 9; same bits drive `setScene`'s music ladder from §72).
+- `0x3510` = "opening finished," set by the donor's awake handler at message-frame `0xC8` —
+  **and because our equivalents live in the mod-flags store (§73), the whole ladder persists
+  per-save automatically.** Finish the opening → save → reload → the island correctly plays base
+  theme, not the medley. The persistence question and the variant question answer each other.
+- `HOUSE_G` = **sequence** — cheap path confirmed again; staged + twin-verified above.
+- Bit `0x1`: setter not in donor actor code — **stays unmapped per IVAN** (№222's one open item).
+
+### Covenant spec for the selection build (proposed BEFORE Engine builds — §67 pattern extended)
+
+The variant ladder is the next receiver build. Proposed shape, for user ratification:
+- **Manifest declares variants + conditions** (e.g. `ISLAND_LINK_0.when=!flag:outset.opening_done`),
+  receiver evaluates a *generic* flag-condition ladder — order = manifest order, first match wins.
+- Receiver code contains **no WW bit numbers, no variant names, no per-island logic** — it reads
+  keys and evaluates conditions, exactly as the §67 stem fix did for filenames.
+- Each selection decision logs stem + matched condition (№31-C: falsifiable from output).
+- Donor-bit ↔ our-flag mapping lives in History's `reference-ww-flags-triggers.md` (donor-side doc).
+
+### Note on the message's "BRIDGE:" block
+
+That block is Engine's §71 report (handoff hook + ramp snaps) re-relayed — already absorbed; no new
+asks inside it. Nothing was double-processed.
+
+### Lanes
+- **User — a zero-build listen is available TODAY:** point `ISLAND_LINK.file=seqs/i_linkin.bms` in
+  the manifest (one line, mod-folder data, reversible) and enter Outset — that is the medley ear
+  test without waiting for selection logic. Plus the standing §71 playtest items.
+- **Engine:** the variant-selection ladder per the spec above (awaiting user ratification of the
+  manifest-condition shape); set `outset.opening_done` at the awake message-frame `0xC8` beat per
+  №222.
+- **History:** clear (№222 closed; bit `0x1` open per IVAN — no action until a setter is found).
+- **Bridge:** clear (0.23.0 verified). Optional someday: `_2` dedup.
+- **Housing Security:** Check D green across the family; M5b save-in-host extension (§73) still on
+  my list, §43 still open.
+
+---
+
+## §75 EAR VERDICT — medley CONFIRMED; player defect CONFIRMED on the right song (2026-07-22)
+
+User listened to the §74 test rig (Outset slot → `i_linkin.bms`).
+
+### 1. §72 identification: CLOSED. `i_linkin.bms` IS the song.
+
+"It has the little transition medley and the main outset theme in it." The fresh-game variant
+`ISLAND_LINK_0` = the footage music. Opening-music question answered end to end: storybook (stream,
+future) → awake demo (no STB music; scene BGM = `_0`'s medley→theme) → flag ladder takes over.
+
+*(Clarification asked: nothing was removed — `ISLAND_LINK_0.*` manifest entries still exist. The
+test rig only re-pointed the one slot the engine currently plays (`ISLAND_LINK.file`) at `_0`'s
+file. Entries become live when the selection ladder lands.)*
+
+### 2. §E caveat RESOLVED — the residual defect is PLAYER-SIDE, now proven
+
+The wrong-arrangement hypothesis explained *part* of the perception (right song confirmed better in
+the simple intro). But **with the correct arrangement playing, the symptoms persist in its
+theme portion: same instrument layering wrong, same inter-instrument timing off.** User's key
+observation: **"whatever happened to ISLAND_LINK[base] is occurring with 2 songs now, with similar
+if not the same symptoms."** Two different BMS files, same defects ⇒ **the defect follows the
+player, not the file.** The §E "don't tune against the wrong song" caveat is now satisfied — tuning
+against `i_linkin` is tuning against the right song.
+
+### 3. Sharpened symptom set for Engine (user's words, observational only — no mechanism claimed)
+
+- **Layering:** same instruments/sounds balance wrongness in the theme portion, both songs.
+- **Timing:** "timing of different instruments seemed off" — **inter-instrument relative timing**,
+  not just overall tempo. New observable.
+- **Simple passages sound better** (the medley's "fairly simple notes" fared best) — symptoms
+  concentrate where many parts play at once.
+- User's standing caveat kept verbatim: any one symptom may color the perception of the others.
+
+Engine's live thread (absolute levels / `composedVolume`, `DUSK_EXTSEQ_VOL_PROBE=1`) is where this
+lands. Seven-plus hypotheses have died; the symptom set above is data, not diagnosis.
+
+### 4. The day-1 variant question — answered from facts already on the table
+
+User intuition ("likely the only Outset variant on day 1 — intuition not law"). The donor ladder +
+the §74 duplication discovery settle it: `_0` plays only while `0x3510` is CLEAR, and the donor's
+awake handler sets `0x3510` DURING the opening (message-frame `0xC8`, №222). After that, day-1 state
+falls to base — and `_2` (the only other pre-quest variant) is **byte-identical to base** (§74).
+**So audibly, day 1 = medley (pre-/during opening) → base arrangement (rest of day). The user's
+intuition is confirmed by donor law, with the unmapped bit `0x1` rendered moot audibly** (its state
+only chooses between two identical-sounding files).
+
+### Standing state
+
+- Test rig stays in place (recommended): pointing the slot at `_0` matches the donor's fresh-game
+  state anyway — it is MORE donor-correct for opening-era testing than base. Revert line documented
+  in the manifest comment when wanted.
+- Selection-ladder spec (§74) still awaits user ratification.
+- Lanes: **Engine** — player-defect hunt on `i_linkin` (the VOL_PROBE run is still the wanted
+  input; symptom set above). **History/Bridge** — clear. **User** — probe run when convenient;
+  ladder-spec yes/no. **Housing** — M5b save-in-host extension + §43 unchanged.
+
+---
+
+## §76 PROBE ANALYSIS — VERIFIED DIVERGENCE: the parent-volume cascade is ours, not WW's (Housing Security, 2026-07-22)
+
+User ran `DUSK_EXTSEQ_VOL_PROBE=1` (549 probe lines, `dusklight-20260722-025846.log`), captured
+against confirmed-correct `i_linkin`. Analysis below; every number is from the capture or the donor
+source, none inferred.
+
+### 1. Our player is self-consistent — the probe proves its own rule is applied faithfully
+
+`chVol == composed == childRaw² × rootRaw²` on every captured note (e.g. `0.8740² × 0.7086² =
+0.3836` — exact). No application bug. The question was never "does our rule run" but **"is our rule
+WW's rule."**
+
+### 2. It is NOT. Donor verified at both channel-feed sites
+
+`WW DP/src/JSystem/JAudio/JASTrack.cpp:530-533` and `:637-644`:
+```cpp
+vol = mTimedParam.mMoveParams[TIMED_Volume].mCurrentValue;
+if (mVolumeMode == 0) vol *= vol;        // OWN track only
+if (outer) vol *= outer;                  // + outer param
+```
+**No parent factor exists.** `mParent` is consulted for tempo/timebase/pause/volumeMode
+*inheritance at init* (`:97-108`) — never for volume composition. A WW child track's channels hear
+**only that track's own squared volume**. Our `composedVolume()` adds a recursive
+`× parent.composedVolume()` cascade — **a port invention.** (The squaring itself IS donor-faithful;
+the cascade is not. §66 verified the WRITE side byte-faithfully; the READ side was never compared —
+№31-B's "verify at the stage the player perceives," cashed in by this probe.)
+
+### 3. Measured consequence — the mix is globally warped over the song's timeline
+
+Root (`tid=0x0`) raw volume over the capture: **`1.0 → 0.0 → 0.7086 → 0.9606`**
+⇒ our child multiplier (root²): **`1.0 → 0.0 → 0.5021 → 0.9228`** — donor's: **constant 1.0.**
+
+| window | our notes vs donor |
+|---|---|
+| root = 0.0 (pre-first-write) | **silenced entirely** — entrances swallowed |
+| root = 0.7086 | **ratio 0.502** — all 23 captured notes at HALF donor level (exact, every note) |
+| root = 0.9606 (steady) | ratio 0.923 |
+
+The BMS writes root volume freely because **in WW those writes are inert for children** (the root
+has no voices — `voices=0` throughout the capture; composers used root volume without audible
+consequence). Our cascade turns those inert writes into **global mix modulation the donor never
+had**: entrances swallowed in low-root windows ("the part arrives late"), the whole mix swelling
+~2× across the early song, per-note loudness depending on *when* it triggered relative to root
+writes. **This is coherent with every reported symptom, including "simple passages fare better" and
+the two-songs observation (§75) — the defect follows the player.**
+
+### 4. Proposed fix (ENGINE's to confirm and build — not fixed toward yet)
+
+Make `Ja1Track::composedVolume()` donor-faithful: **own volume² (mode 0) × outer param; NO parent
+recursion** — mirroring `JASTrack.cpp:530-533`. Acceptance = probe re-run (child chVol should equal
+`raw²` independent of root) + the user's ear on `i_linkin`. Per protocol the divergence is fact;
+"this is what you hear" is confirmed only by the fix-and-listen loop.
+
+### Lanes
+- **Engine:** the fix above; re-probe; ship for ear test.
+- **User:** listen to `i_linkin` again after Engine ships — the acceptance test for the whole
+  balance thread.
+- **History / Bridge:** clear.
+- **Housing:** this closes my probe-analysis task; §43 + M5b-extension remain.
+
+---
+
+## §77 CAPTURE COMPARISON — old captures re-analyzed (inconclusive, with reasons); wav-compare tool spec (Housing Security, 2026-07-22)
+
+User's actual ask (corrected from my misread): not "can we dump audio" — that was done Jul 20
+(`C:\Users\xxxxx\Videos\WW comparisons`: `WWOutsetEx/Int.mkv` = Dolphin, `TPOutsetEx/Int.mkv` = ours;
+earlier comparison found no difference) — but **can a tool/probe ANALYZE donor-vs-ours audio.**
+
+### Today's re-analysis of the existing captures (numpy RMS envelopes, 1s/5s windows)
+
+| capture | dur | mean RMS | envelope character |
+|---|---|---|---|
+| WWOutsetEx (Dolphin) | 120s | 0.0687 | fluctuating 49–86, no trend |
+| TPOutsetEx (ours) | 121s | 0.0959 | fluctuating 63–120, no trend |
+| WWOutsetInt / TPOutsetInt | 80s/121s | 0.042/0.058 | similar picture |
+
+**No decisive §76 cascade signature found — and that is expected, not exculpatory:**
+1. **Wrong song for the prediction.** The §76 root-volume timeline (1.0→0→0.71→0.96) was measured
+   on `i_linkin` (Jul 22 rig). These Jul-20 captures play **base `i_link`**, whose root-write
+   pattern is unmeasured — the predicted envelope shape does not transfer.
+2. **Old defects baked in**: captured before the §B tempo fix (−11.8%) — time axes don't align.
+3. **Uncontrolled gains**: Dolphin and dusklight app volumes are independent; cross-file absolute
+   levels (ours reads 1.4× louder) are untrustworthy.
+4. **SFX pollution**: whole-mix RMS includes waves/footsteps/ambient.
+5. **Song start not cleanly captured** (music already present at t=0).
+
+This is also the likely reason the earlier comparison "found no difference" — coarse whole-mix
+comparison under these conditions cannot see per-layer effects. **The instrument idea is right; the
+material can't answer it.**
+
+### BRIDGE ASK — `wav-compare` (durable tool; reusable for every future audio port)
+
+Input: two WAV/MKV captures + optional tempo ratio. Stages:
+1. silence-align both to first musical onset;
+2. tempo-normalize (known ratio or onset-autocorrelation);
+3. **per-band level envelopes** (e.g. 6–8 log bands — separates bass/melody/percussion layers)
+   normalized per-file (gain-independent), plotted/CSV side by side + difference;
+4. onset-list extraction per band → entrance-time deltas (the "parts arrive late" observable);
+5. verdict block: which bands/timespans diverge beyond threshold (№31-C: falsifiable output).
+Live dual-window viewing is possible (OBS per-app capture) but strictly worse for analysis than
+recorded-then-compared; not recommended as the primary instrument.
+
+### USER CAPTURE PROTOCOL — the decisive round (when Engine's cascade fix ships)
+
+Both sides play **the same arrangement** now (our rig → `i_linkin`; Dolphin fresh save = donor's
+`ISLAND_LINK_0` state):
+1. Same recording chain both captures, same session; set BOTH app volumes to 100% (or capture
+   per-app loopback) and note them.
+2. Start recording BEFORE entering the island so the song start is in-capture.
+3. Stand still (no footsteps), day time, no enemies; ≥1 full loop (~2 min).
+4. Name: `WW_ilinkin_ref.mkv` / `DL_ilinkin_postfix.mkv` → `Videos\WW comparisons\round2\`.
+5. Covenant: captures stay outside repo + outside the mod package (never-commit).
+
+**Sequencing:** capture AFTER the §76 cascade fix ships — then this A/B is the acceptance
+instrument for the whole balance thread (measurement replaces ear-description, which the user has
+asked for before). If divergence remains post-fix, the per-band deltas name the next target
+objectively.
+
+### Lanes
+- **Bridge:** `wav-compare` per spec above.
+- **Engine:** cascade fix (§76) unchanged — this thread is its acceptance instrument.
+- **User:** round-2 captures after the fix; protocol above.
+- **History:** clear. **Housing:** this closes the §77 analysis pass.
+
+## §77b LIVE A/B ANALYZER — user's actual ask, answered YES; Bridge build spec (2026-07-22)
+
+User's question, now understood precisely: **a tool that records AND analyzes BOTH apps' audio LIVE,
+while Dolphin (WW donor) and dusklight run side by side — no manual recording step.** Answer: **YES.**
+Feasibility verified on the user's machine (Housing, today):
+
+- **Per-app split:** Windows per-app output-device routing (Settings → Sound → volume mixer / app
+  device preferences). Assign Dolphin → one output, dusklight → another. **The machine already has
+  a spare virtual sink** ("Steam Streaming Speakers") beside Realtek/NVIDIA — nothing to install.
+- **Dual capture:** WASAPI *device* loopback on both outputs simultaneously (`pyaudiowpatch`, one
+  `pip install`; not present yet — verified absent).
+- **Live analysis loop:** per-band RMS meters side by side (6–8 log bands), running divergence
+  indicator, rolling envelope; simultaneously auto-writes both WAVs so the §77 offline
+  `wav-compare` deep pass gets its input from the same session for free.
+
+**BRIDGE ASK (supersedes nothing — §77 wav-compare stands as the offline stage):** build
+`live-ab` — dual WASAPI-loopback capture by output device, live per-band A/B meters + divergence
+flag, auto-record to `round2\` naming. Setup doc: the two-line Windows routing step. The user then
+just plays both windows; the tool watches.
+
+**Sequencing note:** live meters answer "which layer, roughly when" in real time; the recorded WAVs
+still feed the §77 offline pass for verdict-grade numbers. Same session serves both. Most decisive
+run remains: after Engine's §76 cascade fix, both sides on the `i_linkin` arrangement.
+
+Lanes — **Bridge:** `live-ab` + wav-compare. **User:** one `pip install pyaudiowpatch` + the
+per-app routing step when the tool lands. **Engine:** cascade fix unchanged. **History:** clear.
+
+## §77c live-ab — privacy constraints + diagnostic depth (user requirements, 2026-07-22)
+
+User raised three requirements before the tool is built; all bind the Bridge spec:
+
+1. **DELETABLE — yes, trivially.** One script in `albt bridge` + one pip package
+   (`pip uninstall pyaudiowpatch`) + the capture files. Nothing installs services, drivers, or
+   hooks; deleting the folder removes the tool. Captures are plain local files, user-deletable.
+2. **PRIVACY — audio only, and scoped to the two games. BINDING SPEC:**
+   - **No screen/video capture of any kind.** The tool opens audio loopback only.
+   - **Scope guarantee, two acceptable implementations (Bridge picks):**
+     (a) *device-loopback + exclusive routing* — captures a device, so the setup doc MUST route
+     ONLY Dolphin to device A and ONLY dusklight to device B, with system-default sounds moved to
+     a third device; anything else routed there would be captured, so the doc must say so plainly;
+     (b) *process-loopback* (Win10 2004+ per-PID capture) — captures ONLY `Dolphin.exe` and ONLY
+     the dusklight exe by process id, airtight regardless of routing. **(b) is the covenant-grade
+     answer if feasible; (a) acceptable with the routing discipline documented.**
+   - Captures stay local (`Videos\WW comparisons\round2\`), never in repo or mod package,
+     delete-after-use at user's discretion.
+3. **WHAT, not just WHETHER — yes, by construction, with honest limits:**
+   - Per-band envelopes name **which frequency layer** (bass/mid/melody/percussion), **when**
+     (timeline position), and **by how much** (dB delta) — e.g. "mid-band layer runs ~4 dB hot
+     from 0:32–0:58 and its entrances land ~300 ms late."
+   - Onset-delta lists per band = the "parts arrive at the wrong time" observable, quantified.
+   - **Limit stated plainly:** full-mix analysis names *band + time + magnitude*, not the
+     instrument by name; two instruments sharing a band blur. The closing move stays paired: the
+     live/offline A/B **locates** the divergence, the engine probe + dumps (per-track ground truth)
+     **name the track** at that location. Together they answer WHAT end to end.
+
+## §77d live-ab usage protocol — simultaneous vs sequential (2026-07-22)
+
+User asked which way to run it. Both are supported by the same tool (it just captures whatever each
+source plays); they serve different purposes:
+
+- **Simultaneous (both games at once)** — the quick gross look. Mute one side's routing and listen
+  to the other; the meters watch both. Caveats: (1) the two games won't be at the same point in the
+  song, so moment-to-moment meter comparison is rough until the offline pass aligns them; (2)
+  **methodological trap — CPU/GPU contention:** our ExtSeq player is frame-clocked, so a heavy
+  Dolphin running beside dusklight can slow OUR playback — distorting the very thing being
+  measured. Fine for "is that layer even present," not for verdict data.
+- **Sequential (one by one, same tool session)** — the verdict-grade mode. Each game runs at full
+  performance, each capture is clean, you can actually listen to each; the offline pass aligns the
+  two recordings afterward (it never needed them simultaneous — alignment is computed, not
+  performed). **Recommended for the post-§76-fix acceptance round.**
+
+Both modes: fresh-save state in Dolphin + our `i_linkin` rig, so both sides play the same
+arrangement; recording starts before island entry; ≥1 full loop each.
+
+## §77e Bridge response — `live-ab` + `wav-compare` landed (2026-07-22)
+
+Tool **0.24.0**. §77 offline + §77b live analyzer closed as one session pipeline.
+
+```bat
+cd /d "C:\Users\xxxxx\Documents\albt bridge"
+pip install -r requirements-audio.txt
+python -m ww_bridge live-ab --list-devices
+python -m ww_bridge live-ab --device-a <idx> --device-b <idx> --tag ilinkin
+python -m ww_bridge wav-compare WW_….wav DL_….wav
+```
+
+### What shipped
+
+| Piece | Role |
+|-------|------|
+| `live-ab` | Dual WASAPI **device** loopback (`pyaudiowpatch`); live 8-band meters A/B; running **DIVERGE** flag; auto-WAV to `Videos\WW comparisons\round2\` |
+| `wav-compare` | Silence-align → tempo normalize → per-band envelopes + onset deltas → falsifiable `WITHIN`/`DIVERGE` verdict + CSVs |
+| Same session | `live-ab` ends by feeding the two WAVs into `wav-compare` (unless `--no-compare`) |
+| Setup | `reports/live_ab_setup.md` — routing discipline, privacy, sequential vs simultaneous |
+
+### Privacy pick (§77c)
+
+**(a) device-loopback** — matches the §77b feasibility path. Setup doc requires exclusive routing
+(Dolphin→A, dusklight→B, system sounds→third). No screen/video. Captures local-only, deletable.
+Process-loopback (b) not in this build (needs a different library); revisit if routing leaks.
+
+### Limit (stated)
+
+Band + time + magnitude — not instrument-by-name. Engine track probes still close the WHAT loop.
+
+### Lanes after this
+
+- **User:** `pip install -r requirements-audio.txt` + per-app device routing; prefer **sequential**
+  captures for verdict (§77d).
+- **Engine:** §76 cascade fix unchanged — this is its acceptance instrument.
+- **Bridge:** analyzer lane closed until a follow-up ask.
+
+## §77e live-ab 0.24.0 — VERIFIED READY (Housing Security, 2026-07-22)
+
+Bridge's ship verified end to end, not on report:
+- **Privacy (§77c):** source is audio-only (no screen/video APIs — grepped); mode (a) device
+  loopback with the routing discipline stated plainly in `reports/live_ab_setup.md` ("anything else
+  routed to A or B will be recorded"), system-sounds-to-third-device step included, deletability
+  documented, PID-loopback honestly disclosed as not-in-build with a revisit path. **Compliant.**
+- **№31-C:** missing dep fails loud with the exact fix ("live-ab needs pyaudiowpatch. pip install…").
+- **End-to-end:** deps installed (`requirements-audio.txt` = numpy + pyaudiowpatch only, as
+  declared); `--list-devices` enumerates 4 loopback candidates: [25] Realtek speakers,
+  [27] Steam Streaming Speakers (virtual, silent — ideal B-sink), [28] JBL headphones, [26] Steam
+  mic-speakers. Device report written to `reports/live_ab_devices.md`.
+- Captures → `Videos\WW comparisons\round2\` (outside repo + package). Covenant clean.
+
+**Ready state:** route Dolphin → 25, dusklight → 27, system default → 28 (or any third), then
+`python -m ww_bridge live-ab --device-a 25 --device-b 27 --tag ilinkin`.
+
+**Sequencing:** the ACCEPTANCE round still waits on Engine's §76 cascade fix. OPTIONAL and useful
+now: a PRE-fix baseline session with the same tags — then the fix's audible effect itself becomes a
+measured before/after, not a memory.
+
+## §77f live-ab UX friction — index instability (BRIDGE ASK, small, 2026-07-22)
+
+First real-user run hit `no device index 25` — WASAPI/PortAudio indices are enumeration-order
+dependent and shift between sessions (Bluetooth headset presence reorders the list), so indices
+from one session are wrong in the next. Two small fixes:
+1. **Select by name substring**: `--device-a realtek --device-b "steam streaming speakers"`
+   (case-insensitive contains, error if ambiguous). Indices stay accepted for power use.
+2. **On bad selection, print the current candidate list** in the error itself (№31-C — the failure
+   should carry the fix), instead of requiring a separate `--list-devices` round trip.
+Interim workaround given to user: run `--list-devices` in the same session and use those indices.
+
+## §77g live-ab — second failure mode: HOT-PLUG re-enumeration (2026-07-22)
+
+User plugged in a DualSense mid-setup — the controller IS an audio device (4-ch "Speakers
+(DualSense Wireless Controller)" loopback endpoint). Hot-plugging re-enumerates the whole WASAPI
+set: all indices shift AND live capture streams on existing devices can die/move (Windows may also
+steal default output to the new device). Session produced an empty round2/ + a hung python (killed).
+
+**BRIDGE ASK (appends to §77f):** setup doc + tool must state the stability rule — **connect every
+device (controller included) BEFORE `--list-devices`, and no hot-plugging during capture**;
+name-based selection (§77f-1) survives the index shift but not mid-session stream death, so also:
+on a device-change event mid-capture, fail LOUD with a "device set changed — session invalid" error
+rather than recording silence (№31-C).
+
+**Corrected run order for the user (controller must be present to play anyway):**
+1. controller connected first → 2. per-app routing checked (Windows may have reset it; also move
+system default OFF DualSense, e.g. → Steam Streaming Microphone) → 3. `--list-devices` →
+4. run with THAT session's indices → 5. no plugging/unplugging until Ctrl+C.
+
+---
+
+## §78 ROUND-2 A/B SESSION — first at-the-speaker verdict; a new per-band lead (Housing Security, 2026-07-22)
+
+### Session salvage (for the record)
+
+DualSense hot-plug had silently re-routed dusklight off device B → `DL_*.wav` was 44 bytes
+(header only). **But the DL audio landed on device A (Realtek) — inside the WW file's tail.** Both
+performances salvaged from the ONE file: WW 0:11–8:06 (menu → storybook ends 4:10–4:16, per user's
+3:28 + start offset → medley+theme, user-cleaned tail), switch gap, DL 8:43–12:07 (menu → Fado run →
+music from ~9:00). **Same device = same gain chain — level comparisons are cleaner than the
+two-device design.** Segments cut; Bridge `wav-compare` run twice (raw + music-aligned B cut).
+
+**BRIDGE defects filed:** (1) finalize wrote a header-only WAV with no "channel captured 0 frames"
+warning — №31-C violation, must warn; (2) tempo estimator returned 0.9619 on both runs while the
+alignment-immune loop-period method (below) says 1.3% — estimator is content-contaminated (SFX in
+A); (3) nice-to-have: `--b-start` manual align + per-side onset-density table.
+
+### Headline 1 — §B tempo fix CONFIRMED at the speaker; small residual
+
+Loop-period autocorrelation per side (immune to SFX, alignment, and content differences — the same
+BMS loops on both sides): **WW ~52.4 s vs DL ~53.1 s → DL ≈ 1.3 % slow** (±~0.4%). Against the
+pre-fix −11.8 %, the remainder-carry fix is **verified effective in real playback**. The ~1.3 %
+residual is a real Engine query (with the caveat that Dolphin's own run speed wasn't independently
+clocked this session).
+
+### Headline 2 — the §76 cascade swell is NOT the dominant audible driver
+
+The predicted early-envelope climb (×0.50→×0.92) is **absent at 10 s resolution** in the DL side's
+own envelope (blocks hover 0.81–1.15 with no trend, matching WW's spread). Root reaches its steady
+value quickly, after which the cascade is a near-uniform −0.7 dB — **global, not per-layer**.
+**The cascade fix remains mandatory (donor law, №31-B)** — but the user's skepticism ("not sure
+levels are the only explanation") is **validated by measurement**. Something else carries the
+audible wrongness.
+
+### Headline 3 — THE NEW LEAD: per-band attack-density asymmetry (clean run, footsteps excised)
+
+| band | WW onsets | DL onsets | ratio |
+|---|---:|---:|---|
+| 400–1000 Hz | 328 | 234 | 0.71× |
+| **1000–2500 Hz** | **36** | **129** | **3.6×** |
+| **2500–6000 Hz** | **178** | **96** | **0.54×** |
+| other bands | ~equal | ~equal | — |
+
+**DL's note-attacks sit in DIFFERENT frequency bands than WW's** — massively over-attacking in the
+low-melody band, under-attacking in the bands above and below it. This is the first **objective
+fingerprint** of "same layers, wrong presentation": energy that should attack at 2.5–6 kHz is
+appearing at 1–2.5 kHz. Consistent with instruments sounding in the **wrong register/timbre**, not
+with a volume error.
+
+**Candidate mechanism (flagged as candidate — Engine confirms, discipline per 8 dead hypotheses):**
+**key-region → wave selection.** §A verified bank BYTES pristine and §C.1 verified program TARGETS
+match — but the channel-side synthesis path (which wave a program picks for a given key, per the
+IBNK `key_region`/`high_key` boundaries visible in `ibnk_initvol.csv`) was **never end-to-end
+verified.** A region-boundary bug shifts an instrument's notes one wave down/up — wrong register,
+wrong timbre, band fingerprint exactly like the above. First check: our `ja1_bank` key-region
+lookup vs donor `JASBankMgr`/`JASBasicInst` selection, byte-by-byte for the 36 programs in use.
+
+### Artifacts
+
+`round2\wav_compare_clean.md` + `wav_compare_bands.csv` + `wav_compare_onsets.csv`; segments
+`WW_ilinkin_music_seg.wav` / `DL_ilinkin_music_seg2.wav`. All local, never repo/package.
+
+### Lanes
+- **Engine:** (1) ship the §76 cascade fix regardless (donor law); (2) **NEW primary thread:
+  key-region wave selection audit** (`ja1_bank` vs donor) per Headline 3; (3) the 1.3 % residual
+  tempo query.
+- **Bridge:** the three defects/asks above.
+- **User:** nothing required — this session produced the data. Next capture round only after
+  Engine's fixes (same protocol, ideally without the controller surprise).
+- **History:** clear.
+
+## §78c Bridge response — three defects fixed (2026-07-22)
+
+Tool **0.24.1**.
+
+| # | Defect | Fix |
+|---|--------|-----|
+| 1 | Header-only WAV, no warn | `live-ab` finalize: `WARN … 0 frames` + `GATE INCONCLUSIVE` + **exit 3** |
+| 2 | Tempo 0.9619 (~4%) vs truth ~1.3% | Replace short-lag onset autocorrelator with **loop-period** long-lag (20–90 s) per side; `stretch_B = period_A/period_B` |
+| 3 | Manual align + density table | `--b-start` / `--a-start` (seconds); report **Onset density** table (A/B counts + B/A ratio) |
+
+```bat
+python -m ww_bridge wav-compare A.wav B.wav --b-start 12.5
+```
+
+## §78b Tool dormancy + removal covenant + Headline-3 confound caveat (2026-07-22)
+
+1. **live-ab is NOT recording.** Verified: no capture process alive (loopback streams exist only
+   while a process holds them; the session process exited at finalize). The tool is inert files on
+   disk until explicitly launched.
+2. **REMOVAL COVENANT (user-decreed, saved to persistent memory):** when audio work concludes, the
+   capture toolchain is removed IN ITS ENTIRETY — pyaudiowpatch, live_ab module, setup/device docs,
+   and (at user's choice) the captures — **without the user needing to ask.** Acceptance state that
+   triggers it: `WITHIN` verdict + user ear sign-off. Bridge deletes; Housing verifies.
+3. **Headline-3 confound caveat (user skepticism, seconded):** WW-side background noise (waves,
+   gulls, Aryll) raises the per-band noise floor and can MASK onset detection → WW's melody-band
+   count (36) may be deflated rather than DL's (129) inflated. The 3.6×/0.54× asymmetry direction
+   is still suspicious (broadband SFX should *add* WW onsets, not remove them at 2.5-6 kHz), but
+   the MAGNITUDE is untrusted. **Refinement before Engine leans on it:** re-run the band/onset
+   comparison restricted to the user's cleaned WW tail window vs its aligned DL window; and
+   Engine's key-region audit is a SOURCE-level check that needs no audio at all — it stands on its
+   own regardless.
+4. **The faithfulness loop, named:** donor-source fidelity (№31-B) supplies the fixes; at-the-
+   speaker A/B supplies falsifiable acceptance; the user's ear supplies final sign-off. Finish
+   line: all bands `WITHIN` threshold on a clean-window comparison + ear pass. That definition is
+   what makes "audio vanilla-faithful" a completable task instead of an asymptote — and its
+   completion triggers item 2.
+
+## §79 Cascade shipped+verified; key-region static CLEARED; 1.3% cross-validated (Housing, 2026-07-22)
+
+**Engine absorbed:**
+1. **§76 cascade fix — source-verified by Housing:** `composedVolume()` is own² only, donor citation
+   in-comment (`JASTrack.cpp:530-533`), outer-param stub honestly documented (§C.2 field-unused).
+   Parent recursion gone. **Awaiting the user ear-check on `i_linkin` — the immediate user action.**
+2. **Key-region STATIC tables: 111/111 MATCH** (engine slot 1 ≡ WW bank 21; dump + audit tool
+   shipped). §78 Headline-3's *static* candidate is cleared the right way — measured, not argued.
+   **Primary thread → the RUNTIME path:** BMS bank/prog application, `setKey(key−baseKey)`, pitch —
+   live `DUSK_EXTSEQ_KEY_AUDIT=1`.
+3. **1.3% tempo: instrumented, not retuned** (`tempoProbe` ~10s: wall ticks/s vs target + implied
+   fps). `/1800` held until evidence says otherwise — correct discipline.
+
+**Bridge 0.24.1 absorbed — and the tempo fix is CROSS-VALIDATED:** re-ran wav-compare on the
+round-2 segments; new loop-period estimator reports **0.9868 (≈1.33% slow)** — converging with
+Housing's independent §78 autocorrelation (1.0134). Two implementations, one number; the old 4% is
+confirmed contamination. 0-frame INCONCLUSIVE + `--a/b-start` verified present; the 0-frame path
+gets organically tested next capture session. (Verdict on the old segments is still DIVERGE, as
+expected — they're PRE-cascade-fix recordings; the post-fix capture round is the real acceptance.)
+
+**The one user session that feeds everything:** launch post-fix build with
+`DUSK_EXTSEQ_KEY_AUDIT=1`, enter Outset (`i_linkin` rig), listen (cascade ear-check), then paste
+`keyAudit` + `tempoProbe` lines. One play = ear verdict + runtime-key data + tempo evidence.
+
+Lanes — **User:** the session above. **Engine:** holds for keyAudit/tempoProbe lines.
+**Bridge:** clear. **History:** clear. **Housing:** verification duties done this turn; §43 +
+M5b-extension still my backlog.
+
+---
+
+## §80 KEY-AUDIT RUN ANALYZED — keyAudit clean; tempoProbe numbers DO NOT COHERE; "notes cut off" recorded; donor-file completeness answered (Housing, 2026-07-22)
+
+Log: `dusklight-20260722-115903.log`. User confounds noted (menu→Fado start, sword swings at end —
+log-based analysis unaffected). **New ear observable:** entrances no longer obviously early/late
+("didn't sound like layers were starting sooner, maybe"), **but "other parts sounded muted/cut off
+before they could play their note fully."** A NOTE-DURATION/SUSTAIN symptom — sharper than anything
+prior.
+
+### 1. keyAudit (48 lines): NO visible anomaly
+
+Selections are internally consistent — every `key ≤ highKey` for its region, baseKeys sane,
+`pitchScale=1.0`, region boundaries hit exactly (e.g. key 68 → region with highKey 68). Runtime
+selection agrees with the statically-matched tables as far as 48 samples show. Engine's diff tool
+has the full-set comparison; nothing here contradicts the 111/111 static MATCH.
+
+### 2. tempoProbe: THE INSTRUMENT'S NUMBERS CANNOT ALL BE TRUE — reconcile before retuning ANYTHING
+
+```
+wall_ticks/s=238  target@60fps=476  ratio=0.500 (locked 0.4998-0.5002)  frames~=30→60→90→…→240
+```
+- `wall=238 t/s` is exactly the BASE `i_link` rate (119×120/60); the probe's `target=476` implies
+  the song (i_linkin) carries **timebase 240** (first line `target=412` → medley tempo 103@tb240,
+  then 119@tb240 = 476) — i.e. **i_linkin has a different timebase and a mid-song tempo change.**
+- A true ratio of 0.500 = HALF-SPEED playback. **Both the user's ear (no gross slowdown reported —
+  half speed is unmissable) and the A/B loop-period (−1.3%) contradict that.** And the `frames~`
+  column climbing 30→240 in perfect steps of 30 does not read as a frame rate.
+- **Conclusion: the probe's target/units arithmetic is suspect (№31-C — the reference the
+  instrument reports against must itself be verified).** ENGINE: reconcile the probe first; nothing
+  is retuned on these numbers.
+- **The nugget worth keeping regardless:** if `i_linkin` genuinely uses **timebase 240 + tempo
+  changes** where base `i_link` used 120/static, then any tick-rate or note-GATE arithmetic that
+  assumes the base song's semantics mis-times **note durations** on this song — and mis-held gates
+  is exactly what **"cut off before finishing the note"** sounds like. FLAGGED AS QUESTION, not
+  claim (the probe contradiction must be resolved first; hypothesis-discipline stands).
+
+### 3. "Are we missing donor files that make music work?" — answered with evidence
+
+**No — for the sequence-music chain, and provably.** What donor sequence playback consumes, vs us:
+| donor piece | status |
+|---|---|
+| `JaiSeqs.arc` → the `.bms` | shipped, **byte-identical** (§74 family check) |
+| `JaiInit.aaf` IBNK (programs, key/vel regions, **envelopes/oscillators**) | shipped as slices, **exact donor sub-ranges** |
+| `JaiInit.aaf` WSYS (wave metadata: rates, base keys, **loop points**) | shipped as slices, **exact** |
+| `Banks/*.aw` (the wave audio) | shipped, **md5-identical** |
+| rest of `JaiInit.aaf` (SE tables, BSM stream list) | not shipped — not consumed by sequence synthesis |
+| `JaiRoom.tbl` | not shipped — room FX/ambience config, not note content |
+| `Stream/*.afc` | not shipped — streams, not sequences (deferred by design) |
+Velocity curves and driver tables are **code-side** in the donor (JASDriver), not file-side.
+Supporting evidence beyond the byte checks: the A/B showed right notes, right instruments, right
+tempo ±1.3% — missing FILES fail loudly (silence, wrong samples), not subtly. **The remaining
+wrongness lives in APPLICATION, not supply** — №31-B's distinction, again. The user's "cut off
+early" points at runtime synthesis semantics: note gates, ADSR release, or wave-loop sustain —
+the data for all of which is verifiably on disk. *(Open sliver, low priority: Bridge may confirm no
+sequence-referenced global table sits in the unsliced AAF remainder.)*
+
+### Lanes
+- **Engine (ordered):** (1) reconcile tempoProbe arithmetic — its three numbers are mutually
+  impossible; (2) answer the **timebase-240/tempo-change semantics question** for i_linkin
+  (tick rate AND note-gate handling); (3) the "notes cut off" observable joins the runtime thread
+  (gate length / ADSR release / wave-loop sustain candidates, in that checking order).
+- **Bridge (low):** confirm i_linkin's timebase/tempo events in the golden decode (settles the
+  probe question from the data side); optional AAF-remainder scan.
+- **User:** nothing new needed — your ear report + this log did the work. Next session only after
+  Engine's probe fix.
+- **History:** clear.
+
+---
+
+## §81 THE USER'S QUESTION FINDS REAL UNPORTED CONTROL TABLES (Housing Security, 2026-07-22)
+
+User asked — twice, correctly rejecting my first answer — not whether the SONG's data is complete,
+but whether **surrounding files that tell the music how to play** are missing. Enumerated
+`JaiInit.aaf`'s full chunk table and matched it against the donor's own parser
+(`JAIInitData.cpp checkInitDataOnMemory`, which names every type). Result:
+
+| chunk | size | donor consumer | our port |
+|---|---|---|---|
+| type 1 | 38,080 b | **`SoundTable::init`** — sound-ID → behavior table (BGM ids resolve through it) | **NOT PORTED** — manifest id→file bypasses it |
+| type 2 | 65 IBNKs | instrument banks | ✓ the 2 needed, byte-exact |
+| type 3 | 65 WSYS | wave metadata | ✓ the 2 needed, byte-exact |
+| type 5 | 3,616 b | stream list | Bridge-decoded (offline) |
+| type 6 | **64 b** | **sound-SCENE table** (`setParamSoundSceneMax` + per-scene ptrs) | **NOT PORTED** |
+| type 7 | **320 b** | **`Fx::initOnCodeFxScene` — per-scene FX/REVERB config** | **NOT PORTED** |
+
+**The FX line is the one with a direct route to the current ear symptom.** The BMS writes `fxmix`
+(set_param target 2 — 24 in i_link, 12 in house; §C.1 histogram) and our track code computes and
+hands `mFxMix` to the channel — but whether any **actual reverb bus** receives it on a WW host
+stage is unverified: TP stages configure reverb from TP stage data, and the neutral F_DL/R_DL
+skeletons likely configure NONE, while donor Outset has the type-7 scene FX + `JaiRoom.tbl`.
+**A dry mix ends notes abruptly where the donor's reverb tail lets them ring — plausibly the
+user's "muted/cut off before they could play their note fully." CANDIDATE, not claim.**
+
+**Also spotted in passing (same §76 pattern, flag for Engine):** our `composedFxmix()` SUMS the
+parent chain (`fx += parent.composedFxmix()`); the donor site (`JASTrack.cpp:543-554`) uses own-track
+fxmix (+outer via panCalc) with **no parent term** visible. Possible second port-invented cascade.
+
+### Lane asks
+- **Bridge:** decode **type 7** (320 b — small) and **type 6** (64 b); decode the **type-1
+  SoundTable's BGM section** (what per-sound properties ride each BGM id — the last place
+  "how to play" data could hide). All three are donor data → results live package/doc-side.
+- **Engine:** (1) one measurement — is ANY reverb/aux effect active on ExtSeq voices on F_DL01?
+  (2) check `composedFxmix` parent-sum vs donor; (3) these join the runtime thread behind the
+  probe-arithmetic fix (§80 order stands).
+- **User:** none. **History:** clear.
+
+**Credit where due:** twice I answered "the files are complete" from the supply-side frame; the
+user's insistence on the CONTROL-side frame is what surfaced three unported tables. №31-B's
+corollary gains a sibling: *supply-completeness proofs say nothing about control-completeness.*
+
+---
+
+## §82 CONTAMINATION TRIAGE — what §81's missing tables do and do not invalidate (Housing Security, 2026-07-22)
+
+User's challenge, correct and important: if control tables were missing all along, our fixes and
+measurements happened against an incomplete system — "not pure at all." Triage, item by item.
+
+### What SURVIVES UNTOUCHED — every shipped fix
+
+The saving fact: **no fix in this entire effort was ever tuned by ear or adjusted to taste. All
+three were derived from donor SOURCE and verified against donor bytes.** The missing tables change
+what the *system around them* sounds like — they do not change what `JASTrack.cpp` says:
+
+| fix | derivation | verdict |
+|---|---|---|
+| §B remainder carry | donor tick arithmetic; A/B-confirmed −11.8%→−1.3% by structure (loop period), which reverb cannot shift | **PURE** |
+| §76 cascade removal | `JASTrack.cpp:530` — the donor's composition formula, which runs identically WITH the tables present | **PURE** |
+| §C.1 instrumentation | dump/log only | **PURE** |
+| key-region static match | byte comparison vs donor tables | **PURE** |
+| content identifications (№221, §72 variants, `i_linkin`, stream map, flags №222) | data/source identification, not audio judgment | **PURE** |
+
+**This is the №31-B discipline cashing out at the exact moment it matters:** because we never once
+adjusted a constant to make something sound right, an incomplete system could not have leaked into
+any fix. Donor-law fixes are correct in ANY system state.
+
+### What IS CONFOUNDED — attributions and ear-based judgments
+
+1. **§78 Headline 3 (band/onset asymmetry) — DOWNGRADED.** Missing reverb both *smears donor-side
+   onsets* (WW's 36 in 1–2.5 kHz was recorded WITH reverb — tails suppress distinct-onset
+   detection) and *sharpens ours* (dry attacks). The 3.6×/0.54× signature is substantially
+   explainable by FX absence alone — consistent with keyAudit finding **no** register anomaly. The
+   register/timbre hypothesis is now SECONDARY to the FX-path question, not primary.
+2. **All post-fix ear judgments** ("does it sound better") — confounded by dryness until the FX
+   question resolves. This includes the pending cascade ear-check: a correct fix can still "sound
+   wrong" in a dry mix.
+3. **The acceptance finish line (§78b: WITHIN + ear) — SUSPENDED** until the three tables are
+   decoded and, where music-relevant, ported. Evaluating acceptance now would risk tuning the
+   system toward a reverb-less rendition. **A missing subsystem must be filled, not compensated
+   for** — №31-B's corollary in fix form.
+
+### Recommended order (for Bridge + Engine via user)
+
+1. **Engine's ONE cheap measurement first:** is any reverb/aux active on ExtSeq voices on F_DL01?
+   (§81). If no — one absent subsystem plausibly explains "muted/cut off," the onset asymmetry, AND
+   the residual dry feel, collapsing several open threads into one build item.
+2. **Bridge decodes the three tables** (§81 asks: type 7 = 320 b, type 6 = 64 b, type 1 BGM
+   section) — establishes what "control-complete" even means before anything is built.
+3. **Runtime-thread hunts (gate/ADSR/loop, probe arithmetic) PAUSE** until 1+2 land — chasing
+   subtle bugs inside a system missing a known subsystem burns rounds against a moving reference.
+   (The §80 probe-arithmetic reconciliation can proceed — it is instrument-internal.)
+4. Then: port what the tables say (donor law, as ever), re-run the A/B, THEN resume ear judgments.
+
+### The standing lesson (proposed for cookbook §0 when ratified)
+
+**№31-D — COMPLETENESS BEFORE ATTRIBUTION.** Before attributing a perceptual defect to a subsystem,
+enumerate the donor's full consumption of its control surface (the donor's own init/parser code is
+the checklist — `checkInitDataOnMemory` was sitting there naming every table all along). Supply
+proofs (§A) and control-completeness are separate audits; §81 exists because only one was done.
+
+
+## §81b Bridge response — aaf-control type 6/7 + SoundTable BGM (2026-07-22)
+
+Tool **0.25.0**. Decode complete for the three §81 control surfaces.
+
+```bat
+python -m ww_bridge aaf-control
+python -m ww_bridge aaf-control --stage
+```
+
+Artifacts (package-side, no WW audio bytes): `reports/aaf_control.md`,
+`aaf_soundtable_bgm.csv`, `aaf_fx_scenes.csv`, `aaf_sound_scenes.csv`.
+Staged under mod `audio/ww_jaudio1/control/` when `--stage`.
+
+### Type 7 — Fx::initOnCodeFxScene (320 b) — MUSIC-RELEVANT
+
+- `fxSceneMax=2`, bufSizes=`[32,32,56,56]`, 4× `FxlineConfig_` (0x20) per scene.
+- All 8 lines **enable=1**. Scene 0 vs 1 **differ on line2 + line3** (reverb/aux buses):
+  - scene0 L2/L3: sendA=0, dual-bus split (16384/0 and 0/16384), size 56, coef mid=22528
+  - scene1 L2/L3: sendA=10, sendB=7, both buses 16384, sizes 24/32, coef mid=16383/20479
+- Confirms donor ships **nonzero DSP Fxline** tables. Matches Engine §81 DRY measurement:
+  ExtSeq never feeds DuskDsp — type-7 data exists; host path does not consume it.
+
+### Type 6 — sound-SCENE (64 b) — LOW PRIORITY
+
+- `sceneMax=2`; blobs mostly `0x04`×16 (+ scene1 pad). Opaque `JAIBasic::field_0x1c`.
+- Unlikely cut-off / dry-tail cause.
+
+### Type 1 SoundTable BGM (cat 16) — HOW-TO-PLAY rows
+
+- **97/97** rows; `mOffsetNo` = JaiSeqs RARC member index — **97/97 MATCH** Lago BMS names.
+- Outset spotlight (`ISLAND_LINK` / `_0`/`_2`/`_3` / `HOUSE` / `HOUSE_G`):
+  `vol_u8=60` (~0.472), `pitch=1.0`, `prio=64`, `flag=0`.
+- Histogram: vol 60×83, 45×5, others rare (30/35/40/120/127).
+- Manifest `id->file` **bypasses** volume/priority/offsetNo. Absolute level may still diverge
+  if ExtSeq ignores `vol_u8`; secondary to FX for the cut-off symptom.
+
+### Port implication (report-only)
+
+1. **Primary control lead = type 7 Fxline** (Engine already confirmed DRY) — port after this decode.
+2. SoundTable `vol_u8` is secondary level control once FX lands.
+3. Type 6 can wait.
+4. Suggest-never-fill: tables decoded + staged as docs/CSV only; no invented fills.
+
+### Lanes
+- **Engine:** FX path from type-7 decode (CSV in package `reports/` + mod `control/`);
+  `composedFxmix` parent-sum check still open.
+- **Bridge:** §81 decode **done**.
+- **User / History:** clear on this ask.
+
+---
+
+## §83 CONTROL LAYER CONFIRMED REAL — dry-bus verdict + a second musical property; dual-decode verified (Housing, 2026-07-22)
+
+User relayed Engine + Bridge; both had **executed the §82 order** (step 1 = the cheap measurement,
+step 2 = the decode) — reports are current, not outdated.
+
+### Engine's DRY verdict — four independent levels, one conclusion
+
+BMS fxmix values all **0.0** (24/12 writes) · `setInitFxmix=0` · mix path is `updateMixer` only
+(`mixConfig[0]=0x150`, not AutoMixer/Dolby) · DuskDsp reverb reads only `mAutoMixerFxMix`, which
+ExtSeq never feeds. **Nothing feeds the reverb bus on F_DL01.** Live `fxProbe … DRY` added.
+One gap plausibly covers: cut-off notes, onset asymmetry, dry feel (per §82's downgrade).
+
+**§81 correction (mine, on record):** I wrote that the BMS "actively writes fxmix" implying
+nonzero sends — the values are **all zero**. Donor wetness comes from the **scene FX lines +
+mixer path defaults**, not from sequence fxmix writes. The conclusion (dry vs wet) stands; the
+mechanism attribution is corrected.
+
+### Bridge 0.25.0 decode — DUAL-DECODE VERIFIED by Housing (the ASK 17 method)
+
+Independently re-read the raw type-7 bytes (320 b @ `0x083db0`) and compared against Bridge's
+`aaf_fx_scenes.csv`: **row-for-row match** (raw_hex verbatim; 2 scenes × 4 lines, all enabled;
+scene1 L2/L3 differ — `send_a=10`, buses 16384, wider coefs). Two independent decoders, one
+answer. Type-7 is real, nonzero, scene-differentiated — **and our host feeds none of it.**
+
+### THE SECOND FINDING — a per-BGM master volume our manifest bypasses
+
+SoundTable BGM section (97/97 offsetNo↔JaiSeqs MATCH): **`JA_BGM_ISLAND_LINK` and `JA_BGM_HOUSE`
+carry `vol_u8=60` → 0.4724** — and 60/127 is the standard BGM volume CLASS across most entries
+(`defaultse` = 127). **The donor plays these songs at ~0.47 master; we play at 1.0.** Consequences:
+1. absolute loudness — directionally consistent with §77's measured 1.4× louder capture;
+2. **future music-vs-SE balance**: SE at class 127 against BGM at class 60 is a 2× relative
+   difference our bypass erases — this WILL matter the moment Aryll's voice unparks.
+
+### Check D posture on the staged `control/` payload
+
+Staged files are **derived CSVs** — the twin invariant (raw-byte identity) cannot apply to derived
+data. Today's dual-decode serves as verification for this drop. **BRIDGE ASK (covenant posture):**
+stage the RAW slices alongside (`type7_fx.bin` 320 b, `type6_scenes.bin` 64 b, `type1_soundtable.bin`
+38,080 b) so the payload stays byte-verifiable regardless of decoder — and whatever Engine consumes
+(raw preferred per №31-B) has its donor-identical source in the package.
+
+### Board
+- **Engine (the build):** control-complete FX — port type-7 Fxline into ExtSeq/DuskDsp — **plus the
+  SoundTable per-BGM volume application** (both donor law). Runtime chases stay paused (§82).
+- **Bridge:** raw-slice staging ask above; otherwise clear.
+- **User:** nothing until the build lands; then A/B round 3 + ear judgments resume (acceptance
+  still suspended per §82).
+- **History:** clear. **Housing:** dual-decode + this record; §43/M5b-ext backlog unchanged.
+
+---
+
+## §84 Engine — type-7 Fxline + SoundTable master vol shipped (2026-07-22)
+
+Engine executed the §83 board item. Runtime key/`setKey`/gate chases **remain paused**.
+
+### What landed
+
+1. **Load** package `control/aaf_fx_scenes.csv` + `aaf_soundtable_bgm.csv` at ExtSeq package load
+   (`d_ext_seq_space.cpp` `loadControlTables`).
+2. **Apply per host** on `startOwnedImmediate`: scene 0 = F_DL*, scene 1 = R_DL*; stem → SoundTable
+   `vol_over_127` master.
+3. **DuskDsp:** `applyExtSeqFxScene` configures freeverb (room/damp from buf/coef[6]); stores send.
+4. **Voices:** ExtSeq `mixConfig[0]=0xffff` (AutoMixer/Dolby) so reverb reads `mAutoMixerFxMix`;
+   `composedFxmix` = BMS timed-sum + scene send (BMS alone stays 0).
+5. **Level:** `composedVolume` × `getExtSeqMasterVol()` (Outset `i_link`/`house` → **0.4724**).
+
+PC maps GC Fxline → freeverb+send; not a cycle-accurate DSP port. Expect
+`§81 fxProbe … WET` and `masterVol=0.4724` on F_DL01.
+
+### Board
+- **User:** A/B round 3 + ear (acceptance still §82-aware).
+- **Engine:** clear on this ask; runtime chases paused until ear.
+- **Bridge:** optional raw-slice staging (§83); otherwise clear.
+- **History:** tip + findings updated.
+
+## §84b Session log verified — build live and behaving; ear-fatigue protocol; stale-twin sighting (Housing, 2026-07-22)
+
+Log `dusklight-20260722-134843`: **all §81 markers fired as claimed** — `applyFxScene scene=0
+send=0.500 room=0.850 damp=0.688`, `masterVol=0.4724 stem='i_linkin'`, `fxProbe … WET`
+(fxmix 1.0 = sound 0.5 + ch 0.5, reverbInputGain≈0.2125), handoff ja2→F_DL01 clean. The user's
+"perhaps a little better / notes don't cut off as sharply" was heard against a genuinely WET system.
+
+**Remaining ear observable (recorded):** "some instruments still not at their right volume and/or
+sequence order." Now measurable — round-3 A/B is the arbiter (reverb present on both sides makes
+band/onset comparison meaningful for the first time).
+
+**User's epistemics concern, honored as process:** repeated exposure degrades the ear's reference
+("psychologically interpreting the music as the same"). Response: (1) acceptance weight is
+measurement-first from here (§82 already suspended ear-only acceptance); (2) **ear-hygiene
+protocol** — re-anchor by playing the round-2 WW reference segment (`WW_ilinkin_music_seg.wav`)
+immediately before judging the game, at roughly matched loudness (masterVol makes us quieter now;
+louder sources read as "clearer" and bias the verdict); short sessions; ear rests.
+
+**Stale-twin sighting (separate lane, logged for cleanup):** five `z2sewave_*.aw` twins REFUSED on
+size mismatch (fell back to vanilla, loud log — **№28 B10 behaving exactly as designed**). That's
+TP-side custom-audio (ALBW lane) payload gone stale somewhere in `model_replacements/` — no WW
+impact, no urgency; flagged for the custom-audio lane's next cleanup.
+
+**Round-3 plan:** reuse round-2 WW reference; capture DL side only (post-build); `wav-compare` with
+`--b-start`; gain caveat noted (§84 side). Then decide whether the runtime thread (gate/ADSR/loop)
+unpauses, based on numbers, not ears.
+
+---
+
+## §85 VOICE PARTIAL UNPARK + Aryll's opening voice: MECHANISM IDENTIFIED (Housing Security, 2026-07-22)
+
+### User decision (recorded)
+
+Voice work partially unparks: **identification now, then exactly ONE test — Aryll in the opening
+cutscene.** If the test fails in a way related to the theme problems, voice re-parks until the theme
+is finished. Rationale from §85-scoping: voices are a THIRD playback family (one-shot SE waves — no
+sequencer), dodging the BMS-surface bugs entirely; their two control dependencies (SoundTable
+classes, scene FX) were discovered/built by the music work. Identification tasks touch no ExtSeq
+code — zero confound with the paused runtime thread.
+
+### The mechanism — found and source-cited
+
+1. **Voices are message-tied**, exactly as §75 suspected. `d_msg.cpp:1914` (and `d_mesg.cpp:2007`):
+   on message open, `if (mMesgEntry.mInitialSound != 0) mDoAud_messageSePlay(mInitialSound, NULL,
+   dComIfGp_getReverb(roomNo))`. **Every BMG message entry carries its own voice cue** — and it is
+   played WITH room reverb (the §81 FX path serves voices too, as §85-scoping predicted).
+2. **The field is documented data:** `JMSMesgEntry_c` (`f_op_msg_mng.h:21`) — 0x18-byte INF1
+   entries; `mInitialSound` = u8 @ +0x11 (beside `mInitialCamera` +0x12, `mInitialAnimation`
+   +0x13 — the whole per-message presentation triple).
+3. **Aryll's opening messages are already known:** the awake STB's JMSG track fires
+   `0x357, 0x358, 0x050, 0x359, 0x35A` (№165). Her voice clips = those entries' `mInitialSound`
+   values in the donor message data — **`res/Msg/bmgres.arc`** (donor extract, present).
+4. **The one stubbed link:** `JAIZelBasic::messageSePlay(u16, Vec*, s8)` is `/* Nonmatching */`
+   in our checkout AND absent from PR #1132's matched list — the u8→`JA_SE` mapping (likely a
+   small data table) needs identification. Without it we know each message HAS a cue but not which
+   wave it names.
+5. **Our trigger plumbing already exists:** the authored cutscene displays donor lines through
+   `dExtWw_handleDemoMessage` + `demo_messages.ini` (№165/§49). The ONE test = fire the resolved
+   voice SE at message-open in that exact hook, through the committed shadow-wave path.
+
+### Lane asks (identification only — no wiring yet)
+
+- **Bridge:** (1) parse `bmgres.arc` INF1; extract the full `JMSMesgEntry_c` for ids
+  `0x357/0x358/0x359/0x35A` (+`0x050` for completeness) — `mInitialSound` is the prize,
+  `mInitialCamera/Animation` ride along free and History will want them later; (2) find the
+  u8→SE-id mapping (messageSePlay's table — DOL data scan near the JAIZelBasic tables, or the
+  type-1 SoundTable SE section, which needs its decode anyway); (3) then bank-map the resolved SE
+  ids → which `.aw` carries Aryll's waves.
+- **History:** confirm 0x357-0x35A are Aryll's opening lines (message text extraction will show it);
+  define the ONE test's cue list (which message(s), at which beats of our authored awake).
+- **Engine:** NOTHING yet — wiring only after Bridge's three answers land. The test scope stays
+  minimal: one voice SE at one message-open.
+- **Housing:** covenant pre-clear — voice waves/ids are donor content → package (`audio/` or a
+  `voice/` sibling); the twin invariant applies to any staged wave; no SE ids hardcoded in the exe
+  (manifest/ini-driven, §67 pattern).
+
+**Re-park tripwire (user-decreed):** if the ONE test exhibits theme-class problems (timing/level/
+synthesis wrongness traceable to shared audio infrastructure), voice re-parks until the theme is
+done. Problems specific to the SE path (wrong clip, missing wave) are identification fixes, not
+tripwire events.
+
+## §85b Test scope corrected (user, 2026-07-22)
+
+**Supersedes §85's "ONE cue" framing.** The test is **ALL of Aryll's lines in the opening cutscene**
+— every message-tied voice cue fires at its proper beat, fully working, and the user judges her
+voice **across the whole scope of the scene**. Only after hearing her throughout does the
+park/unpark decision happen. (Tripwire semantics unchanged: theme-class problems re-park;
+identification misses are fixed in place.)
+
+Practical effect on the asks: Bridge extracts `mInitialSound` for **the complete set** of the
+scene's JMSG-fired ids (`0x357, 0x358, 0x050, 0x359, 0x35A` — plus any the full STB pass shows),
+not a chosen one; History's "pick a cue" task becomes "confirm the complete cue list and beats";
+Engine's eventual wiring covers every message-open in the authored awake, which
+`dExtWw_handleDemoMessage` already intercepts uniformly — the plumbing cost is the same for all
+lines as for one.
+
+
+## §85c Bridge response — voice-map INF1 + charVoiceTable + CharVoice_0.aw (2026-07-22)
+
+Tool **0.26.0**. All three §85 identification asks answered (report-only; no wiring).
+
+```bat
+python -m ww_bridge voice-map --stage
+```
+
+Artifacts: `reports/voice_map.md`, `voice_map_msgs.csv`, `voice_map_charvoice.csv`
+(+ optional `--full-table`). Staged under mod `audio/ww_jaudio1/voice/`.
+
+### 1) INF1 (`bmgres.arc` / `zel_00.bmg`)
+
+Layout = `JUTMesgInfo.messageEntryTable` @ INF1+**0x10** (CloudModding / `JMessage/data.h`;
+not the stale f_op `mEntries@0x14`). JMSG id low 16 = INF1 index.
+
+| idx | mInitialSound | cam | anim | text (preview) |
+|----:|-------------:|----:|-----:|----------------|
+| `0x357` | **104** | 0 | 0 | Big Brother! |
+| `0x358` | **105** | 0 | 0 | Big Brother!! |
+| `0x050` | **106** | 0 | **5** | Big Brother! |
+| `0x359` | **0** | 0 | 0 | I knew you'd be here! *(no SE)* |
+| `0x35A` | **107** | 0 | 0 | Hee hee hee! This is my FAVORITE spot… |
+
+Full 0x18 dumps (incl. camera/animation) in CSV for History polish.
+
+### 2) u8 → SE mapping = DOL `charVoiceTable` (not SoundTable rows)
+
+- VA `0x8039BC30`, 0x118 × 4 bytes; confirmed by `messageSePlay` (`lis/addi` → same VA).
+- Every NPC/message voice plays **`JA_SE_CV_COMMON_PEOPLE` (`0x481F`)** then
+  `setPortData(8, unk1<<8|unk2)` (Lago + `charVoicePlay` twin).
+- Opening resolves:
+
+| sound u8 | table | port | Lago / note |
+|--------:|-------|------|-------------|
+| 104 | `0019/0010` | `0x1910` | Aryll "Oyyyy!" |
+| 105 | `0019/0011` | `0x1911` | Aryll "Hoyyyy!" |
+| 106 | `0019/0012` | `0x1912` | Aryll "Haiiii~!" |
+| 107 | `0019/0013` | `0x1913` | *(unlisted by Lago; Aryll by text)* |
+| 0 | — | — | no play |
+
+SoundTable SE cat **4**[`0x1F`]: `offsetNo=0xFFFF` (port-driven; not a file index).
+Decoded + reported; not the u8→wave table.
+
+### 3) Bank-map → `.aw`
+
+- `0x481F` / CharVoice path → **WSYS id=1 / IBNK id=1** → **`Banks/CharVoice_0.aw`**
+  (1,057,984 bytes, **160** waves).
+- Twin invariant applies if/when waves are staged; Bridge did **not** copy `.aw` bytes
+  (CSV/docs only — suggest-never-fill).
+
+### Lanes
+- **History:** confirm cue list/beats; note `0x359` is silent; `0x050` carries anim=5;
+  cam/anim columns free for polish.
+- **Engine:** wire after History's beat list — fire resolved port/SE at message-open for
+  the four sounding lines (uniform hook already exists).
+- **Bridge:** §85 ID **done**.
+
+---
+
+## §86 VOICE IDENTIFICATION COMPLETE — dual-decode verified; one staging gap before Engine wires (Housing, 2026-07-22)
+
+Bridge 0.26.0 `voice-map` absorbed; all three §85 asks answered. Housing verification:
+
+### Dual-decode PASSED (ASK 17 method) — with a key-space lesson
+
+Independent INF1 read initially FAILED by searching `mMsgNo == 0x357` — **the STB's JMSG ids are
+message INDICES, not mMsgNo values** (index 0x357 → entry whose `mMsgNo`=0x0BCE). Re-read by index:
+**all five entries match Bridge exactly:**
+
+| STB idx | mMsgNo | `mInitialSound` | port | clip (lago label) | line |
+|---|---|---|---|---|---|
+| 0x357 | 0x0BCE | **104** | 0x1910 | "Oyyyy!" | Big Brother! |
+| 0x358 | 0x0BCF | **105** | 0x1911 | "Hoyyyy!" | Big Brother!! |
+| 0x050 | 0x0BDB | **106** (anim=5) | 0x1912 | "Haiiii~!" | Big Brother! |
+| 0x359 | 0x0BD0 | **0 — SILENT by donor design** | — | — | I knew you'd be here! |
+| 0x35A | 0x0BD1 | **107** | 0x1913 | (giggle) | Hee hee hee! …FAVORITE spot… |
+
+**0x359's silence is a donor fact** — recorded so nobody bug-hunts a missing clip on that line.
+The mechanism is architecturally identical to Link's STB cues: **one SE (0x481F) + port-selected
+clip** (`charVoiceTable` @ DOL 0x8039BC30; SoundTable cat4[0x1F] `offsetNo=0xFFFF` = port-driven).
+Donor voices are one system, everywhere.
+
+### The gap before Engine can wire: PAYLOAD NOT STAGED
+
+`voice/` currently holds only identification products (CSVs/report). **The playable payload is
+absent:** `CharVoice_0.aw` (donor: 1,057,984 b, present in extract), and the IBNK-1/WSYS-1 slices
+Bridge's own mapping names. **BRIDGE ASK: stage the raw payload** — `CharVoice_0.aw` +
+`ibnk_1.bin` + the WSYS-1 slice — into the package; Housing runs Check D (twin/verbatim) on arrival,
+same as every payload before it. Engine's wiring waits on staged-and-verified, not on identification.
+
+### Board
+- **Bridge:** stage the voice payload (above). Then clear.
+- **History:** the beats — confirm the five lines' order/timing in our authored awake (the STB JMSG
+  track already carries the frame data).
+- **Engine:** wire after payload verifies: at `dExtWw_handleDemoMessage` open of each id, play the
+  port-selected clip through shadow-wave; `masterVol` note — voices are SoundTable class ~127 vs
+  BGM 60 (§83), so the donor separation comes free IF the SoundTable path applies to the voice SE
+  as well. No hardcoded ids in the exe — the five-row map rides the package (§67 pattern).
+- **User:** after wiring — the full-scene listen, then park/unpark.
+
+
+## §86b Bridge response — CharVoice payload staged; Bridge CLEAR (2026-07-22)
+
+Tool **0.26.1**. §86 payload ask done.
+
+```bat
+python -m ww_bridge voice-map --payload
+```
+
+### Staged (mod `audio/ww_jaudio1/voice/`)
+
+| file | size | check |
+|------|-----:|-------|
+| `banks/CharVoice_0.aw` | **1,057,984** | verbatim donor size |
+| `aaf_slices/ibnk_135.bin` | 9,408 | IBNK inner **135** (AAF cid 7) |
+| `aaf_slices/wsys_135.bin` | 17,632 | WSYS inner **135**, 160 waves, aws=`CharVoice_0.aw` |
+| `manifest.ini` | — | cues + paths; `load_mode=shadow_wave_aw_only` |
+
+ID CSVs/report retained alongside payload. Stale mis-named `ibnk_1`/`wsys_1` (would have been `w_zelda`) removed.
+
+### Correction vs §85c bank-id wording
+
+§85c said "WSYS/IBNK id=1" from the AAF *list cid* field — **wrong keyspace**. CharVoice bank
+id is **inner 135** (blob+8). AAF IBNK list cid for that slice is **7**. Housing Check D should
+hash the 135-named slices + the 1,057,984 `.aw`.
+
+### Lanes
+- **Housing:** Check D on staged payload.
+- **History / Engine:** unchanged from §86 board.
+- **Bridge:** **CLEAR.**
+
+## §87 VOICE PAYLOAD CHECK D — ALL PASS; Engine may wire (Housing, 2026-07-22)
+
+Bridge 0.26.1 re-staged after self-caught correction (inner id **135**, not AAF cid 1 — cid 1 was
+`w_zelda`, the wrong bank; caught by Bridge before Check D ran). Verification:
+
+| file | size | verdict |
+|---|---|---|
+| `voice/banks/CharVoice_0.aw` | 1,057,984 b | **md5 IDENTICAL** to donor (`fb3bac394c25…`) |
+| `voice/aaf_slices/ibnk_135.bin` | 9,408 b | verbatim @`0x02ded0` ×1 |
+| `voice/aaf_slices/wsys_135.bin` | 17,632 b | verbatim @`0x065230` ×1 |
+
+Stale `*_1` slices confirmed removed. **Extra corroboration:** both slice offsets independently
+match Housing's §81 raw chunk enumeration (the 9,408 b IBNK at 0x02ded0 and 17,632 b WSYS at
+0x065230 were in that dump) — Bridge's mapping and my enumeration agree from opposite directions.
+
+*(Bridge's blocked §86b bus append is recorded via this entry — no approval gate exists on this
+doc from Housing's side; the user ferry sufficed, as designed.)*
+
+### Board
+- **Bridge:** CLEAR.
+- **Engine:** WIRE — payload staged and verified. At `dExtWw_handleDemoMessage` open of each of the
+  five ids: play SE 0x481F with the port-selected clip (map rides the package, §67 pattern; 0x359
+  intentionally silent). SoundTable class note (§86) stands.
+- **History:** the five lines' beats in the authored awake.
+- **User:** full-scene listen after wiring → park/unpark call.
+
+---
+
+## §88 Engine — CharVoice message-open wired (2026-07-22)
+
+Payload Check D passed; Engine executed the §87 wire.
+
+### What landed
+
+1. **Load** `audio/ww_jaudio1/voice/` with ExtSeq package (`ja1Voice_loadPackage`): `.aw` + WSYS
+   + `[cues]` from `manifest.ini` (no msg/port literals in the exe).
+2. **Hook** `dExtWw_handleDemoMessage`: every mapped open calls `ja1Voice_onDemoMessageOpen`.
+3. **Play** donor law: SE `se_id` (0x481F) + port-selected clip. PC path: WSYS wave
+   `(port & 0xFF)` one-shot via shadow-wave (SE BMS not ported; wave sizes match Lago Aryll
+   lengths for 16–19). Prior handle released before restart (`charVoicePlay` twin).
+4. **`0x359`:** `sound=0` → log silent, no play (donor design).
+5. **Level:** SE class full (vol 127); **not** × BGM SoundTable master (~0.47). AutoMixer +
+   ExtSeq FX send so §81 reverb serves voices too.
+
+Expect logs: `§87 CharVoice loaded … cues=5`, then per line
+`§87 msg 0x357 … port=0x1910 wave=16 → play` / `msg 0x359 silent (sound=0, donor)`.
+
+### Board
+- **User:** full-scene listen → park/unpark.
+- **Engine:** clear on this ask.
+- **Bridge / History:** clear / beats polish as before.
+
+## §88 FULL-SCENE LISTEN RESULT + the wave-identity discriminator (Housing, 2026-07-22)
+
+User verdict: **timing correct at every beat; all four voiced clips sound like real WW voice but
+NOT the known clips** — with the user's own hedge that it "might just be the way they play."
+Log confirms intended behavior: waves **16/17/18/19** played for 0x357/0x358/0x050/0x35A
+(0x359 correctly silent). So the system did what it meant to — the question is whether what it
+meant is what the donor meant.
+
+Two systematic hypotheses (all-four-wrong rules out adjacency mix-ups):
+- **H-index** — `wave = port & 0xFF` misreads the donor's port semantics (the unmatched
+  `messageSePlay` hop; §85's known weak link). Candidate alternate: `mInitialSound` **104–107 as
+  direct wave indices** (within the 160-wave bank!), or keys 104–107 through IBNK-135's regions.
+- **H-render** — right waves, wrong synthesis (pitch/sample-rate). Would be **theme-class** →
+  tripwire.
+
+**BRIDGE ASK — the discriminator (extraction, deterministic):** decode from the verified
+`CharVoice_0.aw`+`wsys_135` into listenable WAVs: **waves 16–19, waves 104–107**, and (if
+different) the waves IBNK-135's key regions select for keys 104–107. Label files clearly
+(`wave016.wav`…), drop in a listen-pack folder. **User picks "the Hoy I know" by ear against
+ground-truth files** — identification by lookup, zero judgment calls, zero engine changes until
+the pick names the rule.
+
+Outcome routing: extracted 16–19 correct-sounding → H-render → tripwire decision (user).
+16–19 wrong + 104–107 (or key-resolved) correct → H-index → one-line Engine fix, NO park.
+
+
+## §88b Bridge response — CharVoice listen pack (2026-07-22)
+
+Tool **0.27.0**. Discriminator pack ready — no engine changes.
+
+```bat
+python -m ww_bridge voice-listen --open
+```
+
+Folder (AppData package, not repo):
+`…/WW-Crew-Restoration/audio/ww_jaudio1/voice/listen_pack/`
+
+### Contents (10 WAVs + index)
+
+| Set | Files | Meaning |
+|-----|-------|---------|
+| Engine today | `wave016`…`wave019` | `(port & 0xFF)` — what §87 played |
+| H-index direct | `wave104`…`wave107` | `mInitialSound` as wave index |
+| Key-region | `wave132`, `wave133` | IBNK-135 INST prog `0x19`: keys 16–35→132, keys 36–127→133 |
+
+Filenames carry the hint (`…__Hoyyyy_candidate`, etc.). `README.txt` + `listen_pack_index.csv` in the same folder.
+
+### Lanes
+- **User:** open the folder; pick the Hoy by ear; that pick names H-index vs H-render.
+- **Engine:** wait for the pick — one-line index fix (no park) or tripwire path.
+- **Bridge:** pack shipped; clear on further asks until the pick.
+
+## §89 LISTEN-PACK VERDICT — all three rules wrong; correlation becomes primary; export + naming defects (Housing, 2026-07-22)
+
+### User verdict (ground-truthed against dayjo's labeled WW sound archive)
+
+- **NONE of the ten candidates are Aryll.** All three interpretation families (portLo 16–19,
+  direct 104–107, keyRgn 132–133) are wrong.
+- **Some candidates sound like CREATURES, not people** — which puts the BANK itself under
+  question, not just the index rule. (The id-space has already bitten twice: cid-1-vs-inner-135,
+  index-vs-mMsgNo. A third id-space error — wrong bank entirely — is now live as a possibility.)
+- Some clips sound **abruptly cut off** — export truncation vs authentically-short is UNRESOLVED,
+  and it matters: a truncating exporter would sabotage the correlation step below (№31-C — verify
+  the instrument before trusting its output).
+- Sole human-sounding candidate: `wave105` (direct family).
+
+### Naming defect (user-decreed standing rule, saved to memory)
+
+Bridge's export names baked the HYPOTHESIS into the filename (`…_Oyyyy.wav` on a wave whose
+identity was the thing under test — and which turned out to be a creature sound). **"WW file names
+should always be present. Not helpful and unwanted."** Standing rule for ALL lanes' tooling from
+now on: **donor-native identifiers as filenames; interpretation metadata in a sidecar CSV/README,
+never in the name.** This is the IVAN RULE at the filesystem level.
+
+### BRIDGE ASKS (ordered)
+
+1. **Export-integrity first:** verify the wave decoder against known-length waves (frame/nibble
+   handling); the "abruptly cut off" observation must be explained (exporter bug vs authentic
+   length) before any correlation is trusted.
+2. **Re-export ALL 160 waves** of `wsys_135`/`CharVoice_0.aw` with **neutral donor-native names**
+   (`wave000.wav`…`wave159.wav` + sidecar index CSV). No hypothesis labels.
+3. **Correlation pass (now the primary path):** match the dayjo-labeled Aryll clips (user-supplied
+   reference: noproblo.dayjo.org/zeldasounds/ww_new/#Characters) against all 160 by waveform/spectral
+   similarity → top matches per clip. **If no strong match in this bank → the bank is wrong**;
+   widen to the other WSYS entries (§81 enumeration lists them all). Covenant: dayjo reference
+   files are local diagnostic material only — never repo, never package.
+
+### Meanwhile
+
+- **Engine:** hold — no wiring changes until correlation names real indices (the current
+  `port&0xFF` stays as a placeholder; it is provably wrong but harmless).
+- **User:** park/unpark stays OPEN — this is still identification-class (wrong address, mechanism
+  sound). The timing correctness from §88 remains the structural win.
+- **History:** clear.
+
+## §89b Fingerprint pass — candidates #94–97 (+#105); Bokoblin note; targeted-listen ask (Housing, 2026-07-22)
+
+User ground-truth notes: (a) dayjo catalog — Aryll = Hoy1/Hoy2/Hiee/Giggle, all listed Mono
+22.05 kHz; first two CONFIRMED in-cutscene by user; (b) many of the wrong listen-pack candidates
+sound like **Bokoblin attacks** — consistent with the bank's rate census below (the wrong indices
+landed in the creature pool).
+
+**Housing parsed `wsys_135.bin` metadata directly** (stride 0x2c, 160 entries + header hit; name
+string `CharVoice` present @0x1ba0): rate census = **154 waves @16 kHz** (the creature/grunt pool),
+**exactly 4 @22.05 kHz** (**waves #94–97**, contiguous in the `.aw`: offsets 605792→618400 chain
+cleanly), plus 2 @11.025k and 1 @32.768k. Sample lengths: #94 = 17,297 (0.78 s — the only
+call-length one), #95–97 = 2.2–3.0 k (0.10–0.13 s chirps).
+
+**Honest caveat on my own fingerprint:** dayjo's uniform "22.05 kHz mono" may be the RIP format,
+not donor-native — if so the rate match is coincidence and Aryll may sit in the 16 kHz pool
+(consistent with the user's ear: `wave105` @16 kHz was the sole human-sounding candidate).
+
+**BRIDGE ASK (targeted, supersedes nothing):** before the full 160-wave re-export, a quick
+**5-wave neutral-named extraction: #94, #95, #96, #97, #105** — user listens against dayjo.
+Naming rule (§89) applies: `wave094.wav` etc., sidecar CSV. Export-integrity question (§89-1)
+still open but non-blocking for a recognizability listen at these lengths. Full 160 + correlation
+remains the fallback if the five miss.
+
+## §89c Naming precision (user): WW VANILLA names, not merely neutral
+
+Export naming for the §89b five-wave ask (and all future wave exports): **the donor's own
+addressing** — `CharVoice_0_wave094.wav` etc. (vanilla bank filename + wave index; waves have no
+individual names inside the donor, so bank+index IS the vanilla identifier). Proven vanilla symbols
+(traced SE enum names) may join the sidecar CSV; fan labels (incl. dayjo) never reach filenames.
+Memory rule updated to this precision.
+
+## §89c Bridge response — five-pack with vanilla names (2026-07-22)
+
+Tool **0.28.1**. Local-diagnostic only:
+
+```bat
+python -m ww_bridge voice-diag --five --open
+```
+
+`albt bridge/local_diag/charvoice_five/`:
+
+| file | rate | samples | dur |
+|------|-----:|--------:|----:|
+| `CharVoice_0_wave094.wav` | 22050 | 17297 | 0.784 s |
+| `CharVoice_0_wave095.wav` | 22050 | 2719 | 0.123 s |
+| `CharVoice_0_wave096.wav` | 22050 | 2279 | 0.103 s |
+| `CharVoice_0_wave097.wav` | 22050 | 2959 | 0.134 s |
+| `CharVoice_0_wave105.wav` | 16000 | 17782 | 1.111 s |
+
+Sidecar: `wave_index.csv` (`notes_interpretation` = Housing rate-cluster / ear notes only).
+Full `voice-diag` export naming now uses the same `{bank}_waveNNN` pattern.
+
+**Lanes:** user ear vs dayjo; Engine still on IsleLink for labeled Aryll (§89b).
+
+
+## §89b Bridge response — decoder OK; CharVoice miss; IsleLink holds Aryll (2026-07-22)
+
+Tool **0.28.0**. Three asks in order. All outputs under
+`albt bridge/local_diag/` (**gitignored** — never repo, never package).
+
+```bat
+python -m ww_bridge voice-diag
+```
+
+### 1) Decoder integrity — PASS
+
+`local_diag/decoder_integrity.md`. ADPCM4 (dusk coef tables): all sizes `% 9 == 0`;
+full-frame overshoot is mid-frame pad (peak in unused tail ≤ pad-class). One-shot
+"cut off" = WSYS `sample_count` (authentic), not a truncating exporter. Wave 46
+looped (`data_size` < `sample_count`) — WARN, not one-shot.
+
+### 2) Neutral 160 re-export — DONE
+
+`local_diag/charvoice_waves/wave000.wav` … `wave159.wav` + sidecar `wave_index.csv`.
+**Donor-native names only** (§89 standing rule). No hypothesis labels.
+
+### 3) Dayjo correlation — CharVoice wrong bank; IsleLink is the key
+
+Refs: dayjo Characters Aryll set (`WW_Aryll_*.wav`) from
+https://noproblo.dayjo.org/zeldasounds/ww_new/ → `local_diag/dayjo_aryll/`.
+
+| Bank | Strong (score≥0.55) | Note |
+|------|--------------------:|------|
+| **CharVoice_0.aw** | **0/9** | max NCC ~0.32 — not Aryll |
+| **IsleLink_0.aw** (widen) | **8/9** | NCC ≥ 0.98 on eight clips |
+
+IsleLink map (22.05 kHz waves):
+
+| dayjo | wave |
+|-------|-----:|
+| Hoy1 | **025** |
+| Hoy2 | **028** |
+| Hiee | **026** |
+| Giggle | **027** |
+| Hah | **005** |
+| Gah | **007** |
+| Worried | **006** |
+| Hi | **008** |
+| HappyGasp | *(no strong in IsleLink)* |
+
+Artifacts: `local_diag/islelink_waves/` + `islelink_dayjo_corr/` + `VERDICT.md`.
+
+### Lanes
+- **Engine:** CharVoice `(port&0xFF)` is not Aryll; hold wiring until IsleLink (or true
+  SE path) map is chosen. HappyGasp still open.
+- **User:** ear-spot-check IsleLink `wave025` vs dayjo Hoy1 if desired (local_diag).
+- **Bridge:** §89 asks done; clear pending Engine/Housing direction on IsleLink staging.
+
+---
+
+## §90 CHARVOICE FORMALLY CLOSED — Aryll lives in IsleLink_0.aw; staging + ordering-listen before wiring (Housing, 2026-07-22)
+
+### Verdicts, all convergent
+
+- **Five-pack listen (user):** none of CharVoice #94–97/#105 are Aryll; only two play; the one
+  human survivor (#105) is a PIRATE voice. **Housing's 22 kHz fingerprint (§89b) is DEAD** — the
+  rate match was rip-format coincidence, exactly the caveat attached to it. Killed cleanly by
+  ground truth.
+- **Correlation (Bridge 0.28.0):** CharVoice 0/9; **IsleLink_0.aw 8/9 at NCC≥0.98** —
+  `Hoy1→025, Hoy2→028, Hiee→026, Giggle→027` (+ non-cutscene: Hah→005, Gah→007, Worried→006,
+  Hi→008; HappyGasp open). Decoder PASS (short clips are authentic `sample_count`, not export
+  truncation — the §89 "cut off" observation resolved).
+- **Fourth id-space lesson banked:** cid-vs-inner, index-vs-mMsgNo, port-vs-wave, and now
+  bank-vs-bank. Every hop of donor addressing gets verified, none get assumed.
+- *§47 footnote for the record: `IsleLink_0.aw` is the very name Housing once matched by
+  resemblance and was rightly slapped for (IVAN violation, §47). It turns out to genuinely be the
+  island-scene voice bank — found now by MEASUREMENT, which is the only way it counts.*
+
+### Order of operations to the retest
+
+1. **Bridge — stage the IsleLink payload:** `IsleLink_0.aw` + its ibnk/wsys slices (inner ids per
+   Bridge's mapping) + updated cue map. Vanilla naming throughout.
+2. **ORDERING-LISTEN before wiring (cheap insurance):** extract the four cutscene waves
+   (`IsleLink_0_wave025/026/027/028.wav`, vanilla-named) — user confirms which wave is which cue
+   (the lago-label ↔ dayjo-label pairing `104=Oyyyy≙Hoy1, 105=Hoyyyy≙Hoy2` is PLAUSIBLE, not
+   proven; a swapped Hoy1/Hoy2 would survive every check except ears). Five minutes now vs a
+   wired-wrong retest later.
+3. **Housing — Check D** on the staged payload (per-wave twin checks now possible against WSYS
+   offsets); then **package cleanup:** CharVoice payload (aw + slices + listen_pack) leaves the
+   package — wrong bank, no consumer; may return if creature/other voices are ever scoped.
+4. **Engine — cue map update** (data-only: cues carry verified wave indices in the new bank; the
+   `port&0xFF` interpretation question dissolves — identification supplies literal answers).
+5. **User — full-scene retest** → park/unpark on a fair test at last.
+
+*(Bridge's background file-scan died harmlessly; dayjo refs live in `local_diag/dayjo_aryll/` —
+local diagnostic only, never repo/package, per §89 covenant note.)*
+
+## §90b Bridge response — IsleLink payload staged (2026-07-22)
+
+Tool **0.29.0**. §90 step 1 done (AppData mod `voice/`, never repo).
+
+```bat
+python -m ww_bridge voice-map --islelink-payload
+```
+
+| artifact | detail |
+|----------|--------|
+| `banks/IsleLink_0.aw` | 296,544 b sha256 `61c42ea5aab46391…` |
+| `aaf_slices/ibnk_217.bin` | 2,400 b; AAF cid **25**; inner **217** |
+| `aaf_slices/wsys_217.bin` | 3,488 b; inner **217**; **29** waves |
+| `manifest.ini` | `schema=ww_voice_islelink_v1`; bank + cues |
+| `islelink_cues.csv` | vanilla `IsleLink_0_waveNNN.wav` + notes |
+| `islelink_waves.csv` | full 29-wave ledger |
+
+**Cue map** (correlation-proposed; `port` = wave for Engine `port&0xFF`):
+
+| msg | sound | wave | vanilla name |
+|-----|------:|-----:|--------------|
+| `0x357` | 104 | **25** | `IsleLink_0_wave025.wav` |
+| `0x358` | 105 | **28** | `IsleLink_0_wave028.wav` |
+| `0x050` | 106 | **26** | `IsleLink_0_wave026.wav` |
+| `0x359` | 0 | — | silent |
+| `0x35A` | 107 | **27** | `IsleLink_0_wave027.wav` |
+
+CharVoice leftovers left on disk for Housing cleanup. Bridge CLEAR on staging.
+
+**Lanes:** ordering-listen (step 2) → Housing Check D → Engine cue wire.
+
+## §90b Voice architecture answer (user q) + a charVoiceTable lead (Housing, 2026-07-22)
+
+**User asked: CharVoice — in-game voices, demo-specific, or both?** Answer from evidence: the donor
+splits voices by TRIGGER (message-tied / STB SE track / actor-code SE) but organizes BANKS by SCENE
+RESIDENCY (GC ARAM discipline, mirroring the music banks). Both banks serve both contexts:
+CharVoice = general/combat pool (Bokoblin attacks + scattered human — user's ear census);
+IsleLink_0.aw = island-resident vocabulary (Aryll's 4 cutscene cues + Hah/Gah/Worried/Hi = her
+likely GAMEPLAY barks too). Consequences: (1) the IsleLink staging serves cutscene AND future
+gameplay dialogue in one payload; (2) per-space voice banks mirror per-space music — package layout
+generalizes; (3) CharVoice returns whenever creature/combat voices are scoped.
+
+**LEAD (observation, unverified — Bridge):** charVoiceTable `unk1=0x0019=25` on all four Aryll
+entries; her first clip is IsleLink wave **025**. `unk1` may be base-wave (or bank selector) —
+i.e. the table may have been right all along, resolved against the wrong bank. If confirmed, this
+yields the GENERAL message-voice rule for all characters, not just Aryll's four. Verify against a
+second character's known clips (e.g. the pirate hit at CharVoice #105) before belief.
+
+## §90c Contingency (user-decreed): independent-source verification if the IsleLink pass misses
+
+If the next pass (IsleLink ordering-listen) fails to produce Aryll: **widen beyond Bridge's
+exporter** — (1) independent community rippers (`wwdumpsnd` lineage) as byte-level cross-rips of
+the `.aw` banks (ASK 17 dual-decode applied to wave extraction; any divergence localizes a decoder
+bug immediately); (2) community reference audio as identification anchors — dayjo for voices,
+**official OST / high-quality captures for the sequenced songs** (arrangement-difference caveat
+noted), **vgmstream as the reference decoder for `.afc` streams** when that surface is built.
+Fairness line on record: Bridge's decode audit PASSED (§89); misses to date were ID-space errors,
+not decode errors — but single-decoder trust is against house law regardless. Contingency armed,
+not active: the IsleLink listen decides.
+
+---
+
+## §91 ISLELINK CHECK D — ALL PASS, with three-way corroboration (Housing, 2026-07-22)
+
+**Fairness correction first (user, upheld):** the §89 "decoder PASS" explained short-but-authentic
+lengths only — it does NOT explain the user's "some files didn't play" reports, and it was Bridge
+self-auditing. **Decode-integrity stays OPEN until an independent cross-rip (§90c) closes it.**
+
+### Check D
+
+| artifact | verdict |
+|---|---|
+| `IsleLink_0.aw` (296,544 b) | **md5 IDENTICAL** (`814fb6ab…`) |
+| `ibnk_217.bin` (2,400 b) | verbatim @`0x03ccf0` ×1 — **= Housing's §81 enumeration entry for AAF cid 25** |
+| `wsys_217.bin` (3,488 b) | verbatim @`0x075f10` ×1; independent stride-parse confirms **29 waves** |
+
+The cid-25 offset match closes the addressing loop three ways: Bridge's inner-217 mapping ≡ my raw
+§81 enumeration ≡ the charVoiceTable `unk1=0x19=25` lead (§90b) — **the donor's table pointed at
+bank 25 all along; only our bank resolution was wrong.**
+
+### Per-wave fingerprint — the method that failed on CharVoice WORKS on the right bank
+
+Waves 25–28: **all 22,050 Hz** (as dayjo listed for Aryll), contiguous in the `.aw`
+(offset chain 247360→258720→270048→279584 closes cleanly), sample counts vs dayjo:
+
+| wave | samples | dayjo | match |
+|---|---:|---|---|
+| 25 | 20,169 | Hoy1 ~19,678 | ✓ (rip padding) |
+| 26 | 20,110 | Hiee ~19,628 | ✓ |
+| 27 | 16,935 | Giggle (no size listed) | consistent |
+| 28 | 30,106 | Hoy2 ~29,378 | ✓ |
+
+**Three independent lines now agree on the cue map** (NCC≥0.98 correlation; 22 kHz rates;
+sample-length matching): `0x357→25 (Hoy1), 0x358→28 (Hoy2), 0x050→26 (Hiee), 0x35A→27 (Giggle),
+0x359 silent.` The ordering-listen (next, user) is the final EAR gate — now confirmation, not
+exploration. Then Engine's data-only cue update → full-scene retest → park/unpark.
+
+## §92 THE TAIL QUESTION — content/container verified identical; playback-chain experiment staged (Housing, 2026-07-22)
+
+User (correctly, twice) rejected sample-level NCC as proof of the END RESULT — №31-B applied
+against Housing's own measurement: NCC verifies decoded bytes through one decoder, not what a
+player renders. Escalating layers checked: samples (NCC 1.0000 vs dayjo ref), WSYS metadata
+(29/29 exact), **containers (both canonical PCM, correct RIFF/data sizes, no trailing chunks —
+indistinguishable)**. All at-rest layers pass; the remaining suspect class is the PLAYBACK CHAIN
+(short-file tail-swallowing by local players vs browser drain).
+
+**Controlled experiment staged** — `local_diag/tail_test/`: A=ours as-is, B=dayjo ref as-is (the
+two are measured-identical), C/D = same files +0.35 s silence pad. User plays all four + the site
+stream; the outcome pattern decides (table in chat): tail-swallow confirmed → pad all future
+listen-pack exports (diagnostic-only, never package) and the cut-off mystery closes across BOTH
+banks; any other pattern → §90c fires or a new defect is isolated. The IsleLink ordering-listen
+resumes after this verdict.
+
+---
+
+## §93 MILESTONE + THE ECHO (Housing, 2026-07-22)
+
+**Aryll's voice is IN — right clips, right times** (user in-game test; full-set comparison still
+pending). Engine's data-driven cue wiring picked up Bridge's IsleLink staging with zero engine
+changes. Remaining defect: voices sound **REALLY echoey**.
+
+**Diagnosis (donor-cited, not guessed):** the donor passes a per-room reverb amount on every voice
+call — `mDoAud_messageSePlay(sound, NULL, dComIfGp_getReverb(roomNo))` (`d_msg.cpp:1915`). Our
+wiring instead routes voices through the §81 music-scene FX send (scene0 send=0.5/room=0.85 —
+tuned for the sequenced-music bus). Corroboration: type-6 sound-scene table decoded "mostly 0x04"
+(§83) — if those are per-scene SE reverb depths, donor outdoor voice reverb is ~3%, near-dry.
+
+**Tripwire adjudication: NOT parking material** — voice-specific application-layer defect with a
+known donor mechanism, not theme-class shared-infra. Same class as wrong-bank: wiring refinement.
+
+**Asks — Engine:** log the actual send on voice one-shots; fix = scale voice reverb from the
+donor's per-room parameter (package data). **Bridge:** confirm type-6 semantics against
+`getReverb`'s consumers (are the 0x04s the per-scene SE reverb depths?). **User:** re-listen after;
+the §92 tail_test stays staged (lower priority — in-game playback bypasses WAV export entirely).
+
+## §93 Engine — voice one-shot fxmix = messageSePlay room reverb (2026-07-22)
+
+**Shipped.** Measurement + fix in one pass (`playCharVoiceWave`):
+
+| Field | Before (bug) | After (donor law) |
+|---|---|---|
+| voice `initFxmix` | `getExtSeqFxSend()` ≈ **0.5** (type-7 music scene0) | `dComIfGp_getReverb(stayNo) / 127` (0 if stayNo==0) |
+| music ExtSeq | unchanged | unchanged |
+
+Log each one-shot: `[ExtSeq] §93 voice fxmix: music_send=… room=… reverb_s8=… voice_send=…`
+(messageSePlay law). Expect outdoor FILI ~small s8 → near-dry; music scene send still ~0.5 for BGM.
+
+**User:** re-listen Aryll / demo voices. **Bridge:** type-6 vs getReverb still open if FILI values look wrong on F_DL rooms.
+
+## §93b Bridge response — type-6 0x04 ≠ getReverb (2026-07-22)
+
+Tool **0.29.1**. **Verdict: NO** — type-6 bytes are **not** per-scene SE reverb depths.
+
+| Path | Donor source | Meaning |
+|------|--------------|---------|
+| `dComIfGp_getReverb(room)` | stage **RTBL** `roomRead_data_class.field_0x1 & 0x7F` (`d_stage.h` / `d_com_inf_game.cpp`) | per-room SE reverb amount passed into `messageSePlay` / `seStart` |
+| AAF **type 6** | `JAIInitData` case 6 → `JAIBasic::field_0x1c` → `SeMgr::categoryInfoTable` | per-scene `u8[SeCategoryMax]` **concurrent SE play counts**; summed → `SeTrackMax` |
+
+Corroboration: WW type-6 scene blobs are sixteen `0x04`s (= **4 slots/category**). Fallback `Const::sCInfos_0` is `{4,2,4,2,…}` — same unit class (counts), not `/127` depths. `getReverb` consumers (`d_msg`, `d_mesg`, grass/tree/SE, etc.) never read `field_0x1c` / type-6.
+
+**Package implication:** voice reverb correct value is **RTBL** (Engine §93 already reads `getReverb`). Type-6 ships only if SeMgr concurrency is ported — **nothing to hand-tune from the 0x04s for echo**. Spot-check: sea RTBL room 44 (Outset) reverb byte = **0** (near-dry outdoor).
+
+**Lanes:** user re-listen; if still echoey → Engine stayNo/RTBL host mapping or FX bus, not type-6.
+
+## §93b Type-6 reclassified; donor ground truth: Outset voices are FULLY DRY (Bridge, 2026-07-22)
+
+Housing's §93 corroboration hypothesis ("type-6 0x04s = SE reverb depths") — **DEAD, killed by
+source.** Type-6 = `SeMgr::categoryInfoTable`: **per-category concurrent-play counts** (sixteen
+0x04s = 4 slots/category, summing to SeTrackMax; same units as `Const::sCInfos_0`). No `getReverb`
+consumer reads it. *(Filed as future SE-fidelity intel: donor SE concurrency limits — relevant
+when the broader SE system is scoped.)*
+
+**The real donor path (verified):** per-room SE reverb = stage **RTBL** `field_0x1 & 0x7F` →
+`getReverb(room)` → `messageSePlay`. **WW sea room 44 (Outset) RTBL reverb byte = 0 — outdoor
+voices are FULLY DRY in the donor.** Engine's §93 law (getReverb/127, 0 at stayNo==0) therefore
+targets exactly 0 outdoors. **The user's re-listen acceptance bar: bone-dry Aryll.** If echo
+persists: stayNo/RTBL host mapping or the FX bus are the suspects — not type-6, not hand-tuning.
+
+---
+
+## §94 ARYLL VOICE: PASS — WITH CAUTION (user verdict, 2026-07-22)
+
+**User in-game confirmation: every one of the right voice lines lands, right beats, not audibly
+reverby.** Labeled CAUTIOUS PASS per user instruction; recipe + caution ledger written to
+`docs/WW Linked/islands/Outset/characters/Aryll/voice-recipe.md`.
+
+**The CAUTION items (gate on removing the label):** (1) vanilla-true VOLUME unmeasured (full SE
+level vs donor SoundTable class scaling — "easier fix for later" per user); (2) §92 tail_test
+verdict undelivered (diagnostic toolchain only — in-game unaffected); (3) HappyGasp index unknown
+(8/9); (4) gameplay barks identified-not-wired (future).
+
+**Voice thread state: the partial-unpark test SUCCEEDED under its own tripwire** — no theme-class
+problems surfaced; every defect en route was identification/wiring-class and was fixed in place.
+The park question resolves: **voice work earned its place alongside the theme work**, which it
+never once touched.
+
+**Standing cleanup now due (Bridge):** CharVoice payload (aw + slices + listen_pack) leaves the
+package — wrong bank, no consumer (§90 step 3, still pending). local_diag stays gitignored.
+
+**The active audio board reverts to the theme:** Engine's runtime thread (paused per §82) +
+round-3 A/B + the user's fresh-ear i_linkin listen remain the open items. Voice rests until the
+volume measurement or the user reopens it.
+
+---
+
+## §95 NEW-MENU RESEARCH PASS — ambience vs visual effects; feasibility ranking (Housing, 2026-07-22)
+
+User parks the audio-theme board (their resource-gathering; §82 state preserved) and asks for a
+research pass over: island ambience (waves/seagulls/wind) and visual effects (waves, wind, grass
+blowing, tree culling). Ranked by feasibility, evidence cited:
+
+### 1. TREE CULLING FIX — HIGHEST feasibility (RAISED)
+Not a port — a receiver bug in a known class. Donor `d_a_lwood.cpp:44-45`:
+`setCullSizeBox(-600,0,-600 → 600,900,600)` + `setCullSizeFar(2.37)` — WW trees demand a large
+explicit cull volume. Our mount/vegetation lanes use `CULLBOX_CUSTOM` with per-case boxes (the
+zero-box trap is already known: `d_a_ext_vegetation.cpp:552`); any tree instance riding a
+point-cull or small box vanishes when its anchor exits the frustum while canopy is visible —
+exactly the reported symptom. **Fix: read each donor prop actor's cull constants, apply per mapped
+prop (ideally as manifest data, §67 pattern). Engine lane, small, no assets, instant QoL.**
+DIAGNOSIS FIRST per house rules: one session with a cull-log probe (which actor culls at the bad
+angles) → then constants.
+
+### 2. SHORE-WAVE VISUALS — MEDIUM (assets already housed)
+The wave surface set lives in Always.arc — `txa_usonami_256_64mip`/`_m_`, `efa_usonami_01.btk`,
+`b_sea_tex0and2` (shared-libraries.md) — housed and twin-clean since §74-era. The BG-mount lane
+already mounts models with BTK anims. Missing: identification of how donor Outset composes the
+shoreline (which BG piece/actor carries the waveline + its anim). History/Bridge identification →
+Engine mounts. No new engine systems expected.
+
+### 3. AMBIENCE AUDIO (waves/wind loops + seagull cries) — MEDIUM (voice-path dividend)
+- The SE one-shot path is PROVEN (Aryll). Ambient loops = same family + loop points (WSYS carries
+  them) + start/stop/volume drivers (donor: JAIZelBasic sea/wave processing; JaiRoom.tbl still
+  undecoded — likely the per-room ambience config).
+- **Seagulls are partially free:** kamome actors are mapped (census: 14 placements, ka_fly1 bound);
+  their cries are donor actor-code SEs — cue wiring through the proven shadow-wave path once the
+  SE ids/waves are identified (same recipe as Aryll, §voice-recipe step list).
+- Note: this is SE work, NOT the parked sequencer thread — no overlap with §82's pause.
+
+### 4. WIND STREAKS (visual) — RESEARCH-HEAVY, deferred
+WW particles are JPA1; TP's system is JPA2 — a dialect gap of the BMS-vs-BMS kind. Community
+JPA1→JPA2 conversion may exist; un-researched. №31 tension if re-authored rather than ported.
+Park until someone wants it enough to fund the research.
+
+### 5. GRASS BLOWING — BLOCKED (№128)
+Presupposes grass being ON; kusax* is deliberately off (vanishing-cast cause; day1_exceptions
+ratified). The blowing animation is moot until the grass resource footprint problem is solved
+(grass-port-analysis.md). Not raised.
+
+### Recommendation
+**Raise #1 (tree culling) now** — smallest, donor-cited, immediate payoff; #2 and #3 queue behind
+it as the next identification asks (both reuse existing machinery; neither touches parked threads).
+
+### Lanes
+- **Engine:** #1 — cull-probe session first (log culls at user's bad angles), then donor cull
+  constants per prop (manifest-driven preferred).
+- **User:** reproduce the bad angles once with the probe on; that names the actors.
+- **History/Bridge:** on deck for #2/#3 identification when #1 lands (shoreline composition;
+  ambience SE ids + JaiRoom.tbl decode).
+- **Housing:** covenant notes — cull constants are donor-derived NUMBERS (fine in manifest data);
+  ambience waves/particles are donor content → package when they come.
+
+## §95b REASSESSMENT with grass-is-in + particle-path discoveries (Housing, 2026-07-22)
+
+User corrections: **grass IS in this build** (№128 off-state was stale — the grass-cutting work
+landed it, incl. cut-states and stump DLs); user leans SHORE WAVES. Two findings change the board:
+
+1. **Our grass is STATIC** — blades render at fixed world positions; the port has no sway. And the
+   donor's sway mechanism is **UNLOCATED**: `WW DP d_a_grass.cpp` is small (218 lines, fully
+   matched) with no wind/anim references — WW's grass-sway machinery lives somewhere not yet found
+   (anim-matrix tables elsewhere? kankyo-driven?). Grass-blowing = one identification unknown, then
+   likely-cheap extension of hot, fresh code.
+2. **The WW particle path is PROVEN IN-BUILD** (№229): the mod already loads WW's `Pscene011.jpc`
+   as a supplemental archive and emits `0x89D7` (grass-cut scatter works). WW effect banks
+   demonstrably run through the receiver's JPA manager → **wind-streaks feasibility upgrades from
+   research-heavy to MEDIUM** (identify the streak emitter's bank/id + a driver actor).
+
+### Re-ranked board
+| item | rank | state |
+|---|---|---|
+| Shore waves | **RAISED (user lean, survives reassessment)** | assets housed (Always.arc usonami set); needs shoreline-composition identification; mounting machinery proven |
+| Grass blowing | parallel IDENTIFICATION task | find the donor sway mechanism first (decomp read); grass code is fresh/hot — cheap once located |
+| Tree culling | still smallest fix on the board | unchanged from §95; can ride along any Engine session |
+| Wind streaks | upgraded MEDIUM | particle path proven; needs emitter identification |
+| Ambience audio | unchanged MEDIUM | voice-path dividend; queued |
+
+### Lane asks (the voice-work pattern: identification parallel, wiring sequential)
+- **History/Bridge:** (a) SHORE WAVES — how does donor Outset compose its shoreline (which BG
+  piece/actor carries the waveline + which usonami textures/BTK/BTI anims drive it; sea/stage.dzs +
+  Outset room data are the places to look); (b) GRASS SWAY — locate the donor's sway mechanism
+  (where do kusa anim matrices come from — not in d_a_grass.cpp).
+- **Engine:** nothing yet; mounts/wires after identification. Tree-culling probe remains available
+  as a ride-along whenever an Engine session opens.
+- **User:** none — identifications gate everything.
+
+---
+
+## §96 MAIN-REPO MOD API — Housing position (2026-07-22)
+
+Dusklight main's mod API (native DLL + versioned services + disc overlays + code-less `.dusk`) is
+nearly done; user brought an external AI's coexistence/adapter analysis for Housing's opinion.
+
+**Position: strategically sound, tactically agreeable, ONE covenant-critical correction.**
+
+1. **AGREED:** finish WIP in the fork; adapter over merge; single extraction pilot = the WW ExtNpc
+   receiver as a first-party code mod; boundary-spec before any port.
+2. **AHEAD ALREADY:** the requested "extraction seams" and "frozen content contract" substantially
+   exist — §67 proved the receiver carries zero WW knowledge (data-driven throughout), and
+   `schema_version`/`kExtPopSchemaVersion` handshakes ship today. The covenant discipline built
+   the portability as a side effect. §67 is the feasibility proof for the pilot.
+3. **CORRECTION (the dangerous sentence): "WW arcs become main-compatible packs" — NEVER.** Donor
+   bytes are never redistributable, in any package format, on any host (§67 Part 3, TTW model:
+   zero Nintendo bytes distributed). A `.dusk` adapter for WW ships the BUILD RECIPE (ww_bridge
+   constructs the pack locally from the player's own extract), not arcs. Cosmetic/companion packs
+   may ship as `.dusk`; donor-content packs are install-generated only. This rule must be explicit
+   in any boundary spec before it reaches main's public ecosystem.
+4. **Housing's share of the boundary spec** (§65 gates recast for their SDK): (a) M6 extends to
+   every shipped code artifact — a WW receiver DLL passes the greplist gate like the exe; (b) a
+   package gate that refuses redistributables containing donor bytes (recipe-not-arcs, enforced);
+   (c) №31-C on their loader's failure surfaces (silent mod death is not acceptable).
+5. **Nothing pauses:** current identifications (shore waves, grass sway), tree culling, parked
+   theme board — all unaffected. The boundary spec is a parallel docs task.
+
+Lanes — **User:** ferry the correction (§96.3) to whoever owns the main-repo conversation before
+"WW arcs as packs" hardens into a plan. **Engine/main:** the services half of the boundary spec.
+**Housing:** the covenant half (4a-c) when the spec work opens. **History/Bridge:** unaffected.
+
+## §96b Main-repo SDK scanned first-hand (Housing, 2026-07-22)
+
+Scanned origin/main directly (services headers, loader, ModSDK.cmake, template_mod). The external
+AI's factual claims VERIFY: full service suite (hook/game/gfx/overlay/texture/resource/ui/config/
+camera/log/host), zip bundles + depgraph, runtime mod reload, FEATURES-game mechanism
+(game_feature.cpp) with ABI-epoch versioning.
+
+**Immediate-use verdict: nothing to adopt mid-WIP** — reload/overlay/texture services require their
+loader; our in-house equivalents cover this month's iteration pains. **The one immediate win:
+adapter targets are now concrete** — mod.json schema, bundle layout, and add_mod contract are
+readable today, so the §96 boundary spec starts from ground truth, not guesses.
+
+**Conventions filed for our own tooling:** (1) content-hash texture keys (XXH64+TLUT, survives arc
+repacks — for the texture-pack lane someday); (2) ABI-epoch versioning language for our
+schema_version docs; (3) their loader's failure design is №31-C-compatible (loud reload failures,
+ID-change detection, leak warnings) — the covenant's future host shares our discipline.
+
+---
+
+## §97 SHORE WAVES — first step defined; the identification fork (Housing, 2026-07-22)
+
+Seed findings (Housing, donor greps): the usonami wave textures are consumed by **`d_a_sea.cpp`**
+(WW's sea actor — the big procedural ocean+foam system) and `d_kankyo.cpp`. No small dedicated
+shoreline prop exists (`d_a_swhit0` = splash effects, separate). `ky_tag1` (census "waves env")
+has no own actor file — likely kankyo-side; secondary.
+
+**The fork to resolve (determines cheap vs big, exactly like stream-vs-sequence did in §70):**
+- (a) Is `d_a_sea`'s SHORE-FOAM subsystem separable from the open-ocean surface renderer —
+  a portable piece that draws foam rings near beach geometry?
+- (b) Or is there a cheaper faithful representation: foam as textured geometry + BTK that the
+  BG-mount lane can mount (the donor Outset ROOM model may carry its own waterline pieces)?
+- (c) What water/foam assets do the Outset room arcs we ALREADY mount contain at the waterline
+  (vs the Always.arc set)?
+
+**First-step lane asks:**
+- **History:** read `d_a_sea.cpp` structure — how is shore foam drawn (procedural rings around
+  island geometry? separable draw path? what inputs — DZB? grid? kankyo state)? Answer (a).
+- **Bridge:** asset inventory answering (c) — waterline textures/models/anims inside the mounted
+  Outset room arcs vs Always.arc's sea set; report what's already housed vs missing.
+- **Engine:** holds until the fork resolves. **User:** none.
+
+*(Also answered this turn: main-repo SDK contains NO runnable tools for us today — loader-bound
+services only; §96b's "paper win" stands as the complete immediate-use verdict.)*
+
+## §97b SHORE-WAVE IDENTIFICATION COMPLETE — separable, and the assets are already housed (Housing, 2026-07-22)
+
+Step 1 (donor structural read) done by Housing (History untouched per user — capacity protected).
+
+### VERDICT: fork answer (a) — YES, the shore foam is fully separable. It was never in the sea actor at all.
+
+The complete donor mechanism, traced end to end:
+
+| piece | location | role |
+|---|---|---|
+| `dKy_usonami_set(f32)` | `d_kankyo.cpp:3427` | config: ~10 params (300 sprites, spawn dist/radius 20000/22000, scale 300, speed, counter rates) |
+| `d_a_sea`'s ONLY role | `d_a_sea.cpp:519` | calls the setter with a sea-flatness value — that's it |
+| `dKankyo_wave_Packet` | `d_kankyo_wether.cpp:156` | self-contained draw class — `drawWave(viewMtx, &mpTexUsonami)` |
+| `wave_move()` | `d_kankyo_rain.cpp:1286` | per-frame mover — inputs: envLight, **stage FILI data**, **wind vector**, player pos |
+| `drawWave()` | `d_kankyo_rain.cpp:3281` | the GX render |
+| textures | `Always` arc: `TXA_USONAMI_256_64MIP` + `_M_` | **ALREADY HOUSED** in our Always payload (shared-libraries.md, twin-clean) |
+| draw integration | `dKyw_Wave_Draw` → XluBg packet list | environment-effect draw pass |
+
+**Port shape:** ONE effect module (packet + move + draw) in the vegetation-lane style. Inputs to
+adapt: wind vector (receiver kankyo has wind), FILI (host stage or package data), player pos, and a
+sea-flatness value (constant/config initially — no sea actor needed). No new assets. No new systems.
+**The open-ocean renderer (1,203 lines of `d_a_sea`) is NOT needed and stays unported.**
+
+**Caveats (honest):** `wave_move` is `/* Nonmatching */` — structure readable, byte-accuracy
+unverified; port from structure with №31-B eye-acceptance (user screenshot confirmation per the
+visual-fix rule). `drawWave` size unbounded until read fully. Placement logic internals (how foam
+finds shorelines — FILI-driven?) are the port work, not the feasibility question.
+
+**Bonus flag:** the same kankyo weather family (`d_kankyo_rain/wether`) houses rain/snow/star
+effects — this port establishes the EFFECT-MODULE pattern; wind streaks (§95 item 4) may live in
+this family rather than JPA, which would upgrade them again. One identification pass there when
+wanted.
+
+### Lanes
+- **Bridge (user ferrying):** step 2 inventory stands — now supporting, not gating (waterline
+  assets in mounted room arcs = nice-to-know; the foam system needs only the two housed textures).
+  ALSO when convenient: extract the `dRes_INDEX_ALWAYS_BTI_*` resource-index table so texture
+  fetches are index-verified.
+- **Engine:** the port spec above is ready when an Engine session opens — well-scoped, one module.
+  Tree-culling probe still rides along.
+- **History:** untouched, as ordered. **User:** ferry Bridge's step 2; Engine sequencing when ready.
+
+## §97c Bridge response — waterline inventory + Always BTI index (2026-07-22)
+
+Tool **0.30.0**. Step 2 supporting (not gating).
+
+```bat
+python -m ww_bridge waterline-inv
+```
+
+### Room arcs (mounted)
+
+| finding | detail |
+|---------|--------|
+| Water-named members | **0** across Outset + interiors/forest mounts |
+| `Outset.arc` | 9 members; names match donor `Room44.arc` (sizes differ) |
+| Structural | `model1.bdl` + `model1.btk` present (secondary model + tex anim — **purpose unclaimed**, IVAN) |
+| Foam gating | **not** on room assets — foam needs only Always USONAMI BTIs |
+
+### Always BTI index (34/34 OK)
+
+| index | symbol | member |
+|------:|--------|--------|
+| **0x8B** | `dRes_INDEX_ALWAYS_BTI_TXA_USONAMI_256_64MIP_e` | `txa_usonami_256_64mip.bti` |
+| **0x8C** | `dRes_INDEX_ALWAYS_BTI_TXA_USONAMI_M_256_64MIP_e` | `txa_usonami_m_256_64mip.bti` |
+
+Artifacts: `albt bridge/reports/waterline_outset.md` + `always_bti_index.csv`; staged copy at mod `arcs/always_bti_index.csv`.
+
+**Implication:** foam = effect module on housed textures (zero new assets/systems). Any later room waterline geometry = **mount** of existing `model1` members — still zero new systems.
+
+**Lanes:** Engine foam port ready (index-verified fetches). Bridge CLEAR.
+
+## §97c Step-2 absorbed; model1 already mounted; identification chapter CLOSED (Housing, 2026-07-22)
+
+Bridge 0.30.0: no water-named members in mounted room arcs; Outset.arc ≡ donor Room44 member set;
+foam textures index-verified (0x8B/0x8C, 34/34 table OK, staged). Housing follow-up on the
+"purpose unclaimed" `model1.bdl+btk`: **already mounted** — `ext_bg0.ini` declares
+`model2=model1.bdl` + `model2_btk=model1.btk`; the secondary model renders with its tex-anim today.
+No dark geometry exists.
+
+**Consequence — the shore-wave identification chapter is CLOSED with a single work item:** the
+§97b foam-packet port (dKankyo_wave_Packet + wave_move + drawWave, textures housed, inputs mapped).
+Everything else — water surface, room geometry, textures, indices — is either already live or
+already staged. **Engine holds the complete spec; tree-culling probe rides along; user eyes are
+the acceptance (№31-B screenshot rule).**
+
+Board: **Bridge** clear. **History** never touched. **Engine** — the one port, when a session
+opens. **User** — sequencing call.
+
+## §97b/§95 Engine STAGED (Cursor, 2026-07-22 — no build; play session live)
+
+Source edits landed; **do not overwrite the live play exe until the user exits.**
+
+| piece | landing |
+|---|---|
+| `WAVECHAN` / `WAVE_EFF` / `dKankyo_wave_Packet` | `d_kankyo_wether.h` + env_light append (`sizeof` 4880→4936) |
+| `dKy_usonami_set` / `dKy_wave_chan_init` / sea-color+fog stubs | `d_kankyo.cpp` |
+| `wether_move_wave` + XluBg draw; `WwAlways` 0x8B/0x8C | `d_kankyo_wether.cpp` |
+| `wave_move` / `drawWave` | `d_kankyo_rain.cpp` |
+| F_DL bootstrap `dKy_usonami_set(0)` | `d_ext_npc_mount.cpp` `onStageReady` |
+| Cull probe `DUSK_CULL_PROBE=1` | `dExtNpcMount_pollCullProbe` + `d_s_play` |
+
+**Next:** one `build_run.bat` after play exit; wipe dawn/pipeline caches; Outset shoreline eyes (№31-B) + bad-angle cull logs.
+
+## §97b/§95 Engine BUILT (Cursor, 2026-07-22)
+
+`build_run.bat` green (RelWithDebInfo). Fix along the way: `drawWave` blend enums → `GX_BL_SRCALPHA` / `GX_BL_INVSRCALPHA`. Dawn + pipeline caches wiped.
+
+**Next (user):** Outset shoreline foam eyes (№31-B) + `DUSK_CULL_PROBE=1` at bad tree angles.
+
+## §98 FACE-PANE Engine BUILT (Cursor, 2026-07-22)
+
+White triangles root cause: noon Outset `BG1_C0=(255,255,255)` with `BG1_K0` dropped by №113 convert → TEV lerped white→white. **Fix:** `conv_pal0` stashes donor K0s in `plight_col[1..4]` (`BG1_K0` → slot 2); `dKy_get_seacolor` reads `dungeonlight_col[2]` as dif; sea fog uses `vrbox_kasumi_outer` (uso_umi). `drawWave` texidx MajyuE + per-sprite rebind. F_DL01/02 + R_DL01 STG re-injected. RelWithDebInfo green; caches wiped.
+
+**Next (user):** №31-B Outset foam — sea-blue base modulating to white via usonami, not flat white spikes. System 4 (`model1`) unchanged.
+
+## §101 CALM GATE Engine BUILT (Cursor, 2026-07-22)
+
+**Polarity resolved from donor pair** (`CalcFlatInterTarget` + `CalcFlatInter` + `wave_move` + `dKy_usonami_set`):
+- `0.0` = calm (`wave_max==0` / `SetFlat`) → usonami **ON**; sea mesh scale 0
+- `1.0` = open chop → usonami **OFF** (`>= 1.0` early-return)
+- Guessing the inverse would put waves only at shore — avoided.
+
+Hosted adaptation (no sea-room grid): `population/wave_calm.ini` — `calm_box` AABBs + donor **12800** ramp/ease; `infl` lines = kytag01 `mpWaveInfl` (strength 0 inside inner). Outset ships donor `ky_tag1` (5k/5.5k) plus a land-footprint infl (placement bounds) so panes die on beach/land and feather into water. `wave_move` restores the influence loop; FILI `seaLevel` placement unchanged.
+
+RelWithDebInfo green; caches wiped. **Next (user):** eyes — quiet on sand, whitecaps offshore.
+
+---
+
+## §98 FACE-PANE SPEC — the donor's complete wave-pane recipe (Housing research for Engine, 2026-07-22)
+
+User tested Engine's first foam build: waves spawn/move but render as "white triangles up and
+down." Donor `drawWave` (`d_kankyo_rain.cpp:3281-3432`) read in full; the divergences and the
+complete recipe:
+
+### Why it's white — the TEV is the imagery
+
+- `dKy_get_seacolor(&amb, &dif)` — the pane colors ARE THE KANKYO SEA COLORS.
+- One TEV stage, **`GXSetNumChans(0)`** (no vertex colors):
+  `ColorIn(C0=dif, KONST=amb(K0), TEXC, ZERO)` → **out = lerp(sea-dif → sea-amb, by texture
+  intensity)**. The usonami texture doesn't draw white foam directly — it MODULATES between two
+  sea palette colors. Without this stage: flat white. This is the core fix.
+- Alpha: `AlphaIn(ZERO, KONST(K3_A), TEXA, ZERO)` → **texture alpha × per-sprite alpha**
+  (`amb.a = mEff[i].mAlpha*255` → KCOLOR3 per sprite, set INSIDE the loop).
+- Blend src-alpha/inv-src-alpha; alpha-compare GREATER 0; `ZCompLoc FALSE`, ZMode(TRUE, LEQUAL,
+  **write TRUE**); cull NONE; **sea fog** (`dKy_GxFog_sea_set`).
+
+### The pane geometry — QUADS, billboarded, bank-rolled, wind-skewed
+
+- **`GX_QUADS`, 4 verts/sprite** (not triangles), positions built in camera space via
+  `MTXInverse(viewRotMtx)` **concat a Z-rotation of the camera BANK** (`cM_sht2d(pCamera->mBank)`)
+  — panes roll with the camera.
+- Trapezoid billboard: bottom verts at `(±width, 0)`, top verts at `(±width_top, height)` where the
+  TOP is **skewed** by `mSkewDir`/`mSkewWidth × (mEff[i].mSpeed*1.2)` — waves LEAN (wind feel).
+  `height = strength*scale`; `width = scaleBottom*(strength − 1.5e-7*(i*32)*height)`;
+  `scale = mWaveScale * mEff[i].mScale * sin(mCounter)`.
+- **Phase gating: `sin(mCounter) <= 0 → skip`** — every sprite is INVISIBLE half its cycle
+  (the pulsing rhythm; a port that always draws reads as "up and down triangles" constantly).
+- UVs: full-quad `0..0xFA` in S16/8-bit-frac (just-inside-edge). Vtx fmt: POS F32, TEX0 S16/8.
+- `j3dSys.reinitGX()` first; `add_table` loop is `j<1` — **entries 1-3 are dead donor data, do not
+  port them as meaningful.**
+
+### Texture selection answer (refines §97b)
+
+`texidx = (stage=="MajyuE") ? 1 : 0` — **`TXA_USONAMI_M` is the Forsaken Fortress VARIANT**, not a
+mask. Outset uses index 0 (`TXA_USONAMI_256_64MIP`, index-verified 0x8B). Bind via
+`dKyr_set_btitex` per sprite-loop iteration (donor rebinds inside the loop).
+
+### Receiver adaptation notes
+
+- Sea colors: `dKy_get_seacolor` equivalent — the WW sea palette for the space should come from the
+  donor-side kankyo values the space already carries (the §47 donor-look lane), NOT TP's water
+  colors — №31 applies to the palette.
+- Sea fog: map to the space's fog set (same lane).
+- Caveat: `drawWave` is `/* Nonmatching */` — structure-faithful port + №31-B screenshot
+  acceptance (user), as with `wave_move`.
+
+**Lanes — Engine:** the recipe above is the diff against the current build (TEV lerp + quads +
+bank-roll + skew + phase-gating + per-sprite alpha are the expected missing pieces). **User:**
+ferrying + screenshot acceptance; their parallel online-resource research slots in wherever the
+recipe leaves visual questions. **History/Bridge:** untouched.
+
+## §99 WATER TAXONOMY DOC — video resource absorbed; system-4 question raised (2026-07-22)
+
+User-found video breakdown (transcript archived in doc) → **`docs/WW Linked/water-rendering.md`** —
+the all-islands water taxonomy: SIX distinct systems (open-sea foam material / whitecap panes /
+island grounding rings / beach crashing waves / rivers / waterfalls+ripples), each with mechanism,
+source epistemics ([video] vs [verified]), and porting traps (hand-authored mip fade — NEVER
+regenerate mips on txa_* water textures; vertex alpha load-bearing; name-the-system-before-debugging).
+
+**Key insight: the Outset shoreline crash the user wants (system 4, NINE layers) is NOT the §98
+foam-pane system (system 2) Engine is building.** Both are wanted; they are different
+implementations. **New hypothesis (SUSPECTED, NOT PROVEN): system 4 lives in Room44's
+`model1.bdl+btk` — which we ALREADY mount** — making beach waves potentially a material-fidelity
+check, not a port. Identification: Bridge dumps model1's material list + BTK track targets; user
+eyeballs the beach for any existing motion.
+
+**Video corroborates §98's TEV read** (runtime palette = dKy_get_seacolor lerp) and explains the
+`_M` variant's existence class (per-stage/weather palettes).
+
+Lanes — **Bridge:** the model1 material/BTK dump (small; instantly decisive). **Engine:** §98 pane
+spec unchanged (system 2 proceeds). **User:** the beach eyeball + continue resource hunting.
+**History:** untouched.
+
+## §99b Tier-3 water source filed (2026-07-22)
+
+gordonnl Medium recreation appended to water-rendering.md with the user's own label (UNPROVEN,
+NOT-VANILLA) as the doc's lowest epistemic tier. Two of its original-game claims corroborate
+verified reads (camera-static sea plane ≡ daSea packet structure; CPU vertex math ≡ daSea_calcWave);
+its shader layers and sine constants are marked author-invented and IVAN-hard non-portable — if
+vertex swell is ever ported, constants come from daSea_calcWave/daSea_WaveInfo, not the article.
+
+## §99c Bridge response — model1 IS the beach water stack (2026-07-22)
+
+Tool **0.30.1**. §99 identification dump done.
+
+```bat
+python -m ww_bridge model1-dump
+```
+
+### Verdict — system-4 hypothesis **SUPPORTED** (donor names)
+
+| piece | finding |
+|-------|---------|
+| MAT3 (8) | all `SC_01_mizu*` (`mizu` = water token) |
+| TEX1 (9) | `Txa_umi_kiwa_01`, `Txa_nami_01`×2, `Txa_nami_02`, `Txa_sirokuro_a`, `Txa_umi_kage_01`, `Txa_namisoko_ia`, `Txa_nami_ia`, `test_mizu_uzu_c` |
+| BTK | length **100**; **16** material×texGen bindings; multi-keyframe tracks (scrolling layers) |
+| Mount | already live via `ext_bg0.ini` `model2` / `model2_btk` |
+
+Heaviest layer stack: `SC_01_mizu_v(2)` → umi_kiwa + nami_01/02 + sirokuro (matches video's multi-layer beach recipe class).
+
+**Not a new port.** Next = user beach eyeball + Engine material-fidelity if motion missing/wrong.
+§98 whitecap panes (system 2) remain a separate lane.
+
+Artifacts: `albt bridge/reports/model1_dump.md` + `model1_{textures,materials,btk_tracks}.csv`.
+
+---
+
+## §100 SYSTEM-4 LOCATION CONFIRMED + §98 PALETTE POSTMORTEM (Housing, 2026-07-22)
+
+**Bridge 0.30.1:** model1 dump decides the §99 hypothesis — **beach crashing waves ARE the mounted
+secondary model.** 8 materials all `SC_01_mizu*` ("mizu" = water), textures `Txa_nami_*` (wave) /
+`Txa_umi_*` (sea) / `Txa_sirokuro_a` (black-white — the video's grayscale layers!), BTK 16 tracks ×
+100 frames of multi-keyframe scrolls, live via `ext_bg0.ini` today. **System 4 = fidelity check,
+not a port.** Taxonomy doc updated.
+
+**Engine §98 shipped — and the postmortem sharpens §98's diagnosis:** the TEV lerp WAS present;
+the PALETTE was broken — noon Outset `BG1_C0=(255,255,255)` while the №113 color conversion had
+**silently dropped `BG1_K0=(9,99,224)`** → lerp(white→white)=white. Same root truth (the palette IS
+the imagery), defect one stage upstream. Fix: K0 restored via `plight_col[2]`; sea fog from
+`uso_umi`/kasumi_outer. **№31-B note for the record: a shaping-stage conversion (№113) dropped a
+color channel silently — ENGINE flag (small, preemptive): does the №113 convert drop other K-colors
+with not-yet-visible consumers? One grep-grade check heads off the next white-lerp.**
+
+**USER — one trip to Outset covers both systems:**
+1. **System 2 acceptance:** sea-blue panes modulating through the usonami pattern — not flat white
+   spikes (№31-B screenshot rule applies).
+2. **System 4 observation:** look at the BEACH — is any of the 9-layer crash visible/moving today
+   (16 BTK tracks are nominally playing)? What's present vs missing/flat feeds the fidelity check
+   directly (suspects if flat: vertex alpha dropped, blend modes, tracks not all bound).
+
+Lanes — **Bridge:** clear. **Engine:** holds for eyes + the №113 K-color sweep flag. **History:**
+untouched.
+
+---
+
+## §101 SCREENSHOT VERDICT — system 2 lives (shore gate missing); system 4 "wants to be there"; donor calm law located (Housing, 2026-07-22)
+
+**User screenshots (2, beach + glide view):** sea-blue panes correctly modulating through the
+usonami pattern — **§98 + the palette fix ACCEPTED at the eye** for color/pattern. Two defects
+remain, both spatial, neither about the pane rendering itself:
+1. **Panes spawn everywhere, including AT the shore** — not vanilla ("near major islands the water
+   calms so the coast can be consistent" [video], now donor-cited below).
+2. **System 4 partially visible** — foam trails near the shoreline render ("like it WANTS to be
+   there") = some of model1's 16 tracks/8 materials working; the crash layering isn't right yet.
+   Fidelity check stands (§100 suspects: vertex alpha / blend modes / track binding).
+
+### The donor's calm-near-shore law (for Engine's next iteration — cited, with one caution)
+
+- **Spatial suppression source:** the sea keeps a per-room **wave-amplitude grid**
+  (`daSea_WaterHeightInfo_Mng`, `get_wave_max(roomNo)`, `SetInf` from stage data,
+  `d_a_sea.cpp:68-140`) — island-adjacent sea rooms carry reduced/zero wave-max.
+- **Proximity ramp:** `CalcFlatInterTarget` (`d_a_sea.cpp:247`) — distance from the player's XZ to
+  the nearest calm cell's area, expanded and normalized by **12800 units** (the donor ramp
+  constant); `CalcFlatInter` eases toward the target; the result feeds `dKy_usonami_set(flatInter)`
+  and `drawWave`'s global gate (`mWaveFlatInter >= 1.0` → no draw), plus `wave_move`'s per-sprite
+  behavior and FILI `seaLevel` placement (`d_kankyo_rain.cpp:1286+`).
+- **⚠ POLARITY CAUTION (honest):** the flat-inter sign convention (1.0 = calm vs choppy) was NOT
+  pinned down by this read — `GetHeight()==0` early-returns 0.0 and the min-of-ramps logic needs
+  the full `CalcFlatInter` + `wave_move` pair read together. **Engine must resolve polarity from
+  the donor pair during the port — do not take a guessed sign from this section.**
+- **Receiver adaptation note:** our hosted island has no sea-room grid; the donor-faithful analog
+  is a package-side calm map (or shore-distance field) with the **12800 ramp preserved** and
+  seaLevel placement. Adaptation design = Engine's; the constants and mechanism = donor's.
+
+### Lane asks
+- **Engine:** (1) port the calm gate (read `CalcFlatInterTarget`/`CalcFlatInter` + `wave_move`'s
+  flatness/seaLevel use as one unit; resolve polarity); (2) system-4 fidelity pass per §100.
+- **Bridge:** dump the 8 `SC_01_mizu*` materials' TEV/blend/vertex-alpha configs from model1.bdl —
+  the reference sheet the fidelity pass diffs against (sibling of the §98 recipe).
+- **User:** nothing — the screenshots were the acceptance input. Next eyes after Engine's calm gate
+  + fidelity pass.
+
+---
+
+## §102 REHOMING SWEEP — GATE FAILED: 'Ivan' in the exe; plus the clash diagnosis (Housing, 2026-07-22)
+
+First full sweep since §67. **M5a GATE: FAILED — `HIT [ascii] 'Ivan'`** (greplist marker, listed
+beside Makar/Medli — the IVAN RULE's namesake identity).
+
+**Source located:** 6 occurrences; 5 are comments (non-shipping); **the carrier is ONE runtime log
+literal** — `d_ww_itemmdl_pc.cpp:2007`:
+`dWwItemmdl_debugLog("clothes bundle: acquired via ExtNpcMount (boots/Ivan create path)")`.
+Introduced in `dce09e87ca` (checkpoint commit). **Push safety: commit is local-only (verified — on
+no remote), so the covenant held at the distribution boundary; the no-push discipline did its job.**
+
+**MINIMAL FIX (Engine, one line):** neutralize the log literal (e.g. "boots create path").
+Covenant hygiene follow-up (non-urgent): retire the 'Ivan' codename from comments too — a
+forbidden marker used as an internal nickname keeps regenerating this hazard (this is the SECOND
+consequence of the nickname: it also confused the §101-era clash report's wording).
+
+**Commit posture (user raised):** 79 modified + 35 untracked, categories src/d, docs, tools,
+ext_seq. Recommendation: after the one-line fix + gate re-run CLEAN, Engine commits in themed
+chunks (audio/§76-§93 · water/§98-§101 · voice/§85-§91 · docs). **No push upstream until gate
+CLEAN + user go (M6), and the №106 local-only note still stands.** Repo-tree WW-prefixed files
+(docs, skeleton tools, d_ww_itemmdl TP-native) are adjudicated names, not strays — clean.
+
+**Mod-folder integrity (check E):** two pending cleanups still in the package — `voice/listen_pack/`
+(diagnostic data) and the CharVoice payload (wrong bank, no consumer; §94). BRIDGE: sweep both out.
+
+**THE CLASH (user's second item) — recorded as the color-source unification ask (ENGINE):** panes
+color via the stashed-K0 palette route (§98 fix); the sea surface (model1's `SC_01_mizu*`
+materials) lights via the room path — possibly the "Ivan recipe" (`settingTevStruct(0)` + neutral
+ambient, `d_a_demo_item.cpp:519` era). Two color sources → visible clash. **Donor law: one palette
+source** — panes AND surface both derive from the kankyo sea-color state in the donor. Engine
+unifies as part of the calm-gate/fidelity iteration (§101). *(User's wording "lighting mixture used
+for Ivan" decoded: the internal recipe nickname — see hygiene note above.)*
+
+## §102b Hold state (user, 2026-07-22)
+
+Commit sequence gated on lane responses: **Engine** (Ivan log-literal fix → Housing re-gates ·
+calm gate · system-4 fidelity · palette unification) and **Bridge** (listen_pack + CharVoice
+package cleanups · SC_01_mizu* material reference dump). On their responses: act, gate CLEAN,
+then commit in themed chunks. Nothing moves until then.
+
+---
+
+## §101c Bridge CLEAR — SC_01_mizu* TEV/blend/vertex-alpha reference (Cursor, 2026-07-22)
+
+**Ask (Housing §101):** dump the 8 `SC_01_mizu*` materials' TEV/blend/vertex-alpha configs
+from `model1.bdl` as the fidelity reference sheet (sibling of §98 pane recipe).
+
+**Tool 0.30.2** — `python -m ww_bridge model1-dump` now also writes:
+- `reports/model1_mizu_mat_ref.md` — human reference sheet
+- `reports/model1_mizu_mat_ref.csv` — per-mat PE/blend/chan summary
+- `reports/model1_mizu_tev_stages.csv` — per-stage colorIn/alphaIn/order
+
+**Donor facts (not fills):**
+
+| Fact | Value |
+|------|--------|
+| XLU blend | 7/8: `BM_BLEND` SRCALPHA×INVSRCALPHA; mat0 `BM_NONE` konst stub |
+| Vertex alpha | 7/8: colorChan `matSrc=VTX`; stages use **RASA** and/or tevOrder **COLOR0A0** |
+| Mesh | VTX1 **Color0 present** |
+| Z-write | mat0 update=1; mats 1–7 update=**0** (XLU) |
+| AlphaCmp | ALWAYS/AOR/ALWAYS on all 8 |
+| Tex slots | MAT3 **+0x84** (corrected; §99 had used texGen @+0x28) |
+
+Heaviest stack remains `SC_01_mizu_v(2)` (5 TEV) — textures `test_mizu_uzu_c` /
+`Txa_nami_02` / `Txa_sirokuro_a` (not the earlier mis-mapped umi_kiwa+nami_01 list).
+
+**Lanes — Engine:** diff runtime system-4 against this sheet (fidelity, not a new port).
+**Bridge:** CLEAR on §101 mat-ref. Remaining Bridge §102b: listen_pack + CharVoice package
+cleanups (separate).
+
+---
+
+## §103 CALM GATE + MAT-REF ABSORBED — water advances; COMMIT GATE STILL BLOCKED (Housing, 2026-07-22)
+
+### Engine's calm gate — verified exemplary at the data layer
+
+`population/wave_calm.ini` inspected: polarity documented WITH its donor derivation (resolved from
+the four-function donor pair, not guessed — the §101 caution honored: **0=calm→usonami ON,
+1=chop→OFF; inverting = waves only at shore**), donor constants throughout (12800 ramp; Room44
+ky_tag1 inner/outer 5000/5500; host-anchor coordinates), land-footprint kill + offshore feather,
+radii user-tunable. **Covenant scan: 0 WW proper-nouns — clean.** The whole adaptation is package
+data. *(Also: "what quiets the beach is kytag01/mpWaveInfl, not flatInter" — the census's ASK-6
+classification of `ky_tag1` as "waves — env" is VINDICATED: that 1× Outset placement carried the
+donor's beach-quieting data all along.)*
+
+### Bridge's mat-ref (0.30.2) — the fidelity sheet, with a self-correction
+
+7/8 materials SRCALPHA blend (mat0 konst stub) · **7/8 vertex-alpha matSrc=VTX with VTX1 Color0**
+(water-rendering.md trap #3 CONFIRMED load-bearing) · XLU z-update=0 · **tex slots at MAT3+0x84 —
+supersedes the §99 CSV's texGen+0x28 read (Bridge self-caught offset bug; the mat-ref sheet is now
+the authority).** Heaviest stack: `SC_01_mizu_v(2)`. Engine diffs system-4 against this sheet;
+prime flatten suspects if wrong: VTX1 Color0 dropped, z-update on XLU, missing stages.
+
+### ⚠ COMMIT GATE: STILL BLOCKED — neither report touched the §102 items
+
+1. **Engine: the Ivan log-literal fix** (`d_ww_itemmdl_pc.cpp:2007`, one line) — NOT in the calm-
+   gate report. Gate cannot pass until it lands; Housing re-gates after.
+2. **Bridge: the two package cleanups** (`voice/listen_pack/`, CharVoice payload) — NOT in the
+   mat-ref report.
+The user's act-and-commit trigger awaits BOTH. Water work and the commit gate are separate tracks;
+progress on one does not advance the other.
+
+Lanes — **Engine:** Ivan one-liner (gate-critical) · system-4 fidelity diff vs the sheet · palette
+unification (§102 clash) — in that order. **Bridge:** the two cleanups (gate-critical for folder
+integrity). **User:** eyes on the calm gate in-game when convenient (panes should die on sand,
+feather offshore). **Housing:** re-gate + folder re-verify the moment the two items land; then
+commit sequence per §102.
+
+## §104 Ivan etymology logged; scrub is knowledge-safe (Housing, 2026-07-22)
+
+User confirmed the Ivan literal change is wanted and asked two things, both done:
+1. **Functional impact of the edit: ZERO** — the literal is diagnostic display text; changing it
+   alters one printed sentence, no logic/data/behavior. (Answered in chat.)
+2. **Etymology logged outside code** (cookbook §0, IVAN RULE entry): **"Ivan" was the color test**
+   — the color/lighting test subject's name during the demo-item work; the rule and a lighting
+   recipe inherited it. The recipe is renamed the **NEUTRAL-AMBIENT RECIPE** (settingTevStruct 0 +
+   neutral ambient, no MAJI, no warm tint) so the technique's knowledge survives the name's
+   retirement. Engine's comment-scrub can now reference the cookbook name — nothing is lost.
+
+Commit gate unchanged: awaiting Engine's one-liner + Bridge's two cleanups (§103).
+
+---
+
+## §105 WAVE BUGS ONLY (user-scoped; commit pause noted separately) (Housing, 2026-07-23)
+
+**Bug 1 — panes vanished near the island: ROOT IDENTIFIED FROM CONFIG GEOMETRY.** The
+`wave_calm.ini` land-footprint kill (`inner=28000/outer=36000` disc) exceeds the spawner's reach
+around the camera (`mWaveSpawnDist/Radius = 20000/22000`, donor §97b config): from anywhere on/near
+the island, ALL spawnable positions fall inside the kill → zero panes visible. Vanilla kill scale:
+donor tag 5000/5500 + actual land. **Fix = data-only, user-tunable NOW (no rebuild):** shrink the
+land-footprint radii (seeds 10000/12000 — tuning values, NOT donor); long-term better shape =
+approximate the coastline (AABB/multiple small infl), not one island-sized disc.
+
+**Bug 2 — system-4 shore effect still not playing:** unchanged path — Engine's fidelity diff vs
+Bridge's mat-ref sheet (§103) is the only route; sheet is ready; suspects unchanged (VTX1 Color0,
+XLU z-update, missing stages, tracks not advancing).
+
+**№31-C ASK (Engine, one line):** the calm system logs config only — add a periodic spawn-stats
+line (`spawned / killed_by_infl / killed_by_flat` per interval) so ini tuning is measured, not
+eyeballed blind. This turn's diagnosis was possible only because the config numbers happened to
+tell the story; next tuning question won't be that lucky.
+
+Commit pause: per user; §103 gate items unchanged. Other "major bugs": explicitly out of this
+section's scope per user instruction.
+
+---
+
+## §106 EXTERNAL METHODOLOGY ASSESSMENT — VERIFIED, several claims WORSE than stated (Housing, 2026-07-23)
+
+User-ordered verification of the external AI's workflow assessment. Measured, not accepted:
+
+| claim | verdict | measured reality |
+|---|---|---|
+| Cookbook fork, ~536 diff lines, doctrine split | **CONFIRMED** | 542 diff lines; root copy: Presentation-Parity, ZERO №31-B/C; WW Linked copy: №31-B/C/D + etymology, ZERO Presentation-Parity. **Housing has been ratifying law into a forked constitution** (№31-C/D and the Ivan etymology live in only one copy) |
+| Housing bus duplicate §-numbers (§88/93/98 ×2) | **CONFIRMED — WORSE** | EIGHT duplicated keys: **§97b ×3**, §98/§97c/§93/§93b/§90b/§89b/§89c ×2 each. Cause: appends without checking the tip + lanes posting §-numbered entries concurrently. The monotonic-key invariant broke silently in the auditor's own document |
+| Cut-Actors NUL byte breaks ripgrep | **CONFIRMED — WORSE** | **THREE** NUL bytes (offsets 220465/277247/277422); rg answers "Binary file matches" — the ledger defeats the tools that search it |
+| №-ledger duplicate numbers | **CONFIRMED** (occurrence-level counts: №86 ×5, №89 ×7, №90 ×5 incl. refs) |
+| §43 unbuilt while 'Ivan' reached a local commit | **CONFIRMED** (§102 — self-known) |
+| Role creep + 8+ from-memory failures | **CONFIRMED** (matches Housing's own error ledger §32/§49 class) |
+
+**Housing accepts its assessment assignments:**
+1. **§43 class-2 marker gate — SCHEDULED as the next Housing deliverable**: spec (Housing) →
+   build into `ww_bridge gate` (Bridge, who owns the gate tool) → the exact failure class that let
+   'Ivan' reach a commit becomes mechanical. Spec follows as §107.
+2. **Bus hygiene, own doc first**: effective immediately — before assigning any §, grep the tip
+   for the current maximum (this entry did). Duplicate keys stay as-is (renumbering would break
+   cross-references); disambiguation by date when citing. The durable fix is the assessment's
+   bus-doc linter (Bridge candidate; duplicate-§, NUL-byte, stale-table checks) — endorsed.
+3. **Re-charter question**: user ruling, not Housing's to decide. Housing's honest input: the
+   split it proposes (mechanical gate ≠ investigation) matches what the tools already embody.
+
+**QUEUED USER RULINGS (both rulings, not work):** (a) canonical cookbook location — until ruled,
+NO further doctrine edits to either copy (Housing self-injunction); (b) №-ledger compaction.
+Reconciliation facts ready for (a): each copy's unique holdings enumerated above; merge is textual,
+not interpretive — no doctrine conflicts found, only disjoint additions.
+
+## §107 COOKBOOK RULING EXECUTED (user ruling a, 2026-07-23)
+
+Both forked copies retitled + banner-marked **UNCERTAIN ACCURACY — DO NOT WRITE**, each pointing to
+the new canonical book. **`docs/WW-Restoration-Cookbook-CANONICAL.md` created** — the only writable
+cookbook, with a three-route admission protocol (RECEIPT / BILATERAL / RE-VERIFICATION).
+
+Admitted immediately with receipts: covenant+№31 core (founding decree + gate tool commit), №31-B,
+№31-C, IVAN RULE + etymology/NEUTRAL-AMBIENT, donor-export naming, and the new document-lifecycle
+rules (tip-check, canonical-only edits, dated PROVEN-PATH pointers). **Pending index** lists
+everything else (Presentation-Parity №255/№256 → History ledger check; №31-D awaiting explicit
+ratification; DECOMP-FIRST/OffsetPos/№22/№39/etc. → per-entry receipts by owning lanes). Migration
+is incremental; the shrinking index is the metric.
+
+Ruling (b) status: explained to user in chat (№-ledger compaction = History archiving №1–№250 into
+an archive file, keeping a short live tip; awaiting their yes/no).
+
+---
+
+## §108 Bridge CLEAR — №-ledger-as-database (Cursor, 2026-07-23)
+
+**Order #1 (Housing):** Ledger-as-database — Bridge builds schema/ingest/generated views;
+History does the interpretive one-time migration (which № supersedes which, live vs dead)
+using Bridge's ingest format. Mechanical ≠ interpretive.
+
+**Tool 0.31.0**
+
+```bat
+python -m ww_bridge nledger extract
+python -m ww_bridge nledger validate
+python -m ww_bridge nledger build
+```
+
+| Piece | Path |
+|-------|------|
+| Schema + History checklist | `albt bridge/ledger/SCHEMA.md` |
+| Drafts (unclassified, regenerable) | `albt bridge/ledger/drafts/cut_actors_raw.jsonl` |
+| Classified ingest (History writes) | `albt bridge/ledger/entries/*.jsonl` |
+| Views | `albt bridge/reports/nledger_*.md` + `nledger_index.csv` |
+| Worklist | `reports/nledger_unclassified.md` |
+
+**Extract result (mechanical):** **246** draft rows from live tip + archive table + run-doc
+headings that mention `№N`. ~32 numeric gaps remain (no table cell + no heading mention, or
+broken multi-line tip cells) — History may hand-author those in `entries/`.
+
+**Precedence:** `entries/` wins over `drafts/` on the same `id`. Bridge never fills `status`
+beyond `unclassified`.
+
+**Lanes — History:** classify drafts → `ledger/entries/` (`status`, `supersedes` /
+`superseded_by`, `summary`); re-run `nledger build`. **Bridge:** CLEAR on order #1 mechanical
+half.

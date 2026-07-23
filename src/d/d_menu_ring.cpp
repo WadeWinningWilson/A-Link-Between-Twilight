@@ -30,11 +30,12 @@
 #include <cstdio>
 
 #if TARGET_PC
-#include "dusk/game_clock.h"
 #include "d/d_albw_potion.h"
+#include "d/d_ext_quick_equip.h"
+#include "dusk/action_bindings.h"
+#include "dusk/game_clock.h"
 #include "dusk/menu_pointer.h"
 #include "dusk/settings.h"
-#include "dusk/action_bindings.h"
 #include "dusk/ui/touch_controls.hpp"
 #endif
 
@@ -55,51 +56,17 @@ static procFunc stick_proc[] = {
 };
 
 #if TARGET_PC
+#include <cstdio>
+#include "JSystem/J2DGraph/J2DPrint.h"
+#include "JSystem/JUtility/JUTFont.h"
+#include "m_Do/m_Do_ext.h"
+
 namespace {
 bool s_pendingQuickEquipRing = false;
 bool s_quickEquipLiveWorld = false;
 dMenu_Ring_c* s_liveQuickRing = nullptr;
 // 70% slowdown → world runs at 30% sim rate (flurry uses dusk::setSimTimeScale).
 constexpr f32 kQuickEquipSimTimeScale = 0.3f;
-
-bool isQuickEquipToolItem(u8 item) {
-    switch (item) {
-    case dItemNo_BOOMERANG_e:
-    case dItemNo_SPINNER_e:
-    case dItemNo_IRONBALL_e:
-    case dItemNo_BOW_e:
-    case dItemNo_LIGHT_ARROW_e:
-    case dItemNo_ARROW_LV1_e:
-    case dItemNo_ARROW_LV2_e:
-    case dItemNo_ARROW_LV3_e:
-    case dItemNo_BOMB_ARROW_e:
-    case dItemNo_HAWK_ARROW_e:
-    case dItemNo_HOOKSHOT_e:
-    case dItemNo_W_HOOKSHOT_e:
-    case dItemNo_HVY_BOOTS_e:
-    case dItemNo_COPY_ROD_e:
-    case dItemNo_COPY_ROD_2_e:
-    case dItemNo_KANTERA_e:
-    case dItemNo_FISHING_ROD_1_e:
-    case dItemNo_LURE_ROD_e:
-    case dItemNo_BEE_ROD_e:
-    case dItemNo_JEWEL_ROD_e:
-    case dItemNo_WORM_ROD_e:
-    case dItemNo_JEWEL_BEE_ROD_e:
-    case dItemNo_JEWEL_WORM_ROD_e:
-    case dItemNo_PACHINKO_e:
-    case dItemNo_HAWK_EYE_e:
-    case dItemNo_BOMB_BAG_LV1_e:
-    case dItemNo_BOMB_BAG_LV2_e:
-    case dItemNo_BOMB_IN_BAG_e:
-    case dItemNo_NORMAL_BOMB_e:
-    case dItemNo_WATER_BOMB_e:
-    case dItemNo_POKE_BOMB_e:
-        return true;
-    default:
-        return false;
-    }
-}
 }  // namespace
 
 void dMenu_Ring_c::setPendingQuickEquip(bool quick) {
@@ -114,6 +81,10 @@ bool dMenu_Ring_c::isQuickEquipLiveWorld() {
     return s_quickEquipLiveWorld;
 }
 
+bool dMenu_Ring_c::isQuickEquipPagesExclusive() {
+    return s_liveQuickRing != NULL && s_liveQuickRing->mUseQuickEquipPages;
+}
+
 f32 dMenu_Ring_c::getQuickEquipSimScale() {
     return s_quickEquipLiveWorld ? kQuickEquipSimTimeScale : 1.0f;
 }
@@ -126,18 +97,327 @@ void dMenu_Ring_c::forceQuickConfirmClose() {
     if (s_liveQuickRing == nullptr || !s_liveQuickRing->mQuickEquipMode) {
         return;
     }
-    dMenu_Ring_c* ring = s_liveQuickRing;
-    if (!ring->mPlayerIsWolf && dusk::isExtraItemSlotEnabled() &&
-        ring->mCurrentSlot < ring->mItemsTotal)
-    {
-        const u8 invSlot = ring->mItemSlots[ring->mCurrentSlot];
-        const u8 item = invSlot != 0xFF ? dComIfGs_getItem(invSlot, false) : dItemNo_NONE_e;
-        if (item != dItemNo_NONE_e && isQuickEquipToolItem(item)) {
-            dComIfGs_setSelectItemIndex(SELECT_ITEM_DOWN, invSlot);
-            ring->field_0x6ac = ring->mCurrentSlot;
+    s_liveQuickRing->confirmQuickEquipHover();
+    s_liveQuickRing->mQuickEquipForceClose = true;
+}
+
+u8 dMenu_Ring_c::getQuickRegistrySlot(int packedIdx) const {
+    if (packedIdx < 0 || packedIdx >= mItemsTotal) {
+        return 0xFF;
+    }
+    return mQuickEquipSlotMap[packedIdx];
+}
+
+u8 dMenu_Ring_c::getQuickRingItem(int slotIdx) const {
+    if (!mUseQuickEquipPages || slotIdx < 0 || slotIdx >= mItemsTotal) {
+        return dItemNo_NONE_e;
+    }
+    const u8 reg = mQuickEquipSlotMap[slotIdx];
+    if (reg == 0xFF) {
+        return dItemNo_NONE_e;
+    }
+    const dQeSocketDesc* sock =
+        mBagViewOpen ? dQe_peekBagChild(mBagViewId, reg) : dQe_peek(mQuickEquipPage, reg);
+    if (sock == NULL || sock->id == 0 || sock->kind == dQeKind_Empty) {
+        return dItemNo_NONE_e;
+    }
+    if (sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect) {
+        if (sock->tpInvSlot != 0xFF) {
+            return dComIfGs_getItem(sock->tpInvSlot, false);
         }
     }
-    ring->mQuickEquipForceClose = true;
+    return sock->iconItemNo != 0xFF ? sock->iconItemNo : dItemNo_NONE_e;
+}
+
+void dMenu_Ring_c::clearQuickEquipItemTextures() {
+    for (int i = 0; i < mTotalItemTexToAlloc; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (mpItemTex[i][j] != NULL) {
+                JKR_DELETE(mpItemTex[i][j]);
+                mpItemTex[i][j] = NULL;
+            }
+            mItemSlotParam1[i] = 0.0f;
+            mItemSlotParam2[i] = 0.0f;
+        }
+    }
+}
+
+void dMenu_Ring_c::loadQuickEquipItemTextures() {
+    for (int i = 0; i < mItemsTotal; i++) {
+        u8 item = getQuickRingItem(i);
+        if (item == dItemNo_NONE_e || item == 0xFF || mpItemBuf[i][0] == NULL) {
+            continue;
+        }
+        if (item == dItemNo_LIGHT_ARROW_e) {
+            item = dItemNo_BOW_e;
+        }
+        const s32 texNum = dMeter2Info_readItemTexture(item, mpItemBuf[i][0], NULL, mpItemBuf[i][1],
+                                                       NULL, mpItemBuf[i][2], NULL, NULL, NULL, -1);
+        for (int k = 0; k < texNum; k++) {
+            mpItemTex[i][k] = JKR_NEW J2DPicture(mpItemBuf[i][k]);
+            mpItemTex[i][k]->setBasePosition(J2DBasePosition_4);
+        }
+        dMeter2Info_setItemColor(item, mpItemTex[i][0], mpItemTex[i][1], mpItemTex[i][2], NULL);
+        const u8 texScale = dItem_data::getTexScale(item);
+        const f32 fVar1 = (mpItemBuf[i][0]->width / 48.0f) * (texScale / 100.0f);
+        mItemSlotParam1[i] = fVar1;
+        mItemSlotParam2[i] = (mpItemBuf[i][0]->height / 48.0f * (texScale / 100.0f));
+    }
+}
+
+void dMenu_Ring_c::applyQuickEquipPage(u8 page, bool rebuildTextures) {
+    const u8 pageCount = dQe_getPageCount();
+    if (pageCount == 0) {
+        page = 0;
+    } else if (page >= pageCount) {
+        page = static_cast<u8>(pageCount - 1);
+    }
+    mQuickEquipPage = page;
+    mBagViewOpen = false;
+    mBagViewId = 0;
+
+    u8 packed = 0;
+    for (int i = 0; i < dQe_kSlotsPerPage; i++) {
+        mQuickEquipSlotMap[i] = 0xFF;
+        mItemSlots[i] = 0xFF;
+        const dQeSocketDesc* sock = dQe_peek(page, static_cast<u8>(i));
+        if (sock == NULL || sock->id == 0 || sock->kind == dQeKind_Empty) {
+            continue;
+        }
+        mQuickEquipSlotMap[packed] = static_cast<u8>(i);
+        if ((sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect) &&
+            sock->tpInvSlot != 0xFF)
+        {
+            mItemSlots[packed] = sock->tpInvSlot;
+        }
+        packed++;
+    }
+    mItemsTotal = packed > 0 ? packed : 1;
+    if (packed == 0) {
+        mQuickEquipSlotMap[0] = 0xFF;
+        mItemSlots[0] = 0xFF;
+    }
+
+    mXButtonSlot = 0xff;
+    mYButtonSlot = 0xff;
+    field_0x6ac = 0xff;
+    mCurrentSlot = 0;
+
+    const u8 curZ = dComIfGs_getSelectItemIndex(SELECT_ITEM_DOWN);
+    const u8 curSword = dComIfGs_getSelectEquipSword();
+    const u8 curShield = dComIfGs_getSelectEquipShield();
+    for (int i = 0; i < packed; i++) {
+        const u8 reg = mQuickEquipSlotMap[i];
+        const dQeSocketDesc* sock = dQe_peek(page, reg);
+        if (sock == NULL || sock->id == 0) {
+            continue;
+        }
+        if ((sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect) &&
+            sock->tpInvSlot == curZ)
+        {
+            field_0x6ac = static_cast<u8>(i);
+            mCurrentSlot = static_cast<u8>(i);
+            break;
+        }
+        if (sock->kind == dQeKind_SwordEquip && sock->iconItemNo == curSword) {
+            mCurrentSlot = static_cast<u8>(i);
+            break;
+        }
+        if (sock->kind == dQeKind_ShieldEquip && sock->iconItemNo == curShield) {
+            mCurrentSlot = static_cast<u8>(i);
+            break;
+        }
+    }
+
+    field_0x634 = 0x10000 / (mItemsTotal > 0 ? mItemsTotal : 1);
+    field_0x66e = 0x8000;
+    field_0x670 = 0;
+    if (rebuildTextures) {
+        clearQuickEquipItemTextures();
+        loadQuickEquipItemTextures();
+        setRotate();
+        field_0x670 = field_0x63e[mCurrentSlot];
+        field_0x66e = field_0x670;
+        mpDrawCursor->setPos(mItemSlotPosX[mCurrentSlot] + mCenterPosX,
+                             mItemSlotPosY[mCurrentSlot] + mCenterPosY);
+        const u8 item = getQuickRingItem(mCurrentSlot);
+        if (item != dItemNo_NONE_e) {
+            mpDrawCursor->setParam(mItemSlotParam1[mCurrentSlot], mItemSlotParam2[mCurrentSlot], 0.1f,
+                                   0.6f, 0.5f);
+        } else {
+            mpDrawCursor->setParam(1.0f, 1.0f, 0.1f, 0.6f, 0.5f);
+        }
+    }
+}
+
+void dMenu_Ring_c::applyQuickEquipBagView(bool rebuildTextures) {
+    if (!mBagViewOpen || mBagViewId == 0) {
+        return;
+    }
+    u8 packed = 0;
+    for (u8 i = 0; i < dQe_kBagCapacity; i++) {
+        mQuickEquipSlotMap[i] = 0xFF;
+        mItemSlots[i] = 0xFF;
+        const dQeSocketDesc* sock = dQe_peekBagChild(mBagViewId, i);
+        if (sock == NULL || sock->id == 0 || sock->kind == dQeKind_Empty) {
+            continue;
+        }
+        mQuickEquipSlotMap[packed] = i;
+        if ((sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect) &&
+            sock->tpInvSlot != 0xFF)
+        {
+            mItemSlots[packed] = sock->tpInvSlot;
+        }
+        packed++;
+    }
+    mItemsTotal = packed > 0 ? packed : 1;
+    if (packed == 0) {
+        mQuickEquipSlotMap[0] = 0xFF;
+        mItemSlots[0] = 0xFF;
+    }
+    mCurrentSlot = 0;
+    field_0x6ac = 0xff;
+    field_0x634 = 0x10000 / (mItemsTotal > 0 ? mItemsTotal : 1);
+    field_0x66e = 0x8000;
+    field_0x670 = 0;
+    if (rebuildTextures) {
+        clearQuickEquipItemTextures();
+        loadQuickEquipItemTextures();
+        setRotate();
+        field_0x670 = field_0x63e[mCurrentSlot];
+        field_0x66e = field_0x670;
+        mpDrawCursor->setPos(mItemSlotPosX[mCurrentSlot] + mCenterPosX,
+                             mItemSlotPosY[mCurrentSlot] + mCenterPosY);
+        mpDrawCursor->setParam(1.0f, 1.0f, 0.1f, 0.6f, 0.5f);
+    }
+}
+
+void dMenu_Ring_c::confirmQuickEquipHover() {
+    if (mPlayerIsWolf || mCurrentSlot >= mItemsTotal) {
+        return;
+    }
+    if (mBagViewOpen) {
+        // Nested bag: confirm child like a normal Z/equip socket.
+    }
+    const u8 reg = mQuickEquipSlotMap[mCurrentSlot];
+    if (reg == 0xFF) {
+        return;
+    }
+    const dQeSocketDesc* sock =
+        mBagViewOpen ? dQe_peekBagChild(mBagViewId, reg) : dQe_peek(mQuickEquipPage, reg);
+    if (sock == NULL || sock->id == 0 || sock->kind == dQeKind_Empty) {
+        return;
+    }
+    switch (sock->kind) {
+    case dQeKind_InvSlot_Z:
+    case dQeKind_ZSelect:
+        if (!dusk::isExtraItemSlotEnabled()) {
+            return;
+        }
+        if (sock->tpInvSlot != 0xFF) {
+            dComIfGs_setSelectItemIndex(SELECT_ITEM_DOWN, sock->tpInvSlot);
+            field_0x6ac = mCurrentSlot;
+        }
+        break;
+    case dQeKind_SwordEquip:
+        if (sock->iconItemNo != 0xFF && dComIfGs_getSelectEquipSword() != sock->iconItemNo) {
+            dMeter2Info_setSword(sock->iconItemNo, false);
+            Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+            dMeter2Info_set2DVibration();
+        }
+        break;
+    case dQeKind_ShieldEquip:
+        if (sock->iconItemNo != 0xFF && dComIfGs_getSelectEquipShield() != sock->iconItemNo) {
+            if (dMeter2_equipOwnedShield(sock->iconItemNo)) {
+                Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
+                                         0);
+                dMeter2Info_set2DVibration();
+            }
+        }
+        break;
+    case dQeKind_Bag:
+    case dQeKind_Custom:
+    case dQeKind_Empty:
+    default:
+        break;
+    }
+}
+
+bool dMenu_Ring_c::tryQuickEquipBagOpen() {
+    if (!mUseQuickEquipPages || mBagViewOpen || mCurrentSlot >= mItemsTotal) {
+        return false;
+    }
+    const u8 reg = mQuickEquipSlotMap[mCurrentSlot];
+    if (reg == 0xFF) {
+        return false;
+    }
+    const dQeSocketDesc* sock = dQe_peek(mQuickEquipPage, reg);
+    if (sock == NULL || sock->kind != dQeKind_Bag || sock->id == 0) {
+        return false;
+    }
+    mBagViewOpen = true;
+    mBagViewId = sock->id;
+    applyQuickEquipBagView(true);
+    setStatus(STATUS_WAIT);
+    stick_wait_init();
+    Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_ROLL, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    return true;
+}
+
+bool dMenu_Ring_c::tryQuickEquipPageFlip() {
+    if (!mUseQuickEquipPages || mBagViewOpen) {
+        return false;
+    }
+    const u8 pageCount = dQe_getPageCount();
+    if (pageCount <= 1) {
+        return false;
+    }
+    s8 delta = 0;
+    if (dMw_RIGHT_TRIGGER()) {
+        delta = 1;
+    } else if (dMw_LEFT_TRIGGER()) {
+        delta = -1;
+    } else {
+        return false;
+    }
+    const u8 next =
+        static_cast<u8>((mQuickEquipPage + pageCount + delta) % pageCount);
+    if (next == mQuickEquipPage) {
+        return false;
+    }
+    applyQuickEquipPage(next, true);
+    setStatus(STATUS_WAIT);
+    stick_wait_init();
+    Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_ROLL, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    dMeter2Info_set2DVibration();
+    return true;
+}
+
+void dMenu_Ring_c::drawQuickEquipPageCue() {
+    if (!mUseQuickEquipPages) {
+        return;
+    }
+    JUTFont* font = mDoExt_getMesgFont();
+    if (font == NULL) {
+        return;
+    }
+    char buf[24];
+    if (mBagViewOpen) {
+        snprintf(buf, sizeof(buf), "BAG %u", static_cast<unsigned>(dQe_countBagOccupied(mBagViewId)));
+    } else {
+        const u8 pageCount = dQe_getPageCount();
+        snprintf(buf, sizeof(buf), "%u / %u", static_cast<unsigned>(mQuickEquipPage + 1),
+                 static_cast<unsigned>(pageCount > 0 ? pageCount : 1));
+    }
+    const JUtility::TColor ink(255, 255, 255, 255);
+    J2DPrint print(font, 0.0f, 18.0f, ink, ink, JUtility::TColor(0, 0, 0, 0), ink);
+    print.setFontSize(16.0f, 16.0f);
+    font->pushDrawState();
+    print.initiate();
+    const f32 x = FB_WIDTH_BASE * 0.5f - 24.0f;
+    const f32 y = 36.0f;
+    print.print(x, y, 255, "%s", buf);
+    font->popDrawState();
 }
 #endif
 
@@ -291,7 +571,14 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     mQuickEquipMode = s_pendingQuickEquipRing;
     s_pendingQuickEquipRing = false;
     mQuickEquipForceClose = false;
-    if (mQuickEquipMode) {
+    mBagViewOpen = false;
+    mBagViewId = 0;
+    mQuickEquipPage = 0;
+    mUseQuickEquipPages = dusk::isQuickEquipWheelEnabled() && !mPlayerIsWolf;
+    for (int qi = 0; qi < MAX_ITEM_SLOTS; qi++) {
+        mQuickEquipSlotMap[qi] = 0xFF;
+    }
+    if (mUseQuickEquipPages) {
         s_liveQuickRing = this;
     }
 #endif
@@ -355,43 +642,16 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
         }
     }
 #if TARGET_PC
-    if (mQuickEquipMode && !mPlayerIsWolf) {
-        u8 filtered[MAX_ITEM_SLOTS];
-        u8 n = 0;
-        for (int i = 0; i < mItemsTotal && n < MAX_ITEM_SLOTS; i++) {
-            const u8 invSlot = mItemSlots[i];
-            const u8 item = dComIfGs_getItem(invSlot, false);
-            if (item != dItemNo_NONE_e && isQuickEquipToolItem(item)) {
-                filtered[n++] = invSlot;
-            }
-        }
-        if (n == 0) {
-            mItemsTotal = 1;
-            mItemSlots[0] = 0xFF;
-            mTotalItemTexToAlloc = 1;
-        } else {
-            mItemsTotal = n;
-            mTotalItemTexToAlloc = n;
-            for (int i = 0; i < n; i++) {
-                mItemSlots[i] = filtered[i];
-            }
-        }
-        mXButtonSlot = 0xff;
-        mYButtonSlot = 0xff;
-        field_0x6ac = 0xff;
-        mCurrentSlot = 0;
-        for (int i = 0; i < mItemsTotal; i++) {
-            if (dComIfGs_getSelectItemIndex(SELECT_ITEM_DOWN) == mItemSlots[i]) {
-                field_0x6ac = i;
-                mCurrentSlot = i;
-            }
-        }
+    if (mUseQuickEquipPages) {
+        dQe_seedTpBuiltin();
+        mTotalItemTexToAlloc = dQe_kSlotsPerPage;
+        applyQuickEquipPage(0, false);
     }
 #endif
     mRingRadiusH = g_ringHIO.mRingRadiusH;
     mRingRadiusV = g_ringHIO.mRingRadiusV;
     field_0x66e = 0x8000;
-    field_0x634 = 0x10000 / mItemsTotal;
+    field_0x634 = 0x10000 / (mItemsTotal > 0 ? mItemsTotal : 1);
     for (int i = 0; i < MAX_SELECT_ITEM; i++) {
         for (int j = 0; j < 3; j++) {
             for (int k = 0; k < SELECT_ITEM_NUM; k++) {
@@ -399,21 +659,30 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             }
         }
         field_0x6be[i] = 0;
+        u8 selectItemNo = dItemNo_NONE_e;
         if (i == 2) {
 #if TARGET_PC
             if (dusk::isExtraItemSlotEnabled() && !mPlayerIsWolf) {
                 u8 slot = dComIfGs_getSelectItemIndex(SELECT_ITEM_DOWN);
-                u8 item = slot != 0xFF ? dComIfGs_getItem(slot, false) : dItemNo_NONE_e;
-                setSelectItem(i, item);
+                selectItemNo = slot != 0xFF ? dComIfGs_getItem(slot, false) : dItemNo_NONE_e;
             } else
 #endif
             {
-                setSelectItem(i, 0);
+                selectItemNo = 0;
             }
         } else {
-            setSelectItem(i, 0x43);
+            selectItemNo = 0x43;
         }
+        setSelectItem(i, selectItemNo);
         for (int j = 0; j < 3; j++) {
+#if TARGET_PC
+            // Empty Z (Extra Item Slot): setSelectItem skips the texture fill — do not
+            // build J2DPicture from an uninitialized ResTIMG (AV in initTexObj/CRT).
+            if (selectItemNo == dItemNo_NONE_e) {
+                mpSelectItemTex[i][j] = NULL;
+                continue;
+            }
+#endif
             mpSelectItemTex[i][j] = JKR_NEW J2DPicture(mpSelectItemTexBuf[i][field_0x6be[i]][0]);
             mpSelectItemTex[i][j]->setBasePosition(J2DBasePosition_4);
         }
@@ -446,7 +715,11 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
         for (int j = 0; j < 3; j++) {
             mpItemBuf[i][j] = (ResTIMG*)mpHeap->alloc(0xC00, 0x20);
         }
+#if TARGET_PC
+        u8 item = mUseQuickEquipPages ? getQuickRingItem(i) : dComIfGs_getItem(mItemSlots[i], false);
+#else
         u8 item = dComIfGs_getItem(mItemSlots[i], false);
+#endif
         if (item != dItemNo_NONE_e) {
             if (item == dItemNo_LIGHT_ARROW_e) {
                 // safety check to prevent attempts setting up a light arrow texture
@@ -769,6 +1042,15 @@ void dMenu_Ring_c::_delete() {
 void dMenu_Ring_c::_move() {
 #if TARGET_PC
     dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::ItemWheel);
+    // Page flip on tap or hold when feature on — works from WAIT or mid-cursor MOVE.
+    if (mUseQuickEquipPages && tryQuickEquipPageFlip()) {
+        mRingRadiusH = g_ringHIO.mRingRadiusH;
+        mRingRadiusV = g_ringHIO.mRingRadiusV;
+        mOldStatus = mStatus;
+        setScale();
+        setActiveCursor();
+        return;
+    }
 #endif
     mRingRadiusH = g_ringHIO.mRingRadiusH;
     mRingRadiusV = g_ringHIO.mRingRadiusV;
@@ -910,6 +1192,9 @@ void dMenu_Ring_c::_draw() {
 #endif
         mpItemExplain->trans(mCenterPosX, mCenterPosY);
         mpItemExplain->draw((J2DOrthoGraph*)grafPort);
+#if TARGET_PC
+        drawQuickEquipPageCue();
+#endif
         drawFlag0();
     }
 }
@@ -974,25 +1259,24 @@ bool dMenu_Ring_c::isMoveEnd() {
                 dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
                 dusk::getActionBindDown(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
             if (!stillDown) {
-                // Release → assign hovered tool to Z only (never rewrite X/Y).
-                if (!mPlayerIsWolf && dusk::isExtraItemSlotEnabled() &&
-                    mCurrentSlot < mItemsTotal)
-                {
-                    const u8 invSlot = mItemSlots[mCurrentSlot];
-                    const u8 item =
-                        invSlot != 0xFF ? dComIfGs_getItem(invSlot, false) : dItemNo_NONE_e;
-                    if (item != dItemNo_NONE_e && isQuickEquipToolItem(item)) {
-                        dComIfGs_setSelectItemIndex(SELECT_ITEM_DOWN, invSlot);
-                        field_0x6ac = mCurrentSlot;
-                    }
-                }
+                // Release → page1 tools to Z; page2 sword/shield equip (never rewrite X/Y).
+                confirmQuickEquipHover();
                 mRingOrigin = 0xff;
                 Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_OUT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
                                          0);
                 dMeter2Info_set2DVibrationM();
                 return true;
             }
-            // B cancels without assigning; Up/Down also cancel in quick mode.
+            // Left/Right page flip is handled in _move (not cancel).
+            // B closes nested bag first; else B / Up / Down cancel without assign.
+            if (mBagViewOpen && dMw_B_TRIGGER()) {
+                applyQuickEquipPage(mQuickEquipPage, true);
+                setStatus(STATUS_WAIT);
+                stick_wait_init();
+                Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_ROLL, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
+                                         -1.0f, 0);
+                return false;
+            }
             if (dMw_B_TRIGGER() || dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER() ||
                 dMeter2Info_getWarpStatus() == 2 || dMeter2Info_getWarpStatus() == 1 ||
                 dMeter2Info_isTouchKeyCheck(0xe))
@@ -1458,11 +1742,19 @@ void dMenu_Ring_c::setScale() {
             }
         } else {
             if (i == mCurrentSlot && (mStatus == STATUS_WAIT || mStatus == STATUS_EXPLAIN || mStatus == STATUS_EXPLAIN_FORCE)) {
-                itemId = dComIfGs_getItem(mItemSlots[i], false) + 0x165;
-                if (dMeter2Info_getRentalBombBag() != 0xff &&
-                    mItemSlots[i] == dMeter2Info_getRentalBombBag() + 0xf)
+#if TARGET_PC
+                if (mQuickEquipMode) {
+                    const u8 qItem = getQuickRingItem(i);
+                    itemId = (qItem != dItemNo_NONE_e && qItem != 0xFF) ? (qItem + 0x165) : 0;
+                } else
+#endif
                 {
-                    itemId = 0x16D;
+                    itemId = dComIfGs_getItem(mItemSlots[i], false) + 0x165;
+                    if (dMeter2Info_getRentalBombBag() != 0xff &&
+                        mItemSlots[i] == dMeter2Info_getRentalBombBag() + 0xf)
+                    {
+                        itemId = 0x16D;
+                    }
                 }
                 setNameString(itemId);
                 setItemScale(i, g_ringHIO.mSelectItemScale);
@@ -1692,8 +1984,26 @@ void dMenu_Ring_c::drawItem() {
                     f32 x = (48.0f - f0) * 0.5f + (mItemSlotPosX[i] - 24.0f + mCenterPosX);
                     f32 y = (48.0f - f1) * 0.5f + (mItemSlotPosY[i] - 24.0f + mCenterPosY);
                     mpItemTex[i][j]->draw(x, y, f0, f1, 0, 0, 0);
+#if TARGET_PC
+                    u8 item = mUseQuickEquipPages ? getQuickRingItem(i) :
+                                                   dComIfGs_getItem(mItemSlots[i], false);
+                    bool ammoOk = !mUseQuickEquipPages;
+                    if (mUseQuickEquipPages) {
+                        const u8 reg = mQuickEquipSlotMap[i];
+                        const dQeSocketDesc* sock =
+                            reg == 0xFF ? NULL :
+                            (mBagViewOpen ? dQe_peekBagChild(mBagViewId, reg) :
+                                           dQe_peek(mQuickEquipPage, reg));
+                        ammoOk = sock != NULL && sock->tpInvSlot != 0xFF &&
+                                 (sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect);
+                    }
+#else
                     u8 item = dComIfGs_getItem(mItemSlots[i], false);
-                    if ((j == 0 && item != dItemNo_BEE_CHILD_e) || (j == 2 && item == dItemNo_BEE_CHILD_e)) {
+                    const bool ammoOk = true;
+#endif
+                    if (ammoOk && ((j == 0 && item != dItemNo_BEE_CHILD_e) ||
+                                   (j == 2 && item == dItemNo_BEE_CHILD_e)))
+                    {
                         u8 itemNum = getItemNum(mItemSlots[i]);
                         u8 itemMaxNum = getItemMaxNum(mItemSlots[i]);
                         if (itemMaxNum != 0) {
@@ -1734,8 +2044,26 @@ void dMenu_Ring_c::drawItem2() {
                 f32 x = (48.0f - f0) * 0.5f + (mItemSlotPosX[idx] - 24.0f + mCenterPosX);
                 f32 y = (48.0f - f1) * 0.5f + (mItemSlotPosY[idx] - 24.0f + mCenterPosY);
                 mpItemTex[idx][i]->draw(x, y, f0, f1, 0, 0, 0);
+#if TARGET_PC
+                u8 item = mUseQuickEquipPages ? getQuickRingItem(idx) :
+                                               dComIfGs_getItem(mItemSlots[idx], false);
+                bool ammoOk = !mUseQuickEquipPages;
+                if (mUseQuickEquipPages) {
+                    const u8 reg = mQuickEquipSlotMap[idx];
+                    const dQeSocketDesc* sock =
+                        reg == 0xFF ? NULL :
+                        (mBagViewOpen ? dQe_peekBagChild(mBagViewId, reg) :
+                                       dQe_peek(mQuickEquipPage, reg));
+                    ammoOk = sock != NULL && sock->tpInvSlot != 0xFF &&
+                             (sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect);
+                }
+#else
                 u8 item = dComIfGs_getItem(mItemSlots[idx], false);
-                if ((i == 0 && item != dItemNo_BEE_CHILD_e) || (i == 2 && item == dItemNo_BEE_CHILD_e)) {
+                const bool ammoOk = true;
+#endif
+                if (ammoOk && ((i == 0 && item != dItemNo_BEE_CHILD_e) ||
+                               (i == 2 && item == dItemNo_BEE_CHILD_e)))
+                {
                     u8 itemNum = getItemNum(mItemSlots[idx]);
                     u8 itemMaxNum = getItemMaxNum(mItemSlots[idx]);
                     if (itemMaxNum != 0) {
@@ -1781,13 +2109,45 @@ void dMenu_Ring_c::stick_wait_init() {
 }
 
 void dMenu_Ring_c::stick_wait_proc() {
+#if TARGET_PC
+    u8 item = mUseQuickEquipPages ? getQuickRingItem(mCurrentSlot) :
+                                    dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
+#else
     u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
+#endif
 
     if (item != dItemNo_NONE_e) {
         setDoStatus(0x24);
     } else {
         setDoStatus(0);
     }
+#if TARGET_PC
+    // Quick-equip pages: L/R page flips; hold mode skips explain. Bag: A opens, B closes.
+    if (mUseQuickEquipPages) {
+        if (mBagViewOpen && dMw_B_TRIGGER()) {
+            applyQuickEquipPage(mQuickEquipPage, true);
+            setStatus(STATUS_WAIT);
+            stick_wait_init();
+            Z2GetAudioMgr()->seStart(Z2SE_ITEM_RING_ROLL, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+            return;
+        }
+        if (dMw_A_TRIGGER() && tryQuickEquipBagOpen()) {
+            return;
+        }
+        if (mQuickEquipMode) {
+            if (pointerMove()) {
+                return;
+            }
+            if (mWaitFrames > 0) {
+                mWaitFrames--;
+            } else if (getStickInfo(mpStick) != 0) {
+                setStatus(STATUS_MOVE);
+                field_0x6b2 = 0;
+            }
+            return;
+        }
+    }
+#endif
     if (dMw_A_TRIGGER() && !dMeter2Info_isTouchKeyCheck(0xe) && openExplain(item)) {
         dMeter2Info_setItemExplainWindowStatus(1);
         field_0x6c4 = mCurrentSlot;
@@ -1853,6 +2213,10 @@ bool dMenu_Ring_c::pointerMove() {
 
     const bool clickOpensExplain = !pointer.touch || mPointerTouchPressHoveredCurrent;
     if (clickOpensExplain && dusk::menu_pointer::consume_click()) {
+        if (mQuickEquipMode) {
+            mPointerTouchPressHoveredCurrent = false;
+            return true;
+        }
         const u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
         if (!dMeter2Info_isTouchKeyCheck(0xe) && openExplain(item)) {
             dMeter2Info_setItemExplainWindowStatus(1);
@@ -2000,18 +2364,39 @@ void dMenu_Ring_c::stick_explain_force_proc() {
 void dMenu_Ring_c::setSelectItem(int i_idx, u8 i_itemNo) {
     f32 texScale = 1.0f;
 
-    if (i_itemNo != dItemNo_NONE_e) {
-        if (field_0x6be[i_idx] == 0) {
-            field_0x6be[i_idx] = 1;
-        } else {
-            field_0x6be[i_idx] = 0;
+    if (i_itemNo == dItemNo_NONE_e) {
+        field_0x686[i_idx] = 0;
+        field_0x548[i_idx] = 0.0f;
+        field_0x558[i_idx] = 0.0f;
+        return;
+    }
+
+    if (field_0x6be[i_idx] == 0) {
+        field_0x6be[i_idx] = 1;
+    } else {
+        field_0x6be[i_idx] = 0;
+    }
+    field_0x686[i_idx] = dMeter2Info_readItemTexture(
+        i_itemNo, mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][0], mpSelectItemTex[i_idx][0],
+        mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][1], mpSelectItemTex[i_idx][1], NULL, NULL,
+        NULL, NULL, -1);
+#if TARGET_PC
+    // Ctor left face-button pictures NULL when Z was empty; create them now that
+    // the buffer holds a real ResTIMG (same bank index the read just filled).
+    if (mpSelectItemTex[i_idx][0] == NULL && mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][0] != NULL)
+    {
+        for (int j = 0; j < 3; j++) {
+            mpSelectItemTex[i_idx][j] =
+                JKR_NEW J2DPicture(mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][0]);
+            mpSelectItemTex[i_idx][j]->setBasePosition(J2DBasePosition_4);
         }
         field_0x686[i_idx] = dMeter2Info_readItemTexture(
             i_itemNo, mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][0], mpSelectItemTex[i_idx][0],
             mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][1], mpSelectItemTex[i_idx][1], NULL, NULL,
             NULL, NULL, -1);
-        texScale = dItem_data::getTexScale(i_itemNo) / 100.0f;
     }
+#endif
+    texScale = dItem_data::getTexScale(i_itemNo) / 100.0f;
     field_0x548[i_idx] = mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][0]->width / 48.0f * texScale;
     field_0x558[i_idx] =
         mpSelectItemTexBuf[i_idx][field_0x6be[i_idx]][0]->height / 48.0f * texScale;
@@ -2134,6 +2519,11 @@ u8 dMenu_Ring_c::getHighlightedItem() const {
         return dItemNo_NONE_e;
     }
 
+#if TARGET_PC
+    if (mUseQuickEquipPages) {
+        return getQuickRingItem(mCurrentSlot);
+    }
+#endif
     const u8 invSlot = mItemSlots[mCurrentSlot];
     return dComIfGs_getItem(invSlot, false);
 }

@@ -3,6 +3,7 @@
 #include "JSystem/JAudio2/JASChannel.h"
 #if TARGET_PC
 #include "dusk/audio/DuskDsp.hpp"
+#include "dusk/logging.h"
 #endif
 #include "JSystem/JAudio2/JASAiCtrl.h"
 #include "JSystem/JAudio2/JASCalc.h"
@@ -190,17 +191,81 @@ void JASChannel::updateEffectorParam(JASDsp::TChannel* i_channel, u16* i_mixerVo
         break;
     }
     f32 fxmix = calcEffect(&fxmix_vector);
-    f32 volume = mVelocity / 127.0f;
-    volume = volume * volume;
-    volume = mSoundParams.mVolume * i_params.mVolume * mParams.mVolume
-        * (i_params._18 * mTremolo.getValue() + 1.0f) * volume;
-    
+    f32 volume;
+#if TARGET_PC && D_ALBW_AUDIO_SHADOW
+    // №31-B: ExtSeq voices use WW's volume chain; TP shaping → identity.
+    // WW TChannel::updateEffectorParam:
+    //   volume = field_0xac * (field_0x5c * field_0x98)
+    // Named (from WW DP / noteOnOsc authority):
+    //   field_0xac = track/channel-mgr volume     → mParams.mVolume
+    //   field_0x5c = initVol * (vel/127)² (noteOn) → mSoundParams.mVolume
+    //   field_0x98 = envelope oscillator          → i_params.mVolume
+    // WW also squares velocity — once, baked into field_0x5c at noteOn
+    // (BankMgr). TP's per-frame re-square + tremolo term are neutralized.
+    if (dusk::audio::isExtSeqOwned(mBankDisposeID)) {
+        volume = mSoundParams.mVolume * i_params.mVolume * mParams.mVolume;
+    } else
+#endif
+    {
+        volume = mVelocity / 127.0f;
+        volume = volume * volume;
+        volume = mSoundParams.mVolume * i_params.mVolume * mParams.mVolume
+            * (i_params._18 * mTremolo.getValue() + 1.0f) * volume;
+    }
+
+#if TARGET_PC && D_ALBW_AUDIO_SHADOW
+    // One-boot probe: WW field names.
+    {
+        static const void* s_seen[12]{};
+        static int s_seenN = 0;
+        if (s_seenN < 12 && dusk::audio::isExtSeqOwned(mBankDisposeID)) {
+            bool already = false;
+            for (int i = 0; i < s_seenN; i++) {
+                if (s_seen[i] == this) {
+                    already = true;
+                    break;
+                }
+            }
+            if (!already) {
+                s_seen[s_seenN] = this;
+                DuskLog.info(
+                    "[ExtSeq] vol3#{} WW:ac/track={:.3f} 5c/init*vel2={:.3f} "
+                    "98/env={:.3f} out={:.3f}",
+                    s_seenN, mParams.mVolume, mSoundParams.mVolume, i_params.mVolume,
+                    volume);
+                s_seenN++;
+            }
+        }
+    }
+#endif
+
     if (volume < 0.0f) {
         volume = 0.0f;
     }
     pan = JASCalc::clamp01(pan);
     fxmix = JASCalc::clamp01(fxmix);
     dolby = JASCalc::clamp01(dolby);
+
+#if TARGET_PC && D_ALBW_AUDIO_SHADOW
+    // §81 cheap measurement: does ExtSeq ever feed the reverb bus?
+    // DuskDsp reverb input uses mAutoMixerFxMix (AutoMixer path only).
+    if (dusk::audio::isExtSeqOwned(mBankDisposeID)) {
+        static bool s_fxProbeDone = false;
+        if (!s_fxProbeDone) {
+            s_fxProbeDone = true;
+            const bool dolbyMix = isDolbyMode();
+            const f32 revGainIfAuto =
+                dolbyMix ? ((fxmix * 127.5f) /*dsp byte*/ / 600.0f) : 0.0f;
+            DuskLog.info(
+                "[ExtSeq] §81 fxProbe FIRST ExtSeq voice: fxmix={:.4f} "
+                "(sound={:.4f}+ch={:.4f}+osc={:.4f}) dolbyMode={} "
+                "autoMixerPath={} → reverbInputGain≈{:.5f} — {}",
+                fxmix, fxmix_vector.mSound, fxmix_vector.mChannel, fxmix_vector.mEffect,
+                dolbyMix ? 1 : 0, dolbyMix ? 1 : 0, revGainIfAuto,
+                (revGainIfAuto > 0.0f) ? "WET" : "DRY (no reverb bus feed)");
+        }
+    }
+#endif
 
     if (isDolbyMode()) {
         updateAutoMixer(i_channel, volume, pan, fxmix, dolby);

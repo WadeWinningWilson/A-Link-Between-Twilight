@@ -78,16 +78,19 @@ public:
 #if TARGET_PC
     bool pointerMove();
     bool isQuickEquipMode() const { return mQuickEquipMode; }
+    bool usesQuickEquipPages() const { return mUseQuickEquipPages; }
     /** Call before constructing a ring to open the filtered hold-to-Z tools wheel. */
     static void setPendingQuickEquip(bool quick);
     /** Peek pending flag before ctor consumes it (for live-world open path). */
     static bool peekPendingQuickEquip();
     /** Live quick-wheel: no pause; world at reduced sim scale. */
     static bool isQuickEquipLiveWorld();
+    /** True while a paged quick-equip ring owns D-pad L/R (incl. live/unpaused). */
+    static bool isQuickEquipPagesExclusive();
     /** 0.3 while live quick-wheel open (70% slowdown), else 1.0. */
     static f32 getQuickEquipSimScale();
     static void setQuickEquipLiveWorld(bool live);
-    /** Damage interrupt: assign hover → Z and request close (live quick only). */
+    /** Damage interrupt: assign hover → Z / equip and request close (live quick only). */
     static void forceQuickConfirmClose();
 #endif
 
@@ -98,6 +101,19 @@ public:
     void setStatus(u8 i_status) { mStatus = i_status; }
 
 private:
+#if TARGET_PC
+    u8 getQuickRingItem(int slotIdx) const;
+    u8 getQuickRegistrySlot(int packedIdx) const;
+    void applyQuickEquipPage(u8 page, bool rebuildTextures);
+    void applyQuickEquipBagView(bool rebuildTextures);
+    void clearQuickEquipItemTextures();
+    void loadQuickEquipItemTextures();
+    void confirmQuickEquipHover();
+    bool tryQuickEquipPageFlip();
+    bool tryQuickEquipBagOpen();
+    void drawQuickEquipPageCue();
+#endif
+
     /* 0x004 */ JKRExpHeap* mpHeap;
     /* 0x008 */ STControl* mpStick;
     /* 0x00C */ CSTControl* mpCStick;
@@ -233,7 +249,12 @@ private:
     bool mCursorInterpInit;
     bool mPointerTouchPressHoveredCurrent;
     bool mQuickEquipMode;
+    bool mUseQuickEquipPages;
     bool mQuickEquipForceClose;
+    bool mBagViewOpen;
+    u8 mQuickEquipPage;
+    u16 mBagViewId;
+    u8 mQuickEquipSlotMap[MAX_ITEM_SLOTS];
 #endif
 };
 

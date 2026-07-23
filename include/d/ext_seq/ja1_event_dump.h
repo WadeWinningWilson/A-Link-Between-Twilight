@@ -25,6 +25,12 @@ u32 dumpBmsToCsv(const u8* data, u32 size, const char* outPath);
 /** Emit one row (uses pending file_off from markOpcodeOff). */
 void emit(const char* event, const char* noteParam, const char* velocity);
 
+/**
+ * During dump only: record a volume set_param for the offline ramp companion
+ * (`seq_vol_ramps_<stem>.csv`) — does not change the golden 5-column schema.
+ */
+void noteVolRamp(u8 target, int moveTime, const char* valueStr);
+
 /** Call immediately before reading an opcode byte (Bridge file_off semantics). */
 void markOpcodeOff(const Ja1Track* track);
 
@@ -32,8 +38,6 @@ u8 currentTrackId();
 u32 currentTick();
 
 void queueOpen(u8 childId, u32 fileOff);
-bool noteSawBackwardJmp(u32 tgt);
-void markBackwardJmp(u32 tgt);
 
 /** Set by cmdWait so the walker knows a wait event was already emitted. */
 void markExplicitWait();

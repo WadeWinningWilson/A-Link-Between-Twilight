@@ -229,6 +229,11 @@ void dAlbwOutfit_recordOwnedByItemNo(int itemNo) {
     dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[bit]);
 }
 
+// №238: public wrapper over the private kind->item map (see itemNoForKind).
+int dAlbwOutfit_itemNoForKind(dAlbwOutfitKind kind) {
+    return itemNoForKind(kind);
+}
+
 bool dAlbwOutfit_isSumoWorn() {
     return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[kSumoWornBit]) != 0;
 }

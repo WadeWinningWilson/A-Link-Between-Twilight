@@ -19,6 +19,9 @@ class dMenu_Option_c;
 class dMenu_Ring_c;
 class dMenu_Skill_c;
 class dMenu_save_c;
+#if TARGET_PC
+class dMenu_ExtStatus_c;
+#endif
 
 BOOL dMw_UP_TRIGGER();
 BOOL dMw_DOWN_TRIGGER();
@@ -76,6 +79,11 @@ public:
         /* 0x20 */ INSECT_AGITHA_OPEN2,
         /* 0x21 */ INSECT_AGITHA_MOVE,
         /* 0x22 */ INSECT_AGITHA_CLOSE,
+#if TARGET_PC
+        /* 0x23 */ EXT_STATUS_OPEN,
+        /* 0x24 */ EXT_STATUS_MOVE,
+        /* 0x25 */ EXT_STATUS_CLOSE,
+#endif
     };
 
     void key_wait_init(u8);
@@ -113,6 +121,11 @@ public:
     void insect_open2_init(u8);
     void insect_move_init(u8);
     void insect_close_init(u8);
+#if TARGET_PC
+    void ext_status_open_init(u8);
+    void ext_status_move_init(u8);
+    void ext_status_close_init(u8);
+#endif
     // ============================================
     // NEW CODE — ALBW Port (load-order Phase 1 follow-up, d_albw_menu_res)
     // "Is any start-menu screen active?" — the dMw_c PROC itself lives for the
@@ -156,12 +169,21 @@ public:
     void insect_open2_proc();
     void insect_move_proc();
     void insect_close_proc();
+#if TARGET_PC
+    void ext_status_open_proc();
+    void ext_status_move_proc();
+    void ext_status_close_proc();
+#endif
     void dMw_capture_create();
     void dMw_capture_delete();
     void dMw_ring_create(u8);
     bool dMw_ring_delete();
     void dMw_collect_create();
     bool dMw_collect_delete(bool);
+#if TARGET_PC
+    void dMw_ext_status_create();
+    bool dMw_ext_status_delete();
+#endif
     void dMw_fmap_create();
     bool dMw_fmap_delete(bool);
     void dMw_dmap_create();
@@ -219,6 +241,9 @@ private:
     /* 0x12C */ dMenu_Fishing_c* mpMenuFishing;
     /* 0x130 */ dMenu_Skill_c* mpMenuSkill;
     /* 0x134 */ dMenu_Insect_c* mpMenuInsect;
+#if TARGET_PC
+    dMenu_ExtStatus_c* mpMenuExtStatus;
+#endif
     /* 0x138 */ int mMemSize;
     /* 0x13C */ f32 mFmapStageTransX;
     /* 0x140 */ f32 mFmapStageTransZ;

@@ -16,6 +16,9 @@ void dExtNpcDoors_pollArrival();
 // №90: arm 120f event G-guard only (no door demo) — warp / any WW-host arrival.
 // No-op if a door-lane arrival demo is already armed for this stage.
 void dExtNpcDoors_armArrivalGuard(const char* stage);
+// №176: after opening camera hold RELEASE — re-arm №110 snap. Arrival G-guard
+// often finishes before awake ends, so the deferred snap never gets another poll.
+void dExtNpcDoors_requestPostOpeningSnap(const char* stage);
 // №90: after interior BG COMPLEATE on a WW host — spawn exit knob for this proc.
 void dExtNpcDoors_onInteriorBgReady(const char* interiorProc);
 // №94: clear door/exit spawn latches (world-gen bump / restart).

@@ -30,16 +30,23 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_stage.h"
 #include "d/d_albw_dialogue.h"
+#include "d/d_albw_outfit.h"  // №238: wardrobe-integrated clothes handover
+#include "d/d_msg_flow.h"     // №248: native message flow for mount talk (Shade Watcher pattern)
+#include "d/d_camera.h"  // №172: Stop camera so opening event path can own the view
+#include "d/d_demo.h"  // §50: demo-truncation probe
+#include "SSystem/SComponent/c_counter.h"  // §52: rate-limited read-back trace
 #include "d/d_ext_mod_flags.h"
 #include "d/d_ext_fado_door.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_population.h"
 #include "d/d_ext_save_guard.h"
+#include "d/ext_seq/ja1_bank.h"
 #include "d/d_item.h"
 #include "d/d_item_data.h"
 #include "d/d_bg_s_gnd_chk.h"
 #include "d/d_drawlist.h"
 #include "d/d_kankyo.h"
+#include "d/d_kankyo_wether.h"
 #include "d/d_meter2_info.h"
 #include "d/d_s_play.h"
 #include "global.h"
@@ -80,6 +87,28 @@ std::unordered_map<std::string, J3DModelData*> s_modelDataCache;
 // same member (plain ko.bdl for Zill, then ko.bdl+ko02.bmt for Joel) AVs. Keep a pristine
 // copy of each J3D2 blob before the first load and re-parse BMT variants from that.
 std::unordered_map<std::string, std::vector<u8>> s_pristineJ3dRaw;
+// ============================================================================
+// №263 — the KOISI exit crash (J3D re-parse of a pointer-fixed buffer).
+// ============================================================================
+// Sequence: interior transition purged the arc's parsed cache AND its pristine
+// copy, but dRes kept the (already pointer-fixed) buffer resident; the exterior
+// re-create then re-parsed it → makeHierarchy AV. Two invariant fixes:
+//   1. pristine copies are SESSION-LIVED (purge no longer erases them) — they
+//      are the insurance FOR the re-parse case, erasing them defeated it;
+//   2. every parse consumes a FRESH COPY of the pristine (below), so neither
+//      the dRes buffer nor the stored pristine is ever pointer-fixed at all.
+// The copies handed to J3D must outlive their models — kept here for the
+// session (same lifetime class as the deliberately-leaked purged ModelData).
+std::vector<std::vector<u8>> s_parsedRawKeep;
+
+void* mountPristineParseSrc(const std::string& plainKey, void* res) {
+    auto pit = s_pristineJ3dRaw.find(plainKey);
+    if (pit == s_pristineJ3dRaw.end()) {
+        return res;  // non-J3D2 / stash refused — first-touch parse of dRes
+    }
+    s_parsedRawKeep.push_back(pit->second);  // fresh copy; J3D fixes THIS one
+    return s_parsedRawKeep.back().data();
+}
 // №73: mounts that have reached COMPLEATE and still own a live resLoad of `arc`.
 std::unordered_map<std::string, int> s_arcLiveCount;
 // №73 sweep ("arcs/mounts are permanent" assumptions invalidated by room-lane):
@@ -152,6 +181,231 @@ bool s_doorDemoLocked = false;
 // actor-owned: actors can despawn while the UI draw list is still processing.
 #if TARGET_PC_NATIVE_UI
 dALBWDialogue_c* s_mountDialogue = NULL;
+// ============================================================================
+// №248 — mount talk goes through TP's NATIVE message flow.
+// ============================================================================
+// The Shade Watcher proved the pattern: dMsgFlow_c::initWord injects OUR text
+// (no BMG asset) into the engine's 0x1324 code-text flow, and the ordered SPEAK
+// EVENT owns Link for the duration. This retires the ALBW-postman box for mount
+// talk — the box that cropped WW lines, ignored TP's centered formatting, and
+// never locked the player (№242 defects 2+3). The section/data layer (ww_ref,
+// flags, actions, next-chains) is untouched; only presentation changed.
+dMsgFlow_c s_mountFlow;
+// ============================================================================
+// №252 — PAGINATION to TP's box rules (the Shade Watcher lesson, generalized).
+// ============================================================================
+// The Shade Watcher's injected lines were AUTHORED within TP's limits; donor
+// rows are not — one catalog entry can hold several donor pages (WW's own
+// page-break control codes were dropped at extraction, flattening multi-box
+// messages). The native flow displays injected text verbatim, so we paginate:
+// section text splits into pages of at most kMountMsgLinesPerPage lines, each
+// page its own initWord, chained on doFlow completion BEFORE section-advance.
+// Single conversation at a time (owner-guarded), so file-scope state is safe.
+// №261 — TP-vanilla layout rules. The US talk box shows 4 lines ('n_e4line'
+// layout) and hard-splits any overflowing line MID-WORD (the "youn / g"
+// screenshot) — vanilla text never overflows because localization pre-wraps it.
+// So WE pre-wrap: donor line breaks are WW-box-width formatting and get
+// discarded; words re-flow to kMountMsgMaxCols with whole-word carry, and a
+// sentence that cannot finish on the current page starts the next one instead
+// (the Shade Watcher rule: word, line, and sentence carry over — never split).
+constexpr int kMountMsgLinesPerPage = 4;   // vanilla US TP talk box line count
+constexpr int kMountMsgMaxCols = 38;       // safe width under the observed 40-col overflow
+std::vector<std::string> s_mountPages;
+size_t s_mountPageIdx = 0;
+
+void mountPaginate(const std::string& textIn) {
+    // ========================================================================
+    // №260 — the regenerated catalog decodes WW's name escape as a literal
+    // "{player}" token. Substitute the save-file name here (R6: the sentence
+    // stays donor data; only the insert comes from TP's own save, exactly the
+    // donor's mechanic). Covers every text source, not just ww_ref.
+    // ========================================================================
+    std::string text = textIn;
+    {
+        const char* rawName = dComIfGs_getPlayerName();
+        std::string name;
+        for (int i = 0; i < 16 && rawName != NULL && rawName[i] != '\0'; ++i) {
+            name += rawName[i];
+        }
+        if (name.empty()) {
+            name = "Link";
+        }
+        size_t at;
+        while ((at = text.find("{player}")) != std::string::npos) {
+            text.replace(at, 8, name);
+        }
+    }
+    s_mountPages.clear();
+    s_mountPageIdx = 0;
+    // ========================================================================
+    // №261 — TP-vanilla re-wrap. Donor \n inside a paragraph = WW-width
+    // formatting (discarded); a BLANK line = WW's own page break (hard flush).
+    // Words flow whole onto lines (≤ kMountMsgMaxCols); a sentence that would
+    // spill past the page's last line carries WHOLE to the next page when a
+    // fresh page can hold it.
+    // ========================================================================
+    std::vector<std::string> pageLines;
+    std::string curLine;
+    auto flushLine = [&]() {
+        if (!curLine.empty()) {
+            pageLines.push_back(curLine);
+            curLine.clear();
+        }
+    };
+    auto flushPage = [&]() {
+        flushLine();
+        if (!pageLines.empty()) {
+            std::string page;
+            for (size_t i = 0; i < pageLines.size(); ++i) {
+                if (i > 0) {
+                    page += '\n';
+                }
+                page += pageLines[i];
+            }
+            s_mountPages.push_back(page);
+            pageLines.clear();
+        }
+    };
+    // Split into paragraphs on blank lines; within each, collect words.
+    size_t pos = 0;
+    while (pos <= text.size()) {
+        // -- gather one paragraph (up to blank line / end) as a word list
+        std::vector<std::string> words;
+        bool sawBlank = false;
+        std::string word;
+        while (pos <= text.size()) {
+            const char c = pos < text.size() ? text[pos] : '\n';
+            if (c == '\n') {
+                if (!word.empty()) {
+                    words.push_back(word);
+                    word.clear();
+                }
+                // peek: a second consecutive newline (ignoring the word we just
+                // closed) = blank line = WW page break → paragraph ends
+                if (pos + 1 <= text.size() &&
+                    (pos + 1 == text.size() || text[pos + 1] == '\n')) {
+                    sawBlank = true;
+                    // consume the run of blank lines
+                    while (pos < text.size() && (text[pos] == '\n' || text[pos] == '\r')) {
+                        ++pos;
+                    }
+                    break;
+                }
+                ++pos;
+                continue;
+            }
+            if (c == ' ' || c == '\t' || c == '\r') {
+                if (!word.empty()) {
+                    words.push_back(word);
+                    word.clear();
+                }
+                ++pos;
+                continue;
+            }
+            word += c;
+            ++pos;
+        }
+        if (!word.empty()) {
+            words.push_back(word);
+        }
+        if (pos >= text.size() && words.empty() && !sawBlank) {
+            break;
+        }
+        // -- group words into sentences (break after terminal .!? — but not
+        //    inside runs like "...!" — i.e. at the LAST of a punctuation run)
+        std::vector<std::vector<std::string> > sentences;
+        std::vector<std::string> sent;
+        for (size_t w = 0; w < words.size(); ++w) {
+            sent.push_back(words[w]);
+            const char last = words[w][words[w].size() - 1];
+            if (last == '.' || last == '!' || last == '?') {
+                sentences.push_back(sent);
+                sent.clear();
+            }
+        }
+        if (!sent.empty()) {
+            sentences.push_back(sent);
+        }
+        // -- flow each sentence; carry whole sentences across page boundaries
+        for (size_t s = 0; s < sentences.size(); ++s) {
+            const std::vector<std::string>& sw = sentences[s];
+            // simulate the flow: would this sentence spill past the page's
+            // last line? (linesUsed counts the line it starts on — curLine's
+            // line when continuing, a fresh line otherwise.)
+            {
+                size_t col = curLine.size();
+                int linesUsed = 1;
+                size_t col2 = 0;
+                int standaloneLines = 1;
+                for (size_t w = 0; w < sw.size(); ++w) {
+                    const size_t need = sw[w].size();
+                    if (col == 0) {
+                        col = need;
+                    } else if (col + 1 + need <= (size_t)kMountMsgMaxCols) {
+                        col += 1 + need;
+                    } else {
+                        col = need;
+                        ++linesUsed;
+                    }
+                    if (col2 == 0) {
+                        col2 = need;
+                    } else if (col2 + 1 + need <= (size_t)kMountMsgMaxCols) {
+                        col2 += 1 + need;
+                    } else {
+                        col2 = need;
+                        ++standaloneLines;
+                    }
+                }
+                const int totalLines = (int)pageLines.size() + linesUsed;
+                if (totalLines > kMountMsgLinesPerPage &&
+                    standaloneLines <= kMountMsgLinesPerPage) {
+                    flushPage();  // sentence carries WHOLE to a fresh page
+                }
+            }
+            for (size_t w = 0; w < sw.size(); ++w) {
+                const std::string& wd = sw[w];
+                if (curLine.empty()) {
+                    curLine = wd;
+                } else if (curLine.size() + 1 + wd.size() <= (size_t)kMountMsgMaxCols) {
+                    curLine += ' ';
+                    curLine += wd;
+                } else {
+                    flushLine();
+                    if ((int)pageLines.size() == kMountMsgLinesPerPage) {
+                        flushPage();
+                    }
+                    curLine = wd;
+                }
+            }
+        }
+        if (sawBlank) {
+            flushPage();  // WW's own page break
+        }
+        if (pos >= text.size()) {
+            break;
+        }
+    }
+    flushPage();
+    if (s_mountPages.empty()) {
+        s_mountPages.push_back(std::string());
+    }
+    // §64 — H2-H7 output probe (LAW: sample the produced result). Log the page
+    // COUNT and each page's line count + length, so on now-full text (№259) the
+    // actual split is visible: overflow (H4 lines>cap), width run-on (H5 long
+    // single line), or a good split all read straight off this.
+    DuskLog.warn("[ExtNpcMount] §64 paginate: {} page(s) from {} chars", (int)s_mountPages.size(),
+                 (int)text.size());
+    for (size_t i = 0; i < s_mountPages.size(); ++i) {
+        int nlines = 1;
+        size_t longest = 0, cur = 0;
+        for (char c : s_mountPages[i]) {
+            if (c == '\n') { ++nlines; cur = 0; }
+            else if (++cur > longest) longest = cur;
+        }
+        DuskLog.warn("[ExtNpcMount] §64   page {}: {} line(s), longest={} chars", (int)i, nlines,
+                     (int)longest);
+    }
+}
 #endif
 dExtNpcMount_c* s_mountDialogueOwner = NULL;
 
@@ -569,6 +823,24 @@ int extNpcSlaveJointCB(J3DJoint* joint, int timing) {
                 host = a->mpCompanion->getModel();
             }
             src = host->getAnmMtx(a->mAttachJnt[i]);
+            // ================================================================
+            // №218 — donor local prop transform: jointMtx × T(offs) × R(rot),
+            // the donor's own hand-prop recipe (Ls1 setMtx: transM then
+            // XYZrotM under the hand joint's anm mtx). Stack top stays valid
+            // through the MTXConcat below — nothing else touches it first.
+            // ================================================================
+            if (a->mAttachLocal[i]) {
+                // №250: the donor selects the prop pose by its demo-driven
+                // flag (m841) — use the demo variant while the storyboard
+                // owns this mount.
+                const bool useDemo = a->mDemoOwned && a->mAttachDemoLocal[i];
+                const cXyz& off = useDemo ? a->mAttachOffsDemo[i] : a->mAttachOffs[i];
+                const cXyz& rot = useDemo ? a->mAttachRotDemo[i] : a->mAttachRot[i];
+                mDoMtx_stack_c::copy(src);
+                mDoMtx_stack_c::transM(off.x, off.y, off.z);
+                mDoMtx_stack_c::XYZrotM((s16)rot.x, (s16)rot.y, (s16)rot.z);
+                src = mDoMtx_stack_c::get();
+            }
             break;
         }
     }
@@ -710,6 +982,75 @@ bool tryGroundSnapSanity(dExtNpcMount_c* a) {
     return true;
 }
 
+// ============================================================================
+// №251 — the get-item HANDOFF, fired at talk close (native talk→item pattern).
+// ============================================================================
+// Spawns the presentation item (Cursor's mature create path resolves the WW
+// prop model behind this item number), then orders the change event — which
+// REPLACES the still-active speak event. The caller must NOT event_reset when
+// this fires; the ordered event owns the transition from here.
+bool fireMountPresentDemo(dExtNpcMount_c* a) {
+#if TARGET_PC
+    if (a == NULL || a->mPresentDemoItemNo < 0) {
+        return false;
+    }
+    const int itemNo = a->mPresentDemoItemNo;
+    a->mPresentDemoItemNo = -1;
+    // §66: Link's setTradeItemAnime present path passes argFlags 3 (0x1|0x2) —
+    // 0x1 suppresses a second execItemGet; 0x2 is the raised-hands offset class.
+    // Mount handoff used 0; match Link so the demo-item flag/show path aligns.
+    const fpc_ProcID itemId =
+        fopAcM_createItemForPresentDemo(&a->current.pos, itemNo, 3, -1, -1, NULL, NULL);
+    if (itemId == fpcM_ERROR_PROCESS_ID_e) {
+        DuskLog.warn("[ExtNpcMount] №251 present-demo spawn failed (item {})", itemNo);
+        return false;
+    }
+    dComIfGp_event_setItemPartnerId(itemId);
+    const s16 eventId = dComIfGp_getEventManager().getEventIdx(a, "DEFAULT_GETITEM", 0xff);
+    if (eventId == -1) {
+        DuskLog.warn("[ExtNpcMount] №251 DEFAULT_GETITEM not found — handoff aborted");
+        return false;
+    }
+    dComIfGp_getEvent()->reset(a);
+    fopAcM_orderChangeEventId(a, eventId, 1, 0xffff);
+    // ========================================================================
+    // №263 — the PRESENT motion (donor: hold.bck is Ba1's give animation, NOT
+    // an idle — looping it as idle was the "constant present" bug). Play it
+    // ONCE here at the handoff; execute() returns her to idle when it ends.
+    // ========================================================================
+    if (a->mManifest.presentAnim[0] != '\0') {
+        setMountAnimation(a, a->mManifest.presentAnim, J3DFrameCtrl::EMode_NONE);
+        a->mPresentAnimActive = true;
+    }
+    DuskLog.info("[ExtNpcMount] №251 get-item HANDOFF fired (item {}, event {})", itemNo,
+                 (int)eventId);
+    return true;
+#else
+    return false;
+#endif
+}
+
+// ============================================================================
+// №262 — flag-gated attach lifetime + carry-idle selection (donor state
+// machine: Ba1 holds ba_cloth with hold.bck until the give flag sets, then
+// wait01 with the bundle retired — the handover IS the state flip).
+// ============================================================================
+bool mountAttachLive(const dExtNpcMount_c* a, int slot) {
+    const char* f = a->mManifest.attach[slot].unlessFlag;
+    if (f[0] == '\0') {
+        return true;
+    }
+    return !dExtModFlags_get(a->mManifest.modFolder, f);
+}
+
+const char* mountIdleBck(const dExtNpcMount_c* a) {
+    if (a->mManifest.idleAttached[0] != '\0' && a->mManifest.attachCount > 0 &&
+        mountAttachLive(a, 0)) {
+        return a->mManifest.idleAttached;
+    }
+    return a->mManifest.idle;
+}
+
 void closeMountDialogue(dExtNpcMount_c* a) {
     if (a == NULL) {
         return;
@@ -719,7 +1060,10 @@ void closeMountDialogue(dExtNpcMount_c* a) {
         s_mountDialogue->hide();
     }
 #endif
-    if (a->mTalkEventActive) {
+    // №251: a pending get-item consumes the event transition — do NOT reset.
+    if (fireMountPresentDemo(a)) {
+        // handoff owns the event from here
+    } else if (a->mTalkEventActive) {
         dComIfGp_event_reset();
     }
     a->mTalking = false;
@@ -729,7 +1073,11 @@ void closeMountDialogue(dExtNpcMount_c* a) {
     if (s_mountDialogueOwner == a) {
         s_mountDialogueOwner = NULL;
     }
-    setMountAnimation(a, a->mManifest.idle, J3DFrameCtrl::EMode_LOOP);
+    // №262: idle re-picks by attach state. №263: unless the present motion is
+    // in flight (fired above) — execute() restores idle when it completes.
+    if (!a->mPresentAnimActive) {
+        setMountAnimation(a, mountIdleBck(a), J3DFrameCtrl::EMode_LOOP);
+    }
 }
 
 struct DialogueSectionParsed {
@@ -765,6 +1113,49 @@ void applyDialogueAction(const dExtNpcMount_c* a, const std::string& action) {
     }
     if (action.rfind("set_flag:", 0) == 0) {
         dExtModFlags_set(a->mManifest.modFolder, action.c_str() + 9, true);
+        return;
+    }
+    // ========================================================================
+    // №238 — grant_outfit:<kind> — the wardrobe-integrated clothes handover.
+    // ========================================================================
+    // Wraps the whole №232 contract in one dialogue action: record wardrobe
+    // ownership (so store/own + the D-pad cycle pick it up), then request the
+    // equip. The equip is async + transition-fenced (dAlbwOutfit_equip only
+    // acts on OWNED outfits and self-blocks while a MESSAGE is open) — so
+    // called mid-dialogue it QUEUES and drains after the box closes, which is
+    // exactly the donor's visible order (box -> wearing -> "suit you
+    // perfectly"). The wear-state design is LOCKED to TP-native Hero's Clothes
+    // (D_ALBW_OUTFIT_HEROS -> dItemNo_WEAR_KOKIRI_e); vanilla-acquired clothes
+    // still register via dAlbwOutfit_syncWornOwnership, so double-grant across
+    // our scene and TP's own Faron beat is idempotent.
+    if (action.rfind("grant_outfit:", 0) == 0) {
+#if TARGET_PC
+        const char* kindStr = action.c_str() + 13;
+        dAlbwOutfitKind kind = D_ALBW_OUTFIT_COUNT;
+        if (std::strcmp(kindStr, "heros") == 0) {
+            kind = D_ALBW_OUTFIT_HEROS;
+        } else {
+            DuskLog.warn("[ExtNpcMount] grant_outfit unknown kind '{}'", kindStr);
+            return;
+        }
+        const int itemNo = dAlbwOutfit_itemNoForKind(kind);
+        dAlbwOutfit_recordOwnedByItemNo(itemNo);   // wardrobe ownership now true
+        dAlbwOutfit_equip(kind);                    // queues; drains after the box
+        // ====================================================================
+        // №251 — the present-demo is DEFERRED to talk close. Ordering the item
+        // event here (at section LOAD) put it under our still-running speak
+        // event + the section's box, and closeMountDialogue's event_reset then
+        // KILLED the ordered event — the "get-item never starts" of №242/this
+        // run. The native pattern is a HANDOFF: the box closes, the item event
+        // replaces the speak event, no reset in between. The pending flag is
+        // consumed by the close path (fireMountPresentDemo).
+        // ====================================================================
+        dExtNpcMount_c* mount = const_cast<dExtNpcMount_c*>(a);
+        mount->mPresentDemoItemNo = itemNo;
+        DuskLog.info("[ExtNpcMount] grant_outfit {} (item {}) via '{}' — owned+equip; "
+                     "present-demo deferred to talk close",
+                     kindStr, itemNo, a->mManifest.proc);
+#endif
         return;
     }
     DuskLog.warn("[ExtNpcMount] unknown dialogue action '{}'", action);
@@ -869,6 +1260,24 @@ bool loadDialogueSectionRaw(const dExtNpcMount_c* a, const char* sectionKey,
                     while (!body.empty() && (body[0] == ' ' || body[0] == '\t')) {
                         body.erase(0, 1);
                     }
+                    // ========================================================
+                    // №251 — the catalog stores ONE ENTRY ACROSS SEVERAL
+                    // PHYSICAL LINES (the extractor wrapped at the donor's own
+                    // line breaks). Reading only the [N] line truncated every
+                    // multi-line message to its first fragment — the user's
+                    // "Hanging the family" screenshot IS row 543's first line.
+                    // Consume continuation lines until the next [entry] or a
+                    // blank line, joining with real newlines.
+                    // ========================================================
+                    std::string contLine;
+                    while (std::getline(cat, contLine)) {
+                        trim(contLine);
+                        if (contLine.empty() || contLine[0] == '[') {
+                            break;
+                        }
+                        body += '\n';
+                        body += contLine;
+                    }
                     // №32 B6 / №29 C3: honor literal "\n", real newlines, and legacy " / ".
                     std::string flat;
                     for (size_t i = 0; i < body.size(); ++i) {
@@ -927,7 +1336,10 @@ bool sectionConditionsOk(const dExtNpcMount_c* a, const DialogueSectionParsed& s
 }
 
 bool beginMountDialogue(dExtNpcMount_c* a, bool fromEvent) {
-    if (a == NULL || a->mCloseCooldown > 0 || s_mountDialogueOwner != NULL) {
+    // №248: an actor may re-enter to ADVANCE its own conversation (section
+    // chain under one held speak event); only a DIFFERENT owner blocks.
+    if (a == NULL || a->mCloseCooldown > 0 ||
+        (s_mountDialogueOwner != NULL && s_mountDialogueOwner != a)) {
         return false;
     }
     const auto refuse = [&](const char* reason, bool playTalk) {
@@ -989,17 +1401,17 @@ bool beginMountDialogue(dExtNpcMount_c* a, bool fromEvent) {
         return refuse("message archive unavailable", true);
     }
 #if TARGET_PC_NATIVE_UI
-    if (s_mountDialogue == NULL) {
-        s_mountDialogue = JKR_NEW dALBWDialogue_c();
-    }
-    if (s_mountDialogue == NULL) {
-        return refuse("dialogue allocation failed", false);
-    }
-    s_mountDialogue->tryCreate();
-    if (!s_mountDialogue->isReady() || s_mountDialogue->isVisible()) {
-        return refuse("dialogue window unavailable", false);
-    }
-    s_mountDialogue->showWithText(sec.text.c_str());
+    // ========================================================================
+    // №248 — NATIVE presentation: inject the section text into the engine's
+    // code-text flow (Shade Watcher pattern). The speak event ordered by the
+    // talk trigger owns Link for the WHOLE conversation; the per-frame poll
+    // drives s_mountFlow.doFlow and chains sections without releasing it.
+    // №252 — the section text is PAGINATED to TP's box rules first; the poll
+    // walks the pages before advancing to the next section.
+    // ========================================================================
+    mountPaginate(sec.text);
+    s_mountFlow.initWord(a, s_mountPages[0].c_str(), 0xFF, 0, NULL);
+    s_mountPageIdx = 1;
     if (!sec.next.empty()) {
         std::snprintf(a->mDialogueNext, sizeof(a->mDialogueNext), "%s", sec.next.c_str());
     } else {
@@ -1172,6 +1584,8 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
             set(out->talk2, sizeof(out->talk2));
         } else if (key == "btp") {
             set(out->btp, sizeof(out->btp));
+        } else if (key == "blink_btp") {
+            set(out->blinkBtp, sizeof(out->blinkBtp));  // №188
         } else if (key == "display_name") {
             set(out->displayName, sizeof(out->displayName));
         } else if (key == "neck_joint") {
@@ -1190,8 +1604,46 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
             if (index + 1 > out->attachCount) {
                 out->attachCount = index + 1;
             }
+        // ====================================================================
+        // №218 — donor-authored local transform for a held prop attach.
+        // attach_offs = x,y,z (model units); attach_rot = x,y,z (raw s16 angle
+        // units, decimal). Either key alone marks the slot as having a local.
+        // ====================================================================
+        } else if (key == "attach_offs" || key == "attach_offs2") {
+            const int index = key == "attach_offs2" ? 1 : 0;
+            if (parseVec3(val, &out->attach[index].offs)) {
+                out->attach[index].hasLocal = true;
+            }
+        } else if (key == "attach_rot" || key == "attach_rot2") {
+            const int index = key == "attach_rot2" ? 1 : 0;
+            if (parseVec3(val, &out->attach[index].rot)) {
+                out->attach[index].hasLocal = true;
+            }
+        // №250: the in-demo pose variant (donor m841 split — Ls1 telescope).
+        } else if (key == "attach_offs_demo" || key == "attach_offs_demo2") {
+            const int index = key == "attach_offs_demo2" ? 1 : 0;
+            if (parseVec3(val, &out->attach[index].offsDemo)) {
+                out->attach[index].hasDemoLocal = true;
+            }
+        } else if (key == "attach_rot_demo" || key == "attach_rot_demo2") {
+            const int index = key == "attach_rot_demo2" ? 1 : 0;
+            if (parseVec3(val, &out->attach[index].rotDemo)) {
+                out->attach[index].hasDemoLocal = true;
+            }
+        // №262: flag-gated prop lifetime + carry-idle (Grandma's bundle).
+        } else if (key == "attach_unless_flag" || key == "attach_unless_flag2") {
+            const int index = key == "attach_unless_flag2" ? 1 : 0;
+            set(out->attach[index].unlessFlag, sizeof(out->attach[index].unlessFlag));
+        } else if (key == "idle_attached") {
+            set(out->idleAttached, sizeof(out->idleAttached));
+        } else if (key == "present_anim") {
+            set(out->presentAnim, sizeof(out->presentAnim));  // №263
         } else if (key == "companion_model") {
             set(out->companionModel, sizeof(out->companionModel));
+        } else if (key == "companion_hidden") {
+            // №249: presence axis 3 at attachment scale — mounted but not
+            // presented until the scene pass flips it (Grandma's bundle).
+            out->companionHidden = parseBoolVal(val);
         } else if (key == "companion_idle") {
             set(out->companionIdle, sizeof(out->companionIdle));
         } else if (key == "companion_mode") {
@@ -1625,18 +2077,11 @@ static void purgeModelCacheForArc(const char* arc) {
             ++it;
         }
     }
-    int nRaw = 0;
-    const std::string rawPrefix = std::string(arc) + "/";
-    for (auto it = s_pristineJ3dRaw.begin(); it != s_pristineJ3dRaw.end();) {
-        if (it->first.rfind(rawPrefix, 0) == 0) {
-            it = s_pristineJ3dRaw.erase(it);
-            ++nRaw;
-        } else {
-            ++it;
-        }
-    }
-    DuskLog.info("[ExtNpcMount] №73 purged model cache for arc '{}' (models={} pristine={})",
-                 arc, nModel, nRaw);
+    // №263: pristine copies are SESSION-LIVED — do NOT erase them here. They
+    // are the only safe parse source once the resident dRes buffer has been
+    // pointer-fixed; erasing them on purge caused the KOISI exit crash.
+    DuskLog.info("[ExtNpcMount] №73 purged model cache for arc '{}' (models={}, pristine kept)",
+                 arc, nModel);
 }
 
 static void retainArcModels(const char* arc) {
@@ -1748,7 +2193,8 @@ J3DModelData* acquireMountedModel(const char* arc, const char* modelName, void* 
         auto pit = s_pristineJ3dRaw.find(plainKey);
         void* loadSrc = NULL;
         if (pit != s_pristineJ3dRaw.end()) {
-            loadSrc = pit->second.data();
+            // №263: fresh copy — never mutate the stored pristine itself.
+            loadSrc = mountPristineParseSrc(plainKey, NULL);
             stageLog("resolve", "path=bmt-load-from-pristine-copy");
         } else {
             // No pristine copy (already pointer-fixed before stash) — skip shirt, don't AV.
@@ -1771,7 +2217,9 @@ J3DModelData* acquireMountedModel(const char* arc, const char* modelName, void* 
                 data = plainIt->second;
                 stageLog("resolve", "path=bmt-fallback-plain-cache");
             } else if (loadSrc != NULL) {
-                data = resolveMountedModelUncached(loadSrc);
+                // №263: loadSrc was consumed (fixed) by the failed bmt attempt
+                // above — take ANOTHER fresh pristine copy for the fallback.
+                data = resolveMountedModelUncached(mountPristineParseSrc(plainKey, res));
                 stageLog("resolve", "path=bmt-fallback-plain-from-pristine");
             } else {
                 data = resolveMountedModelUncached(res);
@@ -1779,7 +2227,11 @@ J3DModelData* acquireMountedModel(const char* arc, const char* modelName, void* 
             }
         }
     } else {
-        data = resolveMountedModelUncached(res);
+        // №263: parse a fresh pristine copy, never the shared dRes buffer —
+        // a purged-then-recreated mount would otherwise re-parse a
+        // pointer-fixed resident buffer (the KOISI exit crash).
+        data = resolveMountedModelUncached(
+            mountPristineParseSrc(std::string(arc) + "/" + modelName, res));
     }
     if (prevHeap != NULL) {
         mDoExt_setCurrentHeap(prevHeap);
@@ -2251,6 +2703,7 @@ static void wwSkyDraw() {
 bool tryBindBtp(dExtNpcMount_c* a, J3DModelData* data) {
     a->mpBtp = NULL;
     a->mBtpBound = false;
+    a->mDemoTexAnmLast = 0xFFFFFFFF;  // №186: sentinel — 0 is a valid resource id
     if (a->mManifest.skipBtp || a->mManifest.btp[0] == '\0') {
         stageLog("btp", "skipped (skip_btp or no btp=)");
         return true;
@@ -2278,6 +2731,64 @@ bool tryBindBtp(dExtNpcMount_c* a, J3DModelData* data) {
     a->mBtpBound = true;
     stageLog("btp", "bound ok");
     return true;
+}
+
+// №188: IDLE BLINK — WW faces are texture planes; "blink" is a BTP frame swap.
+//
+// Ported from `daNpc_Ls1_c`: `setBtp` inits the pattern with EMode_NONE (the
+// actor drives the frame, not a loop ctrl), and `play_btp_anm` with resID index
+// 1 (MABA) holds eyes-open on a random 60-90 frame timer, then advances through
+// the close/open once and re-arms. Bound as a SEPARATE `mpBlink` so it never
+// fights the expression `mpBtp`. Assets confirmed present (`maba.btp` in Ls.arc).
+bool tryBindBlink(dExtNpcMount_c* a, J3DModelData* data) {
+    a->mpBlink = NULL;
+    a->mBlinkBound = false;
+    a->mBlinkTimer = 0;
+    a->mBlinkFrame = 0.0f;
+    if (a->mManifest.blinkBtp[0] == '\0') {
+        return true;
+    }
+    J3DAnmTexPattern* pat =
+        (J3DAnmTexPattern*)dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.blinkBtp);
+    if (pat == NULL) {
+        DuskLog.warn("[ExtNpcMount] №188 blink '{}' missing in arc '{}' — no blink",
+                     a->mManifest.blinkBtp, a->mManifest.arc);
+        return true;  // cosmetic, non-fatal
+    }
+    a->mpBlink = JKR_NEW mDoExt_btpAnm();
+    if (a->mpBlink == NULL) {
+        return true;
+    }
+    // EMode_NONE: we own the frame (donor sets attribute 0 in setBtp).
+    if (a->mpBlink->init(data, pat, 1, J3DFrameCtrl::EMode_NONE, 1.0f, 0, -1) == 0) {
+        DuskLog.warn("[ExtNpcMount] №188 blink '{}' init failed", a->mManifest.blinkBtp);
+        a->mpBlink = NULL;
+        return true;
+    }
+    a->mBlinkBound = true;
+    a->mBlinkTimer = cLib_getRndValue<s16>(60, 30);  // first hold: 60..90 frames
+    DuskLog.info("[ExtNpcMount] №188 blink bound '{}'", a->mManifest.blinkBtp);
+    return true;
+}
+
+// Advance the blink one frame, donor `play_btp_anm` (index-1 branch) verbatim.
+// Called every frame the actor is visible — including inside the demo branch,
+// because a WW character blinks THROUGH its cutscene, not only outside it.
+void dExtNpcMount_driveBlink(dExtNpcMount_c* a) {
+    if (!a->mBlinkBound || a->mpBlink == NULL) {
+        return;
+    }
+    const f32 frameMax = a->mpBlink->getEndFrame();
+    // Hold eyes-open (frame 0) while the timer counts down; when it expires,
+    // advance one frame per tick through the blink, then re-arm and reset.
+    if (cLib_calcTimer(&a->mBlinkTimer) == 0) {
+        a->mBlinkFrame += 1.0f;
+        if (a->mBlinkFrame >= frameMax) {
+            a->mBlinkTimer = cLib_getRndValue<s16>(60, 30);
+            a->mBlinkFrame = 0.0f;
+        }
+    }
+    a->mpBlink->setFrame(a->mBlinkFrame);
 }
 
 void applyModelAmbient(J3DModel* model, const GXColor& amb) {
@@ -2349,6 +2860,17 @@ bool addAttachment(dExtNpcMount_c* a, J3DModelData* bodyData, const dExtNpcAttac
     const int slot = a->mAttachCount++;
     a->mpAttach[slot] = model;
     a->mAttachJnt[slot] = (s16)jointIndex;
+    // ========================================================================
+    // №218 — carry the donor's local prop transform into the slot so both
+    // placement paths (slave CB / setMtx) can compose jointMtx × T × R.
+    // ========================================================================
+    a->mAttachOffs[slot] = spec.offs;
+    a->mAttachRot[slot] = spec.rot;
+    a->mAttachLocal[slot] = spec.hasLocal ? 1 : 0;
+    // №250: the in-demo pose variant (donor m841 split).
+    a->mAttachOffsDemo[slot] = spec.offsDemo;
+    a->mAttachRotDemo[slot] = spec.rotDemo;
+    a->mAttachDemoLocal[slot] = spec.hasDemoLocal ? 1 : 0;
     a->mAttachOnCompanion[slot] = onCompanion ? 1 : 0;
     a->mAttachSlave[slot] = 1;
     // №49/№50: base = host BASE; parent-compose via joint callback during calc (envelope-safe).
@@ -2356,8 +2878,9 @@ bool addAttachment(dExtNpcMount_c* a, J3DModelData* bodyData, const dExtNpcAttac
         onCompanion ? a->mpCompanion->getModel() : a->mpMorf->getModel();
     model->setBaseTRMtx(hostModel->getBaseTRMtx());
     installSlaveJointCallbacks(model, a);
-    DuskLog.info("[ExtNpcMount] attachment '{}' joint_slave → {} ({}) on {}", spec.model, joint,
-                 jointIndex, onCompanion ? "companion" : "body");
+    DuskLog.info("[ExtNpcMount] attachment '{}' joint_slave → {} ({}) on {}{}", spec.model, joint,
+                 jointIndex, onCompanion ? "companion" : "body",
+                 spec.hasLocal ? " +local" : "");
     return true;
 }
 
@@ -2560,12 +3083,14 @@ int useHeapInit(fopAc_ac_c* i_this) {
     }
 
     tryBindBtp(a, data);
+    tryBindBlink(a, data);  // №188
     a->mAttachCount = 0;
     for (int i = 0; i < kExtNpcMaxAttach; ++i) {
         a->mpAttach[i] = NULL;
         a->mAttachJnt[i] = -1;
         a->mAttachOnCompanion[i] = 0;
         a->mAttachSlave[i] = 0;
+        a->mAttachLocal[i] = 0;  // №218: identity unless the manifest authors one
         addAttachment(a, data, a->mManifest.attach[i]);
     }
     addDoorVisual(a, data);
@@ -2676,8 +3201,15 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
                 return 0;
             }
             a->mBgGlobal = true;
-            DuskLog.info("[ExtNpcMount] №107 BG GLOBAL_e (identity) proc='{}' arc='{}'",
-                         a->mManifest.proc, a->mManifest.arc);
+            // №256 / daBg parity: TP room collision is GLOBAL_e + PRIORITY_0
+            // (d_a_bg.cpp). Default ClrDBgWBase leaves priority=2 — WallCorrect
+            // still visits it, but stage-room attribute/SFX/ledge paths expect
+            // world BGs at PRIORITY_0. Join that path; do not relax alink gates.
+            // №257: setBgW + stub Release lands at Regist (create) — not here.
+            a->mpBgW->SetPriority(dBgW_Base::PRIORITY_0);
+            DuskLog.info(
+                "[ExtNpcMount] №256 BG GLOBAL_e PRIORITY_0 (identity) proc='{}' arc='{}'",
+                a->mManifest.proc, a->mManifest.arc);
             return 1;
         }
     }
@@ -3514,6 +4046,28 @@ static constexpr int kBgReadyGoneTimeout = 45;   // actor vanished after create
 // №83: last createBgMountAtHost failure reason (for room0 create FAILED lines).
 static char s_bgCreateFailReason[96] = {};
 
+// №265: identity GLOBAL mounts must stamp the HOST room (Outset exterior = 44),
+// never the keep-slot / actor room 0. Default BgW m_roomId=0xFF falls through to
+// GetGrpRoomId; SetRoomId(0) makes Link's underfoot room 0 and every room-keyed
+// event pack (awake, doors) resolves -1.
+static int resolveIdentityBgHostRoom(const dExtNpcMount_c* a) {
+    if (a == NULL) {
+        return -1;
+    }
+    const int lane = dExtNpcMount_roomLaneHostRoom(a->mManifest.proc);
+    if (lane > 0 && lane < 0x40) {
+        return lane;
+    }
+    if (a->mManifest.hostRoom > 0 && a->mManifest.hostRoom < 0x40) {
+        return a->mManifest.hostRoom;
+    }
+    const int actorRoom = fopAcM_GetRoomNo(a);
+    if (actorRoom > 0 && actorRoom < 0x40) {
+        return actorRoom;
+    }
+    return -1;
+}
+
 static fpc_ProcID createBgMountAtHost(const dExtNpcManifest& man, const char* src,
                                       int forceRoomNo = -1) {
     s_bgCreateFailReason[0] = '\0';
@@ -3553,9 +4107,22 @@ static fpc_ProcID createBgMountAtHost(const dExtNpcManifest& man, const char* sr
         // SearchByName can miss mid-phase. Stay on current layer (do not defer).
     }
     const u32 params = man.socketArg >= 0 ? (u32)man.socketArg : 0;
+    // №163: `parameters` and `argument` are DIFFERENT fields, and until now only
+    // the first was carried. `parameters` selects the manifest; `argument` is the
+    // actor's CENSUS IDENTITY — `fopAcM_findObjectCB` matches proc AND argument,
+    // and `dStage_getName2(prof, argument)` names it. Passing a hardcoded -1 left
+    // every mounted actor anonymous: `dStage_searchName("Ls1")` yields (HENNA0, 5)
+    // from its OBJNAME row, the live actor held -1, `5 == -1` failed, and the
+    // storyboard reported no performer for an actor standing in plain sight.
+    //
+    // Arg is NOT interchangeable with -1 here: every islander shares the HENNA0
+    // proc (Ls1=5, Ob1=7, Ko1=8), so -1 would match whichever one happened to be
+    // found first — the identity-swap class of bug from №126/№129, re-entered
+    // through a different door. The socket arg is what keeps them distinct.
+    const s8 argument = man.socketArg >= 0 ? (s8)man.socketArg : (s8)-1;
     const u32 pendingSeq = dExtNpcMount_pushPendingSpawn(man.proc, spawnSrc, NULL, NULL);
     const fpc_ProcID id =
-        fopAcM_create(actorId, params, &man.hostPos, roomNo, &angle, &scale, -1);
+        fopAcM_create(actorId, params, &man.hostPos, roomNo, &angle, &scale, argument);
     fpcLy_SetCurrentLayer(savedLayer);
     dExtNpcMount_reapPendingSpawn(pendingSeq, id);  // №130
     if (id == fpcM_ERROR_PROCESS_ID_e) {
@@ -3587,6 +4154,10 @@ int dExtNpcMount_roomLaneHostRoom(const char* procName) {
     }
     auto it = s_roomLaneRooms.find(procName);
     return it != s_roomLaneRooms.end() ? it->second : -1;
+}
+
+bool dExtNpcMount_isRoomLaneRoom(int roomNo) {
+    return roomNo >= 0 && roomNo < 0x40 && s_roomLaneProcByRoom.count(roomNo) != 0;
 }
 
 bool dExtNpcMount_isRoomLaneProtected(int roomNo) {
@@ -3669,6 +4240,16 @@ static void releaseRoomLaneMount(const char* procName) {
         dExtNpcMount_c* mount = (dExtNpcMount_c*)existing;
         // Explicit Release before delete — never while the player stands on it.
         if (mount->mpBgW != NULL) {
+            if (mount->mBgGlobal) {
+                int roomNo = mount->mpBgW->GetRoomId();
+                if (roomNo <= 0 || roomNo >= 0x40 || roomNo == 0xFF) {
+                    roomNo = resolveIdentityBgHostRoom(mount);
+                }
+                if (roomNo > 0 && roomNo < 0x40 &&
+                    dStage_roomControl_c::getBgW(roomNo) == mount->mpBgW) {
+                    dStage_roomControl_c::setBgW(roomNo, NULL);
+                }
+            }
             dComIfG_Bgsp().Release(mount->mpBgW);
             mount->mpBgW = NULL;
             DuskLog.info("[ExtNpcMount] №69 Released interior BgW '{}'", procName);
@@ -3928,6 +4509,12 @@ void dExtNpcMount_onRoomUnload(const char* stageName, int roomNo) {
     if (existing != NULL) {
         dExtNpcMount_c* mount = (dExtNpcMount_c*)existing;
         if (mount->mpBgW != NULL) {
+            if (mount->mBgGlobal) {
+                const int r = fopAcM_GetRoomNo(mount);
+                if (r >= 0 && r < 0x40 && dStage_roomControl_c::getBgW(r) == mount->mpBgW) {
+                    dStage_roomControl_c::setBgW(r, NULL);
+                }
+            }
             dComIfG_Bgsp().Release(mount->mpBgW);
             mount->mpBgW = NULL;
         }
@@ -4389,7 +4976,16 @@ static void pollRoomLaneTransport() {
         s_roomTxHoldFrames = 45;
         roomTxStartFadeIn();
         std::snprintf(s_lastBgProc, sizeof(s_lastBgProc), "EXT_BG0");
-        DuskLog.info("[ExtNpcMount] №69 room-lane EXIT complete — active EXT_BG0");
+        // №257: releasing the interior cleared s_bgIslandId when it matched —
+        // restore the live exterior mount id so soft-state matches "active EXT_BG0".
+        {
+            auto ext = s_bgMountIds.find("EXT_BG0");
+            if (ext != s_bgMountIds.end() && fopAcM_SearchByID(ext->second) != NULL) {
+                s_bgIslandId = ext->second;
+            }
+        }
+        DuskLog.info("[ExtNpcMount] №69 room-lane EXIT complete — active EXT_BG0 island={:08x}",
+                     (u32)s_bgIslandId);
         s_roomTxPhase = kRoomTxExitHold;
         return;
     }
@@ -4526,6 +5122,16 @@ void dExtNpcWorld_bump(const char* reason) {
     dExtNpcDoors_clearSpawnLatches();
     dExtNpcPopulation_clearAll();
     s_interiorBootstrapProc[0] = '\0';
+    // №257 / Verdict 2 reading (2): play-scene tear destroys BG actors but left
+    // s_bgMountIds / s_bgIslandId pointing at recycled ProcIDs — reuse then
+    // operated on the wrong BG (or a corpse). Soft handles die with the stage.
+    if (!s_bgMountIds.empty() || s_bgIslandId != fpcM_ERROR_PROCESS_ID_e) {
+        DuskLog.info(
+            "[ExtNpcWorld] №257 drop stale BG soft-handles count={} island={:08x} ({})",
+            (int)s_bgMountIds.size(), (u32)s_bgIslandId, reason != NULL ? reason : "?");
+    }
+    s_bgMountIds.clear();
+    s_bgIslandId = fpcM_ERROR_PROCESS_ID_e;
     DuskLog.info("[ExtNpcWorld] №94 bump gen={} ({})", s_worldGeneration,
                  reason != NULL ? reason : "?");
 }
@@ -4563,37 +5169,846 @@ static void dExtWw_wireFadoCrossing(const char* stage) {
 //     'Ls1') to ours is the real unknown (№151).
 // Logging both the index and the order tells us which half failed, if either.
 static bool s_openingOrdered = false;
+static int s_openingWaitFrames = 0;  // №162: sparse-log counter for the order gate
+/**
+ * №170: two layers — do NOT collapse them.
+ *   pending  = F_DL01 entry → opening done/abandoned  → defers №110 snap only
+ *   hold     = after awake ORDER → demo end             → pauses G-guard too
+ * Arming hold on stage-ready blocked residual clear; awake deferred forever.
+ */
+static bool s_openingPending = false;
+static bool s_openingCameraHold = false;
+static bool s_openingSawDemo = false;
+static int s_openingHoldFrames = 0;
+
+// №254 / №222: durable "opening finished" (donor UNK_3510). Statics reset on
+// interior→exterior recreate; this mod-flag does not. Key is ours (covenant).
+static constexpr const char* kOpeningDoneFlag = "ww.awake_played";
+
+static const char* dExtWw_primaryModFolder() {
+    for (const auto& kv : s_providers) {
+        if (kv.second.modFolder[0] != '\0') {
+            return kv.second.modFolder;
+        }
+    }
+    return nullptr;
+}
+
+static bool dExtWw_openingAlreadyDone() {
+    const char* mod = dExtWw_primaryModFolder();
+    return mod != nullptr && dExtModFlags_get(mod, kOpeningDoneFlag);
+}
+
+static void dExtWw_markOpeningDone(const char* why) {
+    const char* mod = dExtWw_primaryModFolder();
+    if (mod == nullptr) {
+        return;
+    }
+    if (dExtModFlags_get(mod, kOpeningDoneFlag)) {
+        return;
+    }
+    dExtModFlags_set(mod, kOpeningDoneFlag, true);
+    DuskLog.info("[ExtWw] №254 opening-done flag set ({}) — durable across transits",
+                 why != nullptr ? why : "?");
+}
+
+bool dExtWw_openingOwnsCamera() {
+    const char* stage = dComIfGp_getStartStageName();
+    if (stage == NULL || std::strcmp(stage, "F_DL01") != 0) {
+        return false;
+    }
+    return s_openingPending;
+}
+
+bool dExtWw_openingPauseArrivalGuard() {
+    const char* stage = dComIfGp_getStartStageName();
+    if (stage == NULL || std::strcmp(stage, "F_DL01") != 0) {
+        return false;
+    }
+    return s_openingCameraHold;
+}
+
+static void dExtWw_clearOpeningCameraState() {
+    s_openingPending = false;
+    s_openingCameraHold = false;
+    s_openingSawDemo = false;
+    s_openingHoldFrames = 0;
+}
+
+/**
+ * №171: №110 must not fire while we still intend to run `awake`, nor while it
+ * owns the cam. Distinct from ownsCamera — pending must NOT pause G-guard
+ * (№169: force-ending the leftover slot is what lets the order succeed).
+ */
+bool dExtWw_deferArrivalCameraSnap() {
+    const char* stage = dComIfGp_getStartStageName();
+    if (stage == NULL || std::strcmp(stage, "F_DL01") != 0) {
+        return false;
+    }
+    if (s_openingCameraHold) {
+        return true;
+    }
+    // Still trying to order (busy slot / arc load) — keep map-edge snap off.
+    return !s_openingOrdered;
+}
+
 static void dExtWw_orderOpening(const char* stage) {
     if (stage == NULL || std::strcmp(stage, "F_DL01") != 0 || s_openingOrdered) {
         return;
     }
-    fopAc_ac_c* player = dComIfGp_getPlayer(0);
-    if (player == NULL) {
-        return;  // retry next stage-ready; the player is not up yet
-    }
-    const s16 idx = dComIfGp_getEventManager().getEventIdx(player, "awake", 0xff);
-    DuskLog.info("[ExtWw] §46 opening 'awake' getEventIdx -> {}", (int)idx);
-    if (idx < 0) {
-        DuskLog.warn(
-            "[ExtWw] §46 'awake' not resolved — the stage event_list.dat is present and "
-            "round-trip verified (№152), so this is the event MANAGER not picking up the "
-            "stage list, not missing data");
-        s_openingOrdered = true;  // do not spam every stage-ready
+    // №254: durable gate (mirrors donor 0x3510). Interior door recreates the
+    // play scene and clears s_openingOrdered; the save-side flag does not.
+    if (dExtWw_openingAlreadyDone()) {
+        s_openingOrdered = true;
+        dExtWw_clearOpeningCameraState();
+        DuskLog.info("[ExtWw] №254 opening skipped — '{}' already set", kOpeningDoneFlag);
         return;
     }
-    s_openingOrdered = true;
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        // №155: WAIT, do not give up. The first cut of this ran only from
+        // onStageReady and returned here claiming it would "retry next
+        // stage-ready" — but onStageReady fires ONCE per stage change, so there
+        // was no next one. The player does not exist yet at that moment, so the
+        // opening was never even attempted: the log showed the Fado lines and
+        // no getEventIdx line at all. It is now also driven from the per-frame
+        // poll, which is the retry that comment assumed.
+        return;
+    }
+    const s16 idx = dComIfGp_getEventManager().getEventIdx(player, "awake", 0xff);
+    // ========================================================================
+    // №263 — do NOT latch failure on the FIRST unresolved frame. On the warp
+    // entry path the event manager registers the stage list a beat after the
+    // player exists, so the one-shot latch killed the intro for the whole
+    // session (№155's own lesson, one level deeper: WAIT, do not give up).
+    // Bounded retry; the warn fires only when it stays unresolved for 10s.
+    // ========================================================================
+    // DONOR-FAITHFUL (№263 rev 2, decomp-verified): WW actors resolve
+    // getEventIdx TRUSTING success — the donor's load order guarantees the
+    // stage list registers before actors run, so "resolution failed" is not a
+    // state WW has (d_a_andsw0/auction/deku_item idiom: resolve, use, no
+    // give-up branch). The receiver's warp path breaks that ordering
+    // guarantee, so we WAIT for the donor-guaranteed state: retry every frame,
+    // no give-up latch, periodic warn as pure diagnostic.
+    static int s_openingResolveRetries = 0;
+    if (idx < 0) {
+        // ====================================================================
+        // №266 — §67 proved the ROOT: BASE_STAGE never loads on the warp path
+        // (create() ran before the stage resource was queryable; the engine
+        // has no retry). Restore the donor guarantee: late-init the stage
+        // list the moment the resource exists, then the room list, and let
+        // the normal resolve above succeed next frame.
+        // ====================================================================
+        dEvent_manager_c& em66 = dComIfGp_getEventManager();
+        const int late = em66.lateStageListInit();
+        if (late == 2) {
+            em66.roomInit(-1);
+            DuskLog.warn("[ExtWw] №266 stage event list LATE-LOADED (+roomInit) after {} "
+                         "failed resolves — donor availability guarantee restored",
+                         s_openingResolveRetries);
+            return;  // resolve retries next frame against the populated slots
+        }
+        if (++s_openingResolveRetries % 600 == 0) {
+            DuskLog.warn(
+                "[ExtWw] §46 'awake' unresolved after {} attempts (still retrying — donor "
+                "guarantees the stage list; event_list.dat is present and round-trip "
+                "verified №152)",
+                s_openingResolveRetries);
+            // ================================================================
+            // §68 — №266 never fired (getStageRes NULL all session), so the
+            // stage-res SLOT itself is the suspect. Two-way discriminator:
+            //   dzs=NULL too  → whole Stage-archive slot unmounted/redirected
+            //   dzs=OK, evt=NULL → a DIFFERENT (unmerged) F_DL01 Stage.arc is
+            //                      mounted than №152's verified file
+            // ================================================================
+            const void* evtRes = dComIfG_getStageRes("event_list.dat");
+            const void* dzsRes = dComIfG_getStageRes("stage.dzs");
+            DuskLog.warn("[ExtWw] §68 stage-res slot: event_list={} stage.dzs={} stage='{}'",
+                         evtRes != NULL ? "OK" : "NULL", dzsRes != NULL ? "OK" : "NULL",
+                         dComIfGp_getStartStageName());
+            // ================================================================
+            // §67 probe — WHAT the event manager actually holds when the
+            // resolve fails (room id is now correct per №265, so the defect
+            // moved into the LIST itself). Per slot: loaded?, roomNo, count,
+            // first names. One glance answers: wrong slot / evicted room list
+            // / unmerged list / name mismatch.
+            // ================================================================
+            dEvent_manager_c& em67 = dComIfGp_getEventManager();
+            const int playerRoom = fopAcM_GetRoomNo(player);
+            DuskLog.warn("[ExtWw] §67 slots (player room {}):", playerRoom);
+            for (int t = dEvent_manager_c::BASE_KEEP; t < dEvent_manager_c::BASE_MAX; ++t) {
+                if (em67.probeSlot(t).getHeaderP() == NULL) {
+                    DuskLog.warn("[ExtWw] §67   slot {}: (empty)", t);
+                    continue;
+                }
+                const int n = (int)em67.probeSlot(t).getEventNum();
+                std::string names;
+                bool hasAwake = false;
+                for (int e = 0; e < n; ++e) {
+                    const char* nm = em67.probeSlot(t).getEventName(e);
+                    if (nm != NULL && std::strcmp(nm, "awake") == 0) {
+                        hasAwake = true;
+                    }
+                    if (e < 6 && nm != NULL) {
+                        if (!names.empty()) {
+                            names += ",";
+                        }
+                        names += nm;
+                    }
+                }
+                DuskLog.warn("[ExtWw] §67   slot {}: roomNo={} num={} awake={} [{}{}]", t,
+                             (int)em67.probeSlot(t).roomNo(), n, hasAwake ? "YES" : "no",
+                             names, n > 6 ? ",..." : "");
+            }
+        }
+        return;
+    }
+    DuskLog.info("[ExtWw] §46 opening 'awake' getEventIdx -> {} (after {} retries)", (int)idx,
+                 s_openingResolveRetries);
+    s_openingResolveRetries = 0;
+    // §48/№161: the storyboard is NOT fetched from eventInfo's archive. The PLAY
+    // cut calls `getStbDemoData("awake.stb")`, which looks the file up in
+    // `dStage_roomControl_c::getDemoArcName()` — a name normally derived from the
+    // room's LBNK chunk as "Demo%02d_%02d" and loaded via dComIfG_setObjectRes.
+    //
+    // Our authored room44.dzs has no LBNK, so that name stayed EMPTY: the lookup
+    // took its "unknown archive name" branch, returned NULL, and (the assert being
+    // inert in release) dDemo_c::start(NULL,...) did nothing. That is precisely
+    // "ordered and accepted, but nothing plays".
+    //
+    // Rather than synthesise an LBNK chunk to encode a bank pair, name the demo
+    // archive directly — getStbDemoData only does getObjectRes(name, file), so any
+    // name works provided the archive is resident under it.
+    //
+    // The load is ASYNC. d_s_room.cpp:270 does not use the name the frame it is
+    // set — it spins on dComIfG_syncObjectRes and returns 0 (retry) while the
+    // phase is still positive. Ordering in the same frame we request the archive
+    // reproduces the very symptom we are chasing: the order is accepted, then the
+    // PLAY cut asks for awake.stb before the arc is resident and gets NULL.
+    //
+    // So this whole block is a GATE, not a fire-and-forget. It returns without
+    // latching s_openingOrdered while the arc is in flight, and the per-frame
+    // poll (№155) brings us straight back here next frame.
+    {
+        if (*dStage_roomControl_c::getDemoArcName() == '\0') {
+            if (!dComIfG_setObjectRes("Demo02", 0, (JKRHeap*)NULL)) {
+                DuskLog.warn(
+                    "[ExtWw] §48 demo archive 'Demo02' would not load — the storyboard "
+                    "cannot be fetched without it, so the event would order and play "
+                    "nothing. Not ordering; will retry.");
+                return;  // no latch: retry on the next poll
+            }
+            SAFE_SPRINTF(dStage_roomControl_c::getDemoArcName(), "%s", "Demo02");
+            DuskLog.info("[ExtWw] §48 demo archive requested -> '{}'",
+                         static_cast<const char*>(dStage_roomControl_c::getDemoArcName()));
+        }
+
+        const int phase = dComIfG_syncObjectRes(dStage_roomControl_c::getDemoArcName());
+        if (phase > 0) {
+            return;  // still loading — no latch, come back next frame
+        }
+        if (phase < 0) {
+            DuskLog.warn("[ExtWw] §48 demo archive '{}' failed to load (phase {})",
+                         static_cast<const char*>(dStage_roomControl_c::getDemoArcName()), phase);
+            *dStage_roomControl_c::getDemoArcName() = '\0';  // as native does on failure
+            return;
+        }
+        DuskLog.info("[ExtWw] §48 demo archive resident -> '{}'",
+                     static_cast<const char*>(dStage_roomControl_c::getDemoArcName()));
+    }
+
+    // №162: the ORDER is a gate too, for the same reason the archive load is.
+    //
+    // `fopAcM_orderOtherEventId` refuses outright when `isOrderOK()` is false —
+    // that is `mEventStatus == 0 || mEventStatus == 2`, so a non-zero status means
+    // some OTHER event owns the slot this frame. The №161 arc gate pushed our order
+    // one frame later than before, straight into a busy window: the order flipped
+    // from accepted (-> 1, but with no arc) to refused (-> 0, with the arc resident).
+    //
+    // Latching on a REFUSAL is what turns a transient busy frame into a permanent
+    // failure. So we do not latch until the manager actually takes it. Retries are
+    // logged sparsely — a per-frame log would bury the run.
+    if (!dComIfGp_getEvent()->isOrderOK()) {
+        if ((s_openingWaitFrames++ % 60) == 0) {
+            DuskLog.info(
+                "[ExtWw] §46 opening deferred — another event holds the slot "
+                "(isOrderOK false, waited {} frames). Not latching; will retry.",
+                (int)s_openingWaitFrames);
+        }
+        return;  // no latch
+    }
+
+    // №156: the first cut only set a CONDITION. `onCondition(CANDEMO)` marks the
+    // actor as ABLE to run a demo — for a knob door that pairs with an A-press.
+    // Nothing was ever going to start it on arrival, which is why the log showed
+    // a clean resolve and ordered-line while nothing played.
+    //
+    // The real sequence, from the NPC path (d_a_npc.cpp evtOrder) and
+    // d_event.cpp: name the archive on BOTH the actor and the manager, then
+    // actually ORDER the event.
     player->eventInfo.setArchiveName("Demo02");  // holds awake.stb + the cast anims
+    dComIfGp_getEventManager().setObjectArchive(player->eventInfo.getArchiveName());
     player->eventInfo.setEventId(idx);
     player->eventInfo.setMapToolId(0xff);
-    player->eventInfo.onCondition(dEvtCnd_CANDEMO_e);
-    DuskLog.info("[ExtWw] §46 opening ordered (archive Demo02, event {})", (int)idx);
+    const s32 ok = fopAcM_orderOtherEventId(player, idx, 0xff, 0xffff, 40, 1);
+    DuskLog.info("[ExtWw] §46 opening ORDER archive=Demo02 event={} -> {}", (int)idx,
+                 (int)ok);
+    if (ok == 0) {
+        DuskLog.warn(
+            "[ExtWw] §46 order REFUSED despite isOrderOK — event resolved (idx {}), stage "
+            "list read, archive resident. This is `dComIfGp_event_order` itself declining, "
+            "NOT a busy slot and NOT missing data. Not latching; will retry.",
+            (int)idx);
+        return;  // no latch: a refusal must not become permanent
+    }
+    s_openingOrdered = true;  // latch ONLY on an accepted order
+    // №170: G-guard pause starts HERE — after order — so residual/G-guard can
+    // still clear the busy slot that blocks awake (№169 log order).
+    s_openingCameraHold = true;
+    s_openingSawDemo = false;
+    s_openingHoldFrames = 0;
+    // №172: QuickStart leaves Active() true → Run() instead of NotRun().
+    // Event CAMERA/STBWAIT only drives the view on the NotRun path (and store
+    // was ignoring the demo cam while cameraPlay). Stop so the opening pan can
+    // own the view from the first awake frame instead of the map-edge spawn.
+    if (dCamera_c* cam = dCam_getBody()) {
+        cam->Stop();
+        DuskLog.info("[ExtWw] №172 camera Stop after awake ORDER — force event/demo view path");
+    }
+    DuskLog.info(
+        "[ExtWw] №170 opening camera hold ARMED after ORDER — snap deferred, G-guard paused");
+}
+
+// №170: release pending/hold once the opening has run (or timed out).
+static void dExtWw_pollOpeningCameraHold() {
+    if (!s_openingPending && !s_openingCameraHold) {
+        return;
+    }
+    const char* stage = dComIfGp_getStartStageName();
+    if (stage == NULL || std::strcmp(stage, "F_DL01") != 0) {
+        dExtWw_clearOpeningCameraState();
+        return;
+    }
+    // Pending without an order yet: G-guard/residual must still run. Only the
+    // post-ORDER hold watches demo lifetime.
+    if (!s_openingCameraHold) {
+        return;
+    }
+    ++s_openingHoldFrames;
+    const bool running = dComIfGp_event_runCheck() != 0;
+    const bool demoCam = dDemo_c::getCamera() != NULL;
+    if (running || demoCam) {
+        if (!s_openingSawDemo) {
+            s_openingSawDemo = true;
+            DuskLog.info("[ExtWw] №170 opening camera hold — awake demo live (frame {})",
+                         (int)dDemo_c::getFrame());
+        }
+        // №254 / №222: donor sets UNK_3510 at msg-frame 0xC8 (title-card beat).
+        // Latch our durable flag at the same demo-frame threshold.
+        if (dDemo_c::getFrame() >= 0xC8u) {
+            dExtWw_markOpeningDone("title-card frame 0xC8");
+        }
+        return;
+    }
+    if (s_openingSawDemo) {
+        DuskLog.info(
+            "[ExtWw] №170 opening camera hold RELEASE — awake ended (held {}f); arrival snap OK",
+            s_openingHoldFrames);
+        // №254: completion fallback if the demo ended before frame 0xC8 (skip).
+        dExtWw_markOpeningDone("awake ended");
+        // №176: №172 Stop()'d the camera for the pan; №110 was often disarmed when
+        // the arrival G-guard finished before ORDER. Re-arm the behind-Link snap
+        // explicitly — History §52 / owe / box-state probes untouched above.
+        dExtNpcDoors_requestPostOpeningSnap(stage);
+        dExtWw_clearOpeningCameraState();
+        return;
+    }
+    // Ordered but never went live — abandon so №110 can still clear map-edge framing.
+    constexpr int kHoldAbandonFrames = 300;  // ~5s @60
+    if (s_openingHoldFrames >= kHoldAbandonFrames) {
+        DuskLog.warn(
+            "[ExtWw] №170 opening camera hold ABANDON — ordered but no demo after {}f",
+            s_openingHoldFrames);
+        dExtWw_clearOpeningCameraState();
+    }
+}
+
+// §49/№165: donor storyboard MESSAGE ids.
+//
+// A donor storyboard's JMSG track fires DONOR message indices — decoded from
+// awake.stb as 0x357, 0x358, 0x050, 0x359, 0x35A... on a timed schedule (waits
+// of 535/285/430/554 frames between them). Those indices mean nothing in the
+// receiver's message table: index 855 lands on an Ordon pumpkin line and 80 on
+// a quest-log string. The track is working correctly against the wrong table.
+//
+// №31 APPLIED TO TEXT: a missing line is preferable to a foreign one. Showing
+// the receiver's own dialogue in a donor scene is exactly the kind of bleed the
+// space-purity law exists to prevent, so an unmapped id is SUPPRESSED, never
+// passed through.
+//
+// R6: any replacement line is player-visible donor text and must come from
+// DATA. It is read from `<mod>/dialogue/demo_messages.ini` (`id = line`), never
+// from a string in this file. Rendering those lines is NOT wired yet — the
+// folder-side dialogue path is bound to actor-talk flow, not to demo timing —
+// so for now a mapped line is logged rather than drawn. That is deliberately
+// short of the goal and is recorded as such.
+namespace {
+std::unordered_map<u32, std::string> s_demoMsgLines;
+bool s_demoMsgLoaded = false;
+
+void loadDemoMessageMap() {
+    if (s_demoMsgLoaded) {
+        return;
+    }
+    s_demoMsgLoaded = true;
+    // Folder comes from the manifest store rather than a hardcoded name, so the
+    // mod folder stays renameable.
+    const char* mod = NULL;
+    for (const auto& kv : s_providers) {
+        if (kv.second.modFolder[0] != '\0') {
+            mod = kv.second.modFolder;
+            break;
+        }
+    }
+    if (mod == NULL) {
+        return;
+    }
+    const fs::path file =
+        dusk::ConfigPath / "model_replacements" / mod / "dialogue" / "demo_messages.ini";
+    std::error_code ec;
+    if (!fs::is_regular_file(file, ec)) {
+        return;
+    }
+    std::ifstream in(file);
+    std::string line;
+    while (std::getline(in, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
+            line.pop_back();
+        }
+        const size_t hash = line.find_first_not_of(" \t");
+        if (hash == std::string::npos || line[hash] == '#' || line[hash] == ';') {
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+        // Strip a trailing " #" comment. The seeded file annotates every id with
+        // its frame wait, and without this the annotation would be DRAWN as part
+        // of the line. Requires the space so a '#' inside real text survives.
+        const size_t cmt = val.find(" #");
+        if (cmt != std::string::npos) {
+            val.erase(cmt);
+        }
+        const auto trim = [](std::string& s) {
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());
+            while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) s.pop_back();
+        };
+        trim(key);
+        trim(val);
+        if (key.empty()) {
+            continue;
+        }
+        const u32 id = (u32)std::strtoul(key.c_str(), NULL, 0);  // accepts 855 and 0x357
+        s_demoMsgLines[id] = val;
+    }
+    DuskLog.info("[ExtWw] §49 demo message map loaded — {} line(s)", (int)s_demoMsgLines.size());
+}
+}  // namespace
+
+// §49 RENDERING — the storyboard is TIMED, so the box must never block it.
+//
+// The JMSG track fires on explicit frame waits (535, 285, 430, 554, 111, 60,
+// 120, 30, 90 — decoded №165). Some gaps are half a second. A box that waits
+// for an A-press before the demo may continue would desynchronise the scene
+// from its own camera cuts, so this deliberately does NOT gate the demo:
+//
+//   * a new line REPLACES the one on screen (that is what the short waits mean)
+//   * A dismisses early, which is native-feeling but never required
+//   * the line self-clears when the demo ends, so nothing outlives the scene
+//
+// Reuses `dALBWDialogue_c`, the same widget the mount talk path and the shop
+// use — not a second text system.
+
+/** №171: honour the native message↔storyboard suspend contract (UI or suppress). */
+static void dExtWw_resumeDemoAfterMessage(const char* why) {
+    if (dDemo_c::getControl() == NULL || !dDemo_c::getControl()->isSuspended()) {
+        return;
+    }
+    DuskLog.info("[ExtWw] §51 {} — resuming storyboard (suspend {} -> {})", why,
+                 (int)dDemo_c::getControl()->getSuspend(),
+                 (int)dDemo_c::getControl()->getSuspend() - 1);
+    dDemo_c::getControl()->unsuspend(1);
+}
+
+/**
+ * №171: the STB may suspend *after* the MESSAGE op in the same track. An
+ * immediate unsuspend in the adaptor can no-op (not yet suspended), then the
+ * suspend lands and freezes forever. Debounce through the poll instead.
+ */
+static bool s_demoOwesResume = false;
+static const char* s_demoOwesResumeWhy = NULL;
+
+static void dExtWw_oweDemoResume(const char* why) {
+    s_demoOwesResume = true;
+    s_demoOwesResumeWhy = why;
+}
+
+static void dExtWw_pollOwedDemoResume() {
+    if (!s_demoOwesResume) {
+        return;
+    }
+    if (dDemo_c::getControl() == NULL || !dDemo_c::getControl()->isSuspended()) {
+        return;  // wait until the STB's suspend lands
+    }
+    dExtWw_resumeDemoAfterMessage(s_demoOwesResumeWhy != NULL ? s_demoOwesResumeWhy
+                                                              : "owed resume");
+    s_demoOwesResume = false;
+    s_demoOwesResumeWhy = NULL;
+}
+
+// №171 safety: if a mapped line never draws (UI not ready) or A is stolen by
+// doors, frameNoMsg stalls with suspend==1 forever. Don't touch History's §50
+// probe — just clear the debt after a short stuck window.
+static void dExtWw_pollStuckMessageResume() {
+    static u32 s_stuckAt = 0;
+    static int s_stuckFrames = 0;
+    if (dComIfGp_event_runCheck() == 0 || dDemo_c::getControl() == NULL ||
+        !dDemo_c::getControl()->isSuspended()) {
+        s_stuckAt = 0;
+        s_stuckFrames = 0;
+        return;
+    }
+    if (dDemo_c::getControl()->getSuspend() != 1) {
+        s_stuckAt = 0;
+        s_stuckFrames = 0;
+        return;  // magnitude 100 = PLAY-finished; not our debt
+    }
+    const u32 fnm = dDemo_c::getFrameNoMsg();
+    if (fnm == s_stuckAt) {
+        ++s_stuckFrames;
+    } else {
+        s_stuckAt = fnm;
+        s_stuckFrames = 0;
+    }
+    if (s_stuckFrames >= 90) {
+        dExtWw_oweDemoResume("stuck frameNoMsg (suspend 1)");
+        s_stuckFrames = 0;
+    }
+}
+
+#if TARGET_PC_NATIVE_UI
+namespace {
+dALBWDialogue_c* s_demoDialogue = NULL;
+std::string s_demoPendingLine;
+bool s_demoLineShown = false;
+int s_demoLineShownFrames = 0;  // №171/№168: auto-resume if A never comes
+}  // namespace
+#endif
+
+void dExtWw_drawDemoMessage() {
+#if TARGET_PC_NATIVE_UI
+    // MUST be called from the DRAW pass. `registerDraw` ends in
+    // `dComIfGd_set2DOpa`, and d_s_play records that queuing from Execute is
+    // wiped every frame by BeforeOfDraw and never painted.
+    if (s_demoDialogue != NULL && s_demoDialogue->isVisible()) {
+        s_demoDialogue->registerDraw();
+    }
+#endif
+}
+
+void dExtWw_pollDemoMessage() {
+    dExtWw_pollOpeningCameraHold();  // №170: release snap/G-guard hold after awake
+    dExtWw_pollStuckMessageResume(); // №171: UI-miss / stolen-A safety (keeps §50 probe intact)
+    dExtWw_pollOwedDemoResume();     // №171: pay suspend debt once STB has suspended
+    // №169 PROBE: the opening ran ~535 storyboard frames, fired its first message,
+    // then STOPPED — no further JMSG fires, and player control returned. The
+    // G-guard is exonerated by log order (it force-ended the event that was
+    // BLOCKING us, at 6155, before our order succeeded at 6160).
+    //
+    // "It stopped" and "it ended normally" look identical from outside, so this
+    // reports the demo frame as it advances and, critically, the LAST frame
+    // reached when it stops. A demo that dies at a fixed frame every run is a
+    // different fault from one that dies at a varying frame.
+    {
+        static bool s_wasRunning = false;
+        static u32 s_lastFrame = 0;
+        const bool running = dComIfGp_event_runCheck() != 0;
+        const u32 frame = dDemo_c::getFrame();
+        if (running) {
+            if (!s_wasRunning) {
+                DuskLog.info("[ExtWw] §50 demo START (frame {})", (int)frame);
+            } else if (frame != s_lastFrame && (frame % 120) == 0) {
+                // №170: `m_frame` and `m_frameNoMsg` are DIFFERENT clocks, and the
+                // difference is the whole question. `m_frame` ticks on every
+                // forward(); `m_frameNoMsg` only advances while
+                // `getSuspend() <= 0` (d_demo.cpp:1160-1165), and the WAIT cut
+                // times off THAT one (d_event_data.cpp:807). A suspended
+                // storyboard still raises the number the first probe printed,
+                // which is exactly why it could not tell a running demo from a
+                // frozen one.
+                //
+                // gap == 0 -> storyboard time is live; a missing message is the
+                //             MESSAGE TRACK, not time.
+                // gap  > 0 -> something suspended it, and when it starts
+                //             diverging says what.
+                // №171: the MAGNITUDE decides the fix. The message system resumes
+                // with `unsuspend(1)` (d_msg_object.cpp:1412/1903); the PLAY cut
+                // instead uses `suspend(100)` when the demo has already finished
+                // (d_event_data.cpp:1311). A frozen clock looks the same either
+                // way, but 1 means "waiting on a message we suppressed" and 100
+                // means "the storyboard already ended" — opposite problems.
+                DuskLog.info("[ExtWw] §50 demo running — frame {} frameNoMsg {} (gap {}) "
+                             "suspend {}",
+                             (int)frame, (int)dDemo_c::getFrameNoMsg(),
+                             (int)(frame - dDemo_c::getFrameNoMsg()),
+                             dDemo_c::getControl() != NULL
+                                 ? (int)dDemo_c::getControl()->getSuspend()
+                                 : -999);
+            }
+            s_lastFrame = frame;
+        } else if (s_wasRunning) {
+            DuskLog.info(
+                "[ExtWw] §50 demo ENDED — last storyboard frame {}. The camera track alone "
+                "runs 1129+ frames (№165), so an end far below that is a TRUNCATION, not a "
+                "natural finish.",
+                (int)s_lastFrame);
+        }
+        s_wasRunning = running;
+    }
+#if TARGET_PC_NATIVE_UI
+    if (s_demoDialogue == NULL) {
+        return;
+    }
+    // The scene ended — never let a line outlive the demo that scheduled it.
+    if (!dComIfGp_event_runCheck() && s_demoDialogue->isVisible()) {
+        s_demoDialogue->hide();
+        s_demoLineShown = false;
+        s_demoLineShownFrames = 0;
+        s_demoPendingLine.clear();
+        // If we still owe a resume, pay it — otherwise a late abort leaves the
+        // next demo permanently suspended.
+        dExtWw_resumeDemoAfterMessage("demo ended with line up");
+        return;
+    }
+    if (!s_demoPendingLine.empty() && !s_demoLineShown) {
+        s_demoDialogue->tryCreate();
+        if (s_demoDialogue->isReady()) {
+            if (s_demoDialogue->isVisible()) {
+                // Replace: close the previous line's suspend before opening the next.
+                s_demoDialogue->hide();
+                dExtWw_resumeDemoAfterMessage("line replaced");
+            }
+            // §65 H4 probe — is the DEMO caption renderer showing text OUTSIDE
+            // a demo (i.e. intercepting mount talk)? Logs every show.
+            DuskLog.warn("[ExtNpcMount] §65 demo-caption SHOW: '{:.24}'", s_demoPendingLine);
+            s_demoDialogue->showWithText(s_demoPendingLine.c_str());
+            s_demoLineShown = true;
+            s_demoLineShownFrames = 0;
+        }
+    }
+    if (s_demoDialogue->isVisible() && s_demoLineShown) {
+        ++s_demoLineShownFrames;
+    }
+    // №172: box-state trace. Log 040928 showed the storyboard frozen at suspend 1
+    // with NO resume line from either path — so we could not tell whether the box
+    // was still up (auto-resume should have fired), already hidden (dismiss fired
+    // and swallowed the debt), or never shown at all. Those need different fixes,
+    // and silence looks identical for all three.
+    if (dComIfGp_event_runCheck() && (s_demoLineShownFrames % 60) == 0 &&
+        (s_demoDialogue->isVisible() || s_demoLineShown || !s_demoPendingLine.empty())) {
+        DuskLog.info("[ExtWw] §51 box state — visible={} shown={} frames={} pending='{}' "
+                     "owes={} suspend={}",
+                     s_demoDialogue->isVisible() ? 1 : 0, s_demoLineShown ? 1 : 0,
+                     (int)s_demoLineShownFrames, s_demoPendingLine.c_str(),
+                     s_demoOwesResume ? 1 : 0,
+                     dDemo_c::getControl() != NULL
+                         ? (int)dDemo_c::getControl()->getSuspend()
+                         : -999);
+    }
+    if (s_demoDialogue->isVisible() && s_demoDialogue->checkDismiss()) {
+        s_demoDialogue->hide();  // early dismiss: allowed, never required
+        s_demoLineShown = false;
+        s_demoLineShownFrames = 0;
+        s_demoPendingLine.clear();
+        // №171: RESUME THE STORYBOARD — this is the contract I broke in №166.
+        //
+        // The engine SUSPENDS the storyboard when a demo message goes up, and
+        // the message system resumes it on close with exactly this call
+        // (d_msg_object.cpp:1412 and :1903). By suppressing the native box I
+        // removed the resume without removing the suspend, so `m_frameNoMsg`
+        // froze at 640 and never moved again: the scene ran on visually while
+        // its own clock stood still, and 11 of 12 messages never fired.
+        //
+        // Taking over the display means taking over the whole contract, not
+        // just the visible half. Guarded so we only ever resume a storyboard
+        // that is actually suspended — never push the counter negative and
+        // break a demo that was legitimately paused for something else.
+        // №172: OWE the resume, never pay-or-forget.
+        //
+        // This branch used to call resumeDemoAfterMessage() and then clear the
+        // debt. But that call silently returns when `!isSuspended()`, and the
+        // STB may suspend AFTER the MESSAGE op in the same track — the very race
+        // the owe mechanism exists for. If checkDismiss() fires on the same frame
+        // the box opens (page-build yields no text, or a stale A trigger is
+        // pending), we hid the box, no-op'd the resume, and then cleared the
+        // debt. The suspend landed a frame later with nobody owing a resume, and
+        // the storyboard froze at suspend 1 forever — which is exactly what
+        // log 040928 shows: box up, clock stuck at 640, no resume line at all.
+        //
+        // Owing is idempotent and the poll only pays once actually suspended, so
+        // this can never over-resume. Debt is cleared by PAYMENT, never by having
+        // attempted it.
+        DuskLog.info("[ExtWw] §51 dialogue dismissed (input) after {} frames — owing resume",
+                     (int)s_demoLineShownFrames);
+        dExtWw_oweDemoResume("dialogue dismissed");
+    } else if (s_demoDialogue->isVisible() && s_demoLineShown) {
+        // №168: A is never required. Log 040047 shows the player mashing door
+        // A while our box was up — checkDismiss never fired, clock stayed
+        // frozen, camera pan fought the free player cam. Auto-resume after a
+        // short readable beat so the storyboard (and its camera) continue.
+        // Debounce via owe so we don't race the STB's suspend landing.
+        constexpr int kAutoResumeFrames = 90;  // ~1.5s @60
+        if (s_demoLineShownFrames >= kAutoResumeFrames) {
+            s_demoDialogue->hide();
+            s_demoLineShown = false;
+            s_demoLineShownFrames = 0;
+            s_demoPendingLine.clear();
+            dExtWw_oweDemoResume("auto-resume (A never required)");
+        }
+    }
+#endif
+}
+
+bool dExtWw_handleDemoMessage(u32 donorMsgId) {
+    if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        return false;  // receiver scenes: native behaviour, untouched
+    }
+    // §87: donor message-tied CharVoice — SE 0x481F + port clip from package map.
+    // 0x359 sound=0 stays silent by donor design. Map rides voice/manifest.ini.
+    ExtSeq::ja1Voice_onDemoMessageOpen(donorMsgId);
+    loadDemoMessageMap();
+    const auto it = s_demoMsgLines.find(donorMsgId);
+    if (it != s_demoMsgLines.end() && !it->second.empty()) {
+        DuskLog.info("[ExtWw] §49 demo message {} (0x{:X}) -> \"{}\"", (int)donorMsgId,
+                     (int)donorMsgId, it->second);
+#if TARGET_PC_NATIVE_UI
+        if (s_demoDialogue == NULL) {
+            s_demoDialogue = JKR_NEW dALBWDialogue_c();
+        }
+        if (s_demoDialogue != NULL) {
+            s_demoPendingLine = it->second;
+            s_demoLineShown = false;  // the poll shows it next frame, in phase
+        }
+#endif
+    } else {
+        // Mapped-but-blank counts as unmapped: the seeded file ships every id
+        // with an empty value so the ids are visible for authoring.
+        DuskLog.info(
+            "[ExtWw] §49 demo message {} (0x{:X}) suppressed — no line authored. The "
+            "receiver's string at this index is unrelated text and must not show (№31).",
+            (int)donorMsgId, (int)donorMsgId);
+        // №171: suppression still owes the resume — the STB suspends for this
+        // paragraph. No box means nothing will dismiss; debounce via poll so we
+        // unsuspend after the suspend actually lands (not before).
+        dExtWw_oweDemoResume("suppressed (no authored line)");
+    }
+    return true;  // suppress the native display either way
+}
+
+// §47: the donor cast's lighting recipe, applied to the PLAYER in donor spaces.
+//
+// Derived from this project's own tuned values rather than picked by eye:
+//   * donor NPCs / BG render at a FIXED (90,90,90) with NO MAJI (manifest
+//     amb=5a5a5a, applyModelAmbient)
+//   * donor ITEMS render at a fixed warm (105,78,48), also no MAJI
+//   * the player renders through MAJI on env ambient, measured (36,24,59)
+//
+// Two things follow. The item warm is WRONG for him — the mount already records
+// that 105/78/48 "was the №14 orange bloom on skin/cloth", and the player is
+// skin and cloth. And a brightness multiplier was the wrong lever entirely: his
+// ambient is already LOWER than the cast's while he reads far brighter, so the
+// light is coming from the MAJI path the cast never runs.
+//
+// Hence: pin his ambient to the cast's neutral 90 and skip MAJI, which is the
+// same recipe the codebase already uses to make a model sit in the donor look.
+bool dExtWw_applyPlayerDonorLook(J3DModel* model, dKy_tevstr_c* tevStr) {
+    if (model == NULL || tevStr == NULL) {
+        return false;
+    }
+    if (!dusk::getSettings().game.wwPlayerDonorLook.getValue()) {
+        return false;  // default: untouched
+    }
+    if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        return false;  // receiver areas: never reached
+    }
+    // №162: pinning ambient alone only got HALFWAY, and the reason is visible in
+    // the cast's own draw (see the mount's execute path). The cast does TWO things:
+    //
+    //     g_env_light.settingTevStruct(0, &pos, &tevStr);   // <-- repopulate ALL of it
+    //     ... override AmbCol ...
+    //
+    // `settingTevStruct` rewrites the WHOLE tevStr at light-type 0 — light colours,
+    // Color0/K0, fog — not just ambient. The first cut of this function skipped it
+    // and pinned AmbCol onto a tevStr the ALINK draw had already filled with the
+    // PLAYER's much hotter light-type values. So his ambient matched the cast while
+    // his diffuse did not: matched on one channel, unchanged on the rest. That is
+    // precisely "it did something, but only halfway".
+    //
+    // Running the same call the cast runs is what closes the gap. It is the cast's
+    // recipe applied whole, rather than a brightness number picked to compensate.
+    {
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        if (player != NULL) {
+            g_env_light.settingTevStruct(0, &player->current.pos, tevStr);
+        }
+    }
+
+    GXColor amb;
+    amb.r = 90;  // 0x5a — the cast's own manifest value
+    amb.g = 90;
+    amb.b = 90;
+    amb.a = 255;
+    tevStr->AmbCol.r = amb.r;
+    tevStr->AmbCol.g = amb.g;
+    tevStr->AmbCol.b = amb.b;
+    tevStr->AmbCol.a = amb.a;
+    applyModelAmbient(model, amb);
+    return true;  // caller SKIPS MAJI
 }
 
 void dExtNpcMount_onStageReady() {
     // №94: every play-scene Create tears down actors — bump so spawn latches re-arm.
     const char* stage = dComIfGp_getStartStageName();
     dExtWw_wireFadoCrossing(stage);
-    dExtWw_orderOpening(stage);
+    // Re-arm on every stage change; the poll above does the actual ordering
+    // once the player exists.
+    if (stage != NULL && std::strcmp(stage, "F_DL01") == 0) {
+        s_openingWaitFrames = 0;
+        if (dExtWw_openingAlreadyDone()) {
+            // №254: re-entry after interior must NOT re-arm the order gate.
+            s_openingOrdered = true;
+            dExtWw_clearOpeningCameraState();
+            DuskLog.info(
+                "[ExtWw] №254 F_DL01 re-entry — '{}' set, opening will not re-order",
+                kOpeningDoneFlag);
+        } else {
+            // №170: pending defers snap only. Do NOT arm G-guard hold here — that
+            // blocked residual clear and left awake deferred forever (log 035311).
+            s_openingOrdered = false;
+            s_openingPending = true;
+            s_openingCameraHold = false;
+            s_openingSawDemo = false;
+            s_openingHoldFrames = 0;
+            DuskLog.info("[ExtWw] №170 opening snap-pending on F_DL01 (G-guard still free)");
+        }
+    } else if (stage != NULL) {
+        s_openingOrdered = false;
+        s_openingWaitFrames = 0;
+        dExtWw_clearOpeningCameraState();
+    }
     char reason[48];
     if (stage != NULL && s_worldGenStage[0] != '\0' &&
         std::strcmp(stage, s_worldGenStage) == 0) {
@@ -4609,6 +6024,17 @@ void dExtNpcMount_onStageReady() {
     }
     // №83: re-bind room-lane procs for the stage we just entered (R_DL01 etc.).
     syncRoomLaneForCurrentStage();
+    // §97b/§101: arm shore foam on WW field hosts; load package calm map.
+    // flatInter polarity (donor pair): 0=calm/usonami ON, 1=chop/usonami OFF.
+    if (stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage)) {
+        dKy_usonami_set(0.0f);
+        dKyw_wave_calm_onStage(stage);
+        DuskLog.info("[WwFoam] §97b/§101 usonami armed on '{}'", stage);
+    } else {
+        g_env_light.mWaveChan.mWaveCount = 0;
+        g_env_light.mWaveChan.mWaveFlatInter = 1.0f;
+        dKyw_wave_calm_onStage(NULL);
+    }
     // №84: remount exterior after native stage change; release door demo lock.
     tryStageExitRemount();
     dExtNpcMount_endDoorDemoLock();
@@ -4827,6 +6253,9 @@ void dExtNpcMount_pollBgWarps() {
     pollPendingRoomLaneMount();
     // №84: exterior remount may arm before player exists in onStageReady.
     tryStageExitRemount();
+    // №155: the opening needs the player to exist, which is not true at
+    // stage-ready. Poll for it here until it lands (self-latching).
+    dExtWw_orderOpening(dComIfGp_getStartStageName());
     // №90: population + exit knob for WW-host BG mounts (COMPLEATE may precede player).
     tryInteriorBootstrap();
     // №94: empty-world net — latched but no live actors after soft reload.
@@ -5165,6 +6594,16 @@ void dExtNpcMount_endDoorDemoLock() {
 }
 
 void dExtNpcMount_forceEndDoorEvent(const char* reason) {
+    // №170: never truncate awake after it has ordered. Residual + pre-order
+    // G-guard must still clear the busy slot that blocks the order (№169).
+    if (dExtWw_openingPauseArrivalGuard() &&
+        (s_openingSawDemo ||
+         (reason != NULL && std::strcmp(reason, "arrival-G-guard") == 0))) {
+        DuskLog.info(
+            "[ExtNpcMount] №170 refuse force-end ({}) — awake hold active",
+            reason != NULL ? reason : "?");
+        return;
+    }
     dExtNpcMount_endDoorDemoLock();
     fopAc_ac_c* player = dComIfGp_getPlayer(0);
     if (player != NULL) {
@@ -5198,6 +6637,30 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             return cPhs_ERROR_e;
         }
 
+        // №164: stamp the CENSUS IDENTITY here, at the mount, not at the spawn.
+        //
+        // №163 set `argument` in our own `fopAcM_create` call and the bind STILL
+        // failed, which proves the actor does not arrive through that call. It
+        // cannot: the mount's whole design is that an actor of the SOCKET proc
+        // mounts a manifest, and such actors are also placed by the stage's own
+        // ACTR data — where `argument` comes from the placement byte
+        // (`d_stage.cpp:1620`), not from us. One spawn path was patched; the
+        // other was never touched.
+        //
+        // The mount is the single point EVERY mounted actor passes through no
+        // matter how it was created, so the identity belongs here. Without it
+        // `fopAcM_findObjectCB` (proc AND argument) cannot match, and the whole
+        // mounted roster stays unfindable by census name.
+        //
+        // Arg stays EXACT (Ls1=5, Ob1=7, Ko1=8 share the HENNA0 proc). Widening
+        // it to -1 would "fix" the lookup by matching whichever islander came
+        // first — the identity-swap class of №126/№129.
+        if (i_this->mManifest.socketArg >= 0) {
+            i_this->argument = (s8)i_this->mManifest.socketArg;
+            DuskLog.debug("[ExtNpcMount] №164 census identity '{}' argument={}", procName,
+                          (int)i_this->argument);
+        }
+
         // №24 D2: BG payloads require explicit anchor= (never invent 0).
         if (i_this->mManifest.isBg && !i_this->mManifest.hasAnchor) {
             DuskLog.warn("[ExtNpcMount] create '{}' refused — BG missing anchor=", procName);
@@ -5219,6 +6682,14 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
         }
 
         i_this->mpBtp = NULL;
+        i_this->mpBlink = NULL;      // №188
+        i_this->mBlinkBound = false;
+        i_this->mDemoFaceActive = false;  // №194
+        i_this->mDemoFaceFrame = 0.0f;    // №196
+        i_this->mpDemoBtk = NULL;         // №197
+        i_this->mDemoBtkBound = false;
+        i_this->mDemoBtkLast = 0xFFFFFFFF;
+        i_this->mDemoBtkFrame = 0.0f;
         i_this->mpCompanion = NULL;
         i_this->mpBrk = NULL;
         i_this->mpColorBtk = NULL;
@@ -5241,6 +6712,8 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
         i_this->mCcReady = false;
         i_this->mTalkEventActive = false;
         i_this->mTalkFrames = 0;
+        i_this->mPresentDemoItemNo = -1;  // №251: no pending get-item handoff
+        i_this->mDemoOwned = false;       // №250: demo-pose select flag
         i_this->mCloseCooldown = 0;
         i_this->mOrbitPhase = 0;
         i_this->mHeadVariant = 0;
@@ -5441,6 +6914,39 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
         updateBgTransform(i_this);
         if (!i_this->mBgGlobal) {
             i_this->mpBgW->Move();
+        } else {
+            // №256 / №265: daBg sets PRIORITY_0 + setBgW(room); it does NOT
+            // SetRoomId (default 0xFF → GetRoomId falls through to GetGrpRoomId).
+            // Stamping actor room when that room is the keep-slot 0 poisons Link's
+            // underfoot room → event manager room-keyed packs (awake, doors) all
+            // resolve -1. Always stamp the HOST room (Outset exterior = 44).
+            const int roomNo = resolveIdentityBgHostRoom(i_this);
+            if (roomNo > 0 && roomNo < 0x40) {
+                if (fopAcM_GetRoomNo(i_this) != (s8)roomNo) {
+                    fopAcM_SetRoomNo(i_this, (s8)roomNo);
+                    i_this->home.roomNo = (s8)roomNo;
+                }
+                i_this->mpBgW->SetRoomId(roomNo);
+                dBgW_Base* prev = dStage_roomControl_c::getBgW(roomNo);
+                if (prev != NULL && prev != i_this->mpBgW) {
+                    if (prev->ChkUsed()) {
+                        dComIfG_Bgsp().Release(prev);
+                    }
+                    DuskLog.info(
+                        "[ExtNpcMount] №257 released stub room{} BgW — mount '{}' owns "
+                        "collision",
+                        roomNo, procName);
+                }
+                dStage_roomControl_c::setBgW(roomNo, i_this->mpBgW);
+                DuskLog.info("[ExtNpcMount] №265 SetRoomId({}) host for '{}'", roomNo,
+                             procName);
+            } else {
+                // Leave m_roomId=0xFF (grp-room fallback). Never SetRoomId(0).
+                DuskLog.warn(
+                    "[ExtNpcMount] №265 no host room for '{}' actorRoom={} — leave "
+                    "BgW roomId=0xFF",
+                    procName, (int)fopAcM_GetRoomNo(i_this));
+            }
         }
         i_this->mBgReady = true;
         if (i_this->mpBgModels[0] != NULL) {
@@ -5593,8 +7099,10 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
     }
 
     // №47-A: force idle start on every lane (heap may have bound NULL if N3 once refused).
-    if (!i_this->mManifest.isStatic && i_this->mManifest.idle[0]) {
-        setMountAnimation(i_this, i_this->mManifest.idle, J3DFrameCtrl::EMode_LOOP);
+    // №262: attach-aware — a mount still carrying its flag-gated prop starts
+    // in the carry idle (Grandma: hold.bck until ba.clothes_given).
+    if (!i_this->mManifest.isStatic && mountIdleBck(i_this)[0]) {
+        setMountAnimation(i_this, mountIdleBck(i_this), J3DFrameCtrl::EMode_LOOP);
     }
 
     commitCreateCacheTrack();
@@ -5617,7 +7125,19 @@ int dExtNpcMount_delete(dExtNpcMount_c* i_this) {
             wwSkyReleaseUser();
         }
         // №100: drop collision + draw refs before releasing the arc cache.
+        // №257: clear room slot if we claimed it (daBg destructor does the same).
         if (i_this->mpBgW != NULL) {
+            if (i_this->mBgGlobal) {
+                // Prefer the room we stamped on the BgW; fall back to host resolve.
+                int roomNo = i_this->mpBgW->GetRoomId();
+                if (roomNo <= 0 || roomNo >= 0x40 || roomNo == 0xFF) {
+                    roomNo = resolveIdentityBgHostRoom(i_this);
+                }
+                if (roomNo > 0 && roomNo < 0x40 &&
+                    dStage_roomControl_c::getBgW(roomNo) == i_this->mpBgW) {
+                    dStage_roomControl_c::setBgW(roomNo, NULL);
+                }
+            }
             dComIfG_Bgsp().Release(i_this->mpBgW);
             i_this->mpBgW = NULL;
         }
@@ -5641,6 +7161,59 @@ int dExtNpcMount_delete(dExtNpcMount_c* i_this) {
         dComIfG_resDelete(&i_this->mPhase, i_this->mManifest.arc);
     }
     return 1;
+}
+
+// ============================================================================
+// №219 — attach placement, shared by the normal path AND the demo branch.
+// ============================================================================
+// The demo branch (№173) rightly owns the actor and returns before the normal
+// path's tail — but that tail was the ONLY place attaches were placed and
+// calc'd. Result: during a storyboard, a held prop froze at its create-time
+// base matrix (the actor's spawn point) and only looked attached again once
+// gameplay resumed. Both paths now call this after body/companion modelCalc,
+// so slave CBs pull FRESH host joint matrices in cutscenes too.
+// №49/№50: slave attach → parent-compose CBs; door visual → base@DoorDummy.
+// №218: non-slave joint attach composes jointMtx × T(offs) × R(rot).
+// ============================================================================
+static void dExtNpcMount_placeAttachments(dExtNpcMount_c* i_this) {
+    if (i_this->mpMorf == NULL || i_this->mpMorf->getModel() == NULL) {
+        return;
+    }
+    J3DModel* body = i_this->mpMorf->getModel();
+    J3DModel* companion =
+        i_this->mpCompanion != NULL ? i_this->mpCompanion->getModel() : NULL;
+    for (int i = 0; i < i_this->mAttachCount; ++i) {
+        if (i_this->mpAttach[i] == NULL) {
+            continue;
+        }
+        if (!mountAttachLive(i_this, i)) {  // №262: retired by its flag
+            continue;
+        }
+        J3DModel* host =
+            (i_this->mAttachOnCompanion[i] && companion != NULL) ? companion : body;
+        if (host == NULL) {
+            continue;
+        }
+        if (i_this->mAttachSlave[i]) {
+            i_this->mpAttach[i]->setBaseTRMtx(host->getBaseTRMtx());
+        } else if (i_this->mAttachJnt[i] >= 0) {
+            if (i_this->mAttachLocal[i]) {
+                // №250: demo-pose variant while the storyboard owns this mount.
+                const bool useDemo = i_this->mDemoOwned && i_this->mAttachDemoLocal[i];
+                const cXyz& off = useDemo ? i_this->mAttachOffsDemo[i] : i_this->mAttachOffs[i];
+                const cXyz& rot = useDemo ? i_this->mAttachRotDemo[i] : i_this->mAttachRot[i];
+                mDoMtx_stack_c::copy(host->getAnmMtx((u16)i_this->mAttachJnt[i]));
+                mDoMtx_stack_c::transM(off.x, off.y, off.z);
+                mDoMtx_stack_c::XYZrotM((s16)rot.x, (s16)rot.y, (s16)rot.z);
+                i_this->mpAttach[i]->setBaseTRMtx(mDoMtx_stack_c::get());
+            } else {
+                i_this->mpAttach[i]->setBaseTRMtx(host->getAnmMtx((u16)i_this->mAttachJnt[i]));
+            }
+        } else {
+            i_this->mpAttach[i]->setBaseTRMtx(host->getBaseTRMtx());
+        }
+        i_this->mpAttach[i]->calc();
+    }
 }
 
 int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
@@ -5676,6 +7249,322 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
         }
         return 1;
     }
+    // №173: WHILE THE STORYBOARD DRIVES THIS ACTOR, IT OWNS THE ACTOR.
+    //
+    // The cast now BINDS (№164) and the storyboard's animation ids resolve
+    // against our ported arc (№167: JACT 'Ls1' -> 0x10043/0x10045 ->
+    // 47_ls_bwait_l.bck / 47_ls_kyoro_l.bck). But binding only gives the demo a
+    // `dDemo_actor_c` to write into — SOMETHING has to read it back, and nothing
+    // did. That is why the cast stands still at its authored spot through its own
+    // cutscene: the storyboard was animating a record no one applied.
+    //
+    // `dDemo_setDemoData` is that read-back (d_demo.cpp:334). It copies trans /
+    // rotate / scale off the demo actor and, given a morf, resolves the animation
+    // by RESOURCE INDEX out of the demo archive and plays it. Flags mirror the
+    // engine's own generic demo actor (d_a_demo00 uses 0x2A and 0x8E); we want
+    // the full set since we pass a morf:
+    //   TRANS|SCALE|ROTATE|ANM|ANM_FRAME|ANM_TRANSITION = 0xEE
+    //
+    // It returns 0 when this actor is not a demo performer, so the call doubles
+    // as the test — no separate demoActorID check that could drift out of sync.
+    //
+    // RETURNING EARLY IS THE POINT, not an optimisation: ground snap, the orbit
+    // walk and the talk logic below all write `current.pos`/animation, and every
+    // one of them would fight the storyboard for the same fields. A demo-driven
+    // actor must have exactly one author.
+    // №174: TRACE, because №173 shipped blind and "she still does not move" was
+    // ambiguous three ways: code not in the build / not a performer / performer
+    // but the storyboard enabled none of the fields we asked for. Those need
+    // completely different fixes and looked identical on screen.
+    //
+    // `checkEnable(mask)` returns the INTERSECTION of what we requested with what
+    // the storyboard has actually set, so printing it against our 0xEE says
+    // exactly which of trans/rot/scale/anm the demo is really driving.
+    if (dComIfGp_event_runCheck() && (g_Counter.mCounter0 % 60) == 0) {
+        dDemo_actor_c* da = dDemo_c::getActor(i_this->demoActorID);
+        // Also print where the storyboard WANTS this actor. The user reports the
+        // cast never enters the scene at all — no porch start, no beach run — so
+        // the question is not only "is anything driving her" but "driving her
+        // WHERE". This directly tests the №165 `OffsetPos` thread, still open:
+        // `dDemo_c::start()` receives our merged event's offset (-220000, 0,
+        // 320000) while the island sits near -195000. A target ~25,000 units off
+        // means the demo is staging the cast into open ocean, which would look
+        // exactly like "she never appears".
+        cXyz want(0.0f, 0.0f, 0.0f);
+        if (da != NULL) {
+            want = da->getTrans();
+        }
+        DuskLog.info("[ExtWw] §52 demo read-back '{}' demoActorID={} actor={} enables=0x{:02X} "
+                     "(asked 0xEE) at=({:.0f},{:.0f},{:.0f}) demoWants=({:.0f},{:.0f},{:.0f})",
+                     i_this->mManifest.proc, (int)i_this->demoActorID,
+                     da != NULL ? "bound" : "NONE",
+                     da != NULL ? (int)da->checkEnable(0xFF) : 0, i_this->current.pos.x,
+                     i_this->current.pos.y, i_this->current.pos.z, want.x, want.y, want.z);
+    }
+    // №181: FLAGS COME FROM THE DONOR'S OWN ACTOR, not from my reasoning.
+    //
+    // I picked 0xEE at №173 by arguing "we pass a morf, so enable everything".
+    // The donor's Aryll (`d_a_npc_ls1.cpp daNpc_Ls1_c::demo()`) does:
+    //
+    //     dDemo_setDemoData(this, 106, mpMorf, mArcName, 0, NULL,
+    //                       dBgS_GetGndMtrlSndId_Func(current.pos, 10.0f),
+    //                       dComIfGp_getReverb(fopAcM_GetRoomNo(this)));
+    //
+    // 106 = 0x6A = TRANS|ROTATE|ANM|ANM_FRAME. It deliberately does NOT set
+    // SCALE (4) or ANM_TRANSITION (128) — the two bits I added.
+    //
+    // SCALE is almost certainly why the cast was invisible: with ENABLE_SCALE_e
+    // set, setDemoData assigns `i_actor->scale = demo_actor->getScale()`, and a
+    // storyboard that never authors a scale hands back (0,0,0). A zero-scaled
+    // model draws nothing — which is exactly "she is never there", and it also
+    // explains why every position probe read correct while the screen stayed
+    // empty. ANM_TRANSITION is separately unwanted: it writes `i_actor->gravity`.
+    //
+    // Reverb is the donor's too. The donor also passes a ground-material sound id
+    // (`dBgS_GetGndMtrlSndId_Func`), which the receiver has no direct equivalent
+    // for — its `GetMtrlSndId` wants a `cBgS_PolyInfo`. Passing 0 costs correct
+    // footstep material SFX and NOTHING ELSE; it is not part of the visibility
+    // fix, and is left as a known, scoped gap rather than faked.
+    const s8 reverb = dComIfGp_getReverb(fopAcM_GetRoomNo(i_this));
+    if (dDemo_setDemoData(i_this, 106, i_this->mpMorf, i_this->mManifest.arc, 0, NULL, 0,
+                          reverb)) {
+        // №177: the storyboard drives `current.pos`; THIS is what makes it visible.
+        //
+        // №173's early return was right about ownership and wrong about scope. It
+        // stopped the competing WRITES below (ground snap, orbit, talk) — correct
+        // — but it also skipped the `setBaseTRMtx` at the end of this function,
+        // which is the only place `current.pos` becomes a rendered position. So
+        // the cast walked the entire route logically while their models stayed
+        // pinned to the last matrix they were handed.
+        //
+        // The §52 trace is what proved it: `at=` and `demoWants=` agreed exactly
+        // and swept -204886 -> -201778 -> -200440 (y~138, beach level) -> -195400
+        // (y=1650, lookout) — the porch/beach/hill route — while the user watched
+        // her stand still. Logical position and drawn position had diverged, and
+        // only the log could show that.
+        //
+        // Skipping a competing author must not mean skipping the bookkeeping the
+        // engine still needs from us.
+        const f32 ds = i_this->scale.x;
+        mDoMtx_stack_c::transS(i_this->current.pos.x, i_this->current.pos.y,
+                               i_this->current.pos.z);
+        mDoMtx_stack_c::YrotM(i_this->shape_angle.y);
+        mDoMtx_stack_c::scaleM(ds, ds, ds);
+        MtxP demoBase = mDoMtx_stack_c::get();
+        i_this->mpMorf->getModel()->setBaseTRMtx(demoBase);
+
+        // №184: `modelCalc()` IS WHAT MAKES THE BASE MATRIX REAL.
+        //
+        // Setting `setBaseTRMtx` only records where the model SHOULD be.
+        // `modelCalc()` is what recomputes the joint/world matrices the renderer
+        // actually draws from — and the donor says so plainly: `daNpc_Ls1_c::setMtx`
+        // does `setBaseScale` -> `setBaseTRMtx` -> **`mpMorf->calc()`** in that
+        // order, every frame.
+        //
+        // Our normal path calls `modelCalc()` at what is now line ~6626, AFTER the
+        // early return this branch takes. So a demo-driven actor had its base
+        // matrix updated and its joints never recomputed — it rendered with STALE
+        // joint matrices, i.e. exactly where it was last calculated: the lookout.
+        //
+        // That is why every probe read correct and the screen disagreed. Position,
+        // scale, matrix and draw were all measuring the model's INTENT; the joints
+        // were still describing the old pose. It also explains the user's sharpest
+        // clue — her placement shifting slightly only AFTER the cutscene, when the
+        // normal path resumed and finally calc'd the final demo position.
+        //
+        // Same defect class as №177: the early return was right to suppress
+        // competing writers and wrong to drop the bookkeeping the engine needs.
+        // That is TWICE from one `return`, which is the argument for mirroring the
+        // donor's call sequence instead of hand-picking which parts to keep.
+        dDemo_actor_c* demoActor = dDemo_c::getActor(i_this->demoActorID);
+
+        // №194: (the №186 `mTexAnm`/`ENABLE_TEX_ANM` block was removed here — it
+        // watched the wrong channel and never fired for Ls1, proven by the §54
+        // probe. The demo face is driven below from the prm/getDemoIDData channel.)
+
+        // №194: DRIVE THE DEMO FACE from the prm channel.
+        //
+        // The §54 probe (№193) settled the unknowns: the prm channel is live for
+        // the performer, and each frame carries facial entries tagged triple
+        // (0,0,1) — a BTP resID (e.g. 0x39 = 47_ls_bwait_l.btp) and a BTK resID
+        // (0x4F). Critically they resolve from the DEMO ARCHIVE (Demo02), NOT the
+        // actor's own arc — the probe's `arcRes=null` against Ls.arc proved that,
+        // and Demo02 index 0x39 IS that btp.
+        //
+        // So: drain getDemoIDData (file-static iterator — one full while-loop
+        // resets it), and for each facial entry resolve the pattern from the demo
+        // arc and bind it to the mount's BTP. The donor's demo() does exactly
+        // this via getP_BtpData(mArcName) — same data, its own arc name.
+        //
+        // BLINK ARBITRATION (the №192 conflict, resolved donor-faithfully): while
+        // a demo face is active, the demo BTP owns the eye materials — the idle
+        // blink (№188) is SUPPRESSED for the frame so the two never fight. The
+        // demo idle face (`bwait`) carries its own blink, so nothing is lost.
+        bool demoFaceActive = false;
+        if (demoActor != NULL && demoActor->checkEnable(dDemo_actor_c::ENABLE_UNK_e)) {
+            const char* demoArc = dStage_roomControl_c::getDemoArcName();
+            int a0, a1, a2;
+            u16 resID;
+            int guard = 0;
+            bool gotBtp = false;  // №196: the FIRST (0,0,1) entry is the BTP
+            bool gotBtk = false;  // №197: the SECOND (0,0,1) entry is the BTK
+            const bool logNow = (g_Counter.mCounter0 % 30) == 0;
+            // №203 round-4 probe: collect the FULL per-beat texture set so the
+            // laugh beat (garbled mouth) can be correlated. Symptom is SHAPE (pink
+            // SQUARE not ovular), not colour (round 3 cleared the palette decode),
+            // so the question is which texture/UV the mouth gets and whether its
+            // BTK is applied. Logged once per BTP-resID CHANGE (each beat), with
+            // each entry's resolved resource SIZE (a byte size distinguishes a
+            // BTP vs BTK vs BCK, and 0 = not resident).
+            struct { int a0, a1, a2; u16 id; u32 sz; } s_prmDump[16];
+            int s_prmN = 0;
+            u16 s_firstBtp = 0;
+            const u32 prevBtp = i_this->mDemoTexAnmLast;  // №203: detect beat change
+            while (demoActor->getDemoIDData(&a0, &a1, &a2, &resID, NULL) != 0) {
+                if (++guard > 32) {
+                    break;
+                }
+                if (s_prmN < 16) {
+                    void* r = dComIfG_getObjectIDRes(
+                        dStage_roomControl_c::getDemoArcName(), resID);
+                    s_prmDump[s_prmN].a0 = a0;
+                    s_prmDump[s_prmN].a1 = a1;
+                    s_prmDump[s_prmN].a2 = a2;
+                    s_prmDump[s_prmN].id = resID;
+                    s_prmDump[s_prmN].sz = r != NULL ? 1u : 0u;  // resident?
+                    if (a0 == 0 && a1 == 0 && a2 == 1 && s_firstBtp == 0) {
+                        s_firstBtp = resID;
+                    }
+                    s_prmN++;
+                }
+                // Facial entries are tagged (0,0,1). The prm channel emits TWO per
+                // frame with the same triple: the BTP (e.g. 0x39) FIRST, then the
+                // BTK (0x4F). №194 mistakenly bound BOTH as BTP — loading a BTK
+                // through a BTP init thrashes the eye material every frame, which
+                // is the "rapid double-blinking". Take only the first as the BTP;
+                // the BTK (secondary texture-SRT) is left for a later pass.
+                if (a0 == 0 && a1 == 0 && a2 == 1 && !gotBtp) {
+                    gotBtp = true;
+                    J3DAnmTexPattern* pat =
+                        (J3DAnmTexPattern*)dComIfG_getObjectIDRes(demoArc, resID);
+                    if (pat != NULL) {
+                        if (resID != i_this->mDemoTexAnmLast) {
+                            if (i_this->mpBtp == NULL) {
+                                i_this->mpBtp = JKR_NEW mDoExt_btpAnm();
+                            }
+                            // EMode_NONE: we own the frame (play-once-hold below),
+                            // NOT a loop — looping re-blinks bwait continuously.
+                            if (i_this->mpBtp != NULL &&
+                                i_this->mpBtp->init(i_this->mpMorf->getModel()->getModelData(),
+                                                    pat, 1, J3DFrameCtrl::EMode_NONE, 1.0f, 0,
+                                                    -1) != 0) {
+                                i_this->mBtpBound = true;
+                                i_this->mDemoTexAnmLast = resID;
+                                i_this->mDemoFaceFrame = 0.0f;  // new expression: replay once
+                                if (logNow) {
+                                    DuskLog.info(
+                                        "[ExtWw] §54 demo face '{}' BTP resID=0x{:X} (re)bound",
+                                        i_this->mManifest.proc, (int)resID);
+                                }
+                            }
+                        }
+                        demoFaceActive = true;
+                    } else if (logNow) {
+                        DuskLog.info("[ExtWw] §54 demo face '{}' resID=0x{:X} not in demo arc",
+                                     i_this->mManifest.proc, (int)resID);
+                    }
+                } else if (a0 == 0 && a1 == 0 && a2 == 1 && gotBtp && !gotBtk) {
+                    // №197: SECOND (0,0,1) entry = the BTK (texture SRT). Shapes the
+                    // open-mouth/tongue texture into the mouth — without it the raw
+                    // texture renders as a black+pink square (user report during the
+                    // telescope beat). Donor pairs BTP+BTK per expression.
+                    gotBtk = true;
+                    J3DAnmTextureSRTKey* srt =
+                        (J3DAnmTextureSRTKey*)dComIfG_getObjectIDRes(demoArc, resID);
+                    if (srt != NULL) {
+                        if (resID != i_this->mDemoBtkLast) {
+                            if (i_this->mpDemoBtk == NULL) {
+                                i_this->mpDemoBtk = JKR_NEW mDoExt_btkAnm();
+                            }
+                            if (i_this->mpDemoBtk != NULL &&
+                                i_this->mpDemoBtk->init(i_this->mpMorf->getModel()->getModelData(),
+                                                        srt, 1, J3DFrameCtrl::EMode_NONE, 1.0f, 0,
+                                                        -1) != 0) {
+                                i_this->mDemoBtkBound = true;
+                                i_this->mDemoBtkLast = resID;
+                                i_this->mDemoBtkFrame = 0.0f;
+                            }
+                        }
+                    }
+                }
+            }
+            // №203: dump the full prm set ONCE per beat (when the BTP resID
+            // changed this frame). Each line shows every (arg-triple, resID,
+            // resident?) so the laugh beat's texture set is visible, plus which
+            // resID became BTP vs BTK and whether the BTK bound. Tells: is the
+            // mouth's shaping BTK present at this beat, or is it a BTP-only frame
+            // whose texture shows unshaped (square)?
+            if (s_firstBtp != 0 && s_firstBtp != prevBtp) {
+                DuskLog.info("[ExtWw] §56 BEAT '{}' frame={} n={} BTP=0x{:X} BTK=0x{:X} "
+                             "btkBound={}",
+                             i_this->mManifest.proc, (int)dDemo_c::getFrame(), s_prmN,
+                             (int)s_firstBtp, (int)i_this->mDemoBtkLast,
+                             i_this->mDemoBtkBound ? 1 : 0);
+                for (int k = 0; k < s_prmN; ++k) {
+                    DuskLog.info("[ExtWw] §56   [{}] arg=({},{},{}) resID=0x{:X} resident={}", k,
+                                 s_prmDump[k].a0, s_prmDump[k].a1, s_prmDump[k].a2,
+                                 (int)s_prmDump[k].id, (int)s_prmDump[k].sz);
+                }
+            }
+        }
+
+        i_this->mDemoFaceActive = demoFaceActive;  // draw reads this
+        // №196: advance play-ONCE-and-hold, donor play_btp_anm (non-blink branch):
+        // ++ to frameMax then hold. The expression plays through once when set and
+        // then holds — no continuous re-blink. A new expression resets the frame
+        // (above), so each face plays exactly once.
+        if (demoFaceActive && i_this->mBtpBound && i_this->mpBtp != NULL) {
+            const f32 fmax = i_this->mpBtp->getEndFrame();
+            i_this->mDemoFaceFrame += 1.0f;
+            if (i_this->mDemoFaceFrame >= fmax) {
+                i_this->mDemoFaceFrame = fmax;  // hold on the final frame
+            }
+            i_this->mpBtp->setFrame(i_this->mDemoFaceFrame);
+        }
+        // №197: BTK advances the same way — play once, hold.
+        if (demoFaceActive && i_this->mDemoBtkBound && i_this->mpDemoBtk != NULL) {
+            const f32 fmax = i_this->mpDemoBtk->getEndFrame();
+            i_this->mDemoBtkFrame += 1.0f;
+            if (i_this->mDemoBtkFrame >= fmax) {
+                i_this->mDemoBtkFrame = fmax;
+            }
+            i_this->mpDemoBtk->setFrame(i_this->mDemoBtkFrame);
+        }
+        // While the demo owns the face, DO NOT run the idle blink — it would
+        // clobber the demo expression (both write the same eye materials).
+        if (!demoFaceActive) {
+            dExtNpcMount_driveBlink(i_this);  // №188: idle blink between demo faces
+        }
+        i_this->mpMorf->modelCalc();
+        if (i_this->mpCompanion != NULL && i_this->mpCompanion->getModel() != NULL) {
+            i_this->mpCompanion->getModel()->setBaseTRMtx(demoBase);
+            i_this->mpCompanion->modelCalc();
+        }
+        // №219: attaches must ride the storyboard too — place them off the
+        // matrices the demo just computed, or a held prop freezes at spawn.
+        i_this->mDemoOwned = true;  // №250: demo pose variant selects
+        dExtNpcMount_placeAttachments(i_this);
+
+        if (i_this->mpBgW != NULL && i_this->mBgReady) {
+            mDoMtx_stack_c::transS(i_this->current.pos.x, i_this->current.pos.y,
+                                   i_this->current.pos.z);
+            mDoMtx_stack_c::YrotM(i_this->current.angle.y);
+            MTXCopy(mDoMtx_stack_c::get(), i_this->mBgMtx);
+            i_this->mpBgW->Move();
+        }
+        return 1;
+    }
+
     tryGroundSnapSanity(i_this);
 
     // №27 N6: simple seagull orbit around authored home (no AI arc — folder-side motion).
@@ -5705,6 +7594,12 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
     if (i_this->mCloseCooldown > 0) {
         --i_this->mCloseCooldown;
     }
+    // №263: one-shot present motion finished → back to the state-aware idle
+    // (post-give the attach flag is set, so this lands on the plain idle).
+    if (i_this->mPresentAnimActive && i_this->mpMorf != NULL && i_this->mpMorf->isStop() != 0) {
+        i_this->mPresentAnimActive = false;
+        setMountAnimation(i_this, mountIdleBck(i_this), J3DFrameCtrl::EMode_LOOP);
+    }
     if (i_this->mTalking) {
         ++i_this->mTalkFrames;
         // №33: keep native talk-event lock alive while the window is up (postman pattern).
@@ -5712,23 +7607,39 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
             dMeter2Info_onGameStatus(2);
         }
 #if TARGET_PC_NATIVE_UI
-        if (s_mountDialogue == NULL || !s_mountDialogue->isVisible() ||
-            s_mountDialogue->checkDismiss() || i_this->mTalkFrames >= 1800) {
+        // ====================================================================
+        // №248 — native flow poll. doFlow returns nonzero when the current box
+        // completes. Section ADVANCE re-inits the flow directly — the speak
+        // event is NOT released between boxes (the old close-then-begin reset
+        // the event after box 1, which is exactly why only the first box ever
+        // locked Link, №242/№247). The event releases ONCE, at the true end.
+        // ====================================================================
+        if (s_mountFlow.doFlow(i_this, NULL, 0) != 0 || i_this->mTalkFrames >= 1800) {
+            // №252: remaining PAGES of the current section come first — same
+            // held speak event, next page injected, no section change.
+            if (s_mountPageIdx < s_mountPages.size() && i_this->mTalkFrames < 1800) {
+                s_mountFlow.initWord(i_this, s_mountPages[s_mountPageIdx].c_str(), 0xFF, 0, NULL);
+                ++s_mountPageIdx;
+            } else {
             char pendingNext[64];
             std::snprintf(pendingNext, sizeof(pendingNext), "%s", i_this->mDialogueNext);
-            const bool wasEvent = i_this->mTalkEventActive;
-            closeMountDialogue(i_this);
-            if (pendingNext[0] != '\0') {
+            if (pendingNext[0] != '\0' && i_this->mTalkFrames < 1800) {
                 std::snprintf(i_this->mDialogueSection, sizeof(i_this->mDialogueSection), "%s",
                               pendingNext);
                 i_this->mDialogueNext[0] = '\0';
-                i_this->mCloseCooldown = 0;
-                beginMountDialogue(i_this, wasEvent);
+                const bool wasEvent = i_this->mTalkEventActive;
+                if (!beginMountDialogue(i_this, wasEvent)) {
+                    closeMountDialogue(i_this);
+                    std::snprintf(i_this->mDialogueSection, sizeof(i_this->mDialogueSection),
+                                  "%s", i_this->mManifest.dialogueKey);
+                }
             } else {
+                closeMountDialogue(i_this);
                 // Next talk starts at the manifest entry key (else=/gates re-evaluate).
                 std::snprintf(i_this->mDialogueSection, sizeof(i_this->mDialogueSection), "%s",
                               i_this->mManifest.dialogueKey);
             }
+            }  // №252: end of pages-exhausted branch
         }
 #else
         closeMountDialogue(i_this);
@@ -5750,11 +7661,18 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
             // Prefer checkCommandTalk; TrigA only orders the speak event (no orphan window).
             i_this->eventInfo.onCondition(dEvtCnd_CANTALK_e);
             if (i_this->eventInfo.checkCommandTalk()) {
+                // §65 H9 probe — which entry path the talk takes (talk command
+                // vs TrigA speak-order fallback) decides the event's actor
+                // arrangement; log both so the caption-vs-box diff is pinned.
+                DuskLog.warn("[ExtNpcMount] §65 talk-entry: checkCommandTalk ({})",
+                             i_this->mManifest.proc);
                 beginMountDialogue(i_this, /*fromEvent=*/true);
             } else if (player != NULL &&
                        (player->current.pos - i_this->current.pos).absXZ() < 160.0f &&
                        mDoCPd_c::getTrigA(PAD_1) != 0 &&
                        (i_this->attention_info.flags & fopAc_AttnFlag_SPEAK_e) != 0) {
+                DuskLog.warn("[ExtNpcMount] §65 talk-entry: TrigA speak-order fallback ({})",
+                             i_this->mManifest.proc);
                 fopAcM_orderSpeakEvent(i_this, 0, 0);
             }
         }
@@ -5789,6 +7707,7 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
     if (i_this->mBtpBound && i_this->mpBtp != NULL) {
         i_this->mpBtp->play();
     }
+    dExtNpcMount_driveBlink(i_this);  // №188: idle blink (non-demo path)
     i_this->mpMorf->modelCalc();
     if (i_this->mNeckJnt >= 0) {
         fopAc_ac_c* player = dComIfGp_getPlayer(0);
@@ -5824,28 +7743,8 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
             i_this->mpCompanion->modelCalc();
         }
     }
-    J3DModel* body = i_this->mpMorf->getModel();
-    J3DModel* companion =
-        i_this->mpCompanion != NULL ? i_this->mpCompanion->getModel() : NULL;
-    // №49/№50: slave attach → parent-compose CBs; door visual → base@DoorDummy only.
-    for (int i = 0; i < i_this->mAttachCount; ++i) {
-        if (i_this->mpAttach[i] == NULL) {
-            continue;
-        }
-        J3DModel* host =
-            (i_this->mAttachOnCompanion[i] && companion != NULL) ? companion : body;
-        if (host == NULL) {
-            continue;
-        }
-        if (i_this->mAttachSlave[i]) {
-            i_this->mpAttach[i]->setBaseTRMtx(host->getBaseTRMtx());
-        } else if (i_this->mAttachJnt[i] >= 0) {
-            i_this->mpAttach[i]->setBaseTRMtx(host->getAnmMtx((u16)i_this->mAttachJnt[i]));
-        } else {
-            i_this->mpAttach[i]->setBaseTRMtx(host->getBaseTRMtx());
-        }
-        i_this->mpAttach[i]->calc();
-    }
+    i_this->mDemoOwned = false;  // №250: gameplay pose variant
+    dExtNpcMount_placeAttachments(i_this);
     return 1;
 }
 
@@ -5863,6 +7762,59 @@ static u8 clampAmbChannel(int base, f32 wregOffset) {
 int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
     if (i_this == NULL) {
         return 1;
+    }
+    // №178: DRAW-SIDE probe. §52 covers EXECUTE only, and execute is now proven
+    // correct — bound, enables 0xFF, `at` == `demoWants` == -204886, and №177 sets
+    // the base matrix from it. Yet the cast reads as unmoved on screen.
+    //
+    // Execute being right while the screen disagrees leaves exactly two options,
+    // and §52 cannot tell them apart: either draw is NOT RUNNING for this actor
+    // during the demo (culled, torn down, or skipped upstream), or it runs and the
+    // model is drawn somewhere other than `current.pos`. This says which.
+    //
+    // Silence from this line during a demo == draw never happened, which is itself
+    // the answer.
+    // №183: log EVERY mount of this proc, bound or not, with its INSTANCE POINTER.
+    //
+    // `MODELmtx` came back -204886 — the model's real render matrix is at the
+    // porch — while the user sees Aryll on the lookout. Those cannot both be the
+    // same object, so there is a second Aryll-shaped thing and my "one actor"
+    // claim was wrong.
+    //
+    // The old gate (`demoActorID != 0`) is exactly why I never saw it: it only
+    // ever logged the BOUND performer, so an unbound duplicate standing at the
+    // lookout was invisible to the probe that was supposed to find it. Two
+    // distinct pointers on the same frame proves the duplicate; one pointer means
+    // the second figure is drawn by something that is not a mount at all.
+    if (dComIfGp_event_runCheck() && (g_Counter.mCounter0 % 60) == 0) {
+        // №179: read the MODEL'S OWN matrix, not `current.pos`.
+        //
+        // Everything so far has traced the actor's logical position and it has
+        // been correct at every checkpoint — bound, enables 0xFF, `at` ==
+        // `demoWants` == -204886, draw running, not culled, morf present. The
+        // screen still disagrees, so the remaining suspect is the last link
+        // nobody has actually looked at: the matrix the RENDERER uses.
+        //
+        // `getBaseTRMtx()[*][3]` is the translation column actually handed to
+        // J3D. If it reads -204886 the model is genuinely drawn at the porch and
+        // the figure at the lookout is not this actor. If it reads -195205 then
+        // something resets the matrix between №177 setting it in execute and the
+        // draw consuming it — and THAT is the bug, not the position.
+        f32 mx = 0.0f, my = 0.0f, mz = 0.0f;
+        if (i_this->mpMorf != NULL && i_this->mpMorf->getModel() != NULL) {
+            Mtx& bm = i_this->mpMorf->getModel()->getBaseTRMtx();
+            mx = bm[0][3];
+            my = bm[1][3];
+            mz = bm[2][3];
+        }
+        DuskLog.info("[ExtWw] §53 demo DRAW '{}' ptr={} id={} arg={} unloading={} isBg={} "
+                     "morf={} scale=({:.2f},{:.2f},{:.2f}) at=({:.0f},{:.0f},{:.0f}) "
+                     "MODELmtx=({:.0f},{:.0f},{:.0f})",
+                     i_this->mManifest.proc, (void*)i_this, (int)i_this->demoActorID,
+                     (int)i_this->argument, roomLaneMountIsUnloading(i_this) ? 1 : 0,
+                     i_this->mIsBg ? 1 : 0, i_this->mpMorf != NULL ? 1 : 0, i_this->scale.x,
+                     i_this->scale.y, i_this->scale.z, i_this->current.pos.x,
+                     i_this->current.pos.y, i_this->current.pos.z, mx, my, mz);
     }
     // №68: skip draw while room handles are being torn down.
     if (roomLaneMountIsUnloading(i_this)) {
@@ -5932,6 +7884,15 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
     if (i_this->mBtpBound && i_this->mpBtp != NULL) {
         i_this->mpBtp->entry(model->getModelData());
     }
+    // №194: idle blink only when the demo is NOT driving the face — otherwise it
+    // would overwrite the demo expression (entered last = wins per material).
+    if (i_this->mBlinkBound && i_this->mpBlink != NULL && !i_this->mDemoFaceActive) {
+        i_this->mpBlink->entry(model->getModelData());  // №188
+    }
+    // №197: demo BTK (texture SRT) — shapes the open-mouth/tongue texture.
+    if (i_this->mDemoBtkBound && i_this->mpDemoBtk != NULL && i_this->mDemoFaceActive) {
+        i_this->mpDemoBtk->entry(model->getModelData());
+    }
     if (i_this->mpBrk != NULL) {
         i_this->mpBrk->entry(model->getModelData());
     }
@@ -5953,12 +7914,13 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
     if (drawController) {
         i_this->mpMorf->entryDL();
     }
-    if (i_this->mpCompanion != NULL && i_this->mpCompanion->getModel() != NULL) {
+    if (i_this->mpCompanion != NULL && i_this->mpCompanion->getModel() != NULL &&
+        !i_this->mManifest.companionHidden) {  // №249: mounted but not presented
         applyModelAmbient(i_this->mpCompanion->getModel(), amb_col);
         i_this->mpCompanion->entryDL();
     }
     for (int i = 0; i < i_this->mAttachCount; ++i) {
-        if (i_this->mpAttach[i] != NULL) {
+        if (i_this->mpAttach[i] != NULL && mountAttachLive(i_this, i)) {  // №262
             applyModelAmbient(i_this->mpAttach[i], amb_col);
             i_this->mpAttach[i]->entry();
         }
@@ -6431,6 +8393,82 @@ void dExtNpcMount_pollIdentifyProbe() {
                  info.censusName[0] ? info.censusName : "-", info.proc, info.socketArg,
                  info.headModel[0] ? info.headModel : "-",
                  info.displayName[0] ? info.displayName : "-");
+}
+
+// §95 — mount cull probe (ride-along with §97b). Env DUSK_CULL_PROBE=1.
+void dExtNpcMount_pollCullProbe() {
+    static bool s_enabledChecked = false;
+    static bool s_enabled = false;
+    static int s_heartbeat = 0;
+    if (!s_enabledChecked) {
+        s_enabledChecked = true;
+        const char* env = std::getenv("DUSK_CULL_PROBE");
+        s_enabled = env != NULL && env[0] == '1';
+        if (s_enabled) {
+            DuskLog.info("[CullProbe] §95 enabled (DUSK_CULL_PROBE=1)");
+        }
+    }
+    if (!s_enabled) {
+        return;
+    }
+
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+
+    struct CullCtx {
+        const cXyz* playerPos;
+        int heartbeat;
+        int logged;
+    } ctx{&player->current.pos, s_heartbeat, 0};
+
+    fopAcIt_Executor(
+        [](void* actor, void* data) -> int {
+            fopAc_ac_c* ac = (fopAc_ac_c*)actor;
+            CullCtx* c = (CullCtx*)data;
+            if (ac == NULL || !dExtNpcMount_isMountActor(ac)) {
+                return 0;
+            }
+            dExtNpcMount_c* m = (dExtNpcMount_c*)ac;
+            // Prefer static props / trees (BG mounts use huge boxes already).
+            if (m->mIsBg) {
+                return 0;
+            }
+            const f32 dx = ac->current.pos.x - c->playerPos->x;
+            const f32 dz = ac->current.pos.z - c->playerPos->z;
+            if ((dx * dx + dz * dz) > (5000.0f * 5000.0f)) {
+                return 0;
+            }
+
+            const bool culled = fopAcM_cullingCheck(ac) != 0;
+            // Per-actor edge memory: stash prior in unused attention bit via static map keyed by id.
+            static std::unordered_map<u32, bool> s_wasCulled;
+            const u32 id = (u32)fopAcM_GetID(ac);
+            const bool prev = s_wasCulled.count(id) ? s_wasCulled[id] : false;
+            s_wasCulled[id] = culled;
+
+            const bool edge = culled && !prev;
+            const bool beat = (c->heartbeat % 600) == 0 && culled;
+            if (!edge && !beat) {
+                return 0;
+            }
+
+            dExtNpcIdentifyInfo info{};
+            dExtNpcMount_queryActor(ac, &info);
+            DuskLog.warn(
+                "[CullProbe] {} proc={} census={} box=({:.0f},{:.0f},{:.0f})→({:.0f},{:.0f},{:.0f}) "
+                "far={:.2f} pos=({:.0f},{:.0f},{:.0f})",
+                edge ? "CULLED" : "still", info.proc[0] ? info.proc : "?",
+                info.censusName[0] ? info.censusName : "-", ac->cull.box.min.x, ac->cull.box.min.y,
+                ac->cull.box.min.z, ac->cull.box.max.x, ac->cull.box.max.y, ac->cull.box.max.z,
+                fopAcM_getCullSizeFar(ac), ac->current.pos.x, ac->current.pos.y, ac->current.pos.z);
+            c->logged++;
+            return 0;
+        },
+        &ctx);
+
+    ++s_heartbeat;
 }
 
 // --- №81 EXTENSION-FIRST: native save write refuse ---------------------------------

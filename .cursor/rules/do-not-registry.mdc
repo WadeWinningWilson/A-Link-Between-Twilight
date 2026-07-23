@@ -1,0 +1,21 @@
+---
+description: Hard-stop registry — permanently rejected approaches with cascading blast radius
+alwaysApply: true
+---
+
+# ⛔ DO-NOT registry (hard stops)
+
+**Before touching BG/collision registration, room identity, or any surface
+named in [docs/DO-NOT.md](../../docs/DO-NOT.md): read the matching entry.**
+
+- Entries are **permanent rejections**, not advice. Each documents a confirmed
+  incident: the failure mechanism, the blast radius, and the sanctioned path.
+- The failure class these guard is **invisible at the change site and loud
+  everywhere else** — your own test will not show you the breakage.
+- **No AI instance may self-approve an exception.** If you believe your case
+  is genuinely different, write it up against the entry's mechanism
+  point-by-point and get an explicit user go first.
+
+Current entries: **DN-1** — never `SetRoomId(0)`/keep-slot/guessed room on
+standable geometry (poisons the player's room → every room-keyed subsystem
+fails: stage events, doors, camera; №256 incident).

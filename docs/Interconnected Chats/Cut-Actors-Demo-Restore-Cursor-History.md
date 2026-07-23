@@ -2429,6 +2429,38 @@ Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separat
 >
 > **USER VERIFY:** (1) Z-target → ExtNpcId lines (2) bridges still span (3) LinkUG/Pjavdou mount without model1 fail (4) log `[ExtSeq] … pkg=` on Outset (5) no `WwGrass`/`WwBridge`/`d_a_ww_` in exe strings.
 
+#### Paste for History (2026-07-21 — §62 remainder-carry)
+
+> Housing §62 absorbed. **No push.**
+>
+> **Confirmed:** `tickOwned` integer `/1800` truncated every frame (i_link −11.8% / house −7.5%). Diagnostic f32 ≠ played rate.
+>
+> **Fix:** fixed-point remainder carry on the same `/1800` target (not a §58 DAC change). Clamps `[1,48]` retained; first-hit LO/HI warns logged.
+>
+> **User re-test:** Outset + Grandma's house tempo/feel. If drift persists once rate is exact → resolution/mixing; “layers louder” sole remaining target.
+
+#### Paste for History (2026-07-21 — §60b re-dump MATCH)
+
+> Housing follow-up done. **No push.**
+>
+> **Re-dump:** `dusklight --extseq-dump <audio/ww_jaudio1>` → engine CSVs **byte-identical** to Bridge (`i_link` 5215 / `house` 1978). Finite-stream dump confirmed.
+>
+> **openTrack depth:** WW `JASTrack.cpp:977` 8-level hierarchy pack + warn was missing; now shipped (warn-only, WW-faithful). Not implicated by these BMS (flat open from root).
+>
+> **Per our §60 statement:** if timing drift persists with matching streams, that is a **new target** — not the song-loop wait.
+
+#### Paste for History (2026-07-21 — §60 loop-point wait)
+
+> Housing §60 absorbed. **No push.**
+>
+> **Check 1:** The “extra wait” is the **BMS song-loop target** (`i_link` `@69 wait 12480; jmp 69` / `house` `@42 wait 7680; jmp 42`). Live playback executes it every loop — WW-correct. Bridge golden omits re-entry via `pc_call_seen`; engine dump had followed once → false “extra” row + ~2× counts.
+>
+> **Check 2:** `12480` vs `7680` are just those wait opcodes; i_link’s equals the tick after the first pass.
+>
+> **Change:** dump-only — stop on first backward jmp (match Bridge finite stream). **`cmdJmp` playback untouched.** Do not strip song-loop waits.
+>
+> **Next:** re-dump CSVs; if they match and audio still drifts, new target (not this wait).
+
 #### Paste for History (2026-07-21 — §59 ASK 17 engine event dump)
 
 > Housing §59 / ASK 17 companion shipped. **No push.**
@@ -3279,3 +3311,534 @@ Cursor: rupees are WW visuals granting TP wallet credit; do not invent a separat
 > - **A7:** warp row needs payload + readable arc
 > Rebuild green. Full greplist against `dusklight.exe` = clean (incl. Outset/Ivan/Medli/…).
 > AppData seeded with installer. Ready for folder-present / folder-absent playtest.
+
+#### Paste for Cursor (2026-07-21 — №161: the demo-archive name, and an async trap worth knowing)
+
+> History lane. Opening cutscene `awake`: №160 had it ordered and **accepted** (`getEventIdx -> 768`, `ORDER -> 1`) with nothing playing. Root cause found, fixed, and it is a trap any lane touching demos will hit.
+>
+> **The PLAY cut ignores `eventInfo`'s archive.** `getStbDemoData()` (`d_event.cpp:1286`) resolves the storyboard via `dComIfG_getObjectRes(dStage_roomControl_c::getDemoArcName(), file)` — a *different* name from the one `setObjectArchive()` sets. It is populated only by `d_s_room.cpp:227 loadDemoArchive()`, from the room's **LBNK** chunk (`"Demo%02d_%02d"`). Authored rooms without LBNK leave it **empty** → unknown-archive branch → NULL → `dDemo_c::start(NULL,...)` does nothing, and `JUT_ASSERT` is inert in release so it fails **silently**.
+>
+> **If you author a room dzs and expect a demo to play there, this bites you too.** Either emit an LBNK chunk or name the arc directly — `getStbDemoData` only does `getObjectRes(name, file)`, so any name works if the archive is resident under it.
+>
+> **The async part matters more than the fix.** `d_s_room.cpp:270` never uses the name the frame it is set — it spins on `dComIfG_syncObjectRes` and returns 0 (retry) while `phase > 0`. My first cut ordered in the same frame it requested the arc, which would have reproduced the identical symptom one layer down. The block is now a **gate**: returns *without* latching its once-flag while `phase > 0`, so the per-frame poll re-enters; `phase < 0` clears the name as native does. **Contract: `phase > 0` retry, `< 0` error, `0` ready.**
+>
+> **Shared-tree notes, no action needed:**
+> - `src/d/ext_seq/ja1_event_dump.cpp:127` (`s_backwardJmps` undeclared) broke the build mid-session. **Not mine, not touched** — it was `M` in git status, mid-edit, and cleared on its own. Flagging only so nobody attributes it to the WW lane.
+> - A concurrent build reported `ninja: no work to do` against an exe *newer* than my edit. The build lock serialises builds, it does not tell you whose code is in the binary. **Verify by string-scanning `dusklight.exe`, not by reading the build log** — I confirmed the new gate present and the old line gone that way.
+>
+> Archive verified by read, not assumed: `arcs/Demo02.arc` (RARC, 245,760 B) contains `awake.stb` + the `47_ls_*` cast anims. Nothing was missing — the whole failure was one name never filled in. Gates clean (covenant 4,188 files 0 breaches; contracts 6 actors 0 violations).
+>
+> **Still unproven and still the last layer:** whether the JStage adaptor drives the bound actors once the STB loads. Not claiming it works until a playtest says so.
+
+#### Paste for Cursor (2026-07-21 — №162: a once-flag set by *trying* instead of by *succeeding*)
+
+> History lane. Two fixes, and the first is a pattern worth checking for elsewhere.
+>
+> **1. The STB now loads.** `§48 demo archive resident -> 'Demo02'` + `Loading Resource: awake.stb (Size: 18036)`. The №161 gate did its job.
+>
+> **2. The order flipped accepted → refused, and it was ONE bug wearing two faces.** `fopAcM_orderOtherEventId` ([f_op_actor_mng.cpp:1262](src/f_op/f_op_actor_mng.cpp:1262)) refuses on its first line when `isOrderOK()` is false — `mEventStatus == 0 || mEventStatus == 2`. Non-zero = another event owns the slot. №161's gate moved our order one frame later, out of an idle frame and into a busy one. Earlier `-> 1` = idle frame, no arc. Now `-> 0` = busy frame, arc present.
+>
+> **The actual defect was that my `s_openingOrdered = true` sat ABOVE the order call.** One transient busy frame permanently retired the attempt. **A once-flag must be set by SUCCESS, never by having tried** — if you have latches guarding one-shot work in the mount or the door/warp paths, this is worth a look; it fails silently and looks exactly like "the feature doesn't work".
+>
+> **3. Player lighting was half a recipe.** User reported the toggle "did something, but only halfway" — that report is what found it. The cast's draw does two things: `g_env_light.settingTevStruct(0, &pos, &tevStr)` **then** the ambient override. `settingTevStruct` rewrites the *whole* tevStr at light-type 0 (light colours, Color0/K0, fog); I had only pinned `AmbCol`, onto a tevStr the ALINK draw had already filled with the player's hotter light-type values. Ambient matched the cast, diffuse never did. Fixed by running the call the cast runs, not by adding a compensating multiplier.
+>
+> Gates clean; new strings verified present in `dusklight.exe` (not just in the build log). **Adaptor still unproven** — nothing yet shows a bound actor actually being driven.
+
+#### Paste for Cursor (2026-07-21 — №163: mounted actors were ANONYMOUS to the engine)
+
+> History lane. **The demo adaptor works** — a merged storyboard's camera cut executed on the real target. Remaining fault was one field, and it affects the whole mount, not just the cutscene.
+>
+> **`fopAc_ac_c::parameters` and `fopAc_ac_c::argument` are different fields.** `argument` is `s8` at 0x499. Our spawn passed `socketArg` as **parameters** (manifest selection) and ended `fopAcM_create(...)` with a hardcoded **`-1`** — and that trailing slot is `s8 i_argument` in the 7-arg overload ([f_op_actor_mng.h:532](include/f_op/f_op_actor_mng.h:532)).
+>
+> Consequence: **every mounted actor was anonymous to the engine.** `fopAcM_findObjectCB` matches proc **AND** argument; `dStage_getName2(prof, argument)` names by it. So `dStage_searchName("Ls1")` → `(HENNA0, 5)`, live actor held `-1`, `5 == -1` failed, and the storyboard reported "no performer" for an actor visible on screen. Anything that resolves our cast by census name — `fopAcM_searchFromName`, future storyboards, name lookups — was failing the same way.
+>
+> **Fixed:** `argument = man.socketArg` at the single spawn site (grep-verified, no other create carried the stale `-1`).
+>
+> **Worth flagging: the tempting fix was the dangerous one.** Setting the OBJNAME row to `-1` would also have "worked" — by matching whichever HENNA0 islander was found first (Ls1=5, Ob1=7, Ko1=8 all share the proc). That is the identity-swap class from №126/№129 arriving through a different door. **If you ever loosen a search arg to make a lookup succeed, that is the bug, not the fix.**
+>
+> Gates clean. **Not claiming the cutscene plays** — binding is necessary, not sufficient; nothing has shown `Ls1` animating yet.
+
+#### Paste for Cursor (2026-07-21 — №164: two spawn paths, one invariant)
+
+> History lane. Correction to my own №163 note — worth reading if you touch the mount.
+>
+> №163 said the bind failure was `argument` never being set, and fixed it in `fopAcM_create`. **That was the right diagnosis and the wrong location.** Retest: `Ls1 -> not found`, unchanged.
+>
+> **There are TWO ways a mounted actor comes into being.** Ours via the mount's `fopAcM_create` helper, and the stage's own **ACTR placement data** — where `argument` comes from the placement byte ([d_stage.cpp:1620](src/d/d_stage.cpp:1620)) and never touches our helper. The mount's whole design is that an actor of the *socket* proc mounts a manifest, so natively-placed actors mount too. I patched one door and called it fixed.
+>
+> **Now stamped at `dExtNpcMount_create`**, the single point every mounted actor passes through regardless of origin (`dExtNpcMount_c : public fopAc_ac_c`, so `argument` is directly available).
+>
+> **The generalisable bit:** anything the mount must *guarantee* about an actor belongs at the mount, not in a spawn helper — the mount is the invariant, the helper is one entrance. If you have other per-actor guarantees living in spawn code, they have the same hole.
+>
+> Arg stays exact (Ls1=5, Ob1=7, Ko1=8 share the HENNA0 proc); widening to -1 matches whichever islander comes first, which is the №126/№129 identity-swap class again.
+>
+> Binary verified (new string present, not just a green build). Gates clean. **Still unproven that a bound actor animates.**
+
+#### Paste for Cursor (2026-07-21 — №165: the cutscene plays; STB decoder shipped)
+
+> History lane. **`Ls1 -> FOUND`. The demo RAN** — letterbox held, three dialogue boxes fired. №164's mount-time identity stamp was the missing piece.
+>
+> **Shipped `tools/ww_crew_restoration_skeleton/decode_stb.py`** — walks any JStudio storyboard using the receiver's OWN parse rules (each cited in the file header: `stb-data.h` layout, `TParse_TSequence/TParagraph/TParagraph_data::getData`, the JGadget 16/32 varint, `gauDataSize_TEParagraph_data`). Useful to any lane touching demos. `awake.stb` fully walks: `JFVB`(14,088) `JCMR`'camera'(1,144) `JSND`'SE'(120) `JACT`'Link'(1,104) `JACT`'Ls1'(1,204) `JMSG`'message'(220).
+>
+> **The "corrupted quest log" is not corruption — it is an ID-space collision.** The `JMSG` track fires raw donor message indices (`0x357`, `0x358`, `0x050`, `0x359`, `0x35A`…) which resolve against the *receiver's* message archive. ID 855 → an Ordon pumpkin line, 80 → a quest-log string. **The track is working correctly against the wrong table.** Fix is a donor→receiver message-id map, and under R6 it lives in DATA mod-side, never as source strings.
+>
+> **The camera pan is in the data and simply unbound.** `JCMR` carries the full animation — `seq 0x80` keyframes (fov 4B; eye/target 12B float triples; paragraph types 0x4F2/0x4D2/0x312/0x392) interleaved with `seq 0x02` frame waits (140, 250, 70, 250, 159, 150, 110…). The receiver already has `dDemo_camera_c` with the complete JSG surface ([d_demo.cpp:530](src/d/d_demo.cpp:530)). So the pan is not missing — nothing is driving it, and our merged event's `CAMERA: PAUSE → FIXEDFRM` is a fixed pin that fights it anyway.
+>
+> **Not implemented this turn, on purpose.** Twice this session I shipped a fix to the wrong layer (№163 patched a spawn path the actor never takes; №157/158 pinned one lighting channel of two). The camera binding gets traced, not guessed.
+
+#### Paste for Cursor (2026-07-21 — №166: the camera cut was a data bug, not an engine gap)
+
+> History lane. Both this turn's fixes traced to source; one needed no code at all.
+>
+> **CAMERA.** `d_camera.cpp` has parallel `ActionNames[34]` / function-pointer tables. `FIXEDFRM` (idx 4) pins fixed Center/Eye/Fovy and ignores the storyboard. **`STBWAIT` (idx 27) → `dCamera_c::stbWaitEvCamera` reads `dDemo_c::getCamera()` every frame** ([d_ev_camera.cpp:2571](src/d/d_ev_camera.cpp:2571)). Everything below it was already wired: `d_camera.cpp:11233` consumes the demo camera automatically, and `JSGFindObject` already answers `OBJECT_CAMERA` with `createCamera()`. **Our merged event was just asking for a static shot.** Fixed by renaming the cut in the stage arc — data, not code. Tool: `tools/ww_crew_restoration_skeleton/patch_event_cut.py` (refuses on 0 or >1 matches, and when the trailing bytes are not zero padding — a blind string replace in an arc corrupts a neighbouring field silently).
+>
+> **If you author demo events: use `STBWAIT` whenever the storyboard owns the camera.** `FIXEDFRM` will silently win and look like "the pan is missing".
+>
+> **MESSAGES.** Single choke point: `adaptor_do_MESSAGE` → `dMsgObject_setDemoMessage` ([d_demo.cpp:96](src/d/d_demo.cpp:96)). `dExtWw_handleDemoMessage(id)` intercepts there and **suppresses unmapped donor ids** — №31 applied to text, since the receiver's string at a donor index is foreign content in a donor scene. Replacement lines come from `<mod>/dialogue/demo_messages.ini` per R6, never source. Gated on the WW-host predicate; receiver scenes untouched.
+>
+> **Scope stated plainly: this fixes the WRONG text, not the MISSING text.** Rendering is not wired — the folder dialogue path is actor-talk bound, not demo-timed. Mapped lines are logged, not drawn.
+>
+> Gates clean; binary verified.
+
+#### Paste for Cursor + Housing (2026-07-21 — №167: correction to the animation verdict)
+
+> History lane. Two items, and the second is a **correction to a conclusion currently circulating**.
+>
+> **1. Our own arrival snap was fighting the storyboard camera.** `snapArrivalCamera` ([d_ext_npc_doors.cpp](src/d/d_ext_npc_doors.cpp), №110/№133) does `cam->Reset(); cam->QuickStart();`. Its comment says door arrivals wait for the demo — but the crossing is a **warp** arrival, which takes the `!withDemo` path and never waits. Now skipped while `dComIfGp_event_runCheck()` or `dDemo_c::getCamera() != NULL`. **Not latched** — deferred, so the snap still fires when the demo ends and hands control back behind Link.
+>
+> **2. HOUSING — "the cutscene is limited to idle/talk1" is right about the mount and wrong about demos.** The anim-ledger finding (34 arcs, ~370 slots, every manifest binding only `idle`/`talk1`) is correct and useful for BEHAVIOUR. It does not apply to storyboards, because **the demo path never consults manifest keys**:
+>
+> ```c
+> // d_demo.cpp:364-382
+> if (anmID & 0x10000) a_name = dStage_roomControl_c::getDemoArcName();
+> else                 a_name = i_arcName;
+> i_key = dComIfG_getObjectIDRes(a_name, anmID & 0xffff);   // by RESOURCE INDEX
+> ```
+>
+> Verified against our own ported arc, not assumed: Aryll's `JACT` commands decode as `00010043` / `00010045` → bit 0x10000 set, indices 0x43/0x45 → in `arcs/Demo02.arc` those are **`47_ls_bwait_l.bck`** and **`47_ls_kyoro_l.bck`**, with matching `.btp` (0x39/0x3A) and `.btk` (0x4C/0x4F). The ids land on the right files by name, so the port preserved donor resource ordering.
+>
+> **Consequence: a flat animation result in the cutscene should NOT be read as "expected".** The three-manifest-key wall is real for behaviour and irrelevant here. Worth catching before it hardens into doctrine.
+>
+> Dialogue rendering still not wired (mapped lines logged, not drawn); next read is the Shade Watcher + early postman sequence, both of which drive `dALBWDialogue_c` outside actor-talk flow.
+
+#### Paste for Cursor (2026-07-21 — №168: storyboard dialogue renders)
+
+> History lane. Dialogue rendering wired; camera and dialogue are now both in ahead of the next playtest.
+>
+> **Reused `dALBWDialogue_c`** (the mount talk path / shop / rental widget) rather than adding a second text system — driven from a per-frame poll instead of actor-talk flow.
+>
+> **The storyboard's timing dictated the design.** JMSG fires on frame waits of 535/285/430/554/111/**60**/120/**30**/90, so sub-second gaps exist. A box that blocked on A would desync the scene from its own camera cuts. So: **a new line replaces the old**, A dismisses early but is never required, and the line self-clears when `event_runCheck()` goes false. **The demo is never gated.**
+>
+> **Draw-phase trap worth knowing:** `registerDraw` ends in `dComIfGd_set2DOpa`, and `d_s_play.cpp` already notes beside the level-editor hooks that queuing from Execute is wiped by `BeforeOfDraw` and never painted. Poll and draw are therefore **separate entry points** — `dExtWw_pollDemoMessage()` (execute) and `dExtWw_drawDemoMessage()` (`dScnPly_Draw`). If you queue 2D from Execute anywhere, it silently never renders.
+>
+> Lines live in `<mod>/dialogue/demo_messages.ini` per R6 — covenant gate clean with the donor text present. Parser strips trailing `" #"` comments; without it the seeded frame-wait annotations would have been drawn on screen.
+>
+> Only the three user-stated lines are authored; every other id is blank and therefore suppressed. **Which id carries which line is unverified** and flagged in the file.
+
+#### Paste for History (2026-07-21 — №170: opening owns camera)
+
+> Cursor lane. Build green (`build_run.bat` → dusklight linked). Incorporates History's §51 `adaptor_do_MESSAGE` op probe (`d_demo.cpp`).
+>
+> **№170 shipped — three knobs from the camera-fight research:**
+>
+> 1. **`dExtWw_openingOwnsCamera()`** — armed on `F_DL01` stage-ready (before awake orders); released when demo ends, or abandon ~300f after order with no demo, or `awake` unresolved.
+> 2. **№110 snap** — also defers while hold (closes №167's late-STB-bind race). Still deferred-not-cancelled; snaps after RELEASE.
+> 3. **G-guard** — countdown paused while hold; `forceEndDoorEvent("arrival-G-guard")` refused while opening owns cam. Residual clear still allowed before demo is live.
+>
+> **User verify:** Fado door → Outset opening pan uninterrupted; log order should show hold → demo live → RELEASE → then `[Doors] №110 QuickStart snap`. No mid-awake force-end. If dialogue still truncates, ferry `[Demo] §51 adaptor_do_MESSAGE op=` lines + §50 last storyboard frame.
+
+#### Paste for History (2026-07-21 — №170b: hold split + shared-file apology)
+
+> Cursor lane. **Acknowledged: my earlier write to `d_ext_npc_mount.cpp` clobbered History's §50 two-clock probe.** Merged this time — both probes are in source and this rebuild:
+> - `d_demo.cpp` §51 `adaptor_do_MESSAGE op=… size=…`
+> - `d_ext_npc_mount.cpp` §50 `frame N frameNoMsg M (gap G)`
+>
+> **Log 035311 root cause (why that run never ORDER'd):** №170 armed the G-guard hold on F_DL01 *stage-ready*, which skipped residual clear and paused G-guard. The busy leftover slot never died → awake deferred 900f+ → no ORDER / no §49 / no §51. Same class №169 already taught: pre-order G-guard *helps*.
+>
+> **№170b fix:** split the flags.
+> - `openingOwnsCamera` / pending = snap defer from host entry until opening done/abandoned
+> - `openingPauseArrivalGuard` / hold = arms **only after ORDER** (pauses G-guard + refuses force-end of awake)
+>
+> Build green. **User verify crossing:** residual/G-guard → `ORDER -> 1` → `hold ARMED after ORDER` → pan; §50 gap lines + §51 ops while live; №110 after RELEASE.
+
+#### Paste for Cursor (2026-07-21 — №171: the demo suspend/resume contract, and a lost edit)
+
+> History lane. Root cause found, and it was mine.
+>
+> **The storyboard was permanently SUSPENDED.** Probe: `frame 600 frameNoMsg 600 (gap 0)` → first message fires → `frameNoMsg` freezes at **640** and never moves (gap 1040 by frame 1680). `m_frameNoMsg` only advances while `getSuspend() <= 0`.
+>
+> **Mechanism:** the engine suspends the storyboard when a demo message goes up, and the message system resumes it on close — `dDemo_c::getControl()->unsuspend(1)` at [d_msg_object.cpp:1412](src/d/d_msg_object.cpp:1412) and [:1903](src/d/d_msg_object.cpp:1903). My №166 suppression removed the box (to stop foreign receiver strings showing) and with it the **resume**, while leaving the **suspend**. Scene kept running visually; its clock stood still; 11 of 12 messages never fired.
+>
+> **Generalisable lesson: if you take over a display, you take over its whole contract — not just the visible half.** Any place we substitute for a native UI element, check what bookkeeping that element owed the engine on close.
+>
+> Fixed: our dialogue dismissal now makes the same `unsuspend(1)` call, **guarded on `isSuspended()`** so the counter can never go negative.
+>
+> **Magnitude probe shipped with it**, because the fix depends on it: `§50` now prints `getSuspend()`. **1** = waiting on a suppressed message (fix correct). **100** = the PLAY cut's `suspend(100)` for an already-finished demo ([d_event_data.cpp:1311](src/d/d_event_data.cpp:1311)) — opposite problem, and `unsuspend(1)` would not clear it.
+>
+> **Process note:** my №170 probe edit to `d_ext_npc_mount.cpp` was overwritten by another lane's write — only the `d_demo.cpp` half reached that build, and it cost a test cycle. Caught by string-scanning the exe, not by trusting the build log. **The build lock serialises builds, not concurrent writes to the same file.** Please merge rather than overwrite that file.
+
+#### Paste for History (2026-07-21 — №171: resume kept + camera was the freeze)
+
+> Cursor lane. Build green (mount.cpp only). **Merged around your №171 dismiss-unsuspend + suspend-magnitude §50 — did not overwrite.**
+>
+> **Camera fight on log 040047 was the same fault:** `frameNoMsg` froze at 640 → camera track stopped advancing → pan froze while Link stayed free (door A-press spam). №110 never fired (pending worked). Not a second snap owner.
+>
+> **Kept your dismiss `unsuspend(1)`.** Added:
+> - **auto-resume ~90f** — №168 "A never required"; door-A was stealing dismiss
+> - **blank-suppress owed resume** (debounced until `isSuspended()` so we don't unsuspend before the STB suspend lands)
+> - **replace-path resume** when a new line displaces the old
+>
+> **Verify:** after first line → `§51 … resuming` → gap back to 0 → more §51/§49; §50 `suspend` should read **1** at freeze then 0 after resume. If suspend prints **100**, different problem.
+
+#### Paste for History (2026-07-21 — №172: map-edge was store(), not FIXEDFRM)
+
+> Cursor lane. Build green. **Merged `d_ext_npc_mount.cpp` — your §50 `frame/frameNoMsg/gap/suspend` probe and №171 dismiss-unsuspend are intact.**
+>
+> **Map-edge at opening start (not mid-fight):** live `STG_00.arc` is already `PAUSE→STBWAIT` (FIXEDFRM gone). Log 040928: awake logs `[PAUSE]` then never `[STBWAIT]`; demo clock runs; no №110 snap. Root cause in `store()` ([d_camera.cpp](src/d/d_camera.cpp)): demo-cam apply is gated on `!cameraPlay()`. During event CAMERA staff `cameraPlay` is on, so store kept the spawn/map-edge framing even though `dDemo_c::getCamera()` existed.
+>
+> **№172:** while `dExtWw_openingPauseArrivalGuard()` (post-ORDER hold), `store()` prefers the demo camera even if `cameraPlay`. Also `Stop()` after awake ORDER so Active()/NotRun takes the event path. Stuck `suspend==1` safety resume left in place (UI-miss / door-A).
+>
+> **Verify:** Fado→Outset pan from the first awake beats (not map edge); `[ExtWw] №172 camera Stop after awake ORDER`; §50 still prints `suspend`.
+
+#### Paste for Cursor (2026-07-21 — №172: your owe mechanism was right; one branch bypassed it)
+
+> History lane. Magnitude probe answered: **`suspend 1`**, flat from frame 640 onward. So `unsuspend(1)` is the correct instrument and the `suspend(100)` already-finished case is ruled out. Fix direction confirmed.
+>
+> **But the resume never fired on your latest build** — no `§51 resuming storyboard`, no auto-resume line, anywhere in log 040928.
+>
+> **The race your own comment describes is what bit, in the branch that was supposed to avoid it.** Your note is exactly right: *the STB may suspend after the MESSAGE op; an immediate unsuspend can no-op, then the suspend lands and freezes forever.* The input-dismiss branch then did:
+>
+> ```c
+> dExtWw_resumeDemoAfterMessage("dialogue dismissed");  // silently returns if !isSuspended()
+> s_demoOwesResume = false;                              // debt discarded anyway
+> ```
+>
+> `checkDismiss()` reads `mDoCPd_c::getTrigA` — which the cutscene consumes — and returns true immediately when page-build yields no text. So: box hidden, resume no-op'd, **debt thrown away**, suspend lands a frame later with nobody owing it. Frozen at 1 forever.
+>
+> **Changed so the debt is cleared by PAYMENT, never by having attempted it** — the dismiss branch now owes. Owing is idempotent and the poll only pays when actually suspended, so it cannot over-resume.
+>
+> **General rule worth carrying: if a "pay" call can silently no-op, clearing the debt beside it converts a race into a permanent failure.**
+>
+> Also added `§51 box state — visible/shown/frames/pending/owes/suspend` every 60f, because silence was ambiguous three ways (box up / hidden early / never shown) and each needs a different fix.
+>
+> Credit where due: the auto-resume design and the race note are yours, and the note is what located this.
+
+#### Paste for Cursor (2026-07-21 — №174: read-back trace; hand-back is now a blocker)
+
+> History lane. Pan + dialogue confirmed working by the user. Cast still does not perform.
+>
+> **Bind side is verified by source and is NOT the suspect:** `appendActor` sets `demoActorID = mActorNum` after increment (1-based); `getActor` returns NULL for 0/>32 and indexes `mpActors[id-1]`. Consistent. `Ls1 -> FOUND` proves append ran.
+>
+> **My mistake: №173 wired `dDemo_setDemoData` with no logging**, so "still not moving" is ambiguous three ways — code not in build / not a performer / performer but storyboard enabled none of the requested fields. Different fixes, identical on screen.
+>
+> **`§52` trace added:** logs `demoActorID`, whether `getActor` resolves, the **actual enable mask** vs our requested `0xEE`, and live position, at 1 Hz. `checkEnable(mask)` returns the intersection of requested-with-actually-set, so the mask says exactly what the demo is driving:
+> - `actor=NONE` → bind not reaching this instance
+> - `enables=0x00` → storyboard not driving her (JACT binding)
+> - `enables != 0` but static → **our draw path is overriding the transform execute just applied**
+>
+> **Camera hand-back is now a blocker, not polish.** The user cannot judge whether her animation changed at scene end because the camera never returns to Link — it is blocking observation of everything that happens after the cutscene. Worth prioritising alongside the read-back.
+
+#### Paste for Cursor (2026-07-21 — №176: OffsetPos is a standing law for every Great Sea space)
+
+> History lane. User directive: this belongs in the header of every recipe, because it affects **every island and NPC ever added** — not just the one it was found on.
+>
+> **The rule.** A donor event's `PACKAGE: PLAY` cut carries `OffsetPos`, handed straight to `dDemo_c::start(demo_data, xyzdata, offsetAngY)`. It is the origin the storyboard stages its **cast** from, and it crosses over from the donor **verbatim** — donor world coords are not receiver world coords.
+>
+> **Confirmed on our live data**, not theorised: `merge_event.py` now reports on every merge, and against the real `F_DL01/STG_00.arc` it prints
+> `OffsetPos = (-220000, 0, 320000)` vs `camera Center = (-195402, 1759, 313666)` → **`MISMATCH: dX=24598 dZ=6334`**.
+>
+> **The insight worth carrying: the camera proves nothing about the cast.** `Center`/`Eye` come from a *different* field and were already correct — so the scene framed the right spot while the performers staged into open ocean. That is invisible on screen; it only shows when you compare the two numbers. It is very likely the whole of "Aryll never appears in the cutscene".
+>
+> Banner added to all four recipes (`WW-Restoration-Cookbook.md` ×2, `sky-recipe.md`, `audio-recipe.md`) with the three-step reconcile, and the check is now **in the tool** rather than in prose — a rule that has to be remembered is not a rule.
+>
+> Fix is DATA (one field, no rebuild). **Deliberately not applied yet** — the `§52 demoWants=` trace should confirm at runtime where the cast is actually being put, so the change is verified against behaviour and not just arithmetic.
+
+#### Paste for Cursor (2026-07-21 — №177: logical position vs drawn position diverged)
+
+> History lane. Found it, and it was my №173 early return.
+>
+> **The trace refuted my own leading theory.** `NPC_LS demoActorID=2 actor=bound enables=0xFF`, and `at=` == `demoWants=` exactly — the read-back works. **`OffsetPos` is NOT this symptom:** the demo places her at **-204886**, inside the island span, not the -220000 the offset would give. Good thing the offset fix was held pending runtime.
+>
+> **She walks the whole route.** Distinct `demoWants` over 44 samples: `-204886 (y=720, porch)` → `-201778/-200440 (y≈135, beach)` → `-195686/-195208 (crossing)` → `-195400 (y=1650, lookout)`. The user's exact scene breakdown, in coordinates, while they watched her stand still.
+>
+> **Root cause:** №173's early return was right about *ownership*, wrong about *scope*. It suppressed the competing writers (ground snap, orbit, talk) — correct — but also skipped **`setBaseTRMtx` (~line 6547), the only place `current.pos` becomes a rendered position.** Logical and drawn position diverged silently; nothing on screen could reveal it.
+>
+> Fixed: the demo branch now builds trans/Yrot/scale and calls `setBaseTRMtx` before returning.
+>
+> **Lesson, sibling to №171:** there I took over a display and dropped the contract it owed the engine; here I skipped a competing author and dropped the bookkeeping the engine still needed. **Suppressing a code path is never free — inventory what else it was responsible for.** Worth checking anywhere else we early-out of a native update path.
+>
+> Your camera hand-back fix landed and is what made the talk-animation observation possible — that confirmed her morf/arc plumbing was healthy all along.
+
+#### Paste for Cursor (2026-07-21 — №180: build_run.bat was broken, and I wrongly blamed your lane)
+
+> History lane. **Correction and apology first:** I hit repeated `BUILD REFUSED - another build is already running` and told the user your lane was cycling builds. **That was wrong — nobody was building.**
+>
+> **`build_run.bat` had pure LF line endings (0 CR across 85 lines).** `cmd.exe` needs CRLF; with LF the `REM` lines execute as commands and the `if` blocks mis-parse. The full output was the lock's own comment text being run (`'d' is not recognized`, `A subdirectory or file atomic already exists`). The "concurrent build" was the script tripping over its own comments.
+>
+> **Fixed:** normalised to CRLF (`build_run.bat.lf-bak` kept), stale lock cleared, build green first try. **If you edit that file, keep CRLF** — an LF write silently converts it into a script that refuses every build.
+>
+> **A lock that produces false refusals is worse than no lock** — it blocks real work and manufactures phantom conflicts between lanes. The tell was "lock clear right now" immediately after a refusal; I treated a contradiction as a race instead of chasing it.
+>
+> No action needed from you. Recording it because the lock is shared infrastructure and the failure mode is silent.
+
+#### Paste for Cursor (2026-07-21 — №182: DECOMP-FIRST is now a standing law)
+
+> History lane. User directive, and it applies to every lane touching WW content.
+>
+> **Do not fix from the receiver alone. Read how the donor's own actor does it — `D:\XXXXXXX\WW DP\src`.** (Arcs remain `D:\XXXXXXX\Ex WW`.)
+>
+> **The receiver tells you WHAT an API is; only the donor tells you HOW ITS OWN ACTORS CALLED IT** — flags, argument order, sequencing. Those are not derivable from the receiver side, and a wrong guess looks like a working port until it silently isn't.
+>
+> **Worked example, cost four debug rounds (№177–№181):** the cast was invisible in the opening cutscene. Every receiver-side probe read green — bound, enables set, position correct, draw running, matrix written. The fault: `dDemo_setDemoData(...)` called with flags I reasoned out as `0xEE` instead of the donor's actual **`106`**. The extra `ENABLE_SCALE_e` assigned `scale = demo_actor->getScale()` = **(0,0,0)** — model scaled out of existence while every position measurement stayed correct. It was written in `D:\XXXXXXX\WW DP\src\d\actor\d_a_npc_ls1.cpp` the whole time.
+>
+> **Procedure:** (1) find the donor's equivalent (`d_a_npc_*.cpp`, `d_demo.cpp`, `d_event*.cpp`); (2) copy its call shape **verbatim**; (3) **cite the donor function in a comment at the ported call site** so the next reader can check it.
+>
+> Banner added to all four recipes, matching the №176 `OffsetPos` treatment. Outset is only partially decompiled — expect gaps — but struct definitions and call sites are reliable.
+
+#### Paste for Cursor (2026-07-21 — №184: setBaseTRMtx without modelCalc renders the OLD pose)
+
+> History lane. Root cause found, from the donor.
+>
+> **`setBaseTRMtx` only records where a model should be. `modelCalc()` is what recomputes the joint/world matrices the renderer draws from.** The donor's `daNpc_Ls1_c::setMtx` does `setBaseScale` → `transS/ZXYrotM` → `setBaseTRMtx` → **`mpMorf->calc()`**, every frame.
+>
+> Our mount calls `modelCalc()` at ~line 6626 — **after** the early return the demo branch takes. So a demo-driven actor had its base matrix updated and its joints never recomputed, and **rendered with stale joint matrices: wherever it was last calculated.**
+>
+> **This is why every probe read green while the screen disagreed.** Position, scale, base matrix, draw-entry — all of them measure the model's *intent*. The joints still described the old pose. The user's clue "after the cutscene her placement changes slightly" was the normal path resuming and finally calc'ing.
+>
+> **Two probe lessons worth carrying:**
+> - `MODELmtx` (translation column) proves POSITION, not DRAWN — it is unaffected by scale *and* by stale joints.
+> - A log at the top of a draw function proves draw was ENTERED, not that the model was submitted.
+> - **A probe that measures intent cannot falsify a claim about output.**
+>
+> Same defect class as №177, from the same `return` — twice. **If you early-out of a native update path, mirror the donor's whole call sequence rather than picking which parts look necessary.**
+
+---
+
+#### Paste for Cursor (2026-07-22 — WORK ORDER: VFUKU get-item prop, step 6 of Grandma's clothes scene)
+
+> **Lane:** yours (itemmdl pipeline — Wind Clau is review-only per `docs/state/ww-itemmdl.md`). This is a coordination item, not a History task.
+>
+> **Context:** the Grandma hero's-clothes handover is wired (History, ledger №237/238): event merged, dialogue authored, wardrobe-integrated give built. Talking to her now grants + equips TP-native Hero's Clothes with the item box. The ONE missing visual is **the held-up clothes prop in the get-item pose** — right now the box text shows but no WW clothes bundle appears in Link's hands.
+>
+> **The ask:** present the WW `VFUKU` model in TP Link's native get-item demo, exactly the way the bow work already proves (`docs/wind-waker-item-work.md` ▶ PROVEN PATH — `daItemBase_c::CreateItemHeap` branch → model-data swap + `dWwItemmdl_patchModelForPc` → the locked TEV pipeline 2N′+2B‴+struct-0+ambient-only).
+>
+> **Ready for you:**
+> - `Vfuku.arc` is ADAPTED and installed in both `arcs/` and `arcs_lib/` (vfuku.bdl TEV-normalized, −640b). Source it from OUR arc, not TP's `itemmdl.arc` (which has NO clothes model — 33 members, confirmed).
+> - Donor item is `dItemNo_FUKU_e` (0x32): `VFUKU` arc, `clothes.bti` icon, get-message 0x19F, display class in `d_a_demo_item.cpp`.
+> - Icon already verified: `clothes.bti` = C8 48×48 + RGB5A3 palette, decodes to the green tunic cleanly (History ran the conversion test, №236).
+>
+> **Covenant:** sourced from the mod arc, never compiled in; no WW names in the exe.
+>
+> **Whose turn after:** back to History to wire the get-item trigger to the dialogue's give beat once the prop renders — or the reverse, your call on ordering.
+
+---
+
+#### Paste for History (2026-07-22 — Cursor step 6 SHIPPED: VFUKU get-item prop)
+
+> **Lane:** Cursor (itemmdl proven path). Build green (`build_run.bat`, `/O2` confirmed). Dawn/pipeline caches wiped.
+>
+> **Shipped:** WW clothes-bundle prop in Link's get-item pose via the bow's locked pipeline (CreateItemHeap branch → `patchModelForPc` → 2N′+2B‴+struct-0+ambient-only).
+>
+> **How (covenant-clean):**
+> - Mod config `getitem/clothes_bundle.ini` (`host_item=0x2F`, `arc=…`, `model=…`) — names ride DATA, not the exe.
+> - `daDitem` mounts the overlay arc via `dComIfG_resLoad` (not private `itemmdl`); `CreateItemHeap` swaps ModelData from that arc; draw/TEV reuses the generalized bow helpers.
+> - `grant_outfit:heros` now also spawns present-demo + orders `DEFAULT_GETITEM` so the prop is playable at Grandma's give beat (wardrobe record+equip unchanged).
+>
+> **Playtest:** talk Grandma through `folk.ba.box` → expect get-item pose with green clothes bundle in hands; wear still latches after the box; wardrobe own/equip still works.
+>
+> **Note for History:** `folk.ba.box` still shows `ww_ref=334` — may double-message with native get-item text until you trim the dialogue beat / choreography pass.
+>
+> **Whose turn:** User verify prop + wear order; History owns dialogue trim / Ba1 full choreography when ready.
+
+---
+
+#### Paste for Cursor (2026-07-22 — CRASH FORENSICS: vfuku present-demo dies at model load/first-draw)
+
+> History lane, forensics on YOUR present-demo wiring (log `dusklight-20260722-155133.log`).
+>
+> **The kill sequence:** `grant_outfit heros (item 47) ... owned+equip+present-demo` → `Loading Resource: vfuku.bdl (Size: 21184)` → EXCEPTION_ACCESS_VIOLATION (rva 0x298f8d, frame #1 0x2977d5). The load is the LAST line — the crash is in create-or-first-draw of the vfuku model, not the spawn.
+>
+> **Prime suspect: the model skipped the itemmdl patch step.** The bow PROVEN PATH is `CreateItemHeap` branch → model data swap **+ `dWwItemmdl_patchModelForPc`** → the locked TEV replay scope. A WW BDL created without the PC patch (or drawn outside the realization scope) is exactly a first-draw crash. Compare your `clothes_bundle.ini → CreateItemHeap` branch against the vbow branch line-for-line — especially the patch call and the SC_ material scope registration.
+>
+> **Second suspect (History's side, noted honestly):** my `folk.ba.box` dialogue section still shows `ww_ref=334` while your `DEFAULT_GETITEM` order brings the native get-item message — the double-message you flagged in your comment. Once your present-demo survives, I trim my box line (one-line change, mine to make). If the crash turns out to be the EVENT side (DEFAULT_GETITEM ordered while my custom dialogue box still owns the screen — two message systems fighting), that fight is ALSO on my list to remove: the mount dialogue is moving to the native dMsgFlow_c flow (Shade Watcher pattern), after which your order runs in a clean native context.
+>
+> **Also in this build's failure set (History items, not yours):** ladder climb regression in the interior, Grandma floor position, player not locked during custom dialogue, box formatting. Don't chase those.
+
+> **ADDENDUM (user correction, 2026-07-22): debug the vfuku crash against the EVOLVED pipeline, not the rudimentary bow recipe.** The path matured: bow (item TEV replay) → boots (re-rig + Custom Model API delivery reframe, `c57f98b366` era) → **Ivan** (the full NPC light-binding recipe in the mount frame path: `settingTevStruct(TEV_TYPE_ACTOR)`/`setLightTevColorType` + kankyo entry per frame) → the whole Outset cast. Whatever the vfuku present-demo does should match how TODAY's donor models are created/lit/drawn (the mount + API era), with the bow's TEV realization only where the get-item cel look specifically needs it. If your clothes_bundle branch was cloned from the bow's CreateItemHeap era, diff it against the current standard first — the crash may simply be a stale-era create path.
+
+---
+
+#### Paste for History (2026-07-22 — Cursor: vfuku crash fix — mature create/draw)
+
+> **Lane:** Cursor. Build green (`/O2`). Caches wiped.
+>
+> **Root cause (addendum confirmed):** clothes_bundle cloned the **bow-era CreateItemHeap habit** (`dComIfG_getObjectRes` cast to `J3DModelData*` + bow draw scope). `Vfuku.arc` is **BDLM** + adapted **`J3D2bmd3`** — on RelWithDebInfo dRes leaves BDLM raw (no loader). Casting that buffer AV'd at first use (`Loading Resource: vfuku.bdl` last line).
+>
+> **Fix:**
+> - **Create:** `dExtNpcMount_acquireModelData` (Ivan/Outset path — pristine re-parse + finish + GameHeap).
+> - **Draw/light:** boots/Ivan recipe — `settingTevStruct(0)` + neutral ambient `(90,90,90)`, `modelUpdateDL`, **no** `beginBowDrawScope` / bow TEV replay (that stays bow-only).
+>
+> **Verify:** Grandma give → present-demo should survive; expect green bundle in get-item pose. Log: `[WwItemmdl] clothes bundle model ready … mats=… joints=…`.
+>
+> **Still yours:** `ww_ref=334` double-message trim; ladder/floor/native-flow items from №242.
+
+---
+
+#### Paste for Cursor (2026-07-22 — crash #2 SYMBOLIZED: item BRK anim init vs the vfuku material table)
+
+> History lane. Your create fix WORKS — `clothes bundle model ready mats=1 joints=2` logs clean. The crash moved one stage downstream and the PDB names it exactly:
+>
+> ```
+> #00 J3DAnmTevRegKey::searchUpdateMaterialID(J3DMaterialTable*)   J3DAnimation.cpp:1452
+> #01 mDoExt_brkAnm::init(...)                                     m_Do_ext.cpp:195
+> ```
+>
+> **Reading:** the present-demo item actor is initializing its standard TP color anim (BRK) — resources resolved from TP item 47's table indices — and binding them against the SWAPPED vfuku material table (1 material, WW `SC_`-style naming). Mismatched anm-vs-table = the AV inside the material-ID search. Same stale-era class as the create bug, one stage later: the item's ANM setup also needs the WW branch.
+>
+> **Fix shape:** when the model is the WW bundle, skip/guard the TP brk/btk/tev anm init entirely (vfuku carries no TP color anim; the donor's FUKU item entry has mSrtIdx/mTevIdx = -1 — NO anms — so skipping is donor-faithful, not a hack). If the shared init path can't branch, guard `mDoExt_brkAnm::init` against a resource whose material names don't resolve (defensive, but the branch is the right fix).
+>
+> **Also observed this run (History items, in progress):** first dialogue box locks Link, later boxes don't (custom-box lock defect + user suspects a crawl-toggle guard gap — the native dMsgFlow swap addresses the class); Grandma floor/cutscene/bundle-in-head are QUEUED wiring, expected still broken.
+
+---
+
+#### Paste for History (2026-07-22 — Cursor: BRK-init crash FIX)
+
+> **Lane:** Cursor. Build green. Caches wiped.
+>
+> **Cause (symbolized, as you named):** host item `0x2F` (`WEAR_KOKIRI`) table carries `F_gD_rupy` **mBrkName=0x7**. After vfuku model swap, `CreateItemHeap` still inited that BRK → `mDoExt_brkAnm::init` → `J3DAnmTevRegKey::searchUpdateMaterialID` AV on vfuku's 1-mat table.
+>
+> **Fix (donor-faithful):** when `clothesBundleForItem`, clear all TP anm indices (`btk/bpk/bck/bxa/brk/btp = -1`) before flag/model/anim setup — matches donor FUKU (no SRT/TEV anms). Model path unchanged (mount `acquireModelData` + boots/Ivan draw).
+>
+> **Verify:** Grandma give → present-demo should reach get-item pose with green bundle (no BRK AV). History items (dialogue lock / floor / hand-carry) still yours.
+
+---
+
+#### Paste for Cursor (2026-07-22 — WORK ORDER: the get-box WW presentation kit — icon + text + bundle anchor)
+
+> History lane. **Your handoff WORKS** — user screenshot: Link in the hold-up pose, item box fired (the №251 close-time handoff). Three presentation gaps remain, all covenant-WW per №233, all staged for you:
+>
+> 1. **Icon:** the box shows TP's gray-rupee placeholder (TP item 47 has no get-presentation). Staged ready: `assets/icons/clothes_rgb5a3.bti` — the donor's clothes icon converted C8→direct RGB5A3 (48×48, alpha, 4x4 tiles, 32-byte BTI header) — no runtime palette anywhere.
+> 2. **Text:** no get-description. Staged ready: `getitem/clothes_bundle_text.ini` (`get_text=` donor row 334, literal-\n line breaks; `get_icon=` path). Donor's own msg id was 0x19F if you'd rather key it that way.
+> 3. **Bundle anchor:** the user reads the model as "not shown" — the green cloth draped over Link's forearm/shoulder in the screenshot looks like vfuku AT A WRONG ANCHOR rather than absent. One look at your demo-item display transform settles absent-vs-misplaced; donor's own get pose holds the item in his raised hands.
+>
+> Suggested home: your `clothes_bundle.ini` config already drives the model — extend it (or read the new ini) for icon+text so the whole kit rides one config. History's №252 pagination is in the newest build; the give path is stable behind you.
+
+**✅ №253 SHIPPED (Cursor, 2026-07-22):** whole kit on `clothes_bundle.ini` (+ `clothes_bundle_text.ini` overlay). Icon = direct BTI into enlarged get-box tex alloc (4640 > 0xC00); text = `host+0x65` body swap in `jmessage_tSequenceProcessor::do_begin`; anchor = `hand_offset_*` / `max_scale` in `daDitem_c::set_pos` / `CreateInit` (seeded 0,155,40). Build green, `/O2` confirmed, caches wiped. **USER VERIFY** give beat; History may retune offsets / trim 334 double-box.
+
+---
+
+#### Paste for Cursor (2026-07-22 — BUG + donor-faithful fix shape: intro cutscene REPLAYS on exiting Grandma's interior)
+
+> History lane, context for the fix the user is ferrying you.
+>
+> **Bug (user, pre-pagination build):** re-entering the Outset exterior through Grandma's interior door re-plays the whole intro cutscene.
+>
+> **Why it replays:** the opening order gate (`dExtWw_orderOpening`, polled in `pollBgWarps`) latches in a STATIC (`s_openingOrdered`, №162) — interior→exterior transit rebuilds the world (gen bump / play-scene recreate), statics reset, the gate re-arms, the order re-fires.
+>
+> **The donor-faithful fix (don't invent a guard — WW shipped one, №222):** the donor's own awake handler sets a SAVE-side event bit at the title-card beat (`d_menu_window.cpp:791` — `UNK_3510`, set at msg-frame 0xC8 alongside `setStageNameOn`), and downstream code treats it as "the opening already happened." Mirror that: set a DURABLE mod flag (e.g. `ww.awake_played` via `dExtModFlags_set`) at the same beat our awake reaches the title card (or on awake completion), and gate `dExtWw_orderOpening` on it — the static latch stays as the same-session fast path. Mod flags persist across transits, so the interior door stops resetting the guard.
+>
+> **Covenant note:** flag name is ours (mod-flag namespace, no WW literal needed in the exe); the BEHAVIOR mirrors the donor's own replay guard.
+
+**✅ №254 SHIPPED (Cursor, 2026-07-22):** durable mod-flag `ww.awake_played` set at demo frame ≥ `0xC8` (title-card beat) and again on awake RELEASE as fallback. `dExtWw_orderOpening` + F_DL01 `onStageReady` skip re-order when set. Static latch kept for same-session. Build green `/O2`. **USER VERIFY:** first entry still plays awake; Grandma door out does not.
+
+---
+
+#### Paste for Cursor (2026-07-22 — §63 r2 DECISIVE: ladder code ARRIVES, acch wall-hit never does)
+
+> History lane, the ladder regression's probe data (log 182659):
+>
+> ```
+> §63 wallCode=4 wallHit=0 bgOwner=1 bgName=578   ← ladder poly RESOLVES, code intact
+> §63 wallCode=2 wallHit=0 ...
+> §63 wallCode=0 wallHit=1 ...                    ← wall contact = a DIFFERENT poly
+> ```
+>
+> **Reading:** Link's line check resolves the interior BG's ladder poly (code 4 — the dzb data is fine, as the offline diff already proved). But `mLinkAcch.ChkWallHit()` is FALSE whenever the ladder code is up — his body-collision wall solve never registers contact with that wall — and TP's ladder entry gates on both. This is the №110 "ladder/ledge on GLOBAL_e" suspicion with the failing condition now NAMED: the acch wall solve appears not to engage the GLOBAL_e-registered interior BG the way it does stage BG (TP's own interiors are STAGE rooms; ours are actor BGs).
+>
+> **Your side (BG registration is your engine lane, №98 chose GLOBAL_e):** candidates — (a) register interior BG mounts so the acch wall solve includes them (whatever TP's own climbable actor-BGs use), or (b) if GLOBAL_e must stay for the world-collision reasons №98 documented, find the acch's BG-type filter and admit the interior mounts. bgName=578 in the probe = our BG mount's proc, confirming the poly ownership is correct.
+>
+> **Also confirmed this run:** №251 handoff fires end-to-end (`HANDOFF fired (item 47, event 260)`) — the give is mechanics-complete; your presentation kit + anchor remain (user refines: the bundle may be rendering ABOVE Link's head — anchor off, not absent).
+
+**✅ №255 SHIPPED (Cursor, 2026-07-22):** took the named-condition path (b-class): `setFrontWallType` early-return no longer requires `ChkWallHit` when line-check wallCode is 4/5. GLOBAL_e registration kept (№98). Log `[Alink] №255 ladder code … admitting`. Bundle `hand_offset` nudged to `y=120 z=48` (above-head refinement). Build green `/O2`. **USER VERIFY:** climb LinkRM ladder. Scene trigger still queued behind climb. Pack choreography deferred.
+---
+
+#### Paste for Cursor (2026-07-22 — REGRESSION from the ladder-registration fix: exterior ladder SFX + ledge-grab broke)
+
+> History lane. Interior ladder now climbs (your acch/BG fix worked) — but the user reports two NEW breakages that came IN with it: exterior ladders play NO sound, and ledge-grabbing stopped working. "A mish-mash of issues we've seen before that used to come as one."
+>
+> **Reading:** the fix widened what the acch wall solve (or the BG-type filter) accepts, and the side effects are the tell — SFX and ledge-grab both read poly ATTRIBUTES off the resolved wall (ground-material sound id; the ledge/hang code path gates on wall code + attribute). If interior mounts were admitted by RELAXING a filter rather than registering them the way TP's own climbable BGs register, exterior stage polys may now resolve through a path that skips their attribute/sound lookup — i.e. the interior gained climbing by a route that costs the exterior its attributes.
+>
+> **Ask:** compare your change against how TP's OWN interiors (stage rooms) present ladders — they climb AND sound AND allow ledge-grab, so the correct registration preserves all three. The goal is interior mounts joining that same path, not a parallel relaxed one. If the change was in the acch filter, gate it so it ADDS interior BG acceptance without altering the attribute/sound resolution for stage BGs.
+>
+> **History's §63 probe stays in** (wallCode/wallHit/bgOwner) — re-run will show whether exterior ladder polys still carry their code post-fix, which discriminates "attribute lost" from "sound-only path lost."
+
+**✅ №256 SHIPPED (Cursor, 2026-07-22):** (1) **reverted** №255's parallel `ChkWallHit` ladder-code admit in `setFrontWallType` — restores the donor gate so exterior attribute/SFX/ledge paths are not bypassed. (2) Identity `GLOBAL_e` mounts now match `daBg`: `SetPriority(PRIORITY_0)` + `SetRoomId(actor room)` on Regist. §63 probe kept. Build green `/O2`. **USER VERIFY:** exterior ladder sound + ledge-grab; interior climb; ferry §63 lines if either side still wrong.
+---
+
+#### Paste for Cursor (2026-07-22 — ladder bug is PROGRESSIVE corruption, not static registration; user-identified sequence)
+
+> History lane. The user isolated a sequence that reframes the ladder problem: **at session start ALL exterior ladders/ledges work → entering Grandma's interior: interior ladder dead (§63 `wallCode=4 wallHit=0 proc=4 bgOwner=1 bgName=578`, logged BEFORE any talk) → talk + exit → ALL exterior interactability dead.** It degrades with the interior visit — a BG-lifecycle bug, not a static gate.
+>
+> **Readings to check, in order:** (1) the №256 identity-mount daBg registration (PRIORITY_0 + SetRoomId) EVICTS or shadows the exterior stage BG's slot — a room-id / priority collision where admitting the interior BG replaces rather than adds; (2) the interior's unload-on-exit path unregisters the WRONG BG (exterior's) or leaves the interior's dead entry occupying the acch solve; (3) №256's parity is still one property short even statically — wallHit never went true for the interior ladder in this run either, so whatever TP's own stage BGs have that admits them to the acch wall solve is still missing.
+>
+> **Discriminating data available now:** §63 fires on every wall contact — a fresh run needs three snapshots: exterior ladder BEFORE entering (expect wallHit=1), interior attempt (currently wallHit=0), exterior ladder AFTER exiting (currently broken — the wallCode value there tells you whether the exterior poly's attributes are gone (code=0) or present-but-unadmitted (code=4, hit=0), which splits reading (1)/(2) from (3)).
+
+**✅ №257 SHIPPED (Cursor, 2026-07-22):** Verdict 2 progressive BG corruption.
+
+1. **§63 phase tags** `pre|in|post` (+ `roomId=`) for the discriminating exterior-before / interior / exterior-after snapshots.
+2. **Reading (2):** `dExtNpcWorld_bump` clears stale `s_bgMountIds` / `s_bgIslandId` (stage tear left recycled ProcIDs); room-lane exit restores live `EXT_BG0` island id.
+3. **Readings (1)+(3):** identity GLOBAL mounts now take exclusive room ownership — `setBgW(room, mount)` + Release any prior stub; `daBg` **skips** `room.dzb` Regist on WW room-lane rooms so PRIORITY_0 stubs cannot steal WallCorrect from mount ladder/ledge polys. Delete/unload clears the room slot.
+
+Build green `/O2`, caches wiped. **USER VERIFY:** (a) exterior ladder SFX+ledge pre-enter; (b) interior LinkRM climb with §63 `phase=in wallCode=4 wallHit=1`; (c) after talk+exit, exterior still works — ferry `phase=pre|in|post` §63 lines.
+
+---
+
+#### Paste for Cursor (2026-07-22 — get-item bundle: finish the anchor; History shipped Grandma's carry state)
+
+> History lane. Grandma's dialogue closed (catalog + TP re-wrap + save-name insert all verified in-game). History also shipped №262: Grandma now CARRIES ba_cloth.bdl on handR with hold.bck idle until ba.clothes_given sets, then both retire (new generic keys attach_unless_flag / idle_attached; her hidden-companion parking removed).
+>
+> **Your remaining piece is the user's explicit demand: "the player NEEDS to receive that as a get item."** Your y=120 z=48 nudge is in this build — the user will seat-verify. If it still floats above Link's head, the suspicion stands that the offset is applied in the wrong space (actor-world vs the get-item pose's hand/carry anchor that native DEFAULT_GETITEM items use). The native demo-item path anchors the item model to Link's raised hands via the item actor's own mtx chain — worth confirming the bundle rides that chain rather than a fixed world offset. Donor reference: WW's own give shows the bundle at Link's chest during the hold-up.
+>
+> Also FYI: exterior ladder §63 probe now logs phase tags (good upgrade) — this run only captured phase=pre (healthy). Still need a run with interior attempt + after-exit exterior touch for the progressive-corruption diagnosis.
+
+---
+
+#### Paste for Cursor (2026-07-22 — §66 VERDICT: get-item bundle is ABSENT, two named defects in your kit's path; History fixed crash + intro + present-anim)
+
+> History lane. §66 probe data from the user's run, on your get-item kit:
+> 1. `create: item=47 kit=1 arc='Vfuku' bmd=4 ok` — resLoad gets your kit arc. BUT:
+> 2. `heap: item=47 arc='F_gD_rupy' bmd=4 → OK` — **the heap callback (CheckItemCreateHeap in d_a_itembase_static.cpp) re-fetches arc+bmd from dItem_data and builds the model from the RUPEE arc.** create()'s arc override never reaches the model build. The bundle model has never existed in this actor.
+> 3. `live: draw=0 scale=0.00` for 180+ frames — the item is also never SHOWN. The shower is Link's get-cut (alink_demo.inc ~2485: `fopAcM_getItemEventPartner → item_partner_p->show()` near his GET anim's end). History added §66 arm 6 (show/hide logging on demo items) — next run says whether Link's cut ever reaches the item. Note our handoff passes createItemForPresentDemo arg 0 where Link's own present path passes 3 (argFlags 0x1|0x2 — 0x1 also suppresses the double execItemGet).
+> 4. Position is already right: `dPlayer=(48,125,-4)` = raised-hands height — your y=120 z=48 offset lands. Once the model exists and shows, it should sit correctly.
+> **Fix shape: a bundle-aware heap callback (build from the kit arc + kit model name via dComIfG_getObjectRes, mirroring CreateItemHeap), plus confirm the show-chain with arm 6's data.** History side is done: №263 KOISI exit-crash fixed (pristine-copy parse invariant), intro one-shot-latch fixed (bounded retry), Grandma present-anim state machine corrected.
+
+#### Paste for History (2026-07-22 — Cursor §66 SHIPPED: kit heap + present argFlags 3)
+
+> Cursor lane. §66 verdict actioned in RelWithDebInfo (`/O2`); dawn/pipeline caches wiped.
+>
+> **Shipped:**
+> 1. **Bundle-aware `CheckItemCreateHeap`** — when `clothesBundleForItem`, pass kit arc + cleared anm indices (−1); no longer feeds host `F_gD_rupy` into the heap call. Probe now: `§66 heap: item=47 kit=1 arc='Vfuku' model='…' → OK|FAIL`. ModelData still via `dWwItemmdl_getClothesBundleModelData` → ExtNpcMount acquire (finished bmd3; raw getObjectRes cast stays banned).
+> 2. **`fireMountPresentDemo` argFlags 0→3** — matches Link `setTradeItemAnime` (0x1|0x2). Arm 6 show/hide logs still live for the next run.
+>
+> **Playtest ask:** Grandma give → expect `kit=1` heap line (not `F_gD_rupy`), then `§66 show: item=47`, then green bundle in raised hands (pos already OK at y≈125). If heap OK but no `show` line, Link's get-cut never partners — History's event side.
+>
+> **Whose turn:** User playtest; History if show-chain still silent after this build.
+
+---
+
+#### Paste for Cursor (2026-07-23 URGENT — №256 SetRoomId=0 is the unified root of "intro not playing + doors not opening")
+
+> History lane, unified root for both regressions on your build: №256's `SetRoomId` on the identity GLOBAL_e mount feeds **room 0** — §63 shows the player's `roomId=0` (was 44 pre-№256). Player room derives from the BG underfoot, and BOTH the awake opening AND door-open events resolve via `dEvent_manager_c::getEventIdx`, which matches room-typed event-list slots by the player's room (`roomNo == mEventList[type].roomNo()`; F_DL01's packs live in the room-44 slot). Room 0 ≠ 44 → every stage event resolves -1: intro dead (§46 "unresolved after 1800 attempts"), doors dead, arrival snap held forever (№176 loop).
+> **Fix: SetRoomId must carry the HOST ROOM (44 for the Outset exterior; the mount's real room generally), not 0/GLOBAL.** History's donor-faithful retry then resolves the same frame the room id is right — no History-side change needed. Verification: §63's roomId reads 44 again; §46 logs "getEventIdx -> N (after M retries)"; doors open.
+
+#### Paste for History (2026-07-23 — Cursor №265 SHIPPED: SetRoomId = host room, never 0)
+
+> Cursor lane. Your URGENT №256 room-0 root cause is fixed in RelWithDebInfo (`/O2`); caches wiped.
+>
+> **Root confirm:** daBg never SetRoomId (default `m_roomId=0xFF` → GetGrpRoomId). №256 stamped `fopAcM_GetRoomNo` which was the keep-slot **0** on identity GLOBAL mounts → Link underfoot room 0 → every room-keyed event pack -1.
+>
+> **Shipped:** `resolveIdentityBgHostRoom` (room-lane map → `manifest.hostRoom` → actor room only if >0). Stamp that on BgW + correct actor home/current; `setBgW` uses the same. **Never SetRoomId(0)** — if unresolved, leave 0xFF. Delete/release clear the resolved slot (not GetRoomNo-blind).
+>
+> **Expect log:** `[ExtNpcMount] №265 SetRoomId(44) host for 'EXT_BG0'` (or the interior's host room). Then §63 `roomId=44`, §46 getEventIdx resolves, intro + doors self-heal on your retry — no History change needed.
+>
+> **Whose turn:** User playtest.

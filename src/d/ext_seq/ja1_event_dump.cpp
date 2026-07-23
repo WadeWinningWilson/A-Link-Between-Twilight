@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -29,6 +30,14 @@ struct Ev {
     std::string velocity;
 };
 
+struct VolRamp {
+    u32 tick = 0;
+    u8 trackId = 0;
+    u8 target = 0;
+    int moveTime = 0;
+    std::string value;
+};
+
 bool s_active = false;
 u8 s_trackId = 0;
 u32 s_tick = 0;
@@ -37,7 +46,7 @@ Ja1Track* s_track = nullptr;
 bool s_explicitWait = false;
 std::vector<Ev>* s_events = nullptr;
 std::vector<std::pair<u8, u32>>* s_openQueue = nullptr;
-std::set<u32>* s_backwardJmps = nullptr;
+std::vector<VolRamp>* s_volRamps = nullptr;
 
 u32 fileOffOf(Ja1Track* track) {
     if (track == nullptr || track->getSeq()->getBase() == nullptr ||
@@ -45,6 +54,64 @@ u32 fileOffOf(Ja1Track* track) {
         return 0;
     }
     return static_cast<u32>(track->getSeq()->mCurrentFilePtr - track->getSeq()->getBase());
+}
+
+void writeVolRampCompanion(const char* csvPath, const std::vector<VolRamp>& ramps) {
+    if (csvPath == nullptr || ramps.empty()) {
+        return;
+    }
+    // seq_events_engine_foo.csv → seq_vol_ramps_foo.csv
+    std::string path(csvPath);
+    const char* needle = "seq_events_engine_";
+    const auto pos = path.find(needle);
+    if (pos == std::string::npos) {
+        path += ".vol_ramps.csv";
+    } else {
+        path.replace(pos, std::strlen(needle), "seq_vol_ramps_");
+    }
+    FILE* f = std::fopen(path.c_str(), "wb");
+    if (f == nullptr) {
+        DuskLog.warn("[ExtSeq] §C.1 vol ramp companion: cannot write {}", path);
+        return;
+    }
+    std::fputs("tick,track_id,target,value,move_time\n", f);
+    for (const VolRamp& r : ramps) {
+        std::fprintf(f, "%u,%u,%u,%s,%d\n", r.tick, static_cast<unsigned>(r.trackId),
+                     static_cast<unsigned>(r.target), r.value.c_str(), r.moveTime);
+    }
+    std::fclose(f);
+
+    // Early-bar histogram (tick < 480 ≈ first bars): (track, moveTime) → count.
+    std::map<std::pair<u8, int>, u32> early;
+    u32 earlyVol = 0;
+    u32 snap = 0;
+    u32 ramp = 0;
+    for (const VolRamp& r : ramps) {
+        if (r.target != 0) {
+            continue;
+        }
+        if (r.moveTime <= 0) {
+            snap++;
+        } else {
+            ramp++;
+        }
+        if (r.tick < 480u) {
+            earlyVol++;
+            early[{r.trackId, r.moveTime}]++;
+        }
+    }
+    DuskLog.info(
+        "[ExtSeq] §C.1 vol ramps: {} rows → {} (vol snap={} ramp={} early<480={})",
+        ramps.size(), path, snap, ramp, earlyVol);
+    u32 logged = 0;
+    for (const auto& kv : early) {
+        if (logged >= 12u) {
+            break;
+        }
+        DuskLog.info("[ExtSeq] §C.1 early hist track={} moveTime={} count={}",
+                     static_cast<unsigned>(kv.first.first), kv.first.second, kv.second);
+        logged++;
+    }
 }
 
 }  // namespace
@@ -81,16 +148,6 @@ void queueOpen(u8 childId, u32 fileOff) {
     }
 }
 
-bool noteSawBackwardJmp(u32 tgt) {
-    return s_backwardJmps != nullptr && s_backwardJmps->count(tgt) != 0;
-}
-
-void markBackwardJmp(u32 tgt) {
-    if (s_backwardJmps != nullptr) {
-        s_backwardJmps->insert(tgt);
-    }
-}
-
 void emit(const char* event, const char* noteParam, const char* velocity) {
     if (!s_active || s_events == nullptr || event == nullptr) {
         return;
@@ -105,16 +162,29 @@ void emit(const char* event, const char* noteParam, const char* velocity) {
     s_events->push_back(std::move(e));
 }
 
+void noteVolRamp(u8 target, int moveTime, const char* valueStr) {
+    if (!s_active || s_volRamps == nullptr) {
+        return;
+    }
+    VolRamp r;
+    r.tick = s_tick;
+    r.trackId = s_trackId;
+    r.target = target;
+    r.moveTime = moveTime;
+    r.value = valueStr != nullptr ? valueStr : "";
+    s_volRamps->push_back(std::move(r));
+}
+
 u32 dumpBmsToCsv(const u8* data, u32 size, const char* outPath) {
     if (data == nullptr || size == 0 || outPath == nullptr) {
         return 0;
     }
 
     std::vector<Ev> events;
+    std::vector<VolRamp> volRamps;
     std::vector<std::pair<u8, u32>> openQueue;
     openQueue.push_back({0, 0});
     std::set<u32> seenStarts;
-    std::set<u32> backwardJmps;
 
     Ja1Parser parser;
     u32 qi = 0;
@@ -135,8 +205,8 @@ u32 dumpBmsToCsv(const u8* data, u32 size, const char* outPath) {
         track.start(const_cast<u8*>(data), start);
 
         s_events = &events;
+        s_volRamps = &volRamps;
         s_openQueue = &openQueue;
-        s_backwardJmps = &backwardJmps;
         s_trackId = tid;
         s_tick = 0;
         s_track = &track;
@@ -172,8 +242,8 @@ u32 dumpBmsToCsv(const u8* data, u32 size, const char* outPath) {
     }
 
     s_events = nullptr;
+    s_volRamps = nullptr;
     s_openQueue = nullptr;
-    s_backwardJmps = nullptr;
 
     std::sort(events.begin(), events.end(), [](const Ev& a, const Ev& b) {
         if (a.trackId != b.trackId) {
@@ -196,6 +266,8 @@ u32 dumpBmsToCsv(const u8* data, u32 size, const char* outPath) {
                      e.event.c_str(), e.noteParam.c_str(), e.velocity.c_str());
     }
     std::fclose(f);
+
+    writeVolRampCompanion(outPath, volRamps);
 
     DuskLog.info("[ExtSeq] §59 event dump: {} events → {}", events.size(), outPath);
     return static_cast<u32>(events.size());

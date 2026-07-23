@@ -6673,3 +6673,361 @@ void dKyr_evil_draw(Mtx drawMtx, u8** tex) {
         }
     }
 }
+
+#if TARGET_PC
+#include "SSystem/SComponent/c_lib.h"
+#include "SSystem/SComponent/c_m3d.h"
+#include "d/d_kankyo.h"
+#include "d/d_kankyo_wether.h"
+#include "d/d_stage.h"
+#include "JSystem/J3DGraphBase/J3DShape.h"
+#include <cmath>
+
+// §97b — donor wave_move (Nonmatching structure port; WW interior wind table omitted).
+void wave_move() {
+    dKankyo_wave_Packet* pPkt = g_env_light.mpWavePacket;
+    if (pPkt == NULL) {
+        return;
+    }
+    if (g_env_light.mWaveChan.mWaveFlatInter >= 1.0f) {
+        return;
+    }
+
+    camera_class* pCamera = dComIfGp_getCamera(0);
+    fopAc_ac_c* pPlayer = dComIfGp_getPlayer(0);
+    if (pCamera == NULL || dComIfGd_getView() == NULL) {
+        return;
+    }
+
+    f32 seaLevel = 0.0f;
+    const int roomNo = dComIfGp_roomControl_getStayNo();
+    if (roomNo >= 0) {
+        dStage_roomDt_c* roomDt = dComIfGp_roomControl_getStatusRoomDt(roomNo);
+        dStage_FileList_dt_c* fili_p = roomDt != NULL ? roomDt->getFileListInfo() : NULL;
+        if (fili_p != NULL) {
+            seaLevel = dStage_FileList_dt_SeaLevel(fili_p);
+        }
+    }
+
+    cXyz eyevect;
+    dKy_set_eyevect_calc2(pCamera, &eyevect, g_env_light.mWaveChan.mWaveSpawnDist, 0.0f);
+
+    cXyz windPowVec = dKyw_get_wind_vecpow();
+    cXyz* windVecP = dKyw_get_wind_vec();
+    f32 windPow = dKyw_get_wind_pow();
+    cXyz windPowVec2 = windVecP != NULL ? *windVecP : windPowVec;
+
+    DOUBLE_POS deltaXZ;
+    deltaXZ.x = pCamera->view.lookat.center.x - pCamera->view.lookat.eye.x;
+    deltaXZ.y = 0.0;
+    deltaXZ.z = pCamera->view.lookat.center.z - pCamera->view.lookat.eye.z;
+    cXyz vectle;
+    vectle_calc(&deltaXZ, &vectle);
+
+    pPkt->mSkewDir = cM3d_VectorProduct2d(0.0f, 0.0f, -windPowVec2.x, -windPowVec2.z, vectle.x,
+                                          vectle.z);
+    pPkt->mSkewWidth = windPow * (1.0f - std::fabs(windPowVec2.y)) *
+                       (1.0f - std::fabs(windPowVec2.x * vectle.x + windPowVec2.z * vectle.z));
+    pPkt->mSkewWidth *= 0.6f * std::fabs(pPkt->mSkewDir);
+
+    for (s32 i = 0; i < g_env_light.mWaveChan.mWaveCount; i++) {
+        if (g_env_light.mWaveChan.mWaveReset) {
+            pPkt->mEff[i].mStatus = 0;
+        }
+
+        switch (pPkt->mEff[i].mStatus) {
+        case 0: {
+            pPkt->mEff[i].mBasePos.x = eyevect.x;
+            pPkt->mEff[i].mBasePos.y = seaLevel;
+            pPkt->mEff[i].mBasePos.z = eyevect.z;
+            pPkt->mEff[i].mPos.x = cM_rndFX(g_env_light.mWaveChan.mWaveSpawnRadius);
+            pPkt->mEff[i].mPos.y = 0.0f;
+            pPkt->mEff[i].mPos.z = cM_rndFX(g_env_light.mWaveChan.mWaveSpawnRadius);
+            pPkt->mEff[i].mCounter = cM_rndF(65536.0f);
+            pPkt->mEff[i].mAlpha = 0.0f;
+            pPkt->mEff[i].field_0x32 = (s16)cM_rndF(65536.0f);
+            pPkt->mEff[i].mStrengthEnv = 1.0f;
+            pPkt->mEff[i].mScale = g_env_light.mWaveChan.mWaveScaleRand +
+                                   cM_rndF(1.0f - g_env_light.mWaveChan.mWaveScaleRand);
+            pPkt->mEff[i].mSpeed = pPkt->mEff[i].mScale;
+            pPkt->mEff[i].mCounterSpeed =
+                ((1.0f - pPkt->mEff[i].mScale) * 0.05f + 0.02f) *
+                g_env_light.mWaveChan.mWaveCounterSpeedScale;
+            pPkt->mEff[i].field_0x30 = 0;
+            pPkt->mEff[i].mStatus++;
+        }
+            // fallthrough
+        case 1:
+        case 2: {
+            pPkt->mEff[i].mPos.x +=
+                (windPowVec.x * g_env_light.mWaveChan.mWaveSpeed * pPkt->mEff[i].mSpeed) *
+                (pPkt->mEff[i].mStrengthEnv * 0.5f + 0.5f) *
+                (pPkt->mEff[i].mAlpha * 0.8f + 0.2f);
+            pPkt->mEff[i].mPos.z +=
+                (windPowVec.z * g_env_light.mWaveChan.mWaveSpeed * pPkt->mEff[i].mSpeed) *
+                (pPkt->mEff[i].mStrengthEnv * 0.5f + 0.5f) *
+                (pPkt->mEff[i].mAlpha * 0.8f + 0.2f);
+            pPkt->mEff[i].mCounter += pPkt->mEff[i].mCounterSpeed;
+
+            cXyz pos;
+            pos.x = pPkt->mEff[i].mBasePos.x + pPkt->mEff[i].mPos.x;
+            pos.y = pPkt->mEff[i].mBasePos.y + pPkt->mEff[i].mPos.y;
+            pos.z = pPkt->mEff[i].mBasePos.z + pPkt->mEff[i].mPos.z;
+
+            if (pos.abs(eyevect) > g_env_light.mWaveChan.mWaveSpawnRadius) {
+                pPkt->mEff[i].mBasePos.x = eyevect.x;
+                pPkt->mEff[i].mBasePos.z = eyevect.z;
+                if (pos.abs(eyevect) > (g_env_light.mWaveChan.mWaveSpawnRadius + 350.0f)) {
+                    pPkt->mEff[i].mPos.x = cM_rndFX(g_env_light.mWaveChan.mWaveSpawnRadius);
+                    pPkt->mEff[i].mPos.z = cM_rndFX(g_env_light.mWaveChan.mWaveSpawnRadius);
+                } else {
+                    cXyz newPos;
+                    get_vectle_calc(&pos, &eyevect, &newPos);
+                    pPkt->mEff[i].mPos.x = newPos.x * g_env_light.mWaveChan.mWaveSpawnRadius;
+                    pPkt->mEff[i].mPos.z = newPos.z * g_env_light.mWaveChan.mWaveSpawnRadius;
+                }
+                pPkt->mEff[i].mAlpha = 0.0f;
+            }
+
+            pos.x = pPkt->mEff[i].mBasePos.x + pPkt->mEff[i].mPos.x;
+            pos.y = pPkt->mEff[i].mBasePos.y + pPkt->mEff[i].mPos.y;
+            pos.z = pPkt->mEff[i].mBasePos.z + pPkt->mEff[i].mPos.z;
+            pPkt->mEff[i].mStrengthEnv = 1.0f;
+
+            // §101 — donor kytag01 mpWaveInfl (package calm map supplies pointers).
+            WAVE_INFO* const* inflTable = dKyw_getWaveInfl();
+            if (inflTable != NULL) {
+                for (s32 j = 0; j < 10; j++) {
+                    if (inflTable[j] == NULL) {
+                        continue;
+                    }
+                    cXyz inflPos = inflTable[j]->mPos;
+                    inflPos.y = pos.y;
+                    f32 dist = pos.abs(inflPos);
+                    f32 outerRadius = inflTable[j]->mOuterRadius;
+                    f32 innerRadius = inflTable[j]->mInnerRadius;
+                    if (dist < outerRadius) {
+                        if (dist < innerRadius) {
+                            pPkt->mEff[i].mStrengthEnv = 0.0f;
+                            break;
+                        }
+                        f32 range = outerRadius - innerRadius;
+                        if (range > 0.0f) {
+                            if (pPkt->mEff[i].mStrengthEnv > (dist - innerRadius) / range) {
+                                pPkt->mEff[i].mStrengthEnv = (dist - innerRadius) / range;
+                            }
+                        } else {
+                            pPkt->mEff[i].mStrengthEnv = 0.0f;
+                        }
+                    }
+                }
+            }
+
+            // Donor: flatInter > 0 grows a camera-centered dead zone (open-chop path).
+            // Polarity: 0 = calm (skip); approaching 1 = larger kill radius near eye.
+            if (g_env_light.mWaveChan.mWaveFlatInter > 0.0f) {
+                cXyz newPos3 = pCamera->view.lookat.eye;
+                newPos3.y = pos.y;
+                f32 dist = pos.abs(newPos3);
+                f32 innerRadius = g_env_light.mWaveChan.mWaveFlatInter *
+                                  (g_env_light.mWaveChan.mWaveSpawnRadius * 1.5f);
+                f32 outerRadius = innerRadius + 1000.0f;
+                f32 range = outerRadius - innerRadius;
+                if (range > 0.0f) {
+                    if (pPkt->mEff[i].mStrengthEnv > (dist - innerRadius) / range) {
+                        pPkt->mEff[i].mStrengthEnv = (dist - innerRadius) / range;
+                    }
+                } else {
+                    pPkt->mEff[i].mStrengthEnv = 0.0f;
+                }
+            }
+
+            if (pPlayer != NULL) {
+                cXyz newPos3 = pPlayer->current.pos;
+                newPos3.y = pos.y;
+                f32 dist = pos.abs(newPos3);
+                f32 innerRadius = 200.0f;
+                f32 outerRadius = 2000.0f;
+                f32 range = outerRadius - innerRadius;
+                if (dist < outerRadius) {
+                    if (dist < innerRadius) {
+                        pPkt->mEff[i].mStrengthEnv = 0.0f;
+                    } else {
+                        pPkt->mEff[i].mStrengthEnv *= (dist - innerRadius) / range;
+                    }
+                }
+            }
+            break;
+        }
+        case 3:
+            pPkt->mEff[i].mStatus = 0;
+            break;
+        default:
+            break;
+        }
+
+        cXyz newPos2;
+        newPos2.x = pPkt->mEff[i].mBasePos.x + pPkt->mEff[i].mPos.x;
+        newPos2.y = pPkt->mEff[i].mBasePos.y + pPkt->mEff[i].mPos.y;
+        newPos2.z = pPkt->mEff[i].mBasePos.z + pPkt->mEff[i].mPos.z;
+        f32 dist = newPos2.abs(pCamera->view.lookat.eye);
+        if (dist < 0.0f) {
+            dist = 0.0f;
+        }
+        f32 alphaTarget = 1.0f - (dist / (2.0f * g_env_light.mWaveChan.mWaveSpawnDist));
+        alphaTarget *= 1.03f;
+        alphaTarget *= (f32)std::sin(pPkt->mEff[i].mCounter);
+        if (alphaTarget > 1.0f) {
+            alphaTarget = 1.0f;
+        }
+        if (alphaTarget < 0.0f) {
+            alphaTarget = 0.0f;
+        }
+        cLib_addCalc(&pPkt->mEff[i].mAlpha, alphaTarget, 0.5f, 0.5f, 0.001f);
+        pPkt->mEff[i].mBasePos.y = seaLevel;
+    }
+}
+
+// §98 — donor drawWave recipe (TEV sea-lerp + bank-rolled trapezoid quads).
+void drawWave(Mtx drawMtx, u8** pImg) {
+    dKankyo_wave_Packet* pPkt = g_env_light.mpWavePacket;
+    camera_class* pCamera = dComIfGp_getCamera(0);
+    if (pPkt == NULL || pImg == NULL || pCamera == NULL) {
+        return;
+    }
+    if (g_env_light.mWaveChan.mWaveFlatInter >= 1.0f || dComIfGd_getView() == NULL) {
+        return;
+    }
+
+    Mtx camMtx;
+    Mtx rotMtx;
+    MTXInverse(dComIfGd_getViewRotMtx(), camMtx);
+
+    f32 rot = cM_sht2d(pCamera->view.bank);
+    j3dSys.reinitGX();
+    GXSetClipMode(GX_CLIP_ENABLE);
+
+    // TXA_USONAMI_M (index 1) is Forsaken Fortress only; Outset uses 0.
+    s32 texidx = strcmp(dComIfGp_getStartStageName(), "MajyuE") == 0 ? 1 : 0;
+    if (pImg[texidx] == NULL) {
+        texidx = 0;
+    }
+    TGXTexObj texObj;
+    dKyr_set_btitex(&texObj, (ResTIMG*)pImg[texidx]);
+
+    GXSetNumChans(0);
+    GXSetNumTexGens(1);
+    GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    GXColor amb, dif;
+    dKy_get_seacolor(&amb, &dif);
+    GXSetTevColor(GX_TEVREG0, dif);
+    GXSetTevKColorSel(GX_TEVSTAGE0, GX_TEV_KCSEL_K0);
+    GXSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K3_A);
+    GXSetTevKColor(GX_KCOLOR0, amb);
+    GXSetTevKColor(GX_KCOLOR3, amb);
+    GXSetNumTevStages(1);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+    // out = lerp(sea-dif → sea-amb, TEXC) — texture modulates palette, never draws white alone
+    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_KONST, GX_CC_TEXC, GX_CC_ZERO);
+    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_KONST, GX_CA_TEXA, GX_CA_ZERO);
+    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    dKy_GxFog_sea_set();
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+    GXSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
+    GXSetZCompLoc(GX_FALSE);
+    GXSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    GXSetCullMode(GX_CULL_NONE);
+    GXSetNumIndStages(0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_S16, 8);
+    GXClearVtxDesc();
+    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+    MTXRotRad(rotMtx, 'Z', DEG_TO_RAD(rot));
+    MTXConcat(camMtx, rotMtx, camMtx);
+    GXLoadPosMtxImm(drawMtx, GX_PNMTX0);
+    GXSetCurrentMtx(GX_PNMTX0);
+
+    for (s32 i = 0; i < g_env_light.mWaveChan.mWaveCount; i++) {
+        cXyz p;
+        p.x = pPkt->mEff[i].mBasePos.x + pPkt->mEff[i].mPos.x;
+        p.y = pPkt->mEff[i].mBasePos.y + pPkt->mEff[i].mPos.y;
+        p.z = pPkt->mEff[i].mBasePos.z + pPkt->mEff[i].mPos.z;
+
+        f32 wave = (f32)std::sin(pPkt->mEff[i].mCounter);
+        if (wave <= 0.0f) {
+            continue;
+        }
+
+        f32 scale = g_env_light.mWaveChan.mWaveScale * pPkt->mEff[i].mScale * wave;
+        f32 scaleBottom = g_env_light.mWaveChan.mWaveScaleBottom * scale;
+        f32 strength = pPkt->mEff[i].mStrengthEnv;
+        f32 height = strength * scale;
+        f32 width = scaleBottom * (strength - 0.00000015f * (f32)(i * 32) * height);
+        if (height <= 0.0f) {
+            continue;
+        }
+
+        // Donor rebinds inside the sprite loop.
+        dKyr_set_btitex(&texObj, (ResTIMG*)pImg[texidx]);
+        amb.a = (u8)(pPkt->mEff[i].mAlpha * 255.0f);
+        GXSetTevKColor(GX_KCOLOR3, amb);
+
+        cXyz vp, lp;
+        cXyz pos[4];
+        if (pPkt->mSkewDir < 0.0f) {
+            vp.x = -width + width * -(pPkt->mEff[i].mSpeed * 1.2f) * pPkt->mSkewWidth;
+        } else {
+            vp.x = -width - width * -(pPkt->mEff[i].mSpeed * 1.2f) * pPkt->mSkewWidth;
+        }
+        vp.y = height;
+        vp.z = 0.0f;
+        MTXMultVec(camMtx, &vp, &lp);
+        pos[0].x = p.x + lp.x;
+        pos[0].y = p.y + lp.y;
+        pos[0].z = p.z + lp.z;
+
+        if (pPkt->mSkewDir < 0.0f) {
+            vp.x = width + width * -(pPkt->mEff[i].mSpeed * 1.2f) * pPkt->mSkewWidth;
+        } else {
+            vp.x = width - width * -(pPkt->mEff[i].mSpeed * 1.2f) * pPkt->mSkewWidth;
+        }
+        vp.y = height;
+        vp.z = 0.0f;
+        MTXMultVec(camMtx, &vp, &lp);
+        pos[1].x = p.x + lp.x;
+        pos[1].y = p.y + lp.y;
+        pos[1].z = p.z + lp.z;
+
+        vp.x = width;
+        vp.y = 0.0f;
+        vp.z = 0.0f;
+        MTXMultVec(camMtx, &vp, &lp);
+        pos[2].x = p.x + lp.x;
+        pos[2].y = p.y + lp.y;
+        pos[2].z = p.z + lp.z;
+
+        vp.x = -width;
+        vp.y = 0.0f;
+        vp.z = 0.0f;
+        MTXMultVec(camMtx, &vp, &lp);
+        pos[3].x = p.x + lp.x;
+        pos[3].y = p.y + lp.y;
+        pos[3].z = p.z + lp.z;
+
+        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        GXPosition3f32(pos[0].x, pos[0].y, pos[0].z);
+        GXTexCoord2s16(0, 0);
+        GXPosition3f32(pos[1].x, pos[1].y, pos[1].z);
+        GXTexCoord2s16(0xFA, 0);
+        GXPosition3f32(pos[2].x, pos[2].y, pos[2].z);
+        GXTexCoord2s16(0xFA, 0xFA);
+        GXPosition3f32(pos[3].x, pos[3].y, pos[3].z);
+        GXTexCoord2s16(0, 0xFA);
+        GXEnd();
+    }
+
+    J3DShape::resetVcdVatCache();
+}
+#endif

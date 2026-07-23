@@ -4,12 +4,39 @@
 #include "d/ext_seq/ja1_event_dump.h"
 
 #include <cstdio>
+#include <cstdlib>
 
+#include "dusk/audio/DuskDsp.hpp"
+#include "dusk/logging.h"
 #include "JSystem/JAudio2/JASBank.h"
 #include "JSystem/JAudio2/JASChannel.h"
 
 namespace ExtSeq {
 namespace {
+
+bool volProbeEnv() {
+    const char* v = std::getenv("DUSK_EXTSEQ_VOL_PROBE");
+    if (v == nullptr || v[0] == '\0' || (v[0] == '0' && v[1] == '\0')) {
+        return false;
+    }
+    return true;
+}
+
+/** Fresh budget each startOwned so a field→house hop still captures samples. */
+u32& volProbeSetParamBudget() {
+    static u32 s_left = 96;
+    return s_left;
+}
+
+u32& volProbeNoteOnBudget() {
+    static u32 s_left = 24;
+    return s_left;
+}
+
+void volProbeResetBudgets() {
+    volProbeSetParamBudget() = 96;
+    volProbeNoteOnBudget() = 24;
+}
 
 void voiceCallback(u32 type, JASChannel* ch, JASDsp::TChannel*, void* user) {
     if (type != JASChannel::CB_STOP || user == nullptr || ch == nullptr) {
@@ -70,6 +97,7 @@ void Ja1Track::init() {
     mActive = false;
     mIsPaused = false;
     mPauseStatus = 0;
+    mTrackId = 0;
 }
 
 void Ja1Track::close() {
@@ -104,6 +132,17 @@ Ja1Track* Ja1Track::openChild(u8 idx, u8 /*flags*/) {
         // re-push via updateTempo (copy-at-spawn alone is not enough).
         mChildren[idx]->mTempo = getTempo();
         mChildren[idx]->mTimebase = getTimebase();
+        // WW TTrack::openTrack — pack hierarchy id; warn past 8 levels
+        // (JASTrack.cpp:974–980). Report only — WW still returns the child.
+        const u32 topNibble = mTrackId & 0xf0000000u;
+        if (topNibble >= 0x70000000u) {
+            DuskLog.warn(
+                "[ExtSeq] openTrack: hierarchy exceeds 8 levels — invalid track ID "
+                "(WW JASTrack.cpp:977)");
+        }
+        mChildren[idx]->mTrackId =
+            (topNibble + 0x10000000u) |
+            (((mTrackId << 4) | static_cast<u32>(idx)) & 0x0fffffffu);
     }
     return mChildren[idx];
 }
@@ -148,6 +187,17 @@ int Ja1Track::noteOn(u8 voice, s32 key, s32 vel, s32 /*gate*/, u32 /*prio*/) {
         ch->mParams.mPan = composedPan();
         ch->mParams.mFxMix = composedFxmix();
         ch->mParams.mDolby = composedDolby();
+        if (volProbeEnv()) {
+            u32& left = volProbeNoteOnBudget();
+            if (left > 0) {
+                left--;
+                DuskLog.info(
+                    "[ExtSeq] §C.1 volProbe noteOn tid=0x{:x} key={} vel={} "
+                    "chVol={:.4f} composed={:.4f} raw={:.4f}",
+                    mTrackId, static_cast<unsigned>(k), static_cast<unsigned>(v),
+                    ch->mParams.mVolume, composedVolume(), timedCurrent(TIMED_Volume));
+            }
+        }
     }
     return ch != nullptr ? 1 : 0;
 }
@@ -237,9 +287,33 @@ void Ja1Track::updateTempo() {
 void Ja1Track::setParam(u8 target, f32 value, int moveTime) {
     // WW JASystem::TTrack::setParam — timed ramp via MoveParam_.
     if (target >= TIMED_PARAMS) {
+        // §C.1: WW JUT_ASSERTs; we still no-op but must not stay silent — first
+        // hit only so a hot path cannot spam. Dump/log only; no behaviour change.
+        static bool s_warnedOob = false;
+        if (!s_warnedOob) {
+            s_warnedOob = true;
+            DuskLog.warn(
+                "[ExtSeq] §C.1 setParam target {} >= TIMED_PARAMS ({}) — write dropped "
+                "(WW JASTrack.cpp:815 asserts)",
+                static_cast<unsigned>(target), static_cast<unsigned>(TIMED_PARAMS));
+        }
         return;
     }
     MoveParam& param = mTimed[target];
+    // §C.1 absolute-level probe — gated; first 96 volume (target 0) hits per start.
+    bool probed = false;
+    if (target == TIMED_Volume && volProbeEnv() && !Ja1EventDump::active()) {
+        u32& left = volProbeSetParamBudget();
+        if (left > 0) {
+            left--;
+            probed = true;
+            DuskLog.info(
+                "[ExtSeq] §C.1 volProbe setParam tid=0x{:x} raw={:.4f}→{:.4f} "
+                "composed_now={:.4f} moveTime={} mode={} voices={}",
+                mTrackId, param.mCurrent, value, composedVolume(), moveTime, mVolumeMode,
+                activeVoiceCount());
+        }
+    }
     param.mTarget = value;
     if (moveTime <= 0) {
         param.mCurrent = param.mTarget;
@@ -248,6 +322,11 @@ void Ja1Track::setParam(u8 target, f32 value, int moveTime) {
     } else {
         param.mMoveAmount = (param.mTarget - param.mCurrent) / static_cast<f32>(moveTime);
         param.mMoveTime = static_cast<f32>(moveTime);
+    }
+    if (probed && moveTime <= 0) {
+        DuskLog.info(
+            "[ExtSeq] §C.1 volProbe afterSnap tid=0x{:x} raw={:.4f} composed={:.4f}",
+            mTrackId, param.mCurrent, composedVolume());
     }
 }
 
@@ -268,13 +347,16 @@ void Ja1Track::updateTimedParam() {
 }
 
 f32 Ja1Track::composedVolume() const {
+    // §76 / WW JASTrack.cpp:530-533, :637-644 — OWN track only:
+    //   vol = timed[Volume]; if (volumeMode==0) vol *= vol; × outer (if switch).
+    // NO parent.composedVolume() cascade — that was a port invention; BMS root
+    // volume writes are inert for children in the donor.
     f32 vol = mTimed[TIMED_Volume].mCurrent;
     if (mVolumeMode == 0) {
-        vol *= vol;  // WW volumeMode 0
+        vol *= vol;
     }
-    if (mParent != nullptr) {
-        vol *= mParent->composedVolume();
-    }
+    // §81 SoundTable BGM vol_u8/127 — donor master on the sequence (manifest bypassed it).
+    vol *= dusk::audio::getExtSeqMasterVol();
     if (vol < 0.0f) {
         return 0.0f;
     }
@@ -301,10 +383,13 @@ f32 Ja1Track::composedPan() const {
 }
 
 f32 Ja1Track::composedFxmix() const {
-    f32 fx = mTimed[TIMED_Fxmix].mCurrent;
-    if (mParent != nullptr) {
-        fx += mParent->composedFxmix();
+    // BMS timed fxmix is 0 on Outset; donor wetness is type-7 scene Fxline.
+    // PC approx: scene send → AutoMixer fxmix (sum timed chain once, then + send).
+    f32 fx = 0.0f;
+    for (const Ja1Track* t = this; t != nullptr; t = t->mParent) {
+        fx += t->mTimed[TIMED_Fxmix].mCurrent;
     }
+    fx += dusk::audio::getExtSeqFxSend();
     if (fx < 0.0f) {
         return 0.0f;
     }
@@ -326,6 +411,52 @@ f32 Ja1Track::composedDolby() const {
         return 1.0f;
     }
     return d;
+}
+
+void Ja1Track::applyVoiceParamsDeep() {
+    applyVoiceParams();
+    for (int i = 0; i < kMaxChildren; i++) {
+        if (mChildren[i] != nullptr && mChildren[i]->mActive) {
+            mChildren[i]->applyVoiceParamsDeep();
+        }
+    }
+}
+
+int Ja1Track::activeVoiceCount() const {
+    int n = 0;
+    for (int i = 0; i < kMaxVoices; i++) {
+        if (mVoices[i] != nullptr) {
+            n++;
+        }
+    }
+    return n;
+}
+
+void Ja1Track::logVolProbeTree(const char* tag) const {
+    if (!volProbeEnv() || !mActive) {
+        return;
+    }
+    const char* label = (tag != nullptr && tag[0] != '\0') ? tag : "tree";
+    DuskLog.info(
+        "[ExtSeq] §C.1 volProbe {} tid=0x{:x} raw={:.4f} tgt={:.4f} composed={:.4f} "
+        "mode={} voices={}",
+        label, mTrackId, timedCurrent(TIMED_Volume), timedTarget(TIMED_Volume),
+        composedVolume(), mVolumeMode, activeVoiceCount());
+    for (int i = 0; i < kMaxChildren; i++) {
+        if (mChildren[i] != nullptr && mChildren[i]->mActive) {
+            mChildren[i]->logVolProbeTree(tag);
+        }
+    }
+}
+
+void Ja1Track::volProbeOnSeqStart(Ja1Track* root) {
+    if (!volProbeEnv() || root == nullptr) {
+        return;
+    }
+    volProbeResetBudgets();
+    DuskLog.info("[ExtSeq] §C.1 volProbe ON — absolute levels / composedVolume "
+                 "(set DUSK_EXTSEQ_VOL_PROBE=0 to disable)");
+    root->logVolProbeTree("post-start");
 }
 
 void Ja1Track::applyVoiceParams() {

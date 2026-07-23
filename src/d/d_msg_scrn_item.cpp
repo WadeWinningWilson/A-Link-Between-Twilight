@@ -23,6 +23,10 @@
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "JSystem/JUtility/JUTTexture.h"
 #include <cstring>
+#if TARGET_PC
+#include "d/d_ww_itemmdl_pc.h"
+#include "dolphin/os/OSCache.h"
+#endif
 
 dMsgScrnItem_c::dMsgScrnItem_c(u8 param_1, u8 param_2, JKRExpHeap* param_3) {
     if (param_3 != NULL) {
@@ -74,10 +78,22 @@ dMsgScrnItem_c::dMsgScrnItem_c(u8 param_1, u8 param_2, JKRExpHeap* param_3) {
         }
         mItemIndex = 0x43;
     }
+#if TARGET_PC
+    // Clothes get-icon is direct RGB5A3 48×48 (~4640) — larger than vanilla CI8 0xC00.
+    u32 itemTexCap = 0xc00;
+    {
+        const u32 kitCap = dWwItemmdl_clothesBundleIconCap(static_cast<u8>(mItemIndex));
+        if (kitCap > itemTexCap) {
+            itemTexCap = kitCap;
+        }
+    }
+#else
+    const u32 itemTexCap = 0xc00;
+#endif
     for (int i = 0; i < 3; i++) {
         mpItemPane[i] = 0;
         field_0x0e0[i] = 0;
-        mpItemTex[i] = field_0x138->alloc(0xc00, 0x20);
+        mpItemTex[i] = field_0x138->alloc(itemTexCap, 0x20);
         JUT_ASSERT(100, mpItemTex[i] != NULL);
     }
     int uStack_60 = 0xffffffff;
@@ -111,6 +127,16 @@ dMsgScrnItem_c::dMsgScrnItem_c(u8 param_1, u8 param_2, JKRExpHeap* param_3) {
         field_0x0e0[0] = (ResTIMG*)mpItemTex[0];
         mpItemPane[0] = JKR_NEW J2DPicture(field_0x0e0[0]);
         JUT_ASSERT(148, mpItemPane[0] != NULL);
+#if TARGET_PC
+    } else if (dWwItemmdl_writeClothesBundleIconTimg(static_cast<u8>(mItemIndex), mpItemTex[0],
+                                                     itemTexCap)) {
+        DCStoreRangeNoSync(mpItemTex[0], itemTexCap);
+        field_0x0e0[0] = (ResTIMG*)mpItemTex[0];
+        mpItemPane[0] = JKR_NEW J2DPicture(field_0x0e0[0]);
+        JUT_ASSERT(148, mpItemPane[0] != NULL);
+        mpItemPane[0]->setBlackWhite(JUtility::TColor(0x00, 0x00, 0x00, 0x00),
+                                     JUtility::TColor(0xFF, 0xFF, 0xFF, 0xFF));
+#endif
     } else {
         int texNum =
             dMeter2Info_readItemTexture(mItemIndex, mpItemTex[0], (J2DPicture*)NULL, mpItemTex[1],

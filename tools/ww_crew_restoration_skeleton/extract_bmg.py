@@ -69,13 +69,22 @@ def decode_text(dat, off):
 
 
 def escape_meaning(seq):
-    """Map an escape sequence to plain text (or '' when purely presentational)."""
-    # seq[2] selects the group in WW's scheme; only text-bearing ones matter here.
-    if len(seq) >= 4 and seq[2] == 0xFF:
-        return ""              # colour change
-    if len(seq) >= 5 and seq[2] == 0x01 and seq[3] == 0x00:
-        return "{player}"      # player-name insert
-    return ""                  # pause / sound / furigana / camera: no text
+    """Map an escape sequence to plain text (or '' when purely presentational).
+
+    DONOR-VERIFIED (№261, WW DP src/d/d_mesg.cpp tag switch): the 3 bytes after
+    <len> form the tag param; param & 0xFF0000 selects the group:
+      group 0x00, case 0  -> dComIfGs_getPlayerName()   (THE name insert)
+      group 0x00, 1-9     -> pauses/waits               (no text)
+      group 0x00, 10-29   -> button/icon glyphs         (no text here)
+      group 0x01          -> mDoAud_messageSePlay sound (no text)
+      group 0x02          -> camera tag                 (no text)
+      group 0xFF          -> colour change              (no text)
+    The old mapping (01 00 -> {player}) mislabeled SOUNDS as the name and threw
+    the real name escape (1a 05 00 00 00) away.
+    """
+    if len(seq) >= 5 and seq[2] == 0x00 and seq[3] == 0x00 and seq[4] == 0x00:
+        return "{player}"      # player-name insert (donor tag case 0)
+    return ""                  # sound / pause / colour / camera / glyph: no text
 
 
 def main():

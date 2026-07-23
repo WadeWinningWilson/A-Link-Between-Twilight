@@ -96,6 +96,51 @@ void dWwItemmdl_clearOutlineSuppress();
 
 bool dWwItemmdl_retainItemmdlArcOnDemoItemDelete();
 
+/**
+ * Clothes get-item prop (Grandma handover / step 6).
+ * Config: model_replacements/<mod>/getitem/clothes_bundle.ini
+ * (host_item / arc / model / get_text / get_icon / hand_offset_* / max_scale —
+ * no WW name literals in the exe). Optional overlay: clothes_bundle_text.ini.
+ */
+bool dWwItemmdl_clothesBundleForItem(u8 item_no);
+/** Arc stem from config once loaded; nullptr if inactive. */
+const char* dWwItemmdl_clothesBundleArcName();
+/** Model member name from config; nullptr if inactive. */
+const char* dWwItemmdl_clothesBundleModelName();
+/**
+ * Resolve finished ModelData from the already-mounted overlay arc.
+ * Call only after dComIfG_resLoad of clothesBundleArcName() has completed.
+ * Uses ExtNpcMount acquire (Ivan/Outset create path) — not raw getObjectRes.
+ */
+J3DModelData* dWwItemmdl_getClothesBundleModelData();
+
+/** Drop cached ModelData before DeleteBase(unmount) of the clothes arc. */
+void dWwItemmdl_clearClothesBundleCache();
+
+/**
+ * Get-box kit: if msgId is the host-item get message (host+0x65) and config
+ * authored get_text, return that string (newlines already expanded). Else null.
+ */
+const char* dWwItemmdl_clothesBundleGetTextForMessage(u32 msg_id);
+
+/**
+ * Bytes needed for the staged get_icon ResTIMG (0 if no icon / wrong item).
+ * Get-box alloc must be at least this — direct RGB5A3 48×48 is > 0xC00.
+ */
+u32 dWwItemmdl_clothesBundleIconCap(u8 item_no);
+
+/** Copy get_icon BTI into out_buf. False → caller keeps vanilla path. */
+bool dWwItemmdl_writeClothesBundleIconTimg(u8 item_no, void* out_buf, u32 out_cap);
+
+/**
+ * Hand-anchor offset for present-demo (player-local). True when config
+ * authored hand_offset_*; fills *out. False → keep l_player_offset.
+ */
+bool dWwItemmdl_clothesBundleHandOffset(f32* out_x, f32* out_y, f32* out_z);
+
+/** Present-demo max scale from config; 0 = leave actor default (grow to 1). */
+f32 dWwItemmdl_clothesBundleMaxScale();
+
 #endif
 
 

@@ -14,6 +14,20 @@
 #include "f_op/f_op_camera_mng.h"
 #include <cstring>
 #include "m_Do/m_Do_audio.h"
+#if TARGET_PC
+#include "SSystem/SComponent/c_phase.h"
+#include "d/d_ext_save_guard.h"
+#include "dusk/logging.h"
+#if TARGET_PC
+#include "dusk/main.h"
+#include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <string>
+namespace fs = std::filesystem;
+#endif
+#endif
 
 static void dKyw_pntlight_set(WIND_INFLUENCE* pntwind);
 
@@ -238,6 +252,16 @@ static void dKyw_evil_Draw() {
     dKyw_evil_packet(J3DSysDrawBuf_Xlu);
 }
 
+#if TARGET_PC
+static void dKyw_drawWave(int i_type) {
+    dKyw_setDrawPacketListXluBg(g_env_light.mpWavePacket, i_type);
+}
+
+static void dKyw_Wave_Draw() {
+    dKyw_drawWave(J3DSysDrawBuf_Xlu);
+}
+#endif
+
 void dKyw_wether_init() {
     g_env_light.mSunInitialized = false;
     g_env_light.mThunderEff.mStatus = 0;
@@ -270,6 +294,9 @@ void dKyw_wether_init() {
     g_env_light.field_0x1054 = 0;
     g_env_light.field_0x1051 = 0;
     g_env_light.unk_0xe60 = 0.0f;
+#if TARGET_PC
+    dKy_wave_chan_init();
+#endif
 
     dKyw_wind_init();
     dKyw_pntwind_init();
@@ -362,11 +389,30 @@ void dKyw_wether_delete() {
         JKR_DELETE(g_env_light.mpEvilPacket);
         g_env_light.mpEvilPacket = NULL;
     }
+
+#if TARGET_PC
+    if (g_env_light.mWaveInitialized) {
+        JKR_DELETE(g_env_light.mpWavePacket);
+        g_env_light.mpWavePacket = NULL;
+        g_env_light.mWaveInitialized = 0;
+    }
+#endif
 }
 
 dKankyo_evil_Packet::~dKankyo_evil_Packet() {}
 
 dKankyo_mud_Packet::~dKankyo_mud_Packet() {}
+
+#if TARGET_PC
+WAVE_EFF::WAVE_EFF() {}
+WAVE_EFF::~WAVE_EFF() {}
+
+void dKankyo_wave_Packet::draw() {
+    drawWave(j3dSys.getViewMtx(), &mpTexUsonami);
+}
+
+dKankyo_wave_Packet::~dKankyo_wave_Packet() {}
+#endif
 
 dKankyo_odour_Packet::~dKankyo_odour_Packet() {}
 
@@ -1012,6 +1058,309 @@ static void wether_move_evil() {
     }
 }
 
+#if TARGET_PC
+// §97b — Bridge indices for WwAlways USONAMI BTIs (verbatim Always table).
+static constexpr u16 kWwAlwaysUsonami = 0x8B;
+static constexpr u16 kWwAlwaysUsonamiM = 0x8C;
+static request_of_phase_process_class s_wwAlwaysPhase;
+static int s_wwAlwaysPhaseState = cPhs_INIT_e;
+static bool s_wwAlwaysWarned;
+
+// §101 — package calm map (sea-room wave_max grid analog) + kytag01 influences.
+// Polarity (donor CalcFlatInterTarget / CalcFlatInter / wave_move / usonami_set):
+//   0.0 = calm → usonami ON;  1.0 = open chop → usonami OFF (>= 1.0 gate).
+static constexpr f32 kWaveCalmRamp = 12800.0f;
+static constexpr int kWaveCalmMaxBoxes = 8;
+static constexpr int kWaveInflMax = 10;
+
+struct WwCalmBox {
+    f32 minX, maxX, minZ, maxZ;
+};
+
+static WwCalmBox s_calmBoxes[kWaveCalmMaxBoxes];
+static int s_calmBoxCount;
+static WAVE_INFO s_waveInfl[kWaveInflMax];
+static WAVE_INFO* s_waveInflPtrs[kWaveInflMax];
+static int s_waveInflCount;
+static f32 s_flatInter;
+static f32 s_flatTarget;
+static f32 s_flatCounter;
+static char s_calmStage[12];
+static bool s_calmLoaded;
+
+static bool wwFoamFieldActive() {
+    const char* stage = dComIfGp_getStartStageName();
+    return stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage);
+}
+
+// Donor cM2dGBox::GetLen — distance to AABB in XZ (0 if inside).
+static f32 wwCalmBoxLen(f32 minX, f32 maxX, f32 minZ, f32 maxZ, f32 x, f32 z) {
+    if (minX < x && x < maxX && minZ < z && z < maxZ) {
+        return 0.0f;
+    }
+    if (minX < x && x < maxX) {
+        f32 d0 = std::fabs(minZ - z);
+        f32 d1 = std::fabs(maxZ - z);
+        return d0 < d1 ? d0 : d1;
+    }
+    if (minZ < z && z < maxZ) {
+        f32 d0 = std::fabs(minX - x);
+        f32 d1 = std::fabs(maxX - x);
+        return d0 < d1 ? d0 : d1;
+    }
+    f32 cx = x < minX ? minX : maxX;
+    f32 cz = z < minZ ? minZ : maxZ;
+    f32 dx = x - cx;
+    f32 dz = z - cz;
+    return std::sqrt(dx * dx + dz * dz);
+}
+
+// Donor CalcFlatInterTarget — inside any calm box → 0; else min of ramps to
+// each calm box expanded by 12800, normalized by 12800. Far from all → 1.0.
+static f32 wwCalcFlatInterTarget(f32 x, f32 z) {
+    if (s_calmBoxCount <= 0) {
+        return 0.0f;  // no map: match prior arm (island calm)
+    }
+    for (int i = 0; i < s_calmBoxCount; i++) {
+        const WwCalmBox& b = s_calmBoxes[i];
+        if (b.minX <= x && x <= b.maxX && b.minZ <= z && z <= b.maxZ) {
+            return 0.0f;
+        }
+    }
+    f32 result = 1.0f;
+    for (int i = 0; i < s_calmBoxCount; i++) {
+        const WwCalmBox& b = s_calmBoxes[i];
+        f32 len = wwCalmBoxLen(b.minX - kWaveCalmRamp, b.maxX + kWaveCalmRamp,
+                               b.minZ - kWaveCalmRamp, b.maxZ + kWaveCalmRamp, x, z);
+        if (len > kWaveCalmRamp) {
+            len = kWaveCalmRamp;
+        }
+        len /= kWaveCalmRamp;
+        if (result > len) {
+            result = len;
+        }
+    }
+    return result;
+}
+
+static void wwCalmClear() {
+    s_calmBoxCount = 0;
+    s_waveInflCount = 0;
+    for (int i = 0; i < kWaveInflMax; i++) {
+        s_waveInflPtrs[i] = NULL;
+    }
+    s_flatInter = 1.0f;
+    s_flatTarget = 1.0f;
+    s_flatCounter = 0.0f;
+    s_calmStage[0] = '\0';
+    s_calmLoaded = false;
+}
+
+static bool wwParse4f(const char* v, f32* a, f32* b, f32* c, f32* d) {
+    return std::sscanf(v, "%f,%f,%f,%f", a, b, c, d) == 4;
+}
+
+static bool wwParse5f(const char* v, f32* a, f32* b, f32* c, f32* d, f32* e) {
+    return std::sscanf(v, "%f,%f,%f,%f,%f", a, b, c, d, e) == 5;
+}
+
+static void wwLoadWaveCalmIni(const char* stage) {
+    wwCalmClear();
+    if (stage == NULL) {
+        return;
+    }
+    std::snprintf(s_calmStage, sizeof(s_calmStage), "%s", stage);
+
+    const fs::path root = dusk::ConfigPath / "model_replacements";
+    if (!fs::exists(root)) {
+        return;
+    }
+    fs::path iniPath;
+    for (const auto& ent : fs::directory_iterator(root)) {
+        if (!ent.is_directory()) {
+            continue;
+        }
+        const fs::path cand = ent.path() / "population" / "wave_calm.ini";
+        if (fs::exists(cand)) {
+            iniPath = cand;
+            break;
+        }
+    }
+    if (iniPath.empty()) {
+        DuskLog.warn("[WwFoam] §101 no population/wave_calm.ini — flatInter stays armed-default");
+        return;
+    }
+
+    std::ifstream in(iniPath);
+    if (!in) {
+        return;
+    }
+    std::string line;
+    std::string section;
+    const std::string want = std::string("[") + stage + "]";
+    while (std::getline(in, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+            line.pop_back();
+        }
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        if (line[0] == '[') {
+            section = line;
+            continue;
+        }
+        if (section != want) {
+            continue;
+        }
+        const auto eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+        while (!key.empty() && key.back() == ' ') {
+            key.pop_back();
+        }
+        while (!val.empty() && val.front() == ' ') {
+            val.erase(val.begin());
+        }
+        if (key == "calm_box" && s_calmBoxCount < kWaveCalmMaxBoxes) {
+            f32 minX, maxX, minZ, maxZ;
+            if (wwParse4f(val.c_str(), &minX, &maxX, &minZ, &maxZ)) {
+                if (minX > maxX) {
+                    f32 t = minX;
+                    minX = maxX;
+                    maxX = t;
+                }
+                if (minZ > maxZ) {
+                    f32 t = minZ;
+                    minZ = maxZ;
+                    maxZ = t;
+                }
+                s_calmBoxes[s_calmBoxCount++] = {minX, maxX, minZ, maxZ};
+            }
+        } else if (key == "infl" && s_waveInflCount < kWaveInflMax) {
+            f32 x, y, z, inner, outer;
+            if (wwParse5f(val.c_str(), &x, &y, &z, &inner, &outer)) {
+                if (outer < inner + 500.0f) {
+                    outer = inner + 500.0f;  // donor kytag01 bump
+                }
+                WAVE_INFO& w = s_waveInfl[s_waveInflCount];
+                w.mPos.set(x, y, z);
+                w.mInnerRadius = inner;
+                w.mOuterRadius = outer;
+                w.field_0x14 = 0.0f;
+                s_waveInflPtrs[s_waveInflCount] = &w;
+                s_waveInflCount++;
+            }
+        }
+    }
+    for (int i = s_waveInflCount; i < kWaveInflMax; i++) {
+        s_waveInflPtrs[i] = NULL;
+    }
+    s_calmLoaded = true;
+    s_flatCounter = 150.0f;  // donor SetFlat/ClrFlat ease window
+    DuskLog.info("[WwFoam] §101 calm map '{}' boxes={} infl={} ramp={}", stage, s_calmBoxCount,
+                 s_waveInflCount, (int)kWaveCalmRamp);
+}
+
+WAVE_INFO* const* dKyw_getWaveInfl() {
+    return s_waveInflPtrs;
+}
+
+void dKyw_wave_calm_onStage(const char* stage) {
+    if (stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage)) {
+        wwLoadWaveCalmIni(stage);
+    } else {
+        wwCalmClear();
+    }
+}
+
+void dKyw_wave_calm_update() {
+    if (!wwFoamFieldActive() || g_env_light.mWaveChan.mWaveCount == 0) {
+        return;
+    }
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+    s_flatTarget = wwCalcFlatInterTarget(player->current.pos.x, player->current.pos.z);
+    // Donor CalcFlatInter ease (counter path).
+    if (s_flatCounter != 0.0f) {
+        s_flatInter = s_flatInter + (s_flatTarget - s_flatInter) / s_flatCounter;
+        s_flatCounter -= 1.0f;
+        if (s_flatCounter < 0.0f) {
+            s_flatCounter = 0.0f;
+        }
+    } else {
+        s_flatInter = s_flatTarget;
+    }
+    dKy_usonami_set(s_flatInter);
+}
+
+static void wether_move_wave() {
+    if (!wwFoamFieldActive()) {
+        if (g_env_light.mWaveInitialized) {
+            JKR_DELETE(g_env_light.mpWavePacket);
+            g_env_light.mpWavePacket = NULL;
+            g_env_light.mWaveInitialized = 0;
+        }
+        return;
+    }
+
+    dKyw_wave_calm_update();
+
+    switch (g_env_light.mWaveInitialized) {
+    case 0:
+        if (g_env_light.mWaveChan.mWaveCount == 0) {
+            return;
+        }
+        s_wwAlwaysPhaseState = dComIfG_resLoad(&s_wwAlwaysPhase, "WwAlways");
+        if (s_wwAlwaysPhaseState != cPhs_COMPLEATE_e) {
+            if (s_wwAlwaysPhaseState == cPhs_ERROR_e && !s_wwAlwaysWarned) {
+                s_wwAlwaysWarned = true;
+                DuskLog.warn("[WwFoam] §97b WwAlways resLoad ERROR — foam idle");
+            }
+            return;
+        }
+        g_env_light.mpWavePacket = JKR_NEW_ARGS(0x20) dKankyo_wave_Packet;
+        if (g_env_light.mpWavePacket == NULL) {
+            return;
+        }
+        g_env_light.mpWavePacket->mpTexUsonami =
+            (u8*)dComIfG_getObjectRes("WwAlways", (int)kWwAlwaysUsonami);
+        g_env_light.mpWavePacket->mpTexUsonamiM =
+            (u8*)dComIfG_getObjectRes("WwAlways", (int)kWwAlwaysUsonamiM);
+        if (g_env_light.mpWavePacket->mpTexUsonami == NULL ||
+            g_env_light.mpWavePacket->mpTexUsonamiM == NULL) {
+            DuskLog.warn("[WwFoam] §97b USONAMI BTI missing (0x8B/0x8C)");
+            JKR_DELETE(g_env_light.mpWavePacket);
+            g_env_light.mpWavePacket = NULL;
+            return;
+        }
+        for (int i = 0; i < 300; i++) {
+            g_env_light.mpWavePacket->mEff[i].mStatus = 0;
+        }
+        g_env_light.mpWavePacket->mSkewWidth = 0.0f;
+        g_env_light.mpWavePacket->mSkewDir = 0.0f;
+        wave_move();
+        g_env_light.mWaveInitialized = 1;
+        DuskLog.info("[WwFoam] §97b packet ready count={}",
+                     (int)g_env_light.mWaveChan.mWaveCount);
+        break;
+    case 1:
+        if (g_env_light.mWaveChan.mWaveCount == 0) {
+            g_env_light.mWaveInitialized = 0;
+            JKR_DELETE(g_env_light.mpWavePacket);
+            g_env_light.mpWavePacket = NULL;
+            return;
+        }
+        wave_move();
+        break;
+    }
+}
+#endif
+
 void dKyw_wether_move_draw() {
     g_env_light.moya_se = 0;
 
@@ -1028,6 +1377,9 @@ void dKyw_wether_move_draw() {
         wether_move_mud();
         wether_move_evil();
         wether_move_odour();
+#if TARGET_PC
+        wether_move_wave();
+#endif
     }
 }
 
@@ -1078,6 +1430,12 @@ void dKyw_wether_draw() {
         if (g_env_light.mEvilInitialized != 0) {
             dKyw_evil_Draw();
         }
+
+#if TARGET_PC
+        if (g_env_light.mWaveInitialized != 0) {
+            dKyw_Wave_Draw();
+        }
+#endif
 
         dKy_undwater_filter_draw();
     }

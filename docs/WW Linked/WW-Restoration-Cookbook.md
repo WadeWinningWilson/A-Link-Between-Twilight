@@ -1,4 +1,70 @@
-# WW Restoration Cookbook — the ground-up process
+> # ⚠ UNCERTAIN ACCURACY — DO NOT WRITE
+> This copy is one of two diverged cookbooks (fork confirmed 2026-07-23, bus §106; 542 diff
+> lines). It may contain doctrine the other copy lacks and vice versa. **Do not edit. Do not
+> treat any entry here as law without corroboration.**
+> **The canonical book is [WW-Restoration-Cookbook-CANONICAL.md](../WW-Restoration-Cookbook-CANONICAL.md)** — entries migrate there
+> as they are corroborated (bilateral agreement, ratification receipt, or source re-verification).
+
+# WW Restoration Cookbook — the ground-up process (UNCERTAIN ACCURACY — DO NOT WRITE)
+
+> ## READ FIRST — check the DONOR DECOMP, not just the receiver
+>
+> **Decomp source: `D:\XXXXXXX\WW DP\src`**  (arcs: `D:\XXXXXXX\Ex WW`)
+>
+> The receiver's source tells you **what** an API is. Only the donor tells you **how its
+> own actors called it** — flags, argument order, order of operations. Those are not
+> derivable from the receiver side, and guessing them looks exactly like a working port
+> until it silently isn't.
+>
+> **This cost four debug rounds once already (ledger №177–№181).** The cast was invisible
+> in the opening cutscene. Every receiver-side probe read green — actor bound, enables set,
+> position correct, draw running, matrix written. The fault was that
+> `dDemo_setDemoData(...)` was called with flags reasoned out as `0xEE` instead of the
+> donor's actual **`106`**. The extra `ENABLE_SCALE_e` bit assigned
+> `scale = demo_actor->getScale()` = **(0,0,0)** — the model was scaled out of existence
+> while every position measurement stayed correct. The answer was sitting in
+> `D:\XXXXXXX\WW DP\src\d\actor\d_a_npc_ls1.cpp` the entire time.
+>
+> **Before instrumenting a receiver-side theory:**
+>
+> 1. Find the donor's equivalent actor/system (`d_a_npc_*.cpp` for NPCs,
+>    `d_demo.cpp` / `d_event*.cpp` for cutscenes).
+> 2. Copy its call shape **verbatim** — flags, argument order, sequencing.
+> 3. Cite the donor function in a comment at the ported call site.
+>
+> Outset is only partially decompiled, so expect gaps — but struct definitions and call
+> sites are reliable, and are the fastest route from "it doesn't work" to "here is the
+> parameter I got wrong".
+
+
+
+> ## ⚠ READ FIRST — `OffsetPos` applies to EVERY Great Sea space
+>
+> A donor event's `PACKAGE: PLAY` cut carries an **`OffsetPos`** that is handed
+> straight to `dDemo_c::start(demo_data, xyzdata, offsetAngY)`
+> ([d_event_data.cpp:1291](../../../src/d/d_event_data.cpp)). It is the origin the
+> storyboard stages its **cast** from.
+>
+> **It comes across from the donor VERBATIM when an event is merged, and donor
+> world coordinates are not receiver world coordinates.** Outset's opening carries
+> `OffsetPos = -220000, 0, 320000` while the island itself sits near `-195000` — a
+> **~24,600-unit gap in X**. A cast staged off the wrong origin lands in open ocean,
+> and on screen that is indistinguishable from *"the actor never appears"*.
+>
+> **This affects every island, every interior and every NPC that is ever added**, not
+> just the space it was first found on. Whenever you merge a donor event:
+>
+> 1. Decode the PLAY cut and read its `OffsetPos`.
+> 2. Compare it against the receiver-space position of the scene (the camera
+>    `FIXEDFRM`/`STBWAIT` Center is a good reference — it is usually already correct).
+> 3. If they disagree, the cast will stage away from the camera. **Fix the field in
+>    the merged `event_list.dat` — it is DATA, no rebuild required.**
+>
+> A camera that frames the right spot proves nothing about where the cast is: the two
+> come from different fields. Verified-wrong beats assumed-right.
+> Ledger: №165, №175.
+
+
 
 **What this is:** the distilled, proven pipeline for bringing a Wind Waker space to life
 inside the TP port — map, interiors, doors, actors, limbs, animation, story gating.
@@ -44,6 +110,25 @@ reference). Consult BEFORE guessing any WW name or param.
 
   **Corollary:** verifying donor bytes are unmodified proves nothing about output. **Verify at the
   stage the player perceives**, not at the stage that is easiest to hash.
+
+  **№31-C — A CHECK THAT CANNOT RUN MUST REPORT `UNKNOWN`, NEVER `CLEAN`.** Ratified by user
+  2026-07-21. Green must prove the check *executed*, not merely that it found nothing. A verifier's
+  silence is not evidence.
+
+  **Corollary:** any tool reporting a pass must also report **what it inspected** — path, count,
+  version — so the pass is falsifiable from its own output alone.
+
+  **Origin:** History observed that WW's failure paths report through `OS_WARNING` with Japanese
+  text that never reaches the dusk log — "which is why we've seen nothing." The generalised defect:
+  **a ported guard without a ported report is a silent failure**; the port inherited WW's guard
+  *conditions* and dropped its guard *reporting* (`ja1_parser.cpp` 0 logs / 22 bare returns,
+  `ja1_track.cpp` 0 / 5). The audit then found the same class of defect in the covenant gate
+  itself — an emptied `greplist.txt` produced `patterns=0, hits=0, GATE CLEAN, exit 0`, i.e. a pass
+  on an exe it had never meaningfully scanned. Closed in Bridge 0.19.0 (`GATE INCONCLUSIVE`, exit 3,
+  resolved `greplist=` path printed every run); independently re-tested, see bus doc §61 / §61c.
+
+  **№31-B and №31-C are companions:** B says verify at the stage the player perceives; C says a
+  verification's silence is not a result.
 - **RECEIVER COVENANT:** the vanilla exe/game tree contains ZERO WW content — no bytes, no
   names, no dialogue. Everything lives in the mod folder
   (`%AppData%\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\`).
@@ -65,6 +150,14 @@ reference). Consult BEFORE guessing any WW name or param.
 - **IVAN RULE:** no invented identity labels. Verify via decomp + user identity pass;
   labels stay `? (unverified)` until the user locks them. (tww comment order is NOT
   reliable proc order — the Joel/Zill inversion, №50-B.)
+
+  *Etymology (user, 2026-07-22, recorded before the name was scrubbed from code): **"Ivan" was the
+  color test** — the name used for the color/lighting test subject during the demo-item work. The
+  rule inherited the name; so did a lighting recipe. Because `Ivan` is a greplist marker, the
+  nickname must never appear in shipping code again (it reached the exe once via a log literal —
+  bus §102, caught by the gate, contained by no-push). The recipe formerly nicknamed "Ivan/boots"
+  is hereby the **NEUTRAL-AMBIENT RECIPE**: `settingTevStruct(TEV_TYPE 0)` + neutral ambient, no
+  MAJI, no bow warm tint (`d_a_demo_item.cpp:519` era) — same technique, covenant-safe name.*
 - **FAIL-CLOSED EVERYWHERE:** exact-match-or-refuse spawns (E1), warp fade-back guards,
   shader skip-draw-on-compile-fail, audio size-mismatch refusal. A refusal logs a line;
   a guess summons Ganondorf (literally — he is HENNA0 arg 1).

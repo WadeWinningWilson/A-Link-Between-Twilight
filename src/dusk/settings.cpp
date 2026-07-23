@@ -64,8 +64,9 @@ UserSettings g_userSettings = {
         .wwItemmdlHeldSkin {"game.wwItemmdlHeldSkin", WwHeldSkinMode::Off},
         .wwItemmdlHeldBowScalePct {"game.wwItemmdlHeldBowScalePct", 100},
         .wwItemmdlHeldBootsStyle {"game.wwItemmdlHeldBootsStyle", false},
+        .wwPlayerDonorLook {"game.wwPlayerDonorLook", false},
         .dekuLeafGlideTest {"game.dekuLeafGlideTest", false},
-        // №105 P2: gated hold-A crawl (DoStatus NONE + stick ≤ roll rate). Default ON —
+        // №105 P2: gated hold-A crawl ≥1s (DoStatus NONE + stick ≤ roll rate). Default ON —
         // native ENTER does not arm WW crawl holes until adapt_dzb wall-codes land.
         .enableHoldACrawl {"game.enableHoldACrawl", true},
         .wwItemmdlViewerBdlIndex {"game.wwItemmdlViewerBdlIndex", 0xF},
@@ -370,6 +371,7 @@ void registerSettings() {
     Register(g_userSettings.game.wwItemmdlHeldSkin);
     Register(g_userSettings.game.wwItemmdlHeldBowScalePct);
     Register(g_userSettings.game.wwItemmdlHeldBootsStyle);
+    Register(g_userSettings.game.wwPlayerDonorLook);
     Register(g_userSettings.game.dekuLeafGlideTest);
     Register(g_userSettings.game.enableHoldACrawl);
     Register(g_userSettings.game.wwItemmdlViewerBdlIndex);

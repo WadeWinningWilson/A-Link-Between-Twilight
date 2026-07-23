@@ -62,6 +62,30 @@ void ja1Bank_applyWwVelocityCurve(JASChannel* ch, f32 initVol, u8 vel);
 /** True if this channel was started by ExtSeq (WW mix path owns it). */
 bool ja1Bank_isExtSeqChannel(const JASChannel* ch);
 
+/**
+ * §76 key-region audit — write engine parse of every INST key/velo region
+ * (same columns as Bridge `ibnk_initvol.csv`) for byte-level wave-selection
+ * diff. Returns rows written, or 0 on failure.
+ */
+u32 ja1Bank_dumpKeyRegionsCsv(const char* outPath);
+
+/**
+ * §87 — CharVoice SE package (`audio/.../voice/`, Bridge voice-map --payload).
+ * Cue map + .aw ride the package (§67). Lifetime independent of BGM ownership
+ * so message-open one-shots survive ExtSeq handoff unregister.
+ */
+bool ja1Voice_loadPackage(const std::filesystem::path& voiceRoot);
+bool ja1Voice_ready();
+/** Publish CharVoice .aw into shadow-wave (idempotent). */
+void ja1Voice_register();
+void ja1Voice_unregister();
+void ja1Voice_clear();
+/**
+ * Message-open hook: look up INF1 index in package `[cues]`.
+ * sound=0 → silent (donor). Else play SE 0x481F clip = WSYS wave (port & 0xFF).
+ */
+void ja1Voice_onDemoMessageOpen(u32 donorMsgId);
+
 }  // namespace ExtSeq
 
 #endif  // D_EXT_SEQ_JA1_BANK_H

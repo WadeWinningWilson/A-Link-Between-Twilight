@@ -1,43 +1,37 @@
 # WW Bridge Tool — live state
 
-**Tip (overwrite, don’t append):** ASK 17 engine event dump shipped — set `DUSK_EXTSEQ_EVENT_DUMP=1`, enter Outset/house once; CSVs land next to Bridge goldens. **Diff streams; no fix until disagreement is a line.**
+**Tip (overwrite, don't append):** Bridge **№-ledger-as-database SHIPPED** — tool **0.31.0**; `nledger extract|validate|build`. Mechanical drafts **246** unclassified → History classifies into `ledger/entries/` (status/supersedes/summary). Schema: `albt bridge/ledger/SCHEMA.md`.
 
 | Field | Value |
 |-------|--------|
-| **status** | Both streams ready for mechanical diff |
-| **next** | Diff `seq_events_*.csv` vs `seq_events_engine_*.csv`; fix the first disagreement |
-| **do-not** | Change rates/exponents; share decoder with Bridge; fix from theory |
+| **status** | nledger mechanical half CLEAR; History migration pending |
+| **next** | History classifies drafts; optional bus-doc linter later |
+| **do-not** | Bridge inventing which № supersedes which |
 | **tool_root** | `C:\Users\xxxxx\Documents\albt bridge` |
-| **tool_version** | **0.18.0** |
+| **tool_version** | **0.31.0** |
 | **decomp** | `D:\XXXXXXX\WW DP` (`WW_DECOMP`) |
 | **ww_extract** | `D:\XXXXXXX\Ex WW` (`WW_EXTRACT`) |
 | **schema_version** | **2** |
-| **updated** | 2026-07-21 |
+| **updated** | 2026-07-23 |
 
 ## Commands (recent)
 
 | Cmd | Role |
 |-----|------|
-| `seq-events` | **ASK 17** independent BMS event decode (Bridge golden) |
-| `tempo-map` | ASK 16 tempo/timebase |
-| `vel-calib` | ASK 15 velocity hist + initVol |
+| `nledger extract` | Prose → `ledger/drafts/*.jsonl` (unclassified) |
+| `nledger validate` | Schema + dangling-ref warnings |
+| `nledger build` | Generated views → `reports/nledger_*.md` |
+| `model1-dump` | §99+§101 materials/BTK + TEV/blend ref |
+| `waterline-inv` | §97 room inventory + Always BTI index |
 
-## Headline (ASK 17)
-
-| Side | Artifact |
-|------|----------|
-| Bridge | `seq_events_{i_link,house}.csv` |
-| Engine | `seq_events_engine_{i_link,house}.csv` (flag `DUSK_EXTSEQ_EVENT_DUMP=1`) |
-
-Columns: `tick,track_id,event,note_param,velocity` · per-track local ticks
-
-## Open
+## Open (not Bridge)
 
 | Item | Owner |
 |------|--------|
-| Diff Bridge vs engine → first disagreeing line | user / HS |
-| Fix that line only | engine (after diff) |
+| Classify ~246 draft № rows (live/dead/supersedes) | History |
+| system-4 fidelity vs mat-ref sheet | Engine |
+| Tip rewrite from `status=live\|standing` views | History/user |
 
 ## Closed this lane
 
-ASK 1–17 · §52 (B) · §53b · engine dump companion · …
+… · **nledger 0.31.0** · §101c mizu mat-ref · §99 model1-dump · …

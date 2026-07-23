@@ -154,6 +154,13 @@ public:
     dDemo_prm_c* getPrm() { return &mPrm; }
     f32 getAnmTransition() { return mAnmTransition; }
     u32 getShapeId() { return mShape; }
+    // №186: the storyboard's TEXTURE-animation channel (BTP/BTK) — the donor's
+    // cast drives facial animation from it (`daNpc_Ls1_c::demo()` re-inits its
+    // BTP whenever the demo supplies one). `JSGSetTextureAnimation` already
+    // writes these fields; there was simply no way to read them back, so a
+    // ported actor could animate its skeleton and never its face.
+    u32 getTexAnmId() { return mTexAnm; }
+    f32 getTexAnmFrame() { return mTexAnmFrame; }
 
 private:
     /* 0x04 */ u16 mFlags;

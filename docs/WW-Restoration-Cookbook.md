@@ -1,4 +1,70 @@
-# WW Restoration Cookbook
+> # ⚠ UNCERTAIN ACCURACY — DO NOT WRITE
+> This copy is one of two diverged cookbooks (fork confirmed 2026-07-23, bus §106; 542 diff
+> lines). It may contain doctrine the other copy lacks and vice versa. **Do not edit. Do not
+> treat any entry here as law without corroboration.**
+> **The canonical book is [WW-Restoration-Cookbook-CANONICAL.md](WW-Restoration-Cookbook-CANONICAL.md)** — entries migrate there
+> as they are corroborated (bilateral agreement, ratification receipt, or source re-verification).
+
+# WW Restoration Cookbook (UNCERTAIN ACCURACY — DO NOT WRITE)
+
+> ## READ FIRST — check the DONOR DECOMP, not just the receiver
+>
+> **Decomp source: `D:\XXXXXXX\WW DP\src`**  (arcs: `D:\XXXXXXX\Ex WW`)
+>
+> The receiver's source tells you **what** an API is. Only the donor tells you **how its
+> own actors called it** — flags, argument order, order of operations. Those are not
+> derivable from the receiver side, and guessing them looks exactly like a working port
+> until it silently isn't.
+>
+> **This cost four debug rounds once already (ledger №177–№181).** The cast was invisible
+> in the opening cutscene. Every receiver-side probe read green — actor bound, enables set,
+> position correct, draw running, matrix written. The fault was that
+> `dDemo_setDemoData(...)` was called with flags reasoned out as `0xEE` instead of the
+> donor's actual **`106`**. The extra `ENABLE_SCALE_e` bit assigned
+> `scale = demo_actor->getScale()` = **(0,0,0)** — the model was scaled out of existence
+> while every position measurement stayed correct. The answer was sitting in
+> `D:\XXXXXXX\WW DP\src\d\actor\d_a_npc_ls1.cpp` the entire time.
+>
+> **Before instrumenting a receiver-side theory:**
+>
+> 1. Find the donor's equivalent actor/system (`d_a_npc_*.cpp` for NPCs,
+>    `d_demo.cpp` / `d_event*.cpp` for cutscenes).
+> 2. Copy its call shape **verbatim** — flags, argument order, sequencing.
+> 3. Cite the donor function in a comment at the ported call site.
+>
+> Outset is only partially decompiled, so expect gaps — but struct definitions and call
+> sites are reliable, and are the fastest route from "it doesn't work" to "here is the
+> parameter I got wrong".
+
+
+
+> ## ⚠ READ FIRST — `OffsetPos` applies to EVERY Great Sea space
+>
+> A donor event's `PACKAGE: PLAY` cut carries an **`OffsetPos`** that is handed
+> straight to `dDemo_c::start(demo_data, xyzdata, offsetAngY)`
+> ([d_event_data.cpp:1291](../../../src/d/d_event_data.cpp)). It is the origin the
+> storyboard stages its **cast** from.
+>
+> **It comes across from the donor VERBATIM when an event is merged, and donor
+> world coordinates are not receiver world coordinates.** Outset's opening carries
+> `OffsetPos = -220000, 0, 320000` while the island itself sits near `-195000` — a
+> **~24,600-unit gap in X**. A cast staged off the wrong origin lands in open ocean,
+> and on screen that is indistinguishable from *"the actor never appears"*.
+>
+> **This affects every island, every interior and every NPC that is ever added**, not
+> just the space it was first found on. Whenever you merge a donor event:
+>
+> 1. Decode the PLAY cut and read its `OffsetPos`.
+> 2. Compare it against the receiver-space position of the scene (the camera
+>    `FIXEDFRM`/`STBWAIT` Center is a good reference — it is usually already correct).
+> 3. If they disagree, the cast will stage away from the camera. **Fix the field in
+>    the merged `event_list.dat` — it is DATA, no rebuild required.**
+>
+> A camera that frames the right spot proves nothing about where the cast is: the two
+> come from different fields. Verified-wrong beats assumed-right.
+> Ledger: №165, №175.
+
+
 
 The ground-up process manual for the restoration run. The ledger
 ([cut-actors-demo-restore.md](state/cut-actors-demo-restore.md)) is the
@@ -23,6 +89,18 @@ an otherwise free path and forced a 2,000-line port.
 
 **R6.** Any player-visible string describing donor content comes from DATA
 (manifests, `.ini`, `.tsv`), never from source.
+
+**Presentation-Parity Principle (RATIFIED by the user, 2026-07-22 — ledger №255/№256).**
+In donor spaces, any player-facing presentation the donor itself authored — dialogue box,
+HUD (hearts/rupees/magic), get-item box — renders the DONOR's version as a **mod-data skin
+over receiver logic**. Where the donor authored no equivalent, receiver chrome stands.
+Logic never ports; only the visual layer skins. **Carve-out:** the pause menu is EXEMPT —
+the №235 second-page socket already delivers the donor's pause layouts by its own mechanism.
+**Timing (user-ruled):** skins are a POST-OUTSET revisit list (dialogue box → get-item box →
+HUD, by visibility); Outset may be declared complete with the dialogue box + accompanying UI
+still in receiver chrome — that is the ONLY presentation debt permitted at completion.
+Receiver-native surfaces built meanwhile are scaffolds, not violations: the logic/visual
+split (№248 pattern) is what makes each future skin additive.
 
 **The Ivan rule.** No invented identity labels. A label stays `? (unverified)`
 until the user locks it, or until a decomp source names it. Decomp-sourced names

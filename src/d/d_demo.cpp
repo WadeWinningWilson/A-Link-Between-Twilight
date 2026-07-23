@@ -4,6 +4,7 @@
 #include "d/d_debug_viewer.h"
 #include "d/d_msg_class.h"
 #include "d/d_msg_object.h"
+#include "d/d_ext_save_guard.h"  // §49: donor storyboard message suppression
 #include "f_op/f_op_camera_mng.h"
 #include "m_Do/m_Do_graphic.h"
 #include "d/actor/d_a_movie_player.h"
@@ -94,12 +95,22 @@ jstudio_tAdaptor_message::~jstudio_tAdaptor_message() {}
 
 void jstudio_tAdaptor_message::adaptor_do_MESSAGE(JStudio::data::TEOperationData iType,
                                                   const void* pContent, u32 uSize) {
+    // №170: log EVERY invocation, before the switch. The storyboard carries 12
+    // message paragraphs (decoded №165) but only one reached the game. The §49
+    // line sits inside the 0x19 case, so it cannot distinguish "the track never
+    // called us again" from "it called us with an operation we drop on the
+    // release-build `default:`". This does.
+    DuskLog.info("[Demo] §51 adaptor_do_MESSAGE op={} size={}", (int)iType, (int)uSize);
     switch (iType) {
     case JStudio::data::UNK_0x19: {
         JUT_ASSERT(107, pContent!=NULL);
         JUT_ASSERT(108, uSize==4);
         u32 content = *(BE(u32)*)pContent;
-        dMsgObject_setDemoMessage(content);
+        // §49/№165: a donor storyboard fires DONOR message indices, which land on
+        // unrelated receiver strings. Suppress those rather than show foreign text.
+        if (!dExtWw_handleDemoMessage(content)) {
+            dMsgObject_setDemoMessage(content);
+        }
         break;
     }
     default:
@@ -903,6 +914,13 @@ int dDemo_system_c::JSGFindObject(JStage::TObject** p_TObj, char const* actorNam
             g_dComIfG_gameInfo.play.getEvent()->setDebugStb(true);
         }
         fopAc_ac_c* actor = fopAcM_searchFromName(actorName, 0, 0);
+
+        // §48: storyboard actor binding probe. The native failure paths below use
+        // OS_WARNING with Japanese text, which does not reach the dusk log — so a
+        // storyboard whose cast never bound looked identical to one that simply
+        // did nothing. This makes the distinction visible.
+        DuskLog.info("[Demo] §48 JSGFindObject actor='{}' type={} -> {}", actorName,
+                     (int)objType, actor != NULL ? "FOUND" : "not found");
 
         if (actor == NULL) {
             if (objType == JStage::OBJECT_ACTOR && !strncmp(actorName, "d_act", 5)) {

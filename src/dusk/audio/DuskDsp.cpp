@@ -244,6 +244,61 @@ bool dusk::audio::DumpAudio = false;
 bool dusk::audio::EnableHrtf = false;
 f32 dusk::audio::HrtfGain = 0.5f;
 
+namespace {
+f32 s_extSeqFxSend = 0.0f;
+f32 s_extSeqMasterVol = 1.0f;
+}  // namespace
+
+void dusk::audio::applyExtSeqFxScene(u8 scene, f32 busGain01, f32 room01, f32 damp01) {
+    if (busGain01 < 0.0f) {
+        busGain01 = 0.0f;
+    }
+    if (busGain01 > 1.0f) {
+        busGain01 = 1.0f;
+    }
+    if (room01 < 0.05f) {
+        room01 = 0.05f;
+    }
+    if (room01 > 0.95f) {
+        room01 = 0.95f;
+    }
+    if (damp01 < 0.05f) {
+        damp01 = 0.05f;
+    }
+    if (damp01 > 0.95f) {
+        damp01 = 0.95f;
+    }
+    s_extSeqFxSend = busGain01;
+    EnableReverb = true;
+    SharedReverb.setwet(1.0f);
+    SharedReverb.setdry(0.0f);
+    SharedReverb.setroomsize(room01);
+    SharedReverb.setdamp(damp01);
+    SharedReverb.setwidth(1.0f);
+    SharedReverb.setmode(0.0f);
+    DuskLog.info(
+        "[ExtSeq] §81 applyFxScene scene={} send={:.3f} room={:.3f} damp={:.3f} "
+        "(type-7 → freeverb + AutoMixer feed)",
+        static_cast<unsigned>(scene), busGain01, room01, damp01);
+}
+
+f32 dusk::audio::getExtSeqFxSend() {
+    return s_extSeqFxSend;
+}
+
+void dusk::audio::setExtSeqMasterVol(f32 vol01) {
+    if (vol01 < 0.0f) {
+        vol01 = 0.0f;
+    }
+    if (vol01 > 1.0f) {
+        vol01 = 1.0f;
+    }
+    s_extSeqMasterVol = vol01;
+}
+
+f32 dusk::audio::getExtSeqMasterVol() {
+    return s_extSeqMasterVol;
+}
 
 // 3dB at 5kHz.
 static constexpr f32 HRTF_LP_K     = 0.75f;

@@ -21,6 +21,7 @@
 #include "SSystem/SComponent/c_counter.h"
 #include "SSystem/SComponent/c_phase.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_ext_npc_mount.h"
 #include "d/d_item_data.h"
 #include "d/d_kankyo.h"
 #include "d/d_particle_name.h"
@@ -28,6 +29,8 @@
 #include "f_op/f_op_actor_mng.h"
 #include "aurora/lib/gx/gx.hpp"
 #include "dusk/custom_assets.hpp"
+#include "dusk/logging.h"
+#include "dusk/main.h"
 #include "dusk/settings.h"
 #include "m_Do/m_Do_ext.h"
 #include "res/Object/itemmdl.h"
@@ -36,9 +39,14 @@
 #include <dolphin/gx/GXGeometry.h>
 #include <dolphin/gx/GXPixel.h>
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
 
 void dWwItemmdl_debugLog(const char* message) {
     const char* user = getenv("USERPROFILE");
@@ -1698,6 +1706,360 @@ void dWwItemmdl_clearOutlineSuppress() {
 
 bool dWwItemmdl_retainItemmdlArcOnDemoItemDelete() {
     return dusk::getSettings().game.wwItemmdlGetItem.getValue();
+}
+
+namespace {
+
+struct ClothesBundleCfg {
+    bool loaded = false;
+    bool ok = false;
+    u8 hostItem = 0xFF;
+    char arc[32]{};
+    char model[48]{};
+    J3DModelData* cached = nullptr;
+
+    // Get-box kit (icon + text + present-demo anchor) — all from the same ini.
+    std::string getText;
+    std::filesystem::path iconPath;
+    std::vector<u8> iconTimg;
+    bool iconTried = false;
+    bool hasHandOffset = false;
+    f32 handOffsetX = 0.0f;
+    f32 handOffsetY = 0.0f;
+    f32 handOffsetZ = 0.0f;
+    f32 maxScale = 0.0f;
+    std::filesystem::path modRoot;
+};
+
+ClothesBundleCfg s_clothes{};
+
+void trimCfg(std::string* s) {
+    while (!s->empty() && (s->front() == ' ' || s->front() == '\t')) {
+        s->erase(s->begin());
+    }
+    while (!s->empty() &&
+           (s->back() == ' ' || s->back() == '\t' || s->back() == '\r' || s->back() == '\n')) {
+        s->pop_back();
+    }
+}
+
+std::string expandCfgEscapes(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+    for (size_t i = 0; i < in.size(); ++i) {
+        if (in[i] == '\\' && i + 1 < in.size()) {
+            const char n = in[i + 1];
+            if (n == 'n') {
+                out.push_back('\n');
+                ++i;
+                continue;
+            }
+            if (n == 'r') {
+                out.push_back('\r');
+                ++i;
+                continue;
+            }
+            if (n == '\\') {
+                out.push_back('\\');
+                ++i;
+                continue;
+            }
+        }
+        out.push_back(in[i]);
+    }
+    return out;
+}
+
+void applyClothesBundleKey(const std::string& key, const std::string& val, u8* host,
+                           std::string* arc, std::string* model) {
+    if (key == "host_item") {
+        *host = static_cast<u8>(std::strtoul(val.c_str(), nullptr, 0));
+    } else if (key == "arc") {
+        *arc = val;
+    } else if (key == "model") {
+        *model = val;
+    } else if (key == "get_text") {
+        s_clothes.getText = expandCfgEscapes(val);
+    } else if (key == "get_icon") {
+        if (!val.empty() && !s_clothes.modRoot.empty()) {
+            s_clothes.iconPath = s_clothes.modRoot / val;
+        }
+    } else if (key == "hand_offset_x") {
+        s_clothes.handOffsetX = static_cast<f32>(std::strtof(val.c_str(), nullptr));
+        s_clothes.hasHandOffset = true;
+    } else if (key == "hand_offset_y") {
+        s_clothes.handOffsetY = static_cast<f32>(std::strtof(val.c_str(), nullptr));
+        s_clothes.hasHandOffset = true;
+    } else if (key == "hand_offset_z") {
+        s_clothes.handOffsetZ = static_cast<f32>(std::strtof(val.c_str(), nullptr));
+        s_clothes.hasHandOffset = true;
+    } else if (key == "max_scale") {
+        s_clothes.maxScale = static_cast<f32>(std::strtof(val.c_str(), nullptr));
+    }
+}
+
+bool looksLikeIniKeyLine(const std::string& trimmed) {
+    if (trimmed.empty() || trimmed[0] == '#' || trimmed[0] == ';') {
+        return false;
+    }
+    const size_t eq = trimmed.find('=');
+    if (eq == std::string::npos || eq == 0) {
+        return false;
+    }
+    for (size_t i = 0; i < eq; ++i) {
+        const char c = trimmed[i];
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool parseClothesBundleIniKeys(const std::filesystem::path& file, u8* host, std::string* arc,
+                               std::string* model) {
+    std::ifstream in(file);
+    if (!in) {
+        return false;
+    }
+    std::string line;
+    std::string pendingKey;
+    std::string pendingVal;
+    auto flushPending = [&]() {
+        if (pendingKey.empty()) {
+            return;
+        }
+        // Trailing whitespace only — preserve internal newlines.
+        while (!pendingVal.empty() &&
+               (pendingVal.back() == ' ' || pendingVal.back() == '\t' || pendingVal.back() == '\r')) {
+            pendingVal.pop_back();
+        }
+        applyClothesBundleKey(pendingKey, pendingVal, host, arc, model);
+        pendingKey.clear();
+        pendingVal.clear();
+    };
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        std::string trimmed = line;
+        trimCfg(&trimmed);
+
+        if (!pendingKey.empty() && !looksLikeIniKeyLine(trimmed)) {
+            if (trimmed.empty() || trimmed[0] == '#' || trimmed[0] == ';') {
+                // blank / comment ends a multi-line get_text block
+                flushPending();
+                continue;
+            }
+            if (!pendingVal.empty()) {
+                pendingVal.push_back('\n');
+            }
+            pendingVal.append(trimmed);
+            continue;
+        }
+
+        flushPending();
+        if (trimmed.empty() || trimmed[0] == '#' || trimmed[0] == ';') {
+            continue;
+        }
+        const size_t eq = trimmed.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        std::string key = trimmed.substr(0, eq);
+        std::string val = trimmed.substr(eq + 1);
+        trimCfg(&key);
+        trimCfg(&val);
+        if (key == "get_text") {
+            pendingKey = key;
+            pendingVal = val;
+            continue;
+        }
+        applyClothesBundleKey(key, val, host, arc, model);
+    }
+    flushPending();
+    return true;
+}
+
+bool tryLoadClothesBundleIni(const std::filesystem::path& file) {
+    s_clothes.modRoot = file.parent_path().parent_path();  // .../<mod>/getitem/file → <mod>
+    s_clothes.getText.clear();
+    s_clothes.iconPath.clear();
+    s_clothes.iconTimg.clear();
+    s_clothes.iconTried = false;
+    s_clothes.hasHandOffset = false;
+    s_clothes.handOffsetX = s_clothes.handOffsetY = s_clothes.handOffsetZ = 0.0f;
+    s_clothes.maxScale = 0.0f;
+
+    u8 host = 0xFF;
+    std::string arc;
+    std::string model;
+    // Primary kit file, then optional staged sibling overlays get_text/get_icon/offsets.
+    if (!parseClothesBundleIniKeys(file, &host, &arc, &model)) {
+        return false;
+    }
+    parseClothesBundleIniKeys(file.parent_path() / "clothes_bundle_text.ini", &host, &arc, &model);
+
+    if (host == 0xFF || arc.empty() || model.empty() || arc.size() >= sizeof(s_clothes.arc) ||
+        model.size() >= sizeof(s_clothes.model)) {
+        return false;
+    }
+    s_clothes.hostItem = host;
+    std::snprintf(s_clothes.arc, sizeof(s_clothes.arc), "%s", arc.c_str());
+    std::snprintf(s_clothes.model, sizeof(s_clothes.model), "%s", model.c_str());
+    s_clothes.ok = true;
+    DuskLog.info(
+        "[WwItemmdl] clothes bundle cfg host=0x{:02X} arc='{}' model='{}' text={} icon='{}' "
+        "hand={} scale={}",
+        static_cast<unsigned>(host), s_clothes.arc, s_clothes.model,
+        s_clothes.getText.empty() ? "no" : "yes",
+        s_clothes.iconPath.empty() ? "" : s_clothes.iconPath.filename().string(),
+        s_clothes.hasHandOffset ? "yes" : "no", s_clothes.maxScale);
+    return true;
+}
+
+void ensureClothesBundleCfg() {
+    if (s_clothes.loaded) {
+        return;
+    }
+    s_clothes.loaded = true;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::path(dusk::ConfigPath) / "model_replacements";
+    std::error_code ec;
+    if (!fs::is_directory(root, ec)) {
+        return;
+    }
+    for (const auto& mod : fs::directory_iterator(root, ec)) {
+        if (!mod.is_directory()) {
+            continue;
+        }
+        const fs::path ini = mod.path() / "getitem" / "clothes_bundle.ini";
+        if (tryLoadClothesBundleIni(ini)) {
+            return;
+        }
+    }
+}
+
+bool ensureClothesBundleIconLoaded() {
+    ensureClothesBundleCfg();
+    if (!s_clothes.ok || s_clothes.iconPath.empty()) {
+        return false;
+    }
+    if (s_clothes.iconTried) {
+        return !s_clothes.iconTimg.empty();
+    }
+    s_clothes.iconTried = true;
+    std::ifstream in(s_clothes.iconPath, std::ios::binary);
+    if (!in) {
+        DuskLog.warn("[WwItemmdl] clothes get_icon miss '{}'", s_clothes.iconPath.string());
+        return false;
+    }
+    in.seekg(0, std::ios::end);
+    const std::streamoff sz = in.tellg();
+    in.seekg(0, std::ios::beg);
+    if (sz <= 0x20 || sz > 0x10000) {
+        DuskLog.warn("[WwItemmdl] clothes get_icon bad size {}", static_cast<long long>(sz));
+        return false;
+    }
+    s_clothes.iconTimg.resize(static_cast<size_t>(sz));
+    if (!in.read(reinterpret_cast<char*>(s_clothes.iconTimg.data()), sz)) {
+        s_clothes.iconTimg.clear();
+        return false;
+    }
+    DuskLog.info("[WwItemmdl] clothes get_icon ready {} bytes", static_cast<int>(sz));
+    return true;
+}
+
+}  // namespace
+
+bool dWwItemmdl_clothesBundleForItem(u8 item_no) {
+    ensureClothesBundleCfg();
+    return s_clothes.ok && item_no == s_clothes.hostItem;
+}
+
+const char* dWwItemmdl_clothesBundleArcName() {
+    ensureClothesBundleCfg();
+    return s_clothes.ok ? s_clothes.arc : nullptr;
+}
+
+const char* dWwItemmdl_clothesBundleModelName() {
+    ensureClothesBundleCfg();
+    return s_clothes.ok ? s_clothes.model : nullptr;
+}
+
+J3DModelData* dWwItemmdl_getClothesBundleModelData() {
+    ensureClothesBundleCfg();
+    if (!s_clothes.ok) {
+        return nullptr;
+    }
+    if (s_clothes.cached != nullptr) {
+        return s_clothes.cached;
+    }
+    // Mature path (Ivan / Outset cast): BDLM arcs leave raw J3D2 on RelWithDebInfo
+    // (dRes has no BDLM loader). Never cast getObjectRes to ModelData — re-parse +
+    // finish via the mount acquire (GameHeap pin, pristine copy, actor light mask).
+    J3DModelData* md = dExtNpcMount_acquireModelData(s_clothes.arc, s_clothes.model);
+    if (md == nullptr) {
+        DuskLog.warn("[WwItemmdl] clothes bundle model miss arc='{}' model='{}'", s_clothes.arc,
+                     s_clothes.model);
+        return nullptr;
+    }
+    s_clothes.cached = md;
+    dWwItemmdl_debugLog("clothes bundle: acquired via ExtNpcMount (boots/Ivan create path)");
+    DuskLog.info("[WwItemmdl] clothes bundle model ready arc='{}' model='{}' mats={} joints={}",
+                 s_clothes.arc, s_clothes.model, md->getMaterialNum(), md->getJointNum());
+    return md;
+}
+
+void dWwItemmdl_clearClothesBundleCache() {
+    s_clothes.cached = nullptr;
+}
+
+const char* dWwItemmdl_clothesBundleGetTextForMessage(u32 msg_id) {
+    ensureClothesBundleCfg();
+    if (!s_clothes.ok || s_clothes.getText.empty()) {
+        return nullptr;
+    }
+    // TP get-item message id = itemNo + 0x65 (procCoGetItem).
+    if (msg_id != static_cast<u32>(s_clothes.hostItem) + 0x65u) {
+        return nullptr;
+    }
+    return s_clothes.getText.c_str();
+}
+
+u32 dWwItemmdl_clothesBundleIconCap(u8 item_no) {
+    if (!dWwItemmdl_clothesBundleForItem(item_no) || !ensureClothesBundleIconLoaded()) {
+        return 0;
+    }
+    return static_cast<u32>(s_clothes.iconTimg.size());
+}
+
+bool dWwItemmdl_writeClothesBundleIconTimg(u8 item_no, void* out_buf, u32 out_cap) {
+    if (out_buf == nullptr || !dWwItemmdl_clothesBundleForItem(item_no) ||
+        !ensureClothesBundleIconLoaded()) {
+        return false;
+    }
+    if (s_clothes.iconTimg.size() > out_cap) {
+        return false;
+    }
+    std::memcpy(out_buf, s_clothes.iconTimg.data(), s_clothes.iconTimg.size());
+    return true;
+}
+
+bool dWwItemmdl_clothesBundleHandOffset(f32* out_x, f32* out_y, f32* out_z) {
+    ensureClothesBundleCfg();
+    if (!s_clothes.ok || !s_clothes.hasHandOffset || out_x == nullptr || out_y == nullptr ||
+        out_z == nullptr) {
+        return false;
+    }
+    *out_x = s_clothes.handOffsetX;
+    *out_y = s_clothes.handOffsetY;
+    *out_z = s_clothes.handOffsetZ;
+    return true;
+}
+
+f32 dWwItemmdl_clothesBundleMaxScale() {
+    ensureClothesBundleCfg();
+    return s_clothes.ok ? s_clothes.maxScale : 0.0f;
 }
 
 #endif

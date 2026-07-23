@@ -882,6 +882,10 @@ void dMeter2_onALBWBomb();
 void dMeter2_onALBWBombArrow();
 void dMeter2_onALBWIronball();
 void dMeter2_onALBWSpinner();
+// Deku Leaf glide: continuous drain at WW's faithful rate (~2.34% of base/sec).
+void dMeter2_onALBWDekuLeaf();       // call every frame while gliding
+void dMeter2_onALBWDekuLeafStart();  // one-off up-front charge when the glide begins
+bool dMeter2_canALBWDekuLeaf();      // false once the meter is empty -> drop the glide
 void dMeter2_onALBWDomRod();
 void dMeter2_onALBWHookshot();
 void dMeter2_onALBWDoubleHookshot();

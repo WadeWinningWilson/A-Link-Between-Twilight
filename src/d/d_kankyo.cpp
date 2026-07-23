@@ -9403,6 +9403,82 @@ void dKy_GxFog_set() {
     GxXFog_set();
 }
 
+#if TARGET_PC
+// §97b — WW shore foam channel + stubs (no mBG1_C0 twin; use bg_amb_col).
+void dKy_wave_chan_init() {
+    g_env_light.mWaveChan.mWaveCount = 0;
+    g_env_light.mWaveChan.field_0x0 = -1.0f;
+    g_env_light.mWaveChan.field_0x4 = 0.0f;
+    g_env_light.mWaveChan.field_0x8 = 0.0f;
+    g_env_light.mWaveChan.mWaveSpeed = 0.1f;
+    g_env_light.mWaveChan.mWaveSpawnDist = 3000.0f;
+    g_env_light.mWaveChan.mWaveSpawnRadius = 3150.0f;
+    g_env_light.mWaveChan.mWaveReset = 0;
+    g_env_light.mWaveChan.mWaveScale = 250.0f;
+    g_env_light.mWaveChan.mWaveScaleBottom = 5.0f;
+    g_env_light.mWaveChan.mWaveScaleRand = 0.217f;
+    g_env_light.mWaveChan.mWaveCounterSpeedScale = 1.6f;
+    g_env_light.mWaveChan.field_0x2f = 0;
+    g_env_light.mWaveChan.mWaveFlatInter = 1.0f;
+    g_env_light.mWaveInitialized = 0;
+    g_env_light.mpWavePacket = NULL;
+}
+
+void dKy_usonami_set(f32 flatInter) {
+    if (g_env_light.mWaveChan.mWaveCount < 200) {
+        g_env_light.mWaveChan.mWaveSpawnDist = 20000.0f;
+        g_env_light.mWaveChan.mWaveSpawnRadius = 22000.0f;
+        g_env_light.mWaveChan.mWaveReset = 0;
+        g_env_light.mWaveChan.mWaveScale = 300.0f;
+        g_env_light.mWaveChan.mWaveScaleRand = 0.001f;
+        g_env_light.mWaveChan.mWaveCounterSpeedScale = 1.2f;
+        g_env_light.mWaveChan.field_0x2f = 0;
+        g_env_light.mWaveChan.mWaveScaleBottom = 6.0f;
+        g_env_light.mWaveChan.mWaveCount = 300;
+        g_env_light.mWaveChan.mWaveSpeed = 30.0f;
+    }
+    g_env_light.mWaveChan.mWaveFlatInter = flatInter;
+}
+
+static u8 dKy_clampU8(s16 v) {
+    if (v < 0) {
+        return 0;
+    }
+    if (v > 255) {
+        return 255;
+    }
+    return (u8)v;
+}
+
+void dKy_get_seacolor(GXColor* amb, GXColor* dif) {
+    if (amb == NULL || dif == NULL) {
+        return;
+    }
+    // Donor: amb=mBG1_C0(+addAmb), dif=mBG1_K0(+addDif).
+    // TP PAL0 keeps C0 in bg_amb_col[1]; №113 convert stashes K0 in plight_col[2]
+    // → dungeonlight_col[2] (time-blended).
+    amb->r = dKy_clampU8(g_env_light.bg_amb_col[1].r + g_env_light.bg1_addcol_amb.r);
+    amb->g = dKy_clampU8(g_env_light.bg_amb_col[1].g + g_env_light.bg1_addcol_amb.g);
+    amb->b = dKy_clampU8(g_env_light.bg_amb_col[1].b + g_env_light.bg1_addcol_amb.b);
+    amb->a = 0xFF;
+    dif->r = dKy_clampU8(g_env_light.dungeonlight_col[2].r);
+    dif->g = dKy_clampU8(g_env_light.dungeonlight_col[2].g);
+    dif->b = dKy_clampU8(g_env_light.dungeonlight_col[2].b);
+    dif->a = 0xFF;
+}
+
+void dKy_GxFog_sea_set() {
+    // Donor GxFog_sea_set: fog colour = VrUsoUmi. TP maps uso_umi → kasumi_outer.
+    GXColor color;
+    color.r = (u8)g_env_light.vrbox_kasumi_outer_col.r;
+    color.g = (u8)g_env_light.vrbox_kasumi_outer_col.g;
+    color.b = (u8)g_env_light.vrbox_kasumi_outer_col.b;
+    color.a = 0xFF;
+    GxFogSet_Sub(&color);
+    GxXFog_set();
+}
+#endif
+
 void dKy_GxFog_tevstr_set(dKy_tevstr_c* tevstr_p) {
     f32 near_z = 1.0f;
     f32 far_z = 160000.0f;

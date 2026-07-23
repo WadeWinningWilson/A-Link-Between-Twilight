@@ -100,8 +100,10 @@ static std::chrono::steady_clock::time_point sLastRecoveryTime = std::chrono::st
 // ============================================
 static std::chrono::steady_clock::time_point sLastSpinnerDrainTime = std::chrono::steady_clock::now();
 static std::chrono::steady_clock::time_point sLastDomRodDrainTime  = std::chrono::steady_clock::now();
+static std::chrono::steady_clock::time_point sLastDekuLeafDrainTime = std::chrono::steady_clock::now();
 static bool sSpinnerActive        = false;
 static bool sDomRodActive         = false;
+static bool sDekuLeafActive       = false;
 static bool sHookshotFire         = false;
 static bool sDoubleHookshotFire   = false;
 static bool sALBWArmorDepleted    = false;
@@ -466,6 +468,22 @@ bool dMeter2_canALBWIronball() {
 void dMeter2_onALBWSpinner()  { sSpinnerActive = true; }
 void dMeter2_onALBWDomRod()   { sDomRodActive  = true; }
 bool dMeter2_isALBWDepleted() { return sALBWMeter <= 0; }
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide)
+// Continuous drain, modelled on the Spinner. Rate is faithful to WW: the Deku
+// Leaf there burns 1 magic unit per 40 game updates at 30Hz = 0.75 magic/sec off
+// a 32-point bar = 2.34% of the bar per second. Scaled onto sOilBaseMax (10900)
+// that is ~255 units/sec = ~26 per 100ms tick, giving ~43s of glide at base tier.
+// WW also charges 1 unit up front when the glide starts (32nd of the bar).
+// Costs are fixed fractions of sOilBaseMax, so meter upgrades buy longer glides
+// rather than changing the per-second burn (matches the other ALBW item costs).
+// ============================================
+void dMeter2_onALBWDekuLeaf() { sDekuLeafActive = true; }
+bool dMeter2_canALBWDekuLeaf() { return sALBWMeter > 0; }
+void dMeter2_onALBWDekuLeafStart() {
+    // up-front charge = 1/32 of the base meter, mirroring WW's initial -1 magic
+    albwDrainMeter(sOilBaseMax / 32, std::chrono::steady_clock::now());
+}
 // ============================================
 // NEW CODE — ALBW Port
 // Clawshot drain signals and pre-fire gates.
@@ -2199,6 +2217,24 @@ void dMeter2_c::moveKantera() {
                 sLastSpinnerDrainTime = sNow;
             }
             sSpinnerActive = false;
+        }
+        // ============================================
+        // NEW CODE — ALBW Port
+        // Continuous drain: Deku Leaf glide
+        // sDekuLeafActive is set every frame by the glide proc while airborne.
+        // Fixed rate (not tier-scaled): WW's 0.75 magic/sec off a 32-point bar
+        // = 2.34%/sec, which on sOilBaseMax 10900 is ~26 units per 100ms tick.
+        // Base tier -> ~43s of glide; meter upgrades extend that, matching how
+        // the other ALBW costs stay pinned to sOilBaseMax fractions.
+        // ============================================
+        if (sDekuLeafActive) {
+            auto msLeaf = std::chrono::duration_cast<std::chrono::milliseconds>(
+                sNow - sLastDekuLeafDrainTime).count();
+            if (msLeaf >= 100) {
+                albwDrainMeter((sOilBaseMax * 234) / 100000, sNow);  // 2.34%/sec -> per 100ms
+                sLastDekuLeafDrainTime = sNow;
+            }
+            sDekuLeafActive = false;
         }
         // ============================================
         // NEW CODE ENDS HERE

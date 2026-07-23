@@ -29,6 +29,7 @@
 #endif
 
 #if TARGET_PC
+#include "d/d_ext_save_guard.h"
 #include "dusk/frame_interpolation.h"
 #include "dusk/leveledit/enumerate.hpp"
 #include "dusk/logging.h"
@@ -11231,7 +11232,18 @@ static void store(camera_process_class* i_camera) {
     f32 fovy = fopCamM_GetFovy(camera);
 
     dDemo_camera_c* demoCamera = dDemo_c::getCamera();
-    if (demoCamera != NULL && !dComIfGp_getPEvtManager()->cameraPlay()) {
+    // Retail: demo-cam store is gated on !cameraPlay(). Event CAMERA staff
+    // (STBWAIT) normally feeds mViewCache via NotRun→bumpCheck. On F_DL01's
+    // opening that path leaves the spawn/map-edge framing — cameraPlay is on,
+    // Active() often stays true after prior QuickStarts, and store never
+    // reads the storyboard. №172: while our opening hold is live, prefer the
+    // demo camera even when cameraPlay is set so the Outset pan owns the view.
+#if TARGET_PC
+    const bool forceDemoCam = demoCamera != NULL && dExtWw_openingPauseArrivalGuard();
+#else
+    const bool forceDemoCam = false;
+#endif
+    if (demoCamera != NULL && (forceDemoCam || !dComIfGp_getPEvtManager()->cameraPlay())) {
         if (demoCamera->checkEnable(dDemo_camera_c::ENABLE_VIEW_TARG_POS_e)) {
             center = demoCamera->getTarget();
         }

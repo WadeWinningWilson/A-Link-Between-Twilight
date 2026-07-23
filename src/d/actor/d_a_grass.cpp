@@ -370,6 +370,23 @@ static int daGrass_Delete(daGrass_c* i_this) {
 int daGrass_c::execute() {
     dComIfG_Ccsp()->PrepareMass();
 
+    // ========================================================================
+    // §61 r2 — NATIVE baseline witness (user-directed same-run TP/WW compare).
+    // TP grass cutting is KNOWN-GOOD; this line captures what a WORKING poller
+    // sees at its Prepare (list 11): massN through the same accessor the WW
+    // veg poller (list 7) reads. Diffing this trace (cut TP field grass)
+    // against the veg trace (Outset) separates "feed lands between list 7 and
+    // 11" from "list is empty everywhere until a later phase". Read-only.
+    // ========================================================================
+    {
+        static u32 s_gN = 0;
+        if ((s_gN++ % 120) == 0) {
+            OS_REPORT("§61 nativeGrass prepare massN=%d ccsp=%x\n",
+                      (int)dComIfG_Ccsp()->mMass_Mng.mMassObjCount,
+                      (int)((uintptr_t)dComIfG_Ccsp() & 0xFFFF));
+        }
+    }
+
     executeGrass();
     executeFlower();
 

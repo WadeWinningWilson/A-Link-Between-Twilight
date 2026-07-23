@@ -338,12 +338,20 @@ struct UserSettings {
         // Track B A/B: render the held WW skin boots-style — ambient-only, NO SC draw
         // scope / authentic TEV replay (the scope's white-konst spec pass is what blooms).
         ConfigVar<bool> wwItemmdlHeldBootsStyle;
+        // §47: how the PLAYER is lit inside donor spaces. Not a brightness
+        // multiplier — a RECIPE selector, because the measured numbers ruled the
+        // multiplier out: the donor cast renders at a fixed (90,90,90) with no
+        // MAJI, while the player's own ambient measured (36,24,59) and he still
+        // reads far brighter. The light is therefore coming from the MAJI path
+        // the cast never runs, not from ambient, so scaling ambient could not fix
+        // it. 0 = untouched (default). 1 = the donor-cast recipe.
+        ConfigVar<bool> wwPlayerDonorLook;
         // Deku Leaf glide (WIP P1): debug toggle that re-gates TP's cucco-glide chassis onto a
         // "leaf out" state — while ON, running/jumping off a ledge floats (gentle terminal
         // velocity, stick-steer, wind updraft) with no cucco held. Reuses the cucco HIO tuning.
         ConfigVar<bool> dekuLeafGlideTest;
-        // №105 P2: gated hold-A crawl — DoStatus NONE + stick ≤ front-roll rate so it
-        // never steals door/talk/ENTER and does not fight stick-forward roll.
+        // №105 P2: gated hold-A crawl (≥1s) — DoStatus NONE + stick ≤ front-roll rate
+        // so it never steals door/talk/ENTER and does not fight stick-forward roll.
         ConfigVar<bool> enableHoldACrawl;
         // Viewer: itemmdl BDL index the get-item replay loads (0xF=vbow default). Set + Replay to
         // preview any of the 21 WW meshes in the get-item spin. See itemmdl.h for indices.

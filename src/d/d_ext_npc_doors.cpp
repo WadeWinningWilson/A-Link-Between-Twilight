@@ -19,6 +19,7 @@
 
 #include "d/actor/d_a_knob00.h"
 #include "d/d_camera.h"
+#include "d/d_demo.h"  // №167: a running demo owns the camera
 #include "d/d_com_inf_game.h"
 #include "d/d_event.h"
 #include "d/d_ext_npc_mount.h"
@@ -1320,6 +1321,29 @@ void dExtNpcDoors_armArrivalGuard(const char* stage) {
     DuskLog.info("[Doors] №90 arm arrival G-guard (no demo) → '{}'", s_arrival.stage);
 }
 
+void dExtNpcDoors_requestPostOpeningSnap(const char* stage) {
+    if (stage == NULL || stage[0] == '\0') {
+        return;
+    }
+    // Keep door-lane arrival demo ownership if still mid-demo; only clear the
+    // snap latch so №110 can fire once the opening has released the camera.
+    if (s_arrival.armed && s_arrival.withDemo && !s_arrival.demoEnded &&
+        std::strcmp(s_arrival.stage, stage) == 0) {
+        s_arrival.cameraSnapped = false;
+        DuskLog.info("[Doors] №176 post-opening snap — cleared latch (door demo still live)");
+        return;
+    }
+    s_arrival = {};
+    s_arrival.armed = true;
+    s_arrival.withDemo = false;
+    s_arrival.demoStarted = true;
+    s_arrival.demoEnded = true;
+    s_arrival.cameraSnapped = false;
+    s_arrival.guardFramesLeft = 30;  // brief window to snap + re-activate after Stop()
+    std::snprintf(s_arrival.stage, sizeof(s_arrival.stage), "%s", stage);
+    DuskLog.info("[Doors] №176 post-opening snap re-armed → '{}'", s_arrival.stage);
+}
+
 void dExtNpcDoors_onInteriorBgReady(const char* interiorProc) {
     ensureLoaded();
     if (interiorProc == NULL || interiorProc[0] == '\0') {
@@ -1356,6 +1380,26 @@ void dExtNpcDoors_pollArrival() {
         if (s_arrival.cameraSnapped) {
             return;
         }
+        // №167 / №170: a running demo OWNS the camera — do not fight it.
+        //
+        // The comment above says door arrivals wait for the demo so "the demo lock
+        // cannot overwrite it". The reverse is the problem here: this is a WARP
+        // arrival (the crossing), which takes the `!withDemo` path and never waits,
+        // so the snap fired while the opening storyboard was driving its own ~12 s
+        // pan. Two owners, one camera — the user saw the old map-edge spawn shot
+        // win against the storyboard.
+        //
+        // №167 deferred while event_runCheck / dDemo camera. №171 prefers
+        // `deferArrivalCameraSnap` (hold after ORDER, or still trying to order).
+        // G-guard pause stays on `openingPauseArrivalGuard` only after ORDER.
+        //
+        // Deliberately does NOT latch `cameraSnapped`: the snap is DEFERRED, not
+        // cancelled. When the hold clears the camera is unowned again and the next
+        // poll snaps behind Link, which is the right place to hand control back.
+        if (dExtWw_deferArrivalCameraSnap() || dComIfGp_event_runCheck() ||
+            dDemo_c::getCamera() != NULL) {
+            return;
+        }
         dCamera_c* cam = dCam_getBody();
         if (cam == NULL || player == NULL) {
             return;
@@ -1379,7 +1423,10 @@ void dExtNpcDoors_pollArrival() {
     // №90: warp / non-door arrival — residual clear then G-guard only.
     if (!s_arrival.withDemo) {
         if (!s_arrival.demoStarted) {
-            if (dComIfGp_event_runCheck() || dComIfGp_event_getMode() != dEvt_mode_WAIT_e) {
+            // №170: residual MUST clear the busy slot before awake can order.
+            // Only skip once the post-ORDER hold is live (our opening, not a leftover).
+            if (!dExtWw_openingPauseArrivalGuard() &&
+                (dComIfGp_event_runCheck() || dComIfGp_event_getMode() != dEvt_mode_WAIT_e)) {
                 dExtNpcMount_forceEndDoorEvent("arrival-residual");
             }
             s_arrival.demoStarted = true;
@@ -1392,7 +1439,8 @@ void dExtNpcDoors_pollArrival() {
         // fall through to shared G-guard countdown below
     } else if (!s_arrival.demoStarted) {
         // First frame on dest: clear any residual hollow event, then begin arrival demo.
-        if (dComIfGp_event_runCheck() || dComIfGp_event_getMode() != dEvt_mode_WAIT_e) {
+        if (!dExtWw_openingPauseArrivalGuard() &&
+            (dComIfGp_event_runCheck() || dComIfGp_event_getMode() != dEvt_mode_WAIT_e)) {
             dExtNpcMount_forceEndDoorEvent("arrival-residual");
         }
         if (s_arrival.hasFacing) {
@@ -1426,6 +1474,11 @@ void dExtNpcDoors_pollArrival() {
     snapArrivalCamera();
 
     if (s_arrival.guardFramesLeft > 0) {
+        // №170: pause ONLY after awake has ordered. Pre-order G-guard must still
+        // force-end leftovers so the order slot frees (№169 / log 035311).
+        if (dExtWw_openingPauseArrivalGuard()) {
+            return;
+        }
         --s_arrival.guardFramesLeft;
         if (s_arrival.guardFramesLeft > 0) {
             return;
@@ -1438,6 +1491,15 @@ void dExtNpcDoors_pollArrival() {
         } else {
             DuskLog.info("[Doors] №89 event G-guard clear — stage='{}' control free",
                          s_arrival.stage);
+        }
+        // №176: G-guard often ends BEFORE awake's pan. If №110 never latched and
+        // the opening still owns/defers the camera, stay armed so the deferred
+        // snap can fire after RELEASE (otherwise pollArrival never runs again).
+        if (!s_arrival.cameraSnapped && dExtWw_deferArrivalCameraSnap()) {
+            s_arrival.guardFramesLeft = 1;
+            DuskLog.info(
+                "[Doors] №176 keep arrival armed — snap still deferred (opening owns cam)");
+            return;
         }
         s_arrival.armed = false;
     }

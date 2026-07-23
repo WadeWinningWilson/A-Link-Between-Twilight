@@ -42,6 +42,7 @@
 
 #if TARGET_PC
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -52,8 +53,10 @@
 
 #include "SSystem/SComponent/c_lib.h"
 #include "SSystem/SComponent/c_xyz.h"
+#include "d/actor/d_a_player.h"  // №220: horse check for direct-get drops
 #include "d/d_bg_s_gnd_chk.h"
 #include "d/d_cc_s.h"
+#include "d/d_particle.h"  // №220: cut-scatter particle + light callback
 #include "Z2AudioLib/Z2SeMgr.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
@@ -86,6 +89,27 @@ struct ExtVegAssets {
     std::vector<u8> bladeDL;
     std::vector<u8> bladeCutDL;
     std::vector<u8> tex;
+    // ========================================================================
+    // №220 — cut rewards: which global item table a cut blade rolls on.
+    // ========================================================================
+    // The receiver's item tables are GLOBAL (loaded once at boot from
+    // res/ItemTable/item_table.bin, d_s_logo), so any table number is valid on
+    // the host stage. Default 150 = the receiver's health-scaled mercy family
+    // (NONE x8 / GREEN x5 / HEART x2 / BLUE x1, shifting toward hearts as the
+    // player's HP drops — fopAcM_getItemNoFromTableNo bumps 150→151..154).
+    // That family exists in the receiver precisely for grass/pot drops, which
+    // makes it the receiver-native analogue of the donor's per-clump grass
+    // tables. Overridable per pack with `item_table=` (-1 disables drops).
+    //
+    // ========================================================================
+    // №225 — DROPS DEFAULT OFF (covenant №31). The first live cut spawned a
+    // TP-model rupee inside the WW space — a foreign prop, and №31 says a
+    // MISSING prop is preferable to a foreign one. Drops stay disabled until
+    // the WW-visual drop path is wired (the mod's own rupee design: vlupy.bdl
+    // visual + TP wallet grant — see the ledger's `rupees` row). `item_table=`
+    // in the pack re-enables deliberately; the default must not violate law.
+    // ========================================================================
+    int itemTable = -1;
     bool ready = false;
     bool tried = false;
 };
@@ -132,6 +156,15 @@ struct Strip {
     f32 ts[8], tt[8];
 };
 std::vector<Strip> s_strips;
+// ============================================================================
+// №227 — the donor's CUT display list (`l_Oba_kusa_a_cutDL`), decoded to
+// strips exactly like the full blade. The donor draws every grass unit from
+// one of TWO DLs — full blade while standing, the stub after a cut (draw:
+// `mAnimIdx >= 0 ? mpDL : mpDLCut`, d_grass.cpp) — and the stub persists
+// until reload. The extractor shipped this DL in the pack from day one
+// (`blade_cut_dl=`); it was loaded but never decoded or drawn.
+// ============================================================================
+std::vector<Strip> s_cutStrips;
 
 f32 beF32(const std::vector<u8>& v, size_t off) {
     if (off + 4 > v.size()) {
@@ -144,11 +177,12 @@ f32 beF32(const std::vector<u8>& v, size_t off) {
     return f;
 }
 
-void decodeBladeDL() {
-    s_strips.clear();
-    const std::vector<u8>& dl = s_assets.bladeDL;
+// №227: shared for the full blade AND the cut stub — both DLs index the SAME
+// pos/color/texCoord arrays (the donor binds one array set for both draws).
+void decodeDLInto(const std::vector<u8>& dl, size_t limit, std::vector<Strip>& out) {
+    out.clear();
     size_t i = 0;
-    while (i + 3 <= dl.size() && i < 0xA0) {
+    while (i + 3 <= dl.size() && i < limit) {
         const u8 op = dl[i];
         if (op == 0x00) {
             ++i;
@@ -179,9 +213,15 @@ void decodeBladeDL() {
             st.ts[v] = beF32(s_assets.texCoord, ti * 8 + 0);
             st.tt[v] = beF32(s_assets.texCoord, ti * 8 + 4);
         }
-        s_strips.push_back(st);
+        out.push_back(st);
         i += 3 + cnt * 3;
     }
+}
+
+void decodeBladeDL() {
+    decodeDLInto(s_assets.bladeDL, 0xA0, s_strips);
+    // №227: the stub geometry — donor draws it from frame-of-cut onward.
+    decodeDLInto(s_assets.bladeCutDL, 0x80, s_cutStrips);
 }
 
 // The donor calls these display lists with 32-byte-aligned sizes, NOT the raw
@@ -252,6 +292,9 @@ bool readPackKeys(const std::filesystem::path& mani, std::string& pos, std::stri
             bladeCutDl = val;
         } else if (key == "blade_tex") {
             bladeTex = val;
+        } else if (key == "item_table") {
+            // №220: cut-reward table override (-1 disables drops)
+            s_assets.itemTable = atoi(val.c_str());
         }
     }
     return !pos.empty() && !color.empty() && !texCoord.empty() && !matDl.empty() &&
@@ -417,6 +460,19 @@ public:
 int daExtVeg_c::create() {
     fopAcM_ct(this, daExtVeg_c);
 
+    // ========================================================================
+    // №229 — grass-cut scatter (0x89D7) is a SCENE particle our host stage's
+    // own Pscene bank doesn't carry (§62: emitter=0, tevstr fine). The mod
+    // already owns the answer: the death-orb work loads Pscene011.jpc as a
+    // SUPPLEMENTAL archive (slot 2) with a GENERAL fallback in
+    // dPa_tearResFallbackRM — and the offline bank scan confirms Pscene011
+    // contains 0x89D6+0x89D7. Kick the (idempotent, async) load at create so
+    // the resources are resident by the first cut.
+    // ========================================================================
+    if (dPa_control_c* pa = g_dComIfG_gameInfo.play.getParticle()) {
+        pa->ensureTearSceneRes();
+    }
+
     // №129: CONSUME this actor's pending-spawn entry. The population spawner
     // pushes one BEFORE fopAcM_create for every census row, and every other
     // census-spawnable actor (henna0/kdk/mk/p2/knob00) takes it during create.
@@ -529,7 +585,15 @@ void ExtVegPacket_c::draw() {
 // so this is the same mechanism on both sides — no new collision registration,
 // and it costs one query per uncut blade.
 void daExtVeg_c::checkCut() {
+    // §61 H4 — the early-return must LOG, or its silence is ambiguous with
+    // "player wasn't near grass" (the LAW: no-line must be a diagnostic
+    // outcome). One heartbeat per ~10s per actor is enough to prove the gate.
     if (!s_assets.ready || mBladeCount == 0) {
+        static u32 s_gateN = 0;
+        if ((s_gateN++ % 600) == 0) {
+            DuskLog.warn("[ExtVeg] §61 GATE actor={:x} ready={} blades={} — checkCut inert",
+                         (uintptr_t)this & 0xFFFF, s_assets.ready ? 1 : 0, mBladeCount);
+        }
         return;
     }
 
@@ -550,7 +614,61 @@ void daExtVeg_c::checkCut() {
     // coupling that caused the No.136 blade-list bug. If profiling ever shows
     // this costing, hoist it then — not on speculation.
     dComIfG_Ccsp()->PrepareMass();
-    dComIfG_Ccsp()->SetMassAttr(40.0f, 80.0f, 11, 0);
+    // ========================================================================
+    // №225 — 40x120, the RECEIVER's own grass test volume (d_grass.inc:1226),
+    // replacing the donor's 40x80. №148 argued "we draw donor blades, so the
+    // donor's numbers are right" — but the test volume's job is to catch the
+    // RECEIVER's attack shapes (TP Link's swing planes sit higher than WW's),
+    // and the receiver sized its own grass at 120 for exactly that geometry.
+    // First live results fit: only the low, wide great-spin sphere connected;
+    // slash capsules likely passed over the 80-tall volume. Same lesson as
+    // №224: the receiver is the spec for interaction plumbing.
+    // ========================================================================
+    dComIfG_Ccsp()->SetMassAttr(40.0f, 120.0f, 11, 0);
+
+    // ========================================================================
+    // §61 — 10-hypothesis cut-detection probe (LAW). User: grass not cuttable.
+    // ========================================================================
+    // One line answers: H2 massN (0 = feed never seen), H3 per-actor wipe (an
+    // earlier actor logging massN>0 while we log 0 in the same second), H4/H8
+    // nearest-blade distance + dY vs the player, H10 count across held-swing
+    // frames. H5/H6/H7 log at the hit site below. H1/H9 correlate with the
+    // ALINK-side §61 line (setSwordAtCollision).
+    {
+        static u32 s_n = 0;
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        if (player != NULL) {
+            f32 best = 1.0e9f;
+            f32 bestDY = 0.0f;
+            for (int i = 0; i < mBladeCount; ++i) {
+                const f32 dx = mBlades[i].x - player->current.pos.x;
+                const f32 dz = mBlades[i].z - player->current.pos.z;
+                const f32 d2 = dx * dx + dz * dz;
+                if (d2 < best) {
+                    best = d2;
+                    bestDY = player->current.pos.y - mBlades[i].y;
+                }
+            }
+            const int massN = (int)dComIfG_Ccsp()->mMass_Mng.mMassObjCount;
+            // §61 r2 — massN>0 at a poll is the RARE event the rate limiter was
+            // hiding (AT frames vs thousands of polls). Log it UNCONDITIONALLY
+            // with the first object's state so H2 (AtSet consumed) and H3
+            // (geometry) read straight off the line.
+            if (massN > 0) {
+                cCcD_Obj* o0 = dComIfG_Ccsp()->mMass_Mng.mMassObjs[0].GetObj();
+                DuskLog.warn("[ExtVeg] §61 MASS-SEEN actor={:x} massN={} atSet={} coSet={} ccsp={:x}",
+                             (uintptr_t)this & 0xFFFF, massN,
+                             o0 != NULL ? (o0->ChkAtSet() ? 1 : 0) : -1,
+                             o0 != NULL ? (o0->ChkCoSet() ? 1 : 0) : -1,
+                             (uintptr_t)dComIfG_Ccsp() & 0xFFFF);
+            } else if (best < 500.0f * 500.0f && (s_n++ % 30) == 0) {
+                DuskLog.warn("[ExtVeg] §61 poll actor={:x} blades={} massN=0 nearD={:.0f} dY={:.0f} ccsp={:x}",
+                             (uintptr_t)this & 0xFFFF, mBladeCount,
+                             std::sqrt(best), bestDY,
+                             (uintptr_t)dComIfG_Ccsp() & 0xFFFF);
+            }
+        }
+    }
 
     for (int i = 0; i < mBladeCount; ++i) {
         if (mCut[i]) {
@@ -560,6 +678,15 @@ void daExtVeg_c::checkCut() {
         fopAc_ac_c* hitActor = NULL;
         cXyz p = mBlades[i];
         const u32 massFlags = dComIfG_Ccsp()->ChkMass(&p, &hitActor, &hitInf);
+        // §61 r3: EVERY nonzero flags value logs — the %10 limit hid the true
+        // hit count in the first live run (1 line could be 1..10 hits). Hits
+        // are rare frames; unconditional is safe. Blade index makes multi-hit
+        // sweeps countable per swing.
+        if (massFlags != 0) {
+            DuskLog.warn("[ExtVeg] §61 HIT actor={:x} blade={} flags=0x{:X} name={}",
+                         (uintptr_t)this & 0xFFFF, i, massFlags,
+                         hitActor != NULL ? (int)fopAcM_GetName(hitActor) : -1);
+        }
         // bit 0 = AT (an attack reached this point). The receiver's grass
         // excludes carried objects the same way; without that a thrown pot
         // would mow the field.
@@ -569,6 +696,42 @@ void daExtVeg_c::checkCut() {
             continue;
         }
         mCut[i] = true;
+        // ====================================================================
+        // №220 — the donor's full cut consequence, receiver APIs throughout.
+        // ====================================================================
+        // Donor (d_grass.cpp WorkAt, cut branch): scatter particle at +25y
+        // coloured by the room tevstr, an item roll from the clump's table,
+        // then the frame-guarded cut sound. Receiver (d_grass.inc WorkAt) does
+        // the same three beats with its own APIs — particle 0x89D7 (its grass
+        // scatter), room tevstr + light callback, createItemFromTable with
+        // direct-get while on horseback. This is that recipe, verbatim.
+        {
+            cXyz ppos(mBlades[i].x, mBlades[i].y + 25.0f, mBlades[i].z);
+            dKy_tevstr_c* tevstr = dComIfGp_roomControl_getTevStr(mRoomNo);
+            static csXyz s_cutRot(0, 0, 0);
+            // №227: the receiver's own grass passes an envcolor (its per-clump
+            // tint, r/g from m_addCol); we have no clump tint so neutral zero —
+            // but the ARG is part of the call shape (d_grass.inc:390) and was
+            // NULL before. Also capture the emitter handle + inputs once per
+            // cut burst: the first live cuts showed NO visible particle, and
+            // emitter==NULL vs tevstr==NULL vs bogus room reads off this line.
+            GXColor envcolor = {0, 0, 0, 0};
+            void* emitter = dComIfGp_particle_set(0x89D7, &ppos, tevstr, &s_cutRot, NULL, 255,
+                                                  dPa_control_c::getLight8EcallBack(), -1,
+                                                  &envcolor, NULL, NULL);
+            static u32 s_pN = 0;
+            if ((s_pN++ % 8) == 0) {
+                DuskLog.warn("[ExtVeg] §62 cutFx emitter={} tevstr={} room={} pos=({:.0f},{:.0f},{:.0f})",
+                             emitter != NULL ? 1 : 0, tevstr != NULL ? 1 : 0, (int)mRoomNo,
+                             ppos.x, ppos.y, ppos.z);
+            }
+        }
+        if (s_assets.itemTable >= 0) {
+            const bool directGet = daPy_getPlayerActorClass() != NULL &&
+                                   daPy_getPlayerActorClass()->checkHorseRide();
+            fopAcM_createItemFromTable(&mBlades[i], s_assets.itemTable, -1, mRoomNo, NULL, 0,
+                                       NULL, NULL, NULL, directGet);
+        }
         // One cut sound per frame across every clump, not one per blade — a
         // single sword swing crosses several blades and would otherwise stack
         // the sample on itself. The donor guards this with l_CutSoundFlag.
@@ -579,7 +742,18 @@ void daExtVeg_c::checkCut() {
         }
     }
 
-    dComIfG_Ccsp()->MassClear();
+    // ========================================================================
+    // №226 — NO per-actor MassClear: it wipes the GLOBAL mass list and starves
+    // every veg actor that executes after this one. №148 kept the bracket per
+    // clump; that's harmless for Prepare (idempotent rebuild) but Clear is
+    // global state destruction — with the №224 list move it made EXACTLY ONE
+    // patch cuttable per session (the first actor in execute order saw Link's
+    // shapes, cut its blades, then cleared the list for everyone behind it —
+    // the user's "only one patch was ever cut"). The native manager may Clear
+    // because it is the SOLE poller of its stage; we are many. The engine
+    // already clears unconditionally at frame end (dCcS draw), so simply not
+    // clearing here is correct on every stage we exist on.
+    // ========================================================================
 }
 
 void daExtVeg_c::drawBlades() {
@@ -665,6 +839,13 @@ void daExtVeg_c::drawBlades() {
 
     Mtx mv;
     for (int i = 0; i < mBladeCount; ++i) {
+        // ====================================================================
+        // №227 — cut blades draw the donor's STUB, not nothing. №225's vanish
+        // was wrong against the donor (user's Dolphin side-by-side is the
+        // spec: a cut leaves a little stub + particle). The donor's draw picks
+        // per unit: full DL while standing, `l_Oba_kusa_a_cutDL` after a cut,
+        // persisting until reload. Same arrays, different strips.
+        // ====================================================================
         if (mDoLib_clipper::clip(j3dSys.getViewMtx(), mBlades[i], 260.0f)) {
             continue;
         }
@@ -672,7 +853,7 @@ void daExtVeg_c::drawBlades() {
         mDoMtx_YrotM(mv, (s16)(i * 0xDCF));
         mDoMtx_concat(j3dSys.getViewMtx(), mv, mv);
         GXLoadPosMtxImm(mv, GX_PNMTX0);
-        for (const Strip& st : s_strips) {
+        for (const Strip& st : mCut[i] ? s_cutStrips : s_strips) {
             GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (u16)st.count);
             for (int v = 0; v < st.count; ++v) {
                 GXPosition3f32(st.px[v], st.py[v], st.pz[v]);
@@ -724,7 +905,17 @@ static DUSK_CONST actor_method_class l_daExtVeg_Method = {
 
 DUSK_PROFILE actor_process_profile_definition DUSK_CONST g_profile_EXT_VEG = {
     /* Layer ID     */ fpcLy_CURRENT_e,
-    /* List ID      */ 7,
+    // ========================================================================
+    // №224 — List ID 7 → 11: poll the mass system at the RECEIVER's slot.
+    // ========================================================================
+    // 7 was the DONOR's grass-manager placement (WW d_a_grass.cpp, player at
+    // list 5) imported verbatim. But the receiver's own grass poller
+    // (g_profile_GRASS) sits at 11 — after EVERY mass feeder (Alink 5, arrow/
+    // boomerang/spinner/horse) — and §61 proved a list-7 poll here reads an
+    // empty mass list 247/247 while native list-11 grass cuts fine. The
+    // receiver's frame-phase contract is the spec for WHEN the list is
+    // visible; 11 is its answer. Mirror of №173's flags lesson, inverted.
+    /* List ID      */ 11,
     /* List Prio    */ fpcPi_CURRENT_e,
     /* Proc Name    */ fpcNm_EXT_VEG_e,
     /* Proc SubMtd  */ &g_fpcLf_Method.base,

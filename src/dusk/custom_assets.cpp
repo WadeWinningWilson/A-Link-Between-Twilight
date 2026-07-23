@@ -14,6 +14,7 @@
 #include "dusk/logging.h"
 #include "dusk/settings.h"  // game.customModelsDisabled
 #include "d/d_ext_npc_mount.h"  // Plan R provider rescan after arc overlays
+#include "d/d_ext_status.h"     // ext_inv/claims.ini session registry
 #include "d/d_resorce.h"    // dRes_info_c::loaderBasicBmd (engine-standard BMDV finish)
 #include "dusk/bmd_export.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"  // getMaterialNum/getMaterialNodePointer (Layer-B validation)
@@ -1709,6 +1710,10 @@ void scan() {
 
     // Plan R1/R3: rebuild NPC socket providers from enabled mods with arcs+manifests.
     dExtNpcMount_rescanProviders();
+#if TARGET_PC
+    // Session inventory / Ext Status claims from mod ext_inv/claims.ini
+    dExtInv_rescanClaims();
+#endif
 }
 
 // ============================================

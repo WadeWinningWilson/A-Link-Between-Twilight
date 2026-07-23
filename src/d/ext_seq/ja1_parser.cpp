@@ -138,15 +138,16 @@ int Ja1Parser::cmdJmp(Ja1Track* track, u32* args) {
         }
     }
     if (conditionCheck(track, flag)) {
+        // §60: song loops are `wait N; jmp <wait>`. Live playback must follow
+        // forever (WW). Dump must NOT re-enter — Bridge's golden stops via
+        // pc_call_seen at the jmp target, which made a one-time re-entry look
+        // like an "extra wait" at the loop point. Finite dump ≡ emit jmp, stop.
         if (Ja1EventDump::active() && !(flag & 0x80) && track->getSeq()->getBase() != nullptr) {
             const u32 cur = static_cast<u32>(track->getSeq()->mCurrentFilePtr -
                                              track->getSeq()->getBase());
             if (data < cur) {
-                if (Ja1EventDump::noteSawBackwardJmp(data)) {
-                    track->close();
-                    return 3;
-                }
-                Ja1EventDump::markBackwardJmp(data);
+                track->close();
+                return 3;
             }
         }
         track->getSeq()->jump(data);
@@ -334,9 +335,19 @@ int Ja1Parser::cmdSetParam(Ja1Track* track, u8 param_2) {
         break;
     }
     if (Ja1EventDump::active()) {
-        char buf[16];
-        std::snprintf(buf, sizeof(buf), "0x%02X", static_cast<unsigned>(0x90 | (param_2 & 0xF)));
-        dumpEmit("set_param", buf, "");
+        // §C.1 / Bridge 0.21.0: note_param=target (flag), velocity=data/32767.0
+        // (6 dp). Empty velocity when value is reg-indirect (width case 0).
+        char targetBuf[16];
+        char valueBuf[32];
+        std::snprintf(targetBuf, sizeof(targetBuf), "%u", static_cast<unsigned>(flag));
+        if ((param_2 & 0xC) == 0) {
+            valueBuf[0] = '\0';
+        } else {
+            const f32 resolved = static_cast<f32>(static_cast<int>(data)) / 32767.0f;
+            std::snprintf(valueBuf, sizeof(valueBuf), "%.6f", resolved);
+        }
+        dumpEmit("set_param", targetBuf, valueBuf);
+        Ja1EventDump::noteVolRamp(flag, val, valueBuf);
     }
     track->setParam(flag, static_cast<int>(data) / 32767.0f, val);
     return 0;

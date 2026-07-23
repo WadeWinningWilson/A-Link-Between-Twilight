@@ -55,10 +55,28 @@ public:
     void setParam(u8 target, f32 value, int moveTime);
     void updateTimedParam();
     void applyVoiceParams();
+    /** applyVoiceParams on this track and every active child (bus fade). */
+    void applyVoiceParamsDeep();
+    f32 timedCurrent(u8 target) const {
+        return (target < TIMED_PARAMS) ? mTimed[target].mCurrent : 0.0f;
+    }
+    f32 timedTarget(u8 target) const {
+        return (target < TIMED_PARAMS) ? mTimed[target].mTarget : 0.0f;
+    }
+    u8 volumeMode() const { return mVolumeMode; }
+    int activeVoiceCount() const;
+    /**
+     * §C.1 absolute-level probe — dump/log only. Walks this track + active
+     * children: raw timed vol, composedVolume (mode² × parent), voice count.
+     */
+    void logVolProbeTree(const char* tag) const;
     f32 composedVolume() const;
     f32 composedPan() const;
     f32 composedFxmix() const;
     f32 composedDolby() const;
+
+    /** Reset setParam probe budget + log tree after BMS start (no-op if env off). */
+    static void volProbeOnSeqStart(Ja1Track* root);
 
     void oscSetupSimple(u32) {}
     void oscSetupSimpleEnv(u32, u32) {}
@@ -159,6 +177,8 @@ public:
     bool mIsPaused = false;
     u8 mPauseStatus = 0;
     bool mActive = false;
+    /** WW TTrack::field_0x36c — packed hierarchy id (openTrack depth nibble). */
+    u32 mTrackId = 0;
     u8 mOscRoute[4]{};
     // ADSR stubs referenced by cmdSimpleADSR (unused by i_link path typically)
     void* field_0x2cc[2]{};

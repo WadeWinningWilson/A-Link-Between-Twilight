@@ -32,6 +32,7 @@
 #if TARGET_PC
 #include "d/d_albw_rental.h"
 #include "dusk/action_bindings.h"
+#include "dusk/logging.h"  // §65 probe
 #include "dusk/menu_pointer.h"
 #include "dusk/settings.h"
 #include "dusk/version.hpp"
@@ -1448,6 +1449,26 @@ void dMsgObject_c::talkStartInit() {
     {
         dMeter2Info_getMeterClass()->emphasisButtonDelete();
     }
+    // ========================================================================
+    // §65 H2 heartbeat — GATE-REJECTION diagnostic (silence must be diagnostic,
+    // 10-LAW): if a message is pending but NO screen ever gets created, this
+    // names the blocking condition instead of leaving a silent no-box frame.
+    // ========================================================================
+    {
+        static u32 s65NoScrnFrames = 0;
+        if (mpScrnDraw == NULL) {
+            if (++s65NoScrnFrames % 60 == 0) {
+                DuskLog.warn(
+                    "[MsgObject] §65 no-screen heartbeat: heapLock={} fukiKind={} floatMsg={:#x} "
+                    "talkHeap={} f4cd={}",
+                    (int)dComIfGp_isHeapLockFlag(), (int)mFukiKind,
+                    (u32)dMeter2Info_getFloatingMessageID(), mpTalkHeap != NULL ? 1 : 0,
+                    (int)field_0x4cd);
+            }
+        } else {
+            s65NoScrnFrames = 0;
+        }
+    }
     if (((dComIfGp_isHeapLockFlag() == 0 || (dComIfGp_isHeapLockFlag() == 5 && mFukiKind != 15)) ||
          (((dComIfGp_isHeapLockFlag() == 2 ||
             (dComIfGp_isHeapLockFlag() == 3 || dComIfGp_isHeapLockFlag() == 1)) &&
@@ -1471,6 +1492,16 @@ void dMsgObject_c::talkStartInit() {
         }
         dMsgScrnBase_c* pData;
         jmessage_tReference* pRef;
+        // ====================================================================
+        // §65 probe — WHICH message screen class gets built and WHY. fukiKind
+        // is the switch (1/5=Jimaku caption, default=Talk box); msgID names the
+        // resolved BMG entry; heapLock + form are the remaining suspects.
+        // Discriminates §65 H1 (entry-driven caption) / H3 (inherited output
+        // type) / H5/H8 (lock-flag layout) in one line.
+        // ====================================================================
+        DuskLog.warn("[MsgObject] §65 scrn-create: fukiKind={} msgID={:#x} heapLock={} outType={:#x}",
+                     (int)mFukiKind, (u32)mpRefer->getMsgID(), (int)dComIfGp_isHeapLockFlag(),
+                     (int)dMsgObject_getMsgOutputType());
         switch (mFukiKind) {
         case 9:
             pRef = (jmessage_tReference*)mpRenProc->getReference();

@@ -1223,6 +1223,10 @@ public:
         JUT_ASSERT(2778, 0 <= i_roomNo && i_roomNo < 64);
         mStatus[i_roomNo].mpBgW = i_bgw;
     }
+    static dBgW_Base* getBgW(int i_roomNo) {
+        JUT_ASSERT(2782, 0 <= i_roomNo && i_roomNo < 64);
+        return mStatus[i_roomNo].mpBgW;
+    }
     static dBgp_c* getBgp(int i_roomNo) {
 #if DEBUG
         return (dBgp_c*)mBgp[i_roomNo];

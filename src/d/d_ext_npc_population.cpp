@@ -102,6 +102,80 @@ bool looksLikeHeadOnlyName(const std::string& name) {
     return false;
 }
 
+// ============================================================================
+// №249 — presence axis 2: params-variant selection rules (data file).
+// ============================================================================
+// population/presence.ini:  [Name@Stage] (or [Name@*])
+//   params=<hex>                      default variant
+//   params_if:<modflag>=<hex>         override when the flag is SET (last wins)
+// Selection happens at spawn; unlisted actors keep first-row-wins.
+struct PresenceRule {
+    std::string flag;    // empty = the default rule
+    std::string params;  // hex string as authored in the census column
+};
+std::unordered_map<std::string, std::vector<PresenceRule>> s_presenceMap;
+
+bool paramsEqualHex(const std::string& a, const std::string& b) {
+    return std::strtoul(a.c_str(), NULL, 16) == std::strtoul(b.c_str(), NULL, 16);
+}
+
+std::string presenceSelectParams(const char* modFolder,
+                                 const std::vector<PresenceRule>& rules) {
+    std::string sel;
+    for (const PresenceRule& r : rules) {
+        if (r.flag.empty()) {
+            if (sel.empty()) {
+                sel = r.params;  // default only if no override matched yet
+            }
+        } else if (dExtModFlags_get(modFolder, r.flag.c_str())) {
+            sel = r.params;  // later matching overrides win
+        }
+    }
+    return sel;
+}
+
+void loadPresenceMap(const fs::path& modRoot) {
+    s_presenceMap.clear();
+    std::ifstream in(modRoot / "population" / "presence.ini");
+    if (!in) {
+        return;  // optional file — absence means first-row-wins everywhere
+    }
+    std::string line, section;
+    while (std::getline(in, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t')) {
+            line.pop_back();
+        }
+        size_t first = line.find_first_not_of(" \t");
+        if (first == std::string::npos) continue;
+        line.erase(0, first);
+        if (line[0] == '#' || line[0] == ';') continue;
+        if (line[0] == '[') {
+            const size_t end = line.find(']');
+            section = end != std::string::npos ? line.substr(1, end - 1) : "";
+            continue;
+        }
+        if (section.empty()) continue;
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+        PresenceRule rule;
+        if (key == "params") {
+            rule.params = val;
+        } else if (key.rfind("params_if:", 0) == 0) {
+            rule.flag = key.substr(10);
+            rule.params = val;
+        } else {
+            continue;
+        }
+        s_presenceMap[section].push_back(rule);
+    }
+    if (!s_presenceMap.empty()) {
+        DuskLog.info("[ExtNpcPop] №249 presence rules loaded — {} actor(s)",
+                     (int)s_presenceMap.size());
+    }
+}
+
 bool loadActorMap(const fs::path& path, std::unordered_map<std::string, ActorMapEntry>* out) {
     std::ifstream in(path);
     if (!in) {
@@ -368,6 +442,7 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
     const fs::path modRoot = dusk::ConfigPath / "model_replacements" / bg.modFolder;
     const fs::path csvPath = modRoot / "population" / bg.populationCsv;
     const fs::path mapPath = modRoot / "population" / "actor_map.ini";
+    loadPresenceMap(modRoot);  // №249: params-variant selection rules (fresh per spawn run)
 
     int foundSchema = -1;
     const SchemaCheck schema = checkPopulationSchema(modRoot, &foundSchema);
@@ -497,6 +572,30 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
             continue;
         }
         const ActorMapEntry& me = it->second;
+        // ====================================================================
+        // №249 — presence axis 2: params-variant selection (data-driven).
+        // ====================================================================
+        // A unique NPC may carry SEVERAL census rows distinguished by params —
+        // its story-state placements (Ba1 ×4 in LinkRM: loft pre-clothes,
+        // ground floor after). first-row-wins picked whichever the CSV listed
+        // first. `population/presence.ini` now selects: [Name@Stage] with
+        // `params=<hex>` (default) + `params_if:<flag>=<hex>` overrides (last
+        // matching rule wins). Rows whose params don't match the selection are
+        // skipped; actors without a presence entry keep first-row-wins.
+        // WW's own params→flag mapping is observational (Nonmatching donors) —
+        // the ini records each mapping as it is CONFIRMED, never guessed.
+        {
+            const std::string presKey =
+                name + "@" + (hasStageCol ? cols[0] : std::string("*"));
+            auto pit = s_presenceMap.find(presKey);
+            if (pit != s_presenceMap.end()) {
+                const std::string sel = presenceSelectParams(bg.modFolder, pit->second);
+                if (!sel.empty() && !paramsEqualHex(cols[base + 3], sel)) {
+                    ++skipped;
+                    continue;
+                }
+            }
+        }
         if (me.unique && uniqueNames.count(name) != 0) {
             ++skipped;
             continue;

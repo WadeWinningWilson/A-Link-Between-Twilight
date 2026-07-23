@@ -868,6 +868,18 @@ void dCcS::Draw() {
 }
 
 void dCcS::MassClear() {
+    // ========================================================================
+    // §61 r2 — clear-site witness: only USER code calls this wrapper (the
+    // engine's frame-end clear goes straight to mMass_Mng.Clear() in draw).
+    // A clear with a NON-ZERO count mid-frame is the mass list being wiped
+    // while it still holds Link's shapes — the H2/H4 smoking gun.
+    // ========================================================================
+    if (mMass_Mng.mMassObjCount > 0) {
+        static u32 s_clrN = 0;
+        if ((s_clrN++ % 60) == 0) {
+            OS_REPORT("§61 MassClear wrapper with massN=%d\n", (int)mMass_Mng.mMassObjCount);
+        }
+    }
     mMass_Mng.Clear();
 }
 

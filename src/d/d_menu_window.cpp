@@ -14,6 +14,10 @@
 #include "d/d_menu_save.h"
 #include "d/d_menu_skill.h"
 #include "d/d_menu_window.h"
+#if TARGET_PC
+#include "d/d_menu_ext_status.h"
+#include "d/d_ext_status.h"
+#endif
 
 #include "d/d_camera.h"
 #include "d/d_menu_window_HIO.h"
@@ -178,7 +182,10 @@ BOOL dMw_DOWN_TRIGGER() {
 
 BOOL dMw_LEFT_TRIGGER() {
 #if TARGET_PC
-    if (dusk::callMidnaReservesDpadLeft(0) && dMw_quickSwapReservationActive()) {
+    // Paged inventory owns L/R even while live (unpaused) quick-equip is open.
+    if (dusk::callMidnaReservesDpadLeft(0) && dMw_quickSwapReservationActive() &&
+        !dMenu_Ring_c::isQuickEquipPagesExclusive())
+    {
         return false;
     }
 #endif
@@ -191,7 +198,9 @@ BOOL dMw_LEFT_TRIGGER() {
 
 BOOL dMw_RIGHT_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadRightReservedForQuickSwap(0) && dMw_quickSwapReservationActive()) {
+    if (dusk::dpadRightReservedForQuickSwap(0) && dMw_quickSwapReservationActive() &&
+        !dMenu_Ring_c::isQuickEquipPagesExclusive())
+    {
         return false;
     }
 #endif
@@ -313,6 +322,11 @@ initFunc init_proc[] = {
     &dMw_c::insect_open2_init,
     &dMw_c::insect_move_init,
     &dMw_c::insect_close_init,
+#if TARGET_PC
+    &dMw_c::ext_status_open_init,
+    &dMw_c::ext_status_move_init,
+    &dMw_c::ext_status_close_init,
+#endif
 };
 
 typedef void (dMw_c::*procFunc)();
@@ -352,6 +366,11 @@ procFunc move_proc[] = {
     &dMw_c::insect_open2_proc,
     &dMw_c::insect_move_proc,
     &dMw_c::insect_close_proc,
+#if TARGET_PC
+    &dMw_c::ext_status_open_proc,
+    &dMw_c::ext_status_move_proc,
+    &dMw_c::ext_status_close_proc,
+#endif
 };
 
 void dMw_c::key_wait_init(u8 i_proc) {
@@ -372,6 +391,11 @@ void dMw_c::key_wait_init(u8 i_proc) {
     case RING_CLOSE:
         dMw_ring_delete();
         break;
+#if TARGET_PC
+    case EXT_STATUS_CLOSE:
+        dMw_ext_status_delete();
+        break;
+#endif
     case SAVE_CLOSE:
         dMw_fade_in();
         dMw_save_delete();
@@ -875,6 +899,13 @@ void dMw_c::collect_move_proc() {
         mpMenuCollect->_move();
         return;
     }
+    // Sibling Ext Status (Tools/Quest/Atlas) — L/R while Collect has no submenu.
+    if (mpMenuCollect->getSubWindowOpenCheck() == 0 && !mpMenuCollect->isKeyCheck() &&
+        (dMw_LEFT_TRIGGER() || dMw_RIGHT_TRIGGER()))
+    {
+        mMenuProc = EXT_STATUS_OPEN;
+        return;
+    }
 #endif
     if (mpMenuCollect->getSubWindowOpenCheck()) {
         mMenuProc = COLLECT_CLOSE;
@@ -1239,6 +1270,67 @@ void dMw_c::insect_close_proc() {
         mMenuProc = NO_MENU;
     }
 }
+
+#if TARGET_PC
+void dMw_c::ext_status_open_init(u8) {
+    dMeter2Info_setWindowStatus(11);
+    dMw_ext_status_create();
+}
+
+void dMw_c::ext_status_move_init(u8) {}
+
+void dMw_c::ext_status_close_init(u8) {}
+
+void dMw_c::ext_status_open_proc() {
+    mMenuProc = EXT_STATUS_MOVE;
+}
+
+void dMw_c::ext_status_move_proc() {
+    if (mpMenuExtStatus == NULL) {
+        mMenuProc = COLLECT_MOVE;
+        dMeter2Info_setWindowStatus(3);
+        return;
+    }
+    mpMenuExtStatus->_move();
+    if (mpMenuExtStatus->wantsClose()) {
+        mMenuProc = EXT_STATUS_CLOSE;
+        return;
+    }
+    const s8 handoff = mpMenuExtStatus->getCollectHandoff();
+    if (handoff >= 0) {
+        mpMenuExtStatus->clearCollectHandoff();
+        dMw_ext_status_delete();
+        dMeter2Info_setWindowStatus(3);
+        mMenuProc = COLLECT_MOVE;
+        Z2GetAudioMgr()->seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    }
+}
+
+void dMw_c::ext_status_close_proc() {
+    dMw_ext_status_delete();
+    // Close entire pause (Collect was kept alive under Ext Status).
+    mMenuProc = COLLECT_CLOSE;
+}
+
+void dMw_c::dMw_ext_status_create() {
+    if (mpMenuExtStatus != NULL) {
+        return;
+    }
+    mpMenuExtStatus = JKR_NEW dMenu_ExtStatus_c(mpStick, mpCStick);
+    if (mpMenuExtStatus != NULL) {
+        mpMenuExtStatus->_create();
+    }
+}
+
+bool dMw_c::dMw_ext_status_delete() {
+    if (mpMenuExtStatus != NULL) {
+        mpMenuExtStatus->_delete();
+        JKR_DELETE(mpMenuExtStatus);
+        mpMenuExtStatus = NULL;
+    }
+    return true;
+}
+#endif
 
 void dMw_c::dMw_capture_create() {
     if (!dComIfGp_isPauseFlag() && mpCapture == NULL) {
@@ -1780,6 +1872,9 @@ int dMw_c::_create() {
     mpMenuFishing = NULL;
     mpMenuSkill = NULL;
     mpMenuInsect = NULL;
+#if TARGET_PC
+    mpMenuExtStatus = NULL;
+#endif
     mMemSize = 0;
     field_0x144 = 3;
 
@@ -1840,6 +1935,12 @@ int dMw_c::_draw() {
             if (mpMenuCollect != NULL) {
                 mpMenuCollect->draw();
             }
+#if TARGET_PC
+        } else if (dMeter2Info_getWindowStatus() == 11) {
+            if (mpMenuExtStatus != NULL) {
+                dComIfGd_set2DOpa(mpMenuExtStatus);
+            }
+#endif
         } else if (dMeter2Info_getWindowStatus() == 4) {
             if (mpMenuFmap != NULL) {
                 mpMenuFmap->_draw();
@@ -1929,6 +2030,11 @@ int dMw_c::_delete() {
     } else if (!dMw_insect_delete()) {
         mDoExt_setCurrentHeap(heap);
         return 0;
+#if TARGET_PC
+    } else if (!dMw_ext_status_delete()) {
+        mDoExt_setCurrentHeap(heap);
+        return 0;
+#endif
     } else if (!dMw_ring_delete()) {
         mDoExt_setCurrentHeap(heap);
         return 0;

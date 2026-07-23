@@ -253,6 +253,27 @@ namespace {
 static char const DataFileName[] = "event_list.dat";
 };
 
+#if TARGET_PC
+// ============================================================================
+// №266 — late stage-list init (see header). §67 proved BASE_STAGE stays empty
+// when create() ran before the stage resource was queryable (warp path); the
+// donor never retries because its load order guarantees availability. This
+// re-runs the donor's own init the moment the guarantee is restored.
+// dEvDtBase_c::init is re-entry safe (unk[0] byte-swap latch).
+// ============================================================================
+int dEvent_manager_c::lateStageListInit() {
+    if (mEventList[BASE_STAGE].getHeaderP() != NULL) {
+        return 1;
+    }
+    char* res = (char*)dComIfG_getStageRes("event_list.dat");
+    if (res == NULL) {
+        return 0;
+    }
+    mEventList[BASE_STAGE].init(res, -1);
+    return mEventList[BASE_STAGE].getHeaderP() != NULL ? 2 : 0;
+}
+#endif
+
 int dEvent_manager_c::create() {
     mCameraPlay = 0;
     mException.init();

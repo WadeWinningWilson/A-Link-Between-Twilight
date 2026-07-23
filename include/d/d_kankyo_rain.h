@@ -39,6 +39,10 @@ void dKyr_shstar_init();
 void dKyr_star_move();
 void dKyr_shstar_move();
 void vrkumo_move();
+#if TARGET_PC
+void wave_move();
+void drawWave(Mtx drawMtx, u8** pImg);
+#endif
 
 class camera_class;
 void dKyr_get_vectle_calc(cXyz* param_0, cXyz* param_1, cXyz* param_2);

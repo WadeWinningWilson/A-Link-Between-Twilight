@@ -19,6 +19,34 @@ static constexpr int kExtNpcMaxSlavePairs = 8;
 struct dExtNpcAttachSpec {
     char model[64];
     char joint[32];
+    // ============================================================================
+    // №218 — optional donor-authored local transform for a held prop.
+    // ============================================================================
+    // The donor's own actors place hand props as jointMtx × T(offs) × R(rot)
+    // (e.g. the Ls1 telescope: handR × T(5.5,-3,-2) × R(-7463,15109,-23665)).
+    // Without this an attach can only sit exactly ON the joint origin. rot is in
+    // raw s16 angle units, authored in decimal in the manifest.
+    cXyz offs;
+    cXyz rot;
+    bool hasLocal;
+    // ========================================================================
+    // №250 — the DEMO-POSE variant (vanilla-truthful state split).
+    // ========================================================================
+    // The donor selects the prop's local transform by its demo-driven flag
+    // (Ls1 m841: set while a storyboard owns her): in-demo T(5.7,-17.5,-1) vs
+    // gameplay T(5.5,-3,-2). Shipping only one pose put the telescope through
+    // her head in cutscenes. attach_offs_demo/attach_rot_demo author the
+    // in-demo variant; absent = the base local is used in both states.
+    cXyz offsDemo;
+    cXyz rotDemo;
+    bool hasDemoLocal;
+    // ========================================================================
+    // №262 — flag-gated prop lifetime (Grandma's clothes bundle).
+    // ========================================================================
+    // The donor's scene state machine: Ba1 CARRIES ba_cloth (hold.bck idle)
+    // until the give, then never again. attach_unless_flag names the mod flag
+    // that retires the attach the moment it is set (the give's set_flag).
+    char unlessFlag[48];
 };
 
 struct dExtNpcSubtype {
@@ -41,9 +69,25 @@ struct dExtNpcManifest {
     char model2Btk[64];
     char collision[64];
     char idle[64];
+    // ========================================================================
+    // №262 — idle override while a flag-gated attach is still live (donor
+    // state machine: Ba1 plays hold.bck while carrying ba_cloth, wait01 after
+    // the give). Empty = plain idle in both states.
+    // ========================================================================
+    char idleAttached[64];
+    // №263: one-shot PRESENT animation played at the get-item handoff (donor:
+    // Ba1's hold.bck give motion). Distinct from idle_attached — this is the
+    // moment of the give, not the carrying state.
+    char presentAnim[64];
     char talk1[64];
     char talk2[64];
     char btp[64];
+    // №188: idle blink texture-pattern (e.g. Aryll's `maba.btp`). Distinct from
+    // `btp` because the semantics differ: `btp` LOOPS; a blink HOLDS eyes-open on
+    // a random timer, then plays the close/open once. WW faces are texture planes
+    // and "blink" is a BTP frame swap — the donor's `daNpc_Ls1_c::play_btp_anm`
+    // with resID index 1 (`MABA` = mabataki). Empty = no idle blink.
+    char blinkBtp[64];
     char displayName[64];
     char neckJoint[32];
     char dialogueKey[64];
@@ -52,6 +96,14 @@ struct dExtNpcManifest {
     char companionIdle[64];
     // №36 A: 0 = synced base TRMtx + own BCK (mdarm); 1 = joint_slave (lshand / no BCK).
     u8 companionMode;
+    // ========================================================================
+    // №249 — companion hidden by default (presence axis 3 at attachment scale).
+    // ========================================================================
+    // Grandma's `ba_cloth.bdl` (the hero's-clothes bundle) mounts as her
+    // companion but must only PRESENT during the give scene — unbound at her
+    // base matrix it rendered as the "green model in her head" (№244). Hidden
+    // means not drawn; the scene pass flips it with the hold-state.
+    bool companionHidden;
     char brk[64];          // №36 C: Vlupy color anim
     char btk[64];
     f32 colorFrame;        // brk/btk frame; <0 ⇒ from create params
@@ -128,6 +180,22 @@ public:
     bool mBgGlobal;
     J3DModel* mpAttach[kExtNpcMaxAttach];
     s16 mAttachJnt[kExtNpcMaxAttach];
+    // ============================================================================
+    // №218 — per-slot donor local transform (see dExtNpcAttachSpec::offs/rot).
+    // ============================================================================
+    cXyz mAttachOffs[kExtNpcMaxAttach];
+    cXyz mAttachRot[kExtNpcMaxAttach];
+    u8 mAttachLocal[kExtNpcMaxAttach];
+    // №250: the in-demo local variant + whether the demo branch owns this frame.
+    cXyz mAttachOffsDemo[kExtNpcMaxAttach];
+    cXyz mAttachRotDemo[kExtNpcMaxAttach];
+    u8 mAttachDemoLocal[kExtNpcMaxAttach];
+    bool mDemoOwned;
+    // №263: present animation in flight — execute() returns to idle at its end.
+    bool mPresentAnimActive;
+    // №251: pending get-item handoff — set by grant actions, consumed at talk
+    // close (the item event REPLACES the speak event; no reset in between).
+    int mPresentDemoItemNo;
     u8 mAttachOnCompanion[kExtNpcMaxAttach];
     // 1 = №49/50 joint_slave CB (heads/arms); 0 = №50-E door visual (base@DoorDummy only).
     u8 mAttachSlave[kExtNpcMaxAttach];
@@ -138,6 +206,33 @@ public:
     s16 mOrbitPhase;       // №27 N6: Kamome orbit phase (0 = grounded/static)
     u8 mHeadVariant;       // №27 N2/N4: current head index (1-based; 0 = none)
     bool mBtpBound;
+    // №186: last texture-anim id applied from the storyboard. PER-ACTOR on
+    // purpose — a scene has several performers (Link and Ls1 both bind), and a
+    // file-static would let one actor's id suppress another's re-init.
+    u32 mDemoTexAnmLast;
+    // №188: idle-blink state. `mpBlink` is a SEPARATE BTP from `mpBtp` (which is
+    // for expression/loop); the two target the same eye material but only one
+    // drives it at a time — the blink runs whenever no demo expression is active.
+    mDoExt_btpAnm* mpBlink;
+    bool mBlinkBound;
+    s16 mBlinkTimer;
+    f32 mBlinkFrame;
+    // №194: set while the storyboard's prm channel is driving this actor's face.
+    // Draw reads it to suppress the idle-blink entry so it can't clobber the
+    // demo expression (both write the same eye materials).
+    bool mDemoFaceActive;
+    // №196: demo-face BTP frame — advanced play-ONCE-and-hold (donor
+    // play_btp_anm non-blink branch), reset to 0 only when the expression
+    // (resID) changes. NOT a loop — looping re-blinks bwait continuously.
+    f32 mDemoFaceFrame;
+    // №197: demo-face BTK (texture SRT). The prm channel's SECOND (0,0,1) entry.
+    // Only visibly matters for the open-mouth/tongue — it scales the tongue
+    // texture into the mouth; without it the raw texture shows as a black+pink
+    // square. Same play-once-hold discipline as the BTP.
+    mDoExt_btkAnm* mpDemoBtk;
+    bool mDemoBtkBound;
+    u32 mDemoBtkLast;
+    f32 mDemoBtkFrame;
     dCcD_Stts mCcStts;
     dCcD_Cyl mCyl;
     s16 mNeckJnt;
@@ -259,6 +354,10 @@ struct dExtNpcIdentifyInfo {
 bool dExtNpcMount_queryActor(const fopAc_ac_c* actor, dExtNpcIdentifyInfo* out);
 // §41: Z-target identity probe — log once per LockonTarget change (d_s_play poll).
 void dExtNpcMount_pollIdentifyProbe();
+#if TARGET_PC
+// §95: tree/mount cull probe — env DUSK_CULL_PROBE=1; edge + heartbeat logs.
+void dExtNpcMount_pollCullProbe();
+#endif
 
 // Manifest-driven BG warps.
 bool dExtNpcMount_requestBgWarp(const char* procName);
@@ -299,6 +398,9 @@ void dExtNpcMount_forceEndDoorEvent(const char* reason);
 void dExtNpcMount_registerRoomLane(const char* procName, int hostRoom);
 bool dExtNpcMount_isRoomLaneProc(const char* procName);
 int dExtNpcMount_roomLaneHostRoom(const char* procName);  // -1 if not room-lane
+// №257: true if a room-lane BG mount is registered to own this room's collision
+// (daBg must not also Regist a stub room.dzb on WW hosts).
+bool dExtNpcMount_isRoomLaneRoom(int roomNo);
 // True while a room-lane interior is claimed — dStage::loadRoom must not kill it
 // (alink RoomCheck RTBL only knows room 0 and would otherwise recreate-loop).
 bool dExtNpcMount_isRoomLaneProtected(int roomNo);

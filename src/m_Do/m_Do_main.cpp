@@ -105,6 +105,10 @@
 #include "dusk/ui/reporting.hpp"
 #endif
 
+#if TARGET_PC
+#include "d/d_ext_seq_space.h"
+#endif
+
 // --- GLOBALS ---
 s8 mDoMain::developmentMode = -1;
 OSTime mDoMain::sPowerOnTime;
@@ -537,6 +541,11 @@ int game_main(int argc, char* argv[]) {
             ("console", "Show the Windows console window for logs", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
             ("dvd", "Path to DVD image file", cxxopts::value<std::string>())
             ("backend", "Graphics API backend to use (auto, d3d12, d3d11, metal, vulkan, null)", cxxopts::value<std::string>())
+#if TARGET_PC
+            ("extseq-dump",
+             "§60b: offline Ja1Parser event dump for package root (writes seq_events_engine_*.csv)",
+             cxxopts::value<std::string>())
+#endif
             ("cvar", "Override configuration variables without modifying config", cxxopts::value<std::vector<std::string>>());
 
         arg_options.parse_positional({"dvd"});
@@ -564,6 +573,15 @@ int game_main(int argc, char* argv[]) {
     dusk::InitializeFileLogging(dusk::CachePath, startupLogLevel);
 
     log_build_info();
+
+#if TARGET_PC
+    if (parsed_arg_options.count("extseq-dump")) {
+        const std::string pkg = parsed_arg_options["extseq-dump"].as<std::string>();
+        const int dumpRc = dExtSeqSpace_cliDumpEvents(pkg.c_str());
+        dusk::ShutdownFileLogging();
+        return dumpRc;
+    }
+#endif
 
     dusk::config::LoadFromUserPreferences();
     if (dusk::getSettings().game.speedrunMode) {
