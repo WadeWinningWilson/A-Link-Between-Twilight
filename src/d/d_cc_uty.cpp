@@ -542,6 +542,8 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                 atType = AT_TYPE_IRON_BALL;
             } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
                 atType = AT_TYPE_SLINGSHOT;
+            } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SPINNER)) {
+                atType = AT_TYPE_SPINNER;
             }
             if (atType != 0) {
                 dFocusedArts_applyItemDamageBoost(i_AtInfo->mAttackPower);
@@ -558,6 +560,8 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                 atType = AT_TYPE_IRON_BALL;
             } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
                 atType = AT_TYPE_SLINGSHOT;
+            } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SPINNER)) {
+                atType = AT_TYPE_SPINNER;
             }
             if (atType != 0) {
                 dFocusedArts_applyItemDamageBoost(i_AtInfo->mAttackPower);
@@ -619,6 +623,14 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         // Successful shield bash arms +5% on the next damaging hit (any source).
         if (i_AtInfo->mAttackPower > 0 && fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
             dShield_tryConsumeBashNextHitBoost(i_AtInfo->mAttackPower);
+        }
+
+        // Lockout double-claw finisher: fixed ATP 30 after all remaps.
+        {
+            const u16 clawSlashPower = dAlbwLockout_getDoubleClawSlashAttackPower();
+            if (clawSlashPower != 0 && fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
+                i_AtInfo->mAttackPower = clawSlashPower;
+            }
         }
 #endif
 

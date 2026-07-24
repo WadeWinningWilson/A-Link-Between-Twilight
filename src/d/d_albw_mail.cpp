@@ -90,21 +90,52 @@ const char* kDeliverSpeech =
     "No time for introductions!\n\n"
     "Onward to mail!";
 
-const char* kLetterSubject = "New Delivery Services Coming Near You!";
-const char* kLetterSender = "Junior Postman";
+struct AlbwMailLetterDef {
+    int index;
+    const char* subject;
+    const char* sender;
+    const char* body;
+};
 
-const char* kLetterBodySource =
-    "Tired on your travels? Ever rested so deeply that you woke up to notice all your "
-    "belongings missing? Never fear! Hyrulian Post Services are there for you! Taking great "
-    "care to pick up any lost belongings, we safely store them at one of our Junior Postman "
-    "locations who will return them to you with the most reasonable of prices.\n\n"
-    " ~Ordon location coming soon ~";
+const AlbwMailLetterDef kLetters[] = {
+    {
+        kAlbwMailLetterIndex,
+        "New Delivery Services Coming Near You!",
+        "Junior Postman",
+        "Tired on your travels? Ever rested so deeply that you woke up to notice all your "
+        "belongings missing? Never fear! Hyrulian Post Services are there for you! Taking great "
+        "care to pick up any lost belongings, we safely store them at one of our Junior Postman "
+        "locations who will return them to you with the most reasonable of prices.\n\n"
+        " ~Ordon location coming soon ~",
+    },
+    {
+        kAlbwMailLetterIndex2,
+        "Hyrulian Delivery Services Announcement",
+        "Junior Postman",
+        "As you carry forward on your steps throughout Hyrule, you're bound to encounter scrolls "
+        "that must be treated with the utmost care. As our talented Junior Postman employees "
+        "know: a torn or folded scroll pays great disrespect to the knowledge of old! Inspect "
+        "your scrolls carefully for any wear or tear. Be kind, please reseal!",
+    },
+};
+
+constexpr int kLetterCount = static_cast<int>(sizeof(kLetters) / sizeof(kLetters[0]));
+
+const AlbwMailLetterDef* findLetterDef(int letterIndex) {
+    for (int i = 0; i < kLetterCount; i++) {
+        if (kLetters[i].index == letterIndex) {
+            return &kLetters[i];
+        }
+    }
+    return NULL;
+}
 
 constexpr int kLetterPageBufSize = 0x200;
 constexpr int kLetterPageCap = D_MSG_CLASS_PAGE_CNT_MAX;
 static char sLetterPages[kLetterPageCap][kLetterPageBufSize];
 static int sLetterPageCount = 0;
 static int sLetterBuiltLineMax = 0;
+static int sLetterBuiltIndex = -1;
 
 f32 getLetterWrapWidth(J2DTextBox* bodyBox) {
     if (bodyBox != NULL) {
@@ -160,22 +191,30 @@ bool appendLineToPage(int& pageIndex, const char* line, size_t lineLen) {
     return true;
 }
 
-void buildLetterPages(J2DTextBox* bodyBox, int lineMax) {
+void buildLetterPages(int letterIndex, J2DTextBox* bodyBox, int lineMax) {
+    const AlbwMailLetterDef* def = findLetterDef(letterIndex);
+    if (def == NULL) {
+        sLetterPageCount = 0;
+        sLetterBuiltIndex = -1;
+        return;
+    }
+
     if (lineMax <= 0) {
         lineMax = 12;
     }
-    if (sLetterPageCount > 0 && sLetterBuiltLineMax == lineMax) {
+    if (sLetterPageCount > 0 && sLetterBuiltLineMax == lineMax && sLetterBuiltIndex == letterIndex) {
         return;
     }
 
     sLetterPageCount = 0;
     sLetterBuiltLineMax = lineMax;
+    sLetterBuiltIndex = letterIndex;
     for (int i = 0; i < kLetterPageCap; i++) {
         sLetterPages[i][0] = '\0';
     }
 
     char source[2048];
-    std::snprintf(source, sizeof(source), "%s\n\n%s", kLetterSubject, kLetterBodySource);
+    std::snprintf(source, sizeof(source), "%s\n\n%s", def->subject, def->body);
 
     char wrapped[4096];
     wrapped[0] = '\0';
@@ -232,14 +271,25 @@ void setTextBox(J2DTextBox* textBox, const char* text) {
     textBox->setString(kLetterPageBufSize, text);
 }
 
+bool anyRuntimeLetterMissing() {
+    for (int i = 0; i < kLetterCount; i++) {
+        if (!dComIfGs_isLetterGetFlag(kLetters[i].index)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 void dAlbwMail_init() {
-    dMenu_LetterData& slot = dMenu_Letter::letter_data[kAlbwMailLetterIndex];
-    slot.mSubject = kAlbwMailRuntimeMsgId;
-    slot.mName = kAlbwMailRuntimeMsgId;
-    slot.mText = kAlbwMailRuntimeMsgId;
-    slot.mEventFlag = kAlbwMailPendingEventIndex;
+    for (int i = 0; i < kLetterCount; i++) {
+        dMenu_LetterData& slot = dMenu_Letter::letter_data[kLetters[i].index];
+        slot.mSubject = kAlbwMailRuntimeMsgId;
+        slot.mName = kAlbwMailRuntimeMsgId;
+        slot.mText = kAlbwMailRuntimeMsgId;
+        slot.mEventFlag = kAlbwMailPendingEventIndex;
+    }
 }
 
 bool dAlbwMail_isTestMode() {
@@ -247,7 +297,24 @@ bool dAlbwMail_isTestMode() {
 }
 
 bool dAlbwMail_isRuntimeLetter(int letterIndex) {
-    return letterIndex == kAlbwMailLetterIndex;
+    return findLetterDef(letterIndex) != NULL;
+}
+
+bool dAlbwMail_hasReceivedBundle() {
+    return !anyRuntimeLetterMissing();
+}
+
+bool dAlbwMail_hasTutorialScrolls() {
+    // Granted with the Junior Postman North Faron bundle (either letter or delivered bit).
+    if (isDeliveredSaved()) {
+        return true;
+    }
+    for (int i = 0; i < kLetterCount; i++) {
+        if (dComIfGs_isLetterGetFlag(kLetters[i].index)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool dAlbwMail_isDeliverPostman(const daNpc_Post_c* postman) {
@@ -258,7 +325,7 @@ bool dAlbwMail_isDeliverPostman(const daNpc_Post_c* postman) {
 }
 
 bool dAlbwMail_shouldSpawnNorthFaron() {
-    if (dComIfGs_isLetterGetFlag(kAlbwMailLetterIndex) && !dAlbwMail_isTestMode()) {
+    if (dAlbwMail_hasReceivedBundle() && !dAlbwMail_isTestMode()) {
         return false;
     }
     return storyGatePassed() && deliveredGateOpen();
@@ -391,7 +458,7 @@ void dAlbwMail_tryQueuePending() {
     if (!storyGatePassed()) {
         return;
     }
-    if (dComIfGs_isLetterGetFlag(kAlbwMailLetterIndex)) {
+    if (!anyRuntimeLetterMissing()) {
         if (dAlbwMail_isTestMode()) {
             setPendingSaved(true);
             return;
@@ -406,6 +473,12 @@ void dAlbwMail_tryQueuePending() {
 }
 
 void dAlbwMail_onDeliveryComplete() {
+    // receiveLetter() calls this once per runtime slot mid-loop. Finalize only
+    // after the full bundle is owned so the shared pending bit stays set for
+    // every letter in the same grant pass.
+    if (!dAlbwMail_hasReceivedBundle()) {
+        return;
+    }
     setPendingSaved(false);
     if (!dAlbwMail_isTestMode()) {
         setDeliveredSaved(true);
@@ -423,22 +496,27 @@ const char* dAlbwMail_getDeliverLine(int pageIndex) {
     return kDeliverLines[pageIndex];
 }
 
-const char* dAlbwMail_getLetterSubject() {
-    return kLetterSubject;
+const char* dAlbwMail_getLetterSubject(int letterIndex) {
+    const AlbwMailLetterDef* def = findLetterDef(letterIndex);
+    return def != NULL ? def->subject : "";
 }
 
-const char* dAlbwMail_getLetterSender() {
-    return kLetterSender;
+const char* dAlbwMail_getLetterSender(int letterIndex) {
+    const AlbwMailLetterDef* def = findLetterDef(letterIndex);
+    return def != NULL ? def->sender : "";
 }
 
-const char* dAlbwMail_getLetterBodyPage(int pageIndex) {
-    if (pageIndex < 0 || pageIndex >= sLetterPageCount) {
+const char* dAlbwMail_getLetterBodyPage(int letterIndex, int pageIndex) {
+    if (sLetterBuiltIndex != letterIndex || pageIndex < 0 || pageIndex >= sLetterPageCount) {
         return "";
     }
     return sLetterPages[pageIndex];
 }
 
-int dAlbwMail_getLetterBodyPageCount() {
+int dAlbwMail_getLetterBodyPageCount(int letterIndex) {
+    if (sLetterBuiltIndex != letterIndex) {
+        return 0;
+    }
     return sLetterPageCount;
 }
 
@@ -446,14 +524,14 @@ void dAlbwMail_drawLetterSubject(int letterIndex, J2DTextBox* textBox) {
     if (!dAlbwMail_isRuntimeLetter(letterIndex)) {
         return;
     }
-    setTextBox(textBox, dAlbwMail_getLetterSubject());
+    setTextBox(textBox, dAlbwMail_getLetterSubject(letterIndex));
 }
 
 void dAlbwMail_drawLetterSender(int letterIndex, J2DTextBox* textBox) {
     if (!dAlbwMail_isRuntimeLetter(letterIndex)) {
         return;
     }
-    setTextBox(textBox, dAlbwMail_getLetterSender());
+    setTextBox(textBox, dAlbwMail_getLetterSender(letterIndex));
 }
 
 void dAlbwMail_drawLetterBodyPage(int letterIndex, int pageIndex, int lineMax, J2DTextBox* bodyBox,
@@ -463,8 +541,8 @@ void dAlbwMail_drawLetterBodyPage(int letterIndex, int pageIndex, int lineMax, J
     if (!dAlbwMail_isRuntimeLetter(letterIndex)) {
         return;
     }
-    buildLetterPages(bodyBox, lineMax);
-    setTextBox(bodyBox, dAlbwMail_getLetterBodyPage(pageIndex));
+    buildLetterPages(letterIndex, bodyBox, lineMax);
+    setTextBox(bodyBox, dAlbwMail_getLetterBodyPage(letterIndex, pageIndex));
 }
 
 int dAlbwMail_getLetterBodyPageMax(int letterIndex, dMsgStringBase_c* stringDrawer, int lineMax) {
@@ -472,10 +550,10 @@ int dAlbwMail_getLetterBodyPageMax(int letterIndex, dMsgStringBase_c* stringDraw
     if (!dAlbwMail_isRuntimeLetter(letterIndex)) {
         return 0;
     }
-    if (sLetterPageCount <= 0) {
-        buildLetterPages(NULL, lineMax);
+    if (sLetterBuiltIndex != letterIndex || sLetterPageCount <= 0) {
+        buildLetterPages(letterIndex, NULL, lineMax);
     }
-    return dAlbwMail_getLetterBodyPageCount();
+    return dAlbwMail_getLetterBodyPageCount(letterIndex);
 }
 
 #endif  // TARGET_PC

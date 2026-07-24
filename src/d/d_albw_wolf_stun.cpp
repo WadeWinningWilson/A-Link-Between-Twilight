@@ -98,6 +98,8 @@ struct WolfStunEntry {
     fpc_ProcID  mId;
     s16         mTimer;
     s8          mColliderCount;
+    // Hold until dAlbwWolfStun_thaw (lockout double-claw). Timer is not decremented.
+    bool        mHoldUntilThaw;
     cCcD_Obj*   mColliders[8];
     // Execute-phase cc_at_check already resolved the opening field-attack hit;
     // skip draw-phase bridge on that frame to avoid a same-frame double deduct.
@@ -659,9 +661,9 @@ const char* dAlbwWolfArts_getHowlShopName() {
 }
 
 const char* dAlbwWolfArts_getHowlShopDesc() {
-    return "Do you..ah..have a pet wolf that passed by here? Can you feed it this meat? "
-           "A cook from Old Kakariko never picked up the order.. Hopefully it will follow you "
-           "and not come near me anymore.";
+    return "Don't tell anyone but...last night I dreamed I was visited by a giant squirrel "
+           "and bird. They came close...and then I awoke to this scroll in my lap. Here, "
+           "you take it.";
 }
 
 bool dAlbwWolfArts_tryPurchaseHowl() {
@@ -707,9 +709,9 @@ const char* dAlbwWolfArts_getArmShopName() {
 }
 
 const char* dAlbwWolfArts_getArmShopDesc() {
-    return "An old glove from the western desert. It's said an imp once wore it to box "
-           "three shadow beasts at once. It's far too small for you... maybe someone "
-           "riding along could make use of it?";
+    return "It can't be real, it can't be...I h-had one of those dreams again. This time, "
+           "I swear to you, a snake slithered and loomed over me. It told me to gift a "
+           "blessing to a being of Twilight...please take this.";
 }
 
 bool dAlbwWolfArts_tryPurchaseArm() {
@@ -718,6 +720,53 @@ bool dAlbwWolfArts_tryPurchaseArm() {
     }
     dAlbwWolfArts_unlockArm();
     return true;
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Wolf Charge — 3rd pip shop unlock, F_0814)
+// Story gate: Master Sword obtain cutscene (F_0264).
+// ============================================
+namespace {
+constexpr int kWolfChargeShopPrice = 100;
+}
+
+bool dAlbwWolfArts_isChargeUpgradeUnlocked() {
+    return dComIfGs_isEventBit(dSv_event_flag_c::F_0814) != 0;
+}
+
+void dAlbwWolfArts_unlockChargeUpgrade() {
+    dComIfGs_onEventBit(dSv_event_flag_c::F_0814);
+}
+
+bool dAlbwWolfArts_shouldShowChargeShopRow() {
+    return dAlbwWolfCombat_isEnabled() && !dAlbwWolfArts_isChargeUpgradeUnlocked() &&
+           dComIfGs_isEventBit(dSv_event_flag_c::F_0264);
+}
+
+int dAlbwWolfArts_getChargeShopPrice() {
+    return kWolfChargeShopPrice;
+}
+
+const char* dAlbwWolfArts_getChargeShopName() {
+    return "Wolf Charge";
+}
+
+const char* dAlbwWolfArts_getChargeShopDesc() {
+    return "A blessing a blessing- I'm getting ahead of them this time! Here a former "
+           "butcher of Old Kakariko gave me this dried meat as a gift a ha ha. A wolf "
+           "they said, ha give this to a wolf if you see one!";
+}
+
+bool dAlbwWolfArts_tryPurchaseChargeUpgrade() {
+    if (dAlbwWolfArts_isChargeUpgradeUnlocked()) {
+        return false;
+    }
+    dAlbwWolfArts_unlockChargeUpgrade();
+    return true;
+}
+
+u8 dAlbwWolfArts_getMaxCharges() {
+    return dAlbwWolfArts_isChargeUpgradeUnlocked() ? 3 : 2;
 }
 
 // ============================================
@@ -812,7 +861,8 @@ bool dAlbwWolfStun_isStunned(fopAc_ac_c* i_enemy) {
 //   chest/mash hit   = 1/15  (15 mash hits = 1 charge)
 // Fractions from both sources share one accumulator (mWolfBiteCount) and
 // carry across a completed charge — EXCEPT when the completion lands on
-// the 2-charge cap, where the leftover fraction is dropped by design.
+// the charge cap (2, or 3 after Wolf Charge purchase), where the leftover
+// fraction is dropped by design.
 // ============================================
 namespace {
 
@@ -830,13 +880,14 @@ void addWolfChargeSteps(int i_steps) {
         return;
     }
 
+    const u8 maxCharges = dAlbwWolfArts_getMaxCharges();
     link->mWolfBiteCount += i_steps;
     if (link->mWolfBiteCount >= kWolfChargeStepsPerCharge) {
-        if (link->mWolfChargeCount < 2) {
+        if (link->mWolfChargeCount < maxCharges) {
             link->mWolfChargeCount++;
             dAlbwWolfChargeHud_notify();
         }
-        if (link->mWolfChargeCount >= 2) {
+        if (link->mWolfChargeCount >= maxCharges) {
             // Cap reached: drop the leftover fraction (user rule).
             link->mWolfBiteCount = 0;
         } else {
@@ -865,8 +916,29 @@ void dAlbwWolfCombat_onChestMashHit() {
     addWolfChargeSteps(kWolfChargeMashSteps);
 }
 
+void dAlbwWolfCombat_fillCharges() {
+    if (!dAlbwWolfCombat_isEnabled()) {
+        return;
+    }
+
+    daAlink_c* link = daAlink_getAlinkActorClass();
+    if (link == NULL) {
+        return;
+    }
+
+    const u8 maxCharges = dAlbwWolfArts_getMaxCharges();
+    if (link->mWolfChargeCount >= maxCharges && link->mWolfBiteCount == 0) {
+        return;
+    }
+
+    link->mWolfChargeCount = maxCharges;
+    link->mWolfBiteCount = 0;
+    dAlbwWolfChargeHud_notify();
+}
+
 void dAlbwWolfStun_syncColliders(fopAc_ac_c* i_enemy, cCcD_Obj* const* i_objs, int i_count) {
-    if (!dAlbwWolfCombat_isEnabled() || i_enemy == NULL || i_objs == NULL || i_count <= 0) {
+    // Bridge snapshots are needed for any active freeze (wolf combat OR lockout claw).
+    if (i_enemy == NULL || i_objs == NULL || i_count <= 0) {
         return;
     }
 
@@ -881,7 +953,7 @@ void dAlbwWolfStun_syncColliders(fopAc_ac_c* i_enemy, cCcD_Obj* const* i_objs, i
 }
 
 void dAlbwWolfStun_captureAfterExecute() {
-    if (!dAlbwWolfCombat_isEnabled() || sStunCount == 0) {
+    if (sStunCount == 0) {
         return;
     }
 
@@ -966,40 +1038,49 @@ static bool isFreezeUnsafeState(fopAc_ac_c* i_enemy, s16 i_name) {
     }
 }
 
-void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy) {
-    if (!dAlbwWolfCombat_isEnabled() || i_enemy == NULL) {
-        return;
+static bool tryApplyStun(fopAc_ac_c* i_enemy, s16 i_timer, bool i_holdUntilThaw) {
+    if (i_enemy == NULL || fopAcM_GetGroup(i_enemy) != fopAc_ENEMY_e) {
+        return false;
     }
 
     const s16 applyName = fopAcM_GetName(i_enemy);
-    if (isFreezeExcludedName(applyName) || isFreezeUnsafeState(i_enemy, applyName)) {
+    // Lockout claw hold mirrors Midna freeze: twilight types stay unfrozen.
+    if ((i_holdUntilThaw && dAlbwWolfStun_isTwilightEnemy(applyName)) ||
+        isFreezeExcludedName(applyName) || isFreezeUnsafeState(i_enemy, applyName))
+    {
         wolfStun_debugLog("f=%06d evt=apply-skip id=%u name=%d\n", g_Counter.mCounter0,
                           i_enemy->id, applyName);
-        return;
+        return false;
     }
 
     const fpc_ProcID id = i_enemy->id;
 
     WolfStunEntry* existing = findEntry(id);
     if (existing != NULL) {
-        existing->mTimer = static_cast<s16>(WOLF_STUN_FRAMES);
+        if (i_holdUntilThaw) {
+            existing->mHoldUntilThaw = true;
+            existing->mTimer = i_timer;
+        } else if (!existing->mHoldUntilThaw) {
+            existing->mTimer = i_timer;
+        }
         if (existing->mColliderCount == 0) {
             captureCollidersFromCcS(dComIfG_Ccsp(), i_enemy, existing);
         }
-        wolfStun_debugLog("f=%06d evt=stun-refresh id=%u coll=%d name=%d\n",
-                          g_Counter.mCounter0, id, existing->mColliderCount,
-                          fopAcM_GetName(i_enemy));
-        return;
+        wolfStun_debugLog("f=%06d evt=stun-refresh id=%u coll=%d name=%d hold=%d\n",
+                          g_Counter.mCounter0, id, existing->mColliderCount, applyName,
+                          existing->mHoldUntilThaw ? 1 : 0);
+        return true;
     }
 
     if (sStunCount >= WOLF_STUN_MAX) {
         wolfStun_debugLog("f=%06d evt=stun-list-full id=%u\n", g_Counter.mCounter0, id);
-        return;
+        return false;
     }
 
     fpcM_PauseEnable(i_enemy, 1);
     sStunList[sStunCount].mId = id;
-    sStunList[sStunCount].mTimer = static_cast<s16>(WOLF_STUN_FRAMES);
+    sStunList[sStunCount].mTimer = i_timer;
+    sStunList[sStunCount].mHoldUntilThaw = i_holdUntilThaw;
     sStunList[sStunCount].mColliderCount = 0;
     sStunList[sStunCount].mSkipBridgeFrame = g_Counter.mCounter0;
     for (int c = 0; c < static_cast<int>(ARRAY_SIZEU(sStunList[sStunCount].mColliders)); c++) {
@@ -1009,12 +1090,40 @@ void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy) {
 
     WolfStunEntry* entry = &sStunList[sStunCount - 1];
     captureCollidersFromCcS(dComIfG_Ccsp(), i_enemy, entry);
-    wolfStun_debugLog("f=%06d evt=stun-apply id=%u active=%d coll=%d name=%d mpObj=%d skipBridge=%d\n",
-                      g_Counter.mCounter0, id, sStunCount, entry->mColliderCount,
-                      fopAcM_GetName(i_enemy), dComIfG_Ccsp()->mObjCount, entry->mSkipBridgeFrame);
+    wolfStun_debugLog(
+        "f=%06d evt=stun-apply id=%u active=%d coll=%d name=%d hold=%d mpObj=%d skipBridge=%d\n",
+        g_Counter.mCounter0, id, sStunCount, entry->mColliderCount, applyName,
+        i_holdUntilThaw ? 1 : 0, dComIfG_Ccsp()->mObjCount, entry->mSkipBridgeFrame);
     if (entry->mColliderCount == 0) {
         wolfStun_debugLog("f=%06d evt=stun-apply-no-colliders id=%u (expect sync on cc_set)\n",
                           g_Counter.mCounter0, id);
+    }
+    return true;
+}
+
+void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy) {
+    if (!dAlbwWolfCombat_isEnabled()) {
+        return;
+    }
+    tryApplyStun(i_enemy, static_cast<s16>(WOLF_STUN_FRAMES), false);
+}
+
+void dAlbwWolfStun_applyHold(fopAc_ac_c* i_enemy) {
+    // Hold timer is a large sentinel; update never expires hold entries.
+    tryApplyStun(i_enemy, 0x7FFF, true);
+}
+
+void dAlbwWolfStun_thaw(fopAc_ac_c* i_enemy) {
+    if (i_enemy == NULL) {
+        return;
+    }
+
+    for (int i = 0; i < sStunCount; i++) {
+        if (sStunList[i].mId == i_enemy->id) {
+            wolfStun_debugLog("f=%06d evt=stun-thaw id=%u\n", g_Counter.mCounter0, i_enemy->id);
+            removeStunEntry(i);
+            return;
+        }
     }
 }
 
@@ -1022,20 +1131,15 @@ void dAlbwWolfStun_update() {
     // Post-thaw zombie watchdog runs regardless of stun-list state.
     tickPostThawKills();
 
-    if (!dAlbwWolfCombat_isEnabled()) {
-        for (int i = 0; i < sStunCount; i++) {
-            restoreStunColliderFlags(&sStunList[i]);
-            base_process_class* proc = fpcM_SearchByID(sStunList[i].mId);
-            if (proc != NULL) {
-                fpcM_PauseDisable(proc, 1);
-            }
-        }
-        sStunCount = 0;
-        return;
-    }
-
+    // Process the list whenever anyone is frozen — including lockout claw holds
+    // while Wolf Link Combat is off. Do NOT wipe the list when the setting is off.
     int writeIdx = 0;
     for (int i = 0; i < sStunCount; i++) {
+        if (sStunList[i].mHoldUntilThaw) {
+            sStunList[writeIdx++] = sStunList[i];
+            continue;
+        }
+
         sStunList[i].mTimer--;
         if (sStunList[i].mTimer > 0) {
             sStunList[writeIdx++] = sStunList[i];
@@ -1053,7 +1157,7 @@ void dAlbwWolfStun_update() {
 }
 
 void dAlbwWolfStun_beforeMove() {
-    if (!dAlbwWolfCombat_isEnabled() || sStunCount == 0) {
+    if (sStunCount == 0) {
         return;
     }
 
@@ -1097,7 +1201,7 @@ void dAlbwWolfStun_beforeMove() {
 }
 
 void dAlbwWolfStun_afterMove() {
-    if (!dAlbwWolfCombat_isEnabled() || sStunCount == 0) {
+    if (sStunCount == 0) {
         return;
     }
 

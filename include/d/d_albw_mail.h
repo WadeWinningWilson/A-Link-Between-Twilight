@@ -13,12 +13,15 @@ class daNpc_Post_c;
 class J2DTextBox;
 class dMsgStringBase_c;
 
-static constexpr int kAlbwMailLetterIndex = 16;
+// Runtime Collection → Letters slots (vanilla uses 0–15).
+static constexpr int kAlbwMailLetterIndex = 16;   // Welcome / delivery services intro
+static constexpr int kAlbwMailLetterIndex2 = 17;  // Scroll-care announcement
 
 // Runtime letter table sentinel (not a real BMG message id).
 static constexpr u16 kAlbwMailRuntimeMsgId = 0xFFFE;
 
 // saveBitLabels[] indices — F_0812 / F_0813 (N/A slots in d_save_bit_labels.inc).
+// Both letters share the pending bit so one queue delivers the full bundle.
 static constexpr u16 kAlbwMailPendingEventIndex = 812;
 static constexpr u16 kAlbwMailDeliveredEventIndex = 813;
 
@@ -30,6 +33,12 @@ void dAlbwMail_init();
 bool dAlbwMail_isTestMode();
 
 bool dAlbwMail_isRuntimeLetter(int letterIndex);
+
+// True once every letter in the Junior Postman bundle is owned.
+bool dAlbwMail_hasReceivedBundle();
+
+// True after the North Faron delivery grants the mail tutorial scrolls.
+bool dAlbwMail_hasTutorialScrolls();
 
 bool dAlbwMail_isDeliverPostman(const daNpc_Post_c* postman);
 
@@ -59,13 +68,13 @@ int dAlbwMail_getDeliverLineCount();
 
 const char* dAlbwMail_getDeliverLine(int pageIndex);
 
-const char* dAlbwMail_getLetterSubject();
+const char* dAlbwMail_getLetterSubject(int letterIndex);
 
-const char* dAlbwMail_getLetterSender();
+const char* dAlbwMail_getLetterSender(int letterIndex);
 
-const char* dAlbwMail_getLetterBodyPage(int pageIndex);
+const char* dAlbwMail_getLetterBodyPage(int letterIndex, int pageIndex);
 
-int dAlbwMail_getLetterBodyPageCount();
+int dAlbwMail_getLetterBodyPageCount(int letterIndex);
 
 void dAlbwMail_drawLetterSubject(int letterIndex, J2DTextBox* textBox);
 

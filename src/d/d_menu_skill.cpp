@@ -73,6 +73,7 @@ dMenu_Skill_c::dMenu_Skill_c(JKRExpHeap* i_heap, STControl* i_stcontrol, CSTCont
     mpTitleString = NULL;
     mDetailPage = 0;
     mDetailPageCount = 1;
+    mAlbwListOffset = 0;
     mDetailTitle[0] = '\0';
     for (int i = 0; i < kAlbwSkillScrollMaxPages; i++) {
         mDetailPages[i][0] = '\0';
@@ -211,36 +212,60 @@ bool dMenu_Skill_c::isSync() {
     return 1;
 }
 
+#if TARGET_PC
+namespace {
+u8 albwListPageCount(int albwCount) {
+    if (albwCount <= 0) {
+        return 0;
+    }
+    return static_cast<u8>((albwCount + kAlbwSkillScrollPageCap - 1) / kAlbwSkillScrollPageCap);
+}
+}  // namespace
+
+void dMenu_Skill_c::applySkillPageState() {
+    const int albwCount = dAlbwSkillScroll_getCount();
+    const u8 vanillaPages = mTotalSkillNum > 0 ? 1 : 0;
+
+    if (vanillaPages > 0 && mPageIndex < vanillaPages) {
+        mPageKind = kSkillPageVanilla;
+        mAlbwListOffset = 0;
+        mSkillNum = mTotalSkillNum < 7 ? mTotalSkillNum : 7;
+        return;
+    }
+
+    mPageKind = kSkillPageAlbw;
+    const int albwPageIdx = mPageIndex - vanillaPages;
+    mAlbwListOffset = static_cast<u8>(albwPageIdx * kAlbwSkillScrollPageCap);
+    int remaining = albwCount - mAlbwListOffset;
+    if (remaining < 0) {
+        remaining = 0;
+    }
+    mSkillNum = remaining < kAlbwSkillScrollPageCap ? static_cast<u8>(remaining)
+                                                    : static_cast<u8>(kAlbwSkillScrollPageCap);
+}
+#endif
+
 void dMenu_Skill_c::skill_init_calc() {
     mTotalSkillNum = getSkillNum();
 #if TARGET_PC
-    const u8 albwCount = static_cast<u8>(dAlbwSkillScroll_getCount());
-    const bool hasVanilla = mTotalSkillNum > 0;
-    const bool hasAlbw = albwCount > 0;
+    const int albwCount = dAlbwSkillScroll_getCount();
+    const u8 vanillaPages = mTotalSkillNum > 0 ? 1 : 0;
+    const u8 albwPages = albwListPageCount(albwCount);
 
-    mRemainder = 0;
-    if (hasVanilla) {
-        mRemainder++;
-    }
-    if (hasAlbw) {
-        mRemainder++;
-    }
+    mRemainder = vanillaPages + albwPages;
     if (mRemainder == 0) {
         mRemainder = 1;
     }
 
     // Prefer vanilla page when present; otherwise land on ALBW page-2 content.
-    if (hasVanilla) {
-        mPageIndex = 0;
-        mPageKind = kSkillPageVanilla;
-        mSkillNum = mTotalSkillNum < 7 ? mTotalSkillNum : 7;
-    } else if (hasAlbw) {
-        mPageIndex = 0;
-        mPageKind = kSkillPageAlbw;
-        mSkillNum = albwCount < 7 ? albwCount : 7;
+    mPageIndex = 0;
+    if (vanillaPages > 0) {
+        applySkillPageState();
+    } else if (albwPages > 0) {
+        applySkillPageState();
     } else {
-        mPageIndex = 0;
         mPageKind = kSkillPageVanilla;
+        mAlbwListOffset = 0;
         mSkillNum = 0;
     }
 #else
@@ -439,7 +464,7 @@ void dMenu_Skill_c::read_open_init() {
     if (isAlbwScrollPage()) {
         dAlbwSkillScrollEntry entry;
         mStringID = 0;
-        if (dAlbwSkillScroll_getEntry(index, &entry)) {
+        if (dAlbwSkillScroll_getEntry(mAlbwListOffset + index, &entry)) {
             // Auto-flow: wrap the plain-prose body into 4-line pages and
             // show page 0; read_move_move() handles page turning.
             mDetailPageCount = static_cast<u8>(dAlbwSkillScroll_buildDetailPages(
@@ -793,7 +818,7 @@ void dMenu_Skill_c::setPageText() {
     if (isAlbwScrollPage()) {
         for (int i = 0; i < mSkillNum; i++) {
             dAlbwSkillScrollEntry entry;
-            if (!dAlbwSkillScroll_getEntry(i, &entry)) {
+            if (!dAlbwSkillScroll_getEntry(mAlbwListOffset + i, &entry)) {
                 continue;
             }
             // Truncate instead of crashing if a name outgrows the 0x40 row buffer.
@@ -928,12 +953,6 @@ void dMenu_Skill_c::changePage(int delta) {
         return;
     }
 
-    const bool hasVanilla = mTotalSkillNum > 0;
-    const bool hasAlbw = dAlbwSkillScroll_hasAny();
-    if (!hasVanilla || !hasAlbw) {
-        return;
-    }
-
     const u8 oldPage = mPageIndex;
     if (delta > 0 && mPageIndex + 1 < mRemainder) {
         mPageIndex++;
@@ -947,14 +966,8 @@ void dMenu_Skill_c::changePage(int delta) {
         return;
     }
 
-    // Page order: vanilla first (index 0), ALBW second (index 1).
-    mPageKind = (mPageIndex == 0) ? kSkillPageVanilla : kSkillPageAlbw;
-    if (mPageKind == kSkillPageVanilla) {
-        mSkillNum = mTotalSkillNum < 7 ? mTotalSkillNum : 7;
-    } else {
-        const u8 albwCount = static_cast<u8>(dAlbwSkillScroll_getCount());
-        mSkillNum = albwCount < 7 ? albwCount : 7;
-    }
+    // Page order: vanilla HS (0), then ALBW scroll chunks of 7.
+    applySkillPageState();
 
     mIndex = 0;
     setPageText();

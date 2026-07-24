@@ -270,3 +270,59 @@ WW hands don't clip because `usefanb.bck` was custom-authored to match the chest
 
 ### CONFIRMED-WORKING orientation (do not lose)
 Leaf overhead orientation locked (playtested): head-anchor, `s_dekuLeafOffset(0,55,0)`, `s_dekuLeafBaseRotY=+0x4000`, `s_dekuLeafBaseRotX=-0x4000`, applied order Y then X after yaw. Z axis tried and removed. Offset still 55 (a touch high); lowering gated on the hand-hold fix above.
+
+---
+
+## §15. Product lock + aerial bomb-drop feasibility (2026-07-23) — research only
+
+### Product lock (confirmed)
+
+| Piece | Behavior |
+|-------|----------|
+| **Parachute float** | Stays — current cucco-chassis leaf glide (`checkDekuLeafGlide` → `checkGrabGlide`) |
+| **Gust jump** | **Takeoff only** — R+A launches human Link (then float); not a continuous rise |
+| **Activation** | **R+A**, human Link only |
+| **Wolf** | Keeps **simple moon jump** (`f_ap_game.cpp` ~811: R+A → `speed.y = 56`) — no leaf |
+| **Mid-air A** | Current engage/disengage toggles stay |
+| **NEW ask** | While airborne **and leaf-gliding**, drop bombs on enemies below |
+
+### Verdict — aerial bomb drop while leaf-gliding
+
+**Feasible — with a dedicated glide-drop path.** Stock “pull bomb → grab → throw proc” is **not** viable if Link must **keep floating**.
+
+WW stock does **not** support leaf-then-bomb mid-glide (speedrun tech is bomb-held → jump → leaf). This is a Dusklight extension, not a WW parity port.
+
+### Why stock bomb use fails aloft
+
+| Blocker | Evidence | Effect |
+|---------|----------|--------|
+| **A is already leaf toggle + LET_GO** | `procAutoJump`: A toggles `s_dekuLeafGlideActive` (~18132); later `field_0x300c` sets `BUTTON_STATUS_LET_GO` and A → `freeGrabItem()` (~18245) | Same press cannot mean “drop bomb, stay gliding” and “let go of leaf” |
+| **Throw leaves AUTO_JUMP** | `procGrabThrowInit` → `commonProcInit(PROC_GRAB_THROW)` (~874) | Ends glide chassis for a ground throw anim |
+| **WALKHBS re-assert** | While `checkDekuLeafGlide()`, every frame forces `WALKHBS` if missing (~18169) | Clobbers bomb grab upper anime |
+| **Hands / overhead slot** | Leaf welded overhead; bomb uses `mGrabItemAcKeep` + `setGrabItemPos` | Visual + hold-slot fight if you try to carry a lit bomb under the canopy |
+| **Grab-anime free** | `!checkGrabAnime() && grab actor ≠ NULL` → `freeGrabItem()` (~16475) | Bomb can vanish next frame if upper anime is leaf pose, not grab |
+| **Mode bit 4** | Cucco at jump init clears bit 4 (`offModeFlg(4)` ~18088); leaf mid-air engage does **not** | Item-button equip may work while leaf-gliding today, but still hits the grab/pose/A conflicts above |
+
+`checkUpperItemActionFly()` only handles bow / boomerang / copy-rod — **not bombs**. `procAutoJump` already calls `checkItemChangeFromButton()` (~18315), so face-button *equip* is closer than throw — still not a clean drop.
+
+### Recommended path (low risk)
+
+**Instant spawn-and-drop on bomb item button while `checkDekuLeafGlide()`**, stay in `PROC_AUTO_JUMP`:
+
+1. Gate: leaf gliding + bomb on assigned face button + trigger + `dMeter2_canALBWBomb()` (existing).
+2. `dBomb_c::createNormalBombPlayer` / water variant at Link pos (or slightly below feet).
+3. Give downward (optional slight forward) velocity — do **not** `setGrabItemActor`, do **not** enter `PROC_GRAB_THROW`.
+4. Charge meter via existing `dMeter2_onALBWBomb()`; leave leaf meter drain alone.
+5. Keep A = leaf toggle only (do not route drop through LET_GO).
+
+Optional polish: short arm flick / SE; cooldown so spam doesn’t feel broken; refuse when meter can’t pay bomb **and** leaf open cost in the same moment (product call).
+
+### Rejected / high-cost alternatives
+
+- **Hold bomb then leaf (WW speedrun order):** possible-ish if leaf engage doesn’t steal grab, but opposite of the ask and still fights canopy vs overhead bomb.
+- **Full grab-throw while gliding:** needs exemptions for WALKHBS, A conflict, and a throw that doesn’t leave `PROC_AUTO_JUMP` — multi-site, easy to break cucco glide.
+- **New `AT_TYPE` / fake bomb:** unnecessary; real `NBOMB` actors already explode and hit enemies.
+
+### Scope note vs takeoff work
+
+Aerial bomb drop is **orthogonal** to R+A gust-takeoff → float. Implement takeoff/float first; bomb-drop is a small `procAutoJump` (or item-button) hook once glide is stable. **Not implemented yet.**

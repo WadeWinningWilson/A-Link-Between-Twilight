@@ -38,6 +38,8 @@ bool dAlbwWolfCombat_isEnabled();
 // ============================================
 void dAlbwWolfCombat_onBiteConnect();
 void dAlbwWolfCombat_onChestMashHit();
+// Ordon tutorial scarecrow: top up wolf charge meter to the cap (2).
+void dAlbwWolfCombat_fillCharges();
 
 // Returns true when i_name is one of the shadow/twilight enemy types.
 // Twilight enemies receive 70 % damage from the field attack and are
@@ -47,6 +49,14 @@ bool dAlbwWolfStun_isTwilightEnemy(s16 i_name);
 // Apply a WOLF_STUN_FRAMES-frame pause-stun to i_enemy.
 // If the enemy is already in the stun list its timer is refreshed.
 void dAlbwWolfStun_apply(fopAc_ac_c* i_enemy);
+
+// Lockout double-claw finisher: same central freeze gate + collision bridge as
+// wolf Midna freeze, but does NOT require game.wolfLinkCombat. Timer is held
+// until dAlbwWolfStun_thaw (slash end). Skips twilight / excluded / unsafe.
+void dAlbwWolfStun_applyHold(fopAc_ac_c* i_enemy);
+
+// Explicit unpause + remove from stun list (claw slash end / cancel).
+void dAlbwWolfStun_thaw(fopAc_ac_c* i_enemy);
 
 // Per-frame tick: decrement timers, unpause actors whose timer reaches 0.
 // Called from daAlink_c::execute() every frame.
@@ -69,9 +79,9 @@ void dAlbwWolfStun_afterMove();
 
 // ============================================
 // NEW CODE — ALBW Port (Wolf Arts — Focused-Arts-style wolf abilities, shop-unlock hooks)
-// The wolf "arts" (howl / Midna punch / giant) are unlocked via rental-shop purchases gated
-// behind story milestones.  Save-backed per-save event bits (713 = howl; 714/715 reserved for
-// punch/giant).  The rental shop (d_albw_rental.cpp) calls these to draw + purchase the row,
+// The wolf "arts" / charge upgrades are unlocked via rental-shop purchases gated
+// behind story milestones.  Save bits: 713 = howl; 714 = Midna arm; F_0814 = 3rd charge.
+// The rental shop (d_albw_rental.cpp) calls these to draw + purchase the row,
 // mirroring the Focused-Arts-tier row pattern.
 // ============================================
 bool        dAlbwWolfArts_isHowlUnlocked();
@@ -90,6 +100,17 @@ int         dAlbwWolfArts_getArmShopPrice();        // 100 rupees
 const char* dAlbwWolfArts_getArmShopName();
 const char* dAlbwWolfArts_getArmShopDesc();
 bool        dAlbwWolfArts_tryPurchaseArm();         // sets the save bit; false if already owned
+
+// Third wolf charge pip — shop unlock after Master Sword story bit (F_0814).
+bool        dAlbwWolfArts_isChargeUpgradeUnlocked();
+void        dAlbwWolfArts_unlockChargeUpgrade();
+bool        dAlbwWolfArts_shouldShowChargeShopRow();
+int         dAlbwWolfArts_getChargeShopPrice();     // 100 rupees
+const char* dAlbwWolfArts_getChargeShopName();
+const char* dAlbwWolfArts_getChargeShopDesc();
+bool        dAlbwWolfArts_tryPurchaseChargeUpgrade();
+// Current wolf charge cap: 2 base, 3 after Wolf Charge purchase.
+u8          dAlbwWolfArts_getMaxCharges();
 
 // ============================================
 // NEW CODE — ALBW Port (Midna Arm art — hair-reach visual bridge)

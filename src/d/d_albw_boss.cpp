@@ -3,6 +3,7 @@
 #include "d/d_albw_boss.h"
 
 #include "Z2AudioLib/Z2Instances.h"
+#include "d/actor/d_a_b_bq.h"
 #include "d/actor/d_a_b_gm.h"
 #include "d/actor/d_a_e_gm.h"
 #include "d/d_albw_hp_mult.h"
@@ -382,6 +383,140 @@ bool dAlbwBoss_armogohmaResolveBarTarget(fopAc_ac_c** o_actor) {
 // mode-aware (refinement pool vs vanilla rod-hit counter); phase 2 reads the
 // TYPE_GOMA hit counter. current/max are kept for the lock-on overlay / F5 only.
 // ============================================
+// ============================================
+// NEW CODE — ALBW Port (Diababa refined fight)
+// ============================================
+static bool s_diababaLateSticky = false;
+static bool s_diababaRetaliationPoison = false;
+static bool s_diababaPendingHangAfterAppear = false;
+static bool s_diababaSiphonUsedThisSpray = false;
+static bool s_diababaChipLookMNext = false;
+
+static constexpr f32 kAlbwDiababaLatePhaseHpFrac = 0.7f;
+
+void dAlbwBoss_diababaResetFightState() {
+    s_diababaLateSticky = false;
+    s_diababaRetaliationPoison = false;
+    s_diababaPendingHangAfterAppear = false;
+    s_diababaSiphonUsedThisSpray = false;
+    s_diababaChipLookMNext = false;
+}
+
+void dAlbwBoss_diababaUpdatePhase(fopAc_ac_c* i_boss) {
+    if (!dAlbwBossRefinement_isEnabled() || i_boss == NULL) {
+        return;
+    }
+    if (s_diababaLateSticky) {
+        return;
+    }
+    if (i_boss->field_0x560 <= 0) {
+        return;
+    }
+    // Late at remaining HP <= 70% max (bomb −30 from full 100 enters late).
+    if (static_cast<f32>(i_boss->health) <=
+        kAlbwDiababaLatePhaseHpFrac * static_cast<f32>(i_boss->field_0x560))
+    {
+        s_diababaLateSticky = true;
+    }
+}
+
+bool dAlbwBoss_diababaIsLatePhase() {
+    return dAlbwBossRefinement_isEnabled() && s_diababaLateSticky;
+}
+
+void dAlbwBoss_diababaOnPoisonSprayBegin() {
+    s_diababaSiphonUsedThisSpray = false;
+}
+
+void dAlbwBoss_diababaOnPoisonDamage(int i_damageToLink) {
+    if (!dAlbwBossRefinement_isEnabled() || i_damageToLink <= 0) {
+        return;
+    }
+    if (s_diababaSiphonUsedThisSpray) {
+        return;
+    }
+
+    fopAc_ac_c* boss = fopAcM_SearchByName(fpcNm_B_BQ_e);
+    if (boss == NULL || boss->field_0x560 <= 0) {
+        return;
+    }
+
+    const int linkMax = static_cast<int>(dComIfGs_getMaxLifeGauge());
+    if (linkMax <= 0) {
+        return;
+    }
+
+    // Mirror % of Link max lost → % of Diababa max healed (at least 1 if any dmg).
+    int heal = (i_damageToLink * static_cast<int>(boss->field_0x560)) / linkMax;
+    if (heal < 1) {
+        heal = 1;
+    }
+
+    const int maxHp = static_cast<int>(boss->field_0x560);
+    int newHp = static_cast<int>(boss->health) + heal;
+    if (newHp > maxHp) {
+        newHp = maxHp;
+    }
+    boss->health = static_cast<s16>(newHp);
+    s_diababaSiphonUsedThisSpray = true;
+    // Sticky late: siphon must not clear phase.
+    dAlbwBoss_diababaUpdatePhase(boss);
+}
+
+void dAlbwBoss_diababaSetRetaliationPoison(bool i_active) {
+    s_diababaRetaliationPoison = i_active;
+}
+
+bool dAlbwBoss_diababaIsRetaliationPoison() {
+    return dAlbwBossRefinement_isEnabled() && s_diababaRetaliationPoison;
+}
+
+void dAlbwBoss_diababaSetPendingHangAfterAppear(bool i_pending) {
+    s_diababaPendingHangAfterAppear = i_pending;
+}
+
+bool dAlbwBoss_diababaTakePendingHangAfterAppear() {
+    if (!s_diababaPendingHangAfterAppear) {
+        return false;
+    }
+    s_diababaPendingHangAfterAppear = false;
+    return true;
+}
+
+bool dAlbwBoss_diababaTakeChipLookMAlternate() {
+    const bool useLook = s_diababaChipLookMNext;
+    s_diababaChipLookMNext = !s_diababaChipLookMNext;
+    return useLook;
+}
+// ============================================
+
+bool dAlbwBoss_diababaQueryHealthBar(int* o_current, int* o_max) {
+    if (o_current == NULL || o_max == NULL) {
+        return false;
+    }
+    *o_current = 0;
+    *o_max = 0;
+
+    fopAc_ac_c* actor = fopAcM_SearchByName(fpcNm_B_BQ_e);
+    if (actor == NULL || !fopAcM_IsActor(actor) || actor->health <= 0) {
+        return false;
+    }
+
+    const b_bq_class* boss = (const b_bq_class*)actor;
+    // Death cutscene chain starts at demo 50; non-zero demos are intro / room cams.
+    if (boss->mDemoMode != 0 || boss->mDisableDraw) {
+        return false;
+    }
+
+    const dAlbwHP_LockonDisplay hp = dAlbwHP_getLockonDisplayHp(actor);
+    if (hp.max <= 0) {
+        return false;
+    }
+    *o_current = hp.current;
+    *o_max = hp.max;
+    return true;
+}
+
 bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state) {
     if (o_state == NULL) {
         return false;
@@ -515,6 +650,8 @@ void dAlbwBoss_onStageLoad() {
     }
 
     const AlbwBossArenaId stageArena = dAlbwBoss_stageNameToArenaId(dComIfGp_getStartStageName());
+
+    dAlbwBoss_diababaResetFightState();
 
     if (s_warpBootstrapArena != ALBW_BOSS_ARENA_INVALID && stageArena != s_warpBootstrapArena) {
         clearWarpBootstrapSession();

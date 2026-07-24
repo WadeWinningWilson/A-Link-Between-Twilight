@@ -103,14 +103,11 @@ static bool isBulblinKingSpawn(fopAc_ac_c* enemy) {
 }
 
 static u16 resolveBulblinKillRupees(fopAc_ac_c* enemy) {
+    // King-spawn param variants still pay via fight-victory (E_RDB), not field kill.
     if (isBulblinKingSpawn(enemy)) {
         return 0;
     }
-    const u8 weaponType = static_cast<u8>((fopAcM_GetParam(enemy) & 0xF00) >> 8);
-    if (weaponType >= 2) {
-        return 5;
-    }
-    return 1;
+    return 15;
 }
 
 static u16 resolvePoeKillRupees(fopAc_ac_c* enemy) {
@@ -254,7 +251,7 @@ static u16 lookupKillRupees(s16 profName, fopAc_ac_c* enemy) {
     case fpcNm_E_S1_e:
         return 15;
     case fpcNm_E_RDY_e:
-        return 5;
+        return 15;
     case fpcNm_E_YD_e:
         return 1;
     case fpcNm_E_YH_e:

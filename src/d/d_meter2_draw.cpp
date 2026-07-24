@@ -2623,7 +2623,18 @@ void dMeter2Draw_c::drawFocusedArtsMeter() {
 // row). Hearts are hidden in draw() while this mode is active.
 // ============================================
 void dMeter2Draw_c::drawLopHealthBar() {
-    if (!mLopHealthBarActive || mMeterAlphaRate[0] <= 0.0f) {
+    if (!mLopHealthBarActive) {
+        return;
+    }
+    // Human form: gate on ALBW meter alpha (same HUD-hide set as the green meter).
+    // Wolf form pins mMeterAlphaRate[0] to 0 on purpose (stamina hidden) — use the
+    // life/parent HUD alpha instead so Health Bar still follows LoP life UI rules.
+    const bool wolfForm = daPy_getPlayerActorClass()->checkWolf();
+    f32 barAlpha = mMeterAlphaRate[0];
+    if (wolfForm) {
+        barAlpha = (mpLifeParent != NULL) ? mpLifeParent->getAlphaRate() : g_drawHIO.mParentAlpha;
+    }
+    if (barAlpha <= 0.0f) {
         return;
     }
     if (mpKanteraScreen == NULL || mpMagicBase == NULL || mpMagicParent == NULL ||
@@ -2649,6 +2660,7 @@ void dMeter2Draw_c::drawLopHealthBar() {
     const s16 fill32 = (fullLife > 0) ? (s16)((s32)life * 32 / fullLife) : 0;
 
     // Position in the ALBW meter's local space: same X, lifted above it.
+    // (Coords stay valid in wolf — stamina is only alpha-hidden, not relocated.)
     const f32 barX = field_0x5e4[0] + kLopHealthBarOffX;
     const f32 barY = field_0x5f0[0] - kLopHealthBarAbovePx;
 
@@ -2658,6 +2670,7 @@ void dMeter2Draw_c::drawLopHealthBar() {
     mpMagicMeter->setBlackWhite(JUtility::TColor(90, 18, 18, 255),
                                 JUtility::TColor(215, 40, 40, 255));
 
+    mpMagicParent->setAlphaRate(barAlpha);
     setAlphaMagicChange(true);
     mpKanteraScreen->draw(0.0f, 0.0f, graf_ctx);
 

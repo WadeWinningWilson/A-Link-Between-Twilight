@@ -2884,87 +2884,13 @@ EditorWindow::EditorWindow() {
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         leftPane.add_section("ALBW WIP");
-        leftPane.register_control(
-            leftPane.add_child<BoolButton>(BoolButton::Props{
-                .key = "Soulbound Red Potion (Slot 11)",
-                .getValue = [] { return getSettings().game.albwSoulboundRedPotion.getValue(); },
-                .setValue =
-                    [](bool value) {
-                        getSettings().game.albwSoulboundRedPotion.setValue(value);
-                        config::Save();
-                        dAlbwPotion_editorSetSoulboundEnabled(value);
-                    },
-                .isModified =
-                    [] {
-                        return getSettings().game.albwSoulboundRedPotion.getValue() !=
-                               getSettings().game.albwSoulboundRedPotion.getDefaultValue();
-                    },
-            }),
-            rightPane,
-            [](Pane& pane) {
-                pane.clear();
-                pane.add_rml(
-                    "Dedicated red potion bottle in inventory <b>slot 11</b> (2 charges). "
-                    "<b>On</b> = set slot 11 to red potion; <b>Off</b> = remove red from slot "
-                    "11 and restore an empty bottle. Future slices add soulbound fill rules, "
-                    "multi-use drink, and move-while-drinking." +
-                    Rml::String(kAlbwUnfinishedDisclaimer));
-            });
+        // Soulbound Red Potion moved to Settings → Gameplay (next to Quick Equip Wheel).
         editor_bool_option(leftPane, rightPane, getSettings().game.bossRefinement, "Boss Refinement",
             "Treat Ordon, Wooden, and Master swords as valid boss swords (Zant, Ganondorf, "
             "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
-        // ============================================
-        // NEW CODE — ALBW Port (Sumo Outfit — master toggle removed; GLOBAL Cap Wear)
-        // The Sumo Outfit is now a shipped feature obtained from the ALBW rental
-        // shop and worn via the D-pad outfit cycle, so the master "Sumo Outfit"
-        // toggle is no longer surfaced here.  Fists Only stays a sumo-worn-only
-        // tuning sub-option (greyed by dAlbwOutfit_isSumoWorn()).
-        //
-        // "Cap Wear" replaces the old "Link Hat" bool + "Cap Color" dropdown with one
-        // GLOBAL setting (game.capWear): it skins Link's headpiece across EVERY outfit
-        // — the sumo body AND the native clothes — so it is NOT greyed by sumo-worn.
-        // Off = each outfit's native hat; None = bald topknot everywhere; Green/Red/Blue
-        // = the Link/Magic/Zora cap on any base.
-        // ============================================
+        // Link's Cap (capWear) lives in Settings → Interface → ALBW Visuals.
         leftPane.add_section("Sumo Outfit");
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Cap Wear",
-                .getValue =
-                    [] {
-                        switch (getSettings().game.capWear.getValue()) {
-                            case CapWearMode::None:  return Rml::String("None (topknot)");
-                            case CapWearMode::Green: return Rml::String("Green (Hero's)");
-                            case CapWearMode::Red:   return Rml::String("Red (Magic)");
-                            case CapWearMode::Blue:  return Rml::String("Blue (Zora)");
-                            default:                 return Rml::String("Off (native)");
-                        }
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                pane.clear();
-                pane.add_section("Cap Wear");
-                const auto opt = [&pane](const char* label, CapWearMode mode) {
-                    pane.add_button({
-                                        .text = label,
-                                        .isSelected =
-                                            [mode] {
-                                                return getSettings().game.capWear.getValue() == mode;
-                                            },
-                                    })
-                        .on_pressed([mode] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.capWear.setValue(mode);
-                            config::Save();
-                        });
-                };
-                opt("Off (native)", CapWearMode::Off);
-                opt("None (topknot)", CapWearMode::None);
-                opt("Green (Hero's)", CapWearMode::Green);
-                opt("Red (Magic)", CapWearMode::Red);
-                opt("Blue (Zora)", CapWearMode::Blue);
-            });
         editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
             "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
             "Applies only while the Sumo Outfit is worn." +

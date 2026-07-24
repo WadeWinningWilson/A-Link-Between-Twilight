@@ -89,6 +89,11 @@ public:
 
 STATIC_ASSERT(sizeof(b_bh_class) == 0xf4c);
 
+#if TARGET_PC
+// Live side-head slots (mID 0/1). Used by B_BQ conductor.
+b_bh_class* daB_BH_getPtr(int i_id);
+#endif
+
 class daB_BH_HIO_c : public JORReflexible {
 public:
     daB_BH_HIO_c();

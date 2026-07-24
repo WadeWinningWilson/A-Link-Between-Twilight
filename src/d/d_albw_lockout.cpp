@@ -6,6 +6,7 @@
 
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_wolf_stun.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_focused_arts.h"
 #include "d/d_meter2_info.h"
@@ -54,9 +55,31 @@ struct ProvokedEnemy {
 u8 sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
 u8 sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
 u8 sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
-bool sLockoutDoubleClawUsed   = false;
+bool sLockoutDoubleClawUsed       = false;
+bool sLockoutDoubleClawFlyActive  = false;
+bool sLockoutDoubleClawSlashActive = false;
+fpc_ProcID sLockoutDoubleClawTargetId = fpcM_ERROR_PROCESS_ID_e;
 fpc_ProcID sLockoutBomblingId = fpcM_ERROR_PROCESS_ID_e;
 s16 sLockoutBomblingOrbitAngle = 0;
+
+constexpr u16 kLockoutDoubleClawSlashPower = 30;
+
+void clearDoubleClawSession(bool i_thawTarget) {
+    if (i_thawTarget && sLockoutDoubleClawTargetId != fpcM_ERROR_PROCESS_ID_e) {
+        fopAc_ac_c* target = fopAcM_SearchByID(sLockoutDoubleClawTargetId);
+        if (target != NULL) {
+            dAlbwWolfStun_thaw(target);
+        }
+    }
+    sLockoutDoubleClawFlyActive = false;
+    sLockoutDoubleClawSlashActive = false;
+    sLockoutDoubleClawTargetId = fpcM_ERROR_PROCESS_ID_e;
+}
+
+bool isLockoutDoubleClawEquip() {
+    daAlink_c* link = daAlink_getAlinkActorClass();
+    return link != NULL && link->mEquipItem == dItemNo_W_HOOKSHOT_e;
+}
 
 LockoutTaggedEnemy sTaggedEnemies[kLockoutTaggedMax];
 int              sTaggedCount = 0;
@@ -65,14 +88,6 @@ DomRodConfuseState sConfuse = {fpcM_ERROR_PROCESS_ID_e, fpcM_ERROR_PROCESS_ID_e,
 
 ProvokedEnemy sProvokedEnemies[kLockoutProvokedMax];
 int           sProvokedCount = 0;
-
-int lockoutMeterThresholdPct(int i_percent) {
-    const int maxVal = dMeter2_getALBWMaxValue();
-    if (maxVal <= 0) {
-        return 0;
-    }
-    return (maxVal * i_percent) / 100;
-}
 
 LockoutTaggedEnemy* findTaggedEntry(fpc_ProcID i_id) {
     for (int i = 0; i < sTaggedCount; i++) {
@@ -323,9 +338,10 @@ void dAlbwLockout_onBegin() {
     sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
     sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
     sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
-    sLockoutDoubleClawUsed      = false;
-    sLockoutBomblingId          = fpcM_ERROR_PROCESS_ID_e;
-    sLockoutBomblingOrbitAngle  = 0;
+    sLockoutDoubleClawUsed = false;
+    clearDoubleClawSession(true);
+    sLockoutBomblingId         = fpcM_ERROR_PROCESS_ID_e;
+    sLockoutBomblingOrbitAngle = 0;
     clearAllTaggedEnemies();
     clearConfuse();
     clearAllProvoked();
@@ -335,9 +351,10 @@ void dAlbwLockout_onEnd() {
     sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
     sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
     sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
-    sLockoutDoubleClawUsed      = false;
-    sLockoutBomblingId          = fpcM_ERROR_PROCESS_ID_e;
-    sLockoutBomblingOrbitAngle  = 0;
+    sLockoutDoubleClawUsed = false;
+    clearDoubleClawSession(true);
+    sLockoutBomblingId         = fpcM_ERROR_PROCESS_ID_e;
+    sLockoutBomblingOrbitAngle = 0;
     clearAllTaggedEnemies();
     clearConfuse();
     clearAllProvoked();
@@ -401,12 +418,7 @@ void dAlbwLockout_onHookshotFired() {
 }
 
 void dAlbwLockout_onDoubleHookshotFired() {
-    if (!dMeter2_isALBWLocked() || sLockoutDoubleClawUsed) {
-        return;
-    }
-
-    sLockoutDoubleClawUsed = true;
-    dMeter2_restoreALBWMeterToFull();
+    // Finisher consumes on latch, not on fire. No meter restore.
 }
 
 bool dAlbwLockout_canFireBow() {
@@ -418,8 +430,87 @@ bool dAlbwLockout_canFireBombArrow() {
 }
 
 bool dAlbwLockout_canUseDoubleHookshot() {
-    return dMeter2_isALBWLocked() && !sLockoutDoubleClawUsed &&
-           dMeter2_getALBWMeterValue() >= lockoutMeterThresholdPct(50);
+    return dMeter2_isALBWLocked() && !sLockoutDoubleClawUsed;
+}
+
+bool dAlbwLockout_shouldForceEnemyStick(fopAc_ac_c* i_actor) {
+    return dMeter2_isALBWLocked() && !sLockoutDoubleClawUsed && isLockoutDoubleClawEquip() &&
+           i_actor != NULL && fopAcM_GetGroup(i_actor) == fopAc_ENEMY_e;
+}
+
+bool dAlbwLockout_shouldPierceHookShield(fopAc_ac_c* i_actor) {
+    return dAlbwLockout_shouldForceEnemyStick(i_actor);
+}
+
+void dAlbwLockout_onDoubleClawLatch(fopAc_ac_c* i_enemy) {
+    if (!dMeter2_isALBWLocked() || sLockoutDoubleClawUsed || i_enemy == NULL ||
+        fopAcM_GetGroup(i_enemy) != fopAc_ENEMY_e)
+    {
+        return;
+    }
+
+    sLockoutDoubleClawUsed = true;
+    sLockoutDoubleClawTargetId = i_enemy->id;
+    sLockoutDoubleClawFlyActive = true;
+    sLockoutDoubleClawSlashActive = false;
+    dAlbwWolfStun_applyHold(i_enemy);
+}
+
+bool dAlbwLockout_isDoubleClawFlyActive() {
+    return sLockoutDoubleClawFlyActive;
+}
+
+fopAc_ac_c* dAlbwLockout_getDoubleClawTarget() {
+    if (sLockoutDoubleClawTargetId == fpcM_ERROR_PROCESS_ID_e) {
+        return NULL;
+    }
+    return fopAcM_SearchByID(sLockoutDoubleClawTargetId);
+}
+
+void dAlbwLockout_onDoubleClawFlyEnded() {
+    if (!sLockoutDoubleClawFlyActive) {
+        return;
+    }
+
+    // Interrupted before slash — thaw and clear fly/slash session (use stays spent).
+    if (sLockoutDoubleClawTargetId != fpcM_ERROR_PROCESS_ID_e) {
+        fopAc_ac_c* target = fopAcM_SearchByID(sLockoutDoubleClawTargetId);
+        if (target != NULL) {
+            dAlbwWolfStun_thaw(target);
+        }
+    }
+    sLockoutDoubleClawFlyActive = false;
+    sLockoutDoubleClawSlashActive = false;
+    sLockoutDoubleClawTargetId = fpcM_ERROR_PROCESS_ID_e;
+}
+
+void dAlbwLockout_onDoubleClawSlashBegin() {
+    sLockoutDoubleClawFlyActive = false;
+    sLockoutDoubleClawSlashActive = true;
+}
+
+bool dAlbwLockout_isDoubleClawSlashActive() {
+    return sLockoutDoubleClawSlashActive;
+}
+
+void dAlbwLockout_onDoubleClawSlashEnd() {
+    if (!sLockoutDoubleClawSlashActive && sLockoutDoubleClawTargetId == fpcM_ERROR_PROCESS_ID_e) {
+        return;
+    }
+
+    if (sLockoutDoubleClawTargetId != fpcM_ERROR_PROCESS_ID_e) {
+        fopAc_ac_c* target = fopAcM_SearchByID(sLockoutDoubleClawTargetId);
+        if (target != NULL) {
+            dAlbwWolfStun_thaw(target);
+        }
+    }
+    sLockoutDoubleClawFlyActive = false;
+    sLockoutDoubleClawSlashActive = false;
+    sLockoutDoubleClawTargetId = fpcM_ERROR_PROCESS_ID_e;
+}
+
+u16 dAlbwLockout_getDoubleClawSlashAttackPower() {
+    return sLockoutDoubleClawSlashActive ? kLockoutDoubleClawSlashPower : 0;
 }
 
 u8 dAlbwLockout_getHookshotContactAtp() {
@@ -548,7 +639,10 @@ void dAlbwLockout_applyAttackPowerBoost(u16& io_attackPower, u32 i_atType) {
         return;
     }
 
-    if (i_atType == AT_TYPE_ARROW || i_atType == AT_TYPE_BOMB) {
+    // Bow / bomb / spinner: +50%. Iron ball: +150%.
+    if (i_atType == AT_TYPE_ARROW || i_atType == AT_TYPE_BOMB ||
+        i_atType == AT_TYPE_SPINNER)
+    {
         io_attackPower = (io_attackPower * 3) / 2;
     } else if (i_atType == AT_TYPE_IRON_BALL) {
         io_attackPower = (io_attackPower * 5) / 2;

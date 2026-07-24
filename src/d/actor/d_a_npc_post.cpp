@@ -1681,8 +1681,7 @@ int daNpc_Post_c::cutDeliver(int i_staffId) {
                 mDoAud_subBgmStop();
 #if TARGET_PC
                 if (dAlbwMail_isDeliverPostman(this)) {
-                    dAlbwMail_onDeliverCutsceneFinished(
-                        dComIfGs_isLetterGetFlag(kAlbwMailLetterIndex));
+                    dAlbwMail_onDeliverCutsceneFinished(dAlbwMail_hasReceivedBundle());
                 }
 #endif
                 break;
@@ -1768,11 +1767,10 @@ int daNpc_Post_c::cutDeliver(int i_staffId) {
             if (mFlow.doFlow(NULL, NULL, 0)) {
 #if TARGET_PC
                 if (dAlbwMail_isDeliverPostman(this)) {
-                    if (!dComIfGs_isLetterGetFlag(kAlbwMailLetterIndex)) {
+                    if (!dAlbwMail_hasReceivedBundle()) {
                         dMeter2Info_recieveLetter();
                     }
-                    dAlbwMail_onDeliverCutsceneFinished(
-                        dComIfGs_isLetterGetFlag(kAlbwMailLetterIndex));
+                    dAlbwMail_onDeliverCutsceneFinished(dAlbwMail_hasReceivedBundle());
                 }
 #endif
                 rv = 1;

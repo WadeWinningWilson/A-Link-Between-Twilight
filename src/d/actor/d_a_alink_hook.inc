@@ -10,6 +10,9 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
+#if TARGET_PC
+#include "d/d_albw_lockout.h"
+#endif
 
 enum {
     HS_MODE_NONE_e,
@@ -299,7 +302,11 @@ void daAlink_c::hookshotAtHitCallBack(dCcD_GObjInf* i_atObjInf, fopAc_ac_c* i_tg
                 } else {
                     field_0x3494 = 1.0f;
                 }
-            } else if (!i_tgObjInf->ChkTgShield()) {
+            } else if (!i_tgObjInf->ChkTgShield()
+#if TARGET_PC
+                       || dAlbwLockout_shouldPierceHookShield(i_tgActor)
+#endif
+            ) {
                 mHookTargetAcKeep.setData(i_tgActor);
                 field_0x381c = *i_atObjInf->GetAtHitPosP();
             } else {
@@ -835,6 +842,11 @@ int daAlink_c::checkNextActionHookshot() {
 }
 
 void daAlink_c::setHookshotReturnEnd() {
+#if TARGET_PC
+    if (dAlbwLockout_isDoubleClawFlyActive()) {
+        dAlbwLockout_onDoubleClawFlyEnded();
+    }
+#endif
     resetHookshotMode();
     cancelItemUseQuake(0);
 
@@ -912,7 +924,15 @@ void daAlink_c::setHookshotTopPosFly() {
     fopAc_ac_c* targetAc_p = mHookTargetAcKeep.getActor();
 
     if (mItemMode == 5) {
-        if (targetAc_p != NULL && fopAcM_checkHookCarryNow(targetAc_p)) {
+#if TARGET_PC
+        // Lockout double-claw: tip-pin without HookCarry (avoids RETURN teleporting enemies).
+        const bool tipPinOk =
+            targetAc_p != NULL &&
+            (fopAcM_checkHookCarryNow(targetAc_p) || dAlbwLockout_isDoubleClawFlyActive());
+#else
+        const bool tipPinOk = targetAc_p != NULL && fopAcM_checkHookCarryNow(targetAc_p);
+#endif
+        if (tipPinOk) {
             mDoMtx_stack_c::transS(targetAc_p->current.pos);
             mDoMtx_stack_c::ZXYrotM(targetAc_p->shape_angle);
             mDoMtx_stack_c::multVec(&mIronBallCenterPos, &mHookshotTopPos);
@@ -1138,6 +1158,21 @@ void daAlink_c::setHookshotPos() {
                     mHookshotTopPos = field_0x381c;
 
                     targetAc_p = mHookTargetAcKeep.getActor();
+#if TARGET_PC
+                    if (dAlbwLockout_shouldForceEnemyStick(targetAc_p)) {
+                        mHookTargetAcKeep.setData(targetAc_p);
+                        mIronBallCenterPos = mHookshotTopPos - targetAc_p->current.pos;
+                        setHookshotCatchNow();
+                        mItemMode = 5;
+                        field_0x316c.set(field_0x301c, field_0x301e, 0);
+                        mDoMtx_stack_c::ZrotS(-targetAc_p->shape_angle.z);
+                        mDoMtx_stack_c::XrotM(-targetAc_p->shape_angle.x);
+                        mDoMtx_stack_c::YrotM(-targetAc_p->shape_angle.y);
+                        mDoMtx_stack_c::multVecSR(&mIronBallCenterPos, &mIronBallCenterPos);
+                        // Prefer no HookCarry — tip pin is driven by lockout fly state.
+                        dAlbwLockout_onDoubleClawLatch(targetAc_p);
+                    } else
+#endif
                     if (targetAc_p != NULL && (targetAc_p->actor_status & (fopAcStts_UNK_0x200000_e | fopAcStts_UNK_0x80000_e))) {
                         mHookTargetAcKeep.setData(targetAc_p);
                         mIronBallCenterPos = mHookshotTopPos - targetAc_p->current.pos;
@@ -1683,6 +1718,12 @@ int daAlink_c::procHookshotFly() {
     s16 temp_r24 = field_0x301e;
     cXyz spAC(mHookshotTopPos);
     setHookshotTopPosFly();
+#if TARGET_PC
+    // Tip-pin / carry loss dropped us out of mode 5 before the slash window.
+    if (dAlbwLockout_isDoubleClawFlyActive() && mItemMode != 5) {
+        dAlbwLockout_onDoubleClawFlyEnded();
+    }
+#endif
 
     field_0x37d4 = mHookshotTopPos - mHeldItemRootPos;
     if (mProcVar0.field_0x3008 != 0 && cLib_distanceAngleS(field_0x37d4.atan2sX_Z(), temp_r24) > 0x4000) {
@@ -1710,6 +1751,21 @@ int daAlink_c::procHookshotFly() {
     }
 
     current.pos += field_0x37d4;
+
+#if TARGET_PC
+    // Lockout double-claw finisher: at ≤200 (~10u) cancel claw and jump-slash.
+    if (dAlbwLockout_isDoubleClawFlyActive() && targetAc_p != NULL &&
+        current.pos.abs(targetAc_p->current.pos) <= 200.0f)
+    {
+        dAlbwLockout_onDoubleClawSlashBegin();
+        shape_angle.y = cLib_targetAngleY(&current.pos, &targetAc_p->eyePos);
+        current.angle.y = shape_angle.y;
+        resetHookshotMode();
+        cancelItemUseQuake(0);
+        return procCutJumpInit(TRUE);
+    }
+#endif
+
     if (checkSetItemTrigger(dItemNo_W_HOOKSHOT_e) != 0) {
         mProcVar5.field_0x3012 = 1;
     } else if (mProcVar5.field_0x3012 != 0 && !itemButton()) {

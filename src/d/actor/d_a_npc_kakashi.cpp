@@ -11,6 +11,11 @@
 #include "Z2AudioLib/Z2Instances.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "d/d_focused_arts.h"
+#include "d/d_albw_wolf_stun.h"
+#endif
+
 static DUSK_CONSTEXPR int l_bmdData[3][2] = {
     {10, 1},
     {8, 1},
@@ -507,6 +512,13 @@ void daNpc_Kakashi_c::action() {
         setStaggerParam(hit_actor);
         setDamage(0, -1, -1);
         mDamageTimerStart = 0;
+#if TARGET_PC
+        // Ordon tutorial scarecrow: any registered hit refills FA bank + wolf charges.
+        if (hit_actor == daPy_getPlayerActorClass()) {
+            dFocusedArts_fillBank();
+            dAlbwWolfCombat_fillCharges();
+        }
+#endif
     }
 
     if (mSelectAction != NULL) {

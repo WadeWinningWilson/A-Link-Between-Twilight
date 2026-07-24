@@ -301,6 +301,7 @@ enum VisibleKind {
     VISIBLE_FA_TIER,
     VISIBLE_WOLF_HOWL,     // ALBW Port: Wolf Howl art unlock (Upgrades page, state purchase)
     VISIBLE_MIDNA_ARM,     // ALBW Port: "Midna's Grasp" arm art unlock (Upgrades page)
+    VISIBLE_WOLF_CHARGE,   // ALBW Port: 3rd wolf charge pip (after Master Sword)
     VISIBLE_ITEM,
     VISIBLE_SHADE_REFUGE,  // "Return to Last Shade Watcher" (above Oocoo)
     VISIBLE_OOCOO,
@@ -725,6 +726,16 @@ static void rebuildVisibleList() {
         sVisibleCount++;
     }
 
+    // ALBW Port: Wolf Charge (3rd pip) — Upgrades page, after Master Sword story bit.
+    if (cat == CAT_UPGRADES && dAlbwWolfArts_shouldShowChargeShopRow() &&
+        sVisibleCount < kVisibleListMax) {
+        sVisibleList[sVisibleCount].kind        = VISIBLE_WOLF_CHARGE;
+        sVisibleList[sVisibleCount].kItemsIdx   = -1;
+        sVisibleList[sVisibleCount].purchasable = true;
+        sAvailCount++;
+        sVisibleCount++;
+    }
+
     // ALBW Port: the Sumo Outfit is a model-swap STATE (not a native clothes
     // item), so it is injected here rather than in kItems.  Sits at the TOP of
     // the Armor page (before Ordon Clothes); shown once eligible (True ALBW, or
@@ -1090,7 +1101,32 @@ static void tryPurchase(int visIdx) {
         dComIfGs_setRupee(rupees - (u16)price);
         sPurchasedThisSession = true;
         sJustPurchased        = true;
-        sStatusMsg            = "Off it goes with the meat.. and you.\nThank you for your patronage!";
+        sStatusMsg            = "A curious dream-scroll, now yours.\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
+        rebuildVisibleList();
+        return;
+    }
+
+    if (sVisibleList[visIdx].kind == VISIBLE_WOLF_CHARGE) {
+        const int price = dAlbwWolfArts_getChargeShopPrice();
+        u16 rupees      = dComIfGs_getRupee();
+        if (price <= 0) {
+            return;
+        }
+        if (rupees < (u16)price) {
+            sStatusMsg          = "Sincerest apologies, but we can't return\nthat to you for that little..";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        if (!dAlbwWolfArts_tryPurchaseChargeUpgrade()) {
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)price);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
+        sStatusMsg            = "Dried meat for a hungry wolf..\nThank you for your patronage!";
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();
         rebuildVisibleList();
@@ -1115,7 +1151,7 @@ static void tryPurchase(int visIdx) {
         dComIfGs_setRupee(rupees - (u16)price);
         sPurchasedThisSession = true;
         sJustPurchased        = true;
-        sStatusMsg            = "A glove that small, gone at last.\nThank you for your patronage!";
+        sStatusMsg            = "May that Twilight blessing find its mark.\nThank you for your patronage!";
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();
         rebuildVisibleList();
@@ -1676,6 +1712,18 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].desc           = dAlbwWolfArts_getArmShopDesc();
             sPubList[i].itemNo         = 0xFD;         // fallback icon (renders until midna_arm.png)
             sPubList[i].customIconName = "midna_arm";  // custom-icon slot (PNG to be provided)
+            sPubList[i].isOocooService = false;
+            sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
+        } else if (sVisibleList[i].kind == VISIBLE_WOLF_CHARGE) {
+            sPubList[i].name           = dAlbwWolfArts_getChargeShopName();
+            sPubList[i].price          = sVisibleList[i].purchasable
+                ? dAlbwWolfArts_getChargeShopPrice() : 0;
+            sPubList[i].purchasable    = sVisibleList[i].purchasable;
+            sPubList[i].desc           = dAlbwWolfArts_getChargeShopDesc();
+            sPubList[i].itemNo         = 0xFD;
+            sPubList[i].customIconName = "wolf_howl";  // reuse wolf silhouette until dedicated art
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
             sPubList[i].isStorageStore = false;

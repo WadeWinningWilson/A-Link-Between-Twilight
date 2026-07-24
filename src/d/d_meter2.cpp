@@ -410,8 +410,9 @@ static bool dMeter2_isALBWLockoutZTargetRecovery() {
     return attn != NULL && attn->Lockon();
 }
 
-// Continuous-drain items are forced off when internal meter is at or below zero.
-bool dMeter2_canALBWSpinner() { return sALBWMeter > 0; }
+// Spinner: mount while meter > 0, or during lockout (lockout perk: +15% ride speed).
+// Continuous drain still runs while unlocked; during lockout drain floors at 0.
+bool dMeter2_canALBWSpinner() { return sALBWLocked || sALBWMeter > 0; }
 bool dMeter2_canALBWDomRod() { return sALBWMeter > 0; }
 bool dMeter2_canALBWDomRodConfuseThrow() { return sALBWLocked; }
 

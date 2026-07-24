@@ -165,6 +165,33 @@ void dMenu_Ring_c::loadQuickEquipItemTextures() {
     }
 }
 
+void dMenu_Ring_c::remapQuickEquipFaceSlots() {
+    // Face-button assign rebuilds X+Y (and Z slide arms) from mItemSlots[mX/YButtonSlot].
+    // Leaving those at 0xFF after a QE pack makes the "other" buttons write empty (0xFF).
+    mXButtonSlot = 0xff;
+    mYButtonSlot = 0xff;
+    field_0x6ac = 0xff;
+    const u8 curX = dComIfGs_getSelectItemIndex(SELECT_ITEM_X);
+    const u8 curY = dComIfGs_getSelectItemIndex(SELECT_ITEM_Y);
+    const u8 curZ = dComIfGs_getSelectItemIndex(SELECT_ITEM_DOWN);
+    const int n = mItemsTotal > 0 ? mItemsTotal : 0;
+    for (int i = 0; i < n; i++) {
+        const u8 inv = mItemSlots[i];
+        if (inv == 0xFF) {
+            continue;
+        }
+        if (curX != 0xFF && inv == curX) {
+            mXButtonSlot = static_cast<u8>(i);
+        }
+        if (curY != 0xFF && inv == curY) {
+            mYButtonSlot = static_cast<u8>(i);
+        }
+        if (dusk::isExtraItemSlotEnabled() && curZ != 0xFF && inv == curZ) {
+            field_0x6ac = static_cast<u8>(i);
+        }
+    }
+}
+
 void dMenu_Ring_c::applyQuickEquipPage(u8 page, bool rebuildTextures) {
     const u8 pageCount = dQe_getPageCount();
     if (pageCount == 0) {
@@ -198,34 +225,27 @@ void dMenu_Ring_c::applyQuickEquipPage(u8 page, bool rebuildTextures) {
         mItemSlots[0] = 0xFF;
     }
 
-    mXButtonSlot = 0xff;
-    mYButtonSlot = 0xff;
-    field_0x6ac = 0xff;
+    remapQuickEquipFaceSlots();
     mCurrentSlot = 0;
-
-    const u8 curZ = dComIfGs_getSelectItemIndex(SELECT_ITEM_DOWN);
-    const u8 curSword = dComIfGs_getSelectEquipSword();
-    const u8 curShield = dComIfGs_getSelectEquipShield();
-    for (int i = 0; i < packed; i++) {
-        const u8 reg = mQuickEquipSlotMap[i];
-        const dQeSocketDesc* sock = dQe_peek(page, reg);
-        if (sock == NULL || sock->id == 0) {
-            continue;
-        }
-        if ((sock->kind == dQeKind_InvSlot_Z || sock->kind == dQeKind_ZSelect) &&
-            sock->tpInvSlot == curZ)
-        {
-            field_0x6ac = static_cast<u8>(i);
-            mCurrentSlot = static_cast<u8>(i);
-            break;
-        }
-        if (sock->kind == dQeKind_SwordEquip && sock->iconItemNo == curSword) {
-            mCurrentSlot = static_cast<u8>(i);
-            break;
-        }
-        if (sock->kind == dQeKind_ShieldEquip && sock->iconItemNo == curShield) {
-            mCurrentSlot = static_cast<u8>(i);
-            break;
+    if (field_0x6ac != 0xff) {
+        mCurrentSlot = field_0x6ac;
+    } else {
+        const u8 curSword = dComIfGs_getSelectEquipSword();
+        const u8 curShield = dComIfGs_getSelectEquipShield();
+        for (int i = 0; i < packed; i++) {
+            const u8 reg = mQuickEquipSlotMap[i];
+            const dQeSocketDesc* sock = dQe_peek(page, reg);
+            if (sock == NULL || sock->id == 0) {
+                continue;
+            }
+            if (sock->kind == dQeKind_SwordEquip && sock->iconItemNo == curSword) {
+                mCurrentSlot = static_cast<u8>(i);
+                break;
+            }
+            if (sock->kind == dQeKind_ShieldEquip && sock->iconItemNo == curShield) {
+                mCurrentSlot = static_cast<u8>(i);
+                break;
+            }
         }
     }
 
@@ -275,8 +295,11 @@ void dMenu_Ring_c::applyQuickEquipBagView(bool rebuildTextures) {
         mQuickEquipSlotMap[0] = 0xFF;
         mItemSlots[0] = 0xFF;
     }
+    remapQuickEquipFaceSlots();
     mCurrentSlot = 0;
-    field_0x6ac = 0xff;
+    if (field_0x6ac != 0xff) {
+        mCurrentSlot = field_0x6ac;
+    }
     field_0x634 = 0x10000 / (mItemsTotal > 0 ? mItemsTotal : 1);
     field_0x66e = 0x8000;
     field_0x670 = 0;
@@ -1794,7 +1817,17 @@ void dMenu_Ring_c::setNameString(u32 i_stringID) {
 }
 
 void dMenu_Ring_c::setActiveCursor() {
+#if TARGET_PC
+    // QE sword/shield sockets leave mItemSlots as 0xFF — face assign needs a real inv slot.
+    const u8 invSlot = mItemSlots[mCurrentSlot];
+    const u8 item = mUseQuickEquipPages ? getQuickRingItem(mCurrentSlot) :
+                                          dComIfGs_getItem(invSlot, false);
+    const bool faceAssignOk =
+        !mUseQuickEquipPages || (invSlot != 0xFF && item != dItemNo_NONE_e);
+#else
     u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
+    const bool faceAssignOk = true;
+#endif
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN && mpItemExplain->getStatus() == 0) {
 #if TARGET_PC
         // Quick-equip: release-to-Z only — ignore X/Y/Z face-button assigns while held open.
@@ -1809,12 +1842,13 @@ void dMenu_Ring_c::setActiveCursor() {
 #else
         const bool combineTrig = mDoCPd_c::getTrigR(PAD_1);
 #endif
-        if (combineTrig && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+        if (combineTrig && !mPlayerIsWolf && item != dItemNo_NONE_e && faceAssignOk) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
             }
             setMixItem();
-        } else if (mDoCPd_c::getTrigX(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+        } else if (mDoCPd_c::getTrigX(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e &&
+                   faceAssignOk) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
             }
@@ -1826,7 +1860,8 @@ void dMenu_Ring_c::setActiveCursor() {
                     (this->*stick_init[mStatus])();
                 }
             }
-        } else if (mDoCPd_c::getTrigY(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+        } else if (mDoCPd_c::getTrigY(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e &&
+                   faceAssignOk) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
             }
@@ -1840,7 +1875,8 @@ void dMenu_Ring_c::setActiveCursor() {
             }
 #if TARGET_PC
         } else if (mDoCPd_c::getTrigZ(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e &&
-                   dusk::isExtraItemSlotEnabled() && !isMixItemOn() && !isMixItemOff())
+                   faceAssignOk && dusk::isExtraItemSlotEnabled() && !isMixItemOn() &&
+                   !isMixItemOff())
         {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);

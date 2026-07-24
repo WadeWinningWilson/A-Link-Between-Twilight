@@ -23,6 +23,23 @@ bool dAlbwLockout_canFireBombArrow();
 bool dAlbwLockout_canUseDoubleHookshot();
 bool dAlbwLockout_canUseBombling();
 
+// ============================================
+// Double claw lockout finisher
+// Latch any ENEMY-group actor → wolf-style freeze hold → fly → ≤10u jump-slash
+// (ATP 30) → thaw when slash ends. Replaces the old meter-restore perk.
+// ============================================
+bool        dAlbwLockout_shouldForceEnemyStick(fopAc_ac_c* i_actor);
+bool        dAlbwLockout_shouldPierceHookShield(fopAc_ac_c* i_actor);
+void        dAlbwLockout_onDoubleClawLatch(fopAc_ac_c* i_enemy);
+bool        dAlbwLockout_isDoubleClawFlyActive();
+fopAc_ac_c* dAlbwLockout_getDoubleClawTarget();
+void        dAlbwLockout_onDoubleClawFlyEnded();
+void        dAlbwLockout_onDoubleClawSlashBegin();
+bool        dAlbwLockout_isDoubleClawSlashActive();
+void        dAlbwLockout_onDoubleClawSlashEnd();
+// Fixed finisher damage (after at_power_get). 0 = not active.
+u16         dAlbwLockout_getDoubleClawSlashAttackPower();
+
 // Lockout bombling: deploy (spend 1 of 2 uses, +30% base meter), track active actor.
 void dAlbwLockout_onBomblingDeployed(fopAc_ac_c* i_bombling);
 void dAlbwLockout_onBomblingDestroyed(fopAc_ac_c* i_bombling);

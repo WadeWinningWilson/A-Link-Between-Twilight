@@ -106,6 +106,8 @@ private:
     u8 getQuickRegistrySlot(int packedIdx) const;
     void applyQuickEquipPage(u8 page, bool rebuildTextures);
     void applyQuickEquipBagView(bool rebuildTextures);
+    /** Rebuild X/Y/Z ring indices from save select slots after QE pack (must not stay 0xFF). */
+    void remapQuickEquipFaceSlots();
     void clearQuickEquipItemTextures();
     void loadQuickEquipItemTextures();
     void confirmQuickEquipHover();

@@ -107,11 +107,12 @@ enum class TrueAlbwMode : int {
 
 // Cap Wear: which headpiece Link wears, applied GLOBALLY to every outfit (the sumo body AND
 // the native clothes), decoupled so each cap resolves on any base via the cap donor.
+// UI label: "Link's Cap" (Interface → ALBW Visuals).
 //   Off   — native: each outfit keeps its own hat (the sumo body keeps its topknot).
-//   None  — force the bald sumo topknot (alSumou 0x33) on every outfit.
-//   Green — Link's cap   al_head (Kmdl).
-//   Red   — Magic helmet ml_head (Mmdl).
-//   Blue  — Zora helmet  zl_head (Zmdl).
+//   None  — UI "Hair": force the bald sumo topknot (alSumou 0x33) on every outfit.
+//   Green — Link's cap   al_head (Kmdl) — UI "Green (Hero's)".
+//   Red   — Magic helmet ml_head (Mmdl) — UI "Red (Magic)".
+//   Blue  — Zora helmet  zl_head (Zmdl) — UI "Blue (Zora)".
 // (Green/Red/Blue are the "Link cap" modes; see dAlbwSumoTest_wantLinkCap().)
 enum class CapWearMode : u8 {
     Off = 0,
@@ -363,11 +364,10 @@ struct UserSettings {
         //   sumoOutfitFists — hide weapons (fists only)
         ConfigVar<bool> sumoOutfit;
         ConfigVar<bool> sumoOutfitFists;
-        //   capWear         — GLOBAL Cap Wear (Off/None/Green/Red/Blue): which headpiece Link
-        //                     wears across EVERY outfit (sumo body and native clothes alike).
-        //                     Off = each outfit's native hat; None = bald topknot everywhere;
-        //                     Green/Red/Blue = the Link/Magic/Zora cap on any base.  Replaces the
-        //                     old sumoOutfitHat bool + sumoCapColor (sumo-only) settings.
+        //   capWear         — GLOBAL "Link's Cap" setting in Interface → ALBW Visuals
+        //                     (Off/Hair/Green/Red/Blue): headpiece across EVERY outfit.
+        //                     Off = each outfit's default; Hair (None) = bald/topknot;
+        //                     Green/Red/Blue = Hero's/Magic/Zora headpiece on any base.
         ConfigVar<CapWearMode> capWear;
         ConfigVar<bool> shieldDurability;
         // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
@@ -411,7 +411,7 @@ struct UserSettings {
         ConfigVar<bool> heroShadeSecretBoss;
         // Junior Postman mail Phase 0 test: ignore story/delivered save gates for spawn.
         ConfigVar<bool> albwJuniorMailTest;
-        // Editor ALBW WIP: grant/remove soulbound red potion in inventory slot 11.
+        // Grant/remove soulbound red potion in inventory slot 11 (Gameplay; also QE seed).
         ConfigVar<bool> albwSoulboundRedPotion;
         // Parry/bash charge HUD icon style: spur only, spur+shield, or shield only.
         ConfigVar<ParryIcons> parryIconsMode;

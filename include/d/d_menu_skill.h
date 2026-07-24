@@ -57,6 +57,7 @@ public:
     void setNameStringRaw(const char* text);
     void setRowVisibility();
     void changePage(int delta);
+    void applySkillPageState();
     bool isAlbwScrollPage() const;
     void updatePageTitle();
     void setDetailPage(int page);
@@ -120,6 +121,7 @@ private:
     J2DTextBox* mpTitleString;
     u8 mDetailPage;
     u8 mDetailPageCount;
+    u8 mAlbwListOffset;  // first ALBW scroll index shown on the current page
     char mDetailTitle[0x40];
     char mDetailPages[kAlbwSkillScrollMaxPages][kAlbwSkillScrollPageBufLen];
 #endif

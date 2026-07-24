@@ -129,6 +129,36 @@ struct dAlbwBoss_ArmogohmaBarState {
 // Fills bar visibility + HP for the HUD (phase 1 refinement pool or phase 2 eye).
 bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state);
 
+// Diababa (B_BQ): single-pool bar via lock-on HP display. Hidden during intro /
+// death demos and while the middle head is pre-APPEAR (mDisableDraw).
+bool dAlbwBoss_diababaQueryHealthBar(int* o_current, int* o_max);
+
+// Boss Refinement: Diababa bomb reception (boss-side). Does not change global
+// bomb attack power — B_BQ subtracts this on HIT_TYPE_BOMB instead of the
+// vanilla hard-assign health = 50.
+static constexpr int kAlbwDiababaBombReceiveDamage = 30;
+
+// Diababa fight state (Boss Refinement). Late phase = remaining HP <= 70% max
+// (bomb −30 from 100 enters late). Sticky once entered.
+void dAlbwBoss_diababaResetFightState();
+void dAlbwBoss_diababaUpdatePhase(fopAc_ac_c* i_boss);
+bool dAlbwBoss_diababaIsLatePhase();
+
+// Poison siphon: heal boss by (dmg/LinkMaxLife)*bossMax. No-op if dmg<=0.
+// One heal window per spray (debounce). Call OnPoisonSprayBegin when spray starts.
+void dAlbwBoss_diababaOnPoisonSprayBegin();
+void dAlbwBoss_diababaOnPoisonDamage(int i_damageToLink);
+
+// Phase-2 bomb cycle (HP <= 70%):
+//   RUNAWAY thrash + poison/siphon → submerge+5-hit → appear → hang → vanilla spray.
+void dAlbwBoss_diababaSetRetaliationPoison(bool i_active);
+bool dAlbwBoss_diababaIsRetaliationPoison();
+void dAlbwBoss_diababaSetPendingHangAfterAppear(bool i_pending);
+bool dAlbwBoss_diababaTakePendingHangAfterAppear();
+
+// Chip flinch: alternate LOOK_M every other chip (arrow/ball map still applies).
+bool dAlbwBoss_diababaTakeChipLookMAlternate();
+
 void dAlbwBoss_armogohmaOnRodHit(fopAc_ac_c* i_boss, s8 i_hitCount);
 
 // Boss Refinement phase-3 (reveal) — apply one defended weapon hit to the drain

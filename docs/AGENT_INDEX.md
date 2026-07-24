@@ -45,7 +45,7 @@
 | Enemy Death Rupees | [state/enemy-death-rupees.md](state/enemy-death-rupees.md) | `albw-port.md` (setting overview) |
 | WW itemmdl / Wind Curs↔Clau | [state/ww-itemmdl.md](state/ww-itemmdl.md) | [wind-waker-item-work.md](wind-waker-item-work.md), [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) (archive) |
 | Field combat refinements | [state/combat-refinements.md](state/combat-refinements.md) | [combat-refinements-handoff.md](combat-refinements-handoff.md) |
-| Boss fights | [state/boss-fights.md](state/boss-fights.md) | [boss-fights-handoff.md](boss-fights-handoff.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md) |
+| Boss fights | [state/boss-fights.md](state/boss-fights.md) | [boss-fights-handoff.md](boss-fights-handoff.md), [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md), [Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md) |
 | Drive / FPS oracle | [state/drive-fps.md](state/drive-fps.md) | [performance-handoff.md](performance-handoff.md), [build-fps-guidelines.md](build-fps-guidelines.md), [future-performance-leaning.md](future-performance-leaning.md) |
 | Build / FPS review | [state/drive-fps.md](state/drive-fps.md) | [build-fps-guidelines.md](build-fps-guidelines.md) (has its own doc map) |
 | Shield / parry | — | [shield-combat.md](shield-combat.md) |

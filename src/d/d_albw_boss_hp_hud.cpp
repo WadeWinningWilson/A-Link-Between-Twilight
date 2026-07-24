@@ -87,6 +87,8 @@ static J2DTextBox* sName = NULL;
 // ---------------------------------------------------------------------------
 static const char* bossDisplayName(s16 profName) {
     switch (profName) {
+    case fpcNm_B_BQ_e:
+        return "Twilit Parasite DIABABA";
     case fpcNm_B_GM_e:
 #if D_ALBW_BOSS_BAR_INTRO_STYLE
         return "Twilit Arachnid Armogohma";
@@ -175,17 +177,14 @@ void dAlbwBossHpHud_draw() {
         return;
     }
 
-    // Pick the active boss. Armogohma keeps its two-phase prototype query; the
-    // Hero's Shade uses its own single-pool query. Armogohma takes precedence
-    // (they never coexist), so its path is unchanged — the Shade is a pure
-    // fallback. Only the {current, max, name} selection is generalized; the bar
-    // rendering below is shared, so any future scale/spacing/hue/opacity tuning
-    // applies to both bosses.
+    // Pick the active boss. Armogohma (composite) first, then Diababa, then the
+    // Hero's Shade. Arenas never coexist; only {current,max,name}/fillRatio
+    // selection differs — bar render is shared.
     // ============================================
     // MODIFIED CODE — ALBW Port
     // Fill comes from a normalized fillRatio, not raw {current,max}. Armogohma's
-    // query already composites both phases into fillRatio; the Shade boss (single
-    // pool) still derives it as current/max. Early-out is fillRatio <= 0 so a
+    // query already composites both phases into fillRatio; Diababa / Shade
+    // (single pool) derive it as current/max. Early-out is fillRatio <= 0 so a
     // half-full composite bar (e.g. phase-1 empty at 0.5) is never hidden.
     // ============================================
     f32 fillRatio = 0.0f;
@@ -198,7 +197,10 @@ void dAlbwBossHpHud_draw() {
     } else {
         int sCur = 0;
         int sMax = 0;
-        if (dShadeBoss_queryHealthBar(&sCur, &sMax) && sMax > 0 && sCur > 0) {
+        if (dAlbwBoss_diababaQueryHealthBar(&sCur, &sMax) && sMax > 0 && sCur > 0) {
+            fillRatio = static_cast<f32>(sCur) / static_cast<f32>(sMax);
+            name = bossDisplayName(fpcNm_B_BQ_e);
+        } else if (dShadeBoss_queryHealthBar(&sCur, &sMax) && sMax > 0 && sCur > 0) {
             fillRatio = static_cast<f32>(sCur) / static_cast<f32>(sMax);
             name = bossDisplayName(fpcNm_NPC_KN_e);
         }

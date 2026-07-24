@@ -10,11 +10,13 @@
 #include "d/d_msg_object.h"
 #ifdef TARGET_PC
 #include "d/actor/d_a_obj_carry.h"
+#include "d/actor/d_a_b_bq.h"
 #include "d/d_menu_ring.h"
 #include "dusk/achievements.h"
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_shield.h"
 #include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_boss.h"
 #endif
 
 #if DEBUG
@@ -812,6 +814,15 @@ BOOL daAlink_c::checkDamageAction() {
                         dComIfGs_setRupee((u16)(newRupees < 0 ? 0 : newRupees));
                         dmg = 0;
                     }
+                }
+            }
+            // Diababa poison siphon (Boss Refinement): heal boss by % of Link
+            // max lost. Only when life damage remains after armor/parry paths.
+            if (dmg > 0 && tghit_ac_name == fpcNm_B_BQ_e && tghit_ac != NULL) {
+                b_bq_class* bq = (b_bq_class*)tghit_ac;
+                // ACTION_ATTACK == 2, or phase-2 thrash spray on RUNAWAY.
+                if (bq->mAction == 2 || dAlbwBoss_diababaIsRetaliationPoison()) {
+                    dAlbwBoss_diababaOnPoisonDamage(dmg);
                 }
             }
             // ============================================

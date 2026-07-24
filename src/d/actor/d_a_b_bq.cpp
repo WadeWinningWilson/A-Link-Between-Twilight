@@ -18,8 +18,17 @@
 #include "c/c_damagereaction.h"
 #include <cmath>
 #if TARGET_PC
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include "d/d_albw_boss.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_hp_mult.h"
+#include "d/d_albw_lockout.h"
+#include "d/d_focused_arts.h"
+#include "d/d_meter2_info.h"
+#include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_b_bh.h"
 #endif
 
@@ -139,6 +148,8 @@ enum daB_BQ_ACT {
     ACTION_END,
 #if TARGET_PC
     ACTION_RUNAWAY_TEST,
+    ACTION_ANM_PREVIEW,  // TEMP: orphan BCK look-pass (revert after pick)
+    ACTION_LUNGE,        // Refinement: middle-head lunge during bomb-wait
 #endif
 };
 
@@ -436,41 +447,227 @@ static void* s_bi_del_sub(void* i_actor, void* i_data) {
 
 #if TARGET_PC
 static constexpr f32 kAlbwBqRunawayAnimSpeed = 4.5f;
-static constexpr s16 kAlbwBqConductorBeatGap = 50;
-static constexpr s16 kAlbwBqConductorInitialDelay = 20;
+// Phase-2 thrash must stay up long enough for a full poison window.
+static constexpr f32 kAlbwBqRetaliationRunawaySpeed = 1.35f;
+// Quick succession between L/R beats (~0.4s); was 50f and read as long pauses.
+static constexpr s16 kAlbwBqConductorBeatGap = 12;
+static constexpr s16 kAlbwBqConductorInitialDelay = 10;
 static constexpr s16 kAlbwBqRunawaySequenceIframe = 720;
 static constexpr s16 kAlbwBqConductorBeatCount = 5;
 // field_0x6fb: 1=damage, 2=poison pause; 3=Refinement enrage conductor (side-head script)
 static constexpr s8 kAlbwBqFbEnrageSubmerged = 3;
-// Keep in sync with daB_BQ_ACT::ACTION_RUNAWAY_TEST.
+// Keep in sync with daB_BQ_ACT::ACTION_RUNAWAY_TEST / ANM_PREVIEW / LUNGE.
 static constexpr s16 kAlbwBqActionRunawayTest = 5;
-// Keep in sync with ACTION_B_ATTACK_1 / ACTION_B_WAIT in d_a_b_bh.cpp.
+static constexpr s16 kAlbwBqActionAnmPreview = 6;
+static constexpr s16 kAlbwBqActionLunge = 7;
+static constexpr s16 kAlbwBqAnmPreviewIframe = 30;
+// 5–9s @30 logic fps, head-style random window (min + rnd(span)).
+static constexpr f32 kAlbwBqLungeWaitMin = 150.0f;
+static constexpr f32 kAlbwBqLungeWaitSpan = 120.0f;
+// Shared side-head gate while middle lunge plays (~anim length @ 1.05×).
+static constexpr s16 kAlbwBqLungeSideHeadLock = 86;
+// Compensates the tighter 1700 bite band — attack plays 5% faster.
+static constexpr f32 kAlbwBqLungeAnimSpeed = 1.05f;
+// Middle-head BCK_BQ_ATTACK bite band (eyePos→player). Side-head *commit* is
+// 2800 and travel ~1700; the middle anim + HEAD At (~r200) connects closer —
+// keep attempts inside the bite that actually lands.
+static constexpr f32 kAlbwBqLungeReach = 1700.0f;
+// Keep in sync with ACTION_ATTACK_1 / ACTION_B_ATTACK_1 / ACTION_B_WAIT in d_a_b_bh.cpp.
+static constexpr s16 kAlbwBhActionAttack1 = 5;
 static constexpr s16 kAlbwBhActionBAttack1 = 21;
 static constexpr s16 kAlbwBhActionBWait = 20;
+static constexpr s16 kAlbwBhActionBDown = 23;
+
+// TEMP orphan look-pass — which BCK ACTION_ANM_PREVIEW should play.
+static int s_albwBqPreviewAnmId = BCK_BQ_WAIT01;
+
+// Lunge damage: reuse body mCcSph At (B_BH atp/spl) — no extra HEAD spheres.
+static constexpr f32 kAlbwBqLungeAtFrameStart = 8.0f;
+// Mouth At radius during lunge only (was 240; +20%).
+static constexpr f32 kAlbwBqLungeAtRadius = 288.0f;
+// Track yaw for this fraction of the attack anim (near-perfect aim).
+static constexpr f32 kAlbwBqLungeTrackFrac = 0.9f;
+// Conductor soft cap if a beat stalls; hang also has a 15s hard vulnerability timer.
+static constexpr s16 kAlbwBqHoldConductorMaxFrames = 600;
+// Refinement: max time in vulnerability (DAMAGEWAIT) @ ~30 logic Hz.
+static constexpr s16 kAlbwBqHangHardFrames = 450;  // 15 seconds
+
+// Conductor: bit0=left seen attacking, bit1=right. Prevents "instant idle" skips
+// when a Force fails or actor order makes the head look idle for one frame.
+static u8 s_albwBqConductorArmed = 0;
+static s16 s_albwBqConductorReforceWait = 0;
+// Do NOT use mTimers[] as the in-beat latch — execute() decrements all timers
+// every frame, which cleared mTimers[3]=1 instantly and spammed DISPATCH.
+static bool s_albwBqConductorBeatActive = false;
+// Do NOT reuse field_0x1393 (s8 + poison smoke counter) — it wrapped to negatives.
+static int s_albwBqConductorBeat = 0;
+
+// RelWithDebInfo strips OS_REPORT — file probe for barrage freeze playtests.
+static void b_bq_albwConductorProbe(const char* fmt, ...) {
+    if (!dAlbwBossRefinement_isEnabled()) {
+        return;
+    }
+    static bool sResetDone = false;
+    char path[512];
+    path[0] = '\0';
+    const char* user = getenv("USERPROFILE");
+    if (user != NULL && user[0] != '\0') {
+        snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_diababa_conductor_debug.txt",
+                 user);
+    } else {
+        strncpy(path, "albw_diababa_conductor_debug.txt", sizeof(path) - 1);
+        path[sizeof(path) - 1] = '\0';
+    }
+    FILE* fp = fopen(path, sResetDone ? "a" : "w");
+    if (fp == NULL) {
+        fp = fopen("albw_diababa_conductor_debug.txt", sResetDone ? "a" : "w");
+    }
+    if (fp == NULL) {
+        return;
+    }
+    if (!sResetDone) {
+        sResetDone = true;
+        fprintf(fp, "--- Diababa conductor probe (Boss Refinement) ---\n");
+    }
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(fp, fmt, args);
+    va_end(args);
+    fclose(fp);
+}
+
+static void b_bq_albwConductorProbeHead(const char* tag, int slot, b_bh_class* bh_p) {
+    if (bh_p == NULL) {
+        b_bq_albwConductorProbe("  %s slot%d=NULL\n", tag, slot);
+        return;
+    }
+    fopAc_ac_c* a = (fopAc_ac_c*)bh_p;
+    b_bq_albwConductorProbe(
+        "  %s slot%d mID=%u act=%d mode=%d y=%.0f baseY=%.0f anchY=%.0f spd=%.1f hp=%d\n", tag,
+        slot, (unsigned)bh_p->mID, (int)bh_p->mAction, (int)bh_p->mMode, a->current.pos.y,
+        bh_p->mBasePos.y, bh_p->field_0x6b0.y, a->speedF, (int)a->health);
+}
+
+static b_bh_class* b_bq_albwGetSideHead(b_bq_class* i_this, int id);
+
+static void b_bq_albwApplyLungeBodyAt(b_bq_class* i_this, bool i_live) {
+    if (i_live) {
+        // Match B_BH / mizu At src SPrm 0xd: SET + VsPlayer (Create left At SPrm=0).
+        i_this->mCcSph.SetAtType(AT_TYPE_CSTATUE_SWING);
+        i_this->mCcSph.SetAtAtp(2);
+        i_this->mCcSph.SetAtSpl(dCcG_At_Spl_UNK_D);
+        i_this->mCcSph.SetAtSe(dCcD_SE_HARD_BODY);
+        i_this->mCcSph.SetAtHitMark(1);
+        i_this->mCcSph.SetAtSPrm(0xd);
+        i_this->mCcSph.ClrAtHit();
+    } else {
+        i_this->mCcSph.OffAtSetBit();
+        i_this->mCcSph.OffAtVsPlayerBit();
+        i_this->mCcSph.SetAtType(0);
+    }
+}
+
+static void b_bq_albwRollLungeWait(b_bq_class* i_this) {
+    i_this->mTimers[4] =
+        (s16)(kAlbwBqLungeWaitMin + cM_rndF(kAlbwBqLungeWaitSpan));
+}
+
+static bool b_bq_albwSideHeadAttacking(b_bq_class* i_this) {
+    for (int i = 0; i < 2; i++) {
+        b_bh_class* bh_p = b_bq_albwGetSideHead(i_this, i);
+        if (bh_p == NULL) {
+            continue;
+        }
+        if (bh_p->mAction == kAlbwBhActionAttack1 ||
+            bh_p->mAction == kAlbwBhActionBAttack1)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void b_bq_albwTryLungeFromWait(b_bq_class* i_this) {
+    if (!dAlbwBossRefinement_isEnabled()) {
+        return;
+    }
+    if (i_this->mDisableDraw || dComIfGp_event_runCheck()) {
+        return;
+    }
+    // Timer at 0 = ready; hold until side heads are clear (no re-roll while blocked).
+    if (i_this->mTimers[4] != 0) {
+        return;
+    }
+    if (b_bq_albwSideHeadAttacking(i_this) || i_this->field_0x6fe != 0) {
+        return;
+    }
+    // Only commit when Link is inside the bite that BCK_BQ_ATTACK can land
+    // (eye/mouth band — root mDistToPlayer 2800 over-commits and whiffs).
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+    const f32 biteDist = (player->current.pos - i_this->eyePos).abs();
+    if (biteDist > kAlbwBqLungeReach) {
+        return;
+    }
+
+    i_this->mAction = ACTION_LUNGE;
+    i_this->mMode = 0;
+    i_this->field_0x6de = 30;
+    i_this->field_0x6fe = kAlbwBqLungeSideHeadLock;
+}
+
+static void b_bq_lunge(b_bq_class* i_this) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+
+    switch (i_this->mMode) {
+    case 0:
+        anm_init(i_this, BCK_BQ_ATTACK, 3.0f, J3DFrameCtrl::EMode_NONE, kAlbwBqLungeAnimSpeed);
+        a_this->shape_angle.y = i_this->mAngleToPlayer;
+        a_this->current.angle.y = i_this->mAngleToPlayer;
+        i_this->field_0x6f6 = 0x1000;
+        i_this->mMode = 1;
+        break;
+    case 1: {
+        const f32 frame = i_this->mpMorf->getFrame();
+        const f32 end = i_this->mpMorf->getEndFrame();
+        const f32 trackUntil = end * kAlbwBqLungeTrackFrac;
+        // Near-perfect track for ~90% of the attack window, then lock.
+        if (frame < trackUntil) {
+            cLib_addCalcAngleS2(&a_this->shape_angle.y, i_this->mAngleToPlayer, 2, 0x2000);
+            a_this->current.angle.y = a_this->shape_angle.y;
+            i_this->field_0x6f6 = 0x1000;
+        }
+        if (i_this->mpMorf->isStop()) {
+            b_bq_albwApplyLungeBodyAt(i_this, false);
+            anm_init(i_this, BCK_BQ_WAIT01, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+            i_this->mAction = ACTION_WAIT;
+            i_this->mMode = 0;
+            i_this->field_0x6de = 10;
+            b_bq_albwRollLungeWait(i_this);
+        }
+        break;
+    }
+    }
+}
 
 static b_bh_class* b_bq_albwGetSideHead(b_bq_class* i_this, int id) {
-    return (b_bh_class*)fopAcM_SearchByID(i_this->mTentacleIDs[id]);
+    // Prefer the live mID slot table — tentacle process IDs can desync from mID.
+    b_bh_class* bh_p = daB_BH_getPtr(id);
+    if (bh_p != NULL) {
+        return bh_p;
+    }
+    bh_p = (b_bh_class*)fopAcM_SearchByID(i_this->mTentacleIDs[id]);
+    return bh_p;
 }
 
 static bool b_bq_albwSideHeadIdle(b_bh_class* bh_p) {
     if (bh_p == NULL) {
-        return true;
+        return false;
     }
-
-    return bh_p->mAction == kAlbwBhActionBWait && bh_p->mMode == 1 && bh_p->mTimers[0] == 0;
-}
-
-static bool b_bq_albwConductorPlayerInRange(b_bq_class* i_this) {
-    fopAc_ac_c* player = dComIfGp_getPlayer(0);
-
-    for (int i = 0; i < 2; i++) {
-        b_bh_class* bh_p = b_bq_albwGetSideHead(i_this, i);
-        if (bh_p != NULL && (bh_p->field_0x6b0 - player->current.pos).abs() < 2800.0f) {
-            return true;
-        }
-    }
-
-    return false;
+    // Busy while scripted dash plays (not B_WAIT / B_DOWN / etc.).
+    return bh_p->mAction != kAlbwBhActionBAttack1;
 }
 
 static void b_bq_albwForceSideHeadAttack(b_bh_class* bh_p, bool paired) {
@@ -479,15 +676,34 @@ static void b_bq_albwForceSideHeadAttack(b_bh_class* bh_p, bool paired) {
     }
 
     fopAc_ac_c* a_this = (fopAc_ac_c*)bh_p;
+    // Always re-seat on the surface anchor so a downed/deep head still lunges.
+    if (bh_p->mAction == kAlbwBhActionBDown || a_this->current.pos.y < bh_p->field_0x6b0.y - 50.0f) {
+        a_this->current.pos = bh_p->field_0x6b0;
+        a_this->old.pos = a_this->current.pos;
+    }
     bh_p->field_0x6a0 = paired ? 1 : 0;
     bh_p->mAction = kAlbwBhActionBAttack1;
     bh_p->mMode = 0;
+    bh_p->mTimers[0] = 0;
+    bh_p->mTimers[1] = 0;
+    bh_p->field_0x690 = 0.0f;
+    bh_p->field_0x69e = 0;
     a_this->speedF = 0.0f;
+    a_this->health = a_this->health <= 0 ? 1 : a_this->health;
 }
 
 static void b_bq_albwDispatchConductorBeat(b_bq_class* i_this, int beat) {
     b_bh_class* bh0 = b_bq_albwGetSideHead(i_this, 0);
     b_bh_class* bh1 = b_bq_albwGetSideHead(i_this, 1);
+
+    s_albwBqConductorArmed = 0;
+    s_albwBqConductorReforceWait = 20;
+
+    b_bq_albwConductorProbe("DISPATCH beat=%d tentID=[%u,%u] getPtr=[%p,%p] same=%d\n", beat,
+                            (unsigned)i_this->mTentacleIDs[0], (unsigned)i_this->mTentacleIDs[1],
+                            (void*)bh0, (void*)bh1, (int)(bh0 != NULL && bh0 == bh1));
+    b_bq_albwConductorProbeHead("pre", 0, bh0);
+    b_bq_albwConductorProbeHead("pre", 1, bh1);
 
     if (beat == kAlbwBqConductorBeatCount) {
         b_bq_albwForceSideHeadAttack(bh0, true);
@@ -498,22 +714,62 @@ static void b_bq_albwDispatchConductorBeat(b_bq_class* i_this, int beat) {
         b_bq_albwForceSideHeadAttack(bh1, false);
     }
 
+    b_bq_albwConductorProbeHead("postForce", 0, bh0);
+    b_bq_albwConductorProbeHead("postForce", 1, bh1);
+
+    s_albwBqConductorBeatActive = true;
     i_this->field_0x6fe = 0;
+}
+
+static void b_bq_albwConductorNoteArmed(b_bh_class* bh_p, u8 bit) {
+    if (bh_p != NULL && bh_p->mAction == kAlbwBhActionBAttack1) {
+        s_albwBqConductorArmed |= bit;
+    }
 }
 
 static bool b_bq_albwConductorBeatDone(b_bq_class* i_this, int beat) {
     b_bh_class* bh0 = b_bq_albwGetSideHead(i_this, 0);
     b_bh_class* bh1 = b_bq_albwGetSideHead(i_this, 1);
 
+    b_bq_albwConductorNoteArmed(bh0, 1);
+    b_bq_albwConductorNoteArmed(bh1, 2);
+
+    const u8 need = (beat == kAlbwBqConductorBeatCount) ? 3 :
+                    ((beat == 1 || beat == 3) ? 1 : 2);
+    if ((s_albwBqConductorArmed & need) != need) {
+        // One retry after a short wait — do not re-force every frame (resets anim).
+        if (s_albwBqConductorReforceWait > 0) {
+            s_albwBqConductorReforceWait--;
+        } else {
+            b_bq_albwConductorProbe("REFORCE beat=%d armed=%u need=%u\n", beat,
+                                   (unsigned)s_albwBqConductorArmed, (unsigned)need);
+            b_bq_albwConductorProbeHead("reforce", 0, bh0);
+            b_bq_albwConductorProbeHead("reforce", 1, bh1);
+            if ((need & 1) != 0 && (s_albwBqConductorArmed & 1) == 0) {
+                b_bq_albwForceSideHeadAttack(bh0, beat == kAlbwBqConductorBeatCount);
+            }
+            if ((need & 2) != 0 && (s_albwBqConductorArmed & 2) == 0) {
+                b_bq_albwForceSideHeadAttack(bh1, beat == kAlbwBqConductorBeatCount);
+            }
+            s_albwBqConductorReforceWait = 30;
+        }
+        return false;
+    }
+
+    bool done = false;
     if (beat == kAlbwBqConductorBeatCount) {
-        return b_bq_albwSideHeadIdle(bh0) && b_bq_albwSideHeadIdle(bh1);
+        done = b_bq_albwSideHeadIdle(bh0) && b_bq_albwSideHeadIdle(bh1);
+    } else if (beat == 1 || beat == 3) {
+        done = b_bq_albwSideHeadIdle(bh0);
+    } else {
+        done = b_bq_albwSideHeadIdle(bh1);
     }
-
-    if (beat == 1 || beat == 3) {
-        return b_bq_albwSideHeadIdle(bh0);
+    if (done) {
+        b_bq_albwConductorProbe("DONE beat=%d armed=%u\n", beat, (unsigned)s_albwBqConductorArmed);
+        b_bq_albwConductorProbeHead("done", 0, bh0);
+        b_bq_albwConductorProbeHead("done", 1, bh1);
     }
-
-    return b_bq_albwSideHeadIdle(bh1);
+    return done;
 }
 
 static void b_bq_albwPrepareConductor(b_bq_class* i_this) {
@@ -521,19 +777,32 @@ static void b_bq_albwPrepareConductor(b_bq_class* i_this) {
         b_bh_class* bh_p = b_bq_albwGetSideHead(i_this, ti);
         if (bh_p != NULL) {
             fopAc_ac_c* a_this = (fopAc_ac_c*)bh_p;
+            // Surface + idle so L and R both start the barrage visible.
+            a_this->current.pos = bh_p->field_0x6b0;
+            a_this->old.pos = a_this->current.pos;
+            bh_p->mBasePos = bh_p->field_0x6b0;
             bh_p->mAction = kAlbwBhActionBWait;
-            bh_p->mMode = 1;
+            bh_p->mMode = 0;  // mode 0 re-inits WAIT anim
             bh_p->field_0x6a0 = 0;
             bh_p->mTimers[0] = 0;
             bh_p->mTimers[1] = 0;
+            bh_p->field_0x690 = 0.0f;
             a_this->speedF = 0.0f;
         }
     }
 
-    i_this->field_0x1393 = 0;
+    s_albwBqConductorArmed = 0;
+    s_albwBqConductorBeat = 0;
+    s_albwBqConductorBeatActive = false;
+    s_albwBqConductorReforceWait = 0;
     i_this->mTimers[2] = kAlbwBqConductorInitialDelay;
-    i_this->mTimers[3] = 0;
+    i_this->mTimers[1] = kAlbwBqHoldConductorMaxFrames;
     i_this->field_0x6fe = 0;
+
+    b_bq_albwConductorProbe("PREPARE tentID=[%u,%u]\n", (unsigned)i_this->mTentacleIDs[0],
+                            (unsigned)i_this->mTentacleIDs[1]);
+    b_bq_albwConductorProbeHead("prep", 0, b_bq_albwGetSideHead(i_this, 0));
+    b_bq_albwConductorProbeHead("prep", 1, b_bq_albwGetSideHead(i_this, 1));
 }
 
 static void b_bq_albwSnapSideHeadSurfaceAnchors(b_bq_class* i_this) {
@@ -546,30 +815,99 @@ static void b_bq_albwSnapSideHeadSurfaceAnchors(b_bq_class* i_this) {
     }
 }
 
-static bool b_bq_tryAlbwRunawayTest(b_bq_class* i_this) {
+// Body chips (arrow / iron ball): FA+lockout resolved AP × 0.85, cut flinch BCK,
+// no mAction change. Replaces arrow→RUNAWAY and TEMP ANM_PREVIEW look-pass.
+static bool b_bq_tryAlbwBodyChip(b_bq_class* i_this) {
     if (!dAlbwBossRefinement_isEnabled()) {
         return false;
     }
-
-    if (i_this->mAction != ACTION_WAIT || i_this->field_0x6de != 0) {
-        return false;
-    }
-
-    bool isArrow = i_this->mAtInfo.mHitType == HIT_TYPE_ARROW;
-    if (i_this->mAtInfo.mpCollider != NULL &&
-        i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_ARROW))
+    if (i_this->mAction == ACTION_LUNGE || i_this->mAction == ACTION_DAMAGE ||
+        i_this->mAction == ACTION_END)
     {
-        isArrow = true;
-    }
-
-    if (!isArrow) {
         return false;
     }
 
-    i_this->mAction = ACTION_RUNAWAY_TEST;
-    i_this->mMode = 0;
-    i_this->field_0x6de = kAlbwBqRunawaySequenceIframe;
+    cCcD_Obj* hit = i_this->mAtInfo.mpCollider;
+    if (hit == NULL) {
+        return false;
+    }
+
+    const bool isArrow =
+        i_this->mAtInfo.mHitType == HIT_TYPE_ARROW || hit->ChkAtType(AT_TYPE_ARROW);
+    const bool isIronBall = hit->ChkAtType(AT_TYPE_IRON_BALL);
+    if (!isArrow && !isIronBall) {
+        return false;
+    }
+
+    u16 ap = i_this->mAtInfo.mAttackPower;
+    if (ap > 0) {
+        ap = static_cast<u16>(dAlbwHP_applyMult(fpcNm_B_BQ_e, ap));
+    }
+    u32 atType = isArrow ? AT_TYPE_ARROW : AT_TYPE_IRON_BALL;
+    if (ap > 0) {
+        dFocusedArts_applyItemDamageBoost(ap);
+        if (dMeter2_isALBWLocked()) {
+            dAlbwLockout_applyAttackPowerBoost(ap, atType);
+        }
+    }
+
+    int chip = static_cast<int>(ap * 0.85f);
+    if (ap > 0 && chip < 1) {
+        chip = 1;
+    }
+    {
+        int hp = static_cast<int>(i_this->health) - chip;
+        if (hp < 0) {
+            hp = 0;
+        }
+        i_this->health = static_cast<s16>(hp);
+    }
+    dAlbwBoss_diababaUpdatePhase((fopAc_ac_c*)i_this);
+
+    int anm = isArrow ? BCK_BQ_ATTACK_C : BCK_BQ_TESTMOTION;
+    if (dAlbwBoss_diababaTakeChipLookMAlternate()) {
+        anm = BCK_BQ_LOOK_M;
+    }
+    def_se_set(&i_this->mSound, hit, 0x2D, NULL);
+    anm_init(i_this, anm, 3.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+    i_this->mSound.startCreatureVoice(Z2SE_EN_BQ_V_NODAMAGE, -1);
+    i_this->field_0x6de = 10;
     return true;
+}
+
+static void b_bq_anm_preview(b_bq_class* i_this) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    const bool isLunge = s_albwBqPreviewAnmId == BCK_BQ_ATTACK;
+
+    switch (i_this->mMode) {
+    case 0:
+        anm_init(i_this, s_albwBqPreviewAnmId, 3.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+        // Lunge is baked to body forward; vanilla never yaws shape_angle in combat
+        // (only mHeadRot). Snap + track so look-pass can judge aim fix feasibility.
+        if (isLunge) {
+            a_this->shape_angle.y = i_this->mAngleToPlayer;
+            a_this->current.angle.y = i_this->mAngleToPlayer;
+            i_this->field_0x6f6 = 0x800;
+        }
+        i_this->mMode = 1;
+        break;
+    case 1:
+        if (isLunge) {
+            const f32 trackUntil = i_this->mpMorf->getEndFrame() * kAlbwBqLungeTrackFrac;
+            if (i_this->mpMorf->getFrame() < trackUntil) {
+                cLib_addCalcAngleS2(&a_this->shape_angle.y, i_this->mAngleToPlayer, 2, 0x2000);
+                a_this->current.angle.y = a_this->shape_angle.y;
+                i_this->field_0x6f6 = 0x1000;
+            }
+        }
+        if (i_this->mpMorf->isStop()) {
+            anm_init(i_this, BCK_BQ_WAIT01, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+            i_this->mAction = ACTION_WAIT;
+            i_this->mMode = 0;
+            i_this->field_0x6de = 10;
+        }
+        break;
+    }
 }
 #endif
 
@@ -582,6 +920,7 @@ static void damage_check(b_bq_class* i_this) {
     if (i_this->mAction != ACTION_DAMAGE
 #if TARGET_PC
         && i_this->mAction != ACTION_RUNAWAY_TEST
+        && i_this->mAction != ACTION_ANM_PREVIEW
 #endif
     ) {
         if (i_this->mCcSph.ChkTgHit()) {
@@ -589,12 +928,40 @@ static void damage_check(b_bq_class* i_this) {
             at_power_check(&i_this->mAtInfo);
 
 #if TARGET_PC
-            if (b_bq_tryAlbwRunawayTest(i_this)) {
+            // Lunge: bomb may interrupt into hang; ignore other body hits.
+            if (i_this->mAction == ACTION_LUNGE) {
+                if (i_this->mAtInfo.mHitType != 2) {
+                    return;
+                }
+            } else if (b_bq_tryAlbwBodyChip(i_this)) {
                 return;
             }
 #endif
 
             if (i_this->mAtInfo.mHitType == 2) {
+#if TARGET_PC
+                // Boss Refinement: boss-side bomb reception (fixed chip).
+                if (dAlbwBossRefinement_isEnabled()) {
+                    i_this->health -= kAlbwDiababaBombReceiveDamage;
+                    if (i_this->health < 0) {
+                        i_this->health = 0;
+                    }
+                    dAlbwBoss_diababaUpdatePhase((fopAc_ac_c*)i_this);
+
+                    // Phase 2: thrash (RUNAWAY) + poison/siphon → 5-hit → appear → hang.
+                    if (dAlbwBoss_diababaIsLatePhase()) {
+                        dAlbwBoss_diababaSetPendingHangAfterAppear(true);
+                        dAlbwBoss_diababaSetRetaliationPoison(true);
+                        dAlbwBoss_diababaOnPoisonSprayBegin();
+                        i_this->mAction = ACTION_RUNAWAY_TEST;
+                        i_this->mMode = 0;
+                        i_this->field_0x6de = 30;
+                        i_this->mSound.startCreatureVoice(Z2SE_EN_BQ_V_BOMBDAMAGE, -1);
+                        dComIfGs_onOneZoneSwitch(8, -1);
+                        return;
+                    }
+                }
+#endif
                 i_this->mAction = ACTION_DAMAGE;
                 i_this->mMode = 0;
                 i_this->field_0x6de = 30;
@@ -627,7 +994,24 @@ static void damage_check(b_bq_class* i_this) {
         }
 
         if (i_this->mAction == ACTION_DAMAGE) {
-            if (i_this->health <= 0 || daPy_getPlayerActorClass()->getCutCount() >= 4) {
+#if TARGET_PC
+            dAlbwBoss_diababaUpdatePhase((fopAc_ac_c*)i_this);
+#endif
+            // Vanilla: 4-hit *combo* (getCutCount). That resets between spaced swings,
+            // so hang often never closed under Refinement. Count real core hits too.
+            bool endHang = i_this->health <= 0 ||
+                           daPy_getPlayerActorClass()->getCutCount() >= 4;
+#if TARGET_PC
+            if (dAlbwBossRefinement_isEnabled()) {
+                if (i_this->field_0x1392 > 0) {
+                    i_this->field_0x1392--;
+                }
+                if (i_this->field_0x1392 == 0) {
+                    endHang = true;
+                }
+            }
+#endif
+            if (endHang) {
                 i_this->mMode = 20;
                 i_this->field_0x6de = 100;
                 return;
@@ -714,6 +1098,11 @@ static void b_bq_wait(b_bq_class* i_this) {
     case 0:
         anm_init(i_this, BCK_BQ_WAIT01, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
         i_this->mMode = 1;
+#if TARGET_PC
+        if (dAlbwBossRefinement_isEnabled() && i_this->mTimers[4] == 0) {
+            b_bq_albwRollLungeWait(i_this);
+        }
+#endif
         // fallthrough
     case 1:
         if (i_this->mTimers[0] == 0) {
@@ -731,27 +1120,148 @@ static void b_bq_wait(b_bq_class* i_this) {
         break;
     }
 
-    if (i_this->mAnmID == BCK_BQ_NODAMAGE && i_this->mpMorf->isStop()) {
+    if ((i_this->mAnmID == BCK_BQ_NODAMAGE || i_this->mAnmID == BCK_BQ_ATTACK_C ||
+         i_this->mAnmID == BCK_BQ_LOOK_M || i_this->mAnmID == BCK_BQ_TESTMOTION) &&
+        i_this->mpMorf->isStop())
+    {
         anm_init(i_this, BCK_BQ_WAIT01, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
     }
 
     if (i_this->field_0x11fc != 0 && i_this->mTimers[2] == 1) {
+#if TARGET_PC
+        dAlbwBoss_diababaOnPoisonSprayBegin();
+#endif
         i_this->mAction = ACTION_ATTACK;
         i_this->mMode = 0;
+        return;
     }
+
+#if TARGET_PC
+    // Bomb-wait only: lunge re-rolls here; never during poison/hang (those leave WAIT).
+    b_bq_albwTryLungeFromWait(i_this);
+#endif
 }
 
 #if TARGET_PC
-static void b_bq_runaway_test(b_bq_class* i_this) {
+// Shared poison emit (particles + mizu At). Used by upright ATTACK and thrash.
+static void b_bq_albwEmitDokuhaki(b_bq_class* i_this, bool set_dokuhaki, s16 head_rot,
+                                 cXyz& io_aim) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    cXyz mizu_cc_center[4];
+    cXyz cc_center_offset(0.0f, 0.0f, 0.0f);
+    cXyz spCC;
+
+    if (set_dokuhaki) {
+        i_this->mSound.startCreatureVoiceLevel(Z2SE_EN_BQ_V_DOKUHAKI, -1);
+
+        for (int i = 0; i < 4; i++) {
+            static u16 fireno[] = {0x82D6, 0x82D7, 0x82D8, 0x82DF};
+
+            i_this->mMizutamaEmtrIDs[i] = dComIfGp_particle_set(
+                i_this->mMizutamaEmtrIDs[i], fireno[i], &a_this->current.pos, NULL, NULL);
+
+            JPABaseEmitter* emitter = dComIfGp_particle_getEmitter(i_this->mMizutamaEmtrIDs[i]);
+            if (emitter != NULL) {
+                MTXCopy(i_this->mpMorf->getModel()->getAnmMtx(JNT_HEAD), *calc_mtx);
+                cMtx_ZrotM(*calc_mtx, head_rot);
+                emitter->setGlobalRTMatrix(*calc_mtx);
+            }
+        }
+
+        i_this->field_0x1388++;
+        i_this->field_0x1388 &= 15;
+        i_this->field_0x12c8[i_this->field_0x1388] = io_aim;
+        i_this->field_0x12bc = i_this->field_0x12c8[(i_this->field_0x1388 - (ZREG_S(4) + 8)) & 15];
+        i_this->field_0x684.startLevelSound(Z2SE_EN_BQ_DOKUHAKI, 0, -1);
+
+        dBgS_LinChk lin_chk;
+        lin_chk.Set(&i_this->mMizuAtStartPos, &i_this->field_0x12bc, a_this);
+        if (dComIfG_Bgsp().LineCross(&lin_chk)) {
+            io_aim = lin_chk.GetCross();
+            for (int i = 0; i < 2; i++) {
+                static u16 fireno[] = {0x82D4, 0x82D5};
+                i_this->mSmokeEmtrIDs[i] =
+                    dComIfGp_particle_set(i_this->mSmokeEmtrIDs[i], fireno[i], &io_aim, NULL, NULL);
+            }
+            i_this->field_0x1144 = io_aim;
+        }
+
+        spCC = i_this->mMizuAtStartPos - io_aim;
+        i_this->field_0x1138 = io_aim + ((spCC * (i_this->field_0x6c8 & 7)) * 0.05f);
+        for (int i = 0; i < 4; i++) {
+            mizu_cc_center[i] = io_aim + ((spCC * i) * 0.05f);
+        }
+        i_this->mColpatType = 5;
+    } else {
+        cc_center_offset.x += -20000.0f;
+        for (int i = 0; i < 4; i++) {
+            mizu_cc_center[i].set(0.0f, 0.0f, 0.0f);
+        }
+    }
+
+    for (int i = 0; i < 4; i++) {
+        i_this->mCcMizuSph[i].SetC(mizu_cc_center[i] + cc_center_offset);
+        i_this->mCcMizuSph[i].SetR(35.0f);
+        dComIfG_Ccsp()->Set(&i_this->mCcMizuSph[i]);
+    }
+}
+
+static s8 b_bq_runaway_test(b_bq_class* i_this) {
+    s8 set_dokuhaki = false;
+    const bool retaliate = dAlbwBoss_diababaIsRetaliationPoison();
+
+    s16 head_rot = cM_ssin(i_this->mTimers[0] * 1500) * (NREG_F(7) + 1200.0f);
+    cXyz spCC;
+    cXyz spD8;
+    MTXCopy(i_this->mpMorf->getModel()->getAnmMtx(JNT_HEAD), *calc_mtx);
+    cMtx_ZrotM(*calc_mtx, head_rot);
+    spCC.set(0.0f, 0.0f, 0.0f);
+    MtxPosition(&spCC, &i_this->mMizuAtStartPos);
+    // Aim from HEAD joint (same path as particles) — never retarget spheres to Link.
+    const f32 poisonAim = 2800.0f;
+    spCC.set(XREG_F(3) + poisonAim, XREG_F(4) + 500.0f, XREG_F(5));
+    MtxPosition(&spCC, &spD8);
+
     switch (i_this->mMode) {
     case 0:
         b_bq_albwSnapSideHeadSurfaceAnchors(i_this);
-        anm_init(i_this, BCK_BQ_RUNAWAY, kAlbwBqRunawayAnimSpeed, J3DFrameCtrl::EMode_NONE, 1.0f);
-        i_this->mTimers[0] = 0;
+        if (retaliate) {
+            anm_init(i_this, BCK_BQ_RUNAWAY, 3.0f, J3DFrameCtrl::EMode_NONE,
+                     kAlbwBqRetaliationRunawaySpeed);
+            i_this->mTimers[0] = l_HIO.mWaterSprayTime;
+            for (int i = 0; i < 16; i++) {
+                i_this->field_0x12c8[i] = spD8;
+            }
+            i_this->mTimers[1] = 30;
+            if (cM_rndF(1.0f) < 0.5f) {
+                i_this->field_0x138e = 0x500;
+                i_this->field_0x1390 = -0x500;
+            } else {
+                i_this->field_0x138e = -0x500;
+                i_this->field_0x1390 = 0x500;
+            }
+        } else {
+            anm_init(i_this, BCK_BQ_RUNAWAY, kAlbwBqRunawayAnimSpeed, J3DFrameCtrl::EMode_NONE,
+                     1.0f);
+            i_this->mTimers[0] = 0;
+        }
         i_this->mMode = 1;
         break;
     case 1:
-        if (i_this->mpMorf->isStop()) {
+        if (retaliate) {
+            // Thrash + poison for a full spray window; hold last frame if anim ends early.
+            set_dokuhaki = true;
+            if (i_this->mpMorf->isStop()) {
+                i_this->mpMorf->setPlaySpeed(0.0f);
+            }
+            if (i_this->mTimers[0] == 0) {
+                dAlbwBoss_diababaSetRetaliationPoison(false);
+                i_this->field_0x138e = 0;
+                i_this->mMode = 2;
+                i_this->field_0x6fb = kAlbwBqFbEnrageSubmerged;
+                b_bq_albwPrepareConductor(i_this);
+            }
+        } else if (i_this->mpMorf->isStop()) {
             i_this->mMode = 2;
             i_this->field_0x6fb = kAlbwBqFbEnrageSubmerged;
             b_bq_albwPrepareConductor(i_this);
@@ -760,11 +1270,19 @@ static void b_bq_runaway_test(b_bq_class* i_this) {
     case 2:
         i_this->field_0x6fb = kAlbwBqFbEnrageSubmerged;
 
-        if (i_this->mTimers[3] != 0) {
-            if (b_bq_albwConductorBeatDone(i_this, i_this->field_0x1393)) {
-                i_this->mTimers[3] = 0;
+        if (i_this->mTimers[1] == 0) {
+            i_this->field_0x6fb = 0;
+            s_albwBqConductorBeatActive = false;
+            i_this->mMode = 3;
+            anm_init(i_this, BCK_BQ_APPEAR, 1.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+            break;
+        }
 
-                if (i_this->field_0x1393 >= kAlbwBqConductorBeatCount) {
+        if (s_albwBqConductorBeatActive) {
+            if (b_bq_albwConductorBeatDone(i_this, s_albwBqConductorBeat)) {
+                s_albwBqConductorBeatActive = false;
+
+                if (s_albwBqConductorBeat >= kAlbwBqConductorBeatCount) {
                     i_this->field_0x6fb = 0;
                     i_this->mMode = 3;
                     anm_init(i_this, BCK_BQ_APPEAR, 1.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
@@ -779,16 +1297,18 @@ static void b_bq_runaway_test(b_bq_class* i_this) {
             break;
         }
 
-        if (!b_bq_albwConductorPlayerInRange(i_this)) {
-            break;
-        }
-
-        i_this->field_0x1393++;
-        b_bq_albwDispatchConductorBeat(i_this, i_this->field_0x1393);
-        i_this->mTimers[3] = 1;
+        s_albwBqConductorBeat++;
+        b_bq_albwDispatchConductorBeat(i_this, s_albwBqConductorBeat);
         break;
     case 3:
         if (i_this->mpMorf->isStop()) {
+            if (dAlbwBoss_diababaTakePendingHangAfterAppear()) {
+                i_this->mAction = ACTION_DAMAGE;
+                i_this->mMode = 0;
+                i_this->field_0x6de = 30;
+                i_this->field_0x11fc++;
+                return set_dokuhaki;
+            }
             i_this->mAction = ACTION_WAIT;
             i_this->mMode = 0;
             i_this->field_0x6fc = 10;
@@ -796,6 +1316,9 @@ static void b_bq_runaway_test(b_bq_class* i_this) {
         }
         break;
     }
+
+    b_bq_albwEmitDokuhaki(i_this, set_dokuhaki, head_rot, spD8);
+    return set_dokuhaki;
 }
 #endif
 
@@ -808,8 +1331,15 @@ static void b_bq_damage(b_bq_class* i_this) {
         anm_init(i_this, BCK_BQ_BOMBDAMAGE, 3.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
         i_this->mMode = 1;
         i_this->mTimers[0] = 1000;
-        a_this->health = 50;
-        i_this->field_0x1392 = 4;
+#if TARGET_PC
+        // Vanilla: hang opens a fresh 50-HP core pool. Refinement keeps the
+        // continuous bar (bomb already chipped via kAlbwDiababaBombReceiveDamage).
+        if (!dAlbwBossRefinement_isEnabled())
+#endif
+        {
+            a_this->health = 50;
+        }
+        i_this->field_0x1392 = 4;  // remaining core hits (Refinement decrements → hang end)
         // fallthrough
     case 1:
         if (i_this->mpMorf->checkFrame(YREG_F(8) + 113)) {
@@ -829,7 +1359,12 @@ static void b_bq_damage(b_bq_class* i_this) {
 
             if (i_this->mDamageBackCount >= 2) {
                 i_this->onDownFlg();
-                a_this->health = 50;
+#if TARGET_PC
+                if (!dAlbwBossRefinement_isEnabled())
+#endif
+                {
+                    a_this->health = 50;
+                }
             }
 
             Z2GetAudioMgr()->changeBgmStatus(2);
@@ -838,7 +1373,15 @@ static void b_bq_damage(b_bq_class* i_this) {
         if (i_this->mpMorf->isStop()) {
             anm_init(i_this, BCK_BQ_DAMAGEWAIT, 3.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
             i_this->mMode = 2;
-            i_this->mTimers[0] = l_HIO.mChanceTime;
+#if TARGET_PC
+            // Refinement: 15s hard vulnerability window (vanilla chance = 200f).
+            if (dAlbwBossRefinement_isEnabled()) {
+                i_this->mTimers[0] = kAlbwBqHangHardFrames;
+            } else
+#endif
+            {
+                i_this->mTimers[0] = l_HIO.mChanceTime;
+            }
         }
         break;
     case 2:
@@ -898,8 +1441,15 @@ static void b_bq_damage(b_bq_class* i_this) {
             i_this->mDemoMode = 50;
             return;
         }
+        break;
     }
 
+#if TARGET_PC
+    // Refinement: 15s hard cap ends hang vulnerability.
+    if (dAlbwBossRefinement_isEnabled() && i_this->mTimers[0] == 0 && i_this->mMode < 20) {
+        i_this->mMode = 30;
+    } else
+#endif
     if (i_this->mMode < 20 && i_this->mTimers[0] == 0) {
         i_this->mMode = 30;
     }
@@ -910,7 +1460,16 @@ static void b_bq_damage(b_bq_class* i_this) {
         i_this->field_0x6fc = 10;
         i_this->field_0x6f6 = 0;
         i_this->mTimers[0] = 0;
+#if TARGET_PC
+        // Bomb hang arms field_0x11fc; schedule vanilla post-return poison.
+        if (i_this->field_0x11fc != 0) {
+            i_this->mTimers[2] = 80;
+        } else {
+            i_this->mTimers[2] = 0;
+        }
+#else
         i_this->mTimers[2] = 80;
+#endif
         Z2GetAudioMgr()->changeBgmStatus(1);
     }
 
@@ -965,11 +1524,23 @@ static s8 b_bq_attack(b_bq_class* i_this) {
     spCC.set(0.0f, 0.0f, 0.0f);
     MtxPosition(&spCC, &i_this->mMizuAtStartPos);
 
-    spCC.set(XREG_F(3) + 2300.0f, XREG_F(4) + 500.0f, XREG_F(5));
+#if TARGET_PC
+    // Refinement: longer poison aim to cover front-wall safe band (~2800).
+    // Beam end + At spheres stay HEAD-forward (same matrix as the VFX).
+    const f32 poisonAim = dAlbwBossRefinement_isEnabled() ? 2800.0f : 2300.0f;
+#else
+    const f32 poisonAim = 2300.0f;
+#endif
+    spCC.set(XREG_F(3) + poisonAim, XREG_F(4) + 500.0f, XREG_F(5));
     MtxPosition(&spCC, &spD8);
 
     switch (i_this->mMode) {
     case 0:
+#if TARGET_PC
+        if (dAlbwBossRefinement_isEnabled()) {
+            dAlbwBoss_diababaOnPoisonSprayBegin();
+        }
+#endif
         anm_init(i_this, BCK_BQ_ATTACK_A, 10.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
         i_this->mMode = 1;
 
@@ -1166,8 +1737,23 @@ static void action(b_bq_class* i_this) {
         break;
 #if TARGET_PC
     case ACTION_RUNAWAY_TEST:
-        b_bq_runaway_test(i_this);
-        set_head_angle = false;
+        dokuhaki_set = b_bq_runaway_test(i_this);
+        set_head_angle = dAlbwBoss_diababaIsRetaliationPoison();
+        // Mode 1 thrash spray: pause side heads like upright poison (6fb=2).
+        // Mode 2 conductor: submerged script (6fb=3).
+        if (i_this->mMode == 1 && dAlbwBoss_diababaIsRetaliationPoison()) {
+            i_this->field_0x6fb = 2;
+        } else if (i_this->mMode == 2) {
+            i_this->field_0x6fb = kAlbwBqFbEnrageSubmerged;
+        }
+        break;
+    case ACTION_ANM_PREVIEW:
+        b_bq_anm_preview(i_this);
+        set_head_angle = true;
+        break;
+    case ACTION_LUNGE:
+        b_bq_lunge(i_this);
+        set_head_angle = true;
         break;
 #endif
     }
@@ -2436,6 +3022,12 @@ static int daB_BQ_Execute(b_bq_class* i_this) {
         return 1;
     }
 
+#if TARGET_PC
+    if (dAlbwBossRefinement_isEnabled()) {
+        dAlbwBoss_diababaUpdatePhase(a_this);
+    }
+#endif
+
     if (cDmr_SkipInfo != 0) {
         cDmr_SkipInfo--;
     }
@@ -2533,6 +3125,22 @@ static int daB_BQ_Execute(b_bq_class* i_this) {
         sp50.set(20000.0f, -20000.0f, 10000.0f);
         i_this->mCcCoreSph.SetC(sp50);
     }
+
+#if TARGET_PC
+    // Lunge: same body sphere as At (B_BH atp/spl), seated on HEAD so mouth contact hits.
+    if (i_this->mAction == ACTION_LUNGE && !i_this->mpMorf->isStop() &&
+        i_this->mpMorf->getFrame() >= kAlbwBqLungeAtFrameStart)
+    {
+        MTXCopy(model->getAnmMtx(JNT_HEAD), *calc_mtx);
+        sp44.set(0.0f, 0.0f, 80.0f);
+        MtxPosition(&sp44, &sp50);
+        i_this->mCcSph.SetC(sp50);
+        i_this->mCcSph.SetR(YREG_F(13) + kAlbwBqLungeAtRadius);
+        b_bq_albwApplyLungeBodyAt(i_this, true);
+    } else {
+        b_bq_albwApplyLungeBodyAt(i_this, false);
+    }
+#endif
 
     dComIfG_Ccsp()->Set(&i_this->mCcSph);
     dComIfG_Ccsp()->Set(&i_this->mCcCoreSph);
@@ -2761,6 +3369,15 @@ static int daB_BQ_Create(fopAc_ac_c* i_this) {
 
         a_this->attention_info.flags = fopAc_AttnFlag_BATTLE_e;
         a_this->attention_info.distances[fopAc_attn_BATTLE_e] = 0x16;
+
+#if TARGET_PC
+        // Vanilla Create never sets HP (hang assigns 50). Seed a real pool so
+        // Boss Health Bars + Boss HP × have a max before the first bomb; matches
+        // the hang-half convention (50 of ~100).
+        a_this->health = 100;
+        a_this->field_0x560 = 100;
+        dAlbwBoss_diababaResetFightState();
+#endif
 
         static dCcD_SrcSph cc_sph_src = {
             {

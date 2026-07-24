@@ -510,11 +510,39 @@ void dFocusedArts_onStageLoad() {
         return;
     }
 
-    dFocusedArts_resetRuntimeState();
+    // Bank + partial fill persist across stage loads / doors / editor warps.
+    // Only clear in-flight combat windows that cannot survive a transition
+    // (spend sequence, MD forced-wolf, JS lockout, short suppress timers).
+    // Progress still drains via combat rules (damage, HS charge start, spends).
+    s_spendColumn = 0;
+    s_inSpendSequence = false;
+    s_forceNewBaseDamage = false;
+    s_jsFinisherLockoutActive = false;
+    s_backSliceAlbwSuppressFrames = 0;
+    s_maintainStackedFrames = 0;
+    s_gsHurricaneFinisherArmed = false;
+    s_ebGreatSpinAoeFrames = 0;
+    clearMdForcedWolfWindow();
+    s_mdCriticalFinisher = false;
+    logFaEvent("stage load (bank/fill kept)");
+    applyCheatMaxBankIfEnabled();
 }
 
 int dFocusedArts_getBankCount() {
     return s_bankCount;
+}
+
+void dFocusedArts_fillBank() {
+    if (!dFocusedArts_isEnabled() || s_inSpendSequence) {
+        return;
+    }
+    const int maxBank = dFocusedArts_getMaxBank();
+    if (maxBank <= 0 || s_bankCount >= maxBank) {
+        return;
+    }
+    s_bankCount = maxBank;
+    s_fillNumerator = 0;
+    logFaEvent("tutorial dummy fill");
 }
 
 void dFocusedArts_clearOneBankCharge() {

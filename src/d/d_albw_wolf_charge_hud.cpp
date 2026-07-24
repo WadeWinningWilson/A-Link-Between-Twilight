@@ -31,6 +31,7 @@
 #include "d/d_albw_wolf_charge_hud.h"
 #include "d/d_albw_shield.h"
 #include "d/d_albw_wolf_combat.h"
+#include "d/d_albw_wolf_stun.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2.h"
@@ -50,8 +51,9 @@
 static const char* WOLF_ICON_BTI = "tt_wolf_icon_mini64.bti";
 // Native size of the texture; used for iconScale calculation.
 static constexpr f32 WOLF_ICON_NATIVE_SIZE = 64.0f;
-// Maximum charges displayed (matches mWolfChargeCount cap).
-static constexpr u8 WOLF_CHARGE_MAX = 2;
+// Base pip count; live max comes from dAlbwWolfArts_getMaxCharges() (2 or 3).
+static constexpr u8 WOLF_CHARGE_MAX_BASE = 2;
+static constexpr u8 WOLF_CHARGE_MAX_UPGRADE = 3;
 // Alpha for an empty (uncharged) slot — ~30 % opacity.
 static constexpr u8 WOLF_ICON_ALPHA_EMPTY = 77;
 // Alpha for a filled (charged) slot — fully opaque.
@@ -233,7 +235,10 @@ void dAlbwWolfChargeHud_draw() {
     const f32 spacing    = rupeeSize * 1.08f;
     const f32 rowOffsetY = rupeeSize * 1.12f;
 
-    const f32 totalWidth = spacing * (f32)(WOLF_CHARGE_MAX - 1);
+    const u8 maxCharges = dAlbwWolfArts_getMaxCharges();
+    const u8 pipCount =
+        (maxCharges >= WOLF_CHARGE_MAX_UPGRADE) ? WOLF_CHARGE_MAX_UPGRADE : WOLF_CHARGE_MAX_BASE;
+    const f32 totalWidth = spacing * (f32)(pipCount > 0 ? pipCount - 1 : 0);
     f32 posX             = rupeeCenter.x - totalWidth * 0.5f;
     const f32 posY       = rupeeCenter.y - rowOffsetY;
     const f32 halfIcon   = iconSize * 0.5f;
@@ -254,7 +259,7 @@ void dAlbwWolfChargeHud_draw() {
     const f32 pikariScale = g_drawHIO.mSpurIconPikariScale *
                             (rupeeSize / WOLF_ICON_NATIVE_SIZE) * 0.85f;
 
-    for (u8 i = 0; i < WOLF_CHARGE_MAX; i++) {
+    for (u8 i = 0; i < pipCount; i++) {
         const bool filled = i < charges;
 
         if (filled) {

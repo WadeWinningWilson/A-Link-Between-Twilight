@@ -172,6 +172,11 @@ static void e_mb_standby(e_mb_class* i_this) {
                 i_this->mTimers[0] = cM_rndF(100.0f) + 250.0f;
             } else if (bq_p->field_0x6fb == 2) {
                 i_this->mTimers[0] = cM_rndF(30.0f) + 125.0f + 50.0f;
+#if TARGET_PC
+            } else if (bq_p->field_0x6fb == 3) {
+                // Refinement enrage / phase-2 hold conductor — treat like hang wait.
+                i_this->mTimers[0] = cM_rndF(100.0f) + 250.0f;
+#endif
             }
 
             if (i_this->mTimers[0] == 0) {

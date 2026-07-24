@@ -25,9 +25,14 @@ static constexpr int kAlbwSkillScrollPageBufLen = 0x200; // per-page text buffer
 
 enum dAlbwSkillScrollId {
     dAlbwSkillScroll_Meter = 0,
-    dAlbwSkillScroll_FocusedArts1 = 1,
-    dAlbwSkillScroll_FocusedArts2 = 2,
-    dAlbwSkillScroll_FocusedArts3 = 3,
+    dAlbwSkillScroll_AboutItems = 1,
+    dAlbwSkillScroll_Parrying = 2,
+    dAlbwSkillScroll_FocusedArts1 = 3,
+    dAlbwSkillScroll_FocusedArts2 = 4,
+    dAlbwSkillScroll_FocusedArts3 = 5,
+    dAlbwSkillScroll_WolfHowl = 6,
+    dAlbwSkillScroll_MidnaGrasp = 7,
+    dAlbwSkillScroll_WolfCharge = 8,
     dAlbwSkillScroll_Count,
 };
 
@@ -46,10 +51,11 @@ int dAlbwSkillScroll_buildDetailPages(const char* i_body,
                                       char o_pages[][kAlbwSkillScrollPageBufLen],
                                       int i_maxPages);
 
-// True if any ALBW page-2 scroll should appear (meter always; FA when purchased).
+// True if any ALBW page-2 scroll should appear (meter always; mail/FA/wolf when unlocked).
 bool dAlbwSkillScroll_hasAny();
 
-// Ordered list of currently unlocked ALBW scrolls (meter first, then FA tiers).
+// Ordered list of currently unlocked ALBW scrolls (meter, mail tutorials, FA, wolf).
+// May exceed kAlbwSkillScrollPageCap; the skills menu pages ALBW rows in chunks of 7.
 int dAlbwSkillScroll_getCount();
 bool dAlbwSkillScroll_getEntry(int index, dAlbwSkillScrollEntry* out);
 

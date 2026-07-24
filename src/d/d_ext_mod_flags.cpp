@@ -30,6 +30,7 @@
 
 #include "JSystem/J2DGraph/J2DPrint.h"
 #include "JSystem/JUtility/JUTFont.h"
+#include "d/d_albw_potion.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_kankyo.h"
@@ -38,6 +39,7 @@
 #include "dusk/custom_assets.hpp"
 #include "dusk/logging.h"
 #include "dusk/main.h"
+#include "dusk/settings.h"
 #include "f_op/f_op_actor_mng.h"
 #include "d/d_menu_window.h"
 #include "m_Do/m_Do_controller_pad.h"
@@ -519,6 +521,36 @@ void dQe_seedTpBuiltin() {
         desc.flags = dQeFlag_BuiltinSeed;
         if (!claimOnPage(0, desc)) {
             break;
+        }
+    }
+
+    // Soulbound red potion (SLOT_11) is not a "tool" but belongs on the tap wheel
+    // when the Gameplay toggle has granted it.
+    if (dusk::getSettings().game.albwSoulboundRedPotion.getValue() ||
+        dAlbwPotion_isSoulboundRedInSlot(kAlbwPotionSoulboundSlot))
+    {
+        const u8 item = dComIfGs_getItem(kAlbwPotionSoulboundSlot, false);
+        if (item != dItemNo_NONE_e && item != 0xFF) {
+            bool already = false;
+            for (u8 s = 0; s < dQe_kSlotsPerPage; ++s) {
+                const dQeSocketDesc* peek = dQe_peek(0, s);
+                if (peek != NULL && peek->id != 0 &&
+                    (peek->kind == dQeKind_InvSlot_Z || peek->kind == dQeKind_ZSelect) &&
+                    peek->tpInvSlot == kAlbwPotionSoulboundSlot)
+                {
+                    already = true;
+                    break;
+                }
+            }
+            if (!already) {
+                dQeSocketDesc desc{};
+                desc.id = s_qeNextBuiltinId++;
+                desc.kind = dQeKind_InvSlot_Z;
+                desc.tpInvSlot = kAlbwPotionSoulboundSlot;
+                desc.iconItemNo = item;
+                desc.flags = dQeFlag_BuiltinSeed;
+                claimOnPage(0, desc);
+            }
         }
     }
 }

@@ -48,6 +48,9 @@ int  dFocusedArts_getFillDenominator();
 bool dFocusedArts_isSpendReady();
 bool dFocusedArts_hasSpecialFinisherAvailable();
 
+// Fill bank to max (Ordon tutorial scarecrow / practice dummy). No-op if FA off or bank full.
+void dFocusedArts_fillBank();
+
 // Soft-clear one banked charge (e.g. lockout water-bomb consequence). No-op if bank empty.
 void dFocusedArts_clearOneBankCharge();
 

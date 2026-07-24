@@ -19,6 +19,8 @@
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/hurricane_test.h"
 #include "dusk/truetest.hpp"
+#include "dusk/settings.h"
+#include "d/d_albw_potion.h"
 #include "graphics_tuner.hpp"
 #include "m_Do/m_Do_main.h"
 #include "menu_bar.hpp"
@@ -1454,6 +1456,17 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                                ExtraItemSlotMode::Off;
                     },
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.albwSoulboundRedPotion,
+            {
+                .key = "Soulbound Red Potion",
+                .helpText =
+                    "Dedicated red potion bottle in inventory slot 11 (multi-use charges). "
+                    "On = grant the bottle and show it on the Quick Equip / item wheel; "
+                    "Off = clear red from slot 11 (empty bottle). WIP — capacity shop and "
+                    "fill rules still expanding.",
+                .onChange =
+                    [](bool value) { dAlbwPotion_editorSetSoulboundEnabled(value); },
+            });
         // ============================================
         // NEW CODE ENDS HERE
         // ============================================
@@ -1866,6 +1879,52 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Disables the game HUD and all background music.<br/><br/>Useful for recording footage.");
 
         leftPane.add_section("ALBW Visuals");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Link's Cap",
+                .getValue =
+                    [] {
+                        switch (getSettings().game.capWear.getValue()) {
+                            case CapWearMode::None:  return Rml::String("Hair");
+                            case CapWearMode::Green: return Rml::String("Green (Hero's)");
+                            case CapWearMode::Red:   return Rml::String("Red (Magic)");
+                            case CapWearMode::Blue:  return Rml::String("Blue (Zora)");
+                            default:                 return Rml::String("Off");
+                        }
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.capWear;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                const auto opt = [&pane](const char* label, CapWearMode mode) {
+                    pane
+                        .add_button({
+                            .text = label,
+                            .isSelected =
+                                [mode] {
+                                    return getSettings().game.capWear.getValue() == mode;
+                                },
+                        })
+                        .on_pressed([mode] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.capWear.setValue(mode);
+                            config::Save();
+                        });
+                };
+                opt("Off", CapWearMode::Off);
+                opt("Hair", CapWearMode::None);
+                opt("Green (Hero's)", CapWearMode::Green);
+                opt("Red (Magic)", CapWearMode::Red);
+                opt("Blue (Zora)", CapWearMode::Blue);
+                pane.add_rml(
+                    "<br/>Headpiece worn across every outfit.<br/><br/>"
+                    "<b>Off</b>: each outfit keeps its own default hair/hat.<br/>"
+                    "<b>Hair</b>: bald / topknot look on every outfit.<br/>"
+                    "<b>Green / Red / Blue</b>: Hero's, Magic, or Zora headpiece on any base.");
+            });
         leftPane.register_control(
             leftPane.add_select_button({
                 .key = "Parry Icons",

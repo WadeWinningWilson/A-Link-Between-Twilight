@@ -5,7 +5,9 @@
 
 #if TARGET_PC
 
+#include "d/d_albw_mail.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_wolf_stun.h"
 
 namespace {
 
@@ -21,6 +23,28 @@ const dAlbwSkillScrollEntry kMeterScroll = {
     "and even secret techniques. It recovers when you aren't guarding, but "
     "you will also need to focus in when you expend all your energy to get "
     "your meter back to full. A tired hero cannot swing his sword!",
+};
+
+const dAlbwSkillScrollEntry kAboutItemsScroll = {
+    dAlbwSkillScroll_AboutItems,
+    "Mail Scroll",
+    "About Your Items",
+    "About Your Items",
+    "When Link gets tired, never fear, you still have your tools! Each will "
+    "aid you in different ways when you're in need, with many even increasing "
+    "in their power and effectiveness. Be sure to keep an eye on your meter "
+    "to see how it reacts!",
+};
+
+const dAlbwSkillScrollEntry kParryingScroll = {
+    dAlbwSkillScroll_Parrying,
+    "Mail Scroll",
+    "Parrying",
+    "Parrying",
+    "Tired of being smacked around by enemies larger, faster, or more "
+    "powerful than you? That's why any true Hero needs to obtain mastery "
+    "over their shield. Block enemy attacks at the right time, or else your "
+    "shield- or even you- may get damaged!",
 };
 
 const dAlbwSkillScrollEntry kFocusedArtsScrolls[3] = {
@@ -53,6 +77,32 @@ const dAlbwSkillScrollEntry kFocusedArtsScrolls[3] = {
     },
 };
 
+const dAlbwSkillScrollEntry kWolfHowlScroll = {
+    dAlbwSkillScroll_WolfHowl,
+    "Shop Scroll",
+    "Wolf Howl",
+    "Wolf Howl",
+    "The light spirits of Ordona and Farore have bestowed on you a new "
+    "ability! Let your howl ring with more divine power as you learn songs!",
+};
+
+const dAlbwSkillScrollEntry kMidnaGraspScroll = {
+    dAlbwSkillScroll_MidnaGrasp,
+    "Shop Scroll",
+    "Midna's Grasp",
+    "Midna's Grasp",
+    "Grateful for the generosity of the light spirits, Midna now aids in "
+    "battle to protect you on all sides!",
+};
+
+const dAlbwSkillScrollEntry kWolfChargeScroll = {
+    dAlbwSkillScroll_WolfCharge,
+    "Shop Scroll",
+    "Wolf Charge",
+    "Wolf Charge",
+    "Tasty meat from an abandoned town.",
+};
+
 }  // namespace
 
 bool dAlbwSkillScroll_hasAny() {
@@ -61,12 +111,21 @@ bool dAlbwSkillScroll_hasAny() {
 
 int dAlbwSkillScroll_getCount() {
     int count = 1;  // ALBW meter is always the first page-2 entry.
+    if (dAlbwMail_hasTutorialScrolls()) {
+        count += 2;  // About Your Items + Parrying
+    }
     const int faTiers = dFocusedArts_getPurchasedTier();
     if (faTiers > 0) {
         count += faTiers;
-        if (count > kAlbwSkillScrollPageCap) {
-            count = kAlbwSkillScrollPageCap;
-        }
+    }
+    if (dAlbwWolfArts_isHowlUnlocked()) {
+        count++;
+    }
+    if (dAlbwWolfArts_isArmUnlocked()) {
+        count++;
+    }
+    if (dAlbwWolfArts_isChargeUpgradeUnlocked()) {
+        count++;
     }
     return count;
 }
@@ -76,17 +135,45 @@ bool dAlbwSkillScroll_getEntry(int index, dAlbwSkillScrollEntry* out) {
         return false;
     }
 
-    if (index == 0) {
+    int cursor = 0;
+    if (index == cursor++) {
         *out = kMeterScroll;
         return true;
     }
 
-    const int faIndex = index - 1;
-    if (faIndex < 0 || faIndex >= 3) {
-        return false;
+    if (dAlbwMail_hasTutorialScrolls()) {
+        if (index == cursor++) {
+            *out = kAboutItemsScroll;
+            return true;
+        }
+        if (index == cursor++) {
+            *out = kParryingScroll;
+            return true;
+        }
     }
-    *out = kFocusedArtsScrolls[faIndex];
-    return true;
+
+    const int faTiers = dFocusedArts_getPurchasedTier();
+    for (int i = 0; i < faTiers && i < 3; i++) {
+        if (index == cursor++) {
+            *out = kFocusedArtsScrolls[i];
+            return true;
+        }
+    }
+
+    if (dAlbwWolfArts_isHowlUnlocked() && index == cursor++) {
+        *out = kWolfHowlScroll;
+        return true;
+    }
+    if (dAlbwWolfArts_isArmUnlocked() && index == cursor++) {
+        *out = kMidnaGraspScroll;
+        return true;
+    }
+    if (dAlbwWolfArts_isChargeUpgradeUnlocked() && index == cursor++) {
+        *out = kWolfChargeScroll;
+        return true;
+    }
+
+    return false;
 }
 
 bool dAlbwSkillScroll_shouldShowCollectIcon() {

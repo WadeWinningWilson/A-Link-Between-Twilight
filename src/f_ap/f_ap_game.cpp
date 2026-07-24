@@ -31,6 +31,7 @@
 #include <dusk/autosave.h>
 #include "d/d_albw_flurry_rush.h"
 #include "d/d_menu_ring.h"
+#include "d/d_meter2_info.h"
 #include "dusk/action_bindings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/menu_pointer.h"
@@ -818,8 +819,21 @@ static void duskExecute() {
         if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
             auto spinnerActor = (fopAc_ac_c*)dynamic_cast<daAlink_c*>(link)->getSpinnerActor();
             if (spinnerActor) {
+#if TARGET_PC
+                // Lockout spinner perk: +15% on Fast Spinner step and soft cap too.
+                f32 step = 2.f;
+                f32 cap  = 60.f;
+                if (dMeter2_isALBWLocked()) {
+                    step *= 1.15f;
+                    cap *= 1.15f;
+                }
+                if (spinnerActor->speedF < cap) {
+                    spinnerActor->speedF += step;
+                }
+#else
                 if (spinnerActor->speedF < 60.f)
                     spinnerActor->speedF += 2.f;
+#endif
             }
         }
     }

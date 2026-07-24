@@ -11,6 +11,7 @@
 #if TARGET_PC
 #include "d/d_albw_combat.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_lockout.h"
 #include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_shield.h"
 #include "d/d_focused_arts.h"
@@ -882,9 +883,20 @@ BOOL daAlink_c::checkCutHeadState() {
     fopEn_enemy_c* enemy = (fopEn_enemy_c*)mTargetedActor;
 
     if (checkBootsOrArmorHeavy() || enemy == NULL ||
-        !(dComIfGs_isEventBit(dSv_event_flag_c::F_0341) || checkNoResetFlg3(FLG3_TRANING_CUT_HEAD)) ||
-        fopAcM_GetGroup(enemy) != fopAc_ENEMY_e)
+        !(dComIfGs_isEventBit(dSv_event_flag_c::F_0341) || checkNoResetFlg3(FLG3_TRANING_CUT_HEAD)))
     {
+        return FALSE;
+    }
+
+#if TARGET_PC
+    // Ordon scarecrow is NPC-group (not ENEMY) and has no head-lock / helm-punish
+    // credit — still offer Helm Splitter so the tutorial dummy can accept it.
+    if (fopAcM_GetName(enemy) == fpcNm_NPC_KAKASHI_e) {
+        return TRUE;
+    }
+#endif
+
+    if (fopAcM_GetGroup(enemy) != fopAc_ENEMY_e) {
         return FALSE;
     }
 
@@ -1756,8 +1768,13 @@ int daAlink_c::procCutJumpInit(BOOL i_isAirCut) {
     // Block jump sword attacks when meter is exhausted.
     // ============================================
 #if TARGET_PC
-    if (!dMeter2_canALBWSword()) { return 1; }
-    dMeter2_onALBWSword();
+    // Lockout double-claw finisher may jump-slash while the sword lockout gate is closed.
+    if (!dMeter2_canALBWSword() && !dAlbwLockout_isDoubleClawSlashActive()) {
+        return 1;
+    }
+    if (dMeter2_canALBWSword()) {
+        dMeter2_onALBWSword();
+    }
 #endif
     // ============================================
     // NEW CODE ENDS HERE
@@ -1792,6 +1809,9 @@ int daAlink_c::procCutJump() {
     daPy_frameCtrl_c* framectrl = mUnderFrameCtrl;
 
     if (current.angle.y == shape_angle.y && changeCutReverseProc(ANM_CUT_JUMP)) {
+#if TARGET_PC
+        dAlbwLockout_onDoubleClawSlashEnd();
+#endif
         ANGLE_ADD_2(current.angle.y, 0x8000);
         mNormalSpeed = 27.0f;
         dComIfGp_getVibration().StartShock(VIBMODE_S_POWER5, 31, cXyz(0.0f, 1.0f, 0.0f));
@@ -1818,6 +1838,10 @@ int daAlink_c::procCutJump() {
 
 int daAlink_c::procCutJumpLandInit(int param_0) {
     commonProcInit(PROC_CUT_JUMP_LAND);
+#if TARGET_PC
+    // Freeze ends when the slash lands / finishes.
+    dAlbwLockout_onDoubleClawSlashEnd();
+#endif
     checkCutLandDamage();
     setSingleAnimeParam(ANM_CUT_JUMP_LAND, &mpHIO->mCut.mCutJump.m.mLandAnm);
 
@@ -2547,7 +2571,12 @@ int daAlink_c::procCutHeadInit() {
             return 0;
         }
 
-        if (dShield_isParryCombatEnabled() && !dShield_tryBeginHelmSplitter()) {
+        const bool isKakashi =
+            enemy_p != NULL && fopAcM_GetName(enemy_p) == fpcNm_NPC_KAKASHI_e;
+        // Scarecrow has no parry helm-punish window — skip the credit consume.
+        if (dShield_isParryCombatEnabled() && !isKakashi &&
+            !dShield_tryBeginHelmSplitter())
+        {
             return 0;
         }
 
@@ -2565,8 +2594,17 @@ int daAlink_c::procCutHeadInit() {
 
     cXyz sp2C;
     if (enemy_p != NULL) {
-        sp2C = enemy_p->getHeadLockPos() - current.pos;
-        field_0x280c.setData(enemy_p);
+#if TARGET_PC
+        // Kakashi is not fopEn_enemy_c — do not read getHeadLockPos() (wrong layout).
+        if (fopAcM_GetName(enemy_p) == fpcNm_NPC_KAKASHI_e) {
+            sp2C = enemy_p->eyePos - current.pos;
+            field_0x280c.setData(enemy_p);
+        } else
+#endif
+        {
+            sp2C = enemy_p->getHeadLockPos() - current.pos;
+            field_0x280c.setData(enemy_p);
+        }
     } else {
         sp2C.set(cM_ssin(shape_angle.y) * 200.0f, 200.0f, cM_scos(shape_angle.y) * 200.0f);
         field_0x280c.clearData();
