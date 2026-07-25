@@ -4265,8 +4265,19 @@ static void forceLinkGroundReprobe(fopAc_ac_c* player) {
         return;
     }
     daAlink_c* link = (daAlink_c*)player;
+    // №269: room-lane can place Link while door-open left FLAG_WALL_NONE set
+    // (procDoorOpenInit) before procDoorOpen cleared it. WALL_NONE skips
+    // WallCorrect entirely → ChkWallHit never true → ladders/ledges dead
+    // (interior + progressive exterior). Restore the donor clear pair.
+    const u32 before = link->mLinkAcch.GetFlags();
+    link->mLinkAcch.ClrWallNone();
+    link->mLinkAcch.OffLineCheckNone();
     link->mLinkAcch.ClrGroundHit();
     link->mLinkAcch.CrrPos(dComIfG_Bgsp());
+    if ((before & dBgS_Acch::FLAG_WALL_NONE) != 0) {
+        DuskLog.info("[ExtNpcMount] №269 ClrWallNone on place (acchFlags {:#x} → {:#x})",
+                     (unsigned)before, (unsigned)link->mLinkAcch.GetFlags());
+    }
 }
 
 static void clearRoomLaneUnloading(int hostRoom) {
@@ -4891,6 +4902,7 @@ static void pollRoomLaneTransport() {
             spawn.y = refY + 50.0f;
         }
         placeLinkAt(player, spawn);
+        forceLinkGroundReprobe(player);
         if (hostRoom >= 0) {
             roomTxAssignPlayerRoom(player, hostRoom);
             activateWwHostRoom(hostRoom, "room-lane-enter");
@@ -6464,6 +6476,7 @@ void dExtNpcMount_pollBgWarps() {
         }
 
         placeLinkAt(player, spawn);
+        forceLinkGroundReprobe(player);
         // №54-5: Link faces INTO the room (Nintendo PLYR spawn_ry) on interior enter.
         // №56: exit/return override may carry return_ry facing.
         if (s_bgSpawnOverrideValid && s_bgSpawnFacingValid) {

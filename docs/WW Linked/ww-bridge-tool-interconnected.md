@@ -8305,3 +8305,107 @@ receiver `6c5e9cd4e5` **local-only**. Gaps closed:
    not a third loss vector.
 3. Receiver follow-up local commit for Bridge tip/bus/history after `6c5e9cd4e5` (this handoff).
 `extern/aurora` still left dirty on purpose.
+
+---
+
+## §109 WAVE PERIMETER — donor logic backs the user; our kill disc is 5-7× too large (Housing research, 2026-07-23)
+
+User: waves should NOT play at the immediate shore, but ARE visible "not too far from the lookout,
+in the general perimeter." **Donor code confirms this is WW's exact design — a visible RING, not
+absence.** Full spatial law, verified:
+
+### WW suppresses waves in TWO independent tiers (different scales, different jobs)
+
+**Tier 1 — flatInter (island-proximity gradient, LARGE scale):** `CalcFlatInterTarget`
+(`d_a_sea.cpp:247`) over a **100,000-unit grid** (`calcMinMax: v*100000-450000`). A calm cell
+(wave_max=0, Outset's) returns flatInter=0; open sea far from any calm cell = 1.0; ramps 0→1 over
+**12800 units** past the calm-cell edge. `drawWave` draws when **flatInter < 1.0**, suppresses at
+`>= 1.0`. **Consequence (counterintuitive but verified twice — Housing + Engine §101): the whitecap
+PANES are an ISLAND-PROXIMITY effect — they cluster in the calm water AROUND islands and vanish in
+far open sea.** So "visible near the lookout" is literally correct: the panes' home is the island
+perimeter.
+
+**Tier 2 — mpWaveInfl (immediate-shore kill, TINY scale):** `d_kankyo_rain.cpp:1440-1462` — per
+ky_tag1 influence sphere: inside `innerRadius` → `mStrengthEnv=0` (dead); between inner/outer →
+linear ramp. **Donor Outset ky_tag1 radii: inner≈5000, outer≈5500** — a ~500-unit feather right at
+the waterline. THIS is what silences the immediate beach, nothing else.
+
+**Net donor picture:** dead zone only ~5000 off the shoreline (tier 2); full panes everywhere else
+in the calm-cell perimeter (tier 1), naturally bounded to the spawn ring — `mWaveSpawnDist/Radius =
+20000/22000` from the camera. **A visible band from ~5k off the beach out to ~22k — "not too far
+from the lookout." Exactly the user's memory.**
+
+### THE BUG (backed): our hosted kill disc has no donor basis and swallows the whole ring
+
+`wave_calm.ini` carries a second infl the donor never had:
+`infl = -201000,0,303450, 28000,36000` — a **36,000-unit "land-footprint" kill disc**. That is
+**~6.5× the donor's 5500 shore radius** and larger than the entire 22000 spawn ring. From the
+lookout, every spawnable pane falls inside it → zero waves near the island. The over-compensation
+came from "one donor tag can't cover the remounted island" (§101 comment) — true concern, wrong
+magnitude: the fix scaled the *beach* kill up to *island* size instead of adding coverage at
+*beach* scale.
+
+### Fix — donor-faithful, data-only (user-tunable in the ini, no rebuild)
+
+Replace the single island-sized disc with the donor's TWO-tier shape:
+1. keep `calm_box` (the 100k calm-cell analog — tier 1, correct as-is);
+2. the land-footprint infl should sit at **donor tier-2 scale (~inner 5000 / outer 6000)** and be
+   *placed/repeated along the actual shoreline*, not one 36000 disc over the whole island. Seed:
+   drop the big disc to `...,5000,6000` and, if beach coverage gaps appear, add a few small infl
+   lines tracing the coast (the ini already supports multiple `infl=`).
+Acceptance: panes reappear in the perimeter (~5k-22k from Link), still dead at the immediate
+waterline. User eyes (№31-B).
+
+### Lanes
+- **Engine/User:** the `wave_calm.ini` radii edit above (data-only). Re-tune per eyes.
+- **№31-C ASK (still open from §105):** the spawn-stats log line — this diagnosis worked off static
+  config again; the next radius tune should be measured (`spawned/killed_infl/killed_flat`), not
+  eyeballed.
+- **Housing:** research complete; the donor two-tier law is now documented for every future island.
+
+## §110 WAVE ASYMMETRY = §109 fingerprint; sea-facing dead zone explained → ENGINE (Housing, 2026-07-23)
+
+User screenshot: panes back in the water, BUT visible only behind/sides of Outset, dead in FRONT
+(sea-facing). **Confirmed as the §109 oversized-disc fingerprint, not a new bug** — geometry:
+the 36000 land-disc is centered Z=303450, the lookout Z=321000, so the disc sits ~17550 units
+*toward the sea* from where Link stands. Facing the sea (−Z) plunges into the disc middle (killed);
+back/sides sit at the disc's rear edge so the 22000 spawn ring pokes out (visible). A big off-center
+disc necessarily makes a sea-facing dead zone — the worst direction.
+
+**Routing: ENGINE** (user ferrying). Fix unchanged from §109 (donor two-tier: keep calm_box; replace
+the 36000 disc with donor-scale ~5000/6000 infls TRACED along the coastline — a single disc always
+produces this directional artifact, coast-following infls cannot). **Refinements this adds:**
+(1) acceptance criterion = panes visible when Link FACES THE SEA from the lookout (the gameplay
+view, currently the dead one); (2) the §105 spawn-stats log is now thrice-warranted — turn the next
+radii tune into measurement. Housing: research closed; nothing changed by the asymmetry except
+sharper acceptance.
+
+## §110b CORRECTION — no fix applied; panes behind/sides were always there (Housing, 2026-07-23)
+
+§110 wrongly framed the screenshot as "panes back in the water" (progress). **Retracted:** user
+clarifies NO change was made — the behind/sides panes were always present, just unnoticed; the
+sea-facing dead zone is the ORIGINAL bug, unfixed. **Engine has NOT added the §105 spawn-stats log
+either.** Net: both §109 items remain fully OPEN and undelivered —
+(1) wave_calm.ini disc → donor-scale coast-traced infls;
+(2) the spawn-stats log line.
+The §110 GEOMETRY still holds (it described the current unfixed state correctly — disc off-center
+toward the sea → front dead). Only the "progress" framing was wrong. Both items → Engine, nothing
+done yet.
+
+## §111 §109 FIX VERIFIED at the data layer → user playtest (Housing, 2026-07-23)
+
+Engine's wave_calm.ini rewrite inspected before playtest:
+- **Geometry PASS:** the 36000 off-center disc is GONE; replaced by 8 coast-traced infls
+  (donor-scale, max outer radius **6000**) + donor ky_tag1 (5000/5500); calm_box unchanged.
+  Verified: **no single infl exceeds donor tier-2 scale → the §110 off-center directional dead
+  zone is structurally impossible now** (no big disc to sit off-center). The 8 hulls ring the
+  island centroid (~-199000, 318000) — coast-tracing as specced.
+- **Covenant: clean.** 1 "Outset" hit is a COMMENT in a mod-folder file (line 22) — the mod folder
+  is the covenant-correct home for WW names; not an exe/repo leak. №67 unaffected.
+- **§105 spawn-stats: LIVE** (`[WwFoam] §105 spawn-stats spawned/killed_by_infl/killed_by_flat`
+  every 90f) — the next tune is now measurable, third-time ask CLOSED.
+
+**USER PLAYTEST (acceptance):** lookout, FACE THE SEA — panes should fill the ~5k–22k band in
+FRONT (the previously-dead direction), still dead at the immediate waterline. If a gap remains,
+the spawn-stats line now says whether panes are being killed_by_infl (radii still too dense/large)
+or simply not spawning — measured, not guessed. Housing: verification complete; ball is the user's.

@@ -483,8 +483,13 @@ static int s_albwBqPreviewAnmId = BCK_BQ_WAIT01;
 
 // Lunge damage: reuse body mCcSph At (B_BH atp/spl) — no extra HEAD spheres.
 static constexpr f32 kAlbwBqLungeAtFrameStart = 8.0f;
-// Mouth At radius during lunge only (was 240; +20%).
-static constexpr f32 kAlbwBqLungeAtRadius = 288.0f;
+// Mouth At radius during lunge only (331.2 + 2%).
+static constexpr f32 kAlbwBqLungeAtRadius = 337.824f;
+// Poison spray sway amplitude (vanilla ±0x500). Smaller = tighter beam.
+static constexpr s16 kAlbwBqPoisonSwayAmp = 0x100;
+// Poison head track vs vanilla /3: +5% toward Link (105/300 vs 100/300).
+static constexpr s32 kAlbwBqPoisonHeadTrackNum = 105;
+static constexpr s32 kAlbwBqPoisonHeadTrackDen = 300;
 // Track yaw for this fraction of the attack anim (near-perfect aim).
 static constexpr f32 kAlbwBqLungeTrackFrac = 0.9f;
 // Conductor soft cap if a beat stalls; hang also has a 15s hard vulnerability timer.
@@ -624,21 +629,19 @@ static void b_bq_lunge(b_bq_class* i_this) {
     switch (i_this->mMode) {
     case 0:
         anm_init(i_this, BCK_BQ_ATTACK, 3.0f, J3DFrameCtrl::EMode_NONE, kAlbwBqLungeAnimSpeed);
+        // Face Link once at commit; continuous aim is HEAD-only (no body yaw track / sway).
         a_this->shape_angle.y = i_this->mAngleToPlayer;
         a_this->current.angle.y = i_this->mAngleToPlayer;
+        i_this->field_0x138e = 0;
+        i_this->field_0x1390 = 0;
+        i_this->field_0x138c = 0;
         i_this->field_0x6f6 = 0x1000;
+        dAlbwBoss_diababaOnPoisonSprayBegin();  // one siphon window for this lunge
         i_this->mMode = 1;
         break;
     case 1: {
-        const f32 frame = i_this->mpMorf->getFrame();
-        const f32 end = i_this->mpMorf->getEndFrame();
-        const f32 trackUntil = end * kAlbwBqLungeTrackFrac;
-        // Near-perfect track for ~90% of the attack window, then lock.
-        if (frame < trackUntil) {
-            cLib_addCalcAngleS2(&a_this->shape_angle.y, i_this->mAngleToPlayer, 2, 0x2000);
-            a_this->current.angle.y = a_this->shape_angle.y;
-            i_this->field_0x6f6 = 0x1000;
-        }
+        // Keep head-step hot so action() can aim mHeadRot at Link.
+        i_this->field_0x6f6 = 0x1000;
         if (i_this->mpMorf->isStop()) {
             b_bq_albwApplyLungeBodyAt(i_this, false);
             anm_init(i_this, BCK_BQ_WAIT01, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
@@ -1234,11 +1237,11 @@ static s8 b_bq_runaway_test(b_bq_class* i_this) {
             }
             i_this->mTimers[1] = 30;
             if (cM_rndF(1.0f) < 0.5f) {
-                i_this->field_0x138e = 0x500;
-                i_this->field_0x1390 = -0x500;
+                i_this->field_0x138e = kAlbwBqPoisonSwayAmp;
+                i_this->field_0x1390 = -kAlbwBqPoisonSwayAmp;
             } else {
-                i_this->field_0x138e = -0x500;
-                i_this->field_0x1390 = 0x500;
+                i_this->field_0x138e = -kAlbwBqPoisonSwayAmp;
+                i_this->field_0x1390 = kAlbwBqPoisonSwayAmp;
             }
         } else {
             anm_init(i_this, BCK_BQ_RUNAWAY, kAlbwBqRunawayAnimSpeed, J3DFrameCtrl::EMode_NONE,
@@ -1545,11 +1548,21 @@ static s8 b_bq_attack(b_bq_class* i_this) {
         i_this->mMode = 1;
 
         if (cM_rndF(1.0f) < 0.5f) {
-            i_this->field_0x138e = 0x500;
-            i_this->field_0x1390 = -0x500;
+#if TARGET_PC
+            const s16 sway = dAlbwBossRefinement_isEnabled() ? kAlbwBqPoisonSwayAmp : 0x500;
+#else
+            const s16 sway = 0x500;
+#endif
+            i_this->field_0x138e = sway;
+            i_this->field_0x1390 = -sway;
         } else {
-            i_this->field_0x138e = -0x500;
-            i_this->field_0x1390 = 0x500;
+#if TARGET_PC
+            const s16 sway = dAlbwBossRefinement_isEnabled() ? kAlbwBqPoisonSwayAmp : 0x500;
+#else
+            const s16 sway = 0x500;
+#endif
+            i_this->field_0x138e = -sway;
+            i_this->field_0x1390 = sway;
         }
         break;
     case 1:
@@ -1772,9 +1785,37 @@ static void action(b_bq_class* i_this) {
             sp40 = monkey_bomb->current.pos - a_this->current.pos;
             head_rot_target = cM_atan2s(sp40.x, sp40.z) - a_this->shape_angle.y;
             head_rot_target /= 6;
-        } else {
-            head_rot_target =
-                ((i_this->mAngleToPlayer + i_this->field_0x138c) - a_this->shape_angle.y) / 3;
+        } else
+#if TARGET_PC
+            if (i_this->mAction == ACTION_LUNGE) {
+            // Lunge: no spray sway — head joint aims straight at Link.
+            head_rot_target = i_this->mAngleToPlayer - a_this->shape_angle.y;
+            if (head_rot_target > 0x2000) {
+                head_rot_target = 0x2000;
+            } else if (head_rot_target < -0x2000) {
+                head_rot_target = -0x2000;
+            }
+            i_this->field_0x6f6 = 0x1000;
+        } else
+#endif
+        {
+            s32 aim =
+                (i_this->mAngleToPlayer + i_this->field_0x138c) - a_this->shape_angle.y;
+#if TARGET_PC
+            // Poison attack only: +5% stronger head track (HEAD joint → beam stays synced).
+            const bool poisonAimHead =
+                dAlbwBossRefinement_isEnabled() &&
+                (i_this->mAction == ACTION_ATTACK ||
+                 (i_this->mAction == ACTION_RUNAWAY_TEST &&
+                  dAlbwBoss_diababaIsRetaliationPoison()));
+            if (poisonAimHead) {
+                head_rot_target =
+                    (s16)((aim * kAlbwBqPoisonHeadTrackNum) / kAlbwBqPoisonHeadTrackDen);
+            } else
+#endif
+            {
+                head_rot_target = (s16)(aim / 3);
+            }
 
             if (head_rot_target > 3500) {
                 head_rot_target = 3500;

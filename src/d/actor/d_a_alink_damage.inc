@@ -816,14 +816,16 @@ BOOL daAlink_c::checkDamageAction() {
                     }
                 }
             }
-            // Diababa poison siphon (Boss Refinement): heal boss by % of Link
-            // max lost. Only when life damage remains after armor/parry paths.
-            if (dmg > 0 && tghit_ac_name == fpcNm_B_BQ_e && tghit_ac != NULL) {
-                b_bq_class* bq = (b_bq_class*)tghit_ac;
-                // ACTION_ATTACK == 2, or phase-2 thrash spray on RUNAWAY.
-                if (bq->mAction == 2 || dAlbwBoss_diababaIsRetaliationPoison()) {
-                    dAlbwBoss_diababaOnPoisonDamage(dmg);
-                }
+            // Diababa siphon (Boss Refinement): heal boss by % of Link max lost.
+            // Poison spray, retaliation thrash, or middle-head lunge.
+            if (dmg > 0 && tghit_ac_name == fpcNm_B_BQ_e && tghit_ac != NULL &&
+                dAlbwBoss_diababaHitShouldSiphon(tghit_ac))
+            {
+                dAlbwBoss_diababaOnPoisonDamage(dmg);
+            }
+            // Side heads: flat 3% of Diababa max HP per damaging hit.
+            if (dmg > 0 && tghit_ac_name == fpcNm_B_BH_e) {
+                dAlbwBoss_diababaOnSideHeadDamage();
             }
             // ============================================
             // NEW CODE ENDS HERE

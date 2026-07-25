@@ -718,11 +718,31 @@ inline void make_prm_warp_hole(u32* o_params, u8 prm1, u8 prm2, u8 prm3) {
 
 fopAc_ac_c* dComIfGp_getPlayer(int);
 
+#if TARGET_PC
+// Declared in d_albw_lockout.h; keep forward decls here to avoid a header cycle.
+bool dAlbwLockout_queryRivalAimAngleY(const fopAc_ac_c* i_actor, s16* o_angle);
+bool dAlbwLockout_queryRivalAimAngleX(const fopAc_ac_c* i_actor, s16* o_angle);
+bool dAlbwLockout_queryRivalAimDistanceXZ(const fopAc_ac_c* i_actor, f32* o_dist);
+bool dAlbwLockout_queryRivalAimDistance(const fopAc_ac_c* i_actor, f32* o_dist);
+#endif
+
 inline s16 fopAcM_searchPlayerAngleY(const fopAc_ac_c* actor) {
+#if TARGET_PC
+    s16 rivalAngle;
+    if (dAlbwLockout_queryRivalAimAngleY(actor, &rivalAngle)) {
+        return rivalAngle;
+    }
+#endif
     return fopAcM_searchActorAngleY(actor, dComIfGp_getPlayer(0));
 }
 
 inline s16 fopAcM_searchPlayerAngleX(const fopAc_ac_c* actor) {
+#if TARGET_PC
+    s16 rivalAngle;
+    if (dAlbwLockout_queryRivalAimAngleX(actor, &rivalAngle)) {
+        return rivalAngle;
+    }
+#endif
     return fopAcM_searchActorAngleX(actor, dComIfGp_getPlayer(0));
 }
 
@@ -731,14 +751,32 @@ inline f32 fopAcM_searchPlayerDistanceY(const fopAc_ac_c* actor) {
 }
 
 inline f32 fopAcM_searchPlayerDistanceXZ2(const fopAc_ac_c* actor) {
+#if TARGET_PC
+    f32 rivalDist;
+    if (dAlbwLockout_queryRivalAimDistanceXZ(actor, &rivalDist)) {
+        return rivalDist * rivalDist;
+    }
+#endif
     return fopAcM_searchActorDistanceXZ2(actor, dComIfGp_getPlayer(0));
 }
 
 inline f32 fopAcM_searchPlayerDistanceXZ(const fopAc_ac_c* actor) {
+#if TARGET_PC
+    f32 rivalDist;
+    if (dAlbwLockout_queryRivalAimDistanceXZ(actor, &rivalDist)) {
+        return rivalDist;
+    }
+#endif
     return fopAcM_searchActorDistanceXZ(actor, dComIfGp_getPlayer(0));
 }
 
 inline f32 fopAcM_searchPlayerDistance(const fopAc_ac_c* actor) {
+#if TARGET_PC
+    f32 rivalDist;
+    if (dAlbwLockout_queryRivalAimDistance(actor, &rivalDist)) {
+        return rivalDist;
+    }
+#endif
     return fopAcM_searchActorDistance(actor, dComIfGp_getPlayer(0));
 }
 

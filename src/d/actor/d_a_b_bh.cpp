@@ -1516,7 +1516,15 @@ static int daB_BH_Execute(b_bh_class* i_this) {
     MtxPosition(&sp30, &sp24);
 
     i_this->mCcSph.SetC(sp24);
+#if TARGET_PC
+    f32 atR = (100.0f + YREG_F(3)) * l_HIO.model_size;
+    if (dAlbwBossRefinement_isEnabled()) {
+        atR *= 1.02f;  // +2% head At sphere
+    }
+    i_this->mCcSph.SetR(atR);
+#else
     i_this->mCcSph.SetR((100.0f + YREG_F(3)) * l_HIO.model_size);
+#endif
 
     if (i_this->field_0x688 > 1000.0f && dComIfGp_checkPlayerStatus0(0, 0x80000)) {
         i_this->mTgSph.SetR(2.5f * ((100.0f + YREG_F(3)) * l_HIO.model_size));

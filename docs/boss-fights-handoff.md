@@ -151,7 +151,7 @@ _Everything below the banner — refined-fight design contract, HP bar, egg fix,
 
 ## Fyrus — research only (not refined yet)
 
-> **📖 Preliminary orphan-BCK pass:** **[Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md)**. Actor `E_FM` / arc `E_fm`. No Refinement fight hooks yet.
+> **📖 Preliminary orphan-BCK + Goron Golem cameo research:** **[Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md)** (§6 = `B_GO`/`B_GOS`). Actor `E_FM` / arc `E_fm`. No Refinement fight hooks yet.
 
 ---
 

@@ -16,7 +16,14 @@
 #include "f_op/f_op_msg_mng.h"
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include "d/actor/d_a_alink.h"
+#include "d/d_albw_boss.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_item_data.h"
 #endif
 
 class daE_FM_HIO_c : public JORReflexible {
@@ -160,6 +167,9 @@ enum daE_FM_ACTION {
     ACTION_A_DOWN,
     ACTION_START,
     ACTION_END,
+#if TARGET_PC
+    ACTION_ANM_PREVIEW,  // TEMP: orphan BCK look-pass (revert after pick)
+#endif
 };
 
 enum daE_FM_TexAnm {
@@ -335,6 +345,166 @@ static void anm_init(e_fm_class* i_this, int i_anm, f32 i_morf, u8 i_mode, f32 i
     i_this->mpFmModelMorf->setAnm((J3DAnmTransform *)dComIfG_getObjectRes("E_fm", i_anm), i_mode, i_morf, i_speed, 0.0f, -1.0f, NULL);
     i_this->mAnm = i_anm;
 }
+
+#if TARGET_PC
+// TEMP orphan look-pass — which BCK ACTION_ANM_PREVIEW should play.
+static int s_albwFmPreviewAnmId = BCK_FM_CHANCE;
+
+// Body CcSph ships with Tg type 0 (At-only). Refinement look-pass opens
+// projectile Tg so bow / claw / boom / sling can fire orphan BCKs.
+static const u32 kAlbwFmLookPassTg =
+    AT_TYPE_ARROW | AT_TYPE_HOOKSHOT | AT_TYPE_BOOMERANG | AT_TYPE_SLINGSHOT;
+
+// Tg SPrm must be 0x3 (Set + grp bit). OnTgSetBit alone leaves GetGrp()==0
+// so projectile At never matches — first look-pass pass was dead on arrival.
+// Body fire At also hits arrow Tg (burns shots); mute At→Tg info while open.
+static void e_fm_albwLookPassApplyBodyTg(e_fm_class* i_this, bool i_enable) {
+    for (int i = 0; i < 8; i++) {
+        if (i_enable) {
+            i_this->mCcSph[i].SetTgType(kAlbwFmLookPassTg);
+            i_this->mCcSph[i].SetTgSPrm(0x3);
+            i_this->mCcSph[i].OnTgNoHitMark();
+            i_this->mCcSph[i].OnAtNoTgHitInfSet();
+        } else {
+            i_this->mCcSph[i].SetTgType(0);
+            i_this->mCcSph[i].SetTgSPrm(0);
+            i_this->mCcSph[i].OffAtNoTgHitInfSet();
+        }
+    }
+}
+
+static bool e_fm_albwLookPassWantTg(e_fm_class* i_this) {
+    return dAlbwBossRefinement_isEnabled() && i_this->mAction != ACTION_ANM_PREVIEW &&
+           i_this->mAction != ACTION_START && i_this->mAction != ACTION_END;
+}
+
+static void e_fm_albwLookPassProbe(const char* fmt, ...) {
+    if (!dAlbwBossRefinement_isEnabled()) {
+        return;
+    }
+    static bool sResetDone = false;
+    char path[512];
+    path[0] = '\0';
+    const char* user = getenv("USERPROFILE");
+    if (user != NULL && user[0] != '\0') {
+        snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_fyrus_lookpass_debug.txt", user);
+    } else {
+        strncpy(path, "albw_fyrus_lookpass_debug.txt", sizeof(path) - 1);
+        path[sizeof(path) - 1] = '\0';
+    }
+    FILE* fp = fopen(path, sResetDone ? "a" : "w");
+    if (fp == NULL) {
+        fp = fopen("albw_fyrus_lookpass_debug.txt", sResetDone ? "a" : "w");
+    }
+    if (fp == NULL) {
+        return;
+    }
+    if (!sResetDone) {
+        sResetDone = true;
+        fprintf(fp, "--- Fyrus look-pass probe (Boss Refinement) ---\n");
+    }
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(fp, fmt, args);
+    va_end(args);
+    fclose(fp);
+}
+
+static void e_fm_anm_preview(e_fm_class* i_this) {
+    switch (i_this->mMode) {
+    case 0:
+        anm_init(i_this, s_albwFmPreviewAnmId, 3.0f, 0, 1.0f);
+        e_fm_albwLookPassProbe("preview start anm=0x%X\n", s_albwFmPreviewAnmId);
+        i_this->mMode = 1;
+        break;
+    case 1:
+        if (i_this->mpFmModelMorf->isStop()) {
+            anm_init(i_this, BCK_FM_WAIT01, 10.0f, 2, 1.0f);
+            i_this->mAction = ACTION_NORMAL;
+            i_this->mMode = 0;
+            i_this->mTimers[0] = 40;
+            i_this->mDamageInvulnerabilityTimer = 10;
+        }
+        break;
+    }
+
+    i_this->speedF = 0.0f;
+}
+
+static int e_fm_albwLookPassAnmFromHit(cCcD_Obj* hit) {
+    if (hit == NULL) {
+        return -1;
+    }
+    if (hit->ChkAtType(AT_TYPE_ARROW)) {
+        return BCK_FM_CHANCE;
+    }
+    if (hit->ChkAtType(AT_TYPE_HOOKSHOT)) {
+        daAlink_c* link = daAlink_getAlinkActorClass();
+        const bool dblClaw = link != NULL && link->mEquipItem == dItemNo_W_HOOKSHOT_e;
+        return dblClaw ? BCK_FM_BREAKCHAINR : BCK_FM_BREAKCHAINL;
+    }
+    if (hit->ChkAtType(AT_TYPE_BOOMERANG)) {
+        return BCK_FM_DAMAGE_L;
+    }
+    if (hit->ChkAtType(AT_TYPE_SLINGSHOT)) {
+        return BCK_FM_DAMAGE_R;
+    }
+    return -1;
+}
+
+// Map look-pass tools → orphan BCKs (no HP / no fight state change).
+// Not gated on mDamageInvulnerabilityTimer — body Tg grp / fire At were the blockers.
+static bool e_fm_tryAlbwAnmPreview(e_fm_class* i_this) {
+    if (!dAlbwBossRefinement_isEnabled()) {
+        return false;
+    }
+    if (i_this->mAction == ACTION_ANM_PREVIEW || i_this->mAction == ACTION_START ||
+        i_this->mAction == ACTION_END || i_this->mAction == ACTION_DOWN ||
+        i_this->mAction == ACTION_A_DOWN)
+    {
+        return false;
+    }
+
+    cCcD_Obj* hit = NULL;
+    int hitSph = -1;
+    for (int i = 0; i < 8; i++) {
+        if (i_this->mCcSph[i].ChkTgHit()) {
+            hit = i_this->mCcSph[i].GetTgHitObj();
+            hitSph = i;
+            break;
+        }
+    }
+    if (hit == NULL && i_this->mCoreSph.ChkTgHit()) {
+        hit = i_this->mCoreSph.GetTgHitObj();
+        hitSph = 100;
+    }
+    if (hit == NULL) {
+        return false;
+    }
+
+    const int anm = e_fm_albwLookPassAnmFromHit(hit);
+    if (anm < 0) {
+        e_fm_albwLookPassProbe("tg hit sph=%d atType=0x%X (ignored)\n", hitSph,
+                               (u32)hit->GetAtType());
+        return false;
+    }
+
+    e_fm_albwLookPassProbe("LOOKPASS sph=%d atType=0x%X -> anm=0x%X\n", hitSph,
+                           (u32)hit->GetAtType(), anm);
+
+    s_albwFmPreviewAnmId = anm;
+    i_this->mAction = ACTION_ANM_PREVIEW;
+    i_this->mMode = 0;
+    i_this->mDamageInvulnerabilityTimer = 20;
+    i_this->speedF = 0.0f;
+
+    for (int i = 0; i < 8; i++) {
+        i_this->mCcSph[i].ClrTgHit();
+    }
+    i_this->mCoreSph.ClrTgHit();
+    return true;
+}
+#endif
 
 static int nodeCallBack(J3DJoint* i_joint, int param_1) {
     if (param_1 == 0) {
@@ -2138,6 +2308,14 @@ static void damage_check(e_fm_class* i_this) {
     i_this->field_0xa24.Move();
     i_this->field_0xa60.Move();
 
+#if TARGET_PC
+    // Look-pass before invuln gate — projectiles must register even if a short
+    // damage window is open (body Tg grp / fire At were the real blockers).
+    if (e_fm_tryAlbwAnmPreview(i_this)) {
+        return;
+    }
+#endif
+
     if (i_this->mDamageInvulnerabilityTimer == 0) {
         if (i_this->mCoreSph.ChkTgHit()) {
             i_this->mDamageInvulnerabilityTimer = 6;
@@ -2664,6 +2842,12 @@ static void action(e_fm_class* i_this) {
         bossroom_wait_on = FALSE;
         set_look_pos = FALSE;
         break;
+#if TARGET_PC
+    case ACTION_ANM_PREVIEW:
+        e_fm_anm_preview(i_this);
+        i_this->field_0x1b07c = 0;
+        break;
+#endif
     }
 
     cLib_addCalcAngleS2(&actor->shape_angle.y, actor->current.angle.y, 2, 0x1000);
@@ -3051,6 +3235,11 @@ static int daE_FM_Execute(e_fm_class* i_this) {
     cXyz sp10C(-20000.0f, 20000.0f, 20000.0f);
     i_this->field_0x1aff0 = 0;
 
+#if TARGET_PC
+    // Apply Tg before Ccsp()->Set so this frame's registration has grp bits.
+    e_fm_albwLookPassApplyBodyTg(i_this, e_fm_albwLookPassWantTg(i_this));
+#endif
+
     MTXCopy(model->getAnmMtx(3), *calc_mtx);
     sp130.set(20.0f, 0.0f, 0.0f);
     MtxPosition(&sp130, &sp124);
@@ -3147,6 +3336,14 @@ static int daE_FM_Execute(e_fm_class* i_this) {
 
     i_this->mCoreSph.SetC(sp124);
     i_this->mCoreSph.SetR(10.0f + (40.0f + YREG_F(3)));
+#if TARGET_PC
+    // Core already has Tg SPrm 0x3; widen type so aimed shots at the eye count.
+    if (e_fm_albwLookPassWantTg(i_this)) {
+        i_this->mCoreSph.SetTgType(0x2002 | kAlbwFmLookPassTg);
+    } else {
+        i_this->mCoreSph.SetTgType(0x2002);
+    }
+#endif
     dComIfG_Ccsp()->Set(&i_this->mCoreSph);
 
     sp130.set(0.0f, 0.0f, 0.0f);
@@ -3183,6 +3380,11 @@ static int daE_FM_Execute(e_fm_class* i_this) {
             i_this->mCcSph[i].SetAtType(0x400);
         }
     }
+
+#if TARGET_PC
+    // Re-assert after At bit tweaks (OnAtVsPlayerBit touches At SPrm).
+    e_fm_albwLookPassApplyBodyTg(i_this, e_fm_albwLookPassWantTg(i_this));
+#endif
 
     i_this->field_0x182b = 0;
 

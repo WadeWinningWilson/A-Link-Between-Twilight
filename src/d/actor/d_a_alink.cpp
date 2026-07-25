@@ -9363,13 +9363,21 @@ void daAlink_c::setFrontWallType() {
                     dBgW_Base* bgw = dComIfG_Bgsp().GetBgWBasePointer(mLinkLinChk);
                     const char* phase =
                         s_ldPhase == 0 ? "pre" : (s_ldPhase == 1 ? "in" : "post");
+                    // G1/G2/G3 discriminator (History ferry 2026-07-24):
+                    // LineCross-visible but WallCorrect-invisible → if
+                    // m_priority ∉ {0,1,2} = G1; priority fine + cylinder-miss
+                    // = G2; through-flag = G3. Also dump acch flags.
                     DuskLog.warn(
                         "[Alink] §63 phase={} wallCode={} wallHit={} proc={} bgOwner={} "
-                        "bgName={} roomId={}",
+                        "bgName={} roomId={} prio={} used={} moveBg={} acchFlags={:#x}",
                         phase, var_r29, mLinkAcch.ChkWallHit() ? 1 : 0, (int)mProcID,
                         bgOwner != NULL ? 1 : 0,
                         bgOwner != NULL ? (int)fopAcM_GetName(bgOwner) : -1,
-                        bgw != NULL ? bgw->GetRoomId() : -1);
+                        bgw != NULL ? bgw->GetRoomId() : -1,
+                        bgw != NULL ? (int)bgw->GetPriority() : -1,
+                        bgw != NULL && bgw->ChkUsed() ? 1 : 0,
+                        bgw != NULL && bgw->ChkMoveBg() ? 1 : 0,
+                        (unsigned)mLinkAcch.GetFlags());
                 }
             }
             dBgW_Base* sp3C = dComIfG_Bgsp().GetBgWBasePointer(mLinkLinChk);

@@ -3842,3 +3842,61 @@ Build green `/O2`, caches wiped. **USER VERIFY:** (a) exterior ladder SFX+ledge 
 > **Expect log:** `[ExtNpcMount] №265 SetRoomId(44) host for 'EXT_BG0'` (or the interior's host room). Then §63 `roomId=44`, §46 getEventIdx resolves, intro + doors self-heal on your retry — no History change needed.
 >
 > **Whose turn:** User playtest.
+
+---
+
+#### Paste for Cursor (2026-07-24 — ladder/exterior RESEARCH result: it is NOT room-id, NOT the alink gate; it's BG-solve visibility, likely PRIORITY)
+
+> History lane, pure research pass (no edits). Full map in docs/state/ladder-exterior-interaction-research.md. Headline: two independent Explore agents + an acch-flag trace CONVERGE, and they overturn the room-id assumption.
+>
+> **Ruled out cold:** (1) room-id — `dBgS::WallCorrect`/`GroundCross`/`LineCross` have NO room-id term anywhere; `m_roomId`/`GetGrpRoomId` are report-only. Your №256/№265 room work was right and necessary, but for intro+doors, NOT ladders. (2) the alink `ChkWallHit` gate — it's byte-faithful to WW's `daPy_lk_c::setFrontWallType`; never relax it. (3) stuck acch state (`WALL_NONE`/`MOVE_BG_ONLY`) — every `SetWallNone` caller also kills the line check, but the broken ladder reads `wallCode=4`, so the wall solve is running normally.
+>
+> **The deduction that narrows it:** `wallCode=4` readable ⇒ `LineCross` found the poly ⇒ the interior BG is registered (`ChkUsed`) and ready (`!ChkNotReady`). The ONLY way a registered+ready BG is `LineCross`-visible but `WallCorrect`-invisible: **G1 priority ∉ {0,1,2}** (`WallCorrect` filters `ChkPriority` across 3 passes; `LineCross` does not — `d_bg_s.cpp:1189` vs `:279`) — this is your registration lane and the leading cause; **G2** wall-cylinder geometry miss (authored dzb); **G3** grp/poly pass-through attr. Exterior-breaks-after-interior = `Bgsp` slot lifecycle disturbance across the room-lane round-trip (`d_ext_npc_mount.cpp:4227` release, `:6930` №257 stub-release).
+>
+> **One probe settles it** (yours to add — History stayed no-edit): extend §63 to also print, for the `LineCross`-resolved BG, `m_priority` + `ChkUsed` + `ChkMoveBg`, plus `mLinkAcch.m_flags`. Run spawn→interior→ladder→exit→exterior. `m_priority ∉ {0,1,2}` ⇒ G1 (fix the interior's registration to daBg PRIORITY_0, same as EXT_BG0); priority fine + cylinder-miss ⇒ G2 (authored dzb); through-flag ⇒ G3. Confirm EXT_BG1 actually logs the `№256 BG GLOBAL_e PRIORITY_0` line — if it doesn't, it never took the identity branch.
+
+#### Paste for History (2026-07-24 — Cursor §63 G1/G2/G3 probe SHIPPED)
+
+> Cursor lane. §63 extended per your ferry; RelWithDebInfo `/O2`; caches wiped.
+>
+> **Log now carries:** `prio=` (BgW `m_priority`) + `used=` + `moveBg=` + `acchFlags=0x…` on the existing LineCross-resolved line (same rate-limit / phase tags).
+>
+> **Read:** `prio ∉ {0,1,2}` ⇒ G1; prio fine + wallHit=0/cylinder-miss ⇒ G2; through-flag in acchFlags ⇒ G3. Also confirm EXT_BG1 logs `№256 BG GLOBAL_e PRIORITY_0`.
+>
+> **Playtest path:** spawn → interior → ladder → exit → exterior; ferry the §63 lines (pre|in|post).
+>
+> **Whose turn:** User playtest → History verdict.
+
+---
+
+#### Paste for Cursor (2026-07-24 — ladder CAUSE CONFIRMED by your probe: FLAG_WALL_NONE stuck on Link, NOT BG registration)
+
+> History lane. Your §63+§69 probe nailed it, and it clears YOUR lane: **your BG registration is perfect.** The ladder BG logged `prio=0 used=1 moveBg=0` and `№256 BG GLOBAL_e PRIORITY_0 (identity) proc='EXT_BG1' arc='LinkRM'` — the interior took the correct identity branch, priority 0, wall-checkable. My G1/G2/G3 (priority/geometry/pass-through) are all dead.
+>
+> **The real cause is Link-acch STATE.** Interior ladder `acchFlags=0x4120e4` → `FLAG_WALL_NONE` (bit 2) is SET; healthy exterior `0x4020f0` has it clear. `WALL_NONE` skips the entire wall solve (`d_bg_s_acch.cpp:368`) → `ChkWallHit` can never go true → ladder gate never fires. `wallCode=4` still reads because `setFrontWallType` line-casts independently of the acch flag. Link is in normal `proc=4` yet the flag persists → it's stuck.
+>
+> **Mechanism + fix:** in WW, `procDoorOpenInit` sets `WALL_NONE` (`d_a_alink_demo.inc:2698`) and `procDoorOpen` clears it (`:2737`). The room-lane transition teleports Link into the interior before that clear runs, and `forceLinkGroundReprobe` (`d_ext_npc_mount.cpp:4263`) clears the ground hit but NOT `WALL_NONE`. The progressive exterior break is the same flag following Link back out. **Fix: extend `forceLinkGroundReprobe` (or the room-lane place step) to also `mLinkAcch.ClrWallNone()` and re-normalize the line-check flags — restoring the state the interrupted door proc would have cleared.** One-liner, Link-state lane. (Flag-signature caveat in docs/state/ladder-exterior-interaction-research.md §0: `LINE_CHECK` is still ON in the stuck state, which the door setter's `OnLineCheckNone` doesn't match — so a non-door setter may be involved; the `ClrWallNone`-on-transition fix holds regardless.)
+>
+> Full map + my corrected §1c (I'd wrongly ruled this out) in docs/state/ladder-exterior-interaction-research.md.
+
+#### Paste for History (2026-07-24 — Cursor №270 SHIPPED: ClrWallNone on place)
+
+> Cursor lane. Your №269 cause (stuck `FLAG_WALL_NONE`) actioned; RelWithDebInfo `/O2`; caches wiped.
+>
+> **Shipped:** `forceLinkGroundReprobe` now clears `WALL_NONE` + `OffLineCheckNone` (donor `procDoorOpen` pair) before ground reprobe. Called on **room-lane enter**, **room-lane exit**, and **BgWarp place**. One-shot log when the bit was set: `№269 ClrWallNone on place (acchFlags 0x… → 0x…)`.
+>
+> **BG reg left alone** — your probe already proved `prio=0 used=1` / identity branch.
+>
+> **Playtest:** enter Grandma → climb interior ladder; exit → exterior ladders/SFX/ledge. Expect §63 `wallHit=1` and `acchFlags` without bit2 (`0x4`).
+>
+> **Whose turn:** User playtest.
+
+---
+
+#### Paste for Cursor (2026-07-24 — ladder fix CONFIRMED + exact one-liner locus; user test on build v1.4.1-153)
+
+> History lane. User test confirms №269 and pins the fix. Interior ladder broken on BOTH donor interiors (Link's house roomId=255 AND Sturgeon's roomId=2), both `acchFlags=0x4120e4` (`WALL_NONE` set, `wallHit=0`) — systematic, the shared interior-ENTRY transition, not per-ladder geometry. Exterior post-return is `0x4020f0` (`WALL_NONE` clear) — it works not from any fix but because `WALL_NONE` clears once Link is back outside opening normal doors.
+>
+> **Exact fix (one line):** `forceLinkGroundReprobe` (`d_ext_npc_mount.cpp:4263`) is ALREADY called on the entry transition (`:4905`) AND the exit (`:4950`) — but it only does `ClrGroundHit()` + `CrrPos()`, never clears the wall-none flag. Add `link->mLinkAcch.ClrWallNone();` (and re-enable the line check for symmetry) inside it, before the `CrrPos`. Because it's already on both transition paths, this single addition fixes interior-entry AND belt-and-suspenders the exit.
+>
+> Donor-faithful: this restores exactly the state `procDoorOpen`'s `ClrWallNone` (`d_a_alink_demo.inc:2737`) would have set, had our room-lane transition not preempted the door-open anim by teleporting Link into the interior. Verify after: interior `acchFlags` bit 2 clear (`0x…e0`/`0x…f0`, not `0x…e4`), interior ladder grabs on both houses.

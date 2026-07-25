@@ -428,6 +428,18 @@ void dAlbwBoss_diababaOnPoisonSprayBegin() {
     s_diababaSiphonUsedThisSpray = false;
 }
 
+bool dAlbwBoss_diababaHitShouldSiphon(fopAc_ac_c* i_bq) {
+    if (!dAlbwBossRefinement_isEnabled() || i_bq == NULL) {
+        return false;
+    }
+    if (s_diababaRetaliationPoison) {
+        return true;
+    }
+    // Keep in sync with daB_BQ_ACT in d_a_b_bq.cpp (ATTACK=2, LUNGE=7).
+    const s16 act = ((b_bq_class*)i_bq)->mAction;
+    return act == 2 || act == 7;
+}
+
 void dAlbwBoss_diababaOnPoisonDamage(int i_damageToLink) {
     if (!dAlbwBossRefinement_isEnabled() || i_damageToLink <= 0) {
         return;
@@ -460,6 +472,31 @@ void dAlbwBoss_diababaOnPoisonDamage(int i_damageToLink) {
     boss->health = static_cast<s16>(newHp);
     s_diababaSiphonUsedThisSpray = true;
     // Sticky late: siphon must not clear phase.
+    dAlbwBoss_diababaUpdatePhase(boss);
+}
+
+void dAlbwBoss_diababaOnSideHeadDamage() {
+    if (!dAlbwBossRefinement_isEnabled()) {
+        return;
+    }
+
+    fopAc_ac_c* boss = fopAcM_SearchByName(fpcNm_B_BQ_e);
+    if (boss == NULL || boss->field_0x560 <= 0) {
+        return;
+    }
+
+    // Flat 3% of Diababa max HP (not Link-scaled).
+    int heal = (static_cast<int>(boss->field_0x560) * 3) / 100;
+    if (heal < 1) {
+        heal = 1;
+    }
+
+    const int maxHp = static_cast<int>(boss->field_0x560);
+    int newHp = static_cast<int>(boss->health) + heal;
+    if (newHp > maxHp) {
+        newHp = maxHp;
+    }
+    boss->health = static_cast<s16>(newHp);
     dAlbwBoss_diababaUpdatePhase(boss);
 }
 

@@ -12,9 +12,9 @@ file stays a multi-boss archive; handoff cross-references here.
 (`dAlbwBossRefinement_isEnabled()`). Refinement **off** → vanilla flow.
 Helpers live in `d_albw_boss.h` / `d_albw_boss.cpp`.
 
-**Overall status (2026-07-23):** 70% sticky phase + siphon + body chips +
-phase-2 bomb cycle (poison → submerge+5-hit → hang → vanilla spray) + lunge +
-side-head pacing **live**. Door-volume pressure / rhythm-parry still design-only.
+**Overall status (2026-07-24):** **Finished** for v1 Refinement fight — 70% late
+phase, siphon (poison/lunge + side-head 3% boss-max), hang/lunge/barrage, body
+chips. Door-volume pressure / rhythm-parry remain design-only follow-ups.
 
 ---
 
@@ -28,14 +28,15 @@ side-head pacing **live**. Door-volume pressure / rhythm-parry still design-only
 | **Hang hit close** | Refinement: `field_0x1392` counts down from 4 per core hit (combo `cutCount>=4` also) |
 | **Bomb reception** | Flat **−30** (does **not** use FA/lockout); skip vanilla `health = 50` |
 | **Body chips** | Arrow / iron ball only: FA+lockout resolved AP × **0.85**; flinch BCK, no `mAction` change |
-| **Poison aim** | **2800** (vanilla 2300); spheres/VFX stay HEAD-joint forward (no Link retarget) |
-| **Siphon** | `(dmgToLink / LinkMaxLife) × bossMax`; one heal per spray; parry / 0-dmg = no heal |
+| **Poison aim** | **2800**; sway **±0x100**; head track **+5%** (HEAD-joint beam; no sphere retarget) |
+| **Siphon** | Poison/lunge: `(dmg/LinkMax)×bossMax` (1×/attack); side heads: **3% of Diababa max** per damaging hit |
 | **Phase 1** | Bomb → hang → chance/return → post-return poison + siphon |
 | **Phase 2 (≤70%)** | Bomb → RUNAWAY thrash **with** poison/siphon → quick L/R/L/R/BOTH → pop out → hang → vanilla spray → wait |
 | **Side-head roll** | Wait intervals × **0.6** (−40%) |
 | **Side-head attack** | Execute × **1.15** (anim + timers + dash speed) |
 | **Side-head travel** | Max dash home→reach **1700 → 2800** |
-| **Middle lunge** | Bomb-wait only; 5–9 s roll; commit if eyePos→player ≤ **1700**; HEAD At r=**288** (+20% from 240, lunge-only) |
+| **Middle lunge** | eyePos≤**1700**; HEAD At r=**337.824** (+2% from 331.2); head-only aim; siphon on hit |
+| **Side-head At** | CcSph radius **×1.02** under Refinement |
 
 Vanilla vulnerability (hang) window after bomb-down anim: HIO **`mChanceTime = 200`**
 frames (~6.7 s @ 30 Hz). Early exit if `cutCount >= 4` or `health <= 0`.
@@ -195,7 +196,7 @@ recommended stack still **door volume + middle-head response** — not coded yet
 ## 9. Open / stamp blockers (2026-07-23)
 
 1. **Side-head barrage** — latch/`s8` beat spam fixed (2026-07-23); re-playtest mID1 freeze. Probe: `Documents/dusklight/albw_diababa_conductor_debug.txt` (expect `DONE` per beat, no runaway `beat=`).
-2. **Lunge At radius** — **288** (+20% from 240); playtest feel.
+2. **Lunge** — At r=**331.2**; head-only Link aim; siphon on hit. Playtest.
 3. **Hang 4-hit close** — now counts real core hits (`field_0x1392`); playtest.
 4. **Poison head track** — still vanilla math (see §9a); optional stronger `mHeadRot` later.
 
@@ -206,12 +207,12 @@ After hang return → wait: `field_0x11fc` armed, `mTimers[2] = 80`. When `timer
 | Lever | Behavior (vanilla + Refinement) |
 |-------|----------------------------------|
 | Body yaw | not tracked |
-| Head aim | `(mAngleToPlayer + sway) / 3`, ±3500 |
-| Spray sway | `±0x500` left/right while `dokuhaki && timers[1]==0` |
+| Head aim | vanilla `(angle)/3`; Refinement poison: **+5%** (`105/300`) toward Link, ±3500 clamp |
+| Spray sway | vanilla `±0x500`; Refinement **`±0x100`** (less drift) |
 | Beam / At | HEAD joint forward `poisonAim` + Y 500 + Z sin wobble (VFX + spheres share this) |
 | Aim length | 2300 vanilla / **2800** Refinement |
 
-**Reverted (2026-07-23):** player-chest `spD8` retarget + sway kill — desynced At from purple VFX.
+**Reverted (2026-07-23):** player-chest `spD8` retarget — desynced At from purple VFX.
 
 ## 10. Open / tune later
 

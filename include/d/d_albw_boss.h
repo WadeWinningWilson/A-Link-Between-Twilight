@@ -145,9 +145,13 @@ void dAlbwBoss_diababaUpdatePhase(fopAc_ac_c* i_boss);
 bool dAlbwBoss_diababaIsLatePhase();
 
 // Poison siphon: heal boss by (dmg/LinkMaxLife)*bossMax. No-op if dmg<=0.
-// One heal window per spray (debounce). Call OnPoisonSprayBegin when spray starts.
+// One heal window per spray/lunge (debounce). Call OnPoisonSprayBegin when attack starts.
 void dAlbwBoss_diababaOnPoisonSprayBegin();
 void dAlbwBoss_diababaOnPoisonDamage(int i_damageToLink);
+// True when a B_BQ hit should siphon (upright poison, retaliation spray, or lunge).
+bool dAlbwBoss_diababaHitShouldSiphon(fopAc_ac_c* i_bq);
+// Side-head (B_BH) hit on Link: heal middle head by 3% of Diababa max HP.
+void dAlbwBoss_diababaOnSideHeadDamage();
 
 // Phase-2 bomb cycle (HP <= 70%):
 //   RUNAWAY thrash + poison/siphon → submerge+5-hit → appear → hang → vanilla spray.

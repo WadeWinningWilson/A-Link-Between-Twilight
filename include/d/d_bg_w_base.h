@@ -118,6 +118,7 @@ public:
     void SetPushPullCallback(PushPull_CallBack i_callBack) { m_pushPull_Callback = i_callBack; }
     void SetRoomId(int id) { m_roomId = id; }
     bool ChkPriority(int prio) { return m_priority == prio; }
+    u8 GetPriority() const { return m_priority; }
     void SetPriority(PRIORITY priority) { m_priority = priority; }
     void onStickWall() { field_0xb |= 1; }
     void onStickRoof() { field_0xb |= 2; }

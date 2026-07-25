@@ -55,7 +55,6 @@ struct ProvokedEnemy {
 u8 sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
 u8 sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
 u8 sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
-bool sLockoutDoubleClawUsed       = false;
 bool sLockoutDoubleClawFlyActive  = false;
 bool sLockoutDoubleClawSlashActive = false;
 fpc_ProcID sLockoutDoubleClawTargetId = fpcM_ERROR_PROCESS_ID_e;
@@ -145,8 +144,52 @@ void clearProvokedEntryAt(int i_index) {
     }
 }
 
-bool isConfuseAllowlistName(s16 i_name) {
-    return i_name == fpcNm_E_OC_e || i_name == fpcNm_E_DN_e || i_name == fpcNm_E_ST_e;
+// Bosses / traps / leafs / specials that must never be confuse hosts or victims.
+bool isConfuseDenylistName(s16 i_name) {
+    switch (i_name) {
+    // Dungeon / final bosses
+    case fpcNm_E_FM_e:      // Fyrus
+    case fpcNm_B_BQ_e:      // Diababa head
+    case fpcNm_B_BH_e:      // Diababa tentacles
+    case fpcNm_B_OB_e:      // Morpheel
+    case fpcNm_B_DS_e:      // Stallord
+    case fpcNm_B_YO_e:      // Blizzeta
+    case fpcNm_B_YOI_e:     // Blizzeta ice
+    case fpcNm_B_GM_e:      // Armogohma
+    case fpcNm_B_DR_e:      // Argorok
+    case fpcNm_B_ZANT_e:
+    case fpcNm_B_ZANTM_e:
+    case fpcNm_B_ZANTZ_e:
+    case fpcNm_B_ZANTS_e:
+    case fpcNm_B_GND_e:     // Ganondorf
+    case fpcNm_B_MGN_e:     // Beast Ganon
+    case fpcNm_E_HZELDA_e:  // Possessed Zelda
+    case fpcNm_B_GO_e:      // Goron Golem (trap-adjacent)
+    case fpcNm_B_GOS_e:
+    case fpcNm_B_OH_e:
+    case fpcNm_B_OH2_e:
+    case fpcNm_B_DRE_e:
+    // Traps / spawners / projectiles / leaf sub-actors
+    case fpcNm_E_BI_e:      // Bombling (exploder special-case)
+    case fpcNm_E_BI_LEAF_e:
+    case fpcNm_E_DB_LEAF_e:
+    case fpcNm_E_HB_LEAF_e:
+    case fpcNm_E_YD_LEAF_e:
+    case fpcNm_E_NEST_e:
+    case fpcNm_E_BEE_e:
+    case fpcNm_E_GA_e:
+    case fpcNm_E_ARROW_e:
+    case fpcNm_E_IS_e:      // Armos
+    case fpcNm_E_YM_TAG_e:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isConfuseEligibleActor(fopAc_ac_c* i_actor) {
+    return i_actor != NULL && fopAcM_GetGroup(i_actor) == fopAc_ENEMY_e &&
+           !isConfuseDenylistName(fopAcM_GetName(i_actor));
 }
 
 void tagEnemyForLockoutSlingshot(fopAc_ac_c* i_enemy, bool i_nativeStunOnly) {
@@ -215,7 +258,7 @@ struct NearestEnemySearch {
     cXyz const* mSegB;
     f32         mBestDist2;
     fopAc_ac_c* mBest;
-    bool        mAllowlistOnly;
+    bool        mEligibleOnly;
     bool        mUseSegment;
 };
 
@@ -226,7 +269,7 @@ void* judgeNearestEnemy(void* i_actor, void* i_data) {
         fopAcM_GetGroup(actor) != fopAc_ENEMY_e) {
         return NULL;
     }
-    if (search->mAllowlistOnly && !isConfuseAllowlistName(fopAcM_GetName(actor))) {
+    if (search->mEligibleOnly && !isConfuseEligibleActor(actor)) {
         return NULL;
     }
 
@@ -242,32 +285,32 @@ void* judgeNearestEnemy(void* i_actor, void* i_data) {
 }
 
 fopAc_ac_c* findNearestEnemy(cXyz const& i_pos, fopAc_ac_c* i_exclude, f32 i_maxDist2,
-                             bool i_allowlistOnly) {
+                             bool i_eligibleOnly) {
     NearestEnemySearch search;
-    search.mExclude       = i_exclude;
-    search.mPos           = &i_pos;
-    search.mSegA          = NULL;
-    search.mSegB          = NULL;
-    search.mBestDist2     = i_maxDist2;
-    search.mBest          = NULL;
-    search.mAllowlistOnly = i_allowlistOnly;
-    search.mUseSegment    = false;
+    search.mExclude      = i_exclude;
+    search.mPos          = &i_pos;
+    search.mSegA         = NULL;
+    search.mSegB         = NULL;
+    search.mBestDist2    = i_maxDist2;
+    search.mBest         = NULL;
+    search.mEligibleOnly = i_eligibleOnly;
+    search.mUseSegment   = false;
     fopAcIt_Judge(judgeNearestEnemy, &search);
     return search.mBest;
 }
 
 fopAc_ac_c* findNearestEnemyAlongSegment(cXyz const& i_segA, cXyz const& i_segB,
                                        fopAc_ac_c* i_exclude, f32 i_maxDist2,
-                                       bool i_allowlistOnly) {
+                                       bool i_eligibleOnly) {
     NearestEnemySearch search;
-    search.mExclude       = i_exclude;
-    search.mPos           = NULL;
-    search.mSegA          = &i_segA;
-    search.mSegB          = &i_segB;
-    search.mBestDist2     = i_maxDist2;
-    search.mBest          = NULL;
-    search.mAllowlistOnly = i_allowlistOnly;
-    search.mUseSegment    = true;
+    search.mExclude      = i_exclude;
+    search.mPos          = NULL;
+    search.mSegA         = &i_segA;
+    search.mSegB         = &i_segB;
+    search.mBestDist2    = i_maxDist2;
+    search.mBest         = NULL;
+    search.mEligibleOnly = i_eligibleOnly;
+    search.mUseSegment   = true;
     fopAcIt_Judge(judgeNearestEnemy, &search);
     return search.mBest;
 }
@@ -298,7 +341,7 @@ void refreshConfuseTarget() {
 
     fopAc_ac_c* currentTarget = fopAcM_SearchByID(sConfuse.mTargetId);
     if (currentTarget != NULL && currentTarget != host &&
-        fopAcM_GetGroup(currentTarget) == fopAc_ENEMY_e &&
+        isConfuseEligibleActor(currentTarget) &&
         host->current.pos.abs2(currentTarget->current.pos) <= kLockoutConfuseRetargetRange2)
     {
         return;
@@ -306,9 +349,6 @@ void refreshConfuseTarget() {
 
     fopAc_ac_c* target =
         findNearestEnemy(host->current.pos, host, kLockoutConfuseRetargetRange2, true);
-    if (target == NULL) {
-        target = findNearestEnemy(host->current.pos, host, kLockoutConfuseRetargetRange2, false);
-    }
     sConfuse.mTargetId =
         target != NULL ? target->id : fpcM_ERROR_PROCESS_ID_e;
 }
@@ -338,7 +378,6 @@ void dAlbwLockout_onBegin() {
     sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
     sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
     sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
-    sLockoutDoubleClawUsed = false;
     clearDoubleClawSession(true);
     sLockoutBomblingId         = fpcM_ERROR_PROCESS_ID_e;
     sLockoutBomblingOrbitAngle = 0;
@@ -351,7 +390,6 @@ void dAlbwLockout_onEnd() {
     sLockoutBowShotsRemaining       = kLockoutBowShotsMax;
     sLockoutBombArrowShotsRemaining = kLockoutBombArrowShotsMax;
     sLockoutBomblingUsesRemaining   = kLockoutBomblingUsesMax;
-    sLockoutDoubleClawUsed = false;
     clearDoubleClawSession(true);
     sLockoutBomblingId         = fpcM_ERROR_PROCESS_ID_e;
     sLockoutBomblingOrbitAngle = 0;
@@ -418,7 +456,7 @@ void dAlbwLockout_onHookshotFired() {
 }
 
 void dAlbwLockout_onDoubleHookshotFired() {
-    // Finisher consumes on latch, not on fire. No meter restore.
+    // No meter restore / session consume — finisher may repeat freely in lockout.
 }
 
 bool dAlbwLockout_canFireBow() {
@@ -430,11 +468,13 @@ bool dAlbwLockout_canFireBombArrow() {
 }
 
 bool dAlbwLockout_canUseDoubleHookshot() {
-    return dMeter2_isALBWLocked() && !sLockoutDoubleClawUsed;
+    return dMeter2_isALBWLocked();
 }
 
 bool dAlbwLockout_shouldForceEnemyStick(fopAc_ac_c* i_actor) {
-    return dMeter2_isALBWLocked() && !sLockoutDoubleClawUsed && isLockoutDoubleClawEquip() &&
+    // Repeatable during lockout; only suppress while a finisher is already in flight/slash.
+    return dMeter2_isALBWLocked() && isLockoutDoubleClawEquip() &&
+           !sLockoutDoubleClawFlyActive && !sLockoutDoubleClawSlashActive &&
            i_actor != NULL && fopAcM_GetGroup(i_actor) == fopAc_ENEMY_e;
 }
 
@@ -443,13 +483,13 @@ bool dAlbwLockout_shouldPierceHookShield(fopAc_ac_c* i_actor) {
 }
 
 void dAlbwLockout_onDoubleClawLatch(fopAc_ac_c* i_enemy) {
-    if (!dMeter2_isALBWLocked() || sLockoutDoubleClawUsed || i_enemy == NULL ||
+    if (!dMeter2_isALBWLocked() || i_enemy == NULL ||
         fopAcM_GetGroup(i_enemy) != fopAc_ENEMY_e)
     {
         return;
     }
 
-    sLockoutDoubleClawUsed = true;
+    clearDoubleClawSession(true);
     sLockoutDoubleClawTargetId = i_enemy->id;
     sLockoutDoubleClawFlyActive = true;
     sLockoutDoubleClawSlashActive = false;
@@ -472,7 +512,7 @@ void dAlbwLockout_onDoubleClawFlyEnded() {
         return;
     }
 
-    // Interrupted before slash — thaw and clear fly/slash session (use stays spent).
+    // Interrupted before slash — thaw and clear fly/slash session.
     if (sLockoutDoubleClawTargetId != fpcM_ERROR_PROCESS_ID_e) {
         fopAc_ac_c* target = fopAcM_SearchByID(sLockoutDoubleClawTargetId);
         if (target != NULL) {
@@ -649,13 +689,16 @@ void dAlbwLockout_applyAttackPowerBoost(u16& io_attackPower, u32 i_atType) {
     }
 }
 
+bool dAlbwLockout_isDomRodConfuseEligible(fopAc_ac_c* i_enemy) {
+    return isConfuseEligibleActor(i_enemy);
+}
+
 bool dAlbwLockout_isDomRodConfuseAllowlist(fopAc_ac_c* i_enemy) {
-    return i_enemy != NULL && fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e &&
-           isConfuseAllowlistName(fopAcM_GetName(i_enemy));
+    return dAlbwLockout_isDomRodConfuseEligible(i_enemy);
 }
 
 void dAlbwLockout_onDomRodConfuseHit(fopAc_ac_c* i_enemy) {
-    if (!dMeter2_isALBWLocked() || !dAlbwLockout_isDomRodConfuseAllowlist(i_enemy)) {
+    if (!dMeter2_isALBWLocked() || !dAlbwLockout_isDomRodConfuseEligible(i_enemy)) {
         return;
     }
 
@@ -678,7 +721,7 @@ fopAc_ac_c* dAlbwLockout_getConfuseTarget(fopAc_ac_c* i_attacker) {
     }
 
     fopAc_ac_c* target = fopAcM_SearchByID(sConfuse.mTargetId);
-    if (target == NULL || fopAcM_GetGroup(target) != fopAc_ENEMY_e) {
+    if (!isConfuseEligibleActor(target)) {
         return NULL;
     }
     return target;
@@ -689,7 +732,7 @@ s16 dAlbwLockout_getConfuseAimAngleY(fopAc_ac_c* i_attacker) {
     if (target != NULL) {
         return fopAcM_searchActorAngleY(i_attacker, target);
     }
-    return fopAcM_searchPlayerAngleY(i_attacker);
+    return fopAcM_searchActorAngleY(i_attacker, dComIfGp_getPlayer(0));
 }
 
 s16 dAlbwLockout_getConfuseAimAngleX(fopAc_ac_c* i_attacker) {
@@ -697,7 +740,7 @@ s16 dAlbwLockout_getConfuseAimAngleX(fopAc_ac_c* i_attacker) {
     if (target != NULL) {
         return fopAcM_searchActorAngleX(i_attacker, target);
     }
-    return fopAcM_searchPlayerAngleX(i_attacker);
+    return fopAcM_searchActorAngleX(i_attacker, dComIfGp_getPlayer(0));
 }
 
 f32 dAlbwLockout_getConfuseAimDistanceXZ(fopAc_ac_c* i_attacker) {
@@ -705,7 +748,7 @@ f32 dAlbwLockout_getConfuseAimDistanceXZ(fopAc_ac_c* i_attacker) {
     if (target != NULL) {
         return fopAcM_searchActorDistanceXZ(i_attacker, target);
     }
-    return fopAcM_searchPlayerDistanceXZ(i_attacker);
+    return fopAcM_searchActorDistanceXZ(i_attacker, dComIfGp_getPlayer(0));
 }
 
 f32 dAlbwLockout_getConfuseAimDistance(fopAc_ac_c* i_attacker) {
@@ -713,7 +756,7 @@ f32 dAlbwLockout_getConfuseAimDistance(fopAc_ac_c* i_attacker) {
     if (target != NULL) {
         return fopAcM_searchActorDistance(i_attacker, target);
     }
-    return fopAcM_searchPlayerDistance(i_attacker);
+    return fopAcM_searchActorDistance(i_attacker, dComIfGp_getPlayer(0));
 }
 
 void dAlbwLockout_syncConfuseAtBits(fopAc_ac_c* i_attacker, cCcD_Obj* i_atObj) {
@@ -721,13 +764,33 @@ void dAlbwLockout_syncConfuseAtBits(fopAc_ac_c* i_attacker, cCcD_Obj* i_atObj) {
         return;
     }
 
-    if (dAlbwLockout_isConfused(i_attacker)) {
+    // Any rival (confused host or provoked victim) must hit enemies, not Link.
+    if (dAlbwLockout_hasRivalTarget(i_attacker)) {
         i_atObj->OffAtVsPlayerBit();
         i_atObj->OnAtVsEnemyBit();
     } else {
         i_atObj->OnAtVsPlayerBit();
         i_atObj->OffAtVsEnemyBit();
     }
+}
+
+void dAlbwLockout_onCcObjSet(cCcD_Obj* i_obj) {
+    if (i_obj == NULL || !i_obj->ChkAtSet()) {
+        return;
+    }
+
+    cCcD_Stts* stts = i_obj->GetStts();
+    if (stts == NULL) {
+        return;
+    }
+
+    fopAc_ac_c* owner = stts->GetActor();
+    if (owner == NULL || !dAlbwLockout_hasRivalTarget(owner)) {
+        return;
+    }
+
+    i_obj->OffAtVsPlayerBit();
+    i_obj->OnAtVsEnemyBit();
 }
 
 fopAc_ac_c* dAlbwLockout_searchDomRodConfuseVictim(cXyz const& i_segA, cXyz const& i_segB,
@@ -779,7 +842,7 @@ s16 dAlbwLockout_getRivalAimAngleY(fopAc_ac_c* i_actor) {
     if (target != NULL) {
         return fopAcM_searchActorAngleY(i_actor, target);
     }
-    return fopAcM_searchPlayerAngleY(i_actor);
+    return fopAcM_searchActorAngleY(i_actor, dComIfGp_getPlayer(0));
 }
 
 s16 dAlbwLockout_getRivalAimAngleX(fopAc_ac_c* i_actor) {
@@ -787,7 +850,7 @@ s16 dAlbwLockout_getRivalAimAngleX(fopAc_ac_c* i_actor) {
     if (target != NULL) {
         return fopAcM_searchActorAngleX(i_actor, target);
     }
-    return fopAcM_searchPlayerAngleX(i_actor);
+    return fopAcM_searchActorAngleX(i_actor, dComIfGp_getPlayer(0));
 }
 
 f32 dAlbwLockout_getRivalAimDistanceXZ(fopAc_ac_c* i_actor) {
@@ -795,7 +858,7 @@ f32 dAlbwLockout_getRivalAimDistanceXZ(fopAc_ac_c* i_actor) {
     if (target != NULL) {
         return fopAcM_searchActorDistanceXZ(i_actor, target);
     }
-    return fopAcM_searchPlayerDistanceXZ(i_actor);
+    return fopAcM_searchActorDistanceXZ(i_actor, dComIfGp_getPlayer(0));
 }
 
 f32 dAlbwLockout_getRivalAimDistance(fopAc_ac_c* i_actor) {
@@ -803,15 +866,73 @@ f32 dAlbwLockout_getRivalAimDistance(fopAc_ac_c* i_actor) {
     if (target != NULL) {
         return fopAcM_searchActorDistance(i_actor, target);
     }
-    return fopAcM_searchPlayerDistance(i_actor);
+    return fopAcM_searchActorDistance(i_actor, dComIfGp_getPlayer(0));
+}
+
+bool dAlbwLockout_queryRivalAimAngleY(const fopAc_ac_c* i_actor, s16* o_angle) {
+    if (i_actor == NULL || o_angle == NULL) {
+        return false;
+    }
+
+    fopAc_ac_c* actor = const_cast<fopAc_ac_c*>(i_actor);
+    fopAc_ac_c* target = dAlbwLockout_getRivalTarget(actor);
+    if (target == NULL) {
+        return false;
+    }
+
+    *o_angle = fopAcM_searchActorAngleY(actor, target);
+    return true;
+}
+
+bool dAlbwLockout_queryRivalAimAngleX(const fopAc_ac_c* i_actor, s16* o_angle) {
+    if (i_actor == NULL || o_angle == NULL) {
+        return false;
+    }
+
+    fopAc_ac_c* actor = const_cast<fopAc_ac_c*>(i_actor);
+    fopAc_ac_c* target = dAlbwLockout_getRivalTarget(actor);
+    if (target == NULL) {
+        return false;
+    }
+
+    *o_angle = fopAcM_searchActorAngleX(actor, target);
+    return true;
+}
+
+bool dAlbwLockout_queryRivalAimDistanceXZ(const fopAc_ac_c* i_actor, f32* o_dist) {
+    if (i_actor == NULL || o_dist == NULL) {
+        return false;
+    }
+
+    fopAc_ac_c* actor = const_cast<fopAc_ac_c*>(i_actor);
+    fopAc_ac_c* target = dAlbwLockout_getRivalTarget(actor);
+    if (target == NULL) {
+        return false;
+    }
+
+    *o_dist = fopAcM_searchActorDistanceXZ(actor, target);
+    return true;
+}
+
+bool dAlbwLockout_queryRivalAimDistance(const fopAc_ac_c* i_actor, f32* o_dist) {
+    if (i_actor == NULL || o_dist == NULL) {
+        return false;
+    }
+
+    fopAc_ac_c* actor = const_cast<fopAc_ac_c*>(i_actor);
+    fopAc_ac_c* target = dAlbwLockout_getRivalTarget(actor);
+    if (target == NULL) {
+        return false;
+    }
+
+    *o_dist = fopAcM_searchActorDistance(actor, target);
+    return true;
 }
 
 void dAlbwLockout_onConfuseFriendlyFireHit(fopAc_ac_c* i_victim, fopAc_ac_c* i_attacker) {
     if (!dMeter2_isALBWLocked() || i_victim == NULL || i_attacker == NULL ||
-        i_victim == i_attacker || fopAcM_GetGroup(i_victim) != fopAc_ENEMY_e ||
-        fopAcM_GetGroup(i_attacker) != fopAc_ENEMY_e ||
-        !dAlbwLockout_isConfused(i_attacker) ||
-        !isConfuseAllowlistName(fopAcM_GetName(i_victim)) ||
+        i_victim == i_attacker || !isConfuseEligibleActor(i_victim) ||
+        !isConfuseEligibleActor(i_attacker) || !dAlbwLockout_isConfused(i_attacker) ||
         dAlbwLockout_isConfused(i_victim)) {
         return;
     }

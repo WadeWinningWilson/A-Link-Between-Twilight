@@ -6681,7 +6681,15 @@ void dKyr_evil_draw(Mtx drawMtx, u8** tex) {
 #include "d/d_kankyo_wether.h"
 #include "d/d_stage.h"
 #include "JSystem/J3DGraphBase/J3DShape.h"
+#include "dusk/logging.h"
 #include <cmath>
+
+// §105 — periodic wave_move counters for calm-ini tuning (interval ≈ 3s @ 30fps).
+static constexpr int kWwFoamStatInterval = 90;
+static int s_wwFoamStatFrames;
+static int s_wwFoamSpawned;
+static int s_wwFoamKilledInfl;
+static int s_wwFoamKilledFlat;
 
 // §97b — donor wave_move (Nonmatching structure port; WW interior wind table omitted).
 void wave_move() {
@@ -6755,6 +6763,7 @@ void wave_move() {
                 g_env_light.mWaveChan.mWaveCounterSpeedScale;
             pPkt->mEff[i].field_0x30 = 0;
             pPkt->mEff[i].mStatus++;
+            s_wwFoamSpawned++;
         }
             // fallthrough
         case 1:
@@ -6822,10 +6831,14 @@ void wave_move() {
                     }
                 }
             }
+            if (pPkt->mEff[i].mStrengthEnv <= 0.0f) {
+                s_wwFoamKilledInfl++;
+            }
 
             // Donor: flatInter > 0 grows a camera-centered dead zone (open-chop path).
             // Polarity: 0 = calm (skip); approaching 1 = larger kill radius near eye.
             if (g_env_light.mWaveChan.mWaveFlatInter > 0.0f) {
+                const f32 strengthBeforeFlat = pPkt->mEff[i].mStrengthEnv;
                 cXyz newPos3 = pCamera->view.lookat.eye;
                 newPos3.y = pos.y;
                 f32 dist = pos.abs(newPos3);
@@ -6839,6 +6852,9 @@ void wave_move() {
                     }
                 } else {
                     pPkt->mEff[i].mStrengthEnv = 0.0f;
+                }
+                if (strengthBeforeFlat > 0.0f && pPkt->mEff[i].mStrengthEnv <= 0.0f) {
+                    s_wwFoamKilledFlat++;
                 }
             }
 
@@ -6885,6 +6901,16 @@ void wave_move() {
         }
         cLib_addCalc(&pPkt->mEff[i].mAlpha, alphaTarget, 0.5f, 0.5f, 0.001f);
         pPkt->mEff[i].mBasePos.y = seaLevel;
+    }
+
+    s_wwFoamStatFrames++;
+    if (s_wwFoamStatFrames >= kWwFoamStatInterval) {
+        DuskLog.info("[WwFoam] §105 spawn-stats spawned={} killed_by_infl={} killed_by_flat={}",
+                     s_wwFoamSpawned, s_wwFoamKilledInfl, s_wwFoamKilledFlat);
+        s_wwFoamStatFrames = 0;
+        s_wwFoamSpawned = 0;
+        s_wwFoamKilledInfl = 0;
+        s_wwFoamKilledFlat = 0;
     }
 }
 

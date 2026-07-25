@@ -1726,8 +1726,9 @@ int daAlink_c::procHookshotFly() {
 #endif
 
     field_0x37d4 = mHookshotTopPos - mHeldItemRootPos;
+    BOOL arriveNow = FALSE;
     if (mProcVar0.field_0x3008 != 0 && cLib_distanceAngleS(field_0x37d4.atan2sX_Z(), temp_r24) > 0x4000) {
-        setHookshotReturnEnd();
+        arriveNow = TRUE;
     } else {
         mProcVar0.field_0x3008 = 0;
         f32 temp_f31 = field_0x37d4.abs();
@@ -1740,7 +1741,7 @@ int daAlink_c::procHookshotFly() {
         #endif
 
         if (temp_f31 < temp_f30 || mProcVar1.field_0x300a == 0) {
-            setHookshotReturnEnd();
+            arriveNow = TRUE;
         } else {
             field_0x37d4 *= temp_f30 / temp_f31;
             seStartOnlyReverbLevel(Z2SE_LK_HS_WIND_UP);
@@ -1750,10 +1751,28 @@ int daAlink_c::procHookshotFly() {
         }
     }
 
+#if TARGET_PC
+    // Lockout double-claw: convert vanilla fly-arrival into jump-slash (must run
+    // before setHookshotReturnEnd, which clears the fly session).
+    if (arriveNow && dAlbwLockout_isDoubleClawFlyActive() && targetAc_p != NULL) {
+        current.pos += field_0x37d4;
+        dAlbwLockout_onDoubleClawSlashBegin();
+        shape_angle.y = cLib_targetAngleY(&current.pos, &targetAc_p->eyePos);
+        current.angle.y = shape_angle.y;
+        resetHookshotMode();
+        cancelItemUseQuake(0);
+        return procCutJumpInit(TRUE);
+    }
+#endif
+
+    if (arriveNow) {
+        setHookshotReturnEnd();
+    }
+
     current.pos += field_0x37d4;
 
 #if TARGET_PC
-    // Lockout double-claw finisher: at ≤200 (~10u) cancel claw and jump-slash.
+    // Early slash if we close within ~10u before the chain-arrival frame.
     if (dAlbwLockout_isDoubleClawFlyActive() && targetAc_p != NULL &&
         current.pos.abs(targetAc_p->current.pos) <= 200.0f)
     {

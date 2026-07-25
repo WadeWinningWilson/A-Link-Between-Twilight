@@ -2,17 +2,17 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | Boss Refinement Layer A + Armogohma; Diababa 70% phase live; Fyrus orphan-BCK research only; Layer B (Zant/Ganon) future |
+| **status** | Boss Refinement Layer A + Armogohma; **Diababa Refinement v1 finished**; Fyrus research ready — **§8 50%→15% B_GO window locked** (not coded); Layer B future |
 | **owner_impl** | Cursor |
 | **owner_review** | — |
-| **next** | Finish Diababa playtest polish; Fyrus Refinement not started (research ready) |
+| **next** | Implement Fyrus §8 (stun + PUTOUT + B_GO shared pool 50→15%) |
 | **do_not** | Look up bosses by C++ filename — use `fopAcM_GetName()` / `fpcNm_*`; put drive code in `src/`; revert features to “fix” FPS |
 | **playtest_combo** | Boss Refinement **On**, Boss Health Bars **On**, Boss HP × as needed |
-| **updated** | 2026-07-23 — Diababa + Fyrus docs |
+| **updated** | 2026-07-24 — Fyrus §8 B_GO window + whip/blast/Keese research |
 | **detail** | [boss-fights-handoff.md](../boss-fights-handoff.md) — multi-boss archive |
 | **diababa** | [Boss-Fights-RefinedDiababa.md](../Boss-Fights-RefinedDiababa.md) |
 | **armogohma** | [Boss-Fights-RefinedGohma.md](../Boss-Fights-RefinedGohma.md) |
-| **fyrus** | [Boss-Fights-Fyrus-research.md](../Boss-Fights-Fyrus-research.md) — preliminary orphans |
+| **fyrus** | [Boss-Fights-Fyrus-research.md](../Boss-Fights-Fyrus-research.md) — §3 attacks, §7 fire-off/PUTOUT, §8 50→15% B_GO |
 
 ---
 

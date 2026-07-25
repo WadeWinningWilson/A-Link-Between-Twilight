@@ -25,8 +25,9 @@ bool dAlbwLockout_canUseBombling();
 
 // ============================================
 // Double claw lockout finisher
-// Latch any ENEMY-group actor → wolf-style freeze hold → fly → ≤10u jump-slash
-// (ATP 30) → thaw when slash ends. Replaces the old meter-restore perk.
+// Latch any ENEMY-group actor → wolf-style freeze hold → fly → jump-slash
+// (ATP 30) → thaw when slash ends. Repeatable during lockout (no once-per-session).
+// Replaces the old meter-restore perk.
 // ============================================
 bool        dAlbwLockout_shouldForceEnemyStick(fopAc_ac_c* i_actor);
 bool        dAlbwLockout_shouldPierceHookShield(fopAc_ac_c* i_actor);
@@ -68,7 +69,10 @@ u8 dAlbwLockout_getHookshotContactAtp();
 // Lockout-only attack-power modifiers (call from d_cc_uty after other mods, before HP apply).
 void dAlbwLockout_applyAttackPowerBoost(u16& io_attackPower, u32 i_atType);
 
-// Dom Rod lockout confuse: allowlisted enemy attacks nearby enemies for 10s.
+// Dom Rod lockout confuse: eligible commons (+ Darknut/Aeralfos) attack nearby
+// enemies for 10s. Bosses/traps are denylisted.
+bool dAlbwLockout_isDomRodConfuseEligible(fopAc_ac_c* i_enemy);
+// Legacy name — same as isDomRodConfuseEligible.
 bool dAlbwLockout_isDomRodConfuseAllowlist(fopAc_ac_c* i_enemy);
 void dAlbwLockout_onDomRodConfuseHit(fopAc_ac_c* i_enemy);
 bool dAlbwLockout_isConfused(fopAc_ac_c* i_enemy);
@@ -78,6 +82,13 @@ s16 dAlbwLockout_getConfuseAimAngleX(fopAc_ac_c* i_attacker);
 f32 dAlbwLockout_getConfuseAimDistanceXZ(fopAc_ac_c* i_attacker);
 f32 dAlbwLockout_getConfuseAimDistance(fopAc_ac_c* i_attacker);
 void dAlbwLockout_syncConfuseAtBits(fopAc_ac_c* i_attacker, cCcD_Obj* i_atObj);
+// Central CcS::Set hook: force At vs-enemy while a rival target is active.
+void dAlbwLockout_onCcObjSet(cCcD_Obj* i_obj);
+// Central fopAcM_searchPlayer* redirect (returns true when rival aim applies).
+bool dAlbwLockout_queryRivalAimAngleY(const fopAc_ac_c* i_actor, s16* o_angle);
+bool dAlbwLockout_queryRivalAimAngleX(const fopAc_ac_c* i_actor, s16* o_angle);
+bool dAlbwLockout_queryRivalAimDistanceXZ(const fopAc_ac_c* i_actor, f32* o_dist);
+bool dAlbwLockout_queryRivalAimDistance(const fopAc_ac_c* i_actor, f32* o_dist);
 
 // Flight-time proximity hit for Dom Rod ball (vanilla AT type does not register on enemy Tg).
 // Segment from i_segA to i_segB catches fast-moving ball frames; i_radius is XZ distance.
