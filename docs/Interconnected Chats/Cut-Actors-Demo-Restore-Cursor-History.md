@@ -1876,7 +1876,7 @@ Order of checks: `resLoad("E_MS")` phase → kill-switch → `entrySolidHeap 0x1
 
 Reads bits 0–7 (`arg0`) + 8–15 (`arg1`) (L196–197); `OS_REPORT`s its params at create (L195 — free logging already!); **no create-time switch-kill observed**; `entrySolidHeap 0x4B000` (L200) directly after resLoad. Priors: placement/environment first, heap second, params last.
 
-### A3. DZR placement sweep (byte-scan of `name `-padded ACTR names, all 79 stages; layer-blind — counts are pattern hits, not confirmed-active-layer placements)
+### A3. DZR placement sweep (byte-scan of `name`-padded ACTR names, all 79 stages; layer-blind — counts are pattern hits, not confirmed-active-layer placements)
 
 | Actor | Hits | Stages |
 |---|---|---|

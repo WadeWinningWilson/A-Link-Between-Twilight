@@ -8409,3 +8409,73 @@ Engine's wave_calm.ini rewrite inspected before playtest:
 FRONT (the previously-dead direction), still dead at the immediate waterline. If a gap remains,
 the spawn-stats line now says whether panes are being killed_by_infl (radii still too dense/large)
 or simply not spawning — measured, not guessed. Housing: verification complete; ball is the user's.
+
+---
+
+## §112 WHITE-TRIANGLE REGRESSION — plan (Housing, 2026-07-23)
+
+§109 perimeter WORKS (log: spawn-stats 300 spawned, killed_by_infl rising near coast). Separate
+regression: panes white again, not the §98/§100 sea-blue. Diagnosis from source + log:
+
+**NOT a lost-fix.** The §98/§100 color code is fully intact — `dKy_get_seacolor`
+(`d_kankyo.cpp:9453-9467`) still lerps `amb = bg_amb_col[1] + bg1_addcol_amb` against
+`dif = dungeonlight_col[2]` (stashed K0), and `drawWave:6948` still calls it. No source was deleted.
+
+**The regression is a RUNTIME VALUE, and we are BLIND to it (№31-C class).** There is NO color log
+line anywhere — grep for palette/seacolor/K0 markers in the current session returns nothing. §100's
+"noon Outset K0=(9,99,224)" was verified ONCE, by hand, at one time-of-day. If either endpoint is
+white at the tested scene state, `lerp(white→white)=white`. Two live hypotheses, indistinguishable
+without instrumentation:
+- **H-K0:** `dungeonlight_col[2]` (stashed K0) is white/empty at the current time/weather/layer —
+  the №113 stash populates only some lighting states; §100 proved noon, not all-day.
+- **H-amb:** `bg_amb_col[1]` path changed; but the whiter suspect is K0 (amb being white at noon was
+  always expected — the BLUE came from K0, so a white K0 = white panes).
+
+**PLAN (Engine, one instrumentation line first — do NOT re-guess the fix):**
+1. Log both endpoints at draw: `[WwFoam] §112 seacolor amb=(r,g,b) dif=(r,g,b)` once per arm (or
+   throttled). This is the §98 method — instrument the perceived stage, then read. Closes the
+   №31-C blindness that let the regression hide.
+2. User reports the logged values from the white-pane scene. If `dif` is white → H-K0 confirmed →
+   fix is making the №113 K0 stash populate the tested lighting state (not just noon). If `dif` is
+   blue but panes still white → the TEV/texture path regressed, different fix.
+3. Only then change color code — measured, not guessed (8+ dead audio hypotheses say instrument
+   first).
+
+**Not urgent per user** (visibility/perimeter is the win; color is cosmetic-follow). Snapshot +
+commits already secured this state (§ mod b6798e8 / receiver 3bdd32fe5b). Ferry §112 to Engine.
+
+---
+
+## §113 DUSK-API MERGE — Housing containment assessment (2026-07-23)
+
+User flags concern #6 (WIP blast radius). Housing verdict: **#6 is real but REVERSIBLE; #4 (parked
+surfaces → push set) is the IRREVERSIBLE one and the true hard-gate.** Measured state:
+- origin/main **2822** commits ahead of HEAD; HEAD **508** ahead — an INTEGRATION, not a merge.
+  Other instance correct: coexistence import, never `git merge origin/main` onto live WIP.
+- Tree is **DIRTY (20 uncommitted files)** right now — this session's work NOT yet loss-protected;
+  a merge onto a dirty tree = §106 failure-mode-1 (clobber) at scale.
+- **25** fork-local WW receiver source files (`d_ext_*`/`ext_seq`/`custom_assets`) + mod folder =
+  the covenant surface a push-capable mod system merges next to.
+
+**Reframe for the user:** a bad merge branch is deletable (git is reversible) → #6 bounded by
+isolation + a pre-merge tag. A bad PUSH is not un-sendable → #4 is where the only irreversible
+covenant/legal outcome lives (donor bytes or the still-unfixed 'Ivan' literal reaching a public
+remote). Gate #4 hard; treat #6 as recoverable.
+
+**PRE-MERGE CONTAINMENT PROTOCOL (Housing deliverable):**
+1. Commit the dirty 20 FIRST (loss-protect this session before any merge).
+2. Tag pre-merge HEAD (`pre-dusk-api-merge`) — recoverable anchor.
+3. Import on an ISOLATED branch off that tag — live WIP branches untouched; bad outcome = delete
+   branch, `checkout` tag, zero loss. Mod folder is a separate local repo (§108) — receiver merge
+   cannot touch it.
+4. **Never-push strip set (documented):** the 25 WW receiver files, parked audio-shadow/ext-seq
+   surfaces, mod folder. Local-only, never staged for push.
+5. **MANDATORY: greplist gate (M6) on the exe built from the MERGED tree before ANY push.** A merge
+   is the exact moment 'Ivan'/WW arcs sneak into a push set. Push stays gated until gate CLEAN +
+   user go — unchanged rule, more load-bearing post-merge.
+6. #2 (CMake /O2) is FPS-lane, but note: merged mod-presets can also change what gets PACKAGED —
+   Housing re-verifies the strip set survives any CMake reconfigure.
+
+**Housing does NOT execute the merge (Engine/integration lane).** Housing owns: the strip set, the
+post-merge gate run, and re-verification that no WW surface entered a pushable state. Offered to the
+user: I can do steps 1-2 (protective commit + tag) now on request — pure loss-protection, my charter.

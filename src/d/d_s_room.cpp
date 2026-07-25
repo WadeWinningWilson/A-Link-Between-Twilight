@@ -61,6 +61,13 @@ const ShadeWatcherSpawn kShadeWatchers[] = {
     // the antechamber (gate NULL). Link respawns at a custom offset (see the
     // kLinkSpawnOverrides table in d_albw_shade_refuge.cpp), not on the wolf.
     { "D_MN05", 12, { 6875.4951f, 3310.9399f, -15687.1270f }, (s16)16201, NULL },
+    // Outside the Fyrus boss room, Goron Mines (D_MN04 r12). Pre-boss door,
+    // always present (gate NULL), like Diababa. Link respawns beside the wolf
+    // (kLinkSpawnOverrides in d_albw_shade_refuge.cpp).
+    { "D_MN04", 12, { -5276.4111f, 1976.1000f, -12220.0811f }, (s16)-16690, NULL },
+    // Outside the Morpheel boss room, Lakebed Temple (D_MN01 r3). Pre-boss
+    // door, always present (gate NULL). Link respawns beside the wolf.
+    { "D_MN01", 3, { 3.2476f, -320.0000f, -333.0269f }, (s16)366, NULL },
 };
 }  // namespace
 #endif

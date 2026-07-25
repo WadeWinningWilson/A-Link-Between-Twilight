@@ -21,6 +21,7 @@
 #include "d/d_msg_object.h"        // Shade's Refuge: native message text/select injection
 #include "d/d_meter2_info.h"       // Shade's Refuge: dMeter2_fillALBWMeter (rest stamina)
 #include "d/d_albw_shade_refuge.h" // Shade's Refuge: death-respawn slot
+#include "d/d_albw_potion.h"       // Shade's Refuge: rest refills soulbound potion
 
 enum GWolf_RES_File_ID {
     /* BCK */
@@ -1907,6 +1908,9 @@ BOOL daAlbwShadeWatcher_c::talk(void* param_1) {
                     // stamina.
                     dComIfGp_setItemLifeCount(80.0f, 0);
                     dMeter2_fillALBWMeter();
+                    // Rest also tops the soulbound red potion back to its
+                    // current max charges (no-op if the player lacks it).
+                    dAlbwPotion_refillSoulboundToMax();
                 }
                 dComIfGp_event_reset();
                 mMode = 3;

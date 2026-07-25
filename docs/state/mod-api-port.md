@@ -5,7 +5,7 @@
 | **status** | First 10 logged; **#1 `albw-meter` extraction planning started** |
 | **target** | TwilitRealm `origin/main` Mod SDK (`.dusk` + services) |
 | **owner_impl** | — |
-| **next** | #1 P0 in an **external** mod repo (not this tree); host = stock main — see [mod-api-port-albw-meter.md](mod-api-port-albw-meter.md) D3 |
+| **next** | #1 P3 playtest; then P4 shield — see [mod-api-port-albw-meter.md](mod-api-port-albw-meter.md) |
 | **do_not** | Ship WW donor bytes as `.dusk`; split meter-spenders into separate mods; mid-WIP rewrite of Diababa/Shade AI onto ABI; big-bang merge `origin/main` |
 | **updated** | 2026-07-22 |
 | **detail** | [mod-api-port-albw-meter.md](mod-api-port-albw-meter.md) (#1 plan), feasibility/comparison canvases, `docs/albw-port.md` |

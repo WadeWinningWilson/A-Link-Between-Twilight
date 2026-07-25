@@ -106,15 +106,15 @@ void dAlbwPotion_consumeSoulboundDrink(int i_selItemIdx) {
     sync_select_items_for_slot(slot);
 }
 
-void dAlbwPotion_refillSoulboundIfEmpty() {
+void dAlbwPotion_refillSoulboundToMax() {
     if (!dAlbwPotion_isSoulboundRedInSlot(kAlbwPotionSoulboundSlot)) {
         return;
     }
 
-    if (dComIfGs_getBottleNum(kAlbwPotionSoulboundBottleIdx) == 0) {
-        dComIfGs_setBottleNum(kAlbwPotionSoulboundBottleIdx, dAlbwPotion_getMaxUses());
-        sync_select_items_for_slot(kAlbwPotionSoulboundSlot);
-    }
+    // Unconditional top-up to the current max charges (death respawn + Shade
+    // Watcher rest). Refills a partial count, not just a fully-empty bottle.
+    dComIfGs_setBottleNum(kAlbwPotionSoulboundBottleIdx, dAlbwPotion_getMaxUses());
+    sync_select_items_for_slot(kAlbwPotionSoulboundSlot);
 }
 
 void dAlbwPotion_applyDefaultInventorySlot11() {

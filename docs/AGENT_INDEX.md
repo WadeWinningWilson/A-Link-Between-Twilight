@@ -13,6 +13,8 @@
 
 **Interconnected Runs** (multi-agent collaboration): read [Interconnected Chats/INTERCONNECTED-RUNS.md](Interconnected%20Chats/INTERCONNECTED-RUNS.md) + [state/run-control.md](state/run-control.md) first. Dual sign-off before implement; drive only if the user asked.
 
+**Lanes — who does what:** [LANES.md](LANES.md) (Engine · Bridge = Cursor; History · Housing Security · **Librarian** = Claude). Data plumbing → Cursor; judgment/language → Claude. Doc-structure maintenance (compaction, supersession, lint, briefs) is the **Librarian** lane: [Librarian.md](Librarian.md) · queue [LIBRARIAN-QUEUE.md](LIBRARIAN-QUEUE.md).
+
 **Live state rules:**
 
 1. `docs/state/*.md` = **current truth** (overwrite the header fields; keep body short).

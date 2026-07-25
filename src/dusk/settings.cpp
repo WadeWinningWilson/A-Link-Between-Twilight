@@ -91,6 +91,7 @@ UserSettings g_userSettings = {
         .masterQuest {"game.masterQuest", false},
         .bossRefinement {"game.bossRefinement", false},
         .shadeRefuge {"game.shadeRefuge", false},
+        .realtimePotions {"game.realtimePotions", false},
         .heroShadeSecretBoss {"game.heroShadeSecretBoss", false},
         .albwJuniorMailTest {"game.albwJuniorMailTest", false},
         .albwSoulboundRedPotion {"game.albwSoulboundRedPotion", false},
@@ -394,6 +395,7 @@ void registerSettings() {
     Register(g_userSettings.game.masterQuest);
     Register(g_userSettings.game.bossRefinement);
     Register(g_userSettings.game.shadeRefuge);
+    Register(g_userSettings.game.realtimePotions);
     Register(g_userSettings.game.heroShadeSecretBoss);
     Register(g_userSettings.game.albwJuniorMailTest);
     Register(g_userSettings.game.albwSoulboundRedPotion);

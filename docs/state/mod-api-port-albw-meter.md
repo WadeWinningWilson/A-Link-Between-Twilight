@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | **P1 playtest** — fixed Win64 private-member layout crash (2026-07-23); retest green bar |
+| **status** | **P3 installed** (2026-07-25) — lockout economy + ATP/spinner on main `.dusk` v0.3.0; deferred confuse/double-claw/bombling orbit; next = P4 shield |
 | **package** | `albw-meter` (first-party `.dusk`, `FEATURES game`) |
 | **parent** | [mod-api-port.md](mod-api-port.md) |
 | **target host** | TwilitRealm `origin/main` Mod SDK |
@@ -95,7 +95,7 @@ Never “port all of #1 then enable.” Ship slices that each leave a playable g
 | **P0** | Scaffold `.dusk` + Config/Ui + Log; load/unload on main | Mods panel enable/disable; no gameplay change |
 | **P1** | Core pool + recovery + HUD draw (oil suppressed) | Human Link sees ALBW bar; wolf unaffected |
 | **P2** | Spend gates: sword / sidestep / roll / back-jump / bombs / bow / sling / boom / spinner / hook / Dom Rod / armor | Exhaustion + tired idle behave; lockout **not** yet |
-| **P3** | Lockout begin/end + perk suite | Empty meter → lockout perks; refill to max clears |
+| **P3** | Lockout begin/end + perk suite | Empty meter → lockout perks; refill to max clears. **Shipped in v0.3.0:** session reset, bow×3 / BA×2, boom +30% base, spinner mount+15% speed, Dom Rod free control, single-claw pin-to-0, iron-ball 93% gate, item ATP boosts. **Deferred (P3.1):** Dom Rod confuse AI, double-claw finisher, bombling orbit/uses, slingshot pause-stun |
 | **P4** | Shield module (manual / parry / bash / durability / HUD icons) | Parry grants/penalties hit mod pool |
 | **P5** | HS rework + Focused Arts (combat); shop via Config/cheat until #10 | FA bank + suppress ALBW during spend |
 | **P6** | Flurry Rush | Perfect-dodge slow-mo; unload requires scene change |

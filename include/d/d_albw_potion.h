@@ -47,7 +47,7 @@ bool dAlbwPotion_canDrinkSelectItem(int i_selItemIdx, u8 i_itemNo);
 
 void dAlbwPotion_consumeSoulboundDrink(int i_selItemIdx);
 
-void dAlbwPotion_refillSoulboundIfEmpty();
+void dAlbwPotion_refillSoulboundToMax();
 void dAlbwPotion_applyDefaultInventorySlot11();
 
 // Editor ALBW WIP toggle: grant or remove soulbound red potion in slot 11.
@@ -119,7 +119,7 @@ inline void dAlbwPotion_consumeSoulboundDrink(int) {}
 
 
 
-inline void dAlbwPotion_refillSoulboundIfEmpty() {}
+inline void dAlbwPotion_refillSoulboundToMax() {}
 inline void dAlbwPotion_applyDefaultInventorySlot11() {}
 
 inline void dAlbwPotion_editorSetSoulboundEnabled(bool) {}

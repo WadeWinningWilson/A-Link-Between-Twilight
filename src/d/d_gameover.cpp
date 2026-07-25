@@ -487,7 +487,7 @@ void dGameover_c::saveClose_proc() {
         }
 
 #if TARGET_PC
-        dAlbwPotion_refillSoulboundIfEmpty();
+        dAlbwPotion_refillSoulboundToMax();
 #endif
 
         // Reset Monkey lantern steal sequence flags if player hasn't regained lantern

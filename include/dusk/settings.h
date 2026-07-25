@@ -406,6 +406,10 @@ struct UserSettings {
         // (watcher spawns, death-screen "Last Shade Watcher" option, shop return
         // service). Off = whole system disabled. WIP — default off.
         ConfigVar<bool> shadeRefuge;
+        // Realtime Potions: use consumables WHILE moving (Dark-Souls-flask style)
+        // instead of the full-body locking drink/pour. Covers all bottle potions +
+        // lantern-oil refill (NOT fairy). Off = vanilla locking use. WIP — default off.
+        ConfigVar<bool> realtimePotions;
         // Hero's Shade Secret Boss: post-game real duel vs the Hero's Shade after
         // all Hidden Skills (F_0344). Off = disabled. WIP — default off.
         ConfigVar<bool> heroShadeSecretBoss;

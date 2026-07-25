@@ -2901,6 +2901,11 @@ EditorWindow::EditorWindow() {
             "point, respawn at the last watcher on death, and buy a return-to-watcher service "
             "in the shop. Off disables the whole system." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.realtimePotions, "Realtime Potions",
+            "Dark-Souls-flask style: drink potions and refill the lantern with oil WHILE moving, "
+            "instead of the full-body locking animation. Covers all bottle potions and oil "
+            "refill (not fairies). Off keeps the vanilla locking use." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.heroShadeSecretBoss,
             "Hero's Shade Secret Boss",
             "Post-game secret boss: after all Hidden Skills are learned, a final Hero's "

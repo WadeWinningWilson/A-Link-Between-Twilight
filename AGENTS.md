@@ -10,5 +10,9 @@ Then orient via **[docs/AGENT_INDEX.md](docs/AGENT_INDEX.md)** — the map of
 live state files (`docs/state/*.md` = current truth), the Interconnected-Runs
 protocol for multi-agent work, and per-topic detail docs.
 
+Lanes (who does what): [docs/LANES.md](docs/LANES.md) — Engine · Bridge (Cursor);
+History · Housing Security · Librarian (Claude). Doc-structure maintenance is the
+**Librarian** lane ([docs/Librarian.md](docs/Librarian.md)).
+
 Build/workflow rules: [.cursor/rules/build-fps-safe.mdc](.cursor/rules/build-fps-safe.mdc)
 (RelWithDebInfo via `build_run.bat`; never reconfigure CMake mid-session).
