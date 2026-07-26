@@ -8624,3 +8624,345 @@ Merge chat reports RARC working again; now doing Linkle audio. Housing status:
   → "WW survives the merge, confirmed."
 
 Anchor `pre-dusk-api-merge` still the recovery floor.
+
+## §118 MERGED STATE COMMITTED — loss-protected, pre-Outset-test (Housing, 2026-07-25)
+
+Merge landed in this tree (integrate/dusk-api-coexist); 118 dirty entries incl. full `sdk/`.
+Committed after covenant scan (CLEAN: no donor payloads, no WW leak into sdk/mods; 'Ivan' literal
+still present → push stays gated).
+- Receiver: **`8a4a8c54fc`** (= anchor +1; `git describe` pre-dusk-api-merge-1-g8a4a8c54fc)
+- Anchor `pre-dusk-api-merge` @ bfa264511c — rollback floor intact
+- Mod snapshot `modfolder-SNAPSHOT-20260725-185110` (1835f/165MB); mod repo unchanged (merge was
+  receiver-side)
+- Push: GATED (101 ahead upstream; Ivan literal + full merged-exe gate required)
+
+**NEXT: user tests Outset on the merged build.** This is the §115/§116 re-verify made live —
+Housing re-verify items convert from "reported" to "measured" by what the test shows: WW mount
+resolution (§116 radius), BMD load / BDL4→BMD3 arcs (§114), wave systems (§109 perimeter, §112
+color), voice (§94). Report what's working/broken; Housing maps results against the open ledger.
+
+## §119 OUTSET MERGE-TEST RESULTS — WW survived; 4 fidelity/interaction problems mapped (Housing, 2026-07-25)
+
+User tested Outset on the merged build (commit 8a4a8c54fc). **STRUCTURAL WIN: WW is here and
+functioning** — the merge did not destroy WW; residual issues are render-fidelity + interaction,
+not structural loss. Anchor `pre-dusk-api-merge` no longer the likely fallback.
+
+### CONFIRMED WORKING (ledger items CLEARED / advanced)
+- **RARC name-parse / WW mounts (§116): CLEARED** — Outset populates, boots, intro boots.
+- **BMD load / §114 LOAD concern: CLEARED** — models load (Link + props render). §114 REFINES:
+  the load blocker was RARC (§116, fixed); the residual J3DShape rewrite shows as RENDER artifacts,
+  not load failure (see problem 1).
+- **Wave perimeter (§109/§110/§111): LANDED** — waves-line in front, interactive exteriors after
+  an interior work.
+
+### PROBLEM AREAS (map + route — all Engine/render lane; none covenant)
+1. **Link lighting/texture — MOST PRONOUNCED (HIGH).** Solid-color Link (all-blue AND all-gold
+   variants) + a **warped texture fanning from sword/shield**. The warp is the classic
+   **J3DShapeMtx/J3DShapeDraw rewrite signature** (merge changed both; §114) — a broken
+   matrix/display-list producing degenerate triangles from a joint. **Selective**: static Outset
+   props render fine, LINK's model breaks → shape/matrix-TYPE specific (Link uses richer rigging).
+   → Engine: the §114 shape-render rewrite manifesting on Link. Distinguish from the NEUTRAL-AMBIENT
+   recipe (§104, pre-existing Link lighting).
+2. **Blue waves (§112).** Was white triangles; now BLUE. Still wrong (color thread OPEN). → Engine
+   seacolor-endpoint instrumentation (§112 plan unchanged).
+3. **Missing shoreline beach crash (system 4; §101/§103).** Room44 model1 9-layer still not
+   rendering — and the §114 shape rewrite may now compound it (BTK/vertex path). → Engine fidelity
+   diff vs Bridge mat-ref, now post-merge.
+4. **Interior ladder collision/interactivity (NEW-ish).** Known thread
+   (`docs/state/ladder-exterior-interaction-research.md`). → investigation: merge-caused (collision/
+   actor changes) vs pre-existing WW interior gap. Route to whoever owns interior interactions.
+
+### HOUSING HYPOTHESIS (flagged, hedged) — shared-blue root?
+Link-solid-BLUE (problem 1) AND wave-BLUE (problem 2) both post-merge MIGHT share a
+color-register/TEV-state root (a value not reset between draws, or a palette the merge shifted). OR
+coincidence (Link=lighting recipe, wave=palette lerp — different roots). **Flag for Engine to check
+together first** — if one fix clears both, big leverage; if not, they split. Do not assume shared.
+
+### Covenant
+All four are render/interaction fidelity — no leak, fail-closed holds. No containment issue. Push
+still gated (Ivan + merged-exe gate).
+
+### Not yet reported (Housing asks user, low): Aryll VOICE in the cutscene post-merge — working?
+(shadow-wave path shared with the merge chat's Linkle audio, §117 watch flag).
+
+## §119b Aryll voice+dialogue CLEARED post-merge → merge re-verify COMPLETE (Housing, 2026-07-25)
+
+User confirms Aryll voice + dialogue work post-merge (the §117 shadow-wave shared-surface watch
+flag clears — the merge chat's Linkle audio did not regress WW voice). **All WW merge re-verify
+items now resolved:** RARC/mounts ✓, BMD load ✓, waves perimeter ✓, exteriors-after-interior ✓,
+voice+dialogue ✓. Residual = the 4 render/interaction problems in §119 (none structural, none
+covenant). Merge is a confirmed WW success; open work is polish + housekeeping.
+
+## §120 REPRIORITIZATION (user, 2026-07-25) — WW-content-first; top-3 set
+
+**Deprioritized (bottom):**
+- **Link lighting/warping (§119.1) → PARKED.** Link is TP content, not WW — its fidelity is not the
+  covenant's concern for now.
+- **`Ivan` literal (§102) → bottom.** Fix "before the push comes," not now.
+
+**Hypothesis CORRECTED (user):** the §119 shared-blue idea is REFUTED. Link-blue is a **LIGHTING
+bug fused to the texture warp** (the deprioritized TP-Link §114 shape/lighting issue), NOT a
+color/palette root, and NOT shared with wave-blue. **Wave color is its own thread.** Do not chase a
+shared root.
+
+**Containment status (user framing accepted):** strip set now exists as an artifact
+(`docs/WW Linked/PUSH-STRIP-SET.md`); tree is **push-safe by procedure**. Push gate = rebuild → M6
+greplist CLEAN → Tier-3 empty → user go. Housing containment for the merge: DONE. Whose turn: user.
+
+**TOP-3 PRIORITY (user-decreed, all Engine/Cursor):**
+1. **Blue wave color** — the wave color thread (§112), NOT Link. Seacolor-endpoint instrumentation.
+2. **Beach crash (system 4)** — Room44 model1 9-layer fidelity (§103), post-merge.
+3. **Interior collision** — the ladder fix; user notes **Cursor's `ClrWallNone` ladder one-liner**
+   is the route (clear wall-collision flag). (§119.4)
+
+Parked alongside: Grandma's model/anim. Housing: no open blocking item; monitoring the top-3 as
+covenant-neutral render/interaction work (none touch containment).
+
+## §121 LADDER (top-3 #3) — it's an ACTOR, not collision; ClrWallNone is a dead end (Housing DECOMP-FIRST, 2026-07-25)
+
+User clarified: ladder has collision (solid) but won't CLIMB — interactability, not collision, and
+persistent, ladder-only. Donor read:
+- **A ladder is an ACTOR: `d_a_obj_ladder.cpp` + `d_a_player_ladder.inc`** (Link procs
+  `daPyProc_LADDER_UP_START_e`…`_MOVE_e`). The climb is triggered BY the actor, not by mesh.
+- **Diagnosis:** room DZB gives solidity (the "SOME collision"); the **`d_a_obj_ladder` actor that
+  drives the climb is not spawned.** Classic WW-interior pattern — geometry mounts, placed
+  interactive actors inside don't. (Likely `LinkRM`, Link's house upper-floor ladder.)
+- **`ClrWallNone` REFUTED as the fix** — it clears WALL collision (unblocks Link), unrelated to
+  climb. User's interactability framing confirmed; the one-liner would waste a round.
+- **DZB adaptation INNOCENT** — `adapt_bdl_arcs.py` clears through-flags (bits 14-23) for solidity;
+  climb is not a DZB attribute. No covenant-pipeline change.
+
+**Fix route:** mount/port the `d_a_obj_ladder` actor for the room. **History:** is the ladder in the
+room's actor/census list (placed actor we skipped)? **Engine:** mount it via the ExtNpc/population
+path (solidity already present from DZB; actor adds the climb trigger + Link's ladder procs). Not
+Housing's to build; covenant-neutral (interior interaction, no purity surface).
+
+## §121b RETRACTION — §121 was WRONG; History already CONFIRMED the ladder fix (Housing, 2026-07-25)
+
+**§121 is fully retracted.** Housing did a shallow donor read and concluded "ladder = missing
+`d_a_obj_ladder` ACTOR, `ClrWallNone` is a dead end" — WITHOUT reading History's existing research
+(`docs/state/ladder-exterior-interaction-research.md`). User had flagged the docs exist. This is the
+§106 re-derivation failure, repeated after acknowledging it. Owned.
+
+**ACTUAL confirmed status (History §0, 2026-07-24, probe-verified):**
+- Cause: **`FLAG_WALL_NONE` (bit 2) stuck SET on Link's `mLinkAcch`** → skips the wall solve
+  (`d_bg_s_acch.cpp:368`) → `ChkWallHit` never true → ladder gate never fires. `wallCode=4` reads
+  via an independent line-check, which is why it looks like "has collision, won't climb."
+- The ladder BG is MEASURED PERFECT (`prio=0 used=1 moveBg=0`, registered+ready) — NOT a missing
+  actor (§121 refuted by direct measurement).
+- Root: vanilla clears the flag at `procDoorOpen→ClrWallNone` (`d_a_alink_demo.inc:2737`); our
+  room-lane transition teleports Link in BEFORE that clear runs. The progressive exterior break is
+  the SAME stuck flag following Link out (unified).
+- **CONFIRMED FIX (unshipped as of v1.4.1-153):** add `mLinkAcch.ClrWallNone()` (+ re-enable line
+  check) in `forceLinkGroundReprobe` (`d_ext_npc_mount.cpp:4263`) — already called on entry (:4905)
+  + exit (:4950), so the single addition fixes interior climb AND exterior break. Donor-faithful.
+- Systematic across ALL interiors (Link's house roomId=255 + Sturgeon's roomId=2, both
+  `acchFlags=0x4120e4`) — matches user's "all interiors share this."
+- "Might be larger" (user): the exact SETTER isn't disambiguated (flag-signature caveat), but the
+  FIX holds regardless — not larger in scope, just unimplemented.
+
+**`ClrWallNone` one-liner (user/Cursor) was CORRECT all along.** Top-3 #3 = SHIP History's
+documented fix (Cursor/Engine, Link-state lane). Housing adds nothing here except this correction;
+DO NOT re-open the actor hypothesis.
+
+**Process fix for Housing:** DOCS-FIRST before DECOMP-FIRST on any thread another lane owns — read
+the lane's state doc before donor-reading. This is the second re-derivation miss (§106 class);
+recording it against the pattern.
+
+## §121c LADDER — verified: fix SHIPPED, exterior closed, interior RESIDUAL open (Housing code+doc read, 2026-07-25)
+
+User: exterior collision (interior-return) is FIXED; ladder still broken; is the ladder an extension
+of the same fix? **Code-verified answer: the fix is already shipped on ALL paths — the ladder's
+residual is a SEPARATE (re-set) mechanism, not an un-applied path.**
+- `forceLinkGroundReprobe` (`d_ext_npc_mount.cpp:4263`) NOW contains `mLinkAcch.ClrWallNone()` +
+  `OffLineCheckNone()` (№269, :4273), called on entry (:4905), exit (:4962), :6479.
+- **Exterior FIXED** by the exit clear (matches user). **Interior ladder STILL broken despite the
+  ENTRY clear (:4905) running the same ClrWallNone** → therefore NOT "the same fix un-applied";
+  `WALL_NONE` is being RE-SET after the entry clear, or cleared before Link reaches the ladder.
+- This is exactly History §0's un-disambiguated caveat: "a non-door setter is involved" / line flag
+  re-enabled after. User's "might be larger" CONFIRMED — residual re-setter, not the shipped fix.
+- **Next step is NOT new research — it's History's already-specced §3 probe:** at the ladder, dump
+  `m_priority`/`ChkUsed`/`ChkMoveBg` for the LineCross-resolved BG + `mLinkAcch.m_flags`. Routes to
+  re-setter (state family) vs G1 priority vs G2/G3 dzb. **Cursor/Engine (Link-state/BG lane).**
+- Housing role: verification only; do not re-theorize (§121b lesson). The probe is documented; run it.
+
+## §122 WATER split into per-effect docs; waves ACCEPTED, shore-crash WHITE (Housing, 2026-07-25)
+
+User: blue waves + white tips are IN (system 2 ACCEPTED); reorganize water docs; shore effect now
+renders WHITE water (system 4 fidelity FAIL — Engine "didn't know what to do with it"). Two
+resources incoming (standby).
+
+Done:
+- New folder `docs/WW Linked/Water effects/` — per-effect docs, taxonomy stays as INDEX:
+  - `waves.md` (system 2) — **ACCEPTED**; resource landing spot.
+  - `shore-crashing.md` (system 4) — **BROKEN: white water**; known location (Room44 model1),
+    mat-ref sheet exists (Bridge 0.30.2); white = grayscale/foam tex drawn WITHOUT palette/blend
+    modulation (same CLASS as system-2's white-triangle bug, different material — blend/vertex-alpha
+    mismatch); resource landing spot.
+- Taxonomy statuses updated (sys2 ACCEPTED, sys4 BROKEN-white) + folder pointer.
+- great-sea (system 1) = future entry, not yet created (no active work).
+
+Routing — **Engine/Cursor:** shore-crash fidelity diff vs Bridge's `model1_mizu_mat_ref` (blend
+mode + vertex-alpha VTX1 Color0 + 16 BTK tracks); "white" = a blend/alpha mismatch, not missing
+geometry. **User:** posting 2 resources (wave + shore) → landing spots ready; eye = acceptance.
+**Housing:** docs marked, STANDBY for resources. **Bridge:** mat-ref already delivered; nothing new.
+
+## §123 SHORE reference + 9-layer breakdown captured (Housing, 2026-07-25)
+
+User posted the Outset-shoreline VISUAL TARGET (blue water + white foam crashing on sand) + the
+composing GRAYSCALE foam textures + confirmed the doogus video (youtu.be/8NL9Cc05CYk, already the
+[video] source since §99) has an Outset-specific section. Captured into
+`Water effects/shore-crashing.md`:
+- Visual target + the bug-naming invariant: **water BLUE, foam WHITE** — our failure inverts it
+  (water white). Root class = grayscale foam drawn without palette+blend (system-2 lesson, sys-4
+  material).
+- Composing grayscales map to model1's `Txa_sirokuro_a` + `Txa_nami_*` (Bridge §99c) — corroborates
+  "grayscale is a MASK/CONTROL, never literal color."
+- Full 9-layer breakdown (crash A+B scroll, vertical crash, light foam, DARKEN ebb foam, lagging
+  black shadow; vertex-alpha fades) — the video's Outset section, previously only 1 taxonomy row.
+- Reinforces the Engine fix route: diff vs `model1_mizu_mat_ref` for blend (LIGHTEN/DARKEN) +
+  vertex-alpha + grayscale→palette/TEV (not opaque white).
+
+Video was already sourced in the parent taxonomy; its Outset portion is now fully in the per-effect
+doc per user. STANDBY for the further resource the user flagged.
+
+## §124 SHORE white — corrected diagnosis + "what Engine did" audit (Housing, 2026-07-25)
+
+User corrections: (1) BOTH water AND foam white (not water-only); (2) why didn't Engine follow the
+decomp/reference?; (3) it should have been abided by.
+
+**Housing code audit — the reframe:** grep shows NO custom shore-crash/mizu handler in src.
+model1 (the 9-layer beach material) MOUNTS GENERICALLY via `d_ext_npc_mount.cpp` (model2/model2_btk)
+through standard J3D + BTK. **Engine did not write shore code to get wrong — the 9-layer effect is
+DATA baked in the donor BDL's own `SC_01_mizu*` materials, not code.** So "refer to the decomp"
+here = render the mounted BDL faithfully; the BDL IS the decomp-faithful spec.
+
+**Both-white diagnosis (cleaner):** not a palette swap (would turn foam blue) — the grayscale→palette
+mapping is absent ENTIRELY → flat white regardless of 4-bit value. Our J3D isn't honoring the BDL's
+baked TEV/blend/palette. Prime suspect: §114 merge `J3DShape/ShapeDraw/ShapeMtx` rewrite (same one
+warping Link), OR a material-draw gap in the generic secondary-model mount.
+
+**Answer to user #2/#3:** DECOMP-FIRST WAS the right rule; it applies here as "render the BDL's
+baked materials," which our J3D currently doesn't. It's a J3D material-fidelity bug, not Engine
+writing shore logic without the decomp. Caveat: if Engine made an uncommitted shore change, it's
+not in the committed tree Housing audited — must be checked on the merge tree. Routing unchanged:
+Engine diffs live render vs `model1_mizu_mat_ref` (blend/vertex-alpha/TEV reaching GX draw).
+
+## §125 §112+§103 fixes VERIFIED + §124 self-correction + K0-stash pattern flag (Housing, 2026-07-25)
+
+Engine report verified on disk (all three present):
+- **§112 wave color:** wrong endpoint = `dif` (K0 blue). F_DL01 PAL0 had LOST the №113 stash
+  (garbage plight2). Re-injected: noon amb=(255,255,255) dif=(9,99,224). Log `[WwFoam] §112 seacolor
+  amb dif`. `dungeonlight_col[2]` read intact (`d_kankyo.cpp:9464`).
+- **§103 shore white:** ROOT = **MAJI type 0x40 skipping C0/C1/K0** (color registers) → model1
+  materials got no seacolor → flat white. Fix: feed seacolor into C0/C1/K0, force XLU z-update=0,
+  one-shot fidelity probe vs mat-ref (`d_ext_npc_mount.cpp:2450,2489`).
+- **`convert_lighting.py` hardening (№267):** preserves `event_list.dat` + live-only members so
+  re-inject can't strip them — covenant-good (event data integrity).
+
+**§124 SELF-CORRECTION (owned):** my §124 prime suspect (the §114 J3DShape rewrite) was WRONG. Real
+cause = MAJI 0x40 skipping color registers — my SECOND suspect ("material-draw gap"), not the shape
+rewrite. Merge-blame reflex; corrected.
+
+**PATTERN FLAG — №113 K0 stash is a recurring merge/rebuild casualty (2nd loss: §100 fixed → §112
+lost again).** convert_lighting hardening now protects re-strips (good, №176 tool-guarantee), but a
+fresh merge could regenerate PAL0 and drop it. **Housing adds "verify seacolor endpoints" to the
+post-merge WW re-verify checklist (§118/§119):** the `[WwFoam] §112 seacolor` log is the probe — noon
+≠ (255,255,255)/(9,99,224) ⇒ stash lost again.
+
+**USER EYES:** panes = white base + blue tint (§112); shore = beach-crash MOTION now visible (§103);
++ the two log lines. Both top-3 items #1 (wave color) and #2 (beach crash) at acceptance-test stage.
+
+## §126 SHORE WHITE — ROOT PINPOINTED from TEV dump; §125 self-correction (Housing, 2026-07-25)
+
+User: the §103 report IS what made the water white. Correct — verified from Bridge's
+`model1_mizu_tev_stages.csv` (the dump Engine should have read).
+
+**ROOT (evidence, not hypothesis):**
+- Material 0 `SC_01_mizu` = the OPAQUE base (mat-ref: "konst stub, BM_NONE"). Its stage 0 is
+  `KONST ZERO ZERO ZERO → C0` — **color output = K0, drawn opaque.** Whatever is in K0 IS the base
+  water color, painted solid.
+- Engine's §103 `wwApplyModel1SeaPalette` (`d_ext_npc_mount.cpp:2450`) does
+  `setTevKColor(0, &kAmb)` → **K0 = amb = white (255,255,255)** → material 0 renders OPAQUE WHITE →
+  white water. That is the entire bug.
+- **Code contradicts its own comment:** comment "dif=K0 blue"; code `amb→K0` (white). K0 needed the
+  BLUE (dif); got white.
+
+**FIX (Engine):** material 0's K0 must be the WATER color, not amb-white. Leading fix = K0 ← dif
+(blue) per the comment's own intent (swap `&kAmb`→blue for the KColor). **But verify against the
+donor's AUTHORED K0** (DECOMP-FIRST for real) — the donor bakes a specific konst; the injection
+should match it or not override at all. The C1/C0 blends (the foam layers) are separate; the opaque
+BASE (mat0/K0) is what's white.
+
+**§125 SELF-CORRECTION (owned):** §125 accepted Engine's report as a fix — verified the code was
+PRESENT but did NOT audit whether the APPROACH was sound. The approach (inject pane-seacolor into
+model1's baked registers, amb→K0) IS the cause. §124's principle (don't override the BDL's authored
+registers; read the TEV dump) was right; §125 wrongly walked it back. Housing must audit the
+approach against the donor material, not just confirm code exists — the "verify at the stage that
+matters" rule applied to my own sign-off.
+
+**DECOMP-FIRST note for the record:** the fix data existed the whole time in Bridge's
+`model1_mizu_tev_stages.csv`. Assuming register semantics ("mizu reads C1 as tint") instead of
+reading the dump caused the regression. This is the case the mat-ref sheet was made to prevent.
+
+## §127 SHORE water COLOR — hypothesis (a) confirmed; authored-value gap (Housing, 2026-07-25)
+
+White fixed (§126). New discrepancy (user eye + screenshots): our water is TOO DARK; a lighter blue
+shows at geometry edges and clashes. User hypotheses (a) color wrong / (b) lighting / (c) placeholder.
+
+**Evidence (mat-ref structure):**
+- Material 0 `SC_01_mizu` = opaque base, color from a **REG** (BM_NONE). ← where Engine injects.
+- Material 1 `SC_01_mizuB_v_x` = XLU foam layer, color from **VTX** (mesh vertex colors), texture
+  `Txa_umi_kiwa_01` (sea-EDGE foam). ← the donor's AUTHORED color = the lighter blue the user sees.
+
+**Verdict: (a) CONFIRMED, primary.** Engine's §103 injected the PANE dif `(9,99,224)` — a LERP
+ENDPOINT (meant to mix with white; that's why panes looked right) — as model1's SOLID opaque base.
+An endpoint painted flat is too dark, and it CLASHES with the donor's authored vertex-color foam
+(the lighter blue). User's "preset for this shade" = correct: material 1's VTX colors ARE the
+donor's preset; our injected base isn't matching. (b) lighting = minor; (c) not placeholder — the
+lighter blue is the donor's REAL authored color showing through.
+
+**Fix (continues §126 — stop injecting pane seacolor):**
+- **BRIDGE ASK:** dump model1's AUTHORED konst/tevColor RGB VALUES per material (mat-ref has
+  structure, NOT the baked color values — the missing DECOMP-FIRST data). That is the donor-faithful
+  water base color.
+- **ENGINE:** replace the pane-seacolor injection with model1's authored REG color from Bridge's
+  dump. Target = the lighter blue the VTX foam already shows, not the dark pane endpoint.
+
+**Shore crash: PARTIALLY WORKING** — material 1 (`umi_kiwa` foam edge) renders around pilings +
+top-right (user spotted). Not absent; base color + full-layer compositing is what's off.
+
+Housing note: still can't hand Engine the authored value (not in the dump) — routed to Bridge.
+This whole §126–§127 arc is the DECOMP-FIRST case: assume register values → regressions; dump +
+use them → faithful.
+
+---
+
+## §112 Bridge CLEAR — model1 authored tevKColor/tevColor RGB (Cursor, 2026-07-25)
+
+**Ask (Housing §127):** dump model1's authored konst/tevColor RGB values per material — mat-ref
+had structure; Engine needs the baked donor base color (stop inventing pane-endpoint RGB).
+
+**Tool 0.34.0** — `python -m ww_bridge model1-dump` now writes:
+
+| Artifact | Content |
+|----------|---------|
+| `reports/model1_mizu_colors.csv` | per-mat matColor / C0–C3 / K0–K3 RGBA |
+| `reports/model1_mizu_mat_ref.md` | colors table + per-mat K/C lines + stage kcsel/kasel |
+| `reports/model1_mizu_tev_stages.csv` | + kcsel/kasel columns |
+
+**Donor-faithful highlights (file-baked, not fills):**
+
+| mat | name | notable registers |
+|----:|------|-------------------|
+| 0 | `SC_01_mizu` | **K0=(70,90,150,255)** · **C1=(70,90,150,255)** — opaque base / konst stub |
+| 4 | `SC_01_mizu_v(2)` | K1=(100,180,180,255) · K2=(80,100,150,255) |
+| 6 | `SC_01_mizu_v(3)` | K0=(70,90,150,255) · K1=(100,200,200,255) |
+| 7 | `SC_01_mizu_v(4)` | C0=(0,0,0,255) · K1=(0,0,0,50) |
+
+Most XLU foam mats keep K*=white; stage `kcsel` is usually **K0** (konst register select).
+mat0's sea blue `(70,90,150)` is the opaque REG/KONST base — the value Engine should honor
+instead of pane dif `(9,99,224)`.
+
+**Lanes — Engine:** replace pane-seacolor injection with these authored registers (esp. mat0
+K0/C1). **Bridge:** CLEAR on §112 / Housing §127 color dump.

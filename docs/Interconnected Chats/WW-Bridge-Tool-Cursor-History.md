@@ -297,6 +297,7 @@ No changes to B0/B4, schema v2, the handshake, or GAP-3 — all accepted and una
 | 2026-07-22 | Bridge | §85c `voice-map` INF1→charVoice→CharVoice_0.aw (0.26.0) |
 | 2026-07-22 | Bridge | §86b stage CharVoice_0.aw + ibnk_135/wsys_135; CLEAR (0.26.1) |
 | 2026-07-22 | Bridge | §88b `voice-listen` CharVoice WAV pack (0.27.0) |
+| 2026-07-25 | Bridge | §112 model1 tevK/tevColor RGB dump (0.34.0) |
 | 2026-07-23 | Bridge | §111 acceptance drives harness (0.33.0) |
 | 2026-07-23 | Housing→Bridge | §110/§110b loss-protection BOTH (mod+receiver+bridge tool) |
 | 2026-07-23 | Bridge | §109 predictions-as-code verdict engine (0.32.0) |
@@ -333,6 +334,18 @@ Wired package `voice/` cues at `dExtWw_handleDemoMessage`: SE 0x481F / wave(port
 ## §84 / Engine type-7 + SoundTable vol (2026-07-22)
 
 Ported Bridge `control/` CSVs: type-7 → DuskDsp freeverb + AutoMixer send; SoundTable `vol_over_127` → ExtSeq master. Runtime chases paused. Bus: §84.
+
+## §112 / model1 baked konst/tevColor RGB (2026-07-25)
+
+Donor-faithful base colors per `SC_01_mizu*`. Tool **0.34.0**.
+Artifacts: `model1_mizu_colors.csv` + colors table in `model1_mizu_mat_ref.md`.
+
+```bat
+python -m ww_bridge model1-dump
+```
+
+Notable: mat0/mat6 `K0=(70,90,150,255)`; mat4 `K1=(100,180,180)` `K2=(80,100,150)`;
+mat6 `K1=(100,200,200)`.
 
 ## §111 / acceptance drives (2026-07-23)
 
