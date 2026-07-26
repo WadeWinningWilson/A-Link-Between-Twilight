@@ -19,7 +19,7 @@ anm->mRotX = windSpeed + windSpeed * cM_scos(windSpeed * (g_Counter.mTimer + i*2
 - Wind source: `dKyw_get_wind_pow()` (the kankyo wind system — the receiver has wind).
 - **Our port has no `mRotX` animation → static grass.** Fix = drive per-blade `mRotX` by this
   formula from `dKyw_get_wind_pow()`. Depends on kankyo wind being live on the host stage.
-- Feasibility: MEDIUM — small extension of hot grass code once wind is confirmed feeding through.
+- **§134: SHARED wind root with the wave panes** — both dead because host windPow≈0 (WW wind = Wind-Waker state, absent on TP host). ONE fix (feed ambient host wind) restores grass sway AND pane drift/skew. Feasibility: the mRotX code may need adding, but the WIND it reads is the shared blocker.
 
 ## 2. CUT/RUN VFX COLOR (currently BLACK) — [verified] `d_grass.cpp:80,153`
 The grass run-through + cut scatter particles take their color from the ROOM's tev-str K0:

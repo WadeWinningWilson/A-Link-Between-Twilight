@@ -9067,3 +9067,337 @@ but no swoosh). Fixed: slot1 create flags `0x11001284` (daBg parity), entry-befo
 mat0 z-write ON; §127 colors stand. Bridge §128b shipped `model1_btk_motion.md` (Hermite SRT, 16
 bindings). **SHIPPED — awaiting user eye-check on Room44 swoosh** (user not yet playtested). Housing:
 no verify needed unless asked; shore-crashing.md reflects it.
+
+## §132 SHORE MOTION WORKING (user eye) + snapshot + ladder-ferry ruling (Housing, 2026-07-25)
+
+**Shore crash ANIMATES** (user screenshots, matching WW much better). Substantial progress. Snapshot
++ commits: mod `44c4d03` / snapshot `20260725-234051` / receiver `2ca3547076` (anchor+3); covenant
+clean. **Two open shore discrepancies:** (1) water COLOR (§127, Bridge dumping authored values);
+(2) NEW — effect SPEED/TIMING vs donor (BTK scroll rate/phase may not match model1.btk authored
+speeds → check our BTK frame rate vs Bridge `model1_btk_motion.md`). Both routed; Engine + Bridge.
+
+**LADDER-FERRY RULING (user q):** the ladder fix (§121c residual — stuck WALL_NONE re-setter) BUILD
+is ENGINE's (implement History's §3 probe → fix), NOT Housing's to build (charter: audit, not build).
+**But Housing SHOULD receive the ferry as a VERIFICATION handoff** — verifying a shipped ladder fix
+against History's diagnosis + the code is exactly Housing's lane (cf. §121c/§125/§126 verification
+passes). Housing can hold it alongside visuals with no conflict: both are audit/verify passes, and
+visuals are themselves mostly waiting-on-Engine/Bridge. **So: yes route it to Housing to VERIFY, no
+to BUILD.** Roles stay clean — Engine builds, Housing audits, History diagnoses.
+
+## §133 WAVE panes bob-only = missing WIND drift; SHARED root with grass sway (Housing DECOMP-FIRST, 2026-07-25)
+
+User (3rd shore/wave item): pane color vanilla-true, but ours BOB up/down; vanilla has HORIZONTAL
+movement. Verified against source:
+- Donor `wave_move` (`d_kankyo_rain.cpp:1416-1418`): `mPos.x/z += windPowVec.x/z * mWaveSpeed *
+  mSpeed * (strengthEnv*.5+.5) * (mAlpha*.8+.2)` → sprites DRIFT in wind direction. Plus drawWave
+  skew `mSkewWidth = windPow * …` → top verts lean horizontally. BOTH wind-driven.
+- The vertical pulse (`mCounter/sin`) is wind-INDEPENDENT → runs regardless → our bob-only.
+- **VERIFIED: we feed NO wind; no F_DL01 wind config; d_grass.cpp (sway) + d_kankyo_rain.cpp (panes,
+  ×13) both need `dKyw_get_wind`.**
+
+**SHARED-ROOT HYPOTHESIS (probe-gated, NOT concluded):** host stage windless → pane drift+skew dead
+AND grass sway dead — same zero-wind root (§130 HUNT 1 + §133). **Discriminating probe (Engine):**
+log `dKyw_get_wind_pow()` on F_DL01. Zero → feed kankyo wind (one fix restores pane horizontal drift
++ grass sway); non-zero → wind reaches effects, drift blocked elsewhere. Do NOT assume shared until
+probed (past over-claims).
+
+**Shore status update (user):** (1) COLOR §127 — Bridge+Engine shipped authored values; IMPROVED
+but not perfect/vanilla-true (still open, tuning). (2) SPEED/TIMING §132 — confirmed needs fix. (3)
+NEW pane MOTION this §133. **LADDER:** user reports to Engine, ferries back to Housing to VERIFY
+(§132 ruling) — acknowledged, standby.
+
+## §134 WIND ROOT CONFIRMED — code present, host windless; fix SPEC'D for Engine return (Housing, 2026-07-25)
+
+Lockout-productive diagnosis (Engine+Bridge usage-locked). §133 hypothesis → CONFIRMED via code read:
+- **Pane skew + wind-drift CODE IS PRESENT** (§98 build — Engine's "60-something" reference verified):
+  `mSkewWidth` computed `d_kankyo_rain.cpp:6737-6739`, applied in draw `7029-7044`
+  (`vp.x = ±width ± width·mSpeed·mSkewWidth`); wind read via `dKyw_get_wind_*` throughout.
+- **ROOT: windPow ≈ 0 on the host.** WW wind DIRECTION = `dComIfGs_getWindX/Y()` (`d_kankyo.cpp:973`)
+  = the **Wind-Waker player-set state**. TP has NO Wind Waker → state unset → windPow 0 →
+  `mSkewWidth=0`, drift=0 → only the wind-INDEPENDENT vertical pulse survives → BOB-ONLY. We set no
+  wind anywhere (verified — host inherits TP default ≈ 0).
+- **CONFIRMED SHARED ROOT:** the SAME zero-wind kills grass sway (§130 HUNT 1, `dKyw_get_wind_pow`).
+  One root, two symptoms (panes + grass). **Shore crash is NOT wind — it's BTK (§128); its timing is
+  the BTK rate (§132).**
+
+**FIX SPEC (ready for Engine's return — small, one change):** feed an ambient wind on the WW host
+stage — set a non-zero wind direction + power in the kankyo/game-state for F_DL* (WW islands always
+carry ambient wind; the Wind-Waker-set path `dComIfGs_setWindX/Y` or a mount-side kankyo wind set).
+Restores pane drift/skew AND grass sway together. **NOT a data-file change** (it's game-state/kankyo,
+not `wave_calm.ini`) → Engine, not user. Confirm with a `dKyw_get_wind_pow()` log on F_DL01 (expect
+0 pre-fix). Docs updated (waves.md §133/§134, grass-effects.md §1).
+
+**Lockout board:** Engine+Bridge locked. READY-TO-BUILD on return: this wind fix (panes+grass),
+shore color tuning (§127), shore speed/timing (§132), grass VFX K0 (§130 HUNT3), wind streaks
+(§130 HUNT2). Housing continues donor-reads/verification/docs meanwhile; ladder ferry pending (§132).
+
+## §135 LOCKOUT MONTH PLAN — lanes set; Bridge-coverage demo (Housing, 2026-07-26)
+
+Engine+Bridge (Cursor) locked ~1 month. User confirms: History + Librarian + Housing (all Claude)
+AVAILABLE; Librarian already covered the §106 doc debt. Month plan:
+- **History:** the content backlog — §12 census refresh (24 PLYR spawns + rotations, weeks-old
+  highest-value undeployed item), identity, story layers. No Engine needed.
+- **Librarian:** §106 debt (largely covered per user) + ongoing hygiene.
+- **Housing:** load Engine's ready-to-build queue (wind §134, shore color §127, timing §132, grass
+  VFX §130, streaks §130) + TEMPORARILY cover Bridge's donor-data reads (user-authorized).
+  **All Bridge-coverage output marked SINGLE-SOURCE — awaiting Bridge re-verify on return (№31-C;
+  the two-lane cross-check is down).**
+- **User:** exhaustive playtest (complete the bug inventory) + data-only tuning; Housing to provide
+  a concrete HOW guide (user requested extensive support).
+
+**Bridge-coverage demo (§127 shore color):** model1.bdl EXTRACTED clean from mounted Outset.arc
+(RARC parsed by hand: 105,792 b, J3D2bmd3, 8 materials — matches Bridge's mat-ref). MAT3 located.
+First color-pool parse produced IMPLAUSIBLE values (offset-table indexing wrong) → NOT handed over;
+finishing against the J3D format layout properly. Hint: plausible sea-teal (84,104,105) at adjacent
+offsets — unverified, not a deliverable yet. The §126 lesson applies to me too: no unverified
+register values leave this lane.
+
+## §136 BRIDGE-COVERAGE DELIVERABLE — model1 authored colors PARSED (Housing, 2026-07-26)
+
+§135's demo completed properly (first-pass off-by-one corrected: S10=offs[17], K=offs[18]).
+model1.bdl MAT3 per-material authored registers extracted — full table in shore-crashing.md §136.
+Headlines: **base water K0 = (70,90,150,255)** (lighter/grayer than the injected 9,99,224 —
+explains the user's "better but not perfect, too dark"); mizu_v(4) = the black shadow layer
+(C0 black, K1 a=50) — the 9-layer structure visible in the registers = strong self-corroboration.
+**SINGLE-SOURCE — Bridge re-verifies on return.** Engine on return: set base K0 to authored (or
+stop overriding entirely). §127 is now spec-complete in the ready-to-build queue.
+
+## §137 CORRECTION: Cursor lanes DEGRADED, not locked — max-detail ferry protocol (user, 2026-07-26)
+
+User corrects §135: Engine+Bridge are AVAILABLE but usage-limit-degraded (slower, less methodical,
+error-prone). Operating changes:
+
+**1. MAX-DETAIL FERRY FORMAT (all tickets to Cursor lanes from now on):** every ferry carries —
+   (a) EXACT file:line targets; (b) the EXACT change (values/code, not intent — "set K0=(70,90,150,255)
+   in wwApplyModel1SeaPalette for material 'SC_01_mizu' only", not "use authored colors");
+   (c) what NOT to touch (explicit non-goals — degraded lanes over-reach);
+   (d) the acceptance check + the log line that proves it;
+   (e) NO multi-step reasoning left to the lane — Housing pre-chews every decision.
+**2. VERIFICATION TIGHTENS (Housing):** every degraded-lane deliverable gets the full §125-class
+   audit — approach AND presence, against donor/spec, BEFORE user playtests. Assume errors.
+**3. QUEUE ORDER adapts:** send the SMALLEST, most mechanical items first (one-value changes like
+   §136's K0; the §134 wind probe line) — degraded lanes handle mechanical edits better than
+   design work. Hold judgment-heavy items (speed/timing interpretation, ladder re-setter hunt) for
+   either recovered lanes or Housing pre-digestion into mechanical steps.
+**4. §135/§136 single-source flags STAND** — degraded Bridge re-verify is weaker than normal
+   Bridge re-verify; flags clear only on a methodical re-check (or recovered-state Bridge).
+
+Net: Housing's spec work (§134/§136) is now MORE valuable, not less — the specs become the
+error-prevention layer for degraded executors.
+
+## §138 FERRY-1 AUDIT (degraded-Engine, §137 protocol) — over-reach VERIFIED CORRECT; cleared for playtest (Housing, 2026-07-26)
+
+**Degraded-state impact assessment (user-requested overview):**
+1. **Over-reach occurred, as §137 predicted:** ferry said ONE value (mat0 K0), don't touch C regs.
+   Engine instead shipped a full 8-material × C0-C3/K0-K3 authored-register table, re-applied each
+   draw. Citing "Bridge model1_mizu_colors.csv" — values beyond my §136 parse (C2/C3, K2/K3).
+2. **BUT the over-reach is FAITHFUL:** Housing extended its own BDL parse to ALL registers and
+   diffed Engine's table — **21/21 spot-checked registers MATCH the authored BDL (mats 0/3/4, all
+   novel values incl. mat3 C2=(200,200,255), mat4 K2=(80,100,150))**. The extra values came from a
+   real (Bridge) dump, not invention. TWO independent parses now agree → the §136 single-source
+   flag is EFFECTIVELY cross-checked for these registers (formal Bridge re-verify still noted).
+3. **Positive signs despite degradation:** correct scoping to model1 only; C-regs/BTK/z-update
+   untouched as instructed elsewhere; sensible brace-init adaptation; each-draw re-apply is a
+   defensible anti-latch design (documented in-code).
+4. **Residual flags:** (a) "incidental CMake re-run" — /O2 reported intact but per §113 the FPS
+   floor should be re-verified next session (user: watch FPS in playtest); (b) the each-draw
+   re-apply forecloses runtime kankyo modulation of these registers — if the donor modulates them
+   by time-of-day, that refinement comes later (flagged, not a defect now).
+
+**Verdict: SHIPPED WORK IS CORRECT — cleared for user playtest.** Degradation showed as
+scope-expansion, not error; the §137 audit caught and verified it. Acceptance: shore base reads
+lighter gray-blue vs WW ref; `[WwFoam] §103 model1` lists 8 mats; watch FPS (flag 4a).
+
+## §139 №273 FERRY FILTERED for degraded Engine (Housing, 2026-07-26)
+
+History's ferry arrived as a conclusion ("resolved, airtight, №273") with NO payload — the exact
+§137 hazard (degraded Engine would fill gaps itself). Housing pulled №273 from the ledger + read
+the target code; filtered ferry below. Diagnosis (History, airtight): Grandma carries `ba_cloth`
+(wrong — dark-teal unused garment); the hero's clothes = `Vfuku.arc`/`vfuku.bdl` (decomp
+`d_item_data.cpp` FUKU 0x32 + texture-proven). Engine's task = the `attach_arc=` override ONLY.
+
+### FILTERED FERRY → Engine (№273 step 1 of 2 — CODE ONLY, no manifest edit)
+1. **Struct** — `dExtNpcAttachSpec`: add `char arc[N]` (same size as the existing `model` field).
+2. **Parser** — `d_ext_npc_mount.cpp:1595` block (`attach_model`/`attach_model2` pattern): add
+   `attach_arc` / `attach_arc2` keys, same index selection, writing `spec[idx].arc`.
+3. **`addAttachment` (:2948)** — `const char* srcArc = spec.arc[0] ? spec.arc : a->mManifest.arc;`
+   then use `srcArc` in ALL THREE places that currently use `a->mManifest.arc`: the
+   `dComIfG_getObjectRes` call, the `acquireMountedModel` call, and the missing/unparseable warn.
+4. **Residency**: if `getObjectRes(srcArc, …)` returns NULL because the override arc is not
+   resident, load/retain it through the SAME acquire/retain path as the actor's own arc — do NOT
+   invent a new loader. LAW (memory `J3D pointer-fix`): never free an arc while its parsed data is
+   cached — the retain must live as long as the attachment (release with the mount's existing
+   release pair).
+5. **One log line**: `[ExtNpcMount] attach '{}' from override arc '{}'` when the override is used.
+6. **DO NOT:** edit `npc_ba.ini` (History ships that AFTER this lands — №273 explicitly defers it);
+   touch joint/pose/offset logic (№218/№250 blocks); touch ba_cloth references anywhere; rename
+   existing keys.
+7. **Acceptance:** build green (/O2 verified); code tolerates absent `attach_arc` (all existing
+   manifests unchanged in behavior — override is opt-in); the log line fires only with an override.
+   REAL acceptance comes at step 2 (History's ini: `attach_model=vfuku.bdl attach_arc=Vfuku` +
+   cradle joint/pose) → user eye vs the WW screenshot.
+**Covenant:** `attach_arc` is a generic receiver key (no WW literal in code); `Vfuku` names ride
+package data only. Clean.
+
+## §140 OCEAN-BODY IDENTIFIED + Ferry-2 FAILURE (Housing, 2026-07-26)
+
+**Ferry 2 (wind probe): REPORT-WITHOUT-SHIP.** Engine reported both ferries done; Ferry 1 is in
+source + log-verified (mat[0] K0=(70,90,150,255) live ✓ — §138 audit stands). **Ferry 2's windProbe
+is in NO log and NOT in source** — the §137 degraded failure mode in pure form (claimed complete,
+absent on disk). → RE-FERRY §139-style, unchanged content.
+
+**The "greater body of water" — identified by elimination (all measured):**
+- `model.bdl` = land only (8 mats: house/rock/ground). `model3` = window light.
+- Host stage room `R44_00.arc` = **512-byte STUB** (empty skeleton, by design). STG carries no model.
+- The open-ocean renderer (system 1 / `d_a_sea`) was DELIBERATELY not ported (§97b).
+- **Therefore:** the near-island water the user sees = **`model1.bdl`'s water SKIRT** — its 8
+  `SC_01_mizu*` materials are not just the crash strip; the base `SC_01_mizu` IS the flat water
+  surface around the island. Beyond the skirt = **fog/clear color** (no geometry at all).
+
+**Consequence 1 — Ferry 1 may have ALREADY fixed the user's complaint:** the "ocean water (darker,
+not vanilla)" = the SC_01_mizu base = exactly the register Ferry 1 set to authored (70,90,150,255).
+User's comment predates a post-Ferry-1 playtest. **USER: eye-check the main water body first** —
+it may now read correct. The lighter edge color they saw = the kiwa foam-edge materials (correct
+authored behavior).
+
+**Consequence 2 — the FAR ocean is a HOLE, not a wrong color:** past model1's skirt there is
+literally no ocean geometry; the "color" there is kankyo fog/clear. Options when wanted:
+(a) tune fog/clear toward the WW sea palette (cheap, cosmetic, №31-B-honest as "a colored hole");
+(b) port a minimal flat sea plane at seaLevel with system-1 material (the real fix; new build item).
+Neither urgent until the user judges post-Ferry-1 state.
+
+Board: **User** — eye-check main water + FPS (§138 flag). **Engine** — re-ferry Ferry 2 verbatim.
+**Housing** — standing by for ladder verification ferry; speed/timing BTK research still queued.
+
+## §141 MAIN WATER STILL DARK with authored bake — runtime palette is the missing layer (Housing, 2026-07-26)
+
+User playtested WITH Ferry 1 (K0=(70,90,150) live, log-verified): **the swimmable water (model1's
+skirt = the SC_01_mizu base) is STILL too dark vs vanilla.** User correction accepted: their
+complaint was always THIS surface (not beyond-skirt fog).
+
+**Diagnosis (the week's pattern, one level up):** the BAKED K0 (70,90,150) is the BDL's authored
+DEFAULT — but the donor OVERWRITES water registers AT DRAW TIME from the kankyo palette (time-of-
+day/weather). Evidence: (a) doogus video [video]: "colors picked at runtime from a predefined
+palette, changes with weather/time"; (b) the donor pattern is already proven elsewhere — grass
+draw writes `GFSetTevColorS10(REG0, tevstr->mColorC0)` + `GFSetTevColor(REG1, tevstr->mColorK0)`
+per room at draw (`d_grass.cpp:298-300`); (c) vanilla's vivid noon blue is NOT (70,90,150) — no
+static bake produces a day/night-correct sea. **Pinning to the bake (Ferry 1) was necessary
+(stopped the wrong injections) but not sufficient — the runtime kankyo layer is the vanilla look.**
+
+**NEXT RESEARCH (Housing, DECOMP-FIRST — no value-guessing):** find the donor's room-BG register
+write path for water materials: which dKy/tevstr TEV_TYPE the sea-room BG draws through, and which
+palette entry (BG1/sea channel — likely kin to the §100 noon BG1_K0=(9,99,224) family) lands in
+mat0's KONST at draw. Deliverable = the exact runtime source + value flow, then a max-detail ferry.
+This is the §47 donor-look lane applied to the water skirt — the SAME missing layer as grass-VFX
+K0 (§130) and the original grass-color case. One mechanism, many symptoms, all week.
+
+**Ferry 2:** user re-sending verbatim (report-without-ship, §140). Board otherwise unchanged.
+
+## §142 LIGHTING VIDEO LANDED — corroborates §141; doc created; decomp-compare queued (Housing, 2026-07-26)
+
+User found the Jasper/noclip WW cel-shading video (mnxs6CR6Zrk). Landed as
+`docs/WW Linked/lighting-palette-reference.md` ([video] tier, decomp-compare pending per user).
+Key intake:
+1. **"Tinting of the ocean waves" is a hand-authored SIX-times-of-day × weather palette** —
+   independent corroboration of §141's diagnosis (water color = runtime palette write, not BDL
+   bake). The §141 research target is unchanged and now double-sourced.
+2. Character cel-shade = vertex light → **ZAtoon 256-wide lookup ramp** (<120 black / >136 white)
+   → palette tint. Donor spec for the parked Link-lighting item.
+3. Single-light rule (art decision); sun-stare + lightning as rule-based exceptions.
+4. **№113 risk sharpened:** palettes are per-time ARRAYS; our converter dropped single entries
+   twice already — the decomp compare should audit №113's coverage vs the donor tables (would
+   pre-explain "right at noon, wrong at dusk" bug classes).
+
+Next research pass (Housing): d_kankyo.cpp time-of-day tables + BG-channel draw-time register
+writes → the exact runtime source for the water KONST → max-detail ferry. Ferry 2 re-send still
+with user.
+
+## §143 RESEARCH PASS COMPLETE — the donor's runtime water-color chain, cited end to end (Housing, 2026-07-26)
+
+**The full donor mechanism (answers §141; corroborates Jasper §142 at code level):**
+1. **Palette blend:** `kankyo_color_ratio_set` (`d_kankyo.cpp:889-914+`) blends the time-of-day
+   palettes per-frame into `g_env_light.mBG1_C0` / `mBG1_K0` (the SEA channel; noon: C0≈white,
+   K0=(9,99,224) — §100's values).
+2. **Tevstr fill:** `settingTevStruct(TEV_TYPE_BG1, pos, tevstr)` → `setLight_bg` (`:1671`) reads
+   the palette per room (`mEnvrIdxCurr = roomNo`) → the BG-channel switch (`case 1: mC0=BG1_C0;
+   mK0=BG1_K0`) lands the CURRENT blended sea colors in `tevstr->mColorC0/mColorK0`.
+3. **THE BRIDGE — `setLightTevColorType_sub` (`d_kankyo.cpp:1764-1855`):** per material, per frame:
+   **non-toon branch (`:1820`): `tevstr C0 → material TevColor(0)`, `tevstr K0 → TevKColor(0)`** —
+   preserving each register's EXISTING alpha (`col_p->a`). (Toon branch SWAPS destinations
+   (C0→KColor, K0→Color) — likely §126's white-water root: amb landed in K0, the toon-pattern in a
+   non-toon context.) Also: K1 light-influence special case (kColorSel==13 + mColorK1.a≠0), light
+   obj, and FOG from tevstr.
+**Conclusion: mat0's KONST at runtime = the LIVE palette BG1_K0 = (9,99,224) at noon (vivid blue ≈
+the vanilla screenshot), NOT the bake (70,90,150). The bake is only the pre-kankyo default. The
+palette never touches C1-C3/K1-K3 (foam tints/shadow stay authored — Ferry 1's table remains
+correct for those).** And `dKy_get_seacolor` ALREADY returns exactly this pair (amb=BG1_C0-analog,
+dif=K0-stash) — the receiver plumbing exists.
+
+### FERRY 3 → Engine (max-detail, §137): make model1's C0/K0 LIVE, keep the rest authored
+1. **File:** `src/d/d_ext_npc_mount.cpp`, `wwApplyModel1SeaPalette` (the §138 table apply).
+2. **Change:** for EVERY material: fetch `GXColor amb, dif; dKy_get_seacolor(&amb, &dif);` then
+   (a) `setTevColor(0, S10{amb.r,amb.g,amb.b, KEEP existing register alpha})` — C0 = amb;
+   (b) `setTevKColor(0, {dif.r,dif.g,dif.b, KEEP existing alpha})` — K0 = dif;
+   (c) continue applying the §138 authored table for C1,C2,C3,K1,K2,K3 ONLY (skip its C0/K0
+   entries — they are superseded by (a)/(b)).
+   Donor cite: `setLightTevColorType_sub` non-toon mapping `d_kankyo.cpp:1820-1831`; alpha-preserve
+   per the same lines.
+3. **DO NOT:** touch BTK/blend/zMode; swap the mapping (amb→K0 was the §126 white bug — the toon
+   branch pattern; we use NON-toon). If water renders WHITE after this, the toon/non-toon mapping
+   is the first suspect — report, don't improvise.
+4. **Acceptance:** noon water = vivid blue ≈ (9,99,224) (user eye vs vanilla screenshot); §112
+   seacolor log already prints the pair; BONUS: dusk/dawn water shifts automatically (palette
+   blend) — a free time-of-day fidelity win. FPS watch per §138.
+**Deferred (recorded, not in this ferry):** the K1/kColorSel==13 light-influence case; FOG from
+tevstr (the sub applies fog too — a future fidelity item); toon branch applicability.
+
+## §144 NOCLIP REVIEWED — [reference-implementation] tier; Ferry 3 now TRIPLE-sourced (Housing, 2026-07-26)
+
+User found noclip.website (Jasper's — same author as §142's video). Scope measured →
+`docs/WW Linked/noclip-reference.md`. Headlines:
+- Site = WebGL canvas (unreadable by fetch); SOURCE public: `src/ZeldaWindWaker/` = TS ports of OUR
+  decomp files (d_kankyo.ts, d_kankyo_wether.ts, d_a_sea.ts) with donor names. New tier coined:
+  **[reference-implementation]** — above [video]/[recreation], below decomp; rules in the doc
+  (decomp stays law; noclip disambiguates Nonmatching functions; the site = live visual reference).
+- **CROSS-CHECK RUN: noclip's setLightTevColorType = C0←colorC0, K0←colorK0, NO toon swap; its
+  setLight_bg = the same 4-way palette blend.** Ferry 3's mapping is now decomp + video + running-
+  implementation sourced. Bonus: BG1 fog = vrUsoUmiCol (matches Engine's §98 uso_umi wiring).
+- Practical: the user can open Room44 in noclip with a time-of-day control = the LIVE acceptance
+  reference for Ferry 3 (incl. the dusk/dawn auto-shift bonus check); d_a_sea.ts = a working
+  far-ocean reference if that hole is ever filled; Nonmatching decomp functions (wave_move,
+  drawWave, messageSePlay) have working noclip counterparts for disambiguation.
+Board: Engine on Ferry 3 (+Ferry 2 re-send); Housing standing by to audit; user gains the noclip
+side-by-side for acceptance.
+
+## §145 FERRY 3 AUDIT PASS + noclip full inventory (Housing, 2026-07-26)
+
+**Ferry 3 audit (§137): CONFORMANT — NO over-reach this time.** Shipped code matches the spec
+exactly: seacolor fetched once; authored loop r=1..3 only (C1-C3/K1-K3); live C0/K0 with preserved
+register alpha; non-toon mapping with the §126 trap documented IN-CODE; bake pin removed. The
+max-detail ferry format is demonstrably taming the degraded lane (contrast §138's over-reach and
+§140's report-without-ship). **USER: playtest — noon skirt ≈ vivid (9,99,224); dusk/dawn shifts
+free; white ⇒ report (toon-swap suspect). Side-by-side vs noclip Room44 time-slider = the
+acceptance reference. + FPS watch.**
+
+**noclip inventory (user scope question): richer than assessed.** `d_demo.ts` = working STB
+cutscene PLAYBACK (the format History hand-decoded); `Grass.ts` = grass sway reference (§130);
+`d_wood.ts` = the unported swood tree system; `d_a.ts` (304KB) = prop/NPC presentation. Absent:
+gameplay/AI/collision/audio/save (our fork's original-work zone — correctly, none of it is
+noclip's concern). Doc updated (noclip-reference.md §145). Tier rules unchanged: disambiguation
+and cross-check; decomp is law.
+
+## §146 NOCLIP FAST-TRACK doctrine + first finding (user, 2026-07-26)
+
+New doc `docs/WW Linked/noclip-fast-track.md` per user:
+- **Doctrine:** noclip = fast track, not end-all — read its working implementation FIRST to
+  formalize a system's shape, THEN decomp-verify, THEN spec. Inverts the costly order (the water
+  saga took ~6 rounds; fast-tracked systems should take 1-2).
+- **Limit №1 (user-found, recorded):** noclip has NO story-layer logic — placements render
+  unfiltered by ACT0-ACTb; layer truth stays with the census + №222 ladder. Plus: no gameplay,
+  defaults-only rendering.
+- **Finding F-1 (user):** A_mori (Forest of Fairies) in noclip plays resident-enemy IDLE anims —
+  user reports "moblins" (actor code UNVERIFIED per IVAN — Bk vs Mo needs decomp/census check).
+  Fast-tracks the placed-enemy-plays-its-idle pattern for interiors; verification route logged in
+  the doc (noclip d_a.ts → decomp d_a_<code>.cpp → census → spec).
+- The findings-log format makes user museum explorations a formal research instrument.
+Board: user playtesting Ferry 3 (noon vivid blue + dusk shift + FPS); Housing standby.

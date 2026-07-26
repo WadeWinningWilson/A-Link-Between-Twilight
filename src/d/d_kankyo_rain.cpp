@@ -6725,6 +6725,18 @@ void wave_move() {
     f32 windPow = dKyw_get_wind_pow();
     cXyz windPowVec2 = windVecP != NULL ? *windVecP : windPowVec;
 
+    // §134 Ferry 2 — PROBE ONLY (no behavior). Host windPow on F_DL* expected ~0
+    // (WW Wind-Waker state unset on TP). Rate-limited with §105 interval.
+    {
+        static int s_windProbeFrames;
+        if (++s_windProbeFrames >= kWwFoamStatInterval) {
+            s_windProbeFrames = 0;
+            const char* stage = dComIfGp_getStartStageName();
+            DuskLog.info("[WwFoam] §134 windProbe stage='{}' windPow={:.4f}",
+                         stage != NULL ? stage : "?", windPow);
+        }
+    }
+
     DOUBLE_POS deltaXZ;
     deltaXZ.x = pCamera->view.lookat.center.x - pCamera->view.lookat.eye.x;
     deltaXZ.y = 0.0;

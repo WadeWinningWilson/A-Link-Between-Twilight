@@ -18,6 +18,9 @@ static constexpr int kExtNpcMaxSlavePairs = 8;
 
 struct dExtNpcAttachSpec {
     char model[64];
+    // №273: optional override arc for the attach model (generic key; package
+    // names the arc). Empty = load from the mount's own `arc=` (prior behavior).
+    char arc[64];
     char joint[32];
     // ============================================================================
     // №218 — optional donor-authored local transform for a held prop.
@@ -180,6 +183,9 @@ public:
     bool mBgGlobal;
     J3DModel* mpAttach[kExtNpcMaxAttach];
     s16 mAttachJnt[kExtNpcMaxAttach];
+    // №273: resLoad ownership for attach_arc overrides (≠ mount arc).
+    request_of_phase_process_class mAttachArcPhase[kExtNpcMaxAttach];
+    u8 mAttachArcOwned[kExtNpcMaxAttach];
     // ============================================================================
     // №218 — per-slot donor local transform (see dExtNpcAttachSpec::offs/rot).
     // ============================================================================

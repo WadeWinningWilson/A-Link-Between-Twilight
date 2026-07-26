@@ -4,7 +4,14 @@ Per-effect doc for the Outset beach 9-layer crashing-wave material. Part of the 
 set; taxonomy + shared traps in the parent [../water-rendering.md](../water-rendering.md).
 Siblings: [waves.md](waves.md) (system 2, ACCEPTED), great-sea (system 1, future).
 
-## STATUS: §128 compositing fix shipped — USER VERIFY crash swoosh (2026-07-25)
+## STATUS: §128 MOTION WORKING (user eye 2026-07-25) — 2 open discrepancies
+Shore beach-crash now ANIMATES (white foam crash along the shoreline, matching WW much better —
+user screenshots). Substantial progress. **Two open discrepancies remain:**
+1. **Water COLOR (§127, open)** — still off; Bridge dumping model1's authored register values so
+   Engine uses them instead of the pane endpoint.
+2. **Effect SPEED/TIMING (NEW, §132)** — shore + wave crash speed/timing feels off vs donor. The
+   BTK scroll rate / phase may not match model1.btk's authored track speeds. → verify our BTK frame
+   rate + track speeds against Bridge's `model1_btk_motion.md` (Hermite SRT / 100f).
 Engine's fidelity attempt on the beach material produced **white water at the shoreline** — the
 9-layer crash did not resolve; the shore surface reads as flat white/blank (see user screenshot,
 2026-07-25). This is a fidelity FAILURE, not the accepted system-2 panes (those are correct — waves.md).
@@ -108,3 +115,44 @@ UVs scrolling down; when it backs up that's different (ebb)." Independently matc
 (BTK texture-SRT) mechanism + the doogus two-textures-scroll-opposite breakdown. Two casual observers
 converge on the same mechanism → confidence up, but still verify against model1.btk's actual track
 config (decomp). Rest of that video = asset-AUTHORING technique (trim sheets/UV), N/A to a port.
+
+---
+
+## AUTHORED COLOR REGISTERS — parsed from model1.bdl MAT3 (§136, Housing covering Bridge, 2026-07-26)
+
+**⚠ SINGLE-SOURCE — awaiting Bridge re-verify on return (№31-C; cross-check lane locked).** Parsed
+directly from the mounted `Outset.arc` → `model1.bdl` MAT3 (per-material index → pool, corrected
+J3D layout: tevColorS10=offs[17], tevKColor=offs[18]; entry kColorIdx@+0x94, tevColorIdx@+0xDC —
+entry layout corroborated by Bridge's own "+0x84 tex slots" note).
+
+| material | C0 (S10) | C1 (S10) | K0 | K1 | matColor |
+|---|---|---|---|---|---|
+| SC_01_mizu (BASE) | 255,255,255 | **70,90,150** | **70,90,150,255** | 255,255,255 | 204,204,204 |
+| SC_01_mizuB_v_x | 255,255,255 | 255,255,255,(279) | 255,255,255 | 255,255,255 | 255,255,255 |
+| SC_01_mizu_v | 255,255,255 | 255,255,255 | 255,255,255 | 255,255,255 | 204,204,204 |
+| SC_01_mizu_v_x | 255,255,255 | 255,255,255,(279) | 255,255,255 | 255,255,255 | 255,255,255 |
+| SC_01_mizu_v(2) | 255,255,255 | 255,255,255 | 255,255,255 | **100,180,180** | 255,255,255 |
+| SC_01_mizu_v_x(2) | 255,255,255 | 255,255,255 | 255,255,255 | 255,255,255,**a50** | 204,204,204 |
+| SC_01_mizu_v(3) | 255,255,255 | 255,255,255 | **70,90,150** | **100,200,200** | 255,255,255 |
+| SC_01_mizu_v(4) (SHADOW) | **0,0,0** | 255,255,255 | 255,255,255 | 0,0,0,**a50** | 255,255,255 |
+
+**Self-corroboration:** mizu_v(4) = black C0 + low-alpha black K1 = the video's "lagging pitch-black
+shadow layer" — the 9-layer structure appears in the registers unprompted. Teal K1s = foam tints.
+
+**THE ANSWER for §127:** the authored water base = **K0 (70, 90, 150) — lighter/grayer than the
+injected pane endpoint (9,99,224)**, exactly matching the user's "our water is darker than the
+authored preset" observation. Engine target on return: base-material K0 = (70,90,150,255) (or stop
+overriding and let the BDL's own registers stand + kankyo modulation per donor).
+
+
+---
+
+## RUNTIME PALETTE — the missing color layer (§143, 2026-07-26)
+
+Ferry 1 (authored bake) was necessary but NOT the vanilla look: the donor writes the water's C0/K0
+EVERY FRAME from the blended time-of-day sea palette (BG1 channel; noon K0=(9,99,224) vivid blue),
+via `settingTevStruct(TEV_TYPE_BG1)` → `setLightTevColorType_sub` (`d_kankyo.cpp:1764-1855`,
+non-toon: C0→TevColor(0), K0→TevKColor(0), alpha preserved). The bake (70,90,150) is only the
+pre-kankyo default. C1-C3/K1-K3 (foam tints, shadow) are NOT palette-driven — the authored table
+stays for those. Fix = Ferry 3 (bus §143): C0/K0 live from `dKy_get_seacolor`, rest authored.
+The §126 white-water was the TOON-branch mapping (amb→K0) applied in a non-toon context.

@@ -1598,6 +1598,13 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
             if (index + 1 > out->attachCount) {
                 out->attachCount = index + 1;
             }
+        } else if (key == "attach_arc" || key == "attach_arc2") {
+            // №273: opt-in arc override for attach model (same index pattern).
+            const int index = key == "attach_arc2" ? 1 : 0;
+            set(out->attach[index].arc, sizeof(out->attach[index].arc));
+            if (index + 1 > out->attachCount) {
+                out->attachCount = index + 1;
+            }
         } else if (key == "attach_joint" || key == "attach_joint2") {
             const int index = key == "attach_joint2" ? 1 : 0;
             set(out->attach[index].joint, sizeof(out->attach[index].joint));
@@ -2118,6 +2125,13 @@ static bool liveMountRefsArc(const char* arc, const fopAc_ac_c* dying) {
             if (m->mManifest.arc[0] && std::strcmp(m->mManifest.arc, c->arc) == 0) {
                 c->hit = true;
             }
+            // №273: attach_arc overrides also pin the cache.
+            for (int i = 0; i < kExtNpcMaxAttach; ++i) {
+                if (m->mManifest.attach[i].arc[0] &&
+                    std::strcmp(m->mManifest.attach[i].arc, c->arc) == 0) {
+                    c->hit = true;
+                }
+            }
             return 0;
         },
         &ctx);
@@ -2447,13 +2461,13 @@ static void wwSkyPaintMatK0(J3DMaterial* mat, u8 r, u8 g, u8 b, u8 a) {
     mat->setTevKColor(0, &color);
 }
 
-// §127 — Room44 model1 authored tev registers (Bridge model1_mizu_colors.csv).
-// Never inject pane seacolor (dif/amb): those are lerp endpoints for drawWave,
-// not solid model1 colors (§126 white / §127 too-dark). Re-apply the BDL bake
-// each draw so MAJI/other paths cannot leave a wrong value latched.
+// §127 / §138 / §143 — Room44 model1 tev registers.
+// C0/K0 = LIVE seacolor every draw (dKy_get_seacolor → amb/dif = BG1_C0/K0).
+// C1–C3/K1–K3 = authored BDL bake (Bridge model1_mizu_colors.csv) — palette
+// never touches those. Do NOT feed pane seacolor as a solid fill (§126).
 struct WwModel1AuthRegs {
-    s16 c[4][4];  // C0..C3 RGBA (s10; donor may use a>255)
-    u8 k[4][4];   // K0..K3 RGBA
+    s16 c[4][4];  // C0..C3 RGBA (s10; donor may use a>255) — C0 unused at draw
+    u8 k[4][4];   // K0..K3 RGBA — K0 unused at draw
 };
 
 static const WwModel1AuthRegs kWwModel1AuthRegs[8] = {
@@ -2487,6 +2501,13 @@ static void wwApplyModel1SeaPalette(J3DModelData* data) {
     if (data == NULL) {
         return;
     }
+    // §143 Ferry 3: donor setLightTevColorType_sub NON-toon mapping
+    // (d_kankyo.cpp:1820) — amb→TevColor(0), dif→TevKColor(0), alpha preserved.
+    // DO NOT SWAP (amb→K0) — that is the toon-branch pattern and was the §126
+    // white-water trap. If water goes white after this, report; do not improvise.
+    GXColor amb, dif;
+    dKy_get_seacolor(&amb, &dif);
+
     const u16 n = data->getMaterialNum();
     const u16 lim = n < 8 ? n : 8;
     for (u16 i = 0; i < lim; i++) {
@@ -2496,7 +2517,9 @@ static void wwApplyModel1SeaPalette(J3DModelData* data) {
         }
         mat->change();
         const WwModel1AuthRegs& auth = kWwModel1AuthRegs[i];
-        for (int r = 0; r < 4; r++) {
+
+        // Authored C1–C3 / K1–K3 only (foam tints / shadow — not palette-driven).
+        for (int r = 1; r < 4; r++) {
             J3DGXColorS10 c;
             c.r = auth.c[r][0];
             c.g = auth.c[r][1];
@@ -2510,6 +2533,26 @@ static void wwApplyModel1SeaPalette(J3DModelData* data) {
             k.a = auth.k[r][3];
             mat->setTevKColor((u32)r, &k);
         }
+
+        // Live C0/K0 from seacolor; preserve register alpha (donor :1820–1831).
+        J3DGXColorS10* curC0 = mat->getTevColor(0);
+        const s16 aC0 = curC0 != NULL ? curC0->a : auth.c[0][3];
+        J3DGXColorS10 c0;
+        c0.r = (s16)amb.r;
+        c0.g = (s16)amb.g;
+        c0.b = (s16)amb.b;
+        c0.a = aC0;
+        mat->setTevColor(0, &c0);
+
+        J3DGXColor* curK0 = mat->getTevKColor(0);
+        const u8 aK0 = curK0 != NULL ? curK0->a : auth.k[0][3];
+        J3DGXColor k0;
+        k0.r = dif.r;
+        k0.g = dif.g;
+        k0.b = dif.b;
+        k0.a = aK0;
+        mat->setTevKColor(0, &k0);
+
         // §128 composite sheet: mats 1–7 XLU z-update OFF; mat0 opaque keeps
         // z-write ON (donor). Do not clear mat0 depth — that is not the swoosh fix.
         J3DBlend* blend = mat->getBlend();
@@ -2560,8 +2603,8 @@ static void wwProbeModel1Fidelity(J3DModelData* data) {
             k0 != NULL ? (int)k0->r : -1, k0 != NULL ? (int)k0->g : -1,
             k0 != NULL ? (int)k0->b : -1, k0 != NULL ? (int)k0->a : -1);
     }
-    DuskLog.info("[WwFoam] §127 model1 fidelity mats={} vtxMatSrc={} zWriteOk={} "
-                 "(authored regs; mat0 K0/C1=(70,90,150) — no pane seacolor)",
+    DuskLog.info("[WwFoam] §127/§143 model1 fidelity mats={} vtxMatSrc={} zWriteOk={} "
+                 "(C0/K0=live seacolor; C1–C3/K1–K3 authored — non-toon map)",
                  n, vtxOk, zOk);
 }
 
@@ -2938,12 +2981,17 @@ bool addAttachment(dExtNpcMount_c* a, J3DModelData* bodyData, const dExtNpcAttac
     if (spec.model[0] == '\0' || a->mAttachCount >= kExtNpcMaxAttach) {
         return true;
     }
-    void* raw = dComIfG_getObjectRes(a->mManifest.arc, spec.model);
-    J3DModelData* data = acquireMountedModel(a->mManifest.arc, spec.model, raw);
+    // №273: attach_arc= loads the prop from a different arc than the actor body.
+    const char* srcArc = spec.arc[0] ? spec.arc : a->mManifest.arc;
+    void* raw = dComIfG_getObjectRes(srcArc, spec.model);
+    J3DModelData* data = acquireMountedModel(srcArc, spec.model, raw);
     if (data == NULL) {
         DuskLog.warn("[ExtNpcMount] attachment '{}' missing/unparseable in arc '{}'", spec.model,
-                     a->mManifest.arc);
+                     srcArc);
         return true;
+    }
+    if (spec.arc[0]) {
+        DuskLog.info("[ExtNpcMount] attach '{}' from override arc '{}'", spec.model, spec.arc);
     }
 
     // Prefer companion joint table when present.
@@ -6872,6 +6920,8 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             i_this->mAttachJnt[i] = -1;
             i_this->mAttachOnCompanion[i] = 0;
             i_this->mAttachSlave[i] = 0;
+            i_this->mAttachArcOwned[i] = 0;
+            i_this->mAttachArcPhase[i] = {};
         }
 
         const int arg = fopAcM_GetParam(i_this) & 0xFF;
@@ -7033,6 +7083,30 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             dExtNpcMount_forceNextAttach(NULL, NULL);
         }
         return phase;
+    }
+    // №273: opt-in attach_arc — same dComIfG_resLoad path as the body arc;
+    // must be resident before solid-heap addAttachment (getObjectRes).
+    for (int i = 0; i < kExtNpcMaxAttach; ++i) {
+        const char* oa = i_this->mManifest.attach[i].arc;
+        if (oa[0] == '\0' || i_this->mManifest.attach[i].model[0] == '\0') {
+            continue;
+        }
+        if (std::strcmp(oa, i_this->mManifest.arc) == 0) {
+            continue;  // already loaded as the body arc
+        }
+        if (i_this->mAttachArcOwned[i]) {
+            continue;
+        }
+        const int ap = dComIfG_resLoad(&i_this->mAttachArcPhase[i], oa);
+        if (ap == cPhs_ERROR_e) {
+            DuskLog.warn("[ExtNpcMount] №273 attach_arc '{}' resLoad ERROR (proc={})", oa,
+                         procName);
+            continue;
+        }
+        if (ap != cPhs_COMPLEATE_e) {
+            return ap;
+        }
+        i_this->mAttachArcOwned[i] = 1;
     }
     stageLog("create", "resLoad COMPLEATE → solid heap");
 
@@ -7250,6 +7324,11 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
 
     commitCreateCacheTrack();
     retainArcModels(i_this->mManifest.arc);
+    for (int i = 0; i < kExtNpcMaxAttach; ++i) {
+        if (i_this->mAttachArcOwned[i]) {
+            retainArcModels(i_this->mManifest.attach[i].arc);
+        }
+    }
     DuskLog.info("[ExtNpcMount] COMPLEATE {} arc={} model={} btp={} scale={} mod={}", procName,
                  i_this->mManifest.arc, i_this->mManifest.model,
                  i_this->mBtpBound ? i_this->mManifest.btp : "(none)", s,
@@ -7302,6 +7381,17 @@ int dExtNpcMount_delete(dExtNpcMount_c* i_this) {
     if (i_this != NULL && i_this->mManifest.arc[0]) {
         releaseArcModels(i_this->mManifest.arc, "delete-npc", i_this);
         dComIfG_resDelete(&i_this->mPhase, i_this->mManifest.arc);
+    }
+    if (i_this != NULL) {
+        for (int i = 0; i < kExtNpcMaxAttach; ++i) {
+            if (!i_this->mAttachArcOwned[i]) {
+                continue;
+            }
+            const char* oa = i_this->mManifest.attach[i].arc;
+            releaseArcModels(oa, "delete-attach-arc", i_this);
+            dComIfG_resDelete(&i_this->mAttachArcPhase[i], oa);
+            i_this->mAttachArcOwned[i] = 0;
+        }
     }
     return 1;
 }
@@ -7995,7 +8085,7 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                 }
             }
             g_env_light.setLightTevColorType_MAJI(model, &i_this->tevStr);
-            // §127: model1 beach-crash — authored C/K from Bridge dump (not pane seacolor).
+            // §143: model1 C0/K0 live seacolor; C1–C3/K1–K3 authored (§138 table).
             if (i == 1 && data != NULL) {
                 wwApplyModel1SeaPalette(data);
             }

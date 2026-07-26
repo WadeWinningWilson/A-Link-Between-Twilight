@@ -3900,3 +3900,23 @@ Build green `/O2`, caches wiped. **USER VERIFY:** (a) exterior ladder SFX+ledge 
 > **Exact fix (one line):** `forceLinkGroundReprobe` (`d_ext_npc_mount.cpp:4263`) is ALREADY called on the entry transition (`:4905`) AND the exit (`:4950`) — but it only does `ClrGroundHit()` + `CrrPos()`, never clears the wall-none flag. Add `link->mLinkAcch.ClrWallNone();` (and re-enable the line check for symmetry) inside it, before the `CrrPos`. Because it's already on both transition paths, this single addition fixes interior-entry AND belt-and-suspenders the exit.
 >
 > Donor-faithful: this restores exactly the state `procDoorOpen`'s `ClrWallNone` (`d_a_alink_demo.inc:2737`) would have set, had our room-lane transition not preempted the door-open anim by teleporting Link into the interior. Verify after: interior `acchFlags` bit 2 clear (`0x…e0`/`0x…f0`, not `0x…e4`), interior ladder grabs on both houses.
+
+---
+
+#### Paste for Cursor (2026-07-26 — Grandma carries the WRONG prop; needs cross-arc attach to use vfuku.bdl)
+
+> History lane, decomp+texture proven (user was right). Grandma's carry attach uses `ba_cloth.bdl` — that's a dark teal cloth (a different/likely-unused garment in Ba.arc, 0 decomp refs), NOT the hero's clothes. The correct prop is **`Vfuku.arc / vfuku.bdl`** (WW item `dItemNo_FUKU_e` 0x32, texture `clothes.bti`) — green+white+yellow folded tunic, matching the user's WW screenshot, and it's the SAME model your get-item kit already loads (§66 `arc='Vfuku'`). Carried prop should equal given prop.
+>
+> **Blocker in your lane:** `addAttachment` (`src/d/d_ext_npc_mount.cpp:2952`) loads attach models via `dComIfG_getObjectRes(a->mManifest.arc, spec.model)` — hardcoded to the actor's arc (`Ba`). To attach `vfuku.bdl` (arc `Vfuku`), add an **`attach_arc=`** per-slot override (parse in the attach-spec loader; when set, load + `acquireMountedModel` from that arc instead of the actor arc), and **retain Vfuku while the attach is live** (it's an adapted arc already used by the get-item, but not pinned at Grandma's spawn — retain on create, release on delete, arc-scoped like the existing №73 retain/release).
+>
+> Once `attach_arc` exists, History sets the data: `attach_model=vfuku.bdl attach_arc=Vfuku` + cradle joint + pose `05_ba_cut8_wait` held-still (clamped, not `EMode_LOOP` — the №262 "constant presenting" complaint), then visual-tunes the cradle offset against the screenshot. Ledger №273.
+
+---
+
+#### Paste for Cursor (2026-07-26 — get-item: MODEL now FIXED, but never SHOWN; show-chain is the remaining bug)
+
+> History lane. Your heap fix landed — the get-item model is correct now: `§66 heap: item=47 kit=1 arc='Vfuku' model='vfuku.bdl' → OK` and `clothes bundle model ready ... mats=1 joints=2` (was rebuilding from the rupee arc `F_gD_rupy` before). So create + heap + build are all good.
+>
+> **Remaining bug: it's never drawn.** Every frame: `§66 live t=N: draw=0 scale=0.00 max=1.00`, and there is NO `[ItemBase] §66 show:` line anywhere in the run — so `show()` is never called on the partner item. The bundle builds, sits at draw=0/scale=0, and Link receives "nothing." The offset is already correct (`§66 offset: kit hand_offset (0,120,48)`), so once shown it'll sit right.
+>
+> This is the **show-chain**, not the model: our `№251` present-demo handoff (`fireMountPresentDemo` → `createItemForPresentDemo` arg 0 + `setItemPartnerId` + `orderChangeEventId` DEFAULT_GETITEM event 260) fires, but Link's get-cut (`alink_demo.inc` ~2485: `item_partner_p->show()` near the GET anim end) never runs on the partner. Suspect the event doesn't drive Link into `procGetItem` for this handoff, or the partner id isn't the one Link's cut reads. Note our handoff passes `createItemForPresentDemo(..., 0, ...)` where Link's own present path passes arg `3` (argFlags 0x1|0x2) — worth checking that arg difference drives the show cut. §66 arm-6 (show/hide probe) is in and will confirm the moment show() fires.
