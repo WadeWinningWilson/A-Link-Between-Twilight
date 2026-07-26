@@ -10,6 +10,7 @@
 #include "dusk/speedrun.h"
 #include "dusk/livesplit.h"
 #include "dusk/main.h"
+#include "dusk/mods/svc/ui.hpp"
 #include "dusk/settings.h"
 #include "editor.hpp"
 #include "f_pc/f_pc_manager.h"
@@ -42,7 +43,9 @@ const Rml::String kDocumentSource = R"RML(
 
 }
 
-MenuBar::MenuBar() : Document(kDocumentSource), mRoot(mDocument->GetElementById("popup")) {
+MenuBar::MenuBar()
+    : Document(kDocumentSource, false, DocumentScope::MenuBar),
+      mRoot(mDocument->GetElementById("popup")) {
     mTabBar = std::make_unique<TabBar>(mRoot, TabBar::Props{
                                                   .onClose =
                                                       [this] {
@@ -67,6 +70,11 @@ MenuBar::MenuBar() : Document(kDocumentSource), mRoot(mDocument->GetElementById(
 
     mTabBar->add_tab("Achievements", [this] { push(std::make_unique<AchievementsWindow>()); });
 
+    // Tabs registered through the mod UI service (ui_register_menu_tab); MenuBar::rebuild()
+    // re-creates this document when the set changes.
+    for (auto& tab : mods::svc::ui_mod_menu_tabs()) {
+        mTabBar->add_tab(tab.label, std::move(tab.onSelected));
+    }
 
     mTabBar->add_tab("Reset", [this] {
         mTabBar->set_active_tab(-1);
@@ -235,6 +243,21 @@ bool MenuBar::handle_nav_command(Rml::Event& event, NavCommand cmd) {
 
 bool MenuBar::focus() {
     return mTabBar->focus();
+}
+
+void MenuBar::rebuild() {
+    for (auto& doc : get_document_stack()) {
+        if (auto* menuBar = dynamic_cast<MenuBar*>(doc.get())) {
+            const bool wasVisible = menuBar->visible();
+            auto next = std::make_unique<MenuBar>();
+            next->mFocusedTabIndex = menuBar->mFocusedTabIndex;
+            doc = std::move(next);
+            if (wasVisible) {
+                doc->show();
+            }
+            break;
+        }
+    }
 }
 
 }  // namespace dusk::ui

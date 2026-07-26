@@ -1493,6 +1493,38 @@ set(DUSK_FILES
         include/dusk/menu_pointer.h
         src/dusk/menu_pointer.cpp
         src/dusk/mouse.cpp
+        src/dusk/gfx.hpp
+        src/dusk/mod_loader.hpp
+        src/dusk/mods/loader/bundle_disk.cpp
+        src/dusk/mods/loader/bundle_zip.cpp
+        src/dusk/mods/loader/context.cpp
+        src/dusk/mods/loader/depgraph.cpp
+        src/dusk/mods/loader/depgraph.hpp
+        src/dusk/mods/loader/loader.cpp
+        src/dusk/mods/loader/loader.hpp
+        src/dusk/mods/loader/native_module.cpp
+        src/dusk/mods/loader/native_module.hpp
+        src/dusk/mods/loader/prepatch.cpp
+        src/dusk/mods/loader/prepatch.hpp
+        src/dusk/mods/log_buffer.cpp
+        src/dusk/mods/log_buffer.hpp
+        src/dusk/mods/manifest.cpp
+        src/dusk/mods/manifest.hpp
+        src/dusk/mods/svc/camera.cpp
+        src/dusk/mods/svc/config.cpp
+        src/dusk/mods/svc/config.hpp
+        src/dusk/mods/svc/game.cpp
+        src/dusk/mods/svc/hook.cpp
+        src/dusk/mods/svc/hook.hpp
+        src/dusk/mods/svc/host.cpp
+        src/dusk/mods/svc/log.cpp
+        src/dusk/mods/svc/overlay.cpp
+        src/dusk/mods/svc/registry.cpp
+        src/dusk/mods/svc/registry.hpp
+        src/dusk/mods/svc/resource.cpp
+        src/dusk/mods/svc/slot_map.hpp
+        src/dusk/mods/svc/ui.cpp
+        src/dusk/mods/svc/ui.hpp
 		src/dusk/gamepad_color.cpp
 		src/dusk/autosave.cpp
         src/dusk/http/http.hpp
@@ -1563,6 +1595,8 @@ set(DUSK_FILES
         src/dusk/ui/icon_provider.hpp
         src/dusk/ui/modal.cpp
         src/dusk/ui/modal.hpp
+        src/dusk/ui/mod_window.cpp
+        src/dusk/ui/mod_window.hpp
         src/dusk/ui/nav_types.hpp
         src/dusk/ui/number_button.cpp
         src/dusk/ui/number_button.hpp
@@ -1615,6 +1649,15 @@ set(DUSK_FILES
         src/dusk/dpad_quick_swap.cpp
         src/dusk/hurricane_test.cpp
 )
+
+# The gfx/texture mod services are built on aurora::gfx and the texture
+# virtual-replacement API, so they follow DUSK_MODS_AURORA_GFX rather than living in
+# the sorted list above.
+if (DUSK_MODS_AURORA_GFX)
+    list(APPEND DUSK_FILES
+            src/dusk/mods/svc/gfx.cpp
+            src/dusk/mods/svc/texture.cpp)
+endif ()
 
 set(DUSK_HTTP_BACKEND_FILES
         src/dusk/http/no_backend.cpp

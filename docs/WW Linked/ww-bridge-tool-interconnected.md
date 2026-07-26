@@ -8479,3 +8479,148 @@ remote). Gate #4 hard; treat #6 as recoverable.
 **Housing does NOT execute the merge (Engine/integration lane).** Housing owns: the strip set, the
 post-merge gate run, and re-verification that no WW surface entered a pushable state. Offered to the
 user: I can do steps 1-2 (protective commit + tag) now on request — pure loss-protection, my charter.
+
+---
+
+## §114 MERGE DAMAGE OVERVIEW — BMD load path rewritten by main; Outset at plausible risk (Housing, 2026-07-23)
+
+User: dusk-API merge done; a BMD (Beta Link skin) failed to load; assess Outset exposure. Overview
+(NOT a confirmed break — the merged branch is untested for Outset; this maps the risk surface).
+
+### State first (must be stated — the merge is not on the live tree)
+Current working tree = branch `integrate/dusk-api-coexist` @ `bfa264511c` = **the pre-merge anchor**
+(`pre-dusk-api-merge`). **WW work is intact and pre-merge here — nothing lost.** The main merge
+lives on branch **`mods`** (`b6573837da Merge origin/main`) — the likely home of the Beta Link
+failure. Assessment below diffs incoming `origin/main` vs our merge-base — what the merge CHANGES.
+
+### Blast radius — main rewrote the shape/BMD LOAD path (verified from the diff)
+- **`J3DShapeFactory.cpp` (load-time shape construction):** on `TARGET_PC`, `J3DShapeDraw` is now
+  **heap-allocated (`JKR_NEW`)** per shape; sizing changed `+0x0C` → `sizeof(J3DShapeDraw)`. **This
+  is the BMD load path itself.** "Beta Link BMD failed to LOAD" is consistent with a shape-draw
+  construction mismatch here.
+- `J3DShapeDraw.cpp` **+105 lines**, plus `J3DShape`, `J3DShapeMtx`, `J3DModel` touched — the shape
+  DRAW path rewritten.
+- **`DUSK_GAME_DATA` annotations** on shape-matrix statics (`sMtxLoadPipeline`, `sMtxPtrTbl`,
+  `sTexGenBlock`) — GameService ABI epoch (#5 of the merge plan) now live on the shape pipeline.
+- Header moves (`dusk/endian.h` → `helpers/endian.h`) — compile-time risk for any WW source that
+  includes moved headers.
+
+### Why Outset is plausibly exposed (NOT yet confirmed)
+Outset's models reach the screen through **exactly this path**: (a) Layer-B loose BMDs, (b) the
+**BDL4→BMD3 retag adaptation** (`custom_assets` — UNCHANGED by main, so NO conflict marker flagged
+it; the loader moved underneath it silently). If the adaptation's shape-draw assumptions were tuned
+to the OLD `J3DShapeFactory`/`J3DShapeDraw`, they can mismatch the new heap-allocated construction —
+**the same failure class as Beta Link.** The Beta Link BMD is best read as a **CANARY for the whole
+BMD load path, not a one-off skin bug.**
+
+### Routing (Engine owns the fix; Housing maps + gates)
+- **ENGINE (on the `mods`/merged branch):** load ONE Outset BMD (a Layer-B loose BMD + a BDL4→BMD3
+  adapted arc) and confirm pass/fail. If it fails like Beta Link → re-align the BDL4→BMD3 adaptation
+  (and/or Layer-B loader) to main's new `J3DShapeFactory` shape-draw construction. The `custom_assets`
+  no-conflict is the trap: behavior shifted without a merge marker.
+- **HOUSING:** (1) this map; (2) the §113 covenant gate + strip-set still apply on the merged branch
+  BEFORE any push — unchanged; (3) re-verify no WW model path silently regressed once Engine tests.
+- **Reassurance:** the pre-merge anchor is safe. If the merge's BMD damage proves deep, `git checkout
+  pre-dusk-api-merge` restores full WW function while the loader re-alignment is worked separately.
+
+### Honest limits
+This is a diff-derived POSSIBILITY map, not a diagnosis — I have no merged-branch Outset log. The
+Beta Link failure's actual cause (loader mismatch vs merge-conflict botch vs resource path) is
+unconfirmed. Engine's one-BMD test on the merged branch converts this from "plausible" to "measured."
+
+## §115 ROUTING RULING — Beta Link toggle fix vs Outset load-safety (Housing, 2026-07-23)
+
+Merge chat re-diagnosed Beta Link: not a loader break but a clothes-epoch REBUILD SOFT-LOCK
+(`invalidateClothesEpoch` hide stuck when rebuild never lands; `cycle blocked: swap in progress`).
+Proposed fix: a watchdog so an un-landed rebuild can't leave the epoch-hide permanent. User asks
+Housing to route: merge chat or WW workflow?
+
+**Discriminator (verified):** the clothes-epoch system is **Link-clothes-ONLY** (`d_a_alink.cpp` +
+outfit/sumo debug). Outset NPC mounts (`d_ext_npc_mount`, `custom_assets`) do NOT touch it → **the
+outfit soft-lock does not, by itself, threaten Outset.** BUT the beta-arc reload and Outset arcs
+share the model-LOAD path (`J3DShapeFactory`, §114).
+
+**RULING — two separable items:**
+1. **Beta Link toggle watchdog → MERGE CHAT** (they own the repro/log/diagnosis + harder env).
+   Housing conditions: (a) it is WW/ALBW outfit code (NOT in the coexist diff) → **back-port to the
+   pre-merge WW tree** so it survives a §114 rollback; do not strand it on the un-gated branch.
+   (b) The watchdog fixes the FREEZE, not the LOAD — the merge chat's own "failed reload of the
+   bigger beta arc" candidate IS the §114 loader mechanism; if that is the root, the watchdog
+   un-sticks to invisible/fallback Link, not working Beta Link. Watchdog necessary, maybe not
+   sufficient.
+2. **Outset load-safety → THIS WORKFLOW (Housing/§114), UNCHANGED by the outfit fix.** The outfit
+   soft-lock is Link-only; Outset's fate rides purely on whether its BDL4→BMD3 arcs construct on the
+   new `J3DShapeFactory`. **Sharpened §114 ask: Engine loads an OUTSET BDL4→BMD3 arc on the merged
+   branch** — clean = Outset safe regardless of the clothes soft-lock; fail = §114 confirmed.
+
+Net: fixes proceed in BOTH chats but on DIFFERENT problems — merge chat owns the Link-clothes
+toggle (back-ported), this workflow owns Outset load-safety (the one-Outset-BMD test). Neither
+answers the other; do not let the toggle fix be read as clearing Outset.
+
+## §115b BOUNDARY EXPIRY — the clothes-epoch/WW separation is TEMPORARY (user, 2026-07-23)
+
+User flags a valid future merge point on §115's boundary. §115 ruled "clothes-epoch soft-lock is
+Link-clothes-ONLY → not WW's domain." **That is true NOW but carries an expiry:** IF the planned
+**TP-Link ↔ WW-Link model swap** ever lands (the Kmdl-overlay / Wind Waker Skins lane — Beta Link is
+already a `Kmdl.arc` overlay; docs: `Custom-Model-API-Work.md`, `Mod-Load-Order-Design.md`,
+Sumo/outfit work), then WW Link runs THROUGH the `changeLink`/clothes-epoch machinery — and at that
+moment:
+1. the clothes-epoch soft-lock (and the merge chat's watchdog) become **WW-domain shared
+   dependencies**, not just ALBW — the watchdog back-port (§115 condition a) protects WW too;
+2. the covenant (№31) extends to the swap path: a WW Link model reaching the player via `changeLink`
+   is a purity surface — WW Link body must come from WW assets, no TP-clothes cross-pollination;
+3. Housing re-opens the routing: what §115 sent wholly to the merge chat becomes a shared WW concern.
+
+Recorded per the doctrine-expiry rule (§106 rec 3): a boundary that will change must state WHEN.
+No action now — §115 stands until the swap plan is scoped. This note is the tripwire.
+
+## §116 RARC NAME-PARSE BREAK — radius of effect (Housing, read-only, 2026-07-23)
+
+User reports RARC name parsing broke in the merge (informational; no edits requested). Diff
+corroborates: merge changed `JKRArchive.h` (12), `JKRArchivePri.cpp` (2), `JKRDvdRipper` (8).
+
+**UPSTREAM of §114.** RARC name parse locates member BYTES; `J3DShapeFactory` (§114) only runs
+AFTER a member resolves. If names don't resolve, "BMD failed to load" occurs before the shape
+factory — so Beta Link's failure may root HERE, making §114 a downstream symptom. **Check RARC
+name parse FIRST; re-evaluate §114 only after.**
+
+**WW radius:**
+- **HIGH — `d_ext_npc_mount.cpp` (30 by-name lookups):** every WW NPC/BG mount resolves
+  model/collision/anim members by name → Outset population, BG rooms, doors all exposed.
+- **HIGH — all mounted arcs** (Beta Link `Kmdl.arc`, Outset room arcs, NPC arcs): RARC, name-table
+  dependent.
+- **LOW — `custom_assets.cpp` (0 by-name calls):** resolves by index/path; likely survives.
+
+**Bounds (not panic):**
+1. NOT global — TP boots (resolves by name too), so it's a SPECIFIC break (small diff; likely
+   endian/hash/type in the merged JKRArchive, matching the §114 `dusk/endian.h→helpers/endian.h`
+   refactor pattern). By-name/hash path breaks; pre-resolved paths survive → WW's by-name-heavy
+   mount path is the exposed surface.
+2. **Covenant-safe:** name-lookup failure FAILS CLOSED — content absent, never foreign. The "hole >
+   foreign prop" principle holds automatically; no containment breach, only silent absence.
+
+**Routing:** Engine owns the JKRArchive name-parse fix (merge-caused, main's archive layer). Housing
+maps + will re-verify WW mount resolution once fixed. The pre-merge anchor (`pre-dusk-api-merge`)
+still restores full RARC name parse if needed. Not my edit — informational radius per user.
+
+## §117 STATUS RE-CHECK post-RARC-report (Housing, 2026-07-23)
+
+Merge chat reports RARC working again; now doing Linkle audio. Housing status:
+- **GIT REALITY: nothing advanced.** This tree still at `pre-dusk-api-merge`; `mods` branch tops at
+  `b6573837da Merge origin/main` — **NO committed RARC fix on any visible branch.** The fix +
+  merged build are UNCOMMITTED in the merge chat's working tree.
+- **RARC = reported-fixed, Housing-UNVERIFIED.** Rests on their running build; no git artifact to
+  check. §116 radius items stay OPEN until committed/testable.
+- **LOSS-PROTECTION FLAG (charter):** the uncommitted RARC fix is the single most valuable
+  unprotected artifact right now (foundational archive-layer repair). Recommend a milestone commit
+  on the merge tree (§108/§113 pattern). Housing cannot reach that working tree from here — flag for
+  the merge chat.
+- **Linkle = ALBW domain (not WW; `docs/WW*` has no Linkle) → merge chat's lane.** BUT her audio
+  rides the **shared shadow-wave path** (`registerShadowWave`/`ja1_bank`/`DuskDsp`/`custom_assets`)
+  that WW audio also uses. If her fix touches shadow-wave routing or DuskDsp, it becomes a WW
+  re-verify item. Watch flag only — not a cross-lane ask.
+- **Housing re-verify QUEUED, not done:** WW mount resolution end-to-end + the §115 one-Outset-BMD
+  load test run the moment the merged state is committed or loadable. That converts "seems to work"
+  → "WW survives the merge, confirmed."
+
+Anchor `pre-dusk-api-merge` still the recovery floor.

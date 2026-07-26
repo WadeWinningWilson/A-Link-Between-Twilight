@@ -2,13 +2,13 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | First 10 logged; **#1 `albw-meter` extraction planning started** |
+| **status** | Feature extraction track; #1 at P3 on external host — see albw-meter detail |
 | **target** | TwilitRealm `origin/main` Mod SDK (`.dusk` + services) |
 | **owner_impl** | — |
 | **next** | #1 P3 playtest; then P4 shield — see [mod-api-port-albw-meter.md](mod-api-port-albw-meter.md) |
 | **do_not** | Ship WW donor bytes as `.dusk`; split meter-spenders into separate mods; mid-WIP rewrite of Diababa/Shade AI onto ABI; big-bang merge `origin/main` |
-| **updated** | 2026-07-22 |
-| **detail** | [mod-api-port-albw-meter.md](mod-api-port-albw-meter.md) (#1 plan), feasibility/comparison canvases, `docs/albw-port.md` |
+| **updated** | 2026-07-25 |
+| **detail** | [mod-api-port-albw-meter.md](mod-api-port-albw-meter.md) (#1); **host promote / local merge:** [mod-api-host-promote.md](mod-api-host-promote.md) |
 
 ---
 

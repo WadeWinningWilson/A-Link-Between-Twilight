@@ -5,7 +5,15 @@
 
 #include <dolphin/gx/GXAurora.h>
 #include <dolphin/gx/GXExtra.h>
-#include "tracy/Tracy.hpp"
+
+// Mods reach this header through the game ABI include set, which has no Tracy on it.
+#if defined(DUSK_BUILDING_GAME)
+#include <tracy/Tracy.hpp>
+#else
+#ifndef ZoneScopedN
+#define ZoneScopedN(name)
+#endif
+#endif
 
 #if DUSK_GFX_DEBUG_GROUPS
 #define GX_DEBUG_GROUP(name, ...) \

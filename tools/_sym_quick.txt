@@ -1,0 +1,33 @@
+==== 0x11cd393 ====\nJKRHeap::destroy(void)
+C:\Users\xxxxx\Documents\dusklight\libs\JSystem\src\JKernel\JKRHeap.cpp:207:0
+
+==== 0x1082c2 ====\ndRes_info_c::~dRes_info_c(void)
+C:\Users\xxxxx\Documents\dusklight\src\d\d_resorce.cpp:49:0
+
+==== 0x1089d6 ====\ndRes_control_c::deleteRes(char const *, class dRes_info_c *, int)
+C:\Users\xxxxx\Documents\dusklight\src\d\d_resorce.cpp:906:0
+
+==== 0xf419f ====\ndComIfG_resDelete(struct request_of_phase_process_class *, char const *)
+C:\Users\xxxxx\Documents\dusklight\src\d\d_com_inf_game.cpp:1424:0
+
+==== 0x2a6617 ====\n`anonymous namespace'::releaseFaceDonor
+C:\Users\xxxxx\Documents\dusklight\src\d\d_albw_sumo_test.cpp:668:0
+
+==== 0x2a4dbe ====\ndAlbwSumoTest_tickCapLoad(void)
+C:\Users\xxxxx\Documents\dusklight\src\d\d_albw_sumo_test.cpp:964:0
+
+==== 0x2a4a8b ====\ndAlbwSumoTest_exec(class daAlink_c *)
+C:\Users\xxxxx\Documents\dusklight\src\d\d_albw_sumo_test.cpp:1016:0
+
+==== 0x1b7ca1 ====\ndaAlink_c::execute(void)
+C:\Users\xxxxx\Documents\dusklight\src\d\actor\d_a_alink.cpp:19277:0
+
+==== 0xd2a68 ====\nfopAc_Execute
+C:\Users\xxxxx\Documents\dusklight\src\f_op\f_op_actor.cpp:343:0
+
+==== 0xddd4d ====\nfpcBs_Execute(struct base_process_class *)
+C:\Users\xxxxx\Documents\dusklight\src\f_pc\f_pc_base.cpp:78:0
+
+==== 0xe0d72 ====\nfpcLnIt_MethodCall
+C:\Users\xxxxx\Documents\dusklight\src\f_pc\f_pc_line_iter.cpp:21:0
+

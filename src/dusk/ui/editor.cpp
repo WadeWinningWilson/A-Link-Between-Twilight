@@ -2949,7 +2949,7 @@ EditorWindow::EditorWindow() {
             "~2 s tired lockout). Audio: Zant spin 1.05× + Gale tornado 0.85× @ 25% + spinner "
             "ride @ 35%. Particle layout uses Interface → ALBW Visuals → Hurricane Spin Visual." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return getSettings().game.speedrunMode; });
+            []() -> bool { return getSettings().game.speedrunMode; });
         // ============================================
         // NEW CODE — ALBW Port (Demo Leftover Viewer + Cut Actors)
         // Demo lane: all unique BMD/BDL from retail Demo*.arc (365), category filter.

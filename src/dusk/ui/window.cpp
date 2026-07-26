@@ -51,7 +51,9 @@ const Rml::String kDocumentSourceSmall = R"RML(
 
 }  // namespace
 
-Window::Window() : Document(kDocumentSource), mRoot(mDocument->GetElementById("window")) {
+Window::Window()
+    : Document(kDocumentSource, false, DocumentScope::Window),
+      mRoot(mDocument->GetElementById("window")) {
     mTabBar = std::make_unique<TabBar>(mRoot, TabBar::Props{
                                                   .onClose = [this] { request_close(); },
                                                   .selectedTabIndex = 0,
@@ -281,7 +283,8 @@ bool Window::handle_content_nav(Rml::Event& event, NavCommand cmd) noexcept {
 }
 
 WindowSmall::WindowSmall(const Rml::String& windowClass, const Rml::String& dialogClass)
-    : Document(kDocumentSourceSmall), mRoot(mDocument->GetElementById("window")),
+    : Document(kDocumentSourceSmall, false, DocumentScope::Window),
+      mRoot(mDocument->GetElementById("window")),
       mDialog(mDocument->GetElementById("dialog")) {
     listen(mRoot, Rml::EventId::Transitionend, [this](Rml::Event& event) {
         if (event.GetTargetElement() == mRoot && !mRoot->HasAttribute("open") &&

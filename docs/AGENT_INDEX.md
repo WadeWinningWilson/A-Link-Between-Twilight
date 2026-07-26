@@ -60,6 +60,7 @@
 | Fado Ordon door unlock + warp sink | [state/fado-door-warp.md](state/fado-door-warp.md) | cut-actors №101; `d_a_door_knob00`; `d_ext_mod_flags` |
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |
 | Mod API port (main `.dusk` extraction) | [state/mod-api-port.md](state/mod-api-port.md) | [state/mod-api-port-albw-meter.md](state/mod-api-port-albw-meter.md) (#1 plan); port canvases; `albw-port.md` |
+| Mod API host promote + local dusk merge | [state/mod-api-host-promote.md](state/mod-api-host-promote.md) | Layer B / Mods UI / `.dusk` push set; parked WW receivers; `pre-dusk-api-merge` tag; [Custom-Model-API-Work.md](Custom-Model-API-Work.md) |
 
 ---
 

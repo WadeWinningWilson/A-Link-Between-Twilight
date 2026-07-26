@@ -3,11 +3,14 @@
 #include "component.hpp"
 #include "ui.hpp"
 
+#include <span>
+
 namespace dusk::ui {
 
 class Document {
 public:
-    explicit Document(const Rml::String& source, bool passive = false);
+    explicit Document(
+        const Rml::String& source, bool passive = false, DocumentScope scope = DocumentScope::None);
     virtual ~Document();
 
     Document(const Document&) = delete;
@@ -19,6 +22,10 @@ public:
     virtual bool focus();
     virtual bool visible() const;
     virtual bool active() const;
+
+    DocumentScope scope() const { return mScope; }
+    bool set_document_styles(const Rml::String& rcss);
+    void restyle(std::span<const Rml::StyleSheetContainer* const> sheets);
 
     void listen(Rml::Element* element, Rml::EventId event, ScopedEventListener::Callback callback,
         bool capture = false);
@@ -56,9 +63,13 @@ protected:
 
     Rml::ElementDocument* mDocument;
     std::vector<std::unique_ptr<ScopedEventListener> > mListeners;
+    Rml::SharedPtr<Rml::StyleSheetContainer> mBaseStyleSheets;
+    Rml::SharedPtr<Rml::StyleSheetContainer> mDocumentStyleSheets;
+    DocumentScope mScope = DocumentScope::None;
     bool mPendingClose = false;
     bool mClosed = false;
     bool mPassive = false;
+    bool mRestyled = false;
 };
 
 }  // namespace dusk::ui

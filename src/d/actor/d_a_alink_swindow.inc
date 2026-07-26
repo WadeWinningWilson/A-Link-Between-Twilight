@@ -135,6 +135,8 @@ int daAlink_c::loadModelDVD() {
                     if (!s_albwSwapActive) {
                         s_albwSwapOldArc = mArcName;
                         setArcName(checkWolf());   // non-meta -> the new clothes arc
+                        // Drop only true abandoned rows (no archive, no DVD command).
+                        dAlbwSumoTest_sanitizeClothesArc(mArcName);
                         cPhs_Reset(&s_albwPhaseReqB);
                         s_albwSwapActive = true;
                     }
@@ -179,13 +181,22 @@ int daAlink_c::loadModelDVD() {
                     // so draw/calc/shadow never see freed memory -- no freed-window crash.
                     if (mArcName == s_albwSwapOldArc) {
                         // Same arc re-equipped: still resident in mpArcHeap -> rebuild in place.
+                        // (Custom-Model-API §9: same-arc deliberately does not DVD-remount —
+                        // hot-freeing the global clothes arc under live models zombies the
+                        // pipeline. Linkle/Beta track on the next DIFFERENT-arc outfit switch.)
                         mClothesChangeWaitTimer = 0;
                         s_albwSwapActive = false;
+                        s_albwForceClothesRemount = false;
                         changeLink(1);
                         return 1;
                     }
-                    if (dComIfG_resLoad(&s_albwPhaseReqB, mArcName, s_albwArcHeapB) ==
-                        cPhs_COMPLEATE_e) {
+                    // HEAD: plain resLoad into heapB. Ordon→Hero's after Beta relies on a
+                    // healthy global mObjectInfo Kmdl donor (held over non-Hero's — see
+                    // holdGlobalKmdlDonorForClothes — Cap Wear Off included); setRes
+                    // then incCounts instead of a fresh DVD mount that zombies after FST flips.
+                    const int loadSt =
+                        dComIfG_resLoad(&s_albwPhaseReqB, mArcName, s_albwArcHeapB);
+                    if (loadSt == cPhs_COMPLEATE_e) {
                         mClothesChangeWaitTimer = 0;
                         changeLink(1);  // builds the new models from the alt heap; repoints refs
 #if D_ALBW_ARC_LIFECYCLE_DEBUG
@@ -212,14 +223,52 @@ int daAlink_c::loadModelDVD() {
                             s_albwPhaseReqB = l_tr;
                         }
                         s_albwSwapActive = false;
+                        s_albwForceClothesRemount = false;
                         return 1;
+                    }
+                    if (loadSt == cPhs_ERROR_e) {
+                        // HEAD: keep LIVE models, purge abandoned rows, timer=2 retry.
+                        // Do NOT reconcile outfit to Ordon (that pinned the D-pad ring).
+                        const char* failedArc = mArcName;
+                        dRes_info_c* info =
+                            failedArc != NULL ? dComIfG_getObjectResInfo(failedArc) : NULL;
+                        const bool inFlight = info != NULL && info->getArchive() == NULL &&
+                                              info->getDMCommand() != NULL;
+                        const bool zombie = info != NULL && info->getArchive() == NULL &&
+                                            info->getDMCommand() == NULL;
+                        {
+                            const u32 heapFree = s_albwArcHeapB != NULL
+                                                     ? (u32)s_albwArcHeapB->getTotalFreeSize()
+                                                     : 0u;
+                            const u32 heapTotal = s_albwArcHeapB != NULL
+                                                      ? (u32)s_albwArcHeapB->getHeapSize()
+                                                      : 0u;
+                            DuskLog.warn(
+                                "[Alink] build-then-swap resLoad ERROR for {} (old={}) — "
+                                "heapB free={}/{} inFlight={} zombie={}",
+                                failedArc ? failedArc : "(null)",
+                                s_albwSwapOldArc ? s_albwSwapOldArc : "(null)", heapFree,
+                                heapTotal, inFlight ? 1 : 0, zombie ? 1 : 0);
+                        }
+                        if (!inFlight) {
+                            cPhs_Reset(&s_albwPhaseReqB);
+                            if (s_albwArcHeapB != NULL) {
+                                s_albwArcHeapB->freeAll();
+                            }
+                            if (zombie) {
+                                dAlbwSumoTest_sanitizeClothesArc(failedArc);
+                            }
+                        }
+                        mClothesChangeWaitTimer = 2;
+                        return 0;
                     }
                     mClothesChangeWaitTimer = 2;  // alt arc not loaded yet; retry
                 } else
 #endif
                 {
                     // In-place load: wolf metamorphose, or fallback (no alt heap).
-                    if (dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap) == cPhs_COMPLEATE_e) {
+                    const int loadSt = dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap);
+                    if (loadSt == cPhs_COMPLEATE_e) {
                         mClothesChangeWaitTimer = 0;
                         if (isMeta) {
                             if (checkWolf()) {
@@ -234,6 +283,16 @@ int daAlink_c::loadModelDVD() {
                             changeLink(1);
                         }
                         return 1;
+                    }
+                    if (loadSt == cPhs_ERROR_e) {
+                        // In-place already freed the live heap at timer==2 — best we can
+                        // do is stop spinning and unhide; outfit sync may retry later.
+                        DuskLog.warn(
+                            "[Alink] in-place clothes resLoad ERROR for {} — clearing timer",
+                            mArcName ? mArcName : "(null)");
+                        mClothesChangeWaitTimer = 0;
+                        dAlbwAlink_resyncClothesEpoch();
+                        return 0;
                     }
                     mClothesChangeWaitTimer = 2;
                 }

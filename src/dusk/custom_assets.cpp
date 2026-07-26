@@ -11,6 +11,7 @@
 #if TARGET_PC
 
 #include "dusk/main.h"      // ConfigPath
+#include "dusk/io.hpp"      // fs_path_to_string
 #include "dusk/logging.h"
 #include "dusk/settings.h"  // game.customModelsDisabled
 #include "d/d_ext_npc_mount.h"  // Plan R provider rescan after arc overlays
@@ -27,7 +28,7 @@
 #include "JSystem/JSupport/JSupport.h"     // JSULoHalf
 
 #include <SDL3/SDL_filesystem.h>  // SDL_GetBasePath (bundled core tier, <exe>/content/core)
-#include <aurora/dvd.h>     // aurora_dvd_overlay_files / _callbacks (virtual FST)
+#include "dusk/mods/svc/overlay_host.hpp"  // united Layer-A + .dusk Aurora push
 #include <aurora/lib/gfx/png_io.hpp>  // load_png_file (custom icon PNG -> RGBA8)
 #include <aurora/texture.hpp>  // per-mod texture packs (hash-keyed replacement groups)
 #include <fmt/format.h>     // fmt::format (scan's shadowed-conflict log suffix)
@@ -1206,6 +1207,71 @@ bool select_collection_variant(const char* variant_folder) {
     return true;
 }
 
+bool set_mod_group_enabled(const char* group_key, bool enabled) {
+    if (group_key == nullptr || group_key[0] == '\0') {
+        return false;
+    }
+    std::vector<OrderEntry> list = full_order_list();
+    bool changed = false;
+    if (!enabled) {
+        for (OrderEntry& e : list) {
+            if (mod_group_key(e.name.c_str()) != group_key) {
+                continue;
+            }
+            if (e.enabled) {
+                e.enabled = false;
+                changed = true;
+            }
+        }
+    } else {
+        bool anyEnabled = false;
+        int firstMember = -1;
+        for (int i = 0; i < static_cast<int>(list.size()); ++i) {
+            if (mod_group_key(list[i].name.c_str()) != group_key) {
+                continue;
+            }
+            if (firstMember < 0) {
+                firstMember = i;
+            }
+            if (list[i].enabled) {
+                anyEnabled = true;
+                break;
+            }
+        }
+        if (firstMember < 0) {
+            return false;
+        }
+        if (!anyEnabled) {
+            list[firstMember].enabled = true;
+            changed = true;
+        }
+    }
+    if (!changed) {
+        return false;
+    }
+    persist_order(list);
+    scan();
+    install_overlays();
+    return true;
+}
+
+std::string mod_folder_path(const char* folder) {
+    if (folder == nullptr || folder[0] == '\0') {
+        return {};
+    }
+    std::error_code ec;
+    const auto abs = std::filesystem::absolute(ConfigPath / "model_replacements" / folder, ec);
+    if (ec) {
+        return io::fs_path_to_string(ConfigPath / "model_replacements" / folder);
+    }
+    return io::fs_path_to_string(abs);
+}
+
+void rescan_and_install() {
+    scan();
+    install_overlays();
+}
+
 bool move_mod_group(const char* group_key, int delta, bool apply) {
     if (group_key == nullptr || (delta != -1 && delta != 1)) {
         return false;
@@ -1916,13 +1982,11 @@ int overlay_generation() {
 
 namespace {
 
-// Program-lifetime backing store for the absolute loose paths handed to the
-// overlay callbacks as userData. install_overlays() is re-runnable, so this pool
-// is only ever appended to (deduped) — never cleared — which keeps every
-// previously-issued c_str() pointer valid even across a rebuild. A std::deque
-// never relocates its elements, so the pointers stay stable.
+// Program-lifetime backing store for absolute loose paths. collect_dvd_overlays()
+// is re-runnable, so this pool is only ever appended to (deduped) — never cleared.
 std::deque<std::string> s_pathPool;
 std::unordered_map<std::string, const char*> s_pathCstr;
+std::vector<std::string> s_lastLayerASig;
 
 const char* stable_path(const std::string& abs) {
     const auto it = s_pathCstr.find(abs);
@@ -1935,94 +1999,52 @@ const char* stable_path(const std::string& abs) {
     return c;
 }
 
-void* overlay_open(void* userdata) {
-    return std::fopen(static_cast<const char*>(userdata), "rb");
-}
-
-void overlay_close(void* handle) {
-    if (handle != nullptr) {
-        std::fclose(static_cast<FILE*>(handle));
+std::vector<std::string> layer_a_sig(const std::vector<DvdOverlayFile>& files) {
+    std::vector<std::string> sig;
+    sig.reserve(files.size());
+    for (const auto& f : files) {
+        sig.push_back(f.discPath + "|" + std::to_string(f.size) + "|" +
+                      (f.absPathCstr != nullptr ? f.absPathCstr : ""));
     }
-}
-
-std::int64_t overlay_read(void* handle, std::uint8_t* buf, std::size_t len) {
-    FILE* fp = static_cast<FILE*>(handle);
-    if (fp == nullptr) {
-        return -1;
-    }
-    const std::size_t got = std::fread(buf, 1, len, fp);
-    if (got < len && std::ferror(fp)) {
-        return -1;
-    }
-    return static_cast<std::int64_t>(got);
-}
-
-std::int64_t overlay_seek(void* handle, std::int64_t offset, std::int32_t whence) {
-    FILE* fp = static_cast<FILE*>(handle);
-    if (fp == nullptr) {
-        return -1;
-    }
-    if (std::fseek(fp, static_cast<long>(offset), whence) != 0) {
-        return -1;
-    }
-    return static_cast<std::int64_t>(std::ftell(fp));
+    std::sort(sig.begin(), sig.end());
+    return sig;
 }
 
 }  // namespace
 
-void install_overlays() {
-    // Callbacks are set exactly once, unconditionally, so that a later
-    // re-registration (even one that STARTED from an empty set) never trips
-    // Aurora's "callbacks-before-files" fatal check.
-    static bool s_callbacksSet = false;
-    if (!s_callbacksSet) {
-        static const AuroraOverlayCallbacks kCallbacks = {
-            overlay_open,
-            overlay_close,
-            overlay_read,
-            overlay_seek,
-        };
-        aurora_dvd_overlay_callbacks(&kCallbacks);
-        s_callbacksSet = true;
-    }
-
-    // Collect in one pass into a temp, then build the AuroraOverlayFile array so
-    // every fileName pointer is stable before the (synchronous) hand-off to
-    // Aurora. userData is backed by the persistent path pool so it survives
-    // future rebuilds; the temp's name strings just need to outlive the call.
-    struct Pending {
-        std::string name;      // "/audiores/waves/...": disc-absolute
-        const char* pathCstr;  // stable-pool userData
-        std::size_t size;
-    };
-    std::vector<Pending> pending;
-    pending.reserve(s_map.size());
+void collect_dvd_overlays(std::vector<DvdOverlayFile>& out) {
+    out.clear();
+    out.reserve(s_map.size());
     for (const auto& kv : s_map) {
         std::error_code ec;
         const auto sz = std::filesystem::file_size(kv.second, ec);
         if (ec) {
-            continue;  // unreadable loose file — skip, disc entry stays
+            continue;
         }
-        pending.push_back({"/" + kv.first, stable_path(kv.second),
-                           static_cast<std::size_t>(sz)});
+        out.push_back(DvdOverlayFile{"/" + kv.first, stable_path(kv.second),
+                                     static_cast<std::size_t>(sz)});
     }
+}
 
-    std::vector<AuroraOverlayFile> files;
-    files.reserve(pending.size());
-    for (const auto& p : pending) {
-        AuroraOverlayFile f{};
-        f.fileName = p.name.c_str();
-        f.userData = const_cast<char*>(p.pathCstr);
-        f.size = p.size;
-        files.push_back(f);
+void commit_dvd_overlay_push(const std::vector<DvdOverlayFile>& layerA) {
+    auto sig = layer_a_sig(layerA);
+    if (sig == s_lastLayerASig) {
+        DuskLog.info(
+            "[custom_assets] Layer-A DVD overlay unchanged ({} file(s)) — gen {}",
+            static_cast<int>(layerA.size()), s_generation);
+        return;
     }
+    s_lastLayerASig = std::move(sig);
+    ++s_generation;
+    DuskLog.info("[custom_assets] Layer-A DVD overlay committed ({} file(s), gen {})",
+                 static_cast<int>(layerA.size()), s_generation);
+}
 
-    // NOTE: passing 0 files is valid — it clears the overlay set (used when a
-    // toggle disables the last remaining mod). Rebuilds the FST; reload-scoped.
-    aurora_dvd_overlay_files(files.data(), files.size(), nullptr);
-    ++s_generation;  // signal resident-asset caches (e.g. sumo body) to re-mount
-    DuskLog.info("[custom_assets] installed {} DVD overlay file(s) (gen {})",
-                 static_cast<int>(files.size()), s_generation);
+void install_overlays() {
+    // United push: Layer A + dusk-API .dusk overlays. Never call
+    // aurora_dvd_overlay_files with Layer A alone after ModLoader exists — that
+    // wipe is why clothes RARCs (Linkle/Beta) stayed vanilla at boot.
+    dusk::mods::svc::overlay_sync_files();
 }
 
 // ============================================
@@ -2331,10 +2353,11 @@ void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int van
         return;  // no mod provides a twin of this bank
     }
 
-    // №28 / №32 B10: in-place .aw twins are OFFSET-INDEXED by WSYS. A size mismatch
-    // (repacked/shrunk bank) + vanilla offsets ⇒ garbage wave headers ⇒ AV. Refuse and
-    // keep the vanilla bank resident. Larger/repacked waves must use the shadow-wave
-    // redirect path (per-wave), not a whole-bank twin of a different size.
+    // №28 / №32 B10: a size-mismatched .aw must NOT be treated as a byte-compatible
+    // whole-bank twin (vanilla WSYS offsets into a shorter/longer buffer ⇒ AV).
+    // Complete re-skins like Linkle ship a matching .baa — those banks go through
+    // per-wave remap_voice (mod descriptors + virtual addresses). Only refuse when
+    // we have no per-wave map for this leaf (nothing safe to do with the twin).
     std::vector<u8>& buf = s_audioBufs[leaf];
     if (buf.empty()) {
         FILE* fp = std::fopen(pathIt->second.c_str(), "rb");
@@ -2350,12 +2373,17 @@ void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int van
             s_audioBufs.erase(leaf);
             return;
         }
-        if (static_cast<unsigned long>(fsz) != static_cast<unsigned long>(vanilla_size)) {
+        const bool sizeMatch =
+            static_cast<unsigned long>(fsz) == static_cast<unsigned long>(vanilla_size);
+        const auto waveMapIt = s_modWaves.find(leaf);
+        const bool hasPerWave =
+            waveMapIt != s_modWaves.end() && !waveMapIt->second.empty();
+        if (!sizeMatch && !hasPerWave) {
             std::fclose(fp);
             s_audioBufs.erase(leaf);
             DuskLog.warn(
                 "[custom_assets] audio twin '{}' REFUSED — size {} != vanilla {} "
-                "(fall back to vanilla bank)",
+                "and no mod .baa wave map (fall back to vanilla bank)",
                 leaf, static_cast<long>(fsz), vanilla_size);
             return;
         }
@@ -2366,11 +2394,20 @@ void acquire_audio_shadow(int entrynum, unsigned int aram_base, unsigned int van
             s_audioBufs.erase(leaf);
             return;
         }
-        DuskLog.info("[custom_assets] audio twin '{}' resident ({} bytes, vanilla {}) @aram {:#x}",
-                     leaf, static_cast<long>(fsz), vanilla_size, aram_base);
+        if (sizeMatch) {
+            DuskLog.info(
+                "[custom_assets] audio twin '{}' resident ({} bytes, vanilla {}) @aram {:#x}",
+                leaf, static_cast<long>(fsz), vanilla_size, aram_base);
+        } else {
+            DuskLog.info(
+                "[custom_assets] audio twin '{}' resident via per-wave remap "
+                "(mod {} bytes, vanilla {}) @aram {:#x}",
+                leaf, static_cast<long>(fsz), vanilla_size, aram_base);
+        }
     }
-    // DSP redirect range = MOD buffer size (a remapped wave's addr = aram_base +
-    // mod offset, which is < mod size, so it falls inside this range).
+    // DSP redirect range = MOD buffer size. Remapped voices mint
+    // kShadowVirtualBase + aram_base + modOffset; resolveShadowWave only serves
+    // those virtual addresses (real ARAM stays vanilla — safe for size mismatch).
     dusk::audio::registerShadowWave(aram_base, static_cast<u32>(buf.size()), buf.data());
 
     // Track the resident bank for remap_voice()'s containment test — which uses
@@ -2538,6 +2575,8 @@ class J3DModelData;
 namespace dusk::custom_assets {
 void scan() {}
 void install_overlays() {}
+void collect_dvd_overlays(std::vector<DvdOverlayFile>& out) { out.clear(); }
+void commit_dvd_overlay_push(const std::vector<DvdOverlayFile>&) {}
 J3DModelData* try_load(const char*, int) { return nullptr; }
 J3DModelData* try_load_uncached(const char*, int) { return nullptr; }
 std::vector<std::string> list_folders() { return {}; }
@@ -2549,6 +2588,9 @@ void apply_order_changes() {}
 std::string mod_group_key(const char* folder) { return folder ? folder : ""; }
 bool mod_is_collection_variant(const char*) { return false; }
 bool select_collection_variant(const char*) { return false; }
+bool set_mod_group_enabled(const char*, bool) { return false; }
+std::string mod_folder_path(const char*) { return {}; }
+void rescan_and_install() {}
 bool move_mod_group(const char*, int, bool) { return false; }
 bool move_mod_group_to(const char*, int, bool) { return false; }
 std::vector<std::pair<std::string, bool>> order_view(const std::vector<std::string>&) { return {}; }

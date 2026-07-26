@@ -245,7 +245,8 @@ Rml::String format_graphics_setting_value(GraphicsOption option, int value) {
 }
 
 GraphicsTuner::GraphicsTuner(GraphicsTunerProps props, bool prelaunch)
-    : Document(kDocumentSource), mOption(props.option), mValueMin(props.valueMin),
+    : Document(kDocumentSource, false, DocumentScope::GraphicsTuner), mOption(props.option),
+      mValueMin(props.valueMin),
       mValueMax(props.valueMax), mDefaultValue(props.defaultValue), mPrelaunch(prelaunch) {
     if (mDocument == nullptr) {
         return;

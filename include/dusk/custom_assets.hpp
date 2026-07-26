@@ -44,8 +44,27 @@ void scan();
 // rebuilds the overlay set from the current scan map (mirrors the texture API's
 // reload() idiom), so a folder toggle takes effect on the next asset load
 // (reload-scoped). Call once after aurora_dvd_open, then again from
-// toggle_folder(). Overlay callbacks are installed exactly once.
+// toggle_folder().
+//
+// On the dusk-API coexist tree this pushes through the UNITED overlay sync
+// (Layer A + .dusk package overlays). Aurora replaces the whole FST overlay set
+// on each call — a Layer-A-only push after ModLoader::init() was wiping clothes
+// RARCs (Kmdl/Bmdl/…) so Linkle/Beta never appeared.
 void install_overlays();
+
+// One Layer-A overlay file for the united DVD push (disc-absolute path + loose file).
+struct DvdOverlayFile {
+    std::string discPath;      // "/res/object/kmdl.arc"
+    const char* absPathCstr;   // stable absolute path (program lifetime)
+    std::size_t size = 0;
+};
+
+// Fill `out` with the current enabled Layer-A map (clears `out` first).
+void collect_dvd_overlays(std::vector<DvdOverlayFile>& out);
+
+// After a united Aurora push that included this Layer-A set: update the skip
+// signature and bump overlay_generation() when the Layer-A bytes changed.
+void commit_dvd_overlay_push(const std::vector<DvdOverlayFile>& layerA);
 
 // --- Layer B: loose single-BMD injection ---------------------------------
 
@@ -127,6 +146,19 @@ bool mod_is_collection_variant(const char* folder);
 // Enable one variant and disable all siblings under the same collection root.
 // Returns false if folder is not a variant or already the sole enabled sibling.
 bool select_collection_variant(const char* variant_folder);
+
+// Enable or disable every order entry sharing group_key (plain mod or whole
+// collection). enabled=false turns the group fully Off. enabled=true turns on
+// the first member that is currently off when the whole group is off (pick a
+// concrete variant afterwards for collections). Returns false if nothing changed.
+bool set_mod_group_enabled(const char* group_key, bool enabled);
+
+// Absolute UTF-8 path to <config>/model_replacements/<folder> (folder may be
+// "Coll/Var"). Empty if folder is null/empty.
+std::string mod_folder_path(const char* folder);
+
+// Rescan model_replacements + reinstall DVD overlays (Layer-B "Reload").
+void rescan_and_install();
 
 // Move every order entry sharing group_key as one block (plain mods: same as
 // move_folder). apply=false defers scan until apply_order_changes().

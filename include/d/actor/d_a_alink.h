@@ -3498,6 +3498,11 @@ public:
     }
     virtual void changeDragonActor(fopAc_ac_c* i_actor);
     virtual u8 getClothesChangeWaitTimer() const { return mClothesChangeWaitTimer; }
+#if TARGET_PC
+    // Abort a hung loadModelDVD (timer bouncing 1↔2 on never-complete resLoad) so
+    // draw() can run again. Used after Custom Models toggles (e.g. Beta Link → Kokiri).
+    void albwAbortStuckClothesChange();
+#endif
     virtual u8 getShieldChangeWaitTimer() const { return mShieldChangeWaitTimer; }
     virtual BOOL checkBootsOrArmorHeavy() const;
     virtual fpc_ProcID getBottleOpenAppearItem() const;
@@ -8559,6 +8564,18 @@ inline daAlink_c* daAlink_getAlinkActorClass() {
 // Defined in d_a_alink.cpp.
 // ============================================
 void dAlbwAlink_invalidateClothesEpoch();
+
+// Emergency unhide: stamp the clothes-model epoch to the current arc epoch so draw()
+// stops skipping body/face/etc. after a failed Custom-Models remount left the hide
+// seatbelt stuck. Does NOT free or rebuild anything — only clears the skip gate.
+void dAlbwAlink_resyncClothesEpoch();
+
+// Abort hung clothes change + unhide (see daAlink_c::albwAbortStuckClothesChange).
+void dAlbwAlink_abortStuckClothesChange(daAlink_c* link);
+
+// Custom Models FST flip: next same-arc clothes re-equip must free-then-remount instead of
+// rebuilding in place from the stale mpArcHeap (Linkle/Beta toggle with Cap Wear Off).
+void dAlbwAlink_requestClothesRemount();
 
 // GLOBAL Cap Wear: true when the last native changeLink built the requested cap/topknot, false
 // on fallback to the native hat (chosen arc not resident yet).  Read by the outfit module to

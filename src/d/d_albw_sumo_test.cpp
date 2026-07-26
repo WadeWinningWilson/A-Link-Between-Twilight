@@ -16,6 +16,7 @@
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_outfit_stats.h"
 #include "dusk/settings.h"
+#include "dusk/logging.h"
 #include "dusk/custom_assets.hpp"  // overlay_generation() (Custom Models re-mount signal)
 #include "SSystem/SComponent/c_phase.h"
 #include "m_Do/m_Do_ext.h"
@@ -241,6 +242,16 @@ int           s_headGen               = -1;      // overlay generation the priva
 bool          s_headReapplyPending    = false;   // gen changed; rebuild once all needed arcs fresh
 bool          s_headRebuildInFlight   = false;   // a forced rebuild fired; wait for it to fully cycle
 bool          s_headRebuildSawTimer   = false;   // observed the clothes timer go non-zero (rebuild began)
+int           s_headRebuildWaitFrames = 0;       // frames spent waiting on pending/in-flight rebuild
+int           s_headRebuildRetries    = 0;       // watchdog retry count for the current cycle
+
+// Soft-lock recovery for Custom Models remounts. forceReapply can arm a clothes
+// change that never settles (resLoad hang after Beta Link Kmdl FST flip) — draw()
+// skips Link while the timer is non-zero. Watchdog aborts + unhides.
+constexpr int kHeadPendingMountTimeout  = 300;  // ~5s waiting for private mounts
+constexpr int kHeadRebuildStartTimeout  = 90;   // ~1.5s in-flight without clothes timer
+constexpr int kHeadRebuildFinishTimeout = 300;  // ~5s timer stuck / never settles
+constexpr int kHeadRebuildMaxRetries    = 2;
 
 // ============================================
 // NEW CODE — ALBW Port (storm hardening, 2026-07-11)
@@ -263,8 +274,11 @@ std::string   s_headWinners;                     // winners the live mounts were
 bool          s_headVerifyWinners     = false;   // one-shot re-check after a rebuild completes
 
 std::string headArcWinners() {
+    // Include Bmdl: Linkle (and most full-body mods) primarily shadow Ordon's arc.
+    // Omitting it made Cap Off toggles look like "no winner change" while on Zora/Hero's
+    // if only Bmdl differed — and skipped the native remount entirely.
     static const char* const kHeadArcs[] = {
-        "/res/Object/alSumou.arc", "/res/Object/Kmdl.arc",
+        "/res/Object/alSumou.arc", "/res/Object/Kmdl.arc", "/res/Object/Bmdl.arc",
         "/res/Object/Mmdl.arc",    "/res/Object/Zmdl.arc",
     };
     std::string s;
@@ -329,6 +343,14 @@ bool sumoBodySlotReady() {
     return s_sumoLiveSlot >= 0;
 }
 
+// Forward decls — defined later in this TU; used when an overlay flip drops stale
+// global face/cap donors before private remount.
+void releaseFaceDonor(bool bumpEpoch = true);
+void releaseCapDonor(bool bumpEpoch = true);
+void purgeObjectRes(const char* arcName);
+void purgeZombieClothesArc(const char* arcName);
+void dropCachedNonLiveClothesArcs(const char* liveArc);
+
 // ============================================
 // THE coordinator for the whole Custom-Models head refresh — sumo AND native.  Called every
 // frame from tickCapLoad.  Determines which private mounts are the VISIBLE source right now:
@@ -357,15 +379,28 @@ void driveCustomHeadRefresh() {
     // repointed the models) before allowing the NEXT swap to release a slot.  Without this, a
     // rapid re-toggle in the 1-frame gap before the timer is set would free a slot the pending
     // rebuild still reads -> dangling model -> crash.
+    //
+    // Watchdog: if the rebuild never arms / never settles, abort the hung clothes timer and
+    // unhide so Beta→Kokiri (etc.) cannot leave an invisible-but-playable Link.
     {
         daPy_py_c* pl = daPy_getLinkPlayerActorClass();
+        daAlink_c* link = daAlink_getAlinkActorClass();
         const int timer = pl != NULL ? pl->getClothesChangeWaitTimer() : 0;
+        if (s_headRebuildInFlight || s_headReapplyPending) {
+            ++s_headRebuildWaitFrames;
+        } else {
+            s_headRebuildWaitFrames = 0;
+            s_headRebuildRetries = 0;
+        }
+
         if (s_headRebuildInFlight) {
             if (timer != 0) {
                 s_headRebuildSawTimer = true;
             } else if (s_headRebuildSawTimer) {
                 s_headRebuildInFlight = false;
                 s_headRebuildSawTimer = false;
+                s_headRebuildWaitFrames = 0;
+                s_headRebuildRetries = 0;
                 // Verify once the dust settles: if the overlay flipped while our
                 // loads were in flight, the winner compare below re-kicks.
                 s_headVerifyWinners = true;
@@ -383,7 +418,57 @@ void driveCustomHeadRefresh() {
                     }
                 }
 #endif
+            } else if (s_headRebuildWaitFrames >= kHeadRebuildStartTimeout) {
+                const bool giveUp = s_headRebuildRetries >= kHeadRebuildMaxRetries;
+                DuskLog.warn(
+                    "[CustomModels] head rebuild watchdog: in-flight with no clothes timer "
+                    "after {} frames (retry {}/{}){}",
+                    s_headRebuildWaitFrames, s_headRebuildRetries, kHeadRebuildMaxRetries,
+                    giveUp ? " — abort/unhide" : " — retry forceReapply");
+                s_headRebuildInFlight = false;
+                s_headRebuildSawTimer = false;
+                s_headRebuildWaitFrames = 0;
+                if (giveUp) {
+                    s_headRebuildRetries = 0;
+                    s_headVerifyWinners = true;
+                    dAlbwAlink_abortStuckClothesChange(link);
+                } else {
+                    ++s_headRebuildRetries;
+                    dAlbwOutfit_forceReapply();
+                    s_headRebuildInFlight = true;
+                }
+            } else if (s_headRebuildSawTimer &&
+                       s_headRebuildWaitFrames >= kHeadRebuildFinishTimeout)
+            {
+                DuskLog.warn(
+                    "[CustomModels] head rebuild watchdog: clothes change never settled after "
+                    "{} frames — abort hung loadModelDVD (unhide) and re-verify winners",
+                    s_headRebuildWaitFrames);
+                s_headRebuildInFlight = false;
+                s_headRebuildSawTimer = false;
+                s_headRebuildWaitFrames = 0;
+                s_headRebuildRetries = 0;
+                s_headVerifyWinners = true;
+                dAlbwAlink_abortStuckClothesChange(link);
             }
+        } else if (s_headReapplyPending &&
+                   s_headRebuildWaitFrames >= kHeadPendingMountTimeout)
+        {
+            DuskLog.warn(
+                "[CustomModels] head rebuild watchdog: private mounts not ready after {} "
+                "frames — abort pending remount and re-verify",
+                s_headRebuildWaitFrames);
+            s_headReapplyPending = false;
+            s_headRebuildWaitFrames = 0;
+            s_headRebuildRetries = 0;
+            s_sumoPendingSlot = -1;
+#if D_ALBW_SUMO_PRIVATE_FACECAP
+            for (int k = 0; k < kCapKindNum; ++k) {
+                s_capPending[k] = -1;
+            }
+#endif
+            s_headVerifyWinners = true;
+            dAlbwAlink_abortStuckClothesChange(link);
         }
     }
 
@@ -442,14 +527,14 @@ void driveCustomHeadRefresh() {
         }
     }
 
-    // --- Overlay changed -> start a coordinated refresh (once the prior change settled) ---
+    // --- Overlay changed -> refresh clothes Kmdl donor (+ private mounts if any). ---
+    // Cap Wear is commonly Off — Cap private mounts and Cap-seed are NOT the clothes
+    // path. Always drop name-cached global mObjectInfo Kmdl so holdGlobalKmdlDonorForClothes
+    // (same frame, after this) remounts the new FST winner. Private Cap/sumo slots are
+    // independent of mpArcHeap; do not defer on clothes timer.
     if ((gen != s_headGen || s_headVerifyWinners) && !s_headReapplyPending &&
         !s_headRebuildInFlight)
     {
-        daPy_py_c* p = daPy_getLinkPlayerActorClass();
-        if (p != NULL && p->getClothesChangeWaitTimer() != 0) {
-            return;  // a clothes change is in flight — defer a frame
-        }
         s_headGen = gen;
         s_headVerifyWinners = false;
         // Winner-compare gate (see the block comment at s_headWinners): only
@@ -459,25 +544,46 @@ void driveCustomHeadRefresh() {
             return;  // icon-only toggle / reorder — none of our arcs changed
         }
         s_headWinners = winners;
+
+        // Refresh global Kmdl donor (Beta Ordon→Hero's) when safe.
+        // Do NOT hot-free the LIVE clothes arc (Custom-Model-API §5/§9 zombie storm).
+        daPy_py_c* pClothes = daPy_getLinkPlayerActorClass();
+        const bool donorBusy =
+            (pClothes != NULL && pClothes->getClothesChangeWaitTimer() != 0) ||
+            dAlbwOutfit_isSwapInProgress() || dAlbwOutfit_isSumoWorn() ||
+            dAlbwSumoTest_isOutfitActive();
+        daAlink_c* linkActor = daAlink_getAlinkActorClass();
+        const char* liveArc = linkActor != NULL ? linkActor->mArcName : NULL;
+        if (!donorBusy) {
+            releaseFaceDonor(/*bumpEpoch=*/false);
+            purgeZombieClothesArc(kCapArcName);
+            // Evict name-cached NON-live clothes arcs so the next quick-swap DVD-remounts
+            // Linkle/Beta from the new FST (docs §9 "resolves on the next outfit switch").
+            dropCachedNonLiveClothesArcs(liveArc);
+        }
+
         if (needAlSumou && s_sumoLiveSlot >= 0) {
             const int freeSlot = 1 - s_sumoLiveSlot;  // replaced a swap ago -> unreferenced
             releaseSumoSlot(freeSlot);
             s_sumoPendingSlot = freeSlot;             // build-then-swap into it
         }
 #if D_ALBW_SUMO_PRIVATE_FACECAP
-        if (needFace || capKind == 0) startCapSwap(0);        // Kmdl build-then-swap
-        if (capKind > 0) startCapSwap(capKind);               // Red/Blue build-then-swap
+        if (needFace || capKind == 0) {
+            startCapSwap(0);  // Kmdl build-then-swap (private; does not free the live slot)
+        }
+        if (capKind > 0) {
+            startCapSwap(capKind);
+        }
 #endif
+        // HEAD: always one forceReapply after winner change (Cap Off included).
+        // Live outfit stays stale until a DIFFERENT-arc switch (docs §9); non-live
+        // caches were dropped above so that switch remounts cleanly.
+        dAlbwAlink_requestClothesRemount();
         s_headReapplyPending = true;
-        // NOTE: the epoch is invalidated only when the rebuild actually fires (below), NOT here —
-        // build-then-swap keeps the OLD slots valid, so the current model stays correct/visible
-        // during the (possibly heap-stalled) load, instead of going invisible for the whole wait.
+        // NOTE: private build-then-swap keeps OLD slots valid until promote below.
     }
 
-    // --- Fire ONE rebuild once every NEEDED mount is fresh.  CRITICAL: check that all pendings are
-    //     LOADED without promoting any (ensure*Slot just drives the load), then promote them ALL
-    //     ATOMICALLY and rebuild.  If we promoted a cap the instant it loaded (the old bug), a body
-    //     swap stalling on the game heap would leave new-cap + old-body -> the reported hybrid. ---
+    // --- Fire ONE rebuild once every NEEDED mount is fresh (HEAD contract). ---
     if (s_headReapplyPending) {
         bool ready = true;
         if (needAlSumou) {
@@ -498,7 +604,6 @@ void driveCustomHeadRefresh() {
         }
 #endif
         if (ready) {
-            // Promote every arc at once, THEN one rebuild -> body + face + cap all switch together.
             if (s_sumoPendingSlot >= 0) {
                 s_sumoLiveSlot    = s_sumoPendingSlot;
                 s_sumoPendingSlot = -1;
@@ -513,11 +618,18 @@ void driveCustomHeadRefresh() {
                 s_capPending[capKind] = -1;
             }
 #endif
-            dAlbwAlink_invalidateClothesEpoch();  // hide the ~1 frame between here and the rebuild
+            daPy_py_c* p = daPy_getLinkPlayerActorClass();
+            const bool clothesBusy = p != NULL && p->getClothesChangeWaitTimer() != 0;
+            s_headReapplyPending = false;
+            if (clothesBusy) {
+                // Private mounts are fresh; do not forceReapply on top of an
+                // active clothes build-then-swap.
+                return;
+            }
             dAlbwOutfit_forceReapply();  // one rebuild: body + face + cap/topknot all fresh
-            s_headReapplyPending  = false;
             s_headRebuildInFlight = true;   // block the next swap until this rebuild fully cycles
             s_headRebuildSawTimer = false;
+            s_headRebuildWaitFrames = 0;
         }
     }
 }
@@ -561,26 +673,39 @@ bool nativeClothesResourcesReady() {
 // epoch via dAlbwAlink_invalidateClothesEpoch(), so draw()/shadowDraw skip the stale cap until
 // the next changeLink rebuild — closing the exact shadow-crash vector that forced the revert.
 // ============================================
-void releaseFaceDonor() {
+void releaseFaceDonor(bool bumpEpoch) {
     if (sKmdlPhase.id == 2) {
+        // Dual-Kmdl: clothes freeAll bypasses refcount. Destroying when we are the
+        // sole (or already-freed) holder → JKRHeap::destroy(0xffffffffffffffff) on
+        // Ordon→Hero's / Sumo→Ordon quick-select. Only resDelete while another ref
+        // clearly remains (count >= 2) and the archive pointer is still live.
+        dRes_info_c* info = dComIfG_getObjectResInfo(kCapArcName);
+        const bool sharedLive = info != NULL && info->getArchive() != NULL &&
+                                info->getCount() >= 2;
+        if (sharedLive) {
 #if D_ALBW_ARC_LIFECYCLE_DEBUG
-        // TEMP: log only the ACTUAL Kmdl donor free (id==2).  resourcesReady() calls this
-        // every frame over a non-Zora base, where id==0 and we only cPhs_Reset — logging
-        // that path was per-frame file I/O (the FPS regression).  STRIP before push.
-        DuskLog.debug("ALBW-LIFE releaseFaceDonor FREE Kmdl donor (id==2) arc={}",
-                      albwArcArchive(kCapArcName));
+            DuskLog.debug("ALBW-LIFE releaseFaceDonor FREE Kmdl donor (id==2) count={} arc={}",
+                          info->getCount(), albwArcArchive(kCapArcName));
 #endif
-        dComIfG_resDelete(&sKmdlPhase, kCapArcName);  // decCount; clears id to 0
-        // The sumo cap (mpLinkHatModel) and/or face may have been built from this Kmdl's
-        // al_head/al_face.  This decCount is OUTSIDE Link's own mpArcHeap->freeAll(), so it does
-        // NOT bump the clothes epoch -> draw()/shadowDraw would still treat the cap as live and
-        // the shadow pass (addRealShadow -> J3DShape::drawFast) would walk the freed al_head (the
-        // documented donor-release crash).  Invalidate the clothes generation so Link's models
-        // are skipped until the next changeLink rebuilds + re-stamps them (a <=1-frame skip on
-        // the transition, vs a crash).
-        dAlbwAlink_invalidateClothesEpoch();
+            dComIfG_resDelete(&sKmdlPhase, kCapArcName);  // decCount; clears id to 0
+        } else {
+            cPhs_Reset(&sKmdlPhase);  // abandon tracker; do not ~dRes_info_c
+        }
+        if (bumpEpoch) {
+            dAlbwAlink_invalidateClothesEpoch();
+        }
+    } else if (sKmdlPhase.id != 0) {
+        // Abandon in-flight only after the DVD command is gone; otherwise wait.
+        // Hard-resetting mid-mount left archive==NULL zombies (Beta toggle).
+        dRes_info_c* info = dComIfG_getObjectResInfo(kCapArcName);
+        if (info != NULL && info->getDMCommand() == NULL) {
+            if (info->getArchive() == NULL) {
+                purgeObjectRes(kCapArcName);
+            }
+            cPhs_Reset(&sKmdlPhase);
+        }
     } else {
-        cPhs_Reset(&sKmdlPhase);                      // abandon any in-flight / idle request
+        cPhs_Reset(&sKmdlPhase);
     }
 }
 
@@ -590,14 +715,147 @@ void releaseFaceDonor() {
 // own arc, never this one), and the same clothes-epoch bump so a cap built from the freed helmet
 // is skipped by draw/shadow until the next changeLink rebuild.
 // ============================================
-void releaseCapDonor() {
+void releaseCapDonor(bool bumpEpoch) {
     if (sCapPhase.id == 2 && sCapDonorKind != 0) {
         dComIfG_resDelete(&sCapPhase, sCapDonorKind == 1 ? "Mmdl" : "Zmdl");  // decCount
-        dAlbwAlink_invalidateClothesEpoch();
+        if (bumpEpoch) {
+            dAlbwAlink_invalidateClothesEpoch();
+        }
+        sCapDonorKind = 0;
+    } else if (sCapPhase.id != 0 && sCapDonorKind != 0) {
+        const char* arc = sCapDonorKind == 1 ? "Mmdl" : "Zmdl";
+        dRes_info_c* info = dComIfG_getObjectResInfo(arc);
+        if (info != NULL && info->getDMCommand() == NULL) {
+            purgeObjectRes(arc);
+            cPhs_Reset(&sCapPhase);
+            sCapDonorKind = 0;
+        }
     } else {
         cPhs_Reset(&sCapPhase);
+        sCapDonorKind = 0;
     }
-    sCapDonorKind = 0;
+}
+
+// Force-clear a leftover mObjectInfo registration (refcount may be >1 after a
+// failed mount). Safe only when no live Link models reference this arc.
+void purgeObjectRes(const char* arcName) {
+    if (arcName == NULL) {
+        return;
+    }
+    for (int i = 0; i < 8; ++i) {
+        if (dComIfG_getObjectResInfo(arcName) == NULL) {
+            break;
+        }
+        dComIfG_deleteObjectResMain(arcName);
+    }
+}
+
+// True when mObjectInfo has a named arc with no usable archive AND no in-flight
+// DVD command. archive==NULL alone is normal while mounting — purging that was
+// killing live donor/clothes loads and recreating zombies every frame.
+bool objectResIsZombie(const char* arcName) {
+    dRes_info_c* info = dComIfG_getObjectResInfo(arcName);
+    return info != NULL && info->getArchive() == NULL && info->getDMCommand() == NULL;
+}
+
+// Custom-Model-API §9: after an FST flip, name-cached non-live clothes arcs still
+// hold the OLD overlay. The next DIFFERENT-arc outfit switch must DVD-remount —
+// so drop every clothes arc that is NOT the live mpArcHeap one. Never touch the
+// live arc (hot-free under models → zombie storm / dual-Kmdl).
+void dropCachedNonLiveClothesArcs(const char* liveArc) {
+    static const char* const kClothesArcs[] = {"Bmdl", "Kmdl", "Mmdl", "Zmdl", "Wmdl"};
+    for (const char* arc : kClothesArcs) {
+        if (liveArc != NULL && stricmp(arc, liveArc) == 0) {
+            continue;
+        }
+        if (dComIfG_getObjectResInfo(arc) == NULL) {
+            continue;
+        }
+        if (strcmp(arc, "Kmdl") == 0) {
+            releaseFaceDonor(/*bumpEpoch=*/false);
+        } else if (strcmp(arc, "Mmdl") == 0 || strcmp(arc, "Zmdl") == 0) {
+            if ((sCapDonorKind == 1 && strcmp(arc, "Mmdl") == 0) ||
+                (sCapDonorKind == 2 && strcmp(arc, "Zmdl") == 0))
+            {
+                releaseCapDonor(/*bumpEpoch=*/false);
+            }
+        }
+        DuskLog.info("[CustomModels] dropping cached non-live clothes arc {} (live={})",
+                     arc, liveArc ? liveArc : "(null)");
+        purgeObjectRes(arc);
+    }
+}
+
+// Drop abandoned Kmdl/Mmdl/Zmdl rows so clothes setRes can mount cleanly.
+void purgeZombieClothesArc(const char* arcName) {
+    if (arcName == NULL || !objectResIsZombie(arcName)) {
+        return;
+    }
+    DuskLog.warn("[CustomModels] purging zombie mObjectInfo entry for {}", arcName);
+    // Donor phase no longer owns a live archive — reset so the next resLoad starts clean.
+    if (strcmp(arcName, "Kmdl") == 0) {
+        cPhs_Reset(&sKmdlPhase);
+    } else if (strcmp(arcName, "Mmdl") == 0 || strcmp(arcName, "Zmdl") == 0) {
+        if ((sCapDonorKind == 1 && strcmp(arcName, "Mmdl") == 0) ||
+            (sCapDonorKind == 2 && strcmp(arcName, "Zmdl") == 0))
+        {
+            cPhs_Reset(&sCapPhase);
+            sCapDonorKind = 0;
+        }
+    }
+    purgeObjectRes(arcName);
+}
+
+}  // namespace — releaseFaceDonor/releaseCapDonor/purgeZombie called from public API below
+
+void dAlbwSumoTest_releaseGlobalDonorsForClothesArc(const char* arcName) {
+    // Intentionally a no-op. Dropping the global Kmdl donor before Ordon→Hero's
+    // forced a fresh heapB DVD mount that zombies after Beta FST flips.
+    (void)arcName;
+}
+
+void dAlbwSumoTest_sanitizeClothesArc(const char* arcName) {
+    purgeZombieClothesArc(arcName);
+}
+
+namespace {
+
+// Docs (Quick-Sumo Work.md): hold Kmdl in mObjectInfo over every NON-Hero's base so
+// Ordon→Hero's clothes resLoad can incCount a healthy entry. Cap-Off clothes path
+// (Cap private heaps are optional DRAW only).
+//
+// Repro (Beta on, Cap Off): Hero's → Zora → Sumo → Ordon → Hero's crashes in
+// releaseFaceDonor → JKRHeap::destroy. Wear flags still read "Hero's" under Sumo /
+// mid-swap (timer briefly 0), so a naive release destroys a freeAll-aliased Kmdl.
+void holdGlobalKmdlDonorForClothes() {
+    daPy_py_c* player = daPy_getLinkPlayerActorClass();
+    const bool clothesBusy =
+        (player != NULL && player->getClothesChangeWaitTimer() != 0) ||
+        dAlbwOutfit_isSwapInProgress() || dAlbwOutfit_isSumoWorn() ||
+        dAlbwSumoTest_isOutfitActive();
+
+    const bool pipelineOwnsKmdl = !daAlink_c::checkCasualWearFlg() &&
+                                  !daAlink_c::checkZoraWearFlg() &&
+                                  !daAlink_c::checkMagicArmorWearFlg();
+
+    if (clothesBusy) {
+        // Keep a held donor; never release/remount across Sumo or an in-flight swap.
+        return;
+    }
+
+    if (pipelineOwnsKmdl) {
+        // Settled native Hero's — drop our donor ref only when safe (see releaseFaceDonor).
+        // Cap Wear Off: clothes donor only — no drawn hat from this Kmdl, so do not bump
+        // the clothes epoch (that skipped a draw frame and felt like post-swap lag).
+        const bool bump = dusk::getSettings().game.capWear.getValue() != dusk::CapWearMode::Off;
+        releaseFaceDonor(/*bumpEpoch=*/bump);
+        return;
+    }
+
+    if (objectResIsZombie(kCapArcName)) {
+        purgeZombieClothesArc(kCapArcName);
+    }
+    dComIfG_resLoad(&sKmdlPhase, kCapArcName);
 }
 
 bool resourcesReady() {
@@ -614,15 +872,12 @@ bool resourcesReady() {
         return false;
     }
 #endif
-    // Cap + face donor: keep Kmdl resident over every NON-Hero's base so changeLink's sumo
-    // block resolves al_head.bmd (the Link cap) AND al_face.bmd there.  Over Hero's the clothes
-    // pipeline already owns Kmdl in its own mpArcHeap, so a second refcount here would dangle on
-    // that heap's freeAll() (the dual-Kmdl aliasing) -- keep EXCLUDING Hero's; the pipeline's
-    // Kmdl serves the cap there.  Over Ordon/Magic/Zora the pipeline owns Bmdl/Mmdl/Zmdl, so our
-    // Kmdl is an INDEPENDENT resource-manager entry -- the proven-safe Zora case, now generalised
-    // for cap-on-all-bases.  releaseFaceDonor()'s free is made shadow-safe by bumping the clothes
-    // epoch (see there).  Before generalising, al_head resolved only over Hero's/Zora and the cap
-    // fell back to the topknot over Ordon/Magic (confirmed by the ALBW-CAP build probe: kResInfo=0).
+    // HEAD contract (pre-merge): keep a GLOBAL Kmdl donor in mObjectInfo over every NON-Hero's
+    // base. Private Cap Wear still owns the drawn hat/face, but Ordon→Hero's clothes resLoad
+    // must be able to incCount a healthy mObjectInfo Kmdl after a Beta FST flip — a fresh
+    // heapB mount of the same overlay while Cap already holds it ERRORs (hadInfo zombie,
+    // empty heapB, no Loading Resource). WIP's PRIVATE_FACECAP early-return cleared this
+    // donor and broke post-toggle Hero's.
     const bool pipelineOwnsKmdl = !daAlink_c::checkCasualWearFlg() &&
                                   !daAlink_c::checkZoraWearFlg() &&
                                   !daAlink_c::checkMagicArmorWearFlg();
@@ -683,14 +938,16 @@ bool resourcesReady() {
 bool nativeCapResourcesReady() {
     const dusk::CapWearMode mode = dusk::getSettings().game.capWear.getValue();
 
+    // Always: global Kmdl donor over non-Hero's (clothes Ordon→Hero's after Beta).
+    // Private Cap (below) owns the drawn hat — do NOT releaseFaceDonor here.
+    holdGlobalKmdlDonorForClothes();
+
     if (mode == dusk::CapWearMode::Off) {
-        releaseFaceDonor();
         releaseCapDonor();
         return true;
     }
 
     if (mode == dusk::CapWearMode::None) {
-        releaseFaceDonor();
         releaseCapDonor();
         if (dComIfG_getObjectRes("alSumou", kSumoBodyResIdx) == NULL) {
             if (dComIfG_resLoad(&sPhase, "alSumou") != cPhs_COMPLEATE_e) {
@@ -700,15 +957,8 @@ bool nativeCapResourcesReady() {
         return true;
     }
 
-    // ============================================
-    // Green / Red / Blue (Phase 2 — model-agnostic): the cap now loads via the INDEPENDENT loader
-    // (ensureIndependentCap / dAlbwSumoTest_tickCapLoad) into a private array+heap the clothes
-    // pipeline never frees, so residency is BASE-INDEPENDENT and crash-free -- no clothes-arc donor
-    // (those aliased mpArcHeap->freeAll and crashed on release during quick-switch).  Drop any
-    // sumo-leftover donor and report ready only once the private cap data is loaded, so the override
-    // resolves on every base instead of falling back.
-    // ============================================
-    releaseFaceDonor();
+    // Green / Red / Blue — private Cap for DRAW (model-agnostic). Global Kmdl donor
+    // above covers clothes residency (docs Quick-Sumo non-Hero's pattern).
     releaseCapDonor();
     return dAlbwSumoTest_independentCapData() != NULL;
 }
@@ -780,6 +1030,10 @@ void dAlbwSumoTest_tickCapLoad() {
     // are fresh -- so no piece ever rebuilds stale (the topknot/cap wrong-source bug).
     driveCustomHeadRefresh();
 #endif
+    // Clothes-pipeline Kmdl donor over non-Hero's (docs Quick-Sumo). Runs even while the
+    // clothes timer is set — maintainResources early-returns then, which was why Cap-wait
+    // never saw a remounted donor during Ordon→Hero's.
+    holdGlobalKmdlDonorForClothes();
     // Also ensure the selected color cap's live slot exists even if the coordinator is compiled
     // out (kill switch); ensureCapLive is idempotent, so this is a no-op once resident.
 #if D_ALBW_SUMO_PRIVATE_FACECAP

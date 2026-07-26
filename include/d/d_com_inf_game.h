@@ -17,7 +17,15 @@
 #include "m_Do/m_Do_graphic.h"
 #include <cstring>
 
+// Mods reach this header through the game ABI include set, which has no Tracy on it.
+#if defined(DUSK_BUILDING_GAME)
 #include "tracy/Tracy.hpp"
+#else
+#ifndef ZoneScoped
+#define ZoneScoped
+#define ZoneScopedN(name)
+#endif
+#endif
 
 #if TARGET_PC
 #include "d/d_ext_save_guard.h"
@@ -1053,7 +1061,7 @@ public:
 
 STATIC_ASSERT(122384 == sizeof(dComIfG_inf_c));
 
-extern dComIfG_inf_c g_dComIfG_gameInfo;
+DUSK_GAME_EXTERN dComIfG_inf_c g_dComIfG_gameInfo;
 extern GXColor g_blackColor;
 extern GXColor g_clearColor;
 extern GXColor g_whiteColor;

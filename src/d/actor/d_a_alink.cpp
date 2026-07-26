@@ -162,9 +162,24 @@ static J3DModelData* s_albwWwBowNative = NULL;
 // ============================================
 void dAlbwAlink_invalidateClothesEpoch() { ++s_albwArcEpoch; }
 
+void dAlbwAlink_resyncClothesEpoch() { s_albwClothesModelEpoch = s_albwArcEpoch; }
+
+void dAlbwAlink_abortStuckClothesChange(daAlink_c* link) {
+    if (link != NULL) {
+        link->albwAbortStuckClothesChange();
+    }
+}
+
 // True when the last native changeLink resolved the requested Cap Wear cap/topknot (false on
 // fallback to the outfit's native hat).  The outfit module self-heals off this (see the static).
 bool dAlbwAlink_nativeCapResolved() { return s_albwNativeCapResolved; }
+
+// Latched by Custom Models winner change. Same-arc re-equip still rebuilds in place
+// (Custom-Model-API §9 — hot-free under live models zombies the pipeline). Cleared on
+// the next clothes settle; cross-arc quick-swap is what remounts from the new FST.
+static bool s_albwForceClothesRemount = false;
+
+void dAlbwAlink_requestClothesRemount() { s_albwForceClothesRemount = true; }
 
 // ============================================
 // NEW CODE — ALBW Port (universal model-state consistency token)
@@ -233,6 +248,50 @@ static JKRExpHeap*                    s_albwArcHeapB   = NULL;        // alt hea
 static request_of_phase_process_class s_albwPhaseReqB  = {NULL, 0};   // alt heap's load request
 static const char*                    s_albwSwapOldArc = NULL;        // old arc to free after the swap
 static bool                           s_albwSwapActive = false;       // mid build-then-swap (guards retry re-init)
+
+void daAlink_c::albwAbortStuckClothesChange() {
+    // draw() early-outs the entire Link body while mClothesChangeWaitTimer != 0.
+    // After a Custom Models FST flip (Beta Link Kmdl off → Kokiri textures),
+    // build-then-swap can bounce timer 1↔2 forever on a never-complete resLoad —
+    // playable but invisible. Abort restores the pre-swap models (still valid in
+    // mpArcHeap) and clears the hide gate.
+    if (mClothesChangeWaitTimer == 0 && !s_albwSwapActive) {
+        dAlbwAlink_resyncClothesEpoch();
+        return;
+    }
+    DuskLog.warn("[Alink] abort stuck clothes change (timer={} swapActive={} arc={} oldArc={})",
+                 (int)mClothesChangeWaitTimer, s_albwSwapActive ? 1 : 0,
+                 mArcName ? mArcName : "(null)",
+                 s_albwSwapOldArc ? s_albwSwapOldArc : "(null)");
+    const char* liveArc = s_albwSwapOldArc != NULL ? s_albwSwapOldArc : mArcName;
+    if (s_albwSwapActive) {
+        // Drop the hung alt-heap load; live models still reference mpArcHeap
+        // unless a force-remount already tore it down.
+        if (mArcName != NULL) {
+            if (!dComIfG_resDelete(&s_albwPhaseReqB, mArcName)) {
+                dComIfG_deleteObjectResMain(mArcName);
+            }
+        }
+        cPhs_Reset(&s_albwPhaseReqB);
+        if (s_albwArcHeapB != NULL) {
+            s_albwArcHeapB->freeAll();
+        }
+        // Point mArcName back at the arc still resident in the live heap.
+        if (s_albwSwapOldArc != NULL) {
+            mArcName = s_albwSwapOldArc;
+        }
+        s_albwSwapActive = false;
+        s_albwSwapOldArc = NULL;
+    }
+    s_albwForceClothesRemount = false;
+    mClothesChangeWaitTimer = 0;
+    s_albwBuildIntegrityOk = true;
+    // Equip/flags may still say Hero's while models are Ordon — draw() then skips
+    // forever (builtModelState != curState). Reconcile to the live arc and rebuild.
+    dAlbwOutfit_onClothesLoadFailed(liveArc != NULL ? liveArc : mArcName, "abort");
+    dAlbwAlink_resyncClothesEpoch();
+    changeLink(1);
+}
 
 // ============================================
 // NEW CODE — ALBW Port (root-motion foot re-anchor after a model rebuild)
@@ -5467,14 +5526,18 @@ int daAlink_c::create() {
         }
 
         setArcName(checkWolf());
-        setOriginalHeap(&mpArcHeap, 0xA2800);
+        // 0x100000: Beta Link Kmdl (~551KB RARC + BMD data) fits; 0xA2800 was vanilla.
+        // Do NOT bump to 2MB×2 — that OOM-aborts game-heap allocs on save load
+        // (JKRExpHeap allocation failure). Post-toggle Hero's ERROR is mObjectInfo
+        // dual-mount / FST-stale, not heap size (gen-1 Beta Hero's loads on 1MB).
+        setOriginalHeap(&mpArcHeap, 0x100000);
         JKRHEAP_NAME(mpArcHeap, "Alink ArcHeap");
 #if TARGET_PC
         // Second arc heap for build-then-swap (same size as mpArcHeap).  The normal clothes
         // change loads the next arc here while the old models stay live, then frees the old
         // heap and swaps.  If this allocation fails, loadModelDVD falls back to in-place load.
         if (s_albwArcHeapB == NULL) {
-            setOriginalHeap(&s_albwArcHeapB, 0xA2800);
+            setOriginalHeap(&s_albwArcHeapB, 0x100000);
             JKRHEAP_NAME(s_albwArcHeapB, "Alink ArcHeapB");
         }
 #endif
@@ -20918,6 +20981,8 @@ void daAlink_c::shadowDraw() {
 }
 
 void daAlink_c::modelCalc(J3DModel* i_model) {
+    // HEAD: no calc while clothes timer is set. Drawing/posing the old outfit through
+    // the whole build-then-swap load made quick-select feel lagged vs post-merge.
     if (mClothesChangeWaitTimer == 0) {
         i_model->calc();
     }
@@ -21271,7 +21336,10 @@ int daAlink_c::draw() {
 
             g_env_light.setLightTevColorType_MAJI(mpWlChangeModel, &tevStr);
             mDoExt_modelEntryDL(mpWlChangeModel);
+            return 1;
         }
+        // HEAD: hide for the clothes-change timer. Brief cut → new outfit (snappy).
+        // WIP drew old models through s_albwSwapActive and felt like swap lag.
         return 1;
     }
 
@@ -21728,6 +21796,7 @@ daAlink_c::~daAlink_c() {
     }
     s_albwSwapActive = false;
     s_albwSwapOldArc = NULL;
+    s_albwForceClothesRemount = false;
     cPhs_Reset(&s_albwPhaseReqB);
 #endif
 

@@ -21,6 +21,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_e_nz.h"
 #include "dusk/action_bindings.h"
+#include "dusk/logging.h"
 #include "dusk/settings.h"
 #include "f_op/f_op_overlap_mng.h"
 
@@ -109,13 +110,100 @@ bool          sLeavingSumoReload    = false;
 int           sOutfitReloadCooldown = 0;
 bool          sApplySumoLeaveCooldown = false;
 bool          sPostMetamorphoseReapply = false;
+int           sSwapStuckFrames         = 0;
 
 constexpr int kReloadCooldownNormal    = 10;
 constexpr int kReloadCooldownAfterSumo = 18;
+// Soft-lock recovery after Custom Models toggles leave reload/cooldown/desync
+// latched, or sumo target never lands (private alSumou remount). Quick-swap no
+// longer gates on want!=has — this watchdog only heals state.
+constexpr int kSwapSoftStuckTimeout = 90;    // ~1.5s reload/cooldown/cloth desync
+constexpr int kSumoApplyStuckTimeout = 300;  // ~5s wantSumo!=has (remount can be slow)
+constexpr int kSwapHardStuckTimeout = 300;   // ~5s clothes timer never settles
 
 void tickReloadCooldown() {
     if (sOutfitReloadCooldown > 0) {
         sOutfitReloadCooldown--;
+    }
+}
+
+void clearOutfitSoftLocks(daAlink_c* link, const char* why) {
+    const bool want = dAlbwOutfit_isSumoWorn();
+    const bool has  = dAlbwSumoTest_isOutfitActive();
+    const u8 clothes = dComIfGs_getSelectEquipClothes();
+    DuskLog.warn(
+        "[Outfit] swap watchdog: {} (wantSumo={} hasSumo={} cloth={} synced={} "
+        "reloadPending={} cooldown={} pendingEquip={}) — clearing soft locks",
+        why, want ? 1 : 0, has ? 1 : 0, (int)clothes, (int)sSyncedNativeClothes,
+        sReloadPending ? 1 : 0, sOutfitReloadCooldown, (int)sPendingEquip);
+
+    sReloadPending = false;
+    sOutfitReloadCooldown = 0;
+    sLeavingSumoReload = false;
+    sPostMetamorphoseReapply = false;
+    sApplySumoLeaveCooldown = false;
+    sNativeCapTried = false;
+    sPendingEquip = D_ALBW_OUTFIT_COUNT;
+    sSyncedNativeClothes = clothes;
+    sLastAppliedCap = dusk::getSettings().game.capWear.getValue();
+
+    // Reconcile stuck sumo target ↔ visual (quick-swap no longer blocks on this).
+    if (want != has) {
+        if (want && !has) {
+            // Target said sumo but the model never got there — drop the target.
+            dAlbwOutfit_setSumoWorn(false);
+        } else if (link != NULL && !want && has) {
+            // Visual still on sumo after leave — clear the sumo trigger flags.
+            link->offNoResetFlg2(daAlink_c::FLG2_UNK_200000);
+            link->offNoResetFlg2(daAlink_c::FLG2_UNK_80000);
+        }
+    }
+
+    // Timer stuck is what makes Link invisible (draw early-outs while != 0).
+    // Epoch resync alone is not enough — abort the hung loadModelDVD first.
+    if (link != NULL && link->getClothesChangeWaitTimer() != 0) {
+        dAlbwAlink_abortStuckClothesChange(link);
+    } else {
+        dAlbwAlink_resyncClothesEpoch();
+    }
+    sSwapStuckFrames = 0;
+}
+
+void tickSwapWatchdog(daAlink_c* link) {
+    daPy_py_c* player = daPy_getLinkPlayerActorClass();
+    const int timer = player != NULL ? player->getClothesChangeWaitTimer() : 0;
+    const bool want = dAlbwOutfit_isSumoWorn();
+    const bool has = dAlbwSumoTest_isOutfitActive();
+    const u8 clothes = dComIfGs_getSelectEquipClothes();
+    const bool clothDesync = !want && !has && sSyncedNativeClothes != 0xFF &&
+                             clothes != sSyncedNativeClothes;
+    const bool sumoMismatch = want != has;
+    const bool softLatch = sReloadPending || sOutfitReloadCooldown > 0 || clothDesync ||
+                           sLeavingSumoReload || sPostMetamorphoseReapply;
+    const bool softStuck = timer == 0 && (softLatch || sumoMismatch);
+
+    if (!softStuck && timer == 0) {
+        sSwapStuckFrames = 0;
+        return;
+    }
+
+    ++sSwapStuckFrames;
+    if (timer != 0) {
+        if (sSwapStuckFrames >= kSwapHardStuckTimeout) {
+            clearOutfitSoftLocks(link, "clothes timer stuck");
+        }
+        return;
+    }
+    // Sumo remount after Beta Link / texture toggles can exceed the short soft timeout;
+    // give private alSumou longer before peeling the worn bit.
+    if (sumoMismatch && !softLatch) {
+        if (sSwapStuckFrames >= kSumoApplyStuckTimeout) {
+            clearOutfitSoftLocks(link, "sumo apply stuck (want!=has)");
+        }
+        return;
+    }
+    if (sSwapStuckFrames >= kSwapSoftStuckTimeout) {
+        clearOutfitSoftLocks(link, "swap latch stuck with idle clothes timer");
     }
 }
 
@@ -167,6 +255,10 @@ void applyTargetKind(dAlbwOutfitKind kind) {
     if (kind == D_ALBW_OUTFIT_SUMO) {
         dAlbwOutfit_setSumoWorn(true);
         sLeavingSumoReload = false;  // re-applying sumo cancels any pending leave-reload
+        // tickCapLoad already ran this frame with worn=false; re-drive so alSumou
+        // mount starts immediately instead of waiting until next frame.
+        dAlbwSumoTest_tickCapLoad();
+        (void)dAlbwSumoTest_prepareChangeLink();
         dAlbwOutfit_debugLog("target SUMO");
         return;
     }
@@ -433,7 +525,43 @@ bool dAlbwOutfit_canTouchLinkModel() {
     return true;
 }
 
+void dAlbwOutfit_onClothesLoadFailed(const char* liveArcName, const char* failedArcName) {
+    (void)failedArcName;
+    u8 item = dComIfGs_getSelectEquipClothes();
+    if (liveArcName != NULL) {
+        if (strcmp(liveArcName, "Bmdl") == 0) {
+            item = dItemNo_WEAR_CASUAL_e;
+        } else if (strcmp(liveArcName, "Kmdl") == 0) {
+            item = dItemNo_WEAR_KOKIRI_e;
+        } else if (strcmp(liveArcName, "Zmdl") == 0) {
+            item = dItemNo_WEAR_ZORA_e;
+        } else if (strcmp(liveArcName, "Mmdl") == 0) {
+            item = dItemNo_ARMOR_e;
+        }
+    }
+    dMeter2Info_setCloth(item, false);
+    if (dAlbwOutfit_isSumoWorn()) {
+        dAlbwOutfit_setSumoWorn(false);
+    }
+    sSyncedNativeClothes = item;
+    sReloadPending = false;
+    sOutfitReloadCooldown = 0;
+    sLeavingSumoReload = false;
+    sPostMetamorphoseReapply = false;
+    sPendingEquip = D_ALBW_OUTFIT_COUNT;
+    DuskLog.warn(
+        "[Outfit] clothes load failed for {} — reconciled to live arc {} (cloth={})",
+        failedArcName ? failedArcName : "?", liveArcName ? liveArcName : "(null)",
+        (int)item);
+}
+
 bool dAlbwOutfit_isSwapInProgress() {
+    // Only hard in-flight signals. Do NOT gate on wantSumo!=hasSumo or clothes-desync:
+    // after Custom Models toggles (Beta Link Kmdl / texture packs) the private alSumou
+    // slot can be briefly unready, so want=1/has=0 with an idle clothes timer — that used
+    // to refuse quick-swap forever (pre-coexist settled cleanly). syncLinkModel still
+    // heals those; the swap watchdog peels a stuck sumo target if it never lands.
+    // Do NOT gate on Custom Models head remount either — that starved D-pad pacing.
     if (sOutfitReloadCooldown > 0) {
         return true;
     }
@@ -442,15 +570,6 @@ bool dAlbwOutfit_isSwapInProgress() {
         return true;
     }
     if (sReloadPending) {
-        return true;
-    }
-    daAlink_c* link = daAlink_getAlinkActorClass();
-    if (link != NULL && dAlbwOutfit_isSumoWorn() != dAlbwSumoTest_isOutfitActive()) {
-        return true;
-    }
-    const u8 clothes = dComIfGs_getSelectEquipClothes();
-    if (!dAlbwOutfit_isSumoWorn() && !dAlbwSumoTest_isOutfitActive() && sSyncedNativeClothes != 0xFF &&
-        clothes != sSyncedNativeClothes) {
         return true;
     }
     return false;
@@ -465,6 +584,8 @@ void dAlbwOutfit_onStageTransitionBegin() {
     sPostMetamorphoseReapply = false;
     sOutfitReloadCooldown  = 0;
     sApplySumoLeaveCooldown = false;
+    sPendingEquip          = D_ALBW_OUTFIT_COUNT;
+    sSwapStuckFrames       = 0;
 }
 
 void dAlbwOutfit_onMetamorphoseToHuman(daAlink_c* link) {
@@ -487,6 +608,7 @@ void dAlbwOutfit_syncLinkModel(daAlink_c* link) {
     }
 
     tickReloadCooldown();
+    tickSwapWatchdog(link);
 
     daPy_py_c* player = daPy_getLinkPlayerActorClass();
     const int clothesTimer = player != NULL ? player->getClothesChangeWaitTimer() : 0;

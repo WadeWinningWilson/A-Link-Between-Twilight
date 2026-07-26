@@ -77,6 +77,12 @@ void dAlbwOutfit_syncWornOwnership();
 // outfit equip / sumo setClothesChange must not run (crashes on field warp).
 bool dAlbwOutfit_canTouchLinkModel();
 
+// Clothes resLoad failed: keep the live model (liveArcName still resident) and
+// roll save/sync state back to that arc so the clothes pipeline does not spin on
+// a dead target. Does not alter the quick-swap ring — failedArcName is log-only.
+void dAlbwOutfit_onClothesLoadFailed(const char* liveArcName,
+                                     const char* failedArcName = nullptr);
+
 // True while a clothes reload or sumo overlay transition is active.
 bool dAlbwOutfit_isSwapInProgress();
 

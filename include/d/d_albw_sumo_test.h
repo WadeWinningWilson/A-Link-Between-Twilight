@@ -107,6 +107,16 @@ bool dAlbwSumoTest_isSwapPending();
 // play.  Called from daNpcWrestler_c::talk().
 void dAlbwSumoTest_onWrestlerMet();
 
+// Before Link's clothes pipeline loadModelDVD loads `arcName` into its own heap,
+// drop any GLOBAL face/cap donor that aliases the same mObjectInfo name. Quiet
+// only — does not touch private Cap Wear heaps or block remounts.
+void dAlbwSumoTest_releaseGlobalDonorsForClothesArc(const char* arcName);
+
+// Purge an abandoned mObjectInfo row (count>0, archive==NULL) for a clothes arc.
+// Beta FST flips that cPhs_Reset an in-flight donor leave these zombies and pin
+// Ordon→Hero's to resLoad ERROR.
+void dAlbwSumoTest_sanitizeClothesArc(const char* arcName);
+
 #endif  // TARGET_PC
 
 #endif /* D_ALBW_SUMO_TEST_H */

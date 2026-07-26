@@ -691,7 +691,9 @@ void try_apply_mirrored_layout(Rml::Element* body) {
     body->SetClass("mirrored", getSettings().game.enableMirrorMode.getValue());
 }
 
-Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementById("root")) {
+Prelaunch::Prelaunch()
+    : Document(kDocumentSource, false, DocumentScope::Prelaunch),
+      mRoot(mDocument->GetElementById("root")) {
     ensure_initialized();
     begin_update_check();
 

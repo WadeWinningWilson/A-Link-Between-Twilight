@@ -90,6 +90,8 @@
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/texture_replacements.hpp"
 #include "dusk/custom_assets.hpp"
+#include "dusk/data.hpp"
+#include "dusk/mod_loader.hpp"
 #include "dusk/io.hpp"
 #include "dusk/version.hpp"
 #include "dusk/discord_presence.hpp"
@@ -381,6 +383,7 @@ void main01(void) {
     } while (dusk::IsRunning);
 
     exit:;
+    dusk::mods::ModLoader::instance().shutdown();
     dusk::ui::shutdown();
 }
 
@@ -546,6 +549,7 @@ int game_main(int argc, char* argv[]) {
              "§60b: offline Ja1Parser event dump for package root (writes seq_events_engine_*.csv)",
              cxxopts::value<std::string>())
 #endif
+            ("mods", "Directory to load .dusk mod bundles from", cxxopts::value<std::string>())
             ("cvar", "Override configuration variables without modifying config", cxxopts::value<std::vector<std::string>>());
 
         arg_options.parse_positional({"dvd"});
@@ -833,6 +837,28 @@ int game_main(int argc, char* argv[]) {
     // Development Mode
     // mDoMain::developmentMode = 1;  // Force Dev Mode for Debugging
     mDoDvdThd::SyncWidthSound = false;
+
+    // Mod search directories, highest priority first: user dir (--mods replaces it), then
+    // mods/ next to the app.
+    {
+        std::vector<dusk::mods::ModSearchDir> modDirs;
+        if (parsed_arg_options.contains("mods") &&
+            !parsed_arg_options["mods"].as<std::string>().empty())
+        {
+            modDirs.push_back({.path = parsed_arg_options["mods"].as<std::string>()});
+        } else {
+            modDirs.push_back({.path = dusk::ConfigPath / "mods"});
+        }
+        modDirs.push_back({
+            .path = dusk::data::base_path_relative("mods"),
+            .inPlaceNative = true,
+        });
+        dusk::mods::ModLoader::instance().set_search_dirs(std::move(modDirs));
+    }
+    dusk::mods::ModLoader::instance().set_cache_dir(dusk::CachePath / "mod_cache");
+
+    DuskLog.info("Initializing mods...");
+    dusk::mods::ModLoader::instance().init();
 
     OSReport("Starting main01 (Game Loop)...\n");
 
