@@ -6946,6 +6946,30 @@ void drawWave(Mtx drawMtx, u8** pImg) {
     GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     GXColor amb, dif;
     dKy_get_seacolor(&amb, &dif);
+    // §112 — endpoints: amb=BG1_C0 (white base), dif=BG1_K0 (blue tint via plight[2]).
+    // Throttled; noon Outset expect amb≈(255,255,255) dif≈(9,99,224).
+    {
+        static u8 s_prevAmbR, s_prevAmbG, s_prevAmbB, s_prevDifR, s_prevDifG, s_prevDifB;
+        static int s_seacolorLogFrames;
+        static bool s_seacolorHavePrev;
+        const bool changed =
+            !s_seacolorHavePrev || amb.r != s_prevAmbR || amb.g != s_prevAmbG ||
+            amb.b != s_prevAmbB || dif.r != s_prevDifR || dif.g != s_prevDifG ||
+            dif.b != s_prevDifB;
+        if (changed || ++s_seacolorLogFrames >= 90) {
+            s_seacolorLogFrames = 0;
+            s_seacolorHavePrev = true;
+            s_prevAmbR = amb.r;
+            s_prevAmbG = amb.g;
+            s_prevAmbB = amb.b;
+            s_prevDifR = dif.r;
+            s_prevDifG = dif.g;
+            s_prevDifB = dif.b;
+            DuskLog.info("[WwFoam] §112 seacolor amb=({},{},{}) dif=({},{},{})",
+                         (int)amb.r, (int)amb.g, (int)amb.b, (int)dif.r, (int)dif.g,
+                         (int)dif.b);
+        }
+    }
     GXSetTevColor(GX_TEVREG0, dif);
     GXSetTevKColorSel(GX_TEVSTAGE0, GX_TEV_KCSEL_K0);
     GXSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K3_A);

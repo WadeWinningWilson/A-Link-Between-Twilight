@@ -8966,3 +8966,104 @@ instead of pane dif `(9,99,224)`.
 
 **Lanes — Engine:** replace pane-seacolor injection with these authored registers (esp. mat0
 K0/C1). **Bridge:** CLEAR on §112 / Housing §127 color dump.
+
+## §128 SHORE motion ≠ color; BTK verified PLAYING (Housing, 2026-07-25)
+
+User: color fixes don't produce the crash MOTION; decomp is the effect source. Verified: model1.btk
+IS playing (bound LOOP :3244, play() :7330, entry() :7952) → missing swoosh is COMPOSITING, not
+playback. Suspects (Engine): layer blend/alpha, OR opaque base (mat0 BM_NONE, z-write ON) occluding
+the z-write-OFF XLU foam layers. Effect spec = Bridge dump of model1.btk track config + 9-layer
+composite order (decomp-faithful), pairs with §127 authored colors. Recorded to
+Water effects/shore-crashing.md as a SEPARATE open item from color. Bridge on it → user → Engine.
+Housing: supporting only (BTK-playing fact given so Engine doesn't chase playback); no re-theorizing.
+
+## §128b Bridge CLEAR — model1.btk track config + composite order (Cursor, 2026-07-25)
+
+Tool **0.35.0**. `model1-dump` now correctly decodes TTK1 (CloudModding: BCK TrackData ×9 Hermite,
+piecewise tangents; loop=LOOP, duration=100, 16 bindings) and emits:
+
+| Artifact | Content |
+|----------|---------|
+| `reports/model1_btk_motion.md` | Track config + MAT3/TEV composite order + video 9-layer crosswalk |
+| `reports/model1_btk_tracks.csv` | Per-binding TX/TY/RZ/SX/SY summaries |
+| `reports/model1_btk_motion.csv` | Per-component keyframes |
+| `reports/model1_composite_order.csv` | draw mat × TEV stage × BTK |
+
+Donor facts: opposing TX±1 + TY−1→0 on `test_mizu_uzu_c` (tracks 0–1, 6–7); RZ full-turn on
+`Txa_nami_01` (2–3); TY mid-dip −0.4@f50 on nami_02/sirokuro (8–10); `Txa_umi_kage_01` shadow
+scrolls (11–12); mat0 opaque z-write ON before XLU z-write OFF. Video “9 layers” ≠ 16 tracks —
+crosswalk in the MD (IVAN). Motion sheet pairs with §112 colors; does not invent fills.
+
+**Lanes — Engine:** compositing vs sheet (playback already verified). **Bridge:** CLEAR on §128.
+**User:** ferry → Engine.
+
+## §129 2nd WW video (env-artist) assessed — mostly N/A, one shore corroboration (Housing, 2026-07-25)
+
+User posted env-artist video (9zA2rJmn3Ws) on WW asset AUTHORING (trim sheets/UV/decals/atlases),
+tentative ("may not be useful, ignore if N/A"). Verdict: ~95% N/A — it's how Nintendo AUTHORED
+assets; we PORT ripped BDLs, don't re-author, so technique = context not work. Did NOT bloat docs
+with it.
+- ONE applicable nugget: the shoreline UV-scroll observation ([recreation] LOW tier) corroborates
+  §128's BTK texture-SRT motion + the doogus breakdown (two textures, opposite scroll, ebb backs-up).
+  Added to shore-crashing.md as secondary corroboration.
+- Rest → short NON-ACTIONABLE stub `land-terrain-reference.md` (trim/tiling/decals, ~7-12 mats/island)
+  marked reference-only, revisit only if terrain rendering is ever debugged.
+No change to open items. Shore color (§127) + motion (§128) still the live work; Bridge dumping,
+user → Engine.
+
+## §130 NEXT-VISUAL HUNTS — grass sway + wind + grass-VFX-black all LOCATED (Housing DECOMP-FIRST, 2026-07-25)
+
+Forward-scoping donor reads during Engine's shore-motion wait. All three located; each is
+DATA/color-source or a known mechanism — none needs invented code.
+
+### HUNT 1 — GRASS SWAY (was §95b "unlocated") → FOUND: `d_grass.cpp:322-329`
+Sway lives in the grass DATA class (`dGrass_data_c`), NOT the actor shell `d_a_grass.cpp` (why §95b
+missed it). Wind-driven per-blade tilt:
+```
+windSpeed = dKyw_get_wind_pow()*1000 + 1000;  (clamped 2000)
+anm->mRotX = windSpeed + windSpeed * cM_scos(windSpeed * (g_Counter.mTimer + i*250));
+```
+Per-blade `mRotX` (tilt) = cosine of wind-power×time, per-blade phase `i*250` (the wave). Our grass
+has no mRotX anim → static. **Fix:** apply this mRotX per blade from `dKyw_get_wind_pow()` (receiver
+kankyo has wind). Depends on kankyo wind being live on the host stage.
+
+### HUNT 2 — ISLAND WIND STREAKS → FOUND: `ID_AK_JN_WINDLINE00 = 0x0031`
+`WINDEFF_SET` (`d_kankyo_wether.cpp:335`, 30 emitters), spawned in `d_kankyo_rain.cpp:369`
+`dComIfGp_particle_set(ID_AK_JN_WINDLINE00=0x0031, &pos)`. **FILI-GATED:**
+`dStage_FileList_dt_ChkPathWindEffect(fili)` (`:410`) — the stage's FILI enables path wind. Count =
+`mWindlineCount`. **Feasibility MEDIUM (particle path proven §95b):** need 0x0031 in a shipped Pscene
+bank (offline bank scan, like the grass-cut 0x89D7), + FILI path-wind flag on the host stage, +
+kankyo wind live.
+
+### HUNT 3 — GRASS VFX BLACK → FOUND: it reads `tevStr->mColorK0` (same class as water-color bugs)
+`d_grass.cpp:80,153`: `dComIfGp_particle_setSimple(KusaRun/KusaKenPID, &pos, 0xFF, tevStr->mColorK0,
+tevStr->mColorK0, 1)` — the grass run/cut scatter particle color = the ROOM's
+`dKy_tevstr_c::mColorK0` (via `roomControl_getTevStr(roomNo)`). **BLACK = our room's tevstr K0 is
+(0,0,0)/unset.** SAME class as shore water / wave color: a color SOURCE not populated. Ties to the
+§47 donor-look lane (WW room tevstr must carry the donor K0) — the WW room's tevstr isn't feeding the
+particle its K0. (Corroborates the §62-era note; the fix is the room tevstr K0, not the particle.)
+Bonus: env particles get color from kankyo K0 (`setGlobalPrmColor(mBG0_K0)` at `d_kankyo_rain:220`
+for kamome) — the same color-from-kankyo pattern.
+
+**Theme:** HUNT 3 (grass VFX) + shore water + wave color are ONE family — a color source (room
+tevstr K0 / kankyo K0 / donor authored) not reaching the material/particle. The §47 donor-look +
+§126/§127 authored-color work is the shared fix pattern. **Forward prep only — all parked behind
+Engine's shore motion; no build now.** Ready when the user picks them up.
+
+## §131 §130 hunts → island-generic docs created; §128 shore-motion fix noted (Housing, 2026-07-25)
+
+Per user: made docs for the §130 hunts, island-generic (mechanisms are universal WW kankyo/room
+systems; per-island values verified per space):
+- **`docs/WW Linked/grass-effects.md`** — SWAY (`d_grass.cpp:322-329`, wind-driven per-blade mRotX)
+  + CUT/RUN VFX COLOR black (`d_grass.cpp:80,153`, particle color = room `tevStr->mColorK0`; black =
+  K0 unset → SAME color-source family as shore/wave color, §47 donor-look fix).
+- **`docs/WW Linked/wind-effects.md`** — wind streaks (`ID_AK_JN_WINDLINE00=0x0031`, `WINDEFF_SET`
+  30 emitters, FILI-gated `ChkPathWindEffect`, particle path proven §95b).
+Both LOCATED not built; parked behind shore. Covenant-neutral.
+
+**§128 shore-motion (Engine) noted:** root = model1 BTK DifferedDL missing the `0x1200` TexGen bit →
+UV SRT updated CPU-side but `diff()` never patched texMtx to the GPU DL → frozen UVs (play/entry ran
+but no swoosh). Fixed: slot1 create flags `0x11001284` (daBg parity), entry-before-calc, XLU zUp=0,
+mat0 z-write ON; §127 colors stand. Bridge §128b shipped `model1_btk_motion.md` (Hermite SRT, 16
+bindings). **SHIPPED — awaiting user eye-check on Room44 swoosh** (user not yet playtested). Housing:
+no verify needed unless asked; shore-crashing.md reflects it.

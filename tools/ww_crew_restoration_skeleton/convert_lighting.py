@@ -290,6 +290,25 @@ def inject(stage_path: Path, tables: dict[str, tuple[int, bytes]]) -> None:
     bak = stage_path.with_suffix(stage_path.suffix + ".pre113-bak")
     raw = bak.read_bytes() if bak.is_file() else stage_path.read_bytes()
     members = dict(g.list_rarc_files(raw))
+    # №267 / §112: pre113-bak predates event_list.dat. Keep any live-only
+    # members (event packs, etc.) so re-inject cannot strip them again.
+    if bak.is_file() and stage_path.is_file():
+        live = dict(g.list_rarc_files(stage_path.read_bytes()))
+        for name, blob in live.items():
+            if name not in members:
+                members[name] = blob
+                print(f"  preserved live-only member '{name}' ({len(blob)} b)")
+    if "event_list.dat" not in members:
+        for suffix in (".pre-ba1getitm-bak", ".pre270-corrupt-bak", ".pre-event_list-bak"):
+            cand = Path(str(stage_path) + suffix)
+            if not cand.is_file():
+                continue
+            donor_mem = dict(g.list_rarc_files(cand.read_bytes()))
+            if "event_list.dat" in donor_mem:
+                members["event_list.dat"] = donor_mem["event_list.dat"]
+                print(f"  recovered event_list.dat from {cand.name} "
+                      f"({len(members['event_list.dat'])} b)")
+                break
     if "stage.dzs" not in members:
         raise SystemExit(f"{stage_path}: no stage.dzs")
     chunks = g.parse_dzs_chunks(members["stage.dzs"])
@@ -338,7 +357,7 @@ def inject(stage_path: Path, tables: dict[str, tuple[int, bytes]]) -> None:
         g.assert_rtbl_pointers(bytes(out), rtbl_n)
         print(f"  RTBL rebuilt for new offset, active rooms={sorted(rtbl_active)}")
 
-    files = [(n, b) for n, b in g.list_rarc_files(raw) if n != "stage.dzs"]
+    files = [(n, b) for n, b in members.items() if n != "stage.dzs"]
     files.append(("stage.dzs", bytes(out)))
     packed = g.pack_rarc(files)
 

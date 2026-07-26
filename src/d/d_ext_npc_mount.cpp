@@ -2447,6 +2447,124 @@ static void wwSkyPaintMatK0(J3DMaterial* mat, u8 r, u8 g, u8 b, u8 a) {
     mat->setTevKColor(0, &color);
 }
 
+// §127 — Room44 model1 authored tev registers (Bridge model1_mizu_colors.csv).
+// Never inject pane seacolor (dif/amb): those are lerp endpoints for drawWave,
+// not solid model1 colors (§126 white / §127 too-dark). Re-apply the BDL bake
+// each draw so MAJI/other paths cannot leave a wrong value latched.
+struct WwModel1AuthRegs {
+    s16 c[4][4];  // C0..C3 RGBA (s10; donor may use a>255)
+    u8 k[4][4];   // K0..K3 RGBA
+};
+
+static const WwModel1AuthRegs kWwModel1AuthRegs[8] = {
+    // 0 SC_01_mizu — opaque KONST base
+    {{{255, 255, 255, 255}, {70, 90, 150, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{70, 90, 150, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+    // 1 SC_01_mizuB_v_x
+    {{{255, 255, 255, 255}, {255, 255, 255, 279}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+    // 2 SC_01_mizu_v
+    {{{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+    // 3 SC_01_mizu_v_x
+    {{{255, 255, 255, 255}, {255, 255, 255, 279}, {200, 200, 255, 255}, {0, 0, 0, 0}},
+     {{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+    // 4 SC_01_mizu_v(2)
+    {{{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{255, 255, 255, 255}, {100, 180, 180, 255}, {80, 100, 150, 255}, {255, 255, 255, 255}}},
+    // 5 SC_01_mizu_v_x(2)
+    {{{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{255, 255, 255, 255}, {255, 255, 255, 50}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+    // 6 SC_01_mizu_v(3)
+    {{{255, 255, 255, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{70, 90, 150, 255}, {100, 200, 200, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+    // 7 SC_01_mizu_v(4)
+    {{{0, 0, 0, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
+     {{255, 255, 255, 255}, {0, 0, 0, 50}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
+};
+
+static void wwApplyModel1SeaPalette(J3DModelData* data) {
+    if (data == NULL) {
+        return;
+    }
+    const u16 n = data->getMaterialNum();
+    const u16 lim = n < 8 ? n : 8;
+    for (u16 i = 0; i < lim; i++) {
+        J3DMaterial* mat = data->getMaterialNodePointer(i);
+        if (mat == NULL) {
+            continue;
+        }
+        mat->change();
+        const WwModel1AuthRegs& auth = kWwModel1AuthRegs[i];
+        for (int r = 0; r < 4; r++) {
+            J3DGXColorS10 c;
+            c.r = auth.c[r][0];
+            c.g = auth.c[r][1];
+            c.b = auth.c[r][2];
+            c.a = auth.c[r][3];
+            mat->setTevColor((u32)r, &c);
+            J3DGXColor k;
+            k.r = auth.k[r][0];
+            k.g = auth.k[r][1];
+            k.b = auth.k[r][2];
+            k.a = auth.k[r][3];
+            mat->setTevKColor((u32)r, &k);
+        }
+        // §128 composite sheet: mats 1–7 XLU z-update OFF; mat0 opaque keeps
+        // z-write ON (donor). Do not clear mat0 depth — that is not the swoosh fix.
+        J3DBlend* blend = mat->getBlend();
+        J3DZMode* zmode = mat->getZMode();
+        if (i > 0 && blend != NULL && zmode != NULL && blend->getBlendMode() == GX_BM_BLEND &&
+            zmode->getUpdateEnable() != 0) {
+            zmode->setUpdateEnable(0);
+        }
+    }
+}
+
+// One-shot fidelity probe vs Bridge mat-ref (VTX matSrc + XLU z-update=0).
+static void wwProbeModel1Fidelity(J3DModelData* data) {
+    if (data == NULL) {
+        return;
+    }
+    static bool s_probed;
+    if (s_probed) {
+        return;
+    }
+    s_probed = true;
+    JUTNameTab* names = data->getMaterialName();
+    int vtxOk = 0;
+    int zOk = 0;
+    int n = data->getMaterialNum();
+    for (u16 i = 0; i < n; i++) {
+        J3DMaterial* mat = data->getMaterialNodePointer(i);
+        if (mat == NULL) {
+            continue;
+        }
+        J3DColorChan* chan = mat->getColorChan(0);
+        const u8 matSrc = chan != NULL ? chan->getMatSrc() : 0xFF;
+        J3DBlend* blend = mat->getBlend();
+        J3DZMode* zmode = mat->getZMode();
+        const u8 zUp = zmode != NULL ? zmode->getUpdateEnable() : 0xFF;
+        const u8 bm = blend != NULL ? (u8)blend->getBlendMode() : 0xFF;
+        if (matSrc == 1) {
+            vtxOk++;
+        }
+        if (bm != GX_BM_BLEND || zUp == 0) {
+            zOk++;
+        }
+        const char* name = names != NULL ? names->getName(i) : "?";
+        J3DGXColor* k0 = mat->getTevKColor(0);
+        DuskLog.info(
+            "[WwFoam] §103 model1 mat[{}] '{}' matSrc={} blend={} zUp={} K0=({},{},{},{})",
+            (int)i, name != NULL ? name : "?", (int)matSrc, (int)bm, (int)zUp,
+            k0 != NULL ? (int)k0->r : -1, k0 != NULL ? (int)k0->g : -1,
+            k0 != NULL ? (int)k0->b : -1, k0 != NULL ? (int)k0->a : -1);
+    }
+    DuskLog.info("[WwFoam] §127 model1 fidelity mats={} vtxMatSrc={} zWriteOk={} "
+                 "(authored regs; mat0 K0/C1=(70,90,150) — no pane seacolor)",
+                 n, vtxOk, zOk);
+}
+
 static void wwSkyApplyModel(J3DModel* model) {
     if (model == NULL) {
         return;
@@ -3132,15 +3250,24 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
                          a->mManifest.arc);
             continue;
         }
-        a->mpBgModels[i] = mDoExt_J3DModel__create(data, 0x80000, 0x11000084);
+        // Base differed flags match Obj_Fmobj / room BG. Slot 1 hosts model1.btk
+        // (§128 shore crash): daBg ORs 0x1200 (TexGenNum=2 | TexGen) so
+        // calcMaterial SRT reaches the DifferedDL. Without it, play()/entry()
+        // advance frames but UVs stay frozen — "playback verified, no swoosh."
+        u32 diffFlags = 0x11000084;
+        if (i == 1) {
+            diffFlags |= 0x1200;
+        }
+        a->mpBgModels[i] = mDoExt_J3DModel__create(data, 0x80000, diffFlags);
         if (a->mpBgModels[i] == NULL) {
             DuskLog.warn("[ExtNpcMount] BG model '{}' J3DModel__create failed — skip",
                          slotName[i]);
             continue;
         }
         ++loaded;
-        DuskLog.info("[ExtNpcMount] BG model[{}] '{}' mats={} joints={} shapes={}", i, slotName[i],
-                     data->getMaterialNum(), data->getJointNum(), data->getShapeNum());
+        DuskLog.info("[ExtNpcMount] BG model[{}] '{}' mats={} joints={} shapes={} diff={:#x}",
+                     i, slotName[i], data->getMaterialNum(), data->getJointNum(),
+                     data->getShapeNum(), diffFlags);
     }
     if (loaded == 0) {
         DuskLog.warn("[ExtNpcMount] BG '{}' — no models resolved", a->mManifest.arc);
@@ -3163,9 +3290,12 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
                 DuskLog.warn("[ExtNpcMount] BG btk '{}' unavailable — skip", btkName);
                 a->mpBgBtk = NULL;
             } else {
-                DuskLog.info("[ExtNpcMount] BG btk '{}' bound", btkName);
+                DuskLog.info("[WwFoam] §128 model1 btk '{}' bound bindings={} "
+                             "(DifferedDL TexGen 0x1200 — UV SRT live)",
+                             btkName, (int)btk->getUpdateMaterialNum());
             }
         }
+        wwProbeModel1Fidelity(a->mpBgModels[1]->getModelData());
     }
     // brakeeff / Obj_Fmobj pattern: Set against IDENTITY, then copy the real
     // host−anchor mtx and Move() AFTER Regist. GlobalVtx-at-Set with the final
@@ -7849,8 +7979,13 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                 continue;
             }
             J3DModel* model = i_this->mpBgModels[i];
-            model->calc();
             J3DModelData* data = model->getModelData();
+            // §128 / daBg order: BTK entry before calc so MaterialAnm SRT is live
+            // when calcMaterial/diff patches the DifferedDL (needs create 0x1200).
+            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {
+                i_this->mpBgBtk->entry(data);
+            }
+            model->calc();
             if (data != NULL) {
                 for (u16 s = 0; s < data->getShapeNum(); ++s) {
                     J3DShape* shape = data->getShapeNodePointer(s);
@@ -7860,8 +7995,9 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                 }
             }
             g_env_light.setLightTevColorType_MAJI(model, &i_this->tevStr);
-            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {
-                i_this->mpBgBtk->entry(data);
+            // §127: model1 beach-crash — authored C/K from Bridge dump (not pane seacolor).
+            if (i == 1 && data != NULL) {
+                wwApplyModel1SeaPalette(data);
             }
             mDoExt_modelUpdateDL(model);
             if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {

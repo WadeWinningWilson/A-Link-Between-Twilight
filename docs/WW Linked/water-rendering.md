@@ -4,6 +4,12 @@
 geometry, blend modes, and code home. Porting or debugging "waves" without naming WHICH system is
 how effort gets misdirected. Applies to every island; lives outside the per-island folders.
 
+> **This is the INDEX.** Per-effect docs live in [`Water effects/`](Water%20effects/):
+> [waves.md](Water%20effects/waves.md) (system 2 — **ACCEPTED**),
+> [shore-crashing.md](Water%20effects/shore-crashing.md) (system 4 — **BROKEN, white water**),
+> great-sea (system 1, future). This taxonomy stays as the map + shared traps; status detail and
+> resource landings live in the per-effect docs.
+
 **Sources:** community video breakdown (user-supplied, 2026-07-22 —
 https://youtu.be/8NL9Cc05CYk + transcript) — marked **[video]** where it is our only source;
 Housing's donor-code reads (bus §97b/§98) — marked **[verified]** with citations. Where both agree,
@@ -17,9 +23,9 @@ verify in code before building on any of them.
 | # | system | where seen | mechanism (summary) | our status |
 |---|---|---|---|---|
 | 1 | **Open-sea surface foam** (the "poster child") | open Great Sea | 4-bit grayscale tex, runtime PALETTE by weather/time; two scales LIGHTEN-blended; displacement-map scroll for wobble; **hand-darkened mip levels fade foam with distance** [video] | sea surface not ported (open ocean not needed for hosted islands) |
-| 2 | **Whitecap foam panes** (kankyo wave packet) | open water near camera | ~300 pulsing camera-facing trapezoid QUADS; sin-phase gated; sea-color TEV lerp through usonami tex; wind-skewed, bank-rolled — **[verified]** `d_kankyo_wether/rain`, full recipe bus §98 | **§98 Engine BUILT** — white was missing `BG1_K0` (stashed in `plight_col[2]`); awaiting №31-B eyes |
+| 2 | **Whitecap foam panes** (kankyo wave packet) | open water near camera | ~300 pulsing camera-facing trapezoid QUADS; sin-phase gated; sea-color TEV lerp through usonami tex; wind-skewed, bank-rolled — **[verified]** `d_kankyo_wether/rain`, full recipe bus §98 | **ACCEPTED (user eye 2026-07-25)** — blue panes + white tips in; see Water effects/waves.md |
 | 3 | **Island grounding rings** (foam + shadow around islands) | major islands (Forest Haven etc.; missing on Great Fish) | two textures scrolling opposite directions; foam breathes via UV-cycling the top corners of a face strip; seams hand-placed [video] | not identified in donor code yet; likely island/sea model materials |
-| 4 | **Beach crashing waves — THE Outset shoreline material** | Outset beach ("seen at the start of the game") | **NINE layers** [video]: 2 horizontal scrolls + vertical crash scroll (vertex-alpha faded); subtle light foam (back-and-forth); always-present airy foam (same tex, DARKEN blend); lagging pitch-black shadow layer shaping alpha + making sand look wet | **LOCATION CONFIRMED (Bridge 0.30.1):** Room44 `model1.bdl+btk` — 8 materials all `SC_01_mizu*`, 9 textures `Txa_nami_*/Txa_umi_*/Txa_sirokuro_a`, BTK 16 tracks/100fr scrolls, ALREADY MOUNTED. PARTIALLY VISIBLE in-game (user: 'wants to be there'). Fidelity pass live: Bridge dumping the 8 materials' TEV/blend/vertex-alpha reference; Engine diffs rendering against it (bus §101) |
+| 4 | **Beach crashing waves — THE Outset shoreline material** | Outset beach ("seen at the start of the game") | **NINE layers** [video]: 2 horizontal scrolls + vertical crash scroll (vertex-alpha faded); subtle light foam (back-and-forth); always-present airy foam (same tex, DARKEN blend); lagging pitch-black shadow layer shaping alpha + making sand look wet | **LOCATION CONFIRMED (Bridge 0.30.1):** Room44 `model1.bdl+btk` — 8 materials all `SC_01_mizu*`, 9 textures `Txa_nami_*/Txa_umi_*/Txa_sirokuro_a`, BTK 16 tracks/100fr scrolls, ALREADY MOUNTED. **BROKEN — shore water rendered WHITE (user eye 2026-07-25)**; mat-ref sheet exists (Bridge 0.30.2); Engine fidelity diff open. See Water effects/shore-crashing.md |
 | 5 | **Rivers** | Forest Haven etc. | two side-foam scrolls at different scales curving up walls; center wiggly shadow scroll; mirrored-UV joins at mid-river islands [video] | future spaces |
 | 6 | **Waterfalls + ripples** | Forest Haven etc. | crest: two scrolling textures, DARKEN blend used as alpha mask; base ripples: center-out scrolling tex + additive second layer + hard alpha-clip at half-brightness + vertex-alpha edge fade [video] | future spaces |
 

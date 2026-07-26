@@ -4672,6 +4672,25 @@ public:
     // Total combat-howl frames elapsed (startup grace for the song poll + hard-cap failsafe).
     u16  mWolfHowlElapsed      = 0;
     // ============================================
+    // NEW CODE — ALBW Port (Realtime Potions — game.realtimePotions)
+    // Drink a potion / pour lantern oil as an UPPER_2 upper-body overlay while
+    // Link keeps moving in his normal move/wait proc (Dark-Souls-flask style; no
+    // event_compulsory / event camera / mNormalSpeed lock). Own state — the
+    // proc-owned mProcVarX / mItemVar0 scratch union belongs to the concurrent
+    // move proc and must NOT be reused here.
+    // ============================================
+    bool mRealtimeUseActive      = false;  // overlay lifecycle live
+    u8   mRealtimeUsePhase        = 0;      // 0 start, 1 drink/pour, 2 end
+    bool mRealtimeUseIsOil        = false;  // lantern-oil pour vs bottle drink
+    bool mRealtimeUseEffectDone   = false;  // heal/oil granted + item consumed
+    bool mRealtimeUseKanteraKeep  = false;  // oil: relight the lantern on teardown
+    u16  mRealtimeUseItem         = 0;      // consumable item number
+    u8   mRealtimeUseSelIdx       = 0;      // select-item slot captured at start
+
+    bool startRealtimeUse(u16 i_itemNo, bool i_isOil, u8 i_selIdx);
+    void checkRealtimeUse();
+    void endRealtimeUse(bool i_resetUpper);
+    // ============================================
     // NEW CODE ENDS HERE
     // ============================================
 #endif

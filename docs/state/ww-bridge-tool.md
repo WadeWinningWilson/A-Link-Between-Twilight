@@ -1,14 +1,14 @@
 # WW Bridge Tool — live state
 
-**Tip (overwrite, don't append):** Bridge **§112 model1 baked colors CLEAR** — tool **0.34.0**; `model1-dump` now writes `model1_mizu_colors.csv` (tevKColor/tevColor RGB per `SC_01_mizu*`). Donor-faithful base color for Engine system-4.
+**Tip (overwrite, don't append):** Bridge §128 sheet ferried — Engine applied DifferedDL `0x1200` TexGen for model1 BTK (root cause of frozen UVs). Bridge tool still **0.35.0**.
 
 | Field | Value |
 |-------|--------|
-| **status** | §112 colors shipped; accept/verdict/nledger stand |
-| **next** | Engine use colors CSV as base; History nledger classify |
-| **do-not** | Invent sea RGB; put drive code in `src/`; push while Ivan gated |
+| **status** | §128 motion dump CLEAR; Engine compositing fix shipped (await user eye) |
+| **next** | History nledger classify; user verify crash swoosh |
+| **do-not** | Invent sea RGB / purpose labels; put drive code in `src/`; push while Ivan gated |
 | **tool_root** | `C:\Users\xxxxx\Documents\albt bridge` |
-| **tool_version** | **0.34.0** |
+| **tool_version** | **0.35.0** |
 | **decomp** | `D:\XXXXXXX\WW DP` (`WW_DECOMP`) |
 | **ww_extract** | `D:\XXXXXXX\Ex WW` (`WW_EXTRACT`) |
 | **schema_version** | **2** |
@@ -18,7 +18,7 @@
 
 | Cmd | Role |
 |-----|------|
-| `model1-dump` | §99/§101/§112 mats + TEV + **baked K/C colors** |
+| `model1-dump` | §99/§101/§112/§128 mats + TEV + colors + **BTK motion/composite** |
 | `accept --ini …` | Acceptance drive (launch/watch + log assert) |
 | `verdict --ini …` | Score a log once |
 
@@ -26,9 +26,9 @@
 
 | Item | Owner |
 |------|--------|
-| System-4 fidelity vs mat-ref + colors | Engine |
+| System-4 crash swoosh eye-check (§128 DifferedDL TexGen) | User |
 | Classify nledger drafts | History |
 
 ## Closed this lane
 
-… · **§112 colors 0.34.0** · §111 accept · §110 loss-protection · …
+… · **§128 BTK motion 0.35.0** · §112 colors 0.34.0 · §111 accept · §110 loss-protection · …

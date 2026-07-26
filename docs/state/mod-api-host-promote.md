@@ -20,7 +20,7 @@
 | **1** | Mods UI | **Built 2026-07-25 (§7.10) — one Mods page, additive merge:** keep ALBT Layer-B **load-order / grab-and-place / collections / core-override**; **also** fold in main’s `.dusk` loader controls (status, enable/disable/reload, failure reason, mod settings panels, logs). Neither system fully replaces the other — same menu, both surfaces. `modinfo.ini` + screenshot helpers retained. *(Earlier coexist pass wrongly kept ALBT-only UI; that was a misread of “load order”, not the locked intent.)* |
 | **2** | CMake / `/O2` | Acknowledged — treat post-import rebuild as FPS-untrusted until ninja FLAGS show `/O2` |
 | **3** | Pack shape | Public = **`.dusk`**; keeps ini + screenshot helpers |
-| **4** | Covenant / push | Hard-gate — never-push strip + greplist before any push (see §4) |
+| **4** | Covenant / push | Hard-gate — never-push strip + greplist before any push (see §4). **Strip set PRODUCED 2026-07-25: [NEVER-PUSH-STRIP-SET.md](../NEVER-PUSH-STRIP-SET.md)** — 34 Tier-1 receiver files + Tier-2 modified-TP class + M6 gate; baseline M6 CLEAN (0 WW literals in exe) |
 | **5** | GameService ABI | Acknowledged — epoch story when game-facing services land |
 | **6** | WIP blast | Mitigated by isolated branch + pre-merge tag (reversible); still do not merge onto live boss/WW branches |
 

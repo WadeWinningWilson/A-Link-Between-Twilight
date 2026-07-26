@@ -10756,6 +10756,24 @@ void daAlink_c::setNormalSpeedF(f32 i_speed, f32 i_deceleration) {
         }
     }
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Realtime Potions — walk-speed cap while consuming)
+    // While a realtime drink/pour is active (game.realtimePotions), cap Link to
+    // walking speed so healing on the move is a committed, slowed action —
+    // players must pick their moment in combat. Same min-clamp pattern as the
+    // indoor/slope caps above, so the game's own accel/decel eases the slowdown
+    // (no snap). mRealtimeUseActive is only set when the setting is on, so no
+    // extra setting check is needed here.
+    // ============================================
+    if (mRealtimeUseActive) {
+        temp_f30 = mMaxSpeed * 0.5f;  // ~half run = a brisk walk (tunable)
+        if (max_speed > temp_f30) {
+            max_speed = temp_f30;
+        }
+    }
+#endif
+
     if (checkNoResetFlg3(FLG3_UNK_1000)) {
         f32 sp18;
         if (checkWolf()) {
@@ -15690,7 +15708,28 @@ int daAlink_c::changeItemTriggerKeepProc(u8 i_selItemIdx, int i_procType) {
         } else if (checkCanoeRide()) {
             procCanoeBottleDrinkInit(sel_item);
         } else {
-            procBottleDrinkInit(sel_item);
+            // ============================================
+            // NEW CODE — ALBW Port (Realtime Potions)
+            // On foot with game.realtimePotions: drink as a moving upper-body
+            // overlay (startRealtimeUse) instead of the locking proc. Only
+            // single-drink heal potions qualify; multi-stage/nasty items and
+            // fairy/worm fall back to the vanilla locking drink so their special
+            // behavior is preserved. canDrinkSelectItem mirrors the vanilla
+            // guard (blocks an empty soulbound bottle).
+            // ============================================
+#if TARGET_PC
+            if (dusk::getSettings().game.realtimePotions.getValue() && !mRealtimeUseActive &&
+                sel_item != dItemNo_MILK_BOTTLE_e && sel_item != dItemNo_HALF_MILK_BOTTLE_e &&
+                sel_item != dItemNo_UGLY_SOUP_e && sel_item != dItemNo_CHUCHU_PURPLE_e &&
+                sel_item != dItemNo_CHUCHU_BLACK_e && sel_item != dItemNo_BEE_CHILD_e &&
+                sel_item != dItemNo_FAIRY_e && sel_item != dItemNo_WORM_e &&
+                dAlbwPotion_canDrinkSelectItem(i_selItemIdx, (u8)sel_item)) {
+                startRealtimeUse((u16)sel_item, false, i_selItemIdx);
+            } else
+#endif
+            {
+                procBottleDrinkInit(sel_item);
+            }
         }
     } else if (i_procType == ITEM_PROC_KANDELAAR_POUR) {
         if (checkReinRide()) {
@@ -15698,7 +15737,17 @@ int daAlink_c::changeItemTriggerKeepProc(u8 i_selItemIdx, int i_procType) {
         } else if (checkCanoeRide()) {
             procCanoeKandelaarPourInit();
         } else {
-            procKandelaarPourInit();
+            // ============================================
+            // NEW CODE — ALBW Port (Realtime Potions — lantern oil refill)
+            // ============================================
+#if TARGET_PC
+            if (dusk::getSettings().game.realtimePotions.getValue() && !mRealtimeUseActive) {
+                startRealtimeUse((u16)getReadyItem(), true, i_selItemIdx);
+            } else
+#endif
+            {
+                procKandelaarPourInit();
+            }
         }
     } else if (i_procType == ITEM_PROC_FISHING_FOOD) {
         procFishingFoodInit();
@@ -16255,6 +16304,27 @@ void daAlink_c::commonProcInit(daAlink_c::daAlink_PROC i_procID) {
     if (mWolfCombatHowlActive && i_procID != PROC_WOLF_HOWL) {
         mWolfCombatHowlActive = false;
         mWolfHowlEnding       = false;
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port (Realtime Potions — interruption cleanup)
+    // Link stays in his move/wait proc during a realtime drink/pour, so this
+    // single proc-change chokepoint fires on every proc change. Free ground
+    // locomotion (stand/walk/run/turn, incl. Z-target) is allowed to overlap;
+    // any other action (roll, jump, attack, guard, damage, transform, warp, ...)
+    // cancels the overlay. Heal/consume already applied stay applied (bottle
+    // gone); a cancel before the heal frame costs nothing (bottle kept).
+    // ============================================
+    if (mRealtimeUseActive) {
+        const bool locomotion =
+            i_procID == PROC_SERVICE_WAIT || i_procID == PROC_TIRED_WAIT ||
+            i_procID == PROC_WAIT || i_procID == PROC_MOVE ||
+            i_procID == PROC_ATN_MOVE || i_procID == PROC_ATN_ACTOR_WAIT ||
+            i_procID == PROC_ATN_ACTOR_MOVE || i_procID == PROC_WAIT_TURN ||
+            i_procID == PROC_MOVE_TURN || i_procID == PROC_TURN_MOVE;
+        if (!locomotion) {
+            endRealtimeUse(true);
+        }
     }
 #endif
 
@@ -19801,6 +19871,12 @@ int daAlink_c::execute() {
         dFlurryRush_update();
         if (dFlurryRush_isActive()) {
             mDamageTimer = mpHIO->mDamage.m.mInvincibleTime;
+        }
+        // Realtime Potions: advance the moving drink/pour overlay every frame
+        // while Link stays in his normal move/wait proc (game.realtimePotions).
+        // allAnimePlay() (above) advances mUpperFrameCtrl[2] regardless of proc.
+        if (mRealtimeUseActive) {
+            checkRealtimeUse();
         }
         // ============================================
         // NEW CODE ENDS HERE

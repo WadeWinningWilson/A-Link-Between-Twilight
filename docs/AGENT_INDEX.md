@@ -4,6 +4,10 @@
 > registration, room identity, or any surface it names. Entries are permanent
 > rejections with the failure mechanism spelled out; no AI instance may
 > self-approve an exception (escalate to the user).**
+>
+> ⛔ **[NEVER-PUSH-STRIP-SET.md](NEVER-PUSH-STRIP-SET.md) — covenant push-gate (§113).
+> Before ANY push to public `main`: the WW receiver layer is fork-local, and the
+> M6 greplist must be CLEAN on the pushed tree's exe. No self-clearing the gate.**
 
 **Purpose:** One map for fresh Cursor/Claude chats. Prefer **live state** over reopening old sessions or reading interconnected megadocs end-to-end.
 
@@ -61,6 +65,7 @@
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |
 | Mod API port (main `.dusk` extraction) | [state/mod-api-port.md](state/mod-api-port.md) | [state/mod-api-port-albw-meter.md](state/mod-api-port-albw-meter.md) (#1 plan); port canvases; `albw-port.md` |
 | Mod API host promote + local dusk merge | [state/mod-api-host-promote.md](state/mod-api-host-promote.md) | Layer B / Mods UI / `.dusk` push set; parked WW receivers; `pre-dusk-api-merge` tag; [Custom-Model-API-Work.md](Custom-Model-API-Work.md) |
+| WW Bridge Tool | [state/ww-bridge-tool.md](state/ww-bridge-tool.md) | [WW Linked/ww-bridge-tool-interconnected.md](WW%20Linked/ww-bridge-tool-interconnected.md); shore motion §128 → `albt bridge/reports/model1_btk_motion.md` |
 
 ---
 

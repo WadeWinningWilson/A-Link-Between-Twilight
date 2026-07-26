@@ -383,6 +383,175 @@ fopAc_ac_c* daAlink_c::makeFairy(cXyz* i_pos, u32 i_params) {
     return field_0x285c.getActor();
 }
 
+// ============================================
+// NEW CODE — ALBW Port (Realtime Potions — game.realtimePotions)
+// Drink a potion / pour lantern oil as an UPPER_2 upper-body overlay while Link
+// stays in his normal move/wait proc, so he keeps walking/running (Dark-Souls
+// flask). Self-contained lifecycle mirroring commonBottleDrink(1) /
+// commonKandelaarPour(1) but WITHOUT event_compulsory / StartEventCamera /
+// setSpecialDemoType / mNormalSpeed=0 (those welded the vanilla use to the event
+// system and blocked movement). Heal/consume are replicated here rather than
+// reused because the vanilla routine writes the proc-owned mProcVarX/mItemVar0
+// scratch union that the concurrent move proc owns.
+//
+// Scope: single-drink heal potions + lantern-oil refill. Multi-stage / nasty
+// items (milk two-drink, ugly soup, chu purple/black, bee child) and fairy/worm
+// fall back to the vanilla locking use — see the gate in changeItemTriggerKeepProc.
+// ============================================
+#if TARGET_PC
+bool daAlink_c::startRealtimeUse(u16 i_itemNo, bool i_isOil, u8 i_selIdx) {
+    keepItemData();
+
+    if (i_isOil) {
+        mRealtimeUseKanteraKeep = checkNoResetFlg2(FLG2_UNK_1);
+        setKandelaarModel();
+        setBottleModel(getReadyItem());
+        setUpperAnimeParam(getMainBckData(ANM_OIL_BOTTLE_POUR_START)->m_upperID, UPPER_2,
+                           &mpHIO->mItem.mLantern.m.mBeginUnkAnm);
+    } else {
+        setBottleModel(i_itemNo);  // sets mEquipItem = i_itemNo
+        setUpperAnimeParam(getMainBckData(ANM_BOTTLE_DRINK_START)->m_upperID, UPPER_2,
+                           &mpHIO->mItem.mBottle.m.mStartDrinkAnm);
+        setFacePriAnime(ANM_BOTTLE_DRINK_START);
+    }
+
+    mRealtimeUseActive     = true;
+    mRealtimeUsePhase      = 0;
+    mRealtimeUseIsOil      = i_isOil;
+    mRealtimeUseEffectDone = false;
+    mRealtimeUseItem       = i_itemNo;
+    mRealtimeUseSelIdx     = i_selIdx;
+    return true;
+}
+
+void daAlink_c::endRealtimeUse(bool i_resetUpper) {
+    if (!mRealtimeUseActive) {
+        return;
+    }
+
+    // Only blend the upper body back when we still own UPPER_2. When another
+    // action stomped it (attack/equip) we pass false so we don't wipe theirs.
+    if (i_resetUpper) {
+        resetUpperAnime(UPPER_2, 3.0f);
+    }
+
+    if (mRealtimeUseIsOil) {
+        deleteEquipItem(FALSE, TRUE);
+        if (mRealtimeUseKanteraKeep) {
+            setKandelaarModel();
+            mEquipItem = dItemNo_KANTERA_e;
+        }
+        returnKeepItemData();
+    } else {
+        returnKeepItemData();
+    }
+
+    mRealtimeUseActive      = false;
+    mRealtimeUsePhase       = 0;
+    mRealtimeUseIsOil       = false;
+    mRealtimeUseEffectDone  = false;
+    mRealtimeUseKanteraKeep = false;
+    mRealtimeUseItem        = 0;
+    mRealtimeUseSelIdx      = 0;
+}
+
+void daAlink_c::checkRealtimeUse() {
+    simpleAnmPlay(field_0x0718);
+    simpleAnmPlay(field_0x071c);
+
+    daPy_frameCtrl_c* fc = &mUpperFrameCtrl[2];
+    u16 anm = mUpperAnmHeap[2].getIdx();
+
+    if (mRealtimeUseIsOil) {
+        if (anm == getMainBckData(ANM_OIL_BOTTLE_POUR_START)->m_upperID) {
+            if (checkAnmEnd(fc)) {
+                setUpperAnimeBaseMorf(getMainBckData(ANM_OIL_BOTTLE_POUR)->m_upperID, 0.0f);
+                dComIfGp_setItemOilCount(dComIfGs_getMaxOil());
+                mRealtimeUsePhase = 1;
+            }
+        } else if (anm == getMainBckData(ANM_OIL_BOTTLE_POUR)->m_upperID) {
+            if (dComIfGp_getItemNowOil() == dComIfGs_getOil()) {
+                dComIfGs_setEquipBottleItemEmpty(mRealtimeUseSelIdx);
+                setUpperAnimeParam(getMainBckData(ANM_OIL_BOTTLE_POUR_END)->m_upperID, UPPER_2,
+                                   &mpHIO->mItem.mLantern.m.mEndUnkAnm);
+                mRealtimeUseEffectDone = true;
+                mRealtimeUsePhase = 2;
+            }
+        } else if (mRealtimeUsePhase == 2) {
+            if (checkAnmEnd(fc)) {
+                endRealtimeUse(true);
+            }
+        } else {
+            // UPPER_2 hijacked before we finished — drop without touching theirs.
+            endRealtimeUse(false);
+        }
+        return;
+    }
+
+    // Bottle drink.
+    if (anm == getMainBckData(ANM_BOTTLE_DRINK_START)->m_upperID) {
+        if (checkAnmEnd(fc)) {
+            setUpperAnimeBaseMorf(getMainBckData(ANM_BOTTLE_DRINK)->m_upperID, 0.0f);
+            setFacePriAnime(ANM_BOTTLE_DRINK);
+
+            // Primary heal (single-drink items only; see scope note above).
+            const u16 it = mRealtimeUseItem;
+            if (it == dItemNo_LV1_SOUP_e) {
+                dComIfGp_setItemLifeCount(8, 0);
+            } else if (it == dItemNo_LV2_SOUP_e) {
+                dComIfGp_setItemLifeCount(16, 0);
+            } else if (it == dItemNo_LV3_SOUP_e) {
+                dComIfGp_setItemLifeCount(32, 0);
+            } else if (it == dItemNo_RED_BOTTLE_e || it == dItemNo_CHUCHU_RED_e ||
+                       it == dItemNo_RED_BOTTLE_2_e) {
+                dComIfGp_setItemLifeCount(dAlbwPotion_getHealQuarters(mRealtimeUseSelIdx, it), 0);
+            } else if (it == dItemNo_BLUE_BOTTLE_e || it == dItemNo_CHUCHU_BLUE_e ||
+                       it == dItemNo_HOT_SPRING_e) {
+                dComIfGp_setItemLifeCount(dComIfGs_getMaxLifeGauge(), 0);
+            } else if (it == dItemNo_CHUCHU_RARE_e || it == dItemNo_FAIRY_DROP_e) {
+                dComIfGp_setItemLifeCount(dComIfGs_getMaxLifeGauge(), 0);
+                mSwordUpTimer = 510;
+            } else if (it == dItemNo_GREEN_BOTTLE_e || it == dItemNo_CHUCHU_GREEN_e) {
+                dMeter2_addALBWFraction(1, 3);
+            }
+
+            // Enable the heart-refill "ding" during the recovery. The vanilla
+            // drink sets player-status1 0x2000, which d_meter2 gates Z2SE_HP_GAUGE_INC
+            // on; we use the self-clearing life-gauge-SE flag instead so we don't
+            // touch player status / HUD-hide logic. Auto-clears when the fill ends.
+            // Harmless for non-HP items (green potion) — no life change, no ding.
+            dMeter2Info_onLifeGaugeSE();
+
+            voiceStart(Z2SE_AL_V_DRINK);
+            mRealtimeUsePhase = 1;
+        }
+    } else if (anm == getMainBckData(ANM_BOTTLE_DRINK)->m_upperID) {
+        if (dComIfGp_getItemNowLife() == dComIfGs_getLife()) {
+            if (dAlbwPotion_isSoulboundRedInSlot(dComIfGs_getSelectItemIndex(mRealtimeUseSelIdx))) {
+                dAlbwPotion_consumeSoulboundDrink(mRealtimeUseSelIdx);
+            } else {
+                dComIfGs_setEquipBottleItemEmpty(mRealtimeUseSelIdx);
+            }
+            setUpperAnimeParam(getMainBckData(ANM_BOTTLE_DRINK_END)->m_upperID, UPPER_2,
+                               &mpHIO->mItem.mBottle.m.mEndDrinkAnm);
+            setFacePriAnime(ANM_BOTTLE_DRINK_END);
+            mRealtimeUseEffectDone = true;
+            mRealtimeUsePhase = 2;
+        }
+    } else if (anm == getMainBckData(ANM_BOTTLE_DRINK_END)->m_upperID) {
+        if (checkAnmEnd(fc)) {
+            endRealtimeUse(true);
+        }
+    } else {
+        // UPPER_2 hijacked before we finished — drop without touching theirs.
+        endRealtimeUse(false);
+    }
+}
+#endif  // TARGET_PC
+// ============================================
+// NEW CODE ENDS HERE
+// ============================================
+
 int daAlink_c::procBottleDrinkInit(u16 i_itemNo) {
 #if TARGET_PC
     if (!dAlbwPotion_canDrinkSelectItem(mSelectItemId, (u8)i_itemNo)) {
