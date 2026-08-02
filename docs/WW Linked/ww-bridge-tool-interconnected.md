@@ -16587,3 +16587,125 @@ One lesson from the JPA port applies directly to this order: when a donor
 structure appears to match the receiver's field-for-field, check whether the
 receiver keeps any of that data **outside** the struct. That is what cost this
 lane the last several rounds.
+
+## §243 OUTSET VEGETATION — THE TRAP REGISTER (Housing → Foundry, 2026-08-02)
+
+Written for the swood/`d_tree` order (§242) and every vegetation packet after it.
+Grass and flowers are now rendering faithfully; this is the list of what it cost,
+so the next packet does not pay it again. **Every one of these presented as
+"draws nothing" or "draws wrong" with no error anywhere.**
+
+### A. Data-shape traps (the receiver is not the donor)
+
+1. **Data the receiver keeps OUTSIDE the block struct.** TP's `JPABaseShape` ctor
+   sets `mpTexCrdMtxAnmTbl = block + sizeof(JPABaseShapeData)` — ten BE floats
+   past the struct. WW keeps the same scalars as named fields at 0x28..0x50.
+   Allocating only `sizeof(Data)` fed the texture matrix from heap garbage:
+   different random UV scale/rotation per RUN, so it looked like garbage one
+   build and invisible the next. Rule: any TP block class with a pointer member
+   beyond `pXxxData` has trailing payload to allocate AND populate. (§241)
+2. **High flag bits mean different things per lineage.** BSP1 bits 25/26 are TP's
+   tiling S/T (WW has no such bits — its tiling is the f32 pair at 0x28/0x2C);
+   27/28 are TP's `isNoDrawParent`/`isNoDrawChild`, undefined in WW, where a
+   stray 1 silently suppresses the draw. Derive or mask; never inherit.
+3. **ESP1 flags differ outright** and need explicit translation (§212). BEM1,
+   FLD1, TEX1 and BSP1 bits 0-24 are genuinely shared — verified, do not re-check.
+4. **Symbol size ≠ call size.** `l_OhanaDL` is 266 bytes on disk; the donor calls
+   it with 0x100. `GXCallDisplayList` needs a 32-byte-aligned size, so the raw
+   symbol size fails. Use the donor's own call constants, verbatim.
+
+### B. GX-state traps (read the donor's material DL, do not assume)
+
+5. **Texture wrap comes from the material DL, not from the last packet you
+   wrote.** All three vegetation `matDL`s write `TX_SETMODE0_I0` with
+   `wrap_s = wrap_t = GX_MIRROR`. Flowers were given the blade path's
+   `(GX_REPEAT, GX_CLAMP)`; flower UVs run **outside** the unit square
+   (`v[-1.927, 0.551]`), so T-clamp collapsed every negative-v vertex onto one
+   texture row — each polygon drew as a flat slab of the atlas's green leaf
+   region, petal silhouette gone because the alpha cutout was never sampled.
+   Grass hid this because its UVs are `u[0,2] v[0,1]`. **The grass call was
+   wrong too and has been corrected.** Decode `TX_SETIMAGE0`/`TX_SETMODE0` out
+   of the blob (BP opcode 0x61, regs 0x88-0x8B / 0x80-0x83) — it is 20 lines of
+   Python and it is authoritative.
+6. **Vegetation textures are ATLASES.** One texture carries petals AND the green
+   leaf/stem region; UVs select. So "it came out green" is a UV symptom, not a
+   colour symptom — the vertex colours are pure greyscale luminance
+   (`255,255,255` / `178,178,178` / …) and carry no hue at all.
+7. **The material DL's baked texture pointer is a GameCube address.** Bind the
+   texture explicitly after the DL call (№135). Still true.
+8. **`J3DShape::resetVcdVatCache()` at the end of every raw-GX draw.** Omitting
+   it makes every J3D model drawn afterwards inherit your vertex format and
+   render as nothing — the whole cast vanishes while spawning normally (№127).
+9. **Draw from a J3D packet, never from the actor's Draw callback.** An actor
+   callback runs outside the draw phase where `j3dSys.getViewMtx()` is stale, so
+   world coordinates get interpreted as camera-relative (№140).
+10. **`settingTevStruct` leaves C0/K0 at zero on non-J3D paths** — fill them
+    explicitly (№143).
+
+### C. Particle-spawn traps
+
+11. **The prm/env arguments are a MULTIPLIER, not a tint.** `dPa_control_c::set`'s
+    no-userWork branch (which is every WW-supplemental id) writes them straight
+    into the emitter's GLOBAL colours, and the final colour is `resource ×
+    global`. Feed it something dark and the VFX is black however good the
+    resource is. §208 found this with `{0,0,0,0}`; the flower run-through
+    rediscovered it with `AmbCol`.
+12. **Use room K0, and on a mounted host stage read it from the №113 stash.**
+    `AmbCol` is the ambient and runs near-black (36,24,59 at hour 11). The live
+    WW value is `g_env_light.dungeonlight_col[1]` (BG0_K0). There is now ONE
+    helper for this — `extVegSpawnTev()` — because two sources for the same
+    value is exactly how it diverged.
+13. **Pass `roomNo = -1`.** A real room number sends the particle system to the
+    host room's colour entry, which a mounted stage never fills.
+14. **The receiver's `setSimple` is NOT the donor's `setSimple`** — it is
+    registration-gated and silently spawns nothing for un-registered WW ids
+    (§211). Use `particle_set`.
+15. **No level callback.** `getLight8EcallBack` re-draws through the scene lights
+    (the purple, the time-of-day drift); a hand-rolled unlit pass breaks the
+    draw path. Let the ported resource draw itself (§241).
+16. **`ridMax` is 12 and slots 3..11 are spent.** Post-§235 every WW-common id
+    shares one manager on `kWwWindlineRmSlot`, so the slot column in `sWwCommon`
+    is vestigial. Adding a row is free; expecting a real slot is not.
+
+### D. Behaviour traps
+
+17. **The anim-slot pool is not decoration — it is the rate limiter.** The
+    run-through puff fires on the frame a plant takes a PUSH slot, which is why
+    one approach yields one puff and standing still yields none. A frame
+    cooldown reproduces the look and not the rule. Flowers additionally carry a
+    real `field_0x03 = 0x10` cooldown; grass does not. Both are the donor's.
+18. **The donor recovers a plant's home slot from its own lean angle** —
+    `(rotY >> 13) & 7`, because ambient slot *i* has `rotY = i * 0x2000`. Nothing
+    stores an "original slot". Ease `rotX` home first, then chase `rotY` to
+    `rotY & 0xE000`, then free (`d_grass.cpp:174-190`).
+19. **A cut plant releases its slot and goes to `mAnimIdx = -1`** — the stub does
+    not wave.
+20. **Kind → type indirection reads backwards.** Census kind 2 → flowerType 1 →
+    WHITE; kind 3 → flowerType 2 → PINK. `setData` tests `param_3 == 2`, which is
+    flower*Type* 2, i.e. census kind THREE.
+21. **Mass volumes differ per plant**: grass 40 × 80 in the donor (the receiver's
+    own grass uses 40 × 120), flowers 30 × 50. Proximity gates likewise: grass
+    1600 (40 units), flowers 900 (30).
+22. **The mass system must be PREPARED with an extent before any query and
+    cleared after**, or `ChkMass` never reports a hit and swinging does nothing.
+
+### E. Method
+
+23. **Decode the donor blob rather than reasoning from the screenshot.** Reading
+    the strip counts, index ranges, model extents, UV ranges, vertex colours and
+    texture formats straight out of the staged `.bin`s answered in one pass what
+    three visual rounds had not. Strip counts also confirmed the 8-vertex cap is
+    safe (max 5).
+24. **A silent failure is usually a silent CHANNEL.** `OSReport`, `JUT_WARN` and
+    `OS_REPORT` do not reach `dusklight.log`.
+25. **Check the exe timestamp against the log start.** Stale binaries cost this
+    lane three separate test rounds.
+
+### Still owed on Outset vegetation (not done, tracked)
+
+* **`setBatta`** — `d_grass.cpp:81` releases a GRASSHOPPER on the same line as
+  the run-through puff. Foundry's to port; it is a real actor, not an effect.
+* The bessou flower tier (`l_QbsfwDL`, stage `sea` room 0x21) is staged but
+  unwired — no Outset placement.
+* The grass CUT spawn still acquires K0 inline instead of via `extVegSpawnTev`.
+  Same values; fold it in when next touching that block.

@@ -117,6 +117,7 @@ struct ExtVegAssets {
 
 ExtVegAssets s_assets;
 
+
 // §45/№147: one cut sound per FRAME across every clump. A single sword swing
 // crosses several blades, and without this each one would start the sample.
 // The donor guards the same way with its l_CutSoundFlag.
@@ -184,7 +185,9 @@ f32 beF32(const std::vector<u8>& v, size_t off) {
 
 // №227: shared for the full blade AND the cut stub — both DLs index the SAME
 // pos/color/texCoord arrays (the donor binds one array set for both draws).
-void decodeDLInto(const std::vector<u8>& dl, size_t limit, std::vector<Strip>& out) {
+void decodeDLInto(const std::vector<u8>& dl, size_t limit, const std::vector<u8>& pos,
+                  const std::vector<u8>& color, const std::vector<u8>& texCoord,
+                  std::vector<Strip>& out) {
     out.clear();
     size_t i = 0;
     while (i + 3 <= dl.size() && i < limit) {
@@ -207,16 +210,16 @@ void decodeDLInto(const std::vector<u8>& dl, size_t limit, std::vector<Strip>& o
             const u8 pi = dl[i + 3 + v * 3 + 0];
             const u8 ci = dl[i + 3 + v * 3 + 1];
             const u8 ti = dl[i + 3 + v * 3 + 2];
-            st.px[v] = beF32(s_assets.pos, pi * 12 + 0);
-            st.py[v] = beF32(s_assets.pos, pi * 12 + 4);
-            st.pz[v] = beF32(s_assets.pos, pi * 12 + 8);
+            st.px[v] = beF32(pos, pi * 12 + 0);
+            st.py[v] = beF32(pos, pi * 12 + 4);
+            st.pz[v] = beF32(pos, pi * 12 + 8);
             const size_t co = ci * 4;
-            st.cr[v] = co + 3 < s_assets.color.size() ? s_assets.color[co + 0] : 255;
-            st.cg[v] = co + 3 < s_assets.color.size() ? s_assets.color[co + 1] : 255;
-            st.cb[v] = co + 3 < s_assets.color.size() ? s_assets.color[co + 2] : 255;
-            st.ca[v] = co + 3 < s_assets.color.size() ? s_assets.color[co + 3] : 255;
-            st.ts[v] = beF32(s_assets.texCoord, ti * 8 + 0);
-            st.tt[v] = beF32(s_assets.texCoord, ti * 8 + 4);
+            st.cr[v] = co + 3 < color.size() ? color[co + 0] : 255;
+            st.cg[v] = co + 3 < color.size() ? color[co + 1] : 255;
+            st.cb[v] = co + 3 < color.size() ? color[co + 2] : 255;
+            st.ca[v] = co + 3 < color.size() ? color[co + 3] : 255;
+            st.ts[v] = beF32(texCoord, ti * 8 + 0);
+            st.tt[v] = beF32(texCoord, ti * 8 + 4);
         }
         out.push_back(st);
         i += 3 + cnt * 3;
@@ -224,10 +227,65 @@ void decodeDLInto(const std::vector<u8>& dl, size_t limit, std::vector<Strip>& o
 }
 
 void decodeBladeDL() {
-    decodeDLInto(s_assets.bladeDL, 0xA0, s_strips);
+    decodeDLInto(s_assets.bladeDL, 0xA0, s_assets.pos, s_assets.color,
+                 s_assets.texCoord, s_strips);
     // №227: the stub geometry — donor draws it from frame-of-cut onward.
-    decodeDLInto(s_assets.bladeCutDL, 0x80, s_cutStrips);
+    decodeDLInto(s_assets.bladeCutDL, 0x80, s_assets.pos, s_assets.color,
+                 s_assets.texCoord, s_cutStrips);
 }
+
+// ==========================================================================
+// FLOWERS (donor d_flower.cpp) -- the second native vegetation kind.
+// ==========================================================================
+// Ported after the JPA particle port landed (bus 241): flowers were the
+// remaining MOUNTED vegetation, drawn as discrete NPC_YAFLW J3D models and
+// currently invisible (liberty L-6). This replaces the mount with the donor's
+// own raw-GX packet geometry, exactly as grass was done.
+//
+// The donor draws flowers in TWO TIERS with separate arrays, material DL and
+// texture, selected by the census kind (d_a_grass.cpp:176-181, then
+// d_flower.cpp setData:496 and draw:318-386):
+//
+//   census kind 2 -> flowerType 1 -> bit 0x20 CLEAR -> tier WHITE
+//                    l_pos / l_color / l_texCoord, l_matDL,
+//                    l_OhanaDL (0x100) / l_Ohana_gutDL (0xA0),
+//                    l_Txo_ob_flower_white_64x64TEX
+//   census kind 3 -> flowerType 2 -> bit 0x20 SET   -> tier PINK
+//                    l_pos2 / l_color2 / l_texCoord2, l_matDL2,
+//                    l_Ohana_highDL (0x120) / l_Ohana_high_gutDL (0x80),
+//                    l_Txo_ob_flower_pink_64x64TEX
+//
+// (The kind -> flowerType indirection is easy to read backwards: setData tests
+// `param_3 == 2`, which is flowerTYPE 2, i.e. census kind THREE = pink. L-6's
+// note is right; the intermediate step is what makes it look inverted.)
+//
+// The third tier (l_QbsfwDL / bessou) is stage "sea" room 0x21 only and has no
+// Outset placement, so it is not wired -- its blobs are staged but unused.
+// ==========================================================================
+struct FlowerTier {
+    std::vector<u8> pos;
+    std::vector<u8> color;
+    std::vector<u8> texCoord;
+    std::vector<u8> matDL;
+    std::vector<u8> dl;
+    std::vector<u8> cutDL;
+    std::vector<u8> tex;
+    std::vector<Strip> strips;
+    std::vector<Strip> cutStrips;
+    GXTexObj texObj;
+    bool texReady = false;
+    u32 dlSize = 0;
+    u32 cutDLSize = 0;
+};
+
+// Index by tier id: 0 = white (kind 2), 1 = pink (kind 3).
+FlowerTier s_flower[2];
+bool s_flowerReady = false;
+
+// Donor call sizes, verbatim from d_flower.cpp::draw -- NOT the raw symbol
+// sizes, which are unaligned (266/176/290/140) and would fail
+// GXCallDisplayList's 32-byte requirement. Same discipline as the blade DLs.
+const u32 kFlowerMatDLSize = 0xA0;
 
 // The donor calls these display lists with 32-byte-aligned sizes, NOT the raw
 // symbol sizes from the map (0xA7/0x8C/0xA8). GXCallDisplayList requires the
@@ -306,6 +364,109 @@ bool readPackKeys(const std::filesystem::path& mani, std::string& pos, std::stri
            !bladeDl.empty() && !bladeCutDl.empty() && !bladeTex.empty();
 }
 
+// ==========================================================================
+// Flower pack -- same 45 discipline as the blade pack: every blob is named in
+// the manifest, nothing is hardcoded, and an incomplete pack REFUSES (flowers
+// stay inert) rather than half-loading.
+// ==========================================================================
+bool readFlowerKeys(const std::filesystem::path& mani, std::string* out) {
+    // Order matches kFlowerKeys below.
+    std::ifstream in(mani);
+    if (!in) {
+        return false;
+    }
+    static const char* const kFlowerKeys[14] = {
+        "w_pos",    "w_color", "w_tex_coord", "w_mat_dl", "w_dl", "w_cut_dl", "w_tex",
+        "p_pos",    "p_color", "p_tex_coord", "p_mat_dl", "p_dl", "p_cut_dl", "p_tex",
+    };
+    std::string line;
+    bool inSection = false;
+    while (std::getline(in, line)) {
+        while (!line.empty() && (line.back() == '' || line.back() == ' ')) {
+            line.pop_back();
+        }
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        if (line[0] == '[') {
+            inSection = (line == "[flower_pack]");
+            continue;
+        }
+        if (!inSection) {
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) {
+            continue;
+        }
+        const std::string key = line.substr(0, eq);
+        const std::string val = line.substr(eq + 1);
+        for (int k = 0; k < 14; ++k) {
+            if (key == kFlowerKeys[k]) {
+                out[k] = val;
+            }
+        }
+    }
+    for (int k = 0; k < 14; ++k) {
+        if (out[k].empty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool loadFlowerPack(const std::filesystem::path& veg, const std::filesystem::path& mani) {
+    std::string k[14];
+    if (!readFlowerKeys(mani, k)) {
+        DuskLog.warn("[ExtVeg] flower pack: [flower_pack] incomplete -- flowers inert");
+        return false;
+    }
+    for (int t = 0; t < 2; ++t) {
+        FlowerTier& f = s_flower[t];
+        const int b = t * 7;
+        if (!(readBlob(veg / k[b + 0], f.pos) && readBlob(veg / k[b + 1], f.color) &&
+              readBlob(veg / k[b + 2], f.texCoord) && readBlob(veg / k[b + 3], f.matDL) &&
+              readBlob(veg / k[b + 4], f.dl) && readBlob(veg / k[b + 5], f.cutDL) &&
+              readBlob(veg / k[b + 6], f.tex))) {
+            DuskLog.warn("[ExtVeg] flower pack: tier {} blob missing -- flowers inert", t);
+            return false;
+        }
+        // Donor call sizes (d_flower.cpp::draw / setData): white 0x100/0xA0,
+        // pink 0x120/0x80.
+        f.dlSize = (t == 0) ? 0x100 : 0x120;
+        f.cutDLSize = (t == 0) ? 0xA0 : 0x80;
+        decodeDLInto(f.dl, f.dlSize, f.pos, f.color, f.texCoord, f.strips);
+        decodeDLInto(f.cutDL, f.cutDLSize, f.pos, f.color, f.texCoord, f.cutStrips);
+        // Both flower textures are 64x64 at 2048 bytes = CMPR, same as the
+        // blade texture. 135 applies here too: the material DL's texture
+        // pointer is a baked GameCube address and must not be trusted.
+        // ====================================================================
+        // WRAP MODES COME FROM THE DONOR'S OWN MATERIAL DL, NOT FROM A GUESS.
+        //
+        // Both flower material DLs write TX_SETMODE0_I0 with wrap_s = wrap_t =
+        // GX_MIRROR (decoded straight out of d_flower__l_matDL*.bin). That is
+        // load-bearing here, because the flower UVs run WELL outside [0,1]:
+        // white u[0.065,2.004] v[-1.927,0.551], pink u[0,2.917] v[-1.917,0.917].
+        // The first attempt reused the blade call's (GX_REPEAT, GX_CLAMP); with
+        // T clamped, every negative-v vertex collapses onto one texture row, so
+        // each polygon drew as a flat slab of whatever colour sat on that row --
+        // the big green triangles, with the petal silhouette gone because the
+        // alpha cutout lives in the part of the atlas that was never sampled.
+        //
+        // (Filters: the donor also asks for mag=GX_LINEAR, min=NEAR_MIP_NEAR.
+        // There is exactly one mip level in the blob, so GXInitTexObj's
+        // no-mipmap default is equivalent for min; mag already matches.)
+        // ====================================================================
+        GXInitTexObj(&f.texObj, f.tex.data(), 64, 64, GX_TF_CMPR, GX_MIRROR, GX_MIRROR,
+                     GX_FALSE);
+        f.texReady = true;
+    }
+    DuskLog.info("[ExtVeg] flower pack loaded: white strips={}/{} pink strips={}/{}",
+                 s_flower[0].strips.size(), s_flower[0].cutStrips.size(),
+                 s_flower[1].strips.size(), s_flower[1].cutStrips.size());
+    return true;
+}
+
 bool loadAssets() {
     if (s_assets.tried) {
         return s_assets.ready;
@@ -342,11 +503,17 @@ bool loadAssets() {
                         readBlob(veg / bladeCutDl, s_assets.bladeCutDL) &&
                         readBlob(veg / bladeTex, s_assets.tex);
         if (ok) {
-            GXInitTexObj(&s_texObj, s_assets.tex.data(), 64, 64, GX_TF_CMPR, GX_REPEAT,
-                         GX_CLAMP, GX_FALSE);
+            // Same correction as the flower pack: d_grass__l_matDL.bin writes
+            // TX_SETMODE0_I0 with wrap_s = wrap_t = GX_MIRROR. The blade UVs are
+            // u[0,2] v[0,1], so only S is affected -- but MIRROR reverses the
+            // second half of the sweep where REPEAT tiles it, which is a real
+            // difference on the blade, and the donor's value is the spec.
+            GXInitTexObj(&s_texObj, s_assets.tex.data(), 64, 64, GX_TF_CMPR, GX_MIRROR,
+                         GX_MIRROR, GX_FALSE);
             s_texReady = true;
             s_assets.ready = true;
             decodeBladeDL();
+            s_flowerReady = loadFlowerPack(veg, mani);
             DuskLog.info(
                 "[ExtVeg] №122 asset pack loaded from '{}' (pos={} color={} tex={} bytes)",
                 entry.path().filename().string(), s_assets.pos.size(), s_assets.color.size(),
@@ -393,6 +560,159 @@ const csXyz l_setType1[] = {
 const csXyz l_setType2[] = {
     csXyz(-75, 0, -50), csXyz(75, 0, -25), csXyz(14, 0, 106),
 };
+
+// ==========================================================================
+// THE ANIM-SLOT POOL -- donor dGrass_packet_c::mGrassAnm[104] and
+// dFlower_packet_c::mAnm[72], ported rather than approximated.
+// ==========================================================================
+// This is the donor's real sway/lean state machine, and it is LOAD-BEARING for
+// more than the sway: the run-through VFX rate limit IS this pool. The donor
+// never uses a timer for grass -- `WorkCo` fires the puff only on the frame a
+// blade transitions from "no push slot" to "has push slot", so one approach
+// yields one puff, and a player standing still in the grass gets none. A
+// frame-count cooldown reproduces the look and not the rule; this is the rule.
+//
+// Layout (both donors identical in shape):
+//   slots 0..7    AMBIENT. rotY = i * 0x2000 fixed; rotX driven per frame from
+//                 wind (grass) or a sine (flowers). Every plant starts on one,
+//                 picked as cM_rndF(7.0f) -- d_grass.cpp:428, d_flower.cpp:501.
+//   slots 8..N    PUSH. Allocated by newAnm when the player closes, released
+//                 when the plant has eased all the way back.
+//
+// The return path is the clever part and is transcribed exactly
+// (d_grass.cpp:174-190). A push slot's rotY holds the bearing to the player;
+// its TOP THREE BITS therefore also name an ambient slot. So the donor recovers
+// the plant's home slot from the lean direction itself -- `(rotY >> 13) & 7` --
+// and eases rotX back toward that slot's current wind value before chasing rotY
+// to `rotY & 0xE000`. When the chase lands, the push slot is freed and the
+// plant adopts the ambient slot encoded in its own final angle. No "original
+// slot" is ever stored.
+//
+// The sizes are the donor's own (96 push slots for grass, 64 for flowers): a
+// full pool is a real state the donor handles by declining to lean, and
+// shrinking it would change behaviour under crowding.
+//
+// This IS shared state across clumps, which No.136 warned about -- but No.136's
+// problem was a shared BLADE LIST whose lifetime was tied to one actor's, so it
+// grew every room re-entry. This is a fixed-size array of transient slots with
+// explicit alloc/free and no per-actor ownership, which is exactly the donor's
+// own arrangement.
+// ==========================================================================
+struct VegAnm {
+    u8 state;  // 0 = free, 1 = idle/returning, 2 = held by the player this frame
+    s16 rotY;
+    s16 rotX;
+};
+
+const int kGrassAmbient = 8;
+const int kGrassAnmNum = 104;  // donor mGrassAnm[104]
+const int kFlowerAnmNum = 72;  // donor mAnm[72]
+
+VegAnm s_grassAnm[kGrassAnmNum];
+VegAnm s_flowerAnm[kFlowerAnmNum];
+bool s_anmInit = false;
+u32 s_anmFrame = 0xFFFFFFFF;
+
+const u8 kAnmNone = 0xFF;  // donor mAnimIdx = -1 (cut plant: no anim at all)
+
+void vegAnmInit() {
+    if (s_anmInit) {
+        return;
+    }
+    s_anmInit = true;
+    // Donor ctors: setAnm(i, angle) with angle stepping 0x2000, for i in 0..7.
+    for (int i = 0; i < kGrassAmbient; ++i) {
+        s_grassAnm[i].state = 1;
+        s_grassAnm[i].rotY = (s16)(i * 0x2000);
+        s_grassAnm[i].rotX = 0;
+        s_flowerAnm[i].state = 1;
+        s_flowerAnm[i].rotY = (s16)(i * 0x2000);
+        s_flowerAnm[i].rotX = 0;
+    }
+}
+
+// Donor dGrass_packet_c::calc:322-337 and dFlower_packet_c::calc:394-398.
+// Runs ONCE per frame for the whole world, not once per clump -- the ambient
+// slots are shared, so driving them per actor would advance them N times.
+void vegAnmTickAmbient() {
+    vegAnmInit();
+    if (s_anmFrame == (u32)g_Counter.mTimer) {
+        return;
+    }
+    s_anmFrame = (u32)g_Counter.mTimer;
+
+    f32 windSpeed = dKyw_get_wind_pow() * 1000.0f + 1000.0f;
+    windSpeed = cLib_maxLimit(windSpeed, 2000.0f);
+    for (int i = 0; i < kGrassAmbient; ++i) {
+        s_grassAnm[i].rotX =
+            (s16)(windSpeed +
+                  windSpeed * cM_scos((s16)(windSpeed * (f32)(g_Counter.mTimer + i * 250))));
+        s_flowerAnm[i].rotX =
+            (s16)(cM_scos((s16)((g_Counter.mTimer + i * 0xFA) * 1000.0f)) * 1000.0f + 1000.0f);
+    }
+}
+
+// Donor newAnm: first free PUSH slot, or -1 when the pool is full.
+u8 vegAnmNew(VegAnm* pool, int poolNum) {
+    for (int i = kGrassAmbient; i < poolNum; ++i) {
+        if (pool[i].state == 0) {
+            pool[i].state = 1;
+            pool[i].rotY = 0;
+            pool[i].rotX = 0;
+            return (u8)i;
+        }
+    }
+    return kAnmNone;
+}
+
+// ==========================================================================
+// THE SPAWN COLOUR MODULATOR -- one helper, because every WW vegetation VFX
+// needs it and sourcing it wrongly fails SILENTLY (black particles).
+// ==========================================================================
+// 208 established the mechanism: dPa_control_c::set's no-userWork branch writes
+// the prm/env arguments straight into the emitter's GLOBAL colours, and the
+// final particle colour is resource x global (COLOR_MULTI). So this argument is
+// a MULTIPLIER over the donor's authored colour, not a decorative tint -- feed
+// it something dark and the VFX goes black however good the resource is.
+//
+// The donor feeds it the room tevstr's mColorK0 (d_grass.cpp:80/153,
+// d_flower.cpp:91/218). On a MOUNTED host stage the room colour table is never
+// filled, so the live WW value comes from the No.113 stash instead:
+// dungeonlight_col[1] = BG0_K0, the same slot W-LINE-c reads at
+// d_kankyo_wether.cpp:1559.
+//
+// It is NOT AmbCol. AmbCol is the ambient and runs near-black (36,24,59 at
+// hour 11). 182 found that once already for the grass cut scatter; the flower
+// run-through VFX rediscovered it by drawing black, because that spawn was
+// written against AmbCol instead of reusing this. Hence the helper.
+void extVegSpawnTev(const cXyz& i_pos, dKy_tevstr_c* o_tev, GXColor* o_k0) {
+    cXyz pos = i_pos;
+    g_env_light.settingTevStruct(0x40, &pos, o_tev);
+    const GXColorS10& bg0K0 = g_env_light.dungeonlight_col[1];
+    auto clamp8 = [](s16 v) -> u8 {
+        if (v < 0) {
+            return 0;
+        }
+        if (v > 255) {
+            return 255;
+        }
+        return (u8)v;
+    };
+    o_k0->r = clamp8(bg0K0.r);
+    o_k0->g = clamp8(bg0K0.g);
+    o_k0->b = clamp8(bg0K0.b);
+    o_k0->a = 255;
+    // No.143: settingTevStruct leaves C0/K0 at zero on non-J3D paths, so fill
+    // them explicitly -- the donor reads them off a populated room tevstr.
+    o_tev->TevColor.r = o_k0->r;
+    o_tev->TevColor.g = o_k0->g;
+    o_tev->TevColor.b = o_k0->b;
+    o_tev->TevColor.a = 255;
+    o_tev->TevKColor.r = o_k0->r;
+    o_tev->TevKColor.g = o_k0->g;
+    o_tev->TevKColor.b = o_k0->b;
+    o_tev->TevKColor.a = 255;
+}
 
 struct OffsetData {
     u8 num;
@@ -442,7 +762,11 @@ class daExtVeg_c : public fopAc_ac_c {
 public:
     int create();
     int execute() {
-        checkCut();
+        if (isFlower()) {
+            checkFlowers();
+        } else {
+            checkCut();
+        }
         return 1;
     }
     void checkCut();
@@ -459,11 +783,37 @@ public:
     bool mCut[kMaxBlades];
     ExtVegPacket_c mPacket;
     void drawBlades();  // real GX work; runs from the packet, in the draw phase
+
+    // ========================================================================
+    // Flowers. mKind is the census kind straight from the actor parameter:
+    // 0 = grass (blades), 2 = white flower, 3 = pink flower. The donor runs all
+    // three through one census dispatcher too (d_a_grass.cpp), so this actor
+    // keeping all three is donor-shaped rather than a convenience.
+    // ========================================================================
+    u8 mKind;
+    u8 mTier;         // 0 = white, 1 = pink; only meaningful when mKind != 0
+    u8 mAnmIdx[kMaxBlades];    // donor field_0x01: which ambient sway slot
+    u8 mRunCool[kMaxBlades];   // donor field_0x03: run-through VFX cooldown
+    bool isFlower() const { return mKind == 2 || mKind == 3; }
+    // Donor d_flower.cpp: bit 0x20 clear (white) -> ID_IT_JN_FLOWER_W 0x03DE,
+    // set (pink) -> ID_IT_JN_FLOWER_P 0x03DD. Both the cut VFX (WorkAt:207-212)
+    // and the run-through VFX (WorkCo:80-88) use the same id per tier.
+    u16 flowerParticleId() const { return mTier == 0 ? 0x03DE : 0x03DD; }
+    void drawFlowers();
+    void checkFlowers();
 };
 
 
 int daExtVeg_c::create() {
     fopAcM_ct(this, daExtVeg_c);
+
+    // execute() and the packet draw both dispatch on mKind, and every early
+    // return below leaves create() before the parameter is read. Seed the
+    // dispatch state FIRST so an inert actor is inert as grass-with-no-blades
+    // rather than as whatever the allocation happened to contain.
+    mKind = 0;
+    mTier = 0;
+    mBladeCount = 0;
 
     // ========================================================================
     // №229 — grass-cut scatter (0x89D7) is a SCENE particle our host stage's
@@ -508,10 +858,19 @@ int daExtVeg_c::create() {
     const u32 type = params & 0x0F;
     const u32 kind = (params >> 4) & 0x03;
 
-    // kind 0 is grass. Trees/flowers ride the same census dispatcher in the
-    // donor but need their own packets — not this actor's job.
-    if (kind != 0) {
-        return cPhs_COMPLEATE_e;  // trees/flowers ride the same dispatcher — inert here
+    // ========================================================================
+    // Kind dispatch. 0 = grass (blades). 2/3 = flowers, now NATIVE (241/L-6):
+    // they used to fall through here as inert and were mounted as NPC_YAFLW
+    // J3D models instead, which is what "invisible flowers" was. Trees still
+    // ride out -- they are the swood packet, a separate order.
+    // ========================================================================
+    mKind = (u8)kind;
+    mTier = (kind == 3) ? 1 : 0;  // kind 3 -> flowerType 2 -> pink; kind 2 -> white
+    if (kind == 1) {
+        return cPhs_COMPLEATE_e;  // trees ride the same dispatcher -- inert here
+    }
+    if (isFlower() && !s_flowerReady) {
+        return cPhs_COMPLEATE_e;  // pack refused; stay inert rather than half-draw
     }
 
     const OffsetData& off =
@@ -548,6 +907,12 @@ int daExtVeg_c::create() {
             }
         }
         mBlades[mBladeCount] = bp;
+        // Donor setData: `field_0x01 = cM_rndF(7.0f)` -- one of the eight shared
+        // ambient sway slots, so a clump does not move as one sheet.
+        // Donor: mAnimIdx = cM_rndF(7.0f) -- one of the 8 ambient slots
+        // (d_grass.cpp:428, d_flower.cpp:501).
+        mAnmIdx[mBladeCount] = (u8)cM_rndF(7.0f);
+        mRunCool[mBladeCount] = 0;
         ++mBladeCount;
     }
 
@@ -577,7 +942,11 @@ int daExtVeg_c::draw() {
 
 void ExtVegPacket_c::draw() {
     if (mOwner != NULL) {
-        mOwner->drawBlades();
+        if (mOwner->isFlower()) {
+            mOwner->drawFlowers();
+        } else {
+            mOwner->drawBlades();
+        }
     }
 }
 
@@ -635,6 +1004,7 @@ void daExtVeg_c::checkCut() {
     }
 #endif
 
+    vegAnmTickAmbient();
     dComIfG_Ccsp()->PrepareMass();
     // ========================================================================
     // №225 — 40x120, the RECEIVER's own grass test volume (d_grass.inc:1226),
@@ -680,7 +1050,68 @@ void daExtVeg_c::checkCut() {
         }
     }
 
+    fopAc_ac_c* runPlayer = dComIfGp_getPlayer(0);
     for (int i = 0; i < mBladeCount; ++i) {
+        if (mRunCool[i] != 0) {
+            --mRunCool[i];
+        }
+        // ====================================================================
+        // WorkCo / hitCheck -- donor d_grass.cpp:62-95 and 168-192, transcribed.
+        //
+        // The run-through puff (0x03DB) lives INSIDE this state machine: it
+        // fires on the frame a blade takes a push slot, which is what makes one
+        // approach yield one puff and a player standing in the grass yield
+        // none. The blade also leans away and, on the way back, rustles
+        // (JA_SE_FT_ADD_GRASS). None of that existed here before.
+        //
+        // Not ported: the donor also calls setBatta on the same line as the
+        // puff, releasing a grasshopper from the blade. Foundry's order.
+        // ====================================================================
+        {
+            const f32 rdx = mBlades[i].x - (runPlayer != NULL ? runPlayer->current.pos.x : 1e9f);
+            const f32 rdz = mBlades[i].z - (runPlayer != NULL ? runPlayer->current.pos.z : 1e9f);
+            const f32 rd2 = rdx * rdx + rdz * rdz;
+            if (runPlayer != NULL && rd2 <= 1600.0f && mAnmIdx[i] != kAnmNone) {
+                // --- WorkCo: player is inside the 40-unit gate.
+                if (mAnmIdx[i] < kGrassAmbient) {
+                    if (runPlayer->speedF > 16.0f) {
+                        cXyz rpos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
+                        dKy_tevstr_c runTev;
+                        GXColor runK0;
+                        extVegSpawnTev(rpos, &runTev, &runK0);
+                        static csXyz s_grassRunRot(0, 0, 0);
+                        dComIfGp_particle_set(0x03DB, &rpos, &runTev, &s_grassRunRot, NULL, 255,
+                                              NULL, -1, &runK0, &runK0, NULL);
+                    }
+                    const u8 idx = vegAnmNew(s_grassAnm, kGrassAnmNum);
+                    if (idx != kAnmNone) {
+                        mAnmIdx[i] = idx;
+                    }
+                }
+                if (mAnmIdx[i] >= kGrassAmbient) {
+                    VegAnm& a = s_grassAnm[mAnmIdx[i]];
+                    a.rotY = cM_atan2s(rdx, rdz);
+                    a.rotX = cM_atan2s(40.0f - std::sqrt(rd2), 40.0f);
+                    a.state = 2;
+                }
+            } else if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
+                // --- hitCheck's untouched branch: ease home, then free.
+                VegAnm& a = s_grassAnm[mAnmIdx[i]];
+                const s16 targetY = (s16)(a.rotY & 0xE000);
+                const u8 origIdx = (u8)((a.rotY >> 13) & 7);
+                if (a.state == 2) {
+                    fopAcM_seStart(this, JA_SE_FT_ADD_GRASS, 0);
+                    a.state = 1;
+                }
+                if (!cLib_addCalcAngleS(&a.rotX, s_grassAnm[origIdx].rotX, 16, 4000, 100)) {
+                    if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
+                        a.state = 0;  // donor deleteAnm
+                        mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
+                    }
+                }
+            }
+        }
+
         if (mCut[i]) {
             continue;  // already a stump; nothing left to hit
         }
@@ -706,6 +1137,12 @@ void daExtVeg_c::checkCut() {
             continue;
         }
         mCut[i] = true;
+        // Donor WorkAt:146-150: a cut blade releases its push slot and drops
+        // to mAnimIdx = -1, i.e. no sway at all -- the stub does not wave.
+        if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
+            s_grassAnm[mAnmIdx[i]].state = 0;
+        }
+        mAnmIdx[i] = kAnmNone;
         // ====================================================================
         // №220 — the donor's full cut consequence, receiver APIs throughout.
         // ====================================================================
@@ -937,7 +1374,6 @@ void daExtVeg_c::drawBlades() {
     dKy_GxFog_tevstr_set(&tevStr);
 
     Mtx mv;
-    const f32 wind_pow = dKyw_get_wind_pow();
     for (int i = 0; i < mBladeCount; ++i) {
         // ====================================================================
         // №227 — cut blades draw the donor's STUB, not nothing. №225's vanish
@@ -949,20 +1385,32 @@ void daExtVeg_c::drawBlades() {
         if (mDoLib_clipper::clip(j3dSys.getViewMtx(), mBlades[i], 260.0f)) {
             continue;
         }
-        mDoMtx_trans(mv, mBlades[i].x, mBlades[i].y, mBlades[i].z);
-        mDoMtx_YrotM(mv, (s16)(i * 0xDCF));
-        // ============================================================
-        // §130 HUNT 1 — donor per-blade wind sway (d_grass.cpp:322-329):
-        // windSpeed = wind_pow*1000+1000 (clamp 2000); mRotX = windSpeed
-        // + windSpeed*cos(windSpeed*(timer + i*250)). The i*250 phase is
-        // what ripples the field instead of moving it as one sheet.
-        // ============================================================
-        {
-            f32 windSpeed = wind_pow * 1000.0f + 1000.0f;
-            windSpeed = cLib_maxLimit(windSpeed, 2000.0f);
-            const s16 sway = (s16)(windSpeed + windSpeed *
-                cM_scos((s16)(windSpeed * (f32)(g_Counter.mTimer + i * 250))));
-            mDoMtx_XrotM(mv, sway);
+        // ====================================================================
+        // Donor matrix build (d_grass.cpp update:370-406). The blade's ANIM
+        // SLOT supplies both angles -- YrotS(rotY) XrotM(rotX) YrotM(-rotY) --
+        // and the world position is written into the translation column after.
+        //
+        // This replaces an inline per-blade wind sway plus an invented
+        // `i * 0xDCF` yaw. The donor has no such yaw: the eight ambient slots
+        // ARE the variety, each with its own fixed rotY and its own phase of
+        // the wind sine (rotX, driven in vegAnmTickAmbient). Computing the sway
+        // here also meant a blade could not lean away from the player, because
+        // there was nowhere for a per-blade angle to live.
+        //
+        // mAnmIdx == kAnmNone is a CUT blade: the donor leaves it at -1 and the
+        // stub sits still, so build the matrix with no rotation at all.
+        // ====================================================================
+        if (mAnmIdx[i] == kAnmNone) {
+            mDoMtx_trans(mv, mBlades[i].x, mBlades[i].y, mBlades[i].z);
+        } else {
+            const VegAnm& a = s_grassAnm[mAnmIdx[i]];
+            mDoMtx_stack_c::YrotS(a.rotY);
+            mDoMtx_stack_c::XrotM(a.rotX);
+            mDoMtx_stack_c::YrotM(-a.rotY);
+            mDoMtx_copy(mDoMtx_stack_c::get(), mv);
+            mv[0][3] = mBlades[i].x;
+            mv[1][3] = mBlades[i].y;
+            mv[2][3] = mBlades[i].z;
         }
         mDoMtx_concat(j3dSys.getViewMtx(), mv, mv);
         GXLoadPosMtxImm(mv, GX_PNMTX0);
@@ -988,6 +1436,240 @@ void daExtVeg_c::drawBlades() {
     // rather than execute because every clump executes before any clump draws,
     // so clearing in execute would let each clump sound separately.
     s_cutSoundThisFrame = false;
+}
+
+// ==========================================================================
+// FLOWER DRAW -- donor d_flower.cpp::update (matrix) + ::draw (GX).
+// ==========================================================================
+// The donor builds each flower's model matrix from a SHARED sway matrix:
+//
+//   update():  YrotS(angY); XrotM(angX); YrotM(-angY)      [8 ambient slots]
+//              then per flower: mtx[*][3] = world pos; concat(view, mtx)
+//   calc():    angX = scos((timer + i*0xFA) * 1000.0f) * 1000.0f + 1000.0f
+//   ctor:      slot i gets angY = i * 0x2000
+//
+// The donor POOLS those matrices (8 ambient + 64 player-push slots) because one
+// global packet serves up to 200 flowers and it will not build 200 matrices.
+// This actor owns its own handful, so the same values are computed per flower
+// instead of pooled: identical output, no allocator, and no shared-lifetime
+// coupling of the kind No.136 already cost this lane once. The player-push
+// branch (WorkCo) folds in the same way.
+// ==========================================================================
+void daExtVeg_c::drawFlowers() {
+    const FlowerTier& f = s_flower[mTier];
+    j3dSys.reinitGX();
+    GXSetNumIndStages(0);
+    dKy_setLight_again();
+    GXClearVtxDesc();
+
+    static GXVtxDescList l_fVtxDescList[] = {
+        {GX_VA_POS, GX_DIRECT},
+        {GX_VA_CLR0, GX_DIRECT},
+        {GX_VA_TEX0, GX_DIRECT},
+        {GX_VA_NULL, GX_NONE},
+    };
+    static GXVtxAttrFmtList l_fVtxAttrFmtList[] = {
+        {GX_VA_POS, GX_POS_XYZ, GX_F32, 0},
+        {GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0},
+        {GX_VA_TEX0, GX_TEX_ST, GX_F32, 0},
+        {GX_VA_NULL, GX_POS_XYZ, GX_S8, 0},
+    };
+    GXSetVtxDescv(l_fVtxDescList);
+    GXSetVtxAttrFmtv(GX_VTXFMT0, l_fVtxAttrFmtList);
+
+    GXCallDisplayList(const_cast<u8*>(f.matDL.data()), kFlowerMatDLSize);
+    if (f.texReady) {
+        GXLoadTexObj(const_cast<GXTexObj*>(&f.texObj), GX_TEXMAP0);
+    }
+
+    // No.141/No.143, unchanged from the blade path: a mounted host stage never
+    // fills the room colour table, so feed our own tevStr and use AmbCol, which
+    // the probe showed IS populated. The donor reads its room tevstr C0/K0 here.
+    g_env_light.settingTevStruct(0x40, &current.pos, &tevStr);
+    GXColorS10 c0;
+    c0.r = tevStr.AmbCol.r;
+    c0.g = tevStr.AmbCol.g;
+    c0.b = tevStr.AmbCol.b;
+    c0.a = 255;
+    GXColor k0;
+    k0.r = 255; k0.g = 255; k0.b = 255; k0.a = 255;
+    GXSetTevColorS10(GX_TEVREG0, c0);
+    GXSetTevColor(GX_TEVREG1, k0);
+    dKy_GxFog_tevstr_set(&tevStr);
+
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    Mtx mv;
+    for (int i = 0; i < mBladeCount; ++i) {
+        // Donor clips at +260y with a 260 radius (update:466).
+        cXyz clipAt(mBlades[i].x, mBlades[i].y + 260.0f, mBlades[i].z);
+        if (mDoLib_clipper::clip(j3dSys.getViewMtx(), clipAt, 260.0f)) {
+            continue;
+        }
+
+        // ====================================================================
+        // Donor matrix build (d_flower.cpp update:443-478) -- identical in
+        // shape to the grass one, reading this flower's anim slot. The player
+        // lean is NOT computed here: it is written into the slot by
+        // checkFlowers (donor WorkCo), so a flower that has taken a push slot
+        // is already leaning by the time the draw reads it.
+        // ====================================================================
+        const VegAnm& a = s_flowerAnm[mAnmIdx[i] == kAnmNone ? 0 : mAnmIdx[i]];
+        const s16 angY = (mAnmIdx[i] == kAnmNone) ? 0 : a.rotY;
+        const s16 angX = (mAnmIdx[i] == kAnmNone) ? 0 : a.rotX;
+        mDoMtx_stack_c::YrotS(angY);
+        mDoMtx_stack_c::XrotM(angX);
+        mDoMtx_stack_c::YrotM(-angY);
+        mDoMtx_copy(mDoMtx_stack_c::get(), mv);
+        mv[0][3] = mBlades[i].x;
+        mv[1][3] = mBlades[i].y;
+        mv[2][3] = mBlades[i].z;
+        mDoMtx_concat(j3dSys.getViewMtx(), mv, mv);
+        GXLoadPosMtxImm(mv, GX_PNMTX0);
+
+        // Cut flowers draw the donor's `gut` list, exactly as blades draw the
+        // stub (No.227) -- the donor picks on bit 0x8 in draw:348.
+        const std::vector<Strip>& strips = mCut[i] ? f.cutStrips : f.strips;
+        for (size_t sIdx = 0; sIdx < strips.size(); ++sIdx) {
+            const Strip& st = strips[sIdx];
+            GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (u16)st.count);
+            for (int v = 0; v < st.count; ++v) {
+                GXPosition3f32(st.px[v], st.py[v], st.pz[v]);
+                GXColor4u8(st.cr[v], st.cg[v], st.cb[v], st.ca[v]);
+                GXTexCoord2f32(st.ts[v], st.tt[v]);
+            }
+            GXEnd();
+        }
+    }
+
+    // MANDATORY -- see drawBlades. Without it every J3D model drawn after this
+    // inherits our vertex format and renders as nothing (No.127).
+    J3DShape::resetVcdVatCache();
+    s_cutSoundThisFrame = false;
+}
+
+// ==========================================================================
+// FLOWER EXECUTE -- donor hitCheck/WorkAt (cut) + WorkCo (run-through VFX).
+// ==========================================================================
+void daExtVeg_c::checkFlowers() {
+    if (!s_flowerReady || mBladeCount == 0) {
+        return;
+    }
+
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    vegAnmTickAmbient();
+
+    // Donor calc:417 -- flowers use a 30 x 50 mass volume, NOT grass's 40 x 120.
+    dComIfG_Ccsp()->PrepareMass();
+    dComIfG_Ccsp()->SetMassAttr(30.0f, 50.0f, 0xB, 0x2);
+
+    for (int i = 0; i < mBladeCount; ++i) {
+        if (mRunCool[i] != 0) {
+            --mRunCool[i];  // donor cLib_calcTimer on field_0x03
+        }
+
+        // ------------------------------------------------------------------
+        // WorkCo / return -- donor d_flower.cpp:59-118 and the flower half of
+        // hitCheck. Same machine as grass, with the flower's own numbers: a
+        // 30-unit gate (900), and the run-through VFX carries an ADDITIONAL
+        // field_0x03 = 0x10 cooldown that grass does not have. Both gates are
+        // the donor's; neither is a stand-in.
+        // ------------------------------------------------------------------
+        {
+            const f32 dx = mBlades[i].x - (player != NULL ? player->current.pos.x : 1e9f);
+            const f32 dz = mBlades[i].z - (player != NULL ? player->current.pos.z : 1e9f);
+            const f32 d2 = dx * dx + dz * dz;
+            if (player != NULL && d2 <= 900.0f && mAnmIdx[i] != kAnmNone) {
+                if (mAnmIdx[i] < kGrassAmbient) {
+                    if (mRunCool[i] == 0 && !mCut[i] && player->speedF > 16.0f) {
+                        cXyz ppos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
+                        dKy_tevstr_c spawnTev;
+                        GXColor kc;
+                        extVegSpawnTev(ppos, &spawnTev, &kc);
+                        static csXyz s_runRot(0, 0, 0);
+                        JPABaseEmitter* em = dComIfGp_particle_set(
+                            flowerParticleId(), &ppos, &spawnTev, &s_runRot, NULL, 255, NULL, -1,
+                            &kc, &kc, NULL);
+                        if (em != NULL) {
+                            em->setRate(1.0f);   // donor forces rate 1 for the JN ids
+                            mRunCool[i] = 0x10;  // donor field_0x03
+                        }
+                    }
+                    const u8 idx = vegAnmNew(s_flowerAnm, kFlowerAnmNum);
+                    if (idx != kAnmNone) {
+                        mAnmIdx[i] = idx;
+                    }
+                }
+                if (mAnmIdx[i] >= kGrassAmbient) {
+                    VegAnm& a = s_flowerAnm[mAnmIdx[i]];
+                    a.rotY = cM_atan2s(dx, dz);
+                    a.rotX = cM_atan2s(30.0f - std::sqrt(d2), 40.0f);
+                    a.state = 2;
+                }
+            } else if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
+                VegAnm& a = s_flowerAnm[mAnmIdx[i]];
+                const s16 targetY = (s16)(a.rotY & 0xE000);
+                const u8 origIdx = (u8)((a.rotY >> 13) & 7);
+                if (a.state == 2) {
+                    a.state = 1;
+                }
+                if (!cLib_addCalcAngleS(&a.rotX, s_flowerAnm[origIdx].rotX, 16, 4000, 100)) {
+                    if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
+                        a.state = 0;
+                        mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
+                    }
+                }
+            }
+        }
+
+        if (mCut[i]) {
+            continue;
+        }
+
+        // ------------------------------------------------------------------
+        // CUT (donor hitCheck -> WorkAt:189-227).
+        // ------------------------------------------------------------------
+        dCcMassS_HitInf hitInf;
+        fopAc_ac_c* hitActor = NULL;
+        cXyz pt = mBlades[i];
+        const u32 massFlags = dComIfG_Ccsp()->ChkMass(&pt, &hitActor, &hitInf);
+        const bool atHit = (massFlags & 1) && hitActor != NULL &&
+                           fopAcM_GetName(hitActor) != fpcNm_Obj_Carry_e;
+        if (!atHit) {
+            continue;
+        }
+        mCut[i] = true;  // donor onBit(field_0x00, 0x8) -- the `gut` state
+        // Donor WorkAt:195-197 releases the push slot on cut.
+        if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
+            s_flowerAnm[mAnmIdx[i]].state = 0;
+        }
+        mAnmIdx[i] = kAnmNone;
+
+        // Donor WorkAt spawns the cut VFX at the flower's own position (no y
+        // offset, unlike grass's +25) and passes room K0 as both prm and env.
+        {
+            cXyz ppos = mBlades[i];
+            dKy_tevstr_c spawnTev;
+            GXColor kc;
+            extVegSpawnTev(ppos, &spawnTev, &kc);
+            static csXyz s_flowerCutRot(0, 0, 0);
+            dComIfGp_particle_set(flowerParticleId(), &ppos, &spawnTev, &s_flowerCutRot, NULL,
+                                  255, NULL, -1, &kc, &kc, NULL);
+        }
+
+        if (s_assets.itemTable >= 0) {
+            const bool directGet = daPy_getPlayerActorClass() != NULL &&
+                                   daPy_getPlayerActorClass()->checkHorseRide();
+            fopAcM_createItemFromTable(&mBlades[i], s_assets.itemTable, -1, mRoomNo, NULL, 0,
+                                       NULL, NULL, NULL, directGet);
+        }
+
+        // The donor uses the GRASS cut sound for flowers too (WorkAt:225).
+        if (!s_cutSoundThisFrame) {
+            s_cutSoundThisFrame = true;
+            fopAcM_seStart(this, JA_SE_LK_CUT_GRASS, 0);
+        }
+    }
+    dComIfG_Ccsp()->MassClear();
 }
 
 // ==========================================================================

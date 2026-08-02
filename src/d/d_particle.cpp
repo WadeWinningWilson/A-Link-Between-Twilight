@@ -1505,6 +1505,17 @@ static WwCommonRes sWwCommon[] = {
     {kWwWindlineResId, kWwWindlineRmSlot, NULL, false},
     {0x03DA, 4, NULL, false},
     {0x03DB, 5, NULL, false},
+    // 241/flowers: the donor's flower cut + run-through VFX. Same JN bank and
+    // the SAME block shape as the grass ids above (BEM1/FLD1/BSP1/ESP1/TDB1,
+    // key=0 fld=1 tex=1 -- verified by an offline walk of the staged archive),
+    // so they exercise the proven bind path with nothing new in it.
+    // d_flower.cpp: white flowers use ID_IT_JN_FLOWER_W, pink ID_IT_JN_FLOWER_P.
+    // NOTE the slot column is VESTIGIAL since 235 -- ensureWwCommonRes assigns
+    // every WW-common id to kWwWindlineRmSlot and one shared manager. It is kept
+    // only so the table still reads as the donor bank map. Do not add ids here
+    // expecting a real slot: ridMax is 12 and 3..11 are already spent.
+    {0x03DD, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_FLOWER_P (pink)
+    {0x03DE, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_FLOWER_W (white)
     // §231 wave-emit ferry (Foundry §223): the WW ship-wake family + pig ripple, all
     // verified present in the staged common.jpc (offline gclib). One supplemental slot
     // each; lazy-loaded + routed on first emit via dPa_wwWindlineResRM (table-driven).
