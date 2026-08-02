@@ -16462,7 +16462,8 @@ extracted, corrections in §231 (batcher is d_tree, 5 DLs + state table).
 
 ## §241 WW JPA PORT — ROOT CAUSE FOUND: the BSP1 flag word is NOT fully shared, and TP's tex-coord-matrix table lives OUTSIDE the block struct (Housing, 2026-08-02)
 
-**Status: fix implemented and built (exe 11:16:41). Awaiting playtest confirmation.**
+**Status: CONFIRMED IN GAME 2026-08-02 — the WW grass cut VFX renders, tested across
+multiple times of day. Committed 7dba4ff396 with the cleanup below.**
 
 ### What §240 proved (all three ranked suspects cleared)
 
@@ -16532,3 +16533,57 @@ TP moves data that WW keeps in-struct out into trailing tables, and reuses high
 flag bits WW leaves undefined. Any block whose TP class has a pointer member
 beyond `pXxxData` (`mpTexCrdMtxAnmTbl`, `mpTexIdxAnimTbl`, `mpPrmClrAnmTbl`,
 `mpEnvClrAnmTbl`) has payload that must be allocated and populated, not inherited.
+
+### Cleanup executed on confirmation (same commit)
+
+About 840 lines removed, now that the native path is proven:
+
+* The JPAC1->JPAC2 **byte converter is gone** — `wwJpa1ExtractEmitterToJpac2`,
+  `wwJpa1ArchiveHasResId`, the `wwPutBe*`/`wwGetBe*` helpers, and the
+  `DUSK_JPAC_ESP1` / `DUSK_JPAC_FLD1` / `DUSK_JPAC_DUMP` toggles, plus
+  `run_jpac_dump.bat`. Nothing converts WW bytes any more; `ww_jpa::Archive`
+  parses in place and `bindResource` maps by named accessor.
+* `dPa_wwUnlitEcallBack` (§230/§231) **retired** — the resource draws itself.
+* The cut-VFX site is **one native path**: no `DUSK_WW_SIMPLE` opt-in, no
+  `DUSK_WW_LIT` comparison fallback, no level callback at all — the donor's own
+  shape (`d_grass.cpp:153`). Per the always-native ruling, the alternatives are
+  recorded as comments explaining why they are not to be re-attempted, not kept
+  as switches.
+* §222 / §236 / §240 / §241 diagnostic probes stripped.
+
+Env toggles that remain: `DUSK_WW_BATCH=1` (classic vs batched draw for WW
+resources — the classic path is still the default) and `DUSK_FPS_PROBE`.
+
+### Containment
+
+M6 greplist gate **CLEAN** on the committed exe (all 16 patterns zero, ASCII and
+UTF-16LE). The sweep caught one **real pre-existing leak**: a shipped string
+literal in `src/d/d_ww_itemmdl_pc.cpp:2007` named a greplist provider inside an
+explanatory debug message. Replaced with a neutral token. Worth noting how it
+survived: it was a *comment-grade* string — written to explain a code path, not
+to be read by a player — which is exactly the class the gate exists to catch,
+and exactly the class a human reviewer skims past.
+
+## §242 SWOOD ORDER RELEASED to Foundry (Housing, 2026-08-02)
+
+The swood work was held deliberately until particles rendered, so it would not
+be built on an unproven base. **That precondition is now met — the hold is
+lifted.**
+
+Carrying forward the §231 corrections to the original order, unchanged:
+
+* The batcher is **`d_tree`, not `d_wood`**.
+* It is **5 display lists + a state table**, not a single draw:
+  `l_modelStatus = {0,1,2 / 3,1,4}` — intact draws none/leaves/trunk, cut draws
+  cut-upper/leaves/trunk — plus a shadow pass.
+* All blobs are **already extracted** (`assets/veg/d_tree__*`, sizes
+  decomp-exact).
+
+Work remaining: register `swood`/`swood3`/`swood5`, implement the 3-part draw,
+and port the cut branch in full (full-state-machine law — the cut states are the
+spec, not an optional extra).
+
+One lesson from the JPA port applies directly to this order: when a donor
+structure appears to match the receiver's field-for-field, check whether the
+receiver keeps any of that data **outside** the struct. That is what cost this
+lane the last several rounds.

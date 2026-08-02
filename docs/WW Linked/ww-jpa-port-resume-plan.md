@@ -1,5 +1,13 @@
 # WW JPA port — RESUME PLAN (written 2026-08-02, ~02:20)
 
+> **CLOSED 2026-08-02.** The plan ran to completion. STEP 1, 2 and 3 all PASSED
+> — and STEP 3's incidental `hasPtclTexMtx=1` was the actual lead: BSP1's
+> tex-coord-matrix table lives OUTSIDE `JPABaseShapeData` on the receiver, so it
+> was being read from unallocated heap. Fix, evidence and the cleanup that
+> followed are in bus §241; committed `7dba4ff396`; confirmed in game across
+> multiple times of day. §4's cleanup list is DONE and §5's swood order is
+> RELEASED (bus §242). Kept for the method, not as live work.
+
 Pick this up cold. Everything below is either measured or cited; nothing is assumed.
 
 ---
