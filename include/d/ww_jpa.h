@@ -115,6 +115,27 @@ struct BaseShapeBlock {  // BSP1 — JPABaseShapeData (WW JPABaseShape.h:100-121
     s16 colorAnmMaxFrm() const { return bes16(d + 0x1E); }
     void prmColor(u8* rgba) const { for (int i = 0; i < 4; i++) rgba[i] = d[0x20 + i]; }
     void envColor(u8* rgba) const { for (int i = 0; i < 4; i++) rgba[i] = d[0x24 + i]; }
+    // ========================================================================
+    // §241 — TEXTURE-COORDINATE MATRIX FIELDS (WW JPABaseShape.h:189-201).
+    //
+    // These have NO counterpart in TP's JPABaseShapeData: TP stores the same
+    // ten scalars in a trailing table read at `block + sizeof(data)` and gets
+    // its tiling from FLAG BITS 25/26 instead of these two floats. WW keeps
+    // them as named struct fields. Carrying them is mandatory whenever
+    // texScrollAnm (flag bit 24) is set — see bindBsp.
+    // ========================================================================
+    bool texScrollAnmEnabled() const { return (flags() & 0x01000000) != 0; }
+    f32 tilingX() const { return bef32(d + 0x28); }
+    f32 tilingY() const { return bef32(d + 0x2C); }
+    f32 texStaticTransX() const { return bef32(d + 0x30); }
+    f32 texStaticTransY() const { return bef32(d + 0x34); }
+    f32 texStaticScaleX() const { return bef32(d + 0x38); }
+    f32 texStaticScaleY() const { return bef32(d + 0x3C); }
+    f32 texScrollTransX() const { return bef32(d + 0x40); }
+    f32 texScrollTransY() const { return bef32(d + 0x44); }
+    f32 texScrollScaleX() const { return bef32(d + 0x48); }
+    f32 texScrollScaleY() const { return bef32(d + 0x4C); }
+    f32 texScrollRotate() const { return bef32(d + 0x50); }
 };
 
 struct ExtraShapeBlock {  // ESP1 — JPAExtraShapeData (WW JPAExtraShape.h:6-32)

@@ -12,7 +12,6 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <filesystem>
 #include "dusk/logging.h"
@@ -317,61 +316,6 @@ static void drawSecond_light8(JPABaseEmitter* i_emitter) {
     GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, true, GX_TEVPREV);
 }
 
-#if TARGET_PC
-// ============================================================================
-// §230 — WW PARTICLE LANE, step 1: the UNLIT visible pass.
-//
-// Why this exists (measured, not assumed): TP's light8 path draws each particle
-// TWICE — drawFirst (:267) writes NO colour (depth prime), and
-// drawSecond_light8 (:284) is the visible pass, which builds its channel colour
-// from `envLight->bg_amb_col[0]` and calls dKy_setLight_nowroom_grass. That
-// scene ambient is (36,24,59) violet at hour 11 (DuskTap-confirmed against
-// vanilla), which is why our WW scatter reads purple and drifts with time of
-// day. It is also why setDrawTimes(1) went invisible: only the colourless pass
-// ran.
-//
-// The decomp's grass does none of this: it spawns via setSimple, whose callback
-// draw is EMPTY (:769) — the particle is drawn by the standard JPA pipeline in
-// the emitter's own authored colours, unlit.
-//
-// This pass mirrors drawSecond_light8's raster/TEV setup EXACTLY, minus the
-// lighting: no dKy_setLight_nowroom_grass, no ambient channel colour. Lighting
-// is disabled per-channel so the rasterised colour comes from the emitter's own
-// registers instead of the room's ambient.
-// ============================================================================
-static void drawSecond_wwUnlit(JPABaseEmitter* i_emitter) {
-    UNUSED(i_emitter);
-    GXSetColorUpdate(true);
-    GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GXSetZMode(true, GX_LEQUAL, false);
-    GXSetZCompLoc(0);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
-    GXSetNumChans(0);  // §231: no colour channel at all — nothing reads RASC
-    GXSetNumTexGens(1);
-    GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x3c);
-    // ========================================================================
-    // §231 — TEV: texture × the emitter's OWN prm register.
-    //
-    // The first attempt (§230) kept light8's TEV, which consumes GX_CC_RASC —
-    // the RASTERISED colour that `initiateLighting8()` produces. With lighting
-    // switched off, RASC is an unset register (black), so every particle drew
-    // black-on-black: INVISIBLE. That was a defect in my TEV, not evidence
-    // against the unlit approach.
-    //
-    // The colours JPA already loads for us are the registers: JPARegistPrm
-    // writes the emitter's prm into TEVREG0 (C0) and env into TEVREG1 (C1),
-    // each modulated by the globals (JPABaseShape.cpp:24-37). So an unlit
-    // particle is simply: colour = TEXC × C0, alpha = TEXA × A0 — no channel,
-    // no lighting, no room ambient anywhere in the path.
-    // ========================================================================
-    GXSetNumTevStages(1);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_ZERO);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, true, GX_TEVPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, true, GX_TEVPREV);
-}
-#endif
 
 static void drawSecond_b_light8(JPABaseEmitter* i_emitter) {
     UNUSED(i_emitter);
@@ -430,52 +374,6 @@ static void static_light8EcallBack(JPABaseEmitter* i_emitter) {
     }
 }
 
-#if TARGET_PC
-// §230 — WW lane draw dispatcher: identical vertex/matrix setup to
-// static_light8EcallBack (:351), but pass 2 is the UNLIT one. Both passes are
-// still required — pass 1 primes depth and writes no colour.
-static void static_wwUnlitEcallBack(JPABaseEmitter* i_emitter) {
-    GXFlush();
-    GXLoadPosMtxImm(j3dSys.getViewMtx(), 0);
-    GXLoadNrmMtxImm(j3dSys.getViewMtx(), 0);
-    GXInvalidateVtxCache();
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_CLR_RGBA, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_CLR_RGB, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_CLR_RGBA, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-
-    switch (i_emitter->getDrawCount()) {
-    case 1:
-        drawFirst(i_emitter);
-        break;
-    case 2:
-        drawSecond_wwUnlit(i_emitter);
-        break;
-    }
-}
-
-void dPa_wwUnlitEcallBack::setup(JPABaseEmitter* i_emitter, cXyz const* param_1,
-                                 csXyz const* param_2, s8 param_3) {
-    UNUSED(param_1);
-    UNUSED(param_2);
-    UNUSED(param_3);
-    // Two passes, as light8 does — but NO light8 particle callback, so nothing
-    // recolours the particle per-frame from the room light.
-    i_emitter->setDrawTimes(2);
-}
-
-void dPa_wwUnlitEcallBack::draw(JPABaseEmitter* i_emitter) {
-    static_wwUnlitEcallBack(i_emitter);
-}
-
-static dPa_wwUnlitEcallBack s_wwUnlitEcallBack;
-dPa_levelEcallBack* dPa_getWwUnlitEcallBack() { return &s_wwUnlitEcallBack; }
-#endif
 
 static void static_gen_b_light8EcallBack(JPABaseEmitter* i_emitter) {
     GXFlush();
@@ -1600,23 +1498,22 @@ struct WwCommonRes {
     u16 resId;
     u8 slot;
     JPAResourceManager* mng;
-    void* jpcData;  // JPAC2 blob the manager points into
     bool failed;
 };
 
 static WwCommonRes sWwCommon[] = {
-    {kWwWindlineResId, kWwWindlineRmSlot, NULL, NULL, false},
-    {0x03DA, 4, NULL, NULL, false},
-    {0x03DB, 5, NULL, NULL, false},
+    {kWwWindlineResId, kWwWindlineRmSlot, NULL, false},
+    {0x03DA, 4, NULL, false},
+    {0x03DB, 5, NULL, false},
     // §231 wave-emit ferry (Foundry §223): the WW ship-wake family + pig ripple, all
     // verified present in the staged common.jpc (offline gclib). One supplemental slot
     // each; lazy-loaded + routed on first emit via dPa_wwWindlineResRM (table-driven).
-    {0x0024, 6, NULL, NULL, false},   // ID_AK_JN_SHIPIMPACT00
-    {0x0026, 7, NULL, NULL, false},   // ID_AK_JN_HAMON00 (ripple — pig/shallow-water)
-    {0x0034, 8, NULL, NULL, false},   // ID_AK_JN_SHIPWARP-family / impact
-    {0x0035, 9, NULL, NULL, false},   // ID_AK_JN_SHIPSPLASH00
-    {0x0036, 10, NULL, NULL, false},  // ID_AK_JN_SHIPTAIL00
-    {0x0037, 11, NULL, NULL, false},  // ID_AK_JN_SHIPWAVE00 (the wake — ikada:327/334)
+    {0x0024, 6, NULL, false},   // ID_AK_JN_SHIPIMPACT00
+    {0x0026, 7, NULL, false},   // ID_AK_JN_HAMON00 (ripple — pig/shallow-water)
+    {0x0034, 8, NULL, false},   // ID_AK_JN_SHIPWARP-family / impact
+    {0x0035, 9, NULL, false},   // ID_AK_JN_SHIPSPLASH00
+    {0x0036, 10, NULL, false},  // ID_AK_JN_SHIPTAIL00
+    {0x0037, 11, NULL, false},  // ID_AK_JN_SHIPWAVE00 (the wake — ikada:327/334)
 };
 static constexpr int kWwCommonCount = (int)(sizeof(sWwCommon) / sizeof(sWwCommon[0]));
 
@@ -1630,437 +1527,6 @@ static WwCommonRes* wwCommonEntry(u16 i_resID) {
         }
     }
     return NULL;
-}
-
-// Donor JPAEmitterLoader.cpp v10 — JEFF/jpa1 resID at block+0x18.
-static bool wwJpa1ArchiveHasResId(const u8* data, u32 size, u16 wantId) {
-    if (data == NULL || size < 0x20) {
-        return false;
-    }
-    if (std::memcmp(data, "JPAC1-00", 8) != 0) {
-        return false;
-    }
-    const u16 emtrResNum = (u16)((data[0x08] << 8) | data[0x09]);
-    u32 offs = 0x20;
-    for (u16 i = 0; i < emtrResNum; i++) {
-        if (offs + 0x20 > size) {
-            return false;
-        }
-        if (std::memcmp(data + offs, "JEFF", 4) != 0) {
-            return false;
-        }
-        const u16 resId = (u16)((data[offs + 0x18] << 8) | data[offs + 0x19]);
-        const u32 blockNum = (u32)((data[offs + 0x0C] << 24) | (data[offs + 0x0D] << 16) |
-                                   (data[offs + 0x0E] << 8) | data[offs + 0x0F]);
-        u32 pos = offs + 0x20;
-        for (u32 j = 0; j < blockNum; j++) {
-            if (pos + 8 > size) {
-                return false;
-            }
-            const u32 bsz = (u32)((data[pos + 4] << 24) | (data[pos + 5] << 16) |
-                                  (data[pos + 6] << 8) | data[pos + 7]);
-            if (bsz < 8 || pos + bsz > size) {
-                return false;
-            }
-            pos += bsz;
-        }
-        if (resId == wantId) {
-            return true;
-        }
-        offs = pos;
-    }
-    return false;
-}
-
-static void wwPutBe16(u8* p, u16 v) {
-    p[0] = (u8)(v >> 8);
-    p[1] = (u8)(v);
-}
-static void wwPutBe32(u8* p, u32 v) {
-    p[0] = (u8)(v >> 24);
-    p[1] = (u8)(v >> 16);
-    p[2] = (u8)(v >> 8);
-    p[3] = (u8)(v);
-}
-static u16 wwGetBe16(const u8* p) {
-    return (u16)((p[0] << 8) | p[1]);
-}
-static u32 wwGetBe32(const u8* p) {
-    return (u32)((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]);
-}
-static f32 wwGetBef(const u8* p) {
-    u32 u = wwGetBe32(p);
-    f32 f;
-    std::memcpy(&f, &u, sizeof(f));
-    return f;
-}
-static void wwPutBef(u8* p, f32 f) {
-    u32 u;
-    std::memcpy(&u, &f, sizeof(u));
-    wwPutBe32(p, u);
-}
-
-// Convert one JPAC1-00 emitter (resId) + its TEX1 refs into a standalone JPAC2-10
-// blob the TP JPAResourceLoader will accept. Returns heap pointer + byte size.
-static void* wwJpa1ExtractEmitterToJpac2(const u8* src, u32 srcSize, u16 wantId, JKRHeap* heap,
-                                         u32* outSize) {
-    *outSize = 0;
-    if (std::memcmp(src, "JPAC1-00", 8) != 0) {
-        return NULL;
-    }
-    const u16 emtrResNum = wwGetBe16(src + 0x08);
-    const u16 texResNum = wwGetBe16(src + 0x0A);
-
-    // Locate emitter + texture section start.
-    u32 offs = 0x20;
-    const u8* emtr = NULL;
-    for (u16 i = 0; i < emtrResNum; i++) {
-        if (offs + 0x20 > srcSize) {
-            return NULL;
-        }
-        const u16 resId = wwGetBe16(src + offs + 0x18);
-        const u32 blockNum = wwGetBe32(src + offs + 0x0C);
-        u32 pos = offs + 0x20;
-        for (u32 j = 0; j < blockNum; j++) {
-            if (pos + 8 > srcSize) {
-                return NULL;
-            }
-            pos += wwGetBe32(src + pos + 4);
-        }
-        if (resId == wantId) {
-            emtr = src + offs;
-        }
-        offs = pos;
-    }
-    if (emtr == NULL) {
-        return NULL;
-    }
-    const u32 texStart = offs;
-
-    // Collect unique TEX1 indices from the emitter's TDB1 (WW: u16s at block+0x0C).
-    u16 texIdxs[16];
-    u16 texIdxCount = 0;
-    const u32 blockNum = wwGetBe32(emtr + 0x0C);
-    u32 pos = 0x20;
-    const u8* bem1 = NULL;
-    u32 bem1Sz = 0;
-    const u8* bsp1 = NULL;
-    u32 bsp1Sz = 0;
-    // §202/V-e: complex WW emitters also carry ESP1 (scale/alpha over life) and
-    // FLD1 (fields). Dropping them was why grass had the wrong shape/motion —
-    // windline has neither, which hid the limitation until now.
-    const u8* esp1 = NULL;
-    const u8* flds[8] = {};
-    u32 fldCount = 0;
-    for (u32 j = 0; j < blockNum; j++) {
-        const u8* blk = emtr + pos;
-        const u32 bsz = wwGetBe32(blk + 4);
-        if (std::memcmp(blk, "BEM1", 4) == 0) {
-            bem1 = blk;
-            bem1Sz = bsz;
-        } else if (std::memcmp(blk, "BSP1", 4) == 0) {
-            bsp1 = blk;
-            bsp1Sz = bsz;
-        } else if (std::memcmp(blk, "ESP1", 4) == 0) {
-            esp1 = blk;
-        } else if (std::memcmp(blk, "FLD1", 4) == 0) {
-            if (fldCount < 8) {
-                flds[fldCount++] = blk;
-            }
-        } else if (std::memcmp(blk, "TDB1", 4) == 0 && bsz >= 0x0E) {
-            // WW loader: texDataBase = &block->blockData at +0x0C; textureNum at header+0x16.
-            const u8 texNum = emtr[0x16];
-            for (u8 t = 0; t < texNum && (0x0C + 2u * (t + 1)) <= bsz; t++) {
-                const u16 idx = wwGetBe16(blk + 0x0C + 2 * t);
-                bool seen = false;
-                for (u16 k = 0; k < texIdxCount; k++) {
-                    if (texIdxs[k] == idx) {
-                        seen = true;
-                        break;
-                    }
-                }
-                if (!seen && texIdxCount < 16) {
-                    texIdxs[texIdxCount++] = idx;
-                }
-            }
-        }
-        pos += bsz;
-    }
-    if (bem1 == NULL || bsp1 == NULL || texIdxCount == 0) {
-        DuskLog.warn("[WwWind] JPAC1 extract incomplete bem={} bsp={} texN={}", bem1 != NULL,
-                     bsp1 != NULL, (int)texIdxCount);
-        return NULL;
-    }
-
-    // Locate TEX1 blobs by archive index.
-    struct TexRef {
-        const u8* data;
-        u32 size;
-    } texs[16];
-    for (u16 t = 0; t < texIdxCount; t++) {
-        texs[t].data = NULL;
-        texs[t].size = 0;
-    }
-    u32 toff = texStart;
-    for (u16 ti = 0; ti < texResNum; ti++) {
-        if (toff + 8 > srcSize) {
-            return NULL;
-        }
-        const u32 tsz = wwGetBe32(src + toff + 4);
-        for (u16 t = 0; t < texIdxCount; t++) {
-            if (texIdxs[t] == ti) {
-                texs[t].data = src + toff;
-                texs[t].size = tsz;
-            }
-        }
-        toff += tsz;
-    }
-    for (u16 t = 0; t < texIdxCount; t++) {
-        if (texs[t].data == NULL) {
-            DuskLog.warn("[WwWind] JPAC1 missing TEX1 index {}", (int)texIdxs[t]);
-            return NULL;
-        }
-    }
-
-    // Build JPAC2-10: header(0x10) + resHdr(8) + BEM1(0x7C) + BSP1(0x40) + TDB1(8+2*N padded)
-    // + textures.
-    const u32 tdbPayload = 2u * texIdxCount;
-    const u32 tdbSize = (8u + tdbPayload + 3u) & ~3u;
-    const u32 bemOut = 0x7C;
-    const u32 bspOut = 0x40;
-    // §213 BISECT: the ESP1 carry (V-e) is the only change between "visible but
-    // purple" and "invisible", and two attempts to make it correct (§203 map,
-    // §212 flag translation) have not restored visibility. Rather than guess a
-    // fourth time, make it switchable: DEFAULT OFF (= the known-visible
-    // pre-V-e shape), opt IN with DUSK_JPAC_ESP1=1 to test it in isolation.
-    // FLD1 stays carried — it was never implicated.
-    static const bool s_espEnabled = [] {
-        const char* v = std::getenv("DUSK_JPAC_ESP1");
-        return v != NULL && v[0] == '1';
-    }();
-    if (!s_espEnabled) {
-        esp1 = NULL;
-    }
-    // §217: FLD1 gets the same switch — and DEFAULT OFF. V-e added ESP1 and
-    // FLD1 together; only ESP1 was ever bisected, so FLD1 is the untested
-    // delta between the last configuration that DEMONSTRABLY EMITTED (the
-    // purple puffs, 3-block archive) and the current zero-emission one. A
-    // malformed field block is not cosmetic: the loader allocates ppFld from
-    // the header's fldNum and constructs JPAFieldBlock from our bytes, so a
-    // bad one can break particle creation itself. Opt in with DUSK_JPAC_FLD1=1.
-    static const bool s_fldEnabled = [] {
-        const char* v = std::getenv("DUSK_JPAC_FLD1");
-        return v != NULL && v[0] == '1';
-    }();
-    if (!s_fldEnabled) {
-        fldCount = 0;
-    }
-    const u32 espOut = (esp1 != NULL) ? 0x60u : 0u;   // JPAExtraShapeData
-    const u32 fldOut = 0x44u;                          // JPAFieldBlockData (0x41 → pad 4)
-    const u32 resBlocksSize = bemOut + bspOut + espOut + fldOut * fldCount + tdbSize;
-    u32 texBytes = 0;
-    for (u16 t = 0; t < texIdxCount; t++) {
-        texBytes += texs[t].size;
-    }
-    const u32 total = 0x10 + 8 + resBlocksSize + texBytes;
-    u8* dst = (u8*)heap->alloc(total, 0x20);
-    if (dst == NULL) {
-        return NULL;
-    }
-    std::memset(dst, 0, total);
-
-    // Archive header.
-    std::memcpy(dst, "JPAC", 4);
-    std::memcpy(dst + 4, "2-10", 4);
-    wwPutBe16(dst + 0x08, 1);
-    wwPutBe16(dst + 0x0A, texIdxCount);
-    wwPutBe32(dst + 0x0C, 0x10 + 8 + resBlocksSize);  // tex section offset
-
-    // Resource header.
-    u8* rh = dst + 0x10;
-    wwPutBe16(rh + 0, wantId);
-    // §202/V-e: block count must include ESP1 + every FLD1 we now carry.
-    wwPutBe16(rh + 2, (u16)(3 + (esp1 != NULL ? 1 : 0) + fldCount));
-    rh[4] = (u8)fldCount;  // fld
-    rh[5] = 0;             // key
-    rh[6] = (u8)texIdxCount;
-    rh[7] = 0;
-
-    u8* w = rh + 8;
-
-    // --- BEM1: map WW dynamics (data @ +0x0C) → TP JPADynamicsBlockData (0x7C) ---
-    const u8* wd = bem1 + 0x0C;
-    std::memcpy(w, "BEM1", 4);
-    wwPutBe32(w + 4, bemOut);
-    wwPutBe32(w + 0x08, wwGetBe32(wd + 0x00));             // flags
-    wwPutBe32(w + 0x0C, 0);                                // resUserWork
-    wwPutBef(w + 0x10, wwGetBef(wd + 0x54));                // emitterScl
-    wwPutBef(w + 0x14, wwGetBef(wd + 0x58));
-    wwPutBef(w + 0x18, wwGetBef(wd + 0x5C));
-    wwPutBef(w + 0x1C, wwGetBef(wd + 0x60));                // emitterTrs
-    wwPutBef(w + 0x20, wwGetBef(wd + 0x64));
-    wwPutBef(w + 0x24, wwGetBef(wd + 0x68));
-    wwPutBef(w + 0x28, wwGetBef(wd + 0x6C));                // emitterDir
-    wwPutBef(w + 0x2C, wwGetBef(wd + 0x70));
-    wwPutBef(w + 0x30, wwGetBef(wd + 0x74));
-    wwPutBef(w + 0x34, wwGetBef(wd + 0x24));                // init vel omni/axis/rndm/dir
-    wwPutBef(w + 0x38, wwGetBef(wd + 0x28));
-    wwPutBef(w + 0x3C, wwGetBef(wd + 0x2C));
-    wwPutBef(w + 0x40, wwGetBef(wd + 0x30));
-    wwPutBef(w + 0x44, wwGetBef(wd + 0x38));                // spread
-    wwPutBef(w + 0x48, wwGetBef(wd + 0x34));                // initVelRatio
-    wwPutBef(w + 0x4C, wwGetBef(wd + 0x10));                // rate
-    wwPutBef(w + 0x50, wwGetBef(wd + 0x14));                // rateRndm
-    wwPutBef(w + 0x54, wwGetBef(wd + 0x20));                // lifeTimeRndm
-    wwPutBef(w + 0x58, wwGetBef(wd + 0x04));                // volumeSweep
-    wwPutBef(w + 0x5C, wwGetBef(wd + 0x08));                // volumeMinRad
-    wwPutBef(w + 0x60, wwGetBef(wd + 0x3C));                // airResist
-    wwPutBef(w + 0x64, wwGetBef(wd + 0x44));                // moment
-    // emitterRot s16[3] @ WW 0x78 → TP 0x68
-    std::memcpy(w + 0x68, wd + 0x78, 6);
-    wwPutBe16(w + 0x6E, wwGetBe16(wd + 0x1A));              // maxFrame
-    wwPutBe16(w + 0x70, wwGetBe16(wd + 0x1C));              // startFrame
-    wwPutBe16(w + 0x72, wwGetBe16(wd + 0x1E));              // lifeTime
-    wwPutBe16(w + 0x74, wwGetBe16(wd + 0x0C));              // volumeSize
-    wwPutBe16(w + 0x76, wwGetBe16(wd + 0x0E));              // divNumber
-    w[0x78] = wd[0x18];                                    // rateStep
-    w += bemOut;
-
-    // --- BSP1: map WW base shape (data @ +0x0C) → TP JPABaseShapeData (0x40 block) ---
-    const u8* bd = bsp1 + 0x0C;
-    std::memcpy(w, "BSP1", 4);
-    wwPutBe32(w + 4, bspOut);
-    wwPutBe32(w + 0x08, wwGetBe32(bd + 0x00));  // flags
-    wwPutBe16(w + 0x0C, wwGetBe16(bd + 0x04));  // prm anm offs
-    wwPutBe16(w + 0x0E, wwGetBe16(bd + 0x06));  // env anm offs
-    wwPutBef(w + 0x10, wwGetBef(bd + 0x08));    // baseSizeX/Y
-    wwPutBef(w + 0x14, wwGetBef(bd + 0x0C));
-    // WW: blend u16 @0x12, alpha bytes @0x14..; TP: blend u16 @0x18, then alpha/z/tex/clr
-    wwPutBe16(w + 0x18, wwGetBe16(bd + 0x12));
-    w[0x1A] = bd[0x14];
-    w[0x1B] = bd[0x15];
-    w[0x1C] = bd[0x16];
-    w[0x1D] = bd[0x17];
-    w[0x1E] = bd[0x18];
-    w[0x1F] = bd[0x19];
-    w[0x20] = 0;  // texIdx remapped via TDB1; keep 0
-    w[0x21] = bd[0x1B];
-    w[0x22] = bd[0x1C];
-    w[0x23] = bd[0x1D];
-    wwPutBe16(w + 0x24, wwGetBe16(bd + 0x1E));
-    std::memcpy(w + 0x26, bd + 0x20, 4);  // prm color
-    std::memcpy(w + 0x2A, bd + 0x24, 4);  // env color
-    w[0x2E] = 0;
-    w[0x2F] = 0;
-    w[0x30] = 0;
-    w += bspOut;
-
-    // --- ESP1: WW JPAExtraShapeData (data @ +0x0C) → TP layout (0x60) ---
-    // Both are 0x60 but the FIELD ORDER differs: WW leads with the alpha group
-    // (0x08-0x28) then scale (0x2C-0x44); TP leads with scale (0x0C-0x24) then
-    // alpha (0x2C-0x48). Mapped field-by-field, not memcpy'd.
-    if (esp1 != NULL) {
-        const u8* ed = esp1 + 0x0C;
-        std::memcpy(w, "ESP1", 4);
-        wwPutBe32(w + 4, espOut);
-        // ====================================================================
-        // §212 — ESP1 FLAGS MUST BE TRANSLATED, NOT COPIED.
-        //
-        // Unlike BSP1/FLD1 (whose bit layouts are identical across JPA1/JPA2 —
-        // verified §207/§212), the ESP1 flag word means DIFFERENT things in the
-        // two lineages. Copying it verbatim made TP read WW's "alpha enabled"
-        // bit (0x01) as "scale-animation enabled" (TP 0x01) and drive scale
-        // from mismapped values — scaling the particle to nothing. That is the
-        // INVISIBLE grass scatter (visible-but-purple before V-e carried ESP1,
-        // invisible after).
-        //
-        //   meaning          WW (JPA1)        TP (JPA2)
-        //   alpha enable     0x00000001       0x00010000
-        //   sin wave         0x00000002       0x00020000
-        //   scale enable     0x00000100       0x00000001
-        //   scale XY diff    0x00000200       0x00000002
-        //   scale anm X/Y    >>18,>>19 (1b)   >>8,>>10 (2b)
-        //   pivot/center X/Y >>14,>>16 (2b)   >>12,>>14 (2b)
-        //   rotate enable    0x01000000       0x01000000  (same)
-        // Sources: WW JPAExtraShape.h:83-117 vs TP JPAExtraShape.h:81-89.
-        // ====================================================================
-        {
-            const u32 wf = wwGetBe32(ed + 0x00);
-            u32 tf = 0;
-            if (wf & 0x00000100) tf |= 0x00000001;              // scale enable
-            if (wf & 0x00000200) tf |= 0x00000002;              // scale XY diff
-            tf |= ((wf >> 18) & 0x01) << 8;                     // scale anm type X
-            tf |= ((wf >> 19) & 0x01) << 10;                    // scale anm type Y
-            tf |= ((wf >> 14) & 0x03) << 12;                    // scale center X
-            tf |= ((wf >> 16) & 0x03) << 14;                    // scale center Y
-            if (wf & 0x00000001) tf |= 0x00010000;              // alpha enable
-            if (wf & 0x00000002) tf |= 0x00020000;              // alpha flick/sin
-            if (wf & 0x01000000) tf |= 0x01000000;              // rotate (same bit)
-            wwPutBe32(w + 0x08, tf);
-        }
-        wwPutBef(w + 0x0C, wwGetBef(ed + 0x2C));    // scaleInTiming
-        wwPutBef(w + 0x10, wwGetBef(ed + 0x30));    // scaleOutTiming
-        wwPutBef(w + 0x14, wwGetBef(ed + 0x34));    // scaleInValueX
-        wwPutBef(w + 0x18, wwGetBef(ed + 0x38));    // scaleOutValueX
-        wwPutBef(w + 0x1C, wwGetBef(ed + 0x3C));    // scaleInValueY
-        wwPutBef(w + 0x20, wwGetBef(ed + 0x40));    // scaleOutValueY
-        wwPutBef(w + 0x24, wwGetBef(ed + 0x44));    // scaleOutRandom (WW randomScale)
-        wwPutBe16(w + 0x28, wwGetBe16(ed + 0x48));  // anmCycleX
-        wwPutBe16(w + 0x2A, wwGetBe16(ed + 0x4A));  // anmCycleY
-        wwPutBef(w + 0x2C, wwGetBef(ed + 0x08));    // alphaInTiming
-        wwPutBef(w + 0x30, wwGetBef(ed + 0x0C));    // alphaOutTiming
-        wwPutBef(w + 0x34, wwGetBef(ed + 0x10));    // alphaInValue
-        wwPutBef(w + 0x38, wwGetBef(ed + 0x14));    // alphaBaseValue
-        wwPutBef(w + 0x3C, wwGetBef(ed + 0x18));    // alphaOutValue
-        wwPutBef(w + 0x40, wwGetBef(ed + 0x1C));    // alphaWaveFrequency (WW param1)
-        wwPutBef(w + 0x44, wwGetBef(ed + 0x28));    // alphaWaveRandom
-        wwPutBef(w + 0x48, wwGetBef(ed + 0x20));    // alphaWaveAmplitude (WW param2)
-        wwPutBef(w + 0x4C, wwGetBef(ed + 0x4C));    // rotateAngle
-        wwPutBef(w + 0x50, wwGetBef(ed + 0x54));    // rotateAngleRandom
-        wwPutBef(w + 0x54, wwGetBef(ed + 0x50));    // rotateSpeed
-        wwPutBef(w + 0x58, wwGetBef(ed + 0x58));    // rotateSpeedRandom
-        wwPutBef(w + 0x5C, wwGetBef(ed + 0x5C));    // rotateDirection
-        w += espOut;
-    }
-
-    // --- FLD1: WW JPAFieldBlockData (data @ +0x0C) → TP layout (0x44) ---
-    // WW: flags, mag, magRndm, maxDist, pos[3], dir[3], val1..3, fadeIn/Out,
-    //     enTime, disTime, cycle.  TP: flags, pos[3], dir[3], mag, magRndm,
-    //     val1, fadeIn/Out, enTime, disTime, cycle (no maxDist / val2 / val3).
-    for (u32 fi = 0; fi < fldCount; fi++) {
-        const u8* fd = flds[fi] + 0x0C;
-        std::memcpy(w, "FLD1", 4);
-        wwPutBe32(w + 4, fldOut);
-        wwPutBe32(w + 0x08, wwGetBe32(fd + 0x00));  // flags (type/addType/sttFlag)
-        std::memcpy(w + 0x0C, fd + 0x10, 12);       // pos
-        std::memcpy(w + 0x18, fd + 0x1C, 12);       // dir
-        wwPutBef(w + 0x24, wwGetBef(fd + 0x04));    // mag
-        wwPutBef(w + 0x28, wwGetBef(fd + 0x08));    // magRndm
-        wwPutBef(w + 0x2C, wwGetBef(fd + 0x28));    // val1
-        wwPutBef(w + 0x30, wwGetBef(fd + 0x34));    // fadeInTime
-        wwPutBef(w + 0x34, wwGetBef(fd + 0x38));    // fadeOutTime
-        wwPutBef(w + 0x38, wwGetBef(fd + 0x3C));    // enTime
-        wwPutBef(w + 0x3C, wwGetBef(fd + 0x40));    // disTime
-        w[0x40] = fd[0x44];                         // cycle
-        w += fldOut;
-    }
-
-    // --- TDB1: remapped indices 0..N-1 ---
-    std::memcpy(w, "TDB1", 4);
-    wwPutBe32(w + 4, tdbSize);
-    for (u16 t = 0; t < texIdxCount; t++) {
-        wwPutBe16(w + 8 + 2 * t, t);
-    }
-    w += tdbSize;
-
-    // --- TEX1 copies ---
-    for (u16 t = 0; t < texIdxCount; t++) {
-        std::memcpy(w, texs[t].data, texs[t].size);
-        w += texs[t].size;
-    }
-
-    *outSize = total;
-    return dst;
 }
 
 bool dPa_control_c::ensureWwWindlineRes() {
@@ -2137,15 +1603,6 @@ bool dPa_control_c::ensureWwCommonRes(u16 i_resID) {
     }
 
     const u8* rawBytes = reinterpret_cast<const u8*>(raw);
-    // §176: presence via donor v10 layout — NOT TP checkUserIndexDuplication on an empty load.
-    if (!wwJpa1ArchiveHasResId(rawBytes, (u32)sz, e->resId)) {
-        sWwWindHeap->free(raw);
-        e->failed = true;
-        DuskLog.error("[WwWind] staged common.jpc lacks id {:#06x} (JPA1 walk) — check donor file",
-                      (unsigned)e->resId);
-        return false;
-    }
-
     // ========================================================================
     // §233 — NATIVE WW PATH (phases 1+2). The JPAC1→JPAC2 byte converter is no
     // longer used: the archive is parsed in place by ww_jpa::Archive (a port of
@@ -2225,28 +1682,6 @@ bool dPa_control_c::ensureWwCommonRes(u16 i_resID) {
     }
     DuskLog.info("[wwJPA] WW-common id={:#06x} bound natively (slot {}) path='{}'",
                  (unsigned)e->resId, (int)e->slot, path.string());
-    const u32 jpac2Size = 0;  // no converted blob exists in the native path
-    // ========================================================================
-    // §205 Path 1 — dump the converted blob so it can be validated OFFLINE
-    // against a real TP JPAC2 bank. Every colour hypothesis so far assumed
-    // this archive parses correctly; that assumption has never been tested.
-    // Diagnostic only: set DUSK_JPAC_DUMP=1. Strip with the other probes.
-    // ========================================================================
-    {
-        const char* dumpEnv = std::getenv("DUSK_JPAC_DUMP");
-        if (dumpEnv != NULL && dumpEnv[0] == '1') {
-            char nameBuf[64];
-            std::snprintf(nameBuf, sizeof(nameBuf), "ww_converted_%04x.jpc",
-                          (unsigned)e->resId);
-            const fs::path outPath = dusk::ConfigPath / nameBuf;
-            std::ofstream out(outPath, std::ios::binary);
-            if (out) {
-                out.write(reinterpret_cast<const char*>(e->jpcData), (std::streamsize)jpac2Size);
-                DuskLog.info("[WwWind] §205 dumped converted blob → '{}' ({} bytes)",
-                             outPath.string(), (int)jpac2Size);
-            }
-        }
-    }
     return true;
 }
 
@@ -2721,26 +2156,6 @@ void dummy3() {
 }
 
 bool dPa_control_c::newSimple(u16 param_0, u8 param_1, u32* param_2) {
-#if TARGET_PC
-    // ========================================================================
-    // §222 DISCRIMINATOR — why does newSimple refuse WW ids?
-    //   "TABLE FULL"  ⇒ TP saturates this fixed array at boot; the receiver's
-    //                   simple subsystem structurally cannot host WW particles
-    //                   (⇒ the WW particle lane needs its OWN registry).
-    //   "create NULL" ⇒ room existed; the emitter could not be built from the
-    //                   resolved bank (⇒ fault is our converted archive).
-    // The stock overflow warning below uses OSReport, which never reaches our
-    // log file — the third silent channel this thread (cf. JUT_WARN §211,
-    // OS_REPORT §210).
-    // ========================================================================
-    DuskLog.warn("[dPa] §222 newSimple(id={:#06x}) used={} cap={} rmID={}", (unsigned)param_0,
-                 (int)field_0x19, (int)ARRAY_SIZE(field_0x1c),
-                 (int)dPa_control_c::getRM_ID(param_0));
-    if (field_0x19 >= ARRAY_SIZE(field_0x1c)) {
-        DuskLog.error("[dPa] §222 → TABLE FULL (used={} cap={})", (int)field_0x19,
-                      (int)ARRAY_SIZE(field_0x1c));
-    }
-#endif
     if (field_0x19 >= ARRAY_SIZE(field_0x1c)) {
         OSReport("\x1B[43;30mï¼‘ã‚¨ãƒŸãƒƒã‚¿ãƒ¼ç™»éŒ²æ•°ã‚ªãƒ¼ãƒãƒ¼ï¼ï¼\n");
         return false;

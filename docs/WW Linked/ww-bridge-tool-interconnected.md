@@ -16459,3 +16459,76 @@ arriving.
 §222 discriminator; retire dPa_wwUnlitEcallBack (§230/§231) — superseded by letting the resource
 draw itself (§237). Swood (Foundry) still HELD until the particle chain closes; blobs already
 extracted, corrections in §231 (batcher is d_tree, 5 DLs + state table).
+
+## §241 WW JPA PORT — ROOT CAUSE FOUND: the BSP1 flag word is NOT fully shared, and TP's tex-coord-matrix table lives OUTSIDE the block struct (Housing, 2026-08-02)
+
+**Status: fix implemented and built (exe 11:16:41). Awaiting playtest confirmation.**
+
+### What §240 proved (all three ranked suspects cleared)
+
+| step | expected | measured | verdict |
+|---|---|---|---|
+| 1 texture | 0x03DA -> idx 12 `kusa_half` | `globalIdx=12 name='kusa_half' regTex=96` | PASS |
+| 2 template | TP centre == WW pivot | TP `centreX=1 centreY=1`; WW `wwEspFlags=0x01014101` -> `wwPivot=(1,1)` | PASS — the §212 ESP1 translation is verified correct |
+| 3 colour | `JPARegist*` present, donor green | `hasPtclColor=1`, `prm=(152,200,118,255)`, `env=(0,50,0,255)` | PASS |
+
+Also surfaced: `vtx=8` (cross billboard, correct for bspType 4) and — the decisive
+datum — **`hasPtclTexMtx=1`**.
+
+### The fault
+
+Two lineage differences hide inside a word we had been treating as shared.
+
+1. **The trailing table.** BSP1 flag **bit 24** means the same thing in both
+   lineages (WW `isEnableTexScrollAnm`, TP `isTexCrdAnm`), so passing the flag
+   word through switched on TP's `JPALoadCalcTexCrdMtxAnm`. That function reads
+   its ten floats from a table at `block + sizeof(JPABaseShapeData)`
+   (`JPABaseShape.cpp:1669-1673`) — **past the end of the block we allocate**.
+   The texture matrix was built from raw heap contents: a different random UV
+   scale/rotation every run. That is precisely the observed history — "garbage,
+   maybe green" one build, nothing at all the next, with a correct texture and
+   correct colours underneath it the whole time.
+
+   WW keeps the same ten scalars as **named struct fields at 0x28..0x50**
+   (`JPABaseShape.h:189-201`), because WW's builder reads them directly. The two
+   builders are otherwise identical line for line — WW `JPADrawVisitor.cpp:127-157`
+   vs TP `JPABaseShape.cpp:300-330` — so the mapping is exact:
+
+   | TP slot | WW field |
+   |---|---|
+   | `tbl[0..1]` initTrans X/Y | `mTexStaticTransX/Y` (0x30/0x34) |
+   | `tbl[2..3]` initScale X/Y | `mTexStaticScaleX/Y` (0x38/0x3C) |
+   | `tbl[4]` initRot | **no WW counterpart -> 0** |
+   | `tbl[5..6]` incTrans X/Y | `mTexScrollTransX/Y` (0x40/0x44) |
+   | `tbl[7..8]` incScale X/Y | `mTexScrollScaleX/Y` (0x48/0x4C) |
+   | `tbl[9]` incRot | `0x8000 * mTexScrollRotate` (0x50) — the donor's own factor |
+
+2. **Bits 25-28 are TP-only meanings sitting in WW's word.**
+   * 25/26 = TP `getTilingS/T`. WW has no such bits — its tiling is the f32 pair
+     at 0x28/0x2C. TP computes `0.5*(1+bit)`, WW computes `0.5*tiling`, so
+     `bit = tiling - 1`. Now derived from the floats instead of inherited.
+   * 27/28 = TP `isNoDrawParent` / `isNoDrawChild`, undefined in WW. A stray 1
+     there silently suppresses the exact draw we were chasing. Now masked.
+
+### Cleared along the way (recorded so no lane re-checks them)
+
+* Blend/z/alpha-compare config: WW `stBlendFactor[10]` and TP `st_bf[10]` are the
+  same table in the same order; `blend=0x05d9` decodes to BLEND / SRC_ALPHA /
+  INV_SRC_ALPHA in both. No bug.
+* BSP1 byte offsets 0x12/0x14/0x15/0x16/0x17: donor `JPABaseShapeData` confirms
+  blend u16 @0x12, alphaFlags @0x14, refs @0x15/0x16, zFlags @0x17. Correct.
+* A NULL emitter callback does **not** suppress drawing — `JPAEmitterManager::draw`
+  calls `emtr->pRes->draw()` unconditionally (`JPAEmitterManager.cpp:116-123`).
+* `tilingS=0 tilingT=0` is benign on its own: it selects `jpa_crd + 0`, the plain
+  0..1 UV set.
+* Cross-billboard geometry is engine-side (`p_dl[work->mDLType]`), not donor data.
+* §234's anim-table clearing is a no-op for both 0x03DA and 0x0031 — neither has
+  colour-anim bits set (`clrFlg=0x05` / `0x01`).
+
+### Lesson for every remaining block port
+
+"The layouts are identical" was true field-for-field and **still not sufficient**:
+TP moves data that WW keeps in-struct out into trailing tables, and reuses high
+flag bits WW leaves undefined. Any block whose TP class has a pointer member
+beyond `pXxxData` (`mpTexCrdMtxAnmTbl`, `mpTexIdxAnimTbl`, `mpPrmClrAnmTbl`,
+`mpEnvClrAnmTbl`) has payload that must be allocated and populated, not inherited.

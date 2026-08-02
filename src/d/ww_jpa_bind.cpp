@@ -123,15 +123,82 @@ static JPADynamicsBlock* bindDyn(const Resource& r, JKRHeap* heap) {
 // BSP1 â€” base shape. WW JPABaseShape.h:100 â†’ TP JPABaseShapeData.
 // ---------------------------------------------------------------------------
 static JPABaseShape* bindBsp(const Resource& r, JKRHeap* heap) {
-    u8* blk = newBlock(heap, "BSP1", sizeof(JPABaseShapeData));
+    const BaseShapeBlock w = r.bsp();
+    const u8* raw = w.d;
+
+    // ========================================================================
+    // §241 - THE BSP1 FLAG WORD IS **NOT** FULLY SHARED, AND THE BLOCK NEEDS A
+    // TRAILING TEX-COORD-MATRIX TABLE. This is the fault that survived §240.
+    //
+    // §240 cleared the three ranked suspects: the texture resolves to the
+    // donor's own `kusa_half` (STEP 1), the ESP1 translation is right - TP
+    // centre (1,1) == WW pivot (1,1), decoded independently (STEP 2) - and the
+    // colour path carries the authored green (STEP 3). But STEP 3 also
+    // reported `hasPtclTexMtx=1`, and THAT is the thread that unravels it.
+    //
+    // Bit 24 means the same thing in both lineages (WW isEnableTexScrollAnm /
+    // TP isTexCrdAnm), so passing the flag word through switched on TP's
+    // JPALoadCalcTexCrdMtxAnm. That function builds the texture matrix from
+    // ten floats which TP reads from a table at `block + sizeof(data)`
+    // (JPABaseShape.cpp:1669-1673) - memory PAST the end of the block we were
+    // allocating. The matrix was therefore built from whatever the heap
+    // happened to hold: a random per-run UV scale/rotation on every particle.
+    // That is exactly the observed history - "garbage, maybe green" one build,
+    // nothing at all the next, with a correct texture and correct colours
+    // underneath.
+    //
+    // WW keeps those same ten scalars as NAMED FIELDS at 0x28..0x50, and the
+    // two matrix builders are otherwise identical line for line
+    // (WW JPADrawVisitor.cpp:127-157 vs TP JPABaseShape.cpp:300-330). So the
+    // port is a named-field -> named-slot mapping, the same discipline as
+    // every other block here:
+    //
+    //     TP tbl[0..4] = init  trans X/Y, scale X/Y, rot
+    //     TP tbl[5..9] = inc   trans X/Y, scale X/Y, rot
+    //     WW static*   = init;  WW scroll* = inc;  WW has no static rotate (0).
+    //     WW's rotate is a turn fraction; TP's is already in s16 angle units,
+    //     so it carries the donor's own 0x8000 factor (JPADrawVisitor.cpp:136).
+    //
+    // Two more bits must be corrected rather than inherited, for the same
+    // reason - they are TP-only meanings sitting in WW's word:
+    //   * 25/26 are TP's tiling S/T. WW has no such bits; its tiling is the
+    //     f32 pair at 0x28/0x2C. TP computes 0.5*(1+bit), WW computes
+    //     0.5*tiling, so bit = tiling - 1.
+    //   * 27/28 are TP's isNoDrawParent / isNoDrawChild - undefined in WW, and
+    //     a stray 1 there silently suppresses the very draw we are chasing.
+    // ========================================================================
+    const bool texMtx = w.texScrollAnmEnabled();
+    const u32 kTexCrdMtxTblSize = 0x28;  // ten BE f32, TP JPABaseShape.h:137-146
+    u8* blk = newBlock(heap, "BSP1",
+                       sizeof(JPABaseShapeData) + (texMtx ? kTexCrdMtxTblSize : 0));
     if (blk == NULL) {
         return NULL;
     }
     JPABaseShapeData* d = (JPABaseShapeData*)blk;
-    const BaseShapeBlock w = r.bsp();
-    const u8* raw = w.d;
 
-    d->mFlags = w.flags();  // type/dir/rot/basePlane/tev args â€” verified identical
+    u32 bspFlags = w.flags();
+    bspFlags &= ~0x1E000000u;  // clear TP tiling S/T + noDrawParent/noDrawChild
+    if (w.tilingX() >= 2.0f) {
+        bspFlags |= 0x02000000u;  // TP getTilingS
+    }
+    if (w.tilingY() >= 2.0f) {
+        bspFlags |= 0x04000000u;  // TP getTilingT
+    }
+    d->mFlags = bspFlags;
+
+    if (texMtx) {
+        BE(f32)* tbl = (BE(f32)*)(blk + sizeof(JPABaseShapeData));
+        tbl[0] = w.texStaticTransX();
+        tbl[1] = w.texStaticTransY();
+        tbl[2] = w.texStaticScaleX();
+        tbl[3] = w.texStaticScaleY();
+        tbl[4] = 0.0f;  // WW has no static rotate
+        tbl[5] = w.texScrollTransX();
+        tbl[6] = w.texScrollTransY();
+        tbl[7] = w.texScrollScaleX();
+        tbl[8] = w.texScrollScaleY();
+        tbl[9] = 32768.0f * w.texScrollRotate();
+    }
     d->mBaseSizeX = w.baseSizeX();
     d->mBaseSizeY = w.baseSizeY();
     d->mBlendModeCfg = w.blendMode();
@@ -339,20 +406,6 @@ bool bindResource(const Archive& arc, u16 resId, JPAResourceManager* mgr, JKRHea
             res->mBatchInfo.supported = false;
         }
     }
-    // ========================================================================
-    // §236 — post-init readout. init() builds the calc/draw function lists from
-    // BSP1's flags; if our flag combination produces an EMPTY draw list, the
-    // resource binds cleanly and then renders nothing, silently. These four
-    // numbers separate "bound but has no draw function" from "draws but never
-    // emits", which are the only two possibilities left after §235.
-    // ========================================================================
-    DuskLog.warn("[wwJPA] {:#06x} init: drawP={} calcP={} drawE={} calcE={} batch={} "
-                 "bspType={} tevSel={} blend={:#06x}",
-                 (unsigned)resId, (int)res->mpDrawParticleFuncListNum,
-                 (int)res->mpCalcParticleFuncListNum, (int)res->mpDrawEmitterFuncListNum,
-                 (int)res->mpCalcEmitterFuncListNum, res->mBatchInfo.supported ? 1 : 0,
-                 (int)res->pBsp->getType(), (int)res->pBsp->getTevColorArgSel(),
-                 (unsigned)r->bsp().blendMode());
     mgr->registRes(res);
     DuskLog.info("[wwJPA] bound {:#06x} â€” dyn/bsp{}{} fld={} tex={} (native WW accessors)",
                  (unsigned)resId, res->pEsp != NULL ? "/esp" : "", "", (int)res->fldNum,

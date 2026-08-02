@@ -2004,7 +2004,9 @@ J3DModelData* dWwItemmdl_getClothesBundleModelData() {
         return nullptr;
     }
     s_clothes.cached = md;
-    dWwItemmdl_debugLog("clothes bundle: acquired via ExtNpcMount (boots/Ivan create path)");
+    // M6 gate: neutral token only. The provider name is a greplist term and a
+    // shipped string literal is a covenant leak regardless of what it explains.
+    dWwItemmdl_debugLog("clothes bundle: acquired via ExtNpcMount (provider create path)");
     DuskLog.info("[WwItemmdl] clothes bundle model ready arc='{}' model='{}' mats={} joints={}",
                  s_clothes.arc, s_clothes.model, md->getMaterialNum(), md->getJointNum());
     return md;

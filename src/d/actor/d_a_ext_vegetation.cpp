@@ -798,208 +798,30 @@ void daExtVeg_c::checkCut() {
             k0col.b = kb;
             k0col.a = 255;
             // ================================================================
-            // §218 — the level callback is LOAD-BEARING, not decoration.
+            // §241 — FINAL: no level callback. The ported resource draws itself.
             //
-            // §216 measured it: with callback=NULL, `createSimpleEmitterID`
-            // returns a VALID emitter (rate 6, lifeTime 30, correct colours)
-            // but the manager's emitterNum NEVER RISES — the object is
-            // allocated and then never linked into the live list, so it is
-            // never calc'd, never emits, never draws. That is the zero-emission
-            // signature we chased through ESP1 and FLD1, and neither was the
-            // cause: with BOTH disabled (the exact 3-block archive that used to
-            // emit purple puffs) the count was still flat.
+            // The donor spawns its cut scatter with no level callback at all
+            // (d_grass.cpp:153), and now that the WW resource binds natively that
+            // is exactly what works here: JPAResource::draw -> pBsp->setGX ->
+            // drawP applies the donor's OWN TEV, blend and z-mode straight from
+            // BSP1, in the emitter's authored colours, with room K0 riding in as
+            // the global modulator through the call arguments below.
             //
-            // `dPa_control_c` keeps its OWN level-emitter registry
-            // (`field_0x210`, the `level_c::emitter_c` list behind
-            // getEmitter/setStopContinue). Registration runs through the
-            // dPa_levelEcallBack path; passing NULL skips it.
-            //
-            // So restore the callback — the one configuration that provably
-            // emitted — and keep §208's K0 prm/env arguments. Expected: puffs
-            // return. If they return PURPLE, the callback's room-light recolour
-            // (stage ambient (36,24,59) violet) is confirmed as a SEPARATE bug,
-            // and the fix is to reproduce what the callback does for
-            // REGISTRATION without its lighting — donor grass passes no such
-            // callback at all (d_grass.cpp:153).
+            // Every hand-written presentation we tried before the port is gone,
+            // and the reasons are recorded so they are not re-attempted:
+            //   * light8 callback (§218/§219) — visible, but its second pass
+            //     re-draws through the scene lights, which is the purple and the
+            //     time-of-day drift.
+            //   * a hand-rolled UNLIT pass (§230/§231) — forced a 1-stage TEV and
+            //     cleared the vertex descriptors, which the draw path cannot
+            //     survive.
+            //   * the registration-gated simple path (§220/§228) — registers but
+            //     silently draws nothing on this receiver.
+            // The real fault was never presentation: it was BSP1's missing
+            // tex-coord-matrix table (§241, ww_jpa_bind.cpp).
             // ================================================================
-            // ================================================================
-            // §220 — FAITHFUL PATH FIRST: the decomp's own call.
-            //
-            // d_grass.cpp:153 spawns the cut scatter with
-            //   setSimple(pid, pos, 0xFF, K0, K0, 1)
-            // and NO level callback. The receiver's setSimple is the same
-            // subsystem but registration-gated (§211): ids must be entered via
-            // `newSimple` first, and §220's resolver hook now lets that
-            // registration find WW supplemental banks. Its draw is a SINGLE
-            // unlit pass, so the hue comes from the emitter's authored colours
-            // modulated by room K0 — no TP scene-lighting pass, which is what
-            // made the puffs track time of day (§219).
-            //
-            // Registration is attempted once. If it fails, we fall back to the
-            // KNOWN-VISIBLE light8 recipe below rather than showing nothing.
-            // ================================================================
-            void* emitter = NULL;      // REAL JPABaseEmitter* (fallback path only)
-            bool spawnedSimple = false;  // §224: simple path spawned; no handle exists
-            {
-                dPa_control_c* pa = g_dComIfG_gameInfo.play.getParticle();
-                // §221: (a) force the WW bank resident BEFORE registering —
-                // newSimple creates its emitter immediately, so the resource
-                // must already exist; (b) do NOT latch failure forever: the
-                // fallback path loads the bank moments later, so a retry can
-                // succeed. Bounded retries keep it from spamming if the simple
-                // table is genuinely full.
-                // ============================================================
-                // §228 — the simple path is OPT-IN (default OFF).
-                //
-                // It registers successfully but draws NOTHING, so it silently
-                // swallowed the spawn; only when a stage change invalidated the
-                // registration did the light8 fallback take over and become
-                // visible. That is the "invisible until you leave an interior,
-                // then purple" behaviour — an artefact of having two paths
-                // where the preferred one is silently inert.
-                //
-                // Until the WW particle lane exists, ONE deterministic path is
-                // worth more than a half-working faithful one. Set
-                // DUSK_WW_SIMPLE=1 to re-test the simple path in isolation.
-                // ============================================================
-                static const bool s_simpleEnabled = [] {
-                    const char* v = std::getenv("DUSK_WW_SIMPLE");
-                    return v != NULL && v[0] == '1';
-                }();
-                static int s_simpleState = s_simpleEnabled ? 0 : 2;  // 2 = disabled
-                static int s_simpleTries = 0;
-                if (pa != NULL && s_simpleState == 0) {
-                    const bool resOk = pa->ensureWwCommonRes(0x03DA);
-                    u32 handle = 0;
-                    const bool ok = resOk && pa->newSimple(0x03DA, 0, &handle);
-                    if (ok) {
-                        s_simpleState = 1;
-                    } else if (++s_simpleTries >= 4) {
-                        s_simpleState = 2;  // stop trying; fallback owns it
-                    }
-                    DuskLog.warn("[ExtVeg] §221 newSimple(0x03DA) {} res={} try={} (getSimple={})",
-                                 ok ? "REGISTERED" : "failed", resOk ? 1 : 0, s_simpleTries,
-                                 pa->getSimple(0x03DA) != NULL ? 1 : 0);
-                }
-                if (pa != NULL && s_simpleState == 1 && pa->getSimple(0x03DA) != NULL) {
-                    dComIfGp_particle_setSimple(0x03DA, &ppos, 0xFF, k0col, k0col, 1, 0.0f);
-                    // §224 CRASH FIX: do NOT fake a handle here. setSimple
-                    // returns a count, not a JPABaseEmitter*, and the §214
-                    // probe below casts `emitter` and dereferences it — a
-                    // sentinel like (void*)1 becomes a read of address 0x1 the
-                    // moment registration finally succeeds (which is exactly
-                    // when this crash appeared). Track "spawned" separately.
-                    spawnedSimple = true;
-                }
-            }
-            if (!spawnedSimple) {
-                // ============================================================
-                // §230 — WW lane: same general spawn that has been reliably
-                // VISIBLE (§218), but with the UNLIT callback instead of
-                // light8. light8's visible pass colours from the room ambient
-                // (bg_amb_col[0] = (36,24,59) violet at hour 11, DuskTap-
-                // confirmed), which is the purple and the time-of-day drift;
-                // the decomp's grass never lights its scatter at all.
-                //
-                // Set DUSK_WW_LIT=1 to fall back to the old light8 callback if
-                // this needs comparing side by side.
-                // ============================================================
-                // ============================================================
-                // §237 — NO level callback. Let the ported resource draw itself.
-                //
-                // §236 readout: the natively-bound 0x03DA has drawP=4, calcP=4,
-                // batch=1, bspType=4, tevSel=3 — a complete, renderable
-                // resource — and particles ARE created (ptclNum/emitterNum both
-                // rise). So nothing is missing; we were OVERRIDING the system
-                // that works. Both callbacks hand-write GX state: light8 adds a
-                // scene-lit second pass (the purple), and my §230/§231 unlit
-                // pass clears the vertex descriptors and forces a 1-stage TEV —
-                // which the batched draw path (batch=1) cannot survive.
-                //
-                // JPAResource::draw → pBsp->setGX(work) → drawP already applies
-                // the donor's OWN TEV, blend (0x05d9) and z-mode straight from
-                // BSP1. That is the faithful presentation we kept trying to
-                // reconstruct by hand. DUSK_WW_LIT=1 still forces light8 for
-                // side-by-side comparison.
-                // ============================================================
-                static const bool s_forceLit = [] {
-                    const char* v = std::getenv("DUSK_WW_LIT");
-                    return v != NULL && v[0] == '1';
-                }();
-                dPa_levelEcallBack* cb = s_forceLit ? dPa_control_c::getLight8EcallBack() : NULL;
-                emitter = dComIfGp_particle_set(0x03DA, &ppos, &cutTev, &s_cutRot, NULL, 255,
-                                                cb, -1, &k0col, &k0col, NULL);
-            }
-            // ================================================================
-            // §219 — keep the callback's REGISTRATION, drop its LIT SECOND PASS.
-            //
-            // User (2026-08-01): the puffs now appear but track TP's time of
-            // day — yellowish at evening, violet at morning. Source located:
-            // `dPa_light8EcallBack::setup` (d_particle.cpp:151) does exactly
-            // two things — `setDrawTimes(2)` and install a particle callback
-            // whose `execute` is EMPTY (:2817). So the tint is not per-particle;
-            // it is the SECOND draw pass (`drawSecond_light8`, reached via
-            // static_light8EcallBack :351/:371), which re-draws the particle
-            // through the scene's 8-light setup.
-            //
-            // The donor's grass passes NO level callback at all
-            // (d_grass.cpp:153) — its scatter draws ONCE, unlit, in the
-            // emitter's own authored colours modulated only by room K0. Match
-            // that by restoring drawTimes to 1: registration and the draw path
-            // stay (they are why the effect appears at all, §218), the TP
-            // lighting pass goes.
-            // ================================================================
-            // §219 RESULT: setDrawTimes(1) made it INVISIBLE again — the light8
-            // draw switches on the draw count (static_light8EcallBack :366:
-            // case 1 → drawFirst, case 2 → drawSecond_light8), so BOTH passes
-            // are required for anything to reach the screen. Reverted.
-            //
-            // ============ KNOWN-VISIBLE RECIPE (do not lose this) ============
-            //   particle id 0x03DA, WW supplemental slot 4
-            //   dComIfGp_particle_set(id, pos, tevstr, rot, NULL, 255,
-            //                         dPa_control_c::getLight8EcallBack(), -1,
-            //                         &K0, &K0, NULL)
-            //   converter: 3-block archive (ESP1/FLD1 OFF by default)
-            //   → puffs VISIBLE, but tinted by TP's scene lighting (the second
-            //     light8 pass), so hue tracks time of day. Not yet faithful.
-            // ================================================================
-            // ============================================================
-            // §183 Ferry V-c: tevstr colors only reach the emitter through the
-            // per-resource userWork flag path (d_particle.cpp:2145-2161, flag
-            // 0x20 → ParticleColor_get_actor → setGlobalPrm/EnvColor). The
-            // WW-supplemental 0x03DA has NO userWork flags configured, so no
-            // color branch runs and the emitter keeps resource-default black.
-            // Donor parity: WW d_grass passes room K0 EXPLICITLY as BOTH prm
-            // and env (setSimple) — write the same registers directly.
-            // ============================================================
-            // §202/§208: no post-spawn colour writes. The WW emitter authors
-            // its own prm/env (green); K0 rides in as the global modulator via
-            // the call arguments above, exactly as the donor does.
-            // ================================================================
-            // §229: §214/§215/§216 diagnostic probes REMOVED — each answered its
-            // question and they were themselves a source of failures (§215's
-            // sentinel deref crashed once registration finally succeeded).
-            // Findings preserved in the bus: emitter is well-formed (rate 6,
-            // lifeTime 30, volSize 15, gScl 1.0, gPrm = room K0), yet zero
-            // particles are emitted through the simple path.
-            // ================================================================
-            // §236: emission readout — does the natively-bound resource create
-            // particles at all? Pairs with the post-init draw-list counts.
-            {
-                static u32 s_eN = 0;
-                if ((s_eN++ % 4) == 0) {
-                    DuskLog.warn("[ExtVeg] §236 postSpawn ptclNum={} emitterNum={}",
-                                 dComIfGp_particle_getParticleNum(),
-                                 dComIfGp_particle_getEmitterNum());
-                }
-            }
-            static u32 s_pN = 0;
-            if ((s_pN++ % 8) == 0) {
-                DuskLog.warn(
-                    "[ExtVeg] §62 cutFx emitter={} tevstr={} room={} k0=({},{},{}) pos=({:.0f},{:.0f},{:.0f})",
-                    emitter != NULL ? 1 : 0, 1, (int)mRoomNo, (int)kr, (int)kg, (int)kb, ppos.x,
-                    ppos.y, ppos.z);
-            }
+            dComIfGp_particle_set(0x03DA, &ppos, &cutTev, &s_cutRot, NULL, 255, NULL, -1,
+                                  &k0col, &k0col, NULL);
         }
         if (s_assets.itemTable >= 0) {
             const bool directGet = daPy_getPlayerActorClass() != NULL &&
