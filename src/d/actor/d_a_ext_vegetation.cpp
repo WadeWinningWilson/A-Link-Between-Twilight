@@ -631,6 +631,68 @@ void vegAnmInit() {
     }
 }
 
+// ==========================================================================
+// 244 PROBE -- why does the run-through puff fire less than expected?
+// ==========================================================================
+// Accumulated per frame and flushed from vegAnmTickAmbient (which already
+// detects the frame boundary), so ONE line covers every clump instead of one
+// line per actor. Reads as a funnel: examined -> CO -> in range -> eligible
+// (still on an ambient slot) -> fast enough -> spawned. Whichever step drops to
+// zero is the gate. `gFree`/`fFree` catch pool exhaustion, which is the
+// hypothesis this was built for and is invisible from the funnel alone.
+// Set DUSK_VEG_PROBE=0 to silence.
+// ==========================================================================
+struct VegProbe {
+    // [0] = grass, [1] = flower. The first cut of this funnel instrumented only
+    // the grass path, so a question about FLOWERS was answered with grass data.
+    int examined[2], co[2], at[2], inRange[2], eligible[2], fast[2], spawned[2];
+    int returned[2], poolFull[2];
+    // Who is actually in the plant, and how fast. 244 showed the speedF > 16
+    // gate rejecting 77% of eligible encounters, which is only meaningful if
+    // the actor being measured is the player -- the donor drives WorkCo from
+    // whatever has CO, and a static mass object has speedF 0.
+    f32 spdMax[2];      // fastest hitActor seen at an eligible encounter
+    int nonPlayer[2];   // eligible encounters whose hitActor was NOT the player
+    int lastName[2];    // fopAcM_GetName of the most recent rejected actor
+};
+VegProbe s_probe;
+
+int vegAnmFree(const VegAnm* pool, int poolNum) {
+    int n = 0;
+    for (int i = kGrassAmbient; i < poolNum; ++i) {
+        if (pool[i].state == 0) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+// ==========================================================================
+// SLOT RELEASE ON TEARDOWN -- required by OUR ownership model, not the donor's.
+// ==========================================================================
+// The donor's dGrass_room_c::deleteData frees the plant DATA and leaves any
+// anim slot those plants held; the packet ctor resets the whole pool on stage
+// load, so its leak is bounded by stage lifetime and rarely reached.
+//
+// Here every clump is its own actor, created and destroyed by the population
+// spawner and by culling, many times per visit. A blade that is still leaning
+// when its clump goes away would strand its push slot forever -- and once the
+// 96 push slots are gone, NO plant anywhere can take one, which means no lean
+// and (because the puff fires on slot acquisition) no run-through VFX at all.
+// Progressive, silent, and exactly the "appears less often" symptom.
+//
+// Releasing on teardown restores the donor's invariant -- a slot is held only
+// by a live plant -- rather than changing the rule.
+// ==========================================================================
+void vegAnmReleaseAll(VegAnm* pool, int poolNum, u8* idx, int num) {
+    for (int i = 0; i < num; ++i) {
+        if (idx[i] != kAnmNone && idx[i] >= kGrassAmbient && idx[i] < poolNum) {
+            pool[idx[i]].state = 0;
+        }
+        idx[i] = kAnmNone;
+    }
+}
+
 // Donor dGrass_packet_c::calc:322-337 and dFlower_packet_c::calc:394-398.
 // Runs ONCE per frame for the whole world, not once per clump -- the ambient
 // slots are shared, so driving them per actor would advance them N times.
@@ -640,6 +702,33 @@ void vegAnmTickAmbient() {
         return;
     }
     s_anmFrame = (u32)g_Counter.mTimer;
+
+    {
+        static const bool s_probeOn = [] {
+            const char* v = std::getenv("DUSK_VEG_PROBE");
+            return v == NULL || v[0] != '0';
+        }();
+        if (s_probeOn) {
+            static const char* const kName[2] = {"grass ", "flower"};
+            for (int k = 0; k < 2; ++k) {
+                if (s_probe.examined[k] == 0 ||
+                    (s_probe.co[k] == 0 && s_probe.returned[k] == 0)) {
+                    continue;
+                }
+                DuskLog.warn("[ExtVeg] 246 {} exam={} co={} at={} rng={} elig={} fast={} "
+                             "spawn={} ret={} poolFull={} free={}/{} spdMax={:.1f} "
+                             "nonPlayer={} lastName={}",
+                             kName[k], s_probe.examined[k], s_probe.co[k], s_probe.at[k],
+                             s_probe.inRange[k], s_probe.eligible[k], s_probe.fast[k],
+                             s_probe.spawned[k], s_probe.returned[k], s_probe.poolFull[k],
+                             k == 0 ? vegAnmFree(s_grassAnm, kGrassAnmNum)
+                                    : vegAnmFree(s_flowerAnm, kFlowerAnmNum),
+                             (k == 0 ? kGrassAnmNum : kFlowerAnmNum) - kGrassAmbient,
+                             s_probe.spdMax[k], s_probe.nonPlayer[k], s_probe.lastName[k]);
+            }
+        }
+        s_probe = VegProbe();
+    }
 
     f32 windSpeed = dKyw_get_wind_pow() * 1000.0f + 1000.0f;
     windSpeed = cLib_maxLimit(windSpeed, 2000.0f);
@@ -663,6 +752,79 @@ u8 vegAnmNew(VegAnm* pool, int poolNum) {
         }
     }
     return kAnmNone;
+}
+
+// ==========================================================================
+// 246 -- GRASS SPAWNS THROUGH THE SIMPLE EMITTER, AS THE DONOR DOES.
+// ==========================================================================
+// The donor splits its vegetation spawns by PLANT, not by event:
+//   grass  run d_grass.cpp:80 / cut :154  -> dComIfGp_particle_setSimple
+//   flower run d_flower.cpp:91 / cut :218 -> dComIfGp_particle_set
+// So the flower path was already right; only GRASS was substituted.
+//
+// The two are not interchangeable. particle_set mints a NEW emitter per call
+// that then lives out its own maxFrame/lifeTime. setSimple never spawns:
+// dPa_simpleEcallBack holds ONE persistent emitter per id, built with
+// setMaxFrame(0) + stopCreateParticle() so it never self-emits, and each call
+// merely APPENDS a position record. Once per frame executeAfter takes
+// getCurrentCreateNumber() from the resource's own rate and creates that many
+// particles at EVERY recorded position in one batch, clipping records past 200
+// units. N blades triggering in a frame = one batched burst of N x rate. The
+// receiver's executeAfter is line-for-line the donor's.
+//
+// Why this was abandoned before, and why it is right to retry. 228 recorded
+// that the simple path "registers successfully but draws NOTHING". That verdict
+// was reached in a build where the WW resource could not draw AT ALL -- 241's
+// missing tex-coord-matrix table meant every WW particle rendered as heap
+// garbage or nothing. The simple path was convicted on evidence that indicted
+// the whole lane.
+//
+// Registration order is load-bearing (221): newSimple builds its emitter
+// immediately, so the WW bank must be resident first.
+//
+// There is deliberately NO particle_set fallback. A fallback would hide a
+// registration failure behind a working-looking effect, which is how 228
+// reached the wrong conclusion. If this fails it fails loudly.
+// ==========================================================================
+bool extVegEnsureSimple(u16 i_resID) {
+    struct SimpleReg {
+        u16 id;
+        u8 state;  // 0 = untried, 1 = registered, 2 = gave up
+        u8 tries;
+    };
+    static SimpleReg s_reg[] = {{0x03DA, 0, 0}, {0x03DB, 0, 0}};
+    SimpleReg* e = NULL;
+    for (int i = 0; i < (int)(sizeof(s_reg) / sizeof(s_reg[0])); ++i) {
+        if (s_reg[i].id == i_resID) {
+            e = &s_reg[i];
+        }
+    }
+    if (e == NULL || e->state == 2) {
+        return false;
+    }
+    dPa_control_c* pa = g_dComIfG_gameInfo.play.getParticle();
+    if (pa == NULL) {
+        return false;
+    }
+    if (e->state != 1) {
+        // 221(b): do not latch failure on the first miss -- the bank may still
+        // be loading. Bounded retries, then give up loudly.
+        const bool resOk = pa->ensureWwCommonRes(i_resID);
+        u32 handle = 0;
+        if (resOk && pa->newSimple(i_resID, 0, &handle) && pa->getSimple(i_resID) != NULL) {
+            e->state = 1;
+            DuskLog.info("[ExtVeg] 246 simple emitter registered for {:#06x}", (unsigned)i_resID);
+        } else if (++e->tries >= 8) {
+            e->state = 2;
+            DuskLog.error("[ExtVeg] 246 newSimple({:#06x}) FAILED res={} -- grass VFX silent. "
+                          "This is a registration bug, not a design choice.",
+                          (unsigned)i_resID, resOk ? 1 : 0);
+            return false;
+        } else {
+            return false;
+        }
+    }
+    return pa->getSimple(i_resID) != NULL;
 }
 
 // ==========================================================================
@@ -879,6 +1041,8 @@ int daExtVeg_c::create() {
     mBladeCount = 0;
     mRoomNo = static_cast<s8>(fopAcM_GetRoomNo(this));
     std::memset(mCut, 0, sizeof(mCut));
+    int probeMiss = 0;
+    f32 probeMaxDy = 0.0f;
     for (u32 i = 0; i < off.num && mBladeCount < kMaxBlades; ++i) {
         // Store the WORLD position only. The matrix cannot be baked here: it has
         // to include the view matrix, which changes every frame.
@@ -897,6 +1061,7 @@ int daExtVeg_c::create() {
         // hit if there is one, keep y only when there is none.
         cXyz bp(current.pos.x + off.pos[i].x, current.pos.y,
                 current.pos.z + off.pos[i].z);
+        bool gndHit = false;
         {
             dBgS_GndChk gndchk;
             cXyz probe(bp.x, bp.y + 50.0f, bp.z);
@@ -904,6 +1069,24 @@ int daExtVeg_c::create() {
             const f32 gy = dComIfG_Bgsp().GroundCross(&gndchk);
             if (gy > -G_CM3D_F_INF) {
                 bp.y = gy;
+                gndHit = true;
+            }
+        }
+        // 247: a blade whose ground probe MISSED keeps the clump's y. It still
+        // draws there, but its mass test cylinder -- 40x120 for grass, 40x50 for
+        // flowers -- then sits at the wrong height, and ChkMass never sees the
+        // player: a patch that is visible, polled every frame, and completely
+        // inert. Flowers have less than half the vertical tolerance, which is
+        // why they fail where grass survives. Count misses and the worst y
+        // correction so the bad clumps can be found by position.
+        if (!gndHit) {
+            ++probeMiss;
+        }
+        {
+            const f32 dy = bp.y - current.pos.y;
+            const f32 ady = dy < 0.0f ? -dy : dy;
+            if (ady > probeMaxDy) {
+                probeMaxDy = ady;
             }
         }
         mBlades[mBladeCount] = bp;
@@ -916,6 +1099,11 @@ int daExtVeg_c::create() {
         ++mBladeCount;
     }
 
+    DuskLog.info("[ExtVeg] 247 clump kind={} type={} blades={} gndMiss={} maxDy={:.0f} "
+                 "pos=({:.0f},{:.0f},{:.0f})",
+                 (int)mKind, (int)type, mBladeCount, probeMiss, probeMaxDy, current.pos.x,
+                 current.pos.y, current.pos.z);
+
     dKy_tevstr_init(&tevStr, fopAcM_GetRoomNo(this), 0xFF);
     tevStr.room_no = fopAcM_GetRoomNo(this);
 
@@ -927,6 +1115,9 @@ int daExtVeg_c::create() {
 }
 
 int daExtVeg_c::deleteMe() {
+    // 244: release this clump's push slots -- see vegAnmReleaseAll.
+    vegAnmReleaseAll(isFlower() ? s_flowerAnm : s_grassAnm,
+                     isFlower() ? kFlowerAnmNum : kGrassAnmNum, mAnmIdx, mBladeCount);
     return 1;  // №136: owns nothing global — nothing to unwind.
 }
 
@@ -1050,52 +1241,55 @@ void daExtVeg_c::checkCut() {
         }
     }
 
-    fopAc_ac_c* runPlayer = dComIfGp_getPlayer(0);
     for (int i = 0; i < mBladeCount; ++i) {
         if (mRunCool[i] != 0) {
             --mRunCool[i];
         }
         // ====================================================================
-        // WorkCo / hitCheck -- donor d_grass.cpp:62-95 and 168-192, transcribed.
+        // hitCheck -- donor d_grass.cpp:167-197, structure and all.
         //
-        // The run-through puff (0x03DB) lives INSIDE this state machine: it
-        // fires on the frame a blade takes a push slot, which is what makes one
-        // approach yield one puff and a player standing in the grass yield
-        // none. The blade also leans away and, on the way back, rustles
-        // (JA_SE_FT_ADD_GRASS). None of that existed here before.
+        // ONE ChkMass per blade drives everything, and its BITS choose the
+        // branch. bit 1 (0x2) = CO, something is standing in the blade -> lean
+        // + run-through puff. bit 0 (0x1) = AT, an attack reached it -> cut.
+        // Neither -> ease back home.
         //
-        // Not ported: the donor also calls setBatta on the same line as the
-        // puff, releasing a grasshopper from the blade. Foundry's order.
+        // The first cut of this used a raw XZ distance to the player instead of
+        // the CO bit. That is what made walking into grass JUDDER: a distance
+        // test flickers frame to frame as the player moves, so a blade
+        // alternated between "lean toward player" and "ease home" every frame.
+        // The mass system is a real volume overlap and does not chatter. It
+        // also means anything with CO -- not only the player -- parts the
+        // grass, which is the donor's behaviour and was lost by testing the
+        // player's position directly.
+        //
+        // A CUT blade is skipped entirely: the donor's calc only calls
+        // hitCheck when `mAnimIdx >= 0`, and WorkAt set it to -1.
         // ====================================================================
-        {
-            const f32 rdx = mBlades[i].x - (runPlayer != NULL ? runPlayer->current.pos.x : 1e9f);
-            const f32 rdz = mBlades[i].z - (runPlayer != NULL ? runPlayer->current.pos.z : 1e9f);
-            const f32 rd2 = rdx * rdx + rdz * rdz;
-            if (runPlayer != NULL && rd2 <= 1600.0f && mAnmIdx[i] != kAnmNone) {
-                // --- WorkCo: player is inside the 40-unit gate.
-                if (mAnmIdx[i] < kGrassAmbient) {
-                    if (runPlayer->speedF > 16.0f) {
-                        cXyz rpos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
-                        dKy_tevstr_c runTev;
-                        GXColor runK0;
-                        extVegSpawnTev(rpos, &runTev, &runK0);
-                        static csXyz s_grassRunRot(0, 0, 0);
-                        dComIfGp_particle_set(0x03DB, &rpos, &runTev, &s_grassRunRot, NULL, 255,
-                                              NULL, -1, &runK0, &runK0, NULL);
-                    }
-                    const u8 idx = vegAnmNew(s_grassAnm, kGrassAnmNum);
-                    if (idx != kAnmNone) {
-                        mAnmIdx[i] = idx;
-                    }
-                }
-                if (mAnmIdx[i] >= kGrassAmbient) {
-                    VegAnm& a = s_grassAnm[mAnmIdx[i]];
-                    a.rotY = cM_atan2s(rdx, rdz);
-                    a.rotX = cM_atan2s(40.0f - std::sqrt(rd2), 40.0f);
-                    a.state = 2;
-                }
-            } else if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
-                // --- hitCheck's untouched branch: ease home, then free.
+        if (mAnmIdx[i] == kAnmNone) {
+            continue;
+        }
+        dCcMassS_HitInf hitInf;
+        fopAc_ac_c* hitActor = NULL;
+        cXyz p = mBlades[i];
+        const u32 massFlags = dComIfG_Ccsp()->ChkMass(&p, &hitActor, &hitInf);
+        ++s_probe.examined[0];
+        if (massFlags & 2) {
+            ++s_probe.co[0];
+        }
+        if (massFlags & 1) {
+            ++s_probe.at[0];
+        }
+        // AT exclusion: the donor names TWO actors (fpcNm_TSUBO_e, fpcNm_STONE_e)
+        // because WW has a pot actor and a stone actor. The receiver unifies both
+        // under fpcNm_Obj_Carry_e -- its own grass excludes exactly that
+        // (d_grass.inc:404). Same set, one name. Do not "restore" the donor's
+        // two identifiers: they do not exist here.
+        const bool atHit = (massFlags & 1) && hitActor != NULL &&
+                           fopAcM_GetName(hitActor) != fpcNm_Obj_Carry_e;
+
+        if ((massFlags & 2) == 0 && !atHit) {
+            // --- untouched: ease rotX home, then chase rotY, then free.
+            if (mAnmIdx[i] >= kGrassAmbient) {
                 VegAnm& a = s_grassAnm[mAnmIdx[i]];
                 const s16 targetY = (s16)(a.rotY & 0xE000);
                 const u8 origIdx = (u8)((a.rotY >> 13) & 7);
@@ -1107,32 +1301,65 @@ void daExtVeg_c::checkCut() {
                     if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
                         a.state = 0;  // donor deleteAnm
                         mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
+                        ++s_probe.returned[0];
                     }
+                }
+            }
+            continue;
+        }
+
+        // --- WorkCo (donor d_grass.cpp:62-95): something is in the blade.
+        if ((massFlags & 2) != 0 && hitActor != NULL) {
+            const f32 rdx = mBlades[i].x - hitActor->current.pos.x;
+            const f32 rdz = mBlades[i].z - hitActor->current.pos.z;
+            const f32 rd2 = rdx * rdx + rdz * rdz;
+            if (rd2 <= 1600.0f) {  // donor: distSq > 1600 returns without touching the anim
+                ++s_probe.inRange[0];
+                ++s_probe.inRange[0];
+                ++s_probe.eligible[0];
+                if (hitActor->speedF > s_probe.spdMax[0]) {
+                    s_probe.spdMax[0] = hitActor->speedF;
+                }
+                if (hitActor != dComIfGp_getPlayer(0)) {
+                    ++s_probe.nonPlayer[0];
+                }
+                if (!(hitActor->speedF > 16.0f)) {
+                    s_probe.lastName[0] = (int)fopAcM_GetName(hitActor);
+                }
+                if (mAnmIdx[i] < kGrassAmbient) {
+                    // The puff fires HERE -- on the frame the blade takes a
+                    // push slot -- which is the donor's only rate limit.
+                    if (hitActor->speedF > 16.0f) {
+                        ++s_probe.fast[0];
+                        ++s_probe.spawned[0];
+                        cXyz rpos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
+                        dKy_tevstr_c runTev;
+                        GXColor runK0;
+                        extVegSpawnTev(rpos, &runTev, &runK0);
+                        // Donor: setSimple(KusaRunPID, &pos, 0xFF, K0, K0, 1).
+                        if (extVegEnsureSimple(0x03DB)) {
+                            dComIfGp_particle_setSimple(0x03DB, &rpos, 0xFF, runK0, runK0, 1,
+                                                        0.0f);
+                        }
+                        // Donor also calls setBatta here (a grasshopper leaves
+                        // the blade). Foundry's order; not ported.
+                    }
+                    const u8 idx = vegAnmNew(s_grassAnm, kGrassAnmNum);
+                    if (idx != kAnmNone) {
+                        mAnmIdx[i] = idx;
+                    } else {
+                        ++s_probe.poolFull[0];
+                    }
+                }
+                if (mAnmIdx[i] >= kGrassAmbient) {
+                    VegAnm& a = s_grassAnm[mAnmIdx[i]];
+                    a.rotY = cM_atan2s(rdx, rdz);
+                    a.rotX = cM_atan2s(40.0f - std::sqrt(rd2), 40.0f);
+                    a.state = 2;
                 }
             }
         }
 
-        if (mCut[i]) {
-            continue;  // already a stump; nothing left to hit
-        }
-        dCcMassS_HitInf hitInf;
-        fopAc_ac_c* hitActor = NULL;
-        cXyz p = mBlades[i];
-        const u32 massFlags = dComIfG_Ccsp()->ChkMass(&p, &hitActor, &hitInf);
-        // §61 r3: EVERY nonzero flags value logs — the %10 limit hid the true
-        // hit count in the first live run (1 line could be 1..10 hits). Hits
-        // are rare frames; unconditional is safe. Blade index makes multi-hit
-        // sweeps countable per swing.
-        if (massFlags != 0) {
-            DuskLog.warn("[ExtVeg] §61 HIT actor={:x} blade={} flags=0x{:X} name={}",
-                         (uintptr_t)this & 0xFFFF, i, massFlags,
-                         hitActor != NULL ? (int)fopAcM_GetName(hitActor) : -1);
-        }
-        // bit 0 = AT (an attack reached this point). The receiver's grass
-        // excludes carried objects the same way; without that a thrown pot
-        // would mow the field.
-        const bool atHit = (massFlags & 1) && hitActor != NULL &&
-                           fopAcM_GetName(hitActor) != fpcNm_Obj_Carry_e;
         if (!atHit) {
             continue;
         }
@@ -1257,8 +1484,10 @@ void daExtVeg_c::checkCut() {
             // The real fault was never presentation: it was BSP1's missing
             // tex-coord-matrix table (§241, ww_jpa_bind.cpp).
             // ================================================================
-            dComIfGp_particle_set(0x03DA, &ppos, &cutTev, &s_cutRot, NULL, 255, NULL, -1,
-                                  &k0col, &k0col, NULL);
+            // Donor: setSimple(KusaKenPID, &pos, 0xFF, K0, K0, 1) -- d_grass.cpp:154.
+            if (extVegEnsureSimple(0x03DA)) {
+                dComIfGp_particle_setSimple(0x03DA, &ppos, 0xFF, k0col, k0col, 1, 0.0f);
+            }
         }
         if (s_assets.itemTable >= 0) {
             const bool directGet = daPy_getPlayerActorClass() != NULL &&
@@ -1568,19 +1797,68 @@ void daExtVeg_c::checkFlowers() {
         }
 
         // ------------------------------------------------------------------
-        // WorkCo / return -- donor d_flower.cpp:59-118 and the flower half of
-        // hitCheck. Same machine as grass, with the flower's own numbers: a
-        // 30-unit gate (900), and the run-through VFX carries an ADDITIONAL
-        // field_0x03 = 0x10 cooldown that grass does not have. Both gates are
-        // the donor's; neither is a stand-in.
+        // hitCheck -- donor d_flower.cpp:231-259. One ChkMass, its bits pick
+        // the branch, exactly as grass does. The first cut of this used a raw
+        // distance to the player, which is what made walking into vegetation
+        // judder (see the grass path for the full note).
+        //
+        // Two things differ from grass, both the donor's:
+        //   * WorkAt is gated on NOT already being gut -- a cut flower cannot
+        //     be cut again, but it IS still hitChecked and still leans.
+        //   * flowers use a 30-unit gate (900) and lean by atan2s(30-d, 40).
         // ------------------------------------------------------------------
-        {
-            const f32 dx = mBlades[i].x - (player != NULL ? player->current.pos.x : 1e9f);
-            const f32 dz = mBlades[i].z - (player != NULL ? player->current.pos.z : 1e9f);
+        dCcMassS_HitInf hitInf;
+        fopAc_ac_c* hitActor = NULL;
+        cXyz pt = mBlades[i];
+        const u32 massFlags = dComIfG_Ccsp()->ChkMass(&pt, &hitActor, &hitInf);
+        ++s_probe.examined[1];
+        if (massFlags & 2) {
+            ++s_probe.co[1];
+        }
+        if (massFlags & 1) {
+            ++s_probe.at[1];
+        }
+        const bool atHit = (massFlags & 1) && hitActor != NULL &&
+                           fopAcM_GetName(hitActor) != fpcNm_Obj_Carry_e;
+
+        if ((massFlags & 2) == 0 && !atHit) {
+            if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
+                VegAnm& a = s_flowerAnm[mAnmIdx[i]];
+                const s16 targetY = (s16)(a.rotY & 0xE000);
+                const u8 origIdx = (u8)((a.rotY >> 13) & 7);
+                if (!cLib_addCalcAngleS(&a.rotX, s_flowerAnm[origIdx].rotX, 16, 4000, 100)) {
+                    if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
+                        a.state = 0;
+                        mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
+                        ++s_probe.returned[1];
+                    }
+                }
+            }
+            continue;
+        }
+
+        // --- WorkCo (donor d_flower.cpp:59-118).
+        if ((massFlags & 2) != 0 && hitActor != NULL && mAnmIdx[i] != kAnmNone) {
+            const f32 dx = mBlades[i].x - hitActor->current.pos.x;
+            const f32 dz = mBlades[i].z - hitActor->current.pos.z;
             const f32 d2 = dx * dx + dz * dz;
-            if (player != NULL && d2 <= 900.0f && mAnmIdx[i] != kAnmNone) {
+            if (d2 <= 900.0f) {
+                ++s_probe.inRange[1];
                 if (mAnmIdx[i] < kGrassAmbient) {
-                    if (mRunCool[i] == 0 && !mCut[i] && player->speedF > 16.0f) {
+                    ++s_probe.eligible[1];
+                    if (hitActor->speedF > s_probe.spdMax[1]) {
+                        s_probe.spdMax[1] = hitActor->speedF;
+                    }
+                    if (hitActor != dComIfGp_getPlayer(0)) {
+                        ++s_probe.nonPlayer[1];
+                    }
+                    if (!(hitActor->speedF > 16.0f)) {
+                        s_probe.lastName[1] = (int)fopAcM_GetName(hitActor);
+                    }
+                    // Flowers carry BOTH gates: the slot transition AND a real
+                    // field_0x03 = 0x10 cooldown. Grass has only the slot.
+                    if (mRunCool[i] == 0 && !mCut[i] && hitActor->speedF > 16.0f) {
+                        ++s_probe.fast[1];
                         cXyz ppos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
                         dKy_tevstr_c spawnTev;
                         GXColor kc;
@@ -1590,59 +1868,45 @@ void daExtVeg_c::checkFlowers() {
                             flowerParticleId(), &ppos, &spawnTev, &s_runRot, NULL, 255, NULL, -1,
                             &kc, &kc, NULL);
                         if (em != NULL) {
-                            em->setRate(1.0f);   // donor forces rate 1 for the JN ids
-                            mRunCool[i] = 0x10;  // donor field_0x03
+                            em->setRate(1.0f);
+                            mRunCool[i] = 0x10;
+                            ++s_probe.spawned[1];
                         }
                     }
                     const u8 idx = vegAnmNew(s_flowerAnm, kFlowerAnmNum);
                     if (idx != kAnmNone) {
                         mAnmIdx[i] = idx;
+                    } else {
+                        ++s_probe.poolFull[1];
                     }
                 }
                 if (mAnmIdx[i] >= kGrassAmbient) {
                     VegAnm& a = s_flowerAnm[mAnmIdx[i]];
                     a.rotY = cM_atan2s(dx, dz);
                     a.rotX = cM_atan2s(30.0f - std::sqrt(d2), 40.0f);
-                    a.state = 2;
-                }
-            } else if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
-                VegAnm& a = s_flowerAnm[mAnmIdx[i]];
-                const s16 targetY = (s16)(a.rotY & 0xE000);
-                const u8 origIdx = (u8)((a.rotY >> 13) & 7);
-                if (a.state == 2) {
-                    a.state = 1;
-                }
-                if (!cLib_addCalcAngleS(&a.rotX, s_flowerAnm[origIdx].rotX, 16, 4000, 100)) {
-                    if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
-                        a.state = 0;
-                        mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
-                    }
+                    // Donor flower WorkCo sets ONLY the two angles; it never
+                    // writes state 2 the way grass does (d_flower.cpp:113-118
+                    // vs d_grass.cpp:93-95). The state-2 write here was mine.
                 }
             }
         }
 
-        if (mCut[i]) {
+        // Donor gates WorkAt on the flower not already being gut.
+        if (!atHit || mCut[i]) {
             continue;
         }
 
         // ------------------------------------------------------------------
-        // CUT (donor hitCheck -> WorkAt:189-227).
+        // CUT (donor WorkAt:189-227).
         // ------------------------------------------------------------------
-        dCcMassS_HitInf hitInf;
-        fopAc_ac_c* hitActor = NULL;
-        cXyz pt = mBlades[i];
-        const u32 massFlags = dComIfG_Ccsp()->ChkMass(&pt, &hitActor, &hitInf);
-        const bool atHit = (massFlags & 1) && hitActor != NULL &&
-                           fopAcM_GetName(hitActor) != fpcNm_Obj_Carry_e;
-        if (!atHit) {
-            continue;
-        }
         mCut[i] = true;  // donor onBit(field_0x00, 0x8) -- the `gut` state
-        // Donor WorkAt:195-197 releases the push slot on cut.
+        // Donor WorkAt:195-197 frees the push slot on cut. Note it does NOT
+        // clear the index the way grass does -- a cut flower keeps swaying,
+        // and the gut geometry is what changes. Matching that.
         if (mAnmIdx[i] != kAnmNone && mAnmIdx[i] >= kGrassAmbient) {
             s_flowerAnm[mAnmIdx[i]].state = 0;
+            mAnmIdx[i] = (u8)((s_flowerAnm[mAnmIdx[i]].rotY >> 13) & 7);
         }
-        mAnmIdx[i] = kAnmNone;
 
         // Donor WorkAt spawns the cut VFX at the flower's own position (no y
         // offset, unlike grass's +25) and passes room K0 as both prm and env.
@@ -1669,7 +1933,26 @@ void daExtVeg_c::checkFlowers() {
             fopAcM_seStart(this, JA_SE_LK_CUT_GRASS, 0);
         }
     }
-    dComIfG_Ccsp()->MassClear();
+    // ========================================================================
+    // 248 -- NO MassClear. The donor never calls it: neither
+    // dGrass_packet_c::calc nor dFlower_packet_c::calc clears the mass list,
+    // they only SetMassAttr and poll. This call was mine, and 226 had already
+    // written down why it must not exist here -- Clear is GLOBAL state
+    // destruction, and the receiver runs MANY vegetation actors where the
+    // donor runs one packet.
+    //
+    // What it did: Link registers his mass shapes once per frame. The first
+    // flower clump to execute polled them and then wiped the list, so every
+    // vegetation actor BEHIND it in execute order saw massFlags = 0 forever --
+    // no CO (no lean, no run-through puff) and no AT (uncuttable). Visible,
+    // polled every frame, completely inert, and positional only by accident
+    // of execute order, which is why a dead patch could sit next to a working
+    // one. `exam` still counted those blades because it increments before the
+    // flags are read, so the census arithmetic looked perfect throughout.
+    //
+    // The engine clears unconditionally at frame end (dCcS draw), so simply
+    // not clearing here is correct on every stage we exist on.
+    // ========================================================================
 }
 
 // ==========================================================================

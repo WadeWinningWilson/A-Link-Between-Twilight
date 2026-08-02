@@ -793,8 +793,15 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
         // socket byte. mShapeType = param&0xF selects the color variant (0=pink,
         // 1=spotted, 2=black) — the predetermined WW mix — and the higher bits carry
         // sub-type/big-pig/path. The socket arg (0) would flatten every pig to shape 0.
+        // 246: EXT_VEG joins the full-params list. The vegetation actor reads the
+        // donor's own encoding -- kind = (params >> 4) & 3, type = params & 0xF
+        // (daGrass_prm) -- and the census already carries the real DZR params for
+        // every kusax/flower/pflower row. Hand-picked `arg=` bytes were standing in
+        // for them; they happened to agree on kind and blade count, but they are an
+        // invention where the authored value was sitting in the CSV, and they throw
+        // away the item-number bits the same word carries.
         if (actorId == fpcNm_KB_e || actorId == fpcNm_KAMOME_e || actorId == fpcNm_NPC_LS1_e ||
-            actorId == fpcNm_NPC_ZL1_e) {
+            actorId == fpcNm_NPC_ZL1_e || actorId == fpcNm_EXT_VEG_e) {
             params = wwParams;  // §232/§244/§254 native direct-port actors take the full WW DZR
                                 // params (Aryll mType rides param&0xF; Tetra decideType 0/2/6 same)
         } else if (me.arg >= 0) {
