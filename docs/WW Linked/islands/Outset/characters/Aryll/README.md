@@ -3,6 +3,20 @@
 Link's little sister. First WW character to fully perform in the port (opening cutscene). This is her
 index; deep procedures live in the shared recipes, chronology in the ledger.
 
+## Aryll native-port doc set (Librarian-curated pointers)
+
+The port's Aryll coverage is spread across several subtrees; this is the index. Pointers only — the content lives in each doc.
+
+- [voice-recipe.md](voice-recipe.md) — opening-cutscene **voice** (LIVE; verified chain §85–93b).
+- [cutscene-audio-scoping.md](../../../../cutscene-audio-scoping.md) — **§2 opening music / Outset-theme transition is LIVE**; its **§1 voice is SUPERSEDED** by `voice-recipe.md` (History ruling 2026-07-29).
+- [outset-intro-layers.md](../../../../../gaming%20systems/layers/outset-intro-layers.md) — awake / walk / telescope **layer census** (verified reference).
+- [outset-followup-plan.md](../../outset-followup-plan.md) — layer-activation flags + **telescope-quest** checklist (live TODO plan; status refresh pending per History).
+- [Cookbook recipes 10–15](../../../../../WW-Restoration-Cookbook-CANONICAL.md) — the cutscene-NPC **playbook** (storyboard/.stb binding).
+- [port-kits/HISTORY-KIT-FEEDBACK.md](../../../../port-kits/HISTORY-KIT-FEEDBACK.md) — Aryll port-kit **field notes**.
+- [tale-step-in-step-hypotheses.md](../../../../../state/tale-step-in-step-hypotheses.md) — *tangential* (Grandma tale; cites the Aryll cutscene as a discriminator).
+
+---
+
 ## Identity
 
 | | |
@@ -25,7 +39,7 @@ index; deep procedures live in the shared recipes, chronology in the ledger.
 | Dialogue | `folk.ls` | |
 | Cutscene arc | `Demo02.arc` (`arcs/` + `arcs_lib/`) | holds `awake.stb` + her demo anim set |
 
-### Face (texture-plane system — see [face-expression-recipe](../../../face-expression-recipe.md))
+### Face (texture-plane system — see [face-expression-recipe](../../../../face-expression-recipe.md))
 
 | Feature | Material(s) | Texture | Draw mode |
 |---|---|---|---|
@@ -39,8 +53,8 @@ Idle blink = `maba.btp` (index 1, *mabataki*), donor `play_btp_anm` random 60–
 ## Opening cutscene — `awake`
 
 Runs end to end: donor event → merged stage list → order → archive → storyboard → camera pan →
-dialogue → **cast performs**. Full pipeline in [cutscene-recipe](../../../cutscene-recipe.md) and
-[cutscene-animation-recipe](../../../cutscene-animation-recipe.md).
+dialogue → **cast performs**. Full pipeline in [cutscene-recipe](../../../../cutscene-recipe.md) and
+[cutscene-animation-recipe](../../../../cutscene-animation-recipe.md).
 
 **Demo expression beats** (from `§56 BEAT` decode — BTP resIDs in `Demo02`):
 
@@ -95,7 +109,7 @@ C8 to bisect swap-vs-material). Backup of the pin: `Demo02.arc.pre-kuchi18-bak`.
 
 ## Ledger
 
-Chronological detail in [cut-actors-demo-restore.md](../../../../state/cut-actors-demo-restore.md):
+Chronological detail in [cut-actors-demo-restore.md](../../../../../state/cut-actors-demo-restore.md):
 - Cutscene pipeline: №150–№173
 - Face/animation: №184–№197
 - Mouth-texture bug: №198–№216 (RESOLVED)

@@ -660,6 +660,7 @@ public:
     u16 getItemNowLife() { return mItemInfo.mItemNowLife; }
     void setItemNowLife(u16 life) { mItemInfo.mItemNowLife = life; }
     u8 getMesgStatus() { return mItemInfo.mMesgStatus; }
+    void setMesgStatus(u8 status) { mItemInfo.mMesgStatus = status; }  // §245 scope subsystem
     u8 getRStatus() { return mItemInfo.mRStatus; }
     bool isRSetFlag(u8 flag) { return (mItemInfo.mRSetFlag & flag) ? true : false; }
     void setRStatus(u8 status, u8 flag) {
@@ -3809,6 +3810,11 @@ inline void dComIfGp_setItemNowLife(u16 life) {
 
 inline u8 dComIfGp_getMesgStatus() {
     return g_dComIfG_gameInfo.play.getMesgStatus();
+}
+
+// §245 scope subsystem: WW fopMsgM_getScopeMode() writes the regular mesg status.
+inline void dComIfGp_setMesgStatus(u8 status) {
+    g_dComIfG_gameInfo.play.setMesgStatus(status);
 }
 
 inline u8 dComIfGp_getRStatus() {

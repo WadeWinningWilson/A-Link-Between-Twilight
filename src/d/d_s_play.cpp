@@ -9,6 +9,7 @@
 #include "JSystem/JUtility/JUTConsole.h"
 #include "JSystem/JUtility/JUTGamePad.h"
 #include "SSystem/SComponent/c_counter.h"
+#include "dusk/logging.h"  // §352b scene-delete stamp
 #include "c/c_dylink.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_demo.h"
@@ -44,6 +45,7 @@
 #include "d/d_albw_menu_res.h"
 #include "d/d_albw_wolf_stun.h"
 #include "d/d_focused_arts.h"
+#include "dusk/fps_probe.h"
 #if TARGET_PC
 #include "dusk/truetest.hpp"
 #endif
@@ -53,6 +55,7 @@
 #include "d/d_demo_leftover_viewer.h"
 #include "d/d_cut_actor_spawn.h"
 #include "d/d_ext_npc_mount.h"
+#include "d/d_ext_dmesg.h"               // §308 M3 native dMesg viewable box
 #include "d/d_ext_seq_space.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_save_guard.h"  // §49: storyboard dialogue poll + draw
@@ -580,7 +583,10 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     // Custom Models overlay changes, so menu/outfit icons track a toggle like
     // everything else. Idle cost: one int compare. See d_albw_menu_res.h.
     // ============================================
-    dAlbwMenuRes_drive();
+    {
+        DUSK_FPS_SCOPE(MenuRes);
+        dAlbwMenuRes_drive();
+    }
     // Twilight-border fallback: restore missing province walls (see
     // d_albw_twilight_border.h — strictly no-op when vanilla spawned them).
     dAlbwTwilightBorder_drive();
@@ -729,6 +735,8 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     // §49: storyboard dialogue. Same constraint as the editor above — the
     // widget ends in set2DOpa, so it must be queued from Draw, not Execute.
     dExtWw_drawDemoMessage();
+    // §308 M3: native dMesg viewable test box (WW host stages; set2DOpaTop → Draw).
+    dExtDmesg_drawTestBox();
 #endif
 
     #if DEBUG
@@ -792,9 +800,19 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
     dDemoLeftoverViewer::tick();
     dCutActorSpawn::tick();
     // FPS_BISECT_A1b: RULED OUT (2026-07-19) — menu ~288 / field still ~100–115 with polls off.
-    dExtNpcMount_pollBgWarps();
-    dExtWw_pollDemoMessage();  // §49: show/replace/dismiss storyboard lines
-    dExtNpcDoors_poll();
+    {
+        DUSK_FPS_SCOPE(Mount);
+        dExtNpcMount_pollBgWarps();
+    }
+    dExtNpcMount_pollRegionTriggers();  // [tale_loft] → TALE_DEMO (Demo01 / tale.stb)
+    {
+        DUSK_FPS_SCOPE(DemoMsg);
+        dExtWw_pollDemoMessage();  // §49: show/replace/dismiss storyboard lines
+    }
+    {
+        DUSK_FPS_SCOPE(Doors);
+        dExtNpcDoors_poll();
+    }
     dExtNpcMount_pollIdentifyProbe();  // §41: Z-target identity probe (change-only log)
     dExtNpcMount_pollCullProbe();      // §95: tree/mount cull probe (DUSK_CULL_PROBE=1)
     dExtSeqSpace_poll();                  // §52 (B): JA1 space gate + package detect (no parser yet)
@@ -941,6 +959,11 @@ static int dScnPly_Delete(dScnPly_c* i_this) {
     #endif
     dStage_Delete();
 
+#if TARGET_PC
+    // §352b: scene-delete entry stamp — the far bound of the §351 in-status-1
+    // control gap (demo-END → HERE). Pairs with §347a ARM gFrm + §352c sampler.
+    DuskLog.info("[Play] §352b SCENE DELETE gFrm={}", (int)g_Counter.mCounter0);
+#endif
     dComIfGp_event_remove();
 
     dComIfGp_particle_removeScene(0);

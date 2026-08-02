@@ -62,6 +62,18 @@ albw_backup_*/
 # ALBW temp debug dumps from dev sessions
 albw_*_debug.txt
 
+# ============================================================================
+# Port kits — donor-derived source, never committed (user ruling 2026-08-02).
+#
+# These hold machine-decompiled donor actor code (m2c output from split asm)
+# used as porting aids. They pass the exe greplist gate because docs/ is exempt,
+# but they are donor CODE rather than analysis, and the covenant keeps donor
+# content out of the repo — the same call already made for the raw DuskTap
+# capture traces. Keep them local; the project's own ported implementations
+# live in src/ and are committed normally.
+# ============================================================================
+docs/WW Linked/port-kits/
+
 # Local-only captured diagnostic dumps (preserved for reference, never commit)
 Diagnostic files/
 

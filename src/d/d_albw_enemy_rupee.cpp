@@ -4,6 +4,7 @@
 // ============================================
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_rupee_popup.h"
+#include "d/d_albw_region_mult.h"
 
 #if TARGET_PC
 
@@ -81,6 +82,7 @@ static void markKillGranted(fopAc_ac_c* enemy) {
 }
 
 static void grantRupees(u16 amount) {
+    amount = dAlbwRegionMult_scaleRupees(amount);
     if (amount == 0) {
         return;
     }

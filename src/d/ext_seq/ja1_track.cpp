@@ -22,6 +22,26 @@ bool volProbeEnv() {
     return true;
 }
 
+// ============================================================
+// §P2 note-fidelity tap — receiver-side mirror of the donor
+// DuskTap at TTrack::noteOn @80281258 (JASSeqParser.cpp:915:
+//   track->noteOn(noteid, note, r25, time, r22)). Emits ONE line
+// per note in the donor capture's exact shape
+//   note=<voice> p=(<key>,<vel>,<gate>)
+// so the P2 differ can diff our note stream against
+// docs/WW Linked/dolphin-captures-bgm-notes-20260728.txt
+// note-for-note. HIGH VOLUME — toggle DUSK_EXTSEQ_NOTE_TAP=1 for a
+// capture session only, default OFF. Unbudgeted (full stream, like
+// the donor's 8,044-note capture).
+// ============================================================
+bool noteTapEnv() {
+    const char* v = std::getenv("DUSK_EXTSEQ_NOTE_TAP");
+    if (v == nullptr || v[0] == '\0' || (v[0] == '0' && v[1] == '\0')) {
+        return false;
+    }
+    return true;
+}
+
 /** Fresh budget each startOwned so a field→house hop still captures samples. */
 u32& volProbeSetParamBudget() {
     static u32 s_left = 96;
@@ -147,12 +167,25 @@ Ja1Track* Ja1Track::openChild(u8 idx, u8 /*flags*/) {
     return mChildren[idx];
 }
 
-int Ja1Track::noteOn(u8 voice, s32 key, s32 vel, s32 /*gate*/, u32 /*prio*/) {
+int Ja1Track::noteOn(u8 voice, s32 key, s32 vel, s32 gate, u32 /*prio*/) {
     if (Ja1EventDump::active()) {
         (void)voice;
         (void)key;
         (void)vel;
+        (void)gate;
         return 0;
+    }
+    // ============================================================
+    // §P2 note-fidelity tap (donor-shape mirror; see noteTapEnv above).
+    // Raw entry args = the exact quantities the donor tap logged at
+    // TTrack::noteOn: voice=noteid, key/vel/gate = note/vel/time.
+    // ============================================================
+    if (noteTapEnv()) {
+        DuskLog.info("[ExtSeq] §P2 noteTap note={:>3} p=({:04x},{:04x},{:04x})",
+                     static_cast<unsigned>(voice),
+                     static_cast<unsigned>(key) & 0xFFFFu,
+                     static_cast<unsigned>(vel) & 0xFFFFu,
+                     static_cast<unsigned>(gate) & 0xFFFFu);
     }
     if (voice >= kMaxVoices) {
         voice = 0;

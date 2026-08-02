@@ -1,5 +1,11 @@
 # Agent index — where live memory lives
 
+> 🐛 **[KNOWN-BUGS.md](KNOWN-BUGS.md) — open-defect registry with ARMED passive probes.**
+> Confirmed-but-unfixed defects (KB-1 intermittent cutscene kill, KB-2 seam presentation
+> gap), their eliminated hypotheses, and the probe families live in every build so the next
+> occurrence self-documents. Check here BEFORE re-diagnosing a "new" cutscene/control bug,
+> and update the entry when a probe fires.
+
 > ⛔ **[DO-NOT.md](DO-NOT.md) — hard stops. Read it before touching BG/collision
 > registration, room identity, or any surface it names. Entries are permanent
 > rejections with the failure mechanism spelled out; no AI instance may
@@ -8,6 +14,18 @@
 > ⛔ **[NEVER-PUSH-STRIP-SET.md](NEVER-PUSH-STRIP-SET.md) — covenant push-gate (§113).
 > Before ANY push to public `main`: the WW receiver layer is fork-local, and the
 > M6 greplist must be CLEAN on the pushed tree's exe. No self-clearing the gate.**
+>
+> 📒 **[WW Linked/port-liberties.md](WW%20Linked/port-liberties.md) — faithfulness-debt
+> ledger. Every deviation from WW-vanilla values that is a PORT mechanism (not a donor
+> byte) is logged here with its reconciliation condition. Mark a liberty when you take
+> it; clear it when reconciled/ratified. NOT hard-stops — the honest debt list.**
+>
+> 📚 **[gaming systems/](gaming%20systems/README.md) — how WW's runtime systems actually
+> work and how the port reproduces them (cutscenes/step-in-step, dialogue boxes, get-item
+> boxes, demo-actor driving, BDL parse-timing, cel-shade lighting, region triggers, TP
+> receiver architecture, debugging methods). The teachable "how it works" view, with the
+> traps and current imperfections named. Read the relevant area doc before touching a
+> gaming system.**
 
 **Purpose:** One map for fresh Cursor/Claude chats. Prefer **live state** over reopening old sessions or reading interconnected megadocs end-to-end.
 
@@ -48,6 +66,7 @@
 | Topic | Live state | Detail / archive (only if needed) |
 |-------|------------|-----------------------------------|
 | Run control (traffic light) | [state/run-control.md](state/run-control.md) | [INTERCONNECTED-RUNS.md](Interconnected%20Chats/INTERCONNECTED-RUNS.md) |
+| Foundry (methods / instruments) | [state/foundry-methods.md](state/foundry-methods.md) | [Foundry.md](Foundry.md) (charter) · [LANES.md](LANES.md) |
 | Enemy Death Rupees | [state/enemy-death-rupees.md](state/enemy-death-rupees.md) | `albw-port.md` (setting overview) |
 | WW itemmdl / Wind Curs↔Clau | [state/ww-itemmdl.md](state/ww-itemmdl.md) | [wind-waker-item-work.md](wind-waker-item-work.md), [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) (archive) |
 | Field combat refinements | [state/combat-refinements.md](state/combat-refinements.md) | [combat-refinements-handoff.md](combat-refinements-handoff.md) |
@@ -56,14 +75,14 @@
 | Build / FPS review | [state/drive-fps.md](state/drive-fps.md) | [build-fps-guidelines.md](build-fps-guidelines.md) (has its own doc map) |
 | Shield / parry | — | [shield-combat.md](shield-combat.md) |
 | ALBW port overview | — | [albw-port.md](albw-port.md) |
-| Cut Actors / Demo Restore | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) | [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md), [TPHistory.md](TPHistory.md) §7 |
+| Cut Actors / Demo Restore | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) | [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md), [TPHistory.md](TPHistory.md) §7; cutscene/layer RE: [WW Linked/noclip-fast-track.md](WW%20Linked/noclip-fast-track.md) (elevated identity-match method) |
 | Level Editor (Phase 1) | [state/level-editor.md](state/level-editor.md) | [level-editor-phase1.md](level-editor-phase1.md), [Interconnected Chats/Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) |
 | Outfit / sumo / quick-swap | *(add `state/outfit-sumo.md` when next session starts)* | [Interconnected Chats/Quick-Sumo Work.md](Interconnected%20Chats/Quick-Sumo%20Work.md), [Outfit Stats.md](Outfit%20Stats.md), [sumo-combat.md](sumo-combat.md) |
 | Quick-equip wheel + page 2 | [state/quick-equip-wheel.md](state/quick-equip-wheel.md) | `~/.cursor/plans/next_slice_shop_potion_stagger.plan.md` (original hold sketch); [deku-leaf-glide-research.md](deku-leaf-glide-research.md) P4; [d-pad-reworking.md](d-pad-reworking.md) |
 | Ext Status (Collect sibling) | [state/ext-start-status.md](state/ext-start-status.md) | Tools/Quest/Atlas; `ext_inv/claims.ini`; №103 |
 | Fado Ordon door unlock + warp sink | [state/fado-door-warp.md](state/fado-door-warp.md) | cut-actors №101; `d_a_door_knob00`; `d_ext_mod_flags` |
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |
-| Mod API port (main `.dusk` extraction) | [state/mod-api-port.md](state/mod-api-port.md) | [state/mod-api-port-albw-meter.md](state/mod-api-port-albw-meter.md) (#1 plan); port canvases; `albw-port.md` |
+| Mod API port (main `.dusk` extraction) | [state/mod-api-port.md](state/mod-api-port.md) | [modding.md](modding.md) (dusk-API modding guide); [state/mod-api-port-albw-meter.md](state/mod-api-port-albw-meter.md) (#1 plan); port canvases; `albw-port.md` |
 | Mod API host promote + local dusk merge | [state/mod-api-host-promote.md](state/mod-api-host-promote.md) | Layer B / Mods UI / `.dusk` push set; parked WW receivers; `pre-dusk-api-merge` tag; [Custom-Model-API-Work.md](Custom-Model-API-Work.md) |
 | WW Bridge Tool | [state/ww-bridge-tool.md](state/ww-bridge-tool.md) | [WW Linked/ww-bridge-tool-interconnected.md](WW%20Linked/ww-bridge-tool-interconnected.md); shore motion §128 → `albt bridge/reports/model1_btk_motion.md` |
 

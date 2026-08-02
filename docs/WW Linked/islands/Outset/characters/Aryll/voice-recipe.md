@@ -62,3 +62,32 @@
 Cross-refs: bus §85–§93b (`ww-bridge-tool-interconnected.md`) · [audio-recipe](../../audio-recipe.md)
 · [ext-seq-audio-findings](../../../../ext-seq-audio-findings.md) (the theme thread this work
 deliberately never touched).
+
+---
+
+## Native-port status + the TRUE native audio subsystem (History, 2026-07-30, bus §247/§249)
+
+**This voice chain survived the native Aryll port untouched — and here is why.** The trigger is
+**message-tied, not actor-tied**: `d_demo.cpp` calls `dExtWw_handleDemoMessage(msgId)` →
+`ExtSeq::ja1Voice_onDemoMessageOpen(...)` whenever a cutscene dialogue box opens. It keys off the
+**storyboard's message beats**, so it fires the same whether Aryll is the old audition-mount stand-in
+or the new native `d_a_npc_ls1` actor. (The "mounted audio" label is a misnomer — it never depended on
+the mount.) Confirmed live in-game after the native switch.
+
+**But this is a custom reconstruction, not the native subsystem — same status as the demo-face.** The
+three parallel "working bridge vs true native machinery" cases as of §249:
+
+| Layer | What's LIVE now | The TRUE native subsystem (to port) |
+|---|---|---|
+| The actor | native `d_a_npc_ls1` ✅ done | — |
+| Face expressions | reconstructed `getP_BtpData` from the mount | Foundry decoding the donor stub |
+| **Voice / SFX** | **custom `ja1Voice` message-redirect (shadow-wave one-shot from package)** | **WW `JA_SE_CV_*` SE-system events fired by the STB / JAISound — NOT ported** |
+
+**Standing directive (user, 2026-07-30): we ALWAYS port the true native subsystem.** The `ja1Voice`
+redirect is a *bridge*, not the endpoint. The real path — character voices as `JA_SE_CV_*` SE-system
+events, resolved the way the SE-system does it (the `d_a_npc_ls1` actor / STB firing the cues, not a
+package cue-map read at message-open) — is the native port owed here. The §1 scope of
+[cutscene-audio-scoping.md](../../../cutscene-audio-scoping.md) (SE-system `JA_SE_CV_*`) is the native
+target; **this recipe is the verified bridge that stays until the native SE path lands.** (That scoping
+doc's §1 voice section is otherwise superseded by THIS doc for the current live behavior — its *music*
+scope remains its own open item.)

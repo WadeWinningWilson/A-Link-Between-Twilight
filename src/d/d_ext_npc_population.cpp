@@ -10,6 +10,7 @@
 
 #if TARGET_PC
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -414,6 +415,36 @@ int dExtNpcPopulation_countLiveCensus() {
     return ctx.n;
 }
 
+// ============================================================
+// §P2 placement-parity tap (Foundry ferry — mirrors dPa_emitterTapLog, §207).
+// Receiver mirror of the donor DuskTap at the stage-placement dispatcher
+// (@80041628). Emits ONE UNCAPPED line per census actor actually created —
+// every proc, INCLUDING NPC_EXTVEG grass and the bulk paths that the capped
+// `spawn #<=12` debug log and the `[Spawn] src=census` mount log both miss —
+// so tools/foundry/probe_differ.py can hold our placement roster+rate to the
+// donor's 1,608-placement census (site=stage_placement). The ms timestamp is
+// what the differ's rate math needs (dusklight log lines carry none), which
+// also removes the one-shot `t_s=0` rate artifact. HIGH VOLUME — toggle
+// DUSK_PLACE_TAP=1 for capture sessions only, default OFF.
+// ============================================================
+static bool dExtNpcPop_placeTapEnv() {
+    const char* v = std::getenv("DUSK_PLACE_TAP");
+    return !(v == NULL || v[0] == '\0' || (v[0] == '0' && v[1] == '\0'));
+}
+static void dExtNpcPop_placeTapLog(const char* name, const char* proc, const char* chunk, f32 x,
+                                   f32 y, f32 z) {
+    if (!dExtNpcPop_placeTapEnv()) {
+        return;
+    }
+    static const std::chrono::steady_clock::time_point s_t0 =
+        std::chrono::steady_clock::now();
+    const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - s_t0)
+                             .count();
+    DuskLog.info("[DuskLog] §P2 placement t={} name={} proc={} chunk={} pos=({:.1f},{:.1f},{:.1f})",
+                 ms, name, proc, chunk, x, y, z);
+}
+
 void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
     if (!bg.isBg || bg.populationCsv[0] == '\0' || bg.modFolder[0] == '\0') {
         return;
@@ -573,6 +604,36 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
         }
         const ActorMapEntry& me = it->second;
         // ====================================================================
+        // §327 — RETIRED BRIDGE: the Lamp -> NPC_LAMP mount stand-in is PARKED.
+        // The wall/loft lamp is now a NATIVE direct port (fpcNm_LAMP_e,
+        // src/d/actor/d_a_lamp.cpp + OBJNAME("Lamp", fpcNm_LAMP_e, 255) in
+        // d_stage.cpp), so the actor_map.ini [Lamp] proc=NPC_LAMP row must no
+        // longer spawn the model-only stand-in (DN-9: never mount when the donor
+        // system is ported). The config row lives in an external mod folder, so
+        // the park is this code gate — kept gated (not deleted) per the retired-
+        // bridge rule; flip the #if 1 to 0 to resurrect the stand-in for A/B.
+        // ====================================================================
+// §329d UN-PARKED: the park caused the interior CRASH LOOP (2026-08-01 17:36
+// log) — the census:Lamp mount was the ONLY countLiveCensus-countable actor in
+// Grandma's room, so parking it made №94 self-heal read live=0 forever →
+// re-run population every cycle → a NEW Ba1 per cycle → memory death. The
+// stand-in returns until BOTH preconditions exist: (a) a native census→OBJNAME
+// spawn path for fpcNm_LAMP_e, (b) census liveness decoupled from this one
+// actor. Re-park only with both.
+#if 0  // §327 Lamp stand-in parked — native LAMP port owns the placement
+        if (name == "Lamp" && std::strcmp(me.proc, "NPC_LAMP") == 0) {
+            static bool s_lampParkLogged = false;
+            if (!s_lampParkLogged) {
+                s_lampParkLogged = true;
+                DuskLog.info(
+                    "[ExtNpcPop] §327 'Lamp' NPC_LAMP stand-in parked (retired bridge) — "
+                    "native fpcNm_LAMP_e direct port owns the placement");
+            }
+            ++skipped;
+            continue;
+        }
+#endif
+        // ====================================================================
         // №249 — presence axis 2: params-variant selection (data-driven).
         // ====================================================================
         // A unique NPC may carry SEVERAL census rows distinguished by params —
@@ -687,6 +748,8 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
                 fopAcM_create(actorId, params, &pos, roomNo, &angle, &scale, -1);
             if (id != fpcM_ERROR_PROCESS_ID_e) {
                 ++spawned;
+                // §P2 placement-parity tap — UNCAPPED (item/pickup path).
+                dExtNpcPop_placeTapLog("item", me.proc, chunk.c_str(), pos.x, pos.y, pos.z);
                 if (spawned <= 12) {
                     DuskLog.info(
                         "[ExtNpcPop] spawn #{} name=item proc={} itemNo={} "
@@ -726,7 +789,15 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
             continue;
         }
         u32 params = 0;
-        if (me.arg >= 0) {
+        // §229 native pig (direct port): pass the FULL 32-bit WW DZR params, not the
+        // socket byte. mShapeType = param&0xF selects the color variant (0=pink,
+        // 1=spotted, 2=black) — the predetermined WW mix — and the higher bits carry
+        // sub-type/big-pig/path. The socket arg (0) would flatten every pig to shape 0.
+        if (actorId == fpcNm_KB_e || actorId == fpcNm_KAMOME_e || actorId == fpcNm_NPC_LS1_e ||
+            actorId == fpcNm_NPC_ZL1_e) {
+            params = wwParams;  // §232/§244/§254 native direct-port actors take the full WW DZR
+                                // params (Aryll mType rides param&0xF; Tetra decideType 0/2/6 same)
+        } else if (me.arg >= 0) {
             params = static_cast<u32>(me.arg) & 0xFF;
         } else if (man.socketArg >= 0) {
             params = static_cast<u32>(man.socketArg) & 0xFF;
@@ -764,6 +835,8 @@ void dExtNpcPopulation_spawnForBg(const dExtNpcManifest& bg) {
             if (me.unique) {
                 uniqueNames.insert(name);
             }
+            // §P2 placement-parity tap — UNCAPPED (every spawn incl. grass).
+            dExtNpcPop_placeTapLog(name.c_str(), me.proc, chunk.c_str(), pos.x, pos.y, pos.z);
             if (spawned <= 12) {
                 DuskLog.info(
                     "[ExtNpcPop] spawn #{} name={} proc={} chunk={} ww_params={:08x} head={} "

@@ -249,3 +249,32 @@ Check, cheapest first:
 6. Compare a **daytime** screenshot against `VRB0[band 2]`, not against memory.
 
 If all six hold, the sky is correct and will follow time of day.
+
+---
+
+## 8. Wind (Ferry F / №280) — there is NO donor-authored per-stage wind direction
+
+WW hosts render on a foreign shell stage, so the room `FILI` wind reads **0** and the
+wave/grass panes don't drift. Engine's `dKyw_ww_host_wind_onStage` forces an ambient wind
+(`pow≈0.4`) for WW hosts. The **direction** is History's value — and the decomp answer is
+that **the donor authors none**, so the placeholder is already correct.
+
+**Decomp (`dKyw_wind_set`, `D:\XXXXXXX\WW DP\src\d\d_kankyo_wether.cpp:986`):**
+- `FILI` supplies the wind **LEVEL only** (`GlobalWindLevel`: 0→strength 0.3, 1→0.6, 2→0.9).
+  It does **not** carry a direction.
+- Direction = `tact_wind` (the **Wind Waker baton** — player-controlled) **or** `evt_wind`
+  (kytag / tornado events). With neither set:
+  `tact_y=0 → wind_vec = (cos·cos, sin, cos·sin) = (1,0,0)` = **+X = `angY=0`**.
+- `wind_vec.x = cos(tact_x)·cos(tact_y)`, `.y = sin(tact_x)`, `.z = cos(tact_x)·sin(tact_y)`
+  — so `angY` (= `tact_y`) rotates the XZ direction: `0→+X`, `0x4000→+Z`, `0x8000→−X`.
+- Outset's only env tag, **`ky_tag1`** (`sea/Room44`, at `-200000,-5000,321000`), has params
+  `0xffffffff` (all-default) and angle `(0,0,0)` — it authors **no** wind direction.
+
+**Why `angY=0` is the correct Outset value, not a placeholder to replace:** at the Outset
+intro Link **has no Wind Waker yet** (it comes from the King of Red Lions much later), so
+`tact_wind` is unset and the wind *is* the ambient default `angY=0` (+X). Nothing to replace.
+
+**Notes:** the donor default *strength* for level-0 is **0.3** (Engine set `0.4` — close;
+Engine's call). And `angY` being decomp-`0`, the gate step "panes drift vs noclip Room44" is
+the visual arbiter — if `+X` ever disagrees with the museum, that is a deliberate **aesthetic
+tune**, not an authored number (none exists in the data). Do not invent one.

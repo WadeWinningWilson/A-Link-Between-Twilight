@@ -99,6 +99,8 @@ set(DOLZEL_FILES
         src/d/d_event_lib.cpp
         src/d/d_simple_model.cpp
         src/d/d_particle.cpp
+        src/d/ww_jpa.cpp
+        src/d/ww_jpa_bind.cpp
         src/d/d_particle_name.cpp
         src/d/d_particle_copoly.cpp
         src/d/d_path.cpp
@@ -186,6 +188,7 @@ set(DOLZEL_FILES
         src/d/d_albw_dialogue.cpp
         src/d/d_albw_ui_text.cpp
         src/d/d_albw_hp_mult.cpp
+        src/d/d_albw_region_mult.cpp
         src/d/d_albw_combat.cpp
         src/d/d_focused_arts.cpp
         src/dusk/sim_time_scale.cpp
@@ -195,9 +198,12 @@ set(DOLZEL_FILES
         src/d/d_demo_leftover_viewer.cpp
         src/d/d_cut_actor_spawn.cpp
         src/d/d_ext_npc_mount.cpp
+        src/d/d_ext_dmesg.cpp
+        src/d/d_ext_save_flags.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp
         src/d/d_ext_npc_population.cpp
+        src/d/d_ext_ww_actor_shims.cpp
         src/d/d_ext_seq_space.cpp
         src/d/ext_seq/ja1_seq_ctrl.cpp
         src/d/ext_seq/ja1_track.cpp
@@ -271,6 +277,7 @@ set(DOLZEL_FILES
         src/d/d_msg_string.cpp
         src/d/d_msg_flow.cpp
         src/d/d_name.cpp
+        src/d/d_npc.cpp
         src/d/d_npc_lib.cpp
         src/d/d_ovlp_fade.cpp
         src/d/d_ovlp_fade2.cpp
@@ -1024,6 +1031,20 @@ set(REL_FILES
         src/d/actor/d_a_knob00.cpp
         src/d/actor/d_a_ext_vegetation.cpp
         src/d/actor/d_a_ext_plank_span.cpp
+        src/d/actor/d_a_esa.cpp
+        src/d/actor/d_a_kb.cpp
+        src/d/actor/d_a_kamome.cpp
+        src/d/actor/d_a_npc_bm1.cpp
+        src/d/actor/d_a_npc_ls1.cpp
+        src/d/actor/d_a_obj_toripost.cpp
+        src/d/actor/d_a_npc_zl1.cpp
+        src/d/actor/d_a_npc_ba1.cpp
+        src/d/actor/d_a_obj_otble.cpp
+        src/d/actor/d_a_ww_demo00.cpp
+        src/d/actor/d_a_lamp.cpp
+        src/d/actor/d_a_obj_mshokki.cpp
+        src/d/actor/d_a_spc_item01.cpp
+        src/d/d_door.cpp # §328 WW door base layer (dDoor_info/msg/stop/key2/hkyo) — knob00 native branch depends on it
         src/d/actor/d_a_npc_kn.cpp
         src/d/actor/d_a_npc_knj.cpp
         src/d/actor/d_a_npc_kolinb.cpp
@@ -1527,6 +1548,7 @@ set(DUSK_FILES
         src/dusk/mods/svc/ui.hpp
 		src/dusk/gamepad_color.cpp
 		src/dusk/autosave.cpp
+        src/dusk/event_ext_store.cpp
         src/dusk/http/http.hpp
         src/dusk/io.cpp
         src/dusk/layout.cpp

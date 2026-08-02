@@ -44,6 +44,15 @@ static void clear_tmpflag_for_message() {
 };  // namespace
 
 dEvt_control_c::dEvt_control_c() {
+#if TARGET_PC
+    // §353 (the §345a-without-§352b resolution): this ctor runs remove() — and
+    // the play-info is GLOBAL, so a scene CREATE re-initializing it executes
+    // this on the LIVE object: status(pre) is the running event's state, and
+    // the remove() kills it. Tag distinctly from wrapper calls; status(pre)==1
+    // here == the tale assassin's fingerprint. Strip with §336.
+    DuskLog.info("[Evt] §353 dEvt CTOR — status(pre)={} gFrm={}", (int)mEventStatus,
+                 (int)g_Counter.mCounter0);
+#endif
     remove();
 }
 
@@ -66,6 +75,20 @@ s32 dEvt_control_c::orderOld(u16 type, u16 prio, u16 flag, u16 hind, void* reque
 
 s32 dEvt_control_c::order(u16 type, u16 prio, u16 flag, u16 hind, void* requestActor,
                           void* targetActor, s16 id, u8 mapToolId) {
+#if TARGET_PC
+    // §345c (10-hyp refill; H-submitter identity): every change-family (0xE00)
+    // order submitted while an event RUNS, with the requester named. Timestamps
+    // vs §305 box beats (H9 clothes beat) and §324/§311 lines (H10 message
+    // machinery). Strip with §336.
+    if ((flag & 0xE00) && mEventStatus != 0) {
+        DuskLog.info("[Evt] §345c order SUBMIT mid-event: reqProc={:#x} flag={:#x} type={} "
+                     "prio={} id={} mapTool={:#x} runEvt='{}' status={}",
+                     (int)(requestActor != NULL ? fopAcM_GetName((fopAc_ac_c*)requestActor)
+                                                : -1),
+                     (unsigned)flag, (int)type, (int)prio, (int)id, (int)mapToolId,
+                     dComIfGp_getEventManager().getRunEventName(), (int)mEventStatus);
+    }
+#endif
     if (!(flag & 0x400) && mapToolId != 0xFF) {
         int roomNo = dComIfGp_roomControl_getStayNo();
         dStage_MapEvent_dt_c* data = searchMapEventData(mapToolId, roomNo);
@@ -626,6 +649,17 @@ int dEvt_control_c::change() {
             order = &mOrder[curOrderIdx];
 
             if ((order->mFlag & 0xE00) && order->mpRequestActor == mChangeActor) {
+#if TARGET_PC
+                // §344 (the §341a killer): change() is the ONLY direct 1→0 path —
+                // an event-CHANGE order granted mid-tale killed TALE_DEMO at
+                // fnm=98 (log 22:28). Name the requester. Strip with §336.
+                DuskLog.info("[Evt] §344 change() GRANT — reqProc={:#x} flag={:#x} evType={} "
+                             "(mid-run runEvt='{}')",
+                             (int)(order->mpRequestActor != NULL
+                                       ? fopAcM_GetName(order->mpRequestActor) : -1),
+                             (unsigned)order->mFlag, (int)order->mEventType,
+                             dComIfGp_getEventManager().getRunEventName());
+#endif
                 mOrderIdx = curOrderIdx;
                 mNum = 1;
                 order->mNextOrderIdx = -1;
@@ -728,6 +762,15 @@ void dEvt_control_c::reset() {
 
         order(dEvt_type_OTHER_e, 3, 0x201, mHindFlag, pt1, getPt2(), eventIdx, field_0xec);
         mChangeActor = pt1;
+#if TARGET_PC
+        // §345b (H4/H8): reset() queues the RE-ENTRANCE change order (0x201) and
+        // arms mChangeActor whenever the map-event carries a re-entry idx —
+        // prime suspect for the mid-tale change grant. Strip with §336.
+        DuskLog.info("[Evt] §345b reset(): re-entrance order 0x201 queued, fld_ec={:#x} "
+                     "changeActor=proc:{:#x} evIdx={}",
+                     (int)field_0xec,
+                     (int)(pt1 != NULL ? fopAcM_GetName(pt1) : -1), (int)eventIdx);
+#endif
     }
 
     onEventFlag(8);
@@ -741,6 +784,12 @@ void dEvt_control_c::reset(void* param_0) {
     }
 
     mChangeActor = param_0;
+#if TARGET_PC
+    // §345b (H4/H8) — the reset(void*) overload's setter.
+    DuskLog.info("[Evt] §345b reset(actor): changeActor=proc:{:#x} fld_ec={:#x}",
+                 (int)(param_0 != NULL ? fopAcM_GetName((fopAc_ac_c*)param_0) : -1),
+                 (int)field_0xec);
+#endif
     onEventFlag(8);
 }
 
@@ -1031,10 +1080,58 @@ int dEvt_control_c::Step() {
         mEventFlag = 0;
         onEventFlag(0x200);
         mEventStatus = 0;
+#if TARGET_PC
+        // §350b site B: the 2→0 close write. Frame-stamped (H2 sequencing).
+        DuskLog.info("[Evt] §350b 2→0 (close) gFrm={} nextStage={}",
+                     (int)g_Counter.mCounter0, dComIfGp_isEnableNextStage() ? 1 : 0);
+#endif
     } else if (mEventStatus == 0) {
         mEventFlag = 0;
     }
 
+#if TARGET_PC
+    {
+        // ====================================================================
+        // §341a STATUS-TRANSITION PROBE (10-hypothesis, live-state §340): the
+        // tale leaves status 1 mid-item-box — log EVERY transition with the
+        // discriminators for H1 (finish flags → see §318/§287 last prints),
+        // H2 (early §322 exit → nextStage), H3/H4 (demo mode + §341b/c
+        // attribution), H5 (eventFlag 8), H7 (susp), H8 (msg kill),
+        // H10 (what entry() dispatched next). Change-only; strip with §336.
+        // ====================================================================
+        static int s_prevStatus341 = -1;
+        if ((int)mEventStatus != s_prevStatus341) {
+            JStudio::stb::TControl* c341 = dDemo_c::getControl();
+            fopAc_ac_c* pl350 = dComIfGp_getPlayer(0);
+            DuskLog.info(
+                "[Evt] §341a status {}→{} runEvt='{}' demoMode={} f={} fnm={} susp={} "
+                "nextStage={} evFlag8={} kill={} gFrm={} fade={} linkSpd={:.1f}",
+                s_prevStatus341, (int)mEventStatus,
+                dComIfGp_getEventManager().getRunEventName(), (int)dDemo_c::getMode(),
+                (int)dDemo_c::getFrame(), (int)dDemo_c::getFrameNoMsg(),
+                c341 != NULL ? (int)c341->getSuspend() : -999,
+                dComIfGp_isEnableNextStage() ? 1 : 0, chkEventFlag(8) ? 1 : 0,
+                dMsgObject_getMsgObjectClass() != NULL ? 1 : 0,
+                (int)g_Counter.mCounter0, mDoGph_gInf_c::isFade() ? 1 : 0,
+                pl350 != NULL ? pl350->speedF : -1.0f);
+            s_prevStatus341 = (int)mEventStatus;
+        }
+        // §285 event-end probe: teardown only fires at mEventStatus==5 AND
+        // !isEnableNextStage() (№89 — a pending stage-change blocks endProc). Log the
+        // gate so we see (a) whether the tale reaches status 5 (staff all done) and
+        // (b) whether a next-stage is wrongly armed, stranding it (the observed hang).
+        static int s_p285 = 0;
+        if (mEventStatus != 0 && (mEventStatus == 5 ? ((s_p285++ % 30) == 0)
+                                                    : ((s_p285++ % 120) == 0))) {
+            const char* re = evtMng->getRunEventName();
+            DuskLog.info(
+                "[Evt] §285 mEventStatus={} isEnableNextStage={} runEvt='{}' "
+                "(status5 + !nextStage ⇒ endProc→teardown)",
+                (int)mEventStatus, dComIfGp_isEnableNextStage() ? 1 : 0,
+                re != NULL ? re : "(none)");
+        }
+    }
+#endif
     if (mEventStatus == 5 && !dComIfGp_isEnableNextStage()) {
         #if DEBUG
         prevEvId = mEventId;
@@ -1091,6 +1188,11 @@ int dEvt_control_c::Step() {
     }
 
     if (mEventStatus == 0 && entry()) {
+#if TARGET_PC
+        // §350c: first event grant after idle — W2's end marker (H8), pairs
+        // with the playerInit CREATE line as W2's start.
+        DuskLog.info("[Evt] §350c entry() GRANT gFrm={}", (int)g_Counter.mCounter0);
+#endif
         if (dMsgObject_getMsgObjectClass() != NULL) {
             dMsgObject_setKillMessageFlag();
         }
@@ -1240,6 +1342,15 @@ BOOL dEvt_control_c::compulsory(void* param_0, const char* eventName, u16 hind) 
 }
 
 void dEvt_control_c::remove() {
+#if TARGET_PC
+    // §345a (H2): remove() is a DIRECT status-0 writer outside Step — if the
+    // tale dies here, the §341a 1→0 line pairs with THIS attribution.
+    if (mEventStatus != 0) {
+        DuskLog.info("[Evt] §345a dEvt remove() while status={} runEvt='{}' this={} gFrm={}",
+                     (int)mEventStatus, dComIfGp_getEventManager().getRunEventName(),
+                     (void*)this, (int)g_Counter.mCounter0);
+    }
+#endif
     mMode = dEvt_mode_WAIT_e;
     mEventStatus = 0;
     mNum = 0;

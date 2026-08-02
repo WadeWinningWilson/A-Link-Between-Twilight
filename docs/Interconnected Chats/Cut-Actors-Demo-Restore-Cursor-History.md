@@ -3920,3 +3920,39 @@ Build green `/O2`, caches wiped. **USER VERIFY:** (a) exterior ladder SFX+ledge 
 > **Remaining bug: it's never drawn.** Every frame: `§66 live t=N: draw=0 scale=0.00 max=1.00`, and there is NO `[ItemBase] §66 show:` line anywhere in the run — so `show()` is never called on the partner item. The bundle builds, sits at draw=0/scale=0, and Link receives "nothing." The offset is already correct (`§66 offset: kit hand_offset (0,120,48)`), so once shown it'll sit right.
 >
 > This is the **show-chain**, not the model: our `№251` present-demo handoff (`fireMountPresentDemo` → `createItemForPresentDemo` arg 0 + `setItemPartnerId` + `orderChangeEventId` DEFAULT_GETITEM event 260) fires, but Link's get-cut (`alink_demo.inc` ~2485: `item_partner_p->show()` near the GET anim end) never runs on the partner. Suspect the event doesn't drive Link into `procGetItem` for this handoff, or the partner id isn't the one Link's cut reads. Note our handoff passes `createItemForPresentDemo(..., 0, ...)` where Link's own present path passes arg `3` (argFlags 0x1|0x2) — worth checking that arg difference drives the show cut. §66 arm-6 (show/hide probe) is in and will confirm the moment show() fires.
+
+---
+
+#### Paste for Cursor (2026-07-26 — Ba1_Get_Itm event MERGED; wire it as the talk-close demo, retire the bare handoff)
+
+> History lane, Path B step 1 done. `Ba1_Get_Itm` is now in `F_DL01/STG_00.arc::event_list.dat` (events 1→2; DN-2-verified: PAL0 sea-stash preserved `1d89baba`, all other members byte-identical). The `awake` event is untouched.
+>
+> **The event (donor choreography):** 3 staffs — **Ba1**=`WAIT`; **CAMERA**=`GETITEM`→`WAIT`; **Link**=`001n_wait`→`011get_item`(prm0=100)→`001n_wait`. Link's `011get_item` is the raise-item performance that calls `show()` on the partner — the piece our bare `DEFAULT_GETITEM` handoff was missing (why §66 showed `draw=0`, never a `§66 show`).
+>
+> **Your wiring (Engine):** at Grandma's talk-close, replace the `№251` bare `DEFAULT_GETITEM` handoff with ordering **`Ba1_Get_Itm`** (getEventIdx + orderChangeEventId), keeping the item partner = our vfuku item (`fireMountPresentDemo` already sets `setItemPartnerId`). The event then drives Link's `011get_item` (shows the clothes), the CAMERA framing (the "small cutscene"), and holds Ba1. Two things to confirm: (1) the demo must drive the **mount actor's** animation for the Ba1 staff (`WAIT` → her cradle bck) — the mount's `idle_attached` must yield to the staff while the demo owns her; (2) `d_demo.ts` (noclip STB player) is the reference if any staff/cut semantics are ambiguous.
+>
+> **Data flag (History will tune if needed):** the merge's OffsetPos check reported a mismatch (cast origin vs camera center). For an interior demo it may be inert; if the cast stages away from where the camera looks in-game, ping History — it's a DATA reconcile (OffsetPos), no rebuild.
+
+---
+
+#### Paste for Engine (2026-07-26 — WRONG GET-ITEM (big quiver 85 vs clothes 47); precise mechanism + ONE probe, gated-Engine-safe)
+
+> Engine lane. Status first — the good part: **Ba1_Get_Itm now fires** (log 154808: `№251/Ba1_Get_Itm HANDOFF fired (item 47, event 768)`; `Ba1_Get_Itm END — cradle held`). The R_DL01 re-merge worked. Remaining bug: Link raises **item 85 = `dItemNo_ARROW_LV2_e`** (the big quiver, `o_gd_quiver_lv2.bmd`, arc `O_gD_quL2`) instead of our **item 47** (clothes/Vfuku).
+>
+> **CORRECTION — ignore any earlier "set PreItemNo" suggestion.** That was the TRADE path (`setTradeItemAnime`, `d_a_alink_demo.inc:1109`, uses `getPreItemNo()`). The `011get_item` cut is the GET-ITEM demo → **`procCoGetItemInit`** (`d_a_alink_demo.inc:2264`, item block `:2297-2320`):
+> ```
+> if (getParam0() != 0) {
+>     item_no = (getParam0() != 0x100) ? getParam0() : getGtItm();
+>     createItemForPresentDemo(pos, item_no, 0, ...);  // NEW demo-item, overrides partner
+> } else { item_no = getItemEventPartner()->getItemNo(); }  // Param0==0 → USE OUR PARTNER
+> ```
+> `getParam0()` = `mDemo.mParam0` (`d_a_player.h:286/304`). Our handoff `fireMountPresentDemo` (`d_ext_npc_mount.cpp:1010-1015`) creates item 47 via `createItemForPresentDemo` (which `setGtItm(47)`) + `setItemPartnerId(47)` — it never touches `mParam0`.
+>
+> **UNRESOLVED (why I'm not guessing):** the merged `Ba1_Get_Itm` `011get_item` cut has one data `prm0=100.0`, and we `setGtItm(47)` — yet the item is **85**. So EITHER `getParam0()` resolves to `0x100` and `getGtItm()` returned **85** (our 47 clobbered between the handoff and the demo), OR `getParam0()` itself resolves to 85. `prm0→mParam0` transfer (JStudio/dDemo) is where the truth is; I can't see it statically.
+>
+> **ONE probe pins it (please add before touching the fix):** at `procCoGetItemInit` entry (`:2297`) log `getParam0()`, `getGtItm()`, and `(getItemEventPartner() ? partner->getItemNo() : -1)`; and in `fireMountPresentDemo` right after `createItemForPresentDemo`, log `getGtItm()`. Decision tree:
+> - `getParam0()==0x100 && getGtItm()==85` → **GtItm clobbered** between our set and the demo → find/stop the clobberer (Engine).
+> - `getParam0()==85` → the CUT's item param resolves to 85 → **History** fixes the merged event data (`prm0` is the item selector, remap to select item 47 / use partner).
+> - `getParam0()==0` (would use partner=47) → not our case, but confirms the clean target.
+>
+> **Donor-faithful target either way:** `procCoGetItemInit` should raise OUR item-47 partner. Do NOT blindly edit the cut's `prm0` — the probe's `getParam0()` value tells us whether `prm0` even IS `Param0` (it may be an anim param). History owns the data half; Engine owns the GtItm-lifetime half; the probe assigns it.

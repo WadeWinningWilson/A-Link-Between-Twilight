@@ -404,6 +404,7 @@ template class ConfigImpl<dusk::TrueAlbwMode>;
 template class ConfigImpl<dusk::FocusedArtsCheatMode>;
 template class ConfigImpl<dusk::CapWearMode>;
 template class ConfigImpl<dusk::WwHeldSkinMode>;
+template class ConfigImpl<dusk::WwDialogueStyle>;
 template class ConfigImpl<dusk::ui::ControlLayout>;
 }  // namespace dusk::config
 

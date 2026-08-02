@@ -113,6 +113,12 @@ constexpr std::array kLopHudModes = {
     "Health Bar",
 };
 
+// §308 M5 — WW cutscene dialogue box renderer. Order matches enum WwDialogueStyle.
+constexpr std::array kWwDialogueModes = {
+    "Reconstructed",
+    "Native",
+};
+
 constexpr std::array kMagicArmorModes = {
     "Normal",
     "On Damage",
@@ -242,6 +248,7 @@ void reset_for_speedrun_mode() {
     getSettings().game.hpMultMidBoss.setSpeedrunValue(1);
     getSettings().game.hpMultBoss.setSpeedrunValue(1);
     getSettings().game.hpMultFinalBoss.setSpeedrunValue(1);
+    getSettings().game.regionMult.setSpeedrunValue(false);
     getSettings().game.instantDeath.setSpeedrunValue(false);
     getSettings().game.noHeartDrops.setSpeedrunValue(false);
     getSettings().game.autoSave.setSpeedrunValue(false);
@@ -1361,6 +1368,106 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "Stacks with true HP multipliers if both are raised. "
                     "Independent of enemy category.");
             });
+        // ============================================
+        // NEW CODE — ALBW Port (Region Multipliers)
+        // Master + Damage / Health / Rupees axes. Table is SaveTbl v1
+        // (room-level F_SP121 later).
+        // ============================================
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Region Multipliers",
+                .getValue =
+                    []() -> Rml::String {
+                        if (!getSettings().game.regionMult.getValue()) {
+                            return "Off";
+                        }
+                        Rml::String axes;
+                        if (getSettings().game.regionMultDamage.getValue()) {
+                            axes += "Dmg";
+                        }
+                        if (getSettings().game.regionMultHealth.getValue()) {
+                            if (!axes.empty()) {
+                                axes += "+";
+                            }
+                            axes += "HP";
+                        }
+                        if (getSettings().game.regionMultRupees.getValue()) {
+                            if (!axes.empty()) {
+                                axes += "+";
+                            }
+                            axes += "Rup";
+                        }
+                        if (axes.empty()) {
+                            return "On (no axes)";
+                        }
+                        return fmt::format("On ({})", axes);
+                    },
+                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
+                .isModified =
+                    [] {
+                        return getSettings().game.regionMult.getValue() !=
+                                   getSettings().game.regionMult.getDefaultValue() ||
+                               getSettings().game.regionMultDamage.getValue() !=
+                                   getSettings().game.regionMultDamage.getDefaultValue() ||
+                               getSettings().game.regionMultHealth.getValue() !=
+                                   getSettings().game.regionMultHealth.getDefaultValue() ||
+                               getSettings().game.regionMultRupees.getValue() !=
+                                   getSettings().game.regionMultRupees.getDefaultValue();
+                    },
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Region Multipliers");
+                pane.add_text(
+                    "Scales difficulty by province/dungeon from a fixed table "
+                    "(Ordon/Faron 1.00 → … → Hyrule Castle 3.15). Hyrule Field "
+                    "rooms use province pockets (Faron 1.05 / Eldin 1.25 / "
+                    "Lanayru 1.50). Each axis can be toggled independently while "
+                    "the master is On.");
+
+                auto addOnOff = [&pane](const Rml::String& label, ConfigVar<bool>& value) {
+                    pane.add_text(label);
+                    pane
+                        .add_button({
+                            .text = "Off",
+                            .isSelected = [&value] { return !value.getValue(); },
+                            .isDisabled = []() -> bool {
+                                return getSettings().game.speedrunMode;
+                            },
+                        })
+                        .on_pressed([&value] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            value.setValue(false);
+                            config::Save();
+                        });
+                    pane
+                        .add_button({
+                            .text = "On",
+                            .isSelected = [&value] { return value.getValue(); },
+                            .isDisabled = []() -> bool {
+                                return getSettings().game.speedrunMode;
+                            },
+                        })
+                        .on_pressed([&value] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            value.setValue(true);
+                            config::Save();
+                        });
+                };
+
+                addOnOff("Master", getSettings().game.regionMult);
+                addOnOff("Damage (to Link)", getSettings().game.regionMultDamage);
+                addOnOff("Health (enemy HP)", getSettings().game.regionMultHealth);
+                addOnOff("Rupees (enemy-death payouts)", getSettings().game.regionMultRupees);
+                pane.add_rml(
+                    "<br/>Damage stacks with Damage Multiplier and Outfit Stats. "
+                    "Health stacks on category Health Multiplier (newly spawned enemies). "
+                    "Rupees scale Enemy Death Rupees grants only — shops unchanged.");
+            });
+        // ============================================
+        // NEW CODE ENDS HERE
+        // ============================================
         addOption("Stick Cycle Lock-on", getSettings().game.stickCycleLockon,
             "While Z-targeting, right stick left/right cycles between nearby enemies that are "
             "in combat with you instead of manually rotating the lock-on camera.");
@@ -2056,6 +2163,48 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "<b>Vanilla Hearts</b>: LoP layout, keep the heart containers.<br/>"
                     "<b>Health Bar</b>: LoP layout with a Lies-of-P health bar instead of "
                     "hearts.");
+            });
+        // §308 M5 — WW cutscene dialogue box renderer (WW host stages only).
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "WW Dialogue Box",
+                .getValue =
+                    [] {
+                        return kWwDialogueModes[static_cast<u8>(
+                            getSettings().game.wwDialogue.getValue())];
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.wwDialogue;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kWwDialogueModes.size()); ++i) {
+                    pane
+                        .add_button({
+                            .text = kWwDialogueModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.wwDialogue.getValue() ==
+                                           static_cast<WwDialogueStyle>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.wwDialogue.setValue(
+                                static_cast<WwDialogueStyle>(i));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Which box renders Wind Waker dialogue — cutscenes (Grandma's "
+                    "tale) and NPC conversations alike. Only affects WW host stages; "
+                    "Twilight Princess dialogue is untouched.<br/><br/>"
+                    "<b>Reconstructed</b>: the TP dialogue box driven by the ported "
+                    "step-in-step flow (default, stable).<br/>"
+                    "<b>Native</b>: the donor's own dMesg box and font, reading the "
+                    "original WW text directly.");
             });
     });
 }

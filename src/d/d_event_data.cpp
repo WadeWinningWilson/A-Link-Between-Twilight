@@ -16,6 +16,10 @@
 #include <cstring>
 
 #include "JSystem/JKernel/JKRExpHeap.h"
+#if TARGET_PC
+#include "d/d_stage.h"
+#include "dusk/logging.h"
+#endif
 
 inline BOOL dEvDtFlagCheck(int i_flag) {
     return dComIfGp_getEventManager().getFlags().flagCheck(i_flag);
@@ -185,8 +189,8 @@ s32 event_debug_evdt_sound_adjust() {
 #endif
 
 static int dEvDt_Next_Stage(int i_staffId, int i_wipe) {
-    char* stage;
-    s16 start;
+    char* stage = NULL;   // §306: init so the no-next-stage case is detectable (was
+    s16 start = -1;       // uninitialized → garbage fed the `stage != NULL` test below).
     int mode;
     s8 room;
     s8 layer;
@@ -296,6 +300,55 @@ static int dEvDt_Next_Stage(int i_staffId, int i_wipe) {
     }
     #endif
 
+#if TARGET_PC
+    // ================================================================
+    // §322 DONOR-FAITHFUL tale exit: the same-stage RELOAD *is* the teardown.
+    // §306b's "exit to LinkRM while on LinkRM is a no-op" was a MISREADING —
+    // reverted. Donor proof (DECOMP-FIRST):
+    //   * WW dEvDt_Next_Stage (WW DP d_event_data.cpp:14-53) has NO same-stage
+    //     check: Stage+StartCode present → dComIfGp_setNextStage(...), always.
+    //   * WW ACT_PLAY end fork (:812-819): mode 2 → Next_Stage fires → latch
+    //     mWipeDirection=1; the demo is NOT removed — the stage transition
+    //     tears everything down. flag-9/finishCheck never runs on the donor's
+    //     tale-end path at all.
+    //   * tale.stb AUTHORS a black fade-out at its end (d_act3 channel-9 beat
+    //     @680: dir=0x00, 20f; decoded from the byte-identical staged copy).
+    //     The screen is restored by the reload's WIPE-IN — remove the reload
+    //     (§306b) and the game sits faded-out forever with control returned
+    //     underneath (observed: run 2026-08-01 12:36).
+    //   * Foundry's golden trace "brief evt 49 handoff" = LinkRM event idx 49
+    //     = DEFAULT_START — the stage-ENTRY event. The donor's "in place, no
+    //     respawn" is the continuity trick: LinkRM room spawn 0 SITS AT the
+    //     STB end transform (−289,375,83 @0x8000), so reload+respawn is
+    //     indistinguishable from staying put. R_DL01's room.dzr already
+    //     carries that spawn (baked; verified 0x0 → (−289,375,83)).
+    // So: alias the tale-home stage name to the HOST and let the transition
+    // fire with the staff's own StartCode (0 → the baked spawn). The §306b-era
+    // churn had two causes, both since fixed: per-frame setNextStage re-fire
+    // (guarded by !isEnableNextStage at the §306 call site) and arrival
+    // re-trigger (spawn 0 carries no event param — the tale trigger lives on
+    // point 200 only).
+    // ================================================================
+    if (stage != NULL && std::strcmp(stage, "LinkRM") == 0) {
+        stage = const_cast<char*>(dComIfGp_getStartStageName());
+        // §322b: donor StartCode 0 = LinkRM's talk-spot spawn (id 0x00 at
+        // (−290,375,85) @0x8000, event_index 0xff — donor room.dzr entry[2]).
+        // The HOST's id 0 is the port door-arrival convention (armNativeStageChange
+        // passes point 0 for every ext-npc host door), so the donor talk-spot is
+        // baked into R_DL01 room.dzr as point 0xCB (tale point block 0xC8/0xCA + 1;
+        // same transform, no REVT event) and the alias maps the start code with the
+        // stage name. Without this, start 0 resolved the DOOR spawn (−255,0,1125):
+        // Link fell into the void and the arrival fired KNOB_START (letterboxes
+        // stuck, no control — observed run 2026-08-01 13:48).
+        if (start == 0) {
+            start = 0xCB;
+        }
+        DuskLog.info("[Evt] §322 tale exit 'LinkRM' → host '{}' start={} wipe={} — donor "
+                     "same-stage reload (wipe-in restores the STB's authored fade-out)",
+                     stage != NULL ? stage : "(null)", (int)start, (int)wipe);
+    }
+#endif
+
     if (stage != NULL && start != -1) {
         if (do_set_nexttime) {
             dKy_set_nexttime(15.0f * hour);
@@ -311,13 +364,27 @@ static int dEvDt_Next_Stage(int i_staffId, int i_wipe) {
             OS_REPORT("!!\n!!\n");
         }
         #endif
-    } else {
-        // "Scene transition data is not complete!!"
-        OS_REPORT_ERROR("シーン切り替えのデータ指定が足りない!!\n");
-        JUT_ASSERT(379, FALSE);
+#if TARGET_PC
+        DuskLog.info("[Evt] §306 dEvDt_Next_Stage → NEXT STAGE '{}' start={} (wipe out)",
+                     stage, (int)start);
+#endif
+        return 1;  // a real next stage was resolved
     }
 
-    return 1;
+    // §306: DONOR-FAITHFUL — no Stage/StartCode resolved ⇒ NO next stage, return FALSE
+    // (donor dEvDt_Next_Stage: `if (pStageName == NULL) return FALSE`, donor
+    // d_event_data.cpp:27-28). The port's prior unconditional `return 1` (+ inert
+    // assert) made the tale's PACKAGE end-fork (§306) always believe a next stage
+    // existed and never end the demo → mode stuck at 2 → teardown hang. A staff with no
+    // exit stage is NOT an error — it's the clean-end (demo_remove) case.
+#if TARGET_PC
+    static int s_p306 = 0;
+    if ((s_p306++ % 120) == 0) {
+        DuskLog.info("[Evt] §306 dEvDt_Next_Stage → NO next stage (staff has no exit) → "
+                     "clean demo end");
+    }
+#endif
+    return 0;
 }
 
 #if TARGET_PC
@@ -381,6 +448,26 @@ int dEvDtEvent_c::finishCheck() {
         }
 
         if (!dEvDtFlagCheck(mFlags[i])) {
+#if TARGET_PC
+            {
+                // §287 probe: WHICH end-flag gates the tale teardown. finishCheck() only
+                // passes when all mFlags[0..2] are set; the tale hangs because one never is.
+                // Log the failing flag (gated to the tale event, rate-limited) so the NEXT
+                // test — after Foundry completes tale_1's staff/flags — shows either "all set
+                // → teardown" or exactly which flag is still missing.
+                const char* re = dComIfGp_getEventManager().getRunEventName();
+                const bool isTale = re != NULL &&
+                    (std::strcmp(re, "tale_1") == 0 || std::strcmp(re, "tale_2") == 0 ||
+                     std::strcmp(re, "TALE_DEMO") == 0 || std::strcmp(re, "TALE_DEMO2") == 0);
+                static int s_p287 = 0;
+                if (isTale && (s_p287++ % 60) == 0) {
+                    DuskLog.info(
+                        "[Evt] §287 finishCheck FAIL — mFlags[{}]={} NOT set (mFlags=[{},{},{}]) "
+                        "→ this end-flag gates tale teardown; a staff must set it on completion",
+                        i, (int)mFlags[i], (int)mFlags[0], (int)mFlags[1], (int)mFlags[2]);
+                }
+            }
+#endif
             return 0;
         }
     }
@@ -1015,6 +1102,24 @@ void dEvDtStaff_c::specialProcDirector() {
             idata = dComIfGp_evmng_getMyIntegerP(staffId, "Color");
 
             JUT_ASSERT(1261, rate);
+#if TARGET_PC
+            {
+                // §291 probe: which DIRECTOR FADE cut actually EXECUTES for the tale, and the
+                // live fade rate. rate>0 = fade TO black, rate<0 = reveal FROM black. If only
+                // the to-black cuts execute (reveals never fire → their gate flag never set),
+                // the screen stays black over the tale — the observed symptom. Shows the
+                // sequence + whether the reveal (−) cuts reach here at all.
+                const char* re = dComIfGp_getEventManager().getRunEventName();
+                if (re != NULL && (std::strcmp(re, "tale_1") == 0 ||
+                                   std::strcmp(re, "tale_2") == 0)) {
+                    DuskLog.info(
+                        "[Evt] §291 DIRECTOR FADE executing rate={} fadeRateNow={} "
+                        "({} — 0=clear,1=black)",
+                        rate != NULL ? *rate : 0.0f, mDoGph_gInf_c::getFadeRate(),
+                        (rate != NULL && *rate > 0) ? "TO-BLACK" : "REVEAL");
+                }
+            }
+#endif
 
             if (*rate > 0) {
                 mDoGph_gInf_c::setFadeRate(0);
@@ -1289,6 +1394,29 @@ void dEvDtStaff_c::specialProcPackage() {
             demo_data = (u8*)dComIfGp_getEvent()->getStbDemoData(sdata);
             JUT_ASSERT(1571, demo_data);
 
+#if TARGET_PC
+            // Stage=LinkRM on TALE_DEMO PACKAGE: authored for LinkRM; our interior
+            // host is R_DL01. Alias is intentional — FileName still resolves via
+            // getDemoArcName() (Demo01), not the Stage string.
+            {
+                char* stageField = dComIfGp_evmng_getMyStringP(staffId, "Stage");
+                const char* cur = dComIfGp_getStartStageName();
+                if (stageField != NULL && cur != NULL) {
+                    const bool exact = (std::strcmp(stageField, cur) == 0);
+                    const bool linkRmAlias =
+                        (std::strcmp(stageField, "LinkRM") == 0 &&
+                         std::strcmp(cur, "R_DL01") == 0);
+                    DuskLog.info(
+                        "[PACKAGE] PLAY FileName='{}' Stage='{}' cur='{}' match={} "
+                        "demoArc='{}' stb={}",
+                        sdata != NULL ? sdata : "?", stageField, cur,
+                        (exact || linkRmAlias) ? "yes" : "no",
+                        static_cast<const char*>(dStage_roomControl_c::getDemoArcName()),
+                        demo_data != NULL ? "OK" : "NULL");
+                }
+            }
+#endif
+
             dDemo_c::start(demo_data, xyzdata, offsetAngY);
             dComIfGp_event_setCullRate(10.0f);
 
@@ -1305,13 +1433,51 @@ void dEvDtStaff_c::specialProcPackage() {
         break;
     case 'PLAY': {
         dEvt_control_c* evtControl = dComIfGp_getEvent();
-        if (dDemo_c::getMode() == 2) {
-            dStage_MapEvent_dt_c* event = dComIfGp_getEvent()->getStageEventDt();
-            if (event != NULL && event->field_0x7 != 0xFF && !evtControl->chkFlag2(1)) {
-                dDemo_c::getControl()->suspend(100);
-                dComIfGp_evmng_cutEnd(staffId);
-            } else {
-                dDemo_c::end();
+#if TARGET_PC
+        {
+            // §282 end-handoff probe: the tale plays then Link stays stuck. Log the PLAY
+            // cut's demo-mode + the re-entrance discriminators so we see WHY control never
+            // returns. mode 2 = demo finished; field_0x7 != 0xFF ⇒ the donor two-step
+            // "re-entrance" branch (suspend(100)+cutEnd, expects a NEXT event); else end().
+            static int s_p282 = 0;
+            const int mode282 = dDemo_c::getMode();
+            dStage_MapEvent_dt_c* ev282 = dComIfGp_getEvent()->getStageEventDt();
+            if (mode282 != 1 || (s_p282++ % 120) == 0) {
+                DuskLog.info(
+                    "[Pkg] §282 PLAY-end mode={} field_0x7={:#x} chkFlag2(1)={} "
+                    "(mode2+field!=ff ⇒ re-entrance suspend(100); mode2+else ⇒ end(); mode0 ⇒ cutEnd)",
+                    mode282, ev282 != NULL ? (unsigned)ev282->field_0x7 : 0xFFu,
+                    evtControl->chkFlag2(1) ? 1 : 0);
+            }
+        }
+#endif
+        if (dDemo_c::getMode() == 2 && !dComIfGp_isEnableNextStage()) {
+            // §306 DONOR-FAITHFUL restore (donor d_event_data.cpp:812-819). The mode-2
+            // guard `!isEnableNextStage()` stands in for the donor's mWipeDirection latch:
+            // once dEvDt_Next_Stage fires setNextStage, a next stage is pending, so we stop
+            // re-firing it every frame (the §306b log showed 25+ repeat calls). The mode-2
+            // fork is dEvDt_Next_Stage — is there a NEXT STAGE (the staff's ID param) —
+            // NOT field_0x7. No next stage → END the demo so mode reaches 0 and the cut
+            // ends below (→ finish-flag set → teardown → fade-in → control returns). A
+            // next stage would let the wipe/stage transition take over (donor latches
+            // mWipeDirection=1; nothing to do here).
+            //
+            // Replaces the §282 reconstruction, which forked on field_0x7 and on its
+            // "re-entrance" branch did suspend(100)+cutEnd WITHOUT ending the demo — so
+            // mode never left 2, the mode-0 cutEnd never fired, finish-flag 9 stayed
+            // unset, and TALE_DEMO hung faded-to-black waiting for a next event that
+            // never comes. (Guard note: donor wraps this in `if (mWipeDirection==0)`;
+            // the tale has no next stage so it never latches — omitted rather than
+            // reuse the ambiguous port field_0x40. Tracked if a chained tale needs it.)
+            if (!dEvDt_Next_Stage(staffId, 5)) {
+                // §319 DECOMP-FIRST: the donor's ACT_PLAY no-next-stage path calls
+                // dComIfGp_demo_remove() (→ dDemo_c::remove()), NOT dDemo_c::end()
+                // (donor d_event_data.cpp:817). remove() == end() PLUS deleting the demo's
+                // m_object/m_factory/m_message/m_particle. The §306 substitution of bare end()
+                // left m_object ALIVE, so the event never saw the demo as gone → mEventStatus
+                // stayed at 1, endProc/teardown never fired, and the tale hung faded-out (no
+                // fade-in, no control restore). Full remove() matches the donor exactly.
+                dDemo_c::remove();
             }
         }
 
@@ -1626,6 +1792,25 @@ void dEvDtBase_c::advanceCut(dEvDtEvent_c* i_event) {
 
 BOOL dEvDtBase_c::advanceCutLocal(dEvDtStaff_c* i_staff) {
     dEvDtCut_c* cut = &mCutP[i_staff->getCurrentCut()];
+
+#if TARGET_PC
+    // §318 probe — which staff/cut owns the tale's finish flag (§287: flag 9 never sets, so the
+    // tale never tears down). Log each staff's CURRENT cut + its flagId + whether that flag is
+    // set + the next-cut link, gated to the tale event + rate-limited. The cut whose flagId==9
+    // and that stays stuck (flag never set / no advance) is the one to make complete vanilla.
+    {
+        const char* re = dComIfGp_getEventManager().getRunEventName();
+        const bool isTale = re != NULL &&
+            (std::strcmp(re, "tale_1") == 0 || std::strcmp(re, "tale_2") == 0 ||
+             std::strcmp(re, "TALE_DEMO") == 0 || std::strcmp(re, "TALE_DEMO2") == 0);
+        static int s_p318 = 0;
+        if (isTale && (s_p318++ % 20) == 0) {
+            DuskLog.info("[Evt] §318 cut — staff='{}' cut='{}' flagId={} flagSet={} next={}",
+                         i_staff->getName(), cut->getName(), (int)cut->getFlagId(),
+                         dEvDtFlagCheck(cut->getFlagId()) ? 1 : 0, (int)cut->getNext());
+        }
+    }
+#endif
 
     #if DEBUG
     if (event_debug_evdt_endcheck()) {

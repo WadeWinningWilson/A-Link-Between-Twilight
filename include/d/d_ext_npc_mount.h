@@ -78,6 +78,9 @@ struct dExtNpcManifest {
     // the give). Empty = plain idle in both states.
     // ========================================================================
     char idleAttached[64];
+    // F-2 / №281b: opt-in arc for idle_attached BCK (Demo01 ba_wait_l ≠ Ba.arc).
+    // Empty = load idle_attached from the actor arc (№262 default).
+    char idleAttachedArc[32];
     // №263: one-shot PRESENT animation played at the get-item handoff (donor:
     // Ba1's hold.bck give motion). Distinct from idle_attached — this is the
     // moment of the give, not the carrying state.
@@ -151,6 +154,7 @@ struct dExtNpcManifest {
     bool modelSpaceLocal;
     bool skipBtp;
     bool carryable;  // R-O2d: expose TP carry attention
+    bool isBait;     // §222: this mount IS an esa bait actor (pig AI target)
     bool isStatic;   // №32: prop/door — idle optional (NULL anm)
     // №126: geometry comes from CODE + an extracted asset pack, not an arc
     // (the ported vegetation lane). Such a manifest legitimately has no arc=
@@ -173,6 +177,19 @@ public:
     mDoExt_btpAnm* mpBtp;
     mDoExt_brkAnm* mpBrk;
     mDoExt_btkAnm* mpColorBtk;
+    // §218 BTK auto-binder: true when mpColorBtk is an animated sibling <model>.btk
+    // (looping texture-SRT) that must be play()'d every frame, vs a static
+    // color-select frame (Vlupy). See the auto-binder socket in tryBindModel.
+    bool mColorBtkPlay;
+    // §222 pig↔bait AI (donor-pig-bait-contract). Bait actor: mIsBait + esa
+    // state (0=falling,1=ground-available); mBaitClaim = donor field_0x298 claim
+    // slot (0=unclaimed, else pig ID). Pig: mAiTargetId = claimed bait actor id.
+    bool mIsBait;
+    s16 mBaitState;
+    u32 mBaitClaim;
+    f32 mBaitGroundY;
+    u32 mAiTargetId;
+    bool mAiMoving;  // §222: walk anim active — switch walk/idle on transition only
     J3DModel* mpBgModels[3];
     mDoExt_btkAnm* mpBgBtk;
     dBgW* mpBgW;
@@ -186,6 +203,9 @@ public:
     // №273: resLoad ownership for attach_arc overrides (≠ mount arc).
     request_of_phase_process_class mAttachArcPhase[kExtNpcMaxAttach];
     u8 mAttachArcOwned[kExtNpcMaxAttach];
+    // F-2: resLoad ownership for idle_attached_arc (e.g. Demo01).
+    request_of_phase_process_class mIdleAttachedArcPhase;
+    u8 mIdleAttachedArcOwned;
     // ============================================================================
     // №218 — per-slot donor local transform (see dExtNpcAttachSpec::offs/rot).
     // ============================================================================
@@ -270,6 +290,11 @@ public:
     u8 mKnobDoorAction;    // 0=wait 1=demo
     u8 mKnobOpenStarted;   // WW door_open_bck kicked this demo
     u8 mKnobEvBound;       // event idxs resolved for this actor
+    // History Ba1_Get_Itm: mount owns the Ba1 staff (WAIT → cradle) while
+    // Link's 011get_item + CAMERA GETITEM drive the raise/show cutscene.
+    s16 mBa1GetEvtOrdered;  // -1 = none
+    int mBa1StaffId;
+    u8 mBa1GetActive;
 };
 
 // №37: play door-open BCK on nearest doorAttention mount (Knob).
@@ -322,6 +347,11 @@ void dExtNpcMount_markPendingPass();
 bool dExtNpcMount_takePendingSpawn(fpc_ProcID id, char* procOut, u32 procBytes, char* srcOut,
                                    u32 srcBytes, char* headOut, u32 headBytes, char* jointOut,
                                    u32 jointBytes);
+// §334: WW→TP collision-attribute repack (bus §332/§333) — call on every
+// WW-sourced cBgD_t BEFORE dBgW::Set. Idempotent (pointer-keyed); staged arcs
+// stay byte-verbatim (in-memory parsed copy only).
+struct cBgD_t;
+void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag);
 // №38/№51: nearest doorAttention Knob within maxDist. If `facingYaw` non-NULL, prefer
 // props in front of that yaw (≤90°), else pure nearest. Writes *outDistXZ when non-NULL.
 dExtNpcMount_c* dExtNpcMount_nearestDoorAttention(const cXyz& from, f32 maxDist);
@@ -376,6 +406,12 @@ bool dExtNpcMount_requestBgWarpTo(const char* procName, const cXyz& spawnWorld, 
 bool dExtNpcMount_requestBgWarpGuarded(const char* procName, const cXyz& failSafeSpawn);
 void dExtNpcMount_onStageReady();
 void dExtNpcMount_pollBgWarps();
+// Faithful TagEv region-fire (no native d_a_tag_event): consume
+// population/region_triggers.ini ([tale_loft] → TALE_DEMO / tale.stb).
+void dExtNpcMount_pollRegionTriggers();
+// №269 / §158: ClrWallNone + OffLineCheckNone + ground reprobe (donor procDoorOpen pair).
+// Call on place after room-lane OR native-stage arrival into WW interiors.
+void dExtNpcMount_forceLinkGroundReprobe(fopAc_ac_c* player);
 // Last successfully completed BG warp proc (empty if none); for door triggers.
 const char* dExtNpcMount_lastBgProc();
 bool dExtNpcMount_bgWarpBusy();
@@ -398,6 +434,21 @@ void dExtNpcMount_beginDoorDemoLock();
 void dExtNpcMount_endDoorDemoLock();
 // №89: nuclear clear — cancel demo + remove stuck event (arrival end / G-guard).
 void dExtNpcMount_forceEndDoorEvent(const char* reason);
+// §270: stand the arrival-G-guard down so a native WW NPC's freshly-ordered event (the
+// tale) isn't force-ended as if it were a stuck arrival residual. Re-arms on next arrival.
+void dExtNpcMount_clearArrivalGuard(const char* why);
+// §297: the tale trigger is native (daAlink reads the donor loft-point PLYR param →
+// evmng_startDemo). The port only supplies the demo-arc residency the native gets from
+// LBNK; that lives entirely inside d_ext_npc_mount.cpp (dExtWw_pollTaleEntryDemo), no
+// pending-id wire. (The former dExtWw_setPendingTaleDemo bridge is removed.)
+
+// §278: make the tale storyboard arc (Demo01/tale.stb) resident + named before ba1
+// orders the tale event. Returns true only when getStbDemoData(stbName) resolves.
+bool dExtWw_ensureTaleArcResident(const char* stbName);
+
+// §281: true if the running event is the tale storyboard under ANY of its names
+// (TALE_DEMO/TALE_DEMO2 or ba1's native tale_1/tale_2). Used by the presentation gates.
+bool dExtWw_isTaleRunEvent(const char* runEvt);
 
 // №62 Phase D: room-per-interior lane (exemplar LinkRM → host room 2).
 // doors.ini lane=room + host_room=N registers proc→room; create/destroy bind to d_s_room.
@@ -433,6 +484,16 @@ bool dExtNpcMount_providerAt(int index, dExtNpcManifest* out);
 // §27: WW bmd3/bdl arcs need ExtNpc load+finish (never cast getObjectRes → J3DModelData*).
 // acquire pins ModelData in the session cache; retain/release keep the arc buffer alive (№73).
 J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName);
+// §229 direct-port helper: acquire a model with a body BMT baked in (parse-at-consume,
+// cache-keyed by model+bmt). For WW actors whose COLOR lives in a .bmt swap (pig pg_*.bmt)
+// — a raw getObjectRes bmt can't be applied, and the base model renders untextured/black.
+J3DModelData* dExtNpcMount_acquireModelDataBmt(const char* arc, const char* modelName,
+                                               const char* bmtName);
+// §181 (Housing Approach A): consume-time BDL parse for daDemo00 cutscene doubles.
+// The SHAPE model comes by resource ID (getObjectIDRes) from the demo arc, RAW —
+// route it through the same cache/pristine machinery so it parses once and drops
+// with the demo arc (purge is erase-only; the arc owns the buffer). See d_ext_npc_mount.cpp.
+J3DModelData* dExtNpcMount_acquireDemoModel(const char* arc, u16 id, void* res);
 void dExtNpcMount_retainArc(const char* arc);
 void dExtNpcMount_releaseArc(const char* arc);
 

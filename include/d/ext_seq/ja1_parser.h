@@ -32,6 +32,7 @@ private:
     int cmdFinish(Ja1Track* track, u32* args);
     int cmdTranspose(Ja1Track* track, u32* args);
     int cmdCloseTrack(Ja1Track* track, u32* args);
+    int cmdSimpleADSR(Ja1Track* track, u32* args);
     int cmdNop(Ja1Track* track, u32* args);
     int Cmd_Process(Ja1Track* track, u8 op, u16 extra);
     bool conditionCheck(Ja1Track* track, u8 flag);

@@ -1,4 +1,5 @@
 #include "f_ap/f_ap_game.h"
+#include <cstdint>
 #include <cstring>
 #include "DynamicLink.h"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.h"
@@ -16,6 +17,7 @@
 #include "d/d_tresure.h"
 #include "dusk/achievements.h"
 #include "dusk/frame_interpolation.h"
+#include "dusk/fps_probe.h"
 #include "dusk/livesplit.h"
 #include "dusk/logging.h"
 #include "dusk/mod_loader.hpp"
@@ -739,11 +741,19 @@ void fapGm_After() {
 }
 
 #ifdef TARGET_PC
+static std::int64_t s_ferryT_recordT0 = 0;
+
 static void fapGm_Before() {
     dusk::frame_interp::begin_record();
+    s_ferryT_recordT0 = dusk::fps_probe::now_ticks();
 }
 
 static void fapGm_AfterRecord() {
+    if (s_ferryT_recordT0 != 0) {
+        dusk::fps_probe::add_bucket(dusk::fps_probe::Bucket::FrameInterp,
+                                    dusk::fps_probe::now_ticks() - s_ferryT_recordT0);
+        s_ferryT_recordT0 = 0;
+    }
     dusk::frame_interp::end_record();
     fapGm_After();
 }

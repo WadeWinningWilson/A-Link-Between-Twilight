@@ -401,6 +401,19 @@ bool dALBWDialogue_c::checkDismiss() {
     return true;
 }
 
+bool dALBWDialogue_c::advancePageOrFinished() {
+    if (!mVisible || !mReady || mPageCount <= 0) {
+        return true;
+    }
+    if (advancePage()) {
+        if (mpArrow) {
+            mpArrow->arwAnimeInit();
+        }
+        return false;
+    }
+    return true;
+}
+
 void dALBWDialogue_c::draw() {
     if (!mReady || !mVisible || !mpTxScreen || mPageCount <= 0 || !mpTextBox) {
         return;

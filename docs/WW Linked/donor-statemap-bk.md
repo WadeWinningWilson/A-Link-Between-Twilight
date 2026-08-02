@@ -1,0 +1,271 @@
+# Donor state map — `D:\XXXXXXX\WW DP\src\d\actor\d_a_bk.cpp`
+
+> Mechanical extraction (Foundry P13). Every row is a verbatim quote with
+> a line number. State SEMANTICS are [INFERENCE-NEEDED] by design — name
+> them only from decomp evidence, never invention.
+
+## Enums (candidate state vocabularies)
+
+## switch() dispatchers over mode-like expressions
+- L1061 `switch (i_this->dr.mMode)` → cases: `0`, `-1`, `1`, `2`, `3`
+- L1214 `switch (i_this->dr.mMode)` → cases: `-20`, `-19`, `0`, `-1`, `1`, `2`, `3`, `4`, `10`, `11`, `20`, `50`, `51`, `52`, `53`, `54`, `60`
+- L1466 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `10`, `11`, `20`, `50`, `51`, `52`, `60`
+- L1624 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `0`, `1`
+- L1796 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `0`, `1`, `2`, `2`, `3`, `33`, `34`, `4`, `5`, `6`, `8`
+- L2152 `switch (i_this->dr.mMode)` → cases: `-10`, `-9`, `0`, `1`
+- L2354 `switch (i_this->dr.mMode)` → cases: `-10`, `-9`, `0`, `1`
+- L2409 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`, `3`
+- L2452 `switch (i_this->dr.mMode)` → cases: `0`, `1`
+- L2497 `switch (i_this->dr.mMode)` → cases: `10`, `12`, `13`, `14`
+- L2586 `switch (i_this->dr.mMode)` → cases: `0`, `1`
+- L2619 `switch (i_this->dr.mMode)` → cases: `-1`, `0`, `1`
+- L2668 `switch (i_this->dr.mMode)` → cases: `0`, `1`
+- L2711 `switch (i_this->dr.mMode)` → cases: `0`, `1`
+- L2761 `switch (i_this->dr.mMode)` → cases: `-1`, `0`, `1`, `2`, `5`, `6`
+- L2893 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`
+- L2940 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`, `3`
+- L2981 `switch (i_this->dr.mMode)` → cases: `0`, `1`
+- L3017 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`, `10`, `11`, `20`
+- L3104 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`
+- L3188 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`
+- L3263 `switch (i_this->dr.mMode)` → cases: `0`, `1`, `2`, `3`, `4`, `5`
+- L3384 `switch (i_this->dr.mAction)` → cases: `0`, `1`, `2`, `3`, `4`, `5`, `10`, `7`, `8`, `9`, `11`, `12`, `14`, `20`, `21`, `22`, `15`, `19`, `16`, `23`, `30`, `31`, `18`, `29`
+- L3797 `switch (i_this->dr.mMode)` → cases: `0`, `1`
+
+## Transition writes (mode-like assignments, line-cited)
+- L1042 `i_this->dr.mAction = 1;`
+- L1043 `i_this->dr.mMode = 50;`
+- L1046 `i_this->dr.mAction = 2;`
+- L1047 `i_this->dr.mMode = 50;`
+- L1050 `i_this->dr.mAction = 3;`
+- L1051 `i_this->dr.mMode = 0;`
+- L1066 `i_this->dr.mMode = 1;`
+- L1115 `i_this->dr.mMode = 2;`
+- L1117 `i_this->dr.mMode = -1;`
+- L1129 `i_this->dr.mMode = 2;`
+- L1143 `i_this->dr.mMode = 0;`
+- L1156 `i_this->dr.mMode = 0;`
+- L1171 `i_this->dr.mAction = 4;`
+- L1173 `i_this->dr.mMode = 0;`
+- L1183 `i_this->dr.mAction = 12;`
+- L1184 `i_this->dr.mMode = -1;`
+- L1188 `i_this->dr.mAction = 9;`
+- L1189 `i_this->dr.mMode = 0;`
+- L1218 `i_this->dr.mMode = -19;`
+- L1231 `i_this->dr.mMode = -18;`
+- L1234 `i_this->dr.mMode = 1;`
+- L1244 `i_this->dr.mMode = 1;`
+- L1267 `i_this->dr.mMode = 2;`
+- L1269 `i_this->dr.mMode = 3;`
+- L1278 `i_this->dr.mMode = 0;`
+- L1296 `i_this->dr.mMode = 2;`
+- L1305 `i_this->dr.mMode = 11;`
+- L1311 `i_this->dr.mMode = 0;`
+- L1319 `i_this->dr.mAction = 4;`
+- L1321 `i_this->dr.mMode = 0;`
+- L1345 `i_this->dr.mMode = 0;`
+- L1352 `i_this->dr.mMode = 60;`
+- L1360 `i_this->dr.mMode = 53;`
+- L1375 `i_this->dr.mMode = 51;`
+- L1382 `i_this->dr.mMode = 52;`
+- L1391 `i_this->dr.mMode = 10;`
+- L1406 `i_this->dr.mAction = 4;`
+- L1408 `i_this->dr.mMode = 0;`
+- L1410 `i_this->dr.mMode = 20;`
+- L1418 `i_this->dr.mAction = 9;`
+- L1419 `i_this->dr.mMode = 0;`
+- L1423 `i_this->dr.mAction = 12;`
+- L1424 `i_this->dr.mMode = -1;`
+- L1468 `i_this->dr.mMode = 1;`
+- L1511 `i_this->dr.mMode = 11;`
+- L1517 `i_this->dr.mMode = 0;`
+- L1526 `i_this->dr.mAction = 4;`
+- L1528 `i_this->dr.mMode = 0;`
+- L1563 `i_this->dr.mMode = 0;`
+- L1565 `i_this->dr.mMode = 60;`
+- L1581 `i_this->dr.mMode = 10;`
+- L1597 `i_this->dr.mAction = 4;`
+- L1599 `i_this->dr.mMode = 0;`
+- L1601 `i_this->dr.mMode = 20;`
+- L1609 `i_this->dr.mAction = 9;`
+- L1610 `i_this->dr.mMode = 0;`
+- L1615 `i_this->dr.mAction = 12;`
+- L1616 `i_this->dr.mMode = -1;`
+- L1627 `i_this->dr.mMode = 1;`
+- L1707 `i_this->dr.mAction = 4;`
+- L1709 `i_this->dr.mMode = 0;`
+- L1800 `i_this->dr.mMode = 1;`
+- L1824 `i_this->dr.mMode = 2;`
+- L1870 `i_this->dr.mAction = 5;`
+- L1871 `i_this->dr.mMode = 0;`
+- L1880 `i_this->dr.mMode = 8;`
+- L1892 `i_this->dr.mMode = 5;`
+- L1894 `i_this->dr.mMode = 6;`
+- L1902 `i_this->dr.mMode = 4;`
+- L1909 `i_this->dr.mMode = 3;`
+- L1919 `i_this->dr.mMode = 33;`
+- L1923 `i_this->dr.mMode = 2;`
+- L1935 `i_this->dr.mMode = 3;`
+- L1942 `i_this->dr.mMode = 2;`
+- L1946 `i_this->dr.mMode = 3;`
+- L1972 `i_this->dr.mMode = 2;`
+- L1978 `i_this->dr.mMode = 2;`
+- L1985 `i_this->dr.mAction = 0;`
+- L1986 `i_this->dr.mMode = 0;`
+- L1993 `i_this->dr.mAction = 5;`
+- L1994 `i_this->dr.mMode = 0;`
+- L2023 `i_this->dr.mAction = 10;`
+- L2024 `i_this->dr.mMode = 0;`
+- L2033 `i_this->dr.mAction = 5;`
+- L2036 `i_this->dr.mMode = -10;`
+- L2054 `i_this->dr.mAction = 7;`
+- L2055 `i_this->dr.mMode = 0;`
+- L2063 `i_this->dr.mAction = 0;`
+- L2064 `i_this->dr.mMode = 0;`
+- L2068 `i_this->dr.mAction = 12;`
+- L2069 `i_this->dr.mMode = -1;`
+- L2072 `i_this->dr.mAction = 9;`
+- L2073 `i_this->dr.mMode = 0;`
+- L2156 `i_this->dr.mMode = -9;`
+- L2162 `i_this->dr.mMode = 1;`
+- L2179 `i_this->dr.mMode = 1;`
+- L2263 `i_this->dr.mAction = 8;`
+- L2264 `i_this->dr.mMode = -10;`
+- L2284 `i_this->dr.mAction = 0;`
+- L2287 `i_this->dr.mMode = 2;`
+- L2307 `i_this->dr.mAction = 14;`
+- L2308 `i_this->dr.mMode = 0;`
+- L2312 `i_this->dr.mAction = 4;`
+- L2313 `i_this->dr.mMode = 2;`
+- L2316 `i_this->dr.mMode = 0;`
+- L2320 `i_this->dr.mAction = 8;`
+- L2321 `i_this->dr.mMode = 0;`
+- L2323 `i_this->dr.mAction = 0;`
+- L2325 `i_this->dr.mMode = 2;`
+- L2329 `i_this->dr.mAction = 0;`
+- L2332 `i_this->dr.mMode = 2;`
+- L2367 `i_this->dr.mMode = 1;`
+- L2378 `i_this->dr.mAction = 0;`
+- L2381 `i_this->dr.mMode = 2;`
+- L2387 `i_this->dr.mAction = 4;`
+- L2388 `i_this->dr.mMode = 2;`
+- L2396 `i_this->dr.mAction = 0;`
+- L2399 `i_this->dr.mMode = 2;`
+- L2411 `i_this->dr.mMode = 1;`
+- L2420 `i_this->dr.mMode = 2;`
+- L2431 `i_this->dr.mMode = 3;`
+- L2440 `i_this->dr.mMode = 0;`
+- L2454 `i_this->dr.mMode = 1;`
+- L2463 `i_this->dr.mAction = 5;`
+- L2464 `i_this->dr.mMode = 0;`
+- L2466 `i_this->dr.mAction = 4;`
+- L2468 `i_this->dr.mMode = 0;`
+- L2477 `i_this->dr.mAction = 5;`
+- L2480 `i_this->dr.mMode = -10;`
+- L2507 `i_this->dr.mMode = 13;`
+- L2530 `i_this->dr.mMode = 14;`
+- L2533 `i_this->dr.mAction = 0;`
+- L2536 `i_this->dr.mMode = 2;`
+- L2547 `i_this->dr.mAction = 5;`
+- L2559 `i_this->dr.mMode = 1;`
+- L2562 `i_this->dr.mAction = 4;`
+- L2563 `i_this->dr.mMode = 0;`
+- L2590 `i_this->dr.mMode = 1;`
+- L2603 `i_this->dr.mAction = 0;`
+- L2604 `i_this->dr.mMode = 0;`
+- L2626 `i_this->dr.mMode = 1;`
+- L2638 `i_this->dr.mMode = -1;`
+- L2671 `i_this->dr.mMode = 1;`
+- L2693 `i_this->dr.mAction = 20;`
+- L2694 `i_this->dr.mMode = 0;`
+- L2714 `i_this->dr.mMode = 1;`
+- L2745 `i_this->dr.mAction = 0;`
+- L2748 `i_this->dr.mMode = 2;`
+- L2763 `i_this->dr.mMode = 0;`
+- L2779 `i_this->dr.mMode = 1;`
+- L2792 `i_this->dr.mMode = 2;`
+- L2797 `i_this->dr.mAction = 4;`
+- L2805 `i_this->dr.mMode = 5;`
+- L2808 `i_this->dr.mAction = 0;`
+- L2811 `i_this->dr.mMode = 2;`
+- L2835 `i_this->dr.mAction = 0;`
+- L2838 `i_this->dr.mMode = 2;`
+- L2848 `i_this->dr.mAction = 5;`
+- L2860 `i_this->dr.mMode = 1;`
+- L2863 `i_this->dr.mAction = 0;`
+- L2866 `i_this->dr.mMode = 2;`
+- L2880 `i_this->dr.mMode = 1;`
+- L2895 `i_this->dr.mMode = 1;`
+- L2911 `i_this->dr.mMode = 2;`
+- L2917 `i_this->dr.mAction = 0;`
+- L2918 `i_this->dr.mMode = 0;`
+- L2943 `i_this->dr.mMode = 1;`
+- L2949 `i_this->dr.mMode = 2;`
+- L2964 `i_this->dr.mMode = 3;`
+- L2971 `i_this->dr.mAction = 0;`
+- L2972 `i_this->dr.mMode = 0;`
+- L2983 `i_this->dr.mMode = 1;`
+- L2999 `i_this->dr.mAction = 0;`
+- L3002 `i_this->dr.mMode = 2;`
+- L3022 `i_this->dr.mMode = 20;`
+- L3026 `i_this->dr.mMode = 1;`
+- L3031 `i_this->dr.mMode = 10;`
+- L3045 `i_this->dr.mMode = 2;`
+- L3053 `i_this->dr.mMode = 11;`
+- L3060 `i_this->dr.mMode = 11;`
+- L3068 `i_this->dr.mAction = 0;`
+- L3069 `i_this->dr.mMode = 0;`
+- L3078 `i_this->dr.mAction = 0;`
+- L3079 `i_this->dr.mMode = 0;`
+- L3113 `i_this->dr.mMode = 1;`
+- L3134 `i_this->dr.mMode = 2;`
+- L3146 `i_this->dr.mMode = 0;`
+- L3163 `i_this->dr.mAction = 1;`
+- L3164 `i_this->dr.mMode = 20;`
+- L3180 `i_this->dr.mAction = 4;`
+- L3181 `i_this->dr.mMode = 0;`
+- L3191 `i_this->dr.mMode = 1;`
+- L3205 `i_this->dr.mMode = 2;`
+- L3249 `i_this->dr.mAction = 4;`
+- L3250 `i_this->dr.mMode = 0;`
+- L3267 `i_this->dr.mMode = 1;`
+- L3272 `i_this->dr.mMode = 2;`
+- L3284 `i_this->dr.mMode = 3;`
+- L3288 `i_this->dr.mMode = 5;`
+- L3296 `i_this->dr.mMode = 4;`
+- L3302 `i_this->dr.mMode = 2;`
+- L3309 `i_this->dr.mMode = 2;`
+- L3358 `i_this->dr.mAction = 4;`
+- L3359 `i_this->dr.mMode = 0;`
+- L3379 `i_this->dr.mAction = 18;`
+- L3380 `i_this->dr.mMode = 0;`
+- L3472 `i_this->dr.mAction = 1;`
+- L3475 `i_this->dr.mAction = 2;`
+- L3477 `i_this->dr.mMode = 51;`
+- L3592 `i_this->dr.mAction = 0;`
+- L3593 `i_this->dr.mMode = 0;`
+- L3731 `i_this->dr.mMode = -100;`
+- L3800 `i_this->dr.mMode = 1;`
+- L3812 `i_this->dr.mMode = 0;`
+- L4029 `i_this->dr.mAction = 4;`
+- L4031 `i_this->dr.mMode = 0;`
+- L4317 `i_this->dr.mAction = 0;`
+- L4325 `i_this->dr.mAction = 4;`
+- L4326 `i_this->dr.mMode = 0;`
+- L4334 `i_this->dr.mMode = 2;`
+- L4335 `i_this->dr.mAction = 0;`
+- L4355 `i_this->dr.mAction = 0;`
+- L5030 `i_this->dr.mAction = 1;`
+- L5032 `i_this->dr.mMode = -20;`
+- L5038 `i_this->dr.mMode = -1;`
+- L5042 `i_this->dr.mAction = 2;`
+- L5045 `i_this->dr.mAction = 29;`
+- L5049 `i_this->dr.mAction = 30;`
+- L5053 `i_this->dr.mAction = 15;`
+- L5056 `i_this->dr.mAction = 3;`
+- L5070 `i_this->dr.mAction = 23;`
+- L5267 `i_this->model = i_this->mpMorf->getModel();`
+
+(232 transition writes)
+
+## setAction/setMode-style calls (line-cited, first 60)

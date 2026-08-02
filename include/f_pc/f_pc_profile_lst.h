@@ -1163,6 +1163,22 @@ extern actor_process_profile_definition DUSK_CONST g_profile_EXT_BG10;
 extern actor_process_profile_definition DUSK_CONST g_profile_KNOB00;
 extern actor_process_profile_definition DUSK_CONST g_profile_EXT_VEG;
 extern actor_process_profile_definition DUSK_CONST g_profile_EXT_SPAN;
+extern actor_process_profile_definition g_profile_ESA;  // §224 bait direct port
+extern actor_process_profile_definition g_profile_KB;   // §225 pig direct port
+extern actor_process_profile_definition g_profile_KAMOME;  // §232 seagull direct port
+extern actor_process_profile_definition g_profile_NPC_BM1;  // §246 Generic Ritos direct port
+extern actor_process_profile_definition g_profile_NPC_BM2;  // §246 Generic Ritos direct port
+extern actor_process_profile_definition g_profile_NPC_BM3;  // §246 Generic Ritos direct port
+extern actor_process_profile_definition g_profile_NPC_BM4;  // §246 Generic Ritos direct port
+extern actor_process_profile_definition g_profile_NPC_BM5;  // §246 Generic Ritos direct port
+extern actor_process_profile_definition g_profile_NPC_LS1;  // §244 Aryll direct port (framework proof)
+extern actor_process_profile_definition g_profile_OBJ_TORIPOST;  // §253 Rito Postbox direct port
+extern actor_process_profile_definition g_profile_NPC_ZL1;  // §254 Tetra direct port
+extern actor_process_profile_definition g_profile_NPC_BA1;  // §261 Link's Grandma direct port
+extern actor_process_profile_definition DUSK_CONST g_profile_WW_DEMO00;  // §271 WW demo00 puppet twin (coexists w/ TP DEMO00)
+extern actor_process_profile_definition g_profile_LAMP;         // §327 WW wall/loft lamp direct port
+extern actor_process_profile_definition g_profile_Obj_Mshokki;  // §327 WW tableware (MPot/MOsara/MKoppu) direct port
+extern actor_process_profile_definition g_profile_SPC_ITEM01;   // §327 WW wall shield / SPitem quest object direct port
 extern actor_process_profile_definition DUSK_CONST g_profile_NPC_HANJO;
 extern actor_process_profile_definition DUSK_CONST g_profile_NPC_HENNA0;
 extern actor_process_profile_definition DUSK_CONST g_profile_NPC_HOZ;
@@ -1606,6 +1622,7 @@ extern actor_process_profile_definition DUSK_CONST g_profile_TALK;
 extern actor_process_profile_definition DUSK_CONST g_profile_TBOX_SW;
 extern actor_process_profile_definition DUSK_CONST g_profile_TITLE;
 extern actor_process_profile_definition DUSK_CONST g_profile_WarpBug;
+extern actor_process_profile_definition g_profile_OBJ_OTBLE;  // §329 Actor-Kit port (d_a_obj_otble)
 #endif
 
 extern process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[];

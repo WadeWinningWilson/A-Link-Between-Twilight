@@ -18,12 +18,14 @@
 #include <vector>
 
 #include "d/actor/d_a_knob00.h"
+#include "d/actor/d_a_alink.h"  // §161 flag-only ClrWallNone on arrival demo end
 #include "d/d_camera.h"
 #include "d/d_demo.h"  // №167: a running demo owns the camera
 #include "d/d_com_inf_game.h"
 #include "d/d_event.h"
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_save_guard.h"
+#include "d/d_ext_dmesg.h"  // §313 dExtDmesg_isBoxActive (don't G-guard a held tale box)
 #include "f_pc/f_pc_name.h"
 #include "dusk/logging.h"
 #include "dusk/main.h"
@@ -318,11 +320,15 @@ bool isCrossStageHost(const dExtNpcManifest& dest) {
 
 void armNativeStageChange(const char* stage, s8 room, s8 layer, const char* tag) {
     dExtNpcMount_endDoorDemoLock();
+    // §355b: named fade-clear (suspect for the §354 missing tale fade)
+    DuskLog.info("[Doors] §355b armNativeStageChange offFade()");
     mDoGph_gInf_c::offFade();
     if (dComIfGp_isEnableNextStage()) {
         DuskLog.warn("[Doors] {} — next stage already armed; skip re-set", tag != NULL ? tag : "?");
         return;
     }
+    DuskLog.info("[Doors] §347c armNativeStageChange ARM '{}' — evRun={}", stage,
+                 dComIfGp_event_runCheck() ? 1 : 0);
     dComIfGp_setNextStage(stage, /*point*/ 0, room, layer);
 }
 
@@ -1051,6 +1057,21 @@ bool dExtNpcDoors_knobsLatched() {
     return s_knobsSpawned && s_knobsSpawnedGen == dExtNpcWorld_generation();
 }
 
+// §270: stand the arrival-G-guard (№89) down when a native WW NPC (ba1) legitimately ORDERS
+// an event (the tale). The guard force-ends any event still active kArrivalGuardFrames after
+// arrival — it exists to clear a STUCK arrival residual, but can't distinguish that from ba1's
+// fresh orderOtherEventId('tale_1'), so it truncated the tale at frame 0 ("force-end event
+// (arrival-G-guard)"). Standing it down lets the tale run; the guard RE-ARMS on the next
+// arrival, so this is scoped — not a disable. (Outside the anon namespace for external linkage;
+// s_arrival is still in scope in this TU, same as dExtNpcDoors_knobsLatched above.)
+void dExtNpcMount_clearArrivalGuard(const char* why) {
+    if (s_arrival.guardFramesLeft > 0) {
+        DuskLog.info("[Doors] §270 arrival-G-guard stood down ({}) — native WW event owns the slot",
+                     why != NULL ? why : "?");
+    }
+    s_arrival.guardFramesLeft = -1;
+}
+
 int dExtNpcDoors_wantOutdoorKnobCount() {
     ensureLoaded();
     int n = 0;
@@ -1372,6 +1393,13 @@ void dExtNpcDoors_pollArrival() {
         return;
     }
 
+    // §158 / №269: native setNextStage into R_DL* never hits room-lane place, so the
+    // ClrWallNone that lived only on forceLinkGroundReprobe's room-lane callers never
+    // ran → WALL_NONE stuck → ladders dead. Same №269 clear, on the path Link takes.
+    if (!s_arrival.demoStarted) {
+        dExtNpcMount_forceLinkGroundReprobe(player);
+    }
+
     // №121 Ask 3 / №133: WW hosts sit 200k+ from origin. QuickStart alone leaves eye/center
     // at the prior stage's map-edge. Snap like Shade Refuge: Reset behind Link, then
     // QuickStart. Fire after Link exists; for door arrivals wait until demo ends so the
@@ -1463,6 +1491,21 @@ void dExtNpcDoors_pollArrival() {
         dExtNpcMount_endDoorDemoLock();
         dExtNpcMount_forceEndDoorEvent("arrival-end");
         s_arrival.demoEnded = true;
+        // ============================================================
+        // §161 / №269: flag-only clear. G-2 reused the full reprobe and
+        // its ClrGroundHit+CrrPos reposition froze Link post-door-demo.
+        // The ladder needs the FLAGS cleared, not a ground reprobe.
+        // ============================================================
+        {
+            daAlink_c* link = (daAlink_c*)player;
+            const u32 before = link->mLinkAcch.GetFlags();
+            link->mLinkAcch.ClrWallNone();
+            link->mLinkAcch.OffLineCheckNone();
+            if ((before & dBgS_Acch::FLAG_WALL_NONE) != 0) {
+                DuskLog.info("[Doors] §161 flag-only ClrWallNone post-demo ({:#x} → {:#x})",
+                             (unsigned)before, (unsigned)link->mLinkAcch.GetFlags());
+            }
+        }
         s_arrival.guardFramesLeft = kArrivalGuardFrames;
         snapArrivalCamera();
         DuskLog.info("[Doors] №89 arrival demo END stage='{}' — G-guard {}f", s_arrival.stage,
@@ -1484,10 +1527,29 @@ void dExtNpcDoors_pollArrival() {
             return;
         }
         if (dComIfGp_event_runCheck() || dComIfGp_event_getMode() != dEvt_mode_WAIT_e) {
-            dExtNpcMount_forceEndDoorEvent("arrival-G-guard");
-            DuskLog.warn(
-                "[Doors] №89 event G-guard — stage='{}' still active after {}f → force-end",
-                s_arrival.stage, kArrivalGuardFrames);
+            // §313: never force-end while our native dMesg box is legitimately holding a
+            // tale beat (waiting on A/B). The ba1 tale re-enters R_DL01 via its own
+            // setNextStage two-step (§296, point 200), which counts as an arrival and
+            // RE-ARMS this guard; 120f later it killed the held tale (§304: fnm=95 = beat
+            // 540's suspend, force-ended at m_frame 117). §270 stands down at ba1's ORDER
+            // but can't survive that re-arm.
+            //   Discriminator = dExtDmesg_isBoxActive() (a box is up), NOT "a demo control
+            // exists": getControl() is non-NULL on ordinary arrivals too, so the first cut
+            // stood the guard down on F_DL01 (Outset) and — via clearArrivalGuard + return —
+            // skipped the arrival camera snap, stranding the Outset camera at the map edge.
+            //   Fix: skip ONLY the force-end; fall through to the camera-snap + disarm below
+            // untouched. With no box up (every non-tale arrival), the force-end runs exactly
+            // as before. A genuine mid-tale hang is still caught by the 3600f
+            // pollStuckMessageResume backstop.
+            if (dExtDmesg_isBoxActive()) {
+                DuskLog.info("[Doors] §313 №89 guard held — dMesg box presenting a tale beat "
+                             "(stage='{}'), not a stuck residual", s_arrival.stage);
+            } else {
+                dExtNpcMount_forceEndDoorEvent("arrival-G-guard");
+                DuskLog.warn(
+                    "[Doors] №89 event G-guard — stage='{}' still active after {}f → force-end",
+                    s_arrival.stage, kArrivalGuardFrames);
+            }
         } else {
             DuskLog.info("[Doors] №89 event G-guard clear — stage='{}' control free",
                          s_arrival.stage);

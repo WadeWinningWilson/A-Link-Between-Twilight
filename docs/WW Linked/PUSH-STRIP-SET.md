@@ -22,6 +22,15 @@ Push is currently GATED regardless: the `Ivan` literal (`d_ww_itemmdl_pc.cpp:200
 - **Parked surfaces** — audio-shadow, ext-seq, bridge tooling — local-only.
 - **The `Ivan` literal** — must be fixed before push (it is the one confirmed exe-level covenant
   marker; gate catches it if forgotten).
+- **Temporary instrumentation (added §177 sweep, 2026-07-27)** — strip before push, none carry
+  donor bytes: `include/dusk/fps_probe.h` + Ferry T buckets (m_Do_main/game_clock hooks) ·
+  `run_fps_bisect_{palette,waves,btk,wavedraw}.bat` (repo root) · `DUSK_WW_FPS_BISECT` env branches
+  · probe log lines: `[WwWind]` which-bank + W-LINE ARM/DISARM (keep the breach LOGIC, strip the
+  chatter), `§161 flag-only` (keep — self-verifying acceptance), `§62 cutFx amb=` (strip after
+  grass-VFX accepted), `§134 windProbe` (change-triggered after Ferry P #3).
+- **Tracked game-derived binaries (flag for push review, §177):** `tools/font_extract/`
+  (fontres.arc, .bfn, atlases — TP-side, legality hygiene not №31) · `tools/demo_cut_content/out/`
+  tracked text reports are fine, packs/ correctly gitignored.
 
 ## Standing
 - The **exe greplist gate (M6) is the real backstop** — it scans the built binary regardless of

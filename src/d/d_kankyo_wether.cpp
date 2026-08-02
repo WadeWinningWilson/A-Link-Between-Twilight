@@ -7,10 +7,15 @@
 
 #include "d/d_kankyo_wether.h"
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.h"
+#include "JSystem/JGeometry.h"
 #include "SSystem/SComponent/c_math.h"
+#include "SSystem/SComponent/c_counter.h"
+#include "SSystem/SComponent/c_lib.h"
+#include "d/d_bg_s_gnd_chk.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
 #include "d/d_kankyo_rain.h"
+#include "d/d_particle.h"
 #include "f_op/f_op_camera_mng.h"
 #include <cstring>
 #include "m_Do/m_Do_audio.h"
@@ -19,6 +24,7 @@
 #include "d/d_ext_save_guard.h"
 #include "dusk/logging.h"
 #if TARGET_PC
+#include "dusk/fps_probe.h"
 #include "dusk/main.h"
 #include <cmath>
 #include <cstdio>
@@ -396,6 +402,7 @@ void dKyw_wether_delete() {
         g_env_light.mpWavePacket = NULL;
         g_env_light.mWaveInitialized = 0;
     }
+    dKyw_ww_windline_delete();
 #endif
 }
 
@@ -453,8 +460,15 @@ static void wether_move_thunder() {
     }
 }
 
+#if TARGET_PC
+static void wether_move_windline();
+#endif
+
 void dKyw_wether_move() {
     wether_move_thunder();
+#if TARGET_PC
+    wether_move_windline();
+#endif
 }
 
 static void wether_move_sun() {
@@ -1274,6 +1288,369 @@ void dKyw_wave_calm_onStage(const char* stage) {
     } else {
         wwCalmClear();
     }
+}
+
+// Ferry F Stage 2 — ambient sea wind on WW hosts.
+// dKyw_get_wind_* reads g_env_light.global_wind_influence, which dKyw_wind_set
+// refreshes every frame from FILI/LBNK (→ pow 0 on shell hosts). Durable write
+// is the same evt_wind path kytag02/tornado use: angle + custom_windpower.
+// Angle Y=0 is a placeholder until History confirms Outset's authored direction.
+void dKyw_ww_host_wind_onStage(const char* stage) {
+#if TARGET_PC
+    DUSK_FPS_SCOPE(Wind);
+#endif
+    static bool s_armed;
+    static constexpr f32 kWwHostAmbientWindPow = 0.4f;
+    if (stage != NULL && dExtWwSave_isWwHostStage(stage)) {
+        dKyw_evt_wind_set(/*angleX=*/0, /*angleY=*/0);
+        dKyw_custom_windpower(kWwHostAmbientWindPow);
+        if (!s_armed) {
+            s_armed = true;
+            DuskLog.info(
+                "[WwFoam] FerryF ambient wind ARM stage='{}' pow={:.3f} angY=0 (placeholder)",
+                stage, kWwHostAmbientWindPow);
+        }
+    } else if (s_armed) {
+        g_env_light.evt_wind_go = 0;
+        g_env_light.custom_windpower = 0.0f;
+        s_armed = false;
+        DuskLog.info("[WwFoam] FerryF ambient wind DISARM (left WW host)");
+    }
+}
+
+// =============================================================================
+// Ferry W-LINE — donor wether_move_windline + dKyr_wind_init/move
+// (d_kankyo_wether.cpp:400 / d_kankyo_rain.cpp:226). Adaptations:
+//   1) Force ambient branch — Ferry F feeds via custom_windpower; donor :268
+//      would otherwise draw tiny player-anchored tornado lines.
+//   2) Gate = F_* WW host only (not R_DL interiors; not TP).
+//   3) Particle 0x0031 from WW supplemental common.jpc (slot 3) + bank probe.
+//   4) OMIT mKamomeEff. Deku-Leaf count=10 TODO (donor :263; glide state TBD).
+// =============================================================================
+struct WwWindEff {
+    JPABaseEmitter* mpEmitter = NULL;
+    cXyz mBasePos;
+    cXyz mPos;
+    f32 mStateTimer = 0.0f;
+    f32 mAlpha = 0.0f;
+    int mState = 0;
+    int field_0x28 = 0;
+    s16 field_0x2c = 0;
+    s16 mAngleY = 0;
+    s16 mAngleXZ = 0;
+    u8 field_0x32 = 0;
+};
+
+struct WwWindEffSet {
+    WwWindEff mWindEff[30];
+    u8 mbHasCustomWindPower = 0;
+};
+
+static WwWindEffSet* s_wwWind = NULL;
+static bool s_wwWindInitialized = false;
+static int s_wwWindlineCount = 0;
+static constexpr u16 kWwWindlineParticleId = 0x0031;
+
+static bool wwWindlineHostActive() {
+    const char* stage = dComIfGp_getStartStageName();
+    // Adaptation 2: exteriors only (F_*), same family as foam field gate.
+    return stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage);
+}
+
+static void wwWindlineDeleteEmitters(WwWindEffSet* wind) {
+    if (wind == NULL) {
+        return;
+    }
+    for (int i = 0; i < 30; i++) {
+        if (wind->mWindEff[i].mpEmitter != NULL) {
+            wind->mWindEff[i].mpEmitter->deleteAllParticle();
+            wind->mWindEff[i].mpEmitter->becomeInvalidEmitter();
+            wind->mWindEff[i].mpEmitter = NULL;
+        }
+        wind->mWindEff[i].mState = 0;
+    }
+}
+
+static void dKyr_ww_wind_init() {
+    if (s_wwWind == NULL) {
+        return;
+    }
+    s_wwWind->mbHasCustomWindPower = false;
+}
+
+static void dKyr_ww_wind_move() {
+    if (s_wwWind == NULL) {
+        return;
+    }
+    WwWindEffSet* pWind = s_wwWind;
+    camera_class* pCamera = dComIfGp_getCamera(0);
+    cXyz* pWindVec = dKyw_get_wind_vec();
+    f32 windPow = dKyw_get_wind_pow();
+    if (pCamera == NULL || pWindVec == NULL) {
+        return;
+    }
+
+    dBgS_ObjGndChk_All gndChk;
+    cXyz windVec = *pWindVec;
+    u32 particleNum = dComIfGp_particle_getParticleNum();
+
+    // Ambient sea-streak constants (donor ambient path) — verbatim.
+    f32 fVar17 = 4000.0f;
+    f32 posRange = 2000.0f;
+    f32 fVar28 = 80.0f;
+    f32 posWindScale = 2500.0f;
+    f32 fVar25 = 250.0f;
+    f32 fVar18 = 800.0f;
+    f32 fVar23 = 1.0f;
+    f32 offsetY = 1000.0f;
+
+    s32 windlineCount = s_wwWindlineCount;
+    // TODO(Ferry W-LINE): donor forces count=10 while gliding
+    // (daPyStts1_DEKU_LEAF_FLY_e, d_kankyo_rain.cpp:263) — wire when our Deku
+    // Leaf glide status is one check away.
+
+    // Adaptation 1 — NEVER take the custom-windpower branch on WW hosts.
+    // Ferry F feeds ambient wind THROUGH custom_windpower (evt_wind path);
+    // donor :268 would treat that as tornado/kytag02 tiny lines (scale 0.14,
+    // range 160, player-anchored). Force ambient sea streaks instead.
+    const bool useCustomWindPower = false;
+    (void)useCustomWindPower;
+    if (pWind->mbHasCustomWindPower) {
+        pWind->mbHasCustomWindPower = false;
+        wwWindlineDeleteEmitters(pWind);
+    }
+
+    cXyz eyePos;
+    dKy_set_eyevect_calc2(pCamera, &eyePos, fVar17, fVar17);
+
+    dPa_control_c* pa = g_dComIfG_gameInfo.play.getParticle();
+    if (pa == NULL || !pa->ensureWwWindlineRes()) {
+        return;
+    }
+
+    for (s32 i = 0; i < 30; i++) {
+        if (i >= windlineCount && pWind->mWindEff[i].mState == 0) {
+            if (pWind->mWindEff[i].mpEmitter != NULL) {
+                pWind->mWindEff[i].mpEmitter->deleteAllParticle();
+                pWind->mWindEff[i].mpEmitter->becomeInvalidEmitter();
+                pWind->mWindEff[i].mpEmitter = NULL;
+            }
+            continue;
+        }
+
+        WwWindEff& windEff = pWind->mWindEff[i];
+        switch (windEff.mState) {
+        case 0:
+            if (windPow < 0.3f) {
+                continue;
+            }
+            if (particleNum <= 1500 &&
+                ((g_Counter.mCounter0 >> 4 & 7) != (i & 3U))) {
+                windEff.mStateTimer = 0.0f;
+                windEff.mAlpha = 0.0f;
+                windEff.field_0x2c = 0;
+                windEff.mBasePos.set(eyePos);
+                windEff.mBasePos.y += offsetY;
+
+                windEff.mPos.x = cM_rndFX(posRange);
+                windEff.mPos.y = cM_rndFX(posRange);
+                windEff.mPos.z = cM_rndFX(posRange);
+
+                f32 windScale = posWindScale + posWindScale * cM_rndF(1.0f);
+                windEff.mPos.x -= windVec.x * windScale;
+                windEff.mPos.y -= windVec.y * windScale;
+                windEff.mPos.z -= windVec.z * windScale;
+
+                windEff.field_0x2c = (s16)cM_rndF(65535.0f);
+
+                cXyz pos;
+                pos.x = windEff.mBasePos.x + windEff.mPos.x;
+                pos.y = windEff.mBasePos.y + windEff.mPos.y;
+                pos.z = windEff.mBasePos.z + windEff.mPos.z;
+
+                {
+                    cXyz checkPos = pos;
+                    checkPos.y += 10000.0f;
+                    gndChk.SetPos(&checkPos);
+                    f32 gndY = dComIfG_Bgsp().GroundCross(&gndChk);
+                    if (gndY != -G_CM3D_F_INF && pos.y < gndY) {
+                        windEff.mPos.y =
+                            (gndY + offsetY + cM_rndF(offsetY)) - windEff.mBasePos.y;
+                    }
+                }
+
+                pos.x = windEff.mBasePos.x + windEff.mPos.x;
+                pos.y = windEff.mBasePos.y + windEff.mPos.y;
+                pos.z = windEff.mBasePos.z + windEff.mPos.z;
+
+                windEff.mpEmitter =
+                    dComIfGp_particle_set(kWwWindlineParticleId, &pos, NULL, NULL);
+                if (windEff.mpEmitter != NULL) {
+                    windEff.mpEmitter->setGlobalAlpha(0);
+                    windEff.mpEmitter->setGlobalScale(
+                        JGeometry::TVec3<f32>(fVar23, fVar23, fVar23));
+                    windEff.mState = 1;
+                }
+
+                f32 windVec_absXZ =
+                    std::sqrtf(windVec.x * windVec.x + windVec.z * windVec.z);
+                windEff.mAngleXZ = cM_atan2s(windVec.x, windVec.z);
+                windEff.mAngleY = cM_atan2s(windVec.y, windVec_absXZ);
+                windEff.field_0x28 = 0;
+                windEff.field_0x32 = cM_rndF(1.0f) >= 0.0f ? 1 : 0;
+            }
+            break;
+        case 1:
+        case 2: {
+            if (windEff.mpEmitter == NULL) {
+                windEff.mState = 0;
+                break;
+            }
+            f32 fVar14 = fVar25 - fVar17 * (1.0f - windPow);
+            windEff.field_0x2c += (s16)fVar18;
+            if (i & 1) {
+                windEff.mAngleY += (s16)(fVar14 * cM_ssin(windEff.field_0x2c));
+                windEff.mAngleXZ += (s16)(fVar14 * cM_ssin(windEff.field_0x2c));
+            } else {
+                windEff.mAngleY += (s16)(fVar14 * cM_ssin(windEff.field_0x2c));
+                windEff.mAngleXZ -= (s16)(fVar14 * cM_ssin(windEff.field_0x2c));
+            }
+
+            if (windEff.mStateTimer > 0.4f && windEff.field_0x32 == 1) {
+                windEff.field_0x28 += i * 200 + 3600;
+                windEff.mAngleY += (s16)(i * 200 + 3600);
+                if (windEff.field_0x28 > 60535) {
+                    windEff.field_0x32 = 0;
+                }
+            } else {
+                f32 windVec_absXZ =
+                    std::sqrtf(windVec.x * windVec.x + windVec.z * windVec.z);
+                s16 targetAngleXZ = cM_atan2s(windVec.x, windVec.z);
+                s16 targetAngleY = cM_atan2s(windVec.y, windVec_absXZ);
+                cLib_addCalcAngleS(&windEff.mAngleY, targetAngleY, 10, 1000, 1);
+                cLib_addCalcAngleS(&windEff.mAngleXZ, targetAngleXZ, 10, 1000, 1);
+            }
+
+            cXyz move;
+            move.x = cM_scos(windEff.mAngleY) * cM_ssin(windEff.mAngleXZ);
+            move.y = cM_ssin(windEff.mAngleY);
+            move.z = cM_scos(windEff.mAngleY) * cM_scos(windEff.mAngleXZ);
+
+            fVar14 = fVar28 - (fVar28 * 0.2f) * (1.0f - windPow);
+            windEff.mPos.x += move.x * fVar14;
+            windEff.mPos.y += move.y * fVar14;
+            windEff.mPos.z += move.z * fVar14;
+
+            cXyz pos;
+            pos.x = windEff.mBasePos.x + windEff.mPos.x;
+            pos.y = windEff.mBasePos.y + windEff.mPos.y;
+            pos.z = windEff.mBasePos.z + windEff.mPos.z;
+            windEff.mpEmitter->setGlobalTranslation(pos);
+
+            // §178 W-LINE-c — Nonmatching alpha/timer block: use noclip
+            // d_kankyo_wether.ts (sanctioned disambiguator). Decomp's
+            // `0.18f * (i/30)` integer-divides to 0 → timer frozen → invisible.
+            // DO NOT adopt noclip's effScale*=1.8 (their "noclip modification").
+            const f32 maxVel = 0.08f + 0.008f * ((f32)i / 30.0f);
+            f32 distFade = pos.getSquareDistance(pCamera->view.lookat.eye) / 200.0f;
+            if (distFade > 1.0f) {
+                distFade = 1.0f;
+            }
+            // Receiver: BG0_K0 lives in dungeonlight_col[1] (№113 convert stash:
+            // plight_col[1]=bg0_k0). Normalize 0–255 → 0–1 like noclip's Color.
+            const GXColorS10& bg0K0 = g_env_light.dungeonlight_col[1];
+            const f32 colorAvg =
+                ((f32)bg0K0.r + (f32)bg0K0.g + (f32)bg0K0.b) / (3.0f * 255.0f);
+            f32 alphaFade = windPow * (distFade * colorAvg * colorAvg);
+            if (alphaFade < 0.5f) {
+                alphaFade = 0.5f;
+            }
+            const f32 alpha255 = alphaFade * windEff.mAlpha * 255.0f;
+            windEff.mpEmitter->setGlobalAlpha(
+                (u8)(alpha255 > 255.0f ? 255.0f : (alpha255 < 0.0f ? 0.0f : alpha255)));
+
+            if (windEff.mState == 1) {
+                cLib_addCalc(&windEff.mStateTimer, 1.0f, 0.3f, 0.1f * maxVel, 0.01f);
+                if (windEff.mStateTimer >= 1.0f) {
+                    windEff.mState = 2;
+                }
+                if (windEff.mStateTimer > 0.5f) {
+                    cLib_addCalc(&windEff.mAlpha, 1.0f, 0.5f, 0.05f, 0.001f);
+                }
+            } else {
+                cLib_addCalc(&windEff.mStateTimer, 0.0f, 0.4f,
+                             maxVel * (0.1f + 0.01f * ((f32)i / 30.0f)), 0.01f);
+                if (windEff.mStateTimer <= 0.0f) {
+                    windEff.mpEmitter->deleteAllParticle();
+                    windEff.mpEmitter->becomeInvalidEmitter();
+                    windEff.mpEmitter = NULL;
+                    windEff.mState = 0;
+                }
+                if (windEff.mStateTimer < 0.5f) {
+                    cLib_addCalc(&windEff.mAlpha, 0.0f, 0.5f, 0.05f, 0.001f);
+                }
+            }
+#if TARGET_PC
+            // Tuning probe — strip after acceptance (§178).
+            if (i == 0 && (g_Counter.mCounter0 % 30) == 0) {
+                DuskLog.info("[WwWind] line0 state={} timer={:.2f} alpha={:.2f}", windEff.mState,
+                             windEff.mStateTimer, windEff.mAlpha);
+            }
+#endif
+            break;
+        }
+        default:
+            windEff.mState = 0;
+            break;
+        }
+    }
+}
+
+static void wether_move_windline() {
+    s_wwWindlineCount = 0;
+    if (wwWindlineHostActive()) {
+        s_wwWindlineCount = (int)(dKyw_get_wind_pow() * 10.0f);
+    }
+
+    if (!wwWindlineHostActive() && s_wwWindInitialized) {
+        dKyw_ww_windline_delete();
+        return;
+    }
+
+    switch (s_wwWindInitialized ? 1 : 0) {
+    case 0:
+        if (s_wwWindlineCount != 0) {
+            s_wwWind = JKR_NEW_ARGS(0x20) WwWindEffSet;
+            if (s_wwWind == NULL) {
+                return;
+            }
+            for (int i = 0; i < 30; i++) {
+                s_wwWind->mWindEff[i].mState = 0;
+                s_wwWind->mWindEff[i].mpEmitter = NULL;
+            }
+            dKyr_ww_wind_init();
+            dKyr_ww_wind_move();
+            s_wwWindInitialized = true;
+            DuskLog.info("[WwWind] Ferry W-LINE ARM count={} pow={:.3f}", s_wwWindlineCount,
+                         dKyw_get_wind_pow());
+        }
+        break;
+    case 1:
+        dKyr_ww_wind_move();
+        break;
+    }
+}
+
+void dKyw_ww_windline_delete() {
+    if (!s_wwWindInitialized && s_wwWind == NULL) {
+        return;
+    }
+    wwWindlineDeleteEmitters(s_wwWind);
+    JKR_DELETE(s_wwWind);
+    s_wwWind = NULL;
+    s_wwWindInitialized = false;
+    s_wwWindlineCount = 0;
+    DuskLog.info("[WwWind] Ferry W-LINE DISARM");
 }
 
 void dKyw_wave_calm_update() {

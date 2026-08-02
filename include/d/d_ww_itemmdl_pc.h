@@ -120,8 +120,21 @@ void dWwItemmdl_clearClothesBundleCache();
 /**
  * Get-box kit: if msgId is the host-item get message (host+0x65) and config
  * authored get_text, return that string (newlines already expanded). Else null.
+ * Also returns text while a demo clothes-get presentation is armed (§186) —
+ * setDemoMessage(index) resolves a BMG message_id that may not equal host+0x65.
  */
 const char* dWwItemmdl_clothesBundleGetTextForMessage(u32 msg_id);
+
+/** Host item from clothes_bundle.ini (e.g. WEAR_KOKIRI); 0xFF if inactive. */
+u8 dWwItemmdl_clothesBundleHostItem();
+
+/**
+ * §186: arm/disarm the tale clothes get-item presentation. Forces MsgScrnItem
+ * (fukiKind 9), host item index, and kit get_text regardless of BMG slot drift.
+ */
+void dWwItemmdl_beginClothesGetPresentation();
+void dWwItemmdl_endClothesGetPresentation();
+bool dWwItemmdl_isClothesGetPresentation();
 
 /**
  * Bytes needed for the staged get_icon ResTIMG (0 if no icon / wrong item).

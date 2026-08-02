@@ -1,0 +1,600 @@
+{
+ "Ba1": [
+  "res\\Object\\Demo01.arc :: tale.stb",
+  "res\\Object\\Demo01.arc :: tale_2.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo48.arc :: get_shield.stb"
+ ],
+ "Bms2": [
+  "res\\Object\\Demo17.arc :: bombshop.stb"
+ ],
+ "Branch": [
+  "res\\Object\\Demo03.arc :: meet_tetra.stb",
+  "res\\Stage\\E3ROOP\\Stage.arc :: meet_tetra.stb"
+ ],
+ "Dk": [
+  "res\\Object\\Demo02.arc :: kaizoku_zelda_fly.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Stage\\DmSpot0\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\KATA_HB\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\M2ganon\\Stage.arc :: find_sister.stb"
+ ],
+ "DmKmm": [
+  "res\\Object\\Demo08.arc :: meetshishioh.stb"
+ ],
+ "Gdemo20": [
+  "res\\Object\\Demo20.arc :: warp_in.stb",
+  "res\\Object\\Demo33.arc :: warphole.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb"
+ ],
+ "Ghrwp": [
+  "res\\Object\\Demo44.arc :: warp_out.stb"
+ ],
+ "Gnd": [
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb"
+ ],
+ "Jb1": [
+  "res\\Object\\Demo18.arc :: getperl_jab.stb"
+ ],
+ "Ktaruo": [
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb"
+ ],
+ "Link": [
+  "res\\Object\\Demo01.arc :: tale.stb",
+  "res\\Object\\Demo01.arc :: tale_2.stb",
+  "res\\Object\\Demo02.arc :: awake.stb",
+  "res\\Object\\Demo03.arc :: meet_tetra.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo08.arc :: meetshishioh.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo20.arc :: warp_in.stb",
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo27.arc :: dance_zola.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo30.arc :: dance_kokiri.stb",
+  "res\\Object\\Demo31.arc :: awake_kokiri.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo33.arc :: warphole.stb",
+  "res\\Object\\Demo34.arc :: seal.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo36.arc :: to_roof.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo44.arc :: warp_out.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo48.arc :: get_shield.stb",
+  "res\\Object\\Demo49.arc :: rebirth_hyral.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb",
+  "res\\Object\\Demo51.arc :: title.stb",
+  "res\\Stage\\E3ROOP\\Stage.arc :: meet_tetra.stb",
+  "res\\Stage\\M2ganon\\Stage.arc :: find_sister.stb"
+ ],
+ "Ls1": [
+  "res\\Object\\Demo02.arc :: awake.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Stage\\M2ganon\\Stage.arc :: find_sister.stb"
+ ],
+ "MegamiD": [
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "MegamiF": [
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "MegamiN": [
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "P1a": [
+  "res\\Object\\Demo02.arc :: kaizoku_zelda_fly.stb",
+  "res\\Object\\Demo03.arc :: meet_tetra.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Stage\\DmSpot0\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\KATA_HB\\Stage.arc :: kaizoku_zelda_fly.stb"
+ ],
+ "P1b": [
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "P1c": [
+  "res\\Object\\Demo17.arc :: bombshop.stb"
+ ],
+ "Pirates": [
+  "res\\Object\\Demo02.arc :: kaizoku_zelda_fly.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Stage\\DmSpot0\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\KATA_HB\\Stage.arc :: kaizoku_zelda_fly.stb"
+ ],
+ "Po": [
+  "res\\Object\\Demo36.arc :: to_roof.stb"
+ ],
+ "Psail": [
+  "res\\Object\\Demo05.arc :: departure.stb"
+ ],
+ "SMBdor": [
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb"
+ ],
+ "Ship": [
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "Throck": [
+  "res\\Object\\Demo02.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\DmSpot0\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\KATA_HB\\Stage.arc :: kaizoku_zelda_fly.stb"
+ ],
+ "Tide3": [
+  "res\\Object\\Demo23.arc :: rescue.stb"
+ ],
+ "Touseki": [
+  "res\\Object\\Demo02.arc :: kaizoku_zelda_fly.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Stage\\DmSpot0\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\KATA_HB\\Stage.arc :: kaizoku_zelda_fly.stb"
+ ],
+ "Vdora": [
+  "res\\Object\\Demo05.arc :: departure.stb"
+ ],
+ "Vteng": [
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb"
+ ],
+ "X_tower": [
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "Ym1": [
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "Ym2": [
+  "res\\Object\\Demo05.arc :: departure.stb"
+ ],
+ "Zl1": [
+  "res\\Object\\Demo02.arc :: kaizoku_zelda_fly.stb",
+  "res\\Object\\Demo03.arc :: meet_tetra.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Stage\\DmSpot0\\Stage.arc :: kaizoku_zelda_fly.stb",
+  "res\\Stage\\E3ROOP\\Stage.arc :: meet_tetra.stb",
+  "res\\Stage\\KATA_HB\\Stage.arc :: kaizoku_zelda_fly.stb"
+ ],
+ "d_act0": [
+  "res\\Object\\Demo01.arc :: tale.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo08.arc :: meetshishioh.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo20.arc :: warp_in.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo27.arc :: dance_zola.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo31.arc :: awake_kokiri.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo33.arc :: warphole.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo36.arc :: to_roof.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo44.arc :: warp_out.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Object\\Demo48.arc :: get_shield.stb",
+  "res\\Object\\Demo49.arc :: rebirth_hyral.stb"
+ ],
+ "d_act1": [
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo08.arc :: meetshishioh.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo27.arc :: dance_zola.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo30.arc :: dance_kokiri.stb",
+  "res\\Object\\Demo31.arc :: awake_kokiri.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo34.arc :: seal.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo36.arc :: to_roof.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo44.arc :: warp_out.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Object\\Demo48.arc :: get_shield.stb",
+  "res\\Object\\Demo49.arc :: rebirth_hyral.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "d_act10": [
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo30.arc :: dance_kokiri.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Object\\Demo49.arc :: rebirth_hyral.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "d_act11": [
+  "res\\Object\\Demo03.arc :: meet_tetra.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo20.arc :: warp_in.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo27.arc :: dance_zola.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo30.arc :: dance_kokiri.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo33.arc :: warphole.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo51.arc :: title.stb"
+ ],
+ "d_act12": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo44.arc :: warp_out.stb"
+ ],
+ "d_act13": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "d_act14": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "d_act15": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "d_act16": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb"
+ ],
+ "d_act17": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb"
+ ],
+ "d_act18": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb"
+ ],
+ "d_act19": [
+  "res\\Object\\Demo14.arc :: meet_deku.stb"
+ ],
+ "d_act2": [
+  "res\\Object\\Demo01.arc :: tale.stb",
+  "res\\Object\\Demo01.arc :: tale_2.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo08.arc :: meetshishioh.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo27.arc :: dance_zola.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo30.arc :: dance_kokiri.stb",
+  "res\\Object\\Demo31.arc :: awake_kokiri.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo33.arc :: warphole.stb",
+  "res\\Object\\Demo34.arc :: seal.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo36.arc :: to_roof.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo44.arc :: warp_out.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb",
+  "res\\Object\\Demo48.arc :: get_shield.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "d_act20": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb"
+ ],
+ "d_act21": [
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb"
+ ],
+ "d_act3": [
+  "res\\Object\\Demo01.arc :: tale.stb",
+  "res\\Object\\Demo01.arc :: tale_2.stb",
+  "res\\Object\\Demo04.arc :: stolensister.stb",
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo08.arc :: meetshishioh.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo33.arc :: warphole.stb",
+  "res\\Object\\Demo34.arc :: seal.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo44.arc :: warp_out.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb"
+ ],
+ "d_act30": [
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb"
+ ],
+ "d_act31": [
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb"
+ ],
+ "d_act4": [
+  "res\\Object\\Demo05.arc :: departure.stb",
+  "res\\Object\\Demo06.arc :: maju_shinnyu.stb",
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo08.arc :: meetshishioh.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo17.arc :: bombshop.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "d_act5": [
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo11.arc :: getperl_komori.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo45.arc :: runaway_majuto.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "d_act6": [
+  "res\\Object\\Demo07.arc :: find_sister.stb",
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo10.arc :: dragontale.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo23.arc :: rescue.stb",
+  "res\\Object\\Demo24.arc :: attack_ganon.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo29.arc :: pray_zola.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "d_act7": [
+  "res\\Object\\Demo08.arc :: dragontale.stb",
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo18.arc :: getperl_jab.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo41.arc :: howling.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "d_act8": [
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo26.arc :: fairy.stb",
+  "res\\Object\\Demo26.arc :: fairy_flag_on.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo32.arc :: pray_kokiri.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "d_act9": [
+  "res\\Object\\Demo14.arc :: meet_deku.stb",
+  "res\\Object\\Demo15.arc :: getperl_deku.stb",
+  "res\\Object\\Demo19.arc :: towerd.stb",
+  "res\\Object\\Demo19.arc :: towerf.stb",
+  "res\\Object\\Demo19.arc :: towern.stb",
+  "res\\Object\\Demo28.arc :: awake_zola.stb",
+  "res\\Object\\Demo37.arc :: ending.stb",
+  "res\\Object\\Demo46.arc :: epilogue.stb"
+ ],
+ "dmgroom": [
+  "res\\Object\\Demo24.arc :: attack_ganon.stb"
+ ],
+ "p_zelda": [
+  "res\\Object\\Demo25.arc :: awake_zelda.stb",
+  "res\\Object\\Demo35.arc :: kugutu_ganon.stb",
+  "res\\Object\\Demo42.arc :: g2before.stb",
+  "res\\Object\\Demo43.arc :: endhr.stb"
+ ],
+ "zouK": [
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "zouK1": [
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "zouK2": [
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "zouK3": [
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ],
+ "zouK4": [
+  "res\\Object\\Demo21.arc :: master_sword.stb",
+  "res\\Object\\Demo50.arc :: swing_sword.stb"
+ ]
+}

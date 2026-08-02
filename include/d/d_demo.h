@@ -96,6 +96,11 @@ public:
     void setActor(fopAc_ac_c*);
     f32 getPrm_Morf();
     int getDemoIDData(int* o_arg0, int* o_arg1, int* o_arg2, u16* o_resID, u8*);
+    // §251 donor decode — the scripted-face subsystem (replaces History's per-actor
+    // getDemoBtp/getDemoBtk reconstruction shims with the native donor method).
+    J3DAnmTexPattern* getP_BtpData(const char* i_name);
+    J3DAnmTextureSRTKey* getP_BtkData(const char* i_name);
+    void* getP_BrkData(const char* i_name);
 
     virtual ~dDemo_actor_c();
     virtual void JSGSetData(u32, void const*, u32);
@@ -384,7 +389,13 @@ public:
     }
 
     static dDemo_camera_c* getCamera() {
-        JUT_ASSERT(0, m_object != NULL);
+        // §319b: null-safe. The tale teardown now calls dDemo_c::remove() (donor-faithful,
+        // §319 = donor demo_remove), which frees m_object; camera_execute still calls this in
+        // the same frame and already tests the result for != NULL, but the bare deref crashed
+        // (getActiveCamera on a freed m_object, fault 0x108). Honor the caller's NULL contract.
+        if (m_object == NULL) {
+            return NULL;
+        }
         return m_object->getActiveCamera();
     }
 

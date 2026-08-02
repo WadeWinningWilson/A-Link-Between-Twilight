@@ -2014,16 +2014,40 @@ void dWwItemmdl_clearClothesBundleCache() {
     s_clothes.cached = nullptr;
 }
 
+static bool s_clothesGetPresentation = false;
+
 const char* dWwItemmdl_clothesBundleGetTextForMessage(u32 msg_id) {
     ensureClothesBundleCfg();
     if (!s_clothes.ok || s_clothes.getText.empty()) {
         return nullptr;
     }
-    // TP get-item message id = itemNo + 0x65 (procCoGetItem).
+    // §186: demo presentation arm — BMG message_id at table index host+0x65 may
+    // not equal host+0x65 (that mis-wire showed "magic armor / Malo Mart").
+    if (s_clothesGetPresentation) {
+        return s_clothes.getText.c_str();
+    }
     if (msg_id != static_cast<u32>(s_clothes.hostItem) + 0x65u) {
         return nullptr;
     }
     return s_clothes.getText.c_str();
+}
+
+u8 dWwItemmdl_clothesBundleHostItem() {
+    ensureClothesBundleCfg();
+    return s_clothes.ok ? s_clothes.hostItem : static_cast<u8>(0xFF);
+}
+
+void dWwItemmdl_beginClothesGetPresentation() {
+    ensureClothesBundleCfg();
+    s_clothesGetPresentation = true;
+}
+
+void dWwItemmdl_endClothesGetPresentation() {
+    s_clothesGetPresentation = false;
+}
+
+bool dWwItemmdl_isClothesGetPresentation() {
+    return s_clothesGetPresentation;
 }
 
 u32 dWwItemmdl_clothesBundleIconCap(u8 item_no) {

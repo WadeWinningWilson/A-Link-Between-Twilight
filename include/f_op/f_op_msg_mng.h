@@ -63,4 +63,14 @@ inline fpc_ProcID fopMsgM_Timer_create(s16 i_procName, u8 i_mode, u32 i_limitMs,
 }
 u8 fopMsgM_itemNumIdx(u8 i_no);
 
+// ============================================================================
+// §245 scope-message subsystem (WW telescope demo; d_a_npc_ls1 dependency)
+// ============================================================================
+fpc_ProcID fopMsgM_scopeMessageSet(u32 i_msgNo);
+bool fopMsgM_getScopeMode();
+bool fopMsgM_forceSendOn();
+void fopMsgM_forceSendOff();
+bool fopMsgM_checkForceSend();
+bool fopMsgM_releaseScopeMode();
+
 #endif

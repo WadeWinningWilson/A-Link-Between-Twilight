@@ -35,6 +35,10 @@ struct WAVE_INFO;
 WAVE_INFO* const* dKyw_getWaveInfl();
 void dKyw_wave_calm_onStage(const char* stage);
 void dKyw_wave_calm_update();
+// Ferry F Stage 2 — ambient wind on WW host stages (F_DL*/R_DL* only).
+void dKyw_ww_host_wind_onStage(const char* stage);
+// Ferry W-LINE — wind streaks teardown (also called from wether_delete).
+void dKyw_ww_windline_delete();
 #endif
 void dKyw_get_AllWind_vec(cXyz* i_position, cXyz* i_direction, f32* i_power);
 void dKyw_pntwind_cut(WIND_INFLUENCE* i_pntwind);

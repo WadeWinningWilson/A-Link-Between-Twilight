@@ -1,11 +1,17 @@
 #include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_demo.h"
+#include "JSystem/J3DGraphAnimator/J3DAnimation.h"  // §251 J3DAnmTexPattern::getFrameMax (getP_BtpData decode)
 #include "d/d_debug_viewer.h"
 #include "d/d_msg_class.h"
 #include "d/d_msg_object.h"
-#include "d/d_ext_save_guard.h"  // §49: donor storyboard message suppression
+#include "d/d_ext_save_guard.h"  // §49: donor storyboard message suppression / §271 WW-host gate
+#include "d/d_ext_dmesg.h"        // §308 M4: drive the native dMesg box from the storyboard
+#include "d/d_com_inf_game.h"     // §271 dComIfGp_getStartStageName
+#include "d/d_stage.h"            // §271 dStage_searchName (d_act* argument N)
 #include "f_op/f_op_camera_mng.h"
+#include "f_op/f_op_actor_mng.h"
+#include "f_pc/f_pc_manager.h"
 #include "m_Do/m_Do_graphic.h"
 #include "d/actor/d_a_movie_player.h"
 #include "JSystem/JGadget/pointer.h"
@@ -108,8 +114,27 @@ void jstudio_tAdaptor_message::adaptor_do_MESSAGE(JStudio::data::TEOperationData
         u32 content = *(BE(u32)*)pContent;
         // §49/№165: a donor storyboard fires DONOR message indices, which land on
         // unrelated receiver strings. Suppress those rather than show foreign text.
-        if (!dExtWw_handleDemoMessage(content)) {
+        const bool handled = dExtWw_handleDemoMessage(content);
+        // §305 DISCRIMINATOR (Foundry §304 golden trace): the tale's 9 message rows
+        // (539–545/547 + outlier 3095@f149) each set a box that, on dismiss, releases
+        // one suspend(1). Log WHICH row arrived here, whether the WW handler took it,
+        // and the live suspend/storyboard-frame — diff vs §304 to name the stuck hold
+        // and whether 3095 (Hero's Clothes get) opens. Pairs with §194 suspend edges.
+        {
+            auto* ctrl = dDemo_c::getControl();
+            DuskLog.info("[Demo] §305 MESSAGE row={} (0x{:X}) handled={} susp={} fnm={} f={}",
+                         (int)content, (int)content, handled ? 1 : 0,
+                         ctrl != NULL ? (int)ctrl->getSuspend() : -999,
+                         (int)dDemo_c::getFrameNoMsg(), (int)dDemo_c::getFrame());
+        }
+        if (!handled) {
             dMsgObject_setDemoMessage(content);
+        }
+        // §308 M4 — drive the native WW dMesg box's text from the storyboard beat
+        // (additive: runs alongside §201 so the tale still plays while the native box
+        // reflects the current message). The box itself only draws on WW host stages.
+        if (dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+            dExtDmesg_setMessage((unsigned short)content);
         }
         break;
     }
@@ -133,8 +158,12 @@ jstudio_tCreateObject_message::create(JStudio::TObject** ppObject,
 
     u32 type = iBlock.get_type();
     switch (type) {
-    case 'JMSG': 
+    case 'JMSG':
         {
+            // §305: prove the storyboard's message adaptor object is created. If this
+            // never logs, the tale.stb has no bound JMSG track → adaptor_do_MESSAGE can
+            // never fire → suspend #1 (row 539 @f29) strands and NOTHING releases.
+            DuskLog.info("[Demo] §305 JMSG message adaptor object CREATE");
             jstudio_tAdaptor_message* adaptor = JKR_NEW jstudio_tAdaptor_message();
             if (adaptor == NULL) {
                 return false;
@@ -315,6 +344,96 @@ int dDemo_actor_c::getDemoIDData(int* o_arg0, int* o_arg1, int* o_arg2, u16* o_r
     return 1;
 }
 
+// ============================================================================
+// §251 donor decode — the scripted-face subsystem (dDemo_actor_c BTP/BTK/BRK).
+// Donor-verbatim from GZLE01 80069434-8006969C (Foundry decode:
+// docs/WW Linked/getP_BtpData-decode.md). Replaces History's per-actor
+// getDemoBtp/getDemoBtk reconstruction shims (§247 recipe 8) with the one native
+// method every WW demo actor shares — the "true native subsystem" the standing
+// directive owes (bus §250/§251).
+//
+// The prm stream is raw STB file data = BIG-ENDIAN. The port keeps the blob BE in
+// memory (proven: getDemoIDData reads it through a TValueIterator_misaligned<u32>
+// that yields correctly-ordered words), so these readers do BE reads. s16 cases
+// sign-extend (donor `lha`) — a negative id compares against the mBtpId init -1 and
+// naturally no-ops, which is why the donor needs no explicit -1 guard.
+// ============================================================================
+static inline s16 dDemoPrm_readS16(const u8* p) {
+    return (s16)(((u16)p[0] << 8) | (u16)p[1]);
+}
+static inline u32 dDemoPrm_readU32(const u8* p) {
+    return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
+}
+
+J3DAnmTexPattern* dDemo_actor_c::getP_BtpData(const char* i_name) {
+    u32 id;
+    if (checkEnable(ENABLE_TEX_ANM)) {
+        id = mTexAnm;
+    } else {
+        if (!checkEnable(ENABLE_UNK_e))
+            return NULL;
+        const u8* prm = (const u8*)mPrm.mData;
+        switch (mPrm.field_0x0) {
+        case 1: id = dDemoPrm_readS16(prm + 1); break;
+        case 2: id = dDemoPrm_readS16(prm + 2); break;
+        case 4: id = dDemoPrm_readU32(prm + 1); break;
+        case 5:
+        case 6: id = dDemoPrm_readU32(prm + 2); break;
+        default:
+            return NULL;
+        }
+    }
+    if (id == mBtpId)
+        return NULL;                       // donor: rebind only on CHANGE
+    mBtpId = id;
+    const char* arc = i_name;
+    if (id & 0x10000)
+        arc = dStage_roomControl_c::getDemoArcName();
+    J3DAnmTexPattern* btp =
+        (J3DAnmTexPattern*)dComIfG_getObjectIDRes(arc, (u16)id);
+    if (btp != NULL)
+        mTexAnmFrameMax = btp->getFrameMax();
+    return btp;
+}
+
+J3DAnmTextureSRTKey* dDemo_actor_c::getP_BtkData(const char* i_name) {
+    if (!checkEnable(ENABLE_UNK_e))
+        return NULL;
+    const u8* prm = (const u8*)mPrm.mData;
+    u32 id;
+    switch (mPrm.field_0x0) {
+    case 2: id = dDemoPrm_readS16(prm + 4); break;
+    case 5:
+    case 6: id = dDemoPrm_readU32(prm + 6); break;
+    default:
+        return NULL;
+    }
+    if (id == mBtkId)
+        return NULL;
+    mBtkId = id;
+    const char* arc = i_name;
+    if (id & 0x10000)
+        arc = dStage_roomControl_c::getDemoArcName();
+    return (J3DAnmTextureSRTKey*)dComIfG_getObjectIDRes(arc, (u16)id);
+}
+
+void* dDemo_actor_c::getP_BrkData(const char* i_name) {
+    if (!checkEnable(ENABLE_UNK_e))
+        return NULL;
+    u32 id;
+    if (mPrm.field_0x0 == 6)
+        id = dDemoPrm_readU32((const u8*)mPrm.mData + 0xA);
+    else
+        return NULL;
+    if (id == mBrkId)
+        return NULL;
+    mBrkId = id;
+    const char* arc = i_name;
+    if (id & 0x10000)
+        arc = dStage_roomControl_c::getDemoArcName();
+    return dComIfG_getObjectIDRes(arc, (u16)id);
+}
+
 static void* dDemo_getJaiPointer(char const* arcName, u32 anmID, int param_2, u16* param_3) {
     if (param_2 <= 0 || param_3 == NULL) {
         return NULL;
@@ -339,13 +458,29 @@ int dDemo_setDemoData(fopAc_ac_c* i_actor, u8 i_flags, mDoExt_McaMorf* i_morf, c
         return 0;
     }
 
+    // §203: §197 REVERTED. §197 froze the whole demo-state during a message suspend so a
+    // WW actor's clip wouldn't loop — but that was WRONG. Vanilla holds only the storyboard
+    // SEQUENCE (position/pose selection) via the JStudio bail (stb.cpp:118); the character's
+    // current animation clip KEEPS LOOPING while the box waits for input (user-confirmed
+    // against vanilla: Aryll keeps animating during the "Big Brother" boxes, she is not a
+    // frozen statue). So the read-back must run every frame: demo_actor->getTrans() is
+    // frozen by the bail (position holds), while the morf plays on (animation loops) — the
+    // donor's actual behavior. The earlier "repeating animation" complaint was in the broken
+    // pre-§201 context, not a real defect.
     u8 flags = demo_actor->checkEnable(i_flags);
     if (flags & dDemo_actor_c::ENABLE_TRANS_e) {
         i_actor->old.pos = i_actor->current.pos = demo_actor->getTrans();
     }
 
     if (flags & dDemo_actor_c::ENABLE_ROTATE_e) {
-        i_actor->shape_angle = demo_actor->getRatate();
+        // §244 RESTORED to donor (WW d_demo.cpp:129 sets BOTH). The port previously
+        // set only shape_angle, but WW NPCs (e.g. Aryll / d_a_npc_ls1) render from
+        // mAngle = current.angle in setMtx(), so a demo's rotation was applied to
+        // shape_angle and then dropped at draw time — the actor faced its spawn
+        // default through the cutscene. Vanilla (TP + WW) sets current.angle too.
+        // CROSS-LANE: shared demo path — if a native TP cutscene mis-rotates, this
+        // is the line (revert to shape_angle-only).
+        i_actor->current.angle = i_actor->shape_angle = demo_actor->getRatate();
     }
 
     if (flags & dDemo_actor_c::ENABLE_SCALE_e) {
@@ -924,8 +1059,26 @@ int dDemo_system_c::JSGFindObject(JStage::TObject** p_TObj, char const* actorNam
 
         if (actor == NULL) {
             if (objType == JStage::OBJECT_ACTOR && !strncmp(actorName, "d_act", 5)) {
-                actor =
-                    (fopAc_ac_c*)fopAcM_fastCreate(actorName, 0, NULL, -1, NULL, NULL, NULL, NULL);
+#if TARGET_PC
+                // §271: on a WW-hosted stage, route the storyboard's d_act* puppets to
+                // the WW demo00 twin (fpcNm_WW_DEMO00_e). TP's DEMO00 misreads the WW
+                // storyboard data channel and livelocks the scene at frame 0 (Foundry
+                // root-cause: the THP "Movie Start Wait" case). The d_actN name still
+                // resolves the SAME argument N via dStage_searchName; only the proc
+                // changes. Off WW host stages, TP's DEMO00 is used exactly as before.
+                if (dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+                    dStage_objectNameInf* nameInfo = dStage_searchName(actorName);
+                    s8 arg = nameInfo != NULL ? (s8)nameInfo->argument : -1;
+                    actor = (fopAc_ac_c*)fopAcM_fastCreate(
+                        (s16)fpcNm_WW_DEMO00_e, 0, NULL, -1, NULL, NULL, arg, NULL, NULL);
+                    DuskLog.info("[Demo] §271 route '{}' -> WW_DEMO00 arg={}", actorName,
+                                 (int)arg);
+                } else
+#endif
+                {
+                    actor = (fopAc_ac_c*)fopAcM_fastCreate(actorName, 0, NULL, -1, NULL, NULL,
+                                                           NULL, NULL);
+                }
                 if (actor == NULL) {
                     // "Generic-actor<%s> creation failed!!\n"
                     OS_WARNING("汎用くん<%s>生成失敗！！\n", actorName);
@@ -935,12 +1088,20 @@ int dDemo_system_c::JSGFindObject(JStage::TObject** p_TObj, char const* actorNam
                 fopAcM_setStageLayer(actor);
                 // "Generated Generic-actor<%s>!!\n"
                 OS_REPORT("汎用くん<%s>生成！！\n", actorName);
+                DuskLog.warn("[Demo] §175 lazy-create '{}' (prefer pre-spawn)", actorName);
             } else {
                 // "No Demo Actors available!!\n"
                 OS_WARNING("デモの出演者<%s>がいません！！\n", actorName);
                 return true;
             }
         }
+
+#if TARGET_PC
+        // §175: release the pre-spawn pause so execute can run once bound.
+        if (actor != NULL && !strncmp(actorName, "d_act", 5)) {
+            fpcM_PauseDisable(actor, 1);
+        }
+#endif
 
         *p_TObj = mpObject->appendActor(actor);
     } else if (objType == JStage::OBJECT_CAMERA) {
@@ -950,6 +1111,8 @@ int dDemo_system_c::JSGFindObject(JStage::TObject** p_TObj, char const* actorNam
 #endif
         } else {
             *p_TObj = mpObject->createCamera();
+            DuskLog.info("[Demo] §48 JSGFindObject camera='{}' -> {}", actorName,
+                         *p_TObj != NULL ? "created" : "FAILED");
         }
     } else if (objType == JStage::OBJECT_AMBIENT) {
         *p_TObj = mpObject->createAmbient();
@@ -1014,6 +1177,11 @@ void dDemo_c::create() {
 }
 
 void dDemo_c::remove() {
+#if TARGET_PC
+    // §341c (H4 attribution): who tears the demo down mid-box — log frame state.
+    DuskLog.info("[Demo] §341c remove() f={} fnm={} mode={}", (int)m_frame, (int)m_frameNoMsg,
+                 (int)m_mode);
+#endif
     end();
 
     if (m_object != NULL) {
@@ -1069,10 +1237,47 @@ jmessage_tControl::~jmessage_tControl() {}
 int dDemo_c::start(u8 const* p_data, cXyz* p_translation, f32 rotationY) {
     JUT_ASSERT(1886, m_system != NULL);
 
+#if TARGET_PC
+    // §336b DEMO INSTANCE COUNTER (double-start diagnosis, live-state §335):
+    // stamp every STB start with an instance #, the run-event that owns it, and
+    // the player's position — one run then shows the full order→start chain and
+    // which instance died at frame 117. Strip with §336 acceptance.
+    {
+        static int s_demoInstance = 0;
+        ++s_demoInstance;
+        fopAc_ac_c* pl336 = dComIfGp_getPlayer(0);
+        DuskLog.info("[Demo] §336b START #{} runEvt='{}' mode(before)={} link=({:.0f},{:.0f},{:.0f})",
+                     s_demoInstance,
+                     dComIfGp_getEventManager().getRunEventName(),
+                     (int)m_mode,
+                     pl336 != NULL ? pl336->current.pos.x : 0.0f,
+                     pl336 != NULL ? pl336->current.pos.y : 0.0f,
+                     pl336 != NULL ? pl336->current.pos.z : 0.0f);
+    }
+#endif
     m_control->reset();
     JStudio::TParse parser(m_control);
 
-    if (!parser.parse(p_data, 0)) {
+    const bool parseOk279 = parser.parse(p_data, 0);
+#if TARGET_PC
+    {
+        // §279 10-HYPOTHESIS PROBE (tale STB stalls at frame 0):
+        //  H1 start() even CALLED for the tale? (if this never logs on R_DL01 with the
+        //     tale data, orderOtherEventId never fed tale.stb to the control)
+        //  H2 p_data valid / non-NULL / plausible STB header (first 4 bytes)
+        //  H3 parser.parse() succeeded
+        //  H5 control suspended at start   H9 m_status   H8 prior m_data null
+        const char* stg = dComIfGp_getStartStageName();
+        const u32 first4 = (p_data != NULL) ? *reinterpret_cast<const u32*>(p_data) : 0u;
+        DuskLog.info(
+            "[Demo] §279 START stage='{}' p_data={} first4={:#x} parseOK={} suspend={} "
+            "m_status={:#x} prev_m_data_null={}",
+            stg != NULL ? stg : "?", (const void*)p_data, first4, parseOk279 ? 1 : 0,
+            m_control != NULL ? m_control->getSuspend() : -999, (unsigned)m_status,
+            (m_data == NULL) ? 1 : 0);
+    }
+#endif
+    if (!parseOk279) {
         // "Demo data read error!!\n"
         OSReport_Error("デモデータ読み込みエラー！！\n");
         return 0;
@@ -1117,6 +1322,11 @@ static void dummyString2() {
 }
 
 void dDemo_c::end() {
+#if TARGET_PC
+    // §341c (H4 attribution)
+    DuskLog.info("[Demo] §341c end() f={} fnm={} mode={}", (int)m_frame, (int)m_frameNoMsg,
+                 (int)m_mode);
+#endif
     JUT_ASSERT(1956, m_system != NULL);
 
 #if TARGET_PC
@@ -1147,6 +1357,9 @@ int dDemo_c::update() {
     unpause_streams(true);
 #endif
 
+    // §279 update probe REMOVED (§317 golden trace closed the stall question) — it derefed
+    // m_control before the m_data-null guard, crashing once dDemo_c::remove() (§319 teardown)
+    // freed the demo system mid-frame.
     if (m_data == NULL) {
         if (m_branchData == NULL) {
             return 0;
@@ -1163,13 +1376,34 @@ int dDemo_c::update() {
         }
     }
 
-    if (m_control->forward(1) != 0) {
+    // §196: forward() ALWAYS runs — the donor mechanism. JStudio's TObject::forward
+    // (libs/JSystem/.../stb.cpp:118) already bails every object to STATUS_SUSPEND while
+    // the control is suspended (camera+actors FREEZE), while the CONTROL object keeps
+    // processing its track so the data-authored suspend/unsuspend commands still fire.
+    // §195's skip-forward was WRONG: it also froze the control track, so the data
+    // suspend(-1) that releases the non-message hold never ran → counter stuck → deadlock.
+    const int fwdResult279 = m_control->forward(1);
+#if TARGET_PC
+    if (m_frame < 4) {
+        // §279 H7: does the JStudio control actually advance? 0 = STALL (no track / finished
+        // / all objects bailed) → the demo ends; nonzero = ADVANCE (frame progresses).
+        DuskLog.info("[Demo] §279 H7 forward(1) -> {} ({}) at m_frame={}", fwdResult279,
+                     fwdResult279 != 0 ? "ADVANCE" : "STALL->end(m_mode=2)", m_frame);
+    }
+#endif
+    if (fwdResult279 != 0) {
         m_frame++;
 
         if (m_control->getSuspend() <= 0) {
             m_frameNoMsg++;
         }
     } else {
+#if TARGET_PC
+        // §341b (H3): STB control stalled (forward()==0) → natural/truncated END.
+        DuskLog.info("[Demo] §341b forward()==0 STALL → mode 2 at f={} fnm={} susp={}",
+                     (int)m_frame, (int)m_frameNoMsg,
+                     m_control != NULL ? (int)m_control->getSuspend() : -999);
+#endif
         m_mode = 2;
     }
 

@@ -14,8 +14,12 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <algorithm>
 #include <unordered_map>
+#include <vector>
 
+#include <chrono>
+#include "JSystem/J3DGraphAnimator/J3DAnimation.h"
 #include "JSystem/J3DGraphAnimator/J3DJoint.h"
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.h"
 #include "JSystem/J3DGraphAnimator/J3DMaterialAttach.h"
@@ -32,6 +36,8 @@
 #include "d/d_albw_dialogue.h"
 #include "d/d_albw_outfit.h"  // №238: wardrobe-integrated clothes handover
 #include "d/d_msg_flow.h"     // №248: native message flow for mount talk (Shade Watcher pattern)
+#include "d/d_msg_object.h"
+#include "d/d_ww_itemmdl_pc.h"  // §186: clothes get presentation + kit text
 #include "d/d_camera.h"  // №172: Stop camera so opening event path can own the view
 #include "d/d_demo.h"  // §50: demo-truncation probe
 #include "SSystem/SComponent/c_counter.h"  // §52: rate-limited read-back trace
@@ -40,6 +46,7 @@
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_population.h"
 #include "d/d_ext_save_guard.h"
+#include "d/d_ext_dmesg.h"           // §308 M1 native dMesg archive residency
 #include "d/ext_seq/ja1_bank.h"
 #include "d/d_item.h"
 #include "d/d_item_data.h"
@@ -54,8 +61,10 @@
 #include "dusk/custom_assets.hpp"
 #include "dusk/logging.h"
 #include "dusk/main.h"
+#include <aurora/gfx.h>
 #include "f_op/f_op_actor_iter.h"
 #include "f_op/f_op_actor_mng.h"
+#include "f_op/f_op_msg_mng.h"  // §201 native pivot: fopMsgM_messageSetDemo
 #include "f_pc/f_pc_manager.h"
 #include "f_pc/f_pc_name.h"
 #include <vector>
@@ -64,6 +73,8 @@
 #include "m_Do/m_Do_lib.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_graphic.h"
+#include "JSystem/JFramework/JFWDisplay.h"  // §358 JUT fader status in gap
+#include "JSystem/JUtility/JUTFader.h"
 #include "m_Do/m_Do_mtx.h"
 
 // Live-tune NPC cel ambient offsets (additive on manifest amb_*).
@@ -75,6 +86,9 @@ namespace fs = std::filesystem;
 
 std::unordered_map<std::string, dExtNpcManifest> s_providers;
 std::vector<std::string> s_providerOrder;  // stable UI order
+
+// §222: pig↔bait AI — active bait actor ids the pig searches (global).
+std::vector<u32> g_dExtBaitIds;
 
 // ModelData cache (GameHeap-pinned). Key = "arc/model" or "bg:arc/model".
 // Actors hold their own J3DModel / McaMorf over shared cached ModelData — never
@@ -513,7 +527,13 @@ void setMountAnimation(dExtNpcMount_c* a, const char* name, u8 mode) {
                      a->mManifest.model);
         return;
     }
-    J3DAnmTransform* anm = (J3DAnmTransform*)dComIfG_getObjectRes(a->mManifest.arc, name);
+    // F-2: idle_attached may live in a demo arc (Demo01 ba_wait_l), not the actor arc.
+    const char* srcArc = a->mManifest.arc;
+    if (a->mManifest.idleAttachedArc[0] != '\0' && a->mManifest.idleAttached[0] != '\0' &&
+        std::strcmp(name, a->mManifest.idleAttached) == 0) {
+        srcArc = a->mManifest.idleAttachedArc;
+    }
+    J3DAnmTransform* anm = (J3DAnmTransform*)dComIfG_getObjectRes(srcArc, name);
     if (anm != NULL) {
         a->mpMorf->setAnm(anm, mode, 3.0f, 1.0f, 0.0f, -1.0f, NULL);
     }
@@ -774,6 +794,28 @@ u8 tpRupeeGrantId(u8 wwItemNo) {
     return 0;
 }
 
+// ============================================================
+// §head-dbg (2026-07-28): heads re-attach per the logs (0 fails) yet vanish
+// after an Outset→interior→Outset round-trip. Static analysis is exhausted —
+// this captures what the logs can't: the head's ACTUAL seated world position
+// on the FIRST frames of each world generation (a respawn = a new gen). One
+// interior round-trip with DUSK_HEAD_DEBUG=1 discriminates in ONE pass:
+//   • src==NULL     → seat callback finds no host matrix (mAttachJnt stale)
+//   • world≈origin  → head seated at (0,0,0)/underground (not tracking body)
+//   • world≈body    → head IS seated → the loss is DRAW-side (culled/not drawn)
+//   • no line at all → callback never installed on the respawn
+// Gated OFF by default; budgeted per generation so it never floods.
+// ============================================================
+static bool dExtHeadDbgEnv() {
+    // Read once — this gate is polled per-frame per-head in the seat callback;
+    // a per-frame getenv would be a needless hot-path cost in normal play.
+    static const bool on = []() {
+        const char* v = std::getenv("DUSK_HEAD_DEBUG");
+        return !(v == NULL || v[0] == '\0' || (v[0] == '0' && v[1] == '\0'));
+    }();
+    return on;
+}
+
 // №49 v4: REPLACE inside joint callback (param=0) BEFORE children recurse and
 // BEFORE calcWeightEnvelopeMtx — Nintendo nodeCB pattern. Also patches
 // j3dSys.mCurrentMtx so descendants + envelope see the new world mtx.
@@ -845,6 +887,34 @@ int extNpcSlaveJointCB(J3DJoint* joint, int timing) {
         }
     }
 
+    if (jnt == 0 && dExtHeadDbgEnv()) {
+        // Budgeted per world generation (a respawn bumps the generation) so the
+        // first frames of each island load log their root-seat result, no flood.
+        static u32 s_headDbgGen = 0xFFFFFFFFu;
+        static int s_headDbgBudget = 0;
+        const u32 gen = dExtNpcWorld_generation();
+        if (gen != s_headDbgGen) {
+            s_headDbgGen = gen;
+            s_headDbgBudget = 48;
+        }
+        if (s_headDbgBudget > 0) {
+            --s_headDbgBudget;
+            MtxP bb = body->getBaseTRMtx();
+            const bool comp = (a->mpCompanion != NULL && model == a->mpCompanion->getModel());
+            if (src == NULL) {
+                DuskLog.info(
+                    "[ExtNpcMount] §head-dbg gen={} proc={} {} root seat=SRC_NULL body=({:.0f},{:.0f},{:.0f})",
+                    gen, a->mManifest.proc, comp ? "companion" : "attach", bb[0][3], bb[1][3],
+                    bb[2][3]);
+            } else {
+                DuskLog.info(
+                    "[ExtNpcMount] §head-dbg gen={} proc={} {} root seat=({:.0f},{:.0f},{:.0f}) "
+                    "body=({:.0f},{:.0f},{:.0f})",
+                    gen, a->mManifest.proc, comp ? "companion" : "attach", src[0][3], src[1][3],
+                    src[2][3], bb[0][3], bb[1][3], bb[2][3]);
+            }
+        }
+    }
     if (src == NULL) {
         return 1;
     }
@@ -989,6 +1059,12 @@ bool tryGroundSnapSanity(dExtNpcMount_c* a) {
 // prop model behind this item number), then orders the change event — which
 // REPLACES the still-active speak event. The caller must NOT event_reset when
 // this fires; the ordered event owns the transition from here.
+//
+// History Path B: prefer donor pack Ba1_Get_Itm (Ba1 WAIT + CAMERA GETITEM +
+// Link 011get_item → partner show()). Fall back to DEFAULT_GETITEM if the
+// stage list lacks the pack.
+const char* mountIdleBck(const dExtNpcMount_c* a);
+
 bool fireMountPresentDemo(dExtNpcMount_c* a) {
 #if TARGET_PC
     if (a == NULL || a->mPresentDemoItemNo < 0) {
@@ -1006,28 +1082,105 @@ bool fireMountPresentDemo(dExtNpcMount_c* a) {
         return false;
     }
     dComIfGp_event_setItemPartnerId(itemId);
-    const s16 eventId = dComIfGp_getEventManager().getEventIdx(a, "DEFAULT_GETITEM", 0xff);
+    // №281: baseline GtItm right after createItemForPresentDemo (sets it). Compare
+    // to procCoGetItemInit's GtItm — mismatch = clobber between handoff and demo.
+    DuskLog.info("[ExtNpcMount] №281 after present-demo create GtItm={} (wanted {})",
+                 (int)dComIfGp_event_getGtItm(), itemNo);
+
+    bool usedBa1Pack = false;
+    s16 eventId = dComIfGp_getEventManager().getEventIdx(a, "Ba1_Get_Itm", 0xff);
+    if (eventId != -1) {
+        usedBa1Pack = true;
+    } else {
+        eventId = dComIfGp_getEventManager().getEventIdx(a, "DEFAULT_GETITEM", 0xff);
+    }
     if (eventId == -1) {
-        DuskLog.warn("[ExtNpcMount] №251 DEFAULT_GETITEM not found — handoff aborted");
+        DuskLog.warn("[ExtNpcMount] №251 Ba1_Get_Itm/DEFAULT_GETITEM not found — handoff aborted");
         return false;
     }
     dComIfGp_getEvent()->reset(a);
     fopAcM_orderChangeEventId(a, eventId, 1, 0xffff);
-    // ========================================================================
-    // №263 — the PRESENT motion (donor: hold.bck is Ba1's give animation, NOT
-    // an idle — looping it as idle was the "constant present" bug). Play it
-    // ONCE here at the handoff; execute() returns her to idle when it ends.
-    // ========================================================================
-    if (a->mManifest.presentAnim[0] != '\0') {
-        setMountAnimation(a, a->mManifest.presentAnim, J3DFrameCtrl::EMode_NONE);
-        a->mPresentAnimActive = true;
+
+    if (usedBa1Pack) {
+        // Ba1 staff = WAIT only (live pack): hold cradle idle_attached while the
+        // demo owns her — do not kick present_anim; Link's 011get_item shows the
+        // partner. Staff cutEnd is owned by tickBa1GetEvent.
+        a->mBa1GetActive = 1;
+        a->mBa1GetEvtOrdered = eventId;
+        a->mBa1StaffId = -1;
+        a->mPresentAnimActive = false;
+        setMountAnimation(a, mountIdleBck(a), J3DFrameCtrl::EMode_LOOP);
+        DuskLog.info("[ExtNpcMount] №251/Ba1_Get_Itm HANDOFF fired (item {}, event {})", itemNo,
+                     (int)eventId);
+    } else {
+        // Fallback DEFAULT_GETITEM: keep №263 one-shot present motion on the NPC.
+        if (a->mManifest.presentAnim[0] != '\0') {
+            setMountAnimation(a, a->mManifest.presentAnim, J3DFrameCtrl::EMode_NONE);
+            a->mPresentAnimActive = true;
+        }
+        DuskLog.info("[ExtNpcMount] №251 DEFAULT_GETITEM HANDOFF fired (item {}, event {})",
+                     itemNo, (int)eventId);
     }
-    DuskLog.info("[ExtNpcMount] №251 get-item HANDOFF fired (item {}, event {})", itemNo,
-                 (int)eventId);
     return true;
 #else
     return false;
 #endif
+}
+
+// History confirm (1): Ba1 staff WAIT → cradle (idle_attached). Mount must
+// cutEnd so CAMERA/Link staffs can advance; without this the pack stalls.
+void tickBa1GetEvent(dExtNpcMount_c* a) {
+    if (a == NULL || a->mBa1GetActive == 0) {
+        return;
+    }
+    if (a->mBa1GetEvtOrdered >= 0 && dComIfGp_evmng_endCheck(a->mBa1GetEvtOrdered)) {
+        DuskLog.info("[ExtNpcMount] Ba1_Get_Itm END (cradle held → post-give idle)");
+        a->mBa1GetActive = 0;
+        a->mBa1GetEvtOrdered = -1;
+        a->mBa1StaffId = -1;
+        if (!a->mPresentAnimActive) {
+            setMountAnimation(a, mountIdleBck(a), J3DFrameCtrl::EMode_LOOP);
+        }
+        return;
+    }
+    if (!dComIfGp_event_runCheck()) {
+        a->mBa1GetActive = 0;
+        a->mBa1GetEvtOrdered = -1;
+        a->mBa1StaffId = -1;
+        return;
+    }
+
+    a->mBa1StaffId = dComIfGp_evmng_getMyStaffId("Ba1", a, -1);
+    if (a->mBa1StaffId == -1) {
+        return;
+    }
+
+    static DUSK_CONSTEXPR char DUSK_CONST* kBa1Acts[2] = {
+        "WAIT",
+        "GETITEM",
+    };
+    const int actIdx = dComIfGp_evmng_getMyActIdx(a->mBa1StaffId, kBa1Acts, 2, 0, 0);
+    if (dComIfGp_evmng_getIsAddvance(a->mBa1StaffId) != 0) {
+        if (actIdx == 0) {
+            // WAIT: stay on cradle / idle_attached — yield to staff ownership.
+            setMountAnimation(a, mountIdleBck(a), J3DFrameCtrl::EMode_LOOP);
+            a->mPresentAnimActive = false;
+        } else if (actIdx == 1 && a->mManifest.presentAnim[0] != '\0') {
+            // GETITEM (donor №230 shape; live pack is WAIT-only today).
+            setMountAnimation(a, a->mManifest.presentAnim, J3DFrameCtrl::EMode_NONE);
+            a->mPresentAnimActive = true;
+        }
+    }
+    // WAIT ends immediately; GETITEM ends when the one-shot finishes (or now if none).
+    if (actIdx != 1 || !a->mPresentAnimActive ||
+        (a->mpMorf != NULL && a->mpMorf->isStop() != 0)) {
+        if (actIdx == 1 && a->mPresentAnimActive && a->mpMorf != NULL &&
+            a->mpMorf->isStop() != 0) {
+            a->mPresentAnimActive = false;
+            setMountAnimation(a, mountIdleBck(a), J3DFrameCtrl::EMode_LOOP);
+        }
+        dComIfGp_evmng_cutEnd(a->mBa1StaffId);
+    }
 }
 
 // ============================================================================
@@ -1041,6 +1194,41 @@ bool mountAttachLive(const dExtNpcMount_c* a, int slot) {
         return true;
     }
     return !dExtModFlags_get(a->mManifest.modFolder, f);
+}
+
+// §185 Bug 2: defined with RegionTrig — true from loft pre-ORDER through tale end.
+static bool dExtWw_taleHideRealClothesAttach();
+
+// §183/§185 Bug 2: during the tale beat the clothes ARE d_act0 (fuku_model).
+// Real NPC_BA's handR vfuku attach must not render alongside the demo prop —
+// including the commencement fade *before* runEvt latches (pre-cutscene hold).
+static bool mountTaleDemoSuppressAttach(const dExtNpcMount_c* a) {
+    if (a == NULL) {
+        return false;
+    }
+    // ========================================================================
+    // §211 HEAD-LOSS FIX (user repro 2026-07-28): this suppress is ONLY about
+    // NPC_BA's real vfuku clothes hiding behind the tale demo prop (d_act0).
+    // The draw loop applies it per-ACTOR to EVERY attachment, so when
+    // `ba.tale_window` auto-arms on entering Grandma's interior (R_DL01) the
+    // armIf branch of dExtWw_taleHideRealClothesAttach() returned true
+    // GLOBALLY — hiding every NPC's HEAD attachment on the walk-around Outset,
+    // and it stayed latched after leaving. Heads seat correctly (head-dbg
+    // proved world≈body on the respawn); they were simply never drawn. Scope
+    // the whole clause to Grandma: no other actor's attachment is ever a tale
+    // clothes prop (NPC_BA is baked-head, so its only attach IS the vfuku).
+    // ========================================================================
+    if (std::strcmp(a->mManifest.proc, "NPC_BA") != 0) {
+        return false;
+    }
+    if (dExtWw_taleHideRealClothesAttach()) {
+        return true;
+    }
+    if (!a->mDemoOwned && !dComIfGp_event_runCheck()) {
+        return false;
+    }
+    // §281: match ba1's native tale_1/tale_2 too (not just the mount TALE_DEMO names).
+    return dExtWw_isTaleRunEvent(dComIfGp_getEventManager().getRunEventName());
 }
 
 const char* mountIdleBck(const dExtNpcMount_c* a) {
@@ -1139,21 +1327,12 @@ void applyDialogueAction(const dExtNpcMount_c* a, const std::string& action) {
             return;
         }
         const int itemNo = dAlbwOutfit_itemNoForKind(kind);
-        dAlbwOutfit_recordOwnedByItemNo(itemNo);   // wardrobe ownership now true
-        dAlbwOutfit_equip(kind);                    // queues; drains after the box
-        // ====================================================================
-        // №251 — the present-demo is DEFERRED to talk close. Ordering the item
-        // event here (at section LOAD) put it under our still-running speak
-        // event + the section's box, and closeMountDialogue's event_reset then
-        // KILLED the ordered event — the "get-item never starts" of №242/this
-        // run. The native pattern is a HANDOFF: the box closes, the item event
-        // replaces the speak event, no reset in between. The pending flag is
-        // consumed by the close path (fireMountPresentDemo).
-        // ====================================================================
-        dExtNpcMount_c* mount = const_cast<dExtNpcMount_c*>(a);
-        mount->mPresentDemoItemNo = itemNo;
-        DuskLog.info("[ExtNpcMount] grant_outfit {} (item {}) via '{}' — owned+equip; "
-                     "present-demo deferred to talk close",
+        // Wardrobe ownership only. Live wear + UNK_2A80-equivalent persistence
+        // are driven by TALE_DEMO STB ENABLE_SHAPE in daAlink_c::setDemoData
+        // (region trigger → PACKAGE → tale.stb). Do NOT setClothesChange here.
+        dAlbwOutfit_recordOwnedByItemNo(itemNo);
+        DuskLog.info("[ExtNpcMount] grant_outfit {} (item {}) via '{}' — owned only "
+                     "(SHAPE/region owns wear-change; no present-demo, no equip)",
                      kindStr, itemNo, a->mManifest.proc);
 #endif
         return;
@@ -1643,6 +1822,9 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
             set(out->attach[index].unlessFlag, sizeof(out->attach[index].unlessFlag));
         } else if (key == "idle_attached") {
             set(out->idleAttached, sizeof(out->idleAttached));
+        } else if (key == "idle_attached_arc") {
+            // F-2: opt-in arc for idle_attached BCK (mirrors attach_arc).
+            set(out->idleAttachedArc, sizeof(out->idleAttachedArc));
         } else if (key == "present_anim") {
             set(out->presentAnim, sizeof(out->presentAnim));  // №263
         } else if (key == "companion_model") {
@@ -1720,6 +1902,8 @@ bool parseManifestFile(const fs::path& path, const char* modFolder, dExtNpcManif
             set(out->spawnUnlessFlag, sizeof(out->spawnUnlessFlag));
         } else if (key == "carryable") {
             out->carryable = parseBoolVal(val);
+        } else if (key == "bait") {
+            out->isBait = parseBoolVal(val);  // §222 esa bait actor
         } else if (key == "static") {
             out->isStatic = parseBoolVal(val);
         } else if (key == "codegen") {
@@ -1957,8 +2141,28 @@ bool applyBodyBmtToModelData(J3DModelData* data, const char* arc, const char* bm
             ++matCopied;
         }
     }
+    // §229: only replace textures if the bmt actually carries a TEX1 chunk. A MATERIAL-ONLY
+    // bmt (e.g. the WW pig's pg_*.bmt — its color lives in TEV/konst colors, verified offline:
+    // NO TEX1 in the bytes) has no textures; J3DMaterialTable::getTexture() can still return a
+    // non-null EMPTY table, and replacing the model's real texture table with it sends the
+    // materials' texture indices ([5,6]/[3,4]) out of range → indexToPtr AV in makeSharedDL.
+    // The material copy above already transferred the color; keep the model's own textures.
+    bool bmtHasTex1 = false;
+    {
+        const u8* p = (const u8*)raw;
+        u32 fileSz = ((u32)p[8] << 24) | ((u32)p[9] << 16) | ((u32)p[10] << 8) | (u32)p[11];
+        if (fileSz < 0x20 || fileSz > 0x00400000) {
+            fileSz = 0x20;  // sanity — don't scan past a bogus size
+        }
+        for (u32 off = 0x20; off + 4 <= fileSz; off++) {
+            if (p[off] == 'T' && p[off + 1] == 'E' && p[off + 2] == 'X' && p[off + 3] == '1') {
+                bmtHasTex1 = true;
+                break;
+            }
+        }
+    }
     bool texReplaced = false;
-    if (bmt->getTexture() != NULL) {
+    if (bmtHasTex1 && bmt->getTexture() != NULL) {
         data->getMaterialTable().replaceTextures(bmt->getTexture(), bmt->getTextureName());
         texReplaced = true;
     }
@@ -2003,6 +2207,22 @@ J3DModelData* finishMountedModelData(J3DModelData* modelData) {
             return NULL;
         }
         material->setMaterialAnm(materialAnm);
+    }
+    // §229 guard+diag: a bmt-copied material can reach makeSharedDL with a NULL mat-block
+    // (J3DTevBlock2::load derefs this=null → AV). Detect it, log which material/block, and
+    // bail so the caller falls back to the plain model (no crash) instead of AV'ing.
+    for (u16 i = 0; i < matNum; i++) {
+        J3DMaterial* m = modelData->getMaterialNodePointer(i);
+        if (m == NULL || m->getTevBlock() == NULL || m->getColorBlock() == NULL ||
+            m->getTexGenBlock() == NULL || m->getIndBlock() == NULL || m->getPEBlock() == NULL) {
+            DuskLog.warn("[ExtNpcMount] §229 finish: material[{}/{}] NULL block "
+                         "(mat={} tev={} col={} texgen={} ind={} pe={}) — bail before makeSharedDL",
+                         i, matNum, (void*)m,
+                         (void*)(m ? m->getTevBlock() : NULL), (void*)(m ? m->getColorBlock() : NULL),
+                         (void*)(m ? m->getTexGenBlock() : NULL), (void*)(m ? m->getIndBlock() : NULL),
+                         (void*)(m ? m->getPEBlock() : NULL));
+            return NULL;
+        }
     }
     if (modelData->newSharedDisplayList(J3DMdlFlag_UseSingleDL) != kJ3DError_Success) {
         stageLog("finish", "FAIL newSharedDisplayList");
@@ -2131,6 +2351,11 @@ static bool liveMountRefsArc(const char* arc, const fopAc_ac_c* dying) {
                     std::strcmp(m->mManifest.attach[i].arc, c->arc) == 0) {
                     c->hit = true;
                 }
+            }
+            // F-2: idle_attached_arc likewise.
+            if (m->mManifest.idleAttachedArc[0] &&
+                std::strcmp(m->mManifest.idleAttachedArc, c->arc) == 0) {
+                c->hit = true;
             }
             return 0;
         },
@@ -2496,6 +2721,41 @@ static const WwModel1AuthRegs kWwModel1AuthRegs[8] = {
     {{{0, 0, 0, 255}, {255, 255, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 0}},
      {{255, 255, 255, 255}, {0, 0, 0, 50}, {255, 255, 255, 255}, {255, 255, 255, 255}}},
 };
+
+// Ferry A/C — Outset exterior FPS bisect (measure only until STEP 2).
+// Env DUSK_WW_FPS_BISECT=palette|waves|btk|wavedraw  (unset = all on)
+// Ferry C: wavedraw = waves armed + wave_move runs, drawWave skipped.
+enum WwFpsBisectMode : int {
+    kWwFpsBisectOff = 0,
+    kWwFpsBisectSkipPalette = 1,
+    kWwFpsBisectSkipWaves = 2,
+    kWwFpsBisectSkipBtk = 3,
+    kWwFpsBisectSkipWaveDraw = 4,
+};
+
+static int wwFpsBisectMode() {
+    static int s_mode = -1;
+    if (s_mode >= 0) {
+        return s_mode;
+    }
+    s_mode = kWwFpsBisectOff;
+    const char* env = std::getenv("DUSK_WW_FPS_BISECT");
+    if (env != NULL && env[0] != '\0') {
+        if (std::strcmp(env, "palette") == 0 || std::strcmp(env, "1") == 0) {
+            s_mode = kWwFpsBisectSkipPalette;
+        } else if (std::strcmp(env, "waves") == 0 || std::strcmp(env, "2") == 0) {
+            s_mode = kWwFpsBisectSkipWaves;
+        } else if (std::strcmp(env, "btk") == 0 || std::strcmp(env, "3") == 0) {
+            s_mode = kWwFpsBisectSkipBtk;
+        } else if (std::strcmp(env, "wavedraw") == 0 || std::strcmp(env, "4") == 0) {
+            s_mode = kWwFpsBisectSkipWaveDraw;
+        }
+    }
+    static const char* const kNames[] = {"off", "palette", "waves", "btk", "wavedraw"};
+    DuskLog.info("[WwFoam] FerryA FPS_BISECT mode={} (DUSK_WW_FPS_BISECT)",
+                 kNames[s_mode >= 0 && s_mode <= 4 ? s_mode : 0]);
+    return s_mode;
+}
 
 static void wwApplyModel1SeaPalette(J3DModelData* data) {
     if (data == NULL) {
@@ -3090,6 +3350,146 @@ bool addDoorVisual(dExtNpcMount_c* a, J3DModelData* bodyData) {
     return true;
 }
 
+}  // namespace — §334 must be the GLOBAL symbol the header declares
+// ============================================================================
+// §334 WW→TP collision-attribute repack (bus §332 receipts, §333 ruling).
+//
+// ROOT (byte-exact, §332): WW packs its material attCode in PolyInf1 bits
+// 16-20 (atr_conv vocabulary, WW DP d_bg_s.cpp:193); TP reads that same word
+// as att0=bits12-15 (footstep/effect material axis, dKy_pol_sound_get),
+// att1=bits16-18 (1-4 = SINK classes, alink checkNotItemSinkLimit), and
+// groundCode=bits19-23 (4/10 = void/slide family). A WW WOOD table
+// (inf1=0x000200FF) therefore reads as TP att1=2 = SINK — the lava-sink bug.
+//
+// RULING (§333 + user follow-up): PURE per-code translation at the dzb
+// consumption boundary — staged arcs stay donor-byte-verbatim.
+//   * WW materials Link stands on (NORMAL/DIRT/WOOD/STONE/GRASS/GIANT_FLOWER/
+//     CARPET/SAND/ICE/METAL + repeats) → STANDABLE: att0/att1/ground = 0
+//     (default TP material; per-material footstep refinement needs the
+//     code.csv att0 vocabulary — Foundry receipts ask, flagged).
+//   * No-clean-TP-equivalent (LAVA/VOID/DAMAGE/WATER/FREEZE/ELECTRICITY/
+//     WATERFALL) → SLIP-CLASS: groundCode 4 (TP's void/slide family — the
+//     near-OOB mechanism the user named). None occur in Grandma's room; each
+//     is on the user's per-code review list before any such surface ships.
+// Bits outside 12-23 (pass flags low 12, camera bits 24-31) are PRESERVED.
+// Idempotent by pointer (parsed dzbs are cached per arc — J3D pointer-fix law).
+// ============================================================================
+void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag) {
+    // §334f: NO pointer-keyed idempotence — it was the lava bug's staying power.
+    // The §322 tale reload purges + reloads the room arc; the fresh RAW bytes land
+    // at the RECYCLED heap address, the old pointer registry said "done" → skip →
+    // raw WW bits returned after every reload (§334e receipts: bad polys on the
+    // receipted LinkRM piece). The repack is instead idempotent BY CONSTRUCTION:
+    // pass 1 clears bits 12-23 (wwAtt reads 0 afterwards → default branch is a
+    // no-op rewrite), and the slip signature (wwAtt==0, att0==0, ground==4) is
+    // recognized and preserved so re-repacks never degrade slip tris.
+    if (bgd == NULL) {
+        return;
+    }
+    int standable = 0, slip = 0;
+    for (int i = 0; i < bgd->m_ti_num; i++) {
+        u32 inf1 = bgd->m_ti_tbl[i].m_info1;
+        const u32 wwAtt = (inf1 >> 16) & 0x1F;
+        u32 out = inf1 & ~0x00FFF000u;  // clear att0|att1|groundCode, keep the rest
+        if (wwAtt == 0 && ((inf1 >> 19) & 0x1F) == 4 && ((inf1 >> 12) & 0xF) == 0) {
+            out |= (4u << 19);  // already-repacked SLIP tri — preserve, don't degrade
+            ++slip;
+            bgd->m_ti_tbl[i].m_info1 = out;
+            continue;
+        }
+        switch (wwAtt) {
+            // §334g WATER FIX (user report: swimmable water became void): TP
+            // waterness is GROUP-level (dzb Grp water bit → dBgS_GrpPassChk
+            // WATER_GRP; d_bg_s_grp_pass_chk.h) and the bake preserves groups
+            // untouched — so WW WATER/WATERFALL polys need NEUTRAL per-poly
+            // attrs (swim engages via the group). The §334 slip write
+            // (ground=4 = void/slide) overrode swimming as fall-void. WATER
+            // (0x13) + WATERFALL (0x17) → standable/neutral class.
+            case 0x06:  // LAVA      — WW hazard, no clean TP equivalent here
+            case 0x08:  // VOID      — WW fall-void
+            case 0x09:  // DAMAGE
+            case 0x15:  // FREEZE
+            case 0x16:  // ELECTRICITY
+                out |= (4u << 19);  // TP groundCode 4 — void/slide (slip) family
+                ++slip;
+                break;
+            default:  // every WW-standable material class
+                ++standable;
+                break;
+        }
+        bgd->m_ti_tbl[i].m_info1 = out;
+    }
+    DuskLog.info("[ExtWw] §334 dzb attribute repack '{}': {} standable, {} slip ({} tris)",
+                 tag != NULL ? tag : "?", standable, slip, (int)bgd->m_ti_num);
+    // §334d WRITE-VERIFY: this is the first code path that WRITES through the
+    // OFFSET_PTR+BE(u32) wrappers — §337's "repacked-but-still-WW-bits" reads
+    // suggest the store may not land. Read entry 0 back and log the stored
+    // word; a post value still carrying bits in 12-23 (att0/att1/ground ≠ 0
+    // beyond our slip write) = write failure → repack must go through the same
+    // accessor cBgW reads with (GetMaskPolyInf1 path) or a raw byte store.
+    if (bgd->m_ti_num > 0) {
+        const u32 post = bgd->m_ti_tbl[0].m_info1;
+        DuskLog.info("[ExtWw] §334d write-verify '{}' ti[0] post-inf1={:#010x} (att0={} att1={} gnd={})",
+                     tag != NULL ? tag : "?", post, (int)((post >> 12) & 0xF),
+                     (int)((post >> 16) & 0x7), (int)((post >> 19) & 0x1F));
+    }
+}
+
+// ============================================================================
+// §334c GROUND-ATTRIBUTE PROBE (multi-hypothesis, change-only logging): names
+// the exact surface under Link — post-repack att0/att1/groundCode + the owning
+// BgW's actor proc — so a still-sinking surface identifies its consumption
+// boundary from the log alone. Cheap: one ground check every 15 frames, logs
+// only when the tuple changes. Strip with the §334 acceptance.
+// ============================================================================
+void dExtWw_pollGroundAttrProbe() {
+    static int s_tick = 0;
+    if ((s_tick++ % 15) != 0) {
+        return;
+    }
+    if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        return;
+    }
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+    dBgS_GndChk chk;
+    cXyz pos = player->current.pos;
+    pos.y += 50.0f;
+    chk.SetPos(&pos);
+    if (dComIfG_Bgsp().GroundCross(&chk) == -G_CM3D_F_INF) {
+        return;  // no ground under Link
+    }
+    const int att0 = dComIfG_Bgsp().GetPolyAtt0(chk);
+    const int att1 = dComIfG_Bgsp().GetPolyAtt1(chk);
+    const int gcode = dComIfG_Bgsp().GetGroundCode(chk);
+    fopAc_ac_c* owner = dComIfG_Bgsp().GetActorPointer(chk);
+    const s16 ownerProc = owner != NULL ? fopAcM_GetName(owner) : (s16)-1;
+    // §334e: name the owning MOUNT's arc+collision so a bad poly binds to its
+    // exact dzb (roster row) and its receipt-or-absence in the same log.
+    const char* ownerArc = "?";
+    const char* ownerCol = "?";
+    if (owner != NULL &&
+        (ownerProc == fpcNm_NPC_HENNA0_e || ownerProc == fpcNm_NPC_MK_e ||
+         ownerProc == fpcNm_NPC_P2_e || ownerProc == fpcNm_NPC_KDK_e)) {
+        dExtNpcMount_c* m334 = (dExtNpcMount_c*)owner;
+        ownerArc = m334->mManifest.arc;
+        ownerCol = m334->mManifest.collision;
+    }
+    static int s_last = -1;
+    const int tuple = (att0 << 16) | (att1 << 8) | (gcode << 3) | ((ownerProc & 3) + 1);
+    if (tuple == s_last) {
+        return;
+    }
+    s_last = tuple;
+    DuskLog.info("[ExtWw] §334c ground under Link: att0={} att1={} ground={} owner=proc:{:#x} "
+                 "arc='{}' col='{}' pos=({:.0f},{:.0f},{:.0f})",
+                 att0, att1, gcode, (int)ownerProc, ownerArc, ownerCol, player->current.pos.x,
+                 player->current.pos.y, player->current.pos.z);
+}
+namespace {  // §334: reopen the file-local namespace
+
 int useHeapInit(fopAc_ac_c* i_this) {
     dExtNpcMount_c* a = (dExtNpcMount_c*)i_this;
 
@@ -3110,7 +3510,7 @@ int useHeapInit(fopAc_ac_c* i_this) {
         mDoMtx_stack_c::transS(a->current.pos.x, a->current.pos.y, a->current.pos.z);
         mDoMtx_stack_c::YrotM(a->current.angle.y);
         MTXCopy(mDoMtx_stack_c::get(), a->mBgMtx);
-        if (a->mpBgW->Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx) == 1) {
+        if ((dExtWw_repackDzbAttributes((cBgD_t*)dzb, a->mManifest.collision), a->mpBgW->Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx)) == 1) {
             DuskLog.warn("[ExtNpcMount] №117 collision-only Set failed '{}'",
                          a->mManifest.collision);
             return 0;
@@ -3210,6 +3610,7 @@ int useHeapInit(fopAc_ac_c* i_this) {
     // №36 C: optional brk/btk color (Vlupy rupees).
     a->mpBrk = NULL;
     a->mpColorBtk = NULL;
+    a->mColorBtkPlay = false;  // §218: set true only when an animated sibling btk auto-binds
     if (a->mpMorf != NULL && a->mpMorf->getModel() != NULL) {
         J3DModelData* bodyData = a->mpMorf->getModel()->getModelData();
         if (a->mManifest.brk[0] && bodyData != NULL) {
@@ -3229,18 +3630,53 @@ int useHeapInit(fopAc_ac_c* i_this) {
                 }
             }
         }
-        if (a->mManifest.btk[0] && bodyData != NULL) {
+        // ================================================================
+        // §218 BTK AUTO-BINDER SOCKET (Engine ferry — btk-native-fast-track,
+        // bus §215). Two cases share mpColorBtk:
+        //  · manifest `btk=` → a STATIC color-select frame (Vlupy) — EMode_NONE,
+        //    setFrame, never advanced.
+        //  · NO manifest btk → probe the arc for a sibling `<model>.btk` (donor
+        //    convention `model.bdl`+`model.btk`) and auto-bind it as a LOOPING
+        //    texture-SRT animation — EMode_LOOP, play()'d every frame (draw).
+        // One mechanism instead of per-model wiring; donor-agnostic (any
+        // sibling-named texture anim), donor files stay mod-folder-side.
+        // ================================================================
+        const char* btkName = a->mManifest.btk;
+        bool btkAnimated = false;
+        char siblingBtk[64] = {};
+        if (!btkName[0] && a->mManifest.model[0]) {
+            const char* dot = std::strrchr(a->mManifest.model, '.');
+            size_t stem = dot ? (size_t)(dot - a->mManifest.model)
+                              : std::strlen(a->mManifest.model);
+            if (stem > 0 && stem + 5 <= sizeof(siblingBtk)) {
+                std::memcpy(siblingBtk, a->mManifest.model, stem);
+                std::memcpy(siblingBtk + stem, ".btk", 5);  // includes NUL
+                if (dComIfG_getObjectRes(a->mManifest.arc, siblingBtk) != NULL) {
+                    btkName = siblingBtk;
+                    btkAnimated = true;
+                }
+            }
+        }
+        if (btkName[0] && bodyData != NULL) {
             J3DAnmTextureSRTKey* btk =
-                (J3DAnmTextureSRTKey*)dComIfG_getObjectRes(a->mManifest.arc, a->mManifest.btk);
+                (J3DAnmTextureSRTKey*)dComIfG_getObjectRes(a->mManifest.arc, btkName);
             if (btk != NULL) {
                 a->mpColorBtk = JKR_NEW mDoExt_btkAnm();
+                const int mode =
+                    btkAnimated ? J3DFrameCtrl::EMode_LOOP : J3DFrameCtrl::EMode_NONE;
                 if (a->mpColorBtk != NULL &&
-                    a->mpColorBtk->init(bodyData, btk, 1, J3DFrameCtrl::EMode_NONE, 1.0f, 0, -1)) {
-                    f32 frame = a->mManifest.colorFrame;
-                    if (frame < 0.0f) {
-                        frame = vlupyColorFrame(a->mPickupItemNo);
+                    a->mpColorBtk->init(bodyData, btk, 1, mode, 1.0f, 0, -1)) {
+                    if (btkAnimated) {
+                        a->mColorBtkPlay = true;  // advance every frame
+                        DuskLog.info("[ExtNpcMount] §218 btk auto-bind '{}' → {} (loop)",
+                                     siblingBtk, a->mManifest.proc);
+                    } else {
+                        f32 frame = a->mManifest.colorFrame;
+                        if (frame < 0.0f) {
+                            frame = vlupyColorFrame(a->mPickupItemNo);
+                        }
+                        a->mpColorBtk->setFrame(frame);
                     }
-                    a->mpColorBtk->setFrame(frame);
                 } else {
                     a->mpColorBtk = NULL;
                 }
@@ -3373,7 +3809,7 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
             cM3d_IsZero(a->mManifest.hostPos.y - a->mManifest.anchor.y) &&
             cM3d_IsZero(a->mManifest.hostPos.z - a->mManifest.anchor.z);
         if (onWwHost && identity) {
-            if (a->mpBgW->Set((cBgD_t*)dzb, cBgW::GLOBAL_e, NULL) == 1) {
+            if ((dExtWw_repackDzbAttributes((cBgD_t*)dzb, a->mManifest.collision), a->mpBgW->Set((cBgD_t*)dzb, cBgW::GLOBAL_e, NULL)) == 1) {
                 DuskLog.warn("[ExtNpcMount] BG dBgW::Set GLOBAL failed for '{}'",
                              a->mManifest.collision);
                 return 0;
@@ -3391,7 +3827,7 @@ int useBgHeapInit(fopAc_ac_c* i_this) {
             return 1;
         }
     }
-    if (a->mpBgW->Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx) == 1) {
+    if ((dExtWw_repackDzbAttributes((cBgD_t*)dzb, a->mManifest.collision), a->mpBgW->Set((cBgD_t*)dzb, cBgW::MOVE_BG_e, &a->mBgMtx)) == 1) {
         DuskLog.warn("[ExtNpcMount] BG dBgW::Set failed for '{}'", a->mManifest.collision);
         return 0;
     }
@@ -3623,6 +4059,74 @@ J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelNa
     return acquireMountedModel(arc, modelName, res);
 }
 
+// §229: same as above but bakes a body BMT (color/material swap) into the model at
+// consume time. Cache key includes the bmt (acquireMountedModel), so distinct color
+// variants of the same model coexist. Falls back to the plain model if the bmt is bad.
+J3DModelData* dExtNpcMount_acquireModelDataBmt(const char* arc, const char* modelName,
+                                               const char* bmtName) {
+    if (arc == NULL || arc[0] == '\0' || modelName == NULL || modelName[0] == '\0') {
+        return NULL;
+    }
+    void* res = dComIfG_getObjectRes(arc, modelName);
+    if (res == NULL) {
+        return NULL;
+    }
+    return acquireMountedModel(arc, modelName, res,
+                               (bmtName != NULL && bmtName[0] != '\0') ? bmtName : NULL);
+}
+
+// §181 (Housing Approach A): consume-time BDL/BMD parse for daDemo00 cutscene doubles.
+// This port does NOT parse the model family at arc-mount (d_resorce) — models are parsed
+// at CONSUME time (mount-time/global parse is the §180 Outset regression, DN-3).
+// daDemo00 fetches its SHAPE model by resource ID straight from the demo arc, so it
+// arrives RAW → mDoExt_bckAnmRemove deref crash.
+//
+// §183 Bug 1: it must arrive FULLY FINISHED, not just parsed. In the donor the arc-mount
+// case finishes the model (material->change + display-list build); daDemo00's createHeap
+// only builds a J3DModel *instance* and never finalizes materials. acquireMountedModel is
+// parse-ONLY (loadMountedModelDataOnly) → un-finalized materials → the prop renders BLACK.
+// Use acquireBgModel → finishBgModelData (material->change, materialAnm, newSharedDisplayList,
+// simpleCalcMaterial, makeSharedDL): the generic model finish, no BG-only light-mask.
+//
+// Still single-parse (s_modelDataCache) + arc-lifetime-safe: the "bg:<arc>/…" key is
+// erase-only-purged with the demo arc (purgeModelCacheForArc; the arc owns the buffer —
+// no UAF, clause 5). Keyed by shape id (unique within an arc); no other loader / no bmt,
+// so the pristine-copy path (acquireMountedModel's re-parse guard) isn't needed here.
+// §184 Bug 1: WW cel-shade TEV setup — the achievable half of the donor's setToonTex
+// (WW DP d_resorce.cpp:70-108), which the port dropped with the BDL parsers (DN-3). WW
+// models (e.g. fuku.bdl, textures Vfuku/Vfuku/ZAtoon) cel-shade through a TEV stage that
+// reads TEV-color-3.alpha = the TEV stage count; without that step the cel stage resolves
+// BLACK. fuku ships its ZAtoon toon gradient EMBEDDED, so the shared-toon rebind (donor's
+// ZA*→getToonImage, for which this port has no accessor) is not needed here — only the
+// alpha=stageNum step. Idempotent (same value every time), so safe to re-apply on cache hit.
+static void applyDemoToonTev(J3DModelData* model) {
+    if (model == NULL) {
+        return;
+    }
+    for (u16 i = 0; i < model->getMaterialNum(); i++) {
+        J3DMaterial* mat = model->getMaterialNodePointer(i);
+        if (mat == NULL) {
+            continue;
+        }
+        J3DTevBlock* tev = mat->getTevBlock();
+        J3DGXColorS10* c3 = mat->getTevColor(3);
+        if (tev != NULL && c3 != NULL) {
+            c3->a = (s16)tev->getTevStageNum();
+        }
+    }
+}
+
+J3DModelData* dExtNpcMount_acquireDemoModel(const char* arc, u16 id, void* res) {
+    if (arc == NULL || arc[0] == '\0' || res == NULL) {
+        return NULL;
+    }
+    char name[24];
+    snprintf(name, sizeof(name), "demo_shape_%u", (unsigned)id);
+    J3DModelData* model = acquireBgModel(arc, name, res);
+    applyDemoToonTev(model);  // §184 Bug 1: WW cel-shade alpha=stageNum (else prop renders black)
+    return model;
+}
+
 void dExtNpcMount_retainArc(const char* arc) {
     retainArcModels(arc);
 }
@@ -3823,6 +4327,42 @@ s16 dExtNpcMount_socketActorId(const char* socketName) {
     }
     if (strcmp(socketName, "EXT_SPAN") == 0) {
         return fpcNm_EXT_SPAN_e;
+    }
+    // ============================================================
+    // §228 — native pig direct-port spawn switch. socket "KB" routes the pig
+    // placement to the real g_profile_KB actor (fopAcM_create(fpcNm_KB_e,...))
+    // instead of the §222 audition mount hook. ROLLBACK: revert npc_kb.ini
+    // socket=KB→NPC_HENNA0 + socket_arg=0→15 and actor_map [Pig] arg=0→15.
+    // ============================================================
+    if (strcmp(socketName, "KB") == 0) {
+        return fpcNm_KB_e;
+    }
+    // §232 — native seagull direct-port spawn switch (mirrors §228 KB). socket "KAMOME"
+    // routes the placement to g_profile_KAMOME (fopAcM_create(fpcNm_KAMOME_e,…)).
+    if (strcmp(socketName, "KAMOME") == 0) {
+        return fpcNm_KAMOME_e;
+    }
+    // §244 — native Aryll (Ls1) direct-port spawn switch (mirrors §232 KAMOME).
+    // socket "LS" routes the placement to g_profile_NPC_LS1
+    // (fopAcM_create(fpcNm_NPC_LS1_e,…)). ROLLBACK: npc_ls.ini socket=LS→NPC_HENNA0.
+    if (strcmp(socketName, "LS") == 0) {
+        return fpcNm_NPC_LS1_e;
+    }
+    // §253 — native Rito Postbox (obj_toripost) direct-port spawn switch. socket
+    // "TPOST" routes the placement to g_profile_OBJ_TORIPOST. ROLLBACK: npc_tpost.ini
+    // socket=TPOST→NPC_HENNA0.
+    if (strcmp(socketName, "TPOST") == 0) {
+        return fpcNm_OBJ_TORIPOST_e;
+    }
+    // §254 — native Tetra (npc_zl1) direct-port spawn switch. socket "ZL" routes to
+    // g_profile_NPC_ZL1. ROLLBACK: npc_zl.ini socket=ZL→NPC_HENNA0.
+    if (strcmp(socketName, "ZL") == 0) {
+        return fpcNm_NPC_ZL1_e;
+    }
+    // §261 — native Link's Grandma (npc_ba1) direct-port spawn switch. socket "BA"
+    // routes to g_profile_NPC_BA1. ROLLBACK: npc_ba.ini socket=BA→NPC_HENNA0.
+    if (strcmp(socketName, "BA") == 0) {
+        return fpcNm_NPC_BA1_e;
     }
     return -1;
 }
@@ -4438,14 +4978,14 @@ static void releaseRoomLaneMount(const char* procName) {
     DuskLog.info("[ExtNpcMount] №69 forgot mount '{}'", procName);
 }
 
-static void forceLinkGroundReprobe(fopAc_ac_c* player) {
+void dExtNpcMount_forceLinkGroundReprobe(fopAc_ac_c* player) {
     if (player == NULL) {
         return;
     }
     daAlink_c* link = (daAlink_c*)player;
-    // №269: room-lane can place Link while door-open left FLAG_WALL_NONE set
-    // (procDoorOpenInit) before procDoorOpen cleared it. WALL_NONE skips
-    // WallCorrect entirely → ChkWallHit never true → ladders/ledges dead
+    // №269: room-lane / native-stage arrival can place Link while door-open left
+    // FLAG_WALL_NONE set (procDoorOpenInit) before procDoorOpen cleared it.
+    // WALL_NONE skips WallCorrect → ChkWallHit never true → ladders/ledges dead
     // (interior + progressive exterior). Restore the donor clear pair.
     const u32 before = link->mLinkAcch.GetFlags();
     link->mLinkAcch.ClrWallNone();
@@ -4613,9 +5153,31 @@ static void syncRoomLaneForCurrentStage() {
     }
 }
 
+namespace { bool ensureDemoArcResident(const char* arcName); }  // §297b fwd decl (defined below)
+
 void dExtNpcMount_onRoomObjectsReady(const char* stageName, int roomNo) {
     if (stageName == NULL || roomNo < 0 || roomNo >= 0x40) {
         return;
+    }
+    // §297b: LBNK stand-in, at the native room-load moment. The tale re-entrance
+    // (donor loft point 0xC8/0xCA) makes daAlink fire TALE_DEMO the instant the
+    // player spawns; its PACKAGE PLAY cut fetches tale.stb exactly ONCE, no retry
+    // (d_event_data.cpp:1331). demoInit() (d_s_room.cpp:376) just cleared
+    // getDemoArcName in THIS same room-load pass, and we run here BEFORE actors
+    // create — so kick the Demo01 async load now, giving it the whole room-load
+    // window to become resident before that one-shot PLAY cut. The native gets this
+    // for free from the room's LBNK; our authored R_DL01 has none (see §48/line 5959).
+    // The per-frame §297 poll below is only a backstop — on its own it starts the
+    // load the same frame daAlink fires, far too late (proven: request 4 frames
+    // before PLAY, load needs ~26).
+    if (std::strcmp(stageName, "R_DL01") == 0) {
+        const s16 talePoint = dComIfGp_getStartStagePoint();
+        if (talePoint == 0xC8 || talePoint == 0xCA) {
+            ensureDemoArcResident("Demo01");  // start the async arc load at LBNK timing
+            DuskLog.info("[ExtWw] §297b tale arc Demo01 pre-load kicked at room-load "
+                         "(R_DL01 room{} point {}) — before daAlink fires TALE_DEMO",
+                         roomNo, (int)talePoint);
+        }
     }
     // №83: WW host stages re-assert lane bindings as rooms come up.
     if (dExtWwSave_isWwHostStage(stageName)) {
@@ -5080,7 +5642,7 @@ static void pollRoomLaneTransport() {
             spawn.y = refY + 50.0f;
         }
         placeLinkAt(player, spawn);
-        forceLinkGroundReprobe(player);
+        dExtNpcMount_forceLinkGroundReprobe(player);
         if (hostRoom >= 0) {
             roomTxAssignPlayerRoom(player, hostRoom);
             activateWwHostRoom(hostRoom, "room-lane-enter");
@@ -5137,7 +5699,7 @@ static void pollRoomLaneTransport() {
                 player->current.angle.y = s_roomTxFacing;
                 player->shape_angle.y = s_roomTxFacing;
             }
-            forceLinkGroundReprobe(player);
+            dExtNpcMount_forceLinkGroundReprobe(player);
             s_roomTxHoldPos = spawn;
             DuskLog.info(
                 "[ExtNpcMount] №69 room-lane EXIT place-first '{}' → porch "
@@ -5806,6 +6368,123 @@ void loadDemoMessageMap() {
     }
     DuskLog.info("[ExtWw] §49 demo message map loaded — {} line(s)", (int)s_demoMsgLines.size());
 }
+
+// ============================================================
+// §263: msg_id → catalog INDEX remap (NPC-talk path only).
+// An actor requests a WW msg_id (the Rito postbox asks 0xCE5 = 3301), but
+// ww_dialogue_full.txt is keyed by the BMG *index* (3301 → index 924 =
+// "Gooood moooorrrning!"; index 3301 is the unrelated "Seven-Star Isles" chart
+// name — the empty-box→wrong-line bug). The mod's dialogue/ww_messages.tsv holds
+// the map (col0 msg_id, col1 index, col2 text). Returns the index, or (u32)-1
+// when the id has no row (caller keeps the id as-is → unchanged behaviour).
+// ISOLATED to dExtWw_injectTalkText on purpose: the DN-4 tale JMSG path resolves
+// its own ids against ww_dialogue_full.txt directly (e.g. 4410 = clothes variant),
+// and ww_messages.tsv ALSO lists 4410 → a different line, so a shared remap would
+// corrupt the cutscene text. Keep this out of lookupWwDialogueCatalogLine.
+// ============================================================
+static u32 lookupWwMsgIdToIndex(const char* mod, u32 msgId) {
+    if (mod == NULL || mod[0] == '\0') {
+        return (u32)-1;
+    }
+    const fs::path tsv =
+        dusk::ConfigPath / "model_replacements" / mod / "dialogue" / "ww_messages.tsv";
+    std::ifstream f(tsv);
+    if (!f) {
+        return (u32)-1;
+    }
+    std::string row;
+    while (std::getline(f, row)) {
+        const size_t t1 = row.find('\t');
+        if (t1 == std::string::npos) {
+            continue;
+        }
+        const size_t t2 = row.find('\t', t1 + 1);
+        if (t2 == std::string::npos) {
+            continue;
+        }
+        const std::string c0 = row.substr(0, t1);
+        char* end = NULL;
+        const u32 rowId = (u32)std::strtoul(c0.c_str(), &end, 10);
+        if (end == c0.c_str() || rowId != msgId) {
+            continue;  // header ("msg_id"), non-numeric, or no match
+        }
+        const std::string c1 = row.substr(t1 + 1, t2 - t1 - 1);
+        char* end1 = NULL;
+        const u32 idx = (u32)std::strtoul(c1.c_str(), &end1, 10);
+        return (end1 == c1.c_str()) ? (u32)-1 : idx;
+    }
+    return (u32)-1;
+}
+
+// §183 Bug 3: tale.stb JMSG fires decimal BMG row ids (539–545…), same catalog
+// folk.ba's ww_ref uses. demo_messages.ini only seeded awake hex ids — fall back
+// to population/ww_dialogue_full.txt so the STB track shows donor text (R6).
+std::string lookupWwDialogueCatalogLine(const char* mod, u32 id) {
+    if (mod == NULL || mod[0] == '\0') {
+        return {};
+    }
+    const fs::path catalog =
+        dusk::ConfigPath / "model_replacements" / mod / "population" / "ww_dialogue_full.txt";
+    std::ifstream cat(catalog);
+    if (!cat) {
+        return {};
+    }
+    char wanted[32];
+    std::snprintf(wanted, sizeof(wanted), "[%u]", id);
+    const size_t wantLen = std::strlen(wanted);
+    std::string catLine;
+    auto trim = [](std::string& s) {
+        while (!s.empty() &&
+               (s.back() == '\r' || s.back() == '\n' || s.back() == ' ' || s.back() == '\t')) {
+            s.pop_back();
+        }
+        const size_t first = s.find_first_not_of(" \t");
+        s.erase(0, first == std::string::npos ? s.size() : first);
+    };
+    while (std::getline(cat, catLine)) {
+        trim(catLine);
+        if (catLine.compare(0, wantLen, wanted) != 0) {
+            continue;
+        }
+        std::string body = catLine.substr(wantLen);
+        while (!body.empty() && (body[0] == ' ' || body[0] == '\t')) {
+            body.erase(0, 1);
+        }
+        std::string contLine;
+        while (std::getline(cat, contLine)) {
+            trim(contLine);
+            if (contLine.empty() || contLine[0] == '[') {
+                break;
+            }
+            body += '\n';
+            body += contLine;
+        }
+        std::string flat;
+        for (size_t i = 0; i < body.size(); ++i) {
+            if (body[i] == '\\' && i + 1 < body.size() &&
+                (body[i + 1] == 'n' || body[i + 1] == 'N')) {
+                flat += '\n';
+                ++i;
+                continue;
+            }
+            flat += body[i];
+        }
+        const char* rawName = dComIfGs_getPlayerName();
+        std::string name;
+        for (int i = 0; i < 16 && rawName != NULL && rawName[i] != '\0'; ++i) {
+            name += rawName[i];
+        }
+        if (name.empty()) {
+            name = "Link";
+        }
+        size_t at;
+        while ((at = flat.find("{player}")) != std::string::npos) {
+            flat.replace(at, 8, name);
+        }
+        return flat;
+    }
+    return {};
+}
 }  // namespace
 
 // §49 RENDERING — the storyboard is TIMED, so the box must never block it.
@@ -5883,73 +6562,175 @@ static void dExtWw_pollStuckMessageResume() {
         s_stuckAt = fnm;
         s_stuckFrames = 0;
     }
-    if (s_stuckFrames >= 90) {
-        dExtWw_oweDemoResume("stuck frameNoMsg (suspend 1)");
+    // §196: raised 90 → 3600 (60s). A held message legitimately freezes frameNoMsg
+    // while the player reads; the old 90f (1.5s) fired mid-read and prematurely
+    // released the §196 hold → box played through. 60s only trips a true hang, so it
+    // backstops a genuine deadlock without cutting off normal reads.
+    if (s_stuckFrames >= 3600) {
+        dExtWw_oweDemoResume("stuck frameNoMsg (suspend 1) — 60s hang backstop");
         s_stuckFrames = 0;
     }
 }
 
 #if TARGET_PC_NATIVE_UI
 namespace {
+// DN-4: tale/awake demo JMSG → Shade Watcher native path (dMsgFlow + mountPaginate).
+// Forbidden: ALBW post-man box (dALBWDialogue_c as the sole presenter).
+dMsgFlow_c s_demoFlow;
+std::vector<std::string> s_demoNativePages;
+size_t s_demoNativePageIdx = 0;
+bool s_demoNativeActive = false;
+int s_demoNativeFrames = 0;
+int s_demoLastFlowDone = -1;  // §194 probe: last doFlow() return
+// §201 native pivot: the code-text BMG entry index the 0x1324 flow targets (dumped
+// §200). fopMsgM_messageSetDemo(this) + dMsgObject_setWord(text) drives the box through
+// the game's own demo-message state machine — native A/B wait + native unsuspend.
+constexpr u32 kWwCodeTextIndex = 4900u;
+bool s_demoBoxWasOpen = false;  // §201 chain: the current native box has been seen open
+// Legacy leftover cleanup only — never arm for new lines (DN-4).
 dALBWDialogue_c* s_demoDialogue = NULL;
-std::string s_demoPendingLine;
-bool s_demoLineShown = false;
-int s_demoLineShownFrames = 0;  // №171/№168: auto-resume if A never comes
 }  // namespace
+#endif
+
+// ============================================================================
+// §194 MULTI-HYPOTHESIS PROBE — ONE build that discriminates ~12 competing
+// causes of "dialogue boxes flash + the cutscene never freezes for them".
+// Changes NO behavior; only instruments. Each logged column maps to a cause:
+//
+//   susp / (susp*)  H3  the STB never actually suspends (no data-authored suspend)
+//                   H4  it suspends but we unsuspend it immediately
+//                   H7  accounting is unbalanced (we saw susp hit -1)
+//   fnm / gap       H9  the visual timeline advances even while susp>0 (the demo
+//                       manager freezes on a DIFFERENT signal than getSuspend)
+//   tA tB tSt       H1  the advance trigger is spuriously set
+//   hA hB           H2  …compare to HELD: tA==1 while hA==0 ⇒ phantom edge;
+//                       tA==1 && hA==1 ⇒ a real (held) button, not phantom
+//   p2A p3A         H11 the player's pad is not PAD_1 during a demo
+//   boxSt           H5  the box status races straight to close (auto-completes)
+//                   H6  the box never reaches a visible/wait status at all
+//   active pg flow  H10 our DN-4 flow state vs the box state (are they even in sync)
+//   owe             H4/H7 the owed-resume debt at the moment of each transition
+//
+// Throttle: every frame inside a "box window" (flow active OR suspended OR a box
+// is up) and on ANY suspend change; otherwise every 30f so between-box frames
+// don't flood. This captures the full open→wait→close life of each box.
+// ============================================================================
+#if TARGET_PC_NATIVE_UI
+static void dExtWw_stepInStepProbe() {
+    if (dComIfGp_event_runCheck() == 0) {
+        return;
+    }
+    auto* ctrl = dDemo_c::getControl();
+    const int susp = ctrl != NULL ? (int)ctrl->getSuspend() : -999;
+    const u32 f = dDemo_c::getFrame();
+    const u32 fnm = dDemo_c::getFrameNoMsg();
+    dMsgObject_c* msg = dMsgObject_getMsgObjectClass();
+    const int boxSt = msg != NULL ? (int)msg->getStatusLocal() : -1;
+
+    static int s_prevSusp = -1000;
+    const bool suspChanged = (susp != s_prevSusp);
+    const bool boxWindow = s_demoNativeActive || susp != 0 || boxSt > 1;
+    if (suspChanged || boxWindow || (f % 30) == 0) {
+        DuskLog.info(
+            "[ExtWw] §194 f={} fnm={} gap={} susp={}{} | active={} pg={}/{} flow={} boxSt={} | "
+            "tA={} tB={} tSt={} hA={} hB={} | p2A={} p3A={} | owe={}",
+            (int)f, (int)fnm, (int)(f - fnm), susp, suspChanged ? "*" : "",
+            (int)s_demoNativeActive, (int)s_demoNativePageIdx, (int)s_demoNativePages.size(),
+            s_demoLastFlowDone, boxSt, (int)(mDoCPd_c::getTrigA(PAD_1) != 0),
+            (int)(mDoCPd_c::getTrigB(PAD_1) != 0), (int)(mDoCPd_c::getTrigStart(PAD_1) != 0),
+            (int)(mDoCPd_c::getHoldA(PAD_1) != 0), (int)(mDoCPd_c::getHoldB(PAD_1) != 0),
+            (int)(mDoCPd_c::getTrigA(PAD_2) != 0), (int)(mDoCPd_c::getTrigA(PAD_3) != 0),
+            (int)s_demoOwesResume);
+    }
+    s_prevSusp = susp;
+}
 #endif
 
 void dExtWw_drawDemoMessage() {
 #if TARGET_PC_NATIVE_UI
-    // MUST be called from the DRAW pass. `registerDraw` ends in
-    // `dComIfGd_set2DOpa`, and d_s_play records that queuing from Execute is
-    // wiped every frame by BeforeOfDraw and never painted.
+    // Native MsgFlow / MsgScrn* draw themselves. Only drain a leftover post-man
+    // box if one was left visible from an older build path.
     if (s_demoDialogue != NULL && s_demoDialogue->isVisible()) {
-        s_demoDialogue->registerDraw();
+        s_demoDialogue->hide();
     }
 #endif
 }
 
+// §195: WW host stage predicate for dDemo_c::update's step-in-step freeze gate.
+bool dExtWw_isWwDemoStage() {
+    return dExtWwSave_isWwHostStage(dComIfGp_getStartStageName());
+}
+
 void dExtWw_pollDemoMessage() {
+    dExtDmesg_update();              // §308 M4b: native WW box A/B advance + suspend release
     dExtWw_pollOpeningCameraHold();  // №170: release snap/G-guard hold after awake
+    dExtWw_pollGroundAttrProbe();    // §334c: ground-attr change probe (strip at acceptance)
+#if TARGET_PC
+    {
+        // §355c fade-EDGE sampler (§354: the tale's authored fade missing at the
+        // gap): log every isFade() transition with frame.
+        static int s_fade355 = -1;
+        const int f = mDoGph_gInf_c::isFade() ? 1 : 0;
+        if (f != s_fade355) {
+            DuskLog.info("[ExtWw] §355c fade {}→{} gFrm={}", s_fade355, f,
+                         (int)g_Counter.mCounter0);
+            s_fade355 = f;
+        }
+    }
+#endif
+#if TARGET_PC
+    {
+        // ====================================================================
+        // §352c GAP SAMPLER (10-hyp §352, live-state §351): per-frame sample of
+        // the in-status-1 control gap — from the moment a next-stage is ARMED
+        // with the demo at mode 2 (post-STB-END) until the scene delete. Logs
+        // Link speed (H4: what leaks), pos, mDoGph fade (H8: is the screen
+        // actually covered), and the frame — bounded to 240 samples per gap.
+        // ====================================================================
+        static int s_gapRun352 = 0;
+        const bool inGap = dComIfGp_isEnableNextStage() && dDemo_c::getMode() == 2 &&
+                           dComIfGp_event_runCheck();
+        if (inGap && s_gapRun352 < 240) {
+            ++s_gapRun352;
+            fopAc_ac_c* pl = dComIfGp_getPlayer(0);
+            JUTFader* fd358 = JFWDisplay::getManager() != NULL
+                                  ? JFWDisplay::getManager()->getFader() : NULL;
+            DuskLog.info("[ExtWw] §352c gap[{}] gFrm={} linkSpd={:.1f} pos=({:.0f},{:.0f},{:.0f}) "
+                         "fade={} jutSt={} rate={:.2f}",
+                         s_gapRun352, (int)g_Counter.mCounter0,
+                         pl != NULL ? pl->speedF : -1.0f,
+                         pl != NULL ? pl->current.pos.x : 0.0f,
+                         pl != NULL ? pl->current.pos.y : 0.0f,
+                         pl != NULL ? pl->current.pos.z : 0.0f,
+                         mDoGph_gInf_c::isFade() ? 1 : 0,
+                         fd358 != NULL ? (int)fd358->getStatus() : -1,
+                         mDoGph_gInf_c::getFadeRate());
+        } else if (!inGap && s_gapRun352 != 0) {
+            DuskLog.info("[ExtWw] §352c gap CLOSED after {} samples (gFrm={})", s_gapRun352,
+                         (int)g_Counter.mCounter0);
+            s_gapRun352 = 0;
+        }
+    }
+#endif
+#if TARGET_PC_NATIVE_UI
+    dExtWw_stepInStepProbe();        // §194 multi-hypothesis diagnostic (no behavior change)
+#endif
     dExtWw_pollStuckMessageResume(); // №171: UI-miss / stolen-A safety (keeps §50 probe intact)
     dExtWw_pollOwedDemoResume();     // №171: pay suspend debt once STB has suspended
-    // №169 PROBE: the opening ran ~535 storyboard frames, fired its first message,
-    // then STOPPED — no further JMSG fires, and player control returned. The
-    // G-guard is exonerated by log order (it force-ended the event that was
-    // BLOCKING us, at 6155, before our order succeeded at 6160).
-    //
-    // "It stopped" and "it ended normally" look identical from outside, so this
-    // reports the demo frame as it advances and, critically, the LAST frame
-    // reached when it stops. A demo that dies at a fixed frame every run is a
-    // different fault from one that dies at a varying frame.
     {
         static bool s_wasRunning = false;
         static u32 s_lastFrame = 0;
         const bool running = dComIfGp_event_runCheck() != 0;
         const u32 frame = dDemo_c::getFrame();
+        // §317 DIAGNOSTIC (Link post-tale spawn) — trace the REAL Link's position + demo binding
+        // through the tale, to see whether procCoToolDemo drives him to the STB's final transform
+        // (Foundry §315: −289,375,83) and where he is when the demo ends. WW-host stages only.
+        fopAc_ac_c* s317_pl = dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())
+                                  ? dComIfGp_getPlayer(0) : NULL;
         if (running) {
             if (!s_wasRunning) {
                 DuskLog.info("[ExtWw] §50 demo START (frame {})", (int)frame);
             } else if (frame != s_lastFrame && (frame % 120) == 0) {
-                // №170: `m_frame` and `m_frameNoMsg` are DIFFERENT clocks, and the
-                // difference is the whole question. `m_frame` ticks on every
-                // forward(); `m_frameNoMsg` only advances while
-                // `getSuspend() <= 0` (d_demo.cpp:1160-1165), and the WAIT cut
-                // times off THAT one (d_event_data.cpp:807). A suspended
-                // storyboard still raises the number the first probe printed,
-                // which is exactly why it could not tell a running demo from a
-                // frozen one.
-                //
-                // gap == 0 -> storyboard time is live; a missing message is the
-                //             MESSAGE TRACK, not time.
-                // gap  > 0 -> something suspended it, and when it starts
-                //             diverging says what.
-                // №171: the MAGNITUDE decides the fix. The message system resumes
-                // with `unsuspend(1)` (d_msg_object.cpp:1412/1903); the PLAY cut
-                // instead uses `suspend(100)` when the demo has already finished
-                // (d_event_data.cpp:1311). A frozen clock looks the same either
-                // way, but 1 means "waiting on a message we suppressed" and 100
-                // means "the storyboard already ended" — opposite problems.
                 DuskLog.info("[ExtWw] §50 demo running — frame {} frameNoMsg {} (gap {}) "
                              "suspend {}",
                              (int)frame, (int)dDemo_c::getFrameNoMsg(),
@@ -5957,155 +6738,464 @@ void dExtWw_pollDemoMessage() {
                              dDemo_c::getControl() != NULL
                                  ? (int)dDemo_c::getControl()->getSuspend()
                                  : -999);
+                if (s317_pl != NULL) {
+                    DuskLog.info("[ExtWw] §317 Link pos=({:.0f},{:.0f},{:.0f}) demoActorID={} "
+                                 "angY={:#x}", s317_pl->current.pos.x, s317_pl->current.pos.y,
+                                 s317_pl->current.pos.z, (int)s317_pl->demoActorID,
+                                 (u16)s317_pl->current.angle.y);
+                }
             }
             s_lastFrame = frame;
         } else if (s_wasRunning) {
+            if (s317_pl != NULL) {
+                DuskLog.info("[ExtWw] §317 demo END — Link pos=({:.0f},{:.0f},{:.0f}) "
+                             "demoActorID={} angY={:#x} (target −289,375,83 @0x8000)",
+                             s317_pl->current.pos.x, s317_pl->current.pos.y, s317_pl->current.pos.z,
+                             (int)s317_pl->demoActorID, (u16)s317_pl->current.angle.y);
+            }
             DuskLog.info(
                 "[ExtWw] §50 demo ENDED — last storyboard frame {}. The camera track alone "
                 "runs 1129+ frames (№165), so an end far below that is a TRUNCATION, not a "
                 "natural finish.",
                 (int)s_lastFrame);
+#if TARGET_PC_NATIVE_UI
+            dWwItemmdl_endClothesGetPresentation();
+            s_demoNativeActive = false;
+            s_demoNativePages.clear();
+            s_demoNativePageIdx = 0;
+            s_demoNativeFrames = 0;
+#endif
         }
         s_wasRunning = running;
     }
-#if TARGET_PC_NATIVE_UI
-    if (s_demoDialogue == NULL) {
-        return;
-    }
-    // The scene ended — never let a line outlive the demo that scheduled it.
-    if (!dComIfGp_event_runCheck() && s_demoDialogue->isVisible()) {
-        s_demoDialogue->hide();
-        s_demoLineShown = false;
-        s_demoLineShownFrames = 0;
-        s_demoPendingLine.clear();
-        // If we still owe a resume, pay it — otherwise a late abort leaves the
-        // next demo permanently suspended.
-        dExtWw_resumeDemoAfterMessage("demo ended with line up");
-        return;
-    }
-    if (!s_demoPendingLine.empty() && !s_demoLineShown) {
-        s_demoDialogue->tryCreate();
-        if (s_demoDialogue->isReady()) {
-            if (s_demoDialogue->isVisible()) {
-                // Replace: close the previous line's suspend before opening the next.
-                s_demoDialogue->hide();
-                dExtWw_resumeDemoAfterMessage("line replaced");
+    // §317 — trace Link for ~2s AFTER the demo ends, to catch a late teardown snap to the
+    // point-200 door spawn (vs holding the demo's final platform transform). Diagnostic only.
+    {
+        static int s_postEnd = 0;
+        static bool s_wasRun2 = false;
+        const bool run2 = dComIfGp_event_runCheck() != 0;
+        if (s_wasRun2 && !run2) {
+            s_postEnd = 120;
+        }
+        s_wasRun2 = run2;
+        if (s_postEnd > 0 && dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+            --s_postEnd;
+            fopAc_ac_c* pl = dComIfGp_getPlayer(0);
+            if (pl != NULL && (s_postEnd % 15) == 0) {
+                DuskLog.info("[ExtWw] §317 post-end +{}f Link pos=({:.0f},{:.0f},{:.0f})",
+                             120 - s_postEnd, pl->current.pos.x, pl->current.pos.y,
+                             pl->current.pos.z);
             }
-            // §65 H4 probe — is the DEMO caption renderer showing text OUTSIDE
-            // a demo (i.e. intercepting mount talk)? Logs every show.
-            DuskLog.warn("[ExtNpcMount] §65 demo-caption SHOW: '{:.24}'", s_demoPendingLine);
-            s_demoDialogue->showWithText(s_demoPendingLine.c_str());
-            s_demoLineShown = true;
-            s_demoLineShownFrames = 0;
         }
     }
-    if (s_demoDialogue->isVisible() && s_demoLineShown) {
-        ++s_demoLineShownFrames;
-    }
-    // №172: box-state trace. Log 040928 showed the storyboard frozen at suspend 1
-    // with NO resume line from either path — so we could not tell whether the box
-    // was still up (auto-resume should have fired), already hidden (dismiss fired
-    // and swallowed the debt), or never shown at all. Those need different fixes,
-    // and silence looks identical for all three.
-    if (dComIfGp_event_runCheck() && (s_demoLineShownFrames % 60) == 0 &&
-        (s_demoDialogue->isVisible() || s_demoLineShown || !s_demoPendingLine.empty())) {
-        DuskLog.info("[ExtWw] §51 box state — visible={} shown={} frames={} pending='{}' "
-                     "owes={} suspend={}",
-                     s_demoDialogue->isVisible() ? 1 : 0, s_demoLineShown ? 1 : 0,
-                     (int)s_demoLineShownFrames, s_demoPendingLine.c_str(),
-                     s_demoOwesResume ? 1 : 0,
-                     dDemo_c::getControl() != NULL
-                         ? (int)dDemo_c::getControl()->getSuspend()
-                         : -999);
-    }
-    if (s_demoDialogue->isVisible() && s_demoDialogue->checkDismiss()) {
-        s_demoDialogue->hide();  // early dismiss: allowed, never required
-        s_demoLineShown = false;
-        s_demoLineShownFrames = 0;
-        s_demoPendingLine.clear();
-        // №171: RESUME THE STORYBOARD — this is the contract I broke in №166.
-        //
-        // The engine SUSPENDS the storyboard when a demo message goes up, and
-        // the message system resumes it on close with exactly this call
-        // (d_msg_object.cpp:1412 and :1903). By suppressing the native box I
-        // removed the resume without removing the suspend, so `m_frameNoMsg`
-        // froze at 640 and never moved again: the scene ran on visually while
-        // its own clock stood still, and 11 of 12 messages never fired.
-        //
-        // Taking over the display means taking over the whole contract, not
-        // just the visible half. Guarded so we only ever resume a storyboard
-        // that is actually suspended — never push the counter negative and
-        // break a demo that was legitimately paused for something else.
-        // №172: OWE the resume, never pay-or-forget.
-        //
-        // This branch used to call resumeDemoAfterMessage() and then clear the
-        // debt. But that call silently returns when `!isSuspended()`, and the
-        // STB may suspend AFTER the MESSAGE op in the same track — the very race
-        // the owe mechanism exists for. If checkDismiss() fires on the same frame
-        // the box opens (page-build yields no text, or a stale A trigger is
-        // pending), we hid the box, no-op'd the resume, and then cleared the
-        // debt. The suspend landed a frame later with nobody owing a resume, and
-        // the storyboard froze at suspend 1 forever — which is exactly what
-        // log 040928 shows: box up, clock stuck at 640, no resume line at all.
-        //
-        // Owing is idempotent and the poll only pays once actually suspended, so
-        // this can never over-resume. Debt is cleared by PAYMENT, never by having
-        // attempted it.
-        DuskLog.info("[ExtWw] §51 dialogue dismissed (input) after {} frames — owing resume",
-                     (int)s_demoLineShownFrames);
-        dExtWw_oweDemoResume("dialogue dismissed");
-    } else if (s_demoDialogue->isVisible() && s_demoLineShown) {
-        // №168: A is never required. Log 040047 shows the player mashing door
-        // A while our box was up — checkDismiss never fired, clock stayed
-        // frozen, camera pan fought the free player cam. Auto-resume after a
-        // short readable beat so the storyboard (and its camera) continue.
-        // Debounce via owe so we don't race the STB's suspend landing.
-        constexpr int kAutoResumeFrames = 90;  // ~1.5s @60
-        if (s_demoLineShownFrames >= kAutoResumeFrames) {
-            s_demoDialogue->hide();
-            s_demoLineShown = false;
-            s_demoLineShownFrames = 0;
-            s_demoPendingLine.clear();
-            dExtWw_oweDemoResume("auto-resume (A never required)");
+#if TARGET_PC_NATIVE_UI
+    // §186/§202: clear the clothes-get arm once the native item box has OPENED and then
+    // closed. The §202 fix: only start the idle-countdown AFTER the box has been seen open
+    // (s_clothesGetItemBoxOpen). Otherwise the few idle frames between arming the flag and
+    // the native box opening tripped the counter and cleared the flag PRE-open → the item
+    // box never resolved (rendered as talk). Now the flag survives until the box has shown.
+    if (dWwItemmdl_isClothesGetPresentation()) {
+        static int s_clothesGetIdle = 0;
+        static bool s_clothesGetItemBoxOpen = false;
+        dMsgObject_c* msg = dMsgObject_getMsgObjectClass();
+        const u16 st = msg != NULL ? msg->getStatusLocal() : 0;
+        if (st > 1) {
+            s_clothesGetItemBoxOpen = true;  // item box is presenting
+            s_clothesGetIdle = 0;
+        } else if (s_clothesGetItemBoxOpen) {
+            // box was up, now idle → it closed. Clear shortly after.
+            if (++s_clothesGetIdle > 8) {
+                dWwItemmdl_endClothesGetPresentation();
+                s_clothesGetIdle = 0;
+                s_clothesGetItemBoxOpen = false;
+            }
         }
     }
+
+    if (!dComIfGp_event_runCheck() && s_demoNativeActive) {
+        s_demoNativeActive = false;
+        s_demoNativePages.clear();
+        s_demoNativePageIdx = 0;
+        s_demoNativeFrames = 0;
+        dExtWw_resumeDemoAfterMessage("demo ended with native line up");
+        return;
+    }
+
+    // ========================================================================
+    // §193 DN-4 Shade Watcher poll — FAITHFUL step-in-step with the STB timeline.
+    //
+    // Donor contract (History decomp pass, cited): the storyboard freezes the
+    // timeline with a DATA-authored suspend(1) in tale.stb's control track (that
+    // is the "suspend 1" the §50 probe logs — NOT our code); the box then holds
+    // until the player presses A/B and ONLY the final page's dismissal calls
+    // unsuspend(1) to resume. WHO/WHEN:
+    //   * page wait  : dMesg_outwaitProc  — CPad_CHECK_TRIG_A(0)||B  (d_mesg.cpp:2037)
+    //   * final close: dMesg_closeProc    — getControl()->unsuspend(1) (d_mesg.cpp:2112)
+    // The donor NEVER auto-advances on a timer.
+    //
+    // Our OLD code advanced on doFlow()'s return. But during a demo the pad is
+    // event-routed, so dMsgFlow_c auto-completes each single-line chunk with no
+    // wait — the timeline resumed early (truncated at frame 855) and every box
+    // (incl. the get-item) flashed past. That is the "cutscene plays irrespective
+    // of dialogue progression" report.
+    //
+    // Fix: advance ONLY on a DIRECT pad read — the exact read the native
+    // dMsgObject_c::outwaitProc uses (mDoCPd_c::getTrigA/B), which is NOT
+    // suppressed during events (setKillMessageFlagLocal is skipped while
+    // event_runCheck, d_msg_object.cpp:2283). Resume (owe unsuspend) ONLY after
+    // the final page is dismissed. If the flow tears the box down before the
+    // player advances, re-present the SAME page (0xFF = instant text, no
+    // re-typewriter) so it stays on screen — mirrors the donor holding the box.
+    // ========================================================================
+    // ========================================================================
+    // §201 NATIVE PIVOT — page chain only. s_demoNativeActive is set only for
+    // MULTI-page messages; single-page messages are fully driven by the native
+    // dMsgObject_c::_execute (native A/B wait + native unsuspend) and need no poll.
+    //
+    // The native box owns the pad wait and the unsuspend; we ONLY feed the next
+    // page once the current box has fully torn down (seen open → back to idle).
+    // No pad read, no manual unsuspend, no re-present. The pre-charged suspend
+    // (N-1, set at arm time) keeps the storyboard frozen across all N pages; each
+    // native close draws it down by one, resuming only after the final page.
+    // ========================================================================
+    if (s_demoNativeActive) {
+        ++s_demoNativeFrames;
+        dMsgObject_c* msg = dMsgObject_getMsgObjectClass();
+        const u16 st = (msg != NULL) ? msg->getStatusLocal() : 0;
+        if (st > 1) {
+            s_demoBoxWasOpen = true;  // box is presenting
+        }
+        const bool boxClosed = s_demoBoxWasOpen && st <= 1;  // was up, now idle
+        const bool safety = s_demoNativeFrames >= 3600;      // unhang backstop only
+        if (boxClosed || safety) {
+            s_demoBoxWasOpen = false;
+            if (s_demoNativePageIdx < s_demoNativePages.size()) {
+                dMsgObject_setWord(s_demoNativePages[s_demoNativePageIdx].c_str());
+                fopMsgM_messageSetDemo(kWwCodeTextIndex);
+                ++s_demoNativePageIdx;
+                s_demoNativeFrames = 0;
+                DuskLog.info("[ExtWw] §201 native page → {}/{}", (int)s_demoNativePageIdx,
+                             (int)s_demoNativePages.size());
+            } else {
+                s_demoNativeActive = false;
+                s_demoNativePages.clear();
+                s_demoNativePageIdx = 0;
+                s_demoNativeFrames = 0;
+                DuskLog.info("[ExtWw] §201 native page chain complete");
+            }
+        }
+    }
+
+    // §198: suspend release is owned by the data mechanism (STB suspend + the native
+    // box close's unsuspend at d_msg_object.cpp:1414). No manual drain here — it fought
+    // the data-authored unsuspend commands and drove the counter negative.
 #endif
+}
+
+// ============================================================================
+// §256 Native WW-actor TALK text. The port's BMG has no WW dialogue indices, so a
+// native WW villager (Aryll/Tetra/postbox…) that calls fopMsgM_messageSet(wwIdx)
+// for an ordinary (non-storyboard) talk line opens an EMPTY box — the storyboard
+// injection (dExtWw_handleDemoMessage) only covers demo messages. This resolves the
+// WW catalog line and injects it as code-text (the SAME setWord + kWwCodeTextIndex
+// mechanism the demo path uses), for native WW-restored actors on a WW host stage
+// ONLY (proc-name 0x320..0x329) so TP menus/messages are untouched. Returns true if
+// injected — the caller then targets kWwCodeTextIndex.
+// NOTE (§227, corrected): multi-page native talk IS implemented — the live-talk
+// branch in d_ext_dmesg.cpp paginates and advances on A/B, releasing only on the
+// last page. The old "single-page (page 0)" note here was stale and sent a later
+// reader hunting for a missing feature.
+// ============================================================================
+// ============================================================================
+// §226 — is this proc one of OUR WW-restored actors?
+//
+// Derived from the loaded provider manifests: each declares a `socket`, and
+// dExtNpcMount_socketActorId maps that socket to the proc the placement really
+// spawns. Any WW NPC with an ini is therefore covered automatically — no list
+// to maintain, no range to widen when the next actor lands.
+//
+// PER-ACTOR OVERRIDE HOOK: actors that should NOT take the default WW talk box
+// (e.g. signs, which want the parchment style) get their exception here, so the
+// base rule stays "all WW NPCs" and divergence is explicit and greppable.
+// ============================================================================
+bool dExtWw_isWwTalkProc(s16 i_procName) {
+    if (i_procName < 0) {
+        return false;
+    }
+    // --- per-actor overrides (none yet; signs/parchment land here) -----------
+    // if (i_procName == fpcNm_<SIGN>_e) return false;
+
+    for (const auto& kv : s_providers) {
+        const char* sock = kv.second.socket[0] != '\0' ? kv.second.socket : kv.second.proc;
+        if (dExtNpcMount_socketActorId(sock) == i_procName) {
+            return true;
+        }
+    }
+    // Legacy safety net (§263 window): keeps every actor that worked before
+    // working, even if its provider is not resident this session.
+    return i_procName >= fpcNm_KB_e && i_procName <= fpcNm_NPC_BA1_e;
+}
+
+bool dExtWw_injectTalkText(fopAc_ac_c* i_talkActor, u32 i_msgIdx) {
+    if (i_talkActor == NULL) {
+        return false;
+    }
+    if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        return false;
+    }
+    const s16 pn = fopAcM_GetProfName(i_talkActor);
+    // ========================================================================
+    // §226 — WW talk routing is DATA-DRIVEN, not a proc-id window.
+    //
+    // User ruling (2026-08-02): every WW NPC gets the native WW box by default;
+    // individual actors may later be supplanted with their own box types (e.g.
+    // signs on the parchment style) — base yes, override allowed.
+    //
+    // The old gate was `pn < fpcNm_KB_e || pn > fpcNm_NPC_BA1_e`: a CONTIGUOUS
+    // RANGE over proc ids that are not contiguous. It silently excluded every
+    // WW actor registered outside the window, and had already been patched once
+    // (§263 raised the cap when Grandma landed after ZL1). Any WW NPC added
+    // later would fail the same way, silently, with no log — the actor simply
+    // gets a TP box.
+    //
+    // Replaced by membership in the set of procs our own WW providers serve
+    // (derived from the loaded manifests' sockets), so a newly-staged NPC is
+    // covered the moment its ini exists. The legacy range stays as a fallback
+    // so nothing currently working can regress.
+    // ========================================================================
+    if (!dExtWw_isWwTalkProc(pn)) {
+        return false;  // not a WW-restored actor → TP box, untouched
+    }
+    const char* mod = "WW-Crew-Restoration";
+    for (const auto& kv : s_providers) {
+        if (kv.second.modFolder[0] != '\0') {
+            mod = kv.second.modFolder;
+            break;
+        }
+    }
+    // §263: translate the requested msg_id → catalog index (postbox 0xCE5 → 924).
+    // No tsv row ⇒ (u32)-1 ⇒ use the id unchanged (prior behaviour preserved).
+    u32 catId = i_msgIdx;
+    const u32 mappedIdx = lookupWwMsgIdToIndex(mod, i_msgIdx);
+    if (mappedIdx != (u32)-1) {
+        catId = mappedIdx;
+    }
+    const std::string line = lookupWwDialogueCatalogLine(mod, catId);
+    // ========================================================================
+    // §324 Native style: the native WW dMesg box presents the line — text from
+    // zel_00.bmg by the actor's OWN message id (native-first; the catalog line
+    // is only the fallback for ids the text pack remapped). The TP dMsgObject
+    // still runs the lifecycle the actor polls, but suppressed: its isSend()
+    // holds while the native box presents and receives one synthetic "A" on
+    // dismissal (d_msg_object.cpp §324), and its draw is skipped. We still
+    // inject code-text so the suppressed box has sane content.
+    // ========================================================================
+    if (dusk::getSettings().game.wwDialogue.getValue() == dusk::WwDialogueStyle::Native) {
+        if (dExtDmesg_openTalk((unsigned short)i_msgIdx, line.c_str())) {
+            dMsgObject_setWord(line.empty() ? " " : line.c_str());
+            DuskLog.info("[ExtWw] §324 native talk msg {} (0x{:X}) proc={} → native dMesg box",
+                         (int)i_msgIdx, (int)i_msgIdx, (int)pn);
+            return true;
+        }
+        // openTalk declined (no text anywhere / STB box busy) → Reconstructed path.
+    }
+    if (line.empty()) {
+        return false;
+    }
+    mountPaginate(line);
+    if (s_mountPages.empty()) {
+        return false;
+    }
+    dMsgObject_setWord(s_mountPages[0].c_str());
+    DuskLog.info("[ExtWw] §256 native talk msg {} (0x{:X}) proc={} -> \"{:.40}\"",
+                 (int)i_msgIdx, (int)i_msgIdx, (int)pn, line);
+    return true;
+}
+
+// ============================================================================
+// §324 chain hook: fopNpc_npc_c::talk() chains multi-message conversations via
+// the ACTOR-LESS 2-arg fopMsgM_messageSet (mode MSG_CONTINUE). No actor ⇒ no
+// proc-range guard; the guards are the WW host stage + Native style + the short
+// post-release chain window the native box arms on each dismissal. Returns true
+// if the native box took the next message (caller retargets code-text 4900).
+// ============================================================================
+bool dExtWw_injectTalkChain(u32 i_msgIdx) {
+    if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        return false;
+    }
+    if (dusk::getSettings().game.wwDialogue.getValue() != dusk::WwDialogueStyle::Native) {
+        return false;
+    }
+    if (!dExtDmesg_isTalkChainWindow()) {
+        return false;
+    }
+    const char* mod = "WW-Crew-Restoration";
+    for (const auto& kv : s_providers) {
+        if (kv.second.modFolder[0] != '\0') {
+            mod = kv.second.modFolder;
+            break;
+        }
+    }
+    u32 catId = i_msgIdx;
+    const u32 mappedIdx = lookupWwMsgIdToIndex(mod, i_msgIdx);
+    if (mappedIdx != (u32)-1) {
+        catId = mappedIdx;
+    }
+    const std::string line = lookupWwDialogueCatalogLine(mod, catId);
+    if (!dExtDmesg_openTalk((unsigned short)i_msgIdx, line.c_str())) {
+        return false;
+    }
+    dMsgObject_setWord(line.empty() ? " " : line.c_str());
+    // §227: re-arm the gap window — a conversation of any length now stays on
+    // the native box instead of reverting to TP after the first hop.
+    dExtDmesg_rearmTalkChain();
+    DuskLog.info("[ExtWw] §324 talk CHAIN msg {} (0x{:X}) → native dMesg box", (int)i_msgIdx,
+                 (int)i_msgIdx);
+    return true;
 }
 
 bool dExtWw_handleDemoMessage(u32 donorMsgId) {
     if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
         return false;  // receiver scenes: native behaviour, untouched
     }
-    // §87: donor message-tied CharVoice — SE 0x481F + port clip from package map.
-    // 0x359 sound=0 stays silent by donor design. Map rides voice/manifest.ini.
     ExtSeq::ja1Voice_onDemoMessageOpen(donorMsgId);
+
+    // ========================================================================
+    // §193: JMSG 3095 / 4410 = the clothes-get beat. The wear-change stays here
+    // (Link dons the Hero's Clothes); the TEXT now comes from the catalog like
+    // every other demo line and renders through the SAME step-in-step flow below.
+    //
+    // Why the rewrite: the old setDemoMessage(151) was wrong on TWO counts —
+    //   (1) 151 is a BMG index, and in our BMG that row is the FAIRY-bottle line
+    //       ("You caught a fairy in your bottle!"), NOT the clothes. The WW get-
+    //       text is not in the TP BMG at all.
+    //   (2) the native item box reads the BMG by code; it can't show our CATALOG
+    //       text — which is why no item box ever appeared (log had zero fukiKind=9).
+    // The correct get-text is catalog[3095]="You got the Hero's Clothes!..." (and
+    // catalog[4410]=the already-have variant), which lookupWwDialogueCatalogLine
+    // resolves for donorMsgId. So we fall through to the DN-4 catalog flow: correct
+    // text, waits for A/B, resumes on dismiss (step-in-step).
+    //
+    // LIBERTY L-4 (port-liberties.md): the donor renders this as an ITEM box
+    // (mTextboxType 9, with the clothes icon). We show the talk box until the
+    // item box gains a catalog-text path. TEXT + step-in-step are faithful; the
+    // item ICON is the tracked debt.
+    // ========================================================================
+    if (donorMsgId == 3095u || donorMsgId == 4410u) {
+        dAlbwOutfit_recordOwnedByItemNo((int)dItemNo_WEAR_KOKIRI_e);
+        daAlink_c* link = daAlink_getAlinkActorClass();
+        if (link != NULL &&
+            dComIfGs_getSelectEquipClothes() != (u8)dItemNo_WEAR_KOKIRI_e) {
+            dComIfGs_setSelectEquipClothes(dItemNo_WEAR_KOKIRI_e);
+            dComIfGp_setSelectEquipClothes(dItemNo_WEAR_KOKIRI_e);
+            link->setClothesChange(0);
+        }
+        // §201: arm the clothes-get presentation so the native box resolves to the
+        // ITEM box (mFukiKind → 9) with the clothes icon (d_msg_object.cpp:1450-1452).
+        // The code-text tag still supplies OUR catalog get-text. This retires the L-4
+        // item-icon debt — the get now renders through the native item box, not a talk box.
+        dWwItemmdl_beginClothesGetPresentation();
+        DuskLog.info("[ExtWw] §201 clothes-get JMSG {} → wear-change + native item box "
+                     "(mFukiKind 9 + icon) + catalog[{}] text",
+                     (int)donorMsgId, (int)donorMsgId);
+        // fall through to the native catalog flow (renders catalog[donorMsgId])
+    }
+
+    // §202: clear a STALE presentation flag for REGULAR messages so a talk line can't
+    // inherit the item box — but NEVER for the clothes-get itself. 3095/4410 armed the
+    // flag just above and the native item box must still see it armed when it opens next
+    // frame. (§193's unconditional clear here undid the arm, forcing the get to render as
+    // a talk box with no icon — the "get-item box missing" bug.)
+    if (donorMsgId != 3095u && donorMsgId != 4410u) {
+        dWwItemmdl_endClothesGetPresentation();
+    }
+
+    // ========================================================================
+    // §308 M4b — Native WW dialogue style: the native dMesg box (d_ext_dmesg)
+    // owns display + A/B wait + the STB suspend release, reading the donor's own
+    // zel_00.bmg text by the STB message code directly. The gameplay side effects
+    // above (clothes-get wear change, voice) have already run; from here we must
+    // NOT arm the §201 TP box, pre-charge the suspend, or owe a resume — the native
+    // box is the SINGLE owner of the per-beat unsuspend(1). A second owner would
+    // double-release the STB's suspend(1) and desync the timeline. The adaptor calls
+    // dExtDmesg_setMessage(donorMsgId) right after this to show the native box.
+    // (Reconstructed style falls through to the §201 TP-box path unchanged.)
+    // ========================================================================
+    if (dusk::getSettings().game.wwDialogue.getValue() == dusk::WwDialogueStyle::Native) {
+        DuskLog.info("[ExtWw] §308 M4b Native style — demo msg {} handed to native dMesg "
+                     "box (TP box + owe-resume suppressed)", (int)donorMsgId);
+        return true;
+    }
+
     loadDemoMessageMap();
+    std::string line;
     const auto it = s_demoMsgLines.find(donorMsgId);
     if (it != s_demoMsgLines.end() && !it->second.empty()) {
-        DuskLog.info("[ExtWw] §49 demo message {} (0x{:X}) -> \"{}\"", (int)donorMsgId,
-                     (int)donorMsgId, it->second);
+        line = it->second;
+    } else {
+        const char* mod = NULL;
+        for (const auto& kv : s_providers) {
+            if (kv.second.modFolder[0] != '\0') {
+                mod = kv.second.modFolder;
+                break;
+            }
+        }
+        if (mod == NULL) {
+            mod = "WW-Crew-Restoration";
+        }
+        line = lookupWwDialogueCatalogLine(mod, donorMsgId);
+    }
+    if (!line.empty()) {
+        DuskLog.info("[ExtWw] §49/DN-4 demo message {} (0x{:X}) -> \"{:.48}\"", (int)donorMsgId,
+                     (int)donorMsgId, line);
 #if TARGET_PC_NATIVE_UI
-        if (s_demoDialogue == NULL) {
-            s_demoDialogue = JKR_NEW dALBWDialogue_c();
+        if (dComIfGp_getMsgCommonArchive() == NULL) {
+            DuskLog.warn("[ExtWw] DN-4 demo-msg {} — message archive unavailable",
+                         (int)donorMsgId);
+            dExtWw_oweDemoResume("DN-4 no msg archive");
+            return true;
         }
-        if (s_demoDialogue != NULL) {
-            s_demoPendingLine = it->second;
-            s_demoLineShown = false;  // the poll shows it next frame, in phase
+        mountPaginate(line);
+        s_demoNativePages = s_mountPages;
+        s_demoNativePageIdx = 0;
+        s_demoNativeFrames = 0;
+        s_demoBoxWasOpen = false;
+        if (s_demoNativePages.empty()) {
+            dExtWw_oweDemoResume("empty after paginate");
+            return true;
         }
+        // ====================================================================
+        // §201 NATIVE PIVOT — drive the box through the game's OWN demo-message
+        // state machine (dMsgObject_c::_execute), retiring the hand-rolled
+        // dMsgFlow_c driver. Inject our catalog text as code-text (mWord) and target
+        // the code-text BMG entry (4900); the native path then:
+        //   * waits on mDoCPd_c::getTrigA/B(0) DIRECTLY (un-gated by event_runCheck,
+        //     so it works during a demo — the exact thing dMsgFlow_c could not do),
+        //   * unsuspends the storyboard itself in deleteProc (d_msg_object.cpp:1414),
+        //   * picks item-vs-talk per message (mFukiKind → item box + icon when the
+        //     clothes-get presentation flag is armed).
+        // Multi-page: pre-charge the suspend by N-1 so the storyboard stays frozen
+        // across all N native boxes, resuming only after the final page's close.
+        // ====================================================================
+        const int nPages = (int)s_demoNativePages.size();
+        if (nPages > 1 && dDemo_c::getControl() != NULL) {
+            dDemo_c::getControl()->suspend(nPages - 1);
+        }
+        dMsgObject_setWord(s_demoNativePages[0].c_str());
+        fopMsgM_messageSetDemo(kWwCodeTextIndex);
+        s_demoNativePageIdx = 1;
+        s_demoNativeActive = (nPages > 1);  // chain poll only needed for multi-page
+        DuskLog.info("[ExtWw] §201 native demo msg {} pages={} → messageSetDemo({}) (chain={})",
+                     (int)donorMsgId, nPages, (int)kWwCodeTextIndex, (int)(nPages > 1));
 #endif
     } else {
-        // Mapped-but-blank counts as unmapped: the seeded file ships every id
-        // with an empty value so the ids are visible for authoring.
         DuskLog.info(
             "[ExtWw] §49 demo message {} (0x{:X}) suppressed — no line authored. The "
             "receiver's string at this index is unrelated text and must not show (№31).",
             (int)donorMsgId, (int)donorMsgId);
-        // №171: suppression still owes the resume — the STB suspends for this
-        // paragraph. No box means nothing will dismiss; debounce via poll so we
-        // unsuspend after the suspend actually lands (not before).
         dExtWw_oweDemoResume("suppressed (no authored line)");
     }
-    return true;  // suppress the native display either way
+    return true;
 }
 
 // §47: the donor cast's lighting recipe, applied to the PLAYER in donor spaces.
@@ -6214,9 +7304,35 @@ void dExtNpcMount_onStageReady() {
     }
     // №83: re-bind room-lane procs for the stage we just entered (R_DL01 etc.).
     syncRoomLaneForCurrentStage();
+    // ========================================================================
+    // §266 (Engine cover): interior-arrival WALL_NONE clear on EVERY entry path.
+    // The §163 flag-only ClrWallNone runs only on the DOOR-demo arrival path
+    // (d_ext_npc_doors.cpp). Warp / debug / post-chaos (fall→respawn) entries into
+    // a WW INTERIOR bypass it, so a stuck FLAG_WALL_NONE leaves the ladder dead —
+    // setFrontWallType's ChkWallHit gate never fires (ladder-exterior-interaction-
+    // research.md §0). Run the SAME flag-only clear here (NOT the full reprobe — its
+    // CrrPos froze Link in interiors, §161) on entry into any WW interior (R_DL*),
+    // covering all arrival paths. The door path keeps its own post-demo clear.
+    // Link-acch STATE, NOT BG/room registration → DN-1-safe (research §0/§158).
+    // ========================================================================
+    if (stage != NULL && stage[0] == 'R' && dExtWwSave_isWwHostStage(stage)) {
+        daAlink_c* linkArr = daAlink_getAlinkActorClass();
+        if (linkArr != NULL) {
+            const u32 beforeArr = linkArr->mLinkAcch.GetFlags();
+            linkArr->mLinkAcch.ClrWallNone();
+            linkArr->mLinkAcch.OffLineCheckNone();
+            if (beforeArr != linkArr->mLinkAcch.GetFlags()) {
+                DuskLog.info("[ExtNpcMount] §266 interior-arrival flag-only ClrWallNone "
+                             "'{}' ({:#x} → {:#x})", stage, (unsigned)beforeArr,
+                             (unsigned)linkArr->mLinkAcch.GetFlags());
+            }
+        }
+    }
     // §97b/§101: arm shore foam on WW field hosts; load package calm map.
     // flatInter polarity (donor pair): 0=calm/usonami ON, 1=chop/usonami OFF.
-    if (stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage)) {
+    // Ferry A STEP 1: waves bisect skips usonami arming for the run.
+    if (stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage) &&
+        wwFpsBisectMode() != kWwFpsBisectSkipWaves) {
         dKy_usonami_set(0.0f);
         dKyw_wave_calm_onStage(stage);
         DuskLog.info("[WwFoam] §97b/§101 usonami armed on '{}'", stage);
@@ -6224,7 +7340,14 @@ void dExtNpcMount_onStageReady() {
         g_env_light.mWaveChan.mWaveCount = 0;
         g_env_light.mWaveChan.mWaveFlatInter = 1.0f;
         dKyw_wave_calm_onStage(NULL);
+        if (wwFpsBisectMode() == kWwFpsBisectSkipWaves) {
+            DuskLog.info("[WwFoam] FerryA FPS_BISECT: usonami arm SKIPPED on '{}'",
+                         stage != NULL ? stage : "?");
+        }
     }
+    // Ferry F Stage 2: ambient wind on WW hosts (F_DL*/R_DL*). Independent of
+    // usonami arm — feeds dKyw_get_wind_* via evt_wind → global_wind_influence.
+    dKyw_ww_host_wind_onStage(dExtWwSave_isWwHostStage(stage) ? stage : NULL);
     // №84: remount exterior after native stage change; release door demo lock.
     tryStageExitRemount();
     dExtNpcMount_endDoorDemoLock();
@@ -6436,6 +7559,646 @@ static void trySpawnSelfHeal() {
         s_lastBgProc);
     dExtNpcPopulation_clearForBg(s_lastBgProc);
     dExtNpcPopulation_spawnForBg(man);
+}
+
+// ============================================================================
+// Region triggers — faithful TagEv (d_a_tag_event type 0x0A) without a native
+// tag actor. Data: population/region_triggers.ini ([tale_loft] pinned).
+// ============================================================================
+namespace {
+
+struct RegionTrigger {
+    std::string name;
+    char stage[16]{};
+    char event[48]{};       // primary (from ini; immutable after load)
+    char nextEvent[48]{};   // §183 Bug 4: chain TALE_DEMO → TALE_DEMO2
+    char orderEvent[48]{};  // what we order next (starts = event; advances on chain)
+    char modFolder[64]{};
+    char armIf[64]{};
+    char armUnless[64]{};
+    char doneFlag[64]{};
+    cXyz center{};
+    f32 xzRadius = 0.0f;
+    f32 yHalfband = 0.0f;
+    bool once = true;
+    bool ordered = false;
+    bool started = false;  // §184 Bug 5: latch after first ORDER — no geometry re-fire
+    u8 orderCount = 0;     // §186: log ORDER-count vs once-guard
+    s16 orderedEvt = -1;
+    // Commencement fade (gameplay→cutscene): STB has no entry fade; History §173
+    // = startFadeOut/In(20) around the order. 0=idle 1=fade-out 2=order+fade-in.
+    u8 commencePhase = 0;
+    s16 commenceTimer = 0;
+};
+
+std::vector<RegionTrigger> s_regionTriggers;
+bool s_regionTriggersLoaded = false;
+
+// §185/§186 Bug 2: hide NPC_BA's real vfuku while the clothes beat is armed
+// (ba.tale_window) until given — covers pre-cutscene loft hold — and while the
+// tale sequence runs (commence / ORDER / STB). Demo double d_act0 presents it.
+// ============================================================
+// §P2 BTK-parity tap (Foundry, bus §219): logs the effective texture-SRT per
+// animated binding so probe_differ can hold receiver UV motion to the donor
+// BTK law (Bridge §128 key CSVs). Covers the §128 scene btk (mpBgBtk/model1)
+// and every §218 auto-bound sibling btk. Toggle DUSK_BTK_TAP=N (log every Nth
+// tap call; 1 = every frame). Default OFF — capture sessions only, HIGH VOLUME.
+// NOTE index semantics: calcTransform is fed the update-material index i
+// (same range as getUpdateMaterialID); if the donor-CSV baseline diff shows
+// track-shuffled values, revisit i vs i*3 before trusting verdicts.
+// ============================================================
+static int dExtBtkTapStride() {
+    static int s_stride = -2;
+    if (s_stride == -2) {
+        const char* v = std::getenv("DUSK_BTK_TAP");
+        s_stride = (v == NULL || v[0] == '\0') ? 0 : std::atoi(v);
+        if (s_stride < 0) {
+            s_stride = 0;
+        }
+    }
+    return s_stride;
+}
+static void dExtBtkTapLog(const char* i_tag, mDoExt_btkAnm* i_btk) {
+    const int stride = dExtBtkTapStride();
+    if (stride <= 0 || i_btk == NULL || i_btk->getBtkAnm() == NULL) {
+        return;
+    }
+    static u32 s_call = 0;
+    if ((s_call++ % (u32)stride) != 0) {
+        return;
+    }
+    static const std::chrono::steady_clock::time_point s_t0 =
+        std::chrono::steady_clock::now();
+    const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - s_t0)
+                             .count();
+    J3DAnmTextureSRTKey* anm = i_btk->getBtkAnm();
+    const f32 frame = anm->getFrame();
+    const u16 n = anm->getUpdateMaterialNum();
+    for (u16 i = 0; i < n; i++) {
+        if (!anm->isValidUpdateMaterialID(i)) {
+            continue;
+        }
+        J3DTextureSRTInfo srt;
+        anm->calcTransform(frame, i, &srt);
+        DuskLog.info("[DuskLog] §P2 btk t={} tag={} f={:.2f} mat={} mtx={} "
+                     "s=({:.4f},{:.4f}) r={} tr=({:.4f},{:.4f})",
+                     ms, i_tag, frame, anm->getUpdateMaterialID(i),
+                     anm->getUpdateTexMtxID(i), srt.mScaleX, srt.mScaleY,
+                     (int)srt.mRotation, srt.mTranslationX, srt.mTranslationY);
+    }
+}
+
+static bool dExtWw_taleHideRealClothesAttach() {
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    for (const RegionTrigger& t : s_regionTriggers) {
+        const bool isTale = std::strcmp(t.event, "TALE_DEMO") == 0 ||
+                            std::strcmp(t.orderEvent, "TALE_DEMO") == 0 ||
+                            std::strcmp(t.orderEvent, "TALE_DEMO2") == 0;
+        if (!isTale) {
+            continue;
+        }
+        const char* mod = t.modFolder[0] ? t.modFolder : "WW-Crew-Restoration";
+        // §188 FIX: the give is DONE ⇒ never suppress. This MUST come BEFORE the
+        // started/ordered/commencePhase check: those are one-shot LATCHES that stay TRUE
+        // after the tale ends, so testing them first made this return true forever —
+        // suppressing EVERY actor's attachments globally (the post-tale Outset heads+props
+        // vanish). Once the done flag latches, the tale is over and nothing is suppressed.
+        if (t.doneFlag[0] != '\0' && dExtModFlags_get(mod, t.doneFlag)) {
+            continue;
+        }
+        if (t.started || t.ordered || t.commencePhase != 0) {
+            return true;
+        }
+        // Pre-cutscene: story window open ⇒ idle attach must not duplicate d_act0.
+        if (t.armIf[0] != '\0' && dExtModFlags_get(mod, t.armIf)) {
+            return true;
+        }
+        if (player == NULL) {
+            continue;
+        }
+        if (t.armUnless[0] != '\0' && dExtModFlags_get(mod, t.armUnless)) {
+            continue;
+        }
+        const f32 dx = player->current.pos.x - t.center.x;
+        const f32 dz = player->current.pos.z - t.center.z;
+        const f32 dy = player->current.pos.y - t.center.y;
+        if ((dx * dx + dz * dz) < (t.xzRadius * t.xzRadius) &&
+            std::fabs(dy) <= t.yHalfband) {
+            return true;
+        }
+    }
+    const char* runEvt = dComIfGp_getEventManager().getRunEventName();
+    return runEvt != NULL && (std::strcmp(runEvt, "TALE_DEMO") == 0 ||
+                              std::strcmp(runEvt, "TALE_DEMO2") == 0);
+}
+
+bool ensureDemoArcResident(const char* arcName) {
+    if (arcName == NULL || arcName[0] == '\0') {
+        return false;
+    }
+    if (*dStage_roomControl_c::getDemoArcName() == '\0' ||
+        std::strcmp(dStage_roomControl_c::getDemoArcName(), arcName) != 0) {
+        if (*dStage_roomControl_c::getDemoArcName() != '\0' &&
+            std::strcmp(dStage_roomControl_c::getDemoArcName(), arcName) != 0) {
+            // A different demo arc is named — retarget for this PACKAGE.
+            *dStage_roomControl_c::getDemoArcName() = '\0';
+        }
+        if (!dComIfG_setObjectRes(arcName, 0, (JKRHeap*)NULL)) {
+            DuskLog.warn("[RegionTrig] demo archive '{}' would not load", arcName);
+            return false;
+        }
+        SAFE_SPRINTF(dStage_roomControl_c::getDemoArcName(), "%s", arcName);
+        DuskLog.info("[RegionTrig] demo archive requested -> '{}'", arcName);
+    }
+    const int phase = dComIfG_syncObjectRes(dStage_roomControl_c::getDemoArcName());
+    if (phase > 0) {
+        return false;  // still loading
+    }
+    if (phase < 0) {
+        DuskLog.warn("[RegionTrig] demo archive '{}' failed (phase {})", arcName, phase);
+        *dStage_roomControl_c::getDemoArcName() = '\0';
+        return false;
+    }
+    return true;
+}
+
+// §175: DEMO00 doubles self-delete on execute when unbound (demoActorID==0).
+// Pre-spawn + PauseEnable so create() finishes before demo START; JSGFindObject
+// unpauses on bind. Lazy create-on-bind crashed at frame 0 (drive before init).
+bool ensureTaleDemoDoublesReady() {
+    static const char* kNames[] = {"d_act0", "d_act2", "d_act3"};
+    bool allReady = true;
+    for (const char* name : kNames) {
+        fopAc_ac_c* actor = fopAcM_searchFromName(name, 0, 0);
+        if (actor == NULL) {
+            actor = (fopAc_ac_c*)fopAcM_fastCreate(name, 0, NULL, -1, NULL, NULL, NULL, NULL);
+            if (actor == NULL) {
+                DuskLog.warn("[RegionTrig] §175 pre-spawn '{}' FAILED", name);
+                allReady = false;
+                continue;
+            }
+            fopAcM_setStageLayer(actor);
+            fpcM_PauseEnable(actor, 1);
+            DuskLog.info("[RegionTrig] §175 pre-spawn '{}' pid={} (paused until bind)", name,
+                         (int)fopAcM_GetID(actor));
+            // One poll frame so they're findable as FOUND at JSGFindObject time.
+            allReady = false;
+        } else if (actor->demoActorID == 0 && !fpcM_IsPause(actor, 1)) {
+            // Survive until bind — execute would otherwise fopAcM_delete.
+            fpcM_PauseEnable(actor, 1);
+        }
+    }
+    return allReady;
+}
+
+void loadRegionTriggersOnce() {
+    if (s_regionTriggersLoaded) {
+        return;
+    }
+    s_regionTriggersLoaded = true;
+
+    // Prefer every known provider modFolder; fall back to WW-Crew-Restoration.
+    // Deduplicate: s_providers is one entry per proc, so the same mod folder
+    // repeats dozens of times — without this, one section becomes N triggers.
+    std::vector<std::string> mods;
+    for (const auto& kv : s_providers) {
+        if (kv.second.modFolder[0] == '\0') {
+            continue;
+        }
+        const std::string folder = kv.second.modFolder;
+        if (std::find(mods.begin(), mods.end(), folder) == mods.end()) {
+            mods.emplace_back(folder);
+        }
+    }
+    if (mods.empty()) {
+        mods.emplace_back("WW-Crew-Restoration");
+    }
+
+    for (const std::string& mod : mods) {
+        const fs::path path =
+            dusk::ConfigPath / "model_replacements" / mod / "population" / "region_triggers.ini";
+        std::ifstream in(path);
+        if (!in) {
+            continue;
+        }
+        RegionTrigger cur{};
+        bool inSec = false;
+        auto flush = [&]() {
+            if (!inSec || cur.event[0] == '\0' || cur.stage[0] == '\0') {
+                return;
+            }
+            // §184 Bug 5: one section → one trigger (providers used to duplicate).
+            for (const RegionTrigger& existing : s_regionTriggers) {
+                if (existing.name == cur.name &&
+                    std::strcmp(existing.stage, cur.stage) == 0) {
+                    DuskLog.warn("[RegionTrig] skip duplicate '{}' on '{}'", cur.name,
+                                 cur.stage);
+                    return;
+                }
+            }
+            SAFE_SPRINTF(cur.modFolder, "%s", mod.c_str());
+            if (cur.orderEvent[0] == '\0') {
+                SAFE_SPRINTF(cur.orderEvent, "%s", cur.event);
+            }
+            s_regionTriggers.push_back(cur);
+            DuskLog.info(
+                "[RegionTrig] loaded '{}' stage='{}' event='{}' next='{}' center=({:.1f},{:.1f},{:.1f}) "
+                "xzR={:.0f} yH={:.0f}",
+                cur.name, cur.stage, cur.event,
+                cur.nextEvent[0] ? cur.nextEvent : "(none)", cur.center.x, cur.center.y,
+                cur.center.z, cur.xzRadius, cur.yHalfband);
+        };
+        std::string line;
+        while (std::getline(in, line)) {
+            trimInPlace(line);
+            if (line.empty() || line[0] == '#') {
+                continue;
+            }
+            if (line.front() == '[' && line.back() == ']') {
+                flush();
+                cur = RegionTrigger{};
+                cur.name = line.substr(1, line.size() - 2);
+                inSec = true;
+                continue;
+            }
+            if (!inSec) {
+                continue;
+            }
+            const size_t eq = line.find('=');
+            if (eq == std::string::npos) {
+                continue;
+            }
+            std::string key = line.substr(0, eq);
+            std::string val = line.substr(eq + 1);
+            trimInPlace(key);
+            trimInPlace(val);
+            // Strip inline comments.
+            const size_t hash = val.find('#');
+            if (hash != std::string::npos) {
+                val = val.substr(0, hash);
+                trimInPlace(val);
+            }
+            if (key == "stage") {
+                SAFE_SPRINTF(cur.stage, "%s", val.c_str());
+            } else if (key == "event") {
+                SAFE_SPRINTF(cur.event, "%s", val.c_str());
+            } else if (key == "next_event") {
+                SAFE_SPRINTF(cur.nextEvent, "%s", val.c_str());
+            } else if (key == "center_x") {
+                cur.center.x = (f32)std::atof(val.c_str());
+            } else if (key == "center_y") {
+                cur.center.y = (f32)std::atof(val.c_str());
+            } else if (key == "center_z") {
+                cur.center.z = (f32)std::atof(val.c_str());
+            } else if (key == "xz_radius") {
+                cur.xzRadius = (f32)std::atof(val.c_str());
+            } else if (key == "y_halfband") {
+                cur.yHalfband = (f32)std::atof(val.c_str());
+            } else if (key == "arm_if_flag") {
+                SAFE_SPRINTF(cur.armIf, "%s", val.c_str());
+            } else if (key == "arm_unless_flag") {
+                SAFE_SPRINTF(cur.armUnless, "%s", val.c_str());
+            } else if (key == "done_flag") {
+                SAFE_SPRINTF(cur.doneFlag, "%s", val.c_str());
+            } else if (key == "once") {
+                cur.once = (val != "0" && val != "false");
+            }
+        }
+        flush();
+    }
+    DuskLog.info("[RegionTrig] {} trigger(s) ready", (int)s_regionTriggers.size());
+}
+
+}  // namespace
+
+// ============================================================================
+// §273 NATIVE TALE ENTRY WIRE. Foundry baked the REVT into R_DL01/stage.dzs
+// (TALE_DEMO id 0 / TALE_DEMO2 id 1, ZEV, switch_no 0x02). ba1's START_TALE1 cut
+// warps to LinkRM entrance 0xC8 (→ id 0) / 0xCA (→ id 1) and records the pending
+// demo id here. On the R_DL01 arrival we fire TP's NATIVE REVT demo-start:
+// setStartDemo(id) → getEventName(id) → orderStartDemo → TALE_DEMO → the PACKAGE
+// staff loads tale.stb (§272) → cast binds (§269) → WW demo00 drives puppets
+// (§271). Plus Demo01 residency so getStbDemoData can resolve tale.stb. No mount
+// trigger, no bridge — the standing native-first law.
+// ============================================================================
+// §297: the trigger is now purely NATIVE (the donor's spawn param), so this is
+// a residency load ONLY — the port's stand-in for the room's LBNK demo-arc load
+// that our authored R_DL01 lacks (see §48 / line 5959). No pending id, no
+// setStartDemo, no gating.
+//
+//   TRIGGER  ← daAlink, on arrival at the donor loft point 0xC8/0xCA (§296 PLYR
+//              entries): getStartMode/getStartEvent read the donor entry's param
+//              (d_a_alink.h:3605/3638) → dComIfGp_evmng_startDemo(startEvent) →
+//              orderStartDemo (d_a_alink.cpp:5136). The donor's own PLYR param
+//              fires the tale. Nothing here orders it.
+//   RESIDENCY ← this: tale.stb lives in Demo01. The PACKAGE PLAY cut fetches it
+//              exactly ONCE, on the advance frame, with no retry
+//              (d_event_data.cpp:1331). The native has Demo01 resident already
+//              because the room's LBNK pre-loaded it at room-load; our R_DL01 has
+//              no LBNK, so we mirror §48/Demo02 and make Demo01 resident the
+//              moment we arrive at the tale loft point — before daAlink's demo
+//              reaches its PLAY cut.
+//
+// Keyed on the NATIVE spawn point (dComIfGp_getStartStagePoint), so it engages
+// only on a genuine tale re-entrance and never during a plain R_DL01 visit.
+static void dExtWw_pollTaleEntryDemo() {
+    const s16 point = dComIfGp_getStartStagePoint();
+    if (point != 0xC8 && point != 0xCA) {
+        return;  // not the donor tale loft entrance (points 200 / 202)
+    }
+    const char* stg = dComIfGp_getStartStageName();
+    if (stg == NULL || std::strcmp(stg, "R_DL01") != 0) {
+        return;  // only the R_DL01 host stage
+    }
+    // NO player guard: start the async arc load the instant R_DL01 begins loading at
+    // the tale point, so Demo01 wins the race against daAlink's demo reaching its
+    // one-shot PLAY cut. Idempotent: ensureDemoArcResident no-ops once resident.
+    if (ensureDemoArcResident("Demo01")) {
+        static bool s_logged = false;
+        if (!s_logged) {
+            s_logged = true;
+            DuskLog.info("[ExtWw] §297 tale arc Demo01 resident on R_DL01 loft entrance "
+                         "(point {}); native daAlink spawn param drives the trigger",
+                         (int)point);
+        }
+    }
+}
+
+// ============================================================================
+// §278: native-order tale storyboard residency.
+//
+// ba1 fires its OWN trigger (wait_0 → eventOrder → orderOtherEventId 'tale_1'),
+// but the step that made the storyboard arc resident + named lived in the mount
+// region-trigger — now disabled. So the tale ordered into an EMPTY demo: the
+// resident/named demo arc was still 'Demo02' (the awake opening, §48), tale.stb
+// lives in 'Demo01', getStbDemoData missed → demo truncates at frame 0, no fade.
+//
+// Restore that step on ba1's own path: make Demo01 resident + retarget the demo
+// arc name, and prove the .stb actually resolves, BEFORE ba1 is allowed to order.
+// Mirrors §48 (opening/Demo02) and the old §186 region-trigger. Returns true only
+// when the storyboard is fetchable; ba1 gates its order on this (retries otherwise).
+// ============================================================================
+bool dExtWw_ensureTaleArcResident(const char* stbName) {
+    if (!ensureDemoArcResident("Demo01")) {
+        return false;  // arc still loading (async) — retry next frame
+    }
+    if (stbName != NULL && stbName[0] != '\0') {
+        void* stb = dComIfGp_getEvent()->getStbDemoData(const_cast<char*>(stbName));
+        if (stb == NULL) {
+            static int s_warn = 0;
+            if ((s_warn++ % 120) == 0) {
+                DuskLog.warn(
+                    "[ExtWw] §278 getStbDemoData('{}') NULL under demoArc='{}' — tale storyboard "
+                    "not resident yet, holding ba1 order",
+                    stbName, static_cast<const char*>(dStage_roomControl_c::getDemoArcName()));
+            }
+            return false;
+        }
+    }
+    // §278b: the storyboard binds its cast to the demo doubles d_act0/2/3 (§175) —
+    // they MUST be pre-spawned (paused until bind) BEFORE the demo starts, or it hangs
+    // at frame 0 with cast=NONE and never advances (no fade). This too lived in the
+    // now-disabled mount region-trigger; restore it on ba1's own order gate so the
+    // cast exists when the STB references it (JSGFindObject → §271 WW_DEMO00 route).
+    if (!ensureTaleDemoDoublesReady()) {
+        static int s_dbl = 0;
+        if ((s_dbl++ % 120) == 0) {
+            DuskLog.info("[ExtWw] §278b tale demo doubles (d_act0/2/3) not ready yet — "
+                         "holding ba1 order");
+        }
+        return false;  // doubles still spinning up (paused) — retry next frame
+    }
+    DuskLog.info("[ExtWw] §278 tale storyboard '{}' resident + doubles ready under demoArc='{}' "
+                 "— ba1 may order", stbName != NULL ? stbName : "?",
+                 static_cast<const char*>(dStage_roomControl_c::getDemoArcName()));
+    return true;
+}
+
+// ============================================================================
+// §281: recognize the tale storyboard event under ANY of its names. The presentation
+// gates (camera forceDemoCam in d_camera.cpp, Link/Grandma clothes) were authored for
+// the mount's TALE_DEMO/TALE_DEMO2; ba1's native order now RUNS 'tale_1'/'tale_2'
+// (Foundry §280 gave tale_1 its PACKAGE staff), so getRunEventName() returns 'tale_1'
+// and those name-equality gates stopped engaging — hence "no camera work". One
+// predicate, all names, so future renames only touch here.
+// ============================================================================
+bool dExtWw_isTaleRunEvent(const char* runEvt) {
+    return runEvt != NULL &&
+           (std::strcmp(runEvt, "TALE_DEMO") == 0 || std::strcmp(runEvt, "TALE_DEMO2") == 0 ||
+            std::strcmp(runEvt, "tale_1") == 0 || std::strcmp(runEvt, "tale_2") == 0);
+}
+
+void dExtNpcMount_pollRegionTriggers() {
+    dExtWw_pollTaleEntryDemo();  // §297 tale-arc residency (LBNK stand-in; native spawn param triggers)
+    // §308 M1: native dMesg archive residency, WW host stages only. Idempotent;
+    // latches once resident. Foundation for the dMesg subsystem (retires §201).
+    if (dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        dExtDmesg_ensureResident();
+    }
+    loadRegionTriggersOnce();
+    if (s_regionTriggers.empty()) {
+        return;
+    }
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    const char* stage = dComIfGp_getStartStageName();
+    if (player == NULL || stage == NULL) {
+        return;
+    }
+
+    for (RegionTrigger& t : s_regionTriggers) {
+        if (std::strcmp(t.stage, stage) != 0) {
+            continue;
+        }
+        const char* mod = t.modFolder[0] ? t.modFolder : dExtWw_primaryModFolder();
+        if (mod == NULL) {
+            continue;
+        }
+
+        // Mid-flight: wait for PACKAGE/STB end, then chain next_event or stamp done_flag.
+        if (t.ordered) {
+            if (t.orderedEvt >= 0 && dComIfGp_evmng_endCheck(t.orderedEvt)) {
+                // §183 Bug 4: tale→tale_2 = the put-on (SHAPE 1 held). Don't set
+                // clothes_given until the chain completes — attach must stay until
+                // DEMO2 ends (suppressed during demo via Bug 2).
+                if (t.nextEvent[0] != '\0') {
+                    DuskLog.info("[RegionTrig] '{}' END '{}' → chain '{}'", t.name,
+                                 t.orderEvent, t.nextEvent);
+                    SAFE_SPRINTF(t.orderEvent, "%s", t.nextEvent);
+                    t.nextEvent[0] = '\0';
+                    t.ordered = false;
+                    t.orderedEvt = -1;
+                    mDoGph_gInf_c::setFadeColor(*(JUtility::TColor*)&g_blackColor);
+                    mDoGph_gInf_c::startFadeOut(20);
+                    t.commencePhase = 1;
+                    t.commenceTimer = 20;
+                    continue;
+                }
+                if (t.doneFlag[0] != '\0') {
+                    dExtModFlags_set(mod, t.doneFlag, true);
+                }
+                DuskLog.info("[RegionTrig] '{}' END — done_flag='{}' (started latch held)",
+                             t.name, t.doneFlag[0] ? t.doneFlag : "(none)");
+                t.ordered = false;
+                t.orderedEvt = -1;
+                t.commencePhase = 0;
+                t.commenceTimer = 0;
+            }
+            continue;
+        }
+
+        // §186 Bug 5: once ORDER'd, geometry must not re-fire. Chain DEMO2 is
+        // armed ONLY by the END handler (commencePhase=1). Re-arm backup only
+        // when exactly one ORDER has fired and orderEvent advanced (DEMO2 pending).
+        if (t.started && t.commencePhase == 0 && !t.ordered) {
+            if (t.doneFlag[0] != '\0' && dExtModFlags_get(mod, t.doneFlag)) {
+                continue;
+            }
+            const bool chainNeedsOrder =
+                t.orderCount == 1 && t.nextEvent[0] == '\0' &&
+                t.orderEvent[0] != '\0' &&
+                std::strcmp(t.orderEvent, t.event) != 0;
+            if (chainNeedsOrder) {
+                DuskLog.info(
+                    "[RegionTrig] '{}' chain pending '{}' (orderCount={}) — re-arm commence",
+                    t.name, t.orderEvent, (int)t.orderCount);
+                mDoGph_gInf_c::setFadeColor(*(JUtility::TColor*)&g_blackColor);
+                mDoGph_gInf_c::startFadeOut(20);
+                t.commencePhase = 1;
+                t.commenceTimer = 20;
+                // fall through to commence/ORDER
+            } else {
+                if (t.doneFlag[0] != '\0' && !dExtModFlags_get(mod, t.doneFlag)) {
+                    dExtModFlags_set(mod, t.doneFlag, true);
+                    DuskLog.info("[RegionTrig] '{}' latch → force done_flag='{}' (orderCount={})",
+                                 t.name, t.doneFlag, (int)t.orderCount);
+                }
+                continue;
+            }
+        }
+
+        if (t.doneFlag[0] != '\0' && dExtModFlags_get(mod, t.doneFlag)) {
+            continue;
+        }
+        if (t.armUnless[0] != '\0' && dExtModFlags_get(mod, t.armUnless)) {
+            continue;
+        }
+
+        // Donor UNK_0E20 window: open ba.tale_window on first R_DL01 visit until
+        // clothes_given, so [tale_loft] can arm without a separate authoring beat.
+        if (t.armIf[0] != '\0' && !dExtModFlags_get(mod, t.armIf)) {
+            if (std::strcmp(t.armIf, "ba.tale_window") == 0 &&
+                std::strcmp(stage, "R_DL01") == 0) {
+                dExtModFlags_set(mod, t.armIf, true);
+                DuskLog.info("[RegionTrig] auto-armed '{}' (UNK_0E20 stand-in on {})", t.armIf,
+                             stage);
+            } else {
+                continue;
+            }
+        }
+
+        // §186 Bug 5: after the first ORDER, volume cannot start a NEW commence —
+        // only the chain END handler (or orderCount==1 re-arm) sets commencePhase.
+        const bool commencing = (t.commencePhase == 1);
+        if (!commencing) {
+            if (t.started) {
+                continue;
+            }
+            // Donor actionHunt: abs2XZ < r^2 AND |dy| <= y_halfband.
+            const f32 dx = player->current.pos.x - t.center.x;
+            const f32 dz = player->current.pos.z - t.center.z;
+            const f32 dy = player->current.pos.y - t.center.y;
+            if ((dx * dx + dz * dz) >= (t.xzRadius * t.xzRadius) ||
+                std::fabs(dy) > t.yHalfband) {
+                continue;
+            }
+        }
+
+        // TALE_DEMO / tale.stb (+ chained TALE_DEMO2 / tale_2.stb) live in Demo01.arc.
+        if (!ensureDemoArcResident("Demo01")) {
+            continue;
+        }
+
+        // Prove getStbDemoData can resolve before ordering (use orderEvent — chain
+        // advances it; leave ini `event=` as the original arm name).
+        const bool isTaleDemo = std::strcmp(t.orderEvent, "TALE_DEMO") == 0;
+        const bool isTaleDemo2 = std::strcmp(t.orderEvent, "TALE_DEMO2") == 0;
+        if (isTaleDemo || isTaleDemo2) {
+            const char* stbName = isTaleDemo2 ? "tale_2.stb" : "tale.stb";
+            void* stb = dComIfGp_getEvent()->getStbDemoData(const_cast<char*>(stbName));
+            if (stb == NULL) {
+                DuskLog.warn(
+                    "[RegionTrig] getStbDemoData('{}') NULL under demoArc='{}' — not ordering",
+                    stbName, static_cast<const char*>(dStage_roomControl_c::getDemoArcName()));
+                continue;
+            }
+            // §175: d_act0/2/3 ready BEFORE demo START (not lazy at JSGFindObject).
+            if (!ensureTaleDemoDoublesReady()) {
+                continue;
+            }
+        }
+
+        // §173 commencement: gameplay→cutscene fade hides the cast snap.
+        // STB exit fades ride d_act3; this is the entry pair (also used between
+        // TALE_DEMO → TALE_DEMO2 chain).
+        if (!commencing && (isTaleDemo || isTaleDemo2)) {
+            mDoGph_gInf_c::setFadeColor(*(JUtility::TColor*)&g_blackColor);
+            mDoGph_gInf_c::startFadeOut(20);
+            t.commencePhase = 1;
+            t.commenceTimer = 20;
+            DuskLog.info("[RegionTrig] '{}' commencement fade-out 20f (event='{}')", t.name,
+                         t.orderEvent);
+            continue;
+        }
+        if (commencing) {
+            if (t.commenceTimer > 0) {
+                t.commenceTimer--;
+            }
+            // Hold black until fade settles (rate→1) or the 20f timer elapses.
+            if (t.commenceTimer > 0 && mDoGph_gInf_c::getFadeRate() < 0.999f) {
+                continue;
+            }
+        }
+
+        if (!dComIfGp_getEvent()->isOrderOK()) {
+            continue;
+        }
+
+        const s16 idx = dComIfGp_getEventManager().getEventIdx(player, t.orderEvent, 0xff);
+        if (idx < 0) {
+            static int s_taleResolveWarn = 0;
+            if ((s_taleResolveWarn++ % 300) == 0) {
+                DuskLog.warn("[RegionTrig] '{}' event '{}' unresolved (idx=-1) on '{}'", t.name,
+                             t.orderEvent, stage);
+            }
+            continue;
+        }
+
+        player->eventInfo.setArchiveName("Demo01");
+        dComIfGp_getEventManager().setObjectArchive(player->eventInfo.getArchiveName());
+        player->eventInfo.setEventId(idx);
+        player->eventInfo.setMapToolId(0xff);
+        const s32 ok = fopAcM_orderOtherEventId(player, idx, 0xff, 0xffff, 40, 1);
+        DuskLog.info(
+            "[RegionTrig] '{}' ORDER event='{}' idx={} demoArc=Demo01 "
+            "started={} orderCount={} once={} -> {}",
+            t.name, t.orderEvent, (int)idx, t.started ? 1 : 0, (int)t.orderCount,
+            t.once ? 1 : 0, (int)ok);
+        if (ok == 0) {
+            continue;
+        }
+        if (t.commencePhase == 1) {
+            mDoGph_gInf_c::startFadeIn(20);
+            DuskLog.info("[RegionTrig] '{}' commencement fade-in 20f (cast bind via OBJNAME)",
+                         t.name);
+        }
+        t.ordered = true;
+        t.orderedEvt = idx;
+        t.started = true;  // §184 Bug 5: latch — geometry cannot re-ORDER
+        t.orderCount++;
+        t.commencePhase = 0;
+        t.commenceTimer = 0;
+    }
 }
 
 void dExtNpcMount_pollBgWarps() {
@@ -6654,7 +8417,7 @@ void dExtNpcMount_pollBgWarps() {
         }
 
         placeLinkAt(player, spawn);
-        forceLinkGroundReprobe(player);
+        dExtNpcMount_forceLinkGroundReprobe(player);
         // №54-5: Link faces INTO the room (Nintendo PLYR spawn_ry) on interior enter.
         // №56: exit/return override may carry return_ry facing.
         if (s_bgSpawnOverrideValid && s_bgSpawnFacingValid) {
@@ -6905,9 +8668,23 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
         i_this->mTalkFrames = 0;
         i_this->mPresentDemoItemNo = -1;  // №251: no pending get-item handoff
         i_this->mDemoOwned = false;       // №250: demo-pose select flag
+        i_this->mBa1GetActive = 0;
+        i_this->mBa1GetEvtOrdered = -1;
+        i_this->mBa1StaffId = -1;
         i_this->mCloseCooldown = 0;
         i_this->mOrbitPhase = 0;
         i_this->mHeadVariant = 0;
+        // §222: pig↔bait AI. Bait mounts are available (donor mState 1) on spawn
+        // and register for the pig's fpcM-style search; the pig starts targetless.
+        i_this->mBaitClaim = 0;
+        i_this->mBaitGroundY = 0.0f;
+        i_this->mAiTargetId = 0;
+        i_this->mAiMoving = false;
+        i_this->mIsBait = i_this->mManifest.isBait;
+        i_this->mBaitState = i_this->mIsBait ? 1 : 0;
+        if (i_this->mIsBait) {
+            g_dExtBaitIds.push_back(fopAcM_GetID(i_this));
+        }
         i_this->mSlaveMap[0] = '\0';
         i_this->mSlavePairCount = 0;
         // №52-B: do NOT clear mDoorKey/mSpawnSrc — stub Create stamps them from pending
@@ -6923,6 +8700,8 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             i_this->mAttachArcOwned[i] = 0;
             i_this->mAttachArcPhase[i] = {};
         }
+        i_this->mIdleAttachedArcOwned = 0;
+        i_this->mIdleAttachedArcPhase = {};
 
         const int arg = fopAcM_GetParam(i_this) & 0xFF;
         for (int i = 0; i < i_this->mManifest.subtypeCount; ++i) {
@@ -7107,6 +8886,23 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             return ap;
         }
         i_this->mAttachArcOwned[i] = 1;
+    }
+    // F-2: idle_attached_arc — same dComIfG_resLoad path; must be resident
+    // before setMountAnimation pulls the BCK via getObjectRes.
+    {
+        const char* ia = i_this->mManifest.idleAttachedArc;
+        if (ia[0] != '\0' && i_this->mManifest.idleAttached[0] != '\0' &&
+            std::strcmp(ia, i_this->mManifest.arc) != 0 && !i_this->mIdleAttachedArcOwned) {
+            const int ip = dComIfG_resLoad(&i_this->mIdleAttachedArcPhase, ia);
+            if (ip == cPhs_ERROR_e) {
+                DuskLog.warn("[ExtNpcMount] F-2 idle_attached_arc '{}' resLoad ERROR (proc={})",
+                             ia, procName);
+            } else if (ip != cPhs_COMPLEATE_e) {
+                return ip;
+            } else {
+                i_this->mIdleAttachedArcOwned = 1;
+            }
+        }
     }
     stageLog("create", "resLoad COMPLEATE → solid heap");
 
@@ -7329,6 +9125,9 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
             retainArcModels(i_this->mManifest.attach[i].arc);
         }
     }
+    if (i_this->mIdleAttachedArcOwned) {
+        retainArcModels(i_this->mManifest.idleAttachedArc);
+    }
     DuskLog.info("[ExtNpcMount] COMPLEATE {} arc={} model={} btp={} scale={} mod={}", procName,
                  i_this->mManifest.arc, i_this->mManifest.model,
                  i_this->mBtpBound ? i_this->mManifest.btp : "(none)", s,
@@ -7392,6 +9191,12 @@ int dExtNpcMount_delete(dExtNpcMount_c* i_this) {
             dComIfG_resDelete(&i_this->mAttachArcPhase[i], oa);
             i_this->mAttachArcOwned[i] = 0;
         }
+        if (i_this->mIdleAttachedArcOwned) {
+            const char* ia = i_this->mManifest.idleAttachedArc;
+            releaseArcModels(ia, "delete-idle-attached-arc", i_this);
+            dComIfG_resDelete(&i_this->mIdleAttachedArcPhase, ia);
+            i_this->mIdleAttachedArcOwned = 0;
+        }
     }
     return 1;
 }
@@ -7422,6 +9227,9 @@ static void dExtNpcMount_placeAttachments(dExtNpcMount_c* i_this) {
         if (!mountAttachLive(i_this, i)) {  // №262: retired by its flag
             continue;
         }
+        if (mountTaleDemoSuppressAttach(i_this)) {  // §183 Bug 2
+            continue;
+        }
         J3DModel* host =
             (i_this->mAttachOnCompanion[i] && companion != NULL) ? companion : body;
         if (host == NULL) {
@@ -7449,6 +9257,129 @@ static void dExtNpcMount_placeAttachments(dExtNpcMount_c* i_this) {
     }
 }
 
+// ============================================================
+// §222 — Pig↔bait AI (donor-pig-bait-contract, restored 1:1). The bait (esa)
+// mounts are passive + registered (available on spawn = donor mState 1). The
+// pig (NPC_KB) searches the registry for an unclaimed available bait inside the
+// donor acceptance window (XZ<400, |Δy|<40, facing < 0x55F0 — esa_search_sub),
+// CLAIMS it (mBaitClaim = pig id, the donor field_0x298 slot), walks to it, and
+// EATS it (bait → state 2 → self-delete). Entry (which item drops bait) is a
+// stand-in census placement for now; the All-Purpose-Bait item is deferred.
+// ============================================================
+static void dExtNpc_updateAi(dExtNpcMount_c* a) {
+    // Bait: passive — eaten baits (state 2) self-delete; otherwise nothing.
+    if (a->mIsBait) {
+        if (a->mBaitState == 2) {
+            fopAcM_delete(a);
+        }
+        return;
+    }
+    // §222b Bokoblin Increment A — non-combat locomotion + awareness (bokoblin-
+    // port-scope.md). When the player enters detection range, face + pursue; no
+    // combat yet (that's Increment B/C, gated on the damage-manager tier).
+    if (std::strcmp(a->mManifest.proc, "NPC_BK") == 0) {
+        fopAc_ac_c* player = dComIfGp_getPlayer(0);
+        bool pursuing = false;
+        if (player != NULL) {
+            const f32 dx = player->current.pos.x - a->current.pos.x;
+            const f32 dz = player->current.pos.z - a->current.pos.z;
+            const f32 d2 = dx * dx + dz * dz;
+            // §223 find-flag latch (donor getFindFlag/setFindFlag, the smallest
+            // real slice of the kb statemap): once the player is spotted within
+            // ~800 the Bokoblin stays ALERTED (mAiTargetId=1) and keeps pursuing
+            // even through brief gaps, only losing sight beyond ~1400 — hysteresis
+            // instead of the audition's per-frame recheck.
+            if (a->mAiTargetId == 0 && d2 < 800.0f * 800.0f) {
+                a->mAiTargetId = 1;  // find-flag set (alerted)
+            } else if (a->mAiTargetId != 0 && d2 > 1400.0f * 1400.0f) {
+                a->mAiTargetId = 0;  // lost sight
+            }
+            if (a->mAiTargetId != 0 && d2 > 120.0f * 120.0f) {
+                a->current.angle.y = cM_atan2s(dx, dz);
+                cLib_chasePosXZ(&a->current.pos, player->current.pos, 5.0f);
+                pursuing = true;
+            }
+        }
+        if (pursuing && !a->mAiMoving) {
+            setMountAnimation(a, "bk_walk.bck", J3DFrameCtrl::EMode_LOOP);
+            a->mAiMoving = true;
+        } else if (!pursuing && a->mAiMoving) {
+            setMountAnimation(a, "bk_wait.bck", J3DFrameCtrl::EMode_LOOP);
+            a->mAiMoving = false;
+        }
+        return;
+    }
+    // Only the pig runs the bait-seeking AI.
+    if (std::strcmp(a->mManifest.proc, "NPC_KB") != 0) {
+        return;
+    }
+    // Acquire a bait target (donor esa_search_sub acceptance, verbatim).
+    if (a->mAiTargetId == 0) {
+        dExtNpcMount_c* best = NULL;
+        f32 bestD2 = 400.0f * 400.0f;  // donor XZ<400
+        std::vector<u32>& reg = g_dExtBaitIds;
+        for (size_t i = 0; i < reg.size(); ++i) {
+            fopAc_ac_c* ac = NULL;
+            if (!fopAcM_SearchByID(reg[i], &ac) || ac == NULL) {
+                continue;
+            }
+            dExtNpcMount_c* b = (dExtNpcMount_c*)ac;
+            if (!b->mIsBait || b->mBaitState != 1 || b->mBaitClaim != 0) {
+                continue;  // available + unclaimed (donor mState==1 && field_0x298==0)
+            }
+            if (std::fabs(b->current.pos.y - a->current.pos.y) >= 40.0f) {
+                continue;  // donor |Δy|<40
+            }
+            const f32 dx = b->current.pos.x - a->current.pos.x;
+            const f32 dz = b->current.pos.z - a->current.pos.z;
+            const f32 d2 = dx * dx + dz * dz;
+            if (d2 >= bestD2) {
+                continue;
+            }
+            const s16 toB = cM_atan2s(dx, dz);
+            if (cLib_distanceAngleS(a->current.angle.y, toB) >= 0x55F0) {
+                continue;  // donor facing window
+            }
+            best = b;
+            bestD2 = d2;
+        }
+        if (best != NULL) {
+            best->mBaitClaim = fopAcM_GetID(a);  // donor field_0x298 = claimer
+            a->mAiTargetId = fopAcM_GetID(best);
+        }
+    }
+    // Walk to / eat the claimed bait.
+    bool moving = false;
+    if (a->mAiTargetId != 0) {
+        fopAc_ac_c* bAc = NULL;
+        if (fopAcM_SearchByID(a->mAiTargetId, &bAc) && bAc != NULL) {
+            const f32 dx = bAc->current.pos.x - a->current.pos.x;
+            const f32 dz = bAc->current.pos.z - a->current.pos.z;
+            const f32 d2 = dx * dx + dz * dz;
+            a->current.angle.y = cM_atan2s(dx, dz);
+            if (d2 <= 60.0f * 60.0f) {
+                ((dExtNpcMount_c*)bAc)->mBaitState = 2;  // eaten → self-delete
+                a->mAiTargetId = 0;
+            } else {
+                cLib_chasePosXZ(&a->current.pos, bAc->current.pos, 4.0f);
+                moving = true;
+            }
+        } else {
+            a->mAiTargetId = 0;  // bait consumed/gone
+        }
+    }
+    // §222: walk anim while moving, idle otherwise — switch on transition only
+    // so the loop never restarts at frame 0 (the "floating" the user saw = no
+    // anim change; position moved under a held idle pose).
+    if (moving && !a->mAiMoving) {
+        setMountAnimation(a, "walk1.bck", J3DFrameCtrl::EMode_LOOP);
+        a->mAiMoving = true;
+    } else if (!moving && a->mAiMoving) {
+        setMountAnimation(a, "wait1.bck", J3DFrameCtrl::EMode_LOOP);
+        a->mAiMoving = false;
+    }
+}
+
 int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
     if (i_this == NULL) {
         return 1;
@@ -7462,7 +9393,7 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
             wwSkyEnsure();
         }
         updateBgTransform(i_this);
-        if (i_this->mpBgBtk != NULL) {
+        if (i_this->mpBgBtk != NULL && wwFpsBisectMode() != kWwFpsBisectSkipBtk) {
             i_this->mpBgBtk->play();
         }
         // №98: GLOBAL_e world collision has no move mtx — do not Move().
@@ -7471,6 +9402,10 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
         }
         return 1;
     }
+    // §222: pig↔bait AI — runs for every mount actor (bait self-delete needs it
+    // even as a static/morf-less prop; the pig's seek/eat needs it before the
+    // idle/storyboard logic so the pig drives its own position when free).
+    dExtNpc_updateAi(i_this);
     // №117: collision-only static prop — keep dzb aligned with actor pose.
     if (i_this->mpMorf == NULL) {
         if (i_this->mpBgW != NULL && i_this->mBgReady) {
@@ -7827,6 +9762,8 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
     if (i_this->mCloseCooldown > 0) {
         --i_this->mCloseCooldown;
     }
+    // History Ba1_Get_Itm: own Ba1 staff cutEnd while the give pack runs.
+    tickBa1GetEvent(i_this);
     // №263: one-shot present motion finished → back to the state-aware idle
     // (post-give the attach flag is set, so this lands on the plain idle).
     if (i_this->mPresentAnimActive && i_this->mpMorf != NULL && i_this->mpMorf->isStop() != 0) {
@@ -7892,6 +9829,11 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
         } else {
             // №33: wrap mount dialogue in a real TP speak event (postman pattern).
             // Prefer checkCommandTalk; TrigA only orders the speak event (no orphan window).
+            // §183 Bug 3: during TALE_DEMO/TALE_DEMO2 the STB JMSG owns dialogue —
+            // §65 talk-entry must yield (log 22092 was stealing the scene).
+            if (mountTaleDemoSuppressAttach(i_this)) {
+                // Demo owns talk; leave attention alone so A doesn't re-order speak.
+            } else {
             i_this->eventInfo.onCondition(dEvtCnd_CANTALK_e);
             if (i_this->eventInfo.checkCommandTalk()) {
                 // §65 H9 probe — which entry path the talk takes (talk command
@@ -7907,6 +9849,7 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
                 DuskLog.warn("[ExtNpcMount] §65 talk-entry: TrigA speak-order fallback ({})",
                              i_this->mManifest.proc);
                 fopAcM_orderSpeakEvent(i_this, 0, 0);
+            }
             }
         }
     }
@@ -8072,8 +10015,10 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
             J3DModelData* data = model->getModelData();
             // §128 / daBg order: BTK entry before calc so MaterialAnm SRT is live
             // when calcMaterial/diff patches the DifferedDL (needs create 0x1200).
-            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {
+            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL &&
+                wwFpsBisectMode() != kWwFpsBisectSkipBtk) {
                 i_this->mpBgBtk->entry(data);
+                dExtBtkTapLog("scene1", i_this->mpBgBtk);  // §P2 btk tap (§219)
             }
             model->calc();
             if (data != NULL) {
@@ -8086,13 +10031,22 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
             }
             g_env_light.setLightTevColorType_MAJI(model, &i_this->tevStr);
             // §143: model1 C0/K0 live seacolor; C1–C3/K1–K3 authored (§138 table).
-            if (i == 1 && data != NULL) {
+            // Ferry A STEP 1: palette bisect skips per-frame wwApplyModel1SeaPalette.
+            if (i == 1 && data != NULL && wwFpsBisectMode() != kWwFpsBisectSkipPalette) {
                 wwApplyModel1SeaPalette(data);
             }
             mDoExt_modelUpdateDL(model);
-            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL) {
+            if (i == 1 && i_this->mpBgBtk != NULL && data != NULL &&
+                wwFpsBisectMode() != kWwFpsBisectSkipBtk) {
                 i_this->mpBgBtk->remove(data);
             }
+        }
+        // Ferry A STEP 1: sample field FPS while a bisect mode is armed.
+        if (wwFpsBisectMode() != kWwFpsBisectOff && (g_Counter.mCounter0 % 90) == 0) {
+            static const char* const kNames[] = {"off", "palette", "waves", "btk", "wavedraw"};
+            const int mode = wwFpsBisectMode();
+            DuskLog.info("[WwFoam] FerryA FPS_BISECT sample mode={} fps={:.1f}",
+                         kNames[mode >= 0 && mode <= 4 ? mode : 0], aurora_get_fps());
         }
         mDoLib_clipper::resetFar();
         return 1;
@@ -8136,6 +10090,10 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
         i_this->mpBrk->entry(model->getModelData());
     }
     if (i_this->mpColorBtk != NULL) {
+        if (i_this->mColorBtkPlay) {
+            i_this->mpColorBtk->play();  // §218: advance the auto-bound texture animation
+            dExtBtkTapLog(i_this->mManifest.proc, i_this->mpColorBtk);  // §P2 btk tap (§219)
+        }
         i_this->mpColorBtk->entry(model->getModelData());
     }
 
@@ -8159,7 +10117,8 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
         i_this->mpCompanion->entryDL();
     }
     for (int i = 0; i < i_this->mAttachCount; ++i) {
-        if (i_this->mpAttach[i] != NULL && mountAttachLive(i_this, i)) {  // №262
+        if (i_this->mpAttach[i] != NULL && mountAttachLive(i_this, i) &&
+            !mountTaleDemoSuppressAttach(i_this)) {  // №262 + §183 Bug 2
             applyModelAmbient(i_this->mpAttach[i], amb_col);
             i_this->mpAttach[i]->entry();
         }

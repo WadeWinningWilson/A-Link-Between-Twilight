@@ -12,6 +12,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_horse.h"
 #include "d/d_albw_hp_mult.h"
+#include "d/d_albw_region_mult.h"
 #include "d/d_attention.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_flurry_rush.h"
@@ -493,6 +494,10 @@ namespace dusk {
             ImGuiStringViewText(
                 fmt::format("Category: {}\n", lockonHpCategoryName(category)));
             ImGuiStringViewText(fmt::format("True HP mult: {}x\n", trueHpMult));
+            ImGuiStringViewText(fmt::format(
+                "Region mult: {:.2f}x (dmg {:.2f} / hp {:.2f} / rup {:.2f})\n",
+                dAlbwRegionMult_getTableMult(), dAlbwRegionMult_getDamageMult(),
+                dAlbwRegionMult_getHealthMult(), dAlbwRegionMult_getRupeeMult()));
             ImGuiStringViewText(
                 fmt::format("Battle targets nearby: {}\n", battleTargets));
 

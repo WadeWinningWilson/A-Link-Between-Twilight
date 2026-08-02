@@ -161,3 +161,49 @@ deferred to Cursor per the no-edit scope of this pass.
   half points at the `Bgsp` slot lifecycle across the room-lane round-trip
   (`d_ext_npc_mount.cpp:4227, 6930`).
 - Full agent transcripts' key file:lines are inlined above.
+
+---
+
+## §158 ADDENDUM (Housing, 2026-07-26) — the "re-setter" was a PHANTOM; root = stale №237 path assumption
+
+The §0 fix (№269 ClrWallNone in `forceLinkGroundReprobe`) shipped on all THREE call sites — but all
+three are ROOM-LANE paths (`d_ext_npc_mount.cpp:5198/5255/6781`). **The build evolved to NATIVE
+stage transports for interiors** (doors → `dComIfGp_setNextStage` to R_DL01,
+`d_ext_npc_doors.cpp:326` — log: `transport=stage host='R_DL01' … native setNextStage only`), and
+**that path calls NO reprobe/ClrWallNone.** So the entry clear never runs on the path Link actually
+takes: `procDoorOpenInit` sets WALL_NONE → native transport interrupts before the door proc's own
+clear → stuck at the ladder. No second setter exists; the fix was on a superseded path.
+
+Same stale assumption (merge_event.py's №237 "interiors are BG mounts, no stage switch") also sent
+Ba1_Get_Itm's merge to the wrong stage's event_list (F_DL01 vs R_DL01) — History's find. One stale
+doctrine, both interior bugs. **FIX (Engine, pending):** invoke the №269 clear on native-transport
+arrival into WW interiors (doors path / R_DL01 arrival hook). Full record: bus §158; §121b/§121c
+for the earlier passes. §2's G1-G3 candidates and §3's probe remain valid background but are NOT
+needed if the relocated clear fixes the climb.
+
+## §160 ADDENDUM (Housing, 2026-07-26) — relocation LANDED but fires ONE FRAME TOO EARLY
+
+Engine shipped the relocated clear (`d_ext_npc_doors.cpp:1378`, in `pollArrival`) — user retest:
+ladder still dead. Run-log `dusklight-20260726-154808.log` refines the root:
+- R_DL01 arrival shows NO №269 line → WALL_NONE was NOT set on the first poll frame (the clear
+  ran, found nothing — the №269 log prints only when the flag was up). So the flag is NOT carried
+  across the transport (player is rebuilt); the setter is on the ARRIVAL side.
+- Exit back to F_DL01 logs `№269 ClrWallNone (acchFlags 0x406024 → 0x402000)` → the flag WAS set
+  during the interior stay. Setter = our own arrival door demo: `:1378` clear runs FIRST, then
+  `beginDoorDemoLock()` (`:1457`) → `changeDemoMode(DEMO_DOOR_OPEN)` sets WALL_NONE;
+  `endDoorDemoLock`'s `cancelOriginalDemo` bypasses the proc's own clear → stuck.
+- **FERRY G-2 (Engine):** add `dExtNpcMount_forceLinkGroundReprobe(player);` in the demo-completion
+  block after `s_arrival.demoEnded = true;` (`d_ext_npc_doors.cpp:~1472`). Keep the `:1378` call.
+  Self-verifying: №269 must log AFTER `№89 arrival demo END stage='R_DL01'` on next entry.
+Full record: bus §160 item 2.
+
+## ✅ RESOLVED (§163, 2026-07-26) — G-3 flag-only clear; thread CLOSED
+
+G-2 (full `forceLinkGroundReprobe` post-demo) cleared the flags but its `ClrGroundHit()+CrrPos()`
+reposition FROZE Link in interiors (bus §161 three-run differential). **G-3 = flag-only clear**
+(`ClrWallNone` + `OffLineCheckNone`, no reprobe) at the same post-demo site — freeze cured, ladder
+climbs (user-verified on the loft, run 171351: `§161 flag-only ClrWallNone (0x4060e4 → 0x4020e0)`).
+Final shape: `:1378` pre-demo full reprobe (carried flags) + post-demo FLAG-ONLY clear (demo-set
+flags). Root chain for the record: №237 stale "BG mount" assumption → fix shipped on room-lane
+paths Link never takes (§158) → relocated but pre-demo (§160) → post-demo but with reposition
+(§161) → flag-only (§163). Four passes; the discriminating instrument each time was the run log.

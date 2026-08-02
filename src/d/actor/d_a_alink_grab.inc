@@ -216,7 +216,11 @@ void daAlink_c::setGrabItemPos() {
             mDoMtx_multVecZero(mpLinkModel->getAnmMtx(10), &grabActor->current.pos);
             grabActor->shape_angle.y = spE;
             grabActor->shape_angle.z = spC;
-            grabActor->shape_angle.x = shape_angle.x;
+            // §229 WW pig (d_a_kb) is carried UPSIDE-DOWN — its carry_move owns
+            // shape_angle.x (-0x7FFF). Don't force it upright like a pot.
+            if (fopAcM_GetName(grabActor) != fpcNm_KB_e) {
+                grabActor->shape_angle.x = shape_angle.x;
+            }
         } else if (mProcID == PROC_GRAB_READY || mProcID == PROC_GRAB_MISS || mProcID == PROC_PICK_UP || (mProcID == PROC_WOLF_GRAB_UP && mProcVar3.field_0x300e == 0)) {
             mDoMtx_stack_c::transS(current.pos);
             mDoMtx_stack_c::YrotM((shape_angle.y - mProcVar2.field_0x300c));
@@ -251,7 +255,11 @@ void daAlink_c::setGrabItemPos() {
             } else {
                 grabActor->shape_angle.y = spE;
                 grabActor->shape_angle.z = spC;
-                grabActor->shape_angle.x = shape_angle.x;
+                // §229 WW pig carried upside-down (see above) — leave its shape_angle.x
+                // to its own carry_move; forcing Link's upright angle un-flips it.
+                if (fopAcM_GetName(grabActor) != fpcNm_KB_e) {
+                    grabActor->shape_angle.x = shape_angle.x;
+                }
             }
 
             cXyz sp140;

@@ -25,6 +25,8 @@ which identification decides the cost. Nothing here is built; lane assignments a
 
 ## 1. Aryll's voice
 
+> **⚠ SUPERSEDED (History ruling 2026-07-29) — Librarian-stamped.** This §1 (Aryll's voice) is superseded by the LIVE [voice-recipe.md](islands/Outset/characters/Aryll/voice-recipe.md) — the verified voice chain (§85–93b), confirmed in-game and confirmed to survive the native port (message-tied). Retained for scoping history; do **not** act on §1 as current. **§2 below (opening music / Outset-theme transition) remains LIVE** until the audio lane says otherwise.
+
 ### Donor mechanism (verified)
 
 - Character voices are **SE-system events**: the `JA_SE_CV_*` family in

@@ -30,6 +30,26 @@ bool dExtWw_applyPlayerDonorLook(J3DModel* model, dKy_tevstr_c* tevStr);
 // preferable to a foreign one (№31 applied to text).
 bool dExtWw_handleDemoMessage(u32 donorMsgId);
 
+// §256 native WW-actor talk-text injection (empty-box fix). Returns true if it
+// resolved + injected a WW catalog line for i_talkActor's i_msgIdx (caller then
+// targets kWwCodeTextIndex). See d_ext_npc_mount.cpp.
+bool dExtWw_injectTalkText(fopAc_ac_c* i_talkActor, u32 i_msgIdx);
+
+// §226: true when this proc is one of OUR WW-restored actors (derived from the
+// loaded provider manifests, plus the legacy proc-range as a safety net).
+// Base rule: every WW NPC takes the native WW box; per-actor exceptions (signs
+// on the parchment style, etc.) are declared inside this function.
+bool dExtWw_isWwTalkProc(s16 i_procName);
+
+// §324: CONTINUE-chained talk message (actor-less 2-arg fopMsgM_messageSet) —
+// re-opens the native WW dMesg box for the next message in a conversation.
+// Returns true if taken (caller then targets the code-text entry 4900).
+bool dExtWw_injectTalkChain(u32 i_msgIdx);
+
+// §195: true on a WW host stage — used by dDemo_c::update to gate the storyboard
+// advance on the message-box suspend (restore the vanilla step-in-step freeze).
+bool dExtWw_isWwDemoStage();
+
 // §49 rendering. The storyboard is TIMED, so the box never gates the demo:
 // a new line replaces the old, A dismisses early but is never required, and
 // the line self-clears when the scene ends.
@@ -48,6 +68,13 @@ bool dExtWw_openingOwnsCamera();
  * busy slot (№169's G-guard never got to free the lane).
  */
 bool dExtWw_openingPauseArrivalGuard();
+
+/**
+ * §281: true if the running event is the tale storyboard under ANY name
+ * (TALE_DEMO/TALE_DEMO2 or ba1's native tale_1/tale_2). Defined in d_ext_npc_mount.cpp;
+ * declared here too so the camera-drive gate (d_camera.cpp) can see it.
+ */
+bool dExtWw_isTaleRunEvent(const char* runEvt);
 
 /**
  * №171: №110 snap defer — hold after ORDER, or still trying to order.

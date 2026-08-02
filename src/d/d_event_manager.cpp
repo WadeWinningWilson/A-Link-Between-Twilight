@@ -1200,7 +1200,12 @@ int dEvent_manager_c::getMyActIdx(int staffId, const char* const* action, int n_
         OS_REPORT_ERROR("event: getMyActIdx(): å‹•ä½œ %s ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚ç¾åœ¨ã®å‹•ä½œ %s\n", nowCutName, staff->getName());
     }
 
-    return 0;
+    // §295: DONOR-FAITHFUL — no-match returns -1, not 0 (WW d_event_manager.cpp
+    // getMyActIdx: `return -1` after the loop). The port's `return 0` made cutProc
+    // treat a NON-generic cut (ba1's custom START_TALE1) as index 0 = WAIT, dispatch
+    // cutWaitProc, and return TRUE — swallowing the custom cut, so privateCut (→
+    // cut_move_START_TALE1 → the donor re-entrance warp) never ran. Matches the donor.
+    return -1;
 }
 
 char* dEvent_manager_c::getMyNowCutName(int staffId) {
@@ -1288,7 +1293,14 @@ int dEvent_manager_c::getMySubstanceNum(int staffId, const char* dataname) {
 
 void dEvent_manager_c::cutEnd(int staffId) {
     dEvDtCut_c* cut;
-    if (dComIfGp_getEvent()->getMode() == dEvt_mode_WAIT_e) {
+    // §320 DECOMP-FIRST: the donor cutEnd (d_event_manager.cpp:549) has NO event-mode gate — it
+    // just flagSet(cut->getFlagId()) after the staffId==-1 check. The port's added WAIT-mode
+    // early-return silently no-op'd the TALE teardown: cutEnd(PACKAGE) runs at tale end AFTER
+    // dDemo_c::remove() (§319), by which point the event control has already dropped to WAIT, so
+    // PACKAGE flag 3 never set → the finish flag never set → mEventStatus stuck at 1 → endProc
+    // never fired → the tale hung faded-out (no fade-in, no control return). Gate disabled (kept
+    // as dead code); the staffId/mCurrentEvId null-safety below still guards a stray call.
+    if (false && dComIfGp_getEvent()->getMode() == dEvt_mode_WAIT_e) {
         if (OREG_F(8)) {
             // "%s: %d: events not running so don't call."
             OS_REPORT("%s: %d: ã‚¤ãƒ™ãƒ³ãƒˆèµ°ã£ã¦ãªã„ã®ã§å‘¼ã°ãªã„ã§ãã ã•ã„ã€‚\n", __FILE__, 1984);

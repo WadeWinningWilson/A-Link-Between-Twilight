@@ -32,6 +32,22 @@ NPC voice, ambient).
 
 ## 3. The clothes handover — covenant analysis
 
+> ### ⛔ DECOMP CORRECTION (2026-07-26, IVAN — supersedes the get-item framing)
+> **`Ba1_Get_Itm` is NOT the clothes give — it is Grandma's ELIXIR SOUP give.** Its one data
+> node is `prm0 = 0x55 = dItemNo_SOUP_BOTTLE_e` (verified). The Hero's Clothes item is
+> `dItemNo_FUKU_e = 0x32`, and **no event in `LinkRM` carries `0x32`** (all 79 scanned) — because
+> in WW the clothes are a **wear-change (texture swap)**, not a get-item box. (Msg 151 "You got the
+> Hero's Clothes!" is just `0x32 + 0x65` via `MSG_NO_FOR_ITEM`; there is no override, and
+> `mItemMesgNum` is vestigial.) The earlier build **repurposed** the soup event as a clothes
+> get-item box; per the covenant (user ruling, 2026-07-26) that is **unwound**:
+> - `Ba1_Get_Itm` `prm0` **restored to 85 (soup)** in `R_DL01/STG_00.arc` — it is now the faithful
+>   soup event, reserved for the later post-kidnap recovery beat.
+> - The clothes get-box kits (`getitem/clothes_bundle*.ini`) are **deprecated/inert**.
+> - **Clothes = wear-change only** (`dAlbwOutfit_equip → setClothesChange`), which already works.
+> - **Engine action pending:** `grant_outfit:heros` must fire NO get-item demo (wear-change only).
+>   Until then the clothes scene shows a spurious item-85 box (transient, not a new bug).
+> This aligns with the texture-swap finding immediately below — the get-item box was never faithful.
+
 - **DONOR FINDING: WW's hero's clothes are a TEXTURE SWAP, not a model.** WW Link's body model is
   one mesh; casual ⇄ hero is a `linktexS3TC` texture switch in the player (d_a_player_main.cpp
   ~12372-12382 comments; `clothes.bti` = item icon in d_item_data). There is no separate
@@ -65,16 +81,14 @@ Work item (research, ties to the parked "WW Link anims on TP Link" idea): a demo
 table — WW demo anim cue → nearest TP Link anim — applied where the player's demo data resolves
 anims. Even a small table (wait/walk/surprised) would make him a convincing cutscene citizen.
 
-## FOUND (№230): the scene's identity and mechanism
+## FOUND (№230): the scene's identity and mechanism  ⚠ IDENTITY SUPERSEDED — see VERIFIED below
 
-- **The clothes scene = `Ba1_Get_Itm`, an EVENT PACK in `LinkRM/Stage.arc::event_list.dat`**
-  (alongside `TALE_DEMO`, `TALE_DEMO2`, `get_shield`, `LOOK_SHIELD`). NOT an STB — the donor demo
-  archives hold no clothes storyboard (full inventory: tale/tale_2 [Demo01], kaizoku_zelda_fly +
-  awake [Demo02], meet_tetra [03], stolensister [04 = the 0x0E20 kidnap beat], departure [05],
-  maju_shinnyu [06], find_sister [07], meetshishioh/dragontale [08]). It's a talk-driven pack:
-  dialogue -> her actor orders the event -> staffs play the beats. Our merge_event tooling speaks
-  this format; the next step is parsing the pack's staffs/actions for her positioning, camera,
-  msg ids, and the item beat.
+- ~~**The clothes scene = `Ba1_Get_Itm`**~~ **WRONG (decomp, 2026-07-26): `Ba1_Get_Itm` is the
+  ELIXIR-SOUP give (`prm0=0x55`). The clothes scene = the STB `TALE_DEMO` ("Grandma's Tale").**
+  §230 was RIGHT about the *mechanism* (below) — `UNK_2A80` / `d_a_demo00` prm-op / SHAPE channel —
+  but wrong that it's an event pack. It IS an STB (`tale.stb`), the very "no clothes storyboard"
+  §230 ruled out. (Beat-list caveat: the "[04] = 0x0E20 kidnap" label is contradicted — decomp
+  shows the TALE/clothes TagEv arms on `UNK_0E20`; treat `0x0E20`'s human label as UNVERIFIED.)
 - **The wear-state flag is `UNK_2A80`** (player_main: casual clothes unless 2A80 || NG+). In STB
   scenes the donor sets such flags from the STORYBOARD's prm channel via `d_a_demo00` — the
   cutscene Link BODY-DOUBLE — whose prm-op table maps sub-id 1 -> 2A80 (and whose SHAPE channel
@@ -82,6 +96,176 @@ anims. Even a small table (wait/walk/surprised) would make him a convincing cuts
   (Nonmatching) code or the pack's own action — the pack parse decides.
 - `LOOK_SHIELD`/`get_shield` living in the same table means the SHIELD handover scene is
   co-located — the same read covers the next questline beat after the kidnap.
+
+## ✅ VERIFIED faithful spec (2026-07-26, decomp-cited) — W1 trigger + clothes presentation
+
+The clothes-give is the **`TALE_DEMO` STB cutscene** (`tale.stb`), started by a **loft region
+trigger**, and the clothes are a **texture swap driven by the STB** — no get-item box anywhere.
+
+**W1 — the loft trigger (a `TagEv` / `d_a_tag_event` region SCOB in `LinkRM/Room0/room.dzr`):**
+- pos `(-413.6, 375.0, 314.7)` (**y=375 = the loft**; ground spawns are y=0), scale `(10, 4, 10)`,
+  param `0x02FF110A`.
+- Decodes: `getType()=0x0A`, `getEventNo()=2` → `dComIfGp_evmng_getEventIdx(NULL, 2)` = **`TALE_DEMO`**
+  (EVNT entry 0, event-number `0x0002`, PLAY cut → `tale.stb`).
+- **B2a Y-BAND (confirmed):** `actionHunt` (`d_a_tag_event.cpp:242-263`) tests
+  `abs2XZ() < SQUARE(scale.x)*SQUARE(100)` AND `|Δy| <= scale.y*100`. With scale (10,4,10):
+  **XZ radius = 1000**, **Y half-band = 400** → arms for Link y ∈ ~[−25, 775] around the loft.
+- **Gate:** type-0xA arms only while **`UNK_0E20`** is set (`d_a_tag_event.cpp:304-311`); on finish it
+  sets `UNK_3202`; `swbit=17` is a same-session re-arm guard. (True once-gate is enforced at the
+  actor-LAYER level via `getLayerNo`'s `UNK_0101→UNK_0E20→UNK_0520` ladder — treat as
+  layer-confirmed, not a per-tag re-check.)
+
+**Clothes presentation (texture swap, `linktexS3TC`, flag `daPyFlg1_CASUAL_CLOTHES`=0x08):**
+- **Live, in-cutscene:** the STB's Link body-double sets `ENABLE_SHAPE` / `getShapeId()` (0=casual,
+  1=hero) → `daPy_lk_c::setDemoData` swaps the texture (`d_a_player_main.cpp:10352-10367`).
+- **Persistent:** the STB fires a `d_a_demo00` event-bit command (`d_a_demo00.cpp:651-712`, sub-id 1)
+  → `onEventBit(UNK_2A80)`. On every load `playerInit` (`d_a_player_main.cpp:12356-12387`) reads
+  **`UNK_2A80`**: set ⇒ hero clothes, unset (or NG+) ⇒ casual.
+- So "Hero's Clothes on" = **`UNK_2A80`**; the tale STB both flips it live (SHAPE) and writes it
+  persistent (demo00). F-2's `ba_wait_l` is Grandma's cradle inside this same STB.
+
+**Rebuild — BUILD LOG (2026-07-26, History "go for it"):**
+- ✅ **STB-package player EXISTS natively** — `dEvDtStaff_c::specialProcPackage()` →
+  `dEvt_control_c::getStbDemoData(name)` (`d_event_data.cpp:1240/1289`, `d_event.cpp:1286`). The
+  "can we play an STB package" blocker is CLEARED — it's TP's own JStudio path.
+- ✅ **`tale.stb` staged** — present in our `arcs_lib/Demo01.arc` (with `tale_2.stb`, `ba_wait_l`,
+  the vfuku present clips).
+- ✅ **`TALE_DEMO` merged into `R_DL01/STG_00.arc`** (idx 1; `Ba1_Get_Itm` soup stays idx 0). Verified
+  DN-2 PAL0 unchanged, only `event_list.dat` touched. Carries `FileName=tale.stb`, `Stage=LinkRM`.
+- ✅ **Get-item box already dropped** for `grant_outfit:heros` (wear-change only, `d_ext_npc_mount.cpp`
+  ~1234-46).
+
+**PLAYTEST 1 (2026-07-27) — didn't fire; ROOT-CAUSED + FIXED:** trigger loaded, `ba.tale_window`
+auto-armed, geometry fine (§52 shows `NPC_BA` + Link at the loft `(-225,375,-55)`, inside the box),
+flags fine — the ONLY blocker was `ensureDemoArcResident("Demo01")` failing (`[RegionTrig] demo
+archive 'Demo01' would not load`). Cause: `Demo01.arc` lived only in `arcs_lib/`, and the
+custom-asset gate (`custom_assets.cpp:1657`) mounts arcs_lib stems ONLY when named `arc=<stem>` in
+an `npc/*.ini`; `Demo01` is named only via `idle_attached_arc=` (loads via `resLoad`, which is why
+F-2's pose worked, but NOT via `setObjectRes`). `Demo02` works because it's in `arcs/`. **FIX
+(data): copied `Demo01.arc` → `arcs/` (parallels Demo02).** No rebuild.
+Secondary (Engine): my 1-section `region_triggers.ini` parsed into **69 duplicate triggers** (guard/
+parse bug); and `NPC_BA demoActorID=0` — Grandma needs demo-actor binding so the STB drives her
+(else static during the tale).
+
+**PLAYTEST 2 (2026-07-27) — data spine COMPLETE, blocker is now ENGINE binding.** Demo01 fix worked:
+`[PACKAGE] PLAY FileName='tale.stb' … match=yes demoArc='Demo01' stb=OK`; `dDemo_c::start` parses
+(same STB magic `53544200 feff0003` as awake.stb) → `mode=1`. Trigger→event→STB all verified. BUT
+the tale STB drives NOTHING: `§52 read-back 'NPC_BA' demoActorID=0 actor=NONE enables=0x00` (Grandma
+unbound) and no `ENABLE_SHAPE`/clothes swap for Link — vs awake's `NPC_LS demoActorID=2 actor=bound
+enables=0xFF`. So the empty-cast demo plays and ends invisibly. **This is the §52 demo-actor binding
+gap = THE blocker now.** Engine: bind the tale cast (NPC_BA as demo actor + the player SHAPE drive),
+mirroring how the awake path binds NPC_LS. (Also still open: the 69-duplicate region-trigger parse.)
+
+**ENTRY TRANSITION (user obs, 2026-07-27): camera-recenter → FADE-TO-BLACK → event.** DECOMP-verified:
+`tale.stb` parse shows a `camera` object (recenter IS in the STB, rides the binding fix) but **NO
+fade track** (blocks are only `JACT`/`JMSG`/`JSND`). The fade-to-black is **NOT a separate framework
+call** (CORRECTED — two dead ends checked: `d_a_tag_event::cancelShutter()` is a flag gate for
+`getType()==4/7/0xC`, not our `0x0A`, and does NO fade; `dEvent_manager_c::specialCast_Shutter` is
+the physical DOOR shutter `daShutter_c`, not a screen fade). **The fade is almost certainly INSIDE
+`tale.stb`**: its FIRST block is `JFVB` (JStudio Function-Value Block), and the demo exposes
+`dDemo_ambient_c`/`dDemo_light_c`/`dDemo_fog_c::JSGSetColor` — so the STB drives scene colors to
+black. Block order: `JFVB, JACT×5, JCMR, JMSG, JSND`. **Implication:** the fade RIDES the
+demo-actor binding / playback fix — it is NOT extra work. Once the STB drives correctly (binding),
+the `JFVB` fade + `JCMR` camera recenter play automatically. (Exact fade frame-range = the JFVB
+keyframes; confirm via noclip playback if precise numbers are needed.)
+
+**EXACT `tale.stb` CAST (parsed from the STB block table, 2026-07-27) — the precise binding spec:**
+| STB block | object name | binds to | status |
+|---|---|---|---|
+| `JACT` | **`Link`** | the player | player setDemoData path |
+| `JACT` | **`Ba1`** | **`NPC_BA` (mount Grandma)** | ❌ `demoActorID=0` — THE gap |
+| `JACT` | **`d_act0`** | `d_a_demo00` body-double | ❌ not spawned/bound |
+| `JACT` | **`d_act2`** | `d_a_demo00` body-double | ❌ not spawned/bound |
+| `JACT` | **`d_act3`** | `d_a_demo00` body-double | ❌ not spawned/bound |
+| `JCMR` | **`camera`** | event camera | rides binding |
+| `JMSG` | **`message`** | message control | rides binding |
+| `JSND` | **`SE`** | sound | rides binding |
+| `JFVB` | 8 function values | **CAMERA recenter** (eye/target/FOV, 0–3.5s) — NOT a fade | rides binding |
+
+So the tale cast = **`Ba1`(→NPC_BA) + `Link` + three `d_act0/2/3` demo00 doubles + camera**. The
+`d_act` doubles are the `d_a_demo00` cutscene body-doubles — one is Link's clothes double whose
+`ENABLE_SHAPE` does the texture swap + sets the `UNK_2A80`-equiv (§230). Engine must spawn+bind these
+exactly as the **awake path (Demo02) already does for its cast** (that path binds `NPC_LS`
+demoActorID=2 + its demo00 doubles; replicate for `NPC_BA` + `d_act0/2/3`). **CORRECTION (noclip pull, 2026-07-27):** the `JFVB` is the **camera recenter**, NOT a fade — 8
+function-value tracks (`idNo 1`=FOV≈40.1°; `idNo 2-7`=eye/target coords in LinkRM interior space;
+`idNo 0`=short ramp), range 0–3.5s. So `tale.stb` = camera-recenter + cast, and the **fade-to-black
+is a SEPARATE mechanism NOT in this STB** (the user was right; History wrongly walked it back once).
+Likely "the rest of the event" after the fade = **`TALE_DEMO2` / `tale_2.stb`**, which is NOT yet
+merged. Open: find the fade source (game `mDoGph` fade, or a demo-to-demo transition) and whether
+`TALE_DEMO2` is the main clothes content. (noclip is NOT blocked — earlier "blocked" was a transient
+nav failure.)
+
+**RESOLVED (user WW obs + noclip, 2026-07-27) — the fade is the CUTSCENE-COMMENCEMENT (entry) fade:**
+The fade-to-black is the **gameplay→cutscene ENTRY transition**, fired as the demo COMMENCES — it
+hides the camera cut + actor repositioning at demo start. It is NOT an outfit-swap cover and NOT
+between demos. **noclip structurally cannot show it**: noclip renders only the cutscene proper
+(starts already inside it, no gameplay to transition from) — every reload drops straight into the lit
+scene, no fade. (History over-thought this into a "swap cover" once — WRONG; corrected here.)
+
+Faithful entry order:
+1. Link climbs to loft → region trigger.
+2. brief camera to Grandma → **FADE-OUT to black (commencement)** — game fade, `mDoGph_gInf_c::startFadeOut`; hidden by black: camera cut to demo + cast reposition.
+3. **FADE-IN → `TALE_DEMO`/`tale.stb` plays** (recenter beat + Grandma presents the folded clothes, screenshot-confirmed).
+4. the give continues (`TALE_DEMO2`/`tale_2.stb` = Link now wearing them; `tale_1` = talk). The clothes SHAPE-swap is INSIDE the demo playback (ENABLE_SHAPE), a separate concern from the entry fade.
+
+**History DONE this pass:** `TALE_DEMO2` merged into R_DL01 (events `Ba1_Get_Itm`/`TALE_DEMO`/
+`TALE_DEMO2`; PAL0 OK); `tale_2.stb` staged in `arcs/Demo01.arc`. **Engine spec:** wrap the demo
+COMMENCEMENT — region trigger fires `fade-out → order TALE_DEMO → fade-in` (`mDoGph_gInf_c::startFadeOut`).
+
+**Commencement fade — CROSS-REFERENCED TO CODE + STB DATA (authoritative, not a video guess):**
+The fade is a `d_a_demo00` command, prm **id 9 = BLACK fade** (`d_a_demo00.cpp:759-783`, readable):
+`mDoGph_gInf_c::startFadeOut(count)` / `startFadeIn(count)`, `count` read from the STB. A byte-scan
+of `tale.stb` AND `tale_2.stb` finds the command at analogous offsets — identical bytes
+`00000009 29020014 00000000` — count `0x14` = **20 frames**. So the fade count is **20f**, from
+game data (the ~15f YouTube read was close but the STB is exact). Direction pairing (out vs in) not
+fully decoded — needs the JStudio object-data-paragraph parser — but the count byte (20) is
+unambiguous. Structure from GC footage (@677-681s, ±1-2f): recenter (~21f) → fade-out → **black hold
+~37f** (setup: camera cut + cast reposition + Demo01 load) → fade-in → tale.
+**Engine:** fade-out/in = **20f** (STB `0x14`, `mDoGph_gInf_c::startFadeOut/In`); black hold = NOT a
+constant — hold until `TALE_DEMO` resolves, then fade in. The whole fade is issued by the demo00
+double (`d_act*`), so it comes with the cast-binding — Engine may not need to hand-fire it at all if
+the demo00 commands are executed (unlike noclip, which skips them). (`d_a_npc_ba1::event_actionInit`
+is stubbed; this came from `d_a_demo00` + the STB bytes, not ba1.) Cast-binding (`Ba1`/`Link`/`d_act*`/`camera`) is still the separate playback blocker.
+
+## NEXT STEPS (tale cutscene, 2026-07-27)
+1. **Engine — bind + RUN the tale demo00 cast** (`Ba1`→NPC_BA, `Link`, `d_act0/2/3` demo00 doubles,
+   `camera`), mirroring the awake/Demo02 path. If the `d_a_demo00` commands execute, the fade (20f),
+   camera recenter, and clothes SHAPE-swap all come from the STB automatically — noclip skipped them,
+   our engine shouldn't. This is the single blocker.
+2. **History — exact STB extraction** via a faithful JStudio parser (see ferry). Unblocks: the fade
+   out/in direction split, the SHAPE/`UNK_2A80` timing, the camera curves — anything we currently
+   byte-scan.
+3. **Fade fallback:** if Engine fires it explicitly instead of via demo00 → `mDoGph_gInf_c::startFadeOut(20)`
+   /`startFadeIn(20)` (STB `0x14`), black hold until `TALE_DEMO` resolves.
+
+### ⇄ FERRY → Housing: JStudio/STB parser (JSystem-referenced)
+**Ask:** build a faithful STB reader in `tools/ww_crew_restoration_skeleton`, mirroring the decomp
+`D:/XXXXXXX/WW DP/src/JSystem/JStudio/` (the authoritative parser) rather than hand-rolling/byte-scanning.
+Needed layers: (a) STB header → typed block walk (`stb.cpp`); (b) `TParse_TParagraph` iterator
+(`u32Type`/`u32Size`/`content`, `jstudio-data.h`); (c) object-actor **data-paragraph decode**
+(`jstudio-object.cpp` `do_data` → id + content) to read the `d_a_demo00` commands — the fade
+`id 9 [dir,count]`, the SHAPE/`UNK_2A80` writes; (d) FVB function-value curves (`fvb.cpp`/
+`functionvalue.cpp`) for camera eye/target/FOV keyframes. **Why Housing:** parsing/tooling help;
+JSystem is the reference. **Payoff:** exact reads (fade out/in split, SHAPE timing, camera) for the
+tale AND every future WW cutscene, replacing my byte-scan estimates.
+
+**Remaining (Engine), with History trigger-data ready:**
+1. **Loft region trigger** — ✅ DATA DRAFTED & PINNED: `population/region_triggers.ini` `[tale_loft]`
+   (center `-413.6,375,314.7`; XZ radius 1000; Y half-band 400; `arm_if_flag=ba.tale_window`,
+   `done_flag=ba.clothes_given`). Coords PINNED — our interior reuses LinkRM's native frame verbatim
+   (interior_placements Ba1 rows == donor), and Link's loft spawns fall inside the box, so it arms as
+   he wakes. Engine still needs the **region-check mechanism** (no native `d_a_tag_event`) to consume
+   this and fire `TALE_DEMO`; currently the scene triggers on TALK — swap to the region.
+2. **STB residency + resolve** — verify `getStbDemoData("tale.stb")` resolves with `Demo01.arc`
+   resident in R_DL01, and whether the `Stage=LinkRM` package field matters cross-stage.
+3. **SHAPE → texture swap + persistent flag** — drive Link's clothes from the STB's `ENABLE_SHAPE`
+   (`setDemoData`) + a `UNK_2A80`-equivalent, replacing the talk-time `setClothesChange`.
+The get-item box stays removed.
+
+**Layer reconciliation (Follow-up B):** telescope beat = layer 0 (no bit); tale/clothes beat =
+**layer 2** (`UNK_0E20`). Our port OMITTED `ACT2` — revisit so the tale beat's layer loads. The
+prior `UNK_0E20`="kidnap" label is contradicted here (it gates the tale) — IVAN: leave 0x0E20's
+human name unverified.
 
 ## Face estimate (№230): one WW opening expression on TP Link's rig
 

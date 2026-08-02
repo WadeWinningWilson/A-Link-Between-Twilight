@@ -99,6 +99,7 @@ UserSettings g_userSettings = {
         .shieldHudVisibility {"game.shieldHudVisibility", ShieldHudVisibility::Off},
         .bossHealthBars {"game.bossHealthBars", false},
         .lopHud {"game.lopHud", LopHudMode::Off},
+        .wwDialogue {"game.wwDialogue", WwDialogueStyle::Reconstructed},
         .showEponaSpurHud {"game.showEponaSpurHud", true},
         .trueAlbwMode {"game.trueAlbwMode", TrueAlbwMode::Off},
         .damageMultiplier {"game.damageMultiplier", 1},
@@ -111,6 +112,10 @@ UserSettings g_userSettings = {
         .showWardrobeRecoveryDebug {"game.showWardrobeRecoveryDebug", false},
         .albwMagicArmorRentableDebug {"game.albwMagicArmorRentableDebug", false},
         .outfitStats {"game.outfitStats", false},
+        .regionMult {"game.regionMult", false},
+        .regionMultDamage {"game.regionMultDamage", true},
+        .regionMultHealth {"game.regionMultHealth", true},
+        .regionMultRupees {"game.regionMultRupees", true},
         .showDarknutBashDebug {"game.showDarknutBashDebug", false},
         .stickCycleLockon {"game.stickCycleLockon", false},
         .noHeartDrops {"game.noHeartDrops", false},
@@ -379,6 +384,7 @@ void registerSettings() {
     Register(g_userSettings.game.sumoOutfit);
     Register(g_userSettings.game.sumoOutfitFists);
     Register(g_userSettings.game.capWear);
+    Register(g_userSettings.game.wwDialogue);
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);
     Register(g_userSettings.game.wolfLinkCombat);
@@ -415,6 +421,10 @@ void registerSettings() {
     Register(g_userSettings.game.showWardrobeRecoveryDebug);
     Register(g_userSettings.game.albwMagicArmorRentableDebug);
     Register(g_userSettings.game.outfitStats);
+    Register(g_userSettings.game.regionMult);
+    Register(g_userSettings.game.regionMultDamage);
+    Register(g_userSettings.game.regionMultHealth);
+    Register(g_userSettings.game.regionMultRupees);
     Register(g_userSettings.game.showDarknutBashDebug);
     Register(g_userSettings.game.stickCycleLockon);
     Register(g_userSettings.game.noHeartDrops);

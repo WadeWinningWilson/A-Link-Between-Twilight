@@ -6683,6 +6683,7 @@ void dKyr_evil_draw(Mtx drawMtx, u8** tex) {
 #include "JSystem/J3DGraphBase/J3DShape.h"
 #include "dusk/logging.h"
 #include <cmath>
+#include <cstdlib>
 
 // §105 — periodic wave_move counters for calm-ini tuning (interval ≈ 3s @ 30fps).
 static constexpr int kWwFoamStatInterval = 90;
@@ -6725,12 +6726,12 @@ void wave_move() {
     f32 windPow = dKyw_get_wind_pow();
     cXyz windPowVec2 = windVecP != NULL ? *windVecP : windPowVec;
 
-    // §134 Ferry 2 — PROBE ONLY (no behavior). Host windPow on F_DL* expected ~0
-    // (WW Wind-Waker state unset on TP). Rate-limited with §105 interval.
+    // §134 Ferry P — print only on windPow change (>0.01). Steady 0.4 was noise;
+    // FerryF ARM + a change print still prove the feed.
     {
-        static int s_windProbeFrames;
-        if (++s_windProbeFrames >= kWwFoamStatInterval) {
-            s_windProbeFrames = 0;
+        static f32 s_lastPow = -1.0f;
+        if (s_lastPow < 0.0f || std::fabs(windPow - s_lastPow) > 0.01f) {
+            s_lastPow = windPow;
             const char* stage = dComIfGp_getStartStageName();
             DuskLog.info("[WwFoam] §134 windProbe stage='{}' windPow={:.4f}",
                          stage != NULL ? stage : "?", windPow);
@@ -6926,6 +6927,20 @@ void wave_move() {
     }
 }
 
+// Ferry C STEP 1: DUSK_WW_FPS_BISECT=wavedraw — move runs, draw skipped.
+static bool wwFpsBisectSkipWaveDraw() {
+    static int s_skip = -1;
+    if (s_skip >= 0) {
+        return s_skip != 0;
+    }
+    s_skip = 0;
+    const char* env = std::getenv("DUSK_WW_FPS_BISECT");
+    if (env != NULL && (std::strcmp(env, "wavedraw") == 0 || std::strcmp(env, "4") == 0)) {
+        s_skip = 1;
+    }
+    return s_skip != 0;
+}
+
 // §98 — donor drawWave recipe (TEV sea-lerp + bank-rolled trapezoid quads).
 void drawWave(Mtx drawMtx, u8** pImg) {
     dKankyo_wave_Packet* pPkt = g_env_light.mpWavePacket;
@@ -6934,6 +6949,40 @@ void drawWave(Mtx drawMtx, u8** pImg) {
         return;
     }
     if (g_env_light.mWaveChan.mWaveFlatInter >= 1.0f || dComIfGd_getView() == NULL) {
+        return;
+    }
+
+    // Ferry C STEP 1: wavedraw = move runs, draw skipped. Still count sin-gate
+    // panes (draw-load size) on the §105 stats interval so one run answers
+    // draw-vs-move without guessing.
+    const bool skipDraw = wwFpsBisectSkipWaveDraw();
+    auto countDrawPanes = [&]() -> int {
+        int n = 0;
+        for (s32 i = 0; i < g_env_light.mWaveChan.mWaveCount; i++) {
+            f32 wave = (f32)std::sin(pPkt->mEff[i].mCounter);
+            if (wave <= 0.0f) {
+                continue;
+            }
+            f32 scale = g_env_light.mWaveChan.mWaveScale * pPkt->mEff[i].mScale * wave;
+            f32 scaleBottom = g_env_light.mWaveChan.mWaveScaleBottom * scale;
+            f32 strength = pPkt->mEff[i].mStrengthEnv;
+            f32 height = strength * scale;
+            f32 width = scaleBottom * (strength - 0.00000015f * (f32)(i * 32) * height);
+            (void)width;
+            if (height <= 0.0f) {
+                continue;
+            }
+            n++;
+        }
+        return n;
+    };
+    if (skipDraw) {
+        static int s_drawSkipLogFrames;
+        if (++s_drawSkipLogFrames >= kWwFoamStatInterval) {
+            s_drawSkipLogFrames = 0;
+            DuskLog.info("[WwFoam] FerryC FPS_BISECT wavedraw SKIP draw panes={} (sin-gate)",
+                         countDrawPanes());
+        }
         return;
     }
 
@@ -7011,6 +7060,7 @@ void drawWave(Mtx drawMtx, u8** pImg) {
     GXLoadPosMtxImm(drawMtx, GX_PNMTX0);
     GXSetCurrentMtx(GX_PNMTX0);
 
+    int drawPanes = 0;
     for (s32 i = 0; i < g_env_light.mWaveChan.mWaveCount; i++) {
         cXyz p;
         p.x = pPkt->mEff[i].mBasePos.x + pPkt->mEff[i].mPos.x;
@@ -7030,9 +7080,10 @@ void drawWave(Mtx drawMtx, u8** pImg) {
         if (height <= 0.0f) {
             continue;
         }
+        drawPanes++;
 
-        // Donor rebinds inside the sprite loop.
-        dKyr_set_btitex(&texObj, (ResTIMG*)pImg[texidx]);
+        // Ferry E Change 1: GXLoadTexObj bound once before this loop (same texObj
+        // every iteration; donor in-loop rebind is a GC FIFO idiom, not semantics).
         amb.a = (u8)(pPkt->mEff[i].mAlpha * 255.0f);
         GXSetTevKColor(GX_KCOLOR3, amb);
 
@@ -7088,6 +7139,14 @@ void drawWave(Mtx drawMtx, u8** pImg) {
         GXPosition3f32(pos[3].x, pos[3].y, pos[3].z);
         GXTexCoord2s16(0, 0xFA);
         GXEnd();
+    }
+
+    {
+        static int s_drawPaneLogFrames;
+        if (++s_drawPaneLogFrames >= kWwFoamStatInterval) {
+            s_drawPaneLogFrames = 0;
+            DuskLog.info("[WwFoam] FerryC draw panes={} (sin-gate)", drawPanes);
+        }
     }
 
     J3DShape::resetVcdVatCache();

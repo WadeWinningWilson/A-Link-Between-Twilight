@@ -810,6 +810,23 @@ PROCS_NOT_WII \
 /* 0x31C */ X(fpcNm_KNOB00_e) \
 /* 0x31D */ X(fpcNm_EXT_VEG_e) \
 /* 0x31E */ X(fpcNm_EXT_SPAN_e) \
+/* 0x31F */ X(fpcNm_ESA_e) \
+/* 0x320 */ X(fpcNm_KB_e) \
+/* 0x321 */ X(fpcNm_KAMOME_e) \
+/* 0x322 */ X(fpcNm_NPC_BM1_e) \
+/* 0x323 */ X(fpcNm_NPC_BM2_e) \
+/* 0x324 */ X(fpcNm_NPC_BM3_e) \
+/* 0x325 */ X(fpcNm_NPC_BM4_e) \
+/* 0x326 */ X(fpcNm_NPC_BM5_e) \
+/* 0x327 */ X(fpcNm_NPC_LS1_e) \
+/* 0x328 */ X(fpcNm_OBJ_TORIPOST_e) \
+/* 0x329 */ X(fpcNm_NPC_ZL1_e) \
+/* 0x32A */ X(fpcNm_NPC_BA1_e) \
+/* 0x32B */ X(fpcNm_WW_DEMO00_e) \
+/* 0x32C */ X(fpcNm_LAMP_e) \
+/* 0x32D */ X(fpcNm_Obj_Mshokki_e) \
+/* 0x32E */ X(fpcNm_SPC_ITEM01_e) \
+/* 0x32F */ X(fpcNm_OBJ_OTBLE_e) \
 
 #define X(name) name,
 enum {

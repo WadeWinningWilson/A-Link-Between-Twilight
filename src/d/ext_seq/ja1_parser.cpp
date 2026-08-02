@@ -404,6 +404,32 @@ int Ja1Parser::cmdNop(Ja1Track* track, u32* args) {
     return 0;
 }
 
+// ============================================================
+// §264 SimpleADSR (opcode 0xD8, 5 args). Donor JASSeqParser
+// cmdSimpleADSR seeds the track's oscillator envelope table
+// (field_0x2cc/0x304 attack-decay-sustain + field_0x374 release)
+// from Player::sAdsrDef. The Ja1 synth has no per-track envelope
+// table yet, so the faithful ENVELOPE application is tracked debt
+// (a bridge, not the endpoint). The LOAD-BEARING fix here is the
+// DISPATCH: this op was misrouted to cmdTranspose, so every ADSR
+// site detuned its instrument. Consuming the 5 args (already read
+// by Cmd_Process's Arglist) and NOT transposing removes that
+// corruption; the envelope shaping lands when the synth grows the
+// oscillator table. See docs/WW Linked/audio-differ-report.md.
+// ============================================================
+int Ja1Parser::cmdSimpleADSR(Ja1Track* track, u32* args) {
+    (void)track;
+    if (Ja1EventDump::active()) {
+        char params[64];
+        std::snprintf(params, sizeof(params), "%u,%u,%u,%u,%u", args[0], args[1], args[2],
+                      args[3], args[4]);
+        dumpEmit("simple_adsr", params, "");
+    }
+    // ENVELOPE-DEBT §264: donor seeds sAdsrDef + release=args[4]. No port synth
+    // envelope table yet — do NOT fall through to transpose (the fixed bug).
+    return 0;
+}
+
 int Ja1Parser::Cmd_Process(Ja1Track* track, u8 op, u16 extra) {
     // WW Arglist[op-0xC0]: {count, format} — format packs 2 bits/arg
     // (0=u8, 1=u16, 2=u24, 3=reg). Keep the cursor aligned even for nops.
@@ -465,9 +491,16 @@ int Ja1Parser::Cmd_Process(Ja1Track* track, u8 op, u16 extra) {
         return cmdLoopE(track, args);
     case 0xCF:  // Wait (indexed form) — Arglist[15]
         return cmdWait(track, args);
+    // §264 DISPATCH-SHIFT FIX: donor sCmdPList has 0xD8=SimpleADSR, 0xD9=Transpose,
+    // 0xDA=CloseTrack. The port was off by one (0xD8→Transpose detuned every ADSR
+    // site; 0xD9→CloseTrack made every donor transpose kill a child track; 0xDA
+    // CloseTrack was a NOP → 113 close sites left voices stuck). Arglist arities are
+    // already correct (0xD8=5, 0xD9=1, 0xDA=1), so only the routing was wrong.
     case 0xD8:
-        return cmdTranspose(track, args);
+        return cmdSimpleADSR(track, args);
     case 0xD9:
+        return cmdTranspose(track, args);
+    case 0xDA:
         return cmdCloseTrack(track, args);
     case 0xFD:  // Tempo (WW dialect)
         return cmdTempo(track, args);

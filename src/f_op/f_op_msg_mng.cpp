@@ -8,6 +8,10 @@
 #include "d/d_msg_object.h"
 #include "f_op/f_op_msg_mng.h"
 #include "f_op/f_op_scene_mng.h"
+#include "f_pc/f_pc_manager.h"       // §245 fpcM_IsExecuting
+#include "d/d_com_inf_game.h"        // §245 dComIfGp_checkPlayerStatus0 / setMesgStatus / event_runCheck
+#include "d/d_ext_scope_msg.h"       // §245 scope status + daPyStts0_TELESCOPE_LOOK_e
+#include "d/d_ext_save_guard.h"      // §256 dExtWw_injectTalkText (native WW-actor talk text)
 
 static fpc_ProcID i_msgID = fpcM_ERROR_PROCESS_ID_e;
 
@@ -145,6 +149,13 @@ fpc_ProcID fopMsgM_messageSet(u32 i_msgIdx, fopAc_ac_c* i_talkActor, u32 param_2
 
     if (msg != NULL && msg->mode == fopMsg_MODE_MSG_PREPARING_e) {
         msg->pos.set(pos);
+        // §256 native WW-actor talk text: the port BMG has no WW dialogue indices,
+        // so a native WW villager's talk line opens empty. Resolve + inject the WW
+        // catalog line and retarget the code-text BMG entry (kWwCodeTextIndex=4900)
+        // so the box shows it. Guarded to native WW actors on a WW host stage.
+        if (dExtWw_injectTalkText(i_talkActor, i_msgIdx)) {
+            i_msgIdx = 4900;
+        }
         msg->msg_idx = i_msgIdx;
         msg->field_0xf0 = param_2;
         msg->talk_actor = i_talkActor;
@@ -184,6 +195,13 @@ fpc_ProcID fopMsgM_messageSet(u32 i_msgIdx, u32 param_1) {
             return i_msgID;
         } else if (msg->mode == fopMsg_MODE_MSG_CONTINUE_e) {
             msg->pos.set(pos);
+            // §324: a WW actor chaining its conversation (fopNpc_npc_c::talk →
+            // next_msgStatus → this overload). In Native style the native dMesg
+            // box takes the next message too; the suppressed TP object keeps
+            // running on the code-text entry.
+            if (dExtWw_injectTalkChain(i_msgIdx)) {
+                i_msgIdx = 4900;
+            }
             msg->msg_idx = i_msgIdx;
             msg->field_0xf0 = param_1;
             msg->talk_actor = actor;
@@ -360,4 +378,74 @@ void fopMsgM_destroyExpHeap(JKRExpHeap* i_heap) {
 #endif
 
     i_heap->destroy();
+}
+
+// ============================================================================
+// §245  Scope-message subsystem (WW d_a_npc_ls1 telescope demo dependency)
+// ----------------------------------------------------------------------------
+// Direct port of WW f_op_msg_mng.cpp's scope funcs. Port renames applied:
+//   fopMsgM_IsExecuting -> fpcM_IsExecuting ; msg_class::mMsgNo -> ::msg_idx ;
+//   fopMsgStts_* -> fopMsg_MODE_* (UNKB->UNK_B, UNKD->UNK_D, CLOSE_WAIT added).
+// Scope status lives in d_ext_scope_msg.h (see the header for why it is
+// static-backed rather than in the fixed g_dComIfG_gameInfo struct).
+//
+// Gated on daPyStts0_TELESCOPE_LOOK_e, which only the (deferred) player
+// telescope item sets — so these stay dormant-but-faithful until that lands.
+// ============================================================================
+
+// WW pushButton: latches a forced text-send while a scope box waits to close.
+static bool pushButton = false;
+
+fpc_ProcID fopMsgM_scopeMessageSet(u32 i_msgNo) {
+    if (fpcM_IsExecuting(i_msgID)) {
+        msg_class* pMsg = fopMsgM_SearchByID(i_msgID);
+        if (pMsg == NULL) {
+            i_msgID = fpcM_ERROR_PROCESS_ID_e;
+        } else {
+            if (dComIfGp_checkPlayerStatus0(0, daPyStts0_TELESCOPE_LOOK_e) &&
+                dComIfGp_getScopeMesgStatus() == fopMsg_MODE_UNK_B_e) {
+                dComIfGp_setScopeMesgStatus(fopMsg_MODE_BOX_OPENING_e);
+            }
+            pMsg->msg_idx = i_msgNo;
+            pMsg->field_0xf0 = i_msgNo;
+        }
+    }
+    return i_msgID;
+}
+
+bool fopMsgM_getScopeMode() {
+    if (dComIfGp_checkPlayerStatus0(0, daPyStts0_TELESCOPE_LOOK_e) &&
+        dComIfGp_getScopeMesgStatus() == fopMsg_MODE_UNK_B_e && !dComIfGp_event_runCheck()) {
+        dComIfGp_setScopeMesgStatus(fopMsg_MODE_UNK_D_e);
+        return true;
+    }
+    if (dComIfGp_getScopeMesgStatus() == fopMsg_MODE_BOX_CLOSING_e) {
+        dComIfGp_setMesgStatus(fopMsg_MODE_UNK_D_e);
+        return true;
+    }
+    return false;
+}
+
+bool fopMsgM_forceSendOn() {
+    if (dComIfGp_getScopeMesgStatus() == fopMsg_MODE_CLOSE_WAIT_e) {
+        pushButton = true;
+        return true;
+    }
+    return false;
+}
+
+void fopMsgM_forceSendOff() {
+    pushButton = false;
+}
+
+bool fopMsgM_checkForceSend() {
+    return pushButton;
+}
+
+bool fopMsgM_releaseScopeMode() {
+    if (dComIfGp_getScopeMesgStatus() == fopMsg_MODE_UNK_D_e) {
+        dComIfGp_setScopeMesgStatus(fopMsg_MODE_UNK_B_e);
+        return true;
+    }
+    return false;
 }

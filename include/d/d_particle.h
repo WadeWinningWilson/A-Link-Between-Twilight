@@ -195,6 +195,30 @@ public:
     virtual void setup(JPABaseEmitter*, cXyz const*, csXyz const*, s8);
 };
 
+#if TARGET_PC
+// ============================================================================
+// §230 — WW particle lane: UNLIT level callback.
+//
+// TP's light8 callback draws a particle twice and colours the visible pass from
+// the room's ambient (bg_amb_col[0]) — which is why WW particles read violet
+// and drift with time of day. The decomp's grass never lights its scatter at
+// all (setSimple's callback draw is empty). This callback keeps light8's
+// two-pass structure (pass 1 primes depth, pass 2 is visible) but omits the
+// lighting, so the particle shows its own authored colours.
+// ============================================================================
+class dPa_wwUnlitEcallBack : public dPa_levelEcallBack {
+public:
+    virtual void draw(JPABaseEmitter*);
+    virtual void drawAfter(JPABaseEmitter* i_emitter) {
+        UNUSED(i_emitter);
+        dPa_cleanupGX();
+    }
+    virtual void setup(JPABaseEmitter*, cXyz const*, csXyz const*, s8);
+};
+
+dPa_levelEcallBack* dPa_getWwUnlitEcallBack();
+#endif
+
 class dPa_gen_b_light8EcallBack : public dPa_levelEcallBack {
 public:
     virtual void draw(JPABaseEmitter*);
@@ -507,6 +531,12 @@ public:
     // supplemental resource slot so the recovery orb renders in stages whose
     // own archive lacks them (dungeons). Async; returns true once available.
     bool ensureTearSceneRes();
+    // Ferry W-LINE: WW common.jpc (0x0031) in emitter-manager slot 3.
+    bool ensureWwWindlineRes();
+    // Ferry V-d (§201): any WW-common id (0x0031 windline, 0x03DA/0x03DB grass),
+    // one supplemental slot each — lazy-loaded on first resolve.
+    bool ensureWwCommonRes(u16 i_resID);
+    bool hasWwWindlineRes(u16 i_resID) const;
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================

@@ -1501,6 +1501,23 @@ bool dCamera_c::SetTrimTypeForce(s32 param_0) {
 }
 
 void dCamera_c::CalcTrimSize() {
+#if TARGET_PC
+    {
+        // §292 probe: is the cutscene letterbox easing in during the tale? The bars are the
+        // camera TRIM. mTrimSize 2=CINE (eased slide-in), 3=DEMO (instant snap), 1=VISTA,
+        // 0=sliding out/none. mTrimHeight climbs toward CinemaScope (~65) when eased. If during
+        // the tale mTrimSize stays 0 / mTrimHeight~0, the CAMERA staff isn't forcing the
+        // letterbox (its Trim field) → the abrupt entry with no commencement pause.
+        static int s_p292 = 0;
+        if (dExtWw_isTaleRunEvent(dComIfGp_getEventManager().getRunEventName()) &&
+            (s_p292++ % 30) == 0) {
+            DuskLog.info(
+                "[Cam] §292 trim mTrimSize={} mTrimHeight={} mCurState={} "
+                "(2=CINE-ease,3=DEMO-snap,0=out/none; height→~65 = full bars)",
+                (int)mTrimSize, mTrimHeight, (int)mCurState);
+        }
+    }
+#endif
     if (mCurState != 2) {
         switch (mTrimSize) {
         case 0:
@@ -10534,10 +10551,14 @@ bool dCamera_c::eventCamera(s32 param_0) {
 #if TARGET_PC
         if (dusk::frame_interp::is_enabled()) {
             switch (var_r29) {
-                case 3:
-                case 4:
-                case 5:
-                case 12:
+                case 3:   // FIXEDPOS
+                case 4:   // FIXEDFRM
+                case 5:   // UNITRANS
+                case 8:   // GETITEM — Ba1_Get_Itm CAMERA staff; without sync,
+                          // frameInterp keeps prior matrices and the cinematic
+                          // never presents (log: "presentation sync not requested
+                          // … [GETITEM] (staff idx 1)").
+                case 12:  // TACT
                     dusk::frame_interp::request_presentation_sync();
                     break;
                 default:
@@ -11238,8 +11259,15 @@ static void store(camera_process_class* i_camera) {
     // Active() often stays true after prior QuickStarts, and store never
     // reads the storyboard. №172: while our opening hold is live, prefer the
     // demo camera even when cameraPlay is set so the Outset pan owns the view.
+    // §175: same for TALE_DEMO / TALE_DEMO2 (JCMR track must own the view).
 #if TARGET_PC
-    const bool forceDemoCam = demoCamera != NULL && dExtWw_openingPauseArrivalGuard();
+    bool forceDemoCam = demoCamera != NULL && dExtWw_openingPauseArrivalGuard();
+    if (!forceDemoCam && demoCamera != NULL) {
+        // §281: recognize the tale under ba1's native name too (tale_1/tale_2), not just
+        // the mount's TALE_DEMO/TALE_DEMO2 — else the JCMR camera track never owns the
+        // view on the native path ("no camera work").
+        forceDemoCam = dExtWw_isTaleRunEvent(dComIfGp_getEventManager().getRunEventName());
+    }
 #else
     const bool forceDemoCam = false;
 #endif
@@ -11259,6 +11287,15 @@ static void store(camera_process_class* i_camera) {
         if (demoCamera->checkEnable(dDemo_camera_c::ENABLE_PROJ_FOVY_e)) {
             fovy = demoCamera->getFovy();
         }
+#if TARGET_PC
+        static int s_taleCamLog = 0;
+        if (forceDemoCam && (s_taleCamLog++ % 60) == 0) {
+            DuskLog.info("[DemoCam] §175 tale/opening cam eye=({:.0f},{:.0f},{:.0f}) "
+                         "targ=({:.0f},{:.0f},{:.0f}) enables=0x{:02X}",
+                         eye.x, eye.y, eye.z, center.x, center.y, center.z,
+                         (int)demoCamera->checkEnable(0xFF));
+        }
+#endif
 #if DEBUG
     } else if (dDebugPad.Enable(0) && dCamera->CameraID() == 0) {
         if (dDbgCamera.Playing()) {

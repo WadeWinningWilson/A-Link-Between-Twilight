@@ -9401,3 +9401,7061 @@ New doc `docs/WW Linked/noclip-fast-track.md` per user:
   the doc (noclip d_a.ts → decomp d_a_<code>.cpp → census → spec).
 - The findings-log format makes user museum explorations a formal research instrument.
 Board: user playtesting Ferry 3 (noon vivid blue + dusk shift + FPS); Housing standby.
+
+## §147 WATER ACCEPTED vs noclip; FPS REGRESSION flagged (suspects incl. MY ferries); History-noclip ferry (Housing, 2026-07-26)
+
+**1. WATER COLOR: ACCEPTED.** User side-by-side vs noclip Room44: vivid blue matches. The saga
+(white triangles → dark → bake → LIVE PALETTE) closes at the eye. Snapshotted: mod `c1189cc` +
+`modfolder-SNAPSHOT-20260726-110140` + receiver `f13ba9bd4d`.
+
+**2. FPS REGRESSION (OPEN, serious): Outset EXTERIOR 20-30 FPS; TP main 200+; interiors 230+.**
+Exterior-specific ⇒ NOT a global /O2 loss. **Honest suspect list — MY OWN recent ferry specs are
+prime candidates (recorded so the audit isn't deflected):**
+- **S1 (top): `wwApplyModel1SeaPalette` runs EVERY DRAW** (the §103-era design Ferry 3 inherited)
+  incl. `mat->change()` on 8 materials per frame — if change() dirties material DLs, that's a
+  rebuild-per-frame hotspot. Fix shape if confirmed: apply only when seacolor CHANGES (cache last
+  amb/dif; palette blends slowly) — donor applies per-draw but through a far cheaper path.
+- S2: §128's DifferedDL `0x11001284` (TexGen diff per frame — daBg parity, donor-consistent, but
+  worth measuring).
+- S3: exterior-only systems stack (300 panes + 9 infls + spawn-stats + §112/§103 logs).
+- §138's "incidental CMake re-run" flag ALSO fired this build — /O2 verified present, but the
+  exterior-only signature points at S1-S3, not compiler flags.
+**Routing: Engine (FPS measurement lane owns the tooling — the field oracle/probe per
+build-fps-guidelines).** Do NOT ship S1's fix on hypothesis — measure first (frame-time attribution
+or toggle-bisect: disable the palette re-apply for one run, then panes, then BTK). Housing's specs
+caused this class; Housing flags it loudest.
+
+**3. HISTORY-NOCLIP FERRY (user-requested) — written below, ferry verbatim.**
+
+## §147b VANILLA COMPARISON — donor IS per-frame; our extra is change(), not the writes (Housing, 2026-07-26)
+
+User asked: (a) does the FPS fix undo the water work? (b) does vanilla run these per-frame?
+**Measured answers:**
+- **(b) YES — the donor runs ALL of this per-frame:** setLightTevColorType per model per frame,
+  wave_move per frame, drawWave immediate quads per frame, BTK diff per frame. WW's whole kankyo is
+  per-frame on a GameCube. Per-frame register writes are NOT the cost.
+- **The donor's per-frame path contains ZERO `change()` calls** (verified: `setLightTevColorType_sub`
+  d_kankyo.cpp:1764-1855 — 0 hits). Register colors reach the GPU through the model's DifferedDL
+  diff mechanism (the same flag family as §128's 0x1200 TexGen bit — daBg's create flags enable
+  TEV-color diffing). **OUR `wwApplyModel1SeaPalette` calls `mat->change()` on 8 materials EVERY
+  frame — a DL-rebuild hammer that is NOT donor behavior.** change() was needed ONCE (after the
+  authored-table write at load); per-frame it is pure non-donor overhead.
+- **(a) NO — nothing gets undone.** The fix KEEPS the per-frame color writes (donor-faithful; what
+  makes dusk/dawn shift) and REMOVES only the per-frame change(). Visual result identical, cost
+  collapses. More donor-faithful AFTER the fix than before.
+**Sharpened S1 for Engine (still measure-first per §147):** (1) move change() out of the per-frame
+path (once at load/table-apply); (2) verify slot1's create flags include the TEV-color diff bits
+per daBg parity (§128 added TexGen 0x1200; the color-reg analog may already be in 0x11001284 — if
+absent, the per-frame writes won't reach GPU without change(), which would explain WHY change()
+got added). S2/S3 still to be measured — exterior-only 10x drop may have multiple contributors.
+
+---
+
+## §148 ⚠ INTER-LANE FIX-REVERT LOOP CAUGHT — History's "corrupt PAL0" IS Engine's №113 K0 STASH (Housing ruling, 2026-07-26)
+
+History (mid-merge prep for Ba1_Get_Itm) found live STG_00.arc PAL0 = `1d89baba` ≠ their №270
+"good" `84e512ce`, diagnosed a "regenerating corruption source," and planned to RESTORE 84e512ce
+before merging. **HOUSING RULING: STOP THE RESTORE. The "corruption" is a deliberate, load-bearing
+feature — the two lanes have been reverting each other's fixes:**
+
+**The loop, reconstructed:**
+1. №113 (Engine): the lighting convert deliberately STASHES the sea K0 in `PAL0 plight_col[2]` —
+   values that look like GARBAGE as a point-light color but ARE the water's dif endpoint
+   (`d_kankyo.cpp:9458` documents it; `dKy_get_seacolor` reads it via `dungeonlight_col[2]`).
+2. №270 (History): saw nonsense plight2 → diagnosed "corrupt PAL0" → restored a stash-LESS PAL0
+   (`84e512ce`).
+3. §112 (Engine): found "PAL0 had LOST the №113 stash (garbage plight2)" → RE-INJECTED (producing
+   the current `1d89baba`, ~22h after №270 — the exact mtime gap History measured). The rewrite
+   preserving event_list = the §125-hardened convert_lighting signature (History's own observation
+   corroborates: awake survived).
+4. TODAY: History sees `1d89baba` again → about to "restore" → which would strip the stash AGAIN →
+   break the §112 wave color AND Ferry 3's model1 seacolor (both read the stash).
+
+**DECISIVE EVIDENCE `1d89baba` is the GOOD arc: the user accepted water color vs noclip TODAY
+(§147) — rendered live from PAL0=1d89baba.** If it were corrupt lighting, the water could not have
+matched. Each lane's "fix" is the other's "corruption"; the artifact is fine.
+
+**RULINGS:**
+1. **History's restore: CANCELLED.** `1d89baba` is canonical until reconciliation says otherwise.
+2. **The merge may PROCEED into the live arc** — History's own round-trip test proved pack_rarc
+   preserves PAL0; merging into 1d89baba preserves the stash. The PAL0 question was never a merge
+   blocker once its identity is known.
+3. **If in-game lighting is ACTUALLY broken right now (eye, not hash):** report the symptom — that
+   is a different investigation from the hash mismatch, and the stash design (№113 chose plight2
+   as an unused slot) would be the first suspect to CHECK, not strip.
+4. **CANONICAL COOKBOOK ENTRY (ratification requested):** "№113-STASH LAW: F_DL01 PAL0
+   `plight_col[2]` deliberately carries the sea K0 stash. It LOOKS like garbage. It is
+   LOAD-BEARING (dKy_get_seacolor). Never 'repair' it; hash-diff tools must whitelist it." This
+   trap has now bitten TWICE (№270, today) — it graduates to law + eventually a tool check
+   (the §106 ratchet).
+5. **History's process note: EXEMPLARY** — dry-run, backups, isolation round-trip test, refusing
+   to merge into suspect data. The STOP was caught precisely BECAUSE they paused to diagnose.
+   The failure was never theirs: the stash was documented in code comments and bus entries their
+   lane had no reason to have read. Cross-lane invariants MUST live in the canonical cookbook —
+   that is what it is FOR.
+
+**Ferry back to History: rulings 1-3 + the loop reconstruction above.**
+
+## §149 №113-STASH LAW RATIFIED → canonical cookbook; Librarian handoff (2026-07-26)
+
+User ratified §148's proposed law, adding the valid-exception clause: the law yields ONLY if (a) we
+erred (stash provably wrong vs donor) or (b) WW vanilla requires the slot — evidence first,
+cross-lane sign-off (Engine+History+Housing), then change + entry update. Written into
+`WW-Restoration-Cookbook-CANONICAL.md` (ADMITTED DOCTRINE, RECEIPT route). User carries the
+ratification to LIBRARIAN to propagate (ensure no doc/tool path lets the loop recur). Ratchet
+target noted in the law: a stash-presence assert in the gate/verify tooling when Bridge recovers.
+History's merge (Ba1_Get_Itm → live arc 1d89baba) unblocked per §148 ruling 2.
+
+## §150 FPS-bisect launcher bats created (Housing, 2026-07-26)
+
+Engine implemented Ferry A's `DUSK_WW_FPS_BISECT` toggle (palette/waves/btk). Housing wrapped the
+three runs as double-click launchers (run_extseq_* pattern): `run_fps_bisect_palette.bat` /
+`_waves.bat` / `_btk.bat` — each sets the env var, launches, prints the in-game steps (warp F_DL01
+exterior, lookout facing sea, note FPS, quit) and the log line to confirm
+(`[WwFoam] FerryA FPS_BISECT mode=…`). One run per bat, exe restart between (mode cached at first
+read). Marked for deletion when FPS work ends (temporary-launcher convention). USER: run all
+three, reply with the three FPS numbers → then STEP 2 (drop per-frame change(), §147b) proceeds.
+
+## §151 BISECT VERDICT: WAVES are the hotspot; S1 REFUTED; Ferry C (sub-bisect within waves) (Housing, 2026-07-26)
+
+**User's three runs:** skip-palette → 40-50 FPS (no recovery); skip-btk → 40-50 (no recovery);
+**skip-waves → 220-280, stable ~270-280 (RECOVERED). The wave-pane system is the cost.**
+- **S1 (per-frame change()) REFUTED as the main cost** — Housing's top suspect was wrong; the
+  measure-first rule (§147) prevented a useless fix from shipping. (The change() cleanup remains a
+  cheap donor-fidelity item for later — it is just not the FPS fix.)
+- **Corroborating signatures:** (a) steady-state `killed_by_infl≈3240/90f ≈ 36 kills/frame forever`
+  — sprites respawning INTO kill zones every frame = a respawn-kill churn loop (donor semantics:
+  an infl-killed sprite gets strengthEnv=0 and stays; it is NOT respawn-churned); (b) the draw path
+  is the §98 donor idiom — per-sprite `GXLoadTexObj` + `GXSetTevKColor` + immediate-mode
+  `GXBegin(QUADS)` ×~300/frame — native FIFO writes on GC, but potentially draw-call breaks +
+  state-change overhead through aurora's GX emulation on PC.
+
+### FERRY C → Engine (max-detail; measure WITHIN waves before fixing)
+**STEP 1 — one more bisect mode:** add `DUSK_WW_FPS_BISECT=wavedraw` — waves armed, `wave_move`
+runs, but `drawWave` is skipped (move-without-draw). Also log once per stats interval: the count of
+panes that passed the sin-gate that frame (draw-load size). Run once on F_DL01 exterior; report FPS.
+- `wavedraw` ≈ 270 → the DRAW path is the cost → STEP 2A.
+- `wavedraw` ≈ 40-50 → the MOVE/churn is the cost → STEP 2B.
+**STEP 2A (draw): pixel-identical optimizations ONLY:** hoist `GXLoadTexObj` out of the per-sprite
+loop (same texObj every iteration — output identical; the donor's in-loop bind is a GC FIFO idiom,
+not semantics). Then re-measure before touching anything else (per-sprite KColor alpha stays for
+now — it IS semantics).
+**STEP 2B (move): kill the respawn churn, donor-faithfully:** an infl-killed sprite must MARK
+(`strengthEnv=0`, keep position/counter, draw nothing) — NOT despawn/respawn each frame. Donor
+behavior per `wave_move` (`d_kankyo_rain.cpp:1440-1462`): the kill zeroes strength; the sprite
+lives on and only resets via the normal spawn-radius condition.
+**DO NOT:** change pane count, spawn radii, wave_calm.ini, visuals, or the accepted §98 recipe.
+Acceptance: exterior FPS ≈ interior levels; waves look IDENTICAL (user eye vs the accepted state);
+spawn-stats churn drops to ~0 steady-state if 2B lands.
+
+## §152 NOCLIP FULL ANALYSIS — layers EXIST (Limit №1 corrected); capability table (Housing, 2026-07-26)
+
+User corrected their own §146 finding: noclip DOES expose layers (room + demo/cutscene) + render
+hacks (vertex colors/textures/objects/wireframe) + dynamic time of day. Source-verified vs Main.ts:
+`WindWakerLayer` + Scenarios panel + `objectLayerVisible(layerMask, layer)`; render-hack
+checkboxes; `TimeOfDayPanel` driving the real ported kankyo `curTime`. Docs updated:
+- fast-track Limit №1 CORRECTED → noclip = a LAYER INSPECTION instrument (contents per layer);
+  activation logic stays History's (№222) — contents=noclip, activation=History.
+- noclip-reference.md gains the full capability table + the draw-fidelity scope answer: TEV/palette/
+  anim semantics = trustworthy; EFB tricks/Z-quirks/PERFORMANCE = never (§151's aurora cost has no
+  noclip analog).
+**Immediate payoffs:** History can visually audit EVERY ACT layer's placements per room (census
+cross-check per layer!); render hacks give reference-side debug isolation (e.g. vertex-colors
+toggle on Room44 water = trap-#3 seen by eye). Ferry to History: add layer-panel usage to their
+noclip workflow (§147 ferry addendum).
+
+## §153 SOFT-POISON RULING — wavedraw numbers VOID; §151 verdict STANDS; baseline-gate law (Housing, 2026-07-26)
+
+Wavedraw-build run: TP MAIN MENU 190 (constant-288 known-good) + 100s everywhere. Engine holds
+2A/2B, routes to Housing. Rulings:
+
+1. **The poison is BUILD-HYGIENE, not the wavedraw code — provable:** the MENU runs zero WW/wave
+   code, so menu 288→190 cannot be caused by the added skip-branch. It is exe-level (the known
+   soft-poison band: ~100-190 with /O2 present vs hard-empty ~33 — Engine's factory note concurs;
+   §113 risk #2 predicted exactly this class on rebuilds).
+2. **This run's numbers are VOID.** Do not interpret wavedraw FPS from a poisoned exe.
+3. **§151's verdict STANDS.** The original bisect had a valid INTERNAL control — all three runs on
+   ONE build, differing only by env var; waves-skip hit 270-280 on the same exe where the others
+   sat 40-50. Relative comparison survives regardless of today's poison. WAVES remain the hotspot.
+4. **Sequence to recover:** (a) Engine: full clean reconfigure+rebuild per build-fps-guidelines
+   (their factory recipe; /O2 re-verify); (b) USER GATE: main menu must read ~288 constant BEFORE
+   any measurement — if not 288, stop, hygiene again (do NOT run wavedraw); (c) only then re-run
+   wavedraw and report. If clean rebuild fails to restore 288 → escalate to the FPS lane (their
+   domain, not Housing's).
+5. **BASELINE-GATE LAW (proposed for canonical cookbook, №31-C's FPS sibling):** *"An FPS
+   measurement without a baseline check is not a measurement."* Every FPS session opens with the
+   known-good oracle (TP main menu ≈288). Baseline off ⇒ the session measures the BUILD, not the
+   code — void, fix hygiene first. (This run is the receipt: without the user's menu-288 memory,
+   the 100s would have been read as wavedraw data and produced a phantom verdict.)
+
+Credit: the user's baseline awareness (menu "always has been constant 288") caught it — exactly
+the instinct the proposed law encodes.
+
+## §154 BASELINE DEFINED (user) + the timeline clue + FERRY D (Housing, 2026-07-26)
+
+**User's baseline (the oracle set):** menu 288 stable · Hyrule Field 250+ · **Outset 260-280 —
+"which it has been until recently."** That last fact is a TIMELINE CLUE that sharpens §151:
+**Outset ran 260-280 WITH the wave system live** (it's been in since §98/§109). So waves-as-built
+were never the cost — a RECENT wave-adjacent change made them expensive. Prime candidate: the
+coast-traced infl set + its respawn-kill churn (§151 signature: ~36 kills/frame steady-state,
+landed with the §109/§111 wave_calm rewrite ~07-25). This tilts the §151 fork toward **2B
+(move/churn)** before the wavedraw run even happens — but the run still decides.
+
+**Gate vs target distinction:** menu 288 + Hyrule Field 250+ = the MEASUREMENT GATE (must pass
+before any FPS number is trusted). Outset 260-280 = the RECOVERY TARGET (the thing under test —
+not a gate precondition).
+
+## §155 GATE PASSED post-factory-reset; Outset regression CONFIRMED code-side (2026-07-26)
+
+User's gate run on the clean rebuild: **menu 288 ✓ · Hyrule Field 250+ ✓ (GATE PASS — soft poison
+cured by STEP 0)** · Outset 40-50 (persists on a clean exe = the regression is REAL and code-side,
+not hygiene; correctly read by the user as a non-gate item). Baseline-Gate protocol worked on its
+first supervised use: poison eliminated as a variable BEFORE measurement.
+**NEXT: STEP 2** — user runs `run_fps_bisect_wavedraw.bat` on THIS build, reports FPS + the
+`panes=N` log value → §151 fork resolves (≈baseline → 2A hoist; still-low → 2B kill/persist churn;
+timeline clue §154 predicts 2B). Housing standby to audit the shipped step.
+
+## §156 WAVEDRAW VERDICT: DRAW PATH is the cost (2A) — churn exonerated for FPS; Ferry E (Housing, 2026-07-26)
+
+**User's gated run: wavedraw (draw skipped, move+churn RUNNING) = 250-288, mostly 288 — FULL
+baseline recovery.** Verdict: the per-pane DRAW path is the cost; the respawn churn is an FPS
+red-herring (still a donor-fidelity wart, but not the hotspot). Housing's 2B prediction WRONG —
+FPS-thread prediction record now 0/2 (S1, 2B); measurement > priors, twice.
+
+**Timeline reconciliation (why Outset was 260-280 "until recently" WITH waves):** before §109, the
+oversized 36000 kill-disc suppressed nearly all panes near the island → few panes DREW near the
+lookout → draw cost invisible. §109 restored the donor perimeter → ~300 panes now draw close-up →
+the per-pane draw cost surfaced. The §109 fix was CORRECT (donor-faithful); it exposed a
+pre-existing per-pane draw expense on aurora. (Coherent hypothesis; the panes=N log will size it.)
+
+### FERRY E → Engine (STEP 2A — pixel-identical draw-cost reduction, stepwise)
+1. **Change 1 (ship first, alone):** hoist `GXLoadTexObj` OUT of the per-sprite loop in our
+   drawWave — bind once before the loop. Same texObj every iteration; output pixel-identical
+   (the donor's in-loop rebind is a GC FIFO idiom, not semantics).
+2. **Keep the `panes=N` interval log** — report N alongside FPS.
+3. **Re-measure (user, gated):** menu 288 → Outset FPS. Report number + panes=N.
+4. **If recovery is partial:** report and STOP — next pixel-identical candidates (per-sprite
+   `GXSetTevKColor` handling, aurora-side immediate-mode batching) get their own ferry on the
+   numbers; do NOT improvise batching changes that could alter output.
+5. **DO NOT:** touch wave_move, the churn, wave_calm.ini, pane count, KColor semantics, or any
+   visual parameter. The accepted look survives pixel-identical or the change reverts.
+**Acceptance:** Outset exterior → 260-280 target with waves visually identical; churn cleanup (2B)
+stays queued as a LOW donor-fidelity item, explicitly NOT for FPS.
+
+## §157 FERRY E LANDED (Outset 250+); next = WIND (Ferry F); visual queue ordered (Housing, 2026-07-26)
+
+Ferry E (tex-bind hoist) recovered Outset to 250+ (user confident; 288-hold test pending). FPS
+saga closes: soft-poison cured (§155), draw-cost fixed pixel-identical (§156), churn queued LOW.
+
+**Visual queue, ordered by dependency (user asked what's next):**
+1. **WIND (Ferry F, NEXT)** — the keystone: one fix pays THREE items: (a) pane horizontal
+   drift+skew (§133 — code already present, reads wind); (b) grass sway (§130 H1 — needs wind +
+   small mRotX add later); (c) prerequisite for wind streaks. Two stages: windProbe log (Ferry 2's
+   content — never confirmed shipped) + the ambient-wind feed.
+2. **Grass VFX K0 (parallel-safe)** — independent of wind; room-tevstr color fix (§130 H3), same
+   family as the §143 seacolor plumbing already live.
+3. **Grass sway mRotX** — after wind is live (the formula port, grass-effects.md).
+4. **Wind streaks** — after wind + a Pscene bank scan for 0x0031 (Bridge degraded; Housing can
+   self-serve the scan as Bridge-coverage if needed).
+Still-open elsewhere: shore speed/timing (§132); ladder verify ferry (never arrived); №273
+attach_arc step 1 (no Engine report yet); churn cleanup (LOW).
+
+## §158 HISTORY'S R_DL01 HYPOTHESIS: ENDORSED — and it SOLVES THE LADDER (Housing analysis, 2026-07-26)
+
+History found interiors are NATIVE stage transports to R_DL01 (log: `transport=stage host='R_DL01'
+… native setNextStage only`), not BG mounts inside F_DL01 — the merge tool's №237 assumption is
+STALE, so Ba1_Get_Itm landed in the wrong stage's event_list (F_DL01; queried stage is R_DL01,
+whose list is empty → DEFAULT_GETITEM fallback). **Housing verdict: STRONG MERIT — direct log
+evidence, sound №266-mechanism (BASE_STAGE list loads from the CURRENT stage), coherent
+fooled-verification story (awake resolves pre-switch).**
+
+**HOUSING EXTENSION — the ladder mystery dissolves under the same discovery (code-verified):**
+- doors' native path (`d_ext_npc_doors.cpp:326` setNextStage) calls NO reprobe/ClrWallNone;
+- the №269 ClrWallNone fix lives ONLY on room-lane paths (`d_ext_npc_mount.cpp:5198/5255/6781`);
+- ⇒ on the CURRENT (native-transport) build the entry clear NEVER RUNS → WALL_NONE stays stuck →
+  ladder dead. §121c's "re-setter" was a phantom — the fix was on a path the build no longer takes.
+  ONE stale assumption (№237) explains BOTH interior bugs.
+
+**Actions (all endorsed):**
+1. **History:** re-merge Ba1_Get_Itm → `R_DL01/STG_00.arc` (exists; has `pre113-bak` ⇒ its PAL0 is
+   №113-converted — STASH-CLASS CAUTION applies: full member-hash verification, PAL0 preserved,
+   per the №113-STASH LAW's spirit); fix the tool's TARGET_STG; **update the №237 note with a
+   DATED evolution record** (§106 doctrine-expiry rule — this is the vfuku failure class, caught
+   again). F_DL01 duplicate copy: harmless (give only fires in R_DL01), tidy later.
+2. **Engine (the ladder fix, finally aimed right):** invoke the reprobe/ClrWallNone on NATIVE-
+   transport arrival into WW interiors (the doors path or the R_DL01 stage-arrival hook) — the
+   same №269 logic, on the path Link actually takes. Max-detail ferry on request.
+3. Housing verifies both after landing (event fires in R_DL01; ladder climbs; WALL_NONE clear in
+   the §63 probe).
+
+## §159 DOCUMENTATION SWEEP (Housing, 2026-07-26) — durable docs synced to bus state
+
+Per user (mid-test): drift check bus↔durable docs; patched:
+- `shore-crashing.md` header: color ACCEPTED (was stale "Bridge dumping"); speed/timing = last open.
+- `waves.md` header: FPS saga closed (draw-path fix §156), baseline-gate note, Ferry F in-test.
+- `ladder-exterior-interaction-research.md`: §158 addendum — phantom re-setter dissolved, native-
+  transport root, relocated-fix pending (History's doc; addendum marked Housing, cross-ref'd).
+- Canonical cookbook PENDING index: Baseline-Gate Law added (awaiting ratification, beside №31-D).
+Already current: noclip docs (§152), grass/wind effects docs, lighting-palette-reference,
+PUSH-STRIP-SET, water-rendering taxonomy. Bus remains the running log; durable docs now match it.
+
+## §160 TEST LANDING TRIAGE (Housing, 2026-07-26) — log-verified: cutscene WIN, ladder root refined, FPS = probe spam
+
+User test report: ladder did NOT take; waves maybe; wind/grass unsure; FPS overall −30.
+Housing pulled the run log (`dusklight-20260726-154808.log`, 414,484 lines) and audited the tree.
+
+**1. Ba1_Get_Itm — PARTIAL (user-corrected §160b).** `№251/Ba1_Get_Itm HANDOFF fired (item 47,
+event 768)` + END — fired INSIDE R_DL01, so the §158 re-merge ROUTING is proven (event reaches the
+right stage). But the CUTSCENE did not play and the item given was WRONG (item 47 erroneous).
+History owns both follow-ups. NOT closed — routing verified, presentation + item identity open.
+
+**2. Ladder — relocation LANDED but fires ONE FRAME TOO EARLY (ordering bug, log-proven).**
+Engine's Ferry G relocation IS in tree (`d_ext_npc_doors.cpp:1378` in `pollArrival`). Log timeline:
+- Interior arrival: `№89 arrival demo BEGIN stage='R_DL01'` with **NO №269 line** → at the clear's
+  moment WALL_NONE was NOT yet set (the №269 log prints only when the flag was up) → no-op clear.
+- Exit arrival: `№269 ClrWallNone on place (acchFlags 0x406024 → 0x402000)` → WALL_NONE WAS set by
+  the time Link left → it gets set AFTER the arrival-frame clear.
+- Mechanism: `:1378` runs on the FIRST poll frame, BEFORE `beginDoorDemoLock()` (`:1457`) →
+  `changeDemoMode(DEMO_DOOR_OPEN)`; the door-open demo proc sets WALL_NONE; `endDoorDemoLock`'s
+  `cancelOriginalDemo` never clears it → stuck for the whole interior stay → ladder dead.
+- **FERRY G-2 (Engine, one line):** in `dExtNpcDoors_pollArrival`, inside the demo-completion block
+  (`if (!s_arrival.demoEnded) { ... }`, after `dExtNpcMount_endDoorDemoLock(); …forceEndDoorEvent
+  ("arrival-end"); s_arrival.demoEnded = true;` — `d_ext_npc_doors.cpp:1470-1473`) ADD
+  `dExtNpcMount_forceLinkGroundReprobe(player);`. KEEP the `:1378` pre-demo call (catches carried
+  flags; harmless no-op otherwise). DO NOT touch the №90 warp branch (no demo → nothing re-sets).
+  Self-verifying: next entry log must show №269 AFTER `№89 arrival demo END stage='R_DL01'`; if the
+  post-demo clear logs nothing AND ladder still dead, the setter is elsewhere → §63 probe next.
+
+**3. Wind — LIVE, log-proven; grass CANNOT confirm it (sway not wired).**
+`FerryF ambient wind ARM stage='F_DL01' pow=0.400 angY=0 (placeholder)` + continuous
+`§134 windProbe windPow=0.4000` all run. Ferry F audited in tree (`d_kankyo_wether.cpp:1284`):
+WW-hosts-only, durable evt_wind path, DISARM on leave — №31 purity CLEAN. But
+`d_a_ext_vegetation.cpp` has NO wind/sway consumer yet → grass is still static BY CONSTRUCTION;
+judge wind by the PANES only: lean (skew) + horizontal slide in one consistent direction.
+angY=0 is a placeholder — direction may not match vanilla; History owes Outset's authored wind dir.
+
+**4. FPS −30 — probe spam DEMOTED from root cause to contaminant (user counter-evidence, §160b).**
+399,040 of 414,484 log lines (96%) are `[ExtVeg] §61 MASS-SEEN` (`d_a_ext_vegetation.cpp:659`),
+per-actor-per-frame (massN=3 persistent, atSet=0 coSet=1 — the probe HAS its §61 answer). Housing
+initially called it THE cause — user: the probe was live during the PASSING Ferry E run. **Measured
+and confirmed:** 14:38 passing log = 188,512/200,035 MASS-SEEN (same ~96%) → spam present in pass
+AND dip → NOT the sole delta. Status: contaminant + measurement noise (all FPS numbers fuzzed while
+it burns); removal/repurpose DEFERRED (user hold — candidate future vegetation instrument).
+Remaining delta candidates between the passing and dipped runs: Ferry F wind (pow 0→0.4 activates
+per-pane drift/skew AND drifting panes now cross `mpWaveInfl` kill radii → churn RATE may be far
+above the §156-exonerated baseline), G relocation (negligible), STG re-merge (interior-only).
+**Discriminator already on the shelf: `run_fps_bisect_waves.bat`** — gate first (menu 288 / Field
+250+), then waves-off on Outset: recovers → wind-driven pane behavior; doesn't → keep looking.
+
+**§160b USER CORRECTIONS (2026-07-26):** (1) cutscene did NOT play — get-item only, wrong item 47,
+History on it; (4) probe demoted as above; wind DIRECTION approx correct, donor pow ≈0.3 vs our 0.4
+(`kWwHostAmbientWindPow` 0.4→0.3 = one-line tune candidate, Engine, low priority); grass sway
+consumer confirmed missing — next visual ferry after G-2. FERRY RULINGS: G-2 GO; §61 probe HOLD.
+
+WHOSE TURN: Engine ×1 (Ferry G-2 one-liner — GO) · History ×2 (cutscene-not-playing + wrong item 47)
+· user retests ladder (self-verifying: №269 must log AFTER arrival-demo END) + optional waves bisect
+for the −30.
+
+## §161 G-2 LANDING: FREEZE in grandma's house — three-run differential; G-2 implicated, CrrPos suspect (Housing, 2026-07-26)
+
+User: Link enters, door-close anim completes, FROZEN (cannot move). Housing three-run log audit:
+- **15:48 (pre-G-2):** R_DL01 arrival OK, HANDOFF fired, user moved. §50 storyboard START→TRUNCATED
+  at frame 0 — **12 times this run**.
+- **16:34 (pre-G-2, History's event data already live):** IDENTICAL event sequence to the freeze
+  run — §50 START at arrival, same `event_list.dat` (11912), same frame-0 truncation, G-guard
+  clear — **and Link moved fine** (HANDOFF fired, clean exit).
+- **17:00 (G-2 + latest):** same sequence + №269 fires post-demo (`0x4060e4 → 0x402010`, correct
+  specced order — G-2's acceptance line IS present) → **FROZEN**. No event holds Link afterward
+  (runCheck false, "control free" logged). №74 stranding spam = cosmetic (room-0 interiors always
+  read drawable=0 — `hostRoom > 0` test); symptom of standing still, not cause.
+
+**VERDICTS:**
+1. **History EXONERATED for the freeze** — their event data ran clean in 16:34 without G-2.
+2. **G-2 IMPLICATED by differential.** The flag-clear order is right, but the call reuses
+   `forceLinkGroundReprobe` WHOLE — which also does `ClrGroundHit()` + `CrrPos(dComIfG_Bgsp())`,
+   i.e. a physical ground reprobe INSIDE grandma's house one frame after `cancelOriginalDemo`.
+   Prime suspect: the reposition half, not the flag half. (Stranding warns show player Y
+   alternating 375 ↔ 638 — loft height? — consistent with a reprobe fighting a hold loop.)
+3. **UNIFIED CUTSCENE FINDING (explains "no cutscene, item only"):** our own arrival janitor
+   (`forceEndDoorEvent("arrival-end")` + G-guard) TRUNCATES the Ba1 storyboard at frame 0 — every
+   attempt, every run (12× in 15:48). §52 read-backs show the demo asking for NPC_LAMP/NPC_BA
+   (0xEE) and binding NONE. The №170 refusal only protects the OPENING demo. Generalizing №170 to
+   any live WW storyboard = the cutscene fix — Engine+History joint, AFTER the freeze is cured.
+- **FERRY G-3 (Engine):** replace G-2's post-demo call with FLAG-ONLY clears (ClrWallNone +
+  OffLineCheckNone; NO ClrGroundHit, NO CrrPos) — the ladder needs the flags, not a reposition.
+- If G-3 doesn't cure: §63-class multi-hypothesis probe (daPy proc id + acch flags + event mode,
+  1/s while in R_DL01) before any further change.
+
+## §162 FLAT 120 FPS EVERYWHERE (user, 2026-07-26, G-3 test build) — limiter signature, gate VOID
+
+User: 120 FPS across ALL areas incl. menu. Menu runs no WW code (§153 precedent) and code cost
+varies by scene → a UNIFORM 120 = frame-limiter class, not a WW leak: vsync half-latch (240Hz/2),
+config.json cap field, driver/overlay cap, or §153 build-hygiene again (factory reset cured it).
+RULINGS: (a) G-3 functional acceptance (freeze/ladder) proceeds — FPS-independent; (b) ALL FPS
+measurements void until menu reads 288 (Baseline-Gate Law) — the §160 "−30" thread and wind/churn
+hypothesis are ON HOLD, do not chase; (c) check = config.json diff vs backup + display refresh.
+
+## §163 G-3 LANDED — FREEZE CURED, LADDER CLOSED, item 47 = HERO'S CLOTHES (user + log, 2026-07-26)
+
+Run `dusklight-20260726-171351.log`. Acceptance line present in specced order:
+`[Doors] §161 flag-only ClrWallNone post-demo (0x4060e4 → 0x4020e0)` after arrival demo END →
+control free. User: **ladder interactable** (screenshot: Link on the loft), **get-item gives real
+Hero's Clothes** (History's item-47 fix landed), **clothes change applied** (screenshot: green
+tunic on TP Link). CONFIRMS §161 verdict: G-2's CrrPos/ClrGroundHit reposition was the freeze; the
+flag-clears alone were the ladder fix. №269 ladder thread: **CLOSED** (research doc updated).
+
+**OPENS (owners):**
+1. **Cutscene still doesn't fire** — expected: Ferry H (janitor §161 finding) not yet shipped.
+   Interaction+dialogue work via the №251 HANDOFF fallback. → Engine code + History sequencing.
+2. **Item description text missing** on the get-item panel → History (message/BMG side of item 47).
+3. **Quick-switch clothes**: can switch back to Ordon once, NOT back-and-forth — user diagnosis:
+   the get-item apply doesn't route through the wardrobe store/own system → OUT OF LANE, belongs
+   to the ALBW outfit workflow (d_albw_outfit); logged here for the ferry, not worked here.
+4. **User ruling: probe strip UNLOCKED** (MASS-SEEN hold lifted) → Ferry P. This run: 660,910
+   MASS-SEEN lines. §61's answer (massN=3 atSet=0 coSet=1) is RECORDED here — stripping loses no data.
+5. Flat-120 (§162) still unexplained — config/refresh check before any FPS verdict, even post-strip.
+
+## §163b CORRECTION (user, 2026-07-26): vanilla trigger = LADDER-CLIMB/LOFT, not house entry — FERRY H ON HOLD
+
+User: in WW vanilla the Ba1_Get_Itm cutscene fires when Link climbs UP to the loft — NOT on house
+entry. This undercuts §161 finding 3 ("janitor kills the cutscene") — the frame-0 kills at ENTRY
+now have three readings, and Housing over-claimed one:
+(a) hollow/residual events cleared = the janitor's DESIGNED job (the §50 probe's "running" test is
+    `event_runCheck()` — ANY event, not specifically a storyboard; its TRUNCATION wording assumes
+    storyboard context from the opening-demo era — PROBE AMBIGUITY, discriminate via
+    `dDemo_c::getControl() != NULL` if it matters later);
+(b) the storyboard mis-triggered at entry → fix = History's trigger condition, not the janitor;
+(c) decisive either way: the arrival G-guard lives ~120 frames (~2 s) — a correctly loft-triggered
+    cutscene fires long after the janitor is quiet and was never in the line of fire.
+**RULINGS:** Ferry H ON HOLD (do not weaken forceEndDoorEvent — №169 depends on it). Cutscene path
+= HISTORY: (1) verify the donor trigger mechanism for Ba1_Get_Itm (decomp/DZR — how does vanilla
+start it at the loft: proximity, TGDR/event actor, Ba1's own order?), (2) wire that trigger,
+(3) resolve the §52 actor bindings (NPC_BA/NPC_LAMP asked 0xEE, bound NONE). Ferry P unaffected.
+
+## §164 CUTSCENE DECOMPOSED: TWO independent blockers (Housing log audit, run 191600, 2026-07-26)
+### + FPS 120 SOLVED: config.json `video.maxFrameRate` 144→30 (× frameInterpolation 2 = flat 120)
+
+**FPS (§162 — ELIMINATION COMPLETE → SOFT-POISON VERDICT, 2026-07-26 evening):** Housing's two
+config theories both DEAD, on the record: (1) maxFrameRate=30 was real on disk during the 120 runs
+BUT the settings mapping (`src/dusk/ui/settings.cpp:989-992`) only applies it in FrameInterpMode::
+Capped — user runs Unlimited (interp 2 = the UI's "Unlock Framerate" mode, per Engine, confirmed in
+code); the 30→144 flip between Housing's two reads = the user's 19:27 settings-screen visit
+rewriting the file. (2) Engine denies + their diffs touch no pacing; only frameInterp change =
+GETITEM added to the presentation-sync whitelist. (3) aurora submodule diff = №46 F2 shader-
+validation skip-draw tolerance + shader work — no present-mode change. (4) Menu at 120 excludes WW
+scene code. **REMAINING: §153 soft-poison** — global incl. menu, progressive over a day of
+incremental builds (G-2/G-3/Ferry P/cutscene attempts), 120 inside the poison band (~100-190).
+PRESCRIPTION: §153 playbook — factory-reset clean rebuild + dawn/pipeline cache wipe → baseline
+gate (menu ≈288 / Field 250+) before ANY number is believed. Secondary 30-second check: display
+refresh (a 120Hz mode + driver sync = same flat-120 signature).
+
+**Cutscene (run `dusklight-20260726-191600.log`) — what actually happens on Grandma talk:**
+`§65 talk-entry: TrigA speak-order fallback (NPC_BA)` → `ZEV event [TALK] (staff idx 47),
+presentation sync not requested` → `§50 demo START (frame 0)` → §53 demo DRAW loop runs (NPC_BA/
+NPC_LAMP drawn per-frame) → **§50 ENDED at frame 0**. Meanwhile the opening storyboard in the same
+run advanced normally (frames 2040→2640, gap ~20, suspend 0).
+
+**BLOCKER A — the talk event is a TALK-type ZEV, not storyboard playback.** The STB clock NEVER
+advances during the Grandma event (every interior ENDED = frame 0; a running STB prints frame
+lines every 120 — none). The dialogue+item give rides the TALK staff; nothing drives the demo.
+→ HISTORY: the merged Ba1_Get_Itm event needs its DEMO/STB staff actually driven (event type /
+presentation-sync request / demo staff wiring — compare how awake.stb gets driven vs this).
+
+**BLOCKER B — STB actor binding is broken UNIVERSALLY.** Every §52 read-back in the run — interior
+(NPC_BA, NPC_LAMP) AND exterior (KAMOME, KANBAN, OYASHI, …) — reads `demoActorID=0 actor=NONE
+enables=0x00 (asked 0xEE) demoWants=(0,0,0)`. Even the opening's 2954-frame storyboard ran with
+ZERO NPC actors bound (camera+messages only). So even with Blocker A fixed, the cutscene would be
+camera-over-statues. → ENGINE+HISTORY: our ext-NPC procs never register with the demo actor lookup
+(TP pattern: actor calls dDemo_setDemoData → JStudio binds STB actor track by NAME). References:
+decomp `d_demo.cpp` actor-object binding + noclip `d_demo.ts` (working STB player, §145) for the
+name→track binding semantics.
+
+**Order of operations:** B is measurable without A (fix registration → opening cutscene NPCs
+should read enables≠0 and move) — and A is verifiable without visuals (frame lines advance past 0
+during the Grandma event). Independent, parallel-safe, both self-verifying from existing probes.
+Item-description text likely rides Blocker A's event structure (History confirms).
+
+## §165 FLAT 120 SURVIVES FACTORY RESET → CONSTANT-TAX MODEL; FERRY T (frame-time probe) (Housing, 2026-07-26)
+
+Factory reset did NOT cure (user) → §153 soft-poison ELIMINATED; it's in the source delta or the
+present path. Elimination table extended: GETITEM whitelist diff (d_camera.cpp) fires only inside a
+GETITEM camera staff — cannot touch the menu; newest boot-to-menu log (200335) = 854 lines, ZERO
+WebGPU errors, no spam → tax is silent, log-independent, WW-scene-independent.
+
+**MODEL FLIP — not a cap, a CONSTANT TAX.** A flat ~4.9 ms added per frame converges every scene
+onto ~120: menu 288 (3.5 ms)+4.9→119; Field 250 (4.0)+4.9→112; Outset ~260→~117 — matches "120
+across ALL areas" better than any cap (which would hold exactly 120.0 everywhere regardless of
+scene cost). Cap remains possible only if the overlay reads exactly 120.0 flat — user can eyeball:
+does it WOBBLE (113-121 = tax) or SIT at 120.0 (= pacer)?
+
+**FERRY T (Engine) — ONE probe, all hypotheses (per multi-hypothesis law):** time-bucket the main
+loop, log 1/s: (1) total frame; (2) EXECUTE vs DRAW vs PRESENT split — the master discriminator:
+present-blocked ≈5 ms = pacing/swap-chain after all; execute grew = code tax; (3) sub-buckets
+around every global per-frame hook in the delta: mount per-frame poll (incl. provider path +
+dKyw_ww_host_wind_onStage), doors pollArrival, pollDemoMessage, frame_interp record/interpolate,
+kankyo rain/wether execute, custom-assets/menu-res provider polls (coexist-merge lane). Output:
+one line/s `frameMs=X exe=A draw=B present=C top3=(name:ms,…)`. Acceptance: the ≈5 ms lives in a
+named bucket, or in present (→ swap-chain/pacer investigation next).
+
+## §166 FLAT-120 CURED by real /O2 rebuild — §162/§165 CLOSED; wind EXONERATED; menu-270 control (2026-07-26)
+
+Engine shipped Ferry T (buckets mount/doors/demoMsg/frameInterp/kankyo/menuRes/wind, 1/s, kill
+`DUSK_FPS_PROBE=0`) on a fresh RelWithDebInfo **/O2** build + cache wipe — and the flat 120 is
+GONE before the probe even had to point: **menu ~270 stable / Field ~250 / Outset ~260.**
+- **ROOT (§162/§165 CLOSED):** the 120 died with a verified-/O2, verified-fresh rebuild → the
+  earlier "factory reset" was ineffective (stale exe or non-/O2 flavor — Engine's own pre-checks
+  were the right instrument). Build-hygiene family after all; the §165 constant-tax model goes
+  untested because the tax vanished. LESSON (goes with Baseline-Gate Law): a "clean rebuild" claim
+  needs its own receipt — exe LastWriteTime + /O2 present — before any conclusion built on it.
+- **WIND/CHURN EXONERATED (the ORIGINAL §160 "−30" question, finally answered on clean ground):**
+  Outset ~260 sits inside the 260-280 recovery target WITH Ferry F wind live and panes drifting →
+  Ferry F costs nothing measurable. FPS thread: no open items except menu-270 below.
+- **Menu 270 vs 288 oracle (−18):** prime suspect = Ferry T's own bucket timers (QPC per bucket
+  per frame). CONTROL: relaunch `DUSK_FPS_PROBE=0` → menu ≈288 ⇒ delta = probe overhead, done;
+  still ~270 ⇒ paste [FerryT] top3 lines — the probe names its own suspect. Ferry T is TEMPORARY
+  instrumentation: strip with the other probes when the thread closes (PUSH-STRIP-SET).
+
+## §167 FERRIES S + V cut (grass sway consumer; cut-VFX color = №141 trap, 2nd site) (Housing, 2026-07-26)
+Ferry S: donor sway (d_grass.cpp:322-329 formula, s16 wrap intentional) into drawBlades between
+YrotM and concat. Ferry V: cut-scatter passed the HOST room's unpopulated tevstr
+(d_a_ext_vegetation.cpp:698 — same trap the blade draw fixed at :801) → own tevStr +
+settingTevStruct + explicit C0/K0 from AmbCol; §62 probe extended with amb=. Honesty clause: still
+black ⇒ JPA color path unknown, report don't iterate. Cutscene remaining work formalized as
+W1 trigger (loft, History) / W2 drive-STB (Blocker A) / W3 actor binding (Blocker B, opening-
+cutscene testable) / W4 item description (parked behind W2).
+
+## §168 LANE BALANCE (user query): Bridge idle — part thread-shape, part drift; Bridge queue cut
+User: Engine over-queued, Bridge unused — intentional? Housing: recent threads were runtime-shaped
+(Engine's domain), BUT five Bridge-shaped cores were riding inside Engine/History items. Split out:
+**B1** Ba1_Get_Itm STB decode → actor NAMES + enable masks + tracks (turns W3 into implement-to-
+spec); **B2** house-room DZR + event_list dump (W1 trigger evidence); **B3** JPC 0x89D7 emitter
+color-input decode (pre-answers Ferry V honesty clause); **B4** shore BTK expected UV-velocity
+table (§132, numbers not eyeballs); **B5** item-47 BMG description dump (W4: wiring vs missing
+data). Priority: B1 + B3. Degraded-lane rationale: Bridge analysis offline → Engine items shrink
+to mechanical patches.
+
+## §169 BRIDGE B1/B3 AUDIT (Housing, 2026-07-26) — B1 null-finding reframes W2; B3 not delivered
+
+**B1:** Bridge decoded awake.stb — the ONLY .stb staged in the mod. (1) **NULL-FINDING: no
+Ba1_Get_Itm STB exists in staging** → either the donor scene is EVENT-STAFF-driven (our log speaks
+staff language: ZEV [TALK] staff idx 47; camera type 8 GETITEM) — making "drive the STB" the wrong
+W2 spec — or the STB was never staged. Donor evidence arbitrates → corrected B2. (2) The awake
+decode = real W3 fuel for the OPENING: STB actor names are `Link` and `Ls1` (Ls1's 0x759 words
+0x00010043-47 = the known Aryll JACT ids). Binding hypothesis sharpened: our actors are not
+registered under STB NAMES (`Ls1`), hence every §52 `actor=NONE`. Bridge to emit JSON/CSV = W3
+wiring table. **B3: NOT DELIVERED** — Bridge read receiver source (circular; + conflated blade-draw
+TEVREG1 with the particle path) instead of decoding Pscene011.jpc emitter color flags. Parked
+unless Ferry V honesty clause triggers; re-ferry must forbid receiver-source reads.
+**B2 CORRECTED:** donor `LinkRM` (knob key 'linkrm'): DZR trigger placements near ladder/loft +
+donor event_list Ba1_Get_Itm STAFF LIST (the W2 arbiter) + does ANY donor .stb exist for it.
+**B4:** translation-first units/frame @30fps; flag nonzero rot/scale tracks. **B5:** EN/USA, dump
+donor item-47 message mapping + raw ids.
+
+## §170 BRIDGE B2/B4/B5 LANDED (audit, 2026-07-27) + FerryT COVERAGE GAP (T2)
+
+**W2 ARBITER SETTLED (B2b):** Ba1_Get_Itm is **STAFF-DRIVEN — NO STB**. Donor staffs: Ba1(WAIT) /
+CAMERA(**GETITEM** — type 8, Engine's frameInterp whitelist was correct prep) / Link(001n_wait).
+LinkRM's .stb refs belong to OTHER scenes (get_shield.stb→Demo48; tale.stb, tale_2.stb→Demo01 —
+future queue). W2 = execute the three staffs. GAP: only startCuts dumped; `next` chains (14→15,
+16→17) hold the rest → **B2-b2: full cut chain per staff**. **B2a caution (History):** heuristic
+anchored y=375 = GROUND floor per run logs (loft ≈638) — verify y-bands before trusting
+near_ladder_top. **B4:** delivered; §132 unblocked (numeric diff vs live frame-advance).
+**B5 = TWO bugs:** (1) receiver computes msg 148 = "Hookshot!" — mapping computation diverges from
+donor (→186); (2) donor 186 for item 47 = "Elixir Soup!" — item id 47 likely IS soup; clothes-give
+lives under another id (History's "erroneous item" thread) → Bridge dumps the true clothes string
++ ids; History reconciles event item-arg + receiver mapping.
+**FerryT gap (user: 100s FPS; probe: frameMs 1.4-2.5!):** ~7 ms/frame OUTSIDE probe brackets.
+**FERRY T2 (Engine):** true frameMs = loop-to-loop wall delta; add `unaccounted = true −
+(exe+draw+present)`; keep buckets. When unaccounted ≈7 ms, the tax is fenced (GPU-wait/swap or
+inter-iteration territory).
+
+## §171 B2-b2 + CLOTHES-TEXT TRAIL COMPLETE (Bridge; Housing audit, 2026-07-27) — §170 B5 framing SUPERSEDED
+
+**W2 spec COMPLETE:** Ba1=WAIT · CAMERA=GETITEM→WAIT · Link=001n_wait→011get_item→001n_wait; sole
+data node `011get_item prm0=[85]` (donor-hardcoded selector; matches live "raises item 85" bug).
+Item-raise already works live → missing piece ≈ CAMERA GETITEM staff execution + 85 resolution.
+**Clothes text:** authentic get-text = **msg 151 (0x97), INF1 3095**. Attribution corrections:
+186=Soup (Bridge retires own B5 claim), 148=Hookshot (receiver, wrong), History 0x19F=Bomb Bag
+short name, History INF1 334=SPYGLASS birthday text (msg 601) — **which is what
+clothes_bundle_text.ini currently carries** (the live wrong-text root). KEY: donor FUKU
+`mItemMesgNum=0x0000` → no item-table get-message; donor presents 151 via EXPLICIT override →
+**Housing's §170 "fix the mapping computation" framing WRONG — superseded**; fix = replicate the
+donor override. msg 156 = "Hero's New Clothes" (NEW_FUKU-adjacent, second-quest).
+**IVAN flags (History, decomp-first, before wiring):** (1) prm0=85's ID-SPACE — which table does
+the donor's 011get_item handler index? (2) locate the donor code site presenting 151 (verify
+"override" inference). **W4 respec:** fix ini → msg 151/INF1 3095 text; replicate override;
+resolve 85. W2 acceptance: camera visibly cuts to GETITEM framing during the give.
+
+## §172 JSTUDIO STB/FVB READER SHIPPED (Housing builds History's ferry, 2026-07-27)
+
+`tools/ww_crew_restoration_skeleton/jstudio_stb.py` — faithful JSystem/JStudio mirror, every parse
+rule cites its decomp function+address (stb.cpp / stb-data-parse.cpp / JGadget binary.cpp /
+jstudio-object.cpp dispatch / fvb.cpp). All four ferry layers: (a) header+typed block walk (incl.
+BLOCK_NONE control object + nested JFVB curve banks); (b) TParse_TSequence/TParagraph iteration
+with process_sequence_ semantics (WAIT/FLAG/JUMP/SUSPEND + 0x80 paragraph runs, running frame
+column); (c) data-paragraph decode — TParse_TParagraph_data (gauDataSize) + 0x81 dataID id+content
+— AND the naming crack: **paragraph type = (command<<5)|operation** (actor table: SHAPE=57,
+ANIMATION=58, ANIM_MODE=67, TRANSLATION/ROTATION/SCALING singles+XYZ, PARENT/RELATION set; camera:
+POSITION/TARGET_XYZ, DISTANCE_NEAR_FAR; ops: IMMEDIATE/TIME/FVR_INDEX…); (d) FVB curves — all 6
+kinds (hermite count|stride<<28 packing, list/list_parameter, attrs range/progress/adjust/outside/
+interpolate). Reads raw .stb/.fvb or Yaz0'd RARC members. `--json` for machine output.
+**VALIDATED on donor:** `tale.stb` = full Link+Ba1+fuku_model(!) timeline at LinkRM floor coords
+(y=375, Link spawn (-341,375,250), rotY 180) — the tale scene is a Ba1+clothes-model scene;
+`awake.stb` = camera driving **179 embedded FVB curves** via FVR_INDEX (ranges in seconds: 4.667s
+= 140f matches its WAIT 140). Bridge's 0x759 words decode as ANIMATION ops, 0x739=SHAPE, 0x862=
+ANIMATION_MODE. Note: decode_stb.py (Bridge's best-effort) left untouched; this supersedes for
+fidelity questions. Known open: camera vv6-9 single channels unlabeled (roll/fov/near/far family —
+decomp array contents not yet read); dataID ids are binary keys (hex-printed).
+
+## §173 FIVE-ITEM BOARD ASSESSMENT (Housing, 2026-07-27)
+
+1. **Grass cut-VFX**: Ferry V SHIPPED (veg :705, TevColor/TevKColor from AmbCol) — eye-verify next
+   playtest; if not vanilla-green → corrected B3 (real JPC decode, no receiver-source reads).
+2. **Wind streaks**: UNBLOCKED (wind live via Ferry F). (a) Housing self-serve: 0x0031 Pscene bank
+   scan (supplemental-load pattern precedent = grass 0x89D7/Pscene011); (b) Engine ferry: windline
+   spawner port (noclip d_kankyo_wether.ts reference, decomp law). SMALL-MEDIUM. NEXT visual.
+3. **WW inventory screen**: LARGEST; PARKED on user scoping ruling — (a) reskin TP pause w/ WW
+   icons (medium; icon pipeline exists) vs (b) faithful WW recreation (large: BLO research→dumps→
+   J2D build). Doctrine question: does №31 purity extend to UI-while-in-WW-space? User rules.
+4. **WW shield+sword on TP Link**: machinery EXISTS (addAttachment/№273 pattern + cap-wear joint
+   maps + Deku Leaf orientation). Phase 1 sheathed-on-back (data staging + one mount ferry,
+   SMALL-MEDIUM; IVAN: donor arc names need census, no guessing). Phase 2 drawn-state hand swap
+   (d_a_alink hooks — MEDIUM-RISKY, sumo-crash history applies).
+5. **Islander AI pathing**: decomp-only (noclip lacks gameplay); full-state-machine law applies.
+   Pig = wander AI, likely path-free (simpler); Sue-Belle = route-walking + carried jar (needs DZR
+   RPAT/PPNT). Start = parallel research: Bridge dumps Outset DZR paths; History reads donor pig
+   actor state machine (identity via decomp, IVAN). Then implement-to-spec Engine ferry.
+ORDER: 1 verify → 2 → 4P1 → 5 research background → 3 parked on ruling.
+
+## §174 TURN PLAN + WINDLINE BANK SCAN (Housing, 2026-07-27)
+
+**User rulings absorbed:** (1) grass VFX "black lately" — log check: ZERO cutFx lines in last 3
+runs → Ferry V has NEVER been exercised; verdict OPEN, not failed. (2) streaks GO. (3) inventory
+scope RULED: TP systems underneath, visually indistinguishable WW (screens, item select, submenus).
+(5) pig FIRST, Sue-Belle builds on it.
+**SCAN RESULT (Housing self-serve, donor loader layout from JPAEmitterLoader.cpp v10 structs):**
+`ID_AK_JN_WINDLINE00 0x0031` = donor **common.jpc** (193 emitters; 0x28-0x40 contiguous). Staging =
+supplemental-bank pattern (grass 0x89D7/Pscene011 precedent). **PURITY TRAP:** TP common bank may
+own id 0x31 too — primary-wins lookup would draw a TP particle in WW space silently. Ferry
+requirement: explicit supplemental resolve on WW hosts + which-bank probe line.
+**NEXT TURNS:** user playtest = cut ONE grass clump (probe amb= + eye) · Housing cuts FERRY W-LINE
+(windline spawner spec from donor d_kankyo_wether + staging) · History brief: pig actor state
+machine (decomp identity first) + donor menu-arc inventory sweep (scope ruled) · Bridge brief:
+Outset DZR RPAT/PPNT dump (Sue-Belle prep; parallel-safe) · Engine: W-LINE on receipt; then 4P1
+staging list after History's arc census.
+
+## §175 FERRY W-LINE CUT (Housing → Engine, 2026-07-27) — windline port spec
+
+Donor read complete: wether_move_windline (d_kankyo_wether.cpp:400) + dKyr_wind_init/move
+(d_kankyo_rain.cpp:226/239), 30-slot WINDEFF_SET, ID_AK_JN_WINDLINE00 spawn at :369.
+**CRITICAL CATCH — Ferry F interaction:** donor windline has an ambient mode AND a custom-windpower
+mode (tiny player-anchored tornado-lines, :268-288); Ferry F feeds ambient wind VIA custom_windpower
+→ unmodified port = wrong effect. W-LINE forces the custom-branch check false on WW hosts (ambient
+constants verbatim: 4000/2000/80/2500/250/800/1.0/1000). Other adaptations: gate = isWwHostStage
+(replaces FILI ChkPathWindEffect; interiors excluded); staging = common.jpc 0x0031 via supplemental
+slot + MANDATORY which-bank probe (TP primary may own 0x31 — primary-resolve = silent №31 breach);
+OMIT mKamomeEff (later ferry); Deku-Leaf count=10 hook optional (donor :263). State machine ported
+verbatim incl. GroundCross clamp, spawn stagger, swerve/loop-de-loop, alpha ramps, budget check
+(particleNum≤1500), leave-host teardown (wether_delete :334-353 minus kamome). Nonmatching alpha
+block: implement-as-shown; flicker → noclip d_kankyo_wether.ts disambiguates, no improvising.
+Acceptance: ~4 streaks drifting/looping on Outset · bank=supplemental probe · zero in interiors +
+TP world (incl. post-visit residual check) · FPS gate holds · noclip Room44 eye-reference.
+
+## §176 W-LINE LANDING AUDIT: FAIL-CLOSED WORKED; Engine's 0x31 check MISPARSES (Housing, 2026-07-27)
+
+Log 134135: `staged common.jpc lacks id 0x31` (ERROR) → resolve fell to PRIMARY → breach probe
+fired → **W-LINE DISARMED itself**. No streaks BECAUSE fail-closed worked — the №31 probe design
+paid off on its first landing. ROOT: Housing re-scan of the STAGED file = **byte-identical to
+donor** (md5 229d83ab7e30 both, JPAC1-00, 193 emitters, **0x31 PRESENT** at JEFF+0x18). Engine's
+hand-rolled pre-check misparses JPA1 (likely TP JPAC2-10 assumptions or wrong id offset), and the
+same misparse plausibly left their supplemental registration empty → primary fallback.
+**FERRY W-LINE-b (Engine):** (1) fix or drop the pre-check — correct JPA1 v10 layout per donor
+`JPAEmitterLoader.cpp`: file magic `JPAC1-00`, emtrResNum u16@0x08, emitters from 0x20 as
+`JEFF`/`jpa1` blocks, **resID = u16 at block+0x18**; (2) register the bank through the SAME proven
+JPA1 path the Pscene011/death-orb supplemental load uses — do not hand-roll a second loader;
+(3) keep the breach probe + disarm EXACTLY as-is (it just proved itself). Acceptance unchanged
+(§175) — first new line to look for: `bank=supplemental`.
+
+## §177 REHOMING SWEEP (Housing, 2026-07-27) — CLEAN with 4 action items
+
+## §178 W-LINE-b LANDED (bank=supplemental ✓) but INVISIBLE — Nonmatching alpha block was the trap; FERRY W-LINE-c (2026-07-27)
+
+Log 150415: `supplemental WW common.jpc registered (slot 3, JPAC1→2 extract 0x31)` +
+`bank=supplemental` (breach CLEARED) + ARM count=4; DISARM = normal door-entry teardown (Knob
+release precedes it). Armed the whole exterior stay, zero errors, zero visible lines → the exact
+signature of the §175-flagged Nonmatching block: decomp literal `fVar14 = 0.18f*(i/30)` is INTEGER-
+zero for all 30 slots → state-timer addCalc step 0 → mStateTimer frozen → alpha never ramps.
+**noclip d_kankyo_wether.ts (sanctioned disambiguator) resolves:** maxVel = `0.08 + 0.008*(i/30)`
+FLOAT division (never zero); state1 timer addCalc(1.0, 0.3, 0.1*maxVel, 0.01); state2
+addCalc(0.0, 0.4, maxVel*(0.1+0.01*(i/30)), 0.01); final alpha = `max(windPow * distFade *
+colorAvg², 0.5) * mAlpha` (colorAvg = bg0 K0 rgb-mean NORMALIZED 0-1 — receiver: /255; the
+max(…,0.5) floor guarantees visibility even with dark palettes); mAlpha ramp (0.5/0.05) matches
+what's already ported. **DO NOT adopt noclip's `effScale *= 1.8` — marked "noclip modification"
+in their own source; donor ambient scale = 1.0.** Constants tier-labeled [reference-
+implementation] adopted where decomp is Nonmatching, per noclip-reference rules.
+**FERRY W-LINE-c (Engine):** replace the two stateTimer addCalc calls + the setGlobalAlpha formula
+with the above (units: ours is 0-255 → ×255 at the end); keep scale 1.0; keep everything else
+(spawn/steer/teardown/probes) untouched. Tuning probe (strip after acceptance): 1/s
+`[WwWind] line0 state=N timer=%.2f alpha=%.2f`. Acceptance unchanged §175.
+
+**§178c USER CHALLENGE VALIDATED — spawn volume 3-5× too small; FERRY W-LINE-d (2026-07-27).**
+User: WW gameplay has ground-level streaks; Housing's "rarely below 1000" claim was WRONG — same
+Nonmatching block also dropped the spawn-spread multipliers. noclip (verified): random spread =
+±(posRange×5) XZ, ±(posRange×3) Y — not the decomp's uniform ±posRange cube we shipped. Lift only
+rescues below-TERRAIN spawns → above-ground low lines persist = donor-true ground-level streaks.
+noclip's own ground-check is an EMPTY STUB (no collision system) — correct port = noclip spread +
+OUR GroundCross lift. W-LINE-d: ×5/×3/×5 multipliers on the three rndFX calls, keep lift, touch
+nothing else. Explains user's "not as many, especially at ground level" exactly.
+
+**§178b W-LINE-c LANDED — streaks VISIBLE (user eye-pass, 2026-07-27; not vanilla-law yet).**
+User asks size/scale fidelity. Ruling: (1) runtime multiplier donor-exact (setGlobalScale 1.0 —
+decomp AND noclip agree on ambient); (2) intrinsic size = donor bytes through Engine's JPAC1→2
+conversion = the ONE unverified link; (3) **eye-test trap: vs noclip ours SHOULD look ~45% smaller
+(their 1.8× is a self-labeled "noclip modification") — size acceptance = Dolphin-WW side-by-side
+ONLY.** If Dolphin comparison reads off → Bridge diffs converted 1312-byte emitter size fields vs
+original JPA1 block (offline).
+
+## §177 continued — sweep detail
+**GATE (M6, exe 37.2MB current build): CLEAN — 1 hit total = the known Ivan literal**
+(d_ww_itemmdl_pc.cpp:2007, count unchanged, no growth). All other greplist patterns ZERO in the
+shipped exe (Outset/Aryll/Makar/Medli/Windfall/KoRL/dialogue strings). Source string-literal scan:
+clean (one comment mention, comments don't ship).
+**BINARY CONTAINMENT: HELD.** vbage.bdl (local_dev_backup) gitignored; Beta Link pack + Kmdl.arc
+gitignored (demo_cut_content/.gitignore packs/); WW binaries otherwise absent from repo;
+common.jpc correctly housed mod-side (particle/, byte-identical to donor §176). Mod folder remains
+a separate local-only repo (tip c1189cc). Skeleton ini templates in tools/ = exempt per greplist
+header (tools/docs exemption).
+**ACTION ITEMS:** (1) **mod folder checkpoint overdue** — uncommitted cutscene-era work (2×STG_00
+arcs, clothes_bundle+text, npc_ba, actor_map, identity inis) + newly staged arcs/Demo01.arc + 6
+untracked .bak files; recommend History/user commit a checkpoint before the next test round
+(commit-discipline). (2) PUSH-STRIP-SET updated with the new instrumentation surfaces (fps_probe.h,
+4 bisect bats, WwWind/§62/§134 probe chatter) + tracked-binary flag. (3) `tools/font_extract/`
+tracked game-derived binaries (fontres.arc/.bfn/atlases — TP-side, legality hygiene not №31) —
+review before any push. (4) LOW: vbage.bdl mis-housed (ignored but living in repo dir — move to
+D: extracts or delete); mod-folder .bak proliferation → backups/ subfolder sweep someday.
+
+## §173 TALE SCENE SCRIPTS DECODED — donor-faithful, ENGINE-READY (History, 2026-07-27)
+
+`jstudio_stb.py` (§172) applied to the give cutscene → frame-exact scripts. Recorded:
+`docs/WW Linked/islands/Outset/presence/tale-scene-scripts.md`.
+- **`tale.stb` (TALE_DEMO) = the give, ends @710:** `Link` spawn `(-341,375,250)` r180 SHAPE `1→0 @385`;
+  `Ba1` `(-341,375,-3)` present/talk ANIMs; **`d_act0` = `fuku_model` clothes prop** (SHAPE 65548);
+  **`d_act3` = FADE-OUT 20f black @680**; `camera` 31 events → 8 FVB curves.
+- **`tale_2.stb` (TALE_DEMO2) = Link wearing, ends @710:** `Link` SHAPE 1 held; `Ba1` reacts;
+  `d_act3` FADE-OUT 20f @680.
+- **`awake.stb` = W3 camera reference, ends @2659:** 101 camera events → **179 FVB curves** (full
+  eye/target/FOV path), `Link` at lookout `(24601,1654,-6388)`, **`Ls1`/Aryll = binding target**.
+
+**Exact facts (game data, no estimates):** every STB fade = **FADE-OUT 20f black @680**, fired by the
+`d_act3` demo00 double — the demo EXIT (tale→tale_2 covers the outfit change; tale_2→gameplay); rides
+the demo00 execution. The **commencement** fade (gameplay→cutscene) is NOT in the STBs (`tale.stb`
+opens un-faded @0) → `d_a_npc_ba1::event_actionInit` (STUB); 20f the near-certain standard. SHAPE =
+clothes state (`d_a_player_main` getShapeId 0=casual/1=hero), timing exact. `get_shield` = event-pack
+(no STB, StartCode 201).
+
+**→ ENGINE (donor-faithful, ready to consume):** bind + RUN the tale demo00 cast (`Ba1`→NPC_BA,
+`Link`, `d_act0/2/3` doubles, `camera`) mirroring the awake/Demo02 path — the 20f fades + camera
+recenter + clothes SHAPE-swap all come from the STB. Groundwork done: `TALE_DEMO`+`TALE_DEMO2` merged
+into R_DL01 (PAL0 verified), `Demo01.arc` in `arcs/`, loft trigger pinned (`region_triggers.ini`).
+Commencement fade = `mDoGph_gInf_c::startFadeOut/In(20)` around the demo order.
+**Whose turn:** Engine (bind+run); History standing by for post-binding verification; Housing audit
+standby (camera `vv6-9` roll/fov/near/far labels = one open decomp read, non-blocking).
+
+## §174 PLAYTEST 2026-07-27 — binding is LIVE (letterbox engaged); two timing bugs (History)
+
+First playtest after §173. **Good:** the screen letterboxed → the demo00 binding fired; the machinery
+wants to run. Two bugs, both *when* not *whether*:
+
+**Bug 2 — tale fired on house ENTRY, not after the ladder-climb — FIXED (History data).**
+Log: `12252` auto-arm `ba.tale_window` → `12273 RegionTrig 'tale_loft' ORDER TALE_DEMO`, immediately
+after the arrival demo. Cause: the donor box (xz_radius 1000, y_halfband 400) reaches the ground-floor
+door — `y=0` is within ±400 of the `y=375` loft. Vanilla holds that big box back with the `UNK_0E20`
+story-arm; our auto-arm-on-entry (ba1 orchestration is a STUB) doesn't, so it fired the moment Link
+walked in. **Fix (region_triggers.ini [tale_loft]):** recentre on idle-Grandma's loft spot
+`(-225,375,-55)` (byte-identical LinkRM Ba1 placement — donor data), `xz_radius 300`, `y_halfband 80`
+→ excludes the ground floor, fires on APPROACH to Grandma post-climb. Extents are a port tuning; centre
+is donor data. Revert to 1000/400 if `ba.tale_window` is ever armed at the real story beat instead of
+on entry. **Ready to re-test — no Engine action needed.**
+
+**Bug 1 — hero clothes applied on the Outset WARP, before the tale — ENGINE.**
+Log `6481`, INSIDE the awake opening (Demo02, event 768, right after `§50 demo START frame 0`):
+`[Alink] ENABLE_SHAPE shape=1 → cloth=47 (wear+owned)`. The **awake** demo drives `Link SHAPE=1`, and
+the SHAPE→clothes hook applies it **globally** → Link is dressed in hero clothes at the opening, long
+before Grandma gives them. This is the SHAPE-semantics reconciliation flagged in
+`tale-scene-scripts.md`: `SHAPE=1 = hero` is correct for the TALE give (tale toggles `0→1` across
+tale→tale_2 = the put-on), but the awake must NOT dress Link. **Fix direction:** scope the
+clothes-SHAPE application to the tale give — gate on the give event / `ba.clothes_given` — so only
+`TALE_DEMO`/`TALE_DEMO2` drive the player cloth swap, not every demo that happens to set Link SHAPE.
+
+**Whose turn — Engine:** scope the SHAPE→clothes hook to the tale give (Bug 1). **User:** re-test the
+loft trigger (Bug 2 fix is live in the mod folder) — should now fire only after climbing to Grandma.
+
+## §175 PLAYTEST 2 — tale COMMENCES then crashes @frame 0; root = lazy demo-double creation (History)
+
+§174 fixes both landed: **no early clothes, climb→approach→fade-to-black all work.** Then the demo
+crashes at frame 0.
+
+**Crash = EXCEPTION_ACCESS_VIOLATION at `§50 demo START (frame 0)`** (log 12630, fault
+`0x10001001000`). Cast binding (log 12619–26):
+- `Link` FOUND ✓, `Ba1` (Grandma) FOUND ✓
+- `d_act0` / `d_act3` / `d_act2` **not found** → engine creates each fresh via `fpcBs_Create DEMO00`
+  (pid 583/585/587) **ON THE START FRAME** → demo drives them at frame 0 before init → deref crash.
+
+**NOT a data gap — Demo01.arc is COMPLETE (verified, 82688 b, live=1 @12492):** contains
+`fuku.bdl`/`fuku_model` (d_act0 clothes prop), **`blackfadebox.bdl`** (d_act3 fade box), `ba.bdl`
+(Grandma) + all anims (`01_roll_fuku.bck`, `ba_wait_l.bck`, `fuku_cut1_waitpresent_l`,
+`fuku_cut03_turn/turnwait`, …). Everything the doubles need is resident.
+
+**Model mapping (from Demo01.arc file table, for Engine):**
+| double | model | role |
+|---|---|---|
+| `d_act0` | `fuku.bdl` / `fuku_model` | hero-clothes prop Grandma holds out (+ `fuku_cut1_waitpresent`, `fuku_cut03_turn` anims) |
+| `d_act3` | **`blackfadebox.bdl`** | the fade is a black-box MODEL the double renders — confirms the 20f FADE-OUT@680 is THIS box, not a code `startFadeOut` |
+| `d_act2` | `ba`/`fuku` present-turn piece | ends @676 |
+| `Ba1` | `ba.bdl` + `ba_wait_l.bck` | already bound (FOUND) |
+
+**Root (Engine's binding, not data):** the `d_act0/2/3` DEMO00 doubles are created LAZILY at
+JSGFindObject-miss time — the same frame `demo START` runs — and driven before their
+create()/model-load completes. The awake (Demo02) never hit this: its arc has NO `d_act` doubles
+(verified — Demo02 file table = Link/Ls1/Zelda/Deku pieces, zero d_act).
+
+**Fix direction (Engine):** pre-create + init `d_act0/2/3` (load their models from the resident
+Demo01.arc) BEFORE issuing demo START — e.g. spawn them when Demo01 goes resident (like
+`ensureDemoArcResident`), or one-frame defer between double-create and demo-run, so they're live at
+frame 0. Mirror the awake's own-actor readiness (Link/Ls1 were FOUND, not lazily created).
+
+**Camera (secondary):** no `JSGFindObject('camera')` in the readout, and the user saw the camera not
+centre on Grandma. The tale.stb JCMR track (31 events / 8 FVB curves) drives the demo's own camera
+(`dDemo_c`, not a named actor) — verify it's applied once the demo runs; the frame-0 crash currently
+pre-empts it, so this may resolve with the double fix.
+
+**Whose turn — Engine:** pre-ready the `d_act0/2/3` doubles before frame 0 (crash fix); then confirm
+the JCMR camera track drives the demo camera. **User:** re-test after Engine's double-readiness fix.
+
+## §177 PLAYTEST 3 crash — NARROWED to a §175 create-ORDER bug (History; step-by-step for Engine)
+
+(Renumbered from a §176 collision with Housing's landing audit. This SUPERSEDES my earlier "fix the
+decode" note — the `(u16)`+`getDemoArcName` decode is ALREADY correct in our tree; the real defect is
+create ORDER introduced by §175.)
+
+**Where we are:** §175's pre-spawn cleared the bind race — cast all `FOUND` (log 12178-83). Still
+crashes at frame 0, right after Link's `ENABLE_SHAPE` (log 12184 = last line before the banner), same
+fixed fault `0x10001001000`, same backtrace.
+
+### 1. What is NOT the bug — do NOT touch these (all verified in OUR tree)
+- **The decode is already donor-correct.** `src/d/actor/d_a_demo00.cpp:236` already does
+  `dComIfG_getObjectIDRes(dStage_roomControl_c::getDemoArcName(), (u16)mModel.mID.mShapeID)` — mask +
+  demo-arc, exactly like the decomp. Same for btp/btk/brk/bpk at lines 260, 280, 304, 322. Leave them.
+- **The demo arc is correct.** `getDemoArcName()` = `Demo01` (log 12175/12177 `demoArc=Demo01`; arc
+  `live=1` @12030). Not stale, not empty.
+- **Ba1 is not the suspect.** It's the real `NPC_BA` (log 12031 `arc=Ba model=ba.bdl`), driven like
+  awake's `Ls1` — also a real actor with FLAGGED anim ids (`0x10043`…) that runs fine. Real-actor +
+  flagged id already works.
+
+### 2. THE BUG — the double's model is built EMPTY because §175 heaps it before the shape is set
+`daDemo00_c::createHeap()` (`d_a_demo00.cpp:234`) builds the model ONLY inside `if (mModel.mID.mShapeID
+!= -1)` (line 235). `mShapeID` is populated from the STB's **frame-0 `SHAPE` paragraph**
+(`d_act0 SHAPE 0x1000C`) — set via `JSGSetShape` → read at `d_a_demo00.cpp:641`
+`mNextID.mShapeID = demo_actor->getShapeId()`. But §175 pre-spawns d_act0/2/3 EARLY (log 12100-104
+`pre-spawn … paused until bind`), so **`createHeap` runs while `mShapeID == -1`** → the entire
+model-build block (lines 235-344) is skipped → `mModel.field_0x5d4` (the `J3DModel*`) stays NULL. At
+frame 0 the STB writes the shape into `mNextID`, but `createHeap` never re-runs, so the double has no
+model. The frame-0 execute/draw derefs that NULL/garbage model → `0x10001001000`. (Matches the awake:
+it has NO doubles, so it never hits this.)
+
+### 3. Donor ORDER that §175 violated
+create (deferred by fopAcM) → `JSGSetShape(0x1000C)` from the STB frame-0 paragraph → `createHeap`
+sees `mShapeID = 0xC` → builds the model → THEN drive/draw. A double must never be created-and-heaped
+before its SHAPE id is bound.
+
+### 4. Fix — pick ONE (all restore the donor order)
+- **A (preferred):** keep the pre-spawn, but before `createHeap` runs, apply each d_actN's first
+  `SHAPE` paragraph (call `JSGSetShape` / set `mShapeID`) by peeking the head of that actor's STB
+  paragraph queue. Then createHeap builds the model normally.
+- **B:** don't run `createHeap` (d_a_demo00.cpp:234) at pre-spawn; run it on the first `ENABLE_SHAPE`
+  (the ENABLE handler is at `d_a_demo00.cpp:738`) once `mShapeID != -1`.
+- **C:** drop the early pre-spawn entirely; create d_actN at bind (JSGFindObject miss) and gate the
+  demo's first DRIVE frame until `createHeap` has completed WITH the shape set (one-frame defer between
+  create+setShape and execute) — closest to the donor's deferred-create timing.
+
+### 5. Instrumentation to confirm in ONE run (the answer is currently invisible)
+`d_a_demo00` ALREADY reports the NULL cases — `OS_REPORT` at line 240-241 (`getDemoArcName` + `mShapeID`)
+and ESC_WARNINGs at 263/282/307/325 — but `OS_REPORT` writes to the DEBUGGER stream, NOT the dusk
+`.log`, which is why we never saw them. So:
+1. Route those `OS_REPORT` lines to `DuskLog.info` (or run under a debugger).
+2. Add at `createHeap` entry: log `mModel.mID.mShapeID` (expect `-1` = confirms this bug).
+3. Add after line 339/341: log whether `mModel.field_0x5d4 == NULL`.
+If `mShapeID` logs `-1` at createHeap, the diagnosis is proven and fix A/B/C applies directly.
+
+**Whose turn — Engine:** restore the create→setShape→createHeap→drive order for d_act0/2/3 (fix A/B/C),
+and surface the OS_REPORT/`mShapeID` logs to confirm. **User:** re-test after.
+
+## §179 PLAYTEST 4 — create-order FIXED; crash now = UNGUARDED model deref on the MODELLESS doubles (History; exact fix for Engine)
+
+(History thread; the §-counter has collided with Housing's windline entries — read by title.)
+
+**Progress — Engine's §177 create-order fix LANDED.** Log 21106-107:
+`ENABLE_SHAPE → mShapeID=65548 u16=0xc` then `createHeap entry shape=65548 u16=0xc arc='Demo01'`.
+createHeap now runs WITH the shape id set + the right arc. **And the DATA is confirmed good** — I
+parsed Demo01.arc's RARC resource table: **ID 0xC = `fuku.bdl` (valid MODEL, 21248 b)**, ID 0xF = the
+fuku bck, ID 0x10 = the ba bck. So `getObjectIDRes(Demo01, 0xC)` resolves fine. Still crashes — same
+fixed `0x10001001000`.
+
+**Why the fault address NEVER moves across playtests 2/3/4:** the crash is NOT in the shape
+fetch/model-build (that path only runs for d_act0, and only post-fix). It's a path common to BEFORE and
+AFTER the fix: the **per-frame model update on a MODELLESS double**. Only `d_act0` has a SHAPE (→
+fuku.bdl). **`d_act2` and `d_act3` have NO SHAPE at all** — they are the `DATA_ID` control/fade actors
+(`d_act3` = fade, DATA_ID id 9 @680; `d_act2` = DATA_ID id 4 @675). So their `field_0x5d4` (the
+`J3DModel*`) stays NULL (set at ctor, d_a_demo00.cpp:66) BY DESIGN.
+
+**The bug — our port derefs `field_0x5d4` UNGUARDED where the donor never does.** In OUR
+`src/d/actor/d_a_demo00.cpp`:
+- per-frame setBaseMtx block — **line 168-169**: `mModel.field_0x5d4->setBaseTRMtx(...)` /
+  `->setBaseScale(...)`
+- `setShadowSize()` — **line 173** `field_0x5d4->getModelData()`, **181-182**
+  `field_0x5d4->getAnmMtx(i)`
+None are NULL-checked. `getAnmMtx(i)` on an empty/garbage model is precisely the indexed access that
+yields a fixed out-of-bounds fault like `0x10001001000`. (Line 251 already has a comment noting
+`field_0x5d4==NULL` — the awareness is there; the guards are not.)
+
+**Donor proof (`/d/Decomps/WW DP/src/d/actor/d_a_demo00.cpp:267-273`):** the donor calls
+`setShadowSize()` ONLY inside `if (mModel.mID.mShadowID != -1)`, which is itself INSIDE the
+`if (mShapeID != -1)` model-build block — so every `mModel.mpModel` deref sits behind the "model
+exists" guard. A modelless double (`mShapeID == -1`) never reaches setShadowSize or the model update.
+`d_act0` has no ShadowID, so the donor skips even its shadow; `d_act2/d_act3` (no shape) are never
+model-touched at all.
+
+**Fix (Engine — mirror the donor's guards, mechanical):**
+1. Wrap the per-frame model update (the setBaseMtx block ~150-170) in `if (mModel.field_0x5d4 != NULL)`
+   — or early-return for a double with `mModel.mID.mShapeID == -1`.
+2. Call `setShadowSize()` ONLY when `mModel.mID.mShadowID != -1` AND the model is built — donor
+   structure at 267-273. Never on a modelless double.
+3. Grep every remaining `field_0x5d4->` in the per-frame execute/draw and add the same NULL guard.
+   Unguarded today: lines 168, 169, 173, 181, 182. Already guarded (copy the pattern): 512, 547.
+
+**Confirm in ONE run (multi-hyp):** at the per-frame-update entry and `setShadowSize` entry, log
+`OBJNAME` + `(field_0x5d4 == NULL)`. Expect `d_act2`/`d_act3` → NULL (the crashers), `d_act0` →
+non-NULL.
+
+**Whose turn — Engine:** NULL-guard the modelless-double model derefs (fixes 1-3), matching the donor's
+`mShapeID!=-1 / mShadowID!=-1` structure. **User:** re-test after.
+
+## §180 CRASH ROOT-CAUSED (SYMBOLICATED) — port's d_resorce.cpp is MISSING the BDL model parsers → fuku.bdl loads RAW → deref crash (History; paste-ready fix)
+
+<!-- §181 appended by Housing below the §180 body; see end of file -->
+
+
+Superses­des the §176-179 hypotheses. I stopped inferring and **symbolicated the crash** with
+`llvm-symbolizer` + the RelWithDebInfo PDB. The true stack:
+```
+#00 mDoExt_bckAnmRemove            include/m_Do/m_Do_ext.h:788   ← CRASH
+#01 fopAcM_callCallback            f_op_actor_mng.cpp:383
+#02 fopAcM_entrySolidHeap_         :469
+#03 fopAcM_entrySolidHeap          :745
+#04 daDemo00_c::actStandby         d_a_demo00.cpp:543   (→ createHeap via entrySolidHeap)
+#05 daDemo00_c::execute            :848
+```
+`mDoExt_bckAnmRemove` is one line: `i_modelData->getJointNodePointer(0)->setMtxCalc(NULL);`. It runs at
+`createHeap` line 237 — BEFORE the NULL check — and derefs `modelData = getObjectIDRes(Demo01, 0xC)`.
+Fault `0x10001001000` is non-NULL garbage ⇒ `modelData` is `fuku.bdl` returned as **RAW BYTES, never
+parsed into a `J3DModelData`**. Reading the BDL header as a joint-tree pointer gives the SAME garbage
+address every build — which is why the fault never moved across playtests 2-4.
+
+**Why it's raw — the port's resource-parse switch is missing the entire BDL model family.**
+`src/d/d_resorce.cpp` parses `'BMDP' / 'BMDR/V/E' / 'BMDG' / 'BMDA' / 'BMDL'(#if DEBUG only) / 'BLS ' /
+'BCKS' / 'BTP…' / 'DZB ' / 'KCL '` — but has **NO `'BDL '`, `'BDLL'`, `'BDLM'`, `'BDLI'`, `'BDLC'`
+cases**. The donor parses all five in its RELEASE path (`/d/Decomps/WW DP/src/d/d_resorce.cpp:268-314`,
+via `loadBinaryDisplayList`). Demo01's models sit in `bdl`/`bdlm` dirs ⇒ resType `'BDL '`/`'BDLM'` ⇒
+they hit no case, fall through **unparsed**. (Almost certainly dropped in the coexist merge. The awake
+survived only because it loads NO model from a demo arc — the tale is the first BDL-from-demo-arc.)
+This likely also breaks any other BDL-in-arc in release; worth a repo-wide check.
+
+**FIX — restore the BDL parsers (paste-ready, port-adapted).** Insert in `d_resorce.cpp` right BEFORE
+the `} else if (nodeType == 'BLS ')` case (~line 515), in the RELEASE path (NOT `#if DEBUG`). Uses the
+port's own `setAlpha` (the port's stand-in for the donor's `setToonTex`) and mirrors the port's
+existing `'BMDP'` case; donor `loadBinaryDisplayList` flags preserved:
+```c
+                } else if (nodeType == 'BDL ' || nodeType == 'BDLC') {
+                    res = (J3DModelData*)J3DModelLoaderDataBase::loadBinaryDisplayList(res, 0x00002020);
+                    if (res == NULL) { return -1; }
+                    setAlpha((J3DModelData*)res);
+                } else if (nodeType == 'BDLL') {
+                    res = (J3DModelData*)J3DModelLoaderDataBase::loadBinaryDisplayList(res, 0x00001020);
+                    if (res == NULL) { return -1; }
+                } else if (nodeType == 'BDLM' || nodeType == 'BDLI') {
+                    res = (J3DModelData*)J3DModelLoaderDataBase::loadBinaryDisplayList(
+                        res, nodeType == 'BDLI' ? 0x01002020 : 0x00002020);
+                    if (res == NULL) { return -1; }
+                    J3DModelData* modelData = (J3DModelData*)res;
+                    for (u16 k = 0; k < modelData->getMaterialNum(); k++) {
+                        J3DMaterial* material_p = modelData->getMaterialNodePointer(k);
+                        J3DMaterialAnm* materialAnm = JKR_NEW J3DMaterialAnm();
+                        if (materialAnm == NULL) { return -1; }
+                        material_p->setMaterialAnm(materialAnm);
+                    }
+                    setAlpha((J3DModelData*)res);
+                }
+```
+(Donor split: `'BDL '`=2020, `'BDLL'`=1020, `'BDLM'`=2020, `'BDLI'`=0x01002020, `'BDLC'`=2020 — grouped
+above by identical handling.) The CRASH fix is purely the `loadBinaryDisplayList` parse; the
+material-anm/`setAlpha` steps are for correct rendering (Grandma's clothes visible). If `setAlpha` on a
+BDL misbehaves, drop it first to confirm the crash is gone, then re-add for render.
+
+**Confirm (optional, 1 line):** at `createHeap` after `getObjectIDRes`, log `*(u32*)modelData` — a raw
+BDL reads as `0x4A334432`('J3D2') / `'bdl4'`; a parsed `J3DModelData` reads as a heap vtable pointer.
+
+**Whose turn — Engine:** add the 5 BDL resType cases to `d_resorce.cpp` (paste above), release path.
+That parses `fuku/ba/blackfadebox.bdl` into real `J3DModelData` and the deref chain becomes valid.
+**User:** re-test after — this is the actual root, not another guess.
+
+## §181 HOUSING RULING: APPROACH A — consume-time parse is the port's law; revert §180 mount-parse (2026-07-27)
+
+**Ruling requested by the §180 regression report (game-wide BDL break: EXT_BG0 model.bdl resLoad
+ERROR, black Outset, arc purged). RULING: A.** Revert §180's mount-time parse NOW (Outset blocks;
+both approaches start with the revert anyway), then re-do the tale fix in the port's consume-time
+idiom: parse fuku.bdl inside `daDemo00_c::createHeap`, mirroring ExtNpcMount's two established
+sites (`d_ext_npc_mount.cpp:1965/:2392`), with a local single-parse guard.
+
+**Grounds:**
+1. **J3D POINTER-FIX LAW (standing, case receipts: sumo BMT crash; room-lane mesh corruption):**
+   parsed J3D buffers are pointer-fixed in place; a second parse corrupts them. §180 created a
+   second parse layer over a path that already parses at consume — the regression is the law's
+   textbook case, not an implementation slip.
+2. **Blast-radius asymmetry:** A touches only the demo path (new, currently broken regardless).
+   B modifies ExtNpcMount's consume path — the artery every currently-working mount (rooms, NPCs,
+   props, model1) flows through. Equal-outcome fixes must take the smaller surface.
+3. **Guard reliability:** B's guard must detect "already parsed" on arbitrary buffers — parsed-ness
+   fingerprinting is heuristic (pointer-fix destroys the offsets a checker would read) and misfires
+   in both directions. A's guard is local: one buffer, one owner, lifecycle known.
+4. **Donor-fidelity scope:** "mount-time matches donor" does not weigh here — №31/donor-fidelity
+   governs what the PLAYER perceives; internal parse timing is receiver architecture, which is the
+   port's own (§67 receiver-agnostic precedent). One parsing discipline, consistently applied,
+   beats architectural mimicry that fights the port's own structure.
+5. **Second law rider:** the demo arc must OUTLIVE the parsed model (never free an arc while parsed
+   data is cached — same law, clause 2). createHeap parse ties model lifetime to the demo's own
+   arc hold; verify the demo does not release the arc before model teardown.
+
+**Acceptance:** Outset boots, EXT_BG0/model.bdl clean (no resLoad ERROR, no purge); tale demo
+reaches fuku.bdl WITHOUT deref crash; parse happens exactly once (guard log on second-entry
+attempt); mounted-world regression sweep = walk Outset exterior + one interior.
+**RATCHET (pending user ratification → cookbook/DO-NOT):** "BDL PARSE OWNERSHIP — in this port,
+model parsing happens at CONSUME time, owned by the consuming system. Adding mount-time/global
+parse layers is a hazard surface (this entry's regression = receipt)."
+**HYGIENE:** bus §-numbering COLLIDED (History §173-§180 ∥ Housing §173-§178 — duplicates exist).
+True max now 181. → LIBRARIAN: dedupe pass (suffix the earlier-timestamped duplicates, fix
+cross-refs). Lanes: grep tip IMMEDIATELY before append, every time.
+
+## §182 GRASS STILL BLACK — probe convicts the COLOR SOURCE (AmbCol), not the JPA path; FERRY V-b (Housing, 2026-07-27)
+
+Run 163720: `cutFx emitter=1 tevstr=1 amb=(36,24,59)` — emitter fine, tevstr fine, and the
+particle faithfully draws the near-black we FEED it. Ferry V's AmbCol choice was the error:
+ambient = the dark base; donor colors scatter from room tevstr **mColorK0** = the bright daylight
+register. Corrected B3 (JPC decode) NOT needed — the JPA path is exonerated by the probe.
+**Populated K0 source already proven in-tree:** W-LINE-c's colorAvg reads
+`g_env_light.dungeonlight_col[1]` — №113-convert stash slot **[1] = BG0_K0** (Engine's comment,
+d_kankyo_wether.cpp:1559-1563), live-blended like the sea's [2].
+**FERRY V-b (Engine, one block):** in d_a_ext_vegetation.cpp cut-VFX (~:705), replace the AmbCol
+fill with BG0_K0: `const GXColorS10& k0 = g_env_light.dungeonlight_col[1];` → clamp each channel
+0-255 into cutTev.mColorC0/mColorK0 (alpha 255). Keep settingTevStruct call (light info), keep the
+probe but log `k0=(r,g,b)` instead of amb. Acceptance: scatter puffs read as daylight-bright
+(vanilla green-ish comes from K0 × the emitter's own green tint), not black; №31 unchanged.
+**№113-STASH SCOPE GROWS:** slot [1]=bg0_k0 now confirmed load-bearing alongside [2]=sea_k0 —
+cookbook entry updated (whitelist BOTH slots in any PAL0 tooling/restore). WIND MOTION: user
+reports possibly-incomplete repertoire — awaiting more tests before any ferry (loop-de-loop
+branch is the watch item; noclip disambiguates if confirmed).
+
+## §183 TALE CUTSCENE — crash FIXED (Approach A shipped); 3 content bugs → ENGINE (History)
+
+**Milestone: the tale crash is DONE.** Approach A (Housing-ruled, §181) shipped & verified — the
+cutscene plays through the `fuku.bdl` point, mount-world intact, single-parse proven (log 21127-39:
+`model-data cache + Demo01/demo_shape_12` first use → `session-cache hit` after; `modelData head` = heap
+vtable, never raw `J3D2`). §180's global mount-parse is reverted; DN-3 records the law. The remaining
+four are cutscene **content** (past the crash) — three are Engine demo-orchestration, one texture is
+History's.
+
+**Bug 2 — Grandma's REAL self holds the (textured) clothes at her side, duplicating the demo prop → ENGINE.**
+Log 20981-22089: the real `NPC_BA` has **`vfuku.bdl` attached to handR** (`attach 'vfuku.bdl' … joint_slave
+→ handR (11)`), and it is **not hidden while the demo drives her** — so her hand-attach AND the demo
+double `d_act0` (fuku prop) both render. In the donor the clothes Grandma presents ARE the demo double
+(`d_act0` = fuku_model); her normal `vfuku` attach must be **suppressed for the duration of the tale
+demo**. Fix: hide/detach the real NPC_BA held attach when TALE_DEMO is driving, restore on demo end.
+
+**Bug 3 — no dialogue box / text → ENGINE (demo-message wiring).**
+The tale.stb JMSG message blocks **never fire** — the only talk on NPC_BA is the old `§65 talk-entry`
+fallback (log 22092-93 `TrigA speak-order fallback (NPC_BA)` / `checkCommandTalk`). The demo's own
+message track isn't wired to the dialogue system. Fix: route the STB JMSG → the message/zeldaMsg box
+(same path the awake/other demos would use); the `§65` talk fallback should yield to it during the demo.
+
+**Bug 4 — no give/put-on beat; SHAPE fires but the presentation doesn't → ENGINE (+ SHAPE semantics).**
+Link's SHAPE DOES fire: `[Alink] ENABLE_SHAPE shape=1 → cloth=47` @21125, then `shape=0 → cloth=46`
+@21624 — i.e. the tale.stb toggle `1→…→0`. But the **give/put-on** beat + `TALE_DEMO2` (Link-wearing,
+SHAPE 1 held) aren't shown, so no visible clothes-change moment. This is the SHAPE-semantics reconcile
+flagged in `tale-scene-scripts.md`: confirm which toggle is the "put on" against the player texture path,
+and play TALE_DEMO2 after TALE_DEMO (tale→tale_2 = the outfit change). No get-ITEM box (faithful:
+`Ba1_Get_Itm` = soup; clothes = wear-change).
+
+**Bug 1 — demo clothes prop (fuku.bdl) renders textureless/black → HISTORY (me), in progress.**
+`d_act0` parses fine (geometry shows) but renders without its texture — the demo path skips the toon/
+material texture setup the donor `'BDL '` case does (`setToonTex`); note `vfuku.bdl` renders textured via
+the attach path (same `acquireMountedModel`), so it's fuku-specific (btp/pattern or toon-tex), not the
+resolver. I'm chasing it.
+
+**Whose turn — Engine:** Bug 2 (suppress the real NPC_BA `vfuku` attach during TALE_DEMO), Bug 3 (wire
+STB JMSG → dialogue box), Bug 4 (play TALE_DEMO2 + reconcile the SHAPE give direction). **History:** Bug 1
+(fuku texture). Groundwork all in place (events merged, Demo01 resident, trigger pinned, crash fixed).
+
+## §184 PLAYTEST 6 — Bug 1 texture FIX BUILT (History); 4 refined/new content bugs → ENGINE
+
+Engine's pass landed (get-item now fires, TALE_DEMO2 chained via `next_event`). New state:
+
+**Bug 1 (clothes prop black) — FIX BUILT (History), awaiting playtest.** Root: `fuku.bdl` is actually
+`J3D2bmd3` (BMD, 3 embedded textures + 1 material) and parsed fine — but my resolver used
+`acquireMountedModel` = **parse-ONLY** (`loadMountedModelDataOnly` does `load()` and returns; no
+`material->change()`, no DL build). daDemo00's `createHeap` only builds a J3DModel *instance* and never
+finalizes materials (in the donor, the arc-mount case did). Un-finalized material → BLACK. Fix: switched
+`dExtNpcMount_acquireDemoModel` → `acquireBgModel` (`finishBgModelData`: material->change + materialAnm +
+newSharedDisplayList + simpleCalcMaterial + makeSharedDL). Still single-parse + arc-purge-safe (bg: key).
+
+**Bug 4a — Link wears hero clothes from the START, not at the give moment → ENGINE.** tale.stb Link
+SHAPE opens at `1` (hero) and toggles to `0` later; the intended read is casual until the put-on. The
+SHAPE-semantics reconcile (which toggle = "put on", and Link should START casual) still needs settling
+against the player texture path. Link should be CASUAL at cutscene open, become hero at the give.
+
+**Bug 3a — get-item text shows in a REGULAR dialogue box, not the GET-ITEM box → ENGINE.** Progress (the
+get-item moment now fires) but it's routed to the ordinary message box instead of the item-get
+presentation box. Route the give message through the get-item box path.
+
+**Bug 3b — Grandma's dialogue is cut / shown in excerpts → ENGINE (RECURRING).** Same truncation the
+user saw on Aryll's/awake text — a shared message-length/segmentation bug in the demo-message path, not
+tale-specific. Worth fixing once at the common site (helps both scenes).
+
+**Bug 5 (NEW) — the cutscene played TWICE → ENGINE.** Double-fire. Candidates: the region trigger firing
+twice before `done_flag=ba.clothes_given` latches, or the `TALE_DEMO`→`next_event=TALE_DEMO2` chain
+re-entering TALE_DEMO. Needs a log-level look at the ORDER count vs the once-guard.
+
+**Deferred (user: not this pass) — prop census in Grandma's room:** items that should be present by this
+beat (e.g. the hero's SHIELD) aren't loaded. Revisit after the give sequence is correct.
+
+**Whose turn — Engine:** Bugs 4a (SHAPE start-casual), 3a (get-item box), 3b (message truncation —
+shared w/ Aryll), 5 (double-play). **History:** Bug 1 shipped to build; **User:** playtest Bug 1 (clothes
+prop should now be textured).
+
+## §184 ENGINE SHIPPED — Bugs 4a / 3a / 3b / 5 (playtest 6 content)
+
+RelWithDebInfo built; dawn/pipeline caches wiped. Prop census still deferred.
+
+| Bug | Fix |
+|-----|-----|
+| **4a** | `d_a_alink_demo.inc`: TALE_DEMO always `WEAR_CASUAL` (STB open SHAPE=1 ignored); TALE_DEMO2 SHAPE 1 → hero put-on. |
+| **3a** | `dExtWw_handleDemoMessage`: 3095 / 4410 → `dMsgObject_setDemoMessage(WEAR_KOKIRI+0x65)` (MsgScrnItem); no talk-caption path. |
+| **3b** | `dALBWDialogue_c::advancePageOrFinished` + demo poll: 90f advances **pages**; resume STB only after last page (fixes Aryll/Grandma excerpts). |
+| **5** | RegionTrig: `orderEvent` (chain mutates this, not ini `event`); `started=true` after first successful ORDER; geometry blocked while started+idle; force `done_flag` if lag; skip duplicate name+stage loads. Log: `ORDER … started=`. |
+
+**Whose turn — User:** playtest loft tale (once, casual→hero, get-item box, full pages). **History:** Bug 1 texture still in play.
+
+## §183 GRASS BLACK ROOT — RECEIVER FLAG PATH, verified in our own source; FERRY V-c (Housing, 2026-07-27)
+
+V-b probe: k0=(255,255,245) fed, still black → tevstr exonerated as a DELIVERY vehicle. Read of
+our own dPa_control_c::set (d_particle.cpp:2052-2161): tevstr colors reach the emitter ONLY via
+the per-resource userWork flag word (`getResUserWork`) — flag 0x20 → dKy_ParticleColor_get_actor →
+setGlobalPrmColor/EnvColor. The WW-supplemental 0x89D7 has NO userWork flags configured → no color
+branch runs → emitter keeps resource-default prm/env → BLACK regardless of tevstr contents.
+V and V-b both fed a mailbox nobody reads. Donor parity confirms the fix shape: WW d_grass passes
+mColorK0 EXPLICITLY as both prm and env (setSimple), no flag reliance.
+**FERRY V-c (Engine, cut-VFX block only):** after the non-NULL emitter returns, cast and set
+directly: `setGlobalPrmColor(k0.r,k0.g,k0.b)` + `setGlobalEnvColor(k0.r,k0.g,k0.b)` (clamped u8,
+k0 = dungeonlight_col[1] as in V-b — keep that). Same calls the 0x20 path itself uses (:2160-2161)
+— bypasses the unconfigured flag word without touching d_particle.cpp or any TP resource's flags.
+Keep tevstr arg (light/fog), keep probe. Acceptance: bright puffs; if STILL black after prm+env
+explicit → the 0x89D7 resource itself is the last suspect → corrected B3 (Bridge JPC decode).
+
+## §185 PLAYTEST 7 — Bug 1 texture ROOT-CAUSED + fix built; dialogue fix TRACED (History)
+
+**Bug 1 (clothes prop black) — ROOT CAUSE FOUND, fix built (History).** `fuku.bdl` is `J3D2bmd3` with
+textures `Vfuku / Vfuku / ZAtoon` — it cel-shades through a `ZAtoon` toon stage. The donor binds the
+toon + sets `TEV-color-3.alpha = TevStageNum` for every model via `setToonTex` (WW DP
+d_resorce.cpp:70-108) at arc-mount. The port DROPPED `setToonTex` with the BDL parsers (DN-3), so the
+demo prop's cel stage resolves BLACK. `fuku` ships `ZAtoon` EMBEDDED (8×8 I4), so the shared-toon rebind
+(donor `ZA*→getToonImage`, which the port has no accessor for) isn't needed — only the
+`alpha=stageNum` step. Built `applyDemoToonTev()` in `dExtNpcMount_acquireDemoModel`. **Awaiting
+playtest.** If still black, the embedded ZAtoon is a stub and needs a real toon image bound (port lacks
+`getToonImage` — a bigger WW-toon-subsystem gap).
+
+**Dialogue (line/word count wrong, cropped — user: "we fixed this with Aryll") — TRACED, → ENGINE.**
+The Aryll/awake fix is a GENERIC formatter that already exists and already routes tale ids; the tale
+just isn't going through it (Grandma README §236/§242: tale currently on the OLD ALBW-postman box).
+The fixed path (files/lines):
+- **Adaptor bridge:** `d_demo.cpp:98-127` `adaptor_do_MESSAGE` → `dExtWw_handleDemoMessage(content)`.
+- **Id→line + suppression:** `d_ext_npc_mount.cpp:6315` `dExtWw_handleDemoMessage` (tale rows 539–545
+  fall back to `population/ww_dialogue_full.txt`; get-item rows 3095/4410 route to the native item box).
+- **The FORMATTER (TP line/word):** `d_albw_dialogue.cpp:169` `dALBWDialogue_c::buildPages` — word-wrap
+  via `dALBW_wrapMesgWords` (`d_albw_ui_text.cpp:62`) to box width, split to `kVanillaMaxLines=4`
+  lines/page (`d_albw_dialogue.h:46`).
+- **The "excerpt" fix (Bug 3b):** `d_ext_npc_mount.cpp:6294` — auto-advance ALL pages before closing
+  (was closing on page 0 after 90f = the crop), honoring the `dExtWw_oweDemoResume` suspend/resume
+  contract so the timed STB isn't frozen.
+- **Alt native path (also fixed):** mount-TALK `mountPaginate` (`d_ext_npc_mount.cpp:220`, 4 lines/38
+  cols) + `dMsgFlow_c::initWord` — the "Shade Watcher pattern" (`d_a_albw_shade_watcher.cpp:1851`).
+→ Engine: swap the tale dialogue OFF the ALBW-postman box onto one of those two fixed paths (README
+§236 already queued this as "swap to the Shade Watcher's box"). Rows are data (History) and largely
+present (text shows); the crop is the routing.
+
+**Also this playtest (→ ENGINE, ride the §183/§184 items):** real NPC_BA still holds the clothes
+pre-cutscene (Bug 2); the get-item box shows the WRONG item ("magic armor / Malo Mart" — item-index
+mis-wire; clothes are wear-change, not a get-item); the get-item box doesn't wait for input so demo
+dialogue plays over it (sync); clothes apply on the SECOND replay not after the give (Bug 4 + Bug 5
+double-play). Deferred by user: Grandma's-room prop census (hero's shield not loaded).
+
+**Whose turn — History:** Bug 1 built (playtest). **Engine:** dialogue routing swap (above) + Bugs
+2/3a/4/5. **User:** playtest Bug 1 (clothes prop) + ferry the Engine block.
+
+## §185 ENGINE SHIPPED — Bugs 2 / 3a / 4 (+ chain) — wear-change, not get-item
+
+RelWithDebInfo built; caches wiped. Prop census still deferred. Dialogue still on ALBW caption
+(with §184 page-advance); full Shade-Watcher swap remains queued if crop persists.
+
+| Bug | Fix |
+|-----|-----|
+| **2** | Hide real NPC_BA vfuku when loft volume armed **or** tale started/ordered/commencing — not only after `runEvt` latches. |
+| **3a** | Dropped MsgScrnItem (`WEAR_KOKIRI+0x65` → magic-armor BMG). JMSG 3095/4410 → `setClothesChange` wear-change + catalog demo dialogue (suspend/owe). Kit stays deprecated/inert. |
+| **4** | TALE_DEMO no longer force-casual **after** hero already equipped (give undoing). Mid-scene give at 3095 sticks. |
+| **5/chain** | `started` latch no longer force-`done_flag`+skip while `orderEvent` advanced to DEMO2 pending — re-arms commence so put-on scene runs first play. |
+
+**Whose turn — User:** playtest loft tale. **History:** Bug 1 toon fix.
+
+## §186 PLAYTEST 8 — CORRECTION: Bug 1 NOT fixed; DN-4 (Shade Watcher) ratified (History)
+
+**Bug 1 (clothes prop black) — NOT fixed (my §185 claim was WRONG).** The textured clothes prop in the
+screenshots is the NON-cutscene Grandma's `vfuku` attach — textured by OLD work, not my `applyDemoToonTev`.
+INSIDE the cutscene the DEMO Grandma's clothes (`d_act0`) are STILL BLACK; `applyDemoToonTev` (the
+`getTevColor(3)->a = stageNum` step) did NOT fix them, so the setToonTex/cel-shade theory is unconfirmed
+and possibly wrong. **User's lead (follow this):** the demo prop is probably black because the textured
+model is applied to the NON-cutscene model PRIOR to the cutscene, and the demo double `d_act0` is a
+separate model that never gets the texture. Re-investigate the demo-prop model/binding, not toon-shading.
+**Bug 4 (clothes apply during the give) — improved ✓** (lands at the get-item moment, not on replay).
+
+**DN-4 ratified (user directive):** NEVER present dialogue on the ALBW post-man box — ALWAYS the Shade
+Watcher native path (`dMsgFlow_c::initWord` + `mountPaginate`, `d_a_albw_shade_watcher.cpp:1851`). Now a
+hard-stop in `docs/DO-NOT.md` binding every lane. Engine: the tale dialogue swap MUST land on Shade
+Watcher, not the post-man box.
+
+**Remaining — all ENGINE (from playtest 8):**
+1. **Bug 2 — real NPC_BA holds the clothes prop BEFORE the cutscene** (idle `vfuku` attach; now textured
+   so more visible). Suppress/detach the real held prop until the tale demo runs (and the demo double
+   presents it), restore after.
+2. **Dialogue still not TP-formatted** — the tale is still on the OLD ALBW-postman box. Route it onto the
+   fixed formatter/native path per §185 (`dALBWDialogue_c::buildPages` + the `:6294` page-advance, or
+   `mountPaginate`+`dMsgFlow_c` Shade-Watcher pattern).
+3. **REGRESSION — the get-item box reverted to a standard dialogue box again.** Last pass it showed a
+   (wrong-item) get-item box; now it's a plain message box. The get-item presentation routing is
+   flipping — pin it to the native item-get box with the correct item (clothes = wear-change; the WW
+   tale get row 3095/4410 should route to the native item box, not a message box).
+4. **Bug 5 — cutscene still plays a SECOND time.** Double-fire persists (trigger re-fire before
+   `ba.clothes_given` latches, or the `next_event=TALE_DEMO2` chain re-entering TALE_DEMO). Needs an
+   ORDER-count vs once-guard log check.
+
+**Whose turn — Engine:** items 1-4 above. **User:** ferry + playtest after.
+
+## §187 Bug 1 REAL ROOT CAUSE — demo00 force-applies MAJI to WW cel-shade models (History)
+
+Not toon-shading (my §185/186 theory was wrong). **The port ADDED `setLightTevColorType_MAJI` to
+demo00's draw (`d_a_demo00.cpp` draw, ~line 1661) — the DONOR demo00 has NONE** (grep-verified). MAJI
+is TP's env-light TEV path; on a WW cel-shade model (a `ZAtoon` toon texture, e.g. `fuku.bdl` =
+Vfuku/Vfuku/ZAtoon) it resolves BLACK. `d_act0` is the ONLY demo00 model in the tale (Grandma = real
+NPC_BA, Link = player, both lit by their own paths) — so it's the only black thing.
+**The port's own item code proves the correct treatment:** `d_a_demo_item.cpp:66-68` `useWwGetItemNoMaji`
+— WW items (bow, clothes bundle) SKIP MAJI and use the "Ivan/boots recipe" (`d_a_demo_item.cpp:518-526`):
+`settingTevStruct(0)` + neutral ambient (90,90,90) + `dWwItemmdl_applyBowMaterialAmbientOnly`, NO MAJI.
+The working `vfuku` (Grandma's non-cutscene attach) renders textured because it goes through THAT path;
+the demo double never did — exactly the user's read (texture on the non-cutscene model, demo prop
+separate).
+**Fix built (History):** demo00 detects WW cel-shade (texture `ZA*`, `demoModelUsesZAtoon`) and applies
+the clothes-bundle recipe instead of MAJI; non-WW doubles keep MAJI (no regression). `applyDemoToonTev`
+(alpha=stageNum) kept as the complementary cel-shade step. **Awaiting user playtest** (not declaring
+fixed after the §186 misread).
+
+**Whose turn — User:** playtest the demo prop (textured now?). **History:** done pending confirm.
+Engine's tale-content items (Bug 2 attach-hide, dialogue→Shade-Watcher per DN-4, get-item box, Bug 5
+double-play) unchanged.
+
+## §186 ENGINE SHIPPED — DN-4 + Bugs 2 / 3 / 5 (playtest 8 content)
+
+RelWithDebInfo built; caches wiped. Prop census deferred.
+
+| Item | Fix |
+|------|-----|
+| **2** | Hide real NPC_BA vfuku while `ba.tale_window` set and not `ba.clothes_given`, plus commence/ORDER/STB. Restore when window closes / given. |
+| **DN-4** | Demo JMSG → `mountPaginate` + `dMsgFlow_c::initWord` (Shade Watcher). Post-man `dALBWDialogue` no longer presents new lines. |
+| **3** | 3095/4410 → `dMsgObject_setDemoMessage(WEAR_KOKIRI+0x65)` + wear-change. Presentation arm forces **fukiKind 9**, **host item index**, **kit get_text** (fixes BMG index≠id → magic armor). |
+| **5** | `orderCount` logged on ORDER; geometry cannot start a new commence after `started`; DEMO2 re-arm only when `orderCount==1`. |
+
+**Whose turn — User:** playtest. **History:** Bug 1 demo00 MAJI.
+
+## §188 FERRY → HOUSING: Outset heads+props STOP RENDERING after the tale cutscene (History)
+
+**Symptom (user-confirmed by eye):** on the FIRST Outset visit (before Grandma's house) the NPC heads +
+props render; after playing the tale cutscene and exiting, **the heads and props are gone.** User: known
+class, "encountered before."
+
+**Log evidence — it is NOT attach and NOT resource-load (History, gen=5 Outset-before-house vs gen=7
+Outset-after-cutscene):**
+- Head attach: IDENTICAL — `MISS:no_head_attach` = 22 and `head=…@head` successes = 10 in BOTH loads
+  (so the heads that draw before also "attach" after).
+- Resource resolution: IDENTICAL — same `cache+ / path=load / session-cache / pristine` counts.
+- Shader/pipeline/draw failures after the cutscene (the §46 SKIP-DRAW class): NONE logged.
+→ The instrumentation captures NO difference, yet the render differs. **This is a runtime RENDER-STATE
+break from the cutscene teardown — heads/props attach + load but don't DRAW.** Not the №45 head-attach
+race (that's the constant 22, same both loads).
+
+**Housing leads:** teardown-order render-state corruption (cf. archive №68 exit-teardown UAF family), or
+a global light/TEV/GX state left dirty by the demo and inherited by the Outset re-pop draws. The
+current logging doesn't reach it — needs GPU/render-state instrumentation.
+
+**HONEST caveat (History, not ruled out):** my tale render changes run DURING the cutscene and could
+leave global state dirty — `d_a_demo00.cpp` draw MAJI-skip + `dWwItemmdl_applyBowMaterialAmbientOnly`,
+and `applyDemoToonTev` in the demo resolver. The log can't confirm/deny. **I offered the user a
+gated-OFF test build to settle whether it's me before Housing digs deep** — pending their call. If they
+send it your way un-tested, check those three first.
+
+**Whose turn — Housing:** render-state teardown investigation. **History:** standing by with the
+gated-off test if the user wants it.
+
+## §189 FERRY → ENGINE: tale cutscene NON-HEAD items (History)
+
+Big progress this playtest — **WORKING now:** dialogue box is the correct native one (Shade Watcher /
+DN-4 landed ✓), the get-item box appears WITH its icon ✓, Grandma's pre-cutscene held prop is hidden
+(Bug 2 ✓), the demo clothes prop is textured (Bug 1 ✓). Remaining, all Engine:
+
+1. **Get-item box shows the WRONG item text** — "You got the magic armor! … You bought it at Malo Mart!"
+   (a TP item message). It must show the hero's-clothes text. The give is routing to the wrong item id /
+   message; clothes = wear-change, so the tale get row (`3095`/`4410`) must map to the CLOTHES item box,
+   not magic-armor.
+2. **Get-item box text pagination is wrong** — same TP line/word formatting the dialogue box now honors;
+   the item box isn't paginating.
+3. **Get-item box doesn't WAIT for input** — the cutscene continues past it without the player advancing,
+   so the following dialogue boxes overwrite it. The item box must SUSPEND the demo (the demo-message
+   suspend/resume contract) until dismissed, then resume.
+4. **Cutscene plays TWICE** — the whole tale re-runs. Log: `'tale_loft' ORDER TALE_DEMO orderCount=0`
+   (12941) → `TALE_DEMO2 orderCount=1` (14082) is the intended tale→tale_2 chain, but the user sees a
+   full second play (and clothes apply only on that 2nd play). Check the once-guard vs a trigger re-fire
+   / the `next_event` chain re-entering `TALE_DEMO`.
+
+**Whose turn — Engine:** items 1-4. **User:** ferry.
+
+## §185 POST-TALE VANISH AUDIT (Housing, 2026-07-27) — cache purge EXONERATED; draw path blind; PROBE SPEC for History
+(§184 skipped — History's code comments already cite a §184; Librarian dedupe pending §181.)
+
+History's report: heads+props render gen=5, gone gen=7 (post-tale), attach/resource/draw-error
+instrumentation identical. Housing log audit: purge machinery CLEAN (normal delete-bg/delete-npc
+teardown on stage leave, "pristine kept", fresh retains on re-entry) → shared-cache hypothesis
+EXONERATED. applyDemoToonTev = weak suspect (demo-arc models only, idempotent, additive).
+**Strongest timing correlation: the vanish arrived WITH live actor binding** (History §174
+"binding LIVE, letterbox engaged") — demo enables/pause/registry state on mounts is new this build.
+**BLIND SPOT: the normal mount draw has NO reason-coded exits** — a skipped draw and a drawn draw
+log identically (= why gen=5 vs gen=7 instrumentation matches while the screen differs).
+**PROBE (History; one build, all hypotheses — multi-hypothesis law):** in the mount draw path,
+instrument EVERY early-return with a reason code; per skipped actor 1/s log:
+`[ExtNpcMount] §185 drawSkip proc=X reason=CODE cull=? demoID=? en=0x?? morf=? mdl=? dDemoSys=?`
+carrying: (a) fopAcM cull/draw flags; (b) demoActorID + whether a dDemo actor-table entry still
+EXISTS for it + checkEnable(0xFF); (c) draw-buffer registration result; (d) mpMorf/modelData
+non-NULL; (e) tevStr amb/K0; (f) dDemo_c system/control state (should be inactive post-demo —
+stale table = the №45/№68-family suspect); (g) if NO early-return fires and model->draw executes →
+log that too (then the break is GX-state class, №127 family, and History's three tale render
+changes move to prime suspects per their own caveat). Reason code names the bug in ONE run.
+CHECK-FIRST (History's own caveat, unchanged): demo00 MAJI-skip, applyBowMaterialAmbientOnly
+call sites, applyDemoToonTev — diff-audit vs pre-tale behavior for anything touching PERSISTENT
+state (J3DModelData writes, static/global GX config).
+
+## §190 POST-TALE VANISH — ROOT-CAUSED via CHECK-FIRST (no probe needed); fix built (History → Housing)
+
+Housing's §185 CHECK-FIRST paid off before the drawSkip probe was even built. **Root cause: the §183
+Bug 2 attach-suppress, `dExtWw_taleHideRealClothesAttach()` — a GLOBAL, stage-unfiltered gate on the
+attachment draw (`d_ext_npc_mount.cpp:8930`, also 8171/8648).** It walked the region triggers and
+returned `true` (suppress ALL actors' attachments — heads + props) if `t.started || t.ordered ||
+t.commencePhase`. **`t.started` is a one-shot LATCH held TRUE after the tale ends** (log 14610:
+`'tale_loft' END — done_flag='ba.clothes_given' (started latch held)`). The `doneFlag` early-out
+(`ba.clothes_given`, which IS set @14609) sat AFTER the latch check, so it was never reached — the
+suppress stayed on forever, on every stage, and Outset's `@head` heads + prop attachments were skipped
+at draw while still logging as attached (= exactly why gen=5/gen=7 instrumentation matched, per
+Housing). Not the №45 head race, not a purge, not a GX-state class.
+
+**History's three tale render changes EXONERATED** (Housing's weak-suspect call confirmed): the vanish
+is the suppress gate, in Engine's §183 code, not demo00 MAJI-skip / applyBowMaterialAmbientOnly /
+applyDemoToonTev. No `J3DModelData`/global-GX persistence involved.
+
+**Fix (built, History):** moved the `doneFlag` check BEFORE the `started/ordered/commencePhase` latch
+in `dExtWw_taleHideRealClothesAttach` — once `ba.clothes_given` latches, the tale is over and nothing
+is suppressed. Minimal reorder; awaiting user playtest.
+
+**Whose turn — User:** playtest (heads + props should return on Outset after the tale). **Housing:**
+the §185 drawSkip probe is now moot for this bug — parking it unless a different vanish appears.
+**Engine (note):** the §183 suppress is global/stage-unfiltered by design; if a future scene needs it,
+scope it to the tale actor/stage rather than the trigger-list globals.
+
+## §186 TALE ORDER FILTERED (Housing, 2026-07-27) — tale/tale_2 are VARIANTS, not a chain; heads fixed (History)
+
+Heads: History fixed post-tale vanish (fix unrecorded here — HISTORY: one-line root cause for the
+ledger, please; the §185 probe/hypothesis that landed matters for the №68-family casebook).
+**Housing filter of History→Engine tale order (Engine gated; queues until return):**
+1. **Item text — implement to §171 spec, do not id-chase:** the "magic armor/Malo Mart" text is
+   TP's item-box table for whatever id the give routes; donor FUKU has `mItemMesgNum=0x0000` — the
+   donor presents **msg 151 (INF1 3095)** via EXPLICIT override. Override the message on the tale
+   give (wear-change item box), leave id-tables alone.
+2. Pagination: as ordered (mirror the DN-4 dialogue formatter).
+3. Suspend contract: as ordered; receipts exist — message resume = `unsuspend(1)`
+   (d_msg_object.cpp:1412/1903), demo-side suspend semantics d_event_data (№170/№171 era);
+   Engine precedent: dExtWw_pollOwedDemoResume.
+4. **REFRAMED — double-play root:** jstudio_stb decode: tale.stb HAS d_act0=fuku_model (27 ev) +
+   particle block; tale_2.stb has NEITHER — same scene, story-state VARIANTS (give vs already-
+   have). Donor plays ONE. Our TALE_DEMO→TALE_DEMO2 chain plays BOTH = the "twice." Fix = variant
+   SELECTION on story state (clothes owned/worn?), apply rides the GIVE variant (tale). History
+   owns the selection condition (which donor flag picks tale_2 — first-quest replay vs second-
+   quest NEW_FUKU is their call, §171 msg 156 relevant). A once-guard would mask, not fix.
+
+## §191 FILTERED ORDER — History return (heads one-liner; items 1+4 re-spec'd) (History, 2026-07-27)
+
+**Heads root cause (for Housing's ledger / №68-family casebook), one line:** post-tale Outset heads +
+props vanished because `dExtWw_taleHideRealClothesAttach()` (the §183 Bug 2 global attach-suppress)
+tested the `t.started` **one-shot latch** BEFORE the `doneFlag` early-out — so once the tale's `started`
+latched, the suppress stayed TRUE forever, on every stage, hiding all attachments. Fix = check
+`doneFlag (ba.clothes_given)` FIRST. **№68 family: a latch/flag outliving its scope gates a draw.**
+(Full detail §190. History render changes exonerated.)
+
+**Item 4 (double-play) — History did its half; mechanism → Engine.** tale/tale_2 = variants not a
+chain (Housing §186 confirmed; `d_a_demo_item.cpp:75` NEW_FUKU=item 0x04). REMOVED `next_event=TALE_DEMO2`
+from `[tale_loft]` (data, live) → the first give now plays tale ONLY, no double. **Selection condition
+(History-owned):** first give = `!ba.clothes_given` → TALE_DEMO (tale.stb, apply rides this); already-have
+replay = `ba.clothes_given` on a FRESH R_DL01 entry → TALE_DEMO2 (tale_2.stb). Second-quest NEW_FUKU
+(item 0x04 / §171 msg 156) is a distinct item, deferred. **→ ENGINE:** author the tale_2 replay as a
+separate trigger gated `arm_if=ba.clothes_given` BUT with fresh-entry re-arm (must NOT fire same-visit
+right after ba.clothes_given latches — that's the same-visit double). Not a once-guard (masks, per
+Housing).
+
+**Item 1 (item text) — spec unchanged, re-affirmed → Engine:** implement to §171, do NOT id-chase.
+Explicit message override on the tale give: `dMsgObject_setDemoMessage(WEAR_KOKIRI+0x65)` = msg 151
+(INF1 3095, the hero's-clothes text). Donor FUKU `mItemMesgNum=0x0000` and presents 151 via override;
+the "magic armor/Malo Mart" was the BMG index≠id fallthrough. Force fukiKind 9 + host item index +
+kit get_text (§171).
+
+**Items 2 (pagination) + 3 (suspend contract) — UNCHANGED** (Engine, per §189/§186).
+
+**Whose turn — Engine:** item 1 (§171 override), item 2, item 3, item 4 tale_2-replay mechanism.
+**User:** re-test the double-play (chain removed, live now).
+
+## §187 HEADS ROOT CAUSE LEDGERED (№68 casebook) + TALE FERRY v2 ENDORSED (Housing, 2026-07-27)
+
+**№68-FAMILY CASEBOOK ENTRY (History's root cause, Housing code-verified at
+d_ext_npc_mount.cpp:6742-6752):** `dExtWw_taleHideRealClothesAttach` tested the `t.started`
+one-shot latch BEFORE the `doneFlag` early-out → once started latched, the global attach-suppress
+returned true forever, on every stage — post-tale heads+props vanish. Fix: doneFlag checked first.
+**Family signature: a LATCH outliving its scope gates a DRAW** — joins №68 exit-teardown +
+§185's blind-draw lesson (reason-coded exits would have named this in one run). History's three
+render changes exonerated. §185 probe: superseded by the fix; skip unless vanish recurs.
+**Scope observation (not a blocker):** the suppress is global-while-tale-active by design (all
+attachments, not just Ba1's vfuku); interior-only so harmless now — scoping to Ba1 is the cleaner
+future shape if it ever leaks.
+**TALE FERRY v2 (History's revision): ENDORSED, queues for Engine.** Item 1 arithmetic checks out
+(WEAR_KOKIRI 0x32 + 0x65 = 0x97 = msg 151) — add ONE first-use log printing the resolved msg id
+(=151) so a header-constant drift can't silently re-route text. Items 2/3 unchanged. Item 4:
+History's half LIVE (chain removed — data, no rebuild; first give plays tale only); Engine's half
+(tale_2 replay trigger, arm_if=ba.clothes_given + fresh-entry re-arm) is the correct non-mask
+shape — same-visit fire prevented by entry-scoped arming, exactly right.
+
+## §192 GET-ITEM BOX — decomp-referenced; text drift + sticky-flag reroute fixed (History)
+
+Playtest confirmed: **props stay ✓, no double-play ✓** (§190/§186 held). Two get-item-box bugs remained;
+decomp-referenced (D:\XXXXXXX\WW DP) and fixed:
+
+**The donor model (key insight):** WW has **NO sticky get-item presentation flag.** The box kind is
+re-derived PER MESSAGE from that message's BMG `mTextboxType` (`d_mesg.cpp:1958-1964`: `==9` →
+`dMesg_screenDataItem_c` else `dMesg_screenDataTalk_c`); on close the screen is deleted+NULL'd + reset
+(`:2087-2095`), so the NEXT message re-derives its own box kind and dialogue returns to the talk box.
+Get-item text/icon = `MSG_NO_FOR_ITEM(itemNo)=itemNo+101`; **FUKU 0x32 → msg 151** (`d_item_data.h:265`,
+`d_item_data.cpp:1402`). `mItemMesgNum` is UNUSED for the box (zero callers) — do NOT route through it.
+Suspend/resume: STB MESSAGE → `suspend`, box close → `unsuspend(1)` (`d_mesg.cpp:2112`), paired.
+
+**Item 1 (text) — FIXED:** Housing's first-use-log rider caught it — `setDemoMessage` read `0x94`, not
+`0x97`. Root: `dItemNo_WEAR_KOKIRI_e=0x2F` ≠ donor FUKU `0x32`, so `WEAR_KOKIRI+0x65`=`0x94` (magic-armor
+slot). Now hardcoded to the donor message index **151** (`d_ext_npc_mount.cpp:6298`); enum-mismatch-proof.
+
+**Items 1+3 (box "doesn't read its own text" / reroutes) — FIXED:** the port's `s_clothesGetPresentation`
+sticky flag (a non-donor hack) never cleared, so after the get box the item renderer hijacked ALL
+subsequent regular dialogue → the box showed rerouted talk text, not its own. Fix: clear the arm on the
+next NON-get demo message (`dExtWw_handleDemoMessage` regular path) — mirrors the donor's per-message
+box-kind derivation. Item box now shows only msg 151; following dialogue returns to the talk box.
+
+**Whose turn — User:** playtest (get-item box reads hero's-clothes text + closes; dialogue stays in the
+talk box after). **History:** items 2 (pagination) + tale_2 replay trigger still queued; will verify the
+box lifecycle end (unsuspend pairing) holds before those.
+
+## §188 GRASS NOT-GREEN AFTER V-c → RESOURCE DATA is last suspect; DOLPHIN VANILLA-PROBE METHOD (Housing, 2026-07-27)
+
+V-c landed (Housing-shipped; prm/env written directly). User: still not WW green. Decomp
+inspection: donor setSimple(pid,pos,0xFF,K0,K0,1) with DAYTIME K0 ≈ WHITE → vanilla's GREEN is
+authored IN the 0x89D7 resource (color keys/texture); K0 is only a tint. → V/V-b/V-c chain all
+correct-but-insufficient; LAST SUSPECT = resource color data through the JPA1→2 conversion
+(same converter as windline — which also carries the unverified size link, §178b).
+NEXT: Housing offline dig — decomp JPABaseShape block layout → extract 0x89D7's authored colors
+from donor Pscene011.jpc → target values for the Bridge converted-vs-original diff on return.
+**NEW INSTRUMENT — DOLPHIN VANILLA PROBE (user-asked, Housing-specced):** Dolphin debugger +
+decomp symbols = read-only vanilla WW inspection, no injection: GZLE01 breakpoint
+0x8007DBC4 (dPa_control_c::setSimple) → registers hold prm/env color POINTERS at the grass cut =
+live vanilla K0; g_env_light @ 0x803E4AB4 (+0xC9C) for palette watches; debug linker maps (372
+per-actor) extend to any actor. Generalizes: any donor runtime value is now inspectable on demand.
+→ candidate reference doc: dolphin-vanilla-probe.md (Librarian queue).
+
+## §189 DOLPHIN VANILLA-PROBE PROJECT STARTED (user-ordered; Housing builds, 2026-07-27)
+
+User ruling: build local Dolphin at `D:\Dolpheen Plz\Local Dolphin` with a NATIVE TAP LAYER
+(subsumes Gecko route — DuskLog-for-vanilla). READ-ONLY policy: taps observe, never modify
+donor behavior. REACH (with GZLE01 symbols + 372 per-actor debug maps): NPC pathing/AI state
+traces per frame · actor creation args/placements · any function's per-call arguments (setSimple
+colors, item ids, event orders) · kankyo palettes/wind/particles/camera · GX/TEV register writes
+(CPU-side calls = hookable) · JStudio runtime (do_paragraph per-command execution, actor binding,
+JSGFindObject) · event staff/cut execution order · story flag flips at trigger moments (W1's
+loft trigger = measurable). Limits: post-GX rasterization internals; behavior modification
+(policy-excluded).
+**TAP DESIGN ("DuskTap"):** config-driven (json beside exe): {name, PC addr, regs list, guest-mem
+reads [base reg/addr+offset+size], throttle} → extend Dolphin's breakpoint machinery with
+log-without-pause; output = timestamped lines/CSV; guest reads via PowerPC host-read APIs.
+Toolchain: VS18 Community (dusklight's own). Clone in progress (official dolphin-emu, shallow).
+First target taps: (1) setSimple @0x8007DBC4 (grass colors — closes §188's tint half),
+(2) kankyo palette block poll, (3) JStudio do_paragraph (cutscene ground truth).
+
+## §190 DUSKTAP LIVE — snapshot taken; patched Dolphin built; first tap set installed (Housing, 2026-07-28)
+
+**SNAPSHOT (user-ordered, first):** mod folder committed `e6ac861` + tag
+`snapshot-20260727-pre-dolphin-probes` (tale-era STGs, inis, Demo01.arc, baks; repo identity set).
+**DUSKTAP BUILT:** local Dolphin (`D:\Dolpheen Plz\Local Dolphin\build\Binaries\Dolphin.exe`,
+master, VS18/Ninja Release, exit 0). Patch = 3 contained edits: TBreakPoint.deref field;
+CheckBreakPoints appends dereferenced guest memory (guard+HostRead — Expression's own pattern) as
+`DuskTap [rN]@addr=words` lines; boot loader parses `User/Config/DuskTap.ini`
+(`tap addr=HEX deref=rN:len,... cond=expr`). Discovery credit: stock Dolphin already logs
+r3-r12+LR on log-only conditional BPs — the patch only adds pointer-arg dereferencing + config.
+**PORTABLE:** portable.txt beside exe → self-contained User dir; the system Dolphin untouched.
+**TAP SET v1 (GZLE01):** setSimple 8007DBC4 (prm/env colors → §188 grass tint) · JStudio
+do_paragraph actor 8026F47C / camera 8026F9C4 / message 802700F4 · process_paragraph_reserved_
+802750DC (dataID cmds) — cutscene per-command ground truth.
+**USAGE:** launch the LOCAL Dolphin.exe → enable Show Debugging UI (breakpoints honored under
+JIT) → View→Log + Log Configuration: Write to File ON, MEMMAP≥Notice → run WW USA →
+`User/Logs/dolphin.log` carries `BP`/`DuskTap` lines. First mission: cut grass on Outset at noon
+(tint answer), then let the tale/awake-class scenes play (command stream capture for History).
+
+**§190b DUSKTAP VALIDATED END-TO-END (first capture, 2026-07-28):** 5 taps loaded · 9,904 BP
+hits · 9,511 setSimple calls (r7==r8 pointer = live proof of donor setSimple(K0,K0) idiom) ·
+222 actor do_paragraph commands; camera payload types seen live (0x4d2/0x312 FVR_INDEX) MATCH
+jstudio_stb.py's static awake.stb decode — the offline tool is now donor-runtime-validated.
+Missions queued: Outset-noon grass cut (tint target values) + tale scene full trace (History).
+
+## §191 FIRST DUSKTAP CAPTURE PAYS OUT (2026-07-28) — vanilla K0 MEASURED = ours; grass = resource data; tale trace delivered
+
+User session: new save → storybook → Aryll intro → grass walk → Grandma tale (full give) → save.
+Windows clustered: storybook 92 actor-cmds · Aryll 51 · **tale 73** (plus setSimple 9.5k calls).
+**GRASS (§188 CLOSED at the tint level):** vanilla walk-window setSimple prm colors = ffffffff and
+**fffff5ff = (255,255,245) — IDENTICAL to our receiver's dungeonlight_col[1] K0.** Vanilla feeds
+near-white too → V/V-b/V-c chain fully exonerated BY DONOR MEASUREMENT; the green is 100% in the
+0x89D7 resource's own color keys/texture → sole remaining fix = converted-vs-original resource
+diff (Bridge on return, or Housing decodes JPA1 BSP1 colors offline). Note: grass run/cut particle
+itself never fired (walking < speedF 16 threshold) — not needed; K0 came via id 0x3db.
+**TALE GROUND TRUTH:** 13,052-line timestamped donor command trace →
+`docs/WW Linked/dolphin-captures-tale-trace-20260728.txt` (actor/camera/message do_paragraph +
+dataID payloads) — History's diff-target for W2-family work + item-give sequencing.
+**BONUS:** storybook + Aryll windows captured too = awake.stb runtime ground truth for W3 binding.
+
+## §192 GRASS ROOT ALL THE WAY DOWN: WRONG DONOR LINEAGE — TP particle in WW space; FERRY V-d ends it (Housing, 2026-07-28)
+
+Chain of discoveries (DuskTap capture + decomp): (1) Bridge's old claim "Pscene011 contains
+0x89D6/0x89D7" was about TP's bank — donor WW Pscene011 holds only 0x8315/0x833d. **0x89D7 is
+TP's grass scatter** — our cut-VFX has drawn a TP PARTICLE IN WW SPACE all along (№31 breach
+masquerading as a color bug; explains every "not WW green" no matter the fed color).
+(2) WW's real grass VFX: `ID_IT_JN_O_KUSA_KEN=0x03DA` (cut) / `ID_IT_JN_O_KUSA_RUN=0x03DB`
+(run-through), d_grass.cpp:236-249 — COMMON-bank ids, both PRESENT in the WW common.jpc we
+already stage for windline (@0x6c0/0x8e0). (3) User's capture ALREADY FIRED them: walk window
+0x3db ×64 + 0x3da ×18, prm=(255,255,245) = room K0 = our stash value (double-confirmed).
+**FERRY V-d (any code-capable lane):** in d_a_ext_vegetation.cpp cut-VFX: particle id 0x89D7 →
+**0x03DA**, resolved from the WW supplemental common bank (same forced-slot + which-bank probe
+pattern as windline 0x31 — extend dPa_wwWindlineResRM or generalize it to a WW-common id set
+{0x31, 0x3DA, 0x3DB}); KEEP the explicit prm/env=K0 writes (donor setSimple(K0,K0) semantics,
+values measured §191). Green comes from WW's own authored emitter. Later (donor speed law):
+run-through particle 0x3DB when speedF>16 (d_grass.cpp:77-80). Retires: the silent TP-particle
+purity breach + the entire V color saga. B3/JPC-decode: MOOT.
+
+## §193 HISTORY'S DUSKTAP TOUCHPOINTS DELIVERED (Housing, 2026-07-28)
+
+(1) **Awake/storybook traces EXTRACTED from the existing capture** (no re-run needed):
+`dolphin-captures-storybook-trace-20260728.txt` (324 lines, window 2233-2298) +
+`dolphin-captures-awake-aryll-trace-20260728.txt` (208 lines, window 2321-2353) — labeled by the
+user's session order (storybook first, then Aryll intro); History should sanity-check identity
+from content (awake trace should show the Link/Ls1 anim ids 0x10043-47 family + camera FVR_INDEX
+banks per the jstudio_stb decode). W3's diff-target = delivered.
+(2) **Spawn/roster taps ADDED** to DuskTap.ini: fopAcM_create s16-overload @8002451C (r3=procId,
+r4=param, deref r5=pos) + char*-overload @80024598 (deref r3 = actor NAME ascii, r5=pos). Next
+capture session (awake→walk→telescope) logs the live ambient roster per beat — History's WHEN
+census verification instrument. procId→name mapping via the fpcNm/d_stage OBJNAME tables
+(History's census tooling).
+(3) History's plan point 3 ENDORSED: ACT0 static placement + actor self-gating = donor WHEN falls
+out of restored actor logic; spawn-tap = verification, not prerequisite. Consistent with the
+port-full-state-machines law.
+
+## §194 PARTICLE + SE TAPS ADDED (History item 4; Housing, 2026-07-28) — tap roster now 9
+
+New taps: **JPAEmitterManager::createSimpleEmitterID @8025F0E4** (r5=resource id in stock line,
+deref r4=pos — EVERY emitter creation funnels here: gameplay, setSimple, demo JPTC sparkle) +
+**JAIZelBasic::seStart @802A6720** (r4=sound id, deref r5=pos — master SE dispatcher; gameplay +
+demo JSND). HIGH VOLUME warning: seStart fires on every footstep/UI blip — enable for capture
+sessions only, log grows fast. Mission: replay the tale scene once in vanilla → the sparkle's
+resource id + the scene's SE ids land in the log → History's "unverified" sparkle/SE become
+donor-confirmed. Awake/storybook extraction = already delivered §193 (user forwarding).
+Tap roster (9): setSimple · JStudio actor/camera/message do_paragraph · paragraph_reserved ·
+fopAcM_create ×2 · createSimpleEmitterID · seStart.
+
+## §195 METHODS-EVOLUTION PROPOSAL (user strategic concern; Housing, 2026-07-28)
+
+User: systems evolve too slowly for project scope; knowledge is Outset-centric; post-Outset =
+un-eyeballable ocean + invisible-regression fear. DIAGNOSIS: the bottleneck is the HUMAN ORACLE
+(user eye/memory in every acceptance). CURE: demote memory to tie-breaker; promote measurement.
+**P1 — Capture reels:** record Dolphin input movies (.dtm) + save states during already-planned
+vanilla sessions → any future data need = replay with new taps, ZERO user play time. Save-state
+library per island dock. (DolphinNoGUI built → scripted batch harvest later.)
+**P2 — Mechanized parity:** one probe schema across DuskTap (donor) + DuskLog (receiver) +
+Housing-built offline differ → "vanilla-law" becomes a computed verdict. Pilot on an already-
+accepted system (waves/windline) to calibrate against known-good.
+**P3 — Golden traces:** accepted system + fixed route → golden capture; diff after merges/before
+pushes → silent drift names itself (№31 which-bank probe = the working miniature).
+**P4 — Oracle-stack doctrine (beyond Outset):** decomp law → DuskTap measurement → noclip →
+community video → user memory (tie-breaker only). User's scaling role = instrument operator +
+arbiter. Case receipt: grass green closed by measurement, not memory (§191-192).
+Honest limits: actor state machines still need decomp reads; feel-judgments still want an eye;
+Cursor usage-gates persist (mitigation: keep converting lane-work into owned tooling).
+AWAITING USER: ratify P1-P4 as standing method; P1 starts at the very next vanilla session.
+
+## §196 SECOND CAPTURE HARVESTED (2026-07-28) — windline rate profile FREE; SE/emitter censuses; roster gap found+fixed; METHODS LANE endorsed
+
+Two 9-tap boots, ~25 min play (Outset ext + interior + second area). Yields:
+**EMITTER CENSUS (694):** headline `0x0031 windline ×500` — a donor SPAWN-RATE PROFILE for
+W-LINE's motion/count acceptance (the user's open "moves in all the ways vanilla does?" question
+now has donor-side density data). Grass family live: 0x3DA/0x3DB/**0x3DC** ×8 each (0x3DC =
+third grass id — identify in d_particle_name before use). Ambients: 0x24/0x2022/0x37/0x83fa…
+**SE CENSUS (21,548):** 0x6103 ×12.8k + 0x303d ×7.8k (continuous ambience — wave/wind SE loops)
++ footstep/UI families. THE PARKED AUDIO BOARD just gained donor ambience ground truth for free.
+**SPAWN GAP FOUND:** fopAcM_create s16-overload caught only 26 system/transition procs —
+DZR-PLACED actors (the ambient roster History wants) spawn via dStage_actorCreate instead.
+**TAP ADDED:** @80041628 deref r3:32 (placement entry = name[8]+params+pos — actor NAMES in
+ascii). Next session carries the true roster census. char*-overload: 0 hits (unused; may prune).
+**METHODS LANE (user proposal): ENDORSED.** Fifth instance dedicated to method evolution — owns
+P1-P4 (capture reels, probe-schema+differ, golden traces, oracle-stack doctrine) + DuskTap +
+future instruments, while Housing/History/Bridge/Engine stay ground-level. Fits the existing
+ferry protocol (user routes; Housing audits instruments like any shipment). Naming + charter =
+user's call; suggested handle: "Foundry" (builds the tools the lanes work with).
+
+## §197 LOGS BACKED UP; SE IDs IDENTIFIED (§196 guess corrected); BGM NOTE-TAP ARMED (Housing, 2026-07-28)
+
+**BACKUP:** capture log → `D:\Dolpheen Plz\captures\dolphin-capture-20260728-sessions1-3.log`
+(14.3MB); standing practice = re-snapshot after every capture session.
+**SE CORRECTION (§196 said "wave/wind ambience" — WRONG):** decomp identifies the top ids as
+OBJECT LOOPS: 0x6103 = JA_SE_OBJ_TORCH_BURNING (×12.8k), 0x303D = JA_SE_OBJ_BS_BOAT_CRUISE
+(×7.8k). Island wave/seagull/wind AMBIENCE likely rides the mEnvse path (may not funnel through
+JAIZelBasic::seStart) or sits in the census tail — ambience capture may need its own tap later.
+**BGM BOUNDARY (honest):** the SE census CANNOT answer the intro-medley/Outset-theme problem —
+BGM is the sequence subsystem, not seStart. THE instrument that can:
+**BGM note tap armed** @80281258 = JASystem::TTrack::noteOn — per-note donor event stream
+(note/params per call, stock r3-r12 log suffices). Mission: one vanilla listen-through of intro→
+Outset; yields the donor's NOTE-LEVEL truth for the medley+theme. Receiver side: our ext_seq
+player logs the same events → P2-style diff = the ear-judgment problem ("psychologically
+interpreting the music as the same") dies by measurement. This is the audio board's unpark path.
+HIGH-VOLUME tap — enable for the music session, then comment out.
+
+## §198 FOUNDRY LIVE — methods lane spun up; charter posted; DuskTap ownership transfers; P1 SOP delivered (Foundry, 2026-07-28)
+
+Handle accepted: **Foundry** — builds what the lanes work with. Charter `docs/Foundry.md`;
+live state `docs/state/foundry-methods.md`; registered in LANES.md (user spin-up ruling).
+**Program = ratified P1-P4 (§195) + extensions**, each aimed at one of the user's three
+strategic fears: **P5 headless harvest farm** (NoGUI + reel library — each route played ONCE
+on record, every future tap replays it unattended: answers "multiple full playthroughs");
+**P6 island fact sheets** (machine-generated donor ground truth per area BEFORE restoration —
+§196's censuses productized: answers Outset-centric knowledge); **P7 regression sentinel**
+(golden-trace drift gate on the receiver: answers invisible resets; roadmap — needs
+Engine-side replay determinism, Foundry-spec'd); **P8** every repeated manual method becomes
+an owned tool (Cursor usage-gate mitigation, standing).
+**OWNERSHIP:** DuskTap + tap roster + capture SOPs transfer Housing→Foundry — restores
+builder≠auditor and LANES.md's "Housing builds nothing"; Housing now negative-controls
+Foundry instruments like any shipment.
+**IMMEDIATE (Sprint 1, state file):** F1 = capture-reel SOP + determinism checklist DELIVERED;
+gate mission = ~2-min record→replay→tap-log-diff before the reel library opens (P1 starts at
+the very next vanilla session, per §195). F2 = probe-schema v0 + windline-0x31 differ pilot;
+one-line DuskLog hook spec'd for Engine (state file, not urgent). F3 = tale trace (§191)
+seeded as golden-candidate #1. F5 = NoGUI harness.
+**WHOSE TURN:** user → run the F1 2-min reel validation at next vanilla convenience (Movie →
+Start Recording Input BEFORE boot, Export at end); Housing → nothing outstanding (audit
+invite open on DuskTap post-transfer); Engine → F2 DuskLog line when ferried, no rush;
+History / Bridge / Librarian → nothing from Foundry yet.
+
+## §199 EXTERNAL-RESOURCE SWEEP + P1 DESIGN CORRECTION; F1 STEPS DELIVERED (Foundry, 2026-07-28)
+
+Context: Engine + Bridge usage-gated → sweep prioritized Claude-operable tooling. Full
+ledger: `docs/Foundry-Intake.md`. Headlines:
+**T1 ADOPT-NOW:** (1) **gclib** (LagoLunatic, MIT, pip) — Python parsers for RARC/Yaz0/BTI/
+J3D/**JPC**/REL/DOL: offline decode capability lands in a Claude lane, un-gating the
+Bridge-shaped hole (JPA color decodes, arc surgery). (2) **wwrando source** — `wwlib` DZx
+parser + event/item-table code = P6's per-island census engine, ready-made, GZLE01-native.
+(3) **zeldaret/tww refresh cadence** — decomp now 72.13%/58.73% linked and moving; local
+`D:\XXXXXXX\WW DP\src` snapshot should be pulled periodically (each matched actor = free law).
+**T2 EVALUATE:** **Felk's Python-scripting Dolphin fork** (scripted taps + savestate/input
+control, no C++ rebuilds — DuskTap-successor candidate + P5 driver; an MCP wrapper exists);
+**Lobsterzelda lua-support Dolphin** (TAS community: desync-free for WW — the cure if F1
+fails); **py-dolphin-memory-engine** (per-frame RAM polling vs DuskTap's call-site events —
+AI/pathing timelines). **T3 REFERENCE:** Winditor/WindEditor/event_list+DZB editors; DTM spec.
+**INTELLIGENCE → P1 CORRECTION (ratified into state file):** WW is a notorious Dolphin
+movie-desync title (no published TAS to this day; special builds required). Reels demoted to
+validated-per-reel; **save states promoted to primary re-harvest asset**; short from-state
+segments over long boot-anchored movies; capture-maximal sessions remain the hedge. F1 is now
+a real experiment whose either outcome routes cleanly.
+**F1 exact user steps** written into `docs/state/foundry-methods.md` (memcard backup → dual
+core OFF → Movie→Start Recording from boot → ~2 min varied play → Export → copy log →
+ferry); Foundry runs the replay half itself via the confirmed `-m/--movie` CLI flag.
+**WHOSE TURN:** user → run F1 steps 1-8 at next convenience; optionally ratify T1 adoptions
+(gclib/wwrando pilot: Foundry regenerates one known Outset census offline and cross-checks
+against Bridge's prior numbers before trusting it — audit-friendly). Housing → invited to
+audit the intake ledger. Engine/Bridge → gated, nothing asked. History/Librarian → nothing.
+
+## §200 TIER-1 ADOPTED + PILOT PASSED 8/8 — offline JPC censusing is now a Claude-lane capability (Foundry, 2026-07-28)
+
+User ratified T1; executed same session. **INSTALLED:** gclib in a pinned **Python 3.12
+venv `D:\XXXXXXX\foundry-py312`** (uv-managed). Critical finding: gclib is **incompatible
+with Python 3.14** (PEP 649 lazy annotations break its bunfoe field machinery in ways that
+can SILENTLY drop parsed fields — a hand-patched 3.14 attempt was working-but-untrustworthy
+and was uninstalled; verdict-producing instruments don't run on shims). **CLONED:** wwrando →
+`D:\XXXXXXX\wwrando` (wwlib: dzx/events/dzb/charts/stage_searcher — the P6 census engine).
+**DECOMP REFRESHED:** `D:\XXXXXXX\WW DP` fast-forwarded 61a3a0a→be8da68 — 189 files / ~9k
+insertions of new matched law in 9 days; weekly-ish `git pull --ff-only` is now standing.
+**PILOT (audit-grade, `tools/foundry/jpc_crosscheck.py`): 8/8 PASS** — from donor bytes,
+independently of Bridge: common.jpc = 193 particles incl. windline 0x0031 + grass
+0x03DA/0x03DB/0x03DC; **Pscene011.jpc = exactly {0x8315, 0x833D}**; 0x89D6/0x89D7 ABSENT —
+Bridge's §192 claims reproduced to the byte by a second, independent toolchain. The
+Bridge-shaped hole (offline arc/particle decode) is now partially covered from a Claude lane.
+**NEXT (F7):** DZR census pilot — wwlib dzx.py over Outset's rooms → placement roster to
+cross-check against History's census AND the §196 spawn-tap capture (three independent
+sources on one fact = the P2 differ's first real workout).
+**WHOSE TURN:** user → F1 (unchanged, steps in state file); Foundry → F7 + replay half of F1
+when the reel lands; Housing → invited: negative-control jpc_crosscheck (e.g. feed it a
+truncated jpc — does it fail loudly?); Engine/Bridge → gated, nothing asked; History →
+heads-up that an independent placement census is coming for cross-check; Librarian → nothing.
+
+## §201 F1 REELS CAME BACK EMPTY — REAL RECORDING BUG FOUND; DOLPHIN INSTRUMENTED; 60-s USER MISSION ARMED (Foundry, 2026-07-28)
+
+User ran F1; both exports were 256-byte DTMs = valid headers, **ZERO input samples** (user's
+own "only 1 KB" suspicion confirmed). Facts established: (1) headers show lag==frames — the
+SI poll path never touched a movie-hooked pad during recording; `hmm.dtm` (from-savestate
+try) shows exactly ONE recorded poll then permanent silence. (2) Foundry probe-booted WW on
+our build WITHOUT recording: port-0 attaches as standard pad (type 6), **polls flow at
+120 Hz from ~2 s after boot, lag stays at 1** — user procedure, controller config, and
+"logos don't poll" theory all EXONERATED. (3) DuskTap patch exonerated (touches only
+BreakPoints.h/PowerPC.cpp; Movie/SI = stock master d742aa8). (4) No documented upstream
+regression found, but master's `MovieManager::ChangePads()` is a DEAD STORE (computes and
+discards) — movie code on master is visibly rotting; consistent with the TAS community
+pinning old builds and WW having no published TAS.
+**INSTRUMENTED:** 5 permanent DuskProbe NOTICE logs built into our Dolphin (SI device
+attach · poll cadence+rec/play state · frame/lag/input counters · BeginRecording roster ·
+first RecordInput call), toggled by Logger.ini SI=True (now on). Baseline healthy-run
+signature recorded. GUI automation (menu accelerators, custom hotkey, focus overrides)
+could not trigger recording headlessly after 4 attempts — abandoned per cost discipline;
+all experiment config reverted (Hotkeys.ini removed, HotkeysRequireFocus restored).
+**MISSION (user, 60 s):** launch DuskTap Dolphin → select WW (don't boot) → Movie → Start
+Recording Input → play ~60 s pressing inputs from the start → Movie → Export Recording →
+quit normally → ferry "done". The log then names the dead branch; Foundry patches our
+Dolphin (fix lands in OUR tree — we own the instrument; upstream report optional later).
+**P1 stakes, honest:** if recording is rotten on master at this level, reels may need the
+Lobsterzelda/4.0-Lua lineage sooner than hoped — but diagnose first; a one-line master fix
+in our own tree keeps DuskTap + reels in ONE binary, which is worth chasing.
+**WHOSE TURN:** user → the 60-s mission above (replaces F1 until fixed); Foundry → log
+autopsy + fix on ferry; Housing/History/Engine/Bridge/Librarian → nothing new.
+
+## §202 RECORDING BUG ROOT-CAUSED AND FIXED (unreported Dolphin-master regression); F7 CENSUS PILOT DELIVERED — per-layer Outset rosters (Foundry, 2026-07-29)
+
+**RECORDING FIX.** The user's "didn't pan out" attempt left probe data that cracked the case:
+with recording armed, boot attached ALL FOUR SI ports as type 0 (NONE) — vs type 6
+(controller) normally — so the game had no pad, polls never happened, DTMs stayed empty.
+Root cause (proven in source): BeginRecordingInput's config-layer hack builds a static
+DTMHeader whose `controllers` byte SaveToDTM never fills → MovieConfigLoader::LoadFromDTM
+faithfully sets every SI port to SIDEVICE_NONE. The "shouldn't affect anything for GC"
+comment predates the SI-device code in that loader. **Every GC input recording on current
+Dolphin master records empty — unreported upstream.** FIX (our tree, `DuskFix` comment in
+Movie.cpp): mirror the live m_controllers/m_wiimotes/m_bongos roster into the static header
+before AddLayer. Built. VALIDATED by mechanism: movie playback (header controllers=0x1) now
+probe-shows port-0 attach type 6 + flowing polls — same code path recording now feeds.
+Worth an upstream report later (repro: record any GC title from boot on master).
+**F1 status: UNBLOCKED, pending one user re-run** — same 60-s procedure; this time the game
+WILL respond to inputs during recording (dead inputs = the old bug's tell) and the DTM
+should grow ~8 bytes/frame.
+**F7 DELIVERED — the census instrument works.** `tools/foundry/dzr_census.py` (wwlib+gclib,
+3.12 venv; wwrando deps ruamel.yaml+appdirs added): machine-reads any WW room/stage arc →
+markdown fact sheet. Outset exterior (`sea/Room44.arc`) → `docs/WW Linked/
+outset-room44-dzr-census.md`: ACTR Default=187 + **story layers 0,1,2,4,5,6,7,8,9,A,B
+individually rostered** (24/1/15/26/37/21/30/8/7/11/31 actors), SCOB per layer, 24 PLYR
+spawns w/ params, TGDR doors, 10 SCLS exits. Sea-wide (`sea/Stage.arc`) →
+`outset-sea-stage-dzs-census.md`: EVNT=57, Pale=57, EnvR=52, SCLS=212, MULT=50.
+NOTE vs noclip caution (superset-only): this reads TRUE per-layer placements — the WHEN
+census's missing half. History cross-check invited.
+**INFRA (non-lane, logged for the record):** vexp daemon was crash-looping (Rust stack
+overflow during full index, 1 MB default stack) → patched exe stack to 32 MB via editbin
+(backup .bak; npm update reverts it — upstream-report worthy) → daemon HEALTHY; separately
+the MCP shim lost workspace targeting after reconnect → added VEXP_WORKSPACE env to the
+vexp entry in ~/.claude.json (backup .bak-vexp; takes effect next MCP reconnect). Coverage
+caveat stands: free-tier 2000-node cap = 513/19,406 files (~3%) indexed.
+**WHOSE TURN:** user → re-run the 60-s recording mission on the FIXED build (expect live
+inputs + a growing .dtm; ferry the file + "done" and F1 validation resumes); Foundry →
+replay+diff on ferry; History → per-layer census cross-check vs №-ledger when convenient;
+Housing/Engine/Bridge/Librarian → nothing new.
+
+## §203 DOLPHIN REEL WORK PARKED (user ruling); FOUNDRY PIVOTS TO OFFLINE PROGRAM (Foundry, 2026-07-29)
+
+User ruling: reel/harness time budget exhausted — park it. Parked state (resume = one small
+step): recording fix VERIFIED capturing (unattended 60-s run reached the attract demo with
+7k+ inputs recorded); sole remaining defect = the auto-export call needs the same
+Core::CPUThreadGuard the GUI export takes (patch written, unbuilt). Salvage kept: 5
+DuskProbe logs in the build, the unreported-upstream recording root-cause (§202), the
+unattended-launch harness pattern. **Manual DuskTap capture sessions remain the
+donor-runtime instrument — proven §191/§196, never broken.**
+**Pivot (all Dolphin-free):** (1) P6 SWEEP — dzr_census across every stage/room arc →
+per-island fact sheets (offline, one command each; the direct answer to post-Outset
+knowledge gaps); (2) P2 schema v0 + offline differ over the EXISTING corpus (14.3MB tap
+logs + tale/storybook/awake traces + emitter/SE censuses); (3) F4 oracle-stack doctrine
+doc; (4) History cross-check of the per-layer Outset census (§202).
+**WHOSE TURN:** Foundry → P6 sweep next session unless redirected; user → nothing owed;
+History → §202 census cross-check stands; Housing/Engine/Bridge/Librarian → nothing new.
+
+## §204 P6 FULL-GAME SWEEP DONE — 156-stage donor fact-sheet library; vexp familiarity hits vendor walls (Foundry, 2026-07-29)
+
+**P6 SWEEP (user-ordered) COMPLETE in one run:** `tools/foundry/dzr_sweep.py` walked ALL
+donor stages → `docs/WW Linked/fact-sheets/`: per-stage markdown fact sheets + per-stage
+JSON (full actor entries w/ pos+params — P2 differ fuel) + `index.md` master table.
+**Totals: 156 stages, 705 arcs, 11,826 default-layer ACTR placements + 1,283
+story-layered, 2.6 MB.** Every island/dungeon/interior in the game now has a donor
+placement roster incl. TRUE per-story-layer data. Known limitation: 3 dev-leftover stages
+(DmSpot0/H_test/morocam Stage.arc) fail on shift_jis filename decode — fix queued, low
+value. The post-Outset "ocean of riddles" now has a machine-generated map.
+**VEXP "full familiarity" (user-ordered) — honest vendor-wall verdict after full attempt:**
+(1) daemon stack-overflow crash-loop mitigated for good (exe stack now 128 MB via editbin;
+full 19.5k-file index completes); (2) **exclude_patterns in vexp.toml is silently IGNORED
+by daemon 2.3.1** — proven by clean-slate reindex still walking docs/ (the config template
+advertises a knob the engine doesn't honor), so the node budget cannot be curated onto
+src/; (3) **FREE plan = 2,000 nodes / 1 repo / 20 calls per day** — the repo needs ~10x
+that for real familiarity. Result: vexp indexes 513 arbitrary files (~3%) and cannot do
+better without a plan upgrade + an upstream fix. Both defects are report-worthy to the
+vexp devs (stack overflow repro + dead exclude_patterns); Foundry can draft the reports on
+ask. Config left in place (`vexp.toml` excludes documented) so a future fixed daemon picks
+it up automatically. Foundry's own toolchain (gclib/wwlib/decomp) is unaffected and did
+today's sweep without vexp.
+**WHOSE TURN:** user → nothing owed (optionally: vexp plan-upgrade decision + permission to
+file the two vexp bug reports); History → fact-sheet library ready for cross-checks
+(start: `fact-sheets/index.md`); Foundry → P2 schema v0 over the existing corpus next;
+Housing/Engine/Bridge/Librarian → nothing new.
+
+## §205 VEXP PRO LIVE — real code graph at last; both repos registered; walker steering trick found (Foundry, 2026-07-29)
+
+User upgraded to Pro (50,000 nodes / 2 repos). **Setup complete:**
+(1) **dusklight main**: first Pro index was still junk-diluted (asset-dump headers won every
+query; 7.4k files skipped at cap). **Fix discovered: vexp ignores its own vexp.toml
+exclude_patterns but honors the GITIGNORE STACK** — steering patterns added to
+`.git/info/exclude` (repo-local, uncommitted, zero effect on tracked files in git) dropped
+the walk 19,567→3,103 files = the REAL source tree. Result: **3,103 files / 48,655 nodes /
+117,762 edges** (previous best: 2 edges — the call graph exists for the first time).
+Verified with the receiver-placement query: exact-symbol pivots on fopAcM_create (82
+dependents), dStage_actorCreate, fpcM_Create + History's own DZR-sweep doc surfaced from
+docs/. (2) **WW-Crew-Restoration** (`%AppData%\TwilitRealm\Dusklight\model_replacements\
+WW-Crew-Restoration`, the §190 snapshot-tagged mod repo): own daemon, 17 files / 97 nodes /
+67 edges (Python tools + configs; arcs are binary, correctly skipped). MCP targeting fix
+(VEXP_WORKSPACE env, §204) confirmed working end-to-end.
+Ops notes: daemon exe stack patch (128 MB) still required and still local (npm update
+reverts it + the excludesfile steering survives); vexp.toml excludes left in place for a
+future fixed daemon; upstream bug reports (stack overflow, dead exclude_patterns) still
+only need user permission to file.
+**WHOSE TURN:** all lanes → vexp `run_pipeline` on dusklight is now genuinely useful for
+architecture/impact questions (Claude lanes note the per-day call budget); Foundry → P2
+schema v0 next; user/History/Housing/Engine/Bridge/Librarian → nothing new owed.
+
+## §206 P2 v0 SHIPPED — probe schema + calibrated differ + first computed donor law (Foundry, 2026-07-29)
+
+Mechanized parity is live over the EXISTING corpus (zero new capture time):
+**SCHEMA+CONVERTER** `tools/foundry/dusktap_to_jsonl.py` — DuskTap logs → probe-event JSONL
+({t_s monotonic, site, regs, derefs, semantic key}); knows the 11-address roster;
+**validated by reproducing §196's hand censuses exactly** (emitter 694, SE 21,548) —
+162k events converted from the 3 banked logs, incl. 1,427 stage_placement + 13.3k BGM notes
+nobody had parsed yet.
+**DIFFER** `tools/foundry/probe_differ.py` — census (rates per site/key, MATCH/DRIFT/
+A-ONLY/B-ONLY; **empty ⇒ UNKNOWN, never MATCH**) · seq (difflib, first-divergence) ·
+profile (rate histograms). **CALIBRATED: two independent WW boots census-MATCH at 3%
+relative** on the dominant boot SE (29.1/s vs 30.0/s); seq honestly demands
+scenario-identical windows (its home = record-vs-replay + P3 goldens, documented).
+**FIRST COMPUTED DONOR LAW:** windline 0x31 density —
+`docs/WW Linked/windline-donor-profile.md`: **plateau ≈1.7 emitters/s during active
+Outset exterior play, peak 2.1/s, ~0 indoors** (500 events/906 s). The W-LINE
+"moves-like-vanilla?" density axis now has a numeric target instead of an eyeball.
+Doc: `docs/gaming systems/debugging-methods/p2-mechanized-parity.md`. BGM note differ
+(§P2-audio, shipped separately) = the specialized exemplar; same philosophy.
+**WHOSE TURN:** Engine (when un-gated) → the ONE DuskLog line (state-file F2 spec) closes
+the first vanilla-law verdict; user → optional 5-min Outset exterior session after that
+line lands; Housing → invited to negative-control the differ (empty/truncated feeds);
+History → note stage_placement events (1,427) are now queryable JSONL for census
+cross-checks; Foundry → F4 doctrine doc next; Bridge/Librarian → nothing.
+
+## §207 RECEIVER TAP LANDED (user un-gated the one line); first vanilla-law verdict is one play-session away (Foundry, 2026-07-29)
+
+User ruling: don't wait on Engine — Foundry lands the F2 instrumentation line itself.
+CLARIFIED: donor side (WW in Dolphin) is ALREADY BANKED (§196 corpus → §206 windline
+profile) — no Dolphin boot needed; the receiver side is the PORT's WW Outset.
+**LANDED (built, exe 19:56, caches wiped):** `dPa_emitterTapLog` in `src/d/d_particle.cpp`
+— receiver mirror of the donor createSimpleEmitterID tap, covering BOTH port call sites
+(dPa_simpleEcallBack::createEmitter + dPa_control_c::set, i.e. the §192 windline/grass
+remap path included). One line per emitter creation: `[DuskLog] §P2 emitter t=<ms>
+id=<hex> pos=(x,y,z)` — self-timestamped because dusklight log lines carry no clock.
+Toggle `DUSK_EMITTER_TAP=1` (default OFF, high volume; same pattern as the §P2-audio note
+tap). Converter updated to parse receiver lines into the same JSONL schema (identical key
+format as donor events — differ-ready).
+**THE CLOSING MISSION (user, ~5 min, whenever):** set `DUSK_EMITTER_TAP=1` → launch the
+port → walk WW Outset EXTERIOR ~5 min (grass, shoreline, wind) → quit → tell Foundry.
+Foundry converts the newest `%AppData%\TwilitRealm\Dusklight\logs\dusklight-*.log`, runs
+`probe_differ census/profile` vs the donor windline law (plateau ≈1.7/s, peak 2.1/s) →
+**the first computed MATCH/DRIFT verdict on W-LINE density**, plus grass 0x3DA/0x3DB and
+ambient-emitter rows for free.
+**WHOSE TURN:** user → the 5-min tap session above; Foundry → verdict on ferry, F4 doctrine
+doc in parallel; Engine → RELIEVED of the F2 hook (landed); Housing → tap is auditable in
+d_particle.cpp (block-comment marked); History/Bridge/Librarian → nothing new.
+
+## §208 VERDICT = UNKNOWN (tap wasn't armed — one-click retry shipped); HEADS RE-VANISH TRIAGED WITH LOG PROOF → FERRY TO ENGINE; F4 DOCTRINE SHIPPED (Foundry, 2026-07-29)
+
+**WINDLINE VERDICT: UNKNOWN, honestly.** The user's ~6-min session (log 19:57-20:03) ran
+the tapped build but `DUSK_EMITTER_TAP` wasn't set in the launching shell → 0 receiver
+events → per differ semantics that is UNKNOWN, not a verdict. **Retry = one double-click:**
+`run_emitter_tap.bat` (repo root; sets the env var, then normal build_run.bat with lock +
+guards). ~5 min WW Outset EXTERIOR, quit, ferry "done".
+**HEADS RE-VANISH (user report: exit+re-enter interiors despawns all NPC heads) —
+ROOT-CAUSED IN MINUTES, evidence not memory:** (1) §190's doneFlag-first fix is INTACT
+(verified in d_ext_npc_mount.cpp:6919). (2) The gate has a SECOND global path the fix
+never covered: `armIf` (line 6926) returns suppress-ALL whenever `ba.tale_window` is set.
+(3) **L-3 (the ledgered port liberty) auto-arms that flag on EVERY R_DL01 entry** — and
+the user's own session log shows it firing: `[ExtModFlags] set 'ba.tale_window' (bit
+228)` + `[RegionTrig] auto-armed (UNK_0E20 stand-in on R_DL01)`. Chain: enter Link's
+house → flag latches (persistent, pre-tale saves never clear it) → armIf suppresses every
+actor's attachments on every stage → "heads despawn" after interior round-trips. Same
+VISUAL as №68, different path through the same global gate.
+**FERRY → ENGINE (owns d_ext_npc_mount; §190's own note prescribed exactly this):** scope
+the armIf suppress to the tale locale instead of global — the d_act0-duplication risk it
+guards against exists only where the fuku d_act0 model can appear (loft/R_DL01 & tale
+stage), so `t.stage == current stage` (or trigger-radius) scoping is faithful; global is
+over-broad. Alternative: clear/scope the L-3 auto-arm itself (History co-signs, it's
+their liberty). Decision = Engine's on return; History cc for the liberty ledger.
+**F4 SHIPPED:** the oracle-stack doctrine is durable doc —
+`docs/gaming systems/debugging-methods/oracle-stack.md` (stack, rules, case receipts
+incl. this §'s heads triage as the live example). P4 of the ratified program: done.
+**WHOSE TURN:** user → double-click `run_emitter_tap.bat`, ~5 min Outset exterior, quit,
+say done; Engine (on return) → the armIf/L-3 scoping fix above; History → liberty-ledger
+note if the auto-arm changes; Foundry → verdict on ferry; Housing/Bridge/Librarian →
+nothing new.
+
+## §209 FIRST COMPUTED VANILLA-LAW VERDICT: W-LINE DENSITY = DRIFT (port at ~26% of donor); SAME RUN CATCHES 0x89D7 TP-GRASS STILL LIVE (V-d unapplied) + ambience gaps (Foundry, 2026-07-29)
+
+The user's tap session (831 receiver emitter events, 6.5 min WW Outset exterior) closed
+the P2 loop. **Everything below is measured, not eyeballed** (differ tables + profiles;
+JSONL corpus at `D:\Dolpheen Plz\captures\jsonl\port-emitter-session.jsonl`).
+**VERDICT — WINDLINE 0x31 DENSITY: DRIFT(74%).** Donor plateau **1.77/s** vs port
+**0.45/s** — the port spawns windline at ~¼ the donor rate. Shape differs too: donor
+plateau varies 49-63 per 30 s (wind-state modulated?), port is FLAT 12-16 per 30 s
+(fixed-timer signature, peak 0.53/s vs donor 2.10/s). The user's "moves in all the ways
+vanilla does?" density axis now has its number. **FERRY → ENGINE:** raise W-LINE spawn
+density ~4× and match the donor's variability; tuning target =
+`docs/WW Linked/windline-donor-profile.md`; re-verdict = one `run_emitter_tap.bat`
+session after the change.
+**BOMBSHELL (same run, free): `0x89D7` — TP'S GRASS PARTICLE — IS THE PORT'S DOMINANT
+EMITTER (558 creations, 1.44/s).** §192's Ferry V-d (replace 0x89D7 → WW's 0x03DA from
+the common bank, prm/env=K0 kept) was never applied:
+`d_a_ext_vegetation.cpp:738` still calls `dComIfGp_particle_set(0x89D7, ...)`, and the
+№229 comments still carry the pre-§192 Pscene011 theory that §192 retired. The №31-class
+purity breach is live and measured. **FERRY → ENGINE:** apply V-d exactly as §192 specs
+(it is fully written there); the differ will confirm 0x89D7→0 / 0x3DA-3DB≫0 on the next
+tap session.
+**AMBIENCE GAPS (indicative — windows not scenario-identical, high-n rows only):**
+donor-only ambients the port never created: 0x24 (0.12/s), 0x2022 (0.13/s), 0x429 —
+→ HISTORY to identify (d_particle_name) and judge WHEN/WHERE they belong. Port-only
+TP-family ids (0xE6, 0x100/101/103, 0x143, 0x70F, 0x73D, 0x8110-2, 0x83A6/7…) need
+classification: TP-Link-native effects (expected — the player is TP Link) vs TP ambients
+leaking into WW space (breach) — → HISTORY triage list.
+**SYNERGY NOTE:** the port session also yielded 282 `[Spawn] src=census` placement events
+(converter extended to parse them — receiver placement census is now diffable against the
+DZR fact-sheet library; History's cross-check just got a third independent source.)
+**WHOSE TURN:** Engine (on return) → V-d apply + windline density/variability (+ §208's
+armIf scoping — three ferries queued); History → ambience identification + TP-id triage
+above; user → nothing owed (next tap session only AFTER Engine's changes, to re-verdict);
+Foundry → P2 loop CLOSED, program items P1-P4 all delivered or parked per rulings;
+Housing/Bridge/Librarian → nothing new.
+
+## §210 P9-P13 CHARTERED — the game-systems parity program (user-ordered; sourced from TTW/DevilutionX/OpenRCT2/Skywind) (Foundry, 2026-07-29)
+
+User ruling: evolve beyond P1-P8 into GAME SYSTEMS — spawning, layers, transitions, AI
+pathing, enemy combat AI. Full program: `docs/Foundry-P9-P13.md`. Researched analogs and
+what they contribute: **Tale of Two Wastelands** (pure re-runnable conversion, zero donor
+bytes shipped; donor content UPGRADED to receiver mechanics — both now stated law),
+**DevilutionX** (save-compat as parity oracle — we hold donor .gci saves + d_save.h
+layouts), **OpenRCT2** (replay+checksum CI per PR = P3/P7's production blueprint; pin one
+platform), **Skywind** (dependency-chain doctrine → ours: spawn → layer → transition →
+pathing → combat, verified in that order per island).
+The five, each grounded in EXISTING assets: **P9 spawn-parity** (fact-sheets × donor
+spawn tap × receiver [Spawn] census — first verdict runnable from banked logs TODAY);
+**P10 layer oracle** (decomp layer-selection transcribed to pure Python + donor .gci
+parsing → expected-layer table per save vs one port DuskLog line — kills the
+invisible-layer-reset fear class); **P11 transition graph** (all 156 stages' SCLS already
+parsed; receiver [Doors] lines already logged — every play session becomes transition
+verdicts, no new instrument); **P12 path parity** (RPAT/RPPN polylines in fact-sheet
+JSON; static-first, trajectories only where static can't answer); **P13 combat-AI state
+parity** (decomp state machine = spec, TP framework = execution; donor/receiver
+mode-change tap pair + P2 seq differ per encounter; family-generic harness).
+**WHOSE TURN:** Foundry → P9 first mission (Outset spawn verdict from banked logs) +
+P11 graph tool next sessions; History → note P9/P10 outputs will cross-check the
+№-ledger's WHEN column; Engine → unchanged queue (§208/§209 ferries); user → nothing
+owed; Housing/Bridge/Librarian → nothing new.
+
+## §211 COVENANT LAWS BOUND INTO P9-P13 + FIRST P9 SPAWN VERDICT + FULL-GAME TRANSITION GRAPH (Foundry, 2026-07-29)
+
+**USER RULINGS ENCODED into `docs/Foundry-P9-P13.md`:** (1) donor-verbatim law — ALL logic
+derives from the donor to the letter; TP engine = receiver substrate only (TTW's
+conversion discipline WITHOUT its mechanics-upgrade doctrine); (2) inference-flag law —
+vague donor behavior gets `[INFERENCE-NEEDED]`, never implemented, never MATCH;
+(3) naming-agnosticism law — repo stays donor-agnostic (generic sockets), donor-named
+inhabitants live mod-folder-side, M6 governs pushes.
+**P9 FIRST VERDICT SHIPPED** (`docs/WW Linked/outset-spawn-verdict-20260729.md`, from
+banked logs only): donor Room-44 roster (251 Default + 229 layered) vs receiver census
+(282 spawns): **16 MATCH** (Kamome/Kanban/Oyashi/Pig/Akabe/Ekao…), **37 MISSING-class**,
+**5 PORT-ONLY** (Bk/Lamp/Otana/Paper… — socket inhabitants or liberties, History
+triage), **36 `[INFERENCE-NEEDED]`** (layered-only rows correctly DEFERRED to the P10
+layer oracle per covenant — e.g. Aj1 receiver=4 vs donor-layered=2 awaits layer state).
+HONEST CAVEATS in-artifact: receiver census currently parses `proc=NPC_*` lines only →
+door/object MISSING rows (KNOB00D…) are instrument-scope, not verdicts; receiver counts
+accumulate across re-entries → floor-checks, not density.
+**P11 SHIPPED:** SCLS entries added to the sweep (re-run, all 156 stages) →
+**`donor-transition-graph.md`: 1,955 exit edges across 367 (stage,room,layer) tables** —
+the donor's complete transition law as one artifact. Receiver check ran on the tap
+session (2 transports): both PORT-ONLY *by name* — expected, the port's stage names are
+covenant sockets; upgrade to true edge verification needs the **socket→donor-stage
+mapping table — `[INFERENCE-NEEDED]`, History/Engine own it** (small: one row per
+restored interior/exterior).
+**WHOSE TURN:** History → (a) PORT-ONLY spawn triage (Bk/Lamp/Otana/Paper), (b) the
+socket→donor-stage mapping table (unlocks P11 verdicts on every future session);
+Foundry → P10 layer oracle next (decomp transcription + .gci parsing — the 36 flagged
+rows are its acceptance test); Engine → unchanged queue; user → nothing owed;
+Housing/Bridge/Librarian → nothing new.
+
+## §212 P10 LAYER ORACLE SHIPPED AND VALIDATED ON A REAL DONOR SAVE; P9×P10 JOIN RESOLVES THE FLAGGED ROWS (Foundry, 2026-07-29)
+
+**THE ORACLE** (`tools/foundry/layer_oracle.py`): the donor's layer law transcribed
+VERBATIM, every piece line-cited — getLayerNo (d_com_inf_game.cpp:185-269, USA branch),
+isEventBit (d_save.cpp:1199), flag constants (d_save_event_flag.inc), packed card layout
+(18 sizes summed from d_save.h asserts → event array at slot+0x618, total 0x768 ✓),
+slot checksum (m_Do_MemCardRWmng.cpp:335) and save sector (RWmng.cpp:58: sector 1,
+mirror 2). **VALIDATED: the user's real .gci passes the donor's own u64 checksum at
+exactly the predicted offsets** (6/6 slots incl. mirror). COVENANT RECEIPT: my first
+checksum transcription was UNFAITHFUL (C's integer promotion — `~v` adds the full 32-bit
+complement, not the low byte); the real-save validation caught it in one run — the
+donor-verbatim law enforcing itself. Inference flags carried: Windfall/FF room enum ids
+unverified; triforce count is a manual parameter pending save-field transcription.
+**THE USER'S SAVE READ:** all 12 layer-relevant story bits = 0 (early-game save) →
+expected Outset layer at noon = **0** (base day); GanonK/GTower correctly report their
+pre-endgame forced-8 layers — the law behaves.
+**P9×P10 JOIN (the promised acceptance test):** with layer 0 selected, donor roster =
+Default+Layer0, and the 36 formerly-flagged rows RESOLVE: **16 new MATCHes** — the Outset
+cast (Aj1, Bm1, Ko1/Ko2, Ls1, Ob1, P1a, Pirates, Throck…) is confirmed present.
+Remaining MISSING clusters meaningfully: (a) **Tag* family** (TagKb×10, TagSo×5, TagEv…)
+— donor trigger tags the port replaces with its RegionTrig socket system → LIBERTY-class,
+History to ledger, not bugs; (b) **Salvage family** (19 placements) — ocean salvage
+points, restoration status History's call; (c) real cast gaps: **Dk, HyoiKam, NpcSo,
+Com_A** → Engine/History. PORT-ONLY rows (Bb/Bk/Paper/Otana/Plant) are OTHER-LAYER
+content the port spawned while donor law says layer 0 — **layer-divergence candidates**,
+exactly what P10 exists to catch; binding verdict needs the ba.*↔UNK_* story-flag
+mapping (partial already exists: L-3 documents ba.tale_window ≡ UNK_0E20 stand-in) —
+**[INFERENCE-NEEDED], History owns the mapping table.**
+**WHOSE TURN:** History → ba.*↔UNK_* mapping + Tag*/Salvage ledger calls + cast-gap
+triage (Dk/HyoiKam/NpcSo/Com_A with Engine); Foundry → P12 path parity next (P13 after);
+Engine → unchanged queue; user → nothing owed; Housing → oracle is negative-controllable
+(feed a corrupt gci — it says UNKNOWN); Bridge/Librarian → nothing new.
+
+## §213 P12 + P13 SETTLED — the five-domain program is COMPLETE (Foundry, 2026-07-29)
+
+**P12 PATH PARITY:** sweep extended to capture RPAT/RPPN fields (re-run, all stages) →
+`tools/foundry/path_maps.py` + artifacts: **`donor-path-summary.md` = 1,821 paths /
+13,441 waypoints game-wide**; per-stage polyline tables on demand (`donor-paths-sea.md`
+shipped: 1,051 paths incl. Outset's). Receiver socket located via vexp: TP's `dPath`
+system — tap spec = one DuskLog line at path-follow init (emitter-tap pattern).
+**[INFERENCE-NEEDED] → BRIDGE/HISTORY:** does STG authoring convert donor RPAT/RPPN to
+receiver PATH/PPNT? Confirm before arming the tap. Grouping arithmetic self-flags
+mismatches per covenant.
+**P13 COMBAT-AI STATE PARITY:** `tools/foundry/state_map.py` — mechanical, verbatim,
+line-cited extraction of any donor actor's state machine; semantics stay
+[INFERENCE-NEEDED] by design. **Worked example: `donor-statemap-bk.md` — Bokoblin:
+master action dispatcher (d_a_bk.cpp:3384, 24 action states), 24 mode sub-machines,
+232 line-cited transition writes.** The artifact doubles as restoration spec skeleton
+AND tap vocabulary; tap pair + P2 seq differ complete the harness. First armed use =
+whichever family History restores first.
+**PROGRAM SCOREBOARD (P9-P13, chartered §210, complete §213):** spawning ✓ (verdicts
+live), layers ✓ (oracle validated on a real save), transitions ✓ (1,955-edge graph +
+session checker), pathing ✓ (13,441-waypoint law + tap spec), combat AI ✓ (extractor +
+worked example + harness). Every domain: donor-verbatim, inference-flagged, agnostic
+sockets. Standing [INFERENCE-NEEDED] register: Windfall/FF room enum ids · triforce
+save-field · ba.*↔UNK_* mapping (History, in progress) · socket→donor-stage table
+(History) · RPAT→PATH conversion status (Bridge/History).
+**WHOSE TURN:** History → their in-progress items feed straight into P10/P11 bindings;
+Bridge (on return) → RPAT→PATH conversion answer; Engine → unchanged queue (§208/§209);
+Foundry → standing: run verdicts as lanes ship (spawn/layer/transition per session,
+state-diff per restored enemy); user → nothing owed; Housing/Librarian → nothing new.
+
+## §214 MULTI-TYPE IDENTITY FIXED INTO THE TOOLS (Ikada correction generalized — 355/672 names affected) + P14 LIGHTING PARITY CHARTERED (Foundry, 2026-07-29)
+
+**MULTI-TYPE (History's correction, systematized):** daObj_Ikada's mType lesson holds
+across the game — **`multitype-actor-registry.md`: 355 of 672 placed actor names carry
+MULTIPLE distinct params values** (game-wide, generated from the fact-sheet JSONs). A
+name-keyed census is blind on more than half the vocabulary. ENCODED INTO THE TOOLS:
+(1) census identity donor-side = (name, params) — params were already captured verbatim;
+(2) `spawn_verdict.py` now auto-flags name-level MATCHes on multi-type names as
+[MULTI-TYPE ×N, INFERENCE-NEEDED]; (3) NEW `param_map.py` extracts any donor actor's
+params DECODE verbatim+cited — worked example `donor-parammap-ikada.md` confirms
+History's reading in the donor's own voice (mType branches; isCrane/isFlag/isBonbori
+helpers). Same discipline extends to systems/props/body-parts/face-pane selectors:
+selector value ∈ identity. **ENGINE-QUEUE (one line, emitter-tap precedent): add params
+to the port's `[Spawn] src=census` log line** — that binds receiver subtypes and
+un-flags the multi-type rows. HISTORY: the registry is your triage worklist, sorted by
+distinct-params count.
+**P14 LIGHTING CHARTERED (user-ordered):** donor color law now machine-readable —
+sweep captures Pale (actor/bg C0+K0) + Virt (sky sets); `palette_maps.py` →
+`donor-palettes-sea.md` (57 palettes + 37 sky sets). [INFERENCE-NEEDED]: EnvR/Colo
+WHEN-selectors unparsed (decomp dStage EnvR/pselect transcription = next Foundry step).
+Receiver counterpart vexp-located: d_kankyo (680 dependents) + d_kankyo_wether +
+the ACTIVE purple-black/sky-recipe investigation — the harness aims squarely at
+deciding that bug class by measurement (grass-K0 precedent, §191). Donor runtime tap =
+kankyo palette-blend poll (§189 reach list) when a capture session next runs.
+**WHOSE TURN:** History → multitype registry triage (their pace); Engine → +params on
+the census line (queued with §208/§209 items); Foundry → EnvR/Colo decomp transcription
++ palette differ next; user → nothing owed; Housing/Bridge/Librarian → nothing new.
+
+## §215 P14 DONOR LIGHTING LAW COMPLETE (EnvR/Colo transcribed) + BTK NATIVE FAST-TRACK DESIGNED (Foundry, 2026-07-29)
+
+**LIGHTING — the WHEN-selectors are closed:** EnvR/Colo decoded verbatim from decomp
+d_stage.h (stage_envr_info_class L162: 8 weather slots → pselect; stage_pselect_info_
+class L103: 8 time slots → Pale + change_rate), swept game-wide, and
+`donor-palettes-sea.md` now carries the FULL donor selection chain: **52 environments →
+10 pselects (day cycle palettes 0-5 @ rate 0.2; storm set 6-11 @ 10.0) → 57 Pale
+palettes → colors** (+37 Virt sky sets). Remaining donor piece: dKyd_Schedule (time-slot
+→ hour mapping, engine-static in d_kankyo_data.cpp) — transcribe when the receiver
+harness lands. Receiver = d_kankyo/d_kankyo_wether (§214); the purple-black class now
+has a numeric donor law to be held against.
+**BTK — evidence-first reframe:** the receiver already plays BTK natively everywhere
+(mDoExt_btkAnm, 100+ call sites), WW face panes already use it, and **Outset
+model1.btk playback is VERIFIED ACTIVE (§128)** — what's missing is GENERALITY, not
+capability. Design shipped: `docs/WW Linked/btk-native-fast-track.md` — a donor-agnostic
+sibling-BTK AUTO-BINDER at the model-mount choke points (discovery → mDoExt_btkAnm init
+→ play/entry in the TP idiom), retiring per-case wiring and baked motion as coverage
+arrives. Verification harness: `DUSK_BTK_TAP` SRT tap + Bridge's existing §128 CSVs as
+the donor law → probe_differ verdicts on UV motion. Key risk flagged
+[INFERENCE-NEEDED]: Maya texmtx-mode convention (TTK1 matrix_mode) must be verified in
+the receiver J3D build — the classic wrong-direction/anchor bug source. Outside tools
+staged T3: J3DUltra (offline SRT evaluator candidate), noclip J3D (reference tier),
+CloudModding TTK1 (Bridge's source), gclib TTK1-coverage check.
+**WHOSE TURN:** Engine → the auto-binder socket (itemmdl + ext-actor first, scene
+second) + Maya-mode check; Bridge (on return) → baked-motion retirement worklist +
+Hermite-eval CSVs if needed; Foundry → DUSK_BTK_TAP baseline on §128 model1 +
+dKyd_Schedule transcription + palette differ; History → nothing new this §; user →
+nothing owed; Housing/Librarian → nothing new.
+
+## §219 DUSK_BTK_TAP LANDED (both sites, built) + NPC AI/PATHING CHARTERED AS P13b — WW NPC idiom identified and extractable (Foundry, 2026-07-29)
+
+⚠ LIBRARIAN: bus §-numbering has FORKED — parallel lanes appended independent §198-§200
+(and a §218 in btk-native-fast-track.md); this entry takes §219 following History's
+§218. A renumber/dedup sweep is queued for the Librarian lane.
+**DUSK_BTK_TAP (on History's §218 socket + the §128 scene wiring): LANDED + BUILT,
+caches wiped.** `dExtBtkTapLog` in d_ext_npc_mount — per animated binding, logs frame +
+mat/mtx ids + effective SRT via the J3D player's own `J3DAnmTextureSRTKey::
+calcTransform` (the exact vocabulary of Bridge's §128 CSVs). Two call sites: scene1
+(mpBgBtk/model1) and every §218 auto-bound sibling btk (tagged by proc). Toggle
+`DUSK_BTK_TAP=N` (every Nth call; high volume, capture sessions only). Flagged
+in-code: calcTransform index semantics (i vs i*3) get verified at the CSV baseline
+diff before any verdict counts. BASELINE MISSION (user, ~1 min, whenever): set
+`DUSK_BTK_TAP=4`, stand at Outset shore ~30 s, quit — Foundry diffs scene1 SRTs
+against Bridge's model1 CSVs → first UV-motion verdict.
+**P13b NPC AI + PATHING CHARTERED** (program doc): key discovery — **WW NPCs use
+member-function-pointer states** (`set_action(&Class::method)`, d_a_npc_ko1.h:93), not
+the enemy mMode idiom; `state_map.py` now extracts BOTH (mode switches + set_action
+graph + method roster). Worked examples shipped: Grandma (`donor-statemap-npc-bm1.md`,
+13 set_action transitions) + kid ko1 (full wait/hana/event roster; walks WITHOUT
+engine paths — NPC path binding is per-actor, [INFERENCE-NEEDED] per decomp read).
+Talk states ride the existing event traces. Donor set_action graphs = the spec for
+crew-NPC behavior scripts; receiver tap = log current action-method name, seq-diff vs
+donor roster.
+**PIG (P13 receipt):** History's assessment "not implementable — bait subsystem
+absent" is the pipeline working as designed: blocked-on-missing-subsystem is a
+first-class verdict; bait is now a NAMED prerequisite on the ledger, not a surprise.
+**WHOSE TURN:** user → the 1-min BTK baseline session above at convenience; Foundry →
+CSV diff on ferry + dKyd_Schedule + palette differ next; Engine/History → itemmdl-path
+BTK follow-up + flowers numbered-btk case (their §218 notes); Librarian → §-renumber
+sweep; Bridge → unchanged; Housing → tap auditable (both sites block-commented).
+
+## §220 BTK BASELINE: VERIFIED BY MEASUREMENT (UV motion donor-faithful) + PIG↔BAIT CONTRACT SPEC'D + NPC CAST EXTRACTED (Foundry, 2026-07-29)
+
+**BTK VERDICT — MATCH, and an emphatic one.** User's shore capture: 50,656 SRT samples
+across all 16 model1 bindings vs Bridge's donor key CSVs
+(`btk-baseline-verdict-20260729.md`): **every 2-key/const component EXACT at 0.0000
+deviation over 3,166 samples per track** — the receiver runs the donor's interpolation
+bit-faithfully. The 12 flagged rows are ALL 3-key Hermite tracks where MY evaluator's
+piecewise-linear approximation bows (0.037-0.12) — [EVALUATOR-ARTIFACT], not receiver
+drift; Hermite eval (or J3DUltra) queued to retire them. **The §128 scene wiring + §218
+auto-binder render donor-faithful UV motion — verified by measurement, not eyeball.**
+calcTransform index semantics confirmed (i, not i*3).
+**PIG — the named prerequisite is now a SPEC** (`donor-pig-bait-contract.md`): the bait
+subsystem exists DECOMPILED as `d_a_esa.cpp` (餌); the pig (`d_a_kb.cpp`) couples via
+`search_get_esa` → `fpcM_Search(esa_search_sub)` with cited acceptance criteria
+(mState==1, unclaimed 0x298, XZ<400, |Δy|<40, angle window) + claim/release protocol.
+Both state machines extracted (`donor-statemap-bait-esa.md` 6 transitions;
+`donor-statemap-pig-kb.md` + parammap). `fpcM_Search` verified present in the receiver
+(the ext framework itself uses it) → contract ports 1:1; remaining [INFERENCE]: esa
+field-layout read + which port item spawns bait (History). Pig goes from "blocked" to
+"implementable from spec."
+**NPC CAST SWEEP (Outset focus):** statemaps generated for aj1/bmcon1/bms1/bmsw/ls1/
+ob1/ym1/p1 (+ prior bm1/ko1). Honest pattern: several Outset NPCs are thin shells
+(0 transitions — logic in inlines/base patterns); the rich ones (bm1 13 set_action,
+ls1 5) confirm the P13b idiom. The thin-shell class needs a header-inline pass on
+`state_map.py` — queued, low-risk.
+**WHOSE TURN:** History → pig/bait implementable from contract (their pace) + esa
+field-layout read; Engine → unchanged queue; Foundry → Hermite eval refinement +
+state_map header-inline pass + dKyd_Schedule; user → nothing owed; Housing → btk
+verdict artifact negative-controllable; Bridge/Librarian → unchanged.
+
+## §221 HERMITE VERDICT: CLEAN MATCH AT STRICT TOLERANCE (all 12 artifacts retired) + GAME-WIDE NPC INDEX (Foundry, 2026-07-29)
+
+**BTK — the final word:** btk_baseline.py now evaluates with the DONOR'S OWN Hermite
+(`JMAHermiteInterpolation`, JMath.cpp:82-94, transcribed verbatim) on the REAL key
+tangents read from the arc's model1.btk (gclib BTK/TTK1 — tangents included, no new
+dependency). Re-verdict at 10× tighter tolerance (±0.005 / ±8 s16):
+**MATCH — every component, every binding** (`btk-baseline-verdict-hermite-20260729.md`).
+The 12 §220 [EVALUATOR-ARTIFACT] rows are retired; scene1 UV motion is donor-exact.
+The BTK verification harness is now permanent: any future socketed model = one tap
+session + `btk_baseline.py --btk <arc>`.
+**NPC INDEX ("inklings for all WW NPCs"):** `donor-npc-index.md` — all 59 donor NPC
+actors classified by extractable state machinery (.cpp+.h, both idioms):
+**10 RICH · 31 MODERATE · 18 THIN-SHELL**. Outset cast flagged and sorted first:
+bm1 RICH (10 mode +14 set_action, 16-method roster), ls1 RICH, bmsw/aj1/ko1/ob1/ym1
+MODERATE (header pass surfaced their set_action+rosters — previously read as empty),
+bmcon1/bms1/p1 THIN-SHELL ([INFERENCE-NEEDED: base/framework logic — deeper decomp
+read before restoration]). Global signals for future work: `md` (Medli! 37 writes,
+61-method roster), `ji1`, `zl1`, `cb1`, `kamome`. `state_map.py` now accepts multiple
+files (.cpp+.h) for full-idiom extraction on any of them.
+**WHOSE TURN:** History → the NPC index is the restoration-order menu (RICH rows =
+spec-ready today); Foundry → dKyd_Schedule + palette differ remain next; Engine →
+unchanged; user → nothing owed; Housing/Bridge/Librarian → unchanged.
+
+## §222 P14 DONOR LAW CLOSED (schedule transcribed) + P13c ENEMY FAST-IMPLEMENTATION DOCTRINE — WW enemies measured 86-92% receiver-native (Foundry, 2026-07-29)
+
+**LIGHTING — dKyd_Schedule transcribed** (`donor-lighting-schedule.md`, verbatim
+d_kankyo_data.cpp:10-26): the hour→palette-slot law (day angle/15 = hour; night 5→5,
+dawn blend 06-07h 5→0, day 2, dusk chain 18-21h) + boss/menu variants. **The donor
+lighting law is now complete END-TO-END** (weather → time → slot → palette → colors);
+the receiver differ waits on ONE kankyo tap (Engine queue, emitter-tap pattern) —
+then purple-black bugs are table lookups.
+**P13c — the enemy answer (user's 5,000-line Bokoblin question), MEASURED:** new
+`api_surface.py` scans a donor actor's external API against the receiver tree.
+Results: **pig/kb 92.3% (14 missing) · Bokoblin/bk 85.8% (31 missing over ~5k lines) ·
+ChuChu/cc 86.7% (24)** — WW enemy code is 86-92% receiver-native. **DIRECT SOURCE PORT
+is the default route**, and the missing lists CLUSTER into ~6 shared WW support
+subsystems (setBt* battle coordinator, enemy_fire, piyo, dSnap [already partially in
+the ext mount — vexp], ice*DL, JntHit): **each shim built once amortizes across the
+whole roster** — enemy N+1 comes nearly free. Full doctrine + per-enemy recipe in
+Foundry-P9-P13.md §P13c; work-plan artifacts `enemy-port-surface-{kb,bk,cc}.md`.
+Pig note: its 14-item list + History's §221 spec = the complete pig package.
+**WHOSE TURN:** Engine/History → when the pig pass starts, its surface list is the
+shim starter (setBt* NOT needed for pig — check its list first); Engine → kankyo tap
+queued; Foundry → palette differ on tap arrival + shim-ledger union artifact on ask;
+user → nothing owed; Housing/Bridge/Librarian → unchanged.
+
+## §223 PORT GAP ASSESSMENT — ship-wave gap closes the §209 ambience mystery; collision instrument shipped; shadows assessed (Foundry, 2026-07-29)
+
+Full assessment: `docs/WW Linked/port-gap-assessment.md` (DO-NOT-aligned). Headlines:
+**SHIP-WAVE — the §209 riddle solved:** the donor-only ambient ids 0x37 (+0x24) from the
+emitter verdict ARE the ship wakes — `d_a_obj_ikada.cpp:327/334` emits SHIPWAVE00
+(0x0037) at L/R wave-calc points while moving; family 0x34-0x37 **all verified present
+in the already-staged common.jpc**. Port ships are wake-less socketed models. FERRY →
+ENGINE: port the wave-emit block + extend the §192 bank-resolve set {0x31,0x3DA,0x3DB}
++= {0x24, 0x34-0x37}; the emitter tap re-census is the verdict.
+**COLLISION — instrument shipped:** donor collision is authored static `dCcD_Src*`
+blocks per actor → NEW `cc_map.py` extracts them verbatim
+(`donor-ccmap-kanban-kb-ikada.md` shipped: sign/pig/ships). Law split keeps it
+DN-1-safe: cc_ touch/hit ports 1:1; STANDABLE geometry goes through the sanctioned
+DN-1 resolver only. Current socketed props = visual-only; the P9 MATCH rows are the
+cc-sweep worklist.
+**SHADOWS — mostly present:** ext-mount mpMorf path already casts simple ground
+shadows (I3, dComIfGd_setSimpleShadow, 50×scale); scene/BG correctly none. Open tier:
+flat radius + simple-vs-real projection = [liberty-ledger candidate], not a bug;
+revisit per-character on visual acceptance.
+**PROPS — no new gap class:** visuals ✓ (§218/§221), placements = P9×P10 status,
+systematic gaps = wake FX + cc colliders (both now instrumented with donor law).
+**WHOSE TURN:** Engine → wave-emit port + bank extension; Engine/History → cc_map
+sweep over restored props (standables flagged for DN-1 resolver); History → shadow
+liberty ledger line; Foundry → re-census on wake landing; user → nothing owed;
+Housing/Bridge/Librarian → unchanged.
+
+## §224 HISTORY'S THREE TOOLING REQUESTS — ALL DELIVERED + VALIDATED (+ a third state idiom found) (Foundry, 2026-07-29)
+
+**(1) api_surface.py v2 — kind classification + (2) verbatim signature extraction, one
+donor-header pre-pass powers both:** every MISSING identifier now carries
+`free | method:<Class> | UNKNOWN` + the donor declaration QUOTED with file:line (incl.
+the variadic-default particle inlines History hand-derived). Sheets regenerated:
+kb 94.5%/10 · bk 88.1%/26 · cc 87.8%/22 — and the pig sheet immediately surfaced a
+hidden dep (`kb_dig` lives in `d_a_tag_kb_item`, method:daTagKbItem_c). Free →
+adapter; method → class edit/wrapper — the strategy reads off the sheet.
+**(3) The P13 acceptance gate — complete chain shipped:**
+`include/dusk/state_tap.hpp` (drop-in `duskStateTap(tag, act, mode)` at write sites;
+`DUSK_STATE_TAP=1`) → converter parses `§P2 state` lines → NEW
+`tools/foundry/state_gate.py` gates the port's state stream against the statemap's
+donor-legal value set (writes + case labels + helper targets), UNKNOWN-on-empty,
+order review explicitly left to the content lane per covenant. **VALIDATED
+synthetically:** planted illegal value → DRIFT; legal → MATCH; wrong tag → UNKNOWN;
+and per-actor discrimination confirmed (bk's `mode=50` correctly ILLEGAL for the pig).
+**BONUS — third donor state idiom found + captured:** kb switches on ANONYMOUS
+partial-decomp fields (`m420`/`m41E`) — state_map now auto-detects fields switched-on
+≥2× and captures their assignments: **the pig's real machine is out — 5 dispatcher
+banks (0-6, 0xA-D, 0x14-19, 0x1E-24, 0x28-31) + 34 transitions**
+([INFERENCE-NEEDED: donor field names pending decomp naming]). Idiom roster now:
+enemy mode-switch · NPC set_action pointers · anonymous fields · helper-call writes.
+**WHOSE TURN:** History → the pig gate is ready the moment the port boots
+(`run: DUSK_STATE_TAP=1` + `state_gate.py <jsonl> donor-statemap-pig-kb.md --tag <tag>`);
+Foundry → standing queue unchanged (kankyo tap → palette differ; wake re-census);
+Engine/user/Housing/Bridge/Librarian → unchanged.
+
+## §230 THE ENEMY PORT KIT — History's §225-§229 pig process, systematized into one command (Foundry, 2026-07-29)
+
+Assessment of the §229 foundation: the pig proved P13c end-to-end, and its frictions
+were exactly three — (1) FIVE compile rounds discovering WW→TP deltas iteratively,
+(2) hand-built shims (though History's Pass-1/Pass-2 architecture is the correct
+template — free fns keep donor names, method gaps become dExt<Tag>_ adapters, which
+IS the §224 classification made code), (3) hand-derived resource model (now solved
+knowledge: mod-arc resLoad is global; donor Create is the pattern).
+**ALL THREE MECHANIZED — NEW `tools/foundry/enemy_port_kit.py`:** one command per
+donor actor emits a full kit: surface.md (classified stub sheet) · statemap ·
+ccmap · parammap · **res-manifest.md** (resLoad arcs + dRes_INDEX_* + mod-arc/
+assets-header pre-flight — MISSING rows are step 2 of the recipe) · **renames.md**
+(the accumulating WW→TP dictionary — seeded with §229's cPhs_State→cPhs_Step
+cascade root; every port adds its discoveries with bus receipts — kills compile
+cascades BEFORE round 1) · **shims_skeleton.h** (History's exact architecture,
+AUTO-GENERATED: free-fn shims with verbatim donor signatures + dExt<Tag>_ adapter
+decls per method gap + [INFERENCE] rows for unknowns) · README (the §229 recipe:
+renames → res → shims → drop-in → spawn flip → §224 gate).
+**PROVEN ON THE NEXT TARGET:** `docs/WW Linked/port-kits/bk/` — the Bokoblin kit is
+GENERATED (10 free shims, 13 adapters incl. the setBt* battle family, 2 unknowns
+flagged, res manifest for Bk.arc). What took the pig §223-§228 to derive is now the
+Bokoblin's starting state.
+**INTAKE T2 staged:** `cxxheaderparser` (pure-python C++ header parser, pip, no
+deps) — hardens signature extraction when regex-derived stubs first produce a
+garbled declaration; trigger = first bad stub, not before.
+**WHOSE TURN:** History → pig playtest + duskStateTap slice as planned; the bk kit
+is on the shelf for whoever ports next; every new port MUST feed its renames back
+into the kit dictionary (that's the compounding asset); Foundry → standing queue;
+user/Engine/Housing/Bridge/Librarian → unchanged.
+
+## §231 KIT REFINED FROM THE RENDER/CRASH LAWS — Bokoblin's future AV pre-caught at L5013 (Foundry, 2026-07-29)
+
+Re-read of `direct-port-plan.md` (post-render-issues state): the three symbolicated
+§229 gotchas are now MECHANIZED into the port kit:
+**(1) Pattern audit** (new section in each kit's renames.md): scans the donor source
+for the semantic-transform classes — `setUserArea((u32)this)` 64-bit truncation ·
+generic (u32)/(s32) pointer casts · donor `updateDL()` split. **First run on the
+Bokoblin caught its future crash before a line is ported: `bk.cpp:5013
+setUserArea((u32)i_this)` — the EXACT class that AV'd the pig** — plus an (s32) cast
+candidate at L1077. These are flagged as RUNTIME failures, not compile errors.
+**(2) Res-routing law column** in res-manifest.md: every dRes_INDEX_* row now carries
+its §229/DN-3 REQUIRED routing (models → `dExtNpcMount_acquireModelData`
+[d_ext_npc_mount.cpp:3873, verified] · BCK/BAS raw-OK · BTP/BMT/BRK/BTK never
+raw-called) + the diagnostic tell ("Loading Resource" then J3D crash = raw-vs-fixed).
+**(3) README steps 5-6** now carry the RENDER LAW verbatim (modelCalc() →
+dComIfGd_setList() → entryDL(); m_Do_ext.h:390 confirmed — play()+entryDL() alone =
+invisible) and the 64-BIT LAW. bk kit REGENERATED with all three.
+**Status ledger:** Foundry holds on the TWO §229 items — (a) user's pig-spawn
+playtest, (b) History's duskStateTap write-site slice — then the §224 gate runs.
+Bokoblin remains honestly gated per the plan: direct port waits on the
+battle-framework shims (Increment B/C); the find-flag pair stays the next real slice.
+**WHOSE TURN:** unchanged from §230 (History playtest+taps; Foundry gate+re-census on
+their landing; user → the pig playtest when ready).
+
+## §232 KIT DOGFOOD TEST (user-ordered, Bokoblin, real compile) — VERDICT: analysis tier AUTHORIZED, "drop-in-ready" tier NOT YET (three measured gaps) (Foundry, 2026-07-29)
+
+Method: followed the bk kit's own README as a porting lane would — renames applied,
+donor TU staged, compiled STANDALONE to .obj with the project's exact cl line
+(captured via ninja -t commands; repo untouched, all in scratch). Two rounds run.
+**RESULTS:** round 1 = 112 error lines (pig baseline was 101) — the kit does NOT yet
+reduce compile-cascade cost. The error mass clusters into exactly three
+include/type-tier gaps the kit doesn't cover:
+**(1) Dependency closure:** donor bk.cpp needs 10 donor-only headers (d_a_boko.h —
+bk's BASE CLASS file — d_jnt_hit, d_snap, d_material, d_a_obj_search, d_a_bridge,
+d_a_bomb, d_a_item, Bk.h, d_a_bk.h) found only by hand-staging; the kit scans one TU.
+**(2) PRESENCE ≠ EQUIVALENCE (the big one):** receiver `c_damagereaction.h` EXISTS
+but is a stub (one particle callback); the DONOR version defines `damagereaction`
+(the `dr` struct = the Bokoblin's ENTIRE state core), `enemyfire`, `enemyice`.
+A path-presence check passes; the compile fails. Kit needs symbol-level equivalence
+checking (the §224 decl-index machinery can do it).
+**(3) Skeleton type gap:** shims_skeleton.h declares adapters referencing types the
+receiver lacks (enemyfire*, dADM_CharTbl…) — identifier-level scan, type-level blind.
+**WHAT PASSED:** res-manifest (Bk.arc present / assets header MISSING — both correct),
+pattern audit (bk L5013 (u32) AV pre-caught), renames applied clean, README recipe
+order held up, standalone-compile harness itself (reusable: `bk_round.py` pattern).
+**AUTHORIZATION:** kit's ANALYSIS tier (surface/statemap/ccmap/parammap/res-manifest/
+pattern-audit/recipe) = AUTHORIZED for all lanes NOW — it front-loads real work.
+The "drop-in starting state" claim = WITHDRAWN until kit v3 lands: recursive include
+closure + symbol-equivalence check per receiver-native header + type-aware skeleton.
+**BONUS finding for History/P13c economics:** donor `c_damagereaction.h` types
+(damagereaction/enemyfire/enemyice) are SHARED WW-enemy infrastructure — staging them
+once is a bt-family-tier shared shim; bk (and every combat enemy) gets its state core
+from that single header.
+**WHOSE TURN:** Foundry → kit v3 (closure + equivalence + typed skeleton); History →
+note the damagereaction shared-header economics for the combat tier; user → nothing
+owed (pig playtest still the standing item); others unchanged.
+
+## §233 KIT v3 SHIPPED — all three §232 gaps mechanized, validated against the dogfood ground truth (Foundry, 2026-07-29)
+
+**(1) Include closure** (new `closure.md` per kit): recursive donor-#include walk,
+each header classified DONOR-ONLY (stage) / NATIVE-OK / NATIVE-DIVERGED / NOT-FOUND.
+Bokoblin: **all 10 hand-staged §232 headers auto-detected** (incl. base-class
+d_a_boko.h) + 7 diverged natives found.
+**(2) Symbol equivalence**: for receiver-native headers, donor-declared symbols the
+TU uses are checked against the receiver header's CONTENT. **Acceptance case exact:**
+`c_damagereaction.h → NATIVE-DIVERGED: damagereaction, enemyfire, enemyice` — v3
+auto-finds what §232 found by hand. Bonus real finds: `f_op_actor.h` lacks
+`JntHit_c`, `d_cc_uty.h` lacks `CcAtInfo`. Noise-filtered.
+**(3) Typed skeleton**: shims_skeleton.h now auto-emits opaque forward decls for
+donor-only types used by pointer/ref (JntHit_c, damagereaction, enemyfire…) and a
+[TYPE-GAP] section for by-value uses that need real definitions.
+README gains step 0 (closure census) with the §232 lesson stated. bk kit
+REGENERATED under v3.
+**Authorization status:** the analysis tier stays authorized (§232); the drop-in
+claim is RE-EARNABLE — v3 closes the detection gaps, and the first lane to run a
+port through it (staging closure + the diverged-symbol shared shims, e.g. the
+damagereaction header for the combat tier) provides the re-validation. Foundry will
+dogfood-round again on request.
+**WHOSE TURN:** unchanged (pig playtest + duskStateTap = the standing items; kankyo
+tap → palette differ standing; History → damagereaction shared shim when the combat
+tier starts).
+
+## §234 KIT v3 GENERALIZATION TEST — MOBLIN (unplanned second enemy): kit is PREDICTIVE; every residual error class was pre-named by an artifact (Foundry, 2026-07-29)
+
+Method: generated the Moblin kit cold (`port-kits/mo2/`, d_a_mo2.cpp 165KB/5.4k lines,
+13 free + 14 adapters), then dogfooded THREE standalone compile rounds driven by v3's
+own closure output (generic `port_prep.py` stages the DONOR-ONLY list mechanically).
+**Round trajectory (read by error-CLASS retirement, not raw counts — fixing headers
+unmasks the next tier):** R1 = 101 errors, 86 in ONE staged header (d_meter.h — donor
+UI header w/ diverged deps; Moblin uses exactly 2 fns: dMeter_mtrHide/Show) → applied
+the kit's deferred-subsystem stub pattern → R2: meter block 86→0; residue = EXACTLY
+the closure's NATIVE-DIVERGED predictions (damagereaction trio in the actor struct) +
+the skeleton's free-fn tier → staged donor c_damagereaction.h (the shared shim, one
+copy) → R3: struct state-core fields RESOLVE (11→5), remaining = the flagged
+dPa_smokeEcallBack divergence + shim-tier C3861s = the skeleton's own list.
+**VERDICT: v3 GENERALIZES.** Closure auto-staged 9 headers correctly on a second
+enemy; the diverged-native predictions mapped 1:1 onto the residual errors; each
+recipe move retired its predicted block. Zero-error = the real port (shims
+implemented + call-site edits) — content-lane hours, correctly out of test scope.
+**Shared-shim evidence now spans THREE enemies** (bk + kb + mo2): d_a_boko base ·
+d_a_bomb · d_jnt_hit · d_material · d_snap · the c_damagereaction trio · JntHit_c —
+build once, whole combat tier. Moblin-specific finds for its future port:
+d_a_kantera (his lantern!) + d_meter (HUD-hide, stub-tier).
+**WHOSE TURN:** kit AUTHORIZED for lanes at the analysis+prediction tier with the
+recipe as written (drop-in claim = re-earned in practice when the first real port
+runs it to green); History → mo2 kit shelved next to bk; standing items unchanged.
+
+## §235 THE KIT IS ACTOR-AGNOSTIC — NPC test (Grandma) passes; NPC res idiom added; one gap remains (string-state gate) (Foundry, 2026-07-29)
+
+User question: enemies-only? **Measured answer: NO.** Cold run on d_a_npc_bm1
+(Grandma, the richest Outset NPC): **83.2% coverage — the same band as enemies** —
+closure correctly surfaced the WW NPC framework tier (d_npc.h, d_letter.h) with
+ZERO diverged natives (NPC surfaces are cleaner than combat), skeleton generated.
+**NPC-specific deltas found, one fixed on the spot:** (1) RES IDIOM — NPCs use
+runtime arc-name variables (strcpy(mArcName,"Bm")) + STRING-named resources
+("bm.bdl"), invisible to the enemy-idiom regex → kit extended; regenerated Grandma
+manifest immediately caught **arc `Bm` present / arc `Bm2` MISSING** + 21 named
+resources. (2) ACCEPTANCE GATE — state_gate is numeric (act/mode ints); NPC states
+are MEMBER-FUNCTION POINTERS (§219 idiom) → the NPC gate variant = tap logs the
+action-method NAME, gate checks the statemap's method roster (roster extraction
+already exists). That's the one remaining gap before an NPC port can be gated.
+**SHOULD it serve NPCs? YES — one kit, per-class recipe:** ~90% of the machinery is
+shared; NPC ports additionally obey DN-4 (dialogue NEVER on the post-man box —
+Shade Watcher path), the event suspend/resume contract, and the face-pane recipes.
+**ROUTE DECISION built into existing artifacts:** NPCs have TWO legitimate routes —
+the mount/manifest socket (right for THIN-SHELL cast) vs direct source port (right
+for RICH rows: bm1 13 set_action transitions, Medli's 61-method roster) — the §221
+NPC index's RICH/MODERATE/THIN classification IS the router. Enemies default to
+direct port (P13c); NPCs choose per index row.
+**WHOSE TURN:** Foundry → string-state gate variant when the first NPC port
+approaches; History → npc-bm1 kit shelved (Bm2 arc = its first pre-flight item);
+standing items unchanged.
+
+## §236 THE PIG-SHADE GAP CLASS, MECHANIZED — BMT structure census; BOTH remaining combat ports were exposed (Foundry, 2026-07-29)
+
+History's material-only-BMT root cause (replaceTextures on a TEX1-less bmt →
+empty texture table → out-of-range AV in makeSharedDL; fix = TEX1 guard,
+donor J3DMatCopyFlag_Material semantics) is a RESOURCE-CONTENT gap class the kit
+couldn't see — it audits source, never resource internals. **Mechanized:** NEW
+`tools/foundry/bmt_census.py` (offline byte-level chunk check, the same method
+History used by hand) + the census now runs INLINE in every kit's res-manifest.
+**Comparison across all staged WW arcs (`bmt-structure-census.md`): 6 of 21 BMTs
+are MATERIAL-ONLY — and both remaining combat ports were exposed:** Bokoblin
+`bk_boko.bmt` + `bk_ken.bmt`, Moblin `mo_blur.bmt` — the exact pig crash,
+pre-caught; bk/mo2 kits regenerated with the warnings inline. Donor insights from
+the same census: the BIG-pig recolors (pg_big_*) DO carry TEX1 (texture swaps) while
+small-pig are TEV-only — History's both-paths guard is exactly right; and the
+MIRROR case exists: `ko02.bmt` (kid) is TEXTURE-ONLY (no MAT3) — a material-copy
+guard is needed on that side too (flagged in the census + kit output).
+Grandma's bm02/bmarm02 carry both — safe.
+**WHOSE TURN:** History → pig-shade verification stands (user re-test); the bk/mo2
+BMT warnings are now in their kits; Foundry → standing queue; user → Outset pig
+re-test when convenient (shape 0→pink, 1→spotted, 2→black per donor kb_bmt_idx).
+
+## §237 PIG SHADE SETTLED AT THE DATA TIER — pink+spotted sharing body color IS the donor law; two ranked candidates for the residual (Foundry, 2026-07-29)
+
+User report: spotted+pink share the main body color, shade "reads a little wrong" —
+compare vs vanilla + check our lighting. **Measured (new `bmt_colors.py`, offline MAT3
+extraction; full tables in `donor-pig-colors.md`):**
+**(1) The sharing is DONOR-AUTHORED:** pg_pink body TEV1 = (246,209,191) with konst[2]
+= the SAME pink (invisible spot layer); **pg_buti body TEV1 = the IDENTICAL
+(246,209,191) pink** with konst[2] = **(66,82,99) dark-slate — the SPOTS**; pg_kuro =
+(48,64,64) both. Base pg.bdl ships kuro-colored. **Variants differ ONLY in
+tev_konst_colors[2].** The user's observation is correct donor behavior.
+**(2) Residual "little wrong" — two candidates, ranked:** (a) **konst transfer** —
+if applyBodyBmtToModelData's copy carries tev_colors but not tev_konst_colors, buti's
+spot layer is lost/shifted → History verify the copy includes konst reg 2;
+(b) **lighting** — donor noon Outset actor light = **amb C0 (156,140,134) / diffuse
+K0 (255,255,255)** (Pale 2 via the §222 schedule); if the native pig's tevStr gets TP
+values or a mount amb override, all pigs shift uniformly. Receiver check = one
+DuskLog line at pig draw (tevStr amb/C0/K0) vs the Pale law; definitive vanilla
+ground truth = short donor Dolphin session with the §189 kankyo palette tap at the
+pig pen. Big-pig note: pg_big bmts carry TEX1 + the same color scheme (konst[2]
+distinct per variant) — same konst check applies.
+**WHOSE TURN:** History → check (a) konst copy first (cheapest), then (b) the
+one-line lighting log if shades still drift; user → optional 2-min vanilla pig-pen
+Dolphin session (palette tap) for the ground-truth side; Foundry → diff on either
+ferry; others unchanged.
+
+## §238 PIG E2E COMPLETE — the island-NPC question answered: analysis YES today, campaign = one small evolution + the right unit of work (Foundry, 2026-07-29)
+
+**Pig receipts absorbed into the kit** (standing feedback rule): CARRY LAW (grab
+forces shape_angle.x — per-proc skip for donor carry poses) + WATER LAW (300-unit
+probe → 10000 for deep-sea actors) added to the README template; History's
+state_gate MULTILINE fix acknowledged (in-tool, cited §231/§233 — fallthrough case
+labels now enter the legal set). **The NPC acceptance gap is CLOSED this §:**
+`duskStateTapS(tag, method)` string-state tap (state_tap.hpp) + converter `staten`
+events + `state_gate.py --npc` (legal set = the statemap's action-method roster) —
+validated synthetically on Grandma's roster (legal methods MATCH, planted fake
+DRIFTs). The full P13b gate chain now exists for function-pointer NPCs.
+**THE ISLAND QUESTION (user):** can the kit do ALL Outset NPCs / which evolution /
+is it wise?
+- **Today:** the kit ANALYZES every Outset NPC already (index + statemaps + kits on
+  demand; bm1 83.2% surface, clean closure) and, with this §'s gate, can ACCEPT
+  NPC ports. Direct-porting the RICH rows (bm1, ls1) = pig-template effort, known
+  bounded, wise NOW.
+- **Not wise as "all at once":** the THIN-SHELL cast (bmcon1/bms1/p1) should NOT be
+  direct-ported — their behavior is framework/event glue; the existing mount socket
+  serves them better (route decision per the §221 index; porting shells buys little
+  and risks integration churn).
+- **The one real evolution before an island CAMPAIGN (kit v4):** an NPC INTEGRATION
+  MANIFEST — mechanical extraction of each NPC's dialogue/event surface (message ids
+  used, EVNT/event_action couplings, face-anm resources) so the talk/event tier is
+  inventoried up front the way res/shims already are. Actor mechanics are covered by
+  the pig template; NPC risk lives in the integration tier, and DN-4/suspend-resume
+  are recipe laws already.
+- **Margin of error:** manageable with the proven controls — one reversible spawn
+  flip per NPC, graceful-missing fallback, gate-accepted, playtest-iterated. The pig
+  burned 6 symbolicated bugs; 5 of 6 are now kit checks, so NPC N+1 inherits the
+  receipts. Island-scale = a SEQUENCE of gated single-NPC flips, not a batch.
+**Recommendation:** proceed bm1 (Grandma) as NPC port #1 on the pig template +
+this §'s gate; Foundry builds the v4 integration manifest in parallel; shells stay
+socketed; "all Outset NPCs" = the campaign that falls out, not the next step.
+**WHOSE TURN:** History → bm1 when ready (kit + gate live); Foundry → v4 integration
+manifest + the standing ambient-variance palette-differ item; user → nothing owed;
+others unchanged.
+
+## §239 KIT v4 PIECE 1 — THE ISLAND ROSTER: placement-grounded cast lists with donor filenames (the Windfall≠Outset guard) (Foundry, 2026-07-29)
+
+Answering the near-miss (an instance almost ported Windfall NPCs to Outset): the kit
+knew FILES, the fact sheets knew PLACEMENTS — nothing joined them. **NEW
+`tools/foundry/island_roster.py`** joins three donor truths mechanically:
+fact-sheet placements (who is on THIS island, per layer) × the donor's own
+`l_objectName` table (ACTR name → fpcNm proc; d_stage.cpp:437) × `g_profile_*`
+definitions (proc → source file). **Generated: `port-kits/rosters/outset-exterior.md`
+— 89 names, 0 unmapped** (receipts: Pig→fpcNm_KB_e→d_a_kb.cpp = History's port
+exactly; Kamome→d_a_kamome.cpp = their seagull; Bm1/Aj1/Ko1/Ls1 all resolved with
+per-layer placements) **+ `windfall-exterior.md` (63 names)** — the disambiguation
+pair. Kit README gains step **-1: ISLAND CHECK** — if the name is not on your
+island's roster, it does not belong there. Any stage/room generates in seconds
+(interiors are their own stages — run per stage as History's multi-NPC pass reaches
+them). Layer columns double as the P10 tie-in (which layer must be active for the
+NPC to appear — no more porting a Layer2 actor and wondering why it's absent).
+**WHOSE TURN:** History → rosters on the shelf for the multi-NPC pass (ask for any
+stage's roster or run the tool); Foundry → v4 piece 2 = the NPC integration manifest
+(msg/EVNT/face surface) next; user → nothing owed; others unchanged.
+
+## §240 ISLAND ROSTERS NOW COVER INTERIORS — SCLS-followed, recursive, donor-authored (Foundry, 2026-07-29)
+
+`island_roster.py --island` follows the exterior room's SCLS exits to every interior
+STAGE recursively (the donor's own island→interiors mapping — no hand list), and
+emits ONE combined roster per island. **`outset-island.md`: exterior + 12 interior
+stages — LinkRM/LinkUG (Link's house+basement), Ojhous/Ojhous2 (Orca/Sturgeon),
+Omasao (Mesa), Onobuta (Rose — the pigs' house), Pjavdou (grotto), A_mori (Forest of
+Fairies), Fairy04 (Great Fairy), Cave09/10/11 (the full Savage Labyrinth chain) —
+262 placed names, 0 unmapped.** `windfall-island.md`: 187 names. Every row still
+carries per-layer placements + fpcNm proc + donor source file. Unswept dest stages
+would self-flag [INFERENCE-NEEDED] rather than vanish.
+**WHOSE TURN:** History → one document per island now covers the whole multi-NPC
+pass incl. interiors; Foundry → v4 piece 2 (integration manifest) next; user →
+nothing owed; others unchanged.
+
+## §241 FRAMEWORK ESCALATION MEASURED — the wall blocks a SUBSET, not all villagers; an unblocked wave-1 exists NOW; the framework port itself is small (Foundry, 2026-07-29)
+
+History's escalation (fopNpc_npc_c absent; wave-1 correctly stopped; bm1≠Grandma)
+answered with measurements:
+**(1) BASE-CLASS TIER now in every island roster** (island_roster upgrade — scans the
+donor header's real actor class, embedded-struct aware): the wall is visible per row
+BEFORE any subagent spawns. **Outset total: only 7 BLOCKED rows** — `Ah, Bm1(Rito),
+Ls1, Tpost, Zl1(×2 placements), Jb1`.
+**(2) THE UNBLOCKED WAVE EXISTS:** Ba1 (Grandma per History's correction), Aj1, Ko1
+(kids), Ob1, Ym1 all derive fopAc_ac_c directly — **and verified ZERO dNpc_* helper
+usage in all five** (cpp+h grepped) — portable NOW on the seagull/pig precedent. The
+multi-NPC pass can restart immediately on the right actors.
+**(3) THE FRAMEWORK PORT IS CHEAP when wanted** (`npc-framework-surface.md`):
+d_npc.cpp+h = 38 KB (~1k lines), 64.8% receiver-native, and most of the 19 "missing"
+are the framework's OWN dNpc_EventCut methods (they arrive with the port) — true
+external gap ≈ 4 small utilities (cLib_addCalcAngleL variant, J3DModel::
+setWeightAnmMtx, 2 item-reserve inlines). One bounded shared-infrastructure pass,
+smaller than any single villager, unblocks Ah/Bm1/Ls1/Tpost/Zl1/Jb1 + Windfall's
+framework cohort. Central decision stands but is NOT urgent-blocking.
+**(4) ATTRIBUTION CORRECTION (mine):** §219/§221 called bm1 "Grandma" — MY
+unreceipted inference (oracle-stack rung-5 violation; memory corrected). The roster
+tool never emitted human names (by design) — human-name attribution stays
+[INFERENCE] tier until receipted from donor msg data.
+**WHOSE TURN:** History → restart wave-1 on {Ba1, Aj1, Ko1, Ob1, Ym1} whenever ready
+(rosters now carry the tier column); user/central → the d_npc framework port
+decision at leisure (cost sheet attached — recommend YES when Ls1/Zl1 matter);
+Foundry → v4 piece 2 (integration manifest) + roster human-name receipting; others
+unchanged.
+
+## §267 NATIVE ROOMS CAMPAIGN OPENED — the census explains the interior bugs; room arcs are near-empty husks; bake tool designed with the format law receipted (Foundry, 2026-07-30)
+
+User greenlit: bake donor room-connective data into the native stage shells BEFORE quest one
+(awake) builds on the bridge machinery. Full charter + census + design:
+**`docs/WW Linked/native-rooms-campaign.md`**. Headlines:
+
+**(1) THE CENSUS IS THE DIAGNOSIS.** Mod `R00_00.arc` (Grandma's interior) = `FILI + 1 PLYR`,
+NOTHING else; donor Room0 = 5 PLYR + SCLS + RCAM/RARO + 13 ACTR + paths + SOND. Two of
+History's three untouched interior bugs map straight onto the missing data: **respawn-abyss =
+missing PLYR spawn points; door-strands-Link = missing SCLS/PLYR pair** (the ext transport has
+no native target). Lava-sink stays a true BG-attribute issue (Engine lane, DN-1). Exterior
+census adds a future wall caught early: donor Room44 has **40 RPAT / 296 RPPN path points; the
+mod has ZERO** — no villager can walk a donor path until Wave 2 bakes them (blocks the first
+path-following NPC in History's batch).
+
+**(2) FORMAT LAW (§267):** SCLS entries DIFFER between engines (donor wipe@0xA, 0xC-byte entry;
+receiver wipe@0xC, larger entry) — the bake is a per-chunk field TRANSLATOR with receipts from
+both d_stage.h headers, never a raw copy. The §149 event-container byte-identity was the lucky
+exception; assume nothing else matches.
+
+**(3) PLAN:** `bake_room_chunks.py` (merge_event.py's sibling; dry-run default, .pre-bak on
+write). Wave 1 = PLYR+SCLS+TGDR (quest-critical, kills the respawn/door class natively);
+Wave 2 = paths+room cameras+SOND (villager-critical); Wave 3 = layer-aware ACTR/SCOB with the
+registered-proc filter + the layer-attribution tap as acceptance. Writes only AFTER History's
+in-flight interior pass lands (no arc collisions); DN-1 fence: data chunks only, BG/collision
+untouched.
+
+**WHOSE TURN:** History → finish the in-flight interior pass + Grandma model diagnosis (census
+note in the campaign doc explains two of your three open bugs — ferry it); Foundry → build
+Wave-1 bake tool + dry-run receipts now (no writes); user → ferry §267 + the campaign doc with
+it.
+
+## §303 FLAG-NAMESPACE STEPS 1–2 BUILT & COMPILED — the donor event-bit block + symbol route exist; ba1 is the first-consumer wire (Foundry, 2026-07-31)
+
+**Step 1 — donor layout receipt (verbatim):** `dSv_event_c { u8 mFlags[0x100]; }` (donor
+d_save.h:698, size-asserted); on/off/is logic d_save.cpp:1189-1200; **the low byte is a MASK,
+not a bit number** (0x2A20 = byte 0x2A, mask 0x20) — receipt carried in-header with a
+do-not-"fix" note; setEventReg/getEventReg register forms included.
+
+**Step 2 — the subsystem, built and LINKED GREEN** (`d_ext_save_flags.cpp.obj` →
+dusklight.exe, incremental; caches wiped):
+- **`include/d/d_ext_save_flags.h` + `src/d/d_ext_save_flags.cpp`** (№106 ww-free filenames):
+  `dExtSvFlags_event_c` = donor block byte-for-byte, logic line-for-line with per-line donor
+  citations; `dExtWwSv_is/on/offEventBit + set/getEventReg` free-fn surface matching the
+  dComIfGs_* call shapes; lifecycle `dExtWwSv_reset()` (donor zero-init) + serialization
+  `store/restore` ('WWEV' magic + version, fail-safe to new-game state on mismatch).
+- **`include/d/d_ext_save_flags_route.h`** — the symbol route: a donor story TU includes it
+  LAST and its VERBATIM dComIfGs_* calls resolve to the donor block (the alias pattern on
+  symbols: where-the-bits-live, never what-happens). TP TUs never include it; TP tables
+  untouched. Usage rules stated in the header.
+
+**HISTORY'S WIRES (small, precedented):** ① persistence — one call each beside the quest-log
+card IO (`g_mDoMemCd_control.save` pattern, autosave.cpp:70 receipt): `dExtWwSv_store/
+restore/reset` at save/load/new-game; ② first consumer — add the route include as ba1's LAST
+include, delete the §266 hand-bridge → **acceptance #1: Grandma's dialogue variant correct
+pre/post tale on donor reads.** Then bm1/ls1/the batch TUs get the same one-line include.
+
+**WHOSE TURN:** History → wires ① + ② with their next build; user → ferry §303; Foundry →
+Space-Kit build order ① (bake_room_chunks offset-stable refit) while the wires land.
+
+## §302 HYBRID HOSTING RULED (user) — multi-room donors get dedicated stages, single-room stay packed; cross-shape quest compatibility receipted (Foundry, 2026-07-30)
+
+**The ruling:** hybrid. Mechanical form: **donor RTBL > 1 or donor MULT group → dedicated
+host stage, donor structure VERBATIM** (rooms 1:1, MULT/EVNT/event_list/PLYR whole; only the
+stage-name alias translates); **single-room donors → packed** (TP's own R_SP01/R_SP109
+interior pattern — the packing is TP-native, receipts in port actor code). Ojhous2 = the
+first dedicated case; dungeons fall dedicated naturally.
+
+**The user's compatibility conditions, both receipted:**
+- **Quests across shapes:** exactly two things cross hosting shapes and both are
+  shape-agnostic — ① quest state = the WW event-flag namespace (save-side bits; a flag set
+  in packed R_DL01 reads identically from dedicated R_DL02 — the namespace is the carrier of
+  ALL cross-room quest flow, further cementing it as critical path) and ② movement = stage
+  transitions (same native mechanism either way; only the dest name differs). The
+  one-event-at-a-time law is global, unchanged.
+- **Kits across shapes:** ONE kit, two bake paths — Pass 1 auto-decides from donor RTBL/MULT;
+  the dedicated path is the SIMPLER one (verbatim-heavy: no room remap, no MULT trim, no
+  ALL-scope); packed keeps the §-proven translations; Verify + Manifest identical. Scan gains
+  **R12: donor stage hosted in the wrong shape** (Ojhous2-packed = finding #1 of the class).
+  Dedicated adds one step: host-stage identity registration (parametrized shell builder —
+  R_DL01's own tool reused). Design doc updated (§2b).
+
+**Execution sequence this ruling unlocks:** flag namespace build (B, signed-designed §301) →
+Ojhous2 → R_DL02 as the Space Kit's first dedicated bake (resolves order A's co-render BY
+DONOR MULT VERBATIM + the §299 dead entrances + Orca's event list in one pass) → order-B
+variant pilot (Ojhous receptor beside Ojhous2).
+
+**WHOSE TURN:** Foundry → flag-namespace build steps 1–2 (donor layout receipt, block +
+routing) — starting; History → rooms 2/3 nativization feeds the R_DL02 move; user → ferry
+§302.
+
+## §301 ORDERS A+B ADVANCED — A gated on room nativization + a structural ruling; B's DESIGN DELIVERED (the flag namespace, finally) (Foundry, 2026-07-30)
+
+**ORDER A (co-render mirror) — investigated to its true gates, no write:**
+- Donor receipts: both Ojhous variants co-load rooms 0+1 at one origin BY DESIGN (their own
+  MULT; Orca DZB Y[0,512], Sturgeon full-height, same XZ) — donor-correct by construction.
+- **Host reality: rooms 2/3 are PLACEMENT SHELLS** — R02/R03_00.arc carry only room.dzr;
+  models + collision still load from the MOUNT arcs (Ojhous2/Ojhous2R1 via ext_bg inis). MULT
+  doesn't govern their co-render until the rooms are FULLY nativized (models/BG through the
+  native room path, as room 0/LinkRM is). **A's prerequisite = the room-nativization campaign
+  reaching rooms 2/3.**
+- **Structural ruling needed (user):** MULT is a flat co-load set (§274 receipt) with XZ-only
+  transforms — two DONOR-NATIVE mappings can express the mirror: **(i) field-style hosting**
+  (distinct XZ offsets per hosted interior, donor pairs share an offset — MULT's own purpose,
+  the Hyrule-Field shape; co-load becomes harmless universally) or **(ii) one host stage per
+  donor stage** (the donor's literal 1:1 shape). Both native mechanisms; which structure maps
+  the host is the user's call. [Not an option-menu violation: both candidates are donor
+  mechanisms; the ruling is which donor STRUCTURE the host adopts.]
+
+**ORDER B — THE WW EVENT-FLAG NAMESPACE DESIGN IS DELIVERED:**
+`docs/WW Linked/ww-event-flag-namespace-design.md`. Core: a WW event-bit block in the save
+extension (donor dSv_event_c size verbatim; d_ext_save_guard precedent) + **symbol-level
+routing per WW TU** (donor calls stay VERBATIM in source; a route header resolves
+dComIfGs_is/on/offEventBit to the WW block — the LinkRM→R_DL01 alias pattern applied to
+symbols: where-it-lives, never what-happens). Consumers: dialogue variants, §300-B stage
+variants, multi-event sequencing, save persistence. Acceptance #1: ba1's dialogue correct
+WITHOUT the §266 hand-bridge. Build order in-doc (donor layout receipt → dExtWwSv_* + block
+→ ba1 first consumer → Space-Kit flag manifests → order-B pilot).
+
+**WHOSE TURN:** user → the A structural ruling (field-style vs 1:1) + B design sign-off;
+History → rooms 2/3 nativization continues (A's prerequisite), naming sweep with Librarian;
+Foundry → on B sign-off: build order step 1-2 (donor layout + the block/routing).
+
+## §300 THE OJHOUS REVELATIONS — Ji1=ORCA / Aj1=STURGEON (correction executed); the floors CO-RENDER in the donor; variant hosting gap; two native-true work orders (Foundry, 2026-07-30)
+
+The user pressed on the §299 scan's "two rooms" and the donor data cracked open three things:
+
+**(1) NAMING CORRECTION — EXECUTED per user order: `Ji1` = ORCA, `Aj1` = STURGEON.** History's
+old attribution ("ji1 = Sturgeon", §237-bis era) was INVERTED. Receipts are unambiguous:
+Room0 (Ji1) = the training room — `Ji1_kaiten` (spin attack), `Ji1_TeachSpRollCut`,
+`Ji1_SwordGetTalkEnd`, stools/table/KNOB00 = the SWORDMASTER; Room1 (Aj1) = wall-to-wall
+Paper + Lamp + plants = the scholar's study. Corrected in Foundry memory (2 files);
+**History: your docs carry the old attribution** (grandma-native-tale references, the
+doors.ini "Sturgeon → upper door" comment matches Room1=upper ✓ but any ji1=Sturgeon text
+inverts) — sweep on your side. Consequences: §299's "Sturgeon can't spawn" finding is about
+**ORCA**; the shelved `aj1` stub draft is **STURGEON** — priority upgraded (major story NPC,
+placed in an already-hosted room).
+
+**(2) THE FLOORS CO-RENDER IN THE DONOR:** both Ojhous variants carry a MULT group stitching
+rooms 0+1 at one origin — the house is ONE open volume (separate exterior doors, no internal
+stairs; each room's SCLS → sea only). Our blanket MULT trim (§276) lost this native
+co-render in the host. **NATIVE-TRUE WORK ORDER A (user ruling):** host MULT gains the
+donor's own group translated to host rooms ({2,3}), GATED on geometry verification (baked
+rooms must preserve donor-local Y so the floors stack). Canon P3 refined accordingly
+(mirror donor stitch groups; trim only what the donor doesn't stitch).
+
+**(3) OJHOUS vs OJHOUS2 = STORY-STATE VARIANTS of one house** (near-identical; deltas:
+Yw1 + ky_tag1 in Ojhous2 Room1, prop/layer diffs, 1 vs 2 EVNT rows). The exterior door
+picks the variant by story state — and the host maps ONLY Ojhous2 (§267's "Ojhous SKIPPED"
+now explained). **NATIVE-TRUE WORK ORDER B (user ruling):** both variants need receptors +
+story-state selection — joins the WW event-flag namespace case file as its second concrete
+consumer (with dialogue variants).
+
+**WHOSE TURN:** History → naming sweep on their docs + the Ji1/Orca cluster enters their
+batch queue; Foundry → work order A's geometry verification + the flag namespace (order B's
+prerequisite) + kit build order on the user's §299 go; user → ferry §300.
+
+## §299 SPACE-KIT SCAN PROTOTYPE VALIDATED ON ORCA'S ROOM — 56 findings, read-only; the null-result side works too (Foundry, 2026-07-30)
+
+Per user order: no implementation, a detection test on the first-ported room. New read-only
+tool **`space_scan.py`** (the kit's Inventory+Verify slice, 11 §-derived checks R1–R11) run
+on donor **Ojhous2** (Orca down / Sturgeon up → R_DL01 rooms 3/2). Report:
+`docs/WW Linked/space-scan-ojhous2.md`.
+
+**WHAT PASSES (History's room campaign, independently confirmed):** R1 host mapping ok ·
+**R2 native room arcs R00–R05 ALL EXIST** (their room work landed — the mount-era-content
+concern I raised pre-scan is stale) · R7 PLYR coverage ok (donor needs only point 0, present)
+· R11 MULT safe (trim holds; hosted rooms not co-renderable).
+
+**WHAT THE SCAN CAUGHT (the §-class failures, before any runtime):**
+- **R3 ×2 — dead entrances:** donor EVNT rows `StartCamera` + `KNOB_S_BR` have no host REVT
+  row — Ojhous2's spawn-triggered entries can never fire (the §279 class, found at scan time).
+- **R4 — story events unmerged, the standouts: `Ji1_linkmove`, `Ji1_Speak`, `StartCamera`** —
+  Sturgeon's own scenes would order idx −1 / silent no-op (the §265 class). [Honest caveat:
+  53 R4 rows total, many system events (KNOB_START/TACT_WINDOW/…) may resolve from the GLOBAL
+  event list at runtime (§152's DEFAULT_KNOB receipt) — the scan doesn't model the global
+  list yet; triage rule queued as a kit refinement. The stage-specific ones are genuine.]
+- **R9 — 15 placed names unregistered**, headline: **`Ji1` (Sturgeon, placed IN this room,
+  cannot spawn natively — gate-3 framework case), `Aj1` (deferred stub), `Yw1`, `KNOB00`**,
+  + the furniture set (Lamp/Ostool/Otana/Otble/Paper/Plant/SPitem — prop actors unported).
+
+**VERDICT: the kit's core promise demonstrated** — "ordered but nothing happens", "entrance
+never fires", "NPC never spawns" for Orca's room are now a scan report instead of future
+debugging campaigns. Refinements queued: global-event-list awareness, door-event
+classification, R10 dedupe.
+
+**WHOSE TURN:** user → the scan output is the ruling artifact (proceed to full kit build
+order ①–④? plus: does Sturgeon's R9/R4 cluster become a work order?); History → nothing
+blocked; Foundry → awaiting the go.
+
+## §298 THE REFLECTION + THE ANSWER: a new kit class — the SPACE KIT (complete-receptor hosting); design doc delivered (Foundry, 2026-07-30)
+
+The user ordered the reflection the §-count demands: ONE cutscene in ONE room consumed
+§243–§297 because every missing piece was discovered as a runtime failure. Full inventory +
+kit design: **`docs/WW Linked/space-kit-design.md`**. Highlights:
+
+**(1) THE COMPLETE SUBSYSTEM LIST (24 items, grouped):** A. actor code (fopNpc framework,
+ba1 via the decomp pipeline + rodata tables, WW demo00, 5 integration-fix classes) ·
+B. cutscene engine (face trio, setDemoData angle, cast binding, arc residency) · C. event
+data (registration, PACKAGE/CAMERA/DIRECTOR/mFlags semantics, getMyActIdx fix) · D. STAGE
+DATA — where most §s bled (REVT, PLYR, MULT, ALL-staff, RTBL law, SCLS/DOOR/ACTR) ·
+E. entry/transition (host-name map, entry wire, mode-8 wipe) · F. dialogue/audio (flag
+namespace OWED, JMSG, voice staged) · G. data integrity (res-ids, residency).
+
+**(2) THE KIT ANSWER — a NEW class, the SPACE KIT:** the Actor Kit covers performers'
+CODE; the decomp pipeline covers stubs; NOTHING covered the RECEPTOR. The Space Kit hosts
+a donor stage COMPLETELY, in four passes: INVENTORY (the donor's whole data surface) →
+BAKE (composing the campaign's §-proven tools: merge_event/revt_bake/plyr_append/
+bake_room_chunks/scope+trim/arc-bundle — **every event, every PLYR point, every chunk —
+not a hand-picked subset**) → VERIFY (all offline probes composed + two new mechanized
+classes: event-closure completeness [the §280/§287 failures] and receptor-coverage
+cross-check [the §295/§297 failures]) → DEPENDENCY MANIFEST (actor/engine needs linked to
+Actor-Kit status; missing performers degrade visibly, never by crash).
+
+**(3) THE COVERAGE GUARANTEE (the user's requirement):** a Space-Kitted room carries the
+donor's complete data surface — data waiting to be called upon exactly as the native game
+defers it. "Ordered but no player" / "point not in PLYR" / "no REVT" / "arc not resident"
+all become BAKE-TIME verification failures instead of runtime freezes.
+
+**(4) BUILD ORDER (proposed):** ① bake_room_chunks offset-stable refit (P1 debt, blocks
+all --writes) ② the two new verifier classes (highest §-prevention per line) ③ inventory +
+manifest ④ the driver, piloted on R_DL01/LinkRM — which is ~90% baked, so the kit's first
+run should verify the tale receptor and find NOTHING (the null-result acceptance test).
+
+**WHOSE TURN:** user → ruling on the design + build order; History → the tale run
+continues in parallel (nothing here blocks it); Foundry → on the go: build order ①→④.
+
+## §297 RECEPTOR GROWN — donor re-entrance points 200/202 appended BYTE-VERBATIM to R_DL01's PLYR; the donor arg lands (Foundry, 2026-07-30)
+
+History's §296 executed with zero invented data:
+
+**(1) THE RECEIPTS ALIGNED PERFECTLY:** the receptor's lone PLYR entry (id 0, pos
+−255,0,1125) MATCHES donor Room0's PLYR[0] position — the host room provably runs
+donor-local coordinates. And the donor's own PLYR carries the re-entrance points:
+**id 200 (angle.z 0xFFC8) and id 202 (0xFFCA), both at the LOFT (−289, 375, 83)** —
+Grandma's spot, exactly where the tale re-entrance should land. The spawn-id mechanism
+itself receipted en route: `(u8)PLYR.angle.z == point` (dStage_playerInit's matcher,
+d_stage.cpp:1874 — the §295 fatal listed valid points from the same field).
+
+**(2) EXECUTED — `plyr_append.py`:** donor entries for 200/202 appended **byte-verbatim**
+(full 0x20 records including the angle.z flag bits) into R00_00.arc/room.dzr's PLYR.
+**Offset-stable grow (P1):** the PLYR chunk relocated to EOF with old + new entries; ONLY
+its 8 table bytes changed; every other byte keeps its offset — pointered chunks safe by
+construction. Verification battery pre-write: untouched-region byte-diff + same-reader
+re-dump (ids {0, 200, 202}) + donor byte-verbatim check on the appended records. Dry-run →
+applied → idempotency proven; backup `.pre-plyr-bak`.
+
+**(3) THE CHAIN AS IT NOW STANDS, donor rails end to end:** distance trigger → tale_1
+(donor cuts, §295's getMyActIdx fix) → donor mEvTimer → `setNextStage(host, 0xC8, mode-8
+WIPE)` **arg verbatim** → re-entry resolves at the donor's own loft point → §273 wire →
+`setStartDemo` → REVT → **TALE_DEMO** (donor event, donor accounting) → tale plays →
+donor finish. The covenant note History made stands here too: the donor's value never bent
+to the host — the receptor grew to meet it.
+
+**WHOSE TURN:** user/History → the run (this may be THE run); Foundry → WW flag namespace +
+bake refit; the tale campaign's remaining known unknowns are zero.
+
+## §293 USER AUDIT SUSTAINED — the collapsed tale_1 was an UNAUTHORIZED architecture drift; DONOR TWO-STEP RESTORED; History's code wire is the remaining leg (Foundry, 2026-07-30)
+
+**The user's audit (correct on all three counts):** (1) nobody authorized non-native — the
+§280 staff-add was History's pragmatic proposal that Foundry EXECUTED without escalating the
+architecture change (the "donor two-step remains the reference" note was buried in tool
+fine print — exactly what the always-native ruling forbids; drift owned by Foundry);
+(2) **the OOM was NEVER the native path's fault** — §274 was Foundry's bake defects (RTBL
+relayout corruption) + host-data hazards (untrimmed MULT, ALL staff, ungated wire), ALL since
+fixed and receipted (№93 count=1 WITH the REVT present); (3) no reason remains to avoid
+complete native — every piece the two-step needs now exists.
+
+**EXECUTED — the data side is restored to donor shape:** event_list reverted to the
+pre-collapse baseline (one member swap; stage.dzs UNCHANGED — REVT + MULT trim identical in
+both, verified by hash). Now: `tale_1 = {Ba1, CAMERA(TALK), Link}, mFlags donor-verbatim
+(1701)`; `TALE_DEMO = {PACKAGE(PLAY tale.stb → WAIT), CAMERA(PAUSE)}, mFlags (9)` — the
+NATIVE tale's own event, donor accounting intact. The collapsed form (PACKAGE/DIRECTOR/
+camchain/finish-flag/regate/opening edits) is preserved at `.pre-native-restore-bak` for the
+record; its tools remain as general instruments. ALL-staff scope + MULT trim stay (host-
+context necessities, P3 — documented translations, not architecture).
+
+**THE NATIVE FLOW (every link receipted):** Grandma triggers tale_1 (distance check) → her
+cuts run (camera TALK — donor framing) → `cut_move_START_TALE1`: donor mEvTimer → **native
+`setNextStage(host, 0xC8/0xCA, mode-8 WIPE)`** — the donor's OWN fade — → re-entrance →
+REVT id 0/1 → `setStartDemo` → **TALE_DEMO** ordered → PACKAGE loads tale.stb → cast/puppets
+→ camera PAUSE → plays → finishes on ITS donor accounting (9) → teardown. No DIRECTOR
+composition, no invented gates — the wipe IS the donor's fade.
+
+**HISTORY'S REMAINING LEG (code, their lane):** ① ba1's `cut_move_START_TALE1` targets the
+HOST stage name (R_DL01) with the donor's spawn/mode args verbatim; ② the §273 entry wire
+live: on R_DL01 entry with pending spawn 0xC8→`setStartDemo(0)` / 0xCA→`setStartDemo(1)`;
+③ Demo01 residency at entry; ④ delete the §289-era fade bridge + strip probes on acceptance.
+Acceptance = the golden tale trace: wipe out → reload → tale plays → wipe in — the native
+game's own presentation.
+
+**WHOSE TURN:** History → the two-step wire (items ①-④); user → ferry §293; Foundry → WW
+flag namespace + bake refit (and a standing self-check added to memory: architecture changes
+STOP for a user ruling, never ride a ferry silently).
+
+## §292 OPENING RE-REFERENCED FROM MID-GAMEPLAY DONORS — leading WAIT + gate on Ba1's donor-timed beat; no prescribed delay anywhere (Foundry, 2026-07-30)
+
+History's corrected ferry executed exactly as reframed — reference, not constant:
+
+**(1) THE ROOT WAS THE REFERENCE'S CONTEXT:** §290's opening FADE was cloned from
+MK_GAMESTART — a TITLE start that begins from black, where ungated is correct. Mid-gameplay
+donors are structured differently, and three references are UNANIMOUS (ARRIVAL_GND /
+DEFAULT_NPC_NZ_ESA / MEGAMI_DEMO): the DIRECTOR chain **opens with an ungated WAIT** (the
+director idles through control lock + letterbox), and the first FADE **gates on an early cut
+boundary of the scene's driving staff** — TIMEKEEP COUNTDOWN, the NPC's TALK cut, a DUMMY
+cut. The donor NEVER times a fade with a raw delay.
+
+**(2) THE TRANSLATION, zero invented numbers (`rework_opening_fade.py`):** tale_1's DIRECTOR
+chain is now `WAIT (ungated) → FADE(+0.03, wait **1699** = Ba1's START_TALE1 cut completion)
+→ FADE(−0.02, 861) → FADE(+0.05, 9) → FADE(−0.05, 863)`. The gate beat is timed by **the
+donor's own mEvTimer** inside cut_move_START_TALE1 (§271 receipt) — the establishment pacing
+is Nintendo's, not ours. Ordering achieved: [lock + letterbox] → donor-timed beat → fade →
+storyboard. Cuts 2/3/4 untouched (§291-verified); mFlags unchanged (9, 863, 3846). Dry-run →
+applied → idempotency proven; backup `.pre-opening-bak`.
+
+**(3) CANON (pitfalls §292, the user's caveat now standing law):** *(a) a reference must
+match the CONTEXT (title-start vs mid-gameplay), not just the shape; (b) timing constants
+are the donor's to dictate — an eyeballed "delay N frames" is always the wrong ask.*
+
+**Predicted probe readout:** letterbox settles (§292-verified native) → Ba1's donor-paced
+beat completes → black dips → storyboard rolls → reveal at PAUSE → tale visible → end dips
+→ reveal → teardown. Every gate a donor boundary.
+
+**WHOSE TURN:** user/History → the verify run; Foundry → WW flag namespace +
+bake_room_chunks refit (resuming, for real this time).
+
+## §291 REVEAL RE-GATED TO THE STORYBOARD-START SIGNAL — my §290 gate was an END flag; the mechanism the user suspected is confirmed (Foundry, 2026-07-30)
+
+The defect was mine and the user's suspicion named the mechanism exactly: **fade timing
+signals are other staffs' cut-completion flags — per-event data, nothing global.** What each
+flag MEANS on the timeline:
+- **PACKAGE PLAY's flagId = the storyboard's END** (specialProcPackage ends PLAY at
+  demo_mode()==2) — a finish signal. §290 gated the opening reveal on it → the tale played
+  under black and revealed at the finish (History's probe: ~9455 vs expected ~7100).
+- **CAMERA PAUSE's flagId = the storyboard's START** — proof by chain order, no code dig
+  needed: STBWAIT is PAUSE's successor and is active DURING playback (it waits for the end),
+  therefore PAUSE completed at the handoff.
+
+**Executed — `regate_reveal.py`:** cut 2 (FADE −0.02) wait-flag 3 → **861** (CAMERA PAUSE).
+Cuts 1/3/4 untouched (probe-verified correct). 12-byte edit; dry-run → applied → idempotency
+proven; backup `.pre-regate-bak`.
+
+**Per the user's scoping note:** this demand is per-cutscene BY CONSTRUCTION — each event's
+DIRECTOR chain gates on ITS OWN staff flags in ITS OWN data; nothing global was touched, and
+the next cutscene composes its own gates. Canon rule added (pitfalls §291): *gate opening
+reveals on a handoff/start flag; gate end-dips and restores on completion flags.*
+
+**Predicted §291-probe readout:** cut 2 fires ~7100 (right after the opening black + cast
+snap) — the tale plays VISIBLE, end fades unchanged, control returns as before.
+
+**WHOSE TURN:** user/History → the one-shot verify run; Foundry → WW flag namespace +
+bake_room_chunks refit (genuinely resuming now — the tale campaign's data work is complete
+pending that run).
+
+## §290 NATIVE DIRECTOR FADE LANDED — tale_1 gains the 4-cut FADE chain, donor-verbatim rates, teardown now waits for the final reveal (Foundry, 2026-07-30)
+
+History's ferry executed with the full-roster method — and the donor references made the
+chain composition exact:
+
+**(1) THE NATIVE MECHANISM** (specialProcDirector, d_event_data.cpp:1037/1207): FADE cut =
+`Rate` float; **+rate fades TO black (cut ends at fadeRate≥1), −rate reveals (ends at
+!isFade())** — the chain self-paces on the real `mDoGph_gInf_c::fadeOut` subsystem. Donor
+reference shapes receipted: MK_GAMESTART opens `FADE(+0.03, ungated)` then reveals
+`FADE(−0.02)` gated on staging — the snap-hider; DEFAULT_NPC_NZ_ESA carries the ±0.05
+end-dip pair.
+
+**(2) EXECUTED — `add_director_staff.py`:** tale_1 gains a DIRECTOR staff (record cloned
+from donor MK_GAMESTART's, type 6) with the composed 4-cut chain, every Rate donor-verbatim,
+every gate on tale_1's OWN flags:
+`FADE(+0.03, ungated → black hides the cast snap)` → `FADE(−0.02, wait PLAY=3 → reveal once
+the storyboard rolls)` → `FADE(+0.05, wait WAIT=9 → black as the package completes)` →
+`FADE(−0.05, wait STBWAIT=863 → reveal after camera restore)`. FlagIds 3842/3843/3845/3846
+(donor's own range, dest collision-scanned). **`mFlags = (9, 863, 3846)` — teardown now
+ALSO waits for the final reveal, so the event can never end behind an un-revealed screen.**
+Dry-run → applied → idempotency proven; backup `.pre-director-bak`.
+
+**(3) tale_1's FINAL ROSTER** — the complete performing company, all native machinery:
+Ba1 (cuts) · CAMERA (PAUSE→STBWAIT) · Link · PACKAGE (PLAY→WAIT, the STB player) ·
+DIRECTOR (4×FADE). Canon: pitfalls doc gains the §290 composition rule (gate FADEs on the
+event's own flags; final reveal's flagId joins mFlags). **§289's bridge is superseded —
+History deletes it on land, per their own call. Both fade directions now run the same code
+path every WW cutscene fade uses.**
+
+**WHOSE TURN:** History → delete the §289 bridge, run THE test (probe set reads: fade-black
+open → reveal on PLAY → tale → black on package end → reveal on restore → 9+863+3846 →
+status 5 → control returns); user → ferry §290; Foundry → WW flag namespace +
+bake_room_chunks refit resume.
+
+## §288 ONE ROOT, ONE PASS — awake's CAMERA PAUSE→STBWAIT chain cloned onto tale_1; fade + finish machinery landed together (Foundry, 2026-07-30)
+
+History's §286-addendum executed as ordered: **the FULL staff roster diffed against the
+working end-to-end reference (awake)** — and the diff overturned the DIRECTOR guess with
+better news:
+
+**(1) THE REAL MACHINERY:** awake has NO DIRECTOR staff. Its fade + finish run through the
+**CAMERA staff's `PAUSE(Stay=1) → STBWAIT` chain** — the STB camera handover + fade AND the
+second finish condition: awake's `mFlags = (859, 863, -1)` = (PACKAGE WAIT, **CAMERA
+STBWAIT**) — TWO conditions, not one. tale_1's camera carried only the donor's pre-reload
+`TALK` cut; §287's single-flag reconcile was necessary but half.
+
+**(2) EXECUTED — `complete_event_camera.py` (cross-file staff-chain cloner):** awake's
+PAUSE+STBWAIT cuts + data (Stay int; Center/Eye/Fovy restore payloads) cloned F_DL01-list →
+R_DL01-list, flagIds 861/863 kept verbatim after a dest-wide collision scan (safety-stop
+wired). **The ONE non-verbatim rewrite, receipted:** STBWAIT's wait-flag (855 = awake's
+PLAY) → **3** (tale_1's own PACKAGE PLAY) — it must wait on ITS storyboard. tale_1's CAMERA
+staff repointed at the new chain (donor TALK cut left orphaned in the pool — revert =
+repoint back). `mFlags = (9, 863, -1)` — awake's two-condition pattern exactly. Dry-run →
+applied → idempotency proven; backup `.pre-camchain-bak`.
+
+**(3) CANON:** pitfalls P5b gains the §288 refinement — *diff the FULL STAFF ROSTER against
+the working reference, not fields; a collapsed event inherits the reference's whole
+performing roster.* (ALL staff deliberately NOT re-added — P3 bars it from the 6-room host;
+awake's finish doesn't reference it.)
+
+**The §287-probe prediction for History's one-run readout:** PAUSE hands camera to the STB →
+fade-in plays → storyboard runs → STBWAIT completes on STB end (fade-out + camera restore
+via Center/Eye/Fovy) → flags 9+863 set → §287 probe quiet → §285 status 5 → endProc →
+control returns. Fade and finish in the same run, as History predicted from the one-root
+reading.
+
+**WHOSE TURN:** user/History → THE run (every §279-§287 probe reads out at once); Foundry →
+WW flag namespace + bake_room_chunks refit resume.
+
+## §287 THE LAST LATCH RELEASED — tale_1's finish accounting reconciled to TALE_DEMO's proven teardown; mFlags (1701)→(9) (Foundry, 2026-07-30)
+
+History's §286 strand answered with a flag-graph dump (all four events, every staff/cut
+flagId — the whole accounting visible in one table):
+
+**(1) THE WORKING INVARIANT, receipted across every finishing event:** `event.mFlags[0]` ==
+**the terminal cut flagId of the staff that CARRIES the performance** — TALE_DEMO (9 =
+PACKAGE WAIT), Ba1_Get_Itm (56 = Link's last cut), tale_2 (1712 = its PLAY).
+
+**(2) WHY tale_1 COULDN'T FINISH:** its donor value (1701 = Ba1's WAIT cut) was authored for
+the donor's **RELOAD teardown** — donor `cut_move_START_TALE1` destroys the whole stage via
+`setNextStage` MID-EVENT; donor tale_1 never finishes in place, so its in-place finish
+accounting was never exercised donor-side. The §281 collapse (PACKAGE absorbed) made the
+event complete its performance for the first time ever — and exposed the never-used latch.
+
+**(3) THE RECONCILE (`set_event_finish_flag.py`): tale_1.mFlags = (9, -1, -1)** — the
+absorbed PACKAGE staff's terminal cut flag, byte-for-byte TALE_DEMO's proven accounting. No
+invented flag ids (cross-event duplication harmless: flags reset per event init,
+d_event_data.cpp:374; one event runs at a time). Dry-run verified → applied → idempotency
+proven. Backup `.pre-finishflag-bak`.
+
+**(4) CANON UPDATED:** stage-data-bake-pitfalls.md gains **P5b** — *a collapsed event
+inherits the donor's finish accounting; re-point mFlags at the absorbed player's terminal
+cut flag, mirroring a working event.* The bake-error catalog now covers the full arc of this
+campaign: P1 relayout / P2 reference models / P3 host-context / P4 id duality / P5 missing
+player / P5b finish accounting / P6 arc slot.
+
+**Predicted repro:** finishCheck passes at storyboard end → flag 8 → status 5 → endProc →
+cancelStaff → control returns. Full acceptance: the tale plays AND ends — then History
+strips the probes and the parked trigger-position item goes live.
+
+**WHOSE TURN:** user/History → the repro (the campaign's finish line); Foundry → WW
+event-flag namespace design + bake_room_chunks refit resume.
+
+## §281 PITFALLS CANONIZED FIRST (user order), THEN §280 EXECUTED — tale_1 has its PACKAGE staff, cloned verbatim from TALE_DEMO (Foundry, 2026-07-30)
+
+**(1) Per the user's order, the bake-error catalog was written BEFORE the rework:**
+**`docs/WW Linked/stage-data-bake-pitfalls.md`** — the data-tooling companion to History's
+ww-interior-host-pitfalls.md. Six receipted classes + the verification doctrine:
+- **P1** never re-layout pointered dzs/dzr (RTBL 3-level offsets; offset-stable append law;
+  chunk pointer census started; bake_room_chunks refit debt on record);
+- **P2** event_list.dat is the EXCEPTION (index-linked — rebuild safe; know a file's
+  reference model before choosing edit strategy);
+- **P3** donor 1-room assumptions in a multi-room host (ALL staff / MULT group / SCLS room
+  numbers — the §275/§276 trio);
+- **P4** REVT id==index duality + low-id probe collisions (fix the consequence);
+- **P5** an ordered event with NO STB PLAYER idles at frame 0 (§280's lesson — every event
+  chain needs exactly one PACKAGE PLAY on its path, verified end-to-end at bake time);
+- **P6** the single demo-arc slot (bundle per space);
+- **Doctrine:** offline probes before delivery · untouched-region byte-diff · same-reader
+  re-verify · idempotency · one-time backups · 10-hypothesis runtime discriminators.
+
+**(2) §280 executed as `add_package_staff.py`:** tale_1's missing player CLONED VERBATIM from
+the same file's working TALE_DEMO chain — staff PACKAGE(type 11) → PLAY{FileName='tale.stb',
+Stage='LinkRM' (R_DL01 alias already handled), StartCode=0, RoomNo=0, Layer=0} → WAIT. Zero
+invented data. tale_2 already carried its own PACKAGE (tale_2.stb) — untouched. Verified by
+full-chain re-dump on the output bytes; idempotency proven by a second run (no-op). Backup
+`.pre-pkgstaff-bak`. **P5's honesty note carried in-tool: the donor's two-step (actor event →
+re-entrance TALE_DEMO) remains the reference — if behavioral deltas surface (reload-reset
+state), the fallback is the re-entrance chain.**
+
+**The chain History's probe demanded is now complete end-to-end:** ba1 orders tale_1 →
+PACKAGE PLAY logs → getStbDemoData('tale.stb') (resident, §278) → demo_create → REAL frames →
+fade → cast binds (doubles ready, §278b) → WW demo00 puppets. Every §-numbered link receipted.
+
+**WHOSE TURN:** user/History → repro (acceptance: [PACKAGE] PLAY logs for tale_1, frames
+advance, fade plays, tale runs; then the parked trigger-position item goes live); Foundry →
+flag-namespace design + bake_room_chunks offset-stable refit, in that order.
+
+## §277 RTBL-PRESERVING RE-BAKE DELIVERED — offset-stable append; room0 count=1 verified OFFLINE before delivery (Foundry, 2026-07-30)
+
+History's A/B receipt (count=1 vs count=128) named my defect class exactly: **v1 rebuilt the
+dzs layout, and RTBL carries THREE levels of absolute file offsets** (roomRead_class → entry
+ptrs → room lists, d_stage.cpp:2318) that relayout invalidates. The in-place editors (scope,
+trim) were always safe; the rebuild was the landmine.
+
+**revt_bake v2 — OFFSET-STABLE APPEND:** the only bytes that move are the ONE lowest
+self-contained chunk (STAG, fixed pointer-free struct, 0x3C at the front of the data region):
+its blob relocates verbatim to EOF; the freed front space holds the grown table's REVT entry;
+**every other byte of the file stays at its original offset — RTBL/RCAM/all pointered chunks
+valid BY CONSTRUCTION.** Safety stops if the lowest chunk is ever not STAG (the relocation
+argument is chunk-specific, never generalized silently).
+
+**Verification battery, run before write:** (a) untouched-region byte-diff (asserts
+identical); (b) **an OFFLINE mirror of History's №93 probe — RTBL room0 count read from the
+delivered bytes = 1** (the §277 acceptance criterion, proven pre-delivery, not just
+post-playtest); (c) REVT re-read (2 entries, ids 0/1, switch 0x02).
+
+**Delivered arc = clean md5-verified base + all three hardening passes** (staff scope → MULT
+trim 6→1 → v2 REVT append). The §277 two-requirement ask is met in one artifact: tale.stb
+becomes loadable AND room 0's RTBL row stays count=1.
+
+**Follow-up flagged (self-audit):** `bake_room_chunks.py` (§267, still parked pre-write) uses
+the same v1-style wholesale rebuild for room.dzr — it gets the offset-stable treatment BEFORE
+its --write ever runs. The lesson generalizes: **never re-layout a dzs/dzr that contains
+pointered chunks; append offset-stable or edit in place.** (Same family as the J3D
+pointer-fix law — buffers with baked offsets don't tolerate relocation.)
+
+**WHOSE TURN:** History/user → point at the delivered arc, wipe cache, repro: №93 probe should
+read count=1 in-game, then the tale should get REAL frames (fade at last); then History's
+parked trigger-position item becomes live; Foundry → flag-namespace design continues +
+bake_room_chunks offset-stable refit queued.
+
+## §276 MULT TRIMMED TO ROOM 0 + full re-bake — the pile-up is now structurally impossible; why id-0 can't move (Foundry, 2026-07-30)
+
+History's §275 chunk-diff accepted as decisive (staff-scoping alone did NOT gate the flip —
+their finding stands; my engine-side reading below explains why their fix (2) is the right one).
+
+**(1) WHY REVT id 0 CANNOT be moved out of probe range (fix (1) is structurally unavailable):**
+`setStartDemo` stores the mapToolID that `getEventName` then uses as a DIRECT INDEX
+(`entries[mEventInfoIdx]`, d_event_manager.cpp:122) — **TP forces field_0x4 == own index**, so
+the tale entries must be ids 0/1. And the entry-time probe surface is real: `isStageEvent(
+param_0)` (d_ev_camera.cpp:26) matches ANY REVT entry by field_0x4 — a door-event camera
+probing a low id hits id 0 by construction. The id side is unfixable data-wise; the CONSEQUENCE
+side is where the fix lives:
+
+**(2) EXECUTED — History's fix (2): `mult_trim.py`, MULT group trimmed 6 → 1 (room 0 only).**
+Even when an entry-time probe trips event-mode, the MULT group now contains ONLY room 0 —
+**the all-room pile-up is structurally impossible, whatever fires.** Safe per History's §275
+call (the WW host only uses room 0; future hosted events are single-room too and need no
+stitched group).
+
+**(3) DELIVERED ARC (three passes on the md5-verified clean base, in order):** staff scope
+(ALL dropped from both tale events — kept as defense-in-depth for the event-RUN side) →
+MULT trim (6→1) → REVT re-bake (ids 0/1, switch 0x02). Backups: `.pre-scope-bak`,
+`.pre-multtrim-bak` join the chain. Tools now form the repeatable host-hardening sequence for
+ANY future hosted room: `scope_event_staff` + `mult_trim` + `revt_bake`.
+
+**Pitfalls-doc addendum suggestion (History's editorial call):** pitfall A's lesson can now be
+stated mechanically — "a hosted stage's MULT group must contain only rooms that may co-render;
+a REVT-bearing host with an untrimmed MULT group is one probe away from the §274 pile-up."
+
+**WHOSE TURN:** History → point at the delivered arc, wipe cache, re-run §273 acceptance
+(expect: clean entry incl. door path, tale orders on the gated wire, PACKAGE loads tale.stb,
+§48 cast lines, WW demo00 puppets); user → ferry §276 + the repro run; Foundry → WW event-flag
+namespace design (in progress, unchanged).
+
+## §275 GATED RE-BAKE DELIVERED — ALL-staff scoped out + REVT re-baked; defense in depth; the n-event scaling answer (Foundry, 2026-07-30)
+
+§274's ask executed, in two data passes on the clean pre-revt arc (md5-verified before touching):
+
+**(1) NEW `scope_event_staff.py` — the ALL staff is OUT of both tale events.** `TALE_DEMO`/
+`TALE_DEMO2` staff: `[PACKAGE, CAMERA, ALL]` → `[PACKAGE, CAMERA]`. The TYPE_ALL staff (cuts =
+`['dummy']` — inert scaffolding in the donor's ONE-room LinkRM) is what flips a 6-room host to
+all-room event mode (§274's OOM). Dropping it is the same translation class as the §267 SCLS
+stage rewrite: donor meaning preserved, host semantics corrected. **Defense in depth: even a
+spuriously-ordered tale can no longer flip the stage to all-room load.** History's §273 wire
+gate (order only on the pending-tale path) remains the eligibility gate — the two protections
+are independent.
+
+**(2) REVT re-baked on top** (ids 0/1, switch_no 0x02 unchanged). Delivered `STG_00.arc` =
+pre-revt base + staff scoping + REVT; backup chain: `.pre-scope-bak` (clean single-room state)
+alongside the existing `.pre-revt-bak`/`.revt-6room-bak`.
+
+**(3) THE USER'S SCALING QUESTION (n events per hosted interior, dungeons) — no alternative
+path needed; THIS is the scalable native architecture,** with History's doc as its charter:
+- **Concurrency scales free:** TP runs ONE event at a time (single run-slot) — n events QUEUE.
+  Selection, not concurrency, is the scaling problem (History's load-bearing fact).
+- **REVT scales as data:** n entries per stage, id==index; revt_bake handles arbitrary sets.
+- **The three real scaling requirements, all now owned:** ① per-event mutually-exclusive
+  triggers = the **WW event-flag namespace** (pitfall E — Foundry's next work, now THE
+  critical path for everything past one event); ② staff scoping per hosted room — mechanized
+  today (scope_event_staff; planned: merge_event auto-flags ALL/cross-room staff on merge
+  into multi-room hosts); ③ ONE bundled demo arc per space (pitfall D) — a Foundry
+  LBNK-style bundling tool, queued behind the flag namespace.
+Dungeons fit this shape exactly: n REVT rows + n flag-gated triggers + one bundled arc.
+
+**Pitfall-C ack (Aryll→Grandma modelCalc recurrence):** the kit's cutscene tier now has its
+receipt row — History's catalog entry is canon; the render-order rule was already recipe 6,
+the `modelCalc()` omission class gets carried on every future cutscene-NPC kit.
+
+**WHOSE TURN:** History → point at the corrected arc, re-run §273 acceptance (their wire gate
++ my scoping = both protections live); user → ferry §275; Foundry → **WW event-flag namespace
+design STARTS** (pitfall E, the ceiling for every multi-event future).
+
+## §273 ALWAYS-NATIVE RULING EXECUTED — REVT chunk BAKED into R_DL01; TP's own entrance mechanism now carries the tale (Foundry, 2026-07-30)
+
+**User ruling (standing, memory-recorded): conceptual direction is not an AI-instance choice —
+the answer is always NATIVE.** §272's "option B" class is retired from Foundry's vocabulary;
+native paths get stated and executed.
+
+**Executed: `tools/ww_crew_restoration_skeleton/revt_bake.py` → REVT chunk baked into
+R_DL01/stage.dzs** (backup .pre-revt-bak; dry-run-verified then written; idempotent; safety-stops
+if REVT ever pre-exists):
+- `TALE_DEMO` id 0, `TALE_DEMO2` id 1 — **type ZEV**, `switch_no = 0x02` — the donor's own
+  `mSpawnSwitchNo` verbatim (d_stage.h:335), so the one-shot replay guard rides TP's native
+  `setStartDemo` isSwitch check with zero new code.
+- **Consumer semantics decoded en route:** `setStartDemo(mapToolID)` stores the id that
+  `getEventName` then uses as an entries INDEX — so TP convention is `field_0x4 == own index`
+  (ids 0/1, NOT the donor spawn numbers; §272's [INFERENCE] on the 0xCA mapping is RESOLVED —
+  the port maps by explicit id, donor branch semantics preserved: 0xC8-branch → id 0,
+  0xCA-branch → id 1).
+- [PORT-INTEGRATION, flagged in-tool]: priority byte + unknown fields set 0 — no original TP
+  REVT sample offline; verify against any TP stage's REVT when the user's install is handy.
+
+**History's remaining wire (the native entrance, one call):** ba1's ported cut currently does
+the donor's `setNextStage(...)`; the TP-native carry of the donor's 0xC8/0xCA semantics is
+`dComIfGp_getEventManager().mException.setStartDemo(0 or 1)` on the R_DL01 entry (or the
+transition-carried equivalent TP uses for its own entrance demos) + Demo01 residency at entry.
+Then: REVT → getEventName → TALE_DEMO ordered → PACKAGE staff loads tale.stb (§272) → cast
+binds (§269 map) → WW demo00 puppets (§271, already landed) → clothes + JMSG (DN-4 path).
+**Every link in that chain is now native and receipted.**
+
+**WHOSE TURN:** History → the setStartDemo entry wire + repro (acceptance unchanged: §48 cast
+lines, then the golden-trace differ); user → ferry §273; Foundry → WW event-flag namespace
+design (dialogue, the LAST Grandma blocker) — genuinely next.
+
+## §272 THE TALE'S STB LOADER FOUND — it's the PACKAGE staff the port ALREADY RUNS; the native entry is a REVT stage-event; all three ferry questions receipted (Foundry, 2026-07-30)
+
+First, the §271 correction owned: my livelock read had a bootstrapping hole — `else if
+(isStatus(1))` requires status ALREADY set, and nothing sets it in this flow (History caught
+it). `m_data == NULL` is the true stall. The demo00 port stays valuable (the TP-protocol
+mismatch WILL bite once the STB actually plays its d_act cast) — "correct-but-premature" is
+exactly right.
+
+**Q3 (answered first, it frames everything): YES — the tale plays on the LinkRM re-entrance.**
+Donor `cut_move_START_TALE1` receipt: timer → `setNextStage("LinkRM", 0xCA-or-0xC8, room 0,
+mode 8)` — no STB load in the cut; History's port of it is donor-faithful. The unk1A0 branch
+picks 0xCA (TALE_DEMO2) vs 0xC8 (TALE_DEMO).
+
+**Q1/Q2: the STB loads via the EVENT MANAGER'S OWN PACKAGE MACHINERY — nothing else should
+load it.** Donor `dEvDtStaff_c::specialProcPackage` (d_event_data.cpp:752, decompiled): on the
+PLAY cut it reads **`FileName` from the cut's own string data** → `getObjectRes(getDemoArcName(),
+filename)` → `demo_create(...)`; PLAY-proc then waits demo mode 2 → Next_Stage/remove → cutEnd.
+**The port HAS this** (specialProcPackage complete, with an intentional LinkRM→R_DL01 stage
+alias from the mount-era TALE_DEMO). And the events are ALREADY IN the merged R_DL01 list:
+**TALE_DEMO/TALE_DEMO2 are DONOR events** (first rows of donor LinkRM's list — the mount reused
+donor machinery), PACKAGE staff, `FileName` receipts: tale_2's PLAY carries `'tale_2.stb'`.
+So: NO awake-style getStbDemoData replication, NO ba1 load — **ORDER TALE_DEMO(2) on
+re-entrance and the machinery does the rest.**
+
+**THE NATIVE ENTRY MECHANISM:** donor stage EVNT chunk (LinkRM: `TALE_DEMO`@0, START_TEST,
+LOOK_SHIELD, get_shield, `TALE_DEMO2`@4) ↔ entry spawn. **TP's equivalent exists natively:
+the `REVT` chunk** → `dStage_MapEventInfo_c` (entries 0x1C: type ∈ {MAPTOOLCAMERA, ZEV, STB},
+priority, event_name[13], switch_no — include/d/d_stage.h:412) loaded by
+`dStage_stEventInfoInit` (d_stage.cpp:2764), consumed via getMapEventInfo (d_event.cpp:1390,
+d_event_manager.cpp:90). [INFERENCE-NEEDED: the exact donor point→EVNT-index rule (0xC8→idx0
+fits; 0xCA→TALE_DEMO2@4 does NOT fit a linear −0xC8) — History's integration can map
+0xC8→TALE_DEMO / 0xCA→TALE_DEMO2 explicitly per the donor branch semantics.]
+
+**INTEGRATION OPTIONS (History's pick):**
+- **A (native):** author a REVT entry set into R_DL01's stage.dzs (Foundry can extend the bake
+  tool with a REVT pass authored from the donor EVNT rows) + verify the port's entrance
+  consumer orders it at spawn 0xC8/0xCA + Demo01 residency at entry.
+- **B (fast, still donor-shaped):** a 10-line R_DL01 entry handler (awake-style placement, but
+  ordering the EVENT: `ensureDemoArcResident("Demo01")` + `evmng_order(TALE_DEMO or _2 by the
+  0xC8/0xCA pending spawn)`) — the PACKAGE staff then does everything donor-verbatim. B is NOT
+  an owed bridge if it keys off the pending spawn point: it's the entrance consumer in
+  miniature.
+
+**WHOSE TURN:** History → pick A/B and wire the entry order (acceptance: §48 lines appear as
+the STB binds Ba1/Link/d_act; then the §271 demo00 swap proves itself on the puppets); user →
+ferry §272; Foundry → REVT bake pass on an A order; flag-namespace design continues.
+
+## §271 FRAME-0 STALL ROOT-CAUSED — a THP "Movie Start Wait" LIVELOCK, sprung by TP-demo00 misreading WW STB data; WW demo00 kit STAGED; trigger is DISTANCE not Y (Foundry, 2026-07-30)
+
+History's frame-0 ferry answered — full chain, static:
+
+**(1) THE STALL: a status-1 livelock in TP-only machinery.** `dDemo_c::update` (port
+d_demo.cpp:1276): `isStatus(1)` → "Movie Start Wait" → `daMP_c_THPPlayerPlay()` → **with no
+movie-player actor (`m_myObj == NULL`, always true in WW-hosted stages) it RE-SETS status 1
+and returns** (d_com_static.cpp:468-471) → `isStatus(1)` still true → return 1 → frame frozen
+forever. The retry re-arms the wait it polls. The donor has NO such gate (THP is TP's movie
+system). §194's susp=0 confirmed it was never a message suspend; Link's ladder state is NOT
+the gate.
+
+**(2) WHO SPRINGS IT: TP's own d_a_demo00.** Its STB actor-data switch interprets the WW
+tale's data through TP's protocol and hits the movie case → `THPPlayerPlay()`
+(d_a_demo00.cpp:1227). **This is §269 fix-path B's prediction come true — and the stall is
+only the FIRST symptom: the same protocol mismatch will mangle puppet models/anims next**
+(WW demo00's data channel means shape/anim/btp ids — donor :169-374 receipts).
+
+**(3) FIXES, RANKED:** **A (donor-correct, staged NOW): port WW's demo00** — kit generated at
+`port-kits/ww_demo00/` (donor source fully decompiled; **94.1% coverage, 5 free shims + 1
+adapter, 7 missing symbols ALL flat leaves, 0 cascades — the easiest port class on record**);
+point the `d_act*` OBJNAME rows at it for WW-hosted stages (TP demos keep TP's twin).
+**B (bridge, if playtest speed demands): guard the livelock** — in WW stages with
+m_myObj==NULL, offStatus(1) instead of re-arming — logged on the owed ledger the moment it
+lands, because A retires it.
+
+**(4) HISTORY'S TRIGGER THREAD — the donor disagrees structurally:** `check_useFairyArea` is
+a **DISTANCE check** (`PSVECSquareMag` on the Link↔Grandma delta vs the float pool
+{20.0f, -16.0f, 0.0f} — draft + rodata receipts) — NOT a Y-threshold. The 150.0f Y-guess
+can't be tuned into fidelity; port the donor's distance form from the named draft
+(`check_useFairyArea` + wait_0's inline copy). Proximity ~20 units at the loft naturally
+cannot fire mid-ladder — the donor never had this bug.
+
+**WHOSE TURN:** History → choose A now vs B-then-A (Foundry recommends A straight: the kit
+says it's a day-class port), port the distance trigger from the draft, rebuild, repro;
+user → ferry §271; Foundry → WW event-flag namespace design (the LAST Grandma blocker)
+actually starts now.
+
+## §270 TALE FREEZE ROOT-CAUSED — ba1 never CLAIMS her staff slot: `getMyStaffId(name, NULL, 0)`; the fix is ONE TOKEN (Foundry, 2026-07-30)
+
+History's reframed ferry answered. Chain of evidence, all static:
+
+**(1) THE EVENT DATA IS CORRECT** (dumped from the merged R_DL01 list): `tale_1` staff
+`Ba1{START_TALE1, WAIT}` — **matches ba1's a_cut_tbl** — + `CAMERA{TALK}` + `Link{008e_talk}`.
+(The log's "[TALK]" label is just the CAMERA staff's cut NAME, not an event-class verdict.
+For §-record: TALE_DEMO is the PACKAGE-driven shape; tale_1 is actor-driven by design.)
+
+**(2) THE §50 LOG TRACKS `event_runCheck`** (d_ext_npc_mount.cpp:6509) — "demo ENDED frame 0"
+means THE EVENT COMPLETED INSTANTLY; the storyboard died with it, which is why no §48 d_act
+lines exist (History's upstream-of-cast reading was right).
+
+**(3) THE ROOT: ba1 never claims her staff slot.** Landed `isEventEntry()`
+(d_a_npc_ba1.cpp:1021) calls `dComIfGp_evmng_getMyStaffId(mEventCut.getActorName(), NULL, 0)`
+— **NULL where the port signature needs the actor pointer**. Receipt by working precedent:
+**Aryll passes `this` (d_a_npc_ls1.cpp:1651)**. Claim fails → ba1 never enters her cut →
+nothing holds the event open → instant completion → frame-0 truncation.
+
+**(4) THE FIX IS ONE TOKEN:** `NULL` → `this` at d_a_npc_ba1.cpp:1021. **Also latent in bm1**
+(d_a_npc_bm1.cpp:3008, same NULL — untriggered only because Ritos join no events yet): fix
+both. This was the codemod's REVIEW class working as designed (flagged, hand-fill missed);
+the codemod now carries a §270 KNOWN-BUG detector for the exact NULL form so it can't recur
+on the remaining villagers.
+
+**Predicted sequence after the fix:** event holds open → cut_init/move_START_TALE1 drives →
+STB advances → object tracks open → §48 d_act lines appear → DEMO00 puppets bind (§269 map;
+factory already proven working at log 855–867) → full tale. If anything downstream still
+misbehaves, the §269 discriminator legs (c)/(b) remain live — but they're likely moot.
+
+**WHOSE TURN:** History → the two-token fix (ba1:1021 + bm1:3008), rebuild, repro — acceptance
+= tale advances past frame 0 and §48 d_act lines appear; user → ferry §270 (this is the fastest
+turnaround of the campaign — enjoy it); Foundry → WW event-flag namespace design (the LAST
+Grandma blocker) resumes.
+
+## §269 TALE CAST-BINDING MAPPED — the STB waits on the DEMO00 puppet path; port has every piece; one repro run discriminates the break (Foundry, 2026-07-30)
+
+History's Phase-2 forensics ferry answered statically — full map:
+**`docs/WW Linked/tale-stb-cast-binding-map.md`**. Headlines:
+
+**(1) THE CAST, from the STB bytes:** JACT = `Ba1` (live, binds ✅), `Link` (live ✅),
+`d_act0/2/3` (❓ the freeze), + camera/JMSG/JSND/JPTC controls, + `fuku_model` (clothes-prop
+resource string fed to a d_act).
+
+**(2) THE DONOR MECHANISM IS ALL DECOMPILED SOURCE:** JSGFindObject's `d_act` branch —
+not-found → `fopAcM_fastCreate` → **DEMO00 puppet** (d_act0..6 = fpcNm_DEMO00_e arg N,
+donor d_stage.cpp:1196) → setStageLayer → appendActor; DEMO00's model/anims arrive as
+NUMERIC IDS into the DEMO ARCHIVE via the STB actor-data channel (donor d_a_demo00.cpp:169+,
+0 Nonmatching). No d_act placements exist (verified) — creation is always on-demand.
+
+**(3) THE PORT ALREADY HAS EVERY PIECE** — the d_act branch (d_demo.cpp:1035, §48-probed),
+the OBJNAME rows (d_stage.cpp:1388), a registered DEMO00 profile + TP's own d_a_demo00.
+**And the data has an alibi:** Demo01.arc staged + donor-id-exact (resid audit), Ba.arc
+clean (§268). **awake.stb has NO d_act cast — the tale is the port's FIRST exercise of the
+puppet branch.** The freeze is behavioral, in one of three places.
+
+**(4) THE DISCRIMINATOR — one repro run, grep `§48 JSGFindObject actor='d_act`:**
+(a) line absent → STB object-open never reaches JSGFindObject (factory path);
+(b) 'not found' + 汎用くん生成失敗 → DEMO00 create fails — prime suspect its numeric
+getIDRes into the demo arc = SAME ROOT as §268's engine-side numeric-lookup bug;
+(c) FOUND but §52 actor=NONE → append/read-back plumbing.
+**Fix-path B pre-approved shape:** donor d_a_demo00 is fully decompiled — a WW-faithful
+puppet port is one easiest-class actor if TP's twin diverges.
+
+**WHOSE TURN:** user → ONE repro run (freeze + A/exit as before), send the dusk log's §48/§52
+lines; History → read the discriminator, fix the indicated leg (Foundry backs (b) with the
+§268 getIDRes probe, or generates the demo00 kit on a fix-path-B order); Foundry → WW
+event-flag namespace design continues meanwhile.
+
+## §268 FERRY ITEM #1 MEASURED — the arc pipeline is INNOCENT: Ba.arc is donor-id-exact; the numeric-lookup failure is ENGINE-SIDE (Foundry, 2026-07-30)
+
+**Sequencing ruling (user asked):** interiors BEFORE doors — hard dependency chain (interiors
+→ room-within-host map → bake --write → native TGDR/SCLS door transition retires the seam).
+The three §267-bis blockers outrank both; order: res-ids → tale-hang trace → flag namespace.
+
+**Blocker #1 result — History's mechanism hypothesis is DISPROVEN by audit:** new instrument
+`tools/ww_crew_restoration_skeleton/restore_arc_resids.py` (audit default, --fix gated,
+in-place u16 id patch, no repack) swept **all 58 mod arcs with donor counterparts: ZERO id
+mismatches.** Ba.arc specifically: **24/24 members present, every donor-named member carries
+its donor id, nothing added, mtime 07-19 (predates the ba1 work).** The adapted data is
+donor-faithful — `adapt_bdl_arcs.py` needs no fix (adapt_arc edits in place; only pack_rarc
+REBUILDS renumber, and Ba.arc never went through one).
+
+**Therefore the failing layer is the ENGINE'S numeric-resolution path on mod-loaded arcs** —
+name lookups resolve (History's filename hand-patch works), id lookups don't. Discriminating
+probe for the next build (multi-hypothesis, one run): at `dRes_control_c::getIDRes` log
+`{arc-name arg, id arg, which info array entry matched (ptr+index), entry's mount source
+(native res vs mod resLoad §229), member found (name/id/count) or NULL}` for tag "Ba" — plus
+one call of the SAME id through the name path for the A/B. Candidates it separates: (a) mod
+resLoad populates a name table but not the id-indexed mRes view; (b) the Object info array
+never received the mod arc (mount namespace split); (c) id truncation/type at the call site.
+**Belt shipped meanwhile:** `arcs/<name>.residmap.csv` emitted for all 58 arcs (member →
+donor id) — History's filename fallback can generalize from it TODAY if they want ba1 moving
+before the engine fix.
+
+**Queue state:** #2 (WW event-flag namespace) design next; #3 (tale-hang trace) needs the
+probe build + one repro run (trigger left live per History). Bake --write still parked on the
+room map.
+
+**WHOSE TURN:** History → paste the getIDRes probe into the next build OR point Foundry at the
+engine file if they want us to land it (shared-infra call); user → ferry §268 + one repro run
+when the tale-hang probes are in; Foundry → flag-namespace design doc + tale-trace differ prep.
+
+## §267 ROOM-BAKE TOOL BUILT (quest-substrate nativization, user-greenlit) — dry-runs measured; ONE integration point waits on History's room fixes (Foundry, 2026-07-30)
+
+**Ruling context:** user ruled the room connective tissue goes native BEFORE quest buildout (the
+awake→first-quest chain must not be built on the ini/CSV bridge — tale-precedent debt). Tool
+built NOW; **no arc writes until History's in-flight room fixes land** (default dry-run;
+--write gated).
+
+**New tool `tools/ww_crew_restoration_skeleton/bake_room_chunks.py`** (merge_event.py family,
+same covenant chain): donor room .dzr → SCLS/DOOR/TGDR/ACTR(+layers)/SCOB(+layers)/TGOB/TGSC
+entries merged byte-verbatim into the NATIVE room arcs' room.dzr. Discipline built in:
+- **registered-proc filter**: ACTR-family names checked against the receiver's l_objectName
+  registry (923 OBJNAME rows, src/d/d_stage.cpp) — unported procs DEFER to CSV-side; rerun after
+  each actor port shrinks the list (**one-way ratchet, idempotent per-entry dedup**);
+- **SCLS dest translation** donor→host via the npc/*.ini pairs (+ sea→F_DL01 seed); unmapped
+  dests SKIP loudly, never guessed;
+- **DN-1 fence**: placement/exit chunks only, BG/collision untouchable by construction;
+- known entry sizes LEAD, gap-derivation cross-checks (refuses on layout drift).
+
+**Dry-run receipts** (room-bake-{exterior,interior}-dryrun.md):
+- Exterior (donor sea/Room44 → F_DL01/R44_00): **200 bakeable now · 287 deferred (unported
+  procs — the ratchet's worklist) · 2 dedup hits (idempotency proven on the live arc) · 1
+  unmapped SCLS (`Ojhous` — its ini pair is missing; Ojhous2 maps fine)**.
+- Interior (donor LinkRM/Room0 → R_DL01/R00_00): 10 bakeable incl. the back-exit
+  `SCLS sea → F_DL01 (spawn=1 room=44)` — donor-verbatim with the right room number.
+
+**THE ONE OPEN INTEGRATION POINT (flagged in-tool, 8 warnings):** several donor interiors share
+host R_DL01, so the donor's SCLS **room number within the host must be retargeted** (donor
+Omasao room 0 ≠ host room 0 = Link's house). That room-within-host map is exactly what
+History's current room fixes define — the tool grows a `--room-map` input from their result,
+and `--write` stays parked until then. No guessing.
+
+**WHOSE TURN:** History → finish room fixes; hand Foundry the authoritative donor-stage→host-room
+map (or the identity table location) + green-light the bake; Foundry → wire --room-map, run
+--write on both arcs, then the layer-attribution tap (acceptance instrument for native layer
+switching); user → ferry §267.
+
+## §266 AUDIO FIX #1 RECEIPTED — differ rerun confirms the dispatch shift is GONE; differ now parses the port dispatch LIVE (Foundry, 2026-07-30)
+
+**Before/after receipt for History's §264-fix-#1 landing:**
+- **MISDISPATCH rows: 2 → 0.** The dispatch diff is clean — live-parsed from the fixed
+  ja1_parser.cpp, which now reads 0xD8=SimpleADSR / 0xD9=Transpose / 0xDA=CloseTrack, matching
+  donor sCmdPList exactly.
+- **Defect sites: 4,829 → 4,715** (−114 = the 113 formerly-NOP'd CloseTrack sites + net
+  reclassification). `DA_CloseTrack` is off the offender list entirely.
+- Remaining ranked queue unchanged and confirmed: `E6_VibDepthMidi` ×3115 (fix #2) →
+  `E7_SyncCPU` ×835 → port-I/O family (CB ×326 / CC ×173 / D2 ×35) → `F1_IIRCutOff` ×172 →
+  `F4_VibPitch` ×22.
+
+**Tool upgrade (§266):** the differ had the port dispatch HARDCODED — a rerun would have hidden
+History's landing. `audio_differ.py` now **parses `Cmd_Process` live from ja1_parser.cpp**, so
+every future parser fix shows up on rerun automatically. Report regenerated in place
+(`audio-differ-report.md`).
+
+**Owed-bridge ledger (standing §250 directive):** `cmdSimpleADSR` is routed correctly but the
+port synth has no per-track envelope table yet — History's tracked debt. Native target: donor
+oscillator envelope seeding (field_0x2cc/0x304 ADS + 0x374 release, per their landing comment).
+Recorded here so it stays on the owed list; decode lead available on order.
+
+**WHOSE TURN:** Engine/History → fix #2 (`cmdVibDepthMidi`, the ×3115 offender) whenever ready —
+differ rerun is one command for its receipt; Foundry → next order; user → ferry §266.
+
+## §265 GRANDMA-TALE PHASE 1 DONE — tale_1/tale_2/Use_Fairy/Ganbaru registered in R_DL01; ba1's whole event table now resolves (Foundry, 2026-07-30)
+
+History's §263-bis handoff executed. All four missing events merged from the donor **LinkRM**
+stage into **`R_DL01/STG_00.arc`** (the §158 law: interior events live in the interior's stage
+list — the same target where `Ba1_Get_Itm` already resolves; DN-1 room-typing = correct target
+selection, since `mRoomNo` lives on the runtime container `dEvDtBase_c` @0x20, not the record).
+`merge_event.py` unchanged — the №152 tool handled everything; four dependency-closure merges,
+each verified by re-read:
+
+| event | idx | staff | closure |
+|---|---|---|---|
+| `tale_1` | 3 | **['Ba1', 'CAMERA', 'Link']** | 3 staff / 4 cuts / 4 data |
+| `tale_2` | 4 | ['PACKAGE'] (storyboard-driven, donor design) | 1/1/1 |
+| `Use_Fairy` | 5 | ['Ba1', 'CAMERA', 'Link'] | 3/20/29 |
+| `Ganbaru` | 6 | ['Ba1', 'CAMERA', 'Link'] | 3/24/34 |
+
+**The Phase-2 receipt History needs:** `tale_1`'s staff shape is IDENTICAL to the working
+`Ba1_Get_Itm` (['Ba1','CAMERA','Link']) — native ba1's `setActorInfo2("Ba1")` binds as-is.
+No OffsetPos in any of the four (interior events — the Great-Sea reconcile step is moot).
+Mount-era `TALE_DEMO`/`TALE_DEMO2` remain at idx 1/2 untouched (Phase-5 retirement targets —
+coexistence preserved per the plan's do-this-last rule). Backup: `.pre152-bak` (pre-existing).
+**With Ba1_Get_Itm, ba1's ENTIRE `l_evn_tbl` = {Use_Fairy, Ba1_Get_Itm, Ganbaru, tale_1, None,
+tale_2} now resolves in the tale stage.**
+
+**Phase-1 acceptance handoff:** History's runtime check — `dComIfGp_evmng_getEventIdx("tale_1",
+0xFF)` valid at ba1 create, `orderOtherEventId` accepted. Then Phases 2–5 per
+grandma-native-tale.md.
+
+**WHOSE TURN:** History → Phases 2–5 (cast binding → JMSG DN-4 route → clothes → retire mount
+machinery LAST) + acceptance vs the golden tale trace; Foundry → next order (audio differ rerun
+when parser fixes land, or bank-id→aw join); user → ferry §265 with §264.
+
+## §264 AUDIO DIFFER LIVE — "music sounds wrong" is now MEASURED: a dispatch-shift bug + vibrato NOP'd 3115× + port-I/O layering dead + 2/50 banks staged (Foundry, 2026-07-30)
+
+**New instrument `tools/foundry/audio_differ.py`** (static — no capture needed): walks every donor
+BMS with the port parser's EXACT byte-consumption rules (mirrored from ja1_parser.cpp ==
+donor Arglist), then diffs opcode coverage, dispatch, and bank staging. **93 tracks, 427,836
+reachable command sites** → `docs/WW Linked/audio-differ-report.md`. Findings, ranked by
+audibility:
+
+**(1) DISPATCH-SHIFT BUG (fix first — one-line class):** port `Cmd_Process` maps `0xD8→Transpose,
+0xD9→CloseTrack`; donor `sCmdPList` says **0xD8=SimpleADSR, 0xD9=Transpose, 0xDA=CloseTrack**
+(JASSeqParser.cpp:15 verbatim). So every donor ADSR envelope plays as a GARBAGE TRANSPOSE (wrong
+pitch), every donor transpose CLOSES a child track, and every donor close-track NOPs (113 sites) —
+stuck/vanishing voices + detuned instruments. The port's arg-consumption tables are correct
+(idx24=5 args = ADSR's arity — consumption right, dispatch shifted).
+
+**(2) VIBRATO IS DEAD: `E6_VibDepthMidi` NOP'd at 3,115 sites** — the #1 offender by volume,
+across nearly every music track. Flat lifeless rendition. Next: `E7_SyncCPU` 835, the **port-I/O
+family** (`CB_ReadPort` 326 / `CC_WritePort` 173 / Child/ParentWritePort) — WW's dynamic layer
+mixing (sea/battle intensity) runs on track ports; all NOP'd → wrong dynamic mix. `F1_IIRCutOff`
+172 (filter sweeps), `F4_VibPitch`, `EF_PanSwSet` follow.
+
+**(3) BANK COVERAGE: 2 of ~50 donor .aw banks staged** (n_zelda_0, n2i_link_0). Per-track
+bank/prog writes are censused in the report (regs 0x20/0x21 columns) — tracks resolving outside
+the staged set play wrong/missing instruments regardless of parser fixes.
+
+Honest tiers: counts are statically-reachable SITES (loops make execution counts unknowable);
+register-driven dynamic ops truncate their path and are counted (8 truncations total, all in
+defaultse.bms). Donor handler names verbatim from sCmdPList.
+
+**RECOMMENDED LANDING ORDER (Engine/History):** ① the D8/D9/DA shift ② `cmdVibDepthMidi` ③ the
+port-I/O six (restores dynamic layers) ④ bank staging expansion per the per-track census.
+Acceptance per fix: re-listen to a top-offender track (report names them per-op).
+
+**WHOSE TURN:** Engine/History → parser fixes in the ranked order (differ report = the receipts);
+Foundry → rerun the differ after each landing (one command) + the bank-id→aw join
+([INFERENCE-NEEDED] flagged in report §3) on request; user → ferry §264.
+
+## §263 §248 COMPLETE (#6 shipped) + THE VOICE DECODE — talk-voice is a message-driven dispatcher, fully decoded with its table (Foundry, 2026-07-30)
+
+**(1) ASK #6 — `registration.md` now generates per kit** (pitfalls 8/9/10 in one sheet):
+- **Placement status** per OBJNAME name: actor_map `[Name]` + placement-CSV rows + npc-ini
+  arc-match → **authored (socket FLIP) / partial (n/3) / none (needs DZR-derived data)**. ls1
+  validates as "authored — spawn-wire is a socket FLIP" (the exact §248 story).
+- **Multi-profile registration template:** emits the exact four-file copy-paste block
+  (f_pc_name.h X-macro slot / profile_lst.h extern / profile_lst.cpp array with index-match
+  comments / files.cmake), **next free slot read from the receiver** (currently 0x32A —
+  independently matching History's staged ba1 slot). Already-registered profiles are detected
+  and skipped (bm1's five all detected).
+- **Res-coherence:** header ↔ cpp-arc-string ↔ ini-arc three-way table — on ls1 it mechanically
+  reproduces the telescope-from-`Link`-arc silent-hang (arc `Link`: header MISSING; drift row).
+**§248 queue: #1–#6 ALL SHIPPED (§259, §261, §262, §263).**
+
+**(2) THE OWED VOICE DECODE (bus §250) — DONE, and the design surprise matters:** donor NPC
+talk-voice is NOT per-actor `JA_SE_CV_*` calls (ls1/bm1 fire none). It is a **message-driven
+dispatcher**, decoded donor-verbatim (`docs/WW Linked/message-voice-decode.md`):
+BMG `mInitialSound` → window-open fire (`d_mesg.cpp:2007`) → `JAIZelBasic::messageSePlay`
+(Nonmatching, decoded @802A91CC: bound 0x118, 2D-suppression ids 0xB4–0xBA/0x104, category
+switch) → `charVoiceTable__11JAIZelBasic` (**named donor symbol, 280 entries, extracted
+verbatim → `port-kits/voice/charVoiceTable.h`**: 256 charVoice / 21 plain-SE / 3 silent) →
+`charVoicePlay` (decoded @802A9120): **ONE dispatcher SE (0x481F) + `setPortData(8,
+(char<<8)|line)` + `setPortData(9, reverb)`** — voices are DATA on a sequence port, not code.
+History's ja1Voice bridge was the right shape (message-tied) and can be made table-faithful
+immediately; true-native needs the catalog to carry `mInitialSound` + a port-write path
+([PORT-INTEGRATION] points in the doc).
+
+**WHOSE TURN:** History → regen kits for registration.md; voice landing per the decode doc
+(acceptance: donor-matching voice line + 2D-suppression honored); Foundry → ba1 hand-off
+support + next decode/draft on order (the §248 queue is EMPTY); user → ferry §263.
+
+## §262 §248 ASK #5 SHIPPED — CASCADE GRAPH + DORMANCY MAP; the sequencing decision moves from compile errors to kit output (Foundry, 2026-07-30)
+
+**New tool `tools/foundry/cascade_map.py`, kit-integrated → `cascade.md`** (runs with the §251
+cutscene bit, because DEMO-ONLY symbols are load-bearing iff the actor is .stb-cast).
+
+**(1) DORMANCY MAP (pitfall 2 — the question History answered ~15 times by hand for Aryll),
+mechanized as reachability over the TU's local call graph** from lifecycle roots:
+- **CORE** (reachable from _create/_execute/_draw) → shim MUST BE REAL;
+- **DEMO-ONLY** (only via demo()/cut_*/eMove_*/event paths) → dormant until a cutscene —
+  **load-bearing iff cutscene actor (§251 decides)**, stub-safe otherwise;
+- **TALK-ONLY** → live for any talkable placement;
+- **UNREACHED** → dead/cut path, inert stub is faithful-in-effect.
+Verdicts are call-graph FACTS + the cutscene bit — never a guess beyond what the graph shows.
+
+**(2) CASCADE GRAPH (pitfall 1):** for every missing symbol, resolves what its own DONOR
+DEFINITION needs, transitively (depth-capped 3, memoized over a donor-wide definition index) —
+depth 1 = flat leaf (shim and done); depth ≥2 = porting-for-real drags a chain, and the
+TERMINAL column names the donor subsystem it bottoms out in ("this path bottoms out at
+player-feature X", mechanized).
+
+**VALIDATION (bk, the dogfood actor):** 31 missing symbols classified; 3 true cascades —
+`enemy_ice` depth 4 / 30 transitive missing / terminal `c_damagereaction.cpp`, and
+`damage_reaction` depth 3 → same terminal. **That is the §232 dogfood discovery (the
+c_damagereaction stub gap) re-derived mechanically by the tool that should have caught it** —
+the instrument now finds what cost a debugging campaign. ls1 post-framework: 0 missing (the
+telescope cascade this ask was born from no longer exists to show — §245 ported it).
+
+**§248 queue: #1–#5 ✅ — only #6 (placement-status / multi-profile template / res-coherence
+polish) remains.** README order updated: cascade.md is step 0b — the port-now/defer/stub
+sequencing decision is made BEFORE compile 1, not at error 92.
+
+**WHOSE TURN:** History → regen kits to pick up cascade.md (sequencing sheet) — for a cutscene
+actor the DEMO-ONLY rows are the §251 refuse-to-green list; Foundry → §248 #6 polish next, then
+the owed JA_SE_CV_* decode; user → ferry §262.
+
+## §261 §248 ASKS #3+#4 SHIPPED — the INCLUDE PLAN (ABSENT vs PRESENT@header) + the SHARED SHIM LEDGER (Foundry, 2026-07-30)
+
+**(1) ASK #3 — surface.md now emits an INCLUDE PLAN.** Root cause of pitfall 7: the surface's
+receiver index was a flat identifier SET — it could say "present" but never WHERE, and couldn't
+tell header-declared (one `#include` fixes it) from src-only (no include can reach it). New
+locator maps every present symbol to its declaring files; surface.md now carries:
+- **INCLUDE PLAN** — one row per header with the symbols it supplies (bk validation: 194 present
+  symbols grouped; post-framework `d/d_npc.h` correctly appears supplying the dNpc_* family) —
+  "a symbol listed here needs an #include, NOT a shim";
+- **SRC-ONLY** — present but declared in no header → an include cannot reach it, treat as ABSENT
+  (bk: 6 flagged, e.g. `getFindFlag` lives only in d_ext_npc_mount.cpp);
+- PRESENT top-40 now cites each symbol's first header.
+
+**(2) ASK #4 — SHARED SHIM LEDGER** (`tools/foundry/shim_ledger.py` →
+`port-kits/_shims-ledger.md`, **208 shims** auto-scanned from the shared shim header(s)).
+Kit skeletons now open with "**§261 LEDGER SUMMARY: N of M shims already exist — reuse; K are
+new**" and every EXISTS row cites `header:line` with a do-NOT-redefine guard. Two truths the
+validation surfaced: (a) adapters carry their INTRODUCING actor's prefix
+(`dExtNpcBm1_stopZelAnime`), so the ledger aliases donor-name suffixes — the next actor probing
+`stopZelAnime` finds bm1's shim instead of re-defining it (the §248 near-miss, now structural);
+(b) `getDemoBtp` correctly resolves to NOTHING — it was deleted at the §252 native promotion,
+and the ledger reflects live truth because it rescans rather than accumulates. README step 3
+now: honor the ledger first, rerun `shim_ledger.py` after adding shims so the next actor sees
+them.
+
+**§248 queue state: #1 collisions ✅ (§259) · #2 codemod ✅ (§259) · #3 include plan ✅ ·
+#4 shim ledger ✅ · #5 cascade graph + dormancy map — NEXT · #6 placement/multi-profile/
+res-coherence — after.**
+
+**WHOSE TURN:** History → regen any kit for the new surface + ledger sections (one command);
+after adding shims, `shim_ledger.py` refreshes the ledger; Foundry → §248 #5 (cascade/dormancy —
+the deepest one) next unless a decode order preempts; user → ferry §261.
+
+## §260 RODATA PASS SHIPPED — History's §259-bis wall closed for ALL FIVE actors in one pass; Grandma's tables are real (Foundry, 2026-07-30)
+
+History's diagnosis was exactly right and the subagent's refusal was correct — m2c lifts code
+only; the pipeline had NO data pass. **New tool `tools/foundry/rodata_extract.py`** (auto-run by
+rel_decomp.py from now on): parses the dtk asm's data sections and emits **byte-faithful C for
+every table**, typed only where the shape self-receipts:
+- **string-pointer tables** (.rel into @stringBase) → real `const char*` arrays:
+  `l_evn_tbl[6] = { "Use_Fairy", "Ba1_Get_Itm", "Ganbaru", "tale_1", "None", "tale_2" }` —
+  Grandma's actual event roster, donor-verbatim.
+- **mwcc ptmf triples** `{0, -1, fn}` → decoded with the donor fn symbol + port form
+  (`&daNpc_Ba1_c::wait_action1` …) — all 5 set_action tables resolved by their relocations.
+- **everything else** → raw `u32` arrays (the ground truth) with per-word float annotations;
+  `a_anm_prm_tbl$4490` reads off as 0x10-stride entries {packed anmNum/btpNum bytes, morf=8.0f,
+  speed=1.0f, loop=2} — the "non-zero padding" question is answerable byte-by-byte, and any
+  typed re-declaration must memcmp-match the raw array (**the §260 fidelity bar**).
+
+**Delivered for the whole cohort, not just ba1** (the wall was generic, as History predicted):
+`rodata_tables.h` in each decomp-draft/ — ba1 **88 tables** (all 11 blockers included:
+3× a_anm_prm_tbl, l_evn_tbl, 5× ptmf, a_prm_tbl$4153, @5285), aj1 87, ob1 75, ym1 96, ko1 137.
+
+**WHOSE TURN:** History → ba1 step 4 unblocked: assemble against rodata_tables.h (raw arrays =
+receipts; drop the staged header's anm_prm_c against the 0x10 stride), fire when ready;
+Foundry → back to the §248 queue (#3 ABSENT-vs-PRESENT@header, #4 shim ledger); user → ferry
+§260.
+
+## §266 GRANDMA RUNTIME PASS — spawn/crash/flag/model chain fixed; mount tale retired; interior ladder covered; §260 ENDIANNESS TRAP flagged to Foundry (History, 2026-07-30)
+
+Native ba1 went from "never spawns" to "spawns, draws, drives her own tale" through a chain of runtime
+fixes (full detail: docs/state/grandma-native-tale.md §266). Landed this pass, all GREEN:
+1. **Spawn routing** — npc_ba.ini `socket=NPC_HENNA0`→`socket=BA`, socket_arg 26→0 (was still the
+   stand-in route; native ba1 never spawned).
+2. **Crash** — create_Anm/create_itm_Mdl used donor NUMERIC res-ids; adapted arc needs parse-at-consume
+   BY FILENAME (DN-3). Fixed via acquireModelData("ba.bdl")+"wait01.bck"; bundle deferred (Vfuku).
+3. **Invisible (torn down)** — WW↔TP EVENT-BIT COLLISION: ba1's `isEventBit(0x520/…)` hit TP's event
+   table (0x520 SET → init_BA1_0 gate failed). Bridged init_BA1_0 to the birthday state. FULL FIX OWED:
+   a WW event-flag namespace (dialogue flags still read TP).
+4. **Mount tale retired** — region_triggers.ini `[tale_loft]` event= emptied (was TALE_DEMO). Native
+   ba1 owns the tale via orderOtherEventId("tale_1"); kills the doubles-vs-native cutscene hang.
+5. **Interior ladder (Engine cover, DN-1-safe)** — extended the §163 flag-only ClrWallNone to the §83
+   stage-entry hook for ALL WW-interior arrivals (warp/debug/post-chaos), not just the door path.
+6. **Model distortion** — see the trap below.
+
+**→ FOUNDRY: §260 rodata ENDIANNESS TRAP (affects ALL FIVE stubs).** The §260 tables are raw BIG-ENDIAN
+u32 values. That works for float/int fields (u32→f32/int reinterpret is endian-consistent on-machine),
+but **packed sub-word s8 fields silently break on little-endian x64.** ba1's `anm_prm_c` packs
+{s8 anmNum@0, s8 btpNum@1, u16 pad} into word0 — donor big-endian `0x01000000`→anmNum 1, but on LE that
+word is memory `[00,00,00,01]`, so anmNum@0 read `0x00` for EVERY entry → wrong anim + wrong face-btp →
+distorted render. Fixed by reordering the struct's packed bytes to the HIGH offsets (anmNum@3, btpNum@2);
+raw arrays UNCHANGED (still memcmp-match). **aj1/ob1/ym1/ko1 will have the same trap in any packed-byte
+table** — recommend the rodata_extract.py emit a per-field byte-order note (or byte-swap packed <4-byte
+fields) so History doesn't rediscover it per actor. The "byte-verified 0x10" size check does NOT catch it
+(floats pass, sub-word bytes don't).
+
+**WHOSE TURN:** History → user retest of the batched fixes (ladder climbs? tale plays without hang? model
+un-distorted?), then next: WW event-flag namespace (dialogue) + the Vfuku bundle; Foundry → the §260
+packed-byte byte-order note across the 5 stubs + the interior room-chunk bake campaign (Wave 1 PLYR/SCLS/TGDR
+fixes History's respawn/door bugs natively); user → ferry §266 to Foundry, relay the interior census is landed.
+
+## §265 AUDIO FIX #1 LANDED — the 0xD8/0xD9/0xDA dispatch-shift is corrected (ready for the differ rerun receipt) (History, 2026-07-30)
+
+Took Foundry's §264 ranked defect list, fix #1 (highest audibility). Verified DECOMP-FIRST against
+donor `JSystem/JAudio/JASSeqParser.cpp` (`sCmdPList[0xD8]=cmdSimpleADSR`, `[0xD9]=cmdTranspose`,
+`[0xDA]=cmdCloseTrack`) — the port's `ja1_parser.cpp` Cmd_Process was off by one:
+`0xD8→cmdTranspose` (every ADSR site detuned), `0xD9→cmdCloseTrack` (every donor transpose killed a
+child track), `0xDA`→NOP (113 close sites left voices stuck). Arglist arities were already correct
+(kArgCount 0xD8=5, 0xD9=1, 0xDA=1), which is what let it hide.
+
+**Landed (GREEN):** re-routed `0xD8→cmdSimpleADSR` / `0xD9→cmdTranspose` / `0xDA→cmdCloseTrack`.
+`cmdTranspose`/`cmdCloseTrack` are donor-faithful (already existed, just misrouted). New
+`cmdSimpleADSR` — the donor seeds the track oscillator envelope table (`field_0x2cc/0x304` +
+release `field_0x374` from `Player::sAdsrDef`); the Ja1 synth has no per-track envelope table yet, so
+the ENVELOPE application is tracked debt (a bridge) — but the LOAD-BEARING corruption (ADSR-as-transpose
+detune) is GONE, which was fix #1's whole point. Comment carries the debt + the donor field map.
+
+**WHOSE TURN:** Foundry → rerun `audio_differ.py` for the before/after receipt on this landing (top
+offenders should drop: the 0xD8/0xD9 misdispatch rows clear; 0xDA CloseTrack now dispatches);
+History → available for fix #2 (VibDepthMidi, 3,115 sites — the biggest single offender) on the next
+order, but it needs the Ja1 synth to grow a vibrato-depth path (bigger than a re-route); user → ferry
+§265 to Foundry + decide whether History continues down the ranked list now or returns to the Grandma
+tale. NOTE: Grandma tale Phase-1 (event registration, §263) is STILL unanswered by Foundry — this
+audio ferry did not address it.
+
+## §263 BA1 ACCEPTANCE ROUND 1 — postman line FIXED; Grandma's tale goes FULL-NATIVE (user ruling); FOUNDRY event-registration handoff (History, 2026-07-30)
+
+First live test of native Grandma (§262) surfaced three findings; triaged + acted:
+
+**(1) Tetra black eyes — unchanged, still on Foundry.** The cup/aup `entryOpa` engine gap
+(the decode brief History drafted). No History fix possible until decoded.
+
+**(2) Postman "Seven-Star Isles" — ROOT-CAUSED + FIXED (§263, GREEN).** The postbox faithfully
+requests donor msg_id `0xCE5` (=3301), but `ww_dialogue_full.txt` is keyed by the BMG *index*,
+where 3301 = "Seven-Star Isles" (a chart name); the greeting lives at index **924**. The mod's
+`dialogue/ww_messages.tsv` carries the map (`3301 → 924 → "Gooood moooorrrning!"`) but the
+injection ignored it. Fix: `lookupWwMsgIdToIndex()` consults ww_messages.tsv to translate
+msg_id→index in `dExtWw_injectTalkText` BEFORE the catalog lookup. ISOLATED to the NPC-talk path
+on purpose — `ww_messages.tsv` also lists 4410 (a tale-JMSG clothes id) → a different line, so a
+shared remap would corrupt DN-4 cutscene text. Also fixed a latent bug: the injection guard capped
+at `fpcNm_NPC_ZL1_e`, silently excluding native Grandma (0x32A) — extended to `fpcNm_NPC_BA1_e`.
+toripost.cpp untouched (donor-faithful). Builds green. **User: test the postbox greeting.**
+
+**(3) Grandma's tale1 won't play natively → USER RULING: "Full native now."** Root cause: the
+tale.stb was driven by the MOUNT stand-in's machinery (`pollRegionTriggers` `[tale_loft]` →
+`TALE_DEMO` → tale.stb, binding demo-doubles d_act0/2/3), NOT by Grandma's actor. The §261 flip
+removed that stand-in; native ba1 uses the donor trigger `orderOtherEventId("tale_1")`, unwired to
+the STB. Plan + phasing: **docs/state/grandma-native-tale.md**. Good news — native ba1 ALREADY has
+the full cut dispatch (`a_cut_tbl={"ACTION","START_TALE1"}`, `setActorInfo2("Ba1")`,
+`cut_move_START_TALE1`, `wait_0→mOrderType=6→orderOtherEventId("tale_1")`). The gap is
+infrastructure, not actor logic.
+
+**→ FOUNDRY ASK (Phase 1, critical path — event-registration tooling, your lane):** author `tale_1`
++ `tale_2` (and `Use_Fairy`/`Ba1_Get_Itm`/`Ganbaru` for completeness) into the tale host stage's
+event_list.dat via `merge_event.py` (the §152 `awake` precedent), **room-typed correctly (DN-1 —
+`getEventIdx` matches by player room, or `orderOtherEventId` silently no-ops)**, each referencing its
+STB (tale.stb / tale_2.stb, Demo01.arc). Stage note: WW "LinkRM" is hosted in port stage **R_DL01**
+(ext_bg1.ini) — confirm which stage's event_list the runtime reads + the room ba1/player occupy in
+the tale. Acceptance gate for the phase: from native ba1's create,
+`dComIfGp_evmng_getEventIdx("tale_1", 0xFF)` returns a valid idx and `orderOtherEventId` is accepted.
+
+**HISTORY holds Phases 2–5** (native cast binding via the Ls1 `l_objectName` recipe → JMSG on the
+DN-4 Shade-Watcher path → clothes put-on verify → retire the mount TALE_DEMO/doubles LAST, after
+native is confirmed) + acceptance vs the golden `tale` trace. Both hard-stops in play: DN-1
+(event room typing) and DN-4 (dialogue renderer — the "excerpt" symptom the user saw is DN-4).
+
+**WHOSE TURN:** Foundry → Phase 1 event registration (unblocks native ba1's `orderOtherEventId`);
+History → holds Phases 2–5 pending Phase 1, postman §263 landed; user → (a) test the postbox greeting,
+(b) relay Phase-1 ask + the Tetra-eye brief to Foundry.
+
+## §262 BA1 (GRANDMA) GREEN + REGISTERED — the FIRST m2c-draft port lands end-to-end; the decomp→port pipeline is validated (History, 2026-07-30)
+
+Foundry's §260 rodata pass unblocked the wall; History took `ba1_named_draft.cpp` + `rodata_tables.h`
+through steps 4-5 to a **verified green build** (independently reconfirmed: `ninja: no work to do`,
+exit 0, dusklight.exe 38 MB rebuilt). **This is the first actor ported from a pure m2c draft with no
+clean donor `.cpp` — the whole Foundry-decomp → History-port pipeline is now proven on a real
+CUTSCENE actor.** The other four stubs (aj1/ob1/ym1/ko1) reuse this exact flow.
+
+**Landed:** `src/d/actor/d_a_npc_ba1.cpp` (1606 lines, all 104 donor fns, donor order) +
+`include/d/actor/d_a_npc_ba1.h` (253). 5-file registration at slot **0x32A** (`fpcNm_NPC_BA1_e`),
+enum↔array ordinal-aligned (BA1 last, after ZL1, before NULL). Not committed (Housing owns snapshots).
+
+**REUSABLE FINDING — the base-class trap (watch on the next 4 stubs):** ba1's donor C++ base is
+`fopAc_ac_c` (its `__ct` calls `bl __ct__10fopAc_ac_c`, and the body-less upstream header says
+`: public fopAc_ac_c`) — BUT the object **manually overlays `fopNpc_npc_c`**: the ctor installs
+`__vt__12fopNpc_npc_c` and the bodies call `talk__12fopNpc_npc_c`/`setCollision__12fopNpc_npc_c` on
+`this`. The stub header is thus a FALSE tell. The port derives `: public fopNpc_npc_c` (offset-exact:
+m_jnt@0x290/mEventCut@0x2C4/mpMorf@0x330/mObjAcch@0x334/mAcchCir@0x4F8/mStts@0x538/mCyl@0x574 all
+from base) — behaviorally identical, buildable, sibling-consistent. **Verify base by the ctor chain +
+vtable install, NOT the stub header, for every m2c-draft stub.** (A naming-map correction rode along:
+0x6D0 = `mpItemModel` (J3Dmodel*, `create_itm_Mdl`/`modelEntryDL`), NOT `m_hed_jnt_num`; joint
+indices are the s8 trio at 0x6CC/6CD/6CE.)
+
+**Recipes applied:** R14 (all models from own arc `"Ba"`), R11 (`dComIfGp_demo_getActor`), R2/13
+(_draw btp-entry BEFORE `entryDL`), R12 (`current.angle`→shape_angle), §252 native
+`dDemo_actor_c::getP_BtpData`, `cPhs_Step`, `fpcDwPi_NPC_BA1_e`→`fpcDwPi_E_RD_e` shim. Table fidelity:
+the 3 anm tables + resID/evn/cut tables embedded raw-verbatim from §260 `rodata_tables.h` (byte-identical),
+indexed as `anm_prm_c`; ptmf → `set_action(&daNpc_Ba1_c::wait_action1..4)`.
+
+**ACCEPTANCE WATCH-LIST (step 6, History — 19 `[INFERENCE-NEEDED]` bridges, each localized + tagged,
+common path kept live, NOT wholesale-stubbed):**
+- **4 gameInfo camera/state bytes** bridged to the inactive branch (`isCameraShip/Land/LetterBox/xyCheckStay`
+  = gi.unkB5/unkB4/unk1A0/unk5BD3) → affect on-ship respawn variant, one msg-id gate, tale stage-variant
+  select (0xC8 vs 0xCA), LinkRM entrance guard. **If the golden `tale`/`tale_2` trace exercises on-ship
+  respawn or variant 0xCA, these need the real port accessor** (→ Foundry decode candidate).
+- eventInfo XY-pass/get-event callbacks (`init_BA1_3`) → no-op bridge (post-rescue auto-entrance).
+- `gi.unk52C0|=8` endEvent flag → no port slot, no-op. `isBottleItem(0x55)` → defaulted true. partner
+  0x790==5 (CHK_FAIRY_MOV_1) → defaulted false. `@4216` float-pool (cull box/collision radii/chase
+  rates) → ba1's own donor floats where mappable, bm1 sibling dims where not; `nodeBa1Control` eye offset tagged.
+- Behavioral spine to confirm: `mCharType`-driven `getMsg_BA1_*` (msg 0x7E4–0x803), the
+  `setStt`/`set_action`→`wait_action1..4`→`wait_0/1/2/3/ZZZwai/talk_1/2` ptmf dispatch, and
+  `checkOrder`/`checkCommandTalk` literals `eventInfo.mCommand == 1/2` (INTALK/INDEMO — confirm port dEvtCmd match).
+
+**WHOSE TURN:** History → step 6 acceptance = playtest: place Grandma in her Outset house / trigger
+tale, capture the DuskTap BP `8007dbc4` trace, probe-differ vs the golden `tale` trace, watch the 19
+tags above; user → run the playtest capture when ready (postbox §256 greeting still also untested);
+Foundry → on standby for (a) the next stub port on request and (b) a real-accessor decode if acceptance
+trips one of the 4 camera/state bytes.
+
+## §259 BA1 STEP 4 BLOCKED — named draft's .rodata tables are hollow ("unable to generate initializer"); needs a Foundry rodata-extraction pass before History can assemble (History, 2026-07-30)
+
+History took `ba1_named_draft.cpp` into step 4 (assemble the port `.cpp` donor-order + translate
+offset-casts → real members). **Blocked, verified, source-not-ready** — and deliberately NOT
+papered over with a hollow stub actor (that would fake-pass the §251 `tale` acceptance gate).
+
+**The blocker (checked against the draft, not assumed):** m2c lifts every *function body* (Foundry's
+"104/104, zero m2c failures" is true at the function level) but **does not extract `.rodata` table
+bytes**. 11 tables came out as `static ?` / `unable to generate initializer` — and they are Grandma's
+*behavior*, not cosmetics:
+- `a_anm_prm_tbl$4490[0xB]`, `$4497[8]`, `$4553[0x15]` — the **animation-parameter tables**; feed
+  `setAnm_tex`/`setAnm_anm` directly (named-draft lines 848–911). Hollow ⇒ no motion spec.
+- `l_evn_tbl` — the **event-name table** feeding `getEventIdx` (line 679) ⇒ the tale/cutscene dispatch.
+- `@4245/@4264/@4286/@4298/@4318` — the `set_action` init-state **member-fn-pointer tables** (ptmf).
+- `a_prm_tbl$4153` (HIO params, `memcpy(&this->unkC, …, 0x24)` line 469), `@5285` (post-tale action).
+
+Plus 16 `M2C_ERROR`, 41 raw `g_dComIfG_gameInfo + 0xNNN` globals, 12 `unk5B44`, 8 `__ptmf`. These
+are the "translate to real members" cleanup History owns — but the **11 hollow tables can't be
+invented per covenant**, so they gate the assembly.
+
+**Root cause (all three confirmed):** (a) upstream `WW-DP/src/.../d_a_npc_ba1.cpp` = **98 `Nonmatching`**
+— a bodyless matching skeleton; no clean donor `.cpp` exists anywhere, so a `git pull` won't help
+(this is the wait-for-the-donor case DECOMP-FIRST names). (b) `tools/foundry/rel_decomp.py` has **no
+rodata pass** (grep-empty). (c) The bytes DO exist: `D:\XXXXXXX\WW DP\build\GZLE01\d_a_npc_ba1\asm\d\actor\d_a_npc_ba1.s`
+(304 KB, table labels + relocations intact).
+
+**→ FOUNDRY ASK (bounded, tool-shaped):** add a `.rodata`-initializer pass to the pipeline (or
+hand-extract via `dol_disasm.py`) that emits real C initializers for the 11 tables above from the
+`.s` labels+relocations — same fidelity bar as the getP_BtpData decode. Priority order for the port:
+the 3 `a_anm_prm_tbl` (motion) → `l_evn_tbl` (event dispatch) → the 5 `set_action` ptmf tables →
+`a_prm_tbl$4153`/`@5285`. Deliver as a `ba1_tables.inc` (or fold into a re-run of the named draft).
+
+**History has staged/validated (donor-independent, ready to fire on table delivery):**
+- Base class DEFINITIVE: `daNpc_Ba1_c : public fopAc_ac_c` (upstream header + `&g_fopAc_Method.base`
+  receipts) — NOT fopNpc; ba1 owns its own morf/collision members (`mpMorf` 0x330, `dBgS_Acch` 0x334,
+  `dCcD_Stts` 0x538, `dCcD_Cyl` 0x574).
+- 5-file registration validated at slot **0x32A** (`fpcNm_NPC_BA1_e`), mirroring §254 Tetra:
+  f_pc_name.h after ZL1(0x329) · profile_lst after `g_profile_NPC_ZL1` (ordinal-aligned) · d_stage
+  flip `OBJNAME("Ba1", HENNA0, 26)`→`(NPC_BA1, 255)` · files.cmake after zl1 · mount socket `"BA"`.
+- Shims pre-identified: `fpcDwPi_NPC_BA1_e` absent → zl1-style shim (`→ fpcDwPi_E_RD_e`); `cPhs_State→cPhs_Step` (§244).
+- The fully-determined `d_a_npc_ba1.h` (pure layout from the offset map + naming-map, no invented
+  behavior) can ship as a staged artifact now if useful — held pending the anm_prm_c inner-struct
+  layout the table extraction will confirm ("non-zero padding" ⇒ m2c's struct inference is uncertain).
+
+**WHOSE TURN:** Foundry → rodata-extraction pass for ba1's 11 tables (bytes at the `.s` above);
+History → holds step 4, translates + registers + builds green the moment real tables land (aj1/ob1/ym1/ko1
+will hit the SAME wall — the fix is generic, so it unblocks the whole cohort); user → ferry §259 to Foundry.
+
+## §259 §248 ASKS #1+#2 SHIPPED — value-collision checker + applied codemod, coupled; kit now STARTS the port instead of describing it (Foundry, 2026-07-30)
+
+**(1) VALUE-COLLISION CHECKER (`tools/foundry/value_collision.py`, kit-integrated →
+`collisions.md`).** Indexes every enum member on BOTH trees (value-resolved: hex/dec/(1<<n)/
+implicit-increment), then for each absent donor constant the TU uses: receiver space = the
+same-NAME enum first (daPy_FLG0↔daPy_FLG0), same-basename header as fallback; same value in
+space = **COLLISION — never #define the donor value**. Honest tiers: NO-SPACE → hand-check;
+symbolic donor value → hand-check; enum-zero skipped. **Validated on the canonical landmine:**
+ls1 flags `daPyFlg0_SCOPE_CANCEL 0x80000 = FLG0_FAST_SWORD_CUT` exactly as §248 pitfall 3
+described. ls1 full result: 22 absent constants → 10 true collisions + 9 RENAME-EQUIVALENTS + 3
+safe.
+
+**(2) RENAME CODEMOD (`tools/foundry/ww2tp_codemod.py`, kit-integrated → `ported_src/` +
+`codemod-report.md`).** History's full §248 recurring-delta set as executable rules, split
+honestly: **AUTO** (token-guarded: `J3DNode*` pointer-token-only so J3DNodeCBCalcTiming_In
+survives — pitfall 6 encoded; (u32)this→(uintptr_t)this; tevStr member renames; Bgsp accessor;
+getTextureSRT split; 1-arg evmng_getEventIdx→(x,0xFF); 2-arg setPlayerPosAndAngle→(p,a,0);
+fopMsgStts_*→fopMsg_MODE_* incl. the divergent spellings) vs **REVIEW** (type-blind/arity
+deltas — mStatus→mode, HIO #if DEBUG, 9→7-arg btp/btk init, getMyStaffId actor arg,
+dDemo_setDemoData 6→8 — annotated with line numbers, NEVER auto-applied). **Validated on ls1
+(the actor History hand-ported): 49 auto renames + 6 review annotations — the §247 "92→0 over
+4 rounds" class, now applied before compile 1.**
+
+**(3) THE COUPLING (why one pass):** the checker consults the codemod's rename dictionary —
+a same-value hit whose name is the donor constant's RENAME is reclassified
+"RENAME-EQUIVALENT: apply the codemod, don't define" (caught 9 on ls1 that a naive checker
+would report as collisions). Kit README steps rewritten: porters now START from `ported_src/`
+and clear `collisions.md` before any shim #define.
+
+**WHOSE TURN:** History → next villager kits arrive with ported_src/collisions baked in
+(regen any old kit with one command to get them); Foundry → §248 queue continues (#3
+ABSENT-vs-PRESENT@header, then #4 shim ledger); user → ferry §259.
+
+## §258 ALL FIVE STUBS DRAFTED — the whole un-decompiled Outset villager set now has source; auto-naming mechanized (Foundry, 2026-07-30)
+
+Per user order, the remaining four stubs ran through the §256 pipeline. **All clean, zero m2c
+failures** (the §257 jtbl pre-pass absorbed 17 more anonymous jump tables silently):
+
+| actor | fns drafted | jtbls | auto-named fields | named draft |
+|---|---|---|---|---|
+| aj1 (Orca's brother's kin — [INFERENCE on human name]) | 95 | 4 | 6 | `port-kits/npc_aj1/decomp-draft/` |
+| ob1 | 79 | 2 | **10** | `port-kits/npc_ob1/decomp-draft/` |
+| ym1 | 87 | 2 | 4 | `port-kits/npc_ym1/decomp-draft/` |
+| ko1 (fopNpc-based per §237-bis) | 140 | 9 | 9 | `port-kits/npc_ko1/decomp-draft/` |
+
+With ba1 (§257): **505 functions drafted across all five former stubs — the entire un-decompiled
+Outset villager cohort now has port-grade source.**
+
+**NEW TOOL `tools/foundry/template_name.py`** — the ba1 §257 naming method, mechanized: 12 rules,
+each a self-receipting NPC-template code shape (setStt arg store → mSttNum; eventOrder selector →
+mOrderType; `eInit_setEvTimer`-style writers; blink `cLib_calcTimer` idiom → mBlinkTimer; jumptable
+selector → mEvtActionNo; …). Honest by construction: a rule that finds no match emits "NO MATCH —
+name by hand" instead of guessing, and offset collisions between rules are REFUSED and flagged
+(caught a real ambiguity: some actors zero mOrderType inside setStt, so the stt-timer rule
+collides there — hand-resolve). aj1/ym1 diverge on the face-anim shape (fewer auto names — their
+btp path differs from ba1/bm1's); ob1/ko1 match the template strongly. Per-actor receipts:
+`naming-map-auto.md` beside each draft.
+
+**WHOSE TURN:** History → ba1 steps 4–6 (user is ferrying §257) and, when each villager's turn
+comes, its named draft + auto-map are already waiting; Foundry → §248 pitfall queue resumes
+(value-collision checker first) unless a decode/draft order lands; user → ferry §258 with §257.
+
+## §257 BA1 PILOT STEPS 1–3 DONE — 104/104 drafted (jtbl fix), named draft + naming map delivered; one gate correction (Foundry, 2026-07-30)
+
+**(1) STEP 1 CLOSED — the 4 m2c failures were all the same bug, now fixed IN THE DRIVER.** mwcc
+emits anonymous local jump tables (`"@5200"`); m2c only recognizes `jtbl_*`-named tables and fails
+the whole function. `rel_decomp.py` now has a jtbl pre-pass: rename exactly the `@N` objects whose
+body is pure `.rel` entries (that shape IS a jump table). Re-run: **104/104 functions drafted,
+zero failures** — and the fix is generic, every future module inherits it. (`event_action`
+decompiles to Grandma's cutscene dispatch: `eMove_MOV_POS_`, `CHK_FAIRY_`, `EYE_OFF_ZRO_` — the
+tale/fairy-healing beats.)
+
+**(2) STEP 2 — NAMING PASS DELIVERED:** `port-kits/npc_ba1/decomp-draft/naming-map.md` (37 fields,
+tiered [RECEIPT] vs [INFERENCE]) applied mechanically → **`ba1_named_draft.cpp`** (325 renames;
+eventOrder/setStt/plyTexPttrnAnm now read like source). Receipt highlights: 0x7E0=mEvTimer (named
+by its own `eInit_setEvTimer` writer), 0x810/0x6F0/0x6F2 = mBtpNum/mBtpFrame/mBlinkTimer (the
+`30+rnd(60)` blink idiom, bm1 role-match), 0x6D0=m_hed_jnt_num (EXACT bm1 offset match — the NPC
+template preserves layout locally), 0x7D2/0x7DE = mEventIdTable/mEventIdx, 0x812=mOrderType,
+0x813=mSttNum, 0x80D=mEvtActionNo (jumptable selector). 91 low-traffic offsets remain unkNNN =
+[INFERENCE-NEEDED], to be named during port/behavior work.
+
+**(3) STEP 3 (types)** rides in the map (pointer/struct types where evidence is stronger than
+m2c's inference; scalar widths are already faithful — they come from the asm access widths).
+Full class-header assembly = step 4 (with the port).
+
+**(4) GATE CORRECTION (roster doctrine):** the ba1 BINARY calls `dNpc_playerEyePos` (lookBack) —
+my §241 "zero dNpc_ usage" grep ran on an EMPTY STUB and could never see it. **The roster's dNpc
+gate is stub-blind by construction**: a stub actor's framework needs only become visible post-
+draft. No blocker (framework ported §243), but drafts must re-check framework deps — added to the
+pilot doc's worklist. All ba1 dNpc_/framework calls will be enumerated at step-4 assembly.
+
+**WHOSE TURN:** History → when ready, take `ba1_named_draft.cpp` + naming-map into step 4-6
+(assemble cpp donor-order, port via kit v4 — Ba1 IS a CUTSCENE actor [tale.stb], acceptance vs
+golden `tale` trace); Foundry → available for the next stub draft on request (aj1/ob1/ym1/ko1 are
+one `rel_decomp.py --all` each now) + §248 pitfall queue continues; user → ferry §257.
+
+## §256 UN-STUB PIPELINE LIVE — dtk+m2c decomp lane operational; Ba1 pilot 100/104 functions drafted (Foundry, 2026-07-30)
+
+User ruling implemented: decomp participation is GO (REL extension + m2c + Ba1 pilot).
+
+**(1) THE "REL EXTENSION" NEEDED NO CUSTOM PARSER.** The donor extracted tree (`Ex WW`: sys/ +
+files/) junctioned into the decomp's `orig/GZLE01` satisfies dtk directly (DOL sha1 receipt held).
+`dtk dol split` (v1.8.3, fetched to `D:\XXXXXXX\tools\dtk.exe`) emitted **relocated, symbol-
+annotated asm for all 416 modules / 39,319 functions in 10 seconds** — every REL actor now has
+`build/GZLE01/<mod>/asm/*.s` with names from the project symbol tables and relocations resolved.
+
+**(2) m2c IS SET UP AND PRODUCES GOOD DRAFTS.** `D:\XXXXXXX\m2c` (-t ppc = ppc-mwcc-c++). Caveat
+found: m2c's context parser is C-only — the tww decompctx context (C++) is unusable, so we run
+context-free; the draft uses inferred `unkNNN` fields. That gap is closed by receipts:
+
+**(3) NEW DRIVER `tools/foundry/rel_decomp.py`** — one command per module: dtk asm → m2c
+(--passes 2, per-function salvage on batch failure) → **fopAc offset-receipt annotation**: every
+inferred field at offset ≤0x290 gets its real `fopAc_ac_c` member cited from the donor layout
+header (101 annotated offsets, size-asserted); past-base offsets are stamped [INFERENCE-NEEDED].
+Annotation-only (no renames) = zero correctness risk. Output headers carry the DRAFT-never-MATCH
+covenant line; acceptance = the receiver oracle stack, not byte-match.
+
+**(4) BA1 PILOT: 100/104 FUNCTIONS DRAFTED CLEAN (96%)** →
+`port-kits/npc_ba1/decomp-draft/ba1_full_draft.cpp` (+ a 4-fn validation batch). Template
+validation: ba1 `eventOrder` is structurally IDENTICAL to decompiled ls1's (`unkFA|=1` =
+`eventInfo.onCondition(dEvtCnd_CANTALK_e)`) — the NPC family skeleton holds, so decompiled
+siblings are the naming/typing oracle. 4 m2c failures to hand-decode via dol_disasm
+(`next_msgStatus` — succeeds in small-batch mode, retry first — `event_actionInit`,
+`event_action`, `talk_1`). Full worklist + covenant/upstream-sync rules:
+**`docs/WW Linked/ba1-decomp-pilot.md`** (steps: 4 hand-decodes → sibling naming pass → types
+pass → assemble cpp in donor file order → port via kit v4 [Ba1 IS a CUTSCENE actor —
+tale.stb/tale_2] → acceptance vs the golden `tale` trace, the P3 target).
+
+**Weekly upstream-sync rule now standing:** `git -C "D:\XXXXXXX\WW DP" pull` before starting any
+stub — upstream actively decompiles NPCs; never duplicate an actor they've started.
+
+**WHOSE TURN:** Foundry → ba1 worklist steps 1–3 (hand-decodes + naming/types passes); History →
+continue villager batch (Tpost/Zl1 momentum), pick up `ba1_full_draft` only after Foundry's
+naming pass; user → ferry; no ruling pending.
+
+## §255 TWO MORE VILLAGERS GREEN + WIRED — Tpost (§253) + Tetra/Zl1 (§254); the batch inherits the full stack (History, 2026-07-30)
+
+Two of the remaining decompiled Outset villagers landed green + spawn-wired via subagent drop-ins + my
+integration (the reassessment confirmed these are the ONLY portable early-Outset villagers — the named
+stubs Rose/Mesa/Abe/Sturgeon/kids/Sue-Belle/Fishman/Grandma are separate un-decompiled `fopAc_ac_c`
+actors, need Bridge decomp; NPC_PEOPLE + Makar are decompiled but not Outset).
+
+**Tpost (Rito Postbox) @ 0x328** — corrected mid-port: it is `fopNpc_npc_c` (framework), not an obj.
+Standalone (no `.stb` cast), single model. Green + socket `TPOST`→native. **BRIDGE-OWED:** the WW
+letter/mail subsystem (`dLetter_*` + `dSv LETTER_*` flags) is not ported — the postbox's own state
+machine is fully ported; only the letter data-supply is stubbed to "no mail today" (same as the existing
+`dLetter_send`), so it presents but can't deliver mail yet.
+
+**Tetra (Zl1) @ 0x329** — the heavy cutscene actor (3076L, 16 casts) — but it inherited the whole stack
+and needed NO new subsystem work: framework, the §252 native face (`getP_BtpData` called directly), the
+§244 demo-drive fixes, bm1 partner. Both models own-arc (no cross-actor create-hang). Demo binding row
+restored (`OBJNAME("Zl1", fpcNm_NPC_ZL1_e, 255)`); socket `ZL`; param routing (decideType 0/2/6); ZL1
+sentinel promoted to the real actor (bm1 finds real Tetra now). **BRIDGE-OWED:** `daShip_c` (KoRL) +
+`daBranch_c` (tree-branch) mounts inert (swoon-on-deck / forest branch-hang beats) → she holds spawn
+pose in those; and the eye-over-hair layered `_draw` (`J3DPacket` has no `entryOpa`) simplified to the
+recipe-13 triple (eyes as ordinary joints).
+
+**Both build green + link (full target). Visual acceptance pending the user's return** (I can't run the
+game). Note: this proves the payoff of the infrastructure — Tetra, despite being 3× Aryll's cutscene
+weight, was a straight playbook application with zero new subsystems.
+
+**WHOSE TURN:** User → visual spawn-test of Tpost + Tetra on Outset when back (+ commit call). History →
+owed bridges queued: WW letter subsystem (Tpost), daShip/daBranch mounts + eye-packet (Tetra), and the
+standing-directive natives (JA_SE_CV_* voice, player telescope item). Foundry → cutscene-tier kit is
+validated across 4 actors now.
+
+## §252 FACE SUBSYSTEM LANDED NATIVE — Foundry's §251 decode is in; reconstruction retired; the FIRST bridge→native promotion is complete (History, 2026-07-30)
+
+Foundry's §251 decode of `getP_BtpData`/`getP_BtkData`/`getP_BrkData` (donor-verbatim from the donor
+binary via the new `dol_disasm.py`) is **landed + acceptance-passed**. The three methods now live on
+`dDemo_actor_c` in `d_demo.cpp` (§251 marker); Aryll and bm1 call them directly; the per-actor
+`getDemoBtp`/`getDemoBtk` reconstruction shims are **deleted**. **Acceptance gate = Aryll's face —
+user-confirmed "perfect expressions all throughout the cutscene."**
+
+**The one open integration point resolved:** the prm stream is big-endian in port memory, so
+`dDemoPrm_readS16/readU32` do BE reads (the port keeps the STB blob BE — `getDemoIDData` reads it via a
+`TValueIterator_misaligned<u32>`; the s16 sign-extension no-ops against `mBtpId = -1`, no guard needed).
+Both of Foundry's reverse-engineering confirmations held in-game: "rebind only on resID change" IS
+native donor behavior, and the id's `0x10000` bit natively selects the demo archive (`mDemoArcName`).
+
+**Significance:** this is the **first bridge→true-native promotion** under the §250 standing directive
+— a per-actor reconstruction replaced by the one native subsystem every WW demo actor shares. The
+pattern (History reconstructs to unblock + specs the behavior → Foundry decodes from the binary →
+History lands + acceptance-tests) is now proven end-to-end. Remaining owed promotions: `JA_SE_CV_*`
+voice (currently the `ja1Voice` bridge), the player telescope item.
+
+**WHOSE TURN:** History → the other decompiled villagers (Ah/Zl1/Jb1/Tpost) on BOTH playbooks, using
+Foundry's live cutscene-tier kit (cutscene.md + create_trace.h + arc-string check + load-bearing shim
+tags). Foundry → cutscene tier is validated (STB cast index: 63 actors/54 storyboards; Ls1 in 7,
+Bm1/Ji1 in 0 — confirming why their NULL demo shims were safe). User → commit call.
+
+## §250 STANDING DIRECTIVE: always port the TRUE native subsystem; audio live-system recorded + telescope status refreshed (History, 2026-07-30)
+
+**User directive (now doctrine):** *"We will always port true native subsystems."* Custom Dusklight
+reconstructions that mimic a WW subsystem are **bridges, not endpoints** — the true native path is
+always the target, always stays on the owed-work list. Three live bridges from the Aryll port, each
+owing a native port:
+- **Face expressions** — reconstructed `getP_BtpData` → Foundry decodes the donor stub (§249 handoff).
+- **Voice/SFX** — the `ja1Voice` message-redirect is a bridge; the native `JA_SE_CV_*` SE-system path
+  is owed. **Finding recorded** (`characters/Aryll/voice-recipe.md` new §): her voice survived the
+  mount→native switch **because it is message-tied, not actor-tied** (`d_demo.cpp` →
+  `dExtWw_handleDemoMessage` → `ja1Voice_onDemoMessageOpen`, fires on the storyboard's message beats).
+- **Aryll telescope** — scope-message plumbing done (§245); the **player telescope ITEM** (WW
+  player-main state) is the owed native subsystem (a sentinel `#define` today).
+
+**Librarian A-1 ruling (History):** `voice-recipe.md` is LIVE; `cutscene-audio-scoping.md` **§1 (voice)
+SUPERSEDED** → stamp to `voice-recipe.md`. Do NOT retire the whole scoping doc — its **opening-music**
+scope is a separate, still-open item. (A-2: the two layer docs cross-link, not merge — see §247 note;
+A-3: the `npc-bm1/`↔`npc_bm1/` kit-dir dup is Foundry's `port-kits/` generation, route the collapse to
+Foundry.)
+
+**Telescope status refreshed** (`islands/Outset/outset-followup-plan.md`, flag resolved in place): the
+native port MET checklist items 1–3 (spawn/model/actor-state, 2 & 3 this session) + item 6 on the type
+side; the one true remaining blocker is **#5, the player telescope item** — the next native subsystem.
+
+**WHOSE TURN:** Librarian → A-1 §1 supersession stamp + draft the `characters/Aryll/` hub scaffold
+(pointers only; now 8 docs incl. cookbook 10–15 + HISTORY-KIT-FEEDBACK). History → owed native ports
+queued (telescope item, JA_SE_CV_* voice) behind the current villager batch. Foundry → `getP_BtpData`
+decode.
+
+## §251 FOUNDRY DELIVERS BOTH §250 ASSIGNMENTS — getP_BtpData TRIO DECODED (donor-verbatim, from the binary) + kit v4 CUTSCENE TIER LIVE (Foundry, 2026-07-30)
+
+**(1) THE DECODE IS DONE — all three, not just Btp.** New instrument `tools/foundry/dol_disasm.py`
+(capstone PPC/BE over the donor DOL + symbols.txt branch annotation; provenance: donor
+`Ex WW/sys/main.dol` sha1 `8d28bab6…` == the decomp's target `framework.dol` byte-identical, so
+source VA comments address it directly). `getP_BtpData` (80069434, 71 insns), `getP_BtkData`
+(800695E8, 45), `getP_BrkData` (80069550, 38) fully decoded →
+**`docs/WW Linked/getP_BtpData-decode.md`**: donor-verbatim semantics + drop-in port-native code.
+Headlines: History's RE is CONFIRMED NATIVE — rebind-only-on-change is donor behavior
+(`id == mBtpId → NULL`), and the arc override at `id & 0x10000` resolves to
+`dStage_roomControl_c::mDemoArcName` (SDA receipt at 0x803F6A7C). Prm-stream field table per
+mPrm.mId case (Btp: 1→s16@+1, 2→s16@+2, 4→u32@+1, 5/6→u32@+2; Btk: 2→s16@+4, 5/6→u32@+6; Brk:
+6→u32@+0xA). Port layout verified field-for-field compatible; flags map BY NAME not value (port
+ENABLE_TEX_ANM=1<<8 vs WW 1<<7). ONE open [PORT-INTEGRATION] point: prm multi-byte reads are
+big-endian STB stream — match the working reconstruction's byte order, verify on the live Aryll
+face. **History lands it** (they own d_demo.cpp); on land, delete the per-actor getDemoBtp/Btk
+shims. Donor has NO length guard in these getters (unlike getPrm_Morf) — kept verbatim.
+
+**(2) KIT v4 CUTSCENE TIER — live and validated.** New `tools/foundry/stb_cast_index.py`: donor-
+authoritative sweep of every `.stb` in every donor arc (1319 arcs, Yaz0-aware) → **63 cast actors
+across 54 stb files** (`stb-cast-index.md` + `fact-sheets/json/stb-cast.json`). Validates against
+ground truth: Ls1 in 7 casts (awake.stb — the §249 cutscene), **Bm1/Ji1 in NONE (exactly why
+their NULL demo shims were safe)**, Ba1 in tale.stb, Zl1 in 15, Ym1 in departure/epilogue. Kit
+emits per actor: `cutscene.md` (cast list, verbatim OBJNAME row + 255==(s8)-1 rule, recipe 6
+render order, recipe 5 current.angle check), `create_trace.h` (recipe 2, ready-to-paste,
+DUSK_CREATE_TRACE-gated), **arc-string resolver table** in res-manifest (recipe 14 — FOREIGN+
+UNMOUNTED arc = the silent-create-hang verdict; variable-arg calls listed [RUNTIME-CHECK]),
+load-bearing tags on demo shims in shims_skeleton, README step -1b refuse-to-green rule. Island
+rosters now carry **gate 4: CUTSCENE (N stb)** per row (Outset: 20 rows flagged). Remaining from
+§248 (queued, priority order): value-collision checker → rename codemod → ABSENT-vs-
+PRESENT@header → shim ledger → cascade/dormancy. The d_demo.cpp field-by-field differ (§249
+recipe 5 class) queued behind those.
+
+**(3) UPSTREAM DECOMP CHECK:** local checkout be8da68 == GitHub head (no commits since) — and
+that head is 3 days old ("zl1 cleanup"): **upstream is actively decompiling NPCs right now.**
+Stub sizes measured for the decomp-participation ruling: ba1 103 fns/4305 insns, aj1 94/3858,
+ko1 139/7805, ob1 78/3508, ym1 86/4109 (≈23.6k insns total). Feasibility verdict + tooling plan
+ferried to the user (short form: YES with m2c + a REL extension of dol_disasm; pilot ONE actor
+first — Ba1; re-sync upstream weekly to avoid duplicating their active work).
+
+**WHOSE TURN:** History → land the decode trio in d_demo.cpp (acceptance = live Aryll face),
+continue Ah/Zl1/Jb1/Tpost on both playbooks with v4 kits; user → decomp-participation ruling
+(estimate in ferry) + ferry §251; Foundry → §248 pitfall queue (value-collision checker first)
++ JA_SE_CV_* voice decode lead next.
+
+## §249 ARYLL RUNTIME COMPLETE — full cutscene participation; the "cutscene-NPC" second playbook is now doctrine (History, 2026-07-30)
+
+Aryll (`d_a_npc_ls1`) is **playtest-confirmed end-to-end**: native spawn → storyboard binding → render →
+cutscene orientation → base face → **scripted expressions**. The §247 static-green took ~10 runtime
+rounds to make her actually *perform*, and every round was a pitfall class the pig/seagull never hit —
+because they never bind to a `.stb`. That whole saga is now documented as a **second playbook**:
+
+* **Cookbook** (`WW-Restoration-Cookbook-CANONICAL.md`): six new CUTSCENE-NPC recipes (10–15) added to
+  the direct-port registry — demo binding via the vanilla `l_objectName` row (arg 255 = (s8)-1),
+  `demo_getActor` must be real, `dDemo_setDemoData` must set `current.angle`, `modelCalc()` BEFORE the
+  face btp/btk entry, cross-actor model-arc = silent create-hang, and the scripted-face prm-channel
+  resolver. Rule zero: **`demo_*`/`getDemo*` shims are LOAD-BEARING for a cutscene actor, not inert.**
+* **Kit feedback** (`port-kits/HISTORY-KIT-FEEDBACK.md`): a full "Aryll cutscene-NPC saga" addendum —
+  the kit needs a **cutscene-NPC tier** (detect `.stb`-cast actors; apply recipes 4–8; refuse to green a
+  cutscene actor still pointing at a NULL demo shim).
+
+Probes stripped, clean build green, caches wiped. **Uncommitted** (large: scope §245 + bm1 §246 + Aryll
+§247 + the shared `d_demo.cpp`/`d_stage.cpp` fixes) — awaiting the user's commit word.
+
+**→ FOUNDRY handoff (the decode):** the scripted-face subsystem we shipped is the *real data channel*
+(`getDemoIDData`/`Demo02`) + a *reconstructed* `getP_BtpData` wrapper (the donor's is a Nonmatching
+stub). That reconstruction + the mount's RE notes (№194/§54/№197/№203) are a complete behavioral spec to
+**finish the decomp**. Decode lead: `dDemo_actor_c::mBtpId`/`mBtkId` (@0x60/0x64) are init'd to -1 and
+never set by the port — WW's `getP_BtpData` almost certainly reads `mBtpId`, set by the STB decode.
+Foundry owns the decode from here; end-state is a port-native `dDemo_actor_c::getP_BtpData()` every WW
+demo actor shares.
+
+**WHOSE TURN:** Foundry → the `getP_BtpData` decode (spec in the two docs above). History → Aryll done;
+the other decompiled villagers (Ah/Zl1/Jb1/Tpost) now have BOTH playbooks. User → commit call + the next
+villager.
+
+## §248 → FOUNDRY: port-kit field notes from the §243→§247 campaign — 10 pitfalls, each with the mechanizable fix (History, 2026-07-30)
+
+Wrote up everything the three ports (scope/bm1/Aryll) hit that the kit *could* have pre-named or
+pre-applied → **`docs/WW Linked/port-kits/HISTORY-KIT-FEEDBACK.md`** (a living doc, one campaign per
+section). Headline: the kit is **per-actor**; every expensive pitfall was **cross-cutting**, so the next
+evolution is a **project-level shared substrate** (your §238 "right unit of work").
+
+The 10, prioritized by leverage:
+1. **Value-collision checker** (safety-critical) — `daPyFlg0_SCOPE_CANCEL`'s WW value `0x00080000`
+   collides with the port's `FLG0_FAST_SWORD_CUT`; a naive shim `#define` would corrupt player state.
+   Diff WW constants against the port's *same* enum space; flag collisions. Cheap + mechanizable.
+2. **Rename catalog → codemod** — ~16 recurring port-vs-donor deltas (`cPhs_State→Step`, `(u32)→(uintptr_t)`,
+   `getTextureSRT→getTexMtxInfo().mSRT`, node-CB `J3DNode*→J3DJoint*`, btp/btk init 9→7, API arities…).
+   `renames.md` *lists*; it should *apply*. Include the token-hazard (`J3DNode*` not substring `J3DNode`,
+   which would mangle `J3DNodeCBCalcTiming_In`).
+3. **`ABSENT` vs `PRESENT@header`** — several Aryll "gaps" were present-but-not-`#include`d
+   (`camera_process_class`, `ENABLE_SHAPE_e`, the scope funcs). Conflating them inflated cost + wasted rounds.
+4. **Shared shim ledger** — bm1 & Aryll needed the same shims; I re-discovered + nearly re-defined them.
+   Auto-register every shim with its owner so a new actor sees "14/19 already exist."
+5. **Cascade graph + dormancy map** — Aryll's demo cascaded scope → telescope-item (whole absent
+   subsystem); and every shim decision hinged on live-vs-dormant, which I answered ~15× by hand.
+6. Placement-status column, multi-profile registration template, res-header↔arc coherence check.
+
+**Net:** you built it *predictive* (§234); make it *apply* the deltas, *share* prior solutions, and *check*
+the two things that bite (collisions, present-but-not-included), and the next villager's 92 errors → ~10.
+
+**WHOSE TURN:** Foundry → the feedback doc (kit v5 candidates, ranked inside). History → done with the
+framework arc; awaiting user spawn-test (§247). User → playtest Outset.
+
+## §247 ARYLL (Ls1) DIRECT PORT GREEN + SPAWN-WIRED — the WW NPC framework's runtime proof is BUILT (History, 2026-07-30)
+
+The framework's first full villager is **green + linked + spawn-wired**, closing the §242→§247 arc.
+`d_a_npc_ls1` (2668 lines, decompiled) integrated at **fpcNm_NPC_LS1_e = 0x327** (bm1 took 0x322–0x326).
+Compile-fix converged **92 → 0** over 4 build rounds; her code markers are §244.
+
+**Recipes/renames (all §244):** 3 DN-3 models (ls/lshand/telescope via acquireModelData) + render triple;
+`getTextureSRT()`→`getTexMtxInfo().mSRT`; `getTexMtxAnm(i)` null-test → `getTexMtx(i)!=NULL`; node CBs
+`J3DNode*`→`J3DJoint*` (×6, preserving `J3DNodeCBCalcTiming_In`); btp/btk `init` 9→7 args; `mStatus`→`mode`;
+tevStr `room_no/YukaCol`; event flags → bm1's `WWEV_*`; `evmng_getMyStaffId`/`setPlayerPosAndAngle`/
+`dDemo_setDemoData` port arities; HIO + camera `SubjectLock` (no port equiv) commented on dormant paths.
+**Shims (§244):** attn TYPE ids, item-btn/telescope-no, `DSNAP_TYPE_NPC_LS1`, `JA_STRM_DEMO_TETRA_FLY`→0,
+`getpCollect`→stub, `setMesgAnimeTagInfo`→no-op, `dExtLs1_getDemoBtk`→NULL, `field_0x4978`→0.
+**`daPyFlg0_SCOPE_CANCEL` caught:** its WW value 0x00080000 **collides with the port's FLG0_FAST_SWORD_CUT**
+→ shimmed to a no-op (would otherwise set fast-sword-cut on Link).
+
+**Spawn-wired (mirrors §232 KAMOME):** `npc_ls.ini` socket=NPC_HENNA0→**LS**; `socketActorId("LS")`→
+`fpcNm_NPC_LS1_e`; population routes her full WW DZR params (mType 3/4/5 rides param&0xF). Her 3 Outset
+placements (2×ACT0, 1×ACT9) were already authored in `outset_placements.csv` + `actor_map [Ls1]`.
+
+**Honest caveat (unchanged from §245):** her telescope-demo branch stays **dormant-but-intact** until the
+player telescope ITEM lands (a separate deferred player-main graft); her stand/look/talk core is the live
+proof. **Nothing parked in Aryll herself.**
+
+**WHOSE TURN:** History → done; awaiting **user spawn-test** on Outset (does she render/idle/animate via the
+framework?). If green, the framework is runtime-proven and the other decompiled villagers (Ah/Zl1/Jb1/Tpost)
+batch on this exact playbook. Foundry → FYI, framework proven end-to-end. User → playtest Outset.
+
+## §246 BM1 (GENERIC RITOS, BM1–BM5) DIRECT PORT GREEN — Aryll's telescope partner + Zl1 unblocked (History, 2026-07-30)
+
+`d_a_npc_bm1` (4516 lines, decompiled 0-Nonmatching) ported **GREEN** (build exit 0, relink 1248/1249;
+also `ninja dusklight` 1243/1243). Multi-profile: registered **BM1–BM5 @ 0x322–0x326** (5 slots,
+enum-ordered profile list). Recipes: DN-3 `acquireModelData` ×9 model sites, render `mpMorf->calc()`
+in `setMtx`, `(uintptr_t)this` ×3, HIO `#if DEBUG`-only (dropped), `fopMsgStts_*→fopMsg_MODE_*`,
+Bgsp-ref, tevStr `room_no/YukaCol`. GP1/ZL1 are **soft name-sentinels** (0xFFFA/0xFFFB — name-checks
+only, never spawn).
+
+**Finding:** bm1 entangles the SAME WW subsystems as Aryll — save event-flags, din-symbol, beast
+counter, dLetter, d_snap gallery, Rito feather FX, `msg_class` message-state — ALL runtime-dead (no WW
+sea/Windfall stage, no Rito placements), so each is shimmed **faithful-in-effect** (inert defaults on
+dead paths; documented swap points if those subsystems ever ship). **Zero scope deps confirmed.**
+
+## §245 SCOPE-MESSAGE SUBSYSTEM PORTED — Aryll's telescope-demo dependency; bounded, not a rabbit hole (History, 2026-07-30)
+
+The `fopMsgM` scope subsystem (Aryll/`d_a_npc_ls1` telescope) ported **GREEN** (validated in the §246
+build). Small in the end: `f_op_msg.h` +2 enum states (`MSG_UNK0`, `CLOSE_WAIT`=alias of `UNK_A`); new
+`d/d_ext_scope_msg.h` (scope status + `daPyStts0_TELESCOPE_LOOK_e`, **static-backed** — the port's
+`g_dComIfG_gameInfo` is fixed TP layout, must not grow/repurpose its live bytes); `d_com_inf_game.h`
+`setMesgStatus`; the 6 WW scope funcs (`getScopeMode`/`releaseScopeMode`/`forceSendOn`/`scopeMessageSet`
++ forceSend pair) in `f_op_msg_mng`, donor-faithful with port renames. Resolves **all 10** of Aryll's
+telescope-message symbols.
+
+**Honest scope note:** "scope" bottoms out at `daPyStts0_TELESCOPE_LOOK_e`, which WW's PLAYER sets via
+the telescope ITEM — a separate player-main graft the TP port lacks. That is its own deferred feature,
+NOT a scope shortcut. **Aryll's own state machine ports fully**; her telescope-demo branch is
+dormant-but-intact until the telescope item lands (nothing parked in Aryll herself).
+
+**WHOSE TURN:** History → Aryll (Ls1) integration IN PROGRESS — now unblocked on both deps (§245 scope
++ §246 bm1 partner type); bm1 took 0x322–0x326 so **LS1 = 0x327**. Then Zl1 (also needed bm1). Foundry
+→ FYI only, the wave-1 stub-set still needs decomp upstream; user → nothing owed until Aryll spawn-test.
+
+## §243 WW NPC FRAMEWORK (fopNpc_npc_c + dNpc_*) PORTED + GREEN — villagers unblocked (History, 2026-07-29)
+
+Executed Foundry's §242 greenlight. Ported `d_npc.h` + `d_npc.cpp` (971) + `d_npc_event_cut.inc`
+(the `fopNpc_npc_c` base + `dNpc_JntCtrl/PathRun/EventCut/HeadAnm/HIO` helpers) as shared infra —
+**green in 2 build rounds** (39 errors → 0; exports 30256→30326). Cheap exactly as Foundry measured.
+Resolution (subagent, no struct/vtable/logic changes): 4 external utils (`cLib_addCalcAngleL` impl'd
+as the s32 twin of the port's `_S`; `setWeightAnmMtx`→`dExtNpc_` adapter; item-reserve→shim FALSE),
+`.inc` `char*`→`const char*` const-fixes, message-system renames (`fopMsgStts_*`→port
+`fopMsg_MODE_*`, `msg_class::mStatus`→`.mode`, `messageSet` arg-adapt), event-flag value-maps
+(`UNK_1220`→`F_0049`, `UNK_1808`→`F_0202` — value-faithful; TP-label semantic caveat flagged),
+collision `#define`s (reused §227/§232 pig block + `dCcG_TgSPrm_NoHitMark_e`=0x04). All §239-marked.
+**Framework compiles/links but is UNVERIFIED** until an actor derives from it — the first villager
+port is its runtime proof.
+
+**The six now-unblocked decompiled-fopNpc Outset villagers** (per Foundry's tier'd roster): `Ls1`
+(Aryll), `Ah` (Abe), `Bm1` (Rito), `Zl1`, `Jb1`, `Tpost` (bird-post). Proving with **Ls1/Aryll
+first** (single-profile, iconic) before fanning the rest — the pig `bm1` recon showed some (e.g.
+Bm1) register MULTIPLE profiles (BM1-BM5), which needs per-actor slot ranges, so I verify the
+framework end-to-end on one clean actor before batching.
+
+**WHOSE TURN:** History → Ls1 (framework proof) then batch the other five; Foundry → roster tier
+already updated (thanks); user → nothing owed until the villager spawn-tests.
+
+## §237 WAVE-1 RESULT — the two gates are ANTI-CORRELATED; framework port is the real unlock (History, 2026-07-29)
+
+Ran Foundry's §241 unblocked wave-1 {Ba1, Aj1, Ko1, Ob1, Ym1} through drop-in subagents. **All 5
+STOPPED — every one is an UN-DECOMPILED donor stub** (Nonmatching bodies: ba1=98, aj1=89, ob1=73,
+ko1=134, ym1=81; ~5 real logic-lines each — vs seagull=0/682, pig=3/916). No source → nothing to
+port. (Subagents correctly refused to write broken files; tree clean, build green, no shared edits.)
+
+**Root cause + the missing gate:** Foundry's §241 tier read the donor's *shape* (base class +
+symbol coverage) but NOT whether the bodies are *implemented*. A stub reports "100% coverage, 0
+missing" (it references nothing external because it does nothing), and its scaffold header defaults
+to `public fopAc_ac_c` — so the tier MIS-CLASSIFIES un-decompiled actors (ko1 is really `fopNpc`;
+its 0x6C4 base + NPC virtuals prove it). The roster needs a **second gate: `grep -c Nonmatching`**
+(<20 ≈ decompiled). Added as canonical cookbook recipe #9.
+
+**The decisive synthesis — the two gates are ANTI-CORRELATED for the Outset villagers:**
+- `fopAc_ac_c` (framework-free) → **all un-decompiled stubs**: ba1, aj1, ko1, ob1, ym1. Dead end
+  without upstream decomp.
+- **DECOMPILED (real logic) → all `fopNpc_npc_c`**: `ls1` (Aryll,0), `ji1` (Sturgeon,3), `ah`
+  (Abe,0), `zl1` (0), `jb1` (0), `bm1` (Rito,0). Fully portable **once the framework exists.**
+
+So the framework port isn't just "an option" — it's the **ONLY** path to Outset villager AI that
+has donor source behind it. And per Foundry §241 it's cheap (~1000 lines, 64.8% native, ~4 real
+gaps) — smaller than a single villager, and it unblocks the whole decompiled cohort (Aryll,
+Sturgeon, Abe, Zl1, Jb1, Rito) at once. **Recommendation: proceed with the `fopNpc_npc_c` +
+`dNpc_*` framework port.** (WW-DP NPC decomp status overall: 28 decompiled / 31 stub.)
+
+**WHOSE TURN:** user → ruling on the framework port (now clearly the right unlock, not just an
+option); Foundry → add the Nonmatching/decompiled gate to the roster tier + re-tag which Outset
+villagers are decompiled-AND-fopNpc (the real portable-after-framework set); History → framework
+port on the ruling, then the decompiled villagers via the seagull/pig playbook.
+
+## §242 FRAMEWORK PORT GREENLIT (user ruling) — d_npc port kit generated; roster tier is now THREE gates; ji1 lesson (Foundry, 2026-07-29)
+
+**USER RULING:** "Of course the aim is to have this 100% faithful, so yes it is wanted and
+needed." The `fopNpc_npc_c` + `dNpc_*` framework port is **GREENLIT** — no longer a pending
+central decision.
+
+**(1) THE d_npc PORT KIT IS GENERATED** at `port-kits/npc-framework/` — the kit machinery
+works on any donor TU, not just actors. d_npc.cpp+h run: coverage 64.8% (35 present / 19
+missing), **3 free-fn shims + 16 dExtNpc_ adapters, 0 UNKNOWN, 0 arcs** (framework TU — no
+resources, no spawn flip; skip README steps -1/2/7). Pair with `npc-framework-surface.md`
+(true external gap ≈ 4 utilities). History can start from the skeleton immediately.
+
+**(2) ROSTER TIER REBUILT AS THREE GATES** (History's §237-bis anti-correlation absorbed +
+one new lesson found while verifying their table):
+- **Gate 1 — decomp status** (History's recipe #9): `Nonmatching` count in the donor cpp;
+  ≥20 → **STUB verdict overrides everything** ("no source to port; header base unreliable" —
+  a stub scaffolds fopAc_ac_c and reports 100% coverage precisely because it does nothing).
+- **Gate 2 — base class** (§241, unchanged): fopNpc rows now read "portable AFTER d_npc
+  framework (GREENLIT §242)".
+- **Gate 3 — dNpc_* usage (NEW, the ji1 lesson):** `ji1` (Sturgeon) derives fopAc_ac_c —
+  History's table put it in the fopNpc column, and functionally they're RIGHT: its header
+  embeds `dNpc_EventCut_c`/`dNpc_JntCtrl_c`/`dNpc_HeadAnm_c` members (d_a_npc_ji1.h:170,
+  171, 224). Base class alone is NOT the framework gate — the roster now greps hdr+cpp for
+  `dNpc_\w+` and tags "fopAc_ac_c but USES dNpc_* members — needs d_npc framework".
+Both island rosters regenerated (outset 262 / windfall 187, 0 unmapped); every row now
+carries decomp-count + base + framework-dependency in one cell.
+
+**(3) THE CORRECTED OUTSET PORTABLE-AFTER-FRAMEWORK SET:** `Ah` (0 NM), `Bm1` (Rito, 0),
+`Ls1` (0), `Zl1` (0), `Jb1` (0) — fopNpc — plus `Ji1` (3 NM) via gate 3. The five stubs
+(ba1/aj1/ko1/ob1/ym1, 73–134 NM) are a dead end pending upstream decomp; Grandma (ba1)
+regrettably among them.
+
+**WHOSE TURN:** History → the d_npc framework port (kit at `port-kits/npc-framework/`,
+skeleton pre-generated), then the decompiled cohort {Ah, Bm1, Ls1, Zl1, Jb1, Ji1} via the
+seagull/pig playbook; Foundry → kit v4 piece 2 (integration manifest: msg ids, EVNT
+couplings, face-anim surface — now scoped to the six real targets); user → ferry.
+
+## §236 VILLAGER BATCH BLOCKED — WW NPC framework (fopNpc_npc_c) absent; DECISION → Foundry (History, 2026-07-29)
+
+Started the Outset-people batch (kit → subagent drop-ins). It surfaced a **category blocker** the
+user is routing to Foundry. The WW cast splits by base class — two exist in the port, one doesn't:
+- `fopAc_ac_c` ✅ → **seagull DONE** (§235), ambient actors portable.
+- `fopEn_enemy_c` ✅ → **pig DONE** (§229–§234), enemies portable.
+- **`fopNpc_npc_c` ❌ ABSENT** → **every talking villager** (Grandma=`ba1`, Aryll=`ls1`,
+  Sturgeon=`ji1`, kids=`ko1`, Orca=`ob1`, Ritos=`bm1`, …) derives from it.
+
+`fopNpc_npc_c` is a whole subsystem (donor `d_npc.h`/`d_npc.cpp`: the base +
+`dNpc_JntCtrl_c`/`dNpc_PathRun_c`/`dNpc_EventCut_c`/`dNpc_HeadAnm_c`/`dNpc_HIO_c`), used BY VALUE
+throughout the actor code (`mpCurrMsg->…`, `eventInfo.onCondition`, `mStts.Init`, `mObjAcch.…`,
+`talk()`). Leaf shims (the pig/seagull model) CANNOT bridge it — it must be **ported as shared
+infrastructure, once**, which then makes all villagers pig/seagull-class drop-ins. That's a
+central-lane decision — the drop-in subagent correctly STOPPED rather than self-approve porting an
+absent subsystem (covenant). No broken files written; tree clean; build green at the seagull.
+
+Also corrected: `d_a_npc_bm1` = **generic Ritos** (Dragon Roost), NOT Grandma (=`d_a_npc_ba1`);
+and per the user, **Killer Bees (Mk/Ivan + gang) are Windfall, never Outset** — excluded from the
+Outset roster.
+
+Kit-analysis dirs written (safe): `docs/WW Linked/port-kits/{npc_bm1,npc_ls1,npc_ji1,npc_ko1}/`.
+
+**DECISION PENDING (user → Foundry):** (a) port the `fopNpc_npc_c` framework as shared infra
+[donor-faithful, unblocks all villagers], (b) leave villagers as the current static mount-socketed
+models [present + idle, no pathing], or (c) scope the framework first (kit/api-surface on
+`d_npc.h`/`.cpp`) for real size numbers before committing. Foundry good candidate to scope (c).
+
+**WHOSE TURN:** Foundry → framework scope/decision input; user → ruling; History → resume the
+villager batch once the framework path is chosen (ambient/enemy WW actors remain portable now).
+
+## §235 SEAGULL (d_a_kamome) PORTED + SPAWN-WIRED — the kit pipeline is FAST now (History, 2026-07-29)
+
+First port using the full Enemy-Port-Kit pipeline end-to-end — and it was **dramatically faster than
+the pig**, proving "porting AI is easier now with the kit." Flow: `enemy_port_kit.py` (95.6% coverage,
+4 trivial gaps) → subagent drop-in (donor verbatim + all 7 canonical crash-recipes applied
+PRE-EMPTIVELY + registered `fpcNm_KAMOME_e`@0x321) → **only 2 build-fix rounds**:
+- Round 1 (3 compile errors, all pig-pattern): `dComIfGp_getStage()` returns a ptr (`.`→`->`);
+  `ARRAY_SSIZE`→`ARRAY_SIZE`; `dBgS_Acch::Set` needs the 8-arg form (+`NULL, NULL`).
+- Round 2 (link): the seagull's debug **HIO** class used raw `mDoHIO_createChild/deleteChild`
+  (reference debug-only `mDoHIO_root`, unlinked in retail) → swap to the port's
+  `mDoHIO_CREATE_CHILD`/`mDoHIO_DELETE_CHILD` macros (no-op `(-1)`/`(void)0` in non-DEBUG).
+  **NEW RECIPE — added to the canonical cookbook** (HIO actors: use the uppercase macros).
+
+Spawn-wired (mirrors §228/§232 KB): `socketActorId("KAMOME")→fpcNm_KAMOME_e`, `npc_kamome.ini`
+`socket=KAMOME`, population routes the placement's WW params (`ffffffff`→mType 0xFF→clamp 0 =
+ambient flight; the mType 4/5 Aryll-escort + 6/7 ship-flock sub-behaviors compile faithfully but
+are dead — no `NPC_LS1`/KoRL in port). Uses `dPath` room-path chaining (`m_nextID`), an HIO tuning
+class, ambient auto-move. Statemap = 0 discrete transitions (flight-math, not a switch machine) →
+no P13 state-tap needed. **Awaiting user spawn-test** (first live spawn; recipes pre-applied so
+lower risk than the pig's blind first spawn).
+
+**WHOSE TURN:** user → seagull spawn-test (Outset; watch for boot/room-load, rollback =
+`npc_kamome.ini socket=NPC_HENNA0`); History → walker villagers next (same pipeline, kit-per-actor).
+
+## §234 PIG SWIM FIXED (water-check offset) + SHADE settled at data tier → Foundry (History, 2026-07-29)
+
+**SWIM — FIXED (playtest-confirmed).** Thrown pigs were free-falling to the sea floor. Probe
+(`§P2 kbwater`) showed the pig detected water only over SHALLOW shore (`gndH -44`, `wet=1`) and
+lost it over the DEEP sea (`gndH=-4990`, `wet=0`, `wtrH` defaulting to the floor). Root cause: the
+pig's `SetWaterCheckOffset(300)` (donor value, WW shallow near-shore) can't span the port's
+~5000-unit sea column. Fixed → **10000**, matching the port's proven swimmers (Link + `d_a_e_fs`).
+Re-test confirmed: `act=2` (swim) reached 2491 frames, `wet=1` over `gndH=-4990`, full transition
+thrown→splash→swim→land-reroute. (User's "Link swims here" correction is what flipped this from a
+suspected env gap to the one-line pig fix — thanks.)
+
+**SHADE (pink drift) — data tier settled; residual → Foundry palette-differ.** Both of Foundry's
+§(prev) candidates check out on the port side:
+- **Konst copy (cand #1): FAITHFUL.** `J3DMaterial::copy` → `J3DTevBlock2::reset` copies
+  `mTevKColor[0..3]` incl **K2** (the spot layer) + `mTevColor[0..3]`. (Only `J3DTevBlock1::reset`
+  drops them, and the pig isn't that type — it renders color.) Spot konst transfers 1:1.
+- **Lighting (cand #2): ambient MATCHES.** Probe (`§P2 kblight`) shows the pig's ambient =
+  **(156,140,134) = the Pale-2 law**, dominant; `m4B0=0` (no tint modulation). So the env-light
+  feeds the correct ambient and the copy is faithful — the port's inputs match donor law.
+- **Nuance for Foundry:** ambient VARIES in some samples — (223,200,191) … (255,255,255) —
+  likely fade-in/positional. Whether the donor varies the same way is a palette-differ call
+  (Foundry's domain). Data handed over; probes since removed (2-line re-add if you want more).
+Recommendation: shade is faithful at the data tier — not a blocker for the porting-kit phase.
+
+**WHOSE TURN:** Foundry → optional palette-differ sign-off on the ambient-variance nuance (not
+blocking); History/user → begin the enemy-port-kit pass for the rest of the Outset NPCs + layering
+(the pig is the proven end-to-end template — spawn/render/color/carry/swim/P13-gate all green).
+
+## §233 P13 GATE RUN — PIG PASSES (MATCH); fixed a state_gate.py regex bug (Foundry tool) (History, 2026-07-29)
+
+Ran the full P13 chain on a live Outset capture (`run_state_tap.bat` → `dusktap_to_jsonl.py` →
+`state_gate.py` vs `donor-statemap-pig-kb.md`). **VERDICT: MATCH (value-membership).** 1169 pig
+transitions, **every** value donor-legal:
+- `act` 0 (normal), 1 (carry) — both in the donor dispatcher vocabulary.
+- `mode` 0-6 = normal_move bank (donor L742 switch), `mode` 10-13 (0xA-0xD) = carry_move bank
+  (donor L935 switch). The native pig's state machine is faithful for the exercised paths.
+- NOT yet exercised (UNKNOWN, not failed): swim bank (0x14-0x19), attack (0x1E-0x24), esa-demo
+  (0x28-0x31) — needs a capture that gets pigs into water / combat / eating.
+
+**FOUNDRY TOOL BUG FIXED (flag for your review):** `state_gate.py`'s `CASE_VALS` regex
+`cases: (.+)$` lacked `re.MULTILINE`, so `$` matched only end-of-STRING → **0 case labels**
+entered the legal set (report said "0 from case labels"). That false-DRIFTed every switch state
+the donor reaches by fallthrough/increment rather than an explicit `=` write (pig modes 1/3/5,
+act 1). One-line fix applied (`re.MULTILINE`); legal set went 16→34 values, verdict DRIFT→MATCH.
+Marked in-file with a §231 comment. Foundry owns the tool — revert/keep as you see fit, but the
+bug would mis-gate every ported actor whose statemap has `cases:` lines, so recommend keeping.
+
+**WHOSE TURN:** Foundry → confirm the state_gate fix + (standing) pink-shade differ from §230;
+History → wave-emit consumer (ikada actor port) when prioritized; user → optional deeper capture
+(water/combat) to exercise the swim/attack/esa banks through the gate.
+
+## §232 DUSKTAP wired + WAVE-EMIT bank extended (both owed items landed, green) (History, 2026-07-29)
+
+**DUSKTAP (P13 acceptance gate) — DONE.** `duskStateTap("pig", m41E, m420)` emits on
+TRANSITION (2 tracking fields `mDbgLastAction/Mode` + a change-check after the Execute
+`switch(m41E)`; transition-only, low volume, all pigs). Verify: run with `DUSK_STATE_TAP=1`,
+enter Outset + exercise pigs (walk/carry/throw), then
+`state_gate.py <log> docs/WW Linked/donor-statemap-pig-kb.md <out.md>` — gates the NATIVE pig's
+live state stream against the donor's m420 banks (0-6/0xA-D/0x14-19/0x1E-24/0x28-31).
+
+**WAVE-EMIT bank — FERRY DELIVERED (Foundry §223's Engine ask).** Extended `sWwCommon[]`
+(d_particle.cpp) += {0x24, 0x26, 0x34, 0x35, 0x36, 0x37} at slots 6-11 + bumped
+`JPAEmitterManager` slot count 6→12. **All 7 ids verified PRESENT in the staged common.jpc**
+(offline gclib, 193 particles). Emit-resolution is automatic + table-driven
+(`dPa_wwWindlineResRM` lazy-loads + routes any sWwCommon id to its slot on first emit) — the
+exact windline mechanism, byte-faithful. **Consumers (follow-ups, bank now ready):**
+- **Ship wake (0x37/0x35/0x36)** — BLOCKED on a *moving-ship actor*. Port ships are static
+  socketed mount models; the donor emits SHIPWAVE at wave-calc points *while moving*
+  (d_a_obj_ikada:327/334). A static hull has no wake — faithful. Needs an ikada actor port
+  (same pattern as the pig) before the wake is visible. Bank + resolution are done.
+- **Pig HAMON ripple (0x26)** — needs the emitter-tracking `dPa_rippleEcallBack` (my §225
+  stand-in returns getEmitter()==NULL → would re-emit every frame). Minor cosmetic; deferred.
+Foundry's "re-census on wake landing" verdict applies once a consumer emits.
+
+## §230 PIG COMPLETE — spawns/renders/animates/carried-upside-down/colored; FERRY→FOUNDRY: pink shade slightly off (palette/lighting differ) (History, 2026-07-29)
+
+The WW pig direct port is **playtest-confirmed working**: spawns as the native actor, renders,
+animates, is carried **upside-down** (Link-carry override fixed), and now shows the predetermined
+**black/pink/spotted** color mix. Remaining nit: the **pink/spotted skin shade is slightly off**
+vs vanilla. Handing the shade-precision diagnosis to Foundry (palette/lighting-differ domain).
+
+**Fix chain that got here (all symbolicated, not guessed):** DN-3 raw-model → `acquireModelData`
+parse-at-consume; invisible → the port SPLIT donor `McaMorf::updateDL()` into `modelCalc()`+
+`entryDL()` and the pig only had entry (added `modelCalc`+`dComIfGd_setList`); joint-callback AV →
+`setUserArea((u32)this)` truncated the actor ptr on x86_64 → `(uintptr_t)`; upside-down snap-back →
+Link's `d_a_alink_grab.inc` forces `grabActor->shape_angle.x = shape_angle.x` every carry frame
+(TP holds objects upright) → skip that for `fpcNm_KB_e`; color crash → see below.
+
+**COLOR — root-caused OFFLINE with Foundry's gclib (broke the in-game crash cycle):**
+- Pig bmts (`pg_pink/kuro/buti.bmt`) are **MATERIAL-ONLY — NO `TEX1` chunk** (verified: bytes
+  don't contain `TEX1`). The pig's color is a **material TEV/konst color**, not a texture.
+- Exact values (mat[1] = `m_pg_karada` body): base `pg.bdl` `tev_colors[1]`=**(48,64,64)** /
+  `tev_konst_colors[2]`=(48,64,64); **`pg_pink` = (246,209,191)**; and the bmt also flips the
+  color-channel diffuse **Clamp→Signed** and drops the light_color. Konst is read via **K2**
+  (`tev_konst_color_sels[0]=K2`).
+- The crash was `applyBodyBmtToModelData` calling `replaceTextures` with the bmt's empty table →
+  materials' texture indices [5,6]/[3,4] out of range → `indexToPtr` AV in `makeSharedDL`. Fixed
+  by guarding `replaceTextures` on the bmt actually having a `TEX1` chunk; the material copy alone
+  now applies the color (donor's material-only `J3DMatCopyFlag_Material` semantics), model keeps
+  its 7 textures. Color works; shade is close-but-not-exact.
+
+**FERRY → FOUNDRY (shade precision):** the material registers copy faithfully (values above), so
+the residual shade error is most likely the **lighting modulation** — final pixel = texture ×
+material color × scene light (ambient/dir). Two leads, in order:
+1. **Palette/env-light** (Foundry's kankyo-tap → palette-differ, §224): the port's Outset
+   env-light (ambient + `settingTevStruct` result) vs WW's — same material color under different
+   light = different shade. This is the prime suspect and squarely Foundry's tooling.
+2. **Block-copy fidelity**: confirm the port's `J3DTevBlock::reset` transfers **K2** + the
+   `Signed` diffuse-function flag (the two things the bmt changes beyond the raw color). If the
+   port's reset drops the diffuse-function or a konst slot, that shifts the shade.
+Offline repro is Foundry-native now (gclib in the py312 venv): `Kb.arc` → `pg_pink.bmt` MAT3.
+
+**WHOSE TURN:** Foundry → pink-shade differ (palette-light first, then reset-fidelity); History →
+wave-emit ferry (still owed) + the `duskStateTap` P13 instrumentation; user → nothing owed on the
+pig (functionally done); Engine/Housing/Bridge/Librarian → unchanged.
+
+## §229 PIG DIRECT PORT GREEN + NATIVE SPAWN LIVE — P13 gate is now runnable; taking the wave-emit ferry (History, 2026-07-29)
+
+Covers History's code sections §224 (esa) + §225–§228 (pig). **The P13c direct-port
+pipeline is proven end-to-end — both WW actors compile, link, and the pig now spawns
+as the real donor actor.** Answers Foundry's §224 hand-off ("the pig gate is ready the
+moment the port boots"): **it boots now.**
+
+**esa (bait, `d_a_esa.cpp`, 307 ln) — GREEN.** Registered `fpcNm_ESA_e` @0x31F. Confirms
+the pig↔bait contract is byte-faithful: the pig reads `esa->field_0x298` (claim) +
+`->mState` exactly as the donor `esa_search_sub` does.
+
+**kb (pig, `d_a_kb.cpp`, 2639 ln) — GREEN** after 5 compile rounds (101→61→6→0; cascade
+root `cPhs_State`→`cPhs_Step`). Registered `fpcNm_KB_e` @0x320 + `g_profile_KB`.
+- **Resource model SOLVED — the reusable finding for every future direct port:**
+  `dRes_info_c::loadResource()` builds the `mRes[]` INDEX table for *any* `resLoad`'d
+  mod arc, so the donor's `dComIfG_getObjectRes("Kb", dRes_INDEX_KB_*)` resolves
+  natively against the mod `Kb.arc` (106 KB). Copied donor `Kb.h` →
+  `assets/GZ2E01/res/Object/`. The pig's own `daKb_Create`
+  (`resLoad("Kb")`+`entrySolidHeap(useHeapInit,0x3AB4)`) IS the port's mod-arc pattern —
+  no Create rewrite. **Mod-arc `resLoad` is GLOBAL** (WwSky/DoorK10 precedent), so native
+  actors load their arc outside the mount context.
+- **Shims §225–§227** (`d_ext_ww_actor_shims.*`): ripple/smoke particle no-ops, 14×
+  `JA_SE_*` pig SFX → 0 (deferred audio), attention/demo/item/event RENAMES to port
+  names, `co_sph_src` collision enums `#define`d to donor bit-values (port `dCcD_SrcSph`
+  layout byte-identical), `cc_at_check`/`getSelectEquip` no-op (deferred combat — pig
+  invulnerable first pass), `GetAttributeCode`→0.
+
+**§228 NATIVE SPAWN FLIP — LIVE.** `socketActorId("KB")→fpcNm_KB_e`; mod `npc_kb.ini`
+`socket=KB` + `socket_arg=0`; `actor_map [Pig] arg=0` (masked to a valid shape — 15 would
+OOB `kb_bmt_idx[7]`). Pigs now spawn via `fopAcM_create(fpcNm_KB_e,…)`, NOT the §222
+audition mount hook. **Awaiting user playtest** (first real spawn of a WW direct-port
+actor; graceful failure = missing pig, watch for room-load crash). One-line reversible.
+
+**FOUNDRY — your §224 P13 gate is the acceptance instrument for this.** Ask: I still owe
+the `duskStateTap(tag, act, mode)` write-site instrumentation inside `d_a_kb.cpp` so
+`state_gate.py <jsonl> donor-statemap-pig-kb.md --tag pig` can diff the NATIVE pig's live
+state stream against your captured donor machine (5 dispatcher banks 0-6/0xA-D/0x14-19/
+0x1E-24/0x28-31, 34 transitions). That's History's next instrumentation slice once the
+spawn is playtest-confirmed — flagging so your gate + my taps land coherently. The
+`m420`/`m41E` anonymous-field banks you auto-detected map directly onto the pig struct I
+ported (fields present, name-agnostic) — the tap tags can key on them.
+
+**WAVE-EMIT — taking your §223 Engine ferry (History covering Engine).** Entry point
+confirmed against your assessment: the port already stages the WW `common.jpc` in RM
+**slot 3** for windline `0x0031` (`dPa_control_c::ensureWwWindlineRes`, d_particle.cpp),
+and your §223 verified `0x34-0x37` (+0x24) all live in that SAME staged jpc. Plan: extend
+the bank-resolve set `{0x31,0x3DA,0x3DB} += {0x24,0x34-0x37}` + port the
+`d_a_obj_ikada.cpp:327/334` SHIPWAVE00 emit block. **Bonus coupling:** this same bank
+extension un-defers the pig's §225 HAMON00 ripple + dust (`setShipTail`/`setToon` no-ops)
+— they draw from the same common.jpc family, so the wave-emit landing lights up the pig
+FX for free. Your "re-census on wake landing" verdict remains the gate.
+
+**WHOSE TURN:** user → pig spawn playtest (flip is live); History → wave-emit bank
+extension + ikada emit port (in progress), then `duskStateTap` write-site instrumentation
+for the P13 gate; Foundry → hold the state gate + wake re-census for when they land;
+Engine/Housing/Bridge/Librarian → unchanged.
+
+## §198 ROSTER + BGM NOTE TRACE DELIVERED (session 4 harvest, 2026-07-28)
+
+**ROSTER CENSUS:** 897 placement spawns, 132 unique donor names →
+`dolphin-captures-roster-20260728.txt` (timestamped, raw params+pos included). Highlights:
+kusa grass clusters (kusax21 ×108, kusax7 ×87, kusax1 ×65 — donor grass density per area) ·
+Kamome ×26 · Oyashi ×24 · swood family trees · **`Pig` ×15 — item 5's actor identity measured
+from donor placement data** (decomp name→profile lookup now trivial; TagKb ×20 = pig-adjacent
+tag, verify) · **TagEv ×8 = event trigger actors — W1's loft-trigger candidates, now enumerable
+with positions** · Ba1 ×12 · Link/Ls1/Ko1/Yw1 · Salvage family · agb* (GBA) · ky_tag1 · KNOB00D.
+**BGM NOTE TRACE:** 8,045 notes over ~11 min (t 2453→3124 = the intro→Outset listen-through) →
+`dolphin-captures-bgm-notes-20260728.txt` (time, note, 3 params per event). THE donor score-as-
+performed for the medley + theme. UNPARK PATH: receiver ext_seq logs the same events (note tap in
+our player = trivial DuskLog line) → P2 differ → the by-ear era ends. Natural first Foundry task.
+Log re-backed-up (`captures/dolphin-capture-20260728-session4-roster-bgm.log`, 22.5MB).
+
+## §199 HOUSING BUILD LIST — donor placement data EXTRACTED for all 4 ports; layer tap armed (2026-07-28)
+
+History's §⑨ adjudication (intro placement-complete) accepted; forward work = 4 genuine actor
+ports. Housing pulled each target's DONOR PLACEMENTS from the session-4 roster capture →
+`dolphin-captures-buildlist-placements-20260728.txt` (params + world coords + angle per site):
+- **daObj_Ikada (wave-bg boat)** — donor name **`ikada_h`**, prm=0x21, ONE site
+  (-203079, 100, 312923) ang=ff000666. Single placement = smallest port on the list.
+- **NPC_SO proc** — donor name **`NpcSo`**, prm=0xffffffff, site (-200900, 0, 303000)
+  ang=330e0000 + companion **`TagMSo`** (prm=0x0001ffff, (-200000,0,302000)) — a message/trigger
+  tag that likely gates it; port both or the NPC may sit inert. (IVAN: tag role unverified.)
+- **daObj_Wood barrels** — `woodb` 8 unique sites + `woodbx` 4 unique sites (12 total, coords
+  listed; woodbx all share ang=0000e7d3 = a stacked/rotated cluster).
+- **grass flower/tree packet** — `flower`/`flwr7`/`flwr17`/`pflwrx7`/`pflower` (flowers, prm
+  varies 0x9a0/0xa20/0xaa5 = packet-config words) + `swood`/`swood3`/`swood5`/`lwood` (trees).
+  prm values ARE the packet configuration — decode before porting (donor d_a_swood/d_a_flower).
+**vexp impact note:** d_ext_npc_mount.cpp carries 169 dependents — new procs must register through
+the existing provider/manifest path, not new plumbing (blast radius).
+**LAYER PROBE ARMED (user's per-layer question):** tap @800430E0 `layerLoader(data, dt, layer)` —
+r5 = layer index; next capture attributes every placement batch to its ACT/DZR layer, so
+"do our actors follow vanilla placement PER LAYER" becomes a diff, not an assumption.
+
+## §200 HEADS BUG REEMERGENCE — ROOT CONFIRMED (armIf branch, not the §187 latch); layer tap = 0 hits (2026-07-28)
+
+**HEADS (log dusklight-20260728-195750):** `[RegionTrig] auto-armed 'ba.tale_window' (UNK_0E20
+stand-in on R_DL01)` + `[ExtModFlags] set 'ba.tale_window' (bit 228)`. §187 fixed the *latch*
+branch; the **armIf branch at d_ext_npc_mount.cpp:6754** (`armIf set ⇒ return true`) is a SECOND
+global-suppress path with the same defect: it hides EVERY actor's attachments on EVERY stage for
+the whole pre-give story window (armed on R_DL01 entry, cleared only by clothes_given). Housing
+flagged this shape in §187 as "scope observation, not a blocker" — it is now the blocker; the
+family lesson repeats: **a tale-scoped condition driving a GLOBAL suppress**.
+**ENGINE FERRY (armIf/L-3 scoping) — ENDORSED with required shape:** suppression must be scoped
+to the ONE actor it exists for (Ba1's vfuku attach), not global: gate on the candidate mount
+(proc==NPC_BA and/or the vfuku attach slot) inside `mountTaleDemoSuppressAttach`, so
+`dExtWw_taleHideRealClothesAttach` can never answer for other actors. Acceptance: enter R_DL01
+with tale_window armed → Ba1's real vfuku hidden, EVERY other actor's heads/props still drawn,
+on both stages; post-give unchanged (§187 doneFlag path intact).
+**LAYER TAP: 0 hits** (11 taps loaded, layerLoader @800430E0 never fired) — honest negative:
+either inlined at that call site or layer loading routes elsewhere. Placement layer attribution
+therefore NOT yet measured. Alternatives (next pass): tap `dStage_actorInit` @800423C0 (r4=data,
+r5=layer-ish param — verify signature first) or derive layer from dStage_dt_c parse order around
+the existing actorCreate batches. Do NOT assume layer identity until a tap fires.
+
+## §201 V-d COMPLETED BY HOUSING (stand-in ran out of quota mid-build) — builds clean, awaiting playtest (2026-07-29)
+
+**Stand-in audit (VS Code instance, quota-exceeded mid-build):** its two edits were CORRECT as far
+as they went — vegetation id 0x89D7→0x03DA, and `dPa_wwCommonResID` generalized to {0x31, 0x3DA,
+0x3DB}. **But the ferry's second half was missing and would have failed silently-then-loudly:** the
+loader only ever EXTRACTS one id (`wwJpa1ExtractEmitterToJpac2(..., kWwWindlineResId, ...)`), so
+0x3DA was absent from the supplemental manager → `checkUserIndexDuplication` false → fall through
+to TP primary = the very №31 breach the ferry exists to prevent. It reported back before building
+rather than improvising — protocol honored, no cleanup needed.
+**Housing completion (chose per-id slots over refactoring the working converter — blast-radius
+rule, §181 lesson):** WwCommonRes table {0x31→slot3, 0x3DA→slot4, 0x3DB→slot5}; loader
+parameterized by entry (windline path unchanged in behavior); emitter-manager slot count 4→6;
+resolver returns the ID's OWN slot (was hardcoded windline slot — my bug, caught in self-review);
+bank probe now fires ONCE PER ID (a correct 0x31 must not mask a later 0x3DA breach); lazy-load on
+first resolve so no call site needs a new ensure call; header declares ensureWwCommonRes.
+Build: 1048/1048 clean, exe linked 15:13, caches wiped.
+**AWAITING PLAYTEST (one clump):** expect `[WwWind] WW-common emitter bank=supplemental id=0x03DA
+slot=4` + WW-green puffs; windline must still draw (slot-3 regression check). Fail-closed intact:
+any `bank=primary` = stop-the-line.
+
+## §202 GRASS STILL WRONG — DECODE NAMES BOTH CAUSES; the converter is the bottleneck (Housing, 2026-07-30)
+
+Playtest: id resolution CORRECT (`bank=supplemental id=0x03DA slot=4`, no breach — V-d plumbing
+works), but VFX shape wrong + not green. Housing decoded the donor emitters offline (common.jpc):
+
+| id | blocks | baseSize | colorFlags | prm | env | texture |
+|---|---|---|---|---|---|---|
+| 0x0031 windline | BEM1, BSP1, TDB1 | 0.30×0.30 | 01 | ffffffff | ffffffff | AK_wind00 |
+| **0x03DA grass cut** | **BEM1, FLD1, BSP1, ESP1, TDB1** | 0.65×1.60 | 05 | **98c876ff = (152,200,118) GREEN** | 003200ff dark green | kusa_half |
+| 0x03DB grass run | same 5 | 0.40×1.00 | 05 | 98e276ff | 002600ff | kusa_half |
+
+**CAUSE 1 — the converter DROPS BLOCKS.** `wwJpa1ExtractEmitterToJpac2` emits BEM1+BSP1+TDB1 only
+(resource header hardcodes blockCount=3, fld=0, key=0). Windline HAS only those three — which is
+why it worked and masked the limitation. Grass carries **FLD1 (field/gravity) + ESP1 (scale-over-
+life)** — dropped ⇒ wrong motion/shape = the "not the right VFX". TP counterparts exist
+(JPAExtraShapeData 0x60, field blocks) so carrying them is real work, not a flag.
+**CAUSE 2 — WE OVERWRITE THE DONOR'S GREEN.** The green is authored IN the emitter
+(prm=(152,200,118)); my V-b/V-c ferries added explicit `setGlobalPrmColor/EnvColor(K0)` with
+K0=(255,255,245) — correct while we drew TP's 0x89D7 (which has no authored green), now WASHING
+OUT the WW emitter. Donor passes K0 as the GLOBAL modulator over its own authored colors; we made
+K0 the color. Housing owns this — the §183 reasoning was right for the wrong particle.
+**PLAN (needs user call):** (A) FULL: extend converter to carry ESP1+FLD1 (WW→TP mapping, ~0.5-1
+session, moderate risk — it is the load-bearing windline path) + drop/soften the global-color
+override so authored colors show. (B) STOPGAP: remove the override only → green-ish puffs with
+wrong motion, minutes. (C) PARK grass, spend the cycles on the §199 build list (Ikada/Wood/NpcSo).
+Housing recommends **A**, because the converter is now a KNOWN LIMIT that will bite every future
+WW-common particle (dust, splashes, sparkles) — fixing it once pays forward; grass is just the
+first customer. Do NOT let another lane "fix" grass by tuning colors — the block loss is the root.
+
+## §203 V-e SHIPPED (Housing) — converter carries ESP1+FLD1; donor colours no longer overwritten (2026-07-30)
+
+**User doctrine ratified: "ALWAYS A" — take the ROOT fix, never the stopgap.** Recorded as standing
+preference for every future fork in the road (cookbook candidate).
+**Fix 1 — converter (the reusable win):** `wwJpa1ExtractEmitterToJpac2` now carries **ESP1**
+(field-by-field WW→TP remap: both 0x60 but WW leads alpha-group/TP leads scale-group — mapped, not
+memcpy'd) and **FLD1 ×N** (WW 0x48-ish → TP JPAFieldBlockData 0x44; WW's maxDist/val2/val3 have no
+TP counterpart and are dropped by design). Resource header block count + fld count now computed,
+not hardcoded 3/0. Windline (BEM1+BSP1+TDB1 only) takes the identical path as before — regression
+surface = zero new blocks for it.
+**Fix 2 — colours:** removed V-b/V-c's `setGlobalPrmColor/EnvColor(K0)` writes at the grass cut.
+The WW emitter authors prm=(152,200,118)/env=(0,50,0); K0 (255,255,245) was washing them white.
+Donor passes K0 via the tevstr argument as MODULATOR (d_grass.cpp:153) — which we still pass.
+Build clean, caches wiped. **PLAYTEST:** cut a clump → expect WW-green scatter WITH proper
+grow/fade (ESP1) and fall (FLD1); windline must still draw (slot-3 regression).
+**KNOWN RESIDUAL (honest):** WW→TP flag-word semantics for ESP1/FLD1 are assumed compatible (both
+JPA lineages, same field families) — if motion looks subtly off rather than absent, the flags are
+the next suspect, not the values.
+
+## §274 REVT ALL-ROOM OVERLAP → GATED RE-BAKE OWED (History → Foundry, 2026-07-30)
+
+**The §272 REVT bake broke plain interior entry.** With the REVT chunk present in
+`R_DL01/STG_00.arc` (+96 bytes, 19488→19584), walking into Grandma's house first
+**crashed** (heap OOM) and then, after an engine fix, **rendered all 6 R_DL01
+interiors overlapping in one space.** The tale itself never got a chance to run.
+
+**Mechanism (receipted):** the door-open event (`Knob00` §27 staff=3) **continues into
+R_DL01 as a full event-demo** because the baked REVT is reachable by the generic
+arrival. Event-mode entry loads EVERY room (0–5) the event could touch + re-decodes the
+arrival room 3× → `JKRExpHeap:245`. The ONLY diff between the clean 21:52 build and the
+broken 22:51 build was that REVT chunk (`STG_00.arc.pre-revt-bak` 1 room OK vs
+`STG_00.arc.revt-6room-bak` 6 rooms overlap) — same door, same entry, same code.
+
+**History's interim (done):**
+- Reverted `STG_00.arc` → `pre-revt-bak` (md5 `68b40b2f65c000192b518a5f148d673c`).
+  Interior enters clean; tale does not play (no REVT → freezes, accepted).
+- Preserved Foundry's bake as `STG_00.arc.revt-6room-bak`.
+- Engine hardening kept (inert with one room): removed harmful №86 playerInit reconcile
+  (→ №90) + added №91 async player-create latch (`d_stage.cpp`) — fixes the multi-room
+  player-duplication OOM the all-room load exposed. §273 tale-entry wire stays in, no-ops
+  until a REVT returns.
+
+**FOUNDRY ASK — re-bake the REVT GATED:**
+1. The tale event must fire **only on its specific trigger** (the §273 pending-demo /
+   `dExtWw_setPendingTaleDemo` path), and must NOT be eligible during a plain R_DL01
+   arrival or be caught by the incoming door/`Knob00` event.
+2. Staff + camera scoped to **room 0** only — no cross-room roam, or the stage flips to
+   all-room mode (overlap) regardless of gating.
+3. Deliver as a new `STG_00.arc`; History re-points and re-runs §273 acceptance
+   (§48 cast lines → §271 route → golden `tale` trace differ).
+
+Full pitfall + architecture writeup (multi-event-in-one-room rules, the Aryll→Grandma
+render pitfall, the single demo-arc-slot bottleneck, the owed WW event-flag namespace):
+`docs/state/ww-interior-host-pitfalls.md`.
+
+**WHOSE TURN:** Foundry → gated REVT re-bake. History → standby for the corrected arc,
+then §273 acceptance.
+
+## §275 GATED ARC STILL OVERLAPS — root is MULT+REVT event-mode entry, NOT staff (History → Foundry, 2026-07-31)
+
+**Test result:** the gated re-bake (STG_00.arc md5 `0e707361…`) loaded and the OOM is
+GONE (History's №90/№91 landed: playerInit CREATE=1, SKIP=5, №91-latch=2, zero
+allocation failures). **But all 6 R_DL01 interiors still render overlapping.** Staff
+scoping did not change the room count.
+
+**Chunk analysis decides it (per-arc DZS chunk entry counts):**
+| arc | MULT | RTBL | REVT | rooms loaded |
+|-----|------|------|------|--------------|
+| pre-revt (WORKS, 1 room)     | **6** | 6 | none | 1 |
+| gated-scoped (overlaps)      | **6** | 6 | 2    | 6 |
+| old 6-room (overlaps)        | **6** | 6 | 2    | 6 |
+
+- `MULT=6` is present in the WORKING 1-room arc too → the stage always defines a
+  6-room stitched multi-group; **gameplay entry ignores it and loads only the arrival
+  room.** The 6 MULT entries stitch at overlapping coords (that IS the pile-up when
+  co-loaded).
+- The ONLY chunk that changed is **REVT (none → 2).** REVT presence flips the stage
+  into **event-mode entry**, which loads the FULL MULT group → all 6 rooms render.
+- **The tale event never fires** — no `§273` markers, trigger gate holds. The all-room
+  load happens at **stage-entry**, before/independent of any tale trigger. So neither
+  staff-scoping nor the §273 wire-gate can address it: the culprit is whatever engages
+  event-mode on plain arrival — almost certainly the donor **replay-switch (REVT id 0)**
+  you kept intact.
+
+**FOUNDRY ASK (two ways, pick one):**
+1. **Author the REVT with NO stage-entry / auto / replay event.** The tale events must be
+   purely trigger-ordered (History's §273 `dExtWw_setPendingTaleDemo` path). Any donor
+   replay-switch / entry event (id 0) must be dropped or made inert for the host so plain
+   R_DL01 arrival never engages event-mode. (Cleanest if the switch is droppable.)
+2. **OR trim the host MULT group to room 0 (1 entry).** Then even if event-mode engages,
+   only room 0 loads/stitches — rooms 1–5 can't co-render. This is the mod's own
+   STG_00.arc (not vanilla TP), and the WW host only uses room 0, so trimming is safe and
+   robust. Recommended as defense-in-depth even alongside option 1.
+
+**History interim:** reverted `STG_00.arc` → `pre-revt-bak` (1 room, md5 `68b40b2f…`,
+playable, tale frozen). Your gated arc preserved as `STG_00.arc.gated-scoped-bak`.
+Chunk-count method + arc backups documented in `docs/state/ww-interior-host-pitfalls.md`.
+
+**WHOSE TURN:** Foundry → REVT-entry-inert AND/OR MULT-trim-to-room-0 re-bake. History →
+re-point + §273 acceptance (both my OOM protections stay live).
+
+## §276 MULT-trim fixed OVERLAP but not the LOAD — durable fix = trim the empty rooms (History → Foundry, 2026-07-31)
+
+The MULT-trim arc (md5 `1b19479c`, MULT=1/REVT=2 verified) **stopped the visual overlap**
+but the interior **crashed on entry (heap OOM again)**. MULT controls RENDER, not LOAD —
+all 6 rooms still spawn their actors. Evidence across three loads:
+
+| load | extra rooms (R01–05) | player CREATE | OOM |
+|------|----------------------|---------------|-----|
+| pre-revt (1 room)      | 0 | 1 | no |
+| gated (MULT=6)         | 5 | 1 | no (barely) |
+| MULT-trim (MULT=1)     | 5 | **2** | **YES** |
+
+- The 6-room actor load is **over the heap budget** — the gated run barely survived at
+  CREATE=1; the MULT-trim run tipped over, pushed by a **2nd player** (a №85 stale-clear
+  misfire on the event-mode triple room-0 decode). The 24×24 texObj "loop" is a red
+  herring — the clean 1-room load has MORE of them (918) and never OOMs.
+- **History fixed the 2nd player (№92):** the stale-clear now respects a "player
+  established this arrival" latch → CREATE back to 1. Built green. This alone may let the
+  MULT-trim arc squeak in (matching the gated run's survival) — user is testing now — but
+  it is HEAP-MARGINAL, not robust.
+
+**DURABLE FIX — trim the host room SET to room 0.** Rooms 1–5 are 288-byte **empty
+placeholder** arcs (R01_00.arc … R05_00.arc, TP template leftovers; room.dzr is 68 bytes,
+near-empty). The WW host uses only room 0. Trimming the stage to a single defined room
+(RTBL 6→1, drop the 5 placeholder rooms + their EXT_BG2–6 room-lane registrations) means
+event-mode has nothing but room 0 to load — the interior loads exactly like the clean
+pre-revt arc BUT keeps the REVT, so the tale works. This is the LAST host-hardening step:
+**staff-scope + MULT-trim + room-set-trim + REVT** = a host that can't overlap, can't
+over-load, and still runs its gated event. Confirm rooms 1–5 hold no WW content before
+trimming (the 288-byte size says they don't).
+
+**WHOSE TURN:** History → user testing №92 on the MULT-trim arc; if it still OOMs I revert
+to pre-revt to keep it playable. Foundry → room-set-trim re-bake (the durable fix).
+
+## §277 ROOT CAUSE FOUND — the REVT bake CORRUPTS the RTBL (History → Foundry, 2026-07-31)
+
+**Definitive, with a runtime probe.** Residency is decided ONLY by `loadRoom(RTBL[arrivalRoom], true)` looping the arrival room's roomRead row (proven: MULT/REVT/events never create room procs). History added a probe (№93) that logs the exact row the engine reads. On the delivered arc:
+
+```
+№93 stage-entry RTBL row — WW host 'R_DL01' arrival=0 count=128
+bytes=[00 00 01 02 80 ff ff 0c  00 00 01 03 80 ff ff 04  00 00 01 04 01 00 00 00
+       00 00 01 05 c0 c1 c2 c3 c4 c5  00 00 ...]
+```
+
+- Room 0's roomRead row reports **`num=128` (0x80)** with **garbage bytes** — a single-room
+  interior's row must be `num=1, bytes=[0x80]`. The repeating `00 00 01 0X 80 ff ff 0Y`
+  shape is `roomRead_data_class` STRUCT data (num/f1/f2/pad/ptr) being read as room-index
+  bytes → **the baked RTBL's internal offsets/pointers are wrong** (m_rooms pointing into
+  the entries array, or the chunk's offset base miscomputed on re-emit).
+- The garbage decodes to random room indices (1,2,3,4,5 and 63 from the `0xff` bytes) →
+  that is the §274 overlap. The same corrupt table then fails `stayRoomCheck`, so room 0
+  gets torn down after load → **Link + Grandma fall through the floor** (collision loaded
+  then unloaded — user-confirmed this run).
+
+**This is why nothing arc-side worked:** MULT-trim (§276) touched render, not residency;
+staff-scope (§275) touched the event-run side. The load defect is the **RTBL chunk**, and
+the REVT bake is what introduces it — the pre-revt arc's RTBL is clean (loads 1 room,
+collision intact). The +REVT re-emit mangles RTBL.
+
+**FOUNDRY ASK — fix the bake tool's DZS re-emission of the RTBL (roomRead) chunk.** When
+adding the REVT chunk, the tool must preserve the RTBL bytes/offsets byte-exactly (room 0's
+row = `num=1`, `m_rooms=[0x80]`, correct internal pointer). Verify by re-running History's
+№93 probe after the bake: room 0 must log `count=1 bytes=[80]`. Likely the re-emit is
+recomputing/relocating chunk offsets and getting RTBL's `m_entries`/`m_rooms` pointers wrong.
+
+**History interim:** reverted `STG_00.arc` → `pre-revt-bak` (clean RTBL, md5 `68b40b2f…`,
+collision works, tale frozen). Engine belts kept & inert on the clean arc: №90/№91/№92
+(player OOM/dup), №93 (WW-host single-room clamp + the RTBL probe that found this). The
+clamp fixes overlap but CANNOT repair a corrupt RTBL's teardown — the data must be fixed.
+
+**WHOSE TURN:** Foundry → RTBL-preserving REVT re-bake (probe must show room0 count=1). History
+→ re-point + re-run §273 acceptance; also holding a note on the tale firing pre-ladder
+(trigger position) for after the arc is clean.
+
+### §277 CONFIRMED via A/B probe (History, 2026-07-31)
+Clean pre-revt arc re-run: `№93 stage-entry RTBL row — WW host 'R_DL01' arrival=0 count=1 bytes=[c0]`.
+So: clean arc = room0 row `count=1`; baked arc = `count=128` garbage. Same probe, two arcs —
+direct proof the REVT bake corrupts RTBL. Clean arc is stable (1 room, collision OK, no OOM).
+Trigger side verified working on it: `[Ba1Tale] §266 orderOtherEventId evn='tale_1' idx=771 -> 1`
+(accepted) → but `§50 demo START (frame 0)` → `ENDED frame 0 TRUNCATION` = no tale.stb (no REVT
+on this arc), so the demo is empty and never fades. Foundry's RTBL-preserving REVT re-bake is the
+last piece: it supplies tale.stb AND must keep room0 `count=1` (re-run the probe to verify).
+
+## §278 STB RESIDENT + DOUBLES READY, but tale.stb never reaches the demo control (History → Foundry, 2026-07-31)
+
+Big progress on the clean RTBL arc (№93 count=1 confirmed in-game). History closed the two
+"disabled-mount" provisioning gaps on ba1's own order path:
+- **§278** — ensure Demo01 resident + retarget demo-arc name + verify `getStbDemoData('tale.stb')`
+  before ba1 orders. Log confirms: `tale storyboard 'tale.stb' resident … demoArc='Demo01'`.
+- **§278b** — pre-spawn the demo doubles d_act0/2/3 (§175) before order. Log confirms
+  `§175 pre-spawn d_act0/2/3 (paused until bind)` + `doubles ready`.
+
+ba1 then orders and the demo starts: `§266 orderOtherEventId 'tale_1' idx=771 -> 1` → `§50 demo
+START (frame 0)`. **But it hangs at frame 0 and never plays:**
+- NO `getStbDemoData` fetch after the order, NO cut dispatch (`cut_move_START_TALE1` never runs),
+  NO `§273` path, and **JSGFindObject is never called** for the tale cast.
+- `§52 demo read-back 'NPC_LAMP' demoActorID=0 actor=NONE` every frame; `§271 route -> WW_DEMO00`
+  fires 0 times; `forward()` returns 0 so `m_frame` stays 0.
+- The Demo02/awake OPENING on the same build DOES call JSGFindObject and advance — so the demo
+  system works; only the **tale** never feeds its STB into the JStudio control.
+
+**Diagnosis:** `orderOtherEventId('tale_1')` is NOT triggering the storyboard→control load. Per the
+event-gating research, TP loads an STB via `setStartDemo(mapToolID)` → `getEventName` →
+`orderStartDemo` → the REVT event's **PACKAGE staff** loads the .stb — not via `orderOtherEventId`.
+So the demo shell starts but has no storyboard driving it.
+
+**FOUNDRY — two questions only you can answer from the bake:**
+1. Does the baked `tale_1` (event_list + REVT id) carry the **PACKAGE staff** that loads `tale.stb`,
+   or does the STB load only happen on the `setStartDemo`/REVT trigger path?
+2. Should ba1 trigger the tale via **`setStartDemo`/`evmng_startDemo(REVT id)`** (the §273 wire,
+   which uses the REVT chain) rather than `orderOtherEventId('tale_1')`? If so, which REVT id, and
+   how do we avoid the id-0 door-camera-probe collision you flagged?
+
+This is the Phase-2 STB cast-hang the doc always pointed at — now with the arc + doubles
+prerequisites PROVEN satisfied, so the golden-`tale`-trace differ should isolate exactly where our
+control diverges from the real WW tale (does the real one enter via setStartDemo? load via PACKAGE?).
+
+**WHOSE TURN:** Foundry → confirm the STB-load path (PACKAGE staff vs setStartDemo) + golden-trace
+differ. History → once told the correct trigger, re-wire ba1's tale order to it (the §273 REVT path
+is already built). §278/§278b stay (correct prerequisites regardless of trigger path).
+
+## §280 ROOT CONFIRMED by 10-hypothesis probe — tale_1 has NO PACKAGE staff (History → Foundry, 2026-07-31)
+
+History instrumented the demo control with a 10-hypothesis probe (§279) at `dDemo_c::start`
+and `dDemo_c::update`. One run, definitive — **H1**:
+- `§279 START` fires ONLY for the opening (`stage='F_SP102' parseOK=1`) — **never for the tale**.
+- `§279 update stage='R_DL01' m_frame=0 m_mode=0 m_data_null=1 branch_null=1 THPwait=0 suspend=0`
+  every frame → the JStudio control never receives a storyboard; update() no-ops on `m_data==NULL`.
+- `[PACKAGE] PLAY` NEVER logs. `dDemo_c::start(tale.stb)` is called ONLY by an event's **PACKAGE
+  staff PLAY cut** (`d_event_data.cpp:1274-1319`: `getMyStringP(staffId,"FileName")` →
+  `getStbDemoData` → `dDemo_c::start`). No PACKAGE staff runs for the tale → no demo.
+
+**Root:** ba1 orders **`tale_1`** (event_list idx 3, staff `{Ba1,CAMERA,Link}`) — which has **no
+PACKAGE staff** — so the storyboard is never loaded/parsed/played. §278 (Demo01+tale.stb resident)
+and §278b (d_act0/2/3 doubles) are PROVEN satisfied; the gap is the event definition itself.
+
+**FOUNDRY — minimal bake fix (either):**
+1. **Add a PACKAGE staff to `tale_1` (and `tale_2`)** in the event_list: `FileName="tale.stb"`
+   (`tale_2.stb`), `Stage="LinkRM"` (the R_DL01 alias is already handled at d_event_data.cpp:1305),
+   optional `OffsetPos`/`OffsetAngY`. Then ba1's EXISTING order plays the storyboard — no code
+   change. This matches the working `TALE_DEMO`/awake events, which have PACKAGE. **Preferred:
+   minimal, keeps ba1's native flow.**
+2. OR confirm ba1 should instead TRIGGER `TALE_DEMO` (REVT id 0, already has PACKAGE) via the
+   `setStartDemo`/REVT path (§273 `evmng_startDemo`). If so, History re-wires ba1's tale order to
+   the REVT trigger — but that needs ba1 state-machine surgery + your word on the id-0 probe safety.
+   Prefer (1) unless `tale_1` is meant to be retired in favour of `TALE_DEMO`.
+
+Which is authoritative — is `tale_1` supposed to carry PACKAGE (own storyboard), or is `TALE_DEMO`
+the real storyboard event and `tale_1` just ba1's cut-participation stub? The golden-`tale`-trace
+shows whether the real WW tale runs one event with PACKAGE+Ba1+CAMERA+Link (→ fix 1).
+
+**WHOSE TURN:** Foundry → add PACKAGE staff to tale_1/tale_2 (or ruling on TALE_DEMO). History →
+§279 probe stays until a demo plays; strip after. §278/§278b stay (correct prerequisites).
+
+## §286 TALE PLAYS but the EVENT never finishes — finishCheck() stuck on tale_1's end-flags (History → Foundry, 2026-07-31)
+
+MASSIVE progress: on the clean arc, the tale plays end-to-end — `[PACKAGE] PLAY … stb=OK`,
+`§279 START parseOK=1`, camera drives (§281 forceDemoCam for tale_1), all 12 native DN-4
+dialogue lines, models animate, and the DEMO ends cleanly (`§282 mode2 → dDemo_c::end()`,
+demoMode=0, suspend=0, field_0x7=0xff single event). **But control never returns — Link
+stranded.** A 5-build, 10-hypothesis probe chain (§282 demo-end, §284 ba1 cut, §284b endCheck,
+§285 event-status) nailed it:
+
+- `§285 mEventStatus=1 isEnableNextStage=0` forever — NOT a stage-change block (the old
+  setNextStage warp theory is dead; that path (`privateCut`/`cut_move_START_TALE1`) isn't even
+  called — `mEventCut.cutProc()` returns TRUE, so §284 never logged).
+- The event never advances 1→5. Status 5 (→ endProc → demoEnd → cancelStaff → control returns)
+  requires `chkEventFlag(8)`, set only by `dEvt_control_c::reset()` (d_event.cpp:733/744), which
+  is gated by **`event->finishCheck()`** (d_event_manager.cpp:705).
+- **`dEvDtEvent_c::finishCheck()`** (d_event_data.cpp:380) returns 1 only when ALL of the event's
+  `mFlags[0..2]` are set (`dEvDtFlagCheck`). For tale_1 it returns 0 → the whole teardown block
+  (incl. reset()@794) never runs → stuck at status 1.
+
+**ROOT: tale_1's event end-flags (`mFlags`) never all get set**, so `finishCheck()` never passes.
+The demo ended clean; the EVENT's completion accounting is the gap. awake/TALE_DEMO finish because
+their staff set the flags their event `mFlags` require.
+
+**FOUNDRY ASK — reconcile tale_1's end-flag accounting** (event-data bake): compare tale_1's event
+header `mFlags` + each staff's authored `EventFlag` against a working end-to-end event (awake, or
+TALE_DEMO which the mount ran to completion). When Foundry added tale_1's PACKAGE staff (§280),
+the event's `mFlags` (and/or a staff's completion `EventFlag`) likely weren't updated to include
+the flag that signals "this event is done" — so `finishCheck()` can never reach all-set. Fix so
+that when the tale's staff complete, all `mFlags` set → finishCheck → reset → teardown.
+
+Diagnostic anchors: gate `d_event.cpp:1038` (status5 + !nextStage), finish flag `d_event.cpp:733`,
+finishCheck `d_event_data.cpp:380`, event-end processing `d_event_manager.cpp:705-795`.
+
+**History interim:** all fixes stay (§278 arc, §278b doubles, §280 PACKAGE, §281 camera/clothes,
+§283 warp-removal). Probes (§279/§282/§284/§285) stay until the event finishes; strip after.
+NO force-finish bridge added — the native path is tale_1's flags, which is yours to bake.
+
+**WHOSE TURN:** Foundry → reconcile tale_1 end-flags so finishCheck passes. History → verify with
+§285 (mEventStatus should reach 5 → teardown), then fade-in/out polish + strip probes.
+
+### §286 addendum — the fade AND the finish are likely ONE missing-staff root (History, 2026-07-31)
+Strong hypothesis: tale_1 being a partial clone (got PACKAGE §280, but not the rest of a working
+event's staff) explains BOTH open symptoms with one cause. awake/TALE_DEMO carry DIRECTOR FADE cuts
+(fade-in + fade-out) AND the staff/cut whose completion sets the event's `mFlags` (finishCheck).
+tale_1 is missing those → no fade AND finishCheck never all-set → no teardown. So the fix is NOT two
+separate patches: complete tale_1's staff set to match a working end-to-end event (DIRECTOR FADE +
+the completion-flag staff), and the fade in/out AND the clean end/return-to-gameplay should ALL land
+together. Foundry: when reconciling, diff the FULL staff list of tale_1 vs awake (or TALE_DEMO), not
+just the flags — the missing DIRECTOR FADE is probably the same gap as the missing mFlag.
+History is adding a §287 probe that logs exactly WHICH mFlag is unset, so the next test pinpoints it.
+
+## §290 FADE via the native DIRECTOR staff (not port-side) — replicable (History → Foundry, 2026-07-31)
+
+Tale now plays + ends + fades-in. The fade-in is currently a PORT-SIDE BRIDGE (§289 in ba1's
+eventOrder: mDoGph_gInf_c::startFadeOut/startFadeIn around the order) and there is NO fade-OUT.
+User flagged the architectural risk: don't leave a reconstruction; use the native subsystem so it
+replicates. Investigated — the native fade subsystem is the **DIRECTOR staff FADE cut**:
+`d_event_data.cpp:909 specialProcDirector → case 'FADE' (:1037)` reads params `Rate` (f32) + `Color`
+(int[4] rgba) → `mDoGph_gInf_c::fadeOut(rate, color)`. Data-authored, per-cut, fully replicable.
+
+Findings:
+- `STBWAIT`/WAIT staff (`specialProc_WaitProc`) does **camera restore only, no black fade** — so the
+  §288 camera chain correctly gave the END + camera-restore, but "STBWAIT = fade-out" was a misread.
+- awake's black fade is PORT-SIDE opening orchestration (awake isn't native), so cloning its CAMERA
+  chain could never carry a black fade — there was none in the STB to carry.
+
+**FOUNDRY ASK — add a DIRECTOR staff (with FADE cuts) to the tale_1 event**, the canonical native
+fade: a FADE cut at cutscene START (fade FROM black → in: Rate + Color=black, with the entry timed
+so the cast snap is hidden) and at END (fade TO black → out: Rate + Color=black), mirroring how any
+native WW event that fades is authored. Params per d_event_data.cpp:1038-1052: `Rate` float,
+`Color` int[4]=r,g,b,a. This drives BOTH fades data-drivenly through the real subsystem → replicable
+for every future hosted cutscene. Add DIRECTOR to tale_1's staff roster (P5b full-roster method).
+
+**History (on delivery):** REMOVE the §289 port-side fade-in bridge — the DIRECTOR FADE supersedes
+it. Until then §289 stays so the fade-in isn't lost. No port-side fade-out will be added; the
+DIRECTOR is the native path.
+
+**WHOSE TURN:** Foundry → add DIRECTOR FADE staff (in + out cuts) to tale_1. History → on delivery,
+delete §289, verify both fades run through specialProcDirector, then strip all probes.
+
+## §291 DIRECTOR fade GATE-TIMING inversion — reveal fires at STB END, not start (History → Foundry, 2026-07-31)
+
+DIRECTOR staff lands and all 4 FADE cuts fire in order — but the reveal is gated wrong, so black
+covers the whole tale. §291 probe (logs each FADE cut that executes, rate sign + live fade rate):
+
+| cut | frame | rate | fadeRateNow | verdict |
+|-----|-------|------|-------------|---------|
+| 1 black-open (ungated) | 7055 (tale START) | +0.03 | 0→1 | correct |
+| 2 REVEAL (waits PLAY 3) | **9455 (demo END)** | −0.02 | 1 | **WRONG — 2400f too late** |
+| 3 black (waits WAIT 9)  | 9518 | +0.05 | 0 | end |
+| 4 reveal (waits STBWAIT 863) | 9541 | −0.05 | 1 | final |
+
+Demo ends 9453; cut-2 reveal fires 9455 — i.e. the reveal waits until the storyboard COMPLETES.
+So cut 1's black sits over the entire ~2400-frame tale; it only reveals at the very end, then the
+end black/reveal pair fires — the "fade plays over the whole tale, then fades back in" symptom.
+
+**Root:** cut 2's gate flag PLAY(3) sets at the PACKAGE PLAY cut's COMPLETION (storyboard end),
+not when it starts rolling. The "reveal once the storyboard rolls" intent needs a **start-of-
+storyboard** gate, not the PLAY-complete flag.
+
+**FOUNDRY ASK — re-gate the reveal cut (FADE −0.02)** so it fires just after the opening black +
+cast snap (storyboard start), e.g. gate it on a flag the PACKAGE sets at PLAY START (not the
+completion flag), or on the CAMERA PAUSE handoff flag, or ungate it with a small fixed lead — match
+whatever awake's reveal actually keys off (its PLAY flag evidently sets early; tale_1's sets late).
+Cuts 1/3/4 timings are fine; only cut 2's gate is inverted. §287 also now waits on 3846 (cut-4
+reveal's flag) as the last finish condition — that's the intended "can't end behind black" and is
+correct; leave it.
+
+**WHOSE TURN:** Foundry → re-gate cut-2 reveal to storyboard-start. History → §291 re-verify (cut 2
+should fire ~frame 7100, right after cut 1), then strip probes.
+
+## §292 letterbox is native-correct; opening FADE ORDER wrong — re-reference, don't prescribe timing (History → Foundry, 2026-07-31)
+
+Probe-first (§292 camera-trim probe) OVERTURNED the expected ferry: the letterbox is ALREADY the
+native eased mechanism — DO NOT touch the CAMERA Trim. `§292 mTrimSize=2` (CINE ease) the whole
+tale, `mTrimHeight` climbs ~0→65 (bars slide in). No Trim=CINE bake needed; it's already CINE.
+
+Real defect = DIRECTOR opening-FADE ORDERING. Correlated §291 (fades) + §292 (letterbox), same run:
+- 6880: §291 cut 1 TO-BLACK (rate 0.03) STARTS.
+- 6893: §292 letterbox height ≈0 — JUST beginning to ease.
+- 6994: letterbox seated (64.99).  7005: §291 cut 2 REVEAL.
+
+So the opening fade-to-black and the letterbox ease **start on the same frame** → bars ease in UNDER
+the fade instead of appearing over the live scene first. User's general flow (NOT a prescriptive
+timing — his words, "better left to native systems determination"): control-lock + letterbox appear
+~together → THEN fade → THEN cutscene. Confirmed non-native on BOTH trigger paths (ladder + 1st
+floor), so it's the sequencing, not the trigger.
+
+**Root:** cut 1 (opening FADE) is UNGATED / demo-frame-0 because it was cloned from **MK_GAMESTART**
+— a TITLE start that begins from a black screen, where an ungated opening fade is correct. The wrong
+REFERENCE is the root, not a wrong constant.
+
+**FOUNDRY ASK (no magic numbers — re-reference, let native gating set the timing):** re-derive the
+tale's OPENING DIRECTOR (+ its interplay with the CAMERA staff) from a **native MID-GAMEPLAY
+cutscene** — one that fades from live gameplay with a letterbox — instead of MK_GAMESTART. Clone
+whatever gate that donor's opening FADE waits on (a camera-settle / commencement flag), so the
+letterbox→fade ordering emerges from the native gate itself, NOT from a hardcoded WAIT/frame count.
+Cuts 2/3/4 are verified correct (§291 re-gate); only cut 1's reference/gate is wrong.
+
+**WHOSE TURN:** Foundry → re-reference cut-1 opening from a mid-gameplay donor (native gate, no
+prescribed delay). History → §291/§292 re-verify (letterbox seats before cut 1 blacks). Trigger
+position (loft vs 1st floor) remains a separate parked item.
+
+## §296 donor two-step re-entrance faults — R_DL01 PLYR lacks the donor's spawn points (History → Foundry, 2026-07-31)
+
+DONOR TWO-STEP RESTORED and firing natively. History fixed the port bug that blocked it (§295:
+dEvent_manager_c::getMyActIdx returned 0 on no-match; the DONOR returns -1 — the port's 0 made
+cutProc swallow ba1's custom START_TALE1 as WAIT, so cut_move never ran). With that, the front half
+is fully donor-native:
+- `§284b … nowCut='START_TALE1'` (cut dispatches), → cut_move_START_TALE1 → `setNextStage(hostStage,
+  0xC8, 0,8,0.0f,0,1,0,0,0,0)` (DONOR ARGS VERBATIM, stage name host-mapped) → the mode-8 wipe OUT
+  fires → `§273 tale pending id 0` → `§273 tale entry startDemo(0)`.
+
+Then it faults on re-entry (handled fatal, not an access violation):
+`Failed to find player start point for next stage! Requested point: 200, Valid points: [0]`
+0xC8 = point 200 (0xCA = 202). Those are the donor's LinkRM re-entrance spawn points; our host
+R_DL01's PLYR only defines point 0.
+
+Native path (no arg-bending): the point stays donor-verbatim; the RECEPTOR carries the donor's
+points. **FOUNDRY ASK — add the donor LinkRM re-entrance spawn points to R_DL01's PLYR: entries at
+point 200 (0xC8) and 202 (0xCA)**, matching the donor's LinkRM PLYR for the tale re-entrance (angle.z
+= the point id, per d_stage.cpp playerInit point-match). Position from the donor's LinkRM PLYR
+verbatim; the STB re-frames anyway, but keep the donor coordinates. Then ba1's donor setNextStage
+resolves and the re-entry lands → §273 wire → TALE_DEMO.
+
+(Note, no fix proposed: cut_move re-fires the warp each frame while mEvTimer sits at 0 — the donor's
+own structure; the port's async transition just lingers a few frames longer before teardown. It
+resolves the instant the transition lands. Donor-consistent; leaving it.)
+
+**WHOSE TURN:** Foundry → add points 200/202 to R_DL01 PLYR (donor LinkRM coords). History → re-run;
+if TALE_DEMO's cast doesn't bind at re-entry I surface (old mount pre-spawned d_act doubles), no
+unasked patch.
+
+## §298 FOUNDRY ASK — golden trace of tale.stb's suspend/message timeline (tale freezes at frame 198) (History → Foundry, 2026-07-31)
+
+TRIGGER IS NOW FULLY NATIVE + THE DEMO PLAYS. §297/§297b landed (History, code only, not yet its own
+bus entry): the §273 pending/poll TRIGGER is deleted — daAlink's own spawn param does it. On re-entry
+at point 200/202 (§296 PLYR), `getStartMode/getStartEvent` (d_a_alink.h:3605/3638) → `evmng_startDemo
+(startEvent)` → `orderStartDemo` (d_a_alink.cpp:5136). The one thing left port-side is demo-arc
+RESIDENCY (the port has no LBNK): §297b kicks `ensureDemoArcResident("Demo01")` at
+`dExtNpcMount_onRoomObjectsReady` (d_s_room.cpp:384, same room-load pass, before actors) so tale.stb
+resolves before the one-shot PACKAGE PLAY cut (d_event_data.cpp:1331). Result, confirmed in-log:
+- `[PACKAGE] PLAY FileName='tale.stb' … demoArc='Demo01' stb=OK` (arc won the race)
+- `§48 JSGFindObject actor='Link' -> FOUND`, `actor='Ba1' -> FOUND` (real cast bound)
+- `§175 tale/opening cam eye=(…)` moving frame-to-frame (the cutscene camera runs)
+- `§279` advances to m_frame ~1117.
+
+NEW BLOCKER — the demo FREEZES at frame 198 and never resumes. §194 probe (getSuspend / getFrame /
+getFrameNoMsg / box status), tail of run:
+`§194 f=1158 fnm=198 gap=960 susp=1 boxSt=1`
+Read: ONE outstanding data-authored suspend (`susp=1`); the JStudio control track keeps running
+(`f`→1158) but the visual/actor timeline is frozen since `fnm=198`; `gap=960` frames held. Crucially
+the message adaptor **`§51 adaptor_do_MESSAGE` NEVER fired for the tale** — so this suspend is UPSTREAM
+of any narration; the demo froze before the message track could deliver. (Downstream, separately, the
+port has no WW demo-message subsystem at all: `getDmsgArchive` is never set — donor loads
+`/res/Msg/dmsgres.arc` at boot, d_s_logo.cpp:876/518 — and substitutes a dialogue catalog via
+`dExtWw_handleDemoMessage`. That's the NEXT layer; the frame-198 suspend blocks before we reach it.)
+
+DONOR CONTRACT (History read, D:\XXXXXXX\WW DP\src): a storyboard message suspends the control; the
+box builds from `getDmsgArchive()`; on player-dismiss `dMesg_closeProc` calls
+`dComIfGp_demo_get()->getControl()->unsuspend(1)` (d_mesg.cpp:2112) — release is owned by the box
+close. The donor SOURCE gives me the contract but NOT what tale.stb itself suspends on at frame 198 or
+where its release lives — that's a data question the source can't answer.
+
+**FOUNDRY ASK (golden trace, instrument-only — no content):** decode **tale.stb** (inside
+`res/object/demo01.arc`, JStudio `JStudio::stb` format) into a command timeline and give me:
+1. Every `suspend`/`unsuspend` command on the CONTROL track — frame + signed amount. Anchor: what
+   suspends at/near frame **198** (the first suspend where our `fnm` freezes)?
+2. That suspend's intended RELEASE: is it a later `unsuspend` track command at frame N, or is it
+   MESSAGE-linked (released only by a box close)?
+3. Every MESSAGE op (the JMSG track, our adaptor's `UNK_0x19`) — frame + message index — so I can see
+   whether a message paragraph sits inside the 198 suspend window (⇒ message-linked, needs the box to
+   show+dismiss) or the release is an unconditional/branch track command (⇒ our control track should
+   have fired it, and something's eating it).
+4. Any BRANCH commands before ~frame 198 (branch type/id) that could route the control past its own
+   unsuspend.
+
+With that timeline I can diff our frozen-at-198 run against the donor's release and name the exact
+missing mechanism — instead of guessing at STB suspend semantics.
+
+**WHOSE TURN:** Foundry → golden-trace tale.stb (suspend/unsuspend/message/branch timeline, esp.
+around frame 198). History → diff our run against it, then surface the native release mechanism (no
+compensating unsuspend authored on my side). §297/§297b + all probes (§194/§279/§285/§292) stay until
+this resolves; strip at acceptance.
+
+---
+
+## §304 — Foundry → History: tale.stb golden trace DELIVERED (§298 answered; the release is 100% message-linked)
+
+**Lane: Foundry (instruments/forensics). Instrument:** `tools/ww_crew_restoration_skeleton/stb_timeline.py`
+(new, read-only, №31-clean) — every parse rule transcribed from the receiver's own processor
+(`TObject::process_sequence_` stb.cpp:190 for opcodes 0=end/1=flag/2=wait/3=branch/4=suspend/0x80=paragraph;
+`TObject_message::do_paragraph` group 0x42 op 0x19 = `setMessageCode`; control block = type `BLOCK_NONE(-1)`
+→ `TObject_control`, stb.cpp:439). Full report: **docs/WW Linked/tale-stb-timeline.md**.
+Provenance: decoded the LIVE staged copy; it is **byte-identical to the donor original**
+(md5 4d254c72e17cc8e7647517a76f1435e1, 2,684 bytes) — the timeline IS donor authoring.
+
+**A1 — control track = nine wait/suspend(1) pairs, then END.** Suspends at control frames
+**29, 95, 149, 240, 270, 294, 383, 568, 668**; END @694. **Nothing suspends at 198.** Nearest below =
+#3 @149, nearest above = #4 @240.
+
+**A2 — release: message-linked box-close, exclusively.** The file authors **ZERO unsuspend and ZERO
+branch ops** — release cannot come from data. The only donor release is your own contract cite:
+`dMesg_closeProc → unsuspend(1)` (d_mesg.cpp:2112). Donor cadence, all nine beats:
+`setMessageCode` → few-frame open lead → `suspend(1)` → player dismisses → box close → `unsuspend(1)`.
+
+**A3 — nine MESSAGE ops (frame → row, paired suspend):** 21→**539**(@29), 74→**540**(@95),
+145→**3095 = 0x0C17, OUTLIER outside the 539-545 tale block**(@149), 198→**541**(@240),
+247→**542**(@270), 272→**547**(second outlier)(@294), 315→**543**(@383), 467→**544**(@568),
+620→**545**(@668). **Frame 198 is not a suspend — it is message row 541, the 4th box; its hold is the
+suspend @240.**
+
+**A4 — branches before ~198: NONE.** Zero type-3 words in the whole file (any track); no flag-ops
+either. tale.stb is straight-line. Nothing can route past a release.
+
+**Diagnostic read for your diff:** with no box ever opening, the first hold is @29 — and since
+`TObject::forward` returns TRUE while suspended, the caller's `m_frame++` keeps ticking during a hold:
+**a logged m_frame of 198 is wall-clock since start, NOT storyboard progress** — one outstanding
+suspend + frozen visuals matches any of the nine holds. Discriminator probe (one build,
+multi-hypothesis): log every `setMessageCode` value as the JMSG adaptor receives it (or its absence)
++ every transition of `mObject_control.getSuspend()`. That names (a) whether the adaptor fires at
+all, (b) WHICH of the nine holds is stuck, (c) whether outlier row **3095** resolves — a box that
+fails to open for 3095 strands suspend #3 @149 with no close ever coming. Post-release beats for
+completeness: d_act2 DATA_ID(4) @675, d_act3 DATA_ID(9) @680 (give/handover), END @694.
+
+**WHOSE TURN:** History → diff the frozen run against this timeline with the discriminator probe,
+then surface the native release (demo-message box pipeline; no compensating unsuspend). Foundry →
+standing by; stb_timeline.py takes any .stb/.arc if you want the same trace for tale_2.stb or
+Ba1_Get_Itm's storyboard.
+
+---
+
+## §305 — Foundry → History: wire ① BUILT (both save-subsystem decisions resolved with receipts; persistence landed, builds green)
+
+**Lane: Foundry.** Your two wire-① blockers were both answerable from the port's own source, so I
+resolved them and built the wire. Compiled + linked green; caches wiped. UNCOMMITTED, awaiting playtest.
+
+**Decision 2 (init() timing) — SAFE, with receipts.** Call-site census of `dComIfGs_init()`
+(→ `dSv_info_c::init()`): SEVEN sites, FIVE are `#if DEBUG`-only (d_a_title.cpp:334, d_s_logo.cpp:764,
+d_s_name.cpp:237+399, d_s_menu.cpp:772). The only retail sites are **file-select open**
+(d_file_select.cpp:275) and the **opening/title play scene** (d_s_play.cpp:1613) — both strictly
+BEFORE any `card_to_memory` (loads happen at d_file_select.cpp:1565/5256/6257, always after the :275
+init). Continue flow = init() → pick file → card_to_memory → play. So reset-in-init +
+restore-in-card_to_memory can never zero a loaded save — it is exactly TP's own data lifecycle.
+
+**Decision 1 (medium) — sidecar CONFIRMED, and the port hands it a clean home.** Your checksum
+finding stands (mSaveBuffer = QUEST_LOG_SIZE*3, no slack; SetCheckSumGameData covers in-slot bytes).
+The file-IO layer you thought was missing already exists: `dusk::io::FileStream`
+(include/dusk/io.hpp) + `dusk::data::base_path_relative()` (src/dusk/data.hpp). Card identity on PC:
+aurora GCI-folder mode at `<data>/<USA|EUR|JAP>/Card A/` with region from `g_gameName[3]`
+(aurora card.cpp:21, 'E'→USA 'P'→EUR 'J'→JAP — mirrored via `dusk::version::getDiskID().gameName[3]`).
+Sidecar: **`<data>/<region>/event_ext.sav`** (№106-clean name) — beside the card, keyed to the same
+region identity, and the region dir is on dusk::data's user-data migration allowlist
+(data.cpp kUserDataDirectories) so it relocates with the card.
+
+**What landed:**
+* `src/dusk/event_ext_store.cpp` (new TU) — one file, header `'WWEV'`+ver, **three 0x100 donor
+  blocks keyed by quest-log dataNum** (same index memory_to_card/card_to_memory use). All entry
+  points exception-walled: any IO failure logs + leaves the TP save flow untouched; missing/corrupt
+  file → donor new-game state (fail-safe on its own magic, exactly your recommendation).
+* `d_ext_save_flags` grew `rawSize/exportRaw/importRaw` (slot-file access; the §303 store/restore
+  single-block wire format remains for embedding use).
+* **Four hooks, receipts in comments at each site:** `dSv_info_c::init()` → `dExtWwSv_reset()`;
+  `memory_to_card` success tail → `storeSlot(dataNum)` (manual save d_menu_save.cpp:1380 AND
+  autosave.cpp:61 both funnel through it — autosave persists donor flags for free);
+  `card_to_memory` success tail → `restoreSlot(dataNum)`; **file-select copy/erase single choke**
+  (d_file_select.cpp:2790–2812) → `eraseSlot(mSelectNum)` / `copySlot(mCpDataNum, mCpDataToNum)` —
+  slot copy/erase would otherwise desync the sidecar; both ops mirror now.
+
+**Acceptance test for persistence (post-tale):** play tale → 0x2A20 set (ba1's line 1121 setter) →
+save → quit to title (init() resets block) → continue same file → `dComIfGs_isEventBit(0x2A20)` in
+the routed TU must read TRUE (restored from sidecar). Erase/copy a file in file-select and the
+sidecar slot follows. Delete `event_ext.sav` → all slots read donor new-game (fail-safe, TP save
+untouched).
+
+**WHOSE TURN:** History → playtest acceptance #1 (in-session, wire ② already live) + the
+persistence loop above; then back to the frame-198 discriminator probe (§304). Foundry → standing by.
+
+---
+
+## §305b — Foundry audit addendum (user challenge): why the TP save TUs were touched, and the ill-effect analysis
+
+**Q1 — why was touching the TP save system necessary at all?**
+Because the covenant for the flag namespace is the donor's own semantics: *"256 bytes that live and
+die with the save slot."* Slot lifecycle — load, store, erase, copy, new-game reset — is OWNED by
+`dSv_info_c` and the file-select. There is no way to key data to a quest-log slot without observing
+that lifecycle; a block that ignores it either leaks donor state across save files or loses it on
+continue — both content corruption from the player's view. The alternatives were all worse:
+* **In-card storage** — actually modifies TP save DATA (layout/checksum domain). Rejected (History's
+  own finding, §305 decision 1).
+* **Hooking the callers instead** (d_menu_save, autosave, 3 file-select load sites) — five-plus
+  scattered sites vs two function tails, and silently misses any future caller. The tails of
+  `memory_to_card`/`card_to_memory` are the choke every current AND future save/load path funnels
+  through — hooking there is the *minimum-surface* choice, not the invasive one.
+* **Not persisting** — donor flags reset every session; post-tale Grandma reverts on every continue.
+Precedent: these exact TUs are already port-extended (autosave writes through `memory_to_card`;
+d_save.cpp already carries dusk/ALBW extensions). This is the established extension pattern.
+
+**Q2 — are we SURE about ill effects? Here is the honest audit.**
+What the hooks CANNOT do, by construction:
+* **Corrupt save data** — no hook reads or writes `mSaveData`, the card buffer, any TP struct, or a
+  checksum. The card image produced with the feature is BYTE-IDENTICAL to one produced without it.
+  Remove `event_ext.sav` and every TP save loads exactly as before.
+* **Block or alter the save flow** — every sidecar entry point is exception-walled; any IO failure
+  logs a warning and returns. The fail direction is always "donor flags fall back to new-game
+  state," never "TP save affected." The hooks are append-only calls at success tails; the TP code
+  path around them is unchanged, including every early-return.
+* **Perturb timing** — the sidecar is one 776-byte file touched only at save/store/load/copy/erase
+  moments, which already do orders-of-magnitude larger IO on the same thread.
+
+Residual (content-level, not corruption — named honestly):
+1. **Out-of-band card swaps.** If a user swaps in a Card A gci from another install, the sidecar can
+   be stale for that TP save → wrong donor flags (e.g., tale marked done). Same class as any external
+   save manipulation; self-corrects on the next save. TP data unaffected.
+2. **Death-continue — VERIFIED CLOSED.** `getSave`/`putSave` move only per-stage temp memory
+   (d_save.cpp:1593/1598), not event bits: TP's own event flags set since the last save also survive
+   a death-continue. The donor block rides the identical lifecycle — no asymmetry.
+3. **The catch blocks** rely on MSVC catching without /EHsc (project-wide C4530 condition,
+   same pattern as dusk/data.cpp). Precedent-consistent; flagging for completeness.
+
+Net: the save SYSTEM's lifecycle is observed at 4 choke points; the save DATA is untouched and
+byte-identical. The playtest acceptance loop in §305 exercises all four hooks.
+
+## §307 FOUNDRY ASK — pivot to the native WW dMesg subsystem for ALL WW areas (retire the §201 reconstruction) (History → Foundry, 2026-07-31)
+
+DECISION (user greenlit): stop reconstructing WW demo dialogue on top of TP's box and go NATIVE WW
+`dMesg` for WW areas only — TP areas stay on TP's `dMsgObject`, untouched. This retires the §201/§193
+step-in-step flow (dMsgObject + WW-Crew catalog text + hand-rolled `mountPaginate`/page-feeding).
+
+WHY (the §201 bridge has failed three distinct ways, all intermittent):
+1. box parks at `fopMsg_MODE_MSG_END_e` (0x10) but the flow's "page done" test is `st <= 1`
+   (d_ext_npc_mount.cpp:6639) → it never sees the close → demo suspended forever, box gone, Link loose;
+2. the fukiKind-9 clothes-get ITEM box intermittently drops `event_runCheck` → event ends mid-tale;
+3. earlier: multi-page truncation / auto-advance races (the reason §193 exists at all).
+These are GLUE races inherent to polling TP's box status + manually feeding pages. Native `dMesg` owns
+its own state machine and its own `suspend`/`unsuspend` (`dMesg_closeProc → unsuspend(1)`,
+d_mesg.cpp:2112) — the whole polling apparatus disappears, so the whole class disappears BY
+CONSTRUCTION. (Donor subsystem already mapped in §298/§304: `getDmsgArchive()` set at boot,
+`hukidashi_d00.blo` box, `dMesg_tControl` + `JStudio_JMessage`.)
+
+SCOPE HONESTY (told the user verbatim): native `dMesg` DEFINITIVELY kills the message-flow/pagination
+class. The control-lock symptom (Link free) lives in a SEPARATE layer (`daAlink` event-lock,
+d_a_alink.cpp:10227) — assessed as downstream of the stuck flow, so very likely resolved, but it is a
+BRING-UP VERIFY item, not a guarantee. New integration surface (assets + BLO/font into the port's J2D)
+carries its own risk; we accept it as the cleaner architecture.
+
+LANE SPLIT — this ask is ASSETS + a decode (Foundry); the subsystem WIRING is History.
+
+**FOUNDRY ASK:**
+1. **Stage `dmsgres.arc`** (WW `/res/Msg/dmsgres.arc`) into the port — the demo-message resource:
+   `hukidashi_d00.blo` (+ `hukidashi_d09.blo`) box layouts and whatever demo font/timg it carries.
+   №106-compliant path (no "ww" in the shipping filename).
+2. **Stage the WW demo-message TEXT archive** (the `.bmg`/zmsg the demo rows resolve against) and give
+   me the **message-ID → text mapping** for the tale rows from your §304 trace: **539–545, 547**, plus
+   the item-get **3095 / 4410** (Hero's Clothes get / already-have). Confirm whether these live in
+   `dmsgres.arc` itself or a separate message archive (`msgres.arc`/`zmsg`), and the index base
+   (are 539… raw `.bmg` indices, or offset).
+3. **A structure decode** (same spirit as the §304 golden trace) of `dmsgres.arc` + the text archive:
+   BLO pane names History must bind, the font/timg reference, and the `.bmg` header/format — enough to
+   wire `dMesg`'s `SequenceProcessor`/`MeasureProcessor`/`RenderingProcessor` against real data.
+4. Flag any WW font dependency not already resident in the port (demo font vs. the TP font).
+
+**HISTORY WILL WIRE (once assets land):** `dComIfGp_setDmsgArchive` at boot (the d_s_logo.cpp:518/876
+pattern), the `dMesg` subsystem (`dMesg_tControl` + `JStudio_JMessage` + the three processors) rendered
+through the port's J2D, and a **WW-area gate** (`dExtWwSave_isWwHostStage` → route demo dialogue to
+`dMesg`; everything else stays on `dMsgObject`). Then retire §201 for the **tale first as the proof**,
+then extend to the other WW demo areas.
+
+ADJACENT (flagged, NOT in this ask): regular WW NPC talk (Aryll/postbox, currently TP box + catalog via
+§256) is the PARALLEL system — WW `d_msg` (`hukidashi_00.blo` / `getMsgArchive` / `msgres.arc`). Same
+pattern, different archive. If "all WW areas" is meant to include those, it's a follow-on ask once the
+demo path proves out; not scoping it here.
+
+**WHOSE TURN:** Foundry → stage `dmsgres.arc` + the demo text archive + the row→text mapping + a
+structure decode (items 1–4). History → wire the `dMesg` subsystem + WW-area gate, retire §201 on the
+tale as first proof, verify the control-lock during bring-up, then roll to the other WW demo areas.
+Probe stack (§305/§194/§279/§285/§287/§282/§292/§266/§297b/§306) stays until the native path is proven;
+strip at acceptance.
+
+---
+
+## §308 — Foundry → History: §307 asset census + decode DELIVERED (six arcs staged; STB codes are BMG IDs, not indices)
+
+**Lane: Foundry.** Full decode: **docs/WW Linked/dmsg-native-decode.md**. Row TSV (game text) is
+OUTSIDE the repo at `ww-arc-staging/zel_00_rows.tsv` (content-neutrality wall). Highlights:
+
+**Staged, donor-verbatim, md5-receipted, live in `model_replacements/WW-Crew-Restoration/arcs/`:**
+`dmsgres.arc` (both hukidashi BLOs + 5 BTIs), `bmgres.arc` (zel_00.bmg — ALL text, 4,411 entries),
+`bmgresh.arc` (zel_01 Hylian variants — dMesg_parse fetches it unconditionally at d_mesg.cpp:1808,
+so it must be resident even though the tale never uses it), `fontres.arc`
+(**rock_24_20_4i_usa.bfn** = main text font), `rubyres.arc` (**hyrule.bfn** = US ruby font —
+dMsg_Create ASSERTS it non-NULL at :2223 even when unused), `menures.arc` (font_00.bti +
+font_07_02.bti for the outfont A-prompt, + key.bti the d09 item pane placeholder). Neither WW .bfn
+is resident in the port today — both staged. №106-clean (donor names).
+
+**THE INDEX-BASE ANSWER: STB `setMessageCode` values are BMG MESSAGE IDS, not row indices.**
+zel_00.bmg INF1 = 24-byte entries, text offset u32 @+0, **id u16 @+4**; `getMessageEntry(code)`
+resolves by id. Receipt: id 539 sits at INF1 index 2001. All §304 codes verified against real text:
+539/540/541/542/543/544/545/547 = the tale beats in order, and **3095 = "You got the Hero's
+Clothes!" — the §304 outlier is the ITEM-GET box** (switches to the d09 screen; fukiKind 9 ↔
+hukidashi_d09 — your clothes-get bug surface, now data-explained). **4410 caution:** by ID it's
+"...How could it be?" (NOT item-get); the second-quest clothes-get is **id 156** (INF1 index 4410 —
+likely where "4410" came from). Verify against tale_2.stb's MESSAGE ops with stb_timeline.py before
+wiring "4410" anywhere.
+
+**Pane-binding contract (donor source, both screens):** d00 talk box binds `ms00` (body,
+setWhite/setBlack tint), `tx02/txt0` main text + `tx03/tx01` shadow rows (hidden on getOptRuby,
+offsetY −4), `yz00` arrow, `dt00` dot (d_mesg.cpp:1337-1362). d09 item-get box binds the `*90`
+family + `item` (runtime texture swap: `dItem_data::getTexture(msgEntry.mMsgNo − 101)` from
+ItemIconArchive into an 0xC00 TIMG buffer, :1537-1543 — the BMG entry carries the item number),
+`rin1` ring + `lig1-8` rays. Boot mounts: dmsgres aramMount d_s_logo:876, bmgres onMemMount :885
+(PAL: `/res/Msg/data%d/` by PalLanguage :882), bmgresh :889.
+
+**Two integration-surface flags (your named risk area):** (1) d00's first PIC1 references
+**`back.bti`, which does not exist anywhere in the donor tree** — the donor ships it unresolved and
+tolerates it; the port's J2D must not assert on a missing named texture. (2) The outfont BTIs
+resolve BY NAME via global archive search (J2DPicture("font_07_02.bti"), :52) — menures.arc staged
+so the lookup lands, but the port's mount must be in the search path.
+
+**Hylian check is a non-issue for the tale:** dMesg_hyrule_language_check (:1865) covers
+0x3A3-0x3AE… (Deku/Jabun/Valoo) and clears after first clear — tale ids aren't listed.
+
+**WHOSE TURN:** History → wire setDmsgArchive at boot + the dMesg subsystem through the port's J2D
++ the isWwHostStage gate, prove on the tale, verify the Link control-lock. Foundry → standing by
+(tale_2.stb timeline on request; №106 sweep of any new paths at acceptance).
+
+## §309 History → Foundry: native dMesg M1–M3 LANDED — WW text renders in the port (2026-07-31)
+
+§307/§308 pivot is proven through the render. All six staged arcs load; the native WW box now draws
+real WW text through the port's own J2D. Milestones:
+- **M1** archive residency (d_ext_dmesg.cpp): the 6 arcs latched into module slots (getDmsgArchive +
+  msg/msgH), WW-host-gated, TP MsgDtArchive untouched.
+- **M1b** fonts: rock_24_20_4i_usa.bfn + hyrule.bfn as JUTResFont.
+- **M2** text: manual MESGbmg1 parse. RECEIPT CORRECTION to §308 — the STB setMessageCode value is the
+  DIRECT INF1 index, not a re-mapped id (entry[539] = "I've been waiting for you…"). Foundry's "index
+  2001" was a tool-ordering artifact; getMessageEntry(code)=entry[code], text is plain 1-byte + control
+  codes. (No MID1 section → no id table → index IS the code.)
+- **M3** render: hukidashi_d00.blo drawn via dDlst_blo_c on set2DOpaTop. Two port-specific gotchas
+  Foundry's decode didn't have: (a) the BLO is **Yaz0-compressed** in the arc and getResource does NOT
+  auto-decompress — must decodeSZS first (and decodeSZS(src,dst,param3,param4): param3 is the WRITE
+  length, param4 a SKIP offset — misleadingly named); (b) the BTIs are compressed too → a compressed
+  BTI reads a garbage size → CreateTexture(-1) GPU crash. M3 currently hides the picture panes (text-
+  only proof); BTI art is M3b.
+
+Remaining (History): **M3b** decompress the 5 BTIs + changeTexture → un-hide (full bubble art); **M4**
+JStudio_JMessage adaptor → drive from the demo (suspend/release); **M5** the isWwHostStage gate + the
+user-facing {Reconstructed TP / Native WW} setting (LoP-HUD pattern the user requested — §201 stays as
+a toggle, not retired) + the small §201 closed-check fix so both options are reliable; **M6** verify the
+control-lock. Temporary J2DScreen.cpp diagnostics (g_j2dLastFailTag/SigTag) strip at acceptance.
+
+WHOSE TURN: History → M3b (bubble art) then M4. No Foundry action needed; the assets were complete.
+
+## §310 FOUNDRY ASK — native dMesg is rendering, but 3 things rest on History's reconstruction, not WW's own systems: (a) the box FONT METRICS, (b) the pagination-symbol ANIMATION, (c) the get-item ICON source (History → Foundry, 2026-08-01)
+
+Landed since §309 (History, `d_ext_dmesg.cpp`): **M3b** all 5 BTIs decompressed + arted; **M4** demo adaptor drives the box text from the storyboard beat; **M4b** the box is a real renderer owning show/hide + A/B advance + the STB `unsuspend(1)` on final-page dismiss (the donor `dMesg_closeProc:2112` contract), with Native the sole suspend owner (§201 TP box + owe-resume suppressed in that mode); **M4c** a faithful port of `dMesg_tSequenceProcessor`'s byte walk — consumes `0x1A` tags by size, honors authored `0x0A`/`0x00`, substitutes the player-name + out-font-digit tags, splits every `linemax=4` authored lines into a page, drives arrow(more)/dot(last); **M5** the `{Reconstructed / Native}` user setting (LoP-HUD pattern). **Colour** landed cleanly (system tag `0xFF/0` → the port's `\x1BCC[]/GC[]` escape + WW's 9-entry palette). Text now paginates and fits.
+
+**The problem the user flagged (correctly): three parts of this still rest on History's reconstruction/tuning, when WW's OWN systems should be determining them. Where a native mechanism should drive a value and nothing does, that is a STAGING/DECODE gap, not a number for History to pick. Three asks:**
+
+### (a) The box FONT METRICS must come from WW's HIO, not a History constant
+M4c currently hard-sets the text panes to **font 25 / char-space 0 / line-space 30** in `dExtDmesg_bindText`. Those are the WW `g_msgHIO` (`dMeter_msg_HIO_c`) retail defaults I read straight from the decomp — `field_0x70 = DEMO_SELECT(0x19,0x17)` (d_meter.cpp:427), `field_0x5a=0` (:380), `field_0x5e=0x1e` (:382). WW applies them every frame in `dMesg_screenData_c::setCommonData` (d_mesg.cpp:1170-1181): `setFontSize(g_msgHIO.field_0x70)`, `setCharSpace(field_0x5a)`, `setLineSpace(field_0x5e)`. So the value is right, but the SOURCE is a copy-paste from me — a bridge. **Without this override the `.blo` baked pane size renders too big → authored lines overflow the 486px box → J2DTextBox auto-wraps mid-word + spills a 5th line.** So SOMETHING must drive these metrics; right now it's History.
+
+Questions for Foundry:
+1. Is the port's `g_msgHIO` (it exists — TP's `dMeter_msg_HIO_c`) carrying the **WW** dialogue metrics, or **TP's**? If TP's differ from `0x19/0/0x1e`, reading `g_msgHIO` directly would give the wrong (TP) size — which is likely why the box needed an explicit set at all. Does WW ship a distinct dialogue-HIO the port doesn't have?
+2. The truer path is to run the **native `dMesg_screenData_c::setCommonData`** (or its port equivalent) so the metrics come from WW's HIO, not a literal. Is that path portable onto the staged box, or is the WW HIO instance/data one of the things NOT staged?
+3. Or: does `hukidashi_d00.blo`'s own text pane already encode the intended font size, and the bug is simply that WW *overrides* it at runtime while History reads the baked value? If the baked value is authoritative, why does it read oversized?
+   → **Deliverable wanted: the authoritative WW source for {font size, char space, line space, ruby size} and confirmation whether it's already resident in the port or needs staging.** Then History reads it instead of the constant.
+
+### (b) Pagination symbols — ANIMATION + tag-driven subsystems
+History currently show/hide-s the arrow (`yz00`) and close-dot (`dt00`) as static panes by page position. WW **animates** them: `arwAnimeInit`/`arwAnime` (bouncy scale table, d_mesg.cpp:1231) and `dotAnimeInit`/`dotAnime` (colour pulse, :1284). Static panes read as "placed but dead."
+- Is the arrow/dot animation **data** (the scale/colour tables, or a `.bck`/`.brk` on the pane) staged in `dmsgres`, or is it code-only (History ports `arwAnime`/`dotAnime` math)?
+- Confirm the full symbol BTI set is staged: `yazirushi_00_d.bti` + `dot_02_d.bti` are in (arted). `back.bti` is referenced by `d00` but exists nowhere (§308 §4) — confirm it's genuinely unused, not a missing stage.
+- Tags M4c currently **consumes but does not act on**, because the subsystems they drive may not be wired for the WW box: font-size (`0xFF/1,6`), ruby (`0xFF/2`), **timed-wait/auto-close** (`0/4`, `0/7` → `mStopFlag=2`/`mWaitRest`), **message SE** (group `1` → `mDoAud_messageSePlay`), **mesg camera** (group `2`), **mesg anime** (group `3`). For the tale specifically: does `tale.stb`'s message text carry group-1/2/3 tags (SE/camera/anime) that should fire, and are those sinks (`dComIfGp_setMesgCameraTagInfo` etc.) live on WW-host stages? If the tale uses them, dropping them is a fidelity gap.
+   → **Deliverable wanted: (1) arrow/dot animation source (data vs code); (2) confirmation of which control-tag groups the tale's messages actually use, so History implements exactly those rather than guessing.**
+
+### (c) Get-item box — the ICON source is a real wall
+Detection + box are clear and History can build them: INF1 entry `mTextboxType` at `+0x0C` (`==9` → item box), box `hukidashi_d09.blo` (staged), panes `ms90/dt90/yz90/tx90-93` + `item`/`rin1`/`lig1-8`. The wall is the **icon**: WW resolves it as `dItem_data::getTexture(mMsgNo-101)` read as a `'TIMG'` from `dComIfGp_getItemIconArchive()` (d_mesg.cpp:1537-1542; `mMsgNo` at INF1 `+0x04`). The port HAS both accessors, BUT its item-icon archive is **TP/ALBW-indexed** and the port's `dItem_data::getTexture` returns an **index**, not a WW resource name — so a WW item id will not land on the right icon.
+Questions for Foundry:
+1. Is there a **WW item-icon archive** (the arc holding WW's item `TIMG`s) that should be staged alongside the other six, so the WW `mMsgNo-101 → TIMG` path resolves natively?
+2. Or is the intended path a **WW-item-id → port-item-icon mapping** (the tale get is the Hero's Clothes; §201 already maps the wear to `dItemNo_WEAR_KOKIRI_e`)? If so, what's the canonical mapping table?
+3. From `zel_00.bmg`, what is the clothes-get entry's `mMsgNo` (and thus `mMsgNo-101` item id) for the 3095/4410 beats, so History can verify the resolve end-to-end?
+   → **Deliverable wanted: either the staged WW item-icon arc, or the WW-item → port-icon mapping. History builds the d09 box + text now regardless; the icon stays a flagged debt (NOT a silent placeholder) until this resolves.**
+
+WHOSE TURN: Foundry → the three deliverables above ((a) metric source is the priority — it's the one where History is actively substituting its own judgment for a WW system). History → build the d09 box + text meanwhile, and swap the hardcoded metrics for the WW source the moment (a) lands. Temporary `J2DScreen.cpp` diagnostics (`g_j2dLastFailTag/SigTag`) still pending strip at acceptance.
+
+## §204 REHOMING SWEEP (Housing, 2026-07-30) — gate CLEAN; NEW SURFACE: donor capture traces in docs/
+
+**SNAPSHOT:** mod folder → `0068ece`, tag `snapshot-20260730` (V-e era, incl. a new
+R_DL01 STG revt-6room bak from History's lane).
+**M6 GATE (exe 38.4MB, current build): CLEAN — 1 hit = the known `Ivan` literal**, unchanged.
+Extended the scan with the NEW donor names now flowing through our systems (`kusa_half`,
+`AK_wind00`, `ikada_h`, `NpcSo`): **zero in the exe** — V-d/V-e move donor ids as NUMBERS, never
+names, exactly as the covenant wants. No WW binaries anywhere in the repo tree (all `.jpc/.arc/
+.bdl/.stb` hits confined to gitignored tool dirs).
+**NEW SURFACE FOR A RULING — DuskTap capture traces now live in `docs/WW Linked/` (~1.7MB):**
+tale 1248KB, bgm-notes 306KB, roster 85KB, storybook/awake/buildlist. Content = register hex,
+world coordinates, and **donor placement NAMES**; spot-check found no dialogue strings. Under the
+greplist header's `docs/ exempt` rule these are legal — but they are a different KIND of docs
+content (bulk donor-derived data, not prose), and they are duplicated already at
+`D:\Dolpheen Plz\captures\`. **Housing recommendation:** keep DERIVED analysis in docs; move the
+RAW traces out of the repo to the D: capture library, leaving pointers. Cleanest reading of №31's
+spirit (no donor data in the shipped tree) at zero cost, since the backups already exist.
+**USER RULING NEEDED** — Housing will not delete/move user-visible research artifacts unilaterally.
+**HYGIENE (low):** repo-root build junk `build_ls1.log` (144KB), `ba1_ctx_pp.c`, `cl_err.txt` —
+untracked, safe to delete when convenient; `.vexp/` correctly untracked (indexer scratch, and
+still fully usable — ignoring ≠ disabling).
+**Foundry lane is producing heavily** — 30+ new untracked docs (Foundry.md, Foundry-Intake,
+api-surface-*, btk-baseline-verdicts, donor-* references). Not audited here; flagged so Librarian
+can file them and Housing can review any that touch containment.
+
+---
+
+## §311 — Foundry → History: §310 answered (a)(b)(c) — plus a CORRECTION to §308's index claim
+
+**Lane: Foundry.** Full detail in **docs/WW Linked/dmsg-native-decode.md** (§3 corrected, §7/§8 added).
+
+**⚠ CORRECTION first (my error, §308):** "STB codes are BMG message IDs, not row indices" was
+INVERTED — a TSV column-label swap during verification. Re-derived from raw INF1 bytes:
+**STB `setMessageCode` values ARE INF1 ROW INDICES** (direct index into the 24-byte entry table);
+the u16 at entry+4 is `JMSMesgEntry_c.mMsgNo` (struct fully named at f_op_msg_mng.h:22 — your
++0x0C `mTextboxType` detection is byte-receipted: 0 on all talk rows, **9 on 3095 and 4410**).
+Your original 3095/4410 pairing was right all along; §308's "4410 caution" is void. If M4c
+resolves rows by index today, it was already correct — nothing on your side inherits the error.
+
+**(a) Font metrics — the priority.** The port has **NO g_msgHIO at all** (TP never shipped WW's
+`dMeter_msg_HIO_c`; the only reference in the tree is your own TU) — so there is nothing to read,
+and nothing wrong to read either: your literals ARE the donor values. The authoritative source is
+the **`dMeter_msg_HIO_c` constructor** (d_meter.cpp:371) — HIO blocks are dev-tuning reflections;
+retail values ARE the ctor (no data file, nothing to stage). Receipts: `field_0x70 =
+DEMO_SELECT(0x19,0x17)` → retail **25**; `field_0x5a/0x5c = 0` (char space main/shadow);
+`field_0x5e = 30` (line space); box tints `field_0x5/0x9` = (30,30,30,215)/(30,30,75,0).
+Two refinements to your framing: setCommonData runs at the END of each createScreen (:1362),
+NOT every frame; and **the .blo baked TBX1 values are NOT authoritative** — setCommonData
+overrides them immediately after `scrn->set`, and font size is runtime state
+(`setNowFontSize(getInitFontSize)` per message :197, escape-changeable). **Native shape: port the
+ctor verbatim as the WW-side g_msgHIO (ext home, №106-clean) + run setCommonData verbatim.**
+Same numbers as your literals — the struct+consumer mechanism is what retires the bridge label.
+
+**(b) Pagination symbols + tags.** Arrow/dot animation is **PURE CODE — nothing to stage**:
+`arwAnime` (:1231) = procedural squash-stretch (tables scaleX/scaleY/step{60,67,71,74,76} +
+10-frame alpha-in); `dotAnime` (:1284) = procedural color/alpha pulse. Port the functions.
+Tag groups (do_tag :429): 0x00 text ops (0 player-name / 4 wait+stop / **7 timed-wait u16** /
+1,2 mode toggle / 10-29 out-font glyphs), 0x01 SE, 0x02 camera, 0x03 anime, 0xFF color.
+**Raw escape census of the tale's nine rows** (payloads contain 0x00 — null-terminated scans
+truncate; I hit this myself): 539 = player-name ×2 + **SE 0x00A7** + **timed-wait 60**;
+540/541/542/544 = none; 543/547 = color pairs; 545 = player-name + color; 3095 = mode toggles
+1,2 + color + **timed-wait 10**. **Zero camera/anime tags in the tale** — your consume-and-drop
+loses only SE 0x00A7 and the two timed-waits today; implement group 0 (0/1/2/7) + SE + color
+and the tale is tag-complete (porting do_tag verbatim covers all groups anyway).
+
+**(c) Get-item icon — the wall is down, no mapping needed.** Detection = `mTextboxType==9` ✓.
+Both donor routes agree byte-exactly: `getTexture(mMsgNo−101)` = 151−101 = **50** =
+`dItemNo_FUKU_e`, AND the entry's own `mItemImage` (+0x0F) = 0x32 = 50 (second quest: 156−101 =
+55 = `dItemNo_NEW_FUKU_e`, mItemImage 0x37 ✓). `item_resource[0x32].mTexture` →
+`item_texture_tbl[TEXTURE_IDX_CLOTHES]` = **`clothes.bti`** (d_item_data.cpp:1405; NEW_FUKU
+shares it). **`itemicon.arc` STAGED donor-verbatim** (176,672 B, md5 be709f64…, staging + live
+arcs/) — `clothes.bti` confirmed a member. Native path = donor's own
+`JKRArchive::readTypeResource(buf, 0xC00, 'TIMG', "clothes.bti", <itemicon>)` (:1540). The
+port's TP/ALBW icon table never enters the WW box.
+
+**WHOSE TURN:** History → swap (a) to the ported ctor+setCommonData, add SE/timed-wait tag
+handling, wire the d09 icon read from staged itemicon.arc; prove on the tale. Foundry → standing
+by (tale_2.stb timeline ferry on request — its MESSAGE ops should show 4410 if the second-quest
+variant follows the same shape).
+
+## §312 History → Foundry: §311 whose-turn LANDED — metrics de-bridged, d09 get-item box + icon, SE (2026-08-01)
+
+All four §311 History items built + building green (`d_ext_dmesg.cpp`):
+
+- **(a) metric bridge retired.** The font/char/line literals are now a ported donor struct+consumer:
+  `dExtDmesg_msgHIO_c` (ctor = the `dMeter_msg_HIO_c` retail initializers verbatim, `mFontSize 25`
+  / `mCharSpace 0` / `mLineSpace 30` / `mRubySize 15`) + `dExtDmesg_setCommonData()` (port of
+  `dMesg_screenData_c::setCommonData`) applied once at box build, overriding the `.blo` baked TBX1.
+  Same numbers, but sourced from WW's own mechanism — the value no longer rests on History's judgment.
+- **(c) get-item box + icon.** Two-box design keyed on `mTextboxType` (INF1 +0x0C): `d00` talk /
+  `d09` item, selected per beat. `d09` arts frame/arrow/dot (shared `dmsgres` BTIs) + ring (`rin1-4` =
+  `ring_loght_d`) + rays (`lig1-8` = `back_light_d`); the `item` pane swaps to **`clothes.bti` read
+  from the staged `itemicon.arc`** (added to residency) when `mItemImage` (+0x0F) ∈ {0x32, 0x37}. The
+  port's TP/ALBW icon table is never touched. Item ids outside the clothes pair hide the pane + log
+  (flagged debt, not a silent guess) — pending a fuller WW-item→texture map if more gets appear.
+- **(b) SE.** Group-1 tag → `mDoAud_messageSePlay(code, NULL, 0)` (row 539's `0x00A7`). Confirmed your
+  census read: the tale's timed-waits are group-0 code-7 PAUSES → correct no-ops without a typewriter;
+  zero camera/anime tags, so consume-and-drop is now tale-complete for text + SE + colour.
+
+**Not yet done (cosmetic, flagged):** arrow/dot **animation** (`arwAnime` squash-stretch / `dotAnime`
+pulse) — the panes are placed + toggle correctly by page state, but static. Pure-code port per your
+§311(b); scheduled as the next polish pass, not gating the tale. Temporary `J2DScreen.cpp` diagnostics
+still pending strip at acceptance.
+
+WHOSE TURN: History → prove on the tale (user playtest of the get-item box + icon + metrics), then
+port arwAnime/dotAnime. Foundry → the tale_2.stb ferry stands useful if we wire the 4410 second-quest
+variant; no blocking ask.
+
+## §313 History: tale mid-cutscene break ROOT-CAUSED + fixed — the №89 door arrival-guard was killing the held tale (2026-08-01)
+
+The "cutscene breaks midway" the user has hit intermittently is NOT the mount actor and NOT the
+§308 dMesg box — both were exonerated with receipts. Root cause: the **№89 arrival G-guard**
+(`d_ext_npc_doors.cpp:1524`) force-ended the live `TALE_DEMO`. Chain, byte-exact from the log:
+- The tale enters R_DL01 via its own `setNextStage` two-step (§296, point 200) — which counts as an
+  **arrival** and RE-ARMS the guard (`№89 arm arrival demo → 'R_DL01'`), starting a 120f countdown.
+- §270's stand-down runs at ba1's ORDER but can't survive that re-arm.
+- 120f later, while the box legitimately held a beat (§304: `fnm=95` = beat 540's suspend, waiting on
+  A/B), the guard fired: `№89 event G-guard — 'R_DL01' still active after 120f → force-end` → the tale
+  event died under the held box → truncation (`demo ENDED @ m_frame 117`) → type-40 churn → hang.
+- Intermittent because it's a race: dismiss every box within 120f of the re-entrance and the tale
+  finishes first (the "working" M4c run); linger on one box and the guard kills it.
+
+Fix (§313, corrected to v2): at the guard's force-end site, skip ONLY the force-end when the native
+dMesg box is actively holding a beat (`dExtDmesg_isBoxActive()`); fall through to the camera-snap +
+disarm untouched. **v1 was too broad + camera-breaking** — it gated on `dExtWw_isWwDemoStage() &&
+dDemo_c::getControl() != NULL` and called `clearArrivalGuard(...) + return`. But `getControl()` is
+non-NULL on ordinary arrivals too, so on F_DL01 (Outset) it stood the guard down AND the early `return`
+skipped the arrival camera snap → Outset camera stranded at the map edge (user-caught). v2's
+`isBoxActive` discriminator is true only during a held tale beat, never on a plain arrival, and it no
+longer disarms/early-returns so arrival framing is unaffected. A true mid-tale hang is still caught by
+the 3600f `pollStuckMessageResume` backstop. Diagnosis leaned on Foundry's §304 golden trace (the
+`fnm=95`↔beat-540 mapping proved the storyboard couldn't self-terminate → external kill) and §296 (the
+point-200 re-entrance = the arrival that re-arms the guard). Built green; get-item d09 box + clothes.bti
+confirmed on screen (`§311 beat id=3095 fuki=9 → ITEM box shown`).
+
+WHOSE TURN: History → user playtest (tale holds a lingered box; Outset camera snaps normally on
+arrival). Two open items the user surfaced, tracked next: (1) **post-tale spawn** lands behind the door
+(the point-200/0xC8 loft-entrance re-entry point is where the player is left at teardown — needs the
+donor's tale-END spawn, distinct from the ENTRY point of §296); (2) **item-box/dialogue formatting**
+occasionally off (candidate: font-size tags 0xFF/1,6 consumed-not-applied, or the d09 text-pane layout —
+needs a specific case). Foundry → no ask; tale_2.stb ferry still stands for the 4410 variant.
+
+---
+
+## §312 — Foundry: LinkRM TagEv decode — the donor's DATA-AUTHORED trigger chain (and the trigger volume IS the SCOB scale)
+
+**Lane: Foundry.** Follow-on from the cast-sheet census (user check on props/scale). Donor receipts:
+d_a_tag_event.cpp + LinkRM Stage.arc EVNT chunk + Room0.dzr SCOB rows.
+
+**TagEv param contract** (d_a_tag_event.cpp:19-40): `eventNo = prm>>24` (INDEX into the stage's
+EVNT chunk, resolved at create via `evmng_getEventIdx(NULL, eventNo)`), `swbit2 = prm>>16` (arm
+gate), `swbit = prm>>8` (one-shot/completion switch), `type = prm&0xFF`; **eventFlag rides in the
+SCOB's z-rotation field** (`getEventFlag() = home.angle.z`, :39 — 0xFFFF = ungated).
+
+**THE TRIGGER VOLUME IS THE SCOB SCALE** (`actionHunt`, :~510): contact test =
+`distXZ² < (scale.x·100)²` and `|dy| ≤ scale.y·100`. Scale bytes are not just visual — they are
+the trigger's radius/height in decimeters×10. A cast path that drops the SCOB scale channel
+doesn't just render a 10× lamp (bonbori authored at 0.1 — the user's giant first-floor lamp,
+root-caused); it silently mis-sizes every trigger zone.
+
+**LinkRM stage EVNT chunk (×5, in order):** [0] `TALE_DEMO`, [1] `START_TEST`, [2] `LOOK_SHIELD`,
+[3] `get_shield`, [4] `TALE_DEMO2`. Per-entry byte pairs after the name: 0x02 / 0xE0 / 0x11 /
+0x15 / 0x02 — note 0x11/0x15 equal the TagEv switch numbers below (likely each event's own
+switch byte; flagged as observed correspondence, not yet source-receipted).
+
+**The two Room0 TagEv rows, decoded:**
+* **TagEv A** — platform y=375 (Grandma's level), volume r=100/h=40 (scale 1.0/0.4):
+  eventNo=**2 → LOOK_SHIELD** (the family-shield camera beat that message row 543 seeds),
+  arm-gate none (swbit2=0xFF), one-shot switch **0x11 (17)**, type 0x0A (demo-end also sets a WW
+  event bit — the donor's own accounting, dSv UNK_3202 family, :148).
+* **TagEv B** — ground floor y=0, volume r=200/h=40 (scale 2.0/0.4): eventNo=**0xFF (orders NO
+  event; evmng lookup = −1)**, **armed only once switch 17 is on** (swbit2=0x11 — i.e., after the
+  shield look), sets switch **0x12 (18)**. A pure switch-chain step: 17 → 18. What consumes
+  switch 18 is the next question — candidates: the four state-selected Ba1 placements (prm 0/1/3/4)
+  and `get_shield`/`SPitem 0x3B` (the wall shield pickup at y=551). Not yet receipted; do not wire
+  on the guess.
+
+**Why this matters for the rebuild ruling:** the donor's trigger architecture for this room is
+100% data-authored — two SCOB rows + the stage EVNT table drive the shield beat and its switch
+chain, no actor-code triggering. Our current code-hosted cast can't express any of this. When the
+kit returns the cast to data (ACTR/SCOB rows, host format), this chain comes along verbatim —
+including trigger volumes — for free.
+
+**WHOSE TURN:** user → ruling on the kit-rebuild sequencing (Ojhous2→R_DL02 pilot first, then
+R_DL01, per the assessment). History → aware: LOOK_SHIELD/get_shield are the next donor events in
+this room after the tale; the EVNT-byte↔switch correspondence needs one source receipt before use.
+Foundry → standing by; full 17-row cast sheet available on request.
+
+## §314 History: dMesg camera-regression fix (v2) + arrow/dot animation; post-tale spawn ROUTED to the kit rebuild (2026-08-01)
+
+Two dMesg items landed (native-true, mine); one routed to Foundry per the "pursue all native-true
+paths; a non-donor-true fix escalates" directive.
+
+- **§313 camera regression → fixed (v2).** The first guard-exemption cut broke the Outset arrival
+  camera (gated on `getControl()!=NULL`, which is true on ordinary arrivals; `clearArrivalGuard +
+  return` then skipped the arrival camera snap). v2 gates on `dExtDmesg_isBoxActive()` — true ONLY while
+  a tale box is holding — and skips ONLY the force-end, falling through to the camera-snap + disarm
+  untouched. Tale still protected; Outset camera snaps normally.
+- **Arrow/dot animation ported** (Foundry §311(b), pure-code): `arwAnime` squash-stretch
+  (scaleX/scaleY tables, step{60,67,71,74,76}) → the next-page arrow via `J2DPane::scale`; `dotAnime`'s
+  10-frame alpha fade-in via `setAlpha` (the subtler black/white colour pulse on the dot picture is the
+  one remaining sub-item). Get-item d09 box + `clothes.bti` confirmed on screen last run.
+
+- **ROUTED to Foundry — post-tale spawn ("spawn behind the door").** After the tale the player is left
+  at the point-200/0xC8 loft-entrance re-entry point (§296), which reads as behind the door. This is
+  STAGE DATA (R_DL01 PLYR / the tale-END teardown), not dMesg — a code-side reposition would be a bridge,
+  not donor-true, so per the standing directive it goes to the kit rebuild rather than a patch. It fits
+  Foundry's R_DL01-rebuild acceptance test directly: the donor's tale carries Link's end position; the
+  kit-baked room should land him there natively. History needs the donor tale-END Link transform (or it
+  falls out of the kit) — flagging as a rebuild acceptance criterion, no code on the guess.
+
+- **Open (needs a case): item-box/dialogue formatting "sometimes off."** The tale authors no font-size
+  tags (§311 census), so that path is untestable via the tale; colour/name/SE are applied. Awaiting a
+  specific beat + symptom before touching it (per directive, not guessing a non-receipted fix).
+
+WHOSE TURN: History → playtest the animation + confirm Outset camera restored. Foundry → carry the
+post-tale Link spawn into the R_DL01 kit rebuild (donor tale-END transform).
+
+---
+
+## §315 — Foundry → History: the donor tale-END Link transform (§314 ask), receipts attached
+
+**Lane: Foundry.** From the byte-identical donor tale.stb (md5 4d254c72…, §304 provenance), JACT
+'Link' track, FINAL cut:
+
+**Frame 618 (held through END @710): pos (−289.0, 375.0, 83.0), rotY 180.0° (s16 0x8000),
+SHAPE 0, ANIMATION 4, anim-rate 30.**
+
+That is Grandma's platform level (y=375), facing her seat — the donor's tale leaves the REAL Link
+exactly where the demo's last cut put him. Coordinates are world-true: LinkRM MULT[0] =
+(transX 0, transZ 0, rotY 0, room 0) — identity, no offset to apply.
+
+**Diagnosis receipt for the bug:** in the donor there is NO respawn at tale end — the event
+teardown inherits the demo-final transform. Our behind-the-door spawn is the host teardown
+snapping to PLYR point 200 (the §296 re-entry point, whose job was tale ENTRY, not exit). So the
+fix class is confirmed as stage-architecture, not dMesg, and the kit-rebuild acceptance criterion
+is exact: after tale END, Link stands at (−289, 375, 83) rotY 0x8000 with no host-side reposition
+code. (SHAPE 0 / ANIMATION 4 are the end-pose state the demo hands back — the kit's cast pass
+should note them, but pose handback is the demo system's own job, already donor-owned.)
+
+**WHOSE TURN:** History → park the spawn bug against the R_DL01 kit rebuild with this transform as
+the acceptance number; formatting issue stays blocked on a concrete case from the user. Foundry →
+standing by.
+
+---
+
+## §316 — Foundry: DuskTap dMesg/tale golden-trace probe BUILT (user-ordered escalation — donor ground truth over one-bug-per-round)
+
+**Lane: Foundry.** User called the per-bug cadence endless and ordered a DuskTap run: observe the
+DONOR's dMesg system (line counts, metrics, pagination) + the tale end-to-end (entry, per-box
+suspend cycle, teardown, control return) live in Dolphin. Instrument built:
+**tools/foundry/dusktap_dmesg.py** (read-only; attaches to running mainline Dolphin via
+dolphin-memory-engine — no special build, no movie/TAS, so WW's desync problem doesn't apply).
+
+**Every probe is symbol-exact** (config/GZLE01/symbols.txt + donor header offsets, cited per line
+in the file header): nowMesgCode; dMesg_tControl mLineCount/mInitFontSize/mNowFontSize/
+mCharSpace/mTextBoxWidth/mLineLength[4]; dEvt_control_c mEventId/mEventInfoIdx/**mEventFlag (the
+control-lock word — Link-free ⇔ its transitions)**; dDemo_manager_c mCurFile ("tale.stb"
+begin/teardown), mFrame/mFrameNoMsg/mMode, TControl suspend cache (+0x54 — the per-box
+suspend(1)/unsuspend cycle live); Link current.pos + angle.y (the tale-END transform §315,
+observed instead of inferred). Sampled at 120 Hz, transition-stamped CSV + live console.
+
+**RUN PROCEDURE (user, ~5 min):**
+1. Launch mainline Dolphin with the donor US ISO; get to Outset first-quest, ideally a savestate
+   at Link's house door pre-tale.
+2. `D:\XXXXXXX\foundry-py312\Scripts\python.exe C:\Users\xxxxx\Documents\dusklight\tools\foundry\dusktap_dmesg.py`
+   (console says "hooked"; CSV lands in ww-arc-staging/).
+3. Play the tale start to finish — enter, sit through all nine boxes at a natural reading pace,
+   let it tear down, walk a few steps after control returns. Ctrl+C the probe.
+4. Ferry the CSV path; Foundry post-processes into the golden timeline.
+
+**What the trace settles at once (vs. §304's static decode):** the live per-box
+suspend↔box-close release cadence; real line counts per box (pagination oracle for M4c);
+metric values in flight (font 25/0/30 observed, closing (a) empirically); mEventFlag's exact
+transition sequence for event begin AND the control-return moment at teardown (History's
+"very likely downstream" Link-lock verify becomes an observed fact); Link's frame-by-frame
+transform through teardown (diffable against §315's authored (−289, 375, 83) / 0x8000).
+
+**WHOSE TURN:** user → do the run (or ferry a savestate and I'll spec the exact capture window);
+Foundry → post-process into the golden timeline + diff against our port's behavior; History →
+consume the diff instead of chasing the next intermittent.
+
+---
+
+## §317 — Foundry → History: GOLDEN TRACE CAPTURED (run 1 complete) — two corrections + the full donor oracle
+
+**Lane: Foundry.** The user ran the donor tale end-to-end in Dolphin with the §316 probe attached.
+72 transition rows: entry → nine boxes → teardown → control return → walk-out. Full analysis:
+**docs/WW Linked/tale-golden-trace-run1.md**; raw CSV `ww-arc-staging/dusktap_tale_run1.csv`.
+
+**CORRECTION 1 — font size is 23, not 25.** Live: `mNowFontSize = 23` in every box. My §311
+misread `DEMO_SELECT(0x19, 0x17)` — the macro picks the SECOND arg on retail (global.h:67), so
+retail = 0x17 = **23** (25 is the kiosk demo). **Swap `kWwFontSize` 25.0f → 23.0f.** Also
+live-confirmed: charSpace 0, boxWidth 486. This +2pt error is the best candidate for the user's
+"formatting sometimes off."
+
+**CORRECTION 2 / new semantics — the suspend counter GOES NEGATIVE by design.** Box 544: the
+player dismissed fast → box-close `unsuspend(1)` fired BEFORE the control track reached 544's
+authored suspend → counter observed at **−1**, then the authored suspend cancelled it to 0 —
+no hold, storyboard clock never paused. PORT REQUIREMENT: signed counter, `isSuspended()` is
+`> 0`, no clamp-at-zero, no assert — otherwise fast readers deadlock or double-hold.
+
+**Confirmed live (was inference, now observation):** box order = §304 exactly
+(539→540→3095→541→542→547→543→544→545); message ops land on the STORYBOARD clock
+(`mFrameNoMsg` hits the §304 frames byte-exact: 541@198, 542@247, 547@272, 543@315, 544@467,
+545@620) while `mFrame` is wall-clock; one suspend/release per box; **page turns happen WHILE
+suspended** (box-internal pagination never touches the counter — per-box page/line table in the
+doc, `mLineLength[4]` values in the CSV as the wrap oracle); item-get 3095 = d09 box mid-tale,
+same hold contract.
+
+**Lifecycle:** entry = door evt 27 → tale order evt 73 with Link at (−289,375,83) → ~0.5s demo-
+manager-invalid window (the two-step's stage reload) → STB teleports Link to its frame-0
+(−341,375,250). **The donor's continuity trick: the STB END transform equals the talk-start
+spot** — the tale "returns" Link by ending where he began. **Teardown: 545 releases → demo_mode
+1→2 (~40 wall frames) → manager destroyed → brief evt 49 handoff → idle → control returns IN
+PLACE at (−290,375,85) — NO respawn, NO reload at exit.** §315's acceptance number is now an
+observed fact; the port's behind-the-door spawn is host-only.
+
+**Port-diff checklist** (doc §5): font/metrics swap; signed counter; storyboard-clock
+sequencing; page-turn-while-held; in-place control return; d09 mid-tale. Instrument stays armed
+for re-runs on request (second take, tale_2, or a PORT-side capture for the direct diff once
+History adapts the address pack).
+
+**WHOSE TURN:** History → apply the two corrections (one-line font swap; verify counter
+signedness in the port's TObject) and diff the port against the checklist; the golden CSV is the
+acceptance oracle for the whole §307 pivot. Foundry → standing by.
+
+## §205 PATH 1 RESULT — converter validated against TP's OWN LOADER; texture block is the last suspect; V-e may be UNTESTED (Housing, 2026-08-01)
+
+Traces rehomed to `D:\Dolpheen Plz\captures\traces\` + `dolphin-captures-INDEX.md` left as pointer.
+**STRUCTURAL VALIDATION (offline, vs libs/JSystem JPAResourceLoader::load_jpc — the authority):**
+- resource header layout (usrIdx/blockNum/fldNum/keyNum/tdbNum, `offset += 8`) — our writes MATCH.
+- block-magic switch (BEM1/BSP1/ESP1/FLD1/TDB1) + `offset += size` walk — our blob conforms.
+- TDB1 consumed as `data+offset+8` u16 table — matches our remapped 0..N-1 write.
+- BSP1 field offsets (mClrPrm@0x26, mClrEnv@0x2A, mClrFlg@0x21, mTexIdx@0x20) — MATCH.
+- **FLAG SEMANTICS CLEARED (my §203 residual was wrong to fear):** JPA1 and JPA2 use IDENTICAL bit
+  layouts — type 0-3, dirType 4-6, rotType 7-9, basePlane 10, tevColorArg 15-17, tevAlphaArg 18;
+  colour flags 0x01/0x02/0x04/0x08 + type>>4. Cross-verified WW header vs TP header, line by line.
+⇒ The converted archive SHOULD parse and colour correctly. Remaining structural unknown: the
+**TEX1 block** — we copy JPAC1 texture blocks RAW; TP's `JPATexture(data+offset)` may expect a
+different header/BTI offset. A missing/misparsed texture draws UNTEXTURED = white-ish puffs with
+wrong shape — fits the symptom exactly. The §205 dump build (`DUSK_JPAC_DUMP=1` → writes
+`ww_converted_03da.jpc` beside config) settles it in one run.
+**VERIFICATION GAP (important, cost-saving):** latest playtest log (0801-121922) contains NO
+`cutFx` line and NO `id=0x03da` registration — the grass path never ran that session, and other
+lanes have been building today. **So V-e (ESP1+FLD1 carry + colour-override removal) may never
+have been exercised.** Before committing a session to the JPA1-loader port, run ONE clump-cut on a
+build that includes V-e, with DUSK_JPAC_DUMP=1 set.
+**FLOWERS — confirmed architectural, not a render bug:** log shows `flwr7 proc=NPC_YAFLW_W`, i.e.
+flowers are NPC-MOUNTED models (a bridge), while the vegetation actor leaves trees/flowers inert.
+No mount tuning can make them right; the fix is the §199 flower/tree PACKET port (donor
+d_a_flower/swood, prm words already extracted). Standing law: replace bridges with the true
+native subsystem.
+
+## §206 LAW RATIFIED: NO MOUNTING — native systems only (user, 2026-08-01) → DN-9 + scope assessment
+
+Recorded as **DO-NOT DN-9** (hard stop, all lanes) and pairs with the standing
+"always port true native subsystems" directive + "always A / root fix" preference (§203).
+**HONEST SCOPE — what this law implicates (Housing assessment, not a plan):**
+- **Already native (unaffected):** ext_vegetation grass packet (donor arrays + donor draw),
+  windline (donor wether/rain port), waves/shore (donor kankyo + BDL data), doors/knobs logic,
+  demo/STB playback, audio ext_seq.
+- **Currently BRIDGED (each becomes a port task):** flowers/trees via NPC_YAFLW / census
+  dispatcher (§205) · props presented through NPC procs (barrels/boat = the §199 build list, which
+  under DN-9 is now explicitly `daObj_Wood` / `daObj_Ikada` NATIVE ports, not mounts) · NPC_SO
+  and the villager cast where behaviour rides receiver procs rather than donor actor code ·
+  any `attach`-slot presentation standing in for a donor system.
+- **The big one, stated plainly:** `d_ext_npc_mount` itself is the bridge layer. DN-9 does NOT
+  mean deleting it tomorrow — it means every NEW donor system lands native, and existing mounts
+  convert as their donor actors get ported. Housing's recommended migration order: (1) flower/tree
+  packet (blocks visible fidelity now), (2) daObj_Ikada (single placement, self-contained),
+  (3) daObj_Wood (12 sites), (4) NpcSo + TagMSo, (5) villager cast as their donor actors land.
+- **Prerequisite that just got promoted:** several donor actors spawn PARTICLES, so the WW-common
+  particle path must be sound → the §205 texture question and, if it fails, the JPA1-loader port
+  are now blockers for the port programme, not side quests.
+
+## §321 History → Foundry: TALE FINISH ROOT-CAUSED — baked REVT exit bytes 0x00 must be 0xFF (patched live, needs bake-pipeline fix) (2026-08-01)
+
+**Lane: History.** The §320 test log (`dusklight-20260801-121922.log`) read correctly end-to-end
+resolves the long-open teardown stall — and vindicates the whole §306b/§319/§319b/§320 chain.
+
+**What the log showed.** After `§282 PLAY-end mode=2` → `§306b NO transition, clean end` →
+`dDemo_c::remove()`, THREE probes went silent at once (§287 finishCheck, §318 advanceCut) while
+§285 kept printing `mEventStatus=1 runEvt='TALE_DEMO'`. `getRunEventName()` only returns the name
+while the event is non-NULL and START — so the event was alive and `finishCheck()` ran every
+frame. Its silence means it PASSED: **§320's cutEnd un-gating worked, flag 3 set, the chain
+advanced, finish flag 9 SET.** The §318/§287 silence is the finish branch skipping their probe
+sites.
+
+**The actual blocker — one byte of stage data.** In the finish branch
+(`d_event_manager.cpp` Sequencer, TYPE_STB/ZEV): `if (mapdata->field_0x7 != 0xFF) { exitId =
+field_0x7; sceneChange(exitId); }` and `closeProc + reset` only run `if (exitId == -1)`. The §273
+bake wrote the TALE_DEMO/TALE_DEMO2 REVT records into `R_DL01/stage.dzs` with **`field_0x7 = 0x00`
+and `field_0x9 = 0x00`** (zero-filled unknowns). TP reads 0x00 as "take exit 0 at finish" →
+`sceneChange(0)` re-fired every frame forever (harmless no-op on R_DL01 — `isEnableNextStage`
+stayed 0 — but the event never closed, eventFlag 8 never set, `mEventStatus` never left 1, screen
+stayed faded out).
+
+**Donor proof (DECOMP-FIRST).** WW's `dEvent_manager_c::mainProc` (`WW DP/src/d/
+d_event_manager.cpp:300`) has NO exit fork at all: `finish_check()` → `closeProc(event)` directly,
+in place. The exit-at-finish concept is TP-receiver semantics over the REVT record; the TP encoding
+of the donor's behavior is **0xFF = no exit**.
+
+**Done (History):** patched the live arc in place —
+`model_replacements/WW-Crew-Restoration/files/res/Stage/R_DL01/STG_00.arc`, both entries
+`f7 0x00→0xff`, `f9 0x00→0xff`; verified by re-dump; backup `STG_00.arc.pre-321-exitff-bak`.
+No code change, no rebuild — the §320 exe is correct as-is.
+
+**FOUNDRY ACTION:** fold `0xFF` into the REVT bake defaults (exit byte 0x7 + skip-exit byte 0x9;
+zero-fill is a live footgun for every future baked event) in the R_DL01 kit pipeline, so the kit
+rebuild doesn't regress this. Also flag for review: the bake wrote `type=1` (ZEV) for what is an
+STB-driven package event — Sequencer's skip-proc picks `dEv_defaultSkipZev` vs `dEv_defaultSkipStb`
+off this byte; not the current bug, but worth a deliberate call.
+
+**Verify on next run (any tale run):** `§282 … field_0x7=0xff`; after `mode=2` expect §285 to reach
+`mEventStatus=5` then 2/0, fade-in, control returned in place at (−289,375,83) with no drift.
+Then strip the probe set per HISTORY-HANDOFF §7.
+
+**WHOSE TURN:** USER → run the tale once; if it fades back in and control returns, teardown is
+CLOSED (then History strips probes + takes the signed-suspend-counter and d09 items). FOUNDRY →
+bake-default fix above, on your own clock.
+
+## §207 DUMP VALIDATED — the converted archive is CORRECT; fault (if any remains) is DOWNSTREAM of the resource (Housing, 2026-08-01)
+
+`ww_converted_03da.jpc` (1476 B — exactly +164 over the pre-V-e 1312 = ESP1 0x60 + FLD1 0x44, so
+**V-e's block carry is confirmed live in the tested build**). Offline parse vs TP's
+JPAResourceLoader expectations — every field checks out:
+- header `JPAC2-10`, resNum=1, texNum=1, texSection@0x184 ✓ · resource header usrIdx=**0x03da**,
+  blocks=5, fld=1, key=0, tdb=1 ✓
+- blocks present and sized: BEM1 0x7C · **BSP1 0x40 carrying prm=98c876ff (the GREEN), env=003200ff,
+  clrFlg=05, texIdx=0, flags=01018194, baseSize=(0.65,1.60)** · ESP1 0x60 · FLD1 0x44 · TDB1 idxs=[0] ✓
+- **TEX1 valid:** magic `TEX1`, size 0x440, name `kusa_half`, BTI header decodes as IA8 16×32 →
+  16*32*2 = 0x400 payload + 0x40 header = 0x440 EXACTLY. The texture is intact and self-consistent.
+⇒ **The JPAC1→JPAC2 conversion is PROVEN SOUND for grass** (§202's cause 1 fixed by V-e; §205's
+texture suspicion CLEARED). The archive hands the draw path a green, textured, ESP1/FLD1-driven
+emitter. **Therefore: if the puffs still read wrong on screen, the fault is DOWNSTREAM of the
+resource** — draw-time colour/TEV or our own modulation — NOT the converter, and NOT (any longer)
+a candidate for the JPA1-loader port, whose premise was conversion loss.
+**NEXT DATUM NEEDED: the user's eye on THIS build** (dump run 12:37, cut confirmed in log —
+`cutFx k0=(254,222,142)`). Green now ⇒ V-e closed it, thread ends. Still wrong ⇒ Housing taps our
+own draw path (resUserWork=0 on the converted blob means the donor's tevstr-modulation branch never
+runs — the leading downstream suspect, and a one-line experiment, not a port).
+
+## §208 GRASS ROOT CAUSE FOUND — the "envcolor" arg was the GLOBAL PRM MULTIPLIER, passed as ZERO (Housing, 2026-08-01)
+
+Black (not white) was the decisive symptom: emitter defaults are 0xff identity, so black means a
+global colour of ZERO multiplying the resource. Traced it:
+`dPa_control_c::set` no-flag branch (d_particle.cpp:2397-2404) does
+`setGlobalPrmColor(*param_9)` / `setGlobalEnvColor(*param_10)`, and the draw computes
+**resource × global** (`JPABaseShape.cpp:24-27`, COLOR_MULTI). Our cut call passed
+`GXColor envcolor = {0,0,0,0}` as param_9 — added at №227 as "part of the call shape", never
+understood as load-bearing — so the donor's authored green was multiplied by 0 = BLACK.
+**This one arg explains the ENTIRE saga:** V/V-b/V-c's post-spawn `setGlobalPrmColor(K0)` writes
+were accidentally OVERWRITING the zero (hence washed-white, not black); V-e removed them, exposing
+the zero underneath (hence black now). Every colour hypothesis was downstream of an argument bug.
+**FIX (V-f, donor-exact):** pass room K0 as BOTH prm and env args — `setSimple(pid, pos, 0xFF,
+tevStr->mColorK0, tevStr->mColorK0, 1)` (d_grass.cpp:153). Green comes from the emitter's own
+registers; K0 tints it by time of day. Post-spawn writes stay removed. Build clean, caches wiped.
+**LESSONS (worth the cookbook):** (1) a parameter whose meaning is guessed from its NAME is a
+latent bug — `envcolor` was the prm multiplier; (2) BLACK vs WHITE vs WASHED are different
+diagnoses — black = multiply-by-zero, and that fingerprint pointed straight at the arg;
+(3) the §202-§207 work was NOT wasted — dropped ESP1/FLD1 were a real second defect and the
+converter is now validated — but the colour thread could have been ended earlier by reading the
+call's own no-flag branch before theorising about resources.
+**PLAYTEST:** cut one clump → expect WW-green puffs with grow/fade/fall. Windline unaffected.
+
+## §322 History: §306b REVERTED — the donor tale teardown IS a same-stage reload; wipe-in is the missing fade-in (2026-08-01)
+
+**Lane: History.** The §321 run (log `dusklight-20260801-123648.log`) proved the event machinery
+fixed — teardown completed, Link pinned at (−289,375,83), control returned (the user leaf-glided
+after) — but the screen NEVER faded back in: the user was playing behind black. Chasing the donor's
+fade-in mechanism unwound §306b's core premise. Receipts, all DECOMP/DATA:
+
+1. **tale.stb authors a black fade-out at its own end.** d_act3 channel-9 beat @storyboard 680
+   (payload `... 00 14` = fadeOut, 20f; decoded from the staged byte-identical Demo01.arc via
+   stb_timeline.py). §304's "DATA_ID(9) @680 (give/handover)" was misread — channel 9 is the
+   demo00 BLACK-FADE channel (d_a_demo00.cpp:776/§271 twin: r4==0 ⇒ startFadeOut). The donor
+   tale genuinely ends on a faded-out screen (END @694).
+2. **WW `dEvDt_Next_Stage` (WW DP d_event_data.cpp:14-53) has NO same-stage no-op.** Stage +
+   StartCode present ⇒ `setNextStage(...)`, unconditionally. §306b's "exit to LinkRM while on
+   LinkRM is a no-op" was an invented premise — nothing in the donor supports it.
+3. **WW ACT_PLAY end fork (:812-819):** mode 2 → `Next_Stage` fires → latch `mWipeDirection=1`,
+   demo NOT removed. The same-stage RELOAD is the entire donor teardown: it destroys the event
+   mid-flight (flag 9 / finishCheck never even run on this path), and the arrival **wipe-in
+   (wipe 5) is the fade-in** that undoes the STB's authored fade-out.
+4. **Foundry's golden "brief evt 49 handoff" = LinkRM event idx 49 = DEFAULT_START** — the
+   stage-ENTRY event. Its firing is itself evidence of the reload. "Control returns in place, no
+   respawn" is the donor's continuity trick: **LinkRM room spawn 0 sits at (−289,375,83) @0x8000
+   — exactly the STB end transform** (room.dzr PLYR dump). Reload+respawn is indistinguishable
+   from staying put.
+5. Port data already ready: merged TALE_DEMO/TALE_DEMO2 carry the donor `Stage='LinkRM',
+   StartCode=0`; R_DL01's room.dzr already carries the spawn-0 entry at (−289,375,83) (earlier
+   Foundry PLYR bake). Spawn 0 has no event param → no tale re-trigger (trigger lives on point
+   200 only), and the per-frame re-fire is guarded (§306's !isEnableNextStage).
+
+**CHANGE (d_event_data.cpp §322):** the §306b `stage = NULL` no-op is replaced by the donor path —
+alias `LinkRM` → the host stage and let `setNextStage(host, StartCode 0, wipe 5)` fire. Same-stage
+reload behind the authored black; wipe-in restores the screen; spawn 0 lands Link at the donor
+transform.
+
+**Status of the §306/§319/§319b/§320/§321 chain:** all remain correct donor restorations for
+genuinely exit-LESS events (and §321's REVT 0xFF stays required — Foundry bake-default action from
+§321 stands). They were solving the wrong tale path: the donor never clean-ends the tale in place.
+
+**Calibration note for the record:** §306b is the second invented-premise lapse (after §316). The
+tell both times: a port behavior explained by a donor mechanism nobody had READ. The §315/§317
+"no reload at exit" reading came from an instrument that couldn't see a same-stage reload behind
+an already-black screen ending at an identical transform — observation was fine, inference wasn't.
+
+**WHOSE TURN:** USER → run the tale once on the §322 build. Expected: last box dismissed →
+authored 20f fade to black → §322 log line + wipe-in → Link at (−289,375,83) facing 0x8000,
+visible, in control; §287/§318 going silent mid-reload is now EXPECTED (donor kills the event via
+reload). FOUNDRY → §321 bake-default action unchanged; note the §304 DATA_ID(9) reinterpretation
+(fade channel, not give/handover) for the tale_2/Ba1_Get_Itm timelines.
+
+## §322b History: reload leg verified to the wipe-in; arrival spawn was the last wrong byte — host talk-spot point added (2026-08-01)
+
+**Lane: History.** §322 run (log `dusklight-20260801-134821.log`, user screenshot): fade-out →
+reload → **wipe-in WORKED** (screen visible again — the black-screen defect is gone). But arrival
+resolved **the wrong spawn**: donor StartCode 0 = LinkRM's talk-spot (id 0x00, (−290,375,85)
+@0x8000, event_index 0xff — donor room.dzr entry[2]; the golden trace's return transform
+EXACTLY). The HOST's id 0 is the port door-arrival convention (`armNativeStageChange` passes
+point 0 for every host door), so start 0 landed the DOOR spawn (−255,0,1125): Link fell into the
+void (§317: y → −11k) and that spawn's REVT/event byte fired **KNOB_START**, which could never
+finish → letterboxes stuck, no control. (PLYR decode note for the record: spawn id = byte 0x1D;
+byte 0x08 = event index — that's the native mechanism by which point 200 auto-fires TALE_DEMO.)
+
+**Fix (data + one mapping line):**
+- `R_DL01/R00_00.arc::room.dzr` — appended the donor talk-spot as **point 0xCB** (tale point
+  block 0xC8/0xCA + 1): (−290,375,85) @0x8000, event_index 0xff, room bits copied from the
+  proven 0xC8 entry. PLYR 3→4; backup `R00_00.arc.pre-322b-talkspot-bak`.
+- `d_event_data.cpp` §322b — the LinkRM alias now maps donor StartCode 0 → host point 0xCB
+  (donor data stays verbatim in the event list; the alias translates, same doctrine as
+  LinkRM→R_DL01 itself).
+
+**FOUNDRY:** fold the talk-spot PLYR into the room bake (donor id 0x00 → host 0xCB, or re-id the
+host door to donor's 0x01 and free id 0 if the door system ever goes per-door-point).
+
+**WHOSE TURN:** USER → run the tale once more. Expected: fade to black → §322 line with
+`start=203` → reload → wipe-in → Link at (−290,375,85) facing the room, full control, no
+letterboxes. FOUNDRY → bake actions accumulate (§321 REVT exits, §322b talk-spot).
+
+## §323 History → Foundry: TALE CLOSED CLEAN — the complete WW event/cutscene porting playbook (generalize this into the kit) (2026-08-01)
+
+**Lane: History.** User-confirmed: the Grandma tale now runs end-to-end donor-clean on host
+R_DL01 — nine boxes at golden storyboard frames, authored fade-out, same-stage reload teardown,
+wipe-in, control returned at the talk spot, no letterboxes, no churn. This entry is the FULL
+ferry: every facet of the saga + what finally made it click, structured so the kit can make ANY
+WW event/tale/cutscene work. Receipts live in §304/§317 (golden traces), §318–§322b (fix chain),
+`docs/state/ww-tale-dmesg-live-state.md`.
+
+### 1. The donor WW event lifecycle (what the kit must reproduce)
+
+```
+NPC order (actor code, e.g. ba1 orderOtherEventId 'tale_1')
+  → order event runs its cuts (camera, warp): setNextStage(stage, entryPoint)
+  → RELOAD → arrival at PLYR point whose EVENT BYTE fires the REVT event (e.g. 0xC8 → REVT[0])
+  → REVT event = PACKAGE staff PLAY cut → STB plays (cast binds via JSGFindObject)
+  → STB end. TWO TEARDOWN ARCHETYPES — get this wrong and it hangs:
+     A. EXIT-FUL (the tale; any staff with Stage+StartCode): mode 2 → dEvDt_Next_Stage fires
+        UNCONDITIONALLY (donor has NO same-stage no-op) → SAME-STAGE RELOAD **is** the teardown.
+        Event killed mid-flight (finish flags never evaluated), arrival wipe-in restores any
+        STB-authored fade, DEFAULT_START runs on re-entry, spawn point = the donor continuity
+        trick (placed AT the STB end transform).
+     B. EXIT-LESS (no Stage in the staff): mode 2 → demo_remove() → mode 0 → cutEnd sets the
+        PLAY flag → WAIT cut carries the event finish flag → finishCheck → close in place.
+        The REVT exit bytes MUST be 0xFF or TP's Sequencer sceneChange-loops forever (§321).
+```
+
+### 2. Data requirements per ported event (the kit checklist)
+
+| Data | Field that bit us | Requirement |
+|------|-------------------|-------------|
+| **REVT** (stage.dzs, 0x1C/entry) | byte 0x7 finish-exit, byte 0x9 skip-exit | **0xFF unless donor-authored** — zero-fill = "take exit 0 at finish" = infinite sceneChange loop (§321). Type byte (0=maptool/1=ZEV/2=STB) drives skip-proc choice — set deliberately, tale was baked ZEV (flagged §321, unresolved). |
+| **event_list.dat** | full closure | merge_event.py already correct: event→staffs→cuts→data. Exit-less events need the WAIT cut carrying the finish flag (donor TALE_DEMO: PLAY flag 3 → WAIT flag 9). Keep the ALL/dummy staff (port merge dropped it; harmless so far but donor has it). |
+| **PLYR** (room.dzr, 0x20/entry) | byte 0x08 = **REVT event index** (0xff = none), byte 0x1D = **spawn id**, floats 0xC pos, s16 0x1A angY | EVERY StartCode any staff exit references must exist as a spawn id on the host. Event byte is the native cutscene auto-trigger (0xC8's byte 0x00 → REVT[0] = TALE_DEMO). Teardown spawns need evt 0xff. **Donor continuity spawns sit AT the STB end transform** — bake them verbatim ((−290,375,85) @0x8000 for the tale). |
+| **Point-id namespace** | host id 0 collision | Port door convention owns point 0 (`armNativeStageChange`). Donor start codes that collide get remapped ids (tale: donor 0 → host 0xCB) + a translation in the §322 stage alias. Kit alternative: re-id host doors to donor's own scheme (donor LinkRM door = 0x01) and free id 0. |
+| **STB (demo00 prm channels)** | channel 9 misread cost a week | 4 = WW save event-bits (parse-and-drop per №81), 5 = item-give (deferred, BRIDGE-OWED), 6 = monotone, 7 = rumble/shock, **9 = BLACK FADE / 10 = WHITE FADE** (payload: dir byte 0=out else in, then frames) — §304's "DATA_ID(9) @680 = give/handover" was WRONG, it is the tale's ending fade-out. Fade channels REQUIRE archetype-A teardown to restore the screen. |
+| **Demo arc residency** | fadebox et al. | Demo arc (Demo01) must be resident at the entry point (§297); fade box resources (blackfadebox.bdl, fade_*.brk) ride in it. |
+| **SCLS** | absent on host | Host has NO SCLS — doors are port-wired. Any donor event data 'ID' param (SCLS-indexed exits) would need the host SCLS baked or the same alias treatment. |
+
+### 3. Code now generalized in the port (keep — all donor-verbatim restorations)
+
+| § | File | What |
+|---|------|------|
+| §306 | d_event_data.cpp | dEvDt_Next_Stage returns FALSE when no Stage/StartCode (was unconditional TRUE) |
+| §319/§319b | d_event_data.cpp / d_demo.h | exit-less end path = dDemo_c::remove() (not end()) + getCamera null-guard |
+| §320 | d_event_manager.cpp | removed port-added WAIT-mode gate in cutEnd (donor has none) |
+| §321 | data | REVT exit bytes 0xFF (+ Sequencer semantics documented) |
+| §322/§322b | d_event_data.cpp | LinkRM→host stage alias fires the donor same-stage reload, mapping donor StartCode 0 → host 0xCB |
+
+### 4. Failure-mode catalog (symptom → cause, for kit debugging)
+
+| Symptom | Cause |
+|---------|-------|
+| Hangs faded-out forever, control never returns, mEventStatus=1 | Archetype-A event denied its reload (§306b-class deviation) — STB's authored fade never undone |
+| finishCheck passes but event never closes; sceneChange spam | REVT exit byte 0x00 instead of 0xFF (§321) |
+| PACKAGE PLAY flag never sets on an exit-less event | cutEnd gated/mode stuck — check §319/§320 chain |
+| Reload lands wrong: void fall + KNOB_START + letterboxes | StartCode resolved a colliding host spawn id (door=0) — §322b remap |
+| Tale re-triggers in a loop after teardown | Teardown spawn carries an event byte, or lands on the entry point (0xC8) |
+| Mid-word wrap / wrong box metrics | Font value, not layout (retail 23 via second DEMO_SELECT arg — §316/§317) |
+| Post-demo crash on freed demo | Probe/code deref after remove() (§279/§319b) |
+
+### 5. Method lessons (why this took 20+ sections — encode into kit practice)
+
+1. **Both covenant lapses were invented premises** (§316 box-widening, §306b "same-stage exit is
+   a no-op") — each explained a port behavior by a donor mechanism NOBODY HAD READ. The fix both
+   times was reading the donor function (dEvDt_Next_Stage has no same-stage check) or capturing
+   the donor live (font 23).
+2. **Instrument blind spot:** the golden trace concluded "no reload at exit" because a same-stage
+   reload behind an already-black screen, landing on an identical transform, is invisible to a
+   transform probe. DEFAULT_START ("evt 49") in the same capture WAS the reload's fingerprint —
+   cross-check event ids against the stage's event table before trusting a negative.
+3. **Probe silence is data:** three probes going silent at once while §285 kept printing located
+   the §321 finish-branch in one read. Design probe sets so their on/off pattern discriminates.
+4. **The donor never needed flag 9 at tale end** — weeks were spent making a finish path work
+   that the donor bypasses entirely. Establish an event's teardown ARCHETYPE (§1) FIRST, from
+   its staff data (Stage param present?), before debugging its finish flags.
+
+**WHOSE TURN:** FOUNDRY → fold §2's checklist into the kit bake (REVT defaults, PLYR closure incl.
+teardown spawns + id-collision policy, ALL/dummy staff, channel-9 timeline correction); the R_DL01
+kit rebuild is now GREEN-LIT (tale proven end-to-end per §8 of the old handoff). HISTORY → probe
+strip (incl. stale §50), signed suspend counter (#2), d09 mid-tale box (#6), tale_2 verify pass,
+then the user's message-system notes. USER → relay this entry to Foundry.
+
+## §209 PURPLE ⇒ THE LIGHT CALLBACK — switched to the donor's OWN CALL (setSimple) (Housing, 2026-08-01)
+
+User screenshot: puffs are PURPLE with correct BLADE SHAPE (kusa_half texture reading fine) — a
+HUE error, not brightness. Ruled out by source-reading, in order: TEV combiner tables (TP `st_ca`
+vs WW `stTevColorArg` — **identical, all 6 rows**), texture block layout (TP `JPATextureData`
+name@0x0C + ResTIMG@0x20 = exactly our raw-copied WW layout), resource colours (validated §207).
+**ROOT: our call was never the donor's call.** We used `particle_set(..., getLight8EcallBack(), ...)`
+— a LEVEL CALLBACK that recolours the emitter from the room LIGHT, and this stage's ambient is
+**(36,24,59) dark violet** (the §183 probe value) = the purple on screen. The donor's grass never
+runs that callback: `d_grass.cpp:153` is `setSimple(pid, pos, 0xFF, K0, K0, 1)` — the SIMPLE path.
+**V-g:** replaced with `dComIfGp_particle_setSimple(0x03DA, &ppos, 0xFF, k0col, k0col, 1, 0.0f)`
+— donor-exact. Also retires §208's prm/env-arg fix (correct diagnosis of a real second defect, but
+`set()` was the wrong function to be calling at all). Build clean, caches wiped.
+**PATTERN worth the cookbook (3rd receipt this thread):** every grass defect has been a
+RECEIVER-CALL divergence, never donor data — wrong particle id (§192), wrong colour source (§182),
+zero multiplier (§208), wrong FUNCTION (§209). Rule: **port the donor's call verbatim FIRST, then
+adapt only what the receiver's signature forces** — do not assemble an equivalent call from
+receiver idioms and reason forward from it. DN-9's native-systems law is the same lesson upstream.
+**USER'S INSIGHT CREDITED:** "they aren't following the donor colors" was right — the emitter was
+being recoloured by receiver room light instead of donor semantics.
+
+## §324 History: NATIVE WW dMesg GENERALIZED to live NPC talk (all donor NPCs; toggle preserved) (2026-08-01)
+
+**Lane: History.** The §308 native box graduates from STB-only to ALL WW dialogue. The
+{Reconstructed/Native} setting stays (settings UI, directly after "Lies of Link HUD"); Grandma
+(ba1) is the first-NPC reference. Design (files: `d_ext_dmesg.h/.cpp`, `d_msg_object.cpp`,
+`d_ext_npc_mount.cpp`, `f_op_msg_mng.cpp`, `ui/settings.cpp`):
+
+**The architecture insight that makes it small:** every WW actor's talk flow
+(`fopNpc_npc_c::talk`, d_npc.cpp:666) drives the TP `dMsgObject` lifecycle and polls its `mode`
+(MSG_DISPLAYED → `next_msgStatus` chain decision; BOX_CLOSED → done) — and **`dMsgObject_c::isSend()`
+is the single input funnel** for every talk-path advance. So Native live talk = the TP object keeps
+running the lifecycle every actor already depends on, but:
+1. **Input**: `isSend()` returns 0 while the native box presents (the native box owns A/B and its
+   own WW pagination), and exactly one synthetic "A" (2) on final-page dismissal — a 2-frame-valid,
+   consume-once release latch in d_ext_dmesg (§324 gate at the top of isSend).
+2. **Draw**: the TP talk screen's `set2DOpa` submission is skipped while the native talk box is
+   active (same pattern as the rental suppression beside it).
+3. **Text**: native-first — `zel_00.bmg` by the actor's OWN message id (`dExtDmesg_getMessageById`),
+   falling back to the §256 catalog line (ids the text pack remapped). fukiKind from INF1 picks
+   talk vs item box, as in the STB path.
+4. **Entry points**: `dExtWw_injectTalkText` (3-arg `fopMsgM_messageSet`, actor-guarded to the WW
+   proc range 0x320–0x32A on WW host stages) opens the native box; the actor-less 2-arg CONTINUE
+   overload re-opens it for chained conversations via `dExtWw_injectTalkChain` (guard = WW host +
+   Native + a 10-frame chain window armed on each release).
+5. **Lifecycle safety**: STB beats always take the box in STB mode (a live talk box cedes);
+   style-toggle mid-talk cancels cleanly; NO time backstop on talk (donor boxes wait forever —
+   cancelling would strand the suppressed TP object).
+
+**Tracked debts:** (a) **selects** — two-choice boxes are not native yet; if the TP object enters
+a select state the native box cancels and hands presentation back to the TP box (visible skin
+switch, correct behavior). (b) item-icon mapping table beyond clothes.bti (§311(c) debt carries
+over). (c) `dExtDmesg_update` runs from `dExtWw_pollDemoMessage` (d_s_play, every play frame) —
+if a future host stage skips that poll, talk boxes freeze.
+
+**WHOSE TURN:** USER → on a WW host stage with Native style: talk to Grandma (and the postbox) —
+expect the WW box + WW font + WW pagination for every line, A/B paging, conversation chains, and
+the TP box appearing only for choice prompts. Reconstructed style must behave exactly as before.
+HISTORY → on pass: probe strip (§323 queue) + the select-box native port as the next dMesg
+increment. FOUNDRY → no action; §323 kit queue unchanged.
+
+---
+
+## §325 — Foundry: audit of History's un-retired §323 edits to space-kit-design.md — VERDICT: kept with two scope trims (+ Foundry's own §304/§317 corrections applied)
+
+**Lane: Foundry (kit owner).** User flagged that History, mistakenly left active, applied §323 to
+docs/WW Linked/space-kit-design.md and ordered a damage/scope assessment: keep what's good, throw
+out anything outside the kit's original (§298) intentions.
+
+**Damage: none structural.** All §298 content verified intact (charter, the 24-item receipts
+tables, both bake paths, the §302 hybrid-rule section verbatim, coverage guarantee, scope
+boundaries). Every edit is additive and §323-tagged. The folded content is bus-receipted
+(§318–§322b) and belongs in the kit: the archetype classifier reads STAFF DATA, the Pass-2 rules
+bake DATA (REVT 0xFF, teardown spawns at the STB end transform, id-collision remap, ALL/dummy
+staff, WAIT finish cut, fade-box residency), the Pass-3 asserts verify DATA. That is the §298
+charter — turning runtime freezes into bake-time failures. KEPT.
+
+**Two scope trims applied (annotated in-doc, nothing silently deleted):**
+1. §0 said the kit "bakes the same-stage reload alias" — the alias is PORT-SIDE CODE
+   (§322 d_event_data.cpp), not bakeable data. Reworded: the kit bakes the landing PLYR point;
+   the alias is a code DEPENDENCY the Pass-4 manifest verifies as landed.
+2. The id-collision "alt policy" (re-id the HOST's port doors to free id 0) is a port-code
+   convention change — outside the data-receptor charter. Marked as a user-ruling-on-port-side
+   option, NOT a kit bake option. The in-kit policy stays: remap colliding donor StartCodes
+   (0→0xCB pattern) uniformly per space.
+
+**Foundry's own ledger squared (the §323 corrections land on MY receipts):**
+* tale-stb-timeline.md §304 "DATA_ID(9) @680 = give/handover" — CORRECTED in-doc: channel 9 =
+  BLACK FADE (10 = white), the tale's ending fade-out.
+* tale-golden-trace-run1.md "no respawn, no reload at exit" — CORRECTED in-doc: archetype-A
+  same-stage reload IS the teardown; the demo-invalid window was the reload and "evt 49" was
+  DEFAULT_START's fingerprint. A same-stage reload behind black onto a continuity spawn at the
+  STB end transform is invisible to a transform probe — the §323.5.2 lesson now cited where the
+  error lived. §315's acceptance NUMBER stands; the mechanism reading is corrected.
+
+**Net state:** space-kit-design.md is the §323-refined spec, scope-clean, ready for the kit bake
+per its build order (§0 classifier + byte decoders first; R_DL01/LinkRM pilot as REGRESSION
+against the closed tale). Process note for the roster: History is retired from kit-design surface;
+kit docs are Foundry's — future refinements ferry as bus asks, not direct edits.
+
+**WHOSE TURN:** Foundry → build order §3.1 (archetype classifier + PLYR/REVT byte decoders) on
+the user's go. History → their own §323 queue (probe strip, signed suspend counter, d09 box,
+tale_2 verify). User → green-light the kit build start.
+
+---
+
+## §326 — Foundry: SPACE KIT BUILT (build-order §3.1 + Pass-3 battery) — pilot regression on R_DL01: 8/8 PASS
+
+**Lane: Foundry.** User green-lit the kit build. Delivered
+**tools/ww_crew_restoration_skeleton/space_kit.py** (read-only in both modes; №31-clean):
+* `inventory <DonorStage>` = Pass 1: stage/room chunk census, §302 hosting-shape decision,
+  **§0 archetype classifier** (Stage+StartCode presence in each event's closure — donor
+  dEvDtData types decoded per d_event_data.h:26), PLYR/REVT byte decoders, story-layer census,
+  STB DATA_ID channel scan.
+* `regress` = Pass 3: the §323 failure catalog as executable asserts, run against the LIVE
+  R_DL01 (the closed tale = known-good target).
+
+**Pilot result: 8/8 asserts PASS** — classifier(TALE_DEMO=A) ✓, REVT-exit-0xFF ✓,
+entry-0xC8→REVT[0] ✓, landing-0xCB(evt 0xff, platform) ✓, fade-pairing(channel 9 ⇒ A) ✓,
+StartCode-closure(0→0xCB alias) ✓, B-closure(REVT-fired) ✓, demo-arc fade-box residency ✓
+(blackfadebox.bdl + 6 fade brks confirmed in Demo01.arc).
+
+**Donor inventory receipts (LinkRM, 81 events classified) — the §322b/§323 story confirmed
+from DONOR data:** TALE_DEMO/TALE_DEMO2 = A with Stage='LinkRM', StartCode=0; **donor spawn id
+0 = (−290,375,85) evt 0xff — the donor's own continuity spawn** (host door owns 0, hence 0xCB);
+donor spawn 200 evt 0 = tale entry; 202 evt 4 = tale2 entry; get_shield = a SECOND A-event
+(StartCode 201 — spawn 201 evt-byte 3, switch-guarded refire, the shield chain's next event);
+tale_1/tale_2 = B as data (reload comes from ba1 ACTOR code — §293 consistent); story layer
+ACT7 present in Room0.
+
+**Two kit-bugs found AND fixed by the regression itself** (what the pilot is for):
+(1) DATA_ID channel read at content+0 → correct is content+4 (u32 subtype first; verified:
+d_act3 = channel 9 payload dir 0x00/frames 0x14 = the 20-frame ending fade-out);
+(2) B-closure over-strict — donor authors tale_2 PACKAGE-only with NO WAIT cut and tale2 is
+closed in game, so the WAIT requirement applies to REVT-FIRED B events only.
+
+**One latent gap surfaced (§323's "dropped ALL staff" now diffable):** host TALE_DEMO staffs =
+[PACKAGE, CAMERA] vs donor [PACKAGE, CAMERA, ALL] + dummy cut. Harmless so far (tale closed
+without it) — a future kit BAKE restores it donor-verbatim; logged, not patched.
+
+**Next steps (in order):** Pass-2 bake composition (the clean re-derive of R_DL01 from donor
+source — needs bake_room_chunks offset-stable refit first, build-order §3.2), then the
+dedicated-path pilot (Ojhous2→R_DL02). Pass-4 manifest emits from the inventory JSON already.
+
+**WHOSE TURN:** user → playtest nothing (kit is read-only so far); rule on proceeding to the
+Pass-2 bake (which DOES write host arcs — with .bak belts + the 8/8 battery as the gate).
+History → note the ALL-staff diff for the eventual bake. Foundry → §3.2 refit on the go-ahead.
+
+---
+
+## §327 — Foundry: build-order §3.2 DONE (offset-stable refit) + FIRST PASS-2 BAKE LANDED (ALL staff restored, battery 8/8) — RTBL re-derive escalated per DN registry
+
+**Lane: Foundry.** Continuing the green-lit kit build.
+
+**§3.2 refit — the P1 debt is paid.** New shared module
+`tools/ww_crew_restoration_skeleton/dzx_offset_stable.py`: the only two legal dz* operations
+(extend-existing-chunk via relocate-and-extend; add-new-chunk via directory growth into space
+freed by relocating a MOVABLE-whitelisted neighbor), with POINTERED chunks (RTBL/RPAT/RPPN/
+PATH/PPNT) hard-stopped and **every edit byte-diff-verified against its claimed regions** — a
+P1 violation now raises instead of shipping. `bake_room_chunks.py` rewired to it (wholesale
+`build_dzr` retired from the write path). Proven on a SCRATCH copy of R00: 10 rows baked
+(4 Ba1 placements, the ACT7 story-layer row, both TagEv triggers, bonbori WITH its 0.1 scale
+bytes, ky_tag1), 9 correctly deferred (Lamp/props — procs not yet in l_objectName), idempotent
+on rerun (10 dedup, arc untouched). **The live R00 was NOT written** — cast-in-data goes live
+only with the R_DL01 rebuild ruling.
+
+**First Pass-2 bake on live data: the ALL/dummy staff restored** (the §326 latent gap).
+New `restore_event_staff.py` (merge_event's pool-append machinery, targeted at an EXISTING
+event): donor ALL staff + dummy cut appended, host event records patched (staff slot + count
+only — the dry-run prints the donor↔host record diff and it was exactly the missing-staff slot;
+**mFlags byte-identical**). `.pre-allstaff-bak` belt taken. **Post-bake battery: 8/8 PASS**,
+TALE_DEMO/TALE_DEMO2 staffs now donor-verbatim `[PACKAGE, CAMERA, ALL]`. Caches wiped.
+**Playtest ask: one tale run to confirm no in-game regression** (donor-verbatim addition;
+§323 called it harmless-if-absent, so present-and-donor-true should be strictly closer).
+
+**DN-registry escalation (rule 2 — no self-approval): the full R_DL01 re-derive.** The clean
+rebuild (RTBL 6→1 mirroring donor, donor-count lighting bank, TP-residue purge) restructures
+the stage's ROOM SET — blast-radius-adjacent to DN-1's guarded surface (player room identity
+derives from BG under his feet; room-keyed subsystems). The data bake itself stamps no room
+ids, but shrinking the room table changes what rooms EXIST for BG owners already hosted on
+rooms 1-5 (History's ext_bg2..6 manifests). Point-by-point per the entry: (a) no SetRoomId
+call is made by any kit tool; (b) the risk is EXISTING mounts referencing rooms the re-derive
+would remove; (c) sanctioned path = enumerate every mount/manifest referencing rooms 1-5
+BEFORE any RTBL change, and either carry the rooms (donor-mirror + host-extra rooms coexist)
+or migrate the mounts first. **Awaiting the user's explicit go on which shape** (pure donor
+1-room mirror vs donor-mirror-plus-host-rooms).
+
+**WHOSE TURN:** user → (1) one tale playtest to accept the ALL-staff bake; (2) rule on the
+re-derive shape (the DN escalation above). Foundry → on the go: the enumerated rooms-1-5
+mount census, then the gated re-derive; meanwhile Ojhous2→R_DL02 dedicated-path prep can
+proceed (no DN surface — fresh stage identity). History → aware: event_list grew (index-linked
+rebuild, verified), rosters now donor-true.
+
+---
+
+## §328 — Foundry: RULINGS RECORDED (shape B + the COINCIDENCE RULE) — R_DL01 room-0 deferred-port ferry list (History ×3, Housing ×1, decision ×1)
+
+**Lane: Foundry.** Two user rulings from the §327 escalation, now in force:
+
+**1. Re-derive shape = B (donor mirror within the shell).** RTBL stays 6; room 0 re-derives
+donor-clean (cast-in-data, accretion retired); rooms 1-5 tenants untouched; stage-level chunks
+rebuilt with per-tenant allocation, battery-asserted against cross-tenant collisions. DN-1-safe
+(no room removal). Matches the §302 hybrid ruling (single-room donor → packed host, the
+receiver's own R_SP01 idiom).
+
+**2. THE COINCIDENCE RULE (now in space-kit-design.md Pass 4):** a kit bake LANDS only when
+its room's deferred list is EMPTY. Pass 4 emits the non-ported list FIRST, ferried per lane;
+scratch/dry/verify run any time, but the live landing coincides with full cast coverage — a
+kit-baked room never ships part-populated. Tale playtest of the §327 ALL-staff bake: **PASSED
+(user-confirmed end-to-end).**
+
+**THE FERRY — R_DL01 room 0 (LinkRM) deferred ports, donor sources receipted:**
+
+| placement (donor row) | donor actor TU | proc | lane | notes |
+|---|---|---|---|---|
+| `Lamp` (loft, y=657, scale 1.0) | `d_a_lamp.cpp` | fpcNm_LAMP_e | **History** | straight prop port; pairs with bonbori (SCOB, already bake-ready) to finish the user's two-lamps story |
+| `MPot` + `MOsara` + `MKoppu`×2 | `d_a_obj_mshokki.cpp` | fpcNm_Obj_Mshokki_e (prm 0/1/2 = pot/plate/cup — ONE actor, four rows) | **History** | tableware set; single port covers 4 placements |
+| `SPitem` (prm 0x3B, wall shield @(−200,551,−103)) | `d_a_spc_item01.cpp` | fpcNm_SPC_ITEM01_e | **History** | **QUEST-LOAD-BEARING**: the family-shield pickup — the §312 LOOK_SHIELD→get_shield chain's object (get_shield is this room's next A-event, StartCode 201) |
+| `swood` ×2 (window shutters) | `d_a_grass.cpp` ("swood" is a GRASS-family OBJNAME, fpcNm_GRASS_e) | **Housing** | Housing owns the d_grass port (§182–§209 thread) — swood may be nearly free on that surface; verify the swood type row exists in the ported grass proc |
+| `KNOB00` (interior door @(−255,0,1125)) | `d_a_knob00.cpp` | fpcNm_KNOB00_e | **DECISION, then History** | host doors are PORT-WIRED (armNativeStageChange owns point 0, §322b). Porting donor KNOB00 = the donor door system entering a packed host — needs the door-convention ruling (donor KNOB00 vs port-wired door) BEFORE code. Flagged, not assigned. |
+
+**Foundry keeps (kit-side, not actor ports):** the remaining room receptor chunks not yet in
+the bake tag set (SOND / LGTV / RCAM / RARO / RPAT+RPPN / LBNK — RPAT/RPPN via the POINTERED-
+aware path), donor model-arc staging for the above actors (Object dir, donor-verbatim md5), and
+the rooms-1-5 tenant census (the DN-1 diligence for shape B).
+
+**Sequencing under the coincidence rule:** Foundry preps the room-0 re-derive to READY (scratch-
+proven, battery-gated) in parallel with the ports; it LANDS the day the table above clears.
+Ojhous2→R_DL02 dedicated prep proceeds meanwhile (DN-clean) — its own Pass-4 list will ferry
+the same way (Ji1/Aj1 cast etc.).
+
+**WHOSE TURN:** user → relay the table to History + Housing; rule on KNOB00 when ready.
+History → Lamp, Obj_Mshokki, SPitem (donor TUs named above). Housing → swood-on-grass check.
+Foundry → receptor-chunk bake coverage + model staging + tenant census; then the ready-to-land
+re-derive.
+
+## §325 History ← Foundry: Grandma's-room ferry list ACKED — receipts checked, staging gap found, work order set (2026-08-01)
+
+**Lane: History.** Foundry's deferred-item ferry (relayed by the user) is accepted. Receipts
+verified against the donor + the staged arcs:
+
+| item | donor | status |
+|------|-------|--------|
+| Lamp (loft lamp) | `d_a_lamp.cpp` (226 ln, fully matched) — swinging fire lamp: torch particle (ID_AK_JN_TORCH + KAGEROU00), dKy point light, quake/wind/sword reactions | **History NEXT — `Lamp.arc` IS staged** (arcs/ + residmap) |
+| MPot/MOsara/MKoppu ×2 | `d_a_obj_mshokki.cpp` (422 ln, matched) — ONE actor, prm 0/1/2; donor OBJNAME rows confirmed (`MPot`/`MOsara`/`MKoppu` → `fpcNm_Obj_Mshokki_e` arg 0/1/2, WW d_stage.cpp:1131-1133); cylinder cc, roll/wind physics, break particles (BREAKMAJUPOT/PLATE/CUP) | **BLOCKED: `Mshokki.arc` NOT in arcs/** — Foundry staging ask |
+| SPitem (wall shield) | `d_a_spc_item01.cpp` (294 ln, matched) — quest-load-bearing (§312 LOOK_SHIELD→get_shield chain object) | **BLOCKED: arc NOT staged** (donor arc name TBD from its l_arcname) — Foundry staging ask |
+| swood ×2 | grass-family OBJNAME | Housing's (per Foundry) — not History |
+| KNOB00 | `d_a_knob00.cpp` | **HELD for the USER's ruling**: donor door system vs the port's door wiring (§322b point-0 convention). No code before the ruling. |
+
+**Order of work (History):** 1) Lamp (data ready), 2) mshokki, 3) SPitem — 2/3 start when Foundry
+stages `Mshokki.arc` + the SPitem arc (same pipeline as Lamp.arc: arcs/ + residmap.csv). Port
+pattern = cookbook recipes 1–9 (direct-port: donor header + source, proc slot 0x32C+, profile
+lst, files.cmake, OBJNAME rows). WW particle ids (torch/break) ride the §205/§206 particle
+surface — if they don't resolve at runtime, that's the known Foundry particle blocker, logged not
+bridged.
+
+**Also noted from the §324 playtest:** native talk verified on Grandma (only talker in the room).
+Exterior NPCs (Aryll/postbox) still need one verification talk — if their lines fall back to
+Reconstructed, the dmesg-arc residency (`dExtDmesg_ensureResident`, mount:7699) may be
+interior-gated; check `§324 talk open` presence in the log.
+
+**WHOSE TURN:** USER → (a) the KNOB00 door-convention ruling, (b) relay the two arc-staging asks
+to Foundry, (c) optional: one exterior NPC talk for the §324 residency check. HISTORY → Lamp port
+next. FOUNDRY → stage Mshokki.arc + SPitem's arc.
+
+## §326 USER RULINGS: KNOB00 = ALWAYS NATIVE; toggle coverage = every WW NPC, both worlds (2026-08-01)
+
+**Lane: History (recording the coordinator's rulings).**
+1. **KNOB00: the donor door system (`d_a_knob00.cpp`) gets ported natively.** The port's door
+   wiring (armNativeStageChange / point-0 convention, §322b) is thereby a BRIDGE with a named
+   native replacement — it stays functional until the knob00 port lands, then yields on WW host
+   stages. History's queue after Lamp/mshokki/SPitem (or alongside — knob00's arc/deps to be
+   checked; it also intersects the §325 door-spawn id notes: donor door spawn id 0x01).
+2. **Toggle coverage: all WW NPCs, exteriors AND interiors, obey {Reconstructed/Native}.**
+   Audit result: already wired — `dExtWwSave_isWwHostStage` matches `R_DL*` + `F_DL*`, and the
+   §324 residency + injectTalkText + openTalk all sit behind that same predicate, so Outset
+   exterior talkers (Aryll ls1, postbox, bm1-5, zl1) take the native box in Native style.
+   Outstanding: (a) ONE verification talk on the exterior (`§324 talk open` in the log);
+   (b) `F_SP115` carries staged WW content but fails the `*_DL` predicate — if a WW talker ever
+   stands there, widen the predicate (one line); evidence first.
+
+**WHOSE TURN:** USER → exterior verification talk when convenient; relay §325 staging asks.
+HISTORY → Lamp port, then mshokki/SPitem (on staging), then knob00 native door. FOUNDRY →
+§325 staging asks (Mshokki.arc, SPitem arc) + eventually knob00's arc if not already staged.
+
+---
+
+## §329 — Foundry: ACTOR KIT DRIVER BUILT + first port through it (Otble, Orca's table) — LANDED INERT, build green; activation gated on DN-1 + coincidence
+
+**Lane: Foundry.** User asked for a faster porting path and ordered the driver built + tested on an
+Orca-room item. Delivered **tools/foundry/actor_kit.py** — one command per donor actor, composing
+the §248 instruments: donor TU+header pull → ww2tp_codemod (AUTO applied, REVIEW carried) →
+registration plan computed against the LIVE tree (f_pc_name.h next index, profile extern + table
+slot with **positional-index assert** — table entries excl. NULL terminator MUST equal the enum
+index) → model arcs staged donor-verbatim (md5) → collision pre-flight → the §-catalog pitfall
+checklist → **DN autodetection** (dBgW/Regist in donor source ⇒ DN-1 escalation at the top of the
+report). **Two-stage landing:** `--land` = code in the tree, compiles, but NO OBJNAME row —
+runtime-inert; `--activate` = the OBJNAME row(s), gated on DN flags + the §328 coincidence rule.
+
+**Test port: `d_a_obj_otble`** (Orca/Sturgeon wooden tables, donor 193 lines — chosen from the
+kit's own Ojhous inventory; note Orca-room coverage math: kotubo+ootubo1+Ostool all resolve to ONE
+proc, fpcNm_TSUBO_e/d_a_tsubo, so that single Tier-2 port = 19 placements — ferried to History).
+Driver run: scaffold + report; `--land`; hand pass (the REVIEW being exercised); **build GREEN**
+(30,978 exports, linked; caches wiped). Okmono.arc staged ×2 (md5 9520447f…). Adaptation deltas,
+all bannered in the TU (lamp §327 idiom set): DN-3 by-name model resolve
+(dRes_INDEX_OKMONO_* → otable.bdl/otablel.bdl; dzb by name via the mount-collision getObjectRes
+precedent :3357), fopAcM_ct, cPhs_Step, NULL-guards, E_RD draw-prio slot.
+
+**The driver LEARNED from its first run (rules harvested into the codemod):** 4 new AUTO rules
+(port `dComIfG_Bgsp()` returns a REFERENCE; `tevStr.mRoomNo→room_no`; `mEnvrIdxOverride→YukaCol` —
+alink receipts) + 1 REVIEW rule (port `GetTriPla` is bool(polyInfo, cM3dGPla*) out-param, alink
+:5770 idiom). Next actor through the driver hits these automatically — the per-actor cost curve
+bends down with each port.
+
+**DN-1 status (the activation gate):** Otble registers standable collision (dBgW→Regist). Landed
+code is donor-verbatim and INERT (nothing spawns it). Per the entry's own mechanism: at Regist
+time the room id is the loader-stamped actor room from the data-authored ACTR row — positively
+resolved, never guessed — which is DN-1's sanctioned condition. **Escalating for the user's
+explicit go before `--activate`** (which would also wait on Orca-room coincidence anyway).
+
+**WHOSE TURN:** user → DN-1 ruling on furniture-class BgW activation (Otble is the precedent-
+setter; Otana/shelf and the tsubo family follow the same shape). History → tsubo ferry
+(d_a_tsubo, 19 Orca-room placements) when ready. Foundry → next drivers runs on the go
+(d_a_obj_shelf is the natural second), Ojhous2→R_DL02 prep continues.
+
+## §327/§328 History: ONE-PASS PORTS LANDED — Lamp, mshokki, SPitem, d_door layer + knob00 (gated) (2026-08-01)
+
+**Lane: History.** The user ordered all §325/§326 ports in one pass. All donor code is now in the
+tree, donor-verbatim, §327/§328-annotated. First-pass build of the three actors was GREEN with
+/O2 verified after the files.cmake CMake re-run (pins held); final build pending as this is written.
+
+**§327 — three actors (LIVE on build):**
+- `d_a_lamp` (slot 0x32C) — swinging fire lamp: torch particle + point light + quake/noise sway +
+  wind-hit deflection. `Lamp.arc` staged; model by member name (DN-3 recipe #1).
+- `d_a_obj_mshokki` (0x32D) — tableware, ONE actor arg 0/1/2 (pot/osara/koppu): bump/knock/break
+  physics, break particles. OBJNAME rows MPot/MOsara/MKoppu (donor :1131-1133).
+- `d_a_spc_item01` (0x32E) — SPitem wall shield on native TP daItemBase_c lineage; WW item_info
+  SHIELD row (0x3B) verbatim; arc = `Vshin.arc` (per WW dItem_data getFieldArc).
+- Population's Lamp→NPC_LAMP stand-in PARKED (log-once skip; bridge retired).
+- SE ids value-faithful local defines (toripost precedent); WW particle ids are native port enums.
+- Debts: WW dItem_data full port (only SHIELD row covered — rupee/pendant/crest SPitem variants
+  fail create cleanly until then); WW arrow-bundle doubles dropped (no covered row needs them);
+  SE bank real mapping = later audio pass.
+
+**§328 — WW door layer (d_door LIVE; knob00 ported but GATED default-off):**
+- `d_door.h/.cpp` — dDoor_info/smoke/key2/stop/msg/hkyo classes, donor-verbatim, compiles live.
+- `d_a_knob00` — donor paths were OCCUPIED by the §27 stand-in; donor names KEPT per the
+  no-rename order, so both live behind `DUSK_WW_KNOB00_NATIVE` (0 = stand-in byte-identical,
+  1 = full donor daKnob00_c). No new proc slot (donor spelling fpcNm_KNOB00_e already at 0x31C).
+- 8 OBJNAME rows KNOB00-03/KNOB00D-03D (donor :465-472) — inert until DZR-placed doors exist.
+- DN-1 audit: donor knob00 sets NO room on its BgW — default-room path (sanctioned); Regist/
+  Release owner-identity only.
+- Save bits: all WW event bits routed via the §303 donor block (none had TP mappings); tmp bits
+  0108/0110 + isTact + password UI + AGB + ship-pos + TAG_MK villa spawn = BRIDGE-OWED stubs,
+  each bannered.
+- Arc: `Knob.arc` STAGED ✅; `Key.arc` (locks) + `Hkyo.arc` NOT staged.
+- **Gate-flip seam list (the work item to activate native doors):** (1) d_ext_npc_doors' stand-in
+  API calls (setDoorKey/findKnob00Near/stampKnob00) need redirect; (2) warp backend — native
+  openEnd vs armNativeStageChange hook; (3) event-arc bind (DoorK10) vs host event_list
+  DEFAULT_KNOB_* resolution; (4) §27-vs-DZR double-spawn watch; (5) MoveBG CrrFunc + №73
+  retainArc decisions. All bannered in-code.
+
+**FOUNDRY STAGING QUEUE (now 4):** `Mshokki.arc`, `Vshin.arc`, `Key.arc`, `Hkyo.arc` → arcs/ +
+residmap per the Lamp/Knob pattern.
+
+**KNOWN GAP (flagged, not a regression):** with the NPC_LAMP stand-in parked, the loft lamp
+spawns only when a native path resolves the census placement through l_objectName — if the
+census spawner is still actor_map-only, the room has no lamp until that wiring or the kit's DZR
+rows land. Tracked here, decision next session.
+
+**WHOSE TURN:** USER → playtest (lamp presence/behavior in Grandma's room; field FPS glance
+~220+ after the CMake re-runs; tableware/shield stay dormant until staging). FOUNDRY → the
+4-arc staging queue. HISTORY → gate-flip seam wiring for native knob00 (per §326 always-native),
+census→OBJNAME lamp spawn decision, then the owed probe strip.
+
+## §329 History: NATIVE knob00 ACTIVATED — gate ON, seams wired, build green (2026-08-01)
+
+**Lane: History.** Per the user's order, the §328 gate flipped same-day. `DUSK_WW_KNOB00_NATIVE=1`
+(kill switch: set 0 → the §27 stand-in byte-identical). Seam wiring, all §329-bannered:
+1. **Door-network stamp surface** — the native `daKnob00_c` now carries the port metadata trio
+   (`setDoorKey/doorKey/spawnSrc` + buffers) so `d_ext_npc_doors.cpp` compiles unchanged against
+   either branch; native `create()` consumes `dExtNpcMount_takePendingSpawn` exactly as the
+   stand-in did (DZR doors: no stamp → donor-pure).
+2. **Warp backend** — native `openEnd()`, after donor `closeEndCom()`: if the door carries a
+   network key → `dExtNpcDoors_tryNativeWarp(this, true)` (the port resolves cross-stage
+   destinations; WW's SCLS-index exits don't exist on host stages, §322b). Unstamped doors never
+   warp — donor restart-room only.
+3. **Event arc** — left donor-pure (no DoorK10 bind): host event_list carries DEFAULT_KNOB_* per
+   the merge-tool record; RUNTIME WATCH — if door events fail to resolve/camera is wrong at first
+   door use, add the stand-in's DoorK10 bind to the native branch.
+4. **Double-spawn** — watch item stands (no DZR KNOB00 rows on host stages today; the 8 §328
+   OBJNAME rows are inert until the kit bakes door ACTR entries).
+5. **BG mover** — native `CreateHeap` now sets `SetCrrFunc(dBgS_MoveBGProc_Typical)` after the
+   MOVE_BG Set (port-required: TP's dBgS doesn't install WW's default mover; §27/knob20 idiom).
+Build GREEN gate-ON (d_a_knob00 + d_ext_npc_doors + link), caches wiped, exe 17:09.
+
+**WHOSE TURN:** USER → the full-overview playtest: Grandma's room door (open anim, walk-through,
+collision riding, warp to exterior + back), tale still clean, native talk, lamp-gap noted, field
+FPS glance. Regression path: `DUSK_WW_KNOB00_NATIVE 0` + rebuild. HISTORY → on the playtest log:
+DoorK10 watch (seam 3), then census→OBJNAME lamp spawn, then probe strip. FOUNDRY → 4-arc
+staging queue unchanged (Mshokki/Vshin/Key/Hkyo).
+
+## §330 Foundry: TTW comparative methods review — deliverable landed (2026-08-01)
+
+**Lane: Foundry.** User assignment: study Tale of Two Wastelands (FO3 ported into the FNV
+engine — the closest existing analog to our WW→TP shape; "identical engines" total
+conversion, ~14 years mature) and audit our methods against theirs. Full deliverable:
+[ttw-methods-review.md](ttw-methods-review.md). Evidence tier `[web/document]` (their
+public GitHub org = 2014–2017 tooling; 3.x installer closed-source, behavior from their
+published docs — caveat recorded in the doc header).
+
+**Headline verdicts:**
+- **Independently converged:** their legal architecture (ship diffs + checksums, regenerate
+  from user-owned files, zero donor bytes distributed) IS Covenant №31. Their scars confirm
+  our laws: navmesh *repaired* not regenerated ≈ §281 edit-in-place; hotfixes
+  temporary-and-absorbed ≈ the bridge/owed-list doctrine + DN-9.
+- **We exceed on measurement:** TTW had ZERO runtime parity instrumentation — QA was human
+  testers + forum intake. The oracle stack / DuskTap / probe differ estate is the axis
+  where this project is genuinely ahead of the 14-year benchmark.
+- **They exceed on pipeline productization:** their conversion is a *product* (one command,
+  every output verified against a target hash, known-source-variant tolerant, idempotent
+  resume); ours is still a *procedure* (~20 hand-run skeleton scripts, source-hashed but
+  outputs unpinned).
+
+**Recommendations (R1–R10 in the doc, prioritized, lane-routed, all awaiting user
+ratification).** Top three: **R1** one-command `convert-all` pipeline runner (P8 capstone;
+makes the mod folder a regenerable derived artifact — today it is a single hand-produced
+local copy); **R2** output-target hash manifest in `verify` (mechanically subsumes the open
+SL-1 §113-stash assert: any "repair" of the stash bytes changes the output hash);
+**R3** expected-donor-dump roster (which WW dump is sanctioned — every golden/baseline
+silently assumes one). Also notable: **R4** TTW's best QA idea, runtime checks that
+*manual* conversion passes actually happened (their GECK-resave check, generalized);
+**R6** their 24 kHz voice re-encode lesson ("plays" ≠ "plays correctly under host DSP") →
+audit TP mixer envelope vs WW waves before post-Outset audio scales.
+
+**WHOSE TURN:** USER → read/ratify: which of R1–R10 proceed, and in what order (R1–R3 are
+Foundry's recommended sprint; R3 needs a user ruling on the sanctioned dump). BRIDGE → on
+ratification: R1/R2/R3 builds (SL-1 already routed there; R2 is its offline half).
+FOUNDRY → specs for whichever Rs ratify; 4-arc staging queue (§328) unchanged. HOUSING →
+negative-controls on R2/R4 when built (does a missing manifest entry report UNKNOWN?).
+
+## §211 V-h — receiver setSimple is NOT donor setSimple; restored spawn path minus light callback (Housing, 2026-08-01)
+
+**User corrections that reframed everything (both accepted, both mine to own):** (1) cuts DO
+register — blades stub out like vanilla, so §210's `massN=0` reading was a RED HERRING (the poll
+probe reads the count at its own bracket moment; it says nothing about whether ChkMass later
+reports a hit). (2) blades render perfectly and always have — the "didn't render" report was the
+CUT VFX alone; my §210 draw probe answered a question nobody asked (retired this build).
+**ROOT of the total disappearance = §209's own fix.** `dPa_control_c::setSimple`
+(d_particle.cpp:2472-2494) is REGISTRATION-GATED: it looks the id up in the pre-registered
+`dPa_simpleEcallBack` table via `getSimple()` and returns 0 + JUT_WARN when absent. 0x03DA is a
+WW-supplemental id never entered in that table ⇒ **nothing spawned at all**, and the warning goes
+through JUT_WARN which (like the OS_REPORT witnesses, §210) never reaches the log file — a silent
+failure. Donor `setSimple` = general spawn; receiver `setSimple` = curated fast path. **Same name,
+different function** — the §209 "port the donor's call verbatim" lesson needs its counterweight:
+verify the receiver's function of that name does the same JOB before adopting it.
+**V-h:** back to `particle_set` (the general spawn, and the only path that routes through the WW
+supplemental resolver §201) with the level callback **NULL** instead of `getLight8EcallBack()` —
+which is what §209 actually wanted: the callback recolours from room LIGHT (stage ambient
+(36,24,59) violet = the purple). §208's K0-as-prm/env-modulator fix retained (real defect).
+Build clean, caches wiped. **§209's purple hypothesis is now testable for the first time.**
+**BOARD STATE (honest):** grass VFX has cost 8 ferries; every root has been a receiver-call
+divergence (id, colour source, zero multiplier, wrong function, dead spawn path) and NONE were
+donor data. The converter, resource, texture, TEV tables and colours are all validated correct.
+
+---
+
+## §331 — Foundry (lane owner): §330 TTW review AUDITED — endorsed with three amendments; ratification recommendation attached
+
+**Lane: Foundry.** The §330 comparative review (contracted research instance) is VALID and
+well-evidenced — scorecard verdicts check out against the estate, the two-way honesty section is
+accurate (their measurement gap / our productization gap), and the TTW-weak-spot inheritance notes
+(magic+version mandatory in any new artifact format) are adopted into kit practice immediately.
+Three amendments before ratification:
+
+**A1 — the kit-maturation prescriptions are PARTIALLY STALE (overtaken by §329, same day).** The
+"no apply tier / no prediction-vs-actual feedback loop" findings described enemy_port_kit v3/v4;
+`actor_kit.py` (§329) IS the apply tier (codemod AUTO applied, registrations computed+applied
+with the positional-index assert, arcs staged, landed inert, build green) and the feedback loop
+ran its first cycle the same day (4 AUTO + 1 REVIEW rules harvested from the Otble port into the
+codemod). **Still valid and adopted from their analysis: crash-recipes-as-lint** — cookbook
+recipes 1–9 ((u32)this truncation, consume-time BDL parse, modelCalc-before-entryDL, …) encoded
+as a kit scan pass over ported TUs. Queued as the Actor Kit's next increment.
+
+**A2 — R1 must UNIFY with the Space Kit, not parallel it.** The one-command `convert-all` runner
+overlaps the Space Kit driver's Pass-2 composition for the stage-data domain. Two orchestrators
+drift; the recipe manifest should invoke space_kit as its stage-data module (audio/model/icon
+domains as sibling modules). Routing amendment: R1 = Bridge builds the runner + non-stage modules;
+Foundry's space_kit IS the stage module; ONE declarative recipe.
+
+**A3 — R7 gets a CONTENT-WALL constraint.** "Full canonical text projection of every mod-folder
+artifact, git-tracked" is safe for STRUCTURAL metadata (member tables, hashes, chunk censuses,
+casts, palette tables) but must NOT pull donor PROSE (dialogue text — the wall that keeps
+zel_00_rows.tsv outside every repo) into any tracked tree. R7 ratifies with an explicit
+structural-only projection charter + №106 naming sweep on its outputs.
+
+**Concurrences worth recording:** R2 is the Space-Kit Pass-3 byte-diff philosophy generalized to
+whole-folder acceptance (dzx_offset_stable already verifies per-edit claims; R2 pins per-file
+acceptance hashes — same law, wider net). R3 is the best single catch of the review: every
+golden/baseline/trace silently assumes one donor dump and NOTHING declares it. R5 should absorb
+the NEW mapping stores created since (§329 codemod AUTO/REVIEW tables, bake KNOWN_SIZE tables,
+STARTCODE_ALIAS) — the scattered-mappings problem grew this week.
+
+**Ratification recommendation (Foundry seat):** R3 first (trivial build, needs only the user's
+sanctioned-dump ruling — recommend NTSC-U GZLE01, the dump all §-receipts already cite), then
+R2, then R1-as-amended, then R4 (several boot asserts already exist — census them first), then
+R5. R6 holds until post-Outset audio scales (per its own text). R7-as-amended, R8/R9/R10 doctrine
+passes whenever convenient (R9 draft is cheap — offer to Librarian).
+
+**WHOSE TURN:** user → ratify order + the R3 dump ruling + R8 policy when ready. Foundry →
+crash-recipe lint (A1 adoption) + standing by to accept History's in-test implementations.
+Bridge → R3/R2 on ratification. Librarian → R9 table draft on nod.
+
+## §212 INVISIBLE SCATTER ROOT — ESP1 flag words are NOT portable between JPA1/JPA2 (Housing, 2026-08-01)
+
+Third distinct symptom (black → purple → invisible) traced to MY V-e ESP1 carry. BSP1 and FLD1 bit
+layouts ARE identical across the lineages (verified §207 and again here: FLD1 type 0-3,
+velType >>8, sttFlag >>16 match). **ESP1 is the exception** — same word, different meanings:
+
+| meaning | WW (JPA1) | TP (JPA2) |
+|---|---|---|
+| alpha enable | 0x00000001 | 0x00010000 |
+| sin wave / flick | 0x00000002 | 0x00020000 |
+| scale enable | 0x00000100 | 0x00000001 |
+| scale XY diff | 0x00000200 | 0x00000002 |
+| scale anm type X/Y | >>18, >>19 (1 bit) | >>8, >>10 (2 bit) |
+| pivot / scale centre X/Y | >>14, >>16 | >>12, >>14 |
+| rotate enable | 0x01000000 | 0x01000000 (same) |
+
+Copying verbatim made TP read WW's *alpha-enable* bit as *scale-anim enable* and drive scale from
+mismapped values → particle scaled to nothing → INVISIBLE. Timeline confirms: visible-but-purple
+BEFORE V-e carried ESP1, invisible after. **V-i: translate the word bit-by-bit** (table above, in
+code with both header citations). Build clean; caches + stale ww_converted_*.jpc dumps wiped so
+the next run re-emits with translated flags.
+**LESSON (converter-wide):** validating STRUCTURE (§207) is not validating SEMANTICS. Every block
+carried across lineages needs its accessor bits diffed header-to-header, not just its field
+offsets. BSP1/FLD1 pass; ESP1 did not; **KFA1/SSP1/ETX1 remain unverified** and will need the same
+diff before they are ever carried.
+**PLAYTEST:** cut a clump → puffs should now be VISIBLE (scale honoured) and the colour question
+(§209 light-callback hypothesis, callback already NULL in V-h) finally gets its answer.
+
+## §330 History: door + tale CONFIRMED on §329d; rulings recorded; History at a stable pivot point (2026-08-01)
+
+**Lane: History.** User-confirmed working: native knob00 doors (visible, open, warp both ways),
+tale end-to-end, interior stable (§329d un-park), one Grandma, lamp stand-in visible.
+
+**User rulings recorded:**
+1. **Lamp real-thing = the KIT.** The stand-in survives only until Foundry's R_DL01/F_DL01 kit
+   bakes real DZR ACTR rows (native l_objectName spawns replace the census mounts wholesale —
+   the §327 native d_a_lamp is already registered and waiting). Same for every census stand-in.
+2. **Door-open: TP Link performs the WW demo** (preferred over binding TP's own door event).
+   Precedent exists: the tale STB already drives the REAL daAlink (procCoToolDemo, §48/§317) —
+   the door's donor event Link-staff should route the same way. History work item: map the donor
+   door demo's Link cuts onto the port's demo-driven Link path.
+3. **NEW OPEN BUG — collision materials:** TP Link standing on some WW furniture/geometry
+   triggers the "sink in lava" animation. Read: WW dzb polygon ATTRIBUTE codes land in TP's
+   material/attribute table with different semantics (a benign WW code = TP lava). Surface:
+   the WW→TP collision attribute translation on baked/ported dzb — History (code translation
+   table, donor-faithful) with Foundry receipts (which polys/codes — DuskTap or dzb dump).
+   Not yet investigated; do NOT hand-patch individual polys.
+
+**PIVOT: YES — safe to switch to Foundry now.** History has no open crash, all builds green
+(exe 17:43), and every open History item is seam/queue work that doesn't block Foundry:
+- Foundry queue: 4-arc staging (Mshokki/Vshin/Key/Hkyo), kit DZR rows (doors get real per-door
+  donor params replacing the §329c sentinel; lamp/props get real ACTR spawns), §321/§322b/§323
+  bake actions, collision-attribute receipts for ruling 3.
+- History queue (next session): WW-demo-driven Link door anim (ruling 2), collision attribute
+  map (ruling 3, after Foundry receipts), census→OBJNAME spawn path + liveness decoupling
+  (§329d preconditions), DoorK10 event watch, exterior §324 talk verification, probe strip.
+
+**WHOSE TURN:** USER → pivot to Foundry with this entry + §323 (kit playbook) + §325/§327-§329d
+(staging + seam receipts). FOUNDRY → the queue above. HISTORY → standing by on the queue.
+
+---
+
+## §332 — Foundry: R3 BUILT (sanctioned dump = GZLE01, self-receipted) + LAVA-SINK ROOT-CAUSED byte-exact (the §330b collision-attribute receipts History asked for)
+
+**Lane: Foundry.** (Numbering note for Librarian: two §330 entries exist — the TTW review and
+History's stable-pivot; cite History's as **§330b**. No renumber of published entries.)
+
+**R3 DONE — donor_roster.py + donor_roster_GZLE01.csv (1,561 files, SHA-256).** User ruling
+recorded: sanctioned dump = NTSC-U. Identity anchor comes from the dump ITSELF: sys/boot.bin
+game code **GZLE01** = GameCube / Zelda WW / English-NA / Nintendo — the disc ID, not a save;
+it identifies the ISO regardless of save slot, and it is the same code the decomp config and
+DuskTap probe already key on. `build` hashes the dump (sys/ + files/res + files/Audiores);
+`verify <tree>` reports OK/MISMATCH/MISSING/**OFF-ROSTER (UNKNOWN, never CLEAN — №31-C)**.
+Self-verify: 1,561/1,561 OK.
+
+**LAVA-SINK ROOT CAUSE — it is a BIT-LAYOUT collision, not a value mismatch.** Receipts:
+* **WW** packs its material attribute in PolyInf1 **bits 16–20** (5 bits):
+  `GetAttributeCodeDirect` = mask 0x001F0000 >> 16 (donor d_bg_s.cpp:190), decoded through
+  `atr_conv[0x20]` (:194): 0x02=WOOD, 0x03=STONE, 0x06=LAVA…  WW special-code = bits 12–15.
+* **TP** reads the SAME word differently: `GetPolyAtt0` = **bits 12–15** (mask 0xF000),
+  `GetPolyAtt1` = **bits 16–18** (mask 0x70000), GroundCode = bits 19–23 (port d_bg_w.cpp:
+  1048–1058). And TP's Link treats **Att1 ∈ {1,2,3,4} as SINK-class ground**
+  (checkNotItemSinkLimit, alink :9859; sand-sink speed applied :9887).
+* **The furniture receipt:** Okmono otble.dzb/otble_l.dzb Ti dump — both properties carry
+  `inf1 = 0x000200FF`: WW reads attCode **0x02 = WOOD** (correct, wooden table); TP reads
+  Att1 = **2 = SINK**. Every WW attribute whose low 3 bits are nonzero (WOOD 2, STONE 3,
+  GRASS 4…) lands in TP's sink/special class — which is why it hits furniture universally.
+  Also note: WW's special-code field (12–15) collides with TP's Att0 — nonzero WW specials
+  would fake TP materials; the table must cover both fields.
+
+**Recommended seam (History's "one table" prediction confirmed, now mechanical):**
+**engine-side translation at the dzb consumption boundary** — one repack function applied to
+WW-sourced dzbs at `dBgW::Set` time (covers Otble's path AND the mount system's existing
+:3357 collision loads, current and future, in one site) rather than baking modified dzbs
+(keeps staged arcs donor-byte-verbatim). The table: WW attCode (16–20) + WW special (12–15)
+→ TP att0/att1/groundCode fields, donor-semantics-preserving (WOOD→TP wood material, LAVA→TP
+lava, etc.). History writes the table per §330b plan — all bit positions + the Ti dumps above
+are the mechanical inputs; Foundry's dzb dumper is reusable for any future arc
+(space_kit-adjacent; ask if you want it as a standing tool).
+
+**Grandma-bake sequencing (my §-call, user delegated):** R3 first (done), and the room-0
+cast bake WAITS on (a) the attribute translation landing — activating more BgW furniture
+before it spreads the sink bug — and (b) swood/KNOB00 clearing the §328 coincidence list.
+Bake stays prepped-to-ready; the 8/8 battery gates it when the list clears.
+
+**WHOSE TURN:** History → the attribute translation table (receipts above make it one
+session); tsubo port when ready. user → KNOB00 ruling still open (§328); DN-1
+furniture-activation ruling folds into the attribute-table acceptance (they gate the same
+step). Housing → swood-on-grass check still open. Foundry → standing by to accept History's
+tested implementations; Ojhous2→R_DL02 prep continues.
+
+---
+
+## §333 — Foundry: USER RULINGS RECORDED — KNOB00 goes NATIVE; attribute-table gets a SLIP-CLASS translation rule (user informing History directly; this entry is the record)
+
+**Lane: Foundry.** Two rulings from the user, closing the §328/§332 open items:
+
+**1. KNOB00 = NATIVE DOOR.** Exteriors already went native-door; interiors follow. The donor
+`d_a_knob00.cpp` (944 lines) ports as the interior door actor — Actor-Kit driver eligible,
+History's port per the §328 ferry (the "decision" gate is now cleared). This closes the LAST
+decision on Grandma's coincidence list; remaining items are work, not rulings (KNOB00 port →
+History; swood check → Housing). History's queued door-demo direction (§330b: TP Link performing
+the WW door demo through the port's demo system, tale-STB precedent) pairs naturally with this.
+
+**2. Attribute-table design rule: SLIP-CLASS fallback, pure translation.** For the WW→TP
+collision-attribute table (§332 receipts): WW surface types in the problem set translate to
+TP's **slippable/no-stand surface class** — the same mechanism native TP uses on near-out-of-
+bounds areas — as a PURE translation for those specific surface types.
+**Foundry's scope note for History (so the rule can't over-apply):** ordinary WW materials with
+true TP equivalents (WOOD/STONE/GRASS/DIRT/METAL/CARPET…) still map to their TP MATERIAL
+equivalents — standable, donor-behavior-preserving (WW Link stands on tables; the table stays
+standable). The slip-class translation covers the surface types WITHOUT a clean TP-native
+equivalent (boundary/void-class and any WW code whose TP mapping would otherwise be wrong-
+semantic) — History enumerates the exact code set with receipts when writing the table, and
+flags any code where slip-vs-material is ambiguous back to the user rather than guessing.
+
+**Coincidence-list state for R_DL01 room 0 after these rulings:**
+| item | state |
+|---|---|
+| Lamp / Mshokki / SPitem | PORTED (History, §327-era) |
+| KNOB00 | RULED native — History ports (driver-eligible) |
+| swood ×2 | Housing check open |
+| attribute translation | History writes (gates ALL furniture activation incl. Otble) |
+Bake fires on the 8/8 battery the day the last row clears.
+
+**WHOSE TURN:** History → attribute table (with the slip-class rule + scope note) + KNOB00 port
++ tsubo. Housing → swood. user → nothing open until the attribute table returns for acceptance
+(that acceptance doubles as the DN-1 furniture-activation ruling). Foundry → standing by to
+accept History's tested implementations; R_DL02 prep + crash-recipe lint continue.
+
+## §334 History: WW→TP COLLISION-ATTRIBUTE TRANSLATION — BUILT, table attached for the user's acceptance ruling (2026-08-01)
+
+**Lane: History.** The §332-receipted repack is implemented and green (exe 18:53). One function,
+`dExtWw_repackDzbAttributes(cBgD_t*, tag)` (d_ext_npc_mount.cpp, global; decl in the header),
+applied at EVERY WW dzb consumption site before dBgW::Set: the mount's three collision Set sites
+(№117 collision-only + the GLOBAL_e and MOVE_BG_e loads) + knob00's door.dzb. Pointer-keyed
+idempotent; staged arcs stay donor-byte-verbatim (in-memory parsed copy only). Preserves all
+bits outside 12–23 (pass flags, camera bits); clears TP att0/att1/groundCode and rewrites per:
+
+**THE TABLE (WW attCode, inf1 bits 16-20, donor atr_conv vocabulary):**
+| WW codes | donor meaning | TP result | class |
+|---|---|---|---|
+| 0x00,0x1B-0x1F | NORMAL | att0=0 att1=0 ground=0 | STANDABLE |
+| 0x01,0x07,0x12 | DIRT | same | STANDABLE |
+| 0x02,0x0C,0x0D,0x0E,0x10,0x1A | WOOD | same | STANDABLE (the otble fix) |
+| 0x03 | STONE | same | STANDABLE |
+| 0x04 | GRASS | same | STANDABLE |
+| 0x05 | GIANT_FLOWER | same | STANDABLE |
+| 0x0A,0x19 | CARPET | same | STANDABLE |
+| 0x0B | SAND | same | STANDABLE (no TP sand-sink — donor WW has none) |
+| 0x0F | ICE | same | STANDABLE (flagged: TP ice-slide refinement possible) |
+| 0x11,0x14,0x18 | METAL | same | STANDABLE |
+| 0x06 LAVA, 0x08 VOID, 0x09 DAMAGE, 0x13 WATER, 0x15 FREEZE, 0x16 ELECTRICITY, 0x17 WATERFALL | hazard/boundary | groundCode=4 (TP void/slide family) | **SLIP-CLASS** per §333 ruling |
+
+**Per-run receipt:** each repacked dzb logs `§334 ... N standable, M slip (T tris)`.
+**Flagged for later refinement (not blockers):** (a) footstep MATERIAL sounds — TP's sound =
+`pol_sound[att0][att1]` from stage code.csv; mapping WW WOOD→TP wood att0 etc. needs the code.csv
+att0 vocabulary (Foundry receipts ask); v1 = default footstep on all repacked surfaces.
+(b) ICE slide, (c) the 7 slip-class codes — none occur in Grandma's room; each gets the user's
+per-code review before any surface bearing them ships (user pre-approved specific edits).
+
+**WHOSE TURN:** USER → playtest the furniture (stand on the table/props — no sink), then the
+ACCEPTANCE RULING (= DN-1 furniture activation, one yes covers both). HISTORY → tsubo port next
+(Actor-Kit driver), then WW-demo Link door anim. HOUSING → swood check (still open). FOUNDRY →
+on acceptance: Grandma cast bake fires with the 8/8 battery; code.csv att0 vocabulary receipts
+when convenient (footstep refinement).
+
+---
+
+## §335 — Foundry → History: BOTH ASKS ANSWERED — the donor ba1 gate is a CYLINDER (XZ dist + |ΔY|<100 band, disassembly-receipted) + the WW-dzb repack roster (11 manifests + actor class)
+
+**Lane: Foundry.** Answering History's two asks (their §330b/§337-live-state routing).
+
+**ASK 1 — the donor trigger gate, decoded from the RETAIL REL (not inference).**
+`check_useFairyArea__11daNpc_Ba1_cFv` — located via the dump's own `files/maps/d_a_npc_ba1.map`
+(rel .text+0x1B90, 0x118 bytes), disassembled from `files/rels/d_a_npc_ba1.rel` (Yaz0). The gate:
+
+```
+fire = ( XZ_dist(Link, Ba1) < HIO[+0x28] ) && ( |Link.pos.y − Ba1.pos.y| < 100.0f )
+```
+
+Receipts: the distance vector's Y component is OVERWRITTEN with rodata 0.0 (float pool +0x08 = 0.0
+— confirmed) before the magnitude → **XZ-only distance**; then a SEPARATE `fabs(ΔY)` compare vs
+float pool **+0x98 = 100.0** → the Y band; then the XZ compare vs the HIO param at +0x28
+(runtime-set — the port's mUseFairyDist1=500 is consistent with the 498-fires geometry).
+**So: (a)** the §271 3D-sphere form was the reconstruction's collapse of a cylinder;
+**(b)** History's suspicious zeroed `mUseFairyDist0` is almost certainly that rodata **0.0
+Y-replacement constant misread as a second threshold** during m2c; **(c)** the numbers all
+verify — downstairs ΔY=−359 blocked (≥100), and mid-ladder ΔY≈150 ALSO blocked (the old §261
+guessed band of 150 was looser than donor; donor is 100). Note: the port comment's fpool offset
+{20,−16,0} does not appear in THIS function's disasm — the delta uses raw current.pos of both
+actors; History should re-check where that offset claim came from when fixing.
+**Fix form (donor-verbatim):** replace the 3D test with XZ-dist < mUseFairyDist1 AND
+|ΔY| < 100.0f; retire mUseFairyDist0 (it is the 0.0 constant, not a threshold). Also fits the
+tag family receipt: `daTag_Ba1_XyCheck_cB` → `dEvt_info_c::setXyCheckCB` — XY(cylinder) checks
+are the donor's standard trigger idiom.
+
+**ASK 2 — the WW-baked collision roster (repack-target identity).** Emitted machine-readable:
+**`<MOD>/npc/ww_dzb_roster.csv`** (regenerable). Contents: ALL 11 `ext_bg*.ini` manifests are
+WW-layout dzb consumers — R_DL01 ×6 (LinkRM, LinkUG, Ojhous2, Ojhous2R1, Omasao, Onobuta),
+F_SP115 ×3 (Omori, Pjavdou, Cave09), F_DL01 (Outset/R44), F_DL02 (A_mori) — each loading
+`collision=room.dzb`; plus the ACTOR class (Okmono's otble/otble_l.dzb and every future WW
+furniture arc). **The identity rule is cleaner than a list though:** the provenance scan shows
+the stage-room shells in `files/res/Stage` carry NO dzb members at all — every WW dzb reaches
+the engine EXCLUSIVELY through the mount/ext-arc namespace (`d_ext_npc_mount` loads, :3357/:3646
+class), never through TP's native res path. **Recommended wire: repack at the mount-side dzb
+load sites (+ WW actor dzb loads), keyed by load path — the path IS the marker.** No
+TP-template dzb can ever transit those sites, so the corruption case History feared is
+structurally unreachable; the CSV stays as the audit roster / negative-control list.
+
+**WHOSE TURN:** History → the trigger-gate fix (cylinder form above) + the room-BG repack wire
+(path-keyed) + their §334 table acceptance items; then the probe strips. user → History's §334
+attribute table awaits your acceptance ruling (doubles as DN-1 furniture activation). Foundry →
+standing by; staging queue + armed bake unchanged.
+
+## §360 History: PIVOT TO FOUNDRY — open defects registered in docs/KNOWN-BUGS.md, traps armed (2026-08-02)
+
+**Lane: History.** Per the user's pivot order: the two open defects are fully documented in the
+new **docs/KNOWN-BUGS.md** registry (founding entries):
+- **KB-1** the intermittent mid-cutscene kill (get-item break) — every symptom across sessions,
+  everything the §341-§353 campaigns established/eliminated, the three surviving suspects, and
+  the NINE passive probe families armed in the current build. The next strike self-documents;
+  no hunt runs needed during the Foundry era.
+- **KB-2** the ~31-frame cutscene-seam presentation gap — mechanism CONFIRMED (§359: neither
+  fader holds black across the STB→reload seam; input proven locked), bounded fader-hold fix
+  queued as History's first Foundry-era item.
+History's tale-era record: trigger (donor cylinder §338), teardown (§321/§322), collision table
+(§334→§334g incl. water), doors native (§329), dialogue native (§324), all user-verified.
+**WHOSE TURN: FOUNDRY — the floor is yours** (kit per §323, staging queue, cast bake armed on
+the §334/DN-1 acceptance which the user may issue on the current stable build). HISTORY →
+standing by: KB-2 fader hold, KB-1 on next self-documented strike, probe strip after both.
+USER → relay to Foundry; play naturally — the traps watch the tale for us.
+
+---
+
+## §361 — Foundry: THE KIT ERA OPENS — Ojhous2→R_DL02 pilot coincidence list (Pass-4 first, per the §328 rule) + native-trigger coverage folded into the kit spec
+
+**Lane: Foundry.** Taking the §360 floor. Two actions:
+
+**1. User directive recorded in the kit spec (§0b, space-kit-design.md): NATIVE TRIGGERS are kit
+surface.** Data-authored triggers (TagEv/SCOB — volume IS the scale, §312) were already in the
+cast bake; NOW actor-code triggers are covered too: the donor idiom is the CYLINDER
+(XyCheck family, §335), and Pass-4 flags any ported trigger actor whose gate is a reconstructed
+3D-distance test as REVIEW-until-disassembled (the §335 rel-disasm recipe makes receipts cheap:
+files/maps/<rel>.map names the function, capstone reads it).
+
+**2. The R_DL02 dedicated pilot's FIRST act, per the coincidence rule: the deferred-ports ferry
+list** (kit inventory of donor Ojhous2 — DEDICATED shape confirmed: RTBL×2/MULT×2, rooms 0+1
+co-rendered, story layers ACT7/SCO7 both rooms, RPAT×2/RPPN×6 paths in Room1):
+
+| item | rooms (count) | donor TU | tier | lane |
+|---|---|---|---|---|
+| kotubo/ootubo1/Ostool | R0×20, R1×29 (**49 rows!**) | `d_a_tsubo` (one proc) | 2 | **History** (already ferried §329 — now 49-placement payoff) |
+| Otana (shelves) | R0×4, R1×9 (13) | `d_a_obj_shelf` (318 ln) | 1 | **Foundry driver run** (the natural next actor_kit port; BgW-class → lands INERT like Otble) |
+| Paper | R1×10 | `d_a_obj_paper` | 1 | **Foundry driver run** |
+| Plant | R1×3 | `d_a_obj_plant` | 1 | **Foundry driver run** |
+| AttTag | R0×1 | `d_a_tag_attention` | 1 (tag, no model) | **History** (event-adjacent — attention system seam) |
+| Ji1 (ORCA) | R0×1 | `d_a_npc_ji1` (**5,447 ln**) | 3 | **History** (the big one — kaiten/sword-teach events; §335 XyCheck receipts apply) |
+| Aj1 (STURGEON) | R1×2 | `d_a_npc_aj1` (502 ln) | 3 | **History** |
+| Yw1 | R1×1 | `d_a_npc_yw1` | 3 | **History** (or defer — story-layer resident) |
+| swood | R1×2 | grass family | 1 | **Housing** (§328 item, STILL OPEN) |
+| Otble | R0×1, (LinkRM×1) | LANDED INERT | — | **user**: §334 attr-table acceptance activates |
+| KNOB00 / Lamp / SPitem / ky_tag1 | various | — | — | **PORTED** (verified in scan — doors/lamp live) |
+
+**Kit sequencing:** R_DL02 host-stage shell prep (identity registration + donor-verbatim
+structure bake) proceeds NOW — DN-clean, no existing tenants. The CAST bake lands when the table
+clears (coincidence). Tier-1 driver runs (shelf/paper/plant) are Foundry's own queue — the driver
+gets its throughput test. Grandma's armed bake still waits only on: user §334 acceptance +
+Housing swood.
+
+**WHOSE TURN:** user → the §334 attribute-table acceptance remains the single ruling that
+unlocks BOTH armed bakes' furniture; play naturally per §360 (traps watch the tale). History →
+KB-2 fader + tsubo (now 49 placements) + Ji1/Aj1 when the tale era's dust settles. Housing →
+swood (second call). Foundry → R_DL02 shell + Tier-1 driver runs + crash-recipe lint.
+
+---
+
+## §362 — Foundry: PROVISIONAL §334 ACCEPTANCE EXECUTED — Otble ACTIVATED (build green); the provisional-watch census ran and found the FIRST table amendment (WATER 0x13 must not be slip)
+
+**Lane: History+user ruling recorded: §334 accepted PROVISIONALLY** (unique surface/code
+instances may need specific tooling). Foundry made the caveat mechanical immediately:
+
+**1. The attribute-code CENSUS (the provisional-watch tool)** — every staged WW dzb (all 11
+ext_bg room.dzbs + Okmono), Ti-table decode, 9,472 tris total. Domain result: History's table
+covers every occurring code (incl. 0x19 CARPET / 0x1A WOOD). **Slip-class codes actually present:
+TWO** — `0x13 WATER ×158 tris` (Outset shore ×111 — LIVE content — + Omori pools ×47) and
+`0x17 WATERFALL ×4` (Omori, unstaged-to-live). LAVA/VOID/DAMAGE/FREEZE/ELECTRICITY: zero
+occurrences anywhere.
+
+**2. FIRST AMENDMENT FOR REVIEW — `0x13 WATER → STANDABLE (splash material), not slip.`**
+WW's ground-attribute WATER is the SHALLOW-WATER FOOTSTEP MATERIAL — swim is handled by the
+separate water-poly system in BOTH engines (m_wtr checks), not by ground attributes. Slip-mapping
+it makes the Outset shoreline slide-repel Link where the donor lets him wade. Recommended row
+change: 0x13 → att0/att1/ground = standable (v1 default footstep, water-splash material when the
+footstep pass lands). `0x17 WATERFALL` slip is plausibly right (a waterfall face) — review due
+only when Omori/F_SP115 ships. **user → approve the 0x13 row change; History → one-line table
+edit on approval.**
+
+**3. Otble ACTIVATED** (OBJNAME row live, build green 31,060 exports, caches wiped). Pre-flight
+note: History's §334b had ALREADY wired the actor-class repack into Otble's Set path — the site
+I flagged in §335 as at-risk was closed before activation; receipt confirmed in-TU. Driver
+refinement from the run: `--activate` on an already-landed actor now expects enum/profile
+present and refuses only on OBJNAME duplicates.
+
+**Grandma bake gate status after this entry:** §334 acceptance ✓ (provisional) · Otble active ✓
+· swood (Housing) — THE LAST ITEM. R_DL02 pilot proceeds per §361.
+
+**WHOSE TURN:** user → the 0x13 WATER row approval (one word — it protects live Outset shore).
+Housing → swood (third call — it is now the only thing between Grandma's room and full
+population). History → KB-2 fader + tsubo(49) queue unchanged; 0x13 table edit on approval.
+Foundry → R_DL02 shell + Tier-1 driver runs (shelf next).
+
+---
+
+## §363 — Foundry: WATER amendment already CLOSED (convergence with History's §334g) + the swood work item made precise for Housing (it is d_wood, not grass)
+
+**Lane: Foundry.** Two answers to the user's questions:
+
+**1. "What should we do to keep WATER standable?" — NOTHING; it is already done, and it IS
+WW-native.** History's §334g (from a live user report: swimmable water became void) already
+moved 0x13 WATER + 0x17 WATERFALL OUT of the slip class — the repack switch sends them to the
+standable/neutral default. Their receipt is even stronger than my census note: **TP waterness is
+GROUP-level** (dzb Grp water bit → dBgS_GrpPassChk), the bake preserves groups untouched, so
+neutral per-poly attrs mean swim engages via the group and wading works via neutral ground —
+donor-exact both ways (donor atr_conv 0x13 = dBgS_Attr_WATER_e, a walk material, d_bg_s.cpp:213).
+User approval recorded; amendment #1 CLOSED-AS-CONVERGED. Slip class is now exactly
+LAVA/VOID/DAMAGE/FREEZE/ELECTRICITY — zero occurrences in all staged content (census §362).
+
+**2. The swood work item, made precise — it is the donor's d_wood SUBSYSTEM, not a grass row.**
+Foundry traced it: "swood" placements route to fpcNm_GRASS_e, whose actor dispatches by param
+`kind` (bits 4-5) into sibling BATCHERS — and swood's batcher is **donor d_wood.cpp**, with its
+art COMPILED IN as embedded assets: `l_Oba_swood_bDL` (display list), `l_Oba_swood_b_cutDL`
+(**a cut variant — swood is cuttable**), `l_Txa_swood_bTEX` (64×64). The port has NO
+d_wood/d_grass/d_flower batchers; Housing's grass surface is `d_a_ext_vegetation.cpp` — the
+donor packet system with donor blobs (kusax1/7/21 today). **So Housing's task = extend
+ext-vegetation with the donor swood family, the same way they did kusa:**
+  (a) extract the three swood embedded blobs from the donor (same donor-blob path as kusa);
+  (b) register "swood" (LinkRM ×2, Ojhous2R1 ×2; "swood3"/"swood5" variants exist donor-wide)
+      to the ext proc;
+  (c) port the d_wood behavior branch — wind sway + the CUT interaction (the cut DL exists;
+      full-state-machine law applies — no static-prop shortcut on a cuttable);
+  (d) done ⇒ the kit's already-baked swood ACTR rows render, and **Grandma's coincidence list
+      is EMPTY** → the armed cast bake fires through the 8/8 battery.
+
+**WHOSE TURN:** Housing → the swood extension (a-d above — the LAST item before Grandma's room
+fully populates). History → queue unchanged (KB-2 fader, tsubo×49, Ji1/Aj1). user → nothing
+open; play naturally. Foundry → R_DL02 shell + Tier-1 driver runs continue.
+
+## §232 USER RULING: PORT THE WW JPA RUNTIME — "never mounts" (2026-08-02)
+
+After the grass VFX consumed ~15 rounds, user ruled the architecture question closed: WW systems get
+PORTED, never mounted or hand-reconstructed. Applies to Housing's particle work and to every lane.
+**Why the reconstruction path died (evidence, not opinion):** every failure was an artefact of
+TRANSLATING donor data into receiver shapes — dropped ESP1/FLD1 blocks (§202), ESP1 flag words whose
+bits differ between JPA lineages (§212), a resolved bank id discarded one line after computation
+(§223), a dead `setSimple` registration table (§211), and finally a hand-written TEV that consumed
+an unset raster register and drew black (§231). The donor needs none of these because its `*Arc`
+classes NEVER CONVERT — they are thin accessors that read the archive in place with WW's own
+offsets and flag semantics (JPAEmitterLoader.cpp:96-185).
+**PHASE 1 LANDED:** `include/d/ww_jpa.h` + `src/d/ww_jpa.cpp` — direct port of
+JPAEmitterArchiveLoader_v10: same header fields, same block walk, blocks recorded IN PLACE;
+accessors for BEM1/BSP1/ESP1/FLD1 + TDB1 + TEX1 carrying WW's own bit meanings, each cited to its
+donor header. Isolated namespace, TP JPA untouched, mod-absent ⇒ nothing parsed ⇒ no TP residue.
+Replaces the JPAC1→JPAC2 converter's ROLE (converter still present until phases 2-3 land).
+**REMAINING PHASES:** 2 = emitter/particle/field simulation (JPAEmitter 19K + JPAParticle 7.5K +
+JPAField 16K); 3 = draw (JPADrawVisitor 50K + JPADraw 41K + JPADrawSetupTev) — where "unlit like
+vanilla" becomes donor code rather than Housing's hand-written GX pass.
+**BOARD IMPACT:** swood (Foundry order) HELD until phase 3 — building 5 DLs + a cut state machine
+on an unproven particle base would repeat this saga at larger scale. Blob extraction already done
+(§231 audit: all 6 swood blobs + shadow set staged, sizes decomp-exact); corrections logged there
+(batcher is d_tree NOT d_wood; 5 DLs + state table {0,1,2 / 3,1,4}, not 2).
+Grass currently: deterministic single path, visible-but-lit (TP light8) — honest interim state.
+
+## §239 WW JPA PORT — STATE + RANKED PLAN FOR NEXT SESSION (Housing, 2026-08-02)
+
+**WHAT NOW WORKS (all measured, not assumed):** donor common.jpc parsed IN PLACE by the ported
+v10 loader (193 emitters / 96 textures — matches the offline scan); resource bound by NAMED
+ACCESSOR (`0x03da init: drawP=4 calcP=4 drawE=4 batch=0 bspType=4 tevSel=3 blend=0x05d9`);
+particles CREATED and sustained (ptclNum 120→144, emitterNum 10→15 across 58 cuts); drawn by the
+donor's own setGX/blend with NO hand-written GX state; `0x03DA` decomp-VERIFIED as Outset's
+scatter (d_grass.cpp:229-253 — KINDANKUSA only for `kin*`/Xboss1, else ID_IT_JN_O_KUSA_KEN).
+The JPAC1→JPAC2 converter is superseded and its whole failure class (dropped blocks §202, lineage
+flag words §212, discarded bank id §223) is designed out.
+**RULED OUT tonight:** wrong particle id (verified); time-scaling (user capped 30fps → unchanged);
+batch path as sole cause (batch=0 changed the failure mode, did not fix it — so the fault is
+shared by both draw routes ⇒ vertex/texture setup, not draw dispatch).
+**REMAINING SYMPTOM:** geometry reaches the screen but renders as garbage, possibly green-tinged —
+and the only green in the system is the donor's authored prm (152,200,118), so donor colour IS
+arriving.
+**RANKED PLAN (next session):**
+1. **TEXTURE RESOLUTION** (highest probability). bspType=4 = cross billboard (two quads); if
+   `mpTDB1` → shared 96-entry table resolves to the wrong entry, geometry is right and texels are
+   garbage. TEST: log the resolved texture NAME at draw time; expect `kusa_half`.
+2. **VERTEX/UV TEMPLATE.** initBatchInfo/setPTev build corners from ESP1's
+   `getScaleCenterX/Y` — fields fed by MY ESP1 flag translation (§212 table). A wrong centre pair
+   yields correctly-lit, wrongly-shaped quads. TEST: log scaleCenterX/Y + vtxCount vs the donor's
+   ESP1 bits.
+3. **PER-PARTICLE COLOUR.** `hasPtclColor` / JPARegist* functions — how prm/env reach each
+   particle on the classic path.
+**HOUSEKEEPING owed:** delete the ~250-line converter once (1) lands; strip §236 readouts and the
+§222 discriminator; retire dPa_wwUnlitEcallBack (§230/§231) — superseded by letting the resource
+draw itself (§237). Swood (Foundry) still HELD until the particle chain closes; blobs already
+extracted, corrections in §231 (batcher is d_tree, 5 DLs + state table).

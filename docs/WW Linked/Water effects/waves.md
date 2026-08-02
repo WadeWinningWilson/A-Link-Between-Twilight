@@ -4,7 +4,13 @@ Per-effect doc for the kankyo wave packet (the offshore whitecap panes). Part of
 set; taxonomy + shared traps live in the parent [../water-rendering.md](../water-rendering.md).
 Siblings: [shore-crashing.md](shore-crashing.md) (system 4), great-sea (system 1, future).
 
-## STATUS: color ACCEPTED; MOTION discrepancy open (user eye, 2026-07-25)
+## STATUS: color ACCEPTED · perf FIXED (§156) · motion = Ferry F in test (2026-07-26)
+- **FPS saga closed:** pane DRAW path was the Outset 40-50 FPS cost (per-sprite tex bind through
+  aurora immediate-mode); fixed pixel-identical by hoisting the bind (§156 Ferry E → 250+).
+  Respawn churn = FPS red herring (LOW donor-fidelity cleanup queued). Baseline-gate protocol
+  (menu 288 / Field 250+) now mandatory before any FPS measurement (§153-§155).
+- **Motion (drift+skew): Ferry F (ambient host wind) SENT — in test.** Wind restores pane
+  horizontal drift+skew AND unblocks grass sway + streaks (§157).
 Color is right (blue base + white tips). **But the panes only BOB vertically — missing the donor's
 horizontal wind DRIFT + SKEW (§133).**
 **Blue waves with white pointed tips are IN.** The §98 recipe + palette fix + §109 calm-perimeter +

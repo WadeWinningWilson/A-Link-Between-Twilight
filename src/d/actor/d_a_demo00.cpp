@@ -15,9 +15,14 @@
 #include "m_Do/m_Do_graphic.h"
 #include "m_Do/m_Do_ext.h"
 #include "d/d_demo.h"
+#include "d/d_ext_npc_mount.h"  // §181: consume-time BDL resolver for demo doubles
+#include "d/d_ww_itemmdl_pc.h"  // §187: WW item ambient recipe (skip-MAJI for cel-shade)
 #include "Z2AudioLib/Z2Instances.h"
 #include "m_Do/m_Do_lib.h"
 #include "d/actor/d_a_movie_player.h"
+#if TARGET_PC
+#include "dusk/logging.h"
+#endif
 #if DEBUG
 #include "d/d_debug_viewer.h"
 #include <cstring>
@@ -90,6 +95,7 @@ inline int daDemo00_c::create() {
     mSound.init(&eyePos, NULL, 10, 1);
     setAction(&daDemo00_c::actStandby);
     field_0x588.reset();
+    mModel.reset();  // §177: ensure modelless until ENABLE_SHAPE → createHeap
     field_0x6a0 = -1;
     return cPhs_COMPLEATE_e;
 }
@@ -107,6 +113,18 @@ static void get_foward_angle(cXyz* param_1, cXyz* param_2, s16* param_3, s16* pa
 }
 
 void daDemo00_c::setBaseMtx() {
+#if TARGET_PC
+    {
+        // §179 confirm (once per dactor N): modelless → NULL; shaped → non-NULL.
+        static u32 s_loggedMask;
+        u32 bit = 1u << (argument & 31);
+        if ((s_loggedMask & bit) == 0) {
+            s_loggedMask |= bit;
+            DuskLog.info("[Demo00] §179 setBaseMtx dactor{} modelNULL={}",
+                         (int)argument, mModel.field_0x5d4 == NULL);
+        }
+    }
+#endif
     s16 sVar1, sVar2;
     cXyz sp38;
     bool bVar1 = FALSE;
@@ -159,6 +177,12 @@ void daDemo00_c::setBaseMtx() {
         cLib_addCalcAngleS2(&current.angle.z, shape_angle.z, 4, 0x2000);
     }
 
+    // §179: modelless doubles (d_act2/d_act3) keep field_0x5d4 NULL by design —
+    // never touch the model (donor never reaches this for mShapeID==-1).
+    if (mModel.field_0x5d4 == NULL) {
+        return;
+    }
+
     mDoMtx_stack_c::transS(sp38.x, sp38.y, sp38.z);
     mDoMtx_stack_c::XYZrotM(current.angle.x, current.angle.y, current.angle.z);
     mModel.field_0x5d4->setBaseTRMtx(mDoMtx_stack_c::get());
@@ -166,6 +190,23 @@ void daDemo00_c::setBaseMtx() {
 }
 
 void daDemo00_c::setShadowSize() {
+#if TARGET_PC
+    {
+        // §179 confirm (once per dactor N): modelless → NULL; shaped → non-NULL.
+        static u32 s_loggedMask;
+        u32 bit = 1u << (argument & 31);
+        if ((s_loggedMask & bit) == 0) {
+            s_loggedMask |= bit;
+            DuskLog.info("[Demo00] §179 setShadowSize dactor{} modelNULL={}",
+                         (int)argument, mModel.field_0x5d4 == NULL);
+        }
+    }
+#endif
+    // §179: never size a shadow without a built model (donor 267–273).
+    if (mModel.field_0x5d4 == NULL) {
+        return;
+    }
+
     J3DModelData* modelData = mModel.field_0x5d4->getModelData();
     cXyz min(100000000.0f, 100000000.0f, 100000000.0f);
     cXyz max(-100000000.0f, -100000000.0f, -100000000.0f);
@@ -232,14 +273,60 @@ static int createHeapCallBack(fopAc_ac_c* a_this) {
 }
 
 int daDemo00_c::createHeap() {
+#if TARGET_PC
+    // §177: OS_REPORT is debugger-only — surface shape at heap entry in the dusk log.
+    // shape==-1 here proves the pre-spawn-before-SHAPE order bug.
+    {
+        const char* arcName = static_cast<const char*>(dStage_roomControl_c::getDemoArcName());
+        DuskLog.info("[Demo00] createHeap entry shape={} u16=0x{:x} arc='{}'",
+                     (s32)mModel.mID.mShapeID, (u16)mModel.mID.mShapeID,
+                     arcName != NULL ? arcName : "");
+    }
+#endif
+    // §177 Fix B: refuse heap until STB ENABLE_SHAPE has bound mShapeID.
+    // Returning success with a skipped model block left actStandby stuck in
+    // actPerformance with field_0x5d4==NULL (createHeap never re-runs).
+    if (mModel.mID.mShapeID == -1) {
+#if TARGET_PC
+        DuskLog.warn("[Demo00] §177 createHeap deferred — mShapeID still -1");
+#endif
+        return 0;
+    }
+
     if (mModel.mID.mShapeID != -1) {
+#if TARGET_PC
+        // §181 (Housing Approach A): this port does NOT parse the BDL model family at
+        // arc-mount (that global fix was the §180 Outset regression — DO-NOT). Demo-arc
+        // BDLs arrive RAW from getObjectIDRes; parse at CONSUME time via ExtNpcMount's
+        // cached/pristine resolver — single-parse, dropped with the demo arc (no UAF).
+        void* rawRes = dComIfG_getObjectIDRes(dStage_roomControl_c::getDemoArcName(),
+                                              (u16)mModel.mID.mShapeID);
+        J3DModelData* modelData = dExtNpcMount_acquireDemoModel(
+            dStage_roomControl_c::getDemoArcName(), (u16)mModel.mID.mShapeID, rawRes);
+#else
+        // Donor/retail: the native mount switch parses BDL, so getObjectIDRes is already
+        // a live J3DModelData*.
         J3DModelData* modelData = (J3DModelData*)dComIfG_getObjectIDRes(dStage_roomControl_c::getDemoArcName(), (u16)mModel.mID.mShapeID);
-        mDoExt_bckAnmRemove(modelData);
+#endif
 
         if (modelData == NULL) {
             OS_REPORT("\ngetDemoArcName=[%s]", dStage_roomControl_c::getDemoArcName());
             OS_REPORT("\nmModel.mID.mShapeID=[%d]\n", mModel.mID.mShapeID);
+#if TARGET_PC
+            DuskLog.warn("[Demo00] createHeap NULL modelData arc='{}' shape={} u16=0x{:x}",
+                         static_cast<const char*>(dStage_roomControl_c::getDemoArcName()),
+                         (s32)mModel.mID.mShapeID, (u16)mModel.mID.mShapeID);
+#endif
+            return 0;
         }
+#if TARGET_PC
+        // §180 confirm: raw BDL head = 'J3D2' (0x4A334432); parsed model = heap vtable ptr.
+        {
+            const u32 head = *(const u32*)modelData;
+            DuskLog.info("[Demo00] §180 modelData head=0x{:08x} (raw J3D2=0x4A334432)", head);
+        }
+#endif
+        mDoExt_bckAnmRemove(modelData);
         JUT_ASSERT(441, modelData != NULL);
 
         s32 uVar1 = 0x11000084;
@@ -261,6 +348,9 @@ int daDemo00_c::createHeap() {
             if (i_btk == NULL) {
                 // ESC_WARNING: The specified BTP animation could not be found! (%d)
                 OS_REPORT("ESC_WARNING指定btpアニメーションが見つかりません！(%d)\n", mModel.mID.field_0xc);
+#if TARGET_PC
+                DuskLog.warn("[Demo00] ESC_WARNING missing btp id={}", (s32)mModel.mID.field_0xc);
+#endif
                 return 1;
             }
 
@@ -281,6 +371,9 @@ int daDemo00_c::createHeap() {
             if (key == NULL) {
                 // ESC_WARNING: The specified btk animation could not be found! (%d)
                 OS_REPORT("ESC_WARNING指定btkアニメーションが見つかりません！(%d)\n", mModel.mID.field_0x10);
+#if TARGET_PC
+                DuskLog.warn("[Demo00] ESC_WARNING missing btk id={}", (s32)mModel.mID.field_0x10);
+#endif
                 return 1;
             }
 
@@ -305,6 +398,9 @@ int daDemo00_c::createHeap() {
             if (regKey == NULL) {
                 // ESC_WARNING: The specified brk animation could not be found! (%d)
                 OS_REPORT("ESC_WARNING指定brkアニメーションが見つかりません！(%d)\n", mModel.mID.field_0x14);
+#if TARGET_PC
+                DuskLog.warn("[Demo00] ESC_WARNING missing brk id={}", (s32)mModel.mID.field_0x14);
+#endif
                 return 1;
             }
 
@@ -323,6 +419,9 @@ int daDemo00_c::createHeap() {
             if (anm_color == NULL) {
                 // ESC_WARNING: The specified brk animation could not be found! (%d)
                 OS_REPORT("ESC_WARNING指定brkアニメーションが見つかりません！(%d)\n", mModel.mID.field_0x8);
+#if TARGET_PC
+                DuskLog.warn("[Demo00] ESC_WARNING missing bpk id={}", (s32)mModel.mID.field_0x8);
+#endif
                 return 1;
             }
 
@@ -382,8 +481,9 @@ int daDemo00_c::createHeap() {
             mModel.field_0x5d8 = NULL;
         }
 
-        mModel.mID.field_0x18 = 1;
-        if (mModel.mID.field_0x18 != -1) {
+        // §179 / donor 267–273: shadow only when ShadowID (field_0x18) is set —
+        // never force it, never call setShadowSize on a modelless double.
+        if (mModel.mID.field_0x18 != -1 && mModel.field_0x5d4 != NULL) {
             mModel.mShadow = JKR_NEW daDemo00_shadow_c();
             if (mModel.mShadow == NULL) {
                 return 0;
@@ -428,6 +528,10 @@ int daDemo00_c::createHeap() {
                 return 0;
             }
         }
+#if TARGET_PC
+        DuskLog.info("[Demo00] createHeap model={} (NULL=breach)",
+                     mModel.field_0x5d4 != NULL ? "ok" : "NULL");
+#endif
     }
 
     if (field_0x6a7 >= 0 && field_0x6a7 <= 5) {
@@ -461,6 +565,8 @@ int daDemo00_c::actStandby(dDemo_actor_c* actor) {
         if (fopAcM_entrySolidHeap(this, createHeapCallBack, heapSize)) {
             OS_REPORT("汎用くん確保ヒープサイズ %d\n", heap->getHeapSize());
 
+            // §177 Fix B: only leave standby once the model actually exists.
+            // Donor order = setShape → createHeap → drive; never drive modelless.
             if (mModel.field_0x5d4 != NULL) {
                 dDemo_setDemoData(this, 42, NULL, NULL, 0, NULL, 0, 0);
                 setBaseMtx();
@@ -470,10 +576,17 @@ int daDemo00_c::actStandby(dDemo_actor_c* actor) {
                 if (mModel.mpModelMorf != NULL) {
                     actor->setAnmFrameMax(mModel.mpModelMorf->getEndFrame());
                 }
-            }
 
-            setAction(&daDemo00_c::actPerformance);
-            action(actor);
+                setAction(&daDemo00_c::actPerformance);
+                action(actor);
+            } else {
+#if TARGET_PC
+                DuskLog.warn(
+                    "[Demo00] §177 actStandby heap OK but model NULL shape={} — tear down, retry",
+                    (s32)field_0x588.mShapeID);
+#endif
+                fopAcM_DeleteHeap(this);
+            }
         }
     } else {
         if (field_0x6aa == 1 || field_0x6ab >= 0 || field_0x6b8 != 0 || field_0x6ae != 0) {
@@ -737,6 +850,10 @@ inline int daDemo00_c::execute() {
     } else {
         if (actor->checkEnable(dDemo_actor_c::ENABLE_SHAPE_e)) {
             field_0x588.mShapeID = actor->getShapeId();
+#if TARGET_PC
+            DuskLog.info("[Demo00] ENABLE_SHAPE → field_0x588.mShapeID={} u16=0x{:x}",
+                         (s32)field_0x588.mShapeID, (u16)field_0x588.mShapeID);
+#endif
         }
 
         if (actor->checkEnable(dDemo_actor_c::ENABLE_ANM_e)) {
@@ -1170,6 +1287,18 @@ inline int daDemo00_c::execute() {
             actor->offEnable(dDemo_actor_c::ENABLE_UNK_e);
         }
 
+#if TARGET_PC
+        {
+            // §179 multi-hyp: every demo00 (incl. modelless d_act2/3) hits execute.
+            static u32 s_loggedMask;
+            u32 bit = 1u << (argument & 31);
+            if ((s_loggedMask & bit) == 0) {
+                s_loggedMask |= bit;
+                DuskLog.info("[Demo00] §179 exec dactor{} modelNULL={}",
+                             (int)argument, mModel.field_0x5d4 == NULL);
+            }
+        }
+#endif
         action(actor);
 
         #if WIDESCREEN_SUPPORT
@@ -1478,6 +1607,11 @@ static void ke_set(daDemo00_c* i_this) {
         0x0190, 0x0320, 0x04B0,
     };
 
+    // §179: draw already gates on model, but ke_set itself must not deref NULL.
+    if (i_this->mModel.field_0x5d4 == NULL) {
+        return;
+    }
+
     fopAc_ac_c* actor = i_this;
     cXyz sp58, sp64;
     cM_initRnd2(12, 0x7B, fopAcM_GetID(actor) * 2 + 0x32);
@@ -1513,6 +1647,35 @@ static void ke_set(daDemo00_c* i_this) {
     }
 }
 
+#if TARGET_PC
+// §187 Bug 1: does this demo model cel-shade through a WW toon stage (a texture named
+// "ZA*")? Such models render BLACK under MAJI — the port ADDED setLightTevColorType_MAJI
+// to demo00's draw (the donor demo00 has none), which lights TP-style doubles but blacks
+// out WW cel-shade meshes like fuku.bdl (Vfuku/Vfuku/ZAtoon). Mirrors the ZA-name test in
+// the donor's setToonTex (WW DP d_resorce.cpp:77).
+static bool demoModelUsesZAtoon(J3DModel* i_model) {
+    if (i_model == NULL) {
+        return false;
+    }
+    J3DModelData* modelData = i_model->getModelData();
+    if (modelData == NULL) {
+        return false;
+    }
+    J3DTexture* texture = modelData->getTexture();
+    JUTNameTab* nameTab = modelData->getTextureName();
+    if (texture == NULL || nameTab == NULL) {
+        return false;
+    }
+    for (u16 i = 0; i < texture->getNum(); i++) {
+        const char* name = nameTab->getName(i);
+        if (name != NULL && name[0] == 'Z' && (name[1] == 'A' || name[1] == 'B')) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
 static int daDemo00_Draw(daDemo00_c* i_this) {
     return i_this->draw();
 }
@@ -1524,9 +1687,24 @@ int daDemo00_c::draw() {
             tevStr.TevColor.a = 0xFF;
         }
 
-        g_env_light.settingTevStruct(field_0x6ac, &eyePos, &tevStr);
-        g_env_light.setLightTevColorType_MAJI(mModel.field_0x5d4, &tevStr);
-        dKy_bg_MAxx_proc(mModel.field_0x5d4);
+#if TARGET_PC
+        // §187 Bug 1: a WW cel-shade demo model (ZAtoon) renders BLACK under MAJI. Mirror
+        // the demo_item clothes-bundle recipe (d_a_demo_item.cpp:518-526): settingTevStruct(0)
+        // + neutral ambient + material-ambient-only, NO MAJI. Non-WW doubles keep MAJI.
+        if (demoModelUsesZAtoon(mModel.field_0x5d4)) {
+            g_env_light.settingTevStruct(0, &eyePos, &tevStr);
+            tevStr.AmbCol.r = 90;
+            tevStr.AmbCol.g = 90;
+            tevStr.AmbCol.b = 90;
+            tevStr.AmbCol.a = 255;
+            dWwItemmdl_applyBowMaterialAmbientOnly(mModel.field_0x5d4, &tevStr);
+        } else
+#endif
+        {
+            g_env_light.settingTevStruct(field_0x6ac, &eyePos, &tevStr);
+            g_env_light.setLightTevColorType_MAJI(mModel.field_0x5d4, &tevStr);
+            dKy_bg_MAxx_proc(mModel.field_0x5d4);
+        }
 
         if (mModel.mpBtpAnm != NULL) {
             mModel.mpBtpAnm->entry(mModel.field_0x5d4->getModelData());

@@ -53,6 +53,7 @@
 
 #include "SSystem/SComponent/c_lib.h"
 #include "SSystem/SComponent/c_xyz.h"
+#include "SSystem/SComponent/c_counter.h"
 #include "d/actor/d_a_player.h"  // №220: horse check for direct-get drops
 #include "d/d_bg_s_gnd_chk.h"
 #include "d/d_cc_s.h"
@@ -120,6 +121,10 @@ ExtVegAssets s_assets;
 // crosses several blades, and without this each one would start the sample.
 // The donor guards the same way with its l_CutSoundFlag.
 bool s_cutSoundThisFrame = false;
+
+// §215 post-cut emission watch (strip with the other probes).
+int s_emitWatchFrames = 0;
+int s_emitWatchBase = 0;
 
 // №135: the blade texture must be bound EXPLICITLY. The material DL carries a
 // texture pointer, but it is a GameCube address baked into donor data and means
@@ -613,6 +618,23 @@ void daExtVeg_c::checkCut() {
     // no ordering guarantee between clumps, and a shared owner is exactly the
     // coupling that caused the No.136 blade-list bug. If profiling ever shows
     // this costing, hoist it then — not on speculation.
+    // §229: §215/§216 post-cut watch REMOVED (see the cut site).
+#if 0
+    // §215: report the global particle count for a few frames after any cut.
+    // A rise over the pre-spawn baseline proves the emitter EMITS (⇒ the fault
+    // is draw-side); a flat count proves it never emits (⇒ dynamics/volume).
+    if (s_emitWatchFrames > 0) {
+        s_emitWatchFrames--;
+        // §216: emitterNum added. particleNum flat proved zero emission; this
+        // says whether the emitter is even REGISTERED and calc'd:
+        //   emitterNum rises then falls → emitter lived, emitted nothing
+        //   emitterNum never rises      → create() didn't register it at all
+        DuskLog.warn("[ExtVeg] §215/§216 postCut f={} particleNum={} (base {}) emitterNum={}",
+                     s_emitWatchFrames, dComIfGp_particle_getParticleNum(), s_emitWatchBase,
+                     dComIfGp_particle_getEmitterNum());
+    }
+#endif
+
     dComIfG_Ccsp()->PrepareMass();
     // ========================================================================
     // №225 — 40x120, the RECEIVER's own grass test volume (d_grass.inc:1226),
@@ -649,19 +671,7 @@ void daExtVeg_c::checkCut() {
                     bestDY = player->current.pos.y - mBlades[i].y;
                 }
             }
-            const int massN = (int)dComIfG_Ccsp()->mMass_Mng.mMassObjCount;
-            // §61 r2 — massN>0 at a poll is the RARE event the rate limiter was
-            // hiding (AT frames vs thousands of polls). Log it UNCONDITIONALLY
-            // with the first object's state so H2 (AtSet consumed) and H3
-            // (geometry) read straight off the line.
-            if (massN > 0) {
-                cCcD_Obj* o0 = dComIfG_Ccsp()->mMass_Mng.mMassObjs[0].GetObj();
-                DuskLog.warn("[ExtVeg] §61 MASS-SEEN actor={:x} massN={} atSet={} coSet={} ccsp={:x}",
-                             (uintptr_t)this & 0xFFFF, massN,
-                             o0 != NULL ? (o0->ChkAtSet() ? 1 : 0) : -1,
-                             o0 != NULL ? (o0->ChkCoSet() ? 1 : 0) : -1,
-                             (uintptr_t)dComIfG_Ccsp() & 0xFFFF);
-            } else if (best < 500.0f * 500.0f && (s_n++ % 30) == 0) {
+            if (best < 500.0f * 500.0f && (s_n++ % 30) == 0) {
                 DuskLog.warn("[ExtVeg] §61 poll actor={:x} blades={} massN=0 nearD={:.0f} dY={:.0f} ccsp={:x}",
                              (uintptr_t)this & 0xFFFF, mBladeCount,
                              std::sqrt(best), bestDY,
@@ -707,7 +717,37 @@ void daExtVeg_c::checkCut() {
         // direct-get while on horseback. This is that recipe, verbatim.
         {
             cXyz ppos(mBlades[i].x, mBlades[i].y + 25.0f, mBlades[i].z);
-            dKy_tevstr_c* tevstr = dComIfGp_roomControl_getTevStr(mRoomNo);
+            // ============================================================
+            // §182 Ferry V-b: AmbCol was near-black ambient — particle drew it
+            // faithfully. Donor scatter colors from room tevstr mColorK0
+            // (daylight). Live BG0_K0 = №113 stash dungeonlight_col[1]
+            // (same slot W-LINE-c reads at d_kankyo_wether.cpp:1559).
+            // Keep settingTevStruct for light info; C0/K0 filled explicitly
+            // (settingTevStruct leaves them zero on non-J3D paths — №143).
+            // ============================================================
+            dKy_tevstr_c cutTev;
+            g_env_light.settingTevStruct(0x40, &ppos, &cutTev);
+            const GXColorS10& bg0K0 = g_env_light.dungeonlight_col[1];
+            auto clamp8 = [](s16 v) -> u8 {
+                if (v < 0) {
+                    return 0;
+                }
+                if (v > 255) {
+                    return 255;
+                }
+                return (u8)v;
+            };
+            const u8 kr = clamp8(bg0K0.r);
+            const u8 kg = clamp8(bg0K0.g);
+            const u8 kb = clamp8(bg0K0.b);
+            cutTev.TevColor.r = kr;
+            cutTev.TevColor.g = kg;
+            cutTev.TevColor.b = kb;
+            cutTev.TevColor.a = 255;
+            cutTev.TevKColor.r = kr;
+            cutTev.TevKColor.g = kg;
+            cutTev.TevKColor.b = kb;
+            cutTev.TevKColor.a = 255;
             static csXyz s_cutRot(0, 0, 0);
             // №227: the receiver's own grass passes an envcolor (its per-clump
             // tint, r/g from m_addCol); we have no clump tint so neutral zero —
@@ -715,15 +755,250 @@ void daExtVeg_c::checkCut() {
             // NULL before. Also capture the emitter handle + inputs once per
             // cut burst: the first live cuts showed NO visible particle, and
             // emitter==NULL vs tevstr==NULL vs bogus room reads off this line.
-            GXColor envcolor = {0, 0, 0, 0};
-            void* emitter = dComIfGp_particle_set(0x89D7, &ppos, tevstr, &s_cutRot, NULL, 255,
-                                                  dPa_control_c::getLight8EcallBack(), -1,
-                                                  &envcolor, NULL, NULL);
+            // ================================================================
+            // §208 ROOT: this argument is the GLOBAL PRM MULTIPLIER, not a
+            // decorative "envcolor". dPa_control_c::set's no-flag branch does
+            // `setGlobalPrmColor(param_9)` / `setGlobalEnvColor(param_10)`
+            // (d_particle.cpp:2397-2404), and the emitter's final colour is
+            // resource × global (JPABaseShape.cpp:24-27, COLOR_MULTI). Passing
+            // {0,0,0,0} multiplied the donor's authored green by ZERO — BLACK.
+            // №227 added it as "part of the call shape"; it was load-bearing.
+            //
+            // Donor semantics (d_grass.cpp:153): setSimple(pid, pos, 0xFF,
+            // tevStr->mColorK0, tevStr->mColorK0, 1) — room K0 as BOTH prm and
+            // env modulator. Pass exactly that; the green comes from the
+            // emitter's own registers, K0 tints it by time of day.
+            // ================================================================
+            // ================================================================
+            // §211 — the receiver's setSimple is NOT the donor's setSimple.
+            //
+            // §209 switched to `setSimple` for donor parity. In THIS port that
+            // call is registration-gated: `dPa_control_c::setSimple` looks the
+            // id up in the pre-registered `dPa_simpleEcallBack` table
+            // (`getSimple`, d_particle.cpp:2472-2494) and returns 0 with a
+            // JUT_WARN if absent. 0x03DA is a WW-supplemental id that was never
+            // put in that table, so NOTHING SPAWNED — the VFX vanished
+            // entirely (and the warning never reached the log, so it looked
+            // silent). Same name, different function: donor `setSimple` is a
+            // general spawn, receiver `setSimple` is a curated fast path.
+            //
+            // So: back to `particle_set` — the general spawn that DOES route
+            // through the WW supplemental resolver (§201) — but with the level
+            // callback dropped to NULL. `getLight8EcallBack()` recolours the
+            // emitter from the room LIGHT, and this stage's ambient is
+            // (36,24,59) dark violet — the purple the user saw (§209's
+            // diagnosis, now testable for the first time). K0 still rides in
+            // as the prm/env global modulator (§208), which is the donor's
+            // colour semantics; the green comes from the emitter's own
+            // authored registers.
+            // ================================================================
+            GXColor k0col;
+            k0col.r = kr;
+            k0col.g = kg;
+            k0col.b = kb;
+            k0col.a = 255;
+            // ================================================================
+            // §218 — the level callback is LOAD-BEARING, not decoration.
+            //
+            // §216 measured it: with callback=NULL, `createSimpleEmitterID`
+            // returns a VALID emitter (rate 6, lifeTime 30, correct colours)
+            // but the manager's emitterNum NEVER RISES — the object is
+            // allocated and then never linked into the live list, so it is
+            // never calc'd, never emits, never draws. That is the zero-emission
+            // signature we chased through ESP1 and FLD1, and neither was the
+            // cause: with BOTH disabled (the exact 3-block archive that used to
+            // emit purple puffs) the count was still flat.
+            //
+            // `dPa_control_c` keeps its OWN level-emitter registry
+            // (`field_0x210`, the `level_c::emitter_c` list behind
+            // getEmitter/setStopContinue). Registration runs through the
+            // dPa_levelEcallBack path; passing NULL skips it.
+            //
+            // So restore the callback — the one configuration that provably
+            // emitted — and keep §208's K0 prm/env arguments. Expected: puffs
+            // return. If they return PURPLE, the callback's room-light recolour
+            // (stage ambient (36,24,59) violet) is confirmed as a SEPARATE bug,
+            // and the fix is to reproduce what the callback does for
+            // REGISTRATION without its lighting — donor grass passes no such
+            // callback at all (d_grass.cpp:153).
+            // ================================================================
+            // ================================================================
+            // §220 — FAITHFUL PATH FIRST: the decomp's own call.
+            //
+            // d_grass.cpp:153 spawns the cut scatter with
+            //   setSimple(pid, pos, 0xFF, K0, K0, 1)
+            // and NO level callback. The receiver's setSimple is the same
+            // subsystem but registration-gated (§211): ids must be entered via
+            // `newSimple` first, and §220's resolver hook now lets that
+            // registration find WW supplemental banks. Its draw is a SINGLE
+            // unlit pass, so the hue comes from the emitter's authored colours
+            // modulated by room K0 — no TP scene-lighting pass, which is what
+            // made the puffs track time of day (§219).
+            //
+            // Registration is attempted once. If it fails, we fall back to the
+            // KNOWN-VISIBLE light8 recipe below rather than showing nothing.
+            // ================================================================
+            void* emitter = NULL;      // REAL JPABaseEmitter* (fallback path only)
+            bool spawnedSimple = false;  // §224: simple path spawned; no handle exists
+            {
+                dPa_control_c* pa = g_dComIfG_gameInfo.play.getParticle();
+                // §221: (a) force the WW bank resident BEFORE registering —
+                // newSimple creates its emitter immediately, so the resource
+                // must already exist; (b) do NOT latch failure forever: the
+                // fallback path loads the bank moments later, so a retry can
+                // succeed. Bounded retries keep it from spamming if the simple
+                // table is genuinely full.
+                // ============================================================
+                // §228 — the simple path is OPT-IN (default OFF).
+                //
+                // It registers successfully but draws NOTHING, so it silently
+                // swallowed the spawn; only when a stage change invalidated the
+                // registration did the light8 fallback take over and become
+                // visible. That is the "invisible until you leave an interior,
+                // then purple" behaviour — an artefact of having two paths
+                // where the preferred one is silently inert.
+                //
+                // Until the WW particle lane exists, ONE deterministic path is
+                // worth more than a half-working faithful one. Set
+                // DUSK_WW_SIMPLE=1 to re-test the simple path in isolation.
+                // ============================================================
+                static const bool s_simpleEnabled = [] {
+                    const char* v = std::getenv("DUSK_WW_SIMPLE");
+                    return v != NULL && v[0] == '1';
+                }();
+                static int s_simpleState = s_simpleEnabled ? 0 : 2;  // 2 = disabled
+                static int s_simpleTries = 0;
+                if (pa != NULL && s_simpleState == 0) {
+                    const bool resOk = pa->ensureWwCommonRes(0x03DA);
+                    u32 handle = 0;
+                    const bool ok = resOk && pa->newSimple(0x03DA, 0, &handle);
+                    if (ok) {
+                        s_simpleState = 1;
+                    } else if (++s_simpleTries >= 4) {
+                        s_simpleState = 2;  // stop trying; fallback owns it
+                    }
+                    DuskLog.warn("[ExtVeg] §221 newSimple(0x03DA) {} res={} try={} (getSimple={})",
+                                 ok ? "REGISTERED" : "failed", resOk ? 1 : 0, s_simpleTries,
+                                 pa->getSimple(0x03DA) != NULL ? 1 : 0);
+                }
+                if (pa != NULL && s_simpleState == 1 && pa->getSimple(0x03DA) != NULL) {
+                    dComIfGp_particle_setSimple(0x03DA, &ppos, 0xFF, k0col, k0col, 1, 0.0f);
+                    // §224 CRASH FIX: do NOT fake a handle here. setSimple
+                    // returns a count, not a JPABaseEmitter*, and the §214
+                    // probe below casts `emitter` and dereferences it — a
+                    // sentinel like (void*)1 becomes a read of address 0x1 the
+                    // moment registration finally succeeds (which is exactly
+                    // when this crash appeared). Track "spawned" separately.
+                    spawnedSimple = true;
+                }
+            }
+            if (!spawnedSimple) {
+                // ============================================================
+                // §230 — WW lane: same general spawn that has been reliably
+                // VISIBLE (§218), but with the UNLIT callback instead of
+                // light8. light8's visible pass colours from the room ambient
+                // (bg_amb_col[0] = (36,24,59) violet at hour 11, DuskTap-
+                // confirmed), which is the purple and the time-of-day drift;
+                // the decomp's grass never lights its scatter at all.
+                //
+                // Set DUSK_WW_LIT=1 to fall back to the old light8 callback if
+                // this needs comparing side by side.
+                // ============================================================
+                // ============================================================
+                // §237 — NO level callback. Let the ported resource draw itself.
+                //
+                // §236 readout: the natively-bound 0x03DA has drawP=4, calcP=4,
+                // batch=1, bspType=4, tevSel=3 — a complete, renderable
+                // resource — and particles ARE created (ptclNum/emitterNum both
+                // rise). So nothing is missing; we were OVERRIDING the system
+                // that works. Both callbacks hand-write GX state: light8 adds a
+                // scene-lit second pass (the purple), and my §230/§231 unlit
+                // pass clears the vertex descriptors and forces a 1-stage TEV —
+                // which the batched draw path (batch=1) cannot survive.
+                //
+                // JPAResource::draw → pBsp->setGX(work) → drawP already applies
+                // the donor's OWN TEV, blend (0x05d9) and z-mode straight from
+                // BSP1. That is the faithful presentation we kept trying to
+                // reconstruct by hand. DUSK_WW_LIT=1 still forces light8 for
+                // side-by-side comparison.
+                // ============================================================
+                static const bool s_forceLit = [] {
+                    const char* v = std::getenv("DUSK_WW_LIT");
+                    return v != NULL && v[0] == '1';
+                }();
+                dPa_levelEcallBack* cb = s_forceLit ? dPa_control_c::getLight8EcallBack() : NULL;
+                emitter = dComIfGp_particle_set(0x03DA, &ppos, &cutTev, &s_cutRot, NULL, 255,
+                                                cb, -1, &k0col, &k0col, NULL);
+            }
+            // ================================================================
+            // §219 — keep the callback's REGISTRATION, drop its LIT SECOND PASS.
+            //
+            // User (2026-08-01): the puffs now appear but track TP's time of
+            // day — yellowish at evening, violet at morning. Source located:
+            // `dPa_light8EcallBack::setup` (d_particle.cpp:151) does exactly
+            // two things — `setDrawTimes(2)` and install a particle callback
+            // whose `execute` is EMPTY (:2817). So the tint is not per-particle;
+            // it is the SECOND draw pass (`drawSecond_light8`, reached via
+            // static_light8EcallBack :351/:371), which re-draws the particle
+            // through the scene's 8-light setup.
+            //
+            // The donor's grass passes NO level callback at all
+            // (d_grass.cpp:153) — its scatter draws ONCE, unlit, in the
+            // emitter's own authored colours modulated only by room K0. Match
+            // that by restoring drawTimes to 1: registration and the draw path
+            // stay (they are why the effect appears at all, §218), the TP
+            // lighting pass goes.
+            // ================================================================
+            // §219 RESULT: setDrawTimes(1) made it INVISIBLE again — the light8
+            // draw switches on the draw count (static_light8EcallBack :366:
+            // case 1 → drawFirst, case 2 → drawSecond_light8), so BOTH passes
+            // are required for anything to reach the screen. Reverted.
+            //
+            // ============ KNOWN-VISIBLE RECIPE (do not lose this) ============
+            //   particle id 0x03DA, WW supplemental slot 4
+            //   dComIfGp_particle_set(id, pos, tevstr, rot, NULL, 255,
+            //                         dPa_control_c::getLight8EcallBack(), -1,
+            //                         &K0, &K0, NULL)
+            //   converter: 3-block archive (ESP1/FLD1 OFF by default)
+            //   → puffs VISIBLE, but tinted by TP's scene lighting (the second
+            //     light8 pass), so hue tracks time of day. Not yet faithful.
+            // ================================================================
+            // ============================================================
+            // §183 Ferry V-c: tevstr colors only reach the emitter through the
+            // per-resource userWork flag path (d_particle.cpp:2145-2161, flag
+            // 0x20 → ParticleColor_get_actor → setGlobalPrm/EnvColor). The
+            // WW-supplemental 0x03DA has NO userWork flags configured, so no
+            // color branch runs and the emitter keeps resource-default black.
+            // Donor parity: WW d_grass passes room K0 EXPLICITLY as BOTH prm
+            // and env (setSimple) — write the same registers directly.
+            // ============================================================
+            // §202/§208: no post-spawn colour writes. The WW emitter authors
+            // its own prm/env (green); K0 rides in as the global modulator via
+            // the call arguments above, exactly as the donor does.
+            // ================================================================
+            // §229: §214/§215/§216 diagnostic probes REMOVED — each answered its
+            // question and they were themselves a source of failures (§215's
+            // sentinel deref crashed once registration finally succeeded).
+            // Findings preserved in the bus: emitter is well-formed (rate 6,
+            // lifeTime 30, volSize 15, gScl 1.0, gPrm = room K0), yet zero
+            // particles are emitted through the simple path.
+            // ================================================================
+            // §236: emission readout — does the natively-bound resource create
+            // particles at all? Pairs with the post-init draw-list counts.
+            {
+                static u32 s_eN = 0;
+                if ((s_eN++ % 4) == 0) {
+                    DuskLog.warn("[ExtVeg] §236 postSpawn ptclNum={} emitterNum={}",
+                                 dComIfGp_particle_getParticleNum(),
+                                 dComIfGp_particle_getEmitterNum());
+                }
+            }
             static u32 s_pN = 0;
             if ((s_pN++ % 8) == 0) {
-                DuskLog.warn("[ExtVeg] §62 cutFx emitter={} tevstr={} room={} pos=({:.0f},{:.0f},{:.0f})",
-                             emitter != NULL ? 1 : 0, tevstr != NULL ? 1 : 0, (int)mRoomNo,
-                             ppos.x, ppos.y, ppos.z);
+                DuskLog.warn(
+                    "[ExtVeg] §62 cutFx emitter={} tevstr={} room={} k0=({},{},{}) pos=({:.0f},{:.0f},{:.0f})",
+                    emitter != NULL ? 1 : 0, 1, (int)mRoomNo, (int)kr, (int)kg, (int)kb, ppos.x,
+                    ppos.y, ppos.z);
             }
         }
         if (s_assets.itemTable >= 0) {
@@ -757,7 +1032,9 @@ void daExtVeg_c::checkCut() {
 }
 
 void daExtVeg_c::drawBlades() {
-
+    // §210 probe RETIRED: it proved the blade draw path healthy (15,746 hits,
+    // texReady=1, strips=9) — the "not rendering" report was the cut VFX, not
+    // the blades. Removed rather than throttled; it answered its question.
     j3dSys.reinitGX();
     GXSetNumIndStages(0);
     // §45/№142: configure the GX lights before anything is emitted. The native
@@ -838,6 +1115,7 @@ void daExtVeg_c::drawBlades() {
     dKy_GxFog_tevstr_set(&tevStr);
 
     Mtx mv;
+    const f32 wind_pow = dKyw_get_wind_pow();
     for (int i = 0; i < mBladeCount; ++i) {
         // ====================================================================
         // №227 — cut blades draw the donor's STUB, not nothing. №225's vanish
@@ -851,6 +1129,19 @@ void daExtVeg_c::drawBlades() {
         }
         mDoMtx_trans(mv, mBlades[i].x, mBlades[i].y, mBlades[i].z);
         mDoMtx_YrotM(mv, (s16)(i * 0xDCF));
+        // ============================================================
+        // §130 HUNT 1 — donor per-blade wind sway (d_grass.cpp:322-329):
+        // windSpeed = wind_pow*1000+1000 (clamp 2000); mRotX = windSpeed
+        // + windSpeed*cos(windSpeed*(timer + i*250)). The i*250 phase is
+        // what ripples the field instead of moving it as one sheet.
+        // ============================================================
+        {
+            f32 windSpeed = wind_pow * 1000.0f + 1000.0f;
+            windSpeed = cLib_maxLimit(windSpeed, 2000.0f);
+            const s16 sway = (s16)(windSpeed + windSpeed *
+                cM_scos((s16)(windSpeed * (f32)(g_Counter.mTimer + i * 250))));
+            mDoMtx_XrotM(mv, sway);
+        }
         mDoMtx_concat(j3dSys.getViewMtx(), mv, mv);
         GXLoadPosMtxImm(mv, GX_PNMTX0);
         for (const Strip& st : mCut[i] ? s_cutStrips : s_strips) {

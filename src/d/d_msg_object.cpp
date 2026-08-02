@@ -18,6 +18,7 @@
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_demo.h"
+#include "d/d_ext_dmesg.h"  // §324 native WW live-talk box (input + draw ownership)
 #include "d/d_meter2_info.h"
 #include "d/d_meter2.h"
 #include "d/actor/d_a_midna.h"
@@ -31,6 +32,7 @@
 
 #if TARGET_PC
 #include "d/d_albw_rental.h"
+#include "d/d_ww_itemmdl_pc.h"  // §186: clothes get presentation → force fukiKind 9
 #include "dusk/action_bindings.h"
 #include "dusk/logging.h"  // §65 probe
 #include "dusk/menu_pointer.h"
@@ -579,7 +581,9 @@ int dMsgObject_c::_draw() {
 #if TARGET_PC
         // Rental postman uses dALBWDialogue_c / dALBWShop_c — skip vanilla talk
         // screen so "No response..." and the 3-choice bar never appear underneath.
-        if (!dALBWRental_shouldSuppressVanillaTalkMsg())
+        // §324: same for a live WW talk line the native dMesg box is presenting —
+        // this object still runs the lifecycle, the native box owns the pixels.
+        if (!dALBWRental_shouldSuppressVanillaTalkMsg() && !dExtDmesg_isTalkActive())
 #endif
         {
             if (dComIfGp_isPauseFlag()) {
@@ -1436,13 +1440,26 @@ void dMsgObject_c::talkStartInit() {
     JUTFont* local_30 = mDoExt_getMesgFont();
     field_0x19b = 0;
     bool bVar1 = false;
-    if (mFukiKind != mpRefer->getFukiKind()) {
+    auto wantFukiKind = mpRefer->getFukiKind();
+#if TARGET_PC
+    // §202: tale clothes-get renders through a code-text (0x1324) injection whose own
+    // fukiKind is 0 (talk). Force MsgScrnItem (fukiKind 9 → item box + icon) while the
+    // presentation flag is armed. We compute the WANTED kind BEFORE the change check
+    // below: the old code only applied the override inside `if (mFukiKind != getFukiKind())`,
+    // so when the get box's fukiKind (0) matched the previous talk box (0) the block never
+    // ran and the get rendered as a talk box. Deciding the wanted kind up front makes the
+    // 0→9 transition itself trigger the screen rebuild.
+    if (dWwItemmdl_isClothesGetPresentation()) {
+        wantFukiKind = 9;
+    }
+#endif
+    if (mFukiKind != wantFukiKind) {
         if (mpScrnDraw != NULL) {
             delete_screen(false);
             dVar19 = 1.0f;
             bVar1 = true;
         }
-        mFukiKind = mpRefer->getFukiKind();
+        mFukiKind = wantFukiKind;
     }
     if (dComIfGp_isHeapLockFlag() == 8 ||
         (dComIfGp_isHeapLockFlag() == 5 && dMeter2Info_isFloatingMessageVisible() && !field_0x4cd))
@@ -1685,6 +1702,28 @@ void dMsgObject_c::delete_screen(bool param_1) {
 }
 
 u8 dMsgObject_c::isSend() {
+#if TARGET_PC
+    // ========================================================================
+    // §324 native WW talk box: isSend() is the single input funnel for every
+    // talk-path advance, so while the native dMesg box presents a live WW talk
+    // line it owns the pad — this state machine sees "no press" and holds, its
+    // visuals suppressed (draw gate below). On the native box's final-page
+    // dismissal exactly one synthetic "A" (return 2) is fed through, advancing
+    // the lifecycle the WW actors poll (MSG_DISPLAYED chain / BOX_CLOSED).
+    // Selects are NOT native yet: entering a select state hands presentation
+    // back to this box (native cancels, no release) — tracked debt.
+    // ========================================================================
+    if (dExtDmesg_isTalkActive()) {
+        const u16 st = getStatusLocal();
+        if (st == 20 || st == 21 || st == 24) {
+            dExtDmesg_cancelTalk("TP select state — handback");
+        } else {
+            return 0;
+        }
+    } else if (dExtDmesg_isTalkReleaseFrame()) {
+        return 2;
+    }
+#endif
     dComIfGp_setDoStatusForce(0, 0);
     u8 mesgCancelButton = dComIfGp_checkMesgCancelButton();
     if (mesgCancelButton) {

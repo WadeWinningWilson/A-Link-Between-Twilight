@@ -1,0 +1,498 @@
+# Room bake report — Room44.arc -> C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\files\res\Stage\F_DL01\R44_00.arc (§267)
+
+mode: DRY-RUN
+
+- SCLS `LinkRM` -> `R_DL01` (spawn=1 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 6 donor stages — donor room 0 must be retargeted]**
+- SCLS `Ojhous` **SKIPPED — no host mapping (add to npc ini or hosts seed)**
+- SCLS `Ojhous2` -> `R_DL01` (spawn=0 room=1) [SCLS] **[ROOM-MAP NEEDED: host hosts 6 donor stages — donor room 1 must be retargeted]**
+- SCLS `Omasao` -> `R_DL01` (spawn=0 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 6 donor stages — donor room 0 must be retargeted]**
+- SCLS `Onobuta` -> `R_DL01` (spawn=0 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 6 donor stages — donor room 0 must be retargeted]**
+- SCLS `Onobuta` -> `R_DL01` (spawn=1 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 6 donor stages — donor room 0 must be retargeted]**
+- SCLS `A_mori` -> `F_DL02` (spawn=0 room=0) [SCLS]
+- SCLS `Pjavdou` -> `F_SP115` (spawn=0 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 3 donor stages — donor room 0 must be retargeted]**
+- SCLS `Cave09` -> `F_SP115` (spawn=0 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 3 donor stages — donor room 0 must be retargeted]**
+- SCLS `LinkUG` -> `R_DL01` (spawn=1 room=0) [SCLS] **[ROOM-MAP NEEDED: host hosts 6 donor stages — donor room 0 must be retargeted]**
+- TGDR `KNOB00D` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- TGDR `KNOB00D` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- TGDR `KNOB00D` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- TGDR `KNOB00D` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- TGDR `KNOB03D` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood3` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Tpost` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `lwood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `lwood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `lwood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `lwood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kusax21` BAKED
+- ACTR `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Pig` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Pig` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Pig` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Pig` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Pig` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Kanban` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Kanban` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `flwr7` BAKED
+- ACTR `flwr7` BAKED
+- ACTR `flwr7` BAKED
+- ACTR `flwr17` BAKED
+- ACTR `flwr17` BAKED
+- ACTR `flwr17` BAKED
+- ACTR `flwr17` BAKED
+- ACTR `flwr17` BAKED
+- ACTR `pflwrx7` BAKED
+- ACTR `pflwrx7` BAKED
+- ACTR `pflwrx7` BAKED
+- ACTR `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `item` BAKED
+- ACTR `item` BAKED
+- ACTR `item` BAKED
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kani` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kani` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodbx` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `ootubo1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `woodb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodbx` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodbx` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodbx` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kusax7` BAKED
+- ACTR `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `flower` BAKED
+- ACTR `pflower` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `flower` BAKED
+- ACTR `Pig` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Ekao` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `NpcSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `TagSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `TagSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `TagSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `TagSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `TagSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `item` BAKED
+- ACTR `item` BAKED
+- ACTR `item` BAKED
+- ACTR `item` BAKED
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax7` BAKED
+- ACTR `swood3` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood3` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood3` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood3` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood3` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `item` BAKED
+- ACTR `item` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `item` BAKED
+- ACTR `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `item` BAKED
+- ACTR `koisi1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `koisi1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `koisi1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `AND_SW2` BAKED
+- ACTR `Kanban` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `woodb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `kusax1` BAKED
+- ACTR `kusax1` BAKED
+- ACTR `TagMSo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `Pitfall` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTR `swood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ls1` BAKED
+- ACT0 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ob1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ym1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Aj1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Pirates` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ls1` BAKED
+- ACT0 `Bm1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ko1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ko2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Yw1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ym2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Dk` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Zl1` BAKED
+- ACT0 `P1a` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Throck` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Ko1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT0 `Yw1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT1 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Zl1` BAKED
+- ACT2 `P1a` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `P2b` BAKED
+- ACT2 `Bm1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Ob1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Ym1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Pirates` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Ko1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Ko2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Yw1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Ym2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `Aj1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT2 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT4 `Ym2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `pflower` BAKED
+- ACT4 `Ah` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT4 `Yw1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT4 `kusax1` BAKED
+- ACT5 `Ajav` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `Auzu` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `c_green` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `c_red` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `c_green` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `c_green` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `c_green` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `c_red` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `Ah` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `Puti` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `Puti` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `Puti` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `Puti` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT5 `pflower` BAKED
+- ACT5 `pflower` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT5 `kusax1` BAKED
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `pflower` BAKED
+- ACT6 `pflower` BAKED
+- ACT6 `pflower` BAKED
+- ACT6 `pflower` BAKED
+- ACT6 `pflower` BAKED
+- ACT6 `pflower` BAKED
+- ACT6 `Ym2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `Ah` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT6 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `item` BAKED
+- ACT7 `Kamome` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `item` BAKED
+- ACT7 `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `kotubo` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `item` BAKED
+- ACT7 `lwood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `lwood` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `Ajav` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `Auzu` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `pflower` BAKED
+- ACT7 `pflower` BAKED
+- ACT7 `pflower` BAKED
+- ACT7 `pflower` BAKED
+- ACT7 `pflower` BAKED
+- ACT7 `pflower` BAKED
+- ACT7 `Ah` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `Tpost` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT7 `kusax7` BAKED
+- ACT8 `Pirates` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT8 `Zl1` BAKED
+- ACT8 `Dk` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT8 `P1a` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT8 `Throck` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT8 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT8 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT8 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT9 `Ls1` BAKED
+- ACT9 `Zl1` BAKED
+- ACT9 `P1a` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT9 `Dk` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT9 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT9 `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACT9 `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `Pirates` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `Ba1` BAKED
+- ACTa `Zl1` BAKED
+- ACTa `P1b` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `Ym1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `Ym2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `P1a` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `Vdora` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTa `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `DmKmm` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `DmKmm2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `ootubo1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `kuro_s` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Ksaku` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Oyashi` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Ksaku` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `bridge` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `swood5` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `keeth` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Bb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Yw1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Ob1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Ko2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Ko1` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `Ktarur` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `pflower` BAKED
+- ACTb `ikada_h` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `ky_tag1` BAKED
+- SCOB `TagEv` BAKED
+- SCOB `SW_C00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbCSW` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SwSlvg` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbA2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Com_A` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbF` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbF` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbF` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbF` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbF` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbA` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbTBOX` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Akabe` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvage` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvage` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvage` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvage` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvag2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvag2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvag2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `Salvag2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SW_C00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `HyoiKam` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbMARK` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagIsl` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbFA` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagHt` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `SalvagE` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOB `TagKb` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO0 `TagMsg2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO2 `TagMsg2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO4 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO4 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO4 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO4 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO4 `AttTagB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO4 `SW_C00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO5 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO5 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO5 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO5 `agbB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO5 `AttTagB` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO5 `SW_C00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO7 `ITat00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO7 `ITat00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCO7 `ITat00` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+- SCOb `TagMsg2` DEFERRED (proc not in receiver l_objectName — stays CSV-side)
+
+**200 baked · 2 already present (dedup) · 287 deferred (unported procs) · 1 skipped (unmapped SCLS dests).**
+
+> DN-1 fence: placement/exit chunks only — no BG/collision written. Rerun after each actor port to shrink the deferred list (idempotent).

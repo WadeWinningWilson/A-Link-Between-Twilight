@@ -1,12 +1,23 @@
 # Restored-area purple/black lighting — research findings (data forensics)
 
-**Pass type:** research (user-requested, 2026-07-24). Fix staged, not applied.
+> ⛔⛔ **THIS DOC'S "ROOT CAUSE" IS WRONG — DO NOT ACT ON IT. See §148 / DN-2.**
+> The PAL0 values this doc calls "corrupt" (`1d89baba`) are the **deliberate
+> №113 sea-K0 stash** in `plight_col[2]` — they LOOK like garbage as a
+> point-light color but they ARE the water's blue endpoint (`dKy_get_seacolor`
+> reads them). `1d89baba` is the **CANONICAL** arc; the `84e512ce` this doc
+> "restored" is the **broken-water** arc (stash stripped). Restoring per this
+> doc = strip the stash = break the sea. This mislabel fired a 3-cycle inter-lane
+> fix-revert loop (№270 strip → §112 re-inject → today's near-3rd-strip, caught).
+> **NEVER "repair" PAL0 `plight_col[2]`; hash tools must whitelist it.**
+> Any real character purple/black is a SEPARATE symptom in the character
+> light path (it must not read the plight stash) — fix THERE, never the arc.
 
-## ROOT CAUSE (byte-proven): botched Ba1_Get_Itm merge corrupted stage.dzs PAL0
+**Pass type:** research (2026-07-24) — **conclusion RETRACTED 2026-07-26 (§148).**
 
-The same 23:02 merge that dropped `event_list.dat` (№267) ALSO corrupted the
-**PAL0 palette chunk** inside `F_DL01/STG_00.arc::stage.dzs`. №267 restored only
-`event_list`; `stage.dzs` was never checked and stayed mangled.
+## ~~ROOT CAUSE (byte-proven): botched Ba1_Get_Itm merge corrupted stage.dzs PAL0~~ ← WRONG (retracted)
+
+**RETRACTED.** The "corruption" was the №113 sea-K0 stash (load-bearing, looks
+like garbage). Original (wrong) text preserved below for the record only.
 
 **Evidence (F_DL01/STG_00.arc::stage.dzs, PAL0 @0xee0, 18×52B):**
 - Backup PAL0 entries = uniform neutral runs: `998e99 998e99…`, `f7eee5 f7eee5…`,

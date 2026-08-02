@@ -12,6 +12,8 @@
 #include "d/d_path.h"
 #include "d/d_save_HIO.h"
 #include "d/d_stage.h"
+#include "d/d_demo.h"  // §347a arm probe (demo mode/frame)
+#include "SSystem/SComponent/c_counter.h"  // §352a gFrm stamp
 #include "d/d_bg_parts.h"
 #include "f_ap/f_ap_game.h"
 #include "f_op/f_op_kankyo_mng.h"
@@ -36,6 +38,19 @@
 void dStage_nextStage_c::set(const char* i_stage, s8 i_roomId, s16 i_point, s8 i_layer, s8 i_wipe,
                              u8 i_speed) {
     if (!enabled) {
+#if TARGET_PC
+        // §347a CENTRAL ARM PROBE (10-hyp: who arms a stage transition mid-
+        // event — §346 confirmed a scene delete kills the tale). Logs EVERY
+        // first-arm with the stage/point signature (point 200/0xCA = ba1 tale
+        // warp; 0/0xCB = door/§322; else = other machinery) + event status +
+        // runEvt + demo mode. Site tags: §347b (ba1), §347c (doors). Strip §336.
+        DuskLog.info("[Stage] §347a ARM next='{}' point={} wipe={} evRun={} runEvt='{}' "
+                     "demoMode={} fnm={} gFrm={}",
+                     i_stage != NULL ? i_stage : "?", (int)i_point, (int)i_wipe,
+                     dComIfGp_event_runCheck() ? 1 : 0,
+                     dComIfGp_getEventManager().getRunEventName(), (int)dDemo_c::getMode(),
+                     (int)dDemo_c::getFrameNoMsg(), (int)g_Counter.mCounter0);
+#endif
         enabled = true;
         wipe = i_wipe;
         wipe_speed = i_speed;
@@ -337,8 +352,54 @@ int dStage_roomControl_c::loadRoom(int roomCount, u8* rooms, bool param_2) {
         return FALSE;
     }
     
+#if TARGET_PC
+    // ============================================================
+    // №93: WW single-room-host residency clamp + RTBL probe.
+    //
+    // Residency is decided ONLY here: at stage entry (param_2==true) this loop
+    // creates a ROOM_SCENE proc for EVERY ChkBg (0x80) byte in the arrival
+    // room's RTBL row, with no early-return. MULT, REVT and the event/demo
+    // system never create room procs — so trimming MULT (Foundry §276) could
+    // not have stopped the load, and it didn't.
+    //
+    // A WW-hosted interior (R_DL01 = Grandma's house) must be single-room, but
+    // the mod's baked RTBL row for the arrival room lists ALL rooms 0..5 with
+    // ChkBg set → all six become resident and the MULT group stitches them at
+    // overlapping coords = the §274 pile-up. The native single-room interior
+    // simply has a one-entry row; we enforce that here for WW hosts so the load
+    // is correct regardless of what the arc bakes. Vanilla TP and the gameplay
+    // stream path (param_2==false) are untouched.
+    //
+    // The probe logs the actual row bytes so Foundry can ALSO fix the bake
+    // (the row SHOULD be a single [0x80|arrival] entry). Strip after the bake
+    // is corrected; the clamp can stay as a belt.
+    // ============================================================
+    s8 wwClampArrival = -1;
+    if (param_2) {
+        const char* sn = dComIfGp_getStartStageName();
+        if (sn != NULL && dExtWwSave_isWwHostStage(sn)) {
+            wwClampArrival = dComIfGp_getStartStageRoomNo();
+            char rowbuf[160];
+            int p = 0;
+            for (int i = 0; i < roomCount && p < (int)sizeof(rowbuf) - 6; i++) {
+                p += snprintf(rowbuf + p, sizeof(rowbuf) - p, "%02x ", rooms[i]);
+            }
+            DuskLog.info(
+                "[dStage] №93 stage-entry RTBL row — WW host '{}' arrival={} count={} bytes=[{}]",
+                sn, (int)wwClampArrival, roomCount, rowbuf);
+        }
+    }
+#endif
     for (int i = 0; i < roomCount; i++) {
         int roomNo = dStage_roomRead_dt_c_GetLoadRoomIndex(rooms[i]);
+#if TARGET_PC
+        // №93: on a WW host, make ONLY the arrival room resident at stage entry.
+        if (param_2 && wwClampArrival >= 0 && roomNo != wwClampArrival) {
+            DuskLog.info("[dStage] №93 WW-host clamp — skip resident room {} (arrival {})",
+                         roomNo, (int)wwClampArrival);
+            continue;
+        }
+#endif
         dStage_roomControl_c::setZoneCount(roomNo, 2);
         if (!checkStatusFlag(roomNo, 0x01)) {
             if (param_2) {
@@ -545,12 +606,54 @@ static dStage_objectNameInf l_objectName[] = {
     OBJNAME("Link",    fpcNm_ALINK_e,             -1),
     // §46/№154: storyboard actor binding. JStage resolves a JACT block by its
     // ID string through dStage_searchName -> (proc, argument), then finds a LIVE
-    // actor matching BOTH (f_op_actor_mng.cpp fopAcM_findObjectCB). "Link" above
-    // already binds; "Ls1" had no row, so that actor was never found and the demo
-    // reported no performer. Our Ls1 spawns via socket NPC_HENNA0 with arg 5 —
-    // the arg is what distinguishes her from every other islander sharing that
-    // proc (Ko1=8, Ob1=7, ...), so it must be exact, not -1.
-    OBJNAME("Ls1",     fpcNm_NPC_HENNA0_e,         5),
+    // actor matching BOTH (f_op_actor_mng.cpp fopAcM_findObjectCB).
+    // §244: RESTORED to the VANILLA WW row. Donor d/d_stage.cpp:713 is
+    //   OBJNAME("Ls1", fpcNm_NPC_LS1_e, 255, 60) — the port earlier had to point
+    //   "Ls1" at the NPC_HENNA0 mount host (arg 5) only because a real NPC_LS1
+    //   actor did not exist yet. It exists now (native direct port, fpcNm 0x327),
+    //   so we use the donor mapping verbatim. arg 255 == (s8)-1, which matches the
+    //   population's fopAcM_create(..., i_argument = -1) exactly (the demo NPCs
+    //   Ji1/Ko1/Bm1..3 all use 255 the same way). The port's 3-field OBJNAME drops
+    //   the donor's 4th field (60) as every port row does.
+    OBJNAME("Ls1",     fpcNm_NPC_LS1_e,          255),
+    // §254 Tetra: donor d_stage.cpp:725 OBJNAME("Zl1", fpcNm_NPC_ZL1_e, 255, 60).
+    //   255 == (s8)-1 matches the census fopAcM_create(..., -1). Real NPC_ZL1 now
+    //   exists (0x329), so demos (meet_tetra/awake/stolensister/...) bind natively.
+    OBJNAME("Zl1",     fpcNm_NPC_ZL1_e,          255),
+    // §261: JACT 'Ba1' now routes to the native NPC_BA1 direct port (was the
+    // HENNA0 mount stand-in, arg 26). Donor create arg 255 = (s8)-1, matching the
+    // Ls1/Zl1 rows; the census identity is now the real actor.
+    OBJNAME("Ba1",     fpcNm_NPC_BA1_e,           255),
+    OBJNAME("Otble", fpcNm_OBJ_OTBLE_e, 0),  // §329 Actor-Kit
+    // §327 WW wall/loft lamp: donor d/d_stage.cpp:919 is
+    //   OBJNAME("Lamp", fpcNm_LAMP_e, 255, 0) — replicated verbatim (the port's
+    // 3-field OBJNAME drops the donor's 4th field, as every port row does; 255 ==
+    // (s8)-1 -> the placement's own DZR params reach the actor). This native row
+    // REPLACES the retired Lamp->NPC_LAMP mount stand-in, which is parked in
+    // d_ext_npc_population.cpp (§327; DN-9 — donor system now ported).
+    OBJNAME("Lamp",    fpcNm_LAMP_e,              255),
+    // §327 WW tableware: donor d/d_stage.cpp:1131-1133 — one actor, three rows;
+    // the row arg 0/1/2 selects pot/osara/koppu (daObjMshokki_c::param_get_arg).
+    OBJNAME("MPot",    fpcNm_Obj_Mshokki_e,         0),
+    OBJNAME("MOsara",  fpcNm_Obj_Mshokki_e,         1),
+    OBJNAME("MKoppu",  fpcNm_Obj_Mshokki_e,         2),
+    // §327 WW wall shield / special placed item: donor d/d_stage.cpp:1169 is
+    //   OBJNAME("SPitem", fpcNm_SPC_ITEM01_e, 255, 0) — replicated verbatim
+    // (255 -> DZR params carry the WW itemNo in the low byte).
+    OBJNAME("SPitem",  fpcNm_SPC_ITEM01_e,        255),
+    // §328 WW knob doors: donor d/d_stage.cpp:465-472 — eight rows, all to
+    //   fpcNm_KNOB00_e: OBJNAME("KNOB00".."KNOB03" + "KNOB00D".."KNOB03D",
+    //   fpcNm_KNOB00_e, 255, 0) — replicated verbatim (port 3-field macro).
+    // fpcNm_KNOB00_e is the §27-registered slot 0x31C; which implementation
+    // spawns is selected by DUSK_WW_KNOB00_NATIVE (d/actor/d_a_knob00.h §328).
+    OBJNAME("KNOB00",  fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB01",  fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB02",  fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB03",  fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB00D", fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB01D", fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB02D", fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB03D", fpcNm_KNOB00_e,            255),
     OBJNAME("carry00", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry01", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry02", fpcNm_Obj_Carry_e,         -1),
@@ -1665,6 +1768,22 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
     i_stage->setPlayer(player);
     i_stage->setPlayerNum(num);
 
+#if TARGET_PC
+    // №91: player-create latch state (see block below). Function-scope so the
+    // set-site just before dStage_actorCreate can see it.
+    static bool s_playerCreatePending = false;
+    static char s_lastPlayerStage[32] = {0};
+    static int s_lastPlayerPoint = -0x7fffffff;
+    // №92: "player established THIS arrival" — set once the create is queued,
+    // cleared only on a new arrival (stage identity change OR the player going
+    // present→absent i.e. torn down). Distinct from s_playerCreatePending, which
+    // clears the instant havePlayer flips true — leaving a window where a later
+    // room-0 decode sees havePlayer && startRoom==stageRoom and the №85 stale-clear
+    // wrongly recreates the good player (observed CREATE=2 on the triple decode).
+    static bool s_playerEstablished = false;
+    static bool s_prevHavePlayer = false;
+#endif
+
     {
         bool havePlayer = dComIfGp_getPlayer(0) != NULL;
         s8 startRoom = dComIfGp_getStartStageRoomNo();
@@ -1677,15 +1796,72 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
             "stage='{}' plyrNum={}",
             havePlayer ? 1 : 0, (int)startRoom, (int)stageRoom,
             (int)dComIfGp_getStartStagePoint(), sn != NULL ? sn : "?", num);
-        // №86: WW host room-number reconcile — trust setNextStage's start room when the
-        // parsed roomDt disagrees (shell/template PLYR params often carry foreign room bits;
-        // roomLoader now pins roomNo after init, but keep this belt).
-        if (wwHost && !havePlayer && startRoom >= 0 && startRoom != stageRoom) {
-            DuskLog.warn(
-                "[dStage] playerInit №86 reconcile stageRoom {} → startRoom {} on '{}'",
-                (int)stageRoom, (int)startRoom, sn);
-            i_stage->setRoomNo(startRoom);
-            stageRoom = startRoom;
+        // ============================================================
+        // №90: the №86 playerInit reconcile is REMOVED — it re-created
+        // Link once per room and exhausted the heap (JKRExpHeap:245).
+        //
+        // R_DL* is multi-room (rooms 0..5). dScnRoom loads them in
+        // sequence; each room runs playerInit. The native guard below
+        // (`startRoom != stageRoom → skip`) exists precisely so Link is
+        // created ONLY in the arrival room. dStage_dt_c_roomLoader already
+        // pins getRoomNo() = the true room number (setRoomNo(param_2))
+        // BEFORE PLYR decodes, so `stageRoom` is authoritative here.
+        //
+        // The old №86 belt forced stageRoom = startRoom whenever they
+        // differed and no player existed yet. But player creation is
+        // ASYNC: dComIfGp_getPlayer(0) stays NULL for several room loads
+        // after dStage_actorCreate queues ALINK. So EVERY non-arrival room
+        // that loaded during that window saw !havePlayer, reconciled its
+        // (correct) room number down to startRoom, defeated the skip, and
+        // created ANOTHER 22568-byte ALINK — 6 players on R_DL01 → OOM.
+        //
+        // The pin (d_stage.cpp №86 @roomLoader) is the real fix; this belt
+        // is obsolete and was the regression. Do not reinstate without a
+        // per-arrival latch (a bare !havePlayer is not one under async load).
+        // ============================================================
+        (void)wwHost;
+        // ============================================================
+        // №91: player-create latch. dStage_actorCreate queues ALINK
+        // ASYNC — dComIfGp_getPlayer(0) stays NULL for several room
+        // decodes after. On R_DL01 the arrival room (0) is decoded by
+        // MULTIPLE room_of_scene procs (event-mode entry after Foundry's
+        // REVT bake loads all rooms; room 0 drew 3 procs), and each ran
+        // playerInit with havePlayer still false → 3× ALINK + 3× METER2
+        // (~72KB) → JKRExpHeap:245 OOM. TP's invariant is ONE player.
+        //
+        // Enforce it across the async window: once the create is queued,
+        // skip further creates for the SAME arrival until the player
+        // materialises (havePlayer) or the stage identity changes. Native
+        // (synchronous) never needed this; PC-only.
+        // ============================================================
+        {
+            const int curPoint = dComIfGp_getStartStagePoint();
+            const bool stageChanged =
+                sn == NULL || strcmp(sn, s_lastPlayerStage) != 0 ||
+                curPoint != s_lastPlayerPoint;
+            if (stageChanged) {
+                s_playerCreatePending = false;
+                s_playerEstablished = false;  // fresh stage — allow a create/№85 clear
+                snprintf(s_lastPlayerStage, sizeof(s_lastPlayerStage), "%s",
+                         sn != NULL ? sn : "");
+                s_lastPlayerPoint = curPoint;
+            }
+            if (s_prevHavePlayer && !havePlayer) {
+                // player was torn down (present→absent) — this is a new arrival even
+                // if the stage name/point repeat (re-entry). Re-arm for a fresh create.
+                s_playerEstablished = false;
+            }
+            s_prevHavePlayer = havePlayer;
+            if (havePlayer) {
+                s_playerCreatePending = false;  // player materialised — latch not needed
+            }
+            if (!havePlayer && startRoom == stageRoom && s_playerCreatePending) {
+                DuskLog.warn(
+                    "[dStage] playerInit №91 skip — player create already in flight "
+                    "(async) for '{}' room {}",
+                    sn != NULL ? sn : "?", (int)stageRoom);
+                return 1;
+            }
         }
 #endif
         if (havePlayer || startRoom != stageRoom) {
@@ -1697,7 +1873,11 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
                 havePlayer ? 1 : 0, (int)startRoom, (int)stageRoom,
                 (int)dComIfGp_getStartStagePoint(), sn != NULL ? sn : "?");
             // Stale player ptr across ChangeReq on WW hosts: clear and spawn at PLYR.
-            if (havePlayer && startRoom == stageRoom && wwHost) {
+            // №92: but NOT if we already established the player this arrival — a later
+            // room-0 decode (event-mode triple-decode) is not a stale ptr; clearing it
+            // recreates a 2nd ALINK (CREATE=2) and wastes ~24KB toward the OOM. The
+            // else-branch below then returns 1 (skip), which is the correct no-op.
+            if (havePlayer && startRoom == stageRoom && wwHost && !s_playerEstablished) {
                 DuskLog.warn(
                     "[dStage] playerInit №85 clearing stale player for WW host '{}'", sn);
                 dComIfGp_setPlayerInfo(0, NULL, 0);
@@ -1794,6 +1974,12 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
         "[dStage] playerInit CREATE point={} roomBits={} stage='{}'",
         (int)dComIfGp_getStartStagePoint(), (int)(appen->base.parameters & 0x3F),
         dComIfGp_getStartStageName() != NULL ? dComIfGp_getStartStageName() : "?");
+#endif
+#if TARGET_PC
+    // №91: latch BEFORE the async create so duplicate playerInit passes for
+    // this same arrival (multiple room-0 procs) skip until Link materialises.
+    s_playerCreatePending = true;
+    s_playerEstablished = true;  // №92: a create for THIS arrival has been issued
 #endif
     dStage_actorCreate(player_data, appen);
 

@@ -5,9 +5,17 @@
 #include "f_pc/f_pc_leaf.h"
 
 enum fopMsg_Mode_e {
+    // ============================================================
+    // §245 scope-message subsystem (WW fopMsgStts_* → port fopMsg_MODE_*).
+    //   MSG_UNK0 (0x00) + CLOSE_WAIT (0x0A, alias of UNK_A) are the two
+    //   scope states the port was missing. Needed by fopMsgM_forceSendOn /
+    //   Aryll's (d_a_npc_ls1) telescope demo.
+    // ============================================================
+    fopMsg_MODE_MSG_UNK0_e      = 0x00,
     fopMsg_MODE_MSG_PREPARING_e = 0x01,
     fopMsg_MODE_BOX_OPENING_e   = 0x02,
     fopMsg_MODE_MSG_TYPING_e    = 0x06,
+    fopMsg_MODE_CLOSE_WAIT_e    = 0x0A,  // §245 waiting for input before closing (== UNK_A)
     fopMsg_MODE_UNK_A_e         = 0x0A,
     fopMsg_MODE_UNK_B_e         = 0x0B,
     fopMsg_MODE_UNK_D_e         = 0x0D,

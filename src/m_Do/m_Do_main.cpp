@@ -29,6 +29,8 @@
 #include "d/d_s_menu.h"
 #include "d/d_s_play.h"
 #include "dusk/time.h"
+#include "dusk/fps_probe.h"
+#include <cstdint>
 #include "f_ap/f_ap_game.h"
 #include "f_op/f_op_msg.h"
 #include "m_Do/m_Do_MemCard.h"
@@ -305,6 +307,9 @@ void main01(void) {
             continue;
         }
 
+        const auto ferryT_frame0 = dusk::fps_probe::now_ticks();
+        dusk::fps_probe::begin_frame();
+
         VIWaitForRetrace();
 
         dusk::lastFrameAuroraStats = *aurora_get_stats();
@@ -314,10 +319,12 @@ void main01(void) {
 
         const auto pacing = dusk::game_clock::advance_main_loop();
         if (pacing.is_interpolating) {
+            std::int64_t exe_ticks = 0;
             if (pacing.sim_ticks_to_run > 0) {
                 dusk::frame_interp::begin_frame(dusk::getSettings().game.enableFrameInterpolation, true, 0.0f);
                 dusk::frame_interp::set_ui_tick_pending(true);
 
+                const auto exe0 = dusk::fps_probe::now_ticks();
                 for (int sim_tick = 0; sim_tick < pacing.sim_ticks_to_run; ++sim_tick) {
                     dusk::frame_interp::begin_sim_tick();
                     mDoCPd_c::read();
@@ -327,17 +334,24 @@ void main01(void) {
                     mDoAud_Execute();
                     dusk::game_clock::commit_sim_tick();
                 }
+                exe_ticks = dusk::fps_probe::now_ticks() - exe0;
             }
 
-            dusk::frame_interp::begin_frame(dusk::getSettings().game.enableFrameInterpolation, false,
-                                            dusk::game_clock::sample_interpolation_step());
-            dusk::frame_interp::interpolate();
+            const auto draw0 = dusk::fps_probe::now_ticks();
+            {
+                DUSK_FPS_SCOPE(FrameInterp);
+                dusk::frame_interp::begin_frame(dusk::getSettings().game.enableFrameInterpolation, false,
+                                                dusk::game_clock::sample_interpolation_step());
+                dusk::frame_interp::interpolate();
+            }
             dusk::frame_interp::begin_presentation_camera();
             // run draw functions for anything specially marked to handle interp
             fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);
             cAPIGph_Painter();
             dusk::frame_interp::end_presentation_camera();
             dusk::frame_interp::set_ui_tick_pending(false);
+            const std::int64_t draw_ticks = dusk::fps_probe::now_ticks() - draw0;
+            dusk::fps_probe::set_master_exe_draw(exe_ticks, draw_ticks);
         } else {
             dusk::frame_interp::begin_frame(dusk::FrameInterpMode::Off, true, 0.0f);
             dusk::frame_interp::set_ui_tick_pending(true);
@@ -349,12 +363,18 @@ void main01(void) {
 
             // EXECUTE GAME LOGIC & RENDER
             // This calls mDoGph_Painter -> JFWDisplay -> GX Functions
+            // Master exe/draw split comes from fpcM_Management (note_fpcm_split).
             fapGm_Execute();
 
             mDoAud_Execute();
         }
 
-        aurora_end_frame();
+        {
+            const auto present0 = dusk::fps_probe::now_ticks();
+            aurora_end_frame();
+            dusk::fps_probe::add_present(dusk::fps_probe::now_ticks() - present0);
+        }
+        dusk::fps_probe::end_frame(dusk::fps_probe::now_ticks() - ferryT_frame0);
 
         FrameMark;
 

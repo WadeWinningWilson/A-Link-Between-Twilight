@@ -993,6 +993,10 @@ void* dRes_control_c::getRes(char const* i_arcName, char const* i_resName, dRes_
 }
 
 void* dRes_control_c::getIDRes(char const* i_arcName, u16 i_resID, dRes_info_c* i_resInfo, int i_infoNum) {
+    // §266 Foundry probe RESOLVED + stripped: getIDRes resolves mod-arc ids correctly
+    // (id 0x7→idx13, 0xb→24, 0x16→35 against the real 38-entry mod Ba.arc). The engine
+    // id path is INNOCENT; the ba1 model distortion is a render/skeleton bug, not
+    // resource loading. See docs/state/grandma-native-tale.md §266.
     dRes_info_c* resInfo = getResInfoLoaded(i_arcName, i_resInfo, i_infoNum);
     if (resInfo == NULL) {
         return resInfo;

@@ -4,14 +4,13 @@ Per-effect doc for the Outset beach 9-layer crashing-wave material. Part of the 
 set; taxonomy + shared traps in the parent [../water-rendering.md](../water-rendering.md).
 Siblings: [waves.md](waves.md) (system 2, ACCEPTED), great-sea (system 1, future).
 
-## STATUS: §128 MOTION WORKING (user eye 2026-07-25) — 2 open discrepancies
-Shore beach-crash now ANIMATES (white foam crash along the shoreline, matching WW much better —
-user screenshots). Substantial progress. **Two open discrepancies remain:**
-1. **Water COLOR (§127, open)** — still off; Bridge dumping model1's authored register values so
-   Engine uses them instead of the pane endpoint.
-2. **Effect SPEED/TIMING (NEW, §132)** — shore + wave crash speed/timing feels off vs donor. The
-   BTK scroll rate / phase may not match model1.btk's authored track speeds. → verify our BTK frame
-   rate + track speeds against Bridge's `model1_btk_motion.md` (Hermite SRT / 100f).
+## STATUS: COLOR ACCEPTED (noclip side-by-side, §147) · MOTION WORKING (§128) · 1 open
+- **Color: ACCEPTED 2026-07-26** — live runtime palette (Ferry 3, §143: C0/K0 per-frame from
+  `dKy_get_seacolor`, authored C1-C3/K1-K3) matched vs noclip Room44. The full arc: white triangles
+  (§126 K0=amb) → too dark (bake §136) → LIVE PALETTE (§143) → accepted.
+- **Motion: WORKING** (§128 TexGen bit).
+- **OPEN: effect SPEED/TIMING (§132)** — crash speed/phase vs donor; check our BTK frame advance vs
+  Bridge's `model1_btk_motion.md` (Hermite SRT / 100f). Last remaining shore item.
 Engine's fidelity attempt on the beach material produced **white water at the shoreline** — the
 9-layer crash did not resolve; the shore surface reads as flat white/blank (see user screenshot,
 2026-07-25). This is a fidelity FAILURE, not the accepted system-2 panes (those are correct — waves.md).

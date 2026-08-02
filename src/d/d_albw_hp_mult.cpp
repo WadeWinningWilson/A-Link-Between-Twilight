@@ -13,6 +13,7 @@
 
 #include "d/d_albw_hp_mult.h"
 #include "d/d_albw_boss.h"
+#include "d/d_albw_region_mult.h"
 #include "dusk/settings.h"
 #include "d/actor/d_a_b_tn.h"
 #include "f_op/f_op_actor.h"
@@ -148,7 +149,7 @@ int dAlbwHP_getTrueHpMult(s16 profName) {
 }
 
 s16 dAlbwHP_scaleHpValue(s16 profName, s16 hp) {
-    return scaleHpField(hp, dAlbwHP_getTrueHpMult(profName));
+    return dAlbwRegionMult_scaleHp(scaleHpField(hp, dAlbwHP_getTrueHpMult(profName)));
 }
 
 dAlbwHP_LockonDisplay dAlbwHP_getLockonDisplayHp(fopAc_ac_c* actor) {
@@ -239,14 +240,18 @@ void dAlbwHP_tryApplyTrueMaxHp(fopAc_ac_c* actor) {
     }
 
     const int mult = dAlbwHP_getTrueHpMult(profName);
-    if (mult <= 1) {
-        markTrueHpProcessed(procId);
-        return;
+    if (mult > 1) {
+        actor->health = scaleHpField(actor->health, mult);
+        if (actor->field_0x560 > 1) {
+            actor->field_0x560 = scaleHpField(actor->field_0x560, mult);
+        } else if (actor->field_0x560 > 0) {
+            actor->field_0x560 = actor->health;
+        }
     }
 
-    actor->health = scaleHpField(actor->health, mult);
+    actor->health = dAlbwRegionMult_scaleHp(actor->health);
     if (actor->field_0x560 > 1) {
-        actor->field_0x560 = scaleHpField(actor->field_0x560, mult);
+        actor->field_0x560 = dAlbwRegionMult_scaleHp(actor->field_0x560);
     } else if (actor->field_0x560 > 0) {
         actor->field_0x560 = actor->health;
     }

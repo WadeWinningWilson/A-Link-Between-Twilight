@@ -49,7 +49,7 @@ MOD = (
     / "WW-Crew-Restoration"
 )
 DONOR_STAGE = Path("D:/XXXXXXX/Ex WW/files/res/Stage/sea/Stage.arc")
-TARGET_STG = MOD / "files" / "res" / "Stage" / "F_DL01" / "STG_00.arc"
+TARGET_STG = MOD / "files" / "res" / "Stage" / "F_DL01" / "STG_00.arc"  # DEFAULT (exterior); --target overrides. See §158 note below.
 
 HDR = 0x40
 ESZ, SSZ, CSZ, DSZ = 0xB0, 0x50, 0x50, 0x40
@@ -190,13 +190,27 @@ def main() -> int:
     ev_name = sys.argv[1]
     dry = "--dry-run" in sys.argv
 
-    # №237: events live per-stage in the donor (Ba1_Get_Itm is in LinkRM's
-    # Stage.arc, not sea's) but our interiors are BG mounts inside F_DL01, so
-    # the TARGET stays the F_DL01 stage list for every donor stage. Only the
-    # donor is selectable.
+    # №237 (SUPERSEDED 2026-07-26 §158 — dated per §106 stale-doctrine rule,
+    # NOT deleted; this is the 2nd catch of this failure class, vfuku was 1st):
+    #   ORIGINAL (true only for the ROOM-LANE build era): "our interiors are BG
+    #   mounts inside F_DL01, so the TARGET stays the F_DL01 stage list for
+    #   every donor stage." NO LONGER TRUE.
+    #   §158: the interior entry now does a NATIVE STAGE TRANSPORT — the log
+    #   reads `enter EXT_BG1 → transport=stage host='R_DL01' ... native
+    #   setNextStage`. So an event that fires inside an interior must live in
+    #   THAT stage's event_list (Ba1_Get_Itm → R_DL01/STG_00.arc), not F_DL01.
+    #   Symptom that caught it: Ba1_Get_Itm merged into F_DL01 resolved -1 in
+    #   the R_DL01 interior (empty stage list) → DEFAULT_GETITEM fallback, no
+    #   cutscene. `awake` (exterior, F_DL01) still resolves — it's queried
+    #   before the switch, which is why it fooled the first verification.
+    #   The target is now SELECTABLE via --target; F_DL01 stays the DEFAULT for
+    #   exterior events.
     donor_stage = DONOR_STAGE
     if "--donor" in sys.argv:
         donor_stage = Path(sys.argv[sys.argv.index("--donor") + 1])
+    global TARGET_STG
+    if "--target" in sys.argv:
+        TARGET_STG = Path(sys.argv[sys.argv.index("--target") + 1])
 
     donor_raw = arc_member(donor_stage, "event_list.dat")
     if donor_raw is None:

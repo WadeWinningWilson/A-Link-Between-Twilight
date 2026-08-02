@@ -26,6 +26,10 @@
 #include "dusk/imgui/ImGuiConsole.hpp"
 #include "dusk/settings.h"
 #include "dusk/speedrun.h"
+#if TARGET_PC
+#include "d/d_albw_outfit.h"
+#include "dusk/logging.h"
+#endif
 
 BOOL daAlink_c::checkEventRun() const {
     return dComIfGp_event_runCheck() || checkPlayerDemoMode();
@@ -659,6 +663,61 @@ void daAlink_c::setDemoData() {
             } else {
                 demo_mode = mDemo.getDemoMode();
             }
+
+#if TARGET_PC
+            // ================================================================
+            // TALE_DEMO / WW clothes: ENABLE_SHAPE → texture swap + persistent
+            // ownership (UNK_2A80 stand-in). Donor daPy_lk_c::setDemoData
+            // (player_main ~10352): shape 0=casual, 1=hero.
+            // §174 Bug 1: awake also drives Link SHAPE=1 — must NOT dress the
+            // player. Gate to the give events only (not every demo SHAPE).
+            // §184 Bug 4a / §185: tale.stb opens SHAPE=1 but that is NOT the put-on —
+            // keep CASUAL until the give. Do NOT force casual after the wear-change
+            // (JMSG 3095/4410 or DEMO2 SHAPE 1) — that undid the give until a replay.
+            // TALE_DEMO2 held SHAPE 1 is also the put-on.
+            // ================================================================
+            if (demo_actor_p->checkEnable(dDemo_actor_c::ENABLE_SHAPE_e) &&
+                mClothesChangeWaitTimer == 0 && !checkWolf()) {
+                // §281: ba1's native order runs 'tale_1'/'tale_2' (Foundry §280), not the
+                // mount's TALE_DEMO/TALE_DEMO2 — accept both so Link's clothes SHAPE handling
+                // engages on the native path.
+                const char* runEvt = dComIfGp_getEventManager().getRunEventName();
+                const bool isTale1 =
+                    runEvt != NULL && (std::strcmp(runEvt, "TALE_DEMO") == 0 ||
+                                       std::strcmp(runEvt, "tale_1") == 0);
+                const bool isTale2 =
+                    runEvt != NULL && (std::strcmp(runEvt, "TALE_DEMO2") == 0 ||
+                                       std::strcmp(runEvt, "tale_2") == 0);
+                if (isTale1 || isTale2) {
+                    const u32 shape = demo_actor_p->getShapeId();
+                    const u8 curCloth = dComIfGs_getSelectEquipClothes();
+                    const bool giveAlready =
+                        curCloth == (u8)dItemNo_WEAR_KOKIRI_e;
+                    u8 wantCloth;
+                    if (isTale1) {
+                        // Pre-give: ignore opening SHAPE=1. Post-give: keep hero.
+                        wantCloth = giveAlready ? (u8)dItemNo_WEAR_KOKIRI_e
+                                                : (u8)dItemNo_WEAR_CASUAL_e;
+                    } else {
+                        wantCloth = (shape == 1) ? (u8)dItemNo_WEAR_KOKIRI_e
+                                                 : (u8)dItemNo_WEAR_CASUAL_e;
+                    }
+                    if (curCloth != wantCloth) {
+                        dComIfGs_setSelectEquipClothes(wantCloth);
+                        dComIfGp_setSelectEquipClothes(wantCloth);
+                        if (wantCloth == (u8)dItemNo_WEAR_KOKIRI_e) {
+                            dAlbwOutfit_recordOwnedByItemNo((int)wantCloth);
+                        }
+                        setClothesChange(0);
+                        DuskLog.info(
+                            "[Alink] ENABLE_SHAPE shape={} → cloth={} (tale '{}'{})",
+                            (int)shape, (int)wantCloth, runEvt,
+                            wantCloth == (u8)dItemNo_WEAR_KOKIRI_e ? " put-on"
+                            : (isTale1 ? " casual-hold" : ""));
+                    }
+                }
+            }
+#endif
 
             if (demo_actor_p->checkEnable(dDemo_actor_c::ENABLE_TRANS_e)) {
                 pos_p = &demo_actor_p->getTrans();
@@ -2294,6 +2353,23 @@ int daAlink_c::procCoGetItemInit() {
     mNormalSpeed = 0.0f;
     mProcVar1.field_0x300a = 0;
     field_0x3478 = 0.0f;
+
+#if TARGET_PC
+    // №281 probe — pin why Ba1_Get_Item raises item 85 vs partner 47. Do NOT
+    // edit cut prm0 from this alone (may be anim param). Decision tree:
+    //   Param0==0x100 && GtItm==85 → GtItm clobbered (Engine)
+    //   Param0==85                 → cut item param (History data)
+    //   Param0==0                  → partner path (clean target)
+    {
+        daItemBase_c* probe_partner =
+            (daItemBase_c*)fopAcM_getItemEventPartner(this);
+        const int partnerNo =
+            probe_partner != NULL ? (int)probe_partner->getItemNo() : -1;
+        DuskLog.info(
+            "[Alink] №281 procCoGetItemInit Param0={} GtItm={} partnerItem={}",
+            (int)mDemo.getParam0(), (int)dComIfGp_event_getGtItm(), partnerNo);
+    }
+#endif
 
     if (mDemo.getParam0() != 0) {
         int item_no;

@@ -11,6 +11,7 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "JSystem/JKernel/JKRSolidHeap.h"
 #include "d/d_file_sel_info.h"
+#include "d/d_ext_save_flags.h"
 #include "d/d_file_select.h"
 #include "d/d_lib.h"
 #include "d/d_meter2_info.h"
@@ -2795,6 +2796,12 @@ void dFile_select_c::CommandExec() {
         mDoAud_seStartLevel(Z2SE_SY_FILE_DELETE_LEVEL, NULL, 0, 0);
         dComIfGs_setInitDataToCard((u8*)mSaveData, mSelectNum);
         mDoMemCdRWm_SetCheckSumGameData((u8*)mSaveData, mSelectNum);
+        // ====================================================================
+        // §305 wire ① — mirror the slot erase into the donor event-flag
+        // sidecar (this is the single choke where slot bytes are blanked;
+        // copy below is the single choke where they move between slots).
+        // ====================================================================
+        dExtWwSvIo_eraseSlot(mSelectNum);
         dataSave();
         mDataSelProc = DATASELPROC_DATA_ERASE_WAIT;
         break;
@@ -2806,6 +2813,8 @@ void dFile_select_c::CommandExec() {
         memcpy(dstData, srcData, sizeof(SaveDataBuf));
         mDoMemCdRWm_SetCheckSumGameData((u8*)mSaveData, mCpDataToNum);
         mDoMemCd_setCopyToPos(mCpDataToNum);
+        // §305 wire ① — mirror the slot copy (see erase note above).
+        dExtWwSvIo_copySlot(mCpDataNum, mCpDataToNum);
         dataSave();
         mDataSelProc = DATASELPROC_DATA_COPY_WAIT;
         break;

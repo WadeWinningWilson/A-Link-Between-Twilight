@@ -90,6 +90,14 @@ enum class LopHudMode : u8 {
 // NEW CODE ENDS HERE
 // ============================================
 
+// WW dialogue box renderer (WW host stages only). Reconstructed = TP dMsgObject + WW-Crew
+// catalog (§201, the default/fallback); Native = the WW dMesg subsystem
+// (hukidashi_d00.blo + zel_00.bmg via d_ext_dmesg). See §308 bring-up.
+enum class WwDialogueStyle : u8 {
+    Reconstructed = 0,
+    Native = 1,
+};
+
 // Extra Item Slot + optional D-Pad Quick Swap (Midna left, Z item, field equip/transform).
 enum class ExtraItemSlotMode : int {
     Off = 0,
@@ -206,6 +214,12 @@ template <>
 struct ConfigEnumRange<LopHudMode> {
     static constexpr auto min = LopHudMode::Off;
     static constexpr auto max = LopHudMode::HealthBar;
+};
+
+template <>
+struct ConfigEnumRange<WwDialogueStyle> {
+    static constexpr auto min = WwDialogueStyle::Reconstructed;
+    static constexpr auto max = WwDialogueStyle::Native;
 };
 
 template <>
@@ -428,6 +442,9 @@ struct UserSettings {
         // Off = vanilla TP corner layout; VanillaHearts = relayout keeping hearts;
         // HealthBar = relayout with a LoP health bar. See docs/albw-hud-lop-layout-brief.md.
         ConfigVar<LopHudMode> lopHud;
+        // WW dialogue box renderer (WW host stages): Reconstructed (TP box, default) /
+        // Native (WW dMesg box). §308.
+        ConfigVar<WwDialogueStyle> wwDialogue;
         // Epona dash-spur icons while riding. Does not affect wolf charges, shield HUD, or parry icons.
         ConfigVar<bool> showEponaSpurHud;
         // True ALBW / TRUETEST mode — see docs/TrueALBWWorld.md. Change only before loading a file.
@@ -457,6 +474,11 @@ struct UserSettings {
         ConfigVar<bool> albwMagicArmorRentableDebug;
         // Cloth damage mults, swim buffs, Sumo offensive kit — see docs/Outfit Stats.md.
         ConfigVar<bool> outfitStats;
+        // Region Multipliers — province/dungeon table; Damage/Health/Rupees axes.
+        ConfigVar<bool> regionMult;
+        ConfigVar<bool> regionMultDamage;
+        ConfigVar<bool> regionMultHealth;
+        ConfigVar<bool> regionMultRupees;
         // File log of Darknut ALBW bash/guard-break state (Documents/dusklight/albw_darknut_debug.txt).
         ConfigVar<bool> showDarknutBashDebug;
         // Right stick cycles nearby battle enemies instead of manual lock-on camera.

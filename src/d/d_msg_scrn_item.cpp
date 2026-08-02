@@ -56,6 +56,16 @@ dMsgScrnItem_c::dMsgScrnItem_c(u8 param_1, u8 param_2, JKRExpHeap* param_3) {
     if (!bVar5) {
         mItemIndex = dMsgObject_getMessageID() - 0x65;
     }
+#if TARGET_PC
+    // §186: pin to clothes host item — resolved BMG message_id - 0x65 drifts to
+    // Magic Armor / Malo Mart when table index ≠ message_id.
+    if (dWwItemmdl_isClothesGetPresentation()) {
+        const u8 host = dWwItemmdl_clothesBundleHostItem();
+        if (host != 0xFF) {
+            mItemIndex = host;
+        }
+    }
+#endif
     if (mItemIndex == 0x240) {
         mItemIndex = 0x40;
     } else if (mItemIndex == 0x191e || mItemIndex == 0x402e) {

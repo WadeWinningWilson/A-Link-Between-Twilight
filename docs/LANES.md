@@ -19,12 +19,15 @@ is a BEHAVIOR, Cursor built it; if it is a NAME ON A FACE, the user said it."*
 | **History** | Claude | **Archaeology + value/classification judgment** — decomp sourcing, № classification (which supersedes which, live vs dead), identity research. Values, not behaviors. | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) · [TPHistory.md](TPHistory.md) |
 | **Housing Security** | Claude | **Containment audits only** — covenant gate, commit / mod-folder hygiene, and *negative-controls* on Bridge's tooling (can it report a broken ledger? does an empty query say UNKNOWN, not CLEAN?). Builds nothing. | [Librarian.md §"Relationship to Housing Security"](Librarian.md) |
 | **Librarian** | Claude | **Document structure** — compaction, supersession stamping, lint, dedup, boot-brief curation, status-enum sweeps. *Operates* Bridge's linter; authors no content, rules no truth. | [Librarian.md](Librarian.md) · queue: [LIBRARIAN-QUEUE.md](LIBRARIAN-QUEUE.md) |
+| **Foundry** | Claude | **Methods + instruments** — DuskTap & successors, capture reels/replay harness, probe schema + differ, golden traces, oracle-stack doctrine. Builds what the lanes work with; touches no content. *(Added on the user's spin-up ruling, 2026-07-28; bus §195–§196, §198.)* | [Foundry.md](Foundry.md) · [state/foundry-methods.md](state/foundry-methods.md) |
 
 **The audit pairing (load-bearing).** The lane that **builds** an instrument is never the lane
 that **audits** it — the anti-"marking your own homework" rule. Bridge builds the ledger tool;
 **Housing Security** negative-controls it. Bridge builds the linter; the **Librarian** operates
 it. This is why the Librarian is kept separate from Housing Security (HS audits *containment*,
-the Librarian owns *structure*) — see [Librarian.md](Librarian.md).
+the Librarian owns *structure*) — see [Librarian.md](Librarian.md). **Foundry** builds the
+measurement instruments (DuskTap etc.); **Housing Security** negative-controls them — this
+transfer (2026-07-28) closed the anomaly of Housing having built DuskTap itself.
 
 **Multi-agent protocol.** Lanes coordinate through Interconnected Runs, not live messaging:
 [Interconnected Chats/INTERCONNECTED-RUNS.md](Interconnected%20Chats/INTERCONNECTED-RUNS.md) +

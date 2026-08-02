@@ -63,3 +63,24 @@ still lives in the game files (our extraction), but `d_demo.ts` is a WORKING int
 STB format — every track type's playback semantics, readable. Same for wind (yes), props (yes,
 extensively). The rule stands: [reference-implementation] — disambiguate and cross-check against
 it; the decomp remains law.
+
+---
+
+## FULL CAPABILITY ANALYSIS (§152, 2026-07-26 — source-verified vs Main.ts)
+
+User-found, source-confirmed capabilities beyond the §145 inventory:
+| capability | implementation | use for us |
+|---|---|---|
+| **LAYER VIEWING** (room + demo/cutscene layers) | `WindWakerLayer` class + Scenarios UI panel; per-layer visibility bits (`objectLayerVisible`) | **History: inspect each ACT layer's placements in isolation** — visual census per layer; demo-layer views show what a cutscene's room-state looks like. (Corrects fast-track Limit №1.) |
+| **Render hacks** | checkboxes: Enable Vertex Colors / Enable Textures / Enable Objects / Wireframe | **Debug isolation on REFERENCE data:** e.g. toggle vertex colors on Room44's water to SEE what VTX alpha contributes (trap #3 verification by eye); textures-off shows raw material color (the palette layers isolated) |
+| **Time of day** | `TimeOfDayPanel` slider driving `g_env_light.curTime` (t*360) + optional real-clock dynamic mode | already our §143/§147 acceptance instrument — confirmed it drives the REAL ported kankyo (curTime→palette blend), not a shader fake |
+| Rooms panel | per-room visibility | multi-room stages: isolate a room's contribution |
+
+**Draw-fidelity scope (the user's "what does it take into account" question, answered honestly):**
+noclip implements the GX TEV pipeline in shaders (konst/registers/stages — high material fidelity;
+that's why our §143 checks against it were meaningful), the kankyo palette system natively
+(d_kankyo.ts), BTK/BRK/BCK animation, and JPA particles. It does NOT emulate: GC framebuffer
+tricks exactly (EFB copies partial), Z-precision quirks, performance characteristics (its draw
+batching is modern-GPU — NEVER use noclip as an FPS/perf reference, cf. §151's aurora immediate-
+mode cost), audio, or game logic. **Rule refined: presentation semantics = trustworthy reference;
+performance + activation logic = never.**

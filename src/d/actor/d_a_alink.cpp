@@ -21,6 +21,7 @@
 #include "d/d_albw_outfit.h"
 #include "d/d_albw_sumo_test.h"
 #include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_region_mult.h"
 #include "d/d_pane_class.h"
 #include "d/d_demo.h"
 #include "d/actor/d_a_crod.h"
@@ -7528,24 +7529,6 @@ void daAlink_c::setCollision() {
 
     dComIfG_Ccsp()->Set(&mTgCyls[0]);
     dComIfG_Ccsp()->SetMass(&mTgCyls[0], 1);
-
-    // ========================================================================
-    // §61 r2 — feed-side count witness: this SetMass runs EVERY frame from
-    // execute (list 5), so the mass list can never be empty at a later list-7
-    // poll... yet 247/247 veg polls read massN=0. Log the count RIGHT AFTER
-    // registering, through the SAME accessor the veg side reads — if this says
-    // 0 too, the accessor is broken (H10); if >0 here and 0 at veg, something
-    // clears in between (H2/H4) or the phases differ (H1). Also log the Ccsp
-    // pointer identity (H9: two instances).
-    // ========================================================================
-    {
-        static u32 s_mzN = 0;
-        if ((s_mzN++ % 120) == 0) {
-            DuskLog.warn("[Alink] §61 tgMass set massN={} ccsp={:x}",
-                         (int)dComIfG_Ccsp()->mMass_Mng.mMassObjCount,
-                         (uintptr_t)dComIfG_Ccsp() & 0xFFFF);
-        }
-    }
 
     if (checkWolf()) {
         setWolfAtCollision();

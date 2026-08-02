@@ -10,6 +10,7 @@
 #include "d/actor/d_a_obj_carry.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
+#include "d/d_ext_save_flags.h"
 #include "d/d_save.h"
 #include "d/d_save_init.h"
 #include "f_op/f_op_scene_mng.h"
@@ -1542,6 +1543,16 @@ void dSv_info_c::init() {
     initZone();
     mTmp.init();
 
+    // ========================================================================
+    // §305 wire ① — donor event-flag block follows TP's own lifecycle: init()
+    // resets it, card_to_memory() below repopulates it from the sidecar.
+    // Call-site census (receipts): the only NON-DEBUG init() callers are the
+    // file-select open (d_file_select.cpp:275) and the opening/title scene
+    // (d_s_play.cpp:1613) — both strictly BEFORE any card_to_memory(), so
+    // this reset can never zero a loaded save.
+    // ========================================================================
+    dExtWwSv_reset();
+
 #if DEBUG
     unk_0x0 = 0;
     unk_0x1 = 0;
@@ -1899,6 +1910,14 @@ int dSv_info_c::memory_to_card(char* card_ptr, int dataNum) {
     }
 
     printf("SAVE size:%d\n", (int)(card_ptr - var_r29));
+
+    // ========================================================================
+    // §305 wire ① — persist the donor event-flag block beside the quest log
+    // it belongs to (same dataNum), only on a SUCCESSFUL in-card store. Kept
+    // out of the card image: no slot slack, and the checksum covers in-slot
+    // bytes (mDoMemCdRWm_SetCheckSumGameData) — sidecar fails safe instead.
+    // ========================================================================
+    dExtWwSvIo_storeSlot(dataNum);
     return 0;
 }
 
@@ -1949,6 +1968,14 @@ int dSv_info_c::card_to_memory(char* i_cardPtr, int i_dataNum) {
     }
 
     printf("LOAD size:%d\n", (int)(i_cardPtr - var_r30));
+
+    // ========================================================================
+    // §305 wire ① — repopulate the donor event-flag block for the loaded
+    // quest log. Missing/bad sidecar -> dExtWwSvIo leaves the block at
+    // donor new-game state (fail-safe on its own 'WWEV' magic); the TP
+    // save just loaded is untouched either way.
+    // ========================================================================
+    dExtWwSvIo_restoreSlot(i_dataNum);
     return 0;
 }
 

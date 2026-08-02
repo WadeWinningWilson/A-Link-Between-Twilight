@@ -163,3 +163,34 @@ Every claim below is from set/check sites; inferences are marked as such (IVAN).
   registered scene BGM in both tables.
 - **Adjacent finding (same questline):** tag_event case `0x1` sets `0x0004` and starts
   `JA_BGM_BK_FLY_DOWN` — the bird-descends music beat, two cases above the 0x0101/0x0E20 setters.
+
+---
+
+## N. Port-flag ↔ donor-flag mapping — the layer-oracle binding table (History, §213)
+
+Assessed for the **P9×P10 join** (Foundry P10 layer oracle validated the donor `getLayerNo` law against
+real `.gci` saves; the 36 flagged rows resolved but the *binding* verdict for layer-divergence needs our
+mod flags bound to the donor event bits). This is that table. **Source of truth:** donor
+`d_com_inf_game.cpp:184-215` (`getLayerNo`, sea→OutsetIsland cascade) + `actor_map.ini [layers]`.
+
+**Outset (`sea` room `OutsetIsland`) layer cascade — donor-verbatim, priority-ordered:**
+`UNK_0520` set → `layer|4` (ACT4/5) · else `UNK_0E20` → `layer|2` (ACT2/3) · else `UNK_0101` → `9`
+(ACT9) · else base = day/night (`0`/`1`). `layer` = 0 (06:00-18:00) or 1 (night).
+
+| Port mod flag | Donor event bit | Outset layer | Confidence |
+|---|---|---|---|
+| `qs.ah_state` | `UNK_0520` | ACT4/5 (later villager state — `Ah` appears) | **HIGH** — `getLayerNo:194` + `[layers] ACT4-7=qs.ah_state` |
+| `ba.tale_window` | `UNK_0E20` | ACT2/3 (tale window / post-tale) | **HIGH** — L-3 + `getLayerNo:196`; auto-armed on R_DL01 as the UNK_0E20 stand-in |
+| `qs.aryll_taken` | `UNK_0101` | ACT9 (Aryll taken) | **HIGH** — `getLayerNo:198` + `[layers] ACT9=qs.aryll_taken` |
+| `qs.pirates_ashore` | *(forced stage layer 8)* | ACT8 (pirates ashore) | **[INFERENCE-NEEDED]** — ACT8 is NOT in the `getLayerNo` cascade; set via `getStartStageLayer()` during the pirate-arrival event. Donor bit unconfirmed. |
+| `qs.depart` | *(forced stage layer a/b)* | ACTa/ACTb (departure) | **[INFERENCE-NEEDED]** — forced during the departure cutscene, not a standing event bit. |
+| `beat.helmaroc` | *(masked-man / Helmaroc beat)* | gates `Dk` (not an Outset layer) | **[INFERENCE-NEEDED]** — `Dk` is a later-beat actor; donor bit likely the Helmaroc/animation-set-2 flag (cf. §1). |
+| `ba.clothes_given` | *(clothes-received event bit)* | tale done (suppress-off, L-6/§188) | **[INFERENCE-NEEDED]** — port-internal done-latch; donor equivalent = the "got Hero's Clothes" event bit. |
+
+**Priority note (matters for divergence verdicts):** the cascade is **later-beat-wins** — `UNK_0520`
+(ah_state) overrides `UNK_0E20` (tale) overrides `UNK_0101` (aryll). A port that sets two `qs.*` flags at
+once must honour the same precedence or it will spawn the wrong layer. The **layer-divergence candidates**
+Foundry flagged (PORT-ONLY `Bb`/`Bk`/`Paper`/`Otana`/`Plant` at donor-law layer 0) resolve against THIS
+table: they are OTHER-layer content whose gating flag must be checked — if the port spawns them with no
+corresponding donor bit set, that's a real divergence; if a `qs.*`/`ba.*` flag is set, it's expected.
+Binding each candidate needs the two `[INFERENCE-NEEDED]` rows confirmed (the ACT8/a/b forced-layer bits).
