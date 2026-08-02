@@ -632,42 +632,6 @@ void vegAnmInit() {
 }
 
 // ==========================================================================
-// 244 PROBE -- why does the run-through puff fire less than expected?
-// ==========================================================================
-// Accumulated per frame and flushed from vegAnmTickAmbient (which already
-// detects the frame boundary), so ONE line covers every clump instead of one
-// line per actor. Reads as a funnel: examined -> CO -> in range -> eligible
-// (still on an ambient slot) -> fast enough -> spawned. Whichever step drops to
-// zero is the gate. `gFree`/`fFree` catch pool exhaustion, which is the
-// hypothesis this was built for and is invisible from the funnel alone.
-// Set DUSK_VEG_PROBE=0 to silence.
-// ==========================================================================
-struct VegProbe {
-    // [0] = grass, [1] = flower. The first cut of this funnel instrumented only
-    // the grass path, so a question about FLOWERS was answered with grass data.
-    int examined[2], co[2], at[2], inRange[2], eligible[2], fast[2], spawned[2];
-    int returned[2], poolFull[2];
-    // Who is actually in the plant, and how fast. 244 showed the speedF > 16
-    // gate rejecting 77% of eligible encounters, which is only meaningful if
-    // the actor being measured is the player -- the donor drives WorkCo from
-    // whatever has CO, and a static mass object has speedF 0.
-    f32 spdMax[2];      // fastest hitActor seen at an eligible encounter
-    int nonPlayer[2];   // eligible encounters whose hitActor was NOT the player
-    int lastName[2];    // fopAcM_GetName of the most recent rejected actor
-};
-VegProbe s_probe;
-
-int vegAnmFree(const VegAnm* pool, int poolNum) {
-    int n = 0;
-    for (int i = kGrassAmbient; i < poolNum; ++i) {
-        if (pool[i].state == 0) {
-            ++n;
-        }
-    }
-    return n;
-}
-
-// ==========================================================================
 // SLOT RELEASE ON TEARDOWN -- required by OUR ownership model, not the donor's.
 // ==========================================================================
 // The donor's dGrass_room_c::deleteData frees the plant DATA and leaves any
@@ -703,32 +667,6 @@ void vegAnmTickAmbient() {
     }
     s_anmFrame = (u32)g_Counter.mTimer;
 
-    {
-        static const bool s_probeOn = [] {
-            const char* v = std::getenv("DUSK_VEG_PROBE");
-            return v == NULL || v[0] != '0';
-        }();
-        if (s_probeOn) {
-            static const char* const kName[2] = {"grass ", "flower"};
-            for (int k = 0; k < 2; ++k) {
-                if (s_probe.examined[k] == 0 ||
-                    (s_probe.co[k] == 0 && s_probe.returned[k] == 0)) {
-                    continue;
-                }
-                DuskLog.warn("[ExtVeg] 246 {} exam={} co={} at={} rng={} elig={} fast={} "
-                             "spawn={} ret={} poolFull={} free={}/{} spdMax={:.1f} "
-                             "nonPlayer={} lastName={}",
-                             kName[k], s_probe.examined[k], s_probe.co[k], s_probe.at[k],
-                             s_probe.inRange[k], s_probe.eligible[k], s_probe.fast[k],
-                             s_probe.spawned[k], s_probe.returned[k], s_probe.poolFull[k],
-                             k == 0 ? vegAnmFree(s_grassAnm, kGrassAnmNum)
-                                    : vegAnmFree(s_flowerAnm, kFlowerAnmNum),
-                             (k == 0 ? kGrassAnmNum : kFlowerAnmNum) - kGrassAmbient,
-                             s_probe.spdMax[k], s_probe.nonPlayer[k], s_probe.lastName[k]);
-            }
-        }
-        s_probe = VegProbe();
-    }
 
     f32 windSpeed = dKyw_get_wind_pow() * 1000.0f + 1000.0f;
     windSpeed = cLib_maxLimit(windSpeed, 2000.0f);
@@ -1041,8 +979,6 @@ int daExtVeg_c::create() {
     mBladeCount = 0;
     mRoomNo = static_cast<s8>(fopAcM_GetRoomNo(this));
     std::memset(mCut, 0, sizeof(mCut));
-    int probeMiss = 0;
-    f32 probeMaxDy = 0.0f;
     for (u32 i = 0; i < off.num && mBladeCount < kMaxBlades; ++i) {
         // Store the WORLD position only. The matrix cannot be baked here: it has
         // to include the view matrix, which changes every frame.
@@ -1061,7 +997,6 @@ int daExtVeg_c::create() {
         // hit if there is one, keep y only when there is none.
         cXyz bp(current.pos.x + off.pos[i].x, current.pos.y,
                 current.pos.z + off.pos[i].z);
-        bool gndHit = false;
         {
             dBgS_GndChk gndchk;
             cXyz probe(bp.x, bp.y + 50.0f, bp.z);
@@ -1069,24 +1004,6 @@ int daExtVeg_c::create() {
             const f32 gy = dComIfG_Bgsp().GroundCross(&gndchk);
             if (gy > -G_CM3D_F_INF) {
                 bp.y = gy;
-                gndHit = true;
-            }
-        }
-        // 247: a blade whose ground probe MISSED keeps the clump's y. It still
-        // draws there, but its mass test cylinder -- 40x120 for grass, 40x50 for
-        // flowers -- then sits at the wrong height, and ChkMass never sees the
-        // player: a patch that is visible, polled every frame, and completely
-        // inert. Flowers have less than half the vertical tolerance, which is
-        // why they fail where grass survives. Count misses and the worst y
-        // correction so the bad clumps can be found by position.
-        if (!gndHit) {
-            ++probeMiss;
-        }
-        {
-            const f32 dy = bp.y - current.pos.y;
-            const f32 ady = dy < 0.0f ? -dy : dy;
-            if (ady > probeMaxDy) {
-                probeMaxDy = ady;
             }
         }
         mBlades[mBladeCount] = bp;
@@ -1098,11 +1015,6 @@ int daExtVeg_c::create() {
         mRunCool[mBladeCount] = 0;
         ++mBladeCount;
     }
-
-    DuskLog.info("[ExtVeg] 247 clump kind={} type={} blades={} gndMiss={} maxDy={:.0f} "
-                 "pos=({:.0f},{:.0f},{:.0f})",
-                 (int)mKind, (int)type, mBladeCount, probeMiss, probeMaxDy, current.pos.x,
-                 current.pos.y, current.pos.z);
 
     dKy_tevstr_init(&tevStr, fopAcM_GetRoomNo(this), 0xFF);
     tevStr.room_no = fopAcM_GetRoomNo(this);
@@ -1272,12 +1184,9 @@ void daExtVeg_c::checkCut() {
         fopAc_ac_c* hitActor = NULL;
         cXyz p = mBlades[i];
         const u32 massFlags = dComIfG_Ccsp()->ChkMass(&p, &hitActor, &hitInf);
-        ++s_probe.examined[0];
         if (massFlags & 2) {
-            ++s_probe.co[0];
         }
         if (massFlags & 1) {
-            ++s_probe.at[0];
         }
         // AT exclusion: the donor names TWO actors (fpcNm_TSUBO_e, fpcNm_STONE_e)
         // because WW has a pot actor and a stone actor. The receiver unifies both
@@ -1301,7 +1210,6 @@ void daExtVeg_c::checkCut() {
                     if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
                         a.state = 0;  // donor deleteAnm
                         mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
-                        ++s_probe.returned[0];
                     }
                 }
             }
@@ -1314,24 +1222,12 @@ void daExtVeg_c::checkCut() {
             const f32 rdz = mBlades[i].z - hitActor->current.pos.z;
             const f32 rd2 = rdx * rdx + rdz * rdz;
             if (rd2 <= 1600.0f) {  // donor: distSq > 1600 returns without touching the anim
-                ++s_probe.inRange[0];
-                ++s_probe.inRange[0];
-                ++s_probe.eligible[0];
-                if (hitActor->speedF > s_probe.spdMax[0]) {
-                    s_probe.spdMax[0] = hitActor->speedF;
-                }
                 if (hitActor != dComIfGp_getPlayer(0)) {
-                    ++s_probe.nonPlayer[0];
-                }
-                if (!(hitActor->speedF > 16.0f)) {
-                    s_probe.lastName[0] = (int)fopAcM_GetName(hitActor);
                 }
                 if (mAnmIdx[i] < kGrassAmbient) {
                     // The puff fires HERE -- on the frame the blade takes a
                     // push slot -- which is the donor's only rate limit.
                     if (hitActor->speedF > 16.0f) {
-                        ++s_probe.fast[0];
-                        ++s_probe.spawned[0];
                         cXyz rpos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
                         dKy_tevstr_c runTev;
                         GXColor runK0;
@@ -1348,7 +1244,6 @@ void daExtVeg_c::checkCut() {
                     if (idx != kAnmNone) {
                         mAnmIdx[i] = idx;
                     } else {
-                        ++s_probe.poolFull[0];
                     }
                 }
                 if (mAnmIdx[i] >= kGrassAmbient) {
@@ -1811,12 +1706,9 @@ void daExtVeg_c::checkFlowers() {
         fopAc_ac_c* hitActor = NULL;
         cXyz pt = mBlades[i];
         const u32 massFlags = dComIfG_Ccsp()->ChkMass(&pt, &hitActor, &hitInf);
-        ++s_probe.examined[1];
         if (massFlags & 2) {
-            ++s_probe.co[1];
         }
         if (massFlags & 1) {
-            ++s_probe.at[1];
         }
         const bool atHit = (massFlags & 1) && hitActor != NULL &&
                            fopAcM_GetName(hitActor) != fpcNm_Obj_Carry_e;
@@ -1830,7 +1722,6 @@ void daExtVeg_c::checkFlowers() {
                     if (cLib_chaseAngleS(&a.rotY, targetY, 800)) {
                         a.state = 0;
                         mAnmIdx[i] = (u8)((a.rotY >> 13) & 7);
-                        ++s_probe.returned[1];
                     }
                 }
             }
@@ -1843,22 +1734,12 @@ void daExtVeg_c::checkFlowers() {
             const f32 dz = mBlades[i].z - hitActor->current.pos.z;
             const f32 d2 = dx * dx + dz * dz;
             if (d2 <= 900.0f) {
-                ++s_probe.inRange[1];
                 if (mAnmIdx[i] < kGrassAmbient) {
-                    ++s_probe.eligible[1];
-                    if (hitActor->speedF > s_probe.spdMax[1]) {
-                        s_probe.spdMax[1] = hitActor->speedF;
-                    }
                     if (hitActor != dComIfGp_getPlayer(0)) {
-                        ++s_probe.nonPlayer[1];
-                    }
-                    if (!(hitActor->speedF > 16.0f)) {
-                        s_probe.lastName[1] = (int)fopAcM_GetName(hitActor);
                     }
                     // Flowers carry BOTH gates: the slot transition AND a real
                     // field_0x03 = 0x10 cooldown. Grass has only the slot.
                     if (mRunCool[i] == 0 && !mCut[i] && hitActor->speedF > 16.0f) {
-                        ++s_probe.fast[1];
                         cXyz ppos(mBlades[i].x, mBlades[i].y + 20.0f, mBlades[i].z);
                         dKy_tevstr_c spawnTev;
                         GXColor kc;
@@ -1870,14 +1751,12 @@ void daExtVeg_c::checkFlowers() {
                         if (em != NULL) {
                             em->setRate(1.0f);
                             mRunCool[i] = 0x10;
-                            ++s_probe.spawned[1];
                         }
                     }
                     const u8 idx = vegAnmNew(s_flowerAnm, kFlowerAnmNum);
                     if (idx != kAnmNone) {
                         mAnmIdx[i] = idx;
                     } else {
-                        ++s_probe.poolFull[1];
                     }
                 }
                 if (mAnmIdx[i] >= kGrassAmbient) {

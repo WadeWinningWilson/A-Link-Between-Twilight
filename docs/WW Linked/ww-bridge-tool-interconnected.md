@@ -16709,3 +16709,112 @@ so the next packet does not pay it again. **Every one of these presented as
   unwired — no Outset placement.
 * The grass CUT spawn still acquires K0 inline instead of via `extVegSpawnTev`.
   Same values; fold it in when next touching that block.
+
+---
+
+## §364 — Foundry: R1–R10 STATUS + R2 CLOSED opportunistically (output roster pinned at the §360 stable point, 2,057 files)
+
+**Lane: Foundry.** User status check on the TTW slate (§330/§331) — and R2 was mechanical
+enough to close in the same sitting:
+
+| R | status | detail |
+|---|---|---|
+| **R3** dump roster | **DONE §332** | donor_roster_GZLE01.csv, 1,561 files, self-receipted NTSC-U; in use |
+| **R2** output hashes | **DONE §364 (today)** | NEW `output_roster.py`: whole mod folder pinned at the user-verified §360 stable point ("tale-era-close-360-stable", 2,057 files, SHA-256, magic+version header per the TTW inheritance). `verify` = OK/DRIFT/MISSING/NEW; roster absence = UNKNOWN never CLEAN. First run caught live-churning `.vexp/` tool caches inside the mod tree → excluded as non-outputs; re-pin self-verifies 2,057/2,057. **The §113-stash failure class is now mechanically caught**, and with R3 this makes the conversion a verified function: sources pinned + outputs pinned. Re-accept ONLY at user-verified stable points, labeled. |
+| **R1** convert-all runner | NOT STARTED | amended §331 to unify with space_kit (one recipe; space_kit = stage module). Natural next after the R_DL02 pilot proves Pass-2 composition. |
+| **R4** boot-time manual-pass checks | PARTIAL, un-censused | pieces exist (residmap belts, WWEV restore fail-safe, №31-C patterns); the census-then-systematize pass not yet run. |
+| **R5** unified conversion DB | NOT STARTED, growing | absorption list has GROWN since §331: + codemod AUTO/REVIEW tables, KNOWN_SIZE, STARTCODE_ALIAS, ww_dzb_roster, both rosters. Rising priority. |
+| **R6** audio envelope | HOLDS by design | until post-Outset audio scales (its own terms). |
+| **R7** text projection | SEEDED, not built | space_kit inventory JSON is exactly the structural-projection shape; coverage + one-command regen missing; content-wall charter (§331 A3) stands. |
+| **R8** save-compat policy | AWAITS user ruling | pre-release timing; not urgent. |
+| **R9** doctrine table | OFFERED to Librarian | not drafted. |
+| **R10** upgrade recipes | DOCTRINE ADOPTED | (no big-bang; magic+version in every new format — R2's roster complies); recorded recipes not yet needed (no schema bump since). |
+| (A1) crash-recipe lint | QUEUED | Foundry's own next kit increment after Tier-1 driver runs. |
+
+**Sequencing view:** R3+R2 done = TTW's foundation matched. R1 waits on the R_DL02 pilot; R5 is
+the next doctrine build when a lull comes; R4's census is cheap and can ride any engine-touch
+session. Nothing on the slate blocks the kit floor.
+
+**WHOSE TURN:** unchanged from §363 — Housing→swood (the gate), History→KB-2/tsubo/Ji1,
+user→nothing open, Foundry→R_DL02 shell + Tier-1 driver runs (+ re-accept the output roster at
+the next user-verified stable point after Grandma's bake fires).
+
+## §249 OUTSET VEGETATION — CLOSED, READY FOR FOUNDRY REVIEW (Housing, 2026-08-02)
+
+**Grass and flowers both confirmed correct in game.** Rendering, colour, cut
+state, lean, rustle, cut VFX and run-through VFX all faithful. §243's trap
+register still stands; this appends what the last several rounds added, all of
+which bear directly on the swood order.
+
+### The traps §243 did not have
+
+26. **The donor never calls `MassClear`.** Neither `dGrass_packet_c::calc` nor
+    `dFlower_packet_c::calc` clears the mass list — they only `SetMassAttr` and
+    poll. A `MassClear()` added to the flower path by symmetry with the donor's
+    bracket wiped the GLOBAL list every frame, so every vegetation actor BEHIND
+    the first flower clump in execute order saw `massFlags = 0` forever: no CO
+    (no lean, no puff) and no AT (uncuttable). №226 had already written this
+    down. **Any new packet actor must not Clear** — the engine clears at frame
+    end, and we are many actors where the donor is one packet.
+27. **A starved actor still looks healthy in aggregate telemetry.** Blade counts,
+    census totals and per-frame `exam` were all exactly right while patches were
+    inert, because the counter incremented before the mass flags were read. Two
+    separate wrong conclusions came from reading sums across actors. **Instrument
+    per-actor when the symptom is per-actor** ("this patch, not that one").
+28. **`WorkCo` is driven by the mass CO bit, not by distance to the player**
+    (`d_grass.cpp:167-197`, `d_flower.cpp:231-259`). One `ChkMass` per plant; its
+    bits pick the branch; the radius test inside `WorkCo` is a *second* filter
+    against `hitActor`, which need not be the player. An XZ distance substitution
+    judders (it flickers frame to frame) AND is blind to Y, so it masks placement
+    and mass faults that the real test exposes.
+29. **The donor splits spawn mechanism by PLANT, not by event.** grass run+cut →
+    `setSimple`; flower run+cut → `particle_set`. `setSimple` is not a spawn: one
+    persistent emitter per id with `setMaxFrame(0)`/`stopCreateParticle()`, each
+    call appends a position record, and `executeAfter` creates
+    `getCurrentCreateNumber()` particles at every record in one batch, clipping
+    past 200 units. Registration order is load-bearing: `ensureWwCommonRes` then
+    `newSimple` (§221).
+30. **§228's verdict on `setSimple` ("registers but draws nothing") was reached
+    in a build where §241 meant NOTHING WW could draw.** Re-try anything ruled
+    out before §241 before treating it as settled.
+31. **`SetMassAttr`'s args:** `param_2` is the check mask (`0xB` = AT+CO+area for
+    both plants); `param_3` only feeds the area callback and never gates CO.
+    Volumes differ per plant: grass 40×80 donor, flowers 30×50.
+32. **Census `params_hex` is the authored value — use it.** `NPC_EXTVEG` takes
+    the full WW DZR params like the native pig/seagull/Aryll/Tetra rows;
+    `kind = (p>>4)&3`, `type = p&0xF`, plus item bits. Hand-picked `arg=` bytes
+    are a substitution even when they happen to agree.
+33. **Kind → type indirection**: census kind 2 → flowerType 1 → WHITE;
+    kind 3 → flowerType 2 → PINK. `setData` tests `param_3 == 2`, which is
+    flower*Type* 2, i.e. census kind THREE.
+34. **Receiver-side equivalents are NOT substitutions.** `fpcNm_Obj_Carry_e`
+    stands in for the donor's `fpcNm_TSUBO_e` + `fpcNm_STONE_e` because TP
+    unifies both under one carriable actor — the donor's two identifiers do not
+    exist here. Do not "restore" them.
+
+### Placement / layer finding (not a vegetation bug — routing to the layer lane)
+
+`exam` matches the ACTR-only census exactly: grass 21×1 + 29×7 + 36×21 = **980**,
+flowers 1 + 3×7 + 2 + 3×7 + 5×17 = **130**. Everything authored on the default
+layer spawns. But **40 of the 41 lone `pflower` rows sit on conditional WW story
+layers** (ACT4/5/6/7/ACTb), as do 25 `kusax1` and 1 `kusax7`. Those layers never
+activate here, so most of Outset's pink flowers are simply absent. That is a
+population/layer question, not a vegetation one.
+
+### State for the swood order (§242)
+
+Unchanged and still true: blobs extracted (`assets/veg/d_tree__*`, decomp-exact),
+batcher is **`d_tree` not `d_wood`**, **5 DLs + the `l_modelStatus` state table**
+(`{0,1,2 / 3,1,4}`) plus a shadow pass, cut branch ported in full. **No swood code
+exists yet** — the order is unblocked, not started. The vegetation actor still
+returns inert for `kind == 1`, which is where trees enter.
+
+### Owed, not done
+
+* **`setBatta`** — `d_grass.cpp:81` releases a grasshopper on the same line as the
+  run-through puff. Foundry's, by the user's ruling.
+* The bessou flower tier (`l_QbsfwDL`, stage `sea` room 0x21) is staged but
+  unwired — no Outset placement.
+* **Open ruling for the user:** grass uses `SetMassAttr(40, **120**)` where the
+  donor uses `40, 80` (№225 took the receiver's own volume deliberately, to catch
+  TP Link's swing). Left as-is; it is the one remaining knowing deviation.
