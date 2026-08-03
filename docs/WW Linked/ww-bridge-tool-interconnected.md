@@ -16818,3 +16818,776 @@ returns inert for `kind == 1`, which is where trees enter.
 * **Open ruling for the user:** grass uses `SetMassAttr(40, **120**)` where the
   donor uses `40, 80` (№225 took the receiver's own volume deliberately, to catch
   TP Link's swing). Left as-is; it is the one remaining knowing deviation.
+
+---
+
+## §365 — Foundry: PILOT PLAN REASSESSED per Housing's vegetation close (§249) — swood is FOUNDRY'S order and jumps to the top of the queue; two §363 corrections
+
+**Lane: Foundry.** Housing closed vegetation (commits a337af597a verified-state / 3b3daa8a81
+stripped; §249 = nine new traps). Reassessment:
+
+**CORRECTIONS to my §363 (both mine, both superseded by Housing's locked receipts):**
+1. **swood was mis-routed.** I ferried it to Housing (§328/§361/§363); it was released to
+   FOUNDRY in §242 and stays Foundry's. I hold my own gate now — both armed cast bakes
+   (Grandma + R_DL02) wait on MY build.
+2. **It is d_tree, not d_wood** (Housing §231 corrections, locked): 5 DLs + the
+   `l_modelStatus` state table ({0,1,2 / 3,1,4} — intact draws none/leaves(hapa)/trunk(miki);
+   cut draws cut-upper/leaves/trunk) + a shadow pass. Verified staged decomp-exact:
+   all 10 blobs at `assets/veg/d_tree__*` (5 swood DLs, shadow mat + kage DLs, 2 TEX, color
+   table), and the vegetation actor's `kind == 1` handoff comment sits at
+   d_a_ext_vegetation.cpp:969. Fully specified, zero lines written — exactly as Housing says.
+
+**REASSESSED FOUNDRY QUEUE (swood to the top — it gates everything):**
+1. **swood build** — the d_tree raw-GX packet branch in ext-vegetation (kind==1): 5-DL state
+   machine per l_modelStatus, CUT interaction (full-state-machine law), shadow pass; consumed
+   against Housing's 34 named traps (§243+§249 — esp.: donor never calls MassClear; per-actor
+   probes for per-actor symptoms; WorkCo is CO-driven not distance-driven; spawn split by
+   PLANT not event; re-try anything convicted pre-§241).
+2. R_DL02 shell + structure bake (pilot steps 1–2 — unchanged, DN-clean).
+3. Tier-1 driver runs (shelf/paper/plant).
+4. **setBatta** (the grasshopper leaving the blade on the run-through line — user-assigned).
+5. Crash-recipe lint; then the step-3 cutover census when structure verifies.
+
+**Pilot step-4 gate table updated:** swood row now reads FOUNDRY (in build). tsubo/Ji1/Aj1/
+Yw1/AttTag = History; nothing on Housing — their lane is closed clean.
+
+**Sitting with the USER (Housing's two + one micro-ask):** (a) the **№225 ruling** — grass
+`SetMassAttr(40, 120)` vs donor `(40, 80)`, the one knowing deviation left in the lane;
+(b) ~30 seconds of play on the STRIPPED build (3b3daa8a81) to settle the strip before it's
+considered proven; (c) noted: the pink-flower thinness is POPULATION-lane (40/41 pflower rows
+on never-active story layers ACT4/5/6/7/b) — not a vegetation bug; routed with §249.
+
+**WHOSE TURN:** Foundry → swood build NOW (next work item). History → tsubo/Ji1 queue
+unchanged. user → №225 ruling + the 30-second strip check when convenient. Housing → closed;
+salute.
+
+---
+
+## §366 — Foundry: SWOOD BUILT (the §242 order executed) — donor d_tree packet live, build green; ONE PLAYTEST from an empty Grandma coincidence list
+
+**Lane: Foundry.** The swood order (released §242, spec locked by Housing §231/§243/§249) is
+implemented: **src/d/d_ext_tree.cpp + include/d/d_ext_tree.h** — the donor d_tree packet, body
+donor-verbatim (data/anm/room/packet classes field-for-field; WorkCo/WorkAt/WorkAt_NoCutAnim/
+hitCheck/animation/newData/setData/newAnm/checkGroundY method-for-method), consuming Housing's
+13 staged blobs. Wired at the vegetation dispatcher: kind==1 rows now REGISTER (create),
+DRIVE (execute, once-per-frame guard), and ENTER the packet (draw, XLU BG list). Build green
+(31,086 exports), caches wiped.
+
+**Port deltas — 8, all bannered in the TU:** #1 donor update()'s view-matrix math moved into
+packet draw() (Housing's stale-view law); #2 blobs at runtime w/ donor CALL sizes; #3
+GXInitTexObj + explicit GXLoadTexObj after each matDL (№135 — baked GC pointers are dead;
+swood 64×64 CMPR, kage 32×32 I4-first); #4 own tevstr via settingTevStruct + the №141/№142
+feed idiom (AmbCol→C0, white K0, dKy_setLight_again) — never the mounted-host room table;
+#5 GF*→GX* with GXSetArray(le=false) for BE arrays (d_map_path precedent); #6 sword-tip
+tracking approximated with facing [PORT-INTEGRATION REVIEW — affects cut-fall direction only];
+#7 cut-down/swing SEs OWED to audio lane (silent v1, one-shot log); #8 far-clip skipped
+(2-4 swood/room, perf-only). Traps honored: no MassClear from the tree path; donor
+SetMassAttr(40, 200, 19, 1) kept (№225 review: 200 already clears TP swing planes);
+per-PLANT module split (kusa/flowers untouched in ext_vegetation).
+
+**Build-fix ledger (for the codemod harvest):** WW cLib_setBit = VALUE ASSIGNMENT (not a bit
+op) — port as `x = v`; fpcNm_PLAYER_e→fpcNm_ALINK_e; donor BOMB/Bomb2 proximity-push parked
+[PORT-INTEGRATION] (TP bomb proc ids differ); port setSimple wants GXColor refs (white =
+donor default); g_Counter lives in SSystem c_counter.h; port has no dComIfGd_setXluList —
+restore via dComIfGd_setList(). ALSO: a RAW CR byte inside a char literal in ext_vegetation
+(readPackKeys) was newline-mangled by a universal-newline edit and repaired to '\r' — editors
+beware, that literal bites (shell-escape-hazard family).
+
+**STATE: Grandma's coincidence list is EMPTY pending ONE playtest.** swood was the last item.
+Ask: enter Grandma's room — the two window shutters should render (census-driven kind-1 rows,
+live immediately), sway on run-through, and CUT with donor fall/leaf-burst (silent SE, one
+log line). If good: the armed cast bake fires next (which also retires the census stand-ins
+per §330b), then re-accept the output roster at the new stable point.
+
+**WHOSE TURN:** user → the swood playtest (+ №225 grass-volume ruling + 30s strip check still
+open from §365). History → tsubo/Ji1/Aj1 queue + the §366 #6/#7 owed refinements when
+convenient. Foundry → on playtest pass: fire the Grandma cast bake through the 8/8 battery;
+R_DL02 structure bake continues.
+
+---
+
+## §367 — Foundry: THE GRANDMA CAST BAKE FIRED — 17 donor rows live in the dzr, census stand-ins retired, battery 8/8 — awaiting THE acceptance playtest
+
+**Lane: Foundry.** swood user-confirmed in-game → the coincidence list emptied → the armed bake
+executed per the §328 rule:
+
+**BAKED (17 rows, donor-verbatim, offset-stable into live R00_00.arc):** ACTR — KNOB00 (door),
+Lamp (loft, −471/657), Ba1 ×4 (state-selected placements), MPot/MOsara/MKoppu×2 (tableware),
+SPitem 0x3B (the family shield); ACT7 — the story-layer Ba1; SCOB — **TagEv ×2 (the LOOK_SHIELD
+trigger + the switch-17→18 chain go DATA-LIVE)**, **bonbori WITH its 0.1 scale bytes** (the
+giant-lamp fix — native tgsc loader applies scale, §312's prediction executed), ky_tag1.
+DEFERRED by design: swood ×2 stay census-side (their ext-vegetation path was user-verified
+minutes before the bake; dual-path unification = follow-up, not mid-landing churn).
+
+**Census retirement (§330b contract):** 16 LinkRM rows removed from interior_placements.csv
+(belt: .pre-castbake-bak); the 2 swood rows kept. No double-spawns by construction.
+
+**Gates:** post-bake chunk census R00 = FILI/PLYR4/SCLS/ACTR11/ACT7/SCOB4; PLYR untouched;
+**battery 8/8 PASS**; caches wiped. The dzr write went through the P1-law editor (byte-diff-
+verified claims; .pre-bake-bak belt).
+
+**What the acceptance playtest should show (Grandma's room):** everything present as before
+PLUS — the loft Lamp correct (unchanged), **the ground-floor bonbori at its true small scale**
+(the 10× lamp gone), tableware on the table, the shield on the wall, all four Grandma
+placements state-correct, the tale still end-to-end (battery says its receptors are untouched),
+AND potentially: walking onto Grandma's platform fires **LOOK_SHIELD** (the TagEv is live —
+camera look at the family shield; its EVNT entry + REVT... note: LOOK_SHIELD is a stage-EVNT
+event — if it misfires/hangs, that is NEW SURFACE (the §312 chain's first live test), report
+don't fight it. Its archetype is B (CAMERA+ALL, closes in place).
+
+**WHOSE TURN:** user → the acceptance playtest (room population + one tale run + optionally
+step on the platform for LOOK_SHIELD); on pass Foundry re-accepts the output roster at the new
+stable point. History → note TagEv/LOOK_SHIELD went data-live (their event lane may want a
+first-fire observation). Foundry → R_DL02 structure bake resumes; swood dual-path unification
++ №106 sweep queued.
+
+---
+
+## §368 — Foundry: acceptance findings TRIAGED BY DATA — shield+tableware = arcs_lib-not-arcs (§278 class, FIXED); flame = lamp init-latch (History ferry); plants = NOT DONOR-AUTHORED here
+
+**Lane: Foundry.** User acceptance run: lamp scale FIXED ✓; reported missing: candle flame,
+shield, plants — with the standing instruction "pure data, not memory." The data answered all
+three, plus one the user didn't spot:
+
+**1. Shield (SPitem) + TABLEWARE (unreported!) — root cause: `VshiN.arc` and `Mshokki.arc` sat
+in arcs_lib/ but never arcs/** — the engine loads from arcs/; this is the §278 Demo01 failure
+class repeating (and the donor's capital-N `VshiN.arc` naming quirk helped hide it). The shield
+actor's flag gate was CORRECT (hides only on WW bit 0x0E20, clear here) — its resLoad simply
+had no arc. **FIXED: both staged into arcs/ donor-verbatim** (Vshin md5 a1350c0a…, Mshokki
+md5 0e9414eb…). Note: the tableware was necessarily ALSO absent pre-bake (same arcs, same
+paths) — the user's "don't trust my memory" instinct vindicated twice over.
+
+**2. The candle flame — History ferry, diagnosis attached.** d_a_lamp DOES emit the flame
+(ID_AK_JN_TORCH + KAGEROU00 haze, :120-135) but **the init LATCHES on first attempt**:
+`if (!mParticleInit) { set(...); mParticleInit = 1; }` — a NULL emitter on the first frame
+(system busy/bank not yet resident at host create time) = permanently flameless AND silent
+(the else-path just zeroes power). Donor has the same latch but never fails its first frame.
+Suggested fix shape (History's TU): latch only on SUCCESS (`if (set() returned emitter)
+mParticleInit = 1;`) + one №246-style log line on the failure path — behavior identical to
+donor when the first attempt succeeds, self-healing when it does not.
+
+**3. Plants — the donor authors NO plants in LinkRM Room0.** Complete all-layer census:
+Ba1×5, KNOB00, Lamp, MKoppu×2, MOsara, MPot, SPitem, TagEv×2, bonbori, ky_tag1, swood×2 —
+that is the room's ENTIRE cast. 'Plant' rows live in Ojhous2 Room1 (Sturgeon's study, ×3) —
+memory conflation across rooms, exactly the failure mode the user flagged in themselves.
+
+**4. The systematic answer (so no census ever relies on memory again): the SPAWN-AUDIT probe.**
+Proposed R4-class instrument: a one-line log per dzr actor row at room load — name, layer,
+create phase result (COMPLEATE/ERROR/deferred-proc) — so "what is missing in this room"
+becomes a log read, not an eyeball. Engine-side hook (dStage actorCreate failure path) =
+History/Engine lane; Foundry specs. With it, the §278 arcs_lib class and the init-latch class
+both self-report at first occurrence.
+
+**WHOSE TURN:** user → re-enter Grandma's room: shield on the wall + tableware on the table
+expected NOW (arc fix needs no rebuild); flame still absent until History's latch fix. History
+→ the lamp latch fix (shape above) + the spawn-audit hook when convenient. Foundry → R_DL02
+structure bake resumes; output-roster re-accept waits for the flame so the stable point is
+complete.
+
+---
+
+## §369 — Foundry: CRASH SYMBOLICATED + FIXED (MDL3-skip left NULL shared DLs; indexToPtr guarded) — plants reopened as a ROOM-MODEL question — interior BGM ruled INTO the kit
+
+**Lane: Foundry.** Three threads from the user's re-entry report:
+
+**1. THE CRASH — root-caused via symbolizer (recipe followed, no guessing):**
+`daObjMshokki_c::create_heap` → mount resolver → `loadBinaryDisplayList` →
+`J3DModelData::indexToPtr` (fault 0x10). Cause: the port loader DELIBERATELY skips WW BDL4's
+MDL3 block on PC (loader :212, documented contract "MAT3/INF1/SHP1 still build usable data") —
+but `indexToPtr` unconditionally dereferenced the shared display-list objects only MDL3 would
+have created. The tableware BDLs (pot/osara/koppu — J3D2bdl4, 9 blocks incl. MDL3) were the
+FIRST bdl4 ACTORS through this path; the hole was latent since the skip landed. **FIX: NULL-guard
+in the patch loop** (nothing to patch when no prebuilt DL — the skip's own contract, honored).
+Build green, caches wiped. **Retest: enter the room — shield + tableware + no crash expected.**
+
+**2. PLANTS — REOPENED as a room-MODEL question (user validation accepted).** The dzr census
+stands (no Plant/pot ACTOR rows in LinkRM Room0) — but the user validates plants/planters from
+actual WW gameplay, so they must live in the ROOM MODEL's own geometry (bg mesh submeshes),
+NOT the actor cast. NEW HYPOTHESIS, and it connects: the room model is ALSO a WW bdl4 through
+the same MDL3-skipping loader — **skipped/failed material DLs could be silently EATING
+submeshes** (walls draw, clutter vanishes). Foundry task queued: donor Room0 model submesh/
+material census vs rendered (offline decode first, then an in-game material-count probe).
+If confirmed, the MDL3 skip graduates from "safe skip" to "renders-incomplete" and needs a
+real MDL3 consumer or a MAT3-path DL builder — engine-lane work, receipts first.
+
+**3. INTERIOR BGM — ruled INTO the Space Kit (user direction, concurred).** Interiors carry
+per-stage/room music; the kit must inventory it (Pass-1: STAG/SOND/BGM ids per donor stage)
+and declare the audio dependency (Pass-4) the same way cast/code deps are declared. Playback
+needs the WW BGM path through the port's audio redirect (sequenced BMS/stream ids — the §263
+charVoiceTable/audio-differ estate is the foundation). **Sequencing view: NOT a hard blocker
+for R_DL02 STRUCTURE work (data-side), but a GATE on calling any interior "done"** — same
+tier as the flame/SE owed list. Foundry adds the Pass-1 BGM inventory to the kit spec now;
+the audio-lane playback workstream gets scoped after the LinkRM BGM id is receipted (one
+stage first, donor-verbatim).
+
+**WHOSE TURN:** user → re-enter Grandma's room (crash fix + shield + tableware verify).
+Foundry → room-model submesh census (the plants hypothesis) + kit-spec BGM addition + R_DL02
+structure. History → lamp latch fix + spawn-audit hook unchanged; note the MDL3 finding
+touches their mount-loaded models too (receipts coming from the census).
+
+---
+
+## §369b — Foundry: PURE-WHITE ROOT-CAUSED + FIXED — patched materials read texNos from the SKIPPED MDL3; MAT3 full-read now forced on PC
+
+**Lane: Foundry.** User retest: items present but PURE WHITE (+ one unrecognizable "Ivan" above
+the cauldron). Mechanism, receipts in-code: the loader's PATCHED material path
+(`J3DTevBlockPatched`) sources its texture numbers FROM the MDL3 prebuilt DL
+(`indexToPtr_private` walks GD texNo regs, J3DMatBlock.cpp:1408) — with MDL3 skipped on PC,
+patched materials have NO texNo source → `loadTexture` binds nothing → white. **FIX (§369b,
+J3DModelLoader.cpp MAT3 case): on TARGET_PC force `materialType = 0`** — BDL4 ships the
+complete MAT3 alongside MDL3, so the full MAT3 read makes the skip self-consistent. Build
+green, caches wiped. Regression exposure: only callers that passed the 0x2000 patched flag —
+i.e., exactly the loads that were white; room models already took the MAT3 path (they render
+textured). The cauldron "Ivan" is expected to be the now-textured POT (the donor MPot
+placement IS the cauldron-top pot); if a WRONG MODEL persists after texturing, the next dig
+is the OBJNAME-sub→create-argument flow (m60C via param_get_arg) — say so and Foundry pulls it.
+
+**WHOSE TURN:** user → re-enter: shield + tableware TEXTURED expected; confirm the cauldron
+prop reads as a pot. Foundry → room-model submesh census (plants) + kit BGM inventory + R_DL02
+continue. History → unchanged (lamp latch, spawn-audit); MDL3/MAT3 finding is engine-wide —
+their mount models now also take full MAT3 (visual upside possible, e.g. previously-white
+WW props anywhere).
+
+---
+
+## §370 — Foundry: THE CAULDRON IVAN UNMASKED — an OBJNAME SHADOW (WW bonbori→WW Ep vs port routing to TP's Ep) — WW d_a_ep port queued; textures CONFIRMED back
+
+**Lane: Foundry.** User retest: textures restored ✓ (§369b holds; shield brightness noted,
+parked as a lighting-tev tune). The remaining "Ivan" above the cauldron is NOT scale and NOT
+missing VFX — it is an **OBJNAME SHADOW, the exact collision class the kit's Pass-3 names**:
+* Donor receipt: WW's own d_stage maps `bonbori → fpcNm_EP_e` (WW d_stage.cpp:481) — the donor
+  mapping is Ep too. The baked row is donor-true (scale bytes 1,1,1 ✓ in the live dzr; the
+  port's tgsc path copies scale ✓ :2260; fopAc applies ×0.1 ✓ :479).
+* The port ALSO has `bonbori → fpcNm_EP_e` — **but the port's EP is TP's d_a_ep (974 lines,
+  TP's torch)**, not WW's d_a_ep (726 lines, WW's candle/flame prop family). Same proc NAME,
+  different game's actor: TP's Ep reads WW prm ffffff81 + ignores what WW's would honor and
+  renders a full-size lit TP torch — the glowing object in the screenshot, flame included.
+  ("Missing smoke/steam" was the right instinct pointed at the wrong object — that's TP's
+  torch VFX, present and wrong.)
+
+**Native fix queued: port WW d_a_ep** (726 lines, Tier 2 — fire/VFX-heavy; Actor-Kit driver
+scaffold + hand pass) and route "bonbori" (and any other WW Ep-family OBJNAMEs) to it — the
+coexistence pattern is proven (WW_DEMO00 twin beside TP DEMO00, §271). Until it lands, the
+TP torch stands in visibly — preferable to deactivating the row (a missing lamp is quieter
+than a wrong one, but the wrong one self-advertises the queue item; also KB-registry style
+honesty).
+
+**Kit hardening from this find:** Pass-3's OBJNAME-shadow check gets teeth — for every donor
+OBJNAME the bake relies on, assert the port's row resolves to a WW-FAMILY proc (ext/WW-ported
+profile), not a same-named TP actor; report SHADOW otherwise. bonbori would have been flagged
+at bake time instead of found by screenshot.
+
+**WHOSE TURN:** user → nothing (textures confirmed; Ivan explained + queued). Foundry →
+WW d_a_ep through the driver (next Tier-2 after current queue) + the Pass-3 shadow assert +
+room-model submesh census + BGM inventory + R_DL02. History → unchanged (lamp latch,
+spawn-audit, tsubo/Ji1).
+
+---
+
+## §371 — Foundry: METHOD FAILURE OWNED — the offline census is INCOMPLETE by construction; LIVE WORLD-CENSUS probe built and armed (user-ordered)
+
+**Lane: Foundry.** The user is right and the record should say so plainly: **my "pure data" route
+was scoped wrong and cannot answer the question it was asked.** What it did: read the dzr ACTOR
+rows of ONE donor stage's ONE room and declare that the room's complete contents. What that
+misses, by construction:
+* **geometry-resident props** — the cauldron ITSELF is not an actor row (no cauldron proc in the
+  census!), so it is room-model geometry; the small table in front of it and the planters the
+  user validated from real WW gameplay are almost certainly the same class;
+* **code-spawned actors** (anything a room/stage/actor CREATES rather than a dzr row declaring);
+* **VFX / SFX / BGM** entirely (no dzr representation);
+* **sibling models**: LinkRM Room0 carries model.bdl (19 shapes) + model1.bdl + model3.bdl —
+  the manifest declares all three and the mount has three slots, so a silent load/draw failure
+  in the extras is now a live suspect for BOTH the table and the plants (§369's MDL3 story is
+  the mechanism candidate — it already ate actor textures once);
+* **LinkUG** (the second donor arc mounted into this same host room) has ZERO actor rows —
+  so nothing there explains the gap either. Offline is exhausted.
+
+**BUILT (user order): tools/foundry/dusktap_world.py — the LIVE WORLD CENSUS.** Attaches to a
+running mainline Dolphin on the DONOR and walks WW's OWN process tree: every live process, proc
+name resolved to a symbol (502 parsed from donor f_pc_name.h), cross-referenced to its dzr
+OBJNAME names (439 procs parsed from donor d_stage.cpp), with position/params/room per actor.
+Layout receipts in the file header (l_fpcLy_LayerList → layer_class → node lists → node−0x18 =
+process; guarded with pointer-range + count caps, reporting UNKNOWN rather than garbage).
+`--watch` re-censuses on every change, so ONE walkthrough yields a per-room block. ARMED now,
+waiting for Dolphin; CSV → ww-arc-staging/dusktap_world_census.csv.
+
+**RUN PROCEDURE (user):** launch Dolphin + donor ISO → walk into Grandma's house, stand in the
+main room a few seconds, go up to the loft, then out and into Orca's/Sturgeon's house → tell me
+when done. The console prints a per-room roster live; I diff it against our dzr census and the
+delta IS the list of everything my offline route was missing (props, NPCs, code-spawned actors).
+
+**Then, per the user's framing — this becomes SPACE-KIT LAW:** the kit's completeness claim
+cannot rest on dzr rows alone. Pass-1 gains a LIVE-ORACLE column (donor census per room) and
+Pass-3 gains the assert "every live-donor process in this room is either reproduced in the host
+or on the declared deferred list." VFX/SFX/BGM ride the same oracle (the probe is extensible to
+emitter/sound ids — next increment once the actor census is validated).
+
+**WHOSE TURN:** user → the donor walkthrough (probe is armed). Foundry → on data: the delta
+report + kit-law amendment + the model1/model3 draw investigation the census will corroborate.
+History → unchanged.
+
+---
+
+## §372 — Foundry: LIVE DONOR CENSUS WORKS — and it proves the missing props are ROOM-MODEL SUBMESHES, not actors. The user's call was right; the kit's completeness law changes.
+
+**Lane: Foundry.** After two failed enumeration attempts (walked `prev`; then a node's mpData
+that was not a process — both from INFERRED offsets), the third instrument works:
+**tools/foundry/dusktap_scan.py** — a signature scan of donor RAM for process structures,
+validated by profile-name cross-match (no list layout involved anywhere). Live result standing
+in Grandma's room: **219 processes exterior / 148 interior-and-remnants, names resolving
+correctly** (Link at interior coords room 0; LODBG×50, AGBSW0×21, TSUBO×7, KNOB00×6, the full
+Outset NPC roster, etc.).
+
+**THE FINDING (donor ground truth, standing in Grandma's room):** the live interior cast is
+**Lamp + bonbori(EP) + SPitem** plus system processes — and NOTHING ELSE. No tableware actors.
+No table actor. No Ba1 at this save state. Therefore:
+
+**The table, the planters, the plants, the pots, the bottles are NOT ACTORS IN THE DONOR EITHER
+— they are SUBMESHES OF THE ROOM MODEL.** Receipt, decoded from donor LinkRM Room0 model.bdl
+(19 shapes / 19 materials) — its texture names are the missing props by name:
+`Txo_flower_white_64x64`, `Txo_flower_pink_64x64`, `Txo_yakusou` (medicinal herb), `Txo_pot`,
+`Txo_kioke` (tub), `Txo_bin`+`bin` (bottles), `Txo_ita3mai`+`ita` (boards = the small table),
+`carten_01` (curtain), `photo_03`, `Txo_yari_old` (old spear), `Txo_light_shade`, plus
+room surfaces (`Txo_ceiling`, `Txo_w_wall_128`, `Txo_r_floor`, `Txo_jyutan` carpet).
+
+**Where the loss is (narrowed, offline):** our STAGED LinkRM.arc model.bdl still has all
+**19 shapes / 19 materials** (adapt_bdl_arcs strips MDL3 but preserves geometry), and the mount's
+BG draw explicitly `show()`s every shape before `modelUpdateDL`. So the props are being DRAWN
+and are invisible — i.e. a MATERIAL/TEXTURE/ALPHA problem, not missing data. Prime suspect:
+cutout-alpha materials (foliage/curtain) whose texture format or alpha state is wrong after the
+MDL3-less material build (§369/§369b are the same family: patched materials lost their texNo
+source; the remaining half may be alpha/blend state that MDL3's prebuilt DL used to carry).
+**Next instrument (queued): per-shape BG draw probe** — for each of the 19 shapes log material
+name, bound texture + format, blend/alpha-compare state, and whether the shape's DL executed.
+One re-entry then names the invisible ones exactly.
+
+**KIT LAW CHANGED (the user's point, now doctrine):** a room's content is NOT its dzr actor
+rows. Pass-1 must inventory THREE sources — dzr rows, **room-model submeshes (per-shape,
+per-material, with texture names)**, and the LIVE DONOR CENSUS (this probe) — and Pass-3 asserts
+the host reproduces all three or declares the gap. Offline data census alone can never bound
+what the donor RENDERS; that claim is retired.
+
+**WHOSE TURN:** user → optional: the rest of the walk (loft / Orca's / Sturgeon's) with the probe
+still armed, for their rosters; else close Dolphin freely. Foundry → the per-shape draw probe,
+then the invisible-material fix; kit spec amendment (three-source Pass-1); R_DL02 unchanged.
+History → FYI: this material family is the same one that ate actor textures (§369b).
+
+---
+
+## §372b — Foundry: CORRECTION to §372 (tableware + Ba1 ARE live — our bake matches the donor cast 1:1) + bonbori = THE FIRE UNDER THE CAULDRON + Orca's-room ground truth captured
+
+**Lane: Foundry.** Reading the census CSV in full (my §372 console read filtered on a room-id
+string and dropped rows):
+
+**CORRECTION — donor Grandma's-room live cast is:** `Ba1 ×4`, `Obj_Mshokki ×4` (the tableware),
+`TagEv ×2`, `EP (bonbori)`, `LAMP`, `KNOB00`, `SPitem`, plus Link/KYEFF/KANKYO/OVERLAP8.
+So §372's "no tableware actors, no Ba1" was WRONG — an artifact of my filter, not the game.
+**This is the good news: that list is EXACTLY the cast we baked (§367) — our actor set matches
+the donor 1:1.** The §372 submesh finding stands unchanged (the table/planters/flowers/bottles
+are model.bdl submeshes, texture-name-receipted); only the "actors absent" claim is retired.
+
+**bonbori = THE SMALL FIRE UNDER THE CAULDRON (user, observed in Dolphin).** Not a lantern —
+so the port's TP `Ep` (a full lit torch) is wrong twice over: wrong object AND wrong scale-feel.
+This raises the WW `d_a_ep` port from "nice-to-have" to the fix for a visible cooking-fire, and
+it joins the LAMP CANDLE FLAME (History's particle init-latch, §368) as one family:
+**WW fire/flame VFX are absent across the board.** Both are fire-emitter work; recommend they
+land together (History's latch fix + Foundry's WW Ep port), with a shared check: after both,
+Grandma's room should show flame under the cauldron AND on the lamp candle.
+
+**ORCA'S ROOM — live donor ground truth (new, for the R_DL02 pilot):** `TSUBO ×20`
+(kotubo 13 + ootubo1 5 + Ostool 2 — ONE proc covers all 20, confirming the §361 ferry math),
+`Obj_Shelf ×3` (Otana), `Obj_Akabe ×1`, `OBJ_OTBLE ×1`, `NPC_JI1 ×1` (Orca himself), `KNOB00`,
+**`Kmon ×1` — a proc that appears LIVE but is NOT in the room's dzr census** (code-spawned or
+layer-selected: the first concrete instance of exactly the class the live-oracle law was added
+for). Absent at this save state: AttTag, SPitem. R_DL02's Pass-4 list gains `Kmon`;
+Foundry to identify its donor source before the pilot bake.
+
+**WHOSE TURN:** user → nothing pending (probe can stay armed or Dolphin closed freely).
+Foundry → per-shape submesh draw probe (the invisible props), WW d_a_ep port (cauldron fire),
+Kmon identification, kit Pass-1 three-source amendment. History → lamp flame latch (now a
+paired deliverable with WW Ep).
+
+---
+
+## §373 — Foundry: submesh probe BUILT (ready for one room entry) + WW Ep decoded — bonbori is a PARTICLE-ONLY FIRE (type 1, no model), user's observation receipted
+
+**Lane: Foundry.** Proceeding on the three items.
+
+**1. INVISIBLE PROPS — probe built, build green, caches wiped.** Offline narrowing first:
+donor vs staged model.bdl are equivalent — 19 shapes / 19 materials / **3 joints**, material
+names naming the missing props (`Ohana_high1_v` flowers, `display_yakusou_v` herb, `U_bin_v`
+bottles, `chair_chair1_v`, `komono_*` small items, `display_kagi_yari_v` spear); the adapt tool
+strips MDL3 but preserves geometry (staged MAT3 list is byte-identical to donor). So the props
+are DRAWN and INVISIBLE. New §373 probe (mount BG draw, ONE SHOT per model per room entry) logs:
+per-model shape/material/joint counts, **per-joint anmMtx translation + row0 scale** (a collapsed
+non-root joint sinks its whole prop group), and per-shape mtx-group count + hidden flag.
+19 shapes under 3 joints means a single bad joint can account for an entire missing prop group —
+that is what this reads. **Ask: one entry into Grandma's room, then hand me the log.**
+
+**2. WW Ep (the cauldron fire) — decoded, and it is SMALL work, not a model port.** bonbori's
+donor params `0xffffff81` decode (donor d_a_ep.cpp:643-652) to **mType = 1**, hasObm=1, hasGa=0.
+In the donor, `mType == 1` NEVER creates a model — the model paths are types 0/3 (candlestick/
+VKTSD/EP_GA); type 1 only emits **`ID_AK_JN_O_FIRE00` (fire) + `ID_AK_JP_O_KAGEROU00` (heat
+haze)** each frame, with the Sph collision that lets fire ignite things. **So the user's
+"slight fire VFX below the cauldron" IS the donor's entire bonbori.** The port is therefore an
+emitter+collision actor, not a mesh actor — and it lands in the same family as the LAMP flame
+(§368 latch) and the swood SE (§366 #7): **WW fire/VFX plumbing.** Foundry ports WW d_a_ep
+donor-true (all types, since Outset/dungeons use 0/2/3 too) with type 1 as the acceptance case.
+
+**3. Rest of queue unchanged:** Kmon identification (the §372b live-only actor), kit Pass-1
+three-source amendment, R_DL02 structure.
+
+**WHOSE TURN:** user → enter Grandma's room once (the §373 probe fires on first draw) and hand me
+the log; Dolphin is no longer needed for anything on my side. Foundry → WW Ep port + read the
+probe when it lands. History → lamp flame latch (now confirmed same family as the cauldron fire).
+
+---
+
+## §373b — Foundry: VERIFICATION BY DATA, not eyes — geometry proven complete; material-state DIFFER built (donor .bdl ⟷ live port, per material, named)
+
+**Lane: Foundry.** User's correction, accepted and acted on: **asking a human to eyeball a room
+is not verification** — it cannot enumerate what is absent, and it makes every conclusion rest on
+an AI's list plus a person's memory. Two deliverables:
+
+**1. What the §373 probe proved (geometry is NOT the problem).** Interior room model, live:
+**19 shapes / 19 materials / 3 joints**, joints at origin with unit scale, **every shape's hidden
+flag = 0**. Nothing collapsed, culled or hidden — the submeshes ARE submitted for drawing. So the
+missing potted plants are not missing geometry; they are a MATERIAL-level failure (a material that
+binds no texture, or whose alpha test rejects every pixel, draws nothing while its shape reports
+perfectly healthy — exactly the state the §369/§369b MDL3 family produces).
+
+**2. The differ (removes interpretation from the loop entirely):**
+* live half — **§373b material readout** in the mount BG draw (built, green, caches wiped): for
+  every material logs `tex0` (which texture index the TEV block wants), `alphaComp0`/`ref0` (the
+  alpha test) and `blendMode`;
+* offline half — **tools/foundry/mat_state_differ.py**: decodes the donor model's own MAT3 name
+  table + TEX1 names (validated by count, never guessed) and diffs against the log, printing a
+  per-material verdict with the DONOR MATERIAL NAME attached and flagging: `NO TEXTURE BOUND`,
+  `ALPHA TEST = NEVER (invisible)`, `TEX INDEX OUT OF RANGE`, or `NOT REPORTED (UNKNOWN)`.
+* Verified offline half already resolves all 19 donor names, incl. the two the user can see are
+  missing: **`Ohana_high1_v` (flowers/potted plants)** and **`display_yakusou_v` (the herb)** —
+  plus `Obhous_light_shade_v_x` (the only `_x`/translucent-suffixed material in the room).
+
+**So the next room entry produces a machine verdict per material** — "flowers: NO TEXTURE BOUND"
+or "flowers: ok" — with no human in the judgement path. Run:
+`python tools/foundry/mat_state_differ.py <MOD>/arcs/LinkRM.arc model.bdl --log <newest dusklight log>`
+
+**Kit consequence (Pass-3 gains a real assert):** every material of every baked room model must
+report a drawable state; NO TEXTURE BOUND / ALPHA-NEVER is a bake-time-or-boot-time failure, not
+something a playtester should have to notice. Pass-1's three-source inventory (§372) gains the
+per-material state column.
+
+**WHOSE TURN:** user → one entry into Grandma's room on this build, then hand me the log (I run
+the differ; no visual judgement asked of you). Foundry → run differ + fix what it names; WW Ep
+(cauldron fire) port continues in parallel; Kmon + kit amendments queued. History → lamp-flame
+latch unchanged.
+
+---
+
+## §374 — Foundry: MY §369b REGRESSION owned + FIXED (global MAT3 force overflowed TP solid heaps) — and the differ has now eliminated data as the cause of the invisible plants
+
+**Lane: Foundry.** Two things, one of them my own break:
+
+**1. THE CRASH IS MINE.** Symbolicated: `daEp_CreateHeap` → `mDoExt_J3DModel__create`
+(TP's own Ep actor). Cause: **§369b forced `materialType = 0` for EVERY load on PC.** Full MAT3
+materials allocate MORE than patched ones, so TP actors with fixed-size solid heaps overflow at
+model create. My §369b note claimed "regression exposure: only 0x2000-flag callers" — that was
+exactly the wrong reassurance, because TP's Ep IS such a caller. **FIX (§374): the force is now
+SCOPED to WW loads only** — a flag set by an RAII scope around the mount's four WW model-load
+calls (`dExtWw_j3dForceFullMat3()`), consulted in the loader's MAT3 case. TP loads are again
+byte-identical to before §369b; WW loads keep their textures. Build green, caches wiped.
+**Lesson for the ledger: a loader-wide behavior change is never "narrow" — scope it to the
+lane that needs it, at the call site, not in the shared code path.**
+
+**2. The invisible plants: DATA IS FULLY ELIMINATED.** The §373/§373b differ chain has now ruled
+out, with receipts: geometry (19/19 shapes submitted, hidden=0, joints at origin, unit scale),
+materials (19/19 report drawable: the 3 cutout-alpha ones are precisely
+`Ohana_high1_v`/`kazari_lambert2_v`/`display_yakusou_v` with correct GEQUAL/128 tests), textures
+(all CMPR; backend CMPR decode DOES honor 1-bit punch-through alpha), and **our staged model is
+BYTE-IDENTICAL to the donor in every block** (VTX1/SHP1/MAT3/TEX1/JNT1/INF1/DRW1/EVP1; only MDL3
+stripped by design). So the cause is in the SUBMISSION/STATE path, and the §373c probe now
+measures the exact mechanism: `J3DModel::entry()` submits geometry by walking each JOINT's mesh
+chain (J3DJoint.cpp:164) — not the material table — so an unlinked-but-healthy material can never
+draw. §373c logs per-joint chain length + a REACHABLE count with an explicit
+`UNREACHABLE GEOMETRY` marker. The crash cut the run before the 19-material block printed; the
+exterior blocks reported 8/8 and 1/1 (healthy), so the instrument works.
+
+**WHOSE TURN:** user → re-enter Grandma's room on THIS build (crash fixed): I need the
+`§373c REACHABLE materials n/19` line. Foundry → read it, fix what it names, then WW Ep port +
+strip probes at acceptance. History → unchanged.
+
+## §362 History: NATIVE JA1 AUDIO CAMPAIGN — systems inventory + port plan (user order: "the songs are missing their systems") (2026-08-02)
+
+**Lane: History.** The user's diagnosis is confirmed by inventory: WW BGM currently plays through
+the ext_seq bridge = WW's JA1 DATA adapted onto **TP's JAudio2 synthesis primitives**
+(ja1_bank_noteOn → JA2 JASBank::noteOnOsc → JA2 JASChannel/JASOscillator). Supply is proven
+byte-pristine (findings §A); timing fixed (§B, 1.3% residual query open); the invented parent
+volume cascade removed (§C.3). What remains "not sounding right" = **JA1-vs-JA2 semantic gaps**:
+- **Per-track ADSR: MISSING OUTRIGHT** — cmdSimpleADSR (0xD8) parses and DROPS ("the Ja1 synth
+  has no per-track envelope table yet" — ja1_parser.cpp:408); notes play without their authored
+  envelopes.
+- **§C.4 pitch/register path** (open primary in the findings): key→pitch math (setKey(key-baseKey),
+  init sample-rate) currently JA2 semantics; donor = JA1 TChannel/TOscillator.
+- Velocity curve noted as owed (№31-B note at ja1_track.cpp:213), vibrato/mod + pan law
+  unaudited vs JA1.
+
+**Donor sources (ALL fully matched — clean direct-port material):** WW DP JASOscillator.cpp
+(280 ln, JASystem::TOscillator = the envelope/LFO engine), JASChannel.cpp (869 ln, JASystem::
+TChannel = voice model incl. pitch math), JASTrack.cpp (1568 ln, track semantics — partially
+re-implemented in ja1_track already).
+
+**Boundary finding:** the GC DSP layer (JASDsp) is NOT compiled on PC — the port already replaced
+it once for JA2. Re-emulating it for JA1 is the wrong layer. **Campaign shape: port JA1's
+SEMANTIC layers natively above the existing PC voice backend:**
+- **Phase A — JA1 envelope engine:** port JASystem::TOscillator donor-verbatim (namespaced
+  JAudio1:: to avoid the JA2 name collision — §328 naming lesson), give ja1_track its per-track
+  envelope table, wire cmdSimpleADSR + bank osc tables through it. Retires the ADSR debt.
+- **Phase B — JA1 pitch path (§C.4):** donor-compare TChannel's key/pitch/sample-rate math vs
+  the JA2 path in use; port the JA1 math into the ext_seq noteOn. Closes the wrong-frequency-
+  band finding.
+- **Phase C — velocity curve + pan/vibrato audit** vs JA1; port each divergence verbatim.
+- **Phase D — acceptance:** Foundry's audio differ (wav-compare) DL-vs-WW on i_link + house;
+  user ear on Outset intro + interior.
+Full-TChannel port (voice lifecycle on a JA1-true model) = tracked as the endgame IF Phases A-C
+leave residue; gated on the PC-backend interface question, not attempted first.
+
+**WHOSE TURN:** HISTORY → Phase A now. FOUNDRY → wav-compare goldens ready for Phase D; Pass-1
+BGM inventory continues feeding the interior-BGM wiring (separate §361 thread). USER → ear
+checks at each phase gate.
+
+## §363 History: PHASE A LANDED — JA1 envelope engine ported; the silent OscRoute NOP was the deeper root (2026-08-02)
+
+**Lane: History.** Bus §362 Phase A complete, built into the live exe (23:09):
+- **JAudio1::TOscillator** ported donor-verbatim (new ja1_oscillator.h/.cpp; donor symbols kept
+  inside the JAudio1 namespace — §328 naming lesson; dtk markers preserved) + the donor Player
+  envelope defaults (sAdsrDef/sEnvelopeDef/sAdsTable/sRelTable/sVibTable/sTreTable).
+- **The donor per-track ADSR table** (TTrack layout @0x2CC/0x2FC/0x304/0x374: two Osc_ slots,
+  route words, the 4-triple ADS table, direct release) now lives in Ja1Track, ctor-seeded
+  exactly as the donor.
+- **cmdSimpleADSR** (0xD8): parse-and-drop → the donor's byte-faithful seeding.
+- **BONUS ROOT: cmdOscRoute (0xF0) was silently NOP'd in the port** — the donor's mechanism
+  that ROUTES the ADSR table onto voices never engaged, so even a wired ADSR would have gone
+  nowhere. Implemented (route words, reg-6 reset, noteOn overwriteOsc + directRelease tail —
+  donor JASTrack.cpp:325-328/:1301).
+- **noteOn seam:** JA1 Osc_ → JA2 Data conversion field-verified (target id spaces 0-4 identical
+  both effectOsc switches; rate constants cancel exactly; direct-release encoding identical;
+  the relless-osc default release 0x10 reproduced — JA2 would have hard-stopped). Per-note heap
+  blocks freed on CB_STOP (J3D pointer-fix lesson applied to audio).
+- **Named debts (no improvisation):** osc slots 2/3 (JA2 backend has 2; one-shot warn),
+  copyOsc route flags 0x8/0x4 (need table reification), rising-curved-segment mirroring
+  (linear/falling identical — the ported TOscillator is the Phase-B diff authority).
+
+**PHASE-A GATE (user ear + Foundry differ):** Outset exterior (i_link) + Grandma's interior
+(house). Expect: note attacks/releases present (no more organ-flat holds), entrances no longer
+clipped at note ends. §C.4 pitch bands = Phase B, unchanged by design here.
+
+**WHOSE TURN:** USER → the ear test on the current build. FOUNDRY → wav-compare DL-vs-WW re-run
+on both stems when convenient (the §B 1.3% tempo residual query also benefits from a fresh
+capture). HISTORY → on the gate verdict: Phase B (JA1 pitch path / §C.4).
+
+## §364 History: THE "REALLY OFF" ROOT — every song played at HALF TEMPO; wall-clock stepping shipped (2026-08-02)
+
+**Lane: History.** The user's Phase-A ear verdict ("still really off") + the §B tempoProbe lines
+converged on one number: **ratio 0.500** — measured 238 ticks/s vs target 476. The §62 stepping
+formula (tempo×timebase/1800 per CALL) is calibrated for a 60 Hz caller, but the poll runs at
+the ~30 Hz sim cadence (and collapses further during loads). Every WW song has been playing at
+HALF TEMPO the whole era — the dominant "doesn't sound right", bigger than any timbre gap, and
+the earlier "1.3% residual" reading was an artifact of its measurement window.
+**FIX (§364):** donor-semantic time-based stepping — JA1 ticks/sec = tempo×timebase/30 ×
+REAL elapsed time (steady_clock, dt clamped 0.25 s so load stalls don't fast-forward), f64
+fractional accumulator, poll-cadence-independent. The old force-≥1-per-call LO clamp removed
+(correctly 0 steps on fast polls); HI 48 retained. In the live exe 23:19.
+**Phase-A note:** the envelope port (§363) is IN and engaged; its audibility was masked under
+the half-tempo error. Re-gate BOTH with one listen.
+**WHOSE TURN:** USER → ear test (Outset + interior): tempo should be right for the first time;
+then judge attacks/releases (§363) on top. FOUNDRY → wav-compare now measures a meaningful
+build (tempo + envelopes both in); §C.4 pitch bands = Phase B remains. HISTORY → on the gate:
+Phase B.
+
+## §371 History: THE VANILLA JAUDIO1 STACK IS LIVE — gate flipped, A5 ear gate open (2026-08-03)
+
+**Lane: History.** Five phases, four port passes, zero remaining stubs: WW BGM on this build is
+sequenced, voiced, enveloped, and clocked by **Wind Waker's own JAudio1 code** (17 donor-verbatim
+TUs: TSeqParser/TTrack/TSeqCtrl/TChannel+Mgr/TOscillator/banks+BNKParser/DSPChannel/Kernel/
+Player/Calc), driven at the donor's DacRate/80 subframe on the audio thread, voices on a
+reserved slice of the same software DSP, waves from the staged donor arcs. The single non-donor
+line in the whole stack = the DSP register delegation to the port's existing software DSP (11
+ops line-identical, 5 donor-verbatim register writes). ext_seq bridge = kill switch
+(DUSK_JA1_NATIVE=0), retired on the A5 pass. Known first-listen expectation: absolute LEVEL may
+differ (bridge-era master-vol corrections were receiver-side; the donor law governs now).
+**WHOSE TURN: USER → the A5 listen (Outset intro + Grandma's interior): tempo/timbre/feel.
+FOUNDRY → wav-compare differ after the ear. HISTORY → on pass: §364 strip + bridge retirement;
+on fail: gate 0 + the differ names the gap.**
+
+## §372 History: FIRST SOUND — the vanilla JAudio1 stack PLAYS, ear gate PASSED (2026-08-03)
+
+**User verdict: "The music is perfect now!" — exteriors AND interiors.** WW's own JASystem
+engine (TTrack/TSeqParser/TChannel/TOscillator/banks/TDSPChannel, 17 donor-verbatim TUs,
+DUSK_JA1_NATIVE=1) is the playing system end-to-end on PC.
+
+Two GC-shaped transcription bugs stood between the ported stack and sound — both now a
+registered bug CLASS for every future donor TU port:
+1. **§372b pointer-size**: donor `bzero(table, n * 4)` half-zeroed x64 pointer arrays
+   (crash on first load). Fix: `n * sizeof(elem)`, 4 sites.
+2. **§375 endian overlays**: donor packs the setBusConnect table index in the HIGH byte of
+   the u16 mix config and reads it via `{u8 hi; u8 lo;}` — valid only on big-endian GC with
+   MWERKS MSB-first bitfields. x64 read the LOW byte (flags: 80/16/82/18) → connect_table[80]
+   OOB → garbage bus register → no L/R mixer match → TOTAL SILENCE with every upstream stage
+   healthy. Fix: mirror member order (bytes AND nibbles), donor values/logic untouched
+   (ja1_jaschannel.h MixConfig.mParts + play()'s local union). Closure verified: all mWhole
+   writers host-endian; no other endian-sensitive overlays in the stack.
+
+**Port-class checklist addition (for ALL lanes porting donor TUs to x64):** grep every new
+donor TU for (a) size-4 pointer math, (b) unions/bitfields overlaying scalars — GC is BE +
+MSB-first bitfields; both must be mirrored, never "adapted".
+
+**A5 gate: HALF passed.** Ear ✓. Remaining: the Foundry wav-compare differ (the data half).
+Strip list (§364 wall-clock stepping, ext_seq bridge retirement, probe families) HELD until
+the differ ratifies; kill switch DUSK_JA1_NATIVE=0 stays available until then.
+
+**WHOSE TURN: FOUNDRY → the wav-compare differ vs vanilla WW captures (Outset exterior +
+Grandma interior BGM) — the last ratification step. HISTORY → on differ pass: full strip
+(§364 + bridge + probes) and campaign close, incl. live-ab capture-tool removal per standing
+rule. USER → nothing owed; enjoy the music.**
+
+---
+
+## §376 — Foundry → History: the BGM RATIFICATION DIFFER is built and SELF-VALIDATED — capture procedure attached (the last gate on the JAudio1 milestone)
+
+**Lane: Foundry.** Congratulations on §372 — the donor's own JAudio1 stack playing on PC is the
+real thing, and the two bugs you name (pointer-size bzero, endian overlay) belong in the
+port-class checklist exactly as you filed them. Taking the ratification assignment.
+
+**BUILT: tools/foundry/bgm_wav_differ.py** — compares a Dusklight capture against a vanilla-WW
+capture of the SAME track and reports five dimensions, each chosen to fail a DIFFERENT port bug:
+* **TEMPO** — dominant onset-period ratio → the tempo governor (the §372 component under test);
+* **STRUCTURE** — onset-pattern cross-correlation → sequence-reader stepping (dropped/extra
+  events, loop points), with the alignment lag MEASURED not assumed;
+* **PITCH** — fundamental ratio → transpose / wrong sample rate / oscillator table;
+* **TIMBRE** — mean |Δlog-spectrum| + spectral-centroid ratio → bank/voice selection, ADSR,
+  gain staging;
+* **LEVEL** — RMS/peak, with clipping called out.
+Any dimension it cannot compute prints **UNKNOWN, never PASS** (№31-C).
+
+**SELF-VALIDATED BEFORE USE (the discipline that matters):** run against synthetic pairs with
+KNOWN single faults — identical → **MATCH**; tempo-altered → DRIFT(STRUCTURE, TEMPO);
+transposed 2 semitones → DRIFT(PITCH); extra harmonic → DRIFT(TIMBRE). The first pass FAILED
+this test in an instructive way: spectral centroid leaked timbre into the PITCH verdict, so a
+bank/voice fault would have been misreported as a transpose. Fixed by moving centroid to TIMBRE
+and using the fundamental alone for PITCH — **the instrument was calibrated against known faults
+before it was allowed to judge the port.**
+
+**CAPTURE PROCEDURE (user, ~5 min per track — two tracks):**
+1. VANILLA: Dolphin → Options → Audio → **Dump Audio** (writes `<Dolphin User>/Dump/Audio/
+   dspdump.wav`). Boot the donor ISO, stand in **Outset exterior** ~40s, stop dumping; rename
+   to `outset_vanilla.wav`. Repeat for **Grandma interior** → `grandma_vanilla.wav`.
+2. DUSKLIGHT: capture the same two locations, ~40s each, to `outset_dusk.wav` /
+   `grandma_dusk.wav` (any recorder that writes PCM WAV; no in-port capture tool exists and per
+   the standing instruction none should be added for this).
+3. Put all four in one folder and hand me the path — I run
+   `bgm_wav_differ.py --pair-dir <folder>` and post the verdicts.
+Notes for clean data: same in-game location and ~same length; avoid SFX-heavy moments (footsteps
+are fine, combat is not); loop point crossings are OK — STRUCTURE tolerates lag, not reordering.
+
+**Scope honesty:** this ratifies MUSIC RENDERING (sequence, tempo, banks, voices, mixer). It does
+NOT cover SE/voice dispatch or the interior-BGM SELECTION question (which track plays where) —
+those are separate gates; the §361 kit BGM inventory covers selection.
+
+**WHOSE TURN:** user → the four captures (procedure above). Foundry → run the differ, post
+verdicts, and hold the strip list until it passes. History → nothing blocked; the kill switch and
+strip list stay held per your call.
+
+## §386 — Housing → Foundry: INVISIBLE PLANTS — 16 hypotheses eliminated with receipts, data fully cleared, and the one lead nobody has used (2026-08-03)
+
+**Lane: Housing Security.** Taking the §374 hand-off. Result: **I did not find the cause, and the
+value of this entry is the elimination table** — so nobody re-walks 16 dead ends. Two of the
+eliminations are corrections to my own earlier claims; those are marked.
+
+### The subject
+
+`LinkRM.arc` (Link's room), model[0]: **19 shapes / 19 materials / 3 joints**. Three materials
+invisible: `Ohana_high1_v`, `display_yakusou_v`, `kazari_lambert2_v`. The user's WW screenshot
+confirms the shape of it — **the pot renders, the plant in it does not.**
+
+The three are separated from the other sixteen by a perfect three-way signature:
+`alphaComp GEQUAL/128` + `cull NONE` + `blend none`. No exceptions on either side.
+
+### Eliminated, with receipts
+
+| # | hypothesis | verdict | evidence |
+|---|---|---|---|
+| 1 | joint to mesh linkage | dead | §373c `REACHABLE 19/19`, all on joint[2] |
+| 2 | texture index inversion | dead | `tex0` runs 18..0 because TEX1 is stored in reverse order vs MAT3; pairings semantically exact (`light_shade_v` to `Txo_light_shade`, `hashira3_v` to `Txo_ie_hasira_c`, `kagi_yari_v` to `Txo_yari_old`) |
+| 3 | texture data / alpha content | dead | offline decode: `Txo_flower_pink` opaque 2544 / transparent 1552, `Txo_flower_white` 1871/2225, `Txo_yakusou` 1297/2799 — genuine punch-through |
+| 4 | BTI `alphaFlag=0` mishandled | dead | `J3DTexture` builds its GXTexObj from `timg->format`; **never reads alphaFlag** |
+| 5 | CMPR decode drops alpha | dead | `aurora/lib/gfx/texture_convert.cpp:418-470` expands to 0/255 correctly |
+| 6 | TEXA not routed to the compare | dead | §375 `TEXA_used=1` on all 19; stage 0 `aABCD=(7,4,5,7)` = TEXA x RASA |
+| 7 | RASA (vertex alpha) is zero | dead | `aMatSrc=1` (VTX), `aEnable=0`; CLR0 is RGBA8 and shape[2] is **4127/4131 verts at alpha 255** |
+| 8 | konst alpha (the third factor) | dead | §384 `kAlphaSel=0x1f` selects K3, `K3.a=255`, effective **255** |
+| 9 | cull mode wrong | dead | §377 `cullMode=0` on exactly the three — correct for double-sided planes |
+| 10 | z mode / zCompLoc | dead | §377 z LEQUAL/enabled everywhere; `zCompLoc=0` on exactly the three — correct for cutouts |
+| 11 | wrong draw bucket | dead | §378 `materialMode=0x1` gives `drawBuffer=0`, the same bucket as every visible material |
+| 12 | hardcoded PE block discards state | dead | §380 `peType='PEFL'` — a **stateful** block, not PEOP/PEED/PEXL |
+| 13 | texGen / indirect / tev-stage count | dead | §380 texGen=1, tg0 identity mtx, ind=0, tev=2, mtxGrp=1, **dl 1504/8128/6720 bytes** |
+| 14 | stale baked display list | dead | §385 nulled `mSharedDLObj` to force live emission — **no change** |
+| 15 | materials live in an unported arc | dead | `LinkRM.arc` is self-contained: MAT3 + TEX1 + SHP1 + VTX1 all present |
+| 16 | geometry misplaced / degenerate | dead | SHP1 per-shape bbox: shape[15] `y 66..241`, `x 5..466` — exactly a potted plant on a surface; all 19 share one coordinate space, `mtxType=0`, one packet each |
+
+### Corrections to my own earlier claims — do NOT trust these two as I first reported them
+
+* **§381/§382 "no improvement" eliminated NOTHING.** §383 found `sharedDL=1` on every material:
+  state is baked into a display list at load and replayed by `callDL`, so runtime writes to
+  `mRef0` / `setZCompLoc` / `setCullMode` **never reached GX**. I reported alpha-compare and
+  late-Z as cleared on the strength of a no-op. They were later cleared properly (rows 6-10, 14).
+  **Any future override must null `mSharedDLObj` first** — §385 does that, so A/B runs from that
+  build onward are valid.
+* **A bounding-box parse I ran returned 10^38-scale numbers** — my display-list walker desynced.
+  Discarded. The SHP1 bbox read (row 16) is the reliable answer and needs no DL traversal at all.
+
+### Method traps worth carrying (extends §243/§249)
+
+35. **Instrument the LAST TEV stage, not the first.** These materials are `tevStages=2` and the
+    alpha reaching the compare is stage 1's output. I decoded stage 0 for five rounds and
+    concluded "alpha = TEXA x RASA = 255" while stage 1 was `KONST x APREV` — a third factor
+    unread the whole time. It proved innocent, but the reasoning was wrong for five rounds.
+36. **Probes read the material objects; the hardware may replay a baked DL.** If `sharedDL != 0`,
+    every value a probe prints can be correct while the bytes GX executes are not. Check this
+    FIRST when a state-inspection campaign keeps coming back clean.
+37. **A base-class default can lie.** `J3DColorBlock::getCullMode()` defaults to 2 and
+    `J3DPEBlock::getZCompLoc()` to 0; a block variant that stores neither answers plausibly and
+    silently. Confirm the variant with `getType()` before trusting a per-material read.
+38. **Structural checks are not draw confirmation.** `hidden=0`, `mtxGrpNum=1`, a non-zero
+    `dlSize` and joint-chain reachability all pass for geometry that is never rasterised.
+39. **One probe, ten hypotheses.** Six single-hypothesis builds cost six test cycles and found
+    nothing; the consolidated §380 covered ten branches in one build and cleared them together.
+
+### The lead nobody has used
+
+**The same CMPR bytes render correctly through the raw-GX vegetation packet and invisibly through
+J3D.** `Txo_flower_pink_64x64` inside `LinkRM.arc` decodes to opaque 2544 / transparent 1552 —
+byte for byte the `d_flower__l_Txo_ob_flower_pink_64x64TEX.bin` that the ported flower packet draws
+every frame with punch-through alpha intact (bus §249).
+
+That is a **controlled pair**: identical texture data, identical backend, two submission paths, one
+works. Diffing the actual GX command streams between them would NAME the difference instead of
+eliminating candidates one at a time — which is what the last 16 rounds did, at roughly one
+playtest each. The raw-GX side is small and fully known
+(`d_a_ext_vegetation.cpp::drawBlades`, ~40 lines of explicit GX calls); the J3D side is
+`J3DMatPacket` / `J3DShapePacket` draw.
+
+### Remaining candidates (all below the material layer)
+
+* Whether a **draw call is actually issued** for those three shapes. §373c proved the material is
+  *linked*; that is not the same as submitted, and nothing in this thread has confirmed it.
+* Whether the **backend drops the draw** for a reason J3D cannot express.
+
+### Also open, unrelated to plants — CONTAINMENT (Housing)
+
+The `Ep.arc` arc-name shadow was fixed and the driver guarded, but **the guard does not remove what
+is already staged**. Four more driver-staged donor arcs (residmap companion present) shadow names
+the receiver loads: **`Demo02`, `Kamome`, `Kb`, `Lamp`**. `Kamome` and `Kb` are the seagull and
+pig, which run as native direct-ports through TP's own actor — so the collision may be intentional
+there, but it needs an explicit ruling and an alias rather than a name collision that happens to
+work. Separately `bmgres`, `dmsgres`, `fontres`, `rubyres` are staged **without** residmaps and
+shadow TP's message/font archives; likely deliberate for the WW dialogue system, but the same
+hazard class and the same need for a ruling.
