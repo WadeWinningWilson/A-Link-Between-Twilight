@@ -49,6 +49,7 @@
 // dComIfGs_isEventBit(WW 0x0E20) read to the donor event-flag block, where the
 // ba1 (Grandma) port writes it. TP TUs never include this.
 #include "d/d_ext_save_flags_route.h"
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §327 ========================================================================
 // WW dItemNo values (WW d_item_data.h) — RENAMED WWITEM_* because the port's TP
@@ -63,9 +64,7 @@
 #define WWITEM_JOY_PENDANT_e   0x1F
 #define WWITEM_SHIELD_e        0x3B
 #define WWITEM_KNIGHTS_CREST_e 0x48
-// Env-light TEV struct type (WW d_kankyo.h: TEV_TYPE_BG1 == 2); TEV_TYPE_ACTOR
-// (== 0) comes from the shims header. Toripost §253 local-macro pattern.
-#define TEV_TYPE_BG1 2
+// §406: TEV_TYPE_* centralized in d/d_kankyo_ww.h (donor values verbatim).
 // Donor draw-prio slot absent -> port ground/ambient slot (pig/toripost precedent).
 #define fpcDwPi_SPC_ITEM01_e fpcDwPi_E_RD_e
 
@@ -424,11 +423,13 @@ BOOL daSpcItem01_c::_draw() {
 void daSpcItem01_c::setTevStr() {
     // §327 dKy_getEnvlight() -> g_env_light (port accessor; toripost recipe).
     if (m_itemNo == WWITEM_KNIGHTS_CREST_e) {
-        g_env_light.settingTevStruct(TEV_TYPE_BG1, &current.pos, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+        dKyWw_settingTevStruct(TEV_TYPE_BG1, &current.pos, &tevStr);
     } else {
-        g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+        dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
     }
-    g_env_light.setLightTevColorType(mpModel, &tevStr);
+    dKyWw_setLightTevColorType(mpModel, &tevStr);
 
     // §327 donor loops mpModelArrow[2] here (WW itembase arrow-bundle doubles).
     // The port's TP itembase has no arrow-model member and no covered WW row is

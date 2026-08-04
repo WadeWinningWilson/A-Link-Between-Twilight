@@ -34,6 +34,7 @@
 #include "m_Do/m_Do_mtx.h"
 #include "d/d_ext_npc_mount.h"        // §253 DN-3 parse-at-consume model fixup (acquireModelData)
 #include "d/d_ext_ww_actor_shims.h"   // §253 dLib_bcks_setAnm / dLetter_* / WW no-op shims
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §253 ========================================================================
 // WW-absent VALUE-FAITHFUL constants (donor numbering; TP-label caveat as §243/§244).
@@ -85,8 +86,7 @@
 // dIsleIdx_COUNT_e (WW d_save.h) — pay-table array length; the "sea" guard returns 0
 // before indexing in the port, so the table is never read.
 #define dIsleIdx_COUNT_e 49
-// Env-light TEV struct type (WW d_kankyo.h: TEV_TYPE_BG0 == 1). Port lacks the member.
-#define TEV_TYPE_BG0 1
+// §406: TEV_TYPE_* centralized in d/d_kankyo_ww.h (donor values verbatim).
 // dSymbol_FARORE_e (WW d_com_inf_game.h) — port's shim covers only dSymbol_DIN_e (=0);
 // isSymbol() is a shim -> FALSE regardless, so the value is inert (donor value = 2).
 #define dSymbol_FARORE_e 2
@@ -1003,8 +1003,9 @@ bool daObjTpost_c::_draw() {
     }
 
     J3DModel* pModel = mMorf->getModel();
-    g_env_light.settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(pModel, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+    dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(pModel, &tevStr);
     // §253 render #2: the port SPLIT McaMorf::updateDL() -> modelCalc() (setFrame+
     // setMtxCalc+model->calc) and entryDL(). play() (Execute) does NOT calc joints, so
     // Draw must modelCalc() -> setList() -> entryDL(), else invisible (degenerate joints).

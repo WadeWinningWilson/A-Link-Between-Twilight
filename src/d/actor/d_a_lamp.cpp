@@ -33,6 +33,8 @@
 #include "d/d_vibration.h"                // §327 dVibration_c::CheckQuake
 #include "d/d_ext_npc_mount.h"            // §327 DN-3 parse-at-consume model resolver (acquireModelData)
 #include "d/d_ext_ww_actor_shims.h"       // §327 AT_TYPE_WIND/UNK400000, cCcD_TgSPrm_Set_e, fopAcStts_*
+#include "dusk/logging.h"                 // §395 success-latch failure-path log
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §327 ========================================================================
 // WW-absent VALUE-FAITHFUL constants (donor numbering; toripost §253 pattern —
@@ -43,9 +45,7 @@
 #define AT_TYPE_FIRE_ARROW    (1 << 18)   // 0x40000
 // WW SSystem/SComponent/c_cc_d.h Tg SPrm bit the shims header lacks.
 #define cCcD_TgSPrm_IsOther_e 0x08
-// Env-light TEV struct type (WW d_kankyo.h: TEV_TYPE_BG0 == 1); port lacks the
-// member — same local macro toripost §253 uses.
-#define TEV_TYPE_BG0 1
+// §406: TEV_TYPE_* centralized in d/d_kankyo_ww.h (donor values verbatim).
 // Donor draw-prio slot absent -> reuse a port ground/ambient slot (pig/seagull/
 // toripost precedent).
 #define fpcDwPi_LAMP_e fpcDwPi_E_RD_e
@@ -75,9 +75,10 @@ static void MtxRotZ(f32 rot, u8 concat) {
 
 /* 000000EC-00000158       .text daLamp_Draw__FP10lamp_class */
 static BOOL daLamp_Draw(lamp_class* i_this) {
-    g_env_light.settingTevStruct(TEV_TYPE_BG0, &i_this->current.pos, &i_this->tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+    dKyWw_settingTevStruct(TEV_TYPE_BG0, &i_this->current.pos, &i_this->tevStr);
     J3DModel* pModel = i_this->mModel;
-    g_env_light.setLightTevColorType(pModel, &i_this->tevStr);
+    dKyWw_setLightTevColorType(pModel, &i_this->tevStr);
     mDoExt_modelUpdateDL(pModel);
     return TRUE;
 }
@@ -119,10 +120,37 @@ static BOOL daLamp_Execute(lamp_class* i_this) {
 
         // §327 donor 6-arg particle_set -> port 10-arg overload (trailing WW
         // defaults -1/NULL/NULL/NULL made explicit; toripost §253 recipe).
-        dComIfGp_particle_set((u16)ID_AK_JN_TORCH, &i_this->mPos, NULL, &fire_scale, 0xFF,
-                              &i_this->mPa, -1, NULL, NULL, NULL);
-        i_this->mParticleInit = 1;
-        i_this->mParticlePower = 1.0f;
+        // ============================================================
+        // §396 — DONOR particle ids. The receiver enum shares the donor's
+        // NAMES but not its VALUES (receiver ID_AK_JN_TORCH=0x41 vs donor
+        // dPa_name::ID_AK_JN_TORCH=0x01EA; KAGEROU00 0x47 vs 0x4004) — a
+        // name-collision translation trap, §372b/§375 class. Donor values
+        // used literally; both route through the wwJPA common.jpc bridge
+        // (sWwCommon §396 rows).
+        // ============================================================
+        JPABaseEmitter* emitter =
+            dComIfGp_particle_set((u16)0x01EA, &i_this->mPos, NULL, &fire_scale, 0xFF,
+                                  &i_this->mPa, -1, NULL, NULL, NULL);
+        // ============================================================
+        // §395 (bus §368/§394 ferry): latch only on SUCCESS. The donor
+        // latches unconditionally because its first frame never fails;
+        // on the host a NULL emitter at create time (particle system
+        // busy / bank not yet resident) left the candle PERMANENTLY
+        // flameless and silent. Identical to donor when the first
+        // attempt succeeds; self-healing (retries next frame) when not.
+        // ============================================================
+        if (emitter != NULL) {
+            i_this->mParticleInit = 1;
+            i_this->mParticlePower = 1.0f;
+        } else {
+            static int s_logged395 = 0;
+            if (s_logged395 < 4) {
+                ++s_logged395;
+                DuskLog.warn("[Lamp] §395 TORCH emitter NULL on init attempt — retrying "
+                             "next frame (pos=({:.0f},{:.0f},{:.0f}))",
+                             i_this->mPos.x, i_this->mPos.y, i_this->mPos.z);
+            }
+        }
     }
 
     if (i_this->mPa.getEmitter()) {
@@ -130,7 +158,8 @@ static BOOL daLamp_Execute(lamp_class* i_this) {
         whitePartPos.y += 20.0f;
         // §327 donor 2-arg setSimple -> port 7-arg (WW defaults 0xFF/white/white/0
         // + the port's trailing rate 0.0f — the digplace/vegetation idiom).
-        dComIfGp_particle_setSimple((u16)ID_AK_JP_O_KAGEROU00, &whitePartPos, 0xFF, g_whiteColor,
+        // §396: donor id 0x4004 (WW KAGEROU00), not the receiver's same-named 0x47.
+        dComIfGp_particle_setSimple((u16)0x4004, &whitePartPos, 0xFF, g_whiteColor,
                                     g_whiteColor, 0, 0.0f);
         cLib_addCalc2(&i_this->mParticlePower, cM_rndF(0.2f) + 1.0f, 0.5f, 0.02f);
     } else {

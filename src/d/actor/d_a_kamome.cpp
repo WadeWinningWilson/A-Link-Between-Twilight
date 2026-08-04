@@ -37,6 +37,7 @@
 #include "d/d_drawlist.h"                // §232 dDlst_shadowControl_c::getSimpleTex() (port setShadow tail arg)
 #include "m_Do/m_Do_hostIO.h"           // §232 HIO (mDoHIO_createChild / JORReflexible)
 #include "JSystem/J3DGraphAnimator/J3DJoint.h" // §232 J3DJoint node callback (nodeCallBack)
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // ============================================================
 // §232 WW numbered debug registers. The port's HIO reg bank (g_regHIO.mChildReg[])
@@ -201,8 +202,9 @@ static BOOL daKamome_Draw(kamome_class* i_this) {
         return TRUE;
     }
 
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &i_this->actor.current.pos, &i_this->actor.tevStr);
-    g_env_light.setLightTevColorType(i_this->mpMorf->getModel(), &i_this->actor.tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &i_this->actor.current.pos, &i_this->actor.tevStr);
+    dKyWw_setLightTevColorType(i_this->mpMorf->getModel(), &i_this->actor.tevStr);
     // §232 render (recipe #2): the joint calc ran in daKamome_setMtx via modelCalc();
     // the draw only needs to target the list then enter the DL.
     dComIfGd_setList();

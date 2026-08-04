@@ -8,6 +8,7 @@
 #include "d/actor/d_a_swhit0.h"
 #include "d/d_com_inf_game.h"
 #include <cstring>
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 #define COLOR_YELLOW 0
 #define COLOR_BLUE   1
@@ -385,8 +386,9 @@ void daSwhit0_c::setDrawMtx() {
 }
 
 int daSwhit0_c::draw() {
-    g_env_light.settingTevStruct(16, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(mpModel, &tevStr);
+    // §406 deviation corrected: 16 was a TP type; donor d_a_swhit0.cpp:386 authors TEV_TYPE_BG0.
+    dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(mpModel, &tevStr);
 
     // each set of 2 colors represents an on/off state color
     static u8 l_color[] = {

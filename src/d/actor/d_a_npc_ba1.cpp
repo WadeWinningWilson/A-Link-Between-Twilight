@@ -55,6 +55,7 @@
 // instead of TP's colliding table. TP TUs never include this. Replaces the §266
 // hand-bridge (below).
 #include "d/d_ext_save_flags_route.h"
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // ============================================================
 // §261 [INFERENCE-NEEDED] gameInfo status bytes with no mapped port accessor yet
@@ -1587,13 +1588,15 @@ BOOL daNpc_Ba1_c::_draw() {
     // btp entry (calc-after-btp resets the texture pattern → blank face). zl1 does exactly
     // this at d_a_npc_zl1.cpp:2624.
     mpMorf->modelCalc();
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);  // §266 was 0 (too bright); zl1 uses TEV_TYPE_ACTOR
-    g_env_light.setLightTevColorType(model, &tevStr);
+    // §405: WW feeder — receiver settingTevStruct + donor tevstr TevColor/TevKColor
+    // tail (TP never writes those fields on the actor path; §404's copy read black).
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);  // §266 was 0 (too bright); zl1 uses TEV_TYPE_ACTOR
+    dKyWw_setLightTevColorType(model, &tevStr);
     mBtpAnm.entry(modelData, (s16)mBtpFrame);
     mpMorf->entryDL();
     modelData->removeTexNoAnimator(mpBtpRes);
     if (mpItemModel != NULL) {
-        g_env_light.setLightTevColorType(mpItemModel, &tevStr);
+        dKyWw_setLightTevColorType(mpItemModel, &tevStr);
         mDoExt_modelEntryDL(mpItemModel);
     }
     shadowDraw();

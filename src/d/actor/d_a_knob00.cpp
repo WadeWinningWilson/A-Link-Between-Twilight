@@ -67,6 +67,7 @@
 // dComIfGs_*EventBit / *EventReg calls (WW dSv_event indices) to the donor
 // event-flag block — never TP's table.
 #include "d/d_ext_save_flags_route.h"
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §328 ========================================================================
 // WW-absent VALUE-FAITHFUL constants (donor numbering; §327 pattern — LOCAL to
@@ -98,9 +99,7 @@
 #define fopAc_Attn_ACTION_DOOR_e fopAc_AttnFlag_DOOR_e
 // WW status bit (OnStatus on the Mt figure NPC — runtime-dead, stub below).
 #define fopAcStts_UNK800_e 0x00000800
-// Env-light TEV struct type (WW d_kankyo.h: TEV_TYPE_BG0 == 1; ACTOR == 0 from
-// the shims header). Same local macro toripost/lamp §253/§327 use.
-#define TEV_TYPE_BG0 1
+// §406: TEV_TYPE_* centralized in d/d_kankyo_ww.h (donor values verbatim).
 // Donor draw-prio slot absent -> the port's knob-door slot (the §27 stand-in's
 // choice; TP knob20 uses the same slot).
 #define fpcDwPi_KNOB00_e fpcDwPi_KNOB20_e
@@ -311,7 +310,25 @@ void daKnob00_c::setEventPrm() {
         m2C6 = 9;
     }
 
-    if (!checkArea(SQUARE(80.0f), SQUARE(110.0f), SQUARE(250.0f))) {
+    const bool areaOk = checkArea(SQUARE(80.0f), SQUARE(110.0f), SQUARE(250.0f)) != FALSE;
+#if TARGET_PC
+    // §379c H2 probe (change-only): per-door, does the donor area/angle gate
+    // ever PASS, and with what event index? A door whose gate never passes
+    // can never offer CANDOOR — its A-press falls to the doors-module
+    // fallback even with resolved indices (log 211755 'linkrm').
+    {
+        static u32 s_loggedPass = 0, s_loggedFail = 0;
+        const u32 bit = 1u << (fopAcM_GetParam(this) >> 8 & 0x1F);
+        u32& seen = areaOk ? s_loggedPass : s_loggedFail;
+        if (!(seen & bit)) {
+            seen |= bit;
+            DuskLog.info("[Knob00] §379c setEventPrm gate {} m2C6={} evIdx={} room={} ry={}",
+                         areaOk ? "PASS" : "fail", (int)m2C6, (int)mEventIdx[m2C6],
+                         (int)fopAcM_GetRoomNo(this), (int)shape_angle.y);
+        }
+    }
+#endif
+    if (!areaOk) {
         offFlag(4);
     } else {
         eventInfo.setEventId(mEventIdx[m2C6]);
@@ -413,6 +430,27 @@ BOOL daKnob00_c::openProc(int arg1) {
             } else {
                 mDoGph_gInf_c::fadeOut(0.05f, g_blackColor);
             }
+#if TARGET_PC
+            // ================================================================
+            // §379b warp seam — in vanilla WW this fade covers the warp: Link
+            // crosses the door's exit-attributed DZB poly and the engine fires
+            // dStage_changeSceneExitId → SCLS row → setNextStage while black.
+            // The hosted stages don't carry the SCLS bake yet, so the port's
+            // destination resolver issues the SAME native setNextStage call at
+            // the donor's own moment. The SCLS/exit-poly bake retires this
+            // block (and only this block — the fade above stays donor).
+            // ================================================================
+            // §399 fence: fire ONLY while OUR door event is the running event.
+            // Log 094033: a killed B_OPEN left this anim to finish later and
+            // the late seam warped a STALE exit during tale_1 (first-arm-wins
+            // hijack → the tale's own warp no-op'd → black screen).
+            if (mDoorKey[0] != '\0') {
+                const char* re399 = dComIfGp_getEventManager().getRunEventName();
+                if (re399 != NULL && std::strncmp(re399, "DEFAULT_KNOB_DOOR_", 18) == 0) {
+                    dExtNpcDoors_tryNativeWarp(this, /*openAlreadyDone=*/true);
+                }
+            }
+#endif
         }
     }
 
@@ -455,9 +493,15 @@ void daKnob00_c::openEnd() {
     // resolver takes over here, same call the stand-in made at its demo end.
     // Unstamped (DZR-native) doors: donor-pure, no warp.
     // ========================================================================
+    // §399 fence (see openProc seam): a stamped door whose event was killed
+    // finishes its anim LATER — this late warp hijacked the tale's arm
+    // (log 094033). Warp only while OUR door event is the running event.
     if (mDoorKey[0] != '\0') {
-        DuskLog.info("[Knob00] §329 native openEnd → warp key='{}'", mDoorKey);
-        dExtNpcDoors_tryNativeWarp(this, /*openAlreadyDone=*/true);
+        const char* re399 = dComIfGp_getEventManager().getRunEventName();
+        if (re399 != NULL && std::strncmp(re399, "DEFAULT_KNOB_DOOR_", 18) == 0) {
+            DuskLog.info("[Knob00] §329 native openEnd → warp key='{}'", mDoorKey);
+            dExtNpcDoors_tryNativeWarp(this, /*openAlreadyDone=*/true);
+        }
     }
 }
 
@@ -1034,12 +1078,14 @@ BOOL daKnob00_c::draw() {
     }
 
     if (getShapeType() == 5) {
-        g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+        dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
     } else {
-        g_env_light.settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+        dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
     }
 
-    g_env_light.setLightTevColorType(mpModel2, &tevStr);
+    dKyWw_setLightTevColorType(mpModel2, &tevStr);
     J3DModelData* modelData = mpModel->getModelData();
     mBckAnm.entry(modelData);
     mpModel->calc();

@@ -41,6 +41,7 @@
 #include "d/d_ext_npc_mount.h"            // §327 DN-3 parse-at-consume model resolver
 #include "d/d_ext_ww_actor_shims.h"       // §327 AT_TYPE_* / cCcD_* / dCcG_* WW values
 #include "dusk/logging.h"                 // §327 retail-assert fallbacks log instead of panicking
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §327 ========================================================================
 // WW-absent VALUE-FAITHFUL constants (donor numbering; toripost §253 pattern —
@@ -368,8 +369,9 @@ bool daObjMshokki_c::_execute() {
 
 /* 00000E24-00000E84       .text _draw__14daObjMshokki_cFv */
 bool daObjMshokki_c::_draw() {
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(mModel, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(mModel, &tevStr);
     mDoExt_modelUpdateDL(mModel);
     return true;
 }

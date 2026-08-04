@@ -54,6 +54,7 @@
 #include "m_Do/m_Do_audio.h"            // §254 mDoAud_seStart
 #include "d/d_vibration.h"              // §254 dComIfGp_getVibration().StartShock
 #include "JSystem/J3DGraphAnimator/J3DJoint.h"  // §254 J3DJoint (node callbacks J3DNode*->J3DJoint*)
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §254 VERSION_SELECT(demo,us,pal,jp) — the port has no such macro; the port build
 //   is the US/retail path, so select the US argument (index 1). Keeps donor
@@ -2614,8 +2615,10 @@ BOOL daNpc_Zl1_c::_draw() {
         return TRUE;
     }
 
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(pModel, &tevStr);
+    // §405: WW feeder — receiver settingTevStruct + donor tevstr TevColor/TevKColor
+    // tail (TP never writes those fields on the actor path; §404's copy read black).
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(pModel, &tevStr);
 
     // §254 render recipe #2/#13 (Aryll precedent): the port split McaMorf
     //   updateDL() into modelCalc()->entryDL(); modelCalc() MUST precede the face
@@ -2634,7 +2637,7 @@ BOOL daNpc_Zl1_c::_draw() {
     mBtpAnm.remove(modelData);
 
     if (mpModel != NULL) {
-        g_env_light.setLightTevColorType(mpModel, &tevStr);
+        dKyWw_setLightTevColorType(mpModel, &tevStr);
         mDoExt_modelEntryDL(mpModel);
     }
 

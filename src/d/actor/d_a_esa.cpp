@@ -16,11 +16,12 @@
 #include "f_op/f_op_actor_mng.h"
 #include "d/d_ext_ww_actor_shims.h"
 #include "d/d_ext_npc_mount.h"  // §224 dExtNpcMount_acquireModelData (mod arc)
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 #define ESA_NO_WATER (-1.0e30f)  // §224 matches dBgS_GetWaterHeight shim (was -G_CM3D_F_INF)
 
 static BOOL daEsa_Draw(esa_class* i_this) {
-    g_env_light.setLightTevColorType(i_this->mpModel, &i_this->tevStr);
+    dKyWw_setLightTevColorType(i_this->mpModel, &i_this->tevStr);
     mDoExt_modelUpdateDL(i_this->mpModel);
     return true;
 }
@@ -175,7 +176,8 @@ static BOOL daEsa_Execute(esa_class* i_this) {
     cMtx_ZrotM(*calc_mtx, i_this->current.angle.z);
     i_this->mpModel->setBaseTRMtx(*calc_mtx);
 
-    g_env_light.settingTevStruct(0x40, &i_this->current.pos, &i_this->tevStr);
+    // §406 deviation corrected: 0x40 was a TP type; donor d_a_esa.cpp:208 authors TEV_TYPE_ACTOR.
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &i_this->current.pos, &i_this->tevStr);
     return true;
 }
 

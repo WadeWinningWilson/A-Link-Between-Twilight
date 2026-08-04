@@ -19,6 +19,7 @@
 #include "res/Object/Kb.h"
 #include "d/d_vibration.h"
 #include "d/d_drawlist.h"  // §226 dDlst_shadowControl_c::getSimpleTex() (port setShadow tail arg)
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // Several functions use the same joint index for the tail on both the normal and big pig models
 // Because of this, PG_JNT_J_PG_TAIL_e *must* match the value of PG_BIG_JNT_J_PG_TAIL_e
@@ -537,7 +538,8 @@ static BOOL daKb_Draw(kb_class* i_this) {
     fopAc_ac_c* actor = (fopAc_ac_c*)&i_this->actor;
 
     J3DModel* pModel = i_this->mpMorf->getModel();
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &actor->current.pos, &actor->tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &actor->current.pos, &actor->tevStr);
     J3DModelData* pModelData = pModel->getModelData();
     dExtKb_setTexNoAnimator(pModelData, i_this->m500, i_this->mpTexNoAnm);
     if(i_this->m500) {  // §229 DN-3: RAW-btp guard (m500 NULL'd in tex_anm_set)
@@ -551,7 +553,7 @@ static BOOL daKb_Draw(kb_class* i_this) {
     i_this->mTevStr.TevKColor.r = actor->tevStr.TevKColor.r + (0x78 - actor->tevStr.TevKColor.r) * i_this->m4B0;
     i_this->mTevStr.TevKColor.g = actor->tevStr.TevKColor.g + (-actor->tevStr.TevKColor.g) * i_this->m4B0;
     i_this->mTevStr.TevKColor.b = actor->tevStr.TevKColor.b + (-actor->tevStr.TevKColor.b) * i_this->m4B0;
-    g_env_light.setLightTevColorType(pModel, &i_this->mTevStr);
+    dKyWw_setLightTevColorType(pModel, &i_this->mTevStr);
     // §229 render fix: the donor's mDoExt_McaMorf::updateDL() bundled joint-calc + entry.
     // The port SPLIT it: play() (called in Execute) only does frameUpdate — the joint calc
     // lives in modelCalc() (setFrame + setMtxCalc + model->calc). The pig only had entryDL,

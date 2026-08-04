@@ -40,6 +40,7 @@
 #include "string.h"
 #if TARGET_PC
 #include "dusk/logging.h"
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 #endif
 
 // ============================================================
@@ -554,8 +555,9 @@ BOOL daWwDemo00_c::actLeaving(dDemo_actor_c* act) {
 // ============================================================
 BOOL daWwDemo00_c::draw() {
     if (mModel.mpModel != NULL) {
-        g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
-        g_env_light.setLightTevColorType(mModel.mpModel, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+        dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+        dKyWw_setLightTevColorType(mModel.mpModel, &tevStr);
 
         // §271 modelCalc first (base matrix real + tex pattern reset).
         if (mModel.mpMorf != NULL) {

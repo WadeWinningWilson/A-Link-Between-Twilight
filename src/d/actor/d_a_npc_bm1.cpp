@@ -39,6 +39,7 @@
 #include "d/actor/d_a_player.h"        // §246 daPy_py_c / getLinkPlayer()->current.pos
 #include "d/d_demo.h"                  // §246 dDemo_actor_c / dDemo_setDemoData
 #include "d/d_bg_s.h"                  // §246 dBgS_GetGndMtrlSndId_Func (dDemo_setDemoData arg)
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §246 DEMO_SELECT collapses to the retail argument in this port (VERSION > DEMO).
 #ifndef DEMO_SELECT
@@ -3872,8 +3873,10 @@ BOOL daNpc_Bm1_c::_draw() {
         return TRUE;
     }
 
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(morf_model, &tevStr);
+    // §405: WW feeder — receiver settingTevStruct + donor tevstr TevColor/TevKColor
+    // tail (TP never writes those fields on the actor path; §404's copy read black).
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(morf_model, &tevStr);
 
     switch (mType) {
         case TYPE_Akoot_e:
@@ -3896,9 +3899,9 @@ BOOL daNpc_Bm1_c::_draw() {
     mHeadBtpAnm.entry(model_data, mBlinkFrame);
     mpHeadMorf->entryDL();
     mHeadBtpAnm.remove(model_data);
-    g_env_light.setLightTevColorType(model, &tevStr);
+    dKyWw_setLightTevColorType(model, &tevStr);
     if (mbHasArms) {
-        g_env_light.setLightTevColorType(mpArmMorf->getModel(), &tevStr);
+        dKyWw_setLightTevColorType(mpArmMorf->getModel(), &tevStr);
 
         J3DMaterialTable* mattable;
         switch (mType) {
@@ -3921,23 +3924,23 @@ BOOL daNpc_Bm1_c::_draw() {
         }
 
     } else {
-        g_env_light.setLightTevColorType(mpWingMorf->getModel(), &tevStr);
+        dKyWw_setLightTevColorType(mpWingMorf->getModel(), &tevStr);
         mpWingMorf->entryDL();
     }
     if (mpBinderModel) {
-        g_env_light.setLightTevColorType(mpBinderModel, &tevStr);
+        dKyWw_setLightTevColorType(mpBinderModel, &tevStr);
         mDoExt_modelEntryDL(mpBinderModel);
     }
     if (mpBagModel) {
-        g_env_light.setLightTevColorType(mpBagModel, &tevStr);
+        dKyWw_setLightTevColorType(mpBagModel, &tevStr);
         mDoExt_modelEntryDL(mpBagModel);
     }
     if (mpKnifeModel) {
-        g_env_light.setLightTevColorType(mpKnifeModel, &tevStr);
+        dKyWw_setLightTevColorType(mpKnifeModel, &tevStr);
         mDoExt_modelEntryDL(mpKnifeModel);
     }
     if (mpStickModel) {
-        g_env_light.setLightTevColorType(mpStickModel, &tevStr);
+        dKyWw_setLightTevColorType(mpStickModel, &tevStr);
         mDoExt_modelEntryDL(mpStickModel);
     }
 

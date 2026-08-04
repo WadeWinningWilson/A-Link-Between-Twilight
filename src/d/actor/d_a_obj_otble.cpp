@@ -32,6 +32,7 @@
 #include "m_Do/m_Do_ext.h"                // mDoExt_J3DModel__create / modelUpdateDL
 #include "d/d_ext_npc_mount.h"            // §329 DN-3 parse-at-consume model resolver
 #include "d/d_ext_ww_actor_shims.h"       // §329 fopAcStts_NOCULLEXEC_e
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §329 #5: donor draw-prio slot absent -> port E_RD slot (lamp/toripost precedent).
 #define fpcDwPi_OBJ_OTBLE_e fpcDwPi_E_RD_e
@@ -70,8 +71,9 @@ BOOL daObj_Otble::Act_c::_draw() {
         return TRUE;
     }
 
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(mModel, &tevStr);
+    // §406: WW feeder (donor type) — see d_kankyo_ww.h; TP never writes TevColor/TevKColor.
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(mModel, &tevStr);
 
     dComIfGd_setListBG();
     mDoExt_modelUpdateDL(mModel);

@@ -51,6 +51,7 @@
 #include "f_op/f_op_msg_mng.h"         // §244 fopMsgM_getScopeMode/forceSendOn/... (§245 scope funcs)
 #include "f_op/f_op_camera_mng.h"      // §244 camera_process_class (full type for demo camera)
 #include "JSystem/J3DGraphAnimator/J3DJoint.h"  // §244 J3DJoint (node callbacks: J3DNode*->J3DJoint*)
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §244 DEMO_SELECT collapses to the retail argument in this port (VERSION > DEMO).
 #ifndef DEMO_SELECT
@@ -2368,9 +2369,11 @@ BOOL daNpc_Ls1_c::_draw() {
         return TRUE;
     }
 
-    g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
-    g_env_light.setLightTevColorType(morf_model_p, &tevStr);
-    g_env_light.setLightTevColorType(model_p, &tevStr);
+    // §405: WW feeder — receiver settingTevStruct + donor tevstr TevColor/TevKColor
+    // tail (TP never writes those fields on the actor path; §404's copy read black).
+    dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
+    dKyWw_setLightTevColorType(morf_model_p, &tevStr);
+    dKyWw_setLightTevColorType(model_p, &tevStr);
 
     // §244 render (recipe #2): the port split donor updateDL() into
     // modelCalc()->setList()->entryDL(). setMtx()'s mpMorf->calc() is only the
@@ -2391,7 +2394,7 @@ BOOL daNpc_Ls1_c::_draw() {
     mDoExt_modelEntryDL(model_p);
 
     if (mpTelescopeModel) {
-        g_env_light.setLightTevColorType(mpTelescopeModel, &tevStr);
+        dKyWw_setLightTevColorType(mpTelescopeModel, &tevStr);
         mDoExt_modelEntryDL(mpTelescopeModel);
     }
 
