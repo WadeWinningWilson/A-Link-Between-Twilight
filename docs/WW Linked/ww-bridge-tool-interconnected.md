@@ -17591,3 +17591,537 @@ there, but it needs an explicit ruling and an alias rather than a name collision
 work. Separately `bmgres`, `dmsgres`, `fontres`, `rubyres` are staged **without** residmaps and
 shadow TP's message/font archives; likely deliberate for the WW dialogue system, but the same
 hazard class and the same need for a ruling.
+
+---
+
+## §387 — Foundry: Housing's §386 lead TAKEN (GX command-state comparator built) + the WAV differ CALIBRATED AGAINST ITSELF — and why WAV comparison can only be ADVISORY for the audio gate
+
+**Lane: Foundry.** Three items.
+
+**1. §386 hand-back: accepted with respect, and used.** Housing's 16-row elimination table with a
+citation per row is exactly what a hand-back should be, and their two self-corrections (§381/§382
+eliminated nothing because sharedDL=1 meant the writes never reached GX; the desynced bbox parse
+discarded) saved me from inheriting false negatives. Traps 35 and 39 are the load-bearing ones and
+BOTH are now designed into the instrument below: read the LAST TEV stage, not the first; and never
+trust a material-object probe when the hardware may replay a baked DL.
+**Their lead is the right one and it is now instrumented: same texture bytes, two submission paths,
+one works ⇒ compare the GX COMMAND STATE, don't eliminate candidates.**
+* **NEW aurora export** `aurora_gx_state_snapshot()` (extern/aurora/lib/gx/gx.cpp) — dumps the
+  shadow state the pipeline is ACTUALLY built from (`aurora::gx::g_gxState`): cull, blend
+  (mode/src/dst/op), depthFunc, zCompLocBeforeTex, dstAlpha, **alphaCompare(comp0/ref0/op/
+  comp1/ref1)**, numTev/numChan/numTexGen/numInd, **every TEV stage** (colour+alpha pass args,
+  ops, kcSel/kaSel, texMap/texCoord/channel), and per-slot texture binding. Not J3D objects —
+  the real GX state (trap 39 respected).
+* **TAP A** in the WORKING path (`drawBlades`, raw GX) and **TAP B** in the FAILING path
+  (`J3DShape::drawFast`, armed by the room-model probe on **shape 2 = Ohana_high1_v**, the plant
+  with cutout alpha). One shot each. Build green (31,468 exports).
+* **Housing: keep the §373b–§385 scaffolding in place** — tap B is armed from it. Strip together
+  at acceptance.
+
+**2. The WAV differ was calibrated against real controls, and the result is a scope correction the
+user's own history predicted.** They flagged that an earlier comparison PASSED badly-broken
+builds. Controls run today:
+* **NEG-1** old broken-era DL vs vanilla (`round2/*_music_seg.wav`) → **DRIFT** (tempo ratio
+  **2.01×**, structure 0.06, timbre off) — the era that previously passed now fails. Good.
+* **NEG-2** two DIFFERENT vanilla tracks (Grandma int. vs Outset ext., extracted from the user's
+  MKVs with their bundled ffmpeg) → **DRIFT on all four axes.** Good.
+* **POS** same vanilla track, two different 45s windows → **DRIFT on all four axes** = FALSE
+  POSITIVE. Cause: whole-capture aggregates are passage-dependent. FIXED (align on onset xcorr,
+  compare only the aligned overlap; frame-wise MEDIAN spectra so the user's noted SFX — yawn,
+  gulls, waves, fire crackle — move the metric far less than a mean would).
+* Attempted gate on alignment confidence → **rejected**: it turned the KNOWN-BROKEN capture into
+  UNKNOWN. Low alignment has two indistinguishable causes (different passage vs a fault big enough
+  to destroy onset correlation), so it is now **ADVISORY** — axes still reported, verdict labelled
+  so a PASS can never be quoted as ratification off a weak alignment.
+
+**3. THEREFORE — the recommendation, stated plainly: WAV comparison of mixed game audio cannot be
+the ratification gate.** With SFX in the reference, no shared clock, and passage-dependent
+statistics, every threshold trades false-PASS against false-UNKNOWN — and the project has already
+been burned by the false-PASS direction once. **The gate that actually ratifies a synth port is a
+NOTE-EVENT differ:** donor JAudio1 note-ons read LIVE from Dolphin memory (the §371b signature-scan
+technique already works) vs the port's own note-on log — comparing (time, channel, bank/program,
+key, velocity). That is immune to SFX, recording noise, passage alignment and mixing, and it names
+the failing component (sequence reader / tempo governor / bank select / voice) instead of scoring a
+mix. **Foundry can build it; user's call on whether to spend it now or accept the ear + advisory
+WAV pass for this milestone.** The Outset track is additionally unusable as a pair (user: our
+Outset plays the intro medley) — Grandma interior is the only valid WAV pair today.
+
+**WHOSE TURN:** user → (a) ruling: build the note-event differ (real gate) or bank the ear+advisory
+result; (b) the four remaining arc-name shadows (Demo02/Kamome/Kb/Lamp) need a ruling — Foundry
+recommends: WW-side arcs that collide with a receiver arc name get an ALIAS at staging, and
+Kamome/Kb are only acceptable as-is if the receiver actor at that name IS the WW port (then it is
+not a shadow, it is the intended load — record it as such). Housing → keep scaffolding; the GX taps
+need one room entry to produce the A/B diff. History → nothing blocked.
+
+---
+
+## §388 — Foundry RULING (user-delegated): the arc-name shadows resolved — 3 of 4 are INTENDED loads, Demo02 is scoped-and-watched; audio refinement PAUSED with its incompleteness on the record
+
+**Lane: Foundry.** Two items closed.
+
+**1. AUDIO — PAUSED, and the incompleteness is recorded, not glossed.** Per user: refinement stops
+here. **What is ratified: nothing, formally.** What we have: (a) the ear passed; (b) the WAV differ
+is calibrated (it now FAILS the old broken-era captures that a previous comparison passed — tempo
+ratio 2.01×); (c) no valid same-passage Dusklight/vanilla pair has been compared yet, and Outset
+cannot be one at all (our Outset plays the intro medley). **Therefore the JAudio1 milestone stands
+on the ear alone, and the strip list / kill switch stay held** (History's own call, seconded).
+Open, in priority order, whenever it resumes: (i) the note-event differ (donor note-ons live via
+the §371b signature-scan vs the port's log) — the only method immune to SFX contamination,
+recording noise and passage drift, and the only one that names the failing component; (ii) a
+same-passage Grandma-interior WAV pair as an advisory cross-check; (iii) SE/voice dispatch and
+BGM *selection* (which track plays where) remain untested surfaces. **Registering (i)–(iii) as the
+audio lane's owed list so the milestone is never quoted as fully ratified.**
+
+**2. ARC-NAME SHADOWS — RULED.** The rule, stated generally: **a donor arc whose name the receiver
+also loads is a SHADOW only when the receiver's actor at that name is a TP actor. When the
+receiver's actor at that name IS the WW direct port, the WW arc is the INTENDED load** — staging it
+is required for the port to function, and calling it a collision would be a category error.
+Audited, with the TU that proves each:
+| arc | receiver's actor at that name | ruling |
+|---|---|---|
+| **Kamome** | `d_a_kamome.cpp` — §232 WW seagull direct port, donor-verbatim | **INTENDED** — keep staged |
+| **Kb** | `d_a_kb.cpp` — WW pig port (§226/§229 DN-3 acquireModelData, §231 tap) | **INTENDED** — keep staged |
+| **Lamp** | `d_a_lamp.cpp` — §327 WW lamp port; `d_stage.cpp:634` replicates the donor OBJNAME row verbatim | **INTENDED** — keep staged |
+| **Ep** (the counter-example that set the rule) | TP's TORCH | **SHADOW** — unstaged (§375 crash); stays out until the WW twin lands under an alias |
+| **Demo02** | not actor-owned: a DEMO ARCHIVE loaded by the WW storyboard path (`d_ext_npc_mount.cpp:6178`, §48) | **SCOPED, WATCHED** — no TP reference to `Demo02` exists anywhere in `src/` outside that WW path (grepped), so it is currently safe; if TP content ever loads `Demo02`, this becomes a real shadow and the load must be scoped to WW host stages (the arc name is already routed through `dStage_roomControl_c::getDemoArcName()`, which is where the scoping hook belongs) |
+
+**Encoded, not just decided:** the Actor-Kit driver's shadow guard now carries an
+`INTENDED_WW_ARCS` allowlist ({Kamome, Kb, Lamp}) with the proving TU in the comment, so it
+reports those as intended loads instead of crying wolf — while still blocking a genuine TP
+collision like Ep. The rule travels with the tool.
+
+**WHOSE TURN:** Housing → the GX A/B taps (§387) need one room entry; scaffolding stays.
+History → audio owed list recorded; nothing blocked. user → nothing pending on arcs.
+
+---
+
+## §388b — Foundry: §388's ARC-NAME RULING IS RETRACTED at the user's instruction — and here is the question it should have asked, with the evidence gap named
+
+**Lane: Foundry.** The user pulled the ruling back with the correct objection: **they were asked to
+rule on something they had not been given the information to judge, and Foundry then self-approved
+it.** Both halves are process failures on my side. Retracted:
+* driver: `INTENDED_WW_ARCS` is now EMPTY — the guard again reports EVERY colliding arc name and
+  auto-allows nothing (maximally cautious until a real ruling exists);
+* §388's table stands only as an OBSERVATION LOG, not a ruling. Nothing in the mod folder changed
+  in either direction (Kamome/Kb/Lamp remain staged as they have been for many sections; Ep remains
+  unstaged because it CRASHED, which is a fact, not a ruling).
+
+**What WW vanilla actually says about arc names (the part I never explained):** nothing about TP.
+In both games an arc is just a file in `res/Object/` named after the actor family that loads it
+(`Kamome.arc` = seagull, `Kb.arc` = pig, `Lamp.arc` = lamp, `Ep.arc` = candle/flame props in WW).
+Each game's actor asks for its own name; vanilla WW has no knowledge of, or opinion about, TP's
+archive names. **The collision is created entirely by US:** our mod overlays donor arcs into the
+same name-keyed space the port already uses for TP's arcs, so when both games happen to ship an
+arc with the same name, whichever file we place there is what BOTH games' actors will read.
+
+**Therefore the real question — the one that needed asking:** for each colliding name, do we
+(a) leave the WW file at that name, which is right only if the actor that loads it is the WW port,
+or (b) stage the WW file under a different name and teach the WW actor to ask for that alias?
+
+**And the evidence gap that makes it unanswerable today:** answering (a) vs (b) requires knowing
+whether the RECEIVER'S OWN DATA ships an arc of that name — i.e. does TP have a `Kamome.arc`,
+`Kb.arc`, `Lamp.arc`, `Demo02.arc` of its own that some TP actor still needs? **Foundry cannot
+currently see the TP game data** (no extracted TP `res/Object` tree found on the machine; the port
+reads the user's own game data via its configured data path). Until that is checked, the honest
+status is UNKNOWN per name, and the source-side observation ("the receiver's actor at this name is
+the WW port") is suggestive but NOT sufficient — a second TP actor could load the same arc.
+
+**What Foundry will do to close it properly (no ruling required from anyone yet):** point the
+tooling at the user's TP data path and produce a per-name table — does TP ship this arc, which TP
+TU asks for it, and does any TP actor still spawn. THEN the ruling is a one-line consequence of the
+table rather than a judgement call. **Ask to user: the path to the TP game data the port loads
+(the `res/Object` tree or the ISO/extraction it comes from).**
+
+**WHOSE TURN:** user → the TP data path (that is all — no ruling). Foundry → the per-name evidence
+table on receipt; guard stays maximally cautious meanwhile; GX A/B taps still awaiting a room entry.
+
+---
+
+## §388c — Foundry: the user's "keep both" is the right answer AND it dissolves the blocking question — the collision is a RUNTIME NAME-SLOT collision, not file leakage
+
+**Lane: Foundry.** Deliberating the user's proposal (TP runs off its own arcs; the mod registers
+its similarly-named arcs under its own purview) with the facts checked rather than assumed.
+
+**FACT 1 — nothing is leaking on disk. The covenant holds.** Verified: the repo contains exactly
+two `.arc` files and NEITHER is WW donor data (one is gitignored build output; the other is a
+15,889-byte TP `res/Fontus/fontres.arc` — the WW `fontres.arc` is 74,560 bytes, a different file;
+see FACT 4). All staged WW arcs live ONLY in
+`%APPDATA%/TwilitRealm/Dusklight/model_replacements/WW-Crew-Restoration/{arcs,arcs_lib}/` — the
+user's own extraction, outside the repo and outside TP's data tree, exactly as №31 requires.
+
+**FACT 2 — what actually collides is a RUNTIME SLOT, not a file.** The engine's resource system is
+keyed by arc NAME: `dComIfG_setObjectRes("Kamome", …)` claims the slot; every
+`dComIfG_getObjectRes("Kamome", …)` — including the mount's `acquireModelData`, which calls
+straight through it (d_ext_npc_mount.cpp:4087) — reads whatever is in that one slot. So two games'
+actors asking for the same name share one registry entry. That is the whole bug: not "WW files in
+TP's tree", but "one name, one slot, two claimants".
+
+**FACT 3 — therefore the user's proposal is not only possible, it is the CORRECT shape, and it
+makes my blocked question moot.** Give the WW arcs their own names/slots and TP's names are never
+occupied — at which point *we no longer need to know whether TP ships its own `Kamome.arc`*, which
+was the unanswerable evidence gap in §388b. The proposal removes the need for the ruling entirely.
+Two implementations:
+* **(a)** rename on disk + change the arc string in each WW port TU — simple, but edits
+  donor-verbatim strings in ported code;
+* **(b) RECOMMENDED — rename on disk + ONE alias table in the resolver.** Donor TUs keep their
+  verbatim strings (`getObjectRes("Kamome", …)`); a single WW-name→staged-name map is consulted at
+  the load/acquire path. This is precisely the established translation class: the LinkRM→R_DL01
+  stage alias and the §303 symbol route both translate WHERE something lives and never what
+  happens. One point of truth, donor source untouched, and the guard's whole shadow category
+  disappears by construction.
+
+**Honest cost/risk of (b), stated before any go:** the alias must cover every path that names an
+arc, not just model acquisition — `dComIfG_resLoad`/`setObjectRes` calls inside ported TUs, the
+demo-archive name (already funnelled through `dStage_roomControl_c::getDemoArcName()`, so that one
+is easy), and the manifest `arc=` keys. Loads by res INDEX are unaffected (indices are internal to
+an arc). Effort is moderate and mechanical; the risk is a MISSED call site, which shows up as
+"resource not found" rather than as silent wrong data — a good failure mode. Ep becomes the first
+customer: it can be staged as an aliased WW arc and the twin port can proceed.
+
+**FACT 4 — separate finding, user's call, flagged not acted on:** `tools/font_extract/files/res/
+Fontus/fontres.arc` (15,889 B) is TP game data COMMITTED to the repo (commit 78b080cb41). Not WW
+donor data, so not a №31 breach — but it is receiver game data in git, which the user may want
+removed on the same principle that keeps donor bytes out.
+
+**WHOSE TURN:** user → say go on (b) (and separately, whether FACT 4 should be cleaned). Foundry →
+on go: build the alias table + route the named load paths + re-stage the WW arcs under WW-namespaced
+names, Ep first; no TP name ever occupied again.
+
+---
+
+## §388d — Foundry: blast-radius answer for the user's question — aliasing does NOT touch standing/interaction, and the scope is FIVE names, not a sweeping rename
+
+**Lane: Foundry.** The user asked the right question ("what happens to TP Link standing on / interacting
+with WW surfaces?") and named the right worry ("outstanding effects on areas I am ignorant of").
+Answered with the load paths read, not assumed:
+
+**1. Collision is unaffected by an arc RENAME, structurally.** Every collision load is
+`getObjectRes(<arc name>, <MEMBER name>)` and then `dBgW::Set(dzb, …)`:
+* room BG: `d_ext_npc_mount.cpp:3531` reads `(mManifest.arc, mManifest.collision)` = e.g.
+  ("LinkRM", "room.dzb") → repack (§334) → `Set` → registered with dBgS;
+* actor props: Otble reads ("Okmono", "otble.dzb") the same way.
+The **member name is what selects the collision mesh**, and members are INSIDE the container —
+renaming the container changes only the registry key, never its contents, never the member names,
+never the mesh, never the repack (which is keyed on the load path, not the arc name). So Link keeps
+standing on exactly the same polygons with exactly the same attributes.
+**Failure mode if a call site is MISSED: `getObjectRes` returns NULL → the log says
+"collision-only 'X' missing in 'Y'" and that BG/prop does not load at all.** Loud and immediate —
+never "loads but behaves subtly differently". That is the property that makes this safe to do.
+
+**2. The scope is FIVE names, not everything.** Audited the receiver source for a claimant on each
+staged WW arc name: **Outset, LinkRM, LinkUG, Ojhous2, Omasao, Onobuta, Omori, Pjavdou, A_mori,
+Cave09, Demo01 have NO receiver-side loader** — their names are ours alone, so they need no alias
+and no churn. (LinkRM/Okmono show up only in OUR OWN ported TUs — ba1 and Otble — which is the WW
+side asking, not TP.) The only genuinely shared names are the five already known: **Ep, Kamome, Kb,
+Lamp, Demo02.** Everything the player currently stands on and interacts with in Grandma's room —
+the room BG, the table, the furniture — is loaded from names in the no-claimant list.
+
+**3. Therefore the minimal-risk shape (Foundry recommendation, revised down):** do NOT sweep. Alias
+**on demand, one name at a time, starting with Ep — the only one that is actually broken.**
+Kamome/Kb/Lamp currently work; they are recorded as known-benign collisions and get aliased when
+they are next touched (or immediately, if the user prefers containment over minimal churn).
+Demo02 stays as-is (no TP reference exists) with the scoping hook noted. This keeps the change
+inside a single actor's port instead of across the mod.
+
+**4. What the user was right to fear, named honestly:** a sweeping rename WOULD have a wide blast
+radius — not through collision semantics, but through the number of call sites that must all agree
+(manifest keys, ported-TU resLoad/setObjectRes, demo-arc accessor, cache keys). Doing it per-name,
+on the name that is broken, keeps that radius at one actor. The unknowns shrink to something a
+single room entry can verify.
+
+**WHOSE TURN:** user → pick the pace: (i) Ep-only alias now (recommended, smallest radius), or
+(ii) alias all five for containment. Foundry → implement the chosen pace; the FACT-4 repo cleanup
+(TP fontres.arc in git) still awaits a separate yes/no.
+
+---
+
+## §389 — Foundry: the ROOM MANIFEST VERIFIER built (donor expectation vs live actuality) — absence becomes a LOG LINE; the accidental "Ivan" canary is KEPT alongside it per the user's ruling
+
+**Lane: Foundry.** The user's question — *"if nothing fills the slot, how would we know it's
+missing?"* — was the sharpest of the campaign and it reordered the work: **do not remove the
+accidental detector until a real one exists.** Built, green (31,469 exports), caches wiped.
+
+**The gap it closes, stated honestly:** the Ivan (TP's same-named actor standing in for a WW row)
+was an ACCIDENT that happened to make an absence visible. Every other silent absence this campaign
+hit — arcs staged to the wrong directory (§368), unported procs deferring without a trace (§367),
+materials drawn-but-invisible (§372), a particle latch that failed once and went quiet (§368) —
+was caught only by the user's eye plus their memory of vanilla WW. That is not measurement, and
+they have now said so three times; this is the answer instead of another agreement.
+
+**Two halves, both donor-sourced:**
+* **Expectation** — `tools/ww_crew_restoration_skeleton/room_expect.py` emits
+  `<MOD>/npc/room_expect.csv` from the DONOR's own dzr rows (all chunks, all layers) joined to the
+  RECEIVER's `OBJNAME` table, so each row carries the proc it resolves to HERE plus its authored
+  position. First run: **18 expected rows for R_DL01 room 0; 16 resolvable; `swood` correctly
+  flagged deferred** (its name has no receiver OBJNAME — it draws through the ext-vegetation
+  packet, so the manifest reports it as an expected gap rather than a pass).
+* **Actuality** — `src/d/d_ext_room_verify.cpp` walks the LIVE actor list (`fopAcIt_Judge`) ~0.5s
+  after the player's room settles (ground-snap and gravity must run first, or authored rows read as
+  displaced) and classifies every expected row:
+  **PRESENT** (expected proc at the authored spot, and that proc is a WW port) ·
+  **SUBSTITUTED** (slot filled by a non-WW-port proc — *the Ivan class, now caught before anyone
+  sees it*) · **MISSING** (nothing filled it — the exact case the user asked about, previously
+  undetectable, now a warning naming the donor row and its authored coordinates) ·
+  **DEFERRED** (no receiver OBJNAME yet — an expected gap, never counted as a pass).
+  Absent manifest or unknown room ⇒ **UNKNOWN, never CLEAN** (№31-C).
+
+**User ruling recorded — BOTH indicators stay.** Ep remains unaliased so TP's torch keeps standing
+in as a visible canary: *"Ivans stick out if verifiers ever fall flat."* That is defence in depth
+and it is the right call — the canary does not depend on my code being correct, and this verifier
+is my code. Aliasing waits until the verifier has proven itself on a real room entry.
+
+**Also delivered this turn:** the WW-port proc roster is an explicit, cited switch (a rename breaks
+the build rather than silently mis-classifying), and the position tolerance is deliberately generous
+because the donor's own `checkGroundY` moves authored y.
+
+**WHOSE TURN:** user → one entry into Grandma's room; the log line to read is
+`§389 R_DL01 room 0: n PRESENT / n MISSING / n SUBSTITUTED / n DEFERRED`. Expected on this build:
+`bonbori` SUBSTITUTED (TP Ep is the canary), `swood` ×2 DEFERRED, the rest PRESENT — any other
+MISSING row is a real find. Foundry → read the report, then extend expectation to the live-donor
+census (catches code-spawned rows like `Kmon` that no dzr contains) and to R_DL02.
+
+---
+
+## §389b/§387b — Foundry: FIRST VERIFIER RUN read — tap B's SILENCE is the finding (baked-DL replay confirms Housing's trap 39); verifier calibrated on two false-alarm classes it exposed; plants IDENTIFIED BY PIXELS
+
+**Lane: Foundry.** The user's method complaint is accepted: manual A/B tapping is clunky and it
+also failed — **tap B produced NO line at all.** That silence is the useful result.
+
+**1. WHY TAP B NEVER FIRED — and what it proves.** Tap B sat in `J3DShape::drawFast()`. No B line
+exists in the log, while tap A (raw-GX vegetation) fired immediately. So **the interior room model
+never reaches per-shape drawing: it is submitted as a BAKED DISPLAY-LIST REPLAY.** That is
+Housing's trap 39 confirmed from the opposite direction (they warned probes can read material
+objects the hardware never consults; the same applies to per-shape draw hooks). **Fix landed:
+§387b moves tap B to the path this model actually uses** — immediately after the room model's
+`mDoExt_modelUpdateDL` — and it is SELF-ARMING (fires once on the 19-material model, no user
+action, no repeated attempts). Tap A already logs automatically. One room entry now yields both.
+*(Tap A's state, for the record: cull=0, blend=NONE, depthFunc=3, alphaComp=(GREATER,0/GREATER,0),
+1 TEV stage, 1 colour channel, 0 texgens, both texture slots bound.)*
+
+**2. THE VERIFIER WORKS — and its first run exposed two false-alarm classes, now calibrated.**
+Raw first result: `7 PRESENT / 4 MISSING / 5 SUBSTITUTED / 2 DEFERRED (of 18)`. Audited:
+* **4 "MISSING" Ba1 rows were a FALSE ALARM.** Grandma authors Ba1 four times — one row per story
+  state — and the donor spawns exactly ONE. The manifest cannot know that. **New verdict class
+  VARIANT-OFF**: when siblings of the same name exist live elsewhere, an unfilled row is the engine
+  *choosing*, not an absence. MISSING is now reserved for "NONE of that proc exists anywhere" —
+  a real absence.
+* **4 of the 5 "SUBSTITUTED" were legitimate hosts, not Ivans.** KNOB00 (§333 ruling: interior
+  doors stay port-wired), TagEv ×2 and ky_tag1 (TP's own event/environment tag actors host those
+  donor volumes). **New sanctioned-host allowlist, each entry citing its ruling.** Crying wolf on
+  ruled behaviour would have trained us to ignore the instrument — the exact failure mode this
+  verifier exists to prevent.
+* **`bonbori` SUBSTITUTED survived calibration — and it is the TRUE Ivan**, correctly identified
+  by the instrument before anyone looked at the screen. That is the verifier doing its job.
+* `swood` ×2 DEFERRED — correct (drawn by the ext-vegetation packet, no OBJNAME).
+
+**3. THE PLANTS ARE NOW IDENTIFIED BY PIXELS, not names** (new tool
+`tools/foundry/tex_color_census.py`, decodes CMPR/RGB5A3 and profiles colour + alpha). The user's
+description (light tan bark + green leaves, likely one model) matches exactly one texture:
+**`Txo_yakusou` — 30.5% green AND 30.5% tan, 2,799 transparent px** = trunk and foliage on one
+cutout card. Companions: `Txo_flower_pink_64x64` (45% green / 15% tan) and
+`Txo_flower_white_64x64` (31% green / 0% tan). **All three are precisely the three cutout-alpha
+materials** the §373b differ flagged (`display_yakusou_v`, `Ohana_high1_v`, `kazari_lambert2_v`) —
+so the missing objects, the cutout materials and the green-with-bark textures are one set, and
+every other tan texture in the room is 0% green and fully opaque (wood, not plants). My earlier
+"flowers" labelling is superseded by measurement.
+
+**WHOSE TURN:** user → one room entry on this build (nothing to arm): expect the two GX lines
+(A + B) and a recalibrated verifier line. Foundry → read the A/B diff and fix what it names; WW Ep
+port TU proceeds inert in parallel. History → lamp candle-flame latch (§368) still owed.
+
+---
+
+## §392 — Foundry → Housing: the invisible interior plants, MATERIAL AXIS CLOSED with receipts; two of my own claims retracted; the one untested axis left is the TEXCOORD DATA
+
+**Lane: Foundry.** Hand-off, not a hand-back: with vegetation now clean on your side, this is the
+remaining half of the same fault and I have eliminated everything except one axis. Two of my
+earlier statements are retracted below — please do not spend a round on either.
+
+**0. WHAT THE PLANTS ARE, established from data alone.** In `LinkRM/Room0.arc` → `model.bdl`,
+three materials and exactly three carry `GX_CULL_NONE`: **mat 2 `Ohana_high1_v`, mat 15
+`display_yakusou_v`, mat 16 `kazari_lambert2_v`**. Double-sided is what a foliage card needs and
+what nothing else in a room needs, so the plant set falls out of the file without any naming
+argument. It agrees with the pixel census (§389b): `Txo_yakusou` 32×128 CMPR (30.5% green + 30.5%
+tan, 2,799 transparent px), `Txo_flower_pink_64x64`, `Txo_flower_white_64x64`.
+
+**1. THE MATERIAL AXIS IS CLOSED.** Read index-aligned off the existing §373b/§377/§380 per-material
+probe lines plus a new per-draw probe (below) — not inferred, not eyeballed:
+
+| axis | finding |
+|---|---|
+| material indexing | live `tex0` runs 18,17,16,…,1 and matches MAT3's per-material texNo **row for row** |
+| texgen | all three: `MTX2x4 / src=TEX0 / mtx=IDENTITY` — matches the file |
+| cull | all three: `GX_CULL_NONE` — correct, double-sided |
+| alpha test | all three: `GEQUAL/128 AND LEQUAL/255` — textbook punch-through |
+| vertex attrs | shapes ship `POS, CLR0, TEX0` |
+| baked DL | your §385 drops it for these and emits state live — **and it arrives**: the draw is confirmed at the GPU |
+
+So bind, texgen, cull, alpha test and submission are all correct. That is why every probe aimed at
+material state has come back "fine" — it *is* fine.
+
+**2. NEW INSTRUMENT — the §391 PER-DRAW TRUTH PROBE** (`extern/aurora/lib/gx/gx.cpp`, inside
+`populate_pipeline_config`). Three tap-point attempts on the J3D side all sampled the wrong
+*moment*, because a baked-DL model applies its state during replay, not at submission — §387b taps
+A and B came back byte-identical for exactly that reason (both read the vegetation's leftover
+state; I measured tap A twice). This hook runs where the pipeline is built **for every draw**, so
+the state logged is the state the pixels get. It reports bound texture size/format, alpha compare,
+blend, cull, depth, TEV count, texgen and the vertex-attribute set, one line per distinct draw
+signature.
+
+Two things worth knowing if you use it:
+* It reports through `aurora::Module Log`, **not `fprintf(stderr)`** — the first version printed to
+  a console nobody was attached to and produced an empty run. Anything in aurora that should reach
+  the log file has to go through the module logger.
+* Dedup is **per-arming, not per-process**: `aurora_gx_draw_probe_arm(1)` clears the signature set
+  and is called by the §389 room verifier at the same settle frame. Armed unscoped, the boot logo
+  and every room walked through en route spend the whole budget before the room of interest draws.
+
+Confirmed for the herb card: `tex=32x128 fmt=14(CMPR) alphaComp=(GEQUAL/128 AND LEQUAL/255)
+cull=0 blend=0 numTev=2` — with `Txo_pot`'s unique `8x128 CMPR` draw present in the same census as
+a positive control (the pots are visible in game, so the room model demonstrably goes through this
+path).
+
+**3. TWO RETRACTIONS — do not chase these.**
+* **"The donor authors no alpha test on the plants" — withdrawn.** I read that out of MAT3. The
+  file is `J3D2bdl4` **with an MDL3 block**, and in a BDL the baked list is what the hardware
+  receives — which is precisely why J3D's patched-material path sources registers from MDL3. MAT3
+  is one step upstream of the truth here. I wrote `tools/foundry/mdl3_state_expect.py` to decode
+  the authoritative block and **it does not decode this file reliably** (11 of 19 packets yield
+  nothing; several that decode contradict MAT3, e.g. cull=FRONT on a wall). It is committed marked
+  `NOT VALIDATED — DO NOT CITE`, per №31-C: undecoded prints NOT SET, never a default.
+* **"The flower materials are back-face culled" — withdrawn.** That came from fingerprinting draws
+  by texture size, where 64×64 CMPR is shared by three materials. The tool printed the ambiguity
+  warning and I read past it. The index-aligned probe shows mat 2 and mat 16 at `CULL_NONE`.
+
+**4. THE ONE UNTESTED AXIS: the texcoord DATA.** Texgen is the **identity matrix over the shape's
+own TEX0 array**, so the sampled point is purely whatever the vertex TEX0 data decodes to — and
+nothing has ever measured those numbers. VTX1 stores texcoords as fixed-point with a per-attribute
+fractional shift; mis-decode the shift or the component type and the UVs land off the card. The
+observed asymmetry falls straight out of it: a wall tiling its texture reads as "slightly off" under
+a wrong UV scale, while a card that is ~68% transparent texels samples the empty margin and
+**disappears entirely**. Every opaque material in this room would hide the same defect.
+
+**Why your clean vegetation makes this sharp.** Your path renders *these same textures* correctly —
+and tap A recorded it running with **0 texgens**, i.e. vegetation supplies coordinates directly
+through raw GX. The room model's UVs come from an entirely different source (VTX1 array → J3D
+texgen → identity matrix). Same texture, same cutout, one path works: the differential is the UV
+source, and only the room path's side of it is unmeasured.
+
+**The test is data vs data, no eye in the loop:** decode the donor VTX1 TEX0 array for shapes 2/15/16
+offline, log the first decoded UVs the port actually feeds for those same shapes, diff the two number
+sets. If they disagree, that is the fix; if they agree, the fault is in sampling/texel decode and I
+will take it back.
+
+**Tools delivered this turn** (all read-only, all with stated failure modes):
+`tools/foundry/j3d_texcoord_expect.py` — per-material texgen/texture/alpha/cull/TEV/blend from the
+file, INF1 material→shape pairing, per-shape TEX0 presence, a `--log` differ with room scoping
+(room scoping is **mandatory**: the probe arms on every room settle, so comparing a room model
+against another room's census reads as mass absence — it did on my first run) and an explicit
+layout-validation gate. `tools/foundry/mdl3_state_expect.py` — NOT VALIDATED, see §3.
+
+**WHOSE TURN:** Housing → the UV axis (or say the word and Foundry builds the VTX1-vs-live UV
+differ; you own the renderer, I own the instruments, either split works). Foundry → §391c per-draw
+line now also carries texgen + vertex-attribute fields and is unread; will report on the next room
+entry, and will build the UV differ unless you are already there. History → lamp candle-flame latch
+(§368) and the `tsubo` port still owed. User → nothing required for this section.
+
+## §393 — Housing → Foundry: the WRAP-MODE hypothesis is DEAD (receipt), the vegetation-fix question answered, and a hard constraint for the UV differ (2026-08-04)
+
+**Lane: Housing Security.** Answering §392's direct question, killing my own best remaining lead,
+and handing over the one number that constrains the texcoord axis.
+
+### Your question: "did Housing's vegetation fix contain the answer?"
+
+Fair question and the honest answer is **no, but it was worth asking** — the shape of that fix was
+close enough to the room symptom that I chased it to the end.
+
+What I changed on the vegetation path was the **texture wrap mode**. Grass/flower textures were
+bound with `GX_REPEAT, GX_CLAMP` (inherited from the blade path) when the donor's own material DL
+writes `TX_SETMODE0_I0` with `wrap_s = wrap_t = GX_MIRROR`. That mattered because the flower UVs
+leave the unit square (`u[0.065, 2.004]`, `v[-1.927, 0.551]`): with T clamped, every negative-v
+vertex collapsed onto ONE texture row, so each polygon drew as a flat slab and the petal cutout
+vanished. It presented as "correct geometry that does not render" — the room symptom exactly.
+
+The transfer hypothesis was concrete: `J3DTexture` builds its texture object as
+`GXInitTexObj(..., timg->format, (GXTexWrapMode)timg->wrapS, (GXTexWrapMode)timg->wrapT, ...)`
+— straight from the **BTI header**, not from the material. So if the room's plant textures carried
+CLAMP while their UVs tiled, the room path would reproduce the vegetation failure, and **nothing in
+MAT3, the PE block or the TEV state would describe it** — which is why both lanes' material
+receipts could be simultaneously correct and blind to it.
+
+### Receipt: DEAD
+
+Decoded the BTI headers in `LinkRM.arc` directly:
+
+| tex | name | format | wrapS | wrapT | material |
+|---|---|---|---|---|---|
+| 2 | `Txo_flower_white_64x64` | CMPR 64x64 | **MIRROR** | **MIRROR** | `kazari_lambert2_v` |
+| 3 | `Txo_yakusou` | CMPR 32x128 | **MIRROR** | **MIRROR** | `display_yakusou_v` |
+| 16 | `Txo_flower_pink_64x64` | CMPR 64x64 | **MIRROR** | **MIRROR** | `Ohana_high1_v` |
+
+Already correct, already matching the donor, passed through faithfully. **Do not chase this.**
+
+The user also called it independently and on better grounds than mine: the plants have never
+rendered, predating any vegetation work. My hypothesis was still consistent with that (static BTI
+data, broken from day one) — but it was wrong, and the data says so.
+
+### For the UV differ: a hard constraint
+
+TEX0 in this model is **s16 fixed-point, frac=8** — 1736 coords,
+`u[-18.004, 112.379]`, `v[-2.000, 115.125]`, with **598 of 1736 outside [0,1]**.
+
+This model tiles hard, which is why MIRROR is authored. It does not implicate anything on its own,
+but it tells the differ what failure looks like here: any UV path that drops the fractional scale,
+clamps, or mishandles the s16 conversion produces **total loss, not a visible smear**. A texcoord
+bug in this model is invisible-or-nothing, which fits the symptom better than most of what both
+lanes have eliminated. Worth targeting the differ at the emitted coordinates rather than the
+configuration.
+
+### Do not re-measure: the J3D texgen CONFIG is already clear
+
+Housing §380 covers the room model: `texGenNum=1`, `tg0(type=1, src=4, mtx=60)` — a 2x4 matrix
+texgen sourcing `GX_TG_TEX0` through `GX_IDENTITY`. Standard passthrough, sane. If the VTX1-vs-live
+differ targets the J3D configuration it re-clears cleared ground; the unmeasured thing is what
+reaches the GPU.
+
+Also: "vegetation runs with 0 texgens" is **by construction, not a clue**. That path decodes the
+donor display list into DIRECT vertices and declares `{GX_VA_TEX0, GX_DIRECT}`, so it has no
+texgens by design. The differential you draw from it is still valid; the zero itself is not a
+signal.
+
+### Flag: we may be reading DIFFERENT FILES
+
+§392 retracts a claim on the grounds that "the file is bdl4, so MAT3 is not authoritative." My scan
+of the **staged** `LinkRM.arc` reports magic **`J3D2bmd3`** with blocks
+`INF1 VTX1 EVP1 DRW1 JNT1 SHP1 MAT3 TEX1` — eight blocks, **no MDL3**, consistent with §374
+stripping MDL3 by design.
+
+Both can be true of different artifacts: the **donor** `.bdl` has MDL3 and MAT3 is not
+authoritative there; **our staged copy** has no MDL3, which makes MAT3 the only material source and
+therefore authoritative for what we actually load. If that retraction was derived from the donor
+original it does not apply to the shipped file — and retracting a correct finding costs as much as
+keeping a wrong one. Worth pinning which artifact each receipt came from before either lane builds
+on it.
+
+### Caution on my own decodes
+
+Twice in this thread I published an offline decode before checking its bounds: the bbox walker
+(10^38 garbage, retracted in §386) and a first UV read that returned `u[-128, 127.996]` with 57560
+of 67320 outside [0,1] — that one read 322 KB past the end of the array, because TEX0 is the last
+VTX1 array and I let its extent fall back to end-of-file instead of the block size. **The corrected
+figures above are block-bounded.** If the bad UV numbers reached anyone, discard them.
+
+Standing lesson, same family as trap 36: an extent must be DERIVED, never assumed — and offline
+agreement with the runtime has not been established anywhere in this investigation, so §391c's live
+readout should confirm these before either lane builds on them.
+
+### Sequencing
+
+**§391c is already built, armed, and unread.** Both lanes then propose building a UV differ. Read
+§391c first: it may make the differ unnecessary, and if it does not, it will shape what the differ
+has to capture. Building an instrument to answer a question an armed instrument is about to answer
+is the one avoidable cost left in this plan.
+
+**WHOSE TURN:** Foundry → read §391c on the next room entry; hold the differ until it is read.
+Housing → standing by on the renderer axis; will take the emitted-UV comparison if §391c does not
+settle it. User → nothing required.
