@@ -172,6 +172,36 @@ cached resolver — **never cast `getObjectRes`/`getObjectIDRes` → `J3DModelDa
 believe a mount-time parse is genuinely required, STOP: write the double-parse mechanism
 up point-by-point and get an explicit user go.
 
+**AMENDMENT (2026-08-04, §398 — Housing, user-directed):** THE RULE ABOVE STANDS. Two
+factual corrections to its framing, both load-bearing for anyone reasoning about model
+lifetime:
+
+1. **This port DOES mount-parse the BMD family** (`BMDR`/`BMDV`/`BMDE`/`BMWR`/`BMWE`/`BMDG`;
+   `BMDP`/`BMDA` debug-only) exactly as the donor does. The gap is the **BDL family only**.
+   "This port parses at consume time" is true of BDL and false of BMD — the asymmetry
+   explains why BMD room models were never implicated in the §373-§393 plants campaign.
+2. **Until 2026-08-04 there were no BDLs to parse.** Every genuine BDL in the mod folder was
+   converted to BMD offline by `tools/ww_crew_restoration_skeleton/adapt_bdl_arcs.py`
+   (0 `J3D2bdl4` / 227 `J3D2bmd3` across 83 staged arcs, 68 of which still carry `.bdl`
+   filenames). That tool's stated premise — *"the port's loadBinaryDisplayList … crashes on
+   WW models"* — was **TESTED AND DISPROVEN** on 2026-08-04: the donor `Ba.arc`, staged
+   unconverted with genuine `J3D2bdl4` and MDL3 intact, loads, renders, animates and plays
+   its cutscene through the DN-3-**sanctioned consume-time path**
+   (`path=loadBinaryDisplayList` ×5, no failures). Likely fixed by §374's `WwFullMat3Scope`,
+   which landed six days after the adapter was written; the conversion then made its own
+   premise unfalsifiable.
+
+**What this does NOT license:** re-adding a mount-time parse. The double-parse mechanism is
+unchanged and still fatal — a second parse re-fixes an already-pointer-fixed buffer. A
+migration to donor-style mount-parsing requires REMOVING the consume-time layer in the same
+change, per resType, and still needs the explicit user go this entry demands.
+
+**Companion deviation flagged by the same investigation:** the adapter also rewrites donor
+LIGHTING state (`normalize_litmask` 0x03→0x01, `normalize_tevregs`→white). That is a missing
+native system being covered by editing donor assets, it is baked into every shipped WW model,
+and it is invisible to every runtime probe. See §398 and the proposed DO-NOT on donor-data
+rewriting.
+
 **Verification signature:** open the door to Outset — the island boots (no
 `EXT_BG0 … resLoad ERROR`, no `release arc 'Outset' … purge`); a demo double's
 `createHeap` logs `model-data cache + <arc>/demo_shape_<id>` on first use and
