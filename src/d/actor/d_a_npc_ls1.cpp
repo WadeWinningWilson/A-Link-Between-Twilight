@@ -421,7 +421,11 @@ void daNpc_Ls1_c::setMtx(bool i_setEyePos) {
     mDoMtx_stack_c::ZXYrotM(mAngle);
     mpMorf->getModel()->setBaseTRMtx(mDoMtx_stack_c::get());
 
-    mpMorf->calc();
+    // 400: the receiver's `calc()` is J3DMtxCalc's PER-JOINT callback (it reads the
+    // STATIC mJoint/mMtxBuffer that only J3DModel::calc()'s joint walk sets). The
+    // donor's whole-model `mpMorf->calc()` maps to modelCalc() here — same body,
+    // receiver's name (m_Do_ext.cpp:1511, d_a_kamome.cpp:14). See d_a_npc_ba1.cpp.
+    mpMorf->modelCalc();
     mpLsHandModel->calc();
 
     if (mpTelescopeModel) {

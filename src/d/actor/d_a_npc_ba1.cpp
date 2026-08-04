@@ -348,7 +348,31 @@ void daNpc_Ba1_c::setMtx(bool i_setAttn) {
     mDoMtx_stack_c::transS(current.pos.x, current.pos.y, current.pos.z);
     mDoMtx_stack_c::YrotM(mShapeAngleTmp.y);
     mpMorf->getModel()->setBaseTRMtx(mDoMtx_stack_c::get());
-    mpMorf->calc();
+    // ========================================================================
+    // 400 THE GRANDMA CRASH — `calc()` MEANS OPPOSITE THINGS IN THE TWO LINEAGES.
+    //
+    // Donor J3DMtxCalc declares `virtual void calc(u16 jnt_no)` as the PER-JOINT
+    // callback, so the donor's `mDoExt_McaMorf::calc()` is a separate no-arg
+    // DRIVER: setMtxCalc(this) then mpModel->calc().
+    //
+    // The receiver's J3DMtxCalc declares `virtual void calc() = 0` as the
+    // per-joint callback. So `mpMorf->calc()` here does NOT run the model — it
+    // runs ONE joint's transform, and it reads J3DMtxCalc's STATIC mJoint /
+    // mMtxBuffer, which only the joint-tree walk inside J3DModel::calc() sets.
+    // Called straight from createInit, nothing has set them: calcTransform
+    // dereferences a NULL mtxBuffer at getAnmMtx(jntNo) and faults at 0x80.
+    //
+    // Intermittent because the statics hold whatever the LAST model calc left
+    // behind — so it survives or dies depending on what ran immediately before,
+    // which is exactly why interior cycling reproduced it and a fixed count of
+    // cycles never did.
+    //
+    // The receiver's equivalent of the donor's `mpMorf->calc()` is
+    // modelCalc() — byte-for-byte the donor body (m_Do_ext.cpp:1511-1520), and
+    // already documented as that mapping in d_a_kamome.cpp:14. This is the
+    // donor's own call, expressed in the receiver's names; not a workaround.
+    // ========================================================================
+    mpMorf->modelCalc();
     // §266 probe stripped — it read setMtx's calc() (ANIM matrices, all 0,0,0 here) which
     // is EXPECTED; the render matrices are composed by modelCalc() in _draw (the fix).
     if (mpItemModel != NULL) {

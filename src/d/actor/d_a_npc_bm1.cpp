@@ -846,14 +846,18 @@ void daNpc_Bm1_c::setMtx(bool i_param_1) {
     mDoMtx_stack_c::transS(current.pos.x, current.pos.y, current.pos.z);
     mDoMtx_stack_c::YrotM(current.angle.y);
     mpMorf->getModel()->setBaseTRMtx(mDoMtx_stack_c::get());
-    mpMorf->calc();
+    // 400: the receiver's `calc()` is J3DMtxCalc's PER-JOINT callback (it reads the
+    // STATIC mJoint/mMtxBuffer that only J3DModel::calc()'s joint walk sets). The
+    // donor's whole-model `mpMorf->calc()` maps to modelCalc() here — same body,
+    // receiver's name (m_Do_ext.cpp:1511, d_a_kamome.cpp:14). See d_a_npc_ba1.cpp.
+    mpMorf->modelCalc();
     if (!mbHasArms) {
-        mpWingMorf->calc();
+        mpWingMorf->modelCalc();
     } else {
-        mpArmMorf->calc();
+        mpArmMorf->modelCalc();
     }
     mpHeadMorf->getModel()->setBaseTRMtx(mpMorf->getModel()->getAnmMtx(m_hed_jnt_num));
-    mpHeadMorf->calc();
+    mpHeadMorf->modelCalc();
     if (mpBinderModel) {
         if (mAnmNum == 4) {
             mDoMtx_stack_c::copy(mpArmMorf->getModel()->getAnmMtx(m_hnd_R_jnt_num));

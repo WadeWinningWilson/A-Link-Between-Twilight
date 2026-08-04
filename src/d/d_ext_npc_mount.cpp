@@ -2,6 +2,7 @@
  * d_ext_npc_mount.cpp — Plan R generic external-NPC mount (L1 + Slice I lighting/blink).
  */
 #include "d/d_ext_npc_mount.h"
+#include "d/d_ext_room_verify.h"  // §389
 
 #if TARGET_PC
 
@@ -77,6 +78,69 @@
 #include "JSystem/JUtility/JUTFader.h"
 #include "m_Do/m_Do_mtx.h"
 
+// ============================================================================
+// §374 — WW-LOAD SCOPE for the §369b MAT3 force. The loader skips WW bdl4's
+// MDL3 on PC, which leaves PATCHED materials with no texture-number source
+// (pure white). Forcing the full MAT3 read fixes that, but full materials
+// allocate MORE than patched ones, and forcing it for EVERY load overflowed
+// TP actors' fixed-size solid heaps (crash: daEp_CreateHeap ->
+// mDoExt_J3DModel__create). So the force applies ONLY inside WW model loads.
+// ============================================================================
+namespace {
+bool s_wwForceFullMat3 = false;
+struct WwFullMat3Scope {
+    WwFullMat3Scope() { s_wwForceFullMat3 = true; }
+    ~WwFullMat3Scope() { s_wwForceFullMat3 = false; }
+};
+}  // namespace
+
+#if TARGET_PC
+extern "C" void aurora_gx_state_snapshot(char*, unsigned long);  // §387b
+extern "C" void aurora_gx_draw_probe_arm(int);                   // §391b
+// §387 — GX-state tap B controls (defined in J3DShape.cpp). The room-model
+// probe arms the tap on the plant material's shape so the snapshot lands on
+// that draw and nothing else.
+extern int g_extWwGxTapShape;
+extern bool g_extWwGxTapFired;
+#endif
+
+// §389 — ROOM VERIFY tick. Runs the manifest verifier a few frames after the
+// player's room changes (ground-snap + gravity must settle first, or authored
+// rows read as displaced). One report per room entry; the accidental "Ivan"
+// canary stays in place alongside it per the user's ruling — a canary that does
+// not depend on this code being correct is worth keeping.
+namespace {
+void roomVerifyTick() {
+    static int s_lastRoom = -999;
+    static int s_countdown = -1;
+    const int room = (int)dComIfGp_roomControl_getStayNo();
+    if (room != s_lastRoom) {
+        s_lastRoom = room;
+        s_countdown = 30;  // ~0.5s at 60fps
+        return;
+    }
+    if (s_countdown > 0) {
+        if (--s_countdown == 0) {
+            const char* stage = dComIfGp_getStartStageName();
+            dExtRoomVerify_run(stage != NULL ? stage : "?", room);
+#if TARGET_PC
+            // §391b — arm the per-draw GX census for THIS room, at the same
+            // settle point as the manifest report, so the two describe the same
+            // frame. Arming clears the probe's signature set (see
+            // aurora_gx_draw_probe_arm): without that scoping the title screen
+            // and every room walked through en route spend the budget first.
+            aurora_gx_draw_probe_arm(1);
+#endif
+        }
+    }
+}
+}  // namespace
+
+bool dExtWw_j3dForceFullMat3() {
+    return s_wwForceFullMat3;
+}
+
+
 // Live-tune NPC cel ambient offsets (additive on manifest amb_*).
 // WREG_F(30)=R, WREG_F(31)=G, WREG_F(32)=B — e.g. -20 to pull bloom down.
 
@@ -113,15 +177,19 @@ std::unordered_map<std::string, std::vector<u8>> s_pristineJ3dRaw;
 //      the dRes buffer nor the stored pristine is ever pointer-fixed at all.
 // The copies handed to J3D must outlive their models — kept here for the
 // session (same lifetime class as the deliberately-leaked purged ModelData).
-std::vector<std::vector<u8>> s_parsedRawKeep;
+// 399: keep-alive copies are tagged with the cache key that owns them. Untagged
+// they could never be reclaimed, and purgeModelCacheForArc erased the model cache
+// while stranding one FULL raw copy per parse -- measured growing 32 entries per
+// interior cycle, monotonically, which is the crash's real fuel.
+std::vector<std::pair<std::string, std::vector<u8>>> s_parsedRawKeep;
 
 void* mountPristineParseSrc(const std::string& plainKey, void* res) {
     auto pit = s_pristineJ3dRaw.find(plainKey);
     if (pit == s_pristineJ3dRaw.end()) {
         return res;  // non-J3D2 / stash refused — first-touch parse of dRes
     }
-    s_parsedRawKeep.push_back(pit->second);  // fresh copy; J3D fixes THIS one
-    return s_parsedRawKeep.back().data();
+    s_parsedRawKeep.emplace_back(plainKey, pit->second);  // fresh copy; J3D fixes THIS one
+    return s_parsedRawKeep.back().second.data();
 }
 // №73: mounts that have reached COMPLEATE and still own a live resLoad of `arc`.
 std::unordered_map<std::string, int> s_arcLiveCount;
@@ -2060,11 +2128,13 @@ J3DModelData* loadMountedModelDataOnly(void* res) {
     if (header->mMagic1 == 'J3D2' &&
         (header->mMagic2 == 'bdl4' || header->mMagic2 == 'bdl3')) {
         stageLog("resolve", "path=loadBinaryDisplayList");
+        WwFullMat3Scope wwMat3;  // §374
         return J3DModelLoaderDataBase::loadBinaryDisplayList(res, kExtNpcBdlFlags);
     }
     if (header->mMagic1 == 'J3D2' &&
         (header->mMagic2 == 'bmd3' || header->mMagic2 == 'bmd2')) {
         stageLog("resolve", "path=load (bmd)");
+        WwFullMat3Scope wwMat3;  // §374
         return (J3DModelData*)J3DModelLoaderDataBase::load(res, 0x59020010);
     }
     stageLog("resolve", "path=preinstantiated J3DModelData*");
@@ -2307,8 +2377,24 @@ static void purgeModelCacheForArc(const char* arc) {
     // №263: pristine copies are SESSION-LIVED — do NOT erase them here. They
     // are the only safe parse source once the resident dRes buffer has been
     // pointer-fixed; erasing them on purge caused the KOISI exit crash.
-    DuskLog.info("[ExtNpcMount] №73 purged model cache for arc '{}' (models={}, pristine kept)",
-                 arc, nModel);
+    // 399: reclaim the keep-alive raw copies for this arc too. Safe HERE and only
+    // here: releaseArcModels only reaches purge when live=0 AND no live mount still
+    // refs the arc, so every J3DModelData parsed from these buffers is already
+    // abandoned. Erasing the map entry without freeing the buffer was the leak.
+    int nKeep = 0;
+    size_t keepBytes = 0;
+    for (auto kit = s_parsedRawKeep.begin(); kit != s_parsedRawKeep.end();) {
+        if (cacheKeyBelongsToArc(kit->first, arc)) {
+            keepBytes += kit->second.size();
+            kit = s_parsedRawKeep.erase(kit);
+            ++nKeep;
+        } else {
+            ++kit;
+        }
+    }
+    DuskLog.info("[ExtNpcMount] №73 purged model cache for arc '{}' (models={}, keepRaw={} "
+                 "freed={} KB, pristine kept)",
+                 arc, nModel, nKeep, (int)(keepBytes / 1024));
 }
 
 static void retainArcModels(const char* arc) {
@@ -2421,6 +2507,36 @@ J3DModelData* acquireMountedModel(const char* arc, const char* modelName, void* 
     auto it = s_modelDataCache.find(key);
     if (it != s_modelDataCache.end()) {
         stageLog("resolve", "path=session-cache hit");
+        // ====================================================================
+        // 399 CACHE-VS-REMOUNT PROBE. 397 proposed "cache holds a pointer into
+        // recycled arc storage". Reading the pristine machinery DISPROVES that:
+        // ensurePristineJ3dRaw stashes a BYTE COPY and mountPristineParseSrc
+        // hands the parser a fresh copy held in s_parsedRawKeep, so the parsed
+        // J3DModelData is backed by session-lived std::vector storage, never the
+        // arc buffer. Freeing/remounting the arc cannot dangle it.
+        //
+        // So this logs what IS true, on the deterministic repro (cycle
+        // interiors), to separate the three live candidates:
+        //   H1 identity  -- is the SAME J3DModelData reused every cycle? If the
+        //                   pointer changes, the cache is not the shared thing.
+        //   H2 growth    -- s_parsedRawKeep grows by one FRESH COPY per parse and
+        //                   is never trimmed. If it climbs per cycle that is a
+        //                   real unbounded leak, and the pre-crash symptom
+        //                   History reported (load latency rising per cycle)
+        //                   would follow from it.
+        //   H3 hits      -- how many creates share one entry.
+        //
+        // Not logged here but the current leading suspect: J3DMtxCalc::mJoint /
+        // ::mMtxBuffer are STATIC globals (J3DJoint.cpp:25-27) read inside
+        // calcTransform -- the exact crashing frame, fault addr -1. Shared
+        // mutable J3D state fits "Nth re-create" far better than a cache that
+        // cannot dangle.
+        // ====================================================================
+        static std::unordered_map<std::string, int> s_hits;
+        const int n = ++s_hits[key];
+        DuskLog.info("[ExtNpcMount] 399 cache-hit {} data={} hits={} keep={} pristine={}",
+                     key, (const void*)it->second, n, (int)s_parsedRawKeep.size(),
+                     (int)s_pristineJ3dRaw.size());
         return it->second;
     }
 
@@ -2523,11 +2639,12 @@ J3DModelData* resolveBgModelUncached(void* res) {
     if (header->mMagic1 == 'J3D2' &&
         (header->mMagic2 == 'bdl4' || header->mMagic2 == 'bdl3')) {
         J3DModelData* loaded =
-            J3DModelLoaderDataBase::loadBinaryDisplayList(res, kExtNpcBdlFlags);
+            (WwFullMat3Scope(), J3DModelLoaderDataBase::loadBinaryDisplayList(res, kExtNpcBdlFlags));
         return finishBgModelData(loaded);
     }
     if (header->mMagic1 == 'J3D2' &&
         (header->mMagic2 == 'bmd3' || header->mMagic2 == 'bmd2')) {
+        WwFullMat3Scope wwMat3b;  // §374
         J3DModelData* loaded = (J3DModelData*)J3DModelLoaderDataBase::load(res, 0x59020010);
         return finishBgModelData(loaded);
     }
@@ -7554,6 +7671,37 @@ static void trySpawnSelfHeal() {
         dExtNpcPopulation_spawnForBg(man);
         return;
     }
+    // ============================================================
+    // §402 CHURN BREAKER (log 102730: 251 №94 re-runs / 614 EXT_VEG
+    // creates in ONE session). The interior census spawns its 2 swood
+    // (spawned 2 → live=0 next check → re-run, every ~15f forever): a
+    // perpetual stream of in-flight creations — which is EXACTLY what
+    // the play-scene DELETE phase waits to drain, so every transition
+    // OUT of the interior starves at delete → wipe holds at peek →
+    // the black screen (§398 chain, receipts §398e/f). A heal that
+    // loops isn't healing: 3 strikes per BG then stand down + warn.
+    // Root cause (ferried): swood/EXT_VEG spawns never register live
+    // in the interior context — vegetation-lane surface.
+    // ============================================================
+    {
+        static char s_healBg402[24] = {};
+        static int s_healTries402 = 0;
+        if (std::strcmp(s_healBg402, s_lastBgProc) != 0) {
+            std::snprintf(s_healBg402, sizeof(s_healBg402), "%s", s_lastBgProc);
+            s_healTries402 = 0;
+        }
+        if (s_healTries402 >= 3) {
+            static bool s_said402 = false;
+            if (!s_said402) {
+                s_said402 = true;
+                DuskLog.warn("[ExtNpcMount] §402 census heal STAND-DOWN '{}' — 3 re-runs, "
+                             "spawns never register live (vegetation-lane root, bus §396+)",
+                             s_lastBgProc);
+            }
+            return;
+        }
+        ++s_healTries402;
+    }
     DuskLog.warn(
         "[ExtNpcMount] №94 self-heal census — COMPLEATE '{}' live=0 → re-run population",
         s_lastBgProc);
@@ -9384,6 +9532,7 @@ int dExtNpcMount_execute(dExtNpcMount_c* i_this) {
     if (i_this == NULL) {
         return 1;
     }
+    roomVerifyTick();  // §389 — donor-expectation vs live-actuality report
     // №68: room teardown in flight — do not touch matrices / attention / bgw.
     if (roomLaneMountIsUnloading(i_this)) {
         return 1;
@@ -10029,6 +10178,537 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                     }
                 }
             }
+            // ================================================================
+            // §373 SUBMESH PROBE (one shot per model per room entry). The live
+            // donor census (§372) proved the missing interior props (small
+            // table, planters, flowers, bottles) are SUBMESHES of the room
+            // model — 19 shapes / 19 materials / 3 joints in LinkRM model.bdl,
+            // all present in our staged arc. They are drawn and invisible, so
+            // this names WHERE they go: per-shape material + matrix binding,
+            // per-joint world transform (a collapsed non-root joint sinks its
+            // whole prop group into the origin). Strip at §373 acceptance.
+            // ================================================================
+            {
+                static const void* s_probed[3] = {NULL, NULL, NULL};
+                if (data != NULL && s_probed[i] != (const void*)data) {
+                    s_probed[i] = (const void*)data;
+                    DuskLog.info("[ExtBg] §373 model[{}] shapes={} materials={} joints={}",
+                                 i, data->getShapeNum(), data->getMaterialNum(),
+                                 data->getJointNum());
+                    for (u16 j = 0; j < data->getJointNum() && j < 8; ++j) {
+                        J3DJoint* jt = data->getJointNodePointer(j);
+                        MtxPtr am = model->getAnmMtx(j);
+                        if (jt != NULL && am != NULL) {
+                            DuskLog.info("[ExtBg] §373  joint[{}] anmMtx T=({:.1f},{:.1f},{:.1f}) "
+                                         "row0x={:.3f}",
+                                         j, am[0][3], am[1][3], am[2][3], am[0][0]);
+                        } else {
+                            DuskLog.warn("[ExtBg] §373  joint[{}] jt={} anmMtx={}", j,
+                                         jt != NULL ? 1 : 0, am != NULL ? 1 : 0);
+                        }
+                    }
+                    for (u16 s = 0; s < data->getShapeNum() && s < 24; ++s) {
+                        J3DShape* shape = data->getShapeNodePointer(s);
+                        if (shape == NULL) {
+                            DuskLog.warn("[ExtBg] §373  shape[{}] NULL", s);
+                            continue;
+                        }
+                        DuskLog.info("[ExtBg] §373  shape[{}] mtxGrpNum={} hidden={}",
+                                     s, shape->getMtxGroupNum(),
+                                     shape->checkFlag(J3DShpFlag_Visible) ? 1 : 0);
+                    }
+                    // ============================================================
+                    // §373b MATERIAL-STATE READOUT (the differ's live half).
+                    // Human eyeballing is NOT verification: for every material
+                    // this logs the fields that decide whether its geometry can
+                    // appear at all — the texture index it wants, whether the
+                    // model's texture table actually has that entry, and the
+                    // alpha-compare (comp/ref) + blend mode. The offline half
+                    // decodes the SAME fields from the donor .bdl; the diff
+                    // names any material whose state cannot draw. Index order
+                    // is MAT3 order, so index -> donor material name is exact.
+                    // ============================================================
+                    // 381 A/B: counts alpha-tested materials so the three
+                    // cutouts can be treated differently in ONE run.
+                    int abSeen = 0;
+                    for (u16 m = 0; m < data->getMaterialNum() && m < 24; ++m) {
+                        J3DMaterial* mat = data->getMaterialNodePointer(m);
+                        if (mat == NULL) {
+                            DuskLog.warn("[ExtBg] §373b mat[{}] NULL", m);
+                            continue;
+                        }
+                        const u16 tex0 = mat->getTevBlock() != NULL
+                                             ? mat->getTevBlock()->getTexNo(0) : 0xFFFF;
+                        int comp0 = -1, ref0 = -1, blend = -1;
+                        J3DPEBlock* pe = mat->getPEBlock();
+                        if (pe != NULL) {
+                            if (pe->getAlphaComp() != NULL) {
+                                comp0 = pe->getAlphaComp()->getComp0();
+                                ref0 = pe->getAlphaComp()->getRef0();
+                            }
+                            if (pe->getBlend() != NULL) {
+                                blend = pe->getBlend()->getBlendMode();
+                            }
+                        }
+                        // ====================================================
+                        // 375 THE ALPHA VALUE, not the alpha CONFIG.
+                        //
+                        // 373b measured whether the alpha TEST is set up; it
+                        // never measured what alpha ARRIVES at that test. The
+                        // invisible set is EXACTLY the alpha-tested set (3 of 3
+                        // GEQUAL/128; all 16 visible ones are ALWAYS/0), so a
+                        // TEV alpha path that never routes texture alpha would
+                        // produce precisely this: the 16 ALWAYS materials do not
+                        // care what their alpha is, the 3 that test it vanish.
+                        //
+                        // GXTevAlphaArg: 0=APREV 1=A0 2=A1 3=A2 4=TEXA 5=RASA
+                        // 6=KONST 7=ZERO. If no stage feeds TEXA into the alpha
+                        // combiner, sampled texture alpha can never reach the
+                        // compare and GEQUAL 128 fails everywhere.
+                        //
+                        // Controlled comparison already on record: these same
+                        // CMPR bytes (Txo_flower_pink_64x64, opaque 2544 /
+                        // transparent 1552) render CORRECTLY through the raw-GX
+                        // vegetation packet. Same data, same punch-through, two
+                        // paths, one works -- so the fault is in J3D material to
+                        // GX state translation, not the texture or the decoder.
+                        // ====================================================
+                        int aA = -1, aB = -1, aC = -1, aD = -1, aOp = -1;
+                        int stages = 0;
+                        bool texaAnywhere = false;
+                        if (mat->getTevBlock() != NULL) {
+                            stages = (int)mat->getTevBlock()->getTevStageNum();
+                            for (int s = 0; s < stages && s < 16; ++s) {
+                                J3DTevStage* st = mat->getTevBlock()->getTevStage(s);
+                                if (st == NULL) {
+                                    continue;
+                                }
+                                const int a = (st->mTevAlphaAB >> 5) & 7;
+                                const int bb = (st->mTevAlphaAB >> 2) & 7;
+                                const int c = ((st->mTevAlphaAB & 3) << 1) |
+                                              ((st->mTevSwapModeInfo >> 7) & 1);
+                                const int dd = (st->mTevSwapModeInfo >> 4) & 7;
+                                if (a == 4 || bb == 4 || c == 4 || dd == 4) {
+                                    texaAnywhere = true;  // 4 = GX_CA_TEXA
+                                }
+                                if (s == 0) {
+                                    aA = a; aB = bb; aC = c; aD = dd;
+                                    aOp = (int)st->mTevAlphaOp;
+                                }
+                            }
+                        }
+                        DuskLog.info("[ExtBg] §373b mat[{}] tex0={} alphaComp0={} ref0={} "
+                                     "blendMode={}",
+                                     m, (int)tex0, comp0, ref0, blend);
+                        // ====================================================
+                        // 376 THE OTHER HALF OF THE ALPHA PRODUCT.
+                        //
+                        // 375 answered its question: TEXA_used=1 on all 19, and
+                        // every material carries the SAME combiner --
+                        // a0.ABCD=(7,4,5,7) = A=ZERO B=TEXA C=RASA D=ZERO, i.e.
+                        //     alphaOut = lerp(ZERO, TEXA, RASA) = TEXA * RASA
+                        //
+                        // So texture alpha is only one factor. If RASA (the
+                        // rasterized alpha from the colour channel) is ZERO, the
+                        // product is zero however good the texture is, GEQUAL 128
+                        // fails everywhere, and ONLY the three alpha-tested
+                        // materials disappear -- the sixteen ALWAYS ones never
+                        // consult alpha at all. That is the observed split
+                        // exactly, and it is the same mechanism as 231 in the
+                        // JPA lane, where a hand-written TEV consumed RASC with
+                        // no channel configured and drew black.
+                        //
+                        // RASA comes from colour channel 1 (COLOR0A0's alpha).
+                        // chanNum 0, or an alpha channel whose matSrc/ambSrc
+                        // point at a register that was never filled, yields 0.
+                        // GXColorSrc: 0 = REG (the material/ambient colour
+                        // register), 1 = VTX (the vertex array).
+                        // ====================================================
+                        int chanNum = -1, aEn = -1, aMatSrc = -1, aAmbSrc = -1, aLitMask = -1;
+                        int matA = -1, ambA = -1;
+                        J3DColorBlock* cb = mat->getColorBlock();
+                        if (cb != NULL) {
+                            chanNum = (int)cb->getColorChanNum();
+                            // Channel index 1 is the ALPHA half of COLOR0A0.
+                            J3DColorChan* ch = cb->getColorChan(1);
+                            if (ch != NULL) {
+                                aEn = (int)ch->getEnable();
+                                aMatSrc = (int)ch->getMatSrc();
+                                aAmbSrc = (int)ch->getAmbSrc();
+                                aLitMask = (int)ch->getLightMask();
+                            }
+                            J3DGXColor* mc = cb->getMatColor(1);
+                            if (mc != NULL) {
+                                matA = (int)mc->a;
+                            }
+                            J3DGXColor* ac = cb->getAmbColor(1);
+                            if (ac != NULL) {
+                                ambA = (int)ac->a;
+                            }
+                        }
+                        // ====================================================
+                        // 377 THE STATES THAT HIDE GEOMETRY OUTRIGHT.
+                        //
+                        // The whole alpha chain is now verified end to end and
+                        // comes out CORRECT: TEXA is routed (375), RASA is vertex
+                        // alpha and the vertex array is 224/232 at 255 (offline),
+                        // the texture really is punch-through CMPR, and J3D builds
+                        // its GXTexObj from timg->format exactly as the raw-GX
+                        // vegetation path does -- it never consults the BTI
+                        // alphaFlag. So alphaOut = TEXA * 1.0 = TEXA, and GEQUAL
+                        // 128 should pass on 32-62% of texels. It does not.
+                        //
+                        // That exhausts alpha. The remaining per-material states
+                        // that can hide healthy, correctly-shaded geometry are
+                        // CULL MODE and Z MODE, and neither has ever been read.
+                        //
+                        // Cull is the strong one: plant cutouts are thin
+                        // double-sided planes and want GX_CULL_NONE. GXCullMode:
+                        // 0 = NONE, 1 = FRONT, 2 = BACK, 3 = ALL. A material that
+                        // arrives as ALL draws nothing while passing every check
+                        // above; one that arrives as FRONT/BACK when the donor
+                        // said NONE loses exactly the backfacing half of a
+                        // two-sided leaf, which reads as "the plant is missing"
+                        // while the solid pot beside it is unaffected.
+                        // ====================================================
+                        int cull = -1, zEn = -1, zFn = -1, zUpd = -1;
+                        if (cb != NULL) {
+                            cull = (int)cb->getCullMode();
+                        }
+                        if (pe != NULL && pe->getZMode() != NULL) {
+                            J3DZMode* zm = pe->getZMode();
+                            zEn = (int)zm->getCompareEnable();
+                            zFn = (int)zm->getFunc();
+                            zUpd = (int)zm->getUpdateEnable();
+                        }
+                        // ====================================================
+                        // 384 THE THIRD FACTOR -- KONST ALPHA.
+                        //
+                        // 383 decoded the stage I had never looked at. With
+                        // tevStages=2 the alpha reaching the compare is stage 1's
+                        // output, and for this model stage 1 is
+                        //     s1.aABCD = (7,6,0,7) = A ZERO, B KONST, C APREV
+                        //     -> lerp(ZERO, KONST, APREV) = KONST * APREV
+                        // and APREV is stage 0's TEXA * RASA. So the real product
+                        // is
+                        //     alphaOut = KONST_ALPHA * TEXA * RASA
+                        //
+                        // I measured TEXA (255) and RASA (255) and concluded the
+                        // result was 255. There was a third factor the whole time
+                        // and I never read it, because I only ever decoded stage
+                        // 0. If KONST alpha is 0 the product is 0, GEQUAL 128
+                        // fails on every texel, and the sixteen ALWAYS materials
+                        // do not notice -- the exact signature we have been
+                        // chasing since 373.
+                        //
+                        // GXTevKAlphaSel: 0x00 = constant 8/8 (1.0), 0x01..0x0F
+                        // are smaller constant fractions, 0x1C..0x1F select the
+                        // K0..K3 register alpha. A selector in the register range
+                        // with an empty register is the finding; a small constant
+                        // fraction (e.g. 0x0F = 1/8 = 32) would also sink the
+                        // product below the 128 threshold while leaving the
+                        // ALWAYS materials untouched.
+                        // ====================================================
+                        {
+                            int kSel = -1;
+                            int k0a = -1, k1a = -1, k2a = -1, k3a = -1;
+                            J3DTevBlock* tb = mat->getTevBlock();
+                            if (tb != NULL) {
+                                kSel = (int)tb->getTevKAlphaSel(1);
+                                if (tb->getTevKColor(0) != NULL) k0a = (int)tb->getTevKColor(0)->a;
+                                if (tb->getTevKColor(1) != NULL) k1a = (int)tb->getTevKColor(1)->a;
+                                if (tb->getTevKColor(2) != NULL) k2a = (int)tb->getTevKColor(2)->a;
+                                if (tb->getTevKColor(3) != NULL) k3a = (int)tb->getTevKColor(3)->a;
+                            }
+                            int effective = -1;
+                            if (kSel == 0x1C) effective = k0a;
+                            else if (kSel == 0x1D) effective = k1a;
+                            else if (kSel == 0x1E) effective = k2a;
+                            else if (kSel == 0x1F) effective = k3a;
+                            else if (kSel >= 0 && kSel <= 0x0F) effective = (8 - kSel) * 255 / 8;
+                            DuskLog.info("[ExtBg] 384 mat[{}] kAlphaSel={:#04x} K0.a={} K1.a={} "
+                                         "K2.a={} K3.a={} effectiveKonstA={}{}",
+                                         m, (unsigned)(kSel < 0 ? 0 : kSel), k0a, k1a, k2a, k3a,
+                                         effective,
+                                         (comp0 == 6 && effective >= 0 && effective < 128)
+                                             ? "  <<< KONST ALPHA SINKS THE PRODUCT BELOW 128"
+                                             : "");
+                        }
+                        // ====================================================
+                        // 383 IS THE A/B EVEN VALID -- and what does STAGE 1 do?
+                        //
+                        // Two things I got wrong that this settles.
+                        //
+                        // (1) MY INTERVENTIONS MAY HAVE BEEN NO-OPS. J3DMaterial
+                        // can emit from a PREBUILT display list (mSharedDLObj,
+                        // makeDisplayList_private, J3DPacket callDL). If one
+                        // exists, the state was baked at load and my runtime
+                        // writes to mRef0 / setZCompLoc / setCullMode never reach
+                        // GX -- which would make 381's "no improvement" a FALSE
+                        // NEGATIVE that eliminated nothing. sharedDL below says
+                        // which world we are in. Note 374 stripped MDL3 "by
+                        // design", and MDL3 is exactly the baked material DL
+                        // block, so this may cut either way.
+                        //
+                        // (2) I ONLY EVER DECODED TEV STAGE 0. Every material
+                        // here has tevStages=2, and the alpha that reaches the
+                        // compare is the LAST stage's output, not the first. A
+                        // two-stage TP material is the cel-shading shape: stage 0
+                        // samples the base texture, stage 1 modulates against the
+                        // toon/lighting term. The user's ZAtoon question lands
+                        // exactly here -- if stage 1 samples a texmap that ZAtoon
+                        // should occupy and nothing is bound on a mounted stage,
+                        // its output is garbage, the sixteen ALWAYS materials do
+                        // not care, and the three alpha-tested ones die.
+                        // s1.map is the discriminator: a map index with no
+                        // texture behind it is the finding.
+                        // ====================================================
+                        {
+                            const int sharedDL = (mat->getSharedDisplayListObj() != NULL) ? 1 : 0;
+                            int s1A = -1, s1B = -1, s1C = -1, s1D = -1;
+                            int s0map = -1, s0coord = -1, s0chan = -1;
+                            int s1map = -1, s1coord = -1, s1chan = -1;
+                            if (mat->getTevBlock() != NULL) {
+                                J3DTevBlock* tb = mat->getTevBlock();
+                                if (tb->getTevOrder(0) != NULL) {
+                                    s0map = (int)tb->getTevOrder(0)->mTexMap;
+                                    s0coord = (int)tb->getTevOrder(0)->mTexCoord;
+                                    s0chan = (int)tb->getTevOrder(0)->mColorChan;
+                                }
+                                if (tb->getTevOrder(1) != NULL) {
+                                    s1map = (int)tb->getTevOrder(1)->mTexMap;
+                                    s1coord = (int)tb->getTevOrder(1)->mTexCoord;
+                                    s1chan = (int)tb->getTevOrder(1)->mColorChan;
+                                }
+                                J3DTevStage* st1 = tb->getTevStage(1);
+                                if (st1 != NULL) {
+                                    s1A = (st1->mTevAlphaAB >> 5) & 7;
+                                    s1B = (st1->mTevAlphaAB >> 2) & 7;
+                                    s1C = ((st1->mTevAlphaAB & 3) << 1) |
+                                          ((st1->mTevSwapModeInfo >> 7) & 1);
+                                    s1D = (st1->mTevSwapModeInfo >> 4) & 7;
+                                }
+                            }
+                            DuskLog.info("[ExtBg] 383 mat[{}] sharedDL={} s0(map={},crd={},chan={}) "
+                                         "s1(map={},crd={},chan={}) s1.aABCD=({},{},{},{}){}",
+                                         m, sharedDL, s0map, s0coord, s0chan, s1map, s1coord,
+                                         s1chan, s1A, s1B, s1C, s1D,
+                                         sharedDL ? "  <<< BAKED DL: 381/382 WRITES NEVER REACHED GX"
+                                                  : "");
+                        }
+                        // ====================================================
+                        // 385 DROP THE BAKED DISPLAY LIST -- one variable, and it
+                        // is a hypothesis in its own right.
+                        //
+                        // 383 found sharedDL=1 on every material, which means the
+                        // material state is BAKED into a display list at load and
+                        // replayed by J3DPacket's callDL. Two consequences:
+                        //
+                        //   a) My 381/382 interventions never reached GX. Those
+                        //      "no improvement" results eliminated NOTHING --
+                        //      alpha compare, late-Z and cull are all still open.
+                        //      Any future override must invalidate this DL first
+                        //      or it silently does nothing.
+                        //
+                        //   b) More interesting: WHERE DID THAT DL COME FROM? 374
+                        //      strips MDL3 -- the baked material DL block -- "by
+                        //      design", so this one was built at runtime from the
+                        //      material state by makeDisplayList_private. If it
+                        //      was built while the material was only partly
+                        //      initialised, or before 374 scoped the full-MAT3
+                        //      load to WW, then the DL is STALE and every value
+                        //      373b/375-384 read from the live objects is correct
+                        //      while the bytes actually replayed to GX are not.
+                        //      That would explain the whole investigation: every
+                        //      probe reads the material, the hardware reads the DL,
+                        //      and nobody has compared them.
+                        //
+                        // Nulling mSharedDLObj forces the material to emit its
+                        // state live through load() instead of replaying the bake.
+                        // NOTHING ELSE IS CHANGED this round -- no forced alpha,
+                        // no forced cull, no forced z. So if the plants appear,
+                        // the bake was the fault and the live state is correct.
+                        // If they do not, the bake matches the live state and the
+                        // fault is elsewhere -- and, importantly, every future A/B
+                        // run from here is valid because the writes will now land.
+                        //
+                        // DUSK_J3D_LIVE_MAT=0 restores the baked path.
+                        // ====================================================
+                        {
+                            static const bool s_liveMat = [] {
+                                const char* v = std::getenv("DUSK_J3D_LIVE_MAT");
+                                return v == NULL || v[0] != '0';
+                            }();
+                            if (s_liveMat && mat->getSharedDisplayListObj() != NULL) {
+                                mat->mSharedDLObj = NULL;
+                                if (comp0 == 6) {
+                                    DuskLog.warn("[ExtBg] 385 mat[{}] baked DL dropped -- state "
+                                                 "now emitted live (alpha-tested material)", m);
+                                }
+                            }
+                        }
+                        // ====================================================
+                        // 380 TEN-HYPOTHESIS PROBE (replaces 375-379).
+                        //
+                        // Six single-hypothesis rounds is six too many. This
+                        // instruments every remaining branch that can hide
+                        // fully-correct geometry, in one build, with a
+                        // discriminating value per hypothesis. Already eliminated
+                        // and NOT re-tested here: joint->mesh reachability (19/19),
+                        // texture assignment, TEXA routing, vertex alpha (255),
+                        // texobj format, cull mode, z mode, draw bucket.
+                        //
+                        // H1  peType     PEOP/PEED/PEXL are HARDCODED blocks
+                        //                (J3DMatBlock.cpp:1490-1512) that DISCARD
+                        //                stored state. PEOP emits ALWAYS/0 -> a
+                        //                TexEdge material in an Opa block never
+                        //                sends its alpha test to GX.
+                        // H2  stateful   getAlphaComp/getBlend/getZMode non-null
+                        //                = a stateful block that loads real state.
+                        //                Distinguishes H1 from a false alarm.
+                        // H3  zCompLoc   1 = compare BEFORE texturing. With a
+                        //                cutout, transparent texels still write
+                        //                depth and the quad occludes itself.
+                        //                TexEdge deliberately uses 0.
+                        // H4  texGenNum  0 = no texcoord generation emitted; every
+                        //                vertex samples one texel. If that texel
+                        //                is transparent the whole surface fails
+                        //                the alpha test.
+                        // H5  texGen0    src/type/mtx of coord 0. A texgen sourced
+                        //                from an attribute the shape lacks yields
+                        //                degenerate UVs (same failure, different
+                        //                cause than H4).
+                        // H6  indStages  indirect texturing enabled unexpectedly
+                        //                re-routes the sample; nonzero on a plain
+                        //                lambert material is wrong.
+                        // H7  tevStages  configured stage count. If it disagrees
+                        //                with what the block emits, the last stage
+                        //                reads an unwritten register -> alpha 0.
+                        // H8  texNo/obj  the resolved texture INDEX at runtime and
+                        //                whether a GXTexObj exists for it. Covers
+                        //                "index fine, object never built".
+                        // H9  mtxGrpNum  shape matrix groups. 0 = the shape has no
+                        //                draw packets: linked, counted, and with
+                        //                no geometry to submit.
+                        // H10 dlSize     bytes of geometry display list on the
+                        //                first draw packet. 0 = nothing is
+                        //                actually handed to GX for this shape,
+                        //                which reachability cannot see.
+                        // ====================================================
+                        {
+                            const u32 peType = (pe != NULL) ? pe->getType() : 0;
+                            char tag[5] = {(char)(peType >> 24), (char)(peType >> 16),
+                                           (char)(peType >> 8), (char)peType, 0};
+                            const int stateful =
+                                (pe != NULL && pe->getAlphaComp() != NULL) ? 1 : 0;
+                            const int zCompLoc = (pe != NULL) ? (int)pe->getZCompLoc() : -1;
+
+                            int texGenNum = -1, tg0type = -1, tg0src = -1, tg0mtx = -1;
+                            J3DTexGenBlock* tg = mat->getTexGenBlock();
+                            if (tg != NULL) {
+                                texGenNum = (int)tg->getTexGenNum();
+                                J3DTexCoord* tc = tg->getTexCoord(0);
+                                if (tc != NULL) {
+                                    tg0type = (int)tc->getTexGenType();
+                                    tg0src = (int)tc->getTexGenSrc();
+                                    tg0mtx = (int)tc->getTexGenMtx();
+                                }
+                            }
+                            const int indStages =
+                                (mat->getIndBlock() != NULL)
+                                    ? (int)mat->getIndBlock()->getIndTexStageNum() : -1;
+
+                            int mtxGrp = -1, dlSize = -1;
+                            J3DShape* shp = data->getShapeNodePointer(m);
+                            if (shp != NULL) {
+                                mtxGrp = (int)shp->getMtxGroupNum();
+                                if (mtxGrp > 0 && shp->getShapeDraw(0) != NULL) {
+                                    dlSize = (int)shp->getShapeDraw(0)->getDisplayListSize();
+                                }
+                            }
+
+                            DuskLog.info(
+                                "[ExtBg] 380 mat[{}] H1.pe='{}' H2.stateful={} H3.zCompLoc={} "
+                                "H4.texGen={} H5.tg0(t={},s={},m={}) H6.ind={} H7.tev={} "
+                                "H8.tex0={} H9.mtxGrp={} H10.dl={}{}",
+                                m, peType ? tag : "(null)", stateful, zCompLoc, texGenNum,
+                                tg0type, tg0src, tg0mtx, indStages, stages, (int)tex0, mtxGrp,
+                                dlSize,
+                                (comp0 == 6 && peType == 'PEOP')
+                                    ? "  <<< H1 TEXEDGE STATE IN AN OPA BLOCK"
+                                    : (comp0 == 6 && zCompLoc == 1)
+                                          ? "  <<< H3 EARLY-Z ON A CUTOUT"
+                                          : "");
+                        }
+                        DuskLog.info("[ExtBg] §377 mat[{}] cullMode={} zEnable={} zFunc={} "
+                                     "zWrite={}{}",
+                                     m, cull, zEn, zFn, zUpd,
+                                     cull == 3 ? "  <<< CULL_ALL: DRAWS NOTHING" : "");
+                        DuskLog.info("[ExtBg] §376 mat[{}] chanNum={} aEnable={} aMatSrc={} "
+                                     "aAmbSrc={} litMask={:#04x} matColorA={} ambColorA={}{}",
+                                     m, chanNum, aEn, aMatSrc, aAmbSrc,
+                                     (unsigned)(aLitMask < 0 ? 0 : aLitMask), matA, ambA,
+                                     (comp0 == 6 && matA == 0 && aMatSrc == 0)
+                                         ? "  <<< RASA SOURCED FROM AN EMPTY REGISTER"
+                                         : "");
+                        DuskLog.info("[ExtBg] §375 mat[{}] stages={} a0.ABCD=({},{},{},{}) "
+                                     "alphaOp={:#04x} TEXA_used={}{}",
+                                     m, stages, aA, aB, aC, aD, (unsigned)(aOp < 0 ? 0 : aOp),
+                                     texaAnywhere ? 1 : 0,
+                                     (comp0 == 6 && !texaAnywhere)
+                                         ? "  <<< ALPHA-TESTED BUT NO TEXA IN ANY STAGE"
+                                         : "");
+                    }
+                    // ============================================================
+                    // §387 ARM TAP B on the plant material's shape. Housing's
+                    // §386 lead: mat index 2 = Ohana_high1_v (flower/plant,
+                    // cutout alpha) draws invisibly here while the SAME texture
+                    // draws correctly through the raw-GX vegetation path (tap A).
+                    // Shape and material indices are 1:1 in this model (19/19),
+                    // so shape 2 is the plant. One shot, interior model only.
+                    // ============================================================
+                    if (data->getMaterialNum() == 19 && g_extWwGxTapShape < 0) {
+                        g_extWwGxTapShape = 2;
+                        DuskLog.info("[GXTap] §387 armed tap B on shape 2 "
+                                     "(Ohana_high1_v — plant, cutout alpha)");
+                    }
+
+                    // ============================================================
+                    // §373c JOINT→MESH REACHABILITY. J3DModel::entry() submits
+                    // geometry by walking each JOINT's mesh chain (J3DJoint::
+                    // entryIn, J3DJoint.cpp:164) — NOT by iterating the material
+                    // table. A material that is healthy but not linked under any
+                    // joint is never submitted and cannot appear. With 19
+                    // materials on 3 joints, this counts what is actually
+                    // reachable and names the unreachable indices.
+                    // ============================================================
+                    {
+                        int reached = 0;
+                        for (u16 j = 0; j < data->getJointNum(); ++j) {
+                            J3DJoint* jt = data->getJointNodePointer(j);
+                            int chain = 0;
+                            if (jt != NULL) {
+                                for (J3DMaterial* mesh = jt->getMesh();
+                                     mesh != NULL && chain < 64;
+                                     mesh = mesh->getNext()) {
+                                    ++chain;
+                                    ++reached;
+                                }
+                            }
+                            DuskLog.info("[ExtBg] §373c joint[{}] meshChain={} "
+                                         "(hasMesh={})",
+                                         j, chain,
+                                         (jt != NULL && jt->getMesh() != NULL) ? 1 : 0);
+                        }
+                        DuskLog.info("[ExtBg] §373c REACHABLE materials {}/{}"
+                                     "{}",
+                                     reached, data->getMaterialNum(),
+                                     reached < data->getMaterialNum()
+                                         ? "  <-- UNREACHABLE GEOMETRY (cannot draw)"
+                                         : "");
+                    }
+                }
+            }
             g_env_light.setLightTevColorType_MAJI(model, &i_this->tevStr);
             // §143: model1 C0/K0 live seacolor; C1–C3/K1–K3 authored (§138 table).
             // Ferry A STEP 1: palette bisect skips per-frame wwApplyModel1SeaPalette.
@@ -10036,6 +10716,23 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                 wwApplyModel1SeaPalette(data);
             }
             mDoExt_modelUpdateDL(model);
+            // ================================================================
+            // §387b TAP B RELOCATED. Tap B on J3DShape::drawFast NEVER FIRED:
+            // this model draws through a BAKED DL REPLAY, so per-shape draws do
+            // not happen (Housing trap 39, confirmed from the other side). The
+            // state that matters is the state around THIS submission, so read it
+            // here — no arming, no user fiddling, one shot per model.
+            // ================================================================
+            if (data != NULL && data->getMaterialNum() == 19) {
+                static bool s_tapB = false;
+                if (!s_tapB) {
+                    s_tapB = true;
+                    char buf[2048] = {};
+                    aurora_gx_state_snapshot(buf, sizeof(buf));
+                    DuskLog.info("[GXTap] §387b B(J3D room model, post-updateDL) {}",
+                                 buf);
+                }
+            }
             if (i == 1 && i_this->mpBgBtk != NULL && data != NULL &&
                 wwFpsBisectMode() != kWwFpsBisectSkipBtk) {
                 i_this->mpBgBtk->remove(data);

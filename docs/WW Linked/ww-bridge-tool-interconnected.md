@@ -18572,3 +18572,80 @@ state. Such edits are invisible to every runtime probe, they silently invalidate
 investigation, and they remove the pressure that would otherwise get the real system ported. If a
 donor value cannot be honoured, port the system that consumes it or log the gap — do not edit the
 donor.
+
+## §400 — Housing → History + ALL LANES: the Grandma crash is FIXED — `calc()` means OPPOSITE things in the two lineages; §397's mechanism was wrong and so was mine (2026-08-04)
+
+**Lane: Housing Security.** Taking §397. **Fixed and confirmed** — user cycled interiors "a great
+number of times", no crash. Root cause is not lifetime, not the cache, not the format.
+
+### Root cause: a lineage NAME INVERSION
+
+| | per-joint callback | whole-model driver |
+|---|---|---|
+| **donor** `J3DMtxCalc` | `virtual void calc(u16 jnt_no)` | `mDoExt_McaMorf::calc()` — `setMtxCalc(this); mpModel->calc();` |
+| **receiver** `J3DMtxCalc` | **`virtual void calc() = 0`** | **`mDoExt_McaMorf::modelCalc()`** |
+
+Donor code saying `mpMorf->calc()` means *run the model*. Here it hits the **per-joint callback**,
+which reads `J3DMtxCalc`'s **STATIC** `mJoint` / `mMtxBuffer` (J3DJoint.cpp:25-27) — state only the
+joint-tree walk inside `J3DModel::calc()` establishes. Called straight from `createInit`, nothing
+has set them, so `calcTransform` dereferences a NULL mtxBuffer at `getAnmMtx(jntNo)`.
+
+Symbolicated (fault addr **0x80**, not -1):
+`J3DGetTranslateRotateMtx` (J3DTransform.cpp:183) ← `J3DMtxCalcCalcTransformMaya::calcTransform`
+(J3DJoint.cpp:93) ← `mDoExt_McaMorf::calc` (m_Do_ext.cpp) ← `daNpc_Ba1_c::setMtx` (:354) ←
+`createInit` (:330) ← `_create` (:1661).
+
+**Why intermittent:** the statics retain whatever the LAST model calc left behind, so survival
+depends on what ran immediately before. Interior cycling changes that ordering; a fixed sequence
+never reproduced it. This is why it read as "who knows the source".
+
+**Fix:** `modelCalc()` — byte-for-byte the donor's `calc()` body (m_Do_ext.cpp:1511-1520). The
+donor's own call, in the receiver's names. NOT a workaround.
+
+### It was a CLASS, not a Ba1 bug
+
+Same pattern (`setBaseTRMtx(...)` then `->calc()` outside a walk) corrected in:
+`d_a_npc_ba1` · `d_a_npc_bm1` (main + wing + arm + head morfs) · `d_a_npc_ls1` · `d_a_npc_zl1` ·
+`d_a_obj_toripost` (x2). Grandma crashed first only because she re-creates on EVERY interior load;
+the others were waiting for the right cycling.
+
+**The knowledge already existed and did not travel.** `d_a_kamome.cpp:14` documents it exactly:
+*"whole-model joint calc is modelCalc() (donor's mpMorf->calc() maps to it)"*. Kamome's porter hit
+this, solved it, wrote it down locally, and five other actors shipped with the bug.
+
+### Two mechanisms DISPROVEN — do not re-chase
+
+* **§397's shape** (*"session-lived cache retains parsed data across arc purge/remount; recycled
+  storage → stale joint tables"*) is **wrong**. `ensurePristineJ3dRaw` stashes a BYTE COPY and
+  `mountPristineParseSrc` hands the parser a FRESH copy held in `s_parsedRawKeep`, so the parsed
+  `J3DModelData` is backed by session-lived `std::vector` storage and **never points into the arc
+  buffer**. Freeing or remounting the arc cannot dangle it. Confirmed twice: by reading the code,
+  and by measurement — `data=0x1cfe18ac1a0` identical across all 30 cache hits.
+* **My own proposed fix** (validate each cache entry against the live `res` pointer) addressed that
+  same absent mechanism. Not built.
+
+### Kept: a real unbounded leak, found on the way
+
+`s_parsedRawKeep` grew **+32 entries per interior cycle, monotonically, never reclaimed** —
+measured 177 → 209 → 241 → 273. `purgeModelCacheForArc` erased the model-cache entry but stranded
+its keep-alive raw copy (a full model buffer each). **Fixed:** keep-alive copies now carry the
+cache key that owns them and are reclaimed by the same purge — safe only there, because
+`releaseArcModels` reaches purge only when `live == 0` AND no live mount refs the arc.
+After: `keep=` runs 1 → 17, peak 49, bounded and oscillating; 191 purges reclaimed 3-101 KB each.
+This was NOT the crash, but it is the best candidate for History's pre-crash symptom (arrival
+camera lingering / load latency rising per cycle) and should be retested for that.
+
+### BDL canary result (see §398)
+
+The crash reproduced **identically with a genuine unconverted `J3D2bdl4` Ba.arc**, independently
+confirming the BDL format is irrelevant to it — and the fix holds with that arc still staged.
+`Ba.arc` remains unconverted; revert is one copy from `Ba.arc.pre-bdltest-bak`.
+
+### Trap register — entry 40 (extends §243/§249)
+
+40. **A receiver API can share the donor's NAME and invert its MEANING.** `calc()` is the donor's
+    whole-model driver and the receiver's per-joint callback. Verbatim donor code then compiles,
+    links, runs, and fails INTERMITTENTLY on shared static state. Before porting a donor call
+    verbatim, check the receiver's declaration of that virtual — not just that the symbol exists.
+    Corollary: when a porter solves one of these, it belongs in the trap register, not only in a
+    comment at the top of the actor that hit it.

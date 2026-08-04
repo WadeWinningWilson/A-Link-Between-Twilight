@@ -980,7 +980,11 @@ bool daObjTpost_c::_execute() {
     fopAcM_rollPlayerCrash(this, 40.0f, 7, 200.0f, -100.0f, TRUE, 0.0f);  // §253 port arity (+max_y,+min_y,+p5,+p6)
 
     mMorf->play(0, 0, 0);
-    mMorf->calc();
+    // 400: the receiver's `calc()` is J3DMtxCalc's PER-JOINT callback (it reads the
+    // STATIC mJoint/mMtxBuffer that only J3DModel::calc()'s joint walk sets). The
+    // donor's whole-model `mpMorf->calc()` maps to modelCalc() here — same body,
+    // receiver's name (m_Do_ext.cpp:1511, d_a_kamome.cpp:14). See d_a_npc_ba1.cpp.
+    mMorf->modelCalc();
     setMtx();
     setAnm(AnmPrm_NULL, false);
 
@@ -1045,7 +1049,11 @@ void daObjTpost_c::createInit() {
 
     setAnm(AnmPrm_POST_GET0, false);
     setMtx();
-    mMorf->calc();
+    // 400: the receiver's `calc()` is J3DMtxCalc's PER-JOINT callback (it reads the
+    // STATIC mJoint/mMtxBuffer that only J3DModel::calc()'s joint walk sets). The
+    // donor's whole-model `mpMorf->calc()` maps to modelCalc() here — same body,
+    // receiver's name (m_Do_ext.cpp:1511, d_a_kamome.cpp:14). See d_a_npc_ba1.cpp.
+    mMorf->modelCalc();
 
     fopAcM_SetMtx(this, mMorf->getModel()->getBaseTRMtx());
     fopAcM_setCullSizeBox(this, -50.0f, 0.0f, -50.0f, 70.0f, 200.0f, 70.0f);
