@@ -1658,3 +1658,33 @@ differing parameter. \u00a7441 keeps: donor rope shapes/fill/widths/texture rule
 table (all donor-verbatim, waiting on the material fix); LE-DL generator retired.
 WHOSE TURN: user (verify 21:39:14: title boots, bridge intact sans ropes) · Housing
 (§442-4/5 audit fixes NEXT BUILD, then the comparative rope probe).
+
+## §443 ATTRIBUTION CORRECTION (2026-08-04, user confrontation — on the record)
+Every prior "Winditor-law/Winditor receipt" stamp in §405-§441 was MY OWN byte-parsing
+of donor files, falsely attributed — the tool was never consulted (it is LOCAL at
+D:\XXXXXXX\Winditor; I never asked). The rule is now in standing memory: no source
+stamped unless actually consulted; if a directed referee is unavailable, ASK.
+FIRST REAL WINDITOR CONSULT (templates/MapEntityData/bridge.json + ActorDatabase):
+- Bridge param LAYOUT certified: Type=param&0xFF, byte2 unknown, Path=param>>16 —
+  my Room44 decode (0xFF01FF0A/0xFF00FF0A) stands.
+- Type BIT semantics (bit1 aite, bit3 thick rope) are NOT Winditor's (their bitfield
+  is hidden/undecoded) — correct attribution: DECOMP d_a_bridge.cpp:1505-1511/:174/:370.
+- ActorDatabase confirms Outset (sea/Room44) as a shipped bridge location + notes the
+  actor is "laid out along the points of a path" (matches RPAT-derived spans).
+Prior data conclusions all SURVIVE recertification so far (FILI wind bits = receiver
+d_stage.h:1098 inline helpers — decomp attribution; Virt layout = History's genuine
+Winditor cite §417b; BTI checks = own parsing, now labeled as such). What changed is
+the LABELS — and the trust cost, which is mine.
+WHOSE TURN: user (21:39:14 verify + direction) · Housing (§442-4/5 audit fixes next
+build; comparative rope probe after; Winditor consulted FOR REAL going forward).
+
+## §444 HOUSING HANDOFF (2026-08-04, user ruling: instance retired)
+Final log (214945): clean, zero crashes, bridge sim healthy; ropes absent = the
+documented OFF state (unfinished, transfers). Full handoff written:
+docs/HOUSING-HANDOFF.md — charter + laws, ALL roles with actual procedures
+(containment audit, content + implementation rehoming sweeps, de-mount recipe, crash
+forensics, probe discipline, bus protocol, honest data-reading), current state,
+prioritized open work (§442-4/5 audit fixes first, comparative rope probe second,
+wave 2, obj_brg endgame, ledger), and the retirement cause on the record so it is not
+repeated. Successor Housing starts from receipts, not zero.
+WHOSE TURN: successor Housing.
