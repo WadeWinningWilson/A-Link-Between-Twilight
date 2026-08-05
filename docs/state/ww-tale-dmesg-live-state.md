@@ -1500,3 +1500,45 @@ Implementation = next session head, port order 0-5 in the spec (step 0: stage
 mbrdg.dzb + verify rope.bti in WwAlways).
 WHOSE TURN: user (test 18:31:34: esa/lamp/table present via real actors, no identity
 swaps) · Housing next session (§429 bridge implementation off the banked spec).
+
+## §429b BRIDGE IMPLEMENTED (2026-08-04, Housing, off the banked spec)
+d_a_ext_plank_span now runs the donor simulation (exe 18:41:58, gate clean):
+- NODE SIM: two-pass 75.0-segment chain relaxation (control1/2/3 + taper) — plank
+  positions AND orientations donor-derived per frame (fixes the misplacement);
+- COLLISION: one deformable dBgWSv from the donor's own mbrdg.dzb (staged Bridge arc,
+  raw-consumed — dzb needs no J3D parse), 4-verts-per-plank vertex writer + end
+  extensions, ride callback registered (player 100/−31, default 50/−10, ±5-neighbor
+  ita_z_p spring kernel, wind floor 2.0/0.6);
+- ROPES: procedural 3Dlines — 2×14 main handrails (width 4, interior points = post
+  rope tops, endpoints local ∓120/350/∓40) + 4×5 hanger pairs per post plank
+  (width 3), rope.bti from staged WwAlways 0x7E, color {150,150,150,255};
+- donor scales/posts (i≡2 mod 4)/profile/180-flips; §425 lighting unchanged.
+DECLARED OWED (spec has full detail): cut/fire + sword cylinders, snap (m0304/m0308),
+chain/aite variants, moblin/boar/bomb rider specials, sounds/particles.
+WHOSE TURN: user (test: walk the bridge — planks hang on a sagging span, deflect
+underfoot, sway in wind; ropes visible; log lines '[ExtSpan] 429').
+
+## §434 ROPE PLATFORM BUG — documented retreat (2026-08-04, Housing)
+The bridge SIM+COLLISION+GAP are stable (19:56:05); ropes are OFF behind
+kExtSpanRopes pending a dedicated aurora-lane session. FIVE crash receipts:
+ 1) 184254: shared-dzb double-Set (FIXED §429b, per-actor copies).
+ 2) 191024 fatal 0x7f pos 841195 + 3) 194514 fatal 0x7f pos 28692 — BYTE-IDENTICAL
+    hex dumps: well-formed J3D LOAD_ARRAYBASE/stride records (BE u16/u64, attr idx
+    0xC/0xD, strides 0x30/0x24, sizes 0x1E0/0x168) parsed misaligned in the LE main
+    stream; trigger = first-ever exercise of mDoExt_3DlineMat1_c (rope material).
+ 4) 193242 "draw vertex data overrun" — forcing ALL GXCallDisplayList BE broke
+    runtime-recorded LE DLs (GXBeginDisplayList users) at boot.
+ 5) 194952 "Invalid vertex type 0xCF3A0000" — BE-processing ONLY the static blobs
+    (l_invisibleMat/l_matDL/l_mat1DL) ALSO instant-crashed, and those two sites are
+    hit every frame by systems that work through the INLINE path — so BE-blob-inline
+    is NOT inherently fatal; the interaction is specific to how/when the 3Dline
+    material path executes. All aurora experiments REVERTED to stock.
+OPEN QUESTIONS for the dedicated session: what execution context do
+mDoExt_3DlineMatSortPacket draws run in on aurora (packet draw during drain?);
+which writer produced the BE array records at the fatal (J3DShape::loadVtxArray
+GXCmd1* endianness on PC?); why do l_invisibleMat/l_matDL inline safely but
+l_mat1DL desyncs. Instruments ready: §433 P50/P51 witnesses (need routing through
+aurora's Module Log, NOT stdio — stdio does not reach the log file).
+VOID-OUT probes (§433 P53/P54/P56/P58/P60) are rope-independent and STILL ARMED.
+WHOSE TURN: user (test 19:56:05: stable warp, walk bridge, void on purpose, send
+433-P60 lines) · Housing (void fix from P60 verdict; ropes = new session).

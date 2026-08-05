@@ -14775,6 +14775,20 @@ BOOL daAlink_c::checkRestartRoom() {
     {
         return procCoSwimFreezeReturnInit();
     } else if (!checkCargoCarry() && (mGroundCode == 4 || mGroundCode == 10 || (-G_CM3D_F_INF == mLinkAcch.GetGroundH() && !checkModeFlg(0x40000)))) {
+        // ====================================================================
+        // §433-P60: void-out fingerprint (bridge investigation). Names the
+        // exact ground code + height + position that armed the restart branch.
+        // ====================================================================
+        {
+            static int s_p60 = 0;
+            if (s_p60 < 12) {
+                s_p60++;
+                DuskLog.info("[ExtSpan] 433-P60 restartRoom ARMED: gndCode={} gndH={} "
+                             "pos=({}, {}, {}) waterY={} att1={}",
+                             (int)mGroundCode, mLinkAcch.GetGroundH(), current.pos.x,
+                             current.pos.y, current.pos.z, mWaterY, (int)mGndPolyAtt1);
+            }
+        }
         BOOL temp_r28 = mWaterY > mLinkAcch.GetGroundH();
 
         f32 var_f31;
