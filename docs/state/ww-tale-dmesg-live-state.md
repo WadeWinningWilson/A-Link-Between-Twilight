@@ -1542,3 +1542,119 @@ aurora's Module Log, NOT stdio — stdio does not reach the log file).
 VOID-OUT probes (§433 P53/P54/P56/P58/P60) are rope-independent and STILL ARMED.
 WHOSE TURN: user (test 19:56:05: stable warp, walk bridge, void on purpose, send
 433-P60 lines) · Housing (void fix from P60 verdict; ropes = new session).
+
+## §436 (2026-08-04): crush fix VERIFIED walkable · rider-drag probe armed · obj_brg discovery
+§435 crush exemption works (user: bridge walkable). NEW defect: riders dragged to span
+ends, stuck walking in place, roll falls through — rider-correction (dBgWSv CrrPos)
+conveyor suspected; P64 armed (per-frame plank position deltas + taper residual, exe
+20:40:26). DISCOVERY: TP d_a_obj_brg (Kakariko bridge) is the SAME-LINEAGE descendant
+of WW d_a_bridge — identical dzb corner switch / CopyBackVtx / Move architecture, with
+WORKING rider tracking. Two consequences: (1) the drag fix = diff my hand-rolled sim
+against obj_brg's donor-evolved plank/vertex update (the proven reference); (2) the
+ENDGAME per the ratified lineage taxonomy: the WW bridge should become a WW LEG inside
+obj_brg (the vrbox pattern), retiring the §429 standalone TU. Ropes stay §434-owed.
+WHOSE TURN: user (run 20:40:26, cross the bridge, send 433-P64 lines) · Housing next
+session (P64 verdict → drag fix from the obj_brg diff → leg-migration evaluation).
+
+## §437/§438 (2026-08-04): winding fixed (user-verified) · end extension donor-corrected
+§437 winding swap VERIFIED (main body "perfectly walkable" — P64 stationary verts +
+persistent P63 roof hits had convicted mirrored quads). §438: cliff-end fall-through =
+MY end-extension deviations, caught by the user before I papered over them with an
+invented dynamic length. Donor verbatim restored (:1212-1230): idx0 extends +50 local Z
+(plank yaw points TOWARD home), gap-edge plank m02DD-1 extends -40 (aite) / -50 (full),
+rotated by yaw+pitch, NO y-drop. Exe 20:55:57, gate clean.
+LEDGERED: rare jump phase-through (suspected tunneling past the donor 30-unit skirt at
+PC fall speeds — needs a ruling, no reflex deviation); WW collision-system parity audit
+(user question — systematic sweep unowned).
+WHOSE TURN: user (test 20:55:57: cliff ends must hold; main body regression check).
+
+## §440 FULL VERBATIM RE-DERIVATION (2026-08-04, user order: full native, no halfway)
+The §429 paraphrased sim is RETIRED. control1/2/3 + bridge_move case-3 are now the
+donor's lines (WW d_a_bridge.cpp:388-492/:657-794) with seams [R1]-[R5] only. The
+paraphrase's convicted bugs, for the record: forward control3 (plank 0 rotated 180° —
+the start-cliff fall-through), side-swapped anchors (§439), split spring loops, dropped
+m404 roll term, invented m3F4 zeroing. §437's compensating winding swap reverted; §438's
+donor end-extension stands. Remaining non-verbatim (declared): ride callback (player+
+default weights only — moblin/boar/bomb owed with cut/fire), anchors block (donor-
+verbatim per §439), vertex writer (donor map §439 + [R5] collapse). Exe 21:09:54, gate
+clean. Classification stands: NATIVE-PORT, paraphrase debt now paid on the sim core.
+WHOSE TURN: user (test 21:09:54: both cliff ends, jump-landing, main body).
+
+## §441 ROPE PASS OPENED with both referees (2026-08-04, user order)
+CONFESSION LOGGED (§440 reply): remaining transcriptions = rope draw (off, being
+redone), ride-callback rider table (owed w/ cut), vrkumo layer-loop (assembled from
+History's spec — no donor source exists), celestial/vrbox2 blocks (agent-verbatim
+assembly, one tier below direct source read), §416 angle conversion (documented).
+WINDITOR RECEIPT (authored law): Outset bridges typeBits 0x0A bit3 = THICK-ROPE
+variant → txm_rope1.bti (Always 0x8D, staged ✓) with donor widths 6.5 (rails) / 5.0
+(hangers) — my §429 rope params (rope.bti + 4.0/3.0) were WRONG data.
+NOCLIP RECEIPT (working reference, m_do_ext.ts): their 3DlineMat1 PARSES the same GC
+static DL bytes (l_mat1DL / l_toonMat1DL when tevStr'd) into register state and builds
+the material from it — CONFIRMING the DL is pure register state (no draw commands) and
+the correct PC treatment is REGISTER TRANSLATION, never FIFO byte-inlining (the §434
+platform bug). Geometry confirmed donor-true: cross(segDir, point−eye) normalized to
+width, V += len*0.1, normals ±X, triangle strips.
+THE FIX (zero aurora risk): decode l_mat1DL's 16 register loads into direct GX calls
+as the PC setMaterial path (calls go through aurora's normal shims). Byte decode banked:
+XF[1040]=FFFF4280 · CP[30]=3CF3CF00 · XF[1018]=3CF3CF00 · XF[100E]=7F32 ·
+XF[1010]=500 · XF[100C]=FFFFFFFF · BP[28]=380040 (tev order) · BP[C0]=28FA8F (color:
+lerp ZERO,RASC,TEXC = RASC*TEXC ✓ matches noclip semantics) · BP[C1]=08FFF0 (alpha) ·
+BP[43]=41 · BP[40]=17 (zmode) · BP[41]=C (blend) · BP[F3]=7F0000 (alpha comp) ·
+XF[103F]=1 texgen · XF[1009]=1 chan · BP[00]=11 (genmode). Cross-check = noclip's
+setFromRegisters semantics + the tevStr color plumbing (C0/K0/line-color regs set by
+update, donor draw()).
+EXECUTION (next turn): translate registers → GX calls in mDoExt_3DlineMat1_c::
+setMaterial #if TARGET_PC; correct rope params to txm_rope1 + 6.5/5.0 per Winditor
+receipt; re-enable kExtSpanRopes; verify vs the §433 witnesses.
+WHOSE TURN: user (§440 bridge test verdict) · Housing (execute §441 on any verdict).
+
+## §442 REFINEMENT CAMPAIGN OPENED (2026-08-04, user order: finish ALL transcriptions)
+Accountability on the record: the bridge sim was paraphrase under a native-port label —
+the covenant violation the user named; celestial/vrkumo carried evidence-tier labels
+but "donor-verbatim" overstated assembly-from-extraction. Campaign = certify or
+re-derive all six confession items:
+ 1 rope draw — §441 in flight (Winditor: txm_rope1+6.5/5.0; noclip: register-translate
+   l_mat1DL, never FIFO-inline; donor rope-draw verbatim extraction RUNNING)
+ 2 ride callback — donor :29-124 verbatim extraction RUNNING
+ 3 vrkumo layer-loop — certify vs History .inc spec + noclip draw (evidence-tier
+   ceiling: donor undecompiled)
+ 4 celestial TU — line-by-line audit vs donor sources RUNNING (agent)
+ 5 vrbox/vrbox2 WW legs — same audit RUNNING (agent)
+ 6 wind — DONE this pass: WW leg in dKyw_wind_set (donor formula verbatim, tact
+   default 0,0, FILI 0.3), evt-angle trick retired. Exe 21:23:32, gate clean.
+Bridge note (user): rolling uphill can fall through — parked per user (possible genuine
+collision-lineage difference; revisit after campaign).
+WHOSE TURN: agents (audits/extractions) → Housing (execute fixes per findings) · user
+(§440 verdict stands: bridge "largely okay").
+
+## §441 EXECUTED (2026-08-04): ropes LIVE via LE translation + donor shapes
+The §434 platform bug fixed at the right layer: l_mat1DL mechanically byte-swapped to
+aurora's LE stream format (144 bytes, generated from the BE original — noclip receipt
+certified the DL as pure register state, so payload byteswap is exact). Donor rope
+shapes RESTORED from the verbatim extraction: 4-line×5 hanger mat per post (per-vertex
+sizes 5.0 thick/3.0, cut-half lines sized 0), one 2-line×14 rail mat (endpoints donor
+:315-382, width 6.5 thick/4.0), txm_rope1.bti per Winditor bit3 receipt, interior rail
+segments = post rope tops (donor :1112-1167 intact legs). Ride callback donor :29-124
+verbatim with [R7]: PLAYER→fpcNm_ALINK_e; MO2/BK/BOMB legs re-enter with their
+de-mounts (no receiver profiles yet — adapter stand-ins can't match by name).
+[R6] owed: aite partner rail handoff (donor :329-335). Exe 21:35:15, gate clean.
+AUDIT (items 4/5) delivered: ~12 undeclared divergences — headline: eyevect calc2-vs-
+calc (−200 y lost), hide_vrbox gates dropped from moveSun/moveStar, GXSetClipMode
+dropped, GX_COLOR0→COLOR0A0, mInitAnimTimer escape, vrbox2 cross-actor hide gate,
+snap_sunmoon drops undeclared. Fix pass = §442-4/5 NEXT BUILD.
+WHOSE TURN: user (test 21:35:15: ROPES — handrails + hangers, thick, sagging with the
+span; bridge regression check) · Housing (§442-4/5 audit fixes).
+
+## §441b ROPE THEORY #3 FALSIFIED — stable build restored (2026-08-04)
+Title crash (prim 248) EXONERATED the BE display list: the title's horse reins are a
+3DlineMat1 user exercising the BE l_mat1DL inline successfully since forever — my LE
+swap broke THEM. Reverted; ropes OFF; exe 21:39:14 stable (gate clean). Also falsified
+this round: raw-BTI header theory (ResTIMG is BE-typed — JUTTexture.h:20-38).
+Score: DL-endianness ✗ (reins) · mat shape ✗ (§429d 1-line ALSO crashed) · texture ✗.
+The working control EXISTS (reins: same class, same DL, same phase) — next rope build =
+COMPARATIVE probe: log every 3DlineMat setMaterial/draw (this, numLines, count, texptr,
+tevstr) — reins lines at title vs the last line before the rope fatal names the exact
+differing parameter. \u00a7441 keeps: donor rope shapes/fill/widths/texture rule + rider
+table (all donor-verbatim, waiting on the material fix); LE-DL generator retired.
+WHOSE TURN: user (verify 21:39:14: title boots, bridge intact sans ropes) · Housing
+(§442-4/5 audit fixes NEXT BUILD, then the comparative rope probe).

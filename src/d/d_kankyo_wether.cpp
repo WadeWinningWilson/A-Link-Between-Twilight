@@ -1416,7 +1416,9 @@ void dKyw_ww_host_wind_onStage(const char* stage) {
     // ========================================================================
     static constexpr f32 kWwHostAmbientWindPow = 0.3f;
     if (stage != NULL && dExtWwSave_isWwHostStage(stage)) {
-        dKyw_evt_wind_set(/*angleX=*/0, /*angleY=*/0x4000);
+        // §442-6: the evt-angle equivalence trick is RETIRED -- the WW leg in
+        // dKyw_wind_set now resolves donor-formula wind directly. This hook
+        // only keeps the windline system armed.
         dKyw_custom_windpower(kWwHostAmbientWindPow);
         if (!s_armed) {
             s_armed = true;
@@ -2027,6 +2029,33 @@ void dKyw_wind_set() {
 
     cXyz wind_vec;
     f32 strength;
+
+    // ========================================================================
+    // §442-6 WW WIND LEG (refinement of §416's angle-conversion seam): on a
+    // WW host, the DONOR's own resolver runs -- WW dKyw_wind_set:1040-1060
+    // verbatim: tact angles (never-conducted default 0,0 per save sentinel),
+    // WW vector formula x=cos(tx)cos(ty), y=sin(tx), z=cos(tx)sin(ty), and
+    // strength from the authored FILI GlobalWindLevel (Winditor receipt
+    // sea/Room44 = level 0 -> 0.3). Replaces the evt-angle equivalence trick.
+    // ========================================================================
+    if (dKyWw_isSkyHost()) {
+        const s16 tact_wind_x = 0;
+        const s16 tact_wind_y = 0;
+        wind_vec.x = cM_scos(tact_wind_x) * cM_scos(tact_wind_y);
+        wind_vec.y = cM_ssin(tact_wind_x);
+        wind_vec.z = cM_scos(tact_wind_x) * cM_ssin(tact_wind_y);
+        strength = 0.3f;
+        if (g_env_light.light_init_timer != 0) {
+            g_env_light.global_wind_influence.vec = wind_vec;
+            g_env_light.global_wind_influence.pow = strength;
+        } else {
+            cLib_addCalc(&g_env_light.global_wind_influence.vec.x, wind_vec.x, 0.05f, 2.0f, 0.001f);
+            cLib_addCalc(&g_env_light.global_wind_influence.vec.y, wind_vec.y, 0.05f, 2.0f, 0.001f);
+            cLib_addCalc(&g_env_light.global_wind_influence.vec.z, wind_vec.z, 0.05f, 2.0f, 0.001f);
+            cLib_addCalc(&g_env_light.global_wind_influence.pow, strength, 0.05f, 1.0f, 0.005f);
+        }
+        return;
+    }
 
     if (g_env_light.global_wind_influence.vec_override != NULL) {
         wind_vec = *g_env_light.global_wind_influence.vec_override;

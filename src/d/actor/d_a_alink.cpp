@@ -14683,6 +14683,24 @@ void daAlink_c::setLastSceneMode(u32* o_mode) {
 }
 
 int daAlink_c::startRestartRoom(u32 i_mode, int param_1, int i_dmgAmount, BOOL i_isEventRun) {
+    // ========================================================================
+    // §433-P61: the void CHOKE POINT -- every restart passes here regardless
+    // of which branch/caller armed it. mode+param identify the trigger family
+    // (5/0xC9 = magne-void, lava, drown, fall...); position localizes it.
+    // ========================================================================
+    {
+        static int s_p61 = 0;
+        if (s_p61 < 12) {
+            s_p61++;
+            DuskLog.info("[ExtSpan] 433-P61 startRestartRoom mode={} param={:#x} dmg={} evt={} "
+                         "pos=({}, {}, {}) gndCode={} gndH={} waterY={} fallStartY={} "
+                         "falling={} inWater={}",
+                         (int)i_mode, param_1, i_dmgAmount, (int)i_isEventRun, current.pos.x,
+                         current.pos.y, current.pos.z, (int)mGroundCode, mLinkAcch.GetGroundH(),
+                         mWaterY, field_0x33c8, (int)(checkModeFlg(2) != 0),
+                         (int)(checkModeFlg(0x40000) != 0));
+        }
+    }
     if (!checkNoResetFlg0(FLG0_UNK_4000) &&
         (i_isEventRun || dComIfGp_event_compulsory(this, NULL, 0xFFFF)))
     {
@@ -14743,7 +14761,24 @@ void daAlink_c::checkRoofRestart() {
         && (mProcID != PROC_CRAWL_START && mProcID != PROC_CRAWL_END && !checkCoachGuardGame()))
     {
         s16 bg_actorName = getMoveBGActorName(mLinkAcch.m_roof, TRUE);
-        if (bg_actorName == fpcNm_OBJ_SO_e || bg_actorName == fpcNm_Obj_SCannon_e) {
+        // ====================================================================
+        // §435 (P61 conviction, log 200233: mode=5 param=0xc9, gndCode=0,
+        // standing, repeated at one spot with Y pressed down): TP's CRUSH
+        // check vs the WW bridge's deforming ribbon -- the sagging span's
+        // neighbor quads cross above Link's head as his plank deflects, and
+        // TP reads floor+roof as a squish. TP's own fix mechanism is this
+        // exemption list for moving BGs that legitimately sandwich Link
+        // (OBJ_SO / SCannon); the span joins it.
+        // ====================================================================
+        if (bg_actorName == fpcNm_OBJ_SO_e || bg_actorName == fpcNm_Obj_SCannon_e ||
+            bg_actorName == fpcNm_EXT_SPAN_e) {
+            static int s_p63 = 0;
+            if (bg_actorName == fpcNm_EXT_SPAN_e && s_p63 < 4) {
+                s_p63++;
+                DuskLog.info("[ExtSpan] 433-P63 crush-check EXEMPTED (roof=span ribbon) at "
+                             "({}, {}, {})",
+                             current.pos.x, current.pos.y, current.pos.z);
+            }
             return;
         }
 

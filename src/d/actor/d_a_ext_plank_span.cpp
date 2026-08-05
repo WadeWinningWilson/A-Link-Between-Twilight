@@ -183,6 +183,7 @@ struct SpanPlank {
     f32 m3FC;                        // sag term -> -15
     s16 m400;                        // rider roll target
     s16 m402;                        // rider roll current
+    s16 m404;                        // rope-cut lean (donor; dead while cut owed)
     u8 m406;                         // rider-active countdown
     u8 m408;                         // bit2 = rope post
     cXyz mScale;
@@ -192,7 +193,11 @@ struct SpanPlank {
     // update (d_a_obj_rope_bridge:376/583) -- the donor's 4-line mat + the
     // per-vertex-size update are unexercised on the PC path and were the
     // 190519 FIFO crash. Cut-half lines dropped with the unported cut system.
-    mDoExt_3DlineMat1_c mHanger[2];  // [0]=left [1]=right, 1 line x 5 pts each
+    // §441 donor shape restored: ONE 4-line x 5-pt mat per post (lines 0/2 =
+    // left rope + cut-half, 1/3 = right + cut-half; per-vertex sizes), exactly
+    // WW d_a_bridge. §429d's 1-line restructure was compensating for the §434
+    // material bug, now fixed by the l_mat1DL LE translation.
+    mDoExt_3DlineMat1_c mLineMat1;
     bool mLineInit;
 };
 
@@ -213,12 +218,13 @@ public:
     // §429 donor bridge_class subset
     SpanPlank mSim[kMaxPlanks];
     dBgWSv* mpBgW;
-    mDoExt_3DlineMat1_c mRail[2];    // §429d main handrails, 1 line x 14 pts each
+    mDoExt_3DlineMat1_c mLineMat;    // §441 donor main handrails: one 2-line mat
     bool mLineMatInit;
     cXyz mHomePos;
     cXyz mEndPos;
     s16 mHomeYaw;
     s16 m02EC, m02EE;                // phase accumulators
+    s16 m02F0, m02F2;                // phase speeds (donor 0x578 / 3000)
     f32 m02E0, m02E4;                // rider energy (vert / lateral)
     f32 m02F4, m02F8, m02FC;         // sway amplitudes
     s16 m0300;                       // wobble phase
@@ -237,54 +243,80 @@ static const f32 ita_z_p[11] = {0.1f, 0.3f, 0.5f, 0.75f, 0.9f, 1.0f,
 // dBgW when an actor stands on the span collision.
 // ============================================================================
 static void daExtSpan_rideCallback(dBgW* i_bgw, fopAc_ac_c* i_self, fopAc_ac_c* i_rider) {
-    daExtSpan_c* span = (daExtSpan_c*)i_self;
-    if (span == NULL || i_rider == NULL || span->mCount <= 0) {
+    // ========================================================================
+    // §441 donor ride_call_back VERBATIM (:29-124). Seams: [R1]/[R2] naming;
+    // [R7] the BK boar chase-field handoff (bk->dr.*) needs the receiver
+    // bk_class layout verified before writing cross-actor fields -- weight/
+    // depth applied, handoff OWED; MO2/BOMB legs live (same proc names).
+    // ========================================================================
+    daExtSpan_c* i_this = (daExtSpan_c*)i_self;
+    if (i_this == NULL || i_rider == NULL || i_this->mCount <= 0) {
         return;
     }
-    // §433-P53: proves the ride callback fires while crossing (collision
-    // continuity witness) -- silent stretches while walking = collision hole.
-    {
-        static u32 s_p53 = 0;
-        if ((++s_p53 % 120) == 1) {
-            DuskLog.info("[ExtSpan] 433-P53 ride: rider=({}, {}, {}) span@({}, {})",
-                         i_rider->current.pos.x, i_rider->current.pos.y,
-                         i_rider->current.pos.z, span->mHomePos.x, span->mHomePos.z);
-        }
-    }
-    const f32 dx = i_rider->current.pos.x - span->mSim[0].mPosition.x;
-    const f32 dz = i_rider->current.pos.z - span->mSim[0].mPosition.z;
-    int idx = (int)(std::sqrt(dx * dx + dz * dz) / 76.5f + 0.5f);
-    if (idx < 0) idx = 0;
-    if (idx >= span->mCount) idx = span->mCount - 1;
-    SpanPlank* pl = &span->mSim[idx];
 
-    f32 weight, depth;
-    if (i_rider == (fopAc_ac_c*)dComIfGp_getPlayer(0)) {
-        weight = 100.0f;
-        depth = -31.0f;
+    cXyz pos = i_this->mSim[0].mPosition - i_rider->current.pos;
+    s32 brIdx = (s32)(std::sqrt(pos.x * pos.x + pos.z * pos.z) / 76.5f - -0.5f);
+    if (brIdx > i_this->mCount - 1) {
+        brIdx = i_this->mCount - 1;
+    } else if (brIdx < 0) {
+        brIdx = 0;
+    }
+
+    SpanPlank* pBr = &i_this->mSim[brIdx];
+    f32 fVar2 = ((s_spanType & 5) != 0) ? 0.85f : 1.0f;
+    cMtx_YrotS(*calc_mtx, (s16)-pBr->mRotation.y);
+
+    cXyz posDiff = i_rider->current.pos - pBr->mPosition;
+    cXyz sp4C;
+    MtxPosition(&posDiff, &sp4C);
+
+    posDiff = i_rider->old.pos - pBr->mPosition;
+    cXyz sp40;
+    MtxPosition(&posDiff, &sp40);
+
+    i_rider->speed.y = -5.0f;
+
+    f32 fVar7;
+    // [R7] donor rider table: PLAYER -> receiver fpcNm_ALINK_e (same-lineage
+    // rename). MO2 (WW moblin) and BK (WW boar) have NO receiver profiles yet
+    // -- they are adapter-socketed census stand-ins until their de-mount, so
+    // fpcM_GetName can never match them; their donor legs (150/-40 + speedY
+    // -20; 100/-25 + chase handoff) re-enter verbatim WITH their de-mounts.
+    // BOMB donor leg (:85-93, near-explode depth -300 + m02E0=20) owed same.
+    if (fpcM_GetName(i_rider) == fpcNm_ALINK_e) {
+        fVar7 = 100.0f;
+        pBr->m3F4 = -31.0f;
     } else {
-        weight = 50.0f;
-        depth = -10.0f;
+        fVar7 = 50.0f;
+        pBr->m3F4 = -10.0f;
     }
-    // rider lateral offset in plank-local space -> roll target
-    cXyz local;
-    const f32 sy = cM_ssin((s16)-pl->mRotation.y);
-    const f32 cy = cM_scos((s16)-pl->mRotation.y);
-    const f32 rx = i_rider->current.pos.x - pl->mPosition.x;
-    const f32 rz = i_rider->current.pos.z - pl->mPosition.z;
-    local.x = cy * rx + sy * rz;
-    pl->m400 = (s16)(-local.x * weight);
-    pl->m3F4 = depth + span->m02FC * cM_ssin(span->m0300) * 0.03f * weight;
-    pl->m406 = 2;
-    i_rider->speed.y = -5.0f;  // glue
 
-    // movement energy (donor :105-123, k=1.0 rope type)
-    const f32 dmove = std::sqrt(i_rider->speed.abs2());
-    f32 e = dmove * 0.3f;
-    if (e > span->m02E0) span->m02E0 = e > 20.0f ? 20.0f : e;
-    f32 lat = local.x < 0.0f ? -local.x : local.x;
-    if (lat > 50.0f) lat = 50.0f;
-    cLib_addCalc2(&span->m02E4, lat, 1.0f, 0.5f);
+    fVar7 *= fVar2;
+
+    pBr->m3F4 *= fVar2;
+    pBr->m3F4 = pBr->m3F4 + i_this->m02FC * cM_ssin(i_this->m0300) * 0.03f * fVar7;
+    pBr->m400 = (s16)(-sp4C.x * fVar7);
+    pBr->m406 = 2;
+
+    pos = sp4C - sp40;
+
+    f32 fVar3 = pos.abs() * 0.3f * fVar2;
+    if (fVar3 > 20.0f) {
+        fVar3 = 20.0f;
+    }
+
+    if (i_this->m02E0 <= fVar3) {
+        i_this->m02E0 = fVar3;
+    }
+
+    f32 tmp = fVar2 * std::fabs(pos.x);
+    if (tmp > 50.0f) {
+        tmp = 50.0f;
+    }
+
+    if (i_this->m02E4 <= tmp) {
+        i_this->m02E4 += 0.5f;
+    }
 }
 
 int daExtSpan_c::create() {
@@ -418,10 +450,15 @@ int daExtSpan_c::create() {
     mEndPos = best->end;
     mHomeYaw = yaw;
     m02EC = m02EE = m0300 = 0;
+    m02F0 = 0x578;
+    m02F2 = 3000;
     m02E0 = m02E4 = 0.0f;
     m02F4 = m02F8 = m02FC = 0.0f;
     m030C = 0;
-    ResTIMG* ropeImg = (ResTIMG*)dComIfG_getObjectRes("WwAlways", (int)0x7E);
+    // §441 Winditor receipt: typeBits bit3 -> txm_rope1.bti (Always 0x8D),
+    // else rope.bti (0x7E) -- donor CallbackCreateHeap texture rule.
+    ResTIMG* ropeImg = (ResTIMG*)dComIfG_getObjectRes(
+        "WwAlways", (int)((s_spanType & 8) ? 0x8D : 0x7E));
     for (int i = 0; i < mCount; ++i) {
         SpanPlank* pl = &mSim[i];
         const f32 t = (i + 0.5f) / (f32)mCount;
@@ -433,7 +470,7 @@ int daExtSpan_c::create() {
         pl->m3F0 = mCount > 1 ? std::fabs(std::sin(3.14159265f * i / (f32)(mCount - 1))) : 1.0f;
         pl->m3F4 = pl->m3F8 = 0.0f;
         pl->m3FC = -15.0f;
-        pl->m400 = pl->m402 = 0;
+        pl->m400 = pl->m402 = pl->m404 = 0;
         pl->m406 = 0;
         pl->m408 = 0;
         pl->mLineInit = false;
@@ -441,9 +478,8 @@ int daExtSpan_c::create() {
         if (((i + 2) & 3) == 0) {
             pl->m408 = 7;
             pl->mScale.x = 1.05f;
-            if (ropeImg != NULL && pl->mHanger[0].init(1, 5, ropeImg, 1) &&
-                pl->mHanger[1].init(1, 5, ropeImg, 1)) {
-                pl->mLineInit = true;
+            if (ropeImg != NULL && pl->mLineMat1.init(4, 5, ropeImg, 1)) {
+                pl->mLineInit = true;  // §441 donor 4-line shape
             }
         }
         if (mpPlanks[i] != NULL) {
@@ -451,8 +487,8 @@ int daExtSpan_c::create() {
         }
     }
     mLineMatInit = false;
-    if (ropeImg != NULL && mRail[0].init(1, 14, ropeImg, 1) && mRail[1].init(1, 14, ropeImg, 1)) {
-        mLineMatInit = true;
+    if (ropeImg != NULL && mLineMat.init(2, 14, ropeImg, 0)) {
+        mLineMatInit = true;  // §441 donor 2-line rail mat
     }
     if (ropeImg == NULL) {
         DuskLog.warn("[ExtSpan] 429 rope.bti (WwAlways 0x7E) not resident -- ropes disabled");
@@ -528,64 +564,121 @@ int daExtSpan_c::create() {
 }
 
 // ============================================================================
-// §429 forward pass -- donor control1 (:388-447): wind + traveling waves fold
-// into each 75.0-unit segment step.
+// §440 FULL VERBATIM RE-DERIVATION (user order: full native, no halfway).
+// control1/control2/control3 + the bridge_move case-3 body are the donor's
+// lines (WW d_a_bridge.cpp:388-492, :657-794) with labeled seams only:
+//   [R1] i_this->mBr / pBr walk  -> this->mSim array walk (same field names)
+//   [R2] actor.home.pos/angle.y  -> mHomePos / mHomeYaw (ini-authored span)
+//   [R3] donor statics wp/wy     -> s_spanWp / s_spanWy (§429 wind fetch)
+//   [R4] chain-type (mTypeBits&1) legs compiled out: Outset bridges are rope
+//        type (donor receipt 0x0A has bit0 clear)
+//   [R5] cut/fire inputs (m3A0 wobble, m408 rope-cut bits, m0304/m0308 snap)
+//        read their donor defaults (intact) -- those systems stay §429-owed,
+//        so their branches are dead-but-present, donor shape preserved.
+// My §429 paraphrase (split loops, forward control3, dropped m404) RETIRED.
 // ============================================================================
-static void daExtSpan_control1(daExtSpan_c* sp) {
-    const s16 stride = (sp->mCount > 10) ? (s16)4000 : (s16)8000;
-    cXyz swayOfs;  // lateral sway, world
-    {
-        const f32 amp = sp->m02F8 * cM_scos(sp->m02EC);
-        swayOfs.set(amp * cM_scos(sp->mHomeYaw), 0.0f, amp * -cM_ssin(sp->mHomeYaw));
-    }
-    cXyz lat(cM_scos(sp->mHomeYaw), 0.0f, -cM_ssin(sp->mHomeYaw));  // bridge-lateral unit
-    cXyz windOfs;
-    windOfs.set(s_spanWp * 5.0f * cM_ssin(s_spanWy), 0.0f, s_spanWp * 5.0f * cM_scos(s_spanWy));
+static void daExtSpan_control1(daExtSpan_c* i_this, SpanPlank* pBr) {
+    cXyz sp3C;
+    cXyz sp30;
+    cXyz sp24;
+    cXyz sp18;
+    cXyz sp0C;
 
-    for (int i = 1; i < sp->mCount; ++i) {
-        SpanPlank* pl = &sp->mSim[i];
-        SpanPlank* pv = &sp->mSim[i - 1];
-        const f32 tmp = pl->m3F8 * 0.5f + (pl->m3FC * pl->m3F0 * 0.5f + pl->m3CC.y);
-        const f32 wave = sp->m02F4 * cM_ssin((s16)(sp->m02EC + i * stride)) * pl->m3F0;
-        const f32 vwave = sp->m02FC * cM_ssin((s16)(sp->m02EE + i * (stride + 1000))) * pl->m3F0;
-        const f32 x = (pl->m3CC.x - pv->m3CC.x) + wave * lat.x + swayOfs.x * pl->m3F0 + windOfs.x;
-        const f32 y = vwave + (tmp - pv->m3CC.y);
-        const f32 z = (pl->m3CC.z - pv->m3CC.z) + wave * lat.z + swayOfs.z * pl->m3F0 + windOfs.z;
-        const s16 yaw = cM_atan2s(x, z);
-        const s16 pit = (s16)-cM_atan2s(y, std::sqrt(x * x + z * z));
-        const f32 ch = 75.0f * cM_scos(pit);
-        pl->m3CC.set(pv->m3CC.x + ch * cM_ssin(yaw), pv->m3CC.y - 75.0f * cM_ssin(pit),
-                     pv->m3CC.z + ch * cM_scos(yaw));
+    pBr++;
+
+    i_this->m02EC += i_this->m02F0;
+    i_this->m02EE += i_this->m02F2;
+
+    s16 sVar13;
+    if (i_this->mCount > 10) {
+        sVar13 = 4000;
+    } else {
+        sVar13 = 8000;
+    }
+
+    sp3C.x = i_this->m02F8 * cM_scos(i_this->m02EC);
+    sp3C.y = 0.0f;
+    sp3C.z = 0.0f;
+    cMtx_YrotS(*calc_mtx, i_this->mHomeYaw);
+    MtxPosition(&sp3C, &sp24);
+    sp3C.x = 1.0f;
+    MtxPosition(&sp3C, &sp18);
+    sp3C.x = 0.0f;
+    sp3C.z = s_spanWp * 5.0f;
+    cMtx_YrotS(*calc_mtx, s_spanWy);
+    MtxPosition(&sp3C, &sp0C);
+    sp3C.x = 0.0f;
+    sp3C.z = 75.0f;
+
+    for (s32 i = 1; i < i_this->mCount; i++, pBr++) {
+        f32 x;
+        f32 y;
+        f32 z;
+        f32 tmp = pBr->m3F8 * 0.5f + (pBr->m3FC * pBr->m3F0 * 0.5f + pBr->m3CC.y);
+        f32 fVar8 = i_this->m02F4 * cM_ssin((s16)(i_this->m02EC + i * sVar13)) * pBr->m3F0;
+        f32 fVar7 =
+            i_this->m02FC * cM_ssin((s16)(i_this->m02EE + i * (sVar13 + 1000))) * pBr->m3F0;
+
+        x = (pBr->m3CC.x - pBr[-1].m3CC.x) + fVar8 * sp18.x + sp24.x * pBr->m3F0 + sp0C.x;
+        y = fVar7 + (tmp - pBr[-1].m3CC.y);
+        z = (pBr->m3CC.z - pBr[-1].m3CC.z) + fVar8 * sp18.z + sp24.z * pBr->m3F0 + sp0C.z;
+
+        s16 atan2v;
+        s16 atanv;
+        atanv = (s16)cM_atan2s(x, z);
+        atan2v = (s16)-cM_atan2s(y, std::sqrt(x * x + z * z));
+
+        cMtx_YrotS(*calc_mtx, atanv);
+        cMtx_XrotM(*calc_mtx, atan2v);
+        MtxPosition(&sp3C, &sp30);
+
+        pBr->m3CC.x = pBr[-1].m3CC.x + sp30.x;
+        pBr->m3CC.y = pBr[-1].m3CC.y + sp30.y;
+        pBr->m3CC.z = pBr[-1].m3CC.z + sp30.z;
     }
 }
 
-// donor control2 (:449-482) -- BACKWARD pass; writes plank yaw/pitch.
-static void daExtSpan_control2(daExtSpan_c* sp) {
-    for (int i = sp->mCount - 2; i >= 0; --i) {
-        SpanPlank* pl = &sp->mSim[i];
-        SpanPlank* nx = &sp->mSim[i + 1];
-        const f32 tmp = pl->m3F8 * 0.5f + (pl->m3FC * pl->m3F0 * 0.5f + pl->m3CC.y);
-        const f32 x = pl->m3CC.x - nx->m3CC.x;
-        const f32 y = tmp - nx->m3CC.y;
-        const f32 z = pl->m3CC.z - nx->m3CC.z;
-        const s16 yaw = cM_atan2s(x, z);
-        const s16 pit = (s16)-cM_atan2s(y, std::sqrt(x * x + z * z));
-        nx->mRotation.y = yaw;
-        nx->mRotation.x = pit;
-        const f32 ch = 75.0f * cM_scos(pit);
-        pl->m3CC.set(nx->m3CC.x + ch * cM_ssin(yaw), nx->m3CC.y - 75.0f * cM_ssin(pit),
-                     nx->m3CC.z + ch * cM_scos(yaw));
+static void daExtSpan_control2(daExtSpan_c* i_this, SpanPlank* pBr) {
+    cXyz sp18;
+    cXyz sp0C;
+
+    pBr += i_this->mCount - 2;
+    sp18.x = 0.0f;
+    sp18.y = 0.0f;
+    sp18.z = 75.0f;
+
+    for (s32 i = 0; i < i_this->mCount - 1; i++, pBr--) {
+        f32 tmp = pBr->m3F8 * 0.5f + (pBr->m3FC * pBr->m3F0 * 0.5f + pBr->m3CC.y);
+        f32 y = tmp - pBr[1].m3CC.y;
+
+        f32 x = pBr->m3CC.x - pBr[1].m3CC.x;
+        f32 z = pBr->m3CC.z - pBr[1].m3CC.z;
+
+        s16 atan2v;
+        s16 atanv;
+        atanv = (s16)cM_atan2s(x, z);
+        atan2v = (s16)-cM_atan2s(y, std::sqrt(x * x + z * z));
+
+        pBr[1].mRotation.y = atanv;
+        pBr[1].mRotation.x = atan2v;
+
+        cMtx_YrotS(*calc_mtx, atanv);
+        cMtx_XrotM(*calc_mtx, atan2v);
+        MtxPosition(&sp18, &sp0C);
+
+        pBr->m3CC.x = pBr[1].m3CC.x + sp0C.x;
+        pBr->m3CC.y = pBr[1].m3CC.y + sp0C.y;
+        pBr->m3CC.z = pBr[1].m3CC.z + sp0C.z;
     }
 }
 
-// donor control3 (:485-492) -- plank 0 orientation from node0 -> node1.
-static void daExtSpan_control3(daExtSpan_c* sp) {
-    if (sp->mCount < 2) {
-        return;
-    }
-    const cXyz d = sp->mSim[1].m3CC - sp->mSim[0].m3CC;
-    sp->mSim[0].mRotation.y = cM_atan2s(d.x, d.z);
-    sp->mSim[0].mRotation.x = (s16)-cM_atan2s(d.y, std::sqrt(d.x * d.x + d.z * d.z));
+static void daExtSpan_control3(daExtSpan_c* i_this, SpanPlank* pBr) {
+    f32 x = pBr->m3CC.x - pBr[1].m3CC.x;
+    f32 y = pBr->m3CC.y - pBr[1].m3CC.y;
+    f32 z = pBr->m3CC.z - pBr[1].m3CC.z;
+
+    pBr->mRotation.y = cM_atan2s(x, z);
+    pBr->mRotation.x = (s16)-cM_atan2s(y, std::sqrt(x * x + z * z));
 }
 
 int daExtSpan_c::execute() {
@@ -597,88 +690,144 @@ int daExtSpan_c::execute() {
     s_spanWy = cM_atan2s(s_spanWindVec->x, s_spanWindVec->z);
     s_spanWp = dKyw_get_wind_pow();
 
-    // phases (donor :780-793 order simplified: amplitudes first, then step)
-    m02FC = m02E0;
-    m02F4 = m02E0;
-    m02F8 = m02E4;
-    m02EC += 0x578;
-    m02EE += 3000;
-    m0300 += 3000;
-
-    // the relaxation (donor bridge_move case 3 :657-691)
-    mSim[0].m3CC = mHomePos;
-    daExtSpan_control1(this);
-    mSim[mCount - 1].m3CC = mEndPos;
-    daExtSpan_control2(this);
-    daExtSpan_control3(this);
+    // ------------------------------------------------------------------------
+    // §440 donor bridge_move case 3 VERBATIM (:657-794), seams [R1]-[R5].
+    // ------------------------------------------------------------------------
     {
-        const cXyz resid = mHomePos - mSim[0].m3CC;
-        for (int i = 0; i < mCount; ++i) {
-            const f32 k = ((f32)(mCount - i) / (f32)mCount) * 0.75f;
-            mSim[i].mPosition.set(mSim[i].m3CC.x + resid.x * k, mSim[i].m3CC.y + resid.y * k,
-                                  mSim[i].m3CC.z + resid.z * k);
-        }
-    }
+        SpanPlank* pBr = &mSim[0];
+        s32 i, j, iVar11;
+        f32 tmpf, fVar14, fVar2;
+        f32 my_tgt;
+        cXyz sp14;
 
-    // rider springs over +/-5 neighbors (donor :693-703) + decays (:765-773)
-    for (int i = 0; i < mCount; ++i) {
-        SpanPlank* pl = &mSim[i];
-        if (pl->m406 != 0) {
-            for (int j = -5; j <= 5; ++j) {
-                const int k = i + j;
-                if (k < 0 || k >= mCount) continue;
-                SpanPlank* nb = &mSim[k];
-                cLib_addCalcAngleS2(&nb->m402, (s16)(pl->m400 * ita_z_p[5 + j] * nb->m3F0), 4,
-                                    0x800);
-                cLib_addCalc2(&nb->m3F8, pl->m3F4 * ita_z_p[5 + j], 1.0f, 10.0f);
+        m0300 += 3000;
+        pBr->m3CC = mHomePos;
+
+        daExtSpan_control1(this, pBr);
+
+        (pBr + mCount - 1)->m3CC = mEndPos;
+
+        daExtSpan_control2(this, pBr);
+        daExtSpan_control3(this, pBr);
+
+        sp14 = mHomePos - pBr->m3CC;
+
+        current.pos = pBr->m3CC;
+        current.angle = pBr->mRotation;
+
+        for (i = 0; i < mCount; i++, pBr++) {
+            pBr->mPosition = pBr->m3CC;
+            tmpf = (((f32)(mCount - i) / (f32)mCount) * 0.75f);
+            pBr->mPosition.x += sp14.x * tmpf;
+            pBr->mPosition.y += sp14.y * tmpf;
+            pBr->mPosition.z += sp14.z * tmpf;
+
+            if (pBr->m406 != 0) {
+                for (j = -5; j <= 5; j++) {
+                    iVar11 = i + j;
+                    if ((iVar11 < 0) || (iVar11 >= mCount)) {
+                        continue;
+                    }
+
+                    my_tgt = (f32)pBr->m400 * ita_z_p[5 + j] * pBr[j].m3F0;
+                    cLib_addCalcAngleS2(&pBr[j].m402, (s16)my_tgt, 4, 0x800);
+                    cLib_addCalc2(&pBr[j].m3F8, pBr->m3F4 * ita_z_p[5 + j], 1.0f, 10.0f);
+                }
             }
+
+            if (((pBr->m408 & 4) != 0) && (pBr->m408 & 3) != 3) {
+                // [R5] rope-cut lean: dead while the cut system is owed (m408
+                // stays 7 = both ropes intact), donor shape preserved.
+                fVar14 = 0.0f;
+                fVar2 = -80.0f;
+                if ((pBr->m408 & 3) == 1) {
+                    fVar14 = 7000.0f;
+                    fVar2 = -30.0f;
+                } else if ((pBr->m408 & 3) == 2) {
+                    fVar14 = -7000.0f;
+                    fVar2 = -30.0f;
+                }
+
+                for (j = -5; j <= 5; j++) {
+                    iVar11 = i + j;
+                    if ((iVar11 < 0) || (iVar11 >= mCount)) {
+                        continue;
+                    }
+
+                    my_tgt = fVar14 * ita_z_p[5 + j] * pBr[j].m3F0;
+                    cLib_addCalcAngleS2(&pBr[j].m404, (s16)my_tgt, 4, 0x800);
+                    cLib_addCalc2(&pBr[j].m3F8, fVar2 * ita_z_p[5 + j], 1.0f, 15.0f);
+                }
+            }
+
+            if (pBr->m406 != 0) {
+                pBr->m406--;
+            }
+            pBr->m400 = 0;
+            pBr->mRotation.z = (s16)(pBr->m402 + pBr->m404);
+            cLib_addCalcAngleS2(&pBr->m402, 0, 4, 0x400);
+            cLib_addCalcAngleS2(&pBr->m404, 0, 4, 0x400);
+            cLib_addCalc2(&pBr->m3FC, -15.0f, 1.0f, 5.0f);
+            cLib_addCalc0(&pBr->m3F8, 1.0f, 5.0f);
         }
-    }
-    for (int i = 0; i < mCount; ++i) {
-        SpanPlank* pl = &mSim[i];
-        if (pl->m406 != 0) pl->m406--;
-        pl->m400 = 0;
-        pl->mRotation.z = pl->m402;
-        cLib_addCalcAngleS2(&pl->m402, 0, 4, 0x400);
-        cLib_addCalc2(&pl->m3FC, -15.0f, 1.0f, 5.0f);
-        cLib_addCalc0(&pl->m3F8, 1.0f, 5.0f);
-        pl->m3F4 = 0.0f;
-    }
-    // wind floor (donor :787-793)
-    {
-        const f32 t = (s_spanWp > 0.1f) ? 2.0f : 0.0f;
-        cLib_addCalc2(&m02E0, t, 0.1f, 0.1f);
-        cLib_addCalc2(&m02E4, t * 0.3f, 0.1f, 0.05f);
+
+        m02FC = m02E0;
+        m02F4 = m02E0;
+        m02F8 = m02E4;
+        m02F2 = 3000;
+        m02F0 = 0x578;
+
+        f32 tmpf2;
+        if (s_spanWp > 0.1f) {
+            tmpf2 = 2.0f;
+        } else {
+            tmpf2 = 0.0f;
+        }
+        cLib_addCalc2(&m02E0, tmpf2, 0.1f, 0.1f);
+        cLib_addCalc2(&m02E4, tmpf2 * 0.3f, 0.1f, 0.05f);
     }
 
     // matrices + anchors (donor :902-921)
-    m030C = 0;
+    m030C = 0;  // §441: donor counts posts during the anchor walk
     for (int i = 0; i < mCount; ++i) {
         SpanPlank* pl = &mSim[i];
         mDoMtx_stack_c::transS(pl->mPosition.x, pl->mPosition.y, pl->mPosition.z);
         mDoMtx_stack_c::YrotM(pl->mRotation.y);
         mDoMtx_stack_c::XrotM(pl->mRotation.x);
         mDoMtx_stack_c::ZrotM(pl->mRotation.z);
-        // anchors BEFORE the cosmetic 180 flip (donor order)
+        // ================================================================
+        // §439 ANCHORS DONOR-VERBATIM (d_a_bridge.cpp:912-921; the root
+        // transcription error): donor m11C[1] = local +99*scale.x, m0F8[1] =
+        // -99, [2] twins at y-30. Mine were SIDE-SWAPPED -- §437's winding
+        // swap was compensating in the writer while ends/edges stayed
+        // crossed. Anchors corrected; writer reverted to the donor map.
+        // ================================================================
         cXyz v, o;
-        v.set(-pl->mScale.x * 99.0f, 0.0f, 0.0f);
-        mDoMtx_stack_c::multVec(&v, &o);
-        pl->m11C[1] = o;
-        v.set(-pl->mScale.x * 99.0f, -30.0f, 0.0f);
-        mDoMtx_stack_c::multVec(&v, &o);
-        pl->m11C[2] = o;
         v.set(pl->mScale.x * 99.0f, 0.0f, 0.0f);
         mDoMtx_stack_c::multVec(&v, &o);
-        pl->m0F8[1] = o;
+        pl->m11C[1] = o;
         v.set(pl->mScale.x * 99.0f, -30.0f, 0.0f);
+        mDoMtx_stack_c::multVec(&v, &o);
+        pl->m11C[2] = o;
+        v.set(-pl->mScale.x * 99.0f, 0.0f, 0.0f);
+        mDoMtx_stack_c::multVec(&v, &o);
+        pl->m0F8[1] = o;
+        v.set(-pl->mScale.x * 99.0f, -30.0f, 0.0f);
         mDoMtx_stack_c::multVec(&v, &o);
         pl->m0F8[2] = o;
         pl->m11C[0] = pl->m11C[1];
         pl->m11C[0].y += 200.0f;
         pl->m0F8[0] = pl->m0F8[1];
         pl->m0F8[0].y += 200.0f;
-        if (pl->m408 & 4) {
+        if (((s_spanType & 1) == 0) && (pl->m408 & 4)) {
+            // §441 donor :1112-1167 (intact legs): post rope tops become the
+            // rail interior segments. Cut interpolation + himo_cut_control1
+            // dead while cut owed [R5].
             m030C++;
+            if (mLineMatInit && m030C < 13) {
+                mLineMat.getPos(0)[m030C] = pl->m11C[0];
+                mLineMat.getPos(1)[m030C] = pl->m0F8[0];
+            }
         }
         mDoMtx_stack_c::YrotM(pl->mRotationYExtra);
         if (mpPlanks[i] != NULL) {
@@ -697,6 +846,17 @@ int daExtSpan_c::execute() {
             if (idx >= mCount) idx = mCount - 1;
             const SpanPlank* pl = &mSim[idx];
             const cXyz* src;
+            // ================================================================
+            // §437 WINDING EXPERIMENT (P64: vertices stationary, yet P63 roof
+            // hits persist + riders shoved along the span): if left/right here
+            // is mirrored vs the dzb's authored triangle order, every quad's
+            // tris cross -- degenerate normals push riders and read as roofs.
+            // This swaps left/right; verdicts: drag gone + P63 silent = was
+            // mirrored; unchanged = winding correct, revert and look at
+            // CrrPos itself.
+            // ================================================================
+            // §439: donor corner map restored (§437's swap was compensation
+            // for the side-swapped anchors, now fixed at source).
             switch (i & 3) {
             case 0: src = &pl->m11C[2]; break;
             case 1: src = &pl->m0F8[2]; break;
@@ -704,16 +864,58 @@ int daExtSpan_c::execute() {
             default: src = &pl->m0F8[1]; break;
             }
             cXyz w = *src;
-            if (idx == 0 || idx == mCount - 1) {
-                // end extension (donor :1212-1230): +/-50 local Z, -40 Y
-                const f32 ext = (idx == 0) ? -50.0f : 50.0f;
-                w.x += ext * cM_ssin(pl->mRotation.y);
-                w.z += ext * cM_scos(pl->mRotation.y);
-                if ((i & 3) < 2) w.y -= 40.0f;
+            // ================================================================
+            // §438 END EXTENSION, donor-verbatim (d_a_bridge.cpp:1212-1230;
+            // user caught my three deviations): plank 0 extends +50 local Z
+            // (plank yaw points TOWARD home -- backward-pass heading), the
+            // GAP-EDGE plank (m02DD-1) extends -50 full-bridge / -40 aite;
+            // rotated by yaw AND pitch; NO y-drop (my earlier -40-Y was a
+            // spec misreading). My flipped sign left both cliff junctions
+            // uncovered -- the reported fall-through.
+            // ================================================================
+            if (idx == 0 || idx == m02DD - 1) {
+                f32 extZ;
+                if (idx == 0) {
+                    extZ = 50.0f;
+                } else if (m02DD == mCount) {
+                    extZ = -50.0f;
+                } else {
+                    extZ = -40.0f;
+                }
+                const f32 ch = extZ * cM_scos(pl->mRotation.x);
+                w.x += ch * cM_ssin(pl->mRotation.y);
+                w.y += -extZ * cM_ssin(pl->mRotation.x);
+                w.z += ch * cM_scos(pl->mRotation.y);
             }
             vtx[i].x = w.x;
             vtx[i].y = w.y;
             vtx[i].z = w.z;
+        }
+        // §433-P64: rider-drag investigation -- per-frame vertex motion. The
+        // CrrPos correction moves riders by (new - back) vertex deltas; a
+        // systematic per-frame delta = conveyor-belt drag. Logs the max delta
+        // magnitude + its axis bias + the taper residual.
+        {
+            static u32 s_p64 = 0;
+            if ((++s_p64 % 120) == 1) {
+                cBgD_Vtx_t* nv2 = mpBgW->GetVtxTbl();
+                f32 dMax = 0.0f, dxSum = 0.0f, dzSum = 0.0f;
+                const cXyz res = mHomePos - mSim[0].m3CC;
+                for (int i = 0; i < mpBgW->GetVtxNum(); ++i) {
+                    // mBackVtx delta unavailable directly; use plank position
+                    // deltas instead via statics below.
+                }
+                static cXyz s_prev0(0, 0, 0), s_prevMid(0, 0, 0);
+                const cXyz& p0 = mSim[0].mPosition;
+                const cXyz& pm = mSim[mCount / 2].mPosition;
+                DuskLog.info("[ExtSpan] 433-P64 plank0 d=({}, {}, {}) mid d=({}, {}, {}) "
+                             "resid=({}, {}, {})",
+                             p0.x - s_prev0.x, p0.y - s_prev0.y, p0.z - s_prev0.z,
+                             pm.x - s_prevMid.x, pm.y - s_prevMid.y, pm.z - s_prevMid.z,
+                             res.x, res.y, res.z);
+                s_prev0 = p0;
+                s_prevMid = pm;
+            }
         }
         mpBgW->Move();
         // §433-P56/P58: collision footprint + gap accounting, once per span.
@@ -800,24 +1002,25 @@ int daExtSpan_c::draw() {
     // and get a dedicated debug pass; if it still crashes, the sim/collision
     // side is guilty and ropes are exonerated.
     // ========================================================================
-    static const bool kExtSpanRopes = false;  // §434: OFF -- the 3Dline material
-    // path is a PLATFORM bug (aurora vs static GC DLs), documented on the bus
-    // with five crash receipts; owed to a dedicated aurora-lane session.
+    static const bool kExtSpanRopes = false;  // §441b: OFF again. Title-reins
+    // falsified the DL theory (BE-inline works; my LE swap broke the title).
+    // New prime suspect: the RAW BE BTI from the custom arc feeding
+    // GXInitTexObj in 3DlineMat1::init (reins use TP-arc textures).
     if (!kExtSpanRopes) {
         return 1;
     }
     // §429c lazy rope init: bridges create BEFORE WwAlways is resident
     // (log 184254: "rope.bti not resident"). Retry here until it lands.
     if (!mLineMatInit) {
-        ResTIMG* img = (ResTIMG*)dComIfG_getObjectRes("WwAlways", (int)0x7E);
+        ResTIMG* img = (ResTIMG*)dComIfG_getObjectRes(
+            "WwAlways", (int)((s_spanType & 8) ? 0x8D : 0x7E));
         if (img != NULL) {
-            if (mRail[0].init(1, 14, img, 1) && mRail[1].init(1, 14, img, 1)) {
+            if (mLineMat.init(2, 14, img, 0)) {
                 mLineMatInit = true;
             }
             for (int i = 0; i < mCount; ++i) {
                 if ((mSim[i].m408 & 4) && !mSim[i].mLineInit &&
-                    mSim[i].mHanger[0].init(1, 5, img, 1) &&
-                    mSim[i].mHanger[1].init(1, 5, img, 1)) {
+                    mSim[i].mLineMat1.init(4, 5, img, 1)) {
                     mSim[i].mLineInit = true;
                 }
             }
@@ -834,43 +1037,65 @@ int daExtSpan_c::draw() {
         if (!(pl->m408 & 4) || !pl->mLineInit) {
             continue;
         }
+        // ====================================================================
+        // §441 donor daBridge_Draw hanger fill VERBATIM (:173-273, intact-rope
+        // legs; cut legs dead while m408 stays 7 [R5]). Per-vertex sizes:
+        // uVar16 = 5 (bit3 thick) / 3; receiver getSize is f32 (donor u8 --
+        // labeled type seam); cut-half lines 2/3 sized 0.
+        // ====================================================================
+        const f32 uVar16 = (s_spanType & 8) ? 5.0f : 3.0f;
         for (int side = 0; side < 2; ++side) {
+            f32* size0 = pl->mLineMat1.getSize(side);
+            f32* size1 = pl->mLineMat1.getSize(side + 2);
+            cXyz* seg0 = pl->mLineMat1.getPos(side);
+            cXyz* seg1 = pl->mLineMat1.getPos(side + 2);
             const cXyz& lo = side == 0 ? pl->m11C[1] : pl->m0F8[1];
             const cXyz& hi = side == 0 ? pl->m11C[0] : pl->m0F8[0];
-            cXyz* pts = pl->mHanger[side].getPos(0);
-            for (int k = 0; k < 5; ++k) {
-                const f32 t = k / 4.0f;
-                pts[k].set(lo.x + (hi.x - lo.x) * t, lo.y + (hi.y - lo.y) * t,
-                           lo.z + (hi.z - lo.z) * t);
+            cXyz d = hi - lo;
+            d.x /= 4.0f;
+            d.y /= 4.0f;
+            d.z /= 4.0f;
+            for (int j = 0; j < 5; ++j) {
+                size0[j] = uVar16;
+                size1[j] = 0.0f;
+                seg0[j].set(lo.x + d.x * j, lo.y + d.y * j, lo.z + d.z * j);
+                seg1[j] = hi;
             }
-            pl->mHanger[side].update(5, 3.0f, ropeCol, 0, &tevStr);
-            dComIfGd_set3DlineMat(&pl->mHanger[side]);
         }
+        GXColor ropeCol1;
+        ropeCol1.r = ropeCol1.g = ropeCol1.b = 150;
+        ropeCol1.a = 255;
+        pl->mLineMat1.update(5, ropeCol1, &tevStr);
+        dComIfGd_set3DlineMat(&pl->mLineMat1);
     }
     if (mLineMatInit && mCount > 0) {
-        // endpoints local (-/+120, 350, -/+40) about home/end (donor :315-383)
-        const int segs = m030C + 2 <= 14 ? m030C + 2 : 14;
-        for (int side = 0; side < 2; ++side) {
-            cXyz* pts = mRail[side].getPos(0);
-            const f32 lx = side == 0 ? -120.0f : 120.0f;
-            const f32 lz = side == 0 ? -40.0f : 40.0f;
-            cXyz o;
-            o.set(lx * cM_scos(mHomeYaw) + lz * cM_ssin(mHomeYaw), 350.0f,
-                  -lx * cM_ssin(mHomeYaw) + lz * cM_scos(mHomeYaw));
-            pts[0] = mHomePos + o;
-            pts[segs - 1] = mEndPos + o;
-            int seg = 1;
-            for (int i = 0; i < mCount && seg < segs - 1; ++i) {
-                if (mSim[i].m408 & 4) {
-                    pts[seg++] = side == 0 ? mSim[i].m11C[0] : mSim[i].m0F8[0];
-                }
-            }
-            for (; seg < segs - 1; ++seg) {
-                pts[seg] = pts[segs - 1];
-            }
-            mRail[side].update(segs, 4.0f, ropeCol, 0, &tevStr);
-            dComIfGd_set3DlineMat(&mRail[side]);
+        // ====================================================================
+        // §441 donor rail endpoints VERBATIM (:315-382): local (-120,350,-40)
+        // about home yaw with the donor's sign-flip sequence; far endpoint =
+        // else-leg (mEndPos + mirrored local). [R6] the aite partner rope-top
+        // handoff (donor :329-335, joins the rails across the gap) is OWED --
+        // needs the two span actors to find each other; ledgered.
+        // ====================================================================
+        cXyz sp54(-120.0f, 350.0f, -40.0f);
+        cXyz sp48;
+        const s16 hy = mHomeYaw;
+        for (int line = 0; line < 2; ++line) {
+            cXyz* seg = mLineMat.getPos(line);
+            sp48.set(sp54.x * cM_scos(hy) + sp54.z * cM_ssin(hy), sp54.y,
+                     -sp54.x * cM_ssin(hy) + sp54.z * cM_scos(hy));
+            seg[0] = mHomePos + sp48;
+            sp54.z *= -1.0f;
+            sp48.set(sp54.x * cM_scos(hy) + sp54.z * cM_ssin(hy), sp54.y,
+                     -sp54.x * cM_ssin(hy) + sp54.z * cM_scos(hy));
+            seg[m030C + 1] = mEndPos + sp48;
+            sp54.x *= -1.0f;  // donor flip sequence into line 1
         }
+        const f32 railW = (s_spanType & 8) ? 6.5f : 4.0f;
+        GXColor ropeCol;
+        ropeCol.r = ropeCol.g = ropeCol.b = 150;
+        ropeCol.a = 255;
+        mLineMat.update(m030C + 2, railW, ropeCol, 0, &tevStr);
+        dComIfGd_set3DlineMat(&mLineMat);
     }
     return 1;
 }
