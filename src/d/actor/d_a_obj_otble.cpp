@@ -23,6 +23,7 @@
  *              data-authored ACTR row (positively resolved, never guessed).
  * ============================================================================
  */
+// KIT-LINEAGE: native-port
 
 #include "d/dolzel_rel.h" // IWYU pragma: keep
 #include "d/actor/d_a_obj_otble.h"
@@ -182,6 +183,16 @@ bool daObj_Otble::Act_c::_delete() {
 }
 
 cPhs_Step daObj_Otble::Mthd::Create(void* v_this) {
+    // §430/№129: consume this actor's pending-spawn entry (plank_span
+    // pattern) so no stale head/identity poisons later census spawns.
+    {
+        char proc[32] = {};
+        char src[96] = {};
+        char head[64] = {};
+        char joint[32] = {};
+        dExtNpcMount_takePendingSpawn(fopAcM_GetID((fopAc_ac_c*)v_this), proc, sizeof(proc), src,
+                                      sizeof(src), head, sizeof(head), joint, sizeof(joint));
+    }
     return ((daObj_Otble::Act_c*)v_this)->_create();
 }
 

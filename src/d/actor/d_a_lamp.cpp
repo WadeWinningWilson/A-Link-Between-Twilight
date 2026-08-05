@@ -250,6 +250,16 @@ static BOOL daLamp_solidHeapCB(fopAc_ac_c* i_ac) {
 
 /* 0000075C-00000914       .text daLamp_Create__FP10fopAc_ac_c */
 static cPhs_Step daLamp_Create(fopAc_ac_c* i_ac) {  // §327 cPhs_State -> cPhs_Step
+    // §430/№129: consume this actor's pending-spawn entry (plank_span
+    // pattern) so no stale head/identity poisons later census spawns.
+    {
+        char proc[32] = {};
+        char src[96] = {};
+        char head[64] = {};
+        char joint[32] = {};
+        dExtNpcMount_takePendingSpawn(fopAcM_GetID(i_ac), proc, sizeof(proc), src,
+                                      sizeof(src), head, sizeof(head), joint, sizeof(joint));
+    }
     fopAcM_ct(i_ac, lamp_class);
     lamp_class* i_this = (lamp_class*)i_ac;
 

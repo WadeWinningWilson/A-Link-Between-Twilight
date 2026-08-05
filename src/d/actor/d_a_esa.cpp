@@ -204,6 +204,16 @@ static BOOL daEsa_CreateHeap(fopAc_ac_c* i_actor) {
 }
 
 static int daEsa_Create(fopAc_ac_c* i_actor) {
+    // §430/№129: consume this actor's pending-spawn entry (plank_span
+    // pattern) so no stale head/identity poisons later census spawns.
+    {
+        char proc[32] = {};
+        char src[96] = {};
+        char head[64] = {};
+        char joint[32] = {};
+        dExtNpcMount_takePendingSpawn(fopAcM_GetID(i_actor), proc, sizeof(proc), src,
+                                      sizeof(src), head, sizeof(head), joint, sizeof(joint));
+    }
     fopAcM_ct(i_actor, esa_class);
     esa_class* i_this = static_cast<esa_class*>(i_actor);
 

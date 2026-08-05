@@ -1479,3 +1479,24 @@ de-mount is 51 repetitions of the proven §228/§232/§244 direct-port switch pa
 kit-emitted and lint-gated. 19 manifests already native. Full lists in
 docs/state/ww-demount-census.md. WHOSE TURN: user (smoke 18:18:14 + push + batch-size
 ruling for the first kit wave) · Housing (first wave on ruling).
+
+## §429 OWED (2026-08-04, user report at smoke): FINISH the Outset rope bridge
+plank_span is native + lit but INCOMPLETE: ropes never appear, plank positioning wrong,
+no collision (banner-declared + user-observed). Port-full-state-machines rule applies —
+donor d_a_bridge is the spec (rope model+sim, plank placement along RPAT span, per-plank
+collision, sway). Queue at head of wave-1 alongside the already-lit spawn-path switches.
+
+## §430/§431 WAVE 1 (2026-08-04, Housing): 3 spawn switches LIVE + bridge blueprint banked
+§430 direct-port switches built (exe 18:31:34, gate clean): esa→ESA, lamp→LAMP,
+otble→OTBLE — resolver entries, №129 pending-spawn consumption in all three creates,
+manifests flipped off NPC_HENNA0. 48 adapter targets remain. knob00 DEFERRED (spawns
+via doors machinery §27 — socket flip risks double-spawn; needs its own look).
+§431: the COMPLETE donor d_a_bridge extraction is banked at
+docs/state/ww-bridge-donor-spec.md — node-chain sim (75.0 segments, two-pass
+relaxation, backward pass writes plank yaw/pitch), dBgWSv 4-verts-per-plank vertex
+writer + ride callback (weights/deflections per rider type), 3Dline rope renderer
+(2×14 handrails + 4×5 hangers, rope.bti Always 0x7E), springs/wind, cut/fire.
+Implementation = next session head, port order 0-5 in the spec (step 0: stage
+mbrdg.dzb + verify rope.bti in WwAlways).
+WHOSE TURN: user (test 18:31:34: esa/lamp/table present via real actors, no identity
+swaps) · Housing next session (§429 bridge implementation off the banked spec).

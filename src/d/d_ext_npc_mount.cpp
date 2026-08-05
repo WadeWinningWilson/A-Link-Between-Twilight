@@ -4589,6 +4589,21 @@ s16 dExtNpcMount_socketActorId(const char* socketName) {
     if (strcmp(socketName, "KB") == 0) {
         return fpcNm_KB_e;
     }
+    // ========================================================================
+    // §430 WAVE-1 direct-port spawn switches (de-mount census, user-ruled):
+    // mirrors §228 KB. Sockets route placements to the REAL profiles; each
+    // TU consumes its pending-spawn entry (№129 law). ROLLBACK per actor:
+    // manifest socket back to NPC_HENNA0.
+    // ========================================================================
+    if (strcmp(socketName, "ESA") == 0) {
+        return fpcNm_ESA_e;
+    }
+    if (strcmp(socketName, "LAMP") == 0) {
+        return fpcNm_LAMP_e;
+    }
+    if (strcmp(socketName, "OTBLE") == 0) {
+        return fpcNm_OBJ_OTBLE_e;
+    }
     // §232 — native seagull direct-port spawn switch (mirrors §228 KB). socket "KAMOME"
     // routes the placement to g_profile_KAMOME (fopAcM_create(fpcNm_KAMOME_e,…)).
     if (strcmp(socketName, "KAMOME") == 0) {
