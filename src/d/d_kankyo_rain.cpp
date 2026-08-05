@@ -1840,7 +1840,202 @@ void cloud_shadow_move() {
     }
 }
 
+// ============================================================================
+// §417b WW CUMULUS (History's decode, bus §417b) -- the two donor stubs,
+// included behind dKyWw_isSkyHost(). Receiver wiring seams [R1]-[R3] labeled
+// in the .inc; support statics here.
+// ============================================================================
+static f32 s_wwVrkumoBounceTimer = 0.0f;  // [D1] no packet slot in the donor struct
+static inline f32 cubef(f32 v) { return v * v * v; }
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#include "d/d_kankyo_ww.h"
+#include "dusk/logging.h"  // §419 probe
+#include "d_kankyo_ww_vrkumo.inc"
+
+// The drawVrkumo layer loop per the decode spec (.inc:234-241): three texture
+// layers back-to-front (2->0); per-cloud color = lerp(CENTER, HORIZON,
+// distFalloff) -- center at the rim fades toward horizon color... donor lerp
+// direction: rim clouds (falloff->0) take the HORIZON color, near/high clouds
+// (falloff->1) the CENTER color [D2]. TEV: C1=black; (C1, RASC, TEXC, ZERO).
+static void dKyWwVrkumo_draw(Mtx drawMtx, u8** tex) {
+    dKankyo_vrkumo_Packet* pkt = g_env_light.mpVrkumoPacket;
+    camera_class* camera = (camera_class*)dComIfGp_getCamera(0);
+    if (pkt == NULL || camera == NULL || dComIfGd_getView() == NULL) {
+        return;
+    }
+
+    // ========================================================================
+    // §420 THE FIX (user observation: "coverage miniaturized, curved"): this
+    // body never loaded a position matrix, so world-space quads rendered
+    // through whatever PNMTX the PREVIOUS sky packet left bound (the sun's
+    // rotated billboard concat) -- shrinking/curving the whole field. TP's
+    // own drawVrkumo loads the view matrix first (:4917); donor signature
+    // carries drawMtx for exactly this.
+    // ========================================================================
+    GXLoadPosMtxImm(drawMtx, GX_PNMTX0);
+    GXSetCurrentMtx(GX_PNMTX0);
+
+    const f32 domeRadius = dComIfGd_getView()->far_ - 10000.0f;  // [D3]
+    const cXyz camPos = camera->view.lookat.eye;
+    const f32 strength = g_env_light.mVrkumoStrength;
+
+    const GXColorS10& horizon = g_env_light.vrbox_kumo_top_col;
+    const GXColorS10& center = g_env_light.vrbox_kumo_bottom_col;  // §417b restored
+
+    GXColor black;
+    black.r = black.g = black.b = 0;
+    black.a = 255;
+
+    GXSetNumChans(1);
+    GXSetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_CLAMP,
+                  GX_AF_NONE);
+    GXSetNumTexGens(1);
+    GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    GXSetNumTevStages(1);
+    GXSetTevColor(GX_TEVREG1, black);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_C1, GX_CC_RASC, GX_CC_TEXC, GX_CC_ZERO);
+    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_RASA, GX_CA_TEXA, GX_CA_ZERO);
+    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+    GXSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
+    GXSetZMode(GX_ENABLE, GX_LEQUAL, GX_DISABLE);
+    GXSetZCompLoc(GX_TRUE);
+    GXSetNumIndStages(0);
+    GXSetCullMode(GX_CULL_NONE);
+
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_S16, 0);
+    GXClearVtxDesc();
+    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+
+    // §420 probe set (10 hypotheses, one build -- standing rule):
+    //  P20 matrix row0 (leftover-transform conviction / fix verification)
+    //  P21 per-layer texture identity+format  P22 cache thrash
+    //  P23 alpha histogram   P24 wrap-proof azimuth histogram
+    //  P25 quad angular width extremes        P26 first quad world corner
+    //  P27 color lerp endpoints               P28 dome/cam geometry
+    //  P29 fade terms center vs rim           P30 layer scatter magnitudes
+    {
+        static u32 s_f = 0;
+        if ((++s_f % 600) == 1) {
+            DuskLog.info("[WwSky] 420-P20 mtx row0=({}, {}, {}, {}) row1=({}, {}, {}, {})",
+                         drawMtx[0][0], drawMtx[0][1], drawMtx[0][2], drawMtx[0][3],
+                         drawMtx[1][0], drawMtx[1][1], drawMtx[1][2], drawMtx[1][3]);
+            for (int li = 0; li < 3; li++) {
+                const ResTIMG* im = (const ResTIMG*)tex[li];
+                DuskLog.info("[WwSky] 420-P21 layer{} img={} fmt={} {}x{}", li, (const void*)im,
+                             im != NULL ? (int)im->format : -1, im != NULL ? (int)im->width : 0,
+                             im != NULL ? (int)im->height : 0);
+            }
+            int aHist[4] = {0, 0, 0, 0};
+            int azHist[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+            f32 szMin = 999.0f, szMax = 0.0f;
+            for (int i = 0; i < 100; i++) {
+                const VRKUMO_EFF* k = &pkt->mVrkumoEff[i];
+                if (k->mAlpha <= 0.05f) continue;
+                int ab = (int)(k->mAlpha * 3.999f);
+                aHist[ab < 0 ? 0 : (ab > 3 ? 3 : ab)]++;
+                f32 az = atan2f(k->mPosition.x, k->mPosition.z) * 57.2958f + 180.0f;
+                int bz = (int)(az / 45.0f);
+                azHist[bz < 0 ? 0 : (bz > 7 ? 7 : bz)]++;
+                const f32 sz = k->mDistFalloff *
+                               (1.0f - cubef((i & 0x0F) / 16.0f)) *
+                               (0.45f + strength * 0.55f);
+                if (sz < szMin) szMin = sz;
+                if (sz > szMax) szMax = sz;
+            }
+            DuskLog.info("[WwSky] 420-P23 alphaHist=[{},{},{},{}] 420-P24 azHist(45deg)="
+                         "[{},{},{},{},{},{},{},{}] 420-P25 size=[{}..{}]rad",
+                         aHist[0], aHist[1], aHist[2], aHist[3], azHist[0], azHist[1], azHist[2],
+                         azHist[3], azHist[4], azHist[5], azHist[6], azHist[7], szMin, szMax);
+            DuskLog.info("[WwSky] 420-P27 clr horizon=({},{},{}) center=({},{},{}) "
+                         "420-P28 domeR={} far={} cam=({}, {}, {})",
+                         (int)horizon.r, (int)horizon.g, (int)horizon.b, (int)center.r,
+                         (int)center.g, (int)center.b, domeRadius, dComIfGd_getView()->far_,
+                         camPos.x, camPos.y, camPos.z);
+            const VRKUMO_EFF* k0 = &pkt->mVrkumoEff[0];
+            const f32 dxz0 = sqrtf(k0->mPosition.x * k0->mPosition.x +
+                                   k0->mPosition.z * k0->mPosition.z);
+            const f32 cac0 = 1.0f - cubef(dxz0 / 15000.0f > 1.0f ? 1.0f : dxz0 / 15000.0f);
+            const f32 m1s = 0.65f * 0.45f * k0->mDistFalloff;
+            DuskLog.info("[WwSky] 420-P26 k0 el={}deg az={}deg 420-P29 cac={} fall={} a={} "
+                         "420-P30 m1~{}rad",
+                         atan2f(k0->mPosition.y, dxz0) * 57.2958f,
+                         atan2f(k0->mPosition.x, k0->mPosition.z) * 57.2958f, cac0,
+                         k0->mDistFalloff, k0->mAlpha, m1s);
+        }
+    }
+    // §419 (superseded stats kept for continuity)
+    {
+        static u32 s_f = 0;
+        if ((++s_f % 600) == 1) {
+            int nVis = 0;
+            f32 azMin = 999.0f, azMax = -999.0f, elMin = 999.0f, elMax = -999.0f;
+            for (int i = 0; i < 100; i++) {
+                const VRKUMO_EFF* k = &pkt->mVrkumoEff[i];
+                if (k->mAlpha <= 0.05f) continue;
+                nVis++;
+                const f32 dxz = sqrtf(k->mPosition.x * k->mPosition.x +
+                                      k->mPosition.z * k->mPosition.z);
+                const f32 az = atan2f(k->mPosition.x, k->mPosition.z) * 57.2958f;
+                const f32 el = atan2f(k->mPosition.y, dxz) * 57.2958f;
+                if (az < azMin) azMin = az;
+                if (az > azMax) azMax = az;
+                if (el < elMin) elMin = el;
+                if (el > elMax) elMax = el;
+            }
+            DuskLog.info("[WwSky] 419 drawn clouds: n={} az=[{}..{}]deg el=[{}..{}]deg "
+                         "domeR={} far={}",
+                         nVis, azMin, azMax, elMin, elMax, domeRadius,
+                         dComIfGd_getView()->far_);
+        }
+    }
+    for (int textureIdx = 2; textureIdx >= 0; textureIdx--) {
+#if TARGET_PC
+        static CachedTexObjs<3> texobjs;
+        GXTexObj* bound = load_cached_tex(texobjs, (ResTIMG*)tex[textureIdx], GX_TEXMAP0);
+        {
+            static u32 s_f22 = 0;
+            if ((++s_f22 % 1800) < 3) {
+                DuskLog.info("[WwSky] 420-P22 layer{} boundObj={}", textureIdx,
+                             (const void*)bound);
+            }
+        }
+#else
+        TGXTexObj texobj;
+        dKyr_set_btitex(&texobj, (ResTIMG*)tex[textureIdx]);
+#endif
+        for (int i = 0; i < 100; i++) {
+            const VRKUMO_EFF* kumo = &pkt->mVrkumoEff[i];
+            if (kumo->mAlpha <= 0.000001f) {
+                continue;
+            }
+            GXColor clr;
+            const f32 fall = kumo->mDistFalloff;
+            clr.r = (u8)(center.r + (1.0f - fall) * (horizon.r - center.r));
+            clr.g = (u8)(center.g + (1.0f - fall) * (horizon.g - center.g));
+            clr.b = (u8)(center.b + (1.0f - fall) * (horizon.b - center.b));
+            clr.a = (u8)(kumo->mAlpha * 255.0f);
+            dKyWwVrkumo_drawLayerQuad(kumo, i, textureIdx, strength, domeRadius, camPos, clr);
+        }
+    }
+    J3DShape::resetVcdVatCache();
+}
+
 void vrkumo_move() {
+    // §417b: WW hosts run History's decoded donor mover.
+    if (dKyWw_isSkyHost()) {
+        dKyWwVrkumo_move();
+        return;
+    }
+
     cXyz wind_vecpow = dKyw_get_wind_vecpow();
     dKankyo_vrkumo_Packet* vrkumo_packet = g_env_light.mpVrkumoPacket;
     camera_class* camera = (camera_class*)dComIfGp_getCamera(0);
@@ -4749,6 +4944,13 @@ void drawCloudShadow(Mtx drawMtx, u8** tex) {
 }
 
 void drawVrkumo(Mtx drawMtx, GXColor& color, u8** tex) {
+    // §417b: WW hosts run History's decoded donor draw ([D2]: single-color
+    // convention -- the center color reads from env light inside).
+    if (dKyWw_isSkyHost()) {
+        dKyWwVrkumo_draw(drawMtx, tex);
+        return;
+    }
+
     dKankyo_sun_Packet* sun_packet = g_env_light.mpSunPacket;
     dScnKy_env_light_c* envlight = dKy_getEnvlight();
     dKankyo_vrkumo_Packet* vrkumo_packet = g_env_light.mpVrkumoPacket;

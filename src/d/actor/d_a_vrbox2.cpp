@@ -3,6 +3,11 @@
  * 
 */
 
+#include "d/d_kankyo_ww.h"  // §418 WW native skydome leg
+#include "dusk/logging.h"
+
+// §418b: the mount's parse-once model-data cache (global bridge, §334 region).
+J3DModelData* dExtWwMount_acquireModelData(const char* arc, const char* modelName);
 #include "d/dolzel_rel.h" // IWYU pragma: keep
 
 #include "d/actor/d_a_vrbox2.h"
@@ -24,7 +29,152 @@ static void texScrollCheck(f32& param_0) {
         param_0 -= 1.0f;
 }
 
+#if TARGET_PC
+// ============================================================================
+// §418 WW colour + cloud scroll -- donor daVrbox2_color_set (WW
+// d_a_vrbox2.cpp:89-244) with the donor's own per-material speeds:
+// back_cloud mat0 = 1.0x (both texmtx), mat1 = 0.8x (both), mat2 = texmtx0
+// 0.6x / texmtx1 1.0x+0.6x (the donor's verbatim DOUBLE add, :210-211).
+// Register law: back_cloud K0 = KUMO colour; kasumi_mae C0 = kasumi-mae
+// colour and K0.r = CLOUD ALPHA; uso_umi K0 = uso-umi colour. This is the
+// wiring the mount draw approximated wrong (kumo-top on everything, alpha
+// dropped) -- the user-visible "shade slightly off".
+// [S23] receiver palette map: kumo->vrbox_kumo_top_col(+.a), kasumiMae->
+// vrbox_kasumi_inner_col, usoUmi->vrbox_kasumi_outer_col (§410 receipt).
+// [S24] donor MISC-stage tact-wind override skipped: exterior host only.
+// ============================================================================
+static J3DZModeInfo l_wwZModeInfo = {GX_FALSE, GX_LEQUAL, GX_FALSE};
+
+static void daVrbox2_ww_texscroll(J3DMaterial* mat, int idx, f32 speed) {
+    J3DTexMtx* tm = mat->getTexMtx((u32)idx);
+    if (tm != NULL) {
+        f32& tx = tm->getTexMtxInfo().mSRT.mTranslationX;
+        tx += speed;
+        texScrollCheck(tx);
+    }
+}
+
+static int daVrbox2_ww_color_set(vrbox2_class* i_this) {
+    if ((g_env_light.vrbox_kasumi_inner_col.r + g_env_light.vrbox_kasumi_inner_col.g +
+         g_env_light.vrbox_kasumi_inner_col.b + g_env_light.vrbox_sky_col.r +
+         g_env_light.vrbox_sky_col.g + g_env_light.vrbox_sky_col.b +
+         g_env_light.vrbox_kumo_top_col.r + g_env_light.vrbox_kumo_top_col.g +
+         g_env_light.vrbox_kumo_top_col.b) == 0)
+    {
+        return 1;
+    }
+
+    camera_class* camera = (camera_class*)dComIfGp_getCamera(0);
+    cXyz* windVec = dKyw_get_wind_vec();
+    f32 windPow = dKyw_get_wind_pow();
+    f32 scrollSpeed = 0.0f;
+    if (camera != NULL && windVec != NULL) {
+        cXyz eyeXZ = camera->view.lookat.eye;
+        cXyz centerXZ = camera->view.lookat.center;
+        eyeXZ.y = 0.0f;
+        centerXZ.y = 0.0f;
+        cXyz lookDirXZ;
+        dKyr_get_vectle_calc(&eyeXZ, &centerXZ, &lookDirXZ);
+        scrollSpeed = cM3d_VectorProduct2d(0.0f, 0.0f, -windVec->x, -windVec->z, lookDirXZ.x,
+                                           lookDirXZ.z) *
+                      0.0005f * windPow;
+    }
+
+    const GXColorS10& kumo = g_env_light.vrbox_kumo_top_col;
+    J3DGXColor k0;
+    k0.r = (u8)kumo.r;
+    k0.g = (u8)kumo.g;
+    k0.b = (u8)kumo.b;
+    k0.a = 255;
+
+    J3DModelData* data = i_this->mpWwBackCloud->getModelData();
+    static const f32 kWwCloudSpeed[3][2] = {{1.0f, 1.0f}, {0.8f, 0.8f}, {0.6f, 1.6f}};
+    for (int mi = 0; mi < 3; mi++) {
+        J3DMaterial* mat = data->getMaterialNodePointer((u16)mi);
+        if (mat == NULL) {
+            continue;
+        }
+        mat->setCullMode(0);
+        mat->getZMode()->setZModeInfo(l_wwZModeInfo);
+        mat->change();
+        daVrbox2_ww_texscroll(mat, 0, scrollSpeed * kWwCloudSpeed[mi][0]);
+        daVrbox2_ww_texscroll(mat, 1, scrollSpeed * kWwCloudSpeed[mi][1]);
+        mat->setTevKColor(0, &k0);
+    }
+
+    if (i_this->mpWwKasumiMae != NULL) {
+        J3DMaterial* mat = i_this->mpWwKasumiMae->getModelData()->getMaterialNodePointer(0);
+        if (mat != NULL) {
+            mat->getZMode()->setZModeInfo(l_wwZModeInfo);
+            mat->change();
+            J3DGXColorS10 c0;
+            c0.r = g_env_light.vrbox_kasumi_inner_col.r;
+            c0.g = g_env_light.vrbox_kasumi_inner_col.g;
+            c0.b = g_env_light.vrbox_kasumi_inner_col.b;
+            c0.a = 255;
+            J3DGXColor ka;
+            ka.r = (u8)kumo.a;  // donor: cloud ALPHA rides kasumi K0.r
+            ka.g = 0;
+            ka.b = 0;
+            ka.a = 0;
+            mat->setTevColor(0, &c0);
+            mat->setTevKColor(0, &ka);
+        }
+    }
+
+    if (i_this->mpWwUsoUmi != NULL) {
+        J3DMaterial* mat = i_this->mpWwUsoUmi->getModelData()->getMaterialNodePointer(0);
+        if (mat != NULL) {
+            mat->getZMode()->setZModeInfo(l_wwZModeInfo);
+            mat->change();
+            const GXColorS10& uso = g_env_light.vrbox_kasumi_outer_col;
+            J3DGXColor uk;
+            uk.r = (u8)uso.r;
+            uk.g = (u8)uso.g;
+            uk.b = (u8)uso.b;
+            uk.a = 255;
+            mat->setTevKColor(0, &uk);
+        }
+    }
+    return 1;
+}
+
+// donor daVrbox2_Draw (WW d_a_vrbox2.cpp:27-85): eye-follow + 0.09 parallax;
+// sky-list order uso_umi -> kasumi_mae -> back_cloud (+100 Y lift).
+static int daVrbox2_ww_draw(vrbox2_class* i_this) {
+    daVrbox2_ww_color_set(i_this);
+    if (g_env_light.hide_vrbox) {
+        return 1;
+    }
+    f32 y0 = 0.0f;
+    if (dComIfGd_getView() != NULL) {
+        y0 = dComIfGd_getInvViewMtx()[1][3] * 0.09f;
+    }
+    mDoMtx_stack_c::transS(dComIfGd_getInvViewMtx()[0][3], dComIfGd_getInvViewMtx()[1][3] - y0,
+                           dComIfGd_getInvViewMtx()[2][3]);
+    dComIfGd_setListSky();
+    if (i_this->mpWwUsoUmi != NULL) {
+        i_this->mpWwUsoUmi->setBaseTRMtx(mDoMtx_stack_c::get());
+        mDoExt_modelUpdateDL(i_this->mpWwUsoUmi);
+    }
+    if (i_this->mpWwKasumiMae != NULL) {
+        i_this->mpWwKasumiMae->setBaseTRMtx(mDoMtx_stack_c::get());
+        mDoExt_modelUpdateDL(i_this->mpWwKasumiMae);
+    }
+    mDoMtx_stack_c::transM(0.0f, 100.0f, 0.0f);
+    i_this->mpWwBackCloud->setBaseTRMtx(mDoMtx_stack_c::get());
+    mDoExt_modelUpdateDL(i_this->mpWwBackCloud);
+    dComIfGd_setList();
+    return 1;
+}
+#endif
+
 static int daVrbox2_Draw(vrbox2_class* i_this) {
+#if TARGET_PC
+    if (dKyWw_isSkyHost() && i_this->mpWwBackCloud != NULL) {
+        return daVrbox2_ww_draw(i_this);  // §418 WW leg
+    }
+#endif
     camera_class* camera_p;
     dKankyo_sunlenz_Packet* lenz_p;
     J3DModel* kumo_model_p;
@@ -392,7 +542,11 @@ static int daVrbox2_color_set(vrbox2_class* i_this) {
 static int daVrbox2_Execute(vrbox2_class* i_this) {
     UNUSED(i_this);
 
-    if (g_env_light.daytime > 255.0f) {
+    if (g_env_light.daytime > 255.0f
+#if TARGET_PC
+        && !(dKyWw_isSkyHost() && i_this->mpWwBackCloud != NULL)  // §418 no TP sun BTK
+#endif
+    ) {
         i_this->mSunBtk.play();
     }
 
@@ -410,6 +564,26 @@ static int daVrbox2_Delete(vrbox2_class* i_this) {
 
 static int daVrbox2_solidHeapCB(fopAc_ac_c* i_this) {
     vrbox2_class* a_this = (vrbox2_class*)i_this;
+
+#if TARGET_PC
+    // ========================================================================
+    // §418 WW LEG (donor daVrbox2_solidHeapCB, WW d_a_vrbox2.cpp:261-283):
+    // vrbox2 owns uso_umi + kasumi_mae + back_cloud; retail requires all 3.
+    // ========================================================================
+    if (dKyWw_isSkyHost()) {
+        // §418b: raw-bytes crash fix -- go through the mount's parse-once
+        // cache (see d_a_vrbox.cpp §418b note).
+        J3DModelData* d;
+        d = dExtWwMount_acquireModelData("WwSky", "vr_uso_umi.bdl");
+        a_this->mpWwUsoUmi = d != NULL ? mDoExt_J3DModel__create(d, 0x80000, 0x11020202) : NULL;
+        d = dExtWwMount_acquireModelData("WwSky", "vr_kasumi_mae.bdl");
+        a_this->mpWwKasumiMae = d != NULL ? mDoExt_J3DModel__create(d, 0x80000, 0x11020202) : NULL;
+        d = dExtWwMount_acquireModelData("WwSky", "vr_back_cloud.bdl");
+        a_this->mpWwBackCloud = d != NULL ? mDoExt_J3DModel__create(d, 0x80000, 0x11020202) : NULL;
+        return a_this->mpWwUsoUmi != NULL && a_this->mpWwKasumiMae != NULL &&
+               a_this->mpWwBackCloud != NULL;
+    }
+#endif
 
     J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes("vrbox_kumo.bmd");
     JUT_ASSERT(785, modelData != NULL);

@@ -54,6 +54,8 @@
 #include "d/d_bg_s_gnd_chk.h"
 #include "d/d_drawlist.h"
 #include "d/d_kankyo.h"
+#include "d/d_kankyo_ww.h"
+#include "d/d_kankyo_rain.h"  // §410 dKyr_get_vectle_calc
 #include "d/d_kankyo_wether.h"
 #include "d/d_meter2_info.h"
 #include "d/d_s_play.h"
@@ -2878,12 +2880,31 @@ static void wwApplyModel1SeaPalette(J3DModelData* data) {
     if (data == NULL) {
         return;
     }
-    // §143 Ferry 3: donor setLightTevColorType_sub NON-toon mapping
-    // (d_kankyo.cpp:1820) — amb→TevColor(0), dif→TevKColor(0), alpha preserved.
-    // DO NOT SWAP (amb→K0) — that is the toon-branch pattern and was the §126
-    // white-water trap. If water goes white after this, report; do not improvise.
-    GXColor amb, dif;
-    dKy_get_seacolor(&amb, &dif);
+    // ====================================================================
+    // §408 NATIVE CUTOVER — mount-step-1 of the retirement ladder.
+    //
+    // This block used to hand-inline the donor's setLightTevColorType_sub
+    // C0/K0 mapping (§143 Ferry 3 cited the very lines History later ported
+    // verbatim, d_kankyo.cpp:1820-1831). Now that the real function exists
+    // (d_kankyo_ww.cpp §404) and the tevstr feeder's BG1 leg is
+    // byte-identical to dKy_get_seacolor's amb (§408 addcols), the sea sheet
+    // rides the native chain: feed a tevstr with TEV_TYPE_BG1, then run the
+    // ported _sub per material. Colours are IDENTICAL by construction:
+    //   C0 = bg_amb_col[1] + bg1_addcol_amb  (== get_seacolor amb)
+    //   K0 = dungeonlight_col[2]             (== get_seacolor dif)
+    // §126 law unchanged: the _sub's retail non-toon mapping IS
+    // amb→TevColor(0) dif→TevKColor(0), alpha preserved — the trap the old
+    // comment guarded is structurally impossible through this path.
+    //
+    // ONE deliberate behaviour delta, stated for the playtest: the _sub also
+    // writes MATERIAL FOG from the tevstr — which is what the donor does to
+    // room-model materials and the hand path skipped. If the water's haze
+    // shifts, the referee is noclip d_kankyo.ts (sanctioned) before any
+    // revert; do not improvise (§126 discipline).
+    // ====================================================================
+    static dKy_tevstr_c s_wwSeaTevStr;
+    static cXyz s_wwSeaPos(0.0f, 0.0f, 0.0f);
+    dKyWw_settingTevStruct(TEV_TYPE_BG1, &s_wwSeaPos, &s_wwSeaTevStr);
 
     const u16 n = data->getMaterialNum();
     const u16 lim = n < 8 ? n : 8;
@@ -2911,24 +2932,9 @@ static void wwApplyModel1SeaPalette(J3DModelData* data) {
             mat->setTevKColor((u32)r, &k);
         }
 
-        // Live C0/K0 from seacolor; preserve register alpha (donor :1820–1831).
-        J3DGXColorS10* curC0 = mat->getTevColor(0);
-        const s16 aC0 = curC0 != NULL ? curC0->a : auth.c[0][3];
-        J3DGXColorS10 c0;
-        c0.r = (s16)amb.r;
-        c0.g = (s16)amb.g;
-        c0.b = (s16)amb.b;
-        c0.a = aC0;
-        mat->setTevColor(0, &c0);
-
-        J3DGXColor* curK0 = mat->getTevKColor(0);
-        const u8 aK0 = curK0 != NULL ? curK0->a : auth.k[0][3];
-        J3DGXColor k0;
-        k0.r = dif.r;
-        k0.g = dif.g;
-        k0.b = dif.b;
-        k0.a = aK0;
-        mat->setTevKColor(0, &k0);
+        // §408: live C0/K0 + fog through the PORTED donor function (alpha
+        // preservation is the _sub's own behaviour, donor :1820-1831).
+        dKyWw_setLightTevColorType_sub(mat, &s_wwSeaTevStr);
 
         // §128 composite sheet: mats 1–7 XLU z-update OFF; mat0 opaque keeps
         // z-write ON (donor). Do not clear mat0 depth — that is not the swoosh fix.
@@ -3122,6 +3128,17 @@ static void wwSkyFeedEnvFromStageVrbox() {
     g_env_light.vrbox_kumo_top_col.a =
         wwSkyLerpU8(A.kumo_shadow_col.a, B.kumo_shadow_col.a, t);
 
+    // §417b: WW CenterCloudColor -- Winditor-lawed Virt slot right after the
+    // horizon cloud color; №113 already lands it in kumo_bottom_col (converter
+    // :152). TP dropped its consumer; History's vrkumo decode restores it.
+    g_env_light.vrbox_kumo_bottom_col.r =
+        wwSkyLerpU8(A.kumo_bottom_col.r, B.kumo_bottom_col.r, t);
+    g_env_light.vrbox_kumo_bottom_col.g =
+        wwSkyLerpU8(A.kumo_bottom_col.g, B.kumo_bottom_col.g, t);
+    g_env_light.vrbox_kumo_bottom_col.b =
+        wwSkyLerpU8(A.kumo_bottom_col.b, B.kumo_bottom_col.b, t);
+    g_env_light.vrbox_kumo_bottom_col.a = 255;
+
     g_env_light.vrbox_kasumi_inner_col.r =
         wwSkyLerpU8(A.kasumi_inner_col.r, B.kasumi_inner_col.r, t);
     g_env_light.vrbox_kasumi_inner_col.g =
@@ -3155,11 +3172,56 @@ static void wwSkyFeedEnvFromStageVrbox() {
     }
 }
 
+// §410 donor texScrollCheck (d_a_vrbox2.cpp:18-23) -- keeps the cloud scroll
+// translation wrapped into [0,1].
+static void wwSkyTexScrollCheck(f32& v) {
+    while (v < 0.0f)
+        v += 1.0f;
+    while (v > 1.0f)
+        v -= 1.0f;
+}
+
 static void wwSkyDraw() {
     if (!s_wwSkyReady || dComIfGd_getView() == NULL) {
         return;
     }
     wwSkyFeedEnvFromStageVrbox();
+    // ====================================================================
+    // §418 NATIVE SKYDOME HANDOVER: spawn the REAL vrbox actors (donor
+    // dStage_Create spawns both when the stage carries vr_sky.bdl -- WW
+    // d_stage.cpp:2238-2242). Spawned from here because this point proves
+    // the WwSky arc is resident (the §414 lesson). Once daVrbox_Create's
+    // WW leg reports live, this mount draw retires -- the palette feed
+    // above stays (it is the kankyo producer, not dome drawing).
+    // ====================================================================
+    {
+        static u32 s_spawnCooldown = 0;
+        if (dKyWw_domeActorsLive()) {
+            return;  // §418: the native actors own the dome now
+        }
+        if (s_spawnCooldown == 0) {
+            s_spawnCooldown = 120;
+            fopAcM_create(fpcNm_VRBOX_e, 0, NULL, -1, NULL, NULL, -1);
+            fopAcM_create(fpcNm_VRBOX2_e, 0, NULL, -1, NULL, NULL, -1);
+            DuskLog.info("[WwSky] 418 native vrbox+vrbox2 create REQUESTED");
+        } else {
+            s_spawnCooldown--;
+        }
+    }
+    // ====================================================================
+    // §410 donor invisibility gate (daVrbox_color_set, d_a_vrbox.cpp:60-66):
+    // an all-zero sky+kasumi+kumo palette means the stage authors NO sky --
+    // the donor sets mbVrboxInvisible and draws nothing rather than a black
+    // dome. Same test, receiver registers.
+    // ====================================================================
+    if (g_env_light.vrbox_kasumi_inner_col.r + g_env_light.vrbox_kasumi_inner_col.g +
+            g_env_light.vrbox_kasumi_inner_col.b + g_env_light.vrbox_sky_col.r +
+            g_env_light.vrbox_sky_col.g + g_env_light.vrbox_sky_col.b +
+            g_env_light.vrbox_kumo_top_col.r + g_env_light.vrbox_kumo_top_col.g +
+            g_env_light.vrbox_kumo_top_col.b ==
+        0) {
+        return;
+    }
     f32 yOrigin = 0.0f;
     const s8 stay = dComIfGp_roomControl_getStayNo();
     if (stay >= 0) {
@@ -3197,13 +3259,18 @@ static void wwSkyDraw() {
         }
         mDoExt_modelUpdateDL(s_wwSkyModels[0]);
     }
-    // vr_uso_umi.bdl: K = uso/sky colour (WW mVrUsoUmiColor; we share sky_col).
+    // §410 vr_uso_umi.bdl: K0 = donor mVrUsoUmiColor (d_a_vrbox2.cpp:235-239).
+    // Was shared with sky_col -- a documented deviation. The receiver's own
+    // established equivalent is vrbox_kasumi_outer_col (dKy_GxFog_sea_set:
+    // "TP maps uso_umi -> kasumi_outer"), which restores the donor's distinct
+    // false-sea horizon band at dawn/dusk.
     if (s_wwSkyModels[1] != NULL) {
         s_wwSkyModels[1]->setBaseTRMtx(base);
         wwSkyApplyModel(s_wwSkyModels[1]);
         J3DModelData* data = s_wwSkyModels[1]->getModelData();
         if (data != NULL) {
-            wwSkyPaintMatK0(data->getMaterialNodePointer(0), (u8)sky.r, (u8)sky.g, (u8)sky.b,
+            const GXColorS10& uso = g_env_light.vrbox_kasumi_outer_col;
+            wwSkyPaintMatK0(data->getMaterialNodePointer(0), (u8)uso.r, (u8)uso.g, (u8)uso.b,
                             255);
         }
         mDoExt_modelUpdateDL(s_wwSkyModels[1]);
@@ -3220,17 +3287,67 @@ static void wwSkyDraw() {
         }
         mDoExt_modelUpdateDL(s_wwSkyModels[2]);
     }
-    // vr_back_cloud.bdl: K on every material (WW d_a_vrbox2); TEXC*K path.
+    // §410 vr_back_cloud.bdl: K on every material (donor d_a_vrbox2) PLUS the
+    // donor's wind-driven texture scroll (d_a_vrbox2.cpp:158-213) -- the
+    // clouds DRIFT, at per-material speeds x1.0 / x0.8 / x0.6 (mat2's second
+    // texmtx gets the donor's own double-add, x1.6), direction = the wind
+    // vector crossed against the camera look direction so drift is
+    // view-relative. Was static: painted but frozen.
+    // [S16] the donor's MISC-stage leg (Tact wind angles + per-stage yaw
+    // overrides) is WW-baton machinery for interiors; this draw is the
+    // exterior sky, so the normal leg (real wind vec/pow) is the port.
     if (s_wwSkyModels[3] != NULL) {
         mDoMtx_stack_c::transS(cx, cy + 100.0f, cz);
         s_wwSkyModels[3]->setBaseTRMtx(mDoMtx_stack_c::get());
         wwSkyApplyModel(s_wwSkyModels[3]);
         J3DModelData* data = s_wwSkyModels[3]->getModelData();
         if (data != NULL) {
+            f32 scrollSpeed = 0.0f;
+            camera_class* cam = (camera_class*)dComIfGp_getCamera(0);
+            cXyz* windVec = dKyw_get_wind_vec();
+            if (cam != NULL && windVec != NULL) {
+                cXyz eyeXZ = cam->view.lookat.eye;
+                cXyz centerXZ = cam->view.lookat.center;
+                eyeXZ.y = 0.0f;
+                centerXZ.y = 0.0f;
+                cXyz lookDirXZ;
+                dKyr_get_vectle_calc(&eyeXZ, &centerXZ, &lookDirXZ);
+                const f32 windDirView =
+                    cM3d_VectorProduct2d(0.0f, 0.0f, -windVec->x, -windVec->z, lookDirXZ.x,
+                                         lookDirXZ.z) *
+                    0.0005f;
+                scrollSpeed = windDirView * dKyw_get_wind_pow();
+            }
+            // §414-P10: is the dome cloud drift feed alive, or starved by a
+            // zero wind system on the host?
+            {
+                static u32 s_frames414 = 0;
+                if ((++s_frames414 % 600) == 1) {
+                    DuskLog.info("[WwSky] 414-P10 domecloud drift: scrollSpeed={} windPow={} "
+                                 "windVec={}",
+                                 scrollSpeed, dKyw_get_wind_pow(),
+                                 windVec != NULL ? windVec->x : -999.0f);
+                }
+            }
+            static const f32 kCloudMatSpeed[3][2] = {
+                {1.0f, 1.0f}, {0.8f, 0.8f}, {0.6f, 1.6f}};
             const u16 n = data->getMaterialNum();
             for (u16 i = 0; i < n; ++i) {
-                wwSkyPaintMatK0(data->getMaterialNodePointer(i), (u8)kumo.r, (u8)kumo.g,
-                                (u8)kumo.b, 255);
+                J3DMaterial* mat = data->getMaterialNodePointer(i);
+                if (mat == NULL) {
+                    continue;
+                }
+                if (i < 3) {
+                    for (int t = 0; t < 2; ++t) {
+                        J3DTexMtx* tm = mat->getTexMtx((u32)t);
+                        if (tm != NULL) {
+                            f32& tx = tm->getTexMtxInfo().mSRT.mTranslationX;
+                            tx += scrollSpeed * kCloudMatSpeed[i][t];
+                            wwSkyTexScrollCheck(tx);
+                        }
+                    }
+                }
+                wwSkyPaintMatK0(mat, (u8)kumo.r, (u8)kumo.g, (u8)kumo.b, 255);
             }
         }
         mDoExt_modelUpdateDL(s_wwSkyModels[3]);
@@ -3468,6 +3585,26 @@ bool addDoorVisual(dExtNpcMount_c* a, J3DModelData* bodyData) {
 }
 
 }  // namespace — §334 must be the GLOBAL symbol the header declares
+
+// ============================================================================
+// §418b GLOBAL BRIDGE: the native vrbox actors (d_a_vrbox/d_a_vrbox2 WW legs)
+// need the mount's parse-once model-data cache -- acquireMountedModel is
+// file-local (anonymous namespace), so this is the exported door. Cache HIT
+// for the four dome models (the mount parsed them first); never a re-parse
+// of a pointer-fixed buffer.
+// ============================================================================
+J3DModelData* dExtWwMount_acquireModelData(const char* arc, const char* modelName) {
+    void* res = dComIfG_getObjectRes(arc, modelName);
+    if (res == NULL) {
+        return NULL;
+    }
+    // §418b-2 (symbolicated 155519): the dome models live in the BG cache
+    // ("bg:" key namespace) — acquireMountedModel's plain-key cache MISSED,
+    // re-parsed the already-pointer-fixed dRes buffer, and readVertex ran off
+    // the end. acquireBgModel is the same entry the mount's own dome loader
+    // used, so all four models are guaranteed cache HITS here.
+    return acquireBgModel(arc, modelName, res);
+}
 // ============================================================================
 // §334 WW→TP collision-attribute repack (bus §332 receipts, §333 ruling).
 //
@@ -9125,7 +9262,8 @@ int dExtNpcMount_create(dExtNpcMount_c* i_this, const char* procName) {
         // №27 N6 / №108: hide TP stub vrbox; outdoor F_DL* mounts WwSky instead.
         if (strcmp(procName, "EXT_BG0") == 0 || strcmp(procName, "EXT_BG9") == 0) {
             g_env_light.hide_vrbox = true;
-            DuskLog.info("[ExtNpcMount] N6 hide_vrbox for '{}'", procName);
+            dKyWw_setSkyHost(true);  // §411: TP vrbox replaced, sky ALIVE
+            DuskLog.info("[ExtNpcMount] N6 hide_vrbox + ww-sky-host for '{}'", procName);
         }
         if (mountWantsWwSky(i_this)) {
             wwSkyRetain();
@@ -10155,7 +10293,21 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
         // priority is too late — the BG list was already flushed (invisible island).
         // No per-draw logging — Outset BG is already the FPS hot path.
         mDoLib_clipper::changeFar(1000000.0f);
-        g_env_light.settingTevStruct(0x40, &i_this->current.pos, &i_this->tevStr);
+        // ====================================================================
+        // §409 NATIVE BG LIGHTING — mount-step-2 of the retirement ladder.
+        //
+        // Replaced: one TP-typed settingTevStruct(0x40) + setLightTevColorType
+        // _MAJI — TP math over WW data, the standing "island too bright at
+        // night" candidate. The donor's room draw is d_a_bg.cpp:278-279:
+        //     settingTevStruct(TEV_TYPE_BG0 + i, NULL, slot tevstr);
+        //     setLightTevColorType(model, slot tevstr);
+        // i.e. the room-model SLOT INDEX selects the BG palette pair — the
+        // reason the WW palette carries four BG pairs at all. Fed per model in
+        // the loop below (donor keeps per-slot tevstrs; one tevstr fed
+        // immediately before each write is value-identical). NULL pos is the
+        // donor's own argument. Slot 1 (the sea sheet) keeps its §408 path,
+        // which is the same BG1 feed plus the authored C1-C3/K1-K3 bake.
+        // ====================================================================
         for (int i = 0; i < 3; ++i) {
             if (i_this->mpBgModels[i] == NULL) {
                 continue;
@@ -10709,11 +10861,16 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                     }
                 }
             }
-            g_env_light.setLightTevColorType_MAJI(model, &i_this->tevStr);
-            // §143: model1 C0/K0 live seacolor; C1–C3/K1–K3 authored (§138 table).
-            // Ferry A STEP 1: palette bisect skips per-frame wwApplyModel1SeaPalette.
-            if (i == 1 && data != NULL && wwFpsBisectMode() != kWwFpsBisectSkipPalette) {
-                wwApplyModel1SeaPalette(data);
+            // §409: donor pair, slot-typed (d_a_bg.cpp:278-279). Slot 1 = the
+            // §408 sea path (same BG1 feed + authored regs); slots 0/2 = the
+            // generic donor write.
+            if (i == 1) {
+                if (data != NULL && wwFpsBisectMode() != kWwFpsBisectSkipPalette) {
+                    wwApplyModel1SeaPalette(data);
+                }
+            } else {
+                dKyWw_settingTevStruct(TEV_TYPE_BG0 + i, NULL, &i_this->tevStr);
+                dKyWw_setLightTevColorType(model, &i_this->tevStr);
             }
             mDoExt_modelUpdateDL(model);
             // ================================================================

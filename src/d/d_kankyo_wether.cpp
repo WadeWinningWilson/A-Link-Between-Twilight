@@ -14,6 +14,8 @@
 #include "d/d_bg_s_gnd_chk.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
+#include "d/d_kankyo_ww.h"  // §412 WW sky-host gate
+#include "d/d_kankyo_ww_sky.h"  // §413 WW celestial layer
 #include "d/d_kankyo_rain.h"
 #include "d/d_particle.h"
 #include "f_op/f_op_camera_mng.h"
@@ -472,12 +474,28 @@ void dKyw_wether_move() {
 }
 
 static void wether_move_sun() {
+    // §413: covenant — WW hosts get the WW sun/moon/lenz, not TP's.
+    if (dKyWw_isSkyHost()) {
+        dKyWwSky_moveSun();
+        return;
+    }
     s32 sunVisible = false;
-    if (dComIfGp_checkStatus(1) && !g_env_light.hide_vrbox) {
+    // ====================================================================
+    // §412 WW SKY HOST: hide_vrbox was set by the mount to hide TP's vrbox
+    // STUB (№108), but its TP meaning is "stage has no sky" -- it silently
+    // suppressed the sun, moon, stars and cumulus over the mounted island.
+    // dKyWw_isSkyHost() says "vrbox model replaced, sky ALIVE": it bypasses
+    // that flag AND the host roomRead vrboxswitch (mounted rooms are not in
+    // the host's roomRead, so the lookup can never pass for them).
+    // ====================================================================
+    if (dComIfGp_checkStatus(1) && (!g_env_light.hide_vrbox || dKyWw_isSkyHost())) {
         roomRead_class* room = dComIfGp_getStageRoom();
         if (room != NULL && room->num > dComIfGp_roomControl_getStayNo()) {
             sunVisible = dStage_roomRead_dt_c_GetVrboxswitch(
                 *room->m_entries[dComIfGp_roomControl_getStayNo()]);
+        }
+        if (dKyWw_isSkyHost()) {
+            sunVisible = true;  // §412: WW outdoor host -- sky authored ON
         }
 
         // Stage is Hero Shade arena
@@ -632,6 +650,11 @@ static void wether_move_snow() {
 }
 
 static void wether_move_star() {
+    // §413: covenant — WW hosts get the WW starfield.
+    if (dKyWw_isSkyHost()) {
+        dKyWwSky_moveStar();
+        return;
+    }
     s32 starsVisible = false;
     // Stage is Hyrule Castle or Castle Throne Room
     if (!strcmp(dComIfGp_getStartStageName(), "D_MN09") ||
@@ -640,13 +663,16 @@ static void wether_move_star() {
         return;
     } else {
         // Stage is Hero Shade arena
-        if ((dComIfGp_checkStatus(1) && !g_env_light.hide_vrbox) ||
+        if ((dComIfGp_checkStatus(1) && (!g_env_light.hide_vrbox || dKyWw_isSkyHost())) ||
             !strcmp(dComIfGp_getStartStageName(), "F_SP200"))
         {
             roomRead_class* room = dComIfGp_getStageRoom();
             if (room != NULL && room->num > dComIfGp_roomControl_getStayNo()) {
                 starsVisible = dStage_roomRead_dt_c_GetVrboxswitch(
                     *room->m_entries[dComIfGp_roomControl_getStayNo()]);
+            }
+            if (dKyWw_isSkyHost()) {
+                starsVisible = true;  // §412 (see sun gate)
             }
 
             // Stage is Hero Shade arena
@@ -893,8 +919,26 @@ static void wether_move_vrkumo() {
     BOOL var_r31 = false;
     static cXyz r09o(-180000.0f, 750.0f, -200000.0f);
 
-    if (dComIfGp_checkStatus(1) && !g_env_light.hide_vrbox) {
-        g_env_light.mVrkumoCount = 6;
+    // §414-P1: gate discriminator -- which condition kills the cumulus?
+    {
+        static u8 s_lastGate414 = 0xFF;
+        u8 gate = (dComIfGp_checkStatus(1) ? 1 : 0) | (g_env_light.hide_vrbox ? 2 : 0) |
+                  (dKyWw_isSkyHost() ? 4 : 0);
+        if (gate != s_lastGate414) {
+            s_lastGate414 = gate;
+            DuskLog.info("[WwSky] 414-P1 vrkumo gate: checkStatus={} hide_vrbox={} "
+                         "skyHost={} status={} count={}",
+                         (int)(gate & 1), (int)((gate >> 1) & 1), (int)((gate >> 2) & 1),
+                         (int)g_env_light.mVrkumoStatus, (int)g_env_light.mVrkumoCount);
+        }
+    }
+    if (dComIfGp_checkStatus(1) && (!g_env_light.hide_vrbox || dKyWw_isSkyHost())) {
+        // §412: TP authors a 6-cloud baseline; WW authors 50 (donor
+        // wether_move_vrkumo, WW d_kankyo_wether.cpp:769: mVrkumoCount = 50,
+        // then strength*50+50 -> 50..100). Both fit the shared 100-instance
+        // packet. The strength logic itself is shared-lineage (TP wether_pat
+        // 1/2 == WW colpat 1/2: cloudy patterns) and stays TP's.
+        g_env_light.mVrkumoCount = dKyWw_isSkyHost() ? 50 : 6;
 
         if (memcmp(dComIfGp_getStartStageName(), "D_MN07", 6) == 0 ||
             strcmp(dComIfGp_getStartStageName(), "F_SP114") == 0 ||
@@ -920,7 +964,12 @@ static void wether_move_vrkumo() {
             cLib_addCalc(&g_env_light.mVrkumoStrength, 0.0f, 0.08f, 0.002f, 0.00000001f);
         }
 
-        g_env_light.mVrkumoCount = (s16)(g_env_light.mVrkumoStrength * 56.0f + 6.0f);
+        if (dKyWw_isSkyHost()) {
+            // §412 donor scale: 50..100 (WW d_kankyo_wether.cpp:792).
+            g_env_light.mVrkumoCount = (s16)(g_env_light.mVrkumoStrength * 50.0f + 50.0f);
+        } else {
+            g_env_light.mVrkumoCount = (s16)(g_env_light.mVrkumoStrength * 56.0f + 6.0f);
+        }
     } else {
         g_env_light.mVrkumoCount = 0;
     }
@@ -935,6 +984,9 @@ static void wether_move_vrkumo() {
             *room_p->m_entries[dComIfGp_roomControl_getStayNo()]);
     }
 
+    if (dKyWw_isSkyHost()) {
+        var_r31 = true;  // §412: mounted rooms are not in the host roomRead
+    }
     if (strcmp(dComIfGp_getStartStageName(), "F_SP200") == 0) {
         g_env_light.mVrkumoCount = 30;
     } else if (var_r31 == 0) {
@@ -949,18 +1001,54 @@ static void wether_move_vrkumo() {
                 return;
             }
 
-            g_env_light.mpVrkumoPacket->mpResCloudtx_01 =
-                (u8*)dComIfG_getStageRes("cloudtx_01.bti");
-            g_env_light.mpVrkumoPacket->mpResCloudtx_02 =
-                (u8*)dComIfG_getStageRes("cloudtx_02.bti");
-            g_env_light.mpVrkumoPacket->mpResCloudtx_03 =
-                (u8*)dComIfG_getStageRes("cloudtx_03.bti");
+            if (dKyWw_isSkyHost()) {
+                // §412: WW cumulus textures ride the staged WwSky arc (same
+                // arc the dome models load from); the host stage's own
+                // cloudtx would be TP's clouds over a WW island.
+                g_env_light.mpVrkumoPacket->mpResCloudtx_01 =
+                    (u8*)dComIfG_getObjectRes("WwSky", "cloudtx_01.bti");
+                g_env_light.mpVrkumoPacket->mpResCloudtx_02 =
+                    (u8*)dComIfG_getObjectRes("WwSky", "cloudtx_02.bti");
+                g_env_light.mpVrkumoPacket->mpResCloudtx_03 =
+                    (u8*)dComIfG_getObjectRes("WwSky", "cloudtx_03.bti");
+            } else {
+                g_env_light.mpVrkumoPacket->mpResCloudtx_01 =
+                    (u8*)dComIfG_getStageRes("cloudtx_01.bti");
+                g_env_light.mpVrkumoPacket->mpResCloudtx_02 =
+                    (u8*)dComIfG_getStageRes("cloudtx_02.bti");
+                g_env_light.mpVrkumoPacket->mpResCloudtx_03 =
+                    (u8*)dComIfG_getStageRes("cloudtx_03.bti");
+            }
 
             if (g_env_light.mpVrkumoPacket->mpResCloudtx_01 == NULL ||
                 g_env_light.mpVrkumoPacket->mpResCloudtx_02 == NULL ||
                 g_env_light.mpVrkumoPacket->mpResCloudtx_03 == NULL)
             {
+                if (dKyWw_isSkyHost()) {
+                    // ========================================================
+                    // §414 RETRY-NOT-LATCH: on a WW host the WwSky arc may
+                    // not be resident the same frame the sky-host flag flips.
+                    // TP's 99 is PERMANENT and was re-brickable even after the
+                    // §413 re-init. Tear down and retry next frame instead.
+                    // ========================================================
+                    static bool s_warned414 = false;
+                    if (!s_warned414) {
+                        s_warned414 = true;
+                        DuskLog.warn("[WwSky] 414-P2 vrkumo cloudtx not resident yet "
+                                     "(WwSky arc still loading?) -- retrying, NOT latching 99");
+                    }
+                    JKR_DELETE(g_env_light.mpVrkumoPacket);
+                    g_env_light.mpVrkumoPacket = NULL;
+                    return;
+                }
                 g_env_light.mVrkumoStatus = 99;
+            } else if (dKyWw_isSkyHost()) {
+                DuskLog.info("[WwSky] 414-P2 vrkumo INIT OK: WW cloudtx bound "
+                             "(tx1={} tx2={} tx3={}), count={}",
+                             (void*)g_env_light.mpVrkumoPacket->mpResCloudtx_01,
+                             (void*)g_env_light.mpVrkumoPacket->mpResCloudtx_02,
+                             (void*)g_env_light.mpVrkumoPacket->mpResCloudtx_03,
+                             (int)g_env_light.mVrkumoCount);
             }
 
             for (int i = 0; i < 100; i++) {
@@ -974,7 +1062,24 @@ static void wether_move_vrkumo() {
             g_env_light.mVrkumoStatus++;
         }
         break;
-    case 1:
+    case 1: {
+        // §414-P3: liveness snapshot every ~10s while hosted
+        static u32 s_frames414 = 0;
+        if (dKyWw_isSkyHost() && (++s_frames414 % 600) == 1) {
+            DuskLog.info("[WwSky] 414-P3 vrkumo LIVE: count={} strength={} texscroll=({}, {})",
+                         (int)g_env_light.mVrkumoCount, g_env_light.mVrkumoStrength,
+                         g_env_light.mpVrkumoPacket->field_0x1150,
+                         g_env_light.mpVrkumoPacket->field_0x1154);
+            // §416-P11: per-cloud state — convicts cluster (identical pos?) vs
+            // pulse (alpha cycling?) vs stalled drift (pos frozen?).
+            for (int pi = 0; pi < 8; pi++) {
+                VRKUMO_EFF& e = g_env_light.mpVrkumoPacket->mVrkumoEff[pi * 12];
+                DuskLog.info("[WwSky] 416-P11 kumo[{}]: st={} pos=({}, {}, {}) a={} fall={} spd={}",
+                             pi * 12, (int)e.mStatus, e.mPosition.x, e.mPosition.y, e.mPosition.z,
+                             e.mAlpha, e.mDistFalloff, e.mSpeed);
+            }
+        }
+    }
         vrkumo_move();
         dKyw_get_wind_vec();
 
@@ -1300,14 +1405,23 @@ void dKyw_ww_host_wind_onStage(const char* stage) {
     DUSK_FPS_SCOPE(Wind);
 #endif
     static bool s_armed;
-    static constexpr f32 kWwHostAmbientWindPow = 0.4f;
+    // ========================================================================
+    // §416 DONOR WIND (placeholder retired): WW's Great Sea default — tact
+    // never conducted (save sentinel -1/-1) → tact angles (0,0) → WW formula
+    // wind_vec = (1,0,0); power from the room's authored FILI GlobalWindLevel.
+    // Winditor-law receipt: sea/Room44.arc (Outset) FILI param=0x0 →
+    // windLevel 0 → 0.3 (donor dKyw_wind_set, WW d_kankyo_wether.cpp:1060).
+    // Receiver evt-angle convention differs (TP: x=cos·sin(y)) so (1,0,0)
+    // needs angleY=0x4000 here.
+    // ========================================================================
+    static constexpr f32 kWwHostAmbientWindPow = 0.3f;
     if (stage != NULL && dExtWwSave_isWwHostStage(stage)) {
-        dKyw_evt_wind_set(/*angleX=*/0, /*angleY=*/0);
+        dKyw_evt_wind_set(/*angleX=*/0, /*angleY=*/0x4000);
         dKyw_custom_windpower(kWwHostAmbientWindPow);
         if (!s_armed) {
             s_armed = true;
             DuskLog.info(
-                "[WwFoam] FerryF ambient wind ARM stage='{}' pow={:.3f} angY=0 (placeholder)",
+                "[WwFoam] 416 donor wind ARM stage='{}' vec=(1,0,0) pow={:.3f} (FILI receipt)",
                 stage, kWwHostAmbientWindPow);
         }
     } else if (s_armed) {
@@ -1769,7 +1883,15 @@ void dKyw_wether_draw() {
         dKyw_Cloud_Draw();
     }
 
-    if (strcmp(dComIfGp_getStartStageName(), "Name") && g_env_light.mSunInitialized) {
+    // ====================================================================
+    // §413: WW hosts draw the WW celestial packets (sun-then-lenz order is
+    // load-bearing: drawSun writes the fog colour the flare reads). TP's
+    // packets/gates are untouched for TP stages. The host stag-info Arg0
+    // gate does not apply to the mounted island (host stage authorship).
+    // ====================================================================
+    if (dKyWw_isSkyHost()) {
+        dKyWwSky_drawSun();
+    } else if (strcmp(dComIfGp_getStartStageName(), "Name") && g_env_light.mSunInitialized) {
         stage_stag_info_class* stag_info = dComIfGp_getStageStagInfo();
 
         if (dStage_stagInfo_GetArg0(stag_info) != 0) {
@@ -1778,7 +1900,9 @@ void dKyw_wether_draw() {
         }
     }
 
-    if (g_env_light.mStarInitialized) {
+    if (dKyWw_isSkyHost()) {
+        dKyWwSky_drawStar();  // §413 (TP shooting stars stay TP-stage-only)
+    } else if (g_env_light.mStarInitialized) {
         dKyw_Star_Draw();
         dKyw_shstar_Draw();
     }
@@ -1819,6 +1943,17 @@ void dKyw_wether_draw() {
 }
 
 void dKyw_wether_draw2() {
+    // §414-P4/P5: proves the dKyeff2 actor exists on the host AND whether the
+    // vrkumo draw gate passes (status must be 1..98).
+    if (dKyWw_isSkyHost()) {
+        static u8 s_last414p4 = 0xFF;
+        u8 st = (u8)g_env_light.mVrkumoStatus;
+        if (st != s_last414p4) {
+            s_last414p4 = st;
+            DuskLog.info("[WwSky] 414-P4 kyeff2 draw alive; vrkumo status={} (draws iff 1..98)",
+                         (int)st);
+        }
+    }
     if (g_env_light.mVrkumoStatus != 0 && g_env_light.mVrkumoStatus < 99) {
         dKyw_Vrkumo_Draw();
     }

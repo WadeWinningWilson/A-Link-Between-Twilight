@@ -1,6 +1,7 @@
 #include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_kankyo.h"
+#include "d/d_kankyo_ww.h"
 #include "dusk/memory.h"
 #ifdef __REVOLUTION_SDK__
 #include <revolution.h>
@@ -1253,6 +1254,7 @@ static void envcolor_init() {
     g_env_light.schbit_timer = 0;
 
     g_env_light.hide_vrbox = false;
+    dKyWw_setSkyHost(false);  // §411: cleared with hide_vrbox on scene init
     g_env_light.mContrastFlag = 0;
     g_env_light.mFogAdjEnable = true;
     g_env_light.mFogAdjTableType = 0;

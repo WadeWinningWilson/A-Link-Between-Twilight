@@ -38,8 +38,24 @@ public:
     /* 0x383 */ u8 Material_use_fg;
     /* 0x384 */ u8 field_0x384;
     /* 0x385 */ u8 field_0x385;
-};  // Size = 0x388
+#if TARGET_PC
+    // ========================================================================
+    // §407 -- donor mColorK1 (WW d_kankyo.h tevstr +0x8C): the SECOND-LIGHT
+    // color, filled by the eflight influence chain (the player's fire light --
+    // TP's lantern) and consumed by dKyWw_setLightTevColorType_sub, which
+    // enables the extra TEV stage + light slot 1 when .a != 0. TP dropped the
+    // field when it moved material colors into _MAJI; WW materials are
+    // authored against it. PC-only append (precedent: J3DMaterial's TARGET_PC
+    // members); dKy_tevstr_init memsets sizeof(), so init covers it.
+    // ========================================================================
+    GXColor mWwColorK1;
+#endif
+};  // Size = 0x388 (GC) / extended on PC
 
+#if TARGET_PC
+STATIC_ASSERT(sizeof(dKy_tevstr_c) == 0x38C);
+#else
 STATIC_ASSERT(sizeof(dKy_tevstr_c) == 0x388);
+#endif
 
 #endif /* D_D_KANKYO_TEV_STR */

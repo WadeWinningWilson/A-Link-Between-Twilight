@@ -56,11 +56,23 @@ class dKy_tevstr_c;
 
 void dKyWw_setLightTevColorType_sub(J3DMaterial* i_material, dKy_tevstr_c* i_tevstr);
 void dKyWw_setLightTevColorType(J3DModel* i_model, dKy_tevstr_c* i_tevstr);
+// §408: per-material form, exported for draws that mix live palette colours
+// with authored per-material registers (the mounted sea sheet keeps its baked
+// C1-C3/K1-K3 and takes C0/K0 + fog from the tevstr through this).
+void dKyWw_setLightTevColorType_sub(J3DMaterial* i_material, dKy_tevstr_c* i_tevstr);
 
 // §405: the donor settingTevStruct TAIL — receiver settingTevStruct + the WW
 // tevstr TevColor/TevKColor write TP moved into _MAJI. WW actors call THIS,
 // not g_env_light.settingTevStruct directly, or §404's copy reads black.
 class cXyz;
 void dKyWw_settingTevStruct(int i_lightType, cXyz* i_pos, dKy_tevstr_c* i_tevstr);
+
+// §411: "a WW sky is hosted" -- distinct from hide_vrbox ("no sky at all").
+// Set by the mount alongside hide_vrbox; consulted by the wether gates.
+void dKyWw_setSkyHost(bool i_active);
+bool dKyWw_isSkyHost();
+// §418: true once the NATIVE vrbox actors own the dome (mount draw retires).
+void dKyWw_setDomeActorsLive(bool i_live);
+bool dKyWw_domeActorsLive();
 
 #endif /* D_KANKYO_WW_H */

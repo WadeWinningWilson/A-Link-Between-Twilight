@@ -106,6 +106,8 @@ set(DOLZEL_FILES
         src/d/d_path.cpp
         src/d/d_drawlist.cpp
         src/d/d_kankyo_data.cpp
+        src/d/d_kankyo_ww.cpp
+        src/d/d_kankyo_ww_sky.cpp
         src/d/d_kankyo_wether.cpp
         src/d/d_kankyo_rain.cpp
         src/d/d_kankyo_debug.cpp
@@ -200,6 +202,8 @@ set(DOLZEL_FILES
         src/d/d_ext_npc_mount.cpp
         src/d/d_ext_dmesg.cpp
         src/d/d_ext_save_flags.cpp
+        src/d/d_ext_tree.cpp
+        src/d/d_ext_room_verify.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp
         src/d/d_ext_npc_population.cpp
@@ -210,6 +214,23 @@ set(DOLZEL_FILES
         src/d/ext_seq/ja1_parser.cpp
         src/d/ext_seq/ja1_event_dump.cpp
         src/d/ext_seq/ja1_bank.cpp
+        src/d/ext_seq/ja1_oscillator.cpp
+        src/d/ext_seq/ja1_jastrack.cpp
+        src/d/ext_seq/ja1_jasseqparser.cpp
+        src/d/ext_seq/ja1_jaschannel.cpp
+        src/d/ext_seq/ja1_jasbank.cpp
+        src/d/ext_seq/ja1_jasbnkparser.cpp
+        src/d/ext_seq/ja1_kernel.cpp
+        src/d/ext_seq/ja1_jasplayer.cpp
+        src/d/ext_seq/ja1_jasdspchannel.cpp
+        src/d/ext_seq/ja1_jasseqctrl.cpp
+        src/d/ext_seq/ja1_jasnotemgr.cpp
+        src/d/ext_seq/ja1_jasouterparam.cpp
+        src/d/ext_seq/ja1_jasregisterparam.cpp
+        src/d/ext_seq/ja1_jastrackinterrupt.cpp
+        src/d/ext_seq/ja1_jastrackport.cpp
+        src/d/ext_seq/ja1_jascalc.cpp
+        src/d/ext_seq/ja1_native.cpp
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp
@@ -1040,6 +1061,7 @@ set(REL_FILES
         src/d/actor/d_a_npc_zl1.cpp
         src/d/actor/d_a_npc_ba1.cpp
         src/d/actor/d_a_obj_otble.cpp
+ src/d/actor/d_a_ext_ep.cpp
         src/d/actor/d_a_ww_demo00.cpp
         src/d/actor/d_a_lamp.cpp
         src/d/actor/d_a_obj_mshokki.cpp

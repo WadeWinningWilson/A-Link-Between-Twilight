@@ -22,9 +22,18 @@ public:
     /* 0x580 */ mDoExt_btkAnm mSunBtk;
     /* 0x598 */ J3DModel* mpKasumimModel;
     /* 0x59C */ u8 field_0x59C[0x5A0 - 0x59C];
+#if TARGET_PC
+    // §418 WW NATIVE SKYDOME: donor d_a_vrbox2 owns these three (WW
+    // d_a_vrbox2.cpp:261-298 -- NOT vrbox1, which owns only vr_sky).
+    J3DModel* mpWwUsoUmi;
+    J3DModel* mpWwKasumiMae;
+    J3DModel* mpWwBackCloud;
+#endif
 };
 
+#if !TARGET_PC
 STATIC_ASSERT(sizeof(vrbox2_class) == 0x5A0);
+#endif
 
 
 #endif /* D_A_VRBOX2_H */
