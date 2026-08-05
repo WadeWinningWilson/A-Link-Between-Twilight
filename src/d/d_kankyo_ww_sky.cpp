@@ -256,6 +256,20 @@ static void wwSkySunMove() {
             }
         }
 
+        // §421-P31: raw peek-Z evidence -- all-zero forever = backend never
+        // returns data for this render path; nonzero-but-low at open sky =
+        // coordinate/scale mismatch or something writing depth under the sun.
+        {
+            static u32 s_f31 = 0;
+            if ((++s_f31 % 600) == 1) {
+                DuskLog.info("[WwSky] 421-P31 peekZ proj=({}, {}) viz[{:x},{:x},{:x},{:x},{:x}]"
+                             " nVis={} nCulled={}",
+                             projected.x, projected.y, pSunPkt->mVizChkData[0],
+                             pSunPkt->mVizChkData[1], pSunPkt->mVizChkData[2],
+                             pSunPkt->mVizChkData[3], pSunPkt->mVizChkData[4],
+                             (int)numPointsVisible, (int)numPointsCulled);
+            }
+        }
         if (numPointsCulled != 0 && numPointsVisible != 0 && numCenterPointsVisible != 0) {
             numCenterPointsVisible = 1;
             numPointsVisible = 5;

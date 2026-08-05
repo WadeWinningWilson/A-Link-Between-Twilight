@@ -221,21 +221,13 @@ void dKyWw_setSkyHost(bool i_active) {
         g_env_light.mVrkumoCount = 0;
         dKyWwSky_reset();
         dKyWw_setDomeActorsLive(false);  // §418 actors do not survive stage change
-        if (i_active) {
-            // ============================================================
-            // §415 THE MASTER GATE (probe P1's conviction): status bit 1 is
-            // set in exactly one place -- daVrbox_Create, on success
-            // (d_a_vrbox.cpp:140). It means "this stage HAS a sky", and it is
-            // the outermost condition of every wether system, donor and
-            // receiver alike. The mount suppressed TP's vrbox actor (№108),
-            // so the bit stayed clear and checkStatus(1)=0 killed the entire
-            // celestial layer. The WW dome IS this stage's vrbox: assert the
-            // same contract the vrbox actor would have. Never cleared here --
-            // d_s_play's setStatus(0) resets it on every stage open, exactly
-            // as it does for the real actor.
-            // ============================================================
-            dComIfGp_onStatus(1);
-        }
+        // ====================================================================
+        // §424: the §415 onStatus(1) bridge RETIRED (History §422c: clouds
+        // sealed, dome actors continue). The native daVrbox_Create WW leg now
+        // owns the "stage HAS a sky" bit, donor-exact: the wether systems
+        // start the frame the actor lives, and stay donor-correctly dark if
+        // it ever fails to build.
+        // ====================================================================
         DuskLog.info("[WwSky] 413 skyHost {} -> {}: wether re-armed (vrkumo/sun/star)",
                      (int)s_wwSkyHost, (int)i_active);
     }

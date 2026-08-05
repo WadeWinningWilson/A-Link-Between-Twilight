@@ -36,8 +36,10 @@
  * collision mesh being mounted separately — see the ledger entry.
  * =========================================================================
  */
+// KIT-LINEAGE: native-port
 
 #include "d/dolzel_rel.h"  // IWYU pragma: keep
+#include "d/d_kankyo_ww.h"  // §425 native lighting chain
 
 #if TARGET_PC
 
@@ -290,13 +292,19 @@ int daExtSpan_c::draw() {
     if (mCount == 0) {
         return 1;
     }
-    g_env_light.settingTevStruct(0x40, &current.pos, &tevStr);
+    // ========================================================================
+    // §425 LIGHTING-CONTRACT FIX (Foundry kit_laws law-1 finding): this WW
+    // port was lit through the TP path (hand-picked 0x40 + _MAJI) — the exact
+    // black-actor class §405-§407 closed. Donor authors TEV_TYPE_BG0
+    // (WW d_a_bridge.cpp:1244); native chain feeds C0/K0 the donor way.
+    // ========================================================================
+    dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
     for (int i = 0; i < mCount; ++i) {
         if (mpPlanks[i] == NULL) {
             continue;
         }
         mpPlanks[i]->calc();
-        g_env_light.setLightTevColorType_MAJI(mpPlanks[i], &tevStr);
+        dKyWw_setLightTevColorType(mpPlanks[i], &tevStr);
         mDoExt_modelUpdateDL(mpPlanks[i]);
     }
     return 1;

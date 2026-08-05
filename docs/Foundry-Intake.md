@@ -63,3 +63,44 @@ correction, ratified into the state file):**
    ones) beats one long fragile movie.
 3. Capture-maximal sessions remain the hedge: with the full tap roster live, the
    first play yields most data even if its movie never syncs again.
+
+## §423 Sky-campaign law for the kits (2026-08-04, Housing Security)
+From commit 9c62ae05a0 (§407-§420, user-verified) — encode into actor/staging kits:
+1. LIGHTING CONTRACT: every WW actor draw routes dKyWw_settingTevStruct (donor-authored
+   TEV type) → dKyWw_setLightTevColorType; never hand-write C0/K0. The §406 canary logs
+   any unfed tevstr ("UNFED tevstr" = wiring miss).
+2. CUSTOM-ARC MODELS: custom-mounted arcs serve RAW J3D bytes — NEVER feed
+   dComIfG_getObjectRes results to mDoExt_J3DModel__create; go through
+   dExtNpcMount_acquireModelData (parse-once cache; two symbolicated crashes prove it).
+3. NATIVE-ACTOR PATTERN (vrbox precedent): TP same-lineage actor + #if TARGET_PC WW leg
+   (PC-append fields, guarded sizeof asserts), donor register law from extraction,
+   spawn from a resource-proven site, handshake flag to retire any interim draw.
+4. STATUS BIT 1 = "stage has a sky" (daVrbox_Create only) — any future host surface
+   that suppresses a TP subsystem must assert the contract it displaced.
+5. WIND: hosts arm donor wind = tact-default (1,0,0) + authored FILI level (receipts
+   in §416); never invent ambient constants.
+
+## §426 RULING: lineage tags RATIFIED (user, 2026-08-04) + law-1 finding closed
+1. The lineage declaration is APPROVED as proposed: one machine-readable line per
+   ported TU. Suggested concrete shape (adjust if the lint prefers another spelling,
+   but keep it grep-exact, never inferred from prose):
+       // KIT-LINEAGE: native-port | bridge-owed[:ledger-ref] | host-plumbing
+   Semantics as you specified: native-port = all five laws scored; bridge-owed =
+   scored but reported OWED against the ledger entry (standing directive: bridges
+   labeled, never silently passed); host-plumbing = donor-draw laws N/A with lineage
+   as the stated reason. Missing tag = UNKNOWN. Foundry executes the mass-tagging
+   and emits the tag from actor_kit for every new port.
+2. GREEN-LIT: wire kit_laws.py as the blocking pre-flight on actor_kit AFTER the
+   tags land (so N/A semantics are truthful from the first gated run).
+3. Your law-1 finding is CLOSED by Housing (§425, exe 18:05:12): d_a_ext_plank_span
+   now routes dKyWw_settingTevStruct(TEV_TYPE_BG0) → dKyWw_setLightTevColorType,
+   donor receipt WW d_a_bridge.cpp:1244. Next sweep should report 0 VIOLATION;
+   plank_span classifies native-port (declared not-ported list stays on the ledger,
+   which does not demote a port to a bridge — imitation machinery does).
+4. For your two law-5 UNKNOWNs: the donor wind authority is §416 on the WW tale bus
+   (tact-default (1,0,0) + FILI level, Winditor receipt sea/Room44=0→0.3) — cite it.
+
+### §423 correction (Housing, 2026-08-04): law 2 symbol spelling
+Foundry's catch confirmed: the exported symbol follows the established
+dExtNpcMount_ prefix. Code renamed at source (mount TU + both vrbox TUs);
+law text above corrected in place. Lint should key on dExtNpcMount_acquireModelData.

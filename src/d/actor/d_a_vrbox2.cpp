@@ -7,7 +7,7 @@
 #include "dusk/logging.h"
 
 // §418b: the mount's parse-once model-data cache (global bridge, §334 region).
-J3DModelData* dExtWwMount_acquireModelData(const char* arc, const char* modelName);
+J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName);
 #include "d/dolzel_rel.h" // IWYU pragma: keep
 
 #include "d/actor/d_a_vrbox2.h"
@@ -574,11 +574,11 @@ static int daVrbox2_solidHeapCB(fopAc_ac_c* i_this) {
         // §418b: raw-bytes crash fix -- go through the mount's parse-once
         // cache (see d_a_vrbox.cpp §418b note).
         J3DModelData* d;
-        d = dExtWwMount_acquireModelData("WwSky", "vr_uso_umi.bdl");
+        d = dExtNpcMount_acquireModelData("WwSky", "vr_uso_umi.bdl");
         a_this->mpWwUsoUmi = d != NULL ? mDoExt_J3DModel__create(d, 0x80000, 0x11020202) : NULL;
-        d = dExtWwMount_acquireModelData("WwSky", "vr_kasumi_mae.bdl");
+        d = dExtNpcMount_acquireModelData("WwSky", "vr_kasumi_mae.bdl");
         a_this->mpWwKasumiMae = d != NULL ? mDoExt_J3DModel__create(d, 0x80000, 0x11020202) : NULL;
-        d = dExtWwMount_acquireModelData("WwSky", "vr_back_cloud.bdl");
+        d = dExtNpcMount_acquireModelData("WwSky", "vr_back_cloud.bdl");
         a_this->mpWwBackCloud = d != NULL ? mDoExt_J3DModel__create(d, 0x80000, 0x11020202) : NULL;
         return a_this->mpWwUsoUmi != NULL && a_this->mpWwKasumiMae != NULL &&
                a_this->mpWwBackCloud != NULL;

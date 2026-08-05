@@ -12,7 +12,7 @@
 #include "dusk/logging.h"
 
 // §418b: the mount's parse-once model-data cache (global bridge, §334 region).
-J3DModelData* dExtWwMount_acquireModelData(const char* arc, const char* modelName);
+J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName);
 
 static int daVrbox_color_set(vrbox_class* i_this);
 #if TARGET_PC
@@ -219,7 +219,7 @@ static int daVrbox_solidHeapCB(fopAc_ac_c* i_this) {
         // mount's copy (the sumo-BMT crash class). The mount's cache bridge is
         // mount's parse-once cache: the dome models are already in it, so
         // this is a cache HIT, never a re-parse.
-        J3DModelData* wwData = dExtWwMount_acquireModelData("WwSky", "vr_sky.bdl");
+        J3DModelData* wwData = dExtNpcMount_acquireModelData("WwSky", "vr_sky.bdl");
         this_->mpWwSky = wwData != NULL ? mDoExt_J3DModel__create(wwData, 0x80000, 0x11020202)
                                         : NULL;
         return this_->mpWwSky != NULL;

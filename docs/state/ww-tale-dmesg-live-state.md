@@ -1386,3 +1386,96 @@ mirror-recycle, overhead fade + 1.21 clamp (the anti-balloon terms), authored ce
 colouring. P3/P11 probes still armed for verification.
 WHOSE TURN: user (test) · Housing (milestone commit §405–§418 on verify; then peekZ/
 lens-flare follow-up) · History (idle unless P11 disagrees with the decode).
+
+## §421 SKY CAMPAIGN CODA (2026-08-04, Housing): snapshot 9c62ae05a0 + closures
+Campaign §407-§420 committed USER-VERIFIED ("clouds are perfect"). §420 root of the final
+defect: the WW cloud draw never loaded PNMTX — the field rendered through the sun packet's
+leftover billboard concat ("miniaturized, curved"). P31 armed for the lens-flare question
+(sun viz stuck 0; aurora depth-peek backend verified real: reversed-Z converted, encoder
+wired 30Hz — raw sample values will discriminate backend-vs-coordinates-vs-accounting;
+cross-test: TP field-stage sun uses the same path).
+MOYA CENSUS CLOSED (Winditor-law): sea/Room44.dzr authors NO kytag00 — Outset has no haze,
+its absence is donor-correct. The one env tag is ky_tag1 = kytag01 WAVE tag (wave_make:
+300 whitecaps, ring 20000/22000) — already alive via the §97b/§101 wave port; donor params
+recorded here as the authority if tuning ever drifts. kytag00 moya stays ledgered for
+FUTURE islands that author it (e.g. Forsaken Fortress room 9).
+QUEUE: P31 verdict → flare fix · drawVrkumokage (unparked, clouds signed off) · Foundry
+kit updates (lighting contract, vrbox pattern, parse-once bridge) · de-mount step 4 ·
+cleanups (§415 bridge retire, [S15] twins, probe consolidation) · push on user's word.
+WHOSE TURN: user (P31 run + TP-sun cross-test) · Housing (drawVrkumokage next).
+
+## §422 FERRY → HISTORY (2026-08-04, Housing): decode drawVrkumokage
+P31 CLOSED lens flare: peekZ samples reach 0xffffff at open sky, nVis=5 — the aurora
+depth-peek chain works; no fix needed. Clouds user-signed-off.
+ASSIGNMENT (same three-tier method as §417b): drawVrkumokage — the cloud SHADOW pass,
+third TP-dropped function (debug map 0xa18; History's own §417 ledger). Consumes the
+same VRKUMO_EFF ring; expected: ground-projected shadow sprites via TXA_MOYA/kage
+texture, colors from BG K0s (cf. the moya drawCloudShadow extraction — likely siblings).
+Deliverable: ready-to-include body like d_kankyo_ww_vrkumo.inc; Housing wires it behind
+dKyWw_isSkyHost() in the same rain-TU include.
+
+## §422b HISTORY VERDICT (2026-08-04): drawVrkumokage is NOT RETAIL — no port, receipts attached
+Three-tier check ran; the law tier closed it at step one:
+ [LAW] RETAIL framework.map (Ex WW/files/maps): drawVrkumokage ABSENT — the map runs
+       drawVrkumo (0xE3C @ 8009AB88, exactly the decomp stub range) → thunder fns with no
+       kage symbol. Debug map alone carries it (0xa18 @ 800d82f4, d_kankyo_rain.o) —
+       dead-stripped from the shipped game because NOTHING CALLS IT.
+ [LAW] WW DP decomp: no source, no declaration, no caller anywhere in src/ or include/.
+ [REF] noclip (retail-derived): nothing to reconstruct — absent.
+RULING IMPLICATION (covenant: the SHIPPED game is the spec): porting the shadow pass would
+ADD behavior vanilla WW never renders — History recommends NO PORT. Doubly closed: we hold
+debug MAPS only, no debug DOL — there are no bytes to decode even if wanted. If the user
+ever rules it in as an enhancement, it needs a debug-build binary first (acquisition item).
+The §417b cumulus pair is therefore the COMPLETE retail cloud system — nothing further is
+owed on clouds. Housing: the [D4] VRKUMO_EFF 0x10-0x1C guess ("drawVrkumokage-only field")
+upgrades to "debug-only leftover" — safe to ignore permanently.
+WHOSE TURN: Housing → nothing owed on kage; §418 dome actors continue. History → §401
+native arrival remains the queue head. USER → ruling only if you WANT non-vanilla cloud
+shadows as an enhancement (would require sourcing the debug DOL).
+
+## §422c WINDITOR CROSS-CHECK (2026-08-04, user-requested): the data side is ALSO empty
+Three Winditor surfaces checked: (1) all ShadowColor hits = EnvironmentLightingPalette (the
+standard Pale ground/actor shadow tint) — not clouds; (2) SkyboxNode models exactly the four
+shipped vr components (sky/kasumi_mae/uso_umi/back_cloud) — no kage layer exists in the data
+model; (3) the Virt palette's 4 unknown RGBA slots carry no shadow naming and the cloud pair
+(Horizon+Center) is fully accounted by §417b. VERDICT SEALED both directions: retail ships
+no CODE (dead-stripped, absent from framework.map) and no DATA (no color slot, no model, no
+schema field) for cloud shadows. §422b stands.
+
+## §424 BRIDGE RETIRED (2026-08-04, Housing, per History §422c seal)
+drawVrkumokage sealed by History: no code/data/port owed — §417b pair IS the complete
+retail cloud system. Housing continued dome actors: the §415 onStatus(1) bridge removed
+from dKyWw_setSkyHost — daVrbox_Create's WW leg now owns "stage HAS a sky" donor-exact
+(wether starts the frame the actor lives; donor-correct dark if it fails). Built 18:02:06,
+gate clean (Ivan ×1). UNCOMMITTED pending one user smoke test (sky must come up exactly
+as before — the actor create path is already proven, this only removes the redundant
+early assert). Remaining queue: Foundry §423 kit intake · de-mount step 4 (rides kits) ·
+probe consolidation (parked, probes are quiet) · push 9c62ae05a0 on user's word.
+WHOSE TURN: user (smoke test 18:02:06 + push ruling) · Foundry (§423).
+
+## §425/§426 (2026-08-04): plank_span lighting fixed · lineage tags ratified
+Foundry's kit_laws law-1 finding closed: plank_span was TP-lit (0x40+_MAJI) — now
+dKyWw_settingTevStruct(TEV_TYPE_BG0, donor receipt d_a_bridge.cpp:1244) + native
+setLightTevColorType. Built 18:05:12 with §424 (bridge retirement), gate clean.
+User RATIFIED the lineage-tag scheme (native-port/bridge-owed/host-plumbing) — spec +
+green-light ferried to Foundry intake §426; Foundry mass-tags and wires the lint gate.
+UNCOMMITTED: §424 + §425 (fold into next commit after user smoke test).
+WHOSE TURN: user (smoke 18:05:12; push ruling on 9c62ae05a0) · Foundry (§426 execute).
+
+## §428 DE-MOUNT CENSUS (2026-08-04, Housing): step-4 work-list delivered
+Foundry's gate is live (§426 executed). Housing produced the step-4 work-list:
+docs/state/ww-demount-census.md — all 60 census rows from actor_map.ini with routing,
+kind, arc; de-mount targets = every mount-routed/manifest row; 16 TUs + d_door already
+on the native lighting chain. Also this pass: §427 cache-namespace merge (one exported
+dExtNpcMount_acquireModelData probing bg: then plain — Foundry's spelling catch turned
+real defect-prevention; law text corrected at source). Builds through 18:18:14, gate
+clean throughout. UNCOMMITTED: §424/§425/§427 await user smoke.
+WHOSE TURN: user (smoke 18:18:14 + push ruling) · Housing next session (kit re-emits
+off the census, DECOMP-FIRST per actor) · Foundry (lint sweeps the re-emits).
+
+## §428b SOCKET CLASSIFICATION (2026-08-04): 51 adapter-socketed = the step-4 list
+All 51 de-mount targets ride ONE socket (NPC_HENNA0, the audition adapter) — the
+de-mount is 51 repetitions of the proven §228/§232/§244 direct-port switch pattern,
+kit-emitted and lint-gated. 19 manifests already native. Full lists in
+docs/state/ww-demount-census.md. WHOSE TURN: user (smoke 18:18:14 + push + batch-size
+ruling for the first kit wave) · Housing (first wave on ruling).

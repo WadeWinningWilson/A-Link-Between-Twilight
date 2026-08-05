@@ -1,6 +1,7 @@
 /**
  * d_ext_npc_mount.cpp — Plan R generic external-NPC mount (L1 + Slice I lighting/blink).
  */
+// KIT-LINEAGE: host-plumbing
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_room_verify.h"  // §389
 
@@ -3587,25 +3588,6 @@ bool addDoorVisual(dExtNpcMount_c* a, J3DModelData* bodyData) {
 }  // namespace — §334 must be the GLOBAL symbol the header declares
 
 // ============================================================================
-// §418b GLOBAL BRIDGE: the native vrbox actors (d_a_vrbox/d_a_vrbox2 WW legs)
-// need the mount's parse-once model-data cache -- acquireMountedModel is
-// file-local (anonymous namespace), so this is the exported door. Cache HIT
-// for the four dome models (the mount parsed them first); never a re-parse
-// of a pointer-fixed buffer.
-// ============================================================================
-J3DModelData* dExtWwMount_acquireModelData(const char* arc, const char* modelName) {
-    void* res = dComIfG_getObjectRes(arc, modelName);
-    if (res == NULL) {
-        return NULL;
-    }
-    // §418b-2 (symbolicated 155519): the dome models live in the BG cache
-    // ("bg:" key namespace) — acquireMountedModel's plain-key cache MISSED,
-    // re-parsed the already-pointer-fixed dRes buffer, and readVertex ran off
-    // the end. acquireBgModel is the same entry the mount's own dome loader
-    // used, so all four models are guaranteed cache HITS here.
-    return acquireBgModel(arc, modelName, res);
-}
-// ============================================================================
 // §334 WW→TP collision-attribute repack (bus §332 receipts, §333 ruling).
 //
 // ROOT (byte-exact, §332): WW packs its material attCode in PolyInf1 bits
@@ -4309,6 +4291,22 @@ J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelNa
     void* res = dComIfG_getObjectRes(arc, modelName);
     if (res == NULL) {
         return NULL;
+    }
+    // ========================================================================
+    // §427 CACHE-NAMESPACE MERGE (Foundry's §423 spelling catch, resolved at
+    // source): §418b had duplicated this exported symbol under a WwMount_
+    // name because the DOME models live in the "bg:" cache namespace and this
+    // plain-key path would re-parse their already-pointer-fixed buffers (the
+    // symbolicated 155519 crash). One symbol now serves both: probe the BG
+    // cache first (hit for mount-parsed dome/room models), else the plain
+    // pristine-copy acquire (actor-kit models).
+    // ========================================================================
+    {
+        const std::string bgKey = std::string("bg:") + arc + "/" + modelName;
+        auto it = s_modelDataCache.find(bgKey);
+        if (it != s_modelDataCache.end()) {
+            return it->second;
+        }
     }
     return acquireMountedModel(arc, modelName, res);
 }
