@@ -39,6 +39,8 @@
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_seq_space.h"
+#include "d/ww_jpa.h"
+#include "d/d_com_inf_game.h"
 
 #if defined(DUSK_EXCLUDE_WW_ACTIVE)
 
@@ -104,5 +106,67 @@ bool dExtSeqSpace_shouldSuppressJa2Bgm() {
 bool dExtWw_j3dForceFullMat3() {
     return false;
 }
+
+// ---------------------------------------------------------------------------
+// ww_jpa — the WW particle-archive reader. Two entry points, both bool, and the
+// receiver ALREADY handles both failing:
+//   d_particle.cpp:1647  if (!s_wwArc.parse(...))          -> gives up cleanly
+//   d_particle.cpp:1694  if (!ww_jpa::bindResource(...))   -> marks the entry
+//                                                             failed and returns
+// So "false" here is not a default invented to satisfy the linker -- it is the
+// value the call sites were already written to expect when a WW archive cannot
+// be read, which without the WW layer is always.
+// ---------------------------------------------------------------------------
+namespace ww_jpa {
+bool Archive::parse(const u8*, u32) {
+    return false;
+}
+bool bindResource(const Archive&, u16, class JPAResourceManager*, class JKRHeap*) {
+    return false;
+}
+}  // namespace ww_jpa
+
+// ---------------------------------------------------------------------------
+// JEvent1 — the WW event stack. 6 symbols reaching 41 TUs, which sounds like
+// the worst cluster and is actually the easiest, because the reach is ONE
+// HEADER rather than 41 decisions.
+//
+// Every call lives in an inline wrapper in d_com_inf_game.h, and every wrapper
+// is already gated:
+//
+//     inline void dComIfGp_evmng_cutEnd(int id) {
+//         if (JEvent1::evt1_isActive()) { JEvent1::evt1_cutEnd(id); return; }
+//         dComIfGp_getPEvtManager()->cutEnd(id);      <- TP's own manager
+//     }
+//
+// So `evt1_isActive() == false` sends every wrapper down the TP path, which is
+// precisely correct with no WW layer -- the receiver's event system handles
+// everything, as it did before the port. The other five are then UNREACHABLE at
+// runtime; they need definitions only so the link succeeds.
+//
+// getMyActIdx returns -1 rather than 0 deliberately. d_com_inf_game.h records
+// that the WW manager's no-match contract is -1 while TP's is 0; this function
+// is the WW one, so it keeps the WW contract even though the gate means it
+// cannot be called. A default that contradicts its own documented contract is a
+// trap for whoever removes the gate later.
+// ---------------------------------------------------------------------------
+namespace JEvent1 {
+bool evt1_isActive(void) {
+    return false;   // no WW event stack -> TP's manager owns every wrapper
+}
+bool evt1_advanceCutLocal(class dEvDtBase_c*, class dEvDtStaff_c*) {
+    return false;
+}
+int evt1_getIsAddvance(int) {
+    return 0;
+}
+int evt1_getMyActIdx(int, DUSK_CONST char* DUSK_CONST*, int, BOOL, int) {
+    return -1;      // WW's no-match contract, not TP's 0
+}
+void evt1_cutEnd(int) {
+}
+void evt1_specialProc(class dEvDtStaff_c*) {
+}
+}  // namespace JEvent1
 
 #endif  // DUSK_EXCLUDE_WW_ACTIVE
