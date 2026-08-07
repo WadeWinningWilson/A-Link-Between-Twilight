@@ -244,7 +244,7 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 |---|---|---|
 | **R4** boot-time checks | Foundry specs · Engine lands | PARTIAL, un-censused — the census-then-systematize pass is cheap and can ride any engine-touch session |
 | **R7** text projection | Bridge · Foundry | SEEDED — `space_kit` inventory JSON is the right shape; coverage + one-command regen missing; content-wall charter (§331 A3) stands |
-| **V3** env fingerprint | Bridge · Foundry | base ready, but its most valuable field (the **19b conformance verdict**) does not exist yet |
+| **V3** env fingerprint | Bridge · Foundry | **UNBLOCKED 2026-08-07** — 19b landed, so the conformance verdict now exists. Kept in this band by user ruling (order held), not by a blocker. Formerly: base ready, but its most valuable field (the **19b conformance verdict**) does not exist yet |
 | **V4** donor drift sentinel | Foundry | UNBLOCKED (pin `1d57f046`, 0 behind) — but nothing is drifting yet. **Compose with `ww_rebaseline.py`**, which merges; V4 reports what needs re-verification |
 | **V6** reel farm | User rules · Foundry operates | a **re-cost**, temporal axis only; noclip covers static questions free |
 | **V7** Winditor → R5 | Foundry · History · Bridge | **BLOCKED on R5**; `winditor_oracle.py` (§394) already covers the adapter half — the delta is R5 integration + IVAN-tagged `English Name` |
@@ -261,12 +261,27 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 **R2+R3 together = TTW's foundation matched** (§364): sources pinned, outputs pinned, conversion
 is a verified function. What remains on the R side is productization, not foundation.
 
-### Stage D under the pause
+### Stage D — COMPLETE (updated 2026-08-07; this section was stale)
 
-19c (load-time import gate) and 20 (distribution) are **paused by the user's ruling** — step 20's
-ruling (A) PREBUILT PLUGIN stands and does not expire while content is built. **19a/19b are
-measurement, not building**, and may either ride along or pause with the rest — user's call. Note
-that V3's conformance field stays deferred either way until 19b lands.
+**Step 19 is DONE: 129 of 129 receiver→WW call sites severed, and the receiver
+BUILDS AND LINKS with the WW layer entirely absent** (exclusion build EXIT=0,
+LNK1120 gone; normal 38,972,928 bytes vs excluded 38,759,936). 19a (import
+classification, 15-symbol residual), 19b (symbol conformance across our fork and
+dusklight main) and 19c (load-time gate) are all landed.
+
+Step 11's link test, previously PROVEN unreachable before 19, now passes.
+
+**Step 20 (distribution) remains paused by the user's ruling** — ruling (A)
+PREBUILT PLUGIN stands and does not expire while content is built.
+
+**Consequence for this plan: V3's deferral reason is void.** Band 4 defers V3
+because "its most valuable field (the 19b conformance verdict) does not exist
+yet." It exists — `docs/WW Linked/ww-19b-conformance.md`, per-symbol results
+across both images. V3 is unblocked; whether it moves band is the user's call,
+and as of 2026-08-07 the user has kept the order as-is.
+
+**Does NOT mean the binary is WW-free.** 11 `mixed` TUs still carry legs — donor
+lines inside receiver-owned files — which no file-level exclusion removes.
 
 **Lanes with no V-series work:** Housing Security, HousingTemp, and Librarian are fully
 loaded by roadmap Stage A (steps 3, 4, 5) — deliberately not given velocity items, since the
