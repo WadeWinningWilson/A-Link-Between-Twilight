@@ -35,7 +35,7 @@ the plugin to run on a stock dusklight build, which is a step-20 concern.
 |---|---|
 | owner | `encounter/aurora` |
 | status | fix live in our fork; patch prepared, **not submitted** |
-| patch | `docs/state/aurora-load-indx-upstream.patch` — 32 added lines |
+| patch | `patches/aurora/upstream/0001-load-indx-fix.patch` — 32 added lines |
 | found | §449/§450, 2026-08-04 |
 
 Two defects in the FIFO parser's indexed-XF path: an operator-precedence error
@@ -53,9 +53,16 @@ the port began, but TP content never emits the opcode. WW content does: the
 Outset rope bridge was the first thing to reach it (§449 — *"ropes only made one
 reachable at Outset"*). So this is invisible upstream until WW content runs.
 
-Local diff is ~995 lines across 13 files; **only 32 are the fix.** The rest is
-our debug instrumentation and must never travel — the prepared patch already has
-it stripped.
+Local diff is ~1300 lines across 13 files; **only 32 are the fix.** The rest is
+debug instrumentation and must never travel — the upstream patch already has it
+stripped, and the full state is parked at `patches/aurora/local/working-tree.patch`
+purely so nothing is lost before someone strips it.
+
+**It does not become obsolete as more of WW lands — the opposite.** The opcode
+is emitted by core J3D for ANY model using indexed matrix loads, so every extra
+skinned character sends more of them. Porting WW's own native systems would not
+help: a faithful renderer emits the same opcode, because that is the hardware.
+Ropes revealed it; ropes are not its scope.
 
 ## Known gap in how we would DETECT these
 

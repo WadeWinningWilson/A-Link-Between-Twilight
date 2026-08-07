@@ -88,6 +88,41 @@ the one that determines the plugin boundary's real cost.
 GATE is entry points only. **Total surface is not a gate width** (§502 Finding A)
 and must not be summed into one.
 
+### 1a-L. Inbound, MEASURED BY THE LINKER (§577) — 129 symbols / 86 TUs
+
+§1a above estimates the gate by static analysis and leaves **three subsystems
+UNKNOWN**. The exclusion link test measures the same direction with a stronger
+oracle — **the linker cannot be wrong about what does not resolve** — and returns
+no UNKNOWNs:
+
+> **129 symbols across 86 TUs** (`build/ww-excluded-link.log`, 352 unresolved-
+> external lines). Every referencing TU is RECEIVER code: `d_a_alink`,
+> `d_a_arrow`, `d_camera`, `d_s_play`, `d_stage`, `d_npc`.
+
+**This is the exact complement of §1b.** 19a measured what the plugin needs from
+the host — **15**. This measures what the host calls into the plugin — **129**.
+Both directions are now measured rather than estimated, and **the inbound side is
+~8.6× the outbound**.
+
+**The count is not a progress metric, and treating it as one inverts it.** It
+measures how much of the WW layer's API the receiver touches, so *excluding more
+WW code reveals more of that surface*: 194 → 61 → 129 is not better-then-worse.
+The first drop removed self-inflicted noise; the rise is coverage. **It can never
+reach zero by excluding more** — it converges only when the call sites change,
+i.e. when the receiver attaches by hook instead of calling directly.
+
+> **Therefore step 11's link test CANNOT pass before step 19, by construction.**
+> The roadmap's "partial by definition until 19" is not a caveat but a proof.
+
+**Migration shape falls out of the distribution, and these are not one job:**
+
+| cluster | syms / TUs | shape |
+|---|---|---|
+| `dWwItemmdl` | 38 / 12 | deep + narrow |
+| `dExtNpcMount` | 36 / 17 | deep + narrow — with the above, 57% of the surface |
+| `JEvent1` | 6 / 41 | shallow + wide — the opposite problem |
+| `g_profile` | 20 / 1 | not a hook at all; mechanical |
+
 ### 1b. Outbound (the import surface) — WW → receiver
 
 > **B4 RESOLVED 2026-08-06 — the floor is 1,150 symbols / 6,448 sites, not 468.
