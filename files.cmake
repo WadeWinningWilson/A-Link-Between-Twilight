@@ -208,6 +208,7 @@ set(DOLZEL_FILES
         src/d/d_ext_save_flags.cpp
         src/d/d_ext_tree.cpp
         src/d/ext_plugin/ww_import_gate.cpp
+        src/d/ext_plugin/ww_profile_register.cpp
         src/d/d_ext_room_verify.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp
