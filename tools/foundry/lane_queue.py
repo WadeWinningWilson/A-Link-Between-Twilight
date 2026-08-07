@@ -35,7 +35,12 @@ BUS = REPO / "docs/WW Linked/ww-bridge-tool-interconnected.md"
 OUT = REPO / "docs/WW Linked/ww-lane-queue.md"
 
 # An item is a stable token lanes actually use in prose.
-ITEM = re.compile(r"\b(HT-\d+|C[1-7][a-e]?|B[1-4]|D-[123]|"
+# `19[a-c]` added §571. The 19-series was NEVER tracked here — carried in prose
+# since §519, which is why 19a and 19b were handed back as OPEN long after they
+# closed. **A registry that does not know an item exists cannot report it
+# stale**, so the queue built to end stale hand-offs had a blind spot shaped
+# exactly like the problem it solves. Found by a hand-off, not by the tool.
+ITEM = re.compile(r"\b(HT-\d+|C[1-7][a-e]?|B[1-4]|D-[123]|19[a-c]|"
                   r"§\d{3}\s+(?:Finding\s+[A-C]|D-[123]))\b")
 SECTION = re.compile(r"^## §(\d+)", re.M)
 CLOSED = re.compile(r"\b(closed|CLOSED|fixed|FIXED|resolved|RESOLVED|"
@@ -370,6 +375,17 @@ ACCEPTANCE = {
     "B2d": ("every RPPN waypoint belongs to exactly one RPAT path, and each "
             "path's declared count equals the points resolving to it",
             lambda: _b2d_paths(), "behavioural"),
+    # --- the 19-series, registered §571 -------------------------------------
+    "19a": ("the ~1,150 host imports are CLASSIFIED into service / link / "
+            "resolve / compile-in, with the residual set MEASURED not assumed",
+            lambda: (REPO / "docs/WW Linked/ww-import-manifest.txt").is_file()
+                    and _has(F + "binding_plan.py", "HEADER-MACRO",
+                             "NEEDS resolve()"), "source"),
+    "19b": ("the import manifest is RESOLVED against real built images, with "
+            "the per-symbol result on disk for BOTH builds",
+            lambda: (REPO / "docs/WW Linked/ww-19b-conformance.md").is_file()
+                    and "upstream" in _src("docs/WW Linked/ww-19b-conformance.md"),
+            "source"),
     "B2c": ("every chunk type PRESENT IN THE LIVE ARCS resolves to an entry "
             "size -- derived from the arcs, not from a hand-made census file",
             lambda: _b2c_decodable(), "behavioural"),

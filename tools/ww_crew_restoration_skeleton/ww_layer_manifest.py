@@ -189,6 +189,11 @@ WW_SERVING_PLUMBING = {
     "src/d/d_ww_itemmdl_test.cpp": "WW item-model harness",
     "src/d/ext_evt/evt1_boundary.cpp": "boundary INTO the evt1 event stack",
     "src/d/ext_plugin/ww_import_gate.cpp": "the WW plugin's own load gate",
+    # Moves to the plugin WITH the profiles it owns. Excluding it makes
+    # `dWwProfileRegister_lookup` show up unresolved, and that is CORRECT and
+    # informative rather than a regression: it is precisely the call that
+    # becomes a hook on `fpcPf_Get` once the layer is a module.
+    "src/d/ext_plugin/ww_profile_register.cpp": "WW profile ownership shim",
     "src/d/ext_seq/ja1_bank.cpp": "JAudio1 bank bridge",
     "src/d/ext_seq/ja1_event_dump.cpp": "JAudio1 diagnostics",
     "src/d/ext_seq/ja1_native.cpp": "JAudio1 native entry points",

@@ -1,8 +1,8 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
-# tool_sha256:      dd7b6544b1a5b9800e721d37673fd4d27b37daf539550f311a207314a4b0f8ea
-# files_cmake_sha256: de34752bb301fc7ee7aa021638b7986acf270d8950b7243446b538fee4cfd5f1
-# count: 57
+# tool_sha256:      b2631e8271983e768d037832f8cec8efdcd7815ea8ebba8cca101a39a16e45e9
+# files_cmake_sha256: 5ba6393fb77185e3e1eef3dea4e33a8279679dd3bbd1be81693f45f91c481b08
+# count: 58
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
 # (native-port + bridge-owed) PLUS host-plumbing that serves the WW
@@ -86,6 +86,7 @@ set(WW_LAYER_FILES
     src/d/ext_evt/evt1_event_manager.cpp
     src/d/ext_line/mdoext1_3dline.cpp
     src/d/ext_plugin/ww_import_gate.cpp
+    src/d/ext_plugin/ww_profile_register.cpp
     src/d/ext_seq/ja1_bank.cpp
     src/d/ext_seq/ja1_event_dump.cpp
     src/d/ext_seq/ja1_jasbank.cpp

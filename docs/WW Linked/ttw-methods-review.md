@@ -179,15 +179,94 @@ close that gap; the rest is doctrine hygiene.
 hangs off a roadmap step. Recommended order: **V1 → V2 → V3**, with V5 continuing as
 already-queued work.
 
-| # | Owner | Step | Blocked by |
-|---|---|---|---|
-| V1 | **Foundry** builds · **History** first consumer | Cross-lineage accessor differ: donor header + receiver header → bit-layout diff + translation-table stub, both citations inline. **Amended (§A1 below): THREE sources — plus an independent implementation as validator.** Backlog already named: KFA1, SSP1, ETX1. | — |
-| V2 | **User** ratifies · **all lanes** follow · **Engine** holds the kill switches | Intake rule: every playtest finding states whether it reproduces with the relevant gate off. Decides bug ownership before anyone reads code. | — |
-| V3 | **Bridge** emits · **Foundry** specs | Environment fingerprint at the head of every log: build-ID, WW-layer version, mod-folder state, `donor_roster` verdict. | — |
-| V4 | **Foundry** | Donor drift sentinel: on pinned-ref advance, diff ported donor functions and flag the changed ones. | posture §6 ruling 2 / roadmap step 12 |
-| V5 | **Foundry** | Crash-recipes-as-lint — cookbook recipes 1–9 as a kit scan over ported TUs. **Already queued (§331 A1); in flight.** | — |
-| V6 | **User** rules · **Foundry** operates | Re-cost the parked reel/save-state farm (save-states primary, reels secondary). A re-cost, not an unpark. **Scope narrowed by §A2: temporal data only.** | — |
-| V7 | **Foundry** builds · **History** classifies · **Bridge** hosts in R5 | **NEW (§A3).** Mechanize third-party source consultation: import Winditor's `ActorDatabase.json` / `ActorResourceDatabase.json` into the conversion database with per-field provenance tags; cross-check its `Locations` against our own DZR census. | — |
+> **Rebuilt 2026-08-06** so the three-primary-source correction (§A1–§A3) and the §519 roadmap
+> correction live in the columns rather than in prose beneath them.
+
+| # | Owner | Step | Primary sources | Status / blocked by |
+|---|---|---|---|---|
+| V1 | **Foundry** builds · **History** first consumer | Cross-lineage accessor differ — **three-source**: donor header + receiver header + an independent implementation as **validator**, reporting **DISAGREEMENT rather than picking a winner**. Backlog: KFA1, SSP1, ETX1. | decomp *(both sides)* + **noclip** & **Winditor** *(validator)* | ready — nothing blocking |
+| V2 | **User** ratifies · **all lanes** follow · **Engine** holds the kill switches | Intake rule: every playtest finding states whether it reproduces with the relevant gate off. Decides bug ownership before anyone reads code. | — *(process)* | ready |
+| V3 | **Bridge** emits · **Foundry** specs | Environment fingerprint at the head of every log: our build-ID, WW-layer version, mod-folder state, `donor_roster` verdict — **plus dusklight build-ID, ABI version, and the 19b conformance verdict**, since symbol availability is a property of the *target build*. | decomp-side roster + receiver build | base ready; conformance field waits on **19b** |
+| V4 | **Foundry** | **Donor-side** drift sentinel: on pin advance, diff ported donor functions and flag the changed ones. **Compose with `tools/vendoring/ww_rebaseline.py`, do not duplicate it** — that tool *merges*; V4 reports what needs **re-verification**. | decomp *(pinned ref)* | **UNBLOCKED** — roadmap 12/13 done (pin `1d57f046`, 0 behind) |
+| V5 | **Foundry** | Crash-recipes-as-lint — cookbook recipes 1–9 as a kit scan over ported TUs. | project scars *(cookbook)* | **in flight** (§331 A1) |
+| V6 | **User** rules · **Foundry** operates | Re-cost the parked reel/save-state farm — **temporal axis only**; noclip already answers static questions for free. Save-states primary, reels secondary. | **noclip** *(bounds the scope)* + DuskTap | ready — a re-cost, not an unpark |
+| V7 | **Foundry** builds · **History** classifies · **Bridge** hosts in R5 | Import Winditor's `ActorDatabase.json` / `ActorResourceDatabase.json` with **per-field provenance tags**; `English Name` enters as **IVAN-governed leads at `? (unverified)`**, never as identity. Cross-check `Locations` against our DZR census. | **Winditor** *(our census stays authoritative)* | **BLOCKED on R5** *(corrected — was wrongly "ready")*; **and partly pre-existing**: `tools/foundry/winditor_oracle.py` (§394) already adapts the Winditor DBs as an independent oracle, so V7's remaining delta is the **R5 integration + IVAN-tagged `English Name`**, not the adapter |
+
+**Source coverage, before and after.** As first written, V1 and V4 were decomp-only and V2/V3/V5
+were source-agnostic — **noclip and Winditor appeared nowhere in the V-series.** They now carry
+three roles: noclip and Winditor jointly **validate** V1 (independent implementations of the same
+formats, guarding against our own transcription being the thing that is wrong); noclip **bounds**
+V6 to the temporal axis; Winditor **supplies** V7.
+
+**No V8 for noclip.** Its two contributions are already placed — format decoders (→ V1's third
+source) and static scene answers (→ V6's scope bound). Its scene/resource knowledge does not
+warrant a separate item: our DZR census is authoritative there, and noclip rosters are supersets
+without story layers.
+
+**Two drift sentinels, one pattern.** V4 watches the **donor** decomp advance; roadmap **19b**
+watches the **receiver's** symbol table across dusklight builds. Same instrument shape, opposite
+ends of the port — and **V3 is where both verdicts surface to a human.**
+
+## Unified plan — R + V sequenced (2026-08-06)
+
+> **Context for the ordering (user ruling, 2026-08-06):** final building/distribution pauses
+> after step 19 until the port work is done. The goal is therefore **content throughput** —
+> filling the mod folder, finishing islands and quests.
+>
+> **The organizing principle: R items are CAPACITY, V items are EFFICIENCY + SAFETY.** Build
+> capacity first when capacity is the bottleneck — and it is (a 4-arc staging queue, one island,
+> no quests finished). V1 prevents expensive bugs, but you cannot hit bug classes at volume if
+> you never reach volume.
+
+### Band 1 — DO NOW (zero-to-cheap; do not wait on the sequencing decision)
+
+| # | Item | Owner | Work | Why here | Gate / status |
+|---|---|---|---|---|---|
+| 1 | **V2** intake rule | **User** ratifies · **all lanes** follow · **Engine** holds switches | Every finding states whether it repros with the gate off | **Zero build cost**; pays on the next bug report | ready |
+| 2 | **V5** crash lint | **Foundry** | Add cookbook recipes 1–9 as laws to the existing `kit_laws.py` | Framework already landed (§423), so this is now **incremental** — best value-per-cost on either table | ready |
+
+### Band 2 — CAPACITY (the throughput unlock; this is the "fill the mod folder" answer)
+
+| # | Item | Owner | Work | Why here | Gate / status |
+|---|---|---|---|---|---|
+| 3 | **R1** convert-all | **Bridge** builds runner + non-stage modules · **Foundry**'s `space_kit` = stage module (§331 A2) | One declarative recipe; bulk-convert the full roster | **Deletes "stage the arc" from every future port** and moves work from arc scale to island scale. R2+R3 already verify its outputs, so the risky half is done | **VERIFY the R_DL02 pilot gate** (§364); run ends with an output-roster **re-pin** at a new user-verified stable point |
+| 4 | **R5** conversion DB | **Bridge** hosts · **History** classifies rows | Consolidate codemod AUTO/REVIEW, `KNOWN_SIZE`, `STARTCODE_ALIAS`, `ww_dzb_roster`, both rosters | Absorption list is **compounding**; every port consults it; unblocks V7 | ready |
+
+### Band 3 — CONDITIONAL (one judgment call)
+
+| # | Item | Owner | Work | Why here | Gate / status |
+|---|---|---|---|---|---|
+| 5 | **V1** accessor differ | **Foundry** builds · **History** first consumer | Three-source bit-layout differ; reports **DISAGREEMENT**, never a winner | **If History's collision-attribute table is still open → do it now**, because that table *is* its first output. If already landed → insurance against the next §212/§332; slot behind R5 | ready; priority depends on History's state |
+
+### Band 4 — DEFERRED (none of these gate porting)
+
+| Item | Owner | Status / why deferred |
+|---|---|---|
+| **R4** boot-time checks | Foundry specs · Engine lands | PARTIAL, un-censused — the census-then-systematize pass is cheap and can ride any engine-touch session |
+| **R7** text projection | Bridge · Foundry | SEEDED — `space_kit` inventory JSON is the right shape; coverage + one-command regen missing; content-wall charter (§331 A3) stands |
+| **V3** env fingerprint | Bridge · Foundry | base ready, but its most valuable field (the **19b conformance verdict**) does not exist yet |
+| **V4** donor drift sentinel | Foundry | UNBLOCKED (pin `1d57f046`, 0 behind) — but nothing is drifting yet. **Compose with `ww_rebaseline.py`**, which merges; V4 reports what needs re-verification |
+| **V6** reel farm | User rules · Foundry operates | a **re-cost**, temporal axis only; noclip covers static questions free |
+| **V7** Winditor → R5 | Foundry · History · Bridge | **BLOCKED on R5**; `winditor_oracle.py` (§394) already covers the adapter half — the delta is R5 integration + IVAN-tagged `English Name` |
+| **R8** save-compat policy | User | pre-release timing; not urgent |
+| **R9** doctrine table | Librarian | offered, not drafted |
+| **R6** audio envelope | Foundry | HOLDS by its own terms until post-Outset audio scales |
+
+### Band 5 — DONE (context, not work)
+
+**R2** output hashes (§364, 2,057 files pinned) · **R3** dump roster (§332, 1,561 files, GZLE01) ·
+**R10** doctrine adopted · census step 8 (all four axes + `leg_debt.py`) · roadmap step 10
+(`banner_lint.py` + banner spec) · `kit_laws.py` lint framework · `winditor_oracle.py` adapter.
+
+**R2+R3 together = TTW's foundation matched** (§364): sources pinned, outputs pinned, conversion
+is a verified function. What remains on the R side is productization, not foundation.
+
+### Stage D under the pause
+
+19c (load-time import gate) and 20 (distribution) are **paused by the user's ruling** — step 20's
+ruling (A) PREBUILT PLUGIN stands and does not expire while content is built. **19a/19b are
+measurement, not building**, and may either ride along or pause with the rest — user's call. Note
+that V3's conformance field stays deferred either way until 19b lands.
 
 **Lanes with no V-series work:** Housing Security, HousingTemp, and Librarian are fully
 loaded by roadmap Stage A (steps 3, 4, 5) — deliberately not given velocity items, since the
