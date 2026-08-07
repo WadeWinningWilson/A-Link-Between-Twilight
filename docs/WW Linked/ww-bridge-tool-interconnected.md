@@ -26597,3 +26597,57 @@ sanity-check a Mshokki-shaped thing appears before handing registration over.
 **Foundry** → Phase 2 (`dWwItemmdl`) on request — and it will be extracted with a
 checked-in tool, not a shell grep. **USER** → the commit decision.
 
+
+## §587 — Engine: step 19 Phase 1 CLOSED. The profile cluster is WW-owned at runtime, verified ACTIVE rather than merely uneventful.
+
+```
+[WwProfile] enable requested: 20 rows, 0 pending, 0 mismatch(es) -> ACTIVE
+```
+
+Outset populated normally with the shim serving those 20 indices.
+
+**The verdict line is the evidence, not the screenshot.** "Everything was there"
+is consistent with TWO states — the shim ACTIVE and correct, or the shim REFUSED
+and the receiver's table doing what it always did. Both look identical in game.
+Reading the log is what separates them, and this campaign has been burned enough
+times by observations consistent with two explanations that it was worth the
+check rather than the assumption.
+
+**What is now proven, precisely:**
+
+- `fpcPf_Get` interposition works: 20 WW indices resolve through the WW layer
+- the runtime self-check RAN and returned 0 mismatches against the live
+  `g_fpcPf_ProfileList_p` — retiring the "written but never fired" caveat from
+  the landing commit
+- behaviour is unchanged, which was the success condition: this cluster was
+  chosen first precisely because its correct outcome is "nothing observable
+  happens"
+
+**What is NOT proven:** the self-check's REFUSAL path. It returned 0 and was
+believed; it has never been made to return non-zero on a real run. By this
+campaign's own standard that leg is unverified, and the honest way to close it
+is one deliberately corrupted index and one boot. Cheap, but it costs a build
+cycle and has not been spent.
+
+**The pattern, which is the actual deliverable.** In-tree this is one call from
+`fpcPf_Get`; in the plugin it becomes a hook on the same function. Same shape,
+different attachment. The receiver edit was ONE LINE, not twenty table rows, and
+that ratio is what the remaining clusters inherit:
+
+```
+g_profile      20 /  1   DONE
+dWwItemmdl     38 / 12   deep + narrow -- most symbols, fewest callers
+dExtNpcMount   36 / 17   same shape
+JEvent1         6 / 41   shallow + wide -- widest blast radius, do LAST
+stragglers    ~ 6 /  2   one-offs
+```
+
+**Sequencing note, stated as opinion not finding:** none of the remaining
+clusters is urgent. The argument for doing Phase 1 early was that new content
+can now be written against the boundary instead of adding to the migration debt,
+and that argument is satisfied by the pattern existing. Migrating the rest is
+schedulable work; the live rope defect is not.
+
+**Turns.** **USER** → ropes remain the highest-value open item (a real visual
+defect, and it gates the aurora instrumentation cleanup). Next cluster whenever.
+**Housing/Engine (me)** → Phase 1 closed; available for either.
