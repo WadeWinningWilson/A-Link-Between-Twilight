@@ -153,6 +153,58 @@ def classify(path: str) -> str | None:
 DONOR_LINEAGES = ("native-port", "bridge-owed")   # excludable wholesale
 LEG_LINEAGES = ("mixed",)                          # NOT file-excludable
 
+# ============================================================================
+# WHICH LAYER DOES THIS PLUMBING SERVE? (§576)
+#
+# THE CRITERION WAS WRONG, not merely incomplete. Excluding on donor lineage
+# alone left the WW bridges in the build while removing the implementations they
+# exist to call, producing 30 unresolved symbols whose referencing TUs were the
+# bridges THEMSELVES (§575). The instinct was to add a "dependency rule". That
+# is treating the symptom.
+#
+# Step 20 already ruled the end state: a PREBUILT PLUGIN, the tree splitting
+# into pure-TP-receiver + WW plugin + the user's own data. So the build
+# exclusion is not asking "does this TU contain donor code?" -- the covenant
+# question, answered by lineage and owned by Tier-1. It is asking **"does this
+# TU move to the plugin?"** A WW audio bridge moves to the plugin whether or not
+# it contains a single donor line.
+#
+# Lineage cannot answer that: `host-plumbing` means "our code, no donor
+# content", which is true of a WW audio bridge AND of an ALBW dialogue box. The
+# layer a TU SERVES is a separate axis, and it is not derivable from lineage or
+# from the filename -- which is why this is a reviewed table with reasons rather
+# than another pattern match.
+#
+# DEFAULT IS KEEP. An unclassified host-plumbing TU stays in the build. If that
+# is wrong the build FAILS TO LINK, which is loud; the opposite default would
+# silently drop receiver functionality. Failing toward noise beats failing
+# toward silence.
+# ============================================================================
+WW_SERVING_PLUMBING = {
+    "src/d/d_ext_npc_doors.cpp": "WW door/knob binding — merged from WW event data",
+    "src/d/d_ext_npc_mount.cpp": "WW mount stand-in + its ModelData cache",
+    "src/d/d_ext_npc_population.cpp": "WW chunk -> population placement",
+    "src/d/d_ext_room_verify.cpp": "WW room-load verification",
+    "src/d/d_ww_itemmdl_pc.cpp": "WW item models",
+    "src/d/d_ww_itemmdl_test.cpp": "WW item-model harness",
+    "src/d/ext_evt/evt1_boundary.cpp": "boundary INTO the evt1 event stack",
+    "src/d/ext_plugin/ww_import_gate.cpp": "the WW plugin's own load gate",
+    "src/d/ext_seq/ja1_bank.cpp": "JAudio1 bank bridge",
+    "src/d/ext_seq/ja1_event_dump.cpp": "JAudio1 diagnostics",
+    "src/d/ext_seq/ja1_native.cpp": "JAudio1 native entry points",
+    "src/d/ww_jpa_bind.cpp": "binds the WW JPA archive reader",
+}
+
+# Host-plumbing that serves ANOTHER layer and must stay. Recorded with the
+# file's own words, because both of these say so themselves and a reviewer
+# should be able to check the claim without reading the whole TU.
+NON_WW_PLUMBING = {
+    "src/d/d_albw_dialogue.cpp": 'self-declared "NEW CODE — ALBW Port (Native '
+                                 'Dialogue Box)" — a DIFFERENT port, not WW',
+    "src/d/d_ext_mod_flags.cpp": 'self-declared "WW-agnostic" twice — general '
+                                 'mod flag/quest infrastructure',
+}
+
 
 def declared_lineage(path: str) -> tuple[str | None, str | None]:
     """(KIT-LINEAGE, KIT-DONOR) as declared by the TU itself, or (None, None).
@@ -333,16 +385,42 @@ def emit_cmake(ww) -> int:
     body.append(f"# tool_sha256:      {hashlib.sha256(tool).hexdigest()}")
     body.append(f"# files_cmake_sha256: {hashlib.sha256(fc).hexdigest()}")
     part = lineage_partition()
-    excl = sorted({p for lin in DONOR_LINEAGES for p in part.get(lin, [])})
+    donor = {p for lin in DONOR_LINEAGES for p in part.get(lin, [])}
+    plumbing = set(part.get("host-plumbing", []))
+    # §576: exclude what MOVES TO THE PLUGIN = donor code + the plumbing that
+    # serves the WW layer. Unclassified plumbing is KEPT and reported.
+    ww_plumb = plumbing & set(WW_SERVING_PLUMBING)
+    unreviewed = sorted(plumbing - set(WW_SERVING_PLUMBING) - set(NON_WW_PLUMBING))
+    excl = sorted(donor | ww_plumb)
     legs = sorted({p for lin in LEG_LINEAGES for p in part.get(lin, [])})
+    kept = sorted(plumbing & set(NON_WW_PLUMBING))
     fn_only = sorted({p for p, _ in ww} - set(excl) - set(legs))
     body.append(f"# count: {len(excl)}")
     body.append("#")
-    body.append("# BASIS: DECLARED LINEAGE (KIT-LINEAGE banners), user-ruled 2026-08-07.")
-    body.append("# Excludes native-port + bridge-owed only. The previous FILENAME basis")
-    body.append("# was wrong in both directions (§573): it swept in 14 host-plumbing")
-    body.append("# files carrying KIT-DONOR: none -- including a different game's port")
-    body.append("# -- and missed 22 TUs that DO declare donor lineage.")
+    body.append("# BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage")
+    body.append("# (native-port + bridge-owed) PLUS host-plumbing that serves the WW")
+    body.append("# layer. Step 20 ruled the end state is a prebuilt plugin, so the")
+    body.append("# question here is NOT 'does this contain donor code' -- that is the")
+    body.append("# covenant question, owned by Tier-1 -- but 'does this move out of")
+    body.append("# dusklight.exe'. A WW audio bridge moves whether or not it contains")
+    body.append("# a single donor line. Lineage cannot answer that: `host-plumbing`")
+    body.append("# describes an ALBW dialogue box and a WW audio bridge alike.")
+    body.append("#")
+    body.append("# The earlier FILENAME basis was wrong in both directions (§573);")
+    body.append("# lineage-only then left the bridges in while removing what they call,")
+    body.append("# which is where 30 of the 61 remaining unresolved symbols came from.")
+    if kept:
+        body.append("#")
+        body.append(f"# KEPT — host-plumbing serving ANOTHER layer ({len(kept)}):")
+        for p in kept:
+            body.append(f"#   {p}  --  {NON_WW_PLUMBING[p]}")
+    if unreviewed:
+        body.append("#")
+        body.append(f"# UNREVIEWED host-plumbing ({len(unreviewed)}) — KEPT by default.")
+        body.append("# If one of these is a WW bridge the build FAILS TO LINK, which is")
+        body.append("# loud; the opposite default drops receiver code silently.")
+        for p in unreviewed:
+            body.append(f"#   {p}")
     body.append("#")
     body.append("# STILL PARTIAL, and for a reason no basis can fix: `mixed` TUs are")
     body.append("# donor lines INSIDE receiver-owned files. Dropping them would remove")
@@ -364,9 +442,11 @@ def emit_cmake(ww) -> int:
         body.append(f"    {path}")
     body.append(")")
     out.write_text("\n".join(body) + "\n", encoding="utf-8")
-    print(f"emitted {out.relative_to(REPO)} — {len(excl)} sources (declared-lineage basis)")
+    print(f"emitted {out.relative_to(REPO)} — {len(excl)} sources "
+          f"(plugin-split basis: {len(donor)} donor + {len(ww_plumb)} WW-serving plumbing)")
     print(f"  LEG-STRIP REQUIRED: {len(legs)} mixed TUs left in the build (step 19)")
-    print(f"  dropped from the old filename list: {len(fn_only)} (no donor content)")
+    print(f"  KEPT, serves another layer: {len(kept)}   UNREVIEWED plumbing: {len(unreviewed)}")
+    print(f"  dropped from the old filename list: {len(fn_only)}")
     print("  NOTE: still a FLOOR. Legs are not excludable by file; see the header.")
     return 0
 

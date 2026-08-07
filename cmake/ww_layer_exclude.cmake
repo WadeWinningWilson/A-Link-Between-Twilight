@@ -1,14 +1,33 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
-# tool_sha256:      e3de5f7078b31ac6911e4575b5c45860ea8571e87f10f3a619922eb490a45cac
+# tool_sha256:      dd7b6544b1a5b9800e721d37673fd4d27b37daf539550f311a207314a4b0f8ea
 # files_cmake_sha256: de34752bb301fc7ee7aa021638b7986acf270d8950b7243446b538fee4cfd5f1
-# count: 45
+# count: 57
 #
-# BASIS: DECLARED LINEAGE (KIT-LINEAGE banners), user-ruled 2026-08-07.
-# Excludes native-port + bridge-owed only. The previous FILENAME basis
-# was wrong in both directions (§573): it swept in 14 host-plumbing
-# files carrying KIT-DONOR: none -- including a different game's port
-# -- and missed 22 TUs that DO declare donor lineage.
+# BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
+# (native-port + bridge-owed) PLUS host-plumbing that serves the WW
+# layer. Step 20 ruled the end state is a prebuilt plugin, so the
+# question here is NOT 'does this contain donor code' -- that is the
+# covenant question, owned by Tier-1 -- but 'does this move out of
+# dusklight.exe'. A WW audio bridge moves whether or not it contains
+# a single donor line. Lineage cannot answer that: `host-plumbing`
+# describes an ALBW dialogue box and a WW audio bridge alike.
+#
+# The earlier FILENAME basis was wrong in both directions (§573);
+# lineage-only then left the bridges in while removing what they call,
+# which is where 30 of the 61 remaining unresolved symbols came from.
+#
+# KEPT — host-plumbing serving ANOTHER layer (2):
+#   src/d/d_albw_dialogue.cpp  --  self-declared "NEW CODE — ALBW Port (Native Dialogue Box)" — a DIFFERENT port, not WW
+#   src/d/d_ext_mod_flags.cpp  --  self-declared "WW-agnostic" twice — general mod flag/quest infrastructure
+#
+# UNREVIEWED host-plumbing (4) — KEPT by default.
+# If one of these is a WW bridge the build FAILS TO LINK, which is
+# loud; the opposite default drops receiver code silently.
+#   libs/JSystem/src/JAudio2/JASChannel.cpp
+#   src/d/d_event_data.cpp
+#   src/d/d_event_manager.cpp
+#   src/f_pc/f_pc_profile_lst.cpp
 #
 # STILL PARTIAL, and for a reason no basis can fix: `mixed` TUs are
 # donor lines INSIDE receiver-owned files. Dropping them would remove
@@ -29,22 +48,10 @@
 #   src/d/d_stage.cpp
 #   src/f_op/f_op_msg_mng.cpp
 #
-# Matched the OLD filename rules but declare no donor content (14),
+# Matched the OLD filename rules but declare no donor content (2),
 # so they are no longer excluded. Listed so the change is auditable:
 #   src/d/d_albw_dialogue.cpp
 #   src/d/d_ext_mod_flags.cpp
-#   src/d/d_ext_npc_doors.cpp
-#   src/d/d_ext_npc_mount.cpp
-#   src/d/d_ext_npc_population.cpp
-#   src/d/d_ext_room_verify.cpp
-#   src/d/d_ww_itemmdl_pc.cpp
-#   src/d/d_ww_itemmdl_test.cpp
-#   src/d/ext_evt/evt1_boundary.cpp
-#   src/d/ext_plugin/ww_import_gate.cpp
-#   src/d/ext_seq/ja1_bank.cpp
-#   src/d/ext_seq/ja1_event_dump.cpp
-#   src/d/ext_seq/ja1_native.cpp
-#   src/d/ww_jpa_bind.cpp
 set(WW_LAYER_FILES
     src/d/actor/d_a_esa.cpp
     src/d/actor/d_a_ext_ep.cpp
@@ -64,13 +71,23 @@ set(WW_LAYER_FILES
     src/d/actor/d_a_spc_item01.cpp
     src/d/actor/d_a_ww_demo00.cpp
     src/d/d_door.cpp
+    src/d/d_ext_npc_doors.cpp
+    src/d/d_ext_npc_mount.cpp
+    src/d/d_ext_npc_population.cpp
+    src/d/d_ext_room_verify.cpp
     src/d/d_ext_seq_space.cpp
     src/d/d_ext_tree.cpp
     src/d/d_ext_ww_actor_shims.cpp
     src/d/d_kankyo_ww_sky.cpp
+    src/d/d_ww_itemmdl_pc.cpp
+    src/d/d_ww_itemmdl_test.cpp
+    src/d/ext_evt/evt1_boundary.cpp
     src/d/ext_evt/evt1_event_data.cpp
     src/d/ext_evt/evt1_event_manager.cpp
     src/d/ext_line/mdoext1_3dline.cpp
+    src/d/ext_plugin/ww_import_gate.cpp
+    src/d/ext_seq/ja1_bank.cpp
+    src/d/ext_seq/ja1_event_dump.cpp
     src/d/ext_seq/ja1_jasbank.cpp
     src/d/ext_seq/ja1_jasbnkparser.cpp
     src/d/ext_seq/ja1_jascalc.cpp
@@ -86,9 +103,11 @@ set(WW_LAYER_FILES
     src/d/ext_seq/ja1_jastrackinterrupt.cpp
     src/d/ext_seq/ja1_jastrackport.cpp
     src/d/ext_seq/ja1_kernel.cpp
+    src/d/ext_seq/ja1_native.cpp
     src/d/ext_seq/ja1_oscillator.cpp
     src/d/ext_seq/ja1_parser.cpp
     src/d/ext_seq/ja1_seq_ctrl.cpp
     src/d/ext_seq/ja1_track.cpp
     src/d/ww_jpa.cpp
+    src/d/ww_jpa_bind.cpp
 )
