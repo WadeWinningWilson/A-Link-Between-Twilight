@@ -5,6 +5,10 @@
 // KIT-DONOR: none
 // KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
 // KIT-DONOR-STATUS: UNKNOWN
+// Step 19 cluster 3: renames this TU's definitions to dExtNpcMount_Impl_*.
+// MUST precede every other include so the header declarations rename too.
+#include "d/ext_plugin/ww_npcmount_impl_names.h"
+
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_room_verify.h"  // §389
 
@@ -11587,3 +11591,56 @@ bool dExtWwSave_refuseNativeWrite(const char* api, int stageNo, int bit) {
 }
 
 #endif  // TARGET_PC
+
+// ============================================================================
+// Step 19 cluster 3 — bind this layer into the receiver's dispatch table.
+// SELF-INSTALLING during static init, so the receiver holds no reference to the
+// WW layer at all and excluding it leaves no dangling call site.
+// ============================================================================
+#include "d/ext_plugin/ww_npcmount_dispatch.h"
+
+void dWwNpcMountDispatch_install() {
+    g_wwNpcMountApi.fn_acquireDemoModel = &dExtNpcMount_Impl_acquireDemoModel;
+    g_wwNpcMountApi.fn_acquireModelData = &dExtNpcMount_Impl_acquireModelData;
+    g_wwNpcMountApi.fn_cancelTransports = &dExtNpcMount_Impl_cancelTransports;
+    g_wwNpcMountApi.fn_consumeForcedCreateProc = &dExtNpcMount_Impl_consumeForcedCreateProc;
+    g_wwNpcMountApi.fn_create = &dExtNpcMount_Impl_create;
+    g_wwNpcMountApi.fn_cycleHeadNearest = &dExtNpcMount_Impl_cycleHeadNearest;
+    g_wwNpcMountApi.fn_delete = &dExtNpcMount_Impl_delete;
+    g_wwNpcMountApi.fn_draw = &dExtNpcMount_Impl_draw;
+    g_wwNpcMountApi.fn_endDoorDemoLock = &dExtNpcMount_Impl_endDoorDemoLock;
+    g_wwNpcMountApi.fn_execute = &dExtNpcMount_Impl_execute;
+    g_wwNpcMountApi.fn_forceNextAttach = &dExtNpcMount_Impl_forceNextAttach;
+    g_wwNpcMountApi.fn_forceNextSpawnSrc = &dExtNpcMount_Impl_forceNextSpawnSrc;
+    g_wwNpcMountApi.fn_hasPayload = &dExtNpcMount_Impl_hasPayload;
+    g_wwNpcMountApi.fn_hasSocketPayload = &dExtNpcMount_Impl_hasSocketPayload;
+    g_wwNpcMountApi.fn_isRoomLaneProtected = &dExtNpcMount_Impl_isRoomLaneProtected;
+    g_wwNpcMountApi.fn_isRoomLaneRoom = &dExtNpcMount_Impl_isRoomLaneRoom;
+    g_wwNpcMountApi.fn_lookup = &dExtNpcMount_Impl_lookup;
+    g_wwNpcMountApi.fn_nearestDisplayName = &dExtNpcMount_Impl_nearestDisplayName;
+    g_wwNpcMountApi.fn_onRoomObjectsReady = &dExtNpcMount_Impl_onRoomObjectsReady;
+    g_wwNpcMountApi.fn_onRoomUnload = &dExtNpcMount_Impl_onRoomUnload;
+    g_wwNpcMountApi.fn_onStageReady = &dExtNpcMount_Impl_onStageReady;
+    g_wwNpcMountApi.fn_pollBgWarps = &dExtNpcMount_Impl_pollBgWarps;
+    g_wwNpcMountApi.fn_pollCullProbe = &dExtNpcMount_Impl_pollCullProbe;
+    g_wwNpcMountApi.fn_pollIdentifyProbe = &dExtNpcMount_Impl_pollIdentifyProbe;
+    g_wwNpcMountApi.fn_pollRegionTriggers = &dExtNpcMount_Impl_pollRegionTriggers;
+    g_wwNpcMountApi.fn_providerAt = &dExtNpcMount_Impl_providerAt;
+    g_wwNpcMountApi.fn_providerCount = &dExtNpcMount_Impl_providerCount;
+    g_wwNpcMountApi.fn_queryActor = &dExtNpcMount_Impl_queryActor;
+    g_wwNpcMountApi.fn_registerRoomLane = &dExtNpcMount_Impl_registerRoomLane;
+    g_wwNpcMountApi.fn_requestBgWarp = &dExtNpcMount_Impl_requestBgWarp;
+    g_wwNpcMountApi.fn_rescanProviders = &dExtNpcMount_Impl_rescanProviders;
+    g_wwNpcMountApi.fn_resolveSocket = &dExtNpcMount_Impl_resolveSocket;
+    g_wwNpcMountApi.fn_setDisplayNameNearest = &dExtNpcMount_Impl_setDisplayNameNearest;
+    g_wwNpcMountApi.fn_shouldSkipBtp = &dExtNpcMount_Impl_shouldSkipBtp;
+    g_wwNpcMountApi.fn_socketActorId = &dExtNpcMount_Impl_socketActorId;
+    g_wwNpcMountApi.fn_takePendingSpawn = &dExtNpcMount_Impl_takePendingSpawn;
+}
+
+namespace {
+struct WwNpcMountAutoInstall {
+    WwNpcMountAutoInstall() { dWwNpcMountDispatch_install(); }
+};
+const WwNpcMountAutoInstall s_wwNpcMountAutoInstall;
+}  // namespace
