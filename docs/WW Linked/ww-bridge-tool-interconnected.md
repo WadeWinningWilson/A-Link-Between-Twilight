@@ -26729,3 +26729,29 @@ cut, drop measured.
 receiver's rows are NULL and the shim is genuinely the only source. That is the
 real test; the previous run had the table as a safety net underneath.
 **Housing/Engine (me)** → `dWwItemmdl` (38/12) is the next cluster when wanted.
+
+### §588 addendum — cluster 1 confirmed at runtime with the safety net removed
+
+```
+[WwProfile] enable requested: 20 rows, 0 pending, 0 mismatch(es) -> ACTIVE
+[WwProfile] 20 of 20 rows RELINQUISHED by the receiver (NULL in its table)
+"profile not found" occurrences: 0
+```
+
+Three independent signals, and the third is the one that closes it:
+
+- **ACTIVE, 0 mismatches** — the shim is serving, not refusing.
+- **RELINQUISHED 20/20** — the receiver's table really is NULL at every one of
+  those indices. This is the line the previous run could not produce, because
+  the table was still populated underneath.
+- **0 `profile not found`** — `f_pc_base.cpp:138` never once failed to get a
+  profile. Every request for those 20 indices was answered by the shim.
+
+The last point matters most. A NULL row plus a shim that silently missed would
+show up exactly here, as an actor that never creates — and it would be easy to
+miss on screen, because an absent pig looks like a pig that wandered off. Zero
+occurrences is a stronger claim than "everything appeared present".
+
+**Cluster 1 CLOSED. Step 19: 20 of 129 severed, end to end** — mechanism built,
+dependency cut, drop measured (129 -> 109), runtime confirmed with nothing
+underneath.
