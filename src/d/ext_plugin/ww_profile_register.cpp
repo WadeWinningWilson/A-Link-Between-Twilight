@@ -6,8 +6,8 @@
 // KIT-DONOR-STATUS: UNKNOWN
 //
 // WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT
-// Phase 1 of the step-19 migration (§581/§582): the `g_profile` cluster --
-// 23 symbols, ONE referencing TU (`f_pc_profile_lst.cpp`), no hook design.
+// Phase 1 of the step-19 migration: the `g_profile` cluster --
+// 20 symbols (NOT 23 -- see the count control on kRows), ONE referencing TU.
 // It is the mechanical cluster, chosen first not because it is easy but because
 // it exercises the migration harness on work that cannot fail subtly.
 //
@@ -154,15 +154,52 @@ bool dWwProfileRegister_isEnabled() {
     return s_enabled && dWwProfileRegister_pendingRows() == 0;
 }
 
-// Step 2 of Phase 1 fills this in, one row at a time, behind the switch. It is
-// declared now so the receiver cut-over has something to call and so the shape
-// is reviewable before any receiver TU is touched.
+// ---------------------------------------------------------------------------
+// MECHANISM FINDING (Engine, 2026-08-07) — "install" CANNOT BE A REGISTRATION.
+//
+// This function was specified as "register each row at its index". Reading the
+// receiver rather than assuming it, there is nothing to register INTO on our
+// build:
+//
+//   f_pc_profile.cpp:13  (#ifndef __MWERKS__ — the PC path, ours)
+//     process_profile_definition DUSK_CONST* DUSK_CONST* DUSK_CONST
+//         g_fpcPf_ProfileList_p = g_fpcPfLst_ProfileList;
+//
+//   f_pc_profile.cpp:21
+//     process_profile_definition DUSK_CONST* fpcPf_Get(s16 i_profname) {
+//         return g_fpcPf_ProfileList_p[index];
+//     }
+//
+// `DUSK_CONST` is `const` (global.h:258), so on PC the list pointer is CONST and
+// STATICALLY INITIALISED. The mutable, `ModuleProlog`-assigned pointer is the
+// CONSOLE path (`__MWERKS__`), which we do not build. Swapping the pointer or
+// writing into the array is not available: the objects are const and land in
+// read-only data.
+//
+// THE VIABLE SHAPE IS TO HOOK THE LOOKUP, NOT MUTATE THE TABLE.
+// `fpcPf_Get()` is the single point where an index becomes a profile. A hook
+// there returns the plugin's profile for a WW index and delegates every other
+// index to the original -- which is what the plugin ABI exists to do, and it
+// preserves index identity by construction rather than by discipline. It is
+// also revertible in the way step 19 requires: unhooking restores the receiver
+// exactly, with no table left half-written.
+//
+// This is a DESIGN CHANGE to Phase 1, not a detail, so `install()` stays inert
+// until it is ruled on. Landing a registration path that cannot work would be
+// worse than landing nothing.
+//
+// Also noted while reading, not fixed here: `fpcPf_Get` performs NO bounds
+// check. An out-of-range index reads past the array. Not this file's business,
+// but it is the reason index identity is load-bearing rather than merely tidy.
+// ---------------------------------------------------------------------------
 void dWwProfileRegister_install() {
     if (!dWwProfileRegister_isEnabled()) {
         return;  // inert: static table stays authoritative
     }
-    // Intentionally empty until step 2. Reaching here with the switch on and
-    // zero pending rows is the only state in which registration may occur.
+    // Deliberately empty. See MECHANISM FINDING above: the specified approach
+    // (register into the table) is not implementable on PC, and the replacement
+    // (hook fpcPf_Get) has not been ruled on. Reaching here is currently a
+    // no-op by design rather than by omission.
 }
 
 #endif  // TARGET_PC
