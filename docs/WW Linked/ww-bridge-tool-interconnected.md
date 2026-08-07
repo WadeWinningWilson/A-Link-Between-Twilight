@@ -26832,3 +26832,75 @@ covenant gate identity literals CLEAN.
 lookup, item models, mounts, sky, doors, seq-space, save-guard and the event
 wrappers. **Housing/Engine (me)** → step 19 closed. Remaining WW work is legs
 (step 19's successor), and ropes are still the live bug.
+
+## §590 — Housing: methods-plan review, Stage D corrected, and V5 ferried to Foundry with a scoping finding.
+
+**Order held as-is per the user.** Band 1 is next: V2 (user ratifies) and V5
+(Foundry). Neither is Housing/Engine, so this is a ferry, not a start.
+
+### Correction to the plan document
+
+`ttw-methods-review.md`'s "Stage D under the pause" said 19c and 20 were paused
+and deferred **V3** because "its most valuable field (the 19b conformance
+verdict) does not exist yet."
+
+Step 19 is COMPLETE — 129/129 severed, receiver links with the WW layer absent —
+and 19a/19b/19c all landed. `ww-19b-conformance.md` exists with per-symbol
+results across both images. **V3's blocker is void.** Section rewritten; V3's
+Band-4 row now says it stays there by the user's ordering ruling rather than by
+a constraint. Step 20 remains paused, correctly.
+
+### FOUNDRY — V5, with a scoping finding worth having before you start
+
+The framework is ready: `kit_laws.py` has five laws as `lawN_*(raw, code)`
+functions returning PASS / VIOLATION / N/A with stated applicability, collected
+in `LAWS` at :289. Adding laws is mechanical.
+
+The source is `WW-Restoration-Cookbook.md` §9, "Failure classes already solved",
+**18 rows**, not 9 — the plan says "recipes 1–9" but §1–§9 are the cookbook's
+SECTIONS; the failure table lives in §9 and has 18 entries.
+
+**The finding: roughly a third of that table is source-lintable. The rest is
+not, and it is not close.**
+
+Lintable over a ported TU — these are code shapes:
+```
+loose resolver -> exact-match-or-refuse (E1)      base-at-joint double transform
+attach after envelope pool build (№49)            root bind rotation discarded
+material override table (body_bmt)                bare controller drawn (two-model door)
+first-exercise TEV config -> skip-draw guard (№46)
+```
+
+NOT lintable over a TU — these are ARC, DATA or ENVIRONMENT facts:
+```
+BDL loader / adapt offline        litmask slot 1 / toon ramp
+TEV C-reg gray placeholder        DZB through-bits
+model-local vs dzb-world split    stale dawn/pipeline caches
+```
+
+An arc's litmask is not in any `.cpp`. A lint that scans TUs cannot see it, and
+a law that silently reports N/A on every TU because it can never apply is worse
+than no law — it inflates the pass count without adding coverage, which is the
+§389b calibration lesson the file's own header cites.
+
+**Recommendation:** land the ~7 lintable rows as laws now, and report the other
+~11 as a NAMED, counted set that this instrument cannot reach. They want a
+different instrument — the arc-level ones are R4's boot-time half, the data ones
+belong to R5's conversion DB. Saying so in the output keeps "V5 done" from
+reading as "the failure table is covered".
+
+Not a blocker, and the estimate is mine from reading the table, not measured —
+challenge it if you read the rows differently.
+
+### USER — V2 is yours
+
+Band 1 #1 needs a ratification, not a build: **every finding states whether it
+reproduces with the gate off.** Engine holds the kill switches, and after today
+there are more of them (`dWwProfileRegister_setEnabled`, the cluster
+self-installers, `DUSK_EXCLUDE_WW`), so the rule has more surface to be useful
+on than when it was written.
+
+**Turns.** **FOUNDRY** → V5, with the 7-vs-11 split above to accept or reject.
+**USER** → ratify V2; and the mod folder still has no off-machine copy (170 MB,
+own repo, 11 commits, **no remote**, 40 uncommitted). **Housing/Engine (me)** →
+idle on the R/V plan; no Band 1–2 item is mine.
