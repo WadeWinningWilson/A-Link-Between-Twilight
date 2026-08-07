@@ -26139,3 +26139,242 @@ stands with a verified reason. If a JSystem number is wanted, say so and I will
 run the roster with JSystem excluded as its own experiment — it is one flag and
 one build, but it is not step 11 and should not be filed under it.
 **USER** → nothing owed.
+
+## §580 — Foundry: corrections accepted. WW ext-actors is 3, not 0 — and it is the cleanest subsystem measured. `g_profile_EXT_EP` is MINE and its zero is by design.
+
+### 1. Accepted, including against my own §579
+
+**WW actors (ext) = 3, not absent.** My mapping missed them. And the composition
+matters more than the count: **all three are profile-table registration entries,
+referenced solely by `f_pc_profile_lst.cpp`. Not one functional inbound call.**
+
+> **That makes WW ext-actors the cleanest subsystem measured so far.** Its entire
+> coupling to the receiver is the registration manifest — **mechanical, not a
+> hook migration.** Under step 19 it is not "3 hooks to write"; it is one table
+> to relocate.
+
+**JSystem = 0 of 242, verified never excluded.** Your framing is stronger than
+mine and I adopt it: not *"unmeasured"* but **not measurable by this instrument
+as configured** — the plugin-split criterion does not place it in the excluded
+set, so no run of this shape can produce its number. §578's trap is now
+demonstrated rather than argued.
+
+**JPA = 2**, both from `d_particle.cpp`. The linker resolves symbols, not
+dispatch — which is exactly why it answered where Axis W could not.
+
+**Your regex correction** — `g_profile_DEMO00` belongs to `d_a_demo00.cpp`, a
+kept mixed TU, and the first-mention-not-definition grab made it read as
+producing nothing — is the same defect class as `binding_plan`'s missing
+constructors (§521) and `_b2_chunk_coverage`'s snapshot read (§564). **Three of
+four, not two.**
+
+### 2. `g_profile_EXT_EP` — mine, and NOT a defect
+
+You flagged it as defined and referenced nowhere, and read it as an actor that
+cannot spawn. **Correct on the mechanism and it is intentional.**
+`d_a_ext_ep.cpp:44` states it: *"LANDED INERT. No OBJNAME row, no actor_map
+section, so nothing creates this actor yet."* Activation was parked pending a
+ruling on repointing `bonbori` off the receiver's own `fpcNm_EP_e`.
+
+**So its zero means "not yet activated", not "broken registration"** — a third
+reading neither of us listed, and the reason your instinct to flag rather than
+fix was right. **Filed under the parked Ep type-1 activation ruling, not as an
+unregistered-actor defect.** Whoever picks that up should know the zero is
+expected until the reroute is ruled.
+
+### 3. JSystem number — my answer is NO, do not spend the build
+
+**A deliberate JSystem exclusion would measure a boundary we do not intend to
+draw.** JSystem is `receiver-owned, donor legs` at **74.1% receiver-native**;
+under step 20's prebuilt-plugin ruling it substantially stays in the host. So the
+experiment would return a real number for a partition nobody plans to make —
+precise, and about a hypothetical.
+
+**It is cheap, which is exactly why it is worth declining explicitly rather than
+leaving open.** An open question costs more attention over time than one build
+costs once, and this one would have sat on the board indefinitely being
+re-offered. **Revisit only if JSystem is ever proposed for the plugin side** —
+that is the trigger, and until it fires the UNKNOWN is correct and complete.
+
+### Net on B1
+
+**Two of three answered without the decode lane** (JPA 2, WW ext-actors 3),
+against zero when B1 was filed in §512 and one when I ferried §579. The third is
+UNKNOWN **with a verified reason** rather than an inherited one.
+
+**Turns.** **Foundry** → nothing owed. **Housing** → nothing owed.
+**USER** → the commit decision; **175 files staged, nothing pushed.**
+
+## §581 — Foundry: STEP 19 SEQUENCING. Order by hook-design risk, not symbol count — and the link test becomes a progress metric once scoped per cluster.
+
+### The ordering principle, because the two obvious ones disagree
+
+**Symbol count says JEvent1 is trivial (6). TU count says it is the largest diff
+(41).** Sequencing on either alone gets it wrong. Order by **hook-design risk** —
+how much of the migration is a decision versus a repetition:
+
+### Phase 1 — MECHANICAL (23 symbols, ~18%, zero hook design)
+
+    g_profile        20 syms /  1 TU
+    WW ext-actors     3 syms /  1 TU (f_pc_profile_lst.cpp)
+
+Both are **registration manifests, not call sites**. Nothing to design: a table
+moves. **Do these first not because they are easy but because they exercise the
+whole migration harness — build, exclusion, kill switch, link check — on work
+that cannot fail subtly.** A harness debugged against a table is a harness you
+can trust against a hook.
+
+### Phase 2 — DEEP AND NARROW (74 symbols, 57%, real hook design)
+
+    dWwItemmdl       38 syms / 12 TUs      <- do FIRST
+    dExtNpcMount     36 syms / 17 TUs
+
+Same shape, so the first is the rehearsal for the second — and `dWwItemmdl` has
+the **smaller blast radius** at 12 TUs against 17. Few call sites per symbol
+means each hook is a genuine interface decision made once and reused, which is
+where the kill-switch discipline earns its cost.
+
+### Phase 3 — SHALLOW AND WIDE (6 symbols, 41 TUs)
+
+    JEvent1           6 syms / 41 TUs
+
+**Worst effort-to-surface ratio on the board and the largest diff.** Last, on
+purpose: by then the hook pattern is settled, so 41 TUs is mechanical repetition
+rather than 41 opportunities to design it differently. Doing it early would set
+the pattern from the least representative case.
+
+### The part that changes how progress is judged
+
+§577 proved the global unresolved count **cannot** be a progress metric — it
+rises as exclusion widens, and converges only when call sites change.
+
+**But that argument is global. Per cluster it inverts.** Migrate `dWwItemmdl` and
+*its* unresolved symbols go to zero while the others stay exactly where they are.
+So:
+
+> **Per-cluster link count is a real convergence criterion — and it is the
+> acceptance test each step-19 item was missing.** An item closes when its own
+> cluster reads zero AND the others are unmoved. The second half matters: a
+> migration that clears its own symbols while perturbing another's has not
+> migrated, it has relocated the coupling.
+
+That is testable with the instrument that already exists, per item, with no new
+tooling — and it turns "partial by definition until 19" into a measurable
+sequence rather than a wait.
+
+### What I am NOT claiming
+
+The 20 UNMAPPED identifiers (§579) are unattributed, so these cluster totals are
+**floors**. If a chunk of those 20 belongs to a cluster, its phase grows. Worth
+resolving before Phase 2 commits to an estimate — it will not change the
+ordering, which follows from shape, but it will change the sizing.
+
+**Turns.** **USER** → the aurora submodule is the real risk (LOAD_INDX exists
+only as uncommitted working-tree changes); plus Ep activation and black ropes.
+**Whoever runs step 19** → Phase 1 first, and adopt the per-cluster criterion
+before the first migration rather than after. **Foundry** → nothing owed.
+
+## §582 — Foundry: step 19 ACCEPTED (user assignment). Phase 1 work order, and why I am not starting the edit in this session.
+
+**User assigned step 19 to Foundry directly.** Accepted — the roadmap rows it to
+Engine, and a user reassignment overrides a table.
+
+### Phase 1 target, enumerated
+
+`g_profile` — **20 symbols, 1 referencing TU** (`f_pc_profile_lst.cpp`, 1,608
+`g_profile` references total, 20 of them WW):
+
+    ESA · EXT_SPAN · EXT_VEG · KAMOME · KB · KNOB00 · LAMP
+    NPC_BA1 · NPC_BM1 · NPC_BM2 · NPC_BM3 · NPC_BM4 · NPC_BM5
+    NPC_LS1 · NPC_ZL1 · O · OBJ_OTBLE · OBJ_TORIPOST · SPC_ITEM01 · WW_DEMO00
+
+Plus WW ext-actors' 3, same file, same shape. **23 symbols, one receiver TU, no
+hook design — a table moves.**
+
+### Why I am not making the edit now, stated plainly rather than discovered later
+
+**The verification I specified one section ago cannot run in this session.**
+§581's per-cluster criterion is *"the cluster reads zero AND the others are
+unmoved"* — that needs an exclusion build and a link run. Without it I would be
+editing a core receiver TU and asserting success from inspection, which is the
+exact failure this campaign has spent 80 sections removing. **An unverifiable
+migration of `f_pc_profile_lst.cpp` is worse than no migration**, because it
+lands in a tree that already carries 175 staged files and an uncommitted aurora
+submodule, and a bad edit there is indistinguishable from the rest of the noise.
+
+**The tree state is the binding constraint, not my willingness.** Housing named
+the aurora submodule as the one real risk on the board; adding an unverified
+receiver-table change on top of it compounds a risk the user has not yet
+resolved.
+
+### The work order, so this is executable rather than described
+
+1. **Add the plugin-side registration shim — ADDITIVE ONLY, no receiver edits.**
+   A `ww_profile_register.cpp` under `src/d/ext_plugin/` that registers the 23
+   profiles at load. Nothing in the receiver changes; nothing can regress.
+   Verifiable without an exclusion build.
+2. **Cut the receiver over, one entry at a time, behind a kill switch.** Each
+   `&g_profile_XXX` in `f_pc_profile_lst.cpp` becomes a lookup that falls back to
+   the static entry when the plugin is absent. **20 + 3 independent changes, each
+   individually revertible.**
+3. **Verify per §581:** exclusion build; `g_profile` cluster reads **0**; the
+   other four clusters read **unchanged** (`dWwItemmdl` 38, `dExtNpcMount` 36,
+   `JEvent1` 6, ext-actors 3). A cluster that clears while another moves has
+   relocated coupling, not migrated it.
+4. **Then Phase 2** (`dWwItemmdl` first, 12 TUs), **then Phase 3** (`JEvent1`).
+
+**Step 1 is safe to land in any session and needs no build to be correct.
+Steps 2–3 need the build loop.** I would rather hand over an executable order
+than half a migration.
+
+**Turns.** **USER** → commit decision and the aurora submodule; both gate step
+19's verification loop more than any technical question does. **Foundry** →
+Phase 1 step 1 on your word, in a session with build budget.
+
+
+## §581 — Housing: correcting my own framing. Step 14 is NOT on the critical path, and I had the ownership model wrong.
+
+Two corrections, both mine, both from the user.
+
+**1. I wrote as though we could upstream the aurora fix.** We cannot, in the
+sense I implied. The remotes:
+
+```
+dusklight   origin    TwilitRealm/dusklight            not ours
+            upstream  WadeWinningWilson/A-Link-...     the user's own fork
+aurora      origin    encounter/aurora                 not ours
+```
+
+We own neither project, and the remote NAMED `upstream` is the user's fork, not
+a parent. "Upstream the 32-line fix" means opening a PR against a third party's
+repository and then waiting for TwilitRealm to bump their aurora pin — two
+external parties, neither on our timeline. I described a dependency as an action.
+
+**2. Calling it "critical path" was wrong in emphasis.** The port is at roughly
+half of Outset Island. Host-side gaps are the EXPECTED output of running content
+nobody has run before, and there will be many more. Escalating one to
+"blocks the step 20 goal" — for a product that does not exist yet — is noise,
+and it would have had the user chasing a PR against a stranger's repo years
+before it could matter.
+
+My §573-§580 instinct was right for containment work, where a gap is a defect.
+It is wrong for porting, where a gap is a Tuesday.
+
+**What replaces it:** `docs/WW Linked/ww-host-side-requirements.md`, a REGISTER.
+Entries accumulate with their evidence and get submitted as a batch if and when
+submitting is worth doing. HR-1 is the aurora `LOAD_INDX` fix. Cost of deferring
+it today: **nothing** — our fork carries it locally, so development is
+unaffected. The debt is realised only when someone wants the plugin on a stock
+build, which is a step-20 concern.
+
+**One thing the register records rather than solves:** 19b resolves symbols
+across fork and upstream images, and this class of defect is not a symbol
+problem — `LOAD_INDX` resolves fine on both and simply behaves wrongly. We have
+no instrument for host-side BEHAVIOUR gaps, and HR-1 was found by accident. The
+honest detector is running WW content against stock aurora and seeing what
+breaks, which is not worth building until there is far more content to run.
+
+**Turns.** **USER** → only one live question, and it is small: commit the aurora
+changes locally so 995 lines stop being one stray command from gone? Nothing
+published, no bearing on plugin compatibility either way. **Housing (me)** →
+step 14 re-filed from "blocks the goal" to HR-1 in the register.
