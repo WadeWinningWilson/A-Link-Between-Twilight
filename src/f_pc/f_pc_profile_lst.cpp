@@ -1621,42 +1621,42 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     // №57 Cave09 BG socket: index MUST match fpcNm_EXT_BG10_e (0x31B).
     &g_profile_EXT_BG10.base.base,
     // §27 WW knob door port: index MUST match fpcNm_KNOB00_e (0x31C).
-    &g_profile_KNOB00.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_KNOB00)
     // §45 ExtVeg: index MUST match fpcNm_EXT_VEG_e (0x31D).
-    &g_profile_EXT_VEG.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_EXT_VEG)
     // §45 ExtSpan: index MUST match fpcNm_EXT_SPAN_e (0x31E).
-    &g_profile_EXT_SPAN.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_EXT_SPAN)
     // §224 Esa (bait, direct port): index MUST match fpcNm_ESA_e (0x31F).
-    &g_profile_ESA.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_ESA)
     // §225 Kb (pig, direct port): index MUST match fpcNm_KB_e (0x320).
-    &g_profile_KB.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_KB)
     // §232 Kamome (seagull, direct port): index MUST match fpcNm_KAMOME_e (0x321).
-    &g_profile_KAMOME.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_KAMOME)
     // §246 Generic Ritos (BM1..BM5, direct port): indices MUST match
     //      fpcNm_NPC_BM1_e..BM5_e (0x322..0x326), in enum order.
-    &g_profile_NPC_BM1.base.base,
-    &g_profile_NPC_BM2.base.base,
-    &g_profile_NPC_BM3.base.base,
-    &g_profile_NPC_BM4.base.base,
-    &g_profile_NPC_BM5.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_BM1)
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_BM2)
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_BM3)
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_BM4)
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_BM5)
     // §244 Ls1 (Aryll direct port): index MUST match fpcNm_NPC_LS1_e (0x327).
-    &g_profile_NPC_LS1.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_LS1)
     // §253 Rito Postbox (obj_toripost): index MUST match fpcNm_OBJ_TORIPOST_e (0x328).
-    &g_profile_OBJ_TORIPOST.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_OBJ_TORIPOST)
     // §254 Tetra (npc_zl1): index MUST match fpcNm_NPC_ZL1_e (0x329).
-    &g_profile_NPC_ZL1.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_ZL1)
     // §261 Link's Grandma (npc_ba1): index MUST match fpcNm_NPC_BA1_e (0x32A).
-    &g_profile_NPC_BA1.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_NPC_BA1)
     // §271 WW demo00 puppet twin (ww_demo00): index MUST match fpcNm_WW_DEMO00_e (0x32B).
-    &g_profile_WW_DEMO00.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_WW_DEMO00)
     // §327 WW wall/loft lamp (lamp): index MUST match fpcNm_LAMP_e (0x32C).
-    &g_profile_LAMP.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_LAMP)
     // §327 WW tableware (obj_mshokki): index MUST match fpcNm_Obj_Mshokki_e (0x32D).
-    &g_profile_Obj_Mshokki.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_Obj_Mshokki)
     // §327 WW wall shield / SPitem (spc_item01): index MUST match fpcNm_SPC_ITEM01_e (0x32E).
-    &g_profile_SPC_ITEM01.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_SPC_ITEM01)
     // §329 Actor-Kit: index MUST match fpcNm_OBJ_OTBLE_e (0x32F).
-    &g_profile_OBJ_OTBLE.base.base,
+    NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_OBJ_OTBLE)
     NULL,
 };
 #endif

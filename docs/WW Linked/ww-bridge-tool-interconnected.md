@@ -26651,3 +26651,81 @@ schedulable work; the live rope defect is not.
 **Turns.** **USER** → ropes remain the highest-value open item (a real visual
 defect, and it gates the aurora instrumentation cleanup). Next cluster whenever.
 **Housing/Engine (me)** → Phase 1 closed; available for either.
+
+## §588 — Engine: cluster 1 SEVERED. 129 → 109, g_profile → 0, measured not claimed.
+
+Phase 1 previously proved the mechanism while leaving the old wiring connected:
+`f_pc_profile_lst.cpp` still referenced all 20 WW profiles, so the exclusion
+count was unchanged at 129. That gap is now closed.
+
+```
+BEFORE   LNK1120: 129 distinct unresolved   g_profile: 20
+AFTER    LNK1120: 109 distinct unresolved   g_profile:  0
+```
+
+**Predicted 109 before running it.** Stating that because a prediction that
+matches is worth more than a number that merely arrives, and this session's
+previous prediction (61 → down) was wrong for an instructive reason.
+
+### The cut-over, and why nulling was safe
+
+The 20 WW rows in the receiver's PC table became `NULL`. Verified before
+trusting it — a positional table punishes an off-by-one with a wrong actor, not
+a crash:
+
+```
+entries BEFORE 817   AFTER 817          length UNCHANGED
+positions changed: 20, range 0x31C..0x32F
+  match the shim's indices EXACTLY : True
+  all changed positions now NULL   : True
+  every OTHER position untouched   : True
+```
+
+git corroborates independently: 20 lines removed, 20 added, a 1:1 substitution
+that structurally cannot shift a position.
+
+**NULL is safe because the single caller already handles it.**
+`f_pc_base.cpp:138` checks `pprofile == NULL`, logs and returns. So with the
+shim off, WW actors simply do not create — which is exactly right plugin
+semantics: no plugin, no WW actors. The kill switch's meaning changes from
+"receiver covers for us" to "those actors are absent", and that is the honest
+end-state behaviour rather than a regression.
+
+### The self-check had to learn a second valid state
+
+Nulling the rows would have made the old check fail itself (`NULL != profile`)
+and disable the shim — a self-defeating loop. It now distinguishes three cases:
+
+```
+MIRRORING     table[index] == our profile   receiver still owns it (pre-cut-over)
+RELINQUISHED  table[index] == NULL          receiver handed it over (post-cut-over)
+MISMATCH      anything else                 our index is WRONG -> refuse
+```
+
+Only the third is a fault. The check that matters is unchanged: an index naming
+a DIFFERENT profile than we think still refuses, because its symptom is spawning
+the wrong actor rather than crashing.
+
+### What the exclusion build now shows
+
+`dWwProfileRegister_setEnabled` appears unresolved, referenced by
+`m_Do_main.cpp`. **That is correct and expected**: with the WW layer excluded,
+the boot-time enable call has nothing to bind to. It is the one new seam the
+migration created, and in the plugin it is not a link edge at all — the plugin
+enables itself on load rather than being switched on by the host.
+
+Remaining, unchanged in shape:
+
+```
+dWwItemmdl    38    dExtNpcMount  36    dExtWw_        8
+JEvent1        6    dKyWwSky       5    dExtNpcDoors   4
+dExtSeqSpace   3    dExtWwSave     2    ww_jpa         2    other 5
+```
+
+**Step 19: 20 of 129 severed.** Cluster 1 complete — mechanism proven, dependency
+cut, drop measured.
+
+**Turns.** **USER** → one run to confirm Outset still populates now that the
+receiver's rows are NULL and the shim is genuinely the only source. That is the
+real test; the previous run had the table as a safety net underneath.
+**Housing/Engine (me)** → `dWwItemmdl` (38/12) is the next cluster when wanted.

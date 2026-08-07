@@ -210,6 +210,8 @@ int dWwProfileRegister_pendingRows() {
 // refusing is the only safe response, because the failure mode of a wrong index
 // is silently spawning a different actor.
 // ---------------------------------------------------------------------------
+int s_relinquished = 0;  // rows the receiver has handed over
+
 int dWwProfileRegister_selftest() {
     static bool s_ran = false;
     static int s_mismatches = 0;
@@ -223,15 +225,27 @@ int dWwProfileRegister_selftest() {
             ++s_mismatches;
             continue;
         }
-        // The receiver's table is the reference. If it does not agree that this
-        // index names this profile, our row is wrong -- not the receiver's.
-        if (g_fpcPf_ProfileList_p[row.index] != row.profile) {
+        // TWO STATES ARE VALID, and distinguishing them is the point:
+        //
+        //   MIRRORING     table[index] == our profile. The receiver still owns
+        //                 the row; we answer identically. Pre-cut-over.
+        //   RELINQUISHED  table[index] == NULL. The receiver has given the row
+        //                 up and we are the only source. Post-cut-over.
+        //
+        // ANYTHING ELSE means table[index] names a DIFFERENT profile than we
+        // think index means -- our row is wrong, not the receiver's -- and that
+        // is the failure worth refusing over, because its symptom is spawning
+        // the wrong actor rather than crashing.
+        process_profile_definition DUSK_CONST* have = g_fpcPf_ProfileList_p[row.index];
+        if (have != row.profile && have != NULL) {
             ++s_mismatches;
 #if TARGET_PC
-            DuskLog.error("[WwProfile] index 0x{:X} ({}) does NOT match the "
-                          "receiver's table -- refusing to enable",
+            DuskLog.error("[WwProfile] index 0x{:X} ({}) resolves to a DIFFERENT "
+                          "profile in the receiver -- refusing to enable",
                           row.index, row.name);
 #endif
+        } else if (have == NULL) {
+            ++s_relinquished;
         }
     }
     if (s_mismatches != 0) {
@@ -257,6 +271,9 @@ void dWwProfileRegister_setEnabled(bool on) {
                      (int)(sizeof(kRows) / sizeof(kRows[0])),
                      dWwProfileRegister_pendingRows(), bad,
                      dWwProfileRegister_isEnabled() ? "ACTIVE" : "REFUSED");
+        DuskLog.info("[WwProfile] {} of {} rows RELINQUISHED by the receiver "
+                     "(NULL in its table) -- the rest are still mirrored",
+                     s_relinquished, (int)(sizeof(kRows) / sizeof(kRows[0])));
 #endif
     }
 }
