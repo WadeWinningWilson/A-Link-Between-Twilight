@@ -113,3 +113,42 @@ callers, gInf fade edges, demo00 channel-9 beats).
 
 *Founded 2026-08-02 at the History→Foundry pivot. Context: docs/state/ww-tale-dmesg-live-state.md
 §335–§359 (the full campaign), bus §321–§330 (the tale-era fixes these defects survived).*
+
+---
+
+## TP NIGHT-SKY STARS RENDER AS LINES (noted 2026-08-07, not investigated)
+
+**Symptom.** TP's night sky draws its stars as long thin streaks crossing the
+whole sky rather than as star sprites. Observed in the normal build. WW's own
+night sky, for comparison, shows discrete star shapes — so the two are visibly
+different and TP's is the wrong one.
+
+**Not a performance problem.** ~283 FPS at the time. Recording that explicitly
+because the first read of a cropped screenshot said "3 FPS" and an argument was
+built on it — that the frame collapse corroborated massive overdraw from
+screen-spanning geometry. It did not; there was no frame collapse. The overdraw
+reasoning is withdrawn.
+
+**The one real lead.** TP's star draw uses **`GX_QUADS`**, not a line primitive:
+
+```
+d_kankyo_rain.cpp    GXBegin(GX_QUADS, GX_VTXFMT0, 4)   (dKyr_drawStar path)
+d_kankyo_wether.cpp  dKankyo_star_Packet::draw() -> dKyr_drawStar(viewMtx, &mpTex)
+```
+
+So the game is not asking for lines. Quads are arriving with wrong vertex
+positions and stretching into slivers — which points at vertex data rather than
+at the star code itself.
+
+**Tempting adjacency, deliberately NOT claimed.** aurora's indexed-vertex path
+had a real out-of-bounds defect (HR-1, `docs/WW Linked/ww-host-side-requirements.md`),
+and "quads with garbage vertices" is the same shape. But HR-1 was diagnosed from
+a symbolicated crash, and this is a visual read of one screenshot. Same shape is
+not the same bug, and with the perf corroboration gone there is nothing
+connecting them but resemblance. Worth checking first; not worth assuming.
+
+**Scope.** TP-side, not WW, and NOT plugin-related — flagged by the user as
+such. It is a receiver defect the WW work happened to surface by putting a WW
+night sky next to a TP one.
+
+**Status.** NOTED ONLY. No investigation run, no probe armed, no owner assigned.
