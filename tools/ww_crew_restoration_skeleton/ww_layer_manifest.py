@@ -122,6 +122,67 @@ def classify(path: str) -> str | None:
     return None
 
 
+# ============================================================================
+# DECLARED-LINEAGE BASIS (§574, user-ruled 2026-08-07).
+#
+# WHY THE BASIS CHANGED. The filename basis was measured against declared
+# lineage for the first time in §573, once step 10 had bannered every TU, and it
+# is wrong in BOTH directions:
+#
+#   14 files matched the filename rules but declare KIT-DONOR: none -- our own
+#      plumbing, including d_albw_dialogue.cpp (a DIFFERENT game's port). The
+#      step-11 link test removed them and lost ALBW dialogue, the quest/bag
+#      system, menus and letters with them.
+#   22 files declare donor lineage and the filename rules MISS -- d_stage.cpp,
+#      d_demo.cpp, f_op_msg_mng.cpp, d_particle.cpp, d_door.cpp and 17 actors.
+#      Those carry donor content and were on NO never-push list.
+#
+# Because the errors point opposite ways, "over-inclusion is the safe direction"
+# does not rescue the single roster: it is safe for NEVER-PUSH and harmful for a
+# BUILD EXCLUSION, and one roster was serving both.
+#
+# WHAT THIS BASIS STILL CANNOT DO, stated so it is never overread:
+#   - `mixed` TUs are donor lines INSIDE receiver-owned files. No file-level
+#     roster can express that; dropping d_stage.cpp removes the receiver. They
+#     are reported as LEG-STRIP REQUIRED and are step 19's, not step 11's.
+#   - A banner is AUTHORED. A missing or wrong one is invisible here exactly as
+#     a misleading filename was invisible before. The failure mode MOVES; it
+#     does not vanish. The independent cross-check is the covenant gate's string
+#     scan, which reads the binary rather than the roster.
+# ============================================================================
+DONOR_LINEAGES = ("native-port", "bridge-owed")   # excludable wholesale
+LEG_LINEAGES = ("mixed",)                          # NOT file-excludable
+
+
+def declared_lineage(path: str) -> tuple[str | None, str | None]:
+    """(KIT-LINEAGE, KIT-DONOR) as declared by the TU itself, or (None, None).
+
+    Reads the WHOLE file: banners sit behind long headers (lines 38-50 in
+    several TUs), and a head-only reader reported 5 files as unbannered in §573
+    when all of them carry banners.
+    """
+    p = REPO / path
+    if not p.is_file():
+        return None, None
+    t = p.read_text(encoding="utf-8-sig", errors="replace")
+    m = re.search(r"KIT-LINEAGE:\s*([a-z\- ]+)", t)
+    d = re.search(r"KIT-DONOR:\s*(\S+)", t)
+    return (m.group(1).strip() if m else None), (d.group(1) if d else None)
+
+
+def lineage_partition() -> dict[str, list[str]]:
+    """Partition every BUILT source by declared lineage.
+
+    Scans all build sources, not just filename matches -- that is the whole
+    point: d_stage.cpp declares donor lineage and no filename rule sees it.
+    """
+    out: dict[str, list[str]] = {}
+    for src in build_sources():
+        lin, _donor = declared_lineage(src)
+        out.setdefault(lin or "NO BANNER", []).append(src)
+    return out
+
+
 def excluded_hits() -> list[tuple[str, str]]:
     """Excluded files that WOULD have matched — shown so they stay reviewable."""
     out = []
@@ -176,18 +237,49 @@ def ww_headers() -> list[tuple[str, str]]:
 def emit_tier1(ww: list[tuple[str, str]]) -> str:
     """The Tier-1 block, GENERATED. Spliced between markers in the strip set."""
     hdrs = ww_headers()
+    # UNION of both bases (§574). Never-push and build-exclusion want OPPOSITE
+    # safety directions from the same data, and one roster was serving both:
+    # over-inclusion is free here and fatal in the build, omission is
+    # unrecoverable here and merely noisy there. So this list is the WIDEST
+    # available -- filename matches PLUS anything declaring donor lineage --
+    # while cmake/ww_layer_exclude.cmake takes the narrow, wholesale-safe set.
+    #
+    # This is what closes the real containment gap §573 found: 22 TUs declaring
+    # donor lineage (d_stage.cpp, d_demo.cpp, f_op_msg_mng.cpp, d_particle.cpp,
+    # d_door.cpp and 17 actors) were on NO never-push list, because no filename
+    # rule sees a donor leg inside a receiver-named file.
+    part = lineage_partition()
+    by_fn = dict(ww)
+    donor_declared = {p for lin in (*DONOR_LINEAGES, *LEG_LINEAGES)
+                      for p in part.get(lin, [])}
+    union = []
+    for p in sorted(set(by_fn) | donor_declared):
+        lin, donor = declared_lineage(p)
+        if p in by_fn and p not in donor_declared:
+            why = f"{by_fn[p]} (filename basis; declares `{lin or 'no banner'}`)"
+        elif p in by_fn:
+            why = f"KIT-LINEAGE `{lin}`, KIT-DONOR `{donor}` — filename agrees"
+        else:
+            why = (f"KIT-LINEAGE `{lin}` — **filename rules MISS this**; "
+                   f"donor content in a receiver-named TU")
+        union.append((p, why))
     lines = [
         "<!-- BEGIN GENERATED TIER-1 — do not hand-edit.",
         "     Regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-tier1",
-        "     Basis: SOURCES from files.cmake (authoritative, the build is the only",
-        "     authority); HEADERS from a directory scan (indicative only). Both",
-        "     classify by filename convention, NOT by declared lineage — roadmap",
-        "     step 10's provenance banners upgrade that. -->",
+        "     Basis: UNION of filename convention AND declared lineage (KIT-LINEAGE",
+        "     banners), user-ruled 2026-08-07 after §573 measured the filename basis",
+        "     wrong in BOTH directions. Widest set on purpose: for a never-push list",
+        "     over-inclusion costs nothing and omission cannot be recalled.",
+        "     SOURCES from files.cmake (authoritative); HEADERS from a directory scan",
+        "     (indicative — a header no TU includes still appears).",
+        "     NOT sufficient on its own: a `mixed` TU is donor lines inside a",
+        "     receiver-owned file, so listing it here does not make the file",
+        "     strippable — see the leg list in cmake/ww_layer_exclude.cmake. -->",
         "",
-        f"**Sources ({len(ww)}) — generated from `files.cmake`:**",
+        f"**Sources ({len(union)}) — generated from `files.cmake`:**",
         "",
     ]
-    for path, reason in ww:
+    for path, reason in union:
         lines.append(f"- `{path}` — {reason}")
     lines += ["", f"**Includes ({len(hdrs)}) — directory scan, indicative:**", ""]
     for path, reason in hdrs:
@@ -240,21 +332,42 @@ def emit_cmake(ww) -> int:
     body.append("# regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake")
     body.append(f"# tool_sha256:      {hashlib.sha256(tool).hexdigest()}")
     body.append(f"# files_cmake_sha256: {hashlib.sha256(fc).hexdigest()}")
-    body.append(f"# count: {len(ww)}")
+    part = lineage_partition()
+    excl = sorted({p for lin in DONOR_LINEAGES for p in part.get(lin, [])})
+    legs = sorted({p for lin in LEG_LINEAGES for p in part.get(lin, [])})
+    fn_only = sorted({p for p, _ in ww} - set(excl) - set(legs))
+    body.append(f"# count: {len(excl)}")
     body.append("#")
-    body.append("# BASIS: filename convention. This is a FLOOR, not the WW layer.")
-    body.append("# It cannot see a donor port correctly named after the receiver file")
-    body.append("# it replaces, and it cannot see a LEG (donor lines inside a")
-    body.append("# receiver-owned TU) at all -- those are not excludable by dropping a")
-    body.append("# file. Excluding these does NOT make the build WW-free; it removes")
-    body.append("# the separable stacks. Partial by definition until roadmap step 19.")
+    body.append("# BASIS: DECLARED LINEAGE (KIT-LINEAGE banners), user-ruled 2026-08-07.")
+    body.append("# Excludes native-port + bridge-owed only. The previous FILENAME basis")
+    body.append("# was wrong in both directions (§573): it swept in 14 host-plumbing")
+    body.append("# files carrying KIT-DONOR: none -- including a different game's port")
+    body.append("# -- and missed 22 TUs that DO declare donor lineage.")
+    body.append("#")
+    body.append("# STILL PARTIAL, and for a reason no basis can fix: `mixed` TUs are")
+    body.append("# donor lines INSIDE receiver-owned files. Dropping them would remove")
+    body.append("# the receiver, so they are listed below as LEG-STRIP REQUIRED and")
+    body.append("# left in the build. Excluding this set does NOT make the build")
+    body.append("# WW-free -- it removes the separable stacks. Step 19 owns the rest.")
+    body.append("#")
+    body.append(f"# LEG-STRIP REQUIRED ({len(legs)} mixed TUs, NOT excluded here):")
+    for p in legs:
+        body.append(f"#   {p}")
+    if fn_only:
+        body.append("#")
+        body.append(f"# Matched the OLD filename rules but declare no donor content ({len(fn_only)}),")
+        body.append("# so they are no longer excluded. Listed so the change is auditable:")
+        for p in fn_only:
+            body.append(f"#   {p}")
     body.append("set(WW_LAYER_FILES")
-    for path, _reason in sorted(ww):
+    for path in excl:
         body.append(f"    {path}")
     body.append(")")
     out.write_text("\n".join(body) + "\n", encoding="utf-8")
-    print(f"emitted {out.relative_to(REPO)} — {len(ww)} sources")
-    print("  NOTE: a FLOOR. Legs are not excludable by file; see the header.")
+    print(f"emitted {out.relative_to(REPO)} — {len(excl)} sources (declared-lineage basis)")
+    print(f"  LEG-STRIP REQUIRED: {len(legs)} mixed TUs left in the build (step 19)")
+    print(f"  dropped from the old filename list: {len(fn_only)} (no donor content)")
+    print("  NOTE: still a FLOOR. Legs are not excludable by file; see the header.")
     return 0
 
 
@@ -275,9 +388,20 @@ def main() -> int:
         return emit_cmake(ww)
 
     if args.emit_tier1:
-        if splice_tier1(emit_tier1(ww)):
-            print(f"Tier-1 regenerated: {len(ww)} sources, "
+        block = emit_tier1(ww)
+        if splice_tier1(block):
+            # Count what was WRITTEN, not what was passed in: this printed
+            # len(ww)=48 while writing a 70-entry union, which is a tool
+            # misreporting its own output -- the exact defect this campaign
+            # keeps finding in other instruments.
+            n_src = block.count("\n- `src/") + block.count("\n- `libs/")
+            part = lineage_partition()
+            missed = len([p for lin in (*DONOR_LINEAGES, *LEG_LINEAGES)
+                          for p in part.get(lin, []) if p not in dict(ww)])
+            print(f"Tier-1 regenerated: {n_src} sources (UNION basis), "
                   f"{len(ww_headers())} headers -> {STRIP_SET.relative_to(REPO)}")
+            print(f"  of those, {missed} declare donor lineage that the filename "
+                  f"rules MISS -- previously on no never-push list")
             return 0
         print("ERROR: could not locate the Tier-1 region to splice.")
         return 2

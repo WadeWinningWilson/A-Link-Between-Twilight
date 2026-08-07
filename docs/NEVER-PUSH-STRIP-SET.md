@@ -85,61 +85,88 @@ block.
 
 <!-- BEGIN GENERATED TIER-1 — do not hand-edit.
      Regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-tier1
-     Basis: SOURCES from files.cmake (authoritative, the build is the only
-     authority); HEADERS from a directory scan (indicative only). Both
-     classify by filename convention, NOT by declared lineage — roadmap
-     step 10's provenance banners upgrade that. -->
+     Basis: UNION of filename convention AND declared lineage (KIT-LINEAGE
+     banners), user-ruled 2026-08-07 after §573 measured the filename basis
+     wrong in BOTH directions. Widest set on purpose: for a never-push list
+     over-inclusion costs nothing and omission cannot be recalled.
+     SOURCES from files.cmake (authoritative); HEADERS from a directory scan
+     (indicative — a header no TU includes still appears).
+     NOT sufficient on its own: a `mixed` TU is donor lines inside a
+     receiver-owned file, so listing it here does not make the file
+     strippable — see the leg list in cmake/ww_layer_exclude.cmake. -->
 
-**Sources (48) — generated from `files.cmake`:**
+**Sources (70) — generated from `files.cmake`:**
 
-- `src/d/actor/d_a_ext_ep.cpp` — WW-restoration actor
-- `src/d/actor/d_a_ext_plank_span.cpp` — WW-restoration actor
-- `src/d/actor/d_a_ext_vegetation.cpp` — WW-restoration actor
-- `src/d/actor/d_a_ww_demo00.cpp` — WW-restoration actor
-- `src/d/d_albw_dialogue.cpp` — shared ALBW/WW dialogue surface (§113 note)
-- `src/d/d_ext_dmesg.cpp` — WW-restoration subsystem
-- `src/d/d_ext_mod_flags.cpp` — WW-restoration subsystem
-- `src/d/d_ext_npc_doors.cpp` — WW-restoration subsystem
-- `src/d/d_ext_npc_mount.cpp` — WW-restoration subsystem
-- `src/d/d_ext_npc_population.cpp` — WW-restoration subsystem
-- `src/d/d_ext_room_verify.cpp` — WW-restoration subsystem
-- `src/d/d_ext_save_flags.cpp` — WW-restoration subsystem
-- `src/d/d_ext_seq_space.cpp` — WW-restoration subsystem
-- `src/d/d_ext_tree.cpp` — WW-restoration subsystem
-- `src/d/d_ext_ww_actor_shims.cpp` — WW-restoration subsystem
-- `src/d/d_kankyo_ww.cpp` — WW leg inside a receiver-named TU
-- `src/d/d_kankyo_ww_sky.cpp` — WW leg inside a receiver-named TU
-- `src/d/d_ww_itemmdl_pc.cpp` — WW-specific receiver subsystem
-- `src/d/d_ww_itemmdl_test.cpp` — WW-specific receiver subsystem
-- `src/d/ext_evt/evt1_boundary.cpp` — JEvent1 parallel donor stack (WW events)
-- `src/d/ext_evt/evt1_event_data.cpp` — JEvent1 parallel donor stack (WW events)
-- `src/d/ext_evt/evt1_event_manager.cpp` — JEvent1 parallel donor stack (WW events)
-- `src/d/ext_line/mdoext1_3dline.cpp` — MDoExt1 parallel donor stack (WW 3D-line)
-- `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem
-- `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasbank.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasbnkparser.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jascalc.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jaschannel.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasdspchannel.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasnotemgr.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasouterparam.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasplayer.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasregisterparam.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasseqctrl.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jasseqparser.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jastrack.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jastrackinterrupt.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_jastrackport.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_kernel.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_native.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_oscillator.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_parser.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_seq_ctrl.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ext_seq/ja1_track.cpp` — JAudio1 parallel donor stack (WW audio)
-- `src/d/ww_jpa.cpp` — WW-specific receiver subsystem
-- `src/d/ww_jpa_bind.cpp` — WW-specific receiver subsystem
+- `src/d/actor/d_a_demo00.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_esa.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_ext_ep.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_ep.cpp` — filename agrees
+- `src/d/actor/d_a_ext_plank_span.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_bridge.cpp` — filename agrees
+- `src/d/actor/d_a_ext_vegetation.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_grass.cpp` — filename agrees
+- `src/d/actor/d_a_kamome.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_kb.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_knob00.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_lamp.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_npc_ba1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_npc_bm1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_npc_ls1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_npc_zl1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_obj_mshokki.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_obj_otble.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_obj_toripost.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_spc_item01.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_swhit0.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_vrbox.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_vrbox2.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_ww_demo00.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_demo00.cpp` — filename agrees
+- `src/d/d_albw_dialogue.cpp` — shared ALBW/WW dialogue surface (§113 note) (filename basis; declares `host-plumbing`)
+- `src/d/d_demo.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/d_door.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/d_ext_dmesg.cpp` — KIT-LINEAGE `mixed`, KIT-DONOR `per-hunk` — filename agrees
+- `src/d/d_ext_mod_flags.cpp` — WW-restoration subsystem (filename basis; declares `host-plumbing`)
+- `src/d/d_ext_npc_doors.cpp` — WW-restoration subsystem (filename basis; declares `host-plumbing`)
+- `src/d/d_ext_npc_mount.cpp` — WW-restoration subsystem (filename basis; declares `host-plumbing`)
+- `src/d/d_ext_npc_population.cpp` — WW-restoration subsystem (filename basis; declares `host-plumbing`)
+- `src/d/d_ext_room_verify.cpp` — WW-restoration subsystem (filename basis; declares `host-plumbing`)
+- `src/d/d_ext_save_flags.cpp` — KIT-LINEAGE `mixed`, KIT-DONOR `per-hunk` — filename agrees
+- `src/d/d_ext_seq_space.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `none` — filename agrees
+- `src/d/d_ext_tree.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_tree.cpp` — filename agrees
+- `src/d/d_ext_ww_actor_shims.cpp` — KIT-LINEAGE `bridge-owed`, KIT-DONOR `none` — filename agrees
+- `src/d/d_kankyo_ww.cpp` — KIT-LINEAGE `mixed`, KIT-DONOR `per-hunk` — filename agrees
+- `src/d/d_kankyo_ww_sky.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_kankyo_rain.cpp` — filename agrees
+- `src/d/d_particle.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/d_stage.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/d_ww_itemmdl_pc.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/d_ww_itemmdl_test.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_evt/evt1_boundary.cpp` — JEvent1 parallel donor stack (WW events) (filename basis; declares `host-plumbing`)
+- `src/d/ext_evt/evt1_event_data.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_event_data.cpp` — filename agrees
+- `src/d/ext_evt/evt1_event_manager.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_event_manager.cpp` — filename agrees
+- `src/d/ext_line/mdoext1_3dline.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `m_Do/m_Do_ext.cpp` — filename agrees
+- `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
+- `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
+- `src/d/ext_seq/ja1_jasbank.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASBank.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasbnkparser.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASBNKParser.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jascalc.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASCalc.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jaschannel.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASChannel.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasdspchannel.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASDSPChannel.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasnotemgr.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASNoteMgr.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasouterparam.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASOuterParam.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasplayer.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASPlayer_impl.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasregisterparam.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASRegisterParam.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasseqctrl.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASSeqCtrl.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jasseqparser.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASSeqParser.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jastrack.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASTrack.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jastrackinterrupt.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASTrackInterrupt.cpp` — filename agrees
+- `src/d/ext_seq/ja1_jastrackport.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASTrackPort.cpp` — filename agrees
+- `src/d/ext_seq/ja1_kernel.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASRate.cpp` — filename agrees
+- `src/d/ext_seq/ja1_native.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
+- `src/d/ext_seq/ja1_oscillator.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASOscillator.cpp` — filename agrees
+- `src/d/ext_seq/ja1_parser.cpp` — KIT-LINEAGE `bridge-owed`, KIT-DONOR `none` — filename agrees
+- `src/d/ext_seq/ja1_seq_ctrl.cpp` — KIT-LINEAGE `bridge-owed`, KIT-DONOR `none` — filename agrees
+- `src/d/ext_seq/ja1_track.cpp` — KIT-LINEAGE `bridge-owed`, KIT-DONOR `none` — filename agrees
+- `src/d/ww_jpa.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JParticle/JPAEmitterLoader.cpp` — filename agrees
+- `src/d/ww_jpa_bind.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/f_op/f_op_msg_mng.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 
 **Includes (40) — directory scan, indicative:**
 
