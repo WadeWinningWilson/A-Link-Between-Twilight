@@ -184,6 +184,11 @@ WW_SERVING_PLUMBING = {
     "src/d/d_ext_npc_doors.cpp": "WW door/knob binding — merged from WW event data",
     "src/d/d_ext_npc_mount.cpp": "WW mount stand-in + its ModelData cache",
     "src/d/d_ext_npc_population.cpp": "WW chunk -> population placement",
+    # ABSENT FROM DUSKLIGHT MAIN entirely (no file, not in its files.cmake),
+    # and every user of dNpc_c is a WW actor already excluded. Its s32 angle
+    # helper is a WW function: dusklight main's c_lib.cpp IS decompiled and
+    # carries only the s16 variants.
+    "src/d/d_npc.cpp": "WW NPC framework; nothing dusklight-owned uses it",
     "src/d/d_ext_room_verify.cpp": "WW room-load verification",
     "src/d/d_ww_itemmdl_pc.cpp": "WW item models",
     # NOTE: ww_itemmdl_dispatch.cpp is deliberately NOT here. It is the

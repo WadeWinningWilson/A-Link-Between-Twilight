@@ -26755,3 +26755,80 @@ occurrences is a stronger claim than "everything appeared present".
 **Cluster 1 CLOSED. Step 19: 20 of 129 severed, end to end** — mechanism built,
 dependency cut, drop measured (129 -> 109), runtime confirmed with nothing
 underneath.
+
+## §589 — Engine: STEP 19 COMPLETE. 129 of 129 severed; the receiver builds and LINKS with the WW layer entirely absent.
+
+```
+LNK1120: 0        exclusion build EXIT=0
+  normal    38,972,928 bytes
+  excluded  38,759,936 bytes     -212,992  the WW layer's code footprint
+```
+
+Both exes exist. The normal build is unchanged and green.
+
+**Step 11's link test, which §577 proved could not pass before 19, now passes.**
+That proof was correct and is now spent: the count only converged once the CALL
+SITES changed, which is exactly what it predicted.
+
+```
+129 -> 109  cluster 1  g_profile      20   positional table, one lookup
+    ->  72  cluster 2  dWwItemmdl     38   runtime dispatch table
+    ->  36  cluster 3  dExtNpcMount   36   same
+    ->  13  cluster 4  the tail       23   compile-time defaults
+    ->  11             ww_jpa          2
+    ->   5             JEvent1         6   6 symbols, 41 TUs, ONE header
+    ->   0             the last five
+```
+
+### The last five, and the user's question that cracked them
+
+I had filed them as "receiver gap-fills — TP functions our decomp hasn't
+reached", argued from the code READING as TP framework, and said they needed a
+ruling. The user asked the question I had not: **does dusklight main have them?**
+
+```
+cLib_addCalcAngleL · dComIfGs_isGetItemReserve · dComIfGs_checkReserveItem
+dExtNpc_setWeightAnmMtx · dExtNpcWorld_bump      0 files in dusklight main
+src/d/d_npc.cpp                                  DOES NOT EXIST there
+```
+
+And the decisive one: **dusklight main HAS `c_lib.cpp`, decompiled, carrying
+`cLib_addCalcAngleS`/`S2` — and no `L` variant.** So the s32 helper is a WW
+function, not a TP one awaiting decompilation. My reading was wrong twice, in
+the same way both times: `d_npc.cpp` is written in TP's idiom, and I argued from
+that appearance to provenance. **Appearance is not provenance; the comparison
+against dusklight main is.** It took the user asking to run the check.
+
+So `d_npc.cpp` moves to the plugin. Nothing dusklight-owned uses `dNpc_c` --
+every user is a WW actor already excluded -- and that resolved four of the five.
+Only `dExtNpcWorld_bump` needed a default, its caller `d_stage.cpp` being a file
+dusklight main genuinely has.
+
+### The final two seams were mine
+
+`dWwProfileRegister_setEnabled` and `_lookup` -- cluster 1's, the one cluster
+that did not self-install. The receiver was holding a reference to the layer it
+was trying not to contain. Fixed the way clusters 2-4 already did it: the shim
+self-enables during static init, so the receiver names it nowhere.
+
+`_lookup` then needed one more fix worth recording: its default took C++
+mangling and did not match the `extern "C"` declaration the receiver calls. A
+one-symbol link error that looks like a missing definition and is actually a
+linkage mismatch.
+
+### What this does and does not mean
+
+**Does:** the WW layer's separable stacks can leave the executable. The plugin's
+end state is mechanically demonstrated, not argued.
+
+**Does NOT:** make the binary WW-free. 11 `mixed` TUs still carry LEGS -- donor
+lines inside receiver-owned files -- which no file-level exclusion can remove.
+The exclusion list has said so in its own header throughout and still does.
+
+Gates: banner lint 79/79 0 DISAGREES 0 UNKNOWN; manifest --check exit 0;
+covenant gate identity literals CLEAN.
+
+**Turns.** **USER** → a playtest of the NORMAL build; today touched profile
+lookup, item models, mounts, sky, doors, seq-space, save-guard and the event
+wrappers. **Housing/Engine (me)** → step 19 closed. Remaining WW work is legs
+(step 19's successor), and ropes are still the live bug.

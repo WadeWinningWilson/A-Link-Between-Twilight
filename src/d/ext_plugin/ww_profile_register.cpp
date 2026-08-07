@@ -299,4 +299,16 @@ process_profile_definition DUSK_CONST* dWwProfileRegister_lookup(s16 index) {
     return NULL;
 }
 
+// SELF-ENABLING, matching clusters 2-4. It was originally switched on by a call
+// from m_Do_main, and that call was itself the last unresolved symbol under
+// exclusion -- the receiver holding a reference to the layer it is trying not to
+// contain. Static init removes the reference entirely: the WW layer announces
+// itself, which is what a plugin does on load.
+namespace {
+struct WwProfileAutoEnable {
+    WwProfileAutoEnable() { dWwProfileRegister_setEnabled(true); }
+};
+const WwProfileAutoEnable s_wwProfileAutoEnable;
+}  // namespace
+
 #endif  // TARGET_PC

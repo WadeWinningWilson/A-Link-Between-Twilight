@@ -1,8 +1,8 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
-# tool_sha256:      1c1af3bfa0ac6d08a613c331feafa91856e5ef2e3547669367a4e42dc526ee2f
+# tool_sha256:      ef07118d5e598fb975c1aa3ca803934698c5f46596ad7756434b8cb17ef0e3e6
 # files_cmake_sha256: 3d381354acf3703c4cda35b78e6141d36722e412d5066b41b04d4ecae2673924
-# count: 58
+# count: 59
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
 # (native-port + bridge-owed) PLUS host-plumbing that serves the WW
@@ -85,6 +85,7 @@ set(WW_LAYER_FILES
     src/d/d_ext_tree.cpp
     src/d/d_ext_ww_actor_shims.cpp
     src/d/d_kankyo_ww_sky.cpp
+    src/d/d_npc.cpp
     src/d/d_ww_itemmdl_pc.cpp
     src/d/d_ww_itemmdl_test.cpp
     src/d/ext_evt/evt1_boundary.cpp

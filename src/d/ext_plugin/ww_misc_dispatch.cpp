@@ -41,6 +41,10 @@
 #include "d/d_ext_seq_space.h"
 #include "d/ww_jpa.h"
 #include "d/d_com_inf_game.h"
+#include "f_pc/f_pc_profile.h"
+// Included for its `extern "C"` linkage: without it this definition takes
+// C++ mangling and does not match the declaration the receiver calls.
+#include "d/ext_plugin/ww_profile_register.h"
 
 #if defined(DUSK_EXCLUDE_WW_ACTIVE)
 
@@ -168,5 +172,22 @@ void evt1_cutEnd(int) {
 void evt1_specialProc(class dEvDtStaff_c*) {
 }
 }  // namespace JEvent1
+
+// dExtNpcWorld_bump — the ONE straggler whose caller is genuinely dusklight's
+// (d_stage.cpp:3325, a file that exists in dusklight main). The others are
+// called only from TUs that move to the plugin, so they leave with it. This one
+// needs a default because the receiver keeps calling it: a no-op, since with no
+// WW layer there is no NPC world to bump.
+void dExtNpcWorld_bump(const char* /*reason*/) {
+}
+
+// dWwProfileRegister_lookup — fpcPf_Get calls this on every actor creation and
+// f_pc_profile.cpp is receiver-side, so it needs an answer with no WW layer.
+// NULL means "not ours", and fpcPf_Get then reads the receiver's own table --
+// where the 20 WW indices are already NULL, so those actors simply do not
+// create. That is the correct plugin behaviour: no plugin, no WW actors.
+process_profile_definition DUSK_CONST* dWwProfileRegister_lookup(s16 /*index*/) {
+    return NULL;
+}
 
 #endif  // DUSK_EXCLUDE_WW_ACTIVE
