@@ -76,3 +76,34 @@ happened to reach it.
 Recorded rather than solved: the honest detector is running WW content on a
 stock-aurora build and seeing what breaks, which is not worth building until
 there is much more content to run.
+
+## Design note — what a hook CAN and CANNOT reach (2026-08-07)
+
+Step 19 Phase 1 adopted a hook on `fpcPf_Get` after verifying the symbol
+resolves in a shipped build, not just ours:
+
+```
+fpcPf_Get / ?fpcPf_Get     our fork exe: present     upstream exe: present
+```
+
+That verification is what makes the plugin's end state credible: **download,
+drop in the mod folder, supply your own WW ISO, run.** No binary patching, no
+file surgery, no third-party tooling — the plugin attaches itself at load.
+
+**It does not, and cannot, address anything in this register.** A hook attaches
+to a symbol in the host; HR-1 is a *behaviour* defect BELOW the plugin boundary,
+in code that has already run by the time a plugin loads. So the honest statement
+of the end state is:
+
+> The plugin will LOAD and REGISTER correctly on a stock dusklight build. It
+> will still crash when WW content reaches the indexed-matrix path, until the
+> host itself carries the fix.
+
+Those are different claims and collapsing them would be the same error as
+reading "symbols resolve" (19b) as "it works". **19b proves attachment. Nothing
+currently proves behaviour**, which is the gap this register already records.
+
+Practical consequence for distribution: an end user cannot apply an aurora
+patch. Aurora is compiled into `dusklight.exe`. The fix has to be in the build
+they already have, which is why entries here are worth batching toward upstream
+eventually — not urgently, but not never.

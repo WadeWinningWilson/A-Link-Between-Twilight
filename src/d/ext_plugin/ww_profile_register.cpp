@@ -184,9 +184,21 @@ bool dWwProfileRegister_isEnabled() {
 // also revertible in the way step 19 requires: unhooking restores the receiver
 // exactly, with no table left half-written.
 //
-// This is a DESIGN CHANGE to Phase 1, not a detail, so `install()` stays inert
-// until it is ruled on. Landing a registration path that cannot work would be
-// worse than landing nothing.
+// ADOPTED by the user 2026-08-07, after verifying the symbol is reachable in a
+// SHIPPED build and not merely in ours:
+//
+//     fpcPf_Get           our fork exe: present (exported)   upstream exe: present
+//     ?fpcPf_Get          our fork exe: present              upstream exe: present
+//
+// That check is the one that mattered. A hook design is only as good as the
+// symbol it attaches to, and an inlined or stripped `fpcPf_Get` would have made
+// this unbuildable on stock dusklight while working perfectly here.
+//
+// WHAT THIS DESIGN DOES NOT SOLVE, stated so it is not overread: the plugin
+// attaching cleanly says nothing about host BEHAVIOUR. HR-1 (aurora LOAD_INDX)
+// still applies -- the plugin will load and register fine on a stock build and
+// still crash when WW content reaches the indexed-matrix path, because that bug
+// is below the plugin boundary and cannot be hooked around from above.
 //
 // Also noted while reading, not fixed here: `fpcPf_Get` performs NO bounds
 // check. An out-of-range index reads past the array. Not this file's business,
