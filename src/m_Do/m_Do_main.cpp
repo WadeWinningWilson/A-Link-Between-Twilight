@@ -111,6 +111,7 @@
 
 #if TARGET_PC
 #include "d/d_ext_seq_space.h"
+#include "d/ext_plugin/ww_profile_register.h"
 #endif
 
 // --- GLOBALS ---
@@ -616,6 +617,27 @@ int game_main(int argc, char* argv[]) {
     dusk::android::update_surface_frame_rate();
     dusk::crash_reporting::initialize();
     dusk::crash_handler::install();
+
+#if TARGET_PC
+    // ========================================================================
+    // Step 19 Phase 1 — hand the 20 WW actor indices to the WW layer.
+    //
+    // HERE because it must precede the first actor creation (every one goes
+    // through fpcPf_Get) and because logging and the crash handler are already
+    // up, so a refusal is visible and a fault is attributable.
+    //
+    // SAFE BY CONSTRUCTION rather than by hope: the shim answers with the SAME
+    // profiles the receiver's table holds -- verified 20/20 against
+    // g_fpcPf_ProfileList_p -- so enabling it changes routing, not behaviour.
+    // That is the whole point of choosing this cluster first: a migration whose
+    // correct outcome is "nothing observable happens".
+    //
+    // It refuses itself on any mismatch and logs ACTIVE or REFUSED with a
+    // count, so a wrong index announces itself instead of silently spawning the
+    // wrong actor. To revert: pass false, or delete this call.
+    // ========================================================================
+    dWwProfileRegister_setEnabled(true);
+#endif
     // TODO: How to handle this?
     // PADSetDefaultMapping(&defaultPadMapping, PAD_TYPE_STANDARD);
 
