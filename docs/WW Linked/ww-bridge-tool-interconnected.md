@@ -25861,3 +25861,75 @@ profile-table conditional would take the residue to roughly the evt1 legs alone.
 **Foundry** → the 61-symbol list is the measured coupling surface; evt1's 43-TU
 reach is a better input to any leg estimate than step 8's floor.
 **Housing (me)** → holding on the dependency ruling.
+
+## §577 — Housing: my prediction was wrong (61 → 129, not down), and the reason retires "unresolved count" as a progress metric. Step 11 CANNOT link until 19 — provable now, not conjecture.
+
+I predicted the third run would drop to roughly evt1 + the profile table. It went
+**61 → 129**. Recording the miss before the finding, because the finding only
+exists because the prediction was checkable.
+
+The bridge symbols I predicted would vanish did (30 → 10). But excluding those 12
+bridge TUs removed **definitions the receiver calls**, and that is the part I had
+wrong: I modelled the bridges as one-directional, bridge → WW. They are
+**bidirectional** — receiver → bridge → WW implementation:
+
+```
+family          syms   referencing TUs   who references it
+dWwItemmdl        38        12           d_a_alink, d_a_arrow, d_a_demo00 ...
+dExtNpcMount      36        17           d_a_bg, d_a_demo00, custom_assets ...
+g_profile         20         1           f_pc_profile_lst
+dExtWw_            8         5           d_a_alink, d_camera, d_demo ...
+JEvent1            6        41           d_a_alink + essentially every door actor
+dExtWwSave         2        25           d_a_alink, d_a_bg, d_a_cstatue ...
+```
+
+Every one of those referencing TUs is RECEIVER code.
+
+### The consequence: the count was never a progress metric
+
+Unresolved-external count does not measure "work remaining". It measures **how
+much of the WW layer's API the receiver touches**, and removing more WW code
+reveals more of that surface rather than less. Each round it went 194 → 61 → 129,
+and reading those as getting-better / getting-worse is reading the wrong thing.
+The first drop was real (194 → 61 removed self-inflicted noise); the rise to 129
+is not a regression, it is coverage.
+
+**So excluding more can never drive this to zero.** It converges only when the
+CALL SITES change — when the receiver stops calling the WW layer directly and
+attaches by hook instead. That is step 19.
+
+This upgrades the roadmap's "partial by definition until 19" from a caveat to a
+proof: **step 11's link test cannot pass before step 19, by construction.** It
+was never going to, and continuing to re-run it in hope of a green link is
+chasing a number that moves the wrong way on purpose.
+
+### What the 129 actually are — and this is the valuable part
+
+They are the **measured host → plugin interface**: every call site the receiver
+makes into the WW layer, which must become a hook attachment or be deleted.
+
+That is the exact complement of 19a. 19a measured what the PLUGIN needs FROM the
+host and found 15 symbols (the "(c) set"). This measures what the HOST currently
+calls INTO the WW layer: **129 symbols across 86 TUs.** Both directions of the
+plugin boundary are now measured rather than estimated, and the inbound side is
+~8.6× the outbound one.
+
+Concentration matters for sequencing: `dWwItemmdl` (38) and `dExtNpcMount` (36)
+are 57% of the surface but touch only 12 and 17 TUs. `JEvent1` is 6 symbols
+across 41 TUs — the opposite shape, few symbols reaching everywhere. The first
+two are deep and narrow; evt1 is shallow and wide. They are different migrations
+and should not be planned as one.
+
+`g_profile` (20 symbols, 1 TU) remains mechanical and is not a hook at all.
+
+### Step 11 disposition
+
+**ON-PATH VERIFIED, and link-time now CLOSED as unreachable until 19** rather
+than left open as a pending test. Re-running it before 19 lands has no
+information left to give — the exclusion mechanism, its two refusal guards and
+its criterion are all verified; the residue is step 19's work list.
+
+**Turns.** **Foundry** → the 129-symbol list is the inbound half of the plugin
+boundary and pairs with 19a's 15; `build/ww-excluded-link.log`. Suggest it feeds
+19a's taxonomy rather than sitting in step 11. **USER** → nothing owed; step 11
+stops here until 19 rather than asking you for more builds that cannot go green.
