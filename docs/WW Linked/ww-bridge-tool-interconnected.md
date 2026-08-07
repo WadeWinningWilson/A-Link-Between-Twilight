@@ -25703,3 +25703,93 @@ blind-spot finding is recorded here as yours. **USER** → run the full build wi
 `DUSK_EXCLUDE_WW=ON` to close step 11's last leg? It is the only way to learn
 whether the stacks are separable at link time, and a failure there is
 information, not a setback.
+
+## §573 — Housing: step 11 link test RAN. It did not link — and the failure measures the roster, not just the legs.
+
+`build_ww_excluded.bat` → **`LNK1120: 195 unresolved externals`**. That is the
+measurement step 11 has been missing since it was written. Parsed from
+`build/ww-excluded-link.log` (387 KB) rather than eyeballed:
+
+```
+unresolved-external lines : 522   (LNK2019 181 · LNK2001 342)
+DISTINCT symbols          : 194
+receiver TUs referencing  : 105
+```
+
+### The headline is NOT the count — it is what is in it
+
+Grouped by subsystem, the largest bucket was "unclassified", and reading it is
+what matters: `dALBWDialogue_c::*`, `dQe_*` (quest/bag), `dMenu_ExtStatus_c`,
+`dLetter_*`, `dFadoDoor_*`, plus receiver-core names `cLib_addCalcAngleL`,
+`dComIfGs_*`, `dComIfGp_*`, `fopAcM_*`, `dBgS_GetWaterHeight`, `cc_at_check`.
+**None of those is Wind Waker.** Their definitions disappeared, so the exclusion
+removed files that are not WW.
+
+Cross-checked the 48-file roster against **declared lineage** — possible only
+because step 10 bannered every TU:
+
+```
+native-port     27      genuine donor code — correctly excluded
+host-plumbing   14      OUR code, KIT-DONOR: none — excluded on FILENAME ALONE
+bridge-owed      4
+mixed            3
+```
+
+**14 of 48 (29%) declare `KIT-DONOR: none`.** They include
+`src/d/d_albw_dialogue.cpp` — a *different game's* port — and
+`src/d/ext_plugin/ww_import_gate.cpp`, the file I flagged in §564 as being on
+the list only because of its name. The manifest's own header says it classifies
+by filename convention and "answers what is WW-SHAPED, not what is WW-DERIVED".
+This is the first time that caveat has been *measured* instead of restated, and
+it costs 29% of the roster.
+
+So the link failure has **two causes that must not be conflated**:
+1. **Real legs** — receiver code genuinely calling into the WW layer
+   (`dExtWwSave_isWwHostStage` in 10 TUs, `dKyWw_*` in 21, `JEvent1::evt1_*` in
+   48). This is the thing step 11 exists to measure.
+2. **Self-inflicted** — 14 host-plumbing files removed that carry no donor code,
+   taking ALBW dialogue, the quest/bag system, menus and letters with them.
+
+A "195 unresolved" headline that blames all of it on legs would be wrong.
+
+### The other half of "partial", now numbered
+
+```
+census roster (WW-layer TUs)   74
+exclusion roster (filename)    48      <- strict SUBSET, 0 outside
+NOT excluded                   26      d_a_esa, d_a_kamome, d_a_npc_*, ...
+```
+
+26 TUs the census calls WW-layer are receiver-NAMED, so filename convention
+cannot see them and they stay compiled in. That is "partial by definition" with
+a number on it at last.
+
+### Corrections to my own analysis, made before anyone had to catch them
+
+- I first read 5 roster files as unbannered. **Wrong** — my reader only looked
+  at the first 1500 chars and their banners sit at lines 38–50 behind long
+  headers. All 48 are bannered; the corrected tally is above.
+- I first inferred the two rosters diverged in both directions. **Wrong** — the
+  exclusion roster is a strict subset; nothing is excluded that the census does
+  not know about.
+
+### What this means for step 11
+
+It does **not** discharge, and the reason is now specific rather than vague: the
+tree does not link with the WW stacks out, and 29% of what was removed should
+never have been on the list. The roster wants re-basing on **declared lineage**
+(`KIT-LINEAGE` / `KIT-DONOR`) instead of filenames — the change of basis I
+raised in §564 and deferred as "not mine to make unilaterally". It now has
+evidence behind it: filename convention over-excludes by 14 files and
+under-excludes by 26.
+
+Note the two errors point OPPOSITE ways, which is why "safe direction" reasoning
+does not rescue it. Over-inclusion is safe for a NEVER-PUSH list and harmful for
+a BUILD exclusion — and the same roster currently serves both.
+
+**Turns.** **USER** → ruling wanted: re-base the roster on declared lineage
+(banners) rather than filenames? It would fix both directions at once, and
+Tier-1 never-push would need re-deriving with it. **Foundry** → the 194-symbol
+list is a real coupling surface and a better input to 19a's residual set than
+anything estimated; `build/ww-excluded-link.log` is on disk. **Housing (me)** →
+holding until the roster basis is ruled.
