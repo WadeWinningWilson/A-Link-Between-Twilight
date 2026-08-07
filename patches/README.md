@@ -76,12 +76,16 @@ its scope.
 It goes obsolete only if `encounter` fixes it upstream or dusklight drops
 aurora. Neither is about our porting.
 
-### aurora/local/working-tree.patch — scaffolding, disposable
+### aurora/local/working-tree.patch — LIVE instrumentation, retained
 
 The full submodule diff, ~1300 lines across 13 files. Of it, **32 lines are the
-fix above**; the remainder is FIFO/GX/shader/pipeline debug instrumentation
-added to FIND the bug. That is scaffolding, not an asset, and the standing rule
-on capture tooling says it should eventually be stripped rather than preserved.
+fix above**; the remainder is FIFO/GX/shader/pipeline debug instrumentation.
 
-Kept only so nothing is lost before someone decides to strip it. **Never
-submit this.**
+**RETAINED UNTIL THE ROPES ARE RESOLVED (user ruling, 2026-08-07.)** I had
+filed this as spent scaffolding. That was wrong: the rope rendering defect is
+still open, and this is the instrument still being used to chase it. Removing a
+probe because the bug it found is fixed, while the bug it was BUILT for is not,
+would cost the next round of debugging its only visibility.
+
+Strip it when ropes close, not before. **Never submit this** — it is local
+tooling either way.
