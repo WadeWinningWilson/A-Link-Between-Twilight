@@ -95,7 +95,7 @@ block.
      receiver-owned file, so listing it here does not make the file
      strippable — see the leg list in cmake/ww_layer_exclude.cmake. -->
 
-**Sources (73) — generated from `files.cmake`:**
+**Sources (74) — generated from `files.cmake`:**
 
 - `src/d/actor/d_a_demo00.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_esa.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
@@ -143,6 +143,7 @@ block.
 - `src/d/ext_line/mdoext1_3dline.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `m_Do/m_Do_ext.cpp` — filename agrees
 - `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_itemmdl_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_misc_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_npcmount_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_profile_register.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)

@@ -658,6 +658,11 @@ if(DUSK_EXCLUDE_WW)
             "  regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake")
     endif()
 
+    # Step 19 cluster 4: switch on the receiver-side default implementations for
+    # the tail cluster. They are compiled ONLY here, so the WW impls own those
+    # names in a normal build and the two cannot both define a symbol.
+    add_compile_definitions(DUSK_EXCLUDE_WW_ACTIVE=1)
+
     list(LENGTH DUSK_FILES _ww_before)
     list(REMOVE_ITEM DUSK_FILES ${WW_LAYER_FILES})
     list(LENGTH DUSK_FILES _ww_after)

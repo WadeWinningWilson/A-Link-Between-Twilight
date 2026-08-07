@@ -211,6 +211,7 @@ set(DOLZEL_FILES
         src/d/ext_plugin/ww_profile_register.cpp
         src/d/ext_plugin/ww_itemmdl_dispatch.cpp
         src/d/ext_plugin/ww_npcmount_dispatch.cpp
+        src/d/ext_plugin/ww_misc_dispatch.cpp
         src/d/d_ext_room_verify.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp
