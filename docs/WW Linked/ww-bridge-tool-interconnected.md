@@ -25793,3 +25793,71 @@ Tier-1 never-push would need re-deriving with it. **Foundry** → the 194-symbol
 list is a real coupling surface and a better input to 19a's residual set than
 anything estimated; `build/ww-excluded-link.log` is on disk. **Housing (me)** →
 holding until the roster basis is ruled.
+
+## §575 — Housing: re-based exclusion re-run. 194 → 61 unresolved, and the 61 decompose into three causes with three different fixes. Only one is a real leg.
+
+The lineage re-basing worked: `LNK1120: 194 → 61` unresolved externals, 105 → 53
+referencing TUs, log 387 KB → 42 KB. **Every ALBW / quest-bag / menu / letter
+symbol is gone** — those were self-inflicted by the filename roster and are no
+longer in the picture. What remains is signal.
+
+Grouped by what is doing the referencing, which is the part that decides the fix:
+
+```
+A. evt1 event stack     5 symbols   43 receiver TUs   <- THE REAL LEG
+B. actor profile table 20 symbols    1 TU             <- f_pc_profile_lst.cpp
+C. bridge shims        30 symbols    9 TUs            <- ja1 / ww_jpa / WW sky
+D. stragglers           6 symbols    2 TUs
+```
+
+### B is not coupling at all — it is a manifest
+
+All 20 are `g_profile_*` referenced from exactly **one** file,
+`f_pc_profile_lst.cpp`: the actor-profile registration table. It names every
+actor, so excluding an actor's TU orphans its table entry. This is mechanical —
+the table needs the same conditional the sources got — and it is 33% of the
+remaining symbols for zero real coupling.
+
+### C is a design error in the exclusion, and it is mine
+
+The referencing TUs are mostly **the bridges themselves**: `ja1_bank.cpp`,
+`ja1_native.cpp`, `ja1_event_dump.cpp`, `ww_jpa_bind.cpp`, `d_kankyo_ww.cpp`.
+Those are `host-plumbing` / `mixed`, so the lineage basis correctly kept them —
+they contain no donor code. But **their entire purpose is to bridge into the WW
+implementations that were excluded.** Keeping a bridge while removing what it
+bridges to guarantees unresolved symbols.
+
+So the lineage basis answers "what is donor code" correctly and **does not
+answer "what can be removed together"**. Those are different questions and I
+conflated them. A shim whose only reason to exist is an excluded subsystem must
+go with it — a DEPENDENCY rule, not a lineage one. Recommend adding it as a
+third rule rather than reclassifying the files, because their lineage labels are
+right: they really are our plumbing.
+
+`d_s_play.cpp` and `m_Do_main.cpp` also appear here, and those are genuine
+receiver-core calls into the audio bridge — real legs, not bridge-internal.
+
+### A is the real coupling surface
+
+`JEvent1::evt1_cutEnd` / `evt1_getIsAddvance` / `evt1_getMyActIdx` and two more,
+called from **43 receiver TUs** — `d_a_alink.cpp` and essentially every door
+actor. This is receiver code calling a WW-ported event stack, and no roster
+basis or dependency rule touches it. It is step 19's, and it is the honest
+measure of how far the WW layer reaches into the receiver.
+
+Worth setting against step 8's leg-debt figure of **14 legs / 11 TUs / 447
+lines**, which was explicitly labelled a floor: evt1 alone is 43 TUs. The floor
+held as a floor, and the ceiling is roughly 4× it on TU count.
+
+### Step 11 status, unchanged and now precisely bounded
+
+Still does not link, still does not discharge — but the residue is no longer
+"195 unresolved, cause unknown". It is: 20 mechanical (a table), ~25 fixable by
+a dependency rule, and ~16 genuine legs concentrated in one subsystem.
+
+**Turns.** **USER** → ruling wanted on the dependency rule: exclude a
+host-plumbing bridge together with the subsystem it bridges to? That plus the
+profile-table conditional would take the residue to roughly the evt1 legs alone.
+**Foundry** → the 61-symbol list is the measured coupling surface; evt1's 43-TU
+reach is a better input to any leg estimate than step 8's floor.
+**Housing (me)** → holding on the dependency ruling.
