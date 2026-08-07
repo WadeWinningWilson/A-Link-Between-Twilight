@@ -1,0 +1,197 @@
+# §507's mutable-buffer set, ENUMERATED (Foundry asked; §551)
+# count: 97   bytes: 8245
+# rule: the Axis B candidate's declaration line contains no 'const'
+  2048  src/d/actor/d_a_ext_vegetation.cpp:1588  buf
+        char buf[2048] = {};
+  2048  src/d/d_ext_npc_mount.cpp:10903  buf
+        char buf[2048] = {};
+   192  src/d/d_ext_npc_mount.cpp:3952  slotName
+        char slotName[3][64] = {};
+   165  src/d/ext_line/mdoext1_3dline.cpp:75  l_toonMat1DL
+        static u8 l_toonMat1DL[0xA5] ATTRIBUTE_ALIGN(32) = {
+   150  src/d/ext_line/mdoext1_3dline.cpp:59  l_mat1DL
+        static u8 l_mat1DL[0x96] ATTRIBUTE_ALIGN(32) = {
+   128  src/d/d_ext_npc_doors.cpp:90  s_loadedMod
+        char s_loadedMod[128] = {};
+   128  src/d/d_ext_seq_space.cpp:174  coefs
+        char coefs[128] = {};
+    96  src/d/actor/d_a_esa.cpp:215  src
+        char src[96] = {};
+    96  src/d/actor/d_a_ext_plank_span.cpp:357  src
+        char src[96] = {};
+    96  src/d/actor/d_a_ext_vegetation.cpp:957  src
+        char src[96] = {};
+    96  src/d/actor/d_a_knob00.cpp:622  src
+        char src[96] = {};
+    96  src/d/actor/d_a_knob00.cpp:1516  src
+        char src[96] = {};
+    96  src/d/actor/d_a_lamp.cpp:261  src
+        char src[96] = {};
+    96  src/d/actor/d_a_obj_otble.cpp:193  src
+        char src[96] = {};
+    96  src/d/d_ext_npc_mount.cpp:4696  s_forcedSpawnSrc
+        static char s_forcedSpawnSrc[96] = {};
+    96  src/d/d_ext_npc_mount.cpp:5035  s_bgCreateFailReason
+        static char s_bgCreateFailReason[96] = {};
+    64  src/d/actor/d_a_esa.cpp:216  head
+        char head[64] = {};
+    64  src/d/actor/d_a_ext_plank_span.cpp:358  head
+        char head[64] = {};
+    64  src/d/actor/d_a_ext_vegetation.cpp:958  head
+        char head[64] = {};
+    64  src/d/actor/d_a_knob00.cpp:623  head
+        char head[64] = {};
+    64  src/d/actor/d_a_knob00.cpp:1517  head
+        char head[64] = {};
+    64  src/d/actor/d_a_lamp.cpp:262  head
+        char head[64] = {};
+    64  src/d/actor/d_a_obj_otble.cpp:194  head
+        char head[64] = {};
+    64  src/d/d_ext_mod_flags.cpp:849  d
+        char d[64] = {};
+    64  src/d/d_ext_npc_mount.cpp:3885  siblingBtk
+        char siblingBtk[64] = {};
+    64  src/d/d_ext_npc_mount.cpp:4693  s_forcedAttachModel
+        static char s_forcedAttachModel[64] = {};
+    64  src/d/d_ext_npc_mount.cpp:9066  companion
+        char companion[64] = {};
+    64  src/d/d_ext_npc_mount.cpp:9078  bodyBmt
+        char bodyBmt[64] = {};
+    64  src/d/d_ext_npc_mount.cpp:9086  headModel
+        char headModel[64] = {};
+    64  src/d/d_ext_npc_population.cpp:818  headModel
+        char headModel[64] = {};
+    48  src/d/d_particle.cpp:2374  ringID
+        static u16 ringID[6][4] = {
+    48  src/d/d_particle.cpp:2379  normalID
+        static u16 normalID[6][4] = {
+    44  src/d/actor/d_a_demo00.cpp:1608  ke_za
+        static s16 ke_za[22] = {
+    44  src/d/actor/d_a_npc_bm1.cpp:4103  a_size_tbl
+        static u32 a_size_tbl[] = {
+    40  src/d/ext_seq/ja1_jasdspchannel.cpp:83  history
+        u32 history[10] = { 1000000, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    32  src/d/actor/d_a_esa.cpp:214  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_esa.cpp:217  joint
+        char joint[32] = {};
+    32  src/d/actor/d_a_ext_plank_span.cpp:356  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_ext_plank_span.cpp:359  joint
+        char joint[32] = {};
+    32  src/d/actor/d_a_ext_vegetation.cpp:956  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_ext_vegetation.cpp:959  joint
+        char joint[32] = {};
+    32  src/d/actor/d_a_knob00.cpp:621  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_knob00.cpp:624  joint
+        char joint[32] = {};
+    32  src/d/actor/d_a_knob00.cpp:1515  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_knob00.cpp:1518  joint
+        char joint[32] = {};
+    32  src/d/actor/d_a_lamp.cpp:260  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_lamp.cpp:263  joint
+        char joint[32] = {};
+    32  src/d/actor/d_a_obj_otble.cpp:192  proc
+        char proc[32] = {};
+    32  src/d/actor/d_a_obj_otble.cpp:195  joint
+        char joint[32] = {};
+    32  src/d/d_ext_mod_flags.cpp:846  a
+        char a[32] = {};
+    32  src/d/d_ext_mod_flags.cpp:847  b
+        char b[32] = {};
+    32  src/d/d_ext_mod_flags.cpp:848  c
+        char c[32] = {};
+    32  src/d/d_ext_npc_doors.cpp:92  s_exitSpawnForProc
+        char s_exitSpawnForProc[32] = {};
+    32  src/d/d_ext_npc_doors.cpp:1133  keyBuf
+        char keyBuf[32] = {};
+    32  src/d/d_ext_npc_doors.cpp:1338  keyBuf
+        char keyBuf[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:236  s_bgWarpProc
+        char s_bgWarpProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:237  s_lastBgProc
+        char s_lastBgProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:239  s_interiorBootstrapProc
+        char s_interiorBootstrapProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:257  s_roomLaneUnloadingProc
+        char s_roomLaneUnloadingProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:1056  compName
+        char compName[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:1057  bodyName
+        char bodyName[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:4118  proc
+        char proc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:4691  s_forcedCreateProc
+        static char s_forcedCreateProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:4694  s_forcedAttachJoint
+        static char s_forcedAttachJoint[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:5344  s_roomMountPendingProc
+        static char s_roomMountPendingProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:5706  s_roomTxProc
+        static char s_roomTxProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:6066  s_stageExitRemountProc
+        static char s_stageExitRemountProc[32] = {};
+    32  src/d/d_ext_npc_mount.cpp:9087  headJoint
+        char headJoint[32] = {};
+    32  src/d/d_stage.cpp:1802  s_lastPlayerStage
+        static char s_lastPlayerStage[32] = {0};
+    32  src/d/d_ww_itemmdl_test.cpp:54  s_demoArcName
+        static char s_demoArcName[32] = {};
+    24  src/d/d_ext_npc_mount.cpp:7840  s_healBg402
+        static char s_healBg402[24] = {};
+    24  src/d/d_particle.cpp:2351  effectIDTable
+        static u16 effectIDTable[6][2] = {
+    22  src/d/actor/d_a_npc_bm1.cpp:721  a_att_dis_TBL
+        static u8 a_att_dis_TBL[11][2] = {0xA9, 0xA9, 0xA9, 0xA9, 0x6D, 0x6D, 0x6F, 0x6D, 0xA9, 0xA9, 0x
+    16  src/d/d_ext_mod_flags.cpp:845  cmd
+        char cmd[16] = {};
+    14  src/d/actor/d_a_kb.cpp:69  kb_btp_idx
+        static u16 kb_btp_idx[] = {dRes_INDEX_KB_BTP_PG_EYE1_e, dRes_INDEX_KB_BTP_PG_EYE1_e, dRes_INDEX_
+    14  src/d/actor/d_a_kb.cpp:70  kb_bmt_idx
+        static u16 kb_bmt_idx[] = {dRes_INDEX_KB_BMT_PG_PINK_e, dRes_INDEX_KB_BMT_PG_BUTI_e, dRes_INDEX_
+    12  src/d/actor/d_a_kb.cpp:1764  gold_rate_dt
+        static u32 gold_rate_dt[] = {
+    12  src/d/actor/d_a_kb.cpp:1767  item_rate_dt
+        static u32 item_rate_dt[] = {
+    12  src/d/actor/d_a_obj_mshokki.cpp:247  se_flag
+        static s32 se_flag[] = {JA_SE_OBJ_CUP_SWING, JA_SE_OBJ_DISH_SWING, JA_SE_OBJ_CUP_SWING};
+    12  src/d/d_ext_npc_mount.cpp:242  s_worldGenStage
+        char s_worldGenStage[12] = {};
+    12  src/d/d_ext_seq_space.cpp:71  s_handoffStage
+        char s_handoffStage[12] = {};
+    12  src/d/d_ext_seq_space.cpp:133  s_lastStage
+        char s_lastStage[12] = {};
+    12  src/d/d_ext_tree.cpp:122  s_shadowPos
+        u8 s_shadowPos[][3] = {
+     8  src/d/actor/d_a_npc_zl1.cpp:2735  a_siz_tbl
+        static u32 a_siz_tbl[] = {
+     8  src/d/actor/d_a_swhit0.cpp:421  l_color
+        static u8 l_color[] = {
+     8  src/d/d_ext_seq_space.cpp:165  maxBus
+        f32 maxBus[2] = {0, 0};
+     8  src/d/d_ext_seq_space.cpp:166  maxBuf
+        f32 maxBuf[2] = {0, 0};
+     8  src/d/d_ext_seq_space.cpp:167  maxCoef6
+        f32 maxCoef6[2] = {0, 0};
+     8  src/d/d_ext_tree.cpp:126  s_shadowTexCoord
+        u8 s_shadowTexCoord[][2] = {
+     7  src/d/ext_seq/ja1_jasseqparser.cpp:555  calcTypes
+        u8 calcTypes[] = { 0, 0, 0, 1, 1, 2, 2 };
+     7  src/d/ext_seq/ja1_jasseqparser.cpp:556  parentCalcTypes
+        u8 parentCalcTypes[] = { 0, 1, 2, 0, 2, 0, 2 };
+     6  src/d/actor/d_a_obj_mshokki.cpp:233  particle_id
+        static u16 particle_id[] = {ID_AK_JN_BREAKMAJUPOT00, ID_AK_JN_BREAKMAJUPLATE00, ID_AK_JN_BREAKMA
+     6  src/d/d_ext_tree.cpp:710  l_modelStatus
+        static u8 l_modelStatus[2][3] = {{0, 1, 2}, {3, 1, 4}};
+     6  src/d/ext_line/mdoext1_3dline.cpp:93  l_normal
+        static u8 l_normal[][3] ATTRIBUTE_ALIGN(32) = {
+     4  src/d/d_event_manager.cpp:1236  buf
+        static char buf[4] = {};
+     0  src/d/d_ext_npc_mount.cpp:10768  tag
+        char tag[5] = {(char)(peType >> 24), (char)(peType >> 16),
+     0  src/d/d_particle.cpp:1745  s_logged
+        static u16 s_logged[kWwCommonCount] = {};

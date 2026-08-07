@@ -1,0 +1,85 @@
+From: A Link Between Dusklight (WW port lane)
+Subject: [PATCH] gx: fix LOAD_INDX array selection and wire format
+
+Two defects in the indexed-XF (LOAD_INDX) path of the FIFO parser. Both are
+PLATFORM bugs, not content bugs: the opcode is emitted by core J3D
+(J3DShapeMtx::loadMtxIndx_PNGP, J3DSys) via the Dolphin SDK's own
+GDWriteXFIndx[ABCD]Cmd writers, so every caller was affected. Indexed loads were
+broken for the entire life of this port.
+
+1) Array selection had an operator-precedence error:
+
+     GX_POS_MTX_ARRAY + (opcode - (CP_CMD_LOAD_INDX_A / 0x08))
+
+   divides the CONSTANT (0x20 / 8 = 4), so INDX_A..D resolved to
+   GX_POS_MTX_ARRAY + 28/36/44/52 -- far past GX_VA_MAX_ATTR, which is only 5
+   beyond GX_POS_MTX_ARRAY. g_gxState.arrays[] was read out of bounds and the
+   resulting garbage pointer faulted inside copy_xf_data
+   (EXCEPTION_ACCESS_VIOLATION at 0x0).
+
+2) The payload was misparsed. The authority is the SDK's own writer,
+   dolphin/gd/GDBase.h GDWriteXFIndx[ABCD]Cmd:
+
+     GDWrite_u8(GX_LOAD_INDX_x);
+     GDWrite_u16(index);
+     GDWrite_u16(((len - 1) << 12) | addr);
+
+   -- a 4-byte payload. The parser read the index as a u8, took addrLen from
+   payload+1 (straddling both fields, yielding addresses such as 0x0B32), and
+   advanced 1 + 4 = 5 bytes, so every indexed load shifted the remainder of the
+   FIFO by one byte and the parser eventually died on a bogus opcode.
+
+Also adds a guard: an indexed load against an unbound array is a content or
+ordering problem, so it is reported once and skipped rather than faulted on.
+
+Verified field-for-field against the SDK writer. Nothing depended on the old
+behaviour -- it faulted or desynced whenever it executed.
+
+PROVENANCE OF THIS PATCH, stated because the extraction was not purely
+mechanical: our tree carries debug instrumentation next to this code. Generated
+with -U0 so adjacent probe hunks are not swept in, and ONE diagnostic call
+(dump_anomaly, ours) was removed by hand from the guard. Everything else is
+verbatim. Apply with `git apply --unidiff-zero`.
+
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+index ef54b31..27cfa5e 100644
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -419,5 +767,18 @@ void process(const u8* data, u32 size, bool bigEndian) {
+-      u32 arrayType = GX_POS_MTX_ARRAY + (opcode - (CP_CMD_LOAD_INDX_A / 0x08));
+-      u8 srcArrayIdx = data[pos++];
+-      auto const& array = g_gxState.arrays[arrayType];
+-      u8* srcData = ((u8*)array.data) + srcArrayIdx * array.stride;
+-      u16 addrLen = read_u16(data + pos, bigEndian);
++      // The four LOAD_INDX opcodes are 8 apart (0x20/0x28/0x30/0x38) and map to
++      // the four indexed arrays in order. The operator precedence here was
++      // wrong: `opcode - (CP_CMD_LOAD_INDX_A / 0x08)` divides the CONSTANT, so
++      // INDX_A..D resolved to GX_POS_MTX_ARRAY + 28/36/44/52 -- far past
++      // GX_VA_MAX_ATTR (only 5 beyond GX_POS_MTX_ARRAY). g_gxState.arrays[]
++      // was then read out of bounds and the garbage `data` pointer faulted
++      // inside copy_xf_data (observed: EXCEPTION_ACCESS_VIOLATION at 0x0).
++      u32 arrayType = GX_POS_MTX_ARRAY + (opcode - CP_CMD_LOAD_INDX_A) / 0x08;
++      // Wire format, per the GD writer (GDBase.h GDWriteXFIndx[ABCD]Cmd):
++      //   u8 opcode | u16 index | u16 ((len-1) << 12 | addr)
++      // i.e. a 4-byte payload. This previously read the index as a u8, took
++      // addrLen from payload+1 (straddling the two fields, yielding garbage
++      // addresses such as 0x0B32), and then advanced 1 + 4 = 5 bytes -- so
++      // every indexed load also shifted the rest of the FIFO by one byte and
++      // the parser eventually died on a bogus opcode.
++      u16 srcArrayIdx = read_u16(data + pos, bigEndian);
++      u16 addrLen = read_u16(data + pos + 2, bigEndian);
++      pos += 4;
+@@ -425,0 +787,13 @@ void process(const u8* data, u32 size, bool bigEndian) {
++      // An indexed load against an array that was never bound is a content/
++      // ordering bug, not something to die on: report it once and skip.
++      if (arrayType >= GX_VA_MAX_ATTR || g_gxState.arrays[arrayType].data == nullptr) {
++        static bool sWarned = false;
++        if (!sWarned) {
++          sWarned = true;
++          Log.warn("Indexed XF load with unbound array (opcode 0x{:02X}, arrayType={}, dstAddr=0x{:04X}) -- skipped",
++                   opcode, arrayType, dstAddr);
++        }
++        break;  // payload already consumed above
++      }
++      auto const& array = g_gxState.arrays[arrayType];
++      u8* srcData = ((u8*)array.data) + srcArrayIdx * array.stride;

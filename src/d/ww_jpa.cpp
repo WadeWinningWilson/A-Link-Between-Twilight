@@ -1,3 +1,7 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: JSystem/JParticle/JPAEmitterLoader.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: Matching
 // ============================================================================
 // WW JPA LANE — phase 1: JPAC1-00 archive parse (native, no conversion).
 //

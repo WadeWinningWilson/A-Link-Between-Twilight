@@ -1,4 +1,8 @@
-﻿// ============================================================================
+﻿// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
+// ============================================================================
 // WW JPA LANE â€” phase 2 (Path B): bind WW resources to the receiver runtime.
 //
 // User ruling 2026-08-02 ("Go B"): rather than duplicate a JSystem runtime the

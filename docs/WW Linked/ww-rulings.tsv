@@ -1,0 +1,19 @@
+# USER RULINGS the census must consume — machine-readable, one per line.
+#
+# WHY THIS FILE EXISTS
+# §516 recorded the user's NO VETO ruling in prose. The instrument never saw it,
+# so the census kept emitting VETO-PENDING for six sections while the derivation
+# doc said B2 was CLOSED (§546). A ruling that lives only in prose is a ruling
+# the tools disagree with.
+#
+# A ruling here CHANGES A VERDICT; it never deletes the underlying finding. The
+# Axis P candidates that raised VETO-PENDING stay visible and stay counted — the
+# user overruled the disposition, not the measurement. Erasing the evidence
+# would make the ruling unreviewable and its REVISIT TRIGGER unfireable.
+#
+# Format:  kind <TAB> scope <TAB> section <TAB> note
+#   kind    NO-VETO — a spec §5 veto candidate is ruled not disqualifying
+#   scope   * = all subsystems, or an exact subsystem name
+#
+kind	scope	section	note
+NO-VETO	*	516	GXTexObj pair and dMsgFlow_c are shared state to be solved, not disqualifiers; both subsystems return to plugin candidacy

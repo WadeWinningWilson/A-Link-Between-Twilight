@@ -510,9 +510,13 @@ inline void dComIfGp_setMesgAnimeTagInfo(u8) {}
 struct dExtLs1_collect_c { int checkCollect(int) { return 0; } };
 inline dExtLs1_collect_c* dComIfGs_getpCollect() { static dExtLs1_collect_c s; return &s; }
 
-// --- WW g_dComIfG_gameInfo.play.field_0x4978 (unknown u8) is absent in the
-//     port's fixed struct. Read once as a dormant demo gate; WW-default 0. ----
-inline u8 dExtLs1_field4978() { return 0; }
+// --- WW g_dComIfG_gameInfo.play.mScopeWipeFlag (donor d_com_inf_game.h:867,
+//     accessors getScopeWipeFlag/setScopeWipeFlag) is absent in the port's
+//     fixed struct. Read once as a dormant demo gate; WW-default 0.
+//     NAME LEARNED at the 512 re-baseline: upstream named field_0x4978 while
+//     we were pinned behind it. The shim still returns 0 -- only the NAME
+//     changed, so behaviour is untouched. ----
+inline u8 dExtLs1_getScopeWipeFlag() { return 0; }
 
 // §251 dExtLs1_getDemoBtk RETIRED — promoted to native dDemo_actor_c::getP_BtkData
 //      (Foundry decode, d_demo.cpp §251). Aryll calls the native method directly.

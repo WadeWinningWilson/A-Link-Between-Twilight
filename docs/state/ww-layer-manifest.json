@@ -1,0 +1,248 @@
+{
+  "generated_by": "tools/ww_crew_restoration_skeleton/ww_layer_manifest.py",
+  "regenerate": "python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --json docs/state/ww-layer-manifest.json",
+  "tool_sha256": "eb78cedbe52331deaab3085da7a86d8a7a0a72c59e78ef595523fd4ff2fa9fb6",
+  "input": "files.cmake",
+  "input_sha256": "5c827ae369b6b423145307f5e6210f85db553b2f408b5848071ec7f49670d753",
+  "basis": "filename-convention (NOT lineage)",
+  "basis_note": "Sources are build-derived (authoritative). This answers 'what is WW-SHAPED', not 'what is WW-DERIVED' \u2014 roadmap step 10's provenance banners upgrade it to lineage.",
+  "build_source_count": 1523,
+  "ww_layer_count": 47,
+  "ww_layer": [
+    {
+      "path": "src/d/actor/d_a_ext_ep.cpp",
+      "reason": "WW-restoration actor",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/actor/d_a_ext_plank_span.cpp",
+      "reason": "WW-restoration actor",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/actor/d_a_ext_vegetation.cpp",
+      "reason": "WW-restoration actor",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/actor/d_a_ww_demo00.cpp",
+      "reason": "WW-restoration actor",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_albw_dialogue.cpp",
+      "reason": "shared ALBW/WW dialogue surface (\u00a7113 note)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_dmesg.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_mod_flags.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_npc_doors.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_npc_mount.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_npc_population.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_room_verify.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_save_flags.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_seq_space.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_tree.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ext_ww_actor_shims.cpp",
+      "reason": "WW-restoration subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_kankyo_ww.cpp",
+      "reason": "WW leg inside a receiver-named TU",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_kankyo_ww_sky.cpp",
+      "reason": "WW leg inside a receiver-named TU",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ww_itemmdl_pc.cpp",
+      "reason": "WW-specific receiver subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/d_ww_itemmdl_test.cpp",
+      "reason": "WW-specific receiver subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_evt/evt1_boundary.cpp",
+      "reason": "JEvent1 parallel donor stack (WW events)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_evt/evt1_event_data.cpp",
+      "reason": "JEvent1 parallel donor stack (WW events)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_evt/evt1_event_manager.cpp",
+      "reason": "JEvent1 parallel donor stack (WW events)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_line/mdoext1_3dline.cpp",
+      "reason": "MDoExt1 parallel donor stack (WW 3D-line)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_bank.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_event_dump.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasbank.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasbnkparser.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jascalc.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jaschannel.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasdspchannel.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasnotemgr.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasouterparam.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasplayer.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasregisterparam.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasseqctrl.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jasseqparser.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jastrack.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jastrackinterrupt.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_jastrackport.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_kernel.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_native.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_oscillator.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_parser.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_seq_ctrl.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ext_seq/ja1_track.cpp",
+      "reason": "JAudio1 parallel donor stack (WW audio)",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ww_jpa.cpp",
+      "reason": "WW-specific receiver subsystem",
+      "tier1_listed": true
+    },
+    {
+      "path": "src/d/ww_jpa_bind.cpp",
+      "reason": "WW-specific receiver subsystem",
+      "tier1_listed": true
+    }
+  ]
+}

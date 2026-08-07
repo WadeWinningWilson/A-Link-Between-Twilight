@@ -6,6 +6,10 @@
  *
  * №27: N1 layer bleed control, N2 head_from_params attach from CSV params_hex.
  */
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/d_ext_npc_population.h"
 
 #if TARGET_PC

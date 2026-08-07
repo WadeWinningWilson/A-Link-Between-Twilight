@@ -98,6 +98,59 @@ def profile_table_count():
     return len(entries) - 1  # trailing NULL terminator
 
 
+REPO = Path(__file__).resolve().parents[2]
+
+
+
+def _stamp_lineage(txt, actor):
+    """§427 — emit the §426 KIT-LINEAGE tag on every port this kit produces.
+
+    Every port the kit generates is a DIRECT DONOR PORT by construction: the
+    input is the donor TU and the output is that TU codemodded onto receiver
+    calls. So `native-port` is the only honest default here, and stamping it is
+    not a guess about the file — it is a statement about how the file was made.
+
+    Two rules this deliberately does NOT break:
+      * It never RE-tags. If a human later reclassifies a TU (a port that turned
+        out to be imitation machinery is `bridge-owed`), a re-run must not
+        silently overwrite that judgement.
+      * It never invents `bridge-owed` or `host-plumbing`. Those are lineage
+        RULINGS about intent, and the kit has no standing to make them — the
+        same reason the lint refuses to infer lineage from prose.
+
+    Without this, a freshly generated port lands untagged, the §426 pre-flight
+    reads UNKNOWN, and the kit blocks its own output on a tag only it was in a
+    position to write.
+    """
+    if "// KIT-LINEAGE:" in txt:
+        return txt
+    # The tag line stays EXACTLY the ratified spelling and nothing else.
+    # First attempt appended the rationale to the same line, and the lint's
+    # grep-exact regex (which anchors to end-of-line, as §426 requires) could
+    # not read the kit's own output. Explanation goes BELOW the tag.
+    tag = ("// KIT-LINEAGE: native-port" + chr(10)
+           + "// §427 stamped by actor_kit: this file is the donor TU "
+             "codemodded onto" + chr(10)
+           + "// receiver calls, so native-port is a statement about how it was "
+             "made, not" + chr(10)
+           + "// a guess. Reclassify BY HAND if it turns out to be imitation "
+             "machinery" + chr(10)
+           + "// rather than the donor's own behaviour — the kit never "
+             "overwrites that." + chr(10))
+    lines = txt.splitlines(keepends=True)
+    ins = 0
+    for i, l in enumerate(lines[:80]):
+        s = l.strip()
+        if s.endswith("*/"):
+            ins = i + 1
+            break
+        if s.startswith("#include") or s.startswith("#ifndef"):
+            ins = i
+            break
+    lines.insert(ins, tag)
+    return "".join(lines)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
@@ -106,6 +159,41 @@ def main():
     actor = args[0]
     land = "--land" in sys.argv
     activate = "--activate" in sys.argv
+
+    # ========================================================================
+    # §426 BLOCKING PRE-FLIGHT — the five sky-campaign laws (§423), enforced.
+    #
+    # Green-lit by the user once lineage tags landed, so N/A verdicts are
+    # truthful from the very first gated run rather than a guess about scope.
+    #
+    # It gates --land and --activate, NOT analysis: running the kit to look at a
+    # donor actor stays free. What is refused is WRITING a port into the tree
+    # while a law is broken — which is the only moment the refusal is worth
+    # anything.
+    #
+    # A missing // KIT-LINEAGE tag reads UNKNOWN and also blocks: an untagged TU
+    # cannot have its laws scoped, so a PASS from it would not be evidence.
+    # ========================================================================
+    if land or activate:
+        import kit_laws
+        targets = [REPO / f"src/d/actor/{actor}.cpp"]
+        targets = [q for q in targets if q.is_file()]
+        if targets:
+            blocked = []
+            for q in targets:
+                rows, lin, ref = kit_laws.check(q)
+                for name, verdict, why in rows:
+                    if verdict in ("VIOLATION", "UNKNOWN"):
+                        blocked.append((q.name, name, verdict, why))
+            if blocked:
+                print("\n=== §426 PRE-FLIGHT REFUSED — the five laws (§423) ===")
+                for fn, law, verdict, why in blocked:
+                    print(f"  [{verdict}] {fn}: law {law}")
+                    print(f"      {why}")
+                print("\nNothing was written. Fix the law (or declare the lineage) and re-run.\nAnalysis without --land/--activate is never gated.")
+                return 3
+            print("§426 pre-flight: all five laws satisfied for "
+                  + ", ".join(q.name for q in targets))
     objnames = []
     if "--objnames" in sys.argv:
         objnames = sys.argv[sys.argv.index("--objnames") + 1].split(",")
@@ -134,6 +222,7 @@ def main():
 
     # ---- codemod ----------------------------------------------------------
     new_txt, counts, notes = codemod_apply(donor_txt)
+    new_txt = _stamp_lineage(new_txt, actor)
     (out / f"{actor}.cpp").write_text(new_txt, encoding="utf-8")
     if src_h.is_file():
         h_txt, h_counts, h_notes = codemod_apply(read(src_h))
@@ -183,7 +272,37 @@ def main():
     arcs = sorted(set(re.findall(r'getObjectRes\("(\w+)"', donor_txt) +
                       re.findall(r'"(\w+)\.arc"', donor_txt)))
     rep += ["## Model arcs", ""]
+    # §375 ARC-NAME SHADOW GUARD. Staging a donor arc whose NAME also exists in
+    # the receiver silently re-points the TP actor of the same name at WW data
+    # (TP res indices vs WW archive => wrong members or NULL => crash). Cost:
+    # the §374/§375 Ep crash, twice. Never stage a colliding name; report it and
+    # require an alias decided with the twin's port.
+    # §388 RETRACTED (user pulled the ruling back — it was made without the
+    # user having the information to judge it, and Foundry should not have
+    # self-approved it). Until a ruling exists, EVERY colliding arc name is
+    # reported and NOTHING is auto-allowed: the guard stays maximally cautious.
+    INTENDED_WW_ARCS = set()
+    tp_arc_names = set()
+    stage_src = read(RECEIVER / "src/d/d_stage.cpp")
+    for m in re.finditer(r'dComIfG_resLoad\([^,]+,\s*"(\w+)"', stage_src):
+        tp_arc_names.add(m.group(1))
+    for tu in (RECEIVER / "src/d/actor").glob("d_a_*.cpp"):
+        try:
+            t = tu.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for m in re.finditer(r'(?:dComIfG_resLoad\([^,]+,|getObjectRes\()\s*"(\w+)"', t):
+            tp_arc_names.add(m.group(1))
     for a in arcs:
+        if a in INTENDED_WW_ARCS:
+            rep.append(f"- `{a}.arc` staged — INTENDED WW load (the receiver's "
+                       f"actor at this name IS the WW port; §388 ruling)")
+        if a in tp_arc_names and a not in INTENDED_WW_ARCS:
+            rep.append(f"- `{a}.arc` **NOT STAGED — ARC-NAME SHADOW**: the receiver "
+                       f"already loads an arc named `{a}` (TP actor of the same "
+                       f"name would read WW data). Stage under an alias when the "
+                       f"WW twin lands.")
+            continue
         srcarc = DONOR_OBJ / f"{a}.arc"
         if not srcarc.is_file():
             rep.append(f"- `{a}.arc` — NOT in donor Object dir (resolve by hand)")

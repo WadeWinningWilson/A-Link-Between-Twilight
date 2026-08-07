@@ -827,6 +827,7 @@ PROCS_NOT_WII \
 /* 0x32D */ X(fpcNm_Obj_Mshokki_e) \
 /* 0x32E */ X(fpcNm_SPC_ITEM01_e) \
 /* 0x32F */ X(fpcNm_OBJ_OTBLE_e) \
+/* 0x330 */ X(fpcNm_EXT_EP_e) \
 
 #define X(name) name,
 enum {

@@ -117,6 +117,22 @@ int fpcNdRq_Execute(node_create_request* i_request) {
     }
 }
 
+#if TARGET_PC
+// §398d: expose the queue head for the pending-consumption probe (d_s_play).
+// Returns 1 with the head request's type/name/phase-id, 0 if the queue is empty.
+int fpcNdRq_DebugHead(int* o_type, int* o_name, int* o_phaseId) {
+    request_node_class* it = (request_node_class*)l_fpcNdRq_Queue.mpHead;
+    if (it == NULL || it->node_create_req == NULL) {
+        return 0;
+    }
+    node_create_request* cr = it->node_create_req;
+    *o_type = (int)cr->parameters;
+    *o_name = (int)cr->name;
+    *o_phaseId = (int)cr->phase_request.id;
+    return 1;
+}
+#endif
+
 int fpcNdRq_Delete(node_create_request* i_request) {
     fpcNdRq_RequestQTo(i_request);
     if (i_request->create_req_methods != NULL && i_request->create_req_methods->delete_method != NULL &&
@@ -256,6 +272,34 @@ node_create_request* fpcNdRq_ChangeNode(u32 i_requestSize, process_node_class* i
         }
         return req;
     }
+#if TARGET_PC
+    // ========================================================================
+    // §398c REFUSAL-AUTOPSY (black-screen class, log 100415: ChangeReq refused
+    // with peek=0, then an overlap stuck at peek=1 forever). This is the ONLY
+    // change-node refusal; name the reason AND autopsy the queue — the
+    // lingering request's name/type/phase-id is the actual culprit. Rate-
+    // limited; strip with §336.
+    // ========================================================================
+    {
+        static int s_n398c = 0;
+        if ((s_n398c++ % 30) == 0) {
+            DuskLog.warn("[fpcNdRq] §398c ChangeNode REFUSED target={} isIng={} (node id={:#x})",
+                         fpcNdRq_IsPossibleTarget(i_procNode), fpcNdRq_IsIng(i_procNode),
+                         (unsigned)i_procNode->base.id);
+            request_node_class* it = (request_node_class*)l_fpcNdRq_Queue.mpHead;
+            int n = 0;
+            while (it != NULL && n < 8) {
+                node_create_request* cr = it->node_create_req;
+                DuskLog.warn("[fpcNdRq] §398c   queue[{}]: type={} name={} creating_id={:#x} "
+                             "phase_id={}",
+                             n, (int)cr->parameters, (int)cr->name, (unsigned)cr->creating_id,
+                             (int)cr->phase_request.id);
+                it = (request_node_class*)NODE_GET_NEXT((&it->node));
+                ++n;
+            }
+        }
+    }
+#endif
 
     return NULL;
 }

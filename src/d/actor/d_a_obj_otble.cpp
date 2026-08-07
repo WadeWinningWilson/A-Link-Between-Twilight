@@ -24,6 +24,9 @@
  * ============================================================================
  */
 // KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_obj_otble.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: Matching
 
 #include "d/dolzel_rel.h" // IWYU pragma: keep
 #include "d/actor/d_a_obj_otble.h"

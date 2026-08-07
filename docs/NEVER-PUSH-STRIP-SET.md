@@ -1,5 +1,57 @@
 # NEVER-PUSH STRIP SET — covenant hard-gate (§113)
 
+> ## ✅ TIER-1 IS NOW GENERATED, NOT MAINTAINED (2026-08-06, roadmap steps 2+3)
+> **The failure this replaces:** the hand list said **34 files** while the build
+> carried **46**, with **36 unlisted** — the whole `ja1_*` JAudio port, the
+> `evt1_*` event stack, `mdoext1_3dline`, `d_kankyo_ww_sky`, `d_ext_tree`,
+> `ww_jpa`. Authored 2026-07-25, never maintained. That is the guaranteed end
+> state of a hand list guarding a boundary that does not physically exist in the
+> build, so it was NOT hand-patched.
+>
+> Tier-1's file lists are now **derived from `files.cmake`** — the build is the
+> only authority on what actually ships. Regenerate after adding any TU:
+> ```
+> python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-tier1
+> ```
+> and gate it in CI / before any push:
+> ```
+> python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --check   # exit 1 if drifted
+> ```
+> **Basis, stated so it is never overread:** sources are build-derived
+> (authoritative); headers are a directory scan (indicative — a header no TU
+> includes still appears). Both classify by **filename convention, NOT declared
+> lineage**. Roadmap step 10's provenance banners (History) upgrade this to real
+> lineage; until then this manifest answers "what is WW-shaped", not "what is
+> WW-derived".
+>
+> ## RULING — THE M6 GATE'S SCOPE (Housing Security, 2026-08-06, roadmap step 4)
+> The greplist gate scans the exe for WW **identity literals**. It cannot detect
+> ported donor **logic** or donor **data constants**, because compiled code
+> carries no such strings. It has therefore been making a TRUE claim about
+> strings that READS as a claim about lineage — including in every
+> `gate [('Ivan', 1)] PASS` reported during the §440-§486 campaign.
+>
+> **Every gate run must from now on report BOTH axes, verbatim:**
+> ```
+> COVENANT GATE — identity literals: CLEAN (or: BREACH, <hits>)
+>                 code lineage:      UNKNOWN (not measured by this gate)
+> ```
+> `code lineage` stays **UNKNOWN** until the census (roadmap step 8) measures it;
+> it is never reported as CLEAN by this instrument. A gate that cannot see a
+> class of breach must say so in its own output — the §473/§480 rule that a
+> clean log must mean "never fired", applied to the covenant gate itself.
+> **EMITTER SHIPPED (2026-08-06, roadmap step 4 — Housing, Bridge being absent):**
+> `tools/ww_crew_restoration_skeleton/covenant_gate.py`
+> ```
+> python tools/ww_crew_restoration_skeleton/covenant_gate.py --strict
+> ```
+> Reports both axes on every run, refuses to report `code lineage` as anything
+> but UNKNOWN, and with `--strict` also fails on WW-layer manifest drift — a
+> gate run against a stale roster says nothing about the files the roster forgot.
+> NEGATIVE-CONTROLLED: run against a planted blob containing `Outset`/`Aryll` it
+> reports `BREACH {'Outset': 1, 'Aryll': 1}` and exits 1. An instrument that has
+> never produced a failure is not a verified instrument.
+
 > ⛔ **Housing Security lane. This is the covenant's last line before a public
 > push.** A bad merge is reversible (`git checkout pre-dusk-api-merge`); a bad
 > **push is un-sendable** — donor bytes or a WW identity literal reaching the
@@ -21,26 +73,118 @@ reaches the exe. The strip set exists to KEEP it that way across promotions.
 
 ## Tier 1 — Never-push SOURCE files (the WW receiver layer)
 
-These 34 tracked files are the fork-local WW-restoration receiver layer. They
+The files listed below are the fork-local WW-restoration receiver layer. They
 exist legitimately in the fork; they are **never promoted to public `main` as a
 set.** A single file leaves this set only by a deliberate clean-slice review
 (§5) — not by riding along in a broad push.
 
-**Includes (18):**
-`include/d/d_albw_dialogue.h` · `d_ext_fado_door.h` · `d_ext_mod_flags.h` ·
-`d_ext_npc_doors.h` · `d_ext_npc_mount.h` · `d_ext_npc_population.h` ·
-`d_ext_quick_equip.h` · `d_ext_save_guard.h` · `d_ext_seq_space.h` ·
-`d_ext_status.h` · `d_ww_itemmdl_pc.h` · `d_ww_itemmdl_test.h` ·
-`include/d/ext_seq/ja1_{bank,event_dump,parser,seq_ctrl,track}.h` ·
-`include/dusk/custom_assets.hpp`
+**The counts live in the generated block, not in this sentence.** The previous
+version of this paragraph hard-coded "34 tracked files" and was wrong by twelve
+within days of being written — a number in prose is a number that rots. Read the
+block.
 
-**Sources (16):**
-`src/d/actor/d_a_ext_plank_span.cpp` · `d_a_ext_vegetation.cpp` ·
-`src/d/d_albw_dialogue.cpp` · `d_ext_mod_flags.cpp` · `d_ext_npc_doors.cpp` ·
-`d_ext_npc_mount.cpp` · `d_ext_npc_population.cpp` · `d_ext_seq_space.cpp` ·
-`d_ww_itemmdl_pc.cpp` · `d_ww_itemmdl_test.cpp` ·
-`src/d/ext_seq/ja1_{bank,event_dump,parser,seq_ctrl,track}.cpp` ·
-`src/dusk/custom_assets.cpp`
+<!-- BEGIN GENERATED TIER-1 — do not hand-edit.
+     Regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-tier1
+     Basis: SOURCES from files.cmake (authoritative, the build is the only
+     authority); HEADERS from a directory scan (indicative only). Both
+     classify by filename convention, NOT by declared lineage — roadmap
+     step 10's provenance banners upgrade that. -->
+
+**Sources (48) — generated from `files.cmake`:**
+
+- `src/d/actor/d_a_ext_ep.cpp` — WW-restoration actor
+- `src/d/actor/d_a_ext_plank_span.cpp` — WW-restoration actor
+- `src/d/actor/d_a_ext_vegetation.cpp` — WW-restoration actor
+- `src/d/actor/d_a_ww_demo00.cpp` — WW-restoration actor
+- `src/d/d_albw_dialogue.cpp` — shared ALBW/WW dialogue surface (§113 note)
+- `src/d/d_ext_dmesg.cpp` — WW-restoration subsystem
+- `src/d/d_ext_mod_flags.cpp` — WW-restoration subsystem
+- `src/d/d_ext_npc_doors.cpp` — WW-restoration subsystem
+- `src/d/d_ext_npc_mount.cpp` — WW-restoration subsystem
+- `src/d/d_ext_npc_population.cpp` — WW-restoration subsystem
+- `src/d/d_ext_room_verify.cpp` — WW-restoration subsystem
+- `src/d/d_ext_save_flags.cpp` — WW-restoration subsystem
+- `src/d/d_ext_seq_space.cpp` — WW-restoration subsystem
+- `src/d/d_ext_tree.cpp` — WW-restoration subsystem
+- `src/d/d_ext_ww_actor_shims.cpp` — WW-restoration subsystem
+- `src/d/d_kankyo_ww.cpp` — WW leg inside a receiver-named TU
+- `src/d/d_kankyo_ww_sky.cpp` — WW leg inside a receiver-named TU
+- `src/d/d_ww_itemmdl_pc.cpp` — WW-specific receiver subsystem
+- `src/d/d_ww_itemmdl_test.cpp` — WW-specific receiver subsystem
+- `src/d/ext_evt/evt1_boundary.cpp` — JEvent1 parallel donor stack (WW events)
+- `src/d/ext_evt/evt1_event_data.cpp` — JEvent1 parallel donor stack (WW events)
+- `src/d/ext_evt/evt1_event_manager.cpp` — JEvent1 parallel donor stack (WW events)
+- `src/d/ext_line/mdoext1_3dline.cpp` — MDoExt1 parallel donor stack (WW 3D-line)
+- `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem
+- `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasbank.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasbnkparser.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jascalc.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jaschannel.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasdspchannel.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasnotemgr.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasouterparam.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasplayer.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasregisterparam.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasseqctrl.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jasseqparser.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jastrack.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jastrackinterrupt.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_jastrackport.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_kernel.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_native.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_oscillator.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_parser.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_seq_ctrl.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ext_seq/ja1_track.cpp` — JAudio1 parallel donor stack (WW audio)
+- `src/d/ww_jpa.cpp` — WW-specific receiver subsystem
+- `src/d/ww_jpa_bind.cpp` — WW-specific receiver subsystem
+
+**Includes (40) — directory scan, indicative:**
+
+- `include/d/actor/d_a_e_ww.h` — WW leg inside a receiver-named TU
+- `include/d/actor/d_a_ww_demo00.h` — WW-restoration actor
+- `include/d/d_albw_dialogue.h` — shared ALBW/WW dialogue surface (§113 note)
+- `include/d/d_ext_dmesg.h` — WW-restoration subsystem
+- `include/d/d_ext_fado_door.h` — WW-restoration subsystem
+- `include/d/d_ext_mod_flags.h` — WW-restoration subsystem
+- `include/d/d_ext_npc_doors.h` — WW-restoration subsystem
+- `include/d/d_ext_npc_mount.h` — WW-restoration subsystem
+- `include/d/d_ext_npc_population.h` — WW-restoration subsystem
+- `include/d/d_ext_quick_equip.h` — WW-restoration subsystem
+- `include/d/d_ext_room_verify.h` — WW-restoration subsystem
+- `include/d/d_ext_save_flags.h` — WW-restoration subsystem
+- `include/d/d_ext_save_flags_route.h` — WW-restoration subsystem
+- `include/d/d_ext_save_guard.h` — WW-restoration subsystem
+- `include/d/d_ext_scope_msg.h` — WW-restoration subsystem
+- `include/d/d_ext_seq_space.h` — WW-restoration subsystem
+- `include/d/d_ext_status.h` — WW-restoration subsystem
+- `include/d/d_ext_tree.h` — WW-restoration subsystem
+- `include/d/d_ext_ww_actor_shims.h` — WW-restoration subsystem
+- `include/d/d_kankyo_ww.h` — WW leg inside a receiver-named TU
+- `include/d/d_kankyo_ww_sky.h` — WW leg inside a receiver-named TU
+- `include/d/d_ww_itemmdl_pc.h` — WW-specific receiver subsystem
+- `include/d/d_ww_itemmdl_test.h` — WW-specific receiver subsystem
+- `include/d/ext_evt/evt1_boundary.h` — JEvent1 parallel donor stack (WW events)
+- `include/d/ext_line/mdoext1_3dline.h` — MDoExt1 parallel donor stack (WW 3D-line)
+- `include/d/ext_plugin/ww_import_gate.h` — WW-specific receiver subsystem
+- `include/d/ext_seq/ja1_bank.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_boundary.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_dsp_boundary.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_event_dump.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_jasbank.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_jaschannel.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_jasseqparser.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_jastrack.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_native.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_oscillator.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_parser.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_seq_ctrl.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ext_seq/ja1_track.h` — JAudio1 parallel donor stack (WW audio)
+- `include/d/ww_jpa.h` — WW-specific receiver subsystem
+
+<!-- END GENERATED TIER-1 -->
 
 **Why each cluster is covenant surface:**
 - `d_ext_npc_*` / `d_a_ext_*` — the WW actor mount/population/door/vegetation
@@ -97,7 +241,17 @@ item: scrub it from any Tier-2 file before that file promotes to public source.
 
 ## The M6 greplist gate (MANDATORY before any push)
 
-Run on the exe **built from the exact tree about to be pushed** (a merge/reconfigure
+**Run the manifest drift check FIRST** — a gate run against a stale roster tells
+you nothing about the files the roster forgot:
+
+```bash
+python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --check
+```
+Exit 1 = a WW-owned TU is compiled but unlisted. Regenerate (`--emit-tier1`) and
+re-read the diff before continuing; a new WW TU appearing here is expected, a
+RECEIVER TU appearing here means a filename convention has been violated.
+
+Then run on the exe **built from the exact tree about to be pushed** (a merge/reconfigure
 can change what gets packaged — re-run, never trust a prior CLEAN):
 
 ```bash

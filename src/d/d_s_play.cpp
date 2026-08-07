@@ -598,6 +598,40 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
 #endif
     dComIfG_Bgsp().ClrMoveFlag();
 
+#if TARGET_PC
+    // ========================================================================
+    // §398 PENDING-CONSUMPTION PROBE (tale black-screen, log 092751: point-200
+    // pending armed gFrm=2877 and NEVER consumed). This is the ONLY consumer;
+    // the 4 ways it can starve, discriminated per fire (rate-limited):
+    //   H1 fopOvlpM_IsPeek() stuck (an overlap wipe never closed — suspect:
+    //      the native door entry's wipe)  H2 resetToOpening  H3 ChangeReq
+    //      returns 0 every frame (request refused)  H4 pending disabled late.
+    // Change-only-ish: logs only while a pending exists. Strip with §336.
+    // ========================================================================
+    {
+        static int s_n398 = 0;
+        if (dComIfGp_isEnableNextStage() && (s_n398++ % 60) == 0) {
+            // §398d: the queue-head request's phase names WHERE a stuck
+            // transition is parked (fadeFase: 0 IsDoingOverlap, 1 IsDoneOverlap,
+            // 2 Execute, 3 ClearOverlap, 4 IsDoneOverlap).
+            extern int fpcNdRq_DebugHead(int*, int*, int*);
+            extern int fopOvlpM_DebugState(int*, int*, int*, int*, int*, int*);
+            int qType = -1, qName = -1, qPhase = -1;
+            const int qHas = fpcNdRq_DebugHead(&qType, &qName, &qPhase);
+            // §398e: NEVER call fopOvlpM_IsDone here — cReq_Is_Done consumes
+            // the one-shot done latch the scene request itself waits on.
+            int oAct = -1, oPeek = -1, oPh = -1, oBF = -1, oTask = -1, oTF = -1;
+            const int oHas =
+                fopOvlpM_DebugState(&oAct, &oPeek, &oPh, &oBF, &oTask, &oTF);
+            DuskLog.warn("[Scn] §398 pending='{}' pt={} reset={} gFrm={} q={}:{}/{}ph{} "
+                         "ovlp={}:act{} peek{} ph{} bf{:#x} task{} tf{:#x}",
+                         dComIfGp_getNextStageName(), (int)dComIfGp_getNextStagePoint(),
+                         dComIfG_resetToOpening(i_this) ? 1 : 0, (int)g_Counter.mCounter0,
+                         qHas, qType, qName, qPhase, oHas, oAct, oPeek, oPh,
+                         (unsigned)oBF, oTask, (unsigned)oTF);
+        }
+    }
+#endif
     if (!fopOvlpM_IsPeek() && !dComIfG_resetToOpening(i_this)) {
         if (dComIfGp_isEnableNextStage()
             #if DEBUG
@@ -614,6 +648,17 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
             #endif
 
             int rt = fopScnM_ChangeReq(i_this, fpcNm_PLAY_SCENE_e, l_wipeType[wipe], 5);
+#if TARGET_PC
+            // §398 H3: a refused request (rt=0) retries silently forever.
+            {
+                static int s_n398r = 0;
+                if (rt == 0 && (s_n398r++ % 60) == 0) {
+                    DuskLog.warn("[Scn] §398 ChangeReq REFUSED wipe={} pending='{}' gFrm={}",
+                                 (int)wipe, dComIfGp_getNextStageName(),
+                                 (int)g_Counter.mCounter0);
+                }
+            }
+#endif
 
             int hour = dKy_getdaytime_hour();
             BOOL isDaytime = (hour >= 6 && hour < 18) ? FALSE : TRUE;

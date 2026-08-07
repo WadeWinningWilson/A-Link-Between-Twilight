@@ -3,6 +3,10 @@
 // Logic is the donor's dSv_event_c, LINE FOR LINE (d_save.cpp:1189-1214);
 // only the storage identity differs (this block, not TP's table).
 // ============================================================
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 #include "d/d_ext_save_flags.h"
 
 #include <cstring>
@@ -14,6 +18,7 @@ static dExtSvFlags_event_c s_wwEventFlags;
 static const u32 kMagic = 0x57574556;  // 'WWEV'
 static const u16 kVersion = 1;
 
+// KIT-DONOR-HUNK: d/d_save.cpp Matching
 void dExtSvFlags_event_c::init() {
     std::memset(mFlags, 0, sizeof(mFlags));  // donor init = zeroed
 }
@@ -39,6 +44,7 @@ u8 dExtSvFlags_event_c::getEventReg(u16 i_reg) {
     return mFlags[i_reg >> 8] & (u8)i_reg;   // donor d_save.cpp:1210 shape
 }
 
+// KIT-DONOR-HUNK-END
 BOOL dExtWwSv_isEventBit(u16 i_no) { return s_wwEventFlags.isEventBit(i_no); }
 void dExtWwSv_onEventBit(u16 i_no) { s_wwEventFlags.onEventBit(i_no); }
 void dExtWwSv_offEventBit(u16 i_no) { s_wwEventFlags.offEventBit(i_no); }

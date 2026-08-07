@@ -2,6 +2,9 @@
  * d_ext_npc_mount.cpp — Plan R generic external-NPC mount (L1 + Slice I lighting/blink).
  */
 // KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_room_verify.h"  // §389
 

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 /**
  * @file d_a_demo00.cpp
  * 
@@ -1647,6 +1651,7 @@ static void ke_set(daDemo00_c* i_this) {
     }
 }
 
+// KIT-DONOR-HUNK: d/d_resorce.cpp MatchingFor
 #if TARGET_PC
 // §187 Bug 1: does this demo model cel-shade through a WW toon stage (a texture named
 // "ZA*")? Such models render BLACK under MAJI — the port ADDED setLightTevColorType_MAJI
@@ -1674,6 +1679,7 @@ static bool demoModelUsesZAtoon(J3DModel* i_model) {
     }
     return false;
 }
+// KIT-DONOR-HUNK-END
 #endif
 
 static int daDemo00_Draw(daDemo00_c* i_this) {

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 /**
  * ja1_bank.cpp — §53 bank residency via shadow-wave virtual addresses.
  *
@@ -9,6 +13,9 @@
 
 #include "dolphin/types.h"
 
+#include "d/ext_seq/ja1_jasbank.h"  // ===== §369 A4: JAudio1 bank/wave-bank types (native supply)
+#include "d/ext_seq/ja1_native.h"   // ===== §369 A4: THE GATE + native supply decls
+
 #if TARGET_PC
 
 #include <algorithm>
@@ -17,8 +24,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "JSystem/JKernel/JKRHeap.h"
@@ -68,6 +77,10 @@ struct Inst {
 
 struct WaveArc {
     u32 virtBase = 0;
+    // §369 A4: the WW wave-bank (WSYS) index this arc realizes — the
+    // number donor BankMgr::assignWaveBank pairs a bank with (the AAF
+    // slice index the Bridge staged: wsys_<n>.bin).
+    int wsIndex = -1;
     std::string leaf;
     std::vector<u8> bytes;
     std::unordered_map<u32, JASWaveInfo> waves;  // waveId → info
@@ -365,13 +378,14 @@ WaveArc* findOrMakeArc(u32 virtBase) {
 }
 
 bool loadOnePair(const fs::path& root, const char* ibnkName, const char* wsysName,
-                 u32 virtBase) {
+                 u32 virtBase, int wsIndex) {
     std::vector<u8> wsys;
     if (!readFile(root / "aaf_slices" / wsysName, &wsys)) {
         DuskLog.warn("[ExtSeq] §53 missing {}", wsysName);
         return false;
     }
     WaveArc* arc = findOrMakeArc(virtBase);
+    arc->wsIndex = wsIndex;  // §369 A4: donor assignWaveBank pairing key
     if (!parseWsys(wsys.data(), wsys.size(), arc)) {
         DuskLog.warn("[ExtSeq] §53 WSYS parse failed {}", wsysName);
         return false;
@@ -422,6 +436,308 @@ WaveArc* findArc(u32 virtBase) {
     return nullptr;
 }
 
+// ============================================================
+// §369 A4 — NATIVE WAVE SUPPLY (task-4 seam): the donor
+// WaveBankMgr::getWaveBank row realized over the wave arcs the bridge
+// ALREADY loads. Each NativeJa1WaveBank wraps ONE bridge WaveArc:
+//   - getWaveHandle(waveId) resolves through the bridge's parsed WSYS
+//     wave-info table (parseWsys above — the same donor JASWSParser
+//     header shapes), repacked into the donor Driver::Wave_ block the
+//     JA1 noteOn/setWaveInfo path consumes.
+//   - getWavePtr() returns the SAME shadow-space virtual address the
+//     bridge mints (kShadowVirtualBase + virtBase + offset) — the .aw
+//     bytes stay in the bridge's buffers, registered with DuskDsp by
+//     ja1Bank_register(). NO arc is re-mounted.
+//   - Wave_::field_0x24 points at the owning bank's mLoadedFlag: the
+//     donor channel update checks field_0x24[0]==0 as "wave not
+//     resident" and force-stops the voice — wired to the bridge's
+//     register/unregister lifecycle below, which is exactly the donor
+//     TBasicWaveBank heap-resident semantic.
+// ============================================================
+
+class NativeJa1WaveHandle final : public JAudio1::TWaveHandle {
+public:
+    JAudio1::Driver::Wave_ mWave{};
+    intptr_t mVirtAddr = 0;
+    const JAudio1::TWaveInfo* getWaveInfo() const override { return &mWave; }
+    intptr_t getWavePtr() const override { return mVirtAddr; }
+};
+
+class NativeJa1WaveBank final : public JAudio1::TWaveBank {
+public:
+    u32 mVirtBase = 0;
+    int mWsIndex = -1;
+    // donor "wave resident" flag — Wave_::field_0x24 target (u32[1]).
+    u32 mLoadedFlag = 0;
+    std::unordered_map<u32, NativeJa1WaveHandle> mHandles;
+
+    JAudio1::TWaveHandle* getWaveHandle(u32 waveId) const override {
+        auto it = mHandles.find(waveId);
+        if (it == mHandles.end()) {
+            return nullptr;  // donor "no such wave" path — noteOn bails
+        }
+        return const_cast<NativeJa1WaveHandle*>(&it->second);
+    }
+    // §369: arc residency (load/erase) stays with the bridge — the
+    // donor TWaveArc surface is not consumed by the noteOn path.
+    JAudio1::TWaveArc* getWaveArc(int) override { return nullptr; }
+};
+
+std::vector<std::unique_ptr<NativeJa1WaveBank>> s_nativeWaveBanks;
+// host-endian IBNK images handed to the donor BNKParser (kept alive
+// for the session — the parser copies what it keeps, but cheap+safe).
+std::vector<std::vector<u8>> s_nativeIbnkHost;
+bool s_nativeBanksRegistered = false;
+
+NativeJa1WaveBank* buildNativeWaveBank(const WaveArc& arc) {
+    auto bank = std::make_unique<NativeJa1WaveBank>();
+    bank->mVirtBase = arc.virtBase;
+    bank->mWsIndex = arc.wsIndex;
+    bank->mLoadedFlag = arc.registered ? 1u : 0u;
+    for (const auto& kv : arc.waves) {
+        const u32 waveId = kv.first;
+        const JASWaveInfo& wi = kv.second;
+        NativeJa1WaveHandle& h = bank->mHandles[waveId];
+        JAudio1::Driver::Wave_& w = h.mWave;
+        // JASWaveInfo (bridge parseWsys) -> donor Wave_ field map
+        // (§368 merged Wave_/TWaveInfo decl — informative names kept
+        // as comments there).
+        w.field_0x0 = 0;                          // mBlockType (not consumed by the noteOn path)
+        w.field_0x1 = wi.mWaveFormat;
+        w.field_0x2 = wi.mBaseKey;
+        w.field_0x3 = 0;
+        w.field_0x4 = wi.mSampleRate;
+        w.field_0x8 = wi.mOffsetStart;            // mWavePtrOffs
+        w.field_0xc = wi.mOffsetLength;
+        w.field_0x10 = wi.mLoopFlag;
+        w.field_0x14 = wi.mLoopStartSample;
+        w.field_0x18 = wi.mLoopEndSample;
+        w.field_0x1c = wi.mSampleCount;
+        w.field_0x20 = wi.mpLast;
+        w.field_0x22 = wi.mpPenult;
+        w.field_0x24 = &bank->mLoadedFlag;        // donor "wave loaded" table (checked [0]!=0)
+        w.field_0x28 = 0;
+        h.mVirtAddr = static_cast<intptr_t>(dusk::audio::kShadowVirtualBase + arc.virtBase +
+                                            static_cast<u32>(wi.mOffsetStart));
+    }
+    NativeJa1WaveBank* raw = bank.get();
+    s_nativeWaveBanks.push_back(std::move(bank));
+    return raw;
+}
+
+/** §369: donor field_0x24[0] residency flag follows the bridge's shadow-wave registration. */
+void nativeSetArcLoaded(u32 virtBase, bool loaded) {
+    for (auto& b : s_nativeWaveBanks) {
+        if (b->mVirtBase == virtBase) {
+            b->mLoadedFlag = loaded ? 1u : 0u;
+        }
+    }
+}
+
+// ============================================================
+// §369 A4 — staged-IBNK host-endian restore. The Bridge stages raw
+// big-endian AAF slices; the donor BNKParser (ja1_jasbnkparser.cpp,
+// verbatim) reads fields directly, which is correct only on a BE host.
+// The port's own convention is "convert at load, parse verbatim"
+// (e.g. bmd_endian_restore.cpp; the JA2 JASBNKParser receives
+// pre-restored data the same way) — this walker applies that seam to
+// the staged IBNK image, swapping EXACTLY the fields the donor parser
+// reads (struct map = BNKParser::THeader/TInst/TOsc/TRand/TSense/
+// TKeymap/TVmap/TPerc/TPmap in ja1_jasbank.h), with a visited-offset
+// set because oscillators/tables are shared between instruments.
+// ============================================================
+
+void swap16At(u8* p) {
+    std::swap(p[0], p[1]);
+}
+void swap32At(u8* p) {
+    std::swap(p[0], p[3]);
+    std::swap(p[1], p[2]);
+}
+
+struct IbnkEndianWalker {
+    u8* d = nullptr;
+    size_t n = 0;
+    std::unordered_set<u32> visited;
+
+    bool ok(u32 off, u32 need) const { return off != 0 && off + need <= n; }
+    bool seen(u32 off) { return !visited.insert(off).second; }
+    u32 u32At(u32 off) const {
+        u32 v;
+        std::memcpy(&v, d + off, 4);
+        return v;
+    }
+    // swap a u32 field and return its host value
+    u32 sw32(u32 off) {
+        swap32At(d + off);
+        return u32At(off);
+    }
+
+    void oscTable(u32 off) {
+        if (!ok(off, 6) || seen(off)) {
+            return;
+        }
+        // rows of 3 s16; terminator row has row[0] > 10 (donor
+        // getOscTableEndPtr — terminator row included).
+        u32 p = off;
+        while (ok(p, 6)) {
+            swap16At(d + p);
+            swap16At(d + p + 2);
+            swap16At(d + p + 4);
+            s16 mode;
+            std::memcpy(&mode, d + p, 2);
+            p += 6;
+            if (mode > 0xa) {
+                break;
+            }
+        }
+    }
+
+    void osc(u32 off) {
+        if (!ok(off, 0x18) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x4);                    // rate f32
+        const u32 atk = sw32(off + 0x8);    // attack table off
+        const u32 rel = sw32(off + 0xc);    // release table off
+        sw32(off + 0x10);                   // f32
+        sw32(off + 0x14);                   // f32
+        oscTable(atk);
+        oscTable(rel);
+    }
+
+    void rand(u32 off) {
+        if (!ok(off, 0xc) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x4);
+        sw32(off + 0x8);
+    }
+
+    void sense(u32 off) {
+        if (!ok(off, 0xc) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x4);
+        sw32(off + 0x8);
+    }
+
+    void vmap(u32 off) {
+        if (!ok(off, 0x10) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x4);
+        sw32(off + 0x8);
+        sw32(off + 0xc);
+    }
+
+    void keymap(u32 off) {
+        if (!ok(off, 0x8) || seen(off)) {
+            return;
+        }
+        const u32 count = sw32(off + 0x4);
+        if (count > 0x80) {
+            return;  // malformed — leave the rest untouched
+        }
+        for (u32 v = 0; v < count; v++) {
+            const u32 vOffPos = off + 0x8 + v * 4;
+            if (!ok(vOffPos, 4)) {
+                break;
+            }
+            vmap(sw32(vOffPos));
+        }
+    }
+
+    void inst(u32 off) {
+        if (!ok(off, 0x2c) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x8);   // volume f32
+        sw32(off + 0xc);   // pitch f32
+        for (int j = 0; j < 2; j++) {
+            osc(sw32(off + 0x10 + j * 4));
+        }
+        for (int j = 0; j < 2; j++) {
+            rand(sw32(off + 0x18 + j * 4));
+        }
+        for (int j = 0; j < 2; j++) {
+            sense(sw32(off + 0x20 + j * 4));
+        }
+        const u32 keyCount = sw32(off + 0x28);
+        if (keyCount > 0x80) {
+            return;
+        }
+        for (u32 k = 0; k < keyCount; k++) {
+            const u32 kOffPos = off + 0x2c + k * 4;
+            if (!ok(kOffPos, 4)) {
+                break;
+            }
+            keymap(sw32(kOffPos));
+        }
+    }
+
+    void pmap(u32 off) {
+        if (!ok(off, 0x18) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x0);   // f32
+        sw32(off + 0x4);   // f32
+        for (int j = 0; j < 2; j++) {
+            rand(sw32(off + 0x8 + j * 4));
+        }
+        const u32 veloCount = sw32(off + 0x10);
+        if (veloCount > 0x80) {
+            return;
+        }
+        for (u32 v = 0; v < veloCount; v++) {
+            const u32 vOffPos = off + 0x14 + v * 4;
+            if (!ok(vOffPos, 4)) {
+                break;
+            }
+            vmap(sw32(vOffPos));
+        }
+    }
+
+    void perc(u32 off) {
+        if (!ok(off, 0x408) || seen(off)) {
+            return;
+        }
+        sw32(off + 0x0);  // mMagic ('PER2' check in the donor parser)
+        for (u32 j = 0; j < 0x80; j++) {
+            pmap(sw32(off + 0x88 + j * 4));
+        }
+        for (u32 j = 0; j < 0x80; j++) {
+            swap16At(d + off + 0x308 + j * 2);  // release u16 table
+        }
+    }
+
+    bool run() {
+        if (n < 0x3e4) {
+            return false;
+        }
+        sw32(0x0);  // 'IBNK'
+        sw32(0x4);
+        sw32(0x8);  // virtual bank id (registBankBNK reads this)
+        if (u32At(0x0) != 0x49424E4Bu) {  // 'IBNK' host-endian now
+            return false;
+        }
+        for (u32 i = 0; i < 0x80; i++) {
+            inst(sw32(0x24 + i * 4));
+        }
+        for (u32 i = 0; i < 12; i++) {
+            perc(sw32(0x3b4 + i * 4));
+        }
+        return true;
+    }
+};
+
+bool restoreIbnkHostEndian(std::vector<u8>* buf) {
+    IbnkEndianWalker w;
+    w.d = buf->data();
+    w.n = buf->size();
+    return w.run();
+}
+
 }  // namespace
 
 bool ja1Bank_loadPackage(const fs::path& packageRoot) {
@@ -434,8 +750,8 @@ bool ja1Bank_loadPackage(const fs::path& packageRoot) {
     s_arcs.reserve(4);
     s_banks.reserve(4);
 
-    bool ok0 = loadOnePair(packageRoot, "ibnk_0.bin", "wsys_0.bin", kVirtBaseZelda);
-    bool ok2 = loadOnePair(packageRoot, "ibnk_21.bin", "wsys_2.bin", kVirtBaseLink);
+    bool ok0 = loadOnePair(packageRoot, "ibnk_0.bin", "wsys_0.bin", kVirtBaseZelda, 0);
+    bool ok2 = loadOnePair(packageRoot, "ibnk_21.bin", "wsys_2.bin", kVirtBaseLink, 2);
     s_loaded = ok0;  // bank 0 is required for island BGM; bank 2 optional
     if (!ok2) {
         DuskLog.warn("[ExtSeq] §53 bank-2 pair missing — continuing with bank 0 only");
@@ -465,6 +781,7 @@ void ja1Bank_register() {
         dusk::audio::registerShadowWave(arc.virtBase, static_cast<u32>(arc.bytes.size()),
                                         arc.bytes.data());
         arc.registered = true;
+        nativeSetArcLoaded(arc.virtBase, true);  // §369: donor field_0x24[0] residency flag
     }
     s_registered = true;
     DuskLog.info("[ExtSeq] §53 shadow-wave registered arcs={}", s_arcs.size());
@@ -478,6 +795,7 @@ void ja1Bank_unregister() {
         if (arc.registered) {
             dusk::audio::unregisterShadowWave(arc.virtBase);
             arc.registered = false;
+            nativeSetArcLoaded(arc.virtBase, false);  // §369: donor forceStop-on-unloaded path arms
         }
     }
     s_registered = false;
@@ -494,6 +812,11 @@ void ja1Bank_clear() {
 JASChannel* ja1Bank_noteOn(u8 bankId, u8 prog, u8 key, u8 vel, u16 prio,
                            void (*cb)(u32, JASChannel*, JASDsp::TChannel*, void*),
                            void* cbArg) {
+    if (DUSK_JA1_NATIVE) {
+        // ===== §369 THE GATE: gate-ON, the vanilla BankMgr::noteOn path
+        // owns every voice — the bridge's JA2-channel noteOn is fenced.
+        return nullptr;
+    }
     if (!s_loaded || !s_registered) {
         return nullptr;
     }
@@ -601,6 +924,89 @@ void ja1Bank_applyWwVelocityCurve(JASChannel* ch, f32 initVol, u8 vel) {
 
 bool ja1Bank_isExtSeqChannel(const JASChannel* ch) {
     return ch != nullptr && dusk::audio::isExtSeqOwned(ch->mBankDisposeID);
+}
+
+// ============================================================
+// §369 A4 — gate-ON native bank registration (task-5 start chain,
+// bank leg). Follows the donor JAIBankWave::init idiom verbatim:
+//   BankMgr::init(0x100);
+//   registBankBNK(slot, ibnk) for each staged bank (slot = AAF order;
+//     the BMS-visible virtual id comes from IBNK+8 via setVir2PhyTable
+//     inside registBankBNK, exactly the donor);
+//   assignWaveBank(slot, wsIndex) pairing each bank with its wave arc
+//     (wsIndex = the staged wsys slice number).
+// The IBNK image handed to the donor parser is the staged BE slice
+// after the host-endian restore above (§369 named adaptation
+// "convert at load, parse verbatim" — the port's own resource seam).
+// ============================================================
+bool ja1Native_registerBanks() {
+    if (!DUSK_JA1_NATIVE) {
+        return false;  // §369 THE GATE — inert gate-OFF
+    }
+    if (s_nativeBanksRegistered) {
+        return true;
+    }
+    if (!s_loaded || s_banks.empty()) {
+        DuskLog.warn("[ExtSeq] §369 native banks: bridge package not loaded");
+        return false;
+    }
+    JAudio1::BankMgr::init(0x100);  // donor JAIBankWave.cpp:52
+    int slot = 0;
+    std::vector<int> slotWs;
+    for (const Bank& bank : s_banks) {
+        const WaveArc* arc = findArc(bank.virtBase);
+        if (arc == nullptr || arc->wsIndex < 0) {
+            DuskLog.warn("[ExtSeq] §369 native banks: bank id={} has no wave arc", bank.bankId);
+            continue;
+        }
+        s_nativeIbnkHost.push_back(bank.ibnkRaw);  // copy — bridge keeps its BE original
+        std::vector<u8>& host = s_nativeIbnkHost.back();
+        if (!restoreIbnkHostEndian(&host)) {
+            DuskLog.warn("[ExtSeq] §369 native banks: IBNK endian restore failed (bank id={})",
+                         bank.bankId);
+            s_nativeIbnkHost.pop_back();
+            continue;
+        }
+        if (!JAudio1::BankMgr::registBankBNK(slot, host.data())) {
+            DuskLog.warn("[ExtSeq] §369 native banks: registBankBNK failed (slot={})", slot);
+            continue;
+        }
+        slotWs.push_back(arc->wsIndex);
+        slot++;
+    }
+    // donor JAIBankWave.cpp:60-62 — second pass assigns wave banks.
+    for (int i = 0; i < slot; i++) {
+        if (!JAudio1::BankMgr::assignWaveBank(i, slotWs[i])) {
+            DuskLog.warn("[ExtSeq] §369 native banks: assignWaveBank({}, {}) failed", i,
+                         slotWs[i]);
+        }
+    }
+    s_nativeBanksRegistered = slot > 0;
+    DuskLog.info("[ExtSeq] §369 native banks registered: {} bank(s), {} wave bank(s)", slot,
+                 s_nativeWaveBanks.size());
+    return s_nativeBanksRegistered;
+}
+
+/**
+ * §369 A4 — the donor WaveBankMgr::getWaveBank row's data source
+ * (called from JAudio1::WaveBankMgr::getWaveBank below). wsIndex is
+ * the donor wave-bank number; NULL = donor "no wave bank registered".
+ */
+JAudio1::TWaveBank* ja1NativeGetWaveBank(int wsIndex) {
+    if (!DUSK_JA1_NATIVE) {
+        return nullptr;  // §369 THE GATE
+    }
+    for (auto& b : s_nativeWaveBanks) {
+        if (b->mWsIndex == wsIndex) {
+            return b.get();
+        }
+    }
+    for (const auto& arc : s_arcs) {
+        if (arc.wsIndex == wsIndex && !arc.waves.empty()) {
+            return buildNativeWaveBank(arc);
+        }
+    }
+    return nullptr;
 }
 
 u32 ja1Bank_dumpKeyRegionsCsv(const char* outPath) {
@@ -899,6 +1305,25 @@ void ja1Voice_onDemoMessageOpen(u32 donorMsgId) {
 
 }  // namespace ExtSeq
 
+// ============================================================
+// §369 A4 — donor JASWaveBankMgr.h row (the ONE the JA1 bank layer
+// consumes: BankMgr::assignWaveBank -> getWaveBank). Realized over the
+// ExtSeq-loaded arcs (see ja1NativeGetWaveBank above); the donor's
+// wave-arc DVD/ARAM loading side (JASWaveArcLoader/registWaveBankWS)
+// is NOT ported — the bridge already loads and registers the .aw data,
+// which is exactly the residency this row hands back.
+// ============================================================
+namespace JAudio1 {
+namespace WaveBankMgr {
+
+/* JASWaveBankMgr.cpp getWaveBank — PC realization (§369) */
+TWaveBank* getWaveBank(int param_1) {
+    return ExtSeq::ja1NativeGetWaveBank(param_1);
+}
+
+}  // namespace WaveBankMgr
+}  // namespace JAudio1
+
 #else  // !TARGET_PC
 
 namespace ExtSeq {
@@ -921,7 +1346,15 @@ void ja1Voice_register() {}
 void ja1Voice_unregister() {}
 void ja1Voice_clear() {}
 void ja1Voice_onDemoMessageOpen(u32) {}
+bool ja1Native_registerBanks() { return false; }
+JAudio1::TWaveBank* ja1NativeGetWaveBank(int) { return nullptr; }
 
 }  // namespace ExtSeq
+
+namespace JAudio1 {
+namespace WaveBankMgr {
+TWaveBank* getWaveBank(int) { return NULL; }  // §369: non-PC — JA1 port is PC-only
+}  // namespace WaveBankMgr
+}  // namespace JAudio1
 
 #endif  // TARGET_PC

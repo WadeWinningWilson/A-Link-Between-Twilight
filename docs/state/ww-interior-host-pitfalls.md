@@ -146,12 +146,25 @@ When a host stage IS multi-room (or is forced multi-room by Pitfall A), each roo
   22 KB `ALINK` + `METER2`. 6 rooms → 6 players → `JKRExpHeap.cpp:245` OOM. The
   `roomLoader` pin (`setRoomNo(param_2)` before PLYR decodes) already makes `stageRoom`
   authoritative — the reconcile was obsolete AND harmful. **Do not reinstate it.**
-- **№91 player-create latch (ADDED):** `dStage_actorCreate` queues `ALINK` **async** —
-  `dComIfGp_getPlayer(0)` stays NULL for several room decodes. So the arrival room
-  decoded by multiple procs re-created the player before `havePlayer` flipped. The latch
-  enforces TP's **one-player** invariant across the async window: once the create is
-  queued, further `playerInit` passes for the same arrival skip until Link materialises
-  or the stage identity changes. PC-only (native TP is synchronous and never needed it).
+- **№91 player-create latch (ADDED; №282 SCOPED + LATCH-VERIFIED 2026-08-05):**
+  `dStage_actorCreate` queues `ALINK` **async** — `dComIfGp_getPlayer(0)` stays NULL for
+  several room decodes. So the arrival room decoded by multiple procs re-created the
+  player before `havePlayer` flipped. The latch enforces TP's **one-player** invariant
+  across the async window: once the create is queued, further `playerInit` passes for
+  the same arrival skip until Link materialises or the stage identity changes. PC-only
+  (native TP is synchronous and never needed it).
+  **№282 incident:** the guard originally ran GLOBALLY (the computed `wwHost` was
+  discarded via `(void)wwHost`) and its latch had no teardown observer — on a mainline
+  **same-stage same-point reload** (F_SP102 respawn) the stale latch skipped the player
+  create entirely → room tag actors deref'd a NULL player at create
+  (`daTagMstop_c::create → fopAcM_searchPlayerAngleY`, fault `0x5c0`), deterministic.
+  **Now:** the skip fires only on WW host stages (`dExtWwSave_isWwHostStage`) AND only
+  after `fpcM_IsCreating(s_playerCreateId)` confirms the recorded ALINK create request
+  is genuinely still queued; a stale latch is cleared and a fresh player is created
+  (log `№282 stale №91 latch`). Mainline TP is back to native pre-№91 behavior.
+  **Same-stage reloads happen INSIDE WW hosts too** (exit-ful teardown = same-stage
+  reload — the Grandma tale pattern), so the queue verification is what protects the
+  WW wing from this exact crash; the scoping alone would not have.
 
 **Lesson:** on this PC port, any per-room engine action that assumes synchronous player
 creation can duplicate under async load. Guard state that must be created "once per

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 /**
  * §59 / ASK 17 — offline event dump from engine Ja1Parser (no Bridge code).
  * Walks each open_track entry independently with per-track local ticks.

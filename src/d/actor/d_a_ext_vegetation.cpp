@@ -37,6 +37,18 @@
  * `le=true` to GXSETARRAY, so the identical flag applies here.
  * =========================================================================
  */
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/d_grass.cpp Matching
+// KIT-DONOR: d/actor/d_a_grass.cpp Matching
+// KIT-DONOR: d/d_flower.cpp MatchingFor("GZLJ01","GZLE01","GZLP01")
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
+// ^ PER-DONOR STATUSES above; the aggregate stays UNKNOWN because these three
+//   DIVERGE and no single value would be true. This TU is the case that found
+//   the gap (E1): declaring a flat "Matching" made the lint DISAGREE on
+//   d_flower, correctly. Foundry's F1 fix added the per-donor form, so the
+//   statuses are now stated exactly instead of collapsed to UNKNOWN — the
+//   mapping AND the status are both declared, with nothing assumed.
 
 #include "d/dolzel_rel.h"  // IWYU pragma: keep
 
@@ -60,6 +72,7 @@
 #include "d/d_particle.h"  // №220: cut-scatter particle + light callback
 #include "Z2AudioLib/Z2SeMgr.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_ext_tree.h"        // §366 swood packet (kind==1 rides here)
 #include "d/d_kankyo.h"
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.h"
 #include "JSystem/J3DGraphBase/J3DPacket.h"
@@ -73,6 +86,7 @@
 #include "d/d_ext_npc_mount.h"
 #include "d/d_kankyo_tev_str.h"
 #include "dusk/logging.h"
+extern "C" void aurora_gx_state_snapshot(char*, unsigned long);  // §387
 #include "dusk/main.h"
 #include "f_op/f_op_actor.h"
 #include "f_op/f_op_actor_mng.h"
@@ -382,7 +396,7 @@ bool readFlowerKeys(const std::filesystem::path& mani, std::string* out) {
     std::string line;
     bool inSection = false;
     while (std::getline(in, line)) {
-        while (!line.empty() && (line.back() == '' || line.back() == ' ')) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
             line.pop_back();
         }
         if (line.empty() || line[0] == '#' || line[0] == ';') {
@@ -862,7 +876,10 @@ class daExtVeg_c : public fopAc_ac_c {
 public:
     int create();
     int execute() {
-        if (isFlower()) {
+        if (mKind == 1) {
+            // §366: swood driver — one packet calc per frame (guarded inside)
+            dExtTree_execute(dComIfGp_getPlayer(0), mRoomNo);
+        } else if (isFlower()) {
             checkFlowers();
         } else {
             checkCut();
@@ -967,7 +984,18 @@ int daExtVeg_c::create() {
     mKind = (u8)kind;
     mTier = (kind == 3) ? 1 : 0;  // kind 3 -> flowerType 2 -> pink; kind 2 -> white
     if (kind == 1) {
-        return cPhs_COMPLEATE_e;  // trees ride the same dispatcher -- inert here
+        // ====================================================================
+        // §366 — SWOOD LIVE: kind 1 registers into the donor d_tree packet
+        // (Foundry's §242 order, Housing's §231 spec). The actor stays alive
+        // as the packet's per-frame driver (execute/draw below); the packet
+        // owns geometry, cut state, sway, and shadow.
+        // ====================================================================
+        mRoomNo = static_cast<s8>(fopAcM_GetRoomNo(this));
+        cXyz sp = current.pos;
+        if (dExtTree_newData(sp, mRoomNo) == NULL && !dExtTree_assetsReady()) {
+            DuskLog.warn("[ExtVeg] §366 swood pack refused — kind-1 actor inert");
+        }
+        return cPhs_COMPLEATE_e;
     }
     if (isFlower() && !s_flowerReady) {
         return cPhs_COMPLEATE_e;  // pack refused; stay inert rather than half-draw
@@ -1034,6 +1062,12 @@ int daExtVeg_c::deleteMe() {
 }
 
 int daExtVeg_c::draw() {
+    if (mKind == 1) {
+        // §366: swood driver — enter the tree packet into the XLU BG list
+        // (guarded once/frame inside; donor d_tree update() tail idiom).
+        dExtTree_entryDraw();
+        return 1;
+    }
     if (!s_assets.ready || mBladeCount == 0) {
         return 1;
     }
@@ -1539,6 +1573,23 @@ void daExtVeg_c::drawBlades() {
         mDoMtx_concat(j3dSys.getViewMtx(), mv, mv);
         GXLoadPosMtxImm(mv, GX_PNMTX0);
         for (const Strip& st : mCut[i] ? s_cutStrips : s_strips) {
+            // ================================================================
+            // §387 GX-STATE TAP A — the WORKING submission path. Housing's
+            // §386 lead: this draws Txo_flower_pink_64x64 correctly every
+            // frame while the J3D room-model path draws the same bytes
+            // invisibly. Snapshot the state the pipeline is built from
+            // (aurora g_gxState) at the instant of draw; tap B does the same
+            // in the failing path; the DIFF names the field. One shot.
+            // ================================================================
+            {
+                static bool s_tapA = false;
+                if (!s_tapA) {
+                    s_tapA = true;
+                    char buf[2048] = {};
+                    aurora_gx_state_snapshot(buf, sizeof(buf));
+                    DuskLog.info("[GXTap] §387 A(rawGX veg blades) {}", buf);
+                }
+            }
             GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (u16)st.count);
             for (int v = 0; v < st.count; ++v) {
                 GXPosition3f32(st.px[v], st.py[v], st.pz[v]);

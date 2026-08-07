@@ -37,6 +37,9 @@
  * =========================================================================
  */
 // KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_bridge.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: NonMatching
 
 #include "d/dolzel_rel.h"  // IWYU pragma: keep
 #include "d/d_kankyo_ww.h"  // §425 native lighting chain
@@ -63,6 +66,8 @@
 #include "f_op/f_op_actor.h"
 #include "f_op/f_op_actor_mng.h"
 #include "d/d_bg_w_sv.h"        // §429 deformable span collision
+#include "JSystem/J3DGraphBase/J3DShape.h"  // §474 resetVcdVatCache
+#include "d/ext_line/mdoext1_3dline.h"      // §484 parallel donor 3D-line stack
 #include "SSystem/SComponent/c_math.h"
 #include "m_Do/m_Do_mtx.h"
 
@@ -172,6 +177,19 @@ const int kMaxPlanks = 50;  // donor rejects >= 50
 // rider specials, snap (m0304/m0308), sounds/particles. Outset's bridges are
 // plain rope type; riders = player weight 100/depth -31, default 50/-10.
 // ============================================================================
+// ============================================================================
+// §484 The §460 dExtWw3DlineMat1_c subclass that used to live here is GONE,
+// replaced by the parallel donor stack in d/ext_line/mdoext1_3dline.h
+// (MDoExt1::LineMat1_c). That subclass inherited TP's class and diverged by
+// EDITING a copy of TP's draw body -- the shape the user ruled against, and the
+// shape that produced the black ropes when the copy silently omitted
+// dKy_Global_amb_set. The parallel stack carries the donor's OWN data layout
+// (u8 widths, INDEX8 normals off a static 2-entry array), its OWN display lists
+// and its OWN draw, inheriting nothing but the abstract base needed to ride the
+// existing sort packet ([W0], phase 2 owed).
+// This deletion is of MY OWN WW code, superseded -- no TP or donor line removed.
+// ============================================================================
+
 struct SpanPlank {
     cXyz m3CC;                       // rope-chain sim node
     cXyz mPosition;                  // rendered pos = node + taper
@@ -197,7 +215,7 @@ struct SpanPlank {
     // left rope + cut-half, 1/3 = right + cut-half; per-vertex sizes), exactly
     // WW d_a_bridge. §429d's 1-line restructure was compensating for the §434
     // material bug, now fixed by the l_mat1DL LE translation.
-    mDoExt_3DlineMat1_c mLineMat1;
+    MDoExt1::LineMat1_c mLineMat1;  // §484 parallel donor stack
     bool mLineInit;
 };
 
@@ -218,7 +236,7 @@ public:
     // §429 donor bridge_class subset
     SpanPlank mSim[kMaxPlanks];
     dBgWSv* mpBgW;
-    mDoExt_3DlineMat1_c mLineMat;    // §441 donor main handrails: one 2-line mat
+    MDoExt1::LineMat1_c mLineMat;    // §484 parallel donor stack; donor 2-line rail
     bool mLineMatInit;
     cXyz mHomePos;
     cXyz mEndPos;
@@ -235,6 +253,7 @@ public:
 static cXyz* s_spanWindVec;
 static s16 s_spanWy;
 static f32 s_spanWp;
+// KIT-DONOR-DATA: 44 lookup-table d/actor/d_a_bridge.cpp:22-26
 static const f32 ita_z_p[11] = {0.1f, 0.3f, 0.5f, 0.75f, 0.9f, 1.0f,
                                 0.9f, 0.75f, 0.5f, 0.3f, 0.1f};
 
@@ -455,10 +474,22 @@ int daExtSpan_c::create() {
     m02E0 = m02E4 = 0.0f;
     m02F4 = m02F8 = m02FC = 0.0f;
     m030C = 0;
-    // §441 Winditor receipt: typeBits bit3 -> txm_rope1.bti (Always 0x8D),
-    // else rope.bti (0x7E) -- donor CallbackCreateHeap texture rule.
-    ResTIMG* ropeImg = (ResTIMG*)dComIfG_getObjectRes(
-        "WwAlways", (int)((s_spanType & 8) ? 0x8D : 0x7E));
+    // ========================================================================
+    // §470: the rope-texture lookup that USED to sit here is GONE, and with it
+    // a misleading warn. It ran before s_spanType was populated, so it asked
+    // for 0x7E (rope.bti) when the Outset bridges are type 0x0A -- bit3 set --
+    // and need 0x8D (txm_rope1.bti). It then logged "ropes disabled", which is
+    // how §466 came to believe ropes were absent when they were not.
+    // §448 already moved init to the execute path ahead of the anchor walk
+    // (the ordering fix), where s_spanType IS resolved and the lookup retries
+    // until WwAlways is resident. That is now the SINGLE init site for both the
+    // rail mat and the per-post hanger mats. Two init sites with different
+    // resource ids was the actual defect.
+    // Receipt for which runs proved it: 095309 create SUCCEEDED (no warn, mats
+    // live, P66 correctly silent); 225640/005947 create failed and execute
+    // rescued; 232642/225938 create failed and the run hung before execute
+    // could rescue.
+    // ========================================================================
     for (int i = 0; i < mCount; ++i) {
         SpanPlank* pl = &mSim[i];
         const f32 t = (i + 0.5f) / (f32)mCount;
@@ -478,21 +509,15 @@ int daExtSpan_c::create() {
         if (((i + 2) & 3) == 0) {
             pl->m408 = 7;
             pl->mScale.x = 1.05f;
-            if (ropeImg != NULL && pl->mLineMat1.init(4, 5, ropeImg, 1)) {
-                pl->mLineInit = true;  // §441 donor 4-line shape
-            }
+            // §470: hanger mats now initialise on the execute path only.
         }
         if (mpPlanks[i] != NULL) {
             mpPlanks[i]->setBaseScale(pl->mScale);
         }
     }
+    // §470: rail mat likewise deferred to the execute path's single init site.
+    // The flag is still cleared here because a rebuilt span must re-init.
     mLineMatInit = false;
-    if (ropeImg != NULL && mLineMat.init(2, 14, ropeImg, 0)) {
-        mLineMatInit = true;  // §441 donor 2-line rail mat
-    }
-    if (ropeImg == NULL) {
-        DuskLog.warn("[ExtSpan] 429 rope.bti (WwAlways 0x7E) not resident -- ropes disabled");
-    }
 
     mpBgW = NULL;
     // ========================================================================
@@ -787,6 +812,60 @@ int daExtSpan_c::execute() {
         cLib_addCalc2(&m02E4, tmpf2 * 0.3f, 0.1f, 0.05f);
     }
 
+    // ========================================================================
+    // §448 ROPE-MAT INIT MOVED HERE (root cause of the §429e/§441b rope fatal).
+    // The donor inits both rope mats in its CREATE path (d_a_bridge.cpp:1363-
+    // 1379), so by the time anything draws, the anchor walk below has already
+    // written the rail's interior points. The receiver's §429c workaround did
+    // the init lazily inside draw() instead -- because the custom-mounted
+    // WwAlways arc is not resident at create time -- which opened a window the
+    // donor does not have:
+    //   execute(): walk counts m030C posts but SKIPS the interior writes
+    //              (they are gated on mLineMatInit, still false)
+    //   draw():    init allocates the position arrays, sets the flag, writes
+    //              ONLY seg[0] and seg[m030C+1], then update(m030C+2) consumes
+    //              indices 1..m030C -- NEVER WRITTEN -> heap garbage into
+    //              GXPosition3f32 -> the "immediately after 429c ropes LIVE"
+    //              GX FIFO fatal.
+    // Initialising here, AHEAD of the walk, restores the donor's ordering
+    // invariant (mats exist before the walk that fills them) while keeping the
+    // receiver's residency retry. Reference for the invariant: noclip's live
+    // Room44 bridge (rail numLines=2 maxSegments=14 numSegments=6, m030C=4
+    // uncut ropes over 17 planks) -- see bus §448.
+    // ========================================================================
+    if (!mLineMatInit) {
+        ResTIMG* img = (ResTIMG*)dComIfG_getObjectRes(
+            "WwAlways", (int)((s_spanType & 8) ? 0x8D : 0x7E));
+        if (img != NULL) {
+            if (mLineMat.init(2, 14, img, 0)) {
+                mLineMatInit = true;
+            }
+            for (int i = 0; i < mCount; ++i) {
+                if ((mSim[i].m408 & 4) && !mSim[i].mLineInit &&
+                    mSim[i].mLineMat1.init(4, 5, img, 1)) {
+                    mSim[i].mLineInit = true;
+                }
+            }
+            if (mLineMatInit) {
+                // 451-H8: per-span init census -- a span that enqueues mats it
+                // never initialised is the other way garbage reaches the FIFO.
+                int inited = 0, posts = 0;
+                for (int i = 0; i < mCount; ++i) {
+                    if (mSim[i].m408 & 4) {
+                        posts++;
+                        if (mSim[i].mLineInit) {
+                            inited++;
+                        }
+                    }
+                }
+                DuskLog.info("[ExtSpan] 448/451-P66 rope mats LIVE span={} planks={} posts={} "
+                             "hangersInit={} railInit={} type=0x{:02X}",
+                             (void*)this, mCount, posts, inited, (int)mLineMatInit,
+                             (int)s_spanType);
+            }
+        }
+    }
+
     // matrices + anchors (donor :902-921)
     m030C = 0;  // §441: donor counts posts during the anchor walk
     for (int i = 0; i < mCount; ++i) {
@@ -1002,32 +1081,15 @@ int daExtSpan_c::draw() {
     // and get a dedicated debug pass; if it still crashes, the sim/collision
     // side is guilty and ropes are exonerated.
     // ========================================================================
-    static const bool kExtSpanRopes = false;  // §441b: OFF again. Title-reins
-    // falsified the DL theory (BE-inline works; my LE swap broke the title).
-    // New prime suspect: the RAW BE BTI from the custom arc feeding
-    // GXInitTexObj in 3DlineMat1::init (reins use TP-arc textures).
+    // §446b CAPTURE BUILD: ropes ON deliberately, to run the comparative probe
+    // (§441b spec) against the banked control. Theory #4 (raw BE BTI) is now
+    // ALSO falsified statically: txm_rope1.bti parses to fmt=14 CMPR 16x16
+    // mipCount=1 imageOffset=32 (own parsing of the staged WwAlways arc) --
+    // byte-for-byte the same header shape as the control's texture. Expect a
+    // fatal; the P62/P63/P64 lines before it name the failing parameter.
+    static const bool kExtSpanRopes = true;
     if (!kExtSpanRopes) {
         return 1;
-    }
-    // §429c lazy rope init: bridges create BEFORE WwAlways is resident
-    // (log 184254: "rope.bti not resident"). Retry here until it lands.
-    if (!mLineMatInit) {
-        ResTIMG* img = (ResTIMG*)dComIfG_getObjectRes(
-            "WwAlways", (int)((s_spanType & 8) ? 0x8D : 0x7E));
-        if (img != NULL) {
-            if (mLineMat.init(2, 14, img, 0)) {
-                mLineMatInit = true;
-            }
-            for (int i = 0; i < mCount; ++i) {
-                if ((mSim[i].m408 & 4) && !mSim[i].mLineInit &&
-                    mSim[i].mLineMat1.init(4, 5, img, 1)) {
-                    mSim[i].mLineInit = true;
-                }
-            }
-            if (mLineMatInit) {
-                DuskLog.info("[ExtSpan] 429c ropes LIVE (lazy init)");
-            }
-        }
     }
     GXColor ropeCol;
     ropeCol.r = ropeCol.g = ropeCol.b = 150;
@@ -1040,13 +1102,15 @@ int daExtSpan_c::draw() {
         // ====================================================================
         // §441 donor daBridge_Draw hanger fill VERBATIM (:173-273, intact-rope
         // legs; cut legs dead while m408 stays 7 [R5]). Per-vertex sizes:
-        // uVar16 = 5 (bit3 thick) / 3; receiver getSize is f32 (donor u8 --
-        // labeled type seam); cut-half lines 2/3 sized 0.
+        // uVar16 = 5 (bit3 thick) / 3; cut-half lines 2/3 sized 0.
+        // §484: sizes are now u8, the DONOR's own type -- the parallel MDoExt1
+        // stack carries the donor layout, so the f32 type-seam is retired
+        // rather than converted at the call site.
         // ====================================================================
-        const f32 uVar16 = (s_spanType & 8) ? 5.0f : 3.0f;
+        const u8 uVar16 = (s_spanType & 8) ? 5 : 3;
         for (int side = 0; side < 2; ++side) {
-            f32* size0 = pl->mLineMat1.getSize(side);
-            f32* size1 = pl->mLineMat1.getSize(side + 2);
+            u8* size0 = pl->mLineMat1.getSize(side);
+            u8* size1 = pl->mLineMat1.getSize(side + 2);
             cXyz* seg0 = pl->mLineMat1.getPos(side);
             cXyz* seg1 = pl->mLineMat1.getPos(side + 2);
             const cXyz& lo = side == 0 ? pl->m11C[1] : pl->m0F8[1];
@@ -1057,7 +1121,7 @@ int daExtSpan_c::draw() {
             d.z /= 4.0f;
             for (int j = 0; j < 5; ++j) {
                 size0[j] = uVar16;
-                size1[j] = 0.0f;
+                size1[j] = 0;
                 seg0[j].set(lo.x + d.x * j, lo.y + d.y * j, lo.z + d.z * j);
                 seg1[j] = hi;
             }

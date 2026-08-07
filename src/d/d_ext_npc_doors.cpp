@@ -5,6 +5,10 @@
  * pinned-BG warp backend. Spawn/stamp/register in doors.ini order with boot
  * log; exit knobs + leave-shell AABB G-guard; keys healed by position.
  */
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/d_ext_npc_doors.h"
 
 #if TARGET_PC
@@ -13,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <cctype>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -25,6 +30,7 @@
 #include "d/d_event.h"
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_save_guard.h"
+#include "d/ext_plugin/ww_import_gate.h"
 #include "d/d_ext_dmesg.h"  // §313 dExtDmesg_isBoxActive (don't G-guard a held tale box)
 #include "f_pc/f_pc_name.h"
 #include "dusk/logging.h"
@@ -248,6 +254,89 @@ void ensureLoaded() {
     s_loaded = true;
     DuskLog.info("[ExtNpcDoors] loaded {} door triggers from {}", (int)s_doors.size(),
                  path.string());
+
+    // §559: 19c gate controls, once per process. Demonstrating C1/C2/C4/C6 on
+    // a real boot is the difference between a gate that is specified and one
+    // that is shown to behave -- every instrument this campaign trusted
+    // without a negative control turned out to be wrong at least once.
+    dExtWwImportGate_selftest();
+
+    // ========================================================================
+    // §547 SCLS CROSS-CHECK (WWB:B2's payoff). Consumes population/
+    // door_bindings.ini, which `ww_bridge.py scls --emit` generates from the
+    // donor's own SCLS exit table (stage_scls_info_class, 0x0C) in each arc's
+    // room.dzr.
+    //
+    // THIS VALIDATES; IT DOES NOT ROUTE. The donor's SCLS names WW-side
+    // destinations ("sea", room 44); this port routes to HOST stages
+    // (dest.hostStage / hostRoom) chosen by our own config. Those are different
+    // coordinate systems, so SCLS cannot drive routing directly and pretending
+    // otherwise would be the overreach. What it CAN do is catch the transcription
+    // class B2 was written to remove: a door we implement that the donor has no
+    // exit for, or a donor exit we never implemented.
+    //
+    // Additive and log-only by construction -- no DoorDef is modified and no
+    // control flow depends on it. If the file is absent (a user who never ran
+    // `scls --emit`) this is silent: an ABSENT cross-check must not look like a
+    // FAILED one.
+    // ========================================================================
+    {
+        const fs::path bpath = dusk::ConfigPath / "model_replacements" /
+                               island.modFolder / "population" / "door_bindings.ini";
+        std::ifstream bin(bpath);
+        if (!bin) {
+            DuskLog.debug("[ExtNpcDoors] no door_bindings.ini — SCLS cross-check "
+                          "SKIPPED (not failed); run ww_bridge.py scls --emit");
+        } else {
+            // NAME NORMALISATION, and it is not cosmetic. doors.ini calls one
+            // door `amori`; the arc it comes from is `A_mori`, so the generated
+            // section is `[a_mori]`. A raw compare reports "no donor exit" for a
+            // door that plainly has two -- and a validator whose FIRST output is a
+            // false alarm teaches everyone to ignore it. Caught by predicting the
+            // result offline before shipping the check. Fold case, drop
+            // non-alphanumerics, compare the residue.
+            auto norm = [](const std::string& s) {
+                std::string o;
+                for (char c : s) {
+                    if (std::isalnum((unsigned char)c)) {
+                        o += (char)std::tolower((unsigned char)c);
+                    }
+                }
+                return o;
+            };
+            std::vector<std::string> donorSections;
+            std::string bline;
+            while (std::getline(bin, bline)) {
+                trim(bline);
+                if (bline.size() >= 2 && bline[0] == '[' && bline.back() == ']') {
+                    donorSections.push_back(norm(bline.substr(1, bline.size() - 2)));
+                }
+            }
+            int matched = 0;
+            std::string ours;
+            for (DoorDef& d : s_doors) {
+                std::string n = norm(std::string(d.name));
+                bool hit = false;
+                for (const std::string& s : donorSections) {
+                    if (s == n) { hit = true; break; }
+                }
+                if (hit) {
+                    matched++;
+                } else {
+                    ours += (ours.empty() ? "" : ", ");
+                    ours += d.name;
+                }
+            }
+            DuskLog.info("[ExtNpcDoors] §547 SCLS cross-check: {} of {} door rows "
+                         "have a donor exit binding ({} donor sections)",
+                         matched, (int)s_doors.size(), (int)donorSections.size());
+            if (!ours.empty()) {
+                DuskLog.warn("[ExtNpcDoors] §547 door rows with NO donor SCLS exit: {}"
+                             " — either hand-authored beyond the donor, or the arc "
+                             "was not scanned", ours.c_str());
+            }
+        }
+    }
 }
 
 cXyz wwToHost(const dExtNpcManifest& island, const cXyz& ww) {
@@ -810,15 +899,33 @@ bool tickPending(const dExtNpcManifest& island) {
     return true;
 }
 
-bool createKnobAt(const char* src, const cXyz& pos, s16 ry, int roomNo, u32 params) {
+bool createKnobAt(const char* src, const cXyz& pos, s16 ry, int roomNo, int doorIndex,
+                  bool isExit) {
     csXyz angle;
     angle.set(0, ry, 0);
     cXyz scale(1.0f, 1.0f, 1.0f);
 
+    // ============================================================
+    // §380 donor params. The old §27 scheme (25 | doorIndex<<8 | exit
+    // bit16) landed doorIndex in the DONOR's door-TYPE nibble — type 1
+    // turned linkrm into a message door, type 2 made ojhous a night-
+    // message door (§379c receipts) — and bit16 polluted the eventNo
+    // field. The native actor reads donor semantics, so it gets the
+    // donor's own normal-door param, byte-identical to what WW's DZR
+    // gives its doors (swbit FF / type 0 / eventNo FF / swbit2 FF).
+    // Identity + exit-ness live entirely on the doorKey channel
+    // ('door:'/'door:exit:' src → mDoorKey, №51 persist + reconcile).
+    // The henna0 mount FALLBACK keeps the legacy encoding — its own
+    // decode (stampKnobByIndex/bit16) expects it; retire-listed with
+    // the mount class.
+    // ============================================================
+    const u32 kn00Params = 0x0ffff0ffu;
+    const u32 hennaParams = 25u | ((u32)doorIndex << 8) | (isExit ? 0x10000u : 0u);
+
     // §27: prefer real KNOB00 port; fall back to ExtNpc NPC_KNOB mount.
     dExtNpcMount_pushPendingSpawn("NPC_KNOB", src, NULL, NULL);
     const fpc_ProcID kid00 =
-        fopAcM_create(fpcNm_KNOB00_e, params, &pos, roomNo, &angle, &scale, -1);
+        fopAcM_create(fpcNm_KNOB00_e, kn00Params, &pos, roomNo, &angle, &scale, -1);
     if (kid00 != fpcM_ERROR_PROCESS_ID_e) {
         dExtNpcMount_bindPendingSpawn(kid00, "NPC_KNOB", src, NULL, NULL);
         DuskLog.info("[Doors] §27 spawn KNOB00 src='{}'", src != NULL ? src : "?");
@@ -833,7 +940,7 @@ bool createKnobAt(const char* src, const cXyz& pos, s16 ry, int roomNo, u32 para
         return false;
     }
     dExtNpcMount_pushPendingSpawn("NPC_KNOB", src, NULL, NULL);
-    const fpc_ProcID kid = fopAcM_create(actorId, params, &pos, roomNo, &angle, &scale, -1);
+    const fpc_ProcID kid = fopAcM_create(actorId, hennaParams, &pos, roomNo, &angle, &scale, -1);
     if (kid != fpcM_ERROR_PROCESS_ID_e) {
         dExtNpcMount_bindPendingSpawn(kid, "NPC_KNOB", src, NULL, NULL);
         return true;
@@ -873,16 +980,36 @@ void spawnExitKnobIfNeeded(const char* interiorProc) {
         pos = dest.hostPos + dest.spawnRel;
     }
     const s16 faceRy = dest.hasSpawnRy ? dest.spawnRy : (d->hasWwRy ? d->wwRy : (s16)0);
+    // ============================================================
+    // §378 NATIVE-DOOR ADOPTION (duplicate-doors defect, log 194812
+    // pids 360+378): since §329 put KNOB00 in the stage OBJNAME table,
+    // the donor room's OWN door actor (e.g. LinkRM room.dzr KNOB00 at
+    // -255,0,1125 — the exact exit_door_rel) spawns natively from the
+    // room-lane actor list BEFORE this synthetic spawn — two coincident
+    // doors. The donor door IS the door: adopt it (stamp the exit door
+    // key so the warp path follows it) instead of spawning a twin. The
+    // synthetic create below remains only as the fallback for rooms
+    // whose donor data carries no door.
+    // ============================================================
+    if (daKnob00_c* nativeDoor = findKnob00Near(pos, 80.0f)) {
+        stampKnob00(nativeDoor, *d, true);
+        d->exitKnobHost = pos;
+        d->hasExitKnobHost = true;
+        d->exitKnobSpawned = true;
+        std::snprintf(s_exitSpawnForProc, sizeof(s_exitSpawnForProc), "%s", interiorProc);
+        DuskLog.info("[Doors] §378 adopt NATIVE room-lane door key=exit:{} pos=({:.1f},{:.1f},{:.1f})",
+                     d->name, pos.x, pos.y, pos.z);
+        return;
+    }
     char src[64];
     std::snprintf(src, sizeof(src), "door:exit:%s", d->name);
-    const u32 params = 25u | ((u32)d->doorIndex << 8) | 0x10000u;  // bit16 = exit
     // №66-B: stamp the claimed host room, not Link's stale roomNo (void re-entry).
     int roomNo = fopAcM_GetRoomNo(player);
     const int hostRoom = dExtNpcMount_roomLaneHostRoom(interiorProc);
     if (hostRoom >= 0) {
         roomNo = hostRoom;
     }
-    if (createKnobAt(src, pos, faceRy, roomNo, params)) {
+    if (createKnobAt(src, pos, faceRy, roomNo, d->doorIndex, /*isExit=*/true)) {
         d->exitKnobHost = pos;
         d->hasExitKnobHost = true;
         d->exitKnobSpawned = true;
@@ -1244,6 +1371,33 @@ bool dExtNpcDoors_tryNativeWarp(fopAc_ac_c* doorActor, bool openAlreadyDone) {
                 }
             }
         }
+#if TARGET_PC
+        // ================================================================
+        // §379c — fallback-press probe + heal (log 211755: exterior 'linkrm'
+        // fell through with an unresolved event id while 'ojhous' ran the
+        // native event; door-specific). Hypotheses discriminated per press:
+        //   H1 resolve-timing (CreateInit ran before event data) → the heal
+        //      below re-resolves; post!=-1 with pre==-1 confirms
+        //   H2 donor checkArea/angle gate never set eventInfo (pre!=-1 here
+        //      but entry saw -1 → setEventPrm gate is the blocker)
+        //   H3 room-typing (roomNo printed; linkrm is the room-lane door)
+        // On heal success the NEXT press rides the native event; this
+        // fallback still carries this one (never strand a press).
+        // ================================================================
+        if (!openAlreadyDone) {
+#if DUSK_WW_KNOB00_NATIVE
+            const s16 pre7 = k00->mEventIdx[7];
+            const s16 pre8 = k00->mEventIdx[8];
+            if (pre7 == -1 && pre8 == -1) {
+                k00->makeEventId(0);
+            }
+            DuskLog.warn("[Doors] §379c FALLBACK press key='{}' room={} src='{}' "
+                         "evIdx7 {}→{} evIdx8 {}→{}",
+                         key != NULL ? key : "?", (int)fopAcM_GetRoomNo(k00), k00->spawnSrc(),
+                         (int)pre7, (int)k00->mEventIdx[7], (int)pre8, (int)k00->mEventIdx[8]);
+#endif
+        }
+#endif
         DuskLog.info("[Doors] {} OPEN → KNOB00 key='{}'",
                      openAlreadyDone ? "§27 post-cutEnd" : "§27 native", key != NULL ? key : "?");
         return tryWarpFromKey(key, k00->current.pos, player, dist, openAlreadyDone);
@@ -1312,8 +1466,8 @@ void dExtNpcDoors_spawnKnobs(const dExtNpcManifest& island) {
         cXyz pos = wwToHost(island, d.wwPos);
         char src[64];
         std::snprintf(src, sizeof(src), "door:%s", d.name);
-        const u32 params = 25u | ((u32)d.doorIndex << 8);
-        if (createKnobAt(src, pos, d.hasWwRy ? d.wwRy : (s16)0, roomNo, params)) {
+        if (createKnobAt(src, pos, d.hasWwRy ? d.wwRy : (s16)0, roomNo, d.doorIndex,
+                         /*isExit=*/false)) {
             d.knobHost = pos;
             d.hasKnobHost = true;
             ++n;
@@ -1526,34 +1680,22 @@ void dExtNpcDoors_pollArrival() {
         if (s_arrival.guardFramesLeft > 0) {
             return;
         }
-        if (dComIfGp_event_runCheck() || dComIfGp_event_getMode() != dEvt_mode_WAIT_e) {
-            // §313: never force-end while our native dMesg box is legitimately holding a
-            // tale beat (waiting on A/B). The ba1 tale re-enters R_DL01 via its own
-            // setNextStage two-step (§296, point 200), which counts as an arrival and
-            // RE-ARMS this guard; 120f later it killed the held tale (§304: fnm=95 = beat
-            // 540's suspend, force-ended at m_frame 117). §270 stands down at ba1's ORDER
-            // but can't survive that re-arm.
-            //   Discriminator = dExtDmesg_isBoxActive() (a box is up), NOT "a demo control
-            // exists": getControl() is non-NULL on ordinary arrivals too, so the first cut
-            // stood the guard down on F_DL01 (Outset) and — via clearArrivalGuard + return —
-            // skipped the arrival camera snap, stranding the Outset camera at the map edge.
-            //   Fix: skip ONLY the force-end; fall through to the camera-snap + disarm below
-            // untouched. With no box up (every non-tale arrival), the force-end runs exactly
-            // as before. A genuine mid-tale hang is still caught by the 3600f
-            // pollStuckMessageResume backstop.
-            if (dExtDmesg_isBoxActive()) {
-                DuskLog.info("[Doors] §313 №89 guard held — dMesg box presenting a tale beat "
-                             "(stage='{}'), not a stuck residual", s_arrival.stage);
-            } else {
-                dExtNpcMount_forceEndDoorEvent("arrival-G-guard");
-                DuskLog.warn(
-                    "[Doors] №89 event G-guard — stage='{}' still active after {}f → force-end",
-                    s_arrival.stage, kArrivalGuardFrames);
-            }
-        } else {
-            DuskLog.info("[Doors] №89 event G-guard clear — stage='{}' control free",
-                         s_arrival.stage);
-        }
+        // ============================================================
+        // §399 — THE G-GUARD KILL LEG IS DELETED (user ruling executed).
+        // Its victim ledger: the held tale box (§304), the TALE_DEMO
+        // storyboard (§377/KB-1, log 194812), and the scripted B_OPEN
+        // door event 21f in (log 094033 gFrm=1692 — collateral: Link's
+        // door proc died mid-SetWallNone → interior collision loss,
+        // dead door, stale late arm, tale black screen). Each strike
+        // needed a new exemption patch — the watchdog-outlived-its-
+        // context signature the user's ruling named. Every departure is
+        // native now (§379-§380); a genuine hang is still caught by the
+        // 3600f pollStuckMessageResume backstop. The countdown/disarm/
+        // camera bookkeeping below stays — only the kill is gone.
+        // §313/§377 exemptions die with the leg (nothing left to exempt).
+        // ============================================================
+        DuskLog.info("[Doors] №89 G-guard disarm — stage='{}' (kill leg deleted §399)",
+                     s_arrival.stage);
         // №176: G-guard often ends BEFORE awake's pan. If №110 never latched and
         // the opening still owns/defers the camera, stay armed so the deferred
         // snap can fire after RELEASE (otherwise pollArrival never runs again).
@@ -1567,7 +1709,60 @@ void dExtNpcDoors_pollArrival() {
     }
 }
 
+// ============================================================
+// §379b — WW Link-staff interpreter for the native door events.
+// DEFAULT_KNOB_DOOR_F_OPEN/B_OPEN (merged from WW's own event data,
+// §379a) carry a 'Link' staff with WW's acting vocabulary. The evmng
+// name alias (d_event_manager.cpp:1097) binds TP Link to the 'Link'
+// staff; this poll performs the cuts with TP Link's NATIVE acting —
+// the same translation class as the alias itself:
+//   001n_wait / 012unequip / 005wait_turn → cutEnd (TP Link unequips
+//     on the door command already, and the knob's own SETANGLE/
+//     ADJUSTMENT cuts place and turn Link — donor division of labor);
+//   035door prm0 → changeDemoMode(DEMO_DOOR_OPEN_e, prm0) — TP's
+//     procDoorOpenInit reads param0&1 for the right/left swing, the
+//     SAME semantic WW's dProcDoorOpen reads from this SAME prm0.
+//     procDoorOpen cutEnds the staff itself when the acting completes.
+// ============================================================
+static void dExtNpcDoors_pollWwDoorLinkStaff() {
+    if (!dComIfGp_event_runCheck()) {
+        return;
+    }
+    const char* re = dComIfGp_getEventManager().getRunEventName();
+    if (re == NULL || std::strncmp(re, "DEFAULT_KNOB_DOOR_", 18) != 0) {
+        return;
+    }
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL) {
+        return;
+    }
+    const int staffId = dComIfGp_evmng_getMyStaffId("Alink", player, 0);
+    if (staffId == -1) {
+        return;
+    }
+    static const char* const kWwLinkCuts[] = {
+        "001n_wait", "012unequip", "005wait_turn", "035door",
+    };
+    const int act = dComIfGp_evmng_getMyActIdx(staffId, (DUSK_CONST char* DUSK_CONST*)kWwLinkCuts,
+                                               4, FALSE, 0);
+    if (act == 3) {
+        if (dComIfGp_evmng_getIsAddvance(staffId)) {
+            int* prm0 = dComIfGp_evmng_getMyIntegerP(staffId, "prm0");
+            daAlink_c* link = (daAlink_c*)player;
+            link->changeOriginalDemo();
+            link->changeDemoMode(daPy_demo_c::DEMO_DOOR_OPEN_e, prm0 != NULL ? *prm0 : 0, 0, 0);
+            DuskLog.info("[Doors] §379b Link 035door → DEMO_DOOR_OPEN prm0={}",
+                         prm0 != NULL ? *prm0 : 0);
+        }
+        return;  // procDoorOpen owns the cutEnd
+    }
+    // Wait/unequip/turn cuts (and any unmapped name): donor default idiom —
+    // cutEnd each frame; the knob staff owns Link's placement.
+    dComIfGp_evmng_cutEnd(staffId);
+}
+
 void dExtNpcDoors_poll() {
+    dExtNpcDoors_pollWwDoorLinkStaff();
     dExtNpcDoors_pollArrival();
     if (dExtNpcMount_bgWarpBusy()) {
         return;
@@ -1741,6 +1936,24 @@ void dExtNpcDoors_poll() {
         if (!nearXZ(player->current.pos, exitCenter, d.exitRadius)) {
             continue;
         }
+#if DUSK_WW_KNOB00_NATIVE
+        // ============================================================
+        // §397 (log 085918 DEADLOCK): this proximity leg fired queueExit
+        // on the same A-press that ordered the native B_OPEN event — the
+        // pending stage change blocked the event's endProc (№89 rule) and
+        // the running event deferred the change: stuck in the interior.
+        // When the doorway's knob00 can run a native door event, the
+        // event OWNS the press; the §379b fade seam does the warp. This
+        // leg remains only for doorways with no native-event door.
+        // ============================================================
+        if (daKnob00_c* nativeDoor = findKnob00Near(exitCenter, 80.0f)) {
+            if (nativeDoor->mEventIdx[7] != -1 || nativeDoor->mEventIdx[8] != -1) {
+                DuskLog.info("[Doors] §397 proximity-exit stands down — native door event "
+                             "owns '{}'", d.name);
+                continue;
+            }
+        }
+#endif
         if (queueExit(d, island, player, /*openAlreadyDone=*/false)) {
             for (DoorDef& e : s_doors) {
                 e.wasInEnter = true;

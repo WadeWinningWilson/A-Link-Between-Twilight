@@ -602,7 +602,10 @@ public:
     cXyz* getPos(int i_idx) { return mpLines[i_idx].field_0x0; }
     f32* getSize(int i_idx) { return mpLines[i_idx].field_0x4; }
 
-private:
+// §460: visibility only -- no members added, no behaviour changed. WW content
+// draws through a SUBCLASS that carries the donor's tevstr/toon path
+// (dExtWw3DlineMat1_c), so WW data cannot alter how TP's own actors render.
+protected:
     /* 0x08 */ TGXTexObj mTextureObject;
     /* 0x28 */ GXColor mColor;
     /* 0x2C */ dKy_tevstr_c* mpTevStr;

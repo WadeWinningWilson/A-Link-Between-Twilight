@@ -1,0 +1,20 @@
+# vexp configuration
+# See https://vexp.dev/docs for options
+
+[index]
+# Foundry 2026-07-29: spend the plan's node budget on live engine source only.
+# build/assets/companion_mods alone were ~42k files and crowded out src entirely
+# (daemon indexed 513 arbitrary files of 19,406 found, then hit the node cap).
+exclude_patterns = [
+  "build/**",
+  "assets/**",
+  "companion_mods/**",
+  "local_dev_backup/**",
+  "libs/**",
+  "extern/**",
+  "tools/**",
+  "docs/**",
+  "trailer/**",
+  "res/**",
+  ".vexp/**",
+]

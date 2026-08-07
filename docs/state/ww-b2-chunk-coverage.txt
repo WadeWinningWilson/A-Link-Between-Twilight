@@ -1,0 +1,46 @@
+# B2 chunk coverage — MEASURED from the live arcs by chunk_census.py.
+# Regenerate: python tools/ww_crew_restoration_skeleton/chunk_census.py --emit
+# distinct chunk types: 43   PLACED: 28   DELIVERED: 2   NO-PLACEMENT: 9   DEFERRED: 4   UNCLASSIFIED: 0   UNSIZED: 0
+ACTR   entries=   606 arcs= 11 size=0x20  PLACED
+RPPN   entries=   474 arcs=  8 size=0x10  PLACED
+SCLS   entries=   242 arcs= 13 size=0x0C  DELIVERED
+SCOB   entries=   148 arcs= 10 size=0x24  PLACED
+LBNK   entries=   144 arcs= 12 size=0x01  NO-PLACEMENT
+RPAT   entries=    67 arcs=  8 size=0x0C  DELIVERED
+EVNT   entries=    57 arcs=  1 size=0x18  DEFERRED
+Pale   entries=    57 arcs=  1 size=0x2C  NO-PLACEMENT
+PLYR   entries=    56 arcs= 12 size=0x20  PLACED
+EnvR   entries=    52 arcs=  1 size=0x08  NO-PLACEMENT
+ACT7   entries=    50 arcs=  8 size=0x20  PLACED
+MULT   entries=    50 arcs=  1 size=0x0C  DEFERRED
+RTBL   entries=    50 arcs=  1 size=0x08  DEFERRED
+ACT0   entries=    48 arcs=  5 size=0x20  PLACED
+ACTb   entries=    43 arcs=  4 size=0x20  PLACED
+ACT5   entries=    37 arcs=  1 size=0x20  PLACED
+Virt   entries=    37 arcs=  1 size=0x24  NO-PLACEMENT
+ACT4   entries=    26 arcs=  1 size=0x20  PLACED
+ACT2   entries=    24 arcs=  2 size=0x20  PLACED
+ACT6   entries=    21 arcs=  1 size=0x20  PLACED
+ACTa   entries=    21 arcs=  2 size=0x20  PLACED
+ACT1   entries=    19 arcs=  5 size=0x20  PLACED
+RARO   entries=    19 arcs=  8 size=0x14  PLACED
+RCAM   entries=    19 arcs=  8 size=0x14  DEFERRED
+TGOB   entries=    17 arcs=  1 size=0x20  PLACED
+ACT8   entries=    12 arcs=  3 size=0x20  PLACED
+FILI   entries=    12 arcs= 12 size=0x08  NO-PLACEMENT
+Colo   entries=    10 arcs=  1 size=0x0C  NO-PLACEMENT
+ACT3   entries=     9 arcs=  1 size=0x20  PLACED
+SOND   entries=     9 arcs=  6 size=0x1C  PLACED
+ACT9   entries=     7 arcs=  1 size=0x20  PLACED
+LGTV   entries=     7 arcs=  7 size=0x1C  NO-PLACEMENT
+SCO7   entries=     7 arcs=  5 size=0x24  PLACED
+SCO4   entries=     6 arcs=  1 size=0x24  PLACED
+SCO5   entries=     6 arcs=  1 size=0x24  PLACED
+TGDR   entries=     5 arcs=  1 size=0x24  PLACED
+SHIP   entries=     4 arcs=  2 size=0x10  PLACED
+2DMA   entries=     2 arcs=  2 size=0x38  NO-PLACEMENT
+SCO1   entries=     2 arcs=  2 size=0x24  PLACED
+SCO0   entries=     1 arcs=  1 size=0x24  PLACED
+SCO2   entries=     1 arcs=  1 size=0x24  PLACED
+SCOb   entries=     1 arcs=  1 size=0x24  PLACED
+STAG   entries=     1 arcs=  1 size=0x20  NO-PLACEMENT

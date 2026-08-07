@@ -13,6 +13,10 @@
  * menu draw (session registries) so we avoid a new CMake translation unit /
  * RelWithDebInfo reconfigure.
  */
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/d_ext_mod_flags.h"
 #include "d/d_ext_fado_door.h"
 #include "d/d_ext_quick_equip.h"
@@ -312,9 +316,21 @@ int dFadoDoor_tryInterceptChangeScene(int exitId, f32 speed, u32 mode, s8 roomNo
     }
 
     const s16 useAngle = (s_fadoWarpCmd.facing != -1) ? s_fadoWarpCmd.facing : angle;
+    // ============================================================
+    // §400 (log 095110): `mode` arrives from TP's DOOR path (Link walked
+    // through Fado's knob door), and forwarding it made the DESTINATION
+    // spawn Link with startMode=10 → alink orders the KNOB_START walk-in
+    // (d_a_alink.cpp:5149) — a door demo with NO door on the Outset side
+    // to advance it → the event stalled forever (camera never released;
+    // the deleted §399 kill leg had been euthanizing it at ~118f every
+    // warp). This crossing is OURS and doorless by design: a plain
+    // arrival (mode 0) is the vanilla-honest semantics. TP's own doors
+    // are untouched — this intercept fires on the Fado exit only.
+    // ============================================================
     dComIfGp_setNextStage(s_fadoWarpCmd.stage, s_fadoWarpCmd.spawn,
-                          static_cast<s8>(s_fadoWarpCmd.room), static_cast<s8>(layer), speed, mode,
-                          1, wipe == 15 ? 0 : static_cast<s8>(wipe), useAngle, 1, wipe_time);
+                          static_cast<s8>(s_fadoWarpCmd.room), static_cast<s8>(layer), speed,
+                          /*i_lastMode=*/0, 1, wipe == 15 ? 0 : static_cast<s8>(wipe), useAngle, 1,
+                          wipe_time);
     DuskLog.info("[FadoDoor] transit → {} r{} spawn{}", s_fadoWarpCmd.stage, s_fadoWarpCmd.room,
                  s_fadoWarpCmd.spawn);
     return 1;

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: bridge-owed:§369
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 /**
  * JA1 TSeqParser dialect — dispatch matches WW JASSeqParser::parseSeq.
  * Ownership of voices stays on Ja1Track / ExtSeqSpace (№89).
@@ -405,39 +409,67 @@ int Ja1Parser::cmdNop(Ja1Track* track, u32* args) {
 }
 
 // ============================================================
-// §264 SimpleADSR (opcode 0xD8, 5 args). Donor JASSeqParser
-// cmdSimpleADSR seeds the track's oscillator envelope table
-// (field_0x2cc/0x304 attack-decay-sustain + field_0x374 release)
-// from Player::sAdsrDef. The Ja1 synth has no per-track envelope
-// table yet, so the faithful ENVELOPE application is tracked debt
-// (a bridge, not the endpoint). The LOAD-BEARING fix here is the
-// DISPATCH: this op was misrouted to cmdTranspose, so every ADSR
-// site detuned its instrument. Consuming the 5 args (already read
-// by Cmd_Process's Arglist) and NOT transposing removes that
-// corruption; the envelope shaping lands when the synth grows the
-// oscillator table. See docs/WW Linked/audio-differ-report.md.
+// §363 SimpleADSR (opcode 0xD8, 5 args) — the §264 parse-and-drop debt
+// is RETIRED. Seeding is donor-verbatim (WW JASSeqParser.cpp:362-371):
+//   field_0x2cc[0]     = Player::sAdsrDef; .table → field_0x304
+//   field_0x304[1]     = attack time   (triple 0: ramp → 0x7FFF)
+//   field_0x304[4]     = decay-1 time  (triple 1: → 0x7FFF)
+//   field_0x304[7]/[8] = decay-2 time / sustain value (triple 2)
+//   field_0x374        = direct release (applied at EVERY noteOn)
+// (donor default sAdsTable ends with triple 3 = mode 14 HOLD).
+// Donor semantics note: the TABLE reaches a voice only when the
+// sequence routes it (cmdOscRoute 0xF0 → Ja1Track::overwriteOsc); the
+// direct release applies unconditionally. Both wired in ja1_track.
+// The u32→s16 stores carry §363 casts (donor relied on implicit
+// narrowing).
 // ============================================================
 int Ja1Parser::cmdSimpleADSR(Ja1Track* track, u32* args) {
-    (void)track;
     if (Ja1EventDump::active()) {
         char params[64];
         std::snprintf(params, sizeof(params), "%u,%u,%u,%u,%u", args[0], args[1], args[2],
                       args[3], args[4]);
         dumpEmit("simple_adsr", params, "");
     }
-    // ENVELOPE-DEBT §264: donor seeds sAdsrDef + release=args[4]. No port synth
-    // envelope table yet — do NOT fall through to transpose (the fixed bug).
+    track->field_0x2cc[0] = JAudio1::Player::sAdsrDef;
+    track->field_0x2cc[0].table = track->field_0x304;
+    track->field_0x304[1] = static_cast<s16>(args[0]);
+    track->field_0x304[4] = static_cast<s16>(args[1]);
+    track->field_0x304[7] = static_cast<s16>(args[2]);
+    track->field_0x304[8] = static_cast<s16>(args[3]);
+    track->field_0x374 = static_cast<u16>(args[4]);
+    return 0;
+}
+
+// ============================================================
+// §363 OscRoute (opcode 0xF0, 1 byte arg) — donor JASSeqParser::
+// cmdOscRoute (WW JASSeqParser.cpp:550-553, sCmdPList index 48):
+//   track->mOscRoute[(args[0] / 16) & 0xF] = args[0] & 0xF;
+// High nibble selects the track osc slot, low nibble is the route
+// (0x0F = unrouted). §363 memory-safety adaptation: the donor indexes
+// its mOscRoute[2] unguarded — the port drops out-of-range slots
+// instead of corrupting the neighboring fields.
+// ============================================================
+int Ja1Parser::cmdOscRoute(Ja1Track* track, u32* args) {
+    if (Ja1EventDump::active()) {
+        dumpEmitU("osc_route", args[0]);
+    }
+    const u32 slot = (args[0] / 16) & 0xF;
+    if (slot < 2) {
+        track->mOscRoute[slot] = args[0] & 0xF;
+    }
     return 0;
 }
 
 int Ja1Parser::Cmd_Process(Ja1Track* track, u8 op, u16 extra) {
     // WW Arglist[op-0xC0]: {count, format} — format packs 2 bits/arg
     // (0=u8, 1=u16, 2=u24, 3=reg). Keep the cursor aligned even for nops.
+    // KIT-DONOR-DATA: 128 lookup-table JSystem/JAudio/JASSeqParser.cpp Arglist[op-0xC0]
     static const u16 kArgCount[64] = {
         0, 2, 2, 1, 0, 0, 1, 1, 0, 1, 0, 2, 2, 1, 1, 1, 0, 2, 2, 0, 1, 1, 1, 2, 5, 1,
         1, 1, 1, 2, 1, 2, 1, 0, 0, 0, 2, 1, 1, 1, 0, 0, 1, 5, 4, 1, 1, 3, 1, 1, 3, 1,
         1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0,
     };
+    // KIT-DONOR-DATA: 128 lookup-table JSystem/JAudio/JASSeqParser.cpp Arglist[op-0xC0]
     static const u16 kArgFmt[64] = {
         0x0000, 0x0008, 0x0008, 0x0002, 0x0000, 0x0000, 0x0000, 0x0002, 0x0000, 0x0001,
         0x0000, 0x0000, 0x000C, 0x0000, 0x0000, 0x0003, 0x0000, 0x000C, 0x000C, 0x0000,
@@ -502,6 +534,12 @@ int Ja1Parser::Cmd_Process(Ja1Track* track, u8 op, u16 extra) {
         return cmdTranspose(track, args);
     case 0xDA:
         return cmdCloseTrack(track, args);
+    // §363: OscRoute — donor sCmdPList index 48 (0xC0+0x30). Routes the
+    // per-track osc/envelope data (incl. SimpleADSR's) onto voices at
+    // noteOn via Ja1Track::overwriteOsc. Arity already correct
+    // (kArgCount[48]=1, u8) — only the dispatch was missing.
+    case 0xF0:
+        return cmdOscRoute(track, args);
     case 0xFD:  // Tempo (WW dialect)
         return cmdTempo(track, args);
     case 0xFE:  // TimeBase

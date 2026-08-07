@@ -1,3 +1,7 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_knob00.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: Matching
 /**
  * d_a_knob00.cpp
  * Object - Regular doors (with knobs, not sliding)

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_npc_ls1.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: Matching
 // §244 WW Aryll (NPC_LS1) direct port — donor verbatim; framework fopNpc_npc_c native.
 /**
  * d_a_npc_ls1.cpp
@@ -26,7 +30,7 @@
  *      + daPyFlg0_SCOPE_CANCEL + daPyStts0_TELESCOPE_LOOK_e + setPlayerPosAndAngle
  *      + onNoResetFlg0; dItemNo_TELESCOPE_e / dItemBtn_{X,Y,Z}_e; dSv_event_flag_c
  *      UNK_2A80/UNK_0001/UNK_0280/UNK_0310; JA_STRM_DEMO_TETRA_FLY; fopAcStts_UNK4000_e;
- *      DSNAP_TYPE_NPC_LS1; dExtLs1_field4978().
+ *      DSNAP_TYPE_NPC_LS1; dExtLs1_getScopeWipeFlag().
  * ============================================================
  */
 
@@ -1847,7 +1851,7 @@ bool daNpc_Ls1_c::telescope_proc() {
     u8 scope_mesg_status = dComIfGp_getScopeMesgStatus();
     if (scope_mesg_status == fopMsg_MODE_MSG_UNK0_e) {
         if (dComIfGp_checkPlayerStatus0(0, daPyStts0_TELESCOPE_LOOK_e) != 0) {
-            if (dExtLs1_field4978()) {
+            if (dExtLs1_getScopeWipeFlag()) {
                 daPy_getPlayerActorClass()->setPlayerPosAndAngle(&m7CC[1], 0xCC70, 0);
             }
             dComIfGp_setScopeType(1);
@@ -1883,7 +1887,7 @@ bool daNpc_Ls1_c::telescope_proc() {
         }
     // fallthrough
     case fopMsg_MODE_CLOSE_WAIT_e:
-    case fopMsg_MODE_UNK_D_e: 
+    case fopMsg_MODE_SCOPE_WAIT_e: 
         {
             u32 temp_msg_no;
             switch (m833) {

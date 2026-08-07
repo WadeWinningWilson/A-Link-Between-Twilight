@@ -4,6 +4,10 @@
 // and latches them into module slots the ported dMesg subsystem reads. Does NOT
 // touch TP's MsgDtArchive (that is TP dialogue text). Fonts are M1b.
 // ============================================================================
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 #include "d/d_ext_dmesg.h"
 
 #include "d/d_com_inf_game.h"
@@ -662,11 +666,14 @@ void dExtDmesg_setMessage(unsigned short id) {
 // squash-stretches on a ~76-frame cycle (rest 0-60, bounce 60-76, repeat). Faithful scale
 // tables; applied to the raw J2DPane via setScale (the donor animates a dMesg_pane wrapper,
 // but the visible scale curve is identical).
+// KIT-DONOR-HUNK: d/d_mesg.cpp NonMatching
 static void dExtDmesg_arwAnime() {
     if (s_paneArrow == NULL || !s_paneArrow->isVisible()) {
         return;
     }
+    // KIT-DONOR-DATA: 20 lookup-table d/d_mesg.cpp:1231 arwAnime scale table
     static const f32 sx[5] = {1.0f, 1.3f, 0.8f, 1.2f, 1.0f};
+    // KIT-DONOR-DATA: 20 lookup-table d/d_mesg.cpp:1231 arwAnime scale table
     static const f32 sy[5] = {1.0f, 0.3f, 1.1f, 0.8f, 1.0f};
     static const int step[5] = {60, 67, 71, 74, 76};
     ++s_arrowTimer;
@@ -689,6 +696,7 @@ static void dExtDmesg_arwAnime() {
     }
     s_paneArrow->scale(fx, fy);
 }
+// KIT-DONOR-HUNK-END
 
 // §311(b) — full port of dMesg_screenData_c::dotAnime (d_mesg.cpp:1284): the close-dot fades
 // in over 10 frames (setAlpha), then colour-pulses on a 60-frame cycle — its black/white

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_esa.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: Matching
 /**
  * d_a_esa.cpp — All-Purpose Bait (餌). §224 Pass 2: direct source port.
  * Donor logic verbatim; adaptations marked §224:

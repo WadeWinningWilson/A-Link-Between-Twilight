@@ -1,3 +1,7 @@
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 /**
  * d_event_data.cpp
  * Event Data Processor
@@ -6,6 +10,25 @@
 #include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_event_data.h"
+#include "d/d_ext_save_guard.h"  // №285 WW-host scope gate (audit №284)
+#include "d/ext_evt/evt1_boundary.h"  // §423 A4 dispatch
+
+// ============================================================
+// §423 A4 — the TWO dispatch hooks the accessor seam cannot reach, because
+// these calls originate INSIDE this file rather than through a
+// dComIfGp_evmng_* inline. Stated honestly for the A5 record: after A5 this
+// file carries these hooks and NOTHING ELSE of the WW lane — uniform,
+// WW-logic-free, two of them — instead of today's scattered conditionals.
+// That is the campaign's real end state; "byte-vanilla" was my shorthand and
+// it was imprecise (Housing's §423b lesson: name a promise's scope).
+// The alternative that would remove even these — porting d_event.cpp so the
+// WW stack drives its own event Step — is recorded as an A5 option, not
+// silently assumed.
+// ============================================================
+namespace JEvent1 {
+void evt1_specialProc(dEvDtStaff_c* i_staff);
+bool evt1_advanceCutLocal(dEvDtBase_c* i_base, dEvDtStaff_c* i_staff);
+}
 #include "d/actor/d_a_player.h"
 #include "d/d_camera.h"
 #include "d/d_demo.h"
@@ -188,7 +211,10 @@ s32 event_debug_evdt_sound_adjust() {
 }
 #endif
 
-static int dEvDt_Next_Stage(int i_staffId, int i_wipe) {
+// §423 [E3]: linkage only (was file-static). The parallel WW event stack
+// shares this resolver — it maps staff properties to a stage/spawn, which is
+// DATA MAPPING, not event semantics. No behavior change; A5 keeps this line.
+int dEvDt_Next_Stage(int i_staffId, int i_wipe) {
     char* stage = NULL;   // §306: init so the no-next-stage case is detectable (was
     s16 start = -1;       // uninitialized → garbage fed the `stage != NULL` test below).
     int mode;
@@ -516,6 +542,12 @@ void dEvDtStaff_c::specialProc_WaitProc(int i_staffId) {
 }
 
 void dEvDtStaff_c::specialProc() {
+#if TARGET_PC
+    if (JEvent1::evt1_isActive()) {   // §423 A4 hook 1
+        JEvent1::evt1_specialProc(this);
+        return;
+    }
+#endif
     switch (mType) {
     case TYPE_PACKAGE:
         specialProcPackage();
@@ -1451,6 +1483,45 @@ void dEvDtStaff_c::specialProcPackage() {
             }
         }
 #endif
+#if TARGET_PC
+        // ====================================================================
+        // №285 THE §319/§320 KNOT, SCOPED (audit №284). §319 replaced TP's
+        // ENTIRE vanilla PACKAGE/PLAY end-fork with WW's — globally. Vanilla
+        // (verified against the pre-WW tree) is:
+        //     if (mode == 2) {
+        //         if (event && event->field_0x7 != 0xFF && !chkFlag2(1)) {
+        //             getControl()->suspend(100); cutEnd(staffId);   // re-entrance
+        //         } else { end(); }
+        //     }
+        //     if (mode == 0) cutEnd(staffId);
+        // Three regressions for mainline TP: (a) the re-entrance branch was
+        // DELETED — chained TP cutscenes took a path vanilla never used, and
+        // remove() additionally destroys the demo object/factory/message/
+        // particle a suspended re-entrance needs ALIVE; (b) dEvDt_Next_Stage
+        // (a NEXT_STAGE staff proc) was called from PLAY, which vanilla never
+        // does; (c) the !isEnableNextStage() outer guard made "cutscene ends
+        // with a stage already armed" skip the block entirely so the PACKAGE
+        // cut never ends. Vanilla restored here verbatim; the donor fork runs
+        // on WW host stages only (where the tale's WW event data needs it).
+        // With this scoped, §320's cutEnd WAIT-gate is restored too — it was
+        // disabled ONLY to compensate for this block's early teardown.
+        // ====================================================================
+        if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+            if (dDemo_c::getMode() == 2) {
+                dStage_MapEvent_dt_c* event285 = evtControl->getStageEventDt();
+                if (event285 != NULL && event285->field_0x7 != 0xFF && !evtControl->chkFlag2(1)) {
+                    dDemo_c::getControl()->suspend(100);
+                    dComIfGp_evmng_cutEnd(staffId);
+                } else {
+                    dDemo_c::end();
+                }
+            }
+            if (dDemo_c::getMode() == 0) {
+                dComIfGp_evmng_cutEnd(staffId);
+            }
+            break;
+        }
+#endif
         if (dDemo_c::getMode() == 2 && !dComIfGp_isEnableNextStage()) {
             // §306 DONOR-FAITHFUL restore (donor d_event_data.cpp:812-819). The mode-2
             // guard `!isEnableNextStage()` stands in for the donor's mWipeDirection latch:
@@ -1469,7 +1540,13 @@ void dEvDtStaff_c::specialProcPackage() {
             // never comes. (Guard note: donor wraps this in `if (mWipeDirection==0)`;
             // the tale has no next stage so it never latches — omitted rather than
             // reuse the ambiguous port field_0x40. Tracked if a chained tale needs it.)
-            if (!dEvDt_Next_Stage(staffId, 5)) {
+            // №283: only tear down a demo that is still STANDING. remove() is not a
+            // state machine — it frees m_control/m_object and NULLs them, and nothing
+            // re-creates them until the next dScnPly_Create. Re-entering this path (or
+            // racing the native dScnPly_Delete remove()) on an already-removed demo used
+            // to null-deref in end(). end() is idempotent now; this keeps the redundant
+            // teardown from firing at all. getControl() == NULL ⇒ already removed.
+            if (!dEvDt_Next_Stage(staffId, 5) && dDemo_c::getControl() != NULL) {
                 // §319 DECOMP-FIRST: the donor's ACT_PLAY no-next-stage path calls
                 // dComIfGp_demo_remove() (→ dDemo_c::remove()), NOT dDemo_c::end()
                 // (donor d_event_data.cpp:817). remove() == end() PLUS deleting the demo's
@@ -1791,6 +1868,11 @@ void dEvDtBase_c::advanceCut(dEvDtEvent_c* i_event) {
 }
 
 BOOL dEvDtBase_c::advanceCutLocal(dEvDtStaff_c* i_staff) {
+#if TARGET_PC
+    if (JEvent1::evt1_isActive()) {   // §423 A4 hook 2
+        return JEvent1::evt1_advanceCutLocal(this, i_staff) ? TRUE : FALSE;
+    }
+#endif
     dEvDtCut_c* cut = &mCutP[i_staff->getCurrentCut()];
 
 #if TARGET_PC

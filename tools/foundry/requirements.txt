@@ -1,0 +1,13 @@
+# Foundry instrument dependencies.
+#
+# Declared because §530 could not reproduce the real-data numbers: symbol_manifest.py
+# imports zstandard lazily inside a function, so a second lane hit the failure only
+# after a full manifest parse, with no statement anywhere that the dep existed.
+# An instrument another lane cannot run is not a shared instrument.
+#
+#   D:/XXXXXXX/foundry-py312/Scripts/python.exe -m pip install -r tools/foundry/requirements.txt
+#
+# Needed by: symbol_manifest.py (embedded manifests are zstd-compressed;
+#            Compression::Zstd = 1 in src/dusk/mods/manifest.cpp).
+# Everything else in tools/foundry is stdlib-only.
+zstandard>=0.22

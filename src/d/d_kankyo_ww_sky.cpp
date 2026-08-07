@@ -1,3 +1,8 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/d_kankyo_rain.cpp NonMatching
+// KIT-DONOR: d/d_kankyo.cpp MatchingFor
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 // ============================================================
 // §413 WW CELESTIAL LAYER -- see header. Seams:
 //  [S17] donor dStageType_MISC_e legs dropped: the sky host is outdoor by
@@ -15,6 +20,9 @@
 //        (foam-proven access shape, §97b).
 //  [S22] packets are lazy statics, reset via dKyWwSky_reset(); the donor
 //        deletes them in wether_delete -- session-lived here, flag-gated.
+//  [S25] donor snap_sunmoon_proc calls (d_kankyo_rain.cpp:1927 moon, :2026
+//        sun -- pictobox photo-snapshot feed) are DROPPED: the receiver has
+//        no pictobox subsystem, the feed has no consumer. Sites marked inline.
 // ============================================================
 
 #include "d/d_kankyo_ww_sky.h"
@@ -56,6 +64,18 @@ static void wwSkyInitBtitex(GXTexObj* i_obj, ResTIMG* i_img) {
                  (GXTexFmt)i_img->format, (GXTexWrapMode)i_img->wrapS,
                  (GXTexWrapMode)i_img->wrapT, (GXBool)(i_img->mipmapCount > 1));
 }
+// donor dKy_set_eyevect_calc (WW d_kankyo_rain.cpp:54-60) -- the receiver's
+// same-lineage twin exists but is file-static (src/d/d_kankyo_rain.cpp), so
+// this TU carries its own copy, same pattern as the btitex helpers. NOT calc2:
+// the -200 y offset is the donor difference.
+static void wwSkyEyevectCalc(camera_class* i_camera, Vec* o_out, f32 param_2, f32 param_3) {
+    cXyz calc;
+    dKyr_get_vectle_calc(&i_camera->view.lookat.eye, &i_camera->view.lookat.center, &calc);
+    o_out->x = i_camera->view.lookat.eye.x + calc.x * param_2;
+    o_out->y = (i_camera->view.lookat.eye.y + calc.y * param_3) - 200.0f;
+    o_out->z = i_camera->view.lookat.eye.z + calc.z * param_2;
+}
+
 static void wwSkySetBtitex(GXTexObj* i_obj, ResTIMG* i_img) {
     wwSkyInitBtitex(i_obj, i_img);
     GXInitTexObjLOD(i_obj, (GXTexFilter)i_img->minFilter, (GXTexFilter)i_img->magFilter,
@@ -161,7 +181,10 @@ static void wwSkySetSunpos() {
     sp8.x = sinf(DEG2RAD(var_f1)) * 80000.0f;
     sp8.y = cosf(DEG2RAD(var_f1)) * 80000.0f;
     sp8.z = cosf(DEG2RAD(var_f1)) * -48000.0f;
-    if (dComIfGp_event_runCheck() == FALSE) {
+    // donor :597 escape: during the stage-entry light init anim the sun still
+    // tracks even inside an event. Receiver twin of donor mInitAnimTimer =
+    // light_init_timer (d_kankyo.h:469, same 1..20-then-0 mechanism).
+    if (dComIfGp_event_runCheck() == FALSE || g_env_light.light_init_timer != 0) {
         s_sunPos.x = camera_p->view.lookat.eye.x + sp8.x;
         s_sunPos.y = camera_p->view.lookat.eye.y - sp8.y;
         s_sunPos.z = camera_p->view.lookat.eye.z + sp8.z;
@@ -372,7 +395,7 @@ static void wwSkyLenzflareMove() {
     cXyz projected;
     cXyz center;
 
-    dKy_set_eyevect_calc2(pCamera, &eyeVect, 7200.0005f, 7200.0005f);
+    wwSkyEyevectCalc(pCamera, &eyeVect, 7200.0005f, 7200.0005f);  // donor :485 = calc, not calc2
 
     dKyr_get_vectle_calc(&eyeVect, pSunPkt->mPos, &sunDirSmth);
     pLenzPkt->mPositions[0] = pSunPkt->mPos[0];
@@ -607,10 +630,14 @@ static void wwSkyDrawSunBody(Mtx drawMtx, cXyz* pPos, GXColor& reg0, u8** pImg) 
                 GXTexCoord2s16(0, 0xFF);
                 GXEnd();
             }
+            // [S25] donor :1927 snap_sunmoon_proc(&moonPos2, texidx) dropped (no pictobox)
         }
 
         if (bDrawSun == true) {
             cXyz camfwd;
+            // [S25] donor :2026 snap_sunmoon_proc(&sunPos, 9) dropped (no pictobox).
+            // Donor's unused sun_distXZ/sun_phi/cam_distXZ/cam_phi dead locals
+            // (:2028-2035) are dropped too -- the rotation below never reads them.
 
             f32 sun_theta = atan2f(sunPos.x, sunPos.z);
 
@@ -888,7 +915,8 @@ static void wwSkyDrawLenzflareBody(Mtx drawMtx, cXyz* pPos, u8** pImg) {
         GXSetCurrentMtx(GX_PNMTX0);
 
         GXSetNumChans(1);
-        GXSetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL,
+        // donor :2305 sets channel GX_COLOR0 (not COLOR0A0)
+        GXSetChanCtrl(GX_COLOR0, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL,
                       GX_DF_CLAMP, GX_AF_NONE);
         GXSetNumTexGens(0);
         GXSetNumTevStages(1);
@@ -902,6 +930,7 @@ static void wwSkyDrawLenzflareBody(Mtx drawMtx, cXyz* pPos, u8** pImg) {
         GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
         GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
                         GX_TEVPREV);
+        GXSetClipMode(GX_CLIP_ENABLE);  // donor :2316
         GXSetNumIndStages(0);
         GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
         GXClearVtxDesc();
@@ -1064,7 +1093,8 @@ static void wwSkyDrawStarBody(Mtx drawMtx) {
         mDoLib_project(&s_moonPos, &moon_proj);
 
         GXSetNumChans(1);
-        GXSetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL,
+        // donor :3121 sets channel GX_COLOR0 (not COLOR0A0)
+        GXSetChanCtrl(GX_COLOR0, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL,
                       GX_DF_CLAMP, GX_AF_NONE);
         GXSetNumTexGens(0);
         GXSetNumTevStages(1);
@@ -1238,8 +1268,10 @@ static void wwSkyDrawStarBody(Mtx drawMtx) {
 // WwAlways resources [S21].
 // ---------------------------------------------------------------------------
 void dKyWwSky_moveSun() {
-    wwSkySetSunpos();
-    if (!(dComIfGp_checkStatus(1))) {
+    wwSkySetSunpos();  // [S20] donor setSunpos runs from the light pass, outside the wether gate
+    // donor wether_move_sun gate (WW d_kankyo_wether.cpp:475):
+    // checkStatus(1) && !mbVrboxInvisible -- receiver twin = hide_vrbox.
+    if (!(dComIfGp_checkStatus(1)) || g_env_light.hide_vrbox) {
         return;
     }
     if (!s_sunInit) {
@@ -1301,7 +1333,11 @@ void dKyWwSky_moveSun() {
 }
 
 void dKyWwSky_moveStar() {
-    if (!(dComIfGp_checkStatus(1))) {
+    // donor wether_move_star gate (WW d_kankyo_wether.cpp:597-604):
+    // checkStatus(1) && !mbVrboxInvisible (receiver twin = hide_vrbox).
+    // [S17] the donor's M_DragB / "Name" (title) stage legs are dropped: the
+    // sky host is an outdoor field stage by definition.
+    if (!(dComIfGp_checkStatus(1)) || g_env_light.hide_vrbox) {
         return;
     }
     f32 time = g_env_light.getDaytime();

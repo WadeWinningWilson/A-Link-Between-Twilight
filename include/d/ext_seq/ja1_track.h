@@ -1,6 +1,7 @@
 #ifndef D_EXT_SEQ_JA1_TRACK_H
 #define D_EXT_SEQ_JA1_TRACK_H
 
+#include "d/ext_seq/ja1_oscillator.h"
 #include "d/ext_seq/ja1_seq_ctrl.h"
 
 class JASChannel;
@@ -27,8 +28,15 @@ public:
     Ja1SeqCtrl* getSeq() { return &mSeq; }
 
     int noteOn(u8 voice, s32 key, s32 vel, s32 /*gate*/, u32 /*prio*/);
-    bool noteOff(u8 voice, u16 /*release*/);
+    bool noteOff(u8 voice, u16 release);
     void noteOffAll();
+    // ============================================================
+    // §363 donor JASTrack::overwriteOsc (WW JASTrack.cpp:333) — applies
+    // the route-gated per-track osc/envelope data to a freshly started
+    // voice. Phase A: JA1 Osc_ is translated to JA2 JASOscillator::Data
+    // at this seam (the JA2 voice backend stays for Phase A).
+    // ============================================================
+    void overwriteOsc(JASChannel* channel);
     void gateOn(u8 /*voice*/, s32 /*key*/, s32 /*vel*/, s32 /*time*/) {}
 
     void writeRegParam(u8 param);
@@ -89,7 +97,6 @@ public:
     void setPanPower(int, f32) {}
     void assignExtBuffer(void*) {}
     void oscSetupFull(u32, u32, u32) {}
-    void setOscRoute(u8, u8) {}
     s32 seqTimeToDspTime(s32 t, u8) { return t; }
 
     // WW TTrack timed-param targets (JASTrack.h).
@@ -179,10 +186,21 @@ public:
     bool mActive = false;
     /** WW TTrack::field_0x36c — packed hierarchy id (openTrack depth nibble). */
     u32 mTrackId = 0;
-    u8 mOscRoute[4]{};
-    // ADSR stubs referenced by cmdSimpleADSR (unused by i_link path typically)
-    void* field_0x2cc[2]{};
-    u16 field_0x304[16]{};
+    // ============================================================
+    // §363 donor per-track oscillator/envelope table (WW JASTrack.h):
+    //   0x2CC TOscillator::Osc_ field_0x2cc[2] — per-track osc data
+    //   0x2FC u32 mOscRoute[2]                 — 0x0F = unrouted (default)
+    //   0x304 s16 field_0x304[12]              — SimpleADSR (mode,time,value)
+    //                                            triples; ctor-seeded from
+    //                                            Player::sAdsTable
+    //   0x374 u16 field_0x374                  — direct release (SimpleADSR
+    //                                            arg 4; applied every noteOn)
+    // Seeded in init() (donor: ctor seeds field_0x304, init() seeds routes
+    // + sEnvelopeDef — the port's init() runs once post-new, covering both).
+    // ============================================================
+    JAudio1::TOscillator::Osc_ field_0x2cc[2]{};
+    u32 mOscRoute[2]{0x0f, 0x0f};
+    s16 field_0x304[12]{};
     u16 field_0x374 = 0;
 
     /** Tick one wait unit; if ready, run parser until next wait. */

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 /**
  * @file d_a_swhit0.cpp
  * 
@@ -9,6 +13,7 @@
 #include "d/d_com_inf_game.h"
 #include <cstring>
 #include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
+#include "d/d_ext_save_guard.h"  // 515: crossing gate
 
 #define COLOR_YELLOW 0
 #define COLOR_BLUE   1
@@ -386,9 +391,31 @@ void daSwhit0_c::setDrawMtx() {
 }
 
 int daSwhit0_c::draw() {
-    // §406 deviation corrected: 16 was a TP type; donor d_a_swhit0.cpp:386 authors TEV_TYPE_BG0.
-    dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
-    dKyWw_setLightTevColorType(mpModel, &tevStr);
+    // ============================================================
+    // 515 CROSSING SCOPED. This is a PURE TP RECEIVER ACTOR -- the file dates
+    // to 2021-03-28 (dol2asm), not to any WW work. 405/406 SUBSTITUTED TP's own
+    // pair here, so every TP switch in mainline TP was being lit by donor code.
+    // HousingTemp filed this as Tier 2 ("legitimately carries donor code"); the
+    // hunk marker does record where the donor code IS, but it does not make the
+    // crossing legitimate -- lineage `mixed` means TP's file with donor spans,
+    // which is exactly the shape that needs a gate. TP's pair restored as the
+    // default; the donor pair serves only a WW host stage. Both kept, seam
+    // labelled -- never substitute.
+    // DECLARED CROSSING: registered in docs/WW Linked/ww-declared-crossings.md
+    // ============================================================
+#if TARGET_PC
+    if (dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        // KIT-DONOR-HUNK: d/actor/d_a_swhit0.cpp MatchingFor
+        // §406: 16 was a TP type; donor d_a_swhit0.cpp:386 authors TEV_TYPE_BG0.
+        dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
+        dKyWw_setLightTevColorType(mpModel, &tevStr);
+        // KIT-DONOR-HUNK-END
+    } else
+#endif
+    {
+        g_env_light.settingTevStruct(16, &current.pos, &tevStr);
+        g_env_light.setLightTevColorType(mpModel, &tevStr);
+    }
 
     // each set of 2 colors represents an on/off state color
     static u8 l_color[] = {

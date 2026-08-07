@@ -1,3 +1,7 @@
+// KIT-LINEAGE: bridge-owed:§369
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/ext_seq/ja1_track.h"
 #include "d/ext_seq/ja1_parser.h"
 #include "d/ext_seq/ja1_bank.h"
@@ -5,11 +9,13 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <unordered_map>
 
 #include "dusk/audio/DuskDsp.hpp"
 #include "dusk/logging.h"
 #include "JSystem/JAudio2/JASBank.h"
 #include "JSystem/JAudio2/JASChannel.h"
+#include "JSystem/JAudio2/JASOscillator.h"
 
 namespace ExtSeq {
 namespace {
@@ -58,8 +64,104 @@ void volProbeResetBudgets() {
     volProbeNoteOnBudget() = 24;
 }
 
+// ============================================================
+// §363 per-note JA1→JA2 envelope translation storage (Phase A seam).
+// Donor lifetime: the channel keeps a POINTER to TTrack storage
+// (field_0x2cc) for the note's whole life. The port's Ja1Track objects
+// are deleted on close() while released voices keep ringing, so the
+// converted JASOscillator::Data must NOT live in the track (J3D
+// pointer-fix lesson: never free while a consumer caches the pointer).
+// Each note that receives track osc data gets its own heap block,
+// registered per channel and freed on the channel's CB_STOP (fired from
+// ~JASChannel — guaranteed on every death path).
+// ============================================================
+constexpr u32 kOscPointCap = 16;
+
+struct NoteOscBlock {
+    JASOscillator::Data data[2]{};
+    JASOscillator::Point atk[2][kOscPointCap]{};
+    JASOscillator::Point rel[2][kOscPointCap]{};
+};
+
+std::unordered_map<JASChannel*, NoteOscBlock*>& noteOscMap() {
+    static std::unordered_map<JASChannel*, NoteOscBlock*> s_map;
+    return s_map;
+}
+
+NoteOscBlock* noteOscBlockFor(JASChannel* ch) {
+    auto& map = noteOscMap();
+    auto it = map.find(ch);
+    if (it != map.end()) {
+        return it->second;
+    }
+    NoteOscBlock* blk = new NoteOscBlock();
+    map.emplace(ch, blk);
+    return blk;
+}
+
+void noteOscBlockDrop(JASChannel* ch) {
+    auto& map = noteOscMap();
+    auto it = map.find(ch);
+    if (it != map.end()) {
+        delete it->second;
+        map.erase(it);
+    }
+}
+
+// ============================================================
+// §363 JA1 envelope table → JA2 Point table.
+// JA1 tables are raw s16 triples (mode,time,value) — TOscillator::calc
+// reads i_table[idx..idx+2]; a JA2 Point is the SAME triple as a struct
+// (BE-tagged on PC — assignment through the BE wrapper stores swapped).
+// Semantics that carry 1:1:
+//   - mode space: 0-3 curve ids (linear/square/sqroot/samplecell, same
+//     table order both engines), 13 loop (value = point INDEX in both),
+//     14 hold, 15 stop;
+//   - value scale: v/0x8000 both sides;
+//   - TIME UNITS map 1:1 EXACTLY: JA1 runs envTime*((dacRate/80)/600)
+//     /updateInterval updates (updateInterval=1 retail); JA2 runs
+//     mTime/(48000/dacRate) updates — and (dacRate/80)/600 ==
+//     dacRate/48000, so the constants cancel and mTime = envTime.
+// End rule = donor BankMgr oscTableEnd: copy through the first triple
+// with mode > 10 (loop/hold/stop all terminate the walk).
+// Returns the number of points written.
+// ============================================================
+u32 ja1TableToJa2Points(const s16* src, JASOscillator::Point* dst, u32 cap) {
+    if (src == nullptr) {
+        return 0;
+    }
+    u32 n = 0;
+    while (n < cap) {
+        dst[n].mEnvelopeMode = src[n * 3 + 0];
+        dst[n].mTime = src[n * 3 + 1];
+        dst[n].mValue = src[n * 3 + 2];
+        const bool terminal = src[n * 3 + 0] > 10;
+        n++;
+        if (terminal) {
+            return n;
+        }
+    }
+    // ===== §363 memory-safety adaptation: a table unterminated within cap
+    // would let the JA2 reader walk past the buffer — force a HOLD
+    // terminator instead (sustains the last value; no invented shaping).
+    // All donor tables fit easily (sAdsTable = 4 triples, sRelTable = 2,
+    // vib/tre = 6).
+    DuskLog.warn("[ExtSeq] §363 osc table unterminated within {} points — HOLD forced",
+                 kOscPointCap);
+    dst[cap - 1].mEnvelopeMode = static_cast<s16>(14);
+    dst[cap - 1].mTime = static_cast<s16>(0);
+    dst[cap - 1].mValue = static_cast<s16>(0);
+    return cap;
+}
+
 void voiceCallback(u32 type, JASChannel* ch, JASDsp::TChannel*, void* user) {
-    if (type != JASChannel::CB_STOP || user == nullptr || ch == nullptr) {
+    if (type != JASChannel::CB_STOP || ch == nullptr) {
+        return;
+    }
+    // ===== §363: the channel is dying (fired from ~JASChannel) — its
+    // translated osc block, if any, dies with it.
+    noteOscBlockDrop(ch);
+    if (user == nullptr) {
         return;
     }
     auto** slot = static_cast<JASChannel**>(user);
@@ -118,6 +220,22 @@ void Ja1Track::init() {
     mIsPaused = false;
     mPauseStatus = 0;
     mTrackId = 0;
+    // ============================================================
+    // §363 donor osc/envelope table seeding. WW TTrack::init()
+    // (JASTrack.cpp:59-62): routes → 0x0F (unrouted), both track oscs →
+    // Player::sEnvelopeDef. WW TTrack ctor (JASTrack.cpp:41-43): the
+    // SimpleADSR triple table ← Player::sAdsTable; field_0x374 ← 0
+    // (ctor :27 / init :75). The port's init() runs once right after
+    // new, so it carries the ctor seeding too.
+    // ============================================================
+    mOscRoute[0] = 0x0f;
+    field_0x2cc[0] = JAudio1::Player::sEnvelopeDef;
+    mOscRoute[1] = 0x0f;
+    field_0x2cc[1] = JAudio1::Player::sEnvelopeDef;
+    for (int i = 0; i < 12; i++) {
+        field_0x304[i] = JAudio1::Player::sAdsTable[i];
+    }
+    field_0x374 = 0;
 }
 
 void Ja1Track::close() {
@@ -220,6 +338,21 @@ int Ja1Track::noteOn(u8 voice, s32 key, s32 vel, s32 gate, u32 /*prio*/) {
         ch->mParams.mPan = composedPan();
         ch->mParams.mFxMix = composedFxmix();
         ch->mParams.mDolby = composedDolby();
+        // ============================================================
+        // §363 donor JASTrack::noteOn tail (WW JASTrack.cpp:325-328):
+        //     overwriteOsc(channel);
+        //     if (field_0x374) channel->directReleaseOsc(0, field_0x374);
+        // Route-gated track osc data lands on the voice; the SimpleADSR
+        // direct release (arg 4) applies UNCONDITIONALLY of routing.
+        // JA2 setDirectRelease targets mOscillators[0] — the same slot 0
+        // as the donor call, with an identical u16 encoding
+        // ((dr>>14)&3 curve id, dr&0x3FFF time; time units cancel exactly
+        // — see ja1TableToJa2Points header).
+        // ============================================================
+        overwriteOsc(ch);
+        if (field_0x374) {
+            ch->setDirectRelease(field_0x374);
+        }
         if (volProbeEnv()) {
             u32& left = volProbeNoteOnBudget();
             if (left > 0) {
@@ -235,12 +368,21 @@ int Ja1Track::noteOn(u8 voice, s32 key, s32 vel, s32 gate, u32 /*prio*/) {
     return ch != nullptr ? 1 : 0;
 }
 
-bool Ja1Track::noteOff(u8 voice, u16 /*release*/) {
+bool Ja1Track::noteOff(u8 voice, u16 release) {
     if (voice >= kMaxVoices) {
         return false;
     }
     if (mVoices[voice] != nullptr) {
-        mVoices[voice]->release(0);
+        // ============================================================
+        // §363 donor JASTrack::noteOff → TChannel::stop(param_2)
+        // (WW JASTrack.cpp:360-373, JASChannel.cpp:283-292): a nonzero
+        // release overrides the osc's direct release before stopping.
+        // JA2 JASChannel::release(u16) is the exact same contract
+        // (0 = plain release on the osc's own rel_table). The parser's
+        // cmdNoteOff release value (>100 → (r6-98)*20 expansion) now
+        // reaches the voice instead of being dropped.
+        // ============================================================
+        mVoices[voice]->release(release);
         mVoices[voice] = nullptr;
         return true;
     }
@@ -256,12 +398,112 @@ void Ja1Track::noteOffAll() {
     }
 }
 
+// ============================================================
+// §363 donor JASTrack::overwriteOsc (WW JASTrack.cpp:333-358), Phase-A
+// translated. Donor route nibble semantics kept verbatim:
+//   0x0F        = unrouted → skip (init default; SimpleADSR does NOT
+//                 route — sequences route via cmdOscRoute 0xF0);
+//   bits 0-1    = destination channel osc slot;
+//   bit 3 (0x8) = copy the channel's current osc into the track first;
+//   bit 2 (0x4) = same copy but the track keeps its own rel_table.
+// Phase-A adaptation: the track-side JA1 Osc_ is converted to a JA2
+// JASOscillator::Data (field map in ja1TableToJa2Points) held in a
+// per-note heap block, then installed with setOscInit — the donor's
+// channel->overwriteOsc(r28, ...) = setOscInit + one immediate
+// effectOsc step; JA2 applies on its next channel update instead.
+// KNOWN Phase-A residual (named, not approximated): for curve modes 1-3
+// on RISING segments JA1 mirrors the curve (calc: fIdx from the
+// remaining fraction when the delta is positive) while JA2 always
+// weights by the elapsed fraction — identical for linear (mode 0, the
+// SimpleADSR default) and for all falling segments. The ported
+// JAudio1::TOscillator is the authority to diff this against (Phase B).
+// ============================================================
+void Ja1Track::overwriteOsc(JASChannel* param_1) {
+    for (int i = 0; i < 2; i++) {
+        const u32 var1 = mOscRoute[i];
+        if (var1 == 0x0f) {
+            continue;
+        }
+        const u32 r28 = var1 & 3;
+        if (r28 >= 2) {
+            // ===== §363 BRIDGE-OWED: JA1 TChannel carries 4 osc slots
+            // (osc[4]); the JA2 backend carries 2 (mOscillators[2]).
+            // Routes to slots 2/3 have no Phase-A destination — owed to
+            // the full JAudio1 voice path (Phase B+).
+            static bool s_warnedSlot = false;
+            if (!s_warnedSlot) {
+                s_warnedSlot = true;
+                DuskLog.warn(
+                    "[ExtSeq] §363 BRIDGE-OWED osc route → slot {} (JA1 has 4 osc "
+                    "slots, JA2 backend has 2) — route dropped",
+                    r28);
+            }
+            continue;
+        }
+        if ((var1 & 8) || (var1 & 4)) {
+            // ===== §363 BRIDGE-OWED: donor copyOsc flags read the CHANNEL's
+            // current (bank) osc back into the track before overwriting
+            // (0x8 = full copy, 0x4 = copy keeping the track rel_table —
+            // JASTrack.cpp:341-355). That needs a JA2→JA1 table
+            // reification; deferred to Phase B rather than approximated.
+            // Donor behavior NOT reproduced for these flag bits.
+            static bool s_warnedCopy = false;
+            if (!s_warnedCopy) {
+                s_warnedCopy = true;
+                DuskLog.warn(
+                    "[ExtSeq] §363 BRIDGE-OWED osc route copy flag 0x{:X} "
+                    "(donor copyOsc) — route dropped, bank osc kept",
+                    var1 & 0xC);
+            }
+            continue;
+        }
+        NoteOscBlock* blk = noteOscBlockFor(param_1);
+        JASOscillator::Data& d = blk->data[i];
+        const JAudio1::TOscillator::Osc_& src = field_0x2cc[i];
+        // ===== §363 field-for-field translation (JA1 Osc_ → JA2 Data):
+        //   field_0x0  (target id) → mTarget  — id space identical
+        //              (0=volume, 1=pitch, 2=pan, 3=fxmix, 4=dolby);
+        //   field_0x4  (rate)      → mRate    — durations cancel exactly
+        //              (see ja1TableToJa2Points);
+        //   table / rel_table      → mTable / rel_table (Point-converted);
+        //   field_0x10 (scale)     → mScale;
+        //   field_0x14 (vertex)    → mVertex.
+        d.mTarget = src.field_0x0;
+        d.mRate = src.field_0x4;
+        d.mScale = src.field_0x10;
+        d.mVertex = src.field_0x14;
+        d.mTable = nullptr;
+        d.rel_table = nullptr;
+        if (src.table != nullptr && ja1TableToJa2Points(src.table, blk->atk[i], kOscPointCap) > 0) {
+            d.mTable = blk->atk[i];
+        }
+        if (src.rel_table != nullptr &&
+            ja1TableToJa2Points(src.rel_table, blk->rel[i], kOscPointCap) > 0) {
+            d.rel_table = blk->rel[i];
+        }
+        param_1->setOscInit(r28, &d);
+        // ===== §363 donor TOscillator::release (JASOscillator.cpp:139-141):
+        // a relless osc with no direct release falls back to
+        // mDirectRelease = 0x10. JA2 hard-stops in that case, so latch the
+        // donor default at noteOn (slot 0 only — direct release is osc[0]
+        // in both engines). sAdsrDef has rel_table = NULL, so SimpleADSR
+        // notes with release arg 0 depend on this.
+        if (r28 == 0 && d.rel_table == nullptr && field_0x374 == 0) {
+            param_1->setDirectRelease(0x10);
+        }
+    }
+}
+
 void Ja1Track::writeRegDirect(u8 reg, u16 value) {
     if (reg < 32) {
         mRegisterParam.r[reg] = value;
     }
     if (reg == 6) {
         mRegisterParam.bankProg = value;
+        // ===== §363 donor: any write to register 6 (bank/prog) resets the
+        // osc routes to unrouted (WW JASTrack.cpp:1301-1306).
+        mOscRoute[0] = 0x0f;
+        mOscRoute[1] = 0x0f;
     }
 }
 
@@ -615,6 +857,12 @@ void Ja1Track::writeRegParam(u8 param) {
         }
         mRegisterParam.r[bVar0] = static_cast<u16>(sVar0);
         mRegisterParam.setFlag(static_cast<u16>(sVar0));
+        if (bVar0 == 6) {
+            // ===== §363 donor: a write to register 6 resets the osc routes
+            // to unrouted (WW JASTrack.cpp:1301-1306).
+            mOscRoute[0] = 0x0f;
+            mOscRoute[1] = 0x0f;
+        }
     }
     if (Ja1EventDump::active()) {
         char buf[16];

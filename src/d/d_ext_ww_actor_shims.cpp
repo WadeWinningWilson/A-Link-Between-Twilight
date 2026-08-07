@@ -4,6 +4,10 @@
 // gated on unrestored mechanics (figurine gallery, grab/throw, attack-collision
 // bits). Pass 2 wires the real bodies as the d_a_kb source drop-in needs them.
 // ============================================================
+// KIT-LINEAGE: bridge-owed:§223
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/d_ext_ww_actor_shims.h"
 #include "d/d_item_data.h"  // §226 dItemNo_NONE_e (neutral equip-query result)
 #include "f_op/f_op_actor_mng.h"  // §227 fopAcM_fastCreateItem (port signature)

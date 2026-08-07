@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 /**
  * @file d_a_vrbox2.cpp
  * 
@@ -139,16 +143,35 @@ static int daVrbox2_ww_color_set(vrbox2_class* i_this) {
     return 1;
 }
 
+// KIT-DONOR-HUNK: d/actor/d_a_vrbox2.cpp MatchingFor
 // donor daVrbox2_Draw (WW d_a_vrbox2.cpp:27-85): eye-follow + 0.09 parallax;
 // sky-list order uso_umi -> kasumi_mae -> back_cloud (+100 Y lift).
 static int daVrbox2_ww_draw(vrbox2_class* i_this) {
     daVrbox2_ww_color_set(i_this);
-    if (g_env_light.hide_vrbox) {
+    // donor :37-42: vrbox2 gates on its OWN palette sum (it never reads
+    // mbVrboxInvisible -- that flag belongs to vrbox). Was hide_vrbox here,
+    // i.e. the other actor's state.
+    if ((g_env_light.vrbox_kasumi_inner_col.r + g_env_light.vrbox_kasumi_inner_col.g +
+         g_env_light.vrbox_kasumi_inner_col.b + g_env_light.vrbox_sky_col.r +
+         g_env_light.vrbox_sky_col.g + g_env_light.vrbox_sky_col.b +
+         g_env_light.vrbox_kumo_top_col.r + g_env_light.vrbox_kumo_top_col.g +
+         g_env_light.vrbox_kumo_top_col.b) == 0)
+    {
         return 1;
+    }
+    // donor :44-52: sea level from the stay room's FILI (was a hardcoded 0).
+    f32 seaLevel = 0.0f;
+    if (dComIfGp_roomControl_getStayNo() >= 0) {
+        dStage_FileList_dt_c* wwFili =
+            dComIfGp_roomControl_getStatusRoomDt(dComIfGp_roomControl_getStayNo())
+                ->getFileListInfo();
+        if (wwFili != NULL) {
+            seaLevel = dStage_FileList_dt_SeaLevel(wwFili);
+        }
     }
     f32 y0 = 0.0f;
     if (dComIfGd_getView() != NULL) {
-        y0 = dComIfGd_getInvViewMtx()[1][3] * 0.09f;
+        y0 = (dComIfGd_getInvViewMtx()[1][3] - seaLevel) * 0.09f;
     }
     mDoMtx_stack_c::transS(dComIfGd_getInvViewMtx()[0][3], dComIfGd_getInvViewMtx()[1][3] - y0,
                            dComIfGd_getInvViewMtx()[2][3]);
@@ -167,6 +190,7 @@ static int daVrbox2_ww_draw(vrbox2_class* i_this) {
     dComIfGd_setList();
     return 1;
 }
+// KIT-DONOR-HUNK-END
 #endif
 
 static int daVrbox2_Draw(vrbox2_class* i_this) {
@@ -566,6 +590,7 @@ static int daVrbox2_solidHeapCB(fopAc_ac_c* i_this) {
     vrbox2_class* a_this = (vrbox2_class*)i_this;
 
 #if TARGET_PC
+    // KIT-DONOR-HUNK: d/actor/d_a_vrbox2.cpp MatchingFor
     // ========================================================================
     // §418 WW LEG (donor daVrbox2_solidHeapCB, WW d_a_vrbox2.cpp:261-283):
     // vrbox2 owns uso_umi + kasumi_mae + back_cloud; retail requires all 3.
@@ -583,6 +608,7 @@ static int daVrbox2_solidHeapCB(fopAc_ac_c* i_this) {
         return a_this->mpWwUsoUmi != NULL && a_this->mpWwKasumiMae != NULL &&
                a_this->mpWwBackCloud != NULL;
     }
+    // KIT-DONOR-HUNK-END
 #endif
 
     J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes("vrbox_kumo.bmd");

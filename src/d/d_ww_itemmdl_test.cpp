@@ -1,3 +1,7 @@
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 /**
  * d_ww_itemmdl_test.cpp — dev replay for WW itemmdl bow get-item demo.
  */

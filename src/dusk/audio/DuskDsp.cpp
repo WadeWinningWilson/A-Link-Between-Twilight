@@ -718,6 +718,10 @@ static int ReadChannelSamplesChunk(
         // Mod-latched voice (address minted by remap_voice at noteOn).
         aramBase = dusk::audio::resolveShadowWave(channel.mWaveAramAddress);
         if (aramBase == nullptr) {
+            // §374c (JA1 silence probe, strip at A5): unresolved shadow address
+            // = the voice plays silence — log the address so the mint/registry
+            // mismatch is visible instead of silent.
+            { static int n = 0; if (n < 6) { ++n; DuskLog.warn("[JA1] §374c shadow wave UNRESOLVED addr={:#010x}", channel.mWaveAramAddress); } }
             // Stale virtual address (its bank was erased mid-note): a virtual
             // offset is meaningless in real ARAM, so silence + drain the voice
             // instead of decoding garbage. Loop must be cleared or FillDecodeBuf

@@ -1,4 +1,8 @@
-﻿/**
+﻿// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
+/**
  * d_event_manager.cpp
  * Event System Manager
  */
@@ -11,6 +15,7 @@
 #include "d/d_camera.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_demo.h"
+#include "d/d_ext_save_guard.h"  // №284: dExtWwSave_isWwHostStage (getMyActIdx §295 scope)
 #include "d/d_s_play.h"
 #include "SSystem/SComponent/c_counter.h"
 #include <cstring>
@@ -1205,6 +1210,24 @@ int dEvent_manager_c::getMyActIdx(int staffId, const char* const* action, int n_
     // treat a NON-generic cut (ba1's custom START_TALE1) as index 0 = WAIT, dispatch
     // cutWaitProc, and return TRUE — swallowing the custom cut, so privateCut (→
     // cut_move_START_TALE1 → the donor re-entrance warp) never ran. Matches the donor.
+    // ============================================
+    // №284 SCOPED (was global — mainline-TP crash class). TP's receiver contract for
+    // this shared API is `return 0` (= fall to cut 0 / WAIT on an unknown cut name),
+    // and dozens of vanilla TP actors index the result with NO bounds check in a
+    // release build (the JUT_ASSERTs compile out), e.g.
+    //   d_a_npc_kn.cpp:1134   (this->*mCutList[act_idx])(mStaffId)
+    //   d_a_npc_bans.cpp:857, d_a_npc_besu.cpp:1277, d_a_npc_bou.cpp:597, …
+    // Returning -1 there reads a member-function pointer from BEFORE the array and
+    // calls through it — a wild jump, not a hang. The WW donor semantics are needed
+    // only by WW cast on WW host stages (ba1's START_TALE1), so serve -1 THERE and
+    // keep the receiver's contract everywhere else. Same scoping law as №282/№283:
+    // a WW-motivated change to a shared path must not alter mainline TP.
+    // ============================================
+#if TARGET_PC
+    if (!dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        return 0;  // receiver contract: unknown cut ⇒ index 0 (WAIT)
+    }
+#endif
     return -1;
 }
 
@@ -1300,7 +1323,21 @@ void dEvent_manager_c::cutEnd(int staffId) {
     // PACKAGE flag 3 never set → the finish flag never set → mEventStatus stuck at 1 → endProc
     // never fired → the tale hung faded-out (no fade-in, no control return). Gate disabled (kept
     // as dead code); the staffId/mCurrentEvId null-safety below still guards a stray call.
-    if (false && dComIfGp_getEvent()->getMode() == dEvt_mode_WAIT_e) {
+    // ============================================================
+    // №285 SCOPED (audit №284): the `if (false && …)` permanent GLOBAL disable
+    // is gone. That gate exists in the receiver for a reason — a cutEnd against
+    // a stale cut can flag-set and pre-satisfy the NEXT event's finish flag —
+    // and it was disabled only to compensate for §319's early teardown, which
+    // is now WW-scoped (d_event_data.cpp №285). Mainline TP gets its gate back;
+    // WW host stages keep the donor's ungated cutEnd (donor d_event_manager.cpp
+    // :549 has no mode gate) so the tale teardown still fires.
+    // ============================================================
+#if TARGET_PC
+    const bool wwHost285 = dExtWwSave_isWwHostStage(dComIfGp_getStartStageName());
+#else
+    const bool wwHost285 = false;
+#endif
+    if (!wwHost285 && dComIfGp_getEvent()->getMode() == dEvt_mode_WAIT_e) {
         if (OREG_F(8)) {
             // "%s: %d: events not running so don't call."
             OS_REPORT("%s: %d: ã‚¤ãƒ™ãƒ³ãƒˆèµ°ã£ã¦ãªã„ã®ã§å‘¼ã°ãªã„ã§ãã ã•ã„ã€‚\n", __FILE__, 1984);

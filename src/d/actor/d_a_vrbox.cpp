@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 /**
  * d_a_vrbox.cpp
  *
@@ -32,15 +36,26 @@ static int daVrbox_Draw(vrbox_class* i_this) {
         if (g_env_light.hide_vrbox) {
             return 1;
         }
+        // donor :27-34: sea level comes from the stay room's FILI (host-data
+        // driven, was a hardcoded 0). Donor draw sets NO fog -- the receiver's
+        // native path's dKy_GxFog_set() is TP lineage and stays off this leg.
+        f32 seaLevel = 0.0f;
+        if (dComIfGp_roomControl_getStayNo() >= 0) {
+            dStage_FileList_dt_c* wwFili =
+                dComIfGp_roomControl_getStatusRoomDt(dComIfGp_roomControl_getStayNo())
+                    ->getFileListInfo();
+            if (wwFili != NULL) {
+                seaLevel = dStage_FileList_dt_SeaLevel(wwFili);
+            }
+        }
         f32 y0 = 0.0f;
         if (dComIfGd_getView() != NULL) {
-            y0 = dComIfGd_getInvViewMtx()[1][3] * 0.09f;  // host sea level = 0
+            y0 = (dComIfGd_getInvViewMtx()[1][3] - seaLevel) * 0.09f;
         }
         mDoMtx_stack_c::transS(dComIfGd_getInvViewMtx()[0][3],
                                dComIfGd_getInvViewMtx()[1][3] - y0,
                                dComIfGd_getInvViewMtx()[2][3]);
         i_this->mpWwSky->setBaseTRMtx(mDoMtx_stack_c::get());
-        dKy_GxFog_set();
         dComIfGd_setListSky();
         mDoExt_modelUpdateDL(i_this->mpWwSky);
         dComIfGd_setList();
@@ -99,6 +114,7 @@ static int daVrbox_Draw(vrbox_class* i_this) {
 }
 
 #if TARGET_PC
+// KIT-DONOR-HUNK: d/actor/d_a_vrbox.cpp MatchingFor
 // ============================================================================
 // §418 WW color feed -- donor daVrbox_color_set (WW d_a_vrbox.cpp:58-92)
 // verbatim wiring on the WW model: vr_sky material 0 takes the KASUMI-MAE
@@ -146,6 +162,7 @@ static int daVrbox_ww_color_set(vrbox_class* i_this) {
     }
     return 1;
 }
+// KIT-DONOR-HUNK-END
 #endif
 
 static int daVrbox_color_set(vrbox_class* i_this) {
@@ -206,6 +223,7 @@ static int daVrbox_solidHeapCB(fopAc_ac_c* i_this) {
     vrbox_class* this_ = (vrbox_class*)i_this;
 
 #if TARGET_PC
+    // KIT-DONOR-HUNK: d/actor/d_a_vrbox.cpp MatchingFor
     // ========================================================================
     // §418 WW LEG (donor daVrbox_solidHeapCB, WW d_a_vrbox.cpp:163-172):
     // on a WW sky host this actor owns vr_sky.bdl from the staged WwSky arc.
@@ -224,6 +242,7 @@ static int daVrbox_solidHeapCB(fopAc_ac_c* i_this) {
                                         : NULL;
         return this_->mpWwSky != NULL;
     }
+    // KIT-DONOR-HUNK-END
 #endif
 
     J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes("vrbox_sora.bmd");
@@ -240,10 +259,12 @@ static int daVrbox_Create(fopAc_ac_c* i_this) {
     int phase = cPhs_COMPLEATE_e;
 
     if (fopAcM_entrySolidHeap(this_, daVrbox_solidHeapCB, 0xC60)) {
+        // KIT-DONOR-HUNK: d/actor/d_a_vrbox.cpp MatchingFor
         // Donor contract (WW d_a_vrbox.cpp:185-187): a live vrbox = "this
         // stage HAS a sky" -- the very bit the §415 bridge asserted by hand.
         dComIfGp_onStatus(1);
         g_env_light.hide_vrbox = false;
+        // KIT-DONOR-HUNK-END
 #if TARGET_PC
         if (dKyWw_isSkyHost()) {
             dKyWw_setDomeActorsLive(true);  // §418: mount dome draw retires

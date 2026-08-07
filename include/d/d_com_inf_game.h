@@ -2859,11 +2859,43 @@ inline int dComIfGp_evmng_getMyStaffId(const char* i_staffname, fopAc_ac_c* i_ac
     return dComIfGp_getPEvtManager()->getMyStaffId(i_staffname, i_actor, i_tagId);
 }
 
+
+// ============================================================
+// §423 A4 — THE DISPATCH SEAM (the JA1/DSP-boundary equivalent).
+//
+// SCOPE CORRECTION to the §423 plan, stated plainly: the plan said "flip the
+// 26 evmng accessors". Only THREE of them diverge between the games —
+// getMyActIdx, getIsAddvance, cutEnd (audit №284's proven fork surface). The
+// other 23 are data getters over the SHARED format (getMyIntegerP/StringP/
+// FloatP/XyzP, setGoal, …) and have no WW version BECAUSE THEY DO NOT
+// DIVERGE. Flipping them would have been ceremony; per the [E7] law, share
+// what agrees. So A4 is three lines of dispatch, not twenty-six.
+//
+// Gate is JEvent1::evt1_isActive() — false while DUSK_EVT1_NATIVE == 0, so
+// this whole seam is compiled-live but inert until the switch flips.
+// ============================================================
+#include "d/ext_evt/evt1_boundary.h"
+
+namespace JEvent1 {
+int evt1_getMyActIdx(int, DUSK_CONST char* DUSK_CONST*, int, BOOL, int);
+BOOL evt1_getIsAddvance(int);
+void evt1_cutEnd(int);
+}
+
 inline int dComIfGp_evmng_getIsAddvance(int i_staffId) {
+    if (JEvent1::evt1_isActive()) {
+        return JEvent1::evt1_getIsAddvance(i_staffId);
+    }
     return dComIfGp_getPEvtManager()->getIsAddvance(i_staffId);
 }
 
 inline int dComIfGp_evmng_getMyActIdx(int i_staffId, DUSK_CONST char* DUSK_CONST* i_actions, int i_actionNum, BOOL param_3, BOOL param_4) {
+    // §423 A4: the WW manager's no-match contract is -1; TP's is 0. Each game
+    // now gets its own, so §295's gate in d_event_manager.cpp has nothing left
+    // to do (deletes at A5/A6).
+    if (JEvent1::evt1_isActive()) {
+        return JEvent1::evt1_getMyActIdx(i_staffId, i_actions, i_actionNum, param_3, param_4);
+    }
     return dComIfGp_getPEvtManager()->getMyActIdx(i_staffId, i_actions, i_actionNum, param_3, param_4);
 }
 
@@ -2888,6 +2920,13 @@ inline int dComIfGp_evmng_getMySubstanceNum(int i_staffId, DUSK_CONST char* i_da
 }
 
 inline void dComIfGp_evmng_cutEnd(int i_staffId) {
+    // §423 A4: the donor's cutEnd has NO event-mode gate; TP's does (restored
+    // by №285). Each game gets its own — §320's global `if (false && …)` is
+    // now compensating for nothing.
+    if (JEvent1::evt1_isActive()) {
+        JEvent1::evt1_cutEnd(i_staffId);
+        return;
+    }
     dComIfGp_getPEvtManager()->cutEnd(i_staffId);
 }
 

@@ -7,6 +7,10 @@
  * Transition hook: OwnState::Handoff fades prior bus (JA2 or ExtSeq) over N
  * frames (default 30), then starts the next BMS. Stream/.afc is out of scope.
  */
+// KIT-LINEAGE: native-port
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 
 #include "d/dolzel_rel.h"  // IWYU pragma: keep
 
@@ -29,6 +33,7 @@
 #include "d/d_ext_seq_space.h"
 #include "d/ext_seq/ja1_bank.h"
 #include "d/ext_seq/ja1_event_dump.h"
+#include "d/ext_seq/ja1_native.h"  // ===== §369 A4: THE GATE + native player entry points
 #include "d/ext_seq/ja1_parser.h"
 #include "d/ext_seq/ja1_track.h"
 #include "dusk/audio/DuskDsp.hpp"
@@ -384,6 +389,12 @@ void stopOwned(const char* reason) {
         return;
     }
     s_own = OwnState::Stopping;
+    if (DUSK_JA1_NATIVE) {
+        // ===== §369 gate-ON: the vanilla player owns the voices — donor
+        // stopSeq path (async teardown on the audio clock; the shadow-wave
+        // unregister below is UAF-safe against it, see ja1_native.cpp).
+        ExtSeq::ja1Native_stop(reason);
+    }
     if (s_rootInited) {
         s_root.close();  // releases every owned voice FIRST
     }
@@ -401,6 +412,9 @@ void stopOwned(const char* reason) {
 
 /** Release JA1 voices but keep JA2 suppress (mid-handoff into next BMS). */
 void releaseJa1KeepSuppress() {
+    if (DUSK_JA1_NATIVE) {
+        ExtSeq::ja1Native_stop("handoff-release");  // §369 gate-ON: donor stopSeq path
+    }
     if (s_rootInited) {
         s_root.close();
     }
@@ -450,6 +464,30 @@ void startOwnedImmediate(const char* stage) {
     // §53: register after any prior stopOwned; before first noteOn.
     ExtSeq::ja1Bank_register();
     applyControlForStage(stage, stemForStage(stage));
+    if (DUSK_JA1_NATIVE) {
+        // ====================================================================
+        // §369 gate-ON ENTRY-POINT SWAP (task 5): the vanilla JAudio1 player
+        // starts on this BMS instead of the bridge — donor call chain
+        // TTrack::setSeqData -> TTrack::startSeq (rootCallback registered on
+        // the JA1 kernel subframe list; the §365 governor then runs on the
+        // audio clock — no game-thread tick). The bridge root/parser are NOT
+        // started and its tick/noteOn paths early-return under the gate, so
+        // the bridge is fully bypassed while remaining the gate-OFF
+        // kill switch. §364's wall-clock stepping below is untouched
+        // (gate-OFF property; its revert rides the A5 gate flip).
+        // ====================================================================
+        const bool started =
+            ExtSeq::ja1Native_start(bms->data(), static_cast<u32>(bms->size()));
+        s_own = OwnState::Playing;
+        s_tickRemain = 0;
+        s_loggedClampLo = false;
+        s_loggedClampHi = false;
+        clearHandoff();
+        s_tickBudget = 0;
+        DuskLog.info("[ExtSeq] §369 startOwned NATIVE stage='{}' stem='{}' seq={}b → {}",
+                     stage, stemForStage(stage), bms->size(), started ? "running" : "FAILED");
+        return;
+    }
     s_root.start(const_cast<u8*>(bms->data()), 0);
     s_own = OwnState::Playing;
     s_tickRemain = 0;
@@ -601,7 +639,10 @@ void advanceHandoff() {
 
     if (s_handoffKind == HandoffKind::FadeExtSeqThenStart ||
         s_handoffKind == HandoffKind::FadeExtSeqThenStop) {
-        if (s_rootInited && s_fadeTotal > 0) {
+        // §369 gate-ON: the fade lerp below drives the BRIDGE root's timed
+        // volume — inert for the native player (its handoff degrades to a
+        // timed stop; the donor fade surface is the unported JAI layer).
+        if (!DUSK_JA1_NATIVE && s_rootInited && s_fadeTotal > 0) {
             const f32 t =
                 static_cast<f32>(s_fadeRemain) / static_cast<f32>(s_fadeTotal);
             const f32 vol = s_fadeVolStart * t;
@@ -630,31 +671,50 @@ void advanceHandoff() {
 }
 
 void tickOwned() {
+    if (DUSK_JA1_NATIVE) {
+        // ===== §369 gate-ON: the governor runs on the audio clock
+        // (rootCallback per DacRate/80 subframe) — the bridge's
+        // game-thread tick is fenced off entirely.
+        return;
+    }
     if (s_own != OwnState::Playing || !s_rootInited) {
         return;
     }
-    // §62: tempo×timebase/1800 ticks per ~60 Hz frame — keep the SAME target the
-    // §58 diagnostic logs as f32, but carry the discarded remainder so the
-    // long-run average matches (was integer truncate → i_link −11.8% / house −7.5%).
-    u32 steps = 2;
+    // ========================================================================
+    // §364 WALL-CLOCK TICK STEPPING (the "really off" tempo root): the §62
+    // per-call formula (tempo×timebase/1800) is calibrated for a 60 Hz caller,
+    // but the §B tempoProbe proves this poll runs at the ~30 Hz sim cadence
+    // (and worse during loads): measured 238 ticks/s vs target 476 — EXACTLY
+    // half tempo, every song. Donor semantics are time-based (JA1 ticks/sec =
+    // tempo×timebase/30); the only faithful PC stepping is real elapsed time ×
+    // that rate, poll-cadence-independent. Same steady_clock the §B probe uses.
+    // dt clamped to 0.25 s (load stalls must not fast-forward the song); the
+    // old LO clamp (force ≥1/call) is REMOVED — with dt stepping, 0 steps on a
+    // fast poll is CORRECT; HI clamp 48/call retained (§61 class).
+    // ========================================================================
+    u32 steps = 0;
     if (s_root.getTempo() > 0 && s_root.getTimebase() > 0) {
-        const u32 numer =
-            static_cast<u32>(s_root.getTempo()) * static_cast<u32>(s_root.getTimebase()) +
-            s_tickRemain;
-        steps = numer / 1800u;
-        s_tickRemain = numer % 1800u;
-        // §62: keep [1, 48] guards; log on first hit each startOwned (§61 class).
-        // Remainder-carry already makes the long-run average exact before clamps;
-        // neither bound fires for shipped i_link/house (≈7.93 / ≈9.73).
-        if (steps < 1u) {
-            if (!s_loggedClampLo) {
-                s_loggedClampLo = true;
-                DuskLog.warn(
-                    "[ExtSeq] §62 tickOwned clamp LO: steps=0→1 tempo={} timebase={} remain={}",
-                    s_root.getTempo(), s_root.getTimebase(), s_tickRemain);
-            }
-            steps = 1;
-        } else if (steps > 48u) {
+        static std::chrono::steady_clock::time_point s_stepT0;
+        static bool s_stepInit = false;
+        static f64 s_tickAcc = 0.0;
+        const auto now364 = std::chrono::steady_clock::now();
+        if (!s_stepInit) {
+            s_stepInit = true;
+            s_stepT0 = now364;
+        }
+        f64 dt = std::chrono::duration_cast<std::chrono::duration<f64>>(now364 - s_stepT0).count();
+        s_stepT0 = now364;
+        if (dt < 0.0) {
+            dt = 0.0;
+        } else if (dt > 0.25) {
+            dt = 0.25;
+        }
+        const f64 ticksPerSec = static_cast<f64>(s_root.getTempo()) *
+                                static_cast<f64>(s_root.getTimebase()) / 30.0;
+        s_tickAcc += ticksPerSec * dt;
+        steps = static_cast<u32>(s_tickAcc);
+        s_tickAcc -= static_cast<f64>(steps);
+        if (steps > 48u) {
             if (!s_loggedClampHi) {
                 s_loggedClampHi = true;
                 DuskLog.warn(

@@ -1,3 +1,7 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/d_door.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: Matching
 /**
  * d_door.cpp — WW door base layer
  *
@@ -64,6 +68,7 @@
 // dComIfGs_*EventBit calls (all WW dSv_event indices) to the donor event-flag
 // block (d_ext_save_flags) — never TP's table.
 #include "d/d_ext_save_flags_route.h"
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
 
 // §328 ========================================================================
 // WW-absent VALUE-FAITHFUL constants (donor numbering; toripost §253 pattern —
@@ -695,7 +700,7 @@ void dDoor_key2_c::calcMtx(dDoor_info_c* door) {
 /* 8006CA10-8006CA78       .text draw__12dDoor_key2_cFP12dDoor_info_c */
 void dDoor_key2_c::draw(dDoor_info_c* door) {
     J3DModelData* modelData = mpModel->getModelData();
-    g_env_light.setLightTevColorType(mpModel, &door->tevStr);
+    dKyWw_setLightTevColorType(mpModel, &door->tevStr);
     mBckAnim.entry(modelData);
     mDoExt_modelUpdateDL(mpModel);
 }
@@ -946,7 +951,7 @@ void dDoor_hkyo_c::draw(dDoor_info_c* door) {
         return;
     if (!chkFirst()) {
         J3DModelData* modelData = mpModel->getModelData();
-        g_env_light.setLightTevColorType(mpModel, &door->tevStr);
+        dKyWw_setLightTevColorType(mpModel, &door->tevStr);
         mpBrkAnm->entry(modelData);
         mDoExt_modelUpdateDL(mpModel);
     }

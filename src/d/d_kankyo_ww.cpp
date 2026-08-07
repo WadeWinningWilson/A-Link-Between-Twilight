@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 // ============================================================
 // §404 WW LIGHTING PORT — donor-verbatim setLightTevColorType(_sub) from
 // WW DP src/d/d_kankyo.cpp:1763-1873 (dtk address markers kept). See the
@@ -29,6 +33,7 @@
 #include "dusk/logging.h"
 
 /* 80193650-80193A30       .text setLightTevColorType_sub__FP11J3DMaterialP12dKy_tevstr_c */
+// KIT-DONOR-HUNK: d/d_kankyo.cpp MatchingFor
 void dKyWw_setLightTevColorType_sub(J3DMaterial* i_material, dKy_tevstr_c* i_tevstr) {
     if (i_tevstr->mLightMode != 0) {
         J3DColorChan* colorchan_p = i_material->getColorChan(0);
@@ -138,6 +143,7 @@ void dKyWw_setLightTevColorType(J3DModel* i_model, dKy_tevstr_c* i_tevstr) {
         mat_num--;
     }
 }
+// KIT-DONOR-HUNK-END
 
 // ============================================================
 // §405 THE TEVSTR FEEDER — the donor settingTevStruct TAIL (WW DP

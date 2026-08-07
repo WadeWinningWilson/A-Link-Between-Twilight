@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 #include "d/dolzel.h"  // IWYU pragma: keep
 
 #include "JSystem/JKernel/JKRExpHeap.h"
@@ -380,12 +384,16 @@ void fopMsgM_destroyExpHeap(JKRExpHeap* i_heap) {
     i_heap->destroy();
 }
 
+// KIT-DONOR-HUNK: f_op/f_op_msg_mng.cpp NonMatching
 // ============================================================================
 // §245  Scope-message subsystem (WW d_a_npc_ls1 telescope demo dependency)
 // ----------------------------------------------------------------------------
 // Direct port of WW f_op_msg_mng.cpp's scope funcs. Port renames applied:
 //   fopMsgM_IsExecuting -> fpcM_IsExecuting ; msg_class::mMsgNo -> ::msg_idx ;
-//   fopMsgStts_* -> fopMsg_MODE_* (UNKB->UNK_B, UNKD->UNK_D, CLOSE_WAIT added).
+//   fopMsgStts_* -> fopMsg_MODE_* (prefix only; CLOSE_WAIT added).
+//   512: UNK_B/UNK_D retired -- upstream named them SCOPE_ACTIVE (0x0B) and
+//   SCOPE_WAIT (0x0D), so the port carries the donor's semantic names now and
+//   only the prefix convention still differs.
 // Scope status lives in d_ext_scope_msg.h (see the header for why it is
 // static-backed rather than in the fixed g_dComIfG_gameInfo struct).
 //
@@ -403,7 +411,7 @@ fpc_ProcID fopMsgM_scopeMessageSet(u32 i_msgNo) {
             i_msgID = fpcM_ERROR_PROCESS_ID_e;
         } else {
             if (dComIfGp_checkPlayerStatus0(0, daPyStts0_TELESCOPE_LOOK_e) &&
-                dComIfGp_getScopeMesgStatus() == fopMsg_MODE_UNK_B_e) {
+                dComIfGp_getScopeMesgStatus() == fopMsg_MODE_SCOPE_ACTIVE_e) {
                 dComIfGp_setScopeMesgStatus(fopMsg_MODE_BOX_OPENING_e);
             }
             pMsg->msg_idx = i_msgNo;
@@ -415,12 +423,12 @@ fpc_ProcID fopMsgM_scopeMessageSet(u32 i_msgNo) {
 
 bool fopMsgM_getScopeMode() {
     if (dComIfGp_checkPlayerStatus0(0, daPyStts0_TELESCOPE_LOOK_e) &&
-        dComIfGp_getScopeMesgStatus() == fopMsg_MODE_UNK_B_e && !dComIfGp_event_runCheck()) {
-        dComIfGp_setScopeMesgStatus(fopMsg_MODE_UNK_D_e);
+        dComIfGp_getScopeMesgStatus() == fopMsg_MODE_SCOPE_ACTIVE_e && !dComIfGp_event_runCheck()) {
+        dComIfGp_setScopeMesgStatus(fopMsg_MODE_SCOPE_WAIT_e);
         return true;
     }
     if (dComIfGp_getScopeMesgStatus() == fopMsg_MODE_BOX_CLOSING_e) {
-        dComIfGp_setMesgStatus(fopMsg_MODE_UNK_D_e);
+        dComIfGp_setMesgStatus(fopMsg_MODE_SCOPE_WAIT_e);
         return true;
     }
     return false;
@@ -443,9 +451,10 @@ bool fopMsgM_checkForceSend() {
 }
 
 bool fopMsgM_releaseScopeMode() {
-    if (dComIfGp_getScopeMesgStatus() == fopMsg_MODE_UNK_D_e) {
-        dComIfGp_setScopeMesgStatus(fopMsg_MODE_UNK_B_e);
+    if (dComIfGp_getScopeMesgStatus() == fopMsg_MODE_SCOPE_WAIT_e) {
+        dComIfGp_setScopeMesgStatus(fopMsg_MODE_SCOPE_ACTIVE_e);
         return true;
     }
     return false;
 }
+// KIT-DONOR-HUNK-END

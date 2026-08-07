@@ -1,4 +1,8 @@
-﻿#include "d/dolzel.h" // IWYU pragma: keep
+﻿// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
+#include "d/dolzel.h" // IWYU pragma: keep
 
 #include "JSystem/JKernel/JKRAramArchive.h"
 #include "JSystem/JKernel/JKRExpHeap.h"
@@ -338,7 +342,21 @@ int dStage_roomControl_c::loadRoom(int roomCount, u8* rooms, bool param_2) {
             if (!stayRoomCheck(roomCount, rooms, roomNo)) {
 #if TARGET_PC
                 // №62: room-lane claims survive alink RoomCheck RTBL (room0-only).
-                if (dExtNpcMount_isRoomLaneProtected(roomNo)) {
+                // ============================================================
+                // №285 SCOPED (was global — mainline-TP leak class, audit №284).
+                // The claim array is cleared ONLY by the orderly
+                // dExtNpcMount_ensureRoomLaneUnloaded() call; no stage-change,
+                // death or save-quit path clears it. Leaving a WW host by any
+                // other route left that room index un-evictable FOR THE REST OF
+                // THE PROCESS, on every TP stage, with heap growth toward OOM.
+                // №93 twelve lines below already gates on isWwHostStage; this
+                // one only read WW-specific in its COMMENT — "a comment is not
+                // a scope" (audit lesson, DO-NOT-registry candidate). Same
+                // scoping law as №282/№283/§295.
+                // ============================================================
+                const char* sn62 = dComIfGp_getStartStageName();
+                if (sn62 != NULL && dExtWwSave_isWwHostStage(sn62) &&
+                    dExtNpcMount_isRoomLaneProtected(roomNo)) {
                     continue;
                 }
 #endif
@@ -607,6 +625,7 @@ static dStage_objectNameInf l_objectName[] = {
     // §46/№154: storyboard actor binding. JStage resolves a JACT block by its
     // ID string through dStage_searchName -> (proc, argument), then finds a LIVE
     // actor matching BOTH (f_op_actor_mng.cpp fopAcM_findObjectCB).
+    // KIT-DONOR-HUNK: d/d_stage.cpp Matching
     // §244: RESTORED to the VANILLA WW row. Donor d/d_stage.cpp:713 is
     //   OBJNAME("Ls1", fpcNm_NPC_LS1_e, 255, 60) — the port earlier had to point
     //   "Ls1" at the NPC_HENNA0 mount host (arg 5) only because a real NPC_LS1
@@ -654,6 +673,7 @@ static dStage_objectNameInf l_objectName[] = {
     OBJNAME("KNOB01D", fpcNm_KNOB00_e,            255),
     OBJNAME("KNOB02D", fpcNm_KNOB00_e,            255),
     OBJNAME("KNOB03D", fpcNm_KNOB00_e,            255),
+    // KIT-DONOR-HUNK-END
     OBJNAME("carry00", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry01", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry02", fpcNm_Obj_Carry_e,         -1),
@@ -1713,7 +1733,13 @@ dStage_roomControl_c::roomDzs_c dStage_roomControl_c::m_roomDzs;
 u8 dStage_roomControl_c::mNoArcBank;
 #endif
 
-static void dStage_actorCreate(stage_actor_data_class* i_actorData, fopAcM_prm_class* i_actorPrm) {
+// ============================================
+// №282 (was void): return the queued create's ProcID so playerInit can verify
+// its №91 latch against the REAL create queue (fpcM_IsCreating) instead of a
+// flag proxy that can go stale across a same-stage reload. Error/no-queue paths
+// return fpcM_ERROR_PROCESS_ID_e; all other callers ignore the return.
+// ============================================
+static fpc_ProcID dStage_actorCreate(stage_actor_data_class* i_actorData, fopAcM_prm_class* i_actorPrm) {
     dStage_objectNameInf* actorInf = dStage_searchName(i_actorData->name);
 
     if (actorInf == NULL) {
@@ -1727,11 +1753,12 @@ static void dStage_actorCreate(stage_actor_data_class* i_actorData, fopAcM_prm_c
             if (actor != NULL) {
                 fopAcM_delete(actor);
             }
-            return;
+            return fpcM_ERROR_PROCESS_ID_e;
         }
 
-        fopAcM_Create(actorInf->procname, NULL, i_actorPrm);
+        return fopAcM_Create(actorInf->procname, NULL, i_actorPrm);
     }
+    return fpcM_ERROR_PROCESS_ID_e;
 }
 
 static int dStage_cameraCreate(stage_camera2_data_class* i_cameraData, int i_cameraIdx,
@@ -1782,6 +1809,10 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
     // wrongly recreates the good player (observed CREATE=2 on the triple decode).
     static bool s_playerEstablished = false;
     static bool s_prevHavePlayer = false;
+    // №282: ProcID of the ALINK create this latch guards — lets the №91 skip
+    // verify the create is GENUINELY still queued (fpcM_IsCreating) before
+    // trusting the flag. fpcM_ERROR_PROCESS_ID_e = nothing recorded.
+    static fpc_ProcID s_playerCreateId = fpcM_ERROR_PROCESS_ID_e;
 #endif
 
     {
@@ -1819,7 +1850,6 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
         // is obsolete and was the regression. Do not reinstate without a
         // per-arrival latch (a bare !havePlayer is not one under async load).
         // ============================================================
-        (void)wwHost;
         // ============================================================
         // №91: player-create latch. dStage_actorCreate queues ALINK
         // ASYNC — dComIfGp_getPlayer(0) stays NULL for several room
@@ -1849,18 +1879,67 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
             if (s_prevHavePlayer && !havePlayer) {
                 // player was torn down (present→absent) — this is a new arrival even
                 // if the stage name/point repeat (re-entry). Re-arm for a fresh create.
+                // №282: clear the create latch too — the create it guarded belonged
+                // to the torn-down scene (this branch alone is not sufficient —
+                // s_prevHavePlayer only samples on playerInit calls — but it is
+                // correct whenever it does fire).
                 s_playerEstablished = false;
+                s_playerCreatePending = false;
             }
             s_prevHavePlayer = havePlayer;
             if (havePlayer) {
                 s_playerCreatePending = false;  // player materialised — latch not needed
             }
+            // ============================================================
+            // №282: the №91 skip is now (a) SCOPED to WW host stages and
+            // (b) verified against the real create queue.
+            //
+            // (a) SCOPE: the OOM №91 guards against (multiple room_of_scene
+            // procs decoding the arrival room in one arrival) only exists on
+            // WW-hosted multi-room stages (R_DL01 REVT bake). Mainline TP
+            // decodes the arrival room once and ran for months without №91;
+            // the guard firing there caused the F_SP102 respawn crash
+            // (same-stage same-point reload → stale latch → player create
+            // skipped → room tag actors deref a NULL player). WW work must
+            // not alter mainline behavior — outside WW hosts the native flow
+            // is restored exactly.
+            //
+            // (b) LIFECYCLE: the latch is a proxy that goes stale — playerInit
+            // is its only sampling point, so "player created, lived, and was
+            // torn down between arrivals" leaves it set with nothing in
+            // flight. Before honoring it, confirm the recorded ALINK create
+            // request is genuinely still queued (fpcM_IsCreating). If not,
+            // the latch is stale: clear it and fall through to a fresh
+            // create. A real in-flight create (the №91 OOM window) still
+            // skips exactly as before.
+            // ============================================================
             if (!havePlayer && startRoom == stageRoom && s_playerCreatePending) {
-                DuskLog.warn(
-                    "[dStage] playerInit №91 skip — player create already in flight "
-                    "(async) for '{}' room {}",
-                    sn != NULL ? sn : "?", (int)stageRoom);
-                return 1;
+                const bool createQueued = s_playerCreateId != fpcM_ERROR_PROCESS_ID_e &&
+                                          fpcM_IsCreating(s_playerCreateId);
+                if (!createQueued) {
+                    DuskLog.warn(
+                        "[dStage] playerInit №282 stale №91 latch (create id={} not queued) "
+                        "for '{}' room {} — clearing, creating fresh player",
+                        (u32)s_playerCreateId, sn != NULL ? sn : "?", (int)stageRoom);
+                    s_playerCreatePending = false;
+                    s_playerEstablished = false;
+                    s_playerCreateId = fpcM_ERROR_PROCESS_ID_e;
+                } else if (wwHost) {
+                    DuskLog.warn(
+                        "[dStage] playerInit №91 skip — player create already in flight "
+                        "(async) for '{}' room {}",
+                        sn != NULL ? sn : "?", (int)stageRoom);
+                    return 1;
+                } else {
+                    // №282 scope: non-WW stage with a genuinely queued create —
+                    // native TP never skipped here; fall through unchanged. (The
+                    // native `havePlayer || startRoom != stageRoom` guard below is
+                    // the only arbiter, exactly as pre-№91.)
+                    DuskLog.info(
+                        "[dStage] playerInit №282 non-WW stage '{}' — №91 skip not applied "
+                        "(create id={} in flight)",
+                        sn != NULL ? sn : "?", (u32)s_playerCreateId);
+                }
             }
         }
 #endif
@@ -1980,8 +2059,18 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
     // this same arrival (multiple room-0 procs) skip until Link materialises.
     s_playerCreatePending = true;
     s_playerEstablished = true;  // №92: a create for THIS arrival has been issued
-#endif
+    // №282: record the queued create's ProcID so the №91 skip can verify the
+    // latch against the real create queue (stale-latch respawn crash fix).
+    s_playerCreateId = dStage_actorCreate(player_data, appen);
+    if (s_playerCreateId == fpcM_ERROR_PROCESS_ID_e) {
+        // Create never queued (name lookup failed / error path) — do not leave
+        // a latch guarding nothing.
+        s_playerCreatePending = false;
+        s_playerEstablished = false;
+    }
+#else
     dStage_actorCreate(player_data, appen);
+#endif
 
     base_process_class* stageProc =
         (base_process_class*)fopScnM_SearchByID(dStage_roomControl_c::getProcID());

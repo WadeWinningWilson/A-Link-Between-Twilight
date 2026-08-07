@@ -1,3 +1,12 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_kb.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: NonMatching
+// KIT-NOTE: 515 -- bannered after HousingTemp flagged this TU as calling the
+// WW lighting path with no declared lineage. Measured 92.1% donor text against
+// the pinned donor, and its whole dusklight history is WW commits (added
+// 2026-08-02, wired 2026-08-04 in "WW lighting 405/406 ... all 17 TUs wired").
+// So the WW call is CORRECT here and the defect was the missing banner.
 /**
  * d_a_kb.cpp
  * NPC - Pig

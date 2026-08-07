@@ -34,8 +34,28 @@ static cPhs_Step fopScnRq_phase_IsDoingOverlap(scene_request_class* i_sceneReq) 
 }
 
 static cPhs_Step fopScnRq_phase_IsDoneOverlap(scene_request_class* i_sceneReq) {
+#if TARGET_PC
+    // ========================================================================
+    // §398f — the done-latch CONSUMER identifies itself. cReq_Is_Done is a
+    // consuming read and this phase appears at fadeFase[1] AND [4]; if two
+    // scene requests coexist (a leftover entry request at [4] + the new exit
+    // request at [1]), one eats the other's one-shot (log 102257: latch set,
+    // bf→0x0, exit parked at ph1 forever). Log every successful consume with
+    // the request's identity + phase so the eater is named.
+    // ========================================================================
+    {
+        const int done = fopOvlpM_IsDone();
+        if (done == 1) {
+            DuskLog.warn("[Scn] §398f done-latch CONSUMED by req={:p} name={} phase_id={}",
+                         (void*)i_sceneReq, (int)i_sceneReq->create_request.name,
+                         (int)i_sceneReq->create_request.phase_request.id);
+        }
+        return done == 1 ? cPhs_NEXT_e : cPhs_INIT_e;
+    }
+#else
     return fopOvlpM_IsDone() == 1 ? cPhs_NEXT_e : cPhs_INIT_e;
     UNUSED(i_sceneReq);
+#endif
 }
 
 static BOOL l_fopScnRq_IsUsingOfOverlap;

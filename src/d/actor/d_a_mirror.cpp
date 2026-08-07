@@ -19,6 +19,8 @@
 
 #ifndef __MWERKS__
 #include "dusk/math.h"
+#include "d/d_kankyo_ww.h"           // §404 WW lighting write-path (was the empty stub)
+#include "d/d_ext_save_guard.h"      // 515: dExtWwSave_isWwHostStage -- crossing gate
 #endif
 
 static BOOL daMirror_c_createHeap(fopAc_ac_c* i_this) {
@@ -626,7 +628,25 @@ int daMirror_c::draw() {
 
     if (mpModel != NULL) {
         g_env_light.settingTevStruct(0x10, &current.pos, &tevStr);
-        g_env_light.setLightTevColorType(mpModel, &tevStr);
+        // ============================================================
+        // 515 CROSSING SCOPED. HousingTemp doctrine: WW never reaches TP
+        // unless declared. 405/406 wired this TP receiver actor to the WW
+        // write path and SUBSTITUTED TP's own call -- so a pure TP actor was
+        // lit by donor code on EVERY stage, mainline TP included. The donor
+        // has no d_a_mirror.cpp at all; this file dates to the 2024 TP decomp
+        // history. TP's call is restored as the default and the WW leg is
+        // served only on a WW host stage, per the standing shared-path
+        // scoping rule. Both paths kept and labelled -- never substitute.
+        // DECLARED CROSSING: registered in docs/WW Linked/ww-declared-crossings.md
+        // ============================================================
+#if TARGET_PC
+        if (dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+            dKyWw_setLightTevColorType(mpModel, &tevStr);
+        } else
+#endif
+        {
+            g_env_light.setLightTevColorType(mpModel, &tevStr);
+        }
         mDoExt_modelUpdateDL(mpModel);
     }
 

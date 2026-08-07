@@ -33,6 +33,8 @@ private:
     int cmdTranspose(Ja1Track* track, u32* args);
     int cmdCloseTrack(Ja1Track* track, u32* args);
     int cmdSimpleADSR(Ja1Track* track, u32* args);
+    // §363: donor cmdOscRoute (sCmdPList idx 48 = opcode 0xF0).
+    int cmdOscRoute(Ja1Track* track, u32* args);
     int cmdNop(Ja1Track* track, u32* args);
     int Cmd_Process(Ja1Track* track, u8 op, u16 extra);
     bool conditionCheck(Ja1Track* track, u8 flag);

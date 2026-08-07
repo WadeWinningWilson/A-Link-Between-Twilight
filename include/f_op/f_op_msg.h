@@ -17,8 +17,13 @@ enum fopMsg_Mode_e {
     fopMsg_MODE_MSG_TYPING_e    = 0x06,
     fopMsg_MODE_CLOSE_WAIT_e    = 0x0A,  // §245 waiting for input before closing (== UNK_A)
     fopMsg_MODE_UNK_A_e         = 0x0A,
-    fopMsg_MODE_UNK_B_e         = 0x0B,
-    fopMsg_MODE_UNK_D_e         = 0x0D,
+    // 512: donor names, learned at the re-baseline (donor f_op_msg.h:21-23).
+    // Were UNK_B / UNK_D here. 0x0C is the donor's SCOPE_DEMO, added for
+    // completeness -- unused by the port today, but it closes the gap rather
+    // than leaving a hole someone re-derives later.
+    fopMsg_MODE_SCOPE_ACTIVE_e  = 0x0B,  // scope active/idle
+    fopMsg_MODE_SCOPE_DEMO_e    = 0x0C,  // scope demo (cutscene) mode
+    fopMsg_MODE_SCOPE_WAIT_e    = 0x0D,  // scope waiting for event/demo
     fopMsg_MODE_MSG_DISPLAYED_e = 0x0E,
     fopMsg_MODE_MSG_CONTINUE_e  = 0x0F,
     fopMsg_MODE_MSG_END_e       = 0x10,

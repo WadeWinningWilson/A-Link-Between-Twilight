@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 // d_particle is odd in that it doesn't appear to include dolzel.pch.
 // It uses ...data pooling, but weak data from the PCH (e.g. Z2Calc::cNullVec)
 // isn't present like would be expected for a TU using pooling.
@@ -1503,8 +1507,10 @@ struct WwCommonRes {
 
 static WwCommonRes sWwCommon[] = {
     {kWwWindlineResId, kWwWindlineRmSlot, NULL, false},
+    // KIT-DONOR-HUNK: d/d_grass.cpp Matching
     {0x03DA, 4, NULL, false},
     {0x03DB, 5, NULL, false},
+    // KIT-DONOR-HUNK-END
     // 241/flowers: the donor's flower cut + run-through VFX. Same JN bank and
     // the SAME block shape as the grass ids above (BEM1/FLD1/BSP1/ESP1/TDB1,
     // key=0 fld=1 tex=1 -- verified by an offline walk of the staged archive),
@@ -1522,6 +1528,14 @@ static WwCommonRes sWwCommon[] = {
     {0x0024, 6, NULL, false},   // ID_AK_JN_SHIPIMPACT00
     {0x0026, 7, NULL, false},   // ID_AK_JN_HAMON00 (ripple — pig/shallow-water)
     {0x0034, 8, NULL, false},   // ID_AK_JN_SHIPWARP-family / impact
+    // §396 lamp candle (bus §368/§394/§395 thread): the §327 port took the
+    // RECEIVER enum's ID_AK_JN_TORCH/KAGEROU00 — same NAMES as the donor's
+    // dPa_name but TP's VALUES (0x41/0x47), so the lamp asked TP's banks for
+    // ids that aren't resident and the emitter was NULL forever (§395 log).
+    // These are the DONOR's values (WW DP d_particle_name.h:121/:37), both
+    // verified present in the staged common.jpc by offline JPAC1-00 walk.
+    {0x01EA, kWwWindlineRmSlot, NULL, false},  // WW ID_AK_JN_TORCH (candle flame)
+    {0x4004, kWwWindlineRmSlot, NULL, false},  // WW ID_AK_JP_O_KAGEROU00 (heat haze)
     {0x0035, 9, NULL, false},   // ID_AK_JN_SHIPSPLASH00
     {0x0036, 10, NULL, false},  // ID_AK_JN_SHIPTAIL00
     {0x0037, 11, NULL, false},  // ID_AK_JN_SHIPWAVE00 (the wake — ikada:327/334)

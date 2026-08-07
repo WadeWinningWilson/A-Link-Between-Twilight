@@ -165,6 +165,181 @@ it is **pipeline productization**: they made the conversion a *product* (one com
 target-verified, variant-tolerant, resumable) while ours is still a *procedure*. R1–R3
 close that gap; the rest is doctrine hygiene.
 
+## Addendum — V-series: TTW lessons aimed at PORTING VELOCITY (2026-08-06)
+
+> R1–R10 above target pipeline productization and containment. On the user's follow-up
+> ("what would speed up porting?") this addendum extracts the *velocity* lessons instead.
+> Ranked by payoff-per-cost. Awaiting ratification. Cross-ref: roadmap in
+> [ww-code-lineage-posture.md §8](ww-code-lineage-posture.md), which notes that **step 8
+> (census) pays for throughput before step 19 (plugin) does.**
+
+### The V-series at a glance
+
+**This track runs PARALLEL to the Stage A–D roadmap — it is not sequenced into it.** Only V4
+hangs off a roadmap step. Recommended order: **V1 → V2 → V3**, with V5 continuing as
+already-queued work.
+
+| # | Owner | Step | Blocked by |
+|---|---|---|---|
+| V1 | **Foundry** builds · **History** first consumer | Cross-lineage accessor differ: donor header + receiver header → bit-layout diff + translation-table stub, both citations inline. **Amended (§A1 below): THREE sources — plus an independent implementation as validator.** Backlog already named: KFA1, SSP1, ETX1. | — |
+| V2 | **User** ratifies · **all lanes** follow · **Engine** holds the kill switches | Intake rule: every playtest finding states whether it reproduces with the relevant gate off. Decides bug ownership before anyone reads code. | — |
+| V3 | **Bridge** emits · **Foundry** specs | Environment fingerprint at the head of every log: build-ID, WW-layer version, mod-folder state, `donor_roster` verdict. | — |
+| V4 | **Foundry** | Donor drift sentinel: on pinned-ref advance, diff ported donor functions and flag the changed ones. | posture §6 ruling 2 / roadmap step 12 |
+| V5 | **Foundry** | Crash-recipes-as-lint — cookbook recipes 1–9 as a kit scan over ported TUs. **Already queued (§331 A1); in flight.** | — |
+| V6 | **User** rules · **Foundry** operates | Re-cost the parked reel/save-state farm (save-states primary, reels secondary). A re-cost, not an unpark. **Scope narrowed by §A2: temporal data only.** | — |
+| V7 | **Foundry** builds · **History** classifies · **Bridge** hosts in R5 | **NEW (§A3).** Mechanize third-party source consultation: import Winditor's `ActorDatabase.json` / `ActorResourceDatabase.json` into the conversion database with per-field provenance tags; cross-check its `Locations` against our own DZR census. | — |
+
+**Lanes with no V-series work:** Housing Security, HousingTemp, and Librarian are fully
+loaded by roadmap Stage A (steps 3, 4, 5) — deliberately not given velocity items, since the
+audit lanes must not be the ones racing.
+
+### V1 — Cross-lineage accessor differ (HIGHEST VALUE) · *Foundry builds*
+
+**The TTW lesson:** ESPSharp did not hand-write 150+ record parsers — they were **T4
+template-generated from record definitions treated as data.** Mechanical layers get
+generated, never transcribed.
+
+**Our recurring bug class this kills.** Two independently-found, separately-debugged
+failures were the *same* defect shape — a donor field read through receiver accessors with a
+different bit layout:
+- **§212** — JPA1→JPA2 `ESP1` flag word: WW alpha-enable `0x00000001` lands on TP
+  scale-anim-enable ⇒ particle scaled to nothing ⇒ **invisible**. Its own recorded lesson:
+  *"validating STRUCTURE is not validating SEMANTICS."* It explicitly leaves **KFA1, SSP1,
+  ETX1 unverified and awaiting the same manual diff.**
+- **§332** — dzb collision attribute: WW packs bits 16–20, TP reads 12–15/16–18 ⇒ every WW
+  attribute with nonzero low bits reads as TP **sink-class** ⇒ Link sinks into furniture.
+
+**The instrument:** given a donor header and a receiver header for the same block, emit the
+field/bit-layout diff and a translation table stub, with both header citations inline. Turns
+"hand-diff each block, discover the collision in a playtest" into a mechanical pre-flight.
+
+**Why it is the top pick:** it is the cheapest instrument on the board, it retires the most
+expensive bug class we have (semantic collisions that *pass* structural validation and stay
+dormant until content triggers them — HousingTemp §3b), the backlog is already named
+(KFA1/SSP1/ETX1), and it feeds History's live attribute-table work mechanically instead of
+by hand.
+
+### V2 — "Reproduce with the gate off" intake rule (CHEAPEST) · *process; Engine keeps switches alive*
+
+**TTW lesson:** bug reports must reproduce on **unmodded TTW**, with formIDs included —
+their single biggest triage-cost reducer.
+
+**Ours:** every playtest finding states whether it reproduces with the relevant kill switch
+off (`DUSK_EVT1_NATIVE=0`, `DUSK_WW_KNOB00_NATIVE=0`, …). One line in a report; it decides
+*which lane owns the bug* before anyone reads code. Depends on kill switches staying alive —
+already ruled for the event campaign through A5, and this is a second reason to hold that
+line. Becomes free post-step-19 (load/don't-load the plugin).
+
+### V3 — Environment fingerprint in every log · *Bridge emits · Foundry specs*
+
+**TTW lesson:** a canonical load order existed so bug reports were *comparable*.
+
+**Ours:** every DuskLog/crash log opens with build-ID, WW-layer version, mod-folder state,
+and `donor_roster` verdict (R3, built §332). Makes every report self-describing and kills
+"which build was that?" round-trips. Pairs with the existing fail-closed Build-ID↔PDB check
+in symbolication — same discipline, wider net.
+
+### V4 — Donor drift sentinel · *Foundry builds* · pairs with posture §6 ruling 2
+
+**TTW lesson:** `PatchInfo` arrays keyed by **source checksum** — one diff per known donor
+variant, so an unrecognized input is never transformed.
+
+**Ours, applied to a *moving* donor:** zeldaret/tww is ~72% and climbing. Once we vendor by
+pinned reference (posture §6 ruling 2), upstream **will** rewrite functions we transcribed.
+The sentinel: on ref advance, diff the donor functions we have ported and flag the changed
+ones. Without it, upstream drift becomes another stop-the-world audit — the exact failure
+mode this whole document set exists to stop recurring.
+
+### V5 — Crash-recipes-as-lint (ALREADY QUEUED — reaffirmed) · *Foundry*
+
+Adopted at §331 A1 from the §330 analysis. Cookbook recipes 1–9 encoded as a kit scan over
+ported TUs. Reaffirmed here as the cheapest velocity item already on the board: each recipe
+is a bug that shipped and cost a playtest cycle to find.
+
+### V6 — Revisit the parked reel/save-state farm · *user ruling; Foundry operates*
+
+**The uncomfortable TTW data point:** they solved acceptance with **dedicated QA humans**
+(named roles: Risewild, Callen, Kazopert, Hairylegs) — not instruments. We cannot hire, so
+the instrument path is the *only* substitute for the human-oracle bottleneck
+([Foundry.md](../Foundry.md)'s founding problem), and P1/P5 is currently **parked** for lane
+cost.
+
+Not a request to unpark. The recommendation is narrower: TTW's evidence suggests the
+acceptance bottleneck justifies more structural investment than it has had, and the design
+correction already on file (**save-states primary, reels secondary** — WW is a known
+movie-desync offender) is the cheap version. Worth a re-cost, not a re-argument.
+
+### Amendments — the three primary sources (2026-08-06, user correction)
+
+> The user records that the workflow's three primary drivers are **noclip.website**, **the
+> decomp**, and **Winditor**. The V-series as first written leaned on decomp + our own
+> measurement and **did not account for noclip or Winditor at all** (V1/V4 are decomp-sourced;
+> V2/V3/V5 are source-agnostic). Three consequences. Winditor was surveyed for this amendment
+> at `D:\XXXXXXX\Winditor` — consulted, not assumed (§443 rule).
+
+**§A1 — V1 becomes a THREE-source differ.** As first specified, V1 diffs a donor header against
+a receiver header. Both are *our* transcriptions, and the entire bug class it targets **is
+misread bits** — so a two-source differ can confidently emit a wrong table. noclip and Winditor
+carry **independent implementations** of these same formats (noclip decodes both WW and TP;
+Winditor ships `GameFormatReader`, `SuperBMD`, `JStudio`). Amendment: the differ takes a third
+input — an independent implementation's constants — as **validator**, and reports DISAGREEMENT
+rather than picking a winner. This is the oracle stack applied to the instrument itself, and it
+is the difference between "the differ is fast" and "the differ can be trusted."
+
+**§A2 — V6 narrows to temporal data.** noclip already answers *static* donor questions (what is
+in this room, which arc holds this resource, what does it look like) without any playtime. It is
+a renderer, not a simulation, so it **cannot** answer temporal questions — emitter density over
+time, state timing, sequence behaviour. Amendment: the reel/save-state farm is re-costed **for
+the temporal axis only.** Do not build reels to answer questions noclip answers for free. This
+narrows V6's scope and *strengthens* its justification, since the remaining need is the part
+nothing else covers.
+
+**§A3 — V7 (NEW): mechanize third-party source consultation.** Winditor ships a curated
+`ActorDatabase.json` (~404 KB) whose entries carry `Actor Name` (placement name) ↔
+`ActorClassType` (donor class), `English Name`, `Archive Name` / `Main Model` /
+`Secondary Models` / `Wait Animations`, and a per-actor `Locations` stage roster — plus a
+separate `ActorResourceDatabase.json` (~150 KB). Four live consumers already exist: the
+census→OBJNAME spawn path (name→class resolution), the multitype-actor registry (one placement
+name, many behaviours), the port kit's resource-manifest pre-flight, and stage-roster
+cross-checking.
+
+Import it into the R5 conversion database **with per-field provenance tags**, and treat the
+fields differently by evidence class:
+- **Structural fields** (name↔class, archive/model/anim, locations) — mechanically useful,
+  tagged `[winditor]`.
+- **`English Name`** — a *community identity claim*. **The IVAN rule governs it: names and
+  resemblance are never evidence.** These import as **leads at `? (unverified)`**, never as
+  identities. Importing them untagged would launder community guesses into the database as
+  fact — the precise failure IVAN exists to prevent.
+
+Second benefit: §443's failure (*"Winditor-law claimed on work Winditor never saw"*) becomes
+**structurally impossible** once the data is imported and tagged — you cannot cite a source the
+database does not show you consulting.
+
+**Redundancy check (the user's explicit question): nothing becomes redundant.**
+- *Our DZR census vs Winditor `Locations`* — **ours stays authoritative.** Ours is data-derived
+  with true per-story-layer rosters; noclip/Winditor rosters are supersets without story layers
+  (the standing noclip caution). Winditor's list is a **cross-check whose disagreements are
+  signal** — either our census missed a layer or their list is incomplete.
+- *Our `decode_stb.py` vs Winditor's `JStudio`* — **ours stays.** Ours is transcribed from the
+  **receiver's own** parse rules with `file:line` receipts, which is what a port needs; theirs
+  is a donor-side reader. Cross-check, not replacement.
+- *Our `adapt_bdl_arcs.py` vs `SuperBMD`* — different jobs. Ours retags BDL4→BMD3 **in place,
+  preserving RARC member offsets**; SuperBMD is a full converter. Not interchangeable.
+
+**Unchanged by this correction:** V2, V3, V4, V5 — process, logging, decomp-ref tracking, and
+cookbook lint are all source-agnostic.
+
+### Not recommended (considered, rejected)
+
+- **Editor-tooling investment** (TTW maintained GECK Extender / xEdit as part of porting).
+  Their bottleneck was *data authoring*; ours is *C++ actor porting*. The level editor and
+  Winditor help placement review, not the critical path. Revisit if placement authoring ever
+  becomes the constraint.
+- **Third-party conversion enablement** (TTW published conversion guidelines so the community
+  converted mods — a real force multiplier). Premature: it presupposes the stable plugin ABI
+  from roadmap step 16. Name it as the post-step-17 stage, do not build toward it now.
+
 ## Weak spots in TTW's own code, noted so we don't inherit them
 
 - `.pat` format had **no magic number and no version field** — compatibility hung on

@@ -2,6 +2,18 @@
  * d_a_npc_ba1.cpp
  * NPC - Link's Grandma
  */
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_npc_ba1.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: NonMatching
+// KIT-NOTE: this TU shares only ~4% of its text with the donor file, which
+// looks like a mislabelled `native-port` and is NOT. The donor's own
+// d_a_npc_ba1.cpp is NonMatching (largely unimplemented upstream), so there
+// is little donor SOURCE TEXT to match -- this port was reconstructed from
+// the retail binary via m2c (see the §261 note below), which is a port of
+// the same actor by a different route. Low text overlap is EXPECTED here and
+// is not evidence of a wrong lineage tag. Recorded so the step-13 divergence
+// measurement does not re-flag it every run.
 
 // ============================================================
 // §261 WW Link's Grandma (NPC_BA1) DIRECT PORT.
@@ -80,10 +92,13 @@ static inline bool ba1_xyCheckStay()        { return false; } // gi.unk5BD3 == 0
 static const char* l_evn_tbl[6] = { "Use_Fairy", "Ba1_Get_Itm", "Ganbaru", "tale_1", "None", "tale_2" };
 static const char* a_cut_tbl[2] = { "ACTION", "START_TALE1" };
 
+// KIT-DONOR-DATA: 40 lookup-table d/actor/d_a_npc_ba1.cpp
 static const s32 a_bck_resID_tbl[10] = { 7, 3, 4, 5, 1, 8, 6, 2, 0, 0x17 };
+// KIT-DONOR-DATA: 48 lookup-table d/actor/d_a_npc_ba1.cpp
 static const s32 a_btp_resID_tbl[12] = { 0x16, 0xB, 0xC, 0xD, 0xE, 0xF, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15 };
 
 // a_anm_prm_tbl$4490[0xB] — §260 raw ground truth
+// KIT-DONOR-DATA: 176 lookup-table d/actor/d_a_npc_ba1.cpp a_anm_prm_tbl$4490
 static const u32 a_anm_prm_tbl_4490[] = {
     0x00000000, 0x41000000, 0x3F800000, 0x00000002,
     0x01000000, 0x41000000, 0x3F800000, 0x00000002,
@@ -98,6 +113,7 @@ static const u32 a_anm_prm_tbl_4490[] = {
     0x00090000, 0x00000000, 0x3F800000, 0x00000002,
 };
 // a_anm_prm_tbl$4497[8] — §260 raw ground truth
+// KIT-DONOR-DATA: 128 lookup-table d/actor/d_a_npc_ba1.cpp a_anm_prm_tbl$4497
 static const u32 a_anm_prm_tbl_4497[] = {
     0xFFFF0000, 0x00000000, 0x00000000, 0xFFFFFFFF,
     0x00000000, 0x41000000, 0x3F800000, 0x00000002,
@@ -109,6 +125,7 @@ static const u32 a_anm_prm_tbl_4497[] = {
     0x00000000, 0x41000000, 0x3F800000, 0x00000002,
 };
 // a_anm_prm_tbl$4553[0x15] — §260 raw ground truth
+// KIT-DONOR-DATA: 336 lookup-table d/actor/d_a_npc_ba1.cpp a_anm_prm_tbl$4553
 static const u32 a_anm_prm_tbl_4553[] = {
     0x00000000, 0x41000000, 0x3F800000, 0x00000002,
     0x01000000, 0x41000000, 0x3F800000, 0x00000002,
@@ -132,6 +149,7 @@ static const u32 a_anm_prm_tbl_4553[] = {
     0x05000000, 0x41000000, 0x3F800000, 0x00000002,
     0x00080000, 0x41000000, 0x3F800000, 0x00000002,
 };
+// KIT-DONOR-DATA: 4 lookup-table d/actor/d_a_npc_ba1.cpp
 static const u32 a_size_tbl[1] = { 0x000272E0 };
 
 #define ANM4490 ((const daNpc_Ba1_c::anm_prm_c*)a_anm_prm_tbl_4490)
@@ -150,6 +168,7 @@ static s32 l_check_wrk = 0;
 /* 000000EC-00000150 __ct__15daNpc_Ba1_HIO_cFv */
 daNpc_Ba1_HIO_c::daNpc_Ba1_HIO_c() {
     // §261 donor HIO ctor loads a_prm_tbl$4153 (byte-faithful §260) into mPrm.
+    // KIT-DONOR-DATA: 36 lookup-table d/actor/d_a_npc_ba1.cpp a_prm_tbl$4153
     static const u32 a_prm_tbl_4153[9] = {
         0x15542000, 0xEC78E000, 0x00001000, 0x0000F000, 0x04000400,
         0x42E60000 /*115f*/, 0x00000000, 0x43FA0000 /*500f*/, 0x43960000 /*300f*/,

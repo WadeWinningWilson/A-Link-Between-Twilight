@@ -1,3 +1,7 @@
+// KIT-LINEAGE: native-port
+// KIT-DONOR: d/actor/d_a_npc_zl1.cpp
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: MatchingFor
 // §254 WW Tetra (NPC_ZL1) direct port — donor verbatim; framework fopNpc_npc_c native.
 /**
  * d_a_npc_zl1.cpp

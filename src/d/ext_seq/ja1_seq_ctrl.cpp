@@ -1,3 +1,7 @@
+// KIT-LINEAGE: bridge-owed:§369
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/ext_seq/ja1_seq_ctrl.h"
 
 namespace ExtSeq {

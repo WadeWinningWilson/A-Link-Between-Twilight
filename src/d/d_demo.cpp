@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 #include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_demo.h"
@@ -480,7 +484,21 @@ int dDemo_setDemoData(fopAc_ac_c* i_actor, u8 i_flags, mDoExt_McaMorf* i_morf, c
         // default through the cutscene. Vanilla (TP + WW) sets current.angle too.
         // CROSS-LANE: shared demo path — if a native TP cutscene mis-rotates, this
         // is the line (revert to shape_angle-only).
-        i_actor->current.angle = i_actor->shape_angle = demo_actor->getRatate();
+        // ============================================================
+        // №285 SCOPED (was global — audit №284). The "restore to donor"
+        // reasoning was WRONG for a SHARED path: vanilla TP writes
+        // shape_angle ONLY (verified against the pre-WW tree), and TP
+        // deliberately diverged from WW here — TP demo actors are authored
+        // against TP's contract. WW actors (ls1/Aryll setMtx reads
+        // mAngle = current.angle) need the donor form, so serve it on WW
+        // host stages and leave mainline TP byte-vanilla.
+        // ============================================================
+        i_actor->shape_angle = demo_actor->getRatate();
+        if (dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+            // KIT-DONOR-HUNK: d/d_demo.cpp NonMatching
+            i_actor->current.angle = i_actor->shape_angle;
+            // KIT-DONOR-HUNK-END
+        }
     }
 
     if (flags & dDemo_actor_c::ENABLE_SCALE_e) {
@@ -1333,8 +1351,35 @@ void dDemo_c::end() {
     unpause_streams(false);
 #endif
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — №283 (demo teardown IDEMPOTENCE — the double-remove crash)
+    // end() is reached from remove(), and remove() deletes m_control/m_object and NULLs
+    // them while null-checking every one of its OWN deletes — so a SECOND remove() used
+    // to deref a NULL m_control here (fault 0x18 = the object list at +0x18).
+    //
+    // Native TP called remove() exactly once, from dScnPly_Delete. §319 added a second,
+    // EARLIER call on the "demo finished, no next stage" path (d_event_data.cpp, donor
+    // ACT_PLAY demo_remove) — harmless when a scene CREATE follows (dScnPly_Create
+    // re-allocates m_control), fatal when a scene DELETE comes next with no create
+    // between: cutscene end → §319 remove() → stage transition → dScnPly_Delete →
+    // remove() → end() → boom. Observed on vanilla demo90/F_SP109.
+    //
+    // Guard at the SOURCE rather than per-consumer: §319b already had to null-guard
+    // getCamera() for this same freed-demo window, and every future consumer would need
+    // its own. Making the teardown idempotent retires the class. Inert in the native
+    // single-teardown flow (both pointers are non-NULL there).
+    // ============================================
+    if (m_control != NULL) {
+        m_control->destroyObject_all();
+    }
+    if (m_object != NULL) {
+        m_object->remove();
+    }
+#else
     m_control->destroyObject_all();
     m_object->remove();
+#endif
     m_data = NULL;
     m_mode = 0;
 }

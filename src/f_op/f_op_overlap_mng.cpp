@@ -61,6 +61,34 @@ int fopOvlpM_IsDone() {
     return FALSE;
 }
 
+#if TARGET_PC
+// ============================================================
+// §398e NON-CONSUMING state dump (probe-safety: cReq_Is_Done READS
+// AND CLEARS flag1 — a probe calling fopOvlpM_IsDone can EAT the
+// one-shot the scene request waits on). Reads flags directly.
+// Fills: overlap active/peek/req-phase/base flags + wipe-task
+// existence + task request flags. Returns 0 if no overlap.
+// ============================================================
+int fopOvlpM_DebugState(int* o_active, int* o_peek, int* o_phaseId, int* o_bFlags,
+                        int* o_hasTask, int* o_tFlags) {
+    overlap_request_class* r = l_fopOvlpM_overlap[0];
+    if (r == NULL) {
+        return 0;
+    }
+    *o_active = (int)r->field_0x4;
+    *o_peek = (int)r->field_0x8;
+    *o_phaseId = (int)r->phase_req.id;
+    *o_bFlags = ((int)r->base.flag0 << 8) | ((int)r->base.flag1 << 4) | (int)r->base.flag2;
+    *o_hasTask = r->overlap_task != NULL ? 1 : 0;
+    *o_tFlags = r->overlap_task != NULL
+                    ? (((int)r->overlap_task->request.flag0 << 8) |
+                       ((int)r->overlap_task->request.flag1 << 4) |
+                       (int)r->overlap_task->request.flag2)
+                    : -1;
+    return 1;
+}
+#endif
+
 int fopOvlpM_IsDoingReq() {
     if (l_fopOvlpM_overlap[0] != NULL && l_fopOvlpM_overlap[0]->field_0x4 == 1) {
         return 1;

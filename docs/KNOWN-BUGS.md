@@ -8,7 +8,24 @@ on fix.
 
 ---
 
-## KB-1 — Intermittent mid-cutscene KILL (the "get-item break") — OPEN, armed
+## KB-1 — Intermittent mid-cutscene KILL (the "get-item break") — ROOT-CAUSED §377, fix awaiting playtest
+
+**RESOLUTION (2026-08-03, log 194812):** the armed probes caught the strike fully attributed.
+Killer = the **№89 arrival-G-guard** (d_ext_npc_doors.cpp pollArrival): the tale's §296
+two-step re-entry into R_DL01 re-arms the guard; 120f later it force-ended the live TALE_DEMO
+at storyboard frame 117 (§50 TRUNCATION). Adjacent log lines at gFrm=7732:
+`§345a remove() while status=1 runEvt='TALE_DEMO'` + `№89 force-end event (arrival-G-guard)` +
+`№89 event G-guard — stage='R_DL01' still active after 120f → force-end`.
+**Why intermittent:** §313 already held the guard during tale BOX beats (`dExtDmesg_isBoxActive`)
+but not STB DEMO beats — whether the 120f expiry lands on a protected box beat or an unprotected
+demo beat is pure player text-pacing. This also resolves the "stamp-less remove" mystery: the
+caller was `dExtNpcMount_forceEndDoorEvent`, not the scene-delete wrapper.
+**Fix (§377):** the guard also holds when `dDemo_c::getMode() == 1` (a storyboard is actively
+presenting — never a stuck residual; residuals are mode 0). Genuine hangs remain caught by the
+3600f pollStuckMessageResume backstop. Probes stay armed until a clean strike-free playtest run.
+
+---
+*(Original entry preserved below for the probe-campaign record.)*
 
 **First seen:** tale (Grandma) era, recurring across sessions. **Frequency:** intermittent —
 most tale runs are clean; strikes roughly 1-in-3 to 1-in-5 runs, historically at the get-item
