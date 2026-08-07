@@ -95,7 +95,7 @@ block.
      receiver-owned file, so listing it here does not make the file
      strippable — see the leg list in cmake/ww_layer_exclude.cmake. -->
 
-**Sources (71) — generated from `files.cmake`:**
+**Sources (72) — generated from `files.cmake`:**
 
 - `src/d/actor/d_a_demo00.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_esa.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
@@ -142,6 +142,7 @@ block.
 - `src/d/ext_evt/evt1_event_manager.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_event_manager.cpp` — filename agrees
 - `src/d/ext_line/mdoext1_3dline.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `m_Do/m_Do_ext.cpp` — filename agrees
 - `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_itemmdl_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_profile_register.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
@@ -169,7 +170,7 @@ block.
 - `src/d/ww_jpa_bind.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/f_op/f_op_msg_mng.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 
-**Includes (41) — directory scan, indicative:**
+**Includes (43) — directory scan, indicative:**
 
 - `include/d/actor/d_a_e_ww.h` — WW leg inside a receiver-named TU
 - `include/d/actor/d_a_ww_demo00.h` — WW-restoration actor
@@ -197,6 +198,8 @@ block.
 - `include/d/ext_evt/evt1_boundary.h` — JEvent1 parallel donor stack (WW events)
 - `include/d/ext_line/mdoext1_3dline.h` — MDoExt1 parallel donor stack (WW 3D-line)
 - `include/d/ext_plugin/ww_import_gate.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_itemmdl_dispatch.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_itemmdl_impl_names.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_profile_register.h` — WW-specific receiver subsystem
 - `include/d/ext_seq/ja1_bank.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_boundary.h` — JAudio1 parallel donor stack (WW audio)

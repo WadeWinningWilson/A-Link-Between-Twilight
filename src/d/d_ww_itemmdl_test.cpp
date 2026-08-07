@@ -6,6 +6,8 @@
  * d_ww_itemmdl_test.cpp — dev replay for WW itemmdl bow get-item demo.
  */
 
+#include "d/ext_plugin/ww_itemmdl_test_names.h"
+
 #include "d/d_ww_itemmdl_test.h"
 
 #if TARGET_PC
@@ -450,3 +452,17 @@ void tickBowGetItemDemoReplay() {
 }  // namespace dWwItemmdl
 
 #endif
+
+// Bind the trio into the receiver's dispatch table. WW-side, so excluding this
+// TU leaves the fields NULL and the editor helper simply does nothing.
+#include "d/ext_plugin/ww_itemmdl_dispatch.h"
+namespace {
+struct WwItemmdlTestAutoInstall {
+    WwItemmdlTestAutoInstall() {
+        g_wwItemmdlApi.requestBowGetItemDemoReplay   = &dWwItemmdl::Impl_requestBowGetItemDemoReplay;
+        g_wwItemmdlApi.tickBowGetItemDemoReplay      = &dWwItemmdl::Impl_tickBowGetItemDemoReplay;
+        g_wwItemmdlApi.getBowGetItemDemoReplayStatus = &dWwItemmdl::Impl_getBowGetItemDemoReplayStatus;
+    }
+};
+const WwItemmdlTestAutoInstall s_wwItemmdlTestAutoInstall;
+}  // namespace

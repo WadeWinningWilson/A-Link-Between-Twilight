@@ -186,6 +186,10 @@ WW_SERVING_PLUMBING = {
     "src/d/d_ext_npc_population.cpp": "WW chunk -> population placement",
     "src/d/d_ext_room_verify.cpp": "WW room-load verification",
     "src/d/d_ww_itemmdl_pc.cpp": "WW item models",
+    # NOTE: ww_itemmdl_dispatch.cpp is deliberately NOT here. It is the
+    # receiver-side standalone layer -- excluding it would defeat its
+    # entire purpose, which is letting the host run with no WW layer.
+
     "src/d/d_ww_itemmdl_test.cpp": "WW item-model harness",
     "src/d/ext_evt/evt1_boundary.cpp": "boundary INTO the evt1 event stack",
     "src/d/ext_plugin/ww_import_gate.cpp": "the WW plugin's own load gate",

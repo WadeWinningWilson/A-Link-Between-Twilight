@@ -6,6 +6,11 @@
  * d_ww_itemmdl_pc.cpp — Aurora-safe material patch for WW itemmdl view models.
  */
 
+// Step 19 cluster 2: renames this TU's definitions to dWwItemmdlImpl_*.
+// MUST precede every other include so the header's declarations are
+// renamed too and the two cannot disagree.
+#include "d/ext_plugin/ww_itemmdl_impl_names.h"
+
 #include "d/d_ww_itemmdl_pc.h"
 
 #if TARGET_PC
@@ -2093,3 +2098,68 @@ f32 dWwItemmdl_clothesBundleMaxScale() {
 }
 
 #endif
+
+// ============================================================================
+// Step 19 cluster 2 — hand this layer's entry points to the receiver's
+// dispatcher. Defined HERE, WW-side, on purpose: excluding the WW layer removes
+// this function, the table stays all-NULL, and the receiver runs standalone.
+// The absence is structural rather than a flag someone must remember to clear.
+// ============================================================================
+#include "d/ext_plugin/ww_itemmdl_dispatch.h"
+
+void dWwItemmdlDispatch_install() {
+    g_wwItemmdlApi.applyBowMaterialAmbientOnly = &dWwItemmdlImpl_applyBowMaterialAmbientOnly;
+    g_wwItemmdlApi.beginBowDrawScope = &dWwItemmdlImpl_beginBowDrawScope;
+    g_wwItemmdlApi.bracketLog = &dWwItemmdlImpl_bracketLog;
+    g_wwItemmdlApi.clearBowDrawScope = &dWwItemmdlImpl_clearBowDrawScope;
+    g_wwItemmdlApi.clearClothesBundleCache = &dWwItemmdlImpl_clearClothesBundleCache;
+    g_wwItemmdlApi.clearOutlineSuppress = &dWwItemmdlImpl_clearOutlineSuppress;
+    g_wwItemmdlApi.clothesBundleArcName = &dWwItemmdlImpl_clothesBundleArcName;
+    g_wwItemmdlApi.clothesBundleForItem = &dWwItemmdlImpl_clothesBundleForItem;
+    g_wwItemmdlApi.clothesBundleGetTextForMessage = &dWwItemmdlImpl_clothesBundleGetTextForMessage;
+    g_wwItemmdlApi.clothesBundleHandOffset = &dWwItemmdlImpl_clothesBundleHandOffset;
+    g_wwItemmdlApi.clothesBundleHostItem = &dWwItemmdlImpl_clothesBundleHostItem;
+    g_wwItemmdlApi.clothesBundleIconCap = &dWwItemmdlImpl_clothesBundleIconCap;
+    g_wwItemmdlApi.clothesBundleMaxScale = &dWwItemmdlImpl_clothesBundleMaxScale;
+    g_wwItemmdlApi.clothesBundleModelName = &dWwItemmdlImpl_clothesBundleModelName;
+    g_wwItemmdlApi.debugLog = &dWwItemmdlImpl_debugLog;
+    g_wwItemmdlApi.drawWwBowModel = &dWwItemmdlImpl_drawWwBowModel;
+    g_wwItemmdlApi.getClothesBundleModelData = &dWwItemmdlImpl_getClothesBundleModelData;
+    g_wwItemmdlApi.getItemmdlModelData = &dWwItemmdlImpl_getItemmdlModelData;
+    g_wwItemmdlApi.getVbowModelData = &dWwItemmdlImpl_getVbowModelData;
+    g_wwItemmdlApi.isClothesGetPresentation = &dWwItemmdlImpl_isClothesGetPresentation;
+    g_wwItemmdlApi.isPhase2BracketBow = &dWwItemmdlImpl_isPhase2BracketBow;
+    g_wwItemmdlApi.log2QPrimeAudit = &dWwItemmdlImpl_log2QPrimeAudit;
+    g_wwItemmdlApi.logHeap = &dWwItemmdlImpl_logHeap;
+    g_wwItemmdlApi.logShapeInventory = &dWwItemmdlImpl_logShapeInventory;
+    g_wwItemmdlApi.logTevOrderDump = &dWwItemmdlImpl_logTevOrderDump;
+    g_wwItemmdlApi.patchModelForPc = &dWwItemmdlImpl_patchModelForPc;
+    g_wwItemmdlApi.retainItemmdlArcOnDemoItemDelete = &dWwItemmdlImpl_retainItemmdlArcOnDemoItemDelete;
+    g_wwItemmdlApi.setWwBowActorAmbient = &dWwItemmdlImpl_setWwBowActorAmbient;
+    g_wwItemmdlApi.setWwBowGetItemBeamSuppress = &dWwItemmdlImpl_setWwBowGetItemBeamSuppress;
+    g_wwItemmdlApi.shouldSuppressGetItemBeamParticle = &dWwItemmdlImpl_shouldSuppressGetItemBeamParticle;
+    g_wwItemmdlApi.stepPrivateItemmdlArcLoad = &dWwItemmdlImpl_stepPrivateItemmdlArcLoad;
+    g_wwItemmdlApi.tickHeldBowArcMount = &dWwItemmdlImpl_tickHeldBowArcMount;
+    g_wwItemmdlApi.use2DIsolateHeap = &dWwItemmdlImpl_use2DIsolateHeap;
+    g_wwItemmdlApi.usingCustomHeldModel = &dWwItemmdlImpl_usingCustomHeldModel;
+    g_wwItemmdlApi.writeClothesBundleIconTimg = &dWwItemmdlImpl_writeClothesBundleIconTimg;
+}
+
+// SELF-INSTALLING, and deliberately not called by the receiver.
+//
+// Cluster 1 needed a boot-time call from m_Do_main, which added a new
+// unresolved symbol when the WW layer is excluded. This does not: the WW layer
+// binds itself during static initialisation, so the receiver contains no
+// reference to it at all. That is closer to how a plugin actually behaves --
+// it announces itself on load rather than waiting to be switched on -- and it
+// means excluding the layer leaves NO dangling call site.
+//
+// Safe with respect to init order: g_wwItemmdlApi has static storage and is
+// zero-initialised before any dynamic initialiser runs, so this can only ever
+// overwrite NULLs.
+namespace {
+struct WwItemmdlAutoInstall {
+    WwItemmdlAutoInstall() { dWwItemmdlDispatch_install(); }
+};
+const WwItemmdlAutoInstall s_wwItemmdlAutoInstall;
+}  // namespace
