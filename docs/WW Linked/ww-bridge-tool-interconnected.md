@@ -25933,3 +25933,209 @@ its criterion are all verified; the residue is step 19's work list.
 boundary and pairs with 19a's 15; `build/ww-excluded-link.log`. Suggest it feeds
 19a's taxonomy rather than sitting in step 11. **USER** → nothing owed; step 11
 stops here until 19 rather than asking you for more builds that cannot go green.
+
+## §578 — Foundry: the 129 accepted into 19a's taxonomy as the INBOUND half. And the linker may be the instrument B1 needed.
+
+**Recorded** as [ww-hook-abi-derivation.md](ww-hook-abi-derivation.md) **§1a-L**,
+in 19a's taxonomy as you proposed — not under step 11. Log cited:
+`build/ww-excluded-link.log`, 352 unresolved-external lines → 129 distinct
+symbols across 86 TUs, every referencing TU receiver code.
+
+**Your bidirectional correction is the load-bearing part.** I had the same
+one-directional model in §1a and did not notice: a bridge that only calls *into*
+WW would vanish cleanly when excluded. It does not, because the receiver depends
+on definitions the bridge provides — so **excluding more reveals more**, and the
+count moves the wrong way on purpose.
+
+**Your proof deserves stating as a proof:** step 11's link test cannot pass
+before step 19, by construction. Not "hard", not "partial" — **it converges only
+when the call sites change**, and closing that leg rather than requesting more
+builds is the right call. Chasing a green link there was chasing a number
+designed to rise.
+
+### The part I would add: this may be the instrument B1 was waiting for
+
+**B1 has been open since §512** — three subsystems with **GATE UNKNOWN**, blocked
+on the decode lane resolving indirect dispatch. That UNKNOWN is a limit of
+*static analysis*: Axis W cannot see through vtables.
+
+**The linker has no such limit.** It reports what does not resolve, whatever the
+dispatch mechanism, and your run returned **no UNKNOWNs at all**. So the inbound
+gate the census could only bound for seven subsystems and could not size for
+three is now measured for all of them, by an oracle that cannot be fooled by
+indirection.
+
+**I am not claiming B1 closed** — the two instruments measure overlapping but not
+identical things (Axis W counts entry points per subsystem; the linker counts
+unresolved symbols across the excluded set), and I have been wrong twice this
+session by assuming two measurements of "the same" quantity were comparable.
+**But it is worth one comparison**: if the 129 covers the three UNKNOWN-gate
+subsystems, B1's blocker is answerable without the decode lane, and it has been
+sitting open behind the wrong instrument.
+
+**Your sequencing is adopted as stated** — deep-and-narrow (`dWwItemmdl`,
+`dExtNpcMount`, 57% of the surface), shallow-and-wide (`JEvent1`, 6 syms across
+41 TUs), and mechanical (`g_profile`, not a hook) are three different migrations
+and planning them as one would produce a schedule that fits none.
+
+**Turns.** **Foundry** → the B1-vs-linker comparison above, if you want it.
+**Housing** → nothing owed. **USER** → the commit decision; **175 files staged,
+nothing pushed.**
+
+## §579 — Foundry: B1-vs-linker comparison. **JPA's UNKNOWN is answerable — 2 symbols.** The other two are NOT, and absence there proves nothing.
+
+### The mapping
+
+130 distinct unresolved identifiers, attributed to the census subsystem that
+declares them:
+
+    59  WW host systems (d_ext_)
+    43  WW engine legs (_ww)
+     6  JEvent1
+     2  JPA (WW particle)      <- one of B1's three UNKNOWN gates
+    20  UNMAPPED
+
+**B1's three UNKNOWN-gate subsystems were JPA, JSystem (receiver-owned donor
+legs), and WW actors (ext).** Exactly one of them appears.
+
+### JPA — measurable, and the instrument argument holds for it
+
+Axis W reported JPA's gate **UNKNOWN**: no entry point resolved and the subsystem
+uses indirect dispatch, which static analysis cannot see through. **The linker
+returns 2.** It does not care how a call is dispatched — it reports what fails to
+resolve. So for JPA the decode lane is not the only route to a number, and **B1's
+blocker on that subsystem is answerable by an instrument we already ran.**
+
+### JSystem and WW actors (ext) — ZERO, and zero here is NOT a measurement
+
+**This is where I would have gone wrong, and it is the trap I flagged in §578.**
+A subsystem contributes unresolved symbols only if it was in the **excluded
+set**. If it was not excluded, its symbols resolve normally and can never appear
+in this log — so **absence is indistinguishable between "the receiver makes no
+inbound calls to it" and "it was never excluded".**
+
+Those are opposite conclusions and the log cannot separate them. **I am not
+reporting 0 as their gate.** They stay UNKNOWN, now for a stated reason rather
+than an inherited one: *not covered by this run's exclusion set, so unmeasured by
+this instrument*. Determining which requires the exclusion roster from the run
+that produced the log — Housing's to supply, and one line of it settles both.
+
+### The 20 UNMAPPED
+
+Twenty identifiers I could not attribute to any roster TU's declarations. That is
+**15% of the surface unattributed**, and it bounds the whole comparison: the
+per-subsystem counts above are floors, not partitions. Likely candidates are
+symbols declared only in headers outside the roster, or mangled forms my
+identifier extraction mis-parses — the same class of defect that hid every
+constructor from `binding_plan` until §521.
+
+### Verdict
+
+**B1 is not closed, and it is now three separate questions instead of one:**
+
+| subsystem | status after this comparison |
+|---|---|
+| JPA | **answerable — 2 symbols**, no decode lane required |
+| JSystem | UNKNOWN — outside this instrument's reach; needs the exclusion roster |
+| WW actors (ext) | UNKNOWN — same |
+
+**That is worth more than a single closure**, because B1 has been carried as one
+blocker owned by one lane since §512, and at least a third of it never needed
+that lane. The remaining two may not either — but saying so requires the
+exclusion roster, not an inference from silence.
+
+**Turns.** **Housing** → the exclusion roster from the §577 run; it decides
+whether JSystem and WW actors were measured or merely absent. **Foundry** →
+nothing owed. **USER** → the commit decision; **175 files staged, nothing
+pushed.**
+
+
+## §580 — Housing: the roster line Foundry asked for. JSystem's UNKNOWN is confirmed and JSystem is NOT measurable this way; WW ext-actors WERE measured and their gate is 3, not zero.
+
+Provenance first, because the roster changed twice today and citing the wrong
+one would answer a different question: the 11:50 log ran against the roster
+written at 11:49 and committed as `d2ac5d90b1` (plugin-split basis, 57 TUs),
+unmodified since.
+
+```
+EXCLUDED SET actually used by that run — 57 TUs
+  JSystem            0        <- of 242 JSystem TUs the build compiles
+  WW actors (ext)    4        d_a_ext_ep · d_a_ext_plank_span
+                              d_a_ext_vegetation · d_a_ww_demo00
+  JPA                2        ww_jpa.cpp · ww_jpa_bind.cpp
+  other actors      13
+  other subsystems  38
+```
+
+### JSystem — UNKNOWN confirmed, and the reason is now verified rather than argued
+
+**0 of 242.** No JSystem TU has ever been in the excluded set, so its symbols
+resolved normally and could not appear in any of the three logs. Foundry's
+refusal to read that absence as a zero was correct, and the §578 trap is
+demonstrated rather than asserted: absence here carries no information at all.
+
+Stronger than "not measured yet": JSystem is **not measurable by this instrument
+as configured**, because the plugin-split criterion does not put it in the
+excluded set. Getting a number would require excluding JSystem deliberately,
+which is a different experiment and not one step 11 implies.
+
+### WW actors (ext) — MEASURED, and the answer is 3
+
+These WERE excluded, so absence would have been informative — and it is not
+absence:
+
+```
+d_a_ext_plank_span.cpp  -> g_profile_EXT_SPAN    UNRESOLVED, ref by f_pc_profile_lst
+d_a_ext_vegetation.cpp  -> g_profile_EXT_VEG     UNRESOLVED, ref by f_pc_profile_lst
+d_a_ww_demo00.cpp       -> g_profile_WW_DEMO00   UNRESOLVED, ref by f_pc_profile_lst
+d_a_ext_ep.cpp          -> g_profile_EXT_EP      no reference anywhere in the tree
+```
+
+**Gate = 3 symbols, every one a profile-table registration entry, every one
+referenced solely by `f_pc_profile_lst.cpp`.** Not one functional inbound call
+from receiver code. That makes WW ext-actors the cleanest subsystem measured so
+far: their entire coupling to the receiver is the actor registration manifest,
+which is mechanical rather than a hook migration.
+
+**Correction to my own working, made before it reached anyone:** my first pass
+mapped `d_a_ww_demo00.cpp` to `g_profile_DEMO00` and read it as producing no
+symbol. Wrong — the regex took the first mention rather than the definition;
+`g_profile_DEMO00` is defined in `d_a_demo00.cpp`, a KEPT `mixed` TU.
+`d_a_ww_demo00.cpp` defines `g_profile_WW_DEMO00`, which IS unresolved. Three of
+four, not two.
+
+**Side finding, flagged not fixed:** `g_profile_EXT_EP` is defined in
+`d_a_ext_ep.cpp` and referenced **nowhere** — it is absent from
+`f_pc_profile_lst.cpp` and from the whole tree. Its zero is therefore real but
+means something different from the others: the actor is compiled and never
+registered, so it cannot be spawned through the profile table. That is an
+unregistered-actor finding for whoever owns `d_a_ext_ep`, not a coupling result.
+
+### JPA — 2, confirming Foundry's reading exactly
+
+```
+d_particle.cpp  ->  ww_jpa::Archive::parse
+d_particle.cpp  ->  ww_jpa::bindResource
+```
+
+Both from a single receiver TU. The linker did not need to see through the
+vtables that made axis W report UNKNOWN — it resolves symbols, not dispatch.
+
+### Net effect on B1
+
+```
+subsystem          status
+JPA                ANSWERED — 2 symbols, one referencing TU, no decode lane
+WW actors (ext)    ANSWERED — 3 symbols, all registration, no functional calls
+JSystem            UNKNOWN — 0 of 242 excluded; not measurable as configured
+```
+
+Two of three answered without the decode lane, against one when Foundry ferried
+this. The remaining third is not merely unmeasured — it is outside this
+instrument unless someone deliberately excludes JSystem.
+
+**Turns.** **Foundry** → JPA and WW ext-actors answerable; JSystem's UNKNOWN
+stands with a verified reason. If a JSystem number is wanted, say so and I will
+run the roster with JSystem excluded as its own experiment — it is one flag and
+one build, but it is not step 11 and should not be filed under it.
+**USER** → nothing owed.
