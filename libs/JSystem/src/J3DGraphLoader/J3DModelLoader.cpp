@@ -10,6 +10,10 @@
 #include "JSystem/J3DGraphLoader/J3DMaterialFactory.h"
 #include "JSystem/J3DGraphLoader/J3DMaterialFactory_v21.h"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.h"
+#if TARGET_PC
+// §374: defined in d_ext_npc_mount.cpp (WW-load scope flag).
+bool dExtWw_j3dForceFullMat3();
+#endif
 #include "JSystem/J3DGraphLoader/J3DShapeFactory.h"
 #include "JSystem/JKernel/JKRHeap.h"
 #include "JSystem/JSupport/JSupport.h"
@@ -224,6 +228,24 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
                 flags |= (i_flags & 0x3000000);
                 mpMaterialBlock = (J3DMaterialBlock*)block;
                 materialType = getBdlFlag_MaterialType(i_flags);
+#if TARGET_PC
+                // ============================================================
+                // §369b + §374 SCOPE FIX — the PATCHED material path (0x2000)
+                // reads its texture numbers FROM the MDL3 prebuilt DL
+                // (J3DTevBlockPatched::indexToPtr walks the GD list for texNo
+                // regs). With MDL3 SKIPPED on PC (case above), patched
+                // materials have no texNo source: nothing binds -> PURE WHITE.
+                // Forcing the full MAT3 read fixes that, BUT full materials
+                // allocate MORE than patched ones — forcing it globally
+                // overflowed TP actors' fixed solid heaps (§374 crash:
+                // daEp_CreateHeap -> mDoExt_J3DModel__create). So the force is
+                // scoped to WW-sourced loads only; TP loads keep byte-identical
+                // behavior. Flag is set around the mount's WW load calls.
+                // ============================================================
+                if (dExtWw_j3dForceFullMat3()) {
+                    materialType = 0;
+                }
+#endif
                 if (materialType == 0) {
                     readMaterial((J3DMaterialBlock*)block, flags);
                 } else if (materialType == 0x2000) {

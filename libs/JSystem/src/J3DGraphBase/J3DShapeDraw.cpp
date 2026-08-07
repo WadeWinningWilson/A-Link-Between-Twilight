@@ -7,6 +7,7 @@
 #include "JSystem/JKernel/JKRHeap.h"
 
 #if TARGET_PC
+#include <dolphin/gx/GXAurora.h>  // §476 owner breadcrumb (HT-5 strip list)
 #include <aurora/dl.hpp>
 #include <tracy/Tracy.hpp>
 
@@ -173,6 +174,15 @@ J3DShapeDraw::J3DShapeDraw(
 
 void J3DShapeDraw::draw() const {
     ZoneScoped;
+#if TARGET_PC
+    // [Housing] §476 breadcrumb (HT-5 strip list). THIS is the shape's own
+    // geometry list -- the 352-byte triangle-strip lists in the failure. It was
+    // untagged on the assumption that J3DShape's sticky tag covered it; once
+    // the rope started RELEASING its tag (§475) the list came back UNCLAIMED,
+    // which falsified that assumption. Tagging it directly so the submitter is
+    // a fact rather than an inheritance.
+    GXAuroraSetDlOwner(this, "J3DShapeDraw");
+#endif
     GXCallDisplayList(mDisplayList, mDisplayListSize);
 }
 

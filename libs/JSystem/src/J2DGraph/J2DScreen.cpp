@@ -11,6 +11,12 @@
 #include "JSystem/JSupport/JSUMemoryStream.h"
 #include <types.h>
 
+// §308 M3 diagnostic — last makeHierarchyPanes() return-2 block tag + private_set step
+// + the raw signature tag/type read (temporary).
+u32 g_j2dLastFailTag = 0;
+u32 g_j2dSigTag = 0;
+u32 g_j2dSigType = 0;
+
 J2DScreen::J2DScreen()
     : J2DPane(NULL, true, 'root', JGeometry::TBox2<f32>(JGeometry::TVec2<f32>(0, 0), JGeometry::TVec2<f32>(640, 480))), mColor() {
     field_0x4 = -1;
@@ -68,10 +74,12 @@ bool J2DScreen::setPriority(JSURandomInputStream* p_stream, u32 param_1, JKRArch
 
 bool J2DScreen::private_set(JSURandomInputStream* p_stream, u32 param_1, JKRArchive* p_archive) {
     if (!checkSignature(p_stream)) {
+        g_j2dLastFailTag = 'SIG!';  // §308 M3 diag
         return false;
     }
 
     if (!getScreenInformation(p_stream)) {
+        g_j2dLastFailTag = 'INF!';  // §308 M3 diag
         return false;
     }
 
@@ -81,12 +89,18 @@ bool J2DScreen::private_set(JSURandomInputStream* p_stream, u32 param_1, JKRArch
         clean();
     }
 
+    if (make_end && !p_stream->isGood()) {
+        g_j2dLastFailTag = 'GOOD';  // §308 M3 diag — panes built but stream not good
+    }
     return make_end ? p_stream->isGood() : false;
 }
 
 bool J2DScreen::checkSignature(JSURandomInputStream* p_stream) {
     J2DScrnHeader header;
     p_stream->read(&header, sizeof(J2DScrnHeader));
+
+    g_j2dSigTag = header.mTag;    // §308 M3 diag — what was actually read
+    g_j2dSigType = header.mType;
 
     if (header.mTag != 'SCRN' || (header.mType != 'blo1' && header.mType != 'blo2')) {
         JUT_WARN(257, "%s", "SCRN resource is broken.\n")
@@ -142,16 +156,19 @@ s32 J2DScreen::makeHierarchyPanes(J2DPane* p_basePane, JSURandomInputStream* p_s
             return 0;
         case 'TEX1':
             if ((mTexRes = getResReference(p_stream, param_2)) == NULL) {
+                g_j2dLastFailTag = 'TEX1';  // §308 M3 diag
                 return 2;
             }
             break;
         case 'FNT1':
             if ((mFontRes = getResReference(p_stream, param_2)) == NULL) {
+                g_j2dLastFailTag = 'FNT1';  // §308 M3 diag
                 return 2;
             }
             break;
         case 'MAT1':
             if (!createMaterial(p_stream, param_2, p_archive)) {
+                g_j2dLastFailTag = 'MAT1';  // §308 M3 diag
                 return 2;
             }
             break;
@@ -163,6 +180,7 @@ s32 J2DScreen::makeHierarchyPanes(J2DPane* p_basePane, JSURandomInputStream* p_s
             }
 
             if (next_pane == NULL) {
+                g_j2dLastFailTag = header.mTag;  // §308 M3 diag — the unhandled pane tag
                 return 2;
             }
             break;

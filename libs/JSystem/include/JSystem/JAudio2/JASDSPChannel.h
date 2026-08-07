@@ -51,6 +51,24 @@ struct JASDSPChannel {
     void updateProc();
     u8 getStatus() const { return mStatus; }
 
+    // ============================================================
+    // §369 (A4, JA1-native campaign) — voice-slice fence. The native
+    // JAudio1 port reserves a contiguous slice of the shared JASDsp
+    // voice array for its own donor allocator (d/ext_seq/
+    // ja1_jasdspchannel.cpp). Data-driven and inert by default: the
+    // range stays {0,0} unless the gate-ON JA1 init calls the setter,
+    // so stock JA2 behavior is bit-identical while DUSK_JA1_NATIVE=0.
+    // Fenced sites: updateAll (skip reserved wrappers — their voices
+    // are driven by the JA1 ager) and getLowestChannel /
+    // getLowestActiveChannel (never allocate/steal reserved voices).
+    // ============================================================
+    static void setJa1ReservedRange(u32 first, u32 count);
+    static bool isJa1Reserved(u32 index) {
+        return index - sJa1ReservedFirst < sJa1ReservedCount;
+    }
+    static u32 sJa1ReservedFirst;
+    static u32 sJa1ReservedCount;
+
     static void initAll();
     static JASDSPChannel* alloc(u8, Callback, void*);
     static JASDSPChannel* allocForce(u8, Callback, void*);

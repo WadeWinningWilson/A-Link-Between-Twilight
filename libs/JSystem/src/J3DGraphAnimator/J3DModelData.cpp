@@ -52,6 +52,18 @@ void J3DModelData::indexToPtr() {
         J3DMaterial* matNode = getMaterialNodePointer(i);
         J3DDisplayListObj* dl_obj = matNode->getSharedDisplayListObj();
 
+        // ====================================================================
+        // §369 — WW BDL4 with MDL3 SKIPPED (loader :212 TARGET_PC path) builds
+        // materials WITHOUT shared display-list objects; this loop's job is
+        // patching tev pointers INTO those prebuilt DLs, so with none there is
+        // nothing to patch — deref of the NULL obj was the Mshokki.arc crash
+        // (fault 0x10, first bdl4-actor to walk this path). Skip is the
+        // loader's own documented contract, honored here.
+        // ====================================================================
+        if (dl_obj == NULL) {
+            continue;
+        }
+
         GDInitGDLObj(&gdl_obj, dl_obj->getDisplayList(0), dl_obj->getDisplayListSize());
         GDSetCurrent(&gdl_obj);
         matNode->getTevBlock()->indexToPtr();

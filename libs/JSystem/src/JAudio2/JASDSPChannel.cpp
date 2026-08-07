@@ -6,6 +6,15 @@
 
 JASDSPChannel* JASDSPChannel::sDspChannels;
 
+// §369 JA1-native voice-slice fence (see header) — {0,0} = no fence.
+u32 JASDSPChannel::sJa1ReservedFirst;
+u32 JASDSPChannel::sJa1ReservedCount;
+
+void JASDSPChannel::setJa1ReservedRange(u32 first, u32 count) {
+    sJa1ReservedFirst = first;
+    sJa1ReservedCount = count;
+}
+
 JASDSPChannel::JASDSPChannel() :
     mStatus(STATUS_INACTIVE),
     mPriority(-1),
@@ -85,6 +94,9 @@ JASDSPChannel* JASDSPChannel::getLowestChannel(int i_priority) {
     int best_index = -1;
     int best_updateCounter = 0;
     for (int i = 0; i < DSP_CHANNELS; i++) {
+        if (isJa1Reserved(i)) {  // §369: never hand out a JA1-reserved voice
+            continue;
+        }
         JASDSPChannel* channel = &sDspChannels[i];
         s16 priority = channel->mPriority;
         if (priority < 0) {
@@ -109,6 +121,9 @@ JASDSPChannel* JASDSPChannel::getLowestActiveChannel() {
     int best_index = -1;
     int best_updateCounter = 0;
     for (int i = 0; i < DSP_CHANNELS; i++) {
+        if (isJa1Reserved(i)) {  // §369: JA1-reserved voices are not JA2's to break
+            continue;
+        }
         JASDSPChannel* channel = &sDspChannels[i];
         if (channel->mStatus == STATUS_ACTIVE) {
             s16 priority = channel->mPriority;
@@ -208,6 +223,9 @@ void JASDSPChannel::updateAll() {
     for (u32 i = 0; i < DSP_CHANNELS; i++) {
         if ((i & 0xf) == 0 && i != 0) {
             JASDsp::releaseHalt((i - 1) >> 4);
+        }
+        if (isJa1Reserved(i)) {  // §369: the JA1 ager owns these voices' lifecycle (incl. finish-flag reply)
+            continue;
         }
         sDspChannels[i].updateProc();
     }

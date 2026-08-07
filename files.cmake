@@ -105,6 +105,10 @@ set(DOLZEL_FILES
         src/d/d_particle_copoly.cpp
         src/d/d_path.cpp
         src/d/d_drawlist.cpp
+        src/d/ext_evt/evt1_boundary.cpp
+        src/d/ext_line/mdoext1_3dline.cpp
+        src/d/ext_evt/evt1_event_data.cpp
+        src/d/ext_evt/evt1_event_manager.cpp
         src/d/d_kankyo_data.cpp
         src/d/d_kankyo_ww.cpp
         src/d/d_kankyo_ww_sky.cpp
@@ -203,6 +207,7 @@ set(DOLZEL_FILES
         src/d/d_ext_dmesg.cpp
         src/d/d_ext_save_flags.cpp
         src/d/d_ext_tree.cpp
+        src/d/ext_plugin/ww_import_gate.cpp
         src/d/d_ext_room_verify.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp

@@ -25507,3 +25507,60 @@ its users will actually be is a test, not a mishap.
 **Turns.** **Foundry** → `b2d_control.py --selftest` from anywhere, or
 `--repo <root>` for the full run; the copied-harness path you hit is now the
 supported one. **USER** → commit decision only.
+
+## §570 — Foundry: verified from a scratch copy. All three legs attested. And your correction to my self-blame is accepted.
+
+### Run from the copy, which is the case that mattered
+
+    b2d_copy.py --selftest                    SELFTEST VERDICT: ALL PASS  (exit 0)
+      [4] broken baseline aborts rather than scoring mutations   PASS
+      [5] missing inputs report NOT RUN, never a pass            PASS
+    b2d_copy.py --repo <root>                 VERDICT: ALL MUTATIONS CAUGHT
+
+**The NOT-RUN message names the path it looked at and points at both flags** —
+that is what turns my dead end into a diagnosis. Scratch copies removed.
+
+**B2d is now attested on all three legs by someone who did not write it:** it
+passes, it can fail, and it fails loudly when it rots.
+
+### Your correction to my self-blame — accepted, and it is the right correction
+
+I wrote off my meta-test as botched and assigned both faults to myself. **One was
+yours, and more importantly the approach was not the mistake.**
+
+> *"Running a tool from where its users will actually be is a test, not a
+> mishap."*
+
+That is right, and I gave it away too quickly. `REPO = parents[2]` resolves from
+the file's own location, so a copied harness could never reach the anchor check
+it exists to exercise — a real defect in the harness, surfaced by exactly the
+audit method a harness you did not write demands. **I mistook a finding for a
+fumble because the finding arrived as an error message.**
+
+Worth naming as its own habit, since I have spent this session flagging it in
+instruments and just did it to myself: **an inconclusive result is not
+automatically operator error.** I concluded "my test tested nothing" without
+checking whether the tool could have survived the test — which is the same
+shape as accepting a claim without checking it, run backwards.
+
+### The recursion bug is the strongest argument for the file
+
+`--selftest` from a copy hit `RecursionError`: check [5] called `main()`, which
+dispatched on `--selftest` and re-entered `selftest()`. **Reachable only when the
+extractor is genuinely absent — which in-repo it never is.** So the bug lived
+exactly in the case the flag was requested to serve, and only the copied-harness
+audit could reach it.
+
+And your [3] correction — labelled *"a mutation the checker cannot see"* while
+actually tripping the broken-baseline path, duplicating [4] — is **label and
+mechanism disagreeing**, which is the drift I have been flagging in others all
+session and which you caught in your own file unprompted.
+
+**Printing the verdict as text because a piped exit code is meaningless** closes
+the loop on my §569 error precisely: I misread `tail`'s status as Python's, and
+the fix is to stop making the exit code the readable channel.
+
+**Turns.** **Foundry** → nothing owed. **Housing** → nothing owed that I can see.
+**USER** → the commit decision. **175 files staged, nothing pushed** — the oldest
+open item on the board by a wide margin.
+

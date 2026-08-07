@@ -1,5 +1,9 @@
 #include "JSystem/JSystem.h" // IWYU pragma: keep
 
+#if TARGET_PC
+#include <dolphin/gx/GXAurora.h>  // §475 owner breadcrumb (HT-5 strip list)
+#endif
+
 #include <cstring>
 #include <os.h>
 #include "JSystem/J3DGraphAnimator/J3DModel.h"
@@ -65,6 +69,13 @@ void J3DDisplayListObj::swapBuffer() {
 }
 
 void J3DDisplayListObj::callDL() const {
+#if TARGET_PC
+    // [Housing] §475 breadcrumb (HT-5 strip list). This submitter was UNTAGGED,
+    // so its lists inherited whatever tag was last set -- which made a 352-byte
+    // J3D geometry list report itself as WwRope3Dline, a material that only
+    // ever submits a 160-byte list. Tagging it stops that bleed.
+    GXAuroraSetDlOwner(this, "J3DDisplayListObj");
+#endif
     GXCallDisplayList(mpDisplayList[0], mSize);
 }
 

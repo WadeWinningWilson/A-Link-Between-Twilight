@@ -612,6 +612,67 @@ if (CMAKE_CXX_LINK_GROUP_USING_RESCAN_SUPPORTED OR CMAKE_LINK_GROUP_USING_RESCAN
 endif ()
 
 set(DUSK_FILES src/dusk/main.cpp ${GAME_BASE_FILES} ${GAME_DEBUG_FILES} ${miniz_SOURCE_DIR}/miniz.c)
+
+# =============================================================================
+# ROADMAP STEP 11 — WW-layer BUILD EXCLUSION.
+#
+# Converts "we will not push it" into "it cannot be built in". OFF by default:
+# the normal build is unchanged, and turning this on is a deliberate act.
+#
+#   cmake -DDUSK_EXCLUDE_WW=ON ...
+#
+# The list is GENERATED (cmake/ww_layer_exclude.cmake) by
+# tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake. It is
+# never hand-edited: a curated exclusion list drifts from the tree the moment a
+# TU is added, and a drifted list is worse than none because the build reports
+# success while compiling in the thing it was meant to remove.
+#
+# PARTIAL BY DEFINITION UNTIL STEP 19, and this is not a caveat to skim: the
+# list is filename-convention based, so it cannot see a donor port correctly
+# named after the receiver file it replaces, and it cannot see a LEG at all --
+# donor lines inside a receiver-owned TU are not excludable by dropping a file.
+# A green build with this ON means the separable STACKS are out. It does NOT
+# mean the binary is WW-free.
+# =============================================================================
+option(DUSK_EXCLUDE_WW "Compile the WW layer OUT (roadmap step 11). Partial: stacks only, not legs." OFF)
+if(DUSK_EXCLUDE_WW)
+    set(_ww_exclude_cmake "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ww_layer_exclude.cmake")
+    if(NOT EXISTS "${_ww_exclude_cmake}")
+        message(FATAL_ERROR
+            "DUSK_EXCLUDE_WW=ON but ${_ww_exclude_cmake} is missing. Generate it:\n"
+            "  python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake")
+    endif()
+    include("${_ww_exclude_cmake}")
+
+    # DRIFT GUARD. The generated list records the files.cmake it was derived
+    # from. If files.cmake has moved since, the list is stale and would silently
+    # UNDER-exclude -- the exact "stamp reports FRESH on stale content" failure
+    # this campaign has already paid for once. Refuse rather than under-exclude.
+    file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/files.cmake" _fc_now)
+    file(STRINGS "${_ww_exclude_cmake}" _stamp_line REGEX "^# files_cmake_sha256:")
+    string(REGEX REPLACE "^# files_cmake_sha256:[ ]*" "" _fc_stamped "${_stamp_line}")
+    if(NOT _fc_now STREQUAL _fc_stamped)
+        message(FATAL_ERROR
+            "WW exclusion list is STALE: files.cmake has changed since it was generated.\n"
+            "  stamped: ${_fc_stamped}\n  current: ${_fc_now}\n"
+            "  regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake")
+    endif()
+
+    list(LENGTH DUSK_FILES _ww_before)
+    list(REMOVE_ITEM DUSK_FILES ${WW_LAYER_FILES})
+    list(LENGTH DUSK_FILES _ww_after)
+    math(EXPR _ww_removed "${_ww_before} - ${_ww_after}")
+    list(LENGTH WW_LAYER_FILES _ww_listed)
+    message(STATUS "WW EXCLUSION ON: removed ${_ww_removed} of ${_ww_listed} listed TUs "
+                   "(${_ww_before} -> ${_ww_after} sources)")
+    message(STATUS "WW EXCLUSION is PARTIAL: stacks only. Legs (donor lines inside "
+                   "receiver-owned TUs) remain compiled in -- see roadmap step 19.")
+    if(NOT _ww_removed EQUAL _ww_listed)
+        math(EXPR _ww_absent "${_ww_listed} - ${_ww_removed}")
+        message(STATUS "WW EXCLUSION: ${_ww_absent} listed TU(s) were not in the build "
+                       "(header-only, platform-gated, or already absent) -- reported, not silent.")
+    endif()
+endif()
 if(ANDROID)
     add_library(dusklight SHARED ${DUSK_FILES})
     set_target_properties(dusklight PROPERTIES OUTPUT_NAME main)
