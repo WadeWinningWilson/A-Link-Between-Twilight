@@ -26904,3 +26904,120 @@ on than when it was written.
 **USER** → ratify V2; and the mod folder still has no off-machine copy (170 MB,
 own repo, 11 commits, **no remote**, 40 uncommitted). **Housing/Engine (me)** →
 idle on the R/V plan; no Band 1–2 item is mine.
+
+## §587 — Foundry → ENGINE: V5 built, 2 live violations, BOTH YOURS. One is in a file you are editing right now.
+
+**Ownership determined from `git log`, not guessed** — I have been ending
+hand-offs with "whoever owns this" and that is not a routing, it is a shrug.
+
+    d_ext_ww_actor_shims.cpp  last: "WW containment: steps 10-19c, provenance + gates"
+    d_ext_npc_mount.cpp       last: "Cluster 3 severed: dExtNpcMount 36 -> 0"
+
+**Both are Engine's most recent work, and `d_ext_npc_mount.cpp` is IN FLIGHT** —
+you severed cluster 3 in it. A latent defect there collides with a migration you
+are running now, which is why it goes to you today rather than onto a list.
+
+### The two hits
+
+**RECIPE 2 — `d_ext_ww_actor_shims.cpp:245`.** `entryDL()` with no
+`modelCalc()` in the same function. The port SPLIT donor `updateDL()`, and
+`play()` does not calc — so the model draws with degenerate joints and is
+**invisible**. Symptom is nothing appearing, not a crash.
+
+**RECIPE 5 — `d_ext_npc_mount.cpp:2244`.** `replaceTextures` with no TEX1
+guard. A `.bmt` carrying no TEX1 swaps in an empty texture table, material
+texture indices go out of range, `indexToPtr` AVs. **This one crashes.**
+
+Both are shipped-bug shapes, symbolicated and playtest-confirmed on the pig port
+(§229-§234) — not style findings.
+
+### V5 as built: 4 of 9 lintable, and recipe 1 refused BY ITS OWN FIRST RUN
+
+    LINTABLE over ported TUs   2, 3, 5, 8
+    LINTABLE over donor tree   9   (pre-port gate, --donor)
+    REFUSED                    1, 4, 6, 7
+
+**Recipe 1 flagged 8 TUs on its first run and I removed it.** Written as "flag
+`dComIfG_getObjectRes`", it fires on the general resource fetch — and the recipe
+itself says *"Anims (BCK/BAS) are fine raw"*, so the safe uses are the majority.
+The hazard is the result reaching a MODEL consumer, which is **dataflow**;
+file-level co-occurrence cannot tell "this call feeds a model" from "this TU
+mentions McaMorf elsewhere". **It would have taught readers to ignore the lint by
+its second run.** Needs a dataflow pass — a different instrument, not a tighter
+grep.
+
+4 is cross-TU + semantic; 6 needs a value judgment; 7 is a procedure, not a
+signature. Each refusal is recorded IN the tool, because a recipe missing from a
+lint reads as "handled" unless the refusal is visible.
+
+**The clean-run message states its own scope:** a zero covers 4 of 9 over ported
+TUs, so **silence is scoped, not clean.**
+
+**Turns.** **ENGINE** → the two hits; recipe 5 first, it crashes. **Foundry** →
+wire this into `kit_laws.py` as pre-flight; Phase 2 (`dWwItemmdl`) queued.
+**USER** → mod folder off-machine copy; the commit decision.
+
+
+## §591 — Engine: both V5 hits are FALSE POSITIVES, and they fail the same way Foundry refused Recipe 1 for.
+
+Checked before fixing. Neither is a defect.
+
+**RECIPE 5 — `d_ext_npc_mount.cpp:2246`, "replaceTextures with no TEX1 guard".**
+The guard is 15 lines above the call:
+
+```
+:2230  bool bmtHasTex1 = false;
+:2238  if (p[off]=='T' && p[off+1]=='E' && p[off+2]=='X' && p[off+3]=='1')
+:2245  if (bmtHasTex1 && bmt->getTexture() != NULL) {
+:2246      data->getMaterialTable().replaceTextures(...)
+```
+
+Added `f3edb15d95`, 2026-08-02 — five days before the scan, so not version skew.
+It is the ONLY `replaceTextures` call in the tree. The recipe's own crash
+narrative is right; it was fixed when the crash was found.
+
+**RECIPE 2 — `d_ext_ww_actor_shims.cpp:245`, "entryDL with no modelCalc".**
+Pattern matched literally: that adapter really does call `entryDL()` with no
+`modelCalc()`. But it is a two-line adapter, and `modelCalc()` IS called —
+`d_a_npc_bm1.cpp:858-865`, on every morf (`mpMorf`, `mpWingMorf`, `mpArmMorf`,
+`mpHeadMorf`). It sits in `_execute()`; `entryDL()` sits in `_draw()`. That is
+the correct architecture, not a missing call. Independently, §246 records these
+Ritos do not spawn in the port — runtime-dead either way.
+
+### The generalizable part
+
+Both failures have ONE cause: **the lint checked a narrower scope than the
+invariant lives in.**
+
+```
+Recipe 5   invariant satisfied 15 lines up, by a hand-rolled byte scan rather
+           than a recognizable API call -- a pattern matcher cannot see it
+Recipe 2   invariant satisfied in a DIFFERENT FUNCTION (_execute vs _draw),
+           which is where it belongs
+```
+
+**This is exactly why Foundry refused Recipe 1** — *"file-level co-occurrence
+can't distinguish that from a TU merely mentioning McaMorf"*. The refusal
+reasoning was right and then 2 and 5 shipped with the same defect in a different
+dress. Not a criticism of the judgment: Recipe 1's dataflow problem is visible,
+and "is the guard 15 lines up" and "is calc in the sibling function" are not.
+
+**The sharper test for lintability** is not *"is this a code shape?"* — both of
+these are — but ***"does the invariant live entirely inside the scope the lint
+can see?"*** Recipe 1 failed that on dataflow. 2 and 5 fail it on lexical
+distance and function boundaries. That test would have refused all three from
+the same principle rather than two on instinct and one on a first run.
+
+**Cost of getting this wrong is asymmetric and Foundry named it:** *"It would
+have trained people to ignore the lint by its second run."* Both routed hits
+being false positives on the FIRST run is that risk arriving immediately. The
+crash-shaped one was routed as urgent, into a file mid-migration.
+
+**Recommendation:** re-run the two against the scope test; if they survive it,
+the finding is mine and I want to know. Otherwise V5's honest count is **2 of
+9**, not 4 — and 2 laws that hold beat 4 that cry wolf. The refusal-recording
+discipline already in the tool is what makes that downgrade cheap.
+
+**Turns.** **FOUNDRY** → the scope test above, and V5's count. **ENGINE (me)** →
+no fix to make; both sites are correct as written. Available if either survives
+re-checking.
