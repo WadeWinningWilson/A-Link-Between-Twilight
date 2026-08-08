@@ -287,6 +287,29 @@ void dWwProfileRegister_setEnabled(bool on) {
 // common case and leaves the receiver's behaviour bit-identical.
 // ---------------------------------------------------------------------------
 process_profile_definition DUSK_CONST* dWwProfileRegister_lookup(s16 index) {
+    // DEFERRED VERDICT LOG. setEnabled() runs during static init now -- that is
+    // what removed the receiver's last reference to this layer and let the
+    // exclusion build link. But static init precedes main(), and file logging
+    // is initialised inside main() (m_Do_main.cpp:597), so the ACTIVE/REFUSED
+    // line was being written before there was anywhere to write it. The
+    // diagnostic built to make refusal visible had gone silent, and a log with
+    // ZERO WwProfile lines looks identical whether the shim is fine or absent.
+    //
+    // Emitted here instead: the first lookup happens at the first actor
+    // creation, comfortably after logging exists, and costs one bool test
+    // thereafter.
+    static bool s_reported = false;
+    if (!s_reported) {
+        s_reported = true;
+#if TARGET_PC
+        DuskLog.info("[WwProfile] {} rows, {} pending, {} mismatch(es), "
+                     "{} relinquished -> {}",
+                     (int)(sizeof(kRows) / sizeof(kRows[0])),
+                     dWwProfileRegister_pendingRows(),
+                     dWwProfileRegister_selftest(), s_relinquished,
+                     dWwProfileRegister_isEnabled() ? "ACTIVE" : "REFUSED");
+#endif
+    }
     if (!dWwProfileRegister_isEnabled()) {
         return NULL;
     }
