@@ -27608,3 +27608,61 @@ wide. **USER** → `WwSky.arc.baked-keep` restores the baked dome if you want it
 back meanwhile, though the test says you no longer need it. **HOUSING (me)** →
 №116 retirement when someone wants it made deliberate; B2b still waiting on
 History to say which one.
+
+## §598 — Housing: bisect STOOD DOWN. History's donor evidence reframes the finding, and the fourth candidate is one I did not have.
+
+**Accepted in full.** The dome positioning is byte-for-byte WW's; the 0.09
+parallax is donor law; today's `seaLevel` edit COMPLETED the donor formula
+rather than introducing a defect — our previous `camY * 0.09f` was WW's
+expression with the sea-level origin forced to zero. Two rebuild-bisects of code
+now proven vanilla would have been two wasted runs and, worse, would have ended
+by "fixing" a term the donor has.
+
+**The candidate I did not have was VISIBILITY, not causation.** A flat-white
+dome gives the eye nothing to judge apparent size by; a coloured one does. §418's
+runtime feed made the dome render with real colours TODAY, so a pre-existing,
+donor-correct parallax became perceptible for the first time.
+
+That explains what my own measurements could not. I ruled out three mechanisms
+and reported "three candidates checked, none explains it" — correct as far as it
+went, and it went one step short. Every elimination held precisely BECAUSE
+nothing caused the oscillation: the change made an old effect legible. I was
+searching the set of things that could have caused it, and the answer was not in
+that set. Worth recording as a shape, not just an incident: **when every
+candidate is eliminated and the symptom is new, "what changed the OBSERVER" is a
+question with the same standing as "what changed the SYSTEM".**
+
+### What is still open is INPUTS, and it is now probed
+
+Donor-exact maths on out-of-range inputs still looks wrong. History named the
+two questions; this lands the instrument for both.
+
+`d_a_vrbox2.cpp` — §598 probe, in the WW cloud-dome positioning path:
+
+```
+[SkyParallax] §598 sea=<n>  camY[min..max] span=<n>  domeOff[min..max] span=<n>
+```
+
+**RANGES, not frames, and that is the whole design.** The question is not "what
+is camY now" but "does camY EXCURSION in a TP-hosted stage exceed anything WW's
+camera does" — an excursion is only visible across frames. Accumulates over ~120
+frames (~2s), logs, resets. Per-frame logging would answer a question nobody
+asked and flood the log doing it.
+
+Reads directly on History's two:
+- **`sea`** — does our accessor return what WW's `fili->mSeaLevel` returns for a
+  host stage, or a host-coordinate value of a different magnitude?
+- **`camY span`** — `0.09 × ΔcamY` is vanilla, but only over WW's ΔcamY.
+
+Built (EXIT=0), caches wiped. One run with the wobble visible produces the
+ranges to compare against the donor's.
+
+**If the inputs are in range the finding closes as CORRECT-AND-NEWLY-VISIBLE**,
+which is a real disposition and not a shrug — it would mean §418 delivered
+donor-faithful sky and the port is more accurate than it was this morning, not
+less.
+
+**Turns.** **USER** → one run in the WW sky with the wobble visible; the probe
+prints every ~2s. **HISTORY** → the donor-side ranges to compare against (WW's
+own camY excursion and `mSeaLevel` for the equivalent stage). **HOUSING (me)** →
+probe landed; stripping it when the comparison closes.
