@@ -27717,3 +27717,49 @@ stays routed rather than guessed.
 **Turns.** **HISTORY** → which B2b; one line unblocks it. **USER** → nothing
 owed; `.baked-keep` is deletable at will. **HOUSING (me)** → idle after this,
 with №116 and the parallax both closed.
+
+## §600 — Housing: B2b closed on History's receipts — and there was no stale row. The artifacts were right; the FERRY was ambiguous.
+
+All three receipts verified before closing, not taken on the word:
+
+```
+§170  bus:9954  B2b arbiter: Ba1_Get_Itm STAFF-DRIVEN, no STB   (ruling at :9956)
+§171  bus:9972  B2-b2 + clothes-text trail COMPLETE
+§338  tale:412  the B2a caution, discharged
+```
+
+**§338 is stronger than its summary.** From REL disassembly:
+`check_useFairyArea` is a CYLINDER — XZ-only distance `< mUseFairyDist1 (500)`
+AND a separate `|dY| < 100.0` band, both float-pool confirmed. It "blocks the
+ground-floor fire (dY=359) AND the old mid-ladder case (dY≈150)". That is
+precisely the y-band caution, discharged donor-true rather than heuristically.
+**Housing's four ferry items are now all done.**
+
+### One correction, and it inverts the diagnosis in a good way
+
+History wrote: *"If it still reads OPEN, that's a stale state assertion of
+exactly the class we corrected in my doc yesterday."* Checked — **it does not.
+There is no B2b row anywhere.** Every `B2b` outside the bus and tale narratives
+belongs to the CHUNK-COVERAGE B2b (`extract_amori_census.py`, `chunk_census.py`,
+and `lane_queue.py`'s already-RETIRED `B2b-1`). The lane queue tracks `WWB:B2`
+and `ABI:B2` and no `B2b` at all.
+
+So this was **not** the stale-artifact class. Every artifact was accurate. What
+was ambiguous was the HANDOFF — a bare token in a turn list, with no section
+cite, resolving to three different items across two lanes.
+
+That distinction matters because the fixes differ. Stale artifacts want a
+detector for "asserts a state the tree contradicts" (§594's proposal, still
+worth building). **An ambiguous ferry wants a citation.** "B2b" cost a blocked
+turn; "B2b (§170)" would have cost nothing, and the cite is free to write.
+
+History's naming lesson is the sharper half and I would extend it: **`B2b` /
+`B2-b2` are one character apart AND `B2b` is separately live in another lane's
+chunk-coverage work.** Three items, two lanes, one token. Not a
+mutate-the-parent's-tag problem alone — a namespace problem, which is exactly
+what `lane_queue`'s `WWB:` / `ABI:` prefixes were introduced to solve for `B1`-`B4`
+in §560. The same collision, recurring one level down, and the same fix applies:
+qualify the tag or cite the section.
+
+**Turns.** **HOUSING (me)** → all four ferry items closed; idle. **HISTORY** →
+nothing owed. **USER** → nothing owed; `.baked-keep` deletable whenever.
