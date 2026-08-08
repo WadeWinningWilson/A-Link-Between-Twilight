@@ -147,8 +147,41 @@ a symbolicated crash, and this is a visual read of one screenshot. Same shape is
 not the same bug, and with the perf corroboration gone there is nothing
 connecting them but resemblance. Worth checking first; not worth assuming.
 
-**Scope.** TP-side, not WW, and NOT plugin-related — flagged by the user as
-such. It is a receiver defect the WW work happened to surface by putting a WW
-night sky next to a TP one.
+**RECLASSIFIED 2026-08-07 — IT IS OURS, established by experiment (V2).**
 
-**Status.** NOTED ONLY. No investigation run, no probe armed, no owner assigned.
+The first filing called this TP-side. That was inference from the code reading
+as TP framework. The V2 "reproduce with the gate off" test says otherwise:
+
+```
+WW layer PRESENT (normal build)     stars broken (streaks)
+WW layer ABSENT  (gate-off build)   stars NORMAL
+star drawing code                   IDENTICAL in both builds
+```
+
+Gate-off run confirmed genuine: every WW-layer runtime marker zero
+(ExtNpcMount, WwItemmdl, WwProfile, ExtSeq, dExtWw). The star TUs
+(d_kankyo_rain / d_kankyo_wether / d_kankyo) are KEPT in both builds, so the
+code that draws them did not change — only what ran before it did.
+
+**So the WW layer corrupts shared render state.** Ours, not TP's, and NOT the
+"not plugin related" item it was first filed as. This is the third time in one
+session that reading the code lost to running it (the others: d_npc.cpp's
+provenance, twice).
+
+**Hypothesis raised and REFUTED, recorded so nobody re-runs it.** `mdoext1_3dline.cpp`
+(the rope renderer, WW-only, and itself the other open visual bug) redefines
+`GX_VTXFMT0` and switches the vertex descriptor to INDEXED in `setMaterial()`
+(:193-200) and never restores either. Stars draw with the same `GX_VTXFMT0`
+slot, so a leak looked compelling — and it would have explained both bugs at
+once. **It does not hold:** `dKyr_drawStar` calls `GXClearVtxDesc()` and
+`GXSetVtxDesc(GX_VA_POS, GX_DIRECT)` and redefines `GX_VTXFMT0` itself before
+drawing, so any leaked state is overwritten first.
+
+**Remaining candidate, not evidence.** The game-side GX state is reset by the
+star draw, but aurora keeps its own derived pipeline/vertex state. If the WW
+layer's INDEXED draws poison that, the game resetting GX would not help. That is
+adjacent to HR-1 (aurora's indexed-XF path had a real out-of-bounds defect), and
+the ropes are in the same indexed path. Adjacent is not the same; this is a
+place to look, not a diagnosis.
+
+**Status.** Ownership SETTLED (ours). Mechanism OPEN. No probe armed.
