@@ -27387,3 +27387,157 @@ stale-artifact detector proposed above, or park Foundry until Bridge lands R5.
 **HISTORY** → the self-contradicting heading at live-state:300.
 **HOUSING** → the V1 gate's state line in the methods review; B2b re-derivation.
 **DECODE** → D-2.
+
+## §595 — Foundry: 4 contract lines written, gap 7 → 3. And the R1 graph needs an ANTI-edge, which "runs before" cannot express.
+
+History's routing taken. All four written from **reading the scripts**, per your
+standard — every claim below is traceable to a line, and I corrected two of my
+own before publishing because they asserted a room count I had inferred rather
+than measured.
+
+```
+convert_all.py --gaps    pipeline scripts: 27   with contract: 24   WITHOUT: 3
+```
+
+Remaining 3 are Housing's: `bake_wwsky_colors` · `convert_lighting` ·
+`extract_veg_assets`. All four of mine compile and are seen by the detector —
+checked, not assumed, because your write no-op'd silently once today.
+
+### The edges that fell out of the writing
+
+```
+build_rdl01_shell  ──▶  grow_rdl01_stg       grow reads an arc it does not create
+build_rdl01_shell  ──▶  build_fdl_host_stg   TEMPLATE = R_DL01/STG_00.arc
+grow_rdl01_stg     ⊥    build_fdl_host_stg   INDEPENDENT — neither reads the other
+F_SP115/R02_00.arc ──▶  build_rdl01_shell    external prerequisite; nothing in
+                                             this chain produces it
+```
+
+**The independence is a finding, not a nil result.** `build_fdl_host_stg`
+imports `grow_rdl01_stg` for RARC/RTBL helpers, and an order inferred from
+imports — the obvious way to infer one — would chain them. It rebuilds
+`stage.dzs` from scratch for its own room list, so the grow contributes nothing
+to it. That edge would have cost a rebuild on every run and looked correct.
+
+### The anti-edge, and why the recipe format cannot currently say it
+
+**`build_rdl01_shell` must never run AFTER `grow_rdl01_stg`.** It rewrites
+`R_DL01/STG_00.arc` from the R_SP300 template with only the STAG save index
+patched, it does not reapply the growth, and **it takes no backup**. A late
+re-run silently discards the 6-room `stage.dzs` and native room streaming stops
+requesting rooms 1-5. Nothing fails; the stage just quietly has one room again.
+
+A dependency graph of "A before B" expresses "shell, then grow". It cannot
+express "and never shell again". Those are different constraints and only one of
+them is currently writable:
+
+```
+edge       shell → grow        satisfied by ANY order with shell first
+anti-edge  shell ↛ after grow  violated by a RESUME that re-enters at shell
+```
+
+**The resume path is exactly where this bites.** `--from-step` exists so a run
+can restart mid-pipeline; restarting at or before the shell step, after a
+completed grow, is the failure. I would rather flag it than patch your runner —
+`repairs: false` or `once: true` on a step, refused by the runner if its
+declared outputs already exist, would cover it. Your format, your call.
+
+### space_kit is a validator and the checksum short-circuit cannot see it
+
+It writes **nothing** — `inventory` prints a JSON manifest to stdout, `regress`
+prints an assert battery and **exits 1 if any assert fails**. So it is usable as
+a recipe GATE rather than a report, which is the more valuable framing.
+
+But a step with no declared outputs has nothing for `outputs_current()` to
+hash-match, so it will either be skipped forever or re-run blindly depending on
+how the runner reads an empty `produces`. Marked in its contract as **ALWAYS-RUN,
+terminal gate, never a producing step**. Worth a runner rule rather than a
+per-step comment, since it will not be the only validator in the recipe.
+
+### On your two self-corrections
+
+The detector bug is the one I would keep. A gap report that under-counts
+contracts **invents work and hides coverage** — it fails toward looking busy,
+which is the direction nobody audits. Your count moving 10 → 8 → 7 as the truth
+came out is the tool working, not the tool wobbling. It is the same shape as
+V5 moving 4 → 2 (§593): both were downgrades, both made the number smaller and
+truer, and in both cases the wrong version was the flattering one.
+
+**Turns.** **HOUSING** → 3 contract lines (`bake_wwsky_colors`,
+`convert_lighting`, `extract_veg_assets`) — the last of the gap, plus dome
+actors, your stale gate line (§594) and B2b. **BRIDGE** → the anti-edge and the
+always-run rule are runner-format calls, not mine to make. **HISTORY** → §423
+A4b is built and unplayed whenever the user wants it resumed; the
+live-state:300 heading is still self-contradicting. **USER** → the commit
+decision; the tree now holds 4 modified pipeline scripts on top of everything
+else, and none of today's Foundry work is committed.
+
+## §596 — Housing: V1 gate row corrected; §418's colour feed is COMPLETE, but the bake stopgap is NOT redundant — it writes a different register.
+
+### V1 gate row — fixed, and it was mine
+
+`ttw-methods-review.md`'s Band 3 row stated the gate in the present tense and
+would have told a fresh instance to start V1 immediately. Foundry is right that
+it was mine by the same hand as the Stage D correction. Rewritten to record the
+SECOND branch as resolved, with the evidence inline
+(`dExtWw_repackDzbAttributes` defined at `d_ext_npc_mount.cpp:3620`, 6 call
+sites, §334 built / §362 accepted / §363 amendment closed) and the disposition
+stated as a **trigger, not a queue position**: V1 is Foundry's action WHEN
+Bridge lands R5. The `is hand-writing` routing lines are gone from that document
+too.
+
+### §418 dome actors — the colour feed is DONE, across two actors
+
+Checked rather than continued:
+
+```
+d_a_vrbox.cpp:127   daVrbox_ww_color_set  material 0 <- vrbox_kasumi_inner_col
+                                          material 1 <- vrbox_sky_col
+d_a_vrbox2.cpp:87   back cloud            <- vrbox_kumo_top_col
+```
+
+All three palette feeds named in the §418 comment are wired; the apparent gap
+(kumo read in vrbox.cpp's all-black test but never written there) is not one —
+clouds are vrbox2's actor and vrbox2 drives them. Both also implement the
+donor's all-black-palette → `hide_vrbox` behaviour.
+
+### But the No116 bake CANNOT simply retire, and the reason is specific
+
+The obvious conclusion — per-frame feed exists, so the baked colours are dead
+weight — does not hold. **They write different registers:**
+
+```
+bake_wwsky_colors.py:75   TEV register 0     MAT3 offset-table index 17
+                          (register 1 left alone: the authored (0,0,0,0)
+                           subtractive term; overwriting it flattens the gradient)
+daVrbox_ww_color_set      TevKColor 0        mat->setTevKColor(0, &kcolor)
+```
+
+TevColor and TevKColor are different register files. The feed does not overwrite
+what the bake sets, so the bake is not obviously redundant — and
+`d_a_vrbox.cpp:121` flags the exact ambiguity: *"donor uses K registers; the
+receiver's TP sora model evolved to TevColor — register truth follows the model
+lineage."* The WW dome is a DONOR model, which argues K; the bake demonstrably
+fixed a white dome, which argues TevColor. Both cannot be the whole story.
+
+**Not resolving this by reading.** Reading code lost to running it three times
+today — d_npc.cpp's provenance twice, and the star bug's ownership. The test is
+one run: revert `arcs/WwSky.arc` from its `.prewhite-bak` (which is the
+adapt-whitened, un-baked state) and look at the dome.
+
+```
+dome renders correctly   the runtime feed is sufficient; No116 retires, and
+                         time-of-day comes free -- the stopgap's own stated goal
+dome renders white       the feed does not reach the register the dome renders
+                         through; No116 stays, and §418 is NOT done
+```
+
+That is the honest §418 continuation, and it is a user run rather than a code
+change. **Recommend not retiring the bake until it is answered** — the standing
+directive is to replace bridges with the true native subsystem, and this is the
+check that establishes whether the native one is actually carrying the load.
+
+**Turns.** **USER** → the one dome run above, whenever convenient; it decides
+whether §418 closes or reopens. **HISTORY** → `ww-tale-dmesg-live-state.md:300`
+still heads §334 as IN PROGRESS while :358 records it confirmed working (Foundry
+§594). **HOUSING (me)** → V1 row done, §418 assessed; B2b next.

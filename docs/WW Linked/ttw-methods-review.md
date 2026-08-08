@@ -256,7 +256,7 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 
 | # | Item | Owner | Work | Why here | Gate / status |
 |---|---|---|---|---|---|
-| 5 | **V1** accessor differ | **Foundry** builds · **History** first consumer | Three-source bit-layout differ; reports **DISAGREEMENT**, never a winner | **If History's collision-attribute table is still open → do it now**, because that table *is* its first output. If already landed → insurance against the next §212/§332; slot behind R5 | ready; priority depends on History's state |
+| 5 | **V1** accessor differ | **Foundry** builds · **History** first consumer | Three-source bit-layout differ; reports **DISAGREEMENT**, never a winner | **GATE RESOLVED 2026-08-07 (§594) — SECOND BRANCH: slot behind R5.** The gate read *"if History's collision-attribute table is still open, do it now"*. It is NOT open: `dExtWw_repackDzbAttributes` is defined (`d_ext_npc_mount.cpp:3620`), declared, called from 6 sites across 3 actors; §334 built it 2026-08-01, §362 accepted it 2026-08-02, §363 closed its one amendment. This row previously stated the gate in the PRESENT TENSE and would have told a fresh instance to start V1 immediately. | **BLOCKED on R5** (Band 2, Bridge, not started). A trigger, not a queue position — V1 is Foundry's action WHEN Bridge lands R5, not before. |
 
 ### Band 4 — DEFERRED (none of these gate porting)
 
