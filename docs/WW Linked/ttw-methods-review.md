@@ -225,6 +225,26 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 | 1 | **V2** intake rule | **User** ratifies · **all lanes** follow · **Engine** holds switches | Every finding states whether it repros with the gate off | **Zero build cost**; pays on the next bug report | ready |
 | 2 | **V5** crash lint | **Foundry** | Add the cookbook's [DIRECT-PORT CRASH RECIPES](../WW-Restoration-Cookbook-CANONICAL.md) as laws to the existing `kit_laws.py` | Framework already landed (§423), so this is now **incremental** — best value-per-cost on either table | ready |
 
+> **BAND 1 STATE, 2026-08-07 (read this before picking work):**
+>
+> **V2 — RATIFIED by the user.** In force. Every finding states whether it
+> reproduces with the gate off. Its scope boundary is recorded above: it
+> CANNOT test pure WW content, and needs a third answer, **N/A**, beside
+> yes/no.
+>
+> **V5 — DELIVERED by Foundry, count UNDER REVIEW.** Shipped as 4 of 9
+> lintable, with Recipe 1 refused by its own first run. Engine checked the two
+> routed hits (§591): **both are false positives.** Recipe 5's TEX1 guard is 15
+> lines above the call and predates the scan by five days; Recipe 2's
+> `modelCalc()` is called in `_execute()` while `entryDL()` sits in `_draw()`,
+> which is correct architecture, and the actor is runtime-dead besides. Both
+> failed for ONE reason — the lint checked a narrower scope than the invariant
+> lives in — which is the same defect Recipe 1 was correctly refused for.
+> Pending Foundry's re-check the honest count is **2 of 9**.
+>
+> **Band 1 is therefore complete-pending-a-recount. Band 2 is next and it is
+> BRIDGE's, not Foundry's.**
+
 ### Band 2 — CAPACITY (the throughput unlock; this is the "fill the mod folder" answer)
 
 | # | Item | Owner | Work | Why here | Gate / status |
