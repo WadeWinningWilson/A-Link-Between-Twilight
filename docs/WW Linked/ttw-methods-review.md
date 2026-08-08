@@ -188,7 +188,7 @@ already-queued work.
 | V2 | **User** ratifies · **all lanes** follow · **Engine** holds the kill switches | Intake rule: every playtest finding states whether it reproduces with the relevant gate off. Decides bug ownership before anyone reads code. | — *(process)* | ready |
 | V3 | **Bridge** emits · **Foundry** specs | Environment fingerprint at the head of every log: our build-ID, WW-layer version, mod-folder state, `donor_roster` verdict — **plus dusklight build-ID, ABI version, and the 19b conformance verdict**, since symbol availability is a property of the *target build*. | decomp-side roster + receiver build | base ready; conformance field waits on **19b** |
 | V4 | **Foundry** | **Donor-side** drift sentinel: on pin advance, diff ported donor functions and flag the changed ones. **Compose with `tools/vendoring/ww_rebaseline.py`, do not duplicate it** — that tool *merges*; V4 reports what needs **re-verification**. | decomp *(pinned ref)* | **UNBLOCKED** — roadmap 12/13 done (pin `1d57f046`, 0 behind) |
-| V5 | **Foundry** | Crash-recipes-as-lint — cookbook recipes 1–9 as a kit scan over ported TUs. | project scars *(cookbook)* | **in flight** (§331 A1) |
+| V5 | **Foundry** | Crash-recipes-as-lint — the cookbook's [DIRECT-PORT CRASH RECIPES](../WW-Restoration-Cookbook-CANONICAL.md) as a kit scan over ported TUs. | project scars *(cookbook)* | **in flight** (§331 A1) |
 | V6 | **User** rules · **Foundry** operates | Re-cost the parked reel/save-state farm — **temporal axis only**; noclip already answers static questions for free. Save-states primary, reels secondary. | **noclip** *(bounds the scope)* + DuskTap | ready — a re-cost, not an unpark |
 | V7 | **Foundry** builds · **History** classifies · **Bridge** hosts in R5 | Import Winditor's `ActorDatabase.json` / `ActorResourceDatabase.json` with **per-field provenance tags**; `English Name` enters as **IVAN-governed leads at `? (unverified)`**, never as identity. Cross-check `Locations` against our DZR census. | **Winditor** *(our census stays authoritative)* | **BLOCKED on R5** *(corrected — was wrongly "ready")*; **and partly pre-existing**: `tools/foundry/winditor_oracle.py` (§394) already adapts the Winditor DBs as an independent oracle, so V7's remaining delta is the **R5 integration + IVAN-tagged `English Name`**, not the adapter |
 
@@ -223,7 +223,7 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 | # | Item | Owner | Work | Why here | Gate / status |
 |---|---|---|---|---|---|
 | 1 | **V2** intake rule | **User** ratifies · **all lanes** follow · **Engine** holds switches | Every finding states whether it repros with the gate off | **Zero build cost**; pays on the next bug report | ready |
-| 2 | **V5** crash lint | **Foundry** | Add cookbook recipes 1–9 as laws to the existing `kit_laws.py` | Framework already landed (§423), so this is now **incremental** — best value-per-cost on either table | ready |
+| 2 | **V5** crash lint | **Foundry** | Add the cookbook's [DIRECT-PORT CRASH RECIPES](../WW-Restoration-Cookbook-CANONICAL.md) as laws to the existing `kit_laws.py` | Framework already landed (§423), so this is now **incremental** — best value-per-cost on either table | ready |
 
 ### Band 2 — CAPACITY (the throughput unlock; this is the "fill the mod folder" answer)
 
@@ -323,6 +323,34 @@ off (`DUSK_EVT1_NATIVE=0`, `DUSK_WW_KNOB00_NATIVE=0`, …). One line in a report
 *which lane owns the bug* before anyone reads code. Depends on kill switches staying alive —
 already ruled for the event campaign through A5, and this is a second reason to hold that
 line. Becomes free post-step-19 (load/don't-load the plugin).
+
+**SCOPE BOUNDARY, found by running it 2026-08-07 — V2 CANNOT TEST PURE WW CONTENT.**
+
+The rule compares a finding against the same game with the WW layer off. That
+requires the thing to EXIST in both states. Receiver content does; WW content
+does not — turn the layer off and Outset goes with it, so a WW rope bridge has
+no counterpart to compare against. Not "hard to reach": nonexistent.
+
+```
+finding is on RECEIVER content   V2 applies      stars -> SETTLED as ours
+finding is on WW content         V2 cannot        ropes -> untestable
+```
+
+Demonstrated the same day the rule was proposed, on the two open visual bugs.
+Stars are TP's own draw code and the test settled ownership in one run, against
+three sessions of reading the code and getting it wrong. Ropes are WW content
+and the test cannot reach them at all.
+
+**This does not weaken the rule** — it bounds it. Half of one day's findings were
+decided by it. But "state whether it repros with the gate off" needs a third
+answer alongside yes and no: **N/A — the finding is on content the gate removes.**
+Without that, a WW-content bug either goes unreported under the rule or gets an
+invented answer, and per №31-C an unanswerable check must say so rather than
+guess.
+
+What tests WW-content bugs instead: the donor itself (noclip, or the real game)
+for "is this what it should look like", and the retained aurora instrumentation
+for "what is the renderer actually being asked to draw".
 
 ### V3 — Environment fingerprint in every log · *Bridge emits · Foundry specs*
 
