@@ -10,6 +10,29 @@ patched to placeholder index 15. Under №81 EXTENSION-FIRST that index is NOT
 the progression home — native writers refuse while WW is active; the extension
 router will own R_DL* progression later. Room 0 is a thin RARC shell (№62 style);
 LinkRM mounts on room-objects-ready.
+
+Usage:
+  build_rdl01_shell.py            (no arguments)
+
+  Inputs   : <mod>/files/res/Stage/F_SP115/R02_00.arc — the thin room shell cloned
+             for room 0; must already exist, this script does not build it
+             D:/XXXXXXX/Ex TP/files/res/Stage/R_SP300/STG_00.arc — TP template
+             (Yaz0 accepted and decompressed in-process)
+  Outputs  : <mod>/files/res/Stage/R_DL01/STG_00.arc — R_SP300 clone, STAG save
+             table patched to placeholder index 15
+             <mod>/files/res/Stage/R_DL01/R00_00.arc — thin room-0 shell
+  Idempotent: yes, and DESTRUCTIVELY so — both files are rewritten from source on
+             every run and NO backup is taken.
+  Order    : FIRST in the R_DL01 chain — and it must NOT be re-run after
+             grow_rdl01_stg.py. What it writes is the R_SP300 clone with only the
+             STAG save index patched; the room growth is NOT reapplied and no
+             backup is taken, so a late re-run silently discards the 6-room
+             stage.dzs and native room streaming stops requesting rooms 1-5.
+             This is the one ANTI-EDGE in the chain: not "runs before", but
+             "must never run after".
+  R1 note  : F_SP115/R02_00.arc is a donor-of-shape from another part of the tree.
+             A recipe must order whatever produces F_SP115 ahead of this step, or
+             this step aborts with SystemExit — loudly, which is the right failure.
 """
 from __future__ import annotations
 

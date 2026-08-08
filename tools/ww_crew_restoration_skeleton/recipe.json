@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "note": [
+    "R1 recipe. A step is VERIFIED only when BOTH its contract (declared inputs/outputs)",
+    "AND its position in the order are established from evidence. A script having a Usage",
+    "line proves the first, never the second \u2014 17 scripts declare contracts, but the ORDER",
+    "is documented nowhere in the tree. Steps are added as evidence lands; nothing is",
+    "inferred, because a guessed order that runs to completion produces a mod folder that",
+    "looks converted and is not.",
+    "Author a step by: reading the script's Usage, running it in isolation, recording what",
+    "it writes under the mod folder in `produces`, then flipping tier to VERIFIED."
+  ],
+  "from": "arcs/",
+  "to": "model_replacements/WW-Crew-Restoration",
+  "steps": [
+    {
+      "id": "install-skeleton",
+      "script": "install_skeleton.py",
+      "args": [],
+      "desc": "Install the skeleton into model_replacements/ (phase M4/A4)",
+      "produces": [
+        "modinfo.ini"
+      ],
+      "tier": "VERIFIED",
+      "evidence": "docstring states the action and destination; no inputs beyond the repo copy; ordering is definitional \u2014 nothing can precede the folder existing"
+    },
+    {
+      "id": "adapt-bdl-arcs",
+      "script": "adapt_bdl_arcs.py",
+      "args": [],
+      "desc": "Adapt donor BDL arcs (staging transforms) into arcs/",
+      "produces": [],
+      "tier": "UNVERIFIED",
+      "evidence": "CONTRACT known (module docstring), ORDER not: unproven whether it precedes or follows the stage builders. Also pending Housing's lighting-adapter retirement (the normalize_* transforms this step applies may be deleted by that work), so pinning its outputs now would pin a moving target."
+    },
+    {
+      "id": "extract-veg-assets",
+      "script": "extract_veg_assets.py",
+      "args": [],
+      "desc": "Extract donor vegetation blobs to <mod>/assets/veg/ + veg_manifest.ini",
+      "produces": [
+        "assets/veg/veg_manifest.ini"
+      ],
+      "tier": "VERIFIED",
+      "evidence": "CONTRACT and ORDER both read from the script. Writes assets/veg/<symbol>.bin (:118) and assets/veg/veg_manifest.ini (:132) into a directory it mkdirs (:97). INDEPENDENT: its inputs are the donor executable and framework.map, not any step's output, and it touches no arc. Safe anywhere, re-runnable. veg_manifest.ini is the short-circuit key -- the .bin set is variable, the manifest is one file that describes all of them and is written last."
+    },
+    {
+      "id": "bake-wwsky-colors",
+      "script": "bake_wwsky_colors.py",
+      "args": [],
+      "desc": "Bake authored clear-day TEV colours into the sky dome (No116 stopgap)",
+      "produces": [
+        "arcs/WwSky.arc"
+      ],
+      "tier": "VERIFIED",
+      "evidence": "CONTRACT and ORDER both read from the script. Rewrites arcs/WwSky.arc IN PLACE (:114), backing up to WwSky.arc.prewhite-bak (:110). ORDER: must run AFTER adapt-bdl-arcs -- its own docstring states it exists to UNDO that step's normalize_tevregs for vr_* materials, where the TEV register IS the sky colour and whitening the placeholder produced the white dome that shipped. ANTI-EDGE: adapt-bdl-arcs must NEVER run after this one; it would re-whiten the dome. 'A before B' cannot express that, same as the shell/grow pair."
+    },
+    {
+      "id": "convert-lighting",
+      "script": "convert_lighting.py",
+      "args": [],
+      "desc": "Convert donor lighting chain (EnvR/Colo/Pale/Virt) to Env0/Col0/PAL0/VRB0",
+      "produces": [
+        "files/res/Stage/F_DL01/STG_00.arc",
+        "files/res/Stage/F_DL02/STG_00.arc",
+        "files/res/Stage/R_DL01/STG_00.arc"
+      ],
+      "tier": "VERIFIED",
+      "evidence": "CONTRACT and ORDER both read from the script. main() (:389) does three stages -- F_DL01, F_DL02, R_DL01 -- each rewritten IN PLACE at files/res/Stage/<name>/STG_00.arc (:371), backed up to .pre113-bak (:290). ORDER: must run AFTER build-rdl01-shell and after grow-rdl01-stg, because it writes R_DL01/STG_00.arc and addresses rooms 0..5 (:396-404), which only exist once the grow has run. ANTI-EDGE, and it EXTENDS the one Foundry found: build-rdl01-shell rewrites that same STG_00.arc from the R_SP300 template (its own header, :5/:21/:26, says 'must NOT be re-run after'), so a late shell re-run discards the CONVERTED LIGHTING as well as the 6-room stage.dzs. Same file, same mechanism, second victim -- and equally silent."
+    }
+  ]
+}

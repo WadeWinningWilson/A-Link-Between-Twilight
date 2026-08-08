@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Seed Phase O2 / №27 folder content into AppData + this skeleton (no WW arcs)."""
+"""Seed Phase O2 / №27 folder content into AppData + this skeleton (no WW arcs).
+Usage:
+  seed_o2_content.py
+
+  Inputs   : none from the donor — seeds authored Phase-O2/№27 content only.
+  Outputs  : writes into BOTH the live AppData mod folder and this repo skeleton.
+  Covenant : contains NO WW arcs (that separation is deliberate; do not add any).
+  Order    : after install_skeleton.py (needs the folder), independent of arc steps.
+  R1 note  : dual-destination writer — a recipe `produces` list must cover the AppData
+             side only; the repo side is version-controlled and not runner state.
+"""
 from __future__ import annotations
 
 import os

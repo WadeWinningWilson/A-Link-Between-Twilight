@@ -25,6 +25,27 @@ Two findings drive this converter:
      native outdoor stages, not invented.
 
 Everything is written mod-side only. No donor bytes enter the repo.
+
+Usage:
+  convert_lighting.py            (no arguments)
+
+  Inputs   : D:/XXXXXXX/Ex WW/files/res/Stage/<stage>/Stage.arc — donor lighting
+             chain (EnvR/Colo/Pale/Virt), read only
+             <mod>/files/res/Stage/{F_DL01,F_DL02,R_DL01}/STG_00.arc — the target
+             stages; each must already exist
+  Outputs  : <mod>/files/res/Stage/F_DL01/STG_00.arc  (donor sea sector, room 44)
+             <mod>/files/res/Stage/F_DL02/STG_00.arc  (forest, room 0)
+             <mod>/files/res/Stage/R_DL01/STG_00.arc  (interiors, rooms 0..5)
+             all rewritten IN PLACE, each backed up to <name>.pre113-bak.
+  Idempotent: yes — it rebuilds the four tables from the donor every run.
+  Order    : AFTER build_rdl01_shell.py AND AFTER grow_rdl01_stg.py. It writes
+             R_DL01/STG_00.arc and addresses rooms 0..5, which exist only once
+             the growth has run.
+             ANTI-EDGE, and it EXTENDS the one on build_rdl01_shell.py: that
+             script rewrites this same STG_00.arc from the R_SP300 template and
+             takes no backup, so a late re-run discards the CONVERTED LIGHTING as
+             well as the 6-room stage.dzs. Same file, same mechanism, second
+             victim, equally silent.
 """
 from __future__ import annotations
 

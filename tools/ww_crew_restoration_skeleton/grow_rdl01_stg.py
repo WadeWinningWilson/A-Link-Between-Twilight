@@ -13,6 +13,24 @@ contiguous rooms 0..5 (room = bgN − 1).
 №102: RTBL pointer / m_rooms offsets are FILE-ABSOLUTE (dzs base + param_3),
 never relative to the RTBL payload. Payload-relative 0x18/0x20… land in the
 chunk-header directory ("MULT"/"RCAM") and the play scene creates no rooms.
+
+Usage:
+  grow_rdl01_stg.py               (no arguments — ROOM_COUNT = 6 is a constant)
+
+  Inputs   : <mod>/files/res/Stage/R_DL01/STG_00.arc — must ALREADY EXIST (built
+             by build_rdl01_shell.py); read for stage.dzs and room0.dzs's FILI
+  Outputs  : the SAME arc, rewritten in place, RTBL = MULT = 6 (rooms 0..5)
+             backups .pre97-bak and .pre102-bak, each written once
+  Idempotent: yes in shape — stage.dzs is REBUILT to 6 rooms from room0's FILI on
+             every run rather than extended, so a second run converges on the
+             same arc instead of growing it to 12.
+  Order    : after build_rdl01_shell.py; before anything that expects rooms 1-5.
+             Independent of build_fdl_host_stg.py — neither reads the other's
+             output, so a recipe may run them in either order or in parallel.
+  R1 note  : both backups are WRITE-ONCE, so they hold the arc as it stood on the
+             FIRST run — the pre-grow shell — not the previous run. Do not treat
+             .pre97-bak as an undo for the most recent execution; it is a
+             pre-№97 snapshot and nothing else.
 """
 from __future__ import annotations
 

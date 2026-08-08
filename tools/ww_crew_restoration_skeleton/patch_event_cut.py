@@ -19,6 +19,17 @@ The cut name lives in a fixed 0x20 zero-padded field, so a shorter name is
 written with the remainder cleared. A `.pre165-bak` backup is written first.
 
     python patch_event_cut.py <arc> <OLDNAME> <NEWNAME>
+
+Usage:
+  patch_event_cut.py <stage-arc> <old-cut-name> <new-cut-name>
+
+  Inputs   : <stage-arc> (a stage STG_*.arc containing event_list.dat)
+  Outputs  : the SAME arc, rewritten in place (arc.write_bytes)
+  Idempotent: yes by name — a second run finds no <old-cut-name> and changes nothing.
+  Order    : after the event exists in the target arc (i.e. after merge_event.py).
+  R1 note  : takes an explicit target, so a recipe step must name the arc; it has no
+             default and must never be given one (silently patching the wrong stage is
+             the whole hazard this contract exists to prevent).
 """
 from __future__ import annotations
 

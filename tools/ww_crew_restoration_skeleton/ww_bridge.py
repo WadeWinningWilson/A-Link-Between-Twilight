@@ -8,6 +8,8 @@
 #   ww_bridge.py verify <live-dir> [--skeleton <repo-dir>]
 #   ww_bridge.py scls   <live-dir> [--emit]     -> WWB:B2
 #   ww_bridge.py gate   <exe>          -> delegates to covenant_gate.py
+#   ww_bridge.py convert-all [args]    -> R1 pipeline runner (convert_all.py)
+#                                         --gaps lists the remaining R1 work
 #
 # ---------------------------------------------------------------------------
 # WHY IT TAKES A LIVE DIRECTORY AND NOT THE REPO SKELETON

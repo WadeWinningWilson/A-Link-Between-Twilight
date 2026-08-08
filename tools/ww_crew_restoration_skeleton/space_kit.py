@@ -28,6 +28,29 @@
 #                              kit bug (or a real latent gap — report either).
 #
 # Read-only in both modes. Never writes game data. №31-clean.
+#
+# Usage:
+#   space_kit.py inventory <DonorStageDirName>   Pass-1 over a DONOR stage
+#   space_kit.py regress                         Pass-3 battery over the LIVE host
+#
+#   Inputs   : inventory — D:/XXXXXXX/Ex WW/files/res/Stage/<DonorStageDirName>
+#              regress   — <mod>/files/res/Stage/R_DL01/STG_00.arc
+#                          <mod>/files/res/Stage/R_DL01/R00_00.arc
+#   Outputs  : NONE on disk. inventory prints the Pass-4 manifest as JSON on
+#              stdout; regress prints the assert battery. Redirect to capture.
+#   Exit     : regress returns 1 if ANY assert fails, 0 if all pass — so it is
+#              usable as a recipe GATE, not merely a report. inventory returns
+#              its own status from mode_inventory.
+#   Idempotent: trivially — read-only in both modes, no game data is written.
+#   Order    : regress runs AFTER the R_DL01 host arcs are built and baked; it
+#              asserts against the FINISHED tale, so running it early reports
+#              failures that only mean "not built yet". inventory has no order at
+#              all — it reads the donor tree and never touches the mod.
+#   R1 note  : this is a VALIDATOR, not a conversion step. It produces no output
+#              file, so the runner's checksum short-circuit has nothing to match
+#              and would either skip it forever or re-run it blindly — a recipe
+#              must mark it ALWAYS-RUN and place it as a terminal gate (or after
+#              each bake), never as a producing step.
 # ============================================================================
 import json
 import struct

@@ -23,6 +23,25 @@ room 44 -> palette set 0 (clear) -> band 2 (noon) -> its Virt record.
 
 Static by construction: the sky will not shift with time of day until the
 per-frame driver exists. Declared, not silent.
+
+Usage:
+  bake_wwsky_colors.py            (no arguments)
+
+  Inputs   : <mod>/arcs/WwSky.arc — must already exist AND must already have been
+             through adapt_bdl_arcs; this step edits its TEV registers in place.
+  Outputs  : <mod>/arcs/WwSky.arc — rewritten IN PLACE, backup written to
+             WwSky.arc.prewhite-bak before the first change.
+  Idempotent: yes — it re-reads and rewrites the same registers. The backup is
+             taken every run, so a second run overwrites the first backup with
+             already-baked bytes; the pre-bake state survives only the first run.
+  Order    : AFTER adapt_bdl_arcs.py. This step exists to UNDO that step's
+             normalize_tevregs for vr_* materials: for the sky dome the TEV
+             register IS the sky colour, so whitening the 50%-gray placeholder
+             produced the white dome that shipped.
+             ANTI-EDGE — adapt_bdl_arcs.py must NEVER run after this one. It
+             would re-whiten the dome, and nothing errors; the sky just goes
+             white again. Same shape as the shell/grow pair: "A before B" cannot
+             express "and never A again", and --from-step is where it bites.
 """
 from __future__ import annotations
 

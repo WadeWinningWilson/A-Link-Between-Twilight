@@ -16,6 +16,24 @@ sections, each with file offset / load address / size) rather than trusting the
 map's first column, which is section-relative.
 
 Output: <mod>/assets/veg/<symbol>.bin + veg_manifest.ini describing each blob.
+
+Usage:
+  extract_veg_assets.py            (no arguments)
+
+  Inputs   : the donor executable + framework.map (addresses and sizes for every
+             grass/tree/flower texture and display list). Neither is produced by
+             any other pipeline step.
+  Outputs  : <mod>/assets/veg/<symbol>.bin — one blob per named symbol
+             <mod>/assets/veg/veg_manifest.ini — describes every blob; written
+             LAST, so it is the honest short-circuit key (the .bin set varies,
+             the manifest is one file that covers all of them)
+  Idempotent: yes, non-destructively — it mkdirs and overwrites its own outputs
+             and touches nothing it did not create.
+  Order    : INDEPENDENT. Its inputs are donor files, not any step's output, and
+             it writes only under assets/veg/. Safe anywhere in the run, and safe
+             to re-run. No edge to any other step in either direction — recorded
+             as a finding, not a nil result: an order inferred from "it is in the
+             pipeline directory" would have chained it to something.
 """
 from __future__ import annotations
 

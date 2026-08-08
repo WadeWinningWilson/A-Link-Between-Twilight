@@ -9,6 +9,28 @@ F_DL01 needs RTBL n=45 (index by room id) + MULT n=1 (room 44) + room44.dzs.
 F_DL02 needs RTBL/MULT n=1 + room0.dzs.
 
 Writes AppData mod-side only (never commit WW arcs).
+
+Usage:
+  build_fdl_host_stg.py           (no arguments — both targets are hard-coded)
+
+  Inputs   : <mod>/files/res/Stage/R_DL01/STG_00.arc — the TEMPLATE, read for
+             stage.dzs, room0.dzs (its FILI) and whichever pol_*.dat are present
+  Outputs  : <mod>/files/res/Stage/F_DL01/STG_00.arc  (RTBL n=45, MULT n=1, room 44)
+             <mod>/files/res/Stage/F_DL02/STG_00.arc  (RTBL n=1,  MULT n=1, room 0)
+             backup .pre107-bak beside each, written once and never overwritten
+  Idempotent: yes by construction — each output is REBUILT from the template and
+             written whole, never appended to or patched in place.
+  Order    : after build_rdl01_shell.py, which CREATES the template it reads.
+             NOT after grow_rdl01_stg.py — it needs only stage.dzs, room0.dzs's
+             FILI and the pol_*.dat set, and it rebuilds stage.dzs from scratch
+             for its own room list, so the grow contributes nothing to it. An
+             inferred recipe would chain it behind the grow; the script says
+             otherwise, and a needless edge costs a rebuild every run.
+  R1 note  : it validates its own output BEFORE writing — RTBL/MULT tag counts and
+             g.assert_rtbl_pointers — and raises SystemExit rather than shipping a
+             broken stage. A recipe step needs no separate post-check.
+             It imports grow_rdl01_stg for RARC/RTBL helpers, so that file must be
+             importable; that is a module dependency, not a run-order edge.
 """
 from __future__ import annotations
 

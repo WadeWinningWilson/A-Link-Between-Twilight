@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+# Usage:
+#   restore_event_staff.py [--write]        (default is DRY-RUN; --write commits)
+#
+#   Inputs   : donor  D:/XXXXXXX/Ex WW/files/res/Stage/LinkRM/Stage.arc
+#              target <mod>/files/res/Stage/R_DL01/STG_00.arc
+#   Targets  : hard-coded — (TALE_DEMO, ALL), (TALE_DEMO2, ALL)
+#   Outputs  : the target arc, rewritten in place when --write is given
+#   Order    : after the tale events exist in R_DL01 (merge_event.py), and BEFORE
+#              scope_event_staff.py, which drops the ALL staff this one restores.
+#   R1 note  : dry-run by default is the right shape for a recipe — the runner must
+#              pass --write explicitly, so a mis-ordered step reports, never mutates.
 # ============================================================================
 # restore_event_staff.py — Pass-2 bake: restore a donor STAFF (+its cut/data
 # chain) to an EXISTING host event. First target: the ALL/dummy staff the
