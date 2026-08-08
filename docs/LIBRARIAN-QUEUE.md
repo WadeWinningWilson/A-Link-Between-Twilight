@@ -120,6 +120,18 @@ Lint clean (0 conflict / 0 NUL). 43 of 61 linked; the `fact-sheets/` subfolder +
 
 ---
 
+## H. "recipes 1–9" citation re-point (user chose A, 2026-08-06)
+
+Citations of **"cookbook recipes 1–9"** as the crash-lint scope: `ttw-methods-review.md` **V5 (line 191)** + **Band-1 (line 226)**, and `ww-tale-dmesg-live-state.md` **§327 (line 241)**. User: "1–9 is likely a mis-reference → re-point (option A), don't renumber."
+
+**Blocker (verified counts):** the "§9 with 18 rows" the user means is the **frozen `WW-Restoration-Cookbook.md` fork §9 "Failure classes" = 17 rows** (DO-NOT-WRITE). The **live** home is CANONICAL's "DIRECT-PORT CRASH RECIPES" = **9 recipes** (CANONICAL consolidated the old 17-class list into 9). So "recipes 1–9" currently matches the *live* count; re-pointing to §9 would cite frozen/superseded content. Also `§9` is overloaded (census "Spec §9" in `census_axis_*.py` is unrelated).
+
+| ID | Type | Finding | Routes to | Status |
+|----|------|---------|-----------|--------|
+| H-3 | STALE CITATION | **DONE 2026-08-06 (Foundry ruled: the 9 live consolidated recipes; endorsed the method).** All 3 citations re-pointed to **"the cookbook's DIRECT-PORT CRASH RECIPES"** (named section + link to CANONICAL, **no hard count** → drift-proof): `ttw-methods-review.md` V5 + Band-1, `ww-tale-dmesg` §327. Verified: 0 stale "recipes 1–9" left, links resolve, no mixed endings. **Revisit trigger (Foundry, recorded):** a playtest failure matching a frozen-fork failure-class absent from the 9 → migrate that row into CANONICAL first, then extend. | — | CLOSED |
+
+---
+
 ## E. Routed to owning lane (came to the Librarian, but out of scope)
 
 > **✅ R-2 APPLIED 2026-07-27 (user go-ahead).** F-2 note stamped, ledger forward-stamped,

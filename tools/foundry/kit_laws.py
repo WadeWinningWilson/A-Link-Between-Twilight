@@ -103,6 +103,17 @@ RE_FILI = re.compile(r"\bFILI\b|getFiliLevel|fili", re.I)
 RE_TACT_DEFAULT = re.compile(r"1\.0f\s*,\s*0\.0f\s*,\s*0\.0f|tact[- ]?default", re.I)
 
 
+# --- laws 6-7: THE SURVIVING CRASH RECIPES (V5, §589) -----------------------
+# From the CANONICAL cookbook's DIRECT-PORT CRASH RECIPES. Only 2 of the 9
+# survived the SCOPE TEST -- a recipe is lintable iff its invariant lives
+# entirely inside the scope the lint can see. Recipes 1, 2 and 5 all had a
+# syntactic signature and were all FALSE on their first run, because their
+# invariants span dataflow, a function boundary, and lexical distance
+# respectively. These two span nothing.
+RE_PTR_TRUNC = re.compile(r"\(\s*[us]32\s*\)\s*this\b|"
+                          r"setUserArea\s*\(\s*\(\s*[us]32\s*\)")
+RE_HIO_RAW = re.compile(r"\bmDoHIO_(?:create|delete)Child\s*\(")
+
 def strip_comments(text):
     """Laws are about CODE. A banner that names a forbidden call must not read
     as a violation — that is how a linter trains people to delete comments."""
@@ -286,14 +297,54 @@ def law5_wind(raw, code, lin=None):
                          "constants")
 
 
+def law6_ptrtrunc(raw, code, lin=None):
+    """Crash recipe 3 — donor `setUserArea((u32)this)` chops the actor pointer
+    on x86_64, and the joint callback then reads a wild address. Symbolicated on
+    the pig port (§229-§234).
+
+    Wholly local: a pointer truncated to 32 bits is wrong wherever it appears,
+    so there is no distant guard that could make it right. That is why it
+    survived the scope test when recipes 1, 2 and 5 did not."""
+    m = RE_PTR_TRUNC.search(code)
+    if not m:
+        return ("PASS", "no 32-bit cast of a pointer")
+    line = code[:m.start()].count(chr(10)) + 1
+    return ("VIOLATION", f"line {line}: pointer truncated to 32 bits — use "
+                         f"(uintptr_t). Donor casts are 32-bit by origin; audit "
+                         f"every (u32)/(s32) cast of a pointer in ported code")
+
+
+def law7_hio_macro(raw, code, lin=None):
+    """Crash recipe 8 — raw `mDoHIO_createChild`/`deleteChild` reference the
+    debug-only `mDoHIO_root`, which is UNLINKED in the retail PC build: LNK2019.
+    Use the `mDoHIO_CREATE_CHILD` / `mDoHIO_DELETE_CHILD` macros, which no-op
+    outside DEBUG.
+
+    Also wholly local, and its failure is a LINK error rather than a runtime
+    one -- so unlike most of this file it costs a build, not a playtest. Reading
+    the HIO tuning FIELDS is fine; only register/unregister calls are under
+    law."""
+    m = RE_HIO_RAW.search(code)
+    if not m:
+        return ("PASS", "no raw mDoHIO child register/unregister call")
+    line = code[:m.start()].count(chr(10)) + 1
+    return ("VIOLATION", f"line {line}: raw mDoHIO child call — unlinked in the "
+                         f"retail PC build (LNK2019). Use mDoHIO_CREATE_CHILD / "
+                         f"mDoHIO_DELETE_CHILD; the HIO FIELDS stay readable")
+
+
 LAWS = [
     ("1 LIGHTING CONTRACT", law1_lighting),
     ("2 RAW-BYTES / PARSE-ONCE", law2_rawbytes),
     ("3 NATIVE-ACTOR WW LEG", law3_wwleg),
     ("4 STATUS BIT 1", law4_statusbit),
     ("5 DONOR WIND", law5_wind),
+    ("6 POINTER TRUNCATION", law6_ptrtrunc),
+    ("7 HIO MACRO", law7_hio_macro),
 ]
 
+
+LINEAGE_FREE_LAWS = {"6 POINTER TRUNCATION", "7 HIO MACRO"}
 
 DONOR_DRAW_LAWS = {"1 LIGHTING CONTRACT", "2 RAW-BYTES / PARSE-ONCE",
                    "3 NATIVE-ACTOR WW LEG"}
@@ -310,7 +361,14 @@ def check(path):
         except TypeError:
             verdict, why = fn(raw, code)
 
-        if lin is None:
+        # LINEAGE-FREE LAWS (§590). Laws 1-5 are DONOR CONTRACTS: they only mean
+        # something for WW-layer code, so without a lineage tag their result is
+        # not evidence. Laws 6-7 are not contracts — a pointer truncated to 32
+        # bits and a raw mDoHIO child call are wrong in ANY TU, receiver or WW.
+        # Gating them on lineage would silence them exactly where lineage is
+        # undeclared, which is where a stray donor-shaped cast is most likely to
+        # be sitting unnoticed.
+        if lin is None and name not in LINEAGE_FREE_LAWS:
             if verdict in ("PASS", "N/A"):
                 verdict, why = ("UNKNOWN",
                                 "no // KIT-LINEAGE tag — the law cannot be scoped "

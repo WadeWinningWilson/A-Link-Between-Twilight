@@ -1,14 +1,19 @@
 @echo off
 REM ===========================================================================
-REM build_ww_excluded.bat — roadmap step 11, the LINK-TIME leg.
+REM build_ww_excluded.bat — the WW-layer separability REGRESSION GATE.
 REM
-REM WHAT THIS IS FOR
-REM Configure-level exclusion is already proven (§572: 48 of 48 listed TUs
-REM removed, both refusal guards fire). What is NOT known is whether the tree
-REM still LINKS with those 48 files gone. Legs -- donor lines living inside
-REM receiver-owned TUs -- may reference symbols defined in the excluded files,
-REM and the exclusion is documented PARTIAL precisely because it cannot see
-REM them. This build answers that and nothing else.
+REM WHAT THIS IS FOR — AND WHAT CHANGED
+REM This began as step 11's diagnostic: nobody knew whether the tree still
+REM LINKED with the WW layer's files excluded, and a link FAILURE was the
+REM deliverable, because the unresolved-symbol list named the legs.
+REM
+REM STEP 19 ANSWERED THAT. 129 of 129 inbound symbols were severed (§589) and
+REM the receiver links with the WW layer entirely absent. So the meaning of
+REM this script's result is now INVERTED:
+REM
+REM   LINKS      = the expected state. Separability holds.
+REM   DOES NOT   = a REGRESSION. Something re-bound the WW layer into the
+REM                receiver. The unresolved list names what.
 REM
 REM THIS IS A DIAGNOSTIC BUILD, NOT A PLAY BUILD.
 REM If it links, the exe has the WW layer compiled OUT. Do not expect WW
@@ -16,20 +21,24 @@ REM content in it. Do not replace your normal exe with it.
 REM
 REM YOUR NORMAL BUILD IS UNTOUCHED. Different directory, different exe:
 REM   normal : build\windows-msvc-relwithdebinfo\dusklight.exe   (unchanged)
-REM   this   : build\ww-excluded\dusklight.exe
+REM   this   : build\ww-exclude-test\dusklight.exe
 REM
-REM A LINK FAILURE HERE IS THE RESULT, NOT A BREAKAGE. The unresolved-symbol
-REM list names exactly which legs bind the WW layer into the receiver, which is
-REM the measurement step 11 has been missing.
+REM DIRECTORY NOTE — READ THIS BEFORE TRUSTING AN OLD LOG.
+REM The step-19 green result was proven in build\ww-exclude-test, and
+REM run_gate_off.bat already treats that path as the canonical no-WW exe.
+REM This script formerly built build\ww-excluded and wrote
+REM build\ww-excluded-link.log. Those artifacts are PRE-SEVERANCE and SUPER-
+REM SEDED: that log ends in "LNK1120: 130 unresolved externals" and reads as
+REM though step 19 were still open. It is not. Do not cite it.
 REM ===========================================================================
 setlocal
 cd /d "%~dp0"
 
-set "BUILDDIR=build\ww-excluded"
-set "LOGFILE=build\ww-excluded-link.log"
+set "BUILDDIR=build\ww-exclude-test"
+set "LOGFILE=build\ww-exclude-test-link.log"
 
 echo.
-echo === Step 11 link-time test: building with DUSK_EXCLUDE_WW=ON ===
+echo === WW separability gate: building with DUSK_EXCLUDE_WW=ON ===
 echo     output : %BUILDDIR%
 echo     log    : %LOGFILE%
 echo     Your normal build and exe are NOT touched.
@@ -60,15 +69,16 @@ set "RC=%ERRORLEVEL%"
 echo.
 if "%RC%"=="0" (
     echo ============================================================
-    echo   RESULT: LINKED CLEAN.
-    echo   The WW stacks are separable at link time. Step 11 discharges.
+    echo   RESULT: LINKED CLEAN — the expected state since step 19.
+    echo   The WW layer is separable at link time. No regression.
     echo   Exe: %BUILDDIR%\dusklight.exe  ^(WW layer compiled OUT -- not a play build^)
     echo ============================================================
 ) else (
     echo ============================================================
-    echo   RESULT: DID NOT LINK ^(exit %RC%^) -- this is a MEASUREMENT, not a break.
-    echo   The unresolved symbols below name the legs that bind the WW layer
-    echo   into the receiver. That list is the deliverable.
+    echo   RESULT: DID NOT LINK ^(exit %RC%^) -- this is a REGRESSION.
+    echo   Step 19 severed all 129 inbound symbols; if any are back, the
+    echo   receiver has re-bound the WW layer. The unresolved list below
+    echo   names exactly which references did it.
     echo ============================================================
     echo.
     echo   --- unresolved externals ^(first 40^) ---

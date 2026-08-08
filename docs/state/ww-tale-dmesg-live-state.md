@@ -19,7 +19,11 @@ dot `dotAnime` animations. Guard fix (§313 v2): `dExtDmesg_isBoxActive()` stops
 arrival-G-guard from force-ending a held tale box, without touching arrival-camera (that was the
 Outset-camera regression from v1 — fixed).
 
-## TWO diagnostics live in the current build — AWAITING one tale run's log
+## TWO diagnostics (§316 textbox metrics / §317 demo-end pos) — HISTORICAL, both since answered
+<!-- STATE-CORRECTION 2026-08-05: same class as §334's heading. "AWAITING one tale run's log"
+     described a build from many campaigns ago; the tale has run dozens of times since and
+     both questions were answered downstream. Left as a record of what was asked, NOT as an
+     open ask. -->
 1. **§316 textbox metrics** (`d_ext_dmesg.cpp`, `setCommonData`): logs applied-vs-nominal font
    size, bounds width, font cell width. Question it answers: is the port rendering text WIDER
    than the donor at the same nominal 25 (→ the true cause of the mid-word wrap), or is bounds
@@ -238,7 +242,7 @@ only on evidence of a WW talker there. One exterior verification talk still owed
 
 ## §327 ONE-PASS PORT PLAN (user order 2026-08-01): Lamp + mshokki + SPitem + knob00
 Write ALL FOUR ports now; unstaged arcs (Mshokki, SPitem's) just idle until Foundry stages them.
-Per actor (cookbook recipes 1-9): donor include/src from D:/XXXXXXX/WW DP/{include/d/actor,src/d/actor}/
+Per actor (the cookbook's [DIRECT-PORT CRASH RECIPES](../WW-Restoration-Cookbook-CANONICAL.md)): donor include/src from D:/XXXXXXX/WW DP/{include/d/actor,src/d/actor}/
 → port include/d/actor/ + src/d/actor/ (dolzel.h not dolzel_rel.h; res/Object/<Arc>.h donor res
 ids → use residmap.csv ids or raw indices w/ comment; §-tagged block comments; WW particle ids
 via dPa_name — if unresolved at runtime that's the §205/§206 Foundry particle surface, log not
@@ -297,7 +301,15 @@ walk animation (the stand-in drove Link via TP's DoorK10/SHUTTER_DOOR event; the
 staff cuts are WW-anim-vocabulary). Seam-3 decision next session: bind the native door's demo to
 the TP-side door event (receptor-allows line) vs port WW's Link door cuts.
 
-## §334 IN PROGRESS: WW→TP collision-attribute table (top work item; user PROCEED given)
+## §334 LANDED (2026-08-01; accepted §362 2026-08-02, amendment CLOSED-AS-CONVERGED §363)
+<!-- STATE-CORRECTION 2026-08-05 (routed by Foundry, fixed by History): this heading read
+     "IN PROGRESS ... top work item" for five days while line ~358 of THIS SAME FILE read
+     "§334 attribute table CONFIRMED WORKING this run". The heading was accurate when
+     written and never revisited; a fresh instance reading top-down would have re-opened
+     shipped work. Evidence it is landed: dExtWw_repackDzbAttributes live at
+     d_ext_npc_mount.cpp:3620 with 6 call sites across three actors; user acceptance at
+     §362; amendment #1 closed at §363. The V1 accessor-differ gate turns on this state —
+     it routes to INSURANCE (behind R5), not urgent. -->
 Receipts: bus §332 (bit layouts: WW attCode=inf1 bits16-20 via atr_conv, WW special=bits12-15;
 TP att0=12-15, att1=16-18 (1-4=SINK), groundCode=19-23; otble inf1=0x000200FF proof).
 Ruling: bus §333 + user follow-up — true-equivalent materials → TP MATERIAL standable;
@@ -4990,3 +5002,50 @@ Step 7 was DISCHARGED in §494 (:4461) and again in §500 ("discharged across al
 Housing could not find it because census traffic moved to `docs/WW Linked/ww-bridge-tool-interconnected.md`
 at ~§506 while these entries stayed here. Full answer + 3 stale-queue corrections: §515 HOUSINGTEMP
 on the interconnected bus. Cross-linked so neither bus is a dead end again.
+
+## UNIFIED PLAN (R+V) — Bridge/History turn taken 2026-08-05
+CONTEXT: §423 A4b is BUILT (exe 23:16) but its playtest is PAUSED by the user. Not abandoned —
+resume point recorded: three-part test (tale full run FIRST, it hung there; doors; mainline TP
+cutscene as control), mitigation DUSK_EVT1_NATIVE=0 restores today's behavior exactly.
+
+R5 CONVERSION DB — LANDED (tools/conversion_db.py). Bridge hosts / History classifies, both
+hats here. Consolidates the scattered conversion facts into ONE consulted table, and the
+classification is the deliverable, not the collection: every row carries a TIER —
+  LAW (proven vs binary/decomp/Winditor; a disagreement is a bug in the disagreeing decoder)
+  DERIVED (computed from LAW by a stated rule) · OBSERVED (holds everywhere looked, unproven)
+  HOST (OUR receiver-side mapping choice, donor-silent — never cited as donor fact).
+The tier matters because a consumer treating OBSERVED as LAW "fixes" the wrong side of a
+disagreement — precisely how §375 (endian overlay) and §396 (name-collision enum) each cost a
+round. Seeded with chunk sizes (10 LAW rows), STARTCODE_ALIAS (correctly marked HOST, not
+donor fact), §423 A2's file-meaningful-vs-runtime-scratch split, §396's particle-id lineage,
+the Winditor Virt palette order, and §422's retail-presence findings. Absorption ledger names
+what it replaces so consumers get MIGRATED, not duplicated; ww_dzb_roster + both rosters are
+listed PENDING (rosters deliberately deferred — R1 re-pins them, absorbing now would bake a
+stale copy).
+
+V1 GATE — ANSWERED (only History could): the §334 collision-attribute table is LANDED, not
+open. It shipped, was user-verified across the lava/railing/water pass, and has been in use
+since (§334f/g). Therefore per the plan's own condition V1 is INSURANCE, NOT URGENT — slot it
+behind R5 as written. R5 is now in place, so V1's prerequisite (a table stating what this
+project BELIEVES, with tiers, for a differ to compare against) exists.
+
+BRIDGE ITEM STILL OPEN: R1 convert-all runner — needs Foundry's space_kit as a stage module
+plus the R_DL02 pilot gate; it ends with an output-roster re-pin, which is why R5 left the
+rosters unabsorbed. Not started this turn (context); it is the next Bridge action.
+
+## STATE-ASSERTION SWEEP (2026-08-05) — History's doc, routed by Foundry
+FIXED (2, not 1 — swept rather than patching the cited line): §334's "IN PROGRESS / top work
+item" heading (contradicted 58 lines below by "CONFIRMED WORKING"; landed 2026-08-01, accepted
+§362, amendment closed §363 — evidence: dExtWw_repackDzbAttributes at d_ext_npc_mount.cpp:3620,
+6 call sites, 3 actors), and line 22's "AWAITING one tale run's log", which described a build
+from many campaigns ago and has been answered downstream many times over.
+ALSO CORRECTED HERE: my own R5 entry said V2's intake rule was awaiting user ratification. It
+was ALREADY RATIFIED — my line was itself an instance of the failure class it sat next to.
+Three lanes lost a turn each to this class today (superseded link log · in-progress heading
+over closed work · present-tense gate over a shipped table). Every one was accurate when
+written and then simply left. RECOMMENDED INSTRUMENT (Foundry's lane; Bridge routes, user
+picks): a stale-state detector — parse headings/state lines carrying a STATE CLAIM
+(IN PROGRESS / AWAITING / PENDING / "is hand-writing" / OPEN) and flag any whose subject has a
+later CONTRADICTING assertion in the same file, or a code/ledger receipt of completion. It is
+the ww_scope_check.py shape applied to prose: heuristic, advisory, --strict for CI. Cheap, and
+the only failure class on the board that has now cost three lanes a turn on the SAME day.
