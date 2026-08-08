@@ -173,50 +173,6 @@ static int daVrbox2_ww_draw(vrbox2_class* i_this) {
     if (dComIfGd_getView() != NULL) {
         y0 = (dComIfGd_getInvViewMtx()[1][3] - seaLevel) * 0.09f;
     }
-#if TARGET_PC
-    // ========================================================================
-    // §598 SKY-PARALLAX INPUT PROBE — ranges, not frames.
-    //
-    // History settled the CODE question from the donor: this positioning is now
-    // byte-for-byte WW's, the 0.09 parallax is donor law, and the grow/shrink
-    // under vertical camera motion is vanilla. What that does NOT settle is
-    // whether our INPUTS are in WW's range -- donor-exact maths on out-of-range
-    // inputs still looks wrong.
-    //
-    // So this logs RANGES rather than per-frame values. The question is not
-    // "what is camY now" but "does camY EXCURSION in a TP-hosted stage exceed
-    // anything WW's camera does", and an excursion is only visible across
-    // frames. Per-frame logging would answer a question nobody asked and flood
-    // the log while doing it.
-    //
-    // Two things to compare against the donor:
-    //   seaLevel  -- does our accessor return what WW's fili->mSeaLevel does
-    //                for a host stage, or a host-coordinate value of a
-    //                different magnitude?
-    //   camY span -- 0.09 x delta-camY is vanilla, but only over WW's delta.
-    // ========================================================================
-    {
-        const f32 camY = dComIfGd_getInvViewMtx()[1][3];
-        static f32 s_camMin = 1e30f, s_camMax = -1e30f;
-        static f32 s_offMin = 1e30f, s_offMax = -1e30f;
-        static f32 s_seaSeen = 1e30f;
-        static int s_frames = 0;
-        if (camY < s_camMin) { s_camMin = camY; }
-        if (camY > s_camMax) { s_camMax = camY; }
-        if (y0 < s_offMin) { s_offMin = y0; }
-        if (y0 > s_offMax) { s_offMax = y0; }
-        s_seaSeen = seaLevel;
-        if (++s_frames >= 120) {  // ~2s at 60fps
-            DuskLog.info("[SkyParallax] §598 sea={:.1f}  camY[{:.1f}..{:.1f}] span={:.1f}"
-                         "  domeOff[{:.1f}..{:.1f}] span={:.1f}",
-                         s_seaSeen, s_camMin, s_camMax, s_camMax - s_camMin,
-                         s_offMin, s_offMax, s_offMax - s_offMin);
-            s_frames = 0;
-            s_camMin = s_offMin = 1e30f;
-            s_camMax = s_offMax = -1e30f;
-        }
-    }
-#endif
     mDoMtx_stack_c::transS(dComIfGd_getInvViewMtx()[0][3], dComIfGd_getInvViewMtx()[1][3] - y0,
                            dComIfGd_getInvViewMtx()[2][3]);
     dComIfGd_setListSky();

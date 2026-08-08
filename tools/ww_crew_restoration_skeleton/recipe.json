@@ -48,12 +48,10 @@
       "id": "bake-wwsky-colors",
       "script": "bake_wwsky_colors.py",
       "args": [],
-      "desc": "Bake authored clear-day TEV colours into the sky dome (No116 stopgap)",
-      "produces": [
-        "arcs/WwSky.arc"
-      ],
-      "tier": "VERIFIED",
-      "evidence": "CONTRACT and ORDER both read from the script. Rewrites arcs/WwSky.arc IN PLACE (:114), backing up to WwSky.arc.prewhite-bak (:110). ORDER: must run AFTER adapt-bdl-arcs -- its own docstring states it exists to UNDO that step's normalize_tevregs for vr_* materials, where the TEV register IS the sky colour and whitening the placeholder produced the white dome that shipped. ANTI-EDGE: adapt-bdl-arcs must NEVER run after this one; it would re-whiten the dome. 'A before B' cannot express that, same as the shell/grow pair."
+      "desc": "RETIRED \u2014 superseded by \u00a7418's runtime colour feed",
+      "produces": [],
+      "tier": "RETIRED",
+      "evidence": "RETIRED 2026-08-07, on a run rather than an argument. \u00a7418's per-frame feed (daVrbox_ww_color_set + vrbox2's cloud feed) drives the dome from g_env_light every frame. Tested by reverting arcs/WwSky.arc to its .prewhite-bak (un-baked) state -- 6 bytes differ of 773,920, one TEV register per sky BDL -- and the dome rendered CORRECTLY. So the white dome this step existed to paper over is gone WITHOUT the bake, which is the stopgap's own stated goal: 'the engine-correct fix is to drive these registers per frame... that is engine work and it is what enables time-of-day'. It landed. CONSEQUENCE: the anti-edge this step carried (adapt_bdl_arcs must never run after it) is MOOT -- there is no bake left to undo. The dome renders through TevKColor, which the feed drives; adapt's TevColor whitening never reached it. Script retained, not deleted: it documents the No116 investigation and can be re-run if the feed is ever gated off."
     },
     {
       "id": "convert-lighting",

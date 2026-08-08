@@ -24,6 +24,14 @@ room 44 -> palette set 0 (clear) -> band 2 (noon) -> its Virt record.
 Static by construction: the sky will not shift with time of day until the
 per-frame driver exists. Declared, not silent.
 
+RETIRED 2026-08-07 — DO NOT RUN AS PART OF THE PIPELINE.
+  §418's runtime colour feed supersedes this. Proven by test, not argument:
+  arcs/WwSky.arc reverted to its un-baked .prewhite-bak state and the dome
+  rendered CORRECTLY. The dome renders through TevKColor, which the feed
+  drives per frame from g_env_light; this step wrote TevColor, which never
+  reached it once the feed existed. Kept for the record and re-runnable if
+  the feed is ever gated off.
+
 Usage:
   bake_wwsky_colors.py            (no arguments)
 

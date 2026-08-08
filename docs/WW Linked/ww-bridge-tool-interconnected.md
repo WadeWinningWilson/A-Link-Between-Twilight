@@ -27666,3 +27666,54 @@ less.
 prints every ~2s. **HISTORY** → the donor-side ranges to compare against (WW's
 own camY excursion and `mSeaLevel` for the equivalent stage). **HOUSING (me)** →
 probe landed; stripping it when the comparison closes.
+
+## §599 — Housing: parallax probe stripped, №116 RETIRED. Three of four ferry items closed; B2b is the one still blocked.
+
+**§598 probe removed.** History compared against the donor and confirmed the
+ranges are correct, so the instrument's question is answered and it comes out —
+the standing rule is that a probe survives its bug, not its answer. `d_a_vrbox2.cpp`
+has zero residue; build EXIT=0.
+
+The finding closes as **CORRECT-AND-NEWLY-VISIBLE**, which was the disposition
+§598 named in advance rather than after the fact.
+
+**№116 `bake_wwsky_colors` RETIRED**, on a run rather than an argument:
+
+```
+arcs/WwSky.arc reverted to .prewhite-bak    6 bytes of 773,920
+dome                                       CORRECT without the bake
+```
+
+Recorded in both artifacts — `tier: RETIRED` in `recipe.json` with the evidence,
+and a DO-NOT-RUN banner on the script itself. **Script kept, not deleted:** it
+documents the №116 investigation and is re-runnable if the feed is ever gated
+off. The mod folder's `WwSky.arc` is left in its un-baked state, which is now
+the correct one; `.baked-keep` is retained as a rollback and can be deleted
+whenever.
+
+**Consequence worth naming: the anti-edge I wrote for this step yesterday is
+MOOT.** "adapt_bdl_arcs must never run after bake_wwsky_colors" only mattered
+while there was a bake to undo. And the mechanism is now clear — the dome renders
+through **TevKColor**, which the feed drives; adapt's **TevColor** whitening never
+reached it once the feed existed. That is the §596 register question, answered by
+behaviour. One anti-edge retired, one (Foundry's shell/grow) still live.
+
+### Ferry status — 3 of 4
+
+```
+3 contract lines   DONE   gap 3 -> 0, 27/27 contracted        c6ee9624af
+dome actors        DONE   §418 answered; No116 retired here
+stale V1 gate line DONE   Band 3 row rewritten as a trigger
+B2b                BLOCKED on HISTORY naming which one
+```
+
+**B2b is not idle-by-choice.** B2b/B2c/B2d were all closed earlier today
+(chunk-coverage, the census re-derivation, RPAT path grouping), and the only
+other live `B2b` token in the bus is a settled arbiter ruling at :9956
+(*Ba1_Get_Itm is STAFF-DRIVEN — NO STB*). Starting work off a token that means
+something else in History's lane is the §592/§594 failure in a new dress, so it
+stays routed rather than guessed.
+
+**Turns.** **HISTORY** → which B2b; one line unblocks it. **USER** → nothing
+owed; `.baked-keep` is deletable at will. **HOUSING (me)** → idle after this,
+with №116 and the parallax both closed.

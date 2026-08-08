@@ -5049,3 +5049,147 @@ picks): a stale-state detector — parse headings/state lines carrying a STATE C
 later CONTRADICTING assertion in the same file, or a code/ledger receipt of completion. It is
 the ww_scope_check.py shape applied to prose: heuristic, advisory, --strict for CI. Cheap, and
 the only failure class on the board that has now cost three lanes a turn on the SAME day.
+
+## R1 OPENED (2026-08-05, Bridge): runner + recipe format LANDED; the recipe itself is gated on evidence
+Housing committed the mod folder, so the data-loss case is closed and R1 proceeds as capacity
+work rather than as risk mitigation.
+LANDED: tools/ww_crew_restoration_skeleton/convert_all.py (+ recipe.json, wired into
+ww_bridge.py as `convert-all`). Three real things:
+  1. THE RUNNER — sequential, resumable (--from-step), per-step validated, and checksum
+     SHORT-CIRCUITED: a step whose declared outputs still hash to what the runner recorded is
+     skipped (TTW's idempotence trick, the thing that makes re-running cheap).
+  2. THE RECIPE FORMAT — declarative JSON, versioned from/to, per-step id/script/args/
+     produces/tier + an `evidence` field. Tiers borrow the R5 conversion-DB vocabulary for the
+     same reason.
+  3. THE CONTRACT-GAP REPORT (`--gaps`) — MEASURED, not estimated: 27 pipeline scripts,
+     17 declare a contract, 10 do NOT (bake_wwsky_colors, build_fdl_host_stg, build_rdl01_shell,
+     convert_lighting, extract_veg_assets, grow_rdl01_stg, patch_event_cut, restore_event_staff,
+     seed_o2_content, space_kit). That list IS the remaining R1 work, as a command.
+THE FINDING THAT SHAPED IT: R1's spec assumes the steps are knowable. Contracts are (17/27);
+THE ORDER IS DOCUMENTED NOWHERE IN THE TREE. A Usage line proves what a script takes, never
+where it sits. So the recipe ships with ONE verified step (install-skeleton — ordering is
+definitional) and adapt-bdl-arcs marked UNVERIFIED with its reason, and THE RUNNER REFUSES to
+execute UNVERIFIED steps without an explicit flag. Rationale, stated once: the mod folder is
+the project's least reproducible artifact; a runner that guesses an order and completes yields
+a folder that LOOKS converted and is not — the §113-STASH class with a bigger blast radius.
+A runner that stops costs a turn; a runner that guesses costs the folder.
+NEXT (routable, cheap, NOT inferable by me): one Usage line per script in the gap list, from
+whoever owns each step — minutes each. Every line converts directly into a VERIFIED recipe
+step. Bridge cannot supply them without inventing semantics, which is the one thing R1 must
+not do.
+
+## R1 — History/Bridge's three contract lines WRITTEN (2026-08-05); gap 10 → 8
+Wrote the contracts I own rather than reporting them as owed: patch_event_cut (explicit
+target arc, in-place rewrite, idempotent-by-name, runs AFTER merge_event), restore_event_staff
+(dry-run by default, hard-coded TALE_DEMO/TALE_DEMO2 ALL targets, runs after merge_event and
+BEFORE scope_event_staff — which drops the very staff it restores), seed_o2_content (no donor
+inputs, dual-destination AppData+repo, covenant-clean, after install_skeleton).
+Each contract states ORDER as well as IO, because R1's blocker was never the IO — 19 of 27
+scripts now declare one — it is that the ORDER is written down nowhere. Two real ordering
+facts fell out while writing them: restore_event_staff must precede scope_event_staff, and
+patch_event_cut must follow merge_event. Those are the first two edges of the dependency graph
+the recipe needs; both came from reading the scripts, neither from inference.
+REMAINING 8, all owned: Foundry ×4 (build_fdl_host_stg, build_rdl01_shell, grow_rdl01_stg,
+space_kit) · Housing ×3 (bake_wwsky_colors, convert_lighting, extract_veg_assets) ·
+1 unclaimed (convert_lighting is Housing's by subject; confirm at their next touch).
+
+## CLOUD GROW/SHRINK — Housing's bisect CANCELLED; the dome math is now DONOR-EXACT (2026-08-05)
+Housing ruled out three candidates by measurement and refused to guess (correctly). Taking it
+as sky-port owner, the decomp answers it without either of their two builds.
+DONOR (WW DP d_a_vrbox2.cpp:45-64), verbatim:
+    if (fili) y_origin = fili->mSeaLevel;
+    y_offset = (invView[1][3] - y_origin) * 0.09f;
+    transS(invView[0][3], invView[1][3] - y_offset, invView[2][3]);
+OURS after today (d_a_vrbox2.cpp:172-177): IDENTICAL, line for line.
+⇒ THE REFRAME: today's seaLevel change did NOT introduce a defect — it COMPLETED the donor
+formula. Our previous `camY * 0.09` was the donor's expression with y_origin forced to 0, i.e.
+we were MISSING the sea-level term vanilla has. The 0.09 parallax is donor law, and the
+dome-position math is now byte-for-byte WW's. So grow/shrink under vertical camera motion is
+VANILLA BEHAVIOUR — WW's own sky does exactly this.
+FOURTH CANDIDATE (none of the three Housing tested): VISIBILITY, not causation. The dome only
+began rendering with real colours today (un-baked arc → runtime feed, §418). A flat-white dome
+gives the eye nothing to judge apparent size by; a coloured one does. A pre-existing,
+donor-correct parallax becomes perceptible for the first time.
+WHAT REMAINS GENUINELY OPEN — INPUTS, not code: donor-exact math on out-of-range inputs still
+looks wrong. Two inputs to check, both cheap: (a) does dStage_FileList_dt_SeaLevel return what
+WW's fili->mSeaLevel does for our host stage, or a host-coordinate value of a different
+magnitude; (b) does camera-Y EXCURSION in a TP-hosted stage exceed anything WW's camera does —
+0.09 × ΔcamY is vanilla, but only over WW's ΔcamY.
+NEXT STEP (one probe, one run — NOT two rebuild-bisects of code now proven vanilla): log camY,
+seaLevel and y0 for a few seconds while the wobble is visible, and compare the ranges against
+the donor's. If the inputs are in donor range, the effect is vanilla and the finding closes as
+"correct, and newly visible". If seaLevel or ΔcamY is out of range, the defect is in the input
+feed, which is where the search should have pointed all along.
+
+## §598 DONOR-SIDE RANGES (History's half of the cloud finding) — the comparison Housing's probe needs
+Read from the donor's own data, not inferred:
+  WW  sea/Room44 (Outset)  FILI param=0x02965004  mSeaLevel = 0.00
+                            placed-object Y span: -5000 .. +4203  (range 9203, n=270)
+  HOST F_DL01/R44_00       FILI param=0x1fec7f90  mSeaLevel = 0.00
+                            PLYR spawn y = 173  (world -201622, 173, 312243)
+TWO RESULTS, opposite directions:
+ (a) SEA LEVEL AGREES — both 0.00. So the seaLevel term is a NO-OP on this stage
+     (y0 = (camY - 0) * 0.09 = camY * 0.09), which independently CONFIRMS Housing's third
+     elimination by a second route: today's change cannot have altered behaviour here at all,
+     because the term it added evaluates to zero. It is still the right change (donor-exact,
+     and it matters on any stage with a non-zero sea level) — it simply cannot be the cause.
+ (b) THE OPEN VARIABLE IS SCALE, AND IT IS LARGE. WW's Outset places objects across a ~9,200-unit
+     Y span around sea level 0, so donor camY is order 10^3 and y0 = camY*0.09 is order 10^2.
+     Our host spawn sits at y=173 but in a TP world whose X/Z are order 10^5 (-201622, 312243).
+     If host camY ever runs at that magnitude, y0 runs 10^4 — two orders above anything WW's
+     dome experiences, and a dome offset that large against a fixed radius IS visible resize.
+     NOTE the host FILI param differs wildly too (0x1fec7f90 vs 0x02965004) — that field is not
+     sea level, but a host FILI that was never authored to donor values is worth its own look.
+WHAT THIS MAKES THE PROBE READ FOR: not "is camY plausible" but "is camY order 10^3 (donor
+range) or order 10^5 (host-world range)". If the latter, the fix is the input feed — the dome
+wants WW-space camera Y, and the host stage is handing it TP-space — and no amount of correct
+donor math will save it. That is a concrete, falsifiable prediction rather than a hypothesis.
+
+## §598 CLOSED (2026-08-08): inputs are IN DONOR RANGE — "correct and newly visible" CONFIRMED
+Probe output (log 000124), the run the user reported as "sky seemed great":
+  standing still   camY[337.2..337.6] span=0.4     domeOff span=0.0
+  walking          camY[313.9..475.8] span=161.9   domeOff span=14.6
+  large climb      camY[207.2..3216.7] span=3009.6 domeOff span=270.9
+  continued        camY[3353.5..4579.3] span=1225.9 domeOff span=110.3
+  sea=0.0 throughout (matches WW's own sea/Room44 mSeaLevel exactly)
+MY PREDICTION WAS FALSIFIED, and that is the good branch: I predicted camY might run at
+host-world magnitude (order 10^5, from the X/Z of -201622/312243). It does not — camY spans
+207..4579, order 10^2-10^3, INSIDE WW's own Outset Y span (-5000..+4203). The dome is being
+fed WW-space camera Y, not TP-space. No input defect exists.
+⇒ DISPOSITION: the parallax is donor-exact math on donor-range inputs. The grow/shrink is
+VANILLA WW BEHAVIOUR, made perceptible for the first time by §418's colour feed replacing the
+white dome. §418 delivered donor-faithful sky and the port is MORE accurate than it was
+yesterday morning.
+NOT USER ERROR — the earlier observation was real and is now quantified. domeOff moves 0.0
+units standing still and 271 units during a 3,000-unit vertical excursion. Whether the effect
+reads as "wrong" depends entirely on whether you are moving vertically while watching the sky;
+"seemed great this time" and "it grew and shrank last time" are the SAME correct behaviour
+sampled at different vertical speeds. Recording that explicitly so nobody re-opens this as an
+intermittent bug — it is proportional, not intermittent.
+LANE NOTE: three lanes converged on this correctly — Housing eliminated by measurement and
+refused to guess, History supplied the donor law and a falsifiable prediction, the probe killed
+the prediction with data. The prediction being WRONG is what made it useful; a hypothesis that
+cannot lose cannot close a finding.
+
+## B2b DISAMBIGUATED (2026-08-08) — Housing's block cleared: there are TWO tags, both CLOSED
+Housing is blocked on "which B2b", and the record explains why — the cluster carries two
+tags one character apart, plus a third History-owned caution that reads like a fourth item:
+  B2b   = the W2 ARBITER question ("is Ba1_Get_Itm staff-driven or STB-driven?").
+          SETTLED at bus §170: STAFF-DRIVEN, NO STB — donor staffs Ba1(WAIT) /
+          CAMERA(GETITEM, type 8) / Link(001n_wait). LinkRM's .stb refs belong to other
+          scenes (get_shield.stb→Demo48; tale.stb/tale_2.stb→Demo01).
+  B2-b2 = the follow-up GAP that §170 opened in the same breath ("only startCuts dumped;
+          next chains 14→15, 16→17 hold the rest → full cut chain per staff").
+          COMPLETE at bus §171.
+  B2a caution (HISTORY-owned, the only one that was ever mine): "heuristic anchored y=375 =
+          GROUND floor per run logs (loft ≈638) — verify y-bands before trusting
+          near_ladder_top." DISCHARGED THIS SESSION by §338: the ba1 tale trigger now zeroes
+          diff.y before the magnitude test and gates on std::fabs(dY) < 100.0f, which is
+          exactly that y-band verification. It was the fix for the user-reported "trigger
+          fires on the ground floor when it should only fire at the loft".
+⇒ ANSWER TO HOUSING: nothing is owed by History here. B2b settled §170, B2-b2 complete §171,
+B2a discharged §338. If the queue row still reads OPEN it is a stale state assertion of the
+same class as §334's heading — the row should close citing those three receipts.
+ROOT OF THE CONFUSION, worth keeping: two tags differing by one character ("B2b" vs "B2-b2")
+for a settled answer and its follow-up gap. Naming a follow-up by mutating its parent's tag is
+how a closed item and an open one become indistinguishable five sections later.
