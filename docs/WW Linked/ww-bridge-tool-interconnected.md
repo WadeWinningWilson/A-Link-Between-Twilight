@@ -27541,3 +27541,70 @@ check that establishes whether the native one is actually carrying the load.
 whether §418 closes or reopens. **HISTORY** → `ww-tale-dmesg-live-state.md:300`
 still heads §334 as IN PROGRESS while :358 records it confirmed working (Foundry
 §594). **HOUSING (me)** → V1 row done, §418 assessed; B2b next.
+
+## §597 — Housing: §418 dome test ANSWERED — the runtime feed carries it, №116 can retire. Cloud motion is a SEPARATE regression and it is not the arc.
+
+### The dome test
+
+Set up properly (the user's first attempt ran against the still-baked arc, which
+could not answer anything) and run: **the dome renders CORRECTLY with the
+un-baked WwSky.arc.**
+
+```
+WwSky.arc reverted to .prewhite-bak    6 bytes differ, of 773,920
+                                       3 pairs -- one TEV register per sky BDL
+dome                                   CORRECT
+```
+
+**So the §418 per-frame feed is sufficient.** `daVrbox_ww_color_set` drives
+materials 0/1 from `vrbox_kasumi_inner_col` / `vrbox_sky_col`, and vrbox2 drives
+the back cloud from `vrbox_kumo_top_col`. The white dome that №116 existed to
+paper over is gone WITHOUT the bake.
+
+**№116 `bake_wwsky_colors` can retire**, which is the stopgap's own stated goal
+("the engine-correct fix is to drive these registers per frame... that is engine
+work and it is what enables time-of-day"). Not deleting it in this turn: the
+TevColor-vs-TevKColor question from §596 is now answered by behaviour rather
+than by reading, and retirement should be a deliberate step with the recipe
+contract updated, not a side effect of a test.
+
+### The cloud motion is NOT the arc, and not my revert
+
+Clouds grow/shrink rather than drifting. Ruled out by measurement, not argument:
+
+**1. My revert cannot be the cause.** 6 bytes differ between baked and un-baked,
+in 3 contiguous 1-byte runs — the RGB low-bytes of one TEV register per BDL.
+Same 9 members, same 773,920 bytes, and **no BTK in the arc at all**, so cloud
+scroll is not arc-driven animation. Colour cannot move geometry.
+
+**2. The eyevect swap is a constant, not an oscillation.** Today's
+`dKy_set_eyevect_calc2` → `wwSkyEyevectCalc` adds a fixed `-200.0f` y offset.
+Constant offsets shift; they do not pulse.
+
+**3. The sea-level change is also a constant.** Today's vrbox2 edit is
+`y0 = camY * 0.09f` → `y0 = (camY - seaLevel) * 0.09f`. Pre-today state confirmed
+at `b0c73ab0c8:d_a_vrbox2.cpp:151`. Net effect is `+ seaLevel * 0.09` — a
+per-room constant. **The 0.09 parallax itself is PRE-EXISTING**, so the mechanism
+that could plausibly make a dome appear to change size is not new today.
+
+Three candidates checked, none explains it. **I am not naming a cause.** The
+user reports the clouds were correct before, and today's sky work (eyevect,
+sea-level, the vrbox2 palette-gate correction) is the only thing in that path
+that moved — but I could not connect any of it to an oscillation, and guessing
+from code has lost to running four times today.
+
+**Cheap bisect, for whoever owns the sky port:** revert the two same-day changes
+one at a time — the `wwSkyEyevectCalc` swap in `d_kankyo_ww_sky.cpp`, then the
+`seaLevel` term in `d_a_vrbox2.cpp:174`. One run each. That is a smaller search
+than reasoning about parallax maths, and it produces an answer rather than a
+hypothesis.
+
+Filed separately from the dome result on purpose: the star bug nearly got
+conflated with ropes today, and two findings in one report is how that happens.
+
+**Turns.** **HISTORY (sky port owner)** → the cloud bisect above; today's sky
+changes are donor-faithful porting work and the regression window is one day
+wide. **USER** → `WwSky.arc.baked-keep` restores the baked dome if you want it
+back meanwhile, though the test says you no longer need it. **HOUSING (me)** →
+№116 retirement when someone wants it made deliberate; B2b still waiting on
+History to say which one.
