@@ -1,13 +1,13 @@
 @echo off
 REM ===========================================================================
-REM build_ww_excluded.bat — the WW-layer separability REGRESSION GATE.
+REM build_ww_excluded.bat -- the WW-layer separability REGRESSION GATE.
 REM
-REM WHAT THIS IS FOR — AND WHAT CHANGED
+REM WHAT THIS IS FOR -- AND WHAT CHANGED
 REM This began as step 11's diagnostic: nobody knew whether the tree still
 REM LINKED with the WW layer's files excluded, and a link FAILURE was the
 REM deliverable, because the unresolved-symbol list named the legs.
 REM
-REM STEP 19 ANSWERED THAT. 129 of 129 inbound symbols were severed (§589) and
+REM STEP 19 ANSWERED THAT. 129 of 129 inbound symbols were severed (S589) and
 REM the receiver links with the WW layer entirely absent. So the meaning of
 REM this script's result is now INVERTED:
 REM
@@ -23,13 +23,18 @@ REM YOUR NORMAL BUILD IS UNTOUCHED. Different directory, different exe:
 REM   normal : build\windows-msvc-relwithdebinfo\dusklight.exe   (unchanged)
 REM   this   : build\ww-exclude-test\dusklight.exe
 REM
-REM DIRECTORY NOTE — READ THIS BEFORE TRUSTING AN OLD LOG.
+REM DIRECTORY NOTE -- READ THIS BEFORE TRUSTING AN OLD LOG.
 REM The step-19 green result was proven in build\ww-exclude-test, and
 REM run_gate_off.bat already treats that path as the canonical no-WW exe.
 REM This script formerly built build\ww-excluded and wrote
 REM build\ww-excluded-link.log. Those artifacts are PRE-SEVERANCE and SUPER-
 REM SEDED: that log ends in "LNK1120: 130 unresolved externals" and reads as
 REM though step 19 were still open. It is not. Do not cite it.
+REM
+REM FILE FORMAT NOTE (S609): this file must stay PURE ASCII with CRLF line
+REM endings. An LF-only or non-ASCII bat is parsed wrong by cmd.exe -- the
+REM S592 revision shipped with LF endings and cmd executed comment fragments
+REM as commands. If you edit this file, verify: no bytes over 0x7F, CRLF only.
 REM ===========================================================================
 setlocal
 cd /d "%~dp0"
@@ -69,7 +74,7 @@ set "RC=%ERRORLEVEL%"
 echo.
 if "%RC%"=="0" (
     echo ============================================================
-    echo   RESULT: LINKED CLEAN — the expected state since step 19.
+    echo   RESULT: LINKED CLEAN -- the expected state since step 19.
     echo   The WW layer is separable at link time. No regression.
     echo   Exe: %BUILDDIR%\dusklight.exe  ^(WW layer compiled OUT -- not a play build^)
     echo ============================================================
@@ -82,7 +87,7 @@ if "%RC%"=="0" (
     echo ============================================================
     echo.
     echo   --- unresolved externals ^(first 40^) ---
-    findstr /C:"unresolved external" "%LOGFILE%" 2>nul | more +0
+    findstr /C:"unresolved external" "%LOGFILE%" 2>nul
     echo.
     echo   Full log: %LOGFILE%
 )

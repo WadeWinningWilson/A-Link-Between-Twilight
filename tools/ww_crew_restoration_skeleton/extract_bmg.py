@@ -14,6 +14,13 @@ ones with a text meaning and drop the rest, so downstream text is clean.
 
 Usage: python extract_bmg.py <bmgres.arc> <out.tsv>
 
+#   Order    : INDEPENDENT of the stage and event chains. Reads a donor BMG and writes a
+#              dialogue dump beside it; nothing in the pipeline consumes its output as input,
+#              so it has no predecessor and no successor. Placed near the asset steps for
+#              grouping only — that is proximity, not dependency.
+#   R1 note  : src + dst are both explicit (2 args). Its value over the first flat dump is
+#              that it keeps MESSAGE IDS and decodes escapes, so the output is diffable
+#              against the donor rather than merely readable.
 Output is TSV: msg_id <TAB> text  (newlines escaped as \\n).
 Never write output into the repo — it is game text.
 """

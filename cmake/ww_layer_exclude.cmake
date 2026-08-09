@@ -1,7 +1,7 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
 # tool_sha256:      ef07118d5e598fb975c1aa3ca803934698c5f46596ad7756434b8cb17ef0e3e6
-# files_cmake_sha256: 3d381354acf3703c4cda35b78e6141d36722e412d5066b41b04d4ecae2673924
+# files_cmake_sha256: 69ccf3ab671dc1e40237b5b9b41c6e19f37f5562cfc61fc917160ff44858c025
 # count: 59
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
@@ -21,7 +21,7 @@
 #   src/d/d_albw_dialogue.cpp  --  self-declared "NEW CODE — ALBW Port (Native Dialogue Box)" — a DIFFERENT port, not WW
 #   src/d/d_ext_mod_flags.cpp  --  self-declared "WW-agnostic" twice — general mod flag/quest infrastructure
 #
-# UNREVIEWED host-plumbing (7) — KEPT by default.
+# UNREVIEWED host-plumbing (8) — KEPT by default.
 # If one of these is a WW bridge the build FAILS TO LINK, which is
 # loud; the opposite default drops receiver code silently.
 #   libs/JSystem/src/JAudio2/JASChannel.cpp
@@ -30,6 +30,7 @@
 #   src/d/ext_plugin/ww_itemmdl_dispatch.cpp
 #   src/d/ext_plugin/ww_misc_dispatch.cpp
 #   src/d/ext_plugin/ww_npcmount_dispatch.cpp
+#   src/d/ext_plugin/ww_room_loader.cpp
 #   src/f_pc/f_pc_profile_lst.cpp
 #
 # STILL PARTIAL, and for a reason no basis can fix: `mixed` TUs are
@@ -51,13 +52,14 @@
 #   src/d/d_stage.cpp
 #   src/f_op/f_op_msg_mng.cpp
 #
-# Matched the OLD filename rules but declare no donor content (5),
+# Matched the OLD filename rules but declare no donor content (6),
 # so they are no longer excluded. Listed so the change is auditable:
 #   src/d/d_albw_dialogue.cpp
 #   src/d/d_ext_mod_flags.cpp
 #   src/d/ext_plugin/ww_itemmdl_dispatch.cpp
 #   src/d/ext_plugin/ww_misc_dispatch.cpp
 #   src/d/ext_plugin/ww_npcmount_dispatch.cpp
+#   src/d/ext_plugin/ww_room_loader.cpp
 set(WW_LAYER_FILES
     src/d/actor/d_a_esa.cpp
     src/d/actor/d_a_ext_ep.cpp

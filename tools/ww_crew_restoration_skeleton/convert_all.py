@@ -149,6 +149,34 @@ def save_state(state: dict) -> None:
         print(f"  (state not saved: {e})")
 
 
+# ---------------------------------------------------------------------------
+# R1 FORMAT RULES 2 & 3 (Bridge's calls, raised by Foundry from the contracts)
+#
+# RULE 2 — "once": true  ·  THE ANTI-EDGE
+# Ordering can express "A before B". It cannot express "and never A again", and
+# that is the shape build_rdl01_shell actually needs: it rewrites R_DL01's arc
+# from the R_SP300 template with only the STAG index patched, takes no backup,
+# and does NOT reapply the 6-room growth. Run it after grow_rdl01_stg and the
+# stage silently drops to one room — nothing errors, room streaming simply stops
+# asking for rooms 1-5. --from-step is exactly where this bites: resuming at or
+# before the shell after a completed grow IS the failure case.
+# So a `once` step REFUSES (loudly, non-zero) when its declared outputs already
+# exist. Refusal, not skip: skipping would hide a resume that was about to
+# destroy work, and the whole point is that the operator learns it.
+#
+# RULE 3 — "validator": true  ·  STEPS THAT WRITE NOTHING
+# space_kit is a gate, not a producer: inventory prints JSON, regress exits 1 on
+# any failure. A validator has no outputs to hash, so the short-circuit cannot
+# see it — with an empty `produces` it would be skipped forever or re-run
+# blindly depending on how you read the absence. Neither is right for a gate.
+# Validators therefore ALWAYS run, are never hash-skipped, and never record
+# state; their exit code gates the pipeline. space_kit will not be the last one.
+# ---------------------------------------------------------------------------
+def outputs_exist(step: dict) -> bool:
+    produces = step.get("produces") or []
+    return bool(produces) and all((MOD / rel).exists() for rel in produces)
+
+
 def outputs_current(step: dict, state: dict) -> bool:
     """TTW's idempotence trick: a step whose declared outputs all exist AND still
     hash to what this runner recorded is already done."""
@@ -179,6 +207,8 @@ def run_step(step: dict, state: dict, dry: bool) -> bool:
     if r.returncode != 0:
         print(f"  FAILED rc={r.returncode} — stopping so the folder is not half-regenerated")
         return False
+    if step.get("validator"):
+        return True          # RULE 3: never records state — it produces nothing
     hashes = {}
     for rel in step.get("produces") or []:
         p = MOD / rel
@@ -210,11 +240,30 @@ def cmd_run(dry: bool, include_unverified: bool, from_step: str | None) -> int:
             else:
                 continue
         tier = step.get("tier", "UNVERIFIED")
-        print(f"[{sid}] {step.get('desc', step['script'])}  ({tier})")
+        kind = "validator" if step.get("validator") else ("once" if step.get("once") else "step")
+        print(f"[{sid}] {step.get('desc', step['script'])}  ({tier}, {kind})")
         if tier != "VERIFIED" and not include_unverified:
             print("  REFUSED: contract not verified. --include-unverified to force.")
             print("  (a guessed step that 'succeeds' yields a folder that looks converted)")
             return 3
+        # RULE 2: destructive-if-repeated steps refuse rather than skip.
+        if step.get("once") and outputs_exist(step):
+            print("  REFUSED: `once` step whose outputs already exist.")
+            print(f"  Re-running {step['script']} would overwrite them from its template")
+            print("  WITHOUT reapplying later steps' work, and it takes no backup.")
+            print("  If you genuinely intend to rebuild from scratch, delete the outputs")
+            print("  first — deliberately, and knowing what else must re-run after.")
+            return 4
+
+        # RULE 3: validators always run; they have nothing to hash and their exit
+        # code is the point.
+        if step.get("validator"):
+            if not run_step(step, state, dry):
+                print("  validator FAILED — pipeline gated here, by design")
+                return 5
+            ran += 1
+            continue
+
         if outputs_current(step, state):
             print("  up to date — skipped")
             skipped += 1

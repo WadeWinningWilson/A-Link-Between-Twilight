@@ -17,6 +17,13 @@ offset untouched — only the section starts shift.
 adaptation did to every other model in the mod (donor TEV regs etc.).
 
 Usage:
+#   Order    : AFTER adapt_bdl_arcs.py, and this is a CAPABILITY edge, not a convention:
+#              the adaptation pass edits members inside their EXISTING slots and can never
+#              ADD one (its own header says so). Any member that does not yet exist must be
+#              added here, afterwards. Independent of every stage/event step.
+#   R1 note  : takes an explicit arc + member + payload + sibling; four required args and no
+#              defaults. A recipe step must name all four — a defaulted target would write a
+#              member into whichever arc happened to be first, which no test would catch.
   python arc_add_member.py <arc> <member-name> <payload-file> <sibling-name>
 
 The arc is modified in place; a .pre-<member>-bak copy is written first.

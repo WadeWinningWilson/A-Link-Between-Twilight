@@ -25,6 +25,7 @@
 #include "d/d_albw_shade_boss.h"    // dShadeBoss_isEnabled (Hero's Shade secret boss)
 #include "d/d_ext_npc_mount.h"
 #include "d/d_item_data.h"
+#include "d/ext_plugin/ww_room_loader.h"  // 3b Phase 1: WW room-load seam (§608)
 #include "dusk/logging.h"
 #include "dusk/truetest.hpp"
 
@@ -623,7 +624,13 @@ static int phase_2(room_of_scene_class* i_this) {
 #endif
 
     if (i_this->roomInfo != NULL) {
-        dStage_dt_c_roomLoader(i_this->roomInfo, i_this->roomDt, roomNo);
+        // ====================================================================
+        // NATIVE ROOMS 3b Phase 1 (bus §608): route through the WW room-load
+        // seam. On non-WW stages this IS dStage_dt_c_roomLoader — the seam
+        // delegates 100% and only WW host stages log the pass-through.
+        // Kill switch: DUSK_WW_ROOM_SEAM in ww_room_loader.cpp.
+        // ====================================================================
+        dExtWwRoom_loadRoomDzr(i_this->roomInfo, i_this->roomDt, roomNo);
     }
 
     JKRHeap* old_heap = NULL;

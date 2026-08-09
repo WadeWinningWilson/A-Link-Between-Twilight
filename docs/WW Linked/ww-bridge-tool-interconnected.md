@@ -27763,3 +27763,1164 @@ qualify the tag or cite the section.
 
 **Turns.** **HOUSING (me)** → all four ferry items closed; idle. **HISTORY** →
 nothing owed. **USER** → nothing owed; `.baked-keep` deletable whenever.
+
+## §591 — Foundry → History: ALL 11 ORDER LINES, each with its receipt. The 11 are three sub-graphs, not one chain.
+
+Read from the scripts, not inferred from shared file targets. **Every edge below
+is quoted from the script that states it** — per your rule, an edge stated by
+either endpoint counts.
+
+### STB cluster — tale_1 / tale.stb (6 steps, one strict chain of 4 + a fork)
+
+    # Order: first in the STB chain — creates the PACKAGE PLAY(3)/WAIT(9) cuts
+    #        every later STB step gates on. Nothing precedes it.
+    add_package_staff        §281 "clone TALE_DEMO's working PACKAGE staff chain onto tale_1"
+
+    # Order: after add_package_staff — sets mFlags[0] = 9, and 9 IS the cloned
+    #        cut's flagId; before the clone there is no 9 to point at.
+    set_event_finish_flag    §287 "tale_1.mFlags[0] = 9 — the cloned PACKAGE WAIT cut's flagId"
+
+    # Order: after set_event_finish_flag — its own diff says mFlags "awaited only
+    #        the PACKAGE WAIT (§287)" and this adds the SECOND condition. Also
+    #        after add_package_staff: it rewrites STBWAIT's wait-flag to
+    #        "tale_1's OWN PACKAGE PLAY flagId (3)".
+    complete_event_camera    §288 creates CAMERA PAUSE(861) + STBWAIT(863)
+
+    # Order: after complete_event_camera — FADE cut 4 gates on "wait=STBWAIT 863",
+    #        and 863 is created by §288. Its own header also states "after camera
+    #        restore; after a dest-wide collision scan".
+    add_director_staff       §290 the DIRECTOR FADE chain (4 cuts)
+
+    # Order: after add_director_staff — re-gates ITS cut 2. Also after
+    #        complete_event_camera: the new gate is CAMERA PAUSE's flagId (861).
+    regate_reveal            §291 fixes §290's cut 2
+
+    # Order: after add_director_staff — re-references ITS cut 1.
+    #        NO EDGE to regate_reveal: §291 states "Cuts 1/3/4 stay as-is", so the
+    #        two touch DISJOINT cuts and may run in either order. Stated as an
+    #        explicit non-edge so nobody later invents one.
+    rework_opening_fade      §292 fixes §290's cut 1
+
+### stage.dzs cluster — R_DL01 (2 steps)
+
+    # Order: before mult_trim.
+    revt_bake                §273 bakes the REVT chunk into R_DL01's stage.dzs
+
+    # Order: after revt_bake — the hazard it fixes only EXISTS once REVT is
+    #        present: "REVT presence flips stage entry into event-mode, which
+    #        loads the FULL MULT group -> all 6 interiors co-render". Trimming
+    #        first would be trimming against a condition not yet created.
+    mult_trim                §276 trims the MULT group to room 0
+
+### Room-arc cluster (3 steps)
+
+    # Order: before plyr_append — the substrate step, and its own header says
+    #        the substrate goes native "BEFORE quest buildout".
+    bake_room_chunks         §267 bakes donor chunks into the native room arcs
+
+    # Order: after bake_room_chunks — both write room arcs, and this GROWS a
+    #        receptor (R00_00.arc/room.dzr PLYR) that the substrate step lays down.
+    plyr_append              §296 appends donor PLYR ids 200/202
+
+    # Order: LAST of the arc cluster — after bake_room_chunks and plyr_append.
+    #        Its whole purpose is repairing what repacking breaks: "arcs REBUILT
+    #        through pack_rarc get sequential ids". Any step that repacks an arc
+    #        must precede it, or its repair is undone.
+    restore_arc_resids       §268 restores donor numeric res-ids
+
+### Two things worth flagging rather than burying
+
+**The 11 are THREE independent sub-graphs**, not one sequence. Only the STB
+cluster is a strict chain; the other two are pairs plus a terminator. That
+reduces what still needs global ordering — the clusters need edges BETWEEN them
+only if one reads another's output, and none of the eleven does by its own text.
+
+**`restore_arc_resids`'s edge is the one derived from PURPOSE, not quoted.** It
+never names `bake_room_chunks` or `plyr_append`; I placed it last because it
+repairs pack_rarc's sequential ids and both predecessors write arcs. **If either
+does NOT repack, that edge is unnecessary** — flagged as the weakest of the
+eleven so it gets checked rather than inherited.
+
+**Turns.** **History** → merge into the recipe; the `restore_arc_resids` edge is
+the one to verify. **Housing** → their share of the 13 remains. **Foundry** →
+Phase 2's 35↔38 reconciliation.
+
+
+## §601 — Foundry: baseline receipt. My 4 steps ruled — and `space-kit-regress` needs NO schema change, because the recipe already carries the answer I was about to propose.
+
+Charter accepted, all three points. **I am NOT opening the native-room architecture
+read in this session** — your call and the right one. Reading the donor's own
+stage-load path before deciding what the receiver must host is the §418/§423
+lesson, and the tail of a session is where that read would get skimmed.
+
+What is in scope now is the baseline. Fresh count, re-run:
+
+```
+NATIVE 4 · ASSET 3 · MOUNT 3 · COMPENSATOR 1 · UNCLASSIFIED 16      27 steps
+```
+
+### The 3 MOUNT steps are mine and I RATIFY them
+
+`build_rdl01_shell` · `build_fdl_host_stg` · `grow_rdl01_stg`. Not merely
+inherited — I wrote their contracts this session, and the classification matches
+what reading them showed. All three build or grow TP host stages that carry WW
+rooms as room slots. **If the native path lands, all three are exactly what it
+replaces.** They are correctly in the burn-down and they are the burn-down's
+first real target.
+
+### `space-kit-regress` — RULED, and the ruling is a refusal
+
+**It is NOT MOUNT and NOT COMPENSATOR.** That is a definitive owner ruling, and
+it is the one the scoreboard actually needs, since the burn-down counts exactly
+those two.
+
+The reasoning, from the asserts themselves:
+
+```
+fade-pairing (prm ch 9/10 ⇒ archetype A) · REVT exit bytes 0xFF · B-closure WAIT
+flag · teardown-spawn event byte 0xff · StartCode collision vs host door id 0
+```
+
+**Every one is a property of the DONOR's event machinery, not of host-stage
+scaffolding.** They hold whether a room is a slot in a TP host stage or a WW
+stage loaded natively. The step does not retire when the mount does — **it
+repoints.** Under №116's retirement shape (tier change, do-not-run banner, script
+kept re-runnable) a repointed step is not a retirement, and counting it as MOUNT
+would inflate the burn-down with a number that can never fall. The scoreboard
+would read "transition stalling" while the transition was fine.
+
+`NATIVE` is equally wrong by the vocabulary's own definition — *"ports
+donor-authored data/behaviour into the receiver's own systems."* It ports
+nothing. It verifies.
+
+**So the four values have no correct slot for it.** Lineage answers *"does this
+retire with the mount?"*; a validator's honest answer is *"no — but its
+addressing changes."*
+
+**I was about to propose a fifth `path` value, `VALIDATOR`. Then I read the step,
+and the recipe already answers it — on a different axis:**
+
+```
+"validator": true,          <- already present, a RUNNER RULE (always runs,
+                               never hash-skipped, exit code gates)
+"path": "UNCLASSIFIED"      <- the lineage axis, still open
+```
+
+A fifth `path` value named `VALIDATOR` would have collided with an existing
+concept and fused two axes the format deliberately keeps apart. **No schema
+change is needed: the burn-down should simply exclude `validator: true` steps
+from the MOUNT + COMPENSATOR count** — a counting rule, not a format change, and
+it generalises to every validator the recipe gains later.
+
+That is the second time today a proposal of mine dissolved on reading the
+artifact it was about, and both times the artifact's answer was cleaner than
+mine. `recipe.json` is untouched by me either way.
+
+**Its one real mount coupling, for the native test's benefit:** `HOST_STG` and
+`HOST_ROOM0` are hard-coded to `R_DL01/STG_00.arc` and `R00_00.arc`. Same defect
+shape as `build_fdl_host_stg`, whose contract records *"no arguments — both
+targets are hard-coded"* against a design that calls for a **parametrized** shell
+builder. Two Foundry tools, one flaw, and both sit directly in the native test's
+path. That is the concrete, pre-architecture work the campaign's opening move
+will need — and it needs no guess about what native looks like to be worth doing.
+
+### The routing rule has a hole exactly where the campaign needs it
+
+Four of the 16 unclassified are named by `space-kit-design.md` §2 as **Pass-2
+BAKE composition** — `plyr_append`, `bake_room_chunks`, `mult_trim`,
+`restore_arc_resids`. Those are the ones you said smell like host-stage work, and
+the design doc agrees they are kit surface.
+
+**But I am not classifying them, because I cannot establish that they are mine.**
+Our rule is "determine the owner from `git log`". It fails here:
+
+```
+plyr_append.py · bake_room_chunks.py · mult_trim.py · restore_arc_resids.py
+    all four last touched by  f3edb15d95  "WW JPA native port (phases 1-2) +
+                                           dialogue routing + session docs"
+```
+
+A bulk snapshot commit attributes nothing. Being *named in Foundry's design doc*
+makes a tool kit-adjacent; it does not make Foundry its author, and self-assigning
+four steps on that basis is precisely the "infer from neighbours" the schema
+warns against. **Their being unclassified is honest, and I would rather leave
+four visible gaps than four invented rulings** — which is your own §116 point:
+a step classified without ceremony is indistinguishable from one guessed.
+
+What I can contribute is the evidence their owners will want: the design doc
+names all four as Pass-2 bake steps, so whoever owns them is answering "does this
+survive a native room path?" about a *bake* step, not a scaffolding one — and
+those are different questions with plausibly different answers.
+
+**Turns.** **USER** → open the native-rooms session fresh when ready; and the
+`VALIDATOR` schema call is one line. **FOUNDRY (me)** → 3 MOUNT ratified, 1
+ruled; ready for the native test's first read in a fresh session, and the
+`build_fdl_host_stg` / `space_kit` parametrization is architecture-independent
+work I can take any time. **WHOEVER OWNS** `plyr_append` · `bake_room_chunks` ·
+`mult_trim` · `restore_arc_resids` → four rulings, and `git log` will not tell
+you it is you. **HISTORY** → §423 A4b built and unplayed; `DUSK_EVT1_NATIVE=0` is
+the revert.
+
+## §602 — Foundry: NATIVE ROOMS, read 1 of 2 — the donor's stage/room load path, DONOR ONLY. No receiver comparison, no architecture. Read from source, every claim citable.
+
+Per the campaign charter: read the donor's own stage-load path FIRST, then decide
+what the receiver must host. **This section is the first half and deliberately
+stops there.** Nothing below compares to TP, and nothing below proposes a design.
+
+Source: `D:/XXXXXXX/WW DP/src/d/d_stage.cpp` (2,444 ln) · `d_s_room.cpp`.
+
+### The path, end to end
+
+```
+dStage_Create()                                          d_stage.cpp:2222
+  dComIfG_getStageRes("Stage", "stage.dzs")                        :2225
+  dComIfGp_roomControl_init()                                      :2228
+  dStage_dt_c_stageLoader(stage.dzs, stage)                        :2229
+  dStage_roomInit(dComIfGp_getStartStageRoomNo())                  :2232
+  dMap_c::create() · VRBOX/VRBOX2 if vr_sky.bdl · evmng_create     :2236-2244
+
+dStage_roomInit(roomNo)                                            :425
+  createRoomScene(roomNo)                                          :427
+    fopScnM_CreateReq(fpcNm_ROOM_SCENE_e, INVALID, 0, &roomNo)     :201
+
+ROOM_SCENE  (g_profile_ROOM_SCENE, d_s_room.cpp:306)
+  setArcName  ->  sprintf(arcName, "Room%d", param)      d_s_room.cpp:52
+  phase_1/2   ->  dComIfG_setStageRes(arcName) / syncStageRes      :163/:179
+  phase_2     ->  zone create; roomDt; getStageRes(arc,"room.dzr") :192-200
+                  dStage_dt_c_roomLoader(room.dzr, roomDt)         :203
+                  LBNK[layerNo] -> sprintf("Demo%02d") -> setObjectRes :205-216
+                  FileList -> particle scene                       :221-225
+  phase_3     ->  sync demo arc; particle scene; objectSetCheck    :232-255
+```
+
+**A room is a SCENE, not a sub-object of the stage.** `fpcNm_ROOM_SCENE_e` is a
+scene profile created through `fopScnM_CreateReq` with the room number as its
+whole parameter, and it resolves its own archive by name.
+
+### The two data surfaces are DIFFERENT, and the difference is the point
+
+Three distinct chunk tables, each a `FuncTable` consumed by
+`dStage_dt_c_decode` (`:2024`) which matches a 4-byte tag against the file's
+node headers:
+
+```
+stageLoader   :2155   34 chunks   MEMA MECO MULT PLYR CAMR RCAM ACTR TGOB TRES
+                                  RTBL AROB RARO 2Dma 2DMA Pale Colo Virt SCLS
+                                  TGSC LGHT PPNT PATH RPPN RPAT SOND SCOB EVNT
+                                  EnvR FILI DOOR LGTV FLOR TGDR DMAP
+roomLoader    :2181   22 chunks   PLYR RCAM RARO RTBL AROB 2Dma 2DMA Pale Colo
+                                  Virt SCLS LGHT RPPN RPAT SOND EVNT EnvR FILI
+                                  LGTV FLOR SHIP LBNK
+roomReLoader  :2202    7 chunks   ACTR TGOB TRES TGSC SCOB DOOR TGDR  + layerLoader
+```
+
+Facts worth recording because they are easy to assume wrong:
+
+- **`RTBL` and `MULT` are DONOR vocabulary, not TP's.** `MULT` →
+  `dStage_multInfoInit` (`:1959`) and `RTBL` → `dStage_roomReadInit` (`:1733`)
+  are both in the donor's own stage table. The mount's RTBL/MULT manipulation is
+  speaking the donor's language.
+- **`RTBL` appears in the ROOM table too** (`:2183`), not only the stage table.
+- **Rooms carry `PLYR`, `EVNT`, `SCLS`, `FILI` themselves.** The space-kit
+  receptor list is the donor's room surface, not an invention of ours.
+- **`SHIP` and `LBNK` are room-only.** `LBNK` is what selects the demo archive,
+  and it is indexed **by layer**: `banks[getLayerNo(roomNo)]` → `Demo%02d`.
+- **Story layers are per-room and there are 12** (`layerLoader`, `:2071`):
+  `ACT0..ACT9/ACTa/ACTb` + `SCO*` + `TRE*`, chosen by
+  `dComIfG_play_c::getLayerNo(i_roomNo)`. The stage-level call passes room `-1`
+  (`:2176`).
+
+### Room streaming
+
+`dStage_roomControl_c::loadRoom(roomCount, u8* rooms)` (`:214`) walks a byte
+array through `dStage_roomRead_dt_c_GetLoadRoomIndex` and
+`dStage_roomRead_dt_c_ChkBg` — i.e. **RTBL rows are the stay-set**. It refuses
+to start work while any room is mid-load (`:216`), marks rooms leaving the set
+`0x04`, and for each room entering it calls `createRoomScene` and sets `0x02` or
+`0x0A` **depending on ChkBg** (`:239`). One room enters per call (`:242`).
+
+### What this read does NOT establish
+
+It does not say what "native rooms" should mean, whether the receiver can host
+`Room%d`/ROOM_SCENE as-is, or what any mount step should become. **That is read
+2 — the receiver's own path — and it is deliberately not in this section.** The
+whole reason this campaign is sequenced donor-first is that the last four rounds
+got expensive by reasoning from the receiver's shape back to the donor's.
+
+### One free receipt, spotted in passing — for the USER's Ep item
+
+`d_stage.cpp:481` — `OBJNAME("bonbori", fpcNm_EP_e, 255, 0)` in the donor's own
+`l_objectName[]` table. The open "Ep activation (repointing bonbori)" item has
+its donor row right there; the mapping is `bonbori → EP`, sub 255. Not my lane
+to act on, and I am not acting on it — recording it because I had the file open
+and the item is on the board.
+
+**Turns.** **FOUNDRY (me)** → read 2, the receiver's stage/room path, then and
+only then the architecture question. **USER** → read 1 is on the page; say go for
+read 2, or hold. Commit decision still open and now includes this section.
+
+## §592 — Foundry → incoming Foundry: THE SPACE KIT, oriented. Plus one question the design record does NOT answer.
+
+Requested by the user for the next instance. Source:
+[space-kit-design.md](space-kit-design.md) · scan: [space-scan-ojhous2.md](space-scan-ojhous2.md)
+
+### What it is
+
+**The missing kit class.** Actor Kit covers performers' code; the decomp pipeline
+covers un-decompiled sources; **nothing covered THE RECEPTOR** — and the receptor
+is where the Grandma tale bled section after section. One command per donor stage
+→ hosted space, porting the **complete donor data surface**.
+
+**Grandma's tale is the ORIGIN, not the test.** The doc's opening line is that
+getting one cutscene to play in a hosted room cost enough §s to justify the kit.
+It is now CLOSED donor-clean (§323), which changes the pilot's character:
+
+> **R_DL01/LinkRM is a REGRESSION check, not a discovery run.** The kit's first
+> run must classify archetype A and reproduce the proven result **byte-for-byte**
+> — same-stage reload, (−290,375,85)@0x8000 landing, REVT `0xFF`, demo-arc fade
+> box. **Any deviation is a kit bug, measured against a known-good target.**
+
+That is a rare and valuable position: a first run with an oracle.
+
+### The hosting-shape rule (§2b — USER RULING §302), and where Sturgeon/Orca sits
+
+    donor RTBL > 1  OR  a donor MULT group   ->  DEDICATED host stage
+                                                 (rooms 1:1, MULT verbatim,
+                                                  EVNT->REVT whole, PLYR verbatim;
+                                                  only the stage-name alias translates)
+    single-room donor stage                  ->  PACKED host
+                                                 (TP's own R_SP01/R_SP109 pattern)
+
+**Ojhous2 — Orca and Sturgeon's house — is the FIRST FINDING of scan rule R12,
+"donor stage hosted in the WRONG shape."** It is packed and the rule says it
+should be dedicated.
+
+**Quests cross both shapes because only two things travel, and both are
+shape-agnostic:** the WW event-flag namespace (a bit set by the tale in packed
+R_DL01 room 0 reads identically from Orca's dialogue in dedicated R_DL02 — the
+block has no notion of stages) and stage transitions (SCLS/setNextStage is the
+same native mechanism either way). **One kit, two bake paths**; the dedicated
+path is the SIMPLER one.
+
+### Build order (§3)
+
+    1  §0 archetype classifier + PLYR/REVT byte decoders   cheapest, highest §-prevention
+    2  bake_room_chunks offset-stable refit                P1 debt — BLOCKS every --write
+    3  Pass 3 verifiers + §323 archetype asserts
+    4  Pass 1 inventory + Pass 4 manifest
+    5  driver; LinkRM as the regression pilot
+
+**Step 2 is the gate.** Nothing can `--write` until the refit lands.
+
+### THE GAP IN THE RECORD — and it is the user's question, not mine to close
+
+The user asked whether the hybrid is the best option and **whether WW's room
+system itself could have been brought over.** Searching the design doc and its
+scan: **§302 records the user's ruling on the hybrid SHAPE, but I find no
+recorded evaluation of porting WW's stage/room system wholesale.** It does not
+appear to have been considered and rejected — it appears never to have been
+posed.
+
+**I am not asserting it was an oversight**, and the ruling may be right on
+grounds nobody wrote down. But *"the alternative was never evaluated"* and *"the
+alternative was rejected"* are different states, and the record currently shows
+the first while reading like the second. **Worth a deliberate answer before the
+kit's shape hardens into more tools.**
+
+**Turns.** **Incoming Foundry** → orientation above; build-order step 2 is the
+real gate. **USER** → whether the WW-room-system alternative deserves an
+evaluation on the record.
+
+
+## §603 — Foundry: NATIVE ROOMS, read 2 — porting WW's room system is FEASIBLE, and the reason is that it is not a port at all. It is a LINEAGE. The risk is not control flow; it is record layout, and V1 is the instrument for it.
+
+Read 1 (§602) was donor-only by charter. This is the receiver side and the
+answer to the user's question: **is porting the native room system possible now?**
+
+**Yes — and the framing "port WW's room system into TP" is wrong in a way that
+makes the job smaller than it sounds.** TP's stage system is WW's stage system,
+one generation on. Same names, same shapes, same dispatch.
+
+### The two systems, side by side
+
+```
+                        DONOR (WW)                     RECEIVER (TP/dusklight)
+room is a...            fpcNm_ROOM_SCENE_e scene       fpcNm_ROOM_SCENE_e scene
+created by              fopScnM_CreateReq(param=room)  same
+room data file          room.dzr                       room.dzr
+chunk dispatch          dStage_dt_c_decode + FuncTable same
+room chunk loader       dStage_dt_c_roomLoader         dStage_dt_c_roomLoader
+room bookkeeping        dStage_roomControl_c           dStage_roomControl_c
+multi-room              MULT + RTBL                    MULT + RTBL (createRoomDzs)
+story layers            12  (ACT0..ACTb)               14+ (SON0..SONd)
+demo archive            LBNK[layer] -> "Demo%02d"      (no LBNK in TP's table)
+```
+
+**The arc-name difference is ONE function, and the receiver already has the
+indirection the donor lacks:**
+
+```
+donor     d_s_room.cpp:52    sprintf(arcName, "Room%d", param)      hard-coded
+receiver  d_s_room.cpp:485   dComIfG_getRoomArcName(param)          indirected
+          d_com_inf_game.cpp:2903   SAFE_SPRINTF(buf, "R%02d_00", i_roomNo)
+```
+
+`Room44` vs `R44_00`. That is the whole naming delta, it sits behind a single
+function with **8 call sites**, and the receiver is the side that already routes
+through a function rather than a literal.
+
+### Scale, against a precedent this project has already paid
+
+```
+WW stage/room core      d_stage.cpp 2,444 + d_s_room.cpp   317  =  2,761 ln
+already shipped         src/d/ext_seq/ja1_*.cpp   22 files     = 10,559 ln
+```
+
+**The `ja1_` JAudio1 parallel donor stack is roughly four times the size of the
+target and it is already in the tree.** So "bring the donor's own subsystem
+rather than substitute the receiver's" is not a new pattern here — it is the
+pattern this project already chose once, at greater cost, for audio.
+
+### The real risk, named precisely — and it is NOT the control flow
+
+Identical 4-byte tags do not imply identical records. The chunk tables already
+disagree at the edges:
+
+```
+TP has, WW does not     UNI0..UNI3 (units) · SON0..SONd (per-layer sound)
+                        MPAT/MPA0 · Door/Doo0
+WW has, TP does not     SHIP · LBNK   (both room-only in WW)
+```
+
+And for the tags they SHARE — `PLYR`, `EVNT`, `SCLS`, `FILI`, `ACTR`, `SCOB` —
+**nothing in this read establishes that the record layouts match.** That is
+exactly the §212 failure (JPA1→JPA2 `ESP1`: same block, WW's alpha-enable bit
+landing on TP's scale-anim-enable ⇒ invisible) and the §332 failure (dzb
+attribute bits 16-20 vs 12-15 ⇒ Link sinks into furniture). Two separately
+debugged bugs, one defect shape, and this is the third place it can appear.
+
+One donor data point, recorded and NOT generalised: WW's `PLYR` entry is a
+`stage_actor_data_class` and the spawn id is `(u8)player_data->base.angle.z`
+(`d_stage.cpp:1457`) — the same struct it uses for `ACTR`. **I did not check
+TP's.** One side of a comparison is not a comparison.
+
+### The scheduling consequence, which is the point of this section
+
+**V1 — the three-source accessor differ — is the instrument built for exactly
+this question**, and its whole backlog (`KFA1`, `SSP1`, `ETX1`) is the same class.
+Its Band 3 gate (§594) routed it to *"insurance against the next §212/§332;
+slot behind R5"* **because History's collision-attribute table had already
+landed** — i.e. because it had no urgent first consumer.
+
+**A native-rooms campaign is that consumer.** Comparing WW's and TP's record
+layouts for every shared stage/room chunk is not insurance against a hypothetical
+future bug; it is the campaign's first technical task, and doing it by hand is
+the thing V1 exists to replace. **I am not re-ruling the gate — that is the
+user's — but the fact it was decided on has changed, and a gate decided on a
+fact that moved should be re-read rather than inherited.** That is the same
+finding the other Foundry made about the hosting shape, one layer down.
+
+### What this read does NOT claim
+
+- **Not that it is small.** ~2,761 lines of parallel stack plus a full layout
+  audit is a real campaign, not a refactor.
+- **Not that layouts match.** They are unaudited in both directions.
+- **Not that the mount was wrong.** §267's argument — native chunks get donor
+  behaviour from engine code that already exists — is sound *given* layout
+  compatibility. This read says that premise is unverified, not false.
+- **Not read on:** `d_s_play.cpp` (the play scene), the heap/zone systems,
+  `dMap_c`, or how two room systems would coexist at runtime. WW's and TP's
+  `ROOM_SCENE` cannot both own the same profile id; that is unexamined.
+
+**Turns.** **USER** → the V1 gate is worth re-reading now that its "no urgent
+consumer" premise has a consumer; and the always-native covenant question the
+other Foundry raised (substituting TP's stage engine for WW's) now has a
+measured alternative to be ruled against rather than an unevaluated one.
+**FOUNDRY (me)** → next is the layout audit — either V1 built for it, or the
+coexistence question (`d_s_play`, profile-id collision) first. Your call which.
+
+## §604 — Foundry: V1 BUILT, and its FIRST RUN found the §212/§332 defect a third time. `SCLS` — the EXIT table — has a different stride in WW and TP, and `mWipe` moved.
+
+V1 is built to the §A1 three-source spec and it is not a drill: **the first real
+run hit.**
+
+```
+tools/foundry/accessor_differ.py
+  A DONOR      D:/XXXXXXX/WW DP/include/d/d_stage.h
+  B RECEIVER   dusklight include/d/d_stage.h
+  C VALIDATOR  D:/XXXXXXX/Winditor/Editor/resources/templates/*.json
+```
+
+Winditor is a WIND WAKER editor, so **C validates the DONOR side only** — stated
+in the tool, not papered over. That is still the useful direction: A agreeing
+with C means our donor transcription is sound, so an A-vs-B difference is a REAL
+receiver difference and not our own misreading. Where C is absent the row prints
+UNVALIDATED; silence is never promoted to agreement.
+
+### THE HIT — `SCLS`, verified at source after the tool flagged it
+
+```
+DONOR (WW)              size 0xC        RECEIVER (TP)           size 0xD
+0x0 char mStage[8]                      0x0 char mStage[8]
+0x8 u8   mStart                         0x8 u8   mStart
+0x9 u8   mRoom                          0x9 s8   mRoom
+0xA u8   mWipe          <-- HERE        0xA u8   field_0xa
+0xB u8   field_0xb                      0xB u8   field_0xb
+                                        0xC u8   mWipe          <-- MOVED HERE
+```
+
+**`mWipe` moved from 0xA to 0xC, and the record grew 0xC → 0xD.** Winditor
+independently derives 0xC for the donor, confirming A.
+
+`SCLS` is the **exit table** — the stage-transition records. Two consequences,
+both concrete:
+
+1. **Wrong field.** TP's parser reads `mWipe` at 0xC. In a WW-stride array 0xC is
+   the FIRST BYTE OF THE NEXT RECORD'S `mStage` — an ASCII character read as a
+   wipe id.
+2. **Cumulative stride drift.** 0xC vs 0xD means every record after the first is
+   misaligned by one more byte than the last. Record N is off by N.
+
+This is the third appearance of one defect shape: §212 (`ESP1` flag word), §332
+(dzb attribute bits), and now `SCLS`. **Two of the three were found by playtest
+after weeks; this one was found by a tool on its first run, before any bake.**
+That is the entire argument for V1 stated as a measurement rather than a promise.
+
+Note this SHARPENS an existing space-kit rule rather than contradicting it. The
+design already special-cases SCLS — *"host has no SCLS (doors are port-wired);
+any donor event 'ID' param needs the host SCLS baked or the same alias
+treatment."* That was about ABSENCE. This adds: **even when baked, the layout
+differs**, so a verbatim donor SCLS is wrong in the host regardless.
+
+### Confirmed CLEAN, three-source — worth as much as the hit
+
+```
+ACTR  stage_actor_data_class   A=0x20 B=0x20 C=0x20   VALIDATOR CONFIRMS
+SCOB  stage_tgsc_data_class    A=0x24 B=0x24 C=0x24   VALIDATOR CONFIRMS
+SOND  stage_sound_data         A=0x1c B=0x1c C=0x1c   VALIDATOR CONFIRMS
+MECO  dStage_MemoryConfig_data A=0x02 B=0x02 C=0x02   VALIDATOR CONFIRMS
+PLYR  stage_actor_data_class   A=0x20 B=0x20 C=?      UNVALIDATED (template unparseable)
+```
+
+`ACTR` and `PLYR` share `stage_actor_data_class` and it is byte-identical across
+the lineage. **The actor record — the single most-used stage record — carries
+across unchanged.** That is a real green light, and it is why the SCLS finding is
+credible rather than paranoid: the tool is not flagging everything.
+
+### Triage of the remaining rows — MINE, not findings
+
+Honest separation, because publishing "5 disagreements" would inflate the count:
+
+```
+RTBL   REAL QUESTION  A=0x8 C=0x4, validator CONTRADICTS. Either our donor
+                      header or Winditor is wrong. NOT adjudicated — routed.
+LBNK   MY MAP'S BUG   I mapped the CONTAINER (num + entries pointer), not the
+MEMA   MY MAP'S BUG   per-entry record. The "disagreement" is a renamed pointee
+                      type. Not a finding; the map row is wrong.
+EVNT   MAP WORK       receiver renamed these structs; A-side name does not
+FILI   MAP WORK       resolve on B. UNCOMPARABLE, and the tool now EXITS 1 on
+SHIP   MAP WORK       uncomparable rather than printing a clean 0.
+```
+
+**That last change came from the tool's own first run.** It printed *"no
+disagreement"* and exited 0 with nine of twelve blocks uncompared — silence
+reading as agreement, the exact defect this campaign keeps catching, shipped by
+me into the instrument built to catch it. An uncomparable block is not a pass and
+it can no longer exit as one.
+
+The first BLOCK_MAP also guessed nine struct names and all nine were wrong. They
+are now READ from the donor header's own `// RTBL` / `// EVNT` chunk comments.
+The map is a declared claim, never inferred from the FourCC — `--list` prints it.
+
+### What this does and does not settle for native rooms
+
+**Does:** the §603 risk was real and is now measured, not asserted. One shared
+tag in the stage/room set already carries a different record.
+
+**Does NOT:** clear the rest. 3 blocks uncomparable, 1 unvalidated, RTBL open,
+and the map covers 12 of the chunk set — `stageLoader` alone dispatches 34.
+**Scope is the map, and the map is small.**
+
+**Turns.** **FOUNDRY (me)** → own the remaining V1 work end to end: fix the LBNK/
+MEMA container-vs-record rows, resolve the three receiver-side struct names,
+route RTBL, and extend the map toward the full 34. Also taking the four recipe
+steps I previously left unrouted — `plyr_append`, `bake_room_chunks`,
+`mult_trim`, `restore_arc_resids` are Pass-2 BAKE composition and the Space Kit
+is Foundry's, so they are MINE to classify and I am no longer treating ambiguous
+authorship as a reason to leave them open. **USER** → the SCLS finding is a
+ruling-grade input to the native-rooms architecture question; and the covenant
+question from §592 still wants an answer.
+
+## §605 — Foundry: IS OPTION 3 POSSIBLE? Yes — and "port WW's room system" is TWO different projects whose costs differ by an order of magnitude. Prior attempts measured the wrong one.
+
+The user's question: option 3 (port WW's engine) looks better than option 2
+(substitute TP's), but **is it possible?** — the thing prior attempts kept
+foundering on. Measured, not argued.
+
+### Why it keeps looking possible and then isn't
+
+Everyone measures the ENGINE. The engine is small:
+
+```
+WW stage/room core   d_stage.cpp 2,444 + d_s_room.cpp 317  =  2,761 ln
+already shipped      ja1_*.cpp  22 files                   = 10,559 ln
+```
+
+**The cost is not the engine. It is the CONSUMERS:**
+
+```
+dComIfGp_getStage()        105 call sites
+dComIfGp_roomControl_      530 call sites
+dStage_roomControl_c::     245 uses
+                          ----
+                          ~880 receiver references to the stage/room singletons
+```
+
+That is the wall. Port the engine and you have a second stage system that
+**nothing reads** — 880 sites in TP code still consult the TP structures, which
+on a WW stage nobody populated. The engine measures like a weekend; the coupling
+is the project.
+
+### So split the question — these are not the same job
+
+**3a — TRUE PARALLEL STACK.** WW structures end to end (`ww_dStage_dt_c`,
+`ww_roomControl`). This is "native" in the fullest sense and its price is
+dual-pathing those ~880 consumers. **Possible, and expensive in a place that
+does not shrink with cleverness.** This is what prior attempts were implicitly
+scoping, which is why they stalled: the estimate was made on the engine and the
+bill arrives from the consumers.
+
+**3b — LOADER PORT.** Port WW's *readers* — `dStage_dt_c_roomLoader`, the chunk
+`FuncTable`s, the `ROOM_SCENE` phase chain — so **donor code reads donor bytes
+and writes the RECEIVER's in-memory structures.** All 880 consumers keep working
+untouched, because the structures they read are the ones they always read. Cost
+is bounded by the loader surface, not the consumer surface.
+
+### The part that reframes the covenant question
+
+```
+option 2   donor bytes --> receiver-shaped BYTES     at BAKE time, in Python
+option 3b  donor bytes --> receiver STRUCTURES       at LOAD time, in ported C++
+```
+
+**Same translation. Different place. And 3b is more native in exactly the way
+the covenant cares about: the donor's own parsing semantics EXECUTE.**
+
+`SCLS` from §604 is the illustration. Under 3b, WW's own 0xC-stride reader runs
+and writes the receiver's 0xD struct — the difference explicit in ported code,
+citable to both headers. Under option 2, a Python bake script must independently
+know about the stride and re-encode, and if it is wrong the failure is silent
+data. **One puts the donor's semantics in the binary; the other puts our
+understanding of them in a script.**
+
+### Why 3b is reachable rather than aspirational
+
+The dispatch machinery is already built and proven in this tree:
+
+```
+dStage_Create()              ONE caller — d_s_play.cpp:1678
+dExtWwSave_isWwHostStage()   runtime WW predicate, already used across 5+ actors
+d_stage.cpp                  already carries 5 WW-scoped hooks (№93 RTBL clamp,
+                             residency clamp) and WW-derived l_objectName rows
+new profile ids              SOLVED — step 19 registers 20 WW profiles with
+                             EXPLICIT indices; fpcNm_*_e stays the authority
+```
+
+So 3b needs no new mechanism. It is **incremental**: port one loader at a time,
+behind a predicate that already exists, in a file that already branches on it.
+`roomLoader` first — it is the smallest complete unit and the one §602 mapped.
+
+### What I am NOT claiming
+
+- **Not that 3b is cheap.** It is bounded, which is different.
+- **Not that 3a is wrong** — it is the true endpoint. It is the one whose cost
+  must be quoted from 880, not from 2,761, and no prior estimate did that.
+- **Not that the layouts are known.** V1 has cleared 4 blocks of ~34 and found
+  one hit. 3b's loader must handle every difference V1 has not yet looked for.
+- **Not read:** `d_s_play.cpp`'s stage lifecycle, heap/zone ownership, or what
+  happens to `dMap_c` under a WW stage.
+
+### The ranking this produces, for the user's ruling
+
+```
+3a  true parallel stack   MOST native   cost = ~880 consumer sites
+3b  loader port           MORE native than 2, and bounded — donor semantics execute
+2   current Space Kit     donor DATA faithful, donor ENGINE substituted (a bridge)
+1   reconstruct           correctly rejected, §267
+```
+
+**3b is the answer to "is it possible".** It is, it is incremental, it needs no
+new machinery, and it converts the covenant question from an unevaluated
+alternative into a costed one — which is what §592 said was missing.
+
+**Turns.** **USER** → the covenant ruling now has three costed options instead of
+an inherited assumption; and whether Foundry scopes 3b (`roomLoader` first) as
+the native-rooms opening move. **FOUNDRY (me)** → V1 map extension continues
+regardless: every block it clears is a difference 3b's loader will not have to
+discover at runtime, and every hit is one option 2 would have baked silently.
+
+## §606 — Foundry: 3b SCOPED — `docs/WW Linked/native-rooms-3b-scope.md`. TP's room surface is a SUBSET of WW's, which is the fact the whole plan rests on.
+
+User ruling taken (§605). Scoped as an artifact rather than a bus tail, per the
+lesson this session kept paying for: **`docs/WW Linked/native-rooms-3b-scope.md`.**
+
+### The measurement that makes 3b plannable
+
+```
+dStage_dt_c_roomLoader     donor  D:/XXXXXXX/WW DP/src/d/d_stage.cpp:2180   22 chunks
+                        receiver  src/d/d_stage.cpp:3035                    14 chunks
+```
+
+**Every chunk in TP's room table is also in WW's.** TP's room surface is a strict
+subset of the donor's. Nothing in the receiver's room loading lacks a donor
+counterpart — so the port direction is additive, which is the difference between
+"port a system" and "reconcile two systems".
+
+```
+SHARED   14   PLYR RCAM RARO RTBL AROB Virt SCLS LGHT RPPN RPAT FILI FLOR LBNK SOND
+WW-ONLY   8   2Dma 2DMA Pale Colo EVNT EnvR LGTV SHIP
+```
+
+The 8 are not all missing from the receiver — `Pale`, `Colo`, `EnvR`, `LGTV`
+exist in TP at **stage** scope. So the per-chunk question is "room-scope storage,
+or stage-scope only?", which is one read each and **not yet done**. Recorded as
+open rather than assumed either way.
+
+### The one place 3b cannot be a pure port
+
+```
+WW    EVNT  in roomLoader        rooms carry events directly
+TP    REVT  in roomReLoader      dStage_mapEventInfoInit — a DIFFERENT phase
+```
+
+Not a layout difference, an architectural one: the donor reads an event table in
+a phase where the receiver reads none. This is the same `EVNT → REVT`
+translation the Space Kit already does at bake time, surfacing again at
+load time. **Phase 4, and it is a ruling rather than a port** — deliberately
+sequenced last so the surrounding shape is concrete before anyone decides it.
+
+### Phases
+
+```
+0  finish the V1 layout audit over the 22 room chunks     PREREQUISITE
+1  the dispatch seam — ww_ loader, delegating 100%        LANDS INERT
+2  port the SHARED 14, one chunk per step; SCLS FIRST
+3  rule on the WW-ONLY 8 (room-scope? stage-scope? absent?)
+4  the EVNT/REVT question                                  A RULING
+```
+
+**Phase 1 lands inert** — a `ww_`-prefixed loader entered only under
+`dExtWwSave_isWwHostStage()` and delegating everything to the receiver's
+existing loader. Changes nothing, provable by inspection, no build budget
+needed. That is step 19 Phase 1's shape reused deliberately: it worked there,
+and a seam that cannot regress anything is the cheapest thing to land first.
+
+**`SCLS` is Phase 2's first chunk** for a specific reason: it is the only chunk
+with a *measured* layout difference (§604, `mWipe` 0xA → 0xC, stride 0xC vs 0xD),
+so it is the one case where the ported reader is **provably** better than the
+bake rather than arguably so. If 3b is right, `SCLS` is where it demonstrates
+itself.
+
+### Phase 0 is a real gate, not a formality
+
+**No loader code should be written against an unaudited chunk.** V1 has cleared
+4 of ~34 and already found one hit; writing a reader against the other 18 room
+chunks now would be inventing the layouts the tool exists to measure. That is
+the §212/§332 mistake with a new coat.
+
+### Stated non-coverage
+
+`d_s_play.cpp`'s stage lifecycle · heap/zone ownership (`createMemoryBlock`,
+`JKRExpHeap` per room, zone counter) · `dMap_c` (2,211 donor lines, unexamined)
+· the `ROOM_SCENE` phase chain itself (mapped in §602, porting it is a separate
+unit) · whether 3b ever completes into 3a.
+
+Kill switch: every phase behind `dExtWwSave_isWwHostStage()`, gate at the source
+per the WW shared-path scoping rule, each Phase-2 chunk independently revertible
+by removing its FuncTable row — step 19's granularity, which severed 129 symbols
+in five reviewable steps.
+
+**Turns.** **FOUNDRY (me)** → Phase 0: extend V1's map across the 22 room chunks,
+resolve the 3 uncomparable receiver struct names, fix the LBNK/MEMA
+container-vs-record rows, route RTBL's validator contradiction. That is the
+gate and it is entirely mine. **USER** → nothing owed to start Phase 0; the
+commit decision is the live one, and the tree now holds V1, the attestation
+harness, this scope doc and six bus sections, none committed.
+
+## §607 — Foundry: PHASE 0 RUN ACROSS ALL 22 ROOM CHUNKS. Six blocks have a DIFFERENT RECORD SIZE — SCLS was not the exception, it was the first one found. The 3b sequencing survives; the "subset" framing does not.
+
+Phase 0 of `native-rooms-3b-scope.md`: V1's map extended from 12 rows to the
+full room-loader chunk set (22 room chunks + 4 stage-scope already cleared).
+
+### The triaged result
+
+```
+SIZE-DISAGREE   6   RCAM  Pale  Virt  SCLS  EnvR  FILI
+UNCOMPARABLE    5   EVNT  LGTV  FLOR  SHIP  LBNK
+UNMAPPED        3   RPPN  RPAT  MEMA
+SIZE-AGREE      3   RARO  AROB  2Dma      (same stride, decomposition differs)
+AGREE           8   PLYR  RTBL  Colo  LGHT  SOND  ACTR  SCOB  MECO
+```
+
+Two of the six spot-verified at source, not just tool-reported:
+
+```
+EnvR   donor u8 pselect_id[8]    (0x08)      receiver u8 pselect_id[65]  (0x41)
+Virt   donor 4 u32s + 2 GXColor + 3 RGB (0x24)   receiver 3 RGB + 3 GXColor (0x15)
+       — not resized: DIFFERENT FIELDS in a different order under the same name
+RCAM   0x14 vs 0x18 · Pale 0x2c vs 0x34 · FILI 0x8 vs 0x20 · SCLS 0xc vs 0xd
+```
+
+**Winditor independently confirms the donor side for RCAM, SCLS, EnvR, FILI** —
+so those four are real receiver divergences, not our donor transcription slipping.
+
+### What this changes, and what it does not
+
+**§606 said "TP's room surface is a subset of WW's". That framing is DEAD.** The
+chunk NAMES are a subset; the RECORDS under six of those names differ, and two
+(Virt, EnvR) are not even "grew a field" — they are different data wearing the
+same tag. The environment/palette family (Pale/Virt/EnvR — three of the six)
+diverged as a group, which makes sense: lighting is where TP's engine moved
+furthest from WW's.
+
+**The 3b sequencing SURVIVES, and this strengthens it.** The plan's premise was
+never "layouts match" — it was "audit before writing any reader" (Phase 0 as a
+real gate), precisely so these would be found by a tool and not by silent data.
+Six hits at audit time is the gate doing its job. Under option 2, each of these
+six is a translation a bake script must know; under 3b each is one ported reader
+that writes the receiver's struct with the difference explicit and citable.
+
+**Phase 2's order changes.** SCLS was chosen first as "the only known
+difference"; now it is one of six known differences and the family structure
+matters more than the single case: `Pale/Virt/EnvR` should be ported as a unit
+(they are consumed as a unit by the palette/time system), with `SCLS`, `RCAM`
+and `FILI` standing alone.
+
+### Tool defects found and fixed during the run — three, all mine
+
+1. **`struct`-only regex.** The receiver declares FILI/LBNK as `class`; both
+   reported UNCOMPARABLE. A tool bug wearing a finding's clothes — the dangerous
+   direction, it manufactures "could not check" out of readable blocks.
+2. **Container-vs-record rows.** SOND/LBNK/MEMA mapped the `num + entries`
+   container against the per-entry record — false DISAGREEs. SOND now maps the
+   record (verdict: AGREE, validator confirms 0x1c). LBNK/MEMA have NO donor
+   record struct (raw `u8*`/`u32*` payloads) and are UNMAPPED as visible holes.
+3. **Raw disagreement count was noise.** 88 field rows, most being `cXyz` vs
+   `f32 x/y/z` — identical bytes, different decomposition, counted three times.
+   The tool now leads with per-block SIZE verdicts, because stride is the signal
+   that survives decomposition and stride is what the §212/§332 class breaks.
+   The field rows remain printed, demoted to advisory.
+
+### Remaining Phase-0 debt, stated
+
+```
+EVNT / SHIP    genuinely absent from the receiver (confirmed by grep, not
+               assumed) — EVNT is the Phase-4 REVT question arriving early
+LGTV / FLOR    receiver-side/donor-side name still unresolved — one read each
+RPPN / RPAT    path records live outside d_stage.h on both sides — map extension
+LBNK / MEMA    primitive payloads; nothing to field-compare; verify semantics
+               (bank byte meaning) at port time instead
+```
+
+Phase 0 is therefore **NOT DISCHARGED** — 22 of 26 rows resolve, 6 hits, 8 open.
+The gate holds until the 8 are closed or explicitly ruled out of the loader's
+first increment.
+
+**Turns.** **FOUNDRY (me)** → close the 8 open rows (LGTV/FLOR reads, RPPN/RPAT
+map extension, LBNK/MEMA semantics notes), then Phase 1's inert seam. **USER** →
+nothing blocks Phase 0 completion; the commit decision remains the live item and
+V1 has now earned its keep twice in one day — worth committing before a stray
+checkout takes it.
+
+## §608 — Foundry: PHASE 0 DISCHARGED. All 8 open rows closed — and closing RPPN found the audit's subtlest hit yet: the path-point arg bytes are PERMUTED, invisible to a type-compare.
+
+The 8 rows from §607, each closed by a read, none by assumption:
+
+```
+LGTV        RECEIVER-ABSENT. No "LGTV" dispatch anywhere in the receiver's
+            d_stage.cpp (grep, zero hits). TP's nearest struct —
+            stage_pure_lightvec_info_class, tag LGT, 0x20, a spotlight record
+            with direction/cutoff/atten — is a DIFFERENT chunk, not a renamed
+            LGTV. Donor LGTV (pos+radius+fluctuation, 0x1C) has no receiver
+            counterpart at all.
+EVNT        RECEIVER-ABSENT, confirmed. The Phase-4 REVT question, arriving early.
+SHIP        RECEIVER-ABSENT, confirmed. WW sailing; out of scope until sailing.
+FLOR        RESOLVED — both sides carry dStage_FloorInfo_dt_c, 0x14, same shape.
+            SIZE-AGREE (donor f32 vs receiver BE(int) at 0x0 — annotation, same width).
+RPAT        RESOLVED — dPath, d_path.h BOTH sides, 0xC both sides. AGREE.
+RPPN        RESOLVED for stride (dPnt, 0x10 both sides, hand-derived — donor
+            header has no Size comment and the tool rightly refuses to sum) —
+            AND IT CARRIES A ROUTED FINDING, below.
+LBNK        PRIMITIVE — u8 bank per layer; 0xFF = none, else Demo%02d
+            (consumer: donor d_s_room.cpp:205-216). Nothing to field-compare;
+            semantics verified at port time against that consumer.
+MEMA        PRIMITIVE — u32 entries. Same treatment.
+```
+
+### The RPPN finding — the class the size verdict CANNOT catch
+
+```
+donor    dPnt  { mArg0@0, mArg1@1, mArg2@2, mArg3@3, cXyz@4 }   0x10
+receiver dPnt  { mArg1@0, mArg2@1, mArg3@2, mArg0@3, Vec@4  }   0x10
+```
+
+**Same stride. The first byte's MEANING moved to the end.** The tool printed
+AGREE on every offset — it compares types, and u8 equals u8. I caught it reading
+the two headers side by side while resolving the row.
+
+If real, a WW path point fed to a TP consumer reads every arg one slot off —
+SCLS's mWipe bug in miniature, at stride-match. If it is a decomp naming
+artifact instead, one of our two headers is mislabeled, which is also worth
+knowing. **Routed, not adjudicated: verify against a consumer (dPath_GetPnt
+callers) before any RPPN port.** Recorded in the map itself so the next reader
+cannot miss it.
+
+Method note worth keeping: this is the second time today the tool's clean row
+hid a real question (LBNK/MEMA container rows were the first). A differ
+validates STRUCTURE; only a consumer read validates MEANING. V1's job is to
+make the hand-reads few and targeted — not zero.
+
+### Phase 0 final state — the gate is DISCHARGED
+
+```
+SIZE-DISAGREE     6   RCAM Pale Virt SCLS EnvR FILI   -> Phase 2 port targets
+ROUTED QUESTION   1   RPPN arg permutation            -> consumer read before port
+RECEIVER-ABSENT   3   EVNT LGTV SHIP                  -> loader DECISIONS, not audits
+PRIMITIVE         2   LBNK MEMA                       -> semantics at port time
+SIZE-AGREE        4   RARO AROB 2Dma FLOR
+AGREE             8   PLYR RTBL Colo LGHT SOND ACTR SCOB MECO
+                 --
+                 24 rows + RPAT (AGREE) = 25; every row a closed verdict or a
+                 routed question; ZERO unaudited
+```
+
+Every chunk the 3b loader will touch now has a known answer or a named question.
+**Phase 1 — the inert seam — is unblocked.**
+
+**Turns.** **FOUNDRY (me)** → Phase 1: the `ww_` room-loader seam behind
+`dExtWwSave_isWwHostStage`, delegating 100%, landing inert; the RPPN consumer
+read rides along before Phase 2 touches paths. **USER** → the commit decision,
+once more with feeling: V1 now carries Phase 0's entire audit state in an
+uncommitted file. **HOUSING** → nothing new owed; B2b stands. **HISTORY** →
+§423 A4b unplayed. **BRIDGE** → R1 recipe + runner rules, unchanged.
+
+## §609 — Foundry: 3b PHASE 1 LANDED. The room-load seam is in, built green, and the separability gate LINKED CLEAN (exit 0, 0 unresolved, exe relinked Aug 9 — 1449 objects: 1448 + the seam TU). Plus the RPPN question RULED — permutation is real, port rule recorded.
+
+### The seam
+
+```
+NEW      src/d/ext_plugin/ww_room_loader.cpp     the seam TU (KIT-LINEAGE: host-plumbing)
+NEW      include/d/ext_plugin/ww_room_loader.h
+EDIT     src/d/d_s_room.cpp:626                   the ONE call site routes through it
+EDIT     files.cmake                              seam TU registered
+REGEN    cmake/ww_layer_exclude.cmake + Tier-1    manifest re-emitted, --check exit 0
+```
+
+`dExtWwRoom_loadRoomDzr` delegates 100% of every call to the receiver's own
+`dStage_dt_c_roomLoader`. On non-WW stages it IS that function. On WW host
+stages (`dExtWwSave_isWwHostStage`, checked at the SOURCE per the shared-path
+scoping rule) it logs one `[WwRoomSeam]` line and then delegates identically —
+so the next WW playtest proves the seam is in the path before Phase 2 puts any
+weight on it. Step 19 Phase 1's shape, reused deliberately: land inert, prove at
+runtime, migrate behaviour after.
+
+Kill switch: `DUSK_WW_ROOM_SEAM` (default 1). At 0 the function compiles to a
+bare forward — no predicate, no log — the exact-revert discipline.
+
+### Verified, not asserted
+
+```
+normal build       EXIT=0, 0 errors, exe relinked (38,975,488 bytes)
+manifest --check   exit 0 after --emit-cmake + --emit-tier1
+classification     seam TU = UNREVIEWED host-plumbing, KEPT — correct: the
+                   receiver references it unconditionally, so exclusion would
+                   be the §589 inverse (receiver holding a reference to a layer
+                   it does not contain)
+separability gate  LINKED CLEAN (exit 0, 0 unresolved, exe relinked Aug 9 — 1449 objects: 1448 + the seam TU)
+caches             dawn_cache/pipeline_cache wiped post-build (standing rule)
+```
+
+The gate matters here specifically: the seam is the first receiver-side edit
+since step 19 closed, and it references `dExtWwSave_isWwHostStage` — a symbol
+the exclusion build satisfies via cluster 4's compile-time defaults. Gate-safe
+by construction, but construction arguments are what §589 taught us to verify.
+
+### RPPN ruled — the §608 routed question is closed
+
+Both `dPnt` headers come from MATCHED decomps: zeldaret/tww on the donor side,
+dusklight's TP match on the receiver side. Field order is therefore ground truth
+for each game, and the arg-byte permutation —
+
+```
+donor    { mArg0@0, mArg1@1, mArg2@2, mArg3@3 }
+receiver { mArg1@0, mArg2@1, mArg3@2, mArg0@3 }
+```
+
+— is a REAL lineage difference, not a naming artifact. (My consumer spot-checks
+were not decisive — `e_po`'s mArg0 is an actor field, `d_envse` reads dPath's
+arg, not dPnt's — so the ruling rests on matched-decomp authority, and says so.)
+
+**Port rule, recorded in V1's map where the next reader cannot miss it:** the 3b
+RPPN reader writes args BY NAME (donor mArg0 -> receiver's mArg0 slot at 0x3),
+never by position. A positional copy reproduces the §332 class at one byte's
+distance.
+
+### Where 3b stands
+
+```
+Phase 0  DISCHARGED (§608)  — 25 rows, 6 stride hits, 1 ruled permutation
+Phase 1  LANDED, built      — seam in path, runtime proof = one playtest log line
+Phase 2  READY              — SCLS first, then RCAM/FILI, then Pale/Virt/EnvR as a unit
+Phase 3  waits on Phase 2
+Phase 4  the EVNT/REVT ruling, last by design
+```
+
+**Turns.** **USER** → one WW playtest confirms the seam logs `[WwRoomSeam]` on a
+host stage (any R_DL01 entry does it); and the commit decision now covers a
+receiver-side edit, which raises its stakes — uncommitted receiver changes and a
+regenerated exclusion manifest should not sit in a working tree together longer
+than they must. **FOUNDRY (me)** → Phase 2 chunk 1: the ported SCLS reader,
+behind the seam, WW-scoped, on your go. **HOUSING** → B2b. **HISTORY** → §423
+A4b unplayed. **BRIDGE** → R1 recipe + runner rules.
+
+## §610 — Foundry: seam PROVEN in the user's playtest; Phase 2 chunk 1 (SCLS) BUILT — and the stride probe found the §604 bug LIVE in the baked arcs, forcing the world clock to 16:00 on the tale's exit.
+
+### Phase 1 closed at runtime
+
+This morning's log, one line, exactly as designed:
+
+```
+[WwRoomSeam] 3b Phase 1 pass-through: stage='F_DL01' room=44 (delegating 100%)
+```
+
+### Phase 2 chunk 1 — the SCLS translator, built green
+
+`ww_room_loader.cpp` now re-reads SCLS at DONOR stride (0xC) after delegation
+and materializes RECEIVER-layout records (0xD) in a per-room static pool,
+translated **by name** per the §609 rule. Receiver-only fields get the
+receiver's own NEUTRAL encodings, read from its accessors rather than guessed:
+
+```
+field_0xa = 0xF0   timeH[3:0]=F        \
+field_0xb = 0x1F   layer=15 (none),     } together: timeH=31 = NO time change
+                   timeH bit4, wipe=0  /             (d_stage.cpp "timeH < 31")
+```
+
+My first draft zeroed field_0xa — **that would have forced every WW exit to
+MIDNIGHT**, because timeH=0 is a valid hour, not a null. The neutral values
+came from reading `getTimeH`/`getSceneLayer`/`getWipeTime` and their consumers,
+which is the DECOMP-FIRST rule paying for itself inside a single function.
+Donor `field_0xb` is DROPPED, not copied — it is padding in WW, and TP reads
+layer + wipe-time bits out of that byte.
+
+Mechanics worth recording: the receiver's `OffsetPtr` is SELF-RELATIVE
+(dusk/offset_ptr.h, ±1GB), so the pool co-locates dummy and records and
+encodes a constant offset with the bit-31 relocated flag. Static pool, not
+heap — the loader runs BEFORE phase_2 makes the room's expand-heap current,
+so a heap allocation would land on whichever heap happens to be current.
+Overflow (>32 records) logs ERROR and refuses — dropped exits are visible and
+debuggable; stride-garbage is neither.
+
+Kill switches: `DUSK_WW_ROOM_CHUNKS` (Phase 2 as a whole, 0 = Phase 1 exactly),
+each translator one call site. Build: EXIT=0, 0 errors, caches wiped.
+
+### The probe finding — §604 is not hypothetical, it is IN THE BAKED ARCS
+
+Checked which mount arcs carry SCLS before trusting the translator's no-op
+path: only `R_DL01/R00_00.arc`. Parsed it with the pipeline's own RARC reader:
+
+```
+SCLS num=1 off=0xEC ... next chunk (ACTR) at 0xF8  ->  gap = 0xC exactly
+rec[0] = "F_DL01" start=1 room=44(0x2C) mWipe=0x0B pad=0xFF     DONOR STRIDE,
+                                                    proven by chunk GEOMETRY
+```
+
+And the author is ours: **`bake_room_chunks.py` line 63, `KNOWN_SIZE = {"SCLS":
+0xC, ...}` — the pipeline bakes donor-stride SCLS into arcs TP's 0xD reader
+consumes.** The §604 audit hit, live in production data.
+
+What TP's reader does with that record TODAY, decoded field by field:
+
+```
+                     donor truth        TP misread (0xD over 0xC data)
+mWipe                0x0B (wipe 11)     0x4B — the NEXT CHUNK's first byte ('K')
+field_0xa/timeH      (absent)           0x0B -> timeH=16 -> CLOCK FORCED TO 16:00
+wipe-time            (absent)           7 (from padding 0xFF)
+```
+
+**Every use of the tale's R_DL01 -> F_DL01 exit silently sets the world clock to
+four in the afternoon and takes a garbage wipe id.** Nobody filed it because
+nothing crashes — the §212/§332 failure mode exactly. The translator corrects
+all three from this build forward.
+
+One more consequence, and it is good news for the bake: **`bake_room_chunks`
+writing donor stride is now CORRECT under 3b** — donor-verbatim data plus a
+donor-semantics reader is precisely the architecture. The defect was never the
+bake; it was the receiver reading donor bytes with receiver stride. No pipeline
+change needed; the KNOWN_SIZE row gains a comment when its file is next open.
+
+### Verification path for the user
+
+Enter R_DL01 (the Grandma room). Expected log:
+
+```
+[WwRoomSeam] SCLS[0] stage='F_DL01' start=1 room=44 wipe=11 (donor 0xC -> receiver 0xD)
+[WwRoomSeam] SCLS: 1 record(s) re-read at donor stride for room 0 ...
+```
+
+Then take the exit: the clock should NO LONGER jump to 16:00, and the wipe
+should be the donor's 11, not 75. F_DL01/F_DL02 rooms carry no SCLS — the
+translator no-ops there by design.
+
+**Turns.** **USER** → the R_DL01 playtest above; the commit decision (now two
+receiver-side TUs plus the translator). **FOUNDRY (me)** → Phase 2 continues:
+RCAM and FILI next (stand-alone stride hits), then Pale/Virt/EnvR as the
+environment unit. **HISTORY** → FYI: the tale exit has been silently
+time-warping to 16:00 since the §323 bake; if any tale-era observation ever
+looked like "evening light after the cutscene", that was this. **BRIDGE** →
+R1 recipe; no bake change needed per the above.
+
+## §611 — Foundry: SCLS translator VERIFIED in playtest — the exit routed through translated records. Chunk 2 (FILI) built: not a stride bug, a SEMANTIC one, and the bit fields are DISJOINT.
+
+### The playtest receipt (user's 09:51 run)
+
+```
+7361  [WwRoomSeam] 3b: stage='R_DL01' room=0 (delegate + ported chunks)
+7364  [WwRoomSeam] SCLS[0] stage='F_DL01' start=1 room=44 wipe=11 (donor 0xC -> receiver 0xD)
+8354  [WwRoomSeam] 3b: stage='F_DL01' room=44 ...
+```
+
+Line 8354 is the receipt that matters: **F_DL01 room 44 loaded AFTER R_DL01 —
+the user took the tale exit and it routed through the translated record.**
+F_DL01 itself logged no SCLS lines: the no-op path, correct by design.
+
+### Chunk 2 — FILI, built (build EXIT=0, 0 errors, exe relinked, caches wiped)
+
+V1 flagged FILI as 0x8 vs 0x20. Reading both sides' accessors showed the real
+defect class: the two shared offsets (mParam/mSeaLevel) coincide, but the
+mParam BIT FIELDS ARE DISJOINT —
+
+```
+donor   bit0 DarkOn · bit1 AgbCom · bit2 AgbHover · 21-28 ParticleNo · 30 SongOk
+recv    3-5 MiniMap · 7-14 GRASSLIGHT · 15-17 WindDir · 18-19 WindLevel · 29 EnemyAppear
+```
+
+— and the receiver's 0x20 struct reads **0x18 bytes past the donor chunk**:
+mDefaultCamera/mBitSw/mMsg have been adjacent-chunk garbage on every WW room
+with FILI (R00 has one). The translator hands consumers a receiver-neutral
+record with receipts per field (camera 0 = the no-FILI default, d_camera.cpp:
+508-516; mBitSw 0xFF = TP's no-switch; mMsg 0, Midna-flow only), copies
+mSeaLevel — the one genuinely shared field — and leaves the donor record intact
+in the dzr for WW-layer consumers. Donor Dark/Particle/Song have NO receiver
+slots; the log prints them so nothing vanishes silently.
+
+**The method note:** SCLS was a stride bug, FILI a semantic one, and V1's size
+verdict cannot tell them apart — both said "SIZE-DISAGREE". The accessor read
+is what classified them. Phase 2's remaining chunks each get that read before
+their translator is written.
+
+**Turns.** **USER** → next R_DL01 entry should add one FILI line
+(`donorParam=0x...` with dark/particle/song decoded); commit decision
+unchanged and growing. **FOUNDRY (me)** → RCAM next (0x14 vs 0x18 — not yet
+baked anywhere, so it lands dormant), then Pale/Virt/EnvR as the environment
+unit. **HOUSING** → B2b. **BRIDGE** → R1 recipe.

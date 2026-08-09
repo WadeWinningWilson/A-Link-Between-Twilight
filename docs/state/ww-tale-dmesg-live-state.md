@@ -5193,3 +5193,112 @@ same class as §334's heading — the row should close citing those three receip
 ROOT OF THE CONFUSION, worth keeping: two tags differing by one character ("B2b" vs "B2-b2")
 for a settled answer and its follow-up gap. Naming a follow-up by mutating its parent's tag is
 how a closed item and an open one become indistinguishable five sections later.
+
+## R1 FORMAT RULES 2 & 3 (2026-08-08, Bridge's calls on Foundry's §595 findings)
+RULE 2 `once` — THE ANTI-EDGE, and Foundry is right that ordering cannot express it. "A before
+B" says nothing about "and never A again", which is exactly build_rdl01_shell's hazard: it
+rewrites R_DL01/STG_00.arc from the R_SP300 template with only STAG patched, does NOT reapply
+grow_rdl01_stg's 6-room growth, and takes no backup — so a late re-run silently drops the stage
+to one room and streaming just stops asking for rooms 1-5. Nothing errors. Implemented as
+REFUSE-when-outputs-exist, not skip: skipping would quietly protect the tree while hiding that
+a resume was about to destroy work, and the operator learning it is the entire point.
+VERIFIED ON THE REAL TREE — the guard fires today (the arc exists), refusing exactly the case
+Foundry described. --from-step now cannot walk into it.
+RULE 3 `validator` — steps that write nothing (space_kit: inventory prints JSON, regress
+asserts and exits 1). No outputs ⇒ nothing for the hash short-circuit to see ⇒ it would be
+skipped forever or re-run blindly depending on how the absence is read; neither is right for a
+gate. Validators ALWAYS run, are never hash-skipped, never record state, and their exit code
+gates the pipeline. Foundry's note that space_kit will not be the last validator is why this is
+a format rule rather than a special case.
+Both encoded in recipe.json with Foundry's evidence quoted, so the reasoning travels with the
+data rather than living only here.
+STALE-NOTE CORRECTION (gently, and the third instance in two days): Foundry's report lists
+"live-state:300 still contradicts itself" — that was fixed on 2026-08-05; the heading now reads
+§334 LANDED with the correction annotated inline, and it sits at line 304 because the fix added
+lines. Their note predates the fix. Same class as everything else this week: accurate when
+written, and the tree moved. It is now FOUR lanes in two days, which is the strongest argument
+yet for the stale-state detector still sitting unpicked.
+
+## R1 RECIPE v2 AUTHORED (2026-08-08, Bridge) — 14 placed steps over 27/27 contracts
+Contracts hit 27/27 (Housing's last three landed), so authoring ran for the first time.
+POSITION EVIDENCE CAME FROM TWO LEGITIMATE SOURCES, and naming the second one mattered:
+  (a) a step's OWN Order line — 10 of 27 declare one;
+  (b) ANOTHER step's Order line naming it. An edge stated by either endpoint is still an
+      edge — merge_event and scope_event_staff are placed ENTIRELY this way (patch_event_cut
+      says "after merge_event"; restore_event_staff says "after merge_event, BEFORE
+      scope_event_staff"). Neither declares its own position; both are pinned by neighbours.
+14 steps placed. The other 13 contracts declare IO but no order and are NOT in the list —
+an unplaced step is visible work; an invented placement is a silent one.
+SECOND ANTI-EDGE FOUND WHILE AUTHORING (Foundry flagged one; the contracts carry two):
+build_fdl_host_stg must ALSO not run after grow_rdl01_stg — it reads the template the shell
+writes, and grow changes it underneath. Encoded by ordering it before grow; the shell itself
+carries `once` and REFUSES on today's tree, verified.
+The recipe now states, per step, WHY it sits where it sits. That is the artifact R1 was for:
+not "run these twenty things" but "here is the order, and here is the receipt for each edge."
+REMAINING R1: the 13 unplaced steps need Order lines from their owners (same cheap ask that
+took contracts 10→0 in two days), and the three parameterised steps (merge_event,
+patch_event_cut) need their per-event argument lists, which are content decisions rather
+than pipeline facts.
+
+## R1 RECIPE v3 (2026-08-08): Foundry's §591 merged — 25 of 27 placed; their flagged edge VERIFIED and WIDENED
+Foundry delivered 11 with every edge quoted from the script that states it, and flagged ONE as
+placed-by-purpose rather than quotation: restore_arc_resids, which never names its predecessors
+and was put last because it repairs "arcs REBUILT through pack_rarc get sequential ids".
+BRIDGE VERIFIED IT — and the edge is real AND WIDER than drawn: bake_room_chunks, plyr_append,
+revt_bake AND mult_trim ALL call pack_rarc. So restore_arc_resids belongs after the LAST
+repacking step across ALL THREE sub-graphs, not just after plyr_append. Foundry's instinct was
+right; their placement was too narrow, and only checking could tell the difference. Flagging
+the weakest edge for verification instead of letting it be inherited is exactly why this was
+catchable — the same discipline that left 13 unplaced rather than guessed.
+STRUCTURE (Foundry's finding, worth keeping): the 11 are THREE SUB-GRAPHS, not one chain —
+  STB cluster: add_package_staff → set_event_finish_flag → complete_event_camera →
+               add_director_staff → { regate_reveal | rework_opening_fade }
+  stage.dzs:   revt_bake → mult_trim   (causal, not conventional)
+  room arcs:   bake_room_chunks → plyr_append
+plus an EXPLICIT NON-EDGE recorded in the recipe: regate_reveal touches cut 2, rework_opening_
+fade touches cut 1 — disjoint, either order. Stated so no successor invents an ordering.
+STATE: 25 of 27 steps placed. Remaining: extract_bmg + arc_add_member (History/Bridge's own
+two — mine to write). Housing owes nothing: their four ferry items closed and their three
+contract lines landed.
+
+## NATIVE-ROOMS CAMPAIGN OPENED (2026-08-08, USER RULING) — the mount's host-stage era ends
+RULING: native is the next campaign. Target = the MOUNT lineage in the R1 recipe — host-stage
+construction — replaced by the true native room path Foundry's space kit was about to test.
+WHY THIS ORDER IS RIGHT (recorded so it is not re-litigated): R1 is not a competitor to this
+campaign, it is its SAFETY NET. The mod folder was a hand-produced single copy; with the recipe
+the current working state is reproducible, which is precisely the condition under which gutting
+the host-stage path is affordable. Doing the architectural work first would have meant doing it
+with no recovery.
+THE BURN-DOWN IS THE SCOREBOARD (recipe v5 `path` field): MOUNT + COMPENSATOR steps are the
+campaign's target list. Today: MOUNT 3 (build_rdl01_shell, build_fdl_host_stg, grow_rdl01_stg),
+COMPENSATOR 1 (bake_wwsky_colors), NATIVE 4, ASSET 3, UNCLASSIFIED 16. The 16 are owners' calls
+and MUST NOT be inferred — several are almost certainly MOUNT (bake_room_chunks, plyr_append,
+mult_trim are host-stage shaped) and classifying them honestly is the campaign's first receipt,
+not a formality: it sets the baseline the burn-down is measured against.
+PRECEDENT ALREADY SET: №116 retired the day the runtime feed made it moot — evidence, a tier
+change, a DO-NOT-RUN banner, script kept re-runnable. That is the retirement shape every MOUNT
+step should follow. A step deleted without that ceremony is indistinguishable from one lost.
+OPEN QUESTION FOR THE FIRST SESSION (History does NOT know the answer and will not invent it):
+what is the native room path's actual shape? The mount builds TP host stages carrying WW rooms
+as room slots (R_DL01 = 6 rooms). "Native" plausibly means WW stages loaded as real stages —
+but that is Foundry's space-kit test to define, and the §418/§423 lesson applies: read the
+donor's own stage-load path FIRST, then decide what the receiver must host.
+STATE AT HANDOFF: R1 recipe 27/27 placed, lineage field live, contracts 27/27. §423 A4b built
+and UNPLAYED (three-part test: tale, doors, mainline TP cutscene as control; DUSK_EVT1_NATIVE=0
+is the exact-revert mitigation). Nothing else owed by any lane.
+
+## SEQUENCING RULING REQUESTED: R1 on the side vs native wholly — BRIDGE RECOMMENDS: native wholly, R1 folded in
+HONEST UPDATE TO MY OWN EARLIER ARGUMENT: I justified R1's urgency partly on the mod folder
+being an unrecoverable single copy. HOUSING COMMITTED IT. Git now covers the catastrophic case,
+so R1's remaining value is the STRONGER property (rebuild from arcs/ + repo) — real, but no
+longer urgent. Saying so plainly because the earlier framing would otherwise keep justifying
+priority it no longer has.
+RECOMMENDATION: do NOT run R1 as a parallel track. Fold it into the native campaign as a
+RECORD-KEEPING OBLIGATION — every MOUNT step the campaign retires flips its recipe row (№116's
+ceremony); every native step it adds gets a row with its edges quoted. R1 then completes itself
+as a byproduct and can never document a stale pipeline. A side-track R1 would spend effort
+perfecting steps the campaign is about to delete, and would drift the moment it fell behind.
+THE ONE R1 PIECE THAT SURVIVES THE TRANSITION, if a small task is ever wanted: the parameterised
+steps (merge_event, patch_event_cut, arc_add_member, extract_bmg) still carry PLACEHOLDER args.
+Those are CONTENT decisions, architecture-independent, and cheap — the recipe cannot execute
+end-to-end until they are filled, and filling them is not wasted under either path.
