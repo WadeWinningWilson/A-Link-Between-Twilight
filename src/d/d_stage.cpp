@@ -2037,6 +2037,45 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
                 const s8 sr = dComIfGp_getStartStageRoomNo();
                 appen->base.parameters =
                     (appen->base.parameters & 0xFFFFFFC0) | (u32)(sr & 0x3F);
+
+                // ============================================================
+                // §626: the START MODE field of the same word, same problem.
+                //
+                // daAlink_c::getStartMode() reads PLYR parameters bits 12-16
+                // (d_a_alink.h:3605). TP's arrival switch runs its entry
+                // sequence — DEMO_UNK_14_e, setMoveAngle(current.angle.y),
+                // setTimer(35), i.e. the walk-in — for start_mode 0/1/2/3/5/
+                // 13/14 and for nothing else.
+                //
+                // WW packs that word differently. R_DL02's authored PLYRs give
+                // start_mode 27 (room 0) and 16 (room 1). A census of the
+                // receiver's own 1277 shipped PLYR entries finds 0-14 and
+                // NOTHING above 14 — 0 alone is 782 of them. So the WW values
+                // are not rare TP modes, they are outside the vocabulary, the
+                // entry branch is never taken, and Link is left standing where
+                // the animation was supposed to START.
+                //
+                // That spot is the door threshold: raycasting room 0's dzb at
+                // the spawn (1,*,626) finds only group 'door' at y=0 —
+                // 'floor_tuti1' does not reach it. The walk-in is what carries
+                // him onto the floor, so without it he simply drops. The spawn
+                // data is correct; the field that drives it was unreadable.
+                //
+                // 0 = TP's plain entry walk-in, and every WW PLYR seen so far
+                // is a door arrival. REVISIT when a WW warp-in or fall-in
+                // spawn appears — WW's own encoding of this field is not
+                // decoded, and picking 0 is a translation of intent, not of
+                // bits. Same class as №86 above and §334's dzb repack:
+                // translate at the consumption boundary, leave staged arcs
+                // donor-byte-verbatim.
+                // ============================================================
+                const u32 wwStartMode = (appen->base.parameters >> 12) & 0x1F;
+                if (wwStartMode != 0) {
+                    appen->base.parameters &= ~(0x1Fu << 12);
+                    DuskLog.info("[dStage] §626 PLYR start_mode {} -> 0 (WW word, "
+                                 "outside TP's 0-14 vocabulary) stage='{}' room={}",
+                                 wwStartMode, sn, (int)sr);
+                }
             }
         }
 #endif

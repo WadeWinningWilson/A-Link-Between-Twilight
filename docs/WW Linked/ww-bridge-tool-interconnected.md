@@ -29973,3 +29973,65 @@ sinks, §624 failed; if he stands, both worked.
 
 **Turns.** **USER** → direction on A vs B (or run §624 first to keep the two
 separable). **HOUSING** → holding; the `mode` read is ready to run on a word.
+
+## §626 — Housing: option A, landed one layer deeper than proposed. The door animation was never missing — the field that triggers it was unreadable.
+
+**A was right and my proposed implementation was wrong.** I was going to pass
+door-style `speed`/`mode`/`angle` through the warp. Reading further showed the
+warp is not where the decision lives.
+
+```cpp
+int getStartMode() { return (fopAcM_GetParam(this) >> 0xC) & 0x1F; }   // d_a_alink.h:3605
+```
+
+The entry sequence — `DEMO_UNK_14_e`, `setMoveAngle(current.angle.y)`,
+`setTimer(35)`, i.e. **the walk-in** — runs for `start_mode` 0/1/2/3/5/13/14 and
+for nothing else. The value comes from the **PLYR parameter word**, not from the
+warp's arguments.
+
+**Census of the receiver's own 1277 shipped PLYR entries:**
+
+```
+start_mode  0 : 782      5 : 141     10 : 64     11 : 49      7 : 48   ...
+range 0-14. NOTHING above 14.
+
+R_DL02 room 0 : param 0x00ffb000 -> start_mode 27
+R_DL02 room 1 : param 0x01ff0001 -> start_mode 16
+```
+
+WW packs that word differently, so both land **outside TP's vocabulary**. The
+entry branch is never taken and Link is left standing exactly where the animation
+was supposed to *start* — which the §625 raycast already showed is the door
+threshold, where only group `door` exists at y=0. **The spawn data was correct
+all along and so was the door; the field that drives the animation was
+unreadable.**
+
+Everything the user forbade is preserved by construction: the door is untouched,
+the animation is the receiver's own, and no spawn point is invented — an authored
+field is translated, not replaced.
+
+### Why this beats what I proposed
+
+Passing door-style arguments would have fixed **the dev warp**. This fixes
+**arrival**, so real door transitions between WW rooms get it too — and §625
+already established that every WW room's PLYR is a door-arrival point.
+
+It also lands beside its own precedent: №86, six lines up in the same function,
+already translates the **room bits** of this exact word for WW hosts. Same word,
+same function, same class — §334 for dzb attributes, №86 for room bits, §626 for
+start mode. Consumption boundary; staged arcs stay donor-byte-verbatim.
+
+**Stated limit:** 0 is TP's plain walk-in and the majority value, and every WW
+PLYR seen so far is a door arrival — but **WW's own encoding of this field is not
+decoded**. Picking 0 is a translation of intent, not of bits. Revisit when a WW
+warp-in or fall-in spawn appears; the log line prints the discarded value on
+every arrival so the evidence accumulates instead of vanishing.
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+**Prediction:** `[dStage] §626 PLYR start_mode 27 -> 0`, then Link walks in from
+the door and stands on `floor_tuti1`. If he walks in and then sinks, §624 failed
+and the two are cleanly separated. If he still does not move, `start_mode` is not
+the only gate and the next read is `mStartEventID`/`checkModeFlg(0x400)`.
+
+**Turns.** **USER** → `run_rdl02.bat` → warp. **HOUSING** → standing by.
