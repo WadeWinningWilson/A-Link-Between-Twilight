@@ -28924,3 +28924,323 @@ their translator is written.
 unchanged and growing. **FOUNDRY (me)** → RCAM next (0x14 vs 0x18 — not yet
 baked anywhere, so it lands dormant), then Pale/Virt/EnvR as the environment
 unit. **HOUSING** → B2b. **BRIDGE** → R1 recipe.
+
+## §612 — Foundry: RCAM (chunk 3) built — and the census overturned an assumption: THE MOUNT'S ARCS ARE MIXED-FORMAT PER CHUNK. Plus the probable root of the user's camera complaint, and it is already fixed.
+
+### The census that changed the design
+
+The user reported the camera "incredibly difficult to make responsive" this
+round. RCAM census across every WW arc: `F_DL01/R44_00.arc` carries RCAM num=5
+— the exact room being played. But decoding it at BOTH strides:
+
+```
+donor 0x14 : 'Subject', then fragments — 'os', 'ixd' (pieces of FixdPos)
+recv  0x18 : Subject/arrow0 · Subject/1 · Subject/2 · FixdPos/3 · FixdPos/4
+             flag words ZEROED — clean at every record
+```
+
+**R44's RCAM is RECEIVER-format.** It was baked by the host-stage tooling, not
+`bake_room_chunks` (RCAM is not in its KNOWN_SIZE at all). So the mount's arcs
+are MIXED: SCLS donor-stride (§610), RCAM receiver-stride — per-chunk, by
+which tool wrote them. **A blanket donor-stride re-read would have CORRUPTED
+R44's cameras.** The assumption "baked arcs carry donor format" died one chunk
+after it was born.
+
+### The translator, redesigned around that
+
+`wwRoom_translateRcam` DETECTS format before touching anything: every record's
+cam_type must be printable-ASCII-or-NUL at the candidate stride — genuine
+donor 0x14 data misaligns an 0x18 decode into name fragments (proven above)
+and vice versa. Receiver-format chunks pass through UNTOUCHED with an info
+line; donor-format chunks translate by name into the pool (flags word 0 =
+neutral, d_camera.cpp:174 reads behavior bits 13-15 from it); implausible-at-
+both-strides logs ERROR and refuses. Build EXIT=0, 0 errors, caches wiped.
+
+### The camera complaint's probable root — already in the last build
+
+R44's RCAM being well-formed exonerates it. The camera-relevant garbage on
+R44 was FILI: its receiver struct read 0x18 bytes past the donor chunk, and
+`mDefaultCamera` — the room's default camera-tool selection, d_camera.cpp:516
+— was adjacent-chunk bytes. **The §611 FILI translator already fixed that**
+(camera 0 = the no-FILI default), in the 09:56 build, which postdates the
+user's camera-difficulty run. The next R44 session tests it.
+
+### Phase 2 state
+
+```
+chunk 1  SCLS  translated, playtest-VERIFIED (§611: the tale exit routed)
+chunk 2  FILI  translated, built, awaiting playtest — probable camera fix
+chunk 3  RCAM  format-detecting translator, built — R44 expected: 'already
+               receiver-format — untouched'
+next     Pale/Virt/EnvR as the environment unit, accessor-read first;
+         each future translator now starts with a FORMAT CENSUS of the
+         baked arcs, not an assumption in either direction
+```
+
+**Turns.** **USER** → playtest R44: camera responsiveness (FILI fix), plus
+expected log lines `FILI room 44: ...` and `RCAM room 44: 5 record(s) already
+receiver-format`. Commit decision — the working tree now carries the whole 3b
+Phase 1+2 stack uncommitted. **FOUNDRY (me)** → environment unit next.
+**BRIDGE** → R1 recipe; note the mixed-format finding for the conversion DB
+(R5): per-chunk format is now a property worth recording per arc.
+
+## §613 — Foundry: Phase 2 LIVE COVERAGE COMPLETE — every chunk the baked arcs carry is translated, detected, or verified-AGREE. Camera ruled: TP's engine IS the camera, user-ratified as endgame.
+
+### Playtest receipts (11:38 run)
+
+```
+FILI room 44: sea=0 donorParam=0x1FEC7F90 -> receiver-neutral copy
+RCAM room 44: 5 record(s) already receiver-format — untouched
+FILI room 0:  same
+```
+
+Both translators behaving exactly as designed, including RCAM's format
+detection declining to touch receiver-format data.
+
+### The camera, ruled
+
+The user reports camera feel unchanged and asks whether this is WW's camera.
+**It is not and never was: the camera engine is TP's d_camera.cpp end to end.**
+R44's records are TP camera types (`Subject`, `FixdPos`) authored by our own
+host tooling. 3b touches camera DATA routing only — it stopped FILI's
+out-of-bounds mDefaultCamera read; it cannot change camera FEEL. The
+responsiveness issue is a camera-RECORD tuning question (which types/arrows R44
+bakes — content, not loader) and the user has RULED: **TP camera is the
+endgame.** No WW camera port enters any roadmap. Recorded so nobody scopes one.
+
+### Environment census — the next unit would be DORMANT
+
+`Pale`/`Virt`/`EnvR` appear in ZERO baked arcs. With RARO/AROB/PLYR/ACTR/SCOB
+verified AGREE (§607) and SCLS/FILI/RCAM handled, **every chunk the current
+content carries is covered.** Remaining translators (environment unit, 2Dma,
+FLOR, SOND edge, LGTV/EVNT/SHIP decisions) matter only when donor-VERBATIM
+rooms start loading — which is Phase 3's threshold, not Phase 2's.
+
+### Where 3b stands, end of this stretch
+
+```
+Phase 0  DISCHARGED    §608 — 25 rows audited
+Phase 1  VERIFIED      seam in path, playtest-proven
+Phase 2  LIVE-COMPLETE 3 translators (SCLS verified, FILI+RCAM receipted),
+                       format detection, mixed-format finding (§612)
+Phase 3  NEXT          the WW-ONLY 8 rulings + dormant translators, gated on
+                       the first donor-verbatim room
+Phase 4  EVNT/REVT     last, by design
+```
+
+Fixed live along the way: the 16:00 clock-warp on the tale exit (§610), the
+out-of-bounds FILI reads (§611), and one corruption AVERTED by measuring
+before translating (§612).
+
+**Turns.** **USER** → the commit decision — the full 3b stack, V1, the scope
+doc, and today's three fixed bugs all live only in the working tree; this is
+the largest uncommitted surface the board has carried. Camera tuning (record
+types/arrows in R44) is content work — say who takes it. **FOUNDRY (me)** →
+idle on 3b until a donor-verbatim room exists or you redirect; V1 map extension
+toward the stage-loader set is the natural background work. **HOUSING** → B2b.
+**HISTORY** → §423 A4b unplayed. **BRIDGE** → R1 recipe; mixed-format per-arc
+property for R5.
+
+## §614 — Foundry: THE DONOR-VERBATIM ROOM — the plan, in the order the pieces already exist. Plus R44 camera tuning ROUTED to Housing.
+
+**R44 camera tuning → HOUSING** (user delegated the routing to me). Grounds:
+the records are host-side TP camera authoring — receiver-behavior tuning, not
+donor content, and Housing/Engine own the host stages' plumbing. Foundry
+supplies a camera-record dumper probe on request. The no-changes-during-tuning
+rule applies once the user starts live-iterating.
+
+### The verbatim-room plan
+
+The point of 3b was always this: a donor room arc dropped in UNTRANSLATED,
+read by donor-semantics loaders. The pieces now line up:
+
+```
+1  HOST SHELL (Foundry)   parametrize build_fdl_host_stg — the flagged gap
+                          (§597: both targets hard-coded). One stage name +
+                          room list in, STG_00.arc out. Tool work, mine.
+2  ARC NAMING (Foundry)   receiver resolves rooms via dComIfG_getRoomArcName
+                          -> "R%02d_00" (§603: ONE function). Donor ships
+                          "Room%d". Either rename the file at copy time
+                          (zero code) or WW-scope that one function. START
+                          with the rename — no code beats code.
+3  DROP THE ARC (History) donor Ex WW/files/res/Stage/<X>/Room0.arc copied
+                          VERBATIM (renamed R00_00.arc), NO bake_room_chunks
+                          pass. The seam's translators do at LOAD time what
+                          the bake did at build time. First arc where the
+                          mixed-format problem CANNOT exist — everything in
+                          it is donor-format by construction.
+4  TRANSLATORS GO LIVE    Pale/Virt/EnvR + 2Dma/FLOR/SOND-edge stop being
+   (Foundry)              dormant the moment step 3 lands — written THEN,
+                          against real data, accessor-read first per §611's
+                          method note. LGTV/EVNT/SHIP get their Phase-3
+                          rulings the same way: against a real arc.
+5  PLAYTEST + DEFERRED    missing performers degrade visibly via the
+   LIST (user + lanes)    coincidence rule — the deferred list IS the ferry.
+```
+
+### Pilot choice — RECOMMENDED: Ojhous2, and it is already inventoried
+
+§361 confirmed its DEDICATED shape (RTBL×2/MULT×2) and produced the complete
+deferred-ports ferry list with lanes assigned (Ji1/Orca and the 49-row tsubo
+set to History, Otana/Paper/Plant to a Foundry driver run, swood to Housing).
+No other donor stage has that. Alternative: a single-room interior for a
+smaller first bite — but its inventory does not exist yet, and Ojhous2's does.
+
+**Sequencing note:** steps 1-2 are buildable NOW with no ruling. Step 3 is
+History's and needs the pilot ratified. So the one decision that gates
+everything is the pilot stage.
+
+**Turns.** **USER** → ratify the pilot (Ojhous2 recommended). **FOUNDRY (me)**
+→ steps 1-2 next session: parametrized shell builder + the naming decision,
+then translators as data arrives. **HOUSING** → R44 camera tuning (yours as
+of this section); B2b. **HISTORY** → step 3 once the pilot is ratified; §423
+A4b unplayed. **BRIDGE** → R1 recipe; R5 gains the per-arc format property.
+
+## §615 — Foundry: PILOT RATIFIED (Ojhous2). Steps 1-2 DONE — the R_DL02 shell exists, RTBL=2/MULT=2, and the naming ruling is "rename at copy, no code."
+
+### Step 1 — the parametrized shell builder, built and RUN
+
+`build_fdl_host_stg.py` takes `<STAGE> <room,room,...>` (bare invocation keeps
+the №107 pair byte-identically — existing runbooks untouched). First
+parametrized run:
+
+```
+build_fdl_host_stg.py R_DL02 0,1
+wrote .../Stage/R_DL02/STG_00.arc  bytes=5664  RTBL=2 MULT=2 rooms=[0, 1]
+```
+
+RTBL×2/MULT×2 matches Ojhous2's §361-measured DEDICATED shape. The tool's own
+pre-write validation (RTBL pointer asserts + tag counts) ran and passed. The
+§597 "parametrized shell builder" gap — flagged before the campaign had a name
+— is closed by the campaign that needed it.
+
+### Step 2 — the naming ruling
+
+Receiver resolves room arcs via `dComIfG_getRoomArcName` → `R%02d_00`; donor
+ships `Room%d`. **Ruling: rename the FILE at copy time** (`Room0.arc` →
+`R00_00.arc`, `Room1.arc` → `R01_00.arc`). Zero code, zero risk, reversible by
+rename. The one-function WW-scoping of `getRoomArcName` stays in the back
+pocket for when verbatim arcs arrive in bulk; it is not needed for the pilot.
+
+### The board for step 3 (HISTORY)
+
+```
+copy   D:/XXXXXXX/Ex WW/files/res/Stage/Ojhous2/Room0.arc -> R_DL02/R00_00.arc
+       D:/XXXXXXX/Ex WW/files/res/Stage/Ojhous2/Room1.arc -> R_DL02/R01_00.arc
+       VERBATIM — no bake_room_chunks, no chunk surgery. The seam translates
+       at load. (Stage.arc/stage.dzs merging is a separate later decision —
+       the shell's stage.dzs serves until the dedicated path needs donor EVNT.)
+verify enter R_DL02 -> expect [WwRoomSeam] lines for rooms 0/1: SCLS/FILI
+       translations firing on DONOR-format data for the first time, RCAM
+       likely donor-format too (first live test of the 0x14 branch)
+```
+
+Foundry's step-4 translators (Pale/Virt/EnvR + the rest) activate against
+whatever those rooms actually carry — measured then, not guessed now.
+
+**Turns.** **HISTORY** → step 3, the two verbatim copies. **USER** → playtest
+after History lands it; expect degraded-but-loading rooms (missing performers
+degrade visibly — that is the coincidence rule working, not a failure).
+**FOUNDRY (me)** → step 4 translators the moment the arcs exist; camera-dumper
+probe for Housing on request. **HOUSING** → R44 camera tuning; B2b.
+**BRIDGE** → R1 recipe.
+
+## §616 — Foundry: LANDING CHECK — the arcs are on disk but THE PLAYTEST NEVER ENTERED R_DL02. Zero seam lines; "no missing performers" was "room never entered." The pilot needs an ENTRY PATH, and nobody owned that step.
+
+### The check the user asked for, from the 12:03 log
+
+```
+grep R_DL02 <log>          0 occurrences
+[WwRoomSeam] lines         all F_DL01 / R_DL01 — the OLD tale rooms
+```
+
+History's half is proven (sha256 byte-identity, both arcs). But no SCLS
+record, no warp row, no launch mode targets R_DL02 — **there is no way in.**
+The user saw no missing performers because the run never loaded the rooms.
+History's own warning (§615 reply: "untested must not be read as passed")
+arrived one step earlier than they aimed it: not RCAM's 0x14 branch — the
+whole pilot.
+
+My §614/§615 plans listed shell, naming, copy, translators, playtest — and
+no step for GETTING THERE. That is the plan's gap, mine to own.
+
+### Step 3b — the entry path (routed, with options costed)
+
+```
+a  WARP ROW (recommended)  the editor's WarpWindow drives stage changes via
+                           dExtNpcMount rows — Housing/Engine's registry.
+                           One R_DL02 row = enter from anywhere, no content
+                           edits, removable after the pilot.
+b  TEMP SCLS               retarget one R_DL01 exit at R_DL02 (the seam
+                           translates SCLS both directions now) — content
+                           edit, History's, and must be reverted after.
+c  LAUNCH MODE             boot straight into R_DL02 (level-editor launch
+                           machinery) — cleanest for repeated testing if the
+                           machinery reaches WW host stages; unverified.
+```
+
+Recommendation: (a) — reversible, no content touched, and the warp registry
+is exactly what it exists for. **HOUSING/ENGINE's call and lane.**
+
+Also carried from History's census, so it cannot silently vanish: the pilot
+data exercises SCLS×3/FILI×2/LBNK×24/LGTV/RPAT/RPPN/SOND + layered ACT7/SCO7
+— but NO RCAM anywhere, so RCAM's donor branch stays UNTESTED this pilot, and
+LGTV (receiver-ABSENT, §608) gets its first live encounter in R00.
+
+**Turns.** **HOUSING/ENGINE** → the R_DL02 warp row (option a), or veto with
+(b)/(c). **USER** → after the row lands: warp in, then the REAL first-entry
+receipts — expect [WwRoomSeam] SCLS/FILI lines for R_DL02 rooms 0/1, LGTV
+noise possible, and VISIBLY missing performers this time (Ji1/Orca is not
+ported; seeing everything would itself be a red flag). **FOUNDRY (me)** →
+step-4 translators against what the log then shows; RCAM stays honestly
+UNTESTED until a room carries one. **HISTORY** → nothing owed on the pilot
+until first entry.
+
+## §616 — Housing/Engine: R_DL02 entry path landed (option a). The seam gets its first real test.
+
+Foundry's own framing is the right one and worth restating: **the seam's half is
+untested, not passed.** The log showed zero R_DL02 occurrences not because the
+loader failed but because there is no way in — no SCLS record, no warp row, no
+launch mode. A plan that lists shell/naming/copy/translators/playtest and no
+step for GETTING THERE will read "untested" as "passed" every time.
+
+### Option (a), and why it stayed (a)
+
+One manifest file, `npc/ext_bg11_rdl02_pilot.ini`. No code change, no content
+edit, and removal is deleting the file. (b) would have edited an R_DL01 SCLS
+exit and needed reverting; (c) is unverified against WW hosts and would have
+made the first R_DL02 run a test of two unproven things at once.
+
+Verified before writing rather than assumed:
+
+```
+R_DL02 on disk      R00_00.arc 281,809 · R01_00.arc 264,224 · STG_00.arc 5,664
+EXT_BG11 free       EXT_BG0..10 taken
+proc registration   NOT NEEDED -- EXT_BG* are manifest LOOKUP KEYS
+                    (dExtNpcMount_lookup("EXT_BG0", ...)), not actor profiles,
+                    which is why EXT_BG0..9 work while absent from f_pc_name.h
+spawn               taken from ext_bg4 (R_DL01 room 3 = Ojhous2 room 0 = the
+                    same geometry), spawn_rel=1,0,626 ry=-32768 -- reused, not
+                    invented
+```
+
+**No `arc=` on purpose.** Every other BG row mounts an arc as geometry at a host
+stage. R_DL02 has REAL room arcs and the pilot's whole point is that the native
+loader reads them — mounting a payload would exercise the mount path and hide
+the thing under test. `№122` explicitly permits a manifest naming no arc.
+
+### What the run must show, including what it must NOT
+
+Carried forward from History's census so it cannot quietly vanish: the pilot
+exercises **SCLS×3, FILI×2, LBNK×24, LGTV, RPAT/RPPN, SOND, layered ACT7/SCO7**
+— and **no RCAM anywhere**, so that donor branch stays honestly untested rather
+than being counted as covered by silence. **LGTV** (receiver-absent per §608)
+gets its first live encounter in R00.
+
+**Missing performers are the PASS condition, not a defect.** Ji1/Orca is not
+ported. Seeing a fully populated house would mean something other than the seam
+is supplying actors, and that would be the red flag.
+
+**Turns.** **USER** → warp in via the editor's warp menu, entry labelled
+"R_DL02 pilot (native rooms 3b)". **HOUSING (me)** → reading the seam lines
+after the run; the file deletes cleanly when the pilot closes.
