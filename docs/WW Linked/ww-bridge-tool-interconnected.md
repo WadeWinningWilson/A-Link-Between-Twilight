@@ -29637,3 +29637,73 @@ for a room, and what it resolved to here.
 Room 1 and the rest of the chunk coverage are still UNREACHED, not absent.
 **HOUSING** → read the env-light room path, then build the 10-hypothesis darkness
 probe.
+
+## §621 — Housing/Engine: R_DL02 has no floor. Stale room-lane state from a stage the player left. DIAGNOSIS ONLY — DN-1 surface, escalating before code.
+
+**The log line that answers it:**
+
+```
+line  924  [ExtNpcMount] №62 room-lane register 'EXT_BG1' → room 0     (in F_SP102)
+line 2209  [BootStage] WARP -> stage='R_DL02' room=0
+line 2302  [daBg] №257 skip room0 collision — room-lane mount owns BgW
+```
+
+R_DL02's room 0 **registered no collision at all.** Link spawns at
+`(1, 0, 626)` with the floor at `y=0`, so he falls out of the world on frame
+one. The camera follows him down, which is why the screen is black and why he is
+not on it. **The darkness and the missing Link are the same bug**, and it is not
+the env-light path I was about to build a probe for.
+
+### Mechanism
+
+`d_a_bg.cpp` №257 skips collision when
+`isWwHostStage(stage) && dExtNpcMount_isRoomLaneRoom(roomNo)`. Both are true in
+R_DL02 — but the second one is **stale**:
+
+```cpp
+std::unordered_map<int, std::string> s_roomLaneProcByRoom;   // keyed by ROOM NUMBER only
+```
+
+There is **no stage qualifier and no erase anywhere in the file.** `EXT_BG1`
+registered room 0 back in F_SP102; that registration is still live in R_DL02 an
+hour later. So a room-lane mount that owns room 0 *in a different stage* silently
+suppresses this stage's own floor.
+
+Exactly the shared-path scoping failure this lane has a standing rule about:
+global state, no lifecycle, and the consumer cannot tell a live claim from a
+dead one.
+
+**Why it read as a lighting bug:** the skip happens *after* the model parts are
+built, so the room still draws. "Room is there, everything dark, no Link" is what
+falling through an otherwise-fine room looks like.
+
+**Honest limit:** this explains both symptoms, but it does not prove there is no
+*separate* lighting problem underneath. That is unknowable until he can stand up.
+
+### Proposed fix — NOT WRITTEN. DN-1 guards this surface.
+
+DN-1 names `dBgW`/`daBg` registration and room-lane mount creation, and rule 2
+forbids self-approval. Addressing its mechanism point by point:
+
+1. *"Player room is derived from the BG under his feet."* The fix stamps nothing
+   new — it lets `daBg` take its NATIVE path and register R_DL02's own
+   `room.dzb` under `fopAcM_GetParam(this)`, the room's true number. No guessed
+   value, no keep-slot, no `GetRoomNo` off an identity mount.
+2. *"The engine keys entire subsystems by the player's room."* Correct room →
+   R_DL02's own event/door slots resolve. Today there is no BG at all, so the
+   player's room resolves off nothing.
+3. *"Invisible at the change site, loud everywhere else."* Acknowledged — which
+   is why this is a write-up and not a commit.
+
+**Fix at the source, not the consumer:** scope the room-lane registry by the
+stage the lane is FOR. **Not** by the stage current at registration time —
+`warp.cpp:400` deliberately calls `registerRoomLane` BEFORE `setNextStage` so the
+mount binds on room-ready in the new stage. The key must be the manifest's
+`hostStage`; `isRoomLaneRoom()` then answers "is there a live lane for this room
+IN THIS STAGE". A `clear()` on stage change would break the manifest warp rows.
+
+A guard in `daBg` instead would be a per-consumer patch over a lifecycle bug —
+the smell, not the fix.
+
+**Turns.** **USER** → explicit go on the DN-1 surface, per rule 2. **HOUSING** →
+holding.
