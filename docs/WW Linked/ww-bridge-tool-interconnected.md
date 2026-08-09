@@ -30035,3 +30035,70 @@ and the two are cleanly separated. If he still does not move, `start_mode` is no
 the only gate and the next read is `mStartEventID`/`checkModeFlg(0x400)`.
 
 **Turns.** **USER** → `run_rdl02.bat` → warp. **HOUSING** → standing by.
+
+## §627 — Housing: NATIVE ROOMS LOAD. What that actually bought, and what it unblocks.
+
+**Receipts, this run:**
+
+```
+§626 PLYR start_mode 27 -> 0 (WW word, outside TP's 0-14 vocabulary)  room=0
+§334 dzb attribute repack 'room.dzb': 12 standable, 0 slip (12 tris)
+```
+
+**The ledger — what is established, and by what:**
+
+| | |
+|---|---|
+| WW room bakes into a real TP stage; the receiver's OWN loader parses it | §619 — `BMDR` node + bmd3 payload |
+| `daBg` registers the WW dzb as the room's collision, natively | §623 |
+| **Room identity resolves from the DZB group tree — no stamping** | §623 — `R00_check1.m_room_id = 0` |
+| dzb attributes read in TP's vocabulary | §624 — 12 standable, 0 slip |
+| PLYR params translate (room bits, start mode) | №86 + §626 |
+| Room actors create and mount | KNOB00 796, OBJ_OTBLE 815 |
+| Chunk seam translating | SCLS, FILI |
+
+**Not established, stated as unknown rather than clean:** no WW room has been
+entered through a door; no second room has been baked; RCAM untested; env-light
+fidelity untested (the darkness lifted, which is not the same as correct); the
+§626 walk-in did not run even with the field translated, so `start_mode` was not
+the only gate — parked on user direction, not closed.
+
+### The architectural consequence, which is the real prize
+
+**The room-lane mount bridge is now optional.** Every mechanism this campaign has
+been fighting — identity mounts, room-id stamping, DN-1, №257, the room-lane
+registry that suppressed R_DL02's own floor — exists because WW rooms had to be
+**hosted inside TP stages**. A room that is its own stage needs none of it. It
+registers its own collision, under its own room number, read out of its own data.
+
+§623 asked whether DN-1 was native or a band-aid. This is the answer arriving
+from the other direction: the band-aid is becoming **removable**.
+
+### Branches
+
+**1. Door crossing, room 0 ↔ room 1. RECOMMENDED FIRST — the user's own
+pointer.** KNOB00 is in room 0 and creates. This is the smallest step that proves
+a native room is a place you can *be*, not just a place that loads, and it
+settles the arrival question honestly instead of by dev-warp workaround.
+
+**2. Bake a second room. Cheap, and the highest-information test available.**
+`adapt_room_arcs.py` is stage-generic but has only ever run on R_DL02. A second
+stage says whether §619–§626 are the COMPLETE translation set or whether R_DL02
+was hand-fitted one finding at a time. Do it while the set is fresh — this is the
+difference between "we ported a room" and "we have a room pipeline".
+
+**3. Chunk coverage.** B2b stands at UNREACHED, not absent: only SCLS and FILI
+have ever been exercised. Room 1 carries RPAT/RPPN paths that nothing has
+touched. Native rooms are the vehicle that finally exercises them.
+
+**4. Migrate a HOSTED room to native.** The strongest doctrinal move, and the one
+that retires bridge surface rather than adding to it. Wants 1 and 2 first.
+
+**5. Env-light fidelity.** WW Env0/Col0/PAL0/VRB0 under TP semantics — untested.
+
+**6. Performers.** Ji1 is `proc -1`. Content lane, unblocked by all of the above.
+
+**Recommendation: 1, then 2.** 1 closes arrival for real; 2 converts a
+one-off into a pipeline.
+
+**Turns.** **USER** → pick the branch. **HOUSING** → ready on either.
