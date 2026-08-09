@@ -29244,3 +29244,47 @@ is supplying actors, and that would be the red flag.
 **Turns.** **USER** → warp in via the editor's warp menu, entry labelled
 "R_DL02 pilot (native rooms 3b)". **HOUSING (me)** → reading the seam lines
 after the run; the file deletes cleanly when the pilot closes.
+
+### §616 addendum — the row was invalid; I checked the wrong things
+
+It never reached the menu. Two gates, both missed:
+
+```
+d_ext_npc_mount.cpp:2016   isBg -> valid = proc && arc && collision
+warp.cpp:367               also requires hasAnchor (plus hostPos, spawnRel)
+```
+
+My row had `proc`, `host_pos`, `spawn_rel` and deliberately no `arc`, no
+`collision`, no `anchor`. `parseManifestFile` returned false and it was dropped
+before the menu ever saw it.
+
+**What I verified and what I did not.** I checked the arcs existed on disk, that
+EXT_BG11 was free, that EXT_BG* are lookup keys rather than actor profiles, and
+that the spawn came from a known-good row. Every one of those was worth doing
+and none of them was the thing that mattered. **I never read the validity
+predicate for the row type I was writing** — the one check that decides whether
+the file does anything at all.
+
+The `№122` citation was real and misapplied: it governs `isCodeGeom`, a
+different branch. Finding a rule that permits what I wanted is not the same as
+finding the rule that applies.
+
+**The design intent was right and the vehicle cannot express it.** "No arc,
+because R_DL02 has real rooms and a payload would hide the loader under test"
+is correct reasoning about the test. But this menu warps to a BG MOUNT, not to
+a stage — a payload is structural, not optional. Option (c) is not the escape
+either: there is no launch-mode stage flag (`m_Do_main.cpp:561` lists
+log-level, help, console, dvd, backend, extseq-dump, mods, cvar — no stage), so
+(c) means BUILDING one, which makes it the expensive option rather than the
+cheap one History listed.
+
+**So the payload is accepted, and the pilot's verdict moves accordingly.**
+Warping loads R_DL02 natively AND mounts Ojhous2 — the same house as room 0, so
+it will look coherent even if the seam does nothing. **The visuals cannot be the
+verdict; the log is.** `[WwRoomSeam]` lines naming R_DL02 rooms 0/1, or the seam
+did not run however right the screen looks. History's pass criteria were always
+log lines, so nothing is lost — but it would have been easy to read a correct-
+looking house as a pass, and that is now written down instead of assumed.
+
+**Turns.** **USER** → the row is now valid against both gates (checked, not
+assumed); warp in and send the log rather than a screenshot.
