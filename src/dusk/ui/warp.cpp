@@ -3,6 +3,7 @@
 #include "editor.hpp"
 #include "pane.hpp"
 
+#include "dusk/boot_stage.h"
 #include "dusk/debug_warp.h"
 #include "dusk/map_loader_definitions.h"
 #include "fmt/format.h"
@@ -357,6 +358,41 @@ WarpWindow::WarpWindow() {
 
         leftPane.add_section("Action");
 #if TARGET_PC
+        // ====================================================================
+        // --stage dev destination. Present only when the flag was given, so it
+        // costs nothing in a normal run. The label is the RUNTIME string: no
+        // stage id is compiled in here, same rule as the №99 R2 rows below.
+        // ====================================================================
+        if (dBootStage_label() != nullptr) {
+            const std::string bootLabel = dBootStage_label();
+            leftPane.add_section("Dev stage (--stage)");
+            leftPane.register_control(
+                leftPane
+                    .add_button({
+                        .text = bootLabel,
+                    })
+                    .on_pressed([] {
+                        mDoAud_seStartMenu(kSoundClick);
+                        // A dev bake has no story state; suppress the same way
+                        // the manifest rows do so arrival does not run events.
+                        markDebugWarpStorySuppress();
+                        dExtNpcMount_cancelTransports();
+                        dExtNpcMount_endDoorDemoLock();
+                        dBootStage_warp();
+                    }),
+                rightPane, [bootLabel](Pane& pane) {
+                    pane.clear();
+                    pane.add_text(fmt::format(
+                        "{}\n\nDestination armed by --stage on the command line. "
+                        "It is a plain native stage change (dComIfGp_setNextStage), "
+                        "not a BG mount — nothing is mounted into the current "
+                        "stage and no payload is required.\n\n"
+                        "Use it for a stage that has no route in yet: a fresh bake "
+                        "has no SCLS record, no door and no warp row pointing at it.",
+                        bootLabel));
+                });
+        }
+
         // №99 R2: warp rows from mod manifests (warp_label=). Labels stay data-side —
         // never compile WW-facing strings into map_loader_definitions.h.
         {

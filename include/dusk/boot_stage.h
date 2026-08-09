@@ -30,6 +30,13 @@
 //       to pollute. Honest scaffolding beside the game rather than a false
 //       record inside it.
 //
+// WHAT (a) ACTUALLY COST US, recorded because the first diagnosis was wrong:
+// the crash (a) produced was blamed on the forced BG payload's stage textures.
+// It was not. With the payload removed the same crash reproduced, and the real
+// cause was the bake's RARC node type ('BDL ' has no branch in dRes_info_c, so
+// the room model was never parsed). (a) was still the wrong shape, but it was
+// not the thing that crashed.
+//
 // COVENANT: adds no donor bytes and no WW identity literal. The stage id
 // arrives as a RUNTIME ARGUMENT and is never compiled in, which is History A1's
 // "no WW place-names in the exe" satisfied by construction rather than by
@@ -40,20 +47,37 @@
 //         dusklight.exe --stage R_DL02,1        (room 1)
 //         dusklight.exe --stage R_DL02,0,2      (room 0, layer 2)
 //
-// ONE-SHOT. It fires once, after the play scene is running, then disarms. It
-// does not re-fire on later stage changes, so it cannot trap you in a loop.
+// ARMS A DESTINATION; IT DOES NOT TRAVEL (user ruling, 2026-08-09). The flag
+// adds a button to the warp window's dev section and nothing else. The first
+// revision fired by itself ~1s into the play scene, which is worse than it
+// sounds: it moves during whatever the save was mid-way through -- the first
+// run landed on top of an entry demo -- so a fault in the destination is
+// indistinguishable from a fault caused by interrupting the origin. Warping on
+// purpose, from a settled scene, is both what was asked for and the only way
+// the destination is the only variable.
+//
+// The stage id is still never a compiled literal: the button's LABEL is the
+// runtime string, the same rule the No99 R2 manifest warp rows follow.
 // ============================================================================
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Arms the boot warp from the parsed command line. Safe to call with NULL or
+// Arms the destination from the parsed command line. Safe to call with NULL or
 // an empty string, which arms nothing.
 void dBootStage_arm(const char* spec);
 
-// Per-frame. No-op unless armed AND the play scene is ready. Fires once.
-void dBootStage_poll(void);
+// The armed stage id, or NULL if the flag was not given. Callers must not
+// retain the pointer across a call to dBootStage_arm.
+const char* dBootStage_target(void);
+
+// Human-readable "NAME room N layer M" for the armed destination, or NULL.
+const char* dBootStage_label(void);
+
+// Travel now. Returns false (and logs why) if nothing is armed, a stage change
+// is already queued, or the destination is already the current stage.
+bool dBootStage_warp(void);
 
 #ifdef __cplusplus
 }

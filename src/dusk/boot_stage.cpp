@@ -26,11 +26,10 @@
 namespace {
 
 bool s_armed = false;
-bool s_fired = false;
 char s_stage[16] = {};
+char s_label[64] = {};
 int s_room = 0;
 int s_layer = -1;
-int s_settle = 0;
 
 }  // namespace
 
@@ -56,50 +55,55 @@ void dBootStage_arm(const char* spec) {
         return;
     }
     std::snprintf(s_stage, sizeof(s_stage), "%s", buf);
+    std::snprintf(s_label, sizeof(s_label), "%s  room %d  layer %d", s_stage,
+                  s_room, s_layer);
     s_armed = true;
     DuskLog.info("[BootStage] armed: stage='{}' room={} layer={} "
-                 "(fires once, after the play scene is up)",
+                 "(warp window → Dev stage; nothing happens until you press it)",
                  s_stage, s_room, s_layer);
 }
 
-void dBootStage_poll(void) {
-    if (!s_armed || s_fired) {
-        return;
-    }
-    // Let the first play scene settle before requesting a change. Firing during
-    // boot would race the very stage load we are trying to replace, and a
-    // half-initialised change reads as a crash in the new stage rather than as
-    // a mistimed request here.
-    if (++s_settle < 60) {  // ~1s at 60fps
-        return;
+const char* dBootStage_target(void) {
+    return s_armed ? s_stage : NULL;
+}
+
+const char* dBootStage_label(void) {
+    return s_armed ? s_label : NULL;
+}
+
+bool dBootStage_warp(void) {
+    if (!s_armed) {
+        return false;
     }
     if (dComIfGp_isEnableNextStage()) {
-        return;  // a change is already queued; do not stack another
+        // A change is already queued. Stacking a second one is how you get a
+        // fault in a stage you never asked for.
+        DuskLog.warn("[BootStage] refused: a stage change is already queued");
+        return false;
     }
-
     const char* cur = dComIfGp_getStartStageName();
     if (cur != NULL && std::strcmp(cur, s_stage) == 0) {
-        // Already there — nothing to do, and saying so is better than silently
-        // disarming, because "the flag did nothing" and "the flag worked" look
-        // identical from the outside otherwise.
+        // Saying so beats silently doing nothing: "the button did nothing" and
+        // "the button worked" are otherwise identical from the outside.
         DuskLog.info("[BootStage] already in '{}' — nothing to do", s_stage);
-        s_fired = true;
-        return;
+        return false;
     }
 
-    // Same call the warp menu uses (warp.cpp:413), which is the proven path.
-    // Point 0: authored PLYR spawn, never -1 (№90).
+    // Same call the warp menu's own rows use (warp.cpp:413), which is the proven
+    // path. Point 0: authored PLYR spawn, never -1 (№90).
     mDoGph_gInf_c::offFade();
     dComIfGp_setNextStage(s_stage, 0, static_cast<s8>(s_room),
                           static_cast<s8>(s_layer));
-    DuskLog.info("[BootStage] FIRED -> stage='{}' room={} layer={}", s_stage,
+    DuskLog.info("[BootStage] WARP -> stage='{}' room={} layer={}", s_stage,
                  s_room, s_layer);
-    s_fired = true;
+    return true;
 }
 
 #else
 
 void dBootStage_arm(const char*) {}
-void dBootStage_poll(void) {}
+const char* dBootStage_target(void) { return NULL; }
+const char* dBootStage_label(void) { return NULL; }
+bool dBootStage_warp(void) { return false; }
 
 #endif  // TARGET_PC

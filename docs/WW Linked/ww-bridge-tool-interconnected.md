@@ -29503,3 +29503,137 @@ only); caches wiped. **BRIDGE** → `adapt_bdl_arcs.py` is unmodified, but its
 docstring's "crashes on WW models" premise is the one DO-NOT already records as
 disproven, and room arcs are now a second caller — worth folding into the
 contract item.
+
+## §620 — Housing/Engine: `--stage` arms a destination, it no longer travels. And the node-type fix held: the room drew.
+
+**Result of §619:** no crash, and the user reports the room was there. Geometry
+loads and draws. **Everything is dark** — new, unexplained, tracked below.
+
+### `--stage` is now a button, not an event (user ruling)
+
+> *"Next time don't make the game auto-load it, allow me to warp there."*
+
+Correct, and for a reason worth writing down beyond the inconvenience. The
+auto-fire landed ~1s into the play scene — which the first log shows was **on top
+of the save's entry demo** (`§347a ARM next='R_DL02' evRun=1 runEvt='demo38_01'
+demoMode=1`, then one `ChangeReq REFUSED`). Moving during whatever the save was
+mid-way through makes a fault in the DESTINATION indistinguishable from a fault
+caused by interrupting the ORIGIN. Warping on purpose, from a settled scene,
+keeps the destination the only variable. The one-shot settle counter I defended
+in §618 was treating a symptom.
+
+```
+--stage NAME[,room[,layer]]   ->  Warp tab  ->  "Dev stage (--stage)"  ->  press
+```
+
+Plain `dComIfGp_setNextStage`, the same call the menu's own rows use — not a BG
+mount, so nothing is mounted into the current stage and no payload is required.
+The covenant holds unchanged and now visibly: **the button's label IS the runtime
+string**, so no stage id is compiled in, the same rule the №99 R2 manifest rows
+already follow. The per-frame poll in `d_s_play.cpp` is gone entirely.
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+### The darkness: what I have ruled OUT, and why I am not guessing further
+
+The obvious mechanism is already **refuted**. Every material in the bake is
+`enable=0, litMask=0x00` where TP's room models are `enable=1, litMask=0xff` —
+a real and total difference. But `enable=0` means the channel bypasses lighting
+and emits the material colour source directly, so that mechanism predicts a
+**flat FULL-BRIGHT room, not a black one.** Wrong sign. It is not the answer, and
+`loaderBasicBmd`'s `light_mask_type` AND-cascade cannot be either: masking a mask
+that is already zero changes nothing.
+
+Everything else measured is a match, not a difference:
+
+```
+                    R_DL02 bake            TP R_SP01 (village interior)
+matColorSrc         1 (vertex)             1 (vertex)
+vertex colour array none                   none
+matColor            255,255,255 / 204x3    255,255,255 / 204x3 / 102x3
+stage.dzs env       Env0:6 Col0:9 PAL0:34 VRB0:33   (present, not missing)
+```
+
+So the env tables exist and the material setup is ordinary. That points at the
+**content or indexing** of Env0/Col0/PAL0/VRB0 — WW-authored bytes read under
+receiver semantics — or at the FILI the seam already reports translating
+(`donorParam=0x1FEC7F80 -> receiver-neutral copy`), which is exactly the kind of
+"neutral" that can mean "bank 0" and mean black.
+
+**Next is one probe testing ~10 hypotheses, not another static guess.** Static
+reading has now produced a confident wrong answer twice this session (§617's
+payload, and `'BMDR'` from idiom that the 305-arc census corrected). This one
+needs the env-light path read properly first — what actually indexes Pale/Col0
+for a room, and what it resolved to here.
+
+**Turns.** **USER** → `run_rdl02.bat`, load a save, then Warp tab → *Dev stage*.
+Room 1 and the rest of the chunk coverage are still UNREACHED, not absent.
+**HOUSING** → read the env-light room path, then build the 10-hypothesis darkness
+probe.
+
+## §620 — Housing/Engine: `--stage` arms a destination, it no longer travels. And the node-type fix held: the room drew.
+
+**Result of §619:** no crash, and the user reports the room was there. Geometry
+loads and draws. **Everything is dark** — new, unexplained, tracked below.
+
+### `--stage` is now a button, not an event (user ruling)
+
+> *"Next time don't make the game auto-load it, allow me to warp there."*
+
+Correct, and for a reason worth writing down beyond the inconvenience. The
+auto-fire landed ~1s into the play scene — which the first log shows was **on top
+of the save's entry demo** (`§347a ARM next='R_DL02' evRun=1 runEvt='demo38_01'
+demoMode=1`, then one `ChangeReq REFUSED`). Moving during whatever the save was
+mid-way through makes a fault in the DESTINATION indistinguishable from a fault
+caused by interrupting the ORIGIN. Warping on purpose, from a settled scene,
+keeps the destination the only variable. The one-shot settle counter I defended
+in §618 was treating a symptom.
+
+```
+--stage NAME[,room[,layer]]   ->  Warp tab  ->  "Dev stage (--stage)"  ->  press
+```
+
+Plain `dComIfGp_setNextStage`, the same call the menu's own rows use — not a BG
+mount, so nothing is mounted into the current stage and no payload is required.
+The covenant holds unchanged and now visibly: **the button's label IS the runtime
+string**, so no stage id is compiled in, the same rule the №99 R2 manifest rows
+already follow. The per-frame poll in `d_s_play.cpp` is gone entirely.
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+### The darkness: what I have ruled OUT, and why I am not guessing further
+
+The obvious mechanism is already **refuted**. Every material in the bake is
+`enable=0, litMask=0x00` where TP's room models are `enable=1, litMask=0xff` —
+a real and total difference. But `enable=0` means the channel bypasses lighting
+and emits the material colour source directly, so that mechanism predicts a
+**flat FULL-BRIGHT room, not a black one.** Wrong sign. It is not the answer, and
+`loaderBasicBmd`'s `light_mask_type` AND-cascade cannot be either: masking a mask
+that is already zero changes nothing.
+
+Everything else measured is a match, not a difference:
+
+```
+                    R_DL02 bake            TP R_SP01 (village interior)
+matColorSrc         1 (vertex)             1 (vertex)
+vertex colour array none                   none
+matColor            255,255,255 / 204x3    255,255,255 / 204x3 / 102x3
+stage.dzs env       Env0:6 Col0:9 PAL0:34 VRB0:33   (present, not missing)
+```
+
+So the env tables exist and the material setup is ordinary. That points at the
+**content or indexing** of Env0/Col0/PAL0/VRB0 — WW-authored bytes read under
+receiver semantics — or at the FILI the seam already reports translating
+(`donorParam=0x1FEC7F80 -> receiver-neutral copy`), which is exactly the kind of
+"neutral" that can mean "bank 0" and mean black.
+
+**Next is one probe testing ~10 hypotheses, not another static guess.** Static
+reading has now produced a confident wrong answer twice this session (§617's
+payload, and `'BMDR'` from idiom that the 305-arc census corrected). This one
+needs the env-light path read properly first — what actually indexes Pale/Col0
+for a room, and what it resolved to here.
+
+**Turns.** **USER** → `run_rdl02.bat`, load a save, then Warp tab → *Dev stage*.
+Room 1 and the rest of the chunk coverage are still UNREACHED, not absent.
+**HOUSING** → read the env-light room path, then build the 10-hypothesis darkness
+probe.
