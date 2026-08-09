@@ -29707,3 +29707,70 @@ the smell, not the fix.
 
 **Turns.** **USER** → explicit go on the DN-1 surface, per rule 2. **HOUSING** →
 holding.
+
+## §622 — Housing/Engine: `Room: -1`. §621's mechanism confirmed, §621's predicted symptom was wrong, and the level editor is what settled it.
+
+The in-game editor's player panel printed the value no log line carries:
+
+```
+Link  Position: 1.0000, 0.0000, 626.0000     Velocity: 0,0,0   SpeedF: 0
+      Angle: -32768        Room: -1          Entry: 0
+```
+
+**Chain, closed:**
+
+```
+stale room-lane claim (EXT_BG1 → room 0, registered in F_SP102, never erased)
+  → daBg №257 skips R_DL02 room 0 collision                    [log line 2302]
+  → no ground poly under the player
+  → d_a_alink.cpp:5609  dComIfG_Bgsp().GetRoomId(mLinkAcch.m_gnd)
+  → d_bg_s.cpp:1062     if (!polyinfo.ChkSetInfo()) return -1;
+  → Room: -1                                                   [editor readout]
+```
+
+`Room: -1` is the literal signature of *no ground was ever set*. Link's room in
+TP is read off the poly under his feet — which is DN-1's own mechanism point 1,
+arriving here in the **unresolved** direction rather than the wrong-value one.
+
+**§621 stands corrected on one point and confirmed on the other.** The mechanism
+(stale cross-stage room-lane state suppressing this stage's floor) is confirmed
+by an instrument that does not share the log's assumptions. The **consequence I
+predicted — "he falls out of the world" — was wrong**, as the user's constant-XYZ
+readout showed before this run. He is at the authored spawn `(1, 0, 626)` with
+velocity exactly zero on every axis. Why gravity never engages is *not*
+explained; it does not need to be for the fix, and it is recorded as open rather
+than smoothed over.
+
+### The spawn was never the problem
+
+`Position` matches the authored `PLYR` byte-for-byte, `Angle: -32768` matches its
+`angleY`, `Entry: 0` matches the requested point (the receiver matches spawns on
+the **low byte of `angle.z`**; ours is `0xFF00` → 0). The static read of the
+spawn was right.
+
+### Crediting the instrument, and bounding it
+
+The editor produced the discriminating value after three inferences failed. On
+the caution that it may not know this room type: **`Room: -1` comes from the
+player actor, not from the editor's DZR parse**, so it is trustworthy regardless.
+Its placement counts (`30 PLACED · 2 JOINED · 27 UNSPAWNED · 3 LIVE-IN-ROOM`) DO
+come from parsing a WW room and stay unverified — and note `Ji1 · proc -1`,
+`AttTag · proc -1`, i.e. unported actors with no profile, so a large "unspawned"
+count is partly correct-by-design rather than a symptom. Not evidence either way
+yet.
+
+**Darkness:** most likely downstream of `Room: -1` — room 0 never becomes the
+player's room, so room-keyed gating leaves it unlit and undrawn. **Stated as
+likely, not proven.** It is testable for free: fix the floor and see.
+
+### Still blocked on the same go
+
+The fix is unchanged from §621 — scope the room-lane registry by the manifest's
+`hostStage` so a claim made for one stage cannot suppress another's floor, keyed
+on the stage the lane is FOR (warp.cpp registers before `setNextStage` on
+purpose). DN-1 guards the surface and rule 2 forbids self-approval.
+
+The ten-hypothesis probe written for this was **deleted unused** — the editor
+answered it first.
+
+**Turns.** **USER** → the DN-1 go. **HOUSING** → holding.
