@@ -29774,3 +29774,76 @@ The ten-hypothesis probe written for this was **deleted unused** — the editor
 answered it first.
 
 **Turns.** **USER** → the DN-1 go. **HOUSING** → holding.
+
+## §623 — Housing/Engine: DN-1 is a band-aid, and the evidence is one grep. Going native.
+
+> *"Is DN-1 true to native path, or a band-aid for a missing native system? If it
+> acts to serve as the only means to port the room over, then yes."*
+
+**It is a band-aid — a guardrail on a bridge — and the receiver says so itself.**
+
+```
+SetRoomId(...)   appears ONLY in d_ext_npc_mount.cpp        (the mount bridge)
+daBg_c           never calls it. Set(dzb, GLOBAL_e, NULL) + setBgW(roomNo, ...)
+```
+
+Native `daBg` **never stamps a room id.** It leaves the BgW at `0xFF`, so
+`dBgS::GetRoomId` falls through to `GetGrpRoomIndex` — which reads the room out
+of the **DZB's own group tree** (`d_bg_w.cpp:883`: triangle → group → parent →
+grandparent → `m_room_id`). Room identity is **carried by the data and resolved
+at query time**. Nothing asserts it.
+
+The bridge has to assert one because hosted WW geometry sits under a foreign
+room and has no group tree the receiver can trust. DN-1 exists to stop that
+assertion being wrong. Real, load-bearing — **for the bridge.** It is not a
+description of how the receiver works, and it is not the native path.
+
+### And it is no longer the only means — measured, not argued
+
+R_DL02's own `room.dzb`, walked exactly as `GetGrpRoomIndex` walks it:
+
+```
+floor_tuti1 → A00 → R00_check1 (m_room_id = 0)     -> room 0
+wall1/wall2 → wall_wood2 → R00_check1              -> room 0
+door, kirikae, hashira4, bed1                      -> room 0
+7 of 12 groups resolve room 0; the 5 that return 0xFF are the upper
+structural nodes, which carry no geometry to stand on.
+```
+
+**The WW DZB already answers the room question in TP's own mechanism.** The
+donor authored `R00_check1.m_room_id = 0`; the receiver reads it. No stamping, no
+resolution table, no bridge. So the user's own test is met in the negative: the
+bridge is *not* the only means to port this room, and therefore its rules should
+not be reaching into this path.
+
+Note also: TP-era rooms ship `room.kcl` (R_SP01 has no dzb at all). DZB is the
+WW-era format, and the receiver's DZB group-room path is fully implemented — it
+simply had nothing to run on until a room arrived as a real stage.
+
+### The change: confine a bridge rule, do not except DN-1
+
+`dExtNpcMount_isRoomLaneRoom()` now answers **per stage**. A room-lane claim
+belongs to the stage that HOSTS the lane — the manifest's `hostStage` — so
+EXT_BG1's claim on room 0 no longer suppresses R_DL02's floor.
+
+Not an erase-on-stage-change: `warp.cpp` registers the lane BEFORE
+`setNextStage` deliberately, so the mount can bind on room-ready in the stage
+being entered. Scoping by the stage the lane is FOR preserves that; clearing
+would break it. A manifest with no `hostStage` answers for every stage exactly as
+before — narrowing that is not this change's business.
+
+**This is a removal, not an addition.** №257 is a bridge rule ("room-lane mounts
+own collision") that was leaking into a path with no bridge. Confining it lets
+`daBg` do the native thing: register R_DL02's own floor under R_DL02's own room
+number, and let the DZB answer for itself.
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+**Prediction, stated before the run so it can be wrong:** `Room:` becomes `0`.
+If the darkness was downstream of `Room: -1`, it lifts with it; if the room is
+still dark with `Room: 0`, the lighting question is real and separate — and that
+is the honest test §622 promised, at no extra cost.
+
+**Turns.** **USER** → `run_rdl02.bat` → warp → check the editor's `Room:` field
+first, then the screen. **HOUSING** → standing by; if `Room: 0` and still dark,
+the env-light path is next and it will be a probe, not a guess.

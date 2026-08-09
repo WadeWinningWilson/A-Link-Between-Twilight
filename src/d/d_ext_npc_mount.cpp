@@ -5148,8 +5148,37 @@ int dExtNpcMount_roomLaneHostRoom(const char* procName) {
     return it != s_roomLaneRooms.end() ? it->second : -1;
 }
 
+// ============================================================================
+// §622: a room-lane claim belongs to the stage that HOSTS the lane, not to the
+// process. The map is keyed by room number alone and is never erased, so
+// EXT_BG1's claim on room 0 — registered while the player was in F_SP102 —
+// stayed live for every stage entered afterwards. In R_DL02 that suppressed the
+// stage's OWN floor via the №257 skip in daBg, and the player's room resolved to
+// -1 because there was no ground poly to read it from.
+//
+// The answer is not to erase on stage change: warp.cpp registers the lane
+// BEFORE setNextStage on purpose, so the mount can bind on room-ready in the
+// stage being entered. The claim is therefore scoped to the stage it is FOR —
+// the manifest's hostStage — and a claim only answers for the stage it names.
+//
+// A lane whose manifest carries no hostStage answers for every stage, as it did
+// before: that is the pre-existing behaviour and narrowing it is not this
+// change's business.
+// ============================================================================
 bool dExtNpcMount_isRoomLaneRoom(int roomNo) {
-    return roomNo >= 0 && roomNo < 0x40 && s_roomLaneProcByRoom.count(roomNo) != 0;
+    if (roomNo < 0 || roomNo >= 0x40) {
+        return false;
+    }
+    auto it = s_roomLaneProcByRoom.find(roomNo);
+    if (it == s_roomLaneProcByRoom.end()) {
+        return false;
+    }
+    dExtNpcManifest man{};
+    if (!dExtNpcMount_lookup(it->second.c_str(), &man) || man.hostStage[0] == '\0') {
+        return true;  // no stage named — unchanged behaviour
+    }
+    const char* cur = dComIfGp_getStartStageName();
+    return cur != NULL && std::strcmp(cur, man.hostStage) == 0;
 }
 
 bool dExtNpcMount_isRoomLaneProtected(int roomNo) {
