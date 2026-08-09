@@ -29899,3 +29899,77 @@ Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wipe
 again, that separates the two questions for real this time.
 
 **Turns.** **USER** → `run_rdl02.bat` → warp. **HOUSING** → standing by.
+
+## §625 — Housing: the spawn is a DOOR-ARRIVAL point. User diagnosis confirmed by raycast; `--stage` has been throwing the arrival away.
+
+> *"the player spawn is correct… that is where Link crosses into the room via the
+> door entrance animation… instead of walking forward to complete the anim, he
+> gets placed below the door and falls through."*
+
+**Confirmed by raycasting room 0's own collision:**
+
+```
+(1, *, 626)   the PLYR spawn      y=0 : grp 5 'door'          <- the DOOR's collision
+(1, *, 400)   200u inward         y=0 : grp 10 'floor_tuti1'
+(0, *, 0)     room centre         y=0 : grp 10 'floor_tuti1'
+```
+
+`floor_tuti1` **does not reach z=626.** The only surface at the spawn belongs to
+the `door` group. The authored PLYR is an **animation start, not a standing
+spot** — the entry sequence is what carries Link from the threshold onto the
+floor. Separate from §624: the sink repack is still needed and will never put
+floor under z=626.
+
+### Why our warp loses it — the arrival is an argument list we discard
+
+```
+native door arrival:  dStage_changeScene(exitId, speed, mode, room, angle, layer)
+                        -> reads an SCLS record
+                        -> dComIfGp_setNextStage(stage, start, room, layer,
+                                                 SPEED, MODE, 1, WIPE, ANGLE, 1, wipeTime)
+
+our --stage:          dComIfGp_setNextStage(stage, 0, room, layer)          <- 4-arg form
+```
+
+**`speed`, `mode`, `angle` and `wipe` ARE the "how you arrive" information**, and
+the entry sequence is driven from them. The 4-arg overload is the shortcut, and
+`--stage` has been taking it since §618. The mode word is a small enum — 0 plain,
+5 force-back/void-out, 6/7 peep (`d_a_alink.cpp:14886`, `:14619`) — plus high
+bits for boots/wolf/damage.
+
+Same shape as §618 and §623 yet again: **use the receiver's real mechanism
+instead of the shortcut that looks equivalent.**
+
+### Options
+
+**A — arrive with a door-style mode. RECOMMENDED, and it is the user's idea.**
+Call the full `setNextStage` with door-style `speed`/`mode`/`angle` so the
+receiver runs its own entry sequence off the threshold. Uses the door, uses the
+animation, invents no spawn point. **Honest catch:** we cannot literally call
+`dStage_changeScene` — it indexes the DEPARTURE room's SCLS, and no SCLS record
+anywhere points at R_DL02. Fabricating one is what §618 refused. So the call is
+the 11-arg `setNextStage` directly, which is where the door path ends anyway.
+**Open:** which `mode` a door arrival passes. Bounded read of the door actor, not
+a guess.
+
+**B — let the KNOB00 door drive it.** The door actor is in room 0's ACTR list and
+creates (proc 796). If the entry sequence is driven by the door on arrival rather
+than by the mode word, binding the arrival to it is more native still — and more
+plumbing. A and B are the same question asked at two layers; A's read answers
+which.
+
+**C — land on a floor point. REJECTED, and the user rejected it first.** Worth
+recording WHY it is tempting: it would work instantly, forever, and would
+permanently hide that arrivals do not run their entry sequence.
+
+### Scope: this is not an R_DL02 fix
+
+**Every WW room's PLYR is a door-arrival point.** Whatever is built here is the
+arrival mechanism for the whole port, not a fix for one house — which is the
+argument for doing A/B properly rather than cheaply.
+
+**Testable in sequence, no extra scaffolding:** if A lands him and he still
+sinks, §624 failed; if he stands, both worked.
+
+**Turns.** **USER** → direction on A vs B (or run §624 first to keep the two
+separable). **HOUSING** → holding; the `mode` read is ready to run on a word.
