@@ -29847,3 +29847,55 @@ is the honest test §622 promised, at no extra cost.
 **Turns.** **USER** → `run_rdl02.bat` → warp → check the editor's `Room:` field
 first, then the screen. **HOUSING** → standing by; if `Room: 0` and still dark,
 the env-light path is next and it will be a probe, not a guess.
+
+## §624 — Housing/Engine: floor registered, floor read as SINK. §334 needed a second consumer, not a second mechanism.
+
+**§623 landed.** `№257 skip` is gone from the log, the room loads *"perfectly"*,
+and the darkness lifted with `Room: -1` — the prediction held. Link now falls,
+which is progress: he was frozen before because there was no ground at all.
+
+**The log names the mechanism exactly:**
+
+```
+[ExtWw] §334c ground under Link: att0=0 att1=1 ground=0 owner=proc:0x2dc pos=(1,-37,626)
+                                        ^^^^^^                proc 732 = fpcNm_BG_e
+```
+
+Ground **found**, owned by the room BG — daBg is registering. And read as
+`att1=1`, a TP **SINK** class. The floor is there and it swallows him.
+
+§332 established this byte-exactly: WW packs its material attCode in `PolyInf1`
+bits **16-20**; TP reads the same word as `att0` 12-15, `att1` 16-18,
+`groundCode` 19-23. WW attCode 1 lands squarely in TP's sink field.
+
+**§334 already solves it.** It was only ever wired to the mount's OBJECT dzbs —
+`otble.dzb`, `knob00:door.dzb` — because until R_DL02 no WW room ever reached
+`daBg` as a stage's own room. This is that second consumer.
+
+### Two field traps checked rather than assumed
+
+- **`m_info1` is at offset 0x4, not 0x0.** `cBgD_Ti_t` = `{info0, info1, info2,
+  passFlag}`. Anything editing "word 0" of a ti entry is editing `m_info0`.
+- **That does NOT make §619's №21 clear wrong.** `m_info0` is a different field
+  with different tenants: `GetExitId` = bits 0-5, `GetPolyColor` = bits 6-13, and
+  №21's through cluster above them. Two adjacent problems in two adjacent words;
+  the §619 edit addressed the other one. Worth stating plainly because "I already
+  fixed the dzb" was available as a false reassurance here.
+
+### At the consumption boundary, and why not in the bake
+
+§333 ruled it: pure per-code translation where the dzb is consumed, **staged arcs
+stay donor-byte-verbatim**. Translating in `adapt_room_arcs.py` would have been
+the shorter path and it is the wrong one — it mutates the exact bytes the census,
+the extractor and the conversion DB read. That is the argument §618 used to
+refuse a fabricated SCLS record, and it does not stop applying because this time
+the shortcut is mine. Repack is idempotent by construction (§334f), so reload
+re-entry is safe. WW-scoped: mainline TP dzbs are already in TP's vocabulary.
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+**Prediction, again before the run:** the `§334c ground under Link` line reports
+`att0=0 att1=0 ground=0` and Link stands. If he stands but the room is dark
+again, that separates the two questions for real this time.
+
+**Turns.** **USER** → `run_rdl02.bat` → warp. **HOUSING** → standing by.

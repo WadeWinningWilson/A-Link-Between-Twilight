@@ -230,6 +230,35 @@ int daBg_c::createHeap() {
 #endif
 
     cBgD_t* dzb = (cBgD_t*)dComIfG_getStageRes(arcName, "room.dzb");
+#if TARGET_PC
+    // ========================================================================
+    // §624: ROOM dzbs need the §334 attribute repack too.
+    //
+    // §332 established the mismatch byte-exactly: WW packs its material attCode
+    // in PolyInf1 bits 16-20, and TP reads that same word as att0 (12-15),
+    // att1 (16-18) and groundCode (19-23). Untranslated, WW attCode 1 reads as
+    // TP att1=1 — a SINK class — so the floor swallows the player. That is
+    // exactly what R_DL02 produced once the floor was finally registered:
+    //   [ExtWw] §334c ground under Link: att0=0 att1=1 ground=0 pos=(1,-37,626)
+    // Ground FOUND, and read as sink.
+    //
+    // §334 already solves this; it was only ever wired to the mount's object
+    // dzbs, because until R_DL02 no WW room reached daBg as a stage's own room.
+    // This is that second consumer, not a second mechanism.
+    //
+    // At the CONSUMPTION boundary, per the §333 ruling — staged arcs stay
+    // donor-byte-verbatim. Translating in the bake instead would mutate the
+    // very bytes the census, the extractor and the conversion DB read, which is
+    // the argument §618 used to refuse a fabricated SCLS record. The repack is
+    // idempotent by construction (§334f), so re-entry after a reload is safe.
+    //
+    // WW-SCOPED: mainline TP dzbs are already in TP's vocabulary and must not
+    // be touched.
+    // ========================================================================
+    if (dzb != NULL && dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
+        dExtWw_repackDzbAttributes(dzb, "room.dzb");
+    }
+#endif
     if (dzb != NULL) {
         mpKCol = NULL;
         mpBgW = JKR_NEW dBgW();
