@@ -29418,3 +29418,88 @@ Gates: build EXIT=0 · banner lint 81/81 0 DISAGREES 0 UNKNOWN · manifest exit 
 `[BootStage] FIRED`, followed by `[WwRoomSeam]` lines for rooms 0/1. Send the
 log, not a screenshot — the screen cannot be the verdict here either, because a
 dedicated bake with no performers is SUPPOSED to look empty.
+
+## §619 — Housing/Engine: the R_DL02 crash, identified bit-for-bit. Two of my earlier statements were wrong, and the fix is in the bake, not the engine.
+
+**Identification, not inference.** `mDoExt_setupStageTexture` faulted at
+`0x10004001208`. `model.bdl`'s own bytes at `+0xC8`, read little-endian, are
+`0x0000010004001200`; the faulting instruction is `cmpw 0x8(%rsi)`. `+8` is the
+reported fault address, bit for bit. `rsi` was `[modelData + 0xC8]` =
+`mTexture` — so `daBg_c::createHeap` was handed **the raw model.bdl file
+buffer**, and read file bytes as a pointer. No probe build was needed.
+
+**Root cause: `dRes_info_c::setRes` dispatches its fixup on the RARC DIRECTORY
+NODE TYPE, a 4CC compared for exact equality — not on the file extension.** The
+bake inherited Wind Waker's folder names, so the models sat under `'BDL '`. There
+is no `'BDL '` branch. Every `else if` missed, nothing was parsed, and the raw
+buffer went straight to the room BG actor.
+
+This is the session's recurring failure class in a new place: **the asset looked
+right and the 4CC the receiver actually reads was wrong.**
+
+### Two corrections to what I wrote earlier
+
+1. **§617 blamed the warp-menu payload** for the identical
+   `mDoExt_setupStageTexture` crash — `imageOffset==0` textures resolving through
+   a stage that does not carry them. That was **wrong**. The payload is gone and
+   the same crash reproduced, and the bake in fact has **zero** `imageOffset==0`
+   textures in any model. The payload was never the cause; it was a coincident
+   suspect I stopped investigating once it looked sufficient.
+2. I was about to write `'BMDR'` from TP idiom. A census of the receiver's own
+   shipped stages says `'BMDR'` 230/305 and `'BMDE'` 27/305 — and the arc I
+   opened first (`D_MN01`) happens to be a `BMDE`. Reading one arc would have
+   produced a confident wrong rule; **counting 305 produced the real one.**
+
+### Measured contract (receiver's own stages, 305 room arcs + 79 STG_00)
+
+```
+room models  'BMDR' 230/305   'BMDE' 27/305      collision  'KCL ' 305  'DZB '
+placement    'DZR ' 305/305   'PLC ' 305/305     stage      'DZS ' 79   'DAT ' 79
+```
+Every shipped node type is UPPERCASE. The bake arrived with `'BDL '`, `'dat '`,
+`'dzs '`.
+
+### `tools/ww_crew_restoration_skeleton/adapt_room_arcs.py` (new)
+
+Separate from `adapt_bdl_arcs.py` because room arcs take a different road:
+object arcs reach the game through `getObjectRes` and the DN-3 consume-time
+resolver; room arcs are mount-parsed by `dRes_info_c`. It imports the Bridge
+tool for the payload conversion, so there stays exactly one implementation.
+
+```
+node 'BDL ' -> 'BMDR'        node case -> receiver's uppercase form
+payload bdl4 -> bmd3         dzb No21 through-cluster clear
+```
+
+**Applied.** Nodes now `['ROOT','BMDR','DZB ','DZR ']`, all six models
+`J3D2bmd3`, `DAT `/`DZS ` uppercased. Originals kept as
+`*.arc.pre-room-adapt.bak` — the mod folder still has no off-machine copy.
+
+**Second, independent bug found in passing:** both room `dzb`s still carried the
+TP through-flag cluster on every property record (12 and 37). Under receiver
+semantics that is a floor Link falls through. Cleared. It would have read as
+"the entry path still does not work."
+
+### Two things this deliberately does NOT do
+
+**No lighting rewrites.** `adapt_bdl_arcs` applies `normalize_litmask` and
+`normalize_tevregs` to actor models; DO-NOT's 2026-08-04 amendment flags both as
+a deviation that rewrites donor lighting state. Suppressed, and the suppression
+prints on every run. If R_DL02 comes up dark, that is a separate finding to
+handle in the light path — not something to pre-empt by editing donor bytes.
+
+**No mount-time BDL parse.** Leaving a genuine `bdl4` under a `'BMDR'` node would
+route it into `loaderBasicBmd`'s `loadBinaryDisplayList` fallback at MOUNT time —
+precisely what DN-3 forbids adding, reached through the back door. Converting the
+payload to `bmd3` first means the node mount-parses a **BMD**, which the same
+DO-NOT entry states this port does "exactly as the donor does". Keeping `bdl4`
+under a room node is an escalation, not a self-approval.
+
+**Note the engine was not touched.** Same doctrine as §618: the receiver's
+contract is not the thing to bend.
+
+**Turns.** **USER** → re-run `run_rdl02.bat`. No rebuild needed (assets + tooling
+only); caches wiped. **BRIDGE** → `adapt_bdl_arcs.py` is unmodified, but its
+docstring's "crashes on WW models" premise is the one DO-NOT already records as
+disproven, and room arcs are now a second caller — worth folding into the
+contract item.

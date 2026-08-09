@@ -11,7 +11,9 @@ F_DL02 needs RTBL/MULT n=1 + room0.dzs.
 Writes AppData mod-side only (never commit WW arcs).
 
 Usage:
-  build_fdl_host_stg.py           (no arguments — both targets are hard-coded)
+  build_fdl_host_stg.py                       (no args — №107 pair, unchanged)
+  build_fdl_host_stg.py <STAGE> <r0,r1,...>   (parametrized, 3b §614 — e.g.
+                                               `R_DL02 0,1` = Ojhous2 pilot shell)
 
   Inputs   : <mod>/files/res/Stage/R_DL01/STG_00.arc — the TEMPLATE, read for
              stage.dzs, room0.dzs (its FILI) and whichever pol_*.dat are present
@@ -201,6 +203,26 @@ def build_host_stg(stage_name: str, rooms: list[int]) -> Path:
 
 
 def main() -> int:
+    # ========================================================================
+    # PARAMETRIZED (3b step 1, bus §614) — the space-kit design's "parametrized
+    # shell builder" gap (§597: both targets were hard-coded). No arguments
+    # keeps the №107 behaviour EXACTLY, so every existing recipe/runbook that
+    # invokes this bare is untouched.
+    #
+    #   build_fdl_host_stg.py                     №107 pair (F_DL01/44, F_DL02/0)
+    #   build_fdl_host_stg.py <STAGE> <r0,r1,..>  one shell, e.g. R_DL02 0,1
+    #                                             (the Ojhous2 dedicated pilot)
+    # ========================================================================
+    if len(sys.argv) >= 3:
+        stage = sys.argv[1]
+        rooms = [int(r) for r in sys.argv[2].split(",")]
+        if not rooms:
+            raise SystemExit("empty room list")
+        build_host_stg(stage, rooms)
+        return 0
+    if len(sys.argv) == 2:
+        raise SystemExit("usage: build_fdl_host_stg.py [<STAGE> <room,room,...>] "
+                         "— stage AND rooms, or neither (№107 defaults)")
     # №107: Outset exterior = sea sector room 44; A_mori forest = room 0.
     build_host_stg("F_DL01", [44])
     build_host_stg("F_DL02", [0])
