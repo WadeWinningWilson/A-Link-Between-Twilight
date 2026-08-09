@@ -29288,3 +29288,77 @@ looking house as a pass, and that is now written down instead of assumed.
 
 **Turns.** **USER** → the row is now valid against both gates (checked, not
 assumed); warp in and send the log rather than a screenshot.
+
+## §617 — Housing/Engine: the seam PASSED. The crash is the payload option (a) forced on it, and it fired AFTER the result.
+
+### The pilot's actual result — four lines that did not exist before
+
+```
+[WwRoomSeam] 3b: stage='R_DL02' room=0 (delegate + ported chunks)
+[WwRoomSeam] SCLS[0] stage='sea' start=3 room=44 wipe=5 (donor 0xC -> receiver 0xD)
+[WwRoomSeam] SCLS: 1 record re-read at donor stride for room 0
+[WwRoomSeam] FILI room 0: sea=-20000 donorParam=0x1FEC7F80
+             (dark=0 particle=255 song=0) -> receiver-neutral
+```
+
+**Zero R_DL02 occurrences became four.** The stage changed, room 0 loaded through
+the seam, and BOTH ported chunk readers fired on real donor bytes — SCLS
+translated donor stride 0xC to receiver 0xD, FILI decoded to real values. The
+seam's half is no longer untested.
+
+### The crash is downstream, and it is the payload
+
+Symbolicated first, per standing rule:
+
+```
+#00 mDoExt_setupStageTexture   m_Do_ext.cpp:628
+#01 daBg_c::createHeap          d_a_bg.cpp:146
+#02..#05 fopAcM_callCallback / entrySolidHeap_ / entrySolidHeap / fopAc_Create
+```
+
+`daBg_c` is the **Ojhous2 BG payload** — the one the warp menu forced into the
+row. `mDoExt_setupStageTexture` resolves every texture with `imageOffset == 0`
+through `dComIfG_getStageRes()`, `JUT_ASSERT` compiles out in this build, and the
+failed lookup dereferences through. The payload expects stage resources that
+R_DL02, a dedicated bake, does not carry.
+
+**I wrote that the payload "does not spoil the pilot".** It did not spoil the
+result — the seam had already produced it — but it killed the run immediately
+after. Option (a) is not merely compromised by its payload requirement; in a
+stage that does not carry the payload's stage resources it is **fatal**. That is
+a stronger statement than "imperfect" and it retires (a) for dedicated bakes
+generally, not just here.
+
+Row removed (kept as `.crashed-payload-bak`) so the menu entry is not a landmine.
+
+### Coverage: honest, and small
+
+```
+SCLS  2      FILI  1
+LBNK  0   LGTV 0   RPAT 0   RPPN 0   SOND 0   ACT7 0   SCO7 0   RCAM 0
+room=1  never reached
+```
+
+The census predicted SCLS×3, FILI×2, LBNK×24, LGTV, RPAT/RPPN, SOND, layered
+ACT7/SCO7. **Two of those fired.** The crash cut the run at room 0's chunk pass,
+so the rest is not "absent" — it is UNREACHED, which is a different claim and
+must not be recorded as coverage. RCAM stays untested as predicted, now for two
+reasons rather than one.
+
+### What entry path actually works
+
+(a) is refuted by this crash. (c) is not the listed cheap option — there is no
+launch-mode stage flag (`m_Do_main.cpp:561`), so it means building one. That
+leaves **(b) temp SCLS retarget**, and this run supplies the missing piece for
+it: R_DL02 room 0's own SCLS already names `stage='sea' start=3 room=44`. The
+exit wiring is present and readable; retargeting one R_DL01 exit to R_DL02 is a
+single content edit with a known revert.
+
+Alternatively the payload could be made harmless by pointing `arc=` at a stage
+whose resources R_DL02 does carry — but that is guessing at a resource set, and
+(b) is one edit with a receipt.
+
+**Turns.** **USER / HISTORY** → ruling on (b) versus building a launch flag.
+**HOUSING (me)** → seam half now PROVEN for SCLS/FILI on room 0; ready to do (b)
+on the word, and the remaining chunk coverage rides on getting a crash-free
+entry.
