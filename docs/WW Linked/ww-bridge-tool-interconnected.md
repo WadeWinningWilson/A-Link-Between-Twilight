@@ -29362,3 +29362,59 @@ whose resources R_DL02 does carry — but that is guessing at a resource set, an
 **HOUSING (me)** → seam half now PROVEN for SCLS/FILI on room 0; ready to do (b)
 on the word, and the remaining chunk coverage rides on getting a crash-free
 entry.
+
+## §618 — Housing/Engine: ruled (c) and built it. Native-truth and the covenant both point the same way, and it is not close.
+
+**(b) rejected on doctrine, not cost.** SCLS *is* the native exit mechanism, so
+(b) has the surface appeal of using the real system. But it would use that
+system to assert a record Wind Waker does not have — and SCLS is precisely what
+the census, the extractor and the conversion DB READ. B2b counted 242 SCLS exits
+across the arcs. A fabricated row is indistinguishable from a real one a week
+later, and it pollutes the data the translators are being validated against.
+**Using a native mechanism to state something false is less native-true than not
+using it at all.**
+
+It also carries a "must be reverted" obligation — the failure class this
+campaign rediscovered three times today alone (a superseded link log still
+cited, an IN-PROGRESS heading over closed work, a present-tense gate over a
+shipped table). And it would edit the mod folder, which still has no off-machine
+copy.
+
+**(c) touches no donor data.** Nothing to revert, nothing to pollute.
+
+**Covenant, satisfied by construction rather than review:** the stage id arrives
+as a RUNTIME ARGUMENT and is never a compiled literal, which is History A1's "no
+WW place-names in the exe" enforced structurally. The flag is also WW-agnostic —
+it warps to any stage id — so it is dusklight dev tooling, not a WW leg, and it
+survives `DUSK_EXCLUDE_WW` untouched.
+
+**Cheaper than the option table estimated.** "Unverified against WW hosts" was
+fair, but the warp menu already proves the exact call — `dComIfGp_setNextStage`
+(`warp.cpp:413`) — so (c) reuses a proven path instead of inventing one. Written
+once, it serves every future dedicated bake; (b) is a fresh content edit per
+stage.
+
+### Built
+
+```
+include/dusk/boot_stage.h · src/dusk/boot_stage.cpp
+  --stage NAME[,room[,layer]]     e.g. R_DL02 · R_DL02,1 · R_DL02,0,2
+m_Do_main.cpp   option + arm (parse only; records the request)
+d_s_play.cpp    dBootStage_poll() beside the other deferred pollers
+run_rdl02.bat   one-click, ASCII/CRLF per §609
+```
+
+**One-shot, and settles first.** Fires once ~1s after the play scene is up, then
+disarms. Firing during boot would race the very stage load it is replacing, and
+a half-initialised change reads as a crash in the NEW stage rather than as a
+mistimed request — a misattribution this lane has paid for before. It also
+refuses to stack on a queued change, and says so when the stage is already
+current: "the flag did nothing" and "the flag worked" otherwise look identical
+from outside.
+
+Gates: build EXIT=0 · banner lint 81/81 0 DISAGREES 0 UNKNOWN · manifest exit 0.
+
+**Turns.** **USER** → `run_rdl02.bat`. Expect `[BootStage] armed` then
+`[BootStage] FIRED`, followed by `[WwRoomSeam]` lines for rooms 0/1. Send the
+log, not a screenshot — the screen cannot be the verdict here either, because a
+dedicated bake with no performers is SUPPOSED to look empty.

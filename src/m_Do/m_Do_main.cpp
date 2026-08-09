@@ -4,6 +4,7 @@
  * PC Port Version - based on Aurora integration from Vorversion
  */
 
+#include "dusk/boot_stage.h"
 #include "m_Do/m_Do_main.h"
 #include <dolphin/vi.h>
 #include <cstring>
@@ -569,6 +570,12 @@ int game_main(int argc, char* argv[]) {
              "§60b: offline Ja1Parser event dump for package root (writes seq_events_engine_*.csv)",
              cxxopts::value<std::string>())
 #endif
+#if TARGET_PC
+            ("stage",
+             "Dev: boot straight into a stage — NAME[,room[,layer]] (e.g. R_DL02 or R_DL02,1). "
+             "For stages with no in-game route yet; touches no game data.",
+             cxxopts::value<std::string>())
+#endif
             ("mods", "Directory to load .dusk mod bundles from", cxxopts::value<std::string>())
             ("cvar", "Override configuration variables without modifying config", cxxopts::value<std::vector<std::string>>());
 
@@ -616,6 +623,14 @@ int game_main(int argc, char* argv[]) {
     dusk::android::update_surface_frame_rate();
     dusk::crash_reporting::initialize();
     dusk::crash_handler::install();
+
+#if TARGET_PC
+    // --stage: arm the dev boot warp. Parsing here, firing later -- the stage
+    // change needs a running play scene, so this only records the request.
+    if (parsed_arg_options.count("stage")) {
+        dBootStage_arm(parsed_arg_options["stage"].as<std::string>().c_str());
+    }
+#endif
 
     // TODO: How to handle this?
     // PADSetDefaultMapping(&defaultPadMapping, PAD_TYPE_STANDARD);

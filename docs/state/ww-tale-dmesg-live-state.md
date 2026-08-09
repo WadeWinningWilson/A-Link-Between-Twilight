@@ -5302,3 +5302,25 @@ THE ONE R1 PIECE THAT SURVIVES THE TRANSITION, if a small task is ever wanted: t
 steps (merge_event, patch_event_cut, arc_add_member, extract_bmg) still carry PLACEHOLDER args.
 Those are CONTENT decisions, architecture-independent, and cheap — the recipe cannot execute
 end-to-end until they are filled, and filling them is not wasted under either path.
+
+## NATIVE ROOMS — STEP 3 DONE (2026-08-08, History): the first VERBATIM donor room arcs
+Copied D:/XXXXXXX/Ex WW/files/res/Stage/Ojhous2/Room{0,1}.arc → R_DL02/R{00,01}_00.arc.
+BYTE-IDENTITY PROVEN, not assumed — sha256 matched source↔destination on both:
+  Room0.arc → R00_00.arc  sha256 11bd5d3759cb4939…  281,809 b  VERBATIM
+  Room1.arc → R01_00.arc  sha256 4a2928a7ebcaaad7…  264,224 b  VERBATIM
+This is the campaign's thesis in its smallest form: no bake pass, no chunk surgery, no
+adaptation — donor bytes on disk, translation at load. Compare with the mount path, where a
+room reached the folder only after bake_room_chunks + plyr_append + restore_arc_resids.
+WHAT THE SEAM WILL MEET (chunk census of the copied arcs, so the first run's log is readable):
+  R00: SCLSx1 FILIx1 LBNKx12 PLYRx1 ACTRx27 LGTVx1 ACT7x1 SCO7x1
+  R01: SCLSx2 FILIx1 LBNKx12 RPATx2 RPPNx6 PLYRx1 ACTRx48 SCOBx1 SONDx1 ACT7x10
+NOTE FOR THE FIRST-ENTRY READ: neither arc carries an RCAM chunk. Foundry's spec expects the
+first live test of RCAM's 0x14 branch on entry to R_DL02 — on THIS data that branch cannot
+fire, because there is no RCAM to translate. Not a defect in either lane's work; the pilot
+data simply does not exercise it, and a "0x14 never fired" result must be read as UNTESTED,
+not as PASS. Flagged before the run rather than explained after it.
+LAYERED CHUNKS PRESENT (ACT7, SCO7) — layer-aware translation gets exercised on room 0
+immediately, which IS new coverage.
+WHOSE TURN: USER → first entry into R_DL02; expect [WwRoomSeam] translations on donor-format
+data for the first time. FOUNDRY → RCAM 0x14 needs a room that actually carries RCAM if that
+branch is to be tested this pilot.

@@ -259,6 +259,114 @@ static void wwRoom_translateFili(dStage_dt_c* i_stage, int i_roomNo) {
                  i_roomNo, sea, donorParam, donorParam & 1,
                  (donorParam & 0x1FE00000) >> 21, (donorParam >> 30) & 1);
 }
+// ============================================================================
+// PHASE 2, CHUNK 3: RCAM — room cameras. Donor 0x14, receiver 0x18 (§607) —
+// receiver = donor + BE(u16) flags@0x14 (camera behavior bits 13-15,
+// d_camera.cpp:174-183) + BE(u16)@0x16.
+//
+// THE MOUNT'S ARCS ARE MIXED-FORMAT — measured, not assumed (§612):
+//   R44_00.arc RCAM  num=5, gap 120 = 5*0x18: RECEIVER format, all five
+//                    records decode clean at 0x18 (Subject x3, FixdPos x2,
+//                    arrows 0-4, flag words ZEROED). Baked by the host-stage
+//                    tooling, not bake_room_chunks (RCAM is not in its
+//                    KNOWN_SIZE) — already correct for TP's reader.
+//   SCLS             donor format (bake_room_chunks KNOWN_SIZE 0xC, §610).
+//
+// So a blanket donor-stride re-read would CORRUPT receiver-format chunks.
+// This translator DETECTS the format per chunk and translates only donor-
+// stride data (donor-verbatim rooms, the 3b direction); receiver-format
+// passes through untouched. Detection = every record's cam_type must be
+// printable-ASCII-or-NUL at the candidate stride; genuine donor 0x14 data
+// misaligns 0x18 decode into name fragments and vice versa (proven on R44:
+// donor-stride decode yielded 'os'/'ixd' fragments of FixdPos).
+// ============================================================================
+struct WwRcamRecord {
+    /* 0x00 */ char m_cam_type[16];
+    /* 0x10 */ u8 m_arrow_idx;
+    /* 0x11 */ u8 field_0x11;
+    /* 0x12 */ u8 field_0x12;
+    /* 0x13 */ u8 field_0x13;
+};  // donor Size: 0x14
+STATIC_ASSERT(sizeof(WwRcamRecord) == 0x14);
+STATIC_ASSERT(sizeof(stage_camera2_data_class) == 0x18);
+
+static const int kWwRcamMax = 16;
+
+struct WwRcamPool {
+    stage_camera_class dummy;
+    stage_camera2_data_class recs[kWwRcamMax];
+};
+static WwRcamPool s_wwRcam[kWwRoomSlots];
+
+static bool wwRoom_namesPlausible(const u8* base, int num, int stride) {
+    for (int i = 0; i < num; i++) {
+        const u8* nm = base + i * stride;
+        for (int c = 0; c < 16; c++) {
+            u8 b = nm[c];
+            if (b != 0 && (b < 0x20 || b >= 0x7F)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static void wwRoom_translateRcam(dStage_dt_c* i_stage, int i_roomNo) {
+    stage_camera_class* src = i_stage->getCamera();
+    if (src == NULL || i_roomNo < 0 || i_roomNo >= kWwRoomSlots) {
+        return;
+    }
+    int num = src->num;
+    const u8* raw = (const u8*)(stage_camera2_data_class*)src->m_entries;
+    if (raw == NULL || num <= 0) {
+        return;
+    }
+
+    bool recvOk = wwRoom_namesPlausible(raw, num, 0x18);
+    bool donorOk = wwRoom_namesPlausible(raw, num, 0x14);
+    if (recvOk) {
+        // Receiver-format (or num==1, where both decode — receiver wins the
+        // tie: a 1-record donor chunk has zero drift and its only risk, the
+        // trailing flag word, reads adjacent-chunk bytes the log makes visible).
+        DuskLog.info("[WwRoomSeam] RCAM room {}: {} record(s) already receiver-"
+                     "format — untouched.", i_roomNo, num);
+        return;
+    }
+    if (!donorOk) {
+        DuskLog.error("[WwRoomSeam] RCAM room {}: {} record(s) implausible at "
+                      "BOTH strides — left untouched, cameras may misread. "
+                      "Dump the chunk.", i_roomNo, num);
+        return;
+    }
+    if (num > kWwRcamMax) {
+        DuskLog.error("[WwRoomSeam] RCAM room {}: {} donor records exceed pool "
+                      "of {} — NOT translated. Raise kWwRcamMax.",
+                      i_roomNo, num, kWwRcamMax);
+        return;
+    }
+
+    const WwRcamRecord* in = (const WwRcamRecord*)raw;
+    WwRcamPool& pool = s_wwRcam[i_roomNo];
+    for (int i = 0; i < num; i++) {
+        stage_camera2_data_class& out = pool.recs[i];
+        memcpy(out.m_cam_type, in[i].m_cam_type, sizeof(out.m_cam_type));
+        out.m_arrow_idx = in[i].m_arrow_idx;
+        out.field_0x11 = in[i].field_0x11;
+        out.field_0x12 = in[i].field_0x12;
+        out.field_0x13 = in[i].field_0x13;
+        out.field_0x14 = 0;  // camera flags: neutral, d_camera.cpp:174 reads bits 13-15
+        out.field_0x16 = 0;
+        DuskLog.info("[WwRoomSeam] RCAM[{}] type='{:.16s}' arrow={} "
+                     "(donor 0x14 -> receiver 0x18, flags neutral)",
+                     i, in[i].m_cam_type, in[i].m_arrow_idx);
+    }
+    pool.dummy.num = num;
+    s32 diff = (s32)((char*)pool.recs - (char*)&pool.dummy.m_entries);
+    pool.dummy.m_entries.value.value = (s32)(diff | 0x8000'0000);
+    i_stage->setCamera(&pool.dummy);
+    DuskLog.info("[WwRoomSeam] RCAM: {} donor-stride record(s) translated for "
+                 "room {}.", num, i_roomNo);
+}
 #endif  // DUSK_WW_ROOM_SEAM && DUSK_WW_ROOM_CHUNKS
 
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
@@ -279,6 +387,7 @@ void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
 #if DUSK_WW_ROOM_CHUNKS
         wwRoom_translateScls(i_stage, i_roomNo);   // chunk 1 — SCLS (§604 stride hit)
         wwRoom_translateFili(i_stage, i_roomNo);   // chunk 2 — FILI (§607 semantic hit)
+        wwRoom_translateRcam(i_stage, i_roomNo);   // chunk 3 — RCAM (format-detected)
 #endif
         return;
     }

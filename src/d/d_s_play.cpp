@@ -1,8 +1,9 @@
-﻿/**
+/**
  * d_s_play.cpp
  * Main Gameplay Scene
  */
 
+#include "dusk/boot_stage.h"
 #include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_s_play.h"
@@ -849,6 +850,7 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
         DUSK_FPS_SCOPE(Mount);
         dExtNpcMount_pollBgWarps();
     }
+    dBootStage_poll();  // --stage dev entry; no-op unless armed
     dExtNpcMount_pollRegionTriggers();  // [tale_loft] → TALE_DEMO (Demo01 / tale.stb)
     {
         DUSK_FPS_SCOPE(DemoMsg);
