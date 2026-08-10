@@ -13,11 +13,13 @@
 #include "JSystem/JUtility/JUTAssert.h"
 #include "d/d_bg_w_kcol.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_ext_save_guard.h"
 #include "f_ap/f_ap_game.h"
 #include "f_op/f_op_camera_mng.h"
 #include "m_Do/m_Do_graphic.h"
 #include "res/Object/Always.h"
 #include <cstdio>
+#include <cctype>
 #include <cstring>
 
 #ifndef __MWERKS__
@@ -60,7 +62,46 @@ int dRes_info_c::set(char const* i_arcName, char const* i_path, u8 i_mountDirect
 
     if (*i_path != '\0') {
         char path[40];
-        snprintf(path, sizeof(path), "%s%s.arc", i_path, i_arcName);
+        const char* fileName = i_arcName;
+#if TARGET_PC
+        // ====================================================================
+        // §631: VANILLA WW ARC NAMING ON DISK.
+        //
+        // The receiver names stage arcs "R%02d_00" and "Stg_00"; Wind Waker
+        // names them "Room%d" and "Stage" (no zero pad — Room0, Room4, Room44).
+        // Under the zero-bake rule the donor arcs are staged EXACTLY as they
+        // ship, so the receiver has to ask for the vanilla filename rather than
+        // the asset being renamed to suit it.
+        //
+        // Only the FILENAME is translated. `mArchiveName` below keeps the
+        // receiver's own key, because every getStageRes(arcName, ...) call in
+        // the engine is written against it — that string is an identifier, not
+        // a file, and rewriting it would be a much wider change for no gain.
+        //
+        // The DIRECTORY is already vanilla: the caller builds
+        // "/res/Stage/<stage>/" from the stage name, so a WW stage id lands on
+        // WW's own folder with no help. Only these two leaf names differed.
+        //
+        // WW-SCOPED: mainline TP arcs keep TP's names.
+        // ====================================================================
+        char wwName[16];
+        const char* sn = dComIfGp_getStartStageName();
+        if (sn != NULL && dExtWwSave_isWwHostStage(sn) && strstr(i_path, "/Stage/") != NULL) {
+            int roomNo = -1;
+            if (i_arcName[0] == 'R' && isdigit((unsigned char)i_arcName[1]) &&
+                isdigit((unsigned char)i_arcName[2]) && strcmp(i_arcName + 3, "_00") == 0)
+            {
+                roomNo = (i_arcName[1] - '0') * 10 + (i_arcName[2] - '0');
+            }
+            if (roomNo >= 0) {
+                snprintf(wwName, sizeof(wwName), "Room%d", roomNo);
+                fileName = wwName;
+            } else if (strcmp(i_arcName, "Stg_00") == 0) {
+                fileName = "Stage";
+            }
+        }
+#endif
+        snprintf(path, sizeof(path), "%s%s.arc", i_path, fileName);
         mDMCommand = mDoDvdThd_mountArchive_c::create(path, i_mountDirection, i_heap);
 
         if (mDMCommand == NULL) {

@@ -30310,3 +30310,46 @@ content edit. That is the next build, not a ruling.
 
 **Turns.** **HOUSING** → path mapping + stage id, then first cold entry into an
 untouched `sea/Room44.arc`. **USER** → nothing until that lands.
+
+## §631 — Housing: vanilla arc naming and pathing, on disk. The receiver now asks for WW's filenames instead of the asset being renamed to suit it.
+
+> *"with these paths vanilla room/arc naming/pathing is being used right? If
+> possible it should"*
+
+It was not. It is now.
+
+```
+receiver asked for   /res/Stage/sea/R44_00.arc     /res/Stage/sea/Stg_00.arc
+WW ships             /res/Stage/sea/Room44.arc     /res/Stage/sea/Stage.arc
+```
+
+**The directory was already vanilla for free** — the caller builds
+`"/res/Stage/%s/"` from the stage name (`d_resorce.cpp:1095`), so a WW stage id
+lands on WW's own folder unaided. Only the two leaf names differed, and both are
+now translated where the filename is formed (`dRes_info_c::set`), WW-scoped.
+
+Confirmed against the disc: WW is `Room%d.arc` with **no zero pad** (`Room0`,
+`Room4`, `Room44`) and `Stage.arc`. `Ojhous2` — Grandma's house — ships exactly
+`Room0.arc / Room1.arc / Stage.arc`, which is precisely what the R_DL02 bake was
+a repackaging of. Under vanilla naming that stage needs no repackaging at all.
+
+**Only the FILENAME is translated; `mArchiveName` keeps the receiver's key.** Every
+`getStageRes(arcName, ...)` in the engine is written against `R44_00` / `Stg_00`,
+and that string is an identifier, not a file. Renaming it would be a far wider
+change for nothing — the disc layout is the thing that had to match, and it does.
+
+**Where this leaves the zero-bake rule:** a donor stage now needs
+**no repackaging, no renaming, and no content edit** — the arcs sit at their
+vanilla path under their vanilla names with their vanilla bytes, and every
+donor→receiver difference is answered in receiver code at consumption:
+
+```
+§334  dzb attribute vocabulary        №86   PLYR room bits
+§626  PLYR start mode                 §630  'BDL ' models via the DN-3 resolver
+§631  arc filenames                   §623  room-lane scope (removal)
+```
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+**Turns.** **HOUSING** → stage id for `sea`, then first cold entry into an
+untouched `sea/Room44.arc`. **USER** → nothing yet.
