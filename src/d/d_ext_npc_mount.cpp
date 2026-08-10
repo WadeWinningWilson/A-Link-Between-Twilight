@@ -56,6 +56,7 @@
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_population.h"
 #include "d/d_ext_save_guard.h"
+#include "d/ext_plugin/ww_room_loader.h"
 #include "d/d_ext_dmesg.h"           // §308 M1 native dMesg archive residency
 #include "d/ext_seq/ja1_bank.h"
 #include "d/d_item.h"
@@ -4444,6 +4445,10 @@ void dExtNpcMount_rescanProviders() {
     if (!fs::is_directory(userRoot, ec)) {
         return;
     }
+    // §635: the room path's receiver-side hooks, installed once from the WW
+    // layer so mainline TP never has them at all.
+    dExtWwRoom_installHooks();
+
     // A2: socket+arg first-claim wins (directory walk order; top mod list is separate).
     std::unordered_map<std::string, std::string> claimedSocketArg;  // "SOCKET:arg" → proc
     for (auto it = fs::directory_iterator(userRoot, ec); it != fs::directory_iterator();

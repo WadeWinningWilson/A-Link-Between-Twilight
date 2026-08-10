@@ -30499,3 +30499,72 @@ manifest exit 0 · caches wiped · unreviewed plumbing 9 -> 8
 
 **Turns.** **HOUSING** → the arc-name alias hook (Outset blocker), then the PLYR
 reader. **USER** → nothing; staging intact.
+
+## §635 — Housing: both owed pieces landed in one pass, through WW-AGNOSTIC hooks. Receiver TUs gain extension points, not WW knowledge.
+
+Neither piece fits the room-load seam, for different reasons, and both are now
+in the parallel stack anyway.
+
+### The shape: a hook is not a leg
+
+```
+LEG      receiver TU calls a WW symbol.        Fails the separability gate.
+HOOK     receiver TU exposes a NULL-default    Links and behaves identically
+         extension point naming no donor.      with the WW layer excluded.
+         The WW layer installs it; the LOGIC   Verified: 0 WW symbols in any
+         lives in the parallel stack.          line added to a receiver TU.
+```
+
+Two added, both WW-agnostic by construction:
+
+```
+dRes_setArcFileNameHook   (d_resorce)  "an archive's on-disk NAME is not always
+                                        the receiver's key for it"
+dStage_setPlyrParamHook   (d_stage)    "the PLYR parameter word is a PACKED
+                                        FORMAT, and a donor can pack it
+                                        differently"
+```
+
+Neither names Wind Waker. Both are NULL unless something installs them.
+
+### Chunk 6 — arc filenames
+
+Wind Waker ships `Room44.arc` / `Stage.arc`; the receiver asks for `R44_00` /
+`Stg_00`. The **directory already matches for free** — the caller builds
+`"/res/Stage/<stage>/"` from the stage name. Only the two leaf names differ, and
+only the FILENAME is aliased: `mArchiveName` keeps the receiver's key, because
+every `getStageRes(arcName, ...)` in the engine is written against it.
+
+### Chunk 7 — PLYR parameters, and why it is a hook rather than a translator
+
+`playerInit` runs **inside** the delegated loader and queues the actor create, so
+a post-delegation translator is already too late. **The timing is the
+requirement**, which is exactly why this one could not join chunks 1-6. The hook
+fires after the record is copied into the create-append and before the create is
+queued — the only window that exists.
+
+`parameters` is a `BE<u32>`; the hook speaks host-order, so the fire site reads
+out, translates, writes back rather than aliasing the wrapper. The compiler
+caught the first version, which is the right place for that to be caught.
+
+**Stated limit, unchanged and now in the code:** WW's own encoding of the start
+mode is NOT decoded. 0 is the receiver's plain walk-in and its majority value
+(782 of 1277), and every donor PLYR seen so far is a door arrival — so this
+translates **intent, not bits**. Outset's 24 spawns carry seven distinct values
+(16, 17, 18, 21, 25, 26, 29): visible structure, and the specimen set that makes
+real decoding possible. The discarded value is logged every arrival.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+d_a_bg.cpp: 0 diff lines · 0 WW symbols in any added receiver line
+```
+
+**Outset is now unblocked.** The receiver will ask for `Room44.arc` at
+`/res/Stage/sea/`, where 101 byte-identical arcs are staged, with `sea` declared
+in `ww_stages.ini`.
+
+**Turns.** **USER** → first cold entry: `dusklight.exe --stage sea,44`. Expect a
+slow first load (fifty-room stage), `§635 hooks installed`, `§632 WW stage
+declared 'sea'`, and a visibly sparse island — 282 of 475 placements are unported
+actors that will no-op. **HOUSING** → standing by for the log.

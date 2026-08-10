@@ -1788,6 +1788,12 @@ static void dummy2() {
     dComIfGp_roomControl_getStatusRoomDt(0)->getPlayer();
 }
 
+static dStage_plyrParamHook_f s_plyrParamHook = NULL;
+
+void dStage_setPlyrParamHook(dStage_plyrParamHook_f i_hook) {
+    s_plyrParamHook = i_hook;
+}
+
 static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* param_3) {
     UNUSED(param_3);
     stage_actor_class* player = (stage_actor_class*)((int*)i_data + 1);
@@ -2040,6 +2046,17 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
             }
         }
 #endif
+    }
+
+    // §635: last chance to translate a foreign PLYR parameter packing — the
+    // create is queued a few lines below and nothing after the room load can
+    // reach it. NULL unless a content layer installs it.
+    // parameters is a BE<u32>; the hook speaks host-order u32, so read out,
+    // translate, write back rather than aliasing the wrapper.
+    if (s_plyrParamHook != NULL) {
+        u32 plyrParam = appen->base.parameters;
+        s_plyrParamHook(&plyrParam);
+        appen->base.parameters = plyrParam;
     }
 
     dComIfGs_setRestartRoomParam(0);

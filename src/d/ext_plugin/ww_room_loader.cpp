@@ -47,6 +47,7 @@
 // ============================================================================
 #include "d/ext_plugin/ww_room_loader.h"
 
+#include <cstdio>
 #include <cstring>
 
 #include "d/d_ext_save_guard.h"  // dExtWwSave_isWwHostStage
@@ -460,7 +461,101 @@ static void wwRoom_publishModels(int i_roomNo) {
                      arcName, kModels[i]);
     }
 }
+// ============================================================================
+// PHASE 2, CHUNK 6: ARC FILENAMES — vanilla names on disk.
+//
+// Wind Waker ships /res/Stage/sea/Room44.arc and Stage.arc; this engine asks
+// for R44_00 and Stg_00. The DIRECTORY already matches for free — the caller
+// builds "/res/Stage/<stage>/" from the stage name, so a vanilla stage id lands
+// on the vanilla folder unaided. Only the two leaf names differ.
+//
+// Under zero-bake the asset is never renamed, so the LOOKUP moves. This shipped
+// once as a branch inside dRes_info_c::set — a WW conditional in a shared
+// engine path, exactly the surface the shared-path-scoping rule names. It now
+// lives here and reaches the resource layer through a WW-AGNOSTIC hook.
+//
+// Only the FILENAME is aliased. The receiver's key (mArchiveName) is untouched,
+// because every getStageRes(arcName, ...) call in the engine is written against
+// it — that string is an identifier, not a file.
+//
+// Vanilla convention, confirmed against the disc: Room%d with NO zero pad
+// (Room0, Room4, Room44) and Stage. Ojhous2 ships Room0/Room1/Stage.
+// ============================================================================
+static const char* wwRoom_aliasArcFileName(const char* i_arcName) {
+    static char s_name[16];
+    const char* stage = dComIfGp_getStartStageName();
+    if (i_arcName == NULL || stage == NULL || !dExtWwSave_isWwHostStage(stage)) {
+        return NULL;  // no alias — the receiver's own name stands
+    }
+    if (i_arcName[0] == 'R' && i_arcName[1] >= '0' && i_arcName[1] <= '9' &&
+        i_arcName[2] >= '0' && i_arcName[2] <= '9' && std::strcmp(i_arcName + 3, "_00") == 0)
+    {
+        const int roomNo = (i_arcName[1] - '0') * 10 + (i_arcName[2] - '0');
+        std::snprintf(s_name, sizeof(s_name), "Room%d", roomNo);
+        return s_name;
+    }
+    if (std::strcmp(i_arcName, "Stg_00") == 0) {
+        return "Stage";
+    }
+    return NULL;
+}
+
+// ============================================================================
+// PHASE 2, CHUNK 7: PLYR PARAMETERS — the arrival the receiver could not read.
+//
+// daAlink_c::getStartMode() reads PLYR parameter bits 12-16, and the arrival
+// sequence — DEMO_UNK_14_e, setMoveAngle(current.angle.y), setTimer(35), i.e.
+// the walk-in — runs for start_mode 0/1/2/3/5/13/14 and nothing else.
+//
+// A census of the receiver's OWN 1277 shipped PLYR entries finds 0-14 and
+// nothing above 14, with 0 alone accounting for 782. WW's word puts values well
+// outside that range there — R_DL02 gives 27 and 16, and Outset's 24 spawns
+// give seven distinct values (16, 17, 18, 21, 25, 26, 29). So the branch never
+// runs and the player is left standing exactly where the animation was supposed
+// to START, which for a door arrival is the threshold.
+//
+// WHY IT MUST FIRE HERE AND NOT AFTER THE ROOM LOAD. playerInit runs INSIDE the
+// delegated loader and queues the actor create; a post-delegation translator is
+// already too late. That is why this is a hook in the receiver rather than
+// another entry in the chunk list above — the timing is the requirement.
+//
+// STATED LIMIT: WW's own encoding of this field is NOT decoded. 0 is the
+// receiver's plain walk-in and the majority value, and every donor PLYR seen so
+// far is a door arrival — so this translates INTENT, not bits. Outset's seven
+// distinct values are visible structure and the specimen set that makes real
+// decoding possible; revisit before a warp-in or fall-in spawn is expected to
+// behave. The discarded value is logged on every arrival so the evidence
+// accumulates instead of vanishing.
+// ============================================================================
+static void wwRoom_translatePlyrParam(u32* io_parameters) {
+    const char* stage = dComIfGp_getStartStageName();
+    if (io_parameters == NULL || stage == NULL || !dExtWwSave_isWwHostStage(stage)) {
+        return;
+    }
+    const u32 wwStartMode = (*io_parameters >> 12) & 0x1F;
+    if (wwStartMode == 0) {
+        return;
+    }
+    *io_parameters &= ~(0x1Fu << 12);
+    DuskLog.info("[WwRoomSeam] PLYR start_mode {} -> 0 (donor word, outside the "
+                 "receiver's 0-14 vocabulary) stage='{}'",
+                 wwStartMode, stage);
+}
 #endif  // DUSK_WW_ROOM_SEAM && DUSK_WW_ROOM_CHUNKS
+
+// ============================================================================
+// §635: install the two hooks the room path needs but the seam cannot reach.
+// Called once from the WW layer's mod scan. Both hooks are WW-AGNOSTIC on the
+// receiver side and NULL until this runs, so mainline TP is untouched.
+// ============================================================================
+void dExtWwRoom_installHooks(void) {
+#if DUSK_WW_ROOM_SEAM && DUSK_WW_ROOM_CHUNKS
+    dRes_setArcFileNameHook(&wwRoom_aliasArcFileName);
+    dStage_setPlyrParamHook(&wwRoom_translatePlyrParam);
+    DuskLog.info("[WwRoomSeam] §635 hooks installed: arc-filename alias, PLYR "
+                 "parameter translation");
+#endif
+}
 
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
 #if DUSK_WW_ROOM_SEAM

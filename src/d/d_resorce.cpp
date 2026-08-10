@@ -53,6 +53,20 @@ dRes_info_c::~dRes_info_c() {
     }
 }
 
+static dRes_arcFileNameHook_f s_arcFileNameHook = NULL;
+
+void dRes_setArcFileNameHook(dRes_arcFileNameHook_f i_hook) {
+    s_arcFileNameHook = i_hook;
+}
+
+const char* dRes_aliasArcFileName(const char* i_arcName) {
+    if (s_arcFileNameHook == NULL || i_arcName == NULL) {
+        return i_arcName;
+    }
+    const char* alias = s_arcFileNameHook(i_arcName);
+    return alias != NULL ? alias : i_arcName;
+}
+
 int dRes_info_c::set(char const* i_arcName, char const* i_path, u8 i_mountDirection, JKRHeap* i_heap) {
 #ifdef __MWERKS__
     JUT_ASSERT(120, strlen(i_arcName) <= NAME_MAX);
@@ -60,7 +74,9 @@ int dRes_info_c::set(char const* i_arcName, char const* i_path, u8 i_mountDirect
 
     if (*i_path != '\0') {
         char path[40];
-        snprintf(path, sizeof(path), "%s%s.arc", i_path, i_arcName);
+        // §635: on-disk name may differ from the receiver's key (see the hook).
+        snprintf(path, sizeof(path), "%s%s.arc", i_path,
+                 dRes_aliasArcFileName(i_arcName));
         mDMCommand = mDoDvdThd_mountArchive_c::create(path, i_mountDirection, i_heap);
 
         if (mDMCommand == NULL) {

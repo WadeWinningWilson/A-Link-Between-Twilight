@@ -29,4 +29,10 @@ struct dStage_dt_c;
 // ============================================================================
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo);
 
+// §635: install the receiver-side hooks the seam cannot reach — the arc
+// FILENAME alias (vanilla Room44.arc where the receiver asks for R44_00) and
+// the PLYR parameter translation (which must fire inside playerInit, before
+// the actor create is queued). Call once, before any stage loads.
+void dExtWwRoom_installHooks(void);
+
 #endif

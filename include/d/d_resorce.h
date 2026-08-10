@@ -8,6 +8,21 @@ class JKRArchive;
 class JKRHeap;
 class JKRSolidHeap;
 
+// ============================================================================
+// §635: arc FILENAME hook. WW-AGNOSTIC host plumbing — it names no donor, holds
+// no predicate, and is NULL unless something installs it, so the receiver links
+// and behaves identically with any content layer excluded.
+//
+// It exists because an archive's on-disk NAME is not always the receiver's key
+// for it. A donor disc may file the same resource under its own convention
+// (Wind Waker ships Room44.arc / Stage.arc where this engine asks for R44_00 /
+// Stg_00). Under the zero-bake rule the asset is never renamed, so the LOOKUP
+// moves instead. Returning NULL means "no alias" and the original name is used.
+// ============================================================================
+typedef const char* (*dRes_arcFileNameHook_f)(const char* i_arcName);
+void dRes_setArcFileNameHook(dRes_arcFileNameHook_f i_hook);
+const char* dRes_aliasArcFileName(const char* i_arcName);
+
 class dRes_info_c {
 public:
     dRes_info_c();

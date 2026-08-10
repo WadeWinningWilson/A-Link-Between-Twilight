@@ -1421,6 +1421,25 @@ void dStage_Delete();
 void dStage_restartRoom(u32 roomParam, u32 mode, int param_2);
 int dStage_RoomCheck(cBgS_GndChk* gndChk);
 void dStage_dt_c_roomReLoader(void* i_data, dStage_dt_c* stageDt, int param_2);
+// ============================================================================
+// §635: PLYR PARAMETER hook. WW-AGNOSTIC host plumbing — names no donor, holds
+// no predicate, NULL unless installed, so the receiver links and behaves
+// identically with any content layer excluded.
+//
+// It exists because the PLYR parameter word is a PACKED FORMAT, and a donor
+// disc can pack it differently. This engine reads bits 12-16 as the player's
+// start mode (daAlink_c::getStartMode), and a foreign word puts an unrelated
+// value there — outside the 0-14 vocabulary its own 1277 shipped PLYR entries
+// use — so the arrival branch never runs.
+//
+// The hook fires INSIDE dStage_playerInit, after the record is copied into the
+// create-append and before the create is queued. That timing is the whole
+// point: the actor is queued during the room load, so nothing downstream of
+// the load can still reach it.
+// ============================================================================
+typedef void (*dStage_plyrParamHook_f)(u32* io_parameters);
+void dStage_setPlyrParamHook(dStage_plyrParamHook_f i_hook);
+
 void dStage_dt_c_roomLoader(void* i_data, dStage_dt_c* stageDt, int param_2);
 dStage_KeepDoorInfo* dStage_GetKeepDoorInfo();
 dStage_KeepDoorInfo* dStage_GetRoomKeepDoorInfo();
