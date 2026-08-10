@@ -13,6 +13,7 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "f_op/f_op_actor_mng.h"
 #include "d/d_kankyo_ww.h"  // §418 WW native skydome leg
+#include "d/d_ext_npc_mount.h"  // §659 DN-3 consume-time resolver
 #include "dusk/logging.h"
 
 // §418b: the mount's parse-once model-data cache (global bridge, §334 region).
@@ -263,8 +264,20 @@ static int daVrbox_solidHeapCB(fopAc_ac_c* i_this) {
     // itself exactly as the donor asks it. WW-agnostic, no default needed,
     // and one fewer thing that can disagree with reality.
     {
+        // §659 CRASH FIX (fault 0xe0020000 — the SAME address §418b names below,
+        // and for the same reason). A donor Stage.arc files its dome models under
+        // RARC node type 'BDL ', which dRes_info_c has no branch for, so
+        // getStageRes returns the RAW FILE and J3DModel__create read big-endian
+        // file bytes as a pointer. That is §619 exactly, repeated on the stage arc
+        // after being fixed for the room arc — the node type does not care which
+        // arc it is in.
+        //
+        // So this goes through the DN-3 consume-time resolver, the same call the
+        // WwSky leg below already uses, which parses once from a pristine byte
+        // copy and caches. Not a new dependency: this TU already resolves models
+        // that way.
         J3DModelData* stageSky =
-            (J3DModelData*)dComIfG_getStageRes("Stg_00", "vr_sky.bdl");
+            dExtNpcMount_acquireStageModelData("Stg_00", "vr_sky.bdl");
         if (stageSky != NULL) {
             this_->mpWwSky = mDoExt_J3DModel__create(stageSky, 0x80000, 0x11020202);
             DuskLog.info("[WwSky] §657 vr_sky.bdl from the STAGE arc (no mount): {}",

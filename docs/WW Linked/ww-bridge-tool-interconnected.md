@@ -31453,3 +31453,51 @@ manifest exit 0 · caches wiped
 false sea — is the same shape and comes next.
 
 **Turns.** **USER** → `run_outset.bat`. **HOUSING** → vrbox2 on the same pattern.
+
+## §659 — Housing: §658 worked, and then I repeated §619's mistake on the stage arc. Same fault address, same node type.
+
+**§658 landed:** `fpcNm_VRBOX_e` pid=148 is created on `sea` for the first time.
+Then it crashed.
+
+```
+Fault addr: 0xe0020000
+```
+
+That is **the exact address §418b's own comment names** — *"create on RAW bytes,
+fault 0xe0020000 = big-endian file data as pointer."*
+
+A donor `Stage.arc` files its dome models under RARC node type `'BDL '`, which
+`dRes_info_c` has no branch for, so `getStageRes` returned the RAW FILE and §657
+handed it to `mDoExt_J3DModel__create`. **That is §619 exactly, repeated on the
+stage arc hours after being fixed for the room arc** — the node type does not care
+which arc it is in, and I did not carry the lesson across.
+
+**Fix:** route through the DN-3 consume-time resolver — the same call the WwSky
+leg twelve lines below already uses. Not a new dependency; this TU already
+resolves models that way.
+
+### Two build failures, both instructive
+
+**1. Missing declaration.** `d_a_vrbox.cpp` calls `dExtNpcMount_acquireModelData`
+without including `d_ext_npc_mount.h` — it arrives transitively. The new sibling
+did not, so the include is now explicit.
+
+**2. Duplicate symbol (LNK1169).** I put the exclusion default in
+`ww_npcmount_dispatch.cpp` beside its sibling — which was wrong, and the reason
+is worth recording: **that TU owns the public names in BOTH configurations** (it
+is the runtime dispatch table, forwarding to `g_wwNpcMountApi.fn_*`). Defining a
+plain function there duplicates the WW layer's own definition and the NORMAL
+build fails.
+
+The compile-time cluster (`ww_misc_dispatch.cpp`) is the right home: it compiles
+only when the layer is out. **Two dispatch mechanisms exist for good reasons
+(step 19 cluster 4 records why), and a default has to go in the one matching how
+its symbol is owned.**
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**Turns.** **USER** → `run_outset.bat`; the sky is the test. **HOUSING** → the
+room-BG lighting next, per your ordering.

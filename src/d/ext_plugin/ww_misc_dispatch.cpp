@@ -35,6 +35,7 @@
 // plainer one that can.
 // ============================================================================
 #include "d/d_ext_save_guard.h"
+#include "d/d_ext_npc_mount.h"
 #include "d/d_kankyo_ww_sky.h"
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_npc_doors.h"
@@ -78,6 +79,19 @@ void dExtWw_pollDemoMessage() {
 }
 bool dExtWwSave_isWwHostStage(const char* stageName) {
     return false;
+}
+// §659: d_a_vrbox.cpp is a RECEIVER TU and resolves its dome model through
+// the DN-3 consume-time resolver, so with the WW layer excluded that symbol
+// needs an answer. NULL is not a stub standing in for behaviour: it sends
+// the caller down its own vrbox_sora.bmd path, which is exactly what a build
+// with no donor content should do.
+//
+// It lives HERE rather than in ww_npcmount_dispatch.cpp because that TU owns
+// the public names in BOTH configurations (runtime table) -- defining it
+// there duplicated the WW layer's own definition and the normal build failed
+// to link. This cluster compiles only when the layer is out.
+J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* modelName) {
+    return NULL;
 }
 // ---------------------------------------------------------------------------
 // §634: the WW room-load seam. ww_room_loader.cpp moves with the WW layer (its
