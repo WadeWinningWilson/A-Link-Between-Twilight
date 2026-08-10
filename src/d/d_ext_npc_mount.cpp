@@ -3633,7 +3633,39 @@ void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag) {
         return;
     }
     int standable = 0, slip = 0;
+    int through = 0;
     for (int i = 0; i < bgd->m_ti_num; i++) {
+        // =====================================================================
+        // §654 (№21 at the CONSUMPTION boundary, the owed item from §628).
+        //
+        // m_info0 is a SECOND vocabulary clash in the same record, and it bit
+        // exactly where §628 said it would. WW packs poly properties across
+        // bits 16-26 of word 0; the receiver reads bits 14-23 as its
+        // THROUGH cluster (obj/cam/LINK/arrow/stick/boomerang/rope/bomb). So
+        // an untouched donor dzb is pass-through for the PLAYER on every
+        // triangle.
+        //
+        // Measured on Outset: 85 of 85 ti entries carry 0x3FF in that
+        // cluster. It presented as 'the player has no ground' while a plain
+        // dBgS_GndChk at the same point hit at y=168.3 — because the direct
+        // check does not consult through-flags and the player's acch does.
+        //
+        // R_DL02 never showed this because its BAKE cleared the cluster
+        // offline (§619 adapt_dzb). Outset is staged byte-identical, so the
+        // bake was HIDING the clash rather than solving it — which is the
+        // argument for zero-bake arriving as a concrete bug rather than a
+        // principle.
+        //
+        // Material/sound bits below 14 are preserved, per №21's ruling.
+        // =====================================================================
+        {
+            const u32 inf0 = bgd->m_ti_tbl[i].m_info0;
+            const u32 cleared = inf0 & ~0x00FFC000u;
+            if (cleared != inf0) {
+                bgd->m_ti_tbl[i].m_info0 = cleared;
+                ++through;
+            }
+        }
         u32 inf1 = bgd->m_ti_tbl[i].m_info1;
         const u32 wwAtt = (inf1 >> 16) & 0x1F;
         u32 out = inf1 & ~0x00FFF000u;  // clear att0|att1|groundCode, keep the rest
@@ -3665,8 +3697,9 @@ void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag) {
         }
         bgd->m_ti_tbl[i].m_info1 = out;
     }
-    DuskLog.info("[ExtWw] §334 dzb attribute repack '{}': {} standable, {} slip ({} tris)",
-                 tag != NULL ? tag : "?", standable, slip, (int)bgd->m_ti_num);
+    DuskLog.info("[ExtWw] §334 dzb attribute repack '{}': {} standable, {} slip, "
+                 "{} through-cleared (§654) ({} tris)",
+                 tag != NULL ? tag : "?", standable, slip, through, (int)bgd->m_ti_num);
     // §334d WRITE-VERIFY: this is the first code path that WRITES through the
     // OFFSET_PTR+BE(u32) wrappers — §337's "repacked-but-still-WW-bits" reads
     // suggest the store may not land. Read entry 0 back and log the stored

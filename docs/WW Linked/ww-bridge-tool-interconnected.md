@@ -31182,3 +31182,73 @@ difference is read rather than deduced.
 
 **Turns.** **USER** → one more run; the control lines are the deliverable.
 **HOUSING** → diff them.
+
+## §654 — Housing: FOUND IT. The control diff killed my leading suspect and revived one I had wrongly buried.
+
+### The diff that did it
+
+```
+F_SP102  pos=(34941,-299.0,-15854)   gndH=finite  setInfo=1  direct=-299.0  rooms=0  actorRoom=-1
+F_SP103  pos=(300,800.0,-950)        gndH=finite  setInfo=1  direct=800.0   rooms=0  actorRoom=-1
+sea      pos=(-201622,173.1,312243)  gndH=-INF    setInfo=0  direct=168.3   rooms=1  actorRoom=-1
+```
+
+**`actorRoom=-1` on ALL THREE, including both working stages.** That kills H6 —
+room filtering — outright. It was my leading suspicion and I am glad I refused to
+name it; three wrong refutations tonight had already earned that caution.
+
+`rooms=0` on the working stages is the other surprise, and it explains itself:
+TP rooms carry `room.kcl`, not a dzb (`BgProbe` showed `R00_00 dzb=0x0`), so
+`setBgW` is never called there at all.
+
+### The revived hypothesis, and my error in burying it
+
+I marked **H10 (poly attributes) dead** on the grounds that "the direct check
+reads the same polys". That was wrong: the two queries read the same polys
+through **different pass filters**. A plain `dBgS_GndChk` does not consult
+through-flags; the player's acch does. Same geometry, different verdict — which
+is precisely the `direct=HIT / acch=-INF` split the probe measured.
+
+### The mechanism, measured
+
+```
+Outset room.dzb: 85 ti entries
+  m_info0 carrying the receiver's through-cluster (bits 14-23): 85/85
+  ti[0] m_info0=0x07ffe3ff   throughBits=0x3ff
+```
+
+**Every triangle on Outset is pass-through for the PLAYER.** WW packs poly
+properties across bits 16-26 of word 0; the receiver reads bits 14-23 as its
+through cluster (obj/cam/LINK/arrow/stick/boomerang/rope/bomb). This is №21,
+arriving in `m_info0` — a SECOND vocabulary clash in the same record that §334
+translates the other half of.
+
+### Why R_DL02 never showed it — and why that is the point
+
+R_DL02's **bake** cleared this cluster offline (§619 `adapt_dzb`). Outset is
+staged byte-identical, so it never got that treatment. **The bake was hiding the
+clash rather than solving it** — exactly the pattern §637 named, and exactly the
+item §628 recorded as owed: *"move the №21 clear to the consumption boundary
+alongside §334."*
+
+The owed item WAS the fix. Zero-bake did not cause this bug; it exposed one the
+bake had been papering over on every stage.
+
+### Landed
+
+№21's clear now runs inside `dExtWw_repackDzbAttributes`, beside the §334
+attribute translation — one place, both halves of the same record, at the
+consumption boundary. Material and sound bits below 14 are preserved per №21's
+ruling. The repack log now reports the count.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**Prediction, before the run:** `§334 … 85 standable, 0 slip, 85 through-cleared`,
+then `gndH=finite`, create() completes, the player executes, `Room` becomes 44,
+and the screen stops being black.
+
+**Turns.** **USER** → `run_outset.bat`. **HOUSING** → if it stands, strip §640,
+§645, §647-§653 and re-run both gates.
