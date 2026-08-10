@@ -25,56 +25,106 @@
 
 namespace {
 
-bool s_armed = false;
-char s_stage[16] = {};
-char s_label[64] = {};
-int s_room = 0;
-int s_layer = -1;
+// ============================================================================
+// §638: a LIST, not a single destination.
+//
+// One --stage armed one row, so reaching a second dev stage meant relaunching.
+// Worse, a stage the mod already DECLARES in data had no route at all unless
+// the command line happened to name it too — the declaration knew about the
+// stage and the menu did not.
+//
+// Now anything can add a destination: --stage takes a ';'-separated list, and a
+// content layer calls dBootStage_add for stages it declares. The stage id is
+// still never a compiled literal — every entry arrives as a runtime string.
+// ============================================================================
+struct BootTarget {
+    char stage[16];
+    char label[64];
+    int room;
+    int layer;
+    bool fromData;   // declared by a mod vs. named on the command line
+};
 
-}  // namespace
+const int kMaxTargets = 16;
+BootTarget s_targets[kMaxTargets];
+int s_count = 0;
 
-void dBootStage_arm(const char* spec) {
-    if (spec == NULL || spec[0] == '\0') {
+// NAME[,room[,layer]] — parsed here rather than by the option library so the
+// stage id stays a plain runtime string.
+void addOne(const char* spec, bool fromData) {
+    if (spec == NULL || spec[0] == '\0' || s_count >= kMaxTargets) {
         return;
     }
-    // NAME[,room[,layer]] — parsed here rather than by the option library so the
-    // stage id stays a plain runtime string that is never a compiled literal.
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%s", spec);
+    int room = 0;
+    int layer = -1;
     char* comma = std::strchr(buf, ',');
     if (comma != NULL) {
         *comma++ = '\0';
         char* comma2 = std::strchr(comma, ',');
         if (comma2 != NULL) {
             *comma2++ = '\0';
-            s_layer = std::atoi(comma2);
+            layer = std::atoi(comma2);
         }
-        s_room = std::atoi(comma);
+        room = std::atoi(comma);
     }
     if (buf[0] == '\0') {
         return;
     }
-    std::snprintf(s_stage, sizeof(s_stage), "%s", buf);
-    std::snprintf(s_label, sizeof(s_label), "%s  room %d  layer %d", s_stage,
-                  s_room, s_layer);
-    s_armed = true;
-    DuskLog.info("[BootStage] armed: stage='{}' room={} layer={} "
-                 "(warp window → Dev stage; nothing happens until you press it)",
-                 s_stage, s_room, s_layer);
+    for (int i = 0; i < s_count; i++) {
+        if (std::strcmp(s_targets[i].stage, buf) == 0 && s_targets[i].room == room) {
+            return;  // already listed — a mod declaring what --stage also named
+        }
+    }
+    BootTarget& t = s_targets[s_count];
+    std::snprintf(t.stage, sizeof(t.stage), "%s", buf);
+    t.room = room;
+    t.layer = layer;
+    t.fromData = fromData;
+    std::snprintf(t.label, sizeof(t.label), "%s  room %d  layer %d", t.stage, room, layer);
+    s_count++;
+    DuskLog.info("[BootStage] target {}: '{}' room={} layer={} ({})", s_count - 1,
+                 t.stage, room, layer, fromData ? "declared in mod data" : "--stage");
 }
 
-const char* dBootStage_target(void) {
-    return s_armed ? s_stage : NULL;
+}  // namespace
+
+void dBootStage_arm(const char* spec) {
+    if (spec == NULL) {
+        return;
+    }
+    // ';'-separated so one flag can arm several: --stage "sea,44;R_DL02"
+    char buf[256];
+    std::snprintf(buf, sizeof(buf), "%s", spec);
+    char* p = buf;
+    while (p != NULL && *p != '\0') {
+        char* semi = std::strchr(p, ';');
+        if (semi != NULL) {
+            *semi++ = '\0';
+        }
+        addOne(p, false);
+        p = semi;
+    }
 }
 
-const char* dBootStage_label(void) {
-    return s_armed ? s_label : NULL;
+void dBootStage_add(const char* spec) {
+    addOne(spec, true);
 }
 
-bool dBootStage_warp(void) {
-    if (!s_armed) {
+int dBootStage_count(void) {
+    return s_count;
+}
+
+const char* dBootStage_labelAt(int i) {
+    return (i >= 0 && i < s_count) ? s_targets[i].label : NULL;
+}
+
+bool dBootStage_warpAt(int i) {
+    if (i < 0 || i >= s_count) {
         return false;
     }
+    const BootTarget& t = s_targets[i];
     if (dComIfGp_isEnableNextStage()) {
         // A change is already queued. Stacking a second one is how you get a
         // fault in a stage you never asked for.
@@ -82,28 +132,27 @@ bool dBootStage_warp(void) {
         return false;
     }
     const char* cur = dComIfGp_getStartStageName();
-    if (cur != NULL && std::strcmp(cur, s_stage) == 0) {
+    if (cur != NULL && std::strcmp(cur, t.stage) == 0) {
         // Saying so beats silently doing nothing: "the button did nothing" and
         // "the button worked" are otherwise identical from the outside.
-        DuskLog.info("[BootStage] already in '{}' — nothing to do", s_stage);
+        DuskLog.info("[BootStage] already in '{}' — nothing to do", t.stage);
         return false;
     }
-
     // Same call the warp menu's own rows use (warp.cpp:413), which is the proven
     // path. Point 0: authored PLYR spawn, never -1 (№90).
     mDoGph_gInf_c::offFade();
-    dComIfGp_setNextStage(s_stage, 0, static_cast<s8>(s_room),
-                          static_cast<s8>(s_layer));
-    DuskLog.info("[BootStage] WARP -> stage='{}' room={} layer={}", s_stage,
-                 s_room, s_layer);
+    dComIfGp_setNextStage(t.stage, 0, static_cast<s8>(t.room), static_cast<s8>(t.layer));
+    DuskLog.info("[BootStage] WARP -> stage='{}' room={} layer={}", t.stage, t.room,
+                 t.layer);
     return true;
 }
 
 #else
 
 void dBootStage_arm(const char*) {}
-const char* dBootStage_target(void) { return NULL; }
-const char* dBootStage_label(void) { return NULL; }
-bool dBootStage_warp(void) { return false; }
+void dBootStage_add(const char*) {}
+int dBootStage_count(void) { return 0; }
+const char* dBootStage_labelAt(int) { return NULL; }
+bool dBootStage_warpAt(int) { return false; }
 
 #endif  // TARGET_PC

@@ -30696,3 +30696,56 @@ the two expectations up front: a slow fifty-room load, and a sparse island where
 
 **Turns.** **USER** → `run_rdl02.bat` should work again; `run_outset.bat` for the
 new one. **HOUSING** → standing by.
+
+## §638 — Housing: the Dev stage list. A declared stage now routes itself; one flag no longer means one destination.
+
+> *"The only dev stage is still R_DL02, you forgot to make it appear in the warp
+> menu again"*
+
+Not forgotten — **designed too narrowly.** `--stage` armed exactly ONE
+destination, so `run_outset.bat` and `run_rdl02.bat` were mutually exclusive: to
+see `sea` you had to relaunch, and if the running exe came from the other bat you
+saw the other stage. That is a bad shape independent of the immediate confusion.
+
+**The deeper miss:** `sea` was already **declared in the mod's data** and staged
+byte-identical, and the warp window still could not reach it. The declaration
+knew about the stage; the menu did not. Two facts about the same stage, only one
+of them wired.
+
+### Fixed at both ends
+
+```
+--stage "sea,44;R_DL02"        ';'-separated — one flag, several destinations
+<mod>/ww_stages.ini            NAME[,room[,layer]] — the SAME grammar
+                               every declared stage becomes a Dev stage row
+```
+
+`dExtWwSave_registerWwStage` now keys the WW registry on the NAME and hands the
+whole spec to `dBootStage_add`. So declaring a stage is enough to reach it —
+**no command line required at all.** Duplicate (stage, room) entries are ignored,
+so a mod declaring what `--stage` also named lists once.
+
+The covenant is unchanged and, if anything, cleaner: every entry still arrives as
+a **runtime string**, now from a data file rather than an argv slot. No stage id
+is compiled in.
+
+`ww_stages.ini` updated to `sea,44`.
+
+### Two self-inflicted rounds, both the same hazard
+
+The heredoc collapsed `\0` into **actual NUL bytes** inside `boot_stage.cpp`
+(`grep` reported "Binary file matches", which is what gave it away), and `\n`
+into **real newlines** inside a C++ string literal in `warp.cpp` — that one broke
+the parse 190 lines later, which is why the first error pointed somewhere
+innocent. This is the recorded shell-escape hazard, and knowing about it was not
+enough to avoid it; both were repaired with binary-mode replacement using
+`chr(92)` rather than another heredoc.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**Turns.** **USER** → either bat now shows BOTH rows: `sea room 44 layer -1` and
+`R_DL02 room 0 layer -1`. Outset is the one that has never been entered.
+**HOUSING** → standing by for that log.

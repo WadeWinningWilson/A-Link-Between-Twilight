@@ -64,20 +64,24 @@
 extern "C" {
 #endif
 
-// Arms the destination from the parsed command line. Safe to call with NULL or
-// an empty string, which arms nothing.
+// Arms destinations from the parsed command line. ';'-separated, so one flag
+// can arm several:  --stage "sea,44;R_DL02". Safe with NULL or empty.
 void dBootStage_arm(const char* spec);
 
-// The armed stage id, or NULL if the flag was not given. Callers must not
-// retain the pointer across a call to dBootStage_arm.
-const char* dBootStage_target(void);
+// §638: add a destination from anywhere else — a content layer registering a
+// stage it DECLARES in data, so a declared stage is reachable without the
+// command line naming it too. Same NAME[,room[,layer]] grammar. Duplicates of
+// an already-listed (stage, room) are ignored.
+void dBootStage_add(const char* spec);
 
-// Human-readable "NAME room N layer M" for the armed destination, or NULL.
-const char* dBootStage_label(void);
+// How many destinations are listed, and the label for one. The label is the
+// runtime string, which is what keeps the stage id out of the executable.
+int dBootStage_count(void);
+const char* dBootStage_labelAt(int i);
 
-// Travel now. Returns false (and logs why) if nothing is armed, a stage change
-// is already queued, or the destination is already the current stage.
-bool dBootStage_warp(void);
+// Travel to destination i. Returns false (and logs why) if the index is out of
+// range, a stage change is already queued, or it is already the current stage.
+bool dBootStage_warpAt(int i);
 
 #ifdef __cplusplus
 }

@@ -363,34 +363,37 @@ WarpWindow::WarpWindow() {
         // costs nothing in a normal run. The label is the RUNTIME string: no
         // stage id is compiled in here, same rule as the №99 R2 rows below.
         // ====================================================================
-        if (dBootStage_label() != nullptr) {
-            const std::string bootLabel = dBootStage_label();
+        if (dBootStage_count() > 0) {
             leftPane.add_section("Dev stage (--stage)");
-            leftPane.register_control(
-                leftPane
-                    .add_button({
-                        .text = bootLabel,
-                    })
-                    .on_pressed([] {
-                        mDoAud_seStartMenu(kSoundClick);
-                        // A dev bake has no story state; suppress the same way
-                        // the manifest rows do so arrival does not run events.
-                        markDebugWarpStorySuppress();
-                        dExtNpcMount_cancelTransports();
-                        dExtNpcMount_endDoorDemoLock();
-                        dBootStage_warp();
-                    }),
-                rightPane, [bootLabel](Pane& pane) {
-                    pane.clear();
-                    pane.add_text(fmt::format(
-                        "{}\n\nDestination armed by --stage on the command line. "
-                        "It is a plain native stage change (dComIfGp_setNextStage), "
-                        "not a BG mount — nothing is mounted into the current "
-                        "stage and no payload is required.\n\n"
-                        "Use it for a stage that has no route in yet: a fresh bake "
-                        "has no SCLS record, no door and no warp row pointing at it.",
-                        bootLabel));
-                });
+            for (int bi = 0; bi < dBootStage_count(); ++bi) {
+                const std::string bootLabel = dBootStage_labelAt(bi);
+                leftPane.register_control(
+                    leftPane
+                        .add_button({
+                            .text = bootLabel,
+                        })
+                        .on_pressed([bi] {
+                            mDoAud_seStartMenu(kSoundClick);
+                            // A dev bake has no story state; suppress the same
+                            // way the manifest rows do so arrival runs no events.
+                            markDebugWarpStorySuppress();
+                            dExtNpcMount_cancelTransports();
+                            dExtNpcMount_endDoorDemoLock();
+                            dBootStage_warpAt(bi);
+                        }),
+                    rightPane, [bootLabel](Pane& pane) {
+                        pane.clear();
+                        pane.add_text(fmt::format(
+                            "{}\n\nA plain native stage change "
+                            "(dComIfGp_setNextStage), not a BG mount — nothing is "
+                            "mounted into the current stage and no payload is "
+                            "required.\n\nRows come from --stage on the command "
+                            "line and from stages a mod declares in its own data, "
+                            "so a declared stage is reachable without the command "
+                            "line naming it.",
+                            bootLabel));
+                    });
+            }
         }
 
         // №99 R2: warp rows from mod manifests (warp_label=). Labels stay data-side —

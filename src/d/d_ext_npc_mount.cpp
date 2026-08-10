@@ -57,6 +57,7 @@
 #include "d/d_ext_npc_population.h"
 #include "d/d_ext_save_guard.h"
 #include "d/ext_plugin/ww_room_loader.h"
+#include "dusk/boot_stage.h"
 #include "d/d_ext_dmesg.h"           // §308 M1 native dMesg archive residency
 #include "d/ext_seq/ja1_bank.h"
 #include "d/d_item.h"
@@ -11661,9 +11662,21 @@ void dExtWwSave_registerWwStage(const char* stageName) {
     if (stageName == NULL || stageName[0] == '\0') {
         return;
     }
-    if (s_wwStageNames.insert(stageName).second) {
-        DuskLog.info("[WwSave] §632 WW stage declared (data-side): '{}'", stageName);
+    // §638: a declaration line may carry NAME[,room[,layer]] — the same grammar
+    // --stage uses. The registry keys on the NAME alone; the whole spec also
+    // becomes a dev warp destination, so a stage the mod DECLARES is reachable
+    // without the command line having to name it too. That gap is what left the
+    // warp window showing only R_DL02 while 'sea' was declared and staged.
+    const std::string spec(stageName);
+    const size_t comma = spec.find(',');
+    const std::string name = comma == std::string::npos ? spec : spec.substr(0, comma);
+    if (name.empty()) {
+        return;
     }
+    if (s_wwStageNames.insert(name).second) {
+        DuskLog.info("[WwSave] §632 WW stage declared (data-side): '{}'", name.c_str());
+    }
+    dBootStage_add(spec.c_str());
 }
 
 // §637: "declared in data" is NARROWER than "is a WW host stage", and the
