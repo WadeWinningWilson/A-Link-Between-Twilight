@@ -148,6 +148,7 @@ block.
 - `src/d/ext_plugin/ww_profile_register.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_room_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_stage_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_cam_crawl.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_jasbank.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASBank.cpp` — filename agrees
@@ -209,6 +210,7 @@ block.
 - `include/d/ext_plugin/ww_npcmount_impl_names.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_profile_register.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_room_loader.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_cam_crawl.h` — WW-specific receiver subsystem
 - `include/d/ext_seq/ja1_bank.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_boundary.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_dsp_boundary.h` — JAudio1 parallel donor stack (WW audio)

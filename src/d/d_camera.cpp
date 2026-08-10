@@ -208,6 +208,35 @@ engine_fn dCamera_c::engine_tbl[] = {
     &dCamera_c::test1Camera,      &dCamera_c::test2Camera,
 };
 
+// ============================================================================
+// EXTRA-ENGINE EXTENSION POINT — see d_camera.h.
+//
+// Names no extension and knows of none: an index past engine_tbl is offered to
+// whatever is installed, and with nothing installed no algorithm runs. This is
+// the only place the table's extent is defined, so the bound and the table
+// cannot drift apart.
+// ============================================================================
+static dCamera_extraEngineFn l_extraEngineHook = NULL;
+
+void dCamera_setExtraEngineHook(dCamera_extraEngineFn i_fn) {
+    l_extraEngineHook = i_fn;
+}
+
+int dCamera_engineTblCount() {
+    return (int)(sizeof(dCamera_c::engine_tbl) / sizeof(dCamera_c::engine_tbl[0]));
+}
+
+// Runs the algorithm i_alg selects, from the table or from the extension.
+static bool dCamera_runEngine(dCamera_c* i_cam, int i_alg, s32 i_style) {
+    if (i_alg >= 0 && i_alg < dCamera_engineTblCount()) {
+        return (i_cam->*dCamera_c::engine_tbl[i_alg])(i_style);
+    }
+    if (l_extraEngineHook != NULL) {
+        return l_extraEngineHook(i_cam, i_style, i_alg);
+    }
+    return false;
+}
+
 namespace {
 inline static int get_camera_id(camera_class* i_camera) {
     return fopCamM_GetParam(i_camera);
@@ -1201,7 +1230,7 @@ bool dCamera_c::Run() {
         }
         #endif
 
-        sp0F = (this->*engine_tbl[mCamParam.Algorythmn(mCamStyle)])(mCamStyle);
+        sp0F = dCamera_runEngine(this, mCamParam.Algorythmn(mCamStyle), mCamStyle);
 
         field_0x170++;
         field_0x160++;
@@ -10751,7 +10780,7 @@ bool dCamera_c::currentEvCamera() {
     if (getEvIntData(&i, "Continue", 0)) {
         setFlag(0x400000);
     }
-    (this->*engine_tbl[mCamParam.Algorythmn(style)])(style);
+    dCamera_runEngine(this, mCamParam.Algorythmn(style), style);
     setFlag(0x8);
     mBumpCheckFlags = 0x4001;
     clrFlag(0x80080);

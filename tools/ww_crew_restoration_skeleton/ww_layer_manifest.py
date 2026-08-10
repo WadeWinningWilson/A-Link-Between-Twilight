@@ -216,6 +216,13 @@ WW_SERVING_PLUMBING = {
     # §661: same lineage and same reason as the room seam above — the STAGE
     # seam and its donor lighting translators move with the layer.
     "src/d/ext_plugin/ww_stage_loader.cpp": "WW stage-load seam + lighting translators",
+    # §669: the donor CRAWL algorithm. Same lineage argument as the two seams
+    # above — the algorithm is donor code end to end, so it moves with the
+    # layer. Excluding it leaves the receiver NO unresolved symbol at all: the
+    # extra-engine hook it installs into is NULL-default and names nothing,
+    # and the layer installs itself through dExtWwRoom_installHooks, which the
+    # receiver already names.
+    "src/d/ext_plugin/ww_cam_crawl.cpp": "donor CRAWL camera algorithm + its DMC latch",
     "src/d/ext_seq/ja1_bank.cpp": "JAudio1 bank bridge",
     "src/d/ext_seq/ja1_event_dump.cpp": "JAudio1 diagnostics",
     "src/d/ext_seq/ja1_native.cpp": "JAudio1 native entry points",

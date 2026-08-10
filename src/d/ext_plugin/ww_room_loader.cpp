@@ -46,6 +46,7 @@
 // guards downstream. On non-WW stages the WW branch is unreachable.
 // ============================================================================
 #include "d/ext_plugin/ww_room_loader.h"
+#include "d/ext_plugin/ww_cam_crawl.h"  // §669 dExtWwCam_installCrawl
 
 #include <cstdio>
 #include <cstring>
@@ -634,6 +635,11 @@ void dExtWwRoom_installHooks(void) {
     DuskLog.info("[WwRoomSeam] §635 hooks installed: arc-filename alias, PLYR "
                  "parameter translation, donor message archive");
 #endif
+    // §669: the crawl algorithm installs from INSIDE the layer, not from the
+    // receiver. d_ext_npc_mount.cpp is a receiver TU, so naming the camera
+    // installer there would make it a leg; routing it through the boundary
+    // symbol the receiver already names keeps the layer at one entry point.
+    dExtWwCam_installCrawl();
 }
 
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {

@@ -118,6 +118,22 @@ class camera_class;
 class dCamera_c;
 typedef bool (dCamera_c::*engine_fn)(s32);
 
+// ============================================================================
+// EXTRA-ENGINE EXTENSION POINT
+//
+// engine_tbl holds pointer-to-MEMBER, so it cannot carry a free function and
+// cannot be extended from outside this class. An algorithm index at or beyond
+// the end of the table is therefore routed here instead, as a free function
+// taking the camera explicitly.
+//
+// NULL by default, and that default is the pre-existing behaviour: before this
+// hook an out-of-range index would have indexed off the end of engine_tbl, so
+// declining to run anything is strictly safer than what it replaces.
+// ============================================================================
+typedef bool (*dCamera_extraEngineFn)(dCamera_c*, s32 i_style, int i_algorithm);
+void dCamera_setExtraEngineHook(dCamera_extraEngineFn i_fn);
+int dCamera_engineTblCount();
+
 #if TARGET_PC
 struct DebugFlyCam {
     bool initialized;

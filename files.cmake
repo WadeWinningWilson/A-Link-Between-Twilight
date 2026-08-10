@@ -215,6 +215,7 @@ set(DOLZEL_FILES
         src/dusk/boot_stage.cpp
         src/d/ext_plugin/ww_room_loader.cpp
         src/d/ext_plugin/ww_stage_loader.cpp
+        src/d/ext_plugin/ww_cam_crawl.cpp
         src/d/d_ext_room_verify.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp
