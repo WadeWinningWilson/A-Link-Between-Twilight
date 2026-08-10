@@ -203,6 +203,16 @@ WW_SERVING_PLUMBING = {
     # informative rather than a regression: it is precisely the call that
     # becomes a hook on `fpcPf_Get` once the layer is a module.
     "src/d/ext_plugin/ww_profile_register.cpp": "WW profile ownership shim",
+    # §634: WAS unreviewed-plumbing (KEPT), and that was wrong. Its lineage is
+    # WW end to end -- the seam AND every Phase-2 chunk translator behind it --
+    # so it moves with the layer. Keeping it forced the opposite error: a
+    # translator needing a WW-impl function became a LEG, and the only way to
+    # link was to stub the WW symbol, which hides legs rather than removing
+    # them. Excluding the whole file leaves the receiver ONE boundary symbol,
+    # `dExtWwRoom_loadRoomDzr`, whose default is literally the call
+    # d_s_room.cpp made before the seam existed. Same shape as
+    # ww_profile_register.cpp above.
+    "src/d/ext_plugin/ww_room_loader.cpp": "WW room-load seam + its chunk translators",
     "src/d/ext_seq/ja1_bank.cpp": "JAudio1 bank bridge",
     "src/d/ext_seq/ja1_event_dump.cpp": "JAudio1 diagnostics",
     "src/d/ext_seq/ja1_native.cpp": "JAudio1 native entry points",

@@ -1,8 +1,8 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
-# tool_sha256:      ef07118d5e598fb975c1aa3ca803934698c5f46596ad7756434b8cb17ef0e3e6
+# tool_sha256:      dbb93edea0a874fcbc1a7fe49d998ed868c7e0da4730c0b385f0217057b8c536
 # files_cmake_sha256: 54acd1448290876150964c2d0747247857f085b2257f4a691e5b4aad66670387
-# count: 59
+# count: 60
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
 # (native-port + bridge-owed) PLUS host-plumbing that serves the WW
@@ -21,7 +21,7 @@
 #   src/d/d_albw_dialogue.cpp  --  self-declared "NEW CODE — ALBW Port (Native Dialogue Box)" — a DIFFERENT port, not WW
 #   src/d/d_ext_mod_flags.cpp  --  self-declared "WW-agnostic" twice — general mod flag/quest infrastructure
 #
-# UNREVIEWED host-plumbing (9) — KEPT by default.
+# UNREVIEWED host-plumbing (8) — KEPT by default.
 # If one of these is a WW bridge the build FAILS TO LINK, which is
 # loud; the opposite default drops receiver code silently.
 #   libs/JSystem/src/JAudio2/JASChannel.cpp
@@ -30,7 +30,6 @@
 #   src/d/ext_plugin/ww_itemmdl_dispatch.cpp
 #   src/d/ext_plugin/ww_misc_dispatch.cpp
 #   src/d/ext_plugin/ww_npcmount_dispatch.cpp
-#   src/d/ext_plugin/ww_room_loader.cpp
 #   src/dusk/boot_stage.cpp
 #   src/f_pc/f_pc_profile_lst.cpp
 #
@@ -53,14 +52,13 @@
 #   src/d/d_stage.cpp
 #   src/f_op/f_op_msg_mng.cpp
 #
-# Matched the OLD filename rules but declare no donor content (6),
+# Matched the OLD filename rules but declare no donor content (5),
 # so they are no longer excluded. Listed so the change is auditable:
 #   src/d/d_albw_dialogue.cpp
 #   src/d/d_ext_mod_flags.cpp
 #   src/d/ext_plugin/ww_itemmdl_dispatch.cpp
 #   src/d/ext_plugin/ww_misc_dispatch.cpp
 #   src/d/ext_plugin/ww_npcmount_dispatch.cpp
-#   src/d/ext_plugin/ww_room_loader.cpp
 set(WW_LAYER_FILES
     src/d/actor/d_a_esa.cpp
     src/d/actor/d_a_ext_ep.cpp
@@ -97,6 +95,7 @@ set(WW_LAYER_FILES
     src/d/ext_line/mdoext1_3dline.cpp
     src/d/ext_plugin/ww_import_gate.cpp
     src/d/ext_plugin/ww_profile_register.cpp
+    src/d/ext_plugin/ww_room_loader.cpp
     src/d/ext_seq/ja1_bank.cpp
     src/d/ext_seq/ja1_event_dump.cpp
     src/d/ext_seq/ja1_jasbank.cpp

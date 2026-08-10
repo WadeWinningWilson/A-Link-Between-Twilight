@@ -45,6 +45,8 @@
 // Included for its `extern "C"` linkage: without it this definition takes
 // C++ mangling and does not match the declaration the receiver calls.
 #include "d/ext_plugin/ww_profile_register.h"
+#include "d/ext_plugin/ww_room_loader.h"
+#include "d/d_stage.h"
 
 #if defined(DUSK_EXCLUDE_WW_ACTIVE)
 
@@ -76,6 +78,23 @@ void dExtWw_pollDemoMessage() {
 }
 bool dExtWwSave_isWwHostStage(const char* stageName) {
     return false;
+}
+// ---------------------------------------------------------------------------
+// §634: the WW room-load seam. ww_room_loader.cpp moves with the WW layer (its
+// lineage is WW end to end — the seam and every chunk translator behind it), so
+// the receiver's one call site in d_s_room.cpp needs an answer.
+//
+// This default is NOT a stub standing in for absent behaviour. Its body is
+// EXACTLY the call d_s_room.cpp made before the seam existed, so with no WW
+// layer the room-load path is byte-equivalent to the unported receiver — the
+// same relationship ww_profile_register.cpp has with fpcPf_Get.
+//
+// The distinction is worth keeping sharp, because getting it wrong once already
+// cost a round: defaulting a WW symbol that a RECEIVER TU calls hides a leg.
+// Defaulting the ONE symbol that IS the layer boundary is the boundary working.
+// ---------------------------------------------------------------------------
+void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
+    dStage_dt_c_roomLoader(i_data, i_stage, i_roomNo);
 }
 bool dExtWwSave_refuseNativeWrite(const char* api, int stageNo, int bit) {
     return false;

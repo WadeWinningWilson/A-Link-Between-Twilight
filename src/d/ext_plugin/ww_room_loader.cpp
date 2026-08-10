@@ -52,6 +52,9 @@
 #include "d/d_ext_save_guard.h"  // dExtWwSave_isWwHostStage
 #include "d/d_com_inf_game.h"    // dComIfGp_getStartStageName
 #include "d/d_stage.h"           // dStage_dt_c_roomLoader
+#include "d/d_resorce.h"         // dRes_info_c::setRes (§634 publish)
+#include "d/d_bg_w.h"            // cBgD_t
+#include "d/d_ext_npc_mount.h"   // §334 repack, DN-3 consume-time resolver
 #include "dusk/logging.h"
 
 // ============================================================================
@@ -367,6 +370,96 @@ static void wwRoom_translateRcam(dStage_dt_c* i_stage, int i_roomNo) {
     DuskLog.info("[WwRoomSeam] RCAM: {} donor-stride record(s) translated for "
                  "room {}.", num, i_roomNo);
 }
+// ============================================================================
+// PHASE 2, CHUNK 4: room.dzb ATTRIBUTES — §334's vocabulary, second consumer.
+//
+// §332 measured the mismatch byte-exactly: WW packs its material attCode in
+// PolyInf1 bits 16-20, and the receiver reads that same word as att0 (12-15),
+// att1 (16-18) and groundCode (19-23). Untranslated, WW attCode 1 reads as TP
+// att1=1 — a SINK class — and the floor swallows the player.
+//
+// §334 already solves this and was only ever wired to the mount's OBJECT dzbs.
+// A room arc's dzb is a SECOND CONSUMER of the same translation, not a second
+// mechanism.
+//
+// WHY IT BELONGS HERE AND NOT IN daBg. It shipped once as a call inside
+// d_a_bg.cpp, which made a receiver TU reference the WW layer — a leg, and the
+// separability gate caught it. The dzb is consumed at BG create, which happens
+// AFTER room load, so the seam can translate it in place and daBg's untouched
+// code reads a dzb already speaking the receiver's vocabulary.
+//
+// Idempotent by construction (§334f), so a room reload re-entering here is safe.
+// ============================================================================
+static void wwRoom_repackDzb(int i_roomNo) {
+    const char* arcName = dComIfG_getRoomArcName(i_roomNo);
+    cBgD_t* dzb = (cBgD_t*)dComIfG_getStageRes(arcName, "room.dzb");
+    if (dzb == NULL) {
+        return;
+    }
+    dExtWw_repackDzbAttributes(dzb, "room.dzb");
+}
+
+// ============================================================================
+// PHASE 2, CHUNK 5: room MODELS — publishing what the node type prevented.
+//
+// A vanilla WW room arc files its models under RARC node type 'BDL '.
+// dRes_info_c::setRes dispatches its per-resource fixup on that 4CC and has no
+// 'BDL ' branch, so nothing parsed them and the slot still holds the RAW file.
+// Reading that as a J3DModelData is the §619 crash — [modelData + 0xC8] was
+// file bytes and +8 was the reported fault address, bit for bit.
+//
+// Adding a 'BDL ' branch would be mount-time BDL parsing, which DN-3 forbids.
+// DN-3's own prescribed remedy is the consume-time cached resolver, so that is
+// what runs here — and it parses from a PRISTINE BYTE COPY, leaving the donor
+// arc buffer un-pointer-fixed. Under the zero-bake rule that matters twice
+// over: the donor bytes stay identical on disk AND in memory.
+//
+// THEN IT PUBLISHES. The parsed model is written back into the archive's own
+// res slot, so daBg — and every other consumer — reads a real J3DModelData
+// from the ordinary getStageRes call it always made. The receiver learns
+// nothing; no call site changes. That is the difference between this and the
+// version that shipped as a branch inside daBg.
+//
+// Idempotent: after publishing, the slot no longer begins "J3D2".
+// ============================================================================
+static void wwRoom_publishModels(int i_roomNo) {
+    static const char* const kModels[] = {
+        "model.bdl",  "model1.bdl", "model2.bdl",
+        "model3.bdl", "model4.bdl", "model5.bdl",
+    };
+    const char* arcName = dComIfG_getRoomArcName(i_roomNo);
+    dRes_info_c* info = dComIfG_getStageResInfo(arcName);
+    if (info == NULL) {
+        return;
+    }
+    JKRArchive* archive = info->getArchive();
+    if (archive == NULL) {
+        return;
+    }
+    for (int i = 0; i < (int)(sizeof(kModels) / sizeof(kModels[0])); i++) {
+        void* res = dComIfG_getStageRes(arcName, kModels[i]);
+        // A parsed J3DModelData never begins "J3D2"; compared as bytes so
+        // endianness is not a question.
+        if (res == NULL || std::memcmp(res, "J3D2", 4) != 0) {
+            continue;
+        }
+        J3DModelData* parsed = dExtNpcMount_acquireStageModelData(arcName, kModels[i]);
+        if (parsed == NULL) {
+            DuskLog.warn("[WwRoomSeam] model '{}/{}' raw and UNRESOLVED — the "
+                         "consumer will still see a file buffer",
+                         arcName, kModels[i]);
+            continue;
+        }
+        JKRArchive::SDIFileEntry* entry = archive->findNameResource(kModels[i]);
+        if (entry == NULL) {
+            continue;
+        }
+        info->setRes((s32)entry->file_id, parsed);
+        DuskLog.info("[WwRoomSeam] model '{}/{}' published parsed into the res "
+                     "slot (node 'BDL ' has no receiver fixup branch)",
+                     arcName, kModels[i]);
+    }
+}
 #endif  // DUSK_WW_ROOM_SEAM && DUSK_WW_ROOM_CHUNKS
 
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
@@ -388,6 +481,8 @@ void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
         wwRoom_translateScls(i_stage, i_roomNo);   // chunk 1 — SCLS (§604 stride hit)
         wwRoom_translateFili(i_stage, i_roomNo);   // chunk 2 — FILI (§607 semantic hit)
         wwRoom_translateRcam(i_stage, i_roomNo);   // chunk 3 — RCAM (format-detected)
+        wwRoom_repackDzb(i_roomNo);                // chunk 4 — dzb attrs (§334 2nd consumer)
+        wwRoom_publishModels(i_roomNo);            // chunk 5 — 'BDL ' models via DN-3 resolver
 #endif
         return;
     }

@@ -33,6 +33,20 @@ public:
         return *(mRes + i_index);
     }
 
+    // §634: write side of getRes. WW-AGNOSTIC host plumbing — it names no
+    // donor format and carries no WW predicate, so it stays in the build with
+    // the WW layer excluded and is not a leg.
+    //
+    // It exists because setRes()'s fixup dispatches on the RARC directory node
+    // 4CC, and a donor archive can file a resource under a node type this
+    // receiver has no branch for. The parallel donor stack then publishes the
+    // properly-loaded resource into the slot, so every receiver consumer reads
+    // what it always expected and no consumer learns anything happened.
+    void setRes(s32 i_index, void* i_res) {
+        JUT_ASSERT(25, i_index >= 0 && i_index < getResNum());
+        *(mRes + i_index) = i_res;
+    }
+
     s32 getResNum() { return mArchive->countFile(); }
 
     int getCount() { return mCount; }

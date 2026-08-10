@@ -30431,3 +30431,71 @@ default the symbol.
 
 **Turns.** **HOUSING** → re-land through the seam, §631 last since it needs the
 alias-hook design. **USER** → nothing; Outset staging is intact.
+
+## §634 — Housing: re-landed through the seam, and the leg that survived the re-land exposed a wrong classification.
+
+### Two translators moved into the parallel stack
+
+```
+chunk 4  wwRoom_repackDzb      §334's dzb vocabulary, second consumer
+chunk 5  wwRoom_publishModels  'BDL ' models via the DN-3 consume-time resolver
+```
+
+Both live in `ww_room_loader.cpp` beside SCLS/FILI/RCAM, one function with one
+call site each — step 19's grain. **No receiver TU is touched:** `d_a_bg.cpp`,
+`d_stage.cpp` and `d_resorce.cpp` all still diff to 0 lines against the commit
+before I first touched them.
+
+`wwRoom_publishModels` is the interesting one. The consume-time resolver parses
+from a pristine byte copy, then the parsed model is **published back into the
+archive's own res slot**, so `daBg` reads a real `J3DModelData` from the ordinary
+`getStageRes` call it always made. That is the whole difference between this and
+the version that shipped as a branch inside `daBg`: **the receiver learns
+nothing, and no call site changes.** The write side needed one accessor,
+`dRes_info_c::setRes(index, ptr)` — WW-agnostic, names no donor format, carries
+no predicate, so it stays with the WW layer excluded and is not a leg.
+
+### Then the gate went red again — and it was right again
+
+`ww_room_loader.cpp` sat in **UNREVIEWED host-plumbing — KEPT by default**. So a
+translator calling a WW-impl function was *still* a leg; I had moved it one file
+sideways, not out.
+
+**The classification was the bug.** That file's lineage is WW end to end — the
+seam and every chunk translator behind it. It moves with the layer. Reclassified
+as WW-serving plumbing, which leaves the receiver **one** boundary symbol,
+`dExtWwRoom_loadRoomDzr`, defaulted in `ww_misc_dispatch.cpp`.
+
+**And that default is not the papering I was caught doing.** The distinction is
+sharp and worth keeping:
+
+```
+LEG HIDDEN  : a RECEIVER TU calls a WW symbol -> stub the symbol so it links.
+              The WW-shaped call stays in receiver code.
+BOUNDARY    : the ONE symbol that IS the layer edge, whose default body is
+              EXACTLY the call d_s_room.cpp made before the seam existed.
+              With no WW layer the room-load path is byte-equivalent to the
+              unported receiver.
+```
+
+Same relationship `ww_profile_register.cpp` already has with `fpcPf_Get` — the
+tool's own comments name it as the precedent.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped · unreviewed plumbing 9 -> 8
+```
+
+### Still owed, and NOT re-landed — stated rather than quietly dropped
+
+- **§626 PLYR start mode.** It cannot go where the others went: `playerInit`
+  runs INSIDE the delegated loader (the log ordering shows it between the seam
+  entry and the SCLS translation), so a post-delegation translator is too late —
+  the actor is already queued. This needs a ported PLYR reader, which is 3b's
+  actual design and its own piece of work.
+- **§631 arc filename.** Needs a WW-AGNOSTIC alias hook the WW layer populates,
+  so the resource layer keeps no WW knowledge. **This one blocks Outset**: without
+  it the receiver asks for `R44_00.arc` and vanilla ships `Room44.arc`.
+
+**Turns.** **HOUSING** → the arc-name alias hook (Outset blocker), then the PLYR
+reader. **USER** → nothing; staging intact.
