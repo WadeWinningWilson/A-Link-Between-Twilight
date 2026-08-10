@@ -213,6 +213,9 @@ WW_SERVING_PLUMBING = {
     # d_s_room.cpp made before the seam existed. Same shape as
     # ww_profile_register.cpp above.
     "src/d/ext_plugin/ww_room_loader.cpp": "WW room-load seam + its chunk translators",
+    # §661: same lineage and same reason as the room seam above — the STAGE
+    # seam and its donor lighting translators move with the layer.
+    "src/d/ext_plugin/ww_stage_loader.cpp": "WW stage-load seam + lighting translators",
     "src/d/ext_seq/ja1_bank.cpp": "JAudio1 bank bridge",
     "src/d/ext_seq/ja1_event_dump.cpp": "JAudio1 diagnostics",
     "src/d/ext_seq/ja1_native.cpp": "JAudio1 native entry points",

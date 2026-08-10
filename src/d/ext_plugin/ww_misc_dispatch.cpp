@@ -47,6 +47,7 @@
 // C++ mangling and does not match the declaration the receiver calls.
 #include "d/ext_plugin/ww_profile_register.h"
 #include "d/ext_plugin/ww_room_loader.h"
+#include "d/ext_plugin/ww_stage_loader.h"
 #include "d/d_stage.h"
 
 #if defined(DUSK_EXCLUDE_WW_ACTIVE)
@@ -109,6 +110,11 @@ J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* mo
 // ---------------------------------------------------------------------------
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
     dStage_dt_c_roomLoader(i_data, i_stage, i_roomNo);
+}
+// §661: same relationship for the STAGE seam — the default body is exactly
+// the call d_stage.cpp made before it existed.
+void dExtWwStage_loadStageDzs(void* i_data, dStage_dt_c* i_stage) {
+    dStage_dt_c_stageLoader(i_data, i_stage);
 }
 bool dExtWwSave_refuseNativeWrite(const char* api, int stageNo, int bit) {
     return false;

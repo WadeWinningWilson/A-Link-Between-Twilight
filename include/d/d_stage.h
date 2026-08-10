@@ -1441,6 +1441,9 @@ typedef void (*dStage_plyrParamHook_f)(u32* io_parameters);
 void dStage_setPlyrParamHook(dStage_plyrParamHook_f i_hook);
 
 void dStage_dt_c_roomLoader(void* i_data, dStage_dt_c* stageDt, int param_2);
+// §661: the stage-side sibling. Declared for the same reason the room one is —
+// a seam outside this TU delegates to it.
+void dStage_dt_c_stageLoader(void* i_data, dStage_dt_c* i_stage);
 dStage_KeepDoorInfo* dStage_GetKeepDoorInfo();
 dStage_KeepDoorInfo* dStage_GetRoomKeepDoorInfo();
 void dStage_dt_c_fieldMapLoader(void* i_data, dStage_dt_c* i_stage);

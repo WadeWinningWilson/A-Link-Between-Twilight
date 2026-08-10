@@ -16,6 +16,9 @@
 #include "d/d_path.h"
 #include "d/d_save_HIO.h"
 #include "d/d_stage.h"
+#if TARGET_PC
+#include "d/ext_plugin/ww_stage_loader.h"  // §661 stage seam
+#endif
 #include "d/d_demo.h"  // §347a arm probe (demo mode/frame)
 #include "SSystem/SComponent/c_counter.h"  // §352a gFrm stamp
 #include "d/d_bg_parts.h"
@@ -3164,7 +3167,13 @@ void dStage_Create() {
     data_8074C56B_debug = false;
     data_8074C56C_debug = false;
 #endif
+#if TARGET_PC
+    // §661: the stage-load seam, sibling of the room seam. On a stage with no
+    // donor lighting chunks it IS dStage_dt_c_stageLoader.
+    dExtWwStage_loadStageDzs(stageRsrc, dComIfGp_getStage());
+#else
     dStage_dt_c_stageLoader(stageRsrc, dComIfGp_getStage());
+#endif
     daSus_c::execute();
 
     if (dComIfGp_getStartStageRoomNo() >= 0) {

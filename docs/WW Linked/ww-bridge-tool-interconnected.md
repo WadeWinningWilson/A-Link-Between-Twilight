@@ -31572,3 +31572,78 @@ STAGE chunks and the Phase-2 seam only wraps the room loader.
 **Turns.** **USER** → go on the stage-loader seam + the three lighting
 translators, or bank here. **HOUSING** → ready; this is a real unit of work, not
 a one-liner, and I would rather say so than start it unannounced.
+
+## §661 — Housing: the STAGE-load seam, and the three lighting chunks translated by field. No mount, no bake, donor bytes untouched.
+
+The room seam covered `room.dzr`. Lighting is STAGE data, so it needed the
+sibling `dExtWwStage_loadStageDzs` — one receiver call site (`d_stage.cpp:3167`),
+one boundary symbol, defaulted in the compile-time cluster to exactly the call
+that was there before.
+
+**It cannot work the way the room seam does.** The room seam reads
+`i_stage->getSclsInfo()` — a pointer the receiver's own handler set. Here the
+receiver's handlers NEVER RAN (the tag never matched), so the seam walks the dzs
+image itself, finds the donor's chunks by donor tag, and calls the setters. That
+is 3b reached literally: **donor bytes read at donor stride by code that knows
+the donor's layout, writing RECEIVER structures.**
+
+### The three, and they are not equally hard
+
+**Colo — MEASURED IDENTICAL, and worth stating rather than assuming.**
+
+```
+donor     {u8 palette_id[8]; f32 change_rate;}      0xC
+receiver  {u8 palette_id[8]; BE(f32) change_rate;}  0xC
+```
+
+Same fields, same offsets, same size — the `BE` wrapper is only how the receiver
+reads the same big-endian bytes the donor wrote. **Nothing to translate**; the
+chunk is pointed at, exactly as the receiver's handler would have done.
+
+**EnvR — a WIDENING, not a re-layout.** `u8 pselect_id[8]` → `u8 pselect_id[65]`.
+The donor's eight copy straight in. **Stated limit:** the tail is a CLAMP, not a
+translation — what indexes this table is undecoded on both sides. Zeroing 8..64
+would silently select palette 0; instead the donor's LAST entry is replicated, so
+a reader running off the donor's range gets the donor's final state rather than a
+fabricated one. The code says so at the line.
+
+**Pale — the real translation**, same role, different vocabulary:
+
+```
+0x00 mActor_C0  -> 0x00 actor_amb_col      0x1E mFog       -> 0x21 fog_col
+0x06 mBG0_C0    -> 0x03 bg_amb_col[0]      0x21 mVirtIdx   -> 0x2C vrboxcol_id
+0x0C mBG1_C0    -> 0x06 bg_amb_col[1]      0x24 mFogStartZ -> 0x24 fog_start_z
+0x12 mBG2_C0    -> 0x09 bg_amb_col[2]      0x28 mFogEndZ   -> 0x28 fog_end_z
+0x18 mBG3_C0    -> 0x0C bg_amb_col[3]           (both fog planes: same offset)
+```
+
+**NOT DELIVERED, and named rather than dropped silently:** the donor's five K0
+colours (`mActor_K0`, `mBG0_K0`..`mBG3_K0`) are TEV KONSTANT register colours and
+the receiver's palette has no field for them — its `plight_col[6]` is point
+lights, a different concept. Their donor consumer is the WW tevstr setup that
+§407 ported the point-light half of. **Until that lands there is nowhere correct
+to put them, and mapping them onto `plight_col` would be exactly the fabrication
+this port refuses.** The receiver-only tail (bloom, cloud-shadow density, amb
+alphas) has no donor source and is zeroed: a donor stage has no opinion on those.
+
+### Covenant
+
+No mount. No bake. The donor `stage.dzs` is read exactly as it ships and the
+translated records live in seam-owned static pools — same discipline as the room
+seam's SCLS pool, and for the same reason (the loader runs before the room heap
+is current).
+
+The predicate is again the DATA: a receiver stage has no `EnvR`/`Colo`/`Pale`, so
+all three translators return 0 and the seam is inert. Third time that has been
+the right shape (§657b, §658, here).
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 82/82, 0 DISAGREES
+manifest exit 0 (new TU added to Tier-1) · caches wiped
+```
+
+**Prediction:** `§661 donor lighting translated: EnvR=52 Colo=10 Pale=57`, and
+the island stops being black. Whether it looks RIGHT is a separate question — the
+K0 colours are missing by design and the sky is still unconfirmed.
+
+**Turns.** **USER** → `run_outset.bat`. **HOUSING** → standing by.

@@ -147,6 +147,7 @@ block.
 - `src/d/ext_plugin/ww_npcmount_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_profile_register.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_room_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_stage_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_jasbank.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASBank.cpp` — filename agrees
