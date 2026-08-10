@@ -31758,3 +31758,70 @@ caches wiped
 send the log. Two lines decide it: `§664 init HELD` climbing means the camera
 never initialised; its absence means the camera is fine and the disappearing is
 the room-gating hypothesis above.
+
+## §665 — Housing: lighting translation CONFIRMED RUNNING. Camera diagnosis dead, and the user's observation found the real one.
+
+### Two confirmations from one log
+
+```
+§661 donor lighting translated: EnvR=52 (8->65 widened) Colo=10 (identical) Pale=57 (field-mapped)
+```
+
+**§663's tag fix worked** — the counts match §660's static census exactly (52/10/57).
+The translation is genuinely running now.
+
+**And no `§664 init HELD` anywhere.** The camera initialises fine, so §664's
+floor-wait diagnosis is DEAD. I built a probe for a gate that was never the
+problem; the probe earned its keep by ruling it out in one run.
+
+### The user's observation is the actual diagnosis
+
+> *"Swimming in water activates that camera, but climbing onto land and walking
+> stops the camera tracking Link."*
+
+That water/land split is not a symptom of a broken camera — it is the ROOM CAMERA
+being consulted on land and not in water. And room 44's RCAM is:
+
+```
+RCAM[0..2] type='Subject'    RCAM[3..4] type='FixdPos'
+```
+
+The receiver resolves a room camera by **NAME STRING** against TP's
+`camtype.dat` (`d_camera.cpp:2303`, `strcmp` against `mCamTypeData[i].name`).
+Measured against the real file in `CamParam.arc`:
+
+```
+TP camtype.dat contains 'FixdPos'  ->  YES (plus 9 variants)
+TP camtype.dat contains 'Subject'  ->  NONE
+```
+
+So on land the receiver either resolves a genuine TP **fixed** camera — which by
+definition does not follow Link — or fails the lookup on `Subject`, returns
+`0xFF`, and degrades. In water the room camera is not consulted and the ordinary
+follow camera runs. **The split is explained exactly, and by data rather than by
+guesswork.**
+
+### It is a VOCABULARY mismatch, and the donor confirms it
+
+`d_camera.cpp:221` in the donor: `mCamTypeSubject = GetCameraTypeFromCameraName("Subject")`
+— `Subject` is a first-class WW camera type, listed in the donor's own type
+roster alongside `Field`, `Water`, `Boat`, `BoatBattle`, `MiniIsland`, `Cliff`
+and the rest. It simply does not exist in TP's table.
+
+**This is the same shape as every other finding tonight**: shared mechanism,
+divergent vocabulary — SCLS strides, STAG fields, PLYR start modes, dzs chunk
+tags, and now camera type names.
+
+### Not fixed, because the honest fix is a port
+
+Under the standing directive the answer is the donor's camera-type system, not a
+name alias onto the nearest TP type — `Subject` is a WW behaviour and mapping it
+onto a TP entry would be inventing a camera. The donor's roster is in its source
+and its data is not in the extracted `files/res/Object` tree under a `camtype`
+name, so **locating the donor's camera parameter data is step one** and I would
+rather say that than guess a mapping.
+
+**Turns.** **USER** → this is a good banking point; the lighting is confirmed
+running and the camera is diagnosed to the string. **HOUSING** → find the donor's
+camera parameter data, then port the type table the way §644 ported the message
+archive.
