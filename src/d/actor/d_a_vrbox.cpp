@@ -229,6 +229,51 @@ static int daVrbox_solidHeapCB(fopAc_ac_c* i_this) {
     // on a WW sky host this actor owns vr_sky.bdl from the staged WwSky arc.
     // Same create flags as the donor (0x80000, 0x11020202).
     // ========================================================================
+    // ========================================================================
+    // §657 NATIVE SOURCE — the donor reads its OWN STAGE, not a mounted arc.
+    //
+    // Donor: daVrbox_solidHeapCB does
+    //     dComIfG_getStageRes("Stage", "vr_sky.bdl")
+    // i.e. the dome belongs to the stage that is loaded. The §418 leg below
+    // sources the same model from a MOUNTED arc named "WwSky", which is the
+    // bridge: it only exists when something mounted it, and it is enabled by a
+    // flag that a mount sets from a hardcoded proc name (EXT_BG0/EXT_BG9).
+    //
+    // On a stage staged byte-identical from the disc, the donor model is
+    // already IN the stage arc -- Outset loads vr_sky, vr_kasumi_mae,
+    // vr_back_cloud and vr_uso_umi from its own Stage.arc every time -- and
+    // nothing drew them, because no mount announced itself.
+    //
+    // So this asks the stage, exactly as the donor does. Note the arc KEY is
+    // the receiver's "Stg_00": §635 aliases the FILE to the donor's Stage.arc
+    // while deliberately keeping the receiver's key, because every
+    // getStageRes call in the engine is written against it. That is the one
+    // seam between the donor's call and this one, and it is named here rather
+    // than left to be rediscovered.
+    //
+    // The model published into the stage res slot by the room seam (§634) is a
+    // parsed J3DModelData, so there is no re-parse hazard on this path -- the
+    // §418b concern below applies to the mount's raw-bytes arc, not to this.
+    // ========================================================================
+    // §657b: NO PREDICATE. The separability gate refused the first version,
+    // which asked a WW symbol whether this was a donor stage -- a new leg in a
+    // receiver TU. Being forced off it produced the better design: the DATA is
+    // the predicate. No receiver stage arc contains vr_sky.bdl, so a non-null
+    // result here IS "this stage carries a donor sky", asked of the stage
+    // itself exactly as the donor asks it. WW-agnostic, no default needed,
+    // and one fewer thing that can disagree with reality.
+    {
+        J3DModelData* stageSky =
+            (J3DModelData*)dComIfG_getStageRes("Stg_00", "vr_sky.bdl");
+        if (stageSky != NULL) {
+            this_->mpWwSky = mDoExt_J3DModel__create(stageSky, 0x80000, 0x11020202);
+            DuskLog.info("[WwSky] §657 vr_sky.bdl from the STAGE arc (no mount): {}",
+                         this_->mpWwSky != NULL ? "ok" : "FAILED");
+            if (this_->mpWwSky != NULL) {
+                return TRUE;
+            }
+        }
+    }
     if (dKyWw_isSkyHost()) {
         // §418b CRASH FIX (symbolicated 154940: create on RAW bytes, fault
         // 0xe0020000 = big-endian file data as pointer): the custom-mounted
@@ -266,6 +311,26 @@ static int daVrbox_Create(fopAc_ac_c* i_this) {
         g_env_light.hide_vrbox = false;
         // KIT-DONOR-HUNK-END
 #if TARGET_PC
+        // ====================================================================
+        // §657: the dependency is INVERTED for the native path.
+        //
+        // Before: a mount set dKyWw_setSkyHost(true) from a hardcoded proc
+        // name (EXT_BG0/EXT_BG9), and this actor then consulted the flag. The
+        // bridge announced itself and the sky followed.
+        //
+        // Now: this actor OWNS a donor dome loaded from the stage's own arc, so
+        // it says so. The flag becomes a consequence of the data rather than of
+        // something having been mounted -- which is the donor's own contract,
+        // already quoted above: "a live vrbox = this stage HAS a sky".
+        //
+        // The mount path is untouched and still sets the flag its own way, so
+        // hosted stages behave exactly as before.
+        // ====================================================================
+        if (this_->mpWwSky != NULL && !dKyWw_isSkyHost()) {
+            dKyWw_setSkyHost(true);
+            DuskLog.info("[WwSky] §657 sky host from the STAGE — this vrbox owns "
+                         "the donor dome, no mount involved");
+        }
         if (dKyWw_isSkyHost()) {
             dKyWw_setDomeActorsLive(true);  // §418: mount dome draw retires
             DuskLog.info("[WwSky] 418 NATIVE vrbox LIVE -- vr_sky owned by the real actor");

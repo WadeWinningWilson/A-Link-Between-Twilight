@@ -31396,3 +31396,60 @@ adding to it.
 
 **Turns.** **USER** → go on the vrbox port. **HOUSING** → probes are already
 stripped; ready to start.
+
+## §657 — Housing: the vrbox now reads its OWN STAGE, as the donor does. Smaller than a port, because §418 already did the porting.
+
+**The port was mostly already done.** §418 ported the donor's `daVrbox_Draw`,
+`daVrbox_color_set` and the solid-heap leg faithfully — the WW dome logic is
+already donor-verbatim in `d_a_vrbox.cpp`. Two things were not native:
+
+```
+SOURCE   dExtNpcMount_acquireModelData("WwSky", "vr_sky.bdl")   <- a MOUNTED arc
+donor    dComIfG_getStageRes("Stage",  "vr_sky.bdl")            <- the stage's own
+
+GATE     dKyWw_setSkyHost(true) fired only from strcmp(procName, "EXT_BG0"/"EXT_BG9")
+         — the bridge announcing itself by name
+```
+
+On a stage staged byte-identical from the disc, the donor model is already IN the
+stage arc — Outset loads `vr_sky`, `vr_kasumi_mae`, `vr_back_cloud`,
+`vr_uso_umi` from its own `Stage.arc` every single time — and nothing drew them,
+because no mount announced itself.
+
+### Two changes, both removals
+
+**Source.** `daVrbox_solidHeapCB` now asks the stage first, exactly as the donor
+does. The arc KEY stays the receiver's `Stg_00` — §635 aliases the FILE to the
+donor's `Stage.arc` and deliberately keeps the key, because every `getStageRes`
+in the engine is written against it. That is the one seam between the donor's
+call and this one, and it is named in the code rather than left to be
+rediscovered.
+
+**Gate, inverted.** Before: a mount set the flag from a hardcoded proc name, and
+the actor consulted it. Now: the actor OWNS a donor dome from the stage, so it
+says so. The flag becomes a consequence of the DATA — which is the donor's own
+contract, already quoted in that function: *"a live vrbox = this stage HAS a
+sky."* The mount path is untouched, so hosted stages behave exactly as before.
+
+### The gate refused my first version, and the second is better for it
+
+The first attempt asked `dExtWwSave_isDeclaredWwStage(...)` — a new WW symbol in
+a receiver TU, i.e. a leg, and the separability build said so immediately.
+
+Being forced off it produced the better design: **no predicate at all.** No
+receiver stage arc contains `vr_sky.bdl`, so a non-null result IS *"this stage
+carries a donor sky"* — asked of the stage itself, exactly as the donor asks it.
+WW-agnostic, no default needed, and one fewer thing that can disagree with
+reality. That is twice now (§637, here) that a name- or flag-shaped predicate was
+the wrong shape and the data was the right one.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**Prediction:** `§657 vr_sky.bdl from the STAGE arc (no mount): ok`, then
+`§657 sky host from the STAGE`, and Outset gets its sky. `vrbox2` — clouds, haze,
+false sea — is the same shape and comes next.
+
+**Turns.** **USER** → `run_outset.bat`. **HOUSING** → vrbox2 on the same pattern.
