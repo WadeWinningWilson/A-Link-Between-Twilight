@@ -31501,3 +31501,74 @@ manifest exit 0 · caches wiped
 
 **Turns.** **USER** → `run_outset.bat`; the sky is the test. **HOUSING** → the
 room-BG lighting next, per your ordering.
+
+## §660 — Housing: the room is black because the receiver never FINDS the lighting chunks. And the obvious one-line fix would have been silent corruption.
+
+Sky: partially through, **not confirmed correct** — the user cannot judge it
+unlit, so it stays unconfirmed rather than claimed.
+
+### Why the island is black, and why the stand-outs are not
+
+Sorting what renders by WHERE IT COMES FROM makes it one fact, not three:
+
+| renders | source |
+|---|---|
+| grass, rupees | TP actors (`GRASS`, `ITEM`) |
+| doors | `KNOB00`, the mount path |
+| **the island** | **the WW room model — the only pure-native asset** |
+
+Everything lit comes through a TP or mount path. The one black thing is the one
+native thing. So it is the room BG's tevstr feed.
+
+### The measurement
+
+```
+RECEIVER stage table   "Env0"→envrInfoInit  "Col0"→pselectInfoInit  "PAL0"→paletteInfoInit  "VRB0"
+DONOR    stage table   "EnvR"→envrInfoInit  "Colo"→pselectInfoInit  "Pale"→paletInfoInit    "Virt"
+```
+
+**Same four handlers, different four tag names.** Outset ships
+`EnvR:52 Colo:10 Pale:57 Virt:37`, so the receiver's decoder matches **none** of
+the first three: no environment ranges, no palette selection, no palettes. The
+room's tevstr is fed nothing and draws black.
+
+`Virt` IS already in the receiver's table — which is very likely why "some
+semblance of a sky came through" while the ground did not. A nice independent
+corroboration of the mechanism.
+
+### The one-line fix I did not write
+
+Adding `EnvR`/`Colo`/`Pale` beside the receiver's own tags is three lines, needs
+no predicate, and is WW-agnostic — and `Virt` is precedent for the receiver
+carrying a donor-spelled tag. **It would also have been silent corruption**, and
+checking took one command:
+
+```
+                     DONOR      RECEIVER
+Colo  / Col0          0xC        0xC      <- same size...
+Pale  / PAL0         0x2C       0x34
+EnvR  / Env0          0x8       0x41
+```
+
+`EnvR` is **0x8 in the donor and 0x41 in the receiver** — eight-fold. And the
+field vocabularies differ too: the donor's `stage_pselect_info_class` is
+`u8 palette_id[8]; f32 change_rate`, while the receiver's palette record carries
+`actor_amb_col`, `bg_amb_col[4]`, `plight_col[6]`, `fog_col`, `fog_start_z`.
+
+Feeding donor bytes to those readers is §607's warning exactly — **silent data,
+not a crash**, which is worse than the black screen it would appear to fix.
+
+### So this is a translator, and it is the stage-side §604
+
+Three chunks, each needing the donor record transcribed and materialised in
+receiver layout, translated BY FIELD — the same shape as SCLS in the room seam,
+and the same shape §642 deferred. The difference is that it is now concrete: the
+chunks are named, the sizes are measured, and the handlers on both sides are
+known to be the same four.
+
+**It also needs the stage-loader seam that does not exist yet**, since these are
+STAGE chunks and the Phase-2 seam only wraps the room loader.
+
+**Turns.** **USER** → go on the stage-loader seam + the three lighting
+translators, or bank here. **HOUSING** → ready; this is a real unit of work, not
+a one-liner, and I would rather say so than start it unannounced.
