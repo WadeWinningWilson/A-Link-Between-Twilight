@@ -31647,3 +31647,52 @@ the island stops being black. Whether it looks RIGHT is a separate question — 
 K0 colours are missing by design and the sky is still unconfirmed.
 
 **Turns.** **USER** → `run_outset.bat`. **HOUSING** → standing by.
+
+## §663 — Housing: the seam found nothing, silently. Match the way the receiver matches.
+
+§657 is confirmed working — `vr_sky.bdl from the STAGE arc (no mount): ok` and
+`sky host from the STAGE`. **No §661 line at all**, so the lighting seam ran and
+found none of `EnvR` / `Colo` / `Pale` on a stage that carries **52, 10 and 57**
+of them.
+
+**Cause:** the receiver compares chunk tags like this —
+
+```c
+if ((int)node2->m_tag == *(int*)nodeFunc->identifier)
+```
+
+— reinterpreting the 4-char STRING as an int in **native** order, so both sides
+read the same bytes the same way and the comparison holds with no swap anywhere.
+
+My version composed a **big-endian** value (`tag[0]<<24 | ...`). That is the
+mathematically tidy thing to write, and it matched nothing.
+
+**This is the same lesson `m_offset` taught one commit earlier**, in the same
+file, on the same data structure: *when reading a field the receiver owns, read
+it the receiver's way, not the correct-looking way.* Twice in two commits is a
+pattern, not bad luck — writing a fresh reader for someone else's format invites
+exactly this, and the fix both times was to stop hand-rolling and use what the
+receiver already uses.
+
+**And the failure mode is worth naming:** a silent miss. No crash, no error, no
+log — the seam reported nothing because it found nothing, and "nothing to
+translate" is indistinguishable from "not wired up" unless you know the counts.
+That is why §660 measured `EnvR:52 Colo:10 Pale:57` before any code was written.
+
+### On the "blinks out of existence" report
+
+Recorded as UNEXPLAINED, and not folded into this fix. The user's own guess — the
+camera not following, so what is drawn depends on where the frustum is — is
+plausible and untested. The competing reading is simpler: black geometry against
+a black sky is invisible, and at angles where something lights it you see it
+again. **Both fit the description and neither is measured.** Camera is item 2 on
+the agreed list and it has still only ever been observed with a frozen player, so
+it gets read before it gets theorised about.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 82/82, 0 DISAGREES
+caches wiped
+```
+
+**Turns.** **USER** → `run_outset.bat`; `§661 ... EnvR=52 Colo=10 Pale=57` is the
+line that says the translation actually ran this time. **HOUSING** → camera next.

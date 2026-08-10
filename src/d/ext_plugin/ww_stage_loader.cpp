@@ -56,9 +56,22 @@ namespace {
 // m_tag is deliberately kept unswapped by the receiver so a 4-char literal
 // compares directly; this matches the same way.
 // ============================================================================
+// §663: MATCH THE WAY THE RECEIVER MATCHES, byte for byte.
+//
+// dStage_dt_c_decode compares  (int)node->m_tag == *(int*)identifier  — it
+// reinterprets the 4-char STRING as an int in NATIVE order, so both sides read
+// the same bytes the same way and the comparison holds without any swap.
+//
+// My first version composed a BIG-ENDIAN value instead ((tag[0]<<24)|...),
+// which is the mathematically tidy thing and never matched anything. The seam
+// found no EnvR, no Colo and no Pale on a stage that carries 52, 10 and 57 of
+// them, and reported nothing at all — a silent miss, not a crash.
+//
+// The lesson is the same one m_offset taught two commits ago: when reading a
+// field the receiver owns, do it the receiver's way rather than the correct-
+// looking way.
 u32 tagOf(const char* i_tag) {
-    return ((u32)(u8)i_tag[0] << 24) | ((u32)(u8)i_tag[1] << 16) |
-           ((u32)(u8)i_tag[2] << 8) | (u32)(u8)i_tag[3];
+    return *(const u32*)i_tag;
 }
 
 const void* findChunk(void* i_data, const char* i_tag, int* o_num) {
