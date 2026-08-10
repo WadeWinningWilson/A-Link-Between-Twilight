@@ -30936,3 +30936,76 @@ the other seven fields fabricated.
 **Turns.** **USER** → go/no-go on building the stage-loader seam (Phase 2 for
 `dStage_dt_c_stageLoader`, STAG first). **HOUSING** → holding; the §640 probe
 stays until then since it is still reading useful values.
+
+## §643 — Housing: asked whether the seam is vanilla-true. The donor says: mostly UNNECESSARY, and for the rest a translator is IMPOSSIBLE. Port WW's message system instead.
+
+> *"Is it vanilla true? Is there a system you can better port over? What did
+> vanilla WW do?"*
+
+Three questions, three answers, and they overturn §642's plan.
+
+### 1. STAG's first 0x20 is SHARED LINEAGE — the same pattern as §636, a third time
+
+Accessor by accessor:
+
+| | donor | receiver | |
+|---|---|---|---|
+| `GetSaveTbl`    | `mProp>>1 & 0x7F` @0x09 | `field_0x09>>1 & 0x1F` | same byte, same shift, **mask 0x7F vs 0x1F** |
+| `GetSTType`     | `>>16 & 7` @0x0C | `>>16 & 7` @0x0C | **IDENTICAL** |
+| `GetUpButton`   | `mParticleSceneNo & 3` @0x0A | `field_0x0a & 7` @0x0A | same byte, **mask 3 vs 7** |
+| `GetParticleNo` | `>>3 & 0xFF` @0x0A | `>>3 & 0xFF` @0x0A | **IDENTICAL** |
+
+The receiver reads the SAME fields at the SAME offsets and simply takes **more
+bits** of two of them. That is exactly the PLYR start-mode finding (§636: donor
+`&0xF`, receiver `&0x1F`) — **the third instance of the same lineage pattern**:
+the receiver widened a field the donor packed narrower.
+
+**So most of a STAG "translator" would translate nothing.** The data is already
+where the receiver looks.
+
+**And I must correct §642:** I wrote *"GetUpButton's field does not exist in the
+donor."* It does — `mParticleSceneNo & 3`, same byte. What differs is the mask.
+I over-corrected an earlier error into a bigger one.
+
+### 2. For the receiver-only tail, a translator is IMPOSSIBLE, not merely wrong
+
+`mMsgGroup` @0x28, `mStageTitleNo` @0x2A, `mParticleNo[16]` @0x2C, `mGapLevel`,
+`mRangeUp`, `mRangeDown` — all past the donor's 0x20 record. **There is nothing
+to translate from.** Any value a seam produced would be invented, which is the
+fabrication the zero-bake rule exists to refuse. §642's "build a STAG translator"
+was wrong on its own terms.
+
+### 3. What vanilla WW did — and it is a SYSTEM, not a field
+
+```
+WW    /res/Msg/bmgres.arc  +  bmgresh.arc     ONE archive, whole game,
+      mounted at logo/menu (d_s_logo.cpp:882-889, d_s_menu.cpp:44)
+TP    /res/Msg{us,jp,uk,...}/bmgres%d.arc     TEN archives, selected per stage
+      by STAG.mMsgGroup
+```
+
+**Wind Waker has no per-stage message group at all.** The concept does not exist
+in the donor, which is why the field is absent rather than merely moved. TP's
+group split is a receiver invention.
+
+So the answer to *"is there a system you can better port over"* is **yes, and it
+is the message loader**: one global archive rather than a per-stage group. That
+is the donor's actual mechanism, it needs no invented value, and it makes
+`GetMsgGroup` irrelevant on a donor stage instead of dangerous.
+
+### Revised plan, replacing §642's
+
+```
+DROP    the STAG translator. Most fields need none; the rest cannot have one.
+DO      two mask reconciliations (GetSaveTbl 0x7F, GetUpButton 3) — §636's shape
+DO      port WW's message loading: one archive, no per-stage group
+DEFER   mStageTitleNo / mParticleNo / gap+range — each needs its donor SYSTEM
+        identified the same way, not a value picked
+```
+
+This also retires the question of whether the stage-loader seam is needed *for
+STAG*. It may still be needed for other stage chunks (§607's list), but STAG is
+no longer the reason.
+
+**Turns.** **USER** → go on porting the message loader as the next unit.
+**HOUSING** → holding; §640 probe still in.
