@@ -30254,3 +30254,59 @@ unresolved names and printed mojibake; the count was mine, not the data's.
 
 **Turns.** **USER** → the DN-3-route word for `daBg`, and a call on `sea`-whole
 vs a narrower first target. **HOUSING** → SCOB stride, then the `BDL ` route.
+
+## §630 — Housing: the `'BDL '` blocker closed by DN-3's own route. Vanilla WW arcs now load untouched — on disk AND in memory.
+
+> *"whatever is truer to native and allows for the most byte identical it can be.
+> WW vanilla is the boss."*
+
+Both calls follow from that, and neither is close.
+
+**`daBg` → consume-time resolver.** Adding a `'BDL '` branch to `dRes_info_c`
+would be mount-time BDL parsing, which DN-3 forbids. DN-3's own stated remedy for
+a new BDL consumer is the **consume-time cached resolver** — so this is the route
+DN-3 names, not an exception to it. New export
+`dExtNpcMount_acquireStageModelData()`: the existing resolver sourced from the
+STAGE res control instead of the object one.
+
+**The part that decides it on the user's own criterion:** `acquireMountedModel`
+stashes a **pristine byte copy before parsing** and hands the parser a fresh
+copy, so the donor arc buffer is **never pointer-fixed in place**. Retyping the
+node in a bake would edit the file; converting the payload would edit the model;
+this touches neither. **The donor bytes stay identical in memory as well as on
+disk** — which no other option achieves.
+
+Detection is the file magic — a parsed `J3DModelData` never begins `"J3D2"` —
+compared as bytes so endianness is not a question.
+
+**`sea` whole.** Trimming is editing. WW shipped Outset as room 44 of a fifty-room
+stage; that is what comes in.
+
+### Stride measured, not assumed
+
+`SCOB` family is **0x24**, `ACTR` family is **0x20** — 100% ASCII at the right
+stride, garbage at the wrong one, in both directions. My first census reported 64
+SCOB entries as unresolved actor names and printed mojibake; that count was mine,
+not the data's.
+
+**Corrected Outset placement census — 475 placements, 0 unparsed:**
+
+```
+RESOLVE   193 / 475   (16 names)  kusax1 x46, pflower x41, kusax21 x36,
+                                  kusax7 x30, item x14, Zl1 x5, Ba1 x1 ...
+proc -1   282 / 475   (71 names)  keeth x26, ikada_h x11, bridge x11,
+                                  Oyashi x10, SalvagE x10, TagKb x10, Pig x6 ...
+```
+
+41% of Outset's placements resolve today. The rest no-op, visibly, which is the
+correct behaviour for an unported actor and is exactly what Ji1 did in R_DL02.
+
+Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped.
+
+**Still open before Outset can be entered:** the arcs must be reachable under the
+names the receiver asks for (`dComIfG_getRoomArcName` → `R44_00`, and `STG_00`) —
+a **path mapping**, zero bytes changed — and a stage id for `sea`. Neither is a
+content edit. That is the next build, not a ruling.
+
+**Turns.** **HOUSING** → path mapping + stage id, then first cold entry into an
+untouched `sea/Room44.arc`. **USER** → nothing until that lands.

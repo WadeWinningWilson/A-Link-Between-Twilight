@@ -4318,6 +4318,43 @@ J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelNa
     return acquireMountedModel(arc, modelName, res);
 }
 
+// ============================================================================
+// §630: stage-res sibling of the above, for donor ROOM arcs staged byte-identical.
+//
+// A vanilla WW room arc files its models under RARC node type 'BDL '.
+// dRes_info_c dispatches its per-resource fixup on that 4CC and has no 'BDL '
+// branch, so the models are never mount-parsed and getStageRes returns the RAW
+// file buffer — which daBg then read as a J3DModelData (the §619 crash).
+//
+// Adding a 'BDL ' branch would be mount-time BDL parsing, which DN-3 forbids.
+// DN-3's own prescribed remedy for a new consumer is this: route it through the
+// consume-time cached resolver. So this is not an exception to DN-3, it is the
+// route DN-3 names.
+//
+// It also serves the zero-bake rule better than any alternative:
+// acquireMountedModel stashes a PRISTINE BYTE COPY before parsing and hands the
+// parser a fresh copy, so the donor arc buffer is never pointer-fixed in place.
+// The donor bytes stay identical in memory, not only on disk.
+// ============================================================================
+J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* modelName) {
+    if (arc == NULL || arc[0] == '\0' || modelName == NULL || modelName[0] == '\0') {
+        return NULL;
+    }
+    void* res = dComIfG_getStageRes(arc, modelName);
+    if (res == NULL) {
+        return NULL;
+    }
+    // §427 cache-namespace probe, same order as the object path.
+    {
+        const std::string bgKey = std::string("bg:") + arc + "/" + modelName;
+        auto it = s_modelDataCache.find(bgKey);
+        if (it != s_modelDataCache.end()) {
+            return it->second;
+        }
+    }
+    return acquireMountedModel(arc, modelName, res);
+}
+
 // §229: same as above but bakes a body BMT (color/material swap) into the model at
 // consume time. Cache key includes the bmt (acquireMountedModel), so distinct color
 // variants of the same model coexist. Falls back to the plain model if the bmt is bad.

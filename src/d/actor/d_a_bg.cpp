@@ -134,10 +134,40 @@ int daBg_c::createHeap() {
     daBg_Part* bgPart = mBgParts;
 
     for (int i = 0; i < 6; i++) {
-        J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes(arcName, l_modelName[i]);
+        const char* modelResName = l_modelName[i];
+        J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes(arcName, modelResName);
         if (modelData == NULL) {
-            modelData = (J3DModelData*)dComIfG_getStageRes(arcName, l_modelName2[i]);
+            modelResName = l_modelName2[i];
+            modelData = (J3DModelData*)dComIfG_getStageRes(arcName, modelResName);
         }
+
+#if TARGET_PC
+        // ====================================================================
+        // §630: a VANILLA WW room arc, staged byte-identical, files its models
+        // under RARC node type 'BDL '. dRes_info_c dispatches its fixup on that
+        // 4CC and has no 'BDL ' branch, so nothing parsed them and what came
+        // back is the raw file. Reading it as a J3DModelData is the §619 crash:
+        // [modelData + 0xC8] was file bytes, and +8 was the fault address.
+        //
+        // Detect it by the file magic — a parsed J3DModelData never begins
+        // "J3D2" — and route it through the consume-time cached resolver, which
+        // is DN-3's PRESCRIBED path for a new BDL consumer, not an exception to
+        // it. Byte comparison rather than a u32 compare so endianness is not a
+        // question.
+        //
+        // Zero-bake (user directive, 2026-08-09): this is what lets the donor
+        // arc stay untouched. The resolver parses from a pristine byte copy, so
+        // the arc buffer is never pointer-fixed in place either.
+        // ====================================================================
+        if (modelData != NULL && std::memcmp(modelData, "J3D2", 4) == 0) {
+            J3DModelData* resolved =
+                dExtNpcMount_acquireStageModelData(arcName, modelResName);
+            DuskLog.info("[daBg] §630 raw J3D room model '{}/{}' -> consume-time "
+                         "resolver: {}",
+                         arcName, modelResName, resolved != NULL ? "ok" : "FAILED");
+            modelData = resolved;
+        }
+#endif
 
         if (modelData != NULL) {
             mDoExt_setupStageTexture(modelData);

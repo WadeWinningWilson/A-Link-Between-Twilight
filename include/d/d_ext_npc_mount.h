@@ -484,6 +484,15 @@ bool dExtNpcMount_providerAt(int index, dExtNpcManifest* out);
 // §27: WW bmd3/bdl arcs need ExtNpc load+finish (never cast getObjectRes → J3DModelData*).
 // acquire pins ModelData in the session cache; retain/release keep the arc buffer alive (№73).
 J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName);
+// §630: the same resolver, sourced from the STAGE res control instead of the
+// object one — for donor ROOM arcs staged byte-identical. A vanilla WW room arc
+// files its models under RARC node type 'BDL ', which dRes_info_c has no branch
+// for, so they are never mount-parsed and getStageRes hands back a raw buffer.
+// This is DN-3's PRESCRIBED route for that case, not an exception to it: one
+// cached parse at consume time, from a pristine byte copy, so the donor buffer
+// is never pointer-fixed in place and stays byte-identical in memory as well as
+// on disk.
+J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* modelName);
 // §229 direct-port helper: acquire a model with a body BMT baked in (parse-at-consume,
 // cache-keyed by model+bmt). For WW actors whose COLOR lives in a .bmt swap (pig pg_*.bmt)
 // — a raw getObjectRes bmt can't be applied, and the base model renders untextured/black.
