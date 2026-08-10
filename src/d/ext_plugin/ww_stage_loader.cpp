@@ -39,34 +39,44 @@
 namespace {
 
 // ============================================================================
-// The dzs container, same shape the receiver's own decoder walks: a u32 count
-// followed by 12-byte entries of {tag[4], num u32, offset u32}. Offsets are
-// file-relative and are resolved by dStage_dt_c_offsetToPtr BEFORE the loader
-// runs, so by the time the seam sees them the receiver has already turned them
-// into pointers. The seam therefore re-reads the RAW header itself rather than
-// trusting a field it did not set.
+// §662 CRASH FIX — I named this hazard in the banner above and then walked
+// into it. The first version did `base + be32(entry.offset)`, treating the
+// chunk offset as FILE-RELATIVE. It is not: dStage_dt_c_offsetToPtr runs
+// BEFORE the loader and rewrites every chunk offset into a resolved pointer
+// in place. So the arithmetic produced garbage, and because the seam runs on
+// EVERY stage load it faulted on the first TP stage at boot -- an instant
+// crash, not an Outset one.
+//
+// Writing "the receiver has already turned them into pointers" in a comment
+// and then adding the base anyway is the exact failure this file exists to
+// avoid. So it now uses the receiver's OWN types -- dStage_fileHeader and
+// dStage_nodeHeader -- and reads m_offset through the same OFFSET_PTR the
+// receiver's handlers read. No hand arithmetic on a field someone else owns.
+//
+// m_tag is deliberately kept unswapped by the receiver so a 4-char literal
+// compares directly; this matches the same way.
 // ============================================================================
-struct WwDzsEntry {
-    char tag[4];
-    u8 num[4];
-    u8 offset[4];
-};
-
-u32 be32(const u8* p) {
-    return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
+u32 tagOf(const char* i_tag) {
+    return ((u32)(u8)i_tag[0] << 24) | ((u32)(u8)i_tag[1] << 16) |
+           ((u32)(u8)i_tag[2] << 8) | (u32)(u8)i_tag[3];
 }
 
-const u8* findChunk(const void* i_data, const char* i_tag, int* o_num) {
+const void* findChunk(void* i_data, const char* i_tag, int* o_num) {
+    *o_num = 0;
     if (i_data == NULL) {
         return NULL;
     }
-    const u8* base = (const u8*)i_data;
-    const u32 count = be32(base);
-    for (u32 i = 0; i < count && i < 64; i++) {
-        const WwDzsEntry* e = (const WwDzsEntry*)(base + 4 + i * 12);
-        if (std::memcmp(e->tag, i_tag, 4) == 0) {
-            *o_num = (int)be32(e->num);
-            return base + be32(e->offset);
+    dStage_fileHeader* file = (dStage_fileHeader*)i_data;
+    const int count = file->m_chunkCount;
+    if (count <= 0 || count > 64) {
+        return NULL;  // not a dzs we understand; leave it entirely alone
+    }
+    const u32 want = tagOf(i_tag);
+    dStage_nodeHeader* node = file->m_nodes;
+    for (int i = 0; i < count; i++, node++) {
+        if (node->m_tag == want) {
+            *o_num = node->m_entryNum;
+            return (const void*)node->m_offset;
         }
     }
     return NULL;
@@ -129,9 +139,9 @@ void copyRGB(color_RGB_class* o_dst, const u8* i_src) {
 // than a fabricated one. If a donor stage ever proves to index past 7, this is
 // the line to revisit, and it says so.
 // ============================================================================
-int translateEnvr(const void* i_dzs, dStage_dt_c* i_stage) {
+int translateEnvr(void* i_dzs, dStage_dt_c* i_stage) {
     int num = 0;
-    const u8* raw = findChunk(i_dzs, "EnvR", &num);
+    const u8* raw = (const u8*)findChunk(i_dzs, "EnvR", &num);
     if (raw == NULL || num <= 0) {
         return 0;
     }
@@ -165,9 +175,9 @@ int translateEnvr(const void* i_dzs, dStage_dt_c* i_stage) {
 // So there is NOTHING to translate. The chunk is simply pointed at, which is
 // exactly what the receiver's own handler would have done had the tag matched.
 // ============================================================================
-int translateColo(const void* i_dzs, dStage_dt_c* i_stage) {
+int translateColo(void* i_dzs, dStage_dt_c* i_stage) {
     int num = 0;
-    const u8* raw = findChunk(i_dzs, "Colo", &num);
+    const u8* raw = (const u8*)findChunk(i_dzs, "Colo", &num);
     if (raw == NULL || num <= 0) {
         return 0;
     }
@@ -201,9 +211,9 @@ int translateColo(const void* i_dzs, dStage_dt_c* i_stage) {
 // bloom_tbl_id, BG1..3_amb_alpha) has no donor source at all, so it is zeroed:
 // a donor stage genuinely has no opinion on those.
 // ============================================================================
-int translatePale(const void* i_dzs, dStage_dt_c* i_stage) {
+int translatePale(void* i_dzs, dStage_dt_c* i_stage) {
     int num = 0;
-    const u8* raw = findChunk(i_dzs, "Pale", &num);
+    const u8* raw = (const u8*)findChunk(i_dzs, "Pale", &num);
     if (raw == NULL || num <= 0) {
         return 0;
     }
