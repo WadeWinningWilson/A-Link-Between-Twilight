@@ -3175,7 +3175,28 @@ void dStage_Create() {
     *dStage_roomControl_c::getDemoArcName() = 0;
     dKankyo_create();
 
-    if (dComIfG_getStageRes("vrbox_sora.bmd")) {
+    // ========================================================================
+    // §658: the sky test is a RESOURCE NAME, and the two lineages differ only
+    // in which name they ask for. Same function, same position, same two
+    // creates:
+    //
+    //   this engine   getStageRes("vrbox_sora.bmd")
+    //   donor         getStageRes("Stage", "vr_sky.bdl")   d_stage.cpp:2239
+    //
+    // A donor stage carries vr_sky.bdl and no vrbox_sora.bmd, so the test
+    // failed and NEITHER actor was created -- which is why Outset had no sky
+    // even though all four dome models were resident in its own Stage.arc.
+    //
+    // WW-AGNOSTIC and data-driven: no donor is named as a predicate, the stage
+    // is simply asked for either sky model. Whichever it carries, it has a sky.
+    // Same shape as §657b, and for the same reason -- the data answers this
+    // better than any name or flag can.
+    // ========================================================================
+    if (dComIfG_getStageRes("vrbox_sora.bmd") != NULL
+#if TARGET_PC
+        || dComIfG_getStageRes("vr_sky.bdl") != NULL
+#endif
+    ) {
         fopAcM_Create(fpcNm_VRBOX_e, NULL, NULL);
         fopAcM_Create(fpcNm_VRBOX2_e, NULL, NULL);
     }
