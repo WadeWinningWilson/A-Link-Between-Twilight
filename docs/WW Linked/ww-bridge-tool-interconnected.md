@@ -30179,3 +30179,78 @@ worth more there than it was here.
 
 **Turns.** **HOUSING** → census the Outset donor arc + R_DL02 against the
 receiver's consumed set. **USER** → nothing until that lands.
+
+## §629 — Housing: ZERO-BAKE is the standing rule. Outset censused cold against untouched donor arcs — one blocker, and one consequence nobody had priced.
+
+> *"no baking will happen for any content in the port. Every piece byte identical."*
+
+Recorded as a standing directive. Every donor→receiver difference translates at
+the **consumption boundary** in receiver code — the §334 / №86 / §626 pattern —
+never by rewriting the asset.
+
+### Census: `sea/Room44.arc` + `sea/Stage.arc`, BYTE-UNTOUCHED
+
+**Green — works with zero edits:**
+
+```
+DZB   dispatched (ConvDzb)        DAT/DZR/DZS/TEX   no branch, none needed (raw is correct)
+BTK   dispatched
+dzb group tree   83/100 groups resolve a room id natively
+dzb attCodes     0x00 0x01 0x02 0x03 0x04 0x0b 0x10 0x12 0x13 0x19
+                 -> ALL in §334's standable class. ZERO slip surfaces.
+                    Outset needs no new attribute decode.
+```
+
+**The one blocker — and it is the same one, unchanged:**
+
+`'BDL '` has no branch in `dRes_info_c`, so models stay raw and `daBg` receives a
+file buffer. Sanctioned fix is DN-3's own: route `daBg` through the **consume-time
+cached resolver** rather than casting `getStageRes` to `J3DModelData*`. DO-NOT's
+2026-08-04 amendment already proved raw `J3D2bdl4` with MDL3 intact loads,
+renders and animates through exactly that path. **Not a DN-3 exception — DN-3's
+prescribed route.** Still a DO-NOT surface, so it wants the user's word.
+
+### The consequence nobody had priced
+
+**Outset is room 44 of `sea` — a FIFTY-ROOM stage.** `stage.dzs` carries
+`RTBL:50 MULT:50 SCLS:212 EnvR:52 Pale:57`, because `sea` is every island at
+once. R_DL02 was a dedicated one-house stage; this is not that.
+
+Under zero-bake you **cannot trim it** — trimming is editing. So `sea` comes in
+whole. That is almost certainly correct, and it is a much larger bite than "a
+second room". Naming it now rather than discovering it mid-load.
+
+### New work the census revealed
+
+**PLYR start modes are structured, and §626 is visibly lossy.** 24 spawn points:
+
+```
+start_mode  16 x8   26 x5   18 x5   21 x2   17 x1   25 x1   29 x1
+```
+
+Seven distinct values, none in TP's 0-14 range. **That is an encoding, not
+noise** — §626's blanket "→ 0" would flatten all 24 arrivals into the same
+walk-in. It was the right call for one door; it is a stand-in here. WW's own
+encoding of that field now needs real decoding, and this census is the specimen
+set that makes it possible.
+
+**Chunk variety we have never exercised:** `RCAM:5` (first specimen ever — RCAM
+has been honestly-untested for the whole campaign), `RARO:5`, `SHIP:2`, `2DMA:1`,
+`SOND:2`, `RPAT:40`, `RPPN:296`, `TGDR:5`.
+
+**The door back is authored here.** `SCLS[2] -> 'Ojhous2' start=0 room=1` —
+Grandma's house, i.e. R_DL02. Outset and R_DL02 are two ends of one door.
+
+**Actors** (ACTR/SCOB families, 0x20 stride):
+
+```
+192 placements / 15 names  RESOLVE   (kusax1 x46, pflower x41, item x14, Zl1 x5, Ba1 x1 ...)
+219 placements / 57 names  proc -1   (keeth x26, ikada_h x11, bridge x11, Pig x6, Pirates x4 ...)
+ 64 entries    UNPARSED — SCOB family is NOT 0x20 stride
+```
+
+Per №31-C the 64 are **UNKNOWN, not zero**. My first pass reported them as
+unresolved names and printed mojibake; the count was mine, not the data's.
+
+**Turns.** **USER** → the DN-3-route word for `daBg`, and a call on `sea`-whole
+vs a narrower first target. **HOUSING** → SCOB stride, then the `BDL ` route.
