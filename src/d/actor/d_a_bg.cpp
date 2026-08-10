@@ -643,9 +643,27 @@ int daBg_c::create() {
         }
 
         if (mpBgW != NULL) {
+#if TARGET_PC
+            // §645: the LAST unchecked link. Set() can return success while
+            // the BgW carries a memory-error flag, and Regist then REJECTS
+            // it -- which returns cPhs_ERROR_e and destroys the whole BG
+            // actor, so the room ends up with no collision even though
+            // createHeap reported registering one. Silent in vanilla.
+            DuskLog.info("[BgProbe] pre-Regist room={} used={} memErr={}",
+                         roomNo, mpBgW->ChkUsed() ? 1 : 0,
+                         mpBgW->ChkMemoryError() ? 1 : 0);
+#endif
             if (dComIfG_Bgsp().Regist(mpBgW, this)) {
+#if TARGET_PC
+                DuskLog.error("[BgProbe] Regist REJECTED room={} — BG actor "
+                              "dies, room has NO collision", roomNo);
+#endif
                 return cPhs_ERROR_e;
             }
+#if TARGET_PC
+            DuskLog.info("[BgProbe] Regist OK room={} — collision is live",
+                         roomNo);
+#endif
         }
 
         if (mpKCol != NULL) {
