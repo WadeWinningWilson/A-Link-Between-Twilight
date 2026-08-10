@@ -14,6 +14,12 @@ bool dExtWwSave_isWwHostStage(const char* stageName);
 // data (<mod>/ww_stages.ini). Lets /res/Stage/sea/Room44.arc be reached under
 // its own name without the exe carrying a WW place-name (History A1).
 void dExtWwSave_registerWwStage(const char* stageName);
+// §637: NARROWER than isWwHostStage — true only for stages DECLARED in mod
+// data, i.e. those whose arcs are staged byte-identical under the DONOR's own
+// filenames. The neutral R_DL*/F_DL* fork stages are repackaged under the
+// receiver's names and must NOT be aliased. Use this for on-disk LAYOUT
+// questions; use isWwHostStage for donor DATA semantics.
+bool dExtWwSave_isDeclaredWwStage(const char* stageName);
 // §47: give the player the donor cast's LIGHTING RECIPE inside donor spaces.
 // Returns true when it handled the lighting, in which case the caller must SKIP
 // setLightTevColorType_MAJI — bypassing MAJI is the point, not a side effect.

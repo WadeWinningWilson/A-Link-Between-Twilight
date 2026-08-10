@@ -11666,6 +11666,25 @@ void dExtWwSave_registerWwStage(const char* stageName) {
     }
 }
 
+// §637: "declared in data" is NARROWER than "is a WW host stage", and the
+// difference is load-bearing.
+//
+//   R_DL* / F_DL*  neutral fork stages. Their arcs were REPACKAGED under the
+//                  receiver's own names (R00_00.arc, STG_00.arc), so the
+//                  receiver's lookup is already correct for them.
+//   ww_stages.ini  vanilla-named donor stages. Their arcs are staged
+//                  BYTE-IDENTICAL under the donor's names (Room44.arc,
+//                  Stage.arc), so the lookup has to be aliased.
+//
+// Anything keyed on donor DATA semantics (dzb attributes, PLYR packing) wants
+// the broad predicate — both kinds carry donor bytes. Anything keyed on the
+// on-disk LAYOUT wants this one. Using the broad predicate for the filename
+// alias made the receiver ask R_DL02 for Room0.arc, which is not what is staged
+// there, and the stage mounted nothing.
+bool dExtWwSave_isDeclaredWwStage(const char* stageName) {
+    return stageName != NULL && s_wwStageNames.find(stageName) != s_wwStageNames.end();
+}
+
 bool dExtWwSave_isWwHostStage(const char* stageName) {
     if (stageName == NULL) {
         return false;

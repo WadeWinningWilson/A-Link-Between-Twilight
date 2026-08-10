@@ -30637,3 +30637,62 @@ manifest exit 0 · caches wiped
 N (5-bit mask), donor means M (4-bit)` instead of forcing 0. **HOUSING** →
 standing by; the mode VOCABULARY is the next decode and Outset is the specimen
 set.
+
+## §637 — Housing: I broke R_DL02. The alias was right and its predicate was too wide.
+
+The log says it plainly:
+
+```
+line  145  §635 hooks installed: arc-filename alias, PLYR parameter translation
+line  146  §632 WW stage declared (data-side): 'sea'
+line 2139  [BootStage] WARP -> stage='R_DL02'          <- the OLD runner
+           ...then nothing. Stage '?', Room '?', "live fallback", 0 PLYR.
+```
+
+`run_rdl02.bat` still passes `--stage R_DL02`, so this was **not** the Outset run
+— and R_DL02 broke, which it had not done before.
+
+**Cause, mine.** §635's alias fired on `dExtWwSave_isWwHostStage`, which is true
+for `R_DL02`. So the receiver asked for `/res/Stage/R_DL02/Room0.arc`. What is
+staged there is:
+
+```
+R00_00.arc   R01_00.arc   STG_00.arc        <- the RECEIVER's naming
+```
+
+Nothing mounted, so nothing loaded. "Loaded into nothing" was exact.
+
+### The distinction I collapsed
+
+```
+R_DL* / F_DL*   neutral fork stages. Arcs REPACKAGED under the receiver's names.
+                The receiver's lookup is already correct. DO NOT alias.
+ww_stages.ini   vanilla-named donor stages. Arcs staged BYTE-IDENTICAL under the
+                donor's names. The lookup must be aliased.
+```
+
+Both carry donor BYTES, so anything reading donor DATA — dzb attributes, PLYR
+packing — correctly uses the broad predicate and is unaffected. Only the on-disk
+LAYOUT question needed the narrow one. New `dExtWwSave_isDeclaredWwStage()`:
+true only for stages a mod declared in data.
+
+**Worth naming as a pattern rather than a one-off:** two predicates that agreed
+on every stage I had tested, and diverged on the first stage staged differently.
+`isWwHostStage` answers *"are these donor bytes?"*; `isDeclaredWwStage` answers
+*"is this laid out like the donor's disc?"*. They are not the same question and I
+used one name for both.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**R_DL02 is restored** — no alias applies to it, exactly as before §635.
+
+**New `run_outset.bat`**, because using the R_DL02 runner for Outset is what
+produced this confusing report in the first place. It arms `sea,44` and states
+the two expectations up front: a slow fifty-room load, and a sparse island where
+282 of 475 placements no-op.
+
+**Turns.** **USER** → `run_rdl02.bat` should work again; `run_outset.bat` for the
+new one. **HOUSING** → standing by.

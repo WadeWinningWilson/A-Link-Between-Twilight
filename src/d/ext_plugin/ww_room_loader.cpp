@@ -484,7 +484,10 @@ static void wwRoom_publishModels(int i_roomNo) {
 static const char* wwRoom_aliasArcFileName(const char* i_arcName) {
     static char s_name[16];
     const char* stage = dComIfGp_getStartStageName();
-    if (i_arcName == NULL || stage == NULL || !dExtWwSave_isWwHostStage(stage)) {
+    // §637: DECLARED stages only. The neutral R_DL*/F_DL* fork stages are
+    // repackaged under the receiver's own filenames, so aliasing them asks for
+    // a file that is not there and the stage mounts nothing.
+    if (i_arcName == NULL || stage == NULL || !dExtWwSave_isDeclaredWwStage(stage)) {
         return NULL;  // no alias — the receiver's own name stands
     }
     if (i_arcName[0] == 'R' && i_arcName[1] >= '0' && i_arcName[1] <= '9' &&
