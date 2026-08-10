@@ -31067,3 +31067,66 @@ manifest exit 0 · caches wiped
 **Turns.** **USER** → `run_outset.bat` → warp. Expect `§644 donor message system:
 one archive`, then past the meter. **HOUSING** → standing by; §640 probe still in
 until Outset loads.
+
+## §646 — Housing: OUTSET LOADS, ZERO BAKED BYTES. Collision fully exonerated; the player is the remaining question.
+
+### The milestone
+
+Wind Waker's Outset Island loads in this engine from **byte-identical vanilla
+arcs**. Nothing repacked, renamed or edited:
+
+```
+Stage: sea            R44_00/room.dzr · 24 PLYR · ROOM 44 · 504 placed
+Link  (-201622, 173.09, 312243)  =  PLYR[0] exactly
+§644 donor message system: one archive        §636 start_mode 16 -> 0 (donor 4-bit)
+RCAM: 5 donor-stride records translated        <- first RCAM specimen of the campaign
+§334 dzb repack: 85 standable, 0 slip
+model.bdl / model1.bdl / model3.bdl published via the DN-3 resolver
+```
+
+### The collision chain is now fully verified, link by link
+
+```
+[BgProbe] createHeap arc='R44_00' roomNo=44 dzb=0x24c83231200 vtx=3722 tri=4221
+[BgProbe] registered BgW room=44 prio=0
+[BgProbe] pre-Regist room=44 used=0 memErr=0
+[BgProbe] Regist OK room=44 — collision is live
+```
+
+`memErr=0` kills the working-buffer theory outright — Outset being far larger
+than any TP interior turned out not to matter.
+
+And the data under it was independently checked, not assumed:
+
+| | |
+|---|---|
+| geometry | `sanbasi` at y=168.3, Link at y=173.09 — he is 4.8 above the pier |
+| all 24 PLYR | each sits on its own surface |
+| coordinates | already WORLD space; no MULT transform involved |
+| group tree | `sanbasi -> Ie -> R2c`, `R2c.m_room_id = 44` |
+
+**So a poly hit would report room 44.** Which retires an error of mine: I have
+been calling `Room: -1` "the signature of no ground". It is actually *either* no
+poly *or* an unresolvable group room — and here the group resolves cleanly, so it
+is specifically **no poly being hit**, against collision that is demonstrably
+live and correctly placed.
+
+### What that leaves
+
+Every candidate on the collision side is now closed by measurement. The
+remaining question is the **player**: whether it executes, what `mProcID` it sits
+in, whether a demo holds it, and whether `mLinkAcch.m_gnd` is ever populated.
+
+Two supporting observations, held loosely because neither is proof:
+* velocity is **exactly** 0 on all three axes, in both R_DL02 (§622) and here
+* the WW per-frame `§334c ground under Link` line appears **0 times** — though
+  that probe may simply be scoped elsewhere, so it is suggestive, not evidence
+
+The §622 note *"why gravity never engages is not explained"* was left open then
+and is now the same open question on a second, unrelated stage with working
+collision. That recurrence is the finding: **it was never about the floor.**
+
+**Turns.** **HOUSING** → a player-side probe (exec, procID, demo state, m_gnd) —
+the collision side has nothing left to ask. **USER** → this is a clean banking
+point if you want one; Outset loading from unmodified vanilla arcs is the session
+result and it is independent of the player question.
