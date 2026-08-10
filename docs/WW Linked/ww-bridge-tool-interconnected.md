@@ -30353,3 +30353,81 @@ Build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wipe
 
 **Turns.** **HOUSING** → stage id for `sea`, then first cold entry into an
 untouched `sea/Room44.arc`. **USER** → nothing yet.
+
+## §633 — Housing: legs unwound. I built four of them, then reached for the fix that hides legs rather than removes them. Both caught by the user.
+
+> *"Woah you're not creating new legs are you? We had decided on parallel donor
+> stacks"* — and then: *"Unwind it. Never legs from now on if possible, always
+> parallel donors."*
+
+### What I did wrong, precisely
+
+```
+src/d/actor/d_a_bg.cpp   §624 repackDzbAttributes + §630 acquireStageModelData  <- 2 LINK-LEVEL LEGS
+src/d/d_resorce.cpp      §631 arc-filename translation, WW-conditional in a receiver TU
+src/d/d_stage.cpp        §626 PLYR start-mode translation, WW-conditional in a receiver TU
+```
+
+**And the vehicle for all four already existed.** `ww_room_loader.cpp` — "NATIVE
+ROOMS 3b, Phase 1: the room-load dispatch seam" — says in its own header:
+
+> *"Each ported reader slots in HERE, per-chunk, WW-scoped — the receiver's call
+> site never changes again after this patch, and mainline TP never sees any of
+> it."*
+
+I changed receiver call sites four times, into a seam built so that would not
+happen. §631 in particular landed in `dRes_info_c::set`, a shared engine path —
+the exact surface the WW shared-path-scoping rule names.
+
+### The worse half, and the one worth remembering
+
+The separability gate went RED with 2 unresolved. **My next move was to add
+defaults to `ww_misc_dispatch.cpp` so it would link.** That does not remove a leg
+— it makes one invisible. It converts *"the gate detected a regression"* into
+*"the gate is green"*, which is the precise failure the gate exists to catch, and
+it would have added to the `LEG-STRIP REQUIRED: 11 mixed TUs` count while
+appearing to fix something.
+
+**A stub that satisfies a linker is not a severance.** Reverted before it landed.
+
+### Unwound, and verified rather than asserted
+
+```
+d_a_bg.cpp    vs f3565c8ffb^ : 0 diff lines   IDENTICAL
+d_stage.cpp   vs cdf382969a^ : 0 diff lines   IDENTICAL
+d_resorce.cpp vs 363b72e893^ : 0 diff lines   IDENTICAL
+```
+
+Each receiver TU is byte-back to the commit before I first touched it — not
+"looks reverted", identical.
+
+```
+separability gate: LINKED CLEAN   <- green by REMOVAL, not by stub
+build EXIT=0 · banner lint 81/81, 0 DISAGREES · manifest exit 0 · caches wiped
+```
+
+### What survives, because none of it was a leg
+
+- **§623** room-lane stage scoping — a REMOVAL inside `d_ext_npc_mount.cpp`, WW layer.
+- **§632** data-side WW stage registry (`<mod>/ww_stages.ini`) — WW layer.
+- **§630's resolver** `dExtNpcMount_acquireStageModelData` — WW layer, now with no
+  caller until it is re-landed behind the seam. Kept deliberately: the function
+  is right, its call site was wrong.
+- **The `sea` arcs**, staged and verified byte-identical (101 files, matching
+  sha256 over the set), and `ww_stages.ini`.
+
+### Re-land plan — through the seam, not the call site
+
+| was | becomes |
+|---|---|
+| §624 dzb repack in `daBg` | loader repacks the room dzb at the seam, before BG create |
+| §630 `BDL ` route in `daBg` | loader publishes the PARSED model into the res slot, so `daBg`'s untouched code receives a real `J3DModelData` |
+| §626 PLYR start mode | a ported PLYR reader in the loader stack — 3b's actual design, donor code reading donor bytes into receiver structures |
+| §631 arc filename | **does not map onto the room seam.** Needs a WW-AGNOSTIC alias hook the WW layer populates, so the resource layer stays free of WW knowledge |
+
+**Standing rule from this, recorded:** never a leg where a parallel donor stack
+will do. If the exclusion gate goes red, the answer is to move the code, not to
+default the symbol.
+
+**Turns.** **HOUSING** → re-land through the seam, §631 last since it needs the
+alias-hook design. **USER** → nothing; Outset staging is intact.

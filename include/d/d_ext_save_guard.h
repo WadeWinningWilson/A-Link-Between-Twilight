@@ -10,6 +10,10 @@
 
 // True if stage name is a Dusklight WW host (R_DL* interiors / F_DL* fields).
 bool dExtWwSave_isWwHostStage(const char* stageName);
+// §632: declare a VANILLA-NAMED donor stage as a WW host at runtime, from mod
+// data (<mod>/ww_stages.ini). Lets /res/Stage/sea/Room44.arc be reached under
+// its own name without the exe carrying a WW place-name (History A1).
+void dExtWwSave_registerWwStage(const char* stageName);
 // §47: give the player the donor cast's LIGHTING RECIPE inside donor spaces.
 // Returns true when it handled the lighting, in which case the caller must SKIP
 // setLightTevColorType_MAJI — bypassing MAJI is the point, not a side effect.

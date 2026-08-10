@@ -1,7 +1,7 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
 # tool_sha256:      ef07118d5e598fb975c1aa3ca803934698c5f46596ad7756434b8cb17ef0e3e6
-# files_cmake_sha256: 69ccf3ab671dc1e40237b5b9b41c6e19f37f5562cfc61fc917160ff44858c025
+# files_cmake_sha256: 54acd1448290876150964c2d0747247857f085b2257f4a691e5b4aad66670387
 # count: 59
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
@@ -21,7 +21,7 @@
 #   src/d/d_albw_dialogue.cpp  --  self-declared "NEW CODE — ALBW Port (Native Dialogue Box)" — a DIFFERENT port, not WW
 #   src/d/d_ext_mod_flags.cpp  --  self-declared "WW-agnostic" twice — general mod flag/quest infrastructure
 #
-# UNREVIEWED host-plumbing (8) — KEPT by default.
+# UNREVIEWED host-plumbing (9) — KEPT by default.
 # If one of these is a WW bridge the build FAILS TO LINK, which is
 # loud; the opposite default drops receiver code silently.
 #   libs/JSystem/src/JAudio2/JASChannel.cpp
@@ -31,6 +31,7 @@
 #   src/d/ext_plugin/ww_misc_dispatch.cpp
 #   src/d/ext_plugin/ww_npcmount_dispatch.cpp
 #   src/d/ext_plugin/ww_room_loader.cpp
+#   src/dusk/boot_stage.cpp
 #   src/f_pc/f_pc_profile_lst.cpp
 #
 # STILL PARTIAL, and for a reason no basis can fix: `mixed` TUs are

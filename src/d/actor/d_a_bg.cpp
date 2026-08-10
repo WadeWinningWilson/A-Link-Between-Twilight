@@ -134,40 +134,10 @@ int daBg_c::createHeap() {
     daBg_Part* bgPart = mBgParts;
 
     for (int i = 0; i < 6; i++) {
-        const char* modelResName = l_modelName[i];
-        J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes(arcName, modelResName);
+        J3DModelData* modelData = (J3DModelData*)dComIfG_getStageRes(arcName, l_modelName[i]);
         if (modelData == NULL) {
-            modelResName = l_modelName2[i];
-            modelData = (J3DModelData*)dComIfG_getStageRes(arcName, modelResName);
+            modelData = (J3DModelData*)dComIfG_getStageRes(arcName, l_modelName2[i]);
         }
-
-#if TARGET_PC
-        // ====================================================================
-        // §630: a VANILLA WW room arc, staged byte-identical, files its models
-        // under RARC node type 'BDL '. dRes_info_c dispatches its fixup on that
-        // 4CC and has no 'BDL ' branch, so nothing parsed them and what came
-        // back is the raw file. Reading it as a J3DModelData is the §619 crash:
-        // [modelData + 0xC8] was file bytes, and +8 was the fault address.
-        //
-        // Detect it by the file magic — a parsed J3DModelData never begins
-        // "J3D2" — and route it through the consume-time cached resolver, which
-        // is DN-3's PRESCRIBED path for a new BDL consumer, not an exception to
-        // it. Byte comparison rather than a u32 compare so endianness is not a
-        // question.
-        //
-        // Zero-bake (user directive, 2026-08-09): this is what lets the donor
-        // arc stay untouched. The resolver parses from a pristine byte copy, so
-        // the arc buffer is never pointer-fixed in place either.
-        // ====================================================================
-        if (modelData != NULL && std::memcmp(modelData, "J3D2", 4) == 0) {
-            J3DModelData* resolved =
-                dExtNpcMount_acquireStageModelData(arcName, modelResName);
-            DuskLog.info("[daBg] §630 raw J3D room model '{}/{}' -> consume-time "
-                         "resolver: {}",
-                         arcName, modelResName, resolved != NULL ? "ok" : "FAILED");
-            modelData = resolved;
-        }
-#endif
 
         if (modelData != NULL) {
             mDoExt_setupStageTexture(modelData);
@@ -260,35 +230,6 @@ int daBg_c::createHeap() {
 #endif
 
     cBgD_t* dzb = (cBgD_t*)dComIfG_getStageRes(arcName, "room.dzb");
-#if TARGET_PC
-    // ========================================================================
-    // §624: ROOM dzbs need the §334 attribute repack too.
-    //
-    // §332 established the mismatch byte-exactly: WW packs its material attCode
-    // in PolyInf1 bits 16-20, and TP reads that same word as att0 (12-15),
-    // att1 (16-18) and groundCode (19-23). Untranslated, WW attCode 1 reads as
-    // TP att1=1 — a SINK class — so the floor swallows the player. That is
-    // exactly what R_DL02 produced once the floor was finally registered:
-    //   [ExtWw] §334c ground under Link: att0=0 att1=1 ground=0 pos=(1,-37,626)
-    // Ground FOUND, and read as sink.
-    //
-    // §334 already solves this; it was only ever wired to the mount's object
-    // dzbs, because until R_DL02 no WW room reached daBg as a stage's own room.
-    // This is that second consumer, not a second mechanism.
-    //
-    // At the CONSUMPTION boundary, per the §333 ruling — staged arcs stay
-    // donor-byte-verbatim. Translating in the bake instead would mutate the
-    // very bytes the census, the extractor and the conversion DB read, which is
-    // the argument §618 used to refuse a fabricated SCLS record. The repack is
-    // idempotent by construction (§334f), so re-entry after a reload is safe.
-    //
-    // WW-SCOPED: mainline TP dzbs are already in TP's vocabulary and must not
-    // be touched.
-    // ========================================================================
-    if (dzb != NULL && dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
-        dExtWw_repackDzbAttributes(dzb, "room.dzb");
-    }
-#endif
     if (dzb != NULL) {
         mpKCol = NULL;
         mpBgW = JKR_NEW dBgW();

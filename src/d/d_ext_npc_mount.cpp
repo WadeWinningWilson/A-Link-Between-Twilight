@@ -20,6 +20,7 @@
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <iterator>
 #include <sstream>
 #include <string>
@@ -4457,6 +4458,23 @@ void dExtNpcMount_rescanProviders() {
         }
         if (!dusk::custom_assets::is_folder_enabled(modName.c_str())) {
             continue;
+        }
+        // §632: a mod may declare vanilla-named WW stages in data, one per
+        // line, '#' comments. This is what lets /res/Stage/sea/Room44.arc be
+        // reached under its own name without the exe carrying "sea".
+        {
+            std::ifstream ws(modRoot / "ww_stages.ini");
+            if (ws) {
+                std::string line;
+                while (std::getline(ws, line)) {
+                    const size_t b = line.find_first_not_of(" \t\r\n");
+                    if (b == std::string::npos || line[b] == '#') {
+                        continue;
+                    }
+                    const size_t e = line.find_last_not_of(" \t\r\n");
+                    dExtWwSave_registerWwStage(line.substr(b, e - b + 1).c_str());
+                }
+            }
         }
         const fs::path npcDir = modRoot / "npc";
         if (!fs::is_directory(npcDir, ec)) {
@@ -11611,12 +11629,49 @@ void dExtNpcMount_pollCullProbe() {
 
 // --- №81 EXTENSION-FIRST: native save write refuse ---------------------------------
 
+// ============================================================================
+// §632: WW stage recognition, DATA-SIDE — so vanilla stage names can be used
+// without compiling a WW place-name into the exe.
+//
+// THE CONFLICT THIS RESOLVES. The neutral fork prefixes below exist for
+// History A1: no WW place-name may appear in the executable. But "vanilla
+// naming and pathing for all rooms" wants the stage id to BE the vanilla name
+// — `sea`, `Ojhous2`, `LinkRM` — so the folder is /res/Stage/sea/ and the arc
+// is Room44.arc, top to bottom. Recognising those by a compiled string would
+// break A1 outright.
+//
+// A data-side list satisfies both, and it is the pattern the port already
+// trusts: the `--stage` flag proves a stage id can be a runtime string, and
+// №99 R2's warp rows keep their labels data-side for exactly this reason.
+// Nothing here names a WW stage; the mod does, in a file.
+//
+// ADDITIVE, not a replacement: the neutral prefixes keep working untouched, so
+// every existing R_DL*/F_DL* stage behaves as before.
+// ============================================================================
+namespace {
+std::set<std::string> s_wwStageNames;  // declared by mods, never compiled
+}
+
+void dExtWwSave_registerWwStage(const char* stageName) {
+    if (stageName == NULL || stageName[0] == '\0') {
+        return;
+    }
+    if (s_wwStageNames.insert(stageName).second) {
+        DuskLog.info("[WwSave] §632 WW stage declared (data-side): '{}'", stageName);
+    }
+}
+
 bool dExtWwSave_isWwHostStage(const char* stageName) {
-    // Neutral fork prefixes under /res/Stage/: R_DL* (interiors) + F_DL* (fields).
-    if (stageName == NULL || stageName[1] != '_' || stageName[2] != 'D' || stageName[3] != 'L') {
+    if (stageName == NULL) {
         return false;
     }
-    return stageName[0] == 'R' || stageName[0] == 'F';
+    // Neutral fork prefixes under /res/Stage/: R_DL* (interiors) + F_DL* (fields).
+    if (stageName[1] == '_' && stageName[2] == 'D' && stageName[3] == 'L' &&
+        (stageName[0] == 'R' || stageName[0] == 'F')) {
+        return true;
+    }
+    // §632: vanilla-named donor stages, declared data-side by the mod.
+    return s_wwStageNames.find(stageName) != s_wwStageNames.end();
 }
 
 bool dExtWwSave_isWwContentActive() {
