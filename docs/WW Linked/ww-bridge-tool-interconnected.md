@@ -31252,3 +31252,74 @@ and the screen stops being black.
 
 **Turns.** **USER** → `run_outset.bat`. **HOUSING** → if it stands, strip §640,
 §645, §647-§653 and re-run both gates.
+
+## §655 — Housing: OUTSET IS WALKABLE. And the remaining symptoms have one shared cause worth naming before any of them is "fixed".
+
+```
+§334 room.dzb: 85 standable, 0 slip, 85 through-cleared (§654)
+exec#1141 proc=21 room=44 pos=(-202207,2999,317669) spd=(14.92,-5.00,-7.73) normSpd=16.80
+```
+
+`room=44` where it was -1, the player executing, and MOVING. Wind Waker's Outset
+Island is walkable in this engine **from byte-identical vanilla arcs**.
+
+`knob00:door.dzb: 0 through-cleared` confirms the change is a no-op on
+already-clean object dzbs — no regression surface.
+
+### The shared cause behind the leftovers
+
+Three symptoms were reported: the camera does not follow, some angles render in
+colour and others black, and TP stand-ins are visible (grass especially). They
+are not three unrelated gaps. **Most of the WW systems are gated on the FORK-FIELD
+NAMING, not on being a WW stage:**
+
+```
+d_kankyo_wether.cpp:1212  stage[0] == 'F' && isWwHostStage(stage)   <- dKyWw_isSkyHost
+d_kankyo_wether.cpp:1391  stage[0] == 'F' && isWwHostStage(stage)
+d_kankyo_wether.cpp:1473  stage[0] == 'F' && isWwHostStage(stage)
+d_ext_npc_mount.cpp:2723  isWwHostStage(stage) && stage[0] == 'F'
+d_ext_npc_mount.cpp:7731  stage[0] == 'F' && isWwHostStage(stage) && ...
+d_a_alink.cpp:9590        stage[0] == 'F' && ...
+```
+
+**`sea` begins with 's'.** So the WW sun, moon, sky and lenz systems are switched
+OFF on Outset — which is exactly "colour at some angles, black at others": the
+`vr_sky` / `vr_kasumi_mae` / `vr_back_cloud` / `vr_uso_umi` domes ARE loaded from
+`Stage.arc` and nothing is drawing them.
+
+The letter was a proxy for *"is this an outdoor WW stage"*, which was true while
+every WW stage was a neutral fork name (`F_DL*` fields, `R_DL*` interiors). Under
+vanilla naming the proxy is simply wrong. **This is the same class as §637** — a
+predicate that agreed with reality until the first stage staged differently.
+
+### The steps, most pertinent first
+
+**1. Replace the naming proxy with a real predicate.** One question, asked
+honestly: *is this stage OUTDOOR?* The stage's own `STAG` answers it
+(`GetSTType`), and §643 measured that field as IDENTICAL in donor and receiver —
+same offset, same shift. So this is a small change with a measured basis, and it
+lights up sun/moon/sky/lenz on Outset at once. **Do this first: it is one
+predicate and it addresses the largest visible symptom.**
+
+**2. Camera.** RCAM translated 5 records (§chunk 3) and the camera still does not
+follow. Now that the player executes and has a room, this is worth RE-READING
+before touching — the earlier behaviour was measured while the player was frozen,
+so nothing about the camera has actually been observed in a working scene yet.
+
+**3. Grass and the other stand-ins — the real porting work.**
+`d_stage.cpp:630-632` maps `kusax1` / `kusax7` / `kusax21` to TP's
+`fpcNm_GRASS_e`. That is a stand-in by construction, and the standing directive
+says the true native subsystem is always the target. 193 of Outset's 475
+placements resolve today and **153 of those are grass/flower aliases** — so the
+island's populated look is currently mostly TP props wearing WW names.
+
+**4. The 282 unresolved placements.** `keeth` x26, `ikada_h` x11, `bridge` x11,
+`Oyashi` x10, `Pirates` x4 … these are unported actors and correctly no-op. They
+are content work, not system work, and they are the largest single bucket.
+
+**Recommended order: 1, then 2, then 3.** 1 is one predicate with a measured
+basis; 2 is a re-read that may cost nothing; 3 is genuine per-actor porting and
+should not start until the scene it will be judged in is lit and framed.
+
+**Turns.** **USER** → confirm the order, or reprioritise. **HOUSING** → the
+probes (§640/§645/§647-§653) come out either way; they have all served.
