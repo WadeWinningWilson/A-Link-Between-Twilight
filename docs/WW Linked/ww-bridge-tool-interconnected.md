@@ -31009,3 +31009,61 @@ no longer the reason.
 
 **Turns.** **USER** → go on porting the message loader as the next unit.
 **HOUSING** → holding; §640 probe still in.
+
+## §644 — Housing: ported WW's message system instead of inventing a group. It is a drop-in, and I checked rather than assumed.
+
+> *"if there is a system to be ported that will fix an issue PORT IT ALWAYS"*
+
+Recorded as a standing directive. It strengthens the existing rule from *replace
+bridges eventually* to **reach for the donor system FIRST, at the moment of the
+bug** — before writing a translator, a default, a clamp or a guard, ask what the
+donor DOES here.
+
+### What the donor does
+
+```
+WW    onMemMount("/res/Msg/bmgres.arc")      ONE archive, the whole game
+      onMemMount("/res/Msg/bmgresh.arc")     d_s_logo.cpp:882-889
+receiver  /res/Msgus/bmgres%d.arc            TEN, selected per stage by
+                                             STAG offset 0x28
+```
+
+**Wind Waker has no per-stage message group.** The field is absent from its
+0x20-byte STAG because the CONCEPT is absent — which is exactly why a translator
+was impossible and any value would have been invented.
+
+### It is a drop-in, and that was the thing to verify rather than hope for
+
+```
+WW /res/Msg/bmgres.arc  ->  zel_00.bmg,  color.bmc
+receiver asks for           bmg_filename[0] == "zel_00.bmg"
+```
+
+**The member names already match.** Group 0 resolves against the donor archive
+with nothing renamed and nothing repacked — the same result the arc-filename
+alias gets for stages. So `*io_group = 0` is not a safe-looking default: it is
+the index whose filename the donor archive actually contains. Had the names not
+matched, this would have been a very different piece of work, and it was worth
+one command to find out.
+
+### Shape: a hook, and the receiver keeps no donor knowledge
+
+`dMsg_setGroupArchiveHook` — WW-agnostic, NULL unless installed, justified in its
+own terms: *"a donor disc may not organise messages the way this engine does."*
+Return false and `readMessageGroupLocal` is byte-for-byte what it was.
+**0 WW symbols added to `d_msg_object.cpp`**, verified.
+
+Donor side lives in the parallel stack and is scoped to DECLARED stages (§637) —
+a neutral `R_DL*` fork stage keeps the receiver's own selection, because its
+content is TP's.
+
+`bmgres.arc` + `bmgresh.arc` staged **byte-identical** (sha256 matched on both).
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**Turns.** **USER** → `run_outset.bat` → warp. Expect `§644 donor message system:
+one archive`, then past the meter. **HOUSING** → standing by; §640 probe still in
+until Outset loads.

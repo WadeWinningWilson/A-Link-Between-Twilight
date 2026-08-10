@@ -56,6 +56,7 @@
 #include "d/d_resorce.h"         // dRes_info_c::setRes (§634 publish)
 #include "d/d_bg_w.h"            // cBgD_t
 #include "d/d_ext_npc_mount.h"   // §334 repack, DN-3 consume-time resolver
+#include "d/d_msg_object.h"      // §644 message-archive hook
 #include "dusk/logging.h"
 
 // ============================================================================
@@ -582,12 +583,56 @@ static void wwRoom_translatePlyrParam(u32* io_parameters) {
 // Called once from the WW layer's mod scan. Both hooks are WW-AGNOSTIC on the
 // receiver side and NULL until this runs, so mainline TP is untouched.
 // ============================================================================
+// ============================================================================
+// §644: WIND WAKER'S MESSAGE SYSTEM, ported rather than translated.
+//
+// WHAT THE DONOR DOES (d_s_logo.cpp:882-889, d_s_menu.cpp:44):
+//
+//     onMemMount("/res/Msg/bmgres.arc")      ONE archive, the whole game
+//     onMemMount("/res/Msg/bmgresh.arc")
+//
+// There is NO per-stage message group in Wind Waker. The receiver splits its
+// messages into ten archives and picks one from STAG offset 0x28 — a field the
+// donor's 0x20-byte STAG record does not contain, because the CONCEPT does not
+// exist there. A translator would have to invent the value; the donor's own
+// system needs none.
+//
+// IT IS A DROP-IN, which is the part worth checking rather than assuming:
+//
+//     WW  /res/Msg/bmgres.arc   ->  zel_00.bmg, color.bmc
+//     receiver asks for             bmg_filename[0] == "zel_00.bmg"
+//
+// The member names already match, so group 0 resolves against the donor archive
+// with nothing renamed and nothing repacked — the same zero-bake result the arc
+// filename alias gets for stages.
+//
+// SCOPE: declared donor stages only (§637). A neutral R_DL*/F_DL* fork stage
+// keeps the receiver's own message selection, because its content is TP's.
+// ============================================================================
+static bool wwRoom_resolveMsgArchive(char* o_path, int i_pathSize, int* io_group) {
+    const char* stage = dComIfGp_getStartStageName();
+    if (o_path == NULL || io_group == NULL || stage == NULL ||
+        !dExtWwSave_isDeclaredWwStage(stage))
+    {
+        return false;
+    }
+    std::snprintf(o_path, (size_t)i_pathSize, "/res/Msg/bmgres.arc");
+    // Not "group 0" as a safe default — the donor has ONE message set, and 0 is
+    // the index whose filename (zel_00.bmg) is the one that archive contains.
+    *io_group = 0;
+    DuskLog.info("[WwRoomSeam] §644 donor message system: one archive '{}', no "
+                 "per-stage group (stage='{}')",
+                 o_path, stage);
+    return true;
+}
+
 void dExtWwRoom_installHooks(void) {
 #if DUSK_WW_ROOM_SEAM && DUSK_WW_ROOM_CHUNKS
     dRes_setArcFileNameHook(&wwRoom_aliasArcFileName);
     dStage_setPlyrParamHook(&wwRoom_translatePlyrParam);
+    dMsg_setGroupArchiveHook(&wwRoom_resolveMsgArchive);
     DuskLog.info("[WwRoomSeam] §635 hooks installed: arc-filename alias, PLYR "
-                 "parameter translation");
+                 "parameter translation, donor message archive");
 #endif
 }
 

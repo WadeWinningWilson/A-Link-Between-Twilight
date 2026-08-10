@@ -48,6 +48,21 @@ static void dMsgObject_addTotalPayment(s16 param_0);
 
 static s16 s_groupID;
 
+#if TARGET_PC
+static dMsg_groupArchiveHook_f s_groupArchiveHook = NULL;
+
+void dMsg_setGroupArchiveHook(dMsg_groupArchiveHook_f i_hook) {
+    s_groupArchiveHook = i_hook;
+}
+
+bool dMsg_resolveGroupArchive(char* o_path, int i_pathSize, int* io_group) {
+    if (s_groupArchiveHook == NULL || o_path == NULL || io_group == NULL) {
+        return false;
+    }
+    return s_groupArchiveHook(o_path, i_pathSize, io_group);
+}
+#endif
+
 s16 dMsgObject_getGroupID() {
     return s_groupID;
 }
@@ -1815,6 +1830,32 @@ void dMsgObject_c::readMessageGroupLocal(mDoDvdThd_mountXArchive_c** p_arcMount)
 #endif
 
     int msgGroup = dStage_stagInfo_GetMsgGroup(dComIfGp_getStage()->getStagInfo());
+#if TARGET_PC
+    // ========================================================================
+    // §644: message-archive hook. WW-AGNOSTIC — names no donor, holds no
+    // predicate, NULL unless installed.
+    //
+    // WHY A HOOK AND NOT A TRANSLATED FIELD. `msgGroup` above is read from STAG
+    // offset 0x28. A donor STAG record is 0x20 bytes ENTIRELY, so on a donor
+    // stage that read lands past the end of the record and returns whatever
+    // chunk follows — which then indexes a 10-entry filename table and crashed
+    // dMeter2Draw_c's constructor.
+    //
+    // There is nothing to translate it FROM, and the reason is not a moved
+    // field: Wind Waker HAS NO PER-STAGE MESSAGE GROUP. It mounts ONE archive
+    // for the whole game (/res/Msg/bmgres.arc, d_s_logo.cpp:882-889). The field
+    // is absent because the CONCEPT is absent, so any value a translator
+    // produced would be invented.
+    //
+    // So the layer that owns the donor gets to answer with the donor's own
+    // system instead. Returning false leaves this function exactly as it was.
+    // ========================================================================
+    if (dMsg_resolveGroupArchive(arcName, (int)sizeof(arcName), &msgGroup)) {
+        *p_arcMount = mDoDvdThd_mountXArchive_c::create(arcName, 0, JKRArchive::MOUNT_MEM, NULL);
+        s_groupID = (s16)msgGroup;
+        return;
+    }
+#endif
     #if REGION_PAL
     switch (dComIfGs_getPalLanguage()) {
     case dSv_player_config_c::LANGUAGE_GERMAN:
