@@ -31889,3 +31889,74 @@ this port keeps refusing.
 diagnosed — one of four types present, and the missing behaviour is code — which
 is a much better place than "the camera does not follow". **HOUSING** → on your
 word: the WW camera-type port, scoped properly, as its own piece of work.
+
+## §667 — Housing: camera-type port SCOPED, with a correction to §666 and one gate that decides the whole thing.
+
+### Correcting §666 first
+
+I said *"the behaviour of each type is CODE."* **Half wrong.** A donor camera TYPE
+is pure data:
+
+```c
+struct dCamera__Type { char name[24]; s16 mStyles[20]; };   // 0x40
+"Subject" -> {LN17, NONE, NONE, NONE, SS01, NONE, NONE, NONE, NONE, NONE,
+              SX01, SY01, NONE, CC02, SN15, NONE, EN00, NONE, NONE, NONE}
+```
+
+And `mCamTypeSubject` is **assigned once at `d_camera.cpp:221` and never read
+again** — `Subject` has no special-case code in the donor's camera at all. I
+inferred "code" from the existence of `CalcSubjectAngle`, which is a different
+subject entirely.
+
+The behaviour is one level down: a TYPE selects STYLES, and a STYLE names an
+ALGORITHM. So the claim is true of styles, not types.
+
+### The chain, measured end to end
+
+```
+RCAM record --name--> TYPE (name + 20 style ids)  [donor d_cam_type.cpp, SOURCE]
+              --id--> STYLE (4CC + algorithm + params)  [donor d_cam_style.cpp, SOURCE, 902 lines]
+                      --> ALGORITHM  [CODE, e.g. dCamAlg_CRAWL_CAMERA_e]
+```
+
+Both donor tables are **in source**, which is much better than the data hunt
+§665 expected — there is no missing camtype.dat to find.
+
+### What Outset actually needs
+
+```
+TYPES    2   FieldCushion (stage), Subject (3 of 5 room cameras)
+             FixdPos already exists in the receiver
+STYLES  10   Subject needs LN17 + CC02
+             FieldCushion needs FN10, LW01, LE01, LH01, CC01, HN18, HN16, DD01
+```
+
+### And the style record diverges too — of course it does
+
+```
+DONOR     { u32 m00; int engineIdx; f32 styleParam[30]; u16 flag; }        0x84
+RECEIVER  { BE(s32) f0; BE(u16) f4; BE(u16) mFlags; BE(f32) mParams[28]; } 0x78
+```
+
+**30 params vs 28**, and an int engine index vs a u16 field. Same family as SCLS
+strides, STAG fields, PLYR modes, dzs tags and camera-type names — a translation,
+not a copy, and the parameter correspondence is not yet decoded.
+
+### THE GATE
+
+**Both of Subject's styles use `dCamAlg_CRAWL_CAMERA_e`.** Whether the receiver
+implements an equivalent algorithm is **UNKNOWN** — its style record's engine
+field is `field_0x4`, unnamed, and its algorithm vocabulary is not in the header.
+
+**If the receiver has no crawl-camera algorithm, transcribing all ten styles
+achieves nothing** — a parameter block with nothing to execute it, which is
+exactly the failure §666 warned about, just one level lower than I placed it.
+
+So the next step is to identify the receiver's algorithm vocabulary and check for
+the crawl camera, BEFORE transcribing anything. Ten style blocks and a 30→28
+parameter map is real work and it is worthless if the gate is shut.
+
+**Turns.** **HOUSING** → decode the receiver's algorithm vocabulary and answer the
+gate. **USER** → worth knowing: if the gate is shut, the honest options are
+porting the algorithm too (a genuine code port) or accepting TP's camera on donor
+stages until then. I will not alias `Subject` onto a TP type either way.
