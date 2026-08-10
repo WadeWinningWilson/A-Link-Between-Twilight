@@ -31960,3 +31960,72 @@ parameter map is real work and it is worthless if the gate is shut.
 gate. **USER** → worth knowing: if the gate is shut, the honest options are
 porting the algorithm too (a genuine code port) or accepting TP's camera on donor
 stages until then. I will not alias `Subject` onto a TP type either way.
+
+## §668 — Housing: GATE ANSWERED, and it is shut — proven, not guessed. The receiver's algorithm enum is the donor's minus two entries.
+
+### The decode
+
+50 style 4CCs are shared between the lineages. Joining on them maps the donor's
+algorithm ENUM NAMES to the receiver's engine INDICES, and every single one is
+unanimous — **zero conflicts across 50 data points**:
+
+```
+LET 0 · FOLLOW 1 · LOCKON 2 · TALKTO 3 · SUBJECT 4 · FIXED_POSITION 5
+FIXED_FRAME 6 · TOWER 7 · RIDE 8 · MANUAL 9 · EVENT 10 · HOOKSHOT 11
+```
+
+### The proof
+
+The donor's enum reads `… 8 RIDE, 9 HUNG, 10 MANUAL, 11 EVENT, 12 CRAWL,
+13 HOOKSHOT`. The measured receiver indices agree exactly through RIDE and then
+run one, then two, behind. **One hypothesis explains all twelve:**
+
+```
+receiver enum == donor enum MINUS { HUNG, CRAWL }
+
+RIDE      predicted  8   measured  8   OK
+MANUAL    predicted  9   measured  9   OK      (donor 10, shifted by HUNG)
+EVENT     predicted 10   measured 10   OK      (donor 11)
+HOOKSHOT  predicted 11   measured 11   OK      (donor 13, shifted by HUNG+CRAWL)
+```
+
+Twelve for twelve. **The receiver does not implement `CRAWL_CAMERA`** — and this
+is derived from measurement plus an exact shift pattern that accounts for every
+index, not inferred from an absence.
+
+Corroborating: the donor's three CRAWL styles — `CC01`, `CC02`, `LN17` — are
+**none of them** in the receiver's 361-style table. The algorithm is gone and so
+is every style that used it.
+
+### What that means for `Subject`
+
+`Subject` needs `LN17` and `CC02`. **Both are CRAWL.** So the type cannot be
+ported as data at all — its two defining styles have no engine on this side.
+
+### The port, now correctly sized
+
+```
+dCamera_c::crawlCamera        155 lines   d_camera.cpp:4255-4409
+                              plus its entry in the algorithm dispatch table
+2 style entries               CC02, LN17  (4CC + alg + 30 params + flags)
+1 type entry                  Subject
+style record translation      donor 0x84/30 params -> receiver 0x78/28 params
+```
+
+**One camera algorithm, not all of `dCamera_c`.** That is a real code port and a
+bounded one — far better than §666 feared and far worse than "add a table row".
+
+`FieldCushion` is a separate question: its eight missing styles need their own
+algorithm audit, and it may be pure data if none of them is CRAWL or HUNG.
+
+### On the WW/TP camera toggle
+
+It becomes natural rather than bolted-on, and the decode is what makes it so:
+the receiver's table can be extended with donor types whose styles resolve to
+algorithms it HAS, and a setting chooses whether donor stages use them. The
+toggle is not a workaround for the gate — it is the honest shape once some donor
+types are portable and others are not.
+
+**Turns.** **USER** → go on porting `crawlCamera` + the two styles + `Subject`,
+or take `FieldCushion` first if its styles turn out to need no new algorithm.
+**HOUSING** → whichever; the `FieldCushion` algorithm audit is one command.
