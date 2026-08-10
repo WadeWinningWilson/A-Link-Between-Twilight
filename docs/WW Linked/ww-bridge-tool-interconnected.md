@@ -31825,3 +31825,67 @@ rather say that than guess a mapping.
 running and the camera is diagnosed to the string. **HOUSING** → find the donor's
 camera parameter data, then port the type table the way §644 ported the message
 archive.
+
+## §666 — Housing: what the MOUNTED Outset does about cameras — it deletes them. And no, the donor data alone will not give us the WW camera system.
+
+Two questions asked, and the answers change the plan.
+
+### Q2 — what camera system does the mounted Outset use?
+
+**None. It removes the problem from the data.**
+
+```
+F_DL01/R44_00.arc              RCAM 5 -> Subject, Subject, Subject, FixdPos, FixdPos
+F_DL01/R44_00.arc.nocam-bak    RCAM ABSENT
+F_DL01/STG_00.arc stage.dzs    RCAM 1 -> 'FieldS'     <- a TP type, present in TP's table
+sea/Stage.arc     stage.dzs    RCAM 1 -> 'FieldCushion' (DONOR)
+```
+
+The filename says it outright: **`nocam-bak`** — a bake in which the room camera
+records were **deleted**. And the mounted stage's own RCAM is `FieldS`, a TP
+camera type, where the donor's is `FieldCushion`.
+
+So the hosted Outset "works" because it was **fed TP camera data**: the stage
+record replaced with a TP type and the room records removed. That is not a
+camera port; it is the problem baked away. Under zero-bake that answer is not
+available to us — and it should not be, because deleting RCAM silently discards
+authored camera design.
+
+**This is the clearest example yet of the pattern §654 named:** the bake was not
+solving these problems, it was hiding them. Every one of them has come due in the
+order we removed the bake.
+
+### Measured: how much of Outset's camera vocabulary the receiver has
+
+```
+FieldCushion   in TP camtype.dat:  NO      <- the STAGE camera
+Subject        in TP camtype.dat:  NO      <- 3 of 5 room cameras
+FixdPos        in TP camtype.dat:  YES     <- 2 of 5 room cameras
+```
+
+**One of four.** Not a near-miss to patch around.
+
+### Q1 — will the donor's camera-param data give us the WW camera system?
+
+**No, and this is the important half.** `camtype.dat` supplies PARAMETERS for
+types; the BEHAVIOUR of each type is CODE. `Subject` in the donor is
+`mCamTypeSubject = GetCameraTypeFromCameraName("Subject")` (`d_camera.cpp:221`)
+driving `dCamera_c::CalcSubjectAngle` (`:3762`) and its update path. Shipping the
+donor's table into TP's camera code would hand it a type name it has no
+implementation for — a parameter set with nothing to execute it.
+
+So the honest scope is: **the WW camera types are a code port, not a data drop**,
+and `dCamera_c` is one of the larger actors in either lineage. That is a real
+project, not a follow-on to tonight.
+
+### What I would NOT do
+
+Alias `Subject` onto the nearest TP type. It is a distinct WW behaviour with its
+own angle solver; mapping it onto `FixdPos` or `FieldS` would be **inventing a
+camera** and would look plausible while being wrong — the exact failure class
+this port keeps refusing.
+
+**Turns.** **USER** → this is the natural bank point. The camera is now fully
+diagnosed — one of four types present, and the missing behaviour is code — which
+is a much better place than "the camera does not follow". **HOUSING** → on your
+word: the WW camera-type port, scoped properly, as its own piece of work.
