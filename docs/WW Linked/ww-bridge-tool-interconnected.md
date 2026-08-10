@@ -30102,3 +30102,80 @@ that retires bridge surface rather than adding to it. Wants 1 and 2 first.
 one-off into a pipeline.
 
 **Turns.** **USER** → pick the branch. **HOUSING** → ready on either.
+
+## §628 — Housing: retiring the "B2b" label, auditing what "bake" actually contains, and Outset confirmed as the room on the other side of the door.
+
+### 1. B2b — the user is right, and it is a process fault, not their memory
+
+Traced on this bus:
+
+```
+§550   B2b scoped into three tiers
+§552   re-tiered B2b-1..B2b-4, ordered by evidence
+§554   Foundry ACCEPTS B2b-1 and adds a closure criterion
+§555   HOUSING: "B2b-1 DOES NOT EXIST as scoped. My §551 '84 skipped
+       placements' was wrong — they are extracted, declared, and story-gated
+       by design. Do not build it."
+§556   "Revised B2b, and I am not proposing a tier order this time"
+§ 9956 "W2 ARBITER SETTLED (B2b)" — a COMPLETELY DIFFERENT B2b (Ba1_Get_Itm)
+this session  a FOURTH scoping: chunk coverage census -> chunk_census.py, closed
+```
+
+**Re-scoped three times, retracted once, and the label is reused for an
+unrelated item.** No wonder it reads as immortal.
+
+**And my own error on top of it:** I have been writing "B2b stands at UNREACHED,
+not absent" when I meant **R_DL02's runtime chunk coverage** — which is a
+different thing from B2b, and B2b is CLOSED. That conflation is what made a
+closed item keep reappearing in turn summaries.
+
+**Retiring the label.** The remaining work is "which DZR/DZS chunk types does a
+given room carry, and which does the receiver actually consume" — call it that.
+
+### 2. What "bake" means, and the three non-native pathways in it
+
+`bake_room_chunks.py` (§267): reads the donor room's `.dzr` and merges
+SCLS / DOOR / TGDR / ACTR(+layers) / SCOB(+layers) / TGOB / TGSC into the native
+room arc's `room.dzr`, **byte-verbatim, per-entry dedup, idempotent**, with an
+explicit DN-1 fence — placement/exit chunks only, never BG/collision.
+
+Mostly native. **Not entirely.** Named rather than glossed:
+
+1. **`adapt_room_arcs.py` mutates donor bytes — and it is mine.** The №21 dzb
+   through-cluster clear edits staged arc content, and the bdl4→bmd3 payload
+   rewrite changes the model format. Both sit against §333's *"staged arcs stay
+   donor-byte-verbatim"* — **the very rule I invoked in §624 to refuse doing the
+   attribute translation in the bake.** I wrote §619 before articulating that
+   principle and did not go back. Owed: move the №21 clear to the consumption
+   boundary alongside §334, or get an explicit ruling that dzb bakes are exempt.
+2. **Deferred actors stay on the bridge.** ACTR entries are filtered against the
+   receiver's `l_objectName` registry; unresolvable names remain in the bridge's
+   population CSVs. Every native room keeps a bridge remnant until its actors
+   port. §267 calls this a one-way ratchet — correct, but it means "native room"
+   currently means "native substrate, bridge population".
+3. **SCLS destination translation** donor→host via `npc/*.ini` pairs. Necessary,
+   since host stage names differ — but it is a mapping table, not donor data.
+
+### 3. Outset — and it is not merely "a second room"
+
+```
+donor: /d/Decomps/Ex WW/files/res/Stage/sea/Room44.arc   (729 KB, present)
+R_DL02 room 0 SCLS[0]:  stage='sea'  start=3  room=44
+```
+
+**Outset Island is `sea` room 44 — the room on the other side of Grandma's
+door.** The SCLS record we have been reading in every seam log for days points
+straight at it. Branch 1 (door crossing) and branch 2 (second room) are the same
+line of work, not competing ones.
+
+### 4. Order accepted, and it is better than mine
+
+Chunk coverage → Outset → door crossing. Rationale worth stating: R_DL02 taught
+us the translation set **one crash at a time** (§619 node types, §623 collision,
+§624 attributes, §626 start mode). Censusing Outset's chunks FIRST means it lands
+with a known gap list instead of rediscovering the set by failure. Outset is also
+an exterior with far more chunk variety than a one-room house, so the census is
+worth more there than it was here.
+
+**Turns.** **HOUSING** → census the Outset donor arc + R_DL02 against the
+receiver's consumed set. **USER** → nothing until that lands.
