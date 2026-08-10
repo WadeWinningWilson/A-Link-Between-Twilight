@@ -30879,3 +30879,60 @@ The §640 probe stays in for one confirming run, then goes.
 **Turns.** **USER** → `run_outset.bat` → warp. Expect fifty `§641 ... absent from
 the field-map archive` lines, one per MULT entry, then the stage continuing.
 **HOUSING** → standing by; strip the probe once it loads.
+
+## §642 — Housing: §641 fixed (50/50 skipped). The next crash measures STAG — donor 0x20, receiver 0x3C — and that one field explains BOTH.
+
+**§641 worked:** fifty `absent from the field-map archive` lines, one per MULT
+entry, and the stage loader ran past `readMult` for the first time.
+
+**New crash, further in:**
+
+```
+dMeter2Draw_c ctor -> JKRGetTypeResource -> JKRArchive::getGlbResource   fault 0xffffffffffffffff
+  void* res = JKRGetTypeResource('ROOT', bmg_filename[dMsgObject_getGroupID()], ...)
+                                          ^^^^^^^^^^^ a 10-entry table
+```
+
+`s_groupID` comes from
+`dStage_stagInfo_GetMsgGroup(getStagInfo())` — and that is read out of **STAG**.
+
+### The measurement
+
+```
+DONOR    stage_stag_info_class   Size: 0x20
+RECEIVER stage_stag_info_class   Size: 0x3C
+```
+
+The receiver reads `mMsgGroup` at **offset 0x28** — **past the end of the entire
+donor record.** So the group id is whatever chunk happens to follow STAG in
+`sea`'s `stage.dzs`, and it indexes a 10-entry filename table.
+
+And it is not one field. Everything the receiver declares from 0x14 up —
+`mGapLevel`, `mRangeUp`, `mRangeDown`, 0x20, 0x24, `mMsgGroup`, `mStageTitleNo`,
+`mParticleNo[16]` — lies **outside the donor's record**. All of it is currently
+fabricated from neighbouring bytes.
+
+### This also explains §639's failure, which I could not account for at the time
+
+`GetUpButton` is `field_0x0a & 7`. At donor offset 0x0A sits **`mParticleSceneNo`**,
+a `u16` — not an up-button at all. So the value the runtime read (0) and the
+value I computed statically (7) were both meaningless readings of a particle
+scene number. I was not just wrong about the byte; **the field does not exist in
+the donor.** That is a more useful correction than "I misread an offset".
+
+### The fix is structural, and I am not starting it unilaterally
+
+STAG is a **stage** chunk. The Phase-2 seam built this session
+(`dExtWwRoom_loadRoomDzr`) wraps only `dStage_dt_c_roomLoader`; the stage loader
+`dStage_dt_c_stageLoader` has no seam, which is exactly why STAG reaches the
+receiver untranslated while SCLS/FILI/RCAM do not.
+
+So the next piece is **the stage-loader seam** — the same shape as the room one,
+with a STAG translator as its first chunk. That is a real unit of work, not a
+patch, and §607's "six shared chunks have different record sizes" evidently
+includes STAG. Defaulting `msgGroup` to something safe would hide it and leave
+the other seven fields fabricated.
+
+**Turns.** **USER** → go/no-go on building the stage-loader seam (Phase 2 for
+`dStage_dt_c_stageLoader`, STAG first). **HOUSING** → holding; the §640 probe
+stays until then since it is still reading useful values.
