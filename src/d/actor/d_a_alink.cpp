@@ -5523,6 +5523,29 @@ int daAlink_c::create() {
         attention_info.flags = -1;
 
         if (!dComIfGp_getEventManager().dataLoaded()) {
+#if TARGET_PC
+            // §648 TEMPORARY PROBE — DELETE with the fix. Logging only.
+            //
+            // The player actor on `sea` EXISTS (the editor reads its spawn
+            // position) but never executes: the §647 probe emitted for the
+            // F_SP103 Link and then never again after the new ALINK was
+            // created. An actor that exists and never executes is one whose
+            // create phase never completes, and create() has exactly three
+            // cPhs_INIT_e gates. This is the first, and the likeliest: the
+            // event manager is being handed Wind Waker's event_list.dat
+            // (694800 bytes) where the receiver's own is 106476.
+            //
+            // Capped so a genuinely-waiting frame or two stays quiet and a
+            // permanent stall is unmistakable.
+            {
+                static int s_evtWait = 0;
+                if (++s_evtWait <= 3 || (s_evtWait % 300) == 0) {
+                    DuskLog.warn("[PlyrProbe] §648 create() HELD at gate 1: "
+                                 "eventManager.dataLoaded()==false (waits={})",
+                                 s_evtWait);
+                }
+            }
+#endif
             return cPhs_INIT_e;
         }
 
@@ -5543,6 +5566,16 @@ int daAlink_c::create() {
         }
 #endif
         if (dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap) != cPhs_COMPLEATE_e) {
+#if TARGET_PC
+            {   // §648 gate 2 — Link's own arc
+                static int s_arcWait = 0;
+                if (++s_arcWait <= 3 || (s_arcWait % 300) == 0) {
+                    DuskLog.warn("[PlyrProbe] §648 create() HELD at gate 2: "
+                                 "resLoad('{}') incomplete (waits={})",
+                                 mArcName != NULL ? mArcName : "?", s_arcWait);
+                }
+            }
+#endif
             return cPhs_INIT_e;
         }
 
