@@ -31130,3 +31130,55 @@ collision. That recurrence is the finding: **it was never about the floor.**
 the collision side has nothing left to ask. **USER** → this is a clean banking
 point if you want one; Outset loading from unmodified vanilla arcs is the session
 result and it is independent of the player question.
+
+## §653 — Housing: the ten-hypothesis probe split it. Eight dead, and the fault is the PLAYER'S ACCH, not the collision.
+
+```
+652 #7 pos=(-201622,173.1,312243) | H2 gndH=-INF hit=0 setInfo=0
+                                  | H3 direct=168.3 HIT
+                                  | H4/H5 rooms=1 slot44=0x2693dacad50
+                                  | H6 actorRoom=-1
+652   H7/H8 AABB min=(-250001,-5001,249999) max=(-149999,6001,350001)
+      containsXZ=1 bgwRoomId=255
+```
+
+**Same point, same frame, same collision.** A plain `dBgS_GndChk` hits `sanbasi`
+at **168.3** — the exact height the static raycast predicted — and the player's
+`mLinkAcch` returns `-INF`.
+
+| | verdict |
+|---|---|
+| H1 wrong position | **dead** — pos is the authored PLYR spawn exactly |
+| H3 acch-only fault | **CONFIRMED** — direct hits, acch misses |
+| H4/H5 registration | **dead** — `rooms=1`, slot 44 live |
+| H7/H8 spatial index | **dead** — AABB is real and `containsXZ=1` |
+| H9 float magnitude | **dead** — the direct check works at the same 2e5 coords |
+| H10 poly attributes | **dead** — the direct check reads the same polys |
+
+`bgwRoomId=255` is correct and expected: the BgW keeps the 0xFF default, so
+`GetRoomId` falls through to the group tree, which resolves 44.
+
+**The collision side is now exonerated twice over** — once by registration
+(§646) and once by an independent query through a different code path.
+
+### And `playerInit()` did run
+
+Entries #11-#15 on sea read `bgWait=0`, so the init block was entered and
+completed; #16 onward are latched TRUE. So the acch is configured, and the
+difference between the two queries is their **filtering**, not their setup.
+
+The one suspicious input is `actorRoom=-1` — a room-filtered poly check on an
+actor with no room would explain a deadlock exactly (room needs ground, ground
+needs room). **I am not naming it as the cause**, because that is the shape of
+reasoning that produced three wrong refutations tonight.
+
+### What this probe now does instead
+
+The first run spent all ten emissions on `sea` and captured **no control**. That
+was the design fault: the whole remaining value is diffing a stage where the acch
+WORKS against one where it does not, on identical fields. The cap is now **per
+stage**, reset on a stage change, so F_SP102/F_SP103 and `sea` all appear and the
+difference is read rather than deduced.
+
+**Turns.** **USER** → one more run; the control lines are the deliverable.
+**HOUSING** → diff them.

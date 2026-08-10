@@ -5699,8 +5699,21 @@ int daAlink_c::create() {
     // confounded with each other.
     // =====================================================================
     {
+        // §653: cap PER STAGE, not globally. The first run spent all ten
+        // emissions on `sea` and captured no control — and the whole value
+        // of this probe now is diffing a stage where the acch WORKS against
+        // one where it does not, on identical fields. Resetting on a stage
+        // change guarantees both appear.
         static int s_crr = 0;
-        if (++s_crr <= 10) {
+        static char s_lastStage[16] = {0};
+        {
+            const char* sn = dComIfGp_getStartStageName();
+            if (sn != NULL && std::strncmp(sn, s_lastStage, sizeof(s_lastStage)) != 0) {
+                std::snprintf(s_lastStage, sizeof(s_lastStage), "%s", sn);
+                s_crr = 0;
+            }
+        }
+        if (++s_crr <= 6) {
             dBgS_GndChk probeChk;
             cXyz probePos(current.pos.x, current.pos.y + 200.0f, current.pos.z);
             probeChk.SetPos(&probePos);
