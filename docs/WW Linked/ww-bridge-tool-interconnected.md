@@ -30568,3 +30568,72 @@ in `ww_stages.ini`.
 slow first load (fifty-room stage), `§635 hooks installed`, `§632 WW stage
 declared 'sea'`, and a visibly sparse island — 282 of 475 placements are unported
 actors that will no-op. **HOUSING** → standing by for the log.
+
+## §636 — Housing: start mode DECODED. The field was never foreign — the receiver reads one bit too many.
+
+Asked to try decoding it and to check the current online decomp. Both done, and
+they agree.
+
+```
+donor     daPy_lk_c::getStartModeFromParam(u32 p) { return (p >> 0xC) & 0xF; }   4 bits
+receiver  daAlink_c::getStartMode()   { return (param >> 0xC) & 0x1F; }          5 bits
+                                                                  ^^^^
+```
+
+`D:/XXXXXXX/WW DP/include/d/actor/d_a_player_main.h:1880`, and **checked against
+`zeldaret/tww` main online — byte-identical to the local copy**, so nothing has
+moved upstream. The online check also returned a useful negative: **neither
+decomp defines a named enum** for these modes, so the vocabulary is undocumented
+in both.
+
+**The receiver reads ONE EXTRA BIT — bit 16 — which on the donor belongs to a
+different field of the same word.** Every specimen has it set, so every donor
+start mode arrived exactly 16 too large:
+
+```
+param        receiver &0x1F   donor &0xF   bit16   delta
+0x00ffb000        27              11         1      16
+0x01ff0001        16               0         1      16
+0xffffa02c        26              10         1      16
+0xffff102c        17               1         1      16
+0xffff202c        18               2         1      16
+0xffff502c        21               5         1      16
+0xffff902c        25               9         1      16
+0xffffd02c        29              13         1      16
+                     11 specimens, R_DL02 + Outset. Delta 16 in every one.
+```
+
+**The corroboration that makes it more than arithmetic:** masked to the donor's
+four bits the values are **0, 1, 2, 5, 9, 10, 11, 13 — all inside the 0-14 range
+the receiver's own 1277 shipped PLYR entries use.** A wrong mask produces
+out-of-range noise; the donor's mask produces values the receiver already
+speaks. Two independently-derived vocabularies landing on top of each other is
+the check.
+
+### This supersedes §626/§635's stand-in, and the stand-in was worse than it looked
+
+The blanket "→ 0" was honest about being intent-not-bits, and on R_DL02's single
+door it would have looked right forever. **On Outset it would have flattened all
+24 spawns into the same walk-in** — seven distinct donor modes collapsed to one,
+silently, with the evidence discarded on every arrival. That is the failure mode
+the standing "always port the full state machine" rule exists for.
+
+Now it clears bit 16 and nothing else.
+
+### Still open, and NOT assumed
+
+**The FIELD is decoded; the VOCABULARY is not.** Whether donor mode N means what
+receiver mode N means is unproven, and neither decomp names them. What is known:
+`0/1/2/5/13` land on the receiver's arrival branch and `9/10/11` do not — so
+those three are the ones to watch when a spawn misbehaves. Behaviour is the only
+remaining source, and Outset now supplies 24 specimens to read it from.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+**Turns.** **USER** → the log will now read `§636 PLYR start_mode: receiver read
+N (5-bit mask), donor means M (4-bit)` instead of forcing 0. **HOUSING** →
+standing by; the mode VOCABULARY is the next decode and Outset is the specimen
+set.

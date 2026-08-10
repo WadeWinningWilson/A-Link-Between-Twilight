@@ -519,27 +519,58 @@ static const char* wwRoom_aliasArcFileName(const char* i_arcName) {
 // already too late. That is why this is a hook in the receiver rather than
 // another entry in the chunk list above — the timing is the requirement.
 //
-// STATED LIMIT: WW's own encoding of this field is NOT decoded. 0 is the
-// receiver's plain walk-in and the majority value, and every donor PLYR seen so
-// far is a door arrival — so this translates INTENT, not bits. Outset's seven
-// distinct values are visible structure and the specimen set that makes real
-// decoding possible; revisit before a warp-in or fall-in spawn is expected to
-// behave. The discarded value is logged on every arrival so the evidence
-// accumulates instead of vanishing.
+// §636 — DECODED. The field is not foreign, it is one bit WIDER on the receiver.
+//
+//   donor     daPy_lk_c::getStartModeFromParam(u32 p) { return (p >> 0xC) & 0xF; }
+//             D:/XXXXXXX/WW DP/include/d/actor/d_a_player_main.h:1880, and
+//             confirmed against zeldaret/tww main — identical, 4 bits.
+//   receiver  daAlink_c::getStartMode()  { return (param >> 0xC) & 0x1F; }
+//                                                                   ^^^^ 5 bits
+//
+// The receiver reads ONE EXTRA BIT — bit 16 — which on the donor belongs to a
+// different field of the same word. Every specimen has it set, so every donor
+// start mode arrived exactly 16 too large:
+//
+//   param        receiver &0x1F   donor &0xF   bit16   delta
+//   0x00ffb000        27              11         1      16
+//   0x01ff0001        16               0         1      16
+//   0xffffa02c        26              10         1      16
+//   0xffff102c        17               1         1      16
+//   0xffff202c        18               2         1      16
+//   0xffff502c        21               5         1      16
+//   0xffff902c        25               9         1      16
+//   0xffffd02c        29              13         1      16
+//   (11 specimens across R_DL02 and Outset; delta 16 in every one)
+//
+// Masked to the donor's four bits the values are 0, 1, 2, 5, 9, 10, 11, 13 —
+// ALL INSIDE the 0-14 range the receiver's own 1277 shipped PLYR entries use.
+// That is the corroboration: a wrong mask produces out-of-range noise, and the
+// donor's mask produces values the receiver already speaks.
+//
+// So this clears bit 16 and nothing else. It is no longer a stand-in — it is
+// the donor's own decode, and it supersedes the earlier blanket "-> 0", which
+// would have flattened all 24 of Outset's spawns into the same walk-in.
+//
+// STILL OPEN, and NOT assumed: whether donor mode N means what receiver mode N
+// means. The FIELD is decoded; the VOCABULARY is not. Neither decomp defines a
+// named enum for it (checked locally and against zeldaret/tww main), so the
+// semantics have to come from behaviour. 0/1/2/5/13 land on the receiver's
+// arrival branch; 9/10/11 do not, and those are the ones to watch.
 // ============================================================================
 static void wwRoom_translatePlyrParam(u32* io_parameters) {
     const char* stage = dComIfGp_getStartStageName();
     if (io_parameters == NULL || stage == NULL || !dExtWwSave_isWwHostStage(stage)) {
         return;
     }
-    const u32 wwStartMode = (*io_parameters >> 12) & 0x1F;
-    if (wwStartMode == 0) {
-        return;
+    const u32 asReceiverReads = (*io_parameters >> 12) & 0x1F;
+    const u32 donorStartMode = (*io_parameters >> 12) & 0xF;
+    if (asReceiverReads == donorStartMode) {
+        return;  // bit 16 clear — the receiver already reads the donor's value
     }
-    *io_parameters &= ~(0x1Fu << 12);
-    DuskLog.info("[WwRoomSeam] PLYR start_mode {} -> 0 (donor word, outside the "
-                 "receiver's 0-14 vocabulary) stage='{}'",
-                 wwStartMode, stage);
+    *io_parameters &= ~(1u << 16);
+    DuskLog.info("[WwRoomSeam] §636 PLYR start_mode: receiver read {} (5-bit "
+                 "mask), donor means {} (4-bit) — bit 16 cleared. stage='{}'",
+                 asReceiverReads, donorStartMode, stage);
 }
 #endif  // DUSK_WW_ROOM_SEAM && DUSK_WW_ROOM_CHUNKS
 
