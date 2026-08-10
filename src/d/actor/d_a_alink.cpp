@@ -5621,6 +5621,29 @@ int daAlink_c::create() {
         heapSize |= 0x40000000;
 
         if (!fopAcM_entrySolidHeap(this, daAlink_createHeap, heapSize)) {
+#if TARGET_PC
+            // §650 TEMPORARY PROBE — DELETE with the fix. Logging only.
+            //
+            // create() is at call #300 on `sea` and still going, with both
+            // INIT gates passing silently. A cPhs_ERROR_e return deletes the
+            // actor and the request is re-issued, which produces exactly
+            // that: created, never executed, position intact from the
+            // create-append, forever. Vanilla logs none of it.
+            //
+            // heapSize is printed because `sea` is a fifty-room stage — its
+            // Stage.arc, a 694800-byte event list and a 729408-byte Room44
+            // are all resident — so Link's solid heap failing to fit is a
+            // candidate rather than a guess.
+            {
+                static int s_heapFail = 0;
+                if (++s_heapFail <= 3 || (s_heapFail % 100) == 0) {
+                    DuskLog.error("[PlyrProbe] §650 entrySolidHeap FAILED "
+                                  "heapSize={} fails={} — create returns ERROR, "
+                                  "actor is destroyed and re-requested",
+                                  heapSize, s_heapFail);
+                }
+            }
+#endif
             return cPhs_ERROR_e;
         }
 
