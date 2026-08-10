@@ -30812,3 +30812,70 @@ loaded byte-identical — `stage.dzs` 12448, `vr_sky.bdl`, `cloudtx_*.bti` — w
 inside the receiver's own stage loader meeting a fifty-room MULT.
 
 **Turns.** **HOUSING** → the readMult probe. **USER** → nothing yet.
+
+## §641 — Housing: the crash, found — and the probe overturned MY OWN refutation.
+
+### The probe's three lines
+
+```
+sea       upBtn=0  STType=7  boss=0   num=50  entries=0x1d50f1ec3d0
+          i=0 roomNo=0 dzs=0x1d50f134100 chunkCount=1627390218   <- 0x6100010a
+R_DL02    upBtn=0  num=2  dzs chunkCount=14, 3                   <- sane
+F_SP103   upBtn=5  num=1  dzs chunkCount=4                       <- sane
+```
+
+**`multi` was never the problem** — `num=50` matches the census exactly. The
+garbage is the `dzs` pointer, and it is non-NULL with 1.6 BILLION chunks.
+
+### I was wrong in §639, and the probe is what caught it
+
+§639 refuted the field-map ARAM hypothesis by computing `GetUpButton` from sea's
+STAG byte 0x0A statically and getting **7**. The probe says **0**. My byte-offset
+reading was wrong, so the branch I ruled out is the branch that runs.
+
+That is twice today that static reading produced a confident wrong *refutation* —
+which is worth as much attention as a confident wrong claim, because a refutation
+closes a line of inquiry. The probe existed precisely because I said I would stop
+naming suspects from reading; it earned its build.
+
+### The mechanism, complete
+
+```c
+u32 expandSize = dLib_getExpandSizeFromAramArchive(getFieldMapArchive2(), "sea/room0.dzs");
+JUT_ASSERT(1172, expandSize);          // <-- compiled out in RELEASE
+*dzs = mDoExt_getArchiveHeap()->alloc(expandSize, -0x20);   // alloc(0) -> NON-NULL
+readResource(*dzs, expandSize, dzsName);                    // reads nothing
+return *dzs;                                                // hands back the empty block
+```
+
+`dLib_getExpandSizeFromAramArchive` returns **0** when the entry is not in the
+field-map archive (`getAramAddress == 0`). The assert catches that in debug and
+vanishes in release, so `alloc(0)` returns a non-NULL zero-size block, nothing is
+read into it, and `readMult` takes the non-NULL branch. `offsetToPtr` then walks
+`m_chunkCount` read from whatever heap bytes follow — `0x6100010a` of them.
+
+### The fix is WW-agnostic, and it is a receiver defect
+
+Honour the assert in release: `expandSize == 0` → return NULL. No predicate, no
+donor name, nothing WW about it.
+
+**TP never hits this** because every stage taking this branch has its room dzs in
+the field-map archive. A stage that does not is not a WW special case — **it is
+the case the assert was written for.** And NULL is precisely what the caller
+already handles: it falls through to `getStageRes`, and failing that, skips the
+room. Wind Waker keeps per-room data in the Room arcs, so skipping is correct
+rather than merely safe.
+
+Fixing the class rather than the instance also means any future stage with an
+absent room dzs gets a log line instead of a heap walk.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 81/81, 0 DISAGREES
+manifest exit 0 · caches wiped
+```
+
+The §640 probe stays in for one confirming run, then goes.
+
+**Turns.** **USER** → `run_outset.bat` → warp. Expect fifty `§641 ... absent from
+the field-map archive` lines, one per MULT entry, then the stage continuing.
+**HOUSING** → standing by; strip the probe once it loads.

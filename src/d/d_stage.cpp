@@ -577,6 +577,37 @@ void* dStage_roomControl_c::roomDzs_c::add(u8 i_no, u8 roomNo) {
         u32 expandSize =
             dLib_getExpandSizeFromAramArchive(dComIfGp_getFieldMapArchive2(), (const char*)dzsName);
         JUT_ASSERT(1172, expandSize);
+#if TARGET_PC
+        // ====================================================================
+        // §641: honour the assert above in RELEASE. WW-agnostic — this names no
+        // donor and holds no predicate; it is a real defect in the receiver.
+        //
+        // dLib_getExpandSizeFromAramArchive returns 0 when the entry is not in
+        // the field-map archive (getAramAddress == 0). The assert catches that
+        // in debug and is compiled out in release, so the code below then does
+        // alloc(0) — which returns a NON-NULL zero-size block — reads nothing
+        // into it, and hands that pointer back as if it were a loaded dzs.
+        // readMult's caller takes the non-NULL branch and dStage_dt_c_offsetToPtr
+        // walks whatever adjacent heap bytes follow.
+        //
+        // Measured: entering `sea` (upButton 0, 50 MULT entries, no room dzs
+        // anywhere) produced dzs=0x1d50f134100 with chunkCount 0x6100010a —
+        // 1,627,390,218 chunks — and faulted on the walk.
+        //
+        // TP never hits it because every stage taking this branch has its room
+        // dzs in the field-map archive. A stage that does not is not a WW
+        // special case; it is the case the assert was written for. Returning
+        // NULL is exactly what the caller already handles: it falls through to
+        // getStageRes and, failing that, skips the room.
+        // ====================================================================
+        if (expandSize == 0) {
+            DuskLog.warn("[dStage] §641 '{}' absent from the field-map archive — "
+                         "no room dzs to load. Skipping instead of handing back an "
+                         "unfilled buffer.",
+                         dzsName);
+            return NULL;
+        }
+#endif
         OS_REPORT("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ <%s> <%d>\n", dzsName, expandSize);
         *dzs = mDoExt_getArchiveHeap()->alloc(expandSize, -0x20);
         JUT_ASSERT(1179, *dzs != NULL);
