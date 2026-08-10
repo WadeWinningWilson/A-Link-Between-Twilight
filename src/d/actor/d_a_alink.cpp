@@ -15,6 +15,7 @@
 #include "SSystem/SComponent/c_math.h"
 #include "Z2AudioLib/Z2SeqMgr.h"  // Z2GetSeqMgr / stopWolfHowlSong (Wolf Howl music stop)
 #include "d/d_ext_save_guard.h"  // §47: donor-space player ambient tuner
+#include "d/d_bg_s_gnd_chk.h"  // §652 probe: direct ground query
 #include "d/d_item.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_albw_rental.h"
@@ -5671,6 +5672,78 @@ int daAlink_c::create() {
     }
 
     mLinkAcch.CrrPos(dComIfG_Bgsp());
+#if TARGET_PC
+    // =====================================================================
+    // 652 TEMPORARY PROBE -- DELETE with the fix. Logging only.
+    //
+    // Everything upstream is measured and correct, so the failure is isolated
+    // to this one call. CrrPos runs on EVERY retry (it sits outside the
+    // bgWaitFlg block, exactly as the donor makeBgWait polls), the BgW for room
+    // 44 is registered and live BEFORE these attempts, and the dzb puts
+    // sanbasi at y=168.3 under a y=173.09 spawn -- and GetGroundH stays -INF.
+    //
+    // Ten hypotheses, each with the reading that kills it:
+    //   H1  wrong position queried  pos != the authored PLYR spawn
+    //   H2  acch never configured   no hit AND no set-info
+    //   H3  acch-only fault         the DIRECT GndChk succeeds where acch fails
+    //   H4  nothing registered      roomsWithBgW == 0
+    //   H5  registered elsewhere    roomsWithBgW nonzero but this slot empty
+    //   H6  room filtering          actor room -1 excluded from the check
+    //   H7  spatial index empty     the BgW AABB is NULL or degenerate
+    //   H8  point outside index     AABB does not contain current.pos
+    //   H9  float magnitude         AABB contains it, both checks still miss
+    //   H10 poly attributes         both miss despite containment
+    //
+    // The direct GndChk is load-bearing: it queries the SAME point through a
+    // different path, so acch configuration and BG registration stop being
+    // confounded with each other.
+    // =====================================================================
+    {
+        static int s_crr = 0;
+        if (++s_crr <= 10) {
+            dBgS_GndChk probeChk;
+            cXyz probePos(current.pos.x, current.pos.y + 200.0f, current.pos.z);
+            probeChk.SetPos(&probePos);
+            const f32 direct = dComIfG_Bgsp().GroundCross(&probeChk);
+
+            int roomsWithBgW = 0;
+            for (int r = 0; r < 64; ++r) {
+                if (dStage_roomControl_c::getBgW(r) != NULL) { ++roomsWithBgW; }
+            }
+            const int slotNo = fopAcM_GetRoomNo(this) >= 0 ? fopAcM_GetRoomNo(this) : 44;
+            dBgW_Base* slot = dStage_roomControl_c::getBgW(slotNo);
+            const f32 gh = mLinkAcch.GetGroundH();
+
+            DuskLog.warn(
+                "[PlyrProbe] 652 #{} pos=({:.0f},{:.1f},{:.0f}) | H2 gndH={} hit={} "
+                "setInfo={} | H3 direct={:.1f} {} | H4/H5 rooms={} slot{}={} | "
+                "H6 actorRoom={}",
+                s_crr, current.pos.x, current.pos.y, current.pos.z,
+                gh == -G_CM3D_F_INF ? "-INF" : "finite",
+                mLinkAcch.ChkGroundHit() ? 1 : 0,
+                mLinkAcch.m_gnd.ChkSetInfo() ? 1 : 0, direct,
+                direct == -G_CM3D_F_INF ? "-INF" : "HIT", roomsWithBgW, slotNo,
+                (const void*)slot, (int)fopAcM_GetRoomNo(this));
+
+            if (slot != NULL) {
+                cM3dGAab* bnd = slot->GetBnd();
+                if (bnd == NULL) {
+                    DuskLog.warn("[PlyrProbe] 652   H7 AABB NULL (index absent)");
+                } else {
+                    const bool inside =
+                        current.pos.x >= bnd->GetMinX() && current.pos.x <= bnd->GetMaxX() &&
+                        current.pos.z >= bnd->GetMinZ() && current.pos.z <= bnd->GetMaxZ();
+                    DuskLog.warn(
+                        "[PlyrProbe] 652   H7/H8 AABB min=({:.0f},{:.0f},{:.0f}) "
+                        "max=({:.0f},{:.0f},{:.0f}) containsXZ={} bgwRoomId={}",
+                        bnd->GetMinX(), bnd->GetMinY(), bnd->GetMinZ(),
+                        bnd->GetMaxX(), bnd->GetMaxY(), bnd->GetMaxZ(),
+                        inside ? 1 : 0, (int)slot->GetRoomId());
+                }
+            }
+        }
+    }
+#endif
     void* portalActor = NULL;
 
     if (mLinkAcch.GetGroundH() == -G_CM3D_F_INF
