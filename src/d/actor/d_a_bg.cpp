@@ -230,23 +230,6 @@ int daBg_c::createHeap() {
 #endif
 
     cBgD_t* dzb = (cBgD_t*)dComIfG_getStageRes(arcName, "room.dzb");
-#if TARGET_PC
-    // ========================================================================
-    // §645 TEMPORARY PROBE — DELETE with the fix. Logging only: no WW symbol,
-    // no predicate, so it is not a leg.
-    //
-    // Outset loads, its collision is measurably correct (the dzb puts `sanbasi`
-    // at y=168.3 directly under Link's y=173.09 spawn, and every one of the 24
-    // PLYR points sits on its own surface), the §334 repack reports 85 standable
-    // and 0 slip — and the player still reports Room: -1, which is the signature
-    // of NO GROUND POLY. So the question is narrowly whether this function
-    // registers a BgW at all, and if it does, why the ground check misses it.
-    // ========================================================================
-    DuskLog.info("[BgProbe] createHeap arc='{}' roomNo={} dzb={} vtx={} tri={}",
-                 arcName != NULL ? arcName : "?", roomNo, (const void*)dzb,
-                 dzb != NULL ? (int)dzb->m_v_num : -1,
-                 dzb != NULL ? (int)dzb->m_t_num : -1);
-#endif
     if (dzb != NULL) {
         mpKCol = NULL;
         mpBgW = JKR_NEW dBgW();
@@ -255,20 +238,10 @@ int daBg_c::createHeap() {
         }
 
         if (mpBgW->Set(dzb, cBgW::GLOBAL_e, NULL)) {
-#if TARGET_PC
-            // §645: Set() FAILED — createHeap bails and the room gets no
-            // collision at all. Silent in vanilla; this is the one line
-            // that distinguishes it from never having been called.
-            DuskLog.error("[BgProbe] dBgW::Set FAILED room={} — no collision "
-                          "will exist for this room", roomNo);
-#endif
             return 0;
         }
 
         dStage_roomControl_c::setBgW(roomNo, (dBgW_Base*)mpBgW);
-#if TARGET_PC
-        DuskLog.info("[BgProbe] registered BgW room={} prio=0", roomNo);
-#endif
         mpBgW->SetPriority(dBgW_Base::PRIORITY_0);
     } else {
         void* kcl = dComIfG_getStageRes(arcName, "room.kcl");
@@ -643,27 +616,9 @@ int daBg_c::create() {
         }
 
         if (mpBgW != NULL) {
-#if TARGET_PC
-            // §645: the LAST unchecked link. Set() can return success while
-            // the BgW carries a memory-error flag, and Regist then REJECTS
-            // it -- which returns cPhs_ERROR_e and destroys the whole BG
-            // actor, so the room ends up with no collision even though
-            // createHeap reported registering one. Silent in vanilla.
-            DuskLog.info("[BgProbe] pre-Regist room={} used={} memErr={}",
-                         roomNo, mpBgW->ChkUsed() ? 1 : 0,
-                         mpBgW->ChkMemoryError() ? 1 : 0);
-#endif
             if (dComIfG_Bgsp().Regist(mpBgW, this)) {
-#if TARGET_PC
-                DuskLog.error("[BgProbe] Regist REJECTED room={} — BG actor "
-                              "dies, room has NO collision", roomNo);
-#endif
                 return cPhs_ERROR_e;
             }
-#if TARGET_PC
-            DuskLog.info("[BgProbe] Regist OK room={} — collision is live",
-                         roomNo);
-#endif
         }
 
         if (mpKCol != NULL) {

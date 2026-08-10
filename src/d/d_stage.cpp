@@ -2785,40 +2785,6 @@ static void readMult(dStage_dt_c* i_stage, dStage_Multi_c* multi, bool useOldRes
         {"Doo0", dStage_RoomKeepDoorInit},
     };
 
-#if TARGET_PC
-    // ========================================================================
-    // §640 TEMPORARY PROBE — readMult crash. DELETE once the cause is fixed.
-    //
-    // The fault is dStage_dt_c_offsetToPtr on a NON-NULL garbage `dzs`, and two
-    // readings of where that pointer came from were already refuted (the
-    // field-map ARAM branch needs upButton 0/6 and sea's is 7; the roomDzs_c
-    // table is torn down in dStage_Delete). Rather than name a third suspect
-    // from reading, this prints every value the three live explanations differ
-    // on, in one pass:
-    //
-    //   H1 stale old-multi   `multi` itself is a pointer into a freed stage.
-    //                        stagInfoInit only resets it when !isBossStage, and
-    //                        dStage_Delete SETS it for ST_DUNGEON — so a donor
-    //                        STAG read under receiver semantics could keep it.
-    //   H2 bad entry table   multi is fine, m_entries is not.
-    //   H3 absurd num        a donor STAG/MULT count the receiver misreads.
-    //   H4 the dzs branch    something actually returns non-NULL. Logged below.
-    //
-    // Logging only — no WW symbol, no predicate, so this is not a leg.
-    // ========================================================================
-    {
-        stage_stag_info_class* stg = dComIfGp_getStage()->getStagInfo();
-        DuskLog.info("[MultProbe] enter old={} multi={} stag={} upBtn={} STType={} boss={}",
-                     useOldRes ? 1 : 0, (const void*)multi, (const void*)stg,
-                     stg != NULL ? dStage_stagInfo_GetUpButton(stg) : -1,
-                     stg != NULL ? dStage_stagInfo_GetSTType(stg) : -1,
-                     dStage_isBossStage(i_stage) ? 1 : 0);
-        if (multi != NULL) {
-            DuskLog.info("[MultProbe]   num={} entries={}", (int)multi->num,
-                         (const void*)(dStage_Mult_info*)multi->m_entries);
-        }
-    }
-#endif
     if (multi != NULL) {
         dStage_Mult_info* info = multi->m_entries;
 
@@ -2845,20 +2811,6 @@ static void readMult(dStage_dt_c* i_stage, dStage_Multi_c* multi, bool useOldRes
                 OS_REPORT("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Field Map Dzs Find !!\n");
             }
 
-#if TARGET_PC
-            // §640: the value that decides H4. A non-NULL dzs here is what
-            // offsetToPtr then walks; its chunk count says whether it is a real
-            // dzs or a buffer nobody filled.
-            if (dzs != NULL) {
-                DuskLog.warn("[MultProbe]   i={} roomNo={} dzs={} chunkCount={} "
-                             "-> about to offsetToPtr",
-                             (int)i, (int)info->mRoomNo, (const void*)dzs,
-                             (int)((dStage_fileHeader*)dzs)->m_chunkCount);
-            } else if (i < 4) {
-                DuskLog.info("[MultProbe]   i={} roomNo={} dzs=NULL (skipped)",
-                             (int)i, (int)info->mRoomNo);
-            }
-#endif
             if (dzs != NULL) {
                 dStage_dt_c_offsetToPtr(dzs);
                 i_stage->setRoomNo(info->mRoomNo);

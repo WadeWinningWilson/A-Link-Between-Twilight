@@ -5436,41 +5436,6 @@ int daAlink_c::create() {
     fopAcM_ct(this, daAlink_c);
 
     static BOOL bgWaitFlg = FALSE;
-#if TARGET_PC
-    // =====================================================================
-    // §649 TEMPORARY PROBE — DELETE with the fix. Logging only.
-    //
-    // On `sea` the player actor exists but never executes, and NEITHER of
-    // create()'s first two cPhs_INIT_e gates logged a single wait. So it is
-    // not stalling at the event manager and not stalling on Link's arc —
-    // the question is now whether create() runs AT ALL for that actor.
-    //
-    // bgWaitFlg is printed because it is a STATIC shared across every Link
-    // and every stage, and the whole init block — including
-    // dComIfGp_setPlayer(0, this) — sits behind `if (!bgWaitFlg)`. A value
-    // left TRUE by a previous stage's Link would skip all of it. That is a
-    // hypothesis this line tests, not a conclusion.
-    // =====================================================================
-    {
-        static int s_createCalls = 0;
-        ++s_createCalls;
-        // §651: the %300 throttle HID the answer — an INIT phase retries
-        // every frame, so 294 calls elapse during two ordinary stage loads
-        // and '#300 on sea' was ONE sample, not proof of a loop. Emit every
-        // call, capped, so the sea sequence is visible in full.
-        static int s_emits = 0;
-        if (s_emits < 40) {
-            ++s_emits;
-            DuskLog.info("[PlyrProbe] §649 create() entry #{} stage='{}' "
-                         "bgWait={} startMode={} point={}",
-                         s_createCalls,
-                         dComIfGp_getStartStageName() != NULL
-                             ? dComIfGp_getStartStageName() : "?",
-                         bgWaitFlg ? 1 : 0, getStartMode(),
-                         (int)dComIfGp_getStartStagePoint());
-        }
-    }
-#endif
 
     u32 sceneMode = getLastSceneMode();
     s32 startMode = getStartMode();
@@ -5559,29 +5524,6 @@ int daAlink_c::create() {
         attention_info.flags = -1;
 
         if (!dComIfGp_getEventManager().dataLoaded()) {
-#if TARGET_PC
-            // §648 TEMPORARY PROBE — DELETE with the fix. Logging only.
-            //
-            // The player actor on `sea` EXISTS (the editor reads its spawn
-            // position) but never executes: the §647 probe emitted for the
-            // F_SP103 Link and then never again after the new ALINK was
-            // created. An actor that exists and never executes is one whose
-            // create phase never completes, and create() has exactly three
-            // cPhs_INIT_e gates. This is the first, and the likeliest: the
-            // event manager is being handed Wind Waker's event_list.dat
-            // (694800 bytes) where the receiver's own is 106476.
-            //
-            // Capped so a genuinely-waiting frame or two stays quiet and a
-            // permanent stall is unmistakable.
-            {
-                static int s_evtWait = 0;
-                if (++s_evtWait <= 3 || (s_evtWait % 300) == 0) {
-                    DuskLog.warn("[PlyrProbe] §648 create() HELD at gate 1: "
-                                 "eventManager.dataLoaded()==false (waits={})",
-                                 s_evtWait);
-                }
-            }
-#endif
             return cPhs_INIT_e;
         }
 
@@ -5602,16 +5544,6 @@ int daAlink_c::create() {
         }
 #endif
         if (dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap) != cPhs_COMPLEATE_e) {
-#if TARGET_PC
-            {   // §648 gate 2 — Link's own arc
-                static int s_arcWait = 0;
-                if (++s_arcWait <= 3 || (s_arcWait % 300) == 0) {
-                    DuskLog.warn("[PlyrProbe] §648 create() HELD at gate 2: "
-                                 "resLoad('{}') incomplete (waits={})",
-                                 mArcName != NULL ? mArcName : "?", s_arcWait);
-                }
-            }
-#endif
             return cPhs_INIT_e;
         }
 
@@ -5628,29 +5560,6 @@ int daAlink_c::create() {
         heapSize |= 0x40000000;
 
         if (!fopAcM_entrySolidHeap(this, daAlink_createHeap, heapSize)) {
-#if TARGET_PC
-            // §650 TEMPORARY PROBE — DELETE with the fix. Logging only.
-            //
-            // create() is at call #300 on `sea` and still going, with both
-            // INIT gates passing silently. A cPhs_ERROR_e return deletes the
-            // actor and the request is re-issued, which produces exactly
-            // that: created, never executed, position intact from the
-            // create-append, forever. Vanilla logs none of it.
-            //
-            // heapSize is printed because `sea` is a fifty-room stage — its
-            // Stage.arc, a 694800-byte event list and a 729408-byte Room44
-            // are all resident — so Link's solid heap failing to fit is a
-            // candidate rather than a guess.
-            {
-                static int s_heapFail = 0;
-                if (++s_heapFail <= 3 || (s_heapFail % 100) == 0) {
-                    DuskLog.error("[PlyrProbe] §650 entrySolidHeap FAILED "
-                                  "heapSize={} fails={} — create returns ERROR, "
-                                  "actor is destroyed and re-requested",
-                                  heapSize, s_heapFail);
-                }
-            }
-#endif
             return cPhs_ERROR_e;
         }
 
@@ -5672,91 +5581,6 @@ int daAlink_c::create() {
     }
 
     mLinkAcch.CrrPos(dComIfG_Bgsp());
-#if TARGET_PC
-    // =====================================================================
-    // 652 TEMPORARY PROBE -- DELETE with the fix. Logging only.
-    //
-    // Everything upstream is measured and correct, so the failure is isolated
-    // to this one call. CrrPos runs on EVERY retry (it sits outside the
-    // bgWaitFlg block, exactly as the donor makeBgWait polls), the BgW for room
-    // 44 is registered and live BEFORE these attempts, and the dzb puts
-    // sanbasi at y=168.3 under a y=173.09 spawn -- and GetGroundH stays -INF.
-    //
-    // Ten hypotheses, each with the reading that kills it:
-    //   H1  wrong position queried  pos != the authored PLYR spawn
-    //   H2  acch never configured   no hit AND no set-info
-    //   H3  acch-only fault         the DIRECT GndChk succeeds where acch fails
-    //   H4  nothing registered      roomsWithBgW == 0
-    //   H5  registered elsewhere    roomsWithBgW nonzero but this slot empty
-    //   H6  room filtering          actor room -1 excluded from the check
-    //   H7  spatial index empty     the BgW AABB is NULL or degenerate
-    //   H8  point outside index     AABB does not contain current.pos
-    //   H9  float magnitude         AABB contains it, both checks still miss
-    //   H10 poly attributes         both miss despite containment
-    //
-    // The direct GndChk is load-bearing: it queries the SAME point through a
-    // different path, so acch configuration and BG registration stop being
-    // confounded with each other.
-    // =====================================================================
-    {
-        // §653: cap PER STAGE, not globally. The first run spent all ten
-        // emissions on `sea` and captured no control — and the whole value
-        // of this probe now is diffing a stage where the acch WORKS against
-        // one where it does not, on identical fields. Resetting on a stage
-        // change guarantees both appear.
-        static int s_crr = 0;
-        static char s_lastStage[16] = {0};
-        {
-            const char* sn = dComIfGp_getStartStageName();
-            if (sn != NULL && std::strncmp(sn, s_lastStage, sizeof(s_lastStage)) != 0) {
-                std::snprintf(s_lastStage, sizeof(s_lastStage), "%s", sn);
-                s_crr = 0;
-            }
-        }
-        if (++s_crr <= 6) {
-            dBgS_GndChk probeChk;
-            cXyz probePos(current.pos.x, current.pos.y + 200.0f, current.pos.z);
-            probeChk.SetPos(&probePos);
-            const f32 direct = dComIfG_Bgsp().GroundCross(&probeChk);
-
-            int roomsWithBgW = 0;
-            for (int r = 0; r < 64; ++r) {
-                if (dStage_roomControl_c::getBgW(r) != NULL) { ++roomsWithBgW; }
-            }
-            const int slotNo = fopAcM_GetRoomNo(this) >= 0 ? fopAcM_GetRoomNo(this) : 44;
-            dBgW_Base* slot = dStage_roomControl_c::getBgW(slotNo);
-            const f32 gh = mLinkAcch.GetGroundH();
-
-            DuskLog.warn(
-                "[PlyrProbe] 652 #{} pos=({:.0f},{:.1f},{:.0f}) | H2 gndH={} hit={} "
-                "setInfo={} | H3 direct={:.1f} {} | H4/H5 rooms={} slot{}={} | "
-                "H6 actorRoom={}",
-                s_crr, current.pos.x, current.pos.y, current.pos.z,
-                gh == -G_CM3D_F_INF ? "-INF" : "finite",
-                mLinkAcch.ChkGroundHit() ? 1 : 0,
-                mLinkAcch.m_gnd.ChkSetInfo() ? 1 : 0, direct,
-                direct == -G_CM3D_F_INF ? "-INF" : "HIT", roomsWithBgW, slotNo,
-                (const void*)slot, (int)fopAcM_GetRoomNo(this));
-
-            if (slot != NULL) {
-                cM3dGAab* bnd = slot->GetBnd();
-                if (bnd == NULL) {
-                    DuskLog.warn("[PlyrProbe] 652   H7 AABB NULL (index absent)");
-                } else {
-                    const bool inside =
-                        current.pos.x >= bnd->GetMinX() && current.pos.x <= bnd->GetMaxX() &&
-                        current.pos.z >= bnd->GetMinZ() && current.pos.z <= bnd->GetMaxZ();
-                    DuskLog.warn(
-                        "[PlyrProbe] 652   H7/H8 AABB min=({:.0f},{:.0f},{:.0f}) "
-                        "max=({:.0f},{:.0f},{:.0f}) containsXZ={} bgwRoomId={}",
-                        bnd->GetMinX(), bnd->GetMinY(), bnd->GetMinZ(),
-                        bnd->GetMaxX(), bnd->GetMaxY(), bnd->GetMaxZ(),
-                        inside ? 1 : 0, (int)slot->GetRoomId());
-                }
-            }
-        }
-    }
-#endif
     void* portalActor = NULL;
 
     if (mLinkAcch.GetGroundH() == -G_CM3D_F_INF
@@ -5869,21 +5693,6 @@ int daAlink_c::create() {
         }
     }
 
-#if TARGET_PC
-    // §651: the tail has exactly ONE exit and this is it. If create()
-    // reaches here the phase COMPLETES, and an actor whose create
-    // completes should execute — so seeing this line while the exec probe
-    // stays silent moves the question downstream of create() entirely.
-    {
-        static int s_done = 0;
-        if (++s_done <= 10) {
-            DuskLog.info("[PlyrProbe] §651 create() COMPLEATE #{} stage='{}'",
-                         s_done,
-                         dComIfGp_getStartStageName() != NULL
-                             ? dComIfGp_getStartStageName() : "?");
-        }
-    }
-#endif
     return cPhs_COMPLEATE_e;
 }
 
@@ -19526,46 +19335,6 @@ int daAlink_c::procGoronRideWait() {
 }
 
 int daAlink_c::execute() {
-#if TARGET_PC
-    // ========================================================================
-    // §647 TEMPORARY PROBE — DELETE with the fix. Logging only: no WW symbol,
-    // no predicate, and it self-limits to 20 emissions so it cannot spam.
-    //
-    // WHAT IT SETTLES. On both R_DL02 and sea the player sits at its authored
-    // spawn with velocity EXACTLY 0 on all three axes and reports Room: -1 —
-    // and on sea the collision underneath is now proven live and correctly
-    // placed (BgW registered, memErr=0, Regist OK, sanbasi at y=168.3 under a
-    // y=173.09 spawn, group tree resolving to room 44). So a poly hit would
-    // report 44, and -1 means no poly is being hit at all.
-    //
-    // Every remaining explanation lives on this side of the fence, and they
-    // disagree on values nothing currently prints:
-    //   H1 not executing      this line never appears
-    //   H2 held by a demo     demoMode nonzero while the timer never drains
-    //   H3 ground never checked  ChkGroundHit false AND ChkSetInfo false
-    //   H4 checked and missed    ChkSetInfo TRUE but the room still resolves -1
-    //   H5 wrong proc state   mProcID parked somewhere that skips the check
-    // H4 vs H3 is the important split: it separates "the query never ran" from
-    // "the query ran and found nothing", which point at opposite fixes.
-    // ========================================================================
-    {
-        static int s_probeTick = 0;
-        static int s_probeEmits = 0;
-        if (s_probeEmits < 20 && (s_probeTick++ % 60) == 0) {
-            ++s_probeEmits;
-            DuskLog.info(
-                "[PlyrProbe] exec#{} proc={} demo={} p0={} p1={} gndHit={} "
-                "gndSet={} room={} pos=({:.0f},{:.0f},{:.0f}) spd=({:.2f},{:.2f},"
-                "{:.2f}) normSpd={:.2f} startMode={}",
-                s_probeTick, (int)mProcID, (int)mDemo.getDemoMode(),
-                (int)mDemo.getParam0(), (int)mDemo.getParam1(),
-                mLinkAcch.ChkGroundHit() ? 1 : 0,
-                mLinkAcch.m_gnd.ChkSetInfo() ? 1 : 0, (int)fopAcM_GetRoomNo(this),
-                current.pos.x, current.pos.y, current.pos.z, speed.x, speed.y,
-                speed.z, mNormalSpeed, getStartMode());
-        }
-    }
-#endif
 #if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
     // TEMP: teleport-on-swap probe.  A clothes change should not move Link; log current.pos +
     // the one-frame XZ delta through every clothes change (clothesTimer != 0) and ~8 frames

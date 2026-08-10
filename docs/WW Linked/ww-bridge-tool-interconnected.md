@@ -31323,3 +31323,76 @@ should not start until the scene it will be judged in is lit and framed.
 
 **Turns.** **USER** → confirm the order, or reprioritise. **HOUSING** → the
 probes (§640/§645/§647-§653) come out either way; they have all served.
+
+## §656 — Housing: I was about to flip a bridge flag. Stopped. Here is the measured inventory of what is NOT native on Outset, each with its donor target.
+
+> *"Whatever isn't native, make it so. NO mounts, no bakes."*
+
+Caught correctly. My next edit would have called `dKyWw_setSkyHost(true)` from a
+data-driven check — but that flag's own comment says what it means: *"TP vrbox
+replaced, sky ALIVE."* **On a native stage there is no mount and no TP vrbox to
+replace.** Setting it would have been the bridge wearing a data-driven costume,
+and it would have deepened the `mpWwSky` leg inside TP's `d_a_vrbox.cpp` (10
+references) instead of retiring it.
+
+### 1. SKY — port the donor's own actors
+
+The donor's system is small, self-contained, and reads the stage directly:
+
+```
+daVrbox    getStageRes("Stage", "vr_sky.bdl")           d_a_vrbox.cpp   ~6.9 KB
+daVrbox2   getStageRes("Stage", "vr_back_cloud.bdl")    d_a_vrbox2.cpp  ~11 KB
+           getStageRes("Stage", "vr_kasumi_mae.bdl")
+           getStageRes("Stage", "vr_uso_umi.bdl")
+```
+
+All four models are already resident on Outset — we watched them load. Nothing
+draws them because TP's vrbox owns the sky and its WW leg waits on a mount flag.
+
+**Port:** `daVrbox` + `daVrbox2` as a parallel donor stack, registered through the
+existing WW profile register, owning the sky on a declared donor stage. That
+RETIRES `s_wwSkyHost`, the `EXT_BG0`/`EXT_BG9` name test, and the `mpWwSky` leg.
+
+**One trap already visible:** the donor asks for arc key **`"Stage"`**; the
+receiver's key is `"Stg_00"`. §635 aliased the FILE while deliberately keeping the
+receiver's KEY, so ported donor code will ask for a key that does not exist. That
+is a seam to label, not a surprise to discover.
+
+### 2. GRASS AND FRIENDS — the measured stand-in count
+
+Of the 16 names that resolve on Outset, **nine are aliases onto TP's grass actor**:
+
+```
+kusax1 x46  pflower x41  kusax21 x36  kusax7 x30  flwr17 x5
+flwr7 x3    pflwrx7 x3   flower x2                     -> fpcNm_GRASS_e
+                                              153 of 193 resolving placements
+```
+
+**Four are genuine ports** — `Zl1` → `NPC_ZL1`, `Ls1` → `NPC_LS1`, `P2b` →
+`NPC_P2`, `Ba1` → `NPC_BA1`. Three are receiver systems that are lineage-shared
+anyway (`item`, `AND_SW2`, `ky_tag1`, `TagEv`).
+
+So **79% of Outset's visible population is TP grass wearing WW names.** The donor
+target is WW's own grass/flower actors, per name rather than collapsed onto one.
+
+### 3. THE 282 UNRESOLVED — content, not stand-ins
+
+`keeth` x26, `ikada_h` x11, `bridge` x11, `Oyashi` x10, `SalvagE` x10, `TagKb`
+x10, `Pig` x6, `Pirates` x4 … these no-op honestly and mislead nobody. They are
+the largest bucket and the least urgent, because an absent actor is visibly
+absent while a stand-in is invisibly wrong.
+
+### Order, revised under "no mounts, no bakes"
+
+```
+1  daVrbox + daVrbox2      the sky, and it RETIRES bridge surface
+2  camera                  re-read first — only ever observed with a frozen player
+3  WW grass actors         153 placements stop being TP props
+4  the 282                 per-actor content porting
+```
+
+1 is first because it is the only item that DELETES bridge machinery rather than
+adding to it.
+
+**Turns.** **USER** → go on the vrbox port. **HOUSING** → probes are already
+stripped; ready to start.
