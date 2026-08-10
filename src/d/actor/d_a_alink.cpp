@@ -19334,6 +19334,46 @@ int daAlink_c::procGoronRideWait() {
 }
 
 int daAlink_c::execute() {
+#if TARGET_PC
+    // ========================================================================
+    // §647 TEMPORARY PROBE — DELETE with the fix. Logging only: no WW symbol,
+    // no predicate, and it self-limits to 20 emissions so it cannot spam.
+    //
+    // WHAT IT SETTLES. On both R_DL02 and sea the player sits at its authored
+    // spawn with velocity EXACTLY 0 on all three axes and reports Room: -1 —
+    // and on sea the collision underneath is now proven live and correctly
+    // placed (BgW registered, memErr=0, Regist OK, sanbasi at y=168.3 under a
+    // y=173.09 spawn, group tree resolving to room 44). So a poly hit would
+    // report 44, and -1 means no poly is being hit at all.
+    //
+    // Every remaining explanation lives on this side of the fence, and they
+    // disagree on values nothing currently prints:
+    //   H1 not executing      this line never appears
+    //   H2 held by a demo     demoMode nonzero while the timer never drains
+    //   H3 ground never checked  ChkGroundHit false AND ChkSetInfo false
+    //   H4 checked and missed    ChkSetInfo TRUE but the room still resolves -1
+    //   H5 wrong proc state   mProcID parked somewhere that skips the check
+    // H4 vs H3 is the important split: it separates "the query never ran" from
+    // "the query ran and found nothing", which point at opposite fixes.
+    // ========================================================================
+    {
+        static int s_probeTick = 0;
+        static int s_probeEmits = 0;
+        if (s_probeEmits < 20 && (s_probeTick++ % 60) == 0) {
+            ++s_probeEmits;
+            DuskLog.info(
+                "[PlyrProbe] exec#{} proc={} demo={} p0={} p1={} gndHit={} "
+                "gndSet={} room={} pos=({:.0f},{:.0f},{:.0f}) spd=({:.2f},{:.2f},"
+                "{:.2f}) normSpd={:.2f} startMode={}",
+                s_probeTick, (int)mProcID, (int)mDemo.getDemoMode(),
+                (int)mDemo.getParam0(), (int)mDemo.getParam1(),
+                mLinkAcch.ChkGroundHit() ? 1 : 0,
+                mLinkAcch.m_gnd.ChkSetInfo() ? 1 : 0, (int)fopAcM_GetRoomNo(this),
+                current.pos.x, current.pos.y, current.pos.z, speed.x, speed.y,
+                speed.z, mNormalSpeed, getStartMode());
+        }
+    }
+#endif
 #if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
     // TEMP: teleport-on-swap probe.  A clothes change should not move Link; log current.pos +
     // the one-frame XZ delta through every clothes change (clothesTimer != 0) and ~8 frames
