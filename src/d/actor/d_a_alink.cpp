@@ -5453,7 +5453,13 @@ int daAlink_c::create() {
     {
         static int s_createCalls = 0;
         ++s_createCalls;
-        if (s_createCalls <= 6 || (s_createCalls % 300) == 0) {
+        // §651: the %300 throttle HID the answer — an INIT phase retries
+        // every frame, so 294 calls elapse during two ordinary stage loads
+        // and '#300 on sea' was ONE sample, not proof of a loop. Emit every
+        // call, capped, so the sea sequence is visible in full.
+        static int s_emits = 0;
+        if (s_emits < 40) {
+            ++s_emits;
             DuskLog.info("[PlyrProbe] §649 create() entry #{} stage='{}' "
                          "bgWait={} startMode={} point={}",
                          s_createCalls,
@@ -5777,6 +5783,21 @@ int daAlink_c::create() {
         }
     }
 
+#if TARGET_PC
+    // §651: the tail has exactly ONE exit and this is it. If create()
+    // reaches here the phase COMPLETES, and an actor whose create
+    // completes should execute — so seeing this line while the exec probe
+    // stays silent moves the question downstream of create() entirely.
+    {
+        static int s_done = 0;
+        if (++s_done <= 10) {
+            DuskLog.info("[PlyrProbe] §651 create() COMPLEATE #{} stage='{}'",
+                         s_done,
+                         dComIfGp_getStartStageName() != NULL
+                             ? dComIfGp_getStartStageName() : "?");
+        }
+    }
+#endif
     return cPhs_COMPLEATE_e;
 }
 
