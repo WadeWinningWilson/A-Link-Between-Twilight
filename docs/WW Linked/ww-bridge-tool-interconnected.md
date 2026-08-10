@@ -30749,3 +30749,66 @@ manifest exit 0 · caches wiped
 **Turns.** **USER** → either bat now shows BOTH rows: `sea room 44 layer -1` and
 `R_DL02 room 0 layer -1`. Outset is the one that has never been entered.
 **HOUSING** → standing by for that log.
+
+## §639 — Housing: the resolver stays where it is, and the evidence says so. Plus: two crash hypotheses refuted by reading.
+
+> *"That's not my ruling, that's vanilla code/plugin scope: what makes it the most
+> vanilla true and plugin friendly"*
+
+Correct framing, and it decides the question against the move I offered.
+
+**Vanilla-truth is SILENT here, and saying otherwise would be manufacturing an
+argument.** Vanilla WW has no consume-time resolver at all — its own resource
+system dispatches `BDL ` at mount. Ours exists *only* because DN-3 forbids that
+shape in this receiver. It carries no donor lineage, so "where should it live" is
+not a vanilla question. There is no vanilla answer to appeal to.
+
+**Plugin scope decides it, and it says LEAVE IT:**
+
+1. **It is already the port's shared BDL service** — callers today include
+   `d_a_esa`, `d_a_ext_plank_span`, `d_a_kamome`, `d_a_kb`, `d_a_knob00`,
+   `d_a_lamp`, itemmdl, and now the room loader. Not a mount-bridge private.
+2. **Every consumer is WW-layer and leaves together.** `d_ext_npc_mount.cpp` and
+   `ww_room_loader.cpp` are both WW-serving plumbing (§634), so they ship as one
+   plugin unit either way. Moving buys **zero** separability.
+3. **DO-NOT names it by this identity.** DN-3's Guarded surfaces line reads:
+   *"the ExtNpcMount consume-time model path (`acquireMountedModel` /
+   `acquireBgModel` / `s_modelDataCache` / `dExtNpcMount_acquireDemoModel`)"*.
+   Moving it moves a guarded surface out from under the name the hard-stop
+   registry points at — a real documentation-integrity cost for no gain.
+
+**What IS wrong is the FILE NAME, not the location.** `d_ext_npc_mount.cpp` now
+holds the WW layer's shared model service, the room-lane registry, the stage
+registry and the mount bridge. The contents outgrew the name, which is what made
+"mounted" read as a regression. That is a rename question with DN-3 references
+attached — worth doing deliberately, not as a side effect of a crash hunt.
+
+### Crash: located precisely, and my first two explanations are dead
+
+```
+dStage_multInfoInit -> readMult -> dStage_dt_c_offsetToPtr(dzs)
+fault 0x1d1bd0e3008 — a heap-shaped address, so dzs was NON-NULL and garbage
+```
+
+Two candidate sources for that pointer, both **refuted by reading before I built
+anything on them**:
+
+* **TP field-map ARAM path** (`getFieldMapArchive2`). Requires
+  `GetUpButton == 0 or 6`; it is `field_0x0a & 7`, and sea's STAG byte 0x0A is
+  `0x07` → **7**. The branch never runs. (TP D_MN01 is `0x23` → 3.)
+* **Stale `roomDzs_c` table from the previous stage.** `removeRoomDzs()` is
+  called in `dStage_Delete` and `remove()` zeroes `m_num`, so it is torn down per
+  stage.
+
+So `dzs` is non-NULL from a source I have not found, and I am not going to name a
+third suspect from reading — that is the pattern that has cost rounds today.
+**Next is a probe** on `readMult`: MULT `num`, each `mRoomNo`, what `addRoomDzs`
+returns, and what `getStageRes` returns, per entry.
+
+**What DID work, and is worth banking:** vanilla `sea/Stage.arc` mounted and
+loaded byte-identical — `stage.dzs` 12448, `vr_sky.bdl`, `cloudtx_*.bti` — with
+**zero** bridge activity in the whole load (`ExtNpcMount`, `room-lane`, `EXT_BG`,
+`BgW`: 0 occurrences). §635's alias works. The crash is downstream of the arc,
+inside the receiver's own stage loader meeting a fifty-room MULT.
+
+**Turns.** **HOUSING** → the readMult probe. **USER** → nothing yet.
