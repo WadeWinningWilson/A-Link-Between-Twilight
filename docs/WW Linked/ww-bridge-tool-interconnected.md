@@ -31696,3 +31696,65 @@ caches wiped
 
 **Turns.** **USER** → `run_outset.bat`; `§661 ... EnvR=52 Colo=10 Pale=57` is the
 line that says the translation actually ran this time. **HOUSING** → camera next.
+
+## §664 — Housing: the camera has a DEBUG/RELEASE asymmetry that waits forever. And the disappearing is probably NOT the camera.
+
+### The camera gate
+
+```c
+if (dComIfG_Bgsp().GroundCross(&gndchk) == -G_CM3D_F_INF) {
+#if DEBUG
+    if (field_0x238 < 100) { ... return cPhs_INIT_e; }
+    OS_REPORT("camera: Warning: give up to get floor info !!");   // gives up, CONTINUES
+#else
+    return cPhs_INIT_e;                                            // waits FOREVER
+#endif
+}
+```
+
+`init_phase2` checks for floor at `player->current.pos + 50`. **In debug the
+camera gives up after 100 attempts and proceeds; in release it returns INIT
+unconditionally.** A camera that never finds floor under the player never
+finishes init and never follows — silent in exactly the way alink's create was,
+because an actor stuck in a phase is indistinguishable from one never asked to
+run.
+
+Instrumented, **behaviour deliberately unchanged**: adopting the debug give-up
+would alter camera init on every stage in the game, and this is a diagnosis.
+
+### On the disappearing island — the camera is a WEAK candidate, measured
+
+The user's guess was reasonable and the code does not support it:
+
+```
+daBg profile Status: fopAcStts_UNK_0x40000_e | fopAcStts_NOPAUSE_e
+```
+
+**No `fopAcStts_CULL_e`.** The draw path only runs `fopAcM_cullingCheck` when
+that status bit is set, so **the room BG is not frustum-culled at all.** A camera
+in the wrong place cannot cull it out.
+
+`fopAc_CULLBOX_0_e` in the profile is the cull TYPE — which box to use IF culling
+applies. It does not enable culling.
+
+**The better-fitting hypothesis, untested:** the room BG's draw is gated by ROOM,
+and the player is airborne. His room comes from the poly under him
+(`GetRoomId(mLinkAcch.m_gnd)`), so while flying it flickers between 44 and -1 as
+he passes over collision and open air. Room 44's draw following that flicker
+would look exactly like "the island blinks out at certain angles and heights",
+and it would leave the TP ACTORS visible, because actors draw independently of
+room visibility — which is precisely the set the user reported still seeing.
+
+That is a hypothesis with a mechanism, not a preference. It is testable with the
+values the camera probe already prints plus the player's room, and it should be
+read before anything is changed.
+
+```
+build EXIT=0 · separability gate LINKED CLEAN · banner lint 82/82, 0 DISAGREES
+caches wiped
+```
+
+**Turns.** **USER** → `run_outset.bat`, fly around until the island blinks, and
+send the log. Two lines decide it: `§664 init HELD` climbing means the camera
+never initialised; its absence means the camera is fine and the disappearing is
+the room-gating hypothesis above.

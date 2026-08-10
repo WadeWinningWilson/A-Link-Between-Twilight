@@ -11652,6 +11652,32 @@ static int init_phase2(camera_class* i_this) {
         }
 
         OS_REPORT("\ncamera: Warning: give up to get floor info !!\n\n");
+#elif TARGET_PC
+        // =====================================================================
+        // §664: the RELEASE path waits here FOREVER, and says nothing.
+        //
+        // The DEBUG branch above gives up after 100 attempts and CONTINUES;
+        // release returns cPhs_INIT_e unconditionally, so a camera that never
+        // finds floor under the player never finishes init and never follows.
+        // That matches the reported symptom, and it is silent in exactly the
+        // way alink's create was: an actor stuck in a phase looks identical to
+        // one that was never asked to run.
+        //
+        // BEHAVIOUR IS UNCHANGED HERE ON PURPOSE. Adopting the debug give-up
+        // would alter camera init on every stage in the game; this is a
+        // diagnosis, not a fix. Logs the first few waits then every 300th, so
+        // a transient wait stays quiet and a permanent one is unmistakable.
+        // =====================================================================
+        {
+            static int s_camFloorWait = 0;
+            if (++s_camFloorWait <= 3 || (s_camFloorWait % 300) == 0) {
+                DuskLog.warn("[Camera] §664 init HELD: no floor under the player "
+                             "at ({:.0f},{:.0f},{:.0f}) — camera will not follow "
+                             "until it resolves (waits={})",
+                             spA4.x, spA4.y, spA4.z, s_camFloorWait);
+            }
+        }
+        return cPhs_INIT_e;
 #else
         return cPhs_INIT_e;
 #endif
