@@ -5435,6 +5435,35 @@ int daAlink_c::create() {
     fopAcM_ct(this, daAlink_c);
 
     static BOOL bgWaitFlg = FALSE;
+#if TARGET_PC
+    // =====================================================================
+    // §649 TEMPORARY PROBE — DELETE with the fix. Logging only.
+    //
+    // On `sea` the player actor exists but never executes, and NEITHER of
+    // create()'s first two cPhs_INIT_e gates logged a single wait. So it is
+    // not stalling at the event manager and not stalling on Link's arc —
+    // the question is now whether create() runs AT ALL for that actor.
+    //
+    // bgWaitFlg is printed because it is a STATIC shared across every Link
+    // and every stage, and the whole init block — including
+    // dComIfGp_setPlayer(0, this) — sits behind `if (!bgWaitFlg)`. A value
+    // left TRUE by a previous stage's Link would skip all of it. That is a
+    // hypothesis this line tests, not a conclusion.
+    // =====================================================================
+    {
+        static int s_createCalls = 0;
+        ++s_createCalls;
+        if (s_createCalls <= 6 || (s_createCalls % 300) == 0) {
+            DuskLog.info("[PlyrProbe] §649 create() entry #{} stage='{}' "
+                         "bgWait={} startMode={} point={}",
+                         s_createCalls,
+                         dComIfGp_getStartStageName() != NULL
+                             ? dComIfGp_getStartStageName() : "?",
+                         bgWaitFlg ? 1 : 0, getStartMode(),
+                         (int)dComIfGp_getStartStagePoint());
+        }
+    }
+#endif
 
     u32 sceneMode = getLastSceneMode();
     s32 startMode = getStartMode();
