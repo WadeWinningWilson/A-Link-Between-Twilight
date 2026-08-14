@@ -37,6 +37,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
 #include "d/d_kankyo_rain.h"
+#include "d/actor/d_a_alink.h"  // §687 player-room input (donor colget port)
 #include "d/d_kankyo_ww.h"
 #include "f_op/f_op_camera_mng.h"
 #include "m_Do/m_Do_lib.h"
@@ -352,10 +353,30 @@ static void wwSkySunMove() {
             cLib_addCalc(&pSunPkt->mVisibility, 1.0f, 0.1f, 0.1f, 0.001f);
     }
 
-    if (numPointsVisible >= 2) {
-        pLenzPkt->mbDrawLenzInSky = false;
-    } else {
-        pLenzPkt->mbDrawLenzInSky = true;
+    // ========================================================================
+    // §686 PC OCCLUSION HYSTERESIS — the flicker root (agent sweep, hypothesis
+    // 11). The donor's staring-at-the-sun system scales EVERY vrbox channel
+    // through dKy_set_vrboxcol_ratio, and its gate is this lens-occlusion
+    // verdict. On GC the point-visibility count is frame-stable; on this PC
+    // renderer it flips frame to frame, so the ratio request snapped between
+    // 1.0 (reset each execute) and ~1.5 (staring), and the post-scale clamp
+    // at 255 turned the swing into HUE changes — the wild sky flicker, keyed
+    // to camera aim with the donor's quartic response. The donor system stays
+    // verbatim; only its unstable PC input gets a latch: the verdict must
+    // agree for 10 consecutive frames before the gate flips. Labeled
+    // PC-platform translation, not a donor edit.
+    // ========================================================================
+    {
+        static bool s_lenzInSky = true;
+        static int s_lenzFlipCount = 0;
+        const bool rawLenzInSky = numPointsVisible < 2;
+        if (rawLenzInSky == s_lenzInSky) {
+            s_lenzFlipCount = 0;
+        } else if (++s_lenzFlipCount >= 10) {
+            s_lenzInSky = rawLenzInSky;
+            s_lenzFlipCount = 0;
+        }
+        pLenzPkt->mbDrawLenzInSky = s_lenzInSky;
     }
 
     if (pSunPkt->mPos[0].y > 0.0f && !pLenzPkt->mbDrawLenzInSky) {
@@ -1454,5 +1475,241 @@ void dKyWwSky_reset() {
     s_starInit = false;
     s_starCountTarget = 0.0f;
     s_starCount = 0;
+    dKyWwSky_vrboxColorsReset();
+}
+
+// ============================================================================
+// §687 THE DONOR VRBOX COLOR ENGINE — ported, one owner, donor slot.
+//
+// Donor original: the vrbox section of dScnKy_env_light_c::setLight
+// (WW d_kankyo.cpp:830-1089) + its palette selection and easing
+// (setLight_palno_get, :636-828) + the room input (settingTevStruct_colget_
+// player, :1408-1432) — per the banked decomp spec (bus §686 / agent A).
+//
+// WHY A PORT AND NOT A FIX: the receiver's setLight is the shared-ancestor
+// engine in TP dialect, and every flicker so far has been a DIALECT seam
+// (§686's occlusion strobe, §685's mis-diagnosis before it). Per the standing
+// law — never replicate, PORT — the donor's own machine now owns the vrbox
+// colors on WW sky hosts: donor state fields (layer-owned), donor selection
+// chain, donor easing rates (change_rate floor 1/30; the sea's dedicated
+// 1/300-per-frame weather crossfade; the reverse-blend when stepping back),
+// donor blend primitive with its exact arithmetic. The receiver's own block
+// is bypassed on WW hosts at the same call site (one owner, same frame slot
+// — colors at prio 2, consumers at 4/7, donor order preserved).
+//
+// CONSUMPTION BOUNDARY: reads the seam-translated receiver-layout tables
+// (donor VALUES) and writes the receiver-named g_env_light.vrbox_* fields the
+// sky actors read. Deviation from donor, labeled: the donor CLAMPS
+// change_rate by writing back into loaded stage data (WW :763-764); zero-bake
+// forbids mutating the (translated copy of) stage data, so the clamp is
+// applied to a local — identical math, no data write.
+//
+// Ratio inputs (now_vrbox*col_ratio / now_allcol_ratio / addcol) are the
+// donor's own double-buffered ratio system, which the receiver retains under
+// the same names; the staring-at-sun feeder above (§686-latched) is part of
+// that donor system and composes here exactly as in the donor.
+// ============================================================================
+namespace {
+struct WwVrboxColorState {
+    u8 envrPrev = 0;
+    u8 envrCurr = 0;
+    u8 colpatPrev = 0;
+    u8 colpatCurr = 0;
+    f32 blend = 1.0f;   // donor mColPatBlend
+    int initTimer = 1;  // donor mInitAnimTimer warm-up
+};
+WwVrboxColorState s_vrcol;
+
+inline s16 wwKyRatioS16(s16 a, s16 b, f32 t) {
+    return a + (s16)(t * (b - a));  // donor s16_data_ratio_set (WW :107)
+}
+
+// donor kankyo_color_ratio_set (WW :112-125) — both pairs blend with the TIME
+// t, then across by the room/weather blend; add, then scale, then clamp.
+inline s16 wwKyColorRatio(u8 b0A, u8 b0B, u8 b1A, u8 b1B, f32 timeT, f32 roomT, s16 add,
+                          f32 mul) {
+    s16 a = wwKyRatioS16(b0A, b0B, timeT);
+    s16 b = wwKyRatioS16(b1A, b1B, timeT);
+    s16 rt = wwKyRatioS16(a, b, roomT);
+    rt = (s16)(rt + add);
+    rt = (s16)(rt * (g_env_light.now_allcol_ratio * mul));
+    if (rt < 0) {
+        rt = 0;
+    } else if (rt > 255) {
+        rt = 255;
+    }
+    return rt;
+}
+}  // namespace
+
+void dKyWwSky_vrboxColorsReset() {
+    s_vrcol = WwVrboxColorState();
+}
+
+void dKyWwSky_setVrboxColors() {
+    if (g_env_light.stage_envr_info == NULL || g_env_light.stage_pselect_info == NULL ||
+        g_env_light.stage_palette_info == NULL || g_env_light.stage_vrboxcol_info == NULL) {
+        return;
+    }
+
+    // --- room input: the donor keys palettes to the PLAYER's room (colget
+    // port; the one-frame latency the donor gets from draw order arrives here
+    // naturally — the player's room was last written before this prio-2 run).
+    daAlink_c* player = daAlink_getAlinkActorClass();
+    int newRoom = player != NULL ? (int)fopAcM_GetRoomNo((fopAc_ac_c*)player) : -1;
+    if (newRoom >= 0 && newRoom != (int)s_vrcol.envrCurr) {
+        if (newRoom == (int)s_vrcol.envrPrev) {
+            // donor :1417-1421 — stepping BACK across the boundary reverses
+            // the running blend instead of restarting it.
+            s_vrcol.envrPrev = s_vrcol.envrCurr;
+            s_vrcol.envrCurr = (u8)newRoom;
+            s_vrcol.blend = 1.0f - s_vrcol.blend;
+        } else if (s_vrcol.blend >= 1.0f || s_vrcol.blend <= 0.0f) {
+            s_vrcol.envrCurr = (u8)newRoom;  // donor :1422-1426; Prev advances at commit
+            s_vrcol.blend = 0.0f;
+        }
+    }
+
+    // --- weather input (donor colpat gather, collapsed: WW hosts drive it
+    // from the wether pattern; commit only when not mid-fade, donor :2048).
+    u8 weather = g_env_light.wether_pat0;
+    if (weather > 7) {
+        weather = 0;
+    }
+    if (weather != s_vrcol.colpatCurr && s_vrcol.colpatPrev == s_vrcol.colpatCurr) {
+        s_vrcol.colpatCurr = weather;
+        s_vrcol.blend = 0.0f;
+    }
+
+    // --- init-timer warm-up (donor :641-654)
+    if (s_vrcol.initTimer != 0) {
+        if (++s_vrcol.initTimer > 20) {
+            s_vrcol.initTimer = 0;
+        }
+        if (s_vrcol.blend >= 1.0f) {
+            s_vrcol.envrPrev = s_vrcol.envrCurr;
+            s_vrcol.colpatPrev = s_vrcol.colpatCurr;
+        }
+    }
+
+    // --- time blend (donor :657-661 + get_parcent :149-161)
+    dKyd_lightSchejule* sch = dKyd_schejule_getp();
+    f32 daytime = g_env_light.getDaytime();
+    u8 palIdx0 = 2;
+    u8 palIdx1 = 2;
+    f32 timeT = 0.0f;
+    if (sch != NULL) {
+        for (int i = 0; i < 11; i++) {
+            if (daytime >= sch[i].startTime && daytime <= sch[i].endTime) {
+                palIdx0 = sch[i].startTimeLight;
+                palIdx1 = sch[i].endTimeLight;
+                const f32 span = sch[i].endTime - sch[i].startTime;
+                if (span != 0.0f) {
+                    timeT = 1.0f - (sch[i].endTime - daytime) / span;
+                    if (timeT >= 1.0f) {
+                        timeT = 1.0f;
+                    }
+                } else {
+                    timeT = 1.0f;
+                }
+                break;
+            }
+        }
+    }
+    if (palIdx0 > 5) {
+        palIdx0 = 2;
+    }
+    if (palIdx1 > 5) {
+        palIdx1 = 2;
+    }
+
+    // --- palette resolution, prev and curr rows (donor :663-760)
+    stage_envr_info_class* envrP = &g_env_light.stage_envr_info[s_vrcol.envrPrev];
+    stage_envr_info_class* envrC = &g_env_light.stage_envr_info[s_vrcol.envrCurr];
+    stage_pselect_info_class* pselP =
+        &g_env_light.stage_pselect_info[envrP->pselect_id[s_vrcol.colpatPrev]];
+    stage_pselect_info_class* pselC =
+        &g_env_light.stage_pselect_info[envrC->pselect_id[s_vrcol.colpatCurr]];
+
+    // --- the EASE step (donor :762-781); sea weather crossfade 1/300/frame,
+    // room crossfade (1/30)/change_rate; commit prev<-curr at 1.0.
+    if (s_vrcol.envrPrev != s_vrcol.envrCurr || s_vrcol.colpatPrev != s_vrcol.colpatCurr) {
+        f32 rate = pselC->change_rate;
+        if (rate < 0.033333335f) {
+            rate = 0.033333335f;  // donor writes the clamp back; zero-bake keeps it local
+        }
+        if (s_vrcol.colpatPrev != s_vrcol.colpatCurr) {
+            s_vrcol.blend += 0.0033333334f;  // donor's dedicated sea branch (:768-769)
+        } else {
+            s_vrcol.blend += 0.033333335f / rate;
+        }
+        if (s_vrcol.blend >= 1.0f) {
+            s_vrcol.envrPrev = s_vrcol.envrCurr;
+            s_vrcol.colpatPrev = s_vrcol.colpatCurr;
+            s_vrcol.blend = 1.0f;
+        }
+    }
+
+    const u8 pale0 = pselP->palette_id[palIdx0];
+    const u8 pale1 = pselP->palette_id[palIdx1];
+    const u8 pale2 = pselC->palette_id[palIdx0];
+    const u8 pale3 = pselC->palette_id[palIdx1];
+
+    // --- vrbox row indirection (donor :997-1004)
+    stage_vrboxcol_info_class* v0 =
+        &g_env_light.stage_vrboxcol_info[g_env_light.stage_palette_info[pale0].vrboxcol_id];
+    stage_vrboxcol_info_class* v1 =
+        &g_env_light.stage_vrboxcol_info[g_env_light.stage_palette_info[pale1].vrboxcol_id];
+    stage_vrboxcol_info_class* v2 =
+        &g_env_light.stage_vrboxcol_info[g_env_light.stage_palette_info[pale2].vrboxcol_id];
+    stage_vrboxcol_info_class* v3 =
+        &g_env_light.stage_vrboxcol_info[g_env_light.stage_palette_info[pale3].vrboxcol_id];
+
+    const f32 roomT = s_vrcol.blend;
+    const f32 soraR = g_env_light.now_vrboxsoracol_ratio;
+    const f32 kumoR = g_env_light.now_vrboxkumocol_ratio;
+
+#define WW_VRCH(field, addc, ratio) \
+    wwKyColorRatio(v0->field, v1->field, v2->field, v3->field, timeT, roomT, addc, ratio)
+
+    // Field mapping per the §410/§417b receipts: donor Sky->sky_col,
+    // Kumo->kumo_top (alpha from kumo_shadow.a), KumoCenter->kumo_bottom,
+    // KasumiMae->kasumi_inner, UsoUmi->kasumi_outer.
+    g_env_light.vrbox_sky_col.r = WW_VRCH(sky_col.r, g_env_light.vrbox_addcol_sky0.r, soraR);
+    g_env_light.vrbox_sky_col.g = WW_VRCH(sky_col.g, g_env_light.vrbox_addcol_sky0.g, soraR);
+    g_env_light.vrbox_sky_col.b = WW_VRCH(sky_col.b, g_env_light.vrbox_addcol_sky0.b, soraR);
+    g_env_light.vrbox_sky_col.a = 255;
+
+    g_env_light.vrbox_kumo_top_col.r =
+        WW_VRCH(kumo_top_col.r, g_env_light.vrbox_addcol_sky0.r, kumoR);
+    g_env_light.vrbox_kumo_top_col.g =
+        WW_VRCH(kumo_top_col.g, g_env_light.vrbox_addcol_sky0.g, kumoR);
+    g_env_light.vrbox_kumo_top_col.b =
+        WW_VRCH(kumo_top_col.b, g_env_light.vrbox_addcol_sky0.b, kumoR);
+    g_env_light.vrbox_kumo_top_col.a = WW_VRCH(kumo_shadow_col.a, 0, 1.0f);
+
+    g_env_light.vrbox_kumo_bottom_col.r =
+        WW_VRCH(kumo_bottom_col.r, g_env_light.vrbox_addcol_sky0.r, kumoR);
+    g_env_light.vrbox_kumo_bottom_col.g =
+        WW_VRCH(kumo_bottom_col.g, g_env_light.vrbox_addcol_sky0.g, kumoR);
+    g_env_light.vrbox_kumo_bottom_col.b =
+        WW_VRCH(kumo_bottom_col.b, g_env_light.vrbox_addcol_sky0.b, kumoR);
+
+    g_env_light.vrbox_kasumi_inner_col.r =
+        WW_VRCH(kasumi_inner_col.r, g_env_light.vrbox_addcol_kasumi.r, soraR);
+    g_env_light.vrbox_kasumi_inner_col.g =
+        WW_VRCH(kasumi_inner_col.g, g_env_light.vrbox_addcol_kasumi.g, soraR);
+    g_env_light.vrbox_kasumi_inner_col.b =
+        WW_VRCH(kasumi_inner_col.b, g_env_light.vrbox_addcol_kasumi.b, soraR);
+    g_env_light.vrbox_kasumi_inner_col.a = 255;
+
+    g_env_light.vrbox_kasumi_outer_col.r =
+        WW_VRCH(kasumi_outer_col.r, g_env_light.vrbox_addcol_kasumi.r, soraR);
+    g_env_light.vrbox_kasumi_outer_col.g =
+        WW_VRCH(kasumi_outer_col.g, g_env_light.vrbox_addcol_kasumi.g, soraR);
+    g_env_light.vrbox_kasumi_outer_col.b =
+        WW_VRCH(kasumi_outer_col.b, g_env_light.vrbox_addcol_kasumi.b, soraR);
+    g_env_light.vrbox_kasumi_outer_col.a = 255;
+#undef WW_VRCH
 }
 

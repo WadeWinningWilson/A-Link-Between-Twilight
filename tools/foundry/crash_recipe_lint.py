@@ -157,12 +157,20 @@ def scan():
 
 def main():
     if "--donor" in sys.argv:
-        stub, why = donor_is_stub(sys.argv[sys.argv.index("--donor") + 1])
-        print(f"RECIPE 9 PRE-PORT GATE: {why}")
-        print("  VERDICT:", "STUB — do not port; needs upstream decomp (Bridge)"
-              if stub else "decompiled — port may proceed" if stub is False
-              else "UNKNOWN — donor unreadable")
-        return 2 if stub else 0
+        # ====================================================================
+        # V9 (ferry §762): the gate is TWO-AXIS now. configure.py is the
+        # donor's own authoritative ledger (AXIS A, ActorRel caveat honored in
+        # decomp_status.py); the source-marker count stays as AXIS B texture.
+        # Disagreement is FLAGGED, never adjudicated — V1's principle.
+        # ====================================================================
+        import decomp_status
+        arg = sys.argv[sys.argv.index("--donor") + 1]
+        name = arg.replace(chr(92), "/").rsplit("/", 1)[-1].replace(".cpp", "")
+        rc = decomp_status.report(name)
+        stub, why = donor_is_stub(arg) if "/" in arg or chr(92) in arg else (None, "axis B via decomp_status above")
+        if stub is not None:
+            print(f"  (legacy path heuristic: {why})")
+        return rc
 
     hits, n = scan()
     print("V5 — DIRECT-PORT CRASH RECIPES AS LINT")

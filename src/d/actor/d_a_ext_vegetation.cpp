@@ -74,6 +74,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_ext_tree.h"        // §366 swood packet (kind==1 rides here)
 #include "d/d_kankyo.h"
+#include "d/d_kankyo_ww.h"  // §694 donor C0/K0 tevstr fill
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.h"
 #include "JSystem/J3DGraphBase/J3DPacket.h"
 #include "JSystem/J3DGraphBase/J3DShape.h"
@@ -574,6 +575,33 @@ const csXyz l_setType1[] = {
 const csXyz l_setType2[] = {
     csXyz(-75, 0, -50), csXyz(75, 0, -25), csXyz(14, 0, 106),
 };
+// §695: the four layouts the first transcription stopped short of — donor
+// d_a_grass.cpp:71-114 verbatim. Indices 4-7 of l_offsetData had been reusing
+// setType0/1, so flwr7/flwr17/pflwrx7/swood5 clumps sat in the WRONG PATTERN
+// (counts matched, so it was silent — the inventory agent caught it).
+// KIT-DONOR-DATA: 7 asset-like d/actor/d_a_grass.cpp:71-79
+const csXyz l_setType3[] = {
+    csXyz(-24, 0, -28), csXyz(27, 0, -28), csXyz(-21, 0, 33), csXyz(-18, 0, -34),
+    csXyz(44, 0, -4),   csXyz(41, 0, 10),  csXyz(24, 0, 39),
+};
+// KIT-DONOR-DATA: 17 asset-like d/actor/d_a_grass.cpp:80-98
+const csXyz l_setType4[] = {
+    csXyz(-55, 0, -22), csXyz(-28, 0, -50), csXyz(-77, 0, 11),  csXyz(55, 0, -44),
+    csXyz(83, 0, -71),  csXyz(11, 0, -48),  csXyz(97, 0, -34),  csXyz(-74, 0, -57),
+    csXyz(31, 0, 58),   csXyz(59, 0, 30),   csXyz(13, 0, 23),   csXyz(-12, 0, 54),
+    csXyz(55, 0, 97),   csXyz(10, 0, 92),   csXyz(33, 0, -10),  csXyz(-99, 0, -27),
+    csXyz(40, 0, -87),
+};
+// KIT-DONOR-DATA: 7 asset-like d/actor/d_a_grass.cpp:99-107
+const csXyz l_setType5[] = {
+    csXyz(0, 0, 3),    csXyz(-26, 0, -29), csXyz(7, 0, -25), csXyz(31, 0, -5),
+    csXyz(-7, 0, 40),  csXyz(-35, 0, 15),  csXyz(23, 0, 32),
+};
+// KIT-DONOR-DATA: 5 asset-like d/actor/d_a_grass.cpp:108-114
+const csXyz l_setType6[] = {
+    csXyz(-40, 0, 0), csXyz(0, 0, 0), csXyz(80, 0, 0), csXyz(-80, 0, 0),
+    csXyz(40, 0, 0),
+};
 
 // ==========================================================================
 // THE ANIM-SLOT POOL -- donor dGrass_packet_c::mGrassAnm[104] and
@@ -835,7 +863,9 @@ struct OffsetData {
 
 const OffsetData l_offsetData[] = {
     {1, l_setType0},  {7, l_setType0},  {21, l_setType1}, {3, l_setType2},
-    {7, l_setType0},  {17, l_setType1}, {7, l_setType0},  {5, l_setType0},
+    // §695: donor l_offsetData[4..7] (d_a_grass.cpp:119-128) — the correct
+    // arrays, not the setType0/1 stand-ins the first transcription left.
+    {7, l_setType3},  {17, l_setType4}, {7, l_setType5},  {5, l_setType6},
 };
 
 }  // namespace
@@ -1504,29 +1534,25 @@ void daExtVeg_c::drawBlades() {
     // This is also why the sky is wrong: both feed from the environment state,
     // which is not populated on a mounted host stage. The housing lane called
     // that ("it's one problem, not two") and they were right.
-    g_env_light.settingTevStruct(0x40, &current.pos, &tevStr);
-
-    // §45/№143: colour from AmbCol, measured — not guessed.
-    //
-    // The donor feeds GX_TEVREG0/1 from its room tevstr's mColorC0/mColorK0. The
-    // receiver's dKy_tevstr_c has the same-named TevColor/TevKColor, which made
-    // them the obvious analogue — but a one-shot probe showed them arriving as
-    // (0,0,0,0) after settingTevStruct, because they are populated by
-    // setLightTevColorType_MAJI, which pushes into a J3D MODEL's materials. On a
-    // raw-GX path nothing ever fills them, so both earlier colour feeds resolved
-    // to black. Same probe showed AmbCol correctly populated — (36,24,59), which
-    // is bg0 of PAL0[2] from the converted palettes, i.e. the real environment
-    // colour for this room and time of day.
-    //
-    // So AmbCol is the populated analogue here, and using it keeps grass tracking
-    // day/night the way the donor intends.
+    // ========================================================================
+    // §694: the DONOR's register pair, at last. The §45/№143 AmbCol+white feed
+    // was a measured placeholder from the era when TevColor/TevKColor probed
+    // (0,0,0,0) — because the K0 pool itself was never filled by the runtime
+    // seam (plight_col stayed zeroed; ww_stage_loader §694 receipt). With the
+    // pool delivered, the donor path is live end to end: BG0 leg fills
+    // TevColor = bg_amb_col[0]+add (C0) and TevKColor = dungeonlight_col[1]
+    // (BG0_K0, live-blended), which is exactly the donor's
+    //     GFSetTevColorS10(GX_TEVREG0, tevstr->mColorC0);
+    //     GFSetTevColor  (GX_TEVREG1, tevstr->mColorK0);   (WW d_grass.cpp:302)
+    // ========================================================================
+    dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
     GXColorS10 c0;
-    c0.r = tevStr.AmbCol.r;
-    c0.g = tevStr.AmbCol.g;
-    c0.b = tevStr.AmbCol.b;
+    c0.r = tevStr.TevColor.r;
+    c0.g = tevStr.TevColor.g;
+    c0.b = tevStr.TevColor.b;
     c0.a = 255;
-    GXColor k0;
-    k0.r = 255; k0.g = 255; k0.b = 255; k0.a = 255;
+    GXColor k0 = tevStr.TevKColor;
+    k0.a = 255;
     GXSetTevColorS10(GX_TEVREG0, c0);
     GXSetTevColor(GX_TEVREG1, k0);
     dKy_GxFog_tevstr_set(&tevStr);
@@ -1657,17 +1683,18 @@ void daExtVeg_c::drawFlowers() {
         GXLoadTexObj(const_cast<GXTexObj*>(&f.texObj), GX_TEXMAP0);
     }
 
-    // No.141/No.143, unchanged from the blade path: a mounted host stage never
-    // fills the room colour table, so feed our own tevStr and use AmbCol, which
-    // the probe showed IS populated. The donor reads its room tevstr C0/K0 here.
-    g_env_light.settingTevStruct(0x40, &current.pos, &tevStr);
+    // §694: the donor register pair, same as the blade path (see that banner).
+    // The flower draw was the one feed the first §694 pass missed — 54 Outset
+    // placements (41 pflower = the near-house ground cover) were still on the
+    // AmbCol+white placeholder. Donor: d_flower.cpp:339-340/:368-369.
+    dKyWw_settingTevStruct(TEV_TYPE_BG0, &current.pos, &tevStr);
     GXColorS10 c0;
-    c0.r = tevStr.AmbCol.r;
-    c0.g = tevStr.AmbCol.g;
-    c0.b = tevStr.AmbCol.b;
+    c0.r = tevStr.TevColor.r;
+    c0.g = tevStr.TevColor.g;
+    c0.b = tevStr.TevColor.b;
     c0.a = 255;
-    GXColor k0;
-    k0.r = 255; k0.g = 255; k0.b = 255; k0.a = 255;
+    GXColor k0 = tevStr.TevKColor;
+    k0.a = 255;
     GXSetTevColorS10(GX_TEVREG0, c0);
     GXSetTevColor(GX_TEVREG1, k0);
     dKy_GxFog_tevstr_set(&tevStr);

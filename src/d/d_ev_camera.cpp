@@ -1,6 +1,12 @@
 ﻿#include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_ev_camera.h"
+// §903 probe (strip before push) — see NEVER-PUSH-STRIP-SET probe registry.
+#define WW_PROBE_903 1
+#if WW_PROBE_903
+#include "dusk/logging.h"
+#include "d/d_ext_ww_actor_shims.h"
+#endif
 #include "d/d_debug_viewer.h"
 #include "d/d_demo.h"
 #include "m_Do/m_Do_controller_pad.h"
@@ -962,6 +968,36 @@ f32 dummy_lit_3871(int val) {
 bool dCamera_c::transEvCamera(int param_1) {
     TransData* trans = (TransData*)mWork;
     f32 mid_val;
+#if WW_PROBE_903
+    // ========================================================================
+    // §903 PROBE (STRIP BEFORE PUSH — probe registry, NEVER-PUSH-STRIP-SET).
+    // The §902 call's CAMERA/UNITRANS stall (flagSet=0 x109) cannot be answered
+    // by porting: the donor's whole event-camera family is /* Nonmatching */.
+    // So MEASURE the receiver's own completion gate instead. Discriminators:
+    //   H1 re-entry  — styleTimer keeps reading 0 (cut re-inits every frame,
+    //                  so it can never reach mTimer)
+    //   H2 no-Timer  — the "Timer" param is absent (donor data uses another
+    //                  key); the early-out then ENDS the cut, so seeing this
+    //                  with a stall disproves it
+    //   H3 huge/zero mTimer — param present but nonsense
+    //   H4 counting-but-short — styleTimer climbs and simply never reaches
+    // WW-scoped: TP stages emit nothing.
+    // ========================================================================
+    {
+        const char* sn903 = dComIfGp_getStartStageName();
+        if (sn903 != NULL && dExtWwSave_isWwHostStage(sn903)) {
+            static int s_pt = 0;
+            if ((s_pt++ % 60) == 0) {
+                int tmr = -1;
+                const bool hasTimer = getEvIntData(&tmr, "Timer") != 0;
+                DuskLog.info("[WwProbe903] UNITRANS styleTimer={} transTimer={} "
+                             "TimerParam={} paramVal={} type={}",
+                             (int)mCurCamStyleTimer, (int)trans->mTimer,
+                             (int)hasTimer, tmr, param_1);
+            }
+        }
+    }
+#endif
 
     struct {
         cXyz mXyz_0;

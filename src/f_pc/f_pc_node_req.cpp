@@ -274,6 +274,11 @@ node_create_request* fpcNdRq_ChangeNode(u32 i_requestSize, process_node_class* i
     }
 #if TARGET_PC
     // ========================================================================
+    // §398c STRIP HELD — EARNED KEEP (tale §744): built for the black-screen
+    // class, it named the WHITE-screen root on first contact (ChangeNode
+    // REFUSED at the door warp, 6 refusals, queue head captured). A probe that
+    // catches a class it was not built for is instrumentation, not residue —
+    // it leaves when a permanent refusal counter replaces it, not before.
     // §398c REFUSAL-AUTOPSY (black-screen class, log 100415: ChangeReq refused
     // with peek=0, then an overlap stuck at peek=1 forever). This is the ONLY
     // change-node refusal; name the reason AND autopsy the queue — the

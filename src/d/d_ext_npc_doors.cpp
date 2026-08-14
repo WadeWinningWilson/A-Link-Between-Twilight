@@ -1537,9 +1537,29 @@ void dExtNpcDoors_pollArrival() {
     }
     const char* stage = dComIfGp_getStartStageName();
     if (stage == NULL || std::strcmp(stage, s_arrival.stage) != 0) {
+        // ====================================================================
+        // tale §898 (CALLS row 68): the two silent early-returns below are the
+        // §890 candidate stalls — a stall here while the door demo lock is held
+        // is a PERMANENT player lock with every event measure reading normal.
+        // LOUD once per 120 frames of continuous stalling, with the held state.
+        // ====================================================================
+        static int s_stallA = 0;
+        if ((++s_stallA % 120) == 0) {
+            DuskLog.warn("[Doors] §898 pollArrival STALLED {}f on stage-mismatch — armed='{}' "
+                         "cur='{}' demoStarted={} demoEnded={}",
+                         s_stallA, s_arrival.stage, stage != NULL ? stage : "?",
+                         s_arrival.demoStarted ? 1 : 0, s_arrival.demoEnded ? 1 : 0);
+        }
         return;  // still wiping / wrong stage
     }
     if (dComIfGp_isEnableNextStage()) {
+        static int s_stallB = 0;
+        if ((++s_stallB % 120) == 0) {
+            DuskLog.warn("[Doors] §898 pollArrival STALLED {}f on isEnableNextStage — armed='{}' "
+                         "demoStarted={} demoEnded={}",
+                         s_stallB, s_arrival.stage, s_arrival.demoStarted ? 1 : 0,
+                         s_arrival.demoEnded ? 1 : 0);
+        }
         return;  // another change already armed
     }
     fopAc_ac_c* player = dComIfGp_getPlayer(0);

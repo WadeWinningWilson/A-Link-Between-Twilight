@@ -31,6 +31,14 @@ def main() -> int:
     for src in here.rglob("*"):
         if src.is_dir():
             continue
+        # ====================================================================
+        # Integrator ruling (quarantine-escape follow-up): the mod folder needs
+        # mod CONTENT; it has never needed tooling. NO .py ships — a kit copy
+        # living beside the assets it bakes is the delivery mechanism that
+        # planted adapt_bdl_arcs in the live overlay, invisible to every gate.
+        # ====================================================================
+        if src.suffix == ".py" or src.name.endswith(".pyc"):
+            continue
         if src.name == "install_skeleton.py":
             continue
         rel = src.relative_to(here)

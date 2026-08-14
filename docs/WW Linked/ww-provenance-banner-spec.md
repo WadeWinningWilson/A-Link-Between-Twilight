@@ -199,3 +199,42 @@ rather than delete the superseded rows, and **re-audit at P1 before re-adoption*
 * A one-to-one `KIT-DONOR` cannot express a TU assembled from several donor
   objects. Multiple `KIT-DONOR` lines are permitted; the reader takes all of
   them, and Axis D maps to each.
+
+## 7. Plugin-readiness field: `KIT-PLUGIN` (V8 · **Librarian doctrine** · 2026-08-11, WAVE-1 row 11)
+
+**Why (V8, §697/§707).** The plugin-migration track (L8) and the Tier-1 strip set are today
+human-checked standing rules — and a rule only humans check drifts (12 strip-set files went stale
+in 12 days). This field puts each WW-layer TU's migration disposition **in the banner**, so
+`banner_lint.py` catches drift at *authoring* time and the monotonic WW-TU invariant has a per-file
+source. Same one-convention rule as §1.1 — this is a field on the existing banner, **not** a second
+roster.
+
+**The field.** One line, grep-exact, in the banner block after `KIT-DONOR-STATUS`:
+
+```
+// KIT-PLUGIN: receiver-native | plugin-bound[:wave-<N>] | in-plugin | strip-set | UNKNOWN
+```
+
+| Value | Means |
+|---|---|
+| `receiver-native` | TP's own code; stays in the receiver tree permanently, never migrates. (Pairs with `KIT-LINEAGE: host-plumbing`, or a genuinely TP-owned `native-port`.) |
+| `plugin-bound[:wave-<N>]` | WW-layer content destined for the WW plugin repo; on the migration track. `:wave-<N>` records the assigned migration wave when one is set. |
+| `in-plugin` | Already migrated to the plugin repo — the endpoint (bypassing then physically impossible). |
+| `strip-set` | Staged WW arc/data that ships from the mod folder and must NOT be in the pushed receiver tree (the Tier-1 strip set). |
+| `UNKNOWN` | Undeclared. Per §31-C a WW-layer TU with no `KIT-PLUGIN` is *unmeasured*, not "probably fine". |
+
+**Rules** (mirroring §2's two non-negotiables):
+1. **DECLARED, never inferred** — no tool writes `KIT-PLUGIN` by path/pattern (same reason as `KIT-DONOR`).
+2. **Missing = UNKNOWN** (§31-C).
+3. **Monotonic:** the count of `plugin-bound` (not-yet-migrated) WW TUs must only DECREASE across runs; an increase = a TU slipped onto the track without migrating.
+
+**What row 12 (Foundry · `banner_lint.py`) enforces** — this spec is the input; the tool owner implements and may push back:
+- `KIT-PLUGIN` present on every WW-layer roster TU; missing → UNKNOWN (not a pass).
+- value ∈ enum; `:wave-<N>` well-formed when present.
+- a `strip-set` value cross-checks against the strip-set generator's list (the drift this catches).
+- reuse banner_lint's existing 0-clean / 1-disagreement / 2-convention exit codes.
+
+**Open for Foundry/user to confirm before the tool locks it in** (flagged, **not** ruled by the Librarian):
+- field NAME (`KIT-PLUGIN` proposed) — grep-exact, no collision with existing `KIT-*`.
+- whether `:wave-<N>` is required for `plugin-bound` or optional until a wave is assigned.
+- whether `strip-set` and `plugin-bound` are mutually exclusive, or a strip-set TU may also carry a wave.

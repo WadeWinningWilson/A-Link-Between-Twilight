@@ -52,6 +52,15 @@
 #include "d/d_drawlist.h"               // §254 dDlst_shadowControl_c::getSimpleTex()
 #include "d/d_com_inf_game.h"           // §254 dComIfGd_setList / getObjectRes / evmng
 #include "d/d_demo.h"                   // §254 dDemo_actor_c enable flags + getP_BtpData/BtkData
+// ============================================================
+// §885 PROBE (STRIP BEFORE PUSH — registered in NEVER-PUSH-STRIP-SET):
+// run 134919 — Tetra rendered UNTEXTURED. Shares the WW_PROBE_884 kill
+// switch with ls1/p1 (single define per TU; set to 0 to silence).
+// ============================================================
+#define WW_PROBE_884 1
+#if WW_PROBE_884
+#include "dusk/logging.h"
+#endif
 #include "d/d_particle.h"               // §254 particle emitter cfg
 #include "d/d_particle_name.h"          // §254 ID_AK_JN_HAMON00 (unscoped enum)
 #include "d/d_kankyo.h"                 // §254 dKy_* fog/light ratio + LIGHT_INFLUENCE
@@ -2624,6 +2633,25 @@ BOOL daNpc_Zl1_c::_draw() {
     dKyWw_settingTevStruct(TEV_TYPE_ACTOR, &current.pos, &tevStr);
     dKyWw_setLightTevColorType(pModel, &tevStr);
 
+#if WW_PROBE_884
+    // H9 black-tev feeder / H10 anm handles / H11 WW host live in her stage.
+    {
+        static int s_pz = 0;
+        if ((s_pz++ % 120) == 0) {
+            const char* st = dComIfGp_getStartStageName();
+            DuskLog.info("[WwProbe884] zl1 draw tev=({},{},{},{}) K=({},{},{},{}) amb=({},{},{}) "
+                         "btp={} btpF={} btk={} host={} stage={}",  // INTEGRATOR: {:.0f} on
+                         // mBtpAnmFrame (u8) is a compile-time fmt error — spec fixed, value untouched.
+                         (int)tevStr.TevColor.r, (int)tevStr.TevColor.g, (int)tevStr.TevColor.b,
+                         (int)tevStr.TevColor.a, (int)tevStr.TevKColor.r, (int)tevStr.TevKColor.g,
+                         (int)tevStr.TevKColor.b, (int)tevStr.TevKColor.a,
+                         (int)tevStr.AmbCol.r, (int)tevStr.AmbCol.g, (int)tevStr.AmbCol.b,
+                         (void*)mBtpAnm.getBtpAnm(), mBtpAnmFrame,
+                         (void*)mBtkAnm.getBtkAnm(), (int)dKyWw_isSkyHost(),
+                         st ? st : "?");
+        }
+    }
+#endif
     // §254 render recipe #2/#13 (Aryll precedent): the port split McaMorf
     //   updateDL() into modelCalc()->entryDL(); modelCalc() MUST precede the face
     //   btp/btk entry (it re-runs the material calc / resets the tex pattern).

@@ -5,6 +5,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #include "d/actor/d_a_b_bq.h"
 #include "d/actor/d_a_b_gm.h"
+#include "d/actor/d_a_b_zant.h"
 #include "d/actor/d_a_e_gm.h"
 #include "d/d_albw_hp_mult.h"
 #include "d/d_cc_uty.h"
@@ -554,6 +555,69 @@ bool dAlbwBoss_diababaQueryHealthBar(int* o_current, int* o_max) {
     return true;
 }
 
+// ============================================
+// NEW CODE — ALBW Port
+// Zant health bar — PER-PHASE pool. Zant is one fopEn_enemy_c (daB_ZANT_c) whose
+// health resets to the phase max at each mFightPhase (280 for most, field_0x560 for
+// the last), so the bar refills per phase. We track the phase PEAK health as the max:
+// captured on phase change and corrected each frame, so the reset value (the peak) is
+// always the denominator regardless of the exact reset-vs-phase-flip frame ordering.
+// The bar hides during the non-combat set-piece actions so it never flashes between
+// the reused arenas. HUD-only (not Boss-Refinement gated); driven by the HUD tick.
+// ============================================
+static u8 s_zantTrackedPhase = 0xFF;  // last-seen mFightPhase (0xFF = none)
+static s16 s_zantPhaseMax = 0;        // peak health this phase (= the phase reset value)
+
+void dAlbwBoss_zantResetFightState() {
+    s_zantTrackedPhase = 0xFF;
+    s_zantPhaseMax = 0;
+}
+
+bool dAlbwBoss_zantQueryHealthBar(int* o_current, int* o_max) {
+    if (o_current == NULL || o_max == NULL) {
+        return false;
+    }
+    *o_current = 0;
+    *o_max = 0;
+
+    fopAc_ac_c* actor = fopAcM_SearchByName(fpcNm_B_ZANT_e);
+    if (actor == NULL || !fopAcM_IsActor(actor) || actor->health <= 0) {
+        return false;
+    }
+
+    const daB_ZANT_c* zant = (const daB_ZANT_c*)actor;
+
+    // Hide during non-combat set-piece actions (intro / warps / room change / the ice
+    // and last-phase demos) so the bar doesn't flash between the reused arenas.
+    switch (zant->mAction) {
+    case daB_ZANT_c::ACT_OPENING:
+    case daB_ZANT_c::ACT_WARP:
+    case daB_ZANT_c::ACT_ROOM_CHANGE:
+    case daB_ZANT_c::ACT_ICE_DEMO:
+    case daB_ZANT_c::ACT_LAST_START_DEMO:
+    case daB_ZANT_c::ACT_LAST_END_DEMO:
+        return false;
+    default:
+        break;
+    }
+
+    // Per-phase peak = the phase's reset (full) value; health drains from there.
+    if (zant->mFightPhase != s_zantTrackedPhase) {
+        s_zantTrackedPhase = zant->mFightPhase;
+        s_zantPhaseMax = actor->health;
+    }
+    if (actor->health > s_zantPhaseMax) {
+        s_zantPhaseMax = actor->health;
+    }
+    if (s_zantPhaseMax <= 0) {
+        return false;
+    }
+
+    *o_current = actor->health;
+    *o_max = s_zantPhaseMax;
+    return true;
+}
+
 bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state) {
     if (o_state == NULL) {
         return false;
@@ -682,6 +746,10 @@ void dAlbwBoss_onArmogohmaVictory() {
 }
 
 void dAlbwBoss_onStageLoad() {
+    // Zant's per-phase bar tracker is HUD-only (bossHealthBars), independent of Boss
+    // Refinement, so reset it before the Refinement early-out below.
+    dAlbwBoss_zantResetFightState();
+
     if (!dAlbwBossRefinement_isEnabled()) {
         return;
     }

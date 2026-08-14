@@ -583,6 +583,17 @@ void dEvDtStaff_c::specialProc() {
 void dEvDtStaff_c::init() {
     mCurrentCut = mStartCut;
     field_0x40 = true;
+    // §912: the donor's own staff init (d_event_data.cpp:178) seeds its advance
+    // COUNTER. This byte (0x46) was inside the opaque mData region, so TP's
+    // init never wrote it and it held whatever the PARSED EVENT FILE happened
+    // to carry there — an uninitialised read the moment anything consults it.
+    // Done unconditionally rather than WW-scoped ON PURPOSE: nothing on the TP
+    // path reads mAdvance (TP's advance flag is field_0x40, written above), so
+    // this is not a TP behaviour change, while a stage-name-gated init could
+    // run before the start-stage name is settled and leave the garbage in
+    // place — the failure mode I am removing.
+    mAdvance = 2;
+    mbHasAction = false;
 
     #if DEBUG
     if (event_debug_evdt()) {

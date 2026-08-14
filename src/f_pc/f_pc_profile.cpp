@@ -40,5 +40,20 @@ process_profile_definition DUSK_CONST* fpcPf_Get(s16 i_profname) {
     }
 #endif
     int index = i_profname;
+#if TARGET_PC
+    // ========================================================================
+    // §706 Ruling 3(iii) rider (WAVE-1 row 5-batch shape): BOUNDS GUARD.
+    // Under per-row relinquishment a NULL table row is a VALID answer — "that
+    // id is owned elsewhere now" — so an OUT-OF-RANGE index must be its own,
+    // LOUD failure. Before this guard an OOB index was a wild read, and the
+    // two conditions were confusable by construction.
+    // ========================================================================
+    if (index < 0 || index >= fpcNm_MAX_NUM) {
+        OS_REPORT("fpcPf_Get: profile index %d OUT OF RANGE (max %d) — returning NULL; "
+                  "this is a caller bug, not a relinquished row\n",
+                  index, (int)fpcNm_MAX_NUM);
+        return NULL;
+    }
+#endif
     return g_fpcPf_ProfileList_p[index];
 }

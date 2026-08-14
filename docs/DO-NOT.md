@@ -289,3 +289,107 @@ subsystems" directive).
 **Verification signature:** a native port shows the donor's BEHAVIOUR without
 receiver-side per-actor special-casing; the mount pattern shows correct-looking
 models that do nothing the donor's do.
+
+---
+
+## DN-10 — NEVER solve a defect with instance-authored code before the NATIVE system has been read and tried (the ORDER OF RESORT)
+
+**User ratification, 2026-08-11 (verbatim):** *"NEVER bake, if there is an issue,
+AI instances don't solve it, the native systems DO. If the issue is because of
+prior work or needed receiver translating the WW vanilla systems are PROVEN not
+to solve, THAT is when instances work. No guarding, no patching, no baking, no
+mounting, no legs."*
+
+Standing law over every lane and every surface. This entry generalises DN-9
+(mounting) and the §723 guard ledger into the single rule they were both
+instances of.
+
+**Forbidden act:** authoring ANY of the following as the answer to a defect
+before the donor's own system has been read and attempted —
+
+- a **guard** (null-check, abort cover, state clamp, capacity mask)
+- a **patch** that supplants original code rather than porting it
+- a **bake** (an edited donor asset, or an invented value written into data)
+- a **mount** or a **leg** (a receiver proc standing in for a donor system)
+- a **translator/default/clamp** invented because a donor field "looks missing"
+
+**Guarded surfaces:** all of them. This entry has no scope limit — that is the
+point. It applies hardest where a symptom is loud and the native path is
+unread: collision/BG attributes, room and stage identity, event and cut
+dispatch, spawn/entry placement, camera, audio, resource lifetime.
+
+**THE ORDER OF RESORT — the only sanctioned sequence:**
+
+1. **The native WW vanilla disc original.** Read the donor's own implementation
+   FIRST (`D:\XXXXXXX\WW DP\src`, arcs `D:\XXXXXXX\Ex WW`). If a system is
+   missing, **PORT THE SYSTEM.** This is the answer in the overwhelming majority
+   of cases and it is where every lane starts.
+2. **Receiver translation at the CONSUMPTION BOUNDARY** — permitted ONLY where
+   step 1 is *proven* not to solve it, because prior receiver work or a genuine
+   donor/receiver format difference requires translating. Never an edit to donor
+   bytes (see the zero-bake law); the translation lives in receiver code.
+3. **Instance-authored construct** — permitted ONLY when 1 and 2 are BOTH proven
+   insufficient, **with the proof written down** and the construct labelled a
+   bridge carrying its strip trigger.
+
+**What counts as PROOF (step 2/3 gate):** you read the donor's own code for this
+exact surface and can NAME why it cannot apply — the prior receiver work it
+collides with, or the format difference it cannot cross. **"I could not find it",
+"it was faster this way", and "it works" are NOT proof.** A green log is not
+proof. No AI instance may self-approve the step-3 exception; it goes to the USER.
+
+**Why it is rejected — the failure mechanism:** an instance-authored fix treats
+the SYMPTOM at the site where it is visible, which is never the site where the
+native system is absent. It then becomes load-bearing, and the absence it was
+hiding is now invisible to every later lane.
+
+**Blast radius, measured on this project (the incident that produced this entry):**
+the knob00 door chain accumulated **1 native fix to 8 AI-derived ones** — four
+guards (§713c fork, §714 cutEnd, №269 WALL_NONE cover, §717 abort-check) plus
+shims and probes. **Every one of them existed because the destination room was
+never ported.** The interior landed on 2026-08-11 and the whole guard set began
+retiring the same day, untouched. Eight sections of instance work; the fix was
+"port the room."
+
+**Escalation protocol:** if you believe your case is a genuine step-3, STOP.
+Write the donor-side finding, the named reason the native path cannot apply, and
+the strip trigger — and put it to the USER for an explicit go.
+
+**Verification signature:** a lane's fix is DN-10-clean when its write-up names
+the donor source it read. A fix whose justification cites only receiver files has
+not cleared step 1.
+
+**DN-10-S — SUBSTITUTION IS EVIDENCE, NOT A TECHNIQUE (user ratification, 2026-08-12).**
+*"Why are there substitutions? Not allowed, it's a sign a system is unported, identify and port."*
+
+A **substitution** is calling a receiver function where the donor calls a DIFFERENT donor function
+of similar name/shape — `donorFn2()` answered with `receiverFn()`, arguments dropped to fit.
+
+**It is forbidden, and more usefully: it is a DETECTOR.** Every substitution marks the exact
+source line where a donor system was not ported. Treat one as a find, not a workaround:
+
+1. **Name the donor function and its full signature.** The dropped arguments are the missing
+   feature — they tell you what the receiver's stand-in cannot do.
+2. **Check whether the donor system exists in the receiver at all.** If absent, it is an unported
+   system and it goes on the port list under its own name.
+3. **Never "adapt" by dropping arguments.** A `NULL` passed where the donor passes a texture, a
+   matrix, or a callback is a silently degraded feature, and it will surface later as an art bug
+   nobody connects back to the port.
+4. **A comment recording the substitution does not license it.** Self-documenting the swap makes
+   it auditable, not permitted — three ported actors carried `setSimpleShadow2 -> setSimpleShadow`
+   in comments for many sections before anyone asked why.
+
+**Verification signature:** grep ported TUs for `donorFn -> receiverFn` comment forms and for
+receiver calls whose donor counterpart has MORE parameters. Both are cheap and both find real
+unported systems.
+
+**The incident that produced it:** WW pots rendered with opaque BLACK SQUARES under them. Cause:
+`dComIfGd_setSimpleShadow2(pos, groundY, scaleXZ, floorPoly, rotY, scaleZ, pTexObj)` — which takes
+a rotation, a separate Z scale, and a **texture object** — was substituted with the receiver's
+`dComIfGd_setSimpleShadow(...)` and the texture passed as NULL. **An untextured shadow quad draws
+black.** The visible art bug was a faithful report of an unported shadow system.
+
+**Instruments are exempt in one direction only:** making a defect OBSERVABLE
+(probes, logging, counters) is not solving it with instance code. Making it GO
+AWAY is. Inverting a probe's blind early-return is instrument work; clamping the
+value the probe reports is a DN-10 violation.

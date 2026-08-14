@@ -333,6 +333,180 @@ def law7_hio_macro(raw, code, lin=None):
                          f"mDoHIO_DELETE_CHILD; the HIO FIELDS stay readable")
 
 
+
+# --- law 8: THE CACHE-KEY LAW (tale-bus routing, user-refined) ---------------
+# "A cache may not outlive the scope in which its key is unique. Use the
+#  engine's own identity and lifecycle; add a differentiator ONLY where the
+#  engine does not already resolve it upstream."
+# Born from the LinkRM/Ojhous aliasing: R00_00 is a POSITION, not an IDENTITY,
+# and a session-immortal cache keyed on it served one stage's model over
+# another's collision while every file-layer measurement read clean.
+#
+# SCOPE-TEST HONESTY: key uniqueness is a semantic property no regex can
+# judge. What IS lintable is the DECLARATION: each registered cache site must
+# carry a CACHE-KEY annotation naming (a) unique-in scope and (b) the
+# invalidated-by event; absent = UNKNOWN, never clean (the S31-C shape, same
+# as KIT-PLUGIN). Sites enter the registry by DECLARATION, never inference.
+CACHE_SITES = {
+    "src/d/d_ext_npc_mount.cpp": [
+        "acquireStageModelData",   # AFFECTED site of the S772 bug (positional key)
+        "acquireModelData",        # object arcs, globally-unique names
+        "acquireBgModel",
+        "releaseArcModels",
+    ],
+}
+RE_STRKEY_CONTAINER = re.compile(
+    r"(?:std::)?(?:unordered_)?map\s*<\s*(?:std::)?(?:w)?string\b")
+RE_CACHE_ANN = re.compile(
+    r"CACHE-KEY:\s*unique-in=\S+\s+invalidated-by=\S+")
+
+
+def law8_cachekey(raw, code, lin=None):
+    """Registered cache sites must DECLARE key scope + invalidation — and per
+    the integrator audit: (1) ANY TU containing a string-keyed cache container
+    is UNKNOWN when undeclared, registered or not (registry-only scope was
+    this law's own silence-as-green); (2) ALL sites report, not the first."""
+    findings = []
+    for rel, fns in CACHE_SITES.items():
+        for fn in fns:
+            idx = code.find(fn)
+            if idx < 0:
+                continue
+            back = code[max(0, idx - 1200):idx]
+            if not RE_CACHE_ANN.search(back):
+                findings.append(fn)
+    if findings:
+        return ("UNKNOWN",
+                "cache sites lacking CACHE-KEY annotations (%d): %s — key "
+                "lifetime UNDECLARED, not clean (S772 class)"
+                % (len(findings), ", ".join(findings)))
+    # audit item (1): string-keyed cache container in an UNREGISTERED TU
+    m = RE_STRKEY_CONTAINER.search(code)
+    if m and not RE_CACHE_ANN.search(code):
+        line = code[:m.start()].count(chr(10)) + 1
+        return ("UNKNOWN",
+                "line %d: string-keyed cache container with NO CACHE-KEY "
+                "annotation anywhere in the TU — undeclared cache, not clean "
+                "(S772 class; declare unique-in= + invalidated-by= or register "
+                "the site)" % line)
+    return ("PASS", "no undeclared cache site or string-keyed container in this TU")
+
+
+# --- law 9: DN-3 RAW-BUFFER CAST (tale §812, integrator-routed) --------------
+# The tsubo crash class: `(J3DModelData*)dComIfG_getObjectRes(...)` in a
+# WW-layer TU. For WW/custom arcs get*Res returns the RAW FILE BUFFER (DN-3:
+# never parse at arc-mount), so the cast is a type lie the NULL check cannot
+# catch — the pointer is valid, the TYPE is wrong (fault was 0xa000000, not 0).
+# Sanctioned paths, both already in-tree: the consume-time acquirer family
+# (d_a_knob00.cpp:188 dExtNpcMount_acquireModelData) or explicit raw-detect
+# routing (ww_room_loader.cpp:574 memcmp(res, "J3D2", 4)). The two-step
+# compliant shape naturally escapes this regex — only a cast applied DIRECTLY
+# to the get*Res call fires. Scoped by lineage like laws 1-5: vanilla TP TUs
+# use this exact idiom CORRECTLY (native arcs are pipeline-parsed).
+# ONE regex for every cast spelling the corpus actually uses (donor tsubo
+# alone uses THREE: C-style, C-style-on-parenthesized-call, static_cast):
+#   (T*)dComIfG_getObjectRes(...)  ·  (T*)(dComIfG_getObjectRes(...))
+#   static_cast<T*>(dComIfG_getObjectRes(...))
+RE_J3D_GETRES_CAST = re.compile(
+    r"(?:\(\s*(J3D\w+)\s*\*\s*\)|static_cast\s*<\s*(J3D\w+)\s*\*\s*>\s*\()"
+    r"\s*\(?\s*dComIfG_get(?:Object|Stage)Res")
+# Anm-type casts WHITELISTED on tale §816's receipt, verified against the
+# switch itself: d_resorce.cpp loadResource parses BCKS/BCK (:536) and
+# BTP/BTK/BPK/BRK/BLK/BVA (:557) through J3DAnmLoaderDataBase AT MOUNT — DN-3's
+# raw-serving covers only the BDL/model family, so a J3DAnm* cast of get*Res
+# receives PARSED data and is sound. Non-anm, non-ModelData J3D casts stay
+# UNKNOWN (honest residue).
+DN3_ANM_WHITELIST_PREFIX = "J3DAnm"
+
+
+def law9_dn3_cast(raw, code, lin=None):
+    """Direct cast of dComIfG_getObjectRes/getStageRes to a parsed-J3D type in
+    a WW-layer TU. J3DModelData = the CONFIRMED crash class (tale §812) =
+    VIOLATION; other J3D* parsed-type casts = the same lie structurally but
+    unconfirmed = UNKNOWN, never silently green (№-31-C). ALL sites report."""
+    sites = []
+    for m in RE_J3D_GETRES_CAST.finditer(code):
+        ty = m.group(1) or m.group(2)
+        line = code[:m.start()].count(chr(10)) + 1
+        if ty == "J3DModelData":
+            sites.append(("VIOLATION", line, ty))
+        elif ty.startswith(DN3_ANM_WHITELIST_PREFIX):
+            continue  # anm parsed at mount (§816 receipt)
+        else:
+            sites.append(("UNKNOWN", line, ty))
+    if not sites:
+        return ("PASS", "no direct parsed-J3D cast of get*Res in this TU")
+    worst = "VIOLATION" if any(s[0] == "VIOLATION" for s in sites) else "UNKNOWN"
+    detail = "; ".join("line %d: (%s*)get*Res [%s]" % (ln, ty, v)
+                       for v, ln, ty in sites)
+    return (worst,
+            "%s — get*Res returns the RAW buffer for WW/custom arcs (DN-3); "
+            "route through dExtNpcMount_acquire* (knob00:188) or raw-detect "
+            "memcmp J3D2 first (ww_room_loader:574); a null/validity guard is "
+            "NOT a fix (tale §812)" % detail)
+
+
+# --- law 10: DN-10-S SUBSTITUTION MARKS (tale §819, user-ratified) ----------
+# "Substitution is evidence, not a technique" — a substitution marks the exact
+# line where a donor system was not ported, and A COMMENT RECORDING IT DOES
+# NOT LICENSE IT (rule 4; the setSimpleShadow2 comment rode from §253 to §819
+# unquestioned while the user was looking at the black square it caused).
+# This law reads COMMENTS — deliberately opposite to every other law here —
+# because the substitution RECORD is the detector. Two nets:
+#   (a) near-name pair in one comment (setSimpleShadow2 vs setSimpleShadow)
+#   (b) substitution vocabulary beside an identifier
+# The UNDOCUMENTED case has no comment to read; that is --pair's job.
+RE_COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+RE_CMT_IDS = re.compile(r"[A-Za-z_]\w{5,}")
+RE_SUBST_VOCAB = re.compile(
+    r"signatures?\s+diverge|substitut|stand-?in|in place of|->\s*port\b", re.I)
+# Calibration (first run): `X_e -> port mode` enum/field mappings are the
+# SANCTIONED consumption-boundary translation, not substitutions — the vocab
+# net only fires when the comment names a FUNCTION-ish identifier (API-family
+# prefix or verb-cased). The near-name pair net is unaffected.
+RE_FNISH_ID = re.compile(
+    r"\b(?:dComIfGd?_\w+|mDoExt_\w+|dKy\w+_\w+|fopAcM_\w+|"
+    r"(?:set|get|add|create|delete|entry|draw)[A-Z]\w+)")
+
+
+def law10_dn10s(raw, code, lin=None):
+    """Substitution comments = unported donor systems, reported per site."""
+    hits = []
+    for m in RE_COMMENT.finditer(raw):
+        c = m.group(0)
+        line = raw[:m.start()].count(chr(10)) + 1
+        # pair net calibration (first sweep): only FUNCTION-ish pairs — prose
+        # naming two sibling ACTORS/EVENTS (daVrbox/daVrbox2, TALE_DEMO chain,
+        # shutter/shutter2 gate rows) is discussion, not a substitution record.
+        ids = [i for i in RE_CMT_IDS.findall(c) if RE_FNISH_ID.fullmatch(i)]
+        pair = None
+        for a in ids:
+            for b in ids:
+                if a != b and a.startswith(b) and a[len(b):].isdigit() \
+                        and len(a) - len(b) <= 2:
+                    pair = (a, b)
+                    break
+            if pair:
+                break
+        if pair:
+            hits.append("line %d: comment pairs %s / %s — donor system %s is "
+                        "the port target" % (line, pair[0], pair[1], pair[0]))
+        elif RE_SUBST_VOCAB.search(c) and RE_FNISH_ID.search(c):
+            hits.append("TRIAGE line %d: substitution vocabulary beside %s"
+                        % (line, RE_FNISH_ID.search(c).group(0)))
+    if not hits:
+        return ("PASS", "no substitution marks in comments (undocumented "
+                        "substitutions need --pair against the donor TU)")
+    # tiering (№31-C): an explicit A→B function pair = VIOLATION (rule 4);
+    # vocabulary alone (may describe a PAST/removed stand-in) = UNKNOWN, a
+    # human triages — never silently green, never falsely red.
+    verdict = ("VIOLATION" if any(not h.startswith("TRIAGE") for h in hits)
+               else "UNKNOWN")
+    return (verdict, "DN-10-S: " + "; ".join(hits) +
+            " — a comment recording a substitution does not license it "
+            "(tale §819 rule 4)")
+
+
 LAWS = [
     ("1 LIGHTING CONTRACT", law1_lighting),
     ("2 RAW-BYTES / PARSE-ONCE", law2_rawbytes),
@@ -341,10 +515,14 @@ LAWS = [
     ("5 DONOR WIND", law5_wind),
     ("6 POINTER TRUNCATION", law6_ptrtrunc),
     ("7 HIO MACRO", law7_hio_macro),
+    ("8 CACHE-KEY", law8_cachekey),
+    ("9 DN-3 RAW-BUFFER CAST", law9_dn3_cast),
+    ("10 DN-10-S SUBSTITUTION", law10_dn10s),
 ]
 
 
-LINEAGE_FREE_LAWS = {"6 POINTER TRUNCATION", "7 HIO MACRO"}
+LINEAGE_FREE_LAWS = {"6 POINTER TRUNCATION", "7 HIO MACRO", "8 CACHE-KEY",
+                     "10 DN-10-S SUBSTITUTION"}
 
 DONOR_DRAW_LAWS = {"1 LIGHTING CONTRACT", "2 RAW-BYTES / PARSE-ONCE",
                    "3 NATIVE-ACTOR WW LEG"}
@@ -386,20 +564,276 @@ def check(path):
 
 def sweep_targets():
     out = []
+    # d_a_ww_*.cpp added tale §812: the tsubo TU that crashed was OUTSIDE the
+    # sweep — every WW-ported actor lives under that name shape.
     for pat in ("src/d/**/d_ext_*.cpp", "src/d/actor/d_a_ext_*.cpp",
+                "src/d/actor/d_a_ww_*.cpp",
                 "src/d/actor/d_a_npc_ba1.cpp", "src/d/actor/d_a_obj_otble.cpp",
                 "src/d/d_ext_tree.cpp"):
         out.extend(sorted(REPO.glob(pat)))
     return sorted(set(out))
 
 
+# ============================================================================
+# PRE-PORT MODES (tale §817, integrator-routed): the cast is the DONOR'S
+# UNIVERSAL IDIOM (correct in WW, DN-3-forbidden here), so every future port
+# carries the defect by default. --donor-precast turns that from a per-crash
+# discovery into a WORKLIST emitted BEFORE the port lands. --pair catches the
+# §817 substitution class (receiver fn standing in for a donor fn of
+# near-identical name: setSimpleShadow vs donor setSimpleShadow2).
+# ============================================================================
+DONOR_ACTOR_SRC = Path(r"D:/XXXXXXX/WW DP/src/d/actor")
+
+RE_CALL_IDENT = re.compile(r"\b([A-Za-z_]\w{3,})\s*\(")
+
+
+def donor_precast(names):
+    """Per-donor-TU list of parsed-J3D casts of get*Res = the sites a port MUST
+    translate at the consumption boundary (acquirer family / by-index form).
+    Anm-type casts are listed but marked mount-parsed (§816: sound to keep)."""
+    files = ([DONOR_ACTOR_SRC / (n if n.endswith(".cpp") else n + ".cpp") for n in names]
+             if names else sorted(DONOR_ACTOR_SRC.glob("d_a_*.cpp")))
+    rows = []
+    for fp in files:
+        if not fp.is_file():
+            print("MISSING donor TU: %s" % fp)
+            continue
+        code = strip_comments(fp.read_text(encoding="utf-8", errors="replace"))
+        sites = []
+        for m in RE_J3D_GETRES_CAST.finditer(code):
+            ty = m.group(1) or m.group(2)
+            line = code[:m.start()].count(chr(10)) + 1
+            tag = ("anm:mount-parsed-ok" if ty.startswith("J3DAnm")
+                   else "TRANSLATE" if ty == "J3DModelData" else "review")
+            sites.append((line, ty, tag))
+        if sites:
+            rows.append((fp.name, sites))
+    rows.sort(key=lambda r: -sum(1 for s in r[1] if s[2] == "TRANSLATE"))
+    total = sum(1 for _, ss in rows for s in ss if s[2] == "TRANSLATE")
+    for name, sites in rows:
+        must = [s for s in sites if s[2] == "TRANSLATE"]
+        det = " ".join(":%d(%s)" % (ln, ty if tag != "TRANSLATE" else ty)
+                       for ln, ty, tag in sites if tag == "TRANSLATE")
+        anm = sum(1 for s in sites if s[2] == "anm:mount-parsed-ok")
+        print("%-32s %2d TRANSLATE %s%s" % (name, len(must), det,
+              ("  (+%d anm ok)" % anm) if anm else ""))
+    print("\n%d TU(s) with casts · %d TRANSLATE site(s) across the corpus" % (len(rows), total))
+    out = REPO / "docs" / "state" / "ww-staging" / "donor-precast-census.md"
+    with open(out, "w", encoding="utf-8", newline="\r\n") as f:
+        f.write("# Donor pre-cast census (kit_laws --donor-precast, tale §817)\n\n")
+        f.write("Every `(J3D*)dComIfG_get*Res` site in donor actor source. TRANSLATE =\n")
+        f.write("J3DModelData, must route through the acquirer family at port time (DN-3);\n")
+        f.write("anm types are mount-parsed receiver-side (§816) and keep the donor idiom.\n\n")
+        for name, sites in rows:
+            f.write("- **%s**: %s\n" % (name, " · ".join(
+                ":%d %s [%s]" % s for s in sites)))
+    print("artifact -> %s" % out)
+    return 0
+
+
+def pair_check(recv_path, donor_path=None):
+    """§817 substitution class: receiver TU calls a function whose name is a
+    donor-called function minus/plus a short trailing suffix (digits), while
+    the donor TU never calls the receiver's variant. Suspects only — a human
+    judges; the lint's job is that the pair is LOOKED AT."""
+    rp = Path(recv_path)
+    if donor_path is None:
+        guess = rp.name.replace("d_a_ww_", "d_a_")
+        dp = DONOR_ACTOR_SRC / guess
+    else:
+        dp = Path(donor_path)
+    if not dp.is_file():
+        print("no donor TU at %s — pass it explicitly" % dp)
+        return 2
+    rc = strip_comments(rp.read_text(encoding="utf-8", errors="replace"))
+    dc = strip_comments(dp.read_text(encoding="utf-8", errors="replace"))
+    rcalls, dcalls = set(RE_CALL_IDENT.findall(rc)), set(RE_CALL_IDENT.findall(dc))
+    sus = []
+    # §819 net: same NAME called in both, receiver drops arguments (the donor's
+    # dropped trailing params ARE the missing feature). Max-arity per site via
+    # top-level comma count — a suspect list, not a proof.
+    def max_arity(c, name):
+        best = -1
+        for m in re.finditer(r"\b%s\s*\(" % re.escape(name), c):
+            depth, args, i = 1, 1, m.end()
+            if c[i:i+1] == ")":
+                args = 0
+            while i < len(c) and depth:
+                ch = c[i]
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                elif ch == "," and depth == 1:
+                    args += 1
+                i += 1
+            best = max(best, args)
+        return best
+    for n in sorted(rcalls & dcalls):
+        ra, da = max_arity(rc, n), max_arity(dc, n)
+        if 0 <= ra < da:
+            sus.append((n + "() %d arg(s)" % ra, n + "() %d arg(s)" % da))
+    for n in sorted(rcalls - dcalls):
+        for d in dcalls:
+            long, short = (n, d) if len(n) > len(d) else (d, n)
+            if long != short and long.startswith(short) and long[len(short):].isdigit() \
+                    and len(long) - len(short) <= 2:
+                sus.append((n, d))
+                break
+    if not sus:
+        print("PAIR %s vs %s: no near-name substitution suspects" % (rp.name, dp.name))
+        return 0
+    print("PAIR %s vs donor %s — %d SUSPECT(s):" % (rp.name, dp.name, len(sus)))
+    for n, d in sus:
+        print("  receiver calls %-28s donor calls %-28s — §817 class, verify"
+              % (n + "()", d + "()"))
+    return 1
+
+
+# ============================================================================
+# --donor-deps (tale §824, RESHAPED per tale §828): the NAME-GAP triager.
+# §828's correction is this mode's constitution: "absent by name" is NOT
+# "absent as a system" — a name miss has three causes and only one is an
+# unported system: (a) genuinely unported, (b) renamed twin (WW's `2` suffix),
+# (c) same capability under a different ARCHITECTURE (donor registry-object vs
+# receiver callback: dPa_J3DmodelEmitter_c vs dPa_modelEcallBack — the false
+# positive §824 itself produced). So this mode NEVER emits a verdict: every
+# name miss is a NAME-GAP with the best mechanical evidence attached —
+#   twin:<name>       receiver has a near-name (strip digits) — §828 rule 1,
+#                     compare SIGNATURES by hand before concluding anything
+#   family:<names>    receiver symbols in the same API family — rule 2,
+#                     check for the capability under another architecture
+#   res-header        dRes_INDEX_* — generated per port (Jb.h precedent)
+#   enum-dialect      *_e — translation-table class, not a system
+#   no-candidate      rules 1-2 found nothing — HIGHEST suspicion, still a
+#                     question (№-31-C), never a finding
+# ============================================================================
+API_PREFIXES = ("dPa_", "dComIf", "dKy", "dDemo", "dEv", "dMsg", "fop", "mDo",
+                "dBg", "cBg", "dCc", "dSv", "dStage_", "dRes", "dLib", "dAttention",
+                "dMeter", "daPy", "dPn", "cM3d", "cLib", "cXyz", "csXyz", "cBgS",
+                "JPA", "J3DPacket", "mDoExt_")
+RE_TOKEN = re.compile(r"[A-Za-z_]\w{4,}")
+
+
+def _receiver_tokens():
+    # COMMENT-STRIPPED, and the first run proved why: setSimpleShadow2 and
+    # dPa_J3DmodelEmitter_c live in receiver COMMENTS (§253 substitution
+    # banners) while being ABSENT from receiver code — indexing raw text
+    # declared §824's two headline systems "present".
+    toks = set()
+    for base in (REPO / "src", REPO / "include"):
+        for fp in base.rglob("*"):
+            if fp.suffix in (".cpp", ".h", ".hpp", ".inc") and fp.is_file():
+                toks.update(RE_TOKEN.findall(strip_comments(
+                    fp.read_text(encoding="utf-8", errors="replace"))))
+    return toks
+
+
+def _donor_api_deps(fp):
+    """Project-API identifiers a donor TU depends on (its own actor-local
+    names excluded by prefix heuristic)."""
+    code = strip_comments(fp.read_text(encoding="utf-8", errors="replace"))
+    stem = fp.stem  # d_a_tsubo -> daTsubo local-prefix guess
+    local = "da" + "".join(w.capitalize() for w in stem.split("_")[2:])
+    deps = set()
+    for tok in RE_TOKEN.findall(code):
+        if tok.startswith(local):
+            continue
+        if tok.startswith(API_PREFIXES) or tok.endswith("_c"):
+            deps.add(tok)
+    return deps
+
+
+def _classify_gap(sym, rt, fam_cache):
+    """§828 rules 1-2 as mechanical evidence. Returns a tier label."""
+    if sym.startswith("dRes_INDEX_"):
+        return "res-header"
+    base = sym.rstrip("0123456789")
+    if base != sym and base in rt:
+        return "twin:%s" % base
+    for suf in ("0", "1", "2"):
+        if sym + suf in rt:
+            return "twin:%s" % (sym + suf)
+    if sym.endswith("_e"):
+        return "enum-dialect"
+    fam = sym.split("_")[0] + "_"
+    if len(fam) >= 4:
+        if fam not in fam_cache:
+            fam_cache[fam] = sorted(x for x in rt if x.startswith(fam))
+        pool = fam_cache[fam]
+        if pool:
+            import difflib
+            # class symbols (_c) get a looser cutoff: §828's case (c) is an
+            # ARCHITECTURE difference, so the names diverge more than a rename
+            # does (dPa_J3DmodelEmitter_c vs dPa_modelEcallBack = 0.56).
+            cutoff = 0.45 if sym.endswith("_c") else 0.6
+            close = difflib.get_close_matches(sym, pool, n=3, cutoff=cutoff)
+            if close:
+                return "family:%s" % ",".join(close)
+    return "no-candidate"
+
+
+def donor_deps(args):
+    census = args and args[0] == "--census"
+    names = args[1:] if census else args
+    rt = _receiver_tokens()
+    fam_cache = {}
+    files = ([DONOR_ACTOR_SRC / (n if n.endswith(".cpp") else n + ".cpp") for n in names]
+             if names else sorted(DONOR_ACTOR_SRC.glob("d_a_*.cpp")))
+    demand = {}
+    for fp in files:
+        if not fp.is_file():
+            print("MISSING donor TU: %s" % fp)
+            continue
+        absent = sorted(d for d in _donor_api_deps(fp) if d not in rt)
+        tiers = {a: _classify_gap(a, rt, fam_cache) for a in absent}
+        for a in absent:
+            demand.setdefault(a, []).append(fp.stem)
+        if not census:
+            if absent:
+                print("%-28s %d NAME-GAP(s) (evidence attached — §828: "
+                      "never verdicts):" % (fp.name, len(absent)))
+                for a in absent:
+                    print("    %-44s [%s]" % (a, tiers[a]))
+            else:
+                print("%-28s all project-API deps present receiver-side" % fp.name)
+    if census:
+        rows = sorted(demand.items(), key=lambda kv: -len(kv[1]))
+        out = REPO / "docs" / "state" / "ww-staging" / "absent-systems-census.md"
+        with open(out, "w", encoding="utf-8", newline="\r\n") as f:
+            f.write("# Donor NAME-GAP census, ranked by demand "
+                    "(kit_laws --donor-deps --census; §824 reshaped by §828)\n\n")
+            f.write("Donor project-API symbols with no same-name receiver definition. A NAME\n")
+            f.write("MISS IS NOT A FINDING (tale §828): each row carries mechanical evidence\n")
+            f.write("for §828's rules — twin: = renamed candidate (compare signatures);\n")
+            f.write("family: = same-API-family symbols (check for the capability under a\n")
+            f.write("different architecture); no-candidate = highest suspicion, still a\n")
+            f.write("question. Demand rank = triage priority, and the planner demand axis.\n\n")
+            for sym, users in rows:
+                f.write("- **%s** [%s] — %d TU(s): %s\n"
+                        % (sym, _classify_gap(sym, rt, fam_cache), len(users),
+                           ", ".join(sorted(users)[:12])
+                           + (" …" if len(users) > 12 else "")))
+        for sym, users in rows[:20]:
+            print("%-44s %3d donor TU(s)  [%s]"
+                  % (sym, len(users), _classify_gap(sym, rt, fam_cache)))
+        print("\n%d name-gap(s) · artifact -> %s" % (len(rows), out))
+    return 0
+
+
 def main():
+    if len(sys.argv) >= 2 and sys.argv[1] == "--donor-deps":
+        sys.exit(donor_deps(sys.argv[2:]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "--donor-precast":
+        sys.exit(donor_precast(sys.argv[2:]))
+    if len(sys.argv) >= 3 and sys.argv[1] == "--pair":
+        sys.exit(pair_check(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None))
     args = sys.argv[1:]
     failures_only = "--failures-only" in args
     args = [a for a in args if not a.startswith("--")]
     files = sweep_targets() if "--sweep" in sys.argv else [Path(a) for a in args]
     if not files:
-        sys.exit("usage: kit_laws.py <file.cpp> ... | --sweep [--failures-only]")
+        sys.exit("usage: kit_laws.py <file.cpp> ... | --sweep [--failures-only] | --donor-precast [actor ...] | --donor-deps [--census] [actor ...] | --pair <recv.cpp> [donor.cpp]")
 
     n_viol = n_unk = n_owed = 0
     for f in files:

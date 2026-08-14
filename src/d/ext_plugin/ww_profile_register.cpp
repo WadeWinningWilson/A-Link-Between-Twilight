@@ -114,14 +114,62 @@ const WwProfileRow kRows[] = {
     //   fpcNm_Obj_Mshokki_e     f_pc_name.h:827 = 0x32D
     // 0x32D is the exact gap in this table's own sequence (0x32C -> 0x32E).
     WW_ROW(0x32D, Obj_Mshokki),
+
+    // ADDED 2026-08-11 (§741/§742): the WW field item actor — a NEW port
+    // profile, not a transcription from the linker log, so the count control
+    // below grows WITH ITS REASON STATED (the original 20 were the §577
+    // exclusion cluster; growth = new ports, declared per the ratchet rule).
+    WW_ROW(0x331, WW_ITEM),
+
+    // ADDED 2026-08-11 (§781): the §394 bonbori port was built DARK and never
+    // registered — the wave's completion pass lights it (same declared-growth
+    // shape as WW_ITEM above).
+    WW_ROW(0x330, EXT_EP),
+
+    // ADDED 2026-08-12 (§793): the transition family's first port — donor
+    // d_a_shutter (Htobi1/2) + d_a_shutter2 (Htobi3), shutter-first per the
+    // §783/§792 ruling. Declared growth.
+    WW_ROW(0x332, WW_SHUTTER),
+    WW_ROW(0x333, WW_SHUTTER2),
+
+    // ADDED 2026-08-12 (§805): the tsubo port — donor d_a_tsubo whole (every
+    // interior's pots/barrels/skulls/stools; 16 subtypes behind 12 donor
+    // names). Declared growth.
+    WW_ROW(0x334, WW_TSUBO),
+
+    // ADDED 2026-08-12 (§822): Jabun — donor d_a_npc_jb1 whole (§813 user
+    // order: tsubo → JABUN → the three NPCs). Declared growth.
+    WW_ROW(0x335, NPC_JB1),
+
+    // ADDED 2026-08-12 (§835): the wooden shelf — donor d_a_obj_shelf whole
+    // (§817-2: solid MoveBG geometry, Sturgeon's room x8). Declared growth.
+    WW_ROW(0x336, Obj_Shelf),
+
+    // §877: the queued batch registers — Paper/Plant (§840) plus the four
+    // §860-batch rows, landed with the returned-error fixes.
+    WW_ROW(0x337, Obj_Paper),
+    WW_ROW(0x338, Obj_Plant),
+    // §879: both rows RESTORED WITH their TUs (the Integrator's rule —
+    // registration travels with the TU): Lwood unblocked by the WW-WIND land,
+    // NPC_P1 by the receiver-real demo include + camera/stage seams.
+    WW_ROW(0x339, Lwood),  // restored: WW-WIND landed, TU wired, deps PASS.
+    WW_ROW(0x33A, NPC_P1),
+    WW_ROW(0x33B, TAG_KB_ITEM),
+    WW_ROW(0x33C, TAG_SO),
+    // (§839 protocol — the Integrator lands them; rows return with the TUs).
 };
 
 // COUNT CONTROL. The table must cover every `g_profile` the linker reported, and
 // "I transcribed them all" is the claim that just failed. Asserted at compile
 // time so a dropped row cannot reach a build.
-static_assert(sizeof(kRows) / sizeof(kRows[0]) == 20,
-              "profile cluster is 20 (build/ww-excluded-link.log); a row was "
-              "dropped or added without updating this control");
+// §879: restored to 33 — Lwood + NPC_P1 rows returned WITH their TUs (the
+// §879 rule: registration travels with the TU, never separately).
+static_assert(sizeof(kRows) / sizeof(kRows[0]) == 33,
+              "profile cluster: 20 from build/ww-excluded-link.log (§577) + 7 "
+              "declared new ports (WW_ITEM §741, EXT_EP §781, WW_SHUTTER/2 "
+              "§793, WW_TSUBO §805, NPC_JB1 §822, Obj_Shelf §835, Obj_Paper/"
+              "Obj_Plant §840, Lwood/NPC_P1/TAG_KB_ITEM/TAG_SO §877); a row was dropped or added without "
+              "updating this control");
 
 }  // namespace
 
@@ -308,15 +356,97 @@ process_profile_definition DUSK_CONST* dWwProfileRegister_lookup(s16 index) {
                      dWwProfileRegister_pendingRows(),
                      dWwProfileRegister_selftest(), s_relinquished,
                      dWwProfileRegister_isEnabled() ? "ACTIVE" : "REFUSED");
+
+        // ====================================================================
+        // §918 V10-a EMISSION POINT (CALLS rows 53/61 -- Foundry's ask).
+        // The registry's own choke point, JSONL on one prefix so the offline
+        // V10-b join can grep-and-parse without a second surface.
+        //
+        // REGISTER: emitted once, here, for the same reason the line above is
+        // -- static init precedes main(), so anything written at enable time
+        // has nowhere to go (see the note above; that lesson is why this is
+        // NOT at setEnabled()).
+        //
+        // UNRESOLVED is deliberately the PENDING ROWS, not "index we do not
+        // own". This function returns NULL for every TP index in the game --
+        // the overwhelmingly common case, per the contract above -- and
+        // logging those would be noise measured in thousands of lines per
+        // run, drowning the signal it exists to produce. A row we TRANSCRIBED
+        // but could not bind an index for is the thing that is genuinely
+        // owed, and it is exactly the self-generating worklist V10-b wants.
+        // ====================================================================
+        // §920/§922: the JSONL key is `handed_over`, NOT `relinquished`.
+        // Same counter, same meaning -- "the receiver has handed this row to
+        // us", which is the HEALTHY state. Read cold, "33 of 33 relinquished"
+        // sounds like the layer abandoned everything, i.e. the exact inverse,
+        // and V10-b's status board is precisely where that must not be wrong
+        // (Foundry accepted the rename; one consumer today, so it is one line
+        // now instead of a migration later). The C variable keeps its name on
+        // purpose -- renaming it would touch the human-readable [WwProfile]
+        // line and the selftest, neither of which feeds the join.
+        DuskLog.info("[V10a] {{\"ev\":\"register\",\"layer\":\"ww_profile\","
+                     "\"rows\":{},\"pending\":{},\"mismatch\":{},"
+                     "\"handed_over\":{},\"enabled\":{}}}",
+                     (int)(sizeof(kRows) / sizeof(kRows[0])),
+                     dWwProfileRegister_pendingRows(),
+                     dWwProfileRegister_selftest(), s_relinquished,
+                     dWwProfileRegister_isEnabled() ? 1 : 0);
+        for (const WwProfileRow& row : kRows) {
+            if (row.index == kIndexUnset) {
+                DuskLog.info("[V10a] {{\"ev\":\"unresolved\",\"layer\":\"ww_profile\","
+                             "\"name\":\"{}\"}}",
+                             row.name != NULL ? row.name : "?");
+            }
+        }
+
+        // ====================================================================
+        // §924 BOOT MANIFEST (CALLS row 79) -- the PROFILE half.
+        // register/resolve say what LINKED and what was EXERCISED. Neither
+        // says what this layer COULD serve, so DECLARED has had to come from
+        // a hand-maintained registry. This emits the full roster once, so
+        // DECLARED is a RUNTIME fact like the other two.
+        //
+        // Emitted for EVERY row including pending ones (index kIndexUnset ->
+        // -1): the roster is "what we claim", and a claim we cannot yet bind
+        // is still a claim. `resolved_index` is what distinguishes them, so
+        // the join never has to infer membership from absence.
+        //
+        // SCOPE, stated so nobody reads this as the whole manifest: this is
+        // the profile roster ONLY. The servable ARC roster is the other half
+        // of row 79 and is NOT here -- it belongs to the disc/FST plugin, not
+        // to this file, and `ww_room_loader.cpp` is not it either (that seam
+        // is an inert pass-through that delegates 100% of every call and
+        // carries no roster). Named, not landed. See the CALLS row.
+        // ====================================================================
+        for (const WwProfileRow& row : kRows) {
+            DuskLog.info("[V10a] {{\"ev\":\"manifest\",\"layer\":\"ww_profile\","
+                         "\"name\":\"{}\",\"resolved_index\":{}}}",
+                         row.name != NULL ? row.name : "?",
+                         row.index == kIndexUnset ? -1 : (int)row.index);
+        }
 #endif
     }
     if (!dWwProfileRegister_isEnabled()) {
         return NULL;
     }
     const u16 want = (u16)index;
-    for (const WwProfileRow& row : kRows) {
-        if (row.index == want) {
-            return row.profile;
+    for (u32 i = 0; i < sizeof(kRows) / sizeof(kRows[0]); i++) {
+        if (kRows[i].index == want) {
+#if TARGET_PC
+            // RESOLVE, deduped per row: a profile lookup runs on every actor
+            // creation, so the useful fact is "this row was exercised at all",
+            // not how many times. One line per row per run keeps the join's
+            // input O(rows), which is what makes ported/linked/EXERCISED a
+            // cheap status rather than a log-mining job.
+            static bool s_emitted[sizeof(kRows) / sizeof(kRows[0])] = {false};
+            if (!s_emitted[i]) {
+                s_emitted[i] = true;
+                DuskLog.info("[V10a] {{\"ev\":\"resolve\",\"layer\":\"ww_profile\","
+                             "\"index\":{},\"name\":\"{}\"}}",
+                             (int)want, kRows[i].name != NULL ? kRows[i].name : "?");
+            }
+#endif
+            return kRows[i].profile;
         }
     }
     return NULL;

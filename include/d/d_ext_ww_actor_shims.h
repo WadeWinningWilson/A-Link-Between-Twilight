@@ -65,21 +65,15 @@ class JPABaseEmitter;
 // WW "sea" stage + these rooms; in the port getStartStageName()!="sea" so the
 // branch is dead, but it must still COMPILE. Values verbatim from donor.
 enum {
+    dIsleRoom_ForsakenFortress_e = 1,   // donor d_save.h:307 (§888 layer port)
     dIsleRoom_WindfallIsland_e = 11,
     dIsleRoom_OutsetIsland_e   = 44,
 };
 
-// --- secondary food: the pig can also chase a dug-item Tag (fpcNm_TAG_KB_ITEM_e).
-// That Tag actor is not restored, so the search proc-name is a sentinel that
-// matches nothing → search_get_item() returns NULL → the pig eats esa (bait)
-// only, which IS its primary food. daTagKbItem_c is a compile-only stub.
-#define fpcNm_TAG_KB_ITEM_e 0xFFFE
-// kb_dig(): the dug-item Tag's "pig unearthed me" hook. Tag actor unrestored →
-// search never returns one → dead call; no-op stub keeps the source verbatim.
-class daTagKbItem_c : public fopAc_ac_c {
-public:
-    void kb_dig(fopAc_ac_c*) {}
-};
+// --- §877: the §225 pig-tag shims (fpcNm_TAG_KB_ITEM_e 0xFFFE sentinel +
+// daTagKbItem_c stub) are RETIRED — the real TAG_KB_ITEM tag is ported
+// (d_a_tag_kb_item.cpp, enum row 0x33B); the pig's search_get_item now finds
+// live tags and gains its dug-item food source, the intended donor behavior.
 
 // --- particle FX no-ops (deferred to the wave-emit pass) --------------------
 // The pig's water-ripple (setShipTail/HAMON00) and toon dust/smoke
@@ -555,6 +549,12 @@ bool dLetter_isDelivery(u16 i_no);
 // --- WW obj sawdust hit-FX (daObj::HitEff_kikuzu) -> no-op (cosmetic; deferred like
 //     the pig/bm1 particle FX). Free-func form (donor call rewritten off daObj:: scope).
 void dExtTpost_HitEff_kikuzu(fopAc_ac_c* actor, void* cyl);
+// --- §879 WW camera-smoother latch (dCamera_c::SkipSmoother — donor
+//     d_camera.h:618 sets m100/m101/m102=1 so the smoother snaps for one frame).
+//     The receiver camera has no smoother-latch mechanism; kikuzu-class owed
+//     no-op until the WW-camera lane ports the smoother (CRAWL precedent,
+//     ww_cam_crawl.cpp). Sites: npc_p1 talk-start ×3.
+inline void dExtWwCam_SkipSmoother() {}
 // --- WW player letter-read eye nudge (daPy_py_c::onLetterReadEyeMove) -> no-op.
 void dExtTpost_onLetterReadEyeMove();
 // --- WW present-demo cancel / reserve-item clear the port lacks -> inert no-op.
@@ -641,5 +641,36 @@ inline JPABaseEmitter* dComIfGp_particle_setSimpleLand(const cBgS_PolyInfo& /*gn
 //     Absent in the port -> no-op. Only reached on Tetra type-5 (optn) event
 //     ordering; the auto-start demo simply isn't cancelled (minor). BRIDGE-OWED. -
 inline void dComIfGp_evmng_cancelStartDemo() {}
+
+// ============================================================================
+// §806  Donor object-arc alias — the CONSUMPTION-BOUNDARY path translation for
+// donor arc names that collide with the receiver's own res/Object archives.
+// The §716 pattern exactly: the donor-disc reader serves the WW arc's bytes
+// VERBATIM under a renamed mount point (ww_donor_disc kTpCollisionAlias), and
+// WW-port consumers translate the donor name here at load time. Donor DATA
+// keeps donor names untouched; nothing TP-side is shadowed.
+//   "Always"   — TP core archive (alink/bg_obj/demo00/...) → "WwAlways"
+//   "Kkiba_00" — TP box archive (obj_carry/burnbox/movebox) → "WwKkiba00"
+// The two tables MUST stay in lockstep (ww_donor_disc/main.cpp is the server).
+// ============================================================================
+inline bool dExtWw_arcNameEq(const char* a, const char* b) {
+    while (*a != '\0' && *a == *b) {
+        ++a;
+        ++b;
+    }
+    return *a == *b;
+}
+inline const char* dExtWw_objectArcAlias(const char* i_donorArc) {
+    if (i_donorArc == 0) {
+        return i_donorArc;
+    }
+    if (dExtWw_arcNameEq(i_donorArc, "Always")) {
+        return "WwAlways";
+    }
+    if (dExtWw_arcNameEq(i_donorArc, "Kkiba_00")) {
+        return "WwKkiba00";
+    }
+    return i_donorArc;
+}
 
 #endif  // D_EXT_WW_ACTOR_SHIMS_H

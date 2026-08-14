@@ -828,6 +828,14 @@ PROCS_NOT_WII \
 /* 0x32E */ X(fpcNm_SPC_ITEM01_e) \
 /* 0x32F */ X(fpcNm_OBJ_OTBLE_e) \
 /* 0x330 */ X(fpcNm_EXT_EP_e) \
+/* 0x331 */ X(fpcNm_WW_ITEM_e) \
+/* 0x332 */ X(fpcNm_WW_SHUTTER_e) \
+/* 0x333 */ X(fpcNm_WW_SHUTTER2_e) \
+/* 0x334 */ X(fpcNm_WW_TSUBO_e) \
+/* 0x335 */ X(fpcNm_NPC_JB1_e) \
+/* 0x336 */ X(fpcNm_Obj_Shelf_e) \
+/* 0x337 */ X(fpcNm_Obj_Paper_e) \
+/* 0x338 */ X(fpcNm_Obj_Plant_e) /* 0x339 */ X(fpcNm_Lwood_e) /* 0x33A */ X(fpcNm_NPC_P1_e) /* 0x33B */ X(fpcNm_TAG_KB_ITEM_e) /* 0x33C */ X(fpcNm_TAG_SO_e) \
 
 #define X(name) name,
 enum {

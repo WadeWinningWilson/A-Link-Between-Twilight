@@ -2,6 +2,7 @@
 
 #include "d/d_kankyo.h"
 #include "d/d_kankyo_ww.h"
+#include "d/d_kankyo_ww_sky.h"  // §687 donor vrbox color engine gate
 #include "dusk/memory.h"
 #ifdef __REVOLUTION_SDK__
 #include <revolution.h>
@@ -2659,6 +2660,15 @@ void dScnKy_env_light_c::setLight() {
             if (!g_kankyoHIO.light.m_HOSTIO_setting && !g_kankyoHIO.vrbox.m_VrboxSetting)
             #endif
             {
+            // ================================================================
+            // §687: on WW sky hosts the DONOR's vrbox color engine owns these
+            // fields (dKyWwSky_setVrboxColors — the ported setLight vrbox
+            // section, donor state + donor easing), same slot, one owner.
+            // Receiver stages keep the block below byte-for-byte.
+            // ================================================================
+            if (dKyWw_isSkyHost()) {
+                dKyWwSky_setVrboxColors();
+            } else {
 
             sp2B = prev_pal_start_p->vrboxcol_id;
             sp2A = prev_pal_end_p->vrboxcol_id;
@@ -2808,6 +2818,7 @@ void dScnKy_env_light_c::setLight() {
                 vrbox_kasumi_inner_col.g = 0;
                 vrbox_kasumi_inner_col.b = 0;
             }
+            }  // §687 receiver-stage branch
             }
 
             #if DEBUG

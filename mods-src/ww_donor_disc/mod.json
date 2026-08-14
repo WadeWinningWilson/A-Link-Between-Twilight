@@ -1,0 +1,7 @@
+{
+    "id": "wwDonorDisc",
+    "name": "WW Donor Disc Reader",
+    "version": "0.1.0",
+    "author": "Dusklight WW crew (fork-local, never shipped)",
+    "description": "L2: serves byte-identical donor files straight from the user's own Wind Waker (USA) disc image. Nothing staged, nothing shipped — zero-bake carried to completion. Configure mod.wwDonorDisc.wwIsoPath with the path to a plain GZLE01 .iso."
+}

@@ -1,8 +1,8 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
-# tool_sha256:      66ea268757b8f726fa09e4b18d1f64b5138786f2aa6c13c300cce95d576624e8
-# files_cmake_sha256: ea079bd0657c051e52c0c6c0d8859b65d093fa8e9de2270175a3ff9e534ef56f
-# count: 62
+# tool_sha256:      e016334b5de3792daccd7da8f7b009104e1c6c085d25aed4473451336256ec58
+# files_cmake_sha256: ade77bda6519063307711095151e860611e5eeff39a93adbcc3eee27d4e2ab24
+# count: 68
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
 # (native-port + bridge-owed) PLUS host-plumbing that serves the WW
@@ -39,7 +39,8 @@
 # left in the build. Excluding this set does NOT make the build
 # WW-free -- it removes the separable stacks. Step 19 owns the rest.
 #
-# LEG-STRIP REQUIRED (11 mixed TUs, NOT excluded here):
+# LEG-STRIP REQUIRED (12 mixed TUs, NOT excluded here):
+#   src/d/actor/d_a_bg.cpp
 #   src/d/actor/d_a_demo00.cpp
 #   src/d/actor/d_a_swhit0.cpp
 #   src/d/actor/d_a_vrbox.cpp
@@ -52,10 +53,12 @@
 #   src/d/d_stage.cpp
 #   src/f_op/f_op_msg_mng.cpp
 #
-# Matched the OLD filename rules but declare no donor content (5),
+# Matched the OLD filename rules but declare no donor content (7),
 # so they are no longer excluded. Listed so the change is auditable:
 #   src/d/d_albw_dialogue.cpp
 #   src/d/d_ext_mod_flags.cpp
+#   src/d/ext_plugin/ww_cam_data.cpp
+#   src/d/ext_plugin/ww_cam_select.cpp
 #   src/d/ext_plugin/ww_itemmdl_dispatch.cpp
 #   src/d/ext_plugin/ww_misc_dispatch.cpp
 #   src/d/ext_plugin/ww_npcmount_dispatch.cpp
@@ -70,6 +73,7 @@ set(WW_LAYER_FILES
     src/d/actor/d_a_lamp.cpp
     src/d/actor/d_a_npc_ba1.cpp
     src/d/actor/d_a_npc_bm1.cpp
+    src/d/actor/d_a_npc_jb1.cpp
     src/d/actor/d_a_npc_ls1.cpp
     src/d/actor/d_a_npc_zl1.cpp
     src/d/actor/d_a_obj_mshokki.cpp
@@ -77,6 +81,9 @@ set(WW_LAYER_FILES
     src/d/actor/d_a_obj_toripost.cpp
     src/d/actor/d_a_spc_item01.cpp
     src/d/actor/d_a_ww_demo00.cpp
+    src/d/actor/d_a_ww_item.cpp
+    src/d/actor/d_a_ww_shutter.cpp
+    src/d/actor/d_a_ww_tsubo.cpp
     src/d/d_door.cpp
     src/d/d_ext_npc_doors.cpp
     src/d/d_ext_npc_mount.cpp
@@ -95,9 +102,11 @@ set(WW_LAYER_FILES
     src/d/ext_line/mdoext1_3dline.cpp
     src/d/ext_plugin/ww_cam_crawl.cpp
     src/d/ext_plugin/ww_import_gate.cpp
+    src/d/ext_plugin/ww_item_data.cpp
     src/d/ext_plugin/ww_profile_register.cpp
     src/d/ext_plugin/ww_room_loader.cpp
     src/d/ext_plugin/ww_stage_loader.cpp
+    src/d/ext_plugin/ww_tsubo_data.cpp
     src/d/ext_seq/ja1_bank.cpp
     src/d/ext_seq/ja1_event_dump.cpp
     src/d/ext_seq/ja1_jasbank.cpp

@@ -10,6 +10,7 @@
 #include "d/dolzel.h" // IWYU pragma: keep
 
 #include "d/d_event_manager.h"
+#include "d/ext_plugin/ww_stage_loader.h"   // §901 WW arrival-event names
 #include "SSystem/SComponent/c_math.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_camera.h"
@@ -21,6 +22,9 @@
 #include <cstring>
 
 #include "dusk/string.hpp"
+#if TARGET_PC
+#include "dusk/logging.h"  // §717 H2/H3 lifecycle probes
+#endif
 
 #if DEBUG
 static dEvM_HIO_c l_HIO;
@@ -73,6 +77,32 @@ int dEvent_exception_c::setStartDemo(int mapToolID) {
 }
 
 const char* dEvent_exception_c::getEventName() {
+    // ========================================================================
+    // §901 (rows §899/§900): WW host stages answer arrival-event ids from WW'S
+    // OWN table — the two lineages share this index space but not its meaning
+    // (12 of 13 WW ids resolved to the wrong TP event; the Great-Fairy fall
+    // asked FALL_START and got PORTALWARP_START, an event no Outset staff can
+    // man, so the player stayed inside an event that could not end). The ids
+    // arrive donor-correct from the PLAYER's start_mode branch (§636 seam);
+    // only the NAME LOOKUP was TP's. Placed FIRST so the WW path never touches
+    // TP's 213->214 warp-point rewrite. TP stages fall straight through to the
+    // 14-entry table below, untouched (shared-path law, №282/№283).
+    // ========================================================================
+    {
+        const char* sn901 = dComIfGp_getStartStageName();
+        if (sn901 != NULL && dExtWwSave_isWwHostStage(sn901)) {
+            if (mEventInfoIdx == -1) {
+                return NULL;  // donor return, verbatim (getEventIdx:889 reads NULL as -1)
+            }
+            const char* wwName = dExtWwEvt_getArrivalEventName(mEventInfoIdx);
+            if (wwName != NULL) {
+                return wwName;
+            }
+            // not a WW arrival id — fall through to the receiver's own
+            // map-event lookup (same data path, receiver record shape).
+        }
+    }
+
     static const char* soecial_names[14] = {
         "NORMAL_COMEBACK",
         "DEFAULT_START",
@@ -643,6 +673,17 @@ void dEvent_manager_c::endProc(s16 evId, BOOL isClose) {
     fopAcM_Search((fopAcIt_JudgeFunc)allOffObjectCallBack, (void*)param);
     mCameraPlay = 2;
     event->mEventState = 0;
+#if TARGET_PC
+    // §717 H3: the reset that flips getBase() to BASE_NULL — timestamp it so
+    // guard hits can be ordered against it. WW-scoped.
+    {
+        const char* sn717 = dComIfGp_getStartStageName();
+        if (sn717 != NULL && dExtWwSave_isWwHostStage(sn717)) {
+            DuskLog.info("[EvtMng] §717 H3 end-reset: evId={} evType={}→BASE_NULL gFrm={}",
+                         (int)mCurrentEvId, mCurrentEvType, (int)g_Counter.mCounter0);
+        }
+    }
+#endif
     mCurrentEvType = 0;
     mCurrentEvId = -1;
     dComIfGp_getEvent()->setPtD(NULL);
@@ -995,6 +1036,25 @@ int dEvent_manager_c::order(s16 evCompositId) {
 
     mCurrentEvType = getTypeCompositId(evCompositId);
     mCurrentEvId = evCompositId;
+#if TARGET_PC
+    // ========================================================================
+    // §717 H2 (WAVE-1 pass-9 item 2): base state AT type-set. If staffP is 0
+    // here, every getMyActIdx during this event dies at the §713c fork guard
+    // (silently, pre-§717) — the suspected 19:13 five-frame event death.
+    // WW-scoped per the shared-path rule.
+    // ========================================================================
+    {
+        const char* sn717 = dComIfGp_getStartStageName();
+        if (sn717 != NULL && dExtWwSave_isWwHostStage(sn717)) {
+            dEvDtBase_c& b717 = getBase();
+            DuskLog.info("[EvtMng] §717 H2 start: evId={} evType={} staffP={} headerP={} "
+                         "staffNum={}",
+                         (int)mCurrentEvId, mCurrentEvType, b717.getStaffP() != NULL ? 1 : 0,
+                         b717.getHeaderP() != NULL ? 1 : 0,
+                         b717.getHeaderP() != NULL ? b717.getStaffNum() : -1);
+        }
+    }
+#endif
     startProc(event);
     return 1;
 }
@@ -1123,6 +1183,15 @@ int dEvent_manager_c::getIsAddvance(int staffId) {
     } else if (mCurrentEvId == -1) {
         return 0;
     } else {
+        // §912: WW host stages read the DONOR's advance counter (mAdvance
+        // @0x46), which is where the WW event path now writes it. TP keeps
+        // field_0x40, its own advance flag, untouched (shared-path law).
+        {
+            const char* sn912 = dComIfGp_getStartStageName();
+            if (sn912 != NULL && dExtWwSave_isWwHostStage(sn912)) {
+                return getBase().getStaffP(staffId)->mAdvance;
+            }
+        }
         return getBase().getStaffP(staffId)->field_0x40;
     }
 }
@@ -1486,7 +1555,29 @@ fopAc_ac_c* dEvent_manager_c::specialCast(const char* staffname, BOOL param_1) {
     }
 
     if (strcmp(staffname, "SHUTTER_DOOR") == 0) {
+#if TARGET_PC
+        // ====================================================================
+        // tale §754 (fall-through root, tale §753): the DONOR'S OWN cast list
+        // — WW DP d_event_manager.cpp:689-698 tries DOOR10 → DOOR12 → KDDOOR
+        // → KNOB00. The receiver's list below is TP doors only, so the WW
+        // interior knob00 was NEVER CAST: SHUTTER_DOOR stayed unmanned, cut
+        // flags 560/565/570 never satisfied, the entrance event stalled ~2160
+        // dispatches and Link fell at the spawn. DOOR10/DOOR12/KDDOOR are not
+        // yet ported — each joins this chain with its port (donor order kept).
+        // WW-host-scoped per the №282/№283 shared-path law; TP list untouched.
+        // ====================================================================
+        {
+            const char* sn754 = dComIfGp_getStartStageName();
+            if (sn754 != NULL && dExtWwSave_isWwHostStage(sn754)) {
+                shutterActor = specialCast_Shutter(fpcNm_KNOB00_e, param_1);
+            }
+        }
+        if (shutterActor == NULL) {
+            shutterActor = specialCast_Shutter(fpcNm_KNOB20_e, param_1);
+        }
+#else
         shutterActor = specialCast_Shutter(fpcNm_KNOB20_e, param_1);
+#endif
         if (shutterActor == NULL) {
             shutterActor = specialCast_Shutter(fpcNm_BOSS_DOOR_e, param_1);
         }

@@ -9,6 +9,9 @@
 #include "d/d_bg_s.h"
 #include "d/d_bg_s_acch.h"
 #include "d/d_com_inf_game.h"
+#if TARGET_PC
+#include "d/d_ext_save_guard.h"  // tale §818 WW-host predicate (roof-clamp skip)
+#endif
 #include "global.h"
 
 #if DEBUG
@@ -145,7 +148,29 @@ void dBgS_Acch::GroundCheck(dBgS& bgs) {
         grnd_pos = *pm_pos;
         grnd_pos.y += field_0x94 + (m_gnd_chk_offset - field_0x90);
 
-        if (!ChkGndThinCellingOff()) {
+        // ====================================================================
+        // tale §818 (§817 item 3, generalizing §796): the ROOF CLAMP below is
+        // TP's own thin-ceiling feature — the donor's GroundCheck (WW DP
+        // d_bg_s_acch.cpp:122-132) has NO roof check for ANY actor. On WW host
+        // stages, donor placements sit at EXACTLY floor Y (PLYR spawns, tsubo
+        // pots, every prop), the floor's underside answers RoofChk at zero
+        // clearance, and the clamp lands the ground-query start ON the plane —
+        // the strict cross test then never passes and the actor falls through
+        // geometry every plain probe can hit. §796 fixed exactly ONE consumer
+        // (the player) via the per-actor flag; §817 caught the pots dying the
+        // same way in Sturgeon's room. Per the №283 lifecycle law the skip
+        // moves HERE, the source: WW hosts get donor ground semantics for
+        // every acch user; TP stages keep their clamp untouched. §796's alink
+        // special case is retired in the same stroke (one mechanism).
+        // ====================================================================
+        bool wwHost818 = false;
+#if TARGET_PC
+        {
+            const char* sn818 = dComIfGp_getStartStageName();
+            wwHost818 = sn818 != NULL && dExtWwSave_isWwHostStage(sn818);
+        }
+#endif
+        if (!wwHost818 && !ChkGndThinCellingOff()) {
             static dBgS_RoofChk tmpRoofChk;
             tmpRoofChk.SetActorPid(m_gnd.GetActorPid());
             tmpRoofChk.SetPos(*pm_pos);

@@ -131,6 +131,22 @@ disagrees. The DMC latch is therefore **state the WW layer owns**.
 
 ### Blocked / not yet wired
 
+> **✅ DATA HALF LANDED 2026-08-10 — bus §673.** `ww_cam_data.cpp` + generated
+> `ww_cam_data.inc` (gen_cam_data.py from donor source): 145 styles (BE camstyle.dat-shaped
+> blob, algs mapped, sockets 20-27), 63 donor-axis type rows, 35 BG type names — resident +
+> self-tested, selecting nothing. The generator independently reproduced this section's
+> decode (Subject slots, CC02 0x0C2, LN17 0x042) and added CC01 (0x082) as a third CRAWL
+> style. **Mode axes are NOT positionally equivalent past slot 4** (measured; see §673) —
+> rows stay donor-axis. Remaining: the donor mode-selector port + status-bit vocabulary
+> translation (user ruled FULL).
+
+> **✅ SELECTOR HALF BUILT 2026-08-10 — bus §674.** `ww_cam_select.cpp` ports donor
+> nextType/nextMode/latch onto the donor axis through the new NULL-default
+> `dCamera_setSelectHook`; data sources swap to the WW blobs on WW host stages and restore on
+> leave. m1AE = receiver `field_0x223` (measured); receiver `mFakeAngleSys`/`setUSOAngle` IS
+> the donor DMC system (crawl-TU alignment check owed). ModeFix honored as translated input.
+> Sockets logged. All gates green. **Playtest owed** — camera feel on Outset is the verdict.
+
 **Nothing selects algorithm 20 yet.** The style + type data is the other half:
 
 - **Style records** (fully decoded, ready to write): CC02 flags `0x0C2`, LN17 flags `0x042`,
@@ -154,6 +170,28 @@ when unset — not an invention — but find the setter.
 ---
 
 ## 5. Next work order — the donor disc reader (user-approved 2026-08-10)
+
+> **⚠ SUPERSEDED IN PART — build L2 as a PLUGIN, not a receiver leg** (Librarian-stamped 2026-08-06, per the planning-instance L2 reversal; ruling **A** stands). The steps below add `wwIsoPath` to `settings.h`/`settings.cpp` + a receiver-tree TU + a prelaunch field — the exact receiver-leg class ruling (A) exists to eliminate. **Corrected design = L2a:** same isoPath *pattern*, plugin *home* — the plugin declares its own config var (SDK config service `register_var`), does disc I/O plugin-side, and hooks `wwRoom_aliasArcFileName` via `DEFINE_HOOK`; **zero receiver changes, no `settings.cpp` leg, no receiver TU.** **Prelaunch REVERSED:** the earlier "visible-but-optional field" is a receiver UX leg — instead a quiet config key + the 19c load-time gate refusing legibly (log/ui/overlay). **Before committing the seam (Foundry / 19a–19b):** confirm `wwRoom_aliasArcFileName` is reachable as a hook target (not file-local / ICF-folded). **Read L2a + the reversed-prelaunch note first:** [ttw-methods-review.md](WW%20Linked/ttw-methods-review.md) Band-0 L-series table — **L2a row (line 241)**, **prelaunch reversal (line 248)**; ferried as **bus §670**.
+
+> **✅ BUILT 2026-08-10 per L2a — see bus §671.** Plugin `mods-src/ww_donor_disc/`
+> (`wwDonorDisc`), zero receiver changes, R3 boot+fst roster gate wired, all gates green,
+> ON-ROSTER verified against the user's image by an independent Python implementation.
+> The steps below are the SUPERSEDED receiver-side design — kept for the decision record
+> only. **PLAYTESTS A+B PASSED 2026-08-10; staged donor arcs RETIRED** (moved to the mod
+> folder's `_retired_staged_donor/`, all 103 verified byte-identical to the roster first).
+> **Step 6 CORRECTION:** there is NO camtype.dat on the WW disc — that file is a TP-ism.
+> The donor's camera type table is compiled-in source data (`d/d_cam_type.cpp` in the
+> decomp), so the type/style data ports as WW-layer code like CRAWL did; the disc reader
+> has no role in the camera work. See bus §672.
+
+> **⤷ FINAL — row-14 ruling (user 2026-08-11 · bus §711 · Librarian supersession stamp).** The
+> WW-named `wwIsoPath` receiver-leg in the steps below is **WITHDRAWN**. Landed design =
+> **`backend.extraIsoPath`** — a **generic, WW-agnostic** host field in `settings.h`/`settings.cpp`
+> that the plugin **consumes** (HOST KEY WINS; the mod-scoped var demoted to dev fallback). This
+> **RECONCILES** the §670 reversal rather than reversing it: the reversal objected to a *WW-named*
+> receiver leg, and a generic donor/extra-disc field has no WW in its name (must not contain `ww`).
+> **Prelaunch surfacing = a named Engine follow-on** (visible-but-optional row, its own focused
+> pass), not built here. Build = Engine.
 
 **Decision:** the mod already requires the user's own TP disc, so requiring their own **WW
 disc** adds no burden — and it means dusklight ships and stages **zero** donor bytes.

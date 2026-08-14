@@ -97,6 +97,8 @@ static const char* bossDisplayName(s16 profName) {
 #endif
     case fpcNm_NPC_KN_e:
         return "Hero of Time";  // the combat Hero's Shade
+    case fpcNm_B_ZANT_e:
+        return "Usurper King Zant";
     default:
         return NULL;
     }
@@ -203,6 +205,12 @@ void dAlbwBossHpHud_draw() {
         } else if (dShadeBoss_queryHealthBar(&sCur, &sMax) && sMax > 0 && sCur > 0) {
             fillRatio = static_cast<f32>(sCur) / static_cast<f32>(sMax);
             name = bossDisplayName(fpcNm_NPC_KN_e);
+        } else if (dAlbwBoss_zantQueryHealthBar(&sCur, &sMax) && sMax > 0 && sCur > 0) {
+            // ============================================
+            // NEW CODE — ALBW Port (Zant per-phase bar; see dAlbwBoss_zantQueryHealthBar)
+            // ============================================
+            fillRatio = static_cast<f32>(sCur) / static_cast<f32>(sMax);
+            name = bossDisplayName(fpcNm_B_ZANT_e);
         }
     }
 

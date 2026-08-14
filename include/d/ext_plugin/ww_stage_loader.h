@@ -38,4 +38,19 @@ struct dStage_dt_c;
 // that carries no donor lighting chunks.
 void dExtWwStage_loadStageDzs(void* i_data, dStage_dt_c* i_stage);
 
+// ============================================================================
+// §888 WW STORY-LAYER SELECTION (ww_layer_select.cpp) — donor
+// dComIfG_play_c::getLayerNo verbatim on WW-owned reads. Consumed by the
+// d_stage layer loaders on WW host stages ONLY; TP stages keep TP's own.
+// ============================================================================
+int dExtWw_getLayerNo(int i_roomNo);
+
+// ============================================================================
+// §901 WW ARRIVAL-EVENT NAMES (ww_event_names.cpp) — donor
+// dEvent_exception_c::getEventName's special-index table, verbatim. NULL means
+// "not a WW arrival id" (see the TU's contract note). Consumed by
+// dEvent_exception_c::getEventName on WW host stages ONLY.
+// ============================================================================
+const char* dExtWwEvt_getArrivalEventName(int i_eventInfoIdx);
+
 #endif

@@ -1179,6 +1179,19 @@ extern actor_process_profile_definition DUSK_CONST g_profile_WW_DEMO00;  // §27
 extern actor_process_profile_definition g_profile_LAMP;         // §327 WW wall/loft lamp direct port
 extern actor_process_profile_definition g_profile_Obj_Mshokki;  // §327 WW tableware (MPot/MOsara/MKoppu) direct port
 extern actor_process_profile_definition g_profile_SPC_ITEM01;   // §327 WW wall shield / SPitem quest object direct port
+extern actor_process_profile_definition g_profile_WW_ITEM;      // §741 WW field item actor (full dItem_data port)
+extern actor_process_profile_definition g_profile_EXT_EP;       // §394 WW bonbori (donor d_a_ep Type 1); registered §781
+extern actor_process_profile_definition g_profile_WW_SHUTTER;   // transition family port #1 (donor d_a_shutter, Htobi1/2)
+extern actor_process_profile_definition g_profile_WW_SHUTTER2;  // transition family port #1b (donor d_a_shutter2, Htobi3)
+extern actor_process_profile_definition g_profile_WW_TSUBO;     // interior furniture port (donor d_a_tsubo, 16 subtypes / 12 names)
+extern actor_process_profile_definition g_profile_NPC_JB1;      // Jabun (donor d_a_npc_jb1; §813 order slot 2)
+extern actor_process_profile_definition g_profile_Obj_Shelf;    // wooden shelf (donor d_a_obj_shelf; §817-2 solid MoveBG)
+extern actor_process_profile_definition g_profile_Obj_Paper;    // readable props Opaper/Ppos/Piwa (donor d_a_obj_paper; §837)
+extern actor_process_profile_definition g_profile_Obj_Plant;    // potted plant (donor d_a_obj_plant; §837)
+extern actor_process_profile_definition g_profile_Lwood;        // MoveBG palm tree (donor d_a_lwood; §862)
+extern actor_process_profile_definition g_profile_NPC_P1;       // pirates Gonzo/Senza/Nudge (donor d_a_npc_p1; §858)
+extern actor_process_profile_definition g_profile_TAG_KB_ITEM;  // pig dig-item tag (donor d_a_tag_kb_item; §864)
+extern actor_process_profile_definition g_profile_TAG_SO;       // NpcSo zone tag (donor d_a_tag_so; §871)
 extern actor_process_profile_definition DUSK_CONST g_profile_NPC_HANJO;
 extern actor_process_profile_definition DUSK_CONST g_profile_NPC_HENNA0;
 extern actor_process_profile_definition DUSK_CONST g_profile_NPC_HOZ;

@@ -62,6 +62,8 @@
 // ============================================================================
 #include "d/ext_plugin/ww_cam_crawl.h"
 
+#include "dusk/logging.h"  // socket-visit log (extra-engine sockets 21-27)
+
 #include "d/d_camera.h"
 #include "d/d_cam_param.h"
 #include "d/d_com_inf_game.h"
@@ -320,6 +322,22 @@ static bool wwCam_crawlCamera(dCamera_c* i_cam, s32 i_style, int /* i_alg */) {
 static bool wwCam_extraEngine(dCamera_c* i_cam, s32 i_style, int i_alg) {
     if (i_alg == WW_CAM_ALG_CRAWL) {
         return wwCam_crawlCamera(i_cam, i_style, i_alg);
+    }
+    // ========================================================================
+    // Sockets 21-27: donor algorithms with data but no port yet (HUNG=21,
+    // TORNADO=22, VOMIT=23, SHIELD=24, NON_OWNER=25, FOLLOW2=26, DEMO=27 —
+    // see ww_cam_data.inc). Declining runs no algorithm — strictly the
+    // receiver's own out-of-range behavior — but a silent decline would read
+    // as "nothing selects these"; visits are the porting queue, so say so.
+    // ========================================================================
+    if (i_alg >= 21 && i_alg <= 27) {
+        static u32 s_socketVisits[7];
+        const int slot = i_alg - 21;
+        if (s_socketVisits[slot]++ == 0) {
+            DuskLog.warn("[WwCamCrawl] extra-engine SOCKET {} visited (style {}) — donor "
+                         "algorithm unported; camera holds last frame",
+                         i_alg, i_style);
+        }
     }
     return false;
 }

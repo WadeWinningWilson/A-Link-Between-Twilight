@@ -2889,7 +2889,31 @@ inline int dComIfGp_evmng_getIsAddvance(int i_staffId) {
     return dComIfGp_getPEvtManager()->getIsAddvance(i_staffId);
 }
 
+// §717 H1 probe: out-of-line reporter for the §713c guard (defined in
+// d_event.cpp — receiver TU, present in every build configuration).
+void dEvtFork_guardReport(int i_staffId);
+
 inline int dComIfGp_evmng_getMyActIdx(int i_staffId, DUSK_CONST char* DUSK_CONST* i_actions, int i_actionNum, BOOL param_3, BOOL param_4) {
+    // ========================================================================
+    // §713c (WAVE-1 row 16, History's above-the-fork requirement): TEARDOWN
+    // GUARD ABOVE THE STACK FORK. Both managers below walk the SAME
+    // dEvDtBase_c staff structures, and an actor still in its demo action can
+    // query after its event ended and the base was torn down (the knob00
+    // fault at staff+0x218 — №283/№285 lifetime family, game-agnostic). One
+    // liveness test here covers BOTH stacks for EVERY demo actor; each
+    // dialect keeps its own no-match contract (WW -1, TP 0).
+    // ========================================================================
+    {
+        dEvDtBase_c& base = dComIfGp_getEventManager().getBase();
+        if (base.getStaffP() == NULL || base.getHeaderP() == NULL) {
+            // §717 H1: this return was SILENT — if it fires DURING an event
+            // (type set, staff not yet built / BASE_NULL selected) it kills
+            // every cut invisibly. The report is out-of-line (d_event.cpp) and
+            // one-shots the full discriminator tuple.
+            dEvtFork_guardReport(i_staffId);
+            return JEvent1::evt1_isActive() ? -1 : 0;
+        }
+    }
     // §423 A4: the WW manager's no-match contract is -1; TP's is 0. Each game
     // now gets its own, so §295's gate in d_event_manager.cpp has nothing left
     // to do (deletes at A5/A6).

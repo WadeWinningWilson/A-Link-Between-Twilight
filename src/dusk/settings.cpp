@@ -250,6 +250,8 @@ UserSettings g_userSettings = {
         .enableAdvancedSettings {"backend.enableAdvancedSettings", false},
         // Level Editor (Phase 1) — off by default; opt-in via advanced settings.
         .enableLevelEditor {"backend.enableLevelEditor", false},
+        // Optional additional disc image — generic; consumed by extensions only.
+        .extraIsoPath {"backend.extraIsoPath", ""},
     },
 
     // Not sure if there's a better way to declare this
@@ -538,6 +540,7 @@ void registerSettings() {
     Register(g_userSettings.backend.cardFileType);
     Register(g_userSettings.backend.enableAdvancedSettings);
     Register(g_userSettings.backend.enableLevelEditor);
+    Register(g_userSettings.backend.extraIsoPath);
 
     Register(g_userSettings.actionBindings.firstPersonCamera[0]);
     Register(g_userSettings.actionBindings.firstPersonCamera[1]);

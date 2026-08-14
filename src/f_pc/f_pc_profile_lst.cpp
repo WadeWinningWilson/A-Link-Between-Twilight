@@ -1658,5 +1658,27 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     // §329 Actor-Kit: index MUST match fpcNm_OBJ_OTBLE_e (0x32F).
     NULL,  // step 19: WW-owned, served by dWwProfileRegister_lookup (was &g_profile_OBJ_OTBLE)
     NULL,
+    // §741: index MUST match fpcNm_WW_ITEM_e (0x331). BORN RELINQUISHED (P5
+    // Ruling 3's end state): a plugin-era port profile never enters this
+    // table; dWwProfileRegister_lookup is its sole source from birth.
+    NULL,
+    // §793: 0x332 WW_SHUTTER / 0x333 WW_SHUTTER2 — born relinquished, same rule.
+    NULL,
+    NULL,
+    // §805: 0x334 WW_TSUBO — born relinquished, same rule.
+    NULL,
+    // §822: 0x335 NPC_JB1 — born relinquished, same rule.
+    NULL,
+    // §835: 0x336 Obj_Shelf — born relinquished, same rule.
+    NULL,
+    // §837: 0x337 Obj_Paper / 0x338 Obj_Plant — born relinquished, same rule.
+    NULL,
+    NULL,
+    // §877: 0x339 Lwood / 0x33A NPC_P1 / 0x33B TAG_KB_ITEM / 0x33C TAG_SO —
+    // born relinquished, same rule.
+    NULL,
+    NULL,
+    NULL,
+    NULL,
 };
 #endif

@@ -740,6 +740,22 @@ if (TARGET crashpad_handler)
     )
 endif ()
 
+# =============================================================================
+# FORK-LOCAL WW PLUGIN BUILD (L2/L2a — never pushed; see NEVER-PUSH-STRIP-SET).
+#
+# In-tree build of the donor-disc reader plugin so one normal build drops the
+# .dusk into ${CMAKE_BINARY_DIR}/mods — the loader's "mods next to the app"
+# search dir. Services-only mod: nothing links into the exe, files.cmake is
+# untouched, and the DUSK_EXCLUDE_WW gate build never configures it, so the
+# separability gate's tree stays WW-plugin-free too.
+# =============================================================================
+if (DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID
+        AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mods-src/ww_donor_disc/CMakeLists.txt")
+    include(cmake/GameABIConfig.cmake)  # include_guard'd; no-op when already present
+    include(cmake/ModSDK.cmake)
+    add_subdirectory(mods-src/ww_donor_disc)
+endif ()
+
 if (ANDROID)
     # SDLActivity loads SDL_main via dlsym on Android. Since aurora::main is a static
     # archive, force an undefined reference so the linker keeps the SDL_main object.

@@ -5605,6 +5605,9 @@ int daAlink_c::create() {
 
     dComIfGs_setRestartRoom(current.pos, shape_angle.y, getStartRoomNo());
     field_0x3780 = current.pos;
+    // tale §818: §796's per-actor roof-clamp opt-out RETIRED — the WW-host
+    // skip now lives at the source (dBgS_Acch::GroundCheck, one mechanism for
+    // every acch user: player, pots, props). Vanilla clear restored.
     mLinkAcch.ClrGndThinCellingOff();
 
     int bg_roomId = dComIfG_Bgsp().GetRoomId(mLinkAcch.m_gnd);
@@ -14823,6 +14826,44 @@ BOOL daAlink_c::checkRestartRoom() {
                              "pos=({}, {}, {}) waterY={} att1={}",
                              (int)mGroundCode, mLinkAcch.GetGroundH(), current.pos.x,
                              current.pos.y, current.pos.z, mWaterY, (int)mGndPolyAtt1);
+                // ============================================================
+                // tale §780 (§771 zero-clearance discriminator): the player's
+                // own ground resolve just MISSED here, while the §757 probe's
+                // plain +500 GndChk HIT the same column. Fire THREE diagnostic
+                // casts at this exact moment and position — the split names
+                // the failing parameter class in one run:
+                //   A plain dBgS_GndChk, +500       (probe semantics — expected HIT)
+                //   B plain dBgS_GndChk, +30        (low start, the acch window class)
+                //   C dBgS_LinkGndChk,   +500       (the PLAYER'S flag class — Link
+                //                                    pass-flags skip Link-through polys)
+                // A hit + B miss = start-height class (§771 proper).
+                // A hit + C miss = LINK pass-flag class (the §654 clear missed a bit).
+                // A miss         = the bg died SINCE Regist (lifetime).
+                // WW-host-scoped; rides the same 12-shot budget. DN-10-clean.
+                // ============================================================
+                const char* sn780 = dComIfGp_getStartStageName();
+                if (sn780 != NULL && dExtWwSave_isWwHostStage(sn780)) {
+                    dBgS_GndChk chkA;
+                    cXyz pA(current.pos.x, current.pos.y + 500.0f, current.pos.z);
+                    chkA.SetPos(&pA);
+                    const f32 hA = dComIfG_Bgsp().GroundCross(&chkA);
+                    dBgS_GndChk chkB;
+                    cXyz pB(current.pos.x, current.pos.y + 30.0f, current.pos.z);
+                    chkB.SetPos(&pB);
+                    const f32 hB = dComIfG_Bgsp().GroundCross(&chkB);
+                    dBgS_LinkGndChk chkC;
+                    chkC.SetPos(&pA);
+                    const f32 hC = dComIfG_Bgsp().GroundCross(&chkC);
+                    // tale §791/§792: acchFlags is the direct receipt — GRND_NONE
+                    // (0x2) or LINE_CHECK_NONE (0x4000) set here = the truncated
+                    // door/entrance proc's latch, №269's ground-flavor sibling.
+                    DuskLog.warn("[ExtSpan] §780 tri-cast @({:.0f},{:.0f},{:.0f}): "
+                                 "A(+500 plain)={} B(+30 plain)={} C(+500 Link)={} acch={:#x}",
+                                 current.pos.x, current.pos.y, current.pos.z,
+                                 hA <= -1e9f ? -99999.0f : hA, hB <= -1e9f ? -99999.0f : hB,
+                                 hC <= -1e9f ? -99999.0f : hC,
+                                 (unsigned)mLinkAcch.GetFlags());
+                }
             }
         }
         BOOL temp_r28 = mWaterY > mLinkAcch.GetGroundH();
@@ -15041,12 +15082,37 @@ int daAlink_c::checkSceneChange(int i_exitID) {
             exit_mode = 0;
         }
 
-        if (eventInfo.checkCommandDoor()
+        BOOL gateOpen798 = eventInfo.checkCommandDoor()
             || mProcID == PROC_WARP
             || mProcID == PROC_WOLF_DIG
             || mProcID == PROC_WOLF_DIG_THROUGH
             || field_0x3106 != 0
-            || dComIfGp_event_compulsory(this, NULL, -1))
+            || dComIfGp_event_compulsory(this, NULL, -1);
+#if TARGET_PC
+        // ====================================================================
+        // tale §798 — INTERIOR EXIT GATE RECEIPT: the walk-out at Ojhous
+        // grounded on the exit pad (exit id 0 valid, outer condition passed)
+        // and never warped — this gate is the last decision before
+        // dStage_changeSceneExitId, and the donor carries the same shape
+        // (checkCommandDoor OR compulsory, WW DP player_main:10814). When it
+        // DENIES a real exit on a WW host, log the inputs — the failing one
+        // names the fix. One-shot-ish, WW-scoped, sight only.
+        // ====================================================================
+        if (!gateOpen798 && i_exitID != 0x3F) {
+            static int s_g798 = 0;
+            const char* sn798 = dComIfGp_getStartStageName();
+            if (s_g798 < 8 && sn798 != NULL && dExtWwSave_isWwHostStage(sn798)) {
+                s_g798++;
+                DuskLog.warn("[ExtSpan] §798 exit gate DENIED: exitID={} cmdDoor={} proc={} "
+                             "f3106={} compulsory={} evtStatus-ish(runEvt)='{}'",
+                             i_exitID, eventInfo.checkCommandDoor() ? 1 : 0, (int)mProcID,
+                             (int)field_0x3106,
+                             dComIfGp_event_compulsory(this, NULL, -1) ? 1 : 0,
+                             dComIfGp_getEventManager().getRunEventName());
+            }
+        }
+#endif
+        if (gateOpen798)
         {
             BOOL isScnChange = false;
 

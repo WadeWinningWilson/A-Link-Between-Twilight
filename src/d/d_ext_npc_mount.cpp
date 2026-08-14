@@ -86,6 +86,7 @@
 #include "m_Do/m_Do_ext.h"
 #include "m_Do/m_Do_lib.h"
 #include "m_Do/m_Do_controller_pad.h"
+#include "f_op/f_op_overlap_mng.h"  // tale §898 ovlp-peek field in the control-owner bundle
 #include "m_Do/m_Do_graphic.h"
 #include "JSystem/JFramework/JFWDisplay.h"  // §358 JUT fader status in gap
 #include "JSystem/JUtility/JUTFader.h"
@@ -178,6 +179,9 @@ std::unordered_map<std::string, J3DModelData*> s_modelDataCache;
 // same member (plain ko.bdl for Zill, then ko.bdl+ko02.bmt for Joel) AVs. Keep a pristine
 // copy of each J3D2 blob before the first load and re-parse BMT variants from that.
 std::unordered_map<std::string, std::vector<u8>> s_pristineJ3dRaw;
+// tale §773: keys acquired via the STAGE path (positional room-arc names) —
+// evicted at stage change; see dExtNpcMount_dropStageScopedModels.
+std::set<std::string> s_stageScopedModelKeys;
 // ============================================================================
 // №263 — the KOISI exit crash (J3D re-parse of a pointer-fixed buffer).
 // ============================================================================
@@ -2500,6 +2504,75 @@ static void releaseArcModels(const char* arc, const char* reason, fopAc_ac_c* dy
     purgeModelCacheForArc(arc);
 }
 
+// ============================================================================
+// tale §792 — L2C DUMP HOOK (Engine's half of Foundry's equivalence harness).
+// Behind DUSK_L2C_DUMP=1 (env, default off): for each J3D2 model the resolver
+// consumes, write the RUNTIME-ADAPTED byte form to
+//   %APPDATA%/TwilitRealm/Dusklight/l2c_dump/<Arc>__<member>.bdl
+// "Adapted" = the same transform the retired offline baker applied and the
+// PC parser effectively performs (bdl4: MDL3 section removed, magic2 ->
+// 'bmd3', sectionCount-1, fileSize adjusted; bmd passes through verbatim) —
+// applied to a THROWAWAY COPY. The game never consumes these bytes; the
+// harness (l2c_equiv.py) diffs them against the retired references to prove
+// disc + runtime == bake, which retires the bake with a proof. Instrument
+// only: no donor byte is modified in place, nothing changes when the env var
+// is absent.
+// ============================================================================
+static void l2cDumpAdapted(const char* arc, const char* member, const void* res) {
+    static int s_enabled = -1;
+    if (s_enabled == -1) {
+        const char* e = std::getenv("DUSK_L2C_DUMP");
+        s_enabled = (e != NULL && e[0] == '1') ? 1 : 0;
+    }
+    if (s_enabled != 1 || res == NULL || arc == NULL || member == NULL) {
+        return;
+    }
+    const u8* b = (const u8*)res;
+    if (std::memcmp(b, "J3D2", 4) != 0) {
+        return;
+    }
+    const u32 fileSize = ((u32)b[8] << 24) | ((u32)b[9] << 16) | ((u32)b[10] << 8) | (u32)b[11];
+    const u32 secCount = ((u32)b[12] << 24) | ((u32)b[13] << 16) | ((u32)b[14] << 8) | (u32)b[15];
+    if (fileSize < 0x20 || fileSize > 64u * 1024 * 1024 || secCount == 0 || secCount > 64) {
+        return;
+    }
+    std::vector<u8> out(b, b + fileSize);
+    if (std::memcmp(b + 4, "bdl4", 4) == 0) {
+        u32 off = 0x20;
+        for (u32 s = 0; s < secCount && off + 8 <= out.size(); s++) {
+            const u32 secSize = ((u32)out[off + 4] << 24) | ((u32)out[off + 5] << 16) |
+                                ((u32)out[off + 6] << 8) | (u32)out[off + 7];
+            if (secSize < 8 || off + secSize > out.size()) {
+                break;
+            }
+            if (std::memcmp(&out[off], "MDL3", 4) == 0) {
+                out.erase(out.begin() + off, out.begin() + off + secSize);
+                const u32 newSize = (u32)out.size();
+                out[8] = (u8)(newSize >> 24); out[9] = (u8)(newSize >> 16);
+                out[10] = (u8)(newSize >> 8); out[11] = (u8)newSize;
+                const u32 newCount = secCount - 1;
+                out[12] = (u8)(newCount >> 24); out[13] = (u8)(newCount >> 16);
+                out[14] = (u8)(newCount >> 8); out[15] = (u8)newCount;
+                std::memcpy(&out[4], "bmd3", 4);
+                break;
+            }
+            off += secSize;
+        }
+    }
+    std::error_code ec;
+    const std::filesystem::path dir = dusk::ConfigPath / "l2c_dump";
+    std::filesystem::create_directories(dir, ec);
+    const std::filesystem::path file =
+        dir / (std::string(arc) + "__" + member);
+    std::ofstream os(file, std::ios::binary | std::ios::trunc);
+    if (os) {
+        os.write((const char*)out.data(), (std::streamsize)out.size());
+        DuskLog.info("[ExtNpcMount] §792 l2c_dump wrote {} ({} bytes{})",
+                     file.filename().string(), (int)out.size(),
+                     std::memcmp(b + 4, "bdl4", 4) == 0 ? ", MDL3-adapted" : "");
+    }
+}
+
 // GameHeap-pin + arc-scoped cache. Never mutates dRes slots; safe for N concurrent mounts.
 // №26 F3: publish-on-success only; track keys for abort eviction.
 // №50-C: optional body_bmt is part of the cache key so ko.bdl+ko02.bmt never poisons plain ko.bdl.
@@ -2598,8 +2671,9 @@ J3DModelData* acquireMountedModel(const char* arc, const char* modelName, void* 
         // №263: parse a fresh pristine copy, never the shared dRes buffer —
         // a purged-then-recreated mount would otherwise re-parse a
         // pointer-fixed resident buffer (the KOISI exit crash).
-        data = resolveMountedModelUncached(
-            mountPristineParseSrc(std::string(arc) + "/" + modelName, res));
+        void* parseSrc = mountPristineParseSrc(std::string(arc) + "/" + modelName, res);
+        l2cDumpAdapted(arc, modelName, parseSrc);  // tale §792 — instrument only
+        data = resolveMountedModelUncached(parseSrc);
     }
     if (prevHeap != NULL) {
         mDoExt_setCurrentHeap(prevHeap);
@@ -3076,13 +3150,25 @@ static void wwSkyFeedEnvFromStageVrbox() {
         return;
     }
 
-    int room = g_env_light.UseCol;
-    if (room < 0) {
-        room = dComIfGp_roomControl_getStayNo();
+    // ========================================================================
+    // §685: palette room = the STAY room, LATCHED — never UseCol.
+    //
+    // UseCol is per-DRAW scratch: settingTevStruct stamps every drawn
+    // object's room into it (d_kankyo.cpp:3191/3196), so by feed time it
+    // holds whatever room the renderer touched LAST — on a 50-room sea with
+    // 50 EnvR palettes that is a function of CAMERA ANGLE. Receipt: the sky
+    // flipping blue/pink/purple at the same hour, one degree of pan apart
+    // (adjacent sea rooms' palettes). TP never sees this because its stages
+    // hold few rooms with near-identical palettes. The donor keys sky
+    // palettes to the PLAYER'S room; the stay latch is that room, and
+    // latching the last valid value also rides out the airborne -1 flicker.
+    // ========================================================================
+    static int s_paletteRoom = 0;
+    const int stayNo = dComIfGp_roomControl_getStayNo();
+    if (stayNo >= 0) {
+        s_paletteRoom = stayNo;
     }
-    if (room < 0) {
-        room = 0;
-    }
+    int room = s_paletteRoom;
 
     stage_envr_info_class* envr = &g_env_light.stage_envr_info[room];
     u8 weather = g_env_light.wether_pat0;
@@ -3632,6 +3718,26 @@ void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag) {
     if (bgd == NULL) {
         return;
     }
+#if TARGET_PC
+    // tale §759 (provenance, tale §757's assignment 1): the baked overlay
+    // LinkRM.arc differs from the disc at offset 7953 (inside the Ti table).
+    // Log the raw 16-byte window at 7952 BEFORE any repack write — one line
+    // decides disc-vs-baked for the buffer the ENGINE actually consumes.
+    // Disc ti[0] inf0=0x0fffebff; the bake differs in this window.
+    {
+        static int s_prov759 = 0;
+        const u8* raw759 = (const u8*)bgd;
+        if (s_prov759 < 4 && bgd->m_ti_num == 30) {  // LinkRM room.dzb signature
+            s_prov759++;
+            char hex[16 * 2 + 1] = {};
+            for (int b = 0; b < 16; b++) {
+                std::snprintf(hex + b * 2, 3, "%02x", raw759[7952 + b]);
+            }
+            DuskLog.warn("[ExtWw] §759 provenance '{}' bytes@7952 = {}", tag != NULL ? tag : "?",
+                         hex);
+        }
+    }
+#endif
     int standable = 0, slip = 0;
     int through = 0;
     for (int i = 0; i < bgd->m_ti_num; i++) {
@@ -3662,7 +3768,26 @@ void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag) {
             const u32 inf0 = bgd->m_ti_tbl[i].m_info0;
             const u32 cleared = inf0 & ~0x00FFC000u;
             if (cleared != inf0) {
-                bgd->m_ti_tbl[i].m_info0 = cleared;
+                // =============================================================
+                // §729 EXIT-ID RE-HOME (the door-warp gap, §728): WW packs the
+                // poly EXIT ID at inf0 bits 13-18 (donor GetExitId, mask
+                // 0x0007E000>>13, d_bg_s.cpp:109; sentinel 0x3F = none —
+                // player_main:10778) while the receiver reads bits 0-5
+                // (dBgW::GetExitId, mask 0x3F<<0). §654's through-clear was
+                // WIPING bits 14-18 of the donor id every load. Extract BEFORE
+                // the clear, re-home to the receiver position (value map is
+                // IDENTITY incl. the 0x3F sentinel), clear the donor position
+                // so the write is idempotent (second pass: cleared==inf0 →
+                // no rewrite → the re-homed id at 0-5 persists). With SCLS
+                // translated (§691) the receiver's own exit machinery
+                // (dStage_changeSceneExitId → SCLS row → setNextStage) now
+                // has real inputs on WW host rooms — the donor's own warp
+                // moment, no seam.
+                // =============================================================
+                const u32 wwExit = (inf0 >> 13) & 0x3F;
+                u32 out0 = cleared & ~(0x0000003Fu | (1u << 13));
+                out0 |= wwExit;
+                bgd->m_ti_tbl[i].m_info0 = out0;
                 ++through;
             }
         }
@@ -3697,9 +3822,13 @@ void dExtWw_repackDzbAttributes(cBgD_t* bgd, const char* tag) {
         }
         bgd->m_ti_tbl[i].m_info1 = out;
     }
+    // §752-era label fix (Foundry, routed): m_ti_num is the attribute-INFO
+    // record count, NOT triangles — m_t_num is. Print both, each named, so
+    // the two can never be conflated again in a reading.
     DuskLog.info("[ExtWw] §334 dzb attribute repack '{}': {} standable, {} slip, "
-                 "{} through-cleared (§654) ({} tris)",
-                 tag != NULL ? tag : "?", standable, slip, through, (int)bgd->m_ti_num);
+                 "{} through-cleared (§654) ({} attr-info records, {} tris)",
+                 tag != NULL ? tag : "?", standable, slip, through,
+                 (int)bgd->m_ti_num, (int)bgd->m_t_num);
     // §334d WRITE-VERIFY: this is the first code path that WRITES through the
     // OFFSET_PTR+BE(u32) wrappers — §337's "repacked-but-still-WW-bits" reads
     // suggest the store may not land. Read entry 0 back and log the stored
@@ -3738,7 +3867,25 @@ void dExtWw_pollGroundAttrProbe() {
     pos.y += 50.0f;
     chk.SetPos(&pos);
     if (dComIfG_Bgsp().GroundCross(&chk) == -G_CM3D_F_INF) {
-        return;  // no ground under Link
+        // ====================================================================
+        // tale §749 Finding-3 INVERSION (Foundry, instrument-only): this early
+        // return made the probe BLIND to the exact condition it exists to
+        // diagnose — no ground under Link IS the fall-through symptom, and a
+        // check that cannot fail is not a control (§31-C). WARN with position
+        // and the last resolved ground owner, rate-limited like the rest of
+        // the probe, then return.
+        // ====================================================================
+        static int s_noGnd = 0;
+        static const char* s_lastArc = "?";
+        static const char* s_lastCol = "?";
+        if ((s_noGnd++ % 15) == 0) {
+            DuskLog.warn("[§334c] NO GROUND under Link at ({:.0f},{:.0f},{:.0f}) "
+                         "stage='{}' — last resolved ground owner arc='{}' col='{}' "
+                         "(n={})",
+                         pos.x, pos.y, pos.z, dComIfGp_getStartStageName(),
+                         s_lastArc, s_lastCol, s_noGnd);
+        }
+        return;
     }
     const int att0 = dComIfG_Bgsp().GetPolyAtt0(chk);
     const int att1 = dComIfG_Bgsp().GetPolyAtt1(chk);
@@ -4355,6 +4502,29 @@ J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelNa
 }
 
 // ============================================================================
+// §811: BY-INDEX form of the acquirer — DN-3's consume-time route for donor
+// actors that resolve models by RES INDEX (the tsubo family's own idiom:
+// dComIfG_getObjectRes(M_arcname[type], data().m6C)). Same parse-from-
+// pristine-copy + session cache as the name form; the synthetic "idx#N" name
+// is only the cache/pristine identity (stable per arc+index — an arc's index
+// space is fixed), never a filename the parse depends on. Exists so ported
+// donor code keeps its own resolve shape verbatim (option (a) of the DN-3
+// crash call; option (b)'s second mapping table rejected as drift-prone).
+// ============================================================================
+J3DModelData* dExtNpcMount_acquireModelDataByIndex(const char* arc, int resIndex) {
+    if (arc == NULL || arc[0] == '\0' || resIndex < 0) {
+        return NULL;
+    }
+    void* res = dComIfG_getObjectRes(arc, resIndex);
+    if (res == NULL) {
+        return NULL;
+    }
+    char idxName[24];
+    std::snprintf(idxName, sizeof(idxName), "idx#%d", resIndex);
+    return acquireMountedModel(arc, idxName, res);
+}
+
+// ============================================================================
 // §630: stage-res sibling of the above, for donor ROOM arcs staged byte-identical.
 //
 // A vanilla WW room arc files its models under RARC node type 'BDL '.
@@ -4380,6 +4550,21 @@ J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* mo
     if (res == NULL) {
         return NULL;
     }
+    // ========================================================================
+    // tale §773 (the cache LAW, superseding §772's key-widening direction):
+    // room arc names are POSITIONS, not identities ('R00_00' = "room 0 of
+    // whatever stage is loaded"), and the engine ALREADY resolves stage
+    // identity — getStageRes only ever holds the current stage's archives and
+    // drops them at stage change. The defect was LIFETIME: this cache
+    // outlived the scope in which its key is unique, so LinkRM's parsed
+    // R00_00/model.bdl was served into Ojhous's res slot (the wrong-room
+    // render, tale §772). Fix = match the engine's lifecycle: every key
+    // acquired through THIS stage-path is recorded, and
+    // dExtNpcMount_dropStageScopedModels() evicts them at the next WW stage
+    // load. The key stays narrow; no invented differentiators (user ruling,
+    // tale §773).
+    // ========================================================================
+    s_stageScopedModelKeys.insert(std::string(arc) + "/" + modelName);
     // §427 cache-namespace probe, same order as the object path.
     {
         const std::string bgKey = std::string("bg:") + arc + "/" + modelName;
@@ -4389,6 +4574,31 @@ J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* mo
         }
     }
     return acquireMountedModel(arc, modelName, res);
+}
+
+// ============================================================================
+// tale §773: the stage-path cache eviction — called at WW stage.dzs load (the
+// receiver's own stage-resource lifecycle moment). Cache ENTRIES are dropped
+// so a stale parsed model can never be served across stages; the parsed data
+// itself is intentionally not freed here (published res slots from the OLD
+// stage die with the stage; reclamation of the backing copies is a named
+// follow-up — correctness first, memory second).
+// ============================================================================
+void dExtNpcMount_dropStageScopedModels(const char* i_reason) {
+    if (s_stageScopedModelKeys.empty()) {
+        return;
+    }
+    int dropped = 0;
+    for (const std::string& key : s_stageScopedModelKeys) {
+        dropped += (int)s_modelDataCache.erase("bg:" + key);
+        dropped += (int)s_modelDataCache.erase(key);
+        s_pristineJ3dRaw.erase(key);
+    }
+    DuskLog.info("[ExtNpcMount] §773 stage-scoped model cache dropped: {} entr(ies), {} key(s) "
+                 "({})",
+                 dropped, (int)s_stageScopedModelKeys.size(),
+                 i_reason != NULL ? i_reason : "stage change");
+    s_stageScopedModelKeys.clear();
 }
 
 // §229: same as above but bakes a body BMT (color/material swap) into the model at
@@ -6302,9 +6512,14 @@ static void dExtWw_wireFadoCrossing(const char* stage) {
             DuskLog.info("[ExtWw] §46 Fado door unlocked (save-scoped)");
         }
         if (!dFadoDoor_hasWarpCommand()) {
-            // Outset exterior host: F_DL01 room 44, the stage No.107 built.
-            dFadoDoor_setWarpCommand("F_DL01", 44, 0, -1, -1);
-            DuskLog.info("[ExtWw] §46 Fado warp command -> F_DL01 room 44 spawn 0");
+            // ================================================================
+            // tale §835 (row 21 names, tale §831): fork name retired. The door
+            // now targets the NATIVE disc-served donor stage — sea room 44 is
+            // Outset (zero-bake whole-stage adoption); spawn ids are the
+            // donor's own, so spawn 0 is the same PLYR row the fork copy had.
+            // ================================================================
+            dFadoDoor_setWarpCommand("sea", 44, 0, -1, -1);
+            DuskLog.info("[ExtWw] §46 Fado warp command -> sea room 44 spawn 0 (native disc)");
         }
     }
 }
@@ -7167,21 +7382,36 @@ void dExtWw_pollDemoMessage() {
     }
     // §317 — trace Link for ~2s AFTER the demo ends, to catch a late teardown snap to the
     // point-200 door spawn (vs holding the demo's final platform transform). Diagnostic only.
+    // ========================================================================
+    // tale §898 (CALLS row 68, control-loss disambiguation): window widened to
+    // 600f and each sample now carries the CONTROL-OWNER BUNDLE on the SAME
+    // frame as the position — stick input vs speedF splits "player walking"
+    // from "moved by something else"; demoMode/doorLock/evtMode/ovlp name the
+    // holder when input is dead. Sight-only; NEVER-PUSH-STRIP-SET registry.
+    // ========================================================================
     {
         static int s_postEnd = 0;
         static bool s_wasRun2 = false;
         const bool run2 = dComIfGp_event_runCheck() != 0;
         if (s_wasRun2 && !run2) {
-            s_postEnd = 120;
+            s_postEnd = 600;
         }
         s_wasRun2 = run2;
         if (s_postEnd > 0 && dExtWwSave_isWwHostStage(dComIfGp_getStartStageName())) {
             --s_postEnd;
             fopAc_ac_c* pl = dComIfGp_getPlayer(0);
             if (pl != NULL && (s_postEnd % 15) == 0) {
-                DuskLog.info("[ExtWw] §317 post-end +{}f Link pos=({:.0f},{:.0f},{:.0f})",
-                             120 - s_postEnd, pl->current.pos.x, pl->current.pos.y,
-                             pl->current.pos.z);
+                const f32 stX = mDoCPd_c::getStickX(0);
+                const f32 stY = mDoCPd_c::getStickY(0);
+                daPy_py_c* py = (daPy_py_c*)pl;
+                DuskLog.info(
+                    "[ExtWw] §317/§898 post-end +{}f Link pos=({:.0f},{:.0f},{:.0f}) "
+                    "stick=({:.2f},{:.2f}) spdF={:.1f} demoMode={} doorLock={} evtMode={} "
+                    "run={} nextStage={} ovlp={}",
+                    600 - s_postEnd, pl->current.pos.x, pl->current.pos.y, pl->current.pos.z,
+                    stX, stY, pl->speedF, py->getDemoMode(), s_doorDemoLocked ? 1 : 0,
+                    (int)dComIfGp_event_getMode(), dComIfGp_event_runCheck() ? 1 : 0,
+                    dComIfGp_isEnableNextStage() ? 1 : 0, fopOvlpM_IsPeek() ? 1 : 0);
             }
         }
     }
@@ -7728,6 +7958,9 @@ void dExtNpcMount_onStageReady() {
     // §97b/§101: arm shore foam on WW field hosts; load package calm map.
     // flatInter polarity (donor pair): 0=calm/usonami ON, 1=chop/usonami OFF.
     // Ferry A STEP 1: waves bisect skips usonami arming for the run.
+    // (tale §842 QUEUED here — fork-letter gate swap; hunks + evidence in
+    // docs/state/ww-staging/queue-tale842-housing-calm-gate.md, Integrator's
+    // build gate per tale §839. Tree kept at last-built state.)
     if (stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage) &&
         wwFpsBisectMode() != kWwFpsBisectSkipWaves) {
         dKy_usonami_set(0.0f);

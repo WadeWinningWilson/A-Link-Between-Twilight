@@ -1,0 +1,1427 @@
+﻿ninja: Entering directory `C:\Users\xxxxx\Documents\dusklight\build\windows-msvc-relwithdebinfo'
+[1/1249] Building CXX object CMakeFiles\dusklight.dir\cmake_pch.cxx.obj
+[2/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_mtx.cpp.obj
+[3/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_audio.cpp.obj
+[4/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_lib.cpp.obj
+[5/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_Reset.cpp.obj
+[6/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_DVDError.cpp.obj
+[7/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_dvd_thread.cpp.obj
+[8/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_MemCardRWmng.cpp.obj
+[9/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_hostIO.cpp.obj
+[10/1249] Building CXX object CMakeFiles\dusklight.dir\src\c\c_damagereaction.cpp.obj
+[11/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_MemCard.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[12/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_ext.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[13/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_machine.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[14/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_controller_pad.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[15/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_graphic.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[16/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_actor_iter.cpp.obj
+[17/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\main.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[18/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_actor_tag.cpp.obj
+[19/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_actor.cpp.obj
+[20/1249] Building CXX object CMakeFiles\dusklight.dir\src\c\c_dylink.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[21/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_overlap.cpp.obj
+[22/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_overlap_mng.cpp.obj
+[23/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_overlap_req.cpp.obj
+[24/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_camera_mng.cpp.obj
+[25/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_camera.cpp.obj
+[26/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_scene_iter.cpp.obj
+[27/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_scene.cpp.obj
+[28/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_scene_tag.cpp.obj
+[29/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_view.cpp.obj
+[30/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_actor_mng.cpp.obj
+[31/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_kankyo.cpp.obj
+[32/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_msg.cpp.obj
+[33/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_kankyo_mng.cpp.obj
+[34/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_draw_iter.cpp.obj
+[35/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_draw_tag.cpp.obj
+[36/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_scene_pause.cpp.obj
+[37/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_msg_mng.cpp.obj
+[38/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_create_iter.cpp.obj
+[39/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_create_tag.cpp.obj
+[40/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_creator.cpp.obj
+[41/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_delete_tag.cpp.obj
+[42/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_deletor.cpp.obj
+[43/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_draw_priority.cpp.obj
+[44/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_executor.cpp.obj
+[45/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_layer.cpp.obj
+[46/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_leaf.cpp.obj
+[47/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_layer_iter.cpp.obj
+[48/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_layer_tag.cpp.obj
+[49/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_line.cpp.obj
+[50/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_load.cpp.obj
+[51/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_method.cpp.obj
+[52/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_manager.cpp.obj
+[53/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_node.cpp.obj
+[54/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_priority.cpp.obj
+[55/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_profile.cpp.obj
+[56/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_searcher.cpp.obj
+[57/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_line_tag.cpp.obj
+[58/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_line_iter.cpp.obj
+[59/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_method_iter.cpp.obj
+[60/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_method_tag.cpp.obj
+[61/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_pause.cpp.obj
+[62/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_scene_mng.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[63/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_op\f_op_scene_req.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[64/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_fstcreate_req.cpp.obj
+[65/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_debug_sv.cpp.obj
+[66/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_base.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[67/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_create_req.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[68/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_map.cpp.obj
+[69/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_ap\f_ap_game.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[70/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_com_inf_game.cpp.obj
+[71/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_com_inf_actor.cpp.obj
+[72/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bomb.cpp.obj
+[73/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_node_req.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[74/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_lib.cpp.obj
+[75/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_save_init.cpp.obj
+[76/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_jnt_col.cpp.obj
+[77/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_save.cpp.obj
+[78/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_a_obj.cpp.obj
+[79/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_a_item_static.cpp.obj
+[80/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_a_shop_item_static.cpp.obj
+[81/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_a_horse_static.cpp.obj
+[82/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_door_param2.cpp.obj
+[83/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_draw.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[84/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_stdcreate_req.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[85/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_map_path.cpp.obj
+[86/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_map_path_fmap.cpp.obj
+[87/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_com_static.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[88/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_map_path_dmap.cpp.obj
+[89/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_event_manager.cpp.obj
+[90/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_event_lib.cpp.obj
+[91/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_simple_model.cpp.obj
+[92/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_stage.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[93/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_particle_name.cpp.obj
+[94/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_a_itembase_static.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[95/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_particle_copoly.cpp.obj
+[96/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_path.cpp.obj
+[97/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kankyo_data.cpp.obj
+[98/1249] Building CXX object CMakeFiles\dusklight.dir\src\m_Do\m_Do_main.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[99/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_resorce.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[100/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kankyo_debug.cpp.obj
+[101/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_vibration.cpp.obj
+[102/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_demo.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[103/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_vib_pattern.cpp.obj
+[104/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_event_data.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[105/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_event.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[106/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_pc.cpp.obj
+[107/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_attention.cpp.obj
+[108/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_att_dist.cpp.obj
+[109/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_plc.cpp.obj
+[110/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_parts.cpp.obj
+[111/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_capt_poly.cpp.obj
+[112/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_chk.cpp.obj
+[113/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s.cpp.obj
+[114/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_grp_pass_chk.cpp.obj
+[115/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_gnd_chk.cpp.obj
+[116/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_acch.cpp.obj
+[117/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_lin_chk.cpp.obj
+[118/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_movebg_actor.cpp.obj
+[119/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_sph_chk.cpp.obj
+[120/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_spl_grp_chk.cpp.obj
+[121/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_poly_pass_chk.cpp.obj
+[122/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_roof_chk.cpp.obj
+[123/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_s_wtr_chk.cpp.obj
+[124/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_w_base.cpp.obj
+[125/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_w_sv.cpp.obj
+[126/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_cc_d.cpp.obj
+[127/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_cc_mass_s.cpp.obj
+[128/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_w.cpp.obj
+[129/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_particle.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[130/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bg_w_kcol.cpp.obj
+[131/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_cc_s.cpp.obj
+[132/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_item_data.cpp.obj
+[133/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_spline_path.cpp.obj
+[134/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_cam_param.cpp.obj
+[135/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_model.cpp.obj
+[136/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_item.cpp.obj
+[137/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_tresure.cpp.obj
+[138/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_eye_hl.cpp.obj
+[139/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_debug_viewer.cpp.obj
+[140/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_error_msg.cpp.obj
+[141/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_debug_camera.cpp.obj
+[142/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_itembase.cpp.obj
+[143/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_no_chg_room.cpp.obj
+[144/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ev_camera.cpp.obj
+[145/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kankyo_wether.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[146/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kankyo_rain.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[147/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_cd.cpp.obj
+[148/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_cd2.cpp.obj
+[149/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ss_base.cpp.obj
+[150/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_insect.cpp.obj
+[151/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_drawlist.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[152/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_item.cpp.obj
+[153/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_file_sel_warning.cpp.obj
+[154/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_envse.cpp.obj
+[155/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_player.cpp.obj
+[156/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_file_sel_info.cpp.obj
+[157/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_scope.cpp.obj
+[158/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc.cpp.obj
+[159/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_select_icon.cpp.obj
+[160/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_select_cursor.cpp.obj
+[161/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_file_select.cpp.obj
+[162/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_shop_camera.cpp.obj
+[163/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_shop_item_ctrl.cpp.obj
+[164/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_shade_refuge.cpp.obj
+[165/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_shop_system.cpp.obj
+[166/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_twilight_border.cpp.obj
+[167/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_death_rupee.cpp.obj
+[168/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_cc_uty.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[169/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_oocoo.cpp.obj
+[170/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_bright_check.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[171/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_outfit_stats.cpp.obj
+[172/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_wardrobe.cpp.obj
+[173/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_master_quest.cpp.obj
+[174/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_gameover.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[175/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_mail.cpp.obj
+[176/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_skill_scroll.cpp.obj
+[177/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_dialogue.cpp.obj
+[178/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_sumo_test.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[179/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_shop.cpp.obj
+[180/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_ui_text.cpp.obj
+[181/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_region_mult.cpp.obj
+[182/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_rental.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[183/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\sim_time_scale.cpp.obj
+[184/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_hp_mult.cpp.obj
+[185/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_camera.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[186/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_combat.cpp.obj
+[187/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_focused_arts.cpp.obj
+[188/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_outfit.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[189/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_demo_leftover_viewer.cpp.obj
+[190/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_outfit_debug.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[191/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_flurry_rush.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[192/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_cut_actor_spawn.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[193/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ww_itemmdl_test.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[194/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ext_ww_actor_shims.cpp.obj
+[195/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ext_mod_flags.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[196/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\ext_seq\ja1_seq_ctrl.cpp.obj
+[197/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\ext_seq\ja1_parser.cpp.obj
+[198/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ext_npc_doors.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[199/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_alink.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[200/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ww_itemmdl_pc.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[201/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_enemy_rupee.cpp.obj
+[202/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_lockout.cpp.obj
+[203/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\ext_seq\ja1_track.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[204/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_potion.cpp.obj
+[205/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_shade_boss.cpp.obj
+[206/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_boss.cpp.obj
+[207/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_shield.cpp.obj
+[208/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_wolf_stun.cpp.obj
+[209/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_rupee_popup.cpp.obj
+[210/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_boss_hp_hud.cpp.obj
+[211/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_wolf_charge_hud.cpp.obj
+[212/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_lop_item_belt.cpp.obj
+[213/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\truetest.cpp.obj
+[214/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\ext_seq\ja1_event_dump.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[215/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kyeff.cpp.obj
+[216/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kyeff2.cpp.obj
+[217/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kantera_icon_meter.cpp.obj
+[218/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ky_thunder.cpp.obj
+[219/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ext_seq_space.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[220/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_calibration.cpp.obj
+[221/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ext_npc_population.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[222/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_dmap_map.cpp.obj
+[223/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_kankyo.cpp.obj
+[224/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_map_common.cpp.obj
+[225/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_dmap.cpp.obj
+[226/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_fishing.cpp.obj
+[227/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_fmap_map.cpp.obj
+[228/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_fmap.cpp.obj
+[229/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_insect.cpp.obj
+[230/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_item_explain.cpp.obj
+[231/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\ext_seq\ja1_bank.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[232/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_albw_menu_res.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[233/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_collect.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[234/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_window_HIO.cpp.obj
+[235/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_save.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[236/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_fmap2D.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[237/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ext_npc_mount.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[238/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter_haihai.cpp.obj
+[239/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter_hakusha.cpp.obj
+[240/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter_button.cpp.obj
+[241/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter_HIO.cpp.obj
+[242/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_option.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[243/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_ring.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[244/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter_string.cpp.obj
+[245/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter_map.cpp.obj
+[246/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_skill.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[247/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter2_info.cpp.obj
+[248/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_window.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[249/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_unit.cpp.obj
+[250/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_out_font.cpp.obj
+[251/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_menu_letter.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[252/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_arrow.cpp.obj
+[253/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_3select.cpp.obj
+[254/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_base.cpp.obj
+[255/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_class.cpp.obj
+[256/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_boss.cpp.obj
+[257/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter2_draw.cpp.obj
+[258/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_explain.cpp.obj
+[259/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_jimaku.cpp.obj
+[260/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_kanban.cpp.obj
+[261/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_light.cpp.obj
+[262/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_item.cpp.obj
+[263/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_staff.cpp.obj
+[264/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_place.cpp.obj
+[265/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_string_base.cpp.obj
+[266/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_howl.cpp.obj
+[267/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_tree.cpp.obj
+[268/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_string.cpp.obj
+[269/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ovlp_fade.cpp.obj
+[270/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_npc_lib.cpp.obj
+[271/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_name.cpp.obj
+[272/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_npc.cpp.obj
+[273/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ovlp_fade2.cpp.obj
+[274/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_ovlp_fade3.cpp.obj
+[275/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_pane_class_ex.cpp.obj
+[276/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_pane_class_alpha.cpp.obj
+[277/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_pane_class.cpp.obj
+[278/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_flow.cpp.obj
+[279/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_s_menu.cpp.obj
+[280/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_s_title.cpp.obj
+[281/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_save_HIO.cpp.obj
+[282/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_timer.cpp.obj
+[283/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_meter2.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[284/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_k_wmark.cpp.obj
+[285/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_k_wpillar.cpp.obj
+[286/1249] Building CXX object CMakeFiles\dusklight.dir\src\CaptureScreen.cpp.obj
+[287/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2Calc.cpp.obj
+[288/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2AudioArcLoader.cpp.obj
+[289/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_object.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[290/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2Param.cpp.obj
+[291/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SoundMgr.cpp.obj
+[292/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SoundStarter.cpp.obj
+[293/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SoundHandles.cpp.obj
+[294/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_msg_scrn_talk.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[295/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SeMgr.cpp.obj
+[296/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2StatusMgr.cpp.obj
+[297/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2FxLineMgr.cpp.obj
+[298/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SeqMgr.cpp.obj
+[299/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SoundInfo.cpp.obj
+[300/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_s_room.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[301/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_s_name.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[302/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_s_logo.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[303/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2Audience.cpp.obj
+[304/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SoundObjMgr.cpp.obj
+[305/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SoundObject.cpp.obj
+[306/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2LinkMgr.cpp.obj
+[307/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SceneMgr.cpp.obj
+[308/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2Creature.cpp.obj
+[309/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2SpeechMgr2.cpp.obj
+[310/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2EnvSeMgr.cpp.obj
+[311/1249] Building CXX object CMakeFiles\dusklight.dir\src\f_pc\f_pc_profile_lst.cpp.obj
+[312/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_andsw.cpp.obj
+[313/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2AudioMgr.cpp.obj
+[314/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_dmidna.cpp.obj
+[315/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_bg_obj.cpp.obj
+[316/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_dbdoor00.cpp.obj
+[317/1249] Building CXX object CMakeFiles\dusklight.dir\src\Z2AudioLib\Z2WolfHowlMgr.cpp.obj
+[318/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_spiral.cpp.obj
+[319/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_dshutter.cpp.obj
+[320/1249] Building CXX object CMakeFiles\dusklight.dir\src\DynamicLink.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[321/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_hitobj.cpp.obj
+[322/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_ep.cpp.obj
+[323/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag00.cpp.obj
+[324/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\d_s_play.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[325/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag04.cpp.obj
+[326/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag17.cpp.obj
+[327/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_shutter.cpp.obj
+[328/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_brakeeff.cpp.obj
+[329/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_burnbox.cpp.obj
+[330/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_path_line.cpp.obj
+[331/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_timer.cpp.obj
+[332/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ito.cpp.obj
+[333/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_movebox.cpp.obj
+[334/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swpush.cpp.obj
+[335/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_set_bgobj.cpp.obj
+[336/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_scene_exit.cpp.obj
+[337/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_swhit0.cpp.obj
+[338/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_carry.cpp.obj
+[339/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_chkpoint.cpp.obj
+[340/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_event.cpp.obj
+[341/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_evt.cpp.obj
+[342/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_allmato.cpp.obj
+[343/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_camera.cpp.obj
+[344/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_howl.cpp.obj
+[345/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_evtmsg.cpp.obj
+[346/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_evtarea.cpp.obj
+[347/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_lantern.cpp.obj
+[348/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_kmsg.cpp.obj
+[349/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_mist.cpp.obj
+[350/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_telop.cpp.obj
+[351/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_msg.cpp.obj
+[352/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_push.cpp.obj
+[353/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_vrbox.cpp.obj
+[354/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tbox2.cpp.obj
+[355/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_vrbox2.cpp.obj
+[356/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tbox.cpp.obj
+[357/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_disappear.cpp.obj
+[358/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_crod.cpp.obj
+[359/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_boomerang.cpp.obj
+[360/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_life_container.cpp.obj
+[361/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_knob00.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[362/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_bg.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[363/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_nbomb.cpp.obj
+[364/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_suspend.cpp.obj
+[365/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_attention.cpp.obj
+[366/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_yousei.cpp.obj
+[367/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_alldie.cpp.obj
+[368/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_andsw2.cpp.obj
+[369/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_mg_rod.cpp.obj
+[370/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_spinner.cpp.obj
+[371/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_bd.cpp.obj
+[372/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_cstaF.cpp.obj
+[373/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_canoe.cpp.obj
+[374/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_bossL1.cpp.obj
+[375/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ga.cpp.obj
+[376/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_dn.cpp.obj
+[377/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_hb.cpp.obj
+[378/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_nest.cpp.obj
+[379/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_econt.cpp.obj
+[380/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_fr.cpp.obj
+[381/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag05.cpp.obj
+[382/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_fm.cpp.obj
+[383/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag11.cpp.obj
+[384/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_demo00.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[385/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_grass.cpp.obj
+[386/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag10.cpp.obj
+[387/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag14.cpp.obj
+[388/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_fish.cpp.obj
+[389/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_fairy_seirei.cpp.obj
+[390/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_midna.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[391/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_rd.cpp.obj
+[392/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_besu.cpp.obj
+[393/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_arrow.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[394/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kakashi.cpp.obj
+[395/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kkri.cpp.obj
+[396/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_mg_fish.cpp.obj
+[397/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kolin.cpp.obj
+[398/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_demo_item.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[399/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bkdoor.cpp.obj
+[400/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_tkj.cpp.obj
+[401/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bhashi.cpp.obj
+[402/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cboard.cpp.obj
+[403/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_maro.cpp.obj
+[404/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bosswarp.cpp.obj
+[405/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_taro.cpp.obj
+[406/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_eff.cpp.obj
+[407/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fmobj.cpp.obj
+[408/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_henna.cpp.obj
+[409/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_digplace.cpp.obj
+[410/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gpTaru.cpp.obj
+[411/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hhashi.cpp.obj
+[412/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ktOnFire.cpp.obj
+[413/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_klift00.cpp.obj
+[414/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kanban2.cpp.obj
+[415/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kbacket.cpp.obj
+[416/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kgate.cpp.obj
+[417/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ladder.cpp.obj
+[418/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_metalbox.cpp.obj
+[419/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mgate.cpp.obj
+[420/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv2Candle.cpp.obj
+[421/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_magne_arm.cpp.obj
+[422/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ornament_cloth.cpp.obj
+[423/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rope_bridge.cpp.obj
+[424/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_stoneMark.cpp.obj
+[425/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sWallShutter.cpp.obj
+[426/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_scene_exit2.cpp.obj
+[427/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swpropeller.cpp.obj
+[428/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_nameplate.cpp.obj
+[429/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swpush5.cpp.obj
+[430/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_stick.cpp.obj
+[431/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_yobikusa.cpp.obj
+[432/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_CstaSw.cpp.obj
+[433/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_ajnot.cpp.obj
+[434/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_gstart.cpp.obj
+[435/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_hinit.cpp.obj
+[436/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_shop_item.cpp.obj
+[437/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_attack_item.cpp.obj
+[438/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_swc00.cpp.obj
+[439/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_sq.cpp.obj
+[440/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_magne.cpp.obj
+[441/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_lv2prchk.cpp.obj
+[442/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_spring.cpp.obj
+[443/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_statue_evt.cpp.obj
+[444/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_hjump.cpp.obj
+[445/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_mhint.cpp.obj
+[446/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_mstop.cpp.obj
+[447/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_hstop.cpp.obj
+[448/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_L7low_dr.cpp.obj
+[449/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_ykgr.cpp.obj
+[450/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_L7demo_dr.cpp.obj
+[451/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_bh.cpp.obj
+[452/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_dre.cpp.obj
+[453/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_L7op_demo_dr.cpp.obj
+[454/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_go.cpp.obj
+[455/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_dr.cpp.obj
+[456/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_gg.cpp.obj
+[457/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_gos.cpp.obj
+[458/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_bq.cpp.obj
+[459/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_oh2.cpp.obj
+[460/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_oh.cpp.obj
+[461/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_gm.cpp.obj
+[462/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_mgn.cpp.obj
+[463/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_ds.cpp.obj
+[464/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_zant_magic.cpp.obj
+[465/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_yo_ice.cpp.obj
+[466/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_zant_mobile.cpp.obj
+[467/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_zant_sima.cpp.obj
+[468/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_tn.cpp.obj
+[469/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_bullet.cpp.obj
+[470/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_yo.cpp.obj
+[471/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_balloon_2D.cpp.obj
+[472/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_ob.cpp.obj
+[473/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_zant.cpp.obj
+[474/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_coach_fire.cpp.obj
+[475/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_coach_2D.cpp.obj
+[476/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_boss.cpp.obj
+[477/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_bossL5.cpp.obj
+[478/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_push.cpp.obj
+[479/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_do.cpp.obj
+[480/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_door_mbossL1.cpp.obj
+[481/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_cstatue.cpp.obj
+[482/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ai.cpp.obj
+[483/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bi_leaf.cpp.obj
+[484/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_cow.cpp.obj
+[485/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ba.cpp.obj
+[486/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bg.cpp.obj
+[487/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bee.cpp.obj
+[488/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_arrow.cpp.obj
+[489/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bi.cpp.obj
+[490/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bs.cpp.obj
+[491/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_cr_egg.cpp.obj
+[492/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_db_leaf.cpp.obj
+[493/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_cr.cpp.obj
+[494/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bug.cpp.obj
+[495/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_bu.cpp.obj
+[496/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_dk.cpp.obj
+[497/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_db.cpp.obj
+[498/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_df.cpp.obj
+[499/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_fb.cpp.obj
+[500/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_dd.cpp.obj
+[501/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_fk.cpp.obj
+[502/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_dt.cpp.obj
+[503/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_fs.cpp.obj
+[504/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_fz.cpp.obj
+[505/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ge.cpp.obj
+[506/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_gi.cpp.obj
+[507/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_hb_leaf.cpp.obj
+[508/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_gs.cpp.obj
+[509/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_gb.cpp.obj
+[510/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_gm.cpp.obj
+[511/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_gob.cpp.obj
+[512/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_hm.cpp.obj
+[513/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_is.cpp.obj
+[514/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_hz.cpp.obj
+[515/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_hp.cpp.obj
+[516/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_hzelda.cpp.obj
+[517/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_kg.cpp.obj
+[518/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_md.cpp.obj
+[519/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_mb.cpp.obj
+[520/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_mk_bo.cpp.obj
+[521/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_kk.cpp.obj
+[522/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_kr.cpp.obj
+[523/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_mk.cpp.obj
+[524/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_mm_mt.cpp.obj
+[525/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_mm.cpp.obj
+[526/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_mf.cpp.obj
+[527/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_nz.cpp.obj
+[528/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ms.cpp.obj
+[529/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_b_gnd.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[530/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_oct_bg.cpp.obj
+[531/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_oc.cpp.obj
+[532/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ot.cpp.obj
+[533/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ph.cpp.obj
+[534/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_pm.cpp.obj
+[535/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_rb.cpp.obj
+[536/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sb.cpp.obj
+[537/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_rdb.cpp.obj
+[538/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_pz.cpp.obj
+[539/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_po.cpp.obj
+[540/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_s1.cpp.obj
+[541/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_rdy.cpp.obj
+[542/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sg.cpp.obj
+[543/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_st_line.cpp.obj
+[544/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sh.cpp.obj
+[545/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sf.cpp.obj
+[546/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sm.cpp.obj
+[547/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sm2.cpp.obj
+[548/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_st.cpp.obj
+[549/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_tk2.cpp.obj
+[550/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_tk.cpp.obj
+[551/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_tk_ball.cpp.obj
+[552/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_th_ball.cpp.obj
+[553/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_tt.cpp.obj
+[554/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_sw.cpp.obj
+[555/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ws.cpp.obj
+[556/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_warpappear.cpp.obj
+[557/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yc.cpp.obj
+[558/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yd_leaf.cpp.obj
+[559/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_vt.cpp.obj
+[560/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yd.cpp.obj
+[561/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ww.cpp.obj
+[562/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ym_tag.cpp.obj
+[563/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yg.cpp.obj
+[564/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yk.cpp.obj
+[565/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yh.cpp.obj
+[566/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ymb.cpp.obj
+[567/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_ym.cpp.obj
+[568/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_yr.cpp.obj
+[569/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_zm.cpp.obj
+[570/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_zs.cpp.obj
+[571/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_guard_mng.cpp.obj
+[572/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_zh.cpp.obj
+[573/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_izumi_gate.cpp.obj
+[574/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_formation_mng.cpp.obj
+[575/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_wb.cpp.obj
+[576/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_hozelda.cpp.obj
+[577/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag02.cpp.obj
+[578/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag01.cpp.obj
+[579/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag07.cpp.obj
+[580/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag09.cpp.obj
+[581/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag06.cpp.obj
+[582/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag08.cpp.obj
+[583/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag03.cpp.obj
+[584/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag15.cpp.obj
+[585/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag16.cpp.obj
+[586/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag12.cpp.obj
+[587/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kytag13.cpp.obj
+[588/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kago.cpp.obj
+[589/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_mant.cpp.obj
+[590/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_mirror.cpp.obj
+[591/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_mg_fshop.cpp.obj
+[592/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_myna.cpp.obj
+[593/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ash.cpp.obj
+[594/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_horse.cpp.obj
+[595/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_aru.cpp.obj
+[596/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_ni.cpp.obj
+[597/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ashB.cpp.obj
+[598/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_bans.cpp.obj
+[599/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_blue_ns.cpp.obj
+[600/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_bouS.cpp.obj
+[601/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_bou.cpp.obj
+[602/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_cdn3.cpp.obj
+[603/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_chat.cpp.obj
+[604/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_chin.cpp.obj
+[605/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_clerka.cpp.obj
+[606/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_e_th.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[607/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_clerkt.cpp.obj
+[608/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_clerkb.cpp.obj
+[609/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_df.cpp.obj
+[610/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_doc.cpp.obj
+[611/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_coach.cpp.obj
+[612/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_drainSol.cpp.obj
+[613/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_du.cpp.obj
+[614/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_fguard.cpp.obj
+[615/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_doorboy.cpp.obj
+[616/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_fairy.cpp.obj
+[617/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_gnd.cpp.obj
+[618/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grd.cpp.obj
+[619/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grc.cpp.obj
+[620/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grm.cpp.obj
+[621/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_movie_player.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[622/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grmc.cpp.obj
+[623/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_gra.cpp.obj
+[624/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grr.cpp.obj
+[625/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grs.cpp.obj
+[626/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_guard.cpp.obj
+[627/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_gro.cpp.obj
+[628/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_gwolf.cpp.obj
+[629/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_grz.cpp.obj
+[630/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_albw_midna_arm.cpp.obj
+[631/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_albw_shade_watcher.cpp.obj
+[632/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_albw_shade_boss_wolf.cpp.obj
+[633/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_inko.cpp.obj
+[634/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_impal.cpp.obj
+[635/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_hoz.cpp.obj
+[636/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_hanjo.cpp.obj
+[637/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_jagar.cpp.obj
+[638/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ins.cpp.obj
+[639/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kasi_kyu.cpp.obj
+[640/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kasi_hana.cpp.obj
+[641/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kasi_mich.cpp.obj
+[642/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_esa.cpp.obj
+[643/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kamome.cpp.obj
+[644/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_bm1.cpp.obj
+[645/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ls1.cpp.obj
+[646/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_toripost.cpp.obj
+[647/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zl1.cpp.obj
+[648/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kn.cpp.obj
+[649/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_henna0.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[650/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_knj.cpp.obj
+[651/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kolinb.cpp.obj
+[652/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kdk.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[653/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_knob00.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[654/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_kyury.cpp.obj
+[655/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_len.cpp.obj
+[656/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_kb.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[657/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_lf.cpp.obj
+[658/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ks.cpp.obj
+[659/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_midp.cpp.obj
+[660/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_ext_plank_span.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[661/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_lud.cpp.obj
+[662/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_myna2.cpp.obj
+[663/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_moir.cpp.obj
+[664/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_ext_vegetation.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[665/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_pachi_besu.cpp.obj
+[666/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_moi.cpp.obj
+[667/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_pachi_maro.cpp.obj
+[668/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ne.cpp.obj
+[669/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_pachi_taro.cpp.obj
+[670/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_passer.cpp.obj
+[671/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_passer2.cpp.obj
+[672/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_prayer.cpp.obj
+[673/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_pouya.cpp.obj
+[674/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_raca.cpp.obj
+[675/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_saru.cpp.obj
+[676/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_rafrel.cpp.obj
+[677/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_seib.cpp.obj
+[678/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_seic.cpp.obj
+[679/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_seid.cpp.obj
+[680/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_seira.cpp.obj
+[681/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_seira2.cpp.obj
+[682/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_seirei.cpp.obj
+[683/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_shaman.cpp.obj
+[684/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_shop0.cpp.obj
+[685/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_shoe.cpp.obj
+[686/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_shad.cpp.obj
+[687/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_shop_maro.cpp.obj
+[688/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_sola.cpp.obj
+[689/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_soldierA.cpp.obj
+[690/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_sq.cpp.obj
+[691/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_soldierB.cpp.obj
+[692/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_the.cpp.obj
+[693/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_theB.cpp.obj
+[694/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_mk.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[695/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_tkc.cpp.obj
+[696/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_p2.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[697/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_tkj2.cpp.obj
+[698/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_tr.cpp.obj
+[699/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_tks.cpp.obj
+[700/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_tk.cpp.obj
+[701/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_worm.cpp.obj
+[702/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_toby.cpp.obj
+[703/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_yamid.cpp.obj
+[704/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_uri.cpp.obj
+[705/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_yamis.cpp.obj
+[706/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_yamit.cpp.obj
+[707/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_yelia.cpp.obj
+[708/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_wrestler.cpp.obj
+[709/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ykm.cpp.obj
+[710/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zanb.cpp.obj
+[711/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zant.cpp.obj
+[712/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zelR.cpp.obj
+[713/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zelRo.cpp.obj
+[714/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_ykw.cpp.obj
+[715/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_post.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[716/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zelda.cpp.obj
+[717/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zrc.cpp.obj
+[718/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_Lv5Key.cpp.obj
+[719/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_Turara.cpp.obj
+[720/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zrz.cpp.obj
+[721/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_TvCdlst.cpp.obj
+[722/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_barDesk.cpp.obj
+[723/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_automata.cpp.obj
+[724/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_amiShutter.cpp.obj
+[725/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_avalanche.cpp.obj
+[726/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_balloon.cpp.obj
+[727/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_Y_taihou.cpp.obj
+[728/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ari.cpp.obj
+[729/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_npc_zra.cpp.obj
+[730/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bk_leaf.cpp.obj
+[731/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bbox.cpp.obj
+[732/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bky_rock.cpp.obj
+[733/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bhbridge.cpp.obj
+[734/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bed.cpp.obj
+[735/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bmWindow.cpp.obj
+[736/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_batta.cpp.obj
+[737/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bemos.cpp.obj
+[738/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bombf.cpp.obj
+[739/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bsGate.cpp.obj
+[740/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_catdoor.cpp.obj
+[741/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cb.cpp.obj
+[742/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bmshutter.cpp.obj
+[743/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_bubblePilar.cpp.obj
+[744/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_boumato.cpp.obj
+[745/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_chandelier.cpp.obj
+[746/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cdoor.cpp.obj
+[747/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cowdoor.cpp.obj
+[748/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cblock.cpp.obj
+[749/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_chest.cpp.obj
+[750/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cho.cpp.obj
+[751/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crvhahen.cpp.obj
+[752/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crope.cpp.obj
+[753/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crvfence.cpp.obj
+[754/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crvsteel.cpp.obj
+[755/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crvlh_down.cpp.obj
+[756/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crvlh_up.cpp.obj
+[757/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crvgate.cpp.obj
+[758/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_damCps.cpp.obj
+[759/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_crystal.cpp.obj
+[760/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_digholl.cpp.obj
+[761/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_digsnow.cpp.obj
+[762/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_cwall.cpp.obj
+[763/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_dmelevator.cpp.obj
+[764/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_dust.cpp.obj
+[765/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_dan.cpp.obj
+[766/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_enemy_create.cpp.obj
+[767/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fan.cpp.obj
+[768/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_drop.cpp.obj
+[769/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fallobj.cpp.obj
+[770/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fireWood.cpp.obj
+[771/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_firepillar.cpp.obj
+[772/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fireWood2.cpp.obj
+[773/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fchain.cpp.obj
+[774/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_flag.cpp.obj
+[775/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_firepillar2.cpp.obj
+[776/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_fw.cpp.obj
+[777/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_flag2.cpp.obj
+[778/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_food.cpp.obj
+[779/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ganonwall.cpp.obj
+[780/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_flag3.cpp.obj
+[781/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ganonwall2.cpp.obj
+[782/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gb.cpp.obj
+[783/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gadget.cpp.obj
+[784/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_goGate.cpp.obj
+[785/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_geyser.cpp.obj
+[786/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gm.cpp.obj
+[787/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gomikabe.cpp.obj
+[788/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_glowSphere.cpp.obj
+[789/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_graWall.cpp.obj
+[790/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_grave_stone.cpp.obj
+[791/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_grz_rock.cpp.obj
+[792/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_groundwater.cpp.obj
+[793/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_h_saku.cpp.obj
+[794/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gra_rock.cpp.obj
+[795/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hakai_brl.cpp.obj
+[796/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hakai_ftr.cpp.obj
+[797/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hasu2.cpp.obj
+[798/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hata.cpp.obj
+[799/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hbombkoya.cpp.obj
+[800/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hfuta.cpp.obj
+[801/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_heavySw.cpp.obj
+[802/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hsTarget.cpp.obj
+[803/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_hb.cpp.obj
+[804/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ice_l.cpp.obj
+[805/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_gra2.cpp.obj
+[806/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ihasi.cpp.obj
+[807/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ice_s.cpp.obj
+[808/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_iceleaf.cpp.obj
+[809/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ikada.cpp.obj
+[810/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_iceblock.cpp.obj
+[811/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_inobone.cpp.obj
+[812/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ita.cpp.obj
+[813/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kage.cpp.obj
+[814/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kaisou.cpp.obj
+[815/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_itamato.cpp.obj
+[816/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_brg.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[817/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kag.cpp.obj
+[818/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kamakiri.cpp.obj
+[819/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kabuto.cpp.obj
+[820/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kago.cpp.obj
+[821/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kiPot.cpp.obj
+[822/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ki.cpp.obj
+[823/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kantera.cpp.obj
+[824/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kazeneko.cpp.obj
+[825/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kbox.cpp.obj
+[826/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_katatsumuri.cpp.obj
+[827/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_key.cpp.obj
+[828/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_keyhole.cpp.obj
+[829/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kjgjs.cpp.obj
+[830/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kwheel01.cpp.obj
+[831/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kita.cpp.obj
+[832/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kkanban.cpp.obj
+[833/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kwheel00.cpp.obj
+[834/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_knBullet.cpp.obj
+[835/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kshutter.cpp.obj
+[836/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kuwagata.cpp.obj
+[837/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lbox.cpp.obj
+[838/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_laundry.cpp.obj
+[839/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv1Candle01.cpp.obj
+[840/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv1Candle00.cpp.obj
+[841/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_kznkarm.cpp.obj
+[842/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv3Candle.cpp.obj
+[843/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_laundry_rope.cpp.obj
+[844/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lp.cpp.obj
+[845/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv3saka00.cpp.obj
+[846/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv3waterEff.cpp.obj
+[847/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4CandleTag.cpp.obj
+[848/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4EdShutter.cpp.obj
+[849/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv3WaterB.cpp.obj
+[850/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4CandleDemoTag.cpp.obj
+[851/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv3Water.cpp.obj
+[852/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv3Water2.cpp.obj
+[853/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4HsTarget.cpp.obj
+[854/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4bridge.cpp.obj
+[855/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4SlideWall.cpp.obj
+[856/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4Gate.cpp.obj
+[857/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4PoGate.cpp.obj
+[858/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4RailWall.cpp.obj
+[859/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4digsand.cpp.obj
+[860/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4chandelier.cpp.obj
+[861/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4floor.cpp.obj
+[862/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4prelvtr.cpp.obj
+[863/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4sand.cpp.obj
+[864/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4gear.cpp.obj
+[865/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv4prwall.cpp.obj
+[866/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv5FloorBoard.cpp.obj
+[867/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv5IceWall.cpp.obj
+[868/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6Lblock.cpp.obj
+[869/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6SzGate.cpp.obj
+[870/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv5SwIce.cpp.obj
+[871/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6FurikoTrap.cpp.obj
+[872/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv5ychndlr.cpp.obj
+[873/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6ChangeGate.cpp.obj
+[874/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6SwGate.cpp.obj
+[875/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv5yiblltray.cpp.obj
+[876/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6elevta.cpp.obj
+[877/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6Tenbin.cpp.obj
+[878/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6egate.cpp.obj
+[879/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6swturn.cpp.obj
+[880/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6bemos.cpp.obj
+[881/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6TogeRoll.cpp.obj
+[882/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6TogeTrap.cpp.obj
+[883/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv6bemos2.cpp.obj
+[884/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv9SwShutter.cpp.obj
+[885/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv8KekkaiTrap.cpp.obj
+[886/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv7BsGate.cpp.obj
+[887/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv8UdFloor.cpp.obj
+[888/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv7PropellerY.cpp.obj
+[889/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv8OptiLift.cpp.obj
+[890/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv8Lift.cpp.obj
+[891/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_lv7bridge.cpp.obj
+[892/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mirror_6pole.cpp.obj
+[893/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_magLift.cpp.obj
+[894/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_magLiftRot.cpp.obj
+[895/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_maki.cpp.obj
+[896/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mhole.cpp.obj
+[897/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_master_sword.cpp.obj
+[898/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mato.cpp.obj
+[899/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mie.cpp.obj
+[900/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_myogan.cpp.obj
+[901/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mirror_sand.cpp.obj
+[902/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mvstair.cpp.obj
+[903/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mirror_screw.cpp.obj
+[904/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_nagaisu.cpp.obj
+[905/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mirror_chain.cpp.obj
+[906/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_mirror_table.cpp.obj
+[907/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_msima.cpp.obj
+[908/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_onsenFire.cpp.obj
+[909/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_onsen.cpp.obj
+[910/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_oiltubo.cpp.obj
+[911/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ndoor.cpp.obj
+[912/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_octhashi.cpp.obj
+[913/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_onsenTaru.cpp.obj
+[914/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_nougu.cpp.obj
+[915/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_nan.cpp.obj
+[916/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_pdwall.cpp.obj
+[917/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_pleaf.cpp.obj
+[918/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_poCandle.cpp.obj
+[919/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_pdoor.cpp.obj
+[920/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_poFire.cpp.obj
+[921/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_pdtile.cpp.obj
+[922/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_pillar.cpp.obj
+[923/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_picture.cpp.obj
+[924/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_prop.cpp.obj
+[925/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rcircle.cpp.obj
+[926/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_poTbox.cpp.obj
+[927/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rfHole.cpp.obj
+[928/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rock.cpp.obj
+[929/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_riverrock.cpp.obj
+[930/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rgate.cpp.obj
+[931/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_pumpkin.cpp.obj
+[932/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_saidan.cpp.obj
+[933/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rotBridge.cpp.obj
+[934/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_roten.cpp.obj
+[935/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rstair.cpp.obj
+[936/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sakuita.cpp.obj
+[937/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rotTrap.cpp.obj
+[938/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_rw.cpp.obj
+[939/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sekizo.cpp.obj
+[940/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sekidoor.cpp.obj
+[941/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_shield.cpp.obj
+[942/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sakuita_rope.cpp.obj
+[943/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_scannon_crs.cpp.obj
+[944/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_scannon_ten.cpp.obj
+[945/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_scannon.cpp.obj
+[946/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sekizoa.cpp.obj
+[947/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_smoke.cpp.obj
+[948/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sm_door.cpp.obj
+[949/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_snowEffTag.cpp.obj
+[950/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_smtile.cpp.obj
+[951/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_snow_soup.cpp.obj
+[952/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_smgdoor.cpp.obj
+[953/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_smallkey.cpp.obj
+[954/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_smw_stone.cpp.obj
+[955/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_spinLift.cpp.obj
+[956/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_stairBlock.cpp.obj
+[957/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ss_item.cpp.obj
+[958/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ss_drink.cpp.obj
+[959/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_stone.cpp.obj
+[960/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_so.cpp.obj
+[961/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_suisya.cpp.obj
+[962/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_stopper2.cpp.obj
+[963/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swBallA.cpp.obj
+[964/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_stopper.cpp.obj
+[965/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swBallB.cpp.obj
+[966/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swLight.cpp.obj
+[967/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swBallC.cpp.obj
+[968/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sw.cpp.obj
+[969/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_szbridge.cpp.obj
+[970/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swspinner.cpp.obj
+[971/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_sword.cpp.obj
+[972/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_syRock.cpp.obj
+[973/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swturn.cpp.obj
+[974/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swpush2.cpp.obj
+[975/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swhang.cpp.obj
+[976/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_swchain.cpp.obj
+[977/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_testcube.cpp.obj
+[978/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tgake.cpp.obj
+[979/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_takaraDai.cpp.obj
+[980/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tatigi.cpp.obj
+[981/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_taFence.cpp.obj
+[982/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_table.cpp.obj
+[983/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_thashi.cpp.obj
+[984/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ten.cpp.obj
+[985/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_toaru_maki.cpp.obj
+[986/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tmoon.cpp.obj
+[987/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_timeFire.cpp.obj
+[988/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_thdoor.cpp.obj
+[989/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_togeTrap.cpp.obj
+[990/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tobyhouse.cpp.obj
+[991/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tks.cpp.obj
+[992/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_toby.cpp.obj
+[993/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tornado2.cpp.obj
+[994/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tornado.cpp.obj
+[995/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tombo.cpp.obj
+[996/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_usaku.cpp.obj
+[997/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_vground.cpp.obj
+[998/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_treesh.cpp.obj
+[999/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_twGate.cpp.obj
+[1000/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_udoor.cpp.obj
+[1001/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_volcball.cpp.obj
+[1002/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_tp.cpp.obj
+[1003/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_volcbom.cpp.obj
+[1004/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_waterGate.cpp.obj
+[1005/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_waterPillar.cpp.obj
+[1006/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_waterfall.cpp.obj
+[1007/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_web0.cpp.obj
+[1008/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wchain.cpp.obj
+[1009/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wdStick.cpp.obj
+[1010/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_warp_obrg.cpp.obj
+[1011/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_warp_kbrg.cpp.obj
+[1012/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_well_cover.cpp.obj
+[1013/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wsword.cpp.obj
+[1014/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wood_pendulum.cpp.obj
+[1015/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_window.cpp.obj
+[1016/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_web1.cpp.obj
+[1017/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wood_statue.cpp.obj
+[1018/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wflag.cpp.obj
+[1019/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_wind_stone.cpp.obj
+[1020/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zcloth.cpp.obj
+[1021/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_ystone.cpp.obj
+[1022/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zrTurara.cpp.obj
+[1023/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zrTuraraRock.cpp.obj
+[1024/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zdoor.cpp.obj
+[1025/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_yel_bag.cpp.obj
+[1026/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_arena.cpp.obj
+[1027/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zra_rock.cpp.obj
+[1028/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zra_freeze.cpp.obj
+[1029/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_obj_zraMark.cpp.obj
+[1030/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_passer_mng.cpp.obj
+[1031/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_skip_2D.cpp.obj
+[1032/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_swTime.cpp.obj
+[1033/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_swLBall.cpp.obj
+[1034/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_ppolamp.cpp.obj
+[1035/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_swBall.cpp.obj
+[1036/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_Lv6Gate.cpp.obj
+[1037/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_startAndGoal.cpp.obj
+[1038/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_assistance.cpp.obj
+[1039/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_lv6CstaSw.cpp.obj
+[1040/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_peru.cpp.obj
+[1041/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_Lv8Gate.cpp.obj
+[1042/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_Lv7Gate.cpp.obj
+[1043/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_escape.cpp.obj
+[1044/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_chgrestart.cpp.obj
+[1045/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_bottle_item.cpp.obj
+[1046/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_TWgate.cpp.obj
+[1047/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_gra.cpp.obj
+[1048/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_guard.cpp.obj
+[1049/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_csw.cpp.obj
+[1050/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_instruction.cpp.obj
+[1051/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_lightball.cpp.obj
+[1052/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_lv5soup.cpp.obj
+[1053/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_firewall.cpp.obj
+[1054/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_mmsg.cpp.obj
+[1055/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_myna2.cpp.obj
+[1056/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_myna_light.cpp.obj
+[1057/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_mwait.cpp.obj
+[1058/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_kago_fall.cpp.obj
+[1059/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_pachi.cpp.obj
+[1060/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_poFire.cpp.obj
+[1061/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_setBall.cpp.obj
+[1062/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_schedule.cpp.obj
+[1063/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_rmbit_sw.cpp.obj
+[1064/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_setrestart.cpp.obj
+[1065/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_ret_room.cpp.obj
+[1066/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_river_back.cpp.obj
+[1067/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_qs.cpp.obj
+[1068/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_shop_camera.cpp.obj
+[1069/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_smk_emt.cpp.obj
+[1070/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_stream.cpp.obj
+[1071/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_spinner.cpp.obj
+[1072/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_shop_item.cpp.obj
+[1073/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_theB_hint.cpp.obj
+[1074/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_watchge.cpp.obj
+[1075/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_sppath.cpp.obj
+[1076/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_wara_howl.cpp.obj
+[1077/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_ss_drink.cpp.obj
+[1078/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_yami.cpp.obj
+[1079/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_waterfall.cpp.obj
+[1080/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tboxSw.cpp.obj
+[1081/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_tag_wljump.cpp.obj
+[1082/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_talk.cpp.obj
+[1083/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_warp_bug.cpp.obj
+[1084/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\android_frame_rate.cpp.obj
+[1085/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\asserts.cpp.obj
+[1086/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_alink_dusk.cpp.obj
+[1087/1249] Building CXX object CMakeFiles\dusklight.dir\src\d\actor\d_a_title.cpp.obj
+[1088/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\endian.cpp.obj
+[1089/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\file_select.cpp.obj
+[1090/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\crash_reporting.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1091/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\dvd_asset.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1092/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\batch.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1093/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\globals.cpp.obj
+[1094/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\crash_handler.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1095/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\game_clock.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1096/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\frame_interpolation.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1097/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\menu_pointer.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1098/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\gyro.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1099/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mouse.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1100/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\data.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1101/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\prepatch.cpp.obj
+[1102/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\bundle_disk.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1103/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\bundle_zip.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1104/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\native_module.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1105/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\context.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1106/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\manifest.cpp.obj
+[1107/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\config.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1108/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\log_buffer.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1109/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\depgraph.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1110/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\game.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1111/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\camera.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1112/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\config.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1113/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\host.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1114/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\log.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1115/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\hook.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1116/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\loader\loader.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1117/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\layout.cpp.obj
+[1118/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\overlay.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1119/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\registry.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1120/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\io.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1121/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\speedrun.cpp.obj
+[1122/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\gamepad_color.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1123/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\resource.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1124/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\autosave.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1125/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\string.cpp.obj
+[1126/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\bmd_endian_restore.cpp.obj
+[1127/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\touch_camera.cpp.obj
+[1128/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\logging.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1129/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\ui.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1130/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\stubs.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1131/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\texture_replacements.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1132/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\bmd_export.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1133/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiBloomWindow.cpp.obj
+[1134/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\settings.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1135/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiActorSpawner.cpp.obj
+[1136/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiEngine.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1137/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiProcessOverlay.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1138/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\update_check.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1139/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiConsole.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1140/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiCameraOverlay.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1141/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiHeapOverlay.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1142/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiControllerOverlay.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1143/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiStubLog.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1144/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiMenuTools.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1145/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\custom_assets.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1146/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\bool_button.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1147/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\button.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1148/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\component.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1149/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\achievements.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1150/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\leveledit\raycast.cpp.obj
+[1151/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\document.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1152/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiStateShare.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1153/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\event.cpp.obj
+[1154/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\leveledit\enumerate.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1155/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\leveledit\pick.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1156/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\controller_config.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1157/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\icon_provider.cpp.obj
+[1158/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\input.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1159/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\modal.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1160/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\graphics_tuner.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1161/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\mod_window.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1162/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\number_button.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1163/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\reporting.cpp.obj
+[1164/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\pane.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1165/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\select_button.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1166/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\menu_bar.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1167/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\overlay.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1168/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\preset.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1169/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\editor.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1170/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\touch_controls_common.cpp.obj
+[1171/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\prelaunch.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1172/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\tab_bar.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1173/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\string_button.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1174/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\touch_controls.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1175/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\settings.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1176/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\touch_controls_editor.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1177/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\window.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1178/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\offset_ptr.cpp.obj
+[1179/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\OSContext.cpp.obj
+[1180/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\livesplit.cpp.obj
+[1181/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\OSReport.cpp.obj
+[1182/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\ui.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1183/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\OSMutex.cpp.obj
+[1184/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\iso_validate.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1185/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\warp.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1186/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\OSThread.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1187/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\ui\mods.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1188/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\version.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1189/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\hurricane_test.cpp.obj
+[1190/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiSaveEditor.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1191/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\achievements.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1192/1249] Building CXX object CMakeFiles\dusklight.dir\libs\dolphin\src\gf\GFGeometry.cpp.obj
+[1193/1249] Building CXX object CMakeFiles\dusklight.dir\libs\dolphin\src\gf\GFLight.cpp.obj
+[1194/1249] Building CXX object CMakeFiles\dusklight.dir\libs\dolphin\src\gf\GFPixel.cpp.obj
+[1195/1249] Building CXX object CMakeFiles\dusklight.dir\libs\dolphin\src\gf\GFTev.cpp.obj
+[1196/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_malloc.cpp.obj
+[1197/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\discord_presence.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1198/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_API.cpp.obj
+[1199/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_API_controller_pad.cpp.obj
+[1200/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_API_graphic.cpp.obj
+[1201/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_cc_s.cpp.obj
+[1202/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_counter.cpp.obj
+[1203/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_list.cpp.obj
+[1204/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_list_iter.cpp.obj
+[1205/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_node.cpp.obj
+[1206/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_node_iter.cpp.obj
+[1207/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\action_bindings.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1208/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_tree.cpp.obj
+[1209/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_tree_iter.cpp.obj
+[1210/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_phase.cpp.obj
+[1211/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_request.cpp.obj
+[1212/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\dpad_quick_swap.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1213/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_tag.cpp.obj
+[1214/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_tag_iter.cpp.obj
+[1215/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_xyz.cpp.obj
+[1216/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_sxyz.cpp.obj
+[1217/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\discord.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1218/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_bg_s_chk.cpp.obj
+[1219/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_bg_s_gnd_chk.cpp.obj
+[1220/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\http\winhttp.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1221/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_bg_s_lin_chk.cpp.obj
+[1222/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_bg_s_shdw_draw.cpp.obj
+[1223/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_bg_s_poly_info.cpp.obj
+[1224/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_bg_w.cpp.obj
+[1225/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m2d.cpp.obj
+[1226/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_aab.cpp.obj
+[1227/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_cir.cpp.obj
+[1228/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_cps.cpp.obj
+[1229/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d.cpp.obj
+[1230/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_cyl.cpp.obj
+[1231/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_lin.cpp.obj
+[1232/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_pla.cpp.obj
+[1233/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_sph.cpp.obj
+[1234/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_tri.cpp.obj
+[1235/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_m3d_g_vtx.cpp.obj
+[1236/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_lib.cpp.obj
+[1237/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SStandard\s_basic.cpp.obj
+[1238/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_angle.cpp.obj
+[1239/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\audio\DuskAudioSystem.cpp.obj
+[1240/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\audio\DspStub.cpp.obj
+[1241/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\audio\JASCriticalSection.cpp.obj
+[1242/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_cc_d.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1243/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\audio\Adpcm.cpp.obj
+[1244/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\gfx.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1245/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\mods\svc\texture.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1246/1249] Building CXX object CMakeFiles\dusklight.dir\src\SSystem\SComponent\c_math.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1247/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\audio\DuskDsp.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1248/1249] Building CXX object CMakeFiles\dusklight.dir\src\dusk\imgui\ImGuiAudio.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\include\chrono(2387): warning C4530: C++ exception handler used, but unwind semantics are not enabled. Specify /EHsc
+[1249/1249] Generating dusklight exports; Linking CXX executable dusklight.exe; Generating dusklight import library; Embedding symbol manifest; Copying resources
+ INFO 30780 exports (2465 data, 277 forwarded) from 1465 objects

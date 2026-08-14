@@ -30,6 +30,7 @@
 #include "m_Do/m_Do_Reset.h"
 #include <cstdio>
 #include <cstring>
+#include <set>
 
 #include "dusk/logging.h"
 #include "dusk/string.hpp"
@@ -51,10 +52,13 @@ void dStage_nextStage_c::set(const char* i_stage, s8 i_roomId, s16 i_point, s8 i
         // first-arm with the stage/point signature (point 200/0xCA = ba1 tale
         // warp; 0/0xCB = door/§322; else = other machinery) + event status +
         // runEvt + demo mode. Site tags: §347b (ba1), §347c (doors). Strip §336.
-        DuskLog.info("[Stage] §347a ARM next='{}' point={} wipe={} evRun={} runEvt='{}' "
-                     "demoMode={} fnm={} gFrm={}",
-                     i_stage != NULL ? i_stage : "?", (int)i_point, (int)i_wipe,
-                     dComIfGp_event_runCheck() ? 1 : 0,
+        // tale §835 (§833 discriminator): room + layer added — SCLS[2] Ojhous2
+        // is the ONLY Outset door with room!=0; this line must show whether the
+        // non-zero room survives to the arm.
+        DuskLog.info("[Stage] §347a ARM next='{}' room={} layer={} point={} wipe={} evRun={} "
+                     "runEvt='{}' demoMode={} fnm={} gFrm={}",
+                     i_stage != NULL ? i_stage : "?", (int)i_roomId, (int)i_layer, (int)i_point,
+                     (int)i_wipe, dComIfGp_event_runCheck() ? 1 : 0,
                      dComIfGp_getEventManager().getRunEventName(), (int)dDemo_c::getMode(),
                      (int)dDemo_c::getFrameNoMsg(), (int)g_Counter.mCounter0);
 #endif
@@ -630,14 +634,84 @@ void* dStage_roomControl_c::roomDzs_c::add(u8 i_no, u8 roomNo) {
 
 static dStage_objectNameInf l_objectName[] = {
     OBJNAME("Grass",   fpcNm_GRASS_e,             -1),
-    OBJNAME("kusax1",  fpcNm_GRASS_e,             -1),
-    OBJNAME("kusax7",  fpcNm_GRASS_e,             -1),
-    OBJNAME("kusax21", fpcNm_GRASS_e,             -1),
-    OBJNAME("flower",  fpcNm_GRASS_e,             -1),
-    OBJNAME("flwr7",   fpcNm_GRASS_e,             -1),
-    OBJNAME("flwr17",  fpcNm_GRASS_e,             -1),
-    OBJNAME("pflower", fpcNm_GRASS_e,             -1),
-    OBJNAME("pflwrx7", fpcNm_GRASS_e,             -1),
+    // ========================================================================
+    // §696: the donor vegetation names route to the NATIVE PORT, not TP grass.
+    //
+    // These eight names exist ONLY in donor content (no TP stage ships them),
+    // so the rows are data-keyed WW routing with no runtime gate needed. They
+    // had aliased to TP's fpcNm_GRASS_e — on disc-served declared stages the
+    // receiver's own ACTR loader resolves placements through THIS table before
+    // any population claim, so 118 TP-grass actors spawned with TP art and TP
+    // lighting (the "still looks like TP stand-ins, still black" receipt).
+    // fpcNm_EXT_VEG_e is the ported donor dispatcher (d_a_ext_vegetation:
+    // grass blades + both flower tiers; kind==1 delegates to the ported swood
+    // packet), and it reads the donor's own DZR param word verbatim.
+    // swood/swood3/swood5 were previously ABSENT from this table (nothing
+    // spawned — "I don't see small trees"). woodb/woodbx/lwood/Oyashi stay
+    // deliberately unrouted until their native ports land — DN-9 forbids the
+    // mount shortcut.
+    // ========================================================================
+    // ========================================================================
+    // §793: the transition family's first rows — donor shutter doors. Donor-
+    // only names (Htobi* exists in no TP content), so data-keyed routing is
+    // inert on TP by construction, same reasoning as the §696 veg rows above.
+    // Donor rows: WW d_stage.cpp:957-959 (Htobi1/2 -> SHUTTER, Htobi3 ->
+    // SHUTTER2); receiver targets are the §793 ports.
+    // ========================================================================
+    OBJNAME("Htobi1",  fpcNm_WW_SHUTTER_e,        -1),
+    OBJNAME("Htobi2",  fpcNm_WW_SHUTTER_e,        -1),
+    OBJNAME("Htobi3",  fpcNm_WW_SHUTTER2_e,       -1),
+    // ========================================================================
+    // §805: the tsubo family — donor d_a_tsubo (every interior's furniture).
+    // Donor rows: WW d_stage.cpp:519-530. All 12 names are donor-only (checked
+    // against this table 2026-08-12), so data-keyed routing is inert on TP by
+    // construction. The donor's subtype column is the fopAc `argument` field
+    // (unread by the actor — mType comes from placement param bits 24-27,
+    // d_a_tsubo.h:40); -1 here matches the donor-unread posture.
+    // ========================================================================
+    OBJNAME("kotubo",  fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("ootubo1", fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Kmtub",   fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Ktaru",   fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Ostool",  fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Odokuro", fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Okioke",  fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Kmi02",   fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Ptubo",   fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("KkibaB",  fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Kmi00",   fpcNm_WW_TSUBO_e,          -1),
+    OBJNAME("Hbox2S",  fpcNm_WW_TSUBO_e,          -1),
+    // §822: Jabun — donor d_stage.cpp:751 (donor arg 255 = the fopAc
+    // `argument` field, unread by the actor; -1 matches the unread posture).
+    OBJNAME("Jb1",     fpcNm_NPC_JB1_e,           -1),
+    // §835: the wooden shelf — donor d_stage.cpp:862.
+    OBJNAME("Otana",   fpcNm_Obj_Shelf_e,         -1),
+    // §877 batch routes — args verbatim from the donor l_objectName rows
+    // (R5 object_name table): Paper 0/Ppos 1/Piwa 2 = the 3-type selector;
+    // P1a/P1b/P1c 0/1/2 = pirate type; TagSo 0/TagMSo 1 = the fan flag row;
+    // 255-arg rows carry the unread posture as -1.
+    OBJNAME("Paper",   fpcNm_Obj_Paper_e,          0),
+    OBJNAME("Ppos",    fpcNm_Obj_Paper_e,          1),
+    OBJNAME("Piwa",    fpcNm_Obj_Paper_e,          2),
+    OBJNAME("Plant",   fpcNm_Obj_Plant_e,         -1),
+    OBJNAME("lwood",   fpcNm_Lwood_e,             -1),
+    OBJNAME("P1a",     fpcNm_NPC_P1_e,             0),
+    OBJNAME("P1b",     fpcNm_NPC_P1_e,             1),
+    OBJNAME("P1c",     fpcNm_NPC_P1_e,             2),
+    OBJNAME("TagKb",   fpcNm_TAG_KB_ITEM_e,       -1),
+    OBJNAME("TagSo",   fpcNm_TAG_SO_e,             0),
+    OBJNAME("TagMSo",  fpcNm_TAG_SO_e,             1),
+    OBJNAME("kusax1",  fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("kusax7",  fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("kusax21", fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("flower",  fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("flwr7",   fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("flwr17",  fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("pflower", fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("pflwrx7", fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("swood",   fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("swood3",  fpcNm_EXT_VEG_e,           -1),
+    OBJNAME("swood5",  fpcNm_EXT_VEG_e,           -1),
     OBJNAME("door",    fpcNm_DOOR20_e,            -1),
     OBJNAME("kdoor",   fpcNm_KNOB20_e,            -1),
     OBJNAME("ddoor",   fpcNm_DBDOOR_e,            -1),
@@ -1776,6 +1850,80 @@ u8 dStage_roomControl_c::mNoArcBank;
 static fpc_ProcID dStage_actorCreate(stage_actor_data_class* i_actorData, fopAcM_prm_class* i_actorPrm) {
     dStage_objectNameInf* actorInf = dStage_searchName(i_actorData->name);
 
+#if TARGET_PC
+    // ========================================================================
+    // §717 PLACEMENT CENSUS (WAVE-1 pass-9 item 3, WW-host-scoped): the user
+    // observed TP rupees where WW placements should no-op at proc -1 — the
+    // name-collision class (a WW ACTR name matching a receiver l_objectName
+    // row resolves to a TP profile instead of "Nothing"). This is the ONE
+    // funnel every placement passes through, so log each DISTINCT name's
+    // resolution once per session: collisions become a readable table instead
+    // of a guess. Strip with the §717 probe set.
+    // ========================================================================
+    const char* sn717 = dComIfGp_getStartStageName();
+    if (sn717 != NULL && dExtWwSave_isWwHostStage(sn717)) {
+        static std::set<std::string> s_censusSeen;
+        char nameBuf[12];
+        std::memcpy(nameBuf, i_actorData->name, 8);
+        nameBuf[8] = '\0';
+        if (s_censusSeen.insert(nameBuf).second) {
+            if (actorInf == NULL) {
+                DuskLog.info("[WwCensus §717] '{}' -> NOTHING (no l_objectName row; no-op)",
+                             nameBuf);
+            } else {
+                DuskLog.info("[WwCensus §717] '{}' -> proc={} arg={:#x}{}", nameBuf,
+                             (int)actorInf->procname, (unsigned)actorInf->argument,
+                             actorInf->procname == fpcNm_ITEM_e ? "  <<< TP ITEM/RUPEE CLASS"
+                                                                : "");
+            }
+        }
+        // ====================================================================
+        // §725 RULING (History, co-owed §720): the four LIVE capture names
+        // no-op on WW host stages — a TP actor on WW params is wrong twice
+        // (№31: a missing item beats a wrong one; AND_SW2 writes SAVE bits).
+        // Exits are named in the ruling: item → native WW d_a_item port
+        // (History's ticket); TagEv → L-7 RegionTrig service; AND_SW2 →
+        // future switch-semantics row; ky_tag1 → Housing kankyo claim/decline.
+        // No table edits — resolution-time skip, the №93/§679 class.
+        // ====================================================================
+        static const char* const kWwNoOpNames[] = {"item", "ky_tag1", "TagEv", "AND_SW2"};
+        for (size_t k = 0; k < sizeof(kWwNoOpNames) / sizeof(kWwNoOpNames[0]); k++) {
+            if (std::strcmp(nameBuf, kWwNoOpNames[k]) == 0) {
+                static u32 s_noOpHits[4] = {};
+                if (s_noOpHits[k]++ == 0) {
+                    DuskLog.info("[WwCensus §725] '{}' -> RULED NO-OP on WW host (capture "
+                                 "class; exit condition on the ruling)",
+                                 nameBuf);
+                }
+                JKRFree(i_actorPrm);
+                return fpcM_ERROR_PROCESS_ID_e;
+            }
+        }
+        // ====================================================================
+        // §781 — the §725 menu's THIRD option, first use: a capture name whose
+        // NATIVE PORT EXISTS reroutes to it (same funnel, resolution-time,
+        // no table edit). 'bonbori' is TP-placed too, so the route is host-
+        // scoped like the no-ops. TP's Ep draws a torch STAND the donor row
+        // explicitly excludes (§394 banner: Type 1 = "does not have brazier");
+        // the §394 port is the donor's own Type-1 branch. Exit executed —
+        // the no-op era for this name never happened; it goes straight to
+        // native.
+        // ====================================================================
+        if (actorInf != NULL && std::strcmp(nameBuf, "bonbori") == 0) {
+            static dStage_objectNameInf s_wwBonboriInf;
+            s_wwBonboriInf = *actorInf;
+            s_wwBonboriInf.procname = fpcNm_EXT_EP_e;
+            actorInf = &s_wwBonboriInf;
+            static bool s_bonboriLogged = false;
+            if (!s_bonboriLogged) {
+                s_bonboriLogged = true;
+                DuskLog.info("[WwCensus §781] 'bonbori' -> REROUTED to EXT_EP (native §394 "
+                             "port) on WW host");
+            }
+        }
+    }
+#endif
+
     if (actorInf == NULL) {
         OS_REPORT("\x1B""[43;30mStage Actor Name Nothing !! <%s>\n\x1B[m", i_actorData->name);
         JKRFree(i_actorPrm);
@@ -2819,7 +2967,7 @@ static void readMult(dStage_dt_c* i_stage, dStage_Multi_c* multi, bool useOldRes
                 i_stage->setRoomNo(info->mRoomNo);
                 dStage_dt_c_decode(dzs, i_stage, l_roomFuncTable, ARRAY_SIZEU(l_roomFuncTable));
                 dStage_setLayerTagName(l_layerFuncTable, ARRAY_SIZEU(l_layerFuncTable),
-                                       dComIfG_play_c::getLayerNo(0));
+                                       dComIfG_play_c::getLayerNo(info->mRoomNo));  // §892 donor arity
                 dStage_dt_c_decode(dzs, i_stage, l_layerFuncTable, ARRAY_SIZEU(l_layerFuncTable));
             }
 
@@ -2956,6 +3104,10 @@ void dStage_DebugDisp() {
 }
 #endif
 
+// §892 (corrected §891): the invented dStage_selectLayerNo is RETIRED — the
+// donor selects with the ENGINE method at donor arity (WW d_stage.cpp:2150:
+// getLayerNo(i_roomNo)); the WW story algorithm lives inside getLayerNo's
+// resolver now (d_com_inf_game.cpp), not in a d_stage-side fork.
 static void layerTableLoader(void* i_data, dStage_dt_c* i_stage, int roomNo) {
 #if DEBUG
     static FuncTable l_layer0FuncTableA[] = {{"SON0", dStage_soundInfoInit}, {"UNI0", dStage_unitInit}, {"UNI1", dStage_unitInit}};
@@ -2996,10 +3148,10 @@ static void layerTableLoader(void* i_data, dStage_dt_c* i_stage, int roomNo) {
     }
 
 #if DEBUG
-    dStage_dt_c_decode(i_data, i_stage, l_layerFuncTableA_p[dComIfG_play_c::getLayerNo(0)], ARRAY_SIZE(l_layer0FuncTableA));
+    dStage_dt_c_decode(i_data, i_stage, l_layerFuncTableA_p[dComIfG_play_c::getLayerNo(roomNo)], ARRAY_SIZE(l_layer0FuncTableA));
 #else
     dStage_setLayerTagName(l_layerFuncTableA, ARRAY_SIZEU(l_layerFuncTableA),
-                           dComIfG_play_c::getLayerNo(0));
+                           dComIfG_play_c::getLayerNo(roomNo));  // §892 donor arity
     dStage_dt_c_decode(i_data, i_stage, l_layerFuncTableA, ARRAY_SIZEU(l_layerFuncTableA));
 #endif
 
@@ -3007,7 +3159,7 @@ static void layerTableLoader(void* i_data, dStage_dt_c* i_stage, int roomNo) {
     dStage_Elst_c* elst = dComIfGp_getStage()->getElst();
     if (elst != NULL && newRoomNo >= 0 && elst->m_entryNum > newRoomNo) {
         dStage_Elst_dt_c* d = elst->m_entries;
-        int l = dComIfG_play_c::getLayerNo(0);
+        int l = dComIfG_play_c::getLayerNo(roomNo);  // §892 donor arity
         JUT_ASSERT(4174, 0 <= l && l < 15);
         int env_layer = d[newRoomNo].m_layerTable[l];
         JUT_ASSERT(4182, 0 <= env_layer && env_layer < 15);
@@ -3057,7 +3209,7 @@ static void layerActorLoader(void* i_data, dStage_dt_c* i_stage, int param_2) {
     dStubWatch_logLayerR_SP107(param_2 >= 0 ? param_2 : dComIfGp_getStartStageRoomNo());
 #endif
 
-    dStage_setLayerTagName(l_layerFuncTable, 4, dComIfG_play_c::getLayerNo(0));
+    dStage_setLayerTagName(l_layerFuncTable, 4, dComIfG_play_c::getLayerNo(param_2));  // §892 donor arity
     dStage_dt_c_decode(i_data, i_stage, l_layerFuncTable, ARRAY_SIZEU(l_layerFuncTable));
 }
 
@@ -3333,6 +3485,26 @@ int dStage_changeScene(int i_exitId, f32 speed, u32 mode, s8 room_no, s16 angle,
     if (layer == -1 && param_5 != -1) {
         layer = param_5;
     }
+
+#if TARGET_PC
+    // ========================================================================
+    // tale §835 (§833/§834): USE-time SCLS receipt, WW hosts only. The load-
+    // time translation log proves the RECORD is right; this proves which record
+    // the DOOR picked. Discriminates in one line: wrong exitId (H1 — resolves
+    // the neighbor record, e.g. SCLS[1] Ojhous/0 instead of SCLS[2] Ojhous2/1,
+    // same XZ, wrong floor per §834), right record but room lost later (H2 —
+    // compare against the §347a ARM room), and the arrival layer value (H3).
+    // ========================================================================
+    {
+        const char* sn835 = dComIfGp_getStartStageName();
+        if (sn835 != NULL && dExtWwSave_isWwHostStage(sn835)) {
+            DuskLog.info("[Stage] §835 door SCLS pick: exitId={} srcRoom={} -> stage='{:.8s}' "
+                         "start={} room={} layer={} wipe={}",
+                         i_exitId, (int)room_no, scls_info->mStage, (int)scls_info->mStart,
+                         (int)scls_info->mRoom, layer, wipe);
+        }
+    }
+#endif
 
     if (timeH < 31) {
         dKy_set_nexttime(15.0f * timeH);

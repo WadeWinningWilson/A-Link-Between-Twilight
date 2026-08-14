@@ -238,8 +238,60 @@ void dKyWw_setSkyHost(bool i_active) {
                      (int)s_wwSkyHost, (int)i_active);
     }
     s_wwSkyHost = i_active;
+    if (!i_active) {
+        dKyWw_skyArcsPoll();  // §684: false-edge releases the sky arcs at once
+    }
 }
 bool dKyWw_isSkyHost() { return s_wwSkyHost; }
+
+// ============================================================
+// §684 SKY-ARC RESIDENCY FOLLOWS THE SKY-HOST FLAG, NOT THE MOUNT.
+//
+// The celestial textures (sun/moon/star BTIs, donor Always resource IDs) ride
+// the WwAlways arc, and vrkumo's cloud texture rides the WwSky arc. Until now
+// their residency was armed only by the F_DL* MOUNT path (mountWantsWwSky:
+// EXT_BG0/BG9 + stage[0]=='F'), so on a DECLARED sky stage (`sea` — where the
+// §657 native path flips skyHost from the STAGE's own vr_sky) both arcs
+// simply never loaded: the sun/moon retry warnings ('celestial BTIs not
+// resident', 'vrkumo cloudtx not resident') repeated forever and the sky
+// stayed a bare dome over a yellow void. (Foam looked alive because the WAVE
+// path resLoads WwAlways on its own — which is also why 'water effects'
+// appeared once the disc build made first load faster.)
+//
+// This manager keys residency on the sky-host flag itself — the single truth
+// the §657/§411 paths both already set. Phased resLoad per frame while the
+// flag is on (the resource system refcounts mounts, so coexistence with the
+// wave path's own WwAlways phase handle is safe); released on the false edge
+// (scene init clears the flag before any WW consumer runs, d_kankyo.cpp §411).
+// ============================================================
+static request_of_phase_process_class s_skyArcPhase[2];
+static int s_skyArcPhaseState[2] = {cPhs_INIT_e, cPhs_INIT_e};
+static const char* const kSkyArcNames[2] = {"WwSky", "WwAlways"};
+
+void dKyWw_skyArcsPoll() {
+    for (int i = 0; i < 2; i++) {
+        if (s_wwSkyHost) {
+            if (s_skyArcPhaseState[i] != cPhs_COMPLEATE_e &&
+                s_skyArcPhaseState[i] != cPhs_ERROR_e)
+            {
+                s_skyArcPhaseState[i] = dComIfG_resLoad(&s_skyArcPhase[i], kSkyArcNames[i]);
+                if (s_skyArcPhaseState[i] == cPhs_COMPLEATE_e) {
+                    DuskLog.info("[WwSky] §684 '{}' resident (sky-host keyed)", kSkyArcNames[i]);
+                } else if (s_skyArcPhaseState[i] == cPhs_ERROR_e) {
+                    DuskLog.warn("[WwSky] §684 '{}' resLoad ERROR — celestial layer stays "
+                                 "dark (is the arc staged?)",
+                                 kSkyArcNames[i]);
+                }
+            }
+        } else if (s_skyArcPhaseState[i] == cPhs_COMPLEATE_e) {
+            dComIfG_resDelete(&s_skyArcPhase[i], kSkyArcNames[i]);
+            s_skyArcPhaseState[i] = cPhs_INIT_e;
+            DuskLog.info("[WwSky] §684 '{}' released (sky host off)", kSkyArcNames[i]);
+        } else {
+            s_skyArcPhaseState[i] = cPhs_INIT_e;
+        }
+    }
+}
 
 // §418 dome ownership handshake: set by daVrbox_Create's WW leg, cleared on
 // sky-host transitions (actors are deleted by the framework on stage change).

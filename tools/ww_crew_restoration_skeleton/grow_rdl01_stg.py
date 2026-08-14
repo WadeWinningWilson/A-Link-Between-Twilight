@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+# ============================================================================
 """№97/№102: grow R_DL01 STG_00.arc to 6 rooms (room0..5 + RTBL/MULT).
 
 History already delivered R01_00..R05_00.arc + ext_bg2..6 manifests.
@@ -33,6 +35,28 @@ Usage:
              pre-№97 snapshot and nothing else.
 """
 from __future__ import annotations
+# ============================================================================
+# TIER-3 QUARANTINE (kit audit + OUTPUT LAW wiring). This tool writes donor-
+# format bytes and belongs to the era the project is leaving. It must NOT run
+# in the disc-native porting wave. Kept RE-RUNNABLE per the No116 ceremony:
+# pass --tier3-override; the run is then LEDGERED so no donor-format write
+# happens silently. IMPORT-SAFE: gates only under __main__, so Tier-1 kits
+# that import helpers from this file are unaffected.
+# ============================================================================
+import sys as _q_sys
+if __name__ == "__main__":
+    if "--tier3-override" not in _q_sys.argv:
+        _q_sys.stderr.write(
+            "TIER-3 QUARANTINED (kit audit): retired from the disc-native wave. "
+            "Deliberate rerun: --tier3-override (ledgered).\n")
+        raise SystemExit(3)
+    _q_sys.argv.remove("--tier3-override")
+    import io as _q_io
+    from pathlib import Path as _q_P
+    _q_led = _q_P(__file__).resolve().parents[2] / "docs" / "state" / "ww-staging" / "OUTPUT-LEDGER.md"
+    with _q_io.open(_q_led, "a", encoding="utf-8", newline="\r\n") as _q_f:
+        _q_f.write("| TIER3-OVERRIDE RUN: %s | deliberate rerun | quarantine stands |\n"
+                   % _q_P(__file__).name)
 
 import os
 import struct

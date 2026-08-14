@@ -14,7 +14,8 @@
 #include "d/d_bg_s_gnd_chk.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
-#include "d/d_kankyo_ww.h"  // §412 WW sky-host gate
+#include "d/d_kankyo_ww.h"
+#include "d/d_kankyo_ww_wind.h"   // §868 WW wind field driver  // §412 WW sky-host gate
 #include "d/d_kankyo_ww_sky.h"  // §413 WW celestial layer
 #include "d/d_kankyo_rain.h"
 #include "d/d_particle.h"
@@ -467,6 +468,19 @@ static void wether_move_windline();
 #endif
 
 void dKyw_wether_move() {
+    // ========================================================================
+    // §868 land step 2 (§879 wake): the WW WIND FIELD advances once per frame
+    // on WW host stages — donor caller parity (dKy_wind_set runs from the
+    // wether move pass, d_kankyo_wether.cpp:985). WW-owned state only; TP's
+    // global_wind_influence is untouched on TP stages (§865 parallel-systems
+    // rule; scope gate per the shared-path law).
+    // ========================================================================
+    {
+        const char* wwStage = dComIfGp_getStartStageName();
+        if (wwStage != NULL && dExtWwSave_isWwHostStage(wwStage)) {
+            dKyWw_wind_set();
+        }
+    }
     wether_move_thunder();
 #if TARGET_PC
     wether_move_windline();
@@ -476,6 +490,7 @@ void dKyw_wether_move() {
 static void wether_move_sun() {
     // §413: covenant — WW hosts get the WW sun/moon/lenz, not TP's.
     if (dKyWw_isSkyHost()) {
+        dKyWw_skyArcsPoll();  // §684: celestial arcs load sky-host-keyed
         dKyWwSky_moveSun();
         return;
     }
@@ -1374,6 +1389,15 @@ static void wwLoadWaveCalmIni(const char* stage) {
             }
         }
     }
+    // ========================================================================
+    // tale §835: a WW host with NO section in the ini (interiors) must end in
+    // the cleared state, not "loaded-empty" — flatInter/flatCounter semantics
+    // differ, and this keeps behavior identical to the old F-letter gate.
+    // ========================================================================
+    if (s_calmBoxCount == 0 && s_waveInflCount == 0) {
+        wwCalmClear();
+        return;
+    }
     for (int i = s_waveInflCount; i < kWaveInflMax; i++) {
         s_waveInflPtrs[i] = NULL;
     }
@@ -1388,7 +1412,17 @@ WAVE_INFO* const* dKyw_getWaveInfl() {
 }
 
 void dKyw_wave_calm_onStage(const char* stage) {
-    if (stage != NULL && stage[0] == 'F' && dExtWwSave_isWwHostStage(stage)) {
+    // ========================================================================
+    // tale §835 (row 21 names, tale §831): the `stage[0] == 'F'` test was the
+    // fork-era host-naming convention (F_DL01/F_DL02) and excluded the native
+    // disc-served donor stage entirely. The real gate is WW-host membership;
+    // which hosts carry a calm map stays DATA-SIDE (ini section presence — a
+    // stage with no section falls through to clear inside the loader).
+    // BRIDGE LABEL (unchanged scope): this whole calm-map translation stands in
+    // for the donor sea stage's own wave_max grid (dKyw GetArea); porting that
+    // grid read natively retires this ini. Recorded as the owed native target.
+    // ========================================================================
+    if (stage != NULL && dExtWwSave_isWwHostStage(stage)) {
         wwLoadWaveCalmIni(stage);
     } else {
         wwCalmClear();

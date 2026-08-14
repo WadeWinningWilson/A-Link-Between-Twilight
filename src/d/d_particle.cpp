@@ -696,8 +696,28 @@ void dPa_modelEcallBack::setupModel(JPABaseEmitter* i_emitter) {
 
 void dPa_modelEcallBack::drawModel(JPABaseEmitter* i_emitter, f32 (*param_1)[4]) {
     JUT_ASSERT(1542, i_emitter != NULL);
-    
+
     model_c* pModel = getModel(i_emitter);
+    // ========================================================================
+    // [WwTsubo-probe] §832 draw-side twin (sight-only, LOUD-once each way):
+    // fires the first time the particle system actually asks a model emitter
+    // to draw. With the break-site receipt this splits the chain three ways —
+    // no receipt = dispatch never ran; receipt but no draw line = particle
+    // callback never invoked (emitter dead/culled); draw with model=null =
+    // emitter->model mapping lost between setModel and draw.
+    // ========================================================================
+    {
+        static bool s_drawn = false, s_null = false;
+        if (pModel && !s_drawn) {
+            s_drawn = true;
+            DuskLog.info("[WwTsubo-probe] drawModel FIRST DRAW: emitter={} pos=({:.1f},{:.1f},{:.1f})",
+                         (void*)i_emitter, param_1[0][3], param_1[1][3], param_1[2][3]);
+        } else if (!pModel && !s_null) {
+            s_null = true;
+            DuskLog.warn("[WwTsubo-probe] drawModel with NO model bound (emitter={}) — "
+                         "mapping lost between setModel and draw", (void*)i_emitter);
+        }
+    }
     if (pModel) {
         pModel->draw(param_1);
     }
@@ -1525,6 +1545,17 @@ static WwCommonRes sWwCommon[] = {
     // §231 wave-emit ferry (Foundry §223): the WW ship-wake family + pig ripple, all
     // verified present in the staged common.jpc (offline gclib). One supplemental slot
     // each; lazy-loaded + routed on first emit via dPa_wwWindlineResRM (table-driven).
+    // §843 WW BREAKABLE-PROP SHATTER FAMILY. The receiver enum's AK_/IT_ names
+    // carry TP values; these are the DONOR ids (WW DP d_particle_name.h) and
+    // without a row here the supplemental router refuses them — pots broke with
+    // no shards (user report). All five VERIFIED PRESENT in the staged
+    // common.jpc by an offline JPAC1-00 walk before landing (tale §843/§845;
+    // 193 declared == 193 JEFF blocks parsed, control 0x0031 present).
+    {0x0017, kWwWindlineRmSlot, NULL, false},  // TUBOHAHEN     — pot shards
+    {0x0018, kWwWindlineRmSlot, NULL, false},  // TUBOKONAGONA  — pot dust
+    {0x03E5, kWwWindlineRmSlot, NULL, false},  // TR_HAHEN_A    — barrel
+    {0x03E7, kWwWindlineRmSlot, NULL, false},  // TR_HAHEN_C    — stool/pail/hbox2S/woodS
+    {0x03E8, kWwWindlineRmSlot, NULL, false},  // DOKURO00      — skull/try
     {0x0024, 6, NULL, false},   // ID_AK_JN_SHIPIMPACT00
     {0x0026, 7, NULL, false},   // ID_AK_JN_HAMON00 (ripple — pig/shallow-water)
     {0x0034, 8, NULL, false},   // ID_AK_JN_SHIPWARP-family / impact

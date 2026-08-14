@@ -134,6 +134,17 @@ typedef bool (*dCamera_extraEngineFn)(dCamera_c*, s32 i_style, int i_algorithm);
 void dCamera_setExtraEngineHook(dCamera_extraEngineFn i_fn);
 int dCamera_engineTblCount();
 
+// ============================================================================
+// SELECTION EXTENSION POINT — same shape and same argument as the extra-engine
+// hook above: names no extension and knows of none. When installed and it
+// returns true, it has performed this frame's type/mode/style selection
+// (writing mCurType/mCurMode/mCamStyle and mCamParam) and the built-in
+// nextType/nextMode/style-change block is skipped; returning false leaves the
+// built-in selection to run exactly as before. NULL default = built-in only.
+// ============================================================================
+typedef bool (*dCamera_selectFn)(dCamera_c*);
+void dCamera_setSelectHook(dCamera_selectFn i_fn);
+
 #if TARGET_PC
 struct DebugFlyCam {
     bool initialized;

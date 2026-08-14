@@ -3,6 +3,10 @@
  * 
 */
 
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 #include "d/dolzel_rel.h" // IWYU pragma: keep
 
 #include "d/actor/d_a_bg.h"
@@ -16,12 +20,15 @@
 #if TARGET_PC
 #include "d/d_ext_npc_mount.h"
 #include "d/d_ext_save_guard.h"
+#include "d/d_bg_s_gnd_chk.h"                    // tale §757 post-Regist self-test
+#include "SSystem/SComponent/c_counter.h"        // tale §757 frame stamp
 #include "dusk/logging.h"
 #endif
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "JSystem/JKernel/JKRSolidHeap.h"
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.h"
 #include <cstring>
+#include <cstdio>  // tale §898 [P2] stage-latch snprintf
 
 const char* daBg_c::setArcName() {
     static char arcName[32];
@@ -138,6 +145,28 @@ int daBg_c::createHeap() {
         if (modelData == NULL) {
             modelData = (J3DModelData*)dComIfG_getStageRes(arcName, l_modelName2[i]);
         }
+
+#if TARGET_PC
+        // ====================================================================
+        // tale §898 [P1] (CALLS row 68 chain): daBg's model FETCH receipt — the
+        // step between the seam publish (measured clean for A_mori) and draw.
+        // WW hosts only; model[0] NULL here = the room model never reached the
+        // room actor and the invisible-room fault is THIS seam. Sight-only.
+        // ====================================================================
+        {
+            const char* sn898 = dComIfGp_getStartStageName();
+            if (sn898 != NULL && dExtWwSave_isWwHostStage(sn898)) {
+                if (modelData != NULL) {
+                    DuskLog.info("[daBg] §898-P1 room{} model[{}] fetched data={}", roomNo, i,
+                                 (void*)modelData);
+                } else if (i == 0) {
+                    DuskLog.warn("[daBg] §898-P1 room{} model[0] NULL from arc '{}' — room "
+                                 "model never reached daBg create",
+                                 roomNo, arcName);
+                }
+            }
+        }
+#endif
 
         if (modelData != NULL) {
             mDoExt_setupStageTexture(modelData);
@@ -306,6 +335,38 @@ int daBg_c::draw() {
     daBg_Part* bgPart = mBgParts;
     J3DModel* bg_model;
 
+#if TARGET_PC
+    // ========================================================================
+    // tale §898 [P2] (CALLS row 68 chain): FIRST-DRAW dispatch receipt, one-shot
+    // per (stage, room) on WW hosts. Present with models bound = the whole
+    // pipeline ran and the fault is visual (cull/far/lighting); absent while
+    // [P1] fetched = draw never dispatched. Latch resets on stage change so
+    // repeated room numbers across stages stay distinct. Sight-only.
+    // ========================================================================
+    {
+        static char s_drawStage[12] = {0};
+        static u64 s_drawSeen = 0;
+        const char* sn898 = dComIfGp_getStartStageName();
+        if (sn898 != NULL && dExtWwSave_isWwHostStage(sn898) && roomNo >= 0 && roomNo < 64) {
+            if (std::strncmp(s_drawStage, sn898, sizeof(s_drawStage) - 1) != 0) {
+                std::snprintf(s_drawStage, sizeof(s_drawStage), "%s", sn898);
+                s_drawSeen = 0;
+            }
+            if (!(s_drawSeen & (1ull << roomNo))) {
+                s_drawSeen |= 1ull << roomNo;
+                int nm = 0;
+                for (int k = 0; k < 6; k++) {
+                    if (mBgParts[k].model != NULL) {
+                        nm++;
+                    }
+                }
+                DuskLog.info("[daBg] §898-P2 room{} FIRST DRAW dispatch — models bound={}/6",
+                             roomNo, nm);
+            }
+        }
+    }
+#endif
+
     u8 spA;
     u8 sp9;
     u8 sp8 = 0;
@@ -342,16 +403,38 @@ int daBg_c::draw() {
 
             bg_model->calc();
 
+            // ================================================================
+            // §682: NO PER-SHAPE CULLING for donor rooms — donor granularity.
+            //
+            // The §679/§679b probes proved the per-shape clip verdicts here
+            // are self-consistent (independent plane math agreed on every
+            // specimen) yet the island still visibly draw/undraws — i.e. the
+            // view matrix present at draw-list-BUILD time is not the view the
+            // frame finally renders (interpolation/pass-ordering skew). TP
+            // never sees it because its room shapes are small; WW's island-
+            // sized shapes turn the skew into whole-terrain holes.
+            //
+            // The donor's own daBg does NOT per-shape-cull room models — it
+            // clips whole models only (WW d_a_bg.cpp:277 `clip(model)`). So
+            // on WW host stages every shape stays shown, exactly the donor's
+            // granularity; the receiver's own stages keep the receiver's
+            // per-shape behavior byte-for-byte.
+            // ================================================================
+            // KIT-DONOR-HUNK: d/actor/d_a_bg.cpp MatchingFor
+            const char* wwStage = dComIfGp_getStartStageName();
+            const bool wwHost = wwStage != NULL && dExtWwSave_isWwHostStage(wwStage);
+
             for (u16 j = 0; j < modelData->getShapeNum(); j++) {
                 J3DShape* shape = modelData->getShapeNodePointer(j);
 
-                if (mDoLib_clipper::clip(j3dSys.getViewMtx(), (Vec*)shape->getMin(),
-                                         (Vec*)shape->getMax())) {
+                if (!wwHost && mDoLib_clipper::clip(j3dSys.getViewMtx(), (Vec*)shape->getMin(),
+                                                    (Vec*)shape->getMax())) {
                     shape->hide();
                 } else {
                     shape->show();
                 }
             }
+            // KIT-DONOR-HUNK-END
 
             static int l_tevStrType[6] = {32, 33, 34, 35, 35, 32};
             g_env_light.settingTevStruct(l_tevStrType[i], NULL, bgPart->tevstr);
@@ -619,6 +702,37 @@ int daBg_c::create() {
             if (dComIfG_Bgsp().Regist(mpBgW, this)) {
                 return cPhs_ERROR_e;
             }
+#if TARGET_PC
+            // ================================================================
+            // tale §757 (the invisible floor, tale §755): the ground query at
+            // LinkRM/0's spawn returned gndCode=-1 over four donor floor tris
+            // at Y=0, and the log cannot say whether this Regist ever ran or
+            // whether the registered bg answers queries at all. One-shot per
+            // WW-host room: Regist receipt + a DIRECT GndChk down the spawn
+            // column immediately after registration. If the self-test HITS,
+            // the defect is timing (player spawned before this line) or
+            // query-side flags; if it MISSES over present geometry, it is
+            // registration-side. Instrument only — DN-10-clean.
+            // ================================================================
+            {
+                const char* sn757 = dComIfGp_getStartStageName();
+                if (sn757 != NULL && dExtWwSave_isWwHostStage(sn757)) {
+                    dBgS_GndChk chk;
+                    cXyz probe(-255.0f, 500.0f, 1125.0f);
+                    fopAc_ac_c* pl757 = dComIfGp_getPlayer(0);
+                    if (pl757 != NULL) {
+                        probe.set(pl757->current.pos.x, pl757->current.pos.y + 500.0f,
+                                  pl757->current.pos.z);
+                    }
+                    chk.SetPos(&probe);
+                    const f32 hit = dComIfG_Bgsp().GroundCross(&chk);
+                    DuskLog.warn("[daBg] §757 room{} BgW REGISTERED gFrm={} — post-Regist "
+                                 "GndChk at ({:.0f},{:.0f},{:.0f}) -> {}",
+                                 roomNo, (int)g_Counter.mCounter0, probe.x, probe.y, probe.z,
+                                 hit <= -1e9f ? "MISS (-inf)" : "HIT");
+                }
+            }
+#endif
         }
 
         if (mpKCol != NULL) {

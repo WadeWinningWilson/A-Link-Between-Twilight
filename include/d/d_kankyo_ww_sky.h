@@ -24,5 +24,10 @@ bool dKyWwSky_starReady();
 // BEFORE the mount flips the sky host flag (vrkumo hard-fails to status 99 if
 // cloudtx was not yet resident). Called from dKyWw_setSkyHost transitions.
 void dKyWwSky_reset();
+// §687: the donor vrbox color engine (setLight vrbox section + palette
+// selection + easing + player-room input, ported whole). Called from the
+// receiver's setLight vrbox slot on WW sky hosts — one owner, donor slot.
+void dKyWwSky_setVrboxColors();
+void dKyWwSky_vrboxColorsReset();
 
 #endif

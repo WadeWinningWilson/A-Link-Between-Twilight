@@ -33,7 +33,8 @@
 #   space_kit.py inventory <DonorStageDirName>   Pass-1 over a DONOR stage
 #   space_kit.py regress                         Pass-3 battery over the LIVE host
 #
-#   Inputs   : inventory — D:/XXXXXXX/Ex WW/files/res/Stage/<DonorStageDirName>
+#   Inputs   : inventory — DISC-FIRST (backend.extraIsoPath / WW_ISO; game-id
+#              checked) with the Ex WW tree as LOUD fallback; SOURCE line printed
 #              regress   — <mod>/files/res/Stage/R_DL01/STG_00.arc
 #                          <mod>/files/res/Stage/R_DL01/R00_00.arc
 #   Outputs  : NONE on disk. inventory prints the Pass-4 manifest as JSON on
@@ -58,14 +59,92 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+# Consolidation (tale §850, user-ordered): the kit now lives in tools/foundry;
+# merge_event's bake-era chain stays in the skeleton dir — path kept for it.
+sys.path.insert(0, str(Path(__file__).parent.parent / "ww_crew_restoration_skeleton"))
 from jstudio_stb import yaz0_dec, rarc_members
 from merge_event import EventFile, arc_member, ESZ, SSZ, CSZ, DSZ
 
 DONOR_ROOT = Path("D:/XXXXXXX/Ex WW/files/res/Stage")
+
+# ============================================================================
+# NATIVE-DISC INPUT (user routing via tale-bus WHOSE-TURN: "kit right now works
+# for mainly mounts/legs, not native disc"). Donor reads are DISC-FIRST:
+# the WW image named by `backend.extraIsoPath` (the row-14 generic field the
+# plugin itself consumes) or env WW_ISO; the extracted tree is the FALLBACK,
+# and every inventory prints its SOURCE line so which one served can never be
+# assumed (source-attribution honesty).
+# ============================================================================
+import json as _json
+import os as _os
+sys.path.insert(0, str(Path(__file__).parent.parent / "foundry"))
+import ww_disc as _wd
+
+_DISC = None  # (file, boot, label) | False once probed and absent
+
+
+def _ww_iso():
+    global _DISC
+    if _DISC is not None:
+        return _DISC or None
+    path = _os.environ.get("WW_ISO", "")
+    if not path:
+        cfg = _os.path.expandvars(r"%APPDATA%\TwilitRealm\Dusklight\config.json")
+        try:
+            path = _json.load(open(cfg, encoding="utf-8")).get("backend.extraIsoPath", "")
+        except OSError:
+            path = ""
+    if path and Path(path).is_file():
+        try:
+            f, boot = _wd.iso_open(path, _wd.WW_IDS)
+            _DISC = (f, boot, "disc %s (%s)" % (boot[:6].decode("ascii", "replace"), path))
+            return _DISC
+        except (OSError, ValueError) as e:
+            print("SOURCE: disc configured but unusable (%s) -- falling back to tree" % e)
+    _DISC = False
+    return None
+
+
+def donor_file(stage_name, member):
+    """(bytes, source-label) for res/Stage/<stage>/<member> -- disc first."""
+    d = _ww_iso()
+    if d:
+        try:
+            data = _wd.iso_read_file(d[0], d[1], "res/Stage/%s/%s" % (stage_name, member))
+            return data, d[2]
+        except FileNotFoundError:
+            pass
+    p = DONOR_ROOT / stage_name / member
+    if p.is_file():
+        return p.read_bytes(), "tree FALLBACK %s" % p
+    raise FileNotFoundError("%s/%s on neither disc nor tree" % (stage_name, member))
+
+
+def donor_rooms(stage_name):
+    """Room*.arc member names for the stage -- FST-listed on disc, glob on tree."""
+    d = _ww_iso()
+    if d:
+        pre = "res/Stage/%s/Room" % stage_name
+        names = [pth.rsplit("/", 1)[1] for pth, _o, _l in _wd.fst_walk(d[0], d[1])
+                 if pth.startswith(pre) and pth.endswith(".arc")]
+        if names:
+            return sorted(names)
+    return sorted(q.name for q in (DONOR_ROOT / stage_name).glob("Room*.arc"))
+
 MOD = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/model_replacements/WW-Crew-Restoration")
 HOST_STG = MOD / "files/res/Stage/R_DL01/STG_00.arc"
 HOST_ROOM0 = MOD / "files/res/Stage/R_DL01/R00_00.arc"
-HOST_DEMO_ARC = MOD / "arcs/Demo01.arc"
+# Row-21 retirement made arcs/ a moving target: the live overlay first, the
+# retired REFERENCE copy second (a validator asserting the CLOSED tale may
+# read reference bytes; it must say which it read — the source line prints).
+# §742 MEASURED: our Demo01.arc vs disc res/Object/Demo01.arc — member sets
+# EQUAL, stb/bck/brk BYTE-IDENTICAL; only ba.bdl/fuku.bdl/blackfadebox.bdl
+# differ (DN-3 model adaptation). TRANSFORMED bucket, so mount-sourced is
+# legitimate-for-now — WITH ITS EXIT (§723 rule): this input flips to the
+# disc path the day BDL adaptation happens at consumption (L1 layer-2) instead
+# of at bake; until then the three adapted models ARE the residue.
+_DEMO_CANDIDATES = [MOD / "arcs/Demo01.arc", MOD / "arcs_retired_row21/Demo01.arc"]
+HOST_DEMO_ARC = next((c for c in _DEMO_CANDIDATES if c.is_file()), _DEMO_CANDIDATES[0])
 
 # §322b alias (port-side code the kit VERIFIES, never bakes — §325 trim):
 # donor StartCode -> host spawn id, per stage alias in d_event_data.cpp
@@ -77,7 +156,7 @@ bef32 = lambda d, o: struct.unpack_from(">f", d, o)[0]
 
 
 def get_member(arc_path, suffix):
-    raw = Path(arc_path).read_bytes()
+    raw = arc_path if isinstance(arc_path, (bytes, bytearray)) else Path(arc_path).read_bytes()
     if raw[:4] == b"Yaz0":
         raw = yaz0_dec(raw)
     for nm, blob in rarc_members(raw):
@@ -89,7 +168,7 @@ def get_member(arc_path, suffix):
 
 
 def member_names(arc_path):
-    raw = Path(arc_path).read_bytes()
+    raw = arc_path if isinstance(arc_path, (bytes, bytearray)) else Path(arc_path).read_bytes()
     if raw[:4] == b"Yaz0":
         raw = yaz0_dec(raw)
     return [nm for nm, _ in rarc_members(raw)]
@@ -267,22 +346,166 @@ def stb_fade_channels(stb):
 # ---------------------------------------------------------------------------
 # MODE: inventory (Pass 1 on a donor stage)
 # ---------------------------------------------------------------------------
+
+# ============================================================================
+# INTERIOR-COMPLETENESS (interior-entrance-transitions.md §3, routed): an
+# interior is INCOMPLETE while any of its TRANSITION ACTORS is unported —
+# the donor dispatch chain is the complete set, nothing invented. Placement
+# names map to actor classes via the donor's own l_objectName rows; the
+# ported/unported roster is DECLARED with the doc as authority and shrinks as
+# History ports (update BOTH the doc table and this dict in the same change).
+# ============================================================================
+TRANSITION_CLASS = {
+    # l_objectName spelling -> donor actor class
+    "door10": "DOOR10", "door11": "DOOR10", "door20": "DOOR10", "door21": "DOOR10",
+    "Zenshut": "DOOR10", "keyshut": "DOOR10", "K_Zshut": "DOOR10",
+    "door12": "DOOR12", "door12M": "DOOR12", "door12B": "DOOR12",
+    "door13": "DOOR12", "door13M": "DOOR12", "door13B": "DOOR12",
+    "keyS12": "DOOR12", "ZenS12": "DOOR12",
+    "doorKD": "KDDOOR", "ZenshKD": "KDDOOR", "K_ZshKD": "KDDOOR",
+    "doorSH": "KDDOOR", "doorSZ": "KDDOOR",
+    "KNOB00": "KNOB00", "KNOB01": "KNOB00", "KNOB02": "KNOB00", "KNOB03": "KNOB00",
+    "KNOB00D": "KNOB00", "KNOB01D": "KNOB00", "KNOB02D": "KNOB00", "KNOB03D": "KNOB00",
+    "ATdoor": "ATDOOR", "Mori1": "MDOOR",
+    "Ashut": "SHUTTER", "Ashut2": "SHUTTER2",
+    "htetu": "OBJ_HOLE", "Hhyu1": "OBJ_HOLE",
+    "ladder": "OBJ_LADDER", "Mhsg4h": "LSTAIR", "Mhsg6": "LSTAIR", "Mhsg9": "LSTAIR",
+}
+PORTED_CLASSES = {"KNOB00", "OBJ_LADDER"}  # doc table; the other 13 are unported
+
+
+def _placement_names(dz):
+    """8-byte actor names from every placement chunk (ACTR/SCOB/DOOR/TGDR/TGSC
+    + story layers), at each tag's record stride."""
+    names = set()
+    for tag, entries in dz_chunks(dz).items():
+        base = tag[:3]
+        if tag in ("ACTR", "TGOB") or base == "ACT":
+            stride = 0x20
+        elif tag in ("SCOB", "TGSC", "DOOR", "TGDR", "Door") or base == "SCO":
+            stride = 0x24
+        else:
+            continue
+        for cnt, off in entries:
+            # dz_chunks stores (count, OFFSET into dz) -- slice the dz itself
+            for i in range(cnt):
+                rec = dz[off + i * stride: off + i * stride + 8]
+                nm = rec.split(b"\x00")[0]
+                if nm:
+                    names.add(nm.decode("ascii", "replace"))
+    return names
+
+
+def transition_report(all_names):
+    found = {}
+    for nm in sorted(all_names):
+        cls = TRANSITION_CLASS.get(nm)
+        if cls:
+            found.setdefault(cls, []).append(nm)
+    unported = sorted(c for c in found if c not in PORTED_CLASSES)
+    return {
+        "transition_actors_found": {c: found[c] for c in sorted(found)},
+        "unported_transition_classes": unported,
+        "interior_status": ("INCOMPLETE — %d transition class(es) unported: %s"
+                            % (len(unported), ", ".join(unported)))
+                           if unported else "transition-complete",
+    }
+
+
+
+# ============================================================================
+# LAYER-AWARE WARP EMITTER (interconnected §805, user-directed: move porting
+# load off AI instances and onto the kits). Reads each stage's DZR layer
+# chunks off the DISC and emits dBootStage_add("<stage>,<room>,<layer>") rows
+# for every layer that actually CONTAINS placements — labeled by the donor's
+# own actor names (Ob1, Ko1 — never hypothesis labels). The engine grammar
+# already exists (§638); covenant-clean by construction: runtime strings, no
+# compiled stage literals. Layer index = the chunk suffix (ACT0..ACT9,a,b =
+# 0..11), the same number setRoomLayerOverride consumes.
+# ============================================================================
+_LAYER_IDX = {c: i for i, c in enumerate("0123456789ab")}
+
+
+def _layer_names(dz):
+    """{layer_index: sorted actor names} for layers WITH content; -1 = base."""
+    out = {}
+    for tag, entries in dz_chunks(dz).items():
+        base3 = tag[:3]
+        if tag in ("ACTR", "TGOB"):
+            layer, stride = -1, 0x20
+        elif tag in ("SCOB", "TGSC", "DOOR", "TGDR", "Door"):
+            layer, stride = -1, 0x24
+        elif base3 == "ACT" and tag[3] in _LAYER_IDX:
+            layer, stride = _LAYER_IDX[tag[3]], 0x20
+        elif base3 == "SCO" and tag[3] in _LAYER_IDX:
+            layer, stride = _LAYER_IDX[tag[3]], 0x24
+        else:
+            continue
+        for cnt, off in entries:
+            for i in range(cnt):
+                nm = dz[off + i * stride: off + i * stride + 8].split(b"\x00")[0]
+                if nm:
+                    out.setdefault(layer, set()).add(nm.decode("ascii", "replace"))
+    return {k: sorted(v) for k, v in out.items()}
+
+
+def mode_warps(specs):
+    """specs: ['Stage' or 'Stage,room' ...] -> dBootStage_add rows + artifact."""
+    lines = []
+    for spec in specs:
+        stage, _, room_s = spec.partition(",")
+        want_room = int(room_s) if room_s else None
+        for rname in donor_rooms(stage):
+            room_no = int("".join(ch for ch in rname if ch.isdigit()) or 0)
+            if want_room is not None and room_no != want_room:
+                continue
+            rbytes, _src = donor_file(stage, rname)
+            _, dzr = get_member(rbytes, ".dzr")
+            if dzr is None:
+                continue
+            per = _layer_names(dzr)
+            for layer in sorted(k for k in per if k >= 0):
+                lines.append('dBootStage_add("%s,%d,%d");  // %s'
+                             % (stage, room_no, layer, " ".join(per[layer])))
+            if -1 in per and want_room is not None:
+                lines.append("// %s,%d base (layer -1): %s"
+                             % (stage, room_no, " ".join(per[-1][:10])))
+    for ln in lines:
+        print(ln)
+    out = Path(__file__).resolve().parents[2] / "docs" / "state" / "ww-staging" / "warp_rows.inc"
+    with open(out, "w", encoding="utf-8", newline="\r\n") as f:
+        f.write("// GENERATED by space_kit warps (interconnected §805) — the\n"
+                "// donor's own layer map as dBootStage_add rows. Labels are the\n"
+                "// donor's placement names. Engine wires; regenerate any time.\n")
+        for ln in lines:
+            f.write(ln + "\n")
+    print("\n%d row(s) -> %s" % (len(lines), out))
+    return 0
+
+
 def mode_inventory(stage_name):
-    sdir = DONOR_ROOT / stage_name
-    _, dzs = get_member(sdir / "Stage.arc", ".dzs")
-    man = {"stage": stage_name, "pass": "inventory(P1)"}
+    stage_bytes, src = donor_file(stage_name, "Stage.arc")
+    print("SOURCE: %s" % src)
+    _, dzs = get_member(stage_bytes, ".dzs")
+    man = {"stage": stage_name, "pass": "inventory(P1)", "source": src}
     ch = dz_chunks(dzs)
     man["stage_chunks"] = {t: sum(c for c, _ in v) for t, v in ch.items()}
     man["hosting_shape"] = ("DEDICATED" if man["stage_chunks"].get("RTBL", 1) > 1
                             else "PACKED")  # §302 hybrid rule (MULT>1 check below)
 
-    ev_raw = arc_member(sdir / "Stage.arc", "event_list.dat")
+    # merge_event.arc_member is Path-only; the suffix reader handles bytes and
+    # event_list.dat is a unique member name, so exact-suffix match is exact.
+    _, ev_raw = get_member(stage_bytes, "event_list.dat")
     if ev_raw:
         man["events"] = classify_events(EventFile(ev_raw))
-    rooms = sorted(sdir.glob("Room*.arc"))
     man["rooms"] = {}
-    for r in rooms:
-        _, dzr = get_member(r, ".dzr")
+    for rname in donor_rooms(stage_name):
+        rbytes, _rsrc = donor_file(stage_name, rname)
+        r = Path(rname)
+        _, dzr = get_member(rbytes, ".dzr")
+        if dzr is None:
+            man["rooms"][rname] = {"note": "no .dzr member (model-only arc)"}
+            continue
         rch = dz_chunks(dzr)
         layers = sorted(t for t in rch if t[:3] in ("ACT", "SCO") and t not in
                         ("ACTR", "SCOB"))
@@ -291,6 +514,15 @@ def mode_inventory(stage_name):
             "story_layers_present": layers,
             "plyr": decode_plyr(dzr),
         }
+    all_names = set()
+    _, dzs2 = get_member(stage_bytes, ".dzs")
+    all_names |= _placement_names(dzs2)
+    for rname in donor_rooms(stage_name):
+        rb, _ = donor_file(stage_name, rname)
+        _, rdzr = get_member(rb, ".dzr")
+        if rdzr:
+            all_names |= _placement_names(rdzr)
+    man.update(transition_report(all_names))
     print(json.dumps(man, indent=1))
     return 0
 
@@ -304,6 +536,8 @@ def check(results, name, ok, detail):
 
 
 def mode_regress():
+    print("SOURCE demo arc: %s%s" % (HOST_DEMO_ARC,
+          "  [RETIRED REFERENCE]" if "retired" in str(HOST_DEMO_ARC) else ""))
     results = []
     _, dzs = get_member(HOST_STG, "stage.dzs")
     _, dzr = get_member(HOST_ROOM0, ".dzr")
@@ -394,9 +628,11 @@ def mode_regress():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) >= 3 and sys.argv[1] == "warps":
+        sys.exit(mode_warps(sys.argv[2:]))
     if len(sys.argv) >= 3 and sys.argv[1] == "inventory":
         sys.exit(mode_inventory(sys.argv[2]))
     elif len(sys.argv) >= 2 and sys.argv[1] == "regress":
         sys.exit(mode_regress())
     else:
-        sys.exit("usage: space_kit.py inventory <DonorStageDir> | regress")
+        sys.exit("usage: space_kit.py inventory <DonorStageDir> | warps <Stage[,room]>... | regress")

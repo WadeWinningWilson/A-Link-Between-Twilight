@@ -616,6 +616,14 @@ struct UserSettings {
         // entry. Requires enableAdvancedSettings; takes effect after relaunch.
         // ====================================================================
         ConfigVar<bool> enableLevelEditor;
+        // ====================================================================
+        // Optional ADDITIONAL disc image (plain GC ISO). Generic by design:
+        // dusklight itself never reads it — content extensions (mods) may
+        // consume it as a data source for content the user already owns.
+        // Empty = none configured. (WAVE-1 row 14 ruling, 2026-08-11:
+        // in-dusklight, agnostic naming.)
+        // ====================================================================
+        ConfigVar<std::string> extraIsoPath;
     } backend;
 
     // Arrays of size 4 for 4 ports

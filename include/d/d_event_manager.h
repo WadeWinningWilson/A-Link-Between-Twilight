@@ -116,6 +116,11 @@ public:
     // §67 probe (№265 follow-up): read-only slot inspection for the opening
     // resolve diagnostic in d_ext_npc_mount.cpp.
     dEvDtBase_c& probeSlot(int type) { return mEventList[type]; }
+    // §717 H1 probe (read-only, same charter as probeSlot): the fork-guard
+    // reporter needs the live type/id to tell "guard fired while idle"
+    // (BASE_NULL, benign) from "guard fired mid-event" (cut-killer).
+    int probeEvType() const { return mCurrentEvType; }
+    int probeEvId() const { return mCurrentEvId; }
     // №266: late BASE_STAGE init — the warp path can reach create() before the
     // stage resource is queryable, leaving the stage list empty FOREVER (the
     // engine has no retry; §67 proved slot 3 empty). Re-runs the SAME donor

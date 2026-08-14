@@ -218,6 +218,49 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 > no quests finished). V1 prevents expensive bugs, but you cannot hit bug classes at volume if
 > you never reach volume.
 
+### Band 0 — THE LAYER MODEL (L-series, new track — architecture, not instruments)
+
+> **User ruling, 2026-08-06:** *"The law was to guarantee a base layer of Wind Waker is pure.
+> Translations are of course necessary given its home is in TP. Its home can be port liberties."*
+>
+> That settles the doctrine gap. **Three deviation classes now have homes:** *bridges* (temporary,
+> owed a native replacement — the existing owed list) · *translations* (permanent, mechanical,
+> donor-semantics-preserving — the conversion DB) · **deliberate design changes** (permanent,
+> intentional, NOT donor-faithful — **port-liberties**, under a new status carrying **no**
+> reconciliation condition).
+>
+> **The chain:** `donor disc (immutable) → translation → interaction → tunables → mod overrides`.
+> Each layer only ever **adds**; nothing edits the layer beneath it. This is TTW's load-order
+> model (pure masters → `TaleOfTwoWastelands.esm` → third-party plugins) and the project's own
+> *never substitute — add and label* directive, expressed as architecture.
+
+| # | Item | Owner | Work | Why here |
+|---|---|---|---|---|
+| **L1** | Precedence-chain spec | **Foundry** | Name the five layers, what belongs in each, and the rule that no layer edits the one below | Must exist **before** interaction work scales, not after — this is the one ordering that is expensive to get wrong |
+| **L2** | Donor disc reader | **Housing Security** (scoped, next session) | `wwIsoPath` + `ww_donor_disc.cpp`; route `wwRoom_aliasArcFileName` at the disc | **Zero-bake carried to completion** — donor stays byte-identical and unstaged. Wire R3's OFF-ROSTER verdict as the wrong-disc gate. **⚠ RE-HOME BEFORE BUILDING — see L2a** |
+| **L2a** | L2 belongs **plugin-side, not receiver-side** | **Foundry** (finding) · **Housing** (applies) | Verified against the SDK: the **config service exposes `register_var` / `get_string` / `set_string` / `subscribe`** (`sdk/include/mods/svc/config.h`), so **the plugin declares `wwIsoPath` itself — no `settings.h`/`settings.cpp` edit**. Disc reading is plain plugin-side I/O with its own GCM/FST + Yaz0 (the resource service only does `load(relative_path)`, no mount API — and none is needed). Arc-path interception is a **hook**. | As scoped, L2 adds a **config-var leg + a receiver TU** — exactly what ruling (A) exists to avoid. Re-homed, **L2 is 100% plugin-achievable with zero receiver changes.** The only piece that cannot be is the prelaunch UI — see below |
+| **L2b** | **ONE plugin; disc reader = an internal layer with a service-shaped interface** | **Housing** (applies) | Step 20 rules a **single** shipped artifact, and that is right today: one mounted disc handle in one module's state, **one** ABI negotiation, **one** import manifest, **one** 19b verdict, no inter-plugin load-order dependency. **But the SDK supports mod→mod services** — `ModMetaImport`/`ModMetaExport` carry `service_id` + major/min-minor negotiation (`api.h:171-189`). | So **shape the reader as a service-shaped internal layer now**: exporting it later (a reusable donor-disc service for other mods — the L6 direction) becomes a `ModMetaExport` declaration, **not a refactor**. Same lesson as L4: make the seam now, expose it later. **Also: L2's imports join the 19a manifest — regenerate the 24-entry (c) set after L2; it may SHRINK if staged-path imports drop out.** |
+| **L3** | Port-liberties third status | **History** classifies · **Librarian** records | Add *"accepted by design — no reconciliation owed"* and file TP-Link-interaction deviations under it | The user's ruling; cheap; prevents design changes being mislabelled as bridges and sitting on the owed list forever |
+| **L4** | Interaction mappings → R5 | **History** authors · **Bridge** hosts | TP↔WW damage / weapon / item / health mappings land as **data in R5**, never inline in ported actor code | **TP Link interaction is a translation problem, not a fork** — same class as §332 attributes and §212 JPA bits. Inline now = rewrite when tunables arrive |
+| **L5** | Tunables exposure | Foundry specs · Bridge builds | Expose R5 value rows with a precedence read | **LATER** — nearly free once L4 holds; a rewrite if it does not |
+| **L6** | Mod override layer | Bridge | Tunable mods ride the existing load-order manager (P1–P3, built + playtested) | **LATER** — infrastructure already exists; this is plumbing, not a build |
+| **L7** | Code mods (DuskScript) | — | Lua 5.4, one state per mod, event bus, budgets | **LATER** — researched, unbuilt; the END GOAL |
+
+**Prelaunch — recommendation REVERSED (2026-08-06).** I previously advised surfacing `wwIsoPath`
+in the prelaunch disc-selection UI, "visible but optional," mirroring the TP disc. **Withdrawn.**
+Prelaunch is receiver UI that runs *before* mods load, so a field there is a **receiver leg** —
+the one thing ruling (A) exists to prevent, bought for UX. The better answer keeps legibility
+without the leg: **the quiet config key, with the 19c load-time gate refusing legibly** ("WW disc
+not configured / off-roster / unreadable") through the log, ui, or overlay services. Same clear
+explanation, zero receiver footprint. If prelaunch surfacing is genuinely wanted later, build it
+as a **generic "mods contribute prelaunch fields" facility** — no WW in it, and upstream-promotable
+on the same argument as the hook ABI.
+
+**The ecosystem gap closes here.** Disc-reading costs us TTW's canonical converted artifact for
+third parties to build against — but **the override layer becomes that artifact instead.** Donor
+stays pure and untouchable; we and modders write to the same layer above it, arbitrated by the
+load-order manager. Better than TTW's answer, whose canonical artifact is a 17 GB generated install.
+
 ### Band 1 — DO NOW (zero-to-cheap; do not wait on the sequencing decision)
 
 | # | Item | Owner | Work | Why here | Gate / status |
@@ -249,8 +292,16 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 
 | # | Item | Owner | Work | Why here | Gate / status |
 |---|---|---|---|---|---|
-| 3 | **R1** convert-all | **Bridge** builds runner + non-stage modules · **Foundry**'s `space_kit` = stage module (§331 A2) | One declarative recipe; bulk-convert the full roster | **Deletes "stage the arc" from every future port** and moves work from arc scale to island scale. R2+R3 already verify its outputs, so the risky half is done | **VERIFY the R_DL02 pilot gate** (§364); run ends with an output-roster **re-pin** at a new user-verified stable point |
-| 4 | **R5** conversion DB | **Bridge** hosts · **History** classifies rows | Consolidate codemod AUTO/REVIEW, `KNOWN_SIZE`, `STARTCODE_ALIAS`, `ww_dzb_roster`, both rosters | Absorption list is **compounding**; every port consults it; unblocks V7 | ready |
+> **Reordered 2026-08-06: R5 now precedes R1.** Two reasons. **(a)** R5 is the home for L4's
+> interaction mappings and L5's tunables — interaction work is starting *now*, and if R5 is not
+> standing it lands scattered and gets rewritten. **(b)** R1's scope is no longer known: if L2's
+> disc reader covers pass-through assets, R1 shrinks to only the transformed and baked outputs.
+> **Building R1 before L2 risks building for a scope that evaporates.**
+
+| # | Item | Owner | Work | Why here | Gate / status |
+|---|---|---|---|---|---|
+| 3 | **R5** conversion DB | **Bridge** hosts · **History** classifies rows | Consolidate codemod AUTO/REVIEW, `KNOWN_SIZE`, `STARTCODE_ALIAS`, `ww_dzb_roster`, both rosters — **and become the home for L4 interaction mappings** | **Promoted.** Absorption list compounding; every port consults it; unblocks V7; now load-bearing for the whole layer model | ready — **the critical item of the foundation phase** |
+| 4 | **R1** convert-all | **Bridge** builds runner + non-stage modules · **Foundry**'s `space_kit` = stage module (§331 A2) | One declarative recipe over whatever still needs converting | Still deletes "stage the arc" for everything the disc reader cannot serve; R2+R3 already verify its outputs | **RE-SCOPE AFTER L2** — do not build to the old scope. Then verify the R_DL02 pilot gate (§364); run ends with an output-roster **re-pin** |
 
 ### Band 3 — CONDITIONAL (one judgment call)
 
@@ -280,6 +331,175 @@ ends of the port — and **V3 is where both verdicts surface to a human.**
 
 **R2+R3 together = TTW's foundation matched** (§364): sources pinned, outputs pinned, conversion
 is a verified function. What remains on the R side is productization, not foundation.
+
+### §697 integration — where the plugin-migration track fits in R-V-L (advisory, 2026-08-07)
+
+> **Posture, corrected by user ruling 2026-08-07: Foundry ADVISES; the owning lanes build.**
+> §699's WHOSE-TURN assigned 19a v2 and the axis-C runs to Foundry — **that was overreach and is
+> superseded by the routing below.** Nothing in this section is a Foundry build commitment.
+
+**§697 does not add a new track — it populates L.** The L-series is the architecture track, and
+"where WW code physically lives" is an architecture question that L2/L2a/L2b already opened. The
+migration is L's continuation, so it lands as **L8** rather than a parallel plan.
+
+| §697 element | Lands as | Owner (builds) | Advisory note |
+|---|---|---|---|
+| Plugin-migration track — leaf TUs first, interlocked seams last | **L8** (new) | **Housing + Engine** | Order should come from **19a v2's computed ranking**, not a hand-picked leaf list. `ww_cam_data` / `ww_cam_select` are a reasonable hypothesis to *test*, not a starting order to trust |
+| 19a/19b elevated to migration gate | **scope change to 19a** | **whoever holds 19a** (Bridge/Foundry seat) | See "19a v2 output shape" below — the current tool answers a different question |
+| Three deviation grades (clean port · sanctioned translation · tracked deviation) | **L3 extended** | **History** classifies · **Librarian** records | §693 already established *sanctioned translation* as a class; L3's user-ruled third status covers *tracked deviation*. The grades are a refinement of L3, not a fourth category |
+| Plugin-readiness note in every WW banner | **V8** (new) | **Librarian** doctrine · **banner_lint.py** field | **A standing rule only humans check is the Tier-1 strip set again** (12 files stale in 12 days). `banner_lint.py` already exists as the banner verifier — one field makes the rule enforceable |
+| daBg culling (§682) | owed list (existing) | **Engine** | Unchanged — a disable approximating donor outcome; donor whole-model clip still unported |
+| Grass/flower architectural deviation | **L3** tracked deviation + **measurable** | **History** + **Engine** | See "axis C" below — this one can have a number instead of a judgment |
+
+**Band placement.** **L8** sits after L2 — do not start migration before the pilot proves the
+boundary (the pilot-then-policy gate). **V8** belongs in **Band 1**: it is cheap, and it is
+drift-prevention, which is worth most *before* the thing it guards starts growing. **R is
+unchanged** — R5 still precedes R1, and neither is affected by §697.
+
+#### Advisory: 19a v2 output shape
+
+Housing's ask is *per-TU* — "exactly which receiver symbols a plugin build needs." `binding_plan.py`
+currently aggregates **per-symbol** (`collect_imports()` → `{sym: {sites: N}}`), and
+`ww-import-manifest.txt` is a flat 24-entry (c) list. **Migration is per-TU, so the pivot is wrong
+for the use case.** Site counting implies per-file tracking already exists, so this reads as a
+**regroup, not a rebuild**. What the gate needs:
+
+1. **Per-TU import table** — each WW-layer TU's host imports, bucketed **(a) SERVICE / (b) LINK /
+   (c) RESOLVE / (e) COMPILE-IN**.
+2. **Migration-readiness ranking** — sorted by worst bucket, then count. **Zero (c) imports = LEAF
+   = migrate first.**
+3. **№31-C** — a TU whose imports cannot be resolved reports UNKNOWN, never READY.
+
+**Correction owed on the taxonomy:** an earlier Foundry advisory named `ModMetaExport` for
+classifying host imports. **Export (kind 3) is what a mod PROVIDES to other mods; host consumption
+is `ModMetaImport` (kind 2)** — `binding_plan.py:280-283` has it right. Adopt the tool's **four**
+buckets over the advisory's three: omitting COMPILE-IN inflated the long pole from 29 symbols to
+772 (§520).
+
+#### Advisory: census axis C is also an ARCHITECTURE-FIDELITY metric
+
+§697's grass/flower flag — *ported donor logic in a deviating architecture* (donor: global packets
+with big pools; receiver: restructured per-actor) — **is the concrete instance of the caveat filed
+against the census's 0-WHOLESALE result**: axis C measured our **ported** code's coupling, which
+reflects our own restructuring choices, not the donor subsystem's intrinsic separability.
+
+**Testable prediction:** the wood packet, built packet-global from day one, should score
+**materially higher axis-C closure** than the per-actor grass/flower work. If it does, axis C
+becomes a number for *"how donor-shaped is this port"*, and §697's grass/flower regression target
+gets a **measurement rather than a judgment**. No new tool — a re-run of an existing axis, owned
+by whoever runs the census.
+
+#### Advisory: one seam still unverified
+
+Nobody has confirmed `wwRoom_aliasArcFileName` is reachable as a hook target. If it is file-local
+or ICF-folded, **L2's whole interception point needs a different seam.** It is one symbol and 19a
+v2 answers it as a by-product — **check it before Housing commits the disc-reader design.**
+
+### Advisory: where WW code physically lives — L8 mechanics, for HOUSING + ENGINE (2026-08-07)
+
+> **Advisory. Housing and Engine build; Foundry does not.** Written because L8's *mechanics* are
+> nowhere on record and Housing needs them before the L2 pilot.
+
+**Three locations. Only one of them is where code is written.**
+
+| Location | Holds | Who writes here |
+|---|---|---|
+| **Plugin source repo** — a separate git repo | WW **source**; includes `sdk/include/mods/*.h`; builds against the SDK | **This is where WW code is authored** |
+| **Mod folder** (`%APPDATA%\TwilitRealm\Dusklight\…`) | The **built** `mod.dll` + assets | **Nobody.** It is deployment output, like a `build/` directory |
+| **dusklight tree** | Nothing WW *(target state)* | Nobody, for WW |
+
+So: *built* code goes to the mod folder, **source does not.**
+
+**The loader already defines the target — there is no mechanism to invent.**
+- `k_nativeLibName = "mod.dll"` ([loader.cpp:47](../../src/dusk/mods/loader/loader.cpp)), matched
+  as `mod.dll` / `mod.so` (:171)
+- declared through the mod manifest's `native.entry` + `runtimeEntries` (:692)
+- **path-safety validated before load** — *"unsafe native runtime path … skipping"* (:595)
+- loaded via `NativeModule` → `LoadLibraryExW` / `dlopen`
+  ([native_module.cpp:75](../../src/dusk/mods/loader/native_module.cpp))
+
+**Build dependency to plan for now.** The **(b) LINK** bucket resolves against
+`dusklight_exports.def`, so the plugin build needs **a built dusklight's export library**, not just
+the SDK headers. This surfaces on day one of the pilot; better known before than during.
+
+**The transition rule — pilot, then policy.**
+- **Before L2 proves the boundary:** new WW work may still land in the tree. Blocking porting on an
+  unproven path costs more than the mixed state does — and throughput is the current priority.
+  **But it must be written plugin-shaped.**
+- **After the pilot:** new WW work goes **plugin-side by default.**
+
+**"Plugin-shaped" means, concretely:**
+1. **No new legs in receiver files.** A WW branch inside a receiver-owned TU cannot relocate — it
+   is the one shape that forces a rewrite later.
+2. **NULL-default hooks over inline branches.** Already this session's practice per §697, and
+   already the plugin-callable shape.
+3. **Keep TUs leaf-like** — few host imports, favouring **(a)/(b)/(e)** over **(c)**. Zero (c)
+   imports = migrates first.
+4. **A plugin-readiness note in the banner** (V8) stating the TU's bucket profile and known blockers.
+
+**Anti-slip: a ratchet, not vigilance.** Nothing *prevents* a slip — the 13 TP-named donor ports
+proved a naming convention cannot catch the most donor-faithful work, and it gets blinder as the
+porting gets better. What works is making a slip **visible**:
+
+- **The generated manifest counts WW TUs remaining in the tree, and that count must only ever
+  DECREASE.** An increase means something slipped, and the next run says so unprompted. This
+  replaces the hand-maintained Tier-1 list with a **monotonic invariant** — the thing a static list
+  could never be.
+- **V8's banner field** catches the same drift one step earlier, at authoring time.
+- **Once a TU is in the plugin repo, bypassing it is physically impossible** — no longer a
+  discipline question at all.
+
+### Addendum — L2 and load times (2026-08-06)
+
+> User question: does the disc reader cut load times, would prelaunch reading help, and does the
+> per-load cost really apply inside WW rooms? Answered against the tree, with one correction owed.
+
+**Correction owed first.** The TTW comparison characterised our side as *"cost paid per load,
+forever."* **That overstated it and is withdrawn.** Arc loads happen at **room/stage transition
+boundaries**, not continuously and not per frame; once loaded, an arc is cached and
+pointer-fixed, and the project's own J3D rule *forbids* re-parsing a fixed buffer. The cost is
+therefore **once per arc-load event** — what TP already pays for its own arcs. Inside a WW room
+the ongoing cost is **zero**. Because zero-bake forces whole-stage adoption (Outset = room 44 of
+the 50-room `sea`), the shared `sea` arcs load once on stage entry; walking around Outset
+reloads nothing.
+
+**The decisive fact — this is not a new cost class.** `dusklight` **already mounts an ISO and
+reads game data from it at runtime.** `backend.isoPath` feeds `dvd_path`; the image is validated
+through `dusk::iso::inspect` and opened as the DVD device at boot
+([m_Do_main.cpp:786-829](../../src/m_Do/m_Do_main.cpp)). Every TP asset loaded today already
+comes off that image through a virtual DVD layer. **Reading WW arcs from a WW ISO is a second
+instance of the mechanism the receiver is already built on** — the strongest argument for L2 not
+previously on the record, and it is an argument about *risk*, not speed.
+
+**Prelaunch.** The mount already happens there. A second mount for `wwIsoPath` costs one file
+open, once, at startup. **No per-warp mount cost, and nothing to gain by moving it earlier** —
+it is already as early as it gets.
+
+**What actually costs anything.**
+- **Yaz0 decompression** — the only item worth checking, and only in one case: if staged arcs
+  were stored **pre-decompressed**, disc-reading re-adds a decompress that staging had removed.
+  If staged arcs are still Yaz0 it is a wash, since TP's own arcs are Yaz0 and already pay it.
+  **Verify which before assuming either way.**
+- **BDL4→BMD3 retag** — trivial: strip MDL3, rewrite a magic, adjust sizes. Linear, no reparse.
+- **Working the other way** — one already-open handle with seeks beats per-file filesystem
+  `open()` overhead across 101 loose staged arcs.
+
+**Verdict: L2 is load-time neutral.** Not an optimisation, not a regression. **It is a purity and
+maintenance change and must not be sold as a speed win.**
+
+**Escape hatch, if load time ever becomes a real problem.** Transform on first load, cache the
+transformed **bytes**, reuse thereafter — TTW's install-time bake, paid lazily and locally rather
+than up front. **This does not violate zero-bake**, which forbids editing *donor assets*; a
+derived cache is regenerable output, deletable at will. One hard constraint: cache transformed
+**bytes, never parsed or pointer-fixed structures** — crossing that line already produced the
+sumo BMT crash and the room-lane mesh corruption.
+
+**No existing asset cache to ride on.** `pipeline_cache` / `dawn_cache` are aurora's **GPU and
+shader** caches, not asset caches. The hatch above would be new work.
+
+**Standing instruction: measure, do not argue.** Arc-load events per transition, decompress time,
+and retag time are all instrumentable. If load time is a real concern rather than a hypothetical,
+**probe the same route before and after L2** and let the numbers settle it.
 
 ### Stage D — COMPLETE (updated 2026-08-07; this section was stale)
 

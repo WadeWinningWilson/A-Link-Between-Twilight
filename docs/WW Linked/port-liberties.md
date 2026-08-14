@@ -14,7 +14,85 @@ content), or (b) were justified by a **claim that must be verified** (e.g. "the 
 stubbed"). Mark a liberty the moment you take it; clear it when it's reconciled or ratified.
 
 Status: `OPEN` (unreconciled) · `VERIFYING` (research in flight) · `RATIFIED` (user-approved as a
-permanent port choice) · `RECONCILED` (restored to donor).
+permanent port choice) · `RECONCILED` (restored to donor) · `BY-DESIGN` (accepted by design — **no
+reconciliation owed**).
+
+## Entries at a glance · Librarian-maintained index
+
+> Numeric order for scanning (the entry **bodies** below run in priority order, and are
+> authoritative — this table just mirrors each header's status). Updated 2026-08-08: L-10 added.
+
+| Entry | Deviation | Status | Grade\* |
+|---|---|---|---|
+| L-1 | Loft tale-trigger geometry | `RECONCILED` ✓ | `DG-0` |
+| L-2 | Demo-prop lighting = port's WW-item recipe | `OPEN` (likely reconciled by Housing lighting port) | `DG-3` |
+| L-3 | Tale-window arm auto-armed, not the donor beat chain | `OPEN` (blocked on A_mori) | `DG-3` |
+| L-4 | Clothes-get renders as the talk box, not the donor item box | `OPEN` | `DG-3` |
+| L-5 | Outset `ikada_h` static — bob/flag/rope deferred | `OPEN` | `DG-4` |
+| L-6 | Flowers as `NPC_YAFLW` J3D — **measured native** (§780) | `VERIFYING` | `DG-1` cand. |
+| L-7 | Donor `Tag*` actors → port RegionTrig | `RATIFY` (recommended) | `DG-4` |
+| L-8 | Ocean `Salvage` points omitted pending the mechanic | `OPEN` (deferred-mechanic) | `DG-4` |
+| L-9 | WW mount ground shadow = flat up-normal projection | `RATIFY` (recommended) | `DG-4` |
+| **L-10** | WW cutscene staffs performed by **TP's Link** | **`BY-DESIGN`** (2026-08-08) | *ungraded* |
+
+**Tally:** 5 `OPEN` · 1 `VERIFYING` · 2 `RATIFY`-recommended · 1 `RECONCILED` · **1 `BY-DESIGN`**. Grades: 1 `DG-0` · **1 `DG-1` cand. (L-6)** · 3 `DG-3` · 4 `DG-4` · 1 ungraded — the **first `DG-1` candidate** (L-6, §780: `dFlower` measured native; pending user visual confirm).
+
+**\*Grades CONFIRMED (§710)** by History (entry-owner for all ten); L-8 corrected `DG-3`→`DG-4` in the confirm pass. Doctrine below.
+
+### Deviation grades (DG) — how far a deviation strays, on what evidence
+
+> §708 semantics (History classified); Librarian-encoded 2026-08-11 (format is the Librarian's call per the handoff). Statuses answer WHERE an entry stands in reconciliation; **grades answer HOW FAR it strays and ON WHAT EVIDENCE.** Grades attach to entries; they never reclassify one — **no fourth class** (§700).
+
+| grade | meaning | earned by |
+|---|---|---|
+| `DG-0` | byte-exact / none — donor bytes or algorithm verified equal | byte identity (sha256, differ=0) |
+| `DG-1` | equivalent — different mechanism, same observable output | differ / golden-trace showing zero on the stated metric |
+| `DG-2` | bounded — deviation MEASURED and quantified | a cited measurement artifact (axis-C = canonical numeric instrument, §700) |
+| `DG-3` | unmeasured — deviation known, no instrument has quantified it | **default** for every graded entry until an instrument runs |
+| `DG-4` | structural — donor mechanism absent or replaced by a different system | inspection; numeric comparison inapplicable — behavioral checklist |
+
+**Rules (encode of §708):** (1) a grade is **EARNED downward, defaulted upward** — start `DG-3` (or `DG-4` on inspection); no instrument, no lower number. (2) **BY-DESIGN entries are UNGRADED** — reconciliation distance is undefined by definition; grading one puts an unanswerable measurement on the owed list (L-10 is the receipt, not a gap). (3) grades are **orthogonal to statuses** — `RATIFIED`+`DG-4` is coherent; a `RECONCILED` entry that can't earn `DG-1` has the wrong *status* (the grade audits the status). (4) **movement cites its instrument** (`DG-3`→`DG-2` names the measurement; `DG-2`→`DG-1` names the differ run). One vocabulary: DG also carries into V8's banner field if lineage-grading wants it (§708) — do **not** invent a second scale.
+
+**The `DG-3` / `DG-4` criterion (§710 — the confirm pass earned it):** *is there a present mechanism to measure against?* Grade `DG-4` when the donor mechanism is **absent or replaced** in the port (dFlower packet, waveRot, Tag* actors, salvage, Acch shadow); grade `DG-3` when the mechanism is **present** and the deviation is a value / wiring / routing difference against it (ambient values, arm wiring, box routing). Test: could an instrument measure the deviation against a present mechanism TODAY? If nothing exists to measure against, `DG-4`. Consequence: **`DG-4` → `DG-2` requires porting the mechanism first** — which is why §708's "nothing earns `DG-1`/`DG-2` yet" and Foundry's instrument roadmap meet at the same gap.
+
+---
+
+### `BY-DESIGN` — the third status (L3, user-ruled; History classifies · Librarian records)
+
+**What it is:** a deviation that is a *design decision of this port*, not a shortfall against the
+donor. Nothing is owed. It is recorded here — rather than left out of the ledger entirely — so the
+reasoning survives, and so nobody "reconciles" it later by mistaking a choice for a debt.
+
+**Why it exists.** The other four statuses all imply motion: OPEN and VERIFYING are owed, RECONCILED
+is finished, RATIFIED is a debt the user forgave. None of them fit a deviation that was never a debt.
+Without this status such entries either sit on the owed list forever generating phantom work, or get
+deleted and lose their reasoning — and a deleted decision is indistinguishable from an oversight the
+next time someone reads the donor and finds a difference.
+
+**The distinction from RATIFIED, stated once because it is the whole point:**
+
+| | the donor's way was | we chose | what is owed |
+|---|---|---|---|
+| `RATIFIED` | achievable | not to, for cost/risk | nothing *now* — a forgiven debt |
+| `BY-DESIGN` | **not applicable** | the only coherent option for this port | **nothing ever** |
+
+RATIFIED says *we could have, and you said we needn't*. BY-DESIGN says *the question does not
+arise* — usually because WW's answer presupposes a WW that isn't here.
+
+**The canonical class: TP-Link-interaction deviations.** WW content in this port is played by
+**TP's Link** — his proportions, his animation set, his interaction ranges, his acting vocabulary.
+Every deviation that follows from *which hero is standing there* is BY-DESIGN, because the donor's
+value describes a character the port does not contain. Filing those as OPEN would put "make TP Link
+into WW Link" on the owed list, which is not a port liberty — it is a different project.
+
+**Classifying test** (History applies it; if the answer is not clearly yes, the entry stays OPEN —
+BY-DESIGN is the status most likely to be abused as a way to close hard entries):
+> Would restoring the donor's value require changing something the port is not trying to change —
+> the receiver's hero, engine, or platform? If yes, BY-DESIGN. If it would only cost effort, it is
+> OPEN or RATIFIED.
+
+**What it is NOT:** not a home for hard problems, not a synonym for "works well enough", and never
+self-assigned by the lane that took the liberty — same separation the DO-NOT registry uses.
 
 ---
 
@@ -158,7 +236,9 @@ mType) — confirm it reads as the intended vessel.
 
 ---
 
-## L-6 — Flowers render as `NPC_YAFLW` J3D models, not the donor raw-GX `dFlower` packet · **OPEN**
+## L-6 — Flowers render as `NPC_YAFLW` J3D models, not the donor raw-GX `dFlower` packet · **VERIFYING** (§780 — measured native)
+
+> **⚠ CORRECTION (History §780, MEASURED — Librarian-recorded 2026-08-11).** `dFlower` is **NATIVE** now: `d_a_ext_vegetation.cpp` (1,968 lines) carries both tiers with donor call sizes, a manifest-gated pack loader, 64-slot sway, cut particles on donor IDs 0x3DE/0x3DD; its banner declares the `d_flower.cpp` donor and the kind dispatch cites "now NATIVE (241/L-6)"; all 18 `d_flower__*` blobs live in the mod veg pack. **The "not the donor mechanism" claim is retired — it IS the donor mechanism.** → status **OPEN → VERIFYING** (pending user visual confirm: flowers on screen, white tier especially — the btk-era "likely pink not white" note needs eyes); grade **DG-4 → DG-1 candidate** once confirmed. **Named residual (not a blocker):** the `bessou` set (pos3/color3/texCoord3) is absent from the veg pack — sea room 0x21's villa variant only; flowers there draw the standard high set or refuse per the pack's own gate. History nearly wrote a duplicate packet TU — the ledger said OPEN, the tree said otherwise.
 
 **Deviation:** WW Outset flowers (census `pflower`/`pflwrx7` = kind 3 pink, and now `flower`/`flwr7`/
 `flwr17` = kind 2 white via `npc_yaflw_w.ini`) are drawn as discrete `NPC_YAFLW` J3D models
@@ -213,6 +293,8 @@ revisit with an `Acch` shadow then.
   packet is ported. Do NOT substitute a static tree model — swood is a specific `dTree` tree, and a
   wrong-model tree would violate №31. This is the remaining half of roadmap item #3.
 
+  > **⚠ RETIRED (History §780, MEASURED — Librarian-recorded 2026-08-11):** `dTree` = `d_ext_tree.cpp` (§366, 849 lines, donor-verbatim); **EXT_VEG `kind==1` rides it.** The swood "unplaced holes" were **STALE** — they route to the native packet. **No swood/`dTree` port owed** (this half of roadmap item #3 is done, not deferred).
+
 ---
 
 ## L-7 — Donor trigger `Tag*` actors replaced by the port's RegionTrig system · **RATIFY (recommended)**
@@ -251,3 +333,29 @@ Decomp triage collapses them:
 (`HyoiKam` → Hyoi Pear), 1 is invisible (`Com_A`). The binding layer-divergence verdict still needs the
 two `[INFERENCE-NEEDED]` flag rows (ACT8/a/b forced-layer bits) in
 [reference-ww-flags-triggers.md](reference-ww-flags-triggers.md) §N confirmed.
+
+---
+
+## L-10 — WW cutscene staffs are performed by **TP's Link**, in TP's acting vocabulary · **BY-DESIGN** (2026-08-08)
+
+**Deviation.** WW's event data addresses a `Link` staff with WW's own cut vocabulary —
+`001n_wait`, `012unequip`, `005wait_turn`, `035door`. Those name **WW Link's** animations. The port
+serves them with **TP Link's** native acting: the evmng `Alink`↔`Link` alias binds the staff, and
+§379b's interpreter performs each cut through TP's own procs (`035door` → `DEMO_DOOR_OPEN`, whose
+`param0&1` right/left select is the *same* semantic WW reads from the *same* property — the lineage
+survives even though the animation data does not).
+
+**Why BY-DESIGN and not OPEN.** Apply the test: *would restoring the donor's value require changing
+something the port is not trying to change?* Yes — it would require **WW Link**: his rig, his
+animation set, his proportions and interaction ranges. This port's premise is TP's hero in WW's
+world. "Reconcile to donor" here decodes to "replace the protagonist", which is not a debt this
+ledger can hold; it is a different project. Nothing is owed, now or later.
+
+**What this status does NOT excuse.** Everything that is *not* about which hero stands there stays
+owed. Cut **ordering**, **timing**, event **structure**, which staff exists and when it ends — all
+donor law, all still reconcilable, and several were in fact reconciled (§423's parallel WW event
+stack exists precisely so WW's staff semantics run WW's way). BY-DESIGN covers the *performer*,
+never the *performance's script*.
+
+**Scope.** Any deviation that follows from the identity of the acting character. First filed
+instance; expect the door and tale demos to be the visible ones.

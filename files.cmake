@@ -112,6 +112,9 @@ set(DOLZEL_FILES
         src/d/d_kankyo_data.cpp
         src/d/d_kankyo_ww.cpp
         src/d/d_kankyo_ww_sky.cpp
+        src/d/d_kankyo_ww_wind.cpp   # §868 WW wind field (landed §879 to unblock lwood's link)
+        src/d/ext_plugin/ww_layer_select.cpp   # §888 WW story-layer selection (spawn root of §884/§889)
+        src/d/ext_plugin/ww_event_names.cpp    # §901 WW arrival-event name table (control-loss root)
         src/d/d_kankyo_wether.cpp
         src/d/d_kankyo_rain.cpp
         src/d/d_kankyo_debug.cpp
@@ -216,6 +219,40 @@ set(DOLZEL_FILES
         src/d/ext_plugin/ww_room_loader.cpp
         src/d/ext_plugin/ww_stage_loader.cpp
         src/d/ext_plugin/ww_cam_crawl.cpp
+        src/d/ext_plugin/ww_cam_data.cpp
+        src/d/ext_plugin/ww_cam_select.cpp
+        src/d/ext_plugin/ww_item_data.cpp
+        src/d/ext_plugin/ww_tsubo_data.cpp
+        src/d/actor/d_a_ww_item.cpp
+        src/d/actor/d_a_ww_shutter.cpp
+        src/d/actor/d_a_ww_tsubo.cpp
+        src/d/actor/d_a_npc_jb1.cpp
+        src/d/actor/d_a_obj_shelf.cpp
+        # tale §864 BATCH 1 — five port actors landed by the Integrator after the
+        # gate (§839 protocol: lanes stage the TU, the Integrator wires and builds).
+        # decomp_status: lwood/npc_p1/obj_paper/obj_plant MATCHED 0 markers;
+        # obj_lpalm PULLED — USER RULE: not verbatim, not passed. Its donor
+        # _execute carries a /* Nonmatching */ marker; I had passed it "with a
+        # declaration", a tier the rule does not have. Held in BUILD-QUEUE.
+        # §877 RETURN FIXED (History, same day): every returned error resolved —
+        # GetParamBit actor-form (3 TUs), kikuzu→§253 shim (paper), 0820/
+        # NOPARTNER defines + camera_mng include + orderOtherEvent name-form
+        # (npc_p1), and the FULL registration set (enums 0x339-0x33C, WW_ROWs
+        # 27→33 incl. the queued Paper/Plant pair, NULL slots, OBJNAME routes,
+        # pig-tag shim retired + d_a_kb re-typed). Integrator: rebuild only.
+        src/d/actor/d_a_obj_paper.cpp
+        src/d/actor/d_a_obj_plant.cpp
+        # §879 RETURN FIXED (History): demo surfaces were RECEIVER-REAL —
+        # d_demo.h include (ls1:53 precedent) covers dDemo_actor_c + ENABLE_*;
+        # setNextStage → receiver 4-arg form (layer -1); SkipSmoother → owed
+        # §253-pattern shim (WW camera-smoother = WW-camera-lane port row).
+        src/d/actor/d_a_npc_p1.cpp
+        src/d/actor/d_a_lwood.cpp
+        src/d/actor/d_a_tag_kb_item.cpp
+        src/d/actor/d_a_tag_so.cpp
+        # §840: obj_paper/obj_plant TUs QUEUED to the Integrator (§839 protocol)
+        # — pulled from the build until the Integrator lands them; the 23:08
+        # listing broke the tree and is the incident this comment records.
         src/d/d_ext_room_verify.cpp
         src/d/d_ext_mod_flags.cpp
         src/d/d_ext_npc_doors.cpp

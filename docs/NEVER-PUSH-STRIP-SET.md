@@ -95,7 +95,7 @@ block.
      receiver-owned file, so listing it here does not make the file
      strippable — see the leg list in cmake/ww_layer_exclude.cmake. -->
 
-**Sources (75) — generated from `files.cmake`:**
+**Sources (79) — generated from `files.cmake`:**
 
 - `src/d/actor/d_a_demo00.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_esa.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
@@ -141,6 +141,9 @@ block.
 - `src/d/ext_evt/evt1_event_data.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_event_data.cpp` — filename agrees
 - `src/d/ext_evt/evt1_event_manager.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_event_manager.cpp` — filename agrees
 - `src/d/ext_line/mdoext1_3dline.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `m_Do/m_Do_ext.cpp` — filename agrees
+- `src/d/ext_plugin/ww_cam_crawl.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_cam_data.cpp` — WW-specific receiver subsystem (filename basis; declares `donor-port`)
+- `src/d/ext_plugin/ww_cam_select.cpp` — WW-specific receiver subsystem (filename basis; declares `donor-port`)
 - `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_itemmdl_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_misc_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
@@ -148,7 +151,6 @@ block.
 - `src/d/ext_plugin/ww_profile_register.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_room_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_stage_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
-- `src/d/ext_plugin/ww_cam_crawl.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_jasbank.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASBank.cpp` — filename agrees
@@ -175,7 +177,7 @@ block.
 - `src/d/ww_jpa_bind.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/f_op/f_op_msg_mng.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 
-**Includes (47) — directory scan, indicative:**
+**Includes (51) — directory scan, indicative:**
 
 - `include/d/actor/d_a_e_ww.h` — WW leg inside a receiver-named TU
 - `include/d/actor/d_a_ww_demo00.h` — WW-restoration actor
@@ -202,6 +204,9 @@ block.
 - `include/d/d_ww_itemmdl_test.h` — WW-specific receiver subsystem
 - `include/d/ext_evt/evt1_boundary.h` — JEvent1 parallel donor stack (WW events)
 - `include/d/ext_line/mdoext1_3dline.h` — MDoExt1 parallel donor stack (WW 3D-line)
+- `include/d/ext_plugin/ww_cam_crawl.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_cam_data.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_cam_select.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_import_gate.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_itemmdl_dispatch.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_itemmdl_impl_names.h` — WW-specific receiver subsystem
@@ -210,7 +215,7 @@ block.
 - `include/d/ext_plugin/ww_npcmount_impl_names.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_profile_register.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_room_loader.h` — WW-specific receiver subsystem
-- `include/d/ext_plugin/ww_cam_crawl.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_stage_loader.h` — WW-specific receiver subsystem
 - `include/d/ext_seq/ja1_bank.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_boundary.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_dsp_boundary.h` — JAudio1 parallel donor stack (WW audio)
@@ -244,6 +249,25 @@ boss, mail, …), the `src/dusk/mods/**` loader/SDK, `dvd_asset`. These are the
 public upstream's own content; they are gated by ordinary readiness, **not** by
 this covenant strip set.
 
+### Tier 1b — Never-push PLUGIN projects (outside files.cmake, so outside the
+### generated list — HAND-MAINTAINED; add every WW plugin dir here)
+
+The generated Tier-1 derives from `files.cmake` and CANNOT see mod/plugin
+projects that build via `add_mod()` — they are separate CMake targets. This
+subsection is their registry. Same covenant: fork-local, never pushed.
+
+- `mods-src/ww_donor_disc/**` — L2 donor-disc reader plugin (L2a re-home, bus
+  §670/§671). Serves donor files from the user's own GZLE01 image via the
+  overlay service; carries donor identity strings (`bmgres`, stage names) that
+  the M6 exe-greplist does NOT scan (it scans `dusklight.exe`, not `.dusk`
+  packages) — which is WHY it must be listed here by hand.
+- Built artifacts land in `build/**/mods/*.dusk` (untracked; never commit).
+- `src/d/ext_plugin/ww_cam_data.inc` — GENERATED donor camera tables
+  (gen_cam_data.py from donor d_cam_style/d_cam_type source). Outside both
+  generated bases: not a files.cmake TU (it is `#include`d by
+  `ww_cam_data.cpp`, which IS Tier-1) and not under `include/`. Donor data;
+  never push.
+
 ## Tier 2 — Modified-TP files carrying WW references (the dangerous class)
 
 These are **TP's own files**, edited for WW work — they look promotable but
@@ -258,6 +282,7 @@ reference before ANY promotion**, and never promote the WW-specific edit blocks.
 | `src/d/actor/d_a_knob00.cpp` | WW door-knob edits + refs |
 | `src/d/d_camera.cpp` | `Outset` / WW-space camera refs |
 | `src/d/d_kankyo_rain.cpp` | `Outset` / WW env refs |
+| `CMakeLists.txt` | fork-local WW plugin build hunk (`mods-src/ww_donor_disc`, guarded on `NOT DUSK_EXCLUDE_WW`) — strip the whole block before any promotion |
 
 Re-run the locator before any promotion, it drifts:
 `git grep -ilnE '\b(Ivan|Outset|Aryll|Tetra|Windfall|Sturgeon|Orca|Makar|Medli)\b' -- 'src/**' 'include/**' | grep -viE 'd_ext_|d_a_ext_|d_ww_itemmdl|custom_assets|ext_seq|d_albw'`
@@ -327,3 +352,14 @@ strings -n 5 "$EXE" | grep -inE '\b(Ivan|Outset|Aryll|Tetra|Zelda-of-WW|Tetra|St
 - This strip set supersedes the §113 assessment-era "25 files" estimate with the
   **34** verified post-merge receiver files + the Tier-2 modified-TP class the
   estimate did not enumerate.
+
+## PROBE REGISTRY (strip before push — grep the tag, delete the guarded blocks)
+
+| tag | define | TUs | purpose | filed |
+|---|---|---|---|---|
+| `WwProbe903` | `WW_PROBE_903` | d_ev_camera.cpp | UNITRANS stall discriminators (styleTimer/transTimer/Timer-param); the CAMERA execution cannot be ported (donor 39/39 Nonmatching), so it is measured instead; tale §903 | 2026-08-14 |
+| `WwProbe884` | `WW_PROBE_884` | d_a_npc_ls1.cpp, d_a_npc_zl1.cpp, d_a_npc_p1.cpp | run-134919 render triage (Aryll invisible / Tetra untextured / P1 draw-order correlation); 12-hypothesis set, tale §887 | 2026-08-13 |
+
+Strip = delete every `#if WW_PROBE_884 … #endif` block + the `#define` + this row
+(or set the define to 0 for a silenced interim build). `grep -rn WW_PROBE_884 src/`
+must return nothing before any push (same for `WW_PROBE_903`).

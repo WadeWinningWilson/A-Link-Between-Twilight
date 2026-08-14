@@ -1653,7 +1653,30 @@ void scan() {
                     }
                     std::ifstream in(it->path());
                     std::string line;
+                    // §728 (rows 20/21): a manifest that declares source=dvd
+                    // gets its arc from the DVD path (disc-served overlay) —
+                    // the library fallback must NOT re-mount a staged copy for
+                    // it, or the retired mount shadows the disc again through
+                    // this second door (observed 20:24: 18 arcs re-mounted).
+                    // Names are buffered per file and dropped if the file is
+                    // dvd-sourced.
+                    std::vector<std::string> fileArcs;
+                    bool dvdSourced = false;
                     while (std::getline(in, line)) {
+                        if (line.rfind("source=", 0) == 0) {
+                            std::string v = line.substr(7);
+                            for (char& c : v) {
+                                if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+                            }
+                            while (!v.empty() && (v.back() == '\r' || v.back() == '\n' ||
+                                                  v.back() == ' ' || v.back() == '\t')) {
+                                v.pop_back();
+                            }
+                            if (v == "dvd" || v == "game" || v == "tp") {
+                                dvdSourced = true;
+                            }
+                            continue;
+                        }
                         if (line.rfind("arc=", 0) != 0) {
                             continue;
                         }
@@ -1664,6 +1687,11 @@ void scan() {
                             name.pop_back();
                         }
                         if (!name.empty()) {
+                            fileArcs.push_back(name);
+                        }
+                    }
+                    if (!dvdSourced) {
+                        for (const std::string& name : fileArcs) {
                             needed.insert(name);
                         }
                     }

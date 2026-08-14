@@ -88,19 +88,31 @@ void evt1_onStaffAdvance(int staffIdx);
 // JEvent1 therefore owns its scratch rather than aliasing TP's bytes — safe
 // because one event runs at a time, and it keeps A5's revert clean.
 // ============================================================
-static u8 s_wipeDirection[64];
-static s16 s_timer[64];
-static u8 s_advance[64];
+// ============================================================
+// §727 CAPACITY ROOT (the 20:09 run's remaining 5-frame death): these scratch
+// tables were sized 64 — TP-scale — while WW STAGE packs carry staff indices
+// in the HUNDREDS (sea: staffNum=992, the door's staff idx 271/272/273).
+// Every guard silently no-op'd for idx >= 64: s_advance never set, so
+// getIsAddvance stayed FALSE, every donor actor's on-advance init was
+// skipped, actions instant-completed, and the cut chain exhausted in 5
+// frames. Capacity now covers the largest donor pack with headroom.
+// ============================================================
+static const int kEvt1MaxStaff = 2048;
+static u8 s_wipeDirection[kEvt1MaxStaff];
+static s16 s_timer[kEvt1MaxStaff];
+// §912: s_advance RETIRED — the advance counter lives in the donor's own
+// dEvDtStaff_c::mAdvance (@0x46), which the receiver's reader now consults on
+// WW hosts. s_wipeDirection/s_timer stay: those DO overlap TP's field_0x40/
+// 0x41 typing (the original scratch note), so they keep their own storage.
 
 void evt1_resetStaffLatches() {
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < kEvt1MaxStaff; i++) {
         s_wipeDirection[i] = 0;
         s_timer[i] = 0;
-        s_advance[i] = 0;
     }
 }
 
-static bool staffInRange(int i) { return i >= 0 && i < 64; }
+static bool staffInRange(int i) { return i >= 0 && i < kEvt1MaxStaff; }
 
 static u8& wipeDirection(int staffIdx) {
     static u8 dummy = 0;
@@ -115,9 +127,26 @@ static s16& staffTimer(int staffIdx) {
 }
 
 u8& evt1_staffAdvance(int staffIdx) {
+    // ========================================================================
+    // §912 (DN-10-S retired): this returned `s_advance[staffIdx]`, a
+    // module-static SIDE ARRAY — storage the receiver's own reader
+    // (dEvent_manager_c::getIsAddvance, which reads field_0x40) never looks at.
+    // The WW wind-down was faithful and landed where nobody read it, so
+    // getIsAddvance stayed false forever: 274 adv=0 vs 2 adv=1, and both adv=1
+    // were Link cuts on TP's own write path. The donor keeps this counter
+    // INSIDE the staff record (mAdvance @0x46) precisely so writer and reader
+    // share one storage — so use the donor's field. The old scratch note
+    // ("incompatible typing, own the scratch") holds for mWipeDirection/mTimer
+    // at 0x40/0x42, which genuinely overlap TP's field_0x40/0x41; mAdvance at
+    // 0x46 lands in bytes nothing else in the tree touches.
+    // ========================================================================
     static u8 dummy = 0;
-    if (!staffInRange(staffIdx)) { dummy = 0; return dummy; }
-    return s_advance[staffIdx];
+    if (staffIdx < 0) { dummy = 0; return dummy; }
+    dEvDtBase_c& base = dComIfGp_getEventManager().getBase();
+    if (staffIdx >= base.getStaffNum()) { dummy = 0; return dummy; }
+    dEvDtStaff_c* staff = base.getStaffP(staffIdx);
+    if (staff == NULL) { dummy = 0; return dummy; }
+    return staff->mAdvance;
 }
 
 /* 80071AC4-80071B4C       .text finish_check__12dEvDtEvent_cFv */
@@ -167,6 +196,19 @@ void evt1_specialProcPackage(dEvDtStaff_c* i_staff) {
 
     const int actIdx = dComIfGp_evmng_getMyActIdx(
         staffIdx, (DUSK_CONST char* DUSK_CONST*)action_table, 3, FALSE, 0);
+
+    // [P-A4c.4] PACKAGE act transitions, change-only — the -1 contract and the
+    // [E8] cache are both exercised exactly here; a stuck or oscillating
+    // actIdx discriminates cache-staleness from advance-starvation.
+    {
+        static int s_lastAct = -99;
+        if (actIdx != s_lastAct) {
+            DuskLog.info("[Evt1] §423-A4c PACKAGE act {} -> {} (staffIdx={} adv={})",
+                         s_lastAct, actIdx, staffIdx,
+                         dComIfGp_evmng_getIsAddvance(staffIdx) ? 1 : 0);
+            s_lastAct = actIdx;
+        }
+    }
 
     if (dComIfGp_evmng_getIsAddvance(staffIdx)) {
         switch (actIdx) {
@@ -251,21 +293,19 @@ s32 evt1_cutStartCheck(dEvDtCut_c* i_cut) {
 //   mTimer = 0 | mWipeDirection = 0 | mAdvance = 1 | mbHasAction = false
 // The receiver's advanceCut writes only TP's own fields, so the WW stack must
 // apply these itself — the omission is what hung A4.
-// s_seen additionally seeds the FIRST sight of a staff (event start, which
-// runs through TP's init and never reaches this path) with mAdvance = 1, so
-// the staff's start branch fires exactly as the donor's does.
+// §916: the s_seen first-sight table is RETIRED with the seeding block it
+// existed to serve (the donor has no equivalent; init's mAdvance = 2 is the
+// real mechanism, ported at §912).
 // ============================================================
-static u8 s_seen[64];
 
 static void evt1_onAdvance(dEvDtStaff_c* i_staff) {
     const int idx = (int)i_staff->mIndex;
-    if (idx < 0 || idx >= 64) {
+    if (idx < 0 || idx >= kEvt1MaxStaff) {
         return;
     }
     s_timer[idx] = 0;
     s_wipeDirection[idx] = 0;
-    s_advance[idx] = 1;
-    s_seen[idx] = 1;
+    i_staff->mAdvance = 1;   // §912: donor storage (mAdvance @0x46), not the side array
     evt1_onStaffAdvance(idx);   // clears the manager-side action cache
 }
 
@@ -275,16 +315,39 @@ static void evt1_onAdvance(dEvDtStaff_c* i_staff) {
 // satisfied; the -1 case (successor has no start flags) additionally requires
 // THIS cut's own flag to be set, and the 1 case sets it.
 bool evt1_advanceCutLocal(dEvDtBase_c* i_base, dEvDtStaff_c* i_staff) {
-    // [E8] first sight of this staff in the WW stack = event start; the donor
-    // reaches the same state through its own init (mAdvance = 1).
+    // ========================================================================
+    // §916: the [E8] first-sight seeding block is DELETED. The donor's
+    // advanceCutLocal (d_event_data.cpp:917) has NO such block — it relies on
+    // dEvDtStaff_c::init() seeding mAdvance = 2, which §912 ported. The old
+    // comment claimed "the donor reaches the same state through its own init
+    // (mAdvance = 1)": the VALUE WAS WRONG (donor init is 2, not 1) and so was
+    // the TIMING. Sequence it produced: init 2 -> this block clobbers to 1 ->
+    // the wind-down below reads `1 > 1` false -> 0, all inside the FIRST call.
+    // The donor instead reaches the wind-down holding 2, which winds to 1 and
+    // leaves getIsAddvance TRUE for the frame in which the staff acts. That one
+    // frame IS the deadlock-breaker; destroying it is why adv was never once
+    // observed as 2 across five logs and why §912's storage fix alone changed
+    // nothing. Donor semantics now stand unmediated.
+    // ========================================================================
+    dEvDtCut_c* cutP = i_base->getCutP(i_staff->getCurrentCut());
+
+    // ============================================================
+    // [P-A4c.3] WW-side cut probe — §318's shape, ported to the stack that
+    // actually runs under DUSK_EVT1_NATIVE=1. TP's §318 probe sits BELOW the
+    // A4 hook in d_event_data.cpp, so it is blind whenever the WW stack
+    // serves the event; both §468 hang logs proved that blindness. Rate-
+    // limited every 20th call. A staff stuck on one cut with flagSet=0 and a
+    // live next link is the advance-never-satisfies hypothesis, on record.
+    // ============================================================
     {
-        const int idx0 = (int)i_staff->mIndex;
-        if (idx0 >= 0 && idx0 < 64 && !s_seen[idx0]) {
-            s_seen[idx0] = 1;
-            s_advance[idx0] = 1;
+        static int s_p423 = 0;
+        if ((s_p423++ % 20) == 0) {
+            DuskLog.info("[Evt1] §423-A4c cut — staff='{}' cut='{}' flagId={} flagSet={} next={} adv={}",
+                         i_staff->getName(), cutP->getName(), (int)cutP->getFlagId(),
+                         evt1_flagCheck(cutP->getFlagId()) ? 1 : 0, (int)cutP->getNext(),
+                         (int)evt1_staffAdvance((int)i_staff->mIndex));
         }
     }
-    dEvDtCut_c* cutP = i_base->getCutP(i_staff->getCurrentCut());
 
     if (cutP->getNext() != -1) {
         dEvDtCut_c* nextP = i_base->getCutP(cutP->getNext());
@@ -306,7 +369,7 @@ bool evt1_advanceCutLocal(dEvDtBase_c* i_base, dEvDtStaff_c* i_staff) {
 
     // Donor advance-counter wind-down (dEvDtStaff_c::mAdvance).
     // [E2] donor staff->mAdvance wind-down, in JEvent1 scratch.
-    u8& adv = evt1_staffAdvance((int)i_staff->mIndex);   // receiver field (no getter)
+    u8& adv = evt1_staffAdvance((int)i_staff->mIndex);   // §912: donor mAdvance @0x46
     adv = adv > 1 ? 1 : 0;
     return false;
 }
@@ -344,7 +407,52 @@ void evt1_advanceCut(dEvDtBase_c* i_base, dEvDtEvent_c* i_event) {
 // dropping to nothing — and the census script makes that arrival detectable.
 // Port on evidence, not on inventory. [E7] law, applied a second time.
 // ============================================================
+// ============================================================
+// §423 A4c — THE HANG'S SECOND ROOT (2026-08-10, History): the default leg
+// below used to call i_staff->specialProc() — whose FIRST LINE is the A4 hook,
+// which dispatches straight back here while evt1_isActive() is true. For every
+// staff type not handled by name (CAMERA=2, DEFAULT=0, SHUTTER_=10 — i.e. 26
+// of the tale's 39 staffs), that is UNCONDITIONAL MUTUAL RECURSION; with tail
+// calls optimized it spins in place rather than overflowing, which is exactly
+// §468's signature: a HANG, not a fault, log terminating at entry() GRANT.
+// It also explains why A4b's cache fix (a real defect, kept) did not cure the
+// hang, and why the WW stack was silent in both hang logs — the spin happens
+// before any warn site is reached.
+// FIX SHAPE: delegate to the receiver's PER-TYPE procs directly, replicating
+// its dispatch minus PACKAGE/ALL (owned above). Donor's own dispatcher
+// (WW d_event_data.cpp:141) and the receiver's both no-op CAMERA/DEFAULT/
+// SHUTTER_, so the no-case fall-through is faithful in BOTH vocabularies.
+// A2b's recorded decision ("receiver's own proc runs for the six unused
+// types") is preserved — only the mechanism changes. No TP file is touched.
+// ============================================================
 void evt1_specialProc(dEvDtStaff_c* i_staff) {
+    // [P-A4c.1] recursion watchdog — converts any residual re-entrance from an
+    // invisible hang into one log line and a survivable bail.
+    static int s_depth = 0;
+    static bool s_depthWarned = false;
+    if (s_depth > 4) {
+        if (!s_depthWarned) {
+            s_depthWarned = true;
+            DuskLog.warn("[Evt1] §423-A4c RECURSION staff='{}' type={} depth={} — bailing",
+                         i_staff->getName(), i_staff->getType(), s_depth);
+        }
+        return;
+    }
+    struct DepthGuard {
+        int& d;
+        DepthGuard(int& x) : d(x) { d++; }
+        ~DepthGuard() { d--; }
+    } guard(s_depth);
+
+    // [P-A4c.2] dispatch census, first 48 — the §468 logs could not say which
+    // stack was executing; this makes the WW stack visible the moment it runs.
+    static int s_census = 0;
+    if (s_census < 48) {
+        s_census++;
+        DuskLog.info("[Evt1] §423-A4c dispatch #{} staff='{}' type={}",
+                     s_census, i_staff->getName(), i_staff->getType());
+    }
+
     switch (i_staff->getType()) {
     case dEvDtStaff_c::TYPE_PACKAGE:
         evt1_specialProcPackage(i_staff);
@@ -352,9 +460,33 @@ void evt1_specialProc(dEvDtStaff_c* i_staff) {
     case dEvDtStaff_c::TYPE_ALL:
         dComIfGp_evmng_cutEnd((int)i_staff->mIndex);   // donor: ALL_e ⇒ cutEnd
         break;
+    // [E9] receiver dispatch replicated DIRECTLY (never via the hooked
+    // specialProc — see A4c header above). Types absent here are no-ops in
+    // both games' dispatchers.
+    case dEvDtStaff_c::TYPE_DIRECTOR:
+        i_staff->specialProcDirector();
+        break;
+    case dEvDtStaff_c::TYPE_TIMEKEEPER:
+        i_staff->specialProcTimekeeper();
+        break;
+    case dEvDtStaff_c::TYPE_EFFECT:
+        i_staff->specialProcEffect();
+        break;
+    case dEvDtStaff_c::TYPE_CREATE:
+        i_staff->specialProcCreate();
+        dComIfGp_evmng_cutEnd((int)i_staff->mIndex);
+        break;
+    case dEvDtStaff_c::TYPE_SOUND:
+        i_staff->specialProcSound();
+        break;
+    case dEvDtStaff_c::TYPE_MESSAGE:
+        i_staff->specialProcMessage();
+        break;
+    case dEvDtStaff_c::TYPE_LIGHT:
+        i_staff->specialProcLight();
+        break;
     default:
-        // Unused-by-our-content staff types: the receiver's own proc runs.
-        i_staff->specialProc();
+        // CAMERA / DEFAULT / SHUTTER_: no dispatcher case in donor OR receiver.
         break;
     }
 }

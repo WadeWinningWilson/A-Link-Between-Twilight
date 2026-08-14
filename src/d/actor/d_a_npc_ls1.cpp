@@ -51,6 +51,15 @@
 #include "d/d_drawlist.h"              // §244 dDlst_shadowControl_c::getSimpleTex() (port setShadow tail arg)
 #include "d/d_com_inf_game.h"          // §244 dComIfGd_setList (render list target)
 #include "d/d_demo.h"                  // §244 dDemo_actor_c::ENABLE_SHAPE_e (full nested enum)
+// ============================================================
+// §885 PROBE (STRIP BEFORE PUSH — registered in NEVER-PUSH-STRIP-SET):
+// run 134919 — Aryll loaded but never appeared. 12-hypothesis set across
+// ls1/zl1/p1; kill switch = set WW_PROBE_884 to 0.
+// ============================================================
+#define WW_PROBE_884 1
+#if WW_PROBE_884
+#include "dusk/logging.h"
+#endif
 #include "d/d_ext_scope_msg.h"         // §244 daPyStts0_TELESCOPE_LOOK_e (scope subsystem, §245)
 #include "f_op/f_op_msg_mng.h"         // §244 fopMsgM_getScopeMode/forceSendOn/... (§245 scope funcs)
 #include "f_op/f_op_camera_mng.h"      // §244 camera_process_class (full type for demo camera)
@@ -2369,6 +2378,16 @@ BOOL daNpc_Ls1_c::_draw() {
     J3DModel* morf_model_p = mpMorf->getModel();
     J3DModelData* morf_model_info_p = morf_model_p->getModelData();
 
+#if WW_PROBE_884
+    // H4 draw invoked at all / H2 H3 gate latch values.
+    {
+        static int s_pd = 0;
+        if ((s_pd++ % 120) == 0) {
+            DuskLog.info("[WwProbe884] ls1 draw-called m83A={} m83C={} demoId={}",
+                         (int)m83A, (int)m83C, (int)demoActorID);
+        }
+    }
+#endif
     if (m83A || m83C != 0) {
         return TRUE;
     }
@@ -2402,6 +2421,19 @@ BOOL daNpc_Ls1_c::_draw() {
         mDoExt_modelEntryDL(mpTelescopeModel);
     }
 
+#if WW_PROBE_884
+    // H5 draw path completes (post entryDL).
+    {
+        static int s_pc = 0;
+        if ((s_pc++ % 120) == 0) {
+            DuskLog.info("[WwProbe884] ls1 drew tev=({},{},{},{}) K=({},{},{},{})",
+                         (int)tevStr.TevColor.r, (int)tevStr.TevColor.g,
+                         (int)tevStr.TevColor.b, (int)tevStr.TevColor.a,
+                         (int)tevStr.TevKColor.r, (int)tevStr.TevKColor.g,
+                         (int)tevStr.TevKColor.b, (int)tevStr.TevKColor.a);
+        }
+    }
+#endif
     shadowDraw();
     dSnap_RegistFig(DSNAP_TYPE_NPC_LS1, this, 1.0f, 1.0f, 1.0f);
 
@@ -2416,6 +2448,19 @@ BOOL daNpc_Ls1_c::_draw() {
 
 /* 00004418-00004654       .text _execute__11daNpc_Ls1_cFv */
 BOOL daNpc_Ls1_c::_execute() {
+#if WW_PROBE_884
+    // H1 proc executes / H6 position sane / story bits live (one line each ~2s).
+    {
+        static int s_pe = 0;
+        if ((s_pe++ % 120) == 0) {
+            DuskLog.info("[WwProbe884] ls1 exec pos=({:.0f},{:.0f},{:.0f}) scale=({:.2f}) "
+                         "type={} evt0001={} evt2A80={} demoId={}",
+                         current.pos.x, current.pos.y, current.pos.z, scale.x, (int)mType,
+                         (int)dComIfGs_isEventBit(WWEV_UNK_0001),
+                         (int)dComIfGs_isEventBit(WWEV_UNK_2A80), (int)demoActorID);
+        }
+    }
+#endif
     if (!m83D) {
         m794 = current.pos;
         m7A0 = current.angle;

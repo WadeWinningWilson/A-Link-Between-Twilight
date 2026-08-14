@@ -8,7 +8,8 @@
  *
  * ============================================================================
  * §328 WW KNOB DOOR (KNOB00) — TWO IMPLEMENTATIONS, COMPILE-GATED (the gate
- * macro DUSK_WW_KNOB00_NATIVE lives in d/actor/d_a_knob00.h; default 0):
+ * macro DUSK_WW_KNOB00_NATIVE lives in d/actor/d_a_knob00.h; default 1 since
+ * WAVE-1 row 17 — tale §776 caught this comment still claiming 0):
  *
  *   DUSK_WW_KNOB00_NATIVE == 1 : the §328 DIRECT PORT — body VERBATIM from the
  *   WW donor (D:/XXXXXXX/WW DP/src/d/actor/d_a_knob00.cpp, fully matched), on

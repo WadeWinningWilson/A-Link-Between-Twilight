@@ -57,6 +57,7 @@
 #include "JSystem/J3DGraphBase/J3DSys.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
+#include "d/d_kankyo_ww.h"  // §694 donor C0/K0 tevstr fill
 #include "d/d_particle_name.h"
 #include "f_op/f_op_actor_mng.h"
 #include "f_op/f_op_overlap_mng.h"
@@ -773,12 +774,15 @@ void dExtTree_packet_c::draw() {
         }
         // #4 (№141): own tevstr, not the mounted-host room table.
         static dKy_tevstr_c s_tevStr;
-        g_env_light.settingTevStruct(TEV_TYPE_ACTOR, &first->mPos, &s_tevStr);
-        // №141 feed idiom (ext_vegetation :1510): AmbCol -> C0, white K0.
+        // §694: donor register pair (see ext_vegetation §694) — the white-K0
+        // idiom was the placeholder for the then-unfilled K0 pool. Donor swood
+        // feeds REG0/REG1 from the room tevstr C0/K0 (WW d_wood.cpp:922-923).
+        dKyWw_settingTevStruct(TEV_TYPE_BG0, &first->mPos, &s_tevStr);
         GXColorS10 c0;
-        c0.r = s_tevStr.AmbCol.r; c0.g = s_tevStr.AmbCol.g;
-        c0.b = s_tevStr.AmbCol.b; c0.a = 255;
-        GXColor k0 = {255, 255, 255, 255};
+        c0.r = s_tevStr.TevColor.r; c0.g = s_tevStr.TevColor.g;
+        c0.b = s_tevStr.TevColor.b; c0.a = 255;
+        GXColor k0 = s_tevStr.TevKColor;
+        k0.a = 255;
         GXSetTevColorS10(GX_TEVREG0, c0);
         GXSetTevColor(GX_TEVREG1, k0);
         dKy_GxFog_tevstr_set(&s_tevStr);

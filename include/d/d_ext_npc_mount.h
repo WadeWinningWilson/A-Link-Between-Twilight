@@ -484,6 +484,11 @@ bool dExtNpcMount_providerAt(int index, dExtNpcManifest* out);
 // §27: WW bmd3/bdl arcs need ExtNpc load+finish (never cast getObjectRes → J3DModelData*).
 // acquire pins ModelData in the session cache; retain/release keep the arc buffer alive (№73).
 J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelName);
+// §811: by-index sibling — DN-3's consume-time route for donor actors whose
+// own idiom resolves models by RES INDEX (tsubo/item/shutter tables). Cache
+// identity = arc + "idx#N" (an arc's index space is fixed). NEVER cast a
+// getObjectRes return to J3DModelData* — this is the route.
+J3DModelData* dExtNpcMount_acquireModelDataByIndex(const char* arc, int resIndex);
 // §630: the same resolver, sourced from the STAGE res control instead of the
 // object one — for donor ROOM arcs staged byte-identical. A vanilla WW room arc
 // files its models under RARC node type 'BDL ', which dRes_info_c has no branch
@@ -493,6 +498,9 @@ J3DModelData* dExtNpcMount_acquireModelData(const char* arc, const char* modelNa
 // is never pointer-fixed in place and stays byte-identical in memory as well as
 // on disk.
 J3DModelData* dExtNpcMount_acquireStageModelData(const char* arc, const char* modelName);
+// tale §773: evict stage-path model cache entries (positional room-arc keys)
+// at stage change — a cache may not outlive the scope its key is unique in.
+void dExtNpcMount_dropStageScopedModels(const char* i_reason);
 // §229 direct-port helper: acquire a model with a body BMT baked in (parse-at-consume,
 // cache-keyed by model+bmt). For WW actors whose COLOR lives in a .bmt swap (pig pg_*.bmt)
 // — a raw getObjectRes bmt can't be applied, and the base model renders untextured/black.

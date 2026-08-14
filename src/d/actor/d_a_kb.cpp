@@ -17,6 +17,9 @@
 #include "m_Do/m_Do_ext.h"
 #include "d/d_cc_d.h"
 #include "d/actor/d_a_esa.h"
+#include "d/actor/d_a_tag_kb_item_port.h"  // INTEGRATOR wiring: d_a_kb.cpp was
+// pointed at daTagKbItemPort_c by the pig-tag shim retirement but the include
+// was not added — the class is declared, only the #include was missing.
 #include "d/d_ext_npc_mount.h"  // §229 DN-3: parse-at-consume model fixup (acquireModelData)
 #include "dusk/state_tap.hpp"   // §231 P13 acceptance-gate tap (duskStateTap)
 #include "d/actor/d_a_player.h"
@@ -122,7 +125,7 @@ void* esa_search_sub(void* param_1, void* param_2) {
 /* 00000AC8-00000B60       .text item_tag_search__FPvPv */
 void* item_tag_search(void* param_1, void* param_2) {
     if(fopAcM_IsActor(param_1) && fopAcM_GetName(param_1) == fpcNm_TAG_KB_ITEM_e) {
-        daTagKbItem_c* pItem = (daTagKbItem_c*)param_1;
+        daTagKbItemPort_c* pItem = (daTagKbItemPort_c*)param_1;
         fopAc_ac_c* pActor = (fopAc_ac_c*)param_2;
 
         if(std::abs(pActor->current.pos.y - pItem->current.pos.y) < 40.0f && fopAcM_searchActorDistanceXZ(pActor, pItem) < 400.0f) {
@@ -144,10 +147,10 @@ void* search_get_esa(kb_class* i_this) {
 }
 
 /* 00000B9C-00000BD8       .text search_get_item__FP8kb_class */
-daTagKbItem_c* search_get_item(kb_class* i_this) {
+daTagKbItemPort_c* search_get_item(kb_class* i_this) {
     void* pProc = fpcM_Search(item_tag_search, i_this);
     if(pProc) {
-        return (daTagKbItem_c*)pProc;
+        return (daTagKbItemPort_c*)pProc;
     }
 
     return NULL;
@@ -2016,7 +2019,7 @@ void esa_demo_move(kb_class* i_this) {
                 i_this->m574.end();
                 
                 if(i_this->m409 != 0) {
-                    daTagKbItem_c* pItem = search_get_item(i_this);
+                    daTagKbItemPort_c* pItem = search_get_item(i_this);
                     if(pItem) {
                         pItem->kb_dig(actor);
 

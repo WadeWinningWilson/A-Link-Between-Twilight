@@ -53,14 +53,19 @@ bool evt1_isActive();
 // serves everything exactly as it does today (the A4 dispatch becomes inert),
 // so any regression in the parallel stack is one #define away from reverted.
 #ifndef DUSK_EVT1_NATIVE
-// §469-C1 FALSIFICATION (Housing, user-authorised, TEMPORARY — History's switch):
-// flipped 1 -> 0 to test whether the reproducible hang at `[Evt] §350c entry()
-// GRANT` (exe 22:58:32 gFrm=515, exe 23:16:29 gFrm=618, same site both times) is
-// A4's. Hang GONE => A4 confirmed, narrowed to the two hooks at
-// d_event_data.cpp:542/:1868. Hang STAYS => A4 exonerated in one build.
-// RESTORE TO 1 once the verdict is recorded — this is History's control surface,
-// borrowed for a diagnostic, not re-ruled.
-#define DUSK_EVT1_NATIVE 0  // §423 A4: temporarily OFF for the §469-C1 test
+// §469-C1 VERDICT RECORDED (§471): hang GONE at 0 ⇒ A4 CONFIRMED as the hang's
+// owner, narrowed to the two hooks at d_event_data.cpp:546/:1872.
+// §423 A4c ROOT (History, 2026-08-10): evt1_specialProc's default leg called
+// the hooked dEvDtStaff_c::specialProc() — unconditional MUTUAL RECURSION for
+// every staff type without a named case (CAMERA/DEFAULT/SHUTTER_ = 26 of the
+// tale's 39 staffs). Tail-call optimized ⇒ a spin, not an overflow: precisely
+// §468's hang-not-fault signature, and why A4b's (real, kept) cache fix did
+// not cure it. Fixed in evt1_event_data.cpp by dispatching to the receiver's
+// per-type procs DIRECTLY; probes P-A4c.1-4 armed for the retest.
+// RESTORED TO 1 per this header's own instruction — History's switch,
+// History restoring it. Kill switch unchanged: 0 = today's (pre-A4) behavior
+// exactly, one #define away, promise holds by construction through A5.
+#define DUSK_EVT1_NATIVE 1  // §423 A4c: retest build — WW stack live
 #endif
 
 }  // namespace JEvent1

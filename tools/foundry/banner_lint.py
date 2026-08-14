@@ -23,6 +23,11 @@
 #   banner_lint.py <file> [...]    lint specific files
 #   banner_lint.py --coverage      banner coverage over the roster only
 # Read-only. Exit 1 on any DISAGREES, 2 if only UNKNOWNs.
+#
+# ⚠ EXIT-2 SATURATION (integrator WATCH, WAVE-1): since KIT-PLUGIN (V8) landed,
+# every run exits 2 (86 UNKNOWN) until the first declarations are authored.
+# Exit 2 means UNMEASURED, not red — do NOT wire exit!=0 into any pre-push
+# gate before the roster carries declarations, or the tree is permanently red.
 # ============================================================================
 import re
 import sys
@@ -33,6 +38,9 @@ import census_axis_c as C  # noqa: E402
 import census_axis_d as D  # noqa: E402
 
 FIELDS = ("KIT-LINEAGE", "KIT-DONOR", "KIT-DONOR-REF", "KIT-DONOR-STATUS")
+# KIT-PLUGIN (V8) is checked separately in lint_one — not in FIELDS, so its
+# absence message names the §7 spec rather than the generic line.
+KP = "KIT-PLUGIN"
 LINE = re.compile(r"^//\s*(KIT-[A-Z-]+):\s*(.+?)\s*$", re.M)
 # F3: HUNK SCOPE. A shared receiver TU (TP's own d_stage.cpp, d_demo.cpp, ...)
 # can carry donor-derived lines WITHOUT the whole file being a port. Neither
@@ -131,6 +139,21 @@ def lint_one(path, status_map):
     for f in FIELDS:
         if f not in b:
             findings.append(("UNKNOWN", path, f"{f} absent — UNKNOWN, not assumed"))
+
+    # ========================================================================
+    # V8 KIT-PLUGIN (ww-provenance-banner-spec.md §7, WAVE-1 row 12).
+    # DECLARED never inferred; missing = UNKNOWN (§31-C); enum-checked.
+    # Monotonic plugin-bound invariant is enforced in main() over the run.
+    # ========================================================================
+    import re as _re
+    kp = (b.get("KIT-PLUGIN") or [None])[0]
+    if kp is None:
+        findings.append(("UNKNOWN", path,
+                         "KIT-PLUGIN absent — migration disposition unmeasured (§31-C)"))
+    elif not _re.fullmatch(
+            r"receiver-native|plugin-bound(:wave-[0-9]+)?|in-plugin|strip-set|UNKNOWN", kp):
+        findings.append(("DISAGREES", path,
+                         f"KIT-PLUGIN value {kp!r} outside the §7 enum"))
 
     donors = b.get("KIT-DONOR", [])
     aggregate = (b.get("KIT-DONOR-STATUS") or ["UNKNOWN"])[0]

@@ -1,0 +1,117 @@
+d_a_npc_ls1.cpp(107): error C2451: a conditional expression of type 'const J3DTexMtxAnm' is not valid
+d_a_npc_ls1.cpp(107): note: No user-defined-conversion operator available that can perform this conversion, or the operator cannot be called
+d_a_npc_ls1.cpp(110): error C2039: 'getTextureSRT': is not a member of 'J3DTexMtx'
+d_a_npc_ls1.cpp(111): error C2039: 'getTextureSRT': is not a member of 'J3DTexMtx'
+d_a_npc_ls1.cpp(259): error C2065: 'fpcNm_NPC_BM1_e': undeclared identifier
+d_a_npc_ls1.cpp(273): error C2065: 'fopAcStts_UNK4000_e': undeclared identifier
+d_a_npc_ls1.cpp(284): error C2065: 'fopAcStts_UNK4000_e': undeclared identifier
+d_a_npc_ls1.cpp(293): error C2065: 'fopAcStts_NOCULLEXEC_e': undeclared identifier
+d_a_npc_ls1.cpp(323): error C2664: 'void dNpc_EventCut_c::setActorInfo2(char *,fopNpc_npc_c *)': cannot convert argument 1 from 'const char [4]' to 'char *'
+d_a_npc_ls1.cpp(323): note: Conversion from string literal loses const qualifier (see /Zc:strictStrings)
+d_a_npc_ls1.cpp(323): note: while trying to match the argument list '(const char [4], daNpc_Ls1_c *)'
+d_a_npc_ls1.cpp(324): error C2065: 'fopAc_Attn_LOCKON_TALK_e': undeclared identifier
+d_a_npc_ls1.cpp(324): error C2065: 'fopAc_Attn_ACTION_SPEAK_e': undeclared identifier
+d_a_npc_ls1.cpp(332): error C2065: 'fopAc_Attn_TYPE_TALK_e': undeclared identifier
+d_a_npc_ls1.cpp(333): error C2065: 'fopAc_Attn_TYPE_SPEAK_e': undeclared identifier
+d_a_npc_ls1.cpp(376): error C2039: 'mRoomNo': is not a member of 'dKy_tevstr_c'
+d_a_npc_ls1.cpp(377): error C2039: 'mEnvrIdxOverride': is not a member of 'dKy_tevstr_c'
+d_a_npc_ls1.cpp(499): error C2661: 'mDoExt_btpAnm::init': no overloaded function takes 9 arguments
+d_a_npc_ls1.cpp(499): note: while trying to match the argument list '(J3DModelData *, J3DAnmTexPattern *, int, J3DFrameCtrl::Attribute_e, float, int, int, bool, int)'
+d_a_npc_ls1.cpp(532): error C2661: 'mDoExt_btkAnm::init': no overloaded function takes 9 arguments
+d_a_npc_ls1.cpp(532): note: while trying to match the argument list '(J3DModelData *, J3DAnmTextureSRTKey *, int, J3DFrameCtrl::Attribute_e, float, int, int, bool, int)'
+d_a_npc_ls1.cpp(1111): error C3861: 'dComIfGp_getMesgAnimeTagInfo': identifier not found
+d_a_npc_ls1.cpp(1113): error C3861: 'dComIfGp_setMesgAnimeTagInfo': identifier not found
+d_a_npc_ls1.cpp(1169): error C2039: 'UNK_0001': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(1169): error C2065: 'UNK_0001': undeclared identifier
+d_a_npc_ls1.cpp(1172): error C3861: 'dComIfGs_getpCollect': identifier not found
+d_a_npc_ls1.cpp(1174): error C2039: 'UNK_0280': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(1174): error C2065: 'UNK_0280': undeclared identifier
+d_a_npc_ls1.cpp(1177): error C3861: 'dComIfGs_getpCollect': identifier not found
+d_a_npc_ls1.cpp(1187): error C2065: 'dItemBtn_X_e': undeclared identifier
+d_a_npc_ls1.cpp(1187): error C2065: 'dItemNo_TELESCOPE_e': undeclared identifier
+d_a_npc_ls1.cpp(1191): error C2065: 'dItemBtn_Y_e': undeclared identifier
+d_a_npc_ls1.cpp(1191): error C2065: 'dItemNo_TELESCOPE_e': undeclared identifier
+d_a_npc_ls1.cpp(1195): error C2065: 'dItemBtn_Z_e': undeclared identifier
+d_a_npc_ls1.cpp(1195): error C2065: 'dItemNo_TELESCOPE_e': undeclared identifier
+d_a_npc_ls1.cpp(1245): error C2027: use of undefined type 'camera_process_class'
+d_a_npc_ls1.cpp(1429): error C2440: 'initializing': cannot convert from 'dAttention_c *' to 'dAttention_c &'
+d_a_npc_ls1.cpp(1467): error C2039: 'UNK_2A80': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(1467): error C2065: 'UNK_2A80': undeclared identifier
+d_a_npc_ls1.cpp(1478): error C2039: 'UNK_2A80': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(1478): error C2065: 'UNK_2A80': undeclared identifier
+d_a_npc_ls1.cpp(1580): error C2440: 'initializing': cannot convert from 'const char [10]' to 'char *'
+d_a_npc_ls1.cpp(1580): note: Conversion from string literal loses const qualifier (see /Zc:strictStrings)
+d_a_npc_ls1.cpp(1581): error C2440: 'initializing': cannot convert from 'const char [10]' to 'char *'
+d_a_npc_ls1.cpp(1581): note: Conversion from string literal loses const qualifier (see /Zc:strictStrings)
+d_a_npc_ls1.cpp(1582): error C2440: 'initializing': cannot convert from 'const char [4]' to 'char *'
+d_a_npc_ls1.cpp(1582): note: Conversion from string literal loses const qualifier (see /Zc:strictStrings)
+d_a_npc_ls1.cpp(1583): error C2440: 'initializing': cannot convert from 'const char [8]' to 'char *'
+d_a_npc_ls1.cpp(1583): note: Conversion from string literal loses const qualifier (see /Zc:strictStrings)
+d_a_npc_ls1.cpp(1645): error C2660: 'dComIfGp_evmng_getMyStaffId': function does not take 1 arguments
+d_a_npc_ls1.cpp(1645): note: while trying to match the argument list '(char *)'
+d_a_npc_ls1.cpp(1654): error C3861: 'dComIfGp_getScopeMesgStatus': identifier not found
+d_a_npc_ls1.cpp(1668): error C3861: 'fopMsgM_releaseScopeMode': identifier not found
+d_a_npc_ls1.cpp(1671): error C2027: use of undefined type 'camera_process_class'
+d_a_npc_ls1.cpp(1672): error C2039: 'daPyFlg0_SCOPE_CANCEL': is not a member of 'daPy_py_c'
+d_a_npc_ls1.cpp(1672): error C2065: 'daPyFlg0_SCOPE_CANCEL': undeclared identifier
+d_a_npc_ls1.cpp(1811): error C2039: 'mFovy': is not a member of 'view_class'
+d_a_npc_ls1.cpp(1836): error C3861: 'dComIfGp_getScopeMesgStatus': identifier not found
+d_a_npc_ls1.cpp(1837): error C2065: 'fopMsg_MODE_MSG_UNK0_e': undeclared identifier
+d_a_npc_ls1.cpp(1838): error C2065: 'daPyStts0_TELESCOPE_LOOK_e': undeclared identifier
+d_a_npc_ls1.cpp(1839): error C2039: 'field_0x4978': is not a member of 'dComIfG_play_c'
+d_a_npc_ls1.cpp(1840): error C2665: 'daPy_py_c::setPlayerPosAndAngle': no overloaded function could convert all the argument types
+d_a_npc_ls1.cpp(1840): note: 'void daPy_py_c::setPlayerPosAndAngle(const cXyz *,const csXyz *)': cannot convert argument 2 from 'int' to 'const csXyz *'
+d_a_npc_ls1.cpp(1840): note: Conversion from integral type to pointer type requires reinterpret_cast, C-style cast or parenthesized function-style cast
+d_a_npc_ls1.cpp(1840): note: while trying to match the argument list '(cXyz *, int)'
+d_a_npc_ls1.cpp(1842): error C3861: 'dComIfGp_setScopeType': identifier not found
+d_a_npc_ls1.cpp(1849): error C2065: 'JA_STRM_DEMO_TETRA_FLY': undeclared identifier
+d_a_npc_ls1.cpp(1854): error C3861: 'fopMsgM_getScopeMode': identifier not found
+d_a_npc_ls1.cpp(1858): error C3861: 'dComIfGp_getScopeMesgStatus': identifier not found
+d_a_npc_ls1.cpp(1858): error C2050: switch expression not integral
+d_a_npc_ls1.cpp(1860): error C3861: 'dComIfGp_setScopeMesgStatus': identifier not found
+d_a_npc_ls1.cpp(1864): error C2027: use of undefined type 'camera_process_class'
+d_a_npc_ls1.cpp(1865): error C2027: use of undefined type 'camera_process_class'
+d_a_npc_ls1.cpp(1866): error C2039: 'UNK_0310': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(1866): error C2065: 'UNK_0310': undeclared identifier
+d_a_npc_ls1.cpp(1869): error C3861: 'fopMsgM_getScopeMode': identifier not found
+d_a_npc_ls1.cpp(1874): error C2065: 'fopMsg_MODE_CLOSE_WAIT_e': undeclared identifier
+d_a_npc_ls1.cpp(1874): error C2131: expression did not evaluate to a constant
+d_a_npc_ls1.cpp(1874): note: a non-constant (sub-)expression was encountered
+d_a_npc_ls1.cpp(1895): error C2065: 'fopMsg_MODE_CLOSE_WAIT_e': undeclared identifier
+d_a_npc_ls1.cpp(1896): error C3861: 'fopMsgM_forceSendOn': identifier not found
+d_a_npc_ls1.cpp(1898): error C2027: use of undefined type 'camera_process_class'
+d_a_npc_ls1.cpp(1903): error C3861: 'fopMsgM_getScopeMode': identifier not found
+d_a_npc_ls1.cpp(1909): error C2065: 'fopMsg_MODE_CLOSE_WAIT_e': undeclared identifier
+d_a_npc_ls1.cpp(1910): error C3861: 'fopMsgM_forceSendOn': identifier not found
+d_a_npc_ls1.cpp(1911): error C3861: 'fopMsgM_releaseScopeMode': identifier not found
+d_a_npc_ls1.cpp(1913): error C3861: 'fopMsgM_scopeMessageSet': identifier not found
+d_a_npc_ls1.cpp(1916): error C3861: 'fopMsgM_getScopeMode': identifier not found
+d_a_npc_ls1.cpp(1923): error C2065: 'fopMsg_MODE_CLOSE_WAIT_e': undeclared identifier
+d_a_npc_ls1.cpp(1924): error C3861: 'fopMsgM_forceSendOn': identifier not found
+d_a_npc_ls1.cpp(1927): error C3861: 'fopMsgM_releaseScopeMode': identifier not found
+d_a_npc_ls1.cpp(1936): error C2065: 'fopMsg_MODE_CLOSE_WAIT_e': undeclared identifier
+d_a_npc_ls1.cpp(1937): error C3861: 'fopMsgM_forceSendOn': identifier not found
+d_a_npc_ls1.cpp(1939): error C3861: 'fopMsgM_releaseScopeMode': identifier not found
+d_a_npc_ls1.cpp(1942): error C2027: use of undefined type 'camera_process_class'
+d_a_npc_ls1.cpp(1950): error C3861: 'fopMsgM_scopeMessageSet': identifier not found
+d_a_npc_ls1.cpp(1958): error C3861: 'fopMsgM_getScopeMode': identifier not found
+d_a_npc_ls1.cpp(1874): error C2051: case expression not constant
+d_a_npc_ls1.cpp(2129): error C2039: 'mStatus': is not a member of 'msg_class'
+d_a_npc_ls1.cpp(2163): error C2039: 'UNK_2A80': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(2163): error C2065: 'UNK_2A80': undeclared identifier
+d_a_npc_ls1.cpp(2164): error C2039: 'UNK_0001': is not a member of 'dSv_event_flag_c'
+d_a_npc_ls1.cpp(2164): error C2065: 'UNK_0001': undeclared identifier
+d_a_npc_ls1.cpp(2167): error C2065: 'dItemNo_TELESCOPE_e': undeclared identifier
+d_a_npc_ls1.cpp(2256): error C2065: 'dDemo_actor_c': undeclared identifier
+d_a_npc_ls1.cpp(2256): error C2065: 'demo_actor_p': undeclared identifier
+d_a_npc_ls1.cpp(2256): error C3861: 'dComIfGp_demo_getActor': identifier not found
+d_a_npc_ls1.cpp(2266): error C2065: 'demo_actor_p': undeclared identifier
+d_a_npc_ls1.cpp(2268): error C2661: 'mDoExt_btpAnm::init': no overloaded function takes 9 arguments
+d_a_npc_ls1.cpp(2268): note: while trying to match the argument list '(J3DModelData *, J3DAnmTexPattern *, int, J3DFrameCtrl::Attribute_e, float, int, int, bool, int)'
+d_a_npc_ls1.cpp(2288): error C2065: 'demo_actor_p': undeclared identifier
+d_a_npc_ls1.cpp(2290): error C2661: 'mDoExt_btkAnm::init': no overloaded function takes 9 arguments
+d_a_npc_ls1.cpp(2290): note: while trying to match the argument list '(J3DModelData *, J3DAnmTextureSRTKey *, int, J3DFrameCtrl::Attribute_e, float, int, int, bool, int)'
+d_a_npc_ls1.cpp(2301): error C2065: 'demo_actor_p': undeclared identifier
+d_a_npc_ls1.cpp(2301): error C2653: 'dDemo_actor_c': is not a class or namespace name
+d_a_npc_ls1.cpp(2301): error C2065: 'ENABLE_SHAPE_e': undeclared identifier
+d_a_npc_ls1.cpp(2302): error C2065: 'demo_actor_p': undeclared identifier

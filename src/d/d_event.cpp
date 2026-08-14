@@ -16,7 +16,36 @@
 #include "dusk/string.hpp"
 #if TARGET_PC
 #include "d/d_ext_npc_doors.h"
+#include "d/d_ext_save_guard.h"
 #include "dusk/logging.h"
+#endif
+
+#if TARGET_PC
+// ============================================================================
+// §717 H1 (WAVE-1 pass-9 item 2): the §713c above-the-fork guard's reporter.
+// The guard's silent -1/0 is the prime suspect for the 19:13 five-frame event
+// death (door never opened) — if BASE_NULL is selected or the staff is not yet
+// built while an event is LIVE, every cut no-ops with nothing in the log.
+// First-8 one-shot with the full discriminator tuple; out-of-line so the
+// header stays include-light. Strip with the §717 probe set.
+// ============================================================================
+void dEvtFork_guardReport(int i_staffId) {
+    static int s_hits = 0;
+    if (s_hits >= 8) {
+        return;
+    }
+    s_hits++;
+    dEvent_manager_c& mgr = dComIfGp_getEventManager();
+    dEvDtBase_c& base = mgr.getBase();
+    const char* runEvt = mgr.getRunEventName();
+    DuskLog.warn(
+        "[Evt] §717 H1 fork-guard hit #{}: staffId={} evt1Active={} evType={} evId={} "
+        "evtRun={} runEvt='{}' staffP={} headerP={} gFrm={}",
+        s_hits, i_staffId, JEvent1::evt1_isActive() ? 1 : 0, mgr.probeEvType(),
+        (int)mgr.probeEvId(), dComIfGp_getEvent()->runCheck() ? 1 : 0,
+        runEvt != NULL ? runEvt : "(none)", base.getStaffP() != NULL ? 1 : 0,
+        base.getHeaderP() != NULL ? 1 : 0, (int)g_Counter.mCounter0);
+}
 #endif
 
 namespace {
@@ -1114,6 +1143,41 @@ int dEvt_control_c::Step() {
                 dMsgObject_getMsgObjectClass() != NULL ? 1 : 0,
                 (int)g_Counter.mCounter0, mDoGph_gInf_c::isFade() ? 1 : 0,
                 pl350 != NULL ? pl350->speedF : -1.0f);
+            // ================================================================
+            // §717 H4/H6 (WAVE-1 pass-9 item 2): №269-class cover on the
+            // ABORT path. Every existing ClrWallNone lives on an ARRIVAL /
+            // post-transition path — an event that ends WITHOUT a transition
+            // (door never opened; player stays put) had no clear, so a
+            // door-open proc that set FLAG_WALL_NONE and then died with the
+            // event leaves walls/ladders dead while ground stays live (the
+            // user's exact 19:13 signature). This observer sees EVERY status
+            // transition, so →0 with no armed stage change is the one site
+            // that covers all end paths. §161 form: flags only, no reprobe.
+            // WW-scoped per the shared-path rule; the log line IS the probe —
+            // if it never fires, H4 dies and the wall loss is BG-side (H7).
+            // ================================================================
+            {
+                const char* sn717 = dComIfGp_getStartStageName();
+                if ((int)mEventStatus == 0 && s_prevStatus341 != 0 &&
+                    !dComIfGp_isEnableNextStage() && pl350 != NULL && sn717 != NULL &&
+                    dExtWwSave_isWwHostStage(sn717))
+                {
+                    daAlink_c* link717 = (daAlink_c*)pl350;
+                    const u32 before = link717->mLinkAcch.GetFlags();
+                    if ((before & dBgS_Acch::FLAG_WALL_NONE) != 0) {
+                        link717->mLinkAcch.ClrWallNone();
+                        link717->mLinkAcch.OffLineCheckNone();
+                        DuskLog.warn(
+                            "[Evt] §717 №269-abort: event ended w/o transition, WALL_NONE "
+                            "was STUCK (acchFlags {:#x} → {:#x}) — walls restored",
+                            (unsigned)before, (unsigned)link717->mLinkAcch.GetFlags());
+                    } else {
+                        DuskLog.info("[Evt] §717 abort-check: event → 0, acchFlags {:#x} "
+                                     "(WALL_NONE clear — H4 not this end)",
+                                     (unsigned)before);
+                    }
+                }
+            }
             s_prevStatus341 = (int)mEventStatus;
         }
         // §285 event-end probe: teardown only fires at mEventStatus==5 AND

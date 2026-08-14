@@ -28,6 +28,9 @@
 
 #include "d/d_com_inf_game.h"
 #include "d/d_stage.h"
+#include "d/d_ext_save_guard.h"  // §692 declared-stage predicate
+#include "d/d_ext_npc_mount.h"   // tale §773 stage-scoped cache eviction
+#include "d/ext_plugin/ww_room_loader.h"  // tale §749 shared RCAM translator
 #include "dusk/logging.h"
 
 #ifndef DUSK_WW_STAGE_SEAM
@@ -212,13 +215,16 @@ int translateColo(void* i_dzs, dStage_dt_c* i_stage) {
 //   0x24 mFogStartZ   ---------->     0x24 fog_start_z    (same offset)
 //   0x28 mFogEndZ     ---------->     0x28 fog_end_z      (same offset)
 //
-// NOT DELIVERED, and named rather than dropped silently: the donor's five K0
-// colours (mActor_K0, mBG0_K0..mBG3_K0) are TEV KONSTANT register colours, and
-// the receiver's palette has no field for them — its plight_col[6] is point
-// lights, a different concept. Their donor consumer is the WW tevstr setup
-// (settingTevStruct_*), which §407 ported the point-light half of. Until that
-// side lands there is nowhere correct to put them, and inventing a mapping onto
-// plight_col would be exactly the fabrication this port refuses.
+// §694 K0 DELIVERED — the earlier "no receiver field" claim here was STALE:
+// plight_col[6] IS the sanctioned WW K0 pool, by the repo's own convention —
+// convert_lighting.py:188-191 has baked exactly this six-slot order since
+// №113, and DO-NOT.md DN-2 protects slot [2] (BG1_K0, dKy_get_seacolor's
+// dif) by name. The runtime seam simply never executed the same mapping, so
+// seam-served stages fed ZERO K0 into the live-blend chain
+// (d_kankyo.cpp:2418-2434 → dungeonlight_col → dKyWw_settingTevStruct →
+// setTevKColor(0)) — black KColor0 on every WW model, silent because the
+// §406 canary requires C0 AND K0 both zero. Slot order per the converter:
+// [0]=Actor_K0 [1..4]=BG0..3_K0 [5]=Actor_K0 again.
 //
 // The receiver-only tail (bg_light_influence, cloud_shadow_density,
 // bloom_tbl_id, BG1..3_amb_alpha) has no donor source at all, so it is zeroed:
@@ -247,6 +253,13 @@ int translatePale(void* i_dzs, dStage_dt_c* i_stage) {
         copyRGB(&out.bg_amb_col[2], in->mBG2_C0);
         copyRGB(&out.bg_amb_col[3], in->mBG3_C0);
         copyRGB(&out.fog_col, in->mFog);
+        // §694: the K0 pool (see banner) — convert_lighting.py:191 at runtime.
+        copyRGB(&out.plight_col[0], in->mActor_K0);
+        copyRGB(&out.plight_col[1], in->mBG0_K0);
+        copyRGB(&out.plight_col[2], in->mBG1_K0);
+        copyRGB(&out.plight_col[3], in->mBG2_K0);
+        copyRGB(&out.plight_col[4], in->mBG3_K0);
+        copyRGB(&out.plight_col[5], in->mActor_K0);
         out.vrboxcol_id = in->mVirtIdx;
         // Both fog planes sit at the SAME offset in both records and are both
         // big-endian floats, so the bytes move across verbatim.
@@ -257,10 +270,179 @@ int translatePale(void* i_dzs, dStage_dt_c* i_stage) {
     return num;
 }
 
+// ============================================================================
+// §690 VIRT (VRB0) — the missing skybox-member translation, hit at runtime.
+//
+// The donor's Virt record is 0x24 bytes ({u32 pad[4]; GXColor kumo;
+// GXColor kumoCenter; RGB sky; RGB usoUmi; RGB kasumiMae; pad[3]} — WW
+// d_stage.h:42-52); the receiver's stage_vrboxcol_info_class is 0x15 with a
+// DIFFERENT field order. The staged-era Stage.arc carried an offline-converted
+// VRB0 (№144), so nothing noticed that the seam never translated Virt — until
+// the disc-served vanilla stage.dzs bound the donor layout raw and the sky
+// engine read record boundaries into FLOAT data (the §689 receipt: a "color"
+// channel counting 0..20 with a constant 0x3F exponent byte in green — IEEE
+// bytes as RGB). §690's overlay-gate remainder had already named "the skybox
+// members"; this is that item, forced by measurement.
+//
+// Field mapping per the §410/§417b receipts (same rows the sky consumers and
+// the §687 donor engine read): donor sky->sky_col, kumo.rgb->kumo_top_col,
+// kumoCenter.rgb->kumo_bottom_col + kumo_shadow_col.rgb (the receiver keeps
+// shadow as its TP-only third slot; donor has two kumo colors), kumo.a->
+// kumo_shadow_col.a (the alpha the engine reads), usoUmi->kasumi_outer_col,
+// kasumiMae->kasumi_inner_col; receiver-only alphas 255.
+// ============================================================================
+struct WwVirtRecord {  // donor stage_vrbox_info_class, size 0x24
+    u8 mPad[0x10];
+    u8 mKumo[4];        // GXColor
+    u8 mKumoCenter[4];  // GXColor
+    u8 mSky[3];         // RGB
+    u8 mUsoUmi[3];      // RGB
+    u8 mKasumiMae[3];   // RGB
+    u8 mTail[3];
+};
+static_assert(sizeof(WwVirtRecord) == 0x24, "donor Virt record must stay 0x24");
+
+constexpr int kMaxVirt = 64;
+stage_vrboxcol_info_class s_virtPool[kMaxVirt];
+
+int translateVirt(void* i_dzs, dStage_dt_c* i_stage) {
+    int num = 0;
+    const u8* raw = (const u8*)findChunk(i_dzs, "Virt", &num);
+    if (raw == NULL || num <= 0) {
+        return 0;
+    }
+    if (num > kMaxVirt) {
+        DuskLog.error("[WwStageSeam] Virt: {} records exceeds the pool of {} — clamped",
+                      num, kMaxVirt);
+        num = kMaxVirt;
+    }
+    for (int i = 0; i < num; i++) {
+        const WwVirtRecord* in = (const WwVirtRecord*)(raw + i * sizeof(WwVirtRecord));
+        stage_vrboxcol_info_class& out = s_virtPool[i];
+        std::memset(&out, 0, sizeof(out));
+        out.sky_col.r = in->mSky[0];
+        out.sky_col.g = in->mSky[1];
+        out.sky_col.b = in->mSky[2];
+        out.kumo_top_col.r = in->mKumo[0];
+        out.kumo_top_col.g = in->mKumo[1];
+        out.kumo_top_col.b = in->mKumo[2];
+        out.kumo_bottom_col.r = in->mKumoCenter[0];
+        out.kumo_bottom_col.g = in->mKumoCenter[1];
+        out.kumo_bottom_col.b = in->mKumoCenter[2];
+        out.kumo_shadow_col.r = in->mKumoCenter[0];
+        out.kumo_shadow_col.g = in->mKumoCenter[1];
+        out.kumo_shadow_col.b = in->mKumoCenter[2];
+        out.kumo_shadow_col.a = in->mKumo[3];
+        out.kasumi_outer_col.r = in->mUsoUmi[0];
+        out.kasumi_outer_col.g = in->mUsoUmi[1];
+        out.kasumi_outer_col.b = in->mUsoUmi[2];
+        out.kasumi_outer_col.a = 255;
+        out.kasumi_inner_col.r = in->mKasumiMae[0];
+        out.kasumi_inner_col.g = in->mKasumiMae[1];
+        out.kasumi_inner_col.b = in->mKasumiMae[2];
+        out.kasumi_inner_col.a = 255;
+    }
+    i_stage->setVrboxcolInfo(s_virtPool);
+    return num;
+}
+
+// ============================================================================
+// §692 STAG — TRANSLATE, per the mechanical derivation (bus §686): every
+// record-size divergence (donor 0x20 -> receiver 0x3C) is settled by a
+// seam-owned translated record, FILI's exact analogue. Kills the live wound
+// (GetParticleNo reading to +0x3A past the record on EVERY stage load) and
+// neutralizes the five in-range foreign-meaning readers (EscapeWarp ->
+// dStage_changeScene the worst) that persist structurally could not.
+//
+// User rulings applied (defaults accepted): donor STType 4-7 have no receiver
+// case -> receiver sees 0 (OUTDOORS-equivalent) and the DONOR value is kept
+// layer-side (nothing is dropped — dExtWwStage_donorStType()); EscapeWarp -> 0
+// (the donor bits there are schbit-enable, semantically unrelated).
+//
+// TIMING (measured, bus §686): dStage_stagInfoInit consumed GetSaveTbl from
+// the RAW donor record before this seam runs — safe, because WW save-table
+// ids are 0-15 and the receiver's 5-bit read equals the donor's 7-bit read
+// for every value the donor ships. Every dangerous reader (particle rows,
+// stage title, dmap floats, escape warp) runs at phase_2 or later — after
+// this swap.
+//
+// Every receiver-only value below is DERIVED from the receiver's own
+// documented sentinels, not invented: particle rows 0xFF -> the receiver's
+// own 255-sentinel routes to the in-range donor-correct GetParticleNo
+// overload (d_s_play.cpp:1554-1556); title 0 -> JUT_WARN branch; dmap floats
+// 0.0f -> the receiver's own 10800 default; msgGroup 0 -> §644's receipt
+// (zel_00.bmg IS index 0; the hook stays, now redundant but not wrong).
+// ============================================================================
+stage_stag_info_class s_stagPool;
+u32 s_donorStType = 0;
+
+int translateStag(void* i_dzs, dStage_dt_c* i_stage) {
+    int num = 0;
+    const u8* raw = (const u8*)findChunk(i_dzs, "STAG", &num);
+    if (raw == NULL || num <= 0) {
+        return 0;
+    }
+    const auto be16 = [](const u8* p) { return (u16)((p[0] << 8) | p[1]); };
+    const auto be32 = [](const u8* p) {
+        return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
+    };
+    std::memset(&s_stagPool, 0, sizeof(s_stagPool));
+    // near/far: BE floats, byte-verbatim.
+    std::memcpy(&s_stagPool, raw, 8);
+    s_stagPool.mCameraType = raw[0x08];
+    // 0x09: ChkKeyDisp bit0 + saveTbl bits1-5 (donor uses 1-7; WW ids fit);
+    // receiver-only WolfDashType bits6-7 neutral.
+    s_stagPool.field_0x09 = raw[0x09] & 0x3F;
+    // 0x0A: UpButton = donor bits0-1 (donor bit2 is its own field, dropped);
+    // ParticleNo bits3-10 verbatim; receiver-only ArchiveHeap/MiniMap -> 0.
+    s_stagPool.field_0x0a = (u16)(be16(raw + 0x0A) & 0x07FB);
+    // 0x0C: SchSec+TimeH verbatim; STType per the vocabulary ruling;
+    // receiver-only Arg0 bits20-27 -> 0.
+    const u32 d0c = be32(raw + 0x0C);
+    s_donorStType = (d0c >> 16) & 7;
+    const u32 stType = s_donorStType <= 3 ? s_donorStType : 0;
+    s_stagPool.field_0x0c = (d0c & 0x0000FFFFu) | (stType << 16);
+    // 0x10: CullPoint verbatim; donor schbit halves (16-31, where the
+    // receiver's EscapeWarp lives) -> 0 per the ruling.
+    s_stagPool.field_0x10 = be32(raw + 0x10) & 0x0000FFFFu;
+    std::memset(s_stagPool.field_0x14, 0xFF, sizeof(s_stagPool.field_0x14));
+    s_stagPool.mGapLevel = 0;
+    s_stagPool.mRangeUp = 0;
+    s_stagPool.mRangeDown = 0;
+    s_stagPool.field_0x20 = 0.0f;
+    s_stagPool.field_0x24 = 0.0f;
+    s_stagPool.mMsgGroup = 0;
+    s_stagPool.mStageTitleNo = 0;
+    std::memset(s_stagPool.mParticleNo, 0xFF, sizeof(s_stagPool.mParticleNo));
+    i_stage->setStagInfo(&s_stagPool);
+    DuskLog.info("[WwStageSeam] §692 STAG translated (0x20->0x3C): donor STType {} -> "
+                 "receiver {} (donor value retained), saveTbl {}, cull {}",
+                 s_donorStType, stType, (raw[0x09] >> 1) & 0x7F,
+                 be32(raw + 0x10) & 0xFFFF);
+    return 1;
+}
+
 }  // namespace
+
+// Nothing-is-dropped accessor: the donor's own stage-type vocabulary (SEA=7
+// for Outset's host) for future donor consumers.
+u32 dExtWwStage_donorStType() {
+#if DUSK_WW_STAGE_SEAM
+    return s_donorStType;
+#else
+    return 0;
+#endif
+}
 #endif  // DUSK_WW_STAGE_SEAM
 
 void dExtWwStage_loadStageDzs(void* i_data, dStage_dt_c* i_stage) {
+#if DUSK_WW_STAGE_SEAM
+    // tale §773: a NEW stage's resources are being installed — the previous
+    // stage's parsed-model cache entries (positional room-arc keys) die HERE,
+    // matching getStageRes's own lifecycle. Before the translators, so no
+    // consumer of this stage can ever see the last stage's parse.
+    dExtNpcMount_dropStageScopedModels("stage.dzs load");
+#endif
     dStage_dt_c_stageLoader(i_data, i_stage);
 
 #if DUSK_WW_STAGE_SEAM
@@ -271,12 +453,30 @@ void dExtWwStage_loadStageDzs(void* i_data, dStage_dt_c* i_stage) {
     const int envr = translateEnvr(i_data, i_stage);
     const int colo = translateColo(i_data, i_stage);
     const int pale = translatePale(i_data, i_stage);
+    const int virt = translateVirt(i_data, i_stage);
+    // §692: STAG exists in BOTH dialects, so the predicate is the STAGE, not
+    // the data: declared donor stages come off the disc with the 0x20 donor
+    // record; neutral R_DL*/F_DL* stages carry rebuilt receiver-shape STAGs
+    // and must not be touched.
+    const char* stagStage = dComIfGp_getStartStageName();
+    const int stag = (stagStage != NULL && dExtWwSave_isDeclaredWwStage(stagStage))
+                         ? translateStag(i_data, i_stage)
+                         : 0;
+    (void)stag;
+    // tale §749: the STAGE table's RCAM was never translated — donor 0x14
+    // records read at receiver 0x18 on every WW stage (LinkRM Stage.arc
+    // carries RCAMx1, the count==1 blind-spot case exactly). Same adjacency-
+    // first translator as the room path, reserved stage slot.
+    if (stagStage != NULL && dExtWwSave_isDeclaredWwStage(stagStage)) {
+        dExtWwRoom_translateRcamShared(i_stage, kWwRcamStageSlot, i_data);
+    }
 
-    if (envr != 0 || colo != 0 || pale != 0) {
+    if (envr != 0 || colo != 0 || pale != 0 || virt != 0) {
         DuskLog.info("[WwStageSeam] §661 donor lighting translated: EnvR={} "
                      "(8->65 widened) Colo={} (identical, pointed at) Pale={} "
-                     "(field-mapped; K0 colours NOT delivered — no receiver field)",
-                     envr, colo, pale);
+                     "(field-mapped; §694 K0 -> plight_col pool) "
+                     "Virt={} (§690 skybox rows 0x24->0x15)",
+                     envr, colo, pale, virt);
     }
 #endif
 }

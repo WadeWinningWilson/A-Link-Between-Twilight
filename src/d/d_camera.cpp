@@ -222,6 +222,17 @@ void dCamera_setExtraEngineHook(dCamera_extraEngineFn i_fn) {
     l_extraEngineHook = i_fn;
 }
 
+// ============================================================================
+// SELECTION EXTENSION POINT — see d_camera.h. Same contract as the engine
+// extension above: NULL default, names no extension, mainline behavior is
+// untouched until something installs.
+// ============================================================================
+static dCamera_selectFn l_selectHook = NULL;
+
+void dCamera_setSelectHook(dCamera_selectFn i_fn) {
+    l_selectHook = i_fn;
+}
+
 int dCamera_engineTblCount() {
     return (int)(sizeof(dCamera_c::engine_tbl) / sizeof(dCamera_c::engine_tbl[0]));
 }
@@ -1155,6 +1166,12 @@ bool dCamera_c::Run() {
         mForceLockTimer++;
     }
 
+    // ========================================================================
+    // SELECTION EXTENSION POINT (see d_camera.h). Installed-and-true means the
+    // extension performed this frame's whole type/mode/style selection; the
+    // built-in block below is otherwise byte-for-byte what always ran.
+    // ========================================================================
+    if (l_selectHook == NULL || !l_selectHook(this)) {
     mNextType = nextType(mCurType);
     if (mNextType != mCurType && onTypeChange(mCurType, mNextType)) {
         if (mCamSetup.CheckFlag(0x8000)) {
@@ -1199,6 +1216,7 @@ bool dCamera_c::Run() {
         mCamParam.Change(mCamStyle);
         setFlag(0x200);
     }
+    }  // selection extension point
 
     clrFlag(0);
     clrComStat(0x80);

@@ -144,6 +144,17 @@ void dAlbwBoss_diababaResetFightState();
 void dAlbwBoss_diababaUpdatePhase(fopAc_ac_c* i_boss);
 bool dAlbwBoss_diababaIsLatePhase();
 
+// ============================================
+// NEW CODE — ALBW Port
+// Zant (B_ZANT): PER-PHASE draining pool. One actor (daB_ZANT_c) cycles mFightPhase;
+// health resets to that phase's max each phase, so the bar refills per phase. The
+// query tracks health / the phase PEAK (captured on phase change) and hides during
+// the intro / warp / room-change / ice & last-phase demo actions. HUD-only; not
+// gated on Boss Refinement. Reset called on every stage load.
+// ============================================
+bool dAlbwBoss_zantQueryHealthBar(int* o_current, int* o_max);
+void dAlbwBoss_zantResetFightState();
+
 // Poison siphon: heal boss by (dmg/LinkMaxLife)*bossMax. No-op if dmg<=0.
 // One heal window per spray/lunge (debounce). Call OnPoisonSprayBegin when attack starts.
 void dAlbwBoss_diababaOnPoisonSprayBegin();

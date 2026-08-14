@@ -47,11 +47,15 @@
 // ============================================================================
 #include "d/ext_plugin/ww_room_loader.h"
 #include "d/ext_plugin/ww_cam_crawl.h"  // §669 dExtWwCam_installCrawl
+#include "d/ext_plugin/ww_cam_data.h"   // donor camera style/type tables (resident)
+#include "d/ext_plugin/ww_cam_select.h" // donor camera selector (type/mode/style)
 
 #include <cstdio>
 #include <cstring>
 
 #include "d/d_ext_save_guard.h"  // dExtWwSave_isWwHostStage
+#include "SSystem/SComponent/c_math.h"            // cM_ssin/cM_scos (§678)
+#include "JSystem/J3DGraphBase/J3DShape.h"        // shape culling bounds (§678)
 #include "d/d_com_inf_game.h"    // dComIfGp_getStartStageName
 #include "d/d_stage.h"           // dStage_dt_c_roomLoader
 #include "d/d_resorce.h"         // dRes_info_c::setRes (§634 publish)
@@ -304,6 +308,48 @@ struct WwRcamPool {
 };
 static WwRcamPool s_wwRcam[kWwRoomSlots];
 
+// ============================================================================
+// tale §749 (History): the ADJACENCY RULE — with count==1 both strides read the
+// same clean name and the plausibility test passes BOTH ways (LinkRM Room0's
+// single FixdPos took the receiver branch and fed RARO floats into the camera
+// tail). The TRUE stride is arithmetic, not heuristic: the dzr's own chunk
+// table gives (nextChunkDataOff - chunkDataOff) / count. Adjacency cannot lie
+// about its own file; plausibility remains only the fallback for the last
+// chunk in the file.
+// DZR chunk table (BE): u32 count; then count x { char tag[4]; u32 num; u32 off }.
+// ============================================================================
+static u32 wwRoom_be32(const u8* p) {
+    return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
+}
+
+static int wwRoom_chunkStrideByAdjacency(const u8* i_dzr, const u8* i_dataPtr, int i_num) {
+    if (i_dzr == NULL || i_dataPtr == NULL || i_num <= 0 || i_dataPtr <= i_dzr) {
+        return -1;
+    }
+    const u32 dataOff = (u32)(i_dataPtr - i_dzr);
+    const u32 chunkCount = wwRoom_be32(i_dzr);
+    if (chunkCount == 0 || chunkCount > 64) {
+        return -1;  // implausible table — refuse to derive
+    }
+    u32 nextOff = 0xFFFFFFFFu;
+    bool sawSelf = false;
+    for (u32 c = 0; c < chunkCount; c++) {
+        const u32 off = wwRoom_be32(i_dzr + 4 + c * 12 + 8);
+        if (off == dataOff) {
+            sawSelf = true;
+        } else if (off > dataOff && off < nextOff) {
+            nextOff = off;
+        }
+    }
+    if (!sawSelf || nextOff == 0xFFFFFFFFu) {
+        return -1;  // pointer not table-backed, or last data block in the file
+    }
+    if ((nextOff - dataOff) % (u32)i_num != 0) {
+        return -1;
+    }
+    return (int)((nextOff - dataOff) / (u32)i_num);
+}
+
 static bool wwRoom_namesPlausible(const u8* base, int num, int stride) {
     for (int i = 0; i < num; i++) {
         const u8* nm = base + i * stride;
@@ -317,7 +363,7 @@ static bool wwRoom_namesPlausible(const u8* base, int num, int stride) {
     return true;
 }
 
-static void wwRoom_translateRcam(dStage_dt_c* i_stage, int i_roomNo) {
+static void wwRoom_translateRcam(dStage_dt_c* i_stage, int i_roomNo, const u8* i_dzr) {
     stage_camera_class* src = i_stage->getCamera();
     if (src == NULL || i_roomNo < 0 || i_roomNo >= kWwRoomSlots) {
         return;
@@ -328,14 +374,34 @@ static void wwRoom_translateRcam(dStage_dt_c* i_stage, int i_roomNo) {
         return;
     }
 
+    // tale §749: adjacency FIRST — the file's own chunk table is authoritative
+    // where derivable; the name test is only the last-chunk fallback.
+    const int derived = wwRoom_chunkStrideByAdjacency(i_dzr, raw, num);
+    if (derived == 0x18) {
+        DuskLog.info("[WwRoomSeam] RCAM room {}: {} record(s) receiver-format "
+                     "(adjacency-verified stride 0x18) — untouched.", i_roomNo, num);
+        return;
+    }
+    if (derived != 0x14 && derived != -1) {
+        DuskLog.error("[WwRoomSeam] RCAM room {}: adjacency derives stride {:#x} "
+                      "(neither dialect) — falling back to name test.", i_roomNo, derived);
+    }
+
     bool recvOk = wwRoom_namesPlausible(raw, num, 0x18);
     bool donorOk = wwRoom_namesPlausible(raw, num, 0x14);
+    if (derived == 0x14) {
+        // Adjacency says DONOR — overrides the name test's count==1 blind spot
+        // (both strides read one clean name; the old receiver-wins tie fed
+        // RARO's floats into the camera tail — History's §749 proof).
+        recvOk = false;
+        donorOk = true;
+        DuskLog.info("[WwRoomSeam] RCAM room {}: adjacency-verified DONOR stride "
+                     "0x14 ({} record(s)) — translating.", i_roomNo, num);
+    }
     if (recvOk) {
-        // Receiver-format (or num==1, where both decode — receiver wins the
-        // tie: a 1-record donor chunk has zero drift and its only risk, the
-        // trailing flag word, reads adjacent-chunk bytes the log makes visible).
         DuskLog.info("[WwRoomSeam] RCAM room {}: {} record(s) already receiver-"
-                     "format — untouched.", i_roomNo, num);
+                     "format — untouched (name test; adjacency unavailable).",
+                     i_roomNo, num);
         return;
     }
     if (!donorOk) {
@@ -373,6 +439,13 @@ static void wwRoom_translateRcam(dStage_dt_c* i_stage, int i_roomNo) {
     DuskLog.info("[WwRoomSeam] RCAM: {} donor-stride record(s) translated for "
                  "room {}.", num, i_roomNo);
 }
+// tale §749: shared entry — the STAGE loader translates its own RCAM through
+// the same adjacency-first path (slot 63 reserved for the stage table; rooms
+// 0-62 keep their own slots, and no WW stage has a room 63 in play).
+void dExtWwRoom_translateRcamShared(dStage_dt_c* i_stage, int i_slot, const void* i_dzr) {
+    wwRoom_translateRcam(i_stage, i_slot, (const u8*)i_dzr);
+}
+
 // ============================================================================
 // PHASE 2, CHUNK 4: room.dzb ATTRIBUTES — §334's vocabulary, second consumer.
 //
@@ -425,6 +498,63 @@ static void wwRoom_repackDzb(int i_roomNo) {
 //
 // Idempotent: after publishing, the slot no longer begins "J3D2".
 // ============================================================================
+// ============================================================================
+// §678: WORLDIZE the published model's per-shape culling bounds.
+//
+// daBg_c::draw() culls each shape with viewMtx x the shape's LOCAL min/max —
+// it never applies the MULT baseTRMtx that daBg's own create() set on the
+// model. TP's own stitched rooms sit within a few thousand units of the
+// origin, so testing the local box was invisibly wrong there; sea's rooms sit
+// at +/-200k (stage.dzs MULT room 44: x=-200000 z=300000, measured off the
+// disc), so the receiver was clipping PHANTOM ORIGIN BOXES 360k units from
+// where the island renders. Whether the island drew was an accident of
+// camera orientation — the long-standing "island disappears at angles/
+// heights while collision holds" bug (§6): collision never flickered because
+// BgW takes the MULT transform through its own registration.
+//
+// The fix transforms the PARSED model's shape bounds into world space once
+// per mount cycle — derived runtime data; the donor bytes on disc are
+// untouched (zero-bake). Conservative AABB over the four Y-rotated corners;
+// Y itself is unchanged (MULT translates in XZ and rotates about Y only).
+// Idempotent per mount: publish runs once per raw slot, and a re-mount
+// re-parses fresh local bounds before this runs again.
+// ============================================================================
+static void wwRoom_worldizeShapeBounds(J3DModelData* i_model, int i_roomNo) {
+    f32 tx;
+    f32 tz;
+    s16 angle;
+    if (i_model == NULL || !dComIfGp_getMapTrans(i_roomNo, &tx, &tz, &angle)) {
+        return;
+    }
+    const f32 s = cM_ssin(angle);
+    const f32 c = cM_scos(angle);
+    for (u16 j = 0; j < i_model->getShapeNum(); j++) {
+        J3DShape* shape = i_model->getShapeNodePointer(j);
+        Vec* mn = shape->getMin();
+        Vec* mx = shape->getMax();
+        const f32 xs[2] = {mn->x, mx->x};
+        const f32 zs[2] = {mn->z, mx->z};
+        f32 minX = 1e30f, minZ = 1e30f, maxX = -1e30f, maxZ = -1e30f;
+        for (int a = 0; a < 2; a++) {
+            for (int b = 0; b < 2; b++) {
+                // mDoMtx Y-rotation convention: x' = c*x + s*z; z' = -s*x + c*z
+                const f32 wx = c * xs[a] + s * zs[b] + tx;
+                const f32 wz = -s * xs[a] + c * zs[b] + tz;
+                if (wx < minX) minX = wx;
+                if (wx > maxX) maxX = wx;
+                if (wz < minZ) minZ = wz;
+                if (wz > maxZ) maxZ = wz;
+            }
+        }
+        mn->x = minX;
+        mn->z = minZ;
+        mx->x = maxX;
+        mx->z = maxZ;
+    }
+    DuskLog.info("[WwRoomSeam] §678 room {} shape bounds worldized (MULT {} {} rot {})",
+                 i_roomNo, tx, tz, angle);
+}
+
 static void wwRoom_publishModels(int i_roomNo) {
     static const char* const kModels[] = {
         "model.bdl",  "model1.bdl", "model2.bdl",
@@ -457,6 +587,7 @@ static void wwRoom_publishModels(int i_roomNo) {
         if (entry == NULL) {
             continue;
         }
+        wwRoom_worldizeShapeBounds(parsed, i_roomNo);  // §678 — see above
         info->setRes((s32)entry->file_id, parsed);
         DuskLog.info("[WwRoomSeam] model '{}/{}' published parsed into the res "
                      "slot (node 'BDL ' has no receiver fixup branch)",
@@ -640,6 +771,11 @@ void dExtWwRoom_installHooks(void) {
     // installer there would make it a leg; routing it through the boundary
     // symbol the receiver already names keeps the layer at one entry point.
     dExtWwCam_installCrawl();
+    // Donor camera style/type tables: resident + self-tested.
+    dExtWwCam_installData();
+    // The donor SELECTOR — drives the tables above on WW host stages through
+    // the receiver's NULL-default selection extension point (FULL ruling).
+    dExtWwCam_installSelect();
 }
 
 void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
@@ -656,11 +792,48 @@ void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
         // ====================================================================
         DuskLog.info("[WwRoomSeam] 3b: stage='{}' room={} (delegate + ported chunks)",
                      stage, i_roomNo);
+        // ====================================================================
+        // §772 ARC-IDENTITY CONTROL (Foundry, routed): the LinkRM/Ojhous
+        // aliasing was invisible because the seam printed the ARC but not the
+        // STAGE at publish time — R00_00 is not unique across stages, and a
+        // session cache keyed on the bare name served one stage's model over
+        // another's collision. Four file-layer measurements read clean while
+        // the render layer was wrong. This map names the aliasing the INSTANT
+        // it happens: same arc name, different stage than last time -> WARN,
+        // with both stages in the line. It asserts nothing about the cache —
+        // it makes the condition the cache must survive VISIBLE.
+        // ====================================================================
+        {
+            struct ArcStage { char arc[16]; char stg[16]; };
+            static ArcStage s_seen[64];
+            static int s_seenN = 0;
+            const char* arcName = dComIfG_getRoomArcName(i_roomNo);
+            int found = -1;
+            for (int i = 0; i < s_seenN; i++) {
+                if (strncmp(s_seen[i].arc, arcName, 15) == 0) { found = i; break; }
+            }
+            if (found >= 0) {
+                if (strncmp(s_seen[found].stg, stage, 15) != 0) {
+                    DuskLog.warn("[WwRoomSeam] §772 ARC-IDENTITY: '{}' previously "
+                                 "served for stage='{}', now stage='{}' — any "
+                                 "session cache keyed on the BARE arc name is now "
+                                 "serving the WRONG stage's data.",
+                                 arcName, s_seen[found].stg, stage);
+                    strncpy(s_seen[found].stg, stage, 15);
+                }
+            } else if (s_seenN < 64) {
+                strncpy(s_seen[s_seenN].arc, arcName, 15);
+                strncpy(s_seen[s_seenN].stg, stage, 15);
+                s_seen[s_seenN].arc[15] = s_seen[s_seenN].stg[15] = 0;
+                ++s_seenN;
+            }
+        }
         dStage_dt_c_roomLoader(i_data, i_stage, i_roomNo);
 #if DUSK_WW_ROOM_CHUNKS
         wwRoom_translateScls(i_stage, i_roomNo);   // chunk 1 — SCLS (§604 stride hit)
         wwRoom_translateFili(i_stage, i_roomNo);   // chunk 2 — FILI (§607 semantic hit)
-        wwRoom_translateRcam(i_stage, i_roomNo);   // chunk 3 — RCAM (format-detected)
+        wwRoom_translateRcam(i_stage, i_roomNo,    // chunk 3 — RCAM (adjacency-
+            (const u8*)i_data);                    // first, name-test fallback §749)
         wwRoom_repackDzb(i_roomNo);                // chunk 4 — dzb attrs (§334 2nd consumer)
         wwRoom_publishModels(i_roomNo);            // chunk 5 — 'BDL ' models via DN-3 resolver
 #endif

@@ -204,7 +204,15 @@ public:
     /* 0x3C */ BE(s32) field_0x3c;
     /* 0x40 */ bool field_0x40;
     /* 0x41 */ bool field_0x41;
-    /* 0x42 */ u8 mData[0x50 - 0x42];
+    // §912: the donor's OWN runtime-scratch fields, at their donor offsets
+    // (d_event_data.h:120-121). This region was opaque `mData` and is
+    // referenced NOWHERE else in the tree, so naming it neither moves nor
+    // aliases any receiver field — TP's own advance flag is field_0x40, a
+    // different byte. dEvDtStaff_c stays exactly 0x50.
+    /* 0x42 */ u8 mData[0x46 - 0x42];
+    /* 0x46 */ u8 mAdvance;      // donor dEvDtStaff_c::mAdvance (a COUNTER: 2 at init, 1 per advanceCut, winds down)
+    /* 0x47 */ u8 mbHasAction;   // donor dEvDtStaff_c::mbHasAction
+    /* 0x48 */ u8 mData2[0x50 - 0x48];
 };  // Size: 0x50
 
 STATIC_ASSERT(sizeof(dEvDtStaff_c) == 0x50);

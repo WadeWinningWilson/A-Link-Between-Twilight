@@ -1,0 +1,213 @@
+﻿stbs ['tale.stb', 'tale_2.stb']
+STB v3 target=jstudio blocks=11
+
+[fvb] 8 curves:
+  hermite id='' attrs={'range': [0.0, 3.3329999446868896]} keys=2 stride=3
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+  list_parameter id='' attrs={'range': [0.0, 3.5], 'interpolate': 3} keys=5 stride=-
+
+[actor] id='Link' flag=0x0 events=54
+  @    0 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-341.0, 375.0, 250.0], 'u32s': ['0xc3aa8000', '0x43bb8000', '0x437a0000']}
+  @    0 ROTATION_Y {'op': 'IMMEDIATE', 'type': '0x1c2', 'size': 4, 'u32': 1127481344, 'f32': 180.0}
+  @    0 SHAPE {'op': 'op19', 'type': '0x739', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @    0 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 4, 'f32': 0.0}
+  @    0 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @    5 WAIT 5
+  @    5 TRANSLATION_Z {'op': 'IMMEDIATE', 'type': '0x162', 'size': 4, 'u32': 1121452032, 'f32': 108.0}
+  @    5 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 2, 'f32': 0.0}
+  @    5 ANIMATION_MODE {'op': 'IMMEDIATE', 'type': '0x862', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @    5 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  100 WAIT 95
+  @  100 SHAPE {'op': 'op19', 'type': '0x739', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @  100 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 512, 'f32': 0.0}
+  @  100 ANIMATION_MODE {'op': 'IMMEDIATE', 'type': '0x862', 'size': 4, 'u32': 3, 'f32': 0.0}
+  @  100 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  100 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['00fb', '011c', '010a']}, 'raw': '3a0300fb011c010a3902040200000000'}
+  @  150 WAIT 50
+  @  150 ROTATION_Y {'op': 'IMMEDIATE', 'type': '0x1c2', 'size': 4, 'u32': 1127481344, 'f32': 180.0}
+  @  150 SHAPE {'op': 'op19', 'type': '0x739', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @  150 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 512, 'f32': 0.0}
+  @  150 ANIMATION_MODE {'op': 'IMMEDIATE', 'type': '0x862', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @  150 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  150 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['0111', '0103', '0108']}, 'raw': '3a030111010301083902000000000000'}
+  @  195 WAIT 45
+  @  195 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 512, 'f32': 0.0}
+  @  195 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  195 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['0112', '0104', '0109']}, 'raw': '3a030112010401093902000000000000'}
+  @  245 WAIT 50
+  @  245 TRANSLATION_Y {'op': 'IMMEDIATE', 'type': '0x142', 'size': 4, 'u32': 1065353216, 'f32': 1.0}
+  @  245 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['0112', '0104', '0109']}, 'raw': '3a030112010401093902000000000000'}
+  @  385 WAIT 140
+  @  385 TRANSLATION_Y {'op': 'IMMEDIATE', 'type': '0x142', 'size': 4, 'u32': 1136361472, 'f32': 375.0}
+  @  385 SHAPE {'op': 'op19', 'type': '0x739', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  385 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 512, 'f32': 0.0}
+  @  385 ANIMATION_MODE {'op': 'IMMEDIATE', 'type': '0x862', 'size': 4, 'u32': 3, 'f32': 0.0}
+  @  385 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  385 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['0117', '011a', '010b']}, 'raw': '3a030117011a010b3902000000000000'}
+  @  529 WAIT 144
+  @  529 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 512, 'f32': 0.0}
+  @  529 ANIMATION_MODE {'op': 'IMMEDIATE', 'type': '0x862', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @  529 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  529 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['0118', '011b', '011d']}, 'raw': '3a030118011b011d390300000a000000'}
+  @  569 WAIT 40
+  @  569 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 512, 'f32': 0.0}
+  @  569 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  569 DATA_ID {'id': '0x00000001', 'data': {'status': 50, 'entryCount': 3, 'entrySize': 2, 'entries': ['0116', '0119', '010c']}, 'raw': '3a0301160119010c3903000005000000'}
+  @  618 WAIT 49
+  @  618 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-289.0, 375.0, 83.0], 'u32s': ['0xc3908000', '0x43bb8000', '0x42a60000']}
+  @  618 ROTATION_Y {'op': 'IMMEDIATE', 'type': '0x1c2', 'size': 4, 'u32': 1127481344, 'f32': 180.0}
+  @  618 SHAPE {'op': 'op19', 'type': '0x739', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  618 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 4, 'f32': 0.0}
+  @  618 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  710 WAIT 92
+  @  710 END {}
+
+[actor] id='Ba1' flag=0x0 events=24
+  @    0 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-341.0, 375.0, -3.0], 'u32s': ['0xc3aa8000', '0x43bb8000', '0xc0400000']}
+  @    0 ROTATION_Y {'op': 'IMMEDIATE', 'type': '0x1c2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @    0 SCALING_XYZ {'op': 'IMMEDIATE', 'type': '0x282', 'size': 12, 'f32s': [1.0, 1.0, 1.0], 'u32s': ['0x3f800000', '0x3f800000', '0x3f800000']}
+  @    0 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65552, 'f32': 0.0}
+  @    0 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  100 WAIT 100
+  @  100 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65563, 'f32': 0.0}
+  @  100 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  150 WAIT 50
+  @  150 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65563, 'f32': 0.0}
+  @  150 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  245 WAIT 95
+  @  245 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65563, 'f32': 0.0}
+  @  245 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  366 WAIT 121
+  @  366 TRANSLATION_Y {'op': 'IMMEDIATE', 'type': '0x142', 'size': 4, 'u32': 1065353216, 'f32': 1.0}
+  @  366 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65563, 'f32': 0.0}
+  @  366 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  618 WAIT 252
+  @  618 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-226.0, 375.0, -56.0], 'u32s': ['0xc3620000', '0x43bb8000', '0xc2600000']}
+  @  618 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65563, 'f32': 0.0}
+  @  618 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  710 WAIT 92
+  @  710 END {}
+
+[actor] id='d_act0' flag=0x0 events=27
+  @    0 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-341.0, 375.0, -3.0], 'u32s': ['0xc3aa8000', '0x43bb8000', '0xc0400000']}
+  @    0 ROTATION_Y {'op': 'IMMEDIATE', 'type': '0x1c2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @    0 SCALING_XYZ {'op': 'IMMEDIATE', 'type': '0x282', 'size': 12, 'f32s': [1.0, 1.0, 1.0], 'u32s': ['0x3f800000', '0x3f800000', '0x3f800000']}
+  @    0 SHAPE {'op': 'op19', 'type': '0x739', 'size': 4, 'u32': 65548, 'f32': 0.0}
+  @    0 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65551, 'f32': 0.0}
+  @    0 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  100 WAIT 100
+  @  100 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-337.0, 1.0, 125.0], 'u32s': ['0xc3a88000', '0x3f800000', '0x42fa0000']}
+  @  100 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65562, 'f32': 0.0}
+  @  100 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  133 WAIT 33
+  @  133 TRANSLATION_Y {'op': 'IMMEDIATE', 'type': '0x142', 'size': 4, 'u32': 1140785152, 'f32': 510.0}
+  @  133 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  150 WAIT 17
+  @  150 TRANSLATION_XYZ {'op': 'IMMEDIATE', 'type': '0x182', 'size': 12, 'f32s': [-341.0, 375.0, 108.0], 'u32s': ['0xc3aa8000', '0x43bb8000', '0x42d80000']}
+  @  150 ROTATION_Y {'op': 'IMMEDIATE', 'type': '0x1c2', 'size': 4, 'u32': 1127481344, 'f32': 180.0}
+  @  150 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65549, 'f32': 0.0}
+  @  150 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  195 WAIT 45
+  @  195 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65550, 'f32': 0.0}
+  @  195 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  245 WAIT 50
+  @  245 TRANSLATION_Y {'op': 'IMMEDIATE', 'type': '0x142', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  245 ANIMATION {'op': 'op19', 'type': '0x759', 'size': 4, 'u32': 65549, 'f32': 0.0}
+  @  245 ANIMATION_FRAME {'op': 'TIME', 'type': '0x763', 'size': 4, 'u32': 1106247680, 'f32': 30.0}
+  @  255 WAIT 10
+  @  255 END {}
+
+[actor] id='d_act3' flag=0x0 events=4
+  @  680 WAIT 680
+  @  680 DATA_ID {'id': '0x00000009', 'data': {'status': 33, 'entryCount': 2, 'entrySize': 1, 'entries': ['00', '14']}, 'raw': '2902001400000000'}
+  @  710 WAIT 30
+  @  710 END {}
+
+[particle] id='paticle' flag=0x0 events=11
+  @  133 WAIT 133
+  @  133 cmd48 {'op': 'op18', 'type': '0x618', 'size': 7, 'raw': '645f6163743000'}
+  @  133 cmd49 {'op': 'op18', 'type': '0x638', 'size': 11, 'raw': '66756b755f6d6f64656c00'}
+  @  133 cmd50 {'op': 'IMMEDIATE', 'type': '0x642', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @  133 cmd68 {'op': 'op19', 'type': '0x899', 'size': 4, 'u32': 506, 'f32': 0.0}
+  @  133 cmd46 {'op': 'IMMEDIATE', 'type': '0x5c2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  245 WAIT 112
+  @  245 cmd32 {'op': 'IMMEDIATE', 'type': '0x402', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  245 cmd47 {'op': 'IMMEDIATE', 'type': '0x5e2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  246 WAIT 1
+  @  246 END {}
+
+[actor] id='d_act2' flag=0x0 events=4
+  @  675 WAIT 675
+  @  675 DATA_ID {'id': '0x00000004', 'data': {'status': 49, 'entryCount': 1, 'entrySize': 1, 'entries': ['01']}, 'raw': '31010000'}
+  @  676 WAIT 1
+  @  676 END {}
+
+[camera] id='camera' flag=0x0 events=31
+  @    0 vv6 {'op': 'IMMEDIATE', 'type': '0x4e2', 'size': 4, 'u32': 1109419622, 'f32': 40.099998}
+  @    0 vv7 {'op': 'IMMEDIATE', 'type': '0x4c2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @    0 POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x302', 'size': 12, 'f32s': [-120.0, 462.0, 277.0], 'u32s': ['0xc2f00000', '0x43e70000', '0x438a8000']}
+  @    0 TARGET_POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x382', 'size': 12, 'f32s': [-322.0, 436.0, 82.0], 'u32s': ['0xc3a10000', '0x43da0000', '0x42a40000']}
+  @  100 WAIT 100
+  @  100 vv6 {'op': 'FVR_INDEX', 'type': '0x4f2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  100 POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x302', 'size': 12, 'f32s': [-339.0, 601.0, 201.0], 'u32s': ['0xc3a98000', '0x44164000', '0x43490000']}
+  @  100 TARGET_POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x382', 'size': 12, 'f32s': [-367.0, 358.0, 50.0], 'u32s': ['0xc3b78000', '0x43b30000', '0x42480000']}
+  @  150 WAIT 50
+  @  150 vv6 {'op': 'IMMEDIATE', 'type': '0x4e2', 'size': 4, 'u32': 1113299354, 'f32': 54.900002}
+  @  150 POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x302', 'size': 12, 'f32s': [-168.0, 402.0, -99.0], 'u32s': ['0xc3280000', '0x43c90000', '0xc2c60000']}
+  @  150 TARGET_POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x382', 'size': 12, 'f32s': [-383.0, 455.0, 85.0], 'u32s': ['0xc3bf8000', '0x43e38000', '0x42aa0000']}
+  @  245 WAIT 95
+  @  245 vv6 {'op': 'IMMEDIATE', 'type': '0x4e2', 'size': 4, 'u32': 1113299354, 'f32': 54.900002}
+  @  245 POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x302', 'size': 12, 'f32s': [-342.0, 450.0, 160.0], 'u32s': ['0xc3ab0000', '0x43e10000', '0x43200000']}
+  @  245 TARGET_POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x382', 'size': 12, 'f32s': [-338.0, 432.0, -128.0], 'u32s': ['0xc3a90000', '0x43d80000', '0xc3000000']}
+  @  295 WAIT 50
+  @  295 vv6 {'op': 'FVR_INDEX', 'type': '0x4f2', 'size': 4, 'u32': 1, 'f32': 0.0}
+  @  295 POSITION_XYZ {'op': 'FVR_INDEX', 'type': '0x312', 'size': 12, 'f32s': [0.0, 0.0, 0.0], 'u32s': ['0x2', '0x3', '0x4']}
+  @  295 TARGET_POSITION_XYZ {'op': 'FVR_INDEX', 'type': '0x392', 'size': 12, 'f32s': [0.0, 0.0, 0.0], 'u32s': ['0x5', '0x6', '0x7']}
+  @  385 WAIT 90
+  @  385 vv6 {'op': 'IMMEDIATE', 'type': '0x4e2', 'size': 4, 'u32': 1111202202, 'f32': 46.900002}
+  @  385 POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x302', 'size': 12, 'f32s': [-266.0, 449.0, -61.0], 'u32s': ['0xc3850000', '0x43e08000', '0xc2740000']}
+  @  385 TARGET_POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x382', 'size': 12, 'f32s': [-384.0, 448.0, 201.0], 'u32s': ['0xc3c00000', '0x43e00000', '0x43490000']}
+  @  618 WAIT 233
+  @  618 vv6 {'op': 'IMMEDIATE', 'type': '0x4e2', 'size': 4, 'u32': 1109419622, 'f32': 40.099998}
+  @  618 vv7 {'op': 'IMMEDIATE', 'type': '0x4c2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  618 POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x302', 'size': 12, 'f32s': [-40.0, 460.0, 196.0], 'u32s': ['0xc2200000', '0x43e60000', '0x43440000']}
+  @  618 TARGET_POSITION_XYZ {'op': 'IMMEDIATE', 'type': '0x382', 'size': 12, 'f32s': [-266.0, 426.0, 31.0], 'u32s': ['0xc3850000', '0x43d50000', '0x41f80000']}
+  @  680 WAIT 62
+  @  680 END {}
+
+[message] id='message' flag=0x0 events=20
+  @   21 WAIT 21
+  @   21 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 539, 'f32': 0.0}
+  @   74 WAIT 53
+  @   74 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 540, 'f32': 0.0}
+  @  145 WAIT 71
+  @  145 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 3095, 'f32': 0.0}
+  @  198 WAIT 53
+  @  198 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 541, 'f32': 0.0}
+  @  247 WAIT 49
+  @  247 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 542, 'f32': 0.0}
+  @  272 WAIT 25
+  @  272 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 547, 'f32': 0.0}
+  @  315 WAIT 43
+  @  315 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 543, 'f32': 0.0}
+  @  467 WAIT 152
+  @  467 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 544, 'f32': 0.0}
+  @  620 WAIT 153
+  @  620 cmd66 {'op': 'op19', 'type': '0x859', 'size': 4, 'u32': 545, 'f32': 0.0}
+  @  680 WAIT 60
+  @  680 END {}
+
+[control] id='(control)' flag=- events=1
+  @    0 END {}
+
+[sound] id='SE' flag=0x0 events=5
+  @  111 WAIT 111
+  @  111 cmd60 {'op': 'op19', 'type': '0x799', 'size': 4, 'u32': 2147483650, 'f32': -0.0}
+  @  111 cmd46 {'op': 'IMMEDIATE', 'type': '0x5c2', 'size': 4, 'u32': 0, 'f32': 0.0}
+  @  369 WAIT 258
+  @  369 END {}

@@ -35,4 +35,11 @@ void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo);
 // the actor create is queued). Call once, before any stage loads.
 void dExtWwRoom_installHooks(void);
 
+// tale §749: the adjacency-checked RCAM translator, shared with the STAGE
+// loader (stage.dzs carries its own RCAM in the same donor dialect — LinkRM
+// Stage.arc RCAMx1). i_slot: rooms use their roomNo; the stage table uses the
+// reserved stage slot (kWwRcamStageSlot, last pool entry).
+void dExtWwRoom_translateRcamShared(dStage_dt_c* i_stage, int i_slot, const void* i_dzr);
+static const int kWwRcamStageSlot = 63;
+
 #endif

@@ -9,6 +9,7 @@
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
+#include "d/ext_plugin/ww_stage_loader.h"  // §892 dExtWw_getLayerNo
 #include "d/d_item.h"
 #include "d/d_map_path_dmap.h"
 #include "d/d_menu_fmap.h"
@@ -183,6 +184,17 @@ void dComIfG_get_timelayer(int* o_layer) {
 int dComIfG_play_c::getLayerNo_common_common(const char* i_stageName, int i_roomNo, int o_layer) {
     int layer = o_layer;
     if (layer < 0) {
+        // ====================================================================
+        // §892 (corrected §891, §884/§889 spawn root): WW host stages resolve
+        // by WW'S OWN story-layer algorithm — the donor's getLayerNo, ported
+        // verbatim (ww_layer_select.cpp) — through THIS method, the engine's
+        // one selection surface (the donor's own: WW d_com_inf_game.cpp:185 is
+        // this same per-stage-name switch, one generation earlier). TP stage
+        // branches below are untouched; stage names are disjoint.
+        // ====================================================================
+        if (i_stageName != NULL && dExtWwSave_isWwHostStage(i_stageName)) {
+            return dExtWw_getLayerNo(i_roomNo);
+        }
         layer = -1;
 
         // Stage is in a Twilight state
@@ -940,6 +952,20 @@ int dComIfG_play_c::getLayerNo(int param_1) {
     if (roomNo <= -1) {
         roomNo = dComIfGp_getStartStageRoomNo();
     }
+
+#if TARGET_PC
+    // §892: the donor's getLayerNo CONSUMES its room argument (WW
+    // d_com_inf_game.cpp:185); the receiver marked it UNUSED — drift. WW host
+    // stages honor it (sea's isle rooms carry different story layers; the
+    // readMult per-room loop depends on it). TP callers keep the receiver's
+    // stay-room resolution unchanged (shared-path law: WW-scoped only).
+    {
+        const char* sn892 = dComIfGp_getStartStageName();
+        if (param_1 >= 0 && sn892 != NULL && dExtWwSave_isWwHostStage(sn892)) {
+            roomNo = param_1;
+        }
+    }
+#endif
 
     layerNo = getLayerNo_common(dComIfGp_getStartStageName(), roomNo, dComIfGp_getStartStageLayer());
     return layerNo;

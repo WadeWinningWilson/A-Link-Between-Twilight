@@ -223,6 +223,15 @@ WW_SERVING_PLUMBING = {
     # and the layer installs itself through dExtWwRoom_installHooks, which the
     # receiver already names.
     "src/d/ext_plugin/ww_cam_crawl.cpp": "donor CRAWL camera algorithm + its DMC latch",
+    # §673: the donor's compiled-in camera style/type tables (no camtype.dat
+    # exists on the WW disc — a TP-ism; §672 correction). Generated from the
+    # donor's own d_cam_style/d_cam_type TUs by gen_cam_data.py; donor-axis
+    # rows resident behind the layer, awaiting the mode-selector port.
+    "src/d/ext_plugin/ww_cam_data.cpp": "donor camera style/type tables (generated)",
+    # §674: the donor camera SELECTOR (nextType/nextMode/latch) driving the
+    # donor-axis tables through the receiver's NULL-default selection hook.
+    # Excluding it leaves the receiver's own selection byte-identical.
+    "src/d/ext_plugin/ww_cam_select.cpp": "donor camera selector (type/mode/style)",
     "src/d/ext_seq/ja1_bank.cpp": "JAudio1 bank bridge",
     "src/d/ext_seq/ja1_event_dump.cpp": "JAudio1 diagnostics",
     "src/d/ext_seq/ja1_native.cpp": "JAudio1 native entry points",

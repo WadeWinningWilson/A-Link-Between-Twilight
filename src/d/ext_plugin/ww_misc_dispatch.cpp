@@ -129,6 +129,15 @@ void dKyWwSky_moveSun() {
 }
 void dKyWwSky_reset() {
 }
+// §713b (row-17 re-clearance catch): the §687/§684 additions referenced from
+// shared kankyo TUs — same cluster-4 defaults as their siblings above. The
+// isSkyHost gate is receiver-side FALSE in this build, so none of these can
+// be reached; the stubs exist purely so the link stays clean BY REMOVAL.
+void dKyWwSky_setVrboxColors() {
+}
+void dKyWwSky_vrboxColorsReset() {
+}
+// (dKyWw_skyArcsPoll needs no stub: d_kankyo_ww.cpp is a KEPT TU in this build.)
 void dExtNpcDoors_armArrivalGuard(const char* stage) {
 }
 void dExtNpcDoors_poll() {

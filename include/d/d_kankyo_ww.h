@@ -71,6 +71,9 @@ void dKyWw_settingTevStruct(int i_lightType, cXyz* i_pos, dKy_tevstr_c* i_tevstr
 // Set by the mount alongside hide_vrbox; consulted by the wether gates.
 void dKyWw_setSkyHost(bool i_active);
 bool dKyWw_isSkyHost();
+// §684: phased residency for the celestial arcs (WwSky cloudtx + WwAlways
+// BTIs), keyed on the sky-host flag; call per frame while a sky host is live.
+void dKyWw_skyArcsPoll();
 // §418: true once the NATIVE vrbox actors own the dome (mount draw retires).
 void dKyWw_setDomeActorsLive(bool i_live);
 bool dKyWw_domeActorsLive();

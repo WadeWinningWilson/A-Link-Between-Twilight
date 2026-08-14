@@ -89,6 +89,10 @@ BLOCK_MAP = [
     ("PLYR", "stage_actor_data_class",     None,                        "Player Spawn.json"),
     ("RCAM", "stage_camera2_data_class",   None,                        "Camera Point (v1).json"),
     ("RARO", "stage_arrow_data_class",     None,                        None),
+    # RTBL is POINTER-INDIRECTED (ptr array -> records -> room-byte lists), so
+    # single-stride verdicts are a CATEGORY ERROR (§689): A=0x8 is the record,
+    # C=0x4 the ptr entry, gap/num a composite. Compare it with --rtbl, never
+    # by stride.
     ("RTBL", "roomRead_data_class",        None,                        "RTBL.json"),
     ("AROB", "stage_arrow_data_class",     None,                        None),
     ("2Dma", "stage_map_info_class",       None,                        "2D Minimap.json"),
@@ -376,13 +380,131 @@ def compare(fourcc, d_struct, r_struct, tmpl, verbose):
     return dis, 0, verdict
 
 
+# ===========================================================================
+# SOURCE D (§683/§684 wiring) — EMPIRICAL stride from real chunk geometry.
+# The technique that proved SCLS=0xC (§610) and RCAM=0x18 (§612) by hand,
+# mechanized: gap to the next chunk / entry count. It measures what is IN a
+# file, so it answers a different question than A/B/C (what code EXPECTS) —
+# disagreement between D and A is a FORMAT finding about that file (mixed-
+# format arcs, §612), not a layout finding about the games.
+# Caveat stated, not hidden: the LAST chunk's gap runs to end-of-file and
+# may include padding, so its stride prints as ">= floor" and is never
+# reported as exact.
+# ===========================================================================
+def cmd_dzr(path):
+    import struct as _s
+    raw = open(path, "rb").read()
+    if raw[:4] == b"Yaz0":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from ww_disc import yaz0_decompress
+        raw = yaz0_decompress(raw)
+    if raw[:4] == b"RARC":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from ww_disc import rarc_list
+        for nm, data in rarc_list(raw):
+            if nm.endswith(".dzr") or nm.endswith(".dzs"):
+                raw = data
+                break
+        else:
+            print("no .dzr/.dzs member in the RARC")
+            return 2
+    n = _s.unpack(">I", raw[:4])[0]
+    if not (0 < n < 64):
+        print("does not look like a dz* chunk table (count=%d)" % n)
+        return 2
+    nodes = []
+    for i in range(n):
+        tag = raw[4 + i * 12:8 + i * 12].decode("ascii", "replace")
+        num, off = _s.unpack(">II", raw[8 + i * 12:16 + i * 12])
+        nodes.append((off, tag, num))
+    nodes.sort()
+    sizes = {cc: (a_size_of(ds), ds) for cc, ds, rs, tm in BLOCK_MAP if ds}
+    print("SOURCE D — empirical strides from chunk geometry: %s" % path)
+    print("  %-6s %-5s %-9s %-10s %s" % ("tag", "num", "stride", "vs A", "note"))
+    for k, (off, tag, num) in enumerate(nodes):
+        end = nodes[k + 1][0] if k + 1 < len(nodes) else len(raw)
+        gap = end - off
+        exact = k + 1 < len(nodes)
+        stride = gap // num if num else 0
+        a = sizes.get(tag, (None, None))[0]
+        if tag == "RTBL":
+            # pointer-indirected: gap/num is a composite, not a stride (§689)
+            print("  %-6s %-5d %-9s %-10s %s" % (tag, num, "COMPOSITE",
+                  "n/a", "pointer-indirected -- use --rtbl, stride is a category error"))
+            continue
+        if a is None:
+            vs = "-"
+        elif not exact:
+            vs = "AGREE?" if stride >= a else "UNDER!"
+        elif stride == a:
+            vs = "AGREE"
+        else:
+            vs = "D=%s A=%s DIFFER" % (hex(stride), hex(a))
+        note = "" if exact else "last chunk — floor only, padding possible"
+        print("  %-6s %-5d %-9s %-10s %s"
+              % (tag, num, hex(stride) if exact else ">=%s" % hex(stride), vs, note))
+    return 0
+
+
+def a_size_of(struct_name):
+    hdr, sn = resolve_side(DONOR_DIR, DONOR_H, struct_name)
+    _, size, _ = parse_header(hdr, sn)
+    return size
+
+
+# ===========================================================================
+# RTBL STRUCTURAL DECODE (§689) — the comparator stride cannot be. Decodes
+# the pointer-indirected shape build_rtbl_sparse writes and WW ships: ptr
+# array (4B abs offsets) -> per-room records (8B: count,u8 pad, rooms_off)
+# -> room-byte lists (bit7 = ChkBg, low bits = room index, per §602's
+# loadRoom read path). Run on two arcs and diff the PRINTS.
+# ===========================================================================
+def cmd_rtbl(path):
+    import struct as _s
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from ww_disc import yaz0_decompress, rarc_list
+    raw = open(path, "rb").read()
+    if raw[:4] == b"Yaz0":
+        raw = yaz0_decompress(raw)
+    if raw[:4] == b"RARC":
+        for nm, data in rarc_list(raw):
+            if nm == "stage.dzs":
+                raw = data
+                break
+    n = _s.unpack(">I", raw[:4])[0]
+    for i in range(n):
+        tag = raw[4 + i * 12:8 + i * 12]
+        num, off = _s.unpack(">II", raw[8 + i * 12:16 + i * 12])
+        if tag == b"RTBL":
+            print("RTBL structural decode: %s" % path)
+            print("  rooms: %d, ptr array @0x%X" % (num, off))
+            for r in range(num):
+                ptr = _s.unpack(">I", raw[off + r * 4: off + r * 4 + 4])[0]
+                cnt, pad, rooms_off = _s.unpack(">BBH", raw[ptr:ptr + 4])
+                ext = _s.unpack(">I", raw[ptr + 4:ptr + 8])[0]
+                rooms = raw[ext:ext + cnt] if cnt and ext < len(raw) else b""
+                decoded = ["%d%s" % (b & 0x3F, "+ChkBg" if b & 0x80 else "")
+                           for b in rooms]
+                print("  room[%d] rec@0x%X count=%d load-set=[%s]"
+                      % (r, ptr, cnt, ", ".join(decoded)))
+            return 0
+    print("no RTBL chunk in %s" % path)
+    return 2
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--block")
+    ap.add_argument("--rtbl", help="structural decode of an arc's RTBL (§689 comparator)")
+    ap.add_argument("--dzr", help="empirical stride census of a room/stage arc or dz* file (source D)")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args()
 
+    if a.rtbl:
+        return cmd_rtbl(a.rtbl)
+    if a.dzr:
+        return cmd_dzr(a.dzr)
     if a.list:
         print("V1 BLOCK MAP — declared, never inferred:")
         for cc, ds, rs, tm in BLOCK_MAP:
