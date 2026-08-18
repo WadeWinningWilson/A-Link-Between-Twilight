@@ -72,3 +72,4 @@ spec that both p2 and ob1's endgames await.
   block when writing the ctor (implicit-vs-explicit TBD: .fn weak?
   CHECK — if global+long, so has an EXPLICIT ctor unlike ob1).
 - Ctor is WEAK = implicit/in-class (ob1 pattern) — the r29-r31 defaults come from member-object inline ctors, not user code. Kickoff package COMPLETE; begin decode rounds at checklist step 2 (header rewrite).
+- Header restructured + virtual overrides fixed (u16/u32); BASELINE 13/187 exact, fuzzy 1.9049%. so is VERSION-CONDITIONAL (#if VERSION_DEMO in class tail) — MatchingFor rule applies at label time. Kickoff steps 1-2 DONE; decode rounds begin smallest-first.
