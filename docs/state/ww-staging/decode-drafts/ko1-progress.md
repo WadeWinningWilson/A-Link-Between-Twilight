@@ -78,3 +78,68 @@ string pool is a fraction of the target's with ~120 functions unwritten. The
 string pool is a reliable ORDER oracle, so these converge as the TU fills. Same
 for the three `*_toResID` functions at 3 rows each on the MWCC `$NNNN`
 local-static counter.
+
+---
+
+## Update — create chain COMPLETE. 46/203 exact, fuzzy 1.9240% -> 11.5403%.
+
+### The `mDoExt_McaMorf` ctor mapping, resolved
+
+**`mDoExt_McaMorf` has a VIRTUAL BASE**, so its constructor carries an implicit
+most-derived flag as the first argument. `li r4, 0x1` is that flag, and **every
+declared parameter sits one register later than the signature suggests** — which
+is why `modelData` appears in `r5`, and why there are five stack slots for four
+stack parameters.
+
+**Ground truth came from a MATCHING TU (`d_a_am`)** whose call is
+instruction-for-instruction the same shape, so its source gives the argument
+order for free. Checking for a matching sibling took two commands and replaced
+an open-ended reverse-engineering job. Same lesson as using `d_a_npc_p1`/`ba1`
+as NPC idiom oracles — **look for a matching caller before doing register
+archaeology.**
+
+Written, bodies matching, residuals purely `@stringBase0`:
+
+| fn | rows | model res | anim res | differedDlistFlag |
+|---|---|---|---|---|
+| `create_Anm` | 23 | 0x1B | 0x16 | **0x15021222** |
+| `create_hed_Anm` | 12 | tbl {0x1C, 0x1D} | tbl {0x0A, 0x25} | **0x11020022** |
+| `create_bln_Anm` | 18 | 0x1A | 0x01 | **0x11000022** |
+
+**Each anim carries its OWN differedDlistFlag** — easy to assume they are
+identical; they are not.
+
+### Assert strings name members — six so far
+
+`m_hed_jnt_num` ("head"), `m_bbone_jnt_num` ("backbone"), `m_armR2_jnt_num`
+("armR2"), `m_bln_loc_jnt_num` ("balloon_loc"), `m_bln_jnt_num` ("ko_balloon"),
+`m_hed_2_jnt_num` ("head2").
+
+**This is the cheapest naming source in the campaign and it cannot be wrong** —
+the donor's own assert text states the field name. It also CAUGHT one of my
+carve guesses: I had put `m_bln_jnt_num` at 0x6CD; it is 0x6D1.
+
+### NEXT: `CreateHeap` (180 instructions) — analysis done, not yet written
+
+Call order and captures:
+1. `create_Anm()` -> `r30` (its modelData). NULL -> return FALSE.
+2. `create_hed_Anm()` -> `r31`. NULL -> `mpMorf = NULL`, return FALSE.
+3. A **local `u8[2]` copied from a `@7337` u16 constant**, indexed by
+   `field_0x8a6`, stored to `field_0x89e` — a non-static local array with an
+   initialiser, which MWCC materialises from .rodata onto the stack.
+4. `iniTexPttrnAnm(0)`. FALSE -> `mpMorf = NULL`, `field_0x710 = NULL`, return FALSE.
+5. `if (field_0x8a6 == 0)` -> `create_bln_Anm()`; NULL -> `mpMorf = NULL`,
+   `field_0x710 = NULL`, return FALSE.
+6. `create_itm_Mdl()`; FALSE -> the shared failure tail.
+7. **Two joint-callback loops.** Each walks `i` from 0 while
+   `i < <modelData>->getJointNum()` (`lhz 0x28`), and when `i` equals the joint
+   number, does
+   `<morf>->getModel()->getModelData()->getJointNodePointer(i)->setCallBack(cb)`:
+   - `field_0x704` (balloon morf) vs `m_bln_loc_jnt_num`, cb `nodeCallBack_Bln`
+   - `field_0x710` (head morf) vs `m_hed_2_jnt_num`, cb `nodeCallBack_Hed`
+   Then `field_0x704->getModel()->setUserArea((u32)this)`.
+   **⚠ Both loops are bounded by `r31`'s joint count (the HEAD modelData) while
+   indexing a different model.** That reads like a donor quirk rather than a
+   transcription error on my part — verify against the asm before "fixing" it.
+   The sibling idiom is `modelData->getJointNodePointer(n)->setCallBack(cb)`
+   (see `so` lines 241-242, `aj1` 1453-1455).
