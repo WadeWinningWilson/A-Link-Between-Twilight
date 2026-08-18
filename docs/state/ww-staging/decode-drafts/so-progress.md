@@ -95,3 +95,4 @@ spec that both p2 and ob1's endgames await.
 - STOP-POINT NOTE: this instance reached its effective depth here after
   ~4 hours continuous; successor starts at these shapes with the fixed
   parser, then walks the size ladder exactly as ob1 rounds 3+ did.
+- Round 2 micro: modeDebug/modeGetRupeeInit/modeWait/modeHide 100% (17/187). ⚠ -4 layout error before 0xA80 (mA80 needed pad end 0xA84): verify AcchCir2/ObjAcch2 real sizes before trusting comments in 0x870-0xAE8.
