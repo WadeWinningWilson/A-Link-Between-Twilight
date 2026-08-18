@@ -336,3 +336,4 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   p2's spec should pair setAnm/_execute/Proc sites with shape variants
   in their NEIGHBOR functions.
 - Cross-fn probe 1 (control_anmAtr shapes × 3 park symbols): NO coupling — chg/privateCut unmoved; control baseline 6 rows (tree-root), if-chain variant ties, default-case worse. Next pairings: setAnm_ATR/anmAtr-side variants; then p2's neighbor-spec.
+- Round 14: km1 include block adopted (+Ob.h res enums for PR naming pass); counter gap NOT include-driven at this level (+9 only, PCH covers); cross-probe 2 (setAnm_ATR shapes x 5 syms): fully canonicalized, zero movement. Endgame total: 21 rows across 4 sites (chg 2 / control 6 / privateCut 2 / nodeOb1Control 11).
