@@ -159,3 +159,55 @@ BOOL** - the donor tests r3 with `clrlwi. r0, r3, 24` after each. Same shape as
 NEXT: fix the base class to `fopNpc_npc_c`, lay out the members above against
 that base, then write `createInit`. **No code written yet** - `aj1` remains at
 12/131 exact, 2.9112%, and the header work is the gate.
+
+
+## Round 4 - CORRECTION to Round 2, and the real string map
+
+**Round 2 claimed "`createInit` owns `@stringBase0` offset 0". That was an
+artifact of my own regex** - it matched the ANCHOR load
+(`addi rN, rN, "@stringBase0"@l`) and not the string actually selected, which
+comes from the FOLLOWING `addi rN, rN, 0x<offset>`. `createInit`'s real string
+use is **+0x6 = "Aj1"**, not +0x0 = "angry".
+
+Re-derived properly by reading the anchor load AND its follow-on addi:
+
+    createInit        +0x6                       -> "Aj1"
+    init_texPttrnAnm  +0xa, +0xd                 -> "Aj", assert file
+    setAnm_anm        +0xa                       -> "Aj"
+    _create/_delete/demo/itemCreateHeap  +0xa    -> "Aj"
+    wait_action2      +0x62
+    bodyCreateHeap    +0xa,+0xd,+0x79,+0x91,+0xaf,+0xca
+
+    string offsets: angry@0  Aj1@6  Aj@0xA  d_a_npc_aj1.cpp@0xD
+                    a_btp != 0@0x1D  Halt@0x28  AJ1_TLK@0x2D  INI_ANGRY@0x35
+
+**NO FUNCTION REFERENCES +0x0 AT ALL.** So `"angry"` is not emitted by code -
+it belongs to a **file-scope static table** declared above the first function.
+Same for the `AJ1_TLK...INVITE` block at +0x2D onward: `createInit` loads
+`l_evn_tbl` (its own symbol) and dereferences `l_evn_tbl[0]`, so that is a
+`static char* l_evn_tbl[]` whose strings emit at the TABLE's declaration
+point - which the pool places after `init_texPttrnAnm`'s asserts.
+
+**THE ROUND 2 CONCLUSION SURVIVES, FOR A DIFFERENT REASON.** `createInit` is
+still the correct first target - it is the first *function* in string order -
+but not because it owns offset 0. The actual pool head is a static table, and
+**the file needs that table declared before the first function or every string
+offset downstream will be short by 6.**
+
+REVISED WORK ORDER:
+1. declare the file-scope static table owning `"angry"` (pool offset 0)
+2. `createInit` (+0x6 "Aj1") - transcribed in full in Round 3, ready to write
+3. `l_evn_tbl` static table (AJ1_TLK / INI_ANGRY / VIVRATE / JMP / SPPRISE /
+   LOK / DAN / INVITE) declared after `init_texPttrnAnm`
+4. `init_texPttrnAnm`, then `bodyCreateHeap` (6 string uses, the assert-heavy one)
+5. re-run `tools/foundry/pool_align.py d_a_npc_aj1` before any per-function work
+
+DONE THIS ROUND (committed): header now derives from `fopNpc_npc_c` - proven,
+not guessed, by the donor passing `this` to
+`setActorInfo2__15dNpc_EventCut_cFPcP12fopNpc_npc_c` AND by the base already
+declaring `mStts` at 0x538 / `mCyl` at 0x574, the exact offsets `createInit`
+uses. Members 0x6C0+ laid out; override return types aligned to the base
+virtuals (`u16 next_msgStatus(u32*)`, `u32 getMsg()`, `void anmAtr(u16)`);
+`init_AJ1_0/1/2` and `createInit` corrected to return BOOL. Compiles clean.
+**Measured effect: NONE yet (12/131, 2.9112%) - bodies are still empty. This
+is the gate, not the payoff.**
