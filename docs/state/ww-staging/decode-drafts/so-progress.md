@@ -1053,3 +1053,66 @@ proposal's allocator bucket.** Recorded so the next instance does not re-run it
 on the strength of the aj1 result.
 
 STATE unchanged: so 175/187 (99.6699%), ob1 109/115, p2 133/145, aj1 14/131.
+
+## Rounds 66-68 — the re-audit, and two behaviour bugs found by byte-matching
+
+`so` 99.6699% -> **99.8117%**, after the park proposal claimed nothing here was
+reachable. Three findings, in order of how much they matter.
+
+### 1. `cror` around a float compare = a NON-STRICT comparison. Two CORRECTNESS bugs.
+
+MWCC compiles a float `>=` as `fcmpo` + **`cror eq, gt, eq`** + `bne` — it ORs
+the `gt` and `eq` bits because IEEE unordered has to be handled. A plain `>`
+compiles to `bgt`/`ble` with **no `cror` at all**. Same for `cror eq, lt, eq`
+= `<=`.
+
+`cutMiniGameProc` had two:
+
+```cpp
+current.pos.y >= 50.0f + waterY   // I had >
+current.pos.y <= waterY           // I had <
+```
+
+**These are not cosmetic.** They change behaviour exactly at the water surface,
+which is where this minigame's whole state machine lives. A byte-match pass
+found two real bugs that no amount of playtesting would reliably surface.
+
+I swept the four candidate comparison sites **individually** rather than
+flipping them all — `speed.y >=` made it *worse* (15 -> 17), so attributing the
+rows to the right sites mattered. 15 -> 11.
+
+### 2. `checkTgHit` 12 -> 3: assign the local INSIDE the argument list
+
+```cpp
+cXyz* sePos;
+mDoAud_monsSeStart(0x4991, sePos = &eyePos, ...);
+```
+
+MWCC materialises an argument expression in right-to-left **arg** order, but a
+local initialised at its **declaration** is materialised at the declaration —
+here fifteen instructions early. Swept: initialise-at-declaration 12 (baseline),
+no local at all 30, declare-after-the-call 30, reference local 12,
+**assign-in-arg-list 3**.
+
+### 3. What is genuinely allocator residue, confirmed by direct re-read
+
+`_createHeap` (12), `_nodeControl` (5), `modeNearSwim` (8) are pure register-
+**name** swaps: identical instructions, identical offsets, identical stack
+layout, r30/r31 or r29/r30 exchanged. The decl/init lever was tested on
+`_nodeControl` in three forms and did nothing. `_execute` (5) is float-register
+assignment — the multiply-operand-order sweep changed nothing.
+
+### Remaining on `so`
+
+| fn | rows | class |
+|---|---|---|
+| `__ct__`/`__dt__ daNpc_So_HIO_c` | 13 | **vtable shape — HISTORY's, shared header** |
+| `_createHeap` | 12 | register-name colouring (confirmed) |
+| `cutMiniGameProc` | 11 | float load order / `fneg` placement |
+| `modeNearSwim` | 8 | register-name colouring (confirmed) |
+| `_nodeControl` | 5 | register-name colouring (confirmed, 3 forms) |
+| `_execute` | 5 | float-register assignment (2 forms) |
+| `jntHitCreateHeap` | 4 | branch shape (4 forms) |
+| `checkTgHit` | 3 | arg-eval position (5 forms) |
+| `cutEatesaFirstProc` | 3 | compare operand order |
+| `createInit` / `_draw` | 1+1 | single differing pool constant |
