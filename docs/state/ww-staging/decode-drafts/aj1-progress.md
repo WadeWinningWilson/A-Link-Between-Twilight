@@ -1441,3 +1441,71 @@ the answer is no. Nobody should re-run it. (Script:
 `C:/Users/xxxxx/AppData/Local/Temp/typesweep.py` — transient, but the method is
 three lines: regex the narrow declarations out of each residual function's body,
 widen one at a time, rebuild, re-measure, always restoring the file.)
+
+---
+
+## THE DOUBLED-`b` BUCKET IS CRACKED — empty cases, and how to recover their VALUES
+
+Filed as unsolved on `aj1` for many rounds. `ko1` supplied a second instance,
+and the second instance is what made it solvable. **Three functions across three
+TUs went exact together:** `aj1::ctrlAnmAtr`, `ob1::control_anmAtr`,
+`ko1::control_anmAtr`.
+
+### The rule
+
+**A switch dispatch with MORE branches than your cases require means the donor's
+switch has EMPTY CASES.** An empty case emits no body, so it is invisible in the
+code listing — it exists *only* as extra width in the dispatch tree. That much
+was already in this file. **What is new: you can recover the missing case VALUES
+from the tree's shape.**
+
+- **Count the branches.** MWCC builds a binary search over the sorted case list.
+  N branches implies more cases than you have written.
+- **The value tested FIRST is the midpoint of the real case list.** If it is not
+  the midpoint of *yours*, cases are missing on whichever side makes it one.
+
+| TU | evidence in the target | recovered |
+|---|---|---|
+| `ko1` | tests `0xB`, two spare branches | empty `0xA` **and** `0xC`, bracketing |
+| `aj1` | cases {2, 5}, doubled `b` | empty `1` and `6`, bracketing |
+| `ob1` | tests `3` first with cases {3, 6} | `3` is only the midpoint if something sits BELOW it -> empty `2` |
+
+### The wrong empty case is WORSE than none
+
+Swept every one rather than pattern-matching:
+`ko1` — default 2, case-C 4, case-A 1, **A+C 0**.
+`aj1` — case-1 7, case-3 7, case-6 1, **6+1 0**, 6+0 10, 6+7 1.
+`ob1` — case-0 2, case-1 2, **case-2 0**, 2+7 8.
+
+### ⚠ This retires an entry I had recorded as a floor
+
+`ob1::control_anmAtr` was swept three ways earlier in this same session and
+written into `ob1-progress.md` as *"switch-dispatch scan order, floor 6"*.
+**That was wrong.** It was reachable; I did not know what to reach for. A
+"floor" is only ever a floor for the techniques tried so far, and this one was
+recorded with more confidence than three sweeps earn.
+
+### The scan that followed, and its false-positive rate
+
+I then scanned all five TUs for residuals where the target carries more branches
+than my build. **80 hits, and almost all were junk** — unwritten `ko1` stubs
+show as `N/0` because a `/* Nonmatching */` body has no branches at all. Same
+failure mode as the first `cror` scan: a plausible worklist that is mostly an
+artifact of what is not written yet. **Filter to written functions before
+believing any diff-shape scan on a partially-decoded TU.**
+
+Filtered, four real candidates remain, each **+1 branch** — and every one is a
+function I had previously parked:
+
+| fn | rows | I had called it |
+|---|---|---|
+| `so::jntHitCreateHeap` | 4 | branch shape, 4 forms swept |
+| `ob1::chg_anmAtr` | 2 | two-variable compare, "provably unfixable" |
+| `aj1::setAnm_anm` | 3 | two-variable inverted branch |
+| `aj1::chngAnmAtr` | 2 | inverted RANGE branch, 6 forms swept |
+
+A +1 branch is also the plain inverted-branch signature, so these are not
+automatically empty-case cases. **But three of the four were parked as
+"provably" unreachable, and the doubled-`b` bucket was parked the same way and
+turned out not to be.** They are worth re-opening with fresh eyes, not
+re-closing on the strength of the earlier verdict.
