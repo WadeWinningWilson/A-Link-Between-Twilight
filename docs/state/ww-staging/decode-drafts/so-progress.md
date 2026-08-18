@@ -1149,3 +1149,35 @@ one was in an 11-row function and I confirmed the pairing before touching
 anything. **A detector that finds two real bugs and one convincing false
 positive is only useful if you check the third case — the discipline is the
 instrument, not the script.**
+
+
+## RE-OPENED 2026-08-18 — the "genuine register colouring" verdict was under-evidenced
+
+I previously parked `_createHeap`, `_nodeControl` and `modeNearSwim` as genuine
+register-NAME colouring. `ko1::lookBack` then showed that a whole-function
+register rotation can be a DOWNSTREAM SYMPTOM of a few extra instructions: 28
+rows there closed by declaring one member `bool` instead of `u8`, because the
+bool-normalisation `subic/subfe/clrlwi` consumed the scratch registers that
+shifted every later allocation. The verdict here was reached by reading register
+columns, which is exactly the reasoning that nearly failed there.
+
+Re-checked all four with a stricter test — do the row counts match, i.e. is any
+instruction inserted or deleted?
+
+- `modeNearSwim` (8 rows): pure substitutions, no insert/delete. Two locals
+  (`ship` from mpPlayerPtr[2] at 0x5b54, `player` from mPlayerInfo[0] at 0x5b44)
+  swap r29/r30. Initialisation ORDER already matches the target. Verdict
+  survives, now on real evidence rather than appearance.
+- `_createHeap` (12 rows), `_nodeControl` (5 rows): same shape, pure swaps.
+- **`_execute` (5 rows) IS NOT COLOURING AND THE OLD VERDICT WAS WRONG.** It is
+  fmuls OPERAND ORDER:
+      target: lfs f1, 0xb00(r27) ; lfs f0, 0x1e0(r31) ; fmuls f3, f1, f0
+      mine:   lfs f0, 0x1e0(r31) ; lfs f1, 0xb00(r27) ; fmuls f3, f0, f1
+  The target loads the POOL CONSTANT first and multiplies constant-by-scale;
+  mine loads `scale.x` first. Three `fmuls` in the `fopAcM_setCullSizeBox` call
+  are affected. This is a source-level operand-order fix, not an allocator
+  artifact — ACTIONABLE, and it was sitting behind a wrong label.
+
+Lesson recorded for the whole campaign: before calling anything "register
+colouring", check whether the row counts match. If instructions are inserted or
+deleted, the register names are a symptom, not the cause.
