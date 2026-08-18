@@ -290,3 +290,18 @@ sibling actors for the idiom (the anchor round-27 instruction, executed same con
 - Watchers cycled to #122 (bnx4hf2ro). One &-launch near-miss self-caught.
 - NEXT: next_msgStatus, cutProc, cutMiniGameStart/Proc/ReturnProc, _execute, _draw,
   create chain, HIO ctor, XyEventCB, then REL SHA gate (Matching temp-flip + tc canary).
+
+## Round 31: next_msgStatus DECODE-COMPLETE — the case-order lesson proven at scale
+
+244 rows -> 13 by REORDERING MY CASE BODIES to the target's emission order, then
+-> 1 (string pool) after two content fixes. This is the ob1 wait_action1 lesson
+(case BODIES emit in SOURCE order) proven on a 20-case switch: write the cases in
+whatever order the target's bodies appear, NOT in numeric order.
+- Target body order: 32CA 32CB 32CC 32CE 32D0 [32CD|32D1] 32D4 32D2 32D6 32D8 32DC
+  32DA 32DB 32DD 32DE [32DF|32E0] 32E1 633 32D9 default.
+- gameInfo+0x48 = save.player.mPlayerItem(0x3C) + 0xC = dComIfGs_getItem(0xC) != 0xFF
+  (NOT getSelectEquip — that resolves to +0xE and reads a different base).
+- Minigame gate: (HIO m30 || mBAE) && getItem(0xC)!=0xFF && getTimerPtr()==NULL,
+  then eventBit 0x3a10 picks 0x32DC vs 0x32D8.
+- Rupee payout: dComIfGp_setItemRupeeCount(mB7C * 10).
+- so now 77/187 exact, FUZZY 63.36%.
