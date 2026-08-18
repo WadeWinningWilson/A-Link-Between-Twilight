@@ -1136,3 +1136,22 @@ still under investigation" — not "3 functions, 22 rows".
 NOTE the anchor finding while classifying: exactly ONE row is the
 m_heapsize-vs-anonymous rodata anchor difference, so that class is negligible
 here (unlike so, where pool/anchor settling dominated).
+
+## Round 23: the 63 "OTHER" rows CLASSIFIED — they are not 63 problems, they are ~4
+
+Opcode-pair classification of every non-mirror, non-anchor row:
+  **45 of 63 are ONE function's stack-slot layout** — goal_talkpos_to_goalpos
+     (29 stfs + 12 addi + 4 lfs, all frame offsets like 0x4c vs 0x34).
+     Same class as so's cXyz slot family; ONE cause, not 45.
+   4  nodeCallBack: lbz/stb 0x2ec vs 0x2f4 — a MEMBER OFFSET 8 bytes early in
+      my header. FIXABLE, and it is a real header defect, not a shape issue.
+   3  wait_action: wrong callee (moccowait vs talk01) = case-BODY order.
+   2  cutJumpToGoalStart: lfsu data offset.
+   rest: branch-distance echoes of the above.
+FIXED THIS ROUND: wait_action 6 -> 4 by reordering the switch bodies to
+{1, 0x10, 2, 0x11} (moccowait BEFORE talk01). Falsified: 0x10 first (8 rows).
+=> REVISED READ FOR THE RULING: the 63 "other" rows are not 63 independent
+unknowns. They are one stack-layout family (45), one header-offset defect (4),
+one case-order fix (3, now down to ~1), and echoes. The header-offset one in
+particular should be FIXED, not labelled Equivalent.
+p2 now 131/145 exact, fuzzy 99.944%.
