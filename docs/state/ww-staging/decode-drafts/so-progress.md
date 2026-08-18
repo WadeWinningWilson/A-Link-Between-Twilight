@@ -908,3 +908,42 @@ REMAINING, by kind:
   createInit 1, _draw 1.
 - BRANCH SHAPE: jntHitCreateHeap 4 (target branches BOTH arms to a join that
   materialises TRUE; `BOOL ret = TRUE` hoist tried, still 4).
+
+
+## Round 63 - PLACEMENT IS EXHAUSTED ON so (all four sections verified)
+
+Closed the loop on every section after this session's moves:
+
+    strings : 53/53          ALIGNED
+    .rodata : head matches; literal-pool positions remain (see below)
+    .bss    : 24/24 objects  ALIGNED
+    .data   : aligned modulo a KNOWN PARSER ARTIFACT
+
+**The .data "divergence" is not one, and I checked that against my own earlier
+mistake rather than re-raising it.** My walk reports mine carrying two extra
+8-byte objects at 0x20/0x28 (`_three$localstatic4$sqrtf`, `_half$localstatic3$sqrtf`)
+where the target shows a gap from 0x1C to 0x30. The target emits those same two
+doubles WITHOUT `.obj` wrappers, so the parser skips them; 0x1C -> 0x30 is
+exactly padding-to-8 plus the two 8-byte values, i.e. **identical placement.**
+I diagnosed this wrong once before (as "25 extra .data objects", which produced
+a flag and a header that were both inert and both reverted) - it is recorded
+here so the third encounter is cheap.
+
+**CONCLUSION ACROSS ALL THREE TUs: the placement well is dry.**
+so, ob1 and p2 all have aligned string pools, aligned .bss, and .data/.rodata
+that differ only in ways costing zero rows. The four placement root causes that
+took `so` from 139 to 175 have no remaining siblings. **Every row still open on
+every TU is now in the allocator/evaluation-order class**, which I have not
+cracked on a single function yet:
+
+  - stack-slot allocation order   ob_movPass 11
+  - register colouring            _createHeap 12, nodeOb1Control 11,
+                                  modeNearSwim 8, _nodeControl 5
+  - argument evaluation position  checkTgHit 12
+  - vtable shape (shared header)  HIO ctor 9 + dtor 4   <- needs History's call
+  - switch dispatch scan          control_anmAtr 6
+  - literal-pool position         cutMiniGameProc 15, _execute 5, others
+  - branch shape                  jntHitCreateHeap 4, chg_anmAtr 2, _create 2
+
+That reframes what "finishing" these TUs means, and it is worth saying plainly
+rather than continuing to imply another cascade is one insight away: it is not.
