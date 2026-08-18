@@ -106,3 +106,48 @@ spec that both p2 and ob1's endgames await.
 - Round 8: jntHitCreateHeap parked 4 rows (block-order polarity family; != form got beq, block order flipped — 3 spellings tried). Members m84C/m850/mAA8 oracle-placed. _delete PARKED pending the 0x5cda/5cd8 accessor family (same hunt as XyCheckCB).
 - Round 9: modeEventEsa 100%, Mapopen settling (~42/187). PROCESS RULE (2 silent edit-losses): every python patch MUST end with a read-back assert of the new text.
 - Round 10: modeEventFirst settling (~44/187). CAMERA-FAMILY PARK consolidated: modeEventBow, modeGetRupee (else-arm writes camera->mCamera work-union +0xC0/+0xD0 via dComIfGp_getCamera(1)), initCam, moveCam, XyCheckCB (0x5cc8 flags), _delete (0x5cda region) — all need the dCamera work/trim accessor decode; single hunt unblocks six functions. Non-camera remainder: modeSwim/NearSwim/Jump/Hide bodies, cut family, create chain, _execute/_draw, setAnm/setMtx/lookBack/etc.
+
+## Rounds 11-20 (2026-08-18, successor): layout probe, cut-family blitz, new levers
+
+- OFFSET-PROBE TECHNIQUE (round 11): temp fn taking &member into a volatile sink;
+  scan the .o for addi rN,r3,imm. Dumps the real layout in ONE build. Ended the
+  +-4 pad whack-a-mole (single -4 in mA94..mB0C). USE THIS FIRST for any layout drift.
+- modeDisappear/modeJumpInit: pool-only. int old = mA79 (u8 member) = lbz-no-extsb
+  + signed cmpw (u8 local = cmplw; s8 local = extsb).
+- CUT FAMILY: 30+ fns decoded this session, most first-try exact. Recipes:
+  * cutEnd idiom = dComIfGp_evmng_cutEnd(mB6C); staff idx member mB6C.
+  * getPlayer(1) = Link (daPy_py_c, mDemo at 0x304: setDemoType 0x304/setParam0
+    0x30C/setDemoMode 0x314; vtbl at 0x31C, slot 0x84 = setPlayerPosAndAngle(cXyz*,s16)).
+  * getPlayer(2) = THE SHIP (KoRL). daShip_c::initStartPos. NULL-check it.
+  * camera idiom: dComIfGp_getCamera(dComIfGp_getPlayerCameraID(0))->mCamera
+    .Stop()/.SetTrimSize(1)/.Set(a,b)/.Reset(a,b)/.Start() - by value cXyz args.
+  * REG map: g_regHIO child stride 0x90 (floats +0x4, shorts +0x7C):
+    0x1c=REG0_F(4) 0x4b4=REG8_F(10) 0x4b8=REG8_F(11) 0x506=REG8_S(1) 0x510=REG8_S(6)
+    0x6e8=REG12_F(7) 0x6f4=REG12_F(10) 0x744=REG12_S(0) 0x746=REG12_S(1) 0x748=REG12_S(2)
+    0x750=REG12_S(6).
+  * WW-era mDoExt_McaMorf has J3DFrameCtrl at 0x58: lbz 0x5D bit0 + lfs 0x64
+    vs 0.0 == the isStop() inline.
+  * substances: dComIfGp_evmng_getMyFloatP / getMyStringP ("Speed_y","SpeedF","Name").
+  * zel_basic direct field: JAIZelBasic::zel_basic->field_0x00bf (0=off,1=on).
+  * play.mFmapOpen = 2 written DIRECT (accessors only do 0/1).
+  * mEventCut at fopNpc+0x2C4; setAttnFlag(0) = stb +0x60; setAttnPos = cXyz +0x54.
+- NEW LEVER (register mirrors, NAMED locals only): decl-then-assign. 'daShip_c* ship;'
+  declared BEFORE an earlier-fetched pointer flips MWCC coloring (cutMiniGameReturnStart
+  7 rows -> 0). FALSIFIED against CSE-temp mirrors (p2 _execute) - see p2 round 19.
+- NEW LESSON (add/sub association): target add-then-subi = the constant sits in the
+  MIDDLE of the source expression: 'shape_angle.y - 0x4000 + REG12_S(6)'. A trailing
+  constant folds into the REG operand instead. Found by harness sweep (10 variants).
+- fneg ordering: name the negated multiplier first (f32 v = -l_HIO.m88) when the
+  target loads/negates before the accumulate target.
+- MWCC stack-slot laws observed: ctor-at-decl pair -> first=HIGH slot; default-declare
+  both then assign -> first=LOW (moveCam exact). Full-function top-decl C89 style
+  matches some fns but NOT assignment-heavy ones (operator= from call results makes
+  +0xC temps that ctor-init would elide... except when it doesn't - cutEatesaFirstProc
+  resisted 3 spellings, PARKED at +0x20 frame; cutSwimProc parked ~21 rows same family).
+- PARKED: cutSwimProc (~21 rows, slot layout), cutEatesaFirstProc (frame +0x20),
+  modeDisappearInit region settling. All logic-complete.
+- REMAINING NOT DECODED: cutProc, cutMiniGameStart, cutMiniGameProc,
+  cutMiniGameReturnProc, plus non-cut: _createHeap tail, checkTgHit, getMsg,
+  next_msgStatus, lookBack, setAttention, setAnm family, setMtx, mode* stragglers,
+  _execute/_draw, createInit/_create/ctor/_delete, XyCheckCB/XyEventCB,
+  debugDraw/hudeDraw, eventOrder/checkOrder, setScale, _nodeControl, jntHitCreateHeap.
