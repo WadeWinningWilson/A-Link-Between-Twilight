@@ -1,11 +1,11 @@
 {
-  "updated": "2026-08-18T07:27:03+00:00",
-  "updated_epoch": 1787038023,
-  "pid": 33024,
+  "updated": "2026-08-18T15:23:54+00:00",
+  "updated_epoch": 1787066634,
+  "pid": 17000,
   "lane": "HOUSING/ENGINE",
-  "passes": 3,
+  "passes": 5,
   "interval_sec": 30,
-  "last_event": "exited-on-event: 2 new/changed row(s)",
-  "note": "delivered",
+  "last_event": "quiet",
+  "note": "running",
   "watches": "CALLS.md HOUSING/ENGINE/ALL LANES, both states"
 }

@@ -12,6 +12,8 @@
 
 ## Open (actionable by this lane)
 
+- [ ] OUTSET BLACK — **SHARPENED, and it CORRECTS my own 'no collision registers' claim.** Boot 082116, probes live: **`cbgw_set` n=3 ret=0 (cBgW::Set SUCCEEDED)** · **`dbgs_regist` n=3 ret=0 (dBgS::Regist SUCCEEDED — ADMITTED to the searchable set)** · **`bgw_ground` 2,700 calls / 274 TRUES / distinct 3** (queries run and HIT) · **`room_set_bgw` = 0**. I conflated two instruments: room_set_bgw is `roomControl::setBgW(room, bgw)` — the ROOM-BINDING call — not the registration. So collision REGISTERS and ANSWERS, but **NO BgW IS EVER BOUND TO A ROOM**. Room derives to -1 because no room owns geometry (DN-1: the player's room is DERIVED from the BG under his feet). The plugin's own note gives the read: 'the ROOM BgW absent from distinct = never reached by the element loop' — distinct=3, so establish WHETHER THE ROOM'S BgW IS ONE OF THOSE THREE. Matches the archive's historical trace exactly (dBgS::Regist ret=0 ADMITTED and ALINK STILL -INF) — same shape, still unresolved. NEXT: who calls roomControl::setBgW on a normal TP room load, and why it never runs for R44_00.
+
 - [~] BLOCKED Fork aurora work-set - 13 files / 995 insertions, uncommitted, patch-file-only. USER'S CALL. The only thing here still losable to a stray command.
 - [~] BLOCKED Route (B) - plugin out of the fork. User said "A, then B ultimately"; structural, not this lane's to trigger.
 

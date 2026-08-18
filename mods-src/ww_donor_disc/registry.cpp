@@ -3096,17 +3096,72 @@ void on_bsDelete(ModContext*, void* args, void* retval, void*) {
 // PROBE SET #30 HANDLERS — all bounded post-warp; every reader keys on
 // s_warpMoment (the warp instant), never the laggy stage flag.
 // ============================================================================
+// ============================================================================
+// PER-ID, NOT ONE SHARED lastRet - AND A FULL CENSUS, NOT TEN FLIP LINES.
+//
+// THE DEFECT THIS REPLACES, because the old output was READ AS A FINDING and
+// published: the first cut compared `rt` against a SINGLE static `lastRet`
+// shared across ALL ids, and capped output at 10 lines. An id returning 1
+// immediately after another id returned 1 therefore NEVER LOGGED. The set of
+// ids that appeared was an artifact of return-value INTERLEAVING, not a census
+// of what was pinned - so "three ids are pinned, whatever is stuck is not one
+// scene" was a claim the instrument could not support in either direction.
+//
+// A census answers "how many are pinned" in one line. A flip stream never can.
+// ============================================================================
 void on_mIsCreating(ModContext*, void* args, void* retval, void*) {
     if (!s_warpMoment) { return; }
-    static int shown = 0; static int lastRet = -99;
+    const unsigned int id = mods::arg<unsigned int>(args, 0);
     const int rt = (retval != nullptr) ? *static_cast<int*>(retval) : -1;
-    if (rt != lastRet && shown < 10) {
-        shown++; lastRet = rt;
+
+    static unsigned int ids[32]; static int lastRet[32]; static int hits[32];
+    static int n = 0; static int calls = 0; static bool overflowed = false;
+    calls++;
+
+    int i = 0;
+    for (; i < n; i++) { if (ids[i] == id) { break; } }
+    if (i == n) {
+        if (n >= 32) {
+            // LOUD, not silent: a dropped id is a hole in the census and the
+            // census is the whole point.
+            if (!overflowed) {
+                overflowed = true;
+                logf(LOG_LEVEL_ERROR,
+                    "[WwRegistry] {\"ev\":\"m_is_creating_overflow\",\"cap\":32,"
+                    "\"reads\":\"more than 32 distinct ids - the census below is "
+                    "TRUNCATED and its counts are a floor, not a total\"}");
+            }
+            return;
+        }
+        ids[n] = id; lastRet[n] = -99; hits[n] = 0; n++;
+    }
+    hits[i]++;
+    const bool flip = (rt != lastRet[i]);
+    lastRet[i] = rt;
+
+    if (flip) {
         logf(LOG_LEVEL_INFO,
-            "[WwRegistry] {\"ev\":\"m_is_creating\",\"id\":%u,\"ret\":%d,"
-            "\"reads\":\"H3: ret=1 pinned for the play scene's id = stuck on the "
-            "creating list though its create completed\"}",
-            mods::arg<unsigned int>(args, 0), rt);
+            "[WwRegistry] {\"ev\":\"m_is_creating\",\"id\":%u,\"ret\":%d,\"hits\":%d,"
+            "\"reads\":\"PER-ID flip. ret=1 pinned for an id whose create completed "
+            "= stuck on the creating list\"}", id, rt, hits[i]);
+    }
+
+    // FULL CENSUS - every id and its CURRENT ret, so 'how many are pinned' is
+    // read off one line instead of inferred from a flip stream.
+    if ((calls % 240) == 0) {
+        char buf[512]; int off = 0; int pinned = 0;
+        for (int k = 0; k < n && off < (int)sizeof(buf) - 24; k++) {
+            if (lastRet[k] == 1) { pinned++; }
+            off += snprintf(buf + off, sizeof(buf) - off, "%s%u:%d",
+                            (k == 0) ? "" : ",", ids[k], lastRet[k]);
+        }
+        buf[sizeof(buf) - 1] = '\0';
+        logf((pinned > 0) ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"m_is_creating_census\",\"ids\":%d,\"pinned\":%d,"
+            "\"calls\":%d,\"map\":\"%s\",\"trunc\":%d,"
+            "\"reads\":\"map is id:lastRet. pinned = COUNT of ids whose last ret was "
+            "1. THIS is the number; the flip lines above are not a census\"}",
+            n, pinned, calls, buf, overflowed ? 1 : 0);
     }
 }
 
@@ -3196,22 +3251,66 @@ void on_ctRqDo(ModContext*, void* args, void* retval, void*) {
     if (!s_warpMoment) { return; }
     void* req = mods::arg<void*>(args, 0);
     const int rt = (retval != nullptr) ? *static_cast<int*>(retval) : -1;
-    static void* reqs[32]; static int lastRt[32]; static int pumps[32]; static int n = 0;
+    // ========================================================================
+    // PUMP COUNTS WERE UNOBSERVABLE BELOW 300, AND THE 33rd REQUEST VANISHED.
+    //
+    // THE DEFECT THIS REPLACES, because its output was read as a finding:
+    // emission was `flip || (pumps % 300) == 0`, and `lastRt` starts at the
+    // sentinel -99 so the FIRST sighting of ANY request always flips and always
+    // logs at `pumps:1`. A request pumped ONCE and a request pumped 250 times
+    // with a stable ret produced the IDENTICAL LINE. So "pumps is not climbing,
+    // many entries each pumped once" described the EMISSION RULE, not the
+    // runtime - and "one stuck entry re-pumped" vs "many entries pumped once"
+    // are different faults with different fixes.
+    //
+    // Fix: a periodic FULL TALLY of every tracked request with its pump count,
+    // plus a LOUD overflow. The tally is the discriminator; the flip line is not.
+    // ========================================================================
+    static void* reqs[32]; static int lastRt[32]; static int pumps[32];
+    static int n = 0; static int calls = 0; static bool overflowed = false;
+    calls++;
     int i = 0;
     for (; i < n; i++) { if (reqs[i] == req) { break; } }
     if (i == n) {
-        if (n >= 32) { return; }
+        if (n >= 32) {
+            if (!overflowed) {
+                overflowed = true;
+                logf(LOG_LEVEL_ERROR,
+                    "[WwRegistry] {\"ev\":\"ctrq_overflow\",\"cap\":32,"
+                    "\"reads\":\"more than 32 distinct requests - the tally below is "
+                    "TRUNCATED. The old build dropped these SILENTLY, which is why a "
+                    "141-request census looked like 32\"}");
+            }
+            return;
+        }
         reqs[n] = req; lastRt[n] = -99; pumps[n] = 0; n++;
     }
     pumps[i]++;
     const bool flip = (rt != lastRt[i]);
     lastRt[i] = rt;
-    if (flip || (pumps[i] % 300) == 0) {
-        logf((pumps[i] >= 300) ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
+    if (flip) {
+        logf(LOG_LEVEL_INFO,
             "[WwRegistry] {\"ev\":\"ctrq_do\",\"req\":\"%p\",\"ret\":%d,\"pumps\":%d,"
-            "\"reads\":\"ret=1 forever + pumps climbing = the wrapper never returns "
-            "COMPLEATE upward; a stuck pid's request pumped 300+ times names the "
-            "wrapper as the wait\"}", req, rt, pumps[i]);
+            "\"reads\":\"a FLIP only. Do NOT read pumps:1 here as 'pumped once' - "
+            "first sighting always flips off the sentinel. Use ctrq_tally\"}",
+            req, rt, pumps[i]);
+    }
+    if ((calls % 240) == 0) {
+        char buf[512]; int off = 0; int maxPumps = 0; int stuck = 0;
+        for (int k = 0; k < n && off < (int)sizeof(buf) - 28; k++) {
+            if (pumps[k] > maxPumps) { maxPumps = pumps[k]; }
+            if (lastRt[k] == 1) { stuck++; }
+            off += snprintf(buf + off, sizeof(buf) - off, "%s%d/%d",
+                            (k == 0) ? "" : ",", pumps[k], lastRt[k]);
+        }
+        buf[sizeof(buf) - 1] = '\0';
+        logf(LOG_LEVEL_ERROR,
+            "[WwRegistry] {\"ev\":\"ctrq_tally\",\"reqs\":%d,\"calls\":%d,"
+            "\"max_pumps\":%d,\"ret1\":%d,\"pumps_ret\":\"%s\",\"trunc\":%d,"
+            "\"reads\":\"THE DISCRIMINATOR. max_pumps HIGH with few reqs = ONE entry "
+            "re-pumped and never completing. max_pumps LOW with many reqs = MANY "
+            "entries each pumped once and abandoned. These are different faults\"}",
+            n, calls, maxPumps, stuck, buf, overflowed ? 1 : 0);
     }
 }
 

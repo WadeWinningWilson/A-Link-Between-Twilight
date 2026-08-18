@@ -1,9 +1,9 @@
 {
-  "updated": "2026-08-18T07:28:31+00:00",
-  "updated_epoch": 1787038111,
-  "pid": 23576,
-  "passes": 1,
+  "updated": "2026-08-18T15:23:53+00:00",
+  "updated_epoch": 1787066633,
+  "pid": 23784,
+  "passes": 0,
   "interval_sec": 50,
-  "last_event": "exited-to-deliver",
-  "note": "1 to-me row(s)"
+  "last_event": "armed",
+  "note": "407 rows (231 open), 0 plate"
 }
