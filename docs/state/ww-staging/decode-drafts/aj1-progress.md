@@ -698,3 +698,45 @@ in the same family as `clrlwi` width telling you `bool` vs `BOOL`.
 SESSION TOTAL for aj1: **12/131 -> 51/131 exact, 2.9112% -> 27.4130%.**
 The `l_HIO` infrastructure is now in place, so `_execute` (transcribed in
 Round 12) needs only the `ActionFunc` ptmf at 0x6F0 before it can be written.
+
+
+## Round 16 - _execute EXACT; the ob1 template supplied everything
+
+**aj1 51/131 -> 53/131 exact, 27.4130% -> 31.0604%.**
+
+Built the infrastructure Round 12 said was needed, and it was all determined
+rather than designed:
+
+- **`ActionFunc` ptmf at 0x6F0.** An MWCC pointer-to-member is 12 bytes, and
+  0x6F0 + 0xC = **0x6FC = `mHomePos`** - the layout closes exactly, which is how
+  I knew the offset was right before compiling anything.
+- **`l_HIO`** - a file-scope `daNpc_Aj1_HIO_c l_HIO;` (the class landed in
+  Round 15).
+- Members `field_0x75e/0x75f/0x761/0x76b`, `mHomePos` @0x6FC, `field_0x708` csXyz.
+
+**`ob1`'s `_execute` supplied the three things I would otherwise have guessed**,
+and its `setParam` call matches my asm's register order verbatim:
+
+    m_jnt.setParam(l_HIO+0x14, +0x16, +0x18, +0x1A, +0xC, +0xE, +0x10, +0x12, +0x1C)
+    if (dComIfGp_event_runCheck() && !eventInfo.checkCommandTalk()) ...
+    (this->*<ptmf>)(NULL);
+
+Two measured corrections: `fopAcM_posMoveF` takes a `const cXyz*`, so the
+`this+0x538` argument is **`mStts.GetCCMoveP()`**, not `&mStts`; and
+`setCollision` takes **(60.0f, 140.0f)** - the target loads two DIFFERENT
+literals (`@5536`/`@5537`) where I had passed one value twice, which showed up
+as a lone `fmr f2, f1`.
+
+**AND THE BYTE-WIDTH SIGNAL PAID AGAIN.** `_create` tests `createInit()` with
+`clrlwi. r0, r3, 24`, so `createInit` returns **`bool`** - I had it as `BOOL`
+since Round 5. Changing it kept `createInit` EXACT and took `_create` from
+10 rows to **7**. That is the third time this session the CALLER's test width
+named the callee's return type. **Check it whenever a boolean test row survives.**
+
+`_create`'s remaining 7 rows are float-pool positions (mine at 0x18-0x24 vs the
+target's 0x40-0xB4) - they settle as more functions contribute literals, exactly
+like `bodyCreateHeap`'s did.
+
+**SESSION TOTAL for aj1: 12/131 -> 53/131 exact, 2.9112% -> 31.0604%.**
+78 functions remain; largest are `_create` (7 rows), `next_msgStatus` 468,
+`call_1` 408, `chk_areaIN` 380, `set_pa_smk` 376, `lookBack` 368.
