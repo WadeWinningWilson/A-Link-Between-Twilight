@@ -1079,3 +1079,16 @@ assign later -- flips MWCC coloring, 7 rows -> 0) was run against p2's three sit
 - VERDICT: p2 mirrors stay parked for the INLINE-BODY lever campaign (regalloc.md,
   ninja baseline/changes discipline). The decl-then-assign lever joins the vocabulary
   for NAMED-local mirrors only.
+
+## Round 20 (2026-08-18): HISTORY'S VERDICT LANDED — the round-16b question is answered at the evidence level
+
+History/Bridge reviewed and RULED (CALLS row, 2026-08-18): upstream zeldaret/tww already
+uses Equivalent for the regalloc defect class THREE times in configure.py —
+J3DMatBlock (# regalloc), d_a_kamome (# fpr regalloc — an Outset NPC in our own queue),
+d_a_npc_people (EquivalentFor E/J/P). Equivalent objects are non-matching-link-only, so
+the label CANNOT break tree SHA verification. History recommends staging p2 as
+Equivalent w/ the 3 fns + 22 rows itemised in the PR body, mirror puzzle kept open.
+ob1: NOT PR-ready, correctly labelled (convergence phase) — no action owed.
+THE DECISION REMAINS THE USER'S (axis A demands SHA; History explicitly did not decide
+shipping). The question to carry forward is now: adopt the upstream Equivalent
+convention for p2, or hold for SHA via the inline-body campaign.
