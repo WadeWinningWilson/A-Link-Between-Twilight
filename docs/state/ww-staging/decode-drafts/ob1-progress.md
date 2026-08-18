@@ -510,3 +510,42 @@ hard bucket - stack-slot allocation order (ob_movPass 11), register colouring
 (nodeOb1Control 11), switch dispatch scan direction (control_anmAtr 6), plus
 next_msgStatus 4, chg_anmAtr 2, _create 2. Do not go looking for another
 include-position sweep here; there is nothing movable to sweep.
+
+## Rounds 22-24 — 109/115 -> 110/115 (99.8736%)
+
+### `_create` EXACT — the ternary folds, the if-form does not
+
+```cpp
+return createInit() ? state : cPhs_ERROR_e;
+```
+
+The donor emits `li r3, ERROR; beq END; mr r3, state` — a merged return.
+`if (!createInit()) { return cPhs_ERROR_e; }` followed by `return state;` does
+NOT fold; it emits an extra branch. Swept: if-form 2 rows, +`break` 2,
+`== false` 2, **ternary 0**.
+
+**⚠ NOT A RULE.** The identical edit applied to `aj1::_create` made it WORSE
+(2 -> 4) and was reverted. This is a per-function shape.
+
+### `ob_movPass` 11 -> 8 — and its sibling wants the OPPOSITE
+
+`cXyz flat;` declared BEFORE the subtraction that feeds it (8 forms swept:
+flat-first 8, delta-as-value 22, `.set()` 12, flat-first+`.set()` 11,
+copy-then-zero 11, init-from-subtraction 14, flat-at-top 8, two-locals 22).
+
+**`ob_clcMovSpd` has the SAME source shape and is exact with the ORIGINAL
+order.** Two functions, same code, opposite arrangement. Do not "fix" the
+sibling to match.
+
+### Two floors confirmed, both swept, neither worth re-running
+
+**`next_msgStatus` 4 rows.** The donor tail-merges the `status =
+fopMsgStts_MSG_ENDS_e` in the 0xa92-group `else` with the one in `default:`,
+placing `li r31, 0x10` ONCE at a shared label; mine emits a per-case copy plus
+a branch. Swept: inverted condition 5, early-break 4, set-then-override 4 —
+baseline 4. Compiler tail-merge layout, not reachable from the source.
+
+**`control_anmAtr` 6 rows.** The donor's dispatch tests `case 3` first
+(`cmpwi 3; beq; bge; b`); mine tests `case 6` first. With exactly two cases
+{3, 6} the midpoint choice differs. Swept: case-6-first 6, explicit `default:`
+6, if/else-if 9 — baseline 6. Switch-dispatch scan order.
