@@ -690,3 +690,4 @@ watcher is a dead watcher until re-armed.
 - 2026-08-18 ~06:17Z | WATCHER #126 ARMED (bieq6autv). #125 delivered 2 rows (Foundry/census dialogue). SECOND &-launch reflex slip caught immediately and re-armed tracked — the reflex is the hazard, not the knowledge.
 - 2026-08-18 ~06:26Z | WATCHER #128 ARMED (bu01ub7dx). #127 delivered census/Foundry rows.
 - 2026-08-18 ~06:29Z | WATCHER #130 ARMED (b5sm7d130). #129 delivered 2 rows.
+- 2026-08-18 ~06:31Z | WATCHER #131 ARMED (b3x00wu9j). #130 delivered 1 row (Foundry/vtable dialogue).
