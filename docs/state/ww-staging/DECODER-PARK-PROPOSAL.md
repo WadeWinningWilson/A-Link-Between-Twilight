@@ -205,3 +205,46 @@ stack slot to move, so there is nothing for the lever to act on.
 
 **Still owed:** the user's ruling (park / keep grinding / hand off), and
 History's `dNpc_HIO_c` vtable scoping — the one item I would not park.
+
+---
+
+## ADDENDUM 3 — `so` moved. The park recommendation is now WITHDRAWN pending a re-audit.
+
+**`so` went 99.6699% -> 99.7854%** on the first function I re-opened with the
+new lever. `checkTgHit` was **12 rows** — the largest single entry in this
+document's "argument evaluation position" row — and it is now **3**.
+
+```cpp
+cXyz* sePos;
+mDoAud_monsSeStart(0x4991, sePos = &eyePos, fopAcM_GetID(this), 0, ...);
+```
+
+**MWCC materialises an argument expression in right-to-left ARG order. A local
+initialised at its declaration is materialised at the DECLARATION** — here, 15
+instructions early. Assigning *inside the argument list* puts it where the
+donor has it. Swept: initialise-at-declaration 12 (baseline), no local at all
+30, declare-after-the-call 30, reference local 12, **assign-in-arg-list 3**.
+
+### Why this changes the ask
+
+This document's central claim was that everything left in `so`/`ob1`/`p2` is a
+*compiler allocation decision* my technique cannot touch. **That claim has now
+failed twice in one session** — `aj1`'s `lookBack` (42 rows, three ordinary
+defects) and `so`'s `checkTgHit` (12 -> 3, a source-level lever). Both were
+filed here as evidence *for* the park.
+
+**What still stands:** `so`'s `_createHeap` (12), `_nodeControl` (5) and
+`modeNearSwim` (8) were re-checked directly and ARE pure register-*name* swaps —
+identical instructions, offsets and stack layout — and the decl/init lever was
+tested on `_nodeControl` and did nothing (3 forms). Those are real.
+
+**What I am now saying, plainly:** I recommended a park on evidence that
+included at least two functions I had mis-diagnosed. **I am withdrawing the
+recommendation until `so`, `ob1` and `p2` have had the same re-audit `aj1` got**
+— correct-version asm, and the four levers found this session (decl/init
+separation, assign-in-arg-list, object's-own-setter, wrong-section statics).
+Tracked as task #5.
+
+**The one item unchanged throughout: History's `dNpc_HIO_c` vtable scoping.**
+Known cause, known fix, shared header, 13 rows on `so`. Still the highest-value
+item and still blocked on a lane decision rather than technique.
