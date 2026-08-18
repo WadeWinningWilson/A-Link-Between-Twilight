@@ -827,3 +827,46 @@ subtraction. Also note `fabsf` must be written `std::fabsf` in this codebase.
 
 STATE: aj1 **55/131 exact, 38.4201%**. Session: 12/131 -> 55/131,
 2.9112% -> 38.4201% (a 13x fuzzy gain).
+
+
+## Round 19 - lookBack 93.09%, talk_1 EXACT; aj1 57/131, 43.1217%
+
+**`talk_1` EXACT.** Its inner jump table has a **deliberate fall-through**:
+case `0x9DA` calls `onEventBit(0x3704)` and then falls into case `0x9C8`'s
+`onEventBit(0x510)` with no `break`. Visible only because `0x9DA`'s body sits
+immediately above `0x9C8`'s and ends without a branch - **read the body
+addresses, not just the table targets.** Case order (from body addresses):
+`0x9DA, 0x9C8, 0x9DD, {0x9D1,0x9D2,0x9D3}, 0x9D7`.
+
+**`lookBack` 93.09%** - fully decoded (`dNpc_playerEyePos(-20.0f)`, 4-case
+dispatch on `field_0x7bd`, `m_jnt.lookAtTarget(...)`), but its 42 remaining rows
+are **register colouring** (`this` gets r28 in the donor, r31 in mine). I tried
+the `p1` oracle's declare-locals-up-front arrangement: **42 -> 45 rows, WORSE.**
+Reverted. That is now consistent with the `so` result - declaration placement is
+not the colouring lever on any TU I have tested.
+
+### THE TYPE-SIGNAL BANK (everything that HAS worked on this TU)
+
+Every win here came from reading a TYPE or a SHAPE off the diff. Collected so
+the next instance starts with the list rather than rediscovering it:
+
+| diff symptom | what it means |
+|---|---|
+| `clrlwi. rX, rY, 24` testing a result | callee returns **`bool`** (byte), not `BOOL` |
+| extra `clrlwi` on YOUR return only | your local is `bool` where the donor's is **`int`** |
+| `clrlwi rX, rY, 16` at a CALL SITE | callee returns **`int`**, truncated to u16 by the param |
+| `extsb.` / `cmpwi` vs your `cmplwi` | the field is **`s8`**, not `u8` |
+| unexpected `extsb` before a call arg | field signedness ≠ parameter signedness |
+| `cntlzw` around a bool test | source wrote **`== false`**, not `!x` |
+| `memcpy` where you emit field stores | the copy was written as an explicit **`memcpy` call** (NOT necessarily an array - check the READ sites for the member's real type) |
+| bodies right, order wrong | flip **which side of the condition is the then-branch** |
+| jump-table case bodies out of order | source case order = **body ADDRESS order**, not numeric |
+| `lwz` of a global repeated per use | the donor **re-calls the accessor**; do not hoist it into a local |
+
+**AND THE ONE THAT NEVER WORKS:** register colouring. ~15 measured attempts
+across `so`, `ob1`, `p2` and now `aj1`, zero successes. Declaration order,
+aliasing, local hoisting, type changes - all tried, all null. **Treat a
+colouring-only diff as a park candidate, not a puzzle.**
+
+STATE: aj1 **57/131 exact, 43.1217%**. Session: 12/131 -> 57/131,
+2.9112% -> 43.1217% (14.8x fuzzy).
