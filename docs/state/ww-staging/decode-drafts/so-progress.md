@@ -274,3 +274,19 @@ sibling actors for the idiom (the anchor round-27 instruction, executed same con
   _createHeap tail, HIO ctor, XyEventCB, getArg tail, jntHitCreateHeap tail.
 - Monitors at close: timer b15aguq92 alive; watcher #117 (b9d14osfs) armed 303-row
   baseline. Re-arm IMMEDIATELY on delivery; CHECK NEWEST WATCHER OUTPUT each tick.
+
+## Round 30 (this context's true tail): modeProc structurally exact + checkTgHit parked
+
+- modeProc: 16-entry fn-local static ptmf table {init ptmf, proc ptmf, int field_0x18}
+  (the UNCOPIED third int pads stride 0x18->0x1C; MWCC lazy-copies only initialized
+  ptmf members under an init$ guard). All 102 remaining rows = .data placement
+  settling, ZERO shape mismatches. Table order: Wait Hide Jump Swim NearSwim
+  EventFirstWait EventFirst EventFirstEnd EventEsa EventMapopen EventBow Talk
+  Disappear Debug GetRupee EventTriForce.
+- checkTgHit: BOOL (header said void); parked ~15 ordering rows; sePos hoist
+  recovered the eyePos-addr reg cache (35->15). m6D8 cooldown int; l_HIO m7C.
+- History verdicts round: p2 = upstream Equivalent precedent x3 (p2-progress round 20),
+  ob1 = convergence/correct. Receipt row filed. USER still owns the p2 ruling.
+- Watchers cycled to #122 (bnx4hf2ro). One &-launch near-miss self-caught.
+- NEXT: next_msgStatus, cutProc, cutMiniGameStart/Proc/ReturnProc, _execute, _draw,
+  create chain, HIO ctor, XyEventCB, then REL SHA gate (Matching temp-flip + tc canary).
