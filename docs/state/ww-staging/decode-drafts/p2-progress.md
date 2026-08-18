@@ -1249,3 +1249,29 @@ two sequences by size-signature, and the first divergence names the pair.
 LESSON REPEATED (third time this session): I diagnosed from a symptom (+8) and
 asserted a cause (extra slots) without measuring the population. The measurement
 took one objdump call and falsified it.
+
+
+## Round 29 - pools verified ALIGNED (evidence for the pending ruling)
+
+Ran the alignment walks against p2 while the SHA-vs-Equivalent ruling is still
+outstanding, specifically to test whether the remaining rows might be a
+placement artifact after all (they were on `so`, spectacularly).
+
+    STRINGS: target 49 | mine 49  -> ALIGN
+    RODATA : aligns 70/71 objects; first divergence 0x01D4
+
+The lone divergence is the string pool's position relative to the float table,
+and no remaining p2 function carries a rodata-offset row.
+
+The walk was run with a GENERIC instrument (scratch `pools.py <tu>`) so it can
+be pointed at any TU: it parses the target `.s` for the `@stringBase0` contents
+and the `.rodata` object list, dumps mine with `objdump -s/-t`, and reports the
+first divergence by VALUE.
+
+**WHAT THIS MEANS FOR THE RULING:** p2's remaining 13 fns / 99 rows are NOT
+hiding a placement root cause. They are what they were reported as - largely
+register-mirror differences (74 of the 99). **That strengthens the case for
+parking them as §2b Equivalent with written reasons rather than continuing to
+chase SHA**, but the call is the user's and I am not taking it. Recorded here
+so the ruling can be made against measured evidence instead of an assumption
+that "there might still be an easy win in there".

@@ -484,3 +484,29 @@ configure.py changed, 1 line). **An assumption I carried for a whole campaign
 cost one command to falsify.**
 
 STATE unchanged by this round: ob1 **109/115 exact, 99.8324%**, 6 fns / 36 rows.
+
+
+## Round 21 - NEGATIVE RESULT: ob1's pools are already aligned
+
+After the `so` campaign, where four placement root causes were worth ~36 exact
+functions, I ran the same alignment walks against ob1 expecting the same well.
+**It is dry, and that is the useful finding.**
+
+    STRINGS: target 13 | mine 13  -> ALIGN
+    RODATA : aligns 22/23 objects; first divergence 0x0090
+
+The single rodata divergence is only the position of the string pool relative
+to one data table (target has a data object at 0x90, mine starts the strings
+there) - and crucially **none of ob1's six remaining functions has a
+rodata-offset row in its diff.** So this misplacement is costing ZERO rows.
+
+The walk was run with a GENERIC instrument (scratch `pools.py <tu>`) so it can
+be pointed at any TU: it parses the target `.s` for the `@stringBase0` contents
+and the `.rodata` object list, dumps mine with `objdump -s/-t`, and reports the
+first divergence by VALUE.
+
+**CONCLUSION: ob1 has no placement lever left.** Its remaining 36 rows are the
+hard bucket - stack-slot allocation order (ob_movPass 11), register colouring
+(nodeOb1Control 11), switch dispatch scan direction (control_anmAtr 6), plus
+next_msgStatus 4, chg_anmAtr 2, _create 2. Do not go looking for another
+include-position sweep here; there is nothing movable to sweep.
