@@ -406,3 +406,45 @@ diagnosed.
 
 NEXT: `privateCut` (its `a_cut_tbl` static owns the eight cut names at +0x2D)
 - writing it should close most of `bodyCreateHeap`'s 10 rows as a side effect.
+
+
+## Round 9 - the predicted cascade fired: two functions exact from one write
+
+**aj1 14/131 -> 17/131 exact, 11.9351% -> 16.1645%.**
+
+    privateCut       100.00%  EXACT (first try)
+    wait_action2     100.00%  EXACT
+    bodyCreateHeap   100.00%  EXACT  <- closed by wait_action2, not by editing it
+
+**`privateCut` was exact on the FIRST attempt** because the shape transferred
+directly from `ob1`: the action-result is a `switch` with a `default: ret = true;`
+arm, not a ternary - the same correction that made `ob1`'s `privateCut` exact
+earlier this session. Two 8-way jump tables (init + move), `a_cut_tbl` as a
+function-local static owning the eight cut names, `cut_move_*` returning `bool`.
+
+**THE CASCADE, exactly as Round 8 predicted.** After `privateCut`,
+`bodyCreateHeap`'s residual offsets went from ~0x3D low to **exactly 8 low** -
+and 8 bytes is precisely `"Ojhous2 "`. The Round 4 map named `wait_action2` as
+its only user. Writing `wait_action2` closed all 9 rows **without touching
+`bodyCreateHeap` at all**, taking it to EXACT. One more datum for the principle
+that has driven this entire session: **fix the placement root cause and every
+consumer settles at once; chasing the consumer's rows is the wrong order.**
+
+`init_texPttrnAnm` also improved on the way: `bodyCreateHeap` tests its result
+with `clrlwi. r0, r3, 24` - a BYTE - so it returns **`bool`**, not the `BOOL` I
+had settled on in Round 6. That fixed one row here at no cost there (it stays at
+2 rows either way). **The caller's test width is the reliable evidence for a
+callee's return type** - better than reasoning about the callee alone, which is
+where I went wrong twice.
+
+MEMBERS this round: `field_0x764` (int), `field_0x768` (u8) - **note these sit
+inside the 0x75C block, NOT the 0x6F0 one**; I mis-seated them first and got
+`illegal constant expression` from a negative array size, which is the cheap
+way that mistake announces itself. Also `field_0x7ba`, `field_0x7bb`,
+`field_0x7c0`, and `m_hed/bbone/hnd_L/fot_L_jnt_num` at 0x6CC-0x6CF.
+
+SESSION TOTAL for aj1: **12/131 -> 17/131 exact, 2.9112% -> 16.1645%.**
+Five functions written, four of them byte-exact.
+
+NEXT: `_create` (596 bytes) and `_execute` (552) are the largest remaining;
+`call_1` (408) and `chk_areaIN` (380) after that.
