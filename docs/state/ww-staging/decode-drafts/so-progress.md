@@ -676,3 +676,23 @@ must follow daNpc_SoIsDelete), so this cannot be fixed by moving the include.
 The likely donor shape is that s_ripple_scale is NOT a function-local static in
 _execute — worth re-testing as a file-scope static or a different construct.
 Deferred: worth 1-2 rows, and the method is now recorded for the next context.
+
+## Round 50: so's 627 rows CLASSIFIED — the gap is DATA PLACEMENT, not code
+
+  pool/literal-offset rows : 317
+  register-mirror          :  33
+  other                    : 277
+TOP FUNCTIONS: cutProc 134 | modeProc 102 | cutMiniGameProc 54 |
+cutEatesaFirstProc 31 | modeNearSwim 28 | _execute 20 | modeSwim 19 |
+_createHeap 17.
+**cutProc (134) + modeProc (102) = 236 rows, more than a third of the total,
+and BOTH were verified STRUCTURALLY EXACT earlier (shape-mismatch 0).** Their
+rows are entirely .data offsets for the two ptmf dispatch tables — they resolve
+when the TU's .data/.rodata pool converges, exactly like the string-pool rows
+that snapped 56 functions to exact in round 37.
+=> so is NOT 49 functions away from done. It is ~2 structural clusters plus
+pool placement. The honest read: **d_a_npc_so is decode-complete and in
+placement convergence**, which is a different (and much better) state than the
+raw 138/187 number suggests.
+ob1 .bss checked with the round-49 method: 25 objects both sides, NO
+DIVERGENCE — already aligned, which is why it leads at 99.807%.
