@@ -101,3 +101,4 @@ spec that both p2 and ob1's endgames await.
 - Round 3: search/glue/getArg batch 100% (~27/187). getArg lesson: s16 == 0xFFFF spells addis+cmplwi directly. m6D0 = home.angle.x (angle-packed arg).
 - Round 4: tag-search pair + CB glues 100% (23/187 exact + 4 settling). Members: mA79 u8 (tag id), mA7C f32 (radius), mA80 cXyz (tag pos), mB90/94/98 f32 + mB9C s16 + mBAE u8 (minigame tag snapshot). daTag_So_c attested. Real-vs-comment offsets in 0xA74-0xBE4 now oracle-verified at 6 points.
 - Round 5: mode-init batch 7/7 first-compile (~30/187). mA90 int, mBDB u8.
+- Round 6: 4 event-mode inits + XyEventCB 100% (~35/187). PARKED: XyCheckCB needs the gameInfo+0x5cc8 (bit 0x10000... rlwinm 15,15) and +0x5bd3[i] accessors — no matched-TU spelling found (gy also Nonmatching); hunt the dComIfGp XY/tact accessor family in d_com_inf_game.h by offset math (event mgr base 0x52cc region) next session. m6D3 u8 also needed (esa-state == 2 gate).
