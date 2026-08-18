@@ -744,3 +744,20 @@ acting on it. Corollary: the SQRTF_CONST_LITERALS hypothesis was falsified twice
 over — the flag did nothing AND there was nothing to fix.
 STILL TRUE AND VALUABLE from round 51: sph_offset/cyl_offset_A really were
 missing dead statics, and adding them took so 138 -> 139 exact / 99.585%.
+
+## Round 53: THE DEAD-STATIC FIX CASCADED — 627 rows -> 392, modeProc EXACT
+
+Adding the donor's two unreferenced statics (round 51) did far more than the
++1 exact function it showed at the time. Re-measured after the .data realigned:
+  **modeProc: 102 rows -> 0 (EXACT)**
+  **cutProc:  134 rows -> 1** (one string-pool row, addi 0x13f vs 0x1a9)
+  TOTAL so diff rows: **627 -> 392**
+Both ptmf dispatch tables were structurally exact all along; their 236 rows were
+purely .data placement, and placing sph_offset/cyl_offset_A correctly shifted
+the whole section into the donor's layout. This is the SAME cascade shape as
+round 37 (the create chain collapsing the string pool and snapping 56 functions
+to exact) — **fixing a placement root cause pays out across every consumer at
+once, which is why per-function row-chasing is the wrong order of work.**
+CURRENT TOP ROWS: cutMiniGameProc 54 | cutEatesaFirstProc 31 | modeNearSwim 28 |
+_execute 20 | modeSwim 19 | _createHeap 17 | checkTgHit 17 | createInit 12.
+so: 139/187 exact, fuzzy 99.585%.
