@@ -172,3 +172,13 @@ spec that both p2 and ob1's endgames await.
   GetRupee, Jump, Swim, NearSwim, Wait, Talk, Debug, TriForce, FirstWait...), modeProc,
   eventOrder/checkOrder, setScale, _execute/_draw, createInit/getArg tail/_create/ctor,
   _createHeap tail, jntHitCreateHeap tail, _nodeControl, XyEventCB, HIO ctor.
+
+## Round 22: modeEventBow/modeGetRupee string-pool-only; modeJump EXACT; sqrtf lesson
+
+- std::sqrtf carries its OWN (x > 0.0f) guard inside the inline: NEVER wrap it in a
+  source-level if - the wrap emits a duplicate ble (modeJump 1-row residue). Plain
+  call matches. (Retro-applied to both parked fns; they shrank but stay layout-parked.)
+- const cXyz& binding on operator- results avoids the +0xC temp copy (modeJump frame
+  0x40->0x30 exact).
+- modeEventBow/GetRupee: sibling-copy from modeEventMapopen + the resolved accessors;
+  eventBit 0x3a10; talk(1)==0x12; player(0) mDemo TYPE_SYSTEM/DEMO_N_WAIT in GetRupee.
