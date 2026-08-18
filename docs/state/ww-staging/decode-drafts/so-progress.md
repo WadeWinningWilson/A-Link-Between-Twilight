@@ -151,3 +151,24 @@ spec that both p2 and ob1's endgames await.
   next_msgStatus, lookBack, setAttention, setAnm family, setMtx, mode* stragglers,
   _execute/_draw, createInit/_create/ctor/_delete, XyCheckCB/XyEventCB,
   debugDraw/hudeDraw, eventOrder/checkOrder, setScale, _nodeControl, jntHitCreateHeap.
+
+## Round 21 (session close): 72/187 exact, fuzzy 38.36% (was 40/11.66% at session start)
+
+- cutMiniGameWarpProc EXACT (PlTurnProc sibling verbatim).
+- cutJumpMapopenProc pool-only (3-stage mBBC machine; f32 v = -HIO fneg-first lever).
+- setAttention + debugDraw EXACT (attention_info.position=mB60 water-clamped, eyePos=mB54;
+  debugDraw = NDEBUG-stripped dead stores). hudeDraw parked 5 rows (MTXCopy arg order).
+- XyCheckCB + _delete EXACT. THE CAMERA-FAMILY PARK ACCESSOR HUNT IS CLOSED:
+  0x5cc8 = dComIfGp_checkPlayerStatus0(0, 0x10000)
+  0x5bd3 = dComIfGp_getSelectItem(i)   (mSelectItem BASE is 0x5bd3; 0x82 = bait)
+  0x5cda/0x5cd8/0x5cde = play.getMiniGameType() / endMiniGame(8) inline (^=0x80 + result=0)
+  0x4951(play) = mFmapOpen (=2 written direct).
+  => modeEventBow / modeGetRupee else-arm remain writable with these + initCam/moveCam (both decoded).
+- mPhs = request_of_phase_process_class at REAL 0x844 (header comment drift -4 in that
+  region; m84C/m850 real offsets verified by asm). m_arc_name[] = "So".
+- cutEatesaFirstProc PARKED at frame +0x20 (logic complete; 3 decl spellings falsified).
+- REMAINING: cutProc, cutMiniGameStart/Proc, cutMiniGameReturnProc, checkTgHit, getMsg,
+  next_msgStatus, lookBack, setAnm/setAnmSwimSpeed/setMtx, mode* stragglers (Bow,
+  GetRupee, Jump, Swim, NearSwim, Wait, Talk, Debug, TriForce, FirstWait...), modeProc,
+  eventOrder/checkOrder, setScale, _execute/_draw, createInit/getArg tail/_create/ctor,
+  _createHeap tail, jntHitCreateHeap tail, _nodeControl, XyEventCB, HIO ctor.

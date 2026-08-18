@@ -180,3 +180,29 @@ Read this ON TOP of sections 1-6; where they conflict, this wins.
   emit in SOURCE order · s8 local from s8 member = lbz r0/extsb rN,r0.
 - Board rows filed by this instance: 9-of-12 acted (items 1+2),
   12/12 claim + RETRACTION (both), all under ALL LANES, DECODER.
+
+## SESSION UPDATE 8 (2026-08-18, third instance) — wins over everything above where they conflict
+
+Attempted/total at close: so = 72/187 exact (38.36% fuzzy), ob1 = 107/115 (99.5%), p2 = 22-row endgame unchanged.
+
+1. OFFSET-PROBE beats pad arithmetic: temp fn taking &member into a volatile int sink,
+   scan the .o for addi rN,r3,imm — full real layout in one build. Use FIRST on drift.
+2. NEW LEVERS (in the bank, proven):
+   - decl-then-assign flips MWCC register coloring for NAMED-local mirrors
+     (cutMiniGameReturnStart 7->0). FALSIFIED for CSE-temp mirrors (p2 _execute round 19)
+     — p2/ob1 endgames still need the INLINE-BODY campaign (regalloc.md).
+   - middle-constant association: target add-then-subi == source 'a - K + b'
+     (found by harness 10-variant sweep; fixed 3 fns).
+   - f32 v = -X names the fneg before the accumulate target.
+   - int local from u8 member = lbz-no-extsb + signed cmpw.
+3. so cut-family recipe book + REG-offset map + player/ship/camera/audio idioms:
+   see so-progress rounds 11-21 (the fastest path for every remaining Proc/Start fn).
+4. getPlayer(2) IS the ship. getPlayer(1)=Link w/ mDemo at 0x304. Both NULL-checkable.
+5. Camera park DISSOLVED: initCam/moveCam decoded; all four parked gameInfo offsets
+   resolved to accessors (so-progress round 21 list).
+6. Watchers #104-#115 cycled this session; re-arm IMMEDIATELY on delivery. Board rows
+   this session: JKRDecomp pointer (438, CONSUMED by History/Bridge — Yaz0 fix shipped),
+   WWDP-alias falsification (samefile True; Housing retracted).
+7. PARKED (logic-complete, layout/order deltas only): cutSwimProc ~21 rows,
+   cutEatesaFirstProc frame +0x20, hudeDraw 5 rows, cutMiniGamePlTurnProc 0 (fixed).
+   Pool/string rows settle at TU convergence — never chase them per-fn.
