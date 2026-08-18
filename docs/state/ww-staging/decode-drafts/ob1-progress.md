@@ -549,3 +549,42 @@ baseline 4. Compiler tail-merge layout, not reachable from the source.
 (`cmpwi 3; beq; bge; b`); mine tests `case 6` first. With exactly two cases
 {3, 6} the midpoint choice differs. Swept: case-6-first 6, explicit `default:`
 6, if/else-if 9 — baseline 6. Switch-dispatch scan order.
+
+## Round 25 — `nodeOb1Control` 11 rows -> EXACT. It was a TYPE, not the allocator.
+
+```cpp
+int jntNo = ((J3DJoint*)i_node)->getJntNo();   // I had u16
+```
+
+**The entire 11-row residual read as allocation noise:** identical instructions,
+identical offsets, r29/r30 exchanged throughout, plus one symbol rendered as a
+section reference instead of a named object. Every surface feature of the
+"register colouring" bucket. **One local's type fixed all of it.**
+
+Swept: `u16` 11 (baseline), jntNo-declared-before-the-static 19, `s16` 18,
+**`int` 0**.
+
+### ⚠ This corrects something I asserted earlier today
+
+I reported `so`'s `_createHeap` (12), `_nodeControl` (5) and `modeNearSwim` (8)
+as **confirmed** register-name colouring, on the grounds that their instructions
+and offsets are identical and only register names differ. **`nodeOb1Control` had
+exactly that signature and was fixable from the source.**
+
+What I actually confirmed was *"the diff is register names"* — which is an
+observation — not *"the cause is the allocator"*, which is a conclusion I did
+not earn. The two are not the same claim and I should not have run them
+together.
+
+Re-opened and re-swept since:
+- `so::modeNearSwim` — the declaration/initialisation split tested three ways
+  (player-declared-at-top 8, both-at-top 9, ship-declared-then-assigned 8)
+  against a baseline of 8. **Still resists**, now for a better reason.
+- `so::_createHeap` — the registers there hold API-typed pointers
+  (`J3DModelData*`, `J3DAnmTexPattern*`, and a `dRes_info_c*` hoisted out of
+  three `getRes` calls), so there is no free type to correct. Genuinely
+  different from the `jntNo` case.
+
+**The transferable rule: a register-swap diff is a SYMPTOM, not a diagnosis.
+Check every local's type before calling it allocator residue** — especially a
+narrow type (`u16`/`s16`) where the donor may have used `int`.
