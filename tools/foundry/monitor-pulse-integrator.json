@@ -1,1 +1,10 @@
-{"lane": "INTEGRATOR", "ts": 1787013111.0478656}
+{
+  "lane": "INTEGRATOR",
+  "kind": "work-continuation-timer",
+  "ts": "2026-08-18T06:01:05Z",
+  "pid": 25544,
+  "interval_s": 180,
+  "tick": 8,
+  "state": "EMPTY-DISARMED",
+  "top": null
+}

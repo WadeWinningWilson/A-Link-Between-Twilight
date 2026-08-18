@@ -1293,3 +1293,70 @@ next lane does not re-sweep it.
 The literal-pool rows are **convergent, not stuck**: the pool base offsets differ
 only because ~14 functions are still unwritten. They should be re-measured after
 the TU is complete rather than chased now.
+
+## Rounds 49-53 — 99.4845% -> 99.6653% (125/131 exact)
+
+### ⚠ CORRECTION TO §Rounds 41-48 AND TO CALLS ROW 443
+
+I wrote that the literal-pool residuals were *"convergent, not stuck — they
+resolve as the TU fills."* **That was wrong, and the giveaway was in the data I
+had already printed.**
+
+They were ONE fixable defect. `static int a_res_id_tbl[]` lands in **`.data`**;
+the donor's is `static const int`, which lands in **`.rodata`**. Those two
+tables are 0x24 + 0x4 = **0x28** bytes, so their absence shifted every float
+constant after them by exactly 0x28.
+
+**One `const` keyword took six functions to exact at once**: `bckResID`,
+`btpResID`, `chk_areaIN`, `cut_move_VIVRATE`, `setSmoke`, `shadowDraw`, plus
+`set_pa_smk` and `set_pa_don`.
+
+**The rule I should have applied:** a **CONSTANT** offset delta (+0x28) shared
+across unrelated functions is a **MISSING POOL OBJECT**. A **VARYING** delta is
+scheduling. I had four functions all showing +0x28 and read them as four
+independent residuals.
+
+**Diagnostic that finds it in one command:** `objdump -t` the `.o` and compare
+each static's **SECTION** against the target's `# .rodata:0xNN` / `# .data:0xNN`
+comments. A static in the wrong *section* is invisible in a per-function
+instruction diff — it only shows as an offset shift somewhere else entirely.
+Cross-checked all four TUs after the fix: **so / ob1 / p2 / aj1 all CLEAN.**
+
+### One more signal
+
+**Implicit `int` -> `bool` on return emits `subfe` + `clrlwi`; an explicit
+`!= 0` emits `subfe` alone.** If your return carries one extra `clrlwi` the
+donor does not, write the comparison explicitly. (`init_texPttrnAnm`: implicit
+with `return false` 2 rows, `return 0` 2, `return FALSE` 2, explicit `!= 0` **0**.)
+
+### The six remaining, with reasons
+
+| fn | rows | class | swept |
+|---|---|---|---|
+| `setMtx` | 8 | argument-evaluation position | — |
+| `_nodeCB_BackBone` | 4 | argument-evaluation position | 4 forms |
+| `setAnm_anm` | 3 | inverted branch, **two variables** | 4 forms |
+| `_create` | 6 | 4 pool (see below) + 2 inverted branch | — |
+| `ctrlAnmAtr` | 2 | branch shape (doubled `b`) | explicit `default:` |
+| `chngAnmAtr` | 2 | inverted **RANGE** branch | 6 forms |
+
+**`_create`'s pool rows are a NAMED OPEN ITEM, not a mystery.** The target's
+`.rodata` carries three GXColor constants mine does not:
+`0xFF000080` {255,0,0,128}, `0x0000FF80` {0,0,255,128}, `0xFFFF0080`
+{255,255,0,128}, at 0x94/0x98/0x9C — a 0xC shift that lands on `_create`.
+By pool-ID order (@5473/@5475/@5477, immediately after `shadowDraw`'s
+@5459-@5461) they belong to **`_draw`**, which already carries the tell-tale
+dead block:
+
+```cpp
+if (l_HIO.mPrm.field_0x18 != 0) {
+    cXyz sp8 = current.pos;
+    sp8.y = eyePos.y;      // computed, then used by nothing
+}
+```
+
+That is a debug-draw block with its `dDbVw_` calls removed. **`_draw` is already
+EXACT**, so I am NOT authoring speculative debug calls to force the constants —
+that would be inventing donor code to chase 4 rows. **This is the same class as
+`so`'s 14 unreferenced GXColor constants (56 bytes): a real, understood,
+second data point on one pattern, not two separate puzzles.**
