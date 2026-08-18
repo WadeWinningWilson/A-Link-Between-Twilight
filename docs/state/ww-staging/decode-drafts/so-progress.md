@@ -524,10 +524,12 @@ Object-level TU status this build: tc 100.00%, p2 99.94%, ob1 99.50%, so 99.37%.
   monsSeStart call (12 -> 30; the sePos hoist IS correct).
 - cutMiniGameProc 12 -> 11 after restoring bool checkTgHit. Falsified and
   reverted: inverting the collision-sphere if/else arms (12 -> 28).
-- **REVERT HAZARD (cost one silent loss):**  to undo a
+- **REVERT HAZARD (cost one silent loss):** a "git checkout <file>" to undo a
   bad edit ALSO reverts every unrelated good fix made to that file in the same
   uncommitted window. The bool checkTgHit fix was lost that way after the mAF8
   rollback and only resurfaced because the oracle showed cmpwi where the target
   had clrlwi. RULE: before reverting a file, diff it and re-apply the keepers —
   or commit good fixes before attempting a risky one.
 - Gate: 137/187 exact, fuzzy 99.40%.
+  (This very entry was ALSO eaten by the shell on first write — backticks inside
+  an unquoted heredoc EXECUTE and vanish. Re-read every artifact after writing.)
