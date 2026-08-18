@@ -305,3 +305,17 @@ whatever order the target's bodies appear, NOT in numeric order.
   then eventBit 0x3a10 picks 0x32DC vs 0x32D8.
 - Rupee payout: dComIfGp_setItemRupeeCount(mB7C * 10).
 - so now 77/187 exact, FUZZY 63.36%.
+
+## Round 32: cutProc structurally exact — the STATIC-GUARD-PLACEMENT lesson
+
+cutProc = 21-action dispatcher (getMyStaffId("NpcSo") -> mB6C; getMyActIdx over
+a_cut_name_tbl[21]; getIsAddvance gates Start; Proc always). ptmf stride 0x18
+(2 ptmfs, NO pad — modeProc's 0x1C came from its uncopied third int).
+LESSON (new, high value): MWCC emits a function-local static's LAZY-INIT GUARD
+AT THE DECLARATION POINT, not at first use. Declaring the ptmf table at function
+top emitted the entire guarded copy BEFORE getMyStaffId (42 shape mismatches on
+an otherwise length-identical fn); moving the declaration inside the
+'if (mB6C != -1)' block reproduced the target placement exactly -> 0 shape
+mismatches, all remaining rows are .data offsets. WHEN A GUARDED COPY LANDS IN
+THE WRONG PLACE, MOVE THE DECLARATION, not the use.
+so: 77/187 exact, fuzzy 67.26%.
