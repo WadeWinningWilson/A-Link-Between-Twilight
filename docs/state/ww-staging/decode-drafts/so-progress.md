@@ -182,3 +182,19 @@ spec that both p2 and ob1's endgames await.
   0x40->0x30 exact).
 - modeEventBow/GetRupee: sibling-copy from modeEventMapopen + the resolved accessors;
   eventBit 0x3a10; talk(1)==0x12; player(0) mDemo TYPE_SYSTEM/DEMO_N_WAIT in GetRupee.
+
+## Round 23 (final this context): setMtx/checkOrder/setScale/eventOrder + three lessons
+
+- setMtx EXACT: setBaseScale + transS/ZXYrotM/transM(0,mB34,0) + MTXCopy(get(), baseTR).
+- checkOrder EXACT: dComIfGp_event_chkTalkXY() == the 1/2/3 mTalkButton chain (0x52b8).
+- setScale real-0: chained 'scale.z = scale.y = scale.x = mB08' loads the member ONCE
+  (per-component re-reads = extra lfs rows). l_HIO m44/m48/m4C; int m6CC (==15 gate).
+- eventOrder decode-complete: fn-local static char* tbl[6] (SO_1ST_MEET..TRIFORCE_CHECK,
+  indexed [mB70-3]); RANGE-FOLD lesson: a cached u8 local lets MWCC fold ==5||==4||==6
+  into (x-4)<=1 -- per-clause MEMBER RE-READS block the fold (CSE still lands one lbz).
+  Switch spelling is WORSE here (jump table).
+- modeJump EXACT + std::sqrtf INTERNAL-GUARD lesson (round 22) retro-applies everywhere.
+- Next context: modeSwim/modeNearSwim/modeWait/modeTalk stragglers, lookBack, setAnm
+  family, getMsg/next_msgStatus, checkTgHit, cutProc/cutMiniGame* bigs, create chain,
+  _execute/_draw, then REL-link SHA gate (temp-flip Matching + tc canary + tools/
+  decoder .bat hygiene).
