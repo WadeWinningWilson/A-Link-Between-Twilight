@@ -198,3 +198,14 @@ spec that both p2 and ob1's endgames await.
   family, getMsg/next_msgStatus, checkTgHit, cutProc/cutMiniGame* bigs, create chain,
   _execute/_draw, then REL-link SHA gate (temp-flip Matching + tc canary + tools/
   decoder .bat hygiene).
+
+## Round 24: eventOrder + setAnm decode-complete; m_heapsize defined
+
+- eventOrder: fn-local static tbl; RANGE-FOLD blocked by per-clause member re-reads.
+- setAnm: dLib_bcks_setAnm w/ fn-local static tables (bcks {9,6,7,5,8}; prm[6]
+  {i,-1,0,8.0f,1.0f,EMode_LOOP} for i in 0,0,1,2,3,4); m84C->getFrame() >=
+  getEndFrame()-1.0f gate; rnd 5<->3 swap vs l_HIO.m5C. m6D2/m6D3/m6D4 = the
+  bckIdx/prmIdx/oldPrmIdx trio.
+- m_heapsize = 0x1C00 (const u32 class static, rodata anchor at +0; m_arc_name at +4).
+- Standing counts: 75/187 exact + eventOrder/setAnm/modeEventBow/modeGetRupee/
+  cutJumpMapopenProc/WarpStart etc. at settling-rows-only. Fuzzy 44%+.
