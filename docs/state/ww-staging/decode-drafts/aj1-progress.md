@@ -1162,3 +1162,58 @@ existed, and this closes the loop.
 
 STATE: aj1 **79/131 exact, 79.3437%**. Session: **12/131 -> 79/131,
 2.9112% -> 79.3437%** (27.3x fuzzy). 52 remain.
+
+
+## Rounds 36-40 - aj1 79/131 -> 89/131, 79.34% -> 88.12%
+
+EXACT: `eventOrder`, `getMsg_AJ1_1`, `play_texPttrnAnm`, `init_AJ1_2`,
+`decideType`, `getMsg`, `setAnm_NUM`, `setAnm`, `setAnm_ATR`, `chkAttention`.
+Near: `set_pa_pun` 7 rows / `set_pa_aka` 9 (argument evaluation order),
+`cut_move_VIVRATE` 3, `set_pa_smk` 9 (pool churn).
+
+### ⭐ A pointer-to-member constant is identified by its THIRD word
+
+`@4240`, `@4269` and `@4284` all read `0x00000000 / 0xFFFFFFFF` in their first
+two words (the delta and vtable-offset fields). **The function is word three:**
+
+    @4240 -> wait_action1
+    @4269 -> wait_action2
+    @4284 -> wait_action2      <- init_AJ1_2 binds wait_action2, NOT wait_action1
+
+Without reading word three I would have had to guess between two plausible
+actions. `init_AJ1_2` also needed `eventInfo.mpCheckCB` (+0x10), whose
+`CallbackFunc` returns **`s16`** - the compile error was itself the signal.
+
+### ⭐ A struct derived from ONE consumer is provisional
+
+I defined `anm_prm_c` from `setAnm_anm`, which touches only +0x0, +0x4, +0x8,
++0xC. `setAnm_NUM` then reads **+0x1** (`lbz r4, 0x1(r4)`) - a second `s8`, the
+btp index. **Re-open a struct definition when a new consumer appears; the first
+one only shows you the fields it happens to use.**
+
+Three `a_anm_prm_tbl` variants recovered, all 0x10-byte entries:
+`setAnm_NUM` 9 entries, `setAnm` 5 (indexed by `field_0x7bb`, with `{-1,-1,...}`
+sentinel rows), `setAnm_ATR` 9 (indexed by `field_0x7b6`).
+
+### Operand order, third and fourth instances
+
+`anmAtr` needed **`tag != field_0x7b7`** (not the `ob1` order I copied) and
+`chkAttention` needed **`this == target`** (not `target == this`) - the latter
+showing as a `subf` direction rather than a `cmplw`. **Copying an idiom from a
+sibling gets the construct right; the operand order still comes from the diff.**
+
+### Also settled
+
+- `getMsg_AJ1_0` widened to `u32` (compile error was the signal, same family as
+  the `s16` callback).
+- `chk_talk`'s `x==1||x==2||x==3` run is `dComIfGp_event_chkTalkXY()` INLINED -
+  traced via `gameInfo+0x52B8` -> `play+0x4018` -> `dEvt_control_c+0xE0`
+  (`mTalkButton`). **A run of equality tests against small consecutive constants
+  is usually one inlined predicate.**
+- Particle group 0 = `dPtclGroup_Normal_e` = `dComIfGp_particle_set`;
+  group 2 = Toon. The `set_pa_*` residual rows are argument-EVALUATION order
+  (donor evaluates `current.roomNo` before the `getParticle()` object
+  expression); passing the trailing defaults explicitly does NOT change it.
+
+STATE: aj1 **89/131 exact, 88.1198%**. Session: **12/131 -> 89/131,
+2.9112% -> 88.1198%** (30.3x fuzzy). 42 remain.
