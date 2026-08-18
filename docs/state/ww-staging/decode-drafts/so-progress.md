@@ -495,3 +495,15 @@ cutMiniGameProc residue (2 fneg-fold sites + 2 fcmpo polarity + 1 dead load),
 NEXT AFTER THAT: the REL SHA gate — temp-flip so to Matching in configure.py,
 build the REL, compare against the Yaz0-decompressed retail REL, and re-verify
 the tc canary (c5f975667b7d...) because d_npc.h was touched this session.
+
+## Round 39: HIO INHERITANCE FIX LANDED — 137/187 exact, FUZZY 99.37%
+
+The round-38 finding was right and the restructure RAISED the count (133 -> 137)
+instead of regressing it. daNpc_So_HIO_c : public mDoHIO_entry_c, public
+dNpc_HIO_c with JntHit_HIO_c m98; the dNpc_HIO_c subobject at +0x4 supplies
+m04 / mMaxHeadX / mMaxBackboneX / mMaxHeadY / mMaxBackboneY / mMinHeadX /
+mMinBackboneX / mMinHeadY / mMinBackboneY / mMaxTurnStep / mMaxHeadTurnVel /
+mAttnYOffset / mMaxAttnAngleY / m22 / mMaxAttnDistXZ across 0x08-0x2C. Own
+fields start at 0x2C. Header gained d/d_jnt_hit.h + m_Do/m_Do_hostIO.h.
+EVERY FUNCTION IN THE TU IS DECODED. All 50 remaining are >= 98%: register
+mirrors and instruction ordering only, no unknown logic.
