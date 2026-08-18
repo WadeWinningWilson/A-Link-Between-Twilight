@@ -211,3 +211,48 @@ virtuals (`u16 next_msgStatus(u32*)`, `u32 getMsg()`, `void anmAtr(u16)`);
 `init_AJ1_0/1/2` and `createInit` corrected to return BOOL. Compiles clean.
 **Measured effect: NONE yet (12/131, 2.9112%) - bodies are still empty. This
 is the gate, not the payoff.**
+
+
+## Round 5 - FIRST FUNCTION LANDED: createInit is EXACT
+
+**aj1 12/131 -> 13/131 exact, fuzzy 2.9112% -> 5.4911%** (the fuzzy nearly
+doubled off one function because `createInit` is one of the larger ones and the
+header fix corrected offsets used TU-wide).
+
+Written: `static char* l_evn_tbl[] = {"angry"};` at file scope (the pool head,
+proven in Round 4 to be a static table rather than a code reference) plus the
+full `createInit` body from the Round 3 transcription.
+
+**FOUR CORRECTIONS the oracle forced, each caught by measurement:**
+
+1. **The derived class starts at 0x6C4, not 0x6C0.** My members landed 4 bytes
+   high (mHomeAngle at 0x712 vs the target's 0x70E). `fopNpc_npc_c`'s layout
+   comment reads `/* 0x6C0 */ /* vtable */` - the vtable POINTER occupies
+   0x6C0..0x6C4, so derived data begins at 0x6C4.
+2. **I had the angle copy backwards.** `current` is at 0x1F8 (so `current.angle`
+   = 0x204) and `shape_angle` is at 0x20C. The donor reads 0x204 and writes
+   0x20C, i.e. **`mHomeAngle = current.angle; shape_angle = mHomeAngle;`** - I
+   had written it the other way round from the field names alone.
+3. **`init_AJ1_0/1/2` return `bool`, not `BOOL`.** The last remaining row was
+   `clrlwi. r0, r3, 24` (mine: `cmpwi r3, 0x0`) - clrlwi against 24 tests a
+   BYTE, so the return type is byte-sized. Changing the three to `bool` took
+   the function to zero rows. **`BOOL` vs `bool` is visible in the diff and is
+   worth checking first whenever a boolean test row is the only survivor.**
+4. `attention_info` at 0x26C explains the 0x26D/0x26F/0x280 cluster:
+   `distances[1]`, `distances[3]`, and `flags` - and the donor writes **flags
+   FIRST**, then the two distances.
+
+Also confirmed while writing: `gravity` (0x258) = **-4.5f**, `mpMorf->setMorf(0.0f)`,
+`mCyl.SetStts(&mStts)` comes BEFORE `mCyl.Set(dNpc_cyl_src)` (the reverse of
+`so`'s order), and the room/colour pair is the `ob1` idiom verbatim:
+`tevStr.mRoomNo = dComIfG_Bgsp()->GetRoomId(mObjAcch.m_gnd)` /
+`tevStr.mEnvrIdxOverride = ...GetPolyColor(...)`.
+
+**INSTRUMENT CAVEAT:** `pools.py` reports mine as `angry, Aj` where the source
+plainly has `"Aj1"` - the reader truncates the final entry when the object size
+lands short. **`createInit` being byte-EXACT is the ground truth; the reader is
+wrong, not the code.** Worth fixing in `tools/foundry/pool_align.py` before
+anyone trusts its tail entry.
+
+NEXT: `init_texPttrnAnm` (+0xa "Aj", +0xd assert file) then `bodyCreateHeap`
+(six string uses). Both are named in the string map in Round 4.
