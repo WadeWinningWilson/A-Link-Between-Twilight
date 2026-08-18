@@ -1155,3 +1155,21 @@ unknowns. They are one stack-layout family (45), one header-offset defect (4),
 one case-order fix (3, now down to ~1), and echoes. The header-offset one in
 particular should be FIXED, not labelled Equivalent.
 p2 now 131/145 exact, fuzzy 99.944%.
+
+## Round 24: SELF-CORRECTION — the nodeCallBack "header defect" is NOT a defect
+
+Round 23 called the 4 nodeCallBack rows (lbz/stb 0x2ec vs 0x2f4) "a MEMBER
+OFFSET 8 bytes early in my header ... a real header defect". **WRONG.**
+I read the asm: `addi r27, r5, "@3569"@l` — **r27 is the .bss ANONYMOUS ANCHOR**
+(the first .bss object, size 0xC), not `a_this`. So 0x2ec/0x2f4 are .BSS
+OFFSETS, and the access is the guard byte of the function-local
+`static cXyz eye_pos_default / attn_pos_default` pair, not `a_this->field_0x710`.
+=> This is .bss PLACEMENT SETTLING, the same class as so's round-35 rows, and
+it resolves at convergence. There is no header bug and nothing to fix.
+LESSON (cost: one wrong escalation to the user in the same turn): before calling
+an offset mismatch a "member offset defect", CHECK WHAT THE BASE REGISTER IS.
+A small offset off a saved register is far more often a section anchor than a
+this-pointer. The tell was there — 0x2ec is nowhere near field_0x710.
+REVISED classification of the 63 "other" rows: 45 stack-layout (one function),
+4 .bss-anchor settling, 3 case-order (fixed, now ~1), 2 data offset, rest echoes.
+NOTHING in the "other" bucket is a known defect.
