@@ -696,3 +696,28 @@ placement convergence**, which is a different (and much better) state than the
 raw 138/187 number suggests.
 ob1 .bss checked with the round-49 method: 25 objects both sides, NO
 DIVERGENCE — already aligned, which is why it leads at 99.807%.
+
+## Round 51: .data ALIGNMENT — 25 extra objects located; SQRTF_CONST_LITERALS FALSIFIED for so
+
+Applied the round-49 alignment method to .data (note: the target .s writes a
+bare `.data` directive, NOT `.section .data` — the round-49 regex must be
+relaxed or it silently reports zero objects, which it did on the first run).
+RESULT: **target 88 .data objects, mine 113 — 25 EXTRA on my side.**
+First divergence at index 3:
+  TARGET  0x0030 sph_offset$4466 (12) | 0x003C cyl_offset_A$4467 (24)
+  MINE    0x0020 _three$localstatic4$sqrt (8) | 0x0028 _half$localstatic3$sqrtf (8)
+So my build emits the MSL sqrt inline's `_half`/`_three` local statics into
+.data, and is MISSING sph_offset / cyl_offset_A at that position.
+HYPOTHESIS TESTED AND FALSIFIED: that this is the SQRTF_CONST_LITERALS vintage
+flag (ob1 carries it: `extra_cflags=["-DSQRTF_CONST_LITERALS"]` plus
+`#include "d/dolzel_rel_lit.h"`).
+  - added the flag alone      -> localstatic count still 2, metrics identical
+  - added flag + lit header   -> localstatic count still 2, metrics identical
+Both REVERTED (dead config is worse than none). The earlier session's note that
+"so does NOT need the vintage flag" stands, but for a NEW reason: so now HAS
+sqrtf sites (I added absXZ) and the flag still does not move them.
+NEXT LEAD (untested): the missing sph_offset / cyl_offset_A suggests
+jntHitCreateHeap's static tables differ in SHAPE from the donor's — the donor
+has a 12-byte sph_offset plus a 24-byte cyl_offset_A that my source does not
+declare at all. Compare jntHitCreateHeap's static table set against the target
+.data names before chasing the sqrt statics further.
