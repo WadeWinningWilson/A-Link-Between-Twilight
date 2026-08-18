@@ -947,3 +947,39 @@ STATE: aj1 **60/131 exact, 51.4992%**. Session: **12/131 -> 60/131,
 2.9112% -> 51.4992%** (17.7x fuzzy). 71 functions remain; five sit at 3-9 rows
 from pool positions or argument order alone (`_create` 98.9%, `chk_areaIN`
 99.9%, `set_pa_smk` 97.8%, `init_texPttrnAnm` 98.4%, `_nodeCB_BackBone`).
+
+
+## Round 24 - setAnm_anm 98.26%; naming the INVERTED-BRANCH bucket
+
+`setAnm_anm` needed the `anm_prm_c` struct defined (`s8` @0x0, `f32` @0x4,
+`f32` @0x8, `int` @0xC), the emitter field identified as **`mFlags` @0x20C**
+(not `mDataFlag` @0x88 - I guessed from the name and the offset corrected me),
+and the single-case-switch shape for the inner `field_0x7b9 == 2` dispatch.
+That took it 7 -> 3 rows.
+
+### THE INVERTED-BRANCH BUCKET - now named, still unsolved
+
+Three functions across two TUs end on the SAME residual shape:
+
+    target:  cmpw ... ; bne BODY ; b END ; BODY: <body> ; END:
+    mine:    cmpw ... ; beq END  ;         <body>       ; END:
+
+i.e. **the donor branches TO the body and then over it; I branch past it.**
+One extra instruction, and I cannot reproduce it. Affected: `aj1`'s
+`setAnm_anm` (3 rows), `ob1`'s `chg_anmAtr` (2 rows), and a variant in
+`aj1`'s `_nodeCB_BackBone` (4 rows, argument-order flavour).
+
+**FALSIFIED against it, all compiled and measured - do not re-run:**
+
+- `switch (a != b) { case 1: ... }` - materialises the bool (`cmpwi r0, 0x1`), 2 -> 6 rows
+- `switch (a == b) { case 0: ... }` - materialises too (`extrwi.`), 2 -> 4 rows
+- empty then-block with the work in `else` - **MWCC FOLDS THE EMPTY BRANCH**, no change (tested twice: `ob1` `chg_anmAtr`, and here as a clean full-function rewrite so the earlier syntax error does not count as the test)
+- `x == false` - that idiom fixes a DIFFERENT shape (the `cntlzw` materialised negation in `call_1`) and does nothing here
+
+**What is NOT yet tried:** a `goto`, and whether the donor's body is inside a
+scope that forces the label (a `do { } while (0)`, or the body being a separate
+inlined function). Worth one attempt each before this bucket is parked with the
+colouring rows.
+
+STATE: aj1 **60/131 exact, 53.0104%**. Six functions sit at 3-9 rows, every one
+from a KNOWN cause: pool position, argument order, or this branch shape.
