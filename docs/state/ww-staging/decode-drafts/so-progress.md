@@ -52,3 +52,22 @@ spec that both p2 and ob1's endgames await.
 - Lesson re-banked (3rd time this session): verify the signal yourself
   before acting on a recon row — and never let a commit message claim
   "verified" for a grep that returned nothing.
+
+## Ctor member map (from __ct__10daNpc_So_cFv target asm, 2026-08-18)
+- Class size 0xBE4 (g_profile word 5). Base fopNpc_npc_c to 0x6C4
+  (standard subobjects verified: jnt 0x29b/c, EventCut 0x2cc/2d0/32c,
+  ObjAcch@0x334, AcchCir@0x4F8, Stts@0x538(vt 0x550), Cyl@0x574,
+  0x6ac=-1, 0x6b0=0).
+- Derived: 0x6F4 dCcD_Stts #2 (GStts@0x6F8; ALSO stores r31 — a saved
+  reg value into 0x6F8+? read the head for what r31 held) ·
+  0x718 dCcD_Sph block (SPHERE collider — GObjInf@0x718, Aab@+0x110,
+  ShapeAttr@+0x114, Sph@+0x128, dCcD_Sph vt@+0x3C; fish body) ·
+  0x854 mDoExt_btpAnm (0x858/0x860 zeroed) · 0x870 dBgS_ObjAcch #2
+  (vt@0x880, +0x14=r30, +0x20=r29 — saved values, read head) ·
+  0xA34 dBgS_AcchCir #2 · 0xAE8 dPa_rippleEcallBack (JPACallBack →
+  levelE → rippleE vt chain; 0xAEC=0 — water ripple particles) ·
+  tail to 0xBE4 unknown (read member fns).
+- NOTE: the ctor head saves r29/r30/r31 BEFORE the tail — they hold
+  computed defaults stored into Stts#2/Acch#2 fields; decode the head
+  block when writing the ctor (implicit-vs-explicit TBD: .fn weak?
+  CHECK — if global+long, so has an EXPLICIT ctor unlike ob1).
