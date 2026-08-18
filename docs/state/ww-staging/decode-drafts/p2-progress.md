@@ -1227,3 +1227,25 @@ wrote as something else.
 whole-TU .bss census item: count function-local statics in emission order and
 find the two extras. Cheap to do with a script; deferred, 12 rows.
 This is the same class as so's round-35 .bss rows and settles the same way.
+
+## Round 28: CORRECTION to round 27 — the .bss composition MATCHES; it is pure ORDERING
+
+Round 27 said "my TU emits TWO MORE 4-byte guard slots than the donor".
+**Measured with objdump -t on my own .o against the target .s: WRONG.**
+  TARGET .bss objects: size 0 x1, size 1 x24, size 4 x2, size 12 x17, size 648 x1
+  MINE   .bss objects: size 0 x2, size 1 x24, size 4 x2, size 12 x17, size 648 x1
+Identical except one extra ZERO-size symbol, which is a section marker
+(...bss.0), not an object. **Same 24 guards, same 2 four-byte (l_msg/l_msgId),
+same 17 cXyz statics, same l_HIO 0x288.**
+=> The uniform +8 in nodeCallBack is therefore NOT a missing/extra object. It is
+**EMISSION ORDER**: the same objects laid out in a different sequence, putting
+8 more bytes ahead of the statics nodeCallBack touches. MWCC emits .bss objects
+in source-declaration order, so the fix is to find the two function-local
+statics whose relative declaration position differs from the donor's and swap
+them — no code change, just declaration order.
+NEXT-CONTEXT METHOD (cheap): dump target .bss offsets in order from the .s, dump
+mine with `build/binutils/powerpc-eabi-objdump.exe -t <o> | grep .bss`, align the
+two sequences by size-signature, and the first divergence names the pair.
+LESSON REPEATED (third time this session): I diagnosed from a symptom (+8) and
+asserted a cause (extra slots) without measuring the population. The measurement
+took one objdump call and falsified it.
