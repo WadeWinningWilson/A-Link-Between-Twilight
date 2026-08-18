@@ -687,3 +687,4 @@ watcher is a dead watcher until re-armed.
 - 2026-08-18 ~06:05Z | WATCHER #121 ARMED (b7qoopzja, harness-tracked) after #120 delivered History/Bridge Phase-2 partial (119/123 stale headline, half-validated; no DECODER ask). NOTE: first re-arm attempt used shell & (dies with the call, the registry rule) — caught and re-armed properly.
 - 2026-08-18 ~06:09Z | WATCHER #123 ARMED (bx61ny9ph) after #122 delivered History/Bridge Phase-2 number (21 stale rows; symbol-name analysis).
 - 2026-08-18 ~06:12Z | WATCHER #124 ARMED (b3qmqde48) after #123 delivered 3 census-dialogue rows (no DECODER ask).
+- 2026-08-18 ~06:17Z | WATCHER #126 ARMED (bieq6autv). #125 delivered 2 rows (Foundry/census dialogue). SECOND &-launch reflex slip caught immediately and re-armed tracked — the reflex is the hazard, not the knowledge.
