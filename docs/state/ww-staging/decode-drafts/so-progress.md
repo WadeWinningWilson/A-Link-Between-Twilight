@@ -235,3 +235,16 @@ spec that both p2 and ob1's endgames await.
 ## DebugInit lesson: chained mAFC=speedF=0.0f; COS-x/SIN-z axis swap.
 ## TriForce: attention_info.flags=0x200000A; eventBit 0x3a20; modeProc(0,0xc).
 ## FirstWait: ship-follow + checkGetItem(0x78)/isStageBossEnemy(3) gate; HIO m54.
+
+## Round 27: modeSwim decoded/parked — THE cXyz SLOT-CLASS FAMILY IS NOW THE BLOCKER
+
+modeSwim parked ~25 rows; same family as cutSwimProc/cutEatesaFirstProc. Measured
+target layout has THREE allocation classes (top-down): [named cXyz vars] >
+[operator-call sret temps, creation order] > [flat-vector objects + f32 frsp spills].
+No source spelling tried yet produces class 3 for the flats: named-var (memberwise),
+ctor-at-decl, ctor-temp-in-expression, top-decl all falsified. NEXT-CONTEXT OPENER:
+harness campaign over flat spellings (setall(), Vec init, dLib helper?, VECSetPoint?,
+static?) on cutSwimProc (smallest member of the family, 18 real rows) — one win
+retro-applies to all four. Grep how OTHER matched WW actors build XZ-flattened
+distance vectors — the donor idiom likely repo-wide (check d_a_kamome, d_a_tag_so,
+dLib source itself).
