@@ -294,3 +294,28 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   then attribute (extra-weak survival? text order of kept? data anons?).
 - p2 SHAPE-LEAD calibrated (p2-progress round 18): no direct retrofit —
   feeds the transform-search harness vocabulary instead.
+
+### Round 12 (03:37Z) — REL convergence: rodata 100%, data clean; SHA distance = 4 sites (commit fd111756)
+- .rodata 100% BYTE-EXACT (0x11D): the missing 0xC was the debug GXColor
+  trio {FF0000,0000FF,00FF00 alpha 0x80} — bare `(GXColor){...};`
+  expression statements at the END of _draw (bm1/km1 sibling-attested
+  idiom, stripped dDbVw leftovers).
+- .data REL-clean: HIO blob initializer bug fixed (s16 split had eaten
+  the 0.5f slot — 0x400, 0, then the four floats); l_evn_tbl moved to
+  AFTER the HIO ctor (a_prm_tbl emits first; Get_Rupee still pools
+  first). Leading .o statics (3 anons + _three/_half) confirmed
+  REL-LINK-DROPPED. Sizes equal 23040.
+- REL DISTANCE FULLY ATTRIBUTED (5681 bytes): the 3 branch-polarity
+  parks (chg_anmAtr, control_anmAtr, privateCut) + nodeOb1Control's
+  r29/r30 mirror + their local displacement cascades + reloc-table
+  echoes. Nothing else.
+- 🔑 KM1 CONTROL EXPERIMENT: km1's byte-matched chngAnmAtr emits MY
+  beq-skip shape from the IDENTICAL && spelling — so ob1's target bne+b
+  needs a structurally DIFFERENT spelling (nested-if / early-return /
+  statement-after-if variants), NOT counter-parity. Polarity parks are
+  decodable in principle. Experiment matrix for next context: (a)
+  `if (i_no < 7) { if (i_no != field) { body } }` nested; (b) body with
+  trailing statement; (c) early-return forms; same matrix for
+  privateCut's beq+b site and control_anmAtr's tree-root.
+- Status: task #12 at the SAME endgame class as p2 (#9) — 4 small
+  allocator/polarity sites from SHA, everything else byte-true.
