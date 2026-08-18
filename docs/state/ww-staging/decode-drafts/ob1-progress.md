@@ -368,3 +368,19 @@ FALSIFIED: restructuring the ten-case group to fall through into default
 move it to chase the shared else/default block.
 Remaining 4 rows: the group's else-arm emits its own status block where the
 target shares default's. ob1 now 108/115 exact, fuzzy 99.80%.
+
+## Round 17: chg_anmAtr + control_anmAtr + _create probes — TU 99.81%
+
+- chg_anmAtr: compound "if (i_no < 7 && i_no != field_0x800)" -> NESTED ifs
+  matches the target's beq (not bne) shape.
+- control_anmAtr: case 6 before case 3 measures marginally better (equal row
+  count, fuzzy 99.80 -> 99.81). NOTE: MWCC builds the COMPARE CHAIN from
+  case-label source order INDEPENDENTLY of where the bodies land, so the two
+  orderings only trade which instructions align — this is not a free win like
+  the next_msgStatus body reorder was.
+- _create (2 rows): the final "if (!createInit()) return cPhs_ERROR_e;" emits
+  bne+b where the target has a single beq. THREE spellings all give 2 rows:
+  !createInit()+return, createInit()==0+return, createInit()+break-then-return.
+  Assign-and-fall-through (state = cPhs_ERROR_e; break;) was WORSE (4). PARKED.
+STANDING (all three of my TUs, same build):
+  so  138/187 exact 99.56% | ob1 108/115 exact 99.81% | p2 131/145 exact 99.94%
