@@ -109,3 +109,40 @@ measured, not asserted.** The untouched queue behind these three:
 Five TUs at 1.5-2.9%, i.e. essentially undecoded, against 69+36+99 rows of
 allocator noise on three TUs already at 99.67-99.95%. (`d_a_npc_kamome` is
 already `Matching` at 162/162 - nothing owed there.)
+
+## CORRECTION - "placement is exhausted" was true for ROWS, not for SHA
+
+Found while fixing a bug in my own instrument, and it changes what a park means
+for `so` specifically.
+
+**The bug:** `pool_align.py` parsed `objdump -s` with a regex matching only
+8-hex-digit groups, so a PARTIAL trailing word (the last line of a section, e.g.
+`3100`) was silently dropped. Every pool reading truncated its final entry.
+Fixed and committed; re-verified that so/ob1/p2 string pools still align.
+
+**What the fixed reading shows on `so`:** `.rodata` aligns **71/85 objects**
+(my earlier "25/85" predated the `cutSwimProc` 7.0f fix and I never re-ran it -
+that is on me). First divergence is at **0x1E4**, where the target carries
+**14 four-byte constants that my object does not have at all**: an alternating
+`00FF0080` / `FF000080` pattern - GXColor green/red at alpha 0x80.
+
+**They are UNREFERENCED.** No function in the target `.s` loads them. They are
+donor-emitted dead data - the same shape as the `sph_offset` / `cyl_offset_A/B`
+statics I restored to `jntHitCreateHeap` earlier in the campaign, and almost
+certainly the dead-stripped body of `debugDraw` (which in both builds is a stub
+of unused locals).
+
+**WHY THIS MATTERS, and it cuts against my own recommendation:**
+
+- For the **row count / §2b Equivalent** question: irrelevant. Nothing
+  references them, so no function's diff rows depend on them. My "remaining
+  rows are all allocator-class" statement stands.
+- For **SHA**: decisive. `.rodata` is not byte-identical while 56 bytes of
+  donor constants are missing, so **`so` could reach 187/187 exact functions
+  and still fail the SHA gate.** Any ruling that says "grind to SHA" must
+  include reconstructing dead data that no code path reads.
+
+I would rather surface that now than have a SHA gate fail later and look like a
+surprise. It does not change the park recommendation - if anything it
+strengthens it, because the residual work on `so` includes speculative
+reconstruction of code the donor itself dead-stripped.
