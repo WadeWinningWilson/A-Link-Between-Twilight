@@ -654,3 +654,25 @@ REMAINING RESIDUE INVENTORY (all decoded, all shape-only):
   cutMiniGameProc 11 (2 fneg-fold sites + polarity) | _execute 9 (5 bss + 4 fmuls) |
   _nodeControl 8 | jntHitCreateHeap 4 | setAnm 4 | cutEatesaFirstProc 3 |
   plus small pool tails.
+
+## Round 49: .bss ALIGNMENT METHOD (proven on p2) applied to so — divergence located
+
+METHOD (reusable, ~20 s per TU, proven by taking p2's nodeCallBack 16 rows -> 0):
+  1. Parse the target .s for "# .bss:<off> | .. | size: <sz>" + the following .obj name.
+  2. Dump mine: build/binutils/powerpc-eabi-objdump.exe -t <o> | grep .bss (drop size-0).
+  3. Sort both by offset and walk them together; the first (off,size) mismatch names
+     the pair to reorder. MWCC emits .bss in SOURCE-DECLARATION order, so the fix is
+     moving a declaration, never changing code.
+so RESULT: 24 objects both sides, identical count. First divergence at index 20:
+  TARGET  0x011C init$4529 (1) | 0x011D init$6629 (1) | 0x0120 "@6744" (12)
+  MINE    0x011C init$2731 (1) | 0x0120 "@2837" (12)  | 0x012C init$2838 (1)
+=> The target packs the TWO ptmf-table guards (cutProc's cut_tbl and modeProc's
+mode_tbl) ADJACENTLY at 0x11C/0x11D with no object between them; mine puts a
+12-byte cXyz static in between. So in the donor the two tables are encountered
+back-to-back, while in my file _execute's s_ripple_scale (and its guard) lands
+between modeProc (main .cpp) and cutProc (in d_a_npc_so_cut.inc, included late).
+CONSTRAINT: the .inc include position is pinned by TEXT order (the cut functions
+must follow daNpc_SoIsDelete), so this cannot be fixed by moving the include.
+The likely donor shape is that s_ripple_scale is NOT a function-local static in
+_execute — worth re-testing as a file-scope static or a different construct.
+Deferred: worth 1-2 rows, and the method is now recorded for the next context.
