@@ -74,3 +74,38 @@ that than keep reporting motion without movement.
 
 **Decision needed from the user** (History for the vtable item): park, or keep
 grinding, or hand the allocator bucket to a different approach.
+
+## Precedent, found after the proposal was written
+
+`configure.py` already parks actor RELs for exactly this reason class:
+
+    ActorRel(Equivalent,  "d_a_kamome"),   # fpr regalloc
+    ...                                    # regalloc
+
+**`d_a_kamome` sits at 65/67 exact / 99.9905% and is parked `Equivalent` with
+the one-line reason "fpr regalloc".** That is the same situation as my three
+TUs and the same reason class, in the same actor-REL family. The mechanism I
+am asking to use is not novel here, and the bar for the written reason appears
+to be a short, specific phrase naming the cause.
+
+**THE COUNTERWEIGHT, stated so this is not read as a free pass: there are only
+9 `Equivalent` entries in the entire repo**, and the other reasons cited are
+"Nondeterministic compiler bug? Do not link". So Equivalent is used SPARINGLY
+- it is not a dumping ground, and adding three more at once is a meaningful
+fraction of the total. That argues for parking with per-TU reasons that name
+the specific bucket (register colouring / literal-pool position / stack-slot
+order), not a blanket "allocator differences" label, and it argues for taking
+the HIO vtable fix rather than parking it, since that one has a real cause.
+
+Also worth recording from the same survey - **the opportunity cost is now
+measured, not asserted.** The untouched queue behind these three:
+
+    d_a_npc_aj1   12/131 exact   2.9112%
+    d_a_npc_ym1    8/124 exact   2.4940%
+    d_a_npc_yw1    8/119 exact   2.2788%
+    d_a_npc_ko1    5/203 exact   1.9240%
+    d_a_saku       2/ 66 exact   1.4700%
+
+Five TUs at 1.5-2.9%, i.e. essentially undecoded, against 69+36+99 rows of
+allocator noise on three TUs already at 99.67-99.95%. (`d_a_npc_kamome` is
+already `Matching` at 162/162 - nothing owed there.)
