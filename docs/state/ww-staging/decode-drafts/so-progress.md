@@ -721,3 +721,26 @@ jntHitCreateHeap's static tables differ in SHAPE from the donor's — the donor
 has a 12-byte sph_offset plus a 24-byte cyl_offset_A that my source does not
 declare at all. Compare jntHitCreateHeap's static table set against the target
 .data names before chasing the sqrt statics further.
+
+## Round 52: CORRECTION — so's .data IS aligned; the "25 extra objects" was a METHOD ARTIFACT
+
+Round 51 reported "target 88 .data objects, mine 113 — 25 EXTRA" and blamed the
+MSL sqrt statics. **The target HAS those statics.** Reading the raw target .s at
+0x1C-0x30:
+    .obj "@1811" ... .endobj      (ends 0x1C)
+    .4byte 0x00000000
+    .4byte 0x40080000 / 0x00000000   <- double 3.0  == _three
+    .4byte 0x3FE00000 / 0x00000000   <- double 0.5  == _half
+    # .data:0x30 -> sph_offset$4466
+They are emitted as RAW DATA with NO `.obj` wrapper, so a named-object walk does
+not see them. Mine emits the same values at the same offsets (0x20/0x28) but AS
+NAMED SYMBOLS (_three$localstatic4 / _half$localstatic3).
+=> **so's .data is ALIGNED from 0x30 onward and the 0x20/0x28 contents match.**
+The object-count gap is symbol GRANULARITY, not layout.
+METHOD CAVEAT (add to the round-49/51 instrument): the target .s emits some data
+WITHOUT .obj wrappers, so a named-object alignment walk can report FALSE
+divergences. Always read the raw bytes around a reported divergence before
+acting on it. Corollary: the SQRTF_CONST_LITERALS hypothesis was falsified twice
+over — the flag did nothing AND there was nothing to fix.
+STILL TRUE AND VALUABLE from round 51: sph_offset/cyl_offset_A really were
+missing dead statics, and adding them took so 138 -> 139 exact / 99.585%.
