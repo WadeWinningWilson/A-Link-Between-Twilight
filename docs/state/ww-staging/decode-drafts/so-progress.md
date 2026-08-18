@@ -1000,3 +1000,31 @@ read `d_a_npc_p1.cpp` / `d_a_npc_ba1.cpp` for their `_createHeap`,
 node-control and by-value-cXyz-argument sites and compare MY forms against a
 BYTE-IDENTICAL implementation of the same idiom, instead of inventing
 candidate forms per function.
+
+
+### CORRECTION to Round 64 - the "house style" claim was over-read from ONE function
+
+I wrote above that **"the house style is ALL LOCALS DECLARED AT THE TOP OF THE
+FUNCTION"** and based it on `daNpc_P1_c::lookBack`. **That generalisation is
+wrong and I am striking it.** Measured across both byte-identical oracles:
+
+    d_a_npc_p1.cpp   29 fns, 11 declarations appear mid-body (after a statement)
+    d_a_npc_ba1.cpp  93 fns, 10 declarations appear mid-body
+
+And `daNpc_Ba1_c::CreateHeap` - the closest oracle to my own 12-row
+`_createHeap` - opens with `J3DModelData* anm_model = create_Anm();`, i.e.
+declared AT POINT OF USE, exactly like mine. It also uses early
+`return FALSE;` like mine.
+
+**So declaration placement is NOT the systemic cause of the allocator bucket,
+and my TUs' style is not anomalous.** `lookBack` declares at the top because
+that function needs it (a pointer assigned in several branches), not because
+the codebase mandates it. One function is not a style guide - I should have
+measured before reporting it as a finding, and the neutral `_createHeap` result
+should have been my first clue rather than a footnote.
+
+**WHAT SURVIVES:** `d_a_npc_p1` and `d_a_npc_ba1` really are byte-identical
+NPC-family oracles and really are worth reading per-idiom - that part stands.
+What does not survive is any blanket style rule drawn from them. Use them the
+way the alignment walks were used: to answer a SPECIFIC question about a
+SPECIFIC construct, verified by measurement, not to justify sweeping rewrites.
