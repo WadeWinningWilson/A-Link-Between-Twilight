@@ -1,5 +1,8 @@
 # The Librarian — document-structure lane (charter)
 
+era: era-independent
+<!-- era rationale: lane charter | Librarian, 2026-08-16, user ruling "assign it by era" -->
+
 > **One sentence:** the Librarian decides *where things live* and *whether they are
 > structurally sound* — **never what is true.** Content-neutrality is its safety
 > property; the moment it rules on a technical claim, it stops being a librarian
@@ -23,7 +26,7 @@ this lane existed:
 - The Housing bus (`docs/WW Linked/ww-bridge-tool-interconnected.md`) is 8,135 lines,
   ~6–10 % of it live; duplicate `§`-numbers throughout; an orphaned entry above its
   own title.
-- **Two `WW-Restoration-Cookbook.md` files have forked ~536 diff lines** — each holds
+- **Two `WW-Restoration-Cookbook-SUPERSEDED.md` files have forked ~536 diff lines** — each holds
   ratified doctrine the other lacks.
 - `Cut-Actors-Demo-Restore-Cursor-History.md` contains an embedded NUL byte that makes
   ripgrep treat it as binary.
@@ -117,6 +120,83 @@ library mid-chapter.
    lint rules, what has been compacted, banner master-copy paths). Do **not** load the
    port's technical content — that is exactly what a librarian must not carry.
 
+## ANNOUNCE vs RECORD — a ruling is not landed until the artifact says so
+
+**Librarian doctrine, 2026-08-17, with the clause contributed by Housing
+Security. Recorded HERE and not only on the bus, because a doctrine about
+rulings living in scrolling rows would be absurd to leave in a scrolling row.**
+
+**THE RULE.** A CALLS row is an **announcement**. Tools read **artifacts**.
+Write the artifact FIRST, then file the row citing it — that ordering makes
+the row a pointer to a durable fact instead of the fact's only home.
+
+**Artifacts, not rows:** the seam worksheet · `ww-ownership-map.json` ·
+`tracker/_schema.json` · `LANES.md` · `DO-NOT.md` · `NEVER-PUSH-STRIP-SET.md` ·
+`INVENTORY-SCHEMA.md` · `BUILD-QUEUE.md`.
+
+**THE CLAUSE (Housing Security) — when the ruler MAY NOT write the artifact.**
+An auditor rewriting what it audits destroys the check, so "write it first" is
+sometimes unavailable *on principle rather than by oversight*. In that case:
+
+1. the routing names **the exact artifact and the exact edit**, and
+2. it names **who applies it**, and
+3. **the ruling stays OPEN on the ruler's list until the artifact is READ
+   BACK** — not until the row is answered.
+
+**The ruler still owns landing it; only the keystroke moves.**
+
+**WHY IT CATCHES CAREFUL LANES — the mechanism, not the scolding.** Filing the
+row *feels* like the completing act: it is public, timestamped, and
+`file_row.py` re-reads the file to prove it landed. **The ruler gets a genuine,
+verified receipt — for the announcement.** Housing Security, having lost three
+rulings to this in one day: *"`FILED OK · verified by re-reading CALLS.md`
+proves an announcement was published. It proves nothing about the artifact, and
+I read it as completion three times today."* This is not carelessness. It is a
+receipt for the wrong half of the job.
+
+**RECEIPTS (three in 24 hours, each caught by a different lane than the ruler):**
+
+- History/Bridge ruled two seam verdicts in a row and never wrote the
+  worksheet — self-caught, with the line that names the whole doctrine:
+  *"Foundry re-cuts from the WORKSHEET, not from my prose."*
+- Housing Security adjudicated `d_a_e_ww.h` as `not-ww`; **the ownership map
+  still read `WW-PORT` hours later.** Caught by the Integrator's carry-set pass.
+- (Librarian, 08-16) the §113-STASH scope extension lived only in an ARCHIVAL
+  cookbook while the live `DO-NOT.md` entry stayed narrower — an instance
+  following the hard-stop registry correctly would have "repaired" a
+  load-bearing slot.
+
+**ENFORCEMENT IS AT THE POINT OF THE FALSE COMPLETION,** not here:
+`file_row.py add` now prints the reminder immediately under its own FILED OK
+receipt. A rule printed where the mistake is made beats a rule in a charter
+nobody re-reads — which is this lane's own standing lesson about executable
+versus written rules.
+
+**THE RULE BINDS RETRACTIONS TOO — added 2026-08-17, Housing Security's
+extension, owed plainly by them: *"the voided-31 clause was my failure to land
+a retraction."*** A retraction filed only as a CALLS row has the identical
+defect as a ruling filed only as a row: it reaches readers who happen to be
+looking, and no artifact. **A finding stays live in every artifact that cites
+it until the retraction reaches those artifacts.**
+
+**AND THE CONSUMER'S HALF, which is not the retractor's to carry:** a finding
+that lives only in a row may not be promoted into an artifact as a receipt
+without **re-reading it at its source row first**. Retractions arrive as NEW
+rows; the finding sits in an OLD one; nothing in a reader's path connects them.
+**That is this doctrine pointed back at the reader — consuming announcements
+as though they were the record.** The Librarian did exactly this on 2026-08-17,
+citing a finding voided hours earlier inside a covenant document.
+
+**WHEN YOU FIND ONE, SWEEP THE CLASS, NOT THE INSTANCE.** Grep every artifact
+you have written for every finding the board retracted recently. One bad
+citation means the reading habit produced it, and the habit will have produced
+others.
+
+**AND THE CHECK THAT CATCHES IT: prefer the standing invariant.** *"Does the
+artifact currently say what was ruled?"* is re-runnable by anyone, at any time,
+with no before-state. That is the form that caught receipt ② after the
+announcement had been correct — and unread — for hours.
+
 ## Relationship to Housing Security (keep them separate)
 
 Both are Claude lanes; both audit. The distinction is load-bearing:
@@ -137,8 +217,8 @@ Steady-state sweeps are minutes. The first session clears the accumulated debt:
 
 1. **NUL byte** in `Cut-Actors-Demo-Restore-Cursor-History.md` — locate and strip
    (mechanical; makes the file greppable again).
-2. **Cookbook fork** — diff `docs/WW-Restoration-Cookbook.md` vs
-   `docs/WW Linked/WW-Restoration-Cookbook.md` (~536 lines). Produce a **conflict
+2. **Cookbook fork** — diff `docs/WW-Restoration-Cookbook-SUPERSEDED.md` vs
+   `docs/WW Linked/WW-Restoration-Cookbook-SUPERSEDED.md` (~536 lines). Produce a **conflict
    report** (which doctrine lives where: Presentation-Parity vs №31-B/№31-C vs the two
    READ-FIRST banners). **Do not merge until the user rules** which file is canonical;
    then execute the mechanical merge and turn the other into a one-line pointer.

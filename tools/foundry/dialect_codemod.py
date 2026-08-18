@@ -126,17 +126,48 @@ def apply_rules(text, rs):
 
 
 def report_manual(text, rs):
+    """MANUAL/REVIEW rows present in this TU.
+
+    ========================================================================
+    THE SILENT DROP — declared BLIND by History/Bridge 2026-08-14, fixed here.
+    The probe was `re.match`, which anchors at position 0. Every key that does
+    not START with an identifier yielded token=None and was discarded at a
+    bare `continue` — including R5's own CONTROL row and the DN-3 LAW row
+    `(J3DModelData*)dComIfG_getObjectRes(...)`, which begin with `(`.
+
+    **Those rows could never appear in the report, so "(none present in this
+    TU)" asserted nothing about them** — and one of them guards the §810-2 /
+    §814 raw-cast crash. A porter reading a clean report would conclude the
+    raw-cast law was checked and clear. It was never probed at all.
+
+    Two changes: probe on the identifiers found ANYWHERE in the key, and never
+    drop a row silently. A key with no identifier at all is now reported
+    UNPROBEABLE — visible, and honestly unknown (№31-C), rather than absent.
+    Rows whose identifiers only partly appear come back PARTIAL rather than
+    vanishing, because under-reporting is the dangerous direction for a row
+    that exists to prompt human review.
+    ========================================================================
+    """
     hits = []
     for key, to, _t, receipt, kind, why in rs:
         if kind == "AUTO":
             continue
         probe = key[:-1] if key.endswith("*") else key
-        token = re.match(r"[A-Za-z_][\w:]*", probe)
-        if not token:
+        # every identifier in the key, not just one anchored at position 0
+        ids = re.findall(r"[A-Za-z_][\w:]*", probe)
+        if not ids:
+            hits.append(("UNPROBEABLE", key, to, 0,
+                         "no identifier in this key — NOT checked, unknown "
+                         "(was silently dropped before 2026-08-14)", receipt))
             continue
-        n = len(re.findall(r"\b%s" % re.escape(token.group(0)), text))
-        if n:
-            hits.append((kind, key, to, n, why, receipt))
+        counts = [len(re.findall(r"\b%s" % re.escape(i), text)) for i in ids]
+        present = [c for c in counts if c]
+        if len(present) == len(ids):
+            hits.append((kind, key, to, min(counts), why, receipt))
+        elif present:
+            hits.append((kind + "/PARTIAL", key, to, max(counts),
+                         "only %d of %d key identifiers present — %s"
+                         % (len(present), len(ids), why), receipt))
     return hits
 
 

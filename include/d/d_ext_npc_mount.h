@@ -432,6 +432,10 @@ void dExtNpcMount_armStageExitRemount(const char* procName, const cXyz& spawnWor
 // №58-B / №53-A: lock Link (door-open demo) through fade; release on hold complete/abort.
 void dExtNpcMount_beginDoorDemoLock();
 void dExtNpcMount_endDoorDemoLock();
+// §890 probe: is the door-demo lock currently held (begin without end yet)?
+// Sight-only — the doors watchdog uses it to catch an ORPHANED lock (held
+// while pollArrival is disarmed), run 165821's control-loss signature.
+bool dExtNpcMount_isDoorDemoLocked();
 // №89: nuclear clear — cancel demo + remove stuck event (arrival end / G-guard).
 void dExtNpcMount_forceEndDoorEvent(const char* reason);
 // §270: stand the arrival-G-guard down so a native WW NPC's freshly-ordered event (the

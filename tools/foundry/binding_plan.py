@@ -99,6 +99,44 @@ def sdk_service_symbols():
     return out - {"if", "for", "while", "switch", "sizeof", "return", "defined"}
 
 
+# ============================================================================
+# ARTIFACT CLASSIFICATION (19a, tale §950) — the (c) set is the number this
+# project calls "the real long pole", so it must count REAL host imports and
+# nothing else. Verified by reading every entry the manifest called MISSING:
+#   emplace_back  std::vector member  (the plugin links its own STL)
+#   good          matched inside COMMENT PROSE ("only as good as")
+#   field_0x0     a decomp FIELD NAME inside a comment
+#   sp54          a LOCAL VARIABLE  (cXyz sp54; d_bg_s.cpp:769)
+#   msg           matched inside COMMENT PROSE
+#   ModuleProlog  console REL prolog, named only in a comment; dead on PC
+#   ModuleEpilog  appears NOWHERE in the WW layer at all
+# None is a host import. An extraction that counts comment prose and locals
+# inflates the one number a migration decision rests on, so the classes are
+# DECLARED here with their reason and reported separately — never silently
+# dropped (№31-C: an excluded row must say why it was excluded).
+# ============================================================================
+ARTIFACT_CLASSES = {
+    "emplace_back": "std container member — plugin links its own STL",
+    "push_back": "std container member — plugin links its own STL",
+    "good": "comment prose match, not a call site",
+    "msg": "comment prose match, not a call site",
+    "field_0x0": "decomp field name in a comment, not a symbol",
+    "sp54": "local variable (cXyz sp54, d_bg_s.cpp:769)",
+    "ModuleProlog": "console REL prolog — dead on PC, comment-only",
+    "ModuleEpilog": "console REL epilog — absent from the WW layer entirely",
+    "path": "std::filesystem member / local — plugin-side",
+    "max": "std::max — plugin links its own STL",
+    "sin": "libm — plugin links its own CRT",
+    "memset": "CRT — plugin links its own CRT",
+    "getenv": "CRT — plugin links its own CRT",
+}
+
+
+def artifact_reason(name):
+    """Why this name is NOT a host import, or None if it is a real one."""
+    return ARTIFACT_CLASSES.get(name)
+
+
 def collect_imports():
     """Host imports the WW layer makes, with their true site counts.
 
@@ -201,10 +239,35 @@ def _resolve_against_image(names):
         return {}
     if not table:
         return {}
+    # COLLAPSED-DICT SWEEP (tale §967, applying §966's lesson): this verdict
+    # came from `table`, whose keys are UNIQUE NAMES — so a name carried by
+    # 685 raw entries read "resolved" with no hint that by-name binding cannot
+    # pick one of them. Two defects in one line, both optimistic:
+    #   · endswith("::" + n) is CLASS-BLIND (§957: getManager matched 10
+    #     classes while the real import was JUTDbPrint::getManager)
+    #   · exact hits ignore DUPLICATE COUNT (§960/§966's shape A)
+    # A third verdict is added rather than widening "resolved", because
+    # "ambiguous" is not a kind of resolved — the runtime returns MOD_CONFLICT.
+    try:
+        occ = SM.occurrences(str(img)) or {}
+    except Exception:
+        occ = {}
     out = {}
     for n in names:
-        hit = any(k == n or k.endswith("::" + n) for k in table)
-        out[n] = "resolved" if hit else "missing"
+        dup = occ.get(n, 0)
+        if dup > 1:
+            out[n] = "ambiguous"
+            continue
+        exact = n in table
+        qualified = [k for k in table if k.endswith("::" + n)]
+        if exact:
+            out[n] = "resolved"
+        elif len(qualified) == 1:
+            out[n] = "resolved"
+        elif len(qualified) > 1:
+            out[n] = "ambiguous"
+        else:
+            out[n] = "missing"
     return out
 
 

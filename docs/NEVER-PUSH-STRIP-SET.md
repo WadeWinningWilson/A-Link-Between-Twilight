@@ -24,6 +24,68 @@
 > lineage; until then this manifest answers "what is WW-shaped", not "what is
 > WW-derived".
 >
+> ## RULING — EVERY PORTED SUBSYSTEM FILE TAKES THE `d_ww_` PREFIX
+> (Housing/Engine, 2026-08-17. **Recorded here on the Librarian's
+> announce-vs-record doctrine — it was filed as a CALLS row, and a scrolling
+> row cannot bind work that does not exist yet.**)
+>
+> **THE RULE:** a newly ported WW subsystem file is named `d_ww_<subsystem>`.
+> Donor fidelity stays INSIDE the TU — symbols keep their donor names.
+> Receiver convention governs the BOUNDARY — the filename.
+>
+> **WHY IT IS A COVENANT RULE AND NOT A STYLE PREFERENCE — stated precisely,
+> because the first version of this paragraph overstated it and the next
+> paragraph on this very page disproved it (History/Bridge, 2026-08-17):**
+>
+> A donor-faithful filename **matches no filename pattern**. It is caught
+> anyway — but ONLY by the *other* half of the basis: the 2026-08-07 user
+> ruling widened the strip set to the **UNION of filename convention AND
+> declared lineage (KIT-LINEAGE banners)**.
+>
+> **So the exposure is not invisibility. It is SINGLE-MECHANISM DEPENDENCE.**
+> A `d_ww_`-named file is caught by filename *and* by banner — two independent
+> mechanisms. A donor-named file is caught by the banner ALONE, so it ships to
+> public `main` the moment that banner is absent, malformed, or unparsed —
+> **and a missing banner produces no error, because a file with no banner is
+> indistinguishable from a file with nothing to declare.**
+>
+> *(A previous version of this paragraph cited "the push gate measured blind to
+> 31 banner-declaring files" as the receipt for that sentence. **That finding
+> was VOIDED by its own author** — Housing/Engine, 2026-08-17: "I ruled from
+> the rule instead of the artifact, and Foundry's retraction killed its
+> premise." **A voided measurement propping up a live rule is worse than no
+> receipt at all**, so it is removed rather than softened. The claim above
+> stands on its own construction — a file with no banner and no `d_ww_` name
+> is not distinguishable from a file with nothing to declare, by inspection —
+> and on the 4-of-65 count recorded below, which is live.)*
+>
+> **MEASURED — THE SINGLE-MECHANISM SET IS 4 FILES OF 65** (History/Bridge,
+> 2026-08-17, on this paragraph's own claim):
+>
+> - **65** files in the strip set
+> - **61** caught by **filename AND banner** — two independent mechanisms
+> - **4** caught by the **BANNER ALONE**, each one absent-banner away from
+>   shipping: `src/d/d_kankyo_ww.cpp` · `src/d/d_kankyo_ww_sky.cpp` ·
+>   `src/d/d_kankyo_ww_wind.cpp` (WW leg inside a receiver-named TU) and
+>   `src/d/d_albw_dialogue.cpp` (shared ALBW/WW dialogue surface)
+>
+> **Recorded here rather than left in a CALLS row**, per the announce-vs-record
+> rule in [Librarian.md](Librarian.md): a justification that can be counted
+> should be, and the count belongs beside the claim it supports. Measurement is
+> History/Bridge's; placement is the Librarian's — amend freely.
+
+> **THIS PAGE IS ITS OWN EVIDENCE.** The generated block below marks a dozen
+> files *"filename rules MISS this"* — donor content in receiver-named TUs,
+> visible **only** through declared lineage. **Those are the files this rule
+> exists to stop creating.** The union basis is the backstop; the prefix
+> restores the belt to go with it.
+>
+> **RATIFIED BY EXECUTION, not by agreement** — the Integrator ran the rules
+> and confirmed the gap rather than concurring with the argument.
+>
+> **SCOPE:** binds work not yet written, by lanes that may not yet exist.
+> That is precisely the class that cannot live in a CALLS row.
+
 > ## RULING — THE M6 GATE'S SCOPE (Housing Security, 2026-08-06, roadmap step 4)
 > The greplist gate scans the exe for WW **identity literals**. It cannot detect
 > ported donor **logic** or donor **data constants**, because compiled code
@@ -95,8 +157,9 @@ block.
      receiver-owned file, so listing it here does not make the file
      strippable — see the leg list in cmake/ww_layer_exclude.cmake. -->
 
-**Sources (79) — generated from `files.cmake`:**
+**Sources (96) — generated from `files.cmake`:**
 
+- `src/d/actor/d_a_bg.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_demo00.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_esa.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_ext_ep.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_ep.cpp` — filename agrees
@@ -106,18 +169,29 @@ block.
 - `src/d/actor/d_a_kb.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_knob00.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_lamp.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_lwood.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_npc_ba1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_npc_bm1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_npc_jb1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_npc_ls1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_npc_p1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_npc_zl1.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_obj_mshokki.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_obj_otble.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_obj_paper.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_obj_plant.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_obj_shelf.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_obj_toripost.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_spc_item01.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_swhit0.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_tag_kb_item.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
+- `src/d/actor/d_a_tag_so.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_vrbox.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_vrbox2.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/actor/d_a_ww_demo00.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_demo00.cpp` — filename agrees
+- `src/d/actor/d_a_ww_item.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_item.cpp` — filename agrees
+- `src/d/actor/d_a_ww_shutter.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_shutter.cpp` — filename agrees
+- `src/d/actor/d_a_ww_tsubo.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_tsubo.cpp` — filename agrees
 - `src/d/d_albw_dialogue.cpp` — shared ALBW/WW dialogue surface (§113 note) (filename basis; declares `host-plumbing`)
 - `src/d/d_demo.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/d_door.cpp` — KIT-LINEAGE `native-port` — **filename rules MISS this**; donor content in a receiver-named TU
@@ -133,6 +207,7 @@ block.
 - `src/d/d_ext_ww_actor_shims.cpp` — KIT-LINEAGE `bridge-owed`, KIT-DONOR `none` — filename agrees
 - `src/d/d_kankyo_ww.cpp` — KIT-LINEAGE `mixed`, KIT-DONOR `per-hunk` — filename agrees
 - `src/d/d_kankyo_ww_sky.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_kankyo_rain.cpp` — filename agrees
+- `src/d/d_kankyo_ww_wind.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_kankyo_wether.cpp:985-1140` — filename agrees
 - `src/d/d_particle.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/d_stage.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 - `src/d/d_ww_itemmdl_pc.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
@@ -144,13 +219,17 @@ block.
 - `src/d/ext_plugin/ww_cam_crawl.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_cam_data.cpp` — WW-specific receiver subsystem (filename basis; declares `donor-port`)
 - `src/d/ext_plugin/ww_cam_select.cpp` — WW-specific receiver subsystem (filename basis; declares `donor-port`)
+- `src/d/ext_plugin/ww_event_names.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_event_manager.cpp:53-92` — filename agrees
 - `src/d/ext_plugin/ww_import_gate.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_item_data.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_item_data.cpp` — filename agrees
 - `src/d/ext_plugin/ww_itemmdl_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_layer_select.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/d_com_inf_game.cpp:185-271` — filename agrees
 - `src/d/ext_plugin/ww_misc_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_npcmount_dispatch.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_profile_register.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_room_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/d/ext_plugin/ww_stage_loader.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
+- `src/d/ext_plugin/ww_tsubo_data.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `d/actor/d_a_tsubo.cpp` — filename agrees
 - `src/d/ext_seq/ja1_bank.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_event_dump.cpp` — JAudio1 parallel donor stack (WW audio) (filename basis; declares `host-plumbing`)
 - `src/d/ext_seq/ja1_jasbank.cpp` — KIT-LINEAGE `native-port`, KIT-DONOR `JSystem/JAudio/JASBank.cpp` — filename agrees
@@ -177,7 +256,7 @@ block.
 - `src/d/ww_jpa_bind.cpp` — WW-specific receiver subsystem (filename basis; declares `host-plumbing`)
 - `src/f_op/f_op_msg_mng.cpp` — KIT-LINEAGE `mixed` — **filename rules MISS this**; donor content in a receiver-named TU
 
-**Includes (51) — directory scan, indicative:**
+**Includes (54) — directory scan, indicative:**
 
 - `include/d/actor/d_a_e_ww.h` — WW leg inside a receiver-named TU
 - `include/d/actor/d_a_ww_demo00.h` — WW-restoration actor
@@ -200,6 +279,7 @@ block.
 - `include/d/d_ext_ww_actor_shims.h` — WW-restoration subsystem
 - `include/d/d_kankyo_ww.h` — WW leg inside a receiver-named TU
 - `include/d/d_kankyo_ww_sky.h` — WW leg inside a receiver-named TU
+- `include/d/d_kankyo_ww_wind.h` — WW leg inside a receiver-named TU
 - `include/d/d_ww_itemmdl_pc.h` — WW-specific receiver subsystem
 - `include/d/d_ww_itemmdl_test.h` — WW-specific receiver subsystem
 - `include/d/ext_evt/evt1_boundary.h` — JEvent1 parallel donor stack (WW events)
@@ -208,6 +288,7 @@ block.
 - `include/d/ext_plugin/ww_cam_data.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_cam_select.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_import_gate.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_item_data.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_itemmdl_dispatch.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_itemmdl_impl_names.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_itemmdl_test_names.h` — WW-specific receiver subsystem
@@ -216,6 +297,7 @@ block.
 - `include/d/ext_plugin/ww_profile_register.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_room_loader.h` — WW-specific receiver subsystem
 - `include/d/ext_plugin/ww_stage_loader.h` — WW-specific receiver subsystem
+- `include/d/ext_plugin/ww_tsubo_data.h` — WW-specific receiver subsystem
 - `include/d/ext_seq/ja1_bank.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_boundary.h` — JAudio1 parallel donor stack (WW audio)
 - `include/d/ext_seq/ja1_dsp_boundary.h` — JAudio1 parallel donor stack (WW audio)

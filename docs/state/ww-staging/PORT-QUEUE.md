@@ -8,6 +8,8 @@ the general plan applies. Regenerate any time — one command.
 
 | donor TU | class | Outset placements | names | decomp | markers | status |
 |---|---|---|---|---|---|---|
+| d_a_switem | OBJ | 3 | ITat00 | MATCHED | 0 | UNPORTED (added 2026-08-17 History/Bridge — Outset-exterior census from sea/Room44.arc DZR; absent from Phase 1) |
+| d_a_npc_kamome | NPC | 1 | HyoiKam | MATCHED | 0 | UNPORTED (added 2026-08-17 History/Bridge — same census; NOT d_a_kamome, which is the seagull and already listed) |
 | d_a_ki | MISC | 26 | keeth | MATCHED | 0 | UNPORTED |
 | d_a_ks | MISC | 13 | kuro_s kuro_t | MATCHED | 0 | UNPORTED |
 | d_a_stone | MISC | 10 | koisi1 | MATCHED | 0 | UNPORTED |
@@ -43,11 +45,9 @@ the general plan applies. Regenerate any time — one command.
 | d_a_npc_so | NPC | 1 | NpcSo | NONMATCHING | 72 | UNPORTED |
 | d_a_npc_ob1 | NPC | 5 | Ob1 | NONMATCHING | 73 | UNPORTED |
 | d_a_npc_yw1 | NPC | 6 | Yw1 | NONMATCHING | 77 | UNPORTED |
-| d_a_npc_ym1 | NPC | 4 | Ym1 | NONMATCHING | 81 | UNPORTED |
+| d_a_npc_ym1 | NPC | 4+6 | Ym1+Ym2 | NONMATCHING | 81 | UNPORTED — ONE TU, TWO PROCS: Ym2's proc is DECLARED INSIDE d_a_npc_ym1.cpp (no ym2 TU exists donor-side; H/B batch-2 find 2026-08-17). Porting ym1 delivers both; 8 placements total |
 | d_a_npc_aj1 | NPC | 6 | Aj1 | NONMATCHING | 89 | UNPORTED |
-| d_a_npc_ko1 | NPC | 6 | Ko1 | NONMATCHING | 134 | UNPORTED |
-| d_a_npc_ym2 | NPC | 6 | Ym2 | NO-TU |  | UNPORTED |
-| d_a_npc_ko2 | NPC | 5 | Ko2 | NO-TU |  | UNPORTED |
+| d_a_npc_ko1 | NPC | 6+5 | Ko1+Ko2 | NONMATCHING | 134 | UNPORTED — ONE TU, TWO PROCS: Ko2's proc is DECLARED INSIDE d_a_npc_ko1.cpp (no ko2 TU exists donor-side; same find). Porting ko1 delivers both; 7 placements total |
 | d_a_sw_item | TRIGGER | 3 | ITat00 | NO-TU |  | UNPORTED |
 | d_a_throwstone | MISC | 2 | Throck | NO-TU |  | UNPORTED |
 | d_a_obj_ajavw | OBJ | 2 | AjavW | NO-TU |  | UNPORTED |

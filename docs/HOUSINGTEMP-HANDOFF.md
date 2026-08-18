@@ -1,5 +1,24 @@
 # HOUSINGTEMP — LANE HANDOFF (spun up 2026-08-05, user ruling)
 
+> *(Cross-reference added 2026-08-16 by Housing/Engine, on the Librarian's new-handoff
+> audit. Five files answer to "the Housing handoff" and none cited all the others — a
+> successor could read one and never learn the rest existed. Nothing was merged or
+> rewritten; only this block was added, identically, to all five. Any older "the
+> current one is…" pointer below this block predates it.)*
+>
+> | doc | kind | dated |
+> |---|---|---|
+> | [`HANDOFF-HOUSING-ENGINE-2026-08-16.md`](HANDOFF-HOUSING-ENGINE-2026-08-16.md) | **CURRENT INSTANCE HANDOFF** — §1002 six-section order plus a §7 monitor exemplar: owned, half-done, do-not-trust, and the unresolved 10–29 vs 25–29 tag-range contradiction. **Start here for present state.** | 2026-08-16 |
+> | [`HANDOFF-HOUSING-ENGINE-2026-08-14.md`](HANDOFF-HOUSING-ENGINE-2026-08-14.md) | **PRIOR INSTANCE HANDOFF** (§1002 order, tale §1003) — superseded for state by the 08-16 file; still owns the pre-08-16 history it records. | 2026-08-14 |
+> | [`HANDOFF-HOUSING-ENGINE.md`](HANDOFF-HOUSING-ENGINE.md) | **PRE-ORDER HANDOFF** (written before §1002 existed; has none of its sections) — superseded twice over; pre-08-11 history only. | 2026-08-10 |
+> | [`HOUSING-HANDOFF.md`](HOUSING-HANDOFF.md) | **RETIRED-INSTANCE RECORD** (user ruling) — the trust-failure account and the banked-state receipts of the pre-08-04 campaign; not current state. | 2026-08-04 |
+> | [`HOUSINGTEMP-HANDOFF.md`](HOUSINGTEMP-HANDOFF.md) | **HOUSINGTEMP LANE CHARTER** (user ruling) — a DIFFERENT lane, paired against Housing to catch what every lane misses; listed because its name says handoff. | 2026-08-05 |
+>
+> **Picking this lane up: read the 2026-08-16 handoff for state, [`LANES.md`](LANES.md)
+> + [`DO-NOT.md`](DO-NOT.md) for the rules, and the older files only for the history
+> each owns.** Whether the older files should merge or archive is a Librarian/user
+> ruling, deliberately not taken here.
+
 > **User ruling, verbatim:** *"we'll make a new instance, the HousingTemp, needed for
 > anything that slips by any of you."*
 

@@ -5,7 +5,7 @@ there. **These documents shrink.** A row exists only while it is outstanding or 
 decision not to act; once something is mapped and verified it leaves the page.
 
 They are **not** design docs — the pipeline lives in
-[WW-Restoration-Cookbook.md](../WW-Restoration-Cookbook.md), the tool lane in
+[WW-Restoration-Cookbook-SUPERSEDED.md](../WW-Restoration-Cookbook-SUPERSEDED.md), the tool lane in
 [ww-bridge-tool-interconnected.md](../ww-bridge-tool-interconnected.md), and the decision ledger in
 [state/cut-actors-demo-restore.md](../../state/cut-actors-demo-restore.md).
 

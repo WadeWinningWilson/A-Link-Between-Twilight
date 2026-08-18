@@ -1,3 +1,6 @@
+
+era: unknown
+<!-- era rationale: CORRECTED 2026-08-16 from `mounted` - see the sibling SUPERSEDED copy. Not re-read against History/Bridge's consumption-boundary rule; UNKNOWN, not cleared. | Librarian -->
 > # ⚠ UNCERTAIN ACCURACY — DO NOT WRITE
 > This copy is one of two diverged cookbooks (fork confirmed 2026-07-23, bus §106; 542 diff
 > lines). It may contain doctrine the other copy lacks and vice versa. **Do not edit. Do not

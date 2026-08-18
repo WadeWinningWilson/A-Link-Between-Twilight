@@ -5,12 +5,27 @@
 
 ---
 
-## ⛔ BANNER — THE USER STATED THE PRODUCT, AND WE DO NOT BUILD IT (tale §934, 2026-08-14)
+## BANNER — COMMITTED MIGRATION: a working template, a real gap, one unknown
+*(tale §934 as measured · §937/§938 corrections · **§939 user ruling** · revised 2026-08-14)*
+
+> **⚠ THIS BANNER WAS ORIGINALLY TITLED "…AND WE DO NOT BUILD IT."** That framing was wrong in
+> two directions and is superseded: it counted a shipping WW plugin as nothing (§937/§938), and
+> it predated the user's ruling. **Do not quote the original version.**
 
 **The intended product, in the user's words:** *any user with any dusklight version downloads
 the plugin, puts their own ISO in, the plugin connects to dusklight, and that is WW-in-TP.*
 
-**Measured against that goal, the current architecture delivers 0% of it:**
+### 🔒 USER RULING §939 — THE PLUGIN IS THE PRODUCT. MOD-SIDE ONLY FROM NOW.
+User's words: *"They can progress on WW work if it stays mod folder side and doesn't integrate
+into dusklight/receiver."* Operationally, binding on every lane:
+1. **No new `files.cmake` entries for WW work** — the in-exe pile stops growing.
+2. **No new seams edited into native TP files** (`d_stage`, `d_com_inf_game`,
+   `d_event_manager`, `d_event_data`, kin) — the Tier-2 class must not grow while its
+   feasibility is unmeasured.
+3. **WW work continues mod-side** — `mods-src/ww_donor_disc` is the proven shape.
+4. **Existing in-exe code is NOT reverted** — this governs what lands *next*.
+
+### Where that leaves the architecture
 
 | Question | Measured |
 |---|---|
@@ -40,6 +55,29 @@ exists in plugin form.**
 **The gap is real but narrower than "0% plugin", and the difference matters for the work:**
 plugin-izing the receiver layer is **not greenfield** — there is a working in-repo precedent,
 an SDK, a package format, and a proven config-service path to copy from.
+
+### The template is verified clean, not merely present (Foundry §937 / Integrator, row 98)
+Two facts I did not have when I wrote the banner, both strengthening the point:
+- **The artifact is BUILT, not just declared:**
+  `build/windows-msvc-relwithdebinfo/mods/ww_donor_disc.dusk` — entirely WW.
+- **Its sources include ZERO receiver headers** — verified at the link surface: only
+  `<mods/service.hpp>` and std. That is a *working migration template*, which is a materially
+  different starting position from "the mechanism exists in theory".
+
+> **⚠ GUARD (user clarification to §939, 2026-08-14 — do not read the line above as a target
+> shape).** *"I want the receiver based code to remain as it is in content — just delivery is
+> plugin side. The receiver work allows us to make the mod viable, it just needs to be
+> DELIVERED by the plugin."*
+> **"Zero receiver headers" describes today's DATA mod, not a required shape and not a ban on
+> receiver logic.** The receiver layer's content and logic **stay as they are** — they are what
+> makes the mod viable. What moves is the **delivery vehicle**. The gates cap what lands in the
+> **exe** next; they do not deprecate the receiver work. *(History made exactly this misreading
+> at §941 and corrected it at §943; this doc is AGENT_INDEX-inscribed, so the guard belongs
+> here too.)*
+
+**My original banner erased that template by counting it as nothing.** The core claim — the
+receiver layer is in-exe and grew this session — stands and is not softened. But the remaining
+work is smaller than "0% plugin" implied, and saying so is part of reporting it honestly.
 
 ### The §512/§519 reading in this doc's original (3) was WRONG — my error
 The original text said the in-tree layer *"stays in-tree — already ruled twice"*. Re-read
@@ -151,22 +189,27 @@ coexistence tree."* That is a different axis from where the WW receiver layer li
 
 ---
 
-## A count discrepancy this surfaced — flagged, not resolved
+## The count question — RESOLVED by `layer_census.py`, and my own number was part of the problem
 
-Three different numbers describe "the receiver layer", and **none of them carries a scope tag**:
+An earlier revision of this doc listed three unreconcilable counts and called it unresolvable.
+**It is resolved: `tools/foundry/layer_census.py` reports every scope with its tag.**
 
-| Number | Source | Scope as stated |
-|---|---|---|
-| **34 Tier-1 receiver files** | `NEVER-PUSH-STRIP-SET.md`, produced 2026-07-25 | strip-set membership |
-| **~79 `.cpp` + 51 `.h`** | row 85 (Librarian's read) | "Tier-1 receiver layer" |
-| **49 `.cpp` + 44 `.h`** | this doc, measured today | the four named dirs only |
+| Scope | Files | Split | What it means |
+|---|---|---|---|
+| **STRIP-SET** | **134** | 83 `.cpp` · 51 `.h` | what must never be pushed |
+| **LINEAGE-DECLARED** | **107** | 102 `.cpp` · 5 `.h` | files declaring WW lineage |
+| **FILENAME** | **75** | 38 `.cpp` · 37 `.h` | name-pattern match |
+| **EXT-DIRS** | **17** | 17 `.cpp` · 0 `.h` | the `ext_*` plugin dirs only |
 
-These may all be correct over different sets, and mine is deliberately the narrowest —
-**I counted only `ext_plugin/ + ext_seq/ + ext_evt/ + d_ext_*` and say so.** I am not asserting
-the others are wrong. **This is exactly the failure mode CALLS row 78 is being written to
-prevent** (mandatory SCOPE field on every number), and it is worth having as a live example
-while that schema is still being designed: three honest counts, one subject, no way to reconcile
-them from the numbers alone.
+**My "49 `.cpp` + 44 `.h`" matched none of these — it was a FIFTH ad-hoc scope** (`ext_plugin`
++ `ext_seq` + `ext_evt` + `d_ext_*`), invented in the measuring and never named as a set.
+I flagged the scope problem in the same breath as adding a new instance of it. Corrected here:
+**quote a census scope or do not quote a number.**
+
+> **AUTHORITY (the census's own closing note, and it points at work already landed):** all four
+> scopes are **tree-side inferences**. The authoritative answer is **RUNTIME — the plugin's boot
+> manifest**, whose profile half landed at §924 and whose arc-roster half is still owed. When
+> that exists these four become cross-checks against it, not competing truths.
 
 ---
 

@@ -62,15 +62,27 @@ def main():
     print("  THE MAP (phases, tools, standing rules): python tools/foundry/workflow.py")
     print("=" * 72)
 
-    # 1. READINESS — decomp_status
+    # 1. READINESS — decomp_status. FIVE-CLASS AWARE (2026-08-16): the donor
+    # vocabulary is Matching/NonMatching/Equivalent/MatchingFor/EquivalentFor;
+    # decomp_status collapses it version-scoped to three output verdicts, and
+    # this regex must name all three — its first cut missed EQUIVALENT and
+    # would have carded a usable actor as UNKNOWN (the 85-actor demotion
+    # shape, one layer up).
     out = run([str(HERE / "decomp_status.py"), actor])
-    m = re.search(r"(MATCHED|NONMATCHING|NO-TU)", out)
+    m = re.search(r"(MATCHED|NONMATCHING|EQUIVALENT|NO-TU)", out)
     print("\n[1 READINESS] decomp_status:")
     print("  " + (m.group(1) if m else out.strip().splitlines()[-1] if out.strip() else "UNKNOWN"))
     if m and m.group(1) != "MATCHED":
         findings += 1
-        print("  -> not MATCHED: verbatim port impossible; say so in the queue row"
-              " (§801 verdict class)")
+        # §801 RULED 2026-08-16: NonMatching-but-COMPLETE is ADMISSIBLE as a
+        # behavioural spec under labelling. The consequence is a STAMP, not a
+        # stop: the queue row must carry byte-true: DIVERGENT (the store and
+        # the build gate both refuse BYTE-TRUE/EQUIVALENT claims from a
+        # NONMATCHING source — laundering fails three times now).
+        print("  -> not MATCHED: verbatim citation impossible. Under §801 a "
+              "COMPLETE body is admissible as a BEHAVIOURAL spec — label "
+              "every use site, and the queue row MUST stamp "
+              "byte-true: DIVERGENT (filing+build gates refuse more).")
     if not m:
         unknowns += 1
 
@@ -112,6 +124,29 @@ def main():
                 break
     print("  " + (row if row else "(not placed on the active area — check census for demand)"))
 
+    # 4b. TRACKER ROW — the drain is COMPLETE (2026-08-16: ROWED 96/LEGACY 0),
+    # so every receiver TU has a row; a port touching one should cite it, and
+    # a NEW donor surface should get a row minted at queue time (one TU per
+    # row — the comma ruling). This joins the card to the tracker instead of
+    # leaving the two to drift.
+    rows_dir = HERE.parents[1] / "docs" / "state" / "ww-staging" / "tracker" / "rows"
+    print("\n[4b TRACKER ROW] seam-tracker coverage:")
+    hits = []
+    if rows_dir.is_dir():
+        for rp in rows_dir.glob("*.md"):
+            txt = rp.read_text(encoding="utf-8-sig", errors="replace")
+            if actor in txt:
+                mm = re.search(r"^id:\s*(\S+)", txt, re.M)
+                dw = re.search(r"^doorway:\s*(\S+)", txt, re.M)
+                hits.append((mm.group(1) if mm else rp.stem,
+                             dw.group(1) if dw else "?"))
+    if hits:
+        for rid, dw in hits[:5]:
+            print("  row %s  doorway %s" % (rid, dw))
+    else:
+        print("  (no row names this actor — a new surface mints its row at "
+              "queue time; row_store.py mint)")
+
     # 5/6. POST-PORT — per-file laws + substitution nets
     if post:
         out = run([str(HERE / "kit_laws.py"), post])
@@ -147,6 +182,15 @@ def main():
             print("  " + ln)
         if "[HOLD]" in out or "[VERIFY]" in out:
             findings += 1
+
+    # QUEUE-STAMP FOOTER (rulings of 2026-08-16, printed so the card and the
+    # row cannot disagree about what the row must carry):
+    print("\n[QUEUE STAMPS] every row from this card carries:")
+    print("  - COMPILE STATUS: UNVERIFIED unless the Integrator built it "
+          "(a /Zs pass is a shape check, NEVER the verdict — DN-12; "
+          "queue_verdict_lint enforces)")
+    print("  - byte-true: DIVERGENT if any source is NONMATCHING/EQUIVALENT")
+    print("  - ONE TU per row (the comma ruling; row_store refuses more)")
 
     print("\n" + "=" * 72)
     verdict = ("CLEAN" if findings == 0 and unknowns == 0

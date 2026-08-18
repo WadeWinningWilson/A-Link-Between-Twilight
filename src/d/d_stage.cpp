@@ -2190,11 +2190,17 @@ static int dStage_playerInit(dStage_dt_c* i_stage, void* i_data, int num, void* 
         }
         if (i == num) {
 #if TARGET_PC
-            std::vector<s16> valid_points;
+            // Print in POINT-ID SPACE, i.e. through the same (u8) mask the
+            // compare above uses. The raw signed angle.z made run 190948's
+            // FATAL list ids 99/100-103/128/151/201-206 as -157/-156..-153/
+            // -128/-105/-55..-50 — which read as "high-bit ids unreachable"
+            // and spawned a phantom one-mask receiver seam. The matcher was
+            // never wrong; the diagnostic spoke the wrong space.
+            std::vector<int> valid_points;
             valid_points.reserve(num);
             player_data = player->m_entries;
             for (i = 0; i < num; i++) {
-                valid_points.push_back(player_data->base.angle.z);
+                valid_points.push_back((int)(u8)player_data->base.angle.z);
                 player_data++;
             }
             std::ranges::sort(valid_points);
@@ -3273,6 +3279,45 @@ void dStage_dt_c_roomReLoader(void* i_data, dStage_dt_c* i_stage, int param_2) {
         {"TGDR", dStage_tgscInfoInit},
         {"REVT", dStage_mapEventInfoInit},
     };
+
+#if TARGET_PC
+    // ========================================================================
+    // WW-HOST ROOMS RUN THE DONOR'S OWN RELOAD TABLE (WW d_stage.cpp:2201-2207,
+    // Matching) — two rows the shared table above cannot express, found by
+    // History's chunk-vocabulary decode:
+    //   · WW spells its door chunk "DOOR"; the decode is an EXACT 4-byte int
+    //     compare, so the "Door" rows above never fire on a WW room and WW
+    //     doors were never placed. The donor routes DOOR through the TGSC
+    //     placement shape (tgsc-sized records into the actorCreate funnel).
+    //   · TGDR is INVERTED across the lineage: the donor's room table routes
+    //     it to roomDrtgInfoInit (a door-tag record); the shared row above
+    //     reads the same bytes as a generic tgsc record.
+    // The shared tags keep the receiver's own handlers (their bodies match the
+    // donor's row-for-row; the daSus check they add is receiver law). "Door"
+    // and "REVT" rows are ABSENT here because those tags are not in WW's room
+    // vocabulary — no WW file carries them, so their omission changes nothing
+    // on real donor data and keeps the table the donor's own.
+    // KIT-DONOR-HUNK: d/d_stage.cpp Matching
+    // ========================================================================
+    {
+        const char* wwStg = dComIfGp_getStartStageName();
+        if (wwStg != NULL && dExtWwSave_isWwHostStage(wwStg)) {
+            static FuncTable l_wwFuncTable[] = {
+                {"ACTR", dStage_actorCommonLayerInit},
+                {"TGOB", dStage_actorCommonLayerInit},
+                {"TRES", dStage_roomTresureInit},
+                {"TGSC", dStage_tgscCommonLayerInit},
+                {"SCOB", dStage_tgscCommonLayerInit},
+                {"DOOR", dStage_tgscInfoInit},        // donor :2205 — the case trap
+                {"TGDR", dStage_roomDrtgInfoInit},    // donor :2206 — the inversion
+            };
+            dStage_dt_c_decode(i_data, i_stage, l_wwFuncTable, ARRAY_SIZEU(l_wwFuncTable));
+            layerActorLoader(i_data, i_stage, param_2);
+            return;
+        }
+    }
+    // KIT-DONOR-HUNK-END
+#endif
 
     dStage_dt_c_decode(i_data, i_stage, l_funcTable, ARRAY_SIZEU(l_funcTable));
     layerActorLoader(i_data, i_stage, param_2);

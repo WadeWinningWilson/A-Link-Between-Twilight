@@ -18,43 +18,49 @@ def rules(tag):
     """[(rule-name, tier, member-name, regex-with-one-offset-group), ...]
     Regexes run against the whole draft text; group 1 = the hex offset."""
     T = re.escape(tag)
+    # The class-name LENGTH is part of the mangling (11daNpc_Aj1_c) and was
+    # hardcoded 11 — every rule silently NO-MATCHed for daNpc_So_c (10 chars).
+    # A wrong length is not a loud failure, it is a vacuous pass: the tool
+    # reports "shape differs" for a draft whose shape is identical.
+    # (DECODER, 2026-08-17, found preparing the So propagation pass.)
+    L = len("daNpc_%s_c" % tag)
     return [
         # setStt(s8): stores its arg into the state-number field. [RECEIPT]
         ("setStt arg store", "RECEIPT", "mSttNum",
-         rf"setStt__11daNpc_{T}_cFSc.*?this->unk(\w+) = \(u8\) arg0;"),
+         rf"setStt__{L}daNpc_{T}_cFSc.*?this->unk(\w+) = \(u8\) arg0;"),
         # eventOrder: selector compared to 1 (speak order). [RECEIPT]
         ("eventOrder selector", "RECEIPT", "mOrderType",
-         rf"eventOrder__11daNpc_{T}_cFv.*?temp_r0 = this->unk(\w+);"),
+         rf"eventOrder__{L}daNpc_{T}_cFv.*?temp_r0 = this->unk(\w+);"),
         # eventOrder: idx = selector - 3. [RECEIPT]
         ("event index", "RECEIPT", "mEventIdx",
-         rf"eventOrder__11daNpc_{T}_cFv.*?this->unk(\w+) = \(s8\) temp_r0 - 3;"),
+         rf"eventOrder__{L}daNpc_{T}_cFv.*?this->unk(\w+) = \(s8\) temp_r0 - 3;"),
         # eventOrder: table indexed by mEventIdx. [RECEIPT]
         ("event id table", "RECEIPT", "mEventIdTable",
-         rf"eventOrder__11daNpc_{T}_cFv.*?\* 2\)\)->unk(\w+),"),
+         rf"eventOrder__{L}daNpc_{T}_cFv.*?\* 2\)\)->unk(\w+),"),
         # setAnm_tex(s8): compare-then-store btp number. [RECEIPT]
         ("setAnm_tex store", "RECEIPT", "mBtpNum",
-         rf"setAnm_tex__11daNpc_{T}_cFSc.*?this->unk(\w+) = \(u8\) arg0;"),
+         rf"setAnm_tex__{L}daNpc_{T}_cFSc.*?this->unk(\w+) = \(u8\) arg0;"),
         # plyTexPttrnAnm: cLib_calcTimer target = blink timer. [RECEIPT]
         ("blink timer", "RECEIPT", "mBlinkTimer",
-         rf"plyTexPttrnAnm__11daNpc_{T}_cFv.*?cLib_calcTimer<s>__FPs\(&this->unk(\w+)\)"),
+         rf"plyTexPttrnAnm__{L}daNpc_{T}_cFv.*?cLib_calcTimer<s>__FPs\(&this->unk(\w+)\)"),
         # plyTexPttrnAnm: frame counter incremented vs frame max. [RECEIPT]
         ("btp frame", "RECEIPT", "mBtpFrame",
-         rf"plyTexPttrnAnm__11daNpc_{T}_cFv.*?this->unk(\w+) \+= 1"),
+         rf"plyTexPttrnAnm__{L}daNpc_{T}_cFv.*?this->unk(\w+) \+= 1"),
         # plyTexPttrnAnm: ->unk6 == J3DAnmBase::mFrameMax holder (§251). [RECEIPT]
         ("btp resource", "RECEIPT", "mpBtpRes",
-         rf"plyTexPttrnAnm__11daNpc_{T}_cFv.*?this->unk(\w+)->unk6"),
+         rf"plyTexPttrnAnm__{L}daNpc_{T}_cFv.*?this->unk(\w+)->unk6"),
         # event_action: jumptable/switch selector. [RECEIPT]
         ("event action no", "RECEIPT", "mEvtActionNo",
-         rf"event_action__11daNpc_{T}_cFv.*?temp_r0 = this->unk(\w+);"),
+         rf"event_action__{L}daNpc_{T}_cFv.*?temp_r0 = this->unk(\w+);"),
         # setAnm_ATR family: 0xFF = none sentinel. [INFERENCE]
         ("anm attribute", "INFERENCE", "mAnmAtr",
-         rf"setStt__11daNpc_{T}_cFSc.*?this->unk(\w+) = 0xFF;"),
+         rf"setStt__{L}daNpc_{T}_cFSc.*?this->unk(\w+) = 0xFF;"),
         # setStt: previous-state save at tail. [RECEIPT]
         ("stt old", "RECEIPT", "mSttNumOld",
-         rf"setStt__11daNpc_{T}_cFSc.*?this->unk(\w+) = temp_r5;"),
+         rf"setStt__{L}daNpc_{T}_cFSc.*?this->unk(\w+) = temp_r5;"),
         # setStt: timer zeroed on entry. [INFERENCE]
         ("stt timer", "INFERENCE", "mSttTimer",
-         rf"setStt__11daNpc_{T}_cFSc.*?this->unk(\w+) = 0;"),
+         rf"setStt__{L}daNpc_{T}_cFSc.*?this->unk(\w+) = 0;"),
     ]
 
 def main():

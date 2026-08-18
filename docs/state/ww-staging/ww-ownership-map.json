@@ -1,0 +1,1508 @@
+{
+ "_authority": "Cut from OWNERSHIP-WORKSHEET.md at 162/162 verdicts, 2026-08-16. REPLACES the four partitions (STRIP-SET / FILENAME / EXT-DIRS / LINEAGE) as the WW-ownership authority. Axis-B provenance stays in per-file KIT-LINEAGE headers - parse them, never this file, for provenance. A file absent from this map is UNKNOWN and blocks; it does not pass.",
+ "_verdict_sources": {
+  "USER": 12,
+  "HOUSING": 19,
+  "HISTORY/BRIDGE": 132
+ },
+ "_categories": [
+  "UNKNOWN-VERDICT",
+  "albw",
+  "albw-skins",
+  "dual-pending",
+  "fork-host-plumbing",
+  "instrument",
+  "not-ww",
+  "shared-per-hunk",
+  "stale-path",
+  "upstream-native",
+  "ww-port"
+ ],
+ "files": {
+  "include/d/actor/d_a_e_ww.h": {
+   "membership": "X . . .",
+   "commits": "none",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "NOT-WW (Housing Security 08-17: TP enemy. Adjudicating Foundry's cross-instrument conflict - the never-push manifest excludes d_a_e_ww.cpp with positive evidence (fpcNm_E_WW_e, f_op_actor_enemy.h, Z2AudioLib) while this entry carried commits:none, t2_sites:'', flags:'-'. Evidence beats an empty verdict. APPLIED by Foundry 08-17 - the ruling was on the board but had never reached this artifact.)",
+   "category": "not-ww"
+  },
+  "include/d/actor/d_a_ww_demo00.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_albw_dialogue.h": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "La",
+   "route": "HOUSING",
+   "verdict": "ALBW (Housing 08-16: zero WW refs)",
+   "category": "albw"
+  },
+  "include/d/d_ext_dmesg.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_fado_door.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_mod_flags.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_npc_doors.h": {
+   "membership": "X X . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_npc_mount.h": {
+   "membership": "X X . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_npc_population.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_quick_equip.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "USER",
+   "verdict": "ALBW (user 08-16: quick-swap work)",
+   "category": "albw"
+  },
+  "include/d/d_ext_room_verify.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_save_flags.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_save_flags_route.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_save_guard.h": {
+   "membership": "X X . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_scope_msg.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_seq_space.h": {
+   "membership": "X X . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_status.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "USER",
+   "verdict": "ALBW (user 08-16: outfit-tab work)",
+   "category": "albw"
+  },
+  "include/d/d_ext_tree.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_ext_ww_actor_shims.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_kankyo_ww.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_kankyo_ww_sky.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_kankyo_ww_wind.h": {
+   "membership": ". X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/d_menu_ext_status.h": {
+   "membership": ". X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "USER",
+   "verdict": "ALBW (user 08-16: outfit-tab work)",
+   "category": "albw"
+  },
+  "include/d/d_ww_itemmdl_pc.h": {
+   "membership": "X X . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "s",
+   "route": "USER",
+   "verdict": "ALBW-SKINS (user 08-16)",
+   "category": "albw-skins"
+  },
+  "include/d/d_ww_itemmdl_test.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "ALBW-SKINS (History 08-16: flipped from WW-PORT \u2014 namespace dWwItemmdl, editor bow-demo replay helper; matches its own .cpp sibling; skins regex needs the underscore and this header has none)",
+   "category": "albw-skins"
+  },
+  "include/d/ext_evt/evt1_boundary.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_line/mdoext1_3dline.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_cam_crawl.h": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_cam_data.h": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_cam_select.h": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_import_gate.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_item_data.h": {
+   "membership": ". X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_itemmdl_dispatch.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_itemmdl_impl_names.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "s",
+   "route": "USER",
+   "verdict": "ALBW-SKINS (user 08-16)",
+   "category": "albw-skins"
+  },
+  "include/d/ext_plugin/ww_itemmdl_test_names.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_npcmount_dispatch.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_npcmount_impl_names.h": {
+   "membership": "X X . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_profile_register.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_room_loader.h": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_stage_loader.h": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_plugin/ww_tsubo_data.h": {
+   "membership": ". X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_bank.h": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_boundary.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_dsp_boundary.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_event_dump.h": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_jasbank.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_jaschannel.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_jasseqparser.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_jastrack.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_native.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_oscillator.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_parser.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_seq_ctrl.h": {
+   "membership": "X . . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ext_seq/ja1_track.h": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "include/d/ww_jpa.h": {
+   "membership": "X X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_bg.cpp": {
+   "membership": ". . . X",
+   "commits": "both",
+   "t2_sites": "5",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_demo00.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "1",
+   "flags": "sw",
+   "route": "USER",
+   "verdict": "FORK / ALBW-skins \u2014 NO plugin share. 1 skins hunk (:1700-1708 cel-shade ambient) + its donor-derived helper (:1654-1682 demoModelUsesZAtoon, KIT-DONOR-HUNK d/d_resorce.cpp MatchingFor) which serves the SKINS path. AXIS-A FORK, AXIS-B donor-derived \u2014 the axes decouple here. Rest native (History 08-16)",
+   "category": "albw-skins"
+  },
+  "src/d/actor/d_a_demo_item.cpp": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "s",
+   "route": "USER",
+   "verdict": "ALBW-SKINS edits in native TU (user 08-16)",
+   "category": "albw-skins"
+  },
+  "src/d/actor/d_a_esa.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "4",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ext_ep.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ext_plank_span.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ext_vegetation.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_grass.cpp": {
+   "membership": "X . . .",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "INSTRUMENT",
+   "category": "instrument"
+  },
+  "src/d/actor/d_a_kamome.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "3",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_kb.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "4",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_knob00.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "12",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_lamp.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "4",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_lwood.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "6",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_npc_ba1.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "5",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_npc_bm1.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "17",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_npc_jb1.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "5",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_npc_ls1.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "10",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_npc_p1.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "13",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_npc_zl1.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "7",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_obj_lpalm.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "5",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_obj_mshokki.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "3",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_obj_otble.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "5",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_obj_paper.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_obj_plant.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "3",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_obj_shelf.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "4",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_obj_toripost.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "4",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_spc_item01.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "4",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_swhit0.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "3",
+   "flags": "wL",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/actor/d_a_tag_kb_item.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_tag_so.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_vrbox.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "8",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_vrbox2.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "6",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ww_demo00.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ww_item.cpp": {
+   "membership": ". X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ww_shutter.cpp": {
+   "membership": ". X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/actor/d_a_ww_tsubo.cpp": {
+   "membership": ". X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_albw_dialogue.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "La",
+   "route": "HOUSING",
+   "verdict": "ALBW (Housing 08-16: only KIT boilerplate, DONOR none)",
+   "category": "albw"
+  },
+  "src/d/d_camera.cpp": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "3",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_demo.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "sw",
+   "route": "USER",
+   "verdict": "SPLIT \u2014 skins 1 hunk (emitter_create :1505-1512, get-item beam suppress) -> ALBW \u00b7 port 4 WW-host-gated hunks (:121 handleDemoMessage \u00b7 :140 dExtDmesg_setMessage \u00b7 :497 donor transform KIT-DONOR-HUNK NonMatching \u00b7 :1087 WW_DEMO00 route) -> PLUGIN \u00b7 rest native (History 08-16, read per hunk)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_door.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "5",
+   "flags": "wL",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_ev_camera.cpp": {
+   "membership": ". . . .",
+   "commits": "ours",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "INSTRUMENT - five s903/s983/s984 probe sites, all strip-before-push (file's own line 4); the CRAWL port lives in the actors, NOT here (H/B ruled 08-16, envelope find #1)",
+   "category": "instrument"
+  },
+  "src/d/d_event.cpp": {
+   "membership": ". . . X",
+   "commits": "both",
+   "t2_sites": "3",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (History 08-17). 23 added / 0 deleted, three sites (:873 :932 resolver, :1186 isWwHostStage). WW-scoping satisfied by POINTER-RANGE IDENTITY: wwEvntFullNameForRecord returns NULL unless the record is inside the seam s_evntPool - per-record, stronger than a global isWwHostStage. Do not add a redundant stage check.",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_event_data.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "1",
+   "flags": "wL",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_event_manager.cpp": {
+   "membership": ". . . X",
+   "commits": "both",
+   "t2_sites": "7",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_ext_dmesg.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_mod_flags.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_npc_doors.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_npc_mount.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "sw",
+   "route": "USER",
+   "verdict": "PLUGIN / WW-port throughout \u2014 NOT dual. Its 5 dWwItemmdl_ sites (:7374-:7737) are WW clothes-get MESSAGE PRESENTATION driven by donor msg 3095/4410 (native item box mFukiKind 9), i.e. PORT hunks calling the skins module's flag API. A skins MARKER is not a skins HUNK. DN-9 retirement unaffected (History 08-16)",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_npc_population.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_room_verify.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_save_flags.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_seq_space.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_tree.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_ext_ww_actor_shims.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_kankyo_rain.cpp": {
+   "membership": "X . . .",
+   "commits": "both",
+   "t2_sites": "4",
+   "flags": "-",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk CONFIRMED (Housing 08-16: dKyWw_isSkyHost + ww_vrkumo.inc; flags UNDER-detected)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_kankyo_ww.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_kankyo_ww_sky.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_kankyo_ww_wind.cpp": {
+   "membership": ". X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_npc.cpp": {
+   "membership": ". . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/d_particle.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "2",
+   "flags": "L",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_s_play.cpp": {
+   "membership": ". . . .",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "sw",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "SPLIT - port 2 WW hunks (dExtWw_drawDemoMessage :782 + dExtWw_pollDemoMessage :855, the s49 storyboard-dialogue pair) -> PLUGIN . skins 2 hunks (dWwItemmdl bow-demo :843-844) -> ALBW . rest native. dExtWw_* call sites UNGUARDED by isWwHostStage - state-gated in callees, recorded scope-shape not defect (H/B ruled 08-16, envelope find #2)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_stage.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "8",
+   "flags": "wL",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/d/d_ww_itemmdl_pc.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "sw",
+   "route": "USER",
+   "verdict": "ALBW-SKINS (user 08-16)",
+   "category": "albw-skins"
+  },
+  "src/d/d_ww_itemmdl_test.cpp": {
+   "membership": "X X . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "s",
+   "route": "USER",
+   "verdict": "ALBW-SKINS (user 08-16)",
+   "category": "albw-skins"
+  },
+  "src/d/ext_evt/evt1_boundary.cpp": {
+   "membership": "X . X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_evt/evt1_event_data.cpp": {
+   "membership": "X . X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_evt/evt1_event_manager.cpp": {
+   "membership": "X . X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_line/mdoext1_3dline.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_cam_crawl.cpp": {
+   "membership": "X X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_cam_data.cpp": {
+   "membership": "X X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_cam_select.cpp": {
+   "membership": "X X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_event_names.cpp": {
+   "membership": ". X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_import_gate.cpp": {
+   "membership": "X X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_item_data.cpp": {
+   "membership": ". X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_itemmdl_dispatch.cpp": {
+   "membership": "X X X X",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "s",
+   "route": "USER",
+   "verdict": "ALBW-SKINS (user 08-16)",
+   "category": "albw-skins"
+  },
+  "src/d/ext_plugin/ww_layer_select.cpp": {
+   "membership": ". X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_misc_dispatch.cpp": {
+   "membership": "X X X X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_npcmount_dispatch.cpp": {
+   "membership": "X X X X",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_profile_register.cpp": {
+   "membership": "X X X X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_room_loader.cpp": {
+   "membership": "X X X X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_stage_loader.cpp": {
+   "membership": "X X X X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_plugin/ww_tsubo_data.cpp": {
+   "membership": ". X X X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_bank.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_event_dump.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasbank.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasbnkparser.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jascalc.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jaschannel.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasdspchannel.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasnotemgr.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasouterparam.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasplayer.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasregisterparam.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasseqctrl.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jasseqparser.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jastrack.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jastrackinterrupt.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_jastrackport.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_kernel.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_native.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_oscillator.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_parser.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_seq_ctrl.cpp": {
+   "membership": "X . . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ext_seq/ja1_track.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ww_jpa.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/d/ww_jpa_bind.cpp": {
+   "membership": "X X . X",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/dusk/boot_stage.cpp": {
+   "membership": ". . . X",
+   "commits": "other",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "FORK / host-plumbing (self-declared line 1; Integrator 08-16; dBootStage_add stays a seam seed)",
+   "category": "fork-host-plumbing"
+  },
+  "src/dusk/event_ext_store.cpp": {
+   "membership": ". X . .",
+   "commits": "ww",
+   "t2_sites": "",
+   "flags": "w",
+   "route": "HISTORY/BRIDGE",
+   "verdict": "WW-PORT",
+   "category": "ww-port"
+  },
+  "src/f_op/f_op_msg_mng.cpp": {
+   "membership": "X . . X",
+   "commits": "both",
+   "t2_sites": "2",
+   "flags": "wL",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk (Housing 08-16)",
+   "category": "shared-per-hunk"
+  },
+  "src/f_pc/f_pc_profile_lst.cpp": {
+   "membership": ". . . X",
+   "commits": "both",
+   "t2_sites": "",
+   "flags": "L",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk CONFIRMED (Housing 08-16: WW_DEMO00 slot already served by dWwProfileRegister_lookup)",
+   "category": "shared-per-hunk"
+  }
+ }
+}

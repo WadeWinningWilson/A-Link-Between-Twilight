@@ -59,4 +59,4 @@ Confirm dispatch is by kind only. `SwordEquip` / `ShieldEquip` exist for **mod**
 | [ext-start-status.md](ext-start-status.md) | Collect sibling Tools/Quest/Atlas |
 | [cut-actors-demo-restore.md](cut-actors-demo-restore.md) №103 | Full TP id table; two-inventory |
 | [wind-waker-item-work.md](../wind-waker-item-work.md) | 21 `itemmdl` bag meshes |
-| [WW-Restoration-Cookbook.md](../WW%20Linked/WW-Restoration-Cookbook.md) | TP owns inventory |
+| [WW-Restoration-Cookbook-SUPERSEDED.md](../WW%20Linked/WW-Restoration-Cookbook-SUPERSEDED.md) | TP owns inventory |

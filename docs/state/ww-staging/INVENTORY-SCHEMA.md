@@ -119,5 +119,49 @@ not implemented §2/§3.
 
 ---
 
+## 8. OWNERSHIP vs the five axes — RULED, not assumed (A5; Librarian, 2026-08-16)
+
+**THE RULING: CROSS-REFERENCE, NOT MERGE. Ownership is a SIXTH axis and it is orthogonal to all five.**
+
+`ww-ownership-map.json`'s `_categories` answers **"which track does this file belong to"** — a partition
+of provenance. The five axes answer **"how far along is this unit, and is it right"** — per-unit progress
+and verification. **A file's ownership implies nothing about its port state, and no port state implies an
+owner.** `ww-port` + `PORTABLE:ABSENT` is a perfectly coherent record; so is `albw` + `VERIFIED:MATCH`.
+Merging them would force a single field to answer two questions, which is how a vocabulary starts lying.
+
+**But "different axes" does NOT discharge the gate — a shared axis is only one way to get a parallel
+vocabulary. The other is COLLIDING TOKENS, and there are three:**
+
+| ownership token | collides with | ruling |
+|---|---|---|
+| `UNKNOWN-VERDICT` | bare `UNKNOWN` on all five axes | **Never shorten it to `UNKNOWN`.** The suffix is load-bearing: it means *ownership undecided*, not *unmeasured*. A bare `UNKNOWN` in a record is an AXIS STATE and must never be read as an ownership value. |
+| `dual-pending` | `PENDING` (LINKED §4.2) | **Two unrelated pendings.** LINKED `PENDING` = registration in flight. `dual-pending` = ownership contested between two tracks. Neither may be written as bare `pending`. |
+| `not-ww` | `NOT` (LINKED §4.2, EXERCISED §4.3) | **`NOT` is an axis state meaning not-registered / not-hit. `not-ww` is a scope verdict meaning out of this inventory entirely.** A unit that is `not-ww` should not carry axis states at all. |
+
+**THE PARALLEL VOCABULARY THAT ALREADY EXISTS IS INSIDE THE MAP, NOT BETWEEN THE MAP AND THIS SCHEMA.**
+Every record carries BOTH `verdict` (`"WW-PORT"`, upper case, prose, sourced from `_verdict_sources`) and
+`category` (`"ww-port"`, lower case, structured). **Same axis, two spellings, on all 162 records.** That is
+the exact shape History/Bridge and the Integrator validated a law against tonight — two lanes string-matched
+the free-text field while the structured one sat beside it. **RULING: `category` is authoritative and is the
+only field a tool may branch on. `verdict` is provenance prose for a human reader and must never be parsed.**
+
+**CASE HAZARD, flagged because tonight's law is about matchers:** `_categories` is lower-case-kebab in ten
+of eleven members and `UNKNOWN-VERDICT` is the lone upper-case token. **A case-sensitive matcher over that
+list is correct for ten values and silently wrong for one** — and the wrong one is the *we-do-not-know*
+value, so its failure mode is to disappear rather than to error. Normalise on read; do not rely on the
+declared spelling.
+
+**DATA NOTE, measured this pass and NOT a criticism of the map:** five of the eleven declared categories
+currently have **zero** members (`UNKNOWN-VERDICT`, `dual-pending`, `not-ww`, `stale-path`, `upstream-native`).
+Live distribution is `ww-port 129 · shared-per-hunk 18 · albw-skins 8 · albw 5 · instrument 1 ·
+fork-host-plumbing 1` = 162. **A declared-but-unused vocabulary entry is correct and should stay** — a
+category list is a vocabulary, not a census, and deleting unused values is how a partition loses the ability
+to express a state it will need again. **What IS stale is the PUBLISHED distribution** (announced as
+`shared-per-hunk 17 · albw-skins 6 · dual-pending 3 · upstream-native 1 · ONE CONTESTED`); the map has
+moved since, correctly, under later rulings. **Cite the file, not the announcement** — §0's rule, applied
+to a census instead of a number.
+
+---
+
 *Librarian owns this schema's structure; changes to axes/fields are supersession-stamped here. The
 values are the tools' and History's; the Librarian rules no truth, only the shape it is recorded in.*

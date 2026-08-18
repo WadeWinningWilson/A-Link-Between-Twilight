@@ -98,9 +98,18 @@ except Exception as _e:  # pragma: no cover
     WWLM = None
     _WWLM_ERR = _e
 
-RE_LINEAGE = re.compile(r"^//\s*KIT-LINEAGE:\s*"
-                        r"(native-port|bridge-owed|host-plumbing)"
-                        r"(?::(\S+))?\s*$", re.M)
+# ============================================================================
+# ONE MATCHER, TWO CALLERS (2026-08-16). This was a second copy of kit_laws'
+# lineage regex, and both copies carried the same two defects for their whole
+# lives: a three-value alternation blind to `mixed` and `donor-port` (18 of
+# 107 declared files invisible), and a `^//` anchor a UTF-8 BOM defeats -
+# which hid d_stage.cpp itself. Two copies drifting together is luck; the
+# Librarian's file_row lesson (one tokenizer, every caller) applies, so this
+# now IMPORTS the repaired matcher instead of restating it.
+# ============================================================================
+import kit_laws as _kl
+RE_LINEAGE = _kl.RE_LINEAGE
+LINEAGE_DOMAIN = _kl.LINEAGE_DOMAIN
 
 # In-file donor-authority markers. Enumerated from the strings posture §1.1
 # names, NOT from memory of what banners "usually" say — the spec's own

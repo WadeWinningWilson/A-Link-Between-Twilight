@@ -147,9 +147,13 @@ static char* dComIfGp_getInputPassword() {
     s_empty[0] = '\0';
     return s_empty;
 }
+// §328 BRIDGE PAID — was `o_buf[0] = '\0'`, which made every password compare
+// fail by construction. Now delegates to the donor's own fopMsgM_passwordGet
+// (8002BE04), ported in d_ext_ww_actor_shims.cpp: mMsgNo scan, player-name tag
+// substituted, other tags stripped. Kept as a thin file-static so knob00 keeps
+// the donor's call shape.
 static void fopMsgM_passwordGet(char* o_buf, int i_id) {
-    (void)i_id;
-    o_buf[0] = '\0';
+    dExtWwMsg_passwordGet(o_buf, (u32)i_id);
 }
 // WW AGB (GBA Tingle-link) map-send flag — the subsystem does not exist on TP.
 // Inert no-op keeps the donor source verbatim (twin of d_door.cpp's set-flag).

@@ -11,7 +11,7 @@ History at this doc for orientation** — to keep the WW goals visible across la
 context, not as a request: History owes this doc nothing. Anything here that turns out to be a
 content-semantics question goes back to the user for routing.
 
-**Related docs:** [WW-Restoration-Cookbook.md](WW-Restoration-Cookbook.md) (§0 Doctrine is the
+**Related docs:** [WW-Restoration-Cookbook-SUPERSEDED.md](WW-Restoration-Cookbook-SUPERSEDED.md) (§0 Doctrine is the
 charter, §1–4 the pipeline this tool automates) · [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md)
 (the №-ledger; №22 split-transform, №28 audio guard, №31 purity law, №36-D TGDR stride,
 №38 audit standards, №52-C bak-skip) · [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md)
@@ -19405,7 +19405,7 @@ to the donor. In `d_demo.cpp` the `isWwHostStage` gate is ours and the assignmen
 it guards is the donor's form; only the assignment is marked.
 
 **Roster defects found and fixed (census, not banners).** The evidence rule
-`d_a_\w+\.cpp:\d+` counted ANY actor file:line as donor evidence:
+`\bd_a_\w+\.cpp:\d+` counted ANY actor file:line as donor evidence:
 `d_gameover.cpp` was on the roster solely for citing `d_a_alink.cpp:13852` — TP's
 own alink, not a donor object. Now verified against `configure.py`. The same fix
 initially DROPPED `d_event_manager.cpp`, which was wrong — it declares real donor
@@ -26856,7 +26856,7 @@ The framework is ready: `kit_laws.py` has five laws as `lawN_*(raw, code)`
 functions returning PASS / VIOLATION / N/A with stated applicability, collected
 in `LAWS` at :289. Adding laws is mechanical.
 
-The source is `WW-Restoration-Cookbook.md` §9, "Failure classes already solved",
+The source is `WW-Restoration-Cookbook-SUPERSEDED.md` §9, "Failure classes already solved",
 **18 rows**, not 9 — the plan says "recipes 1–9" but §1–§9 are the cookbook's
 SECTIONS; the failure table lives in §9 and has 18 entries.
 

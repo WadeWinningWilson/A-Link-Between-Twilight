@@ -1,0 +1,13 @@
+{
+  "_comment": "A4 baseline pin. Hashes are EOL-NORMALISED (see row_baseline.py header). The gate blocks ONLY on a baselined row vanishing with no retirement entry.",
+  "pinned_head": "852e4db843",
+  "row_count": 2,
+  "rows": {
+    "s36db0fef": "85ae9f17b0efe136",
+    "sfb76e669": "f13f5fcd2e4f333c"
+  },
+  "legacy_unrowed": {
+    "_why": "Seams that predate the store are GRANDFATHERED: listed, never fatal. A gate that demanded a row for every pre-existing seam would fail every build until the estate was fully rowed, and would be switched off.",
+    "note": "not yet enumerated \u2014 grandfathering is open by default"
+  }
+}

@@ -968,36 +968,6 @@ f32 dummy_lit_3871(int val) {
 bool dCamera_c::transEvCamera(int param_1) {
     TransData* trans = (TransData*)mWork;
     f32 mid_val;
-#if WW_PROBE_903
-    // ========================================================================
-    // §903 PROBE (STRIP BEFORE PUSH — probe registry, NEVER-PUSH-STRIP-SET).
-    // The §902 call's CAMERA/UNITRANS stall (flagSet=0 x109) cannot be answered
-    // by porting: the donor's whole event-camera family is /* Nonmatching */.
-    // So MEASURE the receiver's own completion gate instead. Discriminators:
-    //   H1 re-entry  — styleTimer keeps reading 0 (cut re-inits every frame,
-    //                  so it can never reach mTimer)
-    //   H2 no-Timer  — the "Timer" param is absent (donor data uses another
-    //                  key); the early-out then ENDS the cut, so seeing this
-    //                  with a stall disproves it
-    //   H3 huge/zero mTimer — param present but nonsense
-    //   H4 counting-but-short — styleTimer climbs and simply never reaches
-    // WW-scoped: TP stages emit nothing.
-    // ========================================================================
-    {
-        const char* sn903 = dComIfGp_getStartStageName();
-        if (sn903 != NULL && dExtWwSave_isWwHostStage(sn903)) {
-            static int s_pt = 0;
-            if ((s_pt++ % 60) == 0) {
-                int tmr = -1;
-                const bool hasTimer = getEvIntData(&tmr, "Timer") != 0;
-                DuskLog.info("[WwProbe903] UNITRANS styleTimer={} transTimer={} "
-                             "TimerParam={} paramVal={} type={}",
-                             (int)mCurCamStyleTimer, (int)trans->mTimer,
-                             (int)hasTimer, tmr, param_1);
-            }
-        }
-    }
-#endif
 
     struct {
         cXyz mXyz_0;
@@ -1280,6 +1250,35 @@ bool dCamera_c::transEvCamera(int param_1) {
         return 1;
 
     } else {
+#if WW_PROBE_903
+        // ====================================================================
+        // §984 PROBE (STRIP BEFORE PUSH — probe registry). RE-PLACED from the
+        // top of the function (§903), where it sampled trans->mTimer BEFORE the
+        // `mCurCamStyleTimer == 0` init block — TransData views mWork[0x100]
+        // scratch, so a pre-init read held another cut's leftovers (the 0.01f
+        // that nearly got filed as a mechanism, §983). Sampling HERE, at the
+        // completion gate, both values are post-init and directly comparable.
+        // DISCRIMINATORS, all three readable off ONE run:
+        //   H1 re-entry            — styleTimer keeps reading 0 across firings
+        //   H3 nonsense mTimer     — mTimer wild/zero AFTER init
+        //   H4 counting-but-short  — styleTimer climbs, never reaches mTimer
+        // (H2 no-Timer already DEAD by measurement, §983.)
+        // Every 20th evaluation so consecutive frames are visible.
+        // ====================================================================
+        {
+            const char* sn984 = dComIfGp_getStartStageName();
+            if (sn984 != NULL && dExtWwSave_isWwHostStage(sn984)) {
+                static int s_pg = 0;
+                if ((s_pg++ % 20) == 0) {
+                    DuskLog.info("[WwProbe903] UNITRANS gate styleTimer={} mTimer={} "
+                                 "reached={} type={} n={}",
+                                 (int)mCurCamStyleTimer, (int)trans->mTimer,
+                                 (int)(mCurCamStyleTimer >= trans->mTimer), param_1,
+                                 (int)s_pg);
+                }
+            }
+        }
+#endif
         if (mCurCamStyleTimer >= trans->mTimer) {
             rv = 1;
             my_main_f32 = 1.0f;

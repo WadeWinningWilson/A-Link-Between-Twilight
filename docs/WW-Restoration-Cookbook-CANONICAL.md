@@ -1,21 +1,23 @@
 # WW Restoration Cookbook — CANONICAL
 
+era: era-independent
+<!-- era rationale: CORRECTED 2026-08-16. I stamped `mounted` by INFERENCE - the era-independent laws had migrated out, so I reasoned the remainder must be era-bound. History/Bridge, who OWN the content judgement I routed to them, ruled all 15 recipes era-INDEPENDENT with a structural argument: a method derived at the CONSUMPTION BOUNDARY is era-proof by construction - how bytes REACH you changed, what they ARE when you consume them did not. My inference was about the document's history; theirs is about what the recipes instruct. Theirs governs. | Librarian -->
+
 > **📦 ARCHIVAL — user ruling 2026-07-27 (Librarian-stamped).** Retained as the **record of how the
 > project's restoration work began**. It proved too truncated/catch-all to capture the project's full
 > scope, so **going-forward "how it works" documentation is per-system** in
 > [gaming systems/](gaming%20systems/README.md) — not this one file. No new *process* content is added here.
 >
-> **⚠ LAWS STILL IN FORCE — not dead doctrine.** The standing laws in `## ADMITTED DOCTRINE` below
-> (Receiver Covenant, №31 / №31-B / №31-C, the Ivan rule, §113-STASH LAW, donor-export naming) are
-> **live and cited elsewhere** (DN-2, the gate/verify tooling, LIBRARIAN-QUEUE). Archival status applies
-> to the process-manual *framing*, **NOT** to these laws. **Librarian flag → user (pending):** the
-> permanent home for these laws and the pending-corroboration index, now that per-system docs are the
-> model — migrate to a dedicated doctrine doc / DO-NOT.md, or keep citing them from here? Not my call.
+> **✅ THE LAWS HAVE MOVED — flag ANSWERED 2026-08-16 after three weeks pending.** The standing laws
+> once held in `## ADMITTED DOCTRINE` below (Receiver Covenant №31/№31-B, №31-C, the Ivan rule,
+> §113-STASH LAW, donor-export naming) now live in **[DO-NOT.md](DO-NOT.md)** as **DN-11…DN-14**
+> (§113-STASH was already DN-2). The section below is a pointer stub, not a copy — see it for the
+> mapping and for what the migration recovered. **This file no longer houses live doctrine.**
 
 **This is the only writable cookbook.** The two prior copies forked (542 diff lines, bus §106) and
 neither can prove accuracy; both are frozen and marked `UNCERTAIN ACCURACY — DO NOT WRITE`:
-[docs/WW-Restoration-Cookbook.md](WW-Restoration-Cookbook.md) ·
-[docs/WW Linked/WW-Restoration-Cookbook.md](WW%20Linked/WW-Restoration-Cookbook.md).
+[docs/WW-Restoration-Cookbook-SUPERSEDED.md](WW-Restoration-Cookbook-SUPERSEDED.md) ·
+[docs/WW Linked/WW-Restoration-Cookbook-SUPERSEDED.md](WW%20Linked/WW-Restoration-Cookbook-SUPERSEDED.md).
 
 **Admission protocol (user-ruled 2026-07-23):** an entry enters this book only via one of —
 1. **RECEIPT** — a traceable ratification (user words + bus §/№ + date);
@@ -27,72 +29,91 @@ corroboration index at the bottom.
 
 ---
 
-## ADMITTED DOCTRINE
+## ADMITTED DOCTRINE — MIGRATED 2026-08-16, NOW LIVES IN `DO-NOT.md`
 
-### The Receiver Covenant + Space-Purity core (№31)
-**Route: RECEIPT** — user's founding decree (Housing charter, session ba0af71d; enforced all
-session; encoded as a tool in commit `16ec60c842`).
-- The vanilla exe + game tree contain ZERO WW content — no WW bytes, no WW file names, no WW
-  dialogue strings. All WW content lives ONLY in the mod folder. `greplist.txt` gates builds
-  (`ww_bridge gate`; M5a/M6).
-- WW spaces get only WW assets; TP spaces only TP assets; no cross-pollination ever (rupees
-  included — WW Vlupy visual, TP wallet credit). A missing prop is always preferable to a foreign
-  one.
-- NEVER COMMIT: WW arcs, anything under the mod folder, WW-named files.
+> **MOVED ON THE USER'S RULING, NOT COPIED.** These laws were live doctrine
+> sitting inside a document ruled **ARCHIVAL** on 2026-07-27 — an arrangement
+> this file itself flagged to the user that day (*"the permanent home for these
+> laws… migrate to a dedicated doctrine doc / DO-NOT.md, or keep citing them
+> from here? Not my call."*). **The flag went unanswered for three weeks and was
+> answered 2026-08-16: migrate.**
+>
+> **They are NOT duplicated here.** A law with two homes drifts, and this file
+> proved that hazard rather than merely risking it — see the DN-2 recovery below.
 
-### №31-B — Purity covers SHAPING, not just supply
-**Route: RECEIPT** — user 2026-07-20: "№31 should be written for assets, music, lighting,
-everything." Any receiver stage that modifies donor content on its way to the player is a purity
-surface. Corollary: verify at the stage the player perceives, not the stage easiest to hash.
-(Case receipts: grass colour via TP kankyo; TP velocity curve squaring donor audio.)
+| law (as written here) | now |
+|---|---|
+| Receiver Covenant + Space-Purity core (№31) · №31-B shaping | **[DN-11](DO-NOT.md)** |
+| №31-C — a check that cannot run reports UNKNOWN, never CLEAN | **[DN-12](DO-NOT.md)** |
+| IVAN RULE — no invented identity labels | **[DN-13](DO-NOT.md)** |
+| Donor-export naming law | **[DN-14](DO-NOT.md)** |
+| №113-STASH LAW — PAL0 `plight_col[2]` | **[DN-2](DO-NOT.md)** (was already there) |
+| Document-lifecycle rules (this book's own hygiene) | **[Librarian.md](Librarian.md)** — lane hygiene, not a hard stop |
 
-### №31-C — A check that cannot run must report UNKNOWN, never CLEAN
-**Route: RECEIPT** — user 2026-07-21/22: "Put it in cookbook" (bus §61/§61c/§74 lineage). Green
-must prove the check executed. Corollary: a pass must state what it inspected (path, count,
-version) so it is falsifiable from its own output. (Origin: silent ported guards + the gate's own
-empty-greplist false-CLEAN, fixed Bridge 0.19.0.)
+> **⚠ WHAT THE MIGRATION FOUND, and it is the argument for having done it:
+> the №113-STASH LAW here was BROADER than the live DN-2.** This file recorded a
+> scope extension (user, 2026-07-27, bus §182) putting **`plight_col[1]` = BG0_K0**
+> under the same protection — windline alpha and the grass cut-VFX colour. **DN-2
+> did not have it.** An instance reading the hard-stop registry alone would have
+> concluded slot [1] was fair game and "repaired" it, killing two effects **while
+> correctly following the registry.** Recovered into DN-2 on 2026-08-16.
+>
+> **That is what a live law in an archival document costs.** Not that it is lost —
+> that the copy people are told to trust quietly becomes the narrower one.
 
-### IVAN RULE — no invented identity labels
-**Route: BILATERAL + RECEIPT** (referenced in both frozen copies; enforced/ratified continuously;
-violation case receipts bus §47, §89). Names and resemblance are never evidence. Labels stay
-`? (unverified)` until locked by decomp or user identity pass.
-- *Etymology (user receipt 2026-07-22, bus §104):* "Ivan" was the color test — the color/lighting
-  test subject's name during the demo-item work. `Ivan` is a greplist marker: the nickname must
-  never appear in shipping code. The lighting recipe formerly nicknamed "Ivan/boots" is the
-  **NEUTRAL-AMBIENT RECIPE**: `settingTevStruct(TEV_TYPE 0)` + neutral ambient, no MAJI, no warm
-  tint (`d_a_demo_item.cpp:519` era).
+> ## ⏳ ERA BOUNDARY — READ BEFORE FOLLOWING ANY RECIPE BELOW
+>
+> **User, 2026-08-16, recorded because it changes how the rest of this file must be read:**
+> *"a lot of the cookbooks are from mounted/bake/leg eras. Many may not be applicable to the
+> plugin/native loading era."*
+>
+> **The laws ABOVE (`## ADMITTED DOCTRINE`) are era-independent and live** — they are about evidence
+> discipline, not about how content is delivered. №31-C alone (*a check that cannot run must report
+> UNKNOWN, never CLEAN*) was cited across four lanes on 2026-08-15/16 and is load-bearing today.
+>
+> **The RECIPES below are era-bound and this boundary has never been marked.** They were written when
+> the receiver layer was editable in the fork and content arrived by mount, with baked lighting and
+> leg-work standing in for unported systems. **Three of those practices are now HARD STOPS**
+> — mounting is [DN-9](DO-NOT.md), baking is [DN-10](DO-NOT.md), and zero-bake forbids donor-asset
+> edits outright — **so a recipe followed literally can walk an instance straight into a rejected
+> approach.** The Accidental Ivan and the founding lighting bake that produced those laws are
+> recorded in [DO-NOT.md § ORIGIN](DO-NOT.md); this file is where their era's *methods* were written
+> down.
+>
+> **WHAT IS NOT CLAIMED HERE: that any specific recipe is dead.** Which ones survive into the
+> plugin/native-loading era is a content judgement for the owning lane (History/Housing), not the
+> Librarian's — this banner marks the boundary and routes the question, it does not answer it.
+> **Until a recipe carries its own era line, treat it as UNKNOWN rather than current** (№31-C,
+> applied to documentation).
 
-### Donor-export naming law
-**Route: RECEIPT** — user 2026-07-22 (bus §89/§89c; memory `donor-export-naming`). Donor-derived
-exports carry the donor's own addressing as filenames (`IsleLink_0_wave025.wav`); hypothesis and
-fan labels never reach filenames; interpretation goes in sidecars.
-
-### Document-lifecycle rules (this book's own hygiene)
-**Route: RECEIPT** — user rulings 2026-07-23 (bus §106/§107):
-- Before assigning a bus §-number, grep the tip for the current maximum.
-- Doctrine edits happen HERE only. Frozen copies are read-only sources.
-- "PROVEN PATH" pointers must carry date + version; consumers diff against current standard
-  before cloning (assessment rec 3, user-accepted by adoption of this book).
-
-
-### №113-STASH LAW — PAL0 plight_col[2] is the sea-K0 stash: never "repair" it
-**Route: RECEIPT** — user ratification 2026-07-26 (bus §148/§149), after the trap bit TWICE
-(№270 restore ↔ §112 re-inject: an inter-lane fix-revert loop).
-- F_DL01's `STG_00.arc` PAL0 **deliberately carries the sea K0 color stashed in `plight_col[2]`**
-  (№113 convert; read by `dKy_get_seacolor` via `dungeonlight_col[2]` — `d_kankyo.cpp:9458`).
-- **SCOPE EXTENSION (2026-07-27, bus §182):** slot **`plight_col[1]` = BG0_K0** is ALSO a №113
-  stash and load-bearing (windline alpha `d_kankyo_wether.cpp:1559` + grass cut-VFX color, Ferry
-  V-b). The whitelist/carry-forward duty covers BOTH slots [1] and [2], not [2] alone.
-- **It LOOKS like garbage** as a point-light color. **It is LOAD-BEARING** — the wave panes' and
-  the shore water's blue both die without it.
-- Therefore: no lane "fixes" strange plight2 values in this PAL0; hash/diff tooling must WHITELIST
-  the stash bytes; any PAL0 restore must carry the stash forward.
-- **Valid-exception clause (user, at ratification):** the law yields only if (a) we ERRED — the
-  stash itself is shown wrong against the donor, or (b) WW VANILLA is shown to require that slot —
-  in either case: evidence first, cross-lane sign-off (Engine + History + Housing), THEN change,
-  and this entry is updated — never a silent unilateral "repair."
-- Ratchet target (§106): graduate to a tool check (stash-presence assert in the gate/verify path)
-  so the law enforces itself.
+> ## ✅ ERA RULED — History/Bridge, 2026-08-16. `era: INDEPENDENT` for all 15 recipes below.
+>
+> **The routed question was "which recipes survive". Answer: ALL OF THEM — and the reason is
+> structural rather than a fifteen-way judgement call.**
+>
+> **THE RULE, which is the part worth keeping when this file is gone:**
+> - **A method derived at the CONSUMPTION BOUNDARY is ERA-PROOF BY CONSTRUCTION.** How bytes
+>   *reach* you changed (mount → plugin/native); what they *are* when you consume them did not.
+>   `getObjectRes` still returns raw (DN-3), `(u32)this` still truncates on x86_64, `play()` still
+>   does not `calc()`, WW's sea level is still not TP's. **Every recipe below is of this kind.**
+> - **A method about HOW CONTENT REACHES YOU is ERA-BOUND** — mount it, stage it, bake it, edit the
+>   donor asset. **Not one recipe below instructs any of those.** That is not luck: these were
+>   derived by symbolicating crashes at the consumption boundary, which is exactly the layer
+>   zero-bake preserves across delivery eras.
+>
+> **TWO RECIPES MENTION MOUNTING AND ARE STILL ERA-INDEPENDENT — read them before assuming
+> otherwise.** №10 says *"not a mount stand-in"* — the mount is the CONTRAST, and the method is
+> restoring the donor's own `OBJNAME` row. №15 cites the audition mount as **where the behaviour was
+> proven**, and points at the native resolver for the method. **A doc that mentions "mount" is not a
+> mounted-era doc; provenance and contrast are not instructions.**
+>
+> **⚠ AND A NEGATIVE RESULT, recorded so nobody builds the obvious tool: ERA CANNOT BE CLASSIFIED BY
+> KEYWORD.** Two passes were tried. The first flagged №10 and №15 as era-BOUND — **both false
+> positives on reading.** The second looked for imperative era-bound instructions and found **more
+> hits in this CANONICAL file than in the SUPERSEDED one** (1 vs 0), where the true ordering must be
+> the reverse — **so the control failed to separate a live doc from a dead one.** An era linter
+> built on this would report confident nonsense. **Era is read, not grepped** — which is the
+> Librarian's own point: knowing which era a method belongs to is knowing the method.
 
 ### DIRECT-PORT CRASH RECIPES — WW actor → port (the pig playbook)
 **Route: RECEIPT** — every item below was symbolicated + playtest-confirmed on the `d_a_kb` (pig)

@@ -2,7 +2,7 @@
 
 **Run:** [Cut-Actors-Demo-Restore-Cursor-History.md](../Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md)  
 **Control:** [run-control.md](run-control.md)  
-**Process manual:** [WW-Restoration-Cookbook.md](../WW-Restoration-Cookbook.md) — the distilled ground-up pipeline (map→interiors→actors→limbs→animation→story gating); this ledger stays the home for run state + decisions.
+**Process manual:** [WW-Restoration-Cookbook-SUPERSEDED.md](../WW-Restoration-Cookbook-SUPERSEDED.md) — the distilled ground-up pipeline (map→interiors→actors→limbs→animation→story gating); this ledger stays the home for run state + decisions.
 
 ---
 

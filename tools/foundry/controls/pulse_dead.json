@@ -1,0 +1,10 @@
+{
+  "_control": "NEGATIVE CONTROL for tools/foundry/monitor_pulse.py — do not refresh this file.",
+  "_why": "An ancient stamp MUST read DEAD. If monitor_pulse reports ALIVE for a pulse from 1970, it is not comparing anything and every ALIVE verdict it has given is a blanket yes — which is exactly how a monitor stayed dead for hours unnoticed.",
+  "updated": "1970-01-01T00:00:00+00:00",
+  "updated_epoch": 0,
+  "passes": 0,
+  "interval_sec": 180,
+  "last_event": "control fixture — never ran",
+  "note": "control"
+}

@@ -17,6 +17,7 @@
 #if TARGET_PC
 #include "d/d_ext_npc_doors.h"
 #include "d/d_ext_save_guard.h"
+#include "d/ext_plugin/ww_stage_loader.h"  // WW EVNT full-name resolver
 #include "dusk/logging.h"
 #endif
 
@@ -863,8 +864,19 @@ int dEv_defaultSkipZev(void* actor, int parameter) {
 
     char eventName[28];
     char* skipName;
+#if TARGET_PC
+    // WW: these build a suffixed name and LOOK IT UP, so they need the donor's
+    // FULL name — a 12-char truncation matches nothing in the event list.
+    // Pointer identity (never prefix: FROM_HYRULE_1/_2 share 12 chars); NULL
+    // leaves the receiver's stored name exactly as before.
+    const char* wwFullEvt =
+        (data != NULL) ? dExtWwEvt_getStageEventNameForRecord(data) : NULL;
+#endif
     switch (parameter) {
     case 0:
+#if TARGET_PC
+        if (wwFullEvt != NULL) { SAFE_STRCPY(eventName, wwFullEvt); } else
+#endif
         SAFE_STRCPY(eventName, data->data.event_name);
         SAFE_STRCAT(eventName, "$0");
         eventID = dComIfGp_getEventManager().getEventIdx(eventName, 0xFF, -1);
@@ -911,8 +923,19 @@ int dEv_defaultSkipStb(void* actor, int parameter) {
 
     char eventName[28];
     char* skipName;
+#if TARGET_PC
+    // WW: these build a suffixed name and LOOK IT UP, so they need the donor's
+    // FULL name — a 12-char truncation matches nothing in the event list.
+    // Pointer identity (never prefix: FROM_HYRULE_1/_2 share 12 chars); NULL
+    // leaves the receiver's stored name exactly as before.
+    const char* wwFullEvt =
+        (data != NULL) ? dExtWwEvt_getStageEventNameForRecord(data) : NULL;
+#endif
     switch (parameter) {
     case 0:
+#if TARGET_PC
+        if (wwFullEvt != NULL) { SAFE_STRCPY(eventName, wwFullEvt); } else
+#endif
         SAFE_STRCPY(eventName, data->data.event_name);
         SAFE_STRCAT(eventName, "$0");
         eventID = dComIfGp_getEventManager().getEventIdx(eventName, 0xFF, -1);

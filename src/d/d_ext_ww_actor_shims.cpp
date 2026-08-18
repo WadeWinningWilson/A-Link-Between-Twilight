@@ -214,9 +214,237 @@ u8 dComIfGs_getBeastNum(int /*i_beastIdx*/) {
 // WW beast-count adjust — nothing to spend → no-op.
 void dComIfGp_setItemBeastNumCount(int /*i_beastIdx*/, s16 /*num*/) {}
 
-// WW message anime-tag query — no tag active (0xFF), so anmAtr's tag branch is inert.
+// ============================================================================
+// WW MESSAGE ANIME-TAG CHANNEL — PORTED FROM THE DONOR'S OWN MECHANISM.
+//
+// WAS: `getMesgAnimeTagInfo() { return 0xFF; }` beside a no-op setter, with the
+// honest reason recorded at the shim — *"the WW dialogue-anim-tag mechanism has
+// no port driver, so getter stays 0xFF and Aryll's chngAnmTag() path is inert."*
+// THAT REASON IS NOW OBSOLETE: the derived message tier's group-3 (anime) tag IS
+// the driver, and a constant getter would make it fail SILENTLY — no fault, no
+// log, the NPC simply never changes animation on a dialogue beat.
+//
+// THE DONOR'S MECHANISM, read at source rather than inferred:
+//   field     `u8 mMesgAnimeTagInfo` @ 0x493C (donor d_com_inf_game.h:826)
+//   accessors getNowAnimeID / setNowAnimeID / clearNowAnimeID   (:684-686)
+//   sentinel  **0xFF means EMPTY** — clearNowAnimeID() writes exactly that
+//
+// IT IS A ONE-SLOT MAILBOX, and the CONSUMER does the clearing. Donor consumer,
+// d_a_npc_ls1.cpp:1076 (npc_ba1, bm1, hi1, jb1, km1, zl1 all identical):
+//     tag = dComIfGp_getMesgAnimeTagInfo();
+//     if (tag != 0xFF && tag != mMesgAnimeTag) {
+//         dComIfGp_setMesgAnimeTagInfo(0xFF);   // consume
+//         mMesgAnimeTag = tag;
+//         chngAnmTag();
+//     }
+// So the setter is called by BOTH ends — the engine posts an ID, the actor
+// posts 0xFF back to consume it. A no-op setter breaks both halves, which is
+// why the getter alone could never have been enough.
+//
+// MODULE-STATIC, NOT A GAME-INFO FIELD — the offset-stable law (same rule that
+// keeps §308's archives in module slots). The donor's 0x493C does not exist in
+// the port's fixed struct and must not be carved into it.
+//
+// STILL A SHIM IN ONE RESPECT, stated so it is not mistaken for done: this
+// ports the CHANNEL, not the tag SOURCE. Until the derived tier writes group-3
+// tags, nothing posts an ID and the mailbox stays empty — behaviour identical to
+// today. The difference is that it is now WIRED rather than welded shut.
+// ============================================================================
+static u8 s_mesgAnimeTagInfo = 0xFF;  // 0xFF = empty, per the donor's sentinel
+
+// ============================================================================
+// WW BMG MESSAGE LOOKUP **BY mMsgNo** — the donor's own resolution, ported.
+//
+// WHY THIS EXISTS SEPARATELY FROM §308's `dExtDmesg_getMessageById`: THEY ARE
+// TWO DIFFERENT NUMBERING SPACES AND BOTH ARE REAL.
+//   · STB `setMessageCode` IS an INF1 ROW INDEX. Proven, not assumed: INF1[539]
+//     is "I've been waiting for you..." exactly as §308's receipt says, AND no
+//     entry in zel_00.bmg carries mMsgNo == 539 at all. §308 indexes; correct.
+//   · An ACTOR's message id (what it hands fopMsgM_messageSet) is an **mMsgNo**.
+//     Donor `fopMsgM_itemMsgGet_c::getMessage` (8002E4AC) LINEAR-SCANS INF1
+//     comparing mMsgNo and SKIPPING entries whose mDataOffs == 0 (85 such in
+//     zel_00). getMesgHeader -> that scan. There is no index arithmetic anywhere.
+//
+// Measured cost of conflating them, on the user's disc: id 0xCE5 (the postbox)
+// indexes to INF1[3301] = "Seven-Star Isles" but SCANS to INF1[924] =
+// "Gooood moooorrrning!". A wrong-but-valid index returns TEXT, so the failure
+// is silent and the wrong line beats the correct fallback.
+//
+// NO TABLE. The donor needs none and a table is the thing that drifts.
+// ============================================================================
+static const u8* dExtWwMsg_section(const u8* bmg, const char* magic) {
+    if (bmg == NULL) {
+        return NULL;
+    }
+    u32 off = 0x20;  // past the BMG header; blocks are magic + u32 size
+    for (int guard = 0; guard < 64; guard++) {
+        const u8* b = bmg + off;
+        const u32 size = ((u32)b[4] << 24) | ((u32)b[5] << 16) | ((u32)b[6] << 8) | b[7];
+        if (b[0] == magic[0] && b[1] == magic[1] && b[2] == magic[2] && b[3] == magic[3]) {
+            return b;
+        }
+        if (size == 0) {
+            break;
+        }
+        off += size;
+    }
+    return NULL;
+}
+
+// Donor-faithful mMsgNo -> DAT1 text. NULL when the archive is not resident or
+// no entry carries the number. Public so the §324 talk path can be corrected
+// without a second implementation being written somewhere else.
+const char* dExtWwMsg_textByMsgNo(u16 i_msgNo) {
+    // Hylian branch, donor fopMsgM_hyrule_language_check (8002AD4C): before the
+    // game is cleared, fifteen specific messages come from zel_01.bmg instead.
+    // Selected DATA-SIDE here rather than from a transcribed list of fifteen
+    // numbers: those entries are exactly the ones carrying mTextboxType == 12,
+    // measured set-equal against the donor's own switch and against zel_01's
+    // INF1. Porting the mechanism beats copying the table.
+    const u8* zel00 = (const u8*)dComIfG_getObjectRes("bmgres", "zel_00.bmg");
+    const u8* inf1 = dExtWwMsg_section(zel00, "INF1");
+    const u8* dat1 = dExtWwMsg_section(zel00, "DAT1");
+    if (inf1 == NULL || dat1 == NULL) {
+        return NULL;
+    }
+    const u16 count = (u16)(((u16)inf1[0x08] << 8) | inf1[0x09]);
+    for (u16 i = 0; i < count; i++) {
+        const u8* e = inf1 + 0x10 + (u32)i * 24;
+        const u32 dataOffs = ((u32)e[0] << 24) | ((u32)e[1] << 16) | ((u32)e[2] << 8) | e[3];
+        if (dataOffs == 0) {
+            continue;  // donor skips these explicitly
+        }
+        const u16 msgNo = (u16)(((u16)e[0x04] << 8) | e[0x05]);
+        if (msgNo != i_msgNo) {
+            continue;
+        }
+        if (e[0x0C] == 12 && dComIfGs_getClearCount() == 0) {
+            const u8* zel01 = (const u8*)dComIfG_getObjectRes("bmgresh", "zel_01.bmg");
+            const u8* hi = dExtWwMsg_section(zel01, "INF1");
+            const u8* hd = dExtWwMsg_section(zel01, "DAT1");
+            if (hi != NULL && hd != NULL) {
+                const u16 hn = (u16)(((u16)hi[0x08] << 8) | hi[0x09]);
+                for (u16 j = 0; j < hn; j++) {
+                    const u8* he = hi + 0x10 + (u32)j * 24;
+                    const u16 hno = (u16)(((u16)he[0x04] << 8) | he[0x05]);
+                    const u32 ho = ((u32)he[0] << 24) | ((u32)he[1] << 16) | ((u32)he[2] << 8) | he[3];
+                    if (hno == i_msgNo && ho != 0) {
+                        return (const char*)(hd + 0x08 + ho);
+                    }
+                }
+            }
+            // Hylian variant missing → fall through to the readable line rather
+            // than returning nothing. A missing variant must not mute the text.
+        }
+        return (const char*)(dat1 + 0x08 + dataOffs);
+    }
+    return NULL;
+}
+
+// ============================================================================
+// WW PASSWORD RENDER — donor `fopMsgM_passwordGet` (8002BE04), ported.
+//
+// Renders a message to PLAIN TEXT with the player-name tag substituted and all
+// other tags stripped. knob00 compares the result against the entered password,
+// so a stub returning "" made every comparison fail — the §328 banner said so.
+//
+// DONOR SEMANTICS, kept exactly:
+//   · 0x1A escape: read size at +1, group at +2, code at +3..4 (u16 BE). Group 0
+//     / code 0 substitutes the player name; every other tag is SKIPPED, not
+//     rendered. Advance by the tag's own size byte.
+//   · USA possessive: when the PAL language is 1 and the message number is one
+//     of SIX specific values, append "'" after a trailing s/S/z/Z/x/X else "s".
+//     Same six the donor lists, and the same six d_mesg.cpp:457 uses.
+//   · Shift-JIS lead bytes (high nibble 8 or 9) copy TWO bytes, not one.
+//
+// READ BYTE-WISE ON PURPOSE: the donor does `*(u32*)(++src)` because GameCube is
+// big-endian. That cast byte-swaps on x64 and would compare the tag against a
+// reversed value, matching nothing — the class of bug that looks like "the tag
+// is just never present".
+// ============================================================================
+void dExtWwMsg_passwordGet(char* o_buf, u32 i_msgNo) {
+    if (o_buf == NULL) {
+        return;
+    }
+    o_buf[0] = '\0';
+    const char* src = dExtWwMsg_textByMsgNo((u16)i_msgNo);
+    if (src == NULL) {
+        return;  // not resident / no such message — caller sees an empty compare
+    }
+
+    const u8* p = (const u8*)src;
+    char* dst = o_buf;
+    while (*p != 0x00) {
+        if (*p == 0x1A) {
+            const u8 size = p[1];
+            const u8 group = p[2];
+            const u16 code = (u16)(((u16)p[3] << 8) | p[4]);
+            if (group == 0x00 && code == 0x0000) {
+                char name[24];
+                const char* nm = dComIfGs_getPlayerName();
+                int n = 0;
+                for (; nm != NULL && nm[n] != '\0' && n < 20; n++) {
+                    name[n] = nm[n];
+                }
+                name[n] = '\0';
+                if (dComIfGs_getPalLanguage() == 1 &&
+                    (i_msgNo == 0x33B || i_msgNo == 0xC8B || i_msgNo == 0x1D21 ||
+                     i_msgNo == 0x31D7 || i_msgNo == 0x37DD || i_msgNo == 0x37DE) &&
+                    n > 0) {
+                    const char last = name[n - 1];
+                    const bool sibilant = (last == 's' || last == 'S' || last == 'z' ||
+                                           last == 'Z' || last == 'x' || last == 'X');
+                    name[n++] = sibilant ? '\'' : 's';
+                    name[n] = '\0';
+                }
+                for (int k = 0; k < n; k++) {
+                    *dst++ = name[k];
+                }
+            }
+            p += (size != 0) ? size : 1;  // size 0 would spin forever
+            continue;
+        }
+        const u8 hi = (u8)((*p >> 4) & 0xF);
+        if (hi == 8 || hi == 9) {
+            *dst++ = (char)*p++;  // Shift-JIS lead byte: two bytes travel together
+            if (*p == 0x00) {
+                break;
+            }
+        }
+        *dst++ = (char)*p++;
+    }
+    *dst = '\0';
+}
+
 u8 dComIfGp_getMesgAnimeTagInfo() {
-    return 0xFF;
+    return s_mesgAnimeTagInfo;
+}
+
+void dComIfGp_setMesgAnimeTagInfo(u8 i_id) {
+    s_mesgAnimeTagInfo = i_id;
+}
+
+// ⚠ LIFETIME GAP — NAMED, THEN CLOSED. WIRED 2026-08-16.
+//
+// The donor's mMesgAnimeTagInfo lives INSIDE g_dComIfG_gameInfo, so it dies and
+// resets with the game-info. A module-static does NOT: it outlives every stage
+// change for the life of the process.
+//
+// THE WINDOW: engine posts an ID -> stage changes BEFORE the NPC consumes it ->
+// the stale ID survives -> the first NPC to poll in the NEXT stage sees a value
+// that is neither 0xFF nor its own last tag, and plays ONE WRONG ANIMATION.
+// Narrow, but it is exactly the class that reads as "a weird one-off glitch"
+// and costs a debugging session to trace back to a mailbox that never emptied.
+//
+// CALLED FROM ww_stage_loader.cpp:467 (dExtWwStage_loadStageDzs), inside
+// DUSK_WW_STAGE_SEAM, immediately after the tale-§773 model-cache eviction.
+// That site was already the estate's answer to "stage-scoped state dies here",
+// so this rides an established lifecycle rather than inventing one — and it is
+// WW-scoped by construction, which was the reason it was parked in the first
+// place. The parking was right; the assumption that no WW-only seam existed
+// was not.
+void dExtWwShims_resetMesgAnimeTag() {
+    s_mesgAnimeTagInfo = 0xFF;
 }
 
 // WW postman-0 status-map clear — status-map not restored → no-op.

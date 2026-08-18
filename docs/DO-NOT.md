@@ -1,5 +1,8 @@
 # DO-NOT registry — hard stops for every AI instance
 
+era: era-independent
+<!-- era rationale: registry rule 3: entries never expire | Librarian, 2026-08-16, user ruling "assign it by era" -->
+
 **What this is:** a registry of approaches that are PERMANENTLY REJECTED in this
 codebase because they caused (or would cause) cascading, hard-to-diagnose
 failures. An entry here is not advice — it is a **hard stop**.
@@ -19,6 +22,69 @@ future instance):**
 4. **Adding entries:** any lane may add one after a confirmed root cause, with
    the user's direction. Keep the format: mechanism → blast radius → sanctioned
    path → escalation protocol → verification signature.
+
+---
+
+## ORIGIN — where these laws come from (the user's account, verbatim)
+
+**Placed here 2026-08-16 (Librarian ruling, A5 sweep). This is not a preface;
+it is DN-9's and DN-10's first case receipt.** Every entry below carries the
+user's ratification and the failure that produced it. **These two entries were
+missing the failure — it happened before the registry existed, and it is the
+same event for both.** Rule 3 above ("entries never expire — the mechanism
+stays true even after the incident is healed") is the durability guarantee this
+account needs, already written into this document.
+
+**The user's words, held exactly, because founding history cannot be
+re-derived from the tree by anyone:**
+
+> *"'Accidental Ivan' was a quirk of the mounted era. When the outset map was
+> first mounted, often the map would 'expect' certain actors or props (like
+> trees, rupees, etc) to be present. However since none were mount-ported,
+> random items took their place (not random actually — for fun after reviving
+> the Ivan stub, I had wanted to see the actors for a few WW characters —
+> Makar, Medli, WW Ganon in TP areas). One of these was the Ivan WW NPC standing
+> in the place of an swood. An 'Accidental Ivan'. However Ivan's stubs were
+> investigated earlier, when those stubs were built upon, followed by some
+> lighting tweaks/bakes to the model to make him appear near-correct in TP
+> areas, and this same lighting formula was used for the other characters first
+> ported for fun (again Makar, Medli, WW Ganon, and the like), then the lighting
+> was used for Outset island and following mounted era ports as TP lighting was
+> still present in those areas."*
+
+**The sequence:** (1) the Ivan stub investigated and **deliberately** revived —
+the Accidental Ivan was a later quirk, not the founding event · (2) lighting
+tweaks and **bakes** so he read correctly under TP lighting · (3) the same
+formula reused for the fun ports (Makar, Medli, WW Ganon) · (4) the **mounted
+era** — Outset mounted, unported props back-filled by whichever fun character
+was loaded; Ivan stood in for an `swood`, and was later kept as the canary ·
+(5) the formula carried into Outset and subsequent mounted ports while TP
+lighting remained.
+
+**WHY IT BELONGS IN THE HARD-STOP REGISTRY AND NOWHERE ELSE — the two most
+binding entries in this file are the systematic retirement of the two shortcuts
+in that paragraph:**
+
+- **DN-9** forbids mounting. The mounted era is where mounting came from, and
+  the Accidental Ivan is what it looks like from inside: a map asking for props
+  nobody had ported, filled by whatever model happened to be loaded.
+- **DN-10** forbids baking. **The founding lighting formula WAS a bake** — and
+  zero-bake, DN-10's order of resort, and `kit_laws` LAW 1's dKyWw lighting
+  contract are its systematic replacement.
+
+**AND THE PART WORTH KEEPING WHEN THE INCIDENT IS FORGOTTEN: this project's
+strictest laws grew out of its own first hacks, and were written by the people
+who committed them.** That is the right direction for a law to grow, and it is
+the answer to any future instance who reads these entries as arbitrary
+severity. They are not strict because someone was cautious in the abstract.
+They are strict because the estate has already paid for the alternative.
+
+**Confirmed at source, not taken on faith:** the `swood` Ivan stood in for is a
+real donor actor whose family was **later ported natively** — `d_stage.cpp`
+carries `OBJNAME("swood"…)`, `swood3`, `swood5` under the §696 vegetation
+banner, and the comment records that they were *previously ABSENT* from that
+table. **The placeholder's slot became a real port.** Verified by History/Bridge,
+2026-08-16.
 
 ---
 
@@ -118,6 +184,36 @@ it; do not touch PAL0.
 **Escalation:** no AI instance may "fix" this slot. If a tool must change stage
 lighting, the change goes through `convert_lighting.py` with the stash preserved,
 user-directed. Hash tools must whitelist `plight_col[2]`.
+
+### ⚠ SCOPE EXTENSION — SLOT [1] IS ALSO A STASH (recovered 2026-08-16)
+
+**This entry protected `plight_col[2]` ONLY. The law is broader, and the broader
+version was living in an ARCHIVAL document** — `WW-Restoration-Cookbook-CANONICAL.md`,
+whose №113-STASH LAW carries a scope extension this registry never received
+(user ratification 2026-07-27, bus §182). Recovered here by the Librarian on the
+user's migration ruling, 2026-08-16.
+
+**Slot `plight_col[1]` = BG0_K0 is ALSO a №113 stash and is ALSO load-bearing** —
+windline alpha (`d_kankyo_wether.cpp:1559`) and the grass cut-VFX colour (Ferry
+V-b) both read it. **The whitelist and carry-forward duty covers BOTH slots [1]
+and [2], not [2] alone.**
+
+**Why this is recorded as a finding and not a quiet edit:** an instance reading
+this entry alone would have concluded slot [1] was unprotected and "repaired" it,
+killing two effects — **and would have been following the hard-stop registry
+correctly while doing it.** The narrower law was not wrong; it was incomplete,
+and nothing pointed at the fuller copy. That is the exact hazard the estate spent
+2026-08-15/16 cataloguing, in the one document that is supposed to be definitive.
+
+**Valid-exception clause (user, at ratification):** the law yields only if (a) we
+ERRED — the stash is shown wrong against the donor — or (b) WW VANILLA is shown
+to require that slot. Either way: evidence first, cross-lane sign-off (Engine +
+History + Housing), THEN change, and this entry is updated. Never a silent
+unilateral "repair."
+
+**Ratchet target (bus §106):** graduate to a tool check — a stash-presence assert
+in the gate/verify path — so the law enforces itself rather than relying on
+someone having read it.
 
 ---
 
@@ -393,3 +489,144 @@ black.** The visible art bug was a faithful report of an unported shadow system.
 (probes, logging, counters) is not solving it with instance code. Making it GO
 AWAY is. Inverting a probe's blind early-return is instrument work; clamping the
 value the probe reports is a DN-10 violation.
+
+---
+
+## ⓘ REGISTRY NOTE — the DN-5…DN-8 gap
+
+**DN-5, DN-6, DN-7 and DN-8 do not exist and nothing in this file explains why**
+(Librarian, 2026-08-16). They may have been retired, reserved, or never written.
+**They are NOT reused below**, because silently recycling a number would make any
+older citation of "DN-6" resolve to an unrelated law — the same class of harm as
+a §-number collision. **A future entry takes DN-15 or higher.** If anyone knows
+what 5–8 were, record it here rather than in a bus row.
+
+---
+
+## DN-11 — NEVER let WW content into the vanilla tree, and NEVER cross-pollinate WW and TP spaces (№31 + №31-B)
+
+**Migrated here 2026-08-16 on the user's ruling** (*"GO with your
+recommendation"*), from `WW-Restoration-Cookbook-CANONICAL.md`, which was ruled
+ARCHIVAL on 2026-07-27 while these laws stayed live. **A live law housed in an
+archival document is a law one cleanup away from vanishing** — and its DN-2
+sibling proved the risk is real: the fuller version of that law had already
+drifted out of this registry (see DN-2's scope extension).
+
+**User ratification** (founding decree, Housing charter session ba0af71d;
+encoded as a tool in `16ec60c842`), extended 2026-07-20: *"№31 should be written
+for assets, music, lighting, everything."*
+
+**Forbidden act:**
+- Any WW content in the vanilla exe or game tree — **no WW bytes, no WW file
+  names, no WW dialogue strings.** All WW content lives ONLY in the mod folder.
+- **Cross-pollination in either direction.** WW spaces get only WW assets; TP
+  spaces only TP assets. Rupees included (WW Vlupy visual, TP wallet credit).
+  **A missing prop is always preferable to a foreign one.**
+- Committing WW arcs, anything under the mod folder, or WW-named files.
+
+**№31-B — purity covers SHAPING, not just supply.** *Any receiver stage that
+modifies donor content on its way to the player is a purity surface.* Verify at
+the stage **the player perceives**, not the stage easiest to hash. Case receipts:
+grass colour altered via TP kankyo; a TP velocity curve squaring donor audio.
+
+**NAMING RULE — POINTER, NOT A COPY.** This entry's filename requirement (the
+`d_ww_` prefix on newly ported WW subsystem files, Housing/Engine 2026-08-17)
+is RECORDED IN FULL at **[NEVER-PUSH-STRIP-SET.md](NEVER-PUSH-STRIP-SET.md)**,
+where the strip set it governs is generated. **Read it there; it is not
+restated here.**
+
+> *This paragraph was itself a full second statement until 2026-08-17, written
+> by the Librarian in the same pass as a row warning against two homes for one
+> law — caught by Housing Security. Kept as a pointer because §113-STASH is
+> the receipt for what divergence costs: the ARCHIVAL copy of that law turned
+> out BROADER than the live registry entry, and an instance following the
+> registry correctly would have "repaired" a load-bearing slot.*
+
+**Guarded surfaces:** `greplist.txt` and the `ww_bridge gate` (M5a/M6); the push
+gate in [NEVER-PUSH-STRIP-SET.md](NEVER-PUSH-STRIP-SET.md), which enforces the
+push half of this law and must stay consistent with it.
+
+**Verification signature:** a clean M6 greplist on the pushed tree's exe, and a
+perceived-stage check rather than a source-stage hash.
+
+---
+
+## DN-12 — NEVER report CLEAN for a check that could not run (№31-C)
+
+**Migrated here 2026-08-16 (user ruling).** **This is the most-cited law in the
+estate and it had no home in the hard-stop registry** — it was quoted by four
+lanes across 2026-08-15/16 while living in an archival cookbook.
+
+**User ratification 2026-07-21/22:** *"Put it in cookbook"* (bus §61/§61c/§74).
+
+**Forbidden act:** reporting CLEAN, PASS or SAFE from a check whose execution was
+not established. **A check that cannot run reports UNKNOWN — never CLEAN.**
+Absence of evidence is never converted into a verdict.
+
+**Corollary (the falsifiability clause):** a pass must state **what it inspected**
+— path, count, version — so it is falsifiable from its own output. Green must
+prove the check executed.
+
+**Mechanism:** *a vacuous pass is indistinguishable from a real pass*, so care
+cannot detect it — care produces the same output either way. The only detector is
+deliberately making the instrument fail. Origin: silent ported guards and the
+gate's own empty-greplist false-CLEAN (fixed Bridge 0.19.0).
+
+**Sanctioned path — this law is EXECUTABLE, use the command, not the prose:**
+`tools/foundry/control.py` refuses to run a check whose gate has never been shown
+to go red; `control.py audit` lists gates that cannot fail at all.
+
+**Case receipts, 2026-08-15/16, nine instruments in one week:** an inert `\b`
+regex; a `head -12` truncation read as a complete list; tier2's `\bww_` blind to
+an underscore; `port_preflight`'s hardcoded donor path reporting MISSING; a
+lineage gate blind to 18 of 107 files; a C-class list capped at 20 while the
+count moved; a name-symmetry handoff scan that missed the current handoff; a
+doc-collision detector that called a template tree a defect; and `sig_diff`'s own
+negative control matching the vacuous summary line it was written to catch.
+**Every one was a real observation that could not have come out differently.**
+
+**Verification signature:** the gate has a registered control that has been
+*demonstrated* to go RED, and the pass names what it inspected.
+
+---
+
+## DN-13 — NEVER invent an identity label (the IVAN RULE)
+
+**Migrated here 2026-08-16 (user ruling).** Route: BILATERAL + RECEIPT; enforced
+continuously, violation receipts bus §47 and §89.
+
+**Forbidden act:** naming an actor, asset, character or system from resemblance,
+convenience or a working nickname. **Names and resemblance are never evidence.**
+A label stays `? (unverified)` until locked by decomp or a user identity pass.
+
+**Etymology (user receipt 2026-07-22, bus §104):** "Ivan" was the colour/lighting
+test subject during demo-item work. **`Ivan` is a greplist marker — the nickname
+must never appear in shipping code.** The lighting recipe once nicknamed
+"Ivan/boots" is the **NEUTRAL-AMBIENT RECIPE**: `settingTevStruct(TEV_TYPE 0)` +
+neutral ambient, no MAJI, no warm tint (`d_a_demo_item.cpp:519` era).
+
+**See also [§ ORIGIN](#origin--where-these-laws-come-from-the-users-account-verbatim):**
+the Accidental Ivan is the same subject, and the reason this project has both an
+identity law and a bake law.
+
+**Verification signature:** every identity in a report is either decomp-cited or
+carries `? (unverified)`. No third state.
+
+---
+
+## DN-14 — NEVER put a hypothesis or fan label in a donor-derived filename
+
+**Migrated here 2026-08-16 (user ruling).** User 2026-07-22 (bus §89/§89c).
+
+**Forbidden act:** naming a donor-derived export for what we think it is.
+**Donor-derived exports carry the donor's OWN addressing as the filename**
+(`IsleLink_0_wave025.wav`). Hypotheses and fan labels never reach a filename;
+interpretation goes in a sidecar.
+
+**Mechanism:** a filename is the one piece of metadata that survives every copy,
+ferry and re-import — so a guess encoded there outlives the evidence that it was
+a guess, and is later read as fact. (Structurally identical to the era problem in
+`ESTATE-NAVIGATION.md` §6b: what a name asserts, a reader believes.)
+
+**Verification signature:** every exported filename traces to donor addressing;
+every interpretation lives in a sidecar CSV/JSON beside it.

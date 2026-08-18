@@ -63,7 +63,7 @@ Written after getting Outset's sky from "blown out" to correct. It is written
 for **any** donor island, not just Outset: nothing below is Outset-specific
 except the worked example values. Reuse it verbatim for the rest of the sea.
 
-Companion: [WW-Restoration-Cookbook.md](../../../WW-Restoration-Cookbook.md) §4
+Companion: [WW-Restoration-Cookbook-SUPERSEDED.md](../../../WW-Restoration-Cookbook-SUPERSEDED.md) §4
 (the conversion) and §7 (how to cost a port). This doc is the *sky* slice, with
 the failure modes attached to their symptoms.
 

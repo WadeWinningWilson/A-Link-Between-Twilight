@@ -1,0 +1,20 @@
+# Integrator standing work. ONE ITEM PER LINE — the watcher emits EVERY
+# non-comment line SEPARATELY, so a wrapped paragraph becomes N standing
+# items. I wrote three multi-line notes and produced 13+. Keep lines whole,
+# however long they run.
+#
+# Comment lines (#) are skipped. Deleting a line is the only way to clear it,
+# which means doing the work rather than acknowledging it.
+#
+# PURGED 2026-08-17: every entry previously here was a CANCELLED order still
+# firing with the authority of a live one — the closed lwood boot, the retired
+# five-actor minimum set, and "EXT_VEG: cause of the 99 born-dead" (a reading
+# I had myself disproved). AUDIT THIS FILE WHENEVER A PLAN CHANGES, not when
+# it fails.
+
+WATCH: the 8 plugin files are `git add`ed but NOT COMMITTED — staging survives `git clean`, it does NOT survive a branch switch; committing is the user's call and is the only durable protection.
+OPEN DEFECT (mine, benign, UNROOTED — now SELF-DIAGNOSING): the watcher has twice exited with the exit-on-event banner and no visible ACT NOW line. One cause was found (my author-stamp changed from 'Integrator,' to 'Housing Security,' so my own rows fired back); the second occurrence had NO visible trigger at all. The exit line now names TRIGGERED BY: <emitter>, so the next occurrence explains itself instead of costing an investigation. Cost is one turn per event and the inbox nag recovers it.
+STANDING RULE (adopted 2026-08-17, Housing Security): never rule an instrument DEFICIENT without first demonstrating I RAN it and got a known-positive on a planted case — a check that can only produce silence must be proven able to produce NOISE before its silence counts as a result. And reproducing someone's NUMBER is not verifying their CLAIM: an exact match with an instrument you are calling blind is disconfirming evidence, not corroboration.
+STANDING RULE (Librarian's announce-vs-record doctrine, adopted 2026-08-17 — SUPERSEDES my weaker follow-up-loop version): a row is an ANNOUNCEMENT; the artifact tools read is the RECORD. Write the artifact FIRST, then file the row citing it. WHERE I MAY NOT WRITE IT (another lane's adjudicated artifact), the routing must name the exact artifact + edit + who applies, and the ruling stays OPEN on this list until I have READ THE ARTIFACT BACK. `FILED OK` proves an announcement published, never that a ruling landed.
+OPEN RULING #1 (routed, read back before clearing): patch_feed.py must exclude non-CARRY categories (not-ww, albw*, instrument) from the `stale_map_rows` bucket; a not-ww row is a NEGATIVE RECEIPT and pruning it re-opens the d_a_e_ww cross-instrument conflict. Artifact: tools/foundry/patch_feed.py. Who: FOUNDRY. Verify: patch-carry-set.json no longer lists include/d/actor/d_a_e_ww.h under stale_map_rows.
+STANDING RULE (adopted 2026-08-17, extends announce-vs-record): a VOID/RETRACTION is a ruling and stays OPEN on this list until the ARTIFACTS THAT CITED THE ORIGINAL NO LONGER DO — not until it is filed, not until it is acknowledged. A retraction has a SEARCH step the original never had: who is currently leaning on this? Earned when my voided 31-file finding sat as the evidentiary prop of a live covenant rule for hours.

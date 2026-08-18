@@ -1532,6 +1532,34 @@ void dExtNpcDoors_onInteriorBgReady(const char* interiorProc) {
 }
 
 void dExtNpcDoors_pollArrival() {
+    // ========================================================================
+    // §890 WATCHDOG, refined by run 165821's NEGATIVE: during a live control
+    // loss the §898 stall receipts below never fired — so the door-demo lock
+    // can be held while arrival is DISARMED (an ORPHANED lock: begin ran, no
+    // reachable end). Keyed on the LOCK ITSELF, before the armed gate, so the
+    // orphan case is the one this cannot miss. Bundle dumps every 600 frames
+    // of continuous lock; armed=0 in that line IS the orphan signature.
+    // ========================================================================
+    {
+        static int s_lockFrames = 0;
+        if (dExtNpcMount_isDoorDemoLocked()) {
+            if ((++s_lockFrames % 600) == 0) {
+                const char* cur = dComIfGp_getStartStageName();
+                DuskLog.warn("[Doors] §890 DOOR LOCK HELD {}f — armed={} armedStage='{}' "
+                             "curStage='{}' withDemo={} demoStarted={} demoEnded={} "
+                             "isEnableNextStage={} evtRun={}",
+                             s_lockFrames, s_arrival.armed ? 1 : 0,
+                             s_arrival.armed ? s_arrival.stage : "-",
+                             cur != NULL ? cur : "?",
+                             s_arrival.withDemo ? 1 : 0, s_arrival.demoStarted ? 1 : 0,
+                             s_arrival.demoEnded ? 1 : 0,
+                             dComIfGp_isEnableNextStage() ? 1 : 0,
+                             dComIfGp_event_runCheck() ? 1 : 0);
+            }
+        } else {
+            s_lockFrames = 0;
+        }
+    }
     if (!s_arrival.armed) {
         return;
     }

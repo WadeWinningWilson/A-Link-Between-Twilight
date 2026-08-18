@@ -9197,6 +9197,10 @@ void dExtNpcMount_beginDoorDemoLock() {
     s_doorDemoLocked = true;
 }
 
+bool dExtNpcMount_isDoorDemoLocked() {
+    return s_doorDemoLocked;
+}
+
 void dExtNpcMount_endDoorDemoLock() {
     if (!s_doorDemoLocked) {
         return;

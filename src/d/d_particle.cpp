@@ -1556,9 +1556,17 @@ static WwCommonRes sWwCommon[] = {
     {0x03E5, kWwWindlineRmSlot, NULL, false},  // TR_HAHEN_A    — barrel
     {0x03E7, kWwWindlineRmSlot, NULL, false},  // TR_HAHEN_C    — stool/pail/hbox2S/woodS
     {0x03E8, kWwWindlineRmSlot, NULL, false},  // DOKURO00      — skull/try
-    {0x0024, 6, NULL, false},   // ID_AK_JN_SHIPIMPACT00
-    {0x0026, 7, NULL, false},   // ID_AK_JN_HAMON00 (ripple — pig/shallow-water)
-    {0x0034, 8, NULL, false},   // ID_AK_JN_SHIPWARP-family / impact
+    // ⚠ COMMENTS BELOW CORRECTED AGAINST THE DONOR HEADER (WW DP
+    // d_particle_name.h) — the §231 labels carried donor NAMES over values that
+    // mean something else in donor space. Ids left ARMED pending consumer
+    // adjudication (the only callers, pig/zl1 ripple, currently hit the §225
+    // NULL setShipTail shim, so nothing requests these two today — but wiring
+    // the shim against the RECEIVER enum would draw these silently; see the
+    // CALLS row. Receiver ID_AK_JN_HAMON00 is 0x026; the DONOR ripple is
+    // 0x0033, armed below with the adjudicated batch.)
+    {0x0024, 6, NULL, false},   // donor 0x0024 = ID_AK_JN_ELEMENTKUSA00 (§231 said SHIPIMPACT00 — that is 0x0034)
+    {0x0026, 7, NULL, false},   // donor 0x0026 = ID_AK_JN_ROUNDATTACK01 (§231 said HAMON00 — that is 0x0033)
+    {0x0034, 8, NULL, false},   // ID_AK_JN_SHIPIMPACT00 (§231 said "SHIPWARP-family"; value correct)
     // §396 lamp candle (bus §368/§394/§395 thread): the §327 port took the
     // RECEIVER enum's ID_AK_JN_TORCH/KAGEROU00 — same NAMES as the donor's
     // dPa_name but TP's VALUES (0x41/0x47), so the lamp asked TP's banks for
@@ -1570,6 +1578,19 @@ static WwCommonRes sWwCommon[] = {
     {0x0035, 9, NULL, false},   // ID_AK_JN_SHIPSPLASH00
     {0x0036, 10, NULL, false},  // ID_AK_JN_SHIPTAIL00
     {0x0037, 11, NULL, false},  // ID_AK_JN_SHIPWAVE00 (the wake — ikada:327/334)
+    // §977 dPa_name adjudication, armed PER-ID (never globally): rows carry the
+    // DONOR values (WW DP d_particle_name.h — the receiver enum shares the
+    // donor's NAMES, not its VALUES: HAMON00 is 0x026 receiver / 0x0033 donor,
+    // OK is 0x005 / 0x000D, the STS_HAHEN pair 0x050/0x082 vs 0x03E2/0x03E3).
+    // All four verified PRESENT in the staged common.jpc by offline JPAC1-00
+    // walk, 193 declared == 193 parsed (§843 discipline). The stone pair clears
+    // d_a_stone's deps gate; the ks pair half-clears d_a_ks — its third effect
+    // 0x8068 is SCENE-bank (0x8000 bit), which this COMMON-bank table cannot
+    // serve; that omission stays on the owed ledger, not silently dropped.
+    {0x03E2, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_M_STS_HAHEN (stone shatter, d_a_stone)
+    {0x03E3, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_STS_HAHEN (stone shards, d_a_stone)
+    {0x0033, kWwWindlineRmSlot, NULL, false},  // ID_AK_JN_HAMON00 (the REAL donor ripple, d_a_ks + future setShipTail wiring)
+    {0x000D, kWwWindlineRmSlot, NULL, false},  // ID_AK_JN_OK (d_a_ks)
 };
 static constexpr int kWwCommonCount = (int)(sizeof(sWwCommon) / sizeof(sWwCommon[0]));
 

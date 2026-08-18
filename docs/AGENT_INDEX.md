@@ -1,5 +1,32 @@
 # Agent index — where live memory lives
 
+era: era-independent
+<!-- era rationale: the index itself; names where things live, not how to do them | Librarian, 2026-08-16, user ruling "assign it by era" -->
+
+> 🧭 **THIS INDEX COVERS DOCUMENTS. THE INSTRUMENTS HAVE THEIR OWN MAP, AND UNTIL
+> 2026-08-16 NOTHING HERE POINTED AT IT** — an instance onboarded through
+> `CLAUDE.md` → this file could work a whole session without learning that
+> **105 instruments** exist. Run the other map first:
+>
+> ```bash
+> python tools/foundry/workflow.py
+> ```
+>
+> `workflow.py` is the 7-phase port workflow (pick → preflight → build → gates →
+> verify → communicate) and names the ~27 tools that are workflow STEPS;
+> `tool_index.py` lists **every** instrument, one line each. **`tools/foundry` is
+> the one instruments home** — if you are about to write a script, check there
+> first. See [ESTATE-NAVIGATION.md](ESTATE-NAVIGATION.md) for why this bridge was
+> missing and what else the doc tree is missing.
+
+> 🗺️ **[ESTATE-NAVIGATION.md](ESTATE-NAVIGATION.md) — how this repo is organized and
+> what is currently wrong with it** (Librarian audit, user-ordered): the two-tree
+> navigation gap, the 62% of top-level docs unreachable from this index, the
+> duplicate-purpose pairs (two History handoffs; the cookbook whose DEPRECATED
+> copy is the larger and better-named one), the four handoff naming shapes, and
+> a ranked cheapest-first fix list. **Read before adding a doc, so the estate
+> stops growing orphans.**
+
 > 🐛 **[KNOWN-BUGS.md](KNOWN-BUGS.md) — open-defect registry with ARMED passive probes.**
 > Confirmed-but-unfixed defects (KB-1 intermittent cutscene kill, KB-2 seam presentation
 > gap), their eliminated hypotheses, and the probe families live in every build so the next
@@ -75,6 +102,7 @@
 | Foundry (methods / instruments) | [state/foundry-methods.md](state/foundry-methods.md) | [Foundry.md](Foundry.md) (charter) · [LANES.md](LANES.md) |
 | Enemy Death Rupees | [state/enemy-death-rupees.md](state/enemy-death-rupees.md) | `albw-port.md` (setting overview) |
 | WW itemmdl / Wind Curs↔Clau | [state/ww-itemmdl.md](state/ww-itemmdl.md) | [wind-waker-item-work.md](wind-waker-item-work.md), [Interconnected Chats/Wind Curs-Wind Clau.md](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md) (archive) |
+| **History/Bridge lane (WW donor decode)** | [state/ww-handoff-history-bridge.md](state/ww-handoff-history-bridge.md) — **current instance handoff, start here** | [HANDOFF-HISTORY.md](HANDOFF-HISTORY.md) (lane **charter**) · [state/HISTORY-HANDOFF.md](state/HISTORY-HANDOFF.md) (**stale campaign snapshot** — the Grandma tale closed 2026-08-01; read §4 for calibration only) · [state/ww-message-donor-spec.md](state/ww-message-donor-spec.md) (WW message system, field-by-field) · [TPHistory.md](TPHistory.md) |
 | Field combat refinements | [state/combat-refinements.md](state/combat-refinements.md) | [combat-refinements-handoff.md](combat-refinements-handoff.md) |
 | Boss fights | [state/boss-fights.md](state/boss-fights.md) | [boss-fights-handoff.md](boss-fights-handoff.md), [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md), [Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md) |
 | Drive / FPS oracle | [state/drive-fps.md](state/drive-fps.md) | [performance-handoff.md](performance-handoff.md), [build-fps-guidelines.md](build-fps-guidelines.md), [future-performance-leaning.md](future-performance-leaning.md) |
@@ -90,8 +118,9 @@
 | Companion mods (separate release) | — | [research/albt-companion-mods-research.md](research/albt-companion-mods-research.md) |
 | Mod API port (main `.dusk` extraction) | [state/mod-api-port.md](state/mod-api-port.md) | [modding.md](modding.md) (dusk-API modding guide); [state/mod-api-port-albw-meter.md](state/mod-api-port-albw-meter.md) (#1 plan); port canvases; `albw-port.md` |
 | Mod API host promote + local dusk merge | [state/mod-api-host-promote.md](state/mod-api-host-promote.md) | Layer B / Mods UI / `.dusk` push set; parked WW receivers; `pre-dusk-api-merge` tag; [Custom-Model-API-Work.md](Custom-Model-API-Work.md) |
-| Clean-room delivery (plugin + any dusklight + user ISO) | [WW Linked/ww-clean-room-delivery.md](WW%20Linked/ww-clean-room-delivery.md) | **User-stated product:** plugin + any dusklight version + user's own ISO → WW-in-TP. **Measured gap (Housing/Engine, tale §934): WW layer is 100% fork / 0% plugin** — 0 SDK mods, 49/49 WW TUs in `files.cmake`, no MODULE artifact; stock dusklight has nothing to download. **Plugin-ization is OPEN, unbuilt, central work — NOT settled** (Housing retracted the earlier §512/§519 "settled" reading same-day; §519 removed a blocker, it did not name the fork exe as the target). End-to-end clean-room test **NEVER run**. Scope/sequencing/reachability = **user ruling + Bridge/Foundry design**. Count discrepancy → [INVENTORY-SCHEMA §7](state/ww-staging/INVENTORY-SCHEMA.md) fixture |
+| Clean-room delivery (plugin + any dusklight + user ISO) | [WW Linked/ww-clean-room-delivery.md](WW%20Linked/ww-clean-room-delivery.md) | **RULED §939 (user, confirmed to Librarian): the plugin IS the product — mod-side DELIVERY only; receiver code stays as-is in CONTENT (what makes the mod viable), only DELIVERY moves plugin-side — preserved + delivered, NOT deprecated.** **DELIVERY MECHANISM PROVEN ON STOCK/VANILLA — 3 provenance-verified runs (Integrator), each honestly scoped:** (1) donor DATA serves, 224 files zero-change (§933/run-145418); (2) by-name HOOKS resolve+fire, version-independent at link+run, H10 closed / no import thunk into the exe (§953/run-180329); (3) above-enum DISPATCH routes a profile index to plugin data, all 3 §747 legs install (§968-Opt1 mechanism/run-203926). “Road built, paved, driven.” **CARGO SHAPE PROVEN, CREATION NOT:** first donor-faithful actor `tag_so` is REGISTERED + READY on stock (§559/run-214437: process_size 1656, 3 placement-name routes, hooks MOD_OK) — supersedes the earlier linkage-probe. But **INERT / never CREATED**: nothing on vanilla PLACES a TagSo (no stage/DZR) so `fpcBs_Create` never runs. **Boundary: stock can LOAD our actor but cannot ASK for it** — asking needs a placement, a placement needs a stage = the 49-file receiver layer, still in-exe. **ROUTE (b) — board-claimed user ruling §591 (via Foundry; overruled Bridge's (a)-first, do not re-litigate): b1→b2→b3 sequential.** b1 (WW stage DATA reaches vanilla) = DONE (§933 donor-disc serves the DZRs incl. `sea`; confirm on the consolidated plugin); b2 (ASK vanilla to change stage — `dComIfGp_setNextStage`/`fopScnM_ChangeReq` exported but UNCALLED) = first real work; **b3 (vanilla PARSE+ENTER a WW stage = runs the 49-file receiver layer) = THE unknown, and its outcome IS the migration scope.** Skips the ct/getArg de-risk (tag_so ct/getArg never ran) — mitigation: log them on first stage entry so it doubles as the create-proof. **Gates (govern what lands NEXT; existing not reverted):** no new `files.cmake` WW entries · no new Tier-2 native-TP seams. **§968 Option-1 slot approach = board-claimed USER RULING, HELD pending user confirm.** Prompting gap: §934 measured 100% fork / 0% plugin. Count discrepancy → [INVENTORY-SCHEMA §7](state/ww-staging/INVENTORY-SCHEMA.md) |
 | WW Bridge Tool | [state/ww-bridge-tool.md](state/ww-bridge-tool.md) | [WW Linked/ww-bridge-tool-interconnected.md](WW%20Linked/ww-bridge-tool-interconnected.md); shore motion §128 → `albt bridge/reports/model1_btk_motion.md` |
+| **Project origin — the user's founding account** | **[DO-NOT.md § ORIGIN](DO-NOT.md)** | **The user's verbatim account of how this project started — the deliberately revived Ivan stub, the lighting BAKES, the fun ports, the mounted era, and the Accidental Ivan standing in for an `swood`.** **It lives in the hard-stop registry because it is DN-9's and DN-10's first case receipt, not a preface:** DN-9 forbids mounting and the mounted era is where mounting came from; DN-10 forbids baking and **the founding lighting formula was a bake.** Every other DN entry carries the user's ratification plus the failure that produced it — those two were missing the failure, because it predates the registry and is the same event for both. Durability is the registry's own rule 3 (*entries never expire*), and discoverability is maximal: `CLAUDE.md` names `DO-NOT.md` as the first thing any instance reads. **Confirmed at source:** `swood/swood3/swood5` now sit in `d_stage.cpp` under the §696 vegetation banner, previously ABSENT — the placeholder's slot became a real port. |
 
 ---
 

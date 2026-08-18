@@ -51,6 +51,13 @@ PHASES = [
         ("ww_disc.py", "the donor disc reader itself (FST, RARC, Yaz0)"),
     ]),
     ("4. GATES — nothing queues until these pass", [
+        ("control.py", "**RUN THIS FIRST.** A gate may not report a pass until "
+                       "its negative control has been shown to go RED. `audit` "
+                       "= which gates can fail at all; `guard <gate> -- <cmd>` "
+                       "REFUSES to run a check whose gate is blind. Built "
+                       "because all five lanes independently wrote 'every gate "
+                       "needs a control that must fail' and all five then broke "
+                       "it — a written rule did not survive; a command does"),
         ("kit_laws.py", "laws 1-10 incl. DN-3 raw-buffer cast + DN-10-S substitution"),
         ("compile_gate.py", "does the RECEIVER have the API this code calls, in this "
                             "shape? (tier 1 existence, tier 2 real cl /Zs)"),
@@ -58,6 +65,26 @@ PHASES = [
                               "C invisible — class C is stated on every run)"),
         ("kit_output_law.py", "no kit may write a donor-format file that is not "
                               "disc-verbatim"),
+        ("c0_audit.py", "INVISIBLE control bytes (BS/NUL/FF) and UTF-8 BOMs in "
+                        "source and docs. A literal 0x08 inside sig_diff.py's "
+                        "declaration regex made its call-site filter inert for "
+                        "the tool's whole life — invisible to Read, unmatchable "
+                        "by Edit, and it moved measurement counts. Seven "
+                        "injections, six of them warned about in prose only. "
+                        "**Sweep anything you ferry**"),
+    ]),
+    ("4-B. WATCH — a monitor you cannot enumerate is a monitor you will lose", [
+        ("lane_watch.py", "the lane monitor: new open CALLS rows for this lane, "
+                          "and any gate going BLIND. Emits on FAILURE as loudly "
+                          "as on news, and stamps a pulse file every pass"),
+        ("monitor_pulse.py", "**is my watcher alive, or dead since an hour ago?** "
+                             "`TaskList` cannot see monitors — it said 'No tasks "
+                             "found' while three were firing — so the pulse stamp "
+                             "is the ONLY evidence. ALIVE / LATE / DEAD / ABSENT; "
+                             "DEAD means the quiet was UNOBSERVED, not clear"),
+        ("MONITOR-REGISTRY.md", "the task IDs of live monitors. Not a tool — the "
+                                "only record that a watcher exists at all. **Read "
+                                "it before arming; the last instance stacked three**"),
     ]),
     ("5. VERIFY + MEASURE", [
         ("l2c_equiv.py", "runtime-served bytes vs the disc, member by member"),
@@ -71,6 +98,18 @@ PHASES = [
                        "unallocated/collided sections"),
         ("calls_rotate.py", "keeps CALLS.md the size of the work (answered rows -> "
                             "CALLS-ARCHIVE.md, never deleted)"),
+        ("file_row.py", "FILE or ANSWER a CALLS row and PROVE it landed (re-reads "
+                        "the file; refuses ambiguous matches; enforces the "
+                        "CALLS-LANE-TOKEN lint so an addressee can never be "
+                        "unparseable). `lint` sweeps existing rows. Use this instead "
+                        "of an ad-hoc write + `echo filed` — that echo runs even "
+                        "when the write threw, and it has lied"),
+        ("routing_check.py", "did a lane you routed in a WHOSE-TURN actually GET a "
+                             "row? catches the call that was never filed"),
+        ("call_receipt.py", "did the addressee RECEIVE it? flags rows whose lane has "
+                            "been silent on every bus since filing, and ASKS appended "
+                            "to already-answered rows. COMPLEMENT to routing_check — "
+                            "'0 unreceived' is NOT '0 dropped calls'"),
     ]),
 ]
 

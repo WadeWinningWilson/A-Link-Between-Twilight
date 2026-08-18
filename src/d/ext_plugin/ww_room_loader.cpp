@@ -59,6 +59,7 @@
 #include "d/d_com_inf_game.h"    // dComIfGp_getStartStageName
 #include "d/d_stage.h"           // dStage_dt_c_roomLoader
 #include "d/d_resorce.h"         // dRes_info_c::setRes (§634 publish)
+#include "JSystem/JKernel/JKRArchive.h"  // getResSize — the §858 pre-resolve's bound
 #include "d/d_bg_w.h"            // cBgD_t
 #include "d/d_ext_npc_mount.h"   // §334 repack, DN-3 consume-time resolver
 #include "d/d_msg_object.h"      // §644 message-archive hook
@@ -476,6 +477,160 @@ static void wwRoom_repackDzb(int i_roomNo) {
 }
 
 // ============================================================================
+// PHASE 2, CHUNK 6: OBJECT-ARC PRE-RESOLVE — the LBNK-shaped fix (§858 RULED,
+// evidence tale §856; BUILD-QUEUE row "WW room OBJECT-ARC PRE-RESOLVE").
+//
+// THE WINDOW IT CLOSES, measured in §856 and not re-derived here: a pot's
+// create completes in ~1 frame (profile compiled in, bank resident) while a
+// shelf's create phases through its Otana arc resolve — ~160 log lines later.
+// In that window the pot, authored at shelf-top Y, runs the donor's own
+// airborne branch, falls, and breaks by the donor's own fall-height rule. On
+// GC the window never opened: every create serialised through the DVD FIFO, so
+// completion followed request order emergently. DN-10 step 1 has NO TARGET —
+// the donor has no ordering SYSTEM to port; the ordering was a property of its
+// disc. So this is step 2, and it borrows the RECEIVER's own idiom:
+//
+//   TP rooms pre-load their object banks from LBNK before actors create.
+//   WW rooms carry no LBNK -> derive the same set from the room's OWN parsed
+//   ACTR/TGOB records and kick the identical async residency load.
+//
+// SAME CALL THE NATIVE USES: dComIfG_setObjectRes(name, 0, NULL) — the exact
+// residency start ensureDemoArcResident already uses for the §297 tale arc
+// (d_ext_npc_mount.cpp:8357), which is itself this port's proven LBNK stand-in.
+// Requesting early is the whole fix; nothing waits, nothing blocks, and a
+// create that still phases behaves exactly as it does today.
+//
+// NAMES COME FROM THE DONOR'S OWN DATA: the ACTR record's 8-char name, mapped
+// to its arc by the receiver's own dStage_searchName table (the same funnel
+// dStage_actorCreate uses at :1851). A name the table does not know is SKIPPED
+// LOUD (§858 gate term 2) — never a silent fall-through.
+//
+// GATE TERM 1 (§858): load-time is logged per room so a spike on a big room
+// (sea,44) is visible before anyone ships it. GATE TERM 3: touches no actor.
+// ============================================================================
+// Walks the RAW DZR, not i_stage: a room's ACTR records are dispatched by the
+// RELOAD table (d_stage.cpp roomReLoader, called later at d_s_room.cpp:379), so
+// `getActor()` is not populated at seam time — reading it here would silently
+// pre-resolve nothing. The file's own chunk table is authoritative and already
+// parsed by offsetToPtr, which is why the other translators take `i_dzr` too.
+// ⛔ REVERTED ONCE FOR AN ACCESS VIOLATION ON ROOM LOAD (Integrator, symbolicated
+// to the record loop below). THE DEFECT WAS NOT A MISSING CAP — it was that
+// ITERATION CAPS ARE NOT ADDRESS BOUNDS: `c < 128` and `r < 512` limit how many
+// times the loop runs, while the ADDRESS it reads is `i_dzr + off + r*0x20`
+// with `off`/`n` taken from the file. A large or garbage pair walks off the
+// allocation on the FIRST iteration, and the caps never see it.
+//
+// So the function now takes the buffer LENGTH and bounds every read against it:
+// the chunk table, each record, and the name copy. Without a length there is no
+// bound to check — which is why the size parameter is the fix and not an extra
+// guard on top of the old shape.
+//
+// AND THE SEQUENCE IS THE LESSON: this code had never executed before the night
+// it shipped (its TU did not compile until a separate repair), so fixing a
+// compile error is what let an unbounded walk reach the user. "It compiles" and
+// "it has ever run" are different facts.
+static void wwRoom_preResolveObjectArcs(const u8* i_dzr, u32 i_size, int i_roomNo) {
+    // 4-byte count + at least one 12-byte chunk entry, or there is nothing to read.
+    if (i_dzr == NULL || i_size < 16u) {
+        return;
+    }
+    const u32 chunkN = wwRoom_be32(i_dzr);
+    // Small dedupe: a room names the same arc dozens of times (pots, grass).
+    // 64 distinct arcs is far past any WW room's real spread; overflow degrades
+    // to "resolve it again", which is a wasted call and not a fault.
+    char seen[64][12];
+    int seenN = 0;
+    int kicked = 0;
+    int unknown = 0;
+    int records = 0;
+    // Placement chunks a WW ROOM carries, all at the donor's 0x20 actor stride
+    // (History's vocabulary decode: ACTR/TGOB plus the twelve per-layer ACTn).
+    // TGSC/SCOB/DOOR live at 0x24 and carry a scale tail — excluded here rather
+    // than mis-strided; their arcs are a follow-up, not a guess.
+    static const char* const kActorTags[] = {
+        "ACTR", "TGOB", "ACT0", "ACT1", "ACT2", "ACT3", "ACT4", "ACT5",
+        "ACT6", "ACT7", "ACT8", "ACT9", "ACTa", "ACTb",
+    };
+    for (u32 c = 0; c < chunkN && c < 128u; c++) {
+        // BOUND THE CHUNK-TABLE READ ITSELF: chunkN comes from the file, so a
+        // garbage count must not walk the table off the end.
+        if (4u + (u64)c * 12u + 12u > (u64)i_size) {
+            break;
+        }
+        const u8* ent = i_dzr + 4 + (size_t)c * 12;
+        bool isActorTag = false;
+        for (size_t t = 0; t < sizeof(kActorTags) / sizeof(kActorTags[0]); t++) {
+            if (std::memcmp(ent, kActorTags[t], 4) == 0) { isActorTag = true; break; }
+        }
+        if (!isActorTag) {
+            continue;
+        }
+        const u32 n = wwRoom_be32(ent + 4);
+        const u32 off = wwRoom_be32(ent + 8);
+        // THE WHOLE RECORD ARRAY MUST FIT, checked in 64-bit so the product
+        // cannot wrap: a chunk whose (off, n) claims more than the buffer holds
+        // is REFUSED ENTIRELY rather than partially walked — a partial walk is
+        // how a plausible-looking prefix hides a bad tail.
+        if ((u64)off + (u64)n * 0x20u > (u64)i_size) {
+            DuskLog.warn("[WwRoomSeam] §858 pre-resolve: room {} chunk claims off={} n={} "
+                         "(needs {} bytes) but the dzr is {} — chunk REFUSED, not walked.",
+                         i_roomNo, off, n, (u64)off + (u64)n * 0x20u, i_size);
+            continue;
+        }
+        for (u32 r = 0; r < n && r < 512u; r++) {
+        const u8* rec = i_dzr + off + (size_t)r * 0x20;
+        records++;
+        char name[12];
+        // The 8-byte name is inside the record, and the record is inside the
+        // buffer by the check above — but assert the copy's own extent too,
+        // because that is the read the fault address landed in.
+        if ((u64)(rec - i_dzr) + 8u > (u64)i_size) {
+            break;
+        }
+        std::memcpy(name, rec, 8);
+        name[8] = '\0';
+        for (int k = 7; k >= 0 && (name[k] == ' ' || name[k] == '\0'); k--) {
+            name[k] = '\0';
+        }
+        if (name[0] == '\0') {
+            continue;
+        }
+        bool dup = false;
+        for (int s = 0; s < seenN; s++) {
+            if (std::strncmp(seen[s], name, 11) == 0) { dup = true; break; }
+        }
+        if (dup) {
+            continue;
+        }
+        if (seenN < 64) {
+            std::strncpy(seen[seenN], name, 11);
+            seen[seenN][11] = '\0';
+            seenN++;
+        }
+        dStage_objectNameInf* inf = dStage_searchName(name);
+        if (inf == NULL) {
+            unknown++;
+            DuskLog.warn("[WwRoomSeam] §858 pre-resolve: room {} names '{}' — NOT in "
+                         "the object table, so no arc is pre-resolved for it (its "
+                         "create will phase as before, or resolve to Nothing).",
+                         i_roomNo, name);
+            continue;
+        }
+        // The actor NAME is the arc name for the donor's own object arcs (the
+        // §716 res/Object aliasing the mount already serves). setObjectRes is
+        // idempotent-by-residency: an arc already mounted is a no-op.
+        if (dComIfG_setObjectRes(name, 0, NULL)) {
+            kicked++;
+        }
+        }
+    }
+    DuskLog.info("[WwRoomSeam] §858 object-arc pre-resolve: room {} — {} record(s), {} distinct "
+                 "name(s), {} residency load(s) kicked, {} unknown. LBNK-shaped: requested "
+                 "BEFORE actor creation so a phased create cannot open the §856 window.",
+                 i_roomNo, records, seenN, kicked, unknown);
+}
+
+// ============================================================================
 // PHASE 2, CHUNK 5: room MODELS — publishing what the node type prevented.
 //
 // A vanilla WW room arc files its models under RARC node type 'BDL '.
@@ -836,6 +991,54 @@ void dExtWwRoom_loadRoomDzr(void* i_data, dStage_dt_c* i_stage, int i_roomNo) {
             (const u8*)i_data);                    // first, name-test fallback §749)
         wwRoom_repackDzb(i_roomNo);                // chunk 4 — dzb attrs (§334 2nd consumer)
         wwRoom_publishModels(i_roomNo);            // chunk 5 — 'BDL ' models via DN-3 resolver
+        // ====================================================================
+        // CHUNK 6: crashed the fork on 2026-08-17 (I shipped it), reverted, then
+        // RE-ENABLED WITH THE LENGTH THE REVERT REQUIRED. The size comes from
+        // the receiver's OWN accessor (the room archive's getResSize) rather
+        // than from anything this file computes — if it cannot be obtained the
+        // pass is SKIPPED, because an unbounded walk is exactly what was
+        // reverted. Chunk 6 is a pre-warm optimisation, so skipping costs
+        // nothing but the optimisation.
+        {
+            const char* preArc = dComIfG_getRoomArcName(i_roomNo);
+            dRes_info_c* preInfo = (preArc != NULL)
+                ? g_dComIfG_gameInfo.mResControl.getStageResInfo(preArc) : NULL;
+            JKRArchive* preArch = (preInfo != NULL) ? preInfo->getArchive() : NULL;
+            u32 preSize = 0;
+            if (preArch != NULL && i_data != NULL) {
+                preSize = preArch->getResSize(i_data);
+            }
+            if (preSize > 0u) {
+                wwRoom_preResolveObjectArcs((const u8*)i_data, preSize, i_roomNo);
+            } else {
+                DuskLog.warn("[WwRoomSeam] §858 pre-resolve SKIPPED for room {}: the dzr's "
+                             "size is unavailable (arc='{}'), and this pass will not walk "
+                             "an unbounded buffer — that is the fault that reverted it.",
+                             i_roomNo, preArc != NULL ? preArc : "?");
+            }
+        }
+        // ====================================================================
+        // HISTORY — RESOLVED. Kept because the sequence is the lesson.
+        // ====================================================================
+        // Symbolicated: wwRoom_preResolveObjectArcs <- dExtWwRoom_loadRoomDzr
+        // <- d_s_room phase_2, EXCEPTION_ACCESS_VIOLATION reading a record
+        // pointer. THE DEFECT: the record loop computed `i_dzr + off + r*0x20`
+        // from chunk-table values with NO BOUNDS CHECK, and the function never
+        // received the buffer LENGTH, so a garbage `off`/`n` walked straight
+        // off the allocation. Chunks 1-5 predate it and were unaffected.
+        // THE SEQUENCE: this code had never executed before the night it
+        // shipped, because its TU did not compile until a separate repair.
+        // "It compiles" and "it has ever run" are different facts, and fixing
+        // a compile error is what let an unbounded walk reach the user.
+        // NOW FIXED ABOVE and verified by History/Bridge: four bounds, every
+        // comparison u64-widened FIRST (a u32 `off + n*0x20` WRAPS, and a
+        // wrapped sum passes a check it should fail), size taken from the
+        // archive's own authoritative record, and an unavailable size SKIPS
+        // the pass rather than falling back to iteration caps — the failure
+        // mode is "the optimisation does not run", never "the walk runs
+        // blind". The dead re-enable stub that used to sit here is gone; the
+        // live bounded call is the one above.
+        // ====================================================================
 #endif
         return;
     }

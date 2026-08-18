@@ -8,7 +8,16 @@ The method that ended the "still a crash" cycle. When Dusklight prints an access
 Resolve the `rva=` to `function + line` with the x64 `llvm-symbolizer` and the RelWithDebInfo PDB:
 
 ```bash
-llvm-symbolizer.exe --relative-address --exe=<...>/dusklight.pdb <rva>
+llvm-symbolizer.exe --relative-address --exe=<...>/dusklight.exe <rva>
+
+<!-- CORRECTED 2026-08-16 (Librarian, while symbolicating the A_mori exit crash):
+     this line said `--exe=<...>/dusklight.pdb`. llvm-symbolizer wants the EXE and
+     finds the PDB beside it; pointing --exe at the .pdb yields SILENT EMPTY OUTPUT --
+     no error, no frames, just nothing, which reads as "unsymbolicatable build".
+     Verified both ways on rva 0xe203c: .pdb -> blank; .exe -> fpcNd_Delete
+     f_pc_node.cpp:97. Also: VS 18 ships it at
+     `.../VC/Tools/Llvm/x64/bin/llvm-symbolizer.exe` (the doc's `Tools/Llvm/x64/bin`
+     is right, but there is also a non-x64 `Tools/Llvm/bin` copy next to it). -->
 ```
 
 - `llvm-symbolizer.exe` ships with Visual Studio at `…/Tools/Llvm/x64/bin/` (use the **x64** build).

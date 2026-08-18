@@ -1,3 +1,6 @@
+
+era: unknown
+<!-- era rationale: CORRECTED 2026-08-16 from `mounted`, which was the same inference History/Bridge overturned for the CANONICAL copy. These frozen copies were never re-read against their rule and are marked UNCERTAIN ACCURACY - DO NOT WRITE. UNKNOWN is the honest state (DN-12): not era-bound, not cleared, NOT RE-READ. | Librarian -->
 > # ⚠ UNCERTAIN ACCURACY — DO NOT WRITE
 > This copy is one of two diverged cookbooks (fork confirmed 2026-07-23, bus §106; 542 diff
 > lines). It may contain doctrine the other copy lacks and vice versa. **Do not edit. Do not

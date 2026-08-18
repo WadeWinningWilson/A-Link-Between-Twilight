@@ -60,7 +60,15 @@ def main():
         print("CALLS.md missing — cannot check (UNKNOWN, not clean)")
         return 2
     calls = CALLS.read_text(encoding="utf-8", errors="replace")
-    open_rows = re.findall(r"(?m)^- \[ \] ([A-Z/ ]+?)\s*\|", calls)
+    # CASE-AGNOSTIC (Housing's 5th shape): [A-Z/ ] drops `HISTORY/Bridge`.
+    # AND COUNT ANSWERED ROWS AS COVERAGE. This tool asks "was anyone TOLD?",
+    # so an ANSWERED row is the STRONGEST possible evidence — the lane was
+    # told and acted. Counting only open rows flagged the §837 routing as
+    # undelivered *because History had already handled it*, which is the
+    # worst kind of false positive: it punishes the success case and teaches
+    # the reader to skim. Found only after fixing the case bug above — one
+    # defect was hiding another.
+    open_rows = re.findall(r"(?m)^- \[[ xX]\] ([^|]+?)\s*\|", calls)
     open_lanes = {r.strip().upper() for r in open_rows}
 
     routed = {}
@@ -73,8 +81,20 @@ def main():
             end = text.find("\n## ", start + 3)
             sec = text[start:end if end > 0 else len(text)]
             title = sec.splitlines()[0][:70]
-            if only and only not in title.upper():
-                continue
+            # AUTHORSHIP, not mention (calibration): `--lane FOUNDRY` matched
+            # interconnected §868 "FERRY TO FOUNDRY" — a section addressed TO
+            # me, whose routings are not mine to file. A guard that cries wolf
+            # on someone else's section teaches its owner to skim it (§389b).
+            if only:
+                # THE WORSE ONE: bus HEADERS are frequently mixed-case
+                # ("## §837 Integrator", "## §729 Housing"), so an ALL-CAPS
+                # class silently excluded whole sections from the authorship
+                # filter — every --lane verdict was over a PARTIAL view.
+                m_auth = re.match(r"^#+\s*(?:\w+\s+)?§\d+[a-z]?\s+([A-Za-z/ ]+)",
+                                  title)
+                author = (m_auth.group(1).strip() if m_auth else "")
+                if not author.upper().startswith(only):
+                    continue
             m = RE_TURNS.search(sec)
             if not m:
                 continue
@@ -94,9 +114,9 @@ def main():
     gaps = {l: s for l, s in routed.items() if not covered(l) and l != "FOUNDRY"}
     print("routing check — last %d section(s) per bus" % n)
     print("  lanes routed to: %s" % (", ".join(sorted(routed)) or "(none)"))
-    print("  lanes with an open CALLS row: %s" % (", ".join(sorted(open_lanes)) or "(none)"))
+    print("  lanes with a CALLS row (open or answered): %s" % (", ".join(sorted(open_lanes)) or "(none)"))
     if gaps:
-        print("\n  [NO ROW] routed in prose but no open CALLS row:")
+        print("\n  [NO ROW] routed in prose but NO CALLS row at all (open or answered):")
         for lane, secs in sorted(gaps.items()):
             print("    %-16s from %s" % (lane, "; ".join(sorted(secs))[:100]))
         print("\n  -> file a row, or the routing triggers nobody.")

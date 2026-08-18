@@ -1,0 +1,56 @@
+#!/bin/sh
+# ============================================================================
+# pre-commit — B5 (roadmap Phase B, Bridge). CONVENIENCE TIER.
+#
+# B1's seam gate in build_run.bat is THE ENFORCEMENT. This hook is the same
+# checks, earlier: it catches a bad row edit at commit time instead of at the
+# next build, which may be someone else's build hours later.
+#
+# It runs only the CHEAP checks, because a slow pre-commit hook gets disabled
+# and a disabled hook protects nothing:
+#   · row_store validate   — schema/domain/citation checks over rows/*.md
+#   · seam_gate  check     — baseline diff + ownership classifier
+# Neither shells out to the compiler; both are sub-second on this store.
+#
+# SKIP: `git commit --no-verify` (git's own, no bespoke env var invented).
+#
+# ACTIVATION IS NOT AUTOMATIC AND THAT IS DELIBERATE — see .githooks/README.md.
+# ============================================================================
+set -e
+
+REPO="$(git rev-parse --show-toplevel)"
+TRACKER="$REPO/docs/state/ww-staging/tracker"
+
+# Nothing to guard if the store is not present (fresh clone, other branch).
+[ -d "$TRACKER/rows" ] || exit 0
+
+PY=python
+command -v python >/dev/null 2>&1 || PY=python3
+command -v "$PY" >/dev/null 2>&1 || {
+    echo "[pre-commit] python not found — seam checks SKIPPED (not a pass)"
+    exit 0
+}
+
+fail=0
+
+if ! "$PY" "$REPO/tools/foundry/row_store.py" validate; then
+    echo ""
+    echo "[pre-commit] row store REFUSED the commit — fix the rows above."
+    fail=1
+fi
+
+if ! "$PY" "$REPO/tools/foundry/seam_gate.py" check; then
+    echo ""
+    echo "[pre-commit] seam gate REFUSED the commit — each problem above names its fix."
+    fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+    echo ""
+    echo "  This is the CONVENIENCE tier (B5). The same checks run in build_run.bat"
+    echo "  (B1) and will stop the build if you commit past them."
+    echo "  Bypass this hook only: git commit --no-verify"
+    exit 1
+fi
+
+exit 0

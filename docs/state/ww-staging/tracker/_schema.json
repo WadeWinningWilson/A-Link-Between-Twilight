@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "SEAM-TRACKER ROW STORE — declared domains (roadmap A3, spec SPEC-row-store.md §3).",
+    "Bridge hosts; Foundry specs. Every domain below ENUMERATES THE BOUNDED SIDE per",
+    "§P4 (the floor rule): an unrecognised value must FAIL LOUDLY, never bucket silently.",
+    "The generator refuses the index on any value not listed here.",
+    "",
+    "AXIS STATES ARE COPIED FROM NOWHERE — they are the INVENTORY-SCHEMA §4 vocabulary,",
+    "transcribed once here so the validator has a machine-readable form. If §4 changes,",
+    "this file is wrong and the generator's --check-schema flag says so."
+  ],
+
+  "id": {
+    "pattern": "^s[0-9a-f]{8}$",
+    "why": "8 lowercase hex, 's' prefix, randomly minted. No counter: a counter needs an allocator and an allocator needs a lane to remember it (spec §2). Collisions surface as a filename clash in git."
+  },
+
+  "doorway": {
+    "values": ["EXISTS", "GATED", "ABSENT-hookable", "ABSENT-unhookable"],
+    "why": "spec §3. Bounded: these four exhaust the reachability question."
+  },
+
+  "destination": {
+    "values": ["PLUGIN", "FORK", "UPSTREAM", "PATCH", "SPLIT"],
+    "why": "axis A of the ownership map (OWNERSHIP-WORKSHEET 'Axis A — WHERE DOES IT GO')."
+  },
+
+  "axes": {
+    "_why": "INVENTORY-SCHEMA §4, the five axes. A row carries per-axis state, never one bare 'state' field — one field cannot answer five questions (the A5 ruling's own argument).",
+    "PORTABLE":  ["DECOMPILED", "NONMATCHING", "STUB", "ABSENT", "UNKNOWN"],
+    "LINKED":    ["REGISTERED", "RELINQUISHED", "PENDING", "NOT", "UNKNOWN"],
+    "EXERCISED": ["EXERCISED", "REGISTERED-NOT-EXERCISED", "NOT", "UNKNOWN"],
+    "BYTE-TRUE": ["BYTE-TRUE", "EQUIVALENT", "DIVERGENT", "UNKNOWN"],
+    "VERIFIED":  ["MATCH", "DRIFT", "UNKNOWN"]
+  },
+
+  "required_fields": ["id", "symbols", "doorway", "destination", "created"],
+
+  "required_if": {
+    "_why": "spec §3: negative-control is mandatory at intake for PATCH rows — 'assumed-necessary does not ship'.",
+    "destination==PATCH": ["negative-control"]
+  },
+
+  "never_stored": {
+    "provenance": "parsed live from the TU's own KIT-LINEAGE header via kit_laws.lineage(); a copied value is a second roster that drifts (the fifth-roster failure). A row file carrying a literal provenance value is REFUSED."
+  },
+
+  "citation_rule": {
+    "requires_timestamp": true,
+    "why": "spec §3: on a live tree 'I read X' and 'it is Y' are both true — the WwPilot 0->2 lesson, where an untracked file's prior state was unrecoverable and only a verbatim quote survived."
+  }
+}

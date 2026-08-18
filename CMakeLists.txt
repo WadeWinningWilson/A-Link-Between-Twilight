@@ -756,6 +756,26 @@ if (DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID
     add_subdirectory(mods-src/ww_donor_disc)
 endif ()
 
+# =============================================================================
+# ww_hook_smoke and ww_registry ARE GONE — consolidated into ww_donor_disc
+# above (Integrator assignment, CALLS row 570). Three plugins existed because
+# each answered a different question: does donor data serve, do by-name hooks
+# fire, does above-enum dispatch route. All three are answered.
+#
+# `ww_hook_smoke` was an INSTRUMENT and is RETIRED — it proved by-name hooking
+# works end to end on a stock dusklight (run 180329) and an instrument that
+# has answered its question is litter.
+#
+# `ww_registry` is MERGED, not deleted — its source is mods-src/ww_donor_disc/
+# registry.cpp and its entry points are called from that mod's own.
+#
+# ONE CONSEQUENCE WORTH KNOWING WHEN READING THE BUILD: the registry's
+# default-OFF opt-in (DUSK_WW_REGISTRY) is gone with it, so the actor
+# registration code now builds on every normal build rather than behind a
+# switch. That is what "one plugin" means, and it is why ww_donor_disc now
+# carries FEATURES game.
+# =============================================================================
+
 if (ANDROID)
     # SDLActivity loads SDL_main via dlsym on Android. Since aurora::main is a static
     # archive, force an undefined reference so the linker keeps the SDL_main object.

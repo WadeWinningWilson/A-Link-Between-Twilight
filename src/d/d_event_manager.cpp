@@ -157,6 +157,26 @@ const char* dEvent_exception_c::getEventName() {
     switch (eventInfo->m_entries[mEventInfoIdx].type) {
     case 1:
     case 2:
+#if TARGET_PC
+        // ====================================================================
+        // WW STAGE-EVENT FULL NAME. The donor's EVNT name is 15 bytes; this
+        // record's arm holds 12+NUL, and 11 of sea's 57 names are longer —
+        // `FROM_HYRULE_1`/`_2` even truncate to the SAME string. The seam
+        // serves the donor's own bytes keyed by this very index, so the name
+        // returned here is the full one. NULL = not a published WW stage
+        // event, and the receiver's own record answers exactly as before.
+        // Same shape and same gate as the §901 arrival table above.
+        // ====================================================================
+        {
+            const char* sn = dComIfGp_getStartStageName();
+            if (sn != NULL && dExtWwSave_isWwHostStage(sn)) {
+                const char* wwFull = dExtWwEvt_getStageEventName(mEventInfoIdx);
+                if (wwFull != NULL) {
+                    return wwFull;
+                }
+            }
+        }
+#endif
         return eventInfo->m_entries[mEventInfoIdx].data.event_name;
     case 0:
         return "(MAP TOOL CAMERA)";
@@ -697,7 +717,11 @@ void dEvent_manager_c::Sequencer() {
 
     if (event != NULL) {
         if (evtControl->chkEventFlag(0x100)) {
-            char* name = NULL;
+            // DUSK_CONST-matched: the WW full-name hook assigns a const
+            // char* here and the consumer (Z2StatusMgr::setDemoName) already
+            // takes DUSK_CONST char*, so widening the local is the minimal
+            // fix rather than casting away const at the assignment.
+            DUSK_CONST char* name = NULL;
             if (mapdata != NULL) {
                 switch (mapdata->type) {
                 case dStage_MapEvent_dt_TYPE_MAPTOOLCAMERA:
@@ -706,6 +730,19 @@ void dEvent_manager_c::Sequencer() {
                 case dStage_MapEvent_dt_TYPE_ZEV:
                 case dStage_MapEvent_dt_TYPE_STB:
                     name = mapdata->data.event_name;
+#if TARGET_PC
+                    {
+                        // WW: this `name` is looked up downstream, so it needs
+                        // the donor's FULL name for the same reason the
+                        // getEventIdx sites do. Pointer identity; NULL keeps
+                        // the receiver's stored name.
+                        const char* wwFull =
+                            dExtWwEvt_getStageEventNameForRecord(mapdata);
+                        if (wwFull != NULL) {
+                            name = wwFull;
+                        }
+                    }
+#endif
                     break;
                 }
 
@@ -903,6 +940,24 @@ s16 dEvent_manager_c::getEventIdx(const char* eventName, u8 mapToolID, s32 roomN
             switch (mapdata->type) {
             case dStage_MapEvent_dt_TYPE_ZEV:
             case dStage_MapEvent_dt_TYPE_STB:
+#if TARGET_PC
+            {
+                // ============================================================
+                // WW COMPARISON PATH. This lookup matches the record's stored
+                // name against the EVENT LIST, where names are FULL — so a WW
+                // record truncated to 12 chars can never match. The seam
+                // resolves the record back to the donor's own 15-byte name by
+                // POINTER IDENTITY (never by prefix: `FROM_HYRULE_1`/`_2`
+                // share their first 12 chars, so a prefix match would silently
+                // pick one of two distinct events). NULL = not ours, and the
+                // receiver's own stored name is used exactly as before.
+                // ============================================================
+                const char* wwFull = dExtWwEvt_getStageEventNameForRecord(mapdata);
+                if (wwFull != NULL) {
+                    return getEventIdx(wwFull, 0xFF, roomNo);
+                }
+            }
+#endif
                 return getEventIdx(mapdata->data.event_name, 0xFF, roomNo);
             case dStage_MapEvent_dt_TYPE_MAPTOOLCAMERA:
                 SAFE_SPRINTF(map_tool_name, "MapToolCamera%d", mapToolID);
@@ -943,6 +998,16 @@ s16 dEvent_manager_c::getEventIdx(fopAc_ac_c* actor, u8 mapToolID) {
         switch (mapdata->type) {
         case dStage_MapEvent_dt_TYPE_ZEV:
         case dStage_MapEvent_dt_TYPE_STB:
+#if TARGET_PC
+        {
+            // WW comparison path — see the sibling overload; pointer identity,
+            // never prefix. NULL falls through to the stored name.
+            const char* wwFull = dExtWwEvt_getStageEventNameForRecord(mapdata);
+            if (wwFull != NULL) {
+                return getEventIdx(actor, wwFull, 0xFF);
+            }
+        }
+#endif
             return getEventIdx(actor, mapdata->data.event_name, 0xFF);
         case dStage_MapEvent_dt_TYPE_MAPTOOLCAMERA:
             SAFE_SPRINTF(map_tool_name, "MapToolCamera%d", mapToolID);
@@ -968,6 +1033,16 @@ s16 dEvent_manager_c::getEventIdx(fopAc_ac_c* actor, const char* eventName, u8 m
             switch (mapdata->type) {
             case dStage_MapEvent_dt_TYPE_ZEV:
             case dStage_MapEvent_dt_TYPE_STB:
+#if TARGET_PC
+            {
+                // WW comparison path — see the first overload; pointer
+                // identity, never prefix. NULL falls through unchanged.
+                const char* wwFull = dExtWwEvt_getStageEventNameForRecord(mapdata);
+                if (wwFull != NULL) {
+                    return getEventIdx(actor, wwFull, 0xFF);
+                }
+            }
+#endif
                 return getEventIdx(actor, mapdata->data.event_name, 0xFF);
             case dStage_MapEvent_dt_TYPE_MAPTOOLCAMERA:
                 SAFE_SPRINTF(map_tool_name, "MapToolCamera%d", mapToolID);

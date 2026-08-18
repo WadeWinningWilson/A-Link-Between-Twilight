@@ -1,0 +1,937 @@
+{
+ "baseline": "be82e606b2ef228595508ebb8ab1857c15796d5c",
+ "baseline_is_pinned": false,
+ "carry": [
+  {
+   "file": "include/d/actor/d_a_ww_demo00.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_dmesg.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_fado_door.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_mod_flags.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_npc_doors.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_npc_mount.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_npc_population.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_room_verify.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_save_flags.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_save_flags_route.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_save_guard.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_scope_msg.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_seq_space.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_tree.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_ext_ww_actor_shims.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_kankyo_ww.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_kankyo_ww_sky.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/d_kankyo_ww_wind.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_evt/evt1_boundary.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_line/mdoext1_3dline.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_cam_crawl.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_cam_data.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_cam_select.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_import_gate.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_item_data.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_itemmdl_dispatch.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_itemmdl_test_names.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_npcmount_dispatch.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_npcmount_impl_names.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_profile_register.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_room_loader.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_stage_loader.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_plugin/ww_tsubo_data.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_bank.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_boundary.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_dsp_boundary.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_event_dump.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_jasbank.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_jaschannel.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_jasseqparser.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_jastrack.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_native.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_oscillator.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_parser.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_seq_ctrl.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ext_seq/ja1_track.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "include/d/ww_jpa.h",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_bg.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_esa.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ext_ep.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ext_plank_span.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ext_vegetation.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_kamome.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_kb.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_knob00.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_lamp.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_lwood.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_npc_ba1.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_npc_bm1.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_npc_jb1.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_npc_ls1.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_npc_p1.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_npc_zl1.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_lpalm.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_mshokki.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_otble.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_paper.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_plant.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_shelf.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_obj_toripost.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_spc_item01.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_swhit0.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_tag_kb_item.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_tag_so.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_vrbox.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_vrbox2.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ww_demo00.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ww_item.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ww_shutter.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/actor/d_a_ww_tsubo.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_camera.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_demo.cpp",
+   "category": "shared-per-hunk",
+   "route": "USER",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_door.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_event.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_event_data.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_event_manager.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_dmesg.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_mod_flags.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_npc_doors.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_npc_mount.cpp",
+   "category": "ww-port",
+   "route": "USER",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_npc_population.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_room_verify.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_save_flags.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_seq_space.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_tree.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_ext_ww_actor_shims.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_kankyo_rain.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_kankyo_ww.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_kankyo_ww_sky.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_kankyo_ww_wind.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_npc.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_particle.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_s_play.cpp",
+   "category": "shared-per-hunk",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/d_stage.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_evt/evt1_boundary.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_evt/evt1_event_data.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_evt/evt1_event_manager.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_line/mdoext1_3dline.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_cam_crawl.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_cam_data.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_cam_select.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_event_names.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_import_gate.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_item_data.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_layer_select.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_misc_dispatch.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_npcmount_dispatch.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_profile_register.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_room_loader.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_stage_loader.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_plugin/ww_tsubo_data.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_bank.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_event_dump.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasbank.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasbnkparser.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jascalc.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jaschannel.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasdspchannel.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasnotemgr.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasouterparam.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasplayer.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasregisterparam.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasseqctrl.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jasseqparser.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jastrack.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jastrackinterrupt.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_jastrackport.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_kernel.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_native.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_oscillator.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_parser.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_seq_ctrl.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ext_seq/ja1_track.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ww_jpa.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/d/ww_jpa_bind.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/dusk/boot_stage.cpp",
+   "category": "fork-host-plumbing",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/dusk/event_ext_store.cpp",
+   "category": "ww-port",
+   "route": "HISTORY/BRIDGE",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/f_op/f_op_msg_mng.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "src/f_pc/f_pc_profile_lst.cpp",
+   "category": "shared-per-hunk",
+   "route": "HOUSING",
+   "why": "ownership-map"
+  },
+  {
+   "file": "d/d_npc_event_cut.inc",
+   "category": "inc-closure",
+   "route": "BUILD",
+   "why": "included by src/d/d_npc.cpp"
+  },
+  {
+   "file": "d_kankyo_ww_vrkumo.inc",
+   "category": "inc-closure",
+   "route": "BUILD",
+   "why": "included by src/d/d_kankyo_rain.cpp"
+  },
+  {
+   "file": "ww_cam_data.inc",
+   "category": "inc-closure",
+   "route": "BUILD",
+   "why": "included by src/d/ext_plugin/ww_cam_data.cpp"
+  },
+  {
+   "file": "ww_item_data.inc",
+   "category": "inc-closure",
+   "route": "BUILD",
+   "why": "included by src/d/ext_plugin/ww_item_data.cpp"
+  },
+  {
+   "file": "ww_tsubo_data.inc",
+   "category": "inc-closure",
+   "route": "BUILD",
+   "why": "included by src/d/ext_plugin/ww_tsubo_data.cpp"
+  }
+ ],
+ "unresolved": {
+  "blind_spots": [],
+  "cross_instrument_conflict": [],
+  "stale_map_rows": [
+   "include/d/actor/d_a_e_ww.h"
+  ]
+ }
+}

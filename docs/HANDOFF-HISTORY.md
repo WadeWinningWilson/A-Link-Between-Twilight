@@ -1,5 +1,23 @@
 # HISTORY — lane handoff
 
+> ## ⚠ THIS LANE HAS THREE HANDOFFS. THEY ARE DIFFERENT KINDS, NOT COPIES.
+> *(Cross-reference added 2026-08-16 by History/Bridge, on the Librarian's estate
+> audit. Until now none of the three cited any other, and each opened with a
+> "read this first" line — so a successor could read one and never learn the
+> other two existed. Nothing below was merged or rewritten; only this block was
+> added, identically, to all three.)*
+>
+> | doc | kind | last touched |
+> |---|---|---|
+> | [`docs/HANDOFF-HISTORY.md`](HANDOFF-HISTORY.md) | **LANE CHARTER** — what History is, its laws, traps that cost rounds, docs that matter. Durable. | 2026-08-11 |
+> | [`docs/state/HISTORY-HANDOFF.md`](state/HISTORY-HANDOFF.md) | **CAMPAIGN SNAPSHOT** — the native-dMesg / Grandma-tale attempt. **Its "current attempt" and "immediate next steps" are STALE: that tale closed 2026-08-01.** Read for calibration (§4 "where the previous instance was wrong"), not for state. | 2026-08-01 |
+> | [`docs/state/ww-handoff-history-bridge.md`](state/ww-handoff-history-bridge.md) | **CURRENT INSTANCE HANDOFF** — what is owned, half-done, do-not-trust, and the pointer to the live WW message-system decode. **Start here for present state.** | 2026-08-16 |
+>
+> **If you are picking this lane up: read the CHARTER for the rules, the CURRENT
+> handoff for the state, and the SNAPSHOT only for calibration.** Which of the
+> three should be canonical — or whether they should merge — is a Librarian/user
+> ruling, deliberately not taken here.
+
 Written 2026-08-08. Read this before touching WW-lane work. Everything here is either a
 standing responsibility, a live campaign, or something easy to forget that will cost a round.
 
@@ -117,6 +135,24 @@ Check every new donor TU against all five:
 
 ## 5. LANE LAWS EARNED (mostly the hard way)
 
+<!-- ============================================================
+     FOLDED IN 2026-08-16 from docs/state/HISTORY-HANDOFF.md §4.
+     That file is a CLOSED CAMPAIGN SNAPSHOT (Grandma tale, ended
+     2026-08-01) but §4 was never campaign state — it is lane-level
+     calibration that outlives any tale. It was living in a document
+     whose title made the whole thing read as history, which is how an
+     OPEN item in its §5 went unread for fifteen days. Durable content
+     belongs in the CHARTER; the snapshot keeps only its own campaign.
+     ============================================================ -->
+- **Overclaimed certainty repeatedly** — said *"this is the fix"* on §319, §319b, §320 before
+  verifying, and the user called it out. **Treat every fix as a hypothesis until the log or a
+  playtest confirms it.**
+- **Widening the textbox was a COVENANT LAPSE.** To hide a mid-word wrap a previous instance
+  widened the box's wrap bounds — an invented layout. REVERTED. The real cause was a VALUE:
+  retail font is **23**, not 25 (retail is the SECOND `DEMO_SELECT` arg; 25 is the kiosk-demo
+  value). **A port/donor mismatch is a wiring or value bug to FIND, never to paper over.**
+- **Verify sub-agent claims against runtime.** A spawn map claimed Link was not bound to the
+  demo; the log proved he binds (`§48 JSGFindObject actor='Link' → FOUND`).
 - **A comment is not a scope.** №93 and №62 sat twelve lines apart, both *reading* WW-specific;
   only one wrote the check. Tool: `tools/ww_scope_check.py`.
 - **A safety promise has a scope too** — name the phase where it expires (Housing, §423b).

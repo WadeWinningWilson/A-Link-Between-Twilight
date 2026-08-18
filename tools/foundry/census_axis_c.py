@@ -410,7 +410,10 @@ PROVISIONAL_GROUPS = [
     (re.compile(r"/src/(d|f_op|f_pc)/"), V8_NAME + " [provisional: no tag]"),
 ]
 
-_RE_KIT_LINEAGE = re.compile(r"^//\s*KIT-LINEAGE:\s*(\S+)", re.M)
+# BOM-tolerant since 2026-08-16: `^//` cannot match a first line behind a
+# UTF-8 BOM, which hid d_stage.cpp's header from this axis. Capture semantics
+# unchanged (whole value as one token) - only the anchor is widened.
+_RE_KIT_LINEAGE = re.compile("^\ufeff?//" r"\s*KIT-LINEAGE:\s*(\S+)", re.M)
 
 
 def lineage_of(rel):

@@ -106,7 +106,24 @@ def main():
     if table is None:
         print("NO MANIFEST EMBEDDED — UNKNOWN, not clean (№31-C).")
         return 2
+    # COLLAPSED-DICT EXPOSURE, MEASURED AND STATED (tale §967 sweep): `table`
+    # is keyed by NAME, so ~15.3k raw entries whose names repeat never reach
+    # this map. For a FOLD detector that matters in a specific direction —
+    # folding is many NAMES sharing one ADDRESS, and names lost before the map
+    # is built can only cause folds to be MISSED, never invented. So this
+    # tool's counts are a FLOOR. Not silently changing its algorithm here (it
+    # carries its own §530 scope fix and I have not re-derived that); the
+    # exposure is printed so no one reads its number as complete.
     symmap = {n: rva for n, (rva, _f) in table.items()}
+    try:
+        _occ = SM.occurrences(sys.argv[1]) or {}
+        _lost = sum(v - 1 for v in _occ.values() if v > 1)
+        if _lost:
+            print("NOTE: %d raw manifest entr(ies) share a name with another and "
+                  "do not\n      reach the address map. Fold counts below are a "
+                  "FLOOR, not a total." % _lost)
+    except Exception:
+        pass
 
     # SCOPE FIX (§530). This passed `table` as BOTH arguments, so the
     # "involves a symbol we will resolve" filter tested whether a symbol from

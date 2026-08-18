@@ -381,10 +381,16 @@ void dExtNpcBm1_stopZelAnime(mDoExt_McaMorf* m);
 #define WWEV_UNK_2E04 0x2E04
 #define WWEV_ENDLESS_NIGHT 0x0A02
 
-// --- WW din-symbol query (dSymbol_DIN_e) + beast (golden-feather) counter. Not
-//     ported; dComIfGs_isSymbol -> FALSE and getBeastNum -> 0 keep the spawn/msg
-//     branches inert-but-faithful. Constants are inert (queries no-op). ---
-#define dSymbol_DIN_e 0
+// --- WW din-symbol query + beast (golden-feather) counter. Not ported;
+//     dComIfGs_isSymbol -> FALSE and getBeastNum -> 0 keep the spawn/msg
+//     branches inert-but-faithful. Values are the donor's own dSymbolIndex_e
+//     (WW DP d_com_inf_game.h:1682-1686) VERBATIM — the old single define put
+//     DIN at 0, which is NAYRU's slot; inert behind the FALSE-stub today, but
+//     the moment isSymbol becomes real every DIN query would have read NAYRU
+//     (queue row 155 / tale §892). ---
+#define dSymbol_NAYRU_e 0
+#define dSymbol_DIN_e 1
+#define dSymbol_FARORE_e 2
 #define dBeastIdx_GOLDEN_FEATHER_e 0
 
 // --- WW actor status + attention-set flags + day/night enum the port renamed
@@ -494,10 +500,32 @@ JPABaseEmitter* dExtNpcBm1_particleSet(u16 id, const void* pos, const void* rot,
 //     the scope-cancel bit has no port consumer (telescope-dormant path). -----
 #define daPyFlg0_SCOPE_CANCEL ((daPy_py_c::daPy_FLG0)0)
 
-// --- message-anime tag setter (bm1 added only the getter→0xFF). No-op: the WW
-//     dialogue-anim-tag mechanism has no port driver, so getter stays 0xFF and
-//     Aryll's chngAnmTag() path is inert (she uses default talk anims). -------
-inline void dComIfGp_setMesgAnimeTagInfo(u8) {}
+// --- message-anime tag setter. WAS an empty inline no-op; the donor's real
+//     one-slot mailbox is now ported in d_ext_ww_actor_shims.cpp (0xFF sentinel,
+//     consumer-clears protocol, module-static per the offset-stable law).
+//     DECLARED here, DEFINED there — an inline {} would silently win over the
+//     real definition at every include site that saw this header first. --------
+void dComIfGp_setMesgAnimeTagInfo(u8 i_id);
+
+// --- WW BMG lookup BY mMsgNo — the donor's own linear scan (skips mDataOffs==0,
+//     Hylian variant via mTextboxType==12 + clearCount). NULL if not resident or
+//     no such message. NOT the same space as §308's index-based
+//     dExtDmesg_getMessageById: STB codes are INF1 INDICES, actor message ids
+//     are mMsgNos. Public so the §324 talk path can be corrected without a
+//     second copy of this scan being written elsewhere.
+const char* dExtWwMsg_textByMsgNo(u16 i_msgNo);
+
+// --- WW password render — donor fopMsgM_passwordGet (8002BE04). Message to
+//     plain text: player-name tag substituted, all other tags stripped.
+void dExtWwMsg_passwordGet(char* o_buf, u32 i_msgNo);
+
+// --- Clear the anime-tag mailbox to the donor's 0xFF empty sentinel.
+//     WIRED 2026-08-16 at ww_stage_loader.cpp:467 (dExtWwStage_loadStageDzs,
+//     inside DUSK_WW_STAGE_SEAM), beside the §773 model-cache eviction — same
+//     lifecycle, same reason: stage-scoped state dies when a new stage's
+//     resources are installed. The donor keeps this tag in game-info @0x493C
+//     which resets on its own; a module-static does not.
+void dExtWwShims_resetMesgAnimeTag();
 
 // --- WW "collect" (figurine/collectible) query. Port has no dSv_collect class;
 //     checkCollect()→0 selects Aryll's "not collected yet" dialogue branch. ---

@@ -1,5 +1,40 @@
 # HISTORY — role handoff for the next instance
 
+> ## 🔴 THIS FILE IS STALE **EXCEPT** FOR TWO SECTIONS THAT ARE STILL LIVE.
+> *(Added 2026-08-16 by History/Bridge after an OPEN item in §5 was found
+> fifteen days after it was flagged — not because anyone ignored it, but because
+> the file reads as history end-to-end and nothing said which parts still bite.)*
+>
+> - **§4 WHERE THE PREVIOUS INSTANCE WAS WRONG — DURABLE.** Lane-level
+>   calibration, not campaign state. It does not expire with the tale.
+> - **§5 GOLDEN-TRACE ORACLE DIFF — A LIVE CHECKLIST, NOT A RECORD.** The `⬜`
+>   boxes are OPEN WORK. Item (2), the signed suspend counter, was still
+>   unfixed in `d_ext_dmesg.cpp:943` on 2026-08-16 — the non-donor `susp > 0`
+>   gate — and the donor was confirmed NOT to clamp (`JStudio/stb.h:71`,
+>   `suspend(s32 val) { _20 += val; }`). Item (6) `d09 item-box mid-tale` is
+>   also still `⬜` and has NOT been audited.
+>
+> **Everything else here — §3's "current attempt" and its next steps — closed
+> with the Grandma tale on 2026-08-01. Read those for calibration only.**
+
+> ## ⚠ THIS LANE HAS THREE HANDOFFS. THEY ARE DIFFERENT KINDS, NOT COPIES.
+> *(Cross-reference added 2026-08-16 by History/Bridge, on the Librarian's estate
+> audit. Until now none of the three cited any other, and each opened with a
+> "read this first" line — so a successor could read one and never learn the
+> other two existed. Nothing below was merged or rewritten; only this block was
+> added, identically, to all three.)*
+>
+> | doc | kind | last touched |
+> |---|---|---|
+> | [`docs/HANDOFF-HISTORY.md`](../HANDOFF-HISTORY.md) | **LANE CHARTER** — what History is, its laws, traps that cost rounds, docs that matter. Durable. | 2026-08-11 |
+> | [`docs/state/HISTORY-HANDOFF.md`](HISTORY-HANDOFF.md) | **CAMPAIGN SNAPSHOT** — the native-dMesg / Grandma-tale attempt. **Its "current attempt" and "immediate next steps" are STALE: that tale closed 2026-08-01.** Read for calibration (§4 "where the previous instance was wrong"), not for state. | 2026-08-01 |
+> | [`docs/state/ww-handoff-history-bridge.md`](ww-handoff-history-bridge.md) | **CURRENT INSTANCE HANDOFF** — what is owned, half-done, do-not-trust, and the pointer to the live WW message-system decode. **Start here for present state.** | 2026-08-16 |
+>
+> **If you are picking this lane up: read the CHARTER for the rules, the CURRENT
+> handoff for the state, and the SNAPSHOT only for calibration.** Which of the
+> three should be canonical — or whether they should merge — is a Librarian/user
+> ruling, deliberately not taken here.
+
 Read this first, then `docs/state/ww-tale-dmesg-live-state.md` (the live task state), then the last
 sections of the bus. This file explains WHO you are, HOW the run is structured, WHAT is being
 attempted, and — honestly — WHAT the previous instance got wrong.
@@ -107,11 +142,13 @@ checklist.
 
 ## 5. Foundry's golden-trace oracle diff (History's queue) — bus §317
 `tale-golden-trace-run1.md`. Six-point diff vs the live donor: (1) **font 23** ✅applied; (2) **signed
-suspend counter** ⬜ — fast dismissals drive the counter to −1 then the authored suspend cancels it to
-0; the port must NOT clamp at 0. Our box gates release on `susp>0` (`d_ext_dmesg.cpp` update) — that is
-the non-donor clamp; remove it + verify TControl doesn't clamp; (3) storyboard-clock sequencing
+suspend counter** ✅ **FIXED 2026-08-16 (Housing/Engine)** — both release sites in `d_ext_dmesg.cpp`
+(dismiss gate + 3600f backstop) no longer test `susp > 0`; owed-ness is `s_boxSawSuspend`, and the
+donor no-clamp is confirmed at source (`JStudio/stb.h:71` plain signed accumulate, `:145`
+`unsuspend(n) == suspend(-n)`; History/Bridge's verification, CALLS row this date). `COMPILE
+STATUS: UNVERIFIED` until the next build; (3) storyboard-clock sequencing
 (matches); (4) page-turn-while-held (matches); (5) in-place control return (§306b+§319+§319b+§320,
-verifying); (6) **d09 item-box mid-tale** ⬜.
+verifying); (6) **d09 item-box mid-tale** ⬜ — still open, unaudited; on Housing's task list 2026-08-16.
 
 ## 6. Pertinent docs
 - `docs/state/ww-tale-dmesg-live-state.md` — the LIVE task state (read after this).

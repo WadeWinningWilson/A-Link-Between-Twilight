@@ -1,0 +1,82 @@
+l_objectName rows parsed: 823
+
+distinct NAMES placed     : 87  (475 placements)
+distinct PROCS behind them: 61
+
+arcs on disc in res/Object: 577
+detector control PASSED on 3 known-arc procs
+
+proc                         names   plc  class     arc(s)
+fpcNm_GRASS_e                   11   187  C-BATCHED engine-drawn, no arc
+fpcNm_AGBSW0_e                   8    29  B-TAG     no arc, no visual
+fpcNm_KI_e                       1    26  A-ARC     Bgn Ki
+fpcNm_Salvage_e                  4    19  A-ARC     Oship Yslvg00
+fpcNm_ITEM_e                     1    14  A-ARC     Always Bk NZG
+fpcNm_TSUBO_e                    2    11  A-ARC     Always CC Fm Ji
+fpcNm_OBJ_IKADA_e                1    11  A-ARC     Always IkadaH Link
+fpcNm_BRIDGE_e                   1    11  A-ARC     Always Bridge
+fpcNm_Obj_Lpalm_e                1    10  A-ARC     Oyashi
+fpcNm_TAG_KB_ITEM_e              1    10  A-ARC     Kb
+fpcNm_KAMOME_e                   1     9  A-ARC     Bdk Kamome Link
+fpcNm_Obj_Wood_e                 2     9  B-TAG     no arc, no visual
+fpcNm_Lwood_e                    1     6  A-ARC     Lwood
+fpcNm_KB_e                       1     6  A-ARC     Kb Ospbox
+fpcNm_TAG_SO_e                   2     6  B-TAG     no arc, no visual
+fpcNm_NPC_P1_e                   2     6  A-ARC     P1
+fpcNm_CC_e                       2     6  A-ARC     CC Homen
+fpcNm_NPC_YW1_e                  1     5  B-TAG     no arc, no visual
+fpcNm_NPC_YM2_e                  1     5  B-TAG     no arc, no visual
+fpcNm_NPC_ZL1_e                  1     5  B-TAG     no arc, no visual
+fpcNm_SWC00_e                    1     4  B-TAG     no arc, no visual
+fpcNm_Obj_Pirateship_e           1     4  A-ARC     Kaizokusen P1 knob
+fpcNm_NPC_KO1_e                  1     4  B-TAG     no arc, no visual
+fpcNm_NPC_AH_e                   1     4  A-ARC     Ah
+fpcNm_PT_e                       1     4  B-TAG     no arc, no visual
+fpcNm_KANBAN_e                   1     3  A-ARC     Kanban
+fpcNm_STONE_e                    1     3  A-ARC     Always Ebrock Ekao
+fpcNm_NPC_LS1_e                  1     3  A-ARC     Kamome Link
+fpcNm_NPC_OB1_e                  1     3  B-TAG     no arc, no visual
+fpcNm_NPC_YM1_e                  1     3  B-TAG     no arc, no visual
+fpcNm_NPC_KO2_e                  1     3  B-TAG     no arc, no visual
+fpcNm_DK_e                       1     3  A-ARC     Bdk Dk
+fpcNm_TAG_MSG_e                  1     3  B-TAG     no arc, no visual
+fpcNm_SW_ITEM_e                  1     3  B-TAG     no arc, no visual
+fpcNm_OBJ_TORIPOST_e             1     2  A-ARC     Toripost Uo
+fpcNm_KN_e                       1     2  A-ARC     KN
+fpcNm_NPC_AJ1_e                  1     2  B-TAG     no arc, no visual
+fpcNm_NPC_BM1_e                  1     2  A-ARC     Link
+fpcNm_THROWSTONE_e               1     2  B-TAG     no arc, no visual
+fpcNm_Tag_Attention_e            1     2  B-TAG     no arc, no visual
+fpcNm_Obj_Ajav_e                 1     2  A-ARC     Ajav
+fpcNm_Obj_Auzu_e                 1     2  A-ARC     Auzu daiocta
+fpcNm_DEMO_KMM_e                 2     2  A-ARC     Demo_Kmm
+fpcNm_SAKU_e                     1     2  B-TAG     no arc, no visual
+fpcNm_Stone2_e                   1     1  A-ARC     Always
+fpcNm_NPC_SO_e                   1     1  B-TAG     no arc, no visual
+fpcNm_ANDSW2_e                   1     1  B-TAG     no arc, no visual
+fpcNm_OBJ_HOLE_e                 1     1  A-ARC     Aana
+fpcNm_KYTAG01_e                  1     1  A-ARC     Auzu
+fpcNm_TAG_EVENT_e                1     1  B-TAG     no arc, no visual
+fpcNm_Obj_Coming_e               1     1  B-TAG     no arc, no visual
+fpcNm_Obj_Akabe_e                1     1  B-TAG     no arc, no visual
+fpcNm_NPC_KAM_e                  1     1  A-ARC     Agb Bb Kamome
+fpcNm_TAG_ISLAND_e               1     1  B-TAG     no arc, no visual
+fpcNm_TAG_HINT_e                 1     1  B-TAG     no arc, no visual
+fpcNm_NPC_P2_e                   1     1  A-ARC     P2
+fpcNm_NPC_BA1_e                  1     1  A-ARC     Always Ba Otana
+fpcNm_Obj_Gong_e                 1     1  A-ARC     Vdora
+fpcNm_KS_e                       1     1  A-ARC     Bgn KS Kb
+fpcNm_BB_e                       1     1  A-ARC     Bb
+fpcNm_Obj_Barrel2_e              1     1  A-ARC     Ktaru_00
+
+A  ARC-BACKED    catch-all serviceable IFF given a name->arc map
+     35 procs · 42 names · 187 placements (39% of room)
+B  LOGIC TAG     no arc AND no visual - inert no-op is CORRECT
+     25 procs · 34 names · 101 placements (21% of room)
+C  ENGINE-BATCH  visible, drawn by shared subsystem, NO arc ever
+      1 procs · 11 names · 187 placements (39% of room)
+
+HOUSING Q2 - class-A arcs, animation column (upper bound):
+  arcs carrying .bck/.bca : 27
+  arcs with NO animation  : 18
+  animated: Ah(2) Always(16) Ba(10) Bb(14) Bdk(39) Bgn(11) Bk(43) CC(15) Demo_Kmm(2) Dk(2) Fm(13) IkadaH(1) Ji(28) KN(4) KS(1) Kamome(9) Kb(9) Ki(6) Link(7) P1(16) P2(29) Toripost(3) Uo(9) Vdora(2) VigaH(1) daiocta(8) knob(2)

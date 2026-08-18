@@ -62,17 +62,56 @@ def main():
     lines = text.splitlines()
     cutoff = datetime.date.today() - datetime.timedelta(days=keep_days - 1)
 
-    keep, move = [], []
-    for ln in lines:
-        if ln.startswith("- [x]") and row_date(ln) < cutoff:
-            move.append(ln)
+    # ========================================================================
+    # ROWS ARE BLOCKS, NOT LINES (Librarian, 2026-08-16).
+    #
+    # This loop was per-LINE, which was correct for every row a LANE has ever
+    # written — one row, one physical line. **Then a TOOL filed one.**
+    # `decomp_sync.py`'s row carries a fenced `decomp_watch` transcript and
+    # occupies 21 physical lines.
+    #
+    # MEASURED against that live row, with it marked answered and aged past the
+    # cutoff: **1 line moved to the archive and 18 non-blank lines stayed
+    # behind** — an unmatched ``` fence orphaned in CALLS.md (it would swallow
+    # everything rendered after it) and the row's own attribution/date footer
+    # stranded, belonging to no row. The archive would hold a headline with its
+    # evidence amputated; CALLS.md would hold evidence with no ask.
+    #
+    # **Both files corrupted, silently, by a tool whose whole covenant is
+    # "nothing is ever deleted."** It would have been true line-by-line and
+    # false row-by-row.
+    #
+    # The file's real grammar: a row runs from its `- [` line until the NEXT
+    # `- [` line or EOF. Rotate that block. Anything before the first row (the
+    # header) is never a row and always stays.
+    # ========================================================================
+    first_row = next((i for i, l in enumerate(lines) if l.startswith("- [")),
+                     len(lines))
+    keep, move = lines[:first_row], []
+    blocks = []
+    for i in range(first_row, len(lines)):
+        if lines[i].startswith("- ["):
+            blocks.append([lines[i]])
+        elif blocks:
+            blocks[-1].append(lines[i])
+        else:                      # unreachable given first_row, kept explicit
+            keep.append(lines[i])
+    moved_rows = 0
+    for blk in blocks:
+        if blk[0].startswith("- [x]") and row_date(blk[0]) < cutoff:
+            move.extend(blk)
+            moved_rows += 1
         else:
-            keep.append(ln)
+            keep.extend(blk)
+    multiline = sum(1 for b in blocks if len(b) > 1)
 
     active = sum(1 for l in lines if l.startswith("- [ ]"))
     stay_ans = sum(1 for l in keep if l.startswith("- [x]"))
     print("CALLS.md: %d row(s) active · %d answered staying (<%d day(s) old) · "
-          "%d answered to archive" % (active, stay_ans, keep_days, len(move)))
+          "%d answered to archive" % (active, stay_ans, keep_days, moved_rows))
+    if multiline:
+        print("  (%d row(s) span multiple physical lines - rotated as WHOLE "
+              "BLOCKS; a per-line rotate would amputate them)" % multiline)
     if not move:
         print("nothing to rotate")
         return 0
@@ -96,23 +135,51 @@ def main():
     if not ARCHIVE.is_file():
         io.open(ARCHIVE, "w", encoding="utf-8", newline="\r\n").write(head)
     with io.open(ARCHIVE, "a", encoding="utf-8", newline="\r\n") as f:
-        f.write("\n## rotated %s (%d row(s))\n\n" % (stamp, len(move)))
+        f.write("\n## rotated %s (%d row(s), %d line(s))\n\n"
+                % (stamp, moved_rows, len(move)))
         for ln in move:
             f.write(ln + "\n")
 
     new_text = "\n".join(keep).rstrip() + "\n"
     io.open(CALLS, "w", encoding="utf-8", newline="\r\n").write(new_text)
 
-    # VERIFY — no row may vanish (rows in + rows out == rows before).
+    # ========================================================================
+    # VERIFY. Two checks, and the SECOND one is the real one.
+    #
+    # THE COUNT CHECK (`active N->N`) was this tool's only verification and it
+    # is a BEFORE-STATE check: it needs a snapshot taken before the change, so
+    # only the process performing the rotation can ever run it, and only once.
+    #
+    # THE INVARIANT CHECK is History/Bridge's, banked here on Housing
+    # Security's framing (2026-08-17): **"mine needed the before-state; yours
+    # is a standing invariant."** `CALLS-ARCHIVE.md` must contain ZERO open
+    # rows — not because a count balanced, but because an answered-row archive
+    # containing an unanswered row is *definitionally* broken.
+    #
+    # WHY THAT IS STRICTLY BETTER: anyone can run it, at any time, with no
+    # history and no trust in the rotator. It states the property you actually
+    # care about ("nothing unanswered was archived") instead of a proxy the
+    # property happens to imply. Same distinction as `--symbol SAFE` proving a
+    # name resolves rather than a call working.
+    #
+    #   grep -c '^- \[ \]' docs/state/ww-staging/CALLS-ARCHIVE.md   # must be 0
+    # ========================================================================
     after = CALLS.read_text(encoding="utf-8", errors="replace")
     arch = ARCHIVE.read_text(encoding="utf-8", errors="replace")
     lost = [l for l in move if l not in arch]
     act_after = len(re.findall(r"(?m)^- \[ \] ", after))
-    ok = not lost and act_after == active
-    print("rotated %d row(s) -> %s" % (len(move), ARCHIVE.name))
+    open_in_archive = len(re.findall(r"(?m)^- \[ \] ", arch))
+    ok = not lost and act_after == active and open_in_archive == 0
+    print("rotated %d row(s) (%d line(s)) -> %s"
+          % (moved_rows, len(move), ARCHIVE.name))
     print("verify: active %d->%d · archived-intact %s · %s"
           % (active, act_after, "yes" if not lost else "NO (%d lost!)" % len(lost),
              "OK" if ok else "FAILED — restore from git"))
+    print("INVARIANT: open rows in the archive = %d %s"
+          % (open_in_archive,
+             "(must be 0 — re-runnable by anyone, needs no before-state)"
+             if open_in_archive == 0 else
+             "*** AN UNANSWERED ROW WAS ARCHIVED — RESTORE FROM GIT ***"))
     return 0 if ok else 2
 
 

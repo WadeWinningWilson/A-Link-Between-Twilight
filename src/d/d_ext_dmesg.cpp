@@ -14,6 +14,7 @@
 #include "d/d_resorce.h"
 #include "d/d_drawlist.h"                 // §308 M3 dDlst_blo_c (BLO screen draw wrapper)
 #include "d/d_ext_save_guard.h"           // dExtWwSave_isWwHostStage
+#include "d/d_ext_ww_actor_shims.h"       // §324 fix: dExtWwMsg_textByMsgNo (donor mMsgNo space)
 #include "d/d_demo.h"                     // §308 M4b dDemo_c::getControl()->unsuspend(1)
 #include "m_Do/m_Do_ext.h"
 #include "m_Do/m_Do_controller_pad.h"    // §308 M4b mDoCPd_c::getTrigA/B (box advance)
@@ -40,6 +41,17 @@ static JKRArchive* s_menu = NULL;   // menures
 static JUTFont* s_font = NULL;      // M1b rock_24_20_4i_usa.bfn (main text)
 static JUTFont* s_rfont = NULL;     // M1b hyrule.bfn (ruby; asserted non-NULL)
 static const u8* s_zel00 = NULL;    // M2 parsed zel_00.bmg base
+// Donor RGBA8 palette from `bmgres/color.bmc` (CLT1 body +0x0C), or NULL when
+// the member is absent/malformed — in which case `kWwColor` still draws. This
+// points INTO the mounted archive and is never copied, so it must not outlive
+// the mount; it is re-captured on every init alongside `s_zel00`.
+static const u8* s_wwPalette = NULL;
+
+// The donor is big-endian. A struct overlay would byte-swap silently and the
+// failure would look like a corrupt palette rather than a byte-order bug.
+static inline u32 dExtDmesg_be32(const u8* p) {
+    return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
+}
 static bool s_requested = false;
 static bool s_ready = false;
 
@@ -113,6 +125,41 @@ static u8 dExtDmesg_getMessageTextboxType(u16 id) { return dExtDmesg_getMessageE
 // mItemImage: the item-resource index for a get-item beat (0x32 FUKU / 0x37 NEW_FUKU).
 static u8 dExtDmesg_getMessageItemImage(u16 id)   { return dExtDmesg_getMessageEntryByte(id, 0x0F); }
 
+// ----------------------------------------------------------------------------
+// §324 FIX — TWO NUMBERING SPACES, and this file serves both. STB setMessageCode
+// IS an INF1 index (receipt holds: no zel_00 entry has mMsgNo 539, so 539 could
+// only be an index) — the STB path above stays index-keyed. An ACTOR's message
+// id is an mMsgNo (donor getMessage 8002E4AC: linear scan comparing mMsgNo,
+// skipping mDataOffs == 0). Feeding an mMsgNo to getMessageById resolved a
+// wrong-but-valid entry, and because wrong-but-valid RETURNS TEXT it won over
+// the correct catalog fallback — the postbox drew "Seven-Star Isles".
+//
+// This locator maps mMsgNo -> INF1 index so entry ATTRIBUTES (fukiKind) read
+// from the entry actually addressed. TEXT is deliberately NOT resolved here:
+// dExtWwMsg_textByMsgNo owns text and the Hylian archive selection with it,
+// and that scan is not duplicated in a second place.
+// ----------------------------------------------------------------------------
+static int dExtDmesg_msgNoToIndex(u16 i_msgNo) {
+    if (s_zel00 == NULL) {
+        return -1;
+    }
+    const u8* inf1 = bmgFindSection(s_zel00, "INF1");
+    if (inf1 == NULL) {
+        return -1;
+    }
+    const u16 count = be16(inf1 + 0x08);
+    for (u16 i = 0; i < count; i++) {
+        const u8* e = inf1 + 0x10 + (u32)i * 24;
+        if (be32(e + 0) == 0) {
+            continue;  // mDataOffs == 0 — the donor's scan skips these (85 in zel_00)
+        }
+        if (be16(e + 0x04) == i_msgNo) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 // R2-overlaid arc names (Foundry §308/§311: mounted as res/Object/<name>.arc, stock loader).
 // itemicon.arc holds the get-item textures (clothes.bti) — §311(c) staged donor-verbatim.
 static const char* const kArcs[] = {
@@ -173,6 +220,67 @@ bool dExtDmesg_ensureResident() {
 
     // M2 — capture zel_00.bmg base for id-resolution.
     s_zel00 = (const u8*)dComIfG_getObjectRes("bmgres", "zel_00.bmg");
+
+    // ========================================================================
+    // THE DONOR'S OWN COLOUR TABLE — `color.bmc`, the OTHER member of the
+    // `bmgres` archive we already hold. No new mount and no new serve: this is
+    // the consumer that was missing, not a new resource.
+    //
+    // WHY: `kWwColor` below is a hand-written approximation and SEVEN OF ITS
+    // NINE ENTRIES DISAGREE with this file (measured against the user's own
+    // disc: only white and blue match; e.g. red is FF6400 here and FF5A5A
+    // there, cyan is 00FFFF here and 82FFFF there). Colour tags are 58.9% of
+    // the 8,888 tags in the corpus, so the majority of WW coloured text has
+    // been rendering in invented colours. The donor SHIPS this as data and
+    // indexes it with INF1's `defaultColor`; approximating shipped donor data
+    // is exactly what zero-bake forbids.
+    //
+    // FORMAT (measured): 'MGCLbmc1' · size field @0x08 in 32-BYTE UNITS
+    // (34*32 = 1088, the second confirmation of that family convention after
+    // the BMG header) · one 'CLT1' block at 0x20 · block body at +0x08 · a
+    // 4-byte UNIDENTIFIED field there (observed 0x01000000) that is skipped
+    // and deliberately NOT interpreted · palette base = block+0x0C, 256 x
+    // RGBA8 big-endian.
+    //
+    // FALLS BACK TO `kWwColor`, IT DOES NOT REPLACE IT. If the member is
+    // absent or malformed the old table still draws, so a bad archive degrades
+    // to today's behaviour instead of to black text.
+    // ========================================================================
+    s_wwPalette = NULL;
+    {
+        const u8* bmc = (const u8*)dComIfG_getObjectRes("bmgres", "color.bmc");
+        const char* why = "not requested";
+        if (bmc == NULL) {
+            why = "color.bmc absent from bmgres";
+        } else if (memcmp(bmc, "MGCLbmc1", 8) != 0) {
+            why = "not MGCLbmc1";
+        } else {
+            // Walk to CLT1 rather than assuming it is the first block.
+            const u32 blocks = dExtDmesg_be32(bmc + 0x0C);
+            u32 off = 0x20;
+            why = "no CLT1 block";
+            for (u32 i = 0; i < blocks; i++) {
+                const u32 bsz = dExtDmesg_be32(bmc + off + 4);
+                if (bsz == 0) {
+                    why = "zero-size block (refused rather than spun)";
+                    break;
+                }
+                if (memcmp(bmc + off, "CLT1", 4) == 0) {
+                    if (bsz < 0x0C + 256 * 4) {
+                        why = "CLT1 too small for 256 RGBA8 entries";
+                    } else {
+                        s_wwPalette = bmc + off + 0x0C;
+                        why = "ok";
+                    }
+                    break;
+                }
+                off += bsz;
+            }
+        }
+        DuskLog.info("[dMesg] §308 donor colour table: {} — {} (kWwColor is the "
+                     "fallback, and it disagrees with the donor in 7 of 9 slots)",
+                     s_wwPalette != NULL ? "LOADED" : "NOT LOADED", why);
+    }
 
     s_ready = (s_font != NULL && s_rfont != NULL && s_zel00 != NULL);
     if (s_ready) {
@@ -363,7 +471,16 @@ static void dExtDmesg_paginate(const char* text, std::vector<std::string>& pages
                 // Emit the J2D char+gradient colour escape the port's J2DPrint understands
                 // (same format as jmessage_tRenderingProcessor::do_color, d_msg_class.cpp:3526).
                 const u8 ci = p[5];
-                const u32 col = (ci < 9) ? kWwColor[ci] : 0xFFFFFFFFu;
+                // DONOR DATA FIRST, hardcode second (see the capture in init).
+                // The donor table is a full 256 entries, so it needs no `< 9`
+                // guard and no white default — indices 9-255 ARE white in the
+                // shipped file, which is data rather than a rule we impose.
+                // `kWwColor` remains as the labelled fallback for when the
+                // member is missing; it is NOT deleted, and it is NOT correct
+                // (7 of its 9 entries disagree with the donor).
+                const u32 col = (s_wwPalette != NULL)
+                    ? dExtDmesg_be32(s_wwPalette + (u32)ci * 4)
+                    : ((ci < 9) ? kWwColor[ci] : 0xFFFFFFFFu);
                 char esc[40];
                 std::snprintf(esc, sizeof(esc), "\x1B" "CC[%08x]" "\x1B" "GC[%08x]", col, col);
                 page.append(esc);
@@ -841,7 +958,18 @@ void dExtDmesg_update() {
     // actually frozen the timeline (susp>0): advance to the next page WITHOUT releasing,
     // and unsuspend exactly once on the final page's dismissal — so the one STB suspend(1)
     // for this message is balanced by our one unsuspend(1), no matter the page count.
-    if (pressed && s_boxSawSuspend && susp > 0) {
+    // §317 oracle item (2), closed 2026-08-16: the release is NOT gated on
+    // `susp > 0` — that test was a non-donor clamp. The donor's TControl is a
+    // plain signed accumulate (JStudio/stb.h:71 `suspend(s32 v) { _20 += v; }`,
+    // unsuspend(n) == suspend(-n), :145) with no floor: a fast dismissal is
+    // ALLOWED to drive the counter to −1 so the authored suspend that follows
+    // cancels it back to 0. Gating release on the counter's sign prevented the
+    // excursion and thereby the correction — once at −1, unsuspend never fired
+    // and the accounting never recovered. Owed-ness is OUR beat state
+    // (s_boxSawSuspend: one STB suspend observed → one release owed), not the
+    // counter's current value. `susp > 0` remains the right question only for
+    // the latch above (the donor's own isSuspended() is `> 0`, stb.h:138).
+    if (pressed && s_boxSawSuspend) {
         if (s_pageIdx + 1 < (int)s_pages.size()) {
             ++s_pageIdx;
             dExtDmesg_showPage(s_pageIdx);
@@ -849,7 +977,9 @@ void dExtDmesg_update() {
             DuskLog.info("[dMesg] §308 M4c page → {}/{} (id={})", s_pageIdx + 1,
                          (int)s_pages.size(), (int)s_currentMsgId);
         } else {
-            ctrl->unsuspend(1);
+            if (ctrl != NULL) {
+                ctrl->unsuspend(1);
+            }
             s_boxActive = false;
             DuskLog.info("[dMesg] §308 M4c dismissed id={} (last of {} pages) → unsuspend(1) "
                          "(susp {}→{})", (int)s_currentMsgId, (int)s_pages.size(), susp,
@@ -867,8 +997,11 @@ void dExtDmesg_update() {
         return;
     }
     //  * absolute backstop: force-close a stuck beat, paying the release if still owed.
+    //    Owed = this beat suspended (s_boxSawSuspend) and we have not released yet —
+    //    NOT `susp > 0`: the counter may already sit at 0/−1 with our release still
+    //    unpaid, and skipping the payment there is the §317 clamp again.
     if (s_boxFrames > 3600) {
-        if (susp > 0 && ctrl != NULL) {
+        if (s_boxSawSuspend && ctrl != NULL) {
             ctrl->unsuspend(1);
         }
         s_boxActive = false;
@@ -879,8 +1012,11 @@ void dExtDmesg_update() {
 
 // ============================================================================
 // §324 LIVE TALK API — see d_ext_dmesg.h. Text resolution order is native-first:
-// the donor zel_00.bmg by the actor's own message id, then the §256 catalog
-// line the caller already resolved (ids the WW-Crew text pack remapped).
+// the donor BMG by the actor's mMsgNo (dExtWwMsg_textByMsgNo — the donor's own
+// scan, Hylian archive selection included), then the §256 catalog line the
+// caller already resolved (ids the WW-Crew text pack remapped). The actor's id
+// is an mMsgNo, NOT an INF1 index; feeding it to getMessageById was the §324
+// mis-key that drew "Seven-Star Isles" at the postbox.
 // ============================================================================
 bool dExtDmesg_openTalk(unsigned short i_id, const char* i_fallbackText) {
     if (dusk::getSettings().game.wwDialogue.getValue() != dusk::WwDialogueStyle::Native) {
@@ -896,7 +1032,7 @@ bool dExtDmesg_openTalk(unsigned short i_id, const char* i_fallbackText) {
     if (s_boxActive && !s_talkMode) {
         return false;  // an STB beat owns the box — never steal a cutscene's box
     }
-    const char* txt = dExtDmesg_getMessageById(i_id);
+    const char* txt = dExtWwMsg_textByMsgNo(i_id);
     const bool fromBmg = txt != NULL;
     if (txt == NULL) {
         txt = i_fallbackText;
@@ -904,9 +1040,13 @@ bool dExtDmesg_openTalk(unsigned short i_id, const char* i_fallbackText) {
     if (txt == NULL || txt[0] == '\0') {
         return false;  // nothing to show → caller stays Reconstructed
     }
-    // Box choice mirrors the STB path: the INF1 fukiKind when the id is in the
-    // BMG (9 = item box), else the plain talk box.
-    const u8 fukiKind = fromBmg ? dExtDmesg_getMessageTextboxType(i_id) : (u8)0;
+    // Box choice mirrors the STB path — but keyed in the talk path's own space:
+    // the fukiKind comes from the zel_00 entry CARRYING mMsgNo i_id, not from
+    // INF1[i_id] (the same mis-key chose box shapes from unrelated entries, and
+    // since Hylian detection rides on mTextboxType == 12, could silently
+    // mis-mark a line Hylian).
+    const int bmgIdx = fromBmg ? dExtDmesg_msgNoToIndex(i_id) : -1;
+    const u8 fukiKind = (bmgIdx >= 0) ? dExtDmesg_getMessageTextboxType((u16)bmgIdx) : (u8)0;
     if (!dExtDmesg_ensureBoxBuilt((int)fukiKind)) {
         return false;
     }
@@ -921,8 +1061,8 @@ bool dExtDmesg_openTalk(unsigned short i_id, const char* i_fallbackText) {
     s_talkMode = true;
     s_talkRelease = false;
     s_boxFrames = 0;
-    DuskLog.info("[dMesg] §324 talk open id={} fuki={} src={} pages={}", (int)i_id,
-                 (int)fukiKind, fromBmg ? "zel_00.bmg" : "catalog", (int)s_pages.size());
+    DuskLog.info("[dMesg] §324 talk open msgNo={} inf1={} fuki={} src={} pages={}", (int)i_id,
+                 bmgIdx, (int)fukiKind, fromBmg ? "bmg(msgNo)" : "catalog", (int)s_pages.size());
     return true;
 }
 

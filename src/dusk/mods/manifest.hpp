@@ -23,9 +23,13 @@ enum class ResolveStatus {
     Ambiguous,  // name maps to multiple addresses (overloads / per-TU statics)
 };
 
-// Maps the symbol manifest next to the game binary and validates it against the
-// running image's build id (PDB GUID+age / Mach-O UUID / GNU build-id). A missing or
-// stale manifest logs and leaves by-name resolution unavailable; hooks by address are
+// Locates the symbol manifest EMBEDDED IN the running image and validates it against
+// that image's own build id (PDB GUID+age / Mach-O UUID / GNU build-id). There is no
+// manifest FILE: symgen writes the blob into the image as a section after link (see
+// cmake/SymbolManifest.cmake), and it is found here through the descriptor manifest.cpp
+// reserves. The manifest travelling inside the image it describes is what lets a mod
+// resolve by name against whatever build the user is running. A missing or stale
+// manifest logs and leaves by-name resolution unavailable; hooks by address are
 // unaffected. Safe to call more than once.
 void initialize();
 
@@ -33,7 +37,7 @@ bool available();
 
 // Build id of the running executable image (PDB GUID+age / Mach-O UUID / GNU
 // build-id), computed once on first use; empty if it couldn't be determined.
-// Independent of whether a manifest file was loaded.
+// Independent of whether a manifest was loaded.
 const std::vector<uint8_t>& image_build_id();
 
 // Resolve a symbol name to its address in the running image. Names can be either the platform's

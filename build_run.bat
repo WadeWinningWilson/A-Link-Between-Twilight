@@ -71,6 +71,34 @@ if errorlevel 1 (
     exit /b 98
 )
 
+REM ---------------------------------------------------------------------------
+REM B1 SEAM GATE (roadmap Phase B, Bridge). Baseline-diff + ownership classifier,
+REM IN THE TOOLCHAIN rather than behind a role, so it cannot be "forgotten to run".
+REM Blocks on exactly two things: a tracker row that was baselined and is now gone
+REM with no retirement entry (the deletion bypass), and a changed WW-layer file
+REM whose ownership category nobody has classified.
+REM
+REM Its refusals name FILE + WHY + FIX (B2) — a failure a builder cannot act on
+REM trains them to bypass the gate, and a bypassed gate protects nothing.
+REM
+REM ESCAPE HATCH, deliberate and visible: set DUSK_SKIP_SEAM_GATE=1 to proceed.
+REM It prints a loud line when used, because an ADVERTISED bypass that leaves a
+REM trace beats an unadvertised one that gets added under deadline and never
+REM removed. If this gate is ever wrong, skip it and say so on CALLS.
+REM ---------------------------------------------------------------------------
+if not "%DUSK_SKIP_SEAM_GATE%"=="1" (
+    python "%~dp0tools\foundry\seam_gate.py" check
+    if errorlevel 1 (
+        echo.
+        echo   BUILD REFUSED by the B1 seam gate ^(above^). Each problem names its fix.
+        echo   Override for one build: set DUSK_SKIP_SEAM_GATE=1
+        rmdir /s /q "%LOCKDIR%" 2>nul
+        exit /b 97
+    )
+) else (
+    echo [seam-gate] SKIPPED via DUSK_SKIP_SEAM_GATE=1 - row/ownership checks did NOT run.
+)
+
 REM §806: ww_donor_disc_package rides the canonical build — the mod DLL/.dusk
 REM otherwise never rebuilds (its target is not a dusklight dependency), and a
 REM stale donor-disc reader silently serves yesterday's roster.
@@ -86,3 +114,18 @@ if "%EXESIZE%"=="0" (
     echo ERROR: dusklight.exe is 0 bytes - link failed or AV blocked the file. Try rebuild.bat
     exit /b 1
 )
+
+REM ===========================================================================
+REM PDB ARCHIVE (tale S945/S968, user-ruled in with a retention cap).
+REM MSVC keeps the PDB GUID stable across incremental links and bumps the AGE,
+REM rewriting dusklight.pdb IN PLACE - so a crash log from the previous build
+REM becomes unsymbolicatable the moment the NEXT link finishes. That is exactly
+REM how the 08-12 crash was lost: nobody deleted its PDB, the next build
+REM overwrote it. This must run AFTER a successful link and BEFORE the next one.
+REM Prunes to the newest 10 (~2.3 GB ceiling; each PDB is ~234 MB) and keeps the
+REM index row for pruned builds so they report PRUNED rather than vanishing.
+REM Never fails the build: archiving is diagnostics, not a gate.
+REM ===========================================================================
+python "%~dp0tools\foundry\build_ledger.py" record || echo   (build ledger skipped - non-fatal)
+python "%~dp0tools\foundry\build_identity.py" archive || echo   (PDB archive skipped - non-fatal)
+

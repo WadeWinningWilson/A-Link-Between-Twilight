@@ -1,0 +1,29 @@
+#!/bin/sh
+# ============================================================================
+# post-merge — B3's WIRING (Foundry, 2026-08-16). CONVENIENCE TIER, like
+# pre-commit: row_origin.py IS the mechanism, this just runs it at the one
+# moment it matters — right after a merge lands (a vanilla-project sync).
+#
+# DRY RUN ONLY, deliberately: `sync` without --apply prints the attribution
+# (which changed files are VANILLA-authored vs ours) and which rows those
+# touches make STALE, and WRITES NOTHING. The human reads the printout and
+# runs `python tools/foundry/row_origin.py sync --apply` if it looks right.
+# A hook that mutates tracker state on every merge would be a write nobody
+# reviewed — the exact class the estate spent 2026-08-16 closing.
+#
+# Fires for nobody until `git config core.hooksPath .githooks` (the user's
+# deliberate activation step — see README.md). Pre-staged so that ONE
+# decision activates B5 and B3's wiring together.
+# ============================================================================
+REPO="$(git rev-parse --show-toplevel)"
+[ -f "$REPO/tools/foundry/row_origin.py" ] || exit 0
+
+PY=python
+command -v python >/dev/null 2>&1 || PY=python3
+command -v "$PY" >/dev/null 2>&1 || exit 0
+
+echo "[post-merge] B3 origin attribution (dry run — writes nothing):"
+"$PY" "$REPO/tools/foundry/row_origin.py" sync || true
+echo "[post-merge] if rows read STALE above and the attribution looks right:"
+echo "             python tools/foundry/row_origin.py sync --apply"
+exit 0

@@ -83,20 +83,49 @@ def tier1(tu):
 def tier2(tu):
     r = subprocess.run(["ninja", "-C", str(BUILD), "-t", "commands", TEMPLATE_OBJ],
                        capture_output=True, text=True)
-    line = next((l for l in r.stdout.splitlines() if "cl.exe" in l), None)
+    # PICK THE REAL COMPILE LINE, NOT THE FIRST LINE MENTIONING cl.exe.
+    # `ninja -t commands <obj>` emits the whole dependency chain, and the first
+    # cl.exe hit was a libjpeg-turbo CONFIGURE stamp that merely NAMES the
+    # compiler. Tier 2 was therefore running a configure step, never seeing the
+    # probe source, and reporting "cl /Zs clean — verified by the real
+    # compiler" unconditionally. **A gate that always passes.** Caught by a
+    # deliberately-false static_assert control that also passed; nothing else
+    # would have surfaced it, because a vacuous PASS looks exactly like a PASS.
+    # The real line compiles the template SOURCE, so require that.
+    stem = TEMPLATE_OBJ.split("/")[-1].replace(".obj", "")   # e.g. d_a_bg.cpp
+    cands = [l for l in r.stdout.splitlines()
+             if "cl.exe" in l and stem in l and ("/c " in l or " -c " in l)]
+    line = cands[-1] if cands else None
     if not line:
-        return None, "no template compile line (build dir unconfigured?)"
+        return None, ("no REAL compile line for %s — refusing to run a command "
+                      "that is not a compile (a vacuous pass is worse than an "
+                      "UNKNOWN)" % stem)
     # swap source, strip PCH consumption (keep the /FI forced include), no obj
     line = re.sub(r"/Yu\S+", "", line)
     line = re.sub(r"/Fp\S+", "", line)
     line = re.sub(r"/Fo\S+", "", line)
     line = re.sub(r"/showIncludes", "", line)
-    line = re.sub(r"-c .*$", "", line)
+    # strip the ORIGINAL source (both spellings) or cl compiles the template
+    # instead of the probe — the same false-pass shape one level down.
+    line = re.sub(r"[/-]c\s+\S+\s*$", "", line)
     cmd = 'call "%s" >nul 2>&1 && %s /Zs -c "%s"' % (VCVARS, line, tu)
     r2 = subprocess.run(["cmd", "/c", cmd], capture_output=True, text=True,
                         cwd=str(BUILD), timeout=300)
-    errs = [l for l in (r2.stdout + r2.stderr).splitlines()
+    out = r2.stdout + r2.stderr
+    errs = [l for l in out.splitlines()
             if re.search(r"error C\d+|fatal error", l)]
+    # NON-ZERO EXIT WITH NOTHING PARSED IS *NOT* CLEAN. Under Git Bash this
+    # exact command returns rc=1 with EMPTY stdout and stderr — vcvars64.bat
+    # fails to initialise there (it works from cmd/PowerShell), so cl never
+    # runs. With only the error-regex to go on, that read as "0 errors" =
+    # PASS. Combined with the configure-line bug above, tier 2 could report
+    # "verified by the real compiler" having compiled nothing at all. A gate
+    # must distinguish "it compiled and was clean" from "it never ran".
+    if r2.returncode != 0 and not errs:
+        return None, ("compiler exited %d with NO parseable diagnostics — it "
+                      "almost certainly never ran (vcvars64.bat fails to "
+                      "initialise under Git Bash; invoke from cmd/PowerShell). "
+                      "Reporting UNRESOLVED rather than clean." % r2.returncode)
     return errs, None
 
 

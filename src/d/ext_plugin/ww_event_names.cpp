@@ -39,6 +39,8 @@
 
 #include "d/ext_plugin/ww_stage_loader.h"
 
+#include <cstring>
+
 #include "d/d_com_inf_game.h"
 #include "d/d_stage.h"
 
@@ -82,4 +84,60 @@ const char* dExtWwEvt_getArrivalEventName(int i_eventInfoIdx) {
     }
 
     return NULL;
+}
+
+// ============================================================
+// WW STAGE-EVENT FULL NAMES — the 15→13 narrowing, answered at the boundary.
+//
+// The EVNT translator can only store 12 chars + NUL in the receiver's
+// `event_name` arm, and 11 of sea's 57 donor names are longer. Two of them,
+// `FROM_HYRULE_1` and `FROM_HYRULE_2`, truncate to the SAME string — so the
+// loss is not merely cosmetic: two distinct events become one name, and a
+// lookup cannot tell them apart.
+//
+// The receiver's own struct is not widened (0x1C is TP's on-disc layout, and
+// TP data uses it) and the donor's names are not shortened (that is baking).
+// Instead the seam SERVES the full name, keyed by the record index the
+// receiver already has in hand — the same shape as the arrival table above and
+// as `dMsg_resolveGroupArchive`.
+//
+// The names are the DONOR'S OWN BYTES, copied at publish time into a
+// seam-owned pool. The translator's pool is static and stage-lived, but the
+// stage.dzs buffer behind it is not this TU's to reason about, so the strings
+// are copied rather than pointed at — the J3D pointer-fix law's habit applied
+// to a much smaller thing.
+//
+// SCOPE, stated so nobody mistakes this for the whole fix: it answers the
+// NAME-RETURNING path. A consumer that compares an incoming name against the
+// receiver's stored (truncated) record — getEventIdx's own string compare —
+// still sees 12 chars. That side is named on the task; this half is what
+// getName needs and it lands independently.
+// ============================================================
+namespace {
+const int kMaxWwStageEvents = 96;
+const int kWwEventNameCap = 16;  // 15 donor bytes + NUL
+char l_wwStageEventNames[kMaxWwStageEvents][kWwEventNameCap];
+int l_wwStageEventCount = 0;
+}  // namespace
+
+void dExtWwEvt_publishStageEventNames(const char* i_names, int i_num, int i_stride) {
+    l_wwStageEventCount = 0;
+    if (i_names == NULL || i_num <= 0 || i_stride <= 0) {
+        return;  // a stage with no EVNT publishes nothing; get() then returns NULL
+    }
+    const int n = (i_num < kMaxWwStageEvents) ? i_num : kMaxWwStageEvents;
+    for (int i = 0; i < n; i++) {
+        const char* src = i_names + (size_t)i * (size_t)i_stride;
+        std::memcpy(l_wwStageEventNames[i], src, kWwEventNameCap - 1);
+        l_wwStageEventNames[i][kWwEventNameCap - 1] = '\0';
+    }
+    l_wwStageEventCount = n;
+}
+
+const char* dExtWwEvt_getStageEventName(int i_eventInfoIdx) {
+    if (i_eventInfoIdx < 0 || i_eventInfoIdx >= l_wwStageEventCount) {
+        return NULL;  // not a published WW stage event — caller falls through
+    }
+    const char* name = l_wwStageEventNames[i_eventInfoIdx];
+    return (name[0] != '\0') ? name : NULL;
 }

@@ -1013,8 +1013,33 @@ static int dScnPly_Delete(dScnPly_c* i_this) {
 
     dComIfGp_particle_removeScene(0);
 
-    dComIfGp_getMsgDtArchive(1)->removeResourceAll();
-    JKRUnmountArchive(dComIfGp_getMsgDtArchive(1));
+    // ========================================================================
+    // A_mori exit crash (run 161726, symbolicated to this line): slot 1 is
+    // set ONLY in phase_4 (:1611, and only when the message-group mount
+    // command exists) and was unmounted HERE without being CLEARED — so the
+    // pointer dangles until the next phase_4, and a delete that runs without
+    // an intervening re-set (a §398-refused changeover tearing down before
+    // create completes, or a mount that never produced a command) dereferences
+    // freed memory. The heap's poison fill is how a "pointer" of
+    // 0xFFFFFFFFFFFFFFFF reaches a vtable call. This create/delete pair is
+    // the slot's lifecycle OWNER, so the fix lives here, at the source:
+    // tolerate a scene that never set the slot, and clear after unmount so a
+    // stale pointer cannot survive this line. On a healthy cycle (every
+    // mainline TP delete) the slot is freshly set and both changes are
+    // behavior-neutral.
+    // ========================================================================
+    {
+        JKRArchive* msgDt1 = dComIfGp_getMsgDtArchive(1);
+        if (msgDt1 != NULL) {
+            msgDt1->removeResourceAll();
+            JKRUnmountArchive(msgDt1);
+            dComIfGp_setMsgDtArchive(1, NULL);
+        } else {
+            DuskLog.warn("[Play] msg-archive slot 1 unset at scene delete — teardown "
+                         "skipped (pre-fix this was the run-161726 crash); a scene "
+                         "died before phase_4 or its message-group mount never ran");
+        }
+    }
 
     #if DEBUG
     dJcame_c::remove();

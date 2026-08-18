@@ -1,5 +1,8 @@
 # Lanes — who does what
 
+era: era-independent
+<!-- era rationale: the lane roster; the user's ruling, not a method | Librarian, 2026-08-16, user ruling "assign it by era" -->
+
 > **Source of truth.** The lane split is a **user ruling** (data plumbing → Cursor;
 > judgment / language work → Claude). This file *shelves* that roster so fresh instances can
 > discover it; it does not invent roles. Role lines are anchored to existing ratified sources
@@ -20,6 +23,7 @@ is a BEHAVIOR, Cursor built it; if it is a NAME ON A FACE, the user said it."*
 | **Housing Security** | Claude | **Containment audits only** — covenant gate, commit / mod-folder hygiene, and *negative-controls* on Bridge's tooling (can it report a broken ledger? does an empty query say UNKNOWN, not CLEAN?). Builds nothing. | [Librarian.md §"Relationship to Housing Security"](Librarian.md) |
 | **Librarian** | Claude | **Document structure** — compaction, supersession stamping, lint, dedup, boot-brief curation, status-enum sweeps. *Operates* Bridge's linter; authors no content, rules no truth. | [Librarian.md](Librarian.md) · queue: [LIBRARIAN-QUEUE.md](LIBRARIAN-QUEUE.md) |
 | **Foundry** | Claude | **Methods + instruments** — DuskTap & successors, capture reels/replay harness, probe schema + differ, golden traces, oracle-stack doctrine. Builds what the lanes work with; touches no content. *(Added on the user's spin-up ruling, 2026-07-28; bus §195–§196, §198.)* | [Foundry.md](Foundry.md) · [state/foundry-methods.md](state/foundry-methods.md) |
+| **Decoder** | Claude | **Donor decompilation** — owns the 655 port-grade drafts in `docs/state/ww-staging/decode-drafts/`, burns down the `[INFERENCE-NEEDED]` markers (debug maps → sibling analogy → headers), and proves byte-true claims through the (A) gate (donor PPC toolchain → REL SHA1 vs `config/GZLE01/build.sha1`, perturbed-byte control per claim). Acts on `decomp_watch` flips so drafts are CONFIRMED or REPLACED by the official decomp rather than becoming permanent. | [DECODER-BRIEFING.md](DECODER-BRIEFING.md) |
 
 **The audit pairing (load-bearing).** The lane that **builds** an instrument is never the lane
 that **audits** it — the anti-"marking your own homework" rule. Bridge builds the ledger tool;

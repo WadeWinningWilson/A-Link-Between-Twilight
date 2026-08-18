@@ -1,0 +1,88 @@
+name           plc  model   dzb   bck  other  arc
+kusax1          46  NO ARC                         
+pflower         41  NO ARC                         
+kusax21         36  NO ARC                         
+kusax7          30  NO ARC                         
+keeth           26  NO ARC                         
+item            14  NO ARC                         
+ikada_h         11  NO ARC                         
+bridge          11      3     2     0      0  bridge.arc
+Oyashi          10      1     1     0      0  Oyashi.arc
+agbMARK         10  NO ARC                         
+TagKb           10  NO ARC                         
+SalvagE         10      2     0     0      0  SalvagE.arc
+kotubo           9  NO ARC                         
+Kamome           9      2     0     9      5  Kamome.arc
+swood5           9  NO ARC                         
+agbB             9  NO ARC                         
+swood3           6  NO ARC                         
+lwood            6      1     1     0      0  lwood.arc
+Pig              6  NO ARC                         
+swood            6  NO ARC                         
+flwr17           5  NO ARC                         
+woodb            5  NO ARC                         
+TagSo            5  NO ARC                         
+agbF             5  NO ARC                         
+Yw1              5  NO ARC                         
+Ym2              5  NO ARC                         
+Zl1              5  NO ARC                         
+P1a              5  NO ARC                         
+woodbx           4  NO ARC                         
+SW_C00           4  NO ARC                         
+Salvage          4      2     0     0      0  Salvage.arc
+Salvag2          4  NO ARC                         
+Pirates          4  NO ARC                         
+Ko1              4  NO ARC                         
+Ah               4      1     0     2      2  Ah.arc
+c_green          4  NO ARC                         
+Puti             4  NO ARC                         
+Kanban           3     11     0     0      0  Kanban.arc
+flwr7            3  NO ARC                         
+pflwrx7          3  NO ARC                         
+koisi1           3  NO ARC                         
+Ls1              3      0     0     9     16  Ls1.arc
+Ob1              3  NO ARC                         
+Ym1              3  NO ARC                         
+Ko2              3  NO ARC                         
+Dk               3      3     0     2      0  Dk.arc
+TagMsg2          3  NO ARC                         
+ITat00           3  NO ARC                         
+Tpost            2  NO ARC                         
+kani             2  NO ARC                         
+ootubo1          2  NO ARC                         
+flower           2  NO ARC                         
+Aj1              2  NO ARC                         
+Bm1              2  NO ARC                         
+Throck           2  NO ARC                         
+AttTagB          2  NO ARC                         
+Ajav             2      6     1     0      0  Ajav.arc
+Auzu             2      1     0     0      1  Auzu.arc
+c_red            2  NO ARC                         
+Ksaku            2  NO ARC                         
+Ekao             1      1     1     0      0  Ekao.arc
+NpcSo            1  NO ARC                         
+AND_SW2          1  NO ARC                         
+TagMSo           1  NO ARC                         
+Pitfall          1  NO ARC                         
+ky_tag1          1  NO ARC                         
+TagEv            1  NO ARC                         
+agbCSW           1  NO ARC                         
+SwSlvg           1  NO ARC                         
+agbA2            1  NO ARC                         
+Com_A            1  NO ARC                         
+agbA             1  NO ARC                         
+agbTBOX          1  NO ARC                         
+Akabe            1      0     1     0      0  Akabe.arc
+HyoiKam          1  NO ARC                         
+TagIsl           1  NO ARC                         
+agbFA            1  NO ARC                         
+TagHt            1  NO ARC                         
+P2b              1  NO ARC                         
+Ba1              1  NO ARC                         
+P1b              1  NO ARC                         
+Vdora            1      1     0     2      0  Vdora.arc
+DmKmm            1  NO ARC                         
+DmKmm2           1  NO ARC                         
+kuro_s           1  NO ARC                         
+Bb               1      2     0    14     19  Bb.arc
+Ktarur           1  NO ARC                         

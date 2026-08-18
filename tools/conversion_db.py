@@ -28,6 +28,10 @@ Every row carries a TIER, because "we know this" is not one thing:
              disagreement here is a real question, not a bug.
   HOST       a receiver-side mapping decision (our choice, donor-silent) —
              never presented as donor fact.
+  CONTROL    NOT A FACT. A deliberately-planted row whose job is to be found;
+             if a consumer's sweep comes back clean WITHOUT naming it, that
+             consumer is blind and its clean verdicts prove nothing (§1004,
+             tools/foundry/control.py). get() refuses to return these.
 
 The tier is the point. A consumer that treats OBSERVED as LAW will "fix" the
 wrong side of a disagreement, which is exactly how §375 (the endian overlay) and
@@ -642,6 +646,36 @@ CODE_DIALECT = {
     "daObj::HitEff_kikuzu": F("dExtTpost_HitEff_kikuzu shim (owed FX)", "HOST",
         "receiver daObj has no kikuzu sawdust helper; §253 no-op shim carries "
         "the call until the WW dPa obj-FX pass. obj_paper §877 fix"),
+
+    # --- NEGATIVE CONTROL (tier CONTROL) — NOT A CONVERSION FACT -------------
+    # This row is not a belief. It is the input whose SILENCE proves K3
+    # (dialect_codemod.py) is blind, per control.py's registry (tale §1004).
+    #
+    # THE CLASS IT CATCHES: K3's report_manual() derives its probe with
+    # `re.match(r"[A-Za-z_][\w:]*", key)` — anchored at position 0. Any key
+    # beginning with a non-identifier character yields token=None and hits the
+    # bare `continue`, so THE ROW IS DROPPED WITHOUT A WORD and the run prints
+    # "(none present in this TU)". Two live rows are in that class right now:
+    # `(u32)this  [setUserArea]` (HOST) and — the one that matters —
+    # `(J3DModelData*)dComIfG_getObjectRes(...)`, the DN-3 LAW row guarding the
+    # §810-2/§814 raw-cast crash class. A porter reading a silent K3 run as
+    # "no DN-3 problem in this TU" has been told nothing.
+    #
+    # This key is that shape by construction, and the fixture
+    # tools/foundry/controls/dialect_unprobeable_key.cpp contains its donor
+    # form. If a K3 scan of that fixture does not print the marker, K3's clean
+    # verdicts on THIS ROW CLASS are worthless. Measured 2026-08-14: it does
+    # not print it. The gate is BLIND and is declared so, not called clean.
+    #
+    # SAFE BY CONSTRUCTION: classify() rules this REVIEW (leading `(`), so
+    # apply_rules() — which touches AUTO rows only — can never write it into a
+    # port; and get() below refuses to return any CONTROL row.
+    "(WW_DIALECT_CONTROL_MUST_APPEAR*)dComIfG_getObjectRes(...)": F(
+        "NEVER APPLY — negative control, not a conversion fact", "CONTROL",
+        "control.py gate `code_dialect`. Its appearance in a K3 --scan of "
+        "controls/dialect_unprobeable_key.cpp is the proof K3 can see the "
+        "unprobeable-key class at all; its absence condemns the DN-3 row's "
+        "silence too. Delete this row only together with the gate."),
 }
 
 # ---------------------------------------------------------------------------
@@ -688,6 +722,14 @@ ABSORBED = [
 
 def get(table: str, key):
     fact = DB[table][key]
+    # A CONTROL row is planted to be FOUND, never to be APPLIED. Consuming one
+    # as a conversion fact would write a marker into a port, so refuse loudly
+    # rather than let the poison be drunk.
+    if fact.tier == "CONTROL":
+        raise KeyError(
+            "%s[%r] is a NEGATIVE CONTROL, not a conversion fact — it exists so "
+            "a blind sweep can be detected (control.py gate). Do not apply it."
+            % (table, key))
     return fact.value
 
 

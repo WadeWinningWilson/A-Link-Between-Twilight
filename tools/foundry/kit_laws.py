@@ -50,16 +50,41 @@ REPO = Path(__file__).resolve().parents[2]
 #                 reason**, which is auditable in a way silence is not
 #   (missing)     UNKNOWN — the gap cannot hide
 # ============================================================================
-RE_LINEAGE = re.compile(r"^//\s*KIT-LINEAGE:\s*"
-                        r"(native-port|bridge-owed|host-plumbing)"
-                        r"(?::(\S+))?\s*$", re.M)
+# ============================================================================
+# LINEAGE MATCHER REWRITTEN 2026-08-16 (Integrator's find, landed by the tool
+# owner per their spec). The old alternation named THREE of the SIX in-tree
+# values - `mixed` and `donor-port` were never in it, so **the gate could not
+# see a single file declaring itself a DONOR-FAITHFUL PORT, the thing this
+# project exists to produce.** And `^//` cannot match a line whose file opens
+# with a UTF-8 BOM - which hid d_stage.cpp, the most-cited TU on the board.
+# 18 of 107 declared files were invisible (17%).
+#
+# The shape of the fix is the lesson: match ANY family token and VALIDATE
+# against the domain, so a new lineage value can never again be silently
+# unseen - it surfaces as UNKNOWN-VALUE:<token>, loudly, instead of parsing
+# as "no header". Absent and unrecognised are different facts (No.31-C).
+# NOTE: the ratchet (ww_ratchet.py) never used this matcher - its substring
+# count was tolerant all along, so the pinned baseline (TU 102) DOES NOT MOVE.
+# ============================================================================
+LINEAGE_DOMAIN = {"native-port", "bridge-owed", "host-plumbing",
+                  "mixed", "donor-port"}
+RE_LINEAGE = re.compile("^\ufeff?//"  # explicit escape - never a literal BOM
+                        r"\s*KIT-LINEAGE:\s*"
+                        r"([A-Za-z][\w-]*)"          # any family token
+                        r"(?::(\S+))?"               # optional citation (:§N)
+                        r"(?:\s*\([^)\n]*\))?\s*$",  # optional (qualifier)
+                        re.M)
 
 
 def lineage(raw):
     m = RE_LINEAGE.search(raw)
     if not m:
         return (None, None)
-    return (m.group(1), m.group(2))
+    fam = m.group(1)
+    if fam not in LINEAGE_DOMAIN:
+        # visible, never silent - and distinct from "no header"
+        return ("UNKNOWN-VALUE:%s" % fam, m.group(2))
+    return (fam, m.group(2))
 
 # --- law 1: LIGHTING CONTRACT -----------------------------------------------
 # Every WW actor draw routes dKyWw_settingTevStruct (donor-authored TEV type) ->
@@ -583,20 +608,58 @@ def sweep_targets():
 # near-identical name: setSimpleShadow vs donor setSimpleShadow2).
 # ============================================================================
 DONOR_ACTOR_SRC = Path(r"D:/XXXXXXX/WW DP/src/d/actor")
+DONOR_SRC = Path(r"D:/XXXXXXX/WW DP/src")
 
 RE_CALL_IDENT = re.compile(r"\b([A-Za-z_]\w{3,})\s*\(")
+
+# ============================================================================
+# NON-ACTOR TU RESOLUTION — added by the INTEGRATOR 2026-08-16, same defect and
+# same rule as port_deps.resolve_donor_tu (Foundry's `port_preflight d_msg`
+# diagnosis). The donor TU was COMPOSED under `src/d/actor/`, never searched
+# for, so a system TU like `d_msg` reported `MISSING donor TU` — the tool's
+# path stated as the donor's contents. A tool may only say MISSING about a
+# place it LOOKED; otherwise the verdict is UNSEARCHED/N-A.
+# Actor fast path is preserved, so actor output is byte-unchanged.
+# ============================================================================
+_DONOR_TU_CACHE = {}
+
+
+def _unresolved(name):
+    """A non-existent path standing in for a SEARCHED-AND-ABSENT TU, so the
+    caller's `is_file()` branch still fires and prints the UNSEARCHED verdict
+    with a usable name. Never used to imply the file lives here."""
+    stem = name[:-4] if name.endswith(".cpp") else name
+    return DONOR_ACTOR_SRC / (stem + ".cpp")
+
+
+def resolve_donor_tu(name):
+    """Donor TU path for an actor OR system TU; None = SEARCHED AND ABSENT."""
+    stem = name[:-4] if name.endswith(".cpp") else name
+    if stem in _DONOR_TU_CACHE:
+        return _DONOR_TU_CACHE[stem]
+    fp = DONOR_ACTOR_SRC / (stem + ".cpp")
+    if not fp.is_file():
+        fp = next(iter(sorted(DONOR_SRC.rglob(stem + ".cpp"))), None) \
+            if DONOR_SRC.is_dir() else None
+    _DONOR_TU_CACHE[stem] = fp
+    return fp
 
 
 def donor_precast(names):
     """Per-donor-TU list of parsed-J3D casts of get*Res = the sites a port MUST
     translate at the consumption boundary (acquirer family / by-index form).
     Anm-type casts are listed but marked mount-parsed (§816: sound to keep)."""
-    files = ([DONOR_ACTOR_SRC / (n if n.endswith(".cpp") else n + ".cpp") for n in names]
+    files = ([resolve_donor_tu(n) or _unresolved(n) for n in names]
              if names else sorted(DONOR_ACTOR_SRC.glob("d_a_*.cpp")))
     rows = []
     for fp in files:
         if not fp.is_file():
-            print("MISSING donor TU: %s" % fp)
+            print("UNSEARCHED/N-A: no TU named '%s' anywhere under %s — the"
+                  % (fp.name, DONOR_SRC))
+            print("  donor tree WAS walked and this name is not in it. No cast")
+            print("  measurement was made for it; the counts below EXCLUDE it")
+            print("  and imply no zero. (Was 'MISSING donor TU', which read as")
+            print("  a fact about the donor and was a fact about the path.)")
             continue
         code = strip_comments(fp.read_text(encoding="utf-8", errors="replace"))
         sites = []
@@ -639,11 +702,14 @@ def pair_check(recv_path, donor_path=None):
     rp = Path(recv_path)
     if donor_path is None:
         guess = rp.name.replace("d_a_ww_", "d_a_")
-        dp = DONOR_ACTOR_SRC / guess
+        dp = resolve_donor_tu(guess) or _unresolved(guess)
     else:
         dp = Path(donor_path)
     if not dp.is_file():
-        print("no donor TU at %s — pass it explicitly" % dp)
+        print("UNSEARCHED/N-A: no TU named '%s' under %s (whole tree walked)"
+              % (dp.name, DONOR_SRC))
+        print("  — pass the donor path explicitly. Nothing was compared, so")
+        print("  no name-gap result is implied either way.")
         return 2
     rc = strip_comments(rp.read_text(encoding="utf-8", errors="replace"))
     dc = strip_comments(dp.read_text(encoding="utf-8", errors="replace"))
@@ -778,12 +844,17 @@ def donor_deps(args):
     names = args[1:] if census else args
     rt = _receiver_tokens()
     fam_cache = {}
-    files = ([DONOR_ACTOR_SRC / (n if n.endswith(".cpp") else n + ".cpp") for n in names]
+    files = ([resolve_donor_tu(n) or _unresolved(n) for n in names]
              if names else sorted(DONOR_ACTOR_SRC.glob("d_a_*.cpp")))
     demand = {}
     for fp in files:
         if not fp.is_file():
-            print("MISSING donor TU: %s" % fp)
+            print("UNSEARCHED/N-A: no TU named '%s' anywhere under %s — the"
+                  % (fp.name, DONOR_SRC))
+            print("  donor tree WAS walked and this name is not in it. No cast")
+            print("  measurement was made for it; the counts below EXCLUDE it")
+            print("  and imply no zero. (Was 'MISSING donor TU', which read as")
+            print("  a fact about the donor and was a fact about the path.)")
             continue
         absent = sorted(d for d in _donor_api_deps(fp) if d not in rt)
         tiers = {a: _classify_gap(a, rt, fam_cache) for a in absent}

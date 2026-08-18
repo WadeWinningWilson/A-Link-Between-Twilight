@@ -35,6 +35,43 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DONOR_ACTOR_SRC = Path("D:/XXXXXXX/WW DP/src/d/actor")
+DONOR_SRC = Path("D:/XXXXXXX/WW DP/src")
+
+# ============================================================================
+# NON-ACTOR TU RESOLUTION — added by the INTEGRATOR 2026-08-16 on Foundry's
+# diagnosis (CALLS, `port_preflight d_msg`).
+#
+# THE DEFECT: the donor TU path was COMPOSED as `src/d/actor/<name>.cpp` and
+# never searched for. `d_msg` is not an actor, so three legs printed
+# `MISSING donor TU` — a verdict that READS as a fact about the donor and is
+# a fact about the tool's path. Leg 2 printed `0 TU(s) with casts` ALONGSIDE
+# it, so a false absence arrived wearing a measurement's clothes.
+#
+# THE RULE THIS ENCODES: a tool may only say MISSING about a place it LOOKED.
+# When the whole donor tree has been searched and the name is not there, the
+# honest verdict is UNSEARCHED/N-A — never MISSING, and never a clean zero.
+#
+# Fast path first: actors still resolve in one stat, so actor behaviour and
+# output are byte-unchanged. The tree walk runs only when that misses.
+# ============================================================================
+_DONOR_TU_CACHE = {}
+
+
+def resolve_donor_tu(name):
+    """Donor TU path for an actor OR a system TU, or None if truly absent.
+
+    None means SEARCHED-AND-ABSENT across the donor tree — it does NOT mean
+    'not under src/d/actor'. Callers must phrase their verdict accordingly.
+    """
+    stem = name[:-4] if name.endswith(".cpp") else name
+    if stem in _DONOR_TU_CACHE:
+        return _DONOR_TU_CACHE[stem]
+    fp = DONOR_ACTOR_SRC / (stem + ".cpp")
+    if not fp.is_file():
+        fp = next(iter(sorted(DONOR_SRC.rglob(stem + ".cpp"))), None) \
+            if DONOR_SRC.is_dir() else None
+    _DONOR_TU_CACHE[stem] = fp
+    return fp
 
 # ---------------------------------------------------------------------------
 # THE REGISTRY. Every status carries its receipt (§N). Update BY RULING ONLY.
@@ -47,6 +84,49 @@ SYSTEMS = {
         "receipt": "kit_laws law 5 / §416 — TP symbols exist; WW hosts must arm "
                    "tact-default (1,0,0) + authored FILI level; not yet armed "
                    "globally. THE PALM CASE (2026-08-13, caught at gate twice).",
+    },
+    # -----------------------------------------------------------------------
+    # Housing/Engine adjudication 2026-08-14 (Foundry's refocus-pass ask).
+    # ARMED PER-ID, NEVER GLOBALLY. Registering this row does NOT clear an
+    # actor: it names the test each one must pass.
+    #
+    # THE TRAP. The receiver's dPa_name enum shares the donor's NAMES and not
+    # its VALUES (ID_AK_JN_TORCH: receiver 0x41, donor 0x01EA; KAGEROU00 0x47
+    # vs 0x4004), so donor code compiles clean against the receiver enum and
+    # means a DIFFERENT particle. Two ported actors already disagree on the
+    # convention: d_a_lamp §396 uses DONOR values through the bridge,
+    # d_a_obj_mshokki §327 uses NATIVE receiver members.
+    #
+    # THE ONLY ARMED PATH is sWwCommon[] (d_particle.cpp:1528) — an explicit
+    # 18-row allow-list served by ensureWwCommonRes(), which returns FALSE for
+    # any unregistered id. An unregistered DONOR id therefore either draws
+    # nothing or, if the value collides with a live TP id, draws the WRONG
+    # particle. That is the WIND/palm shape: receiver-PRESENT, semantically
+    # unarmed.
+    #
+    # AND THE ALLOW-LIST IS A *COMMON*-BANK BRIDGE. Donor bit 0x8000 marks a
+    # SCENE-specific bank (Pscene*.jpc — the SN infix; JN = common bank), so a
+    # 0x8000-set id cannot be served by sWwCommon at all, however many rows are
+    # added. That is a missing SYSTEM, not a missing row.
+    #
+    # THE TEST, mechanical: for every ID_* the donor TU references, resolve the
+    # value in the donor d_particle_name.h; 0x8000 set => scene bank => HOLD
+    # (no path exists); else membership in sWwCommon => pass, non-membership =>
+    # registrable (add the row + receipt), never silently allowed.
+    # -----------------------------------------------------------------------
+    "WW-PARTICLE-IDS": {
+        "signatures": ["dPa_name"],
+        "status": "PRESENT-UNARMED",
+        "receipt": "Housing/Engine 2026-08-14 (Foundry refocus ask): name-space "
+                   "collision (same names, different values) + sWwCommon is an "
+                   "18-row COMMON-bank allow-list; ensureWwCommonRes returns "
+                   "false for unregistered ids. Armed PER-ID only. Census of the "
+                   "three blocked candidates: d_a_stone 0x03E2/0x03E3 both "
+                   "common-bank, unregistered => REGISTRABLE; d_a_ks 0x0033 + "
+                   "0x000D common (registrable) but 0x8068 scene-bank; d_a_ki "
+                   "0x8099/0x809A/0x809B/0x8061 ALL scene-bank => NO PATH. "
+                   "Scene-bank ids need a WW scene/room particle system that "
+                   "does not exist; sWwCommon cannot serve them.",
     },
     "SHADOW-SIMPLE2": {
         "signatures": ["dComIfGd_setSimpleShadow2"],
@@ -140,8 +220,8 @@ def strip_comments(text):
 
 
 def donor_tokens(actor):
-    fp = DONOR_ACTOR_SRC / (actor if actor.endswith(".cpp") else actor + ".cpp")
-    if not fp.is_file():
+    fp = resolve_donor_tu(actor)
+    if fp is None or not fp.is_file():
         return None
     return set(RE_TOKEN.findall(strip_comments(
         fp.read_text(encoding="utf-8", errors="replace"))))
@@ -150,7 +230,12 @@ def donor_tokens(actor):
 def check(actor, quiet=False):
     toks = donor_tokens(actor)
     if toks is None:
-        print("  DEPS: donor TU not found: %s" % actor)
+        # UNSEARCHED/N-A, not MISSING (see resolve_donor_tu): the whole donor
+        # tree was walked. Say which tree, so the verdict is falsifiable.
+        print("  DEPS: UNSEARCHED/N-A — no TU named '%s.cpp' anywhere under %s."
+              % (actor, DONOR_SRC))
+        print("        This is NOT a finding about the donor's contents: no")
+        print("        dependency measurement was made, and no zero is implied.")
         return 2
     findings = 0
     covered = set()
