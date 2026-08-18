@@ -833,3 +833,78 @@ target has and mine lacks) - that is the next substantive target, not a
 placement artifact. _execute's remaining rows are float-pool positions
 (divergence still at 0xAC, where the donor emits 7.0 + the two inline-sqrt
 doubles that mine places at 0x150/0x158).
+
+
+## Rounds 59-62 - the include position was worth 20 functions, and a SWEEP found it
+
+**153 -> 175/187 exact (99.633 -> 99.670%), 34 fns / 194 rows -> 12 fns / 69 rows.**
+
+**Round 59 - stop theorising about the float pool, sweep it.** Two rounds of
+reasoning about MWCC literal-pool ordering produced one correct move and two
+regressions. The pool is NOT in source order - proof: my `offsetZero`
+constants (0.1 / 20.0) land AFTER the cut functions' literals even though
+offsetZero precedes the cut block in source. So I stopped modelling it and
+wrote a sweep: move `#include "d_a_npc_so_cut.inc"` to each of nine anchor
+points, rebuild, run the report, restore, keep the best. ~20 s per position.
+
+    before _createHeap    154 | before checkTgHit    173  <-- BEST
+    before offsetZero     160 | before getMsg        153  (previous best)
+    before lookBack       147 | before setMtx        145
+    before modeWaitInit   145 | before modeProc      139
+    before eventOrder     138
+
+**One include line, +20 exact functions.** A finer sweep either side of
+`checkTgHit` (jntHitCreateHeap 172, offsetDive 158, offsetSwim 154,
+offsetAppear 152, next_msgStatus/setAttention/setAnm 147) confirmed it is a
+genuine peak, not a plateau edge.
+
+**METHOD NOTE worth carrying to every other TU: when a placement question has
+a small finite answer set and the oracle costs seconds, SWEEP IT. Do not
+reason about MWCC's pool ordering - it cost me two regressions (cut block at
+end of file 153 -> 138; 15.0f -> 7.0f at the wrong position 153 -> 151) and
+the sweep found a better answer than any of my hypotheses in one pass.**
+
+**Round 60 - the same edit is right or wrong depending on layout.** I had
+tested `cutSwimProc`'s `mAFC = 15.0f` -> `7.0f` earlier and MEASURED IT WORSE
+(153 -> 151), so I reverted it. Re-applied after the include moved, the same
+edit makes cutSwimProc **EXACT**. The constant was always right; with the
+block misplaced, the fresh 7.0f literal could not land at .rodata 0xAC, and
+without it the following 8-byte sqrt doubles could not be 8-aligned inline
+(which is why the target has them at 0xB0/0xB8 and I had them far downstream).
+**A reverted edit is not a refuted edit - re-test the shelf after any layout
+change.**
+
+**Round 61 - a codegen row that was a SEMANTIC bug.** `modeEventFirstWait`
+differed by one row: target `cror eq, gt, eq`, mine `cror eq, lt, eq`. I had
+written `dist <= l_HIO.m54`. Swapping the operands moved the mismatch to the
+`fcmpo`; strict `<` produced `bge` and made it worse (2 rows). The donor's
+condition is **`dist >= l_HIO.m54`** - EXACT. **The event gate fires when the
+ship is at least m54 AWAY, not when it is within m54.** My reconstruction had
+the proximity test backwards, and only the byte-match caught it - it is not a
+formatting difference and it would have shipped as wrong behaviour.
+
+**Round 62 - two more hypotheses falsified.** Aliasing `i_model` into a local
+in `_nodeControl` did not move its r30/r31 colouring (still 5 rows). And the
+HIO ctor/dtor's 13 rows are a VTABLE-SHAPE difference, not a body difference:
+the target stores the base's own `__vt__10dNpc_HIO_c` at +0x4, while mine
+emits a merged derived vtable at `__vt__14daNpc_So_HIO_c + 0xc`, i.e. my
+`daNpc_So_HIO_c` overrides a virtual (the dtor) that the donor's does not.
+**That is a question about the SHARED `dNpc_HIO_c` header and I did not touch
+it** - a shared-header edit here would reach every other npc TU, and the
+standing rule is that those get scoped and reviewed, not changed unilaterally
+mid-round. Flagged for the user/History rather than acted on.
+
+STATE: so **175/187 exact, fuzzy 99.6699%**, 12 fns / 69 rows.
+Cross-check after every commit: p2 133/145 and ob1 108/115 UNCHANGED.
+
+REMAINING, by kind:
+- VTABLE SHAPE (shared header, NOT mine to change alone): HIO ctor 9, HIO dtor 4.
+- REGISTER COLOURING (local decl order / live ranges, not yet cracked):
+  _createHeap 12, _nodeControl 5, modeNearSwim 8.
+- ARG EVALUATION ORDER: checkTgHit 12 (donor keeps the named local and assigns
+  r28 AFTER the fopAcM_GetID inline - inlining `&eyePos` was tried and is
+  WORSE, 14 -> 32).
+- FLOAT POOL POSITION: cutMiniGameProc 15, _execute 5, cutEatesaFirstProc 3,
+  createInit 1, _draw 1.
+- BRANCH SHAPE: jntHitCreateHeap 4 (target branches BOTH arms to a join that
+  materialises TRUE; `BOOL ret = TRUE` hoist tried, still 4).
