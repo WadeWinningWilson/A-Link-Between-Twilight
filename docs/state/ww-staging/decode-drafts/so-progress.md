@@ -98,3 +98,4 @@ spec that both p2 and ob1's endgames await.
 - Round 2 micro: modeDebug/modeGetRupeeInit/modeWait/modeHide 100% (17/187). ⚠ -4 layout error before 0xA80 (mA80 needed pad end 0xA84): verify AcchCir2/ObjAcch2 real sizes before trusting comments in 0x870-0xAE8.
 - modeEventMapopenInit 100% (18/187); tail shifted -0x10 empirically (mAFC@real 0xAFC ✓, mA80 unaffected ✓). Layout comments 0x870-0xB00 still unverified against subobject reality.
 - offsetZero/Dive/Swim/Appear written (values 0.1/20/-1, 0.3/10/-150, 0.3/10/-40, 0.4/22/110): 3 pool-settling rows each, member placement VERIFIED (mB38-B40 land exactly). 22/187 effective. Offset-comment parser pattern banked (the .s carries '# .rodata:0xNN' per object — parse those, never arithmetic).
+- Round 3: search/glue/getArg batch 100% (~27/187). getArg lesson: s16 == 0xFFFF spells addis+cmplwi directly. m6D0 = home.angle.x (angle-packed arg).
