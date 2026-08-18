@@ -1028,3 +1028,28 @@ NPC-family oracles and really are worth reading per-idiom - that part stands.
 What does not survive is any blanket style rule drawn from them. Use them the
 way the alignment walks were used: to answer a SPECIFIC question about a
 SPECIFIC construct, verified by measurement, not to justify sweeping rewrites.
+
+
+## Round 65 - the aj1 type-audit insight does NOT transfer to so (tested, negative)
+
+`aj1` Round 6 produced a promising rule: a five-row register-COLOURING
+difference in `init_texPttrnAnm` dissolved on its own once two RETURN TYPES
+were corrected (`btpResID` int-not-u16, `init_texPttrnAnm` BOOL-not-bool). The
+colouring was a symptom, not a cause. Since `so`'s remaining bucket is mostly
+colouring, I tested the same idea here immediately.
+
+**Tested:** `jntHitCreateHeap` BOOL -> bool (with `ret` and the `_createHeap`
+call site adjusted, dropping the suspicious `(u8)` cast). The `(u8)` cast on
+`return (u8)jntHitCreateHeap() ? TRUE : FALSE;` was exactly the kind of
+narrowing artifact the aj1 finding predicts.
+
+**Result: NEGATIVE. No change at all** - `jntHitCreateHeap` stayed at 4 rows,
+`_createHeap` stayed at 12, same registers. Reverted; the tree is clean.
+
+**So the rule is real but narrow:** wrong return types CAN manifest as
+colouring differences (proven on `aj1`), but `so`'s colouring is not caused by
+that - at least not at this call site. **This does not resurrect the park
+proposal's allocator bucket.** Recorded so the next instance does not re-run it
+on the strength of the aj1 result.
+
+STATE unchanged: so 175/187 (99.6699%), ob1 109/115, p2 133/145, aj1 14/131.
