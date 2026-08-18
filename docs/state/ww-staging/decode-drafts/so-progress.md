@@ -1116,3 +1116,36 @@ assignment — the multiply-operand-order sweep changed nothing.
 | `checkTgHit` | 3 | arg-eval position (5 forms) |
 | `cutEatesaFirstProc` | 3 | compare operand order |
 | `createInit` / `_draw` | 1+1 | single differing pool constant |
+
+### Round 69 — the outstanding `cutMiniGameProc` candidate was a FALSE POSITIVE, confirmed by eye
+
+`wrong_member.py` flagged `lfs f0, 0x110(r31)` vs `lfs f0, 0x88(r31)` — target
+0.5f against my 300.0f, which would have been a fourth wrong-constant bug.
+**It is not.** Pairing the rows with context shows why:
+
+```
+ 248  T lfs f1, 0x88(r31)     | M lfs f1, 0x88(r31)      <- both 300.0
+ 249  T bl cM_rndF__Ff        | M bl cM_rndF__Ff
+*250  T lfs f0, 0x88(r31)     | M lfs f2, 0x110(r31)
+*251  T fneg f2, f0           | M                        <- INSERTION
+*252  T lfs f0, 0x110(r31)    | M lfs f0, 0x88(r31)      <- the "candidate"
+*253  T                       | M fneg f0, f0
+ 254  T fmuls f0, f2, f0      | M fmuls f0, f2, f0
+```
+
+**Both sides load 300.0 and 0.5 and compute `-range2 * 0.5f`.** Only the order
+of the two constant loads differs. objdiff pairs BY POSITION, so the insertion
+at 251/253 slid the two `lfs` rows against each other and manufactured a
+displacement-only difference that does not exist.
+
+There is an earlier insertion in the same function at row 346 (`stfs f0, 0x8(r1)`
+followed by `lfs f0, 0x8(r1)` — the donor stores an f32 local and re-reads it,
+forcing the single-precision rounding; I compute and use it directly), which is
+what desynchronised the tail in the first place.
+
+**This is the caveat the tool prints, working as intended: the row-count column
+is a confidence score.** Both real bugs it found were in 1-row functions. This
+one was in an 11-row function and I confirmed the pairing before touching
+anything. **A detector that finds two real bugs and one convincing false
+positive is only useful if you check the third case — the discipline is the
+instrument, not the script.**
