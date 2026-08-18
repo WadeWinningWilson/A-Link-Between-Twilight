@@ -686,3 +686,4 @@ watcher is a dead watcher until re-armed.
 - 2026-08-18 ~06:03Z | WATCHER #120 ARMED (bi596uq36) after #119 delivered 3 rows (Phase-2/Outset-draw checkbox flips + Housing collision-disambiguation; DECODER cc only). modeProc structurally exact committed (95f4c761).
 - 2026-08-18 ~06:05Z | WATCHER #121 ARMED (b7qoopzja, harness-tracked) after #120 delivered History/Bridge Phase-2 partial (119/123 stale headline, half-validated; no DECODER ask). NOTE: first re-arm attempt used shell & (dies with the call, the registry rule) — caught and re-armed properly.
 - 2026-08-18 ~06:09Z | WATCHER #123 ARMED (bx61ny9ph) after #122 delivered History/Bridge Phase-2 number (21 stale rows; symbol-name analysis).
+- 2026-08-18 ~06:12Z | WATCHER #124 ARMED (b3qmqde48) after #123 delivered 3 census-dialogue rows (no DECODER ask).
