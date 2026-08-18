@@ -338,3 +338,21 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
 - Cross-fn probe 1 (control_anmAtr shapes × 3 park symbols): NO coupling — chg/privateCut unmoved; control baseline 6 rows (tree-root), if-chain variant ties, default-case worse. Next pairings: setAnm_ATR/anmAtr-side variants; then p2's neighbor-spec.
 - Round 14: km1 include block adopted (+Ob.h res enums for PR naming pass); counter gap NOT include-driven at this level (+9 only, PCH covers); cross-probe 2 (setAnm_ATR shapes x 5 syms): fully canonicalized, zero movement. Endgame total: 21 rows across 4 sites (chg 2 / control 6 / privateCut 2 / nodeOb1Control 11).
 - nodeOb1Control in-function variants: decl-split/ptr-local tie at 11, static-after-jntNo worse (19) — pair-birth order robust to local spelling; most of the 11 rows are anchor-name display + the r29/r30 encoding bytes. Family confirmed systemic; all in-function levers exhausted (25+ variants across 4 sites).
+
+### Round 15 (03:44Z) — upstream regalloc.md consulted (round 16b path 3 CLOSED)
+- Cheatsheet levers vs our ledger: decl-order ✗tried · base-ptr local
+  ✗tried (p2) · C-cast vs static_cast ~partially · temps ✗tried ·
+  **INLINES — "the inline itself may be implemented wrong; modify the
+  inline body" — UNTRIED for the current sites** · **const on inline
+  PRIMITIVE params (invisible in mangling) — UNTRIED systematically.**
+- THE INLINE-LEVER CAMPAIGN (next context, both TUs): candidate inlines
+  at the mirror sites — nodeOb1Control: mDoMtx_stack_c::copy/get,
+  J3DJoint::getJntNo, getAnmMtx, JntCtrl accessors; p2 setAnm:
+  dNpc_setAnm edge, getMoveSpeed/getNowCut; p2 _execute: the dComIfG
+  +0x12a0 accessor. DISCIPLINE: shared headers — ninja baseline on
+  main first, experiment, ninja changes for regressions, tc canary SHA
+  after any d_npc.h/m_Do touch.
+- With this, ALL of round 16b's three paths are progressed: (1) ob1
+  pattern-learning DONE (pair-birth log + the _create flip datum),
+  (2) harness BUILT+campaigned, (3) upstream lore CONSULTED (the
+  inline lever is their answer for persistent regswaps).
