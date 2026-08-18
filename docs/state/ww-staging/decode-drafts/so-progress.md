@@ -576,3 +576,16 @@ flip cost jntHitCreateHeap 7 rows; a 'bool ok =' temp cost 3 more at 20).
 LESSON: when a caller shows clrlwi-before-normalize, narrow AT THE CALL with a
 cast; do not change the callee's return type to chase it.
 Gate: 137/187 exact, fuzzy 99.41%. _createHeap residue is now 16 mirror rows + 1.
+
+## Round 45: cutEatesaFirstProc down to 3; the residue is now MWCC-CANONICAL shapes
+
+cutEatesaFirstProc: 31 total / 3 real, and the 3 are one fcmpu operand order
+plus its two branch-distance echoes. BOTH source orders (spd != 0.0f and
+0.0f != spd) emit the SAME f0,f31 — MWCC canonicalizes the compare, so this row
+is NOT reachable from operand order. Same conclusion as the p2 mirror class.
+LOWEST-PERCENT SURVIVORS (the real work list, all decoded, all shape-only):
+  hudeDraw 85.86 | _nodeControl 89.41 | checkTgHit 90.73 |
+  jntHitCreateHeap 95.72 | setAnm 98.20
+These five are where the remaining bytes are concentrated; the big functions are
+all >= 98%. Next context should start there rather than re-walking the bigs.
+STANDING: 137/187 exact, fuzzy 99.41%, tree clean, configure.py NonMatching.
