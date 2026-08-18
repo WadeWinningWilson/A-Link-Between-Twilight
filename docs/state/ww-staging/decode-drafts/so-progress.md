@@ -761,3 +761,75 @@ once, which is why per-function row-chasing is the wrong order of work.**
 CURRENT TOP ROWS: cutMiniGameProc 54 | cutEatesaFirstProc 31 | modeNearSwim 28 |
 _execute 20 | modeSwim 19 | _createHeap 17 | checkTgHit 17 | createInit 12.
 so: 139/187 exact, fuzzy 99.585%.
+
+
+## Rounds 54-58 - the placement cascade completes (139 -> 153 exact)
+
+Four placement root causes fell in sequence. Every one was found by an
+ALIGNMENT WALK (parse the target .s for the section's object list, dump mine
+with objdump, walk both and name the FIRST divergence) rather than by reading
+diff rows.
+
+**Round 54 - .rodata head.** The target's .rodata STARTS with the class
+statics (m_heapsize@0x0, m_arc_name@0x4, m_sph_src@0x8) and only then the
+float pool at 0x48; mine started with floats. Moving the three definitions to
+the file top took 392 -> 294 rows. Moving them ABOVE the HIO ctor as well then
+matched the head byte-for-byte (99.622 -> 99.631). NOTE THE FAILED VARIANT:
+inserting after `s.rfind('#include')` put them in the MIDDLE of the file,
+because the cut .inc include is itself an #include near the bottom - that
+experiment measured a regression that was never the hypothesis's fault.
+
+**Round 55 - alignment walks must compare VALUES, not (offset,size).** My
+first .rodata walk reported "aligned through idx 28" while the values had
+already diverged at 0xAC. Sizes agree trivially when everything is a 4-byte
+float. Compare the emitted words.
+
+**Round 56 - the cut block compiles before getMsg.** The STRING pool put the
+21 cut names (SWIM/JUMP/APPEAR/...) at index 7, immediately after the assert
+strings and BEFORE "sea"/"BoatBattle"/the SO_* event names. Mine emitted them
+at 16. Moving `#include "d_a_npc_so_cut.inc"` to just before getMsg: 139 ->
+141 exact. The opposite move (include at end of file, which the target's .text
+ORDER appeared to argue for) measured WORSE (138) - the target's tail
+functions live in separate `.text unique` sections, so their listed order is
+not source order. **The string pool is the reliable order oracle here; the .s
+function listing is not.**
+
+**Round 57 - the donor reuses `modelData`, and that was worth 12 functions.**
+The target's string pool has "modelData != 0", "btp != 0" and both m_jnt
+asserts but NO "hudeData != 0". The donor does not declare a second local for
+the 0xD hude model - it REASSIGNS modelData, so the assert string dedups
+against the one already in the pool. Making that one change: **141 -> 153
+exact**, string pool aligned end to end, and it is also the root of
+_createHeap's r30/r31 colouring swap (one fewer live local).
+*Lesson: a string the target does NOT have is as much evidence as one it does.*
+
+**Round 58 - the missing debug table.** Target had 53 strings, mine 42. The 11
+absent ones (HIDE, NEAR_SWIM, EVENT_FIRST_WAIT, EVENT_FIRST, EVENT_FIRST_END,
+EVENT_ESA, EVENT_MAPOPEN, EVENT_BOW, DEBUG, GETRUPEE, EVENT_TRIFORCE) are
+exactly the members of a 16-entry mode-name table in modeProc order once the
+five already present (WAIT/JUMP/SWIM/TALK/DISAPPEAR) dedup. Restored as a
+fn-local static in debugDraw (which is otherwise a stub of dead locals).
+String pool now **53/53**. Row count did not move, but the .rodata size is now
+the donor's.
+
+STATE: so **153/187 exact, fuzzy 99.633%**, 34 fns / 194 rows (was 48/294).
+Cross-check after the round: p2 133/145 and ob1 108/115 both UNCHANGED - all
+edits were so-local, no shared header touched.
+
+TWO FALSIFIED HYPOTHESES, recorded so they are not retried:
+- `checkTgHit`: inlining `&eyePos` to move its materialisation after the
+  fopAcM_GetID inline made it 14 -> 32 rows. The donor DOES keep the named
+  local (it saves r26-r31 via _savegpr_26; the inlined form only needs
+  _savegpr_27). What differs is only WHERE r28 is assigned - still open.
+- `jntHitCreateHeap`: hoisting `BOOL ret = TRUE` to the declaration changed
+  the branch shape but stayed at 4 rows. The target emits then-block -> b ->
+  else(li 0) -> b -> join(li 1), i.e. BOTH arms branch to a join that
+  materialises TRUE. Not yet reproduced.
+
+CURRENT TOP ROWS: cutMiniGameProc 31 | cutEatesaFirstProc 16 | modeNearSwim 15
+| checkTgHit 14 | _createHeap 12 | _execute 11 | HIO ctor 9 | modeSwim 8.
+cutMiniGameProc still has REAL missing code (three `fneg`/`fmuls` pairs the
+target has and mine lacks) - that is the next substantive target, not a
+placement artifact. _execute's remaining rows are float-pool positions
+(divergence still at 0xAC, where the donor emits 7.0 + the two inline-sqrt
+doubles that mine places at 0x150/0x158).
