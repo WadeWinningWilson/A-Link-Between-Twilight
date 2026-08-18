@@ -388,3 +388,19 @@ that is why some refs symbolize as l_HIO@ha and others as anchor+0x58):
 NEW MEMBERS TO ADD: int m868 (blink timer), s16 m86C (blink count),
   mBE0 int (post-mode timer, in the mBDF pad), mAF8 f32, l_HIO 9xs16 @0xC-0x1C
   and 4xs16 @0x64/0x66/0x68/0x6A (m68 IS the third of those four).
+
+### Round 34 ADDENDUM — a REGRESSION TRAP caught by measuring (77 -> 39 exact)
+
+Adding the round-34 spec's header members in one batch DROPPED the TU from
+77/187 to 39/187. Cause: **f32 mAF8 inserted at 0xAF8 sits INSIDE
+dPa_rippleEcallBack mRippleCb (0xAE8, size 0x14 -> ends 0xAFC)** — the insert
+GREW the class and pushed mAFC/everything after it +4, silently breaking ~38
+already-exact functions. Reverted (git checkout the header) and re-verified
+77/187 78.22%.
+RULE: 0xAF8 is INSIDE mRippleCb — the 'mAF8' the asm stores to is a FIELD OF
+THE CALLBACK OBJECT (mRippleCb.field_0x10), not a new member of daNpc_So_c.
+Same caution for any offset that lands inside mObjAcch2 (0x870-0xA34),
+mAcchCir2 (0xA34-0xA74), mSph (0x718-0x848), mB10 (0xB10-0xB34).
+PROCESS: after ANY header batch, re-run the report and compare the exact count
+BEFORE committing. A header edit is the only change class in this TU that can
+regress dozens of functions at once.
