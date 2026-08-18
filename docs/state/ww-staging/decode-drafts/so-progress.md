@@ -551,3 +551,19 @@ Procedure followed exactly (the anti-vacuous discipline):
    the vacuous-match trap that produced this lane's 12/12 over-claim).
 USE build.sha1 FOR EVERY FUTURE GATE -- no Yaz0 decompression needed, and it
 covers RELs that were never extracted to files/rels.
+
+## Round 43: _createHeap probe — bool jntHitCreateHeap FALSIFIED (net negative)
+
+_createHeap's tail has a clrlwi r3,r3,24 before the subic/subfe BOOL
+normalization, which reads as "callee returns bool". Flipping
+jntHitCreateHeap to bool DID fix that row (_createHeap 18 -> 17) but broke
+jntHitCreateHeap itself (0 -> 7 rows): net worse, fuzzy 99.40 -> 99.37.
+REVERTED and re-verified at 137/187, 99.40%.
+=> jntHitCreateHeap genuinely returns BOOL; the narrowing in _createHeap comes
+from the CALL SITE's conversion, not the callee's type. Whatever spelling
+produces it must narrow at the call (a u8/bool temp), without changing the
+callee signature. Untried and cheap next time: assign to a local bool/u8 first,
+or compare != 0 through a u8 cast.
+STANDING: 137/187 exact, fuzzy 99.40%. _createHeap residue is 17 rows, of which
+16 are the r30/r31 mirror (decl-then-assign already falsified) and 1 is this
+narrowing.
