@@ -1065,3 +1065,44 @@ CONSTANT.** `x ? 0x9d6 : 0x9d5` computes 0/+1 and adds 0x9d5;
 
 STATE: aj1 **68/131 exact, 64.6959%**. Session: **12/131 -> 68/131,
 2.9112% -> 64.6959%** (22.2x fuzzy).
+
+
+## Rounds 29-31 - aj1 68/131 -> 73/131, 64.70% -> 72.43%
+
+EXACT this stretch: `itemCreateHeap` (first try), `checkOrder`, `init_AJ1_1`,
+`anmAtr`, `ctrl_WAITanm`. Near: `setSmoke` 4 rows, `flw_pa_pun` 3,
+`shadowDraw` 4 (all pool positions or one argument form).
+
+**The single-case-switch lesson is now being APPLIED rather than discovered** -
+`checkOrder`'s `switch (field_0x746) { case 0: ... }` was written that way from
+the start. That is the first time this campaign a pattern was used
+prophylactically instead of found through a diff.
+
+### API mappings worth keeping (all from sibling TUs or headers)
+
+    eventInfo +0x04 == 1/2   ->  eventInfo.checkCommandTalk() /
+                                 .checkCommandDemoAccrpt()   (dEvtCmd_INTALK_e=1,
+                                                              INDEMO_e=2)
+    actor_status @0x1C4      ->  fopAcM_OnStatus / fopAcM_OffStatus
+                                 (`rlwinm rX,rY,0,18,16` is a single-bit CLEAR
+                                  of 0x4000; `ori 0x4000` is the set)
+    mpMorf + 0x58 checkPass  ->  mpMorf->checkFrame(f)   NOT getFrameCtrl()
+                                 (that accessor belongs to another class in the
+                                  same header)
+    gameInfo +0x5BDB/+0x5BDC ->  dComIfGp_getMesgAnimeAttrInfo() /
+                                 getMesgAnimeTagInfo() / clearMesgAnimeTagInfo()
+    JPABaseEmitter +0x1A8/+0x1E4 -> mGlobalRotation / mGlobalTranslation
+
+### Two more bank entries
+
+- **Comparison OPERAND ORDER is source-visible.** I copied `ob1`'s
+  `field_0x801 != tag` into `aj1`'s `anmAtr`; the donor writes
+  **`tag != field_0x7b7`**, which flips the `cmplw` operands. **Copying an idiom
+  from a sibling gets the CONSTRUCT right but not the ORDER** - that still has
+  to come from the diff.
+- **The `extsb`/`s8` signal has now paid SIX times on this TU alone**
+  (`field_0x758`, `0x7b9`, `0x7ba`, `0x7bb`, `0x7bc`, `0x7c1`). When a byte
+  field is compared, assume `s8`.
+
+STATE: aj1 **73/131 exact, 72.4331%**. Session: **12/131 -> 73/131,
+2.9112% -> 72.4331%** (24.9x fuzzy). 58 remain, all under 210 bytes.
