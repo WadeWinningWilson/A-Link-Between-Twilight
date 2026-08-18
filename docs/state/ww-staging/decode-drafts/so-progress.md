@@ -611,3 +611,27 @@ zel_basic/seNum/sePos block ordering vs the GetID null-check, and neither
 hoist direction moves it.
 STANDING: 138/187 exact, fuzzy 99.56%. Work list now: checkTgHit (12, resistant),
 jntHitCreateHeap, setAnm, _createHeap (17, 16 of them the r30/r31 mirror).
+
+## Round 47: CROSS-CHECKS RUN ACROSS ALL TUs (History's request) — 4 pass, 1 UNVERIFIABLE
+
+1. FULL GZLE01 BUILD: passes. No Matching TU broke from this session's edits.
+   (Modules 73.41% fuzzy / TWW Game Code 75.19% / Core Engine 99.92%.)
+2. MATCHING-LABEL AUDIT, the real regression test: cross-referenced every
+   plain-Matching entry in configure.py against the objdiff report.
+   **753 configured Matching TUs, ZERO below 100%.** The d_npc.h fopNpc pad
+   typing is provably harmless project-wide, not just to the tc canary.
+3. d_npc.h CONSUMER FAMILY: 59 NPC TUs, 27 at 100%; the rest are undecoded
+   (1-3% — never worked on), not regressions.
+4. d_a_npc_so is GZLE01-ONLY (single ActorRel entry) so its header/VERSION_DEMO
+   guard edits have no cross-version exposure.
+5. **UNVERIFIABLE, AND THIS ONE MATTERS: the workspace builds NOTHING but
+   GZLE01.** `ninja -t targets all` lists **0** source objects under
+   build/D44J01, build/GZLJ01 or build/GZLP01 — the directories exist but no
+   compile edges are wired. CONSEQUENCE: any
+   `MatchingFor("GZLJ01","GZLE01","GZLP01")` label in configure.py CANNOT be
+   verified in this workspace as configured. Those labels (msdan2 / msdan_sub2 /
+   hami2 from an earlier session) are asserted, not measured, here.
+MEASUREMENT-ERROR NOTE: my first cross-version probe reported "errors: 1" for
+all three versions. That was MY grep counting ninja's own "unknown target"
+message, not a compile failure. Verify a target EXISTS before treating its
+absence as a defect.
