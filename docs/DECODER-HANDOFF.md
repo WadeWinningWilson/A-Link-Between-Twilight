@@ -206,3 +206,176 @@ Attempted/total at close: so = 72/187 exact (38.36% fuzzy), ob1 = 107/115 (99.5%
 7. PARKED (logic-complete, layout/order deltas only): cutSwimProc ~21 rows,
    cutEatesaFirstProc frame +0x20, hudeDraw 5 rows, cutMiniGamePlTurnProc 0 (fixed).
    Pool/string rows settle at TU convergence — never chase them per-fn.
+
+## SESSION UPDATE 9 (2026-08-18, fourth instance) — wins over everything above where they conflict
+
+**Attempted/total at close (script-computed, `objdiff-cli report generate`): 702/781
+exact across the five active TUs.** Both trees clean. WWDP tip `18ade4cf`;
+dusklight tip `5d5f42bd60`.
+
+| TU | exact | fuzzy | note |
+|---|---|---|---|
+| d_a_npc_p2 | 135/145 | 99.9505% | endgame unchanged; user ruling on Equivalent-vs-SHA STILL PENDING |
+| d_a_npc_ob1 | 112/115 | 99.9171% | **now the TEMPLATE — see 2** |
+| d_a_npc_so | **177/187** | 99.8767% | HIO hole CLOSED this session |
+| d_a_npc_aj1 | 127/131 | 99.8133% | |
+| d_a_npc_ko1 | **151/203** | **79.5972%** | was 5/203 (1.92%) at session start |
+
+### 1. THE HEADLINE: dNpc_HIO_c IS A MEMBER, NOT A BASE CLASS
+
+Nine asks across three instances asked History to authorise a `d_npc.h` edit for a
+13-row hole in so's HIO ctor/dtor. **The shared header never needed changing.**
+`daNpc_So_HIO_c` inherits only `mDoHIO_entry_c` and holds a `dNpc_HIO_c` **member at
+0x04**. Fixed in `d_a_npc_so.h` alone; both functions exact; so 175 -> 177.
+
+Proof, from `d_a_npc_kg1` (a TU nobody had assigned to the question):
+`__ct__15daNpc_Kg1_HIO_cFv` stores its own vtable at 0x0, then does
+`addi r3, r30, 0x10` followed by `bl __ct__10dNpc_HIO_cFv` — an explicit member-ctor
+call at a non-zero, non-base offset. And `__ct__10dNpc_HIO_cFv` itself calls no base
+ctor, so it is a root class.
+
+**WHY IT HID FOR NINE ASKS, and this is the transferable part: COMPOSITION AND
+INHERITANCE HAVE IDENTICAL LAYOUT HERE.** 4 (the `mDoHIO_entry_c` vptr) + 0x28 = 0x2C,
+exactly where so's own members start. Every offset check either lane could run PASSED
+UNDER THE WRONG MODEL. Only vtable traffic separates them: a base subobject with a
+virtual dtor forces a derived secondary vtable; a member never does. A comment in
+`d_a_npc_so.h` records this — do not "simplify" it back into inheritance.
+
+Three mechanisms were proposed on this surface and **all three were falsified by
+measurement**: History's de-virtualise-the-dtor (cost so 12 exact functions, reverted),
+my "unidentified non-dtor virtual" (refuted by their symbol grep — the only
+`dNpc_HIO_c` symbols in the image are ctor, dtor, vtable), and History's
+polymorphic-base lead (refuted by the ctor above).
+
+**`d_npc.h` must NOT be edited: 20 TUs reference `__vt__10dNpc_HIO_c` and all 20
+construct it as a member correctly.**
+
+### 2. ob1 IS A 1:1 TEMPLATE FOR ko1, NOT A REFERENCE — READ IT FIRST, ALWAYS
+
+`d_a_npc_ob1` is 112/115 matching and its bodies map one-to-one onto ko1's. This session
+`anmAtr`, `demo`, `lookBack`, `next_msgStatus`, `_draw`, `_execute`, and the
+`ob_movPass`/`ob_clcMovSpd`/`ob_nMove` trio all came straight from it. **Four separate
+times I decoded from asm something already written in ob1's source.** For any `ko_*`,
+`_draw`, `_execute`, `anmAtr` or `demo` function: open `src/d/actor/d_a_npc_ob1.cpp`
+before you open the asm.
+
+### 3. NEW INSTRUMENTS (tools/foundry, each validated against a known-good result first)
+
+- **`exact_delta.py <tu>`** — snapshots the exact-function NAME SET and diffs it.
+  **RUN AFTER EVERY CHANGE, BEFORE COMMITTING.** A flat exact COUNT hides churn: three
+  times this session a type-chain fix repaired one function and broke another, net zero,
+  invisible in the TU total AND in the per-function score of the thing I had just edited.
+  It calls out the equal-lost/equal-gained case explicitly.
+- **`jump_table.py <tu> <sym> --base N`** — decodes a switch table into cases grouped by
+  shared body, ordered by LABEL ADDRESS. See lever 1 in section 4.
+- **`pool_position.py <tu>`** — splits residuals into pool/string-offset-only (body is
+  correct) versus real. Caution is baked into its output: these are NOT guaranteed to
+  close by themselves, and a delta surviving TU completion means a real pool-ORDERING
+  defect.
+- `pool_align.py` — **ADOPTED by Foundry, negative control added by them, RE-CERTIFIED
+  by me** this session at their request (ob1 13/13 strings + 22/23 rodata; p2 49/49 +
+  70/71; numbers identical to before their move).
+
+### 4. NEW LEVERS, all proven by A/B measurement this session
+
+1. **A jump table gives the case VALUES; the label ADDRESSES give the SOURCE ORDER.**
+   MWCC emits case bodies in written order while indexing the table by value. Recover
+   only the values and you get a switch that builds cleanly and scores badly with
+   nothing to point at. Cost 4 rows on `hana_action2`; with the rule stated,
+   `next_msgStatus` (129 instructions, 30 case groups) landed exact on the first try.
+2. **MTXCopy's SOURCE must be hoisted into a local.** Nested, MWCC evaluates the
+   destination first — 11 rows on `setMtx`, and ob1 had it written down already.
+3. **A value computed before the branch chain is its own STATEMENT, not an `&&`
+   operand.** A target that computes a sqrt unconditionally and only then compares means
+   `f32 d = sqrtf(...); if (... && d < K)`.
+4. **Ternary polarity: the FIRST `li` is the FALSE arm, and the branch tests the
+   NEGATION of the source condition.** `li 0x2000 / beq / li -0x2000` is
+   `(x != 0) ? -0x2000 : 0x2000`. The intuitive reading gets it backwards every time.
+5. **Named cXyz locals allocate in REVERSE declaration order** — first declared gets the
+   highest slot. Works only when no by-value cXyz ARGUMENT is in play (see open item 3).
+6. **Bool chains must agree end-to-end.** A caller testing only the low byte
+   (`clrlwi. r0, r3, 24`) proves the callee returns a BYTE type, and that OUTRANKS the
+   assumption that TRUE/FALSE in the body implies BOOL. I had this backwards twice.
+7. **A register-naming difference can be a SYMPTOM of an inserted instruction, not
+   colouring.** `lookBack` showed 28 rows of apparent whole-function register rotation
+   and closed entirely by declaring one member `bool` instead of `u8` — the
+   bool-normalisation `subic/subfe/clrlwi` had consumed the scratch registers. **Before
+   calling anything colouring, check whether the row COUNTS match.** Sweep for this with
+   `scratchpad/boolnorm.py` (compares `subfe` counts on both sides).
+8. **A LAYOUT THAT FITS IS NOT A LAYOUT THAT IS RIGHT.** Twice in one session: a
+   pointer-to-member-function fit a `cXyz` carve because both are 12 bytes (ko1
+   `field_0x730` — only `__ptmf_scall` at the call site gave it away), and composition
+   fit inheritance (section 1). Size agreement is necessary, never sufficient. **Read
+   the instruction that USES the member.**
+9. **Compiler-generated `__dt__` symbols sitting at 0% are a WORK LIST** — each names a
+   TYPE the class must use. But a destructor needs an OBJECT: passing NULL for a
+   parameter of that type does NOT instantiate it, and the CTOR names member offsets via
+   its `__vt__` stores. `routeWallCheck` brought 13 free symbols with it,
+   `chk_ForwardGroundY` 7, and two header members brought 9.
+10. **Frame-size rows are a declaration question, not codegen.** If the residual
+    includes `stwu r1, -N` and `addi r1, r1, N`, the COUNT of stack objects is wrong.
+    `_draw`'s last 18 rows were four debug `cXyz` temporaries that are ONE reused
+    variable in the target.
+
+### 5. OPEN ITEMS, precisely bounded — do NOT re-run the falsified experiments
+
+1. **`ko1::setStt` (395 rows) — STRUCTURE FULLY DECODED, BODY NOT WRITTEN.** The tail of
+   `ko1-progress.md` has the 30-entry table, all 14 distinct bodies, every fall-through
+   group, the prologue the table does not cover, and a caution that `jump_table.py`'s
+   default pick is wrong on this input (that block re-tests for 2 and then 1, so five
+   values arrive there and are discriminated afterwards). **This is the natural next task
+   and it is entirely self-contained.**
+2. **`ko1::ko_nMove` (30 rows)** — the target loads `speedF` BEFORE computing the l_HIO
+   child address and mine reverses it, plus one extra `fmr`. The clamp is
+   `min(speedF*rate, cap*rate)` and the ternary FORM is confirmed correct (the result
+   lands in the cap register, which an if-statement would not produce).
+3. **`ko1::ko_movPass` (12 rows) and `ko1::wait_7` (13 rows)** — a by-value `cXyz`
+   ARGUMENT temporary takes the slot the target gives `flat`. **FRAMES MATCH**, so the
+   object COUNT is right and this is pure slot assignment. **TRIED AND FAILED, do not
+   repeat:** flat-before-delta, delta-before-flat, flat hoisted above the early return,
+   and passing the argument as a named local (that one made it WORSE — 12 rows to 23,
+   frame 0x40 to 0x50).
+4. **`so::_execute` (5 rows)** — **THREE mechanisms falsified.** Not colouring; not
+   "loads the pool constant first" (I had r27/r31 backwards — r27 is `this`, which
+   `0x224` = `speed.y` proves, and the rows are the `speed.y` ladder around line 1167,
+   NOT `fopAcM_setCullSizeBox`); and NOT operand order (swapping all four multiplies to
+   constant-first produced BYTE-IDENTICAL output, because MWCC folds commutative
+   multiplies the same way). What survives: both sides load the SAME two values from the
+   SAME addresses in OPPOSITE order. Untested candidates: the if/else ladder shape, a
+   local holding `mB00` across the four comparisons, and how the negation is written.
+5. **so: `modeNearSwim` (8), `_createHeap` (12), `_nodeControl` (5)** — re-verified as
+   genuine colouring under the stricter row-count test (pure substitutions, nothing
+   inserted). Park candidates, not puzzles.
+
+### 6. OPERATIONAL — THE WATCHER FAILURE COST A REAL ANSWER
+
+My watcher died and the USER had to tell me it was down. On re-arming it fired on its
+FIRST pass with unread rows — one of which was **History's ruling on the
+nine-times-repeated vtable ask**. Delivery was never the failure; being down was.
+
+**Arm the watcher on wake, re-arm IMMEDIATELY after every delivery, verify by PULSE AGE
+rather than exit code, and log every arm in `tools/foundry/MONITOR-REGISTRY.md`.**
+Watchers #134-#136 ran this session.
+
+**BUG, reported not fixed (Foundry's tool): `watcher_census.py` CRASHES** with
+`AttributeError: 'list' object has no attribute 'items'` at line 261 — `reg` is a list
+where the code expects a dict. It dies AFTER printing its pid table and BEFORE the
+missing-watcher comparison. **The part that dies is the part that catches a dead watcher,
+and it dies having already produced output, so a crashed census reads as a census that
+ran.**
+
+### 7. HABITS THAT PAID
+
+- **Commit the decode BEFORE writing the function** when the decode is the expensive part
+  (`setStt`). It then survives regardless of who finishes the function.
+- **Correct your own filed notes in place.** I filed a `so::_execute` finding with the
+  registers backwards and had to correct it twice more. An entry that keeps its
+  conclusion while quietly dropping the failed reasoning is how a wrong lead survives
+  three reviews.
+- **A scan that finds ONE real thing and stays quiet beats one that finds eighteen.**
+  Two diff-shape scans earlier in the campaign produced mostly-false worklists; both were
+  caught by checking them against results already trusted. Validate every new instrument
+  against a known-good case before believing its output.
+- **A mistyped mangled symbol returns an EMPTY diff, which reads exactly like a perfect
+  match.** A `rows: 0` from `dr.py` once meant only that the class is `daNpc_So_c`, not
+  `11daNpc_So_c`.
