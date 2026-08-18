@@ -534,3 +534,58 @@ anchor/arithmetic slip of the session and they are all the same shape.
 SESSION TOTAL for aj1: **12/131 -> 48/131 exact, 2.9112% -> 25.8746%.**
 83 functions remain; largest are `_execute` 552, `next_msgStatus` 468,
 `call_1` 408, `chk_areaIN` 380, `set_pa_smk` 376, `lookBack` 368, `talk_1` 336.
+
+
+## Round 12 - _execute transcribed (147 instrs), NOT written; needs infrastructure first
+
+Shape is fully legible:
+
+    BOOL daNpc_Aj1_c::_execute() {
+        if (!field_0x761) {                       // one-shot home latch
+            mHomePos   = current.pos;             // 0x6FC/0x700/0x704 <- 0x1F8..
+            field_0x708/0x70A/0x70C = current.angle;
+            field_0x761 = 1;
+        }
+        m_jnt.setParam(l_HIO.<9 s16 fields at +0xC,0xE,0x10,0x12,0x14,0x16,0x18,0x1A,0x1C>);
+        if (field_0x75e && !field_0x1c0) return TRUE;
+        checkOrder();
+        if (!demo()) {
+            int idx = -1;
+            if (<gameInfo +0x529A> && <this +0xF8> != 1) idx = isEventEntry();
+            if (idx >= 0) event_proc(idx);
+            else          (this->*<ptmf @ 0x6F0>)(NULL);
+            fopAcM_posMoveF(this, <this +0x538>);
+            play_animation();
+            mObjAcch.CrrPos(*dComIfG_Bgsp());
+        }
+        eventOrder();
+        mHomeAngle = current.angle;               // 0x70E/0x710/0x712
+        if (!field_0x75f) shape_angle = current.angle;
+        tevStr.mRoomNo         = dComIfG_Bgsp()->GetRoomId(mObjAcch.m_gnd);
+        tevStr.mEnvrIdxOverride = dComIfG_Bgsp()->GetPolyColor(mObjAcch.m_gnd);
+        setMtx(false);
+        flw_pa_pun(); del_pa_aka(); flw_pa_aka(); setSmoke();
+        if (!field_0x76b) setCollision("@5536", "@5537");
+        return TRUE;
+    }
+
+**WHY I STOPPED HERE RATHER THAN WRITING IT.** `_execute` is the first function
+that needs real INFRASTRUCTURE rather than just members:
+
+1. **`l_HIO`** - a file-scope `daNpc_Aj1_HIO_c l_HIO;` instance, and the HIO
+   class currently has no fields. `setParam` reads nine s16s from it at
+   +0xC..+0x1C, so the HIO layout has to be built first.
+2. **An action pointer-to-member at 0x6F0**, called via `__ptmf_scall`. That
+   needs the `ActionFunc` typedef pattern (`ob1` has
+   `typedef int (daNpc_Ob1_c::*ActionFunc)(void*)`) plus `set_action`/`checkAction`
+   support - and `wait_action1/2` already exist as its targets.
+3. Members: `mHomePos` (cXyz @ 0x6FC), 0x708/0x70A/0x70C (csXyz), `field_0x75e`,
+   `field_0x75f`, `field_0x761`, `field_0x76b`, and the two `setCollision`
+   floats `@5536`/`@5537` still to read.
+
+Writing it piecemeal would leave a half-built HIO class and a dangling ptmf,
+which is exactly the state I have committed all session not to leave behind.
+**The next session should build the HIO class + ActionFunc typedef FIRST**, then
+`_execute` follows mechanically from the transcription above.
+
+STATE: aj1 **48/131 exact, 25.8746%** - unchanged this round, nothing written.
