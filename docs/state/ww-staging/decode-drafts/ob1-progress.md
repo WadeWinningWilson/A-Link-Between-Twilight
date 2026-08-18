@@ -335,3 +335,4 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   each park with shape changes in OTHER functions via multi-site specs.
   p2's spec should pair setAnm/_execute/Proc sites with shape variants
   in their NEIGHBOR functions.
+- Cross-fn probe 1 (control_anmAtr shapes × 3 park symbols): NO coupling — chg/privateCut unmoved; control baseline 6 rows (tree-root), if-chain variant ties, default-case worse. Next pairings: setAnm_ATR/anmAtr-side variants; then p2's neighbor-spec.
