@@ -42,3 +42,13 @@ spec that both p2 and ob1's endgames await.
 6. Pool/data order LAST (l_evn-style file statics position, GXColor
    debug trio at _draw tail, de-const .data tables) then REL gate under
    TEMP Matching flip (NEVER cite a NonMatching-config hash).
+
+## CORRECTION (same day): vintage wiring REVERTED
+- The kickoff's "literal-vintage (round-17 recon)" is WRONG for so:
+  target has 0 .double literals and 0 _half/_three statics; the 14
+  frsqrte chains are f32-constant normalize-family inlines, not sqrtf.
+  Round-17's recon mislabeled so. Wire the vintage PCH ONLY if/when a
+  genuine sqrtf site appears during decode (then re-check this).
+- Lesson re-banked (3rd time this session): verify the signal yourself
+  before acting on a recon row — and never let a commit message claim
+  "verified" for a grep that returned nothing.
