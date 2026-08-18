@@ -143,3 +143,44 @@ Call order and captures:
    transcription error on my part — verify against the asm before "fixing" it.
    The sibling idiom is `modelData->getJointNodePointer(n)->setCallBack(cb)`
    (see `so` lines 241-242, `aj1` 1453-1455).
+
+---
+
+## Update — 80/203 exact, 25.37%. Five layers complete.
+
+**Done and byte-exact:** foundation, create chain (10), init dispatch (9),
+animation (setAnm / setAnm_NUM / setAnm_ATR / setAnm_tex / chg_anmTag /
+control_anmTag / control_anmAtr), messaging (all 7 getMsg_*), plus event_proc,
+isEventEntry, chk_partsNotMove, checkOrder, eventOrder, down_1, wait_3,
+searchByID, bitCount, clrSpd, endEvent, setPlaySpd, event_action.
+
+**Residuals, all with named causes:** setAnm_anm and set_balloonAnm_anm 2 rows
+each (one shared register-reuse idiom on an int->float convert, int-local
+workaround measured WORSE); create_Anm 23 / create_bln_Anm 18 / create_hed_Anm
+12 / create_itm_Mdl 6 / event_actionInit 1 — every one of those is
+`@stringBase0` position and converges as the TU fills.
+
+### ⚠ NEXT UNLOCK: the HIO, and it gates a whole family
+
+`daNpc_Ko1_HIO_c` and `daNpc_Ko1_childHIO_c` are still **empty stubs** with no
+members, and there is no `l_HIO` global yet. Established so far from
+`setAttention`:
+
+- `l_HIO` is indexed by **`field_0x8a6`** (the KO1/KO2 discriminator) with a
+  stride of **0x60** — so `daNpc_Ko1_childHIO_c` is 0x60 bytes and the children
+  array starts at `l_HIO + 0`.
+- `+0x24` within a child is an `f32` (the attention-height offset).
+
+Derive the rest from `__ct__20daNpc_Ko1_childHIO_cFv` and
+`__ct__15daNpc_Ko1_HIO_cFv` the same way `aj1`'s HIO was done — the ctor writes
+every default, so it is a complete field-by-field spec.
+
+**This gates more than `setAttention`:** any function reading tuning parameters
+goes through `l_HIO`, so it is worth doing before the `wait_*`/`walk_*`/`swim_*`
+bulk rather than after.
+
+### Also still TODO in the carve
+
+`0x6D4` (anm sub-objects) and `0x84C` (s16/u16 block) remain sized byte arrays.
+Every member needed so far has split cleanly out of one, and `sizeof` has held
+at 0x8AC through every split.
