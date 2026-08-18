@@ -184,3 +184,47 @@ bulk rather than after.
 `0x6D4` (anm sub-objects) and `0x84C` (s16/u16 block) remain sized byte arrays.
 Every member needed so far has split cleanly out of one, and `sizeof` has held
 at 0x8AC through every split.
+
+---
+
+## Session close — 88/203 exact, 27.3998% (opened at 5/203, 1.9240%)
+
+**The HIO unlock paid: +6 exact from one header edit.** Layout derived entirely
+from `__ct__15daNpc_Ko1_HIO_cFv`, which is a complete spec because the ctor
+writes every default:
+
+```
+__construct_array(this+0xC, ctor, dtor, 0x60, 2)   -> children[2], stride 0x60
+loop i<2: *(this + 0x68 + i*0x60) = i              -> child + 0x5C = int
+          memcpy(this + 0x10 + i*0x60, tbl, 0x58)  -> child + 0x04, 0x58 prm
+stb -1, 0x4(this); stw -1, 0x8(this)
+```
+
+`daNpc_Ko1_prm_c` then carved to 27 fields by walking every register that holds
+`l_HIO` and mapping displacement N to prm offset N-0x10.
+
+**⚠ The prm family is similar but NOT identical across TUs** — `aj1`'s is 0x30,
+`ko1`'s is 0x58. Borrow the sibling's NAMES only after the offsets independently
+agree; copying the struct would misplace every field. Same trap as `anm_prm_c`
+(`ko1`'s is `aj1`'s plus one trailing `int`).
+
+### Two return-shape signals, which point OPPOSITE ways
+
+- **One `li r3, N` in the target where you emit two** -> fold the returns into a
+  merged tail (`ob1::_create`: `return createInit() ? state : cPhs_ERROR_e;`).
+- **Two `li r3, N` where you emit one** -> the donor wrote an explicit
+  `return N;` INSIDE the branch; MWCC does not tail-merge them (`ko1::wait_2`,
+  4 rows -> 0).
+
+Hold them together or you will apply the wrong one.
+
+### Where the next pass starts
+
+`wait_1` (98 instructions) is the head of the state machine and needs more of the
+`0x856` block carved — it reads `field_0x858` and `field_0x8a5`, and branches on
+`field_0x89f`. The rest of `wait_*`/`walk_*`/`swim_*`/`attk_*`/`talk_*` follow the
+same shapes.
+
+**Carve TODOs left:** `0x6D4` (anm sub-objects), `0x856..0x85E`. Every member
+needed so far has split cleanly out of a sized array and `sizeof` has held at
+0x8AC through every split — the conservative carve has not cost a single retry.
