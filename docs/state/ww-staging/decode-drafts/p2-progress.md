@@ -1047,3 +1047,21 @@ ko1, pt, saku, bridge_move, then outward beyond Outset. TIMER monitor (30s tick)
   build ran under BEFORE citing its hash. The genuine D44J01 divergence
   is real decode data: identical source matches 3 retail versions and
   misses the kiosk demo -> version-conditional codegen delta exists.
+
+## Round 18 (2026-08-18, successor) — shape-lead calibration (before spending passes)
+- The ob1 _create datum (if→switch flipped a register mirror) does NOT
+  retrofit directly onto p2's three sites: p2 is row-count exact
+  everywhere, and if→switch changes branch shape (bne vs beq+b) — it
+  would BREAK matching rows. In _create the if's branch shape was
+  ALREADY wrong, so the switch fixed shape AND flipped the mirror
+  together.
+- REFINED HYPOTHESIS: the flip came from switch-lowering shifting
+  internal compiler counters, not from the emitted branches. p2 needs
+  CODEGEN-NEUTRAL counter-shift candidates: 15d falsified one benign
+  file-scope decl; 16b falsified an in-function stripped static. UNTRIED:
+  in-function constructs that trigger case-processing/jumptable machinery
+  with zero byte delta — none identified that are provably neutral.
+- CONCLUSION: this confirms round 16b's path (2) — the automated
+  transform-search harness (statement splits/merges/temp introductions,
+  row-count oracle, ~30s/cycle) is the right vehicle; the shape lead
+  ADDS switch-wrapping variants to its transform vocabulary.

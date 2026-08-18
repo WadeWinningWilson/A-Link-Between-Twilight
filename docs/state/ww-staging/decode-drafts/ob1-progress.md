@@ -276,3 +276,21 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   first-use to converge; (3) temp-flip Matching, REL build, byte-diff;
   (4) the 4 parks re-examined under the control-flow-shape lead (the
   _create if->switch flip); (5) SHA gate + cross-version + PR staging.
+
+### Round 11 (03:30Z) — REL-gate forensics state (commit f543c2a2)
+- .bss 100% (names recovered from target .bss list: l_check_inf[20]/
+  l_check_wrk/l_check_flg — my l_kb_bit and talk_1's accumulator were
+  ONE object; static cXyz = a_eye_pos_off). .data 94.01 (a_prm_tbl/
+  a_size_tbl/a_hed_mdl_resID_tbl de-const'd into .data; target .data
+  object order == mine from l_evn_tbl@0x30 onward; residue = my 3 anon
+  12-byte header statics + _three/_half at 0x0-0x30 where target has
+  a_prm_tbl — likely REL-reconciled per tc precedent, VERIFY not assume).
+- .text emission order IDENTICAL through slot 74; mine has 13 EXTRA weak
+  fns interleaved from slot 75 (__dt__12fopNpc_npc_c, __dt__12cCcD_CylAttr
+  + 11 more; mine 126 fns vs target 113). p2 precedent: extras get
+  REL-link-dropped — but ob1's first gate run MISMATCHED (c51ba74a vs
+  a1f385ef, sizes 23032 vs ?), so compare the KEPT set in the linked REL
+  next: objdump/dtk the built .rel section sizes vs retail Yaz0-decomp,
+  then attribute (extra-weak survival? text order of kept? data anons?).
+- p2 SHAPE-LEAD calibrated (p2-progress round 18): no direct retrofit —
+  feeds the transform-search harness vocabulary instead.
