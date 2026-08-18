@@ -100,3 +100,4 @@ spec that both p2 and ob1's endgames await.
 - offsetZero/Dive/Swim/Appear written (values 0.1/20/-1, 0.3/10/-150, 0.3/10/-40, 0.4/22/110): 3 pool-settling rows each, member placement VERIFIED (mB38-B40 land exactly). 22/187 effective. Offset-comment parser pattern banked (the .s carries '# .rodata:0xNN' per object — parse those, never arithmetic).
 - Round 3: search/glue/getArg batch 100% (~27/187). getArg lesson: s16 == 0xFFFF spells addis+cmplwi directly. m6D0 = home.angle.x (angle-packed arg).
 - Round 4: tag-search pair + CB glues 100% (23/187 exact + 4 settling). Members: mA79 u8 (tag id), mA7C f32 (radius), mA80 cXyz (tag pos), mB90/94/98 f32 + mB9C s16 + mBAE u8 (minigame tag snapshot). daTag_So_c attested. Real-vs-comment offsets in 0xA74-0xBE4 now oracle-verified at 6 points.
+- Round 5: mode-init batch 7/7 first-compile (~30/187). mA90 int, mBDB u8.
