@@ -339,3 +339,52 @@ cutMiniGameStart real-0 first try; cutMiniGameReturnProc real-0; cutMiniGameProc
   and negates at RUNTIME - my literal folds to -500/-150; source likely a named
   const or macro-with-parameter, PARKED), 2x fcmpo cror polarity, 1 dead-load.
 - so: 77/187 exact, FUZZY 78.22% (session start 11.66%).
+
+## Round 34: _execute FULLY MAPPED (spec below — decode is mechanical from here)
+
+Not yet written to source (context ended); everything needed is here.
+ORDER (291 rows, r30 = .bss ANON ANCHOR "@3569", l_HIO lives at .bss+0x58 —
+that is why some refs symbolize as l_HIO@ha and others as anchor+0x58):
+ 1. fopAcM_setCullSizeBox(this, -100*scale.x, -100*scale.x, -100*scale.x,
+    100*scale.x, 100*scale.x, 100*scale.x)  [rodata 0x1d8=-100, 0x50=100]
+ 2. if (!dComIfGp_event_runCheck() && mObjAcch2 flag 0x20 @0x898) {
+      current.pos.y = speedF = mAFC = speed.y = mAFC = 0; modeProc(0,1); return 1; }
+ 3. m_jnt.setParam(9 s16 from l_HIO+0xC..0x1C — SPLIT the m0C pad into 9 s16)
+ 4. old.angle.y (0x206) = shape_angle.y
+ 5. if (m6CC == 1) { if (mA7C == 0) fopAcIt_Judge(searchTagSo_CB, this);
+                     else modeProc(0,3); }
+    else if (mA7C == 0) fopAcIt_Judge(searchTagSo_CB, this);
+ 6. BLINK: if (!cLib_calcTimer(&m868)) { m86C++;
+      if ((f32)m86C > (f32)mBtpAnm.getAnm()->getFrameMax()  [ptr @0x858, s16 @+8])
+        { m868 = (int)(100.0f + cM_rndF(100.0f)); m86C = 0; } }
+    (the s16->f32 compares use the xoris/0x4330 int->float idiom BOTH sides)
+ 7. setScale(); setAttention();
+ 8. cLib_addCalc2(&speedF, mAFC, 0.3f, 4.0f)          [0x130=0.3, 0x114=4.0]
+ 9. cLib_addCalc2(&mB34, mB38, mB40, mB3C)
+10. lookBack(); checkOrder(); modeProc(1, 0x10); eventOrder();
+11. s16 tiltTarget = 0; f32 waterY = dLib_getWaterY(...);
+    if (current.pos.y < waterY) {            // underwater
+       current.pos.y = waterY;
+       if (mB34 > 0.0f && mRippleCb.field@0xAEC == NULL) {
+          static cXyz s_ripple_scale(0.8f, 0.8f, 0.8f);   // guard @0xC + obj @0x10
+                                                          // of a .bss static pair
+          dComIfGp_particle_set(0x33, &current.pos, NULL, &s_ripple_scale, 0xFF,
+                                &mRippleCb);
+          if (mRippleCb.field@0xAEC != NULL) mAF8 = 0.0f;
+       }
+    } else {                                  // airborne: pick tilt by speed.y
+       f32 q = mB00 * 0.25f;                 [0x1e0=0.25]
+       if (speed.y < -q)      tilt = (speed.y < -(mB00*0.5f)) ? HIO+0x64 : HIO+0x66;
+       else if (speed.y > q)  tilt = (speed.y > mB00*0.5f)    ? HIO+0x68 : HIO+0x6A;
+       else tilt = 0;
+       mRippleCb.end();
+    }
+12. cLib_addCalcAngleS2(&shape_angle.x, tilt, 4, 0x800)
+13. if (m6CC != 1 && m6CC != 5 && !mBDB && !cLib_calcTimer(&mBE0))
+      { fopAcM_posMoveF(this, NULL); mAcchCir2/mObjAcch2.CrrPos(*dComIfG_Bgsp()); }
+      (0x870 is mObjAcch2; CrrPos on dBgS_Acch)
+14. m84C->play(NULL,0,0); m84C->calc(); setMtx(); setAnm(6,false);
+    setAnmSwimSpeed(); old.angle.y = shape_angle.y; return 0;
+NEW MEMBERS TO ADD: int m868 (blink timer), s16 m86C (blink count),
+  mBE0 int (post-mode timer, in the mBDF pad), mAF8 f32, l_HIO 9xs16 @0xC-0x1C
+  and 4xs16 @0x64/0x66/0x68/0x6A (m68 IS the third of those four).
