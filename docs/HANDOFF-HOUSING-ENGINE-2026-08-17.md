@@ -24,16 +24,20 @@ Retired on the user's all-lanes retirement order, 2026-08-17 (Decoder exempt).
 
 ---
 
-> ## ⚠ LANE STOOD DOWN 2026-08-18T07:27Z — USER ORDER. THE WATCHER IS OFF.
+> ## LANE AWAKE — resumed 2026-08-18T15:14Z on the user's order. Watcher ARMED.
 >
-> **`engine_watch.py` delivered and was NOT re-armed. This lane is blind while it
-> stays down, and blind looks exactly like quiet.** Decoder is exempt and keeps
-> running; Housing/Engine does not.
+> *(Stood down 07:27Z on the all-lanes order; woken ~8h later. The instruction
+> below was written for that gap and it WORKED — re-arming was the first action on
+> waking, before anything else was read. Keeping it because it will be needed
+> again, and because a stale "the watcher is off" banner at the top of a handoff is
+> the exact failure this document keeps recording.)*
 >
-> **FIRST ACTION ON RESUME, before reading anything else:**
+> **FIRST ACTION ON ANY RESUME, before reading anything else:**
 > ```
 > python -u tools/foundry/engine_watch.py --exit-on-event
 > ```
+> **19 rows landed during the stand-down and none touched this lane's surface**
+> (all Decoder `ko1`/`so` work) — but that was luck, not design.
 > **The last stand-down in this estate cost a missed call** — a `HISTORY, HOUSING`
 > assignment landed unseen in the gap and the *user* had to point at it. That is not
 > an argument against standing down; it is an argument for re-arming the moment work
@@ -41,10 +45,21 @@ Retired on the user's all-lanes retirement order, 2026-08-17 (Decoder exempt).
 > 54 times and re-armed inside the same turn on every single delivery — until this
 > one, deliberately, on the order.
 >
-> **Open and unrooted when the lane stopped:** the BMT `CLASS-ON-RAW` candidate
-> (`d_a_kb.cpp:2481`, `d_a_npc_bm1.cpp:3891`/`:3917`) · the four-reading `wwHost`
-> probe at `d_a_bg.cpp:425` · and **the blank itself — `room_set_bgw = 0` is still
-> the live symptom and nothing tonight closed it.**
+> **OPEN RIGHT NOW, in priority order:**
+> 1. **The `wwHost` probe at `d_a_bg.cpp:425` — THE PIVOT, not a downstream item.**
+>    `dExtWwSave_isWwHostStage` gates the collision skip at `:251` **and** the
+>    per-shape clip at `:424`. One predicate, both symptoms.
+> 2. **Grep the existing boot log for `№257 skip`** — free, no rebuild, and it
+>    splits "daBg deliberately owns no BgW" from "it fell through to the dzb path".
+> 3. **The two stall probes are FIXED and BUILDING** (per-id census + pump tally +
+>    loud overflows). **Needs one boot** to read `m_is_creating_census` (`pinned`
+>    count) and `ctrq_tally` (`max_pumps` splits the two faults).
+> 4. The BMT `CLASS-ON-RAW` candidate — latent, armed, not blocking.
+>
+> **⚠ `room_set_bgw = 0` IS NOT THE SYMPTOM IT LOOKED LIKE — `setBgW` is inline,
+> so that probe cannot report anything else. See §2.** The live symptom is that
+> **the transition never completes** (`scn_change_req` 141 fired / 137 returning 0)
+> **and Outset draws nothing.**
 
 ## 1. WHAT THIS LANE OWNS
 
@@ -78,6 +93,32 @@ lane and said Housing "builds nothing". Both are wrong. You hold both.
   index-fetch site (`registry.cpp`, `WwAkabe_solidHeapCB`).
 - **The user's delivery ruling (plugin + patcher, 2026-08-17) makes this
   deliverable**: tree-side code is patcher-delivered, not undeliverable.
+- **⚠ THE ENTRY BELOW IS RETRACTED BY A LATER BOOT (2026-08-18, second
+  correction the same day). READ THIS FIRST.** I wrote that **nothing passes
+  through `cBgW::Set`** on Outset, so the convergence fix was *"buildable but not
+  verifiable"*. **MEASURED: `cbgw_set` n=3, ret=0 — it IS called and it SUCCEEDS.**
+  Also measured: `dbgs_regist` n=3 ret=0 (admitted to the searchable set) and
+  `bgw_ground` **2,700 calls / 274 TRUES / distinct 3**.
+  - ***And that falsifies my own discriminator, in my favour's opposite direction:***
+    I offered *"present with `trues=0` = the walk rejects everything"* as the
+    unconverted-`dzb` signature. **274 trues means the walk HITS — the geometry is
+    not garbage.** That is **evidence AGAINST the unconverted-`dzb` defect being
+    the Outset cause.** The §2 fix may still be correct as a port; it is no longer
+    supported as *this* blank's explanation.
+  - **AND `room_set_bgw = 0` IS NOT MEASURABLE.** `dStage_roomControl_c::setBgW`
+    is **inline in the header** (`d_stage.h:1222`, a three-line `static`), so the
+    hook on its mangled symbol reads zero regardless. **`registry.cpp:921` already
+    said so** — *"setBgW's zero receipts are an INLINING artifact (host warned)"* —
+    twelve lines above the `DEFINE_HOOK_SYMBOL` it qualifies.
+  - **AND ZERO CALLS IS THE INTENDED BEHAVIOUR HERE ANYWAY:** `d_a_bg.cpp:250-258`
+    (`TARGET_PC`) returns **before** `setBgW` when
+    `isWwHostStage(stage) && isRoomLaneRoom(roomNo)` — №257, *the room-lane mount
+    owns collision*. **Free discriminator, no rebuild: that branch logs
+    `[daBg] №257 skip room{} collision`. Grep the boot log for `№257 skip`.**
+  - **BOTH SYMPTOMS TURN ON ONE PREDICATE:** `dExtWwSave_isWwHostStage` gates the
+    collision skip at `:251` **and** the per-shape clip at `:424`. **The four-reading
+    `wwHost` probe is therefore NOT downstream — it is the pivot.**
+
 - **BUILDABLE IS NOT VERIFIABLE — READ THIS BEFORE YOU BUILD IT (2026-08-18).**
   The design above stands. **But on Outset today NOTHING PASSES THROUGH
   `cBgW::Set`**: Integrator measured `room_set_bgw = 0` on epoch-2 vanilla —

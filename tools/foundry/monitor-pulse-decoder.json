@@ -1,10 +1,10 @@
 {
-  "updated": "2026-08-18T15:24:08+00:00",
-  "updated_epoch": 1787066648,
-  "pid": 18612,
+  "updated": "2026-08-18T15:29:04+00:00",
+  "updated_epoch": 1787066944,
+  "pid": 35092,
   "lane": "DECODER",
-  "passes": 5,
+  "passes": 2,
   "interval_sec": 30,
-  "last_event": "quiet",
-  "note": "running"
+  "last_event": "exited-on-event: 2 new/changed row(s)",
+  "note": "delivered"
 }

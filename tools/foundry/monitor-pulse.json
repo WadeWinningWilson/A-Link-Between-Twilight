@@ -1,9 +1,9 @@
 {
-  "updated": "2026-08-18T15:22:09+00:00",
-  "updated_epoch": 1787066529,
+  "updated": "2026-08-18T15:28:10+00:00",
+  "updated_epoch": 1787066890,
   "pid": 19716,
-  "passes": 3,
+  "passes": 5,
   "interval_sec": 180,
-  "last_event": "2 new row(s)",
+  "last_event": "3 new row(s)",
   "note": "running"
 }
