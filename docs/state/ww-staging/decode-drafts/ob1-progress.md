@@ -249,3 +249,30 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   NEXT PHASE (p2 playbook rounds 19+): pool forensics (my pool has extras/
   order deltas), .data/.bss order, .text emission order tool, then the
   REL SHA gate (flip Matching temporarily to measure), cross-version.
+
+### Round 10 (03:25Z) — order-forensics opener (phase data for the REL gate)
+- Section match: .text 99.47 / .rodata 95.68 / .data 89.58 / .bss 98.04 /
+  .ctors 100.
+- .bss CONVERGED: my layout matches TARGET ABSOLUTE offsets — anon anchor
+  @0xC pile (17 header-inline anon objects 0xC-0x58), l_HIO@0x58 (0x3C),
+  l_kb_actor@0x94, l_kb_count@0xE4, l_kb_bit@0xE8, nodeOb1Control static
+  cXyz region @0xEC(dtor-obj)/0xF8(guard)/0xFC(value), l_check_flg@0x108.
+  Residue likely 1-2 rows.
+- .data order (mine): 3 anon 12-byte objects, _three/_half fake_sqrtf
+  statics (NOTE: p2 target order was _half,_three — mine reversed; but
+  REL link DROPS these per tc precedent, so only .o-level), l_evn_tbl,
+  3 more anon, a_anm_prm_tbl x3 (0x58/0xF8/0x184), @2023 (0x88 — ptmf
+  consts?), a_cut_tbl@0x298, method tbl, g_profile, vtables. Compare vs
+  target .s .data .obj sequence next (p2 round-6 script pattern).
+- .rodata: object sequence mostly parallel to target (a_prm_tbl FIRST in
+  mine vs @4239 anchor first in target — my a_prm_tbl at 0x0 vs target
+  0x120! The HIO-ctor local static emits EARLY in mine. Target's rodata
+  starts with the float anons. Likely fix: parse order of the prm blob —
+  investigate whether target's a_prm_tbl$4151 counter (4151 > 4239-ish
+  region... actually 4151 < 4239) — hmm counter says a_prm_tbl parsed
+  FIRST yet emits at 0x120. MWCC rodata emission may order floats first?
+  Experiment matrix for next rounds.)
+- NEXT: (1) target .data/.rodata .obj order lists; (2) reorder statics/
+  first-use to converge; (3) temp-flip Matching, REL build, byte-diff;
+  (4) the 4 parks re-examined under the control-flow-shape lead (the
+  _create if->switch flip); (5) SHA gate + cross-version + PR staging.
