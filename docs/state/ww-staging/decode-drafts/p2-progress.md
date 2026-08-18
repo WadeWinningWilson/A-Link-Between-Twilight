@@ -1065,3 +1065,17 @@ ko1, pt, saku, bridge_move, then outward beyond Outset. TIMER monitor (30s tick)
   transform-search harness (statement splits/merges/temp introductions,
   row-count oracle, ~30s/cycle) is the right vehicle; the shape lead
   ADDS switch-wrapping variants to its transform vocabulary.
+
+## Round 19 (2026-08-18, successor instance): decl-then-assign lever tested against the mirror sites
+
+The lever that RESOLVED a register mirror in so's cutMiniGameReturnStart at source level
+(declare the pointer local BEFORE the earlier-fetched one: `daShip_c* ship;` up top,
+assign later -- flips MWCC coloring, 7 rows -> 0) was run against p2's three sites:
+
+- _execute (r28<->r29, bgsp-CSE vs mtrlSnd): decl-order swap of mtrlSnd/roomNo = no change;
+  named `dBgS* bgsp` local = WORSE (87 rows, live range extended to r27 save);
+  ternary mtrlSnd = no change. The mirror is between a compiler CSE temp and a named
+  local -- the source-level decl lever cannot reach a CSE temp's color. All reverted.
+- VERDICT: p2 mirrors stay parked for the INLINE-BODY lever campaign (regalloc.md,
+  ninja baseline/changes discipline). The decl-then-assign lever joins the vocabulary
+  for NAMED-local mirrors only.
