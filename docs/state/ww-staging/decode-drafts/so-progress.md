@@ -319,3 +319,23 @@ an otherwise length-identical fn); moving the declaration inside the
 mismatches, all remaining rows are .data offsets. WHEN A GUARDED COPY LANDS IN
 THE WRONG PLACE, MOVE THE DECLARATION, not the use.
 so: 77/187 exact, fuzzy 67.26%.
+
+## Round 33: THE WHOLE CUT FAMILY IS DECODED — fuzzy 78.22%
+
+cutMiniGameStart real-0 first try; cutMiniGameReturnProc real-0; cutMiniGameProc
+(2260 bytes, the TU's largest) down to 12 real rows, length-identical at 565.
+- cutMiniGameProc = 8-state jump table on mB74: 0 anim/timer, 1 wait, 2 pick a
+  ship-relative random spot (fwd 1000+rnd400, lateral +-1000*0.5), 3 swim to it,
+  4 re-pick lateral (+-300*0.5), 5 face+wait, 6 LAUNCH (speedF = mB08*(5+rnd5);
+  speed.y = 18*mB08 + 4*speedF clamped to l_HIO.m50; gravity -0.8; anim 4),
+  7 airborne (Sph collide window: r = l_HIO.m3C while above water+50, else the
+  sphere is PARKED at y=30000 with r=0 — the donor's way of disabling a collider;
+  checkTgHit -> mB7C hit count capped 10; splash -> mB80 round count; 10 rounds
+  or arrow budget out -> endMiniGame + cutEnd).
+- ARROW BUDGET: mB78 increments on daPyRFlg0_ARROW_SHOOT (player mResetFlg0 0x20000000).
+- ATTN TARGET: writes to 0x318 are mEventCut.setAttnPos (EventCut+0x54), NOT mAAC.
+- checkTgHit returns **bool**, not BOOL (call sites: clrlwi. vs cmpwi).
+- REMAINING 12 real in cutMiniGameProc: 2x fneg-fold sites (target loads +1000/+300
+  and negates at RUNTIME - my literal folds to -500/-150; source likely a named
+  const or macro-with-parameter, PARKED), 2x fcmpo cror polarity, 1 dead-load.
+- so: 77/187 exact, FUZZY 78.22% (session start 11.66%).
