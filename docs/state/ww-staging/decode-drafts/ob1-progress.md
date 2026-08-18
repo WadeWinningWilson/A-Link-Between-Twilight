@@ -357,3 +357,14 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   (2) harness BUILT+campaigned, (3) upstream lore CONSULTED (the
   inline lever is their answer for persistent regswaps).
 - Call-site inline spellings (hoist/static_cast/const-local/redundant-cast): all tie at 11 (redundant cast worse 27). ~34 variants falsified across the mirror/polarity family this session. In-function + call-site space EXHAUSTED; the shared-header inline-body campaign (regalloc.md's lever, baseline/changes discipline) is the next context's opening move.
+
+## Round 16 (2026-08-18, so-campaign spillover): next_msgStatus 16 -> 4; TU 99.50 -> 99.80%
+
+The case-BODY-ORDER lesson proven at scale on so transfers verbatim to ob1:
+moving case 0xa93 / 0xa97 ABOVE the ten-case eventBit group reproduced the
+target emission (16 rows -> 4) in ONE build.
+FALSIFIED: restructuring the ten-case group to fall through into default
+(4 -> 33). The group's POSITION in the case list dominates the shape; do not
+move it to chase the shared else/default block.
+Remaining 4 rows: the group's else-arm emits its own status block where the
+target shares default's. ob1 now 108/115 exact, fuzzy 99.80%.
