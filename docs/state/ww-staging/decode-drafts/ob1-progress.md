@@ -319,3 +319,4 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   privateCut's beq+b site and control_anmAtr's tree-root.
 - Status: task #12 at the SAME endgame class as p2 (#9) — 4 small
   allocator/polarity sites from SHA, everything else byte-true.
+- (a) nested-if FALSIFIED for chg_anmAtr (2 rows unchanged) — matrix continues: trailing-statement, early-return, no-code-then variants; harness is the systematic vehicle.
