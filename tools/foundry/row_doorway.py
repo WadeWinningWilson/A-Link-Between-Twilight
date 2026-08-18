@@ -46,7 +46,7 @@ UP_EXE = Path("C:/Users/xxxxx/Documents/dusklight-main/build/"
 # match broadly, validate against the domain (§P3) - a novel doorway value
 # surfaces as STALE-UNKNOWN-CLASS, never as a silent skip
 DOORWAY_DOMAIN = {"EXISTS", "GATED", "ABSENT-hookable", "ABSENT-unhookable"}
-RE_FIELD = re.compile(r"^(id|symbols|doorway|retired):\s*(.+?)\s*$", re.M)
+RE_FIELD = re.compile(r"^(id|symbols|doorway|destination|retired):\s*(.+?)\s*$", re.M)
 
 
 def load_rows(rows_dir):
@@ -57,7 +57,8 @@ def load_rows(rows_dir):
         if f.get("retired"):
             continue                    # RETIRED rows are history, not claims
         syms = [s.strip() for s in f.get("symbols", "").split(",") if s.strip()]
-        out.append((p.name, f.get("id", "?"), f.get("doorway", "?"), syms))
+        out.append((p.name, f.get("id", "?"), f.get("doorway", "?"), syms,
+                    f.get("destination", "?")))
     return out
 
 
@@ -78,7 +79,7 @@ def manifest(img):
 
 def check_rows(rows, own, up):
     stale = unknown = 0
-    for fname, rid, doorway, syms in rows:
+    for fname, rid, doorway, syms, destination in rows:
         problems = []
         if doorway not in DOORWAY_DOMAIN:
             problems.append("doorway %r not in declared domain" % doorway)
@@ -92,8 +93,35 @@ def check_rows(rows, own, up):
                 problems.append("%s: an image is UNAVAILABLE - UNKNOWN" % s)
                 continue
             if n_own == 0:
-                problems.append("%s: gone from OUR FORK - the row cites code "
-                                "the tree no longer has" % s)
+                # ------------------------------------------------------------
+                # THE PLANNED-PORT PREMISE. `n_own == 0` is a DEFECT only when
+                # the row claims code we already have. On an ABSENT-* row with
+                # a planned destination the symbol is NOT PORTED YET BY DESIGN
+                # — absence is the row's own premise, not a finding.
+                #
+                # Measured 2026-08-18: this arm produced 160 hits, the loudest
+                # and most contaminated bucket in the run. Housing/Engine's
+                # argument for fixing it rather than annotating it: a gate
+                # whose loudest signal is mostly premise trains everyone to
+                # ignore it, and the day a REAL "gone from our fork" appears it
+                # arrives in a pile of 160 and is indistinguishable. That is
+                # worse than a vacuous green, because a green does not compete
+                # for attention.
+                #
+                # FORK rows are the exception and keep the check: that
+                # destination means the code IS ours and tree-side, so its
+                # absence is exactly the defect this arm was written to catch.
+                # EXISTS rows keep it too — present on vanilla implies present
+                # in a fork of vanilla.
+                #
+                # No schema change: `destination` is already parsed (:49/:61)
+                # and already gates the doorway arm below.
+                # ------------------------------------------------------------
+                planned_absent = (doorway.startswith("ABSENT")
+                                  and destination not in ("FORK", "?"))
+                if not planned_absent:
+                    problems.append("%s: gone from OUR FORK - the row cites "
+                                    "code the tree no longer has" % s)
             if doorway == "EXISTS":
                 if n_up == 0:
                     problems.append("%s: declared EXISTS but MISSING on "
@@ -111,6 +139,32 @@ def check_rows(rows, own, up):
             print("  [STALE] %-14s %s" % (rid, fname))
             for pr in problems:
                 print("          %s" % pr)
+        elif destination == "FORK" and doorway != "EXISTS":
+            # ------------------------------------------------------------
+            # A GREEN HERE WOULD BE A LIE OF OMISSION, so it is not printed.
+            #
+            # The only ABSENT-side check above is `doorway in DOORWAY_DOMAIN
+            # and n_up > 0` — it needs the symbol to be PRESENT ON VANILLA.
+            # A FORK row's symbols are OUR OWN CODE, so n_up is 0 forever and
+            # that branch CANNOT FIRE. The row would print [ OK ] whatever the
+            # truth was. A gate that cannot go red is not a gate, and a green
+            # from one gets quoted as evidence.
+            #
+            # MITIGATION ONLY, NOT THE REMEDY. This fixes the misleading
+            # REPORT; the row still carries a doorway VALUE asserting
+            # something about a symbol we authored, and every consumer of that
+            # field reads the assertion rather than this console line.
+            # `doorway: N/A` in _schema.json is the actual fix and it is
+            # Integrator's call (Housing/Engine withdrew "not in the schema").
+            #
+            # WHAT IS STILL LIVE AND WHY THIS IS NOT [ SKIP ]: the
+            # `n_own == 0` check above DOES apply to a FORK row and did run.
+            # So this line means "present in our fork, doorway unevaluable" —
+            # which is strictly more than nothing and strictly less than OK.
+            # ------------------------------------------------------------
+            print("  [ N/A ] %-14s %s  (%s on a FORK row: our own symbol, so "
+                  "the vanilla-presence check cannot fire; n_own checked, "
+                  "%d symbol(s))" % (rid, fname, doorway, len(syms)))
         else:
             print("  [ OK  ] %-14s %s  (%s, %d symbol(s))"
                   % (rid, fname, doorway, len(syms)))

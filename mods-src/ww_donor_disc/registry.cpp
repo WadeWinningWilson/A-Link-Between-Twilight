@@ -75,15 +75,41 @@
 // binary and the link failed with four LNK2005s (Integrator, CALLS row 574).
 //
 // THE IMPORT_SERVICE LINES BELOW STAY, and that is a NARROWER subtraction than
-// the one suggested — deliberately. `IMPORT_SERVICE` expands to a **static**
-// pointer (`sdk/include/mods/service.hpp:49`), so it has internal linkage and
-// cannot collide across translation units; each TU gets its own handle and its
-// own modmeta import record. None of the four duplicate symbols in that link
-// error came from it. Removing them would leave `s_hook` and `s_log` undefined
-// in this file, which is exactly the "a wrong subtraction silently drops a
-// service" hazard the report warned about.
+// the one suggested — deliberately. Removing them would leave `s_hook` and
+// `s_log` undefined in this file, which is exactly the "a wrong subtraction
+// silently drops a service" hazard the report warned about. None of the four
+// duplicate symbols in that link error came from them.
+//
+// ============================================================================
+// EPOCH-2 AMENDMENT — INTEGRATOR 2026-08-17. THE PARAGRAPH ABOVE USED TO SAY
+// `IMPORT_SERVICE` EXPANDS TO A **STATIC** POINTER, SO IT "CANNOT COLLIDE
+// ACROSS TRANSLATION UNITS". THAT WAS TRUE AND IT IS NOW FALSE.
+//
+// It cited `sdk/include/mods/service.hpp:49`. That line still exists and it
+// changed:
+//     epoch 1: static const service_type* variable = nullptr;
+//     epoch 2:        const service_type* variable = nullptr;
+//
+// One dropped keyword turns internal linkage into external, and `s_log` —
+// imported here AND in `main.cpp` — becomes LNK2005. `docs/modding.md` now
+// states the contract plainly: "A service must be imported in only one file
+// (usually your mod.cpp). Other files may simply use `svc_log`."
+//
+// So on epoch 2 `main.cpp` owns the LogService import and this file declares
+// it. `s_hook` is imported ONLY here, so it is unaffected either way.
+//
+// The epoch-1 arm is kept, not replaced: the fork's own in-tree build is still
+// epoch 1 and must stay buildable (the fork is deliberately NOT merged). The
+// discriminator is `<mods/svc/hook.hpp>`, which is one of the headers the
+// 39-commit fast-forward ADDED — `MOD_ABI_VERSION` is 1u in both and cannot
+// tell them apart. Route (B) deletes the epoch-1 arm.
+// ============================================================================
 IMPORT_SERVICE(HookService, s_hook);
+#if defined(__has_include) && __has_include(<mods/svc/hook.hpp>)
+extern const LogService* s_log;  // epoch 2+: imported once, in main.cpp
+#else
 IMPORT_SERVICE(LogService, s_log);
+#endif
 // The UI service, imported for ONE observation and nothing more (§1011 rider).
 // NOTE FOR THE RECORD: §662 said this also needs "a `mod.json` version entry".
 // It does not — checked rather than followed: no mod.json under `mods-src/`
@@ -2425,6 +2451,7 @@ int s_glbCalls = 0;
 // Defined below the destination table; declared here because the resource
 // probe gates on it and sits above that table.
 bool startStageIsWw();
+bool stageBecomingWw();   // start OR next — see the MULT gate (Room -1 fix)
 
 // for a whole boot. The run ends seconds after the first WW stage entry, so
 // the volume is bounded by the crash and the LAST LINE is the evidence.
@@ -3420,6 +3447,118 @@ void on_groundCross(ModContext*, void* args, void* retval, void*) {
 // (`GetGroundH()` is literally `return m_ground_h`, d_bg_s_acch.h:125), and
 // FLAG_GROUND_HIT/FIND live in m_flags. Reporting the owning actor lets the
 // player's own acch be picked out of the crowd.
+// ============================================================================
+// PHASE 4a — THE ROOF-CLAMP SEAM, RE-SITED OFF A RECEIVER EDIT (Integrator,
+// 2026-08-17, user-approved). FIRST seam moved onto the host's OWN switch.
+//
+// REPLACES `d_bg_s_acch.cpp:170` (fork tale §818), which added a WW-host test
+// beside TP's thin-ceiling roof clamp:
+//     if (!wwHost818 && !ChkGndThinCellingOff()) { ...roof clamp... }
+// Its own comment gives the reason: the donor's GroundCheck has NO roof check
+// for any actor, donor placements sit at EXACTLY floor Y, so the clamp lands
+// the ground-query start ON the plane and the actor falls through geometry.
+//
+// DN-10 STEP 1 — THE RECEIVER ALREADY HAS THIS SWITCH. `SetGndThinCellingOff`
+// sets FLAG_GND_THIN_CELLING_OFF; the clamp is skipped when it is set. So
+// `wwHost818 == true` and the flag being set are the SAME EFFECT. We author no
+// behaviour; we throw the receiver's own switch. Both setters verified SAFE
+// (resolve to exactly one) in the SHIPPING VANILLA manifest.
+//
+// AND THE FORK TRIED THIS FIRST: §796 set the flag for the PLAYER only; §817
+// found the pots dying the same way in Sturgeon's room; §818 gave up on the
+// flag and went stage-wide. THE MECHANISM WAS NEVER WRONG — COVERAGE WAS. An
+// edit sets the flag where you edited it; a hook on the shared choke point
+// sets it for every consumer. §818's coverage via §796's mechanism.
+//
+// WHY A SECOND CALLBACK ON A HOOK THAT ALREADY EXISTS, rather than folding
+// this into `on_acchCrrPos` below: that one is a MEASUREMENT INSTRUMENT, gated
+// on `s_diagProbes` and switchable off. This gate must run whenever the plugin
+// is active. Folding a behaviour into a probe makes the probe un-disableable
+// and hides the behaviour inside a diagnostic. Add and label; do not
+// substitute.
+//
+// THE CLR ARM IS LOAD-BEARING, NOT SYMMETRY: `|=` never clears itself, so
+// without it a TP stage entered after a WW stage inherits donor ground
+// semantics on every acch that ever visited one — a TP-content bug caused by
+// WW code, which is the exact shape the WW shared-path scoping rule exists to
+// stop.
+//
+// NOT MEASURED: the per-frame trampoline cost. `CrrPos` has 444 call sites
+// across 293 files. Phase 5 warns hot per-frame subsystems may belong
+// tree-side; this is the first candidate to measure, and it is why the counters
+// below exist.
+// ============================================================================
+typedef void (*FnAcchFlag)(void*);
+FnAcchFlag s_fnAcchSetThinCeilOff = nullptr;
+FnAcchFlag s_fnAcchClrThinCeilOff = nullptr;
+bool s_acchFlagResolveTried = false;
+unsigned s_acchSetCalls = 0;
+unsigned s_acchClrCalls = 0;
+
+// Call-don't-hook, the same pattern as `getStartStageName`: these are setters
+// we INVOKE on the receiver's own object, not seams we intercept.
+void resolveAcchFlagFns() {
+    if (s_acchFlagResolveTried) { return; }
+    s_acchFlagResolveTried = true;
+    void* a = nullptr;
+    if (s_hook->resolve(mod_ctx, "?SetGndThinCellingOff@dBgS_Acch@@QEAAXXZ", &a, nullptr) == MOD_OK) {
+        s_fnAcchSetThinCeilOff = reinterpret_cast<FnAcchFlag>(a);
+    }
+    a = nullptr;
+    if (s_hook->resolve(mod_ctx, "?ClrGndThinCellingOff@dBgS_Acch@@QEAAXXZ", &a, nullptr) == MOD_OK) {
+        s_fnAcchClrThinCeilOff = reinterpret_cast<FnAcchFlag>(a);
+    }
+    logf(LOG_LEVEL_INFO,
+        "[WwRegistry] {\"ev\":\"acch_thinceil_resolve\",\"set\":%d,\"clr\":%d,"
+        "\"reads\":\"both 1 => the roof-clamp seam is re-sited onto the host's own "
+        "flag and d_bg_s_acch.cpp:170 is not needed; a 0 means the gate is INERT "
+        "and the receiver edit is still load-bearing\"}",
+        s_fnAcchSetThinCeilOff != nullptr ? 1 : 0,
+        s_fnAcchClrThinCeilOff != nullptr ? 1 : 0);
+}
+
+// PRE hooks return HookAction (a pre hook may suppress the original); POST
+// hooks return void. This one never suppresses: the receiver's CrrPos must
+// always run, we only set a flag it will read.
+HookAction on_acchCrrPosGate(ModContext*, void* args, void*, void*) {
+    resolveAcchFlagFns();
+    void* self = mods::arg<void*>(args, 0);
+    if (self == nullptr) { return HOOK_CONTINUE; }
+    if (startStageIsWw()) {
+        if (s_fnAcchSetThinCeilOff != nullptr) { s_fnAcchSetThinCeilOff(self); s_acchSetCalls++; }
+    } else if (s_fnAcchClrThinCeilOff != nullptr) {
+        s_fnAcchClrThinCeilOff(self);
+        s_acchClrCalls++;
+    }
+    // ------------------------------------------------------------------
+    // INVOCATION RECEIPT — added after the 211106 boot, which proved the
+    // gate INSTALLED (r:0) and RESOLVED (set:1 clr:1) and could not show
+    // whether it ever FIRED. Announce != record != applied != effective;
+    // the first two had receipts and the third did not, so "green" was
+    // being read one step further than the evidence reached.
+    // Log-once at 1, then sparsely, so a hot path cannot flood the log.
+    // ------------------------------------------------------------------
+    // THRESHOLD CHOICE, corrected after boot 211829. Totals of 1/100/10000 all
+    // landed in menu frames, where startStageIsWw() is false: the log read
+    // "set":0,"clr":100 and said nothing about the arm that matters. A counter
+    // keyed on VOLUME reports when the hot path is hot; the interesting event
+    // is the TRANSITION into the WW arm. Fire on the FIRST set, and on the
+    // first clr, then sparsely.
+    static bool s_firstSetShown = false;
+    const unsigned total = s_acchSetCalls + s_acchClrCalls;
+    const bool firstSet = (s_acchSetCalls == 1 && !s_firstSetShown);
+    if (firstSet) { s_firstSetShown = true; }
+    if (firstSet || total == 1 || total == 10000) {
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"acch_thinceil_fired\",\"total\":%u,\"set\":%u,"
+            "\"clr\":%u,\"reads\":\"the gate is INVOKED, not merely installed; set>0 on a WW "
+            "stage means the receiver's own thin-ceiling flag is being thrown for every acch "
+            "user, which is what d_bg_s_acch.cpp:170 was edited to do\"}",
+            total, s_acchSetCalls, s_acchClrCalls);
+    }
+    return HOOK_CONTINUE;
+}
+
 void on_acchCrrPos(ModContext*, void* args, void*, void*) {
     if (!startStageIsWw()) { return; }
     static int shown = 0;
@@ -4112,7 +4251,8 @@ int s_multTp = 0;   // MULT chunks left entirely to the receiver
 const int kVtSetMulti = 72;
 
 HookAction on_multInfoInit(ModContext*, void* args, void* retval, void*) {
-    if (!startStageIsWw()) {
+    // Room -1 fix: MULT is decided DURING the load, so ask the early question.
+    if (!stageBecomingWw()) {
         s_multTp++;
         return HOOK_CONTINUE;  // TP stage — the receiver's own handler, untouched
     }
@@ -4576,6 +4716,53 @@ bool startStageIsWw() {
     }
     for (int i = 0; i < s_routeCount; i++) {
         if (std::strcmp(now, s_routes[i].stage) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ============================================================================
+// THE SAME QUESTION, ASKED EARLY ENOUGH — the Room -1 root cause (Integrator,
+// 2026-08-17). `startStageIsWw()` reports the stage that IS current. Some
+// decisions are made while the stage is still being REQUESTED, and for those
+// it answers false at exactly the moment it matters.
+//
+// MEASURED, not theorised: the user's overlay showed **Room: -1** on a `sea`
+// boot. `registry.cpp:232` records that the RECEIVER's `dStage_multInfoInit`
+// adds `setRoomNo(-1)` on top of the donor's three-line handler (WW never
+// walks the MULT chunk at load). We already port the donor handler — but the
+// shutdown receipt read **`mult_donor:1, mult_receiver:2`**: the substitution
+// fired ONCE and the receiver's ran TWICE, because MULT is processed DURING
+// the load, BEFORE the start-stage name flips. So we handed WW data to the
+// walker that sets room -1.
+//
+// CORROBORATION FROM AN UNRELATED SEAM, which is why this is a property of the
+// predicate and not of MULT: the Phase-4a acch gate logged **1,264 CLR calls
+// before its first SET**. Same late flip, different consumer. I read that as
+// "menu frames" and moved on; it was this.
+//
+// DELIBERATELY A SECOND FUNCTION, NOT A CHANGE TO `startStageIsWw()`: that
+// predicate is consumed all over this file, and several of those consumers
+// WANT "is current", not "is becoming". Widening it would silently re-time
+// every one of them. Add and label; do not substitute.
+//
+// `s_fnGetNextStageName` is already resolved alongside the start getter
+// (§1016) — this reads the receiver's own answer, it does not invent one.
+// ============================================================================
+bool stageBecomingWw() {
+    if (startStageIsWw()) {
+        return true;
+    }
+    if (s_fnGetNextStageName == nullptr) {
+        return false;
+    }
+    const char* nxt = s_fnGetNextStageName();
+    if (nxt == nullptr) {
+        return false;
+    }
+    for (int i = 0; i < s_routeCount; i++) {
+        if (std::strcmp(nxt, s_routes[i].stage) == 0) {
             return true;
         }
     }
@@ -5246,6 +5433,11 @@ ModResult wwRegistry_initialize() {
     const ModResult rG6 = (s_diagProbes ? mods::hook_add_pre<BgWGroundCrossRp>(s_hook, on_bgwGroundCrossRp) : MOD_OK);
     const ModResult rG7 = (s_diagProbes ? mods::hook_add_post<RwgGndCheck>(s_hook, on_rwgGndCheck) : MOD_OK);
     const ModResult rG8 = (s_diagProbes ? mods::hook_add_post<AcchCrrPos>(s_hook, on_acchCrrPos) : MOD_OK);
+    // Phase 4a roof-clamp gate: PRE arm, NOT gated on s_diagProbes — it is
+    // behaviour, not measurement. Rides the AcchCrrPos symbol already declared.
+    const ModResult rG8p = mods::hook_add_pre<AcchCrrPos>(s_hook, on_acchCrrPosGate);
+    logf(LOG_LEVEL_INFO,
+        "[WwRegistry] {\"ev\":\"acch_thinceil_gate_install\",\"r\":%d}", (int)rG8p);
     (void)rG8;
     (void)rG7;   // leaf-level receipt; shares the bg_receipt attach semantics
     (void)rG6;   // walk receipt; shares the bg_receipt attach line semantics

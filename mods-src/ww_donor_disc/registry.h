@@ -9,9 +9,13 @@
 // dispatch route. All three are answered, so the split has outlived its
 // purpose and the user asked for ONE plugin rather than a family.
 //
-// The registry keeps its own translation unit and its own service imports
-// (`IMPORT_SERVICE` emits a *static* pointer, so each TU holds its own
-// handles and its own modmeta import record). Only the entry points changed:
+// The registry keeps its own translation unit and its own service imports.
+// NOTE — this used to add "(`IMPORT_SERVICE` emits a *static* pointer, so each
+// TU holds its own handles and its own modmeta import record)". That stopped
+// being true at the Game ABI epoch-2 bump: `service.hpp:49` dropped `static`,
+// so the pointer now has EXTERNAL linkage and a service may be imported in
+// only one file. See the epoch-2 amendment at the top of `registry.cpp` for
+// the discriminator and both arms. Only the entry points changed:
 // what were `mod_initialize` / `mod_shutdown` are now these two functions,
 // called by the merged plugin's single pair.
 //

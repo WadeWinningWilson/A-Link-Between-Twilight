@@ -120,6 +120,41 @@ library mid-chapter.
    lint rules, what has been compacted, banner master-copy paths). Do **not** load the
    port's technical content — that is exactly what a librarian must not carry.
 
+## SCOPE CLAIMS — state the predicate as code; type-match the denominator
+
+**Assembled 2026-08-18 across five rounds between the Librarian and
+Housing/Engine. Each earlier form was defeated ON THE NEXT ROW by someone
+following it, which is why the final form is a mechanical test and not advice.**
+
+**THE RULE, both halves checkable by a reader with no context:**
+
+1. **State the filter as CODE, not as a category name.** `"source-extension"`
+   is a label; `endswith((".cpp",".h",".hpp",".c",".inc"))` plus the pruned
+   directory set is a definition. *Prose failed four times running; the code
+   form reproduced on another lane's first attempt, 3 for 3.*
+2. **The denominator must be the population the NUMERATOR IS DRAWN FROM** —
+   not merely a superset containing it. **Subset is necessary and not
+   sufficient.** `2,738 of 27,801` is a true statement, passes a subset test,
+   and is still the wrong fraction; against the type-matched population it was
+   **13.8%, not 9.8%**.
+
+**THE TWO FAILURES THAT PRODUCED IT:**
+
+- *(Librarian)* reported `296 of 19,800` where **not one of the 296 was inside
+  the 19,800** — numerator `tools/foundry/*.py` + `docs/**.md`, denominator
+  C/C++ excluding `tools/`. **Two unrelated counts joined by the word "of."**
+  It passed every earlier form of this rule.
+- *(Housing/Engine)* divided by ALL FILES — `.md`, `.json`, `.png` — making
+  their own coverage look worse than it was. **Bias in the flattering
+  direction for a confession is still a wrong denominator.**
+
+**AND THE STOPPING RULE, which is part of the doctrine and not an afterthought
+(Housing/Engine called it):** *"the FINDING has not moved through five rounds
+and two lanes and two methods. Only the denominators moved. Five rounds of
+scope correction on a stable finding is where rigour turns into theatre."*
+**When the correction rounds stop changing the finding, the thread is done.**
+Nothing in this section justifies a sixth round on a stable number.
+
 ## RELAYED AUTHORITY — calibrate the threshold to REVERSIBILITY
 
 **History/Bridge, 2026-08-17, in their FINAL row before retiring. Recorded here

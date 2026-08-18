@@ -97,8 +97,54 @@ INTERVAL = 50
 PLATE_WAKE_SEC = 100
 
 ROW = re.compile(r"^- \[([ xX])\]([^|]*)\|")
-MINE = re.compile(r"\b(HISTORY|BRIDGE|ALL LANES|ALL)\b", re.I)
-AUTHORED = re.compile(r"History/Bridge|HISTORY/BRIDGE", re.I)
+MINE = re.compile(r"\b(HISTORY|BRIDGE|ALL LANES|ALL|DECODER)\b", re.I)
+# ---------------------------------------------------------------------------
+# (6) SELF-SUPPRESSION WAS A SUBSTRING SEARCH OVER A FIXED TAIL WINDOW, AND IT
+# WAS WRONG IN BOTH DIRECTIONS. Measured over all 361 rows on the live board:
+#
+#   ·  9 FALSE POSITIVES - rows authored by FOUNDRY and HOUSING SECURITY whose
+#      text merely MENTIONS "History/Bridge" (e.g. "Foundry, withdrawing the
+#      node-0 comparand - History/Bridge's box and INF signature are correct").
+#      These were SUPPRESSED AS MINE. **A row ABOUT this lane, written BY
+#      another lane, is exactly the row that must never be swallowed** - and
+#      being about me is what made it look like it was from me.
+#   · 28 FALSE NEGATIVES - rows this lane genuinely authored, MISSED because
+#      `s[-260:]` never reached the source field on a long row. Those woke me
+#      on my own filings, the precise noise self-suppression exists to stop.
+#
+# ROOT: authorship is a FIELD, not a substring. The row format is
+# `- [ ] LANES | BODY | SOURCE, note | DATE`, so the author is the LEADING NAME
+# of the second-to-last pipe field. Anchor there and both error classes vanish.
+# An unparseable/absent source field yields NOT-MINE, which errs toward
+# DELIVERING - the correct failure direction for a monitor.
+# ---------------------------------------------------------------------------
+AUTHORED = re.compile(r"^\s*History\s*/\s*Bridge\b", re.I)
+
+# ---------------------------------------------------------------------------
+# (5) THE BROADCAST BLIND SPOT — found by the USER, not by this watcher, and not
+# by its pulse (which said ALIVE, and ALIVE was true; that is defect 4's lesson
+# repeating in a new place). v4 delivered ONLY on a lane field naming
+# HISTORY/BRIDGE, treating ALL / ALL LANES as informational. That was CORRECT
+# when eight lanes broadcast constantly and exiting on every broadcast would
+# have restored the noise self-suppression exists to stop.
+#
+# IT STOPPED BEING CORRECT WHEN EVERY OTHER LANE RETIRED. DECODER is now the
+# sole active counterpart and this lane is its designated reviewer — and Decoder
+# addresses its rows `[ALL LANES, DECODER]`. So its ob1 milestone, its 12/12
+# claim AND its 12/12 retraction were all detected, logged, and NOT DELIVERED.
+# The one row that woke this lane was the single one that happened to name
+# HISTORY explicitly. The reviewer was structurally blind to the reviewee.
+#
+# FIX: a lane field naming DECODER now forces delivery too. Self-suppression
+# still applies unchanged — rows THIS lane authors carry History/Bridge in their
+# source field, so answering my own Decoder-addressed row does not wake me.
+#
+# THE GENERAL LESSON, which is the part worth keeping: A DELIVERY RULE ENCODES
+# AN ASSUMPTION ABOUT WHO IS TALKING. When the roster changed, the rule silently
+# became a filter against exactly the traffic it existed to catch. Re-read the
+# addressee assumptions whenever the lane roster changes.
+# ---------------------------------------------------------------------------
+FROM_DECODER = re.compile(r"\bDECODER\b", re.I)
 
 
 def plate_open():
@@ -207,7 +253,23 @@ def scan():
         # key on addressee+body so a checkbox flip is a STATE CHANGE, not a new row
         key = hashlib.sha1((m.group(2).strip() + body[:90])
                            .encode("utf-8", "replace")).hexdigest()[:12]
-        rows[key] = (state, m.group(2).strip(), excerpt, bool(AUTHORED.search(s[-260:])))
+        # authorship = LEADING NAME of the source field (see defect 6 above),
+        # never a substring sweep over a tail window.
+        #
+        # (7) BUT THE FIELD'S *POSITION* IS NOT GUARANTEED, and this lane proved
+        # it by waking itself. The canonical row is
+        # `LANES | BODY | SOURCE | DATE` so the source sits at [-2] — but a row
+        # filed WITHOUT the trailing date field has only 3 fields, and then [-2]
+        # is the BODY and the source has slid to [-1]. I filed exactly such a
+        # row, my own suppression missed it, and the watcher delivered my own
+        # filing back to me — the precise noise suppression exists to stop.
+        # FIX: anchor against BOTH tail fields. A well-formed row has the date
+        # at [-1], which cannot match the anchor, so testing both adds no false
+        # positives and removes the dependence on field COUNT.
+        parts = s.split("|")
+        tail = [p.strip() for p in parts[-2:]] if len(parts) >= 3 else []
+        rows[key] = (state, m.group(2).strip(), excerpt,
+                     any(AUTHORED.match(c) for c in tail))
     return rows
 
 
@@ -285,7 +347,7 @@ def main():
     # one: it resolves in whole scans, so a config finer than INTERVAL would
     # otherwise be announced accurately and honoured falsely.
     eff = max(PLATE_WAKE_SEC, INTERVAL)
-    emit("  DELIVERY: exits on an OPEN row naming HISTORY/BRIDGE | SELF-WAKE: %s"
+    emit("  DELIVERY: exits on an OPEN row naming HISTORY/BRIDGE *or DECODER* | SELF-WAKE: %s"
          % ("%d plate item(s), waking in ~%ds (scan %ds)" % (len(plate0), eff, INTERVAL)
             if plate0 else "DISARMED (plate empty - calls only)"))
     if PLATE_WAKE_SEC < INTERVAL:
@@ -310,6 +372,7 @@ def main():
             for k, (st, lane, body, mine_auth) in cur.items():
                 if k not in seen:
                     to_me = re.search(r"\b(HISTORY|BRIDGE)\b", lane, re.I)
+                    from_decoder = FROM_DECODER.search(lane)
                     if mine_auth and not to_me:
                         continue
                     emit("NEW [%s] >> [%s] %s" % (st, lane, body))
@@ -318,8 +381,17 @@ def main():
                     # (ALL / ALL LANES) do not, and neither does an already-[x] row
                     # appearing for the first time - that is history landing on the
                     # board, not work arriving.
-                    if to_me and not mine_auth and st == " ":
-                        to_me_events.append(lane)
+                    if (to_me or from_decoder) and not mine_auth and st == " ":
+                        # (8) NAME THE TRIGGER, do not just count it. Housing
+                        # Security's rule, adopted rather than agreed with: IF A
+                        # TOOL TAKES AN ACTION ON A CONDITION, IT MUST BE ABLE TO
+                        # NAME THE CONDITION. This banner used to print a COUNT,
+                        # so every delivery required reading the surrounding
+                        # output to infer what actually fired -- reasoning from
+                        # context, which is the same inference-from-absence that
+                        # produced three false findings on this board in a day.
+                        why = "addressed to HISTORY/BRIDGE" if to_me else "authored/addressed DECODER"
+                        to_me_events.append((lane, why, body[:110]))
                 elif seen[k][0] != st:
                     emit("%s >> [%s] %s" % ("ANSWERED" if st == "x" else "RE-OPENED",
                                             lane, body[:400]))
@@ -378,8 +450,13 @@ def main():
                 # exiting on them would restore the noise self-suppression exists
                 # to prevent. RE-ARM after handling; the row set is re-baselined.
                 # ---------------------------------------------------------------
-                emit("HISTORY-WATCH ** EXITING TO DELIVER ** %d row(s) addressed to "
-                     "HISTORY/BRIDGE. Re-arm after handling." % len(to_me_events))
+                emit("HISTORY-WATCH ** EXITING TO DELIVER ** %d row(s). Re-arm "
+                     "after handling." % len(to_me_events))
+                for lane, why, excerpt in to_me_events:
+                    emit("   TRIGGERED BY: [%s] (%s)" % (lane, why))
+                    emit("      %s" % excerpt)
+                if not to_me_events:
+                    emit("   (NO TRIGGER RECORDED - spurious wake, report it)")
                 write_pulse(passes, "exited-to-deliver",
                             "%d to-me row(s)" % len(to_me_events))
                 return 0

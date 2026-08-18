@@ -77,10 +77,38 @@ The briefing's load-bearing number is **exact**: `HEAD..origin/main` = **2,861**
 divergence `be82e606b2` dated **2026-05-08**. Both to the digit.
 
 **But it omits the other half: we are also ~635 commits AHEAD** (635 at measurement;
-already 636 the same evening after loss-protection commit `a8f163488a` — this number
-DRIFTS with every snapshot, so re-measure `origin/main..HEAD` before scoping, don't cite
-this one). Phase 1's "the merge" is a **reconciliation of ~635 against 2,861**, not a
-catch-up. Scope it on both numbers.
+636 later the same evening, 670 by 03:50 — this number DRIFTS with every snapshot, so
+re-measure `origin/main..HEAD` before scoping, never cite this one).
+
+> #### ⛔ AND THE SENTENCE THAT USED TO FOLLOW WAS WRONG — CORRECTED IN PLACE 2026-08-18
+>
+> It read: *"Phase 1's 'the merge' is a reconciliation of ~635 against 2,861, not a
+> catch-up. Scope it on both numbers."* **The NUMBERS are right. What they GOVERN is
+> not.** They describe **`C:\Users\xxxxx\Documents\dusklight` — the FORK, which is the
+> MOD.** Phase 1's host upgrade happened in a **different repository**.
+>
+> **MEASURED IN BOTH TREES, 2026-08-18, on Integrator's correction:**
+>
+> | tree | what it is | behind | ahead | `GAME_SERVICE_MAJOR` |
+> |---|---|---|---|---|
+> | `dusklight-main` | the **HOST** (vanilla) | **0** | **0** | **2u** |
+> | `dusklight` | the **FORK** (our mod) | 2,861 | 670 | 1u |
+>
+> **`dusklight-main` fast-forwarded 39 commits to `c880d46fb5` — HEAD == origin/main,
+> 0 ahead, so ZERO conflicts were POSSIBLE.** There was no reconciliation to scope.
+> Meanwhile this repo's HEAD is **not** an ancestor of `c880d46fb5`, so its 2,861/670
+> divergence is real — it is simply **not the thing Phase 1 was about**.
+>
+> **⚠ LOAD-BEARING CONSEQUENCE: `GAME_SERVICE_MAJOR` went `1u → 2u` — VANILLA IS NOW
+> EPOCH 2, and every game-coupled mod on that host is invalidated by design.** This
+> tree is still `1u`. Whatever merges must carry the epoch-2 ABI.
+>
+> **THE ERROR CLASS, because it is the third form of the same mistake in one session:
+> a CORRECT measurement attached to the WRONG SUBJECT.** The vacuous-match trap was a
+> measurement that could not see its subject; the stale-artifact red was a measurement
+> of a superseded subject; this was a measurement of a different subject entirely.
+> **Verifying a number is not verifying what the number is ABOUT** — and I verified the
+> number, twice, while never asking which repository the question lived in.
 
 ### State at retirement — all measured, not remembered
 

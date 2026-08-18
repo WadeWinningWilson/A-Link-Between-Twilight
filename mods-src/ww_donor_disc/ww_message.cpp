@@ -27,6 +27,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <new>
 
 IMPORT_SERVICE(LogService, s_msgLog);
 
@@ -92,8 +93,304 @@ const uint32_t kSizeUnit = 32u;
 // ============================================================================
 namespace {
 
+// ============================================================================
+// Yaz0 (SZS) decompression — PORTED FROM THE DONOR, NOT AUTHORED HERE.
+//
+// KIT-DONOR: JSystem/JKernel/JKRDecomp.cpp :: JKRDecomp::decodeSZS
+// KIT-DONOR-STATUS: MATCHED — `Object(Matching, "JSystem/JKernel/JKRDecomp.cpp")`
+//                   at configure.py:994, so this is byte-for-byte the routine
+//                   the retail game runs on these archives.
+//
+// DN-10 STEP 1: the donor has its own decoder, so it is PORTED rather than
+// reconstructed. No decompressor was authored for this receiver. Specialised
+// to the whole-buffer case: the donor's `dstSize` is a SKIP counter and its
+// `srcSize` an emit COUNT; here we skip nothing and emit the full length the
+// header declares at +4.
+//
+// PROVEN BEFORE WIRING, against the donor's own archives rather than a
+// synthetic case: all 12 Yaz0 files in `res/Msg` decode to magic `RARC` at
+// byte 0 with a length exactly equal to the header's declared size. A
+// transcription error in an LZ inner loop desynchronises the stream within a
+// few hundred bytes — twelve exact-length RARCs is not a result a broken port
+// can produce.
+//
+// THE BOUNDS CHECKS ARE RECEIVER-SIDE, NOT DONOR BEHAVIOUR. Retail trusts its
+// own disc; we are handed a buffer whose length we know, so overruns refuse
+// instead of reading past the end. That is a consumption-boundary guard and
+// changes no donor byte.
+// ============================================================================
+uint32_t yaz0DecompressedSize(const unsigned char* a) {
+    return (uint32_t(a[4]) << 24) | (uint32_t(a[5]) << 16) |
+           (uint32_t(a[6]) << 8) | uint32_t(a[7]);
+}
+
+bool yaz0Decode(const unsigned char* src, uint32_t srcSize,
+                unsigned char* dst, uint32_t dstSize) {
+    uint32_t si = 0x10;
+    uint32_t di = 0;
+    unsigned int bits = 0;
+    int nbits = 0;
+
+    while (di < dstSize) {
+        if (nbits == 0) {
+            if (si >= srcSize) return false;
+            bits = src[si++];
+            nbits = 8;
+        }
+        if (bits & 0x80) {
+            if (si >= srcSize) return false;
+            dst[di++] = src[si++];
+        } else {
+            if (si + 1 >= srcSize) return false;
+            const unsigned int b0 = src[si];
+            const unsigned int b1 = src[si + 1];
+            si += 2;
+            const uint32_t dist = ((b0 & 0x0Fu) << 8) | b1;
+            uint32_t count = b0 >> 4;
+            if (count == 0) {
+                if (si >= srcSize) return false;
+                count = uint32_t(src[si++]) + 0x12u;
+            } else {
+                count += 2;
+            }
+            if (dist + 1u > di) return false;          // copy source underflows
+            uint32_t cs = di - dist - 1u;
+            if (di + count > dstSize) return false;     // would overrun the output
+            while (count-- != 0) dst[di++] = dst[cs++];
+        }
+        bits = (bits << 1) & 0xFFu;
+        nbits--;
+    }
+    return di == dstSize;
+}
+
+// ============================================================================
+// Decompressed-archive cache — ENTRIES ARE NEVER EVICTED, AND THAT IS THE
+// DESIGN, NOT AN OVERSIGHT.
+//
+// `rarcFindMember` returns a NON-OWNING pointer INTO the archive, and
+// `wwMessage_open` then caches views into it (`s_base`, `s_inf1`, `s_dat1`).
+// Freeing or evicting a decompressed buffer while any of those are live turns
+// every later read into a read of freed memory — the failure this file already
+// documents twice (see `wwMessage_close`, and the colour-table note below it).
+//
+// So a decompressed archive is allocated once and kept for the module's
+// lifetime. The population is bounded and small: 12 Yaz0 archives in the
+// donor's `res/Msg`, ~1.05 MB if every one were opened at once. A FULL TABLE
+// REFUSES LOUDLY RATHER THAN EVICTING, because eviction reintroduces exactly
+// the dangling pointer this design exists to prevent.
+// ============================================================================
+// ----------------------------------------------------------------------------
+// THE KEY IS CONTENT, NEVER AN ADDRESS. (Housing/Engine caught this on review
+// of the first cut, which keyed on the caller's archive POINTER.)
+//
+// The compressed archive is CALLER-OWNED and this module does not control its
+// lifetime, so a raw address is not an identity — and never-evict made that
+// permanent rather than transient. It failed in BOTH directions:
+//
+//   · SILENT WRONG DATA — the source arc is freed and a DIFFERENT archive of
+//     the same compressed size lands at the same address. Allocators reuse
+//     same-size blocks as ordinary behaviour, so that is not exotic. Result is
+//     a cache HIT returning the previous archive's text, with no fault and no
+//     refusal to notice it by.
+//   · CAP EXHAUSTION BY CHURN, which fires first in practice — the SAME
+//     archive re-loaded at a NEW address is a MISS and burns a fresh slot.
+//     Across stage transitions the table fills with duplicates of a handful of
+//     archives, then refuses PERMANENTLY. The symptom is "messages worked,
+//     then stopped after playing a while", which no short run surfaces.
+//
+// Hashing the compressed bytes makes a re-load at a new address a HIT, which
+// removes the churn failure entirely and converts the correctness question
+// from a lifetime one (unanswerable here) into a collision one (bounded and
+// astronomically unlikely with a 64-bit hash plus both sizes).
+// ----------------------------------------------------------------------------
+uint64_t yaz0KeyOf(const unsigned char* a, uint32_t size) {
+    uint64_t h = 1469598103934665603ull;            // FNV-1a offset basis
+    for (uint32_t i = 0; i < size; ++i) {
+        h ^= a[i];
+        h *= 1099511628211ull;                      // FNV-1a prime
+    }
+    return h;
+}
+
+struct Yaz0CacheEntry {
+    uint64_t key;       // content hash — NOT an address (see above)
+    uint32_t srcSize;
+    uint32_t outSize;
+    unsigned char* buf;
+    uint32_t len;
+};
+
+const int kYaz0CacheMax = 24;   // 2x the donor's res/Msg population
+Yaz0CacheEntry s_yaz0Cache[kYaz0CacheMax];
+int s_yaz0CacheCount = 0;
+
+// ----------------------------------------------------------------------------
+// THE TRANSIENT PATH — why not everything goes in the never-evict table.
+// (Housing/Engine raised the exhaustion; the consumer lifetimes below are the
+// measurement that decides it.)
+//
+// `rarcFindMember` is ONE GATE serving FOUR callers, and they do not have the
+// same lifetime needs:
+//
+//   · MESSAGE opens (`wwMessage_open`, `wwMessageColor_open`) stash views —
+//     `s_base`, `s_inf1`, `s_dat1` — that outlive the call. Those MUST be
+//     cached and never evicted. Population: 12 archives, ~1.05 MB. Bounded.
+//   · `wwMessage_rarcFind` callers CONSUME WITHIN THE CALL. Measured, not
+//     assumed: `main.cpp:271` reads `stage.dzs`, extracts one int and calls
+//     `wwRegistry_setStageType(stage, int)`; `main.cpp:309` reads `room.dzr`
+//     and `memcpy`s names into a LOCAL `char nm[9]`. Neither lets a pointer
+//     into the archive escape.
+//
+// Sending stage/room archives through the persistent table was a real defect:
+// `res/Stage` holds 328 Yaz0 archives against 24 never-evicted slots, so a
+// player crossing ~24 compressed stages fills it with LEGITIMATELY DISTINCT
+// entries and then every later stage load fails with "cache full". Content
+// keying cannot help — that failure is diversity, not duplication. And 24
+// slots of multi-MB `Stage.arc` is tens of MB held for the session, not the
+// ~1 MB the cap was justified against.
+//
+// So the transient path decompresses into ONE reusable scratch buffer.
+//
+// ⚠ CONTRACT: a pointer from the transient path is valid ONLY UNTIL THE NEXT
+// `wwMessage_rarcFind` CALL. Both present callers satisfy that trivially. A
+// future caller that wants to HOLD the bytes must copy them or use the
+// persistent path — and that is exactly why this is spelled out here rather
+// than left as a property someone has to rediscover.
+// ----------------------------------------------------------------------------
+unsigned char* s_yaz0Scratch = nullptr;
+uint32_t s_yaz0ScratchCap = 0;
+// What is CURRENTLY sitting in the scratch buffer, so a repeat request for the
+// same archive does not decompress it again. MEASURED NEED, not speculation:
+// the first boot with this path live logged 20 decodes for 10 archives — every
+// one decompressed TWICE, including a 149,191 -> 773,920 byte archive. The
+// stage/room sniffers ask the same arc for the same member more than once per
+// load, and the transient path had no reuse whatsoever.
+//
+// Safe by the contract already stated above: a transient pointer is valid only
+// until the NEXT wwMessage_rarcFind call, and returning the same buffer for the
+// SAME archive cannot violate that — the bytes are identical either way.
+uint64_t s_yaz0ScratchKey = 0;
+uint32_t s_yaz0ScratchLen = 0;
+bool s_yaz0ScratchValid = false;
+
+const unsigned char* yaz0AcquireTransient(const unsigned char* a, uint32_t size,
+                                          uint32_t declared, uint32_t* outLen) {
+    const uint64_t key = yaz0KeyOf(a, size);
+    if (s_yaz0ScratchValid && s_yaz0ScratchKey == key &&
+        s_yaz0ScratchLen == declared && s_yaz0Scratch != nullptr) {
+        mlogf(LOG_LEVEL_INFO,
+            "[WwMsg] {\"ev\":\"yaz0_scratch_reuse\",\"src\":%u,\"out\":%u}",
+            size, declared);
+        *outLen = s_yaz0ScratchLen;
+        return s_yaz0Scratch;
+    }
+    s_yaz0ScratchValid = false;   // contents are about to be replaced
+    if (declared > s_yaz0ScratchCap) {
+        delete[] s_yaz0Scratch;                 // safe: call-scoped by contract
+        s_yaz0Scratch = new (std::nothrow) unsigned char[declared];
+        s_yaz0ScratchCap = (s_yaz0Scratch != nullptr) ? declared : 0u;
+    }
+    if (s_yaz0Scratch == nullptr) {
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"scratch allocation "
+            "failed\",\"want\":%u}", declared);
+        return nullptr;
+    }
+    if (!yaz0Decode(a, size, s_yaz0Scratch, declared)) {
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"stream ended early or "
+            "would overrun (transient)\",\"declared\":%u}", declared);
+        return nullptr;
+    }
+    s_yaz0ScratchKey = key;
+    s_yaz0ScratchLen = declared;
+    s_yaz0ScratchValid = true;
+    mlogf(LOG_LEVEL_INFO,
+        "[WwMsg] {\"ev\":\"yaz0_decoded\",\"mode\":\"transient\",\"src\":%u,"
+        "\"out\":%u}", size, declared);
+    *outLen = declared;
+    return s_yaz0Scratch;
+}
+
+const unsigned char* yaz0Acquire(const void* arc, uint32_t size, uint32_t* outLen) {
+    const unsigned char* a = static_cast<const unsigned char*>(arc);
+
+    if (size < 0x11u) {
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"shorter than a Yaz0 "
+            "header\",\"size\":%u}", size);
+        return nullptr;
+    }
+
+    const uint32_t declared = yaz0DecompressedSize(a);
+    const uint64_t key = yaz0KeyOf(a, size);
+    for (int i = 0; i < s_yaz0CacheCount; ++i) {
+        if (s_yaz0Cache[i].key == key && s_yaz0Cache[i].srcSize == size &&
+            s_yaz0Cache[i].outSize == declared) {
+            // THE HIT PATH LOGS. The first cut was silent here, so a wrong hit
+            // would have produced wrong text with nothing in the log to see it
+            // by. A cache that only reports its misses cannot be audited.
+            mlogf(LOG_LEVEL_INFO,
+                "[WwMsg] {\"ev\":\"yaz0_cache_hit\",\"src\":%u,\"out\":%u,"
+                "\"slot\":%d}", size, s_yaz0Cache[i].len, i);
+            *outLen = s_yaz0Cache[i].len;
+            return s_yaz0Cache[i].buf;
+        }
+    }
+
+    if (s_yaz0CacheCount >= kYaz0CacheMax) {
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"cache full; entries are "
+            "never evicted because live readers hold views into them\","
+            "\"cap\":%d}", kYaz0CacheMax);
+        return nullptr;
+    }
+
+    const uint32_t outSize = declared;
+    if (outSize == 0u) {
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"header declares zero "
+            "decompressed size\"}");
+        return nullptr;
+    }
+    unsigned char* buf = new (std::nothrow) unsigned char[outSize];
+    if (buf == nullptr) {
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"allocation failed\","
+            "\"want\":%u}", outSize);
+        return nullptr;
+    }
+    if (!yaz0Decode(a, size, buf, outSize)) {
+        delete[] buf;   // safe: nothing has been handed out yet
+        mlogf(LOG_LEVEL_ERROR,
+            "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"stream ended early or "
+            "would overrun; archive truncated or not Yaz0\",\"declared\":%u}",
+            outSize);
+        return nullptr;
+    }
+
+    s_yaz0Cache[s_yaz0CacheCount].key = key;
+    s_yaz0Cache[s_yaz0CacheCount].srcSize = size;
+    s_yaz0Cache[s_yaz0CacheCount].outSize = declared;
+    s_yaz0Cache[s_yaz0CacheCount].buf = buf;
+    s_yaz0Cache[s_yaz0CacheCount].len = outSize;
+    s_yaz0CacheCount++;
+
+    mlogf(LOG_LEVEL_INFO,
+        "[WwMsg] {\"ev\":\"yaz0_decoded\",\"src\":%u,\"out\":%u,\"cached\":%d}",
+        size, outSize, s_yaz0CacheCount);
+
+    *outLen = outSize;
+    return buf;
+}
+
+// `persistent` = the caller will hold views into the returned bytes after it
+// returns, so a Yaz0 archive must go in the never-evict table. FALSE routes it
+// through the reusable scratch buffer (see the contract above).
 const unsigned char* rarcFindMember(const void* arc, uint32_t size,
-                                    const char* member, uint32_t* outLen) {
+                                    const char* member, uint32_t* outLen,
+                                    bool persistent) {
     const unsigned char* a = static_cast<const unsigned char*>(arc);
     if (a == nullptr || member == nullptr || size < 0x40u) {
         mlogf(LOG_LEVEL_ERROR,
@@ -101,14 +398,58 @@ const unsigned char* rarcFindMember(const void* arc, uint32_t size,
             "RARC header\",\"size\":%u}", size);
         return nullptr;
     }
+    // ========================================================================
+    // Yaz0 arrives DECOMPRESSED now, and the premise that used to sit here was
+    // measurably false. This block read:
+    //
+    //     "Yaz0-compressed; this reader handles uncompressed RARC only, and
+    //      the donor message archives are measured uncompressed"
+    //
+    // THE DONOR MESSAGE ARCHIVES ARE NOT ALL UNCOMPRESSED. Counted on the
+    // user's own disc: `res/Msg` holds 35 archives and 12 ARE Yaz0 — every one
+    // a map-name resource (docmapres, gsmapres, heartmapres, htmmapres,
+    // irmapres, moonmapres, submamapres, terrymapres, tnmapres, trmapres,
+    // ygmapres, ysmapres). Disc-wide the census is 640 Yaz0 against 681 RARC,
+    // so this refusal was turning away 48% of every archive on ANY path that
+    // reached this reader, not just messages.
+    //
+    // The refusal was still the right call while no decoder existed — reading
+    // Yaz0 as RARC reports a corrupt entry table and sends someone hunting the
+    // disc. It is superseded, not reversed: we now decode with the donor's own
+    // routine and carry on.
+    // ========================================================================
     if (std::memcmp(a, "Yaz0", 4) == 0) {
-        // Deliberate refusal — see the header. Reading Yaz0 as RARC would
-        // report a corrupt entry table and send someone hunting the disc.
-        mlogf(LOG_LEVEL_ERROR,
-            "[WwMsg] {\"ev\":\"arc_refused\",\"why\":\"Yaz0-compressed; this "
-            "reader handles uncompressed RARC only, and the donor message "
-            "archives are measured uncompressed\"}");
-        return nullptr;
+        uint32_t inflated = 0;
+        const unsigned char* buf = nullptr;
+        if (persistent) {
+            buf = yaz0Acquire(arc, size, &inflated);
+        } else {
+            if (size < 0x11u) {
+                mlogf(LOG_LEVEL_ERROR,
+                    "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"shorter than a "
+                    "Yaz0 header (transient)\",\"size\":%u}", size);
+                return nullptr;
+            }
+            const uint32_t declared = yaz0DecompressedSize(a);
+            if (declared == 0u) {
+                mlogf(LOG_LEVEL_ERROR,
+                    "[WwMsg] {\"ev\":\"yaz0_refused\",\"why\":\"header declares "
+                    "zero decompressed size (transient)\"}");
+                return nullptr;
+            }
+            buf = yaz0AcquireTransient(a, size, declared, &inflated);
+        }
+        if (buf == nullptr) {
+            return nullptr;   // the acquire path has already logged the reason
+        }
+        a = buf;
+        size = inflated;
+        if (size < 0x40u) {
+            mlogf(LOG_LEVEL_ERROR,
+                "[WwMsg] {\"ev\":\"arc_refused\",\"why\":\"decompressed shorter "
+                "than a RARC header\",\"size\":%u}", size);
+            return nullptr;
+        }
     }
     if (std::memcmp(a, "RARC", 4) != 0) {
         mlogf(LOG_LEVEL_ERROR,
@@ -182,18 +523,23 @@ const unsigned char* rarcFindMember(const void* arc, uint32_t size,
 // which is exactly the trap just fixed in registry.cpp.
 const void* wwMessage_rarcFind(const void* arc, uint32_t size, const char* member,
                                uint32_t* outLen) {
-    return rarcFindMember(arc, size, member, outLen);
+    // TRANSIENT: both callers (main.cpp:271 stage.dzs, :309 room.dzr) consume
+    // within the call - measured, not assumed. The returned pointer is valid
+    // only until the next wwMessage_rarcFind call; copy if you need to hold it.
+    return rarcFindMember(arc, size, member, outLen, /*persistent=*/false);
 }
 
 bool wwMessage_openFromArc(const void* arc, uint32_t size, const char* member) {
     uint32_t len = 0;
-    const unsigned char* p = rarcFindMember(arc, size, member, &len);
+    // PERSISTENT: wwMessage_open stashes s_base/s_inf1/s_dat1 into these bytes.
+    const unsigned char* p = rarcFindMember(arc, size, member, &len, /*persistent=*/true);
     return (p != nullptr) && wwMessage_open(p, len);
 }
 
 bool wwMessageColor_openFromArc(const void* arc, uint32_t size, const char* member) {
     uint32_t len = 0;
-    const unsigned char* p = rarcFindMember(arc, size, member, &len);
+    // PERSISTENT: the colour table is read back after this call returns.
+    const unsigned char* p = rarcFindMember(arc, size, member, &len, /*persistent=*/true);
     return (p != nullptr) && wwMessageColor_open(p, len);
 }
 

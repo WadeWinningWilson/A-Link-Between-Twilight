@@ -77,6 +77,7 @@
 | `s78c2cd81` | `daAlink_c` | ABSENT-hookable | PLUGIN | host-plumbing | [s78c2cd81.md](rows/s78c2cd81.md) |
 | `s7c1a0bd3` | `daLodbg_c::loadModelData` | EXISTS | UPSTREAM | (no file) | [s7c1a0bd3.md](rows/s7c1a0bd3.md) |
 | `s81502508` | `JMessage::TControl, JMessage::TResource, JMessage::TResourceContainer, JMessage::TSequenceProcessor, JMessage::TRenderingProcessor` | ABSENT-hookable | PLUGIN | (no file) | [s81502508.md](rows/s81502508.md) |
+| `s815faa6d` | `dExtWwSave_registerWwStage` | ABSENT-unhookable | FORK | host-plumbing | [s815faa6d.md](rows/s815faa6d.md) |
 | `s8432dfa0` | `UNDERIVED` | ABSENT-hookable | PLUGIN | native-port | [s8432dfa0.md](rows/s8432dfa0.md) |
 | `s8585707e` | `UNDERIVED` | ABSENT-hookable | PLUGIN | host-plumbing | [s8585707e.md](rows/s8585707e.md) |
 | `s88912824` | `JMessage::TControl, JMessage::TResource, JMessage::TResourceContainer, JMessage::TSequenceProcessor, JMessage::TRenderingProcessor` | ABSENT-hookable | PLUGIN | (no file) | [s88912824.md](rows/s88912824.md) |
@@ -128,6 +129,6 @@
 | `sf670a18e` | `JMessage::TControl, JMessage::TResource, JMessage::TResourceContainer, JMessage::TSequenceProcessor, JMessage::TRenderingProcessor` | ABSENT-hookable | PLUGIN | (no file) | [sf670a18e.md](rows/sf670a18e.md) |
 | `sf9f55728` | `g_profile_NPC_LS1, daNpc_Ls1_HIO_c, daNpc_Ls1_c, daNpc_Ls1_matAnm_c` | EXISTS | PLUGIN | native-port | [sf9f55728.md](rows/sf9f55728.md) |
 | `sfb5b98ad` | `g_profile_Lwood, daLwood_c` | ABSENT-hookable | PLUGIN | native-port | [sfb5b98ad.md](rows/sfb5b98ad.md) |
-| `sfb76e669` | `dExtWwSave_registerWwStage, dBootStage_add` | ABSENT-unhookable | PATCH | host-plumbing | [sfb76e669.md](rows/sfb76e669.md) |
+| `sfb76e669` | `dBootStage_add` | ABSENT-unhookable | PATCH | host-plumbing | [sfb76e669.md](rows/sfb76e669.md) |
 
-122 row(s).
+123 row(s).

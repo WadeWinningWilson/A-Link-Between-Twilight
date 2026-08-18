@@ -273,3 +273,121 @@ estate lost three artifacts to session-temp in one week.*
 - **The public surfaces were never given a containment read**: the
   `A-Link-Between-Dusklight` repo and three `zeldaret/tww` PRs. Offered to the
   user, never taken up. No evidence of any problem; also no check performed.
+
+---
+
+# 8. SUCCESSOR UPDATE — 2026-08-17 (evening). Written by the instance created that day.
+
+> §7 was my predecessor's exit. This is mine, written while still working —
+> **not a retirement.** The user corrected an earlier draft of this section for
+> reading like one.
+
+## 8.1 THE WORLD MOVED. Re-read §7.1 knowing this.
+
+**`dusklight-main` is now `c880d46fb5`, epoch 2.** §7.1's "everything I measured
+predates the services" is no longer a warning about hypothetical services —
+they are **on disk** with implementations in `src/dusk/mods/svc/`.
+
+- **It was a PURE FAST-FORWARD**, 39 commits, 0 ahead, zero conflicts possible.
+  §7.6's "branch before merging" and the ownership-map-as-conflict-map framing
+  were scoped against **the fork**, which is the MOD, not the host. That cost
+  me a 443-conflict prediction against the wrong repository.
+- **`GAME_SERVICE_MAJOR` 1u → 2u.** Every game-coupled mod is invalidated by
+  design — dusklight's OWN `shadow_mod` fails identically. That is the guard.
+- **The plugin was rebuilt for epoch 2 and LOADS on stock vanilla**, serving
+  donor arcs, roster ON-ROSTER, 2,213 FST files.
+
+## 8.2 TWO EPOCH-2 TRAPS — both cost a build
+
+1. **`MOD_ABI_VERSION` is `1u` in BOTH epochs.** The MOD ABI did not bump; the
+   GAME ABI did. Anything keying on it to detect the epoch takes the wrong
+   branch **silently**. Use `__has_include(<mods/svc/hook.hpp>)`.
+2. **`IMPORT_SERVICE` dropped `static`** (`service.hpp:49`): internal →
+   external linkage, so a service imports in **one file only**. Ours was in two
+   → `LNK2005`. `mods/hook.hpp` is now a deprecation shim for
+   `mods/svc/hook.hpp`.
+
+## 8.3 PHASE 4a HAS A DEMONSTRATED SEAM — the first one
+
+`d_bg_s_acch.cpp:170`'s WW-host test is **replaced** by a plugin-side pre-hook
+on `dBgS_Acch::CrrPos` that throws the receiver's **own**
+`FLAG_GND_THIN_CELLING_OFF`. Boot 212953: install `r:0` · both setters bound ·
+1,265 invocations · **WW arm fired**. Zero receiver edits, zero patch.
+
+**And the seam is far smaller than "1 blocker":** twelve consumer sites,
+**SEVEN pure diagnostics**, five behavioural. Of the five — one done (above),
+one needs address-binding (`mDoLib_clipper::clip` is AMBIGUOUS), **three are
+blocked on WW subsystems living TREE-SIDE** (`dExtNpcMount` 57 files/113
+symbols/804 sites · `dKyWw_*` 45/25). That is a Phase-5 move, not a patch.
+**Phase 5 sizing: 757 of 894 call sites (85%) move free; the re-siting surface
+is 137, of which only 10 are diagnostics.**
+
+## 8.4 THE MISTAKE I MADE ALL DAY, in one line
+
+**I designed against a surface the plugin ALREADY COVERED — seven times.**
+Duplicate `CrrPos` hook. Duplicate `BgDraw` hook — which a predecessor had
+already proven **inlined-dead**, with an inline disambiguator built beside it
+saying so. Five smaller ones.
+
+**Every single recovery came from READING AN ARTIFACT, never from reasoning
+further.** The mitigation is mechanical, not attitudinal:
+
+> **GREP THE PLUGIN FOR THE SYMBOL BEFORE DESIGNING ANYTHING AROUND IT.**
+
+Corollary, learned the same way: **a silent instrument is not a result.**
+`create_census`, `acch_ground` and `MtdCreate` are all gated on `s_diagProbes`
+(config key **`mod.wwDonorDisc.wwDiagProbes`**, a **FLAT DOTTED KEY** — I wrote
+a nested object first and created a phantom the loader never reads).
+
+## 8.5 OUTSET — where it actually stands, and the strategic correction
+
+Measured, probes confirmed live: `create_census` **distinct 135 · COMPLEATE 35
+· ERROR 99 · looping 1**, and **`room_set_bgw` = 0**. Actors complete; **no
+collision ever registers**. The **99 is already catalogued** (§7.3 #6 —
+`daGrass_Create` returns `cPhs_ERROR_e` on every path; born-dead is CORRECT).
+
+**`Room: -1` is a SYMPTOM, not a cause.** DN-1: *"the player's room number is
+DERIVED FROM THE BG UNDER HIS FEET."* I had the chain backwards for several
+turns and built a fix (`stageBecomingWw` at the MULT gate) on it — it left
+`mult_donor:1 / mult_receiver:2` **unchanged**, which is a clean disproof. The
+MULT work is still correct on its own terms (WW must not walk MULT at load);
+judge it separately.
+
+**THE STRATEGIC POINT, from the user, and it supersedes the whole hunt:**
+collision registration **already worked** — lwood/akabe/TagSo spawned,
+registered collision and drew on unmodified dusklight. So this is a regression
+against a working demonstration that **predates the fast-forward**, and the
+fast-forward's PURPOSE was to unlock **header-ful** plugins.
+
+> **Do not spend another night rooting a `void*` defect. Phase 5 (typed,
+> header-ful) dissolves the class the defect belongs to.**
+
+**CORRECTION, same evening, user-caught:** I wrote here that the lwood
+tree-side-vs-plugin-side FPS measurement was "the one measurement that decides
+the roadmap." **It is not, and proposing it now was out of sequence.** The
+briefing puts it INSIDE Phase 5, after *"Rebuild plugin-side actors as typed"* —
+measuring per-frame cost on a path that currently draws NOTHING measures noise.
+
+**The briefing names the actual next step and it is not a Phase-5 item:**
+
+> **Phase 2 — RE-MEASURE.** Re-run against current vanilla: the 122-seam
+> census, `binding_plan`/19a, the doorway classification. How many of the 87
+> ABSENT-hookable are now EXISTS or covered by a published service, and does
+> the 1 ABSENT-unhookable survive? **"Everything downstream branches on this
+> number. It is also the honest answer to 'is the patch needed at all.'"**
+
+It was Foundry's; Foundry retired; I filed it to BRIDGE/ENGINE as unowned. **It
+is the gate on Phases 3-6 and it has not run.** Read the briefing before
+proposing a next step — I did not, and invented one.
+
+## 8.6 STATE
+
+Aurora skip-draw work: rebased onto the pin, branch `dusk-skipdraw-cf3ffc98`
+(`3eed7c2`, `e9ec4a7`), both epochs compiling. **THE FORK'S OWN aurora set — 13
+files / 995 insertions — IS STILL UNCOMMITTED**, patch-file-only at
+`aurora-patches/`. It is the only thing here still losable to a stray command.
+
+Artifacts: `BASELINE-PHASE0.md` · `FINDING-phase4a-resite.md` (19 §§) ·
+`FINDING-phase5-sizing.md` · `FINDING-save-slots.md` (saves PROVEN intact).
+Plate: `INTEGRATOR-PLATE.md`. Timer: `integrator_timer.py`, arm **via the
+Monitor tool only**.

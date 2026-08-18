@@ -112,3 +112,51 @@ RULES, because a self-waking watcher is a noise generator if these slip:
       falsifiable completeness test (dtk address ranges) and a negative control
       (trips on 2 of 869 TUs). `BYTE-TRUE` barred from this provenance.
 - [x] MONITOR DELIVERY — watcher now exits to deliver instead of accumulating.
+
+- [x] **Yaz0 wiring in `mods-src/ww_donor_disc/ww_message.cpp`** — WIRED + BUILDS 2026-08-18 (donor `decodeSZS` ported, never-evict cache, premise corrected in place). **RUNTIME UNOBSERVED — needs a boot before anyone calls it working.**
+  ~~superseded description follows~~ — the donor
+  `JKRDecomp::decodeSZS` transcription is PROVEN 12/12 against real archives;
+  what remains is the OWNERSHIP design, not the algorithm.
+  `rarcFindMember` returns a NON-OWNING pointer and `wwMessage_open` caches
+  views into it (`s_base`/`s_inf1`/`s_dat1`), so a decompress into a local
+  dangles. Needs a module-owned decompressed cache that outlives the open
+  reader, freed only where `wwMessage_close()` already drops its pointers.
+  Replace the `:104` refusal with decompress-then-parse and CORRECT the false
+  premise comment ("the donor message archives are measured uncompressed" —
+  12 of 35 in `res/Msg` are Yaz0; 640 of 1321 disc-wide).
+  **MUST BUILD BEFORE ANY STATUS CLAIM** — this lane's DO-NOT-TRUST section
+  records that its pre-§988 clean-compile reports were worthless.
+- [x] **Job ② — SPLIT tracker row `sfb76e669`** — DONE 2026-08-18: split into `sfb76e669` (dBootStage_add, PATCH) + new `s815faa6d` (dExtWwSave_registerWwStage, FORK). 123 rows, 0 errors, indexed. My "missing schema term" blocker was FALSE — `FORK` was declared all along with zero users.
+  ~~old description~~ (measured 2026-08-18; scoping
+  DONE, see the filed row). Population is ONE row, not twelve. It mixes two
+  symbols under one label: `dBootStage_add` keeps `ABSENT-unhookable`
+  (re-verified against the epoch-2 StageService, which is actor-level only and
+  does NOT expose stage registration); `dExtWwSave_registerWwStage` is a
+  WRONG-PLACE/fork-side verdict. **BLOCKED: `_schema.json` has no WRONG-PLACE
+  term — that vocabulary call is Integrator's or the user's, not mine.**
+- [x] **CHECK `s49f0caba` AGAINST SaveService** — CLOSED 2026-08-18, answer is
+  NO. Housing/Engine measured it and I verified at `save.h`: `set_blob`/`get_blob`
+  are CURRENT-SLOT only, `peek_blob(slot,…)` gives cross-slot READ, there is no
+  cross-slot WRITE. `eraseSlot`/`copySlot` run from the file-select screen where
+  no slot is active (`MOD_UNAVAILABLE`), so the SPLIT is CORRECT AS FILED.
+  **Doorway re-measure closes at ZERO rows moved by epoch 2 — a measured null.**
+  Residual ask is INTEGRATOR's, not mine: one slot-targeted write mirroring
+  `peek_blob`. (superseded item, kept for the record)
+
+  doorway re-measure (CLOSED 2026-08-18: 122 rows → 23 domain → 19 ABSENT →
+  16 already PLUGIN → 3 → 1; the 14 `window` candidates were a homonym,
+  `WindowService` is host desktop-window management, not J2D). This row is
+  `src/d/d_ext_save_flags.cpp`, `SPLIT` / `ABSENT-hookable`. SaveService gives
+  `set_blob`/`get_blob`/`peek_blob` + `observe_saves`. **If that covers the WW
+  save-flag shim, the SPLIT collapses to a clean PLUGIN route.**
+
+- [x] **PHASE 2 — the doorway re-measure** — SOLVED 2026-08-18: the 21 "flips" are a DONOR-vs-RECEIVER frame mismatch (rows cite `WW DP/configure.py`, validator measures the TP binary). Merge moved ZERO seams; the 1 ABSENT-unhookable survives. Residual is Integrator's design call on which frame `row_doorway.py` should validate.
+  ~~old~~ **PHASE 2 — the doorway re-measure** (Integrator's routing, 2026-08-18).
+  Raw: 119/123 STALE. NOT yet a finding. Vanilla image VALIDATED (post-merge
+  `c880d46fb5`, exe 08-17 20:02). Mangling hypothesis FALSIFIED. Blocked on:
+  (1) a CURRENT fork build — ours is 08-17 21:08 vs HEAD 23:00, so `n_own` is
+  two hours blind; (2) a ruling on whether planned-port rows are exempt from
+  the `n_own == 0` check, since an ABSENT-hookable row cites code that does not
+  exist yet BY DESIGN and the check fires on the row's own premise.
+  Report per ROW on the "declared ABSENT-* but PRESENT on vanilla" bucket (69
+  symbol-level hits) — that is the bucket the briefing actually asks about.

@@ -15,6 +15,26 @@
 > merge artifact until proven otherwise*). **Re-measure before citing any number
 > here as current.**
 >
+> ## ⏭️ THE EVENT THIS STAMP ANTICIPATED HAS NOW HAPPENED — amended 2026-08-17
+> **THE MERGE LANDED.** `dusklight-main` fast-forwarded **39 commits to
+> `c880d46fb5`** (2026-08-15), **ABI epoch 2**, and the services listed above
+> are **ON DISK with real implementations** — 18 files in `src/dusk/mods/svc/`,
+> verified at source, not relayed.
+>
+> **SO THE WORDS ABOVE HAVE CHANGED FORCE WITHOUT CHANGING MEANING.**
+> *"Predates the services"* no longer reads as *"those services are
+> hypothetical"*; it now reads as **"measured against a host that no longer
+> exists."** Same sentence, opposite practical weight — a reader before the
+> merge would treat these numbers as current-minus-a-roadmap, and a reader
+> after it must treat them as historical.
+>
+> **A supersession stamp is itself dated evidence.** It was correct when
+> written this afternoon and needed this amendment within hours, which is the
+> argument for putting the COMMIT and the DATE in a stamp rather than only the
+> list of what it predates: a list ages silently, a commit hash does not.
+> (Integrator caught it; Librarian amended.)
+
+>
 > **AND ONE THING THIS DOCUMENT CARRIES THAT THE OTHER TWO DO NOT:** its
 > premise is *the patch it compiles*. The user's 2026-08-17 delivery ruling
 > (plugin + patcher, recorded in

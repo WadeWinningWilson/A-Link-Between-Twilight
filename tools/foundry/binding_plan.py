@@ -307,6 +307,28 @@ def derivation_sha256():
 def main():
     argv = sys.argv[1:]
     dpath = Path(argv[argv.index("--def") + 1]) if "--def" in argv else DEF
+    # ====================================================================
+    # --sdk: MEASURE AGAINST A DIFFERENT SDK TREE THAN THE ONE WE LIVE IN.
+    #
+    # Added 2026-08-18 (Foundry, Phase 2 re-measure). `--def` was already
+    # parameterised; `SDK` was NOT, so a run in this tree ALWAYS counted
+    # this tree's service headers. After the host fast-forwarded to
+    # c880d46fb5 (epoch 2), the four new services -- Save/Stage/Item/
+    # Window -- exist only in the `dusklight-main` clone. Running here
+    # reported "102 published functions" and NAMED NONE OF THEM, which is
+    # a confident answer to the PREVIOUS epoch's question.
+    #
+    # It could not error: an SDK path that resolves and parses cleanly is
+    # indistinguishable from the RIGHT SDK path. Half a parameterised
+    # input pair is the trap -- `--def` moving while `SDK` stayed pinned
+    # is what let the two inputs describe different worlds silently.
+    # ====================================================================
+    global SDK
+    if "--sdk" in argv:
+        SDK = Path(argv[argv.index("--sdk") + 1])
+        if not SDK.is_dir():
+            print("--sdk path is not a directory: %s" % SDK)
+            return 2
     # §536: hash the files ACTUALLY OPENED, rather than an input list somebody
     # remembered. Three stamps in a row each missed a different input; a fourth
     # enumeration would have the same shape. Tracing removes the judgment.
