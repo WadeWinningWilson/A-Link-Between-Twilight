@@ -1173,3 +1173,18 @@ this-pointer. The tell was there — 0x2ec is nowhere near field_0x710.
 REVISED classification of the 63 "other" rows: 45 stack-layout (one function),
 4 .bss-anchor settling, 3 case-order (fixed, now ~1), 2 data offset, rest echoes.
 NOTHING in the "other" bucket is a known defect.
+
+## Round 25: absXZ TRANSFERS TO p2 — the 45-row cluster collapses; ob1 sites are NOT the same idiom
+
+goal_talkpos_to_goalpos 22 rows -> 2 with (a_goal_pos - current.pos).absXZ();
+a second site in the same function (the 5.0f check) took p2 to 132/145 exact,
+fuzzy 99.949%. **45 of the 63 "other" rows were this ONE cause.**
+CAUTION LEARNED THE HARD WAY: I swept the same conversion into ob1's two flat
+sites and it REGRESSED the TU 99.807 -> 99.059. Those sites use
+**PSVECSquareMag = abs2XZ (SQUARED)**, not absXZ. Reverted.
+=> absXZ replaces ONLY the sqrt-of-squaremag form. A bare PSVECSquareMag on a
+flattened vector is the abs2XZ idiom and must stay. Check whether the source
+takes a square root before converting.
+REVISED p2 RESIDUE after this round: 74 register-mirror (the Equivalent
+question) + ~2 stack rows + 5 .bss/anchor settling + ~1 case-order + small
+echoes. The non-mirror bucket is now marginal.
