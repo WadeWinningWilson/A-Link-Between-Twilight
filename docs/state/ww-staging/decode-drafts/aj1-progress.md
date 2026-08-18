@@ -96,3 +96,66 @@ WORK ORDER, revised from measurement rather than precedent:
 4. per-function work smallest-first only after the pools stop moving
 
 STATE: no code written yet. `aj1` untouched at 12/131 exact, 2.9112%.
+
+
+## Round 3 - createInit fully transcribed; TWO BLOCKERS FOUND IN THE HEADER
+
+Pulled the donor's `createInit` in full: **118 instructions**, and its shape is
+completely legible. But it cannot be written yet, and the reason is upstream.
+
+**BLOCKER 1 - the class has NO MEMBER FIELDS AT ALL.** `include/d/actor/d_a_npc_aj1.h`
+is 2.7 KB of method declarations over an empty class body. `createInit` alone
+touches at least these offsets, none of which exist yet:
+
+    0x1b5 roomId     0x1b6 polyColor   0x258 f32 (from @4332)
+    0x26d, 0x26f (u8 = 0xad)           0x280 (s32 = 0xa)
+    0x2c4 dNpc_EventCut_c              0x330 mDoExt_McaMorf*
+    0x334 dBgS_Acch                    0x41c cBgS_PolyInfo
+    0x538 dCcD_Stts (+0x5b8 back-ptr)  0x574 dCcD_Cyl
+    0x70e/0x710/0x712 s16 home angles  0x744 s16 eventIdx
+    0x75b u8                           0x7b9 u8 = 9     0x7bf s8 type
+
+**BLOCKER 2 - THE BASE CLASS IS WRONG, and the donor's own call proves it.**
+The header says `class daNpc_Aj1_c : public fopAc_ac_c`. But `createInit` does:
+
+    mr r5, r30                     ; r30 == this
+    bl setActorInfo2__15dNpc_EventCut_cFPcP12fopNpc_npc_c
+
+i.e. **`this` is passed where a `fopNpc_npc_c*` is required.** The class must
+derive from `fopNpc_npc_c`, not `fopAc_ac_c`. That also explains the 0x26d /
+0x26f / 0x280 cluster, which is npc-base territory rather than actor-base.
+Every field offset I lay out against the wrong base would be wrong, so this is
+strictly first.
+
+**WHAT createInit DOES** (recorded now so the transcription is not lost):
+
+    field_0x75b = (u8)(field_0xb0 >> 8);
+    mEventIdx = dComIfGp_evmng_getEventIdx(l_evn_tbl[0], 0xff);
+    mEventCut.setActorInfo2("Aj1", this);
+    field_0x280 = 0xa;  field_0x26d = 0xad;  field_0x26f = 0xad;
+    field_0x7b9 = 9;
+    switch ((s8)field_0x7bf) {   // 0/1/2 dispatch, default -> return FALSE
+        case 0: ok = init_AJ1_0(); break;
+        case 1: ok = init_AJ1_1(); break;
+        case 2: ok = init_AJ1_2(); break;
+        default: ok = FALSE;
+    }
+    if (!ok) return FALSE;
+    home.angle = shape_angle (x/y/z copied via 0x70e/0x710/0x712);
+    current.angle = the same three;
+    field_0x258 = @4332;
+    mStts.Init(0xff, 0xff, this);  mCcCyl.Set(dNpc_cyl_src);
+    play_animation();
+    mAcch.CrrPos(dComIfG_Bgsp());
+    field_0x1b5 = GetRoomId(mPolyInfo);  field_0x1b6 = GetPolyColor(mPolyInfo);
+    mpMorf->setMorf(@4187);
+    setMtx(true);
+    return TRUE;
+
+**ALSO: `init_AJ1_0/1/2` and `createInit` are declared `void` and must return a
+BOOL** - the donor tests r3 with `clrlwi. r0, r3, 24` after each. Same shape as
+`ob1`'s `init_OB1_0`.
+
+NEXT: fix the base class to `fopNpc_npc_c`, lay out the members above against
+that base, then write `createInit`. **No code written yet** - `aj1` remains at
+12/131 exact, 2.9112%, and the header work is the gate.
