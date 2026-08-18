@@ -1026,3 +1026,42 @@ tested with a branch straight to the exit is an explicit empty case.**
 
 STATE: aj1 **64/131 exact, 59.8201%**. Session: **12/131 -> 64/131,
 2.9112% -> 59.8201%** (20.5x fuzzy). 67 remain, all under 240 bytes.
+
+
+## Round 28 - ⭐ THE INVERTED-BRANCH BUCKET IS CRACKED
+
+Round 24 named this bucket and listed four falsified attempts. **`event_proc`
+solved it: a single-case `switch` ON AN INTEGER SUBJECT produces the
+`beq body ; b end` shape that a plain `if` cannot.**
+
+    // gives  beq END ; <body>            (what I kept writing)
+    if (field_0x746 == 0) { ... }
+
+    // gives  beq BODY ; b END ; BODY:    (what the donor emits)
+    switch (field_0x746) {
+    case 0:
+        ...
+        break;
+    }
+
+**WHY MY ROUND-24 ATTEMPTS FAILED, and it is instructive:** I tried
+`switch (a != b)` and `switch (a == b)` - switching on a COMPARISON. That forces
+MWCC to materialise a boolean first (`cmpwi r0, 0x1`, `extrwi.`), which is why
+both made things worse. **The switch subject has to be the integer VALUE
+itself.** I had the right construct and the wrong operand.
+
+**This retroactively explains the whole bucket:**
+- `privateCut` matched first try because its dispatch was ALREADY a switch on an int.
+- `event_proc` (this round) and `setStt`'s empty case are the same family.
+- **`ob1`'s `chg_anmAtr` and `aj1`'s `setAnm_anm` still cannot be fixed** - their
+  conditions compare TWO VARIABLES (`i_no != field_0x800`,
+  `field_0x7b9 != i_prm->field_0x0`), which no switch can express. Those stay
+  open, but now for a KNOWN reason rather than an unknown one.
+
+Also this round, from `getMsg_AJ1_2`: **ternary polarity sets the BASE
+CONSTANT.** `x ? 0x9d6 : 0x9d5` computes 0/+1 and adds 0x9d5;
+`x == 0 ? 0x9d5 : 0x9d6` computes 0/-1 and adds 0x9d6 - which is the donor's
+`subic`/`subfe` idiom. If the added constant is off by one, flip the ternary.
+
+STATE: aj1 **68/131 exact, 64.6959%**. Session: **12/131 -> 68/131,
+2.9112% -> 64.6959%** (22.2x fuzzy).
