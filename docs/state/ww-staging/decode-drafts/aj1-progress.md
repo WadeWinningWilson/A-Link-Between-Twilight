@@ -589,3 +589,52 @@ which is exactly the state I have committed all session not to leave behind.
 `_execute` follows mechanically from the transcription above.
 
 STATE: aj1 **48/131 exact, 25.8746%** - unchanged this round, nothing written.
+
+
+## Round 13 - the HIO class layout, decoded (infrastructure for _execute)
+
+`__ct__15daNpc_Aj1_HIO_cFv` is only 25 instructions and gives the whole class:
+
+    class daNpc_Aj1_HIO_c : public mDoHIO_entry_c {
+        /* 0x00 */ vtable (mDoHIO_entry_c then daNpc_Aj1_HIO_c - stored twice,
+                           the standard two-store pattern)
+        /* 0x04 */ s8   = -1
+        /* 0x08 */ s32  = -1
+        /* 0x0C */ <0x30-byte parameter block, memcpy'd from a_prm_tbl$4141>
+    };
+
+The ctor is: store vtable, `memcpy(this + 0xC, a_prm_tbl, 0x30)`, then
+`field_0x4 = -1`, `field_0x8 = -1`. **A `memcpy` of exactly the block size is
+how MWCC implements a struct/array ASSIGNMENT**, so the donor almost certainly
+writes something like `mPrm = a_prm_tbl;` rather than calling memcpy by hand.
+
+**`a_prm_tbl$4141`, all 12 words (0x30 bytes), read from the target .data:**
+
+    0x20001F40  0x01F4CD38  0x00001C70  0xFA24FF6A
+    0x04000400  0x43160000  0x00000000  0x44BB8000
+    0x52080000  0x44098000  0x61A8001E  0x00140000
+
+**IT IS MIXED-TYPE, and that matters.** As s16 pairs the first five words give
+`0x2000, 0x1F40, 0x01F4, 0xCD38, 0x0000, 0x1C70, 0xFA24, 0xFF6A, 0x0400` -
+exactly the nine values `_execute` feeds to `m_jnt.setParam` from +0xC..+0x1C.
+But words 6, 8 and 10 are clean floats (`0x43160000` = 150.0,
+`0x44BB8000` = 1500.0, `0x44098000` = 550.0). So the block is a STRUCT of nine
+s16 angle/param fields followed by float distances - not a flat array.
+
+**WHY I STOPPED HERE.** Naming and typing those struct fields is DESIGN, not
+transcription - I would be inventing a layout, and a wrong guess propagates into
+every consumer of `l_HIO`. Two things must be settled first:
+
+1. The struct's field split after the nine s16s (the remaining 0x1E bytes mix
+   floats and what look like more s16 pairs: `0x52080000`, `0x61A8001E`,
+   `0x00140000`).
+2. **`m_jnt.setParam`'s ARGUMENT ORDER, which is scrambled relative to memory
+   order.** The call loads: r4=+0x14, r5=+0x16, r6=+0x18, r7=+0x1A, r8=+0xC,
+   r9=+0xE, r10=+0x10, stack+0x8=+0x12, stack+0x1C=+0x1C. Do NOT assume the
+   source lists them in offset order - check `dNpc_JntCtrl_c::setParam`'s real
+   signature and let that name the fields.
+
+Both are answerable from `d_npc.h` plus a matching sibling; neither is a guess I
+should make at the end of a long session.
+
+STATE: aj1 **48/131 exact, 25.8746%** - unchanged, nothing written this round.
