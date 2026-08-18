@@ -256,3 +256,52 @@ anyone trusts its tail entry.
 
 NEXT: `init_texPttrnAnm` (+0xa "Aj", +0xd assert file) then `bodyCreateHeap`
 (six string uses). Both are named in the string map in Round 4.
+
+
+## Round 6 - two more functions; aj1 12/131 -> 14/131, fuzzy 2.9112% -> 7.1231%
+
+    createInit         100.00%  EXACT
+    btpResID           100.00%  EXACT
+    init_texPttrnAnm    98.43%  (2 rows)
+
+**`btpResID`** is a five-instruction table lookup:
+`static int a_res_id_tbl[] = {7,8,0,2,5,3,6,1,4}; return a_res_id_tbl[i_no];`
+NOTE: its diff initially showed 3 rows that were ONLY the local-static's
+generated suffix (`a_res_id_tbl$4419` vs my `$1654`). **objdiff normalises those
+for the fuzzy score - it reports 100.00% - so do not chase guard-ID suffixes.**
+They are a function of how many statics precede in compile order and settle by
+themselves as the TU fills in.
+
+**`init_texPttrnAnm`** went 16 -> 2 rows on two typing corrections, both read
+off the instruction stream rather than guessed:
+
+- `btpResID` returns **`int`, not `u16`**. The target does
+  `bl btpResID; mr r0, r3; clrlwi r4, r0, 16` - it ZERO-EXTENDS the result at
+  the call site, which only happens if the callee returned something wider than
+  the `u16` that `dComIfG_getObjectIDRes` wants. A `u16` return would need no
+  `clrlwi`.
+- `init_texPttrnAnm` returns **`BOOL`, not `bool`** - my byte-sized return added
+  a `clrlwi r3, r0, 24` the target does not have.
+
+Fixing those two also dissolved a five-row register-allocation difference
+(r28/r29/r30/r31 assignment) **without touching it directly** - worth noting,
+because I spent a lot of the `so`/`ob1` endgame trying to attack colouring
+head-on. Here the colouring was a SYMPTOM of wrong types, not a cause.
+
+**STILL OPEN on `init_texPttrnAnm` (2 rows):** the target ends
+`subic r0, r3, 0x1; subfe r3, r0, r3` - a full-word 0/1 normalisation with NO
+byte narrowing. Three combinations tried and measured:
+
+    bool return + plain return init(...)   -> subfe into r0 + clrlwi  (2 rows)
+    BOOL return + plain return init(...)   -> no subic/subfe at all   (2 rows)
+    BOOL return + return init(...) != 0    -> subfe into r0 + clrlwi  (2 rows)
+
+In C++ `x != 0` yields `bool`, so the narrowing keeps reappearing. The donor
+gets an int-width 0/1 some other way. Kept the `!= 0` form as the semantically
+correct one. **Do not re-run those three.**
+
+Members added this round: `mBtpAnm` (mDoExt_btpAnm, 0x14 bytes) at **0x6D8**,
+`field_0x6ec` u8, `field_0x6ee` s16, `field_0x7b8` s8 - the same
+mBtpAnm/byte/halfword shape `so` has at 0x854/0x868/0x86C.
+
+NEXT: `bodyCreateHeap` (820 bytes, six string uses - the largest undone).
