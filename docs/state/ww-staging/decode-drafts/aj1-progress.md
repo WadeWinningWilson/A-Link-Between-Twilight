@@ -790,3 +790,40 @@ read sites are the authority on layout.
 
 STATE: aj1 **54/131 exact, 33.8059%**. Session: 12/131 -> 54/131,
 2.9112% -> 33.8059%.
+
+
+## Round 18 - call_1 EXACT, chk_areaIN 99.95%; two NEW idioms for the bank
+
+**aj1 54/131 -> 55/131 exact, 33.8059% -> 38.4201%.**
+
+**`call_1` EXACT.** Three findings, each read off the diff:
+
+1. **`field_0x7b9` is `s8`, not `u8`.** The donor uses `extsb.` / `cmpwi`
+   (signed) where mine emitted `cmplwi`. Two rows for one type character.
+2. **NEW IDIOM: `x == false` and `!x` are NOT interchangeable under MWCC.**
+   The target MATERIALISES the negation - `clrlwi; cntlzw; extrwi.` then
+   branches - which is what `x == false` produces. Plain `!x` compiles to a
+   direct inverted branch and cost the last 4 rows. **When you see
+   `cntlzw` around a bool test, the source wrote an explicit `== false` (or
+   `== 0`), not `!`.**
+3. `m_jnt + 0xA` is `mbTrn`, so those `stb 1, 0x29a` stores are `m_jnt.setTrn()`.
+
+**`chk_areaIN` 99.95%** (5 rows, all float/double POOL POSITIONS - mine at
+0x10/0x18/0x20 vs the target's 0x70/0x78/0x80 - they settle as more functions
+contribute literals, exactly like `_create`'s 7). It is a distance/height/angle
+gate built on the `absXZ` inline:
+
+    dist  = (dComIfGp_getPlayer(0)->current.pos - i_pos).absXZ();
+    dy    = dComIfGp_getPlayer(0)->current.pos.y - i_pos.y;
+    angle = (s16)cLib_targetAngleY(&current.pos,
+                                   &dComIfGp_getPlayer(0)->current.pos) - field_0x708.y;
+    return dist < i_dist && std::fabsf(dy) < 500.0f && abs(angle) < i_angle;
+
+Two corrections got it from 16 rows to 5: **the donor RE-CALLS
+`dComIfGp_getPlayer(0)` at each use rather than caching it in a local** (I had
+hoisted it, which showed up as `lwz r4, 0x5b44(r31)` vs my cached `r30`), and
+the `cLib_targetAngleY` result is **sign-extended** (`extsh`) before the
+subtraction. Also note `fabsf` must be written `std::fabsf` in this codebase.
+
+STATE: aj1 **55/131 exact, 38.4201%**. Session: 12/131 -> 55/131,
+2.9112% -> 38.4201% (a 13x fuzzy gain).
