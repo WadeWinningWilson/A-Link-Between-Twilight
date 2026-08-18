@@ -209,3 +209,23 @@ spec that both p2 and ob1's endgames await.
 - m_heapsize = 0x1C00 (const u32 class static, rodata anchor at +0; m_arc_name at +4).
 - Standing counts: 75/187 exact + eventOrder/setAnm/modeEventBow/modeGetRupee/
   cutJumpMapopenProc/WarpStart etc. at settling-rows-only. Fuzzy 44%+.
+
+## Round 25: message/joint family + the missed-watcher defect
+
+- setAnmSwimSpeed real-0 first try (p2 rate-clamp sibling verbatim; HIO m34/m38).
+- lookBack EXACT: runCheck/getAttnFlag/trnChk/setTrn/clrTrn/getTurnSpeed chain;
+  dNpc_playerEyePos(l_HIO.m08); lookAtTarget(&shape_angle.y,&mB44,pos+200y,
+  shape_angle.y,mB50,mBDA). bool mBDA (u8->bool killed the subic/subfe/clrlwi
+  normalization — the bank's ssb lesson, second confirmation).
+- getMsg decode-complete: ids 0x32CA/D0/DD/DF/E0/E1/E2, m6D0 override via mBD8;
+  setMessageCountNumber(mB7C); "sea" room 13 / eventBit 0x901 gate. CONDITION-ORDER
+  LESSON: target emits the ||-form else-arm FIRST — inverting to && reorders blocks.
+- eventOrder/setAnm: see round 24. _nodeControl decoded, parked 10 rows (now-address
+  remat vs CSE — regalloc family). setMtx/checkOrder/setScale exact (round 23).
+- WATCHER DEFECT (user-caught): #115's exit-on-event completion notice was missed
+  among timer ticks — ~27 min blind, 11 rows moved (all yaz0/census close-outs, no
+  DECODER ask; HISTORY checked off the so milestone row). Rule: every timer tick,
+  also CHECK THE NEWEST WATCHER TASK OUTPUT for an unread EXITING line.
+- Standing: exact count via report; remaining majors: cutProc, cutMiniGameStart/Proc,
+  cutMiniGameReturnProc, next_msgStatus, checkTgHit, modeSwim/NearSwim/Wait/Talk/
+  Debug/TriForce/FirstWait stragglers, modeProc, _execute/_draw, create chain, HIO ctor.
