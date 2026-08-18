@@ -103,3 +103,4 @@ spec that both p2 and ob1's endgames await.
 - Round 5: mode-init batch 7/7 first-compile (~30/187). mA90 int, mBDB u8.
 - Round 6: 4 event-mode inits + XyEventCB 100% (~35/187). PARKED: XyCheckCB needs the gameInfo+0x5cc8 (bit 0x10000... rlwinm 15,15) and +0x5bd3[i] accessors — no matched-TU spelling found (gy also Nonmatching); hunt the dComIfGp XY/tact accessor family in d_com_inf_game.h by offset math (event mgr base 0x52cc region) next session. m6D3 u8 also needed (esa-state == 2 gate).
 - Round 7: modeSwimInit 100%, modeJumpInit settling-only (~37/187). Members mB00/mB08 f32; HIO m50 f32 (jump speed cap) / m68 s16 (shape pitch); l_HIO static placed (position provisional).
+- Round 8: jntHitCreateHeap parked 4 rows (block-order polarity family; != form got beq, block order flipped — 3 spellings tried). Members m84C/m850/mAA8 oracle-placed. _delete PARKED pending the 0x5cda/5cd8 accessor family (same hunt as XyCheckCB).
