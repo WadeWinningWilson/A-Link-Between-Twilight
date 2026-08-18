@@ -384,3 +384,64 @@ target shares default's. ob1 now 108/115 exact, fuzzy 99.80%.
   Assign-and-fall-through (state = cPhs_ERROR_e; break;) was WORSE (4). PARKED.
 STANDING (all three of my TUs, same build):
   so  138/187 exact 99.56% | ob1 108/115 exact 99.81% | p2 131/145 exact 99.94%
+
+
+## Rounds 18-19 - branch-shape bucket (108 -> 109/115, 99.807 -> 99.832%)
+
+Came back to ob1 after the `so` placement work, with the branch-polarity
+lesson sharpened. ob1 stood at 7 fns / 38 rows; three of those functions
+differed by exactly 2 rows and ALL THREE were the same shape - target
+`beq`+`b` (branch to body, branch over it) where I had a single inverted
+branch, or the reverse.
+
+**privateCut - EXACT.** The action-result test was written as a ternary,
+`(int)field_0x7FE == 0 ? event_action() : true`. The donor uses a **switch
+with a default**:
+
+    bool ret;
+    switch ((int)field_0x7FE) {
+    case 0:  ret = event_action(); break;
+    default: ret = true;
+    }
+    if (ret) { dComIfGp_evmng_cutEnd(i_staffId); }
+
+The tell was in the SAME function: its other dispatch (the `getIsAddvance`
+switch) already matched byte-for-byte with the `beq`+`b` shape, so the shape
+was demonstrably available in this TU - I just had the second site written as
+a ternary. **When one site in a function already matches with shape X and
+another differs by exactly that shape, the answer is usually X.**
+
+**chg_anmAtr - still 2 rows, TWO forms tried and falsified.** Target is
+`cmplw r5,r0; bne <body>; b <end>` where I emit a single `beq <end>`.
+Tried `switch (i_no != field_0x800) { case 1: }` - MWCC materialised the
+boolean (`cmpwi r0, 0x1`), 2 -> 6 rows. Tried an empty then-block with the
+work in the `else` - MWCC folded the empty branch away, back to the original
+2. Reverted to the plain `if`. **Do not re-run either of those.** The compare
+is variable-vs-variable, so a switch cannot express it directly; the shape
+must come from somewhere else and I have not found it.
+
+**control_anmAtr - bodies now exact, 6 rows are dispatch only.** The two case
+BODIES were in the wrong source order: the target emits `li r4, 0x4` (case 3)
+before `li r4, 0x7` (case 6), so case 3 must come first in source. Swapped.
+Rows 13-29 are now identical. What remains is purely the switch DISPATCH scan
+direction - target tests 3 then 6 (ascending), mine tests 6 then 3
+(descending) - and that is NOT controlled by source case order: I measured the
+identical dispatch before and after the swap. Same case set, same types.
+**HONEST NOTE: the swap left the exact count flat and moved fuzzy by -0.002%
+(99.8345 -> 99.8324), i.e. it did not pay off on the fuzzy axis.** I kept it
+anyway because the body-emission order is a structural fact about the donor
+and is required for an eventual SHA match; the fuzzy dip is noise-level and
+the wrong thing to optimise against. Flagging it rather than hiding it.
+
+**_create - 2 rows, hypothesis formed, NOT yet applied.** Target materialises
+`li r3, 0x5` (cPhs_ERROR_e) UNCONDITIONALLY and then branches; mine branches
+first and sets 5 on one path. That is the shape of a result local:
+`int ret = cPhs_ERROR_e; if (createInit()) { ret = state; } return ret;`
+rather than my early `return cPhs_ERROR_e;`. Not applied because the site sits
+inside the phase switch and the restructure is more invasive than 2 rows
+justifies right now.
+
+STATE: ob1 **109/115 exact, 99.8324%**, 6 fns / 36 rows.
+REMAINING: ob_movPass 11, nodeOb1Control 11, control_anmAtr 6 (dispatch scan
+direction), next_msgStatus 4, chg_anmAtr 2, _create 2.
+Cross-check: so 175/187 and p2 133/145 UNCHANGED across these commits.
