@@ -260,3 +260,55 @@ ones rather than skipping to the biggest.
 
 `wait_7` (159 instructions) is the largest of the family and adds a
 `searchByID(field_0x7b4)` + `JUT_ASSERT` prologue before the shared opening.
+
+
+## setStt() - structure DECODED, body NOT yet written (2026-08-18)
+
+The last function in ko1 above 100 rows (395). `tools/foundry/jump_table.py`
+recovered its whole shape in one pass, so whoever writes it does not re-derive
+this.
+
+PROLOGUE (from the asm, ahead of the table):
+    fopAc_ac_c* a_partner = searchByID(field_0x7b4[0]);   // r28, used by 0x11 / 0x13
+    s8 prev = field_0x8a3;                                // r30, saved BEFORE the store
+    field_0x84e = 0;
+    field_0x8a3 = i_stt;                                  // the parameter
+    switch (field_0x8a3) { ...
+
+TABLE (@6033, 30 entries, base 0, 14 distinct bodies). Cases below are in SOURCE
+order - sorted by label ADDRESS, not by value - because MWCC emits case bodies
+in the order they were written:
+
+=== @6033: 30 entries, 14 distinct bodies, default=.L_00004550
+--- cases in SOURCE order (sorted by label address) ---
+  case 0x3:  -> NOT a simple store, read it: li r0, 0x1 | stb r0, 0x8a5(r29) | stb r0, 0x29a(r29)
+  case 0x4 0xB:  -> NOT a simple store, read it: cmpwi r5, 0xb | beq .L_00004654 | bge .L_00004680
+        ^ 2 values share this body: FALL-THROUGH case list
+  case 0x5:  -> NOT a simple store, read it: stb r4, 0x8a5(r29) | stb r4, 0x876(r29) | stb r4, 0x8a2(r29)
+  case 0x6 0xD 0x17:  -> NOT a simple store, read it: cmpwi r5, 0x6 | beq .L_000046F0 | b .L_0000470C
+        ^ 3 values share this body: FALL-THROUGH case list
+  case 0x7:  -> NOT a simple store, read it: lwz r0, 0x73c(r29) | cmplwi r0, 0x0 | beq .L_00004770
+  case 0x8:  -> NOT a simple store, read it: lwz r4, 0x744(r29) | cmplwi r4, 0x0 | beq .L_000047D0
+  case 0x9 0x10 0x12 0x19:  -> NOT a simple store, read it: li r0, 0x0 | stb r0, 0x8a5(r29) | stb r0, 0x876(r29)
+        ^ 4 values share this body: FALL-THROUGH case list
+  case 0xA 0xE 0x1A:  -> NOT a simple store, read it: li r0, 0x1 | stb r0, 0x8a5(r29) | li r0, 0x0
+        ^ 3 values share this body: FALL-THROUGH case list
+  case 0xF 0x18:  -> NOT a simple store, read it: lfs f0, 0x7c4(r29) | stfs f0, 0x7f4(r29) | lfs f0, 0x7c8(r29)
+        ^ 2 values share this body: FALL-THROUGH case list
+  case 0x11:  -> NOT a simple store, read it: cmplwi r28, 0x0 | bne .L_000049A4 | bl getSDevice__12JUTAssertionFv
+  case 0x13:  -> NOT a simple store, read it: cmplwi r28, 0x0 | beq .L_00004A8C | li r0, 0x2
+  case 0x14:  -> NOT a simple store, read it: li r0, 0xff | stb r0, 0x89c(r29) | stb r0, 0x89d(r29)
+  case 0x1B 0x1C:  -> NOT a simple store, read it: lfs f1, 0x13c(r31) | bl cM_rndF__Ff | lfs f0, 0x13c(r31)
+        ^ 2 values share this body: FALL-THROUGH case list
+  case 0x0 0x15:  -> NOT a simple store, read it: mr r3, r29 | bl setAnm__11daNpc_Ko1_cFv | addi r11, r1, 0x40
+        ^ 2 values share this body: FALL-THROUGH case list
+
+CAUTION on the tool's `default=.L_00004550`: that is the MOST FREQUENT target,
+which is how the tool picks a default, but its body immediately re-tests r5 for
+2 and then 1. Values 0x1, 0x2, 0xC, 0x16, 0x1D all arrive there and are
+discriminated afterwards. Read that block before assuming a bare `default:` -
+the heuristic is documented as a heuristic for exactly this case.
+
+Starting point: write the 14 bodies in the listed order, build, let objdiff place
+the rest. The fall-through groups are already correct - read off shared labels,
+not guessed.
