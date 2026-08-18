@@ -96,3 +96,4 @@ spec that both p2 and ob1's endgames await.
   ~4 hours continuous; successor starts at these shapes with the fixed
   parser, then walks the size ladder exactly as ob1 rounds 3+ did.
 - Round 2 micro: modeDebug/modeGetRupeeInit/modeWait/modeHide 100% (17/187). ⚠ -4 layout error before 0xA80 (mA80 needed pad end 0xA84): verify AcchCir2/ObjAcch2 real sizes before trusting comments in 0x870-0xAE8.
+- modeEventMapopenInit 100% (18/187); tail shifted -0x10 empirically (mAFC@real 0xAFC ✓, mA80 unaffected ✓). Layout comments 0x870-0xB00 still unverified against subobject reality.
