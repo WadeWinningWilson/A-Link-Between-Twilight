@@ -320,3 +320,18 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
 - Status: task #12 at the SAME endgame class as p2 (#9) — 4 small
   allocator/polarity sites from SHA, everything else byte-true.
 - (a) nested-if FALSIFIED for chg_anmAtr (2 rows unchanged) — matrix continues: trailing-statement, early-return, no-code-then variants; harness is the systematic vehicle.
+
+### Round 13 (03:40Z) — HARNESS BUILT + first falsification campaign
+- tools/decoder_transform_search.py (WWDP) — variant-spec brute-forcer,
+  row-count oracle, ~8s/cycle, auto-restore. Spec format documented in
+  the file header.
+- chg_anmAtr polarity site: 18 variants falsified (nested-if, early
+  returns, goto, else-empty, ;-then, || and && comma-expression
+  short-circuits, do-while-break, switch-on-bool). LESSON: branch
+  POLARITY is not a local-spelling lever — MWCC canonicalizes the sense
+  (cousin of the p2 reassociation lesson). Park confirmed §2b.
+- NEXT VECTOR (for both TUs' endgames): CROSS-FUNCTION shape variants —
+  the _create if->switch flip changed ANOTHER site's allocation, so pair
+  each park with shape changes in OTHER functions via multi-site specs.
+  p2's spec should pair setAnm/_execute/Proc sites with shape variants
+  in their NEIGHBOR functions.
