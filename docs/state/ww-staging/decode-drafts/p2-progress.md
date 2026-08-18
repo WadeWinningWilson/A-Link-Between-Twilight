@@ -1092,3 +1092,23 @@ ob1: NOT PR-ready, correctly labelled (convergence phase) — no action owed.
 THE DECISION REMAINS THE USER'S (axis A demands SHA; History explicitly did not decide
 shipping). The question to carry forward is now: adopt the upstream Equivalent
 convention for p2, or hold for SHA via the inline-body campaign.
+
+## Round 21 (2026-08-18): p2 REL SHA GATE RE-RUN HONESTLY — MISMATCH, and now cheaply repeatable
+
+Using the newly-found authoritative hash source config/GZLE01/build.sha1
+(no Yaz0 decompression, covers RELs never extracted to files/rels):
+  TARGET dad-style entry: 0edeed200522ab838be151fbdc7d56cd37426d6d
+  BUILT (Matching temp-flip, p2.o DELETED first, rebuild timestamp verified):
+         7750f21ec2f54bb14c5c85ad1d5e3221bc91a03b
+  VERDICT: MISMATCH.
+configure.py restored to NonMatching and re-verified immediately.
+MEANING FOR THE PENDING RULING: 99.94% at object level does NOT yield a
+byte-identical REL. The 22 register-mirror rows are the whole remaining gap, so
+the user's choice is genuinely between (a) label it Equivalent now, per the
+three upstream regalloc precedents History evidenced, and ship, or (b) keep the
+inline-body campaign running for the mirrors. There is no third state where p2
+is silently already SHA-clean.
+GATE PROCEDURE (reusable, ~40 s per TU): flip the ActorRel to Matching ->
+python configure.py -> DELETE the TU .o -> ninja the .rel -> sha1 vs build.sha1
+-> RESTORE NonMatching and verify. Deleting the .o is mandatory; without it the
+link can reuse a stale object and the result is vacuous.
