@@ -1194,3 +1194,27 @@ instruction inserted or deleted?
 Lesson recorded for the whole campaign: before calling anything "register
 colouring", check whether the row counts match. If instructions are inserted or
 deleted, the register names are a symptom, not the cause.
+
+
+### _execute (5 rows) - SECOND correction: operand order is NOT the lever either
+
+I said the fmuls rows were "expression evaluation order and fixable in source".
+Tested it: swapped all four `mB00 * 0.25f` / `mB00 * 0.5f` to `0.25f * mB00` /
+`0.5f * mB00`, rebuilt, and the output was **BYTE-IDENTICAL** - same 5 rows, same
+registers. Reverted; tree clean.
+
+MWCC folds a commutative multiply the same way regardless of how the source
+writes it, so which value lands in f0 versus f1 is NOT reachable from operand
+order. My "fixable in source" was a guess presented as a diagnosis, and it is now
+falsified.
+
+WHAT SURVIVES, and it is still the useful half: this is NOT register colouring in
+the sense of "nothing to be done". The two sides load the SAME two values from
+the SAME two addresses in the OPPOSITE order (0xb00(r27) = the member mB00,
+0x1e0(r31) = the literal 0.25f). Something decides that order and it is not the
+multiply. Candidates not yet tested: the shape of the surrounding if/else ladder,
+whether the donor holds mB00 in a local across the four comparisons, or whether
+the negation `-(x)` is written differently.
+
+Tally on this one function: three proposed mechanisms, three falsified by
+measurement. Recording that rather than a fourth guess.
