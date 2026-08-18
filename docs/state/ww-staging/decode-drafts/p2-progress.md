@@ -1188,3 +1188,26 @@ takes a square root before converting.
 REVISED p2 RESIDUE after this round: 74 register-mirror (the Equivalent
 question) + ~2 stack rows + 5 .bss/anchor settling + ~1 case-order + small
 echoes. The non-mirror bucket is now marginal.
+
+## Round 26: THE PRECISE, POST-FIX p2 NUMBER FOR THE RULING
+
+Re-classified every diff row after the absXZ + wait_action work:
+  **13 non-exact functions, 99 total rows** (was 14 fns / 138 rows)
+    register-mirror (identical shape, different regs): **74**
+    other:                                              24
+    rodata-anchor symbol:                                1
+The mirror count is UNCHANGED at 74 across all this work — it is a stable,
+separable class, which is exactly what the Equivalent question turns on.
+PER-FUNCTION, with the mirror/other split on the big four:
+  cutRideSwitchProc 32 (mirror 31 / other 1)
+  nodeCallBack      16 (mirror 7  / other 9  <- the .bss-settling rows)
+  _createHeap       14 (mirror 14 / other 0)
+  cutRopeTalkProc   13 (mirror 13 / other 0)
+  _execute 5 | setAnm 4 | wait_action 4 | anmAtr 3 | chkAttention 2 |
+  goal_talkpos_to_goalpos 2 | goal_goalpos_wait 2 | cutJumpToGoalStart 1 |
+  cutJumpStart 1
+=> THE HONEST PR-BODY SENTENCE IS NOW: "13 functions differ, 99 instruction
+rows; 74 are register allocation (the class upstream already labels
+Equivalent in three places), 24 are ordering/.bss-settling shape, 1 is an
+anchor-symbol choice. No known defects." That is a far tighter claim than the
+"3 functions / 22 rows" I inherited AND than the "14 / 138" I corrected to.
