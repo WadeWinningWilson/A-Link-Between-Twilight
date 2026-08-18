@@ -740,3 +740,53 @@ like `bodyCreateHeap`'s did.
 **SESSION TOTAL for aj1: 12/131 -> 53/131 exact, 2.9112% -> 31.0604%.**
 78 functions remain; largest are `_create` (7 rows), `next_msgStatus` 468,
 `call_1` 408, `chk_areaIN` 380, `set_pa_smk` 376, `lookBack` 368.
+
+
+## Round 17 - next_msgStatus EXACT, and Round 15's array conclusion CORRECTED
+
+**aj1 53/131 -> 54/131 exact, 31.0604% -> 33.8059%.**
+
+**`next_msgStatus` (134 instrs) is EXACT.** The 23-entry jump table `@4601`
+gave the case values (message IDs 0x9C6..0x9DC) directly, and **the case-body
+ADDRESSES gave the source case order** - `0x9c6, 0x9c7, 0x9c9, {0x9c8,0x9ca},
+0x9db, {0x9cb,0x9dc}, 0x9cd, 0x9cf, 0x9d0, default` - which is NOT numeric order
+and could not have been guessed. Read a jump table's targets, sort the bodies by
+address, and the switch writes itself.
+
+The last 9 rows were a **nested-branch inversion**. I had written
+`if (isEventBit(0x504)) -> 0x9cf; else if (0x2a80) -> 0x9dc; else -> 0x9cb`,
+which emits the `0x9cf` body first. The donor branches AWAY on 0x504 being set,
+so the false path is the then-branch and `0x9dc`/`0x9cb` emit before `0x9cf`:
+
+    if (!dComIfGs_isEventBit(0x504)) {
+        if (dComIfGs_isEventBit(0x2a80)) *i_msgNo = 0x9dc; else *i_msgNo = 0x9cb;
+    } else { *i_msgNo = 0x9cf; }
+
+**Third instance of the same pattern today** (with `ob1`'s `control_anmAtr` case
+order and `so`'s `modeEventFirstWait` comparison direction): **when the bodies
+are right but ordered wrong, the fix is WHICH SIDE OF THE CONDITION IS THE
+THEN-BRANCH.**
+
+### CORRECTION to Round 15 - `mPrm` is a STRUCT, not an array
+
+Round 15 concluded the HIO parameter block is `s16[0x18]` because a plain array
+forced the donor's single `memcpy`. **That was a hack that happened to match.**
+Transcribing `call_1` shows it reading **`lfs f1, 0x28(l_HIO)`** and
+**`lfs f1, 0x30(l_HIO)`** - FLOATS out of that block - which an s16 array cannot
+express. The mixed struct I guessed in Round 14 was right all along, and its
+offsets check out exactly: +0x1C f32, +0x20 s16, +0x24 f32, +0x28 s16
+(class-relative 0x28/0x2C/0x30/0x34).
+
+**The resolution keeps both properties: declare the STRUCT and call `memcpy`
+EXPLICITLY.** Struct *assignment* inlines field stores; an explicit `memcpy` on
+a struct emits the call. `__ct__15daNpc_Aj1_HIO_cFv` stays **EXACT** and
+`_execute` stays **EXACT** with named fields
+(`l_HIO.mPrm.max_backbone_x`, ...).
+
+**So the Round 15 rule was too strong.** Corrected form: *memcpy-vs-field-stores
+tells you the copy was written as a `memcpy` call, NOT that the member is an
+array.* Check how other functions READ the member before choosing its type - the
+read sites are the authority on layout.
+
+STATE: aj1 **54/131 exact, 33.8059%**. Session: 12/131 -> 54/131,
+2.9112% -> 33.8059%.
