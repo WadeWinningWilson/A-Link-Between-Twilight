@@ -356,3 +356,4 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   pattern-learning DONE (pair-birth log + the _create flip datum),
   (2) harness BUILT+campaigned, (3) upstream lore CONSULTED (the
   inline lever is their answer for persistent regswaps).
+- Call-site inline spellings (hoist/static_cast/const-local/redundant-cast): all tie at 11 (redundant cast worse 27). ~34 variants falsified across the mirror/polarity family this session. In-function + call-site space EXHAUSTED; the shared-header inline-body campaign (regalloc.md's lever, baseline/changes discipline) is the next context's opening move.
