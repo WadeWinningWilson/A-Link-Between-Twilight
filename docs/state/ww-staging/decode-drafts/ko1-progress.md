@@ -228,3 +228,35 @@ same shapes.
 **Carve TODOs left:** `0x6D4` (anm sub-objects), `0x856..0x85E`. Every member
 needed so far has split cleanly out of a sized array and `sizeof` has held at
 0x8AC through every split — the conservative carve has not cost a single retry.
+
+---
+
+## The state-function recipe — apply these UP FRONT, not after the diff
+
+`ko1` 91/203 (30.2743%). `wait_6` (94 instructions) was the first written with
+no correction pass, because by then the family's signals were known. Anyone
+picking up `wait_5/7/9/a`, `walk_*`, `swim_*`, `attk_*`, `talk_*` should apply
+all of these before the first build:
+
+1. **Every branch carries its own explicit `return 1;`.** MWCC does NOT
+   tail-merge them, so each shows as a separate `li r3, 0x1`. **Count the
+   `li r3, 0x1` in the target and give exactly that many branches a return.**
+   Cost me 4 rows on `wait_2` and 2 on `wait_4` before I generalised it.
+2. **`cntlzw` + `extrwi` around a bool result means the source wrote
+   `== false`,** not `!x`. The two are not interchangeable under MWCC.
+3. **`l_HIO` displacement N maps to `l_HIO.children[field_0x8a6].mPrm.field_0x(N-0x10)`**
+   — children at +0xC, mPrm at child +0x4. Confirmed from three independent
+   consumers (`setAttention`, `wait_4`, `wait_6`).
+4. The common opening is
+   `if (field_0x875 != 0) { if (chk_talk() [&& chk_manzai_1()]) setStt(3); return 1; }`.
+5. `field_0x6bc` (inherited from `fopNpc_npc_c`) == 1 -> set it 2 and `setStt(0x14)`.
+
+**The general shape of this cost curve is worth knowing:** the first few
+functions in a family take several correction rounds each; once the signals are
+extracted the rest land first try. It is worth spending the rounds on the early
+ones rather than skipping to the biggest.
+
+### Next
+
+`wait_7` (159 instructions) is the largest of the family and adds a
+`searchByID(field_0x7b4)` + `JUT_ASSERT` prologue before the shared opening.
