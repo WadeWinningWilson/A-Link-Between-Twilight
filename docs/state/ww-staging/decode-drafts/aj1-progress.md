@@ -870,3 +870,44 @@ colouring-only diff as a park candidate, not a puzzle.**
 
 STATE: aj1 **57/131 exact, 43.1217%**. Session: 12/131 -> 57/131,
 2.9112% -> 43.1217% (14.8x fuzzy).
+
+
+## Round 20 - set_pa_smk transcribed (95 instrs), NOT written; needs the JPA emitter map
+
+Shape is clear; what it needs is an API MAPPING, not a decode:
+
+    PSMTXCopy(mpMorf->getModel()->getAnmMtx(m_fot_L_jnt_num), mDoMtx_stack_c::now);
+    field_0x79c = now[0][3];  field_0x7a0 = now[1][3];  field_0x7a4 = now[2][3];
+    mSmokeCb.<vtable +0x20>();                       // virtual call on the smoke cb
+    field_0x78c = dComIfGp_particle_set(2, 0x2027, &field_0x79c, &shape_angle,
+                                        NULL, current.angle.<0x20a>, 0, 0xC8, &mSmokeCb, ...);
+    if (field_0x78c != NULL) {
+        <emitter>->mFieldA = @4185+0x58 (x2), +0x3c;   // 0x1F0/0x1F4/0x1F8
+        <emitter>->mFieldB = @4185+0x5c (x3);          // 0x1D8/0x1DC/0x1E0
+        <emitter>-><0x64> = 0x28;
+        <emitter>-><0x38> = @4185+0x60;
+        <emitter>-><0x60> = 1;
+        <emitter>-><0x74> = @4185+0x64;
+        <emitter>-><0xC/0x10/0x14> = the +0x3c / +0x5c values again;
+        field_0x782..0x785 = the 4 bytes read from @4185+0x54;
+    }
+
+**WHY NOT WRITTEN:** the eleven emitter field offsets (0x1F0, 0x1F4, 0x1F8,
+0x1D8-0x1E0, 0x64, 0x38, 0x60, 0x74, 0x0C, 0x10, 0x14) each need mapping onto a
+named `JPABaseEmitter` setter - `JPAEmitter.h` has `setGlobalAlpha`,
+`setGlobalParticleScale`, `setGlobalDynamicsScale` and friends, so the names
+exist, but matching offset->setter is a careful read of that header rather than
+anything readable off this diff. **That is a lookup task, not a pattern task**,
+and starting it at the end of a long session risks a half-written 95-instruction
+function - which is the one thing I have held to all session.
+
+The `@4185` constants it needs (rodata offsets 0x3C, 0x54, 0x58, 0x5C, 0x60,
+0x64) are read the same way as `_create`'s cull box: `@4185` is an ANCHOR at
+rodata 0x0, so the value is simply the rodata word at that offset.
+
+STATE: aj1 **57/131 exact, 43.1217%** - unchanged, nothing written this round.
+SESSION: **12/131 -> 57/131 exact, 2.9112% -> 43.1217%** (14.8x fuzzy), with
+`createInit`, `btpResID`, `bodyCreateHeap`, `privateCut`, `wait_action2`,
+`_create`(7 rows), `_execute`, `next_msgStatus`, `call_1`, `talk_1`, the HIO
+class + ctor all landed, and the cascade from `_create` alone taking 31
+constructor-chain functions to exact.
