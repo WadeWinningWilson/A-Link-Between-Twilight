@@ -440,3 +440,23 @@ LESSON: a cXyz built from another cXyz plus one tweak is COPY-THEN-ADJUST
 (cXyz p(current.pos); p.y += x) — the 3-arg component ctor reorders the loads
 (cost 11 rows until flipped). Same shape as tc/bm1/ba1 sibling actors.
 Includes added to the main .cpp: d/d_snap.h, d/d_drawlist.h.
+
+## Round 37: CREATE CHAIN LANDS — CONVERGENCE FIRES: 77 -> 133 exact, 94.55% fuzzy
+
+createInit + _create written length-identical (residual = pool settling only).
+Writing them **collapsed the string/rodata pool**, and 56 functions that had been
+sitting at settling-rows-only snapped to EXACT in one build. This is the
+convergence effect the anchors predicted — DO NOT chase pool rows per-function;
+they resolve when the TU is complete.
+createInit: dual collision (mStts/mCyl dNpc_cyl_src + mStts2/mSph m_sph_src),
+pos.y -= 150, setMtx, morf calc, mAAC = current.pos, anim 1, mA79 = cM_rndF(4.9);
+THREE spawn routes -- sea/room13/boss3/!bit0x901 -> mode 5; sea/room4/boss7/
+isCollect(0,3)/!bit0x3a20 -> mode 0xF; else attention 0x200000A + mode 1.
+Tail: mBE0=30, AcchCir SetWall(30,30), ObjAcch2.Set + SetWallNone + SetRoofNone,
+cullMtx = baseTRMtx, cull box +-100*scale, cullSizeFar 10, gravity -2.5,
+attention distances[1]/[3]=0x22, eventInfo.setXyCheckCB/setXyEventCB (they are
+dEvt_info_c methods, NOT actor methods), mEventCut.setActorInfo2(NpcSo, this).
+_create: fopAcM_ct_Retail; resLoad; room-26/!bit0x1e40 and !isStageBossEnemy(3)
+both return cPhs_ERROR_e; entrySolidHeap(createHeap_CB, 0x1C00); createInit.
+REMAINING (54, but only TWO are undecoded): _createHeap (0.51%) and the
+daNpc_So_HIO_c ctor (0.91%). Everything else is >= 98% and settles.
