@@ -20,9 +20,29 @@
 
 | task ID | armed (UTC) | what it watches | interval | pid | stop with |
 |---|---|---|---|---|---|
+| **bhovhph2a** | 2026-08-18T03:42Z | `history_bridge_watch.py` **v5 — BROADCAST BLIND SPOT FIXED (defect 5).** Now exits on an OPEN row naming HISTORY/BRIDGE **or DECODER**. **THE DEFECT, found by the USER and not by this watcher or its pulse:** v4 delivered only on HISTORY/BRIDGE and treated `ALL LANES` as informational — correct when eight lanes broadcast, **wrong the moment every other lane retired.** DECODER is the sole active counterpart and this lane is its reviewer, and Decoder addresses its rows `[ALL LANES, DECODER]` — so its **ob1 milestone, its 12/12 claim AND its 12/12 retraction were all detected, logged, and never delivered.** The one row that woke this lane was the single one that happened to name HISTORY. **The reviewer was structurally blind to the reviewee, while the pulse said ALIVE and ALIVE was true** — liveness, coverage and delivery bitten for the fourth time. Self-suppression unchanged (own rows carry `History/Bridge` in the source field). **Predicate control-tested 7/7 including 3 specimens v4 dropped and a self-suppression negative — it fires on 4 of 7, so it is not vacuous.** **GENERAL LESSON: a delivery rule encodes an assumption about WHO IS TALKING; re-read it whenever the lane roster changes.** | 50 s | 10412 | `TaskStop bhovhph2a` |
 | ~~b4hchcv93~~ | 2026-08-16 | **STOOD DOWN 2026-08-17 on the user's order** (*"stop monitoring integrator and the build, I told you"*). Row kept, not deleted: a silently-removed row is how a duplicate gets armed later. | - | dead | already stopped |
 | **b9v3kpj2h** | 2026-08-17T15:43Z | lane_watch.py — Foundry lane. CALLS rows whose ADDRESSEE FIELD names FOUNDRY. `WAKE_ON_BROADCAST = False`: ALL LANES broadcasts do NOT wake this lane, per standing user order. Does NOT watch build logs or Integrator runs. | 300 s; audit every 10 | 2556 | TaskStop b9v3kpj2h |
 | **bfqhz1ew3** | 2026-08-17T06:02Z (watcher re-arm #80; #77 biv65sqh2, #78 bch7hm26c, #79 bhf3hej9m each delivered+exited) | decoder_watch.py --exit-on-event â€” DECODER lane; CALLS rows addressed DECODER/ALL LANES, both states, self-filings suppressed; pulse monitor-pulse-decoder.json | 30 s | see pulse | TaskStop bfqhz1ew3 â€” | **b10hwkits** | 2026-08-17 | DECODER-TIMER: unconditional 30 s tick, drives WORK CONTINUATION (briefing Â§3b.1 â€” the second, previously-missing mechanism; the exit-on-event watcher above delivers interrupts, this one resumes decoding on quiet) | 30 s | n/a | TaskStop b10hwkits â€” exit-on-event means it ALSO exits on each delivery; re-arm `python -u tools/foundry/decoder_watch.py --exit-on-event` via Monitor and update task ID + pid here |
+
+### INTEGRATOR (added 2026-08-17 on the user's order)
+
+| task ID | armed (UTC) | what it does | interval | pid | stop with |
+|---|---|---|---|---|---|
+| **br5b9oonr** | 2026-08-18T03:36Z | `integrator_timer.py` - INTEGRATOR **work-continuation** timer. Copied from DECODER's timer per the user's order: *"copy decoder's timer so that you can retrigger yourself so that any work on your plate starts without the user prompting."* Reads `docs/state/ww-staging/INTEGRATOR-PLATE.md` and **DISARMS ITSELF when the plate empties** (History/Bridge's refinement, which Decoder's unconditional timer does not carry). A missing plate file reports **PLATE-MISSING**, never "empty" - a vanished file must look like a fault, not like quiet. | 180 s | 25820 | `TaskStop br5b9oonr` |
+
+**ARMED WITH THE MONITOR TOOL, DELIBERATELY.** This registry's own line 592
+records the defect: *"Root cause of silent timers bakhgc61g/bv7q596b4: plain
+background Bash only notifies on EXIT - the heartbeat MUST be created with the
+Monitor tool (stdout lines = events)."* Two Decoder timers reported success and
+delivered nothing.
+
+**Verified at arm time by the three properties, not one:** LIVENESS (pulse
+`monitor-pulse-integrator.json` ts 7 s old, pid 25820) - COVERAGE (tick names
+the top open plate item) - DELIVERY (the first tick arrived as a notification).
+It was also run with `--max-ticks 1` **before** arming, to prove it can produce
+NOISE: a check that can only produce silence cannot have its silence read as a
+result.
 
 ## FOUNDRY RE-ARM RECIPE (recorded on the 2026-08-16 stand-down order â€”
 ## "record the current version so tomorrow starts at tonight's quality")
@@ -599,3 +619,4 @@ watcher is a dead watcher until re-armed.
 - 2026-08-18 ~02:53Z DECODER: History call closed with measurement — D44J01 built 3/3 MATCH, 12/12 real (98a75858). ob1 at ~58 exact. Timer b15aguq92 alive; watcher #100 (bye4vor38) armed.
 - 2026-08-18 ~03:02Z DECODER: 12/12 RETRACTED on History's discriminator (falsifiable test run: 3/3 MISMATCH under genuine D44J01 compile; labels MatchingFor(E,J,P) restored, 8916d5a7). ob1 at 60/115. Anchors + handoff hardened. Timer b15aguq92 alive; watcher #102 (byjwx58t1) armed.
 - 2026-08-18 ~03:09Z DECODER: context nearing exhaustion — final hardening done (ob1 round 8, 64/115 exact, everything committed through setMtx/shadowDraw). Successor: read DECODER-HANDOFF.md §7 then ob1-progress rounds 3-8. Timer b15aguq92 + watcher #103 (bv4z5nrii) die with this session — ARM YOUR OWN.
+- 2026-08-18 ~03:52Z DECODER: so campaign OPENED (kickoff complete: anchor+ctor map+header restructure+baseline 13/187+task #3; round-1 shapes banked). Instance at effective context depth — decode work holds for successor; monitors stay armed for board duty.
