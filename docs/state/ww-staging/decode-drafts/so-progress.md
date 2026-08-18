@@ -947,3 +947,56 @@ cracked on a single function yet:
 
 That reframes what "finishing" these TUs means, and it is worth saying plainly
 rather than continuing to imply another cascade is one insight away: it is not.
+
+
+## Round 64 - my own systemic hypothesis, falsified in two commands; and a STYLE ORACLE found
+
+I said last round that the next move was to look for a systemic cause behind
+the whole allocator bucket, and named inlining depth as the candidate (the
+build line carries both `-inline auto` and `-inline noauto`, last wins).
+
+**FALSIFIED, cheaply: `configure.py` has 314 `ActorRel(Matching, ...)` entries.**
+They build with the identical `cflags_rel` - `-inline noauto`, `-O3,s`,
+`-schedule off`, `-sdata 0/-sdata2 0` - and are byte-identical to retail.
+**The build configuration is proven correct by 314 matching actor RELs; the
+flags are not the systemic cause and must not be touched.** (1498 of 1683
+workspace units are at 100%.) Anyone tempted to tune cflags for a stubborn
+actor REL should read that number first.
+
+**The useful consequence: if the flags are right, the remaining differences are
+SOURCE FORM, which means there is an oracle for them.** Of the 314, two are
+NPC actors of the same family: **`d_a_npc_p1` and `d_a_npc_ba1` are Matching.**
+Those are byte-identical reference implementations of the exact idioms failing
+in so/ob1/p2, and I had not been using them.
+
+**WHAT THE ORACLE SAYS - the house style is ALL LOCALS DECLARED AT THE TOP OF
+THE FUNCTION, then assigned in the body.** From `daNpc_P1_c::lookBack`:
+
+    BOOL daNpc_P1_c::lookBack() {
+        u32 o_retval = false;
+        cXyz posdiff = (dComIfGp_getPlayer(0)->current.pos - current.pos);
+        cXyz dstPos;
+        cXyz* dstPos_p;          <- declared UNINITIALISED, assigned in branches
+        f32 fVar4 = posdiff.absXZ();
+        bool look_at_target = true;
+        ...
+
+My TUs declare at point of use (modern style). That difference changes both
+register colouring AND stack-slot order - i.e. exactly the bucket that is left.
+
+**FIRST TEST WAS NEUTRAL AND I REVERTED IT.** Hoisting `modelData` and `btp` to
+the top of `_createHeap` left it at 12 rows with the identical colouring
+(target r30/r31/r28, mine r31/r30/r30). Reverted rather than kept: in a
+byte-matching campaign an unmeasured stylistic rewrite is churn, and "the
+siblings do it" is evidence about the DONOR's style, not proof about THIS
+function. The oracle stays valuable; this particular application of it did not
+pay.
+
+STATE unchanged: so 175/187 (99.6699%), ob1 109/115 (99.8324%),
+p2 133/145 (99.9503%). Trees clean.
+
+NEXT, and it is now a much better-posed question than "guess a source form":
+read `d_a_npc_p1.cpp` / `d_a_npc_ba1.cpp` for their `_createHeap`,
+node-control and by-value-cXyz-argument sites and compare MY forms against a
+BYTE-IDENTICAL implementation of the same idiom, instead of inventing
+candidate forms per function.
