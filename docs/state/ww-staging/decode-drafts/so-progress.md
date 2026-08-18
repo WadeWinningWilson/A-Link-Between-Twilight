@@ -533,3 +533,21 @@ Object-level TU status this build: tc 100.00%, p2 99.94%, ob1 99.50%, so 99.37%.
 - Gate: 137/187 exact, fuzzy 99.40%.
   (This very entry was ALSO eaten by the shell on first write — backticks inside
   an unquoted heredoc EXECUTE and vanish. Re-read every artifact after writing.)
+
+## Round 42: so REL SHA GATE RUN HONESTLY — MISMATCH (as expected at 99.4%)
+
+Procedure followed exactly (the anti-vacuous discipline):
+1. configure.py temp-flipped d_a_npc_so NonMatching -> Matching, reconfigured.
+2. DELETED build/GZLE01/src/d/actor/d_a_npc_so.o and rebuilt so the link could
+   not reuse a stale object (verified the .o timestamp advanced).
+3. TARGET HASH SOURCE FOUND: config/GZLE01/build.sha1 is the authoritative
+   per-REL hash list (there is NO d_a_npc_so.rel in orig/GZLE01/files/rels --
+   only 235 rels are extracted and so is not among them; RELS.arc holds the rest).
+   Target: dad717a5da27e7c168e18fb5af8bbd85b8c71200
+   Built:  4d81f104ed1c1ad75166be4bb60f0b7f03f94445
+   VERDICT: MISMATCH. Correct and expected -- 50 functions still carry ordering
+   and register-mirror residues. NOT a regression, NOT a defect.
+4. configure.py RESTORED to NonMatching and re-verified (leaving it Matching is
+   the vacuous-match trap that produced this lane's 12/12 over-claim).
+USE build.sha1 FOR EVERY FUTURE GATE -- no Yaz0 decompression needed, and it
+covers RELs that were never extracted to files/rels.
