@@ -359,3 +359,50 @@ the oracle to diff against.
 STATE: aj1 **14/131 exact, 7.1231%** (session start 12/131, 2.9112%).
 createInit and btpResID EXACT; init_texPttrnAnm 98.43% (2 rows, three return-type
 combinations already falsified - see Round 6).
+
+
+## Round 8 - the "open question" was my own misreading; bodyCreateHeap written
+
+**RESOLVED, and the oracle did it in one command.** Round 7 flagged that the
+McaMorf construction passes `r4 = 1, r5 = a_mdl_dat` while the mangled name says
+parameter 1 is `J3DModelData*`. I dumped `so`'s **byte-EXACT** `_createHeap`
+call to the same constructor: **identical register pattern** - `li r4, 0x1`,
+`mr r5, r31`(modelData), `li r6/r7/r8, 0`, `li r9, -1`, `lfs f1` = 1.0, `li r10, 0`,
+same five stack stores. So there was never a discrepancy - my reading of the
+register convention was simply wrong, and the source form is settled
+empirically:
+
+    new mDoExt_McaMorf(a_mdl_dat, NULL, NULL, NULL, J3DFrameCtrl::EMode_NULL,
+                       1.0f, 0, -1, 1, NULL, 0x80000, 0x11020022)
+
+**This is what the byte-identical siblings are FOR** - not style rules (which I
+over-read in the `so` campaign and had to retract), but settling a specific
+question about a specific construct. Cost: one command. I had been about to
+leave the function unwritten over it.
+
+**RESULT: `bodyCreateHeap` 99.66%, aj1 fuzzy 7.1231% -> 11.9351%.**
+
+All 10 residual rows are **string-pool OFFSETS** and nothing else:
+
+    T addi r4, r4, 0x91   |  M addi r4, r4, 0x54     ("backbone")
+    T addi r6, r6, 0x9a   |  M addi r6, r6, 0x5d
+    T addi r4, r4, 0xaf   |  M addi r4, r4, 0x72     ("handL")
+    ...
+
+The structure is exact; my offsets are uniformly ~0x3D low because the strings
+that belong BETWEEN them do not exist yet - the eight cut names
+(`AJ1_TLK`..`INVITE`, +0x2D..) which live in `privateCut`'s `a_cut_tbl` local
+static, and `"Ojhous2"`. **These 10 rows will close by themselves when those
+functions are written - do not chase them.** Same placement principle that
+drove the whole `so` campaign, and it confirms the Round 4 work order.
+
+Members added: `m_hed_jnt_num` / `m_bbone_jnt_num` / `m_hnd_L_jnt_num` /
+`m_fot_L_jnt_num` at **0x6CC-0x6CF** (four consecutive s8).
+
+SESSION TOTAL for aj1: **12/131 -> 14/131 exact, 2.9112% -> 11.9351% fuzzy**,
+with `createInit` + `btpResID` byte-exact, `bodyCreateHeap` 99.66% and
+`init_texPttrnAnm` 98.43% - the last two blocked only on strings/typing already
+diagnosed.
+
+NEXT: `privateCut` (its `a_cut_tbl` static owns the eight cut names at +0x2D)
+- writing it should close most of `bodyCreateHeap`'s 10 rows as a side effect.
