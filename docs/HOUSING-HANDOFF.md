@@ -229,3 +229,65 @@ urge to shortcut should reread bus §437-§440: the shortcut was slower.
 
 WHOSE TURN: successor Housing (open with §442-4/5, then the comparative rope probe) ·
 user (batch rulings, playtest verdicts) · History/Foundry (idle, nothing owed).
+
+---
+
+# ⛔ LANE CONSOLIDATED — 2026-08-17 (user ruling)
+
+> **"Housing Security" is retired as a lane name. The role lives on inside
+> INTEGRATOR.** One instance held Integrator + Housing Security + HousingTemp;
+> the roster had never listed Integrator at all, which made rows addressed to
+> *Housing Security* alone unroutable — every tool derives its lane set from
+> [`LANES.md`](LANES.md), and that table has now been corrected.
+>
+> ## → THE LIVE HANDOFF IS [`state/ww-staging/HANDOFF-INTEGRATOR.md`](state/ww-staging/HANDOFF-INTEGRATOR.md)
+>
+> Read §7 there (RETIREMENT UPDATE) for what was true at retirement: the
+> measurement-date problem, what the measurements actually covered, the seven
+> published claims that later proved false, what compiles but has never run,
+> and the tool traps.
+>
+> **This document is HISTORY and is deliberately not rewritten.** Everything
+> above records what the Housing Security lane was and did, and the ~800
+> historical mentions of this name across the tale, `CALLS.md`, the archive and
+> source comments were left standing on the same principle. **One lane going
+> forward; three names in the record.**
+
+## What of this charter survives the consolidation
+
+The **containment-audit role is intact** and is now Integrator's, with one
+constraint carried over verbatim because it is the reason the lane existed:
+
+> **Housing Security audits and BUILDS NOTHING IT AUDITS — self-clearing
+> destroys the check.**
+
+That is now a *tension inside one instance* rather than a boundary between two,
+and it is worth stating plainly to a successor: **Integrator's own builds are
+NOT independently audited merely because the containment role signs off on
+them.** Where a genuine independent check is needed, route it to Foundry or
+History/Bridge. Both caught real defects in Integrator's work on 2026-08-17 —
+a false push-gate finding and a live retracted directive — that this instance
+did not catch in itself.
+
+## Rulings made under this name that are still live
+
+- **Zone model** — Zone 1 (donor identity content, mod-side, never committed) ·
+  Zone 2 (WW-named engine logic in the tree, stripped, never pushed) ·
+  Zone 3 (vanilla, pushable). Discriminator: *does it carry donor bytes, names
+  or strings?*
+- **`d_snap` → Zone 2**, measured rather than inferred: 2,257 lines, eight
+  string literals and every one an `#include` path.
+- **A `not-ww` row is a NEGATIVE RECEIPT and must never be pruned as stale** —
+  its absence from a WW diff is the verdict being *right*. Pruning it re-opens
+  the `d_a_e_ww` cross-instrument conflict.
+- **Evidence beats an empty verdict** — when two adjudicated instruments
+  disagree, the one carrying positive evidence wins. An empty evidence set is
+  not a weak verdict, it is an unmade one.
+
+## Rulings made under this name that are VOID
+
+- **"The push gate is blind to 31 banner-declared files"**, and the ruling
+  approving a banner reader. **DO NOT BUILD IT.** The gate has used a
+  filename ∪ declared-lineage UNION basis since 2026-08-07. I ruled from the
+  rule instead of the artifact — I ran the filename regexes and never ran the
+  manifest.

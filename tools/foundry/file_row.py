@@ -130,7 +130,14 @@ def ratified_lanes():
 # is the ONLY builder under the §839 protocol and one of the most active lanes,
 # yet the roster predates the role — that is a real question for the user, not
 # something a linter should settle.
-OPERATIONAL_LANES = {"INTEGRATOR", "HOUSINGTEMP"}
+# RETIRED ALIASES, kept ACCEPTED so ~800 historical rows still lint clean.
+# INTEGRATOR left this set on 2026-08-17 — it is now RATIFIED in LANES.md,
+# which closed the gap this comment used to describe ("the roster predates
+# the role"). HOUSINGTEMP and HOUSING SECURITY were CONSOLIDATED INTO
+# INTEGRATOR by the same ruling: one instance, three names. The names stay
+# valid as addressees because the RECORD is not rewritten — only the live
+# routing surface moved.
+OPERATIONAL_LANES = {"HOUSINGTEMP", "HOUSING SECURITY"}
 COLLECTIVE = {"ALL", "ALL LANES"}
 KNOWN_LANES = (ratified_lanes() | OPERATIONAL_LANES | COLLECTIVE) or {
     "FOUNDRY", "HISTORY", "HOUSING", "HOUSINGTEMP", "INTEGRATOR", "LIBRARIAN",
@@ -390,8 +397,12 @@ def main():
         else:
             print("    every ratified lane has been addressed at least once.")
         print("    **Corrections to the roster are the USER'S, not mine.** This tool")
-        print("    reads LANES.md; it does not define lanes. INTEGRATOR is the §839")
-        print("    sole builder yet is absent from the roster — a real question.")
+        print("    reads LANES.md; it does not define lanes. INTEGRATOR was")
+        print("    RATIFIED 2026-08-17 — Housing Security + HousingTemp were")
+        print("    CONSOLIDATED into it (one instance, three names). The old")
+        print("    \"absent from the roster\" gap this tool used to report is")
+        print("    CLOSED; the two retired names stay ACCEPTED so the ~800")
+        print("    historical rows carrying them still lint clean.")
         return 1 if bad else 0
 
     if cmd == "verify":

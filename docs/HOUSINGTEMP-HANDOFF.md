@@ -212,3 +212,69 @@ WHOSE TURN: **HousingTemp** (spin-up: read the five open items in §5, then run 
 covenant sweep 3a over the uncommitted tree — it has never had one) · **user** (ruling on
 §5.1; word to History for A2) · **Housing Security** (rope crash: exe 01:05:51 queued,
 `461-H19 prevDL` lines are the deliverable) · **History** (A2 on the user's word).
+
+---
+
+# ⛔ LANE CONSOLIDATED — 2026-08-17 (user ruling)
+
+> **"HousingTemp" is retired as a lane name. The role lives on inside
+> INTEGRATOR.**
+>
+> This consolidation was *already true in practice and never recorded*: the
+> user ruled on **2026-08-14** that HousingTemp and Integrator were the same
+> instance (*"HousingTemp/Integrator"*). `call_receipt.py` has carried
+> `ALIASES = {"HOUSINGTEMP": "INTEGRATOR"}` since then. **The roster never
+> caught up**, which is why HousingTemp read as *SILENT SINCE tale §697* — the
+> identity had simply stopped posting under its old name while the same
+> instance kept working as Integrator. That false reading was one of two hits
+> in an accusation withdrawn at tale §977. **A merged identity the roster never
+> recorded, mistaken for a dead lane.**
+>
+> ## → THE LIVE HANDOFF IS [`state/ww-staging/HANDOFF-INTEGRATOR.md`](state/ww-staging/HANDOFF-INTEGRATOR.md)
+>
+> Read §7 there for the retirement state.
+>
+> **This document is HISTORY and is not rewritten.** The ~395 mentions of this
+> name across the tale, `CALLS.md`, the archive and **shipping source** are
+> left standing — `src/m_Do/m_Do_ext.cpp` credits HousingTemp for **two real
+> defects found by its instrument audit** (§467, §486/HT-12). Renaming that
+> would delete an attribution, not a label.
+
+## What of this charter survives
+
+**The instrument-integrity audit (§3c) was this lane's highest-value duty and
+it proved itself again on 2026-08-17** — three separate false findings shipped
+that day, and every one came from the same root this charter names:
+**an instrument's silence read as an answer.**
+
+The rule that closes it, earned three times over and now carried into
+Integrator:
+
+> **A check that can only produce SILENCE must be proven able to produce NOISE
+> before its silence counts as a result.** Never rule an instrument deficient
+> without demonstrating you RAN it and got a known-positive on a planted case.
+
+Corollary from the same day: **reproducing someone's NUMBER is not verifying
+their CLAIM.** An exact match with an instrument you are calling blind is
+*disconfirming* evidence — if the tool reports the same set you found, the tool
+can see it.
+
+## The anti-patterns section was right and got exercised
+
+§6 recorded anti-patterns "from real failures — do not repeat." They were
+repeated on 2026-08-17, by this instance, which is worth a successor knowing:
+
+- **Ruling from the rule instead of the artifact** — I "verified" a push-gate
+  hole by running filename regexes against *invented* paths, never against the
+  tree. The finding was void.
+- **Treating a filed row as a landed ruling** — three rulings reached no
+  artifact; one sat as the evidentiary prop of a live covenant rule for hours.
+- **Reporting the limit of one's own search as a property of the world** —
+  I declared "there is no Integrator handoff" after searching one directory,
+  and created a duplicate of the file that already existed.
+
+**None of these were new. All three are in the charter above.** A handoff that
+lists an anti-pattern does not prevent it; only an instrument or an ordering
+does. That is why the fixes that stuck this session were *mechanical* — the
+roster corrected, `file_row.py` amended to say its receipt proves only an
+announcement, the watcher made to name its own wake trigger.
