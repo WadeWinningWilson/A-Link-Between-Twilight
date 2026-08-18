@@ -424,3 +424,19 @@ commit (77 exact held). Corrections to the round-34 spec, found by measuring:
   a precomputed local reorders the loads.
 PARKED (9): 5 x .bss anchor offsets (settle at convergence) + 4 x fmuls operand
 order on the tilt compares (both source orders produce f0,f1; target has f1,f0).
+
+## Round 36: _draw real-0 — fuzzy 82.89%
+
+l_HIO m26 (debugDraw gate) / m31 (skip-model) / m2C (force hudeDraw);
+m6CC==5 returns early. Body: settingTevStruct(0,&current.pos,&tevStr) ->
+setLightTevColorType(model,&tevStr) -> mBtpAnm.entry(modelData, m86C) ->
+m84C->entryDL() -> modelData->getMaterialTable().removeTexNoAnimator(
+mBtpAnm.getBtpAnm()) -> (mA78 || l_HIO.m2C) hudeDraw().
+Then dSnap_RegistFig(0x7D, this, snapPos, shape_angle.y, 1,1,1) and
+dComIfGd_setShadow(mA74, 0, m84C->getModel(), &shadowPos(y+150), 800.0f,
+40.0f, current.pos.y + mB34, mObjAcch2.GetGroundH(), mObjAcch2.m_gnd,
+&tevStr, 0, 1.0f, dDlst_shadowControl_c::getSimpleTex()); mA74 = u32 shadow id.
+LESSON: a cXyz built from another cXyz plus one tweak is COPY-THEN-ADJUST
+(cXyz p(current.pos); p.y += x) — the 3-arg component ctor reorders the loads
+(cost 11 rows until flipped). Same shape as tc/bm1/ba1 sibling actors.
+Includes added to the main .cpp: d/d_snap.h, d/d_drawlist.h.
