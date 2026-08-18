@@ -460,3 +460,38 @@ _create: fopAcM_ct_Retail; resLoad; room-26/!bit0x1e40 and !isStageBossEnemy(3)
 both return cPhs_ERROR_e; entrySolidHeap(createHeap_CB, 0x1C00); createInit.
 REMAINING (54, but only TWO are undecoded): _createHeap (0.51%) and the
 daNpc_So_HIO_c ctor (0.91%). Everything else is >= 98% and settles.
+
+## Round 38 (context close): _createHeap + HIO ctor — 133/187 exact, FUZZY 97.94%
+
+_createHeap decoded, length-identical 197, parked at an 18-row r30/r31 mirror
+(decl-then-assign falsified). Res indices 0xC model / 0x10 btp / 0xD hude;
+McaMorf 0x80000/0x11020022; J3DModel__create 0x80000/0x11000022; joints head 11
++ backbone 1 both take nodeControl_CB; JUT_ASSERT lines 0x1FD 0x210 0x215 0x217
+0x221 (the stringBase head strings confirm each).
+HIO ctor field block written (110 rows, length-identical).
+
+### THE LAST PIECE — daNpc_So_HIO_c IS MULTIPLE-INHERITANCE (write this first next time)
+
+The ctor stores THREE vtable words: __vt__mDoHIO_entry_c then
+__vt__daNpc_So_HIO_c at offset 0x0, and __vt__dNpc_HIO_c at offset 0x4. So:
+    class daNpc_So_HIO_c : public mDoHIO_entry_c, public dNpc_HIO_c { ... };
+with a JntHit_HIO_c member at 0x98 (its ctor is called on this+0x98).
+CONSEQUENCE: the dNpc_HIO_c subobject starts at 0x4, so ITS m04 lands at 0x8 and
+ITS mMaxHeadX/mMaxBackboneX/... chain lands at 0xC-0x1E — i.e. my flat m08/m0C..m1C
+fields ARE dNpc_HIO_c's inherited members, which is exactly why _execute's
+m_jnt.setParam(m0E,m12,m16,m1A,m0C,m10,m14,m18,m1C) reads them in that order.
+So the fix is: declare the two bases + the JntHit_HIO_c m98 member and DELETE the
+flat 0x00-0x1E fields (they come from the base). Own fields start at 0x20.
+This is a header restructure with real regression risk — do it with the report
+gate (must stay >= 133 exact) and revert immediately if it drops.
+
+### STATE AT CONTEXT CLOSE
+so: 133/187 exact, fuzzy 97.94% (session start 40 / 11.66%).
+Every function in the TU is now DECODED. What remains is convergence work:
+the HIO-ctor inheritance fix above, an 18-row _createHeap mirror, a 12-row
+cutMiniGameProc residue (2 fneg-fold sites + 2 fcmpo polarity + 1 dead load),
+9 rows in _execute (5 .bss settling + 4 fmuls order), 15 in checkTgHit
+(arg-eval ordering), and small polarity/ordering rows elsewhere.
+NEXT AFTER THAT: the REL SHA gate — temp-flip so to Matching in configure.py,
+build the REL, compare against the Yaz0-decompressed retail REL, and re-verify
+the tc canary (c5f975667b7d...) because d_npc.h was touched this session.
