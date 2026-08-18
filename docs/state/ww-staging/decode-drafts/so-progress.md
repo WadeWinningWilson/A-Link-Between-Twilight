@@ -507,3 +507,11 @@ mAttnYOffset / mMaxAttnAngleY / m22 / mMaxAttnDistXZ across 0x08-0x2C. Own
 fields start at 0x2C. Header gained d/d_jnt_hit.h + m_Do/m_Do_hostIO.h.
 EVERY FUNCTION IN THE TU IS DECODED. All 50 remaining are >= 98%: register
 mirrors and instruction ordering only, no unknown logic.
+
+## Round 40: tc CANARY RE-VERIFIED AFTER THE d_npc.h EDITS — MATCH
+
+d_a_npc_tc REL sha1 = c5f975667b7d9536d3e72ac7d87536fa4a622851 = the recorded
+retail value. tc is ActorRel(Matching) so the REL link is REAL, not a
+retail-object passthrough. The shared-header work this session (fopNpc pad
+typing) is provably harmless to shared consumers.
+Object-level TU status this build: tc 100.00%, p2 99.94%, ob1 99.50%, so 99.37%.
