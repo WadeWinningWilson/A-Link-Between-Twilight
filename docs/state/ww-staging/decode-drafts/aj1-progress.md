@@ -305,3 +305,57 @@ Members added this round: `mBtpAnm` (mDoExt_btpAnm, 0x14 bytes) at **0x6D8**,
 mBtpAnm/byte/halfword shape `so` has at 0x854/0x868/0x86C.
 
 NEXT: `bodyCreateHeap` (820 bytes, six string uses - the largest undone).
+
+
+## Round 7 - bodyCreateHeap fully transcribed (215 instrs), NOT written, one open question
+
+Pulled all 215 instructions. The shape is unambiguous and the semantics are
+recorded below so the write is mechanical next session. **I did not write it**
+- one detail does not reconcile and I would rather leave a clean transcription
+than a half-correct 215-instruction function.
+
+**SEMANTICS:**
+
+    a_mdl_dat = (J3DModelData*)dComIfG_getObjectIDRes("Aj", 0xA);
+    JUT_ASSERT(0x8BE, a_mdl_dat != 0);                  // "a_mdl_dat != 0" @+0x6A
+    mpMorf = new mDoExt_McaMorf(...);                   // operator new(0xB4)
+    if (mpMorf == NULL) return false;
+    if (mpMorf->getModel() == NULL) { mpMorf = NULL; return false; }
+    if (!init_texPttrnAnm(0, false)) { mpMorf = NULL; return false; }
+    m_hed_jnt_num   = a_mdl_dat->getJointName()->getIndex("head");     // +0x79
+    JUT_ASSERT(0x8D3, m_hed_jnt_num >= 0);                             // +0x7E
+    m_bbone_jnt_num = ...getIndex("backbone");                         // +0x91
+    JUT_ASSERT(0x8D5, ...);                                            // +0x9A
+    m_hnd_L_jnt_num = ...getIndex("handL");                            // +0xAF
+    JUT_ASSERT(0x8D7, ...);                                            // +0xB5
+    m_fot_L_jnt_num = ...getIndex("footL");                            // +0xCA
+    JUT_ASSERT(0x8D9, ...);
+    ...getJointNodePointer(m_hed_jnt_num)->setCallBack(nodeCB_Head);
+    ...getJointNodePointer(m_bbone_jnt_num)->setCallBack(nodeCB_BackBone);
+    mpMorf->getModel()->setUserArea((u32)this);
+    return true;
+
+Joint-number fields are **0x6CC / 0x6CD / 0x6CE / 0x6CF** (four s8, consecutive)
+and must be carved out of the current `field_0x6c4[0x6D8 - 0x6C4]` padding.
+`lwz r3, 0x54(r31)` is `a_mdl_dat->getJointName()`.
+
+**THE OPEN QUESTION - do not paper over it.** The McaMorf construction reads:
+
+    li r3, 0xb4 ; bl __nw__FUl ; mr. r0, r3 ; beq <skip>
+    ... five stack args at 0x8..0x18: -1, 1, 0, 0x80000, 0x11020022 ...
+    li r4, 0x1 ; mr r5, r31 ; li r6,0 ; li r7,0 ; li r8,0 ; li r9,-1
+    lfs f1, "@4434"  (= 1.0f) ; li r10, 0
+    bl __ct__14mDoExt_McaMorfFP12J3DModelDataP25mDoExt_McaMorfCallBack1_c...
+
+With `this` in r3 (the freshly new'd pointer, never reloaded), **r4 = 1 and
+r5 = a_mdl_dat**. But the mangled name says parameter 1 is `J3DModelData*`,
+which would put `a_mdl_dat` in r4, not r5. Either I am misreading the register
+convention here or the ctor signature in our headers differs from the donor's.
+**Resolve that BEFORE writing the call** - `so`'s `_createHeap` has a
+byte-EXACT 12-argument `new mDoExt_McaMorf(modelData, NULL, NULL, NULL,
+J3DFrameCtrl::EMode_NULL, 1.0f, 0, -1, 1, NULL, 0x80000, 0x11020022)` and is
+the oracle to diff against.
+
+STATE: aj1 **14/131 exact, 7.1231%** (session start 12/131, 2.9112%).
+createInit and btpResID EXACT; init_texPttrnAnm 98.43% (2 rows, three return-type
+combinations already falsified - see Round 6).
