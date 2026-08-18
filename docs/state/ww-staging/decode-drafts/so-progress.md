@@ -261,3 +261,16 @@ sibling actors for the idiom (the anchor round-27 instruction, executed same con
 - cutEatesaFirstProc 74 -> 3 (one fcmpu operand-order + branch-length echoes) — park.
 - RULE: any frsqrte + flat-vector site — reach for absXZ()/abs()/abs2XZ() FIRST.
 - so at 77/187 exact, fuzzy 53.60% (session start 40/11.66%).
+
+## Round 29 (context close): modeNearSwim decoded/parked; fuzzy 56.17%
+
+- modeNearSwim: BoatBattle camera SetTypeForce, player-centered circle path
+  (radius 400/wobble 50/0x100, y+=mB34 both arms), exit >= mA7C -> mode 3.
+  Parked 8-row ship/player r29-r30 mirror; decl-then-assign FALSIFIED on this
+  pair (3 orders) - use-pattern coloring, joins the p2/ob1 inline-body-campaign class.
+- CONTEXT CLOSE STATE: 77/187 exact, fuzzy 56.17% (start 40/11.66%). absXZ() rule
+  in force (round 28). Remaining majors: modeProc, next_msgStatus, checkTgHit,
+  cutProc, cutMiniGameStart/Proc/ReturnProc, _execute, _draw, create chain,
+  _createHeap tail, HIO ctor, XyEventCB, getArg tail, jntHitCreateHeap tail.
+- Monitors at close: timer b15aguq92 alive; watcher #117 (b9d14osfs) armed 303-row
+  baseline. Re-arm IMMEDIATELY on delivery; CHECK NEWEST WATCHER OUTPUT each tick.
