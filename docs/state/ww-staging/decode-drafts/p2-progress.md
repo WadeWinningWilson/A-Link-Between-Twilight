@@ -1112,3 +1112,27 @@ GATE PROCEDURE (reusable, ~40 s per TU): flip the ActorRel to Matching ->
 python configure.py -> DELETE the TU .o -> ninja the .rel -> sha1 vs build.sha1
 -> RESTORE NonMatching and verify. Deleting the .o is mandatory; without it the
 link can reuse a stale object and the result is vacuous.
+
+## Round 22 (2026-08-18): CORRECTION — "22 rows" IS NOT THE WHOLE p2 GAP
+
+I have been telling the user, in the SHA-gate reporting, that "the 22
+register-mirror rows are the whole remaining gap". **That is wrong and I am
+correcting it before any ruling is made on it.**
+MEASURED, all 14 non-exact functions in the TU, every diff row classified:
+  TOTAL diff rows: **138**
+    register-mirror (identical shape, different registers): 74
+    genuinely other (ordering/polarity/etc):                63
+    anchor-symbol only (m_heapsize vs ...rodata.0):          1
+The predecessor's "22 rows / 3 sites" figure is ACCURATE **for those three
+functions only** — setAnm 4 + _execute 5 + cutRopeTalkProc 13 = 22. The other
+ELEVEN non-exact functions carry the remaining 116 rows.
+WHAT THIS CHANGES FOR THE RULING: an `Equivalent` label on p2 would cover
+14 functions / 138 rows, not 3 functions / 22 rows. History's precedent
+argument (upstream uses Equivalent for regalloc) still applies to the 74
+mirror rows, but the 63 "other" rows are NOT all regalloc and should be
+looked at before the PR body claims they are. The honest PR-body sentence is
+"14 functions differ; 74 rows are register allocation, 63 are ordering/shape
+still under investigation" — not "3 functions, 22 rows".
+NOTE the anchor finding while classifying: exactly ONE row is the
+m_heapsize-vs-anonymous rodata anchor difference, so that class is negligible
+here (unlike so, where pool/anchor settling dominated).
