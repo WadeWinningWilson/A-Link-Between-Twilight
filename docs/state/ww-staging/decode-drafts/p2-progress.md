@@ -1211,3 +1211,19 @@ rows; 74 are register allocation (the class upstream already labels
 Equivalent in three places), 24 are ordering/.bss-settling shape, 1 is an
 anchor-symbol choice. No known defects." That is a far tighter claim than the
 "3 functions / 22 rows" I inherited AND than the "14 / 138" I corrected to.
+
+## Round 27: nodeCallBack's 9 non-mirror rows diagnosed — 2 EXTRA .bss GUARD SLOTS
+
+All 12 differing rows in nodeCallBack (mirror and non-mirror alike) are a
+UNIFORM +8 SHIFT: mine 0x2f4/0x2f8/0x2e8/0x310/0x314/0x304 where the target has
+0x2ec/0x2f0/0x2e0/0x308/0x30c/0x2fc.
+The target .bss is a long run of 1-byte function-local-static GUARD objects,
+each padded to 4 bytes (@3569 0xC, then @1036, @1034, @1032 ... one per
+function-local static in the TU). A uniform +8 means **my TU emits TWO MORE
+4-byte guard slots than the donor before this point** — i.e. two extra
+function-local statics somewhere earlier in the file, or two donor statics I
+wrote as something else.
+=> NOT a defect and NOT reachable by editing nodeCallBack itself. It is a
+whole-TU .bss census item: count function-local statics in emission order and
+find the two extras. Cheap to do with a script; deferred, 12 rows.
+This is the same class as so's round-35 .bss rows and settles the same way.
