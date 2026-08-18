@@ -222,3 +222,30 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
 - l_evn_tbl file-scope static EXISTS in rodata (0x150, 4 bytes) — an
   event-name ptr table, likely used by createInit/eventOrder region;
   find its consumer before writing createInit.
+
+### Round 9 (03:24Z) — 🎉 TU FULLY DECODED: fuzzy 99.4678%, 106/115 exact
+- ALL functions written. Landed this round: setAnm, chkAttention (km1
+  verbatim), setMtx (setBaseTRMtx + anmMtx-hoist), shadowDraw, lookBack
+  (bm1 verbatim; bool field_0x7FA pins ssb param), anmAtr, _draw (first
+  compile), _execute (FIRST COMPILE — core loop), nodeOb1Control,
+  create_Anm (vbase-flag ctor, "head"/"backbone" getIndex, assert-forced
+  m_hed_jnt_num/m_bbone_jnt_num), create_hed_Mdl (a_mdl_dat, tbl {6}),
+  CreateHeap (a_hed_tex_tbl rodata-templated local, joint-callback loop,
+  SetWall(30,80), 8-arg Set), createInit (FIRST COMPILE — l_evn_tbl
+  "Get_Rupee" event, path from (param>>16)&0xFF, cc 0xff/0xd9,
+  setActorInfo2("Ob1")), _create (switch-on-state, size 0x272E0,
+  cullSizeBox ±60/-20/170).
+- NEW LESSONS: caller clrlwi. pins bool returns EVERYWHERE (charDecide,
+  createInit, init_OB1_*, setBtp, iniTexPttrnAnm, chk_talk, event_action
+  all bool); switch(state){case COMPLEATE:} = beq+b; l_evn_tbl file-static
+  initializer strings pool FIRST (pre-function parse) — explains
+  "Get_Rupee" at pool offset 0.
+- PAIR-BIRTH LOG: _create's this/anchor mirror FLIPPED to match when the
+  if became switch — control-flow shape feeds the allocator direction!
+  (Strongest mirror-puzzle lead yet — p2's setAnm/_execute/Proc sites
+  might flip with an equivalent-shape change.)
+- REMAINING sub-100 (9 fns): ALL pool-settling rows + the 4 §2b parks
+  (chg_anmAtr 2, control_anmAtr 2, privateCut 2, nodeOb1Control mirror).
+  NEXT PHASE (p2 playbook rounds 19+): pool forensics (my pool has extras/
+  order deltas), .data/.bss order, .text emission order tool, then the
+  REL SHA gate (flip Matching temporarily to measure), cross-version.
