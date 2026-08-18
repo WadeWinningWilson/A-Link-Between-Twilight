@@ -1173,10 +1173,23 @@ instruction inserted or deleted?
   fmuls OPERAND ORDER:
       target: lfs f1, 0xb00(r27) ; lfs f0, 0x1e0(r31) ; fmuls f3, f1, f0
       mine:   lfs f0, 0x1e0(r31) ; lfs f1, 0xb00(r27) ; fmuls f3, f0, f1
-  The target loads the POOL CONSTANT first and multiplies constant-by-scale;
-  mine loads `scale.x` first. Three `fmuls` in the `fopAcM_setCullSizeBox` call
-  are affected. This is a source-level operand-order fix, not an allocator
-  artifact — ACTIONABLE, and it was sitting behind a wrong label.
+  CORRECTION (same session): my first reading of these rows had the register
+  roles BACKWARDS. r27 is `this`, r31 is the RODATA POOL base — so `0xb00(r27)`
+  is the member `mB00` and `0x1e0(r31)` / `0x110(r31)` are the literals 0.25f
+  and 0.5f. The rows are NOT in `fopAcM_setCullSizeBox` (that is ~180
+  instructions earlier); they are the `speed.y` vs `mB00 * 0.25f` / `* 0.5f`
+  ladder around line 1167.
+
+  So the real statement is: the TARGET loads the member first and the constant
+  second, computing member-by-constant; mine loads the constant first. My source
+  already reads `mB00 * 0.25f`, i.e. member-first, so the operand order in the
+  SOURCE is not obviously the lever — this needs the surrounding expression
+  looked at, not a one-token swap.
+
+  What still stands, and is the reason this entry exists: THIS IS NOT REGISTER
+  COLOURING. The two sides load the same two values from the same two addresses
+  in opposite order. That is an expression-evaluation-order difference and it is
+  fixable in source. The old 'genuine colouring' label was wrong.
 
 Lesson recorded for the whole campaign: before calling anything "register
 colouring", check whether the row counts match. If instructions are inserted or
