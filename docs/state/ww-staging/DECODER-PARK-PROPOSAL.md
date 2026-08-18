@@ -146,3 +146,62 @@ I would rather surface that now than have a SHA gate fail later and look like a
 surprise. It does not change the park recommendation - if anything it
 strengthens it, because the residual work on `so` includes speculative
 reconstruction of code the donor itself dead-stripped.
+
+---
+
+## ADDENDUM 2026-08-18 — a correction to my own evidence, and a narrowed claim
+
+**I found a real lever, and it retires part of the "colouring never pays" claim
+above. The recommendation for `so`/`ob1`/`p2` is UNCHANGED; the reasoning is
+narrower and one headline example was wrong.**
+
+### What changed
+
+`aj1`'s `lookBack` was cited in this document (and in bus rows 439/440/442) as
+the flagship colouring failure — *"the matching-sibling declare-locals-up-front
+arrangement, measured 42 -> 45 rows, WORSE"*. **`lookBack` is now EXACT.** It was
+never a colouring problem. It had three ordinary defects:
+
+1. It read `shape_angle.y` (0x20E) where the donor reads `current.angle.y`
+   (0x206) — a **wrong field**, at three sites.
+2. `field_0x76a` was `u8` where the donor has `bool`; passing a `u8` to a `bool`
+   parameter emits `subic/subfe/clrlwi` normalisation the donor does not have.
+3. `field_0x7bd` was `u8` where the donor has `s8` (`extsb` on the subject).
+
+Errors 1 and 3 were only visible once I read the **correct game version's**
+disassembly (I had been reading the JP `.s` while building US — see
+`decode-drafts/aj1-progress.md` §Rounds 41-48).
+
+### The new lever
+
+**Declaration position and initialisation position are SEPARATE levers.**
+`cXyz dstPos;` declared early emits no code but claims the **stack slot**;
+`dstPos.set(0,0,0)` placed later fixes the **store order**. Every one of my
+earlier ~17 attempts moved declaration and initialisation *together*, which is
+why each one traded one diff for another. Measured on `lookBack`:
+declare-first-with-initialiser 16 rows, pointer-between 20, pointer-first 18,
+**declare-then-set-later 0**.
+
+### And the boundary — this is why the recommendation still stands
+
+**The lever moves STACK SLOTS. It does not move REGISTER NAMES.** Tested
+directly on `so`'s `_nodeControl` (3 forms: decl-then-set 5 rows, swapped decl
+16, mixed 13 — baseline 5, i.e. **no improvement**).
+
+`so`'s remaining residuals are pure register-*name* swaps: identical
+instructions, identical offsets, identical stack layout, with r30/r31 or r29/r30
+exchanged (`_createHeap` 12, `_nodeControl` 5, `modeNearSwim` 8). There is no
+stack slot to move, so there is nothing for the lever to act on.
+
+### Net effect on the ask
+
+- **`so`, `ob1`, `p2`: recommendation unchanged** — park as §2b Equivalent. The
+  evidence is now *stronger*, not weaker: I found a genuine lever and it
+  provably does not apply to what is left in these three.
+- **`aj1` is withdrawn from any park discussion.** It is at **118/131 exact,
+  99.6350%** and still moving; it should not be parked.
+- **The falsified-attempts list above should be read as ~16, not ~17**, and the
+  `lookBack` line struck.
+
+**Still owed:** the user's ruling (park / keep grinding / hand off), and
+History's `dNpc_HIO_c` vtable scoping — the one item I would not park.
