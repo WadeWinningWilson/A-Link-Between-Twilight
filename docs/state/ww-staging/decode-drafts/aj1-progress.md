@@ -1360,3 +1360,42 @@ EXACT**, so I am NOT authoring speculative debug calls to force the constants �
 that would be inventing donor code to chase 4 rows. **This is the same class as
 `so`'s 14 unreferenced GXColor constants (56 bytes): a real, understood,
 second data point on one pattern, not two separate puzzles.**
+
+## Round 54 — 126/131 exact, 99.7659%
+
+**The "argument-evaluation position" bucket is not one bucket. It cracks two
+ways, and a third case resists both.** All measured on `setMtx` (8 -> 0):
+
+1. **Hoist the object into a local declared IMMEDIATELY BEFORE the call.**
+   `field_0x6d0` -> a `subModel` local took it 8 -> 4. **Declaration POINT is
+   the lever, not the local's existence:** the same local hoisted to the top of
+   the function measured **19 rows — worse than the baseline.**
+2. **Use the object's own setter.** `model->setBaseTRMtx(now)` in place of
+   `PSMTXCopy(now, model->getBaseTRMtx())` took the remaining 4 -> 0. This is
+   the same signal that fixed `flw_pa_aka`/`flw_pa_pun` via
+   `emitter->setGlobalRTMatrix()`. A local declared right before the call also
+   measured 0, so both spellings are byte-identical; I kept the setter as the
+   donor-idiomatic form.
+3. **`_nodeCB_BackBone` resists both** — floor of 4 rows across **8 swept
+   forms** (cMtx_ wrapper, stack-class XrotM, accessor vs raw member, locals
+   hoisted, a local per call, double negation, a jnt pointer local). The target
+   loads the angle before materialising `now`; nothing I can write reverses it.
+   Parking it as arg-eval position with the sweep recorded so it is not redone.
+
+### Final state for this stretch
+
+| TU | exact | fuzzy |
+|---|---|---|
+| `d_a_npc_so` | 175/187 | 99.6699% |
+| `d_a_npc_ob1` | 109/115 | 99.8324% |
+| `d_a_npc_p2` | 133/145 | 99.9503% |
+| `d_a_npc_aj1` | **126/131** | **99.7659%** |
+
+**543/578 exact across the four TUs.** `aj1` began this session at 12/131 and
+2.9112%.
+
+`aj1`'s five remaining, all named and all swept: `_nodeCB_BackBone` 4 (arg-eval,
+8 forms), `setAnm_anm` 3 (inverted branch, two variables, 4 forms),
+`chngAnmAtr` 2 (inverted RANGE branch, 6 forms), `ctrlAnmAtr` 2 (branch shape),
+`_create` 6 (4 = the three missing GXColor pool constants documented in
+§Rounds 49-53, 2 = inverted branch).
