@@ -638,3 +638,41 @@ Both are answerable from `d_npc.h` plus a matching sibling; neither is a guess I
 should make at the end of a long session.
 
 STATE: aj1 **48/131 exact, 25.8746%** - unchanged, nothing written this round.
+
+
+## Round 14 - HIO layout LANDED (48 -> 50 exact); ctor body still wrong
+
+**`setParam`'s signature named the fields, so this was transcription after all -
+I was wrong in Round 13 to call it design.** `dNpc_JntCtrl_c::setParam` is
+declared in `d_npc.h` as
+`(max_backbone_x, max_backbone_y, min_backbone_x, min_backbone_y, max_head_x,
+max_head_y, min_head_x, min_head_y, max_turn_step)`. Mapping that onto the
+call's register loads (r4=+0x14, r5=+0x16, r6=+0x18, r7=+0x1A, r8=+0xC, r9=+0xE,
+r10=+0x10, stack=+0x12, +0x1C) resolves the block exactly:
+
+    0x0C max_head_x      0x2000      0x14 max_backbone_x  0x0000
+    0x0E max_head_y      0x1F40      0x16 max_backbone_y  0x1C70
+    0x10 min_head_x      0x01F4      0x18 min_backbone_x  0xFA24
+    0x12 min_head_y      0xCD38      0x1A min_backbone_y  0xFF6A
+                                     0x1C max_turn_step   0x0400
+
+i.e. head params first in memory, backbone second, turn step last - the
+scrambled ARGUMENT order was just MWCC's, not the struct's. **The lesson: when
+an argument order looks scrambled, read the callee's declaration before
+concluding anything about the caller's data layout.**
+
+**RESULT: `__dt__15daNpc_Aj1_HIO_cFv` and `__dt__14mDoHIO_entry_cFv` both went
+EXACT - 48/131 -> 50/131, 25.8746% -> 26.8213%.** The class layout is right.
+
+**THE CTOR BODY IS STILL WRONG (0.00%, 59 rows vs the target's 25 instrs).**
+The target does a single `memcpy(this + 0xC, a_prm_tbl, 0x30)`; my
+`mPrm = a_prm_tbl;` on a mixed-type struct made MWCC copy FIELD BY FIELD
+instead. So the member at 0xC is probably not a mixed struct at all - more
+likely a plain array (which cannot be assigned, forcing a real `memcpy` call),
+with the typed access happening at the use sites. **Try `s16 mPrm[0x18]` (or a
+u8[0x30]) plus an explicit memcpy next, and check whether `_execute`'s
+`setParam` reads still come out clean.** The layout offsets above are confirmed
+correct either way - only the member's TYPE is open.
+
+STATE: aj1 **50/131 exact, 26.8213%**. Session: 12/131 -> 50/131, 2.9112% ->
+26.8213%.
