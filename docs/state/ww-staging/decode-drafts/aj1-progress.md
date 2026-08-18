@@ -983,3 +983,46 @@ colouring rows.
 
 STATE: aj1 **60/131 exact, 53.0104%**. Six functions sit at 3-9 rows, every one
 from a KNOWN cause: pool position, argument order, or this branch shape.
+
+
+## Rounds 25-27 - aj1 64/131, 59.82%; the EMPTY-CASE signal
+
+Landed: `FARwai` **EXACT**, `wait_1` **EXACT**, `setStt` **EXACT**,
+`setMtx` 8 rows, `shadowDraw` 4 rows (pool positions only).
+
+### ⭐ NEW SIGNAL: an explicit EMPTY `case`
+
+`setStt` sat at 9 rows because the donor's switch has **`case 0: break;` with no
+body**. An empty case produces NO CODE, so it is invisible in the body listing -
+**it shows only in the DISPATCH TREE**, as a comparison whose branch target is
+the function exit:
+
+    cmpwi r0, 0x2 ; beq case2
+    bge  L_2764
+    cmpwi r0, 0x0 ; beq END      <- case 0 exists and is EMPTY
+    bge  L_2774                  <- case 1
+
+I had folded 0 into the default and lost 9 rows to it. Three added lines took it
+to EXACT. **Read the dispatch comparisons, not just the case bodies - a value
+tested with a branch straight to the exit is an explicit empty case.**
+
+### More entries for the bank
+
+- **`field_0x758`, `field_0x7ba`, `field_0x7bb`, `field_0x7b9` are all `s8`.**
+  The `extsb`-vs-`cmplwi` signal has now paid FIVE times on this TU; when a
+  byte field is compared, assume `s8` until the diff says otherwise.
+  Fixing `field_0x758` closed TWO functions at once.
+- **`current.angle.y` (0x206) vs `shape_angle.y` (0x20E)** - both `csXyz`, six
+  bytes apart, and easy to confuse. `wait_1` turns `current.angle.y`.
+- **A stale float register at a call site is a real argument.** `shadowDraw`
+  leaves `f3` holding `current.pos.y` from an earlier load and never reloads it -
+  because `current.pos.y` IS the third float argument (confirmed against `ob1`'s
+  `dComIfGd_setShadow` call, which passes it explicitly).
+
+### Falsified this round
+
+- `setMtx`: holding `field_0x6d0` in a named local to keep it live - **8 -> 18
+  rows, frame grew 0x10 -> 0x20.** The donor re-reads the member.
+
+STATE: aj1 **64/131 exact, 59.8201%**. Session: **12/131 -> 64/131,
+2.9112% -> 59.8201%** (20.5x fuzzy). 67 remain, all under 240 bytes.
