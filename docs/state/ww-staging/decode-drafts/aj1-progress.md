@@ -448,3 +448,45 @@ Five functions written, four of them byte-exact.
 
 NEXT: `_create` (596 bytes) and `_execute` (552) are the largest remaining;
 `call_1` (408) and `chk_areaIN` (380) after that.
+
+
+## Round 10 - _create transcribed (155 instrs), NOT written; exact data still needed
+
+Shape is settled - it is the standard actor `_create`, and `ob1`'s (2 rows off
+exact) is the template:
+
+    cPhs_State daNpc_Aj1_c::_create() {
+        fopAcM_SetupActor(this, daNpc_Aj1_c);          // the inlined ctor chain,
+                                                        // instrs 0..104
+        cPhs_State state = dComIfG_resLoad(&mPhs, "Aj");   // "Aj" = pool +0xA
+        switch (state) {
+        case cPhs_COMPLEATE_e: {
+            static u32 a_siz_tbl[] = { ... };              // a_siz_tbl$5553
+            if (!decideType(fopAcM_GetParam(this) & 0xFF)) return cPhs_ERROR_e;
+            if (!fopAcM_entrySolidHeap(this, CheckCreateHeap,
+                                       a_siz_tbl[field_0x7be])) return cPhs_ERROR_e;
+            cullMtx = mpMorf->getModel()->getBaseTRMtx();
+            fopAcM_setCullSizeBox(this, /* six floats, see below */);
+            if (!createInit()) return cPhs_ERROR_e;
+        }
+        }
+        return state;
+    }
+
+The first 104 instructions are the `fopAcM_SetupActor` expansion (fopAc_ac_c
+ctor, the `__vt__12fopNpc_npc_c` store at 0x6C0 - **which independently confirms
+the Round 5 finding that the derived class starts at 0x6C4** - then dBgS_Acch,
+dBgS_AcchCir, cCcD_Stts, dCcD_GStts, dCcD_GObjInf, dCcD_Cyl ctors). Nothing to
+decide there; the macro emits it.
+
+**STILL NEEDED BEFORE WRITING (do not guess these):**
+1. `a_siz_tbl$5553` contents - the solid-heap sizes, indexed by `field_0x7be`.
+   Read them out of the target `.data` the same way `a_res_id_tbl` was read.
+2. The six `fopAcM_setCullSizeBox` floats. They load off the `"@4185"` anchor at
+   **+0xA8, +0x40, (f3 = f1 again), +0xAC, +0xB0, +0xB4** - note the THIRD arg
+   is `fmr f3, f1`, i.e. the same value as the first, exactly like `ob1`'s
+   `(-60, -20, -60, 60, 170, 60)` shape where x and z share a literal.
+3. Members: `mPhs` (for `dComIfG_resLoad`) and `field_0x7be` (s8, the size-table
+   index). `decideType` must return **bool** - tested with `clrlwi. r0, r3, 24`.
+
+STATE: aj1 **17/131 exact, 16.1645%** - unchanged this round, nothing written.
