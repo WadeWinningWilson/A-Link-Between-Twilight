@@ -445,3 +445,42 @@ STATE: ob1 **109/115 exact, 99.8324%**, 6 fns / 36 rows.
 REMAINING: ob_movPass 11, nodeOb1Control 11, control_anmAtr 6 (dispatch scan
 direction), next_msgStatus 4, chg_anmAtr 2, _create 2.
 Cross-check: so 175/187 and p2 133/145 UNCHANGED across these commits.
+
+
+## Round 20 - ob_movPass diagnosed (not fixed), and I removed my own dead flag
+
+**`ob_movPass` (11 rows) is STACK-SLOT ORDER, and the frame size already
+matches.** Three cXyz slots exist on both sides at 0xC / 0x18 / 0x24 and both
+frames are 0x40 - only the assignment permutes. In use order the target takes
+0x24 -> 0x18 -> 0xC (descending, i.e. by declaration order), mine takes
+0xC -> 0x24 -> 0x18. My named locals `delta` and `flat` correctly hold the top
+two slots; the odd one out is the unnamed temporary for `mPathRun.getDir()`,
+which the donor appears to hold in a NAMED local declared before them.
+
+TWO ATTEMPTS, both recorded so they are not repeated blind:
+- `const cXyz& delta` -> `cXyz delta` (value): **11 -> 22 rows and the frame
+  grew to 0x50.** The const-reference binding is CORRECT - the matching 0x40
+  frame is the evidence. Do not "simplify" it.
+- Naming the getDir() result (`cXyz dir = mPathRun.getDir();`): **DID NOT
+  COMPILE.** Untested, therefore NOT falsified - it is still the live
+  hypothesis, and it needs the real `getDir`/`chkPointPass` signatures checked
+  first. **CAUTION FOR MY OWN FUTURE SELF: the failed build left a stale .o and
+  the differ happily reported the PREVIOUS experiment's 22 rows as if they were
+  this one's.** I only caught it because the number was suspiciously identical.
+  Always read the compiler's exit status, not just the row count.
+
+**`nodeOb1Control` (11 rows) is register colouring** - a straight r29/r30 swap
+against a .bss anchor, same bucket as `so`'s `_createHeap` and `_nodeControl`.
+Nothing tried yet.
+
+**REMOVED MY OWN SCAFFOLDING: `-DSQRTF_CONST_LITERALS`.** I added it to ob1's
+`ActorRel` in the campaign-kickoff commit (1673d54c) as "vintage PCH wiring",
+and `MSL_Common/Include/math.h` really does gate `sqrtf`'s form on it, so I had
+been assuming it was load-bearing for `ob_movPass`'s `std::sqrtf`. **Measured:
+it is INERT.** With and without, ob1 is 109/115 exact at 99.8324% - identical
+to four decimals, and `ob_movPass` stays at 11 rows either way. Dropped from
+configure.py. Workspace-wide re-report confirms no other unit moved (only
+configure.py changed, 1 line). **An assumption I carried for a whole campaign
+cost one command to falsify.**
+
+STATE unchanged by this round: ob1 **109/115 exact, 99.8324%**, 6 fns / 36 rows.
