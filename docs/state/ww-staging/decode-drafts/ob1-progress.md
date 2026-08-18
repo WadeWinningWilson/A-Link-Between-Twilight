@@ -142,3 +142,83 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   _execute, init_OB1_*, nodeOb1Control, ob_* movement, event_proc,
   privateCut, set_action PTMF, getMsg_OB1_0, chkAttention, lookBack,
   setMtx, shadowDraw, searchActor partner).
+
+### Round 6 (02:40Z) — 47/115 exact, TU fuzzy ~35% (commits 9582338c, b9e381c0, +setStt)
+- 100%: wait_1, walk_1, talk_1, checkOrder, eventOrder, setStt (7-case
+  jumptable, case 4 falls into 1/5, case 6 early-returns past setAnm).
+  demo() at 2 pool-settling rows ("Ob" offset) — effectively done.
+- demo() = dDemo binding: dComIfGp_demo_get()->getObject()->getActor(
+  demoActorID); getP_BtpData("Ob"); mBtpAnm.init(mdl, btp, TRUE, 2, 1.0f,
+  0, -1, true, 0); dDemo_setDemoData(this, 0x6a, mpMorf, "Ob", 0,0,0,0);
+  returns field_0x7FB u8.
+- NEW LESSONS: s8 local from s8 member = lbz r0/extsb rN,r0 vs int local
+  lbz rN/extsb rN,rN (eventOrder); re-spelled inline accessor under CSE
+  re-extends per use (extsh) where a named s16 local folds it (demo);
+  eventOrder mixed local/member: `s8 action` local for the tree, member
+  re-spell `(int)field==1` inside.
+- checkOrder: eventInfo.checkCommandDemoAccrpt/Talk order; demo-id array
+  = s16 field_0x7D0[1] indexed by s16 field_0x7D2 (only [0] reachable;
+  eventOrder stores idx = action-3). orderOtherEventId(this, id, 0xff,
+  0xffff, 0, 1).
+- Header adds: 0x6D4 J3DModel*, 0x6D8 J3DAnmTexPattern*, 0x6F0 u8 frame,
+  0x7D0 s16[1]/0x7D2 s16/0x7D4 s16, 0x7E2 u16 (msg status), 0x7EC u8,
+  0x7ED u8, 0x7EA s8, 0x804 s8; l_check_flg file static (pig-bit accum,
+  talk_1). Msg: talk_1 case 0x13 sets eventBits 0x304/0x308/0x2c20/0x302
+  by msg id {0xa8e, 0xaa7, 0xaa9-0xaac}.
+- REMAINING (68 fns): wait_action1/2, set_action (PTMF), event_proc,
+  privateCut, chkAttention, lookBack, next_msgStatus, setBtp,
+  plyTexPttrnAnm, setAnm_anm, setAnm ($4455 tbl), anmAtr, getMsg_OB1_0,
+  init_OB1_0/1/2, createInit, _create, CreateHeap, create_Anm,
+  create_hed_Mdl, _draw, _execute, setMtx, shadowDraw, nodeOb1Control,
+  ob_setPthPos/movPass/clcMovSpd/nMove, isDelete/weak dtors (auto).
+
+### Round 7 (03:00Z) — 60/115 exact, TU fuzzy 63.4% (commits through 8916d5a7)
+- 100% added: setStt, wait_action1/2 (case bodies follow SOURCE order —
+  original wrote 4,5,3,2), set_action (km1 verbatim, 0/0 stores),
+  event_proc, privateCut*, init_OB1_0/1/2 (ptmf constants @4249/@4263/
+  @4276 = wait_action1/2/2), ob_setPthPos, ob_clcMovSpd (per-component
+  cXyz assignment interleaves; const-ref binding kills operator- temp
+  copy), ob_nMove, setBtp* (m_hed_tex_pttrn NAME FORCED by assert string;
+  u16 resID local), plyTexPttrnAnm, setAnm_anm* (CHAINED ASSIGNMENT
+  a=b=c=0 forces runtime int->float xoris/0x4330 idiom), next_msgStatus
+  (34-entry jumptable 0xa8d..0xaae), getMsg_OB1_0 (pig-count dialog tree;
+  direct member compares CSE extension across > and switch).
+  (* = 1-2 pool-settling rows only.)
+- PARKED §2b (polarity family, ~2 rows each): chg_anmAtr tail,
+  control_anmAtr tree-root, privateCut beq+b site.
+- REMAINING REAL FNS (~15): nodeOb1Control, createInit, setMtx, setAnm
+  ($4455 tbl w/ sentinels), anmAtr, lookBack, chkAttention, shadowDraw,
+  _draw, _execute, _create (materializes implicit __ct + weak dtor wave),
+  create_Anm (0x214, assert names a_mdl_dat/m_hed_jnt_num/m_bbone_jnt_num),
+  create_hed_Mdl, CreateHeap. Weak dtor/cCcD wave + fopNpc trio
+  materialize when _create/_draw land.
+- FIELD TYPES pinned this round: 7E7/7E8/7E9 s8 (pig counts), 7EA s8,
+  7ED u8, 803 s8, 804 s8, 80A s8, 7FE u8 ((s8) cast at -1 check),
+  7B4 f32, 7F0/7F1 u8, 6F2 s16, 6F4 ActionFunc, 7D0 s16[1]/7D2/7D4 s16.
+- 🔴 12/12 RETRACTION logged (see p2-progress.md): D44J01 genuinely
+  mismatches the three obj TUs; labels MatchingFor(E,J,P) — terminal
+  unless the demo delta is decoded. Vacuous-hash lesson re-banked:
+  CHECK WHICH CONFIG A BUILD RAN UNDER BEFORE CITING ITS HASH.
+
+### Round 8 (03:09Z) — 64/115 exact, FINAL ROUND OF THIS CONTEXT
+- 100% added: setAnm, chkAttention (km1-VERBATIM: bool return + named
+  dAttention_c& local + if/else — direct-call spelling masks == with
+  extrwi; u8/BOOL returns also mask), setMtx (setBaseTRMtx METHOD for
+  the stack->model copy + drawHead anmMtx-hoist for the head-model copy;
+  m_hed_jnt_num@0x6CC s8 assert-attested name, field_0x78C s16 yaw,
+  tevStr.mRoomNo/mEnvrIdxOverride p2 idiom), shadowDraw (settling-only:
+  150/800/40 constants, GetGroundH, m_gnd, addRealShadow to 6D4).
+- Rodata map fully computed (offset->object table in this round's
+  session): sqrt doubles 0.5/3.0 @0x50/0x58 (vintage ✓), 150/800/40 @
+  0x64-0x6C, 80/160 @0x7C/0x80 (unclaimed — lookBack candidates).
+- REMAINING REAL FNS (10): lookBack (0x1A0, partially dumped — starts by
+  saving jnt angles into 7C4/7C6/7C8 then eyePos-y copy, 807 switch,
+  @4241 zeros into sp2C-34; 80/160 floats likely its dist gates),
+  anmAtr (0x108, km1 template + MesgAnime idiom), _draw (0xF4),
+  _execute (0x1E4), nodeOb1Control (0x150), createInit (0x208),
+  _create (0x120, materializes implicit ctor + weak wave), CreateHeap
+  (0x14C), create_Anm (0x214, asserts name a_mdl_dat/m_hed_jnt_num/
+  m_bbone_jnt_num — NAMES FORCED), create_hed_Mdl (0xCC).
+- l_evn_tbl file-scope static EXISTS in rodata (0x150, 4 bytes) — an
+  event-name ptr table, likely used by createInit/eventOrder region;
+  find its consumer before writing createInit.

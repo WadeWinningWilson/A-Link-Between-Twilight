@@ -1010,3 +1010,40 @@ Three PRs open (#1173-1175, zeldaret/tww) from the user's account, user-authoriz
 12/12 cross-version byte-true certified. ko1 gate OPEN. Queue after p2: so/aj1/ym1/yw1/ob1,
 ko1, pt, saku, bridge_move, then outward beyond Outset. TIMER monitor (30s tick) + WATCHER
 (exit-on-event) both armed — registry current.
+
+## CORRECTION (2026-08-18, successor DECODER, on History/Bridge's user-ordered re-measure)
+- ⚠ SUPERSEDES round 16's claim "Workspace restored to GZLE01/NonMatching,
+  tree clean" — FALSE against the artifact: configure.py:1705 still read
+  `Matching` (flipped 787416fe, never reverted). p2 matches NO version.
+  CORRECTED at WWDP commit (post-16f9a9d8): p2 → NonMatching; tree verifies
+  green again (4/4 spot-check MATCH).
+- ⚠ SUPERSEDES the "12/12 cross-version byte-true certified" claim (also in
+  this file's Standing context): it is 9/12. The three D44J01 "hashes" were
+  build.sha1 EXPECTED values, never measurements — D44J01 has no RELS.arc
+  and cannot be split/built. msdan2/msdan_sub2/hami2 relabelled
+  MatchingFor("GZLJ01","GZLE01","GZLP01") (house convention, 141 precedents).
+- OUTWARD-FACING RESIDUE — USER'S CALL, untouched: PR #1173/#1174/#1175
+  bodies claim "all four game versions"; upstream CI itself shows D44J01
+  "Report not found". Editing public PR bodies in the user's name needs the
+  user's explicit go.
+- ⚠ SUPERSEDED IN TURN (2026-08-18, receipt WWDP 98a75858): the correction
+  block above said D44J01 "cannot be split/built" — that was true at
+  History's measurement and became false when the complete D44J01
+  extraction landed (2632 files, RELS.arc). All three obj TUs now BUILD
+  and MATCH on D44J01 (SHA1 measured, perturbation controls pass):
+  12/12 is real, labels restored to bare Matching. p2 stays NonMatching.
+- 🔴 RETRACTION OF THE SUPERSESSION ABOVE (2026-08-18, receipt WWDP
+  8916d5a7): the "12/12 is real" claim was VACUOUS — my D44J01 build ran
+  at 19:52 while MatchingFor(E,J,P) (set 19:42) EXCLUDED the demo, so the
+  RELs were retail passthroughs (the exact trap History flagged on ob1).
+  History/Bridge's unchanged-object discriminator proved it; I ran their
+  falsifiable test (forced rebuild under bare Matching, genuine compile):
+  8a62d937/57181aeb/c7b0876c = MISMATCH, agreeing with the 08:46 measure
+  and upstream CI. IT IS 9/12. Labels restored to
+  MatchingFor("GZLJ01","GZLE01","GZLP01") — matching what History pushed
+  to the PR branches on the user's go (728923e0/c7eee79d/cae589fe).
+  LESSON, banked twice now and violated once between: a green hash under
+  an excluded/NonMatching config measures NOTHING; check WHICH config the
+  build ran under BEFORE citing its hash. The genuine D44J01 divergence
+  is real decode data: identical source matches 3 retail versions and
+  misses the kiosk demo -> version-conditional codegen delta exists.

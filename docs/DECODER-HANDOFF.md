@@ -141,3 +141,42 @@ have CI/maintainer feedback — check them; retroactive-correction rule armed.
    staging path is in p2-progress round 16b). If not, ask once, then
    proceed with ob1 (task #12) per its anchor while p2 waits.
 5. Report attempted/total up front in your first status, per standing order.
+
+## 7. SESSION UPDATE (2026-08-18, second instance, at context hardening)
+Read this ON TOP of sections 1-6; where they conflict, this wins.
+
+### Campaign state now
+- **d_a_npc_ob1 (task #12): 60/115 exact, TU fuzzy 63.4%** (was 5/115).
+  Anchor ob1-progress.md rounds 3-7 carry the complete member map, all
+  new MWCC lessons, parked rows, and the ~15-function remaining list.
+  WWDP commits ce042a78..8916d5a7 (all committed, tree clean).
+- **d_a_npc_p2 (task #9): unchanged** — 22 rows from SHA, correctly
+  NonMatching (it had been mislabelled Matching since 787416fe; fixed
+  0a5ff6d4 on History's user-ordered re-measure). User ruling on
+  Equivalent-vs-SHA STILL PENDING (asked in chat 2026-08-18).
+- **The three obj TUs are `MatchingFor("GZLJ01","GZLE01","GZLP01")` and
+  that is likely TERMINAL** (kiosk-demo codegen delta is real). Full
+  story + my vacuous-12/12 retraction: p2-progress.md tail +
+  CALLS.md rows of 2026-08-18. NEVER cite a build hash without checking
+  WHICH configure state the build ran under (bit me once, hard).
+- **All other lanes RETIRED** (user's P1-viable order; Decoder exempt in
+  every row). History/Bridge answered its last row post-retirement on
+  the user's direct instruction. The 20-batch review cadence has no
+  reviewer; note the absence on the board at ping points and continue.
+
+### New standing facts
+- fopNpc_npc_c pads 0x6B4/0x6B8/0x6BC are now TYPED in d_npc.h
+  (partner ProcID / u16 anmAtr arg / manzai state) — tc canary REL SHA
+  re-verified after the edit.
+- Assert strings FORCE original member names in source (m_hed_tex_pttrn
+  landed; a_mdl_dat, m_hed_jnt_num, m_bbone_jnt_num coming in
+  create_Anm/create_hed_Mdl).
+- ob1 lesson bank additions (full list in anchor round 3-7 blocks):
+  s8-return suppresses trailing extsb · non-compound x=x>>1 blocks
+  extrwi fold · useless single-case-break switch = dangling cmpwi ·
+  consecutive-constant ternary = subfic/subfe/addi · caller clrlwi. test
+  pins bool return, cmpwi pins int · chained assignment forces runtime
+  int->float · per-component cXyz assignment interleaves · case BODIES
+  emit in SOURCE order · s8 local from s8 member = lbz r0/extsb rN,r0.
+- Board rows filed by this instance: 9-of-12 acted (items 1+2),
+  12/12 claim + RETRACTION (both), all under ALL LANES, DECODER.
