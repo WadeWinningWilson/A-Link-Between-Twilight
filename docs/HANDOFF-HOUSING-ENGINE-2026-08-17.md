@@ -45,16 +45,52 @@ Retired on the user's all-lanes retirement order, 2026-08-17 (Decoder exempt).
 > 54 times and re-armed inside the same turn on every single delivery — until this
 > one, deliberately, on the order.
 >
+> **⚠ READ THIS BEFORE THE LIST: THE BOOTS ARE VANILLA, NOT OUR FORK.**
+> Boot 083130 reports `Build: v1.4.1-145-dirty (rev c880d46fb5…)` — the epoch-2
+> **`dusklight-main`** binary. **Our `src/d/` hunks are NOT in it** (`[daBg]`
+> lines: 0). The plugin loads and logs (1,280 `WwRegistry` lines), but every
+> fork-side gate is absent. ***I proposed two next actions that both targeted code
+> not present in the tested binary — a `№257 skip` grep whose result was fixed at
+> zero before it ran, and a `wwHost` probe at a line that does not exist there.***
+> **Check which binary a log came from before designing a test against it.**
+>
 > **OPEN RIGHT NOW, in priority order:**
-> 1. **The `wwHost` probe at `d_a_bg.cpp:425` — THE PIVOT, not a downstream item.**
->    `dExtWwSave_isWwHostStage` gates the collision skip at `:251` **and** the
->    per-shape clip at `:424`. One predicate, both symptoms.
-> 2. **Grep the existing boot log for `№257 skip`** — free, no rebuild, and it
->    splits "daBg deliberately owns no BgW" from "it fell through to the dzb path".
+> 1. **THE BINARY DIFFERENTIAL — no new instrument, both binaries already exist.**
+>    Vanilla lacks the hunks at `:251`/`:424`, so the receiver's per-shape clip runs
+>    **ungated** on island-sized WW geometry (§682: whole-terrain holes) — which
+>    matches every measurement. **Our fork build
+>    `build/windows-msvc-relwithdebinfo/dusklight.exe` HAS the gates compiled in.**
+>    Plugin side is a one-variable reconfigure: `standalone/CMakeLists.txt:40`
+>    declares `DUSK_ROOT` as a **CACHE PATH** — point it at our tree for the
+>    epoch-1 SDK. **If the fork build also draws nothing, the clip hypothesis dies
+>    and the cause is upstream — worth as much as a confirmation.**
+> 2. **On the FORK binary only**, the `wwHost` reading at `:425` and the
+>    `№257 skip` line both become real. **The probe was never wrong; it was pointed
+>    at the wrong binary. Change the binary, not the probe.**
 > 3. **The two stall probes are FIXED and BUILDING** (per-id census + pump tally +
 >    loud overflows). **Needs one boot** to read `m_is_creating_census` (`pinned`
 >    count) and `ctrq_tally` (`max_pumps` splits the two faults).
 > 4. The BMT `CLASS-ON-RAW` candidate — latent, armed, not blocking.
+>
+> **✅ SETTLED 2026-08-18 — PHASE 5 IS UNBLOCKED AT THE INCLUDE LEVEL. MEASURED.**
+> Probe TU `mods-src/ww_donor_disc/standalone/phase5_include_probe.cpp`, compiled
+> `/Zs` against the plugin's own flags (lifted from `build.ninja`): **zero errors.**
+> All six surface headers parse — `d_a_bg.h` · `d_bg_s.h` · `d_bg_s_acch.h` ·
+> `d_bg_w.h` · `d_stage.h` · `m_Do/m_Do_lib.h` — once **`d/dolzel_rel.h` is
+> included FIRST**, which is the receiver's own convention (`d_a_bg.cpp` opens that
+> way with an explicit IWYU-keep). And **usable, not just parseable**:
+> `mDoLib_clipper::changeFar`/`resetFar` callable, `sizeof(daBg_c)` resolves,
+> `setBgW` callable. *A typed plugin does not hook `clip` — it calls it.*
+>
+> > **⚠ AND THE TRADE NOBODY HAD MEASURED, which cost that probe its first run:
+> > `dStage_roomControl_c::getBgW` EXISTS IN OUR FORK (`d_stage.h:1226`) AND NOT ON
+> > VANILLA** (`dusklight-main` has `setBgW` at `:1216`, no getter). **A typed plugin
+> > compiles against VANILLA headers, so it sees vanilla's API — every fork-added
+> > accessor is invisible to it.** Header-ful dissolves the **inlining** blindness
+> > and substitutes an **API-divergence** boundary. That is a much better trade
+> > *because a divergence is a compile error while an inlined hook returns silence
+> > indistinguishable from "never ran"* — but it is not free. Expect more, as
+> > compile errors rather than dead hypotheses.
 >
 > **⚠ `room_set_bgw = 0` IS NOT THE SYMPTOM IT LOOKED LIKE — `setBgW` is inline,
 > so that probe cannot report anything else. See §2.** The live symptom is that

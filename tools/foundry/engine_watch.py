@@ -50,7 +50,20 @@
 # -replace that turned a separator into a regex alternation and made a watcher
 # silently blind to the thing it existed to report.
 #
-#   ARM:  python -u tools/foundry/engine_watch.py --exit-on-event
+#   ARM:  python -u tools/foundry/engine_watch.py          <-- USE THIS
+#
+#   DO NOT PASS --exit-on-event UNDER THE HARNESS. It is INHERITED FROM
+#   decoder_watch.py AND IT IS REDUNDANT HERE: the harness already raises a
+#   notification for EVERY stdout line, so ROW lines deliver while the
+#   watcher keeps running. Exiting buys nothing and costs a re-arm.
+#
+#   AND THE RE-ARM IS A REAL FAILURE MODE, NOT A CHORE - measured on this
+#   lane 2026-08-18: the delivery and the death arrive in the SAME
+#   notification, and when it carries interesting rows the EXITING line gets
+#   buried under them. This lane re-armed 59 times correctly and then missed
+#   one WHILE EDITING HANDOFF PROSE ABOUT RE-ARMING. Four minutes blind; a
+#   row landed in the gap; THE USER caught it, which is the exact failure a
+#   watcher exists to prevent. Removing the flag removes the class.
 #
 # Running this ARMS A WATCHER. --help does not (it did once, elsewhere, and
 # left a false-ALIVE stamp). ONE PULSE FILE PER LANE.
