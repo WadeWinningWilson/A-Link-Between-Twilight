@@ -404,3 +404,23 @@ mAcchCir2 (0xA34-0xA74), mSph (0x718-0x848), mB10 (0xB10-0xB34).
 PROCESS: after ANY header batch, re-run the report and compare the exact count
 BEFORE committing. A header edit is the only change class in this TU that can
 regress dozens of functions at once.
+
+## Round 35: _execute WRITTEN — 277 rows, 9 real; fuzzy 81.59%
+
+Header members added ONLY into genuine pads, with a report gate run BEFORE the
+commit (77 exact held). Corrections to the round-34 spec, found by measuring:
+- flag @0x898 = mObjAcch2.**ChkGroundHit()** (bit 5 / 0x20), NOT ChkWaterHit.
+- 0x206 = **current.angle.y** (current = pos 0x1F8 + angle 0x204 + roomNo 0x20A),
+  NOT old.angle.y.
+- 0x858 = mBtpAnm + 4 = **mFrameCtrl** (mDoExt_baseAnm: vtbl 0, mFrameCtrl 0x4);
+  the s16 at +8 is J3DFrameCtrl::mEnd -> the call is **mBtpAnm.getEndFrame()**.
+  (mBtpAnm stays at 0x854; m850 J3DModel is unchanged.)
+- m868 is **s16-cast on store** ((s16)(100.0f + cM_rndF(100.0f))) though the
+  member is int -- the extsh proves the cast.
+- ripple = **dComIfGp_particle_setShipTail(0x33, ...)** -- group 5 is
+  dPtclGroup_ShipTail_e (the SHIP-WAKE group), not the normal group.
+  mRippleCb.getEmitter()/setRate(0.0f) are the 0xAEC/0xAF8 accesses.
+- The tilt multiply must be INLINE in the compare (speed.y < -(mB00 * 0.25f));
+  a precomputed local reorders the loads.
+PARKED (9): 5 x .bss anchor offsets (settle at convergence) + 4 x fmuls operand
+order on the tilt compares (both source orders produce f0,f1; target has f1,f0).
