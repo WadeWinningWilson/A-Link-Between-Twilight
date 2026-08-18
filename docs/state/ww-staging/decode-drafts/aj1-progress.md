@@ -1106,3 +1106,59 @@ prophylactically instead of found through a diff.
 
 STATE: aj1 **73/131 exact, 72.4331%**. Session: **12/131 -> 73/131,
 2.9112% -> 72.4331%** (24.9x fuzzy). 58 remain, all under 210 bytes.
+
+
+## Rounds 32-35 - aj1 73/131 -> 79/131, 72.43% -> 79.34%
+
+EXACT: `cut_move_LOK`, `CreateHeap`, `itemCreateHeap`, `bodyCreateHeap`,
+`_delete`, `set_action`, `play_animation`, `chk_talk`.
+Near: `cut_move_VIVRATE` 3 rows (pool positions).
+
+### ⭐ The caller-test-width rule fired TWICE INSIDE ONE FUNCTION
+
+`CreateHeap` tests both `bodyCreateHeap()` and `itemCreateHeap()` with **`cmpwi`
+(a word)** where I emitted `clrlwi` (a byte). Widening BOTH callees to `BOOL`
+kept each of them exact AND took `CreateHeap` 2 rows -> 0. **That rule has now
+paid on five separate functions in this TU and is the most reliable signal in
+the bank.**
+
+Its sibling, the **local-width** variant: `play_animation` had an unexpected
+`extsb` on a LOCAL. The local flows into `mDoExt_McaMorf::play(Vec*, u32, s8)`,
+so `sndId` is **`u32`**, not the `s8` I assumed from the value's meaning.
+**An unexpected `extsb` on a local means its declared type is narrower than what
+it flows into.**
+
+### ⭐ Recognising an INLINED PREDICATE
+
+`chk_talk`'s asm reads as `x == 1 || x == 2 || x == 3` on `gameInfo + 0x52B8`.
+That is NOT three hand-written comparisons - it is
+**`dComIfGp_event_chkTalkXY()` inlined** (`mTalkButton` vs X/Y/Z). Found by
+tracing the offset: `gameInfo + 0x52B8` -> `play + 0x4018` -> inside
+`dEvt_control_c` (0x3F38..0x402C) at **+0xE0** -> `mTalkButton`. Likewise
+`+0x52B9` is `getPreItemNo()`.
+**A run of equality tests against small consecutive constants is usually ONE
+inlined predicate. Trace the offset through the containing struct before
+transcribing the comparisons literally.**
+
+### `set_action` explains the empty `case 9:` arms
+
+`set_action` is the state-machine core: `__ptmf_cmpr` / `__ptmf_test` /
+`__ptmf_scall` around the `ActionFunc` at 0x6F0, setting **`field_0x7c0 = 9`
+before calling the OUTGOING action** (a "leaving" notification) and `= 0` before
+calling the incoming one. **That is why `wait_action1`/`wait_action2` have empty
+`case 9:` arms** - I wrote those from the dispatch shape without knowing why they
+existed, and this closes the loop.
+
+### API mappings added
+
+    mObjAcch flags     -> mObjAcch.ChkGroundHit()
+    dBgS               -> dComIfG_Bgsp()->GetMtrlSndId(mObjAcch.m_gnd)
+    vibration          -> dComIfGp_getVibration().StartShock(n, -0x11, cXyz(...))
+                          (idiom lifted from d_a_am - useful references are NOT
+                           limited to the two byte-identical NPC oracles; ANY
+                           matching TU calling the same API works)
+    mpMorf frame       -> mpMorf->getFrame()
+    acch setup         -> fopAcM_GetPosition_p / GetOldPosition_p / GetSpeed_p
+
+STATE: aj1 **79/131 exact, 79.3437%**. Session: **12/131 -> 79/131,
+2.9112% -> 79.3437%** (27.3x fuzzy). 52 remain.
