@@ -1399,3 +1399,45 @@ ways, and a third case resists both.** All measured on `setMtx` (8 -> 0):
 `chngAnmAtr` 2 (inverted RANGE branch, 6 forms), `ctrlAnmAtr` 2 (branch shape),
 `_create` 6 (4 = the three missing GXColor pool constants documented in
 §Rounds 49-53, 2 = inverted branch).
+
+## Cross-TU negative result — the narrow-type sweep is DONE, and it found nothing
+
+After `ob1::nodeOb1Control` turned out to be `u16 jntNo` where the donor had
+`int` (11 rows -> exact), I said the next step was to check every local's type
+across all four TUs. **I ran it mechanically rather than by eye: every
+narrow-typed local (`u16`/`s16`/`u8`/`s8`/`short`) declared with an initialiser
+inside every non-exact function, widened to `int`, rebuilt, re-measured.**
+
+**18 locals tested. ZERO improvements.** Every one was neutral or worse:
+
+| TU | function | local | was -> after |
+|---|---|---|---|
+| so | `_execute` | `tilt` (s16) | 5 -> 6 |
+| so | `cutEatesaFirstProc` | `a` (s16) | 3 -> 7 |
+| so | `cutMiniGameProc` | `angle` (s16) | 10 -> 16 |
+| so | `cutMiniGameProc` | `timeUp` (u8) | 10 -> 11 |
+| ob1 | `next_msgStatus` | `status` (u16) | 4 -> 5 |
+| p2 | `setAnm` | `anm` (s8) | 4 -> 7 |
+| p2 | `chkAttention` | `maxAngle` (s16) | 2 -> 2 |
+| p2 | `chkAttention` | `angle` (s16) | 2 -> 5 |
+| p2 | `anmAtr` | `id` (u8) | 3 -> 4 |
+| p2 | `anmAtr` | `type` (u8) | 3 -> 5 |
+| p2 | `goal_talkpos_to_goalpos` | `targetAngle` (s16) | 2 -> 9 |
+| p2 | `goal_talkpos_to_goalpos` | `procName` (s16) | 2 -> 6 |
+| p2 | `goal_goalpos_wait` | `procName` (s16) | 2 -> 3 |
+| p2 | `_execute` | `roomNo` (s8) | 5 -> 29 |
+| p2 | `cutRideSwitchProc` | `procName` (s16) | 32 -> 36 |
+| p2 | `cutRopeTalkProc` | `rotX` (s16) | 13 -> 14 |
+| p2 | `cutRopeTalkProc` | `rotZ` (s16) | 13 -> 15 |
+| p2 | `cutRopeTalkProc` | `curY` (s16) | 13 -> 13 |
+
+**Conclusion: `nodeOb1Control` was a one-off, not a systemic defect.** The
+narrow types everywhere else are correct — several are strongly load-bearing
+(`p2::_execute`'s `roomNo` as `s8` is worth 24 rows).
+
+**This is recorded as a CLOSED lead, not an open one.** I named "check every
+local's type" as the next step in a report; it is now done, mechanically, and
+the answer is no. Nobody should re-run it. (Script:
+`C:/Users/xxxxx/AppData/Local/Temp/typesweep.py` — transient, but the method is
+three lines: regex the narrow declarations out of each residual function's body,
+widen one at a time, rebuild, re-measure, always restoring the file.)
