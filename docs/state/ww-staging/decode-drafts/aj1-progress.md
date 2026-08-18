@@ -1217,3 +1217,79 @@ sibling gets the construct right; the operand order still comes from the diff.**
 
 STATE: aj1 **89/131 exact, 88.1198%**. Session: **12/131 -> 89/131,
 2.9112% -> 88.1198%** (30.3x fuzzy). 42 remain.
+
+## Rounds 41-48 — 88.12% -> 99.4845% (117/131 exact)
+
+### ⚠ A REFERENCE ERROR I MADE, AND WHY IT MATTERS BEYOND THIS TU
+
+I was reading `build/D44J01/.../d_a_npc_aj1.s` (the **JP** disassembly) while
+building **GZLE01** (US). The correct oracle is `build/GZLE01/...`. Two ways
+this bites:
+
+1. **Struct offsets shift.** The JP save block sits 0x18 lower — the same field
+   is `0x5bbb(r3)` in JP and `0x5bd3(r3)` in US.
+2. **The SOURCE SHAPE can differ between versions.** `chk_parts_notMov` is a
+   NESTED two-stage test in JP and a FLAT three-way `&&` in US. Transcribing the
+   JP shape would have left it permanently unmatched with no visible reason.
+
+objdiff always used the right target, so nothing already-exact was wrong — but
+every *manual* `.s` read was against the wrong version. **Check the build dir in
+your dump path matches the build target before transcribing anything.**
+
+### New type signals (all measured)
+
+- **`.set(x, y, z)` vs `operator=` on a cXyz.** All-loads-then-all-stores
+  (`lfs z; lfs y; lfs x; stfs x; stfs y; stfs z`) is `.set(...)` — args are
+  evaluated right-to-left, then stored in order. Interleaved load/store
+  (`lfs x; stfs x; lfs y; stfs y; ...`) is memberwise `operator=`. `setAttention`
+  was 8 rows purely on this.
+- **When a call's args are RIGHT but ordered wrong and one arg is the object
+  itself, look for the object's OWN inline method.**
+  `emitter->setGlobalRTMatrix(mtx)` expands to
+  `JPASetRMtxTVecfromMtx(mtx, mGlobalRotation, mGlobalTranslation)` but puts the
+  emitter in its register FIRST and the two `addi`s LAST, which is the target
+  order. Writing the free function directly cannot produce that order. **Fixed
+  `flw_pa_aka` and cascaded to its sibling `flw_pa_pun` (8 rows) at once.**
+- **`current.roomNo` and `fopAcM_GetRoomNo(this)` inline to the same load but
+  SCHEDULE DIFFERENTLY.** The raw member makes MWCC materialise the callee
+  object (`gameInfo.play.getParticle()`) *before* reading roomNo; the accessor
+  reads roomNo first, which is the target order. Took `set_pa_pun` to exact and
+  `set_pa_aka` 9 -> 2. **If a call's only diff is "object load and a member read
+  are swapped", try the `fopAcM_` accessor form.**
+- **`becomeInvalidEmitter()` on a LOCAL vs repeated member writes.** Target loads
+  the emitter pointer once into a register and reuses it; writing
+  `field_0x794->mMaxFrame = -1; field_0x794->mFlags |= 1;` re-loads. Hoist to a
+  local *and* call the named method.
+- **A save-struct read that splits into `base+addend` / small displacement is the
+  WRONG accessor family.** `dComIfGs_getSelectItem` (save) materialises the
+  sub-object address into the relocation addend and emits `lbz 0x9(r3)`;
+  `dComIfGp_getSelectItem` (play) keeps one flat member displacement
+  (`lbz 0x5bd3(r3)`), which is the target. One row, but unfixable by any amount
+  of local rearrangement.
+- **The dPa level constant names the wrapper.** `li r4, 0x2` at
+  `dPa_control_c::set` is `dPtclGroup_Toon_e` -> `dComIfGp_particle_setToon`,
+  not `..._set` (which is level 0, Normal).
+
+### The inverted-branch bucket: a boundary, not just a fix
+
+The single-case `switch` on an integer subject cracks an inverted **EQUALITY**
+branch — it took `chngAnmAtr`'s inner `field_0x7b6 == 8` from 5 rows to 2.
+**It does NOT crack an inverted RANGE branch.** `chngAnmAtr`'s outer
+`i_atr <= 9` wants `ble BODY; b END` and six forms all floor at 2 rows:
+nested/flat x `<= 9` / `< 10` / `9 >=` / `!(> 9)`. Recording the boundary so the
+next lane does not re-sweep it.
+
+### Residuals, with reasons
+
+| fn | rows | class |
+|---|---|---|
+| `set_pa_smk` | 6 | literal-pool position (r31 is the .rodata float-pool base) |
+| `_nodeCB_BackBone` | 4 | argument-evaluation position (4 call forms swept, all 4 rows) |
+| `ctrlAnmAtr` | 2 | branch shape (target has a doubled `b`; explicit `default:` measured no-change) |
+| `chngAnmAtr` | 2 | inverted RANGE branch (see above) |
+| `set_pa_don` | 2 | literal-pool position |
+| `bckResID` / `btpResID` | 3+3 | MWCC local-static `$NNNN` counter; cosmetic, converges as the TU fills |
+
+The literal-pool rows are **convergent, not stuck**: the pool base offsets differ
+only because ~14 functions are still unwritten. They should be re-measured after
+the TU is complete rather than chased now.
