@@ -73,3 +73,25 @@ spec that both p2 and ob1's endgames await.
   CHECK — if global+long, so has an EXPLICIT ctor unlike ob1).
 - Ctor is WEAK = implicit/in-class (ob1 pattern) — the r29-r31 defaults come from member-object inline ctors, not user code. Kickoff package COMPLETE; begin decode rounds at checklist step 2 (header rewrite).
 - Header restructured + virtual overrides fixed (u16/u32); BASELINE 13/187 exact, fuzzy 1.9049%. so is VERSION-CONDITIONAL (#if VERSION_DEMO in class tail) — MatchingFor rule applies at label time. Kickoff steps 1-2 DONE; decode rounds begin smallest-first.
+
+## Round 1 PARTIAL (03:51Z, at context depth limit — shapes banked, bodies unwritten)
+- Ten smallest dumped; decode-ready shapes:
+  * modeDebug / modeGetRupeeInit / modeWait = EMPTY bodies `{}`.
+  * modeEventMapopenInit: mAFC(f32)=0.0f; speedF=0.0f; m_jnt lock byte
+    0x29C(=mbBackBoneLock)=0 — find/park the accessor spelling.
+  * modeHide: `current.pos = mA80;` (cXyz @0xA80, per-component
+    interleave = plain operator=).
+  * offsetZero/Dive/Swim/Appear: three f32 stores to mB40/mB3C/mB38
+    (DESCENDING store order = source order) from ANONYMOUS literals
+    anchored off class-static m_heapsize (p2 anchor pattern; so's class
+    statics: m_heapsize@0x0, m_arc_name@0x4, m_sph_src@0x8-0x48, then
+    the literal pool). Values NOT yet extracted — the offset parser
+    drifted on empty .obj entries; recompute with a size-aware parser
+    (count .4byte/.float lines per object) before writing these.
+  * getArg: m6D0(s16?)=<fopAc 0x1DC lha>; if ==0xFFFF (addis+cmplwi
+    unsigned idiom) or ==0 then m6D0=1. fopAc 0x1DC field name TBD.
+- KNOWN VALUES: @4341=0.0f (Mapopen), pool floats sighted: 100/30/10/
+  300/1/-1/650/200/20/-300/90 at various slots.
+- STOP-POINT NOTE: this instance reached its effective depth here after
+  ~4 hours continuous; successor starts at these shapes with the fixed
+  parser, then walks the size ladder exactly as ob1 rounds 3+ did.
