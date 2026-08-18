@@ -676,3 +676,25 @@ correct either way - only the member's TYPE is open.
 
 STATE: aj1 **50/131 exact, 26.8213%**. Session: 12/131 -> 50/131, 2.9112% ->
 26.8213%.
+
+
+## Round 15 - HIO ctor EXACT; the memcpy was the type, not the code
+
+**`mPrm` is `s16[0x18]`, not a struct.** Round 14 guessed a mixed-type struct
+from the data (nine s16s then floats); assigning it made MWCC copy field by
+field. Declaring a plain `s16[0x18]` and calling `memcpy` explicitly matched
+immediately - **arrays cannot be assigned in C++, which is precisely what forces
+the single `memcpy` call the donor emits.** The float-looking words
+(`0x43160000` = 150.0 etc.) are just s16 pairs that happen to read as floats;
+the type is uniform and the callers reinterpret.
+
+**`__ct__15daNpc_Aj1_HIO_cFv`: 59 rows -> 0. aj1 50/131 -> 51/131, 27.4130%.**
+
+GENERALISABLE: **when the target emits a `memcpy` for a whole-member copy and
+your version emits field stores, the member is an ARRAY.** Struct assignment
+inlines; array copy calls. That is a type signal readable straight off the diff,
+in the same family as `clrlwi` width telling you `bool` vs `BOOL`.
+
+SESSION TOTAL for aj1: **12/131 -> 51/131 exact, 2.9112% -> 27.4130%.**
+The `l_HIO` infrastructure is now in place, so `_execute` (transcribed in
+Round 12) needs only the `ActionFunc` ptmf at 0x6F0 before it can be written.
