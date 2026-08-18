@@ -34,14 +34,20 @@ if i >= 0:
 dump = subprocess.run([OD, '-s', '-j', '.rodata', obj], capture_output=True, text=True).stdout
 by, w = {}, {}
 for ln in dump.splitlines():
-    m = re.match(r'\s*([0-9a-f]{4,8})\s+((?:[0-9a-f]{8} ?){1,4})', ln)
+    # objdump -s pads the hex area to a fixed 35 cols, then TWO spaces, then ASCII.
+    # The final line of a section is often a PARTIAL word (e.g. '3100'); matching
+    # only 8-hex-digit groups silently drops those bytes and truncates the last
+    # string in the pool. Take the hex area positionally instead.
+    m = re.match(r'\s*([0-9a-f]{4,8}) (.{1,35}?)(?:  |$)', ln)
     if m:
         b = int(m.group(1), 16)
         h = ''.join(m.group(2).split())
+        if not re.fullmatch(r'[0-9a-f]*', h):
+            continue
         for k in range(len(h) // 2):
             by[b + k] = int(h[2 * k:2 * k + 2], 16)
-        for k, x in enumerate(m.group(2).split()):
-            w[b + 4 * k] = x.upper()
+        for k in range(len(h) // 8):
+            w[b + 4 * k] = h[8 * k:8 * k + 8].upper()
 
 tab = subprocess.run([OD, '-t', '-j', '.rodata', obj], capture_output=True, text=True).stdout
 base = size = None
