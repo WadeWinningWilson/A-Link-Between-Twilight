@@ -11,7 +11,7 @@
 > |---|---|---|
 > | [`docs/HANDOFF-HISTORY.md`](../HANDOFF-HISTORY.md) | **LANE CHARTER** — what History is, its laws, traps that cost rounds, docs that matter. Durable. | 2026-08-11 |
 > | [`docs/state/HISTORY-HANDOFF.md`](HISTORY-HANDOFF.md) | **CAMPAIGN SNAPSHOT** — the native-dMesg / Grandma-tale attempt. **Its "current attempt" and "immediate next steps" are STALE: that tale closed 2026-08-01.** Read for calibration (§4 "where the previous instance was wrong"), not for state. | 2026-08-01 |
-> | [`docs/state/ww-handoff-history-bridge.md`](ww-handoff-history-bridge.md) | **CURRENT INSTANCE HANDOFF** — what is owned, half-done, do-not-trust, and the pointer to the live WW message-system decode. **Start here for present state.** | 2026-08-16 |
+> | [`docs/state/ww-handoff-history-bridge.md`](ww-handoff-history-bridge.md) | **CURRENT INSTANCE HANDOFF** — now carries §0: **THE LANE IS RETIRED (2026-08-17)**. Retirement record, retractions, and what survives. **Start here.** | 2026-08-17 |
 >
 > **If you are picking this lane up: read the CHARTER for the rules, the CURRENT
 > handoff for the state, and the SNAPSHOT only for calibration.** Which of the
@@ -23,6 +23,9 @@ Every path named below was verified to exist at write time. Anything I could not
 marked UNVERIFIED rather than dropped.
 
 > ## ▶ ADDENDUM 2026-08-16 — READ THIS BEFORE §1: THE LANE'S LARGEST OUTPUT POSTDATES THIS DOC
+>
+> *(2026-08-17: the "picking this lane up" framing below is superseded — the lane is
+> RETIRED, see §0. The spec itself and the two filed questions remain the record.)*
 >
 > **`docs/state/ww-message-donor-spec.md`** — the WW dialogue/message system,
 > field-by-field, on the user's order (CALLS `HISTORY, HOUSING`; bus **tale §1011**).
@@ -54,6 +57,91 @@ marked UNVERIFIED rather than dropped.
 > look like missing data. It looks like an answer.**
 
 ---
+
+---
+
+## 0. ⛔ THIS LANE IS RETIRED — 2026-08-17
+
+**Retired on the user's order, confirmed directly.** The accompanying briefing is
+[`BRIEFING-P1-VIABLE.md`](ww-staging/BRIEFING-P1-VIABLE.md): P1 is viable again, the
+architecture this lane worked inside is being rebuilt against a merged baseline, and
+every lane retires. **DECODER IS EXEMPT and continues.**
+
+**SECTIONS 1–3 BELOW ARE SUPERSEDED BY THIS SECTION.** They describe the §986–§992 era
+and were already stale before retirement. Sections 4–6 (assumptions, error
+classification, pointers) still hold and are worth reading.
+
+### The premise, verified rather than accepted
+
+The briefing's load-bearing number is **exact**: `HEAD..origin/main` = **2,861**,
+divergence `be82e606b2` dated **2026-05-08**. Both to the digit.
+
+**But it omits the other half: we are also ~635 commits AHEAD** (635 at measurement;
+already 636 the same evening after loss-protection commit `a8f163488a` — this number
+DRIFTS with every snapshot, so re-measure `origin/main..HEAD` before scoping, don't cite
+this one). Phase 1's "the merge" is a **reconciliation of ~635 against 2,861**, not a
+catch-up. Scope it on both numbers.
+
+### State at retirement — all measured, not remembered
+
+| thing | state |
+|---|---|
+| monitor | **DOWN**, not re-armed |
+| plate (`tools/foundry/history-bridge-plate.md`) | **0 open items** — self-wake inert |
+| row store | **122 rows / 0 errors** |
+| seam gate | **PASS** |
+| strip-set manifest (`ww_layer_manifest.py --check`) | **exit 0**, 65 files |
+| `mods-src/ww_donor_disc/` | staged in git + snapshotted `../dusklight-port-safety/2026-08-17-0030/` (13 files, 517,078 B, SHA-256 13/13) |
+
+### Nothing is half-done. All three close-out items were discharged:
+
+- `tools/foundry/arc_index.py` — hardened (3 arcs, bounded reads, near-miss suggestions
+  instead of silent not-found). **Foundry owns it.** Only ever run against WW `res/` arcs.
+- Re-cert sweep — rescued by Librarian to `tools/foundry/recert_sweep.py`, passing 3/3.
+  Self-maintaining over `byte-true: BYTE-TRUE` tracker rows; a hardcoded list would rot.
+- Shape classification — **moot**, the catch-all was declined by the user.
+
+### ⚠ SEVEN RETRACTIONS — inherit these corrected, do not re-derive them
+
+1. **I ENDORSED** "the parsed-object vtable head makes a second parse impossible" as a
+   "genuinely nice invariant" **without testing it**. It is false — `getObjectRes` never
+   returns the parsed object. It crashed the next boot.
+2. "Per-actor porting scales with NAMES (86 in one room)" — **wrong: 87 names collapse to
+   61 PROFILES** via the donor's own `l_objectName`. `GRASS_e` alone serves 11 names.
+3. "Port `grass` first, best ratio on the board" — **`d_a_grass` registers ZERO collision.**
+   I ranked on TU size and placement count; neither measures a collision goal.
+4. "`min.y = +INF` ⇒ pre-swap PROVEN" — **ambiguous, not proof.** `MakeBlckTransMinMax`
+   reproduces the same signature bit-identically when `mNeedsFullTransform == 0`.
+5. "The port is unreadable from this tree; my reviews are donor-and-receiver-scoped" —
+   **false. It is in `mods-src/`, a directory I never searched.**
+6. The 21 zero-area triangles in room 44 are **UNCLASSIFIED**, not on the wall chain —
+   `ClassifyPlane`'s outer `cM3d_IsZero` guard excludes them from every chain.
+7. **I held a reversible INTERNAL retirement order on a rule meant for IRREVERSIBLE
+   OUTWARD-FACING actions.** The ranking rule ("a direct user instruction outranks a
+   relayed row") is a safety rule for publishing into someone else's repository. Applying
+   it to an internal order cost the user a round-trip. **It will look principled to you
+   too. It is over-application.**
+
+### What outlived the lane and is the USER's, not the next instance's
+
+- **Three PRs open against `zeldaret/tww`** (`d_a_obj_msdan2`, `d_a_obj_msdan_sub2`,
+  `d_a_obj_hami2` — all three verified twelve-of-twelve across four versions).
+- **`A-Link-Between-Dusklight` is PUBLIC** — measured by anonymous API probe. Flagged when
+  the exposure question arose; never resolved.
+
+### 🔑 THE ONE METHOD TO CARRY FORWARD
+
+**Check the ARTIFACT, not the report — and check the EFFECT, not the artifact.**
+
+Every finding this lane contributed on 2026-08-17 came from that, and every error came
+from skipping it. Worked examples: a ruling that reached the map but not the carry set; a
+correction that reached a banner but not the point of use 210 lines below; a voided
+finding still cited as a live receipt in a covenant page; my own stale marker count
+sitting at its point of use for a full day while the correction lived in CALLS rows.
+
+A keyword sweep is a proxy for a reading. It cannot see a superseded **number**, because
+a stale measurement carries no retraction language for a keyword to catch.
+
 
 ## 1. WHAT I OWN
 

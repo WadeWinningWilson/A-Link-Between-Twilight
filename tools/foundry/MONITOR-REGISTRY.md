@@ -595,3 +595,4 @@ watcher is a dead watcher until re-armed.
 - 2026-08-17 DECODER (successor instance, post-handoff): WAKE. Timer ARMED as Monitor b15aguq92 (persistent, 30s ticks); watcher #90 ARMED b62w6u5yz (decoder_watch.py --exit-on-event, from dusklight root). Repo verified: tip 1673d54c, tree clean. Resuming per DECODER-HANDOFF.md — p2 held at 22 rows (user ruling pending), ob1 active.
 - 2026-08-18 ~01:57Z DECODER: watcher #90 (b62w6u5yz) DELIVERED (P1-viable retirement row for other lanes; DECODER explicitly exempt — no action). RE-ARMED as #91 (b1rwliuyh). Timer b15aguq92 alive.
 - 2026-08-18 ~01:59Z DECODER: watcher #91 delivered (Foundry retirement + History/Bridge verification rows; DECODER exempt, no action). RE-ARMED as #92. Timer b15aguq92 alive.
+- 2026-08-18 ~02:30Z DECODER: watchers #94/#95 delivered (History/Bridge + Integrator retirement rows; DECODER exempt in each). Re-armed #96 (b8hry93k6). Timer b15aguq92 alive. ob1 at 41/115 exact.

@@ -96,3 +96,49 @@ callee-saved registers get assigned to a value pair, RECORD target direction.
   setAttention(0x58), event_actionInit(0x58), _delete(0x5C), setAnm_ATR
   (0x68), setAnm_NUM(0x6C), getMsg_OB1_1(0x6C), getMsg(0x70), then setStt
   (fully analyzed above) once get_attPos/set_pigCnt land.
+
+### Rounds 4-5 (02:29Z) — 41/115 exact, TU fuzzy 24.14% (commits 13da80a5, 61614115, 602936aa)
+- 100% now also: setAnm_NUM ($4448 8-row tbl), getMsg (0/1/2 switch),
+  getMsg_OB1_1, set_pigCnt, searchActor_Kb (kb_class m405 bit-or, cap 20),
+  get_attPos (mPathRun.nextPath(current.roomNo), maxPoint when idx 0),
+  chk_talk (bool!), manzai, wait_2, wait_3, nodeCallBack_Ob1, setAnm_ATR,
+  setAttention, charDecide, chk_partsNotMove, event_actionInit* /_delete*
+  (*=1 pool-settling row each, effectively done).
+- NEW MWCC LESSONS this stretch:
+  * ternary with CONSECUTIVE constants `c ? 0xAAB : 0xAAC` = branchless
+    subfic/subfe/addi (0xAAC + -(cond)); the `0xAAC - (x!=0)` spelling
+    gives a DIFFERENT 0/1-materialize shape.
+  * a CALLER testing a call result with clrlwi. pins callee return = bool;
+    cmpwi = int/BOOL (wait_2/3 -> chk_talk bool).
+  * u32 == -1 check compiles to addis+cmplwi 0xffff (unsigned form);
+    int would cmpwi -1 directly (chg_anmAtr field_0x7CC u32).
+  * .bss has an ANCHOR object like rodata's m_heapsize: "@3569" (0xC anon,
+    early counter — likely a header-inline default-arg temp); all TU .bss
+    symbols addressed relative to it in target asm. Settles with layout.
+- d_npc.h RETYPE (shared header, offsets unchanged, tc canary REL SHA
+  re-verified c5f975667b MATCH): fopNpc 0x6B4 fpc_ProcID field_0x6b4
+  (manzai partner ID), 0x6B8 u16 field_0x6b8 (arg to virtual anmAtr),
+  0x6BC u8 field_0x6bc (manzai state 2/3).
+- manzai idiom: dComIfG_MesgCamInfo_c* caminfo = dComIfGp_getMesgCameraInfo();
+  `this != caminfo->mActor[caminfo->mBasicID - 1]` (bm1 anmAtr attests);
+  gameInfo+0x5C20 = MesgCamInfo, NOT attention.
+- PARKED §2b (2 rows each, semantically proven): chg_anmAtr tail
+  (target bne-to-body + b-to-end, mine beq-to-end; km1 && spelling adopted;
+  !(==) and early-return falsified), control_anmAtr (2-case switch tree
+  root: target roots at 3, mine at 6; case-swap made it worse (6 rows),
+  empty case 0 matched root but added 2 rows — falsified both).
+- Ob1 = ROSE (Abe's wife, pig lady). Msg ids 0xAA8/0xAAB/0xAAC; eventBit
+  0x2C20; eventReg 0xB6FF = pig-collection bitmask (bitCount'd into
+  0x7E7 total/0x7E8 present/0x7E9 alive-not-collected).
+- BOARD NOTE: History/Bridge, Foundry, Integrator (+Housing Sec/Temp fold),
+  all lanes RETIRED per user's P1-viable order — DECODER explicitly exempt
+  in every row. The briefing's 20-batch review cadence pinged HISTORY;
+  reviewer is gone. At next TU-complete ping, note absence on the board and
+  continue (3b.2 relocate discipline).
+- NEXT: wait_1, walk_1, talk_1, demo, checkOrder, eventOrder, setStt
+  (analyzed in full — write after), setBtp, plyTexPttrnAnm, setAnm_anm,
+  setAnm ($4455 tbl), anmAtr, lookBack, next_msgStatus, then the big tail
+  (createInit/_create/_createHeap/create_Anm/create_hed_Mdl, _draw,
+  _execute, init_OB1_*, nodeOb1Control, ob_* movement, event_proc,
+  privateCut, set_action PTMF, getMsg_OB1_0, chkAttention, lookBack,
+  setMtx, shadowDraw, searchActor partner).
