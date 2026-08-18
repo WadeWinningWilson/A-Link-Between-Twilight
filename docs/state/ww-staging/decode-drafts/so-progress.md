@@ -567,3 +567,12 @@ or compare != 0 through a u8 cast.
 STANDING: 137/187 exact, fuzzy 99.40%. _createHeap residue is 17 rows, of which
 16 are the r30/r31 mirror (decl-then-assign already falsified) and 1 is this
 narrowing.
+
+## Round 44: the narrowing was at the CALL SITE — (u8) cast lands it
+
+Round 43 predicted this and it holds: 'return (u8)jntHitCreateHeap() ? TRUE : FALSE'
+gives _createHeap 18 -> 17 WITHOUT touching the callee signature (the callee
+flip cost jntHitCreateHeap 7 rows; a 'bool ok =' temp cost 3 more at 20).
+LESSON: when a caller shows clrlwi-before-normalize, narrow AT THE CALL with a
+cast; do not change the callee's return type to chase it.
+Gate: 137/187 exact, fuzzy 99.41%. _createHeap residue is now 16 mirror rows + 1.
