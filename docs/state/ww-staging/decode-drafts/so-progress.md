@@ -71,3 +71,4 @@ spec that both p2 and ob1's endgames await.
   computed defaults stored into Stts#2/Acch#2 fields; decode the head
   block when writing the ctor (implicit-vs-explicit TBD: .fn weak?
   CHECK — if global+long, so has an EXPLICIT ctor unlike ob1).
+- Ctor is WEAK = implicit/in-class (ob1 pattern) — the r29-r31 defaults come from member-object inline ctors, not user code. Kickoff package COMPLETE; begin decode rounds at checklist step 2 (header rewrite).
