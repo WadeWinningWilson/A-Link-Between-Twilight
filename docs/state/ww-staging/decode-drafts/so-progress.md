@@ -635,3 +635,22 @@ MEASUREMENT-ERROR NOTE: my first cross-version probe reported "errors: 1" for
 all three versions. That was MY grep counting ninja's own "unknown target"
 message, not a compile failure. Verify a target EXISTS before treating its
 absence as a defect.
+
+## Round 48: jntHitCreateHeap + setAnm residues characterised (both source-inexpressible)
+
+jntHitCreateHeap (4 rows): the TRUE/FALSE emission blocks are ordered opposite
+to the target. THREE spellings all give the same 4 rows — if/else on != NULL,
+if/else on == NULL (flips beq->bne, no help), early-return, and init-FALSE-then-if.
+The target emits beq -> [jntHit store] -> b, with li 0 BEFORE li 1, a block order
+no source arrangement reproduced. PARKED.
+setAnm (4 rows): 2 are pool literals and 2 are the m_arc_name reference —
+the TARGET reaches it as "addi r3, r31, 0x4" (ANCHOR-RELATIVE off m_heapsize,
+the rodata-anchor lesson) while mine emits a separate lis/addi symbol pair.
+That is pool/anchor placement, expected to settle at full convergence, not a
+source defect.
+STANDING: 138/187 exact, fuzzy 99.56%, gate held, tree clean.
+REMAINING RESIDUE INVENTORY (all decoded, all shape-only):
+  _createHeap 17 (16 = r30/r31 mirror) | checkTgHit 12 (arg-block ordering) |
+  cutMiniGameProc 11 (2 fneg-fold sites + polarity) | _execute 9 (5 bss + 4 fmuls) |
+  _nodeControl 8 | jntHitCreateHeap 4 | setAnm 4 | cutEatesaFirstProc 3 |
+  plus small pool tails.
