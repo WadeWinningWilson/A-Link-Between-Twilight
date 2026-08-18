@@ -1509,3 +1509,28 @@ automatically empty-case cases. **But three of the four were parked as
 "provably" unreachable, and the doubled-`b` bucket was parked the same way and
 turned out not to be.** They are worth re-opening with fresh eyes, not
 re-closing on the strength of the earlier verdict.
+
+### The four candidates re-opened — and they do NOT fall to the empty-case rule
+
+I said these were worth re-opening rather than re-closing on the earlier
+verdict. Done, and the earlier verdict holds:
+
+- **`so::jntHitCreateHeap`** — the only one where the trick could plausibly
+  apply, because it compares a POINTER to NULL and that is a comparison with a
+  CONSTANT. Tested `switch ((u32)mAA8) { case 0: ... }` — **worse, 5 rows.**
+  Plus empty-then-branch 4 and early-return 4, against a baseline of 4.
+- **`ob1::chg_anmAtr`** and **`aj1::setAnm_anm`** — both compare two VARIABLES
+  (`i_no != field_0x800`, `field_0x7b9 != i_prm->field_0x0`). No switch can
+  express that, and the Round 28 boundary stands.
+- **`aj1::chngAnmAtr`** — an inverted RANGE (`i_atr <= 9`). A switch over a dense
+  0..9 set compiles to a jump table, which the target does not have.
+
+**Conclusion: the +1-branch signature is ambiguous.** It fires for BOTH the
+empty-case case and the ordinary inverted-branch family, and only the former is
+fixable. The discriminator is whether the construct is a **switch dispatch**
+(several compares forming a search tree) or a **single inverted compare**. The
+scan cannot tell them apart; a human look at the target's branch structure can,
+in about ten seconds.
+
+So the crack is real but narrower than the scan implied: **it applies to switch
+dispatches only.** Recording that so the next pass does not re-run these four.
