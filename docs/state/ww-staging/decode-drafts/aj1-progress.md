@@ -490,3 +490,47 @@ decide there; the macro emits it.
    index). `decideType` must return **bool** - tested with `clrlwi. r0, r3, 24`.
 
 STATE: aj1 **17/131 exact, 16.1645%** - unchanged this round, nothing written.
+
+
+## Round 11 - _create fires the biggest cascade of the campaign
+
+**aj1 17/131 -> 48/131 exact, 16.1645% -> 25.8746%. THIRTY-ONE functions went
+exact from writing ONE function.**
+
+`_create` is where `fopAcM_SetupActor(this, daNpc_Aj1_c)` instantiates the whole
+constructor chain - `fopAc_ac_c`, `dBgS_Acch`, `dBgS_ObjAcch`, `dBgS_AcchCir`,
+`cCcD_Stts`, `dCcD_GStts`, `dCcD_GObjInf`, `cCcD_ShapeAttr`, `cM3dGAab`,
+`cM3dGCyl`, `cCcD_CylAttr`, `dCcD_Cyl` and their dtors/thunks. **Every one of
+those is emitted into this TU and all of them snapped to byte-exact at once.**
+Same class of cascade as `so`'s create chain (77 -> 133) earlier in the campaign,
+and it is the third time this session that writing the *instantiating* function
+paid out far more than the function itself is worth.
+
+Data resolved before writing (none of it guessed):
+
+    a_siz_tbl$5553  = { 0 }                       read from target .data
+    cull box        = (-60, -20, -60, 80, 260, 100)
+                      via the "@4185" ANCHOR at rodata 0x0 plus the addends
+                      +0xA8, +0x40, (f3 = f1 again), +0xAC, +0xB0, +0xB4
+    mPhs            @ 0x6C4  <- the FIRST derived member, which is why the
+                                derived class starts there (Round 5's 0x6C4
+                                finding, independently confirmed a third way)
+    field_0x7be     @ 0x7BE  (s8, indexes a_siz_tbl)
+    decideType      returns bool  (tested with clrlwi. r0, r3, 24)
+
+**Then `mSmokeCb`.** `_create` sat at 93.52% until I noticed the ctor prologue
+calls `__ct__18dPa_smokeEcallBackFUc` on `this + 0x76C` - a member I had never
+declared. `dPa_smokeEcallBack` is 0x20 bytes (per `d_a_npc_ji1.h`'s 0x2E0/0x300
+pair). Declaring it took `_create` to **97.48%**. The existence of a
+`set_pa_smk` function (376 bytes) in the undone list corroborated it.
+
+**HEADER MISTAKE WORTH RECORDING:** while adding `field_0x7be` I deleted the
+`field_0x7b8` line and produced overlapping declarations of `field_0x7b9`. Both
+faults announced themselves immediately (`undefined identifier`, then a visibly
+duplicated offset in the layout). **When editing a padded layout by string
+replacement, re-read the 0x7B0-0x7C0 window afterwards** - this is the fourth
+anchor/arithmetic slip of the session and they are all the same shape.
+
+SESSION TOTAL for aj1: **12/131 -> 48/131 exact, 2.9112% -> 25.8746%.**
+83 functions remain; largest are `_execute` 552, `next_msgStatus` 468,
+`call_1` 408, `chk_areaIN` 380, `set_pa_smk` 376, `lookBack` 368, `talk_1` 336.
