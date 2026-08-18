@@ -229,3 +229,9 @@ spec that both p2 and ob1's endgames await.
 - Standing: exact count via report; remaining majors: cutProc, cutMiniGameStart/Proc,
   cutMiniGameReturnProc, next_msgStatus, checkTgHit, modeSwim/NearSwim/Wait/Talk/
   Debug/TriForce/FirstWait stragglers, modeProc, _execute/_draw, create chain, HIO ctor.
+
+## Round 26 (tail): modeDebugInit EXACT, modeEventTriForce string-only,
+## modeEventFirstWait parked 1 row (fcmpo cror gt-vs-lt polarity family).
+## DebugInit lesson: chained mAFC=speedF=0.0f; COS-x/SIN-z axis swap.
+## TriForce: attention_info.flags=0x200000A; eventBit 0x3a20; modeProc(0,0xc).
+## FirstWait: ship-follow + checkGetItem(0x78)/isStageBossEnemy(3) gate; HIO m54.
