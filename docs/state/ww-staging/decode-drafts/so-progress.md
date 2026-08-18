@@ -248,3 +248,16 @@ static?) on cutSwimProc (smallest member of the family, 18 real rows) — one wi
 retro-applies to all four. Grep how OTHER matched WW actors build XZ-flattened
 distance vectors — the donor idiom likely repo-wide (check d_a_kamome, d_a_tag_so,
 dLib source itself).
+
+## Round 28 — THE SLOT-CLASS FAMILY FALLS: cXyz::absXZ()
+
+The round-27 blocker dissolved in one stroke: the donor spells XZ-flattened distance
+as **(a - b).absXZ()** (c_xyz.h line 122). The inline itself constructs the flat temp
+(cXyz tmp(x, 0, z)) — that IS the mystery class-3 stack allocation. Every hand-spelled
+flat (named var, memberwise, ctor-temp) fought the inline. Found by grepping the
+sibling actors for the idiom (the anchor round-27 instruction, executed same context).
+- modeSwim 25 real -> 0. cutSwimProc 18 -> 0 (PARK DISSOLVED; target ctor is direct
+  cXyz target(mEventCut.getAttnPos()) once the frame is right).
+- cutEatesaFirstProc 74 -> 3 (one fcmpu operand-order + branch-length echoes) — park.
+- RULE: any frsqrte + flat-vector site — reach for absXZ()/abs()/abs2XZ() FIRST.
+- so at 77/187 exact, fuzzy 53.60% (session start 40/11.66%).
