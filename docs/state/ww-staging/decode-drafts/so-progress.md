@@ -589,3 +589,25 @@ LOWEST-PERCENT SURVIVORS (the real work list, all decoded, all shape-only):
 These five are where the remaining bytes are concentrated; the big functions are
 all >= 98%. Next context should start there rather than re-walking the bigs.
 STANDING: 137/187 exact, fuzzy 99.41%, tree clean, configure.py NonMatching.
+
+## Round 46: TWO NEW ARG-ORDER LEVERS (hudeDraw EXACT, _nodeControl 13->8); 99.56%
+
+The residue class is ARGUMENT EVALUATION ORDER and it IS reachable — two
+distinct levers found, both verified by the gate:
+ 1. **Hoist the OTHER argument.** hudeDraw: MTXCopy(get(), m850->getBaseTRMtx())
+    evaluated the member load first; the target wants "now" first. Hoisting
+    get() into a local did NOT work (5 rows) and mDoMtx_copy did NOT work (5).
+    Hoisting the MEMBER — "J3DModel* model = m850;" then
+    MTXCopy(get(), model->getBaseTRMtx()) — gave 5 -> 0 EXACT. Simplifying an
+    argument releases its claim on the early evaluation slot.
+ 2. **Drop the stack wrapper for the explicit form.** _nodeControl:
+    mDoMtx_stack_c::YrotM(angle) evaluated the angle load before materializing
+    "now"; mDoMtx_YrotM(mDoMtx_stack_c::now, angle) puts "now" first — 13 -> 8.
+    Hoisting the angles into s16 locals was WORSE (16); converting the other
+    get() calls to ::now was inert.
+FALSIFIED on checkTgHit (both reverted, 12 -> 17 each): hoisting fopAcM_GetID
+into a local, and hoisting dComIfGp_getReverb into an s8. Its 12 rows are the
+zel_basic/seNum/sePos block ordering vs the GetID null-check, and neither
+hoist direction moves it.
+STANDING: 138/187 exact, fuzzy 99.56%. Work list now: checkTgHit (12, resistant),
+jntHitCreateHeap, setAnm, _createHeap (17, 16 of them the r30/r31 mirror).
