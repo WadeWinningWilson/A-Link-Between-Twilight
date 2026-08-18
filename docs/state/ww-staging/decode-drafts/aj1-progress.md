@@ -911,3 +911,39 @@ SESSION: **12/131 -> 57/131 exact, 2.9112% -> 43.1217%** (14.8x fuzzy), with
 `_create`(7 rows), `_execute`, `next_msgStatus`, `call_1`, `talk_1`, the HIO
 class + ctor all landed, and the cascade from `_create` alone taking 31
 constructor-chain functions to exact.
+
+
+## Rounds 21-23 - aj1 CROSSES HALF: 57/131 -> 60/131 exact, 43.12% -> 51.50%
+
+Landed: `set_pa_smk` 97.8%, `_nodeCB_Head` **EXACT (first try)**,
+`_nodeCB_BackBone` 4 rows, `demo` **EXACT**, `_draw` **EXACT**.
+
+**`_nodeCB_Head` exact on the FIRST attempt** is the clearest sign the
+accumulated patterns are working - fn-local `static cXyz`, explicit
+`mDoMtx_YrotM(now, ...)` rather than the stack wrapper, `getAnmMtx(jntNo)`
+recomputed rather than cached. No iteration needed.
+
+### FIVE MORE ENTRIES FOR THE TYPE-SIGNAL BANK
+
+| diff symptom | what it means |
+|---|---|
+| frame size too SMALL (0x20 vs 0x30) | a local is missing or wrongly `static` - `set_pa_smk`'s `GXColor` is a STACK local; making it `static` cost 15 rows |
+| your return normalises (`subic`/`subfe`/`clrlwi`) but the donor returns raw | the FIELD is `bool`, not just the return type (`demo`, 9 -> 3 rows) |
+| donor branches to one common exit | single exit, NOT an early `return` (`demo`'s last 3 rows) |
+| an offset lands INSIDE an existing member | look for an ACCESSOR, do not add a field - 0x6E0 is `mBtpAnm`'s `mpAnm`, i.e. `mBtpAnm.getBtpAnm()`. I started adding a member and had to revert |
+| `lbz` where you declared `f32` | the ACCESS WIDTH at the use site beats inference from the data - `l_HIO` prm+0x18 reads as a byte though the bytes look like a float |
+
+**ALSO DONOR-FAITHFUL DEAD CODE:** `_draw` contains an
+`if (l_HIO.mPrm.field_0x18) { cXyz sp8 = current.pos; sp8.y = eyePos.y; }` whose
+stores nothing ever reads. **The donor emits it, so it must be written out** -
+same family as the dead `sph_offset`/`cyl_offset` statics restored on `so`.
+
+**API notes worth keeping:** `J3DModelData::getMaterialTable()` returns a
+REFERENCE (`.removeTexNoAnimator(...)`, not `->`); `dSnap_RegistFig` needs
+`d/d_snap.h`; `JPABaseEmitter::setGlobalParticleScale(x, y)` sets z to 1.0
+internally, so the 2-arg overload covers all three stores.
+
+STATE: aj1 **60/131 exact, 51.4992%**. Session: **12/131 -> 60/131,
+2.9112% -> 51.4992%** (17.7x fuzzy). 71 functions remain; five sit at 3-9 rows
+from pool positions or argument order alone (`_create` 98.9%, `chk_areaIN`
+99.9%, `set_pa_smk` 97.8%, `init_texPttrnAnm` 98.4%, `_nodeCB_BackBone`).
