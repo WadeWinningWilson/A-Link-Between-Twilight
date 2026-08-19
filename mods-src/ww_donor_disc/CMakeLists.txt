@@ -35,5 +35,5 @@ add_mod(ww_donor_disc
     # the donor's NONMATCHING processor.cpp). Its own TU for the same reason
     # ww_message.cpp is: a new concern does not go in the file two lanes have
     # already collided in twice.
-    SOURCES main.cpp donor_disc.cpp registry.cpp ww_message.cpp ww_jmessage.cpp ww_dmesg.cpp
+    SOURCES main.cpp donor_disc.cpp registry.cpp ww_message.cpp ww_jmessage.cpp ww_dmesg.cpp ww_kankyo.cpp ww_kankyo_wind.cpp ww_vrbox.cpp ww_sky.cpp ww_vrkumo.cpp ww_wave.cpp ww_shore.cpp ww_cam_data.cpp ww_cam_select.cpp ww_cam_crawl.cpp
 )

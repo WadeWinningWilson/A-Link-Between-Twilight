@@ -105,3 +105,6 @@ void wwRegistry_setBmgArcBytes(const void* buf, unsigned int size);
 // WHY IT MATTERS: a flat 81-row list cost a diagnostic run - the user could
 // not find Outset, warped elsewhere, and the probe never reached `R44_00`.
 void wwRegistry_finalizeRoutes();
+
+// True while the receiver start-stage name is a served WW stage.
+bool wwRegistry_isWwHostStage();

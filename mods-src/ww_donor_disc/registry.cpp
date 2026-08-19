@@ -56,6 +56,28 @@
 // ============================================================================
 
 #include "registry.h"
+#include "ww_kankyo.h"
+#include "ww_kankyo_wind.h"
+#include "ww_vrbox.h"
+#include "ww_sky.h"
+#include "ww_shore.h"
+#include "ww_wave.h"
+#include "ww_cam_data.h"
+#include "ww_cam_select.h"
+#include "ww_cam_crawl.h"
+
+#include "d/d_camera.h"
+#include "d/d_com_inf_game.h"
+#include "d/d_kankyo.h"
+#include "JSystem/J3DGraphAnimator/J3DModel.h"
+#include "JSystem/J3DGraphAnimator/J3DModelData.h"
+#include "JSystem/J3DGraphBase/J3DShape.h"
+#include "JSystem/J3DGraphBase/J3DMaterial.h"
+#include "JSystem/J3DGraphBase/J3DPacket.h"
+#include "JSystem/JUtility/JUTNameTab.h"
+#include "JSystem/JUtility/JUTTexture.h"
+#include "SSystem/SComponent/c_counter.h"
+#include "SSystem/SComponent/c_math.h"
 
 #include <mods/hook.hpp>
 #include <mods/meta.hpp>
@@ -65,7 +87,9 @@
 #include <mods/svc/ui.h>
 
 #include <cstdarg>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cstddef>
 
@@ -327,6 +351,12 @@ DEFINE_HOOK_SYMBOL("?loadBinaryDisplayList@J3DModelLoaderDataBase@@SAPEAVJ3DMode
                    void*(const void*, unsigned int), J3DLoadBDL);
 DEFINE_HOOK_SYMBOL("?load@J3DModelLoaderDataBase@@SAPEAVJ3DModelData@@PEBXI@Z",
                    void*(const void*, unsigned int), J3DLoadBMD);
+// 2N′: locked/patched BDL materials no-op makeSharedDisplayList. During WW
+// finish only, run J3DMaterial's base bake so the shared DL is not empty.
+DEFINE_HOOK_SYMBOL("?makeSharedDisplayList@J3DLockedMaterial@@UEAAXXZ",
+                   void(void*), LockedMakeSharedDL);
+DEFINE_HOOK_SYMBOL("?makeSharedDisplayList@J3DPatchedMaterial@@UEAAXXZ",
+                   void(void*), PatchedMakeSharedDL);
 
 // ============================================================================
 // THE MISSING `'BMDL'` DISPATCH CASE — supplied plugin-side.
@@ -472,6 +502,23 @@ DEFINE_HOOK_SYMBOL("?mDoExt_J3DModel__create@@YAPEAVJ3DModel@@PEAVJ3DModelData@@
 // difference between a virtual and a plain member rather than a bad name.
 // ============================================================================
 DEFINE_HOOK_SYMBOL("?draw@daBg_c@@QEAAHXZ", int(void*), BgDraw);
+// Donor daBg_btkAnm_c: SC_01 materials sync to wave frame (d_a_bg.cpp:72-87).
+DEFINE_HOOK_SYMBOL("?entry@daBg_btkAnm_c@@QEAAXPEAVJ3DModelData@@@Z",
+                   void(void*, void*), BgBtkEntry);
+DEFINE_HOOK_SYMBOL("?play@daBg_btkAnm_c@@QEAAXXZ", void(void*), BgBtkPlay);
+
+// Sky list flush. dComIfGd_drawOpaListSky is header-inline onto this.
+DEFINE_HOOK_SYMBOL("?drawOpaDrawList@dDlst_list_c@@QEAAXPEAVJ3DDrawBuffer@@@Z",
+                   void(void*, void*), DrawOpaList);
+
+// WW camera selector. Vanilla has no dCamera_setSelectHook. nextType is the
+// first call of the type/mode/style block in Run(), after setMapToolData.
+DEFINE_HOOK_SYMBOL("?nextType@dCamera_c@@QEAAHH@Z", int(void*, int), CamNextType);
+DEFINE_HOOK_SYMBOL("?nextMode@dCamera_c@@QEAAHH@Z", int(void*, int), CamNextMode);
+DEFINE_HOOK_SYMBOL("?onStyleChange@dCamera_c@@QEAA_NHH@Z", bool(void*, int, int),
+                   CamOnStyleChange);
+// CRAWL socket: extra-engine 20 remapped onto test2 (engine_tbl[19]).
+DEFINE_HOOK_SYMBOL("?test2Camera@dCamera_c@@QEAA_NH@Z", bool(void*, int), CamTest2);
 
 // ============================================================================
 // THE INLINE DISAMBIGUATOR - because `bg_draw: 0` is NOT yet an answer.
@@ -591,8 +638,10 @@ DEFINE_HOOK_SYMBOL("?load1stDynamicWave@Z2SceneMgr@@QEAAXXZ",
                    void(void*), AudLoad1st);
 DEFINE_HOOK_SYMBOL("?check1stDynamicWave@Z2SceneMgr@@QEAA_NXZ",
                    bool(void*), AudCheck1st);
-DEFINE_HOOK_SYMBOL("?dComIfG_syncAllObjectRes@@YAHXZ",
-                   int(), SyncObjRes);
+// dComIfG_syncAllObjectRes is inline → syncAllRes(mObjectInfo, …). The free
+// function symbol never exists; hook the real callee or the probe is silent.
+DEFINE_HOOK_SYMBOL("?syncAllRes@dRes_control_c@@SAHPEAVdRes_info_c@@H@Z",
+                   int(void*, int), SyncObjRes);
 
 // ============================================================================
 // PROBE SET #21 — THE DRAWABILITY DOOR. Run 142432 pushed the create ladder
@@ -1176,6 +1225,16 @@ const unsigned char* s_bmgArcBuf = nullptr;
 uint32_t s_bmgArcSize = 0;
 
 DEFINE_HOOK_SYMBOL("dStage_dt_c_stageLoader", void*(void*, void*), StageLoader);
+DEFINE_HOOK_SYMBOL("?dStage_dt_c_roomLoader@@YAXPEAXPEAVdStage_dt_c@@H@Z",
+                   void(void*, void*, int), RoomLoader);
+DEFINE_HOOK_SYMBOL("?dKy_setLight@@YAXXZ", void(), KySetLight);
+DEFINE_HOOK_SYMBOL(
+    "?setLightTevColorType_MAJI@dScnKy_env_light_c@@QEAAXPEAVJ3DModelData@@PEAVdKy_tevstr_c@@@Z",
+    void(void*, void*, void*), KyMajiModelData);
+DEFINE_HOOK_SYMBOL(
+    "?settingTevStruct@dScnKy_env_light_c@@QEAAXHPEAVcXyz@@PEAVdKy_tevstr_c@@@Z",
+    void(void*, int, void*, void*), KySettingTev);
+DEFINE_HOOK_SYMBOL("?dStage_Create@@YAXXZ", void(), StageCreate);
 
 // AND THE SITE ONE STEP UPSTREAM — §1017's target, which is the better of the
 // two and is taken as well rather than instead. `dRes_control_c::setStageRes`
@@ -1683,6 +1742,131 @@ const short kPilotIndex = kWwProfileBase + 1;  // 4097
 // CRT's math logf. Same trap that bit noteDefer, same cure.
 void logf(LogLevel level, const char* fmt, ...);
 
+// ============================================================================
+// DZB ATTRIBUTE TRANSLATION AT CONSUME — DN-10 step 2, not a bake, not a mount.
+//
+// ConvDzb already rebases OffsetPtrs and one-time-swaps vertices. It does NOT
+// translate poly-info bits. WW packs through/exit/att on a different layout
+// than TP reads:
+//   m_info0 through cluster: WW bits 16-26 vs TP bits 14-23 (Link-through)
+//   m_info0 exit id:         WW bits 13-18 vs TP bits 0-5
+//   m_info1 att/ground:      WW att at bits 16-20 vs TP att0/att1/groundCode
+// Untouched donor dzb => every triangle is Link-through. Plain GroundCross
+// still hits; player acch (SetLink) misses; ALINK create stays INIT on -INF.
+// Measured historically on Outset: 85/85 ti entries carried 0x3FF in that
+// cluster. Boot 172311 matches that signature (walker hits, player -INF).
+//
+// STEP 1 cannot apply: this is a genuine donor/receiver FORMAT difference at
+// the TP consumption boundary, not a missing WW system. STEP 2 is the
+// sanctioned answer — the same shape as the already-shipped ConvDzb arm.
+//
+// THE CODE PORTED is fork `dExtWw_repackDzbAttributes`
+// (`src/d/d_ext_npc_mount.cpp:3709`, §654/§729/§334). That function lives
+// inside the mount layer. DN-9 forbids calling it. The translation itself is
+// the named format map; it is applied here, after ConvDzb, on vanilla only
+// (fork already runs the same map tree-side). Header-free: walk cBgD_t by the
+// offsets in `include/d/d_bg_w.h` and resolve OffsetPtrs the same way
+// `include/dusk/offset_ptr.h` does after setBase. Idempotent by construction
+// (second pass: through cluster already clear => no rewrite; slip signature
+// preserved).
+// ============================================================================
+static std::uint32_t wwBe32Load(const void* p) {
+    const unsigned char* b = static_cast<const unsigned char*>(p);
+    return (static_cast<std::uint32_t>(b[0]) << 24) |
+           (static_cast<std::uint32_t>(b[1]) << 16) |
+           (static_cast<std::uint32_t>(b[2]) << 8) |
+           static_cast<std::uint32_t>(b[3]);
+}
+
+static void wwBe32Store(void* p, std::uint32_t v) {
+    unsigned char* b = static_cast<unsigned char*>(p);
+    b[0] = static_cast<unsigned char>(v >> 24);
+    b[1] = static_cast<unsigned char>(v >> 16);
+    b[2] = static_cast<unsigned char>(v >> 8);
+    b[3] = static_cast<unsigned char>(v);
+}
+
+static void* wwOffsetPtrResolve(void* field) {
+    // After ConvDzb setBase: bit 31 = relocated, remaining bits = self-relative
+    // offset. Same decode as OffsetPtr::operator T*() (offset_ptr.h:17-31).
+    const std::int32_t swapped = static_cast<std::int32_t>(wwBe32Load(field));
+    if (swapped == 0) {
+        return nullptr;
+    }
+    const std::int32_t realOffset =
+        (swapped & 0x40000000) ? swapped : (swapped & 0x7FFFFFFF);
+    return static_cast<char*>(field) + realOffset;
+}
+
+static void wwDzbRepackAttributes(void* dzb, const char* tag) {
+    if (dzb == nullptr || s_hostIsFork) {
+        return;
+    }
+    unsigned char* base = static_cast<unsigned char*>(dzb);
+    const int tiNum = static_cast<int>(wwBe32Load(base + 0x28));  // cBgD_t::m_ti_num
+    const int tNum = static_cast<int>(wwBe32Load(base + 0x08));   // cBgD_t::m_t_num
+    if (tiNum <= 0 || tiNum > 65536) {
+        return;
+    }
+    unsigned char* ti =
+        static_cast<unsigned char*>(wwOffsetPtrResolve(base + 0x2C));  // m_ti_tbl
+    if (ti == nullptr) {
+        return;
+    }
+
+    int standable = 0;
+    int slip = 0;
+    int through = 0;
+    for (int i = 0; i < tiNum; i++) {
+        unsigned char* rec = ti + (i * 16);  // sizeof(cBgD_Ti_t)
+        const std::uint32_t inf0 = wwBe32Load(rec + 0);
+        const std::uint32_t cleared = inf0 & ~0x00FFC000u;
+        if (cleared != inf0) {
+            const std::uint32_t wwExit = (inf0 >> 13) & 0x3F;
+            std::uint32_t out0 = cleared & ~(0x0000003Fu | (1u << 13));
+            out0 |= wwExit;
+            wwBe32Store(rec + 0, out0);
+            ++through;
+        }
+
+        const std::uint32_t inf1 = wwBe32Load(rec + 4);
+        const std::uint32_t wwAtt = (inf1 >> 16) & 0x1F;
+        std::uint32_t out = inf1 & ~0x00FFF000u;
+        if (wwAtt == 0 && ((inf1 >> 19) & 0x1F) == 4 && ((inf1 >> 12) & 0xF) == 0) {
+            out |= (4u << 19);
+            ++slip;
+            wwBe32Store(rec + 4, out);
+            continue;
+        }
+        switch (wwAtt) {
+            case 0x06:  // LAVA
+            case 0x08:  // VOID
+            case 0x09:  // DAMAGE
+            case 0x15:  // FREEZE
+            case 0x16:  // ELECTRICITY
+                out |= (4u << 19);
+                ++slip;
+                break;
+            default:
+                ++standable;
+                break;
+        }
+        wwBe32Store(rec + 4, out);
+    }
+
+    static int shown = 0;
+    if (shown < 8) {
+        shown++;
+        const std::uint32_t post = wwBe32Load(ti + 4);
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"dzb_attr_repack\",\"tag\":\"%s\",\"standable\":%d,"
+            "\"slip\":%d,\"through_cleared\":%d,\"ti_num\":%d,\"t_num\":%d,"
+            "\"ti0_inf1\":\"0x%08x\",\"reads\":\"WW->TP through/exit/att at consume; "
+            "ported from dExtWw_repackDzbAttributes, not the mount\"}",
+            tag != nullptr ? tag : "?", standable, slip, through, tiNum, tNum, post);
+    }
+}
+
 // Actor field offsets — MEASURED from the image's own PDB (llvm-pdbutil type
 // stream, LF_MEMBER rows for `fopAc_ac_c`), not authored: current @1460,
 // shape_angle @1480, scale @1488; `actor_place` carries pos at +0
@@ -1853,11 +2037,167 @@ FnNewSharedDL   s_fnNewSharedDL   = nullptr;
 FnSimpleCalcMat s_fnSimpleCalcMat = nullptr;
 FnMakeSharedDL  s_fnMakeSharedDL  = nullptr;
 void*           s_j3dDefaultMtx   = nullptr;
+typedef void (*FnMatMakeSharedDL)(void* material);
+FnMatMakeSharedDL s_fnJ3DMatMakeSharedDL = nullptr;
+int s_wwFinishDepth = 0;
 // READ, NOT AUTHORED: J3DModel.h:16 `J3DMdlFlag_UseSingleDL = 0x40000`.
 // I first wrote 0x20000 from memory - the FOURTH authored-constant slip of
 // the session, and the first one caught BEFORE it shipped, by reading the
 // header instead of trusting the recollection.
 const unsigned int kJ3DMdlFlag_UseSingleDL = 0x40000;
+// WW d_resorce.cpp 'BDL ' arm: loadBinaryDisplayList(res, 0x00002020).
+// 0x2020 = UsePostTexMtx|DoBdlMaterialCalc — NOT TP BMD 0x59020010, NOT 0x1010.
+const unsigned int kWwBdlLoadFlags = 0x00002020u;
+
+// finishBgModelData / wwParseModelOnce: load is step one of four. getRes and
+// loadResource were stopping at load — empty shared DLs → Aurora tcg src 21.
+void wwFinishModelData(void** pParsed, const char* tag) {
+    if (pParsed == nullptr || *pParsed == nullptr) {
+        return;
+    }
+    void* parsed = *pParsed;
+    if (s_fnNewSharedDL == nullptr) {
+        logf(LOG_LEVEL_ERROR,
+            "[WwRegistry] {\"ev\":\"model_finish\",\"tag\":\"%s\",\"ok\":0,"
+            "\"why\":\"newSharedDisplayList unresolved\"}",
+            tag != nullptr ? tag : "?");
+        return;
+    }
+    s_wwFinishDepth++;
+    const int sharedRet = s_fnNewSharedDL(parsed, kJ3DMdlFlag_UseSingleDL);
+    if (sharedRet == 0) {
+        if (s_fnSimpleCalcMat != nullptr && s_j3dDefaultMtx != nullptr) {
+            s_fnSimpleCalcMat(parsed, s_j3dDefaultMtx);
+        }
+        if (s_fnMakeSharedDL != nullptr) {
+            s_fnMakeSharedDL(parsed);
+        }
+    } else {
+        logf(LOG_LEVEL_ERROR,
+            "[WwRegistry] {\"ev\":\"model_sharedDL_fail\",\"tag\":\"%s\",\"ret\":%d,"
+            "\"reads\":\"receiver returns -1 here; refusing a half-built model\"}",
+            tag != nullptr ? tag : "?", sharedRet);
+        *pParsed = nullptr;
+    }
+    s_wwFinishDepth--;
+    static int shown = 0;
+    if (shown < 8) {
+        shown++;
+        logf(*pParsed != nullptr ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+            "[WwRegistry] {\"ev\":\"model_finish\",\"tag\":\"%s\",\"ok\":%d,"
+            "\"sharedDL\":%d,\"binds\":\"%d%d%d\",\"reads\":\"load already done; "
+            "this is newSharedDisplayList+simpleCalcMaterial+makeSharedDL; "
+            "2N bake runs inside makeSharedDL while finish-depth>0\"}",
+            tag != nullptr ? tag : "?", *pParsed != nullptr ? 1 : 0, sharedRet,
+            s_fnNewSharedDL != nullptr, s_fnSimpleCalcMat != nullptr,
+            s_fnMakeSharedDL != nullptr);
+    }
+}
+
+// §678 (fork ww_room_loader): daBg clips each shape with viewMtx × LOCAL
+// min/max and never applies the MULT baseTRMtx. sea room 44 sits at
+// ~(-200000, 300000); local boxes stay at the origin, so a camera that is
+// actually on Outset hides every island shape. Transform parsed bounds into
+// world XZ once per first parse (Y unchanged — MULT is XZ + Y-rot only).
+// §682 (fork d_a_bg.cpp): donor daBg clips whole models only. Vanilla always
+// per-shape hides. Worldize (§678) puts rock AABBs in the frustum; thin
+// overlay shapes (grass cards / model1 xlu) still fail the clip because the
+// view at list-build is not the view at present. Undo hide at EntryDL PRE —
+// after the clip loop, before packets. clipper::clip and shape->hide are
+// inline; this is the consume-boundary of "do not hide."
+const int kMaxWorldized = 32;
+void* s_worldized[kMaxWorldized];
+int s_worldizedN = 0;
+
+void wwRememberWorldized(void* i_parsed) {
+    if (i_parsed == nullptr) {
+        return;
+    }
+    for (int i = 0; i < s_worldizedN; i++) {
+        if (s_worldized[i] == i_parsed) {
+            return;
+        }
+    }
+    if (s_worldizedN < kMaxWorldized) {
+        s_worldized[s_worldizedN++] = i_parsed;
+    }
+}
+
+int wwIsWorldized(void* i_parsed) {
+    if (i_parsed == nullptr) {
+        return 0;
+    }
+    for (int i = 0; i < s_worldizedN; i++) {
+        if (s_worldized[i] == i_parsed) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void wwWorldizeShapeBounds(void* i_parsed, const char* i_arc) {
+    if (i_parsed == nullptr || i_arc == nullptr) {
+        return;
+    }
+    if (!(i_arc[0] == 'R' && i_arc[1] >= '0' && i_arc[1] <= '9' && i_arc[2] >= '0' &&
+          i_arc[2] <= '9' && i_arc[3] == '_' && i_arc[4] == '0' && i_arc[5] == '0' &&
+          i_arc[6] == '\0')) {
+        return;
+    }
+    const int roomNo = (i_arc[1] - '0') * 10 + (i_arc[2] - '0');
+    f32 tx = 0.0f;
+    f32 tz = 0.0f;
+    s16 angle = 0;
+    if (!dComIfGp_getMapTrans(roomNo, &tx, &tz, &angle)) {
+        logf(LOG_LEVEL_WARN,
+             "[WwRegistry] {\"ev\":\"shape_worldize\",\"arc\":\"%s\",\"room\":%d,"
+             "\"ok\":0,\"why\":\"getMapTrans miss (MULT not live yet)\"}",
+             i_arc, roomNo);
+        return;
+    }
+    J3DModelData* model = static_cast<J3DModelData*>(i_parsed);
+    const f32 s = cM_ssin(angle);
+    const f32 c = cM_scos(angle);
+    const u16 n = model->getShapeNum();
+    for (u16 j = 0; j < n; j++) {
+        J3DShape* shape = model->getShapeNodePointer(j);
+        if (shape == nullptr) {
+            continue;
+        }
+        Vec* mn = shape->getMin();
+        Vec* mx = shape->getMax();
+        const f32 xs[2] = {mn->x, mx->x};
+        const f32 zs[2] = {mn->z, mx->z};
+        f32 minX = 1e30f, minZ = 1e30f, maxX = -1e30f, maxZ = -1e30f;
+        for (int a = 0; a < 2; a++) {
+            for (int b = 0; b < 2; b++) {
+                const f32 wx = c * xs[a] + s * zs[b] + tx;
+                const f32 wz = -s * xs[a] + c * zs[b] + tz;
+                if (wx < minX) {
+                    minX = wx;
+                }
+                if (wx > maxX) {
+                    maxX = wx;
+                }
+                if (wz < minZ) {
+                    minZ = wz;
+                }
+                if (wz > maxZ) {
+                    maxZ = wz;
+                }
+            }
+        }
+        mn->x = minX;
+        mn->z = minZ;
+        mx->x = maxX;
+        mx->z = maxZ;
+    }
+    wwRememberWorldized(i_parsed);
+    logf(LOG_LEVEL_INFO,
+         "[WwRegistry] {\"ev\":\"shape_worldize\",\"arc\":\"%s\",\"room\":%d,"
+         "\"shapes\":%u,\"tx\":%.1f,\"tz\":%.1f,\"rot\":%d}",
+         i_arc, roomNo, (unsigned)n, tx, tz, (int)angle);
+}
 
 void wwInvalidateParsedModels(const char* arc);
 void wwInvalidateParsedModelsAll(const char* why);
@@ -1943,6 +2283,7 @@ int WwAkabe_solidHeapCB(void* self) {
                 kAkabeArcs[m->type], (int)kAkabeDzbIndex);
         }
     }
+    wwDzbRepackAttributes(dzb, kAkabeArcs[m->type]);
     // donor: if (!Set(dzb, MOVE_BG_e, &mMtx)) ret = true;  (Set false = OK)
     if (s_fnBgwSet(bgw, dzb, 0x1u /* cBgW::MOVE_BG_e */, m->mtx)) {
         std::free(bgw);
@@ -2059,6 +2400,470 @@ WwActorMethodClass s_akabeMethods = {
 };
 WwActorProfileDef s_akabeProfile = {};
 
+WwActorMethodClass s_vrboxMethods = {
+    (void*)&WwVrbox_create, (void*)&WwVrbox_delete, (void*)&WwVrbox_execute,
+    (void*)&WwVrbox_isDelete, (void*)&WwVrbox_draw, {0},
+};
+WwActorProfileDef s_vrboxProfile = {};
+
+WwActorMethodClass s_vrbox2Methods = {
+    (void*)&WwVrbox2_create, (void*)&WwVrbox2_delete, (void*)&WwVrbox2_execute,
+    (void*)&WwVrbox2_isDelete, (void*)&WwVrbox2_draw, {0},
+};
+WwActorProfileDef s_vrbox2Profile = {};
+
+// ============================================================================
+// PORT — daKytag01 (WAVE_INFO / coast foam kill). Donor d_a_kytag01.cpp
+// MATCHING. Placement name "ky_tag1" (WW d_stage.cpp:660). Room44 SCOB×1.
+// Foam channel is plugin-owned (s_chan); Create only registers WAVE_INFO into
+// wwWave mpWaveInfl table. Does NOT call donor wave_make / zero WaveCount —
+// that would tear down foam owned by ww_wave.
+// ============================================================================
+struct Kytag01Members {
+    WwWaveInfl wave;  // donor WAVE_INFO at actor+base
+};
+static_assert(sizeof(Kytag01Members) == 24, "WAVE_INFO layout");
+
+Kytag01Members* kytag01Members(void* self) {
+    return reinterpret_cast<Kytag01Members*>(static_cast<char*>(self) + kActorBaseSize);
+}
+
+int WwKytag01_create(void* self) {
+    WwTagSo_ct(self);
+    Kytag01Members* m = kytag01Members(self);
+    const float* pos =
+        reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffCurrentPos);
+    const float* scl =
+        reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffScale);
+    m->wave.mPos.set(pos[0], pos[1], pos[2]);
+    m->wave.mInnerRadius = scl[0] * 5000.0f;
+    m->wave.mOuterRadius = scl[2] * 5000.0f;
+    m->wave.field_0x14 = 0.0f;
+    const f32 defaultOuter = m->wave.mInnerRadius + 500.0f;
+    if (defaultOuter >= m->wave.mOuterRadius) {
+        m->wave.mOuterRadius = defaultOuter;
+    }
+    wwWave_registerInfl(&m->wave);
+    static int created = 0;
+    if (created < 4) {
+        created++;
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"kytag01_created\",\"pos\":[%.1f,%.1f,%.1f],"
+             "\"inner\":%.0f,\"outer\":%.0f,\"reads\":\"donor daKytag01_Create\"}",
+             m->wave.mPos.x, m->wave.mPos.y, m->wave.mPos.z, m->wave.mInnerRadius,
+             m->wave.mOuterRadius);
+    }
+    return 4;  // cPhs_COMPLEATE_e
+}
+
+int WwKytag01_delete(void* self) {
+    wwWave_unregisterInfl(&kytag01Members(self)->wave);
+    return 1;
+}
+int WwKytag01_execute(void*) { return 1; }
+int WwKytag01_isDelete(void*) { return 1; }
+int WwKytag01_draw(void*) { return 1; }
+
+WwActorMethodClass s_kytag01Methods = {
+    (void*)&WwKytag01_create, (void*)&WwKytag01_delete, (void*)&WwKytag01_execute,
+    (void*)&WwKytag01_isDelete, (void*)&WwKytag01_draw, {0},
+};
+WwActorProfileDef s_kytag01Profile = {};
+
+// Model/draw callables used by lwood (and retained for later props).
+// Declared before the lwood body so create/draw can see them.
+typedef void* (*FnJ3DModelCreate)(void*, unsigned int, unsigned int);
+typedef void  (*FnCullFar)(void*, float);
+typedef float (*FnRndF)(float);
+typedef void  (*FnBgwMove)(void*);
+typedef void  (*FnModelUpdateDL)(void*);
+FnJ3DModelCreate s_fnJ3DModelCreateC = nullptr;
+FnCullFar        s_fnCullFar = nullptr;
+FnRndF           s_fnRndF = nullptr;
+FnBgwMove        s_fnBgwMove = nullptr;
+FnModelUpdateDL  s_fnModelUpdateDL = nullptr;
+const unsigned int kLwoodOffTevStr = 496;
+
+// ============================================================================
+// PORT — daLwood (normal tree). Donor d_a_lwood.cpp MATCHING (GZLE01).
+//
+// TRACE / PRIOR FAILURES → RESOLUTIONS (this ship):
+//   R2  by-index DZB never hits name-keyed ConvDzb → call ConvDzb + att
+//       repack before Set (same as akabe).
+//   R3  getObjRes returns raw forever → wwParseModelOnce + evict on
+//       resDelete / stage load (memo already in this file).
+//   R4  authored constants are DATA: BDL=4, DZB=7 (GZLE01 Lwood.h /
+//       RARC table). Prior crash wrote DZB=5. TEV_TYPE_BG0=1 not 0.
+//   R5  CreateInit is NOT in the method table — call it from create
+//       after solid heap (SetMtx, cull box/far, calc, Regist, set_mtx,
+//       Move). Method-table-only ports dropped these.
+//   R6  bind counts ≠ coverage — every CreateInit call site is reached
+//       and logged once.
+//   DN-1 Regist(bgw, this) only — never SetRoomId.
+//   Dawn draw: mode1/5 PASS · mode4 FAIL even locked:1 AND private ModelData.
+//       Private-copy was invented — REVERTED (DN-10). WW d_resorce 'BDL ':
+//       loadBinaryDisplayList(0x2020) + setToonTex; NO newSharedDisplayList.
+//       Leaf sway HELD until mode 0 PASSes.
+//   Move bind: ?Move@dBgW@@QEAAXXZ (imports.lib), not UEAA.
+// ============================================================================
+void* wwParseModelOnce(void* raw, const char* arc, int index);  // defined below
+
+const char kLwoodArc[] = "Lwood";
+// Authority: D:\XXXXXXX\WW DP\assets\GZLE01\res\Object\Lwood.h
+const int kLwoodBdlIndex = 4;  // dRes_INDEX_LWOOD_BDL_ALWD_e
+const int kLwoodDzbIndex = 7;  // dRes_INDEX_LWOOD_DZB_ALWD_e — NOT 5 (R4)
+const unsigned int kOffCurrentAngle = 1472;  // current.pos@1460 + 12
+const unsigned int kTevTypeBg0 = 1;          // R4: 0 is TEV_TYPE_ACTOR
+const unsigned int kLwoodOffHeap = 448;      // PDB; kOffHeap defined later
+
+struct LwoodMembers {
+    unsigned char phs[0x80];
+    J3DModel* model;
+    void* bgw;
+    float mtx[3][4];
+    short timer;
+    short pad;
+    float yureScale;
+};
+
+LwoodMembers* lwoodMembers(void* self) {
+    return reinterpret_cast<LwoodMembers*>(static_cast<char*>(self) + kActorBaseSize);
+}
+
+void lwoodSetMoveBgMtx(void* self) {
+    LwoodMembers* m = lwoodMembers(self);
+    if (s_fnMtxTransS == nullptr || s_fnMtxZXYrotM == nullptr || s_fnMtxScaleM == nullptr ||
+        s_fnMtxGet == nullptr) {
+        return;
+    }
+    const float* pos =
+        reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffCurrentPos);
+    const short* ang =
+        reinterpret_cast<const short*>(static_cast<const char*>(self) + kOffCurrentAngle);
+    const float* scl =
+        reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffScale);
+    s_fnMtxTransS(pos[0], pos[1], pos[2]);
+    s_fnMtxZXYrotM(ang[0], ang[1], ang[2]);
+    s_fnMtxScaleM(scl[0], scl[1], scl[2]);
+    std::memcpy(m->mtx, s_fnMtxGet(), sizeof(m->mtx));
+}
+
+void lwoodSetMtx(void* self) {
+    LwoodMembers* m = lwoodMembers(self);
+    if (m->model == nullptr || s_fnMtxTransS == nullptr || s_fnMtxZXYrotM == nullptr ||
+        s_fnMtxGet == nullptr) {
+        return;
+    }
+    const float* pos =
+        reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffCurrentPos);
+    const short* ang =
+        reinterpret_cast<const short*>(static_cast<const char*>(self) + kOffCurrentAngle);
+    const float* scl =
+        reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffScale);
+    Vec scale = {scl[0], scl[1], scl[2]};
+    m->model->setBaseScale(scale);
+    s_fnMtxTransS(pos[0], pos[1], pos[2]);
+    s_fnMtxZXYrotM(ang[0], ang[1], ang[2]);
+    m->model->setBaseTRMtx(*reinterpret_cast<Mtx*>(s_fnMtxGet()));
+}
+
+int WwLwood_solidHeapCB(void* self) {
+    LwoodMembers* m = lwoodMembers(self);
+    if (s_fnGetObjRes == nullptr || s_fnJ3DModelCreateC == nullptr || s_fnDBgWCtor == nullptr ||
+        s_fnBgwSet == nullptr) {
+        logf(LOG_LEVEL_ERROR, "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":0,\"why\":\"bind\"}");
+        return 0;
+    }
+    void* raw = s_fnGetObjRes(kLwoodArc, kLwoodBdlIndex);
+    void* parsed = wwParseModelOnce(raw, kLwoodArc, kLwoodBdlIndex);
+    if (parsed == nullptr) {
+        logf(LOG_LEVEL_ERROR,
+             "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":0,\"why\":\"bdl\",\"idx\":%d}",
+             kLwoodBdlIndex);
+        return 0;
+    }
+    // Donor: mDoExt_J3DModel__create(modelData, 0x80000, 0x11000022)
+    m->model = static_cast<J3DModel*>(s_fnJ3DModelCreateC(parsed, 0x80000u, 0x11000022u));
+    if (m->model == nullptr) {
+        logf(LOG_LEVEL_ERROR, "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":0,\"why\":\"model\"}");
+        return 0;
+    }
+    m->model->setUserArea(reinterpret_cast<uintptr_t>(self));
+    lwoodSetMoveBgMtx(self);
+
+    void* dzb = s_fnGetObjRes(kLwoodArc, kLwoodDzbIndex);
+    if (dzb == nullptr) {
+        logf(LOG_LEVEL_ERROR,
+             "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":0,\"why\":\"dzb\",\"idx\":%d}",
+             kLwoodDzbIndex);
+        return 0;
+    }
+    if (s_fnConvDzb != nullptr) {
+        void* conv = s_fnConvDzb(dzb);
+        if (conv != nullptr) {
+            dzb = conv;
+        }
+    }
+    wwDzbRepackAttributes(dzb, "alwd.dzb");
+    void* bgw = std::calloc(1, 0x400);
+    if (bgw == nullptr) {
+        return 0;
+    }
+    s_fnDBgWCtor(bgw);
+    if (s_fnBgwSet(bgw, dzb, 0x1u /* MOVE_BG_e */, m->mtx)) {
+        std::free(bgw);
+        logf(LOG_LEVEL_ERROR, "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":0,\"why\":\"bgw_set\"}");
+        return 0;
+    }
+    m->bgw = bgw;
+    J3DModelData* md = static_cast<J3DModelData*>(parsed);
+    logf(LOG_LEVEL_INFO,
+         "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":1,\"bdl\":%d,\"dzb\":%d,"
+         "\"locked\":%d,\"flags\":\"0x%08X\","
+         "\"reads\":\"shared ModelData (WW); BDL 0x2020 + setToonTex\"}",
+         kLwoodBdlIndex, kLwoodDzbIndex,
+         (md != nullptr && md->isLocked()) ? 1 : 0, kWwBdlLoadFlags);
+    return 1;
+}
+
+void WwLwood_createInit(void* self) {
+    LwoodMembers* m = lwoodMembers(self);
+    if (m->model == nullptr) {
+        return;
+    }
+    // R5 — full CreateInit body (not in method table).
+    if (s_fnSetMtx != nullptr) {
+        s_fnSetMtx(self, m->model->getBaseTRMtx());
+    }
+    if (s_fnCullBox != nullptr) {
+        s_fnCullBox(self, -600.0f, -0.0f, -600.0f, 600.0f, 900.0f, 600.0f);
+    }
+    if (s_fnCullFar != nullptr) {
+        s_fnCullFar(self, 2.37f);
+    }
+    if (s_fnRndF != nullptr) {
+        m->timer = (short)s_fnRndF(0x8000);
+        m->yureScale = s_fnRndF(0.4f) + 0.8f;
+    } else {
+        m->timer = 0;
+        m->yureScale = 1.0f;
+    }
+    // Leaf sway callback HELD — see banner. Joint name still logged for proof.
+    {
+        J3DModelData* data = m->model->getModelData();
+        JUTNameTab* names = data != nullptr ? data->getJointName() : nullptr;
+        int found = 0;
+        if (names != nullptr && data != nullptr) {
+            for (u16 i = 0; i < data->getJointNum(); i++) {
+                const char* n = names->getName(i);
+                if (n != nullptr && std::strcmp(n, "J_Alwd_ha") == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+        }
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_init\",\"leaf_joint\":%d,\"leaf_sway\":0,"
+             "\"reads\":\"CreateInit full; sway HELD until draw PASS\"}",
+             found);
+    }
+    if (s_fnModelCalc != nullptr) {
+        s_fnModelCalc(m->model);
+    }
+    // DN-1 sanctioned Regist — no room stamp.
+    if (s_bgspInstance != nullptr && s_fnBgsRegist != nullptr && m->bgw != nullptr) {
+        s_fnBgsRegist(s_bgspInstance, m->bgw, self);
+        if (s_fnSetPriority != nullptr) {
+            s_fnSetPriority(m->bgw, 1);
+        }
+    }
+    lwoodSetMtx(self);
+    if (s_fnBgwMove != nullptr && m->bgw != nullptr) {
+        s_fnBgwMove(m->bgw);
+    }
+}
+
+int WwLwood_create(void* self) {
+    WwTagSo_ct(self);
+    LwoodMembers* m = lwoodMembers(self);
+    std::memset(m, 0, sizeof(*m));
+    if (s_fnResLoad == nullptr || s_fnEntrySolidHeap == nullptr) {
+        return 5;
+    }
+    const int rt = s_fnResLoad(m->phs, kLwoodArc);
+    if (rt != 4) {
+        return rt;
+    }
+    if (!s_fnEntrySolidHeap(self, WwLwood_solidHeapCB, 0x0e40u)) {
+        logf(LOG_LEVEL_ERROR, "[WwRegistry] {\"ev\":\"lwood_create\",\"ok\":0,\"why\":\"heap\"}");
+        return 5;
+    }
+    WwLwood_createInit(self);
+    static int created = 0;
+    if (created < 8) {
+        created++;
+        const float* pos =
+            reinterpret_cast<const float*>(static_cast<const char*>(self) + kOffCurrentPos);
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_created\",\"n\":%d,\"pos\":[%.1f,%.1f,%.1f],"
+             "\"bgw\":\"%p\",\"model\":\"%p\"}",
+             created, pos[0], pos[1], pos[2], m->bgw, (void*)m->model);
+    }
+    return 4;
+}
+
+int WwLwood_delete(void* self) {
+    LwoodMembers* m = lwoodMembers(self);
+    if (m->bgw != nullptr && s_bgspInstance != nullptr && s_fnBgsRelease != nullptr) {
+        const unsigned char* heap =
+            reinterpret_cast<const unsigned char*>(static_cast<const char*>(self) + kLwoodOffHeap);
+        // Donor: if (heap != NULL) Release — heap ptr at actor+448
+        void* heapPtr = *reinterpret_cast<void* const*>(heap);
+        if (heapPtr != nullptr) {
+            s_fnBgsRelease(s_bgspInstance, m->bgw);
+        }
+        std::free(m->bgw);
+        m->bgw = nullptr;
+    }
+    wwInvalidateParsedModels(kLwoodArc);
+    if (s_fnResDelete != nullptr) {
+        s_fnResDelete(m->phs, kLwoodArc);
+    }
+    return 1;
+}
+
+int WwLwood_execute(void* self) {
+    lwoodMembers(self)->timer++;
+    return 1;
+}
+
+int WwLwood_isDelete(void*) { return 1; }
+
+// Draw bisect (SPEC-patcher-requirements / HANDOFF §7.4). Dawn device-lost
+// after CPU draw returns — no Fault marker. Env WW_LWOOD_DRAW:
+//   0 full · 1 none (PASS 133253) · 2 UpdateDL only (FAIL 134152) ·
+//   3 tev+lists, no submit · 4 lists+UpdateDL, no tev ·
+//   5 lists+UpdateDL once then skip (PASS 134723) ·
+//   6 hide all shapes then lists+UpdateDL (empty-mesh test)
+// Default 4 after mode-5 PASS — multi-submit vs tev split.
+static int lwoodDrawMode() {
+    static int s_mode = -1;
+    if (s_mode < 0) {
+        const char* e = std::getenv("WW_LWOOD_DRAW");
+        s_mode = (e != nullptr && e[0] != '\0') ? std::atoi(e) : 4;
+        if (s_mode < 0 || s_mode > 6) {
+            s_mode = 4;
+        }
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_draw_mode\",\"mode\":%d,"
+             "\"reads\":\"0=full 1=none 2=UDL 3=tev 4=lists+UDL 5=one-submit "
+             "6=hideAll; default 4; mode5 PASS=one-shot OK\"}",
+             s_mode);
+    }
+    return s_mode;
+}
+
+static void lwoodHideAllShapes(J3DModel* model) {
+    if (model == nullptr) {
+        return;
+    }
+    J3DModelData* data = model->getModelData();
+    if (data == nullptr) {
+        return;
+    }
+    const u16 n = data->getShapeNum();
+    for (u16 i = 0; i < n; i++) {
+        J3DShape* shp = data->getShapeNodePointer(i);
+        if (shp != nullptr) {
+            shp->hide();
+        }
+    }
+}
+
+int WwLwood_draw(void* self) {
+    LwoodMembers* m = lwoodMembers(self);
+    if (m->model == nullptr) {
+        return 1;
+    }
+    const int mode = lwoodDrawMode();
+    if (mode == 1) {
+        static int s_skipN = 0;
+        s_skipN++;
+        if (s_skipN <= 3 || (s_skipN % 300) == 0) {
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_draw_skip\",\"n\":%d,\"mode\":1}",
+                 s_skipN);
+        }
+        return 1;
+    }
+
+    static int s_submitBudget = -1;
+    if (s_submitBudget < 0) {
+        s_submitBudget = (mode == 5) ? 1 : 1000000;
+    }
+
+    dKy_tevstr_c* tev =
+        reinterpret_cast<dKy_tevstr_c*>(static_cast<char*>(self) + kLwoodOffTevStr);
+    cXyz* pos = reinterpret_cast<cXyz*>(static_cast<char*>(self) + kOffCurrentPos);
+    const bool doTev = (mode == 0 || mode == 3);
+    const bool doLists = (mode == 0 || mode == 3 || mode == 4 || mode == 5 || mode == 6);
+    bool doSubmit = (mode == 0 || mode == 2 || mode == 4 || mode == 5 || mode == 6);
+    if (doSubmit && s_submitBudget <= 0) {
+        doSubmit = false;
+        static int s_capSkip = 0;
+        s_capSkip++;
+        if (s_capSkip <= 3 || (s_capSkip % 300) == 0) {
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_draw_cap\",\"n\":%d,\"mode\":%d}",
+                 s_capSkip, mode);
+        }
+        return 1;
+    }
+    if (mode == 6) {
+        static int s_hid = 0;
+        if (s_hid == 0) {
+            lwoodHideAllShapes(m->model);
+            s_hid = 1;
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_hide_all\",\"shapes\":%u}",
+                 m->model->getModelData() != nullptr
+                     ? (unsigned)m->model->getModelData()->getShapeNum()
+                     : 0u);
+        }
+    }
+    if (doTev) {
+        dKyWw_settingTevStruct((int)kTevTypeBg0, pos, tev);
+        dKyWw_setLightTevColorType(m->model, tev);
+    }
+    if (doLists) {
+        dComIfGd_setListBG();
+    }
+    if (doSubmit && s_fnModelUpdateDL != nullptr) {
+        s_fnModelUpdateDL(m->model);
+        if (mode == 5) {
+            s_submitBudget--;
+        }
+    }
+    if (doLists) {
+        dComIfGd_setList();
+    }
+    static int s_drawN = 0;
+    s_drawN++;
+    if (s_drawN <= 3 || (s_drawN % 300) == 0) {
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_draw\",\"n\":%d,\"mode\":%d,"
+             "\"tev\":%d,\"lists\":%d,\"submit\":%d,\"reads\":\"submit alive\"}",
+             s_drawN, mode, doTev ? 1 : 0, doLists ? 1 : 0, doSubmit ? 1 : 0);
+    }
+    return 1;
+}
+
+WwActorMethodClass s_lwoodMethods = {
+    (void*)&WwLwood_create, (void*)&WwLwood_delete, (void*)&WwLwood_execute,
+    (void*)&WwLwood_isDelete, (void*)&WwLwood_draw, {0},
+};
+WwActorProfileDef s_lwoodProfile = {};
+
 // ============================================================================
                                 // says 7. Indices are DATA, never inferred.
 
@@ -2066,27 +2871,17 @@ WwActorProfileDef s_akabeProfile = {};
 const unsigned int kOffHeap   = 448;
 const unsigned int kOffTevStr = 496;
 
-typedef void* (*FnJ3DModelCreate)(void*, unsigned int, unsigned int);
 typedef void* (*FnBgWNewSet)(void*, unsigned int, void*);
 typedef void  (*FnModelSetBaseTR)(void*, void*);
-typedef void  (*FnCullFar)(void*, float);
-typedef float (*FnRndF)(float);
-typedef void  (*FnBgwMove)(void*);
 typedef void  (*FnTevSetting)(void*, int, const void*, void*);
 typedef void  (*FnTevColorType)(void*, void*, void*);
 typedef void  (*FnVoidVoid)();
-typedef void  (*FnModelUpdateDL)(void*);
-FnJ3DModelCreate s_fnJ3DModelCreateC = nullptr;
 FnBgWNewSet      s_fnBgWNewSet = nullptr;
 FnModelSetBaseTR s_fnSetBaseTRMtx = nullptr;
-FnCullFar        s_fnCullFar = nullptr;
-FnRndF           s_fnRndF = nullptr;
-FnBgwMove        s_fnBgwMove = nullptr;
 FnTevSetting     s_fnTevSetting = nullptr;
 FnTevColorType   s_fnTevColorType = nullptr;
 FnVoidVoid       s_fnSetListBG = nullptr;
 FnVoidVoid       s_fnSetList = nullptr;
-FnModelUpdateDL  s_fnModelUpdateDL = nullptr;
 void* s_envLight = nullptr;
 
 // ========================================================================
@@ -2163,6 +2958,7 @@ void wwInvalidateParsedModelsAll(const char* why) {
              s_parsedModelCount);
     }
     s_parsedModelCount = 0;
+    s_worldizedN = 0;
 }
 
 // ========================================================================
@@ -2175,6 +2971,75 @@ void wwInvalidateParsedModelsAll(const char* why) {
 // and the second pass is destructive rather than merely wasteful (DN-3).
 // Parsing uses the RECEIVER'S OWN loader, never a reimplementation.
 // ========================================================================
+// KIT-DONOR: d/d_resorce.cpp setToonTex(J3DModelData*) MatchingFor (8006D990).
+// WW 'BDL ' conversion is loadBinaryDisplayList + THIS — not TP newSharedDL.
+// Pale has no dDlst_list_c::getToonImage; ZA*/ZB* rebind skipped.
+// DL patch uses receiver mDoExt_modelTexturePatch (same GD patch as WW).
+typedef void (*FnModelTexturePatch)(J3DModelData*);
+FnModelTexturePatch s_fnModelTexturePatch = nullptr;
+
+static void wwSetToonTex(J3DModelData* pModel) {
+    if (pModel == nullptr) {
+        return;
+    }
+    J3DTexture* pTexture = pModel->getTexture();
+    if (pTexture == nullptr) {
+        return;
+    }
+    JUTNameTab* pTextureName = pModel->getTextureName();
+    int zaSeen = 0;
+    if (pTextureName != nullptr) {
+        for (u16 i = 0; i < pTexture->getNum(); i++) {
+            const char* pName = pTextureName->getName(i);
+            if (pName != nullptr && pName[0] == 'Z' && (pName[1] == 'A' || pName[1] == 'B')) {
+                zaSeen++;
+            }
+        }
+    }
+    j3dSys.setTexture(pTexture);
+    const s32 isBDL = (pModel->getModelDataType() == 1) ? 1 : 0;
+    for (u16 i = 0; i < pModel->getMaterialNum(); i++) {
+        J3DMaterial* pMaterial = pModel->getMaterialNodePointer(i);
+        if (pMaterial == nullptr) {
+            continue;
+        }
+        J3DTevBlock* pTevBlock = pMaterial->getTevBlock();
+        if (pTevBlock == nullptr) {
+            continue;
+        }
+        J3DGXColorS10* pTev3 = pMaterial->getTevColor(3);
+        if (pTev3 != nullptr) {
+            pTev3->a = pTevBlock->getTevStageNum();
+        }
+    }
+    if (isBDL && s_fnModelTexturePatch != nullptr) {
+        s_fnModelTexturePatch(pModel);
+    }
+    static int s_toonN = 0;
+    if (s_toonN < 8) {
+        s_toonN++;
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"set_toon_tex\",\"bdl\":%d,\"za_names\":%d,"
+             "\"patch_fn\":%d,\"mats\":%u,"
+             "\"reads\":\"WW setToonTex via mDoExt_modelTexturePatch; no ZA rebind\"}",
+             isBDL, zaSeen, s_fnModelTexturePatch != nullptr ? 1 : 0,
+             (unsigned)pModel->getMaterialNum());
+    }
+}
+
+// After loadBinaryDisplayList: WW setToonTex; TP-style finish only if no baked DL.
+static void wwAfterBdlLoad(void** pParsed, const char* tag) {
+    if (pParsed == nullptr || *pParsed == nullptr) {
+        return;
+    }
+    J3DModelData* md = static_cast<J3DModelData*>(*pParsed);
+    wwSetToonTex(md);
+    J3DMaterial* m0 = (md->getMaterialNum() > 0) ? md->getMaterialNodePointer(0) : nullptr;
+    if (m0 == nullptr || m0->getSharedDisplayListObj() == nullptr) {
+        wwFinishModelData(pParsed, tag);
+    }
+}
+
 void* wwParseModelOnce(void* raw, const char* arc, int index) {
     if (raw == nullptr) { return nullptr; }
     for (int i = 0; i < s_parsedModelCount; i++) {
@@ -2191,33 +3056,22 @@ void* wwParseModelOnce(void* raw, const char* arc, int index) {
     const unsigned int sub = *reinterpret_cast<const unsigned int*>(
         static_cast<const unsigned char*>(raw) + 4);
     void* parsed = nullptr;
+    int finishRan = 0;
     if (sub == 0x346C6462u && s_fnJ3DLoadBDL != nullptr) {          // 'bdl4'
-        parsed = s_fnJ3DLoadBDL(raw, 0x1010);
+        parsed = s_fnJ3DLoadBDL(raw, kWwBdlLoadFlags);
+        if (parsed != nullptr) {
+            wwAfterBdlLoad(&parsed, arc);
+            finishRan = 1;  // logged as "after path ran"; may have skipped finish
+        }
     } else if (sub == 0x33646D62u && s_fnJ3DLoadBMD != nullptr) {   // 'bmd3'
         parsed = s_fnJ3DLoadBMD(raw, 0x29020030);
+        wwFinishModelData(&parsed, arc);
+        finishRan = 1;
+    } else {
+        wwFinishModelData(&parsed, arc);
+        finishRan = 1;
     }
-    // ================================================================
-    // FINISH THE CONVERSION. Loading is step one of four.
-    // ================================================================
-    int sharedRet = -1;
-    if (parsed != nullptr && s_fnNewSharedDL != nullptr) {
-        sharedRet = s_fnNewSharedDL(parsed, kJ3DMdlFlag_UseSingleDL);
-        if (sharedRet == 0) {
-            if (s_fnSimpleCalcMat != nullptr && s_j3dDefaultMtx != nullptr) {
-                s_fnSimpleCalcMat(parsed, s_j3dDefaultMtx);
-            }
-            if (s_fnMakeSharedDL != nullptr) { s_fnMakeSharedDL(parsed); }
-        } else {
-            // The receiver RETURNS -1 here rather than drawing. So do we:
-            // a model whose display list failed to build must never reach
-            // modelUpdateDL - that is precisely what killed four boots.
-            logf(LOG_LEVEL_ERROR, "[WwRegistry] {\"ev\":\"model_sharedDL_fail\","
-                 "\"arc\":\"%s\",\"idx\":%d,\"ret\":%d,\"reads\":\"receiver "
-                 "returns -1 here; refusing to hand a half-built model to the "
-                 "GPU\"}", arc != nullptr ? arc : "?", index, sharedRet);
-            parsed = nullptr;
-        }
-    }
+    wwWorldizeShapeBounds(parsed, arc);
     if (parsed != nullptr && s_parsedModelCount < kMaxParsedModels) {
         s_parsedModels[s_parsedModelCount].arc   = arc;
         s_parsedModels[s_parsedModelCount].index = index;
@@ -2225,15 +3079,17 @@ void* wwParseModelOnce(void* raw, const char* arc, int index) {
         s_parsedModels[s_parsedModelCount].parsed = parsed;
         s_parsedModelCount++;
     }
-    logf(parsed != nullptr ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
-         "[WwRegistry] {\"ev\":\"model_parse_once\",\"arc\":\"%s\","
-         "\"idx\":%d,\"sub\":\"0x%08X\",\"raw\":\"%p\",\"parsed\":\"%p\","
-         "\"n\":%d,\"sharedDL\":%d,\"binds\":\"%d%d%d%d\","
-         "\"reads\":\"conversion is load+newSharedDisplayList+simpleCalcMaterial"
-         "+makeSharedDL; sharedDL=0 means the display list BUILT\"}",
-         arc != nullptr ? arc : "?", index, sub, raw, parsed, s_parsedModelCount,
-         sharedRet, s_fnNewSharedDL != nullptr, s_fnSimpleCalcMat != nullptr,
-         s_fnMakeSharedDL != nullptr, s_j3dDefaultMtx != nullptr);
+    {
+        J3DModelData* md = static_cast<J3DModelData*>(parsed);
+        const int locked = (md != nullptr && md->isLocked()) ? 1 : 0;
+        logf(parsed != nullptr ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+             "[WwRegistry] {\"ev\":\"model_parse_once\",\"arc\":\"%s\","
+             "\"idx\":%d,\"sub\":\"0x%08X\",\"raw\":\"%p\",\"parsed\":\"%p\","
+             "\"n\":%d,\"flags\":\"0x%08X\",\"locked\":%d,\"finish\":%d,"
+             "\"reads\":\"WW BDL=0x2020+setToonTex; finish only if no baked DL\"}",
+             arc != nullptr ? arc : "?", index, sub, raw, parsed, s_parsedModelCount,
+             kWwBdlLoadFlags, locked, finishRan);
+    }
     return parsed;
 }
 
@@ -2241,6 +3097,10 @@ void* wwParseModelOnce(void* raw, const char* arc, int index) {
 
 
 const short kAkabeIndex = kWwProfileBase + 2;   // 4098
+const short kVrboxIndex = kWwProfileBase + 3;   // 4099
+const short kVrbox2Index = kWwProfileBase + 4;  // 4100
+const short kKytag01Index = kWwProfileBase + 5; // 4101
+const short kLwoodIndex = kWwProfileBase + 6;   // 4102
 
 const short kPilotDrawPriority = 0;  // see tale §995: donor's 101 is untransferable
 static_assert(kPilotDrawPriority >= 0,
@@ -2252,6 +3112,10 @@ const WwProfileRow kRowsStorage[] = {
     {kSelfTestIndex, static_cast<const void*>(&kSelfTestSentinel), false},
     {kPilotIndex, static_cast<const void*>(&s_pilotProfile), true},
     {kAkabeIndex, static_cast<const void*>(&s_akabeProfile), true},
+    {kVrboxIndex, static_cast<const void*>(&s_vrboxProfile), true},
+    {kVrbox2Index, static_cast<const void*>(&s_vrbox2Profile), true},
+    {kKytag01Index, static_cast<const void*>(&s_kytag01Profile), true},
+    {kLwoodIndex, static_cast<const void*>(&s_lwoodProfile), true},
 };
 const WwProfileRow* const kRows = kRowsStorage;
 const int kRowCount = (int)(sizeof(kRowsStorage) / sizeof(kRowsStorage[0]));
@@ -2338,6 +3202,14 @@ const WwObjectNameInf kObjectNames[] = {
     // Port #1 (queue 146): donor WW `d_stage.cpp:1088` OBJNAME("Akabe",
     // fpcNm_Obj_Akabe_e, 0, 0) — name and argument verbatim.
     {"Akabe", kAkabeIndex, 0},
+    // Donor d_stage.cpp:1260-1261. argument 255 as s8 is -1 (vanilla's Vrbox
+    // argument). Intercepted only on WW stages — TP owns these names too.
+    {"Vrbox", kVrboxIndex, -1},
+    {"Vrbox2", kVrbox2Index, -1},
+    // Donor d_stage.cpp:660 OBJNAME("ky_tag1", fpcNm_KYTAG01_e, 255, 0).
+    {"ky_tag1", kKytag01Index, -1},
+    // Donor d_stage.cpp OBJNAME("lwood", fpcNm_Lwood_e, …).
+    {"lwood", kLwoodIndex, 0},
 };
 const int kObjectNameCount = (int)(sizeof(kObjectNames) / sizeof(kObjectNames[0]));
 
@@ -2593,6 +3465,34 @@ void on_resLoadResource(ModContext*, void* args, void* retval, void*) {
         return;
     }
 
+    // Always/WwAlways: skip BMDL supply walk. This hook exists for J3D models;
+    // Always is mostly TIMG. Mid-expand walks corrupted boots (f_shipicon
+    // truncated). Celestial + whitecaps use getObjectRes after COMPLEATE.
+    {
+        const char* arcName = static_cast<const char*>(self);
+        char n0 = arcName != nullptr ? arcName[0] : 0;
+        if (n0 == 'A' || n0 == 'W') {
+            char safe[12];
+            for (int k = 0; k < 11; k++) {
+                const char c = arcName[k];
+                safe[k] = (c >= 32 && c < 127) ? c : '\0';
+                if (safe[k] == '\0') {
+                    break;
+                }
+            }
+            safe[11] = '\0';
+            if (std::strcmp(safe, "Always") == 0 || std::strcmp(safe, "WwAlways") == 0) {
+                static int s_skipN = 0;
+                if ((++s_skipN % 50) == 1) {
+                    logf(LOG_LEVEL_INFO,
+                         "[WwRegistry] {\"ev\":\"bmdl_skip_always\",\"n\":%d,\"arc\":\"%s\"}",
+                         s_skipN, safe);
+                }
+                return;
+            }
+        }
+    }
+
     int nonNull = 0, rawHere = 0;
     for (unsigned int i = 0; i < count; i++) {
         void* p = slots[i];
@@ -2627,12 +3527,13 @@ void on_resLoadResource(ModContext*, void* args, void* retval, void*) {
         void* parsed = nullptr;
         if (sub == 0x626D6433u) {                              // 'bmd3'
             if (s_fnJ3DLoadBMD != nullptr) { parsed = s_fnJ3DLoadBMD(p, 0x29020030); }
+            wwFinishModelData(&parsed, "loadResource");
         } else if (sub == 0x62646C34u) {                       // 'bdl4'
-            if (s_fnJ3DLoadBDL != nullptr) { parsed = s_fnJ3DLoadBDL(p, 0x1010); }
+            if (s_fnJ3DLoadBDL != nullptr) { parsed = s_fnJ3DLoadBDL(p, kWwBdlLoadFlags); }
+            wwAfterBdlLoad(&parsed, "loadResource");
         } else {
             continue;   // J3D2 but not a model container — not ours.
         }
-
         if (parsed != nullptr) {
             slots[i] = parsed;      // republish, exactly as the DEBUG arm does
             s_bmdlFixed++;
@@ -2727,6 +3628,11 @@ HookAction on_bgDraw(ModContext*, void* args, void*, void*) {
     return HOOK_CONTINUE;
 }
 
+HookAction on_drawOpaList(ModContext*, void* args, void*, void*) {
+    wwVrbox_onSkyOpaDraw(mods::arg<void*>(args, 1));
+    return HOOK_CONTINUE;
+}
+
 int s_toQ = 0;
 void on_lyTgToQueue(ModContext*, void* args, void* retval, void*) {
     const bool ww = startStageIsWw();
@@ -2798,21 +3704,37 @@ void on_audCheck1st(ModContext*, void*, void* retval, void*) {
     }
 }
 
-// phase_2's gate. ret>0 = still syncing = phase_2 loops. Same shape: the
-// finding is a positive that never decays to <=0.
+// Logo dvdWaitDraw / play sync gate. Hook is syncAllRes (inline target of
+// dComIfG_syncAllObjectRes). ret>0 = still syncing.
+//
+// Do NOT open WwAlways here. Full disc Always→WwAlways (§806) at logo alongside
+// TP Always+Alink left the archive heap too tight for sea Akabe solid heaps
+// (113931: always_resident OK, then dbgs_regist n=3 → crash before akabe_created).
+// Boot window opens from wwSky_move when the outdoor host is live.
 int s_syncObj = 0, s_syncZeroSeen = 0;
 void on_syncObjRes(ModContext*, void*, void* retval, void*) {
     s_syncObj++;
     const int rt = (retval != nullptr) ? *static_cast<int*>(retval) : -999;
-    const bool done = (rt <= 0);
+    if (wwSky_alwaysReady()) {
+        // no-op
+    } else if (wwSky_bootWindowOpen()) {
+        wwSky_pollAlways();
+        if (!wwSky_alwaysReady() && retval != nullptr) {
+            *static_cast<int*>(retval) = 1;
+        }
+    }
+    const int outRt = (retval != nullptr) ? *static_cast<int*>(retval) : rt;
+    const bool done = (outRt <= 0);
     const bool firstDone = (done && s_syncZeroSeen == 0);
-    if (firstDone) { s_syncZeroSeen = 1; }
+    if (firstDone) {
+        s_syncZeroSeen = 1;
+    }
     if (s_syncObj <= 4 || firstDone || (!done && (s_syncObj % 120) == 0)) {
         logf((!done && s_syncObj >= 120) ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
             "[WwRegistry] {\"ev\":\"phase_ladder\",\"step\":\"2_syncObjectRes\","
             "\"n\":%d,\"ww\":%d,\"ret\":%d,"
             "\"reads\":\"ret>0 forever = phase_2 STALL (H2, object arcs never arrive); negative = error path (H6)\"}",
-            s_syncObj, startStageIsWw() ? 1 : 0, rt);
+            s_syncObj, startStageIsWw() ? 1 : 0, outRt);
     }
 }
 
@@ -3957,6 +4879,19 @@ void on_j3dModelCreate(ModContext*, void* args, void* retval, void*) {
 HookAction on_modelEntryDL(ModContext*, void* args, void*, void*) {
     if (!startStageIsWw()) { return HOOK_CONTINUE; }
     void* model = mods::arg<void*>(args, 0);
+    if (model != nullptr) {
+        J3DModel* j3d = static_cast<J3DModel*>(model);
+        J3DModelData* data = j3d->getModelData();
+        if (wwIsWorldized(data)) {
+            const u16 n = data->getShapeNum();
+            for (u16 i = 0; i < n; i++) {
+                J3DShape* shape = data->getShapeNodePointer(i);
+                if (shape != nullptr) {
+                    shape->show();
+                }
+            }
+        }
+    }
     s_drawEntries++;
     // The head of a live J3DModel is a heap vtable; `0x3244334A` there would
     // mean a RAW 'J3D2' buffer reached the draw list, which is a different
@@ -3998,6 +4933,28 @@ void on_j3dLoadBMD(ModContext*, void* args, void* retval, void*) {
         "\"flags\":\"0x%08X\",\"out\":\"%p\",\"magic\":\"0x%08X\"}",
         s_j3dBmd, in, flags, out,
         in != nullptr ? *static_cast<const unsigned int*>(in) : 0u);
+}
+
+HookAction on_lockedMakeSharedDL(ModContext*, void* args, void*, void*) {
+    if (s_wwFinishDepth <= 0) {
+        return HOOK_CONTINUE;
+    }
+    void* self = mods::arg<void*>(args, 0);
+    if (s_fnJ3DMatMakeSharedDL != nullptr && self != nullptr) {
+        s_fnJ3DMatMakeSharedDL(self);
+    }
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction on_patchedMakeSharedDL(ModContext*, void* args, void*, void*) {
+    if (s_wwFinishDepth <= 0) {
+        return HOOK_CONTINUE;
+    }
+    void* self = mods::arg<void*>(args, 0);
+    if (s_fnJ3DMatMakeSharedDL != nullptr && self != nullptr) {
+        s_fnJ3DMatMakeSharedDL(self);
+    }
+    return HOOK_SKIP_ORIGINAL;
 }
 
 HookAction on_glbResource(ModContext*, void* args, void*, void*) {
@@ -4119,6 +5076,7 @@ void on_getRes(ModContext*, void* args, void* retval, void*) {
                 if (conv != nullptr && retval != nullptr) {
                     *static_cast<void**>(retval) = conv;
                 }
+                wwDzbRepackAttributes(conv != nullptr ? conv : got, rn);
             }
         }
         // COLLISION VISIBILITY (rows 956/958): `room.dzb` requests were
@@ -4186,10 +5144,13 @@ void on_getRes(ModContext*, void* args, void* retval, void*) {
             }
             if (out == nullptr) {
                 if (sub == 0x346C6462u && s_fnJ3DLoadBDL != nullptr) {        // 'bdl4'
-                    out = s_fnJ3DLoadBDL(got, 0x1010);
+                    out = s_fnJ3DLoadBDL(got, kWwBdlLoadFlags);
+                    wwAfterBdlLoad(&out, mods::arg<const char*>(args, 1));
                 } else if (sub == 0x33646D62u && s_fnJ3DLoadBMD != nullptr) { // 'bmd3'
                     out = s_fnJ3DLoadBMD(got, 0x29020030);
+                    wwFinishModelData(&out, mods::arg<const char*>(args, 1));
                 }
+                wwWorldizeShapeBounds(out, mods::arg<const char*>(args, 0));
                 if (out != nullptr && s_cacheN < 32) {
                     s_rawKey[s_cacheN] = got;
                     s_parsed[s_cacheN] = out;
@@ -4495,10 +5456,10 @@ HookAction on_setStageRes(ModContext*, void* args, void*, void*) {
     return HOOK_CONTINUE;
 }
 
-// PURE OBSERVER — counts and returns. See the banner above the
-// DEFINE_HOOK_SYMBOL: measuring whether the loader runs must not alter
-// whether the loader runs.
-HookAction on_stageLoader(ModContext*, void*, void*, void*) {
+// PRE observer + Pale bind. Does not change whether the loader runs.
+// Vanilla never looks for the donor "Pale" chunk (it wants PAL0). Binding
+// here is consume-boundary translation of the DZS we already relocated.
+HookAction on_stageLoader(ModContext*, void* args, void*, void*) {
     s_loaderCalls++;
     // ====================================================================
     // THE SEAM THE PER-ARC EVICTION CANNOT COVER.
@@ -4512,6 +5473,23 @@ HookAction on_stageLoader(ModContext*, void*, void*, void*) {
     // a corruption two stages later that looks like anything but this.
     // ====================================================================
     wwInvalidateParsedModelsAll("stage load");
+    wwKankyo_reset();
+    dKyWw_wind_reset();
+    wwVrbox_resetSpawn();
+    wwSky_reset();
+    wwWave_reset();
+    wwShore_reset();
+    void* dzs = mods::arg<void*>(args, 0);
+    if (stageBecomingWw() && dzs != nullptr) {
+        const int n = wwKankyo_bindDzs(dzs);
+        const int fili = dKyWw_bindFili(dzs);
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"pale_bind\",\"n\":%d,\"virt\":%d,\"envr\":%d,\"colo\":%d,"
+            "\"fili\":%d,\"start\":\"%s\"}",
+            n, wwKankyo_virtN(), wwKankyo_envrN(), wwKankyo_coloN(), fili,
+            (s_fnGetStartStageName != nullptr && s_fnGetStartStageName() != nullptr)
+                ? s_fnGetStartStageName() : "(unreadable)");
+    }
     if (s_loaderCalls == 1 || (s_loaderCalls % 50) == 0) {
         logf(LOG_LEVEL_INFO,
             "[WwRegistry] {\"ev\":\"stage_loader\",\"calls\":%d,\"start\":\"%s\"}",
@@ -4520,6 +5498,145 @@ HookAction on_stageLoader(ModContext*, void*, void*, void*) {
                 ? s_fnGetStartStageName() : "(unreadable)");
     }
     return HOOK_CONTINUE;
+}
+
+HookAction on_roomLoader(ModContext*, void* args, void*, void*) {
+    if (!stageBecomingWw()) {
+        return HOOK_CONTINUE;
+    }
+    void* dzr = mods::arg<void*>(args, 0);
+    const int fili = dKyWw_bindFili(dzr);
+    if (fili >= 0) {
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"fili_bind\",\"level\":%d,\"room\":%d,\"sea\":%.1f}",
+            fili, mods::arg<int>(args, 2), dKyWw_filiSeaLevel());
+    }
+    return HOOK_CONTINUE;
+}
+
+void on_bgBtkEntry(ModContext*, void* args, void*, void*) {
+    if (!startStageIsWw()) {
+        return;
+    }
+    wwShore_onBtkEntry(mods::arg<void*>(args, 0), mods::arg<void*>(args, 1));
+}
+
+HookAction on_bgBtkPlay(ModContext*, void* args, void*, void*) {
+    if (!startStageIsWw()) {
+        return HOOK_CONTINUE;
+    }
+    if (wwShore_tryWavePlay(mods::arg<void*>(args, 0))) {
+        return HOOK_SKIP_ORIGINAL;
+    }
+    return HOOK_CONTINUE;
+}
+
+HookAction on_kySetLight(ModContext*, void*, void*, void*) {
+    if (!startStageIsWw()) {
+        return HOOK_CONTINUE;
+    }
+    // Painter can fire more than once per sim tick (frame interp). Donor
+    // wether_move is once per tick — double move = 2× wind + bounce pulse.
+    static u32 s_lastCounter = 0xFFFFFFFFu;
+    const u32 tick = g_Counter.mCounter0;
+    const bool simTick = (tick != s_lastCounter);
+    if (simTick) {
+        s_lastCounter = tick;
+        dKyWw_wind_set();
+        wwSky_move();
+        // Whitecaps — donor wether_move_wave shape; Always gate inside wwWave.
+        wwWave_move();
+        // Once per Counter0 only. setLight can fire multiple times per tick;
+        // re-entryImm of the same wave packet → circular J3D list (114950).
+        wwWave_drawQueue();
+        // Shore SC_01 BTK clock (donor d_envse type-1 field_0xf8 0..99).
+        wwShore_tick();
+    }
+    wwKankyo_virt_set();
+    static int s_windTicks = 0;
+    if (simTick) {
+        s_windTicks++;
+        if (s_windTicks == 1 || (s_windTicks % 300) == 0) {
+            cXyz* v = dKyWw_get_wind_vec();
+            logf(LOG_LEVEL_INFO,
+                "[WwRegistry] {\"ev\":\"wind_tick\",\"n\":%d,\"pow\":%.3f,"
+                "\"vec\":[%.3f,%.3f,%.3f],\"fili\":%d,\"stagFar\":%.0f}",
+                s_windTicks, dKyWw_get_wind_pow(),
+                v != nullptr ? v->x : 0.0f, v != nullptr ? v->y : 0.0f,
+                v != nullptr ? v->z : 0.0f, dKyWw_filiLevel(), dKyWw_discStagFar());
+        }
+    }
+    return HOOK_CONTINUE;
+}
+
+HookAction on_kyMaji(ModContext*, void* args, void*, void*) {
+    if (!startStageIsWw()) {
+        return HOOK_CONTINUE;
+    }
+    void* data = mods::arg<void*>(args, 1);
+    void* tevstr = mods::arg<void*>(args, 2);
+    int type = -1;
+    if (!dKyWw_tryWwMaji(data, tevstr, &type)) {
+        return HOOK_CONTINUE;
+    }
+    static int s_dabg = 0;
+    s_dabg++;
+    if (s_dabg == 1 || (s_dabg % 300) == 0) {
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"ww_light\",\"n\":%d,\"type\":%d,\"pale\":%d}",
+             s_dabg, type, wwKankyo_paletN());
+    }
+    return HOOK_SKIP_ORIGINAL;
+}
+
+void on_kySettingTev(ModContext*, void* args, void*, void*) {
+    if (!startStageIsWw()) {
+        return;
+    }
+    const int type = mods::arg<int>(args, 1);
+    dKyWw_overlayTevStruct(type, static_cast<dKy_tevstr_c*>(mods::arg<void*>(args, 3)));
+}
+
+void on_stageCreate(ModContext*, void*, void*, void*) {
+    if (startStageIsWw()) {
+        wwVrbox_trySpawn(kVrboxIndex, kVrbox2Index);
+    }
+}
+
+HookAction on_camNextType(ModContext*, void* args, void* retval, void*) {
+    dCamera_c* cam = static_cast<dCamera_c*>(mods::arg<void*>(args, 0));
+    if (cam == nullptr || !wwCamSelect(cam)) {
+        return HOOK_CONTINUE;
+    }
+    *static_cast<int*>(retval) = cam->mCurType;
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction on_camNextMode(ModContext*, void* args, void* retval, void*) {
+    dCamera_c* cam = static_cast<dCamera_c*>(mods::arg<void*>(args, 0));
+    if (cam == nullptr || !wwCam_isAttached()) {
+        return HOOK_CONTINUE;
+    }
+    *static_cast<int*>(retval) = cam->mCurMode;
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction on_camOnStyleChange(ModContext*, void*, void* retval, void*) {
+    if (!wwCam_isAttached() || wwCam_inSelectLatch()) {
+        return HOOK_CONTINUE;
+    }
+    *static_cast<bool*>(retval) = false;
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction on_camTest2(ModContext*, void* args, void* retval, void*) {
+    dCamera_c* cam = static_cast<dCamera_c*>(mods::arg<void*>(args, 0));
+    if (cam == nullptr || !wwCam_isAttached()) {
+        return HOOK_CONTINUE;
+    }
+    const int style = mods::arg<int>(args, 1);
+    *static_cast<bool*>(retval) = wwCam_runCrawl(cam, style);
+    return HOOK_SKIP_ORIGINAL;
 }
 
 
@@ -4612,6 +5729,13 @@ HookAction on_stageSearchName(ModContext*, void* args, void* retval, void*) {
         // strncmp bounded at 8: the receiver's field is char[8] and an 8-char
         // name carries no terminator, so an unbounded compare would read past it.
         if (std::strncmp(kObjectNames[i].name, objName, sizeof(kObjectNames[i].name)) == 0) {
+            // Vrbox/Vrbox2 exist in the receiver's table. Only steal them on
+            // a WW stage; otherwise Ordon's sky would become ours.
+            if ((kObjectNames[i].procname == kVrboxIndex ||
+                 kObjectNames[i].procname == kVrbox2Index) &&
+                !startStageIsWw() && !stageBecomingWw()) {
+                return HOOK_CONTINUE;
+            }
             s_nameHits++;
             *static_cast<const void**>(retval) = &kObjectNames[i];
             return HOOK_SKIP_ORIGINAL;
@@ -5258,7 +6382,7 @@ void onWwWarpTabSelected(ModContext* ctx, void*) {
 // reported separately rather than silently truncating (№31-C: a check that
 // cannot run says UNKNOWN, never clean).
 // ============================================================================
-const int kMaxAttachNotes = 32;
+const int kMaxAttachNotes = 128;
 struct AttachNote {
     const void* rec;
     ModResult   result;
@@ -5402,6 +6526,14 @@ const char* result_name(ModResult r) {
 
 }  // namespace
 
+bool wwRegistry_isWwHostStage() {
+    return startStageIsWw();
+}
+
+void wwFinishParsedModel(void** pParsed, const char* tag) {
+    wwFinishModelData(pParsed, tag);
+}
+
 ModResult wwRegistry_initialize() {
     // ------------------------------------------------------------------------
     // HOST-CAPABILITY DETECTION FIRST — the defer flags below must be set
@@ -5501,9 +6633,25 @@ ModResult wwRegistry_initialize() {
     const ModResult rBmdl = mods::hook_add_post<ResLoadResource>(s_hook, on_resLoadResource);
     // The Outset visibility probe. PRE: the question is whether the call is
     // REACHED, and a post hook on a void function tells us nothing extra.
-    const ModResult rDraw = (s_diagProbes ? mods::hook_add_pre<ModelEntryDL>(s_hook, on_modelEntryDL) : MOD_OK);
+    const ModResult rDraw = mods::hook_add_pre<ModelEntryDL>(s_hook, on_modelEntryDL);
     const ModResult rMk = mods::hook_add_post<J3DModelCreate>(s_hook, on_j3dModelCreate);
     const ModResult rBgD = mods::hook_add_pre<BgDraw>(s_hook, on_bgDraw);
+    const ModResult rBgBtkE = mods::hook_add_post<BgBtkEntry>(s_hook, on_bgBtkEntry);
+    const ModResult rBgBtkP = mods::hook_add_pre<BgBtkPlay>(s_hook, on_bgBtkPlay);
+    logf((rBgBtkE == MOD_OK && rBgBtkP == MOD_OK) ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+         "[WwRegistry] {\"ev\":\"shore_btk_attach\",\"entry\":\"%s\",\"play\":\"%s\"}",
+         result_name(rBgBtkE), result_name(rBgBtkP));
+    const ModResult rSkyFlush = mods::hook_add_pre<DrawOpaList>(s_hook, on_drawOpaList);
+    const ModResult rCamT = mods::hook_add_pre<CamNextType>(s_hook, on_camNextType);
+    const ModResult rCamM = mods::hook_add_pre<CamNextMode>(s_hook, on_camNextMode);
+    const ModResult rCamS = mods::hook_add_pre<CamOnStyleChange>(s_hook, on_camOnStyleChange);
+    const ModResult rCamC = mods::hook_add_pre<CamTest2>(s_hook, on_camTest2);
+    logf((rCamT == MOD_OK && rCamM == MOD_OK && rCamS == MOD_OK && rCamC == MOD_OK)
+             ? LOG_LEVEL_INFO
+             : LOG_LEVEL_ERROR,
+         "[WwRegistry] {\"ev\":\"wwcam_attach\",\"nextType\":\"%s\",\"nextMode\":\"%s\","
+         "\"onStyle\":\"%s\",\"test2\":\"%s\"}",
+         result_name(rCamT), result_name(rCamM), result_name(rCamS), result_name(rCamC));
     const ModResult rCF = mods::hook_add_pre<ClipChangeFar>(s_hook, on_clipChangeFar);
     const ModResult rDwE = (s_diagProbes ? mods::hook_add_pre<DwExecute>(s_hook, on_dwExecute) : MOD_OK);
     const ModResult rTQ = mods::hook_add_post<LyTgToQueue>(s_hook, on_lyTgToQueue);
@@ -5653,17 +6801,26 @@ ModResult wwRegistry_initialize() {
         result_name(rDraw));
     const ModResult rBdl = mods::hook_add_post<J3DLoadBDL>(s_hook, on_j3dLoadBDL);
     const ModResult rBmd = mods::hook_add_post<J3DLoadBMD>(s_hook, on_j3dLoadBMD);
+    const ModResult rLockDL = mods::hook_add_pre<LockedMakeSharedDL>(s_hook, on_lockedMakeSharedDL);
+    const ModResult rPatchDL = mods::hook_add_pre<PatchedMakeSharedDL>(s_hook, on_patchedMakeSharedDL);
     logf((rBdl == MOD_OK && rBmd == MOD_OK && rBmdl == MOD_OK)
              ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
         "[WwRegistry] {\"ev\":\"j3d_hooks\",\"loadBinaryDisplayList\":\"%s\","
-        "\"load\":\"%s\",\"bmdl_arm\":\"%s\"}",
-        result_name(rBdl), result_name(rBmd), result_name(rBmdl));
+        "\"load\":\"%s\",\"bmdl_arm\":\"%s\",\"locked_makeSharedDL\":\"%s\","
+        "\"patched_makeSharedDL\":\"%s\"}",
+        result_name(rBdl), result_name(rBmd), result_name(rBmdl),
+        result_name(rLockDL), result_name(rPatchDL));
     const ModResult rMsgArc = mods::hook_add_pre<SetMsgDtArc>(s_hook, on_setMsgDtArc);
     logf(rMsgArc == MOD_OK ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
         "[WwRegistry] {\"ev\":\"msgarc_hook\",\"setMsgDtArchive\":\"%s\","
         "\"getMsgDtArchive_readable\":%d}",
         result_name(rMsgArc), s_fnGetMsgDtArc != nullptr);
     const ModResult rLdr = mods::hook_add_pre<StageLoader>(s_hook, on_stageLoader);
+    const ModResult rRoomLdr = mods::hook_add_pre<RoomLoader>(s_hook, on_roomLoader);
+    const ModResult rKyLt = mods::hook_add_pre<KySetLight>(s_hook, on_kySetLight);
+    const ModResult rMaji = mods::hook_add_pre<KyMajiModelData>(s_hook, on_kyMaji);
+    const ModResult rTev = mods::hook_add_post<KySettingTev>(s_hook, on_kySettingTev);
+    const ModResult rStCr = mods::hook_add_post<StageCreate>(s_hook, on_stageCreate);
     const ModResult rSSR = mods::hook_add_pre<SetStageRes>(s_hook, on_setStageRes);
 
     // ========================================================================
@@ -5689,8 +6846,15 @@ ModResult wwRegistry_initialize() {
     noteAttach(&mod_meta_hook_ResLoadResource, rBmdl);
     noteAttach(&mod_meta_hook_J3DLoadBDL, rBdl);
     noteAttach(&mod_meta_hook_J3DLoadBMD, rBmd);
+    noteAttach(&mod_meta_hook_LockedMakeSharedDL, rLockDL);
+    noteAttach(&mod_meta_hook_PatchedMakeSharedDL, rPatchDL);
     noteAttach(&mod_meta_hook_SetMsgDtArc, rMsgArc);
     noteAttach(&mod_meta_hook_StageLoader, rLdr);
+    noteAttach(&mod_meta_hook_RoomLoader, rRoomLdr);
+    noteAttach(&mod_meta_hook_KySetLight, rKyLt);
+    noteAttach(&mod_meta_hook_KyMajiModelData, rMaji);
+    noteAttach(&mod_meta_hook_KySettingTev, rTev);
+    noteAttach(&mod_meta_hook_StageCreate, rStCr);
     noteAttach(&mod_meta_hook_SetStageRes, rSSR);
     // 14th — the Outset draw probe. Added on Housing's heads-up: attachment
     // comes from THIS ledger, not from the loader, so a hook that is declared
@@ -5700,6 +6864,13 @@ ModResult wwRegistry_initialize() {
     noteAttach(&mod_meta_hook_ModelEntryDL, rDraw);
     noteAttach(&mod_meta_hook_J3DModelCreate, rMk);
     noteAttach(&mod_meta_hook_BgDraw, rBgD);
+    noteAttach(&mod_meta_hook_BgBtkEntry, rBgBtkE);
+    noteAttach(&mod_meta_hook_BgBtkPlay, rBgBtkP);
+    noteAttach(&mod_meta_hook_DrawOpaList, rSkyFlush);
+    noteAttach(&mod_meta_hook_CamNextType, rCamT);
+    noteAttach(&mod_meta_hook_CamNextMode, rCamM);
+    noteAttach(&mod_meta_hook_CamOnStyleChange, rCamS);
+    noteAttach(&mod_meta_hook_CamTest2, rCamC);
     noteAttach(&mod_meta_hook_ClipChangeFar, rCF);
     noteAttach(&mod_meta_hook_DwExecute, rDwE);
     noteAttach(&mod_meta_hook_LyTgToQueue, rTQ);
@@ -5826,6 +6997,11 @@ ModResult wwRegistry_initialize() {
                 &a, nullptr) == MOD_OK)
             s_fnJ3DLoadBMD = reinterpret_cast<FnJ3DParse>(a);
         a = nullptr;
+        if (s_hook->resolve(mod_ctx,
+                "?makeSharedDisplayList@J3DMaterial@@UEAAXXZ",
+                &a, nullptr) == MOD_OK)
+            s_fnJ3DMatMakeSharedDL = reinterpret_cast<FnMatMakeSharedDL>(a);
+        a = nullptr;
         // RECEIPT on the resolves themselves. Run 225743 could not distinguish
         // "both parsers resolved and the walk found nothing" from "neither
         // resolved, so the handler returned on its first check" — because a
@@ -5833,7 +7009,8 @@ ModResult wwRegistry_initialize() {
         logf((s_fnJ3DLoadBDL != nullptr && s_fnJ3DLoadBMD != nullptr)
                  ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
             "[WwRegistry] {\"ev\":\"bmdl_parsers\",\"loadBinaryDisplayList\":\"%p\","
-            "\"load\":\"%p\"}", (void*)s_fnJ3DLoadBDL, (void*)s_fnJ3DLoadBMD);
+            "\"load\":\"%p\",\"mat_makeSharedDL\":\"%p\"}",
+            (void*)s_fnJ3DLoadBDL, (void*)s_fnJ3DLoadBMD, (void*)s_fnJ3DMatMakeSharedDL);
         // ====================================================================
         // NEXT-stage name, added by the INTEGRATOR at the gate 2026-08-15
         // (§1016 ask, second half). Housing moved the sampler to `fpcPf_Get`
@@ -6013,6 +7190,58 @@ ModResult wwRegistry_initialize() {
         s_akabeProfile.group = 0;                       // fopAc_ACTOR_e
         s_akabeProfile.cullType = 0;                    // CULLBOX_CUSTOM = 0
 
+        // ====================================================================
+        // PORT — kytag01 (WAVE_INFO). Donor d_a_kytag01.cpp profile:
+        // List ID 7, UNK40000, CULLBOX_0. Foam infl only — no wave_make.
+        // ====================================================================
+        s_kytag01Profile.base.base.layer_id = 0;
+        s_kytag01Profile.base.base.list_id = 0x0007;
+        s_kytag01Profile.base.base.list_priority = 0;
+        s_kytag01Profile.base.base.name = kKytag01Index;
+        s_kytag01Profile.base.base.methods =
+            reinterpret_cast<const WwMethodClass*>(s_leafMethod);
+        s_kytag01Profile.base.base.process_size =
+            kActorBaseSize + sizeof(Kytag01Members);
+        s_kytag01Profile.base.base.unk_size = 0;
+        s_kytag01Profile.base.base.parameters = 0;
+        s_kytag01Profile.base.sub_method = s_actorMethod;
+        s_kytag01Profile.base.priority = 0;
+        s_kytag01Profile.sub_method = &s_kytag01Methods;
+        s_kytag01Profile.status = 0x40000;  // fopAcStts_UNK40000_e
+        s_kytag01Profile.group = 0;
+        s_kytag01Profile.cullType = 0;  // CULLBOX_0
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"kytag01_ready\",\"index\":%d,"
+             "\"process_size\":%u,\"reads\":\"Room44 SCOB ky_tag1 → WAVE_INFO\"}",
+             (int)kKytag01Index, s_kytag01Profile.base.base.process_size);
+
+        // ====================================================================
+        // PORT — lwood. Donor profile: List 7, NOCULLEXEC|CULL|UNK40000,
+        // CULLBOX_CUSTOM. Draw prio NOT transferred (§995).
+        // ====================================================================
+        s_lwoodProfile.base.base.layer_id = 0;
+        s_lwoodProfile.base.base.list_id = 0x0007;
+        s_lwoodProfile.base.base.list_priority = 0;
+        s_lwoodProfile.base.base.name = kLwoodIndex;
+        s_lwoodProfile.base.base.methods =
+            reinterpret_cast<const WwMethodClass*>(s_leafMethod);
+        s_lwoodProfile.base.base.process_size =
+            kActorBaseSize + sizeof(LwoodMembers);
+        s_lwoodProfile.base.base.unk_size = 0;
+        s_lwoodProfile.base.base.parameters = 0;
+        s_lwoodProfile.base.sub_method = s_actorMethod;
+        s_lwoodProfile.base.priority = 0;
+        s_lwoodProfile.sub_method = &s_lwoodMethods;
+        s_lwoodProfile.status = 0x10 | 0x8 | 0x40000;
+        s_lwoodProfile.group = 0;
+        s_lwoodProfile.cullType = 0;  // CULLBOX_CUSTOM
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_ready\",\"index\":%d,\"process_size\":%u,"
+             "\"bdl\":%d,\"dzb\":%d,\"leaf_sway\":0,"
+             "\"reads\":\"R2-R6 applied; sway HELD for Dawn draw bisect\"}",
+             (int)kLwoodIndex, s_lwoodProfile.base.base.process_size, kLwoodBdlIndex,
+             kLwoodDzbIndex);
+
         // The akabe callable set — every mangling gate-verified on the user's
         // image this session before the port was written.
         {
@@ -6074,6 +7303,18 @@ ModResult wwRegistry_initialize() {
                  reinterpret_cast<void**>(&s_fnMtxScaleM)},
                 {"?get@mDoMtx_stack_c@@SAPEAY03MXZ",
                  reinterpret_cast<void**>(&s_fnMtxGet)},
+                // lwood draw/create extras (R5/R6 coverage)
+                {"?mDoExt_J3DModel__create@@YAPEAVJ3DModel@@PEAVJ3DModelData@@II@Z",
+                 reinterpret_cast<void**>(&s_fnJ3DModelCreateC)},
+                {"?mDoExt_modelUpdateDL@@YAXPEAVJ3DModel@@@Z",
+                 reinterpret_cast<void**>(&s_fnModelUpdateDL)},
+                {"?mDoExt_modelTexturePatch@@YAXPEAVJ3DModelData@@@Z",
+                 reinterpret_cast<void**>(&s_fnModelTexturePatch)},
+                {"?fopAcM_setCullSizeFar@@YAXPEAVfopAc_ac_c@@M@Z",
+                 reinterpret_cast<void**>(&s_fnCullFar)},
+                {"?cM_rndF@@YAMM@Z", reinterpret_cast<void**>(&s_fnRndF)},
+                // READ from dusklight_imports.lib — QEAA not UEAA (virtual).
+                {"?Move@dBgW@@QEAAXXZ", reinterpret_cast<void**>(&s_fnBgwMove)},
             };
             int bound = 0, missing = 0;
             for (const Bind& b : kBinds) {
@@ -6119,6 +7360,48 @@ ModResult wwRegistry_initialize() {
                 "degrades that call to a guarded no-op, never a crash\"}",
                 (int)kAkabeIndex, bound, missing);
         }
+
+        // PORT — donor vrbox / vrbox2. List ID 7, UNK4000|UNK40000, CULLBOX_0.
+        // Draw prio is the RECEIVER's fpcDwPi_VRBOX_e / VRBOX2_e (7 / 4), which
+        // happen to match the donor's early-enum slots — these are TP's sky
+        // buckets, not a WW number copied into a TP-ordered queue.
+        s_vrboxProfile.base.base.layer_id = 0;
+        s_vrboxProfile.base.base.list_id = 0x0007;
+        s_vrboxProfile.base.base.list_priority = 0;
+        s_vrboxProfile.base.base.name = kVrboxIndex;
+        s_vrboxProfile.base.base.methods =
+            reinterpret_cast<const WwMethodClass*>(s_leafMethod);
+        s_vrboxProfile.base.base.process_size = kActorBaseSize + sizeof(void*);
+        s_vrboxProfile.base.base.unk_size = 0;
+        s_vrboxProfile.base.base.parameters = 0;
+        s_vrboxProfile.base.sub_method = s_actorMethod;
+        s_vrboxProfile.base.priority = 7;  // fpcDwPi_VRBOX_e
+        s_vrboxProfile.sub_method = &s_vrboxMethods;
+        s_vrboxProfile.status = 0x4000 | 0x40000;
+        s_vrboxProfile.group = 0;
+        s_vrboxProfile.cullType = 0;  // CULLBOX_0
+
+        s_vrbox2Profile.base.base.layer_id = 0;
+        s_vrbox2Profile.base.base.list_id = 0x0007;
+        s_vrbox2Profile.base.base.list_priority = 0;
+        s_vrbox2Profile.base.base.name = kVrbox2Index;
+        s_vrbox2Profile.base.base.methods =
+            reinterpret_cast<const WwMethodClass*>(s_leafMethod);
+        s_vrbox2Profile.base.base.process_size = kActorBaseSize + sizeof(void*) * 3;
+        s_vrbox2Profile.base.base.unk_size = 0;
+        s_vrbox2Profile.base.base.parameters = 0;
+        s_vrbox2Profile.base.sub_method = s_actorMethod;
+        s_vrbox2Profile.base.priority = 4;  // fpcDwPi_VRBOX2_e
+        s_vrbox2Profile.sub_method = &s_vrbox2Methods;
+        s_vrbox2Profile.status = 0x4000 | 0x40000;
+        s_vrbox2Profile.group = 0;
+        s_vrbox2Profile.cullType = 0;
+
+        wwVrbox_bind(s_hook);
+        dExtWwCam_installData();
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"vrbox_ready\",\"index\":[%d,%d],\"prio\":[7,4]}",
+            (int)kVrboxIndex, (int)kVrbox2Index);
     }
 
     logf((rLeaf == MOD_OK && rActor == MOD_OK) ? LOG_LEVEL_INFO : LOG_LEVEL_WARN,

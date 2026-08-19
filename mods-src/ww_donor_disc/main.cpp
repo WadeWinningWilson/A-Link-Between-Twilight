@@ -37,6 +37,7 @@
 #include "donor_disc.h"
 #include "registry.h"
 #include "ww_message.h"
+#include "ww_kankyo_wind.h"
 
 #include <mods/service.hpp>
 #include <mods/svc/config.h>
@@ -283,6 +284,15 @@ void sniffStageType(const char* discPath, const void* arcBytes, uint32_t size) {
         const uint32_t v = ((uint32_t)dzs[off+0x0C] << 24) | ((uint32_t)dzs[off+0x0D] << 16) |
                            ((uint32_t)dzs[off+0x0E] << 8) | (uint32_t)dzs[off+0x0F];
         wwRegistry_setStageType(stage, (int)((v >> 16) & 7));
+        // STAG mFar @ +0x04 (BE f32) — donor camera far / vrkumo dome radius.
+        if (off + 8 <= dzsLen) {
+            const uint32_t farBits =
+                ((uint32_t)dzs[off + 4] << 24) | ((uint32_t)dzs[off + 5] << 16) |
+                ((uint32_t)dzs[off + 6] << 8) | (uint32_t)dzs[off + 7];
+            float farz = 0.0f;
+            std::memcpy(&farz, &farBits, sizeof(farz));
+            dKyWw_setDiscStagFar(farz);
+        }
         return;
     }
 }
