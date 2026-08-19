@@ -2660,14 +2660,69 @@ int s_drawEntries = 0;
 // POST, because the ANSWER is the return value: did construction yield an
 // instance, or NULL? A pre hook sees only that it was attempted.
 int s_bgDraws = 0;
+// ============================================================================
+// COUNT BEFORE YOU GATE. The previous cut returned on !startStageIsWw() BEFORE
+// touching the counter, so `bg_draw` receipts = 0 had TWO readings that are
+// opposite answers and were indistinguishable:
+//
+//   (a) daBg_c::draw NEVER RUNS on this host - the actor is never asked, and
+//       any fix that re-shows shapes is fixing nothing; or
+//   (b) it runs FINE and the WW predicate suppressed every receipt.
+//
+// The vanilla run reported ZERO. That silence is exactly the shape that has
+// killed five hypotheses on this board - a gated instrument reading as absence.
+// So: count EVERY call unconditionally, and report the predicate's value
+// alongside. `calls` answers (a); `ww` answers (b); the pair cannot be misread.
+// ============================================================================
 HookAction on_bgDraw(ModContext*, void* args, void*, void*) {
-    if (!startStageIsWw()) { return HOOK_CONTINUE; }
-    s_bgDraws++;
-    if (s_bgDraws <= 6 || (s_bgDraws % 600) == 0) {
+    static int s_bgDrawCallsAll = 0;   // EVERY call, gate or no gate
+    s_bgDrawCallsAll++;
+
+    const bool ww = startStageIsWw();
+    if (ww) { s_bgDraws++; }
+
+    // ------------------------------------------------------------------
+    // SAMPLE IN THE RIGHT ERA. The previous cut threw its whole sample away
+    // on the WRONG STAGE and read as a finding: all twelve receipts landed
+    // at log lines 1307-2448 while the first `start="sea"` was at 2489, so
+    // every `ww:0` was CORRECT and about the PRE-WARP BG - the title actor,
+    // not Outset's. `calls:1200` looks damning until you ask WHEN frame 1200
+    // was.
+    //
+    // A throttle is a sampling decision, and a sampling decision made before
+    // the event under study is a decision to miss it. So the counters RESET
+    // when the WW predicate flips, and the throttle restarts on the far side
+    // of the warp. `ww_calls` now counts from the stage we actually care
+    // about, and `era` says which side of the flip a receipt came from.
+    // ------------------------------------------------------------------
+    static bool s_sawWw = false;
+    if (ww && !s_sawWw) {
+        s_sawWw = true;
+        s_bgDrawCallsAll = 1;   // restart sampling ON the WW stage
+        s_bgDraws = 1;
         logf(LOG_LEVEL_INFO,
-            "[WwRegistry] {\"ev\":\"bg_draw\",\"n\":%d,\"self\":\"%p\","
-            "\"entries_so_far\":%d,\"reads\":\"draws>0 with entries==0 means the parts loop is skipped; draws==0 means the actor is never asked\"}",
-            s_bgDraws, mods::arg<void*>(args, 0), s_drawEntries);
+            "[WwRegistry] {\"ev\":\"bg_draw_era\",\"reads\":\"WW predicate flipped "
+            "TRUE - bg_draw counters reset here. Receipts BELOW this line are the "
+            "only ones about the WW stage; anything above is pre-warp and says "
+            "nothing about Outset\"}");
+    }
+
+    // Emit on the first few of EITHER counter so a host where the predicate is
+    // false still proves the hook fires at all.
+    if (s_bgDrawCallsAll <= 6 || (s_bgDrawCallsAll % 600) == 0 ||
+        (ww && (s_bgDraws <= 6 || (s_bgDraws % 60) == 0))) {
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"bg_draw\",\"calls\":%d,\"ww_calls\":%d,\"ww\":%d,"
+            "\"self\":\"%p\",\"entries_so_far\":%d,"
+            "\"reads\":\"READ THE ERA FIRST - a receipt ABOVE bg_draw_era is "
+            "PRE-WARP and says NOTHING about the WW stage (that mistake was made "
+            "once already: 12 receipts, all before the stage flipped, read as a "
+            "finding). BELOW the era line: ww==1 with entries==0 = the actor is "
+            "asked to draw and has NO PARTS - upstream of any culling. ww==1 with "
+            "entries>0 = parts exist and the question moves to visibility. Event "
+            "ABSENT entirely = daBg_c::draw is never reached\"}",
+            s_bgDrawCallsAll, s_bgDraws, ww ? 1 : 0,
+            mods::arg<void*>(args, 0), s_drawEntries);
     }
     return HOOK_CONTINUE;
 }
@@ -2910,6 +2965,34 @@ int s_ndDraws = 0;
 HookAction on_ndDraw(ModContext*, void* args, void*, void*) {
     const bool ww = startStageIsWw();
     s_ndDraws++;
+
+    // ------------------------------------------------------------------
+    // PERIODIC PER-ERA TOTAL — because the dedup below makes this probe
+    // STRUCTURALLY UNABLE to report per-frame activity. It logs each DISTINCT
+    // node once, capped at 24 per era, so a whole boot yielded 3 receipts and
+    // "0 after the WW flip" was read as "the draw walker stopped". It means
+    // no NEW node, which is a different claim entirely.
+    //
+    // That is the fourth instrument on this surface whose LIMIT was read as a
+    // property of the subject. So: an unconditional running total per era,
+    // emitted on a cadence the dedup cannot suppress. `ww_total` climbing
+    // after the flip = the draw walker IS running on the WW stage and the BG
+    // simply is not in it. `ww_total` flat = the walker itself stops.
+    // ------------------------------------------------------------------
+    static int s_ndAllTp = 0, s_ndAllWw = 0;
+    int& eraTotal = ww ? s_ndAllWw : s_ndAllTp;
+    eraTotal++;
+    if ((eraTotal % 120) == 0 || eraTotal == 1) {
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"nd_draw_total\",\"ww\":%d,\"era_total\":%d,"
+            "\"tp_total\":%d,\"ww_total\":%d,"
+            "\"reads\":\"UNCONDITIONAL running total - the nd_draw receipts below "
+            "are DEDUPED per distinct node (cap 24/era) and cannot show per-frame "
+            "activity. ww_total climbing = the draw walker RUNS on the WW stage; "
+            "ww_total absent/flat = the walker itself is not reached\"}",
+            ww ? 1 : 0, eraTotal, s_ndAllTp, s_ndAllWw);
+    }
+
     void* node = mods::arg<void*>(args, 0);
     static void* seenWw[24]; static int nWw = 0;
     static void* seenTp[24]; static int nTp = 0;
