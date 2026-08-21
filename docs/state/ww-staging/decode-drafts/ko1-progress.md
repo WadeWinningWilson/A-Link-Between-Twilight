@@ -413,3 +413,29 @@ measure identical.
 REMAINING on ko1: set_action 42 (the PTMF store) · HIO ctor 34 · ko_nMove 28
 (open item 2, bounded) · ko_movPass/wait_7 10 each (open item 3, by-value cXyz
 slot — 4 falsified approaches recorded) · setAnm_anm/set_balloonAnm_anm 2 each.
+
+
+## TU FULLY WRITTEN (2026-08-21): 178/203 exact, fuzzy 99.7225%
+
+`chk_routeAngle` was the last stub: outprod + atan2s with a single shared
+180-flip — **the asm's forward-branch INTO the other arm's flip is the `||`
+tell** (if/else-if duplicates the block, 4 rows). set_action (ob1 form,
+teardown state 9) and the HIO ctor (memcpy loop from a function-local static
+prm table, values decoded from .obj bytes) landed the same batch.
+
+**Residual map at completion — this is the whole remaining distance:**
+- **18 pool-position functions** (instrument-classified). NOW LIVE per the
+  recorded caution: the TU is complete, so these are a REAL POOL-ORDERING
+  question. Known component: my `a_prm_tbl` emits BEFORE the @-literal run
+  (every constant shifted +0xB0) while the target has it after; the HIO
+  ctor's `$NNNN` (mine 1613, target 4154) says the target's internal-symbol
+  counter is far higher — inline-instantiation count differs. Section-level
+  layout comparison is the next instrument-shaped task.
+- **7 REAL rows**: ko_nMove 30 (open item 2, bounded) · ko_movPass/wait_7 12
+  each (open item 3, by-value cXyz slot, 4 approaches falsified) ·
+  get_crsActorID 6 (GetAc materialization, parked) · chg_anmAtr 2 (unfolded
+  branch, parked) · setAnm_anm/set_balloonAnm_anm 2 each (not yet examined).
+
+exact_delta earned its keep AGAIN this batch: a flat 177 hid nodeKo1Control
+and setMtx regressing to pool-shift while set_action and the ctor went green
+— equal-lost/equal-gained, invisible in the total, named by the tool.
