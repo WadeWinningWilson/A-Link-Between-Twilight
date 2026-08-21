@@ -70,48 +70,33 @@ instance's monitors die with its session — arm your own on startup.
   _half,_three order). so/aj1/ym1/yw1/ob1/ko1/kamome are ALL this vintage;
   saku is not; pt/bridge_move need objdiff units created first.
 
-## 4. Campaign state
-### d_a_npc_p2 (task #9) — 22 instruction rows from SHA
-Anchor: docs/state/ww-staging/decode-drafts/p2-progress.md (in dusklight) —
-its CONTINUATION PREAMBLE + rounds 1-17 are REQUIRED READING (the entire MWCC
-lesson bank: pool = parse order with rodata-absolute labels; counters as
-source archaeology; -sym on file-keyed text sections => cut family in a
-_cut.inc; demanded-inline emission rules; member re-spell vs named-local
-load-count control; the sqrt idiom map; useless-case-3 switches; compound
-*= and -= operand-order effects; and more).
-- DONE: string pool, rodata, .data byte-exact; ALL 145 function sizes exact;
-  .text emission order identical; vintage PCH landed; cross-version verified
-  (GZLJ01 shows only the same residue). 142/145 functions byte-perfect
-  including relocs; cutRopeTalkStart (the 0x550 giant) is 100%.
-- REMAINING: three functions with mirror-order register-pair allocations —
-  setAnm (4 rows, extsb r0/r3), _execute (5 rows, r28/r29 CSE temp),
-  cutRopeTalkProc (13 rows, r27/r28 + f30/f31). A 14-experiment
-  falsification ledger is in the anchor — do NOT redo those (spelling
-  sweeps, decl orders, parity probes, stripped-static probe, GC/1.3.2r
-  compiler: all dead). Live paths: (1) allocator pattern-learning from ob1;
-  (2) an automated transform-search harness driven by the row-count oracle;
-  (3) USER DECISION PENDING: accept 2b-Equivalent on these 3 fns for PR
-  staging vs hold for SHA. Ask once if unanswered.
-- p2 is held NonMatching in configure.py until the gate passes.
+## 4. Campaign state — POINTER SECTION, not a snapshot
 
-### d_a_npc_ob1 (task #12) — opened, structure mapped
-Anchor: docs/state/ww-staging/decode-drafts/ob1-progress.md (kickoff
-checklist + rounds 1-2). 115 fns, text 0x3DC0, literal-vintage, ONE weak
-text section (the fopNpc next_msgStatus/getMsg/anmAtr trio) — NO cut-family
-.inc needed. Vintage wiring already committed (configure + dolzel_rel_lit
-include). Round 2 holds the full ctor member map (offsets 0x29b..0x770).
-Skeleton: src/d/actor/d_a_npc_ob1.cpp (422 lines, 69 stubs, 5/115 exact)
-plus a bare header. NEXT STEP: populate the header member layout from the
-ctor map, then decode smallest-fns-first (bitCount, clrSpd, setStt, resID
-helpers) with per-fn objdiff. SECONDARY MISSION: at every site where a pair
-of callee-saved registers is assigned, record the target direction vs
-yours — that data may crack the p2 mirror puzzle.
+**(Restructured 2026-08-21 on History/Bridge's audit: this section carried a
+retracted figure, called a finished TU "opened", and had no entry for the
+active campaign. A state snapshot in a layered document goes stale the moment
+work moves; what follows is durable pointers + the one number per TU that
+identifies its era. THE LIVE STATE IS ALWAYS: newest SESSION UPDATE below +
+the TU's own progress doc + `objdiff-cli report generate` run fresh.)**
 
-### Completed earlier this campaign (Matching, SHA-clean)
-d_a_obj_msdan2 (9/9), d_a_obj_msdan (8/9, one 2b park), d_a_obj_msdan_sub2
-(18/18), d_a_obj_hami2 (25/25). Cross-version 9/9 byte-true E/J/P; D44J01
-pending kiosk extraction. Upstream PRs #1173/#1174/#1175 (zeldaret/tww) may
-have CI/maintainer feedback — check them; retroactive-correction rule armed.
+Per-TU anchors (each doc's TAIL is its live end):
+- **d_a_npc_p2** — p2-progress.md. 135/145. Blocked on the MIRROR class
+  (user ruled byte-perfect, no Equivalent staging — see UPDATE 10). The
+  14-experiment falsification ledger + rounds 28-30 (declaration-order lever:
+  real once, NOT general) are required reading before touching mirrors.
+- **d_a_npc_ob1** — ob1-progress.md. 112/115, body-complete, closed record.
+- **d_a_npc_so** — so-progress.md. 177/187, closed record (HIO member fix).
+- **d_a_npc_aj1** — aj1-progress.md. 127/131, closed record. Round 19 = the
+  type-signal bank source (promoted to METHOD-type-signal-bank.md by Foundry).
+- **d_a_npc_ko1** — ko1-progress.md. **FULLY WRITTEN 2026-08-21, 178/203**;
+  residual = 18 pool-position fns (live pool-ORDERING question) + 7 REAL rows
+  (bounded open items + parked shape puzzles). The ACTIVE campaign.
+- **Completed, Matching, SHA-clean:** d_a_obj_msdan2 9/9 · d_a_obj_msdan 8/9
+  (one 2b park) · d_a_obj_msdan_sub2 18/18 · d_a_obj_hami2 25/25.
+  Cross-version E/J/P 9/9 byte-true; **D44J01 measured and MISMATCHED under a
+  genuine compile — 9/12, labels MatchingFor(E,J,P)** (the "pending kiosk
+  extraction" line that stood here was stale; the 12/12 claim was retracted
+  2026-08-18). Upstream PRs #1173/#1174/#1175 — check for feedback.
 
 ## 5. Key files/folders index
 - Charter: C:\Users\xxxxx\Documents\dusklight\docs\DECODER-BRIEFING.md
