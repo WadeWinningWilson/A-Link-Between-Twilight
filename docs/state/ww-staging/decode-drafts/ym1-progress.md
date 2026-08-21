@@ -67,3 +67,20 @@ family, a_btp).
 
 STANDING ORDER integrated: four-version verification acknowledged on the
 board; this lane runs the Matching flip + gate itself at each TU close.
+
+
+## Batches 9-10: getMsg family complete + kari/area pair — 50/124
+
+All seven getMsg fns byte-exact (dispatcher = 6 dense cases under the
+jump-table threshold; YM2_2's last row was lever 4 verbatim). chk_areaIN
+is a HEIGHT VARIANT of ko1's chk_areaIn (adds fabsf(dy) < 300) — assuming
+the sibling without reading cost one round, again. kari_1 written with the
+dead-sqrt idiom; its 12 rows are the by-value-arg stack-slot family
+(flat-before-delta measures worse, so current order is right — same class
+as ko1's movPass/wait_7, PARKED with them).
+
+Remaining ym1 stubs (larger half): talk_1 145 · wait_1/2 109/121 ·
+wait_action1-4 · createInit 172 · bodyCreateHeap 192 · head/itemCreateHeap ·
+CreateHeap · _create 74 · next_msgStatus 172 · _execute 174 · _draw 128 ·
+lookBack 90 · turn_1 · eventOrder done · privateCut · endEvent done ·
+init_YM* family · chngAnmTag/ctrlAnmTag/ctrlAnmAtr · shadowDraw · demo.
