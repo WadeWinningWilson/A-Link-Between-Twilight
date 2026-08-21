@@ -1324,3 +1324,45 @@ only the dagger/sheath pair; declaring sheath before dagger); the `BOOL` vs `int
 return type; `mType` cached in a local vs re-read; and whether the two static
 tables at the top participate in the tie-break. **A/B harness is written and
 parameterised — adding a variant is one JSON entry.**
+
+
+## Round 29 (2026-08-21): **THE MIRROR CLASS IS DECLARATION ORDER — 5 of the 74 rows closed**
+
+`_createHeap` 14 rows -> **9**. WWDP `2ffa982f`. p2 fuzzy 99.9505% -> 99.9535%,
+exact 135/145, `exact_delta` reports no change to the name set.
+
+**THE LEVER, and it is the register analogue of the known cXyz reverse-slot rule:
+WHEN TWO LOCALS' LIVE RANGES OVERLAP, MWCC COLOURS THEM BY DECLARATION ORDER.**
+Declaring `sheathModelData` before `daggerModelData` flips r26/r27 to match the
+target. Their ranges overlap because of the source's own duplicated assert
+(`JUT_ASSERT(0xA2E, daggerModelData != 0)` names the DAGGER while the sheath is
+already loaded), which keeps the dagger live past the point the sheath arrives.
+
+**ISOLATED BY SWEEP, NOT BY ARGUMENT — and the negative half is the useful half:**
+- **Eight different declaration orders ALL measured 9**, and every one of them
+  put sheath before dagger. The earlier dagger-before-sheath hoist measured 14.
+  **So only the relative order of the OVERLAPPING PAIR matters; where the other
+  three locals sit is free.** Hoisting per se does nothing.
+- **Variable reuse is dead** (round 28): five reuse shapes measured 18/15/18/14/15.
+
+**WHY THIS MATTERS BEYOND ONE FUNCTION: the 74-row mirror class was the whole
+basis of the Equivalent argument — "identical shape, different registers" reads
+as compiler noise nobody can steer. It is steerable.** The user refused
+Equivalent staging and held out for byte-perfect; this is the first evidence that
+byte-perfect is reachable rather than a wait for upstream policy. **Mirror count
+74 -> 69.**
+
+**THE RECIPE for the remaining 69, applicable to any mirror function:**
+1. Confirm row counts match on both sides (lever 7) — else it is an inserted
+   instruction, not colouring.
+2. Read the target asm and write down which value lives in which register.
+3. Find the point where two ranges are live simultaneously — usually a test or
+   an argument that keeps an earlier value alive past a later load.
+4. Reverse those two declarations. Everything else is free.
+
+**STILL OPEN on `_createHeap` (9 rows, two groups):** `headModelData` wants r27
+and has no visible overlap partner to reorder against (rows 75/92/114); and
+`bookModelData` vs the **unnamed** `new mDoExt_McaMorf` temporary (rows
+194/210/228/230/237/238) — the temp has no declaration to reorder, so the next
+probe is giving it a named local and moving that name around. The A/B harness
+(`scratchpad/ab.py` + a JSON variant list) makes each new idea one entry.
