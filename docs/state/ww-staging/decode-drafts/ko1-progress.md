@@ -480,3 +480,20 @@ the shape — same park. These two plus chg_anmAtr's unfolded branch form a
 family: 2-row shape puzzles where every obvious spelling is falsified;
 worth one dedicated session with a transform-search harness, not more
 hand probes.
+
+
+### ko_movPass/wait_7 slot question: FIFTH falsification, formally parked
+
+The 10-row diff is a clean two-slot swap: the by-value `current.pos` arg temp
+(chkPointPass) wants the HIGH slot 0x24 and `flat` the LOW 0xc; ours invert.
+Frames match. Added to the handoff's four falsified approaches: **block-scoping
+the flat/delta cluster is NEUTRAL** — named locals hoist ahead of call temps
+regardless of scope depth. The target allocates the CALL TEMP first, which no
+source spelling tried so far reproduces.
+
+**PARKED into the transform-search family** with chg_anmAtr (unfolded branch),
+setAnm_anm/set_balloonAnm_anm (live-value conversion), get_crsActorID (GetAc
+materialization), and ko_nMove's residue (FPR dest tie-break). Six functions,
+~45 rows, every hand-probe ledgered. The next attack on any of them should be
+the automated transform-search harness the p2 anchor already names as a live
+path — one engine, six targets.
