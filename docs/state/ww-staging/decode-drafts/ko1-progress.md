@@ -262,7 +262,12 @@ ones rather than skipping to the biggest.
 `searchByID(field_0x7b4)` + `JUT_ASSERT` prologue before the shared opening.
 
 
-## setStt() - structure DECODED, body NOT yet written (2026-08-18)
+## setStt() - WRITTEN 2026-08-18, 395 rows -> 17 (all pool position)
+
+**Status: done, LOGIC-EXACT.** Committed WWDP `8bb915d7`. The decode below is
+kept verbatim because it was correct; what it did NOT cover is recorded at the
+end of this section under RESOLVED WHEN WRITTEN. Original heading:
+'structure DECODED, body NOT yet written'.
 
 The last function in ko1 above 100 rows (395). `tools/foundry/jump_table.py`
 recovered its whole shape in one pass, so whoever writes it does not re-derive
@@ -312,3 +317,42 @@ the heuristic is documented as a heuristic for exactly this case.
 Starting point: write the 14 bodies in the listed order, build, let objdiff place
 the rest. The fall-through groups are already correct - read off shared labels,
 not guessed.
+
+
+### setStt RESOLVED WHEN WRITTEN (2026-08-18) - three things the decode missed
+
+1. **THE SHARED TAILS ARE STRUCTURAL - `goto`, not a compiler tail-merge.**
+   Three tails are reached both by fall-in from a later case and by a forward
+   branch from an earlier one (`.L_00004908` from the 4/0xB group,
+   `.L_000049FC` from the 6/0xD/0x17 group, `.L_00004808` from case 7).
+   Writing the statements out in full at both sites measured **66
+   DIFF_INSERT rows: MWCC does not cross-jump here**, so identical duplicated
+   tails stay duplicated. Rewiring them as three labels (`set_prm_1/2/3`)
+   reached by `goto` took the function from 98 rows to 17. `goto` has
+   precedent in 43 files of this repo. **Generalisable: a forward branch into
+   a later case's tail is a source-level `goto`, not an optimisation - test it
+   by duplicating once and counting inserts.**
+
+2. **EVERY `l_HIO` REFERENCE IS +0x10 FROM THE DISPLACEMENT.**
+   `children[]` is at 0x0C in `daNpc_Ko1_HIO_c` and `mPrm` at 0x04 within a
+   child, so `lfs 0x34(r3)` means `mPrm.field_0x24`. I took the mapping from a
+   matching sibling line (`walk_1` uses `mPrm.field_0x50`) and read it as
+   identity - the sibling is consistent with +0x10, it just did not disprove
+   identity. Cost 7 rows. **Derive the offset from the header arithmetic, not
+   from a sibling call site that happens to fit.**
+
+3. **THE PLAYER IS INDEX 1.** `mPlayerInfo` has stride 8, so 0x5b44/0x5b4c/
+   0x5b54 are `dComIfGp_getPlayer(0/1/2)`. The target loads 0x5b4c ->
+   `getPlayer(1)`, which `d_a_npc_so_cut.inc` already uses ten times. I
+   defaulted to 0 because so.cpp's nearby calls are 0 and 2.
+
+**Remaining 17 rows are pool/stringBase displacement only** (`pool_position.py`
+agrees). Literal ORDER is right - 90/180/-4.0/-3.0/-1.6 sit at a uniform
+-0xD8 shift - and the two early literals that appear swapped (0.0f vs -4.5f)
+are owned by earlier stubs: parse order @4296 (0.0f) before @4483 (-4.5f)
+matches the target, so they close as the TU fills in. **Re-check at TU
+completion; a survivor there is a real pool-ordering defect.**
+
+**CAUTION on the instrument:** `pool_position.py` runs `objdiff report
+generate -p .` and prints `0 LOGIC-EXACT, 0 REAL` from the wrong directory -
+a clean-looking all-clear. Run it from `D:/XXXXXXX/WWDP`.
