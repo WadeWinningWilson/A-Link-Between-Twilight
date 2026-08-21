@@ -1418,3 +1418,24 @@ compares against the measured baseline and labels worse/equal explicitly.
 f31/f30 pair on `swingA` says FPR colouring mirrors too, and floats have no
 `mr.`-style test to anchor them — so the discriminator may be evaluation ORDER
 inside the expressions rather than declaration. Untested.
+
+
+### Round 30 addendum: second probe set on cutRopeTalkProc — four more falsified
+
+Register map first (the useful part): the disagreement is NOT a pair swap. Long
+webs match on both sides (region-1 swingA=f29, recompute swingA=f31/swingB=f30,
+rows 164/166 identical). The mirrors are two long-vs-short TIE-BREAKS: `rope`
+r27(tgt)/r28(mine) spanning rows 17->460 vs two short GPR webs (a spill reload at
+0x3c(r1) + `curY`), and region-1 `swingB` f31(tgt)/f30(mine) vs nothing visible.
+Flipping `rope` alone would close 7 of the 13 rows.
+
+Probes, all measured and dead: rotZ-declared-before-rotX 16 (worse) ·
+curY inlined 13 rows but match% DROPS to 99.58 (named local is right) ·
+fresh names at the recompute 20 (worse) · cosB hoisted 55 (much worse — it
+feeds the second addCalc's arg expressions; moving it splits CSE).
+
+Running total on the mirror class: 1 win (_createHeap, declaration order of an
+overlapping pair), 13 falsified probes across two functions. The class is
+resistant to local shape changes; the tie-break driver is something with wider
+scope (web colouring order). Parked here — the next attack should come with a
+new hypothesis class, not more of these.
