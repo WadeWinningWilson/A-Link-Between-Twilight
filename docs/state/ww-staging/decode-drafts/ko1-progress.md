@@ -439,3 +439,29 @@ prm table, values decoded from .obj bytes) landed the same batch.
 exact_delta earned its keep AGAIN this batch: a flat 177 hid nodeKo1Control
 and setMtx regressing to pool-shift while set_action and the ctor went green
 — equal-lost/equal-gained, invisible in the total, named by the tool.
+
+
+## Post-completion rounds (2026-08-21 late): section placement + ko_nMove
+
+**THE SESSION'S BIGGEST SINGLE LEVER — CONSTNESS IS SECTION PLACEMENT** (WWDP
+`b7d96139`): static const -> .rodata, static non-const -> .data. The donor
+keeps the prm table MUTABLE and the bck resID tables CONST; mine were both
+backwards. The const prm table sat at the FRONT of .rodata shifting 18
+functions' pool displacements +0xB0; the non-const bck tables hid in .data
+where the 0.09% data match shows nothing. **Diagnosis path: map the split
+asm's .obj lines to their TRUE sections (bare `.rodata`/`.data` directives —
+a `.section`-only grep MISSES them and misled me once), then diff against the
+built .o's symtab.** Result: 180/203, pool residuals 16 fns with smaller
+rows, .rodata and .data symbol order now mirror the target.
+
+**ko_nMove 28 -> 23** (`69b621be`): the recorded open item was right — a
+per-branch `f32 spdF = speedF;` forces the load before the l_HIO address.
+FALSIFIED on the residue (do not re-run): prm reference local (29 — early
+address materialization breaks chain CSE), named products + if (34), named
+products + ternary (31). Residue = base-vs-index evaluation order + the
+product's dest register (f1 vs f0, one extra fmr) — the volatile-FPR
+analogue of the mirror tie-break. PARKED.
+
+Remaining REAL: ko_nMove 23 · movPass/wait_7 10 each · get_crsActorID 6 ·
+chg_anmAtr 2 · setAnm_anm/set_balloonAnm_anm 2 each. Everything else is
+pool-position (16 fns) converging with TU state.
