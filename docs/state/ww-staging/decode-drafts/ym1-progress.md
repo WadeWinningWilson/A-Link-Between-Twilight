@@ -34,3 +34,19 @@ DECOMP ROOT only.
 
 Next actions: ctor member map from `__ct` asm -> header layout confirmation,
 then smallest-fns-first with per-fn objdiff.
+
+
+## Batches 1-5 (same session as kickoff): 8 -> 33/124, every written function byte-exact
+
+25 functions written, zero parked except chngAnmAtr (2 rows, the
+unfolded-branch family's second witness - ble-over-b resists 4 shapes).
+Levers re-confirmed in the new TU: ret-variable vs bool-normalize (x2),
+truncation-shape/lever-6 both directions (chk_BlackPig bool retype flips its
+CALLER), isEventBit ternary = subic/subfe + base, the && empty-branch beqlr
+tell, ko1's set_action form verbatim (9/0 teardown states identical).
+
+NEXT: the anm cluster as one unit - anm_prm_c struct (0x10 stride: s8 id,
+u8 btpNo at +1, three f32 at 4/8/C presumed), the a_anm_prm_tbl statics
+($4537 setAnm on m8AD, $4575 setAnm_ATR on m8A8 - .data, NON-const per the
+section-placement lever), then setAnm_anm/init_texPttrnAnm/play_texPttrnAnm
+and the wait/talk action ladder above it.
