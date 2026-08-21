@@ -284,6 +284,7 @@ set(DOLZEL_FILES
         src/d/d_albw_lockout.cpp
         src/d/d_albw_enemy_rupee.cpp
         src/d/d_albw_shield.cpp
+        src/d/d_albw_parry_master.cpp
         src/d/d_albw_potion.cpp
         src/d/d_albw_boss.cpp
         src/d/d_albw_shade_boss.cpp

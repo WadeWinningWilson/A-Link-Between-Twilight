@@ -15,6 +15,7 @@
 #include "dusk/achievements.h"
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
 #include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_boss.h"
 #endif
@@ -239,6 +240,11 @@ int daAlink_c::setDamagePoint(int i_dmgAmount, BOOL i_checkZoraMag, BOOL i_setDm
         }
 #endif
         dComIfGp_setItemLifeCount(-i_dmgAmount, 0);
+#if TARGET_PC
+        if (i_dmgAmount > 0) {
+            dParryMaster_onHpLoss(i_dmgAmount);
+        }
+#endif
     }
 
 #if TARGET_PC
@@ -726,12 +732,16 @@ BOOL daAlink_c::checkDamageAction() {
 #if TARGET_PC
                     if (dShield_onShieldHit(this, at_spl, tghit_ac)) {
                         dShield_playParrySuccessFeedback(this, var_r29->GetTgHitPosP());
+                        dParryMaster_onPerfectParry();
                         return 0;
                     }
                     if (dShield_onFailedGuardBreakBlock(this, at_spl, tghit_ac)) {
                         return 1;
                     }
                     dShield_onFailedGuardBlock(tghit_ac);
+                    if (tghit_gobj != NULL) {
+                        dParryMaster_onFailedBlock(this, tghit_gobj->GetAtAtp());
+                    }
 #endif
 #if TARGET_PC
                     if (dShield_isDurabilityEnabled() && dShield_onBlockHit(this, at_spl, false, tghit_ac)) {

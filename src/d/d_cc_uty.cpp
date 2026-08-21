@@ -29,6 +29,7 @@
 #include "d/d_albw_boss.h"
 #include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
 #endif
 
 static int plCutLRC[58] = {
@@ -637,6 +638,13 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         if (i_AtInfo->mAttackPower != 0) {
             i_enemy->health -= i_AtInfo->mAttackPower;
 #if TARGET_PC
+            if (i_AtInfo->mpActor != NULL &&
+                (fopAcM_GetGroup(i_AtInfo->mpActor) == fopAc_PLAYER_e ||
+                 (i_AtInfo->mpCollider != NULL &&
+                  i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK))))
+            {
+                dParryMaster_onDealtDamage();
+            }
             if (fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
                 dAlbwEnemyRupees_tryKillAfterDamage(i_enemy, i_AtInfo->mAttackPower);
                 if (dMeter2_isALBWLocked() && i_AtInfo->mpActor != NULL &&

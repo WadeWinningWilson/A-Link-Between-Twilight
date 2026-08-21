@@ -248,7 +248,9 @@ void reset_for_speedrun_mode() {
     getSettings().game.hpMultMidBoss.setSpeedrunValue(1);
     getSettings().game.hpMultBoss.setSpeedrunValue(1);
     getSettings().game.hpMultFinalBoss.setSpeedrunValue(1);
+    getSettings().game.regionDamage.setSpeedrunValue(false);
     getSettings().game.regionMult.setSpeedrunValue(false);
+    getSettings().game.parryMaster.setSpeedrunValue(false);
     getSettings().game.instantDeath.setSpeedrunValue(false);
     getSettings().game.noHeartDrops.setSpeedrunValue(false);
     getSettings().game.autoSave.setSpeedrunValue(false);
@@ -1369,10 +1371,15 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "Independent of enemy category.");
             });
         // ============================================
-        // NEW CODE — ALBW Port (Region Multipliers)
-        // Master + Damage / Health / Rupees axes. Table is SaveTbl v1
-        // (room-level F_SP121 later).
+        // NEW CODE — ALBW Port (Region Damage + Region Multipliers)
+        // Region Damage is standalone (incoming to Link). Region Multipliers
+        // master gates Health / Rupees only. Same province/dungeon table.
         // ============================================
+        addSpeedrunDisabledOption("Region Damage", getSettings().game.regionDamage,
+            "Scales incoming damage to Link by province/dungeon "
+            "(Ordon/Faron 1.00 → … → Hyrule Castle 3.15; Field rooms use "
+            "Faron/Eldin/Lanayru pockets). Stacks with Damage Multiplier and "
+            "Outfit Stats. Independent of Region Multipliers (enemy HP / rupees).");
         leftPane.register_control(
             leftPane.add_select_button({
                 .key = "Region Multipliers",
@@ -1382,13 +1389,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             return "Off";
                         }
                         Rml::String axes;
-                        if (getSettings().game.regionMultDamage.getValue()) {
-                            axes += "Dmg";
-                        }
                         if (getSettings().game.regionMultHealth.getValue()) {
-                            if (!axes.empty()) {
-                                axes += "+";
-                            }
                             axes += "HP";
                         }
                         if (getSettings().game.regionMultRupees.getValue()) {
@@ -1407,8 +1408,6 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     [] {
                         return getSettings().game.regionMult.getValue() !=
                                    getSettings().game.regionMult.getDefaultValue() ||
-                               getSettings().game.regionMultDamage.getValue() !=
-                                   getSettings().game.regionMultDamage.getDefaultValue() ||
                                getSettings().game.regionMultHealth.getValue() !=
                                    getSettings().game.regionMultHealth.getDefaultValue() ||
                                getSettings().game.regionMultRupees.getValue() !=
@@ -1420,10 +1419,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 pane.clear();
                 pane.add_section("Region Multipliers");
                 pane.add_text(
-                    "Scales difficulty by province/dungeon from a fixed table "
-                    "(Ordon/Faron 1.00 → … → Hyrule Castle 3.15). Hyrule Field "
-                    "rooms use province pockets (Faron 1.05 / Eldin 1.25 / "
-                    "Lanayru 1.50). Each axis can be toggled independently while "
+                    "Scales enemy HP and enemy-death rupees by the same province/dungeon "
+                    "table as Region Damage. Incoming damage to Link is the separate "
+                    "Region Damage setting. Each axis can be toggled independently while "
                     "the master is On.");
 
                 auto addOnOff = [&pane](const Rml::String& label, ConfigVar<bool>& value) {
@@ -1457,12 +1455,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 };
 
                 addOnOff("Master", getSettings().game.regionMult);
-                addOnOff("Damage (to Link)", getSettings().game.regionMultDamage);
                 addOnOff("Health (enemy HP)", getSettings().game.regionMultHealth);
                 addOnOff("Rupees (enemy-death payouts)", getSettings().game.regionMultRupees);
                 pane.add_rml(
-                    "<br/>Damage stacks with Damage Multiplier and Outfit Stats. "
-                    "Health stacks on category Health Multiplier (newly spawned enemies). "
+                    "<br/>Health stacks on category Health Multiplier (newly spawned enemies). "
                     "Rupees scale Enemy Death Rupees grants only — shops unchanged.");
             });
         // ============================================
@@ -1484,6 +1480,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         addOption("Shield Parry & Bash Charges", getSettings().game.shieldParryCombat,
             "Perfect-guard timing earns bash charges and ALBW meter. Failed blocks cost meter "
             "and charges. Off uses traditional TP guard (no parry economy).");
+        addSpeedrunDisabledOption("Parry Master", getSettings().game.parryMaster,
+            "Failed blocks chip HP (15% of scaled damage) and tax ALBW from base meter capacity; "
+            "perfect parries and landed hits reclaim recent chip. Guard-break shatter is exempt. "
+            "Requires Shield Parry & Bash Charges. Speedrun forces Off.");
         addOption("Shield Durability", getSettings().game.shieldDurability,
             "Shield HP by tier; failed blocks drain it. Hylian repairs on parry and takes more "
             "damage per hit. Break at 0 uses guard break (replaces vanilla slip counter).");

@@ -2,6 +2,8 @@
 
 Design + **completed research** for manual shielding, shield durability, parry rewards, and ALBW meter integration.
 
+**Parry Master** (difficulty setting `game.parryMaster`): normal/failed blocks take 15% of **post-scale** damage; perfect = 0; reclaim queue + base-meter tax. Spec + HUD phase 2: [region-damage-difficulty.md](region-damage-difficulty.md) §4. **Core shipped**; LoP faded-heart HUD deferred.
+
 **Implemented:** Phase 1 manual shielding, Phase 3 ALBW recovery pause while guarding. **Next:** Phase 4 parry + bash charge economy (single phase).
 
 | Source | What we take from it |

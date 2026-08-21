@@ -7,6 +7,7 @@
 
 #include "d/dolzel.h" // IWYU pragma: keep
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
 #include "d/d_albw_combat.h"
 #include "d/d_albw_hp_mult.h"
 #include "d/d_albw_lockout.h"
@@ -47,6 +48,8 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_set>
+
+static u8 s_fyrusAttackPerfectParry = 0;
 
 namespace {
 
@@ -1120,12 +1123,28 @@ void dShield_resetSession() {
     sBashAlbwGranted = false;
     sBashNextHitBoostPending = false;
     sShieldHudLingerFrames = 0;
+    s_fyrusAttackPerfectParry = 0;
+    dParryMaster_resetSession();
+}
+
+void dShield_noteFyrusAttackParry(bool i_perfect) {
+    if (i_perfect) {
+        s_fyrusAttackPerfectParry = 1;
+    }
+}
+
+bool dShield_takeFyrusAttackPerfectParry() {
+    const bool perfect = s_fyrusAttackPerfectParry != 0;
+    s_fyrusAttackPerfectParry = 0;
+    return perfect;
 }
 
 void dShield_updateGuardTracking(daAlink_c* i_link) {
     if (i_link == NULL) {
         return;
     }
+
+    dParryMaster_update();
 
     if (dShield_isDurabilityEnabled()) {
         syncDurabilityToEquip(i_link);
@@ -1222,6 +1241,10 @@ bool dShield_onShieldHit(daAlink_c* i_link, int i_atSpl, fopAc_ac_c* i_attacker)
 #endif
 
     repairDurabilityOnParry(i_link);
+
+    if (i_attacker != NULL && fopAcM_GetName(i_attacker) == fpcNm_E_FM_e) {
+        dShield_noteFyrusAttackParry(true);
+    }
 
     return true;
 }

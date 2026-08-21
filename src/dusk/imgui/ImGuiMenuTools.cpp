@@ -495,9 +495,10 @@ namespace dusk {
                 fmt::format("Category: {}\n", lockonHpCategoryName(category)));
             ImGuiStringViewText(fmt::format("True HP mult: {}x\n", trueHpMult));
             ImGuiStringViewText(fmt::format(
-                "Region mult: {:.2f}x (dmg {:.2f} / hp {:.2f} / rup {:.2f})\n",
+                "Region mult: {:.2f}x (dmg {:.2f} / hp {:.2f} / rup {:.2f}×rd {:.0f})\n",
                 dAlbwRegionMult_getTableMult(), dAlbwRegionMult_getDamageMult(),
-                dAlbwRegionMult_getHealthMult(), dAlbwRegionMult_getRupeeMult()));
+                dAlbwRegionMult_getHealthMult(), dAlbwRegionMult_getRupeeMult(),
+                dAlbwRegionMult_getRegionDamageRupeeMult()));
             ImGuiStringViewText(
                 fmt::format("Battle targets nearby: {}\n", battleTargets));
 

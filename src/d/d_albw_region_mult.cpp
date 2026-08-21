@@ -1,6 +1,7 @@
 // ============================================
 // NEW CODE — ALBW Port (Region Multipliers)
-// Province/dungeon difficulty table + Damage/Health/Rupees axes.
+// Province/dungeon difficulty table. Region Damage is standalone;
+// master + Health/Rupees axes share the same lookup.
 // ============================================
 #include "d/d_albw_region_mult.h"
 
@@ -99,7 +100,7 @@ f32 tableMultForStageRoom(const char* stage, int roomNo) {
     // Sacred Grove stage — Lost Woods early vs Grove / ToT Past.
     if (strcmp(stage, "F_SP117") == 0) {
         if (roomNo == 3) {
-            return 1.00f;  // Lost Woods
+            return 2.25f;  // Lost Woods (aligned with Grove / ToT Past)
         }
         if (roomNo == 1 || roomNo == 2) {
             return 2.25f;  // Sacred Grove / Temple of Time (Past)
@@ -202,8 +203,8 @@ f32 dAlbwRegionMult_getTableMult() {
 }
 
 f32 dAlbwRegionMult_getDamageMult() {
-    if (!dAlbwRegionMult_isEnabled() ||
-        !dusk::getSettings().game.regionMultDamage.getValue()) {
+    // Standalone setting — does not require Region Multipliers master.
+    if (!dusk::getSettings().game.regionDamage.getValue()) {
         return 1.0f;
     }
     return resolveTableMult();
@@ -225,6 +226,14 @@ f32 dAlbwRegionMult_getRupeeMult() {
     return resolveTableMult();
 }
 
+// Region Damage On → flat ×3 on enemy-death / fight-victory grants (independent of RM master).
+f32 dAlbwRegionMult_getRegionDamageRupeeMult() {
+    if (!dusk::getSettings().game.regionDamage.getValue()) {
+        return 1.0f;
+    }
+    return 3.0f;
+}
+
 s16 dAlbwRegionMult_scaleHp(s16 hp) {
     if (hp <= 1) {
         return hp;
@@ -244,7 +253,10 @@ s16 dAlbwRegionMult_scaleHp(s16 hp) {
 }
 
 u16 dAlbwRegionMult_scaleRupees(u16 amount) {
-    return scaleAmountU16(amount, dAlbwRegionMult_getRupeeMult());
+    // finalGrant ≈ base × (RD ? 3 : 1) × (RM rupees ? table : 1)
+    const f32 mult =
+        dAlbwRegionMult_getRupeeMult() * dAlbwRegionMult_getRegionDamageRupeeMult();
+    return scaleAmountU16(amount, mult);
 }
 
 #endif  // TARGET_PC

@@ -916,6 +916,8 @@ void dMeter2_addALBWFraction(int numerator, int denominator);
 // Refill a fraction of base capacity (sOilBaseMax), not expanded max — lockout perk restores.
 void dMeter2_addALBWBaseFraction(int numerator, int denominator);
 void dMeter2_subALBWFraction(int numerator, int denominator);
+// Drain a fixed ALBW amount (Parry Master base-capacity tax, etc.).
+void dMeter2_drainALBWAmount(int amount);
 int dMeter2_getALBWMeterValue();
 int dMeter2_getALBWMaxValue();
 int dMeter2_getALBWNormalRecoveryRate();

@@ -108,7 +108,8 @@ era: era-independent
 | Boss fights | [state/boss-fights.md](state/boss-fights.md) | [boss-fights-handoff.md](boss-fights-handoff.md), [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md), [Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md) |
 | Drive / FPS oracle | [state/drive-fps.md](state/drive-fps.md) | [performance-handoff.md](performance-handoff.md), [build-fps-guidelines.md](build-fps-guidelines.md), [future-performance-leaning.md](future-performance-leaning.md) |
 | Build / FPS review | [state/drive-fps.md](state/drive-fps.md) | [build-fps-guidelines.md](build-fps-guidelines.md) (has its own doc map) |
-| Shield / parry | — | [shield-combat.md](shield-combat.md) |
+| Region / damage difficulty | [state/region-damage-difficulty.md](state/region-damage-difficulty.md) | [region-damage-difficulty.md](region-damage-difficulty.md) — **A+B+E done**; next **C→D**; F scalers; G research / E-HUD |
+| Shield / parry | — | [shield-combat.md](shield-combat.md); Parry Master → [region-damage-difficulty.md](region-damage-difficulty.md) §4 |
 | ALBW port overview | — | [albw-port.md](albw-port.md) |
 | Cut Actors / Demo Restore | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) | [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md), [TPHistory.md](TPHistory.md) §7; cutscene/layer RE: [WW Linked/noclip-fast-track.md](WW%20Linked/noclip-fast-track.md) (elevated identity-match method) |
 | Level Editor (Phase 1) | [state/level-editor.md](state/level-editor.md) | [level-editor-phase1.md](level-editor-phase1.md), [Interconnected Chats/Level-Editor-Cursor-Claude.md](Interconnected%20Chats/Level-Editor-Cursor-Claude.md) |

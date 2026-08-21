@@ -7,6 +7,7 @@
 
 #if TARGET_PC
 
+#include "d/d_albw_shield.h"
 #include "d/d_com_inf_game.h"
 
 namespace {
@@ -102,6 +103,9 @@ void dAlbwPotion_consumeSoulboundDrink(int i_selItemIdx) {
     if (dComIfGs_getBottleNum(kAlbwPotionSoulboundBottleIdx) > 0) {
         dComIfGs_addBottleNum(kAlbwPotionSoulboundBottleIdx, -1);
     }
+
+    // Soulbound drink → +20% equipped shield max durability (when durability On).
+    dShield_repairDurabilityFraction(1, 5);
 
     sync_select_items_for_slot(slot);
 }

@@ -48,6 +48,7 @@ UserSettings g_userSettings = {
         .noSwordRecoil {"game.noSwordRecoil", false},
         .manualShielding {"game.manualShielding", false},
         .shieldParryCombat {"game.shieldParryCombat", true},
+        .parryMaster {"game.parryMaster", false},
         .hiddenSkillRework {"game.hiddenSkillRework", true},
         .focusedArts {"game.focusedArts", false},
         .focusedArtsTest {"game.focusedArtsTest", false},
@@ -112,8 +113,8 @@ UserSettings g_userSettings = {
         .showWardrobeRecoveryDebug {"game.showWardrobeRecoveryDebug", false},
         .albwMagicArmorRentableDebug {"game.albwMagicArmorRentableDebug", false},
         .outfitStats {"game.outfitStats", false},
+        .regionDamage {"game.regionDamage", false},
         .regionMult {"game.regionMult", false},
-        .regionMultDamage {"game.regionMultDamage", true},
         .regionMultHealth {"game.regionMultHealth", true},
         .regionMultRupees {"game.regionMultRupees", true},
         .showDarknutBashDebug {"game.showDarknutBashDebug", false},
@@ -363,6 +364,7 @@ void registerSettings() {
     Register(g_userSettings.game.noSwordRecoil);
     Register(g_userSettings.game.manualShielding);
     Register(g_userSettings.game.shieldParryCombat);
+    Register(g_userSettings.game.parryMaster);
     Register(g_userSettings.game.hiddenSkillRework);
     Register(g_userSettings.game.focusedArts);
     Register(g_userSettings.game.focusedArtsTest);
@@ -423,8 +425,8 @@ void registerSettings() {
     Register(g_userSettings.game.showWardrobeRecoveryDebug);
     Register(g_userSettings.game.albwMagicArmorRentableDebug);
     Register(g_userSettings.game.outfitStats);
+    Register(g_userSettings.game.regionDamage);
     Register(g_userSettings.game.regionMult);
-    Register(g_userSettings.game.regionMultDamage);
     Register(g_userSettings.game.regionMultHealth);
     Register(g_userSettings.game.regionMultRupees);
     Register(g_userSettings.game.showDarknutBashDebug);

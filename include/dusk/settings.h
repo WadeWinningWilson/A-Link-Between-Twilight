@@ -298,6 +298,8 @@ struct UserSettings {
         ConfigVar<bool> manualShielding;
         // Phase 4: LoP-style parry, bash charges, ALBW rewards/penalties. Off = vanilla guard slip only.
         ConfigVar<bool> shieldParryCombat;
+        // Parry Master: fail chip HP + reclaim queue + base-meter tax. Requires Shield Parry.
+        ConfigVar<bool> parryMaster;
         // Helm punish flow, hidden-skill dispatch, ALBW meter costs, Jump Strike charge gate.
         // Always on (ALBW core); retained for save compat — not shown in settings UI.
         ConfigVar<bool> hiddenSkillRework;
@@ -474,9 +476,11 @@ struct UserSettings {
         ConfigVar<bool> albwMagicArmorRentableDebug;
         // Cloth damage mults, swim buffs, Sumo offensive kit — see docs/Outfit Stats.md.
         ConfigVar<bool> outfitStats;
-        // Region Multipliers — province/dungeon table; Damage/Health/Rupees axes.
+        // Region Damage — standalone; same province/dungeon table as Region Multipliers
+        // (incoming damage to Link). Independent of the Health/Rupees master.
+        ConfigVar<bool> regionDamage;
+        // Region Multipliers — master + Health / Rupees axes (same table).
         ConfigVar<bool> regionMult;
-        ConfigVar<bool> regionMultDamage;
         ConfigVar<bool> regionMultHealth;
         ConfigVar<bool> regionMultRupees;
         // File log of Darknut ALBW bash/guard-break state (Documents/dusklight/albw_darknut_debug.txt).

@@ -32,6 +32,7 @@
 #include "d/d_albw_rental.h"
 #include "d/d_albw_wardrobe.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
 #include "d/d_albw_sumo_test.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_flurry_rush.h"
@@ -279,6 +280,32 @@ static void albwRefreshLockoutState(bool i_playDecSound) {
         sALBWMeter = sOilMaxVar;
     }
 }
+
+#if TARGET_PC
+#include "d/d_save.h"
+#include "d/d_item_data.h"
+
+// Big quiver 75% / Giant 50%. Bomb: base 100%, Giant bag (×2 max) 50%.
+static int scaleAlbwQuiverDrain(int base) {
+    const u8 arrowMax = dComIfGs_getArrowMax();
+    if (arrowMax >= GIANT_QUIVER_MAX) {
+        return (base * 50) / 100;
+    }
+    if (arrowMax >= BIG_QUIVER_MAX) {
+        return (base * 75) / 100;
+    }
+    return base;
+}
+
+static int scaleAlbwBombDrain(int base) {
+    // TP only has base bag vs Giant (LV2 first-bit doubles max via getBombMax).
+    const u8 bombMax = dComIfGs_getBombMax(dItemNo_NORMAL_BOMB_e);
+    if (bombMax >= 60) {
+        return (base * 50) / 100;
+    }
+    return base;
+}
+#endif
 
 // Max repayable overspend before lockout (one half-base / HS-sized spend).
 static constexpr int kALBWMaxDebt = -5450;
@@ -705,6 +732,13 @@ void dMeter2_addALBWBaseFraction(int numerator, int denominator) {
 
 void dMeter2_subALBWFraction(int numerator, int denominator) {
     int amount = (sOilMaxVar * numerator) / denominator;
+    albwDrainMeter(amount, std::chrono::steady_clock::now());
+}
+
+void dMeter2_drainALBWAmount(int amount) {
+    if (amount <= 0) {
+        return;
+    }
     albwDrainMeter(amount, std::chrono::steady_clock::now());
 }
 
@@ -1842,7 +1876,8 @@ void dMeter2_c::moveLife() {
             }
         }
 
-        s16 new_life = dComIfGs_getLife() + dComIfGp_getItemLifeCount();
+        s16 old_life = dComIfGs_getLife();
+        s16 new_life = old_life + dComIfGp_getItemLifeCount();
         if (new_life > life_count) {
             new_life = life_count;
         } else if (new_life < 0) {
@@ -1851,6 +1886,16 @@ void dMeter2_c::moveLife() {
 
         dComIfGs_setLife((u8)new_life);
         dComIfGp_clearItemLifeCount();
+#if TARGET_PC
+        {
+            const int delta = static_cast<int>(new_life) - static_cast<int>(old_life);
+            if (delta > 0) {
+                dParryMaster_onHeal(delta);
+            } else if (new_life == 0) {
+                dParryMaster_clearQueue();
+            }
+        }
+#endif
 
         if (mNowLifeGauge == dComIfGs_getLife() && mLifeCountType != 0) {
             mLifeCountType = 0;
@@ -2133,13 +2178,16 @@ void dMeter2_c::moveKantera() {
         // ============================================
 
         if (sBombArrowMade) {
-            albwDrainMeter(kALBWBombArrowDrain, sNow);
+            // Comment on kALBWBombArrowDrain: 5450 arrow + 2725 bomb.
+            const int bombArrowCost =
+                scaleAlbwQuiverDrain(5450) + scaleAlbwBombDrain(2725);
+            albwDrainMeter(bombArrowCost, sNow);
             sBombArrowMade = false;
         } else if (sArrowMade) {
-            albwDrainMeter(5450, sNow);
+            albwDrainMeter(scaleAlbwQuiverDrain(5450), sNow);
             sArrowMade = false;
         } else if (sBombAmmo) {
-            albwDrainMeter(5450, sNow);
+            albwDrainMeter(scaleAlbwBombDrain(5450), sNow);
             sBombAmmo = false;
         } else if (sBoomThrow) {
             if (sALBWLocked) {
