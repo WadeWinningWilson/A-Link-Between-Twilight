@@ -6,13 +6,19 @@ Baseline: **8/124 exact, fuzzy 2.49%** (exact_delta snapshot written at open).
 81 `/* Nonmatching */` stubs. Queue position: after ko1 (fully written,
 180/203); before yw1 (8/119, likely sibling).
 
-**FIRST STRUCTURAL FACT, and it changes the template strategy:
-`daNpc_Ym1_c : public fopAc_ac_c` — NOT fopNpc_npc_c.** The ob1/ko1/so/aj1
-playbook (fopNpc member map at 0x290-0x6BC, m_jnt, mEventCut, PathRun idioms)
-does NOT carry over structurally. yw1 is the likely 1:1 sibling (same base,
-near-identical size 119 vs 124 — the ob1<->ko1 relationship again). RULE FROM
-ko1: read the sibling's SOURCE before decoding any asm; four functions were
-re-derived from scratch that ob1 already had.
+**FIRST STRUCTURAL FACT — CORRECTED WITHIN THE HOUR, against the asm:
+the skeleton header says `: public fopAc_ac_c` and THE HEADER IS WRONG.**
+The target's `__ct__11daNpc_Ym1_cFv` (weak) stores `__vt__12fopNpc_npc_c` at
+0x6C0 and constructs the complete fopNpc member set at ko1's exact offsets
+(m_jnt fields at 0x29B/0x29C, mObjAcch at 0x334, mAcchCir at 0x4F8, mStts at
+0x550, mCyl at 0x574, mCurrMsgBsPcId = -1 at 0x6AC). **ym1 IS
+fopNpc_npc_c-derived; the ob1/ko1 playbook carries in full.** My kickoff
+filing repeated the skeleton header as ground truth — the same
+unverified-premise failure the estate has on record; the asm is the ground
+truth. **FIRST WORK ITEM: fix the header's base class**, which makes the
+0x290-0x6BC region free (inherited) and leaves only ym1's own members past
+0x6C4 to map. yw1 (8/119, near-identical size) is the likely 1:1 sibling —
+read its source AND check its header for the same wrong base before decoding.
 
 Biggest stubs (pool_position census at open): bodyCreateHeap 192 ·
 _execute 174 · createInit 172 · next_msgStatus 172 · talk_1 145 · _draw 128 ·
