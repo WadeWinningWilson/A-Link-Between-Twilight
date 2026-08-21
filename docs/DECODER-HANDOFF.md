@@ -32,7 +32,8 @@ instance's monitors die with its session — arm your own on startup.
   (WadeWinningWilson), fork public, only for COMPLETED confirmed TUs.
 - Grading axis (A): C++ compiles under the donor toolchain; REL SHA1-identical
   to retail. Equivalent (2b) parks exist but SHA is the bar unless the user
-  rules otherwise (see section 4: a decision is PENDING with the user).
+  rules otherwise. **THE USER RULED THIS ON 2026-08-18 AND IT IS NOT OPEN: see
+  SESSION UPDATE 10.** Sections 4 and 7 below still say PENDING; they are STALE.
 
 ## 3. Workspace and tooling map
 - Repo: `D:\XXXXXXX\WWDP` (fork of zeldaret/tww). Git tip `1673d54c`, tree
@@ -153,7 +154,7 @@ Read this ON TOP of sections 1-6; where they conflict, this wins.
 - **d_a_npc_p2 (task #9): unchanged** — 22 rows from SHA, correctly
   NonMatching (it had been mislabelled Matching since 787416fe; fixed
   0a5ff6d4 on History's user-ordered re-measure). User ruling on
-  Equivalent-vs-SHA STILL PENDING (asked in chat 2026-08-18).
+  Equivalent-vs-SHA **ALREADY RULED - see SESSION UPDATE 10. Do not ask again.**
 - **The three obj TUs are `MatchingFor("GZLJ01","GZLE01","GZLP01")` and
   that is likely TERMINAL** (kiosk-demo codegen delta is real). Full
   story + my vacuous-12/12 retraction: p2-progress.md tail +
@@ -215,7 +216,7 @@ dusklight tip `5d5f42bd60`.
 
 | TU | exact | fuzzy | note |
 |---|---|---|---|
-| d_a_npc_p2 | 135/145 | 99.9505% | endgame unchanged; user ruling on Equivalent-vs-SHA STILL PENDING |
+| d_a_npc_p2 | 135/145 | 99.9505% | endgame unchanged; **ruling NOT pending - see UPDATE 10** |
 | d_a_npc_ob1 | 112/115 | 99.9171% | **now the TEMPLATE — see 2** |
 | d_a_npc_so | **177/187** | 99.8767% | HIO hole CLOSED this session |
 | d_a_npc_aj1 | 127/131 | 99.8133% | |
@@ -379,3 +380,53 @@ ran.**
 - **A mistyped mangled symbol returns an EMPTY diff, which reads exactly like a perfect
   match.** A `rows: 0` from `dr.py` once meant only that the class is `daNpc_So_c`, not
   `11daNpc_So_c`.
+
+
+## SESSION UPDATE 10 (2026-08-21, fifth instance) — wins over everything above
+
+### 0. STOP ASKING ABOUT p2. IT WAS RULED ON 2026-08-18 AND THE ANSWER IS ON THE BOARD.
+
+**`CALLS.md` line 472, verbatim: "USER RULING relayed — p2 HOLDS for byte-perfect,
+no Equivalent staging; mirror puzzle promoted to critical path; ruling noted
+reversible".** Reaffirmed at line 499 after the 138-row correction: *"THE USER'S
+RULING DOES NOT CHANGE - they ruled HOLD, which was the conservative call and is
+now BETTER founded than when they made it."*
+
+**So: p2 is NOT blocked on the user. SHA is the bar, Equivalent staging is refused,
+and the MIRROR PUZZLE IS THE CRITICAL PATH — which is DECODER work, not a
+decision to wait on.** The ruling is recorded reversible; that is not an invitation
+to re-ask, it is a note that it can be revisited if the evidence changes.
+
+**HOW FIVE INSTANCES GOT THIS WRONG, because the mechanism matters more than the
+fact:** the handoff said PENDING, each successor read the handoff, repeated
+PENDING to the user, and wrote PENDING into the next handoff. **Nobody re-read the
+board.** The user's words on catching it: *"this has been determined long ago and
+you keep asking, check your calls because this was answered."* This is exactly the
+estate's own recorded rule — *never repeat another lane's premise unverified;
+repetition feels like corroboration* — and the premise here was my own lane's.
+**A handoff is a claim about the board, not a substitute for it. Re-derive the
+open items from CALLS.md on wake; do not inherit them.**
+
+### 1. Also on wake: the estate is on a USER HOLD and DECODER IS EXEMPT
+
+`CALLS.md` line 552 (Foundry, 2026-08-20): every other lane holds while Engine's
+plugin-only Outset milestone is verified. **"DECODER DOES NOT — they are exempt and
+their ob1/p2/aj1 work continues."** Do not stand down; do not pick up other lanes'
+held work either.
+
+### 2. ko1 setStt — DONE. 395 rows -> 17, all pool position.
+
+WWDP `8bb915d7`. Findings are recorded at the tail of `ko1-progress.md` under
+"setStt RESOLVED WHEN WRITTEN": the shared tails are source-level `goto`s and not
+a compiler tail-merge (duplicating them measured 66 inserts — MWCC does not
+cross-jump here); every `l_HIO` displacement is +0x10 from the member name; the
+player is index 1. ko1 fuzzy 79.5972% -> 84.1189%, exact 151/203 with the name-set
+diff confirming no churn.
+
+### 3. Instrument caution
+
+`pool_position.py` prints `0 LOGIC-EXACT, 0 REAL` when run outside the decomp repo
+— it calls `objdiff report generate -p .`, matches no unit, returns empty. **A
+clean-looking zero is indistinguishable from an all-clear.** Run it from
+`D:/XXXXXXX/WWDP`. Filed to Foundry; `watcher_census.py`'s crash-after-output is
+still open too.

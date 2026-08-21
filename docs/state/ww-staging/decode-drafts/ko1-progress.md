@@ -262,7 +262,7 @@ ones rather than skipping to the biggest.
 `searchByID(field_0x7b4)` + `JUT_ASSERT` prologue before the shared opening.
 
 
-## setStt() - WRITTEN 2026-08-18, 395 rows -> 17 (all pool position)
+## setStt() - WRITTEN 2026-08-21, 395 rows -> 17 (all pool position)
 
 **Status: done, LOGIC-EXACT.** Committed WWDP `8bb915d7`. The decode below is
 kept verbatim because it was correct; what it did NOT cover is recorded at the
@@ -319,7 +319,7 @@ the rest. The fall-through groups are already correct - read off shared labels,
 not guessed.
 
 
-### setStt RESOLVED WHEN WRITTEN (2026-08-18) - three things the decode missed
+### setStt RESOLVED WHEN WRITTEN (2026-08-21) - three things the decode missed
 
 1. **THE SHARED TAILS ARE STRUCTURAL - `goto`, not a compiler tail-merge.**
    Three tails are reached both by fall-in from a later case and by a forward
