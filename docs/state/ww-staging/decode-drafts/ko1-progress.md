@@ -385,3 +385,31 @@ Remaining REAL residuals on ko1 (from pool_position, top of the list):
 nodeKo1Control 81 · hana_action4 60 · wait_action3 60 · privateCut 58 ·
 ko_setPthPos + smaller stubs. nodeKo1Control has ob1's nodeOb1Control as a
 direct template (read it first).
+
+
+## Stubs batch 2 (2026-08-21, same session): ko1 169 -> 177/203, fuzzy 98.42%
+
+Byte-exact this batch: plyTexPttrnAnm (ob1 verbatim; field_0x72e u16->s16, the
+cLib_calcTimer<s> instantiation is the tell) · btpNum_toResID (4-entry static
+table; the no-return fall-off compiles to bgelr/bltlr — matches the TU's
+"return value expected" warnings) · chk_talk (bm1 named the accessors; ko1 uses
+the ret-variable form — the r31 slot in the asm discriminates it from aj1's
+early-return form) · getMsg (9-entry table via explicit empty cases 4/8) ·
+chkAttention (ob1 verbatim; **u8 return forced an extrwi truncation, target's
+bare srwi proves BOOL — the truncation SHAPE at a return site names the
+declared type**) · _delete · nodeHedControl + nodeBlnControl (the balloon
+matrix relay through field_0x6d4, retyped 0x30-byte blob -> Mtx).
+
+Logic-exact (pool rows only): chk_wallJump (returns f32, header retyped),
+chk_start_swim (ChkWaterIn gate, m_wtr.GetHeight - GetGroundH > 62), shadowDraw.
+
+PARKED, do not re-run: **chg_anmAtr 2 rows** — target's equal-early-out is an
+unfolded bne-over-b; early-return, goto-to-end-label, do-while-break, and
+else-return ALL fold to beq. **get_crsActorID 6 rows** — GetAc()'s
+inline-ternary materialization; target keeps the full li-0/lwz merge + re-test,
+ours short-circuits mStts==NULL to the -1 arm; if-return and ternary tails
+measure identical.
+
+REMAINING on ko1: set_action 42 (the PTMF store) · HIO ctor 34 · ko_nMove 28
+(open item 2, bounded) · ko_movPass/wait_7 10 each (open item 3, by-value cXyz
+slot — 4 falsified approaches recorded) · setAnm_anm/set_balloonAnm_anm 2 each.
