@@ -1275,3 +1275,52 @@ parking them as §2b Equivalent with written reasons rather than continuing to
 chase SHA**, but the call is the user's and I am not taking it. Recorded here
 so the ruling can be made against measured evidence instead of an assumption
 that "there might still be an easy win in there".
+
+
+## Round 28 (2026-08-21): the MIRROR PUZZLE opened on `_createHeap` — VARIABLE REUSE FALSIFIED
+
+Per the user's 2026-08-18 ruling (`CALLS.md` 472: *p2 HOLDS for byte-perfect, no
+Equivalent staging; mirror puzzle promoted to critical path*), the 74 mirror rows
+are the work. Started on `_createHeap` because it is **14 mirror / 0 other** — no
+confounds.
+
+**THE DEFECT, characterised exactly:** a pure `r26`<->`r27` swap, 14 rows,
+**311/311 instructions on both sides** — so it passes lever 7's row-count test and
+is genuinely colouring, not an inserted instruction.
+
+**THE TARGET'S ALLOCATION, read off the asm rather than assumed:**
+  `r27` <- headModelData, then daggerModelData, then the `new` McaMorf result
+  `r26` <- sheathModelData, then bookModelData, then telescopeModelData
+Ours is exactly inverted. The forcing point is rows 160/161, where two ranges are
+live at once: `mr r26, r3` loads sheath while `cmplwi r27, 0x0` still tests
+dagger — that second test is the source's own duplicated assert
+(`JUT_ASSERT(0xA2E, daggerModelData != 0)` naming dagger, not sheath), which we
+already reproduce faithfully.
+
+**HYPOTHESIS TESTED AND FALSIFIED — DO NOT RE-RUN IT.** The r27/r26 grouping looks
+exactly like two reused variables (one for head+dagger, one for
+sheath+book+telescope) against our five distinct locals. Measured all five
+reuse shapes with an A/B harness (`scratchpad/ab.py`, apply -> build -> measure ->
+revert, with a REVERTED baseline check at the end):
+
+| variant | rows |
+|---|---|
+| baseline (five distinct locals) | **14** |
+| reuse head+dagger | 18 |
+| reuse sheath+book+telescope | 15 |
+| both (two vars total) | 18 |
+| reuse telescope only | 14 |
+| reuse book only | 15 |
+
+**Every reuse shape is worse or neutral. The target does NOT reuse these locals;
+our declaration shape is right and the grouping is an allocator artifact, not a
+source structure.** That kills the most natural reading of the evidence, which is
+worth more than it sounds: the mirror class cannot be closed by re-shaping
+variable lifetimes here.
+
+**WHAT IS STILL UNTESTED on this function** (next set, in rough order of promise):
+declaration ORDER with lifetimes unchanged (hoisting all five to the top; hoisting
+only the dagger/sheath pair; declaring sheath before dagger); the `BOOL` vs `int`
+return type; `mType` cached in a local vs re-read; and whether the two static
+tables at the top participate in the tie-break. **A/B harness is written and
+parameterised — adding a variant is one JSON entry.**
