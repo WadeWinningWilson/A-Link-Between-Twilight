@@ -465,3 +465,18 @@ analogue of the mirror tie-break. PARKED.
 Remaining REAL: ko_nMove 23 · movPass/wait_7 10 each · get_crsActorID 6 ·
 chg_anmAtr 2 · setAnm_anm/set_balloonAnm_anm 2 each. Everything else is
 pool-position (16 fns) converging with TU state.
+
+
+### setAnm_anm 2-row park (2026-08-21): four spellings falsified
+
+Mine emits an extra `lbz 0x860 + extsb` reload before the int-to-float of the
+tail (`field_0x824 = field_0x860` after zeroing 860/861); the target converts
+the `li 0` register directly, no reload, no extsb. FALSIFIED: `field_0x824 =
+0` (33 rows — kills the conversion machinery entirely, so the conversion is
+structural), an s8 local for the zero (33), and both chained-assignment
+orders (19 each). **The target's source keeps the stored value visibly live
+in a way none of the natural spellings reproduce.** set_balloonAnm_anm shares
+the shape — same park. These two plus chg_anmAtr's unfolded branch form a
+family: 2-row shape puzzles where every obvious spelling is falsified;
+worth one dedicated session with a transform-search harness, not more
+hand probes.
