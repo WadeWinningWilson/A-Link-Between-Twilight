@@ -50,3 +50,20 @@ u8 btpNo at +1, three f32 at 4/8/C presumed), the a_anm_prm_tbl statics
 ($4537 setAnm on m8AD, $4575 setAnm_ATR on m8A8 - .data, NON-const per the
 section-placement lever), then setAnm_anm/init_texPttrnAnm/play_texPttrnAnm
 and the wait/talk action ladder above it.
+
+
+## Ladder batches 6-8 (same session): 33 -> 47/124
+
+Byte-exact: setMtx (ob1 spellings + hoisted-MtxP lever, first build),
+nodeCB_BackBone, decideType (logic-exact, 1 string row - "Halt" owner
+pending), NBTwai; logic-exact: set_cutGrass (checkFrame(34) + hand-L joint
+particle + seStart), SITwai (dNpc_chkAttn by-value player pos). The anm
+cluster closed earlier at three setters exact via ONE retype.
+
+Field-signedness tells cashed this stretch: m8AF s8, m898 s8 (extsb at
+reads), anm_prm_c.field_0x1 s8 (bare lbz at the Sc argument). The donor's
+own member names recovered from the assert-string table (m_hed_jnt_num
+family, a_btp).
+
+STANDING ORDER integrated: four-version verification acknowledged on the
+board; this lane runs the Matching flip + gate itself at each TU close.
