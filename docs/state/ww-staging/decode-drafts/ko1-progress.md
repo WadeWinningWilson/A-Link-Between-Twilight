@@ -356,3 +356,32 @@ completion; a survivor there is a real pool-ordering defect.**
 **CAUTION on the instrument:** `pool_position.py` runs `objdiff report
 generate -p .` and prints `0 LOGIC-EXACT, 0 REAL` from the wrong directory -
 a clean-looking all-clear. Run it from `D:/XXXXXXX/WWDP`.
+
+
+## Round: stubs batch (2026-08-21) — 4 functions written, partner family 5/5 BYTE-EXACT
+
+ko1 **151 -> 156 exact of 203** (exact_delta: +5 by name, nothing lost).
+WWDP `c99e44d2`. chk_areaIn and ko_clcSwmSpd are logic-exact (4 pool rows each).
+
+Two rounds cost by not reading the sibling first — recording so the pattern
+sticks:
+1. **`fopAcM_GetID`'s NULL check IS the inner if/else in the asm.** I wrote the
+   check explicitly and got a doubled branch pattern (2 beq on one compare, two
+   `li -1` arms). bm1's `partner_srch_sub` — the donor sibling — calls the macro
+   bare inside `if (l_check_wrk != 0)`. The asm's apparent nested-if was the
+   macro expansion. **When an asm shape looks like source structure, check
+   whether a macro the siblings use produces it.**
+2. **4 sparse cases over 0..8 emit a COMPARE TREE; the target has a jump
+   table.** Explicit empty cases (`case 0: case 2: case 4: case 5: case 8:
+   break;`) densify the value set and flip MWCC to the table. The bounds check
+   (`cmplwi 0x8 / bgt`) belongs to the table, not the source.
+3. Enum-parser validation paid immediately: my sequential fpcNm parser was OFF
+   BY ONE (validated against ob1's known KB filter, asm 0xDD vs parsed 0xDE).
+   Filters are KO1/KO2/OB1, not JI1/KO1/BM5 as the raw parse claimed. **A
+   plausible-looking enum name from an unvalidated parser would have built
+   clean and cost a debug round.**
+
+Remaining REAL residuals on ko1 (from pool_position, top of the list):
+nodeKo1Control 81 · hana_action4 60 · wait_action3 60 · privateCut 58 ·
+ko_setPthPos + smaller stubs. nodeKo1Control has ob1's nodeOb1Control as a
+direct template (read it first).
