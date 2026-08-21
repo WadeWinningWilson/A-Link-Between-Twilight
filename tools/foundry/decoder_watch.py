@@ -111,12 +111,26 @@ def write_pulse(passes, last_event, note):
              "unfalsifiable, treat this watcher as untrusted" % e)
 
 
+def read_calls_retry():
+    """One retry (2 s) on the CALLS read-race, per the estate's 2026-08-21
+    finding (Housing/Engine row): our own tools rewrite CALLS.md, and a read
+    that races the rewrite raises OSError. First failure -> wait and retry
+    silently; second -> raise, which main's except-Exception handler survives
+    LOUDLY (emit + degraded pulse + continue) rather than dying. Both halves
+    of the two-property test: the retry lives here, the survive lives there."""
+    try:
+        return CALLS.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        time.sleep(2)
+        return CALLS.read_text(encoding="utf-8", errors="replace")
+
+
 def board_rows():
     """CALLS rows addressed to this lane, both states -> {hash: excerpt}."""
     if not CALLS.is_file():
         return None
     rows = {}
-    for ln in CALLS.read_text(encoding="utf-8", errors="replace").splitlines():
+    for ln in read_calls_retry().splitlines():
         if addressed_to_me(ln) and not is_own_filing(ln):
             s = ln.strip()
             key = hashlib.sha1(s.encode("utf-8", "replace")).hexdigest()[:12]
