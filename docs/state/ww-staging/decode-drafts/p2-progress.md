@@ -1353,6 +1353,9 @@ byte-perfect is reachable rather than a wait for upstream policy. **Mirror count
 74 -> 69.**
 
 **THE RECIPE for the remaining 69, applicable to any mirror function:**
+> **CORRECTION (round 30, same day): THIS RECIPE IS OVERSTATED AND I AM MARKING IT
+> RATHER THAN DELETING IT. Step 4 does NOT generalise — it failed on the very next
+> function. Read round 30 before using this.**
 1. Confirm row counts match on both sides (lever 7) — else it is an inserted
    instruction, not colouring.
 2. Read the target asm and write down which value lives in which register.
@@ -1366,3 +1369,52 @@ and has no visible overlap partner to reorder against (rows 75/92/114); and
 194/210/228/230/237/238) — the temp has no declaration to reorder, so the next
 probe is giving it a named local and moving that name around. The A/B harness
 (`scratchpad/ab.py` + a JSON variant list) makes each new idea one entry.
+
+
+## Round 30 (2026-08-21): **THE LEVER DOES NOT GENERALISE — my round-29 recipe was over-claimed**
+
+Applied round 29's recipe to `cutRopeTalkProc` (13 mirror / 0 other, 515/515
+instructions, so genuine colouring). **It failed.**
+
+Its three mirror pairs, read off the asm:
+  `rope` r27<->r28 (rows 17/19/460) · `swingA` **f31<->f30** (35/111/115/118/132/135)
+  · a third GPR value r28<->r27 (235/350/365/392)
+The `model`/`rope` and `swingA`/`swingB` pairs are each declared adjacently with
+overlapping ranges — **textbook shape for the round-29 lever.** Measured:
+
+| variant | rows |
+|---|---|
+| baseline | **13** |
+| swingB-before-swingA (split decl) | 19 **worse** |
+| rope-before-model (split decl) | 13 = baseline |
+| both reversed | 19 **worse** |
+| localHand hoisted above handPos | 17 **worse** |
+
+**WHAT IS ACTUALLY ESTABLISHED, stated at the width the evidence supports:**
+declaration order of an overlapping pair CAN flip register colouring — proven
+once, on `_createHeap`, worth 5 rows and committed. **It is NOT a general recipe
+for the mirror class.** Four variants of the same shape on the next function are
+neutral or worse.
+
+**AND THE SELF-CRITICISM THAT MATTERS MORE THAN THE RESULT: I generalised a
+one-function finding into a numbered recipe for 69 rows in the same document, and
+the next function falsified it within the hour.** That is the identical failure
+this lane already has on record twice — the 12/12 over-claim, and the p2
+"22 rows / 3 functions" figure carried out of its narrow scope. **A result from
+one function is a result from one function.** Round 29's recipe is marked in
+place rather than deleted, because an entry that quietly keeps its conclusion
+while dropping the failed reasoning is how a wrong lead survives review.
+
+**WHAT SURVIVES AS A METHOD (not a recipe):** the A/B harness itself. Confirm
+row counts match, read the target's register map, form a source-level hypothesis,
+and MEASURE it — cheap, and it kills bad ideas in about ten seconds each.
+`scratchpad/ab.py <variants.json> [srcfile] [symbol]` now takes any TU file and
+symbol. **Its own stale-threshold bug is fixed:** it compared against a hardcoded
+14 and printed "<<< BETTER" for no-change results once the baseline improved —
+the same false-all-clear shape as `pool_position.py`'s silent zero. It now
+compares against the measured baseline and labels worse/equal explicitly.
+
+**NEXT HYPOTHESIS CLASS for the mirror rows (declaration order is spent):** the
+f31/f30 pair on `swingA` says FPR colouring mirrors too, and floats have no
+`mr.`-style test to anchor them — so the discriminator may be evaluation ORDER
+inside the expressions rather than declaration. Untested.
