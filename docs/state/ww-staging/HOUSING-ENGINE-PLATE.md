@@ -79,9 +79,24 @@ marks an item blocked on someone else and does not count as open.
   **⚠️ NOT RUN. `dol_asset_probe` with `match:1` on the next boot closes it** —
   it goes through the by-symbol path so lookup, disc gate and read are all
   exercised. Blocked only on that boot; nothing else in this lane depends on it.
-- [ ] **PORTING QUEUE — History has a backlog; this lane is now free.** lwood was the
-  blocker holding the WW actor port; with the packet discipline understood, the same
-  one-entry-per-fill rule applies to every J3D-path WW actor ported next.
+- [~] **PORTING QUEUE — THIS LANE'S SUPPORT IS DELIVERED; THE PORT IS HISTORY'S.**
+  Rewritten 2026-08-22: the old wording said "this lane is now free", which was true
+  when written and has since been discharged. What this lane owed the vegetation
+  port is DONE — packet-hazard answer (donor managers use their own J3DPacket +
+  `entryImm`, so they are IMMUNE and need no one-entry-per-fill guard), DN-15 paths
+  named (`d_grass`/`d_flower`/`d_tree` + the `d_a_grass` spawner), and the
+  zero-bake asset blocker found AND solved (39 assets by donor symbol, `ed76eb426d`).
+  **Blocked on HISTORY landing code.** My next action on it is a build, and the
+  WATCHER (`bk9maresi`) will deliver that request — the timer cannot, because a
+  timer only reads MY plate. That distinction cost a real blind window this session
+  (a build request sat unanswered while History/Bridge waited on the lane that
+  compiles), which is why the watcher is now armed alongside it.
+
+*Every item is `- [~]`: each is blocked on the user's boot, on History, or on the
+wind/lpalm owner. The timer SELF-DISARMS here BY DESIGN — "a timer that wakes the
+lane with nothing to do is the one failure this design cannot tune its way out of."
+THE WATCHER STAYS ARMED and is now the live channel: incoming work reaches this lane
+through it. Re-mark one `- [ ]` and re-arm the timer to resume self-driven work.*
 
 - [x] *(STOOD DOWN — the GX path is fixed, so the bypass is a diagnostic, not a path.)* **GfxService SPIKE increment 1 — ran, succeeded.**
   `mods-src/ww_donor_disc/ww_gfx_spike.cpp` (new TU), declared in `registry.h`,
