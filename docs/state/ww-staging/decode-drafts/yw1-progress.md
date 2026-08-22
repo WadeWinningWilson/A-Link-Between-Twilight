@@ -142,6 +142,26 @@ the upLift reverse-decl lever (that one is same-kind locals only).
 - Carves: m758/m75A/m75C s16 (anim-settle snapshot) · m760 int ·
   m77C u8 · m7C1 → s8.
 
+## Batches 11-12: 57 -> 66/119 exact (same successor session)
+
+- Glue five: CheckCreateHeap, set_action (ptmf at m6F4, phase byte m7C7 —
+  0=init/9=exit, ym1 verbatim), endEvent, isEventEntry, setStt. Two setStt
+  levers: (1) unconditional setAnm()+chngTsuboAnm() tail AFTER the switch;
+  (2) **empty explicit cases steer the compare-tree pivot** — retail's
+  tree pivots on 4 because the donor enumerated `case 4: break; case 6:
+  break;` even though they do nothing (1-row tell: a beq to the join with
+  no body = an empty case in the set).
+- Pot subsystem: chngTsuboAnm (m773 latch; m775 picks {4→(3,1),5→(1,1)}
+  vs {1→(5,1),3→(4,1)}+clear on m7C0), chk_brkTsubo (u8 return like
+  upLift, not the template's void), chk_bm1Odoroki (searchByID(m700,
+  NULL) — NEW fpc_ProcID m700 = the Grandma/BM1 partner id, distinct
+  from m704=pot; reads bm1's PRIVATE m880 via the existing getOdoroki()
+  accessor — check for accessors before befriending), set_pthPoint
+  (setIdx → teleport to point → nextIdx → face next via
+  cLib_targetAngleY).
+- Carves: m700 fpc_ProcID (bm1 partner) · m6F4 ActionFunc ptmf ·
+  m7C3/m7C4 u8 · m77D u8.
+
 ## Carved so far
 mPhs 0x6C4 · m_hed/bbone_jnt_num 0x6CC/D · m_hair1/2/3 0x6CE-D0 ·
 m704 fpc_ProcID (pot) · mPathRun 0x70C (dNpc_PathRun_c, 8b) ·
