@@ -1,4 +1,4 @@
-# FINDING — the black vegetation is TP's own grass actor on a WW stage; WW's `kusa`/`pflower` are NOT PORTED
+# FINDING — Outset's vegetation runs the RECEIVER's grass code behind a shared profile name; WW's own grass/flower/tree managers are NOT PORTED
 
 era: era-2 (Outset served)
 <!-- era rationale: concerns the currently served set (sea room 44) | Housing/Engine, 2026-08-22 -->
@@ -45,9 +45,14 @@ Porting them is a manager port (3 units + the spawner), not a guarded-actor port
 ## The short version
 
 The `WW GRASS AND FLOWERS STILL BLACK` item was being chased as a **WW lighting
-defect**. It is not one. The WW colour path works. **The WW grass and flower
-actors do not exist in this port at all**, and what is on Outset is **TP's own
-`GRASS_e` actor**, which has no WW colour source and therefore draws unlit.
+defect**. It is not one. The WW colour path works at every hop.
+
+The WW placements resolve and spawn — but to a profile name (`fpcNm_GRASS_e`)
+that **both games define**, so the RECEIVER's grass spawner and the RECEIVER's
+grass/flower managers run. WW's own `d_grass` / `d_flower` / `d_tree` managers
+are not ported. The result is TP vegetation, drawn by TP code with TP lighting,
+standing at WW's placement positions — and TP lighting has nothing for a WW
+stage, so it draws unlit.
 
 This makes it a **DN-11 cross-pollination** item (WW spaces get only WW assets)
 and a **porting gap** — not a colour bug.
@@ -80,7 +85,7 @@ of them is vegetation. Types 12/13/14 are skipped by design and are UI/demo
 paths in the receiver (`d_a_alink_swindow`, `d_a_demo_item`, `d_file_select`,
 `d_menu_collect`) — not vegetation either.
 
-### 3. The WW vegetation actors are absent — measured, not inferred
+### 3. The placements exist, and they resolve to a SHARED profile name
 
 Room 44's `room.dzr` places **164 vegetation objects**:
 
@@ -92,41 +97,44 @@ Room 44's `room.dzr` places **164 vegetation objects**:
 | `pflower` | 41 | flowers |
 | `flwr17`, `flwr7`, `pflwrx7` | 11 | flowers |
 
-**In the entire boot log: `kusax` appears 0 times, `pflower` 0 times, `flwr` 0
-times.** No spawn, no failure, no receipt. The plugin's registry contains no
-reference to any of them, and `src/ww/d/actor/` holds only `d_a_bg`,
-`d_a_sea`, `d_a_vrbox`. **These actors are not ported.**
+The donor maps every one of them to `fpcNm_GRASS_e` (`d_stage.cpp:438-444`), a
+profile name **the receiver also defines**. So they spawn — and the receiver's
+implementation is what runs.
 
-### 4. What IS on Outset is TP's grass actor
+`kusax` / `pflower` / `flwr` appear **0 times** in the boot log, but that proves
+nothing on its own: the name is consumed by the profile lookup and never logged.
+**I originally read that silence as "nothing spawned", which was wrong.**
 
-`fpcNm_GRASS_e` — the RECEIVER's grass — is created **106 times**, and the
-split is the point:
+What IS absent is the donor CODE: the plugin registry has no reference to any
+vegetation unit, and `src/ww/d/actor/` holds only `d_a_bg`, `d_a_sea`,
+`d_a_vrbox`. **WW's grass/flower/tree managers are not ported.**
 
-- **6** before the `sea` bind (line 2360) — the pre-warp TP room
-- **100** AFTER it, spanning room 44's load (line 2889)
+### 4. The spawn count matches the placements
 
-100 TP grass actors against 112 WW `kusa*` placements. The `kusa` hits in the
-log are all TP's own (`fpcNm_Obj_Yobikusa_e`, `a_kusa_rgba.bti`,
-`j_umakusa.bmd`) — receiver resources, not donor ones.
+`fpcNm_GRASS_e` is created **106 times** — **6** before the `sea` bind (line
+2360, the pre-warp TP room) and **100 AFTER** it, spanning room 44's load (line
+2889). 100 spawns against 112 `kusa*` placements: these are the WW placements,
+running receiver code.
 
 ## The mechanism this explains
 
-TP's `GRASS_e` draws through its **own `J3DPacket` + `entryImm`** (the same
-property that makes it immune to the lwood packet-merge hazard), so it never
-passes through `dKyWw_tryWwMaji` and never receives a WW overlay. Its colour
-comes from the receiver's `g_env_light`, which has nothing for a WW stage.
-**Unlit → black.** It accounts for grass *and* flowers together, which a
-single mistyped material would not.
+The receiver's grass/flower managers draw through their **own `J3DPacket` +
+`entryImm`** — the same property that makes them immune to the lwood
+packet-merge hazard — so they never pass through `dKyWw_tryWwMaji` and never
+receive a WW overlay. Their colour comes from the receiver's `g_env_light`,
+which has nothing for a WW stage. **Unlit → black.** It accounts for grass *and*
+flowers together, which a single mistyped material would not.
 
 ## What is inference, and who settles it
 
-**MEASURED:** everything in §1–§4 above.
+**MEASURED:** everything in §1–§4 above, plus the donor draw paths at the top.
 
-**INFERRED, and the user is the only one who can confirm it:** that the black
-objects the user sees ARE these 100 TP `GRASS_e` actors. The counts, the
-timing, the absence of any WW vegetation, and the unlit-by-construction
-mechanism all agree — but "the log says TP grass is there" and "the black
-things on screen are that grass" are different claims.
+**INFERRED:** that the black objects the user sees are these 100. The counts,
+the timing, and an unlit-by-construction mechanism all agree. The user reports
+being uncertain whether they look WW or TP — which this finding predicts, since
+the MODELS are the receiver's but they stand exactly where WW placed them.
+**Either way the gap is the same and the action is unchanged**, so this no
+longer blocks the fix.
 
 ## What the fix is NOT
 
@@ -135,9 +143,11 @@ outright, and DN-10 orders the donor's own system ported rather than the
 receiver's patched. Lighting TP grass correctly on Outset would make a DN-11
 violation look finished.
 
-**The fix is to port the donor's `kusa` / `pflower` actors** — which is a
-porting-queue item (History), not a kankyo item. Until then the honest state
-is: WW vegetation is unported, and TP vegetation is standing in.
+**The fix is to port the donor's vegetation SYSTEM** — `d_grass.cpp`,
+`d_flower.cpp`, `d_tree.cpp` (the managers that draw) plus `d_a_grass.cpp` (the
+spawner that feeds them). A porting-queue item for History, not a kankyo item
+for this lane. Until then the honest state is: WW vegetation is unported, and
+the receiver's is running in its place.
 
 ## Reproduce
 
