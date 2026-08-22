@@ -1,8 +1,10 @@
 # kg1 (Orca) decode campaign — anchor
 
 Opened 2026-08-22 by the successor DECODER session that closed yw1 to
-parks (109/119, fuzzy 98.71) the same day. kg1 = Orca, Outset room 44 —
-next target under the Outset-first charter (smallest open Outset TU).
+parks (109/119, fuzzy 98.71) the same day. kg1 = **Salvatore** (Squid-Hunt
+/ Sploosh-Kaboom minigame host, WINDFALL — the TU comment rules it).
+**CORRECTION: my open-note called this Orca/Outset — wrong on both; the
+Outset-first charter did NOT select this TU, smallest-open-TU did.**
 
 ## Baseline at open
 
@@ -48,6 +50,22 @@ next target under the Outset-first charter (smallest open Outset TU).
   member emits construct_array even at count 1) + 2 trailing u8. Values:
   head ±2500/±7000, backbone ±2000/±8000, turn 1000/2000, attnY 35.0f,
   attnAngle 0x4000, attnDist 400.0f. Dtor chain snapped with it (6/66).
+
+## Batch 2: 6 -> 7/66 exact (fuzzy 12.2)
+
+- nodeCallBack 95.8 (pool-only residue): one big static (no yw1-style
+  _nodeCB split). Head branch: rot pair FIRST, then MID-BLOCK statics
+  l_offsetAttPos(24,5,0)/l_offsetEyePos(24,-16,0) (donor names from bss),
+  multVec to m734/m740 + attention position (+= l_HIO.mNpc[0].mAttnYOffset),
+  the rot pair REPEATED between multVecs (donor spelling, ported as-is).
+  Joint 8 attaches m6C4 (Salvatore's prop model) at transM(23.46, -22.26,
+  -47.05) + XYZrotM(8011, -20224, 8011).
+- Class statics m_camera_ctr/m_camera_eye (bss-named) defined; l_HIO
+  declared after l_cyl_src. Actor ctor is the IMPLICIT default — do NOT
+  write one; it snaps at _create's first new.
+- LEVER (1-row): a guarded static whose init code sits AFTER other
+  statements = the donor declared it MID-BLOCK; hoisting to block top
+  reorders the guard ahead of those statements and misses.
 
 ## NEXT
 
