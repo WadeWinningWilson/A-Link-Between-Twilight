@@ -75,7 +75,22 @@ def describe(path):
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return "(unreadable)", "", False
-    if "--selftest" in text or "def selftest" in text:
+    # ========================================================================
+    # DETECT `--control` TOO, not only `--selftest`.
+    #
+    # This detector looked for `--selftest` alone, so **10 tools that carry a
+    # working `--control` were listed as carrying nothing** - among them
+    # Decoder's donated `pool_align.py`, the zero-bake gate `donor_scan.py`,
+    # and `aurora_patch_check.py`. That is precisely the `l2c_equiv` failure
+    # this file's own header is written about: an instrument whose control the
+    # inventory cannot see gets treated as uncontrolled, and someone
+    # eventually writes a second one.
+    #
+    # `--control` and `--selftest` are the same claim in different words - a
+    # check the tool carries and can run on itself - so both set this column.
+    # ========================================================================
+    if ("--selftest" in text or "def selftest" in text
+            or "--control" in text or "def control(" in text):
         selftest = True
     for ln in text.splitlines()[:60]:
         if not purpose:
@@ -151,7 +166,8 @@ def main():
     add("> deliberately leaves out. A lane cannot use what it cannot find.")
     add(">")
     add("> **`ctl`** = a negative control is declared in `control.py`.")
-    add("> **`self`** = the tool carries its own `--selftest` or fixture.")
+    add("> **`self`** = the tool carries its own `--selftest` / `--control` "
+            "or fixture.")
     add("> **Read `self` before writing a new control** - `l2c_equiv` had one")
     add("> all along while every lane called it uncontrolled.")
     add("")

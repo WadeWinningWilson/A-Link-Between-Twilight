@@ -1,0 +1,18 @@
+# ============================================================================
+# Foundry runtime state - NEVER TRACKED.
+#
+# WHY THIS FILE EXISTS: there were no ignore rules here at all, so a broad
+# `git add -A tools/foundry` swept up live heartbeat files that had been
+# deliberately left untracked. They then churn on every commit, which buries
+# real instrument changes in noise and makes every diff look busy.
+#
+# THE RULE: instruments are tracked, what instruments EMIT is not. A pulse
+# file, a watcher's seen-list and a census history are all reconstructed by
+# their own tool on next run - there is nothing to preserve and every reason
+# not to carry another lane's live process state in the history.
+# ============================================================================
+monitor-pulse*.json
+.monitor_census_state.json
+.librarian-watch/
+*.tmp*
+__pycache__/

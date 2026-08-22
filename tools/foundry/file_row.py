@@ -98,14 +98,60 @@ def write(text):
     raise last_err
 
 
+def incoming_audit(text, what="row"):
+    """Reject control bytes in the INCOMING text, BEFORE it touches CALLS.md.
+
+    ADDED 2026-08-22 on Housing/Engine's report, and their diagnosis is the
+    whole reason this exists: `byte_audit()` below checks THE FILE, not the
+    incoming row. That fails safe -- but it fails GLOBAL. Once a bad byte is
+    in, EVERY subsequent add from EVERY lane is refused, and the board goes
+    read-only for the whole estate until someone repairs it by hand. They hit
+    that twice in five minutes (the second time, the row explaining the
+    backspace trap contained a backspace).
+
+    Checking here instead means a malformed row is refused at its author,
+    naming their own bytes, and the board is never corrupted at all. The
+    file-level audit stays as the backstop for damage from any other source.
+
+    Reports the OFFSET and surrounding context, because an invisible byte
+    cannot be found by eye -- that is what made the repairs expensive."""
+    bad = {0x00: "NUL", 0x08: "BACKSPACE", 0x1a: "SUB", 0x0c: "FORM-FEED"}
+    hits = [(i, b) for i, b in enumerate(text.encode("utf-8", "surrogatepass"))
+            if b in bad]
+    if not hits:
+        return True
+    print("*** REFUSED: control bytes in the incoming %s ***" % what)
+    print("    NOTHING was written. CALLS.md is untouched and other lanes are")
+    print("    unaffected -- this is caught at the source, not after the fact.")
+    raw = text.encode("utf-8", "surrogatepass")
+    for off, b in hits[:6]:
+        lo, hi = max(0, off - 30), min(len(raw), off + 30)
+        ctx = raw[lo:off].decode("utf-8", "replace") + \
+            ("<<%s>>" % bad[b]) + raw[off + 1:hi].decode("utf-8", "replace")
+        print("    offset %d: %s" % (off, ctx.replace("\n", " ")))
+    if len(hits) > 6:
+        print("    ... and %d more" % (len(hits) - 6))
+    print("    CAUSE, nearly always: a Windows path or an escape sequence written")
+    print("    through a shell/heredoc, where \\b collapsed to 0x08. Write the row")
+    print("    with --file, or use forward slashes.")
+    return False
+
+
 def byte_audit():
-    """NUL/backspace in the artifact -> loud failure, never a silent pass."""
+    """NUL/backspace in the artifact -> loud failure, never a silent pass.
+
+    BACKSTOP ONLY since 2026-08-22 -- incoming_audit() above now catches the
+    common case before it lands. This still runs, because damage can arrive
+    from an editor, a merge, or a lane not using this tool."""
     raw = io.open(CALLS, "rb").read()
     nul, bs = raw.count(b"\x00"), raw.count(b"\x08")
     if nul or bs:
         print("*** BYTE HYGIENE FAILED *** NUL=%d BS=%d in CALLS.md" % (nul, bs))
         print("    Invisible control bytes are unmatchable by later edits and break")
         print("    every parser downstream. Repair before filing anything else.")
+        print("    NOTE: this is the FILE-level check. If you did not just write a")
+        print("    bad byte, someone else's landed earlier and the board is")
+        print("    read-only for everyone until it is repaired.")
         return False
     return True
 
@@ -282,7 +328,14 @@ def slurp(path):
     if not p.is_file():
         print("*** FAILED *** --file %s does not exist" % path)
         return None
-    return io.open(p, encoding="utf-8", newline=None).read().strip()
+    body = io.open(p, encoding="utf-8", newline=None).read().strip()
+    # --file is the path lanes are TOLD to use when a row misbehaves, so it is
+    # the likeliest carrier of a byte the author cannot see. A file dodges
+    # shell word expansion; it does not dodge a backspace already sitting in
+    # it. Audit the CONTENT, not just argv.
+    if not incoming_audit(body, "--file content (%s)" % path):
+        return None
+    return body
 
 
 def flatten_note(note):
@@ -353,6 +406,20 @@ def main():
               % (cmd, ", ".join(sorted(VALID_FLAGS[cmd]))))
         return 2
 
+    # ========================================================================
+    # PARSE-TIME BYTE SWEEP. The per-command guards below run before any write,
+    # so they are SAFE -- but they run AFTER match resolution, which means a
+    # bad byte can be MASKED by a match error ("matches 0 rows") and the author
+    # never learns their bytes were the problem. Sweeping every command-line
+    # value here reports the real cause first, and covers any command added
+    # later without that command having to remember to ask.
+    # ========================================================================
+    for a in sys.argv[2:]:
+        if a.startswith("--"):
+            continue
+        if not incoming_audit(a, "argument"):
+            return 2
+
     if cmd == "annotate":
         text = read()
         hits = rows_matching(text, opt("--match") or "@@NOMATCH@@")
@@ -361,6 +428,8 @@ def main():
                   % len(hits))
             return 1
         note = slurp(opt("--note-file")) if opt("--note-file") else opt("--note")
+        if note is not None and not incoming_audit(note, "note"):
+            return 1
         if note is None or not note.strip():
             print("*** FAILED *** annotate needs --note-file <path> or --note '<text>'")
             return 2
@@ -449,6 +518,12 @@ def main():
         if not arg.startswith("- ["):
             print("*** FILING FAILED *** a row must start with '- [ ] LANE |'")
             return 2
+
+        # THE ROW IS CHECKED BEFORE IT TOUCHES THE BOARD (2026-08-22). See
+        # incoming_audit(): the file-level guard fails GLOBAL, so one lane's
+        # bad byte made the board read-only for the whole estate. Twice.
+        if not incoming_audit(arg, "row"):
+            return 1
 
         # ------------------------------------------------------------------
         # MULTI-LINE ROW CONVENTION (Librarian ruling, 2026-08-16, on Foundry's
@@ -573,6 +648,8 @@ def main():
     # for is exactly the failure this tool exists to prevent, committed by the
     # tool itself.
     note = slurp(opt("--note-file")) if opt("--note-file") else opt("--note")
+    if note is not None and not incoming_audit(note, "note"):
+        return 1
     if opt("--note-file") and note is None:
         return 2
     if note is not None and not note.strip():

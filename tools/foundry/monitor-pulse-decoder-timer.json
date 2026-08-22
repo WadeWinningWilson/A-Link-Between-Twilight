@@ -1,9 +1,0 @@
-{
-  "lane": "DECODER",
-  "kind": "work-continuation-timer",
-  "ts": "2026-08-22T02:38:34Z",
-  "pid": 24528,
-  "interval_s": 30,
-  "tick": 135,
-  "state": "QUIET-CONTINUE"
-}
