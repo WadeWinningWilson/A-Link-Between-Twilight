@@ -122,9 +122,71 @@ differently than REL @-pools.
   (1,1,1) float triples) precede l_pos — emitted from draw/ho_move
   bodies.
 
-## NEXT
+## Batch 4 (WWDP b7a748b4): setNrmVtx 99.47 PARKED
 
-setNrmVtx (0x538), then packet draw (0x830, heals string pool + @2100/
-@2080), then ho_move (0xD1C, heals @literal order; z_rate_tbl$4444
-func-static 13xf32, l_texCoord 85x8B, l_matDL 0x34 GX display list
-still to extract). Consult d_a_sail's equivalents FIRST for each.
+Sail-sibling normal accumulator; grid variants: row-8/9 boom seam (no
+smoothing across), row-11 apex vs vtx[84], y-flatten rows >7,
+normalizeRS fallback +X, 900*cM_ssin(-800*(col+row)) Y-skew. 2-insn
+park (in-source note): donor REMATERIALIZES (param_1+idx) at the col!=6
+site while 1.3.2 promotes it for every containing spelling — 6 variants
+falsified (plain/parens/register/named idx2/inline mul/flipped) — the
+v2 operand-flip (idx+param_1+1) keeps the full register map at the cost
+of 2 reordered adds.
+
+## Batch 5 (WWDP 985f6114): packet draw 99.7 (now 100 in report)
+
+Full GX pipeline: INDEX8 pos/nrm/tex over the double banks; Ship CI8
+sail tex (RGB565 TLUT, dRes_INDEX_SHIP_BTI_NEW_HO1_e=23) + Cloth toon
+TEXMAP1; 2/3-stage TEV keyed on tevStr K1.a; fade alpha =
+mColorC0.a=mAlpha through TEVREG0, A0*TEXA in the l_HIO.field_0x05
+branch; matDL 0x20 + DOUBLE-SIDED geometry (CULL_BACK l_DL pass, rebind
+GX_VA_NRM to mBackNrm, CULL_FRONT same l_DL); J3DShape::sOldVcdVatCmd
+reset. l_texCoord (cXy[85]) / l_DL (u8[0x233] ALIGN32, GLOBAL not
+static) / l_matDL extracted bit-exact. **@2100/@2080 (two (1,1,1) Vec
+aggregates) auto-emit via the PCH J3DJoint inlines — never author them.**
+
+## Batch 6 (WWDP bf5fd9d0 + 5c07bb8d): ho_move 97.2, unit 98.80, 16/20
+
+The 0xD1C cloth sim. First draft scored 92.1; levers to 97.2:
+- **LICM shape**: the x/z wind-clamp expressions live INSIDE the loop
+  (donor); hoist temps rank BELOW windPow in the f-map. Precomputing
+  them outside gives them f22/f21 and wrecks the whole allocation.
+- **f32 top-declaration order = f-reg order** (f31 down): swayX, swayZ,
+  swingZ, swingX, stretch, leanSin, open, colF, rowF, windPow.
+- loop-2 bank pointer = fresh short-lived local (vtx2), select-form
+  row advance (`row = col < 6 ? row : row + 1`), ternary phase-speed
+  cap, named single-use loads (fabsf temp, sp28.x/z copies).
+- **MWCC FLOAT-PARSE TRAP (new lever, repo-wide)**: python round-trip
+  extraction is IEEE-correct but MWCC parses some decimals 1 ULP LOW
+  (0.0007f -> ...34 vs donor ...35; 0.0002f likewise). Spell the exact
+  f32 decimal (0.00070000003f) — himo2's 0.060000002f is the precedent.
+  ANY table extracted with the python formatter must be re-verified
+  against MWCC output bytes, not python.
+- _delete healed to 100 (string pool fixed by draw's "Ship" first-ref).
+Decode map: wind-relative angle chase w/ force_calc override
+(cLib_addCalcAngleS2 4/0x1000 vs 2/0x1400), mBankIdx ^= 1 double
+buffer, m1B44 phase (2500+9000*0.8*pow, cap 10000), m2212 col-phase
+(3000*cos +/-300), sag machine (getSailOn + m2208 latch + 15-frame
+m1B4A burst, cLib_addCalc2 targets 1.414/1.0/1-0.65*m2200), 85-vertex
+loop (colStep=10922*x_rate[row], sway pair vs mSwingSize envelope,
+row-anchor y-blend l_pos[row*7].y, 120/5 amp fans, col>4 4.25 kicker,
+fade=0.35+0.65*open, z -13.75 bias), boom-lean z-band pass
+(fabsf(vtx[59].x) * (const + REG6_F(8..12)) on rows 6-10), 12x7
+setNrmVtx sweep + apex + setBackNrm + 3x DCStoreRangeNoSync.
+
+## PARKS at campaign hold (unit fuzzy 98.80, 16/20 exact)
+
+- setNrmVtx 99.4: 2-insn remat shape (batch 4, falsified list in-source).
+- ho_move 97.2: caller-save temp rotation flips after the first sqrtf
+  (f1/f2 cascade ~85 value-identical rows), extsh order at the atan2s
+  use (+relAngle r28/r26), vtx bank-pointer association (4 rows). All
+  kari-class; candidates for the transform-search harness.
+- _create 98.5: rate-constant f28/f29/f30 binding follows @slot order;
+  donor's 0.5f slot is a PCH-HEADER token (@4130) so it sorts FIRST;
+  my TU numbers 0.5f fresh in ho_move/_create. Same root as the
+  .sdata2 slot ORDER + 0x64 pad delta (values all match). Park:
+  header-token numbering isn't reachable from this TU's source.
+- _execute 98.5: batch-2 reg swap park stands.
+- daHo_HIO_c vtbl is weak here, global in donor (donor likely defines a
+  genMessage out-of-line somewhere; no such function in the TU — check
+  at Matching-flip time).
