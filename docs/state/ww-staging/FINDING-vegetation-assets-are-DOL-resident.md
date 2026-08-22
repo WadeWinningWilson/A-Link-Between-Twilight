@@ -1,4 +1,4 @@
-# FINDING — the WW vegetation port hits ZERO-BAKE: 186 KB of its assets live in the executable, not in any arc
+# FINDING — the WW vegetation assets live in the EXECUTABLE, not an arc (27.1 KB) — located in the user's own DOL, SOLVED
 
 era: era-2 (Outset served)
 <!-- era rationale: blocks the vegetation port for the currently served set | Housing/Engine, 2026-08-22 -->
@@ -52,7 +52,11 @@ The three donor managers — `d_grass.cpp`, `d_flower.cpp`, `d_tree.cpp` — pul
 | textures (`*TEX.h`) | 108,373 |
 | display lists (`*DL.h`) | 38,752 |
 | geometry / colour / texcoord | 43,444 |
-| **TOTAL** | **190,569 (186.1 KB)** |
+| **TOTAL (C source)** | **190,569 (186.1 KB)** |
+
+⚠️ **Those are C-SOURCE sizes, not data sizes.** The binary payload the port
+actually needs is **27,780 bytes (27.1 KB)** — see the banner. Quoting the
+source size made the problem look ~9x bigger than it is.
 
 Examples, verbatim from the donor source:
 
@@ -70,8 +74,9 @@ Examples, verbatim from the donor source:
 The zero-bake directive is explicit that the port ships **no donor bytes at
 all**, with every donor→receiver difference translated at the consumption
 boundary in receiver code. Pasting `l_Txq_bessou_hanaTEX.h` into plugin source
-ships 26 KB of donor texture as a C array. That the bytes arrive as source
-rather than as a file does not change what they are — and it is 186 KB of it.
+ships donor texture as a C array (4,096 bytes of data, 26 KB of source text).
+That the bytes arrive as source rather than as a file does not change what they
+are — and it is 27.1 KB of data across 39 blobs.
 
 The lwood precedent is the standard to match: its geometry is served from the
 user's own `Lwood.arc`, verified byte-identical against the disc. Vegetation
@@ -99,12 +104,12 @@ So the shape of a zero-bake-compliant port is: **resolve symbol → address →
 read the bytes out of the user's own `main.dol` at runtime**, exactly as the
 plugin already serves arc members from the user's disc.
 
-⚠️ **NOT YET DONE, and the gap is named rather than glossed:** the addresses
-above are from the **DEBUG** build (`frameworkD.map`). The user's disc is
-retail (`D44J01`-era `main.dol`), whose addresses differ. Mapping debug symbols
-onto the retail DOL is the actual work, and it is unstarted. What is
-established is that the data is DOL-resident, sized, and symbol-named — not
-that the retail offsets are known.
+✅ **THIS ROUTE WAS SUPERSEDED BY A SIMPLER ONE — see the banner.** The debug
+addresses do not transfer to retail, and mapping them turned out to be
+unnecessary: the decomp's asset headers carry the byte VALUES, so exact content
+matching finds the retail offsets directly and verifies itself. The debug map
+remains useful for CONFIRMING sizes (`l_K_kusa_00TEX` is 0x1000, and the located
+blob is 4,096 bytes — they agree).
 
 ## What this changes for the port
 
@@ -116,8 +121,14 @@ spawner) is unaffected and can proceed; only the DATA needs the serving route.
 from the user's disc is the same job as serving arc members, and it is now on
 this lane's plate.
 
-## What is still unknown
+## What is still open
 
-Whether the retail DOL's layout can be resolved from the debug maps at
-acceptable confidence, or whether it needs a signature/scan approach. Until
-that is answered, the vegetation port can land its CODE but not its ASSETS.
+Only the build work: hand the ported managers their bytes at load, reading from
+the user's `main.dol` at the recorded offsets, exactly as arc members are served
+today. Nothing about the location or the identity of the data is unknown any
+more — 39/39 blobs matched exactly, 0 misses.
+
+The one thing a content match does NOT establish is that the runtime consumer
+reads from that file offset; the DOL is relocated at load. Serving hands over
+the BYTES, so that distinction does not block the port — but it would block any
+scheme that tried to point the game at its own DOL image.
