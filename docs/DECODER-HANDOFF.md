@@ -537,3 +537,61 @@ p2 ruling: HOLDS for byte-perfect (board line 472 — do not re-ask).
 Estate HOLD: DECODER exempt. Four-version verification: this lane runs the
 Matching flip + gate itself at each TU close. Queue after yw1: ko1 parks,
 p2 mirror family, then the charter order (kamome certified MATCH×4).
+
+
+## SESSION UPDATE 13 (2026-08-22, sixth instance, MID-SESSION refresh — not a retirement)
+
+**Written on the user's check-in; this instance has ~14.6M tokens of
+headroom and is NOT retiring. Refresh so the handoff never lags a
+retirement again. Lane state: WWDP head `b7a748b4`.**
+
+### TU scoreboard since UPDATE 12 (all figures objdiff exact-counts)
+- **ym1 123/124** (advanced from 121; parks reduced to the chngAnmAtr tail).
+- **yw1 109/119** (advanced from 24; campaign parked-open on the
+  setHairAngle spring family — anchor doc has the falsification list).
+- **kg1 CLOSED 55/66** fuzzy 98.69 (11 = kari harness family, documented).
+- **mgameboard CLOSED 17/23** (sinit cXyz copy-ctor park family).
+- **fallrock_tag 7/7, tag_ba1 17/17, obj_aygr 18/18 — three consecutive
+  100.00 TUs.** aygr went upstream as PR #1179 (History/Bridge submitted;
+  I ack'd on the board: they keep owning submissions).
+- **d_a_grid ACTIVE: 15/20, batches 1-4 committed** (8fce0db2 = batch 3,
+  b7a748b4 = batch 4). FRAMEWORK unit (DOL, SDA relocs — first non-REL TU
+  this session). Anchor: decode-drafts/grid-progress.md.
+
+### grid campaign — where to pick up
+Remaining: **packet draw (0x830, next)** then **ho_move (0xD1C)**. Read
+d_a_sail's draw/sail_pos_move FIRST (matched sibling; grid = the ship 帆).
+Draw heals the string pool ("Ship" first ref at +0x7ee), the @literal
+ordering in _create/_execute (donor 0.5f/1.0f numbered before _create),
+and .data @2100/@2080 (two (1,1,1) triples). Still to extract from the
+target obj: l_texCoord (85×8B at .data 0x414), l_matDL (0x34 GX display
+list), z_rate_tbl$4444 (ho_move func-static, 13×f32). Parks standing:
+_execute reg swap (batch 2), setNrmVtx 2-insn remat shape (batch 4,
+6 spellings falsified in-source — do not re-run them).
+
+### New levers this stretch (grid batches; full text in grid-progress.md)
+- **WW J3D packet layout**: J3DDrawPacket sizeof 0x24, J3DMatPacket 0x3C —
+  repo header offset comments are TP-stale but the COMPILED layout is
+  correct; derive packet classes directly. DOL proof: entryMatAnmSort
+  reads mpMaterialAnm at 0x38, addShapePacket head at 0x28.
+- **cMtx_concat, never raw PSMTXConcat** — the m_Do_mtx.h inline wrapper
+  is what makes arg3 evaluate first (bwdg/goal_flag/majuu_flag precedent).
+- **Stack-slot decl order**: named locals get frame slots in declaration
+  order, later = lower; reorder decls to swap slots (setTopNrmVtx).
+- **Int reg numbering via decl scope**: `int top;` before the loop vs
+  inside flips r28/r29 allocation.
+- **Heal-at-closure families**: string-pool offsets AND @literal-number
+  ordering (SDA hoist order sorts by @num = first-use across the TU) both
+  fix themselves when the earlier-emitted functions are written — do not
+  chase them per-function in a framework TU.
+
+### Monitors (live right now)
+30s timer `biqv5rnmn` RUNNING (tick ~478). CALLS watcher re-armed as
+`bjjp1qdpm` — NOTE it fires on MY OWN filed rows too; read, then re-arm
+in the same breath. Registry logging per charter.
+
+### Queue after grid
+ko1 parks, p2 mirror family, then charter order. The kari-family
+transform-search harness remains the intended instrument for the parked
+register shapes (ym1/kg1/mgameboard/grid share the family); solving it
+once pays across four TUs.

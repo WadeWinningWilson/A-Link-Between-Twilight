@@ -76,8 +76,55 @@ differently than REL @-pools.
   alphaFar/Near(0x30/31) + fadeDist(0x34); l_ship = daShip_c* GLOBAL
   DEFINED IN THIS TU (sbss).
 
+## Batch 3 (WWDP 8fce0db2): 14/20 matched
+
+- NEW 100s: _create-cluster heals — __sinit, __dt__10daHo_HIO_c,
+  __dt__13daHo_packet_c, entry weak, _draw, setTopNrmVtx. _create 97.88,
+  _delete 93.55 (pool-only), _execute 98.54 (batch-2 reg park stands).
+- **STRUCTURAL: J3D packet layout is TP-stale in comments only.** WW
+  J3DDrawPacket sizeof = 0x24, J3DMatPacket = 0x3C (DOL evidence:
+  entryMatAnmSort reads mpMaterialAnm at 0x38, addShapePacket list head
+  at 0x28, ctor inits 0x24/0x2C/0x30=-1/0x34/0x38). The repo header's
+  `/* 0x28 */`-style comments and `// Size: 0x40` are TP numbers, but the
+  COMPILED layout is already WW-correct — derive daHo_packet_c from
+  J3DMatPacket directly; mShapePacket lands at 0x3C, mMtx at 0x80.
+  daHo ctor = zero 18A2/189C/18A0/189E, alpha 255,
+  setShapePacket(&mShapePacket) (0x28 = mpShapePacket, NOT init-shape).
+- **LEVER (new): stack-slot decl order.** Named cXyz locals get frame
+  slots in DECLARATION order (later decl = lower address). setTopNrmVtx
+  needed `cXyz out;` declared BEFORE the cross var to swap two slots.
+- **LEVER (new): cMtx_concat, not PSMTXConcat.** The m_Do_mtx.h INLINE
+  WRAPPER evaluates its args as a call boundary — arg3 (packet mMtx addi)
+  emitted FIRST, then j3dSys, then calc_mtx. Raw PSMTXConcat evaluates
+  left-to-right and never matches. Precedents: d_a_bwdg, d_a_goal_flag,
+  d_a_majuu_flag all spell `cMtx_concat(j3dSys.getViewMtx(), *calc_mtx,
+  packet.getMtx())`.
+- **LEVER (new): int reg-numbering via decl scope.** `int top;` declared
+  BEFORE the for loop (assigned inside) makes top enter the allocator
+  before i → top=r29, i=r28 as donor. Declared inside, order flips.
+- HIO dtor sets mNo = -1 (donor teardown, not empty).
+- _create decode: fopAcM_ct + param u8 (0x1B48) + resLoad Cloth/Ship +
+  HIO createChild("船の帆" SJIS) + 85-vertex loop: band amp
+  (rows 0-6→40, 7-13→70, 42-55→85, else 80), z-envelope
+  amp*sin(minDist * 1.05f*(pi/2 / (span*0.5f))), column-detect 12-term
+  || chain (i≡j mod 7 → top=j+56, default 6), y-envelope split at
+  l_pos[top].y (below: 0-anchored 1.05 rate, amp 35/70/80 by top;
+  above: 84-anchored 1.15 rate, amp 20), mSwingSize[i] =
+  std::sqrtf(SQUARE+SQUARE). l_pos = static Vec[85] extracted bit-exact
+  (12 rows x 7 cols + apex y=368.75).
+- Carves: daGrid_c mParam 0x1B48, f32 mSwingSize[85] 0x1B54,
+  cXyz mVtxSpd[85] 0x1CA8. daHo_HIO_c full 0xA4 (cloth-sim params
+  0x3C-0xA0, values in ctor).
+- PARK-until-closure families in _create/_delete: string pool ("Ship"
+  first ref lives in packet::draw at +0x7ee) and @literal ordering
+  (donor 0.5f/1.0f numbered in draw/ho_move before _create) — both heal
+  when those two functions are written. Also .data @2100/@2080 (two
+  (1,1,1) float triples) precede l_pos — emitted from draw/ho_move
+  bodies.
+
 ## NEXT
 
-_create (0x514, heals sinit + string pool), setNrmVtx (0x538), then
-packet draw (0x830) and ho_move (0xD1C) - consult d_a_sail's
-equivalents FIRST for each.
+setNrmVtx (0x538), then packet draw (0x830, heals string pool + @2100/
+@2080), then ho_move (0xD1C, heals @literal order; z_rate_tbl$4444
+func-static 13xf32, l_texCoord 85x8B, l_matDL 0x34 GX display list
+still to extract). Consult d_a_sail's equivalents FIRST for each.
