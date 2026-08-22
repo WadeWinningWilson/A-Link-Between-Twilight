@@ -9,6 +9,40 @@ marks an item blocked on someone else and does not count as open.
 
 ## Open
 
+- [x] **LWOOD IS FIXED AND USER-CONFIRMED — "perfect and in color now."** Root cause:
+  the same matPacket entered more than once per `dDlst_list_c::reset()` window, so
+  `entryMatSort` matched `isSame` against ITSELF and wrote `head->next = head`
+  (`J3DPacket.cpp:199`) — circular list, frame never completes, `drain()` never runs,
+  FIFO to the 4 GB assert. Fix: ONE ENTRY PER FRAME FILL, the discipline
+  `ww_wave.cpp:944` already documented. Confirmed causally: 9 skips fired, self-loops
+  0 (was 2), cycles 0 (was 4), draws reached **3,240** vs dying at **44**, clean
+  shutdown, `overflow:0`. Kill switch `WW_LWOOD_ONCE=0` restores the old behaviour.
+- [ ] **WW GRASS AND FLOWERS STILL BLACK** — user-confirmed, next on this lane. NOT the
+  same defect as lwood: lwood was a packet-chain cycle, this is colour/material. Prior
+  work already falsified `finish_toon`; the `bg_overlay` / AmbCol receipts are built and
+  the disputed lead is that stage `sea` has no receiver kankyo data so BG-consumed AmbCol
+  reads unlit. Start from the built receipts rather than a fresh hypothesis.
+- [ ] **PORTING QUEUE — History has a backlog; this lane is now free.** lwood was the
+  blocker holding the WW actor port; with the packet discipline understood, the same
+  one-entry-per-fill rule applies to every J3D-path WW actor ported next.
+
+- [x] *(STOOD DOWN — the GX path is fixed, so the bypass is a diagnostic, not a path.)* **GfxService SPIKE increment 1 — ran, succeeded.**
+  `mods-src/ww_donor_disc/ww_gfx_spike.cpp` (new TU), declared in `registry.h`,
+  called from `main.cpp` init/shutdown, added to `standalone/CMakeLists.txt`.
+  Gated `WW_GFX_SPIKE=1`; unarmed builds pay nothing. Answers the three
+  preconditions in ONE boot — is GfxService acquirable, does `register_draw_type`
+  take, does `SCENE_AFTER_TERRAIN` fire — before any WGSL work is paid for.
+  **The import is `IMPORT_OPTIONAL_SERVICE`, deliberately:** the required form
+  makes the mod FAIL TO LOAD when the host cannot satisfy it, which would take
+  the whole plugin — working Outset warp and disc reader included — offline.
+  Pre-flight clean: braces/parens balanced, both entry points at global scope
+  (anon-namespace link trap checked), 5/5 call sites arity-matched.
+- [x] *(STOOD DOWN — see above; recipe preserved at docs/RECIPE-plugin-side-j3d-rendering.md.)* **GfxService SPIKE increment 2 — real mesh ran, 21,232 draws, zero overflow.**
+  Deliberately NOT written yet: it is the expensive half and is worth nothing if
+  increment 1 says the route is unreachable. Shape is already fixed by increment
+  1 (same stage, same callback), so nothing relocates. Increment 1's receipt
+  records `reversed_z` and `sample_count` precisely because the pipeline state
+  must match the scene pass exactly.
 - [x] **Alwd bisect run 1 — `WW_LWOOD_DRAW=10` — DONE, FAIL @ n=3, ATTRIBUTABLE.**
   `zeroed=2 mats=2 bytes_was=896 armed=1`; mode-1 control clean the same minute.
   SharedDL content is not the trigger.
