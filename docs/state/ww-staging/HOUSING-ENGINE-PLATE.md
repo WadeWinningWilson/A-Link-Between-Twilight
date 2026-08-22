@@ -9,6 +9,32 @@ marks an item blocked on someone else and does not count as open.
 
 ## Open
 
+- [x] **`ww_sky.cpp` SPLIT — DONE 2026-08-22.** Six increments, commits `436c55503f`
+  → `9655e48c56`. ww_sky.cpp 1155 → 424; `d_kankyo_rain.cpp` 1678, `d_kankyo.cpp` 928.
+  Every increment built exit 0 with the artifact checked FRESH (not trusted from the
+  exit code — build_install.bat has printed [OK] Installed over a fatal link error).
+  Donor-owned bodies now sit in donor-named units; what remains in ww_sky.cpp is
+  plugin-side orchestration with no donor counterpart (Always/phase poller,
+  wwSkyMoveSun/MoveStar, wwSkyEntryBuf, the packet draw()s and public entry points).
+  Sequencing that made it cheap: give shared state its donor OWNER first
+  (`WwCelestial::setSunpos`, mirroring `dScnKy_env_light_c` 0xAB4/0xAC0), then the
+  consumers move with nothing new to publish.
+  Two defects found and fixed IN the split, both mine: inc.1/inc.2 left donor
+  citation banners behind so the moved bodies lost their line refs and the banners
+  floated above unrelated functions; and inc.6 claimed "every rain-owned citation is
+  gone (checked)" when the check had not run yet and returned 1. Corrected in
+  `9655e48c56`.
+  **NOT verified: nothing in this split was diffed against the donor or RUN. The sky
+  has not been observed rendering since inc.1.** A split moves code; it does not test
+  it. That run is the open risk this item hands forward.
+- [ ] **`ww_wave.cpp` remainder — `d_kankyo_wether` + `d_kankyo`.** 580 lines left.
+  `wwWaveUsonamiSet` is the d_kankyo piece (donor `dKy_usonami_set`,
+  d_kankyo.cpp:3427); the packet, channel and entry points are wether's.
+- [x] **`d_kankyo_rain` SPLIT DONE** — `50c4d09cba`, builds and installs. 2 of 3
+  units out of ww_wave.cpp.
+- [x] **`d_a_sea` SPLIT DONE** — `f5fa173578`, plus the KIT-DONOR correction
+  (`usonami` was never d_a_sea's).
+
 - [x] **LWOOD IS FIXED AND USER-CONFIRMED — "perfect and in color now."** Root cause:
   the same matPacket entered more than once per `dDlst_list_c::reset()` window, so
   `entryMatSort` matched `isSame` against ITSELF and wrote `head->next = head`
