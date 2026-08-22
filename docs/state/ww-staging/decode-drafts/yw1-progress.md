@@ -246,3 +246,30 @@ set_pthPoint/setHairAngle/chngTsuboAnm/chk_brkTsubo/chk_bm1Odoroki (pot+
 hair subsystems — read fresh, no ym1 twin); walk_1 (path); wait/turn/talk
 ladder; demo/_draw/_execute/_create; partner family (searchByID/
 partner_search/partner_search_sub — ba1+ko1 vocabulary).
+
+
+## Fresh-eyes tail pass (2026-08-22): 109 -> 113/119, fuzzy 99.25
+
+WWDP 7624deba + 69605d23. Four functions to 100 (sinit, turn_1,
+lookBack, talk_1) + walk_1 91.9->99.0 and chk_areaIN 99.98.
+
+**Real defects found (not parks):**
+- sinit 75.9->100: l_hed_front is cXyz(0.0f, 1.0f, 0.0f) — the donor
+  constructs the head-front unit vector in sinit; a default-ctor decl
+  loses it. Read the sinit disasm's inline-ctor stores, they ARE the
+  initializer values.
+- walk_1's area gate was INVERTED vs donor: `chk_areaIN(...) == false`
+  (walk while OUTSIDE the stop zone). A real behavior divergence.
+- Two LEVERS did everything else:
+  1. **INT-LOCAL for s16-returning calls** (cLib_targetAngleY etc.):
+     donor captures into `int`, giving extsh AT ASSIGNMENT; an s16 local
+     or inline call defers/skips the extsh and never matches. Five
+     instances today (walk_1, turn_1, chk_areaIN, + grid earlier).
+  2. **Signedness at the CONSUMER, not the producer**: m7C3 s8 (raw lbz
+     into an Sc param — u8 adds a conversion extsb), m7C4 s8 (switch
+     extsb), m776 bool (bare-srwi store of a compare). The store/param
+     SHAPE names the declared type.
+
+Remaining: setHairAngle 94.7 (the parked spring family, sweep-harness
+target) + 5 pool-position stragglers owned by the 6 unwritten functions
+(hana_action/wait_action tails per the campaign map).
