@@ -84,3 +84,46 @@ wait_action1-4 · createInit 172 · bodyCreateHeap 192 · head/itemCreateHeap ·
 CreateHeap · _create 74 · next_msgStatus 172 · _execute 174 · _draw 128 ·
 lookBack 90 · turn_1 · eventOrder done · privateCut · endEvent done ·
 init_YM* family · chngAnmTag/ctrlAnmTag/ctrlAnmAtr · shadowDraw · demo.
+
+
+## Batch 11 (2026-08-21, post-compaction resume): createInit closed — 98/124
+
+Byte-exact: createInit (WWDP b3432a6c), _nodeCB_BackBone; decideType
+snapped exact as a side effect of the init_YM* retype. _nodeCB_Head is
+LOGIC-EXACT, parked on bss-position (the static a_eye_pos_off guard block
+@3569 sits 84 bytes earlier in my .bss than retail — earlier .bss content
+not yet emitted; converges with the TU).
+
+createInit decode facts:
+- staff jump table @4408: cases 0-5 -> init_YM1_0/1, init_YM2_0/1/2/3;
+  cases 6 AND 7 share one label -> init_YMx_error; default (>7) ret=0.
+- a_att_dis_TBL[3][2] u8 .data = {{0,0},{0xAA,0xAA},{0xAA,0xAA}} (the
+  earlier "6 bytes of 0xAA" read was WRONG — first pair is zeros).
+- a_staff_tbl char*[8] .data = Ym1,Ym1,Ym2,Ym2,Ym2,Ym2,Ym1,Ym2.
+- kari mass-cyl block (mStaff==0): m704.SetStts/Set, offset cXyz(0,0,80)
+  rotated by current.angle.y, SetC/SetR(50)/SetH(30),
+  dComIfG_Ccsp()->SetMass(&m704, 3). Pool: gravity -4.5f (same as ob1).
+- TYPE SIGNAL cashed: single clrlwi. at the switch JOIN (no per-case
+  truncation) => init_YM* return bool, ret is bool. int-returning callees
+  + u8/bool ret both add a per-case clrlwi and miss by 7 rows.
+
+NEW LEVER (proven on _nodeCB_BackBone, 4-row swing):
+mDoMtx_stack_c::XrotM(m_jnt.getBackbone_y()) — the WRAPPER form
+pre-evaluates the inline-accessor argument (lha lands BEFORE the lis/addi
+of &now). The direct mDoMtx_XrotM(mDoMtx_stack_c::now, accessor()) form
+evaluates left-to-right and misses. Note the asymmetry: with a PLAIN FIELD
+argument (createInit's YrotM(current.angle.y)) the wrapper emits &now
+first — the pre-evaluation only fires for inline-call arguments.
+
+Header corrections: 0x704 cyl renamed m704 (was shadowing
+fopNpc_npc_c::mCyl at 0x574 — first block of createInit uses the BASE
+mStts/mCyl, kari block uses the derived m704); m84C/m870 carved to cXyz.
+
+Remaining (~26 non-exact): bodyCreateHeap 192 · headCreateHeap ·
+itemCreateHeap · CreateHeap · next_msgStatus 172 · _execute 174 ·
+_draw 128 · demo 78 · privateCut · setStt · anmAtr · chk_talk ·
+chkAttention · setAttention · set_collision_sp · plus the pool/bss parks
+(init_texPttrnAnm, setAnm_anm, chngAnmAtr, kari_1, _nodeCB_Head,
+set_cutGrass, chk_areaIN, wait_2, SITwai, shadowDraw, _create, near-100s).
+NEXT: the createHeap family as one cluster (share arc/model vocabulary),
+then next_msgStatus/_execute/_draw, then the talk/attention cluster.
