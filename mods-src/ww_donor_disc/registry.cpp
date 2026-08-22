@@ -3095,8 +3095,89 @@ static int lwoodHideShapePackets(J3DModel* model) {
 // WwLwood_draw is the tick site and sits above that definition.
 void wwGxCensusTick();
 extern int s_lwoodDrawsThisFrame;
+extern int s_dlstResets;
 
 #include "ww_j3d_mesh.inc"
+
+// ============================================================================
+// ONE ENTRY PER FRAME FILL — the fix, and the discipline this plugin already
+// documents for its own working WW content.
+//
+// `ww_wave.cpp:944` states the hazard verbatim: "Must run once per frame fill -
+// a second entryImm of the same packet before drawClear makes next=self
+// (circular list -> die)." The waves survive because `wwWave_drawQueue` enters
+// once per fill. lwood had no such discipline.
+//
+// WHAT GOES WRONG WITHOUT IT, measured rather than assumed: the scene renders
+// several passes inside one `dDlst_list_c::reset()` window (steady state 8
+// entries / 4 lwood draws per frame; the fatal frame reached 31+ entries and 7
+// lwood draws inside a SINGLE reset). On the second pass `J3DJoint::entryIn`
+// resets each matPacket's head, then `J3DDrawBuffer::entryMatSort` finds that
+// same matPacket STILL IN ITS BUCKET and matches `isSame` against ITSELF,
+// running `A->addShapePacket(A->getShapePacket())` — which writes
+// `head->next = head` (`J3DPacket.cpp:199`). Traversal never terminates, the
+// frame never completes, aurora's per-frame `drain()` never runs, and the FIFO
+// doubles to the UINT32_MAX assert.
+//
+// AND `drawClear()` IS NOT A GUARD, though it looks like one: it nulls
+// `mpNextPacket` only, clearing a STALE chain. `entryMatSort` calls it at the
+// top and the self-merge re-links head->head regardless. Ordering does not save
+// this; only not entering twice does.
+//
+// CORROBORATION FROM THE FIRST BISECT OF THE HUNT: `mode 5 (one submit)` PASSED
+// while every multi-submit mode failed. That result predates all of the
+// investigation that eventually explained it.
+//
+// SIDE TABLE, NOT A MEMBER FIELD: `LwoodMembers` mirrors the donor's
+// `daLwood_c` layout and its size is tied to the actor profile, so adding a
+// field there would change the actor size and break donor fidelity.
+//
+// KILL SWITCH: WW_LWOOD_ONCE=0 restores the old (crashing) behaviour so the fix
+// can be A/B'd against itself. A fix that cannot be turned off cannot be
+// proven to be the thing that fixed it.
+// ============================================================================
+struct LwoodFillGuard {
+    void* self;
+    int lastReset;
+};
+
+LwoodFillGuard s_lwoodFill[8];
+int s_lwoodFillN = 0;
+int s_lwoodFillSkips = 0;
+int s_lwoodFillOverflow = 0;
+int s_lwoodOnceEnabled = -1;
+
+bool wwLwoodOnceEnabled() {
+    if (s_lwoodOnceEnabled < 0) {
+        const char* e = std::getenv("WW_LWOOD_ONCE");
+        s_lwoodOnceEnabled = (e != nullptr && e[0] == '0') ? 0 : 1;
+    }
+    return s_lwoodOnceEnabled == 1;
+}
+
+// True when this actor has ALREADY been entered in the current fill window.
+// Records the window on first sight so the first pass of every frame proceeds.
+bool wwLwoodAlreadyEnteredThisFill(void* self) {
+    for (int i = 0; i < s_lwoodFillN; i++) {
+        if (s_lwoodFill[i].self == self) {
+            if (s_lwoodFill[i].lastReset == s_dlstResets) {
+                return true;
+            }
+            s_lwoodFill[i].lastReset = s_dlstResets;
+            return false;
+        }
+    }
+    if (s_lwoodFillN < 8) {
+        s_lwoodFill[s_lwoodFillN].self = self;
+        s_lwoodFill[s_lwoodFillN].lastReset = s_dlstResets;
+        s_lwoodFillN++;
+        return false;
+    }
+    // TABLE FULL: never suppress a draw we cannot account for, and say so.
+    // Silently dropping draws here would look like the fix working.
+    s_lwoodFillOverflow++;
+    return false;
+}
 
 int WwLwood_draw(void* self) {
     LwoodMembers* m = lwoodMembers(self);
@@ -3106,6 +3187,25 @@ int WwLwood_draw(void* self) {
     const int mode = lwoodDrawMode();
 
     wwGxCensusTick();   // GX traffic census - counters only, no behaviour change
+
+    // THE FIX. Skip any submit after the first in this fill window; entering the
+    // same model twice is what lets entryMatSort merge a packet with itself.
+    if (wwLwoodOnceEnabled() && wwLwoodAlreadyEnteredThisFill(self)) {
+        s_lwoodFillSkips++;
+        if (s_lwoodFillSkips <= 4 || (s_lwoodFillSkips % 600) == 0) {
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_fill_skip\",\"n\":%d,\"reset\":%d,"
+                 "\"draws_this_frame\":%d,\"overflow\":%d,"
+                 "\"reads\":\"SECOND submit of this instance inside one reset window - "
+                 "suppressed. This is the entry that would have met itself in entryMatSort and "
+                 "written head->next = head. Skips appearing at all CONFIRMS the scene renders "
+                 "multiple passes per frame fill; skips at ZERO with the run still alive would "
+                 "mean the fix is not what saved it. overflow>0 means the guard table filled "
+                 "and some draws were NOT accounted for\"}",
+                 s_lwoodFillSkips, s_dlstResets, s_lwoodDrawsThisFrame, s_lwoodFillOverflow);
+        }
+        return 1;
+    }
 
     // ------------------------------------------------------------------------
     // THE BRANCH PROBE — which arm of mDoExt_modelUpdateDL does lwood take?
