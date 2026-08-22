@@ -51,11 +51,22 @@ marks an item blocked on someone else and does not count as open.
   **NOT LINK-TESTED:** no parent project here includes the in-tree target, so the
   in-tree link is reasoned from static evidence only. Integrator can settle it.
 
-- [ ] **WW GRASS AND FLOWERS STILL BLACK** — user-confirmed, next on this lane. NOT the
-  same defect as lwood: lwood was a packet-chain cycle, this is colour/material. Prior
-  work already falsified `finish_toon`; the `bg_overlay` / AmbCol receipts are built and
-  the disputed lead is that stage `sea` has no receiver kankyo data so BG-consumed AmbCol
-  reads unlit. Start from the built receipts rather than a fresh hypothesis.
+- [ ] **WW GRASS AND FLOWERS STILL BLACK** — user-confirmed. **THE STANDING LEAD IS
+  DEAD: falsified offline 2026-08-22** (`2cf3463e11`, artifact
+  `FINDING-sea-kankyo-data-present.md`, tool `tools/foundry/ww_dzs_kankyo.py`).
+  Stage `sea` DOES have kankyo data — `sea/Stage.arc` → `stage.dzs` carries Pale x57
+  (**none** all-zero), EnvR x52, Colo x10, and `selectPale()` resolves IN RANGE at
+  every hop for room 44 (`EnvR[44]=[0,1,2,0,0,0,0,0]` → `Colo[0]` → Pale 0..5, all
+  populated). So "no data for a WW stage" explains nothing; the inline comment
+  asserting it is corrected (`8b7be04b13`).
+  **This item was written down as boot-blocked and it was not** — it was a DATA
+  question. Fifth finding to fall to opening the disc.
+  **STILL NEEDS THE BOOT, and one receipt forks it — already unconditional, nothing
+  to arm:** `pale_bind` at `registry.cpp:6916`. Counts present ⇒ defect is DOWNSTREAM
+  (the write, or what the daBg draw consumes — read `bg_overlay` next). Receipt
+  absent or `n=0` ⇒ binding never happened for `sea`, and that is the defect.
+  `WW_BG_AMBCOL` stays OFF: misconceived on the write side AND premised on a
+  falsified fact.
 - [ ] **PORTING QUEUE — History has a backlog; this lane is now free.** lwood was the
   blocker holding the WW actor port; with the packet discipline understood, the same
   one-entry-per-fill rule applies to every J3D-path WW actor ported next.
