@@ -489,3 +489,51 @@ compiles clean at 8/119. NEXT: HIO ctor + prm table decode (ONE 0x38 child,
 Head's shape), then the init_YW1_* ladder and createInit. Sibling rule:
 check the ym1 twin FIRST for every function; chk_areaIN here is a FOUR-ARG
 variant — do not transplant blindly.
+
+
+## SESSION UPDATE 12 (2026-08-21, fifth instance, FINAL — retirement handoff)
+
+**Lane state at hold: ym1 121/124, yw1 24/119, WWDP head `a636ad9d`.**
+The user ordered a HOLD pending this handoff's paste and this instance's
+retirement. Successor: execute the standing wake protocol (arm watcher +
+timer FIRST, log in MONITOR-REGISTRY.md, re-derive open items from CALLS.md
+— NOT from any handoff, including this one).
+
+### Where to pick up
+
+**yw1 is the active TU (24/119).** Campaign anchor:
+`docs/state/ww-staging/decode-drafts/yw1-progress.md` — batches 1-3 filed
+with the full carve list and the NEXT queue. Start with the
+play_animation/upLift/setMtx cluster, then bck/btpResID (CHECK THE
+SINGLE-ENTRY-TABLE TRAP FIRST — ym1's btpResID {0xE} landmark). Sibling
+rule holds: read the ym1 twin before every function; the pot/hair/path
+subsystems (chngTsuboAnm, chk_brkTsubo, setHairAngle, set_pthPoint,
+walk_1) have NO ym1 twin — read their asm fresh.
+
+**ym1 (121/124) holds 3 harness-class parks** — kari_1 slot swap,
+setAnm_anm shared tail, chngAnmAtr unfolded ble/b (EIGHT source shapes
+falsified — see ym1-progress batch 17 + the else-return note in yw1-progress;
+do not re-run those shapes). Matching flip + four-version gate deferred
+until they close. The transform-search harness (offered to Foundry,
+unclaimed = mine) is the intended instrument; yw1's own chngAnmAtr twin
+(limit 7) shares the idiom — solving either pays twice.
+
+### Session levers (full list in the two progress anchors)
+Single-entry-table pool fix · orphan GXColor pool-only reproduction ·
+orphan bss statics (l_check_inf/wrk) · single-iteration HIO loop idiom ·
+else-return fail-block placement · `return intcall() != 0` normalize ·
+wrapper-XrotM inline-arg pre-evaluation · negated-accessor ZrotM (yw1) ·
+copy-init vs ctor cXyz spelling tell · switch-join bool type signal ·
+per-case block locals never overlap.
+
+### Monitors at retirement
+30s timer buskawsp0 STOPPED at hold (user order — no further work ticks).
+CALLS watcher b26a88ox8 left ARMED so the board stays monitored through
+the handoff gap; it dies with this session's process — successor re-arms
+both per charter and logs the arms. All entries in MONITOR-REGISTRY.md.
+
+### Standing orders unchanged
+p2 ruling: HOLDS for byte-perfect (board line 472 — do not re-ask).
+Estate HOLD: DECODER exempt. Four-version verification: this lane runs the
+Matching flip + gate itself at each TU close. Queue after yw1: ko1 parks,
+p2 mirror family, then the charter order (kamome certified MATCH×4).
