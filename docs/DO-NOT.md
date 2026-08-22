@@ -724,3 +724,81 @@ a guess, and is later read as fact. (Structurally identical to the era problem i
 
 **Verification signature:** every exported filename traces to donor addressing;
 every interpretation lives in a sidecar CSV/JSON beside it.
+
+---
+
+## DN-15 — NEVER fuse two donor units into one file, and NEVER port to a path the donor does not use
+
+**THE RULE (the user, 2026-08-22):**
+
+> *"Files shouldn't themselves port 2/3 things. They should each port ONE thing
+> (or follow vanilla, if vanilla keeps those lines/port items separate, we do
+> too)."*
+
+extended the same day to bind all future work:
+
+> *"ensure that the kits (and any instances) now wire/port according to the WW
+> data organization from now on (unless explicit reasons are given)."*
+
+**SO: one translation unit per donor unit, living at the donor's own path.**
+`d/actor/d_a_sea.cpp` is ported at `src/ww/d/actor/d_a_sea.cpp`. Not beside it,
+not under a name we invented, not sharing a file with another unit.
+
+### What this cost before it was a rule
+
+A full day of reorg, on a plugin nobody had been careless with:
+
+- **four files each fused several donor units** — `ww_wave.cpp` alone carried
+  `d_kankyo_wether` + `d_kankyo_rain` + `d/actor/d_a_sea` + `d_kankyo`.
+- **two donor units had two porters apiece** — `d_kankyo_wether` was split
+  across `ww_kankyo_wind.cpp` and `ww_vrkumo.cpp`; `d_camera` across
+  `ww_cam_select.cpp` and `ww_cam_crawl.cpp`.
+- **one donor routine was ported TWICE**, under two names, in two files, with
+  nothing telling either author the other existed (`dKyr_init_btitex` →
+  `wwWaveInitBtitex` *and* `wwSkyInitBtitex`).
+- **provenance rotted quietly**: `usonami` was attributed to `d_a_sea` because
+  the symbol *appears* there — `d_a_sea.cpp:519` only CALLS it; the donor
+  DEFINES it at `d_kankyo.cpp:3427`. Splitting on that header would have
+  shipped a `d_a_sea.cpp` asserting a routine that unit never owned.
+
+**Every one of those was written by someone who would have agreed with this
+rule if asked.** That is the point. A rule enforced by memory decays at the
+rate instances are replaced.
+
+### The mechanical enforcement — this is not advisory
+
+`tools/foundry/ww_layout_gate.py`, wired into **pre-commit in both repos**:
+
+- dusklight: `.githooks/pre-commit` (requires `git config core.hooksPath .githooks`)
+- the WW plugin repo: its own `.git/hooks/pre-commit`
+
+It checks **only staged files**, so an in-progress split cannot block unrelated
+commits — a gate that punishes bystanders gets disabled, and a disabled gate
+protects nothing. It refuses a commit that adds: more than one donor unit in a
+file, a file at a path its donor does not use, or an incomplete `KIT-*` block.
+
+`--control` proves it can **convict and acquit** — it is verified able to FAIL
+on each violation class, per DN-12.
+
+> ⚠ **`core.hooksPath` is per-clone config and is NOT carried by a clone.** A
+> fresh checkout has the gate present and NOT ARMED. Any instance setting up a
+> new working copy must run `git config core.hooksPath .githooks`, and must not
+> read the gate's silence as a pass until it has confirmed the hook fires.
+
+### The escape hatch, and why it must be argued in-file
+
+Some files genuinely cannot obey. Declare it **in the file**:
+
+```
+// KIT-LAYOUT-EXEMPT: <reason this cannot be one donor unit>
+```
+
+**An exemption with an empty reason is REFUSED** — that is the defect wearing a
+sticker. The founding case is `ww_cam_data.cpp`: its tables are *generated* into
+a blob shaped like the **receiver's** `camstyle.dat`, so what it ports is that
+receiver format, which matches no single donor unit. The three donor units are
+its inputs. Splitting it means changing the generator, not moving code.
+
+The reason goes in the file and not a side list because the user's wording was
+*"unless explicit reasons are given"* — and a reason nobody encounters has not
+been given.
