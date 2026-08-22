@@ -149,15 +149,33 @@ def main():
             skipped_names.append(os.path.basename(h) + ' (no byte/float array -- macro-built?)')
             continue
         for name, data in bl:
-            if len(data) < 16:
+            # SIZE IS NOT THE TEST -- UNIQUENESS IS. This used to skip anything
+            # under 16 bytes, on my assumption that "an 8-byte pattern occurs
+            # everywhere in a 3.8 MB image so a match would not be evidence."
+            # That assumption was WRONG and measurably so: l_color (8 B) and
+            # l_color3 (8 B) each occur EXACTLY ONCE in the whole image. The
+            # floor was excluding assets whose match is perfectly decisive.
+            #
+            # Small blobs are now searched and kept only when the match is
+            # UNIQUE; a small blob matching in several places is genuinely not
+            # evidence and is skipped BY NAME, which is the honest form of the
+            # rule I was reaching for with the floor.
+            if len(data) < 4:
                 skipped += 1
-                skipped_names.append('%s::%s (%d B, below the 16-byte search floor)'
+                skipped_names.append('%s::%s (%d B -- too short to be evidence at any count)'
                                      % (os.path.basename(h), name, len(data)))
                 continue
             off = dol.find(data)
             if off >= 0:
                 dup = dol.find(data, off + 1)
                 uniq = dup < 0
+                if not uniq and len(data) < 16:
+                    # A short blob matching more than once is not evidence.
+                    skipped += 1
+                    skipped_names.append(
+                        '%s::%s (%d B, matches at 0x%X AND 0x%X -- ambiguous, not served)'
+                        % (os.path.basename(h), name, len(data), off, dup))
+                    continue
                 tag = 'HIT' if uniq else 'HIT (also @0x%X -- NOT UNIQUE)' % dup
                 if emit:
                     # A non-unique blob is recorded with its uniqueness flag
