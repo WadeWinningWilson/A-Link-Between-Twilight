@@ -67,6 +67,19 @@ Outset-first charter did NOT select this TU, smallest-open-TU did.**
   statements = the donor declared it MID-BLOCK; hoisting to block top
   reorders the guard ahead of those statements and misses.
 
+## Batches 3-4: 7 -> 10/66 exact (fuzzy 25.3)
+
+- lookBack 99.8 / chkAttention 97.2 / nodeCallBack 95.9 (pool+slot
+  residues) + set_mtx/playTexPatternAnm/initTexPatternAnm(89) written.
+- LEVERS: (1) kg1 reads the player via **dComIfGp_getPlayer(0)**
+  (mPlayerInfo[0], gameInfo+0x5B44), NOT getLinkPlayer (getPlayerPtr(0),
+  +0x5B4C) - 8-byte offset tell distinguishes them. (2) byval cXyz arg
+  passed DIRECTLY (eyePos) - a named copy first doubles the stores.
+  (3) named RODATA symbols are donor spellings: m_arcname[3]=Kg +
+  m_camera_fovy=40.0f are CLASS statics, l_btp_ix_tbl={9,B,D,C} is a
+  file static - an anonymous-pool table means NEITHER (const local).
+- Parks: chkAttention slot-interleave (kari family), pools pending fill.
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
