@@ -162,6 +162,24 @@ the upLift reverse-decl lever (that one is same-kind locals only).
 - Carves: m700 fpc_ProcID (bm1 partner) · m6F4 ActionFunc ptmf ·
   m7C3/m7C4 u8 · m77D u8.
 
+## Batch 13: 66 -> 69/119 exact (same successor session) — partner family
+
+searchActor_Bm1 (ba1's searchActor_Fa verbatim, fpcNm_NPC_BM1_e) +
+partner_search_sub + partner_search. THREE LEVERS:
+1. **Read the INLINE before spelling asm branching in source.**
+   fpcM_GetID carries `p != NULL ? id : -1` INSIDE — my source-level
+   null-ternary doubled the check (two beq on one condition = the tell).
+   Same family as the ko1 message-reachability rule: the branch you see
+   in asm may live in a header, not in the donor's function.
+2. **Single-case-switch signature**: `cmpwi K; beq CASE; b DEFAULT` — the
+   UNINVERTED pair with a value-join = `switch (x) { case K: ...
+   default: ... }`, NOT if/else (MWCC inverts if/else and ternary here).
+   Also elides the s8 extsb that an if-compare emits.
+3. **bool-vs-BOOL chains**: a `clrlwi.` join-test means the value is bool
+   END-TO-END — if the producer returned BOOL(int), MWCC inserts a
+   normalize that retail lacks; retype the whole chain (partner_search_sub
+   → bool, ret → bool).
+
 ## Carved so far
 mPhs 0x6C4 · m_hed/bbone_jnt_num 0x6CC/D · m_hair1/2/3 0x6CE-D0 ·
 m704 fpc_ProcID (pot) · mPathRun 0x70C (dNpc_PathRun_c, 8b) ·
