@@ -749,11 +749,40 @@ endif ()
 # untouched, and the DUSK_EXCLUDE_WW gate build never configures it, so the
 # separability gate's tree stays WW-plugin-free too.
 # =============================================================================
+# -----------------------------------------------------------------------------
+# THE PLUGIN SOURCE LIVES OUTSIDE THIS REPO (2026-08-22).
+#
+# It used to be an in-tree copy at mods-src/ww_donor_disc. There were TWO live
+# copies -- that one and the extracted repo -- and they diverged: the in-tree
+# copy carried the whole lwood once-per-frame-fill fix (LwoodFillGuard,
+# wwLwoodAlreadyEnteredThisFill, the entryMatSort/addShapePacket hooks, 208
+# code lines) that the extracted repo did not have at all. **Repointing this
+# build without reconciling first would have silently reverted lwood.** They
+# were reconciled first; the in-tree copy is snapshotted at
+# Documents/ww_donor_disc-intree-backup-2026-08-22 with a per-file sha256
+# manifest, then removed so ONE source of truth remains.
+#
+# PATH IS A CACHE VARIABLE, NOT A LITERAL. An absolute path baked in here
+# would break every other builder including a fresh clone of this same repo.
+# It defaults to the sibling directory and the build SKIPS CLEANLY when the
+# folder is absent -- so a dusklight checkout without the plugin still
+# configures and builds, exactly as the old EXISTS guard allowed.
+#
+# add_subdirectory needs an explicit BINARY dir here: the source is not
+# beneath this directory, and CMake requires the second argument in that case.
+# -----------------------------------------------------------------------------
+set(DUSK_WW_PLUGIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../A Link Between Twilight WW"
+        CACHE PATH "Source directory of the WW donor-disc plugin (outside this repo)")
+
 if (DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID
-        AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mods-src/ww_donor_disc/CMakeLists.txt")
+        AND EXISTS "${DUSK_WW_PLUGIN_DIR}/CMakeLists.txt")
     include(cmake/GameABIConfig.cmake)  # include_guard'd; no-op when already present
     include(cmake/ModSDK.cmake)
-    add_subdirectory(mods-src/ww_donor_disc)
+    add_subdirectory("${DUSK_WW_PLUGIN_DIR}" "${CMAKE_BINARY_DIR}/ww_donor_disc")
+elseif (DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID)
+    message(STATUS
+            "WW plugin not built: no CMakeLists.txt at '${DUSK_WW_PLUGIN_DIR}'. "
+            "Set -DDUSK_WW_PLUGIN_DIR=<path> to point at it. This is not an error.")
 endif ()
 
 # =============================================================================
@@ -766,8 +795,9 @@ endif ()
 # works end to end on a stock dusklight (run 180329) and an instrument that
 # has answered its question is litter.
 #
-# `ww_registry` is MERGED, not deleted — its source is mods-src/ww_donor_disc/
-# registry.cpp and its entry points are called from that mod's own.
+# `ww_registry` is MERGED, not deleted — its source is the plugin's
+# src/plugin/registry.cpp (at ${DUSK_WW_PLUGIN_DIR}, no longer in this repo)
+# and its entry points are called from that mod's own.
 #
 # ONE CONSEQUENCE WORTH KNOWING WHEN READING THE BUILD: the registry's
 # default-OFF opt-in (DUSK_WW_REGISTRY) is gone with it, so the actor
