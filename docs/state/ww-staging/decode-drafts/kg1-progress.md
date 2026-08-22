@@ -180,6 +180,41 @@ Outset-first charter did NOT select this TU, smallest-open-TU did.**
   (d) fopNpc 0x29B = m_jnt.mbHeadLock (0x290 + JntCtrl 0x0B) - a bare
   stb 1 there is onHeadLock() inlined.
 
+## Batch 9: fuzzy 60.40 -> 98.69 - CAMPAIGN CLOSED TO PARKS (WWDP e35aa8f3)
+
+- wait_action 98.58 first compile: the whole 12-state Squid-Hunt driver
+  (staffId "Kg1" via dComIfGp_evmng_getMyStaffId; daMgBoard_c located by
+  fpcNm_MGBOARD_e + fopAcIt_Judge(fpcSch_JudgeForPName,...); case 0
+  FALLS THROUGH into case 1; pay/talk/game/A-press/present-demo chain;
+  prize tables {07,CC,05} by getEventReg(0xFE07) and {F1,06} by
+  0xFF07 clamp; fopAcM_createItemForPresentDemo + event_setItemPartnerId;
+  gameInfo "|=8" = dComIfGp_event_reset() (dEvt_control_c mEventFlag
+  0xE8, ctrl base 0x51D8), "&=~2" @0x52AE = event_offHindFlag(2),
+  A-press = CPad_CHECK_TRIG_A(0), SE = fopAcM_seStart(this,
+  JA_SE_PLAYSPOT_START, 0)). Park: r27/r28 numbering + procName/items2
+  slot swap (target procName=8 BELOW the case arrays - no lexical
+  spelling reaches it; kari family).
+- Lifecycle: **target has NO _delete/_execute/_draw symbols -> bodies
+  are `inline` members expanded INTO the FPv wrappers** (the header's
+  inline decls are the tell); restructuring wrapper-body -> inline
+  member + thin wrapper fixed Execute/Delete to 100 (this-copy emits
+  before the pool anchor). _create = fopAcM_SetupActor + resLoad
+  m_arcname + entrySolidHeap(0x10000) + CreateInit. Draw 96.2 parked:
+  pure r30/r31 this/pool swap (Execute wanted this=r30, Draw this=r31 -
+  no consistent rule found).
+- __sinit 100: **class-static cXyz ctor VALUES live in the sinit** -
+  m_camera_ctr(-200,140,85) / m_camera_eye(-117,92,344); a
+  default-constructed definition zeros them and craters sinit to 62.
+- btpAnm entry tell: entry(J3DModelData*, s) is the SHORT overload -
+  passing getFrame() f32 needs the explicit (s16) cast (fctiwz+stfd).
+- Implicit ctor snapped at _create's SetupActor: +36 functions in one
+  build (all weak dtors/CrossAtTg/GetShapeAttr + __ct).
+- END STATE: 55/66 exact, fuzzy 98.69, ALL 66 written. Sub-100 set (11)
+  = pool-pending (CreateHeap 99.7, lookBack 99.8, next_msgStatus 99.0,
+  playTexPatternAnm 98.7, setAnm 97.25, nodeCallBack 95.9,
+  initTexPatternAnm 88.9 pool) + micro-parks (wait_action 98.6, Draw
+  96.2, chkAttention 97.2 slot, getMsg 93.9 fold-tail).
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
