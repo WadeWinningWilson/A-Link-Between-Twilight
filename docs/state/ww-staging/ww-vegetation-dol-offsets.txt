@@ -1,0 +1,44 @@
+DOL: D:\XXXXXXX\Ex WW\sys\main.dol (3822272 bytes)
+vegetation asset headers: 48
+  g_dTree_Oba_kage_32DL                       43 B  0x378020  HIT
+  l_K_kusa_00TEX                            4096 B  0x374C00  HIT
+  l_Oba_kusa_aDL                             167 B  0x376980  HIT
+  l_Oba_kusa_a_cutDL                         140 B  0x376A40  HIT
+  l_Oba_swood_a_cuttDL                       175 B  0x3779A0  HIT
+  l_Oba_swood_a_cutuDL                       103 B  0x377A60  HIT
+  l_Oba_swood_a_hapaDL                       356 B  0x377AE0  HIT
+  l_Oba_swood_a_mikiDL                       194 B  0x377C60  HIT
+  l_Oba_swood_noneDL                          37 B  0x377960  HIT
+  l_OhanaDL                                  266 B  0x37FDC0  HIT
+  l_Ohana_gutDL                              176 B  0x37FEE0  HIT
+  l_Ohana_highDL                             290 B  0x380A40  HIT
+  l_Ohana_high_gutDL                         140 B  0x380B80  HIT
+  l_QbsafDL                                  158 B  0x37EB80  HIT
+  l_QbsfwDL                                 1643 B  0x37EC20  HIT
+  l_Txa_kage_32TEX                           512 B  0x377E00  HIT
+  l_Txa_ob_kusa_aTEX                        2048 B  0x375FC0  HIT
+  l_Txa_swood_aTEX                          2048 B  0x376CE0  HIT
+  l_Txo_ob_flower_pink_64x64TEX             2048 B  0x37FFA0  HIT
+  l_Txo_ob_flower_white_64x64TEX            2048 B  0x37F2A0  HIT
+  l_Txq_bessou_hanaTEX                      4096 B  0x37CEA0  HIT
+  l_Vmori_00DL                               176 B  0x375DA0  HIT
+  l_Vmori_01DL                               140 B  0x375E60  HIT
+  l_Vmori_color                               20 B  0x375D44  HIT
+  l_Vmori_pos                                324 B  0x375C00  HIT
+  l_Vmori_texCoord                            72 B  0x375D58  HIT
+  l_color2                                    20 B  0x3808F0  HIT
+  l_color                                     32 B  0x376904  HIT
+  l_color                                     40 B  0x3778AC  HIT
+  l_pos2                                     336 B  0x3807A0  HIT
+  l_pos3                                    2892 B  0x37DEA0  HIT
+  l_pos                                      576 B  0x37FAA0  HIT
+  l_pos                                      324 B  0x3767C0  HIT
+  l_pos                                      972 B  0x3774E0  HIT
+  l_texCoord2                                288 B  0x380904  HIT
+  l_texCoord3                                376 B  0x37E9EC  HIT
+  l_texCoord                                 208 B  0x37FCE0  HIT
+  l_texCoord                                  72 B  0x376924  HIT
+  l_texCoord                                 128 B  0x3778D4  HIT
+
+hit 39 / miss 0 / skipped 9 (non-byte or tiny tables)
+located 27780 bytes (27.1 KB) inside the user's own executable

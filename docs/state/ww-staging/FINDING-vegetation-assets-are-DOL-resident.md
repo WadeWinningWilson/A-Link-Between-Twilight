@@ -5,6 +5,33 @@ era: era-2 (Outset served)
 
 **Lane:** Housing/Engine · **Date:** 2026-08-22 · **Raised BEFORE the port, not after**
 
+> ## ✅ SOLVED SAME DAY — and one of my own numbers was wrong
+>
+> **ALL 39 SEARCHABLE BLOBS LOCATED IN THE USER'S OWN RETAIL `main.dol`, 0 MISSES.**
+> Tool: `tools/foundry/ww_dol_locate.py`. Offsets: `ww-vegetation-dol-offsets.txt`.
+> The whole vegetation asset set sits in one span, `0x374C00`–`0x380B80`.
+>
+> **CORRECTION TO THIS DOCUMENT'S OWN HEADLINE: the "186 KB" below is the size of
+> the C SOURCE (hex text), not of the data. The actual binary payload is 27,780
+> bytes — 27.1 KB.** I inflated it roughly 9x by measuring the decomp's source
+> files instead of the bytes they encode. The blocker was real; its size was not.
+>
+> **THE DEBUG→RETAIL ADDRESS MAPPING TURNED OUT TO BE UNNECESSARY.** The section
+> below calls that mapping "the actual work" — it was not. The decomp's asset
+> headers carry the byte VALUES, so the bytes are their own search key: match the
+> content, get the retail offset, and the match verifies itself. No symbol table,
+> no relocation arithmetic.
+>
+> **BONUS, unlooked-for but load-bearing for the port: every blob matched even
+> though the decomp is built from `D44J01` (JP) and the user's disc is USA.** These
+> assets are byte-identical across those builds. That is measured, not assumed —
+> 39/39 exact matches of whole blobs.
+>
+> **WHAT A HIT DOES NOT PROVE, and the tool says so in its own header:** that the
+> runtime consumer reads from that offset. The DOL is relocated at load; serving a
+> table means handing the ported manager the BYTES, exactly as arc members are
+> served today. That is the remaining build work, and it is straightforward.
+
 ## Why this exists
 
 The vegetation port was just handed to History
