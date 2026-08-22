@@ -70,13 +70,27 @@ def kit_block(text):
 
 
 def donor_units(vals):
+    """Every donor path on every KIT-DONOR line, not just the first.
+
+    THE HOLE THIS CLOSES, found 2026-08-22 by following the gate's own advice
+    instead of trusting its output: the first version matched ONE path per
+    line, so `KIT-DONOR: JSystem/JMessage/data.h + JSystem/JMessage/control.cpp`
+    read as a SINGLE unit. **A file could evade the multi-unit check simply by
+    writing both donors on one line** -- and `ww_message.cpp` did exactly that,
+    innocently. The gate then reported the wrong unit and would have pushed a
+    rename to `data.cpp`, which is a 14-line donor file that is not what our
+    message reader ports.
+
+    A checker whose parse is narrower than the format it checks reports on the
+    part it can see and stays silent about the rest. That is the same
+    "one expression is not the hazard" shape this lane has now hit three times.
+    """
     seen = []
     for v in vals:
-        m = re.match(r'(\S+?\.(?:cpp|h))', v)
-        unit = re.sub(r'\.(cpp|h)$', '', m.group(1)) if m else v.split()[0]
-        if unit.lower() == "none":
-            continue
-        if unit not in seen:
+        for m in re.finditer(r'([A-Za-z0-9_./]+\.(?:cpp|h))', v):
+            unit = re.sub(r'\.(cpp|h)$', '', m.group(1))
+            if unit.lower() == "none" or unit in seen:
+                continue
             seen.append(unit)
     return seen
 
