@@ -9,7 +9,7 @@
 # is the row-first record; this is the instrument that keeps the ledger
 # honest instead of hand-verified once and trusted forever.
 #
-# TWO CHECKS, EACH A DISTINCT GIT-APPLY QUESTION AGAINST A REF:
+# FIVE OPERATIONS, EACH A DISTINCT GIT-APPLY QUESTION AGAINST A REF:
 #
 #   byte-verify   apply the patch to a SCRATCH CHECKOUT of its stated pin,
 #                 hash-compare every touched file against the intended
@@ -26,12 +26,24 @@
 #                 has diverged in the affected region - not a clean redundant/
 #                 needed answer, flagged for a human to read.
 #
-# NEVER OPERATES ON THE LIVE SUBMODULE. Every git operation runs inside a
-# throwaway clone under a temp directory, cloned fresh and discarded after.
-# This rule exists because building AURORA-PATCH-0001 without it briefly
-# mutated the real dusklight-main aurora submodule's working tree (recorded
-# in AURORA-PATCH-LEDGER.md's "near-miss" section) - the exact accident this
-# script's isolation is designed to make structurally impossible.
+#   compat        does the patch apply to a USER's tagged dusklight release,
+#                 resolving each release's extern/aurora pin from the
+#                 superproject tree. Answers "will this reach a real user".
+#
+#   apply /       INSTALL and UNINSTALL. **These two are the ONLY operations
+#   unapply       that write to a real repo** - stripping a patch out of a
+#                 scratch clone helps nobody; the point is to toggle it in
+#                 and out of the build you actually run.
+#
+# THE READ-ONLY OPERATIONS NEVER TOUCH A LIVE REPO. verify/redundancy/compat
+# run entirely inside throwaway clones, cloned fresh and discarded. That rule
+# exists because building AURORA-PATCH-0001 without it briefly mutated the
+# real dusklight-main aurora submodule's working tree (recorded in
+# AURORA-PATCH-LEDGER.md's "near-miss" section).
+#
+# apply/unapply cannot have that isolation and so carry it as GUARDS instead:
+# dry-run by default, refuse on a dirty tree, pre-check before touching
+# anything, and hash-verify the result against a named ref afterward.
 #
 # Usage:
 #   aurora_patch_check.py verify <patch> <local-aurora-repo> <pin>
@@ -41,8 +53,12 @@
 #     -> fetches origin from a scratch clone of <local-aurora-repo> (which
 #        must have 'origin' pointed at the real upstream), checks the patch
 #        against REF (default origin/main) after the fetch.
+#   aurora_patch_check.py compat <patch> <aurora-repo> <dusklight-repo> --refs v1.4.1,v1.4.0
+#   aurora_patch_check.py apply   <patch> <aurora-repo> [--target REF] [--write]
+#   aurora_patch_check.py unapply <patch> <aurora-repo> [--base REF] [--write]
+#     -> apply/unapply are DRY-RUN unless --write is passed.
 #   aurora_patch_check.py --control
-# Exit 0 ran/control-passed - 1 control failed - 2 bad input.
+# Exit 0 ran/control-passed - 1 control failed / refused - 2 bad input.
 # ============================================================================
 import shutil
 import subprocess
@@ -229,7 +245,22 @@ def compat(patch_path, aurora_repo, dusklight_repo, refs):
     return results
 
 
+def apply_patch(patch_path, repo, target_ref=None, write=False):
+    """INSTALL: apply a tracked patch INTO a real working tree.
+
+    Mirror of unapply() with the same guards -- dry-run default, dirty-tree
+    refusal, pre-check, post-verify. Added 2026-08-22 after the first live
+    round-trip test had to fall back to raw `git apply` for the forward
+    direction: install and uninstall must have the SAME safety shape, or the
+    guarded half is only half a system."""
+    return _toggle(patch_path, repo, reverse=False, verify_ref=target_ref, write=write)
+
+
 def unapply(patch_path, repo, base_ref=None, write=False):
+    return _toggle(patch_path, repo, reverse=True, verify_ref=base_ref, write=write)
+
+
+def _toggle(patch_path, repo, reverse, verify_ref=None, write=False):
     """STRIP A TRACKED PATCH BACK OUT of a real working tree.
 
     Ordered 2026-08-22: "since we're tracking exactly what we're putting INTO
@@ -271,45 +302,58 @@ def unapply(patch_path, repo, base_ref=None, write=False):
                           "would tangle them with the reversal:\n    "
                           + "\n    ".join(dirty.splitlines()[:8])}
 
-    chk = git(repo, "apply", "--check", "-R", str(patch_path), check=False)
+    rflag = ["-R"] if reverse else []
+    chk = git(repo, "apply", "--check", *rflag, str(patch_path), check=False)
     if chk.returncode != 0:
-        return {"ok": False, "stage": "not-applied",
-                "detail": "reverse-apply check FAILED -- the patch is not cleanly "
-                          "applied to this tree (absent, partial, or drifted). "
-                          "Nothing changed.\n    " + chk.stderr.strip()[:400]}
+        return {"ok": False,
+                "stage": "not-applied" if reverse else "will-not-apply",
+                "detail": ("reverse-apply check FAILED -- the patch is not "
+                           "cleanly applied to this tree (absent, partial, or "
+                           "drifted)."
+                           if reverse else
+                           "apply check FAILED -- the patch does not fit this "
+                           "tree. Most often that means it is ALREADY APPLIED; "
+                           "it can also mean drift or a wrong base.")
+                          + " Nothing changed.\n    " + chk.stderr.strip()[:400]}
 
     if not write:
         return {"ok": True, "stage": "dry-run",
-                "detail": "patch IS cleanly applied and WOULD reverse out of %d "
-                          "file(s). Nothing changed -- pass --write to do it."
-                          % len(paths), "files": paths}
+                "detail": ("patch IS cleanly applied and WOULD reverse out of %d "
+                           "file(s)." if reverse else
+                           "patch WOULD apply cleanly into %d file(s).")
+                          % len(paths)
+                          + " Nothing changed -- pass --write to do it.",
+                "files": paths}
 
-    ap = git(repo, "apply", "-R", str(patch_path), check=False)
+    ap = git(repo, "apply", *rflag, str(patch_path), check=False)
     if ap.returncode != 0:
         return {"ok": False, "stage": "apply-failed",
-                "detail": "reverse-apply failed AFTER its own check passed: %s"
-                          % ap.stderr.strip()[:400]}
+                "detail": "%s failed AFTER its own check passed: %s"
+                          % ("reverse-apply" if reverse else "apply",
+                             ap.stderr.strip()[:400])}
 
-    result = {"ok": True, "stage": "unapplied", "files": paths,
-              "detail": "patch reversed out of %d file(s)" % len(paths)}
-    if base_ref:
+    result = {"ok": True, "stage": "unapplied" if reverse else "applied",
+              "files": paths,
+              "detail": "patch %s %d file(s)"
+                        % ("reversed out of" if reverse else "applied into", len(paths))}
+    if verify_ref:
         mismatches = []
         for p in paths:
             got = git(repo, "hash-object", p, check=False).stdout.strip()
-            want = git(repo, "rev-parse", "%s:%s" % (base_ref, p), check=False).stdout.strip()
+            want = git(repo, "rev-parse", "%s:%s" % (verify_ref, p), check=False).stdout.strip()
             if got != want or not got:
                 mismatches.append(p)
-        result["verified_against"] = base_ref
+        result["verified_against"] = verify_ref
         result["mismatches"] = mismatches
         if mismatches:
             result["ok"] = False
             result["detail"] += (" -- but %d file(s) do NOT match %s afterward: %s. "
-                                 "The tree is NOT at the expected stock state."
-                                 % (len(mismatches), base_ref, ", ".join(mismatches)))
+                                 "The tree is NOT at the expected state."
+                                 % (len(mismatches), verify_ref, ", ".join(mismatches)))
         else:
             result["detail"] += (" and ALL %d verified byte-identical to %s -- "
-                                 "the tree is provably back at stock."
-                                 % (len(paths), base_ref))
+                                 "the tree is provably at that state."
+                                 % (len(paths), verify_ref))
     return result
 
 
@@ -499,6 +543,16 @@ def main():
         print("REDUNDANCY vs %s: %s" % (ref, r["verdict"]))
         print("  %s" % r["detail"])
         return 0
+    if cmd == "apply":
+        patch, repo = sys.argv[2], sys.argv[3]
+        target = sys.argv[sys.argv.index("--target") + 1] if "--target" in sys.argv else None
+        write = "--write" in sys.argv
+        r = apply_patch(patch, repo, target, write)
+        print("APPLY [%s]: %s" % (r["stage"], "OK" if r["ok"] else "REFUSED/FAILED"))
+        print("  %s" % r["detail"])
+        if not write and r["ok"]:
+            print("  (dry-run is the default -- this changed nothing)")
+        return 0 if r["ok"] else 1
     if cmd == "unapply":
         patch, repo = sys.argv[2], sys.argv[3]
         base = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else None

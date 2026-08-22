@@ -92,10 +92,22 @@ def cmd_status():
 
 
 def cmd_fetch(quiet=False):
+    # NO DIRTY-GUARD HERE, DELIBERATELY.
+    #
+    # `git fetch` writes refs and objects under .git/ and NEVER touches the
+    # worktree, so a dirty tree cannot be clobbered by it. The guard used to
+    # sit here too, and that made this command unrunnable during exactly the
+    # period it matters: the donor worktree is dirty WHENEVER A LANE IS
+    # MID-DECODE (found 2026-08-22 with Decoder's live yw1 edits + 5 scratch
+    # files sitting in it). A safety rail that blocks the safe read is why
+    # this check stopped being routine at all.
+    #
+    # `cmd_sync` keeps the guard: it runs `merge --ff-only`, which DOES touch
+    # the worktree and can genuinely clobber local work.
     g = guard()
-    if g is not None:
-        print("REFUSING: %s" % g)
-        return 1
+    if g is not None and not quiet:
+        print("  NOTE: donor worktree is dirty (%s) — fetching anyway; fetch "
+              "does not touch the worktree. `sync` still refuses." % g)
     if not quiet:
         print("fetching origin ...")
     rc, out = git("fetch", "origin", "--quiet")
@@ -109,6 +121,21 @@ def cmd_fetch(quiet=False):
         print("  could not count distance to origin/main — UNKNOWN")
         return 1
     print("  behind origin/main by %d commit(s)" % behind)
+
+    # AHEAD-COUNT IS THE NUMBER THAT DECIDES, AND THIS ONLY REPORTED BEHIND.
+    # "behind 12" sounds small and is small. What makes a rebase expensive is
+    # how much of OUR work has to be replayed on top of it -- measured
+    # 2026-08-22 at 346 local commits (Decoder's whole decode campaign) against
+    # 12 upstream. Behind-only turns a compounding cost into a quiet one.
+    rc, out = git("rev-list", "--count", "origin/main..HEAD")
+    ahead = int(out.strip()) if rc == 0 and out.strip().isdigit() else -1
+    if ahead > 0:
+        print("  AHEAD of origin/main by %d commit(s) — local work upstream "
+              "does not have" % ahead)
+        if behind:
+            print("  => DIVERGED. `merge --ff-only` refuses by construction, so "
+                  "`sync` CANNOT clobber this work. A rebase is the only way "
+                  "forward and it grows with the ahead-count.")
     if behind:
         rc, out = git("log", "-1", "--format=%h|%ad|%s", "--date=short",
                       "origin/main")

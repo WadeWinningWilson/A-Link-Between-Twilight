@@ -12,6 +12,7 @@
 - [x] Promote Decoder's ten-symptom type-signal bank + single-case-switch crack (rows 440/441) out of `aj1-progress.md` §Round 19 into standalone methods doctrine
 - [x] Positive-control rule fold-in: every absence-based check in the estate needs a known-present probe (zero-bake magic-grep lesson, Housing/Engine's correction)
 - [x] Fork-strip ledger lint (see `mods-src/ww_donor_disc/FORK-STRIP-LEDGER.md` §Lint hook): STRIPPED rows <-> dedicated commits, both directions
+- [x] donor_scan.py: magic-byte + -uall pre-commit donor gate (built after the 2026-08-22 zero-bake breach; control-proven on BOTH defect classes)
 - [ ] Board pass each wake: rows naming FOUNDRY since last read; monitor census (pulse age AND pid, per false-ALIVE lesson); re-arm anything of mine that died
 - [ ] AURORA-PATCH-LEDGER: build-verify step for aurora_patch_check.py (byte-verify != builds; user flagged the lwood candidate will likely need build refinement, not just extraction)
 - [ ] AURORA hookability re-sweep: per standing directive, re-measure the ~4%/87%/9% split whenever the lwood candidate's source branch or the plugin's hook surface changes; goal is shrinking the patch-only share, not just reporting it

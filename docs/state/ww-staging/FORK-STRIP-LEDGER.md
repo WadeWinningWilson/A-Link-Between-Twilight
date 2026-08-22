@@ -1,7 +1,22 @@
 # FORK-STRIP-LEDGER — MOVED (pointer, not content)
 
-> **THE LEDGER IS NOT HERE. It is:**
-> ### `mods-src/ww_donor_disc/FORK-STRIP-LEDGER.md`
+> **THE LEDGER IS NOT HERE.**
+>
+> **AUTHORITATIVE (2026-08-22 onward):**
+> ### `C:/Users/xxxxx/Documents/A Link Between Twilight WW/FORK-STRIP-LEDGER.md`
+> The plugin became its own project outside the fork on user order, and the
+> ledger moved with it — it is a record about the PLUGIN's relationship to the
+> fork, so it belongs beside the plugin.
+>
+> **STALE COPY, still on disk:** `mods-src/ww_donor_disc/FORK-STRIP-LEDGER.md`
+> — the fork's copy. **Byte-identical as of 2026-08-22 (17,226 B both), so
+> nothing has diverged yet.** It goes when the fork copy of the plugin goes,
+> which is a deliberate fork-strip step, not automatic.
+>
+> **TWO IDENTICAL FILES WITH NO MARKED OWNER IS HOW DIVERGENCE STARTS.**
+> Edit the authoritative one only. If you find them differing, the new home
+> wins and the fork copy is stale — do not hand-merge them.
+>
 > Owner: **Foundry**, from a direct user order 2026-08-21.
 
 ## Why this stub exists
