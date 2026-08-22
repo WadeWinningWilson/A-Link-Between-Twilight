@@ -37,6 +37,18 @@ next target under the Outset-first charter (smallest open Outset TU).
 8. Reverse-declaration stack slots for same-kind named locals.
 9. Write pool NEIGHBORS when a 99.9x cluster shares stringBase/floats.
 
+## Batch 1: 2 -> 6/66 exact
+
+- Base-class correction applied (header claimed fopAc_ac_c; ctor asm
+  rules fopNpc_npc_c — members at 0x6C4 confirm). Return-type clashes
+  with the base virtuals (getMsg u32, next_msgStatus u16) fixed in the
+  same pass — the stub header had them void.
+- HIO ctor EXACT: daNpc_Kg1_HIO_c = vtbl + s8/-1 + s32/-1 + u8 +
+  **dNpc_HIO_c mNpc[1]** (0x28 elem, __construct_array tell — an ARRAY
+  member emits construct_array even at count 1) + 2 trailing u8. Values:
+  head ±2500/±7000, backbone ±2000/±8000, turn 1000/2000, attnY 35.0f,
+  attnAngle 0x4000, attnDist 400.0f. Dtor chain snapped with it (6/66).
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
