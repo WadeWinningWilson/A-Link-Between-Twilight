@@ -40,6 +40,48 @@ already proven from the caller side during the kg1 campaign.
   proves `mpBombIcons[24]` + `[i * 8 + j]` in source.
 - CreateHeap retyped BOOL (CheckCreateHeap passes its return through).
 
+## Batch 2 (written, build pending — header edits triggered world rebuilds)
+
+- _execute 100 after hoisting the two register reads into locals
+  (`u8 best/score` before the two mValue stores — target loads both
+  before either store); state machine 0->1(wait mbStartGame)->2->3
+  (execGameMain until mbEndGame, timer 30)->4 (timer, then END_S/END_F
+  jingle by mAliveShipNum) with case-2-falls-into-3.
+- CreateInit: cullMtx = board getBaseTRMtx, cull box -600/-300/-500..
+  600/300/100, getEventIdx MINIGAME_START/END, setWaitParm(5,2,3,2,
+  0.9,0.5,0,0x800), MiniGameInit.
+- set_2dposition 91->pending: squid column x=523 y=115+47i; bombs
+  ACCUMULATOR form (x=95 -=35/col, y=120 +=35/row, y reset per column —
+  a multiply spelling `95-i*35` misses); title/score positions;
+  **LEVER: setScoreAlpha's f32->u8 conversion happens INSIDE the class
+  inline in the donor (runtime fctiwz on 80.5f) — MWCC folds a constant
+  conversion at the CALL boundary but NOT through an inline param, so
+  the donor's param type is f32** (WWDP header said u8 + "???", fixed).
+- CursorMove: STControl trigger quad, s8 clamps 0..7 (mBoardPosX/Y
+  retyped s8), CURSOR se on change with NULL pos.
+- MinigameMain (bool, was void): checkSePlaying(START) early-out,
+  attack(), RIGHT/WRONG/DESTROY jingles, StartShock(7,-33,cXyz(0,1,0)),
+  icon flips mpSquidIcon[mDeadShipNum-1] / mpBombIcons[mScore-1]
+  offBeforeTex; mShips base folds +8 (reads field_0x8/0xb/0xc/0xe of
+  dSeaFightGame_ship_data; 0xe retyped s8).
+- set_mtx: board+cursor+64-cell hit/miss placement over static
+  cXyz m_cur_table[8][8] (bss 0x300; grid [y][x] for cursor, [i][j]
+  transposed vs mGrid[j][i] in the cell loop), ship placement with
+  ZrotM(0x4000 flat / -0x8000 vertical), mpShip4Model retyped [2].
+- _draw: board always; gated by mbDraw: cursor + hit/miss loops under
+  dComIfGd_setListMaskOff()/setList() buffer swaps (drawlist +0x28/2C =
+  MaskOff pair, +0x1C/20 = normal pair — the j3dSys+0x48/4C store-pair
+  tell), ships drawn only when game over (value-form bool via cntlzw),
+  2D packets via dComIfGd_set2DOpa (minigame, numbers, 24 bombs,
+  3 squids).
+- CreateHeap: res 8 board / 9 cursor / 7 hit x20 / 10 miss x32 /
+  4,5,6 ships x2 each (all mDoExt_J3DModel__create(0x80000,0x11000022),
+  every slot null-checked -> return 0; asserts 307-411 "modelData !=
+  0"); 2DNumber init(4,470,75,24,24,0)+(4,100,80,24,24,0); 2DObject
+  news are vtbl-inline (implicit ctor), TIMG init pairs spelled
+  (18,19)/(15,16)/(14,17) — **MWCC evaluates call args right-to-left,
+  so the SECOND source arg's getRes lands first in the binary**.
+
 ## NEXT
 
 _execute (state dispatch over mState), set_2dposition, CreateInit,
