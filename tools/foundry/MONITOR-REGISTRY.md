@@ -774,3 +774,10 @@ watcher is a dead watcher until re-armed.
   the handoff: board tail row 727 confirms ym1 121/124 hold + yw1 24/119;
   re-arm-window sweep found no unanswered DECODER-addressed rows. Resuming
   yw1 at the play_animation/upLift/setMtx cluster.
+
+- 2026-08-22 DECODER (user order "arm monitor and timer", post-interrupt):
+  prior arms superseded. CALLS watcher bvw92ft9i (decoder_watch.py
+  --exit-on-event, pid 5164, pulse fresh); 30s work timer Monitor
+  biqv5rnmn (decoder_timer.py, pid 37496, pulse fresh). Both verified by
+  pulse age, not exit code. Open work: kg1 campaign batch 2 (nodeCallBack
+  → _create), 6/66 exact at head 54607088.
