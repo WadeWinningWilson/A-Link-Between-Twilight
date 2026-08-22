@@ -1,4 +1,4 @@
-# FINDING — 9 vegetation assets are NOT servable by content match; 7 are material display lists
+# FINDING — 7 material DLs are CORRECTLY EXCLUDED (they embed a texture address); only 2 small tables are a real gap
 
 era: era-2 (Outset served)
 <!-- era rationale: blocks part of the vegetation port for the currently served set | Housing/Engine, 2026-08-22 -->
@@ -6,6 +6,34 @@ era: era-2 (Outset served)
 **Lane:** Housing/Engine · **Date:** 2026-08-22 · **Found by:** checking the
 DRAW PATH against the served table, on History/Bridge's instruction to read the
 consumer rather than the asset headers.
+
+> ## 🔄 REVERSED 2026-08-22, SAME DAY — READ THIS FIRST. THE PREMISE BELOW IS WRONG.
+>
+> History/Bridge answered the open question and it INVERTS this document:
+> **`l_matDL` is not a blob at all.** It is a MACRO PARAMETERISED BY A TEXTURE
+> SYMBOL — `l_matDL__d_flower(l_Txo_ob_flower_white_64x64TEX)` — expanding to a GX
+> register-load list that embeds
+> `LOAD_BP_REG(GX_BP_REG_SETIMAGE3_TEX0, IMAGE_ADDR(TEX_NAME))`, where
+> `IMAGE_ADDR(a) = (u32)(a) >> 5`. **The material DL's bytes carry the texture's
+> own ADDRESS.**
+>
+> **SO THE SEVEN ARE NOT A COVERAGE GAP — THEIR ABSENCE IS THE METHOD WORKING.**
+> Those bytes are RELOCATION-DEPENDENT, so they are not stable content and not a
+> legitimate search key. A locator built on "the bytes are their own search key"
+> must not match them, and mine did not.
+>
+> **AND SERVING THEM WOULD HAVE BEEN ACTIVELY WRONG — worse than missing.** It
+> would hand our renderer a GameCube texture address from the donor's address
+> space, pointing at nothing in ours: a GX register loaded with a garbage image
+> base, presenting as corrupt or black vegetation — *the exact symptom this port
+> exists to fix.*
+>
+> ⚠️ **I ROUTED OPTION ① (expand the macros offline) TO DECODER. THAT REQUEST IS
+> WITHDRAWN — it would have produced bytes that are wrong by construction.**
+>
+> **WHAT REMAINS A REAL GAP: only the two 8-byte flower colour tables.** Seven of
+> the nine are correctly excluded. My framing of "a limit of the method" was
+> backwards; it was the method refusing to serve something unstable.
 
 ## The correction this makes to my own earlier claim
 
