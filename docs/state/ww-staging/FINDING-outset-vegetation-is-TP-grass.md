@@ -5,6 +5,43 @@ era: era-2 (Outset served)
 
 **Lane:** Housing/Engine · **Date:** 2026-08-22 · **Boot:** `dusklight-20260822-142942.log`
 
+> ## ⚠️ CORRECTED 2026-08-22, SAME DAY — READ THIS FIRST
+>
+> The original text said the WW vegetation "does not spawn" and that what is on
+> Outset is TP grass **standing in for** placements that never resolved. **That
+> framing is WRONG and the correction matters.**
+>
+> **The donor's OWN name table maps the vegetation to a profile the receiver also
+> has:** `d_stage.cpp:438-444` — `OBJNAME("kusax1", fpcNm_GRASS_e, ...)`,
+> `"kusax7"`, `"kusax21"`, `"flwr17"`, `"pflower"` — **all → `fpcNm_GRASS_e`**.
+> That name exists in BOTH games. So the WW placements DO resolve and DO spawn;
+> the 100 `fpcNm_GRASS_e` creations after the sea bind **ARE the WW placements**.
+> What runs is the **RECEIVER's implementation** of that profile.
+>
+> So the objects stand at WW's placement positions, drawn by TP's code with TP's
+> models and TP's lighting. "0 log hits for `kusax`" meant only that the name is
+> consumed by the lookup and never logged — NOT that nothing spawned. I read an
+> absence of the string as an absence of the object.
+>
+> **The conclusion survives and the fix is unchanged** — WW's own vegetation is
+> unported and the donor's system must be ported — but the mechanism is
+> "receiver implementation behind a shared profile name", not "nothing spawned".
+
+## How the donor actually draws it — settles the packet-hazard question
+
+`d_a_grass.cpp` is a **SPAWNER, NOT A RENDERER**. `daGrass_Create` reads the
+placement, pushes into the managers — `dComIfGp_getGrass()->newData()` (kind 0),
+`getTree()->newData()` (kind 1), `getFlower()->newData()` (kinds 2/3, white and
+pink) — and returns `cPhs_ERROR_e`, deleting itself immediately.
+
+The DRAWING lives in `d_grass.cpp`, `d_flower.cpp`, `d_tree.cpp`. Both grass and
+flower managers draw via **`j3dSys.getDrawBuffer(0)->entryImm(this, 0)`**
+(`d_grass.cpp:414`, `d_flower.cpp:480`) — their own `J3DPacket`.
+
+**THEREFORE: IMMUNE TO THE LWOOD PACKET-MERGE HAZARD.** They never reach
+`entryMatSort`, so they cannot self-merge and need no one-entry-per-fill guard.
+Porting them is a manager port (3 units + the spawner), not a guarded-actor port.
+
 ## The short version
 
 The `WW GRASS AND FLOWERS STILL BLACK` item was being chased as a **WW lighting
