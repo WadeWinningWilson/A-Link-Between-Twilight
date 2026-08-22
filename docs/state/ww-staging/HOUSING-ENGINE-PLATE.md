@@ -27,22 +27,19 @@ marks an item blocked on someone else and does not count as open.
   **NOT verified: nothing in this split was diffed against the donor or RUN. The sky
   has not been observed rendering since inc.1.** A split moves code; it does not test
   it. That run is the open risk this item hands forward.
-- [ ] **`ww_wave.cpp` remainder — `d_kankyo_wether` + `d_kankyo`.** 580 lines left.
-  `wwWaveUsonamiSet` is the d_kankyo piece (donor `dKy_usonami_set`,
-  d_kankyo.cpp:3427); the packet, channel and entry points are wether's.
-- [x] **`d_kankyo_rain` SPLIT DONE** — `50c4d09cba`, builds and installs. 2 of 3
-  units out of ww_wave.cpp.
-- [x] **`d_a_sea` SPLIT DONE** — `f5fa173578`, plus the KIT-DONOR correction
-  (`usonami` was never d_a_sea's).
-
-- [x] **LWOOD IS FIXED AND USER-CONFIRMED — "perfect and in color now."** Root cause:
-  the same matPacket entered more than once per `dDlst_list_c::reset()` window, so
-  `entryMatSort` matched `isSame` against ITSELF and wrote `head->next = head`
-  (`J3DPacket.cpp:199`) — circular list, frame never completes, `drain()` never runs,
-  FIFO to the 4 GB assert. Fix: ONE ENTRY PER FRAME FILL, the discipline
-  `ww_wave.cpp:944` already documented. Confirmed causally: 9 skips fired, self-loops
-  0 (was 2), cycles 0 (was 4), draws reached **3,240** vs dying at **44**, clean
-  shutdown, `overflow:0`. Kill switch `WW_LWOOD_ONCE=0` restores the old behaviour.
+- [x] **`ww_wave.cpp` remainder — DONE 2026-08-22.** `b770e4115d` (usonami_set →
+  d_kankyo, donor `dKy_usonami_set` d_kankyo.cpp:3427) and `72b0eaee62` (remainder
+  merged into `d_kankyo_wether.cpp`; **ww_wave.cpp DELETED** and de-registered from
+  both CMakeLists).
+  **The plugin no longer fuses donor units** — every WW unit is named for the donor
+  unit it carries: d_kankyo_wether 1486, d_kankyo_rain 1678, d_kankyo 952, ww_sky 424
+  (plugin orchestration only), d_a_sea 134.
+  Two mistakes recorded in `72b0eaee62`, both mine: a collision check that reported
+  "NONE" while being structurally unable to see anonymous-namespace declarations
+  (the form this codebase uses everywhere), and a failed transform whose `rm`/`sed`
+  ran anyway because they sat outside it — file deleted with no merge done, restored
+  from HEAD after confirming no other lane's work was in the diff.
+  **NOT verified: never RUN.** Waves and sky unobserved since this work began.
 - [ ] **WW GRASS AND FLOWERS STILL BLACK** — user-confirmed, next on this lane. NOT the
   same defect as lwood: lwood was a packet-chain cycle, this is colour/material. Prior
   work already falsified `finish_toon`; the `bg_overlay` / AmbCol receipts are built and
