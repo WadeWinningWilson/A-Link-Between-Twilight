@@ -106,6 +106,27 @@ flat@0xC — the chk_areaIN by-value temp is allocated BETWEEN the delta
 temp and the named local, which no tried declaration order produces. Not
 the upLift reverse-decl lever (that one is same-kind locals only).
 
+## Batches 7-8: 40 -> 49/119 exact (same successor session)
+
+- createHeap family + privateCut EXACT: bodyCreateHeap ("Yw" res 6, morf
+  flags 0x80000/0x11020022, head+backbone with the hi1-style `& 0xffff`
+  index masks, asserts 2415/2429/2431 — plain retail line numbers, demo
+  variants TBD at four-version gate time); headCreateHeap (res tbl {7} +
+  texPttrn tbl {0} BOTH single-entry, indexed by NEW m7C5 s8; hair1/2/3
+  joints + nodeCB_Hair on all three, asserts 2460/2477/2479/2481);
+  CreateHeap (ym1 shape minus itemCreateHeap, SetWall(30,30) not (30,60)).
+  POOL-SHIFT COROLLARY PAID AGAIN: body/headCreateHeap sat at 99.9x on a
+  6-byte string shift — the missing "DUMMY" literal from UNWRITTEN
+  privateCut; writing privateCut (ym1 twin on m7BC s8) snapped all four.
+  Write the POOL NEIGHBORS first when a 99.9x cluster shares a stringBase.
+- getMsg family EXACT: dispatcher = ym1's switch shape on m7C6; YW1_0/3
+  share the m774/m775/pot-path head (m775 = the upLift pot-gone flag
+  feeding msg 0x89F); adjacent-msg ternaries (`? n+1 : n`) compile to the
+  branchless bool-add — spell them as ternaries. 1-row lever: a trailing
+  `if (bit) return A; return c ? B : C;` pair whose A-load sits at the
+  BOTTOM in retail = donor spelled `if (!bit) { return c ? B : C; }
+  return A;` (negated wrap, tail hoisted).
+
 ## Carved so far
 mPhs 0x6C4 · m_hed/bbone_jnt_num 0x6CC/D · m_hair1/2/3 0x6CE-D0 ·
 m704 fpc_ProcID (pot) · mPathRun 0x70C (dNpc_PathRun_c, 8b) ·
