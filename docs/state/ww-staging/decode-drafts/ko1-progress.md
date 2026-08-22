@@ -497,3 +497,28 @@ materialization), and ko_nMove's residue (FPR dest tie-break). Six functions,
 ~45 rows, every hand-probe ledgered. The next attack on any of them should be
 the automated transform-search harness the p2 anchor already names as a live
 path — one engine, six targets.
+
+
+## Cross-TU data audit round (2026-08-22): 180 -> 183/203
+
+**The assert-string lever extends to LOCALS.** The @stringBase0 pool was
+2 bytes short vs target: donor's four model-data asserts read
+`a_mdl_dat != 0`, mine `mdlData != 0` — JUT_ASSERT stringifies the local
+VARIABLE NAME, so donor local names are recoverable from assert text and
+MUST be adopted. One rename → pool byte-equal (content AND order) and
++3 exact (WWDP 518fbb14). kg1 had the sibling defect (literal "Kg" where
+donor routes m_arcname; 55 -> 56/66).
+
+**objdiff's blind spot, proven twice today:** function scores do not
+police string-pool content or .data emission order. tag_ba1 was 17/17
+code-100.00 and STILL missed the REL SHA until l_evn_tbl moved below the
+HIO ctor (function-local a_prm_tbl emits at the ctor's DEFINITION
+position — .data order follows definition order, not use). Three TUs
+now SHA-verified byte-true and flipped MatchingFor("GZLE01"):
+aygr / fallrock_tag / tag_ba1 (WWDP 762b5faa). The dead .data extras in
+every REL build (PCH Vec aggregates + sqrtf statics) are dropped by
+-strip_partial at link — benign, confirmed.
+
+ko1's remaining distance: 6 harness parks (~45 rows, all falsified) +
+the pool-position stragglers now down near the noise floor. The ko1
+SHA flip should be attempted once the parks close.
