@@ -1,7 +1,0 @@
-{
-    "id": "wwDonorDisc",
-    "name": "A Link Between Twilight Plugin",
-    "version": "0.2.0",
-    "author": "Dusklight WW crew (fork-local, never shipped)",
-    "description": "The Wind Waker layer, mod-side. Serves byte-identical donor files straight from the user's own Wind Waker (USA) disc image — nothing staged, nothing shipped, zero-bake carried to completion — and registers WW actors above the host's proc enum via by-name hooks, with no receiver edit, on a stock dusklight. Configure mod.wwDonorDisc.wwIsoPath with the path to a plain GZLE01 .iso."
-}

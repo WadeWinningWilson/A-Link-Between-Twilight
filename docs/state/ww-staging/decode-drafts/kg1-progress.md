@@ -156,6 +156,30 @@ Outset-first charter did NOT select this TU, smallest-open-TU did.**
   flags are right and the donor spelling is something none of the 10
   shapes reach. Harness-class micro-shape - same family as ym1 kari_1.
 
+## Batch 8: fuzzy 53.85 -> 60.40 (WWDP 07318211)
+
+- next_msgStatus 98.99 instruction-exact (pool/address residue): 19-case
+  switch on *i_msgno-0x1D4D via .data jump table @4894; absent cases
+  0x1D53/0x1D54 -> default ret 16; case 0x1D5C also rets 16 (m771=1);
+  everything else rets 15.
+- Decoded flow: intro ladder gated by dComIfGs_isEventBit(0xE04) +
+  dLib_getIplDaysFromSaveTime()<4 + dComIfGs_isTmpBit/onTmpBit(0x101);
+  pay block = mpCurrMsg->mSelectNum==0 && dComIfGs_getRupee()>=10 ->
+  m74D=1 (anm attr), dComIfGp_setItemRupeeCount(-10), m751=1,
+  m_jnt.onHeadLock(), player->setPlayerPosAndAngle(&cXyz(0,0,250),
+  0x2000), msg 0x1D55; replay counter = getEventReg/setEventReg(0xFE07)
+  clamp<3 selecting 0x1D60/61/62.
+- LEVERS: (a) **split-declaration register allocation** - target had
+  ret=r30/player=r31 with ret's `li 15` emitted FIRST; only spelling
+  satisfying both: `daPy_py_c* player;` declared BEFORE `u16 ret = 15;`
+  with the init as a separate statement after (decl order sets the reg,
+  statement order sets emission). (b) **daPy_py_c vptr at +0x31C** -
+  fopAc_ac_c is non-polymorphic, so daPy virtuals dispatch via
+  lwz r12,0x31C(player); the (cXyz*,s16) slot = setPlayerPosAndAngle.
+  (c) u32-returning dLib fn compared signed = donor `(int)` cast.
+  (d) fopNpc 0x29B = m_jnt.mbHeadLock (0x290 + JntCtrl 0x0B) - a bare
+  stb 1 there is onHeadLock() inlined.
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
