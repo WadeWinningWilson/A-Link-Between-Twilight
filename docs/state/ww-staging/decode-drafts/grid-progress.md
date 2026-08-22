@@ -51,8 +51,33 @@ differently than REL @-pools.
   uses mNo-and-reset (no refcount): deleteChild + mNo = -1.
 - daHo_HIO_c.mNo carved (s8 at 0x4).
 
+## Batch 2 (WWDP faa40a64): 8/20 matched
+
+- setTopNrmVtx 99.85 (pool), _draw 98.60 instruction-exact, _execute
+  98.54 (one reg-rename park, kari family), setBackNrm/setNrmMtx 100.
+- **LEVER: whole-struct tevStr assign.** The 60-line field-copy block
+  in _draw is ONE line - `tevStr = l_ship->tevStr;` - because the
+  IMPLICIT dKy_tevstr_c operator= calls J3DLightObj's USER operator=
+  (which copies only mInfo, skipping field_0x34[64]) and word-copies
+  the GXColorS10s; hand-spelled member assigns go bytewise/lha and
+  miss. Proven precedent: d_a_sail (matched 100) - THE PIRATE SAIL IS
+  THIS ACTOR'S SIBLING and covers most remaining shapes.
+- _draw details: current.angle (not shape_angle) rotations + ship
+  getSailAngle() Yrot, MtxScale(1,scale.y,1)*HIO scale, concat into
+  packet mtx, entryZSort into isMonotone() ? XluListP1 : XluList with
+  buf->mpZMtx = *calc_mtx.
+- _execute: camera-distance alpha fade - (current.pos - eye).abs()
+  AS A TEMP (naming the diff adds 12 bytes of frame), lerp between
+  HIO alphaFar/alphaNear by dist/fadeDist, approach by ±5/frame,
+  skip ho_move when scale.y < 0.01f (sail furled).
+- Carves: daHo_packet_c head = J3DMatPacket + pad[0x80-sizeof] + Mtx
+  mMtx(0x80) + dKy_tevstr_c* (0xB0); daGrid embeds the packet at
+  0x2A0 (alpha at packet+0x18A3); daHo_HIO draw-scale xyz(0x24) +
+  alphaFar/Near(0x30/31) + fadeDist(0x34); l_ship = daShip_c* GLOBAL
+  DEFINED IN THIS TU (sbss).
+
 ## NEXT
 
-Batch 2: setTopNrmVtx (0x10C), _execute (0x1C4), _draw (0x23C); then
-setNrmVtx (0x538), _create (0x514); the monsters (packet draw 0x830,
-ho_move 0xD1C) last.
+_create (0x514, heals sinit + string pool), setNrmVtx (0x538), then
+packet draw (0x830) and ho_move (0xD1C) - consult d_a_sail's
+equivalents FIRST for each.
