@@ -75,11 +75,12 @@ add_subdirectory("${DUSK_ROOT}/sdk" dusk-sdk EXCLUDE_FROM_ALL)
 # ---------------------------------------------------------------------------
 add_mod(ww_donor_disc
     MOD_JSON ../mod.json
-    FEATURES game
+    FEATURES game webgpu
     SOURCES
         ../main.cpp
         ../donor_disc.cpp
         ../registry.cpp
+        ../ww_gfx_spike.cpp
         ../ww_message.cpp
         ../ww_jmessage.cpp
         ../ww_dmesg.cpp

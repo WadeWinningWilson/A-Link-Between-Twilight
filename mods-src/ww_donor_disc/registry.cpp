@@ -94,6 +94,7 @@
 // libs/JSystem/include/JSystem/J3DGraphBase/J3DDrawBuffer.h - a missing include,
 // NOT an API divergence.
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.h"
+#include "JSystem/J3DGraphBase/J3DShapeDraw.h"
 #include "JSystem/JUtility/JUTNameTab.h"
 #include "JSystem/JUtility/JUTTexture.h"
 #include "SSystem/SComponent/c_counter.h"
@@ -465,6 +466,82 @@ DEFINE_HOOK_SYMBOL("?loadResource@dRes_info_c@@QEAAHXZ", int(void*), ResLoadReso
 // ============================================================================
 DEFINE_HOOK_SYMBOL("?mDoExt_modelEntryDL@@YAXPEAVJ3DModel@@@Z",
                    void(void*), ModelEntryDL);
+
+// ============================================================================
+// THE GX CENSUS — plugin-side, no aurora change, and it tests the ONE mechanism
+// still standing.
+//
+// WHY THIS AND NOT MORE aurora WORK. The user's constraint is that the fix must
+// live plugin-side, and the tracked measurement says ~90% of the fork's aurora
+// work-set is patch-only. But the Dolphin GX API is a different story: the host
+// exports 247 GX entry points including `GXCallDisplayList`,
+// `GXBeginDisplayList` and `GXEndDisplayList` (verified via dumpbin /EXPORTS).
+// Those are resolvable by name at runtime, so the plugin can MEASURE the GX
+// stream without touching the backend at all.
+//
+// WHAT IT TESTS. `fifo::publish()` returns early while `sInDisplayList` is true
+// (`fifo.cpp:173`), and `begin_display_list` sets that latch while
+// `end_display_list` clears it. AN UNBALANCED begin THEREFORE STOPS THE FIFO
+// FROM EVER DRAINING - which is exactly the runaway signature: `drain()` runs
+// per frame from `aurora.cpp:251`, so death ~8-11 frames in means the drain is
+// not doing its job rather than that geometry is heavy.
+//
+// THE PREDICTION IS FALSIFIABLE AND CHEAP: if `begins != ends` and the gap grows
+// per frame, that is the desync and its author is whoever left it open. If they
+// stay balanced, THE RECORDED MECHANISM IS WRONG and I will say so - this lane
+// has already retracted three mechanisms tonight and a fourth costs nothing but
+// a build.
+//
+// NOTE ON SIGNATURES: these are C entry points, so the symbol names are
+// undecorated. A wrong signature here is caught by the hook layer at install,
+// which is why each install result is reported rather than assumed.
+// ============================================================================
+DEFINE_HOOK_SYMBOL("GXCallDisplayList", void(const void*, unsigned int), GxCallDL);
+DEFINE_HOOK_SYMBOL("GXBeginDisplayList", void(void*, unsigned int), GxBeginDL);
+DEFINE_HOOK_SYMBOL("GXEndDisplayList", unsigned int(void), GxEndDL);
+
+// ============================================================================
+// THE PACKET-CYCLE PROBE — catch the self-loop AS IT IS CREATED.
+//
+// `lwood_pkt_census` proved a cycle exists (clean through draw 41, `cycle:1`
+// from draw 42, dead at 44). This names the instruction that makes it.
+//
+// `J3DMatPacket::addShapePacket` PREPENDS (`J3DPacket.cpp:199`):
+//     pShape->setNextPacket(mpShapePacket);
+//     mpShapePacket = pShape;
+// If `pShape` IS ALREADY THE HEAD, that writes `pShape->next = pShape` — a
+// one-line self-loop, and any traversal of it runs forever.
+//
+// How that can happen: `entryMatSort` merges same-material packets by walking
+// its bucket and testing `packet->isSame(pMatPacket)`. A matPacket ENTERED
+// TWICE IN ONE FRAME finds ITSELF in that bucket, and the merge then reads
+// `A->addShapePacket(A->getShapePacket())` — head prepended onto itself.
+// `J3DJoint::entryIn` resets the head each frame (`J3DJoint.cpp:179`,
+// `matPacket->setShapePacket(shapePacket)`), which is what normally keeps this
+// impossible — so a model that skips or double-runs that path is the suspect.
+//
+// The probe CHANGES NOTHING. It reports the condition at the moment of creation,
+// with both pointers, so the author can be named instead of inferred.
+// ============================================================================
+DEFINE_HOOK_SYMBOL("?addShapePacket@J3DMatPacket@@QEAAXPEAVJ3DShapePacket@@@Z",
+                   void(void*, void*), AddShapePacket);
+
+// The entry side. `entryMatSort` is the ONLY caller that can make a matPacket
+// merge with itself, so recording its current subject lets the self-loop probe
+// say WHICH call created the cycle instead of leaving it to inference.
+DEFINE_HOOK_SYMBOL("?entryMatSort@J3DDrawBuffer@@QEAAHPEAVJ3DMatPacket@@@Z",
+                   int(void*, void*), EntryMatSort);
+
+// THE REAL FRAME BOUNDARY. `dDlst_list_c::reset()` calls `frameInit()` on all 21
+// draw buffers (`d_drawlist.cpp:1930`), and `frameInit` NULLs every bucket
+// (`J3DDrawBuffer.cpp:47`). That is the only point at which a matPacket stops
+// being in its bucket.
+//
+// The previous probe cleared its duplicate tally in `wwGxCensusTick`, which
+// fires once per LWOOD DRAW - four times a frame - so its window was far
+// narrower than a frame and its `pkt_double_entry:0` was NOT evidence.
+// Anchoring to reset() makes the count mean what it says.
+DEFINE_HOOK_SYMBOL("?reset@dDlst_list_c@@QEAAXXZ", void(void*), DlstReset);
 
 // ============================================================================
 // THE UPSTREAM HALF — run 132033 answered the binary split and it is UPSTREAM.
@@ -2879,7 +2956,7 @@ static int lwoodDrawMode() {
     if (s_mode < 0) {
         const char* e = std::getenv("WW_LWOOD_DRAW");
         s_mode = (e != nullptr && e[0] != '\0') ? std::atoi(e) : 1;
-        if (s_mode < 0 || s_mode > 16) {
+        if (s_mode < 0 || s_mode > 18) {
             s_mode = 1;
         }
         logf(LOG_LEVEL_INFO,
@@ -3014,12 +3091,175 @@ static int lwoodHideShapePackets(J3DModel* model) {
     return hidden;
 }
 
+// Defined further down with the other GX census pieces; declared here because
+// WwLwood_draw is the tick site and sits above that definition.
+void wwGxCensusTick();
+extern int s_lwoodDrawsThisFrame;
+
+#include "ww_j3d_mesh.inc"
+
 int WwLwood_draw(void* self) {
     LwoodMembers* m = lwoodMembers(self);
     if (m->model == nullptr) {
         return 1;
     }
     const int mode = lwoodDrawMode();
+
+    wwGxCensusTick();   // GX traffic census - counters only, no behaviour change
+
+    // ------------------------------------------------------------------------
+    // THE BRANCH PROBE — which arm of mDoExt_modelUpdateDL does lwood take?
+    //
+    // Prompted by the user's question: WW waves, stars and grass all render, so
+    // why is lwood alone a problem? That reframes it — the difficulty is not
+    // "WW content cannot render here", it is specific to lwood, and Room 44's
+    // own model.bdl is ALSO a donor J3D model that draws every frame without
+    // complaint.
+    //
+    // `mDoExt_modelUpdateDL` (m_Do_ext.cpp:334) chooses:
+    //     sharedDL(mat0) != NULL && !isLocked()  ->  calc(); diff(); entry();
+    //     otherwise                              ->  unlock(); update(); lock();
+    //
+    // THE SECOND ARM CALLS update(), WHICH REGENERATES THE MODEL'S DISPLAY
+    // LISTS. If the condition stays false, that happens EVERY FRAME - a display
+    // list rebuilt per model per frame, into a buffer whose overflow is exactly
+    // the crash we have been chasing. The first arm only re-enters an existing
+    // packet and costs nothing.
+    //
+    // Two booleans decide it and neither has ever been measured. This logs them.
+    // ------------------------------------------------------------------------
+    {
+        static int s_branchN = 0;
+        s_branchN++;
+        if (s_branchN <= 4) {
+            J3DModelData* md = m->model->getModelData();
+            J3DMaterial* mat0 = (md != nullptr) ? md->getMaterialNodePointer(0) : nullptr;
+            const int hasShared =
+                (mat0 != nullptr && mat0->getSharedDisplayListObj() != nullptr) ? 1 : 0;
+            const int locked = (md != nullptr && md->isLocked()) ? 1 : 0;
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_dl_branch\",\"n\":%d,\"shared_dl0\":%d,"
+                 "\"locked\":%d,\"takes\":\"%s\","
+                 "\"reads\":\"THE WHOLE QUESTION IN TWO BOOLEANS. takes=diff means the cheap "
+                 "arm: calc/diff/entry, re-enters an existing packet, writes no display list. "
+                 "takes=UPDATE means unlock/update/lock - IT REGENERATES THE DISPLAY LIST EVERY "
+                 "FRAME, which is a per-model-per-frame writer into the very buffer whose "
+                 "overflow kills this actor at draw 44. If lwood reads UPDATE and Room 44's "
+                 "model reads diff, that is the difference between them and the bypass was "
+                 "never needed\"}",
+                 s_branchN, hasShared, locked,
+                 (hasShared != 0 && locked == 0) ? "diff" : "UPDATE");
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // MODE 17 — THE GfxService ROUTE. The actual lwood test.
+    //
+    // This is the whole point of the spike: the GX submit below dies on a
+    // `fifo::write_data: buffer size overflow`, and mode 0 proved a
+    // FORK-IDENTICAL draw shape dies too, so the draw shape is not the variable.
+    // Mode 17 delivers the same instances, at the same world positions, on the
+    // same frame cadence, through a route that never touches `aurora::gx::fifo`.
+    //
+    // It RETURNS EARLY: no `dComIfGd_setListBG`, no `modelUpdateDL`, nothing
+    // enters the GX path for this actor. A mode that did both would prove
+    // nothing, because the GX submit alone is enough to trigger the overflow.
+    // ------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // MODE 18 — THE REAL LWOOD MESH THROUGH GfxService.
+    //
+    // Mode 17 answered "does the route work" with a 36-corner box that uploaded
+    // nothing. That was the wrong test to stop on: the GX failure is a DATA
+    // VOLUME failure, and a box exercises almost none of the data path. This
+    // mode decodes the model's own GX display lists into a triangle list and
+    // uploads it per instance per frame — deliberately the naive shape, because
+    // stressing the buffer is the entire point.
+    //
+    // Decode is CACHED per J3DModelData: display lists are immutable resource
+    // data, so all four lwood share one decode. The per-frame cost is the
+    // UPLOAD, which is what we want to measure.
+    // ------------------------------------------------------------------------
+    if (mode == 18) {
+        static int s_meshN = 0;
+        // 64k floats = ~7.2k triangles; an lwood is far under this. If the cap is
+        // ever hit the receipt says so, because a silently truncated tree that
+        // renders fine is exactly how a decoder bug survives review.
+        WwMeshCache* mesh = wwDecodeModelMesh(m->model, 64 * 1024);
+        bool ok = false;
+        if (mesh != nullptr && mesh->triCount > 0) {
+            ok = wwGfxSpike_submitMesh(
+                mesh->verts, mesh->triCount * 3,
+                reinterpret_cast<const float*>(m->model->getBaseTRMtx()));
+        }
+        s_meshN++;
+        if (s_meshN <= 4 || (s_meshN % 900) == 0) {
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_mesh_decode\",\"n\":%d,\"tris\":%d,"
+                 "\"shapes\":%d,\"prims\":%d,\"truncated\":%d,\"submitted\":%d,"
+                 "\"bad_op\":\"0x%02X\",\"bad_at\":%d,"
+                 "\"pos_comps\":%d,\"pos_type\":%d,\"pos_stride\":%u,"
+                 "\"oob_pos\":%d,"
+                 "\"dec_lo\":[%.1f,%.1f,%.1f],\"dec_hi\":[%.1f,%.1f,%.1f],\"dec_ok\":%d,"
+                 "\"raw\":[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f],\"raw_ok\":%d,"
+                 "\"perm\":[%d,%d,%d],\"perm_resid\":%d,"
+                 "\"shapes_total\":%d,\"shapes_skipped\":%d,\"groups\":%d,\"pnmtxidx\":%d,"
+                 "\"joint_applied\":%d,"
+                 "\"bbox_lo\":[%.1f,%.1f,%.1f],\"bbox_hi\":[%.1f,%.1f,%.1f],"
+                 "\"reads\":\"THE BBOX IS THE ORACLE. An lwood should measure roughly +/-200 "
+                 "wide and ~600 tall. Tens of thousands, or wild asymmetry, means the position "
+                 "array was read with the wrong endianness or fixed-point frac and the geometry "
+                 "is noise - which would still RENDER, just as a scribble. tris=0 means the "
+                 "display lists were not understood at all - and bad_op then names the exact GX "
+                 "opcode that stopped the walk, which is the difference between a decoder bug "
+                 "and a model with no geometry. dec_lo/dec_hi are the MODEL'S OWN DECLARED bounds "
+                 "from the BDL and owe NOTHING to my decoder: if they match bbox_lo/bbox_hi the "
+                 "decode is faithful and the fault is downstream, if they differ the decoder is "
+                 "still lying\"}",
+                 s_meshN, mesh != nullptr ? mesh->triCount : -1,
+                 mesh != nullptr ? mesh->shapes : -1, mesh != nullptr ? mesh->prims : -1,
+                 mesh != nullptr ? mesh->truncated : -1, ok ? 1 : 0,
+                 mesh != nullptr ? mesh->badOp : 0, mesh != nullptr ? mesh->badAt : -1,
+                 mesh != nullptr ? mesh->posComps : -1, mesh != nullptr ? mesh->posType : -1,
+                 mesh != nullptr ? (unsigned)mesh->posStride : 0u,
+                 mesh != nullptr ? mesh->oobPos : -1,
+                 mesh != nullptr ? mesh->decLo[0] : 0.0f, mesh != nullptr ? mesh->decLo[1] : 0.0f,
+                 mesh != nullptr ? mesh->decLo[2] : 0.0f, mesh != nullptr ? mesh->decHi[0] : 0.0f,
+                 mesh != nullptr ? mesh->decHi[1] : 0.0f, mesh != nullptr ? mesh->decHi[2] : 0.0f,
+                 mesh != nullptr ? mesh->decValid : -1,
+                 mesh != nullptr ? mesh->raw[0] : 0.0f, mesh != nullptr ? mesh->raw[1] : 0.0f,
+                 mesh != nullptr ? mesh->raw[2] : 0.0f, mesh != nullptr ? mesh->raw[3] : 0.0f,
+                 mesh != nullptr ? mesh->raw[4] : 0.0f, mesh != nullptr ? mesh->raw[5] : 0.0f,
+                 mesh != nullptr ? mesh->raw[6] : 0.0f, mesh != nullptr ? mesh->raw[7] : 0.0f,
+                 mesh != nullptr ? mesh->raw[8] : 0.0f, mesh != nullptr ? mesh->rawOk : -1,
+                 mesh != nullptr ? mesh->perm[0] : -1, mesh != nullptr ? mesh->perm[1] : -1,
+                 mesh != nullptr ? mesh->perm[2] : -1, mesh != nullptr ? mesh->permScore : -1,
+                 mesh != nullptr ? mesh->shapesTotal : -1,
+                 mesh != nullptr ? mesh->shapesSkipped : -1,
+                 mesh != nullptr ? mesh->groupsTotal : -1,
+                 mesh != nullptr ? mesh->usesPnMtxIdx : -1,
+                 mesh != nullptr ? mesh->jointApplied : -1,
+                 mesh != nullptr ? mesh->lo[0] : 0.0f, mesh != nullptr ? mesh->lo[1] : 0.0f,
+                 mesh != nullptr ? mesh->lo[2] : 0.0f, mesh != nullptr ? mesh->hi[0] : 0.0f,
+                 mesh != nullptr ? mesh->hi[1] : 0.0f, mesh != nullptr ? mesh->hi[2] : 0.0f);
+        }
+        return 1;
+    }
+
+    if (mode == 17) {
+        static int s_gfxN = 0;
+        const bool ok =
+            wwGfxSpike_submitLwood(reinterpret_cast<const float*>(m->model->getBaseTRMtx()));
+        s_gfxN++;
+        if (s_gfxN <= 3 || (s_gfxN % 600) == 0) {
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_draw_gfx\",\"n\":%d,\"submitted\":%d,"
+                 "\"reads\":\"mode 17: this instance went to GfxService and NOT to GX. "
+                 "submitted=0 means the spike declined it and lwood_gfx_reject says why; a run "
+                 "of zeros here is a clean run that proves NOTHING about the FIFO\"}",
+                 s_gfxN, ok ? 1 : 0);
+        }
+        return 1;
+    }
     if (mode == 1) {
         static int s_skipN = 0;
         s_skipN++;
@@ -5694,6 +5934,171 @@ void on_j3dModelCreate(ModContext*, void* args, void* retval, void*) {
     }
 }
 
+// ============================================================================
+// GX CENSUS HANDLERS. Counters only - no behaviour change, nothing suppressed.
+// Reported per WW-stage frame so the per-frame TREND is visible: a one-off
+// imbalance is noise, a gap that grows every frame is the desync.
+// ============================================================================
+int s_gxCallDlCalls = 0;
+unsigned long long s_gxCallDlBytes = 0;
+int s_gxBeginDl = 0;
+int s_gxEndDl = 0;
+int s_gxFrames = 0;
+
+int s_addShapeCalls = 0;
+int s_selfLoops = 0;
+void* s_entrySubject = nullptr;   // matPacket currently inside entryMatSort
+int s_entryCalls = 0;
+
+// Per-lwood-frame entry tally: how many times each matPacket is entered.
+// A matPacket entered TWICE in one frame is what puts it in its own bucket.
+void* s_entrySeen[32];
+int s_entrySeenN = 0;
+int s_entryDupes = 0;
+
+int s_dlstResets = 0;
+int s_entriesThisFrame = 0;
+int s_lwoodDrawsThisFrame = 0;
+int s_prevFrameEntries = 0;
+int s_prevFrameLwoodDraws = 0;
+int s_peakFrameEntries = 0;
+
+HookAction on_dlstReset(ModContext*, void*, void*, void*) {
+    // Every bucket is about to be NULLed, so nothing can still be "already in
+    // its bucket" past this point. This is the honest frame boundary.
+    s_dlstResets++;   // RESTORED: dropped when this block was repaired, which is
+                      // why every receipt read resets:0 and the baseline logged
+                      // every frame instead of every 60th.
+    // Snapshot the frame that just ENDED before clearing. The baseline matters:
+    // if the whole draw list replays, this total roughly DOUBLES; if only lwood
+    // re-enters, it rises by a handful. Those are different bugs with different
+    // fixes, and the number separates them without another guess.
+    s_prevFrameEntries = s_entriesThisFrame;
+    s_prevFrameLwoodDraws = s_lwoodDrawsThisFrame;
+    if (s_entriesThisFrame > s_peakFrameEntries) {
+        s_peakFrameEntries = s_entriesThisFrame;
+    }
+    // Report periodically AND whenever a frame runs far past the steady-state
+    // 8 entries. The failing frame reached 45-50 before anything else fired, so
+    // the anomaly is the frame BOUNDARY going missing, not the draw pass looping
+    // - and a threshold catches that on the frame it happens.
+    const bool anomalous = (s_entriesThisFrame > 16);
+    if (startStageIsWw() && (anomalous || (s_dlstResets % 60) == 0)) {
+        logf(anomalous ? LOG_LEVEL_WARN : LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"frame_entries\",\"reset\":%d,\"entries\":%d,"
+             "\"lwood_draws\":%d,\"peak\":%d,"
+             "\"reads\":\"BASELINE. entries = entryMatSort calls in the frame that just "
+             "ended; lwood_draws = WwLwood_draw calls in it. On a steady WW stage both should "
+             "be FLAT. The failing frame reported entries_this_frame 31-36 with six double "
+             "entries - compare against this baseline: roughly DOUBLE means THE WHOLE DRAW "
+             "PASS REPLAYED, a small rise means only lwood re-entered. Those are different "
+             "bugs with different fixes and this number separates them\"}",
+             s_dlstResets, s_entriesThisFrame, s_lwoodDrawsThisFrame, s_peakFrameEntries);
+    }
+    s_entrySeenN = 0;
+    s_entriesThisFrame = 0;
+    s_lwoodDrawsThisFrame = 0;
+    return HOOK_CONTINUE;
+}
+
+HookAction on_entryMatSort(ModContext*, void* args, void*, void*) {
+    s_entryCalls++;
+    void* mp = mods::arg<void*>(args, 1);   // arg0 = this (J3DDrawBuffer)
+    s_entrySubject = mp;
+    if (startStageIsWw() && mp != nullptr) {
+        s_entriesThisFrame++;
+        for (int i = 0; i < s_entrySeenN; i++) {
+            if (s_entrySeen[i] == mp) {
+                s_entryDupes++;
+                if (s_entryDupes <= 6) {
+                    logf(LOG_LEVEL_WARN,
+                         "[WwRegistry] {\"ev\":\"pkt_double_entry\",\"n\":%d,"
+                         "\"matpkt\":\"%p\",\"entry_call\":%d,\"resets\":%d,\"entries_this_frame\":%d,\"lwood_draws\":%d,"
+                         "\"reads\":\"THIS matPacket IS BEING ENTERED INTO THE DRAW BUFFER A "
+                         "SECOND TIME WITHIN ONE FRAME. entryMatSort walks the bucket and merges on "
+                         "isSame(), so the second entry FINDS ITSELF and runs "
+                         "A->addShapePacket(A->getShapePacket()) - head prepended onto head, which "
+                         "is the self-loop. If this fires alongside pkt_self_loop with the same "
+                         "matpkt, the double entry is the CAUSE and the fix is to stop submitting "
+                         "the model twice per frame\"}",
+                         s_entryDupes, mp, s_entryCalls, s_dlstResets, s_entriesThisFrame,
+                         s_lwoodDrawsThisFrame);
+                }
+                return HOOK_CONTINUE;
+            }
+        }
+        if (s_entrySeenN < 32) {
+            s_entrySeen[s_entrySeenN++] = mp;
+        }
+    }
+    return HOOK_CONTINUE;
+}
+
+HookAction on_addShapePacket(ModContext*, void* args, void*, void*) {
+    s_addShapeCalls++;
+    J3DMatPacket* mp = static_cast<J3DMatPacket*>(mods::arg<void*>(args, 0));
+    J3DShapePacket* sp = static_cast<J3DShapePacket*>(mods::arg<void*>(args, 1));
+    if (mp == nullptr || sp == nullptr) {
+        return HOOK_CONTINUE;
+    }
+    // THE SELF-LOOP CONDITION, read BEFORE the prepend happens.
+    if (mp->getShapePacket() == sp) {
+        s_selfLoops++;
+        if (s_selfLoops <= 8) {
+            logf(LOG_LEVEL_WARN,
+                 "[WwRegistry] {\"ev\":\"pkt_self_loop\",\"n\":%d,\"call\":%d,"
+                 "\"matpkt\":\"%p\",\"shapepkt\":\"%p\",\"ww_stage\":%d,\"self_merge\":%d,\"resets\":%d,\"entries_this_frame\":%d,"
+                 "\"reads\":\"addShapePacket IS ABOUT TO PREPEND A PACKET ONTO ITSELF - "
+                 "pShape already IS the chain head, so this writes pShape->next = pShape and "
+                 "every later traversal of that chain runs FOREVER. This is the cycle "
+                 "lwood_pkt_census sees from draw 42, caught at the instruction that creates "
+                 "it. ww_stage says whether it is OUR stage; a self-loop on a TP stage would "
+                 "mean this is a receiver-wide behaviour and not the plugin's doing\"}",
+                 s_selfLoops, s_addShapeCalls, (void*)mp, (void*)sp,
+                 startStageIsWw() ? 1 : 0, (mp == s_entrySubject) ? 1 : 0,
+                 s_dlstResets, s_entriesThisFrame);
+        }
+    }
+    return HOOK_CONTINUE;
+}
+
+HookAction on_gxCallDL(ModContext*, void* args, void*, void*) {
+    s_gxCallDlCalls++;
+    s_gxCallDlBytes += mods::arg<unsigned int>(args, 1);
+    return HOOK_CONTINUE;
+}
+
+HookAction on_gxBeginDL(ModContext*, void*, void*, void*) {
+    s_gxBeginDl++;
+    return HOOK_CONTINUE;
+}
+
+HookAction on_gxEndDL(ModContext*, void*, void*, void*) {
+    s_gxEndDl++;
+    return HOOK_CONTINUE;
+}
+
+// Called once per lwood draw pass so the census has a frame boundary to report
+// against; lwood is the actor under investigation, so its cadence is the right
+// clock for this measurement.
+void wwGxCensusTick() {
+    s_gxFrames++;
+    s_lwoodDrawsThisFrame++;
+    if (s_gxFrames <= 6 || (s_gxFrames % 120) == 0) {
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"gx_census\",\"tick\":%d,\"callDL\":%d,"
+             "\"callDL_bytes\":%llu,\"beginDL\":%d,\"endDL\":%d,\"open\":%d,"
+             "\"reads\":\"CUMULATIVE GX traffic. `open` = beginDL minus endDL. "
+             "aurora's publish() returns early while sInDisplayList is true, and "
+             "begin_display_list sets that latch, so AN OPEN COUNT THAT GROWS PER TICK "
+             "MEANS THE FIFO CAN NEVER DRAIN - which is the runaway. open staying 0 "
+             "FALSIFIES the unbalanced-display-list mechanism outright and callDL_bytes "
+             "then says whether the volume is real traffic instead\"}",
+             s_gxFrames, s_gxCallDlCalls, s_gxCallDlBytes, s_gxBeginDl, s_gxEndDl,
+             s_gxBeginDl - s_gxEndDl);
+    }
+}
+
 HookAction on_modelEntryDL(ModContext*, void* args, void*, void*) {
     if (!startStageIsWw()) { return HOOK_CONTINUE; }
     void* model = mods::arg<void*>(args, 0);
@@ -7560,6 +7965,19 @@ ModResult wwRegistry_initialize() {
     // The Outset visibility probe. PRE: the question is whether the call is
     // REACHED, and a post hook on a void function tells us nothing extra.
     const ModResult rDraw = mods::hook_add_pre<ModelEntryDL>(s_hook, on_modelEntryDL);
+    const ModResult rAsp = mods::hook_add_pre<AddShapePacket>(s_hook, on_addShapePacket);
+    const ModResult rEms = mods::hook_add_pre<EntryMatSort>(s_hook, on_entryMatSort);
+    const ModResult rDlr = mods::hook_add_pre<DlstReset>(s_hook, on_dlstReset);
+    const ModResult rGxC = mods::hook_add_pre<GxCallDL>(s_hook, on_gxCallDL);
+    const ModResult rGxB = mods::hook_add_pre<GxBeginDL>(s_hook, on_gxBeginDL);
+    const ModResult rGxE = mods::hook_add_pre<GxEndDL>(s_hook, on_gxEndDL);
+    logf(LOG_LEVEL_INFO,
+         "[WwRegistry] {\"ev\":\"gx_census_install\",\"addShapePacket\":%d,\"entryMatSort\":%d,\"dlstReset\":%d,\"callDL\":%d,\"beginDL\":%d,"
+         "\"endDL\":%d,"
+         "\"reads\":\"0=MOD_OK. These are UNDECORATED C symbols; the host exports 247 GX "
+         "entry points so they should resolve. A non-zero here means the census never ran "
+         "and a clean gx_census line would prove NOTHING\"}",
+         (int)rAsp, (int)rEms, (int)rDlr, (int)rGxC, (int)rGxB, (int)rGxE);
     const ModResult rMk = mods::hook_add_post<J3DModelCreate>(s_hook, on_j3dModelCreate);
     const ModResult rBgD = mods::hook_add_pre<BgDraw>(s_hook, on_bgDraw);
     const ModResult rBgBtkE = mods::hook_add_post<BgBtkEntry>(s_hook, on_bgBtkEntry);

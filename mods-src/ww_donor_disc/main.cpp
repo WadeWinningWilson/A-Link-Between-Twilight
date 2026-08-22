@@ -1136,6 +1136,7 @@ MOD_EXTERN_C MOD_EXPORT ModResult mod_initialize(ModError* out_error) {
     // not start. Same reasoning as the missing-disc case just above.
     // ------------------------------------------------------------------------
     wwRegistry_initialize();
+    wwGfxSpike_initialize();
     return MOD_OK;
 }
 
@@ -1150,6 +1151,7 @@ MOD_EXTERN_C MOD_EXPORT ModResult mod_update(ModError* /*out_error*/) {
 }
 
 MOD_EXTERN_C MOD_EXPORT ModResult mod_shutdown(ModError* /*out_error*/) {
+    wwGfxSpike_shutdown();
     wwRegistry_shutdown();
     drop_served();
     wwDonorDisc_service()->detach(mod_ctx);

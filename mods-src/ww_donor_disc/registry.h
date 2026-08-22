@@ -29,6 +29,25 @@
 
 #include <mods/api.h>
 
+// ============================================================================
+// GfxService SPIKE (ww_gfx_spike.cpp) - increment 1, reachability only.
+// Declared here because main.cpp already includes this header; the spike does
+// NOT belong to the registry and keeps its own translation unit. Both are
+// no-ops unless WW_GFX_SPIKE=1, so an unarmed build pays nothing.
+// ============================================================================
+void wwGfxSpike_initialize();
+void wwGfxSpike_shutdown();
+
+// Increment 2b: hand ONE lwood instance to the GfxService route instead of GX.
+// `world34` is the model's own base TR matrix (J3D 3x4, row-major). Returns
+// false when the instance was NOT submitted, and the spike's own counters say
+// why — a false that the caller swallows would read as a successful draw.
+bool wwGfxSpike_submitLwood(const float world34[12]);
+
+// Level 4: the REAL decoded lwood mesh. `verts` is a flat xyz triangle list in
+// model space; `vertCount` is vertices, not triangles.
+bool wwGfxSpike_submitMesh(const float* verts, int vertCount, const float world34[12]);
+
 ModResult wwRegistry_initialize();
 ModResult wwRegistry_shutdown();
 
