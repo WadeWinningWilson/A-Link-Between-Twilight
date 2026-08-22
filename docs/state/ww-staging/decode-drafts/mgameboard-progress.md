@@ -119,7 +119,10 @@ already proven from the caller side during the kg1 campaign.
 
 ## NEXT
 
-_execute (state dispatch over mState), set_2dposition, CreateInit,
-set_mtx (0x304 bytes), CursorMove, MinigameMain, _draw, CreateHeap
-(0x6B0, model/DList construction against m_bullet_table), then dtors/
-sinit heal.
+Campaign closed to parks. Open items: (1) the sinit copy-call park
+(batch 3) - blocks __sinit + the phantom __ct__4cXyzFRC4cXyz; (2)
+register/pool residues on set_mtx/MinigameMain/_draw/CreateHeap
+(95-99.9); (3) m_bullet_table u8[0x120] is declared but its writer was
+never seen in this TU - likely consumed by d_seafightgame.cpp (check
+when that TU opens). Next campaign: pick the next smallest-open TU
+(d_a_fallrock_tag 7 fns was the runner-up).
