@@ -53,6 +53,12 @@
 #     -> fetches origin from a scratch clone of <local-aurora-repo> (which
 #        must have 'origin' pointed at the real upstream), checks the patch
 #        against REF (default origin/main) after the fetch.
+#   aurora_patch_check.py base <patch> <aurora-repo> [--head REF]
+#     -> identifies the commit the patch was CUT AGAINST from its own pre-image
+#        blob hashes, and reports SAME / BEHIND-HEAD / AHEAD-OF-HEAD /
+#        DIVERGENT. Answers "why will this not apply?" -- which plain
+#        `git apply` cannot, since it fails identically for a corrupt patch,
+#        a drifted tree and a divergent base.
 #   aurora_patch_check.py compat <patch> <aurora-repo> <dusklight-repo> --refs v1.4.1,v1.4.0
 #   aurora_patch_check.py apply   <patch> <aurora-repo> [--target REF] [--write]
 #   aurora_patch_check.py unapply <patch> <aurora-repo> [--base REF] [--write]
@@ -103,6 +109,145 @@ def touched_paths(patch_text):
         if line.startswith("+++ b/"):
             paths.append(line[6:])
     return paths
+
+
+def preimage_blobs(patch_text):
+    """{path: pre-image blob hash} from the patch's own `index a..b` lines.
+
+    These are git's fingerprint of the EXACT file contents the patch was cut
+    against, carried inside the patch itself. They identify its base without
+    anyone having to remember or record what that base was."""
+    out, cur = {}, None
+    for line in patch_text.splitlines():
+        if line.startswith("diff --git"):
+            cur = line.split(" b/")[-1].strip()
+        elif line.startswith("index ") and cur:
+            frag = line[len("index "):].split("..")[0].strip()
+            if frag:
+                out[cur] = frag
+            cur = None
+    return out
+
+
+def find_base(patch_path, repo, head_ref="HEAD", limit=1500):
+    """WHICH COMMIT WAS THIS PATCH CUT AGAINST, AND WHERE IS THAT vs HEAD?
+
+    ================================================================
+    THE FAILURE THIS EXISTS FOR (found live 2026-08-22, and it is the
+    delivery model's biggest single risk):
+    AURORA-PATCH-0001 applied in NEITHER direction against the aurora
+    this project actually builds -- on a clean tree. That reads like
+    corruption and is not. Its pre-image blobs resolve to upstream
+    `8b690b6`, which CONTAINS upstream `4998dcc` ("Avoid
+    provably-redundant tev_overflow calls"); `extern/aurora` sits on
+    `fc2e1cd`, a fork work-set commit branched BEFORE it. **The patch
+    and the thing we compile are on DIVERGENT BRANCHES.**
+    Both carry the same intent in two revisions, so neither is a
+    superset and no amount of re-capturing fixes it.
+
+    An installer that ships the patch would fail on the tree the
+    project builds, and "does it apply?" alone cannot tell you why --
+    it reports the same failure for a corrupt patch, a drifted tree
+    and a divergent base, which are three different problems with
+    three different fixes. This names which one you have.
+    ================================================================
+    """
+    text = Path(patch_path).read_text(encoding="utf-8", errors="replace")
+    want = preimage_blobs(text)
+    if not want:
+        # UNIFORM SHAPE on every path. A result dict whose KEYS depend on which
+        # failure occurred makes the caller crash on the failure instead of
+        # reporting it -- which is exactly what this control caught.
+        return {"ok": False, "base": None, "head": None, "rel": "NO-INDEX-LINES",
+                "detail": "", "paths": [], "missing_blobs": [], "matches": [],
+                "reason": "patch carries no `index` lines - cannot identify a base"}
+    paths = list(want)
+    # Full hashes for the abbreviations the patch carries.
+    full = {}
+    for p, h in want.items():
+        r = git(repo, "rev-parse", h, check=False)
+        full[p] = r.stdout.strip() if r.returncode == 0 else None
+    missing = [p for p, h in full.items() if not h]
+
+    # ====================================================================
+    # THE BASE IS AN EQUIVALENCE CLASS, NOT A POINT -- and this tool got
+    # that wrong on its first run, in a way that produced a confident,
+    # checkable, WRONG answer.
+    #
+    # A patch's pre-image blobs pin the CONTENT of the touched files, and
+    # every commit that leaves those files untouched carries the same
+    # blobs. `fork-aurora-81f12f31.patch` matched FIVE commits; the first
+    # in rev-list order was `49fdf1b`, so the tool announced that as "the
+    # base" and declared the filename's own `81f12f31` wrong. **81f12f31
+    # was in the matching set the whole time.** Taking the first hit did
+    # not just lose precision, it manufactured a discrepancy.
+    #
+    # So: collect EVERY match, then pick the representative by its
+    # relationship to head -- same, then ancestor, then descendant, then
+    # divergent. If ANY commit carrying this exact content sits in head's
+    # history, the patch is based on content head knows about, and
+    # reporting DIVERGENT off an arbitrary sibling would be false.
+    # ====================================================================
+    head = git(repo, "rev-parse", head_ref, check=False).stdout.strip()
+    matches = []
+    cands = git(repo, "rev-list", "--all", "-%d" % limit, check=False).stdout.split()
+    for c in cands:
+        r = git(repo, "ls-tree", c, "--", *paths, check=False)
+        got = {}
+        for line in r.stdout.splitlines():
+            try:
+                meta, path = line.split("\t", 1)
+                got[path.strip()] = meta.split()[2]
+            except (ValueError, IndexError):
+                continue
+        if len(got) == len(paths) and all(got[p] == full[p] for p in paths):
+            matches.append(c)
+
+    RANK = {"SAME": 0, "BEHIND-HEAD": 1, "AHEAD-OF-HEAD": 2, "DIVERGENT": 3}
+
+    def classify(c):
+        if c == head:
+            return "SAME"
+        if git(repo, "merge-base", "--is-ancestor", c, head, check=False).returncode == 0:
+            return "BEHIND-HEAD"
+        if git(repo, "merge-base", "--is-ancestor", head, c, check=False).returncode == 0:
+            return "AHEAD-OF-HEAD"
+        return "DIVERGENT"
+
+    base, rel, detail = None, "UNKNOWN", ""
+    if matches:
+        scored = sorted(((RANK[classify(c)], c) for c in matches), key=lambda x: x[0])
+        best_rank, base = scored[0]
+        rel = [k for k, v in RANK.items() if v == best_rank][0]
+        extra = ("" if len(matches) == 1 else
+                 "  (%d commits carry these exact file contents; this is the one "
+                 "best related to %s)" % (len(matches), head_ref))
+        if rel == "SAME":
+            detail = "patch base IS the checked-out commit - it should apply directly" + extra
+        elif rel == "BEHIND-HEAD":
+            detail = ("patch base is an ANCESTOR of %s: the tree moved on. The patch "
+                      "may still apply if nothing touched its hunks." % head_ref) + extra
+        elif rel == "AHEAD-OF-HEAD":
+            detail = ("patch base is a DESCENDANT of %s: the patch was cut against a "
+                      "NEWER tree than the one checked out. Advance the checkout or "
+                      "re-cut the patch." % head_ref) + extra
+        else:
+            mb = git(repo, "merge-base", base, head, check=False).stdout.strip()
+            detail = ("patch base and %s share only %s - they are on DIFFERENT "
+                      "BRANCHES, and NO commit carrying this content is in %s's "
+                      "history. The patch cannot apply here and re-capturing it will "
+                      "not help; one side has to be rebased onto the other."
+                      % (head_ref, mb[:9] or "no common ancestor", head_ref)) + extra
+    return {"ok": bool(base), "base": base, "head": head, "rel": rel,
+            "detail": detail, "paths": paths, "missing_blobs": missing,
+            "matches": matches,
+            "reason": "" if base else
+            ("pre-image blobs %s are not in this repo at all - the patch was cut "
+             "against a tree this clone has never seen" % ", ".join(m for m in missing)
+             if missing else
+             "no commit in the last %d matches ALL pre-image blobs - the base was a "
+             "WORKING TREE state, never committed, so it is unreproducible from "
+             "history" % limit)}
 
 
 def verify(patch_path, source_repo, pin, target_ref="HEAD"):
@@ -516,8 +661,75 @@ def control():
             print("  CONTROL FAILED (unapply)")
             return 1
 
+        # ================================================================
+        # BASE-DETECTION CONTROL. It must find the right base AND fail to
+        # invent one. A detector that always names something is worse than
+        # none: it would have answered the AURORA-PATCH-0001 question with
+        # a confident wrong commit instead of DIVERGENT.
+        # ================================================================
+        # A DEDICATED two-commit fixture. The `base` repo above has exactly one
+        # commit, so HEAD~1 does not resolve there -- reusing it made this
+        # control report the TOOL wrong when the CONTROL was wrong, which is
+        # the failure mode a control is supposed to be immune to.
+        br = tmp / "baserepo"
+        br.mkdir()
+        subprocess.run(["git", "init", "-q", str(br)], check=True)
+        subprocess.run(["git", "-C", str(br), "config", "user.email", "t@t"], check=True)
+        subprocess.run(["git", "-C", str(br), "config", "user.name", "t"], check=True)
+        (br / "f.txt").write_text("\n".join(["a", "b", "c", ""]), encoding="utf-8")
+        subprocess.run(["git", "-C", str(br), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(br), "commit", "-qm", "one"], check=True)
+        (br / "f.txt").write_text("\n".join(["a", "B", "c", ""]), encoding="utf-8")
+        subprocess.run(["git", "-C", str(br), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(br), "commit", "-qm", "two"], check=True)
+        b1 = subprocess.run(["git", "-C", str(br), "rev-parse", "HEAD~1"],
+                            capture_output=True, text=True).stdout.strip()
+        b2 = subprocess.run(["git", "-C", str(br), "rev-parse", "HEAD"],
+                            capture_output=True, text=True).stdout.strip()
+        pfile = tmp / "gen.patch"
+        pfile.write_text(subprocess.run(["git", "-C", str(br), "diff", b1, b2],
+                                        capture_output=True, text=True).stdout,
+                         encoding="utf-8")
+        r_pos = find_base(pfile, br, head_ref=b2)
+        # same patch, one pre-image hash corrupted -> must NOT identify a base
+        bad = tmp / "bad.patch"
+        txt = pfile.read_text(encoding="utf-8")
+        import re as _re
+        bad.write_text(_re.sub(r"index [0-9a-f]+", "index deadbee", txt, count=1),
+                       encoding="utf-8")
+        r_neg = find_base(bad, br, head_ref=b2)
+        # ================================================================
+        # THE EQUIVALENCE-CLASS CASE -- the bug that produced a confident
+        # wrong answer. Add a SECOND commit carrying the same f.txt content
+        # on a DIVERGENT branch. Both match the pre-image blobs; the tool
+        # must report the one in head's history, not whichever rev-list
+        # happens to hand back first.
+        # ================================================================
+        subprocess.run(["git", "-C", str(br), "checkout", "-q", "-b", "side", b1], check=True)
+        (br / "other.txt").write_text("unrelated\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(br), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(br), "commit", "-qm", "side-branch"], check=True)
+        subprocess.run(["git", "-C", str(br), "checkout", "-q", b2], check=True)
+        r_eq = find_base(pfile, br, head_ref=b2)
+        eq_ok = (r_eq["ok"] and len(r_eq.get("matches", [])) >= 2
+                 and r_eq["rel"] == "BEHIND-HEAD")
+
+        base_checks = [
+            ("picks in-history over sibling", eq_ok),
+            ("finds the real base", r_pos["ok"] and r_pos["base"].startswith(b1[:7])),
+            ("calls it BEHIND-HEAD", r_pos["rel"] == "BEHIND-HEAD"),
+            ("REFUSES a bogus base", not r_neg["ok"]),
+            ("says why it refused", bool(r_neg.get("reason"))),
+        ]
+        for name, passed in base_checks:
+            print("  %-28s %s" % (name, "OK" if passed else "*** WRONG ***"))
+        if not all(p for _, p in base_checks):
+            print("  CONTROL FAILED (base detection)")
+            return 1
+
         print("CONTROL PASSED - byte-verify, three redundancy verdicts, four compat")
-        print("verdicts, and all seven unapply guards correct.")
+        print("verdicts, all seven unapply guards, and base detection that both")
+        print("finds a real base and refuses to invent one.")
         return 0
 
 
@@ -563,6 +775,31 @@ def main():
         if not write and r["ok"]:
             print("  (dry-run is the default -- this changed nothing)")
         return 0 if r["ok"] else 1
+    if cmd == "base":
+        patch, repo = sys.argv[2], sys.argv[3]
+        head = sys.argv[sys.argv.index("--head") + 1] if "--head" in sys.argv else "HEAD"
+        r = find_base(patch, repo, head)
+        if not r["ok"]:
+            print("PATCH BASE: *** NOT IDENTIFIED ***")
+            print("  %s" % r["reason"])
+            return 1
+        info = git(repo, "log", "-1", "--format=%h %ad %an: %s", "--date=short",
+                   r["base"], check=False).stdout.strip()
+        print("PATCH BASE: %s" % info)
+        if len(r.get("matches", [])) > 1:
+            print("  (%d commits carry these exact file contents - the base is an"
+                  % len(r["matches"]))
+            print("   EQUIVALENCE CLASS, not a point; the one shown is the one best")
+            print("   related to the checkout, not an arbitrary first hit.)")
+        print("  checked out (%s): %s" % (head, r["head"][:9]))
+        print("  RELATIONSHIP: %s" % r["rel"])
+        print("  %s" % r["detail"])
+        if r["rel"] == "DIVERGENT":
+            print()
+            print("  This is the case that looks like a corrupt patch and is not.")
+            print("  `git apply` fails FORWARD and REVERSE, on a clean tree, and no")
+            print("  amount of re-capturing changes it.")
+        return 0 if r["rel"] in ("SAME", "BEHIND-HEAD") else 1
     if cmd == "compat":
         patch, aurora_repo, dusklight_repo = sys.argv[2], sys.argv[3], sys.argv[4]
         refs = sys.argv[sys.argv.index("--refs") + 1].split(",") if "--refs" in sys.argv else ["HEAD"]
