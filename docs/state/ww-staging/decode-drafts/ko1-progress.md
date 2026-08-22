@@ -522,3 +522,20 @@ every REL build (PCH Vec aggregates + sqrtf statics) are dropped by
 ko1's remaining distance: 6 harness parks (~45 rows, all falsified) +
 the pool-position stragglers now down near the noise floor. The ko1
 SHA flip should be attempted once the parks close.
+
+
+### setAnm_anm park: falsifications SIX and SEVEN (2026-08-22)
+
+Target tail re-read: `li r0,0; stb 860; stb 861;` then the SIGNED
+int->float magic consumes THE SAME r0 — donor's compiler store-forwards
+the known constant and folds the extsb of 0; mine reloads (lbz+extsb).
+Two spellings the original four missed, both now FALSIFIED (measured
+WORSE than the parked 96.77/95.83):
+- copy-chain `860=0; 861=860; 824=861;` -> 95.0 / 93.5
+- source-swap `860=0; 861=0; 824=861;` (adjacent-store forward) ->
+  95.2 / 95.6
+The xoris signed-magic also KILLS the u8-retype theory (a u8 source
+would take the unsigned path). Whatever makes the donor forward is not
+reachable from the assignment's shape — sweep-harness slot sets should
+still include these tails for interaction coverage, but no more hand
+probes on this pair.
