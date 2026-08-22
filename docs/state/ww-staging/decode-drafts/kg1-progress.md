@@ -80,6 +80,27 @@ Outset-first charter did NOT select this TU, smallest-open-TU did.**
   file static - an anonymous-pool table means NEITHER (const local).
 - Parks: chkAttention slot-interleave (kari family), pools pending fill.
 
+## Batch 5: fuzzy 25.3 -> 36.95 (10/66 exact + 4 fns at 99.7-100 pool-pending)
+
+- CreateHeap 99.67: morf from res 5 with an ANM TRANSFORM arg (res 17,
+  playMode 2 — unlike the ym1/yw1 NULL+(-1) form); joints head/backbone2
+  via m_jnt.setHead/BackboneJntNum (asserts 547/552);
+  initTexPatternAnm(3,false) gated + (0,true) ungated; prop model m6C4
+  res 6; mBtpAnm.init(res 6, res 10, loop 2); u16 LOOP over
+  getJointNum() attaching nodeCallBack to head/backbone2/joint-8;
+  Acch.Set passes &current.angle + &shape_angle (yw1 passed NULLs).
+- CreateInit 99.95 (returns cPhs_COMPLEATE_e): Stts/Cyl/SetStts,
+  setCollision(60,150), gravity -9, setActorInfo2("Auc0"), the JOR HIO
+  once-guard (mDoHIO_createChild w/ SJIS label, l_HIO.field_0x8
+  refcount), evmng getEventIdx ×3 → m784/m786/m788 (MINIGAME_START/END,
+  KAISEN_GETITEM), m74D=2 camera mode, head+backbone LOCKED
+  (onHeadLock/onBackBoneLock), m734 = spawn pos.
+- LEVERS: (a) a JOR-paged HIO = `: public JORReflexible` + explicit
+  `virtual ~X() {}` (bmsw pattern) — dropping the dtor drops the WHOLE
+  vtable and shifts every member by 4; (b) the assert EXPR string names
+  the member (m_eye_tex_pattern was my m6F4); (c) SJIS HIO labels embed
+  as UTF-8 in source, sjiswrap converts at compile.
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
