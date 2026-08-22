@@ -175,3 +175,22 @@ REMAINING 3 (harness-class, ledgered):
   gotos) — the optimizer folds them all to bgt. Do NOT re-run these.
 TU fuzzy 99.93. Matching flip + four-version gate DEFERRED until these 3
 close (harness or yw1-sibling insight). NEXT: yw1 (8/119), expected ~1:1.
+
+## 2026-08-22 (successor session): TWO OF THE THREE PARKS CRACKED — 123/124
+
+The predicted "yw1-sibling insight" arrived on schedule. hi1's matched
+setAnm_anm carries the spelling: **`if (c1 || c2) { return; }`** — the
+OR-guard emits the final condition as the UNFOLDED `branch-if-false BODY;
+b END` pair that all eight prior shapes folded away.
+- chngAnmAtr CLOSED: `if (i_atr == m8A8 || i_atr > 0xD) return;` (ca1dd5ce).
+- setAnm_anm CLOSED: the function is **VOID** — retail never loads r3
+  anywhere; there was no shared `li r3,1` tail, the early `return 1` was
+  the template's invention. void + OR-guard (b053caa6). Header decl int →
+  void; all 3 call sites discard the result.
+- kari_1 STANDS at 99.9 (+3 falsifications: flat/dist top-declaration
+  arrangements worsen 8→11 rows). Precise structure: retail allocates
+  delta-op- temp@0x24 > chk_areaIN argtemp@0x18 > named flat@0xC; the
+  argtemp sits BETWEEN the delta temp and the named local — no tried
+  declaration order produces that interleaving. (NOT the reverse-decl
+  locals lever from yw1 upLift — that governs same-kind named locals.)
+Matching flip + four-version gate still deferred on kari_1 alone.

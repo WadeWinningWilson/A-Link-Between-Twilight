@@ -35,6 +35,77 @@ path walking (dNpc_PathRun_c), partner search vs BM1 (Grandma).
   early-return inlines it before A.** (Tried against ym1's chngAnmAtr fold
   park: does NOT crack it — 8th falsified shape there.)
 
+## Batch 4: 24 -> 28/119 exact (successor session, 2026-08-22)
+
+- play_animation EXACT: the aj1 spelling verbatim (NOT the ym1 twin — yw1
+  adds the ground-material footstep feed): `if (mObjAcch.ChkGroundHit())
+  sndId = GetMtrlSndId(mObjAcch.m_gnd);` then `m770 = mpMorf->play(&eyePos,
+  sndId, dComIfGp_getReverb(current.roomNo))`; frame-wrap check vs m750.
+- upLift EXACT (u8 return, NOT void as the template decl had it): the
+  pot-on-head carry. searchByID(m704, &prm); m775 = prm == 1; if pot found:
+  setCarryNow-if-not-carried, pot->shape_angle.y = atan2s of headMtx x
+  l_hed_front, pot->current.pos = headMtx x (34,-4,0). `l_hed_front` is a
+  ZERO cXyz file-static (bss 0x134, only upLift references it — donor
+  dead-ish read, ported faithfully; declared between play_animation and
+  upLift to land after the @4468-era statics).
+- setMtx EXACT: ym1's shape MINUS the R-hand model block, PLUS setHairAngle()
+  after mpMorf->calc() and upLift() before setAttention(). Carved
+  mpHeadModel at 0x6D8.
+- searchByID EXACT: the hi1 two-arg twin PLUS a null-guard on the out-param
+  both at clear and at set (yw1 0x5C vs siblings' 0x54).
+
+**TWO LEVERS MINTED (one meta-lesson):**
+1. **==1-store clamp form discriminates the DESTINATION type.** Retail
+   `srwi r0,r0,5` after subfic/cntlzw => the stored field is **bool**
+   (m775 is bool, direct `m775 = prm == 1;`). The byte-clamped
+   `rlwinm rN,rN,27,24,31` appears when the bool must exist as a **u8
+   VALUE** — u8 local (knob00 `u8 bVar3 = (x==K)`), or bool operands of
+   bitwise `&` (ji1 setAnm). 1-row tell, falsified 9 shapes before landing
+   because I read the diff SIDES INVERTED — always print target/base
+   LABELED, never trust a bare `<`/`>` memory.
+2. **Locals-swap signature = reverse declaration order.** MWCC allocates
+   same-scope local aggregates top-down: LATER-declared cXyz gets the
+   LOWER stack slot. If every stack ref of two locals is pairwise swapped
+   vs retail, flip their declaration order (`cXyz front;` before
+   `cXyz ofs(34,-4,0);` put ofs at 0xC, front at 0x18).
+
+Carves this batch: mpHeadModel 0x6D8 (J3DModel*) · m750 f32 (morf frame) ·
+m770 u8 (play result) · m775 bool (pot-gone flag).
+
+## Batches 5-6: 28 -> 40/119 exact (same successor session)
+
+- resID pair + texPttrn family EXACT first build: bckResID plain 7-entry
+  {0,3,4,2,1,5,9} (NO subtype switch, simpler than ym1); btpResID =
+  single-entry {8} — THE ym1 LANDMARK TRAP, checked first as ordered;
+  init_texPttrnAnm is ym1's with arc-name LITERAL "Yw" (not mArcName) and
+  JUT_ASSERT line 0x28A; play_texPttrnAnm pure ym1 twin (m7BF/m6F0/m6F2 ↔
+  m8AA/m6F4/m6F6). Carves: mBtpAnm 0x6DC, m6F0/m6F2, m7BF s8. Header carve
+  side-snapped chngAnmTag/ctrlAnmTag/ctrlAnmAtr (pre-drafted empties).
+- setAnm ladder closed: setAnm_NUM (7x{i,0,8.0,1.0,2} table), setAnm
+  (m7C2-indexed, table w/ -1 rows at [0]/[2]), setAnm_ATR (m7BD-indexed),
+  chngAnmAtr, anmAtr (ym1 twin, m7C8/m7BE). Carves m7C2/m7C8 s8.
+
+**THE SESSION LEVER — OR-GUARD RETURN (cracks two shape families):**
+`if (c1 || c2) { return; }` emits c1 as branch-if-true-to-end (FOLDED) and
+c2 as the UNFOLDED pair `branch-if-false BODY; b END`. This is the ONLY
+spelling that keeps the pair — empty-then/else, bare return-in-then,
+explicit goto, && nesting ALL fold to a single inverted branch (12+
+falsifications across ym1+yw1). Donor witness: hi1 setAnm_anm
+(`if (temp < 0 || field == temp) return;`).
+- yw1 setAnm_anm: VOID (not int) + OR-guard → exact.
+- yw1 chngAnmAtr: `if (i_no == m7BD || i_no > 7) return;` → exact.
+- **ym1 chngAnmAtr PARK CRACKED** (was 8 falsified shapes) → ym1 122/124.
+- **ym1 setAnm_anm PARK CRACKED**: the "shared li r3,1 tail" was a mirage —
+  retail loads NO return value anywhere; the function is VOID with the
+  OR-guard, `int` + `return 1` was the template's invention → ym1 123/124.
+
+**ym1 kari_1 park STANDS** (+3 falsifications this session: flat/dist
+top-declaration arrangements all worsen to 11 rows; base = 8). Structure
+understood precisely now: retail slots delta-temp@0x24 > argtemp@0x18 >
+flat@0xC — the chk_areaIN by-value temp is allocated BETWEEN the delta
+temp and the named local, which no tried declaration order produces. Not
+the upLift reverse-decl lever (that one is same-kind locals only).
+
 ## Carved so far
 mPhs 0x6C4 · m_hed/bbone_jnt_num 0x6CC/D · m_hair1/2/3 0x6CE-D0 ·
 m704 fpc_ProcID (pot) · mPathRun 0x70C (dNpc_PathRun_c, 8b) ·
