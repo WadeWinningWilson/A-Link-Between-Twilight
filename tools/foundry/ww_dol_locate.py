@@ -193,6 +193,25 @@ def main():
                 if not emit:
                     print('  %-38s %7d B  --------  MISS' % (name, len(data)))
                 misses += 1
+    # STRIDE INVARIANT (History/Bridge's check, adopted so it runs every time
+    # rather than once by hand): a vertex-attribute blob's length must be a
+    # whole number of elements. A stride that does not divide its blob means the
+    # located SIZE or the assumed stride is wrong -- and indexed GX will draw the
+    # misreading rather than refuse it. This is the cheapest corroboration the
+    # table has that its sizes are right.
+    STRIDES = (('pos', 12), ('texCoord', 8), ('color', 4))
+    stride_bad = []
+    for r in (rows if emit else []):
+        _unit, _sym, _off, _len = r[0], r[1], r[2], r[3]
+        for kind, st in STRIDES:
+            if re.fullmatch(r'l_(Vmori_)?%s\d?' % kind, _sym) and _len % st:
+                stride_bad.append('%s::%s %dB not divisible by stride %d'
+                                  % (_unit, _sym, _len, st))
+    if stride_bad:
+        print('// *** STRIDE INVARIANT FAILED -- DO NOT SERVE THIS TABLE ***')
+        for b in stride_bad:
+            print('//   %s' % b)
+
     if emit:
         # The disc ID is part of the table's identity: these are file offsets
         # into ONE build's executable. A JP or EU disc has different ones, and
