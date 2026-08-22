@@ -463,3 +463,29 @@ watcher: background task `b26a88ox8` (re-arm at every READ of the board —
 both historical gaps followed no-action deliveries). Prior-session tasks
 bwdghun86/b67ogapqw were orphaned by the session exit and are dead; do not
 look for them. All arms logged in `tools/foundry/MONITOR-REGISTRY.md`.
+
+### UPDATE 11 addendum (same session, later): ym1 effectively CLOSED at 121/124
+
+The createHeap family, setStt, anmAtr, talk/attention cluster, next_msgStatus,
+demo, _execute, _draw all went exact same-session (full ledger:
+ym1-progress.md batches 12-17). The three survivors are HARNESS-CLASS parks
+(kari_1 slot swap · setAnm_anm shared tail · chngAnmAtr unfolded ble/b pair —
+seven source shapes falsified, and yw1's copy shows the IDENTICAL idiom, so
+one solution pays twice). Matching flip + four-version gate DEFERRED until
+those three close. Estate exact count now ~876/905 + ym1's 121.
+
+Levers minted (also in the batch ledger): btpResID single-entry-table pool
+fix (one fix snapped SIX 99.9x functions — a systematic pool shift has ONE
+upstream cause); orphan-GXColor pool-only reproduction (daiocta idiom);
+orphan l_check_inf/wrk bss statics (ba1 vocabulary); `return intcall() != 0`
+vs implicit bool conversion; wrapper-XrotM arg pre-evaluation; copy-init
+(interleaved) vs ctor/set (batched) cXyz spelling tell; per-case block
+locals don't overlap (declare shared temps at function top).
+
+**yw1 campaign OPEN (WWDP <commit>): header rebuilt on the ym1 template**,
+base class corrected, signatures pre-typed with the session's levers,
+compiles clean at 8/119. NEXT: HIO ctor + prm table decode (ONE 0x38 child,
+0x30 prm), then the nodeCB trio (Hair is new — read its asm, don't assume
+Head's shape), then the init_YW1_* ladder and createInit. Sibling rule:
+check the ym1 twin FIRST for every function; chk_areaIN here is a FOUR-ARG
+variant — do not transplant blindly.
