@@ -127,3 +127,51 @@ chkAttention · setAttention · set_collision_sp · plus the pool/bss parks
 set_cutGrass, chk_areaIN, wait_2, SITwai, shadowDraw, _create, near-100s).
 NEXT: the createHeap family as one cluster (share arc/model vocabulary),
 then next_msgStatus/_execute/_draw, then the talk/attention cluster.
+
+
+## Batches 12-17 (2026-08-21, same session): 98 -> 121/124 — ALL functions written
+
+Byte-exact this stretch: CreateHeap, init_texPttrnAnm (the 98.36 park closed:
+`return mBtpAnm.init(...) != 0;` — explicit !=0 in a bool fn emits subfe
+alone; implicit int->bool adds a defensive clrlwi), privateCut, body/head/
+itemCreateHeap (snapped by privateCut's "DUMMY" emission), setStt, anmAtr,
+chk_talk, chkAttention, setAttention, chk_nbt_attn (held), next_msgStatus,
+demo, _execute, _draw, _create, and the SIX pool-shift victims
+(chk_areaIN, kari_1->99.9, set_collision_sp, set_cutGrass, shadowDraw,
+wait_2, SITwai) + _nodeCB_Head.
+
+THE BIG POOL FIND: btpResID's a_res_id_tbl is a SINGLE-entry {0xE} static
+(donor indexes out of bounds by design). My 13-entry copy inserted 48 pool
+bytes and shifted every later constant — one fix snapped six functions.
+Corollary: a systematic pool shift across many 99.9x functions has ONE
+upstream cause; find it instead of parking each function.
+
+Orphan reproduction levers (both proven):
+- 3 orphaned pool words FF000080/0000FF80/FFFF0080 = stripped debug-draw
+  GXColors; daiocta's unreferenced-GXColor-local idiom emits them POOL-ONLY
+  (no code rows) inside _draw's field_0x18 debug block.
+- ba1's partner-search scratch (fopAc_ac_c* l_check_inf[20] + int
+  l_check_wrk) exists ORPHANED in ym1 .bss; declaring them unreferenced
+  after l_HIO restores the 84-byte bss layout and snapped _nodeCB_Head.
+
+Retypes cashed by signal: init_YM* -> bool (single join clrlwi), m8B3 s8
+(extsb.), m8A6 bool (plain-lbz return), m8A7 s8, a_tex_pttrn_num_tbl s8
+(bare lbzx at Sc arg), chk_nbt_attn BOOL->bool + bool local,
+body/head/itemCreateHeap void->BOOL (caller cmpwi), demo void->bool.
+Carves: mHomePos cXyz + mHomeAngle csXyz (mRotYTarget was mHomeAngle.y);
+prm field_0x18 f32 -> 4 u8 debug flags (lbz in _draw, no lfs anywhere).
+Other levers: set_collision_sp's shared `off` local at function top
+(per-case cXyz locals cost 16 frame bytes — MWCC does not overlap block
+locals) + `f32 h, r;` declaration order (h=f31, r=f30);
+setAttention's pos is COPY-INIT (interleaved one-reg) not ctor (batched).
+
+REMAINING 3 (harness-class, ledgered):
+- kari_1 99.9: named cXyz local vs by-value arg temp SLOT SWAP (target has
+  the arg temp ABOVE the named local; flat-first/last both falsified).
+- setAnm_anm 95.98: mine duplicates `li r3,1` at two return sites; target
+  shares one tail.
+- chngAnmAtr 93.12: target's `ble body; b end` unfolded pair. SEVEN source
+  shapes falsified (&&, nested if, early return, empty-then/else, literal
+  gotos) — the optimizer folds them all to bgt. Do NOT re-run these.
+TU fuzzy 99.93. Matching flip + four-version gate DEFERRED until these 3
+close (harness or yw1-sibling insight). NEXT: yw1 (8/119), expected ~1:1.
