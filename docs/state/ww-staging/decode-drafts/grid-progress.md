@@ -39,6 +39,20 @@ setTopNrmVtx/setNrmVtx, _execute/_draw/_create, then the two monsters
 pools are shared DOL-wide sda2, so pool-offset residues behave
 differently than REL @-pools.
 
+## Batch 1 (WWDP see log): 6+ matched
+
+- Wrappers were already stub-correct; setNrmMtx = cMtx_YrotS(*calc_mtx,
+  mAngleY) (calc_mtx = SDA Mtx* from c_lib.h, pirate_flag precedent);
+  setBackNrm EXACT with the **roving-pointer loop lever** (target
+  advances two pointers +12/iter; an indexed [i] spelling emits
+  add-per-access — spell `for (...; i++, nrm++, back++)`).
+- _delete instruction-exact (pool order pending _create): arcs are
+  "Cloth" (mPhs 0x290) and "Ship" (mPhs2 0x298); the grid HIO teardown
+  uses mNo-and-reset (no refcount): deleteChild + mNo = -1.
+- daHo_HIO_c.mNo carved (s8 at 0x4).
+
 ## NEXT
 
-Batch 1: the five daGrid_* wrappers, _delete, setBackNrm, setNrmMtx.
+Batch 2: setTopNrmVtx (0x10C), _execute (0x1C4), _draw (0x23C); then
+setNrmVtx (0x538), _create (0x514); the monsters (packet draw 0x830,
+ho_move 0xD1C) last.
