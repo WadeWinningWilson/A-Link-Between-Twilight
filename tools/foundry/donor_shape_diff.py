@@ -52,6 +52,11 @@ NOISE = re.compile(r'^(?:printf|sprintf|snprintf|vsnprintf|OS\w*|JUT\w*|'
 
 
 def extract(path, name):
+    # A pair list goes stale the moment another lane lands a split. A
+    # missing file is a SKIP, not a crash -- crashing loses every result
+    # after it, which is how one stale row cost a whole batch earlier.
+    if not Path(path).is_file():
+        return None
     t = io.open(path, encoding="utf-8", errors="replace").read()
     t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)
     m = re.search(r'^[A-Za-z_][\w:<>,\s\*&]*?\b%s\s*\([^;]*?\)\s*(?:const\s*)?\{'
@@ -82,6 +87,39 @@ def shape(body):
             n = re.sub(r'^(dKyWw|dKyw|dKy|daSea|da|ww)_?', '', word, flags=re.I)
             out.append("call:" + n.lower())
     return out
+
+
+def classify_thin(plugin_body, donor_fn):
+    """A THIN port has two opposite meanings and they must not be conflated.
+
+    Found live 2026-08-22: `dKyWw_settingTevStruct` carries 2 shape tokens
+    against the donor's 41 - ratio 0.05, the thinnest in the tree. That reads
+    as a gap and IS THE OPPOSITE. Its whole body is
+
+        g_env_light.settingTevStruct(...);   // the RECEIVER's own
+        dKyWw_overlayTevStruct(...);         // our WW translation on top
+
+    which is DN-10 done right: the receiver already implements the donor's 137
+    lines, so the port DELEGATES instead of duplicating. A ranking that called
+    that a gap would have sent someone to "fix" the most exemplary file in the
+    tree.
+
+    The discriminator is whether the thin body CALLS an equivalent. If it
+    does, thin means DELEGATES. If it is empty or only returns, thin means
+    STUB. Same number, opposite verdicts."""
+    if plugin_body is None:
+        return "?"
+    base = re.sub(r'^(dKyWw|dKyw|dKy|daSea|da|ww)_?', '', donor_fn.split("::")[-1],
+                  flags=re.I).lower()
+    for m in re.finditer(r'\b([A-Za-z_]\w*)\s*\(', plugin_body):
+        cand = re.sub(r'^(dKyWw|dKyw|dKy|daSea|da|ww)_?', '', m.group(1),
+                      flags=re.I).lower()
+        if cand == base:
+            return "DELEGATES"
+    stripped = [l.strip() for l in plugin_body.splitlines() if l.strip()]
+    if not stripped or all(l.startswith("return") for l in stripped):
+        return "STUB"
+    return "OWN-IMPL"
 
 
 def compare(pf, pn, df, dn):
@@ -130,8 +168,20 @@ def main():
         return selftest()
     if "--batch" in sys.argv:
         src = Path(sys.argv[sys.argv.index("--batch") + 1])
-        rows = [l.rstrip("\n").split("\t") for l in
-                io.open(src, encoding="utf-8") if l.strip() and not l.startswith("#")]
+        rows, skipped = [], []
+        for _n, _l in enumerate(io.open(src, encoding="utf-8"), 1):
+            if not _l.strip() or _l.startswith("#"):
+                continue
+            _p = _l.rstrip("\n").split("\t")
+            # A malformed row must not take the batch down with it: one bad
+            # line was losing 50 good results to a crash. Skip it LOUDLY --
+            # a silently dropped row is a pair nobody knows went unchecked,
+            # which is the same silence-reads-as-absence trap as everything
+            # else this lane has hit today.
+            if len(_p) == 4:
+                rows.append(_p)
+            else:
+                skipped.append((_n, _l.strip()[:70]))
         print("SHAPE DIFF - plugin vs donor (%d pair(s))\n" % len(rows))
         tally = {}
         for pf, pn, df, dn in rows:
@@ -140,6 +190,11 @@ def main():
             tally[key] = tally.get(key, 0) + 1
             print("  %-26s %s" % (pn, v))
         print("\n  " + " | ".join("%s %d" % kv for kv in sorted(tally.items())))
+        if skipped:
+            print("  *** %d MALFORMED ROW(S) SKIPPED - NOT checked and NOT passed:"
+                  % len(skipped))
+            for _n, _txt in skipped[:5]:
+                print("      line %d: %s" % (_n, _txt))
         return 0
     if len(sys.argv) < 5:
         print(__doc__ or "see header")
