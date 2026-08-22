@@ -75,6 +75,17 @@
 | **b9v3kpj2h** | 2026-08-17T15:43Z | lane_watch.py — Foundry lane. CALLS rows whose ADDRESSEE FIELD names FOUNDRY. `WAKE_ON_BROADCAST = False`: ALL LANES broadcasts do NOT wake this lane, per standing user order. Does NOT watch build logs or Integrator runs. | 300 s; audit every 10 | 2556 | TaskStop b9v3kpj2h |
 | **bfqhz1ew3** | 2026-08-17T06:02Z (watcher re-arm #80; #77 biv65sqh2, #78 bch7hm26c, #79 bhf3hej9m each delivered+exited) | decoder_watch.py --exit-on-event â€” DECODER lane; CALLS rows addressed DECODER/ALL LANES, both states, self-filings suppressed; pulse monitor-pulse-decoder.json | 30 s | see pulse | TaskStop bfqhz1ew3 â€” | **b10hwkits** | 2026-08-17 | DECODER-TIMER: unconditional 30 s tick, drives WORK CONTINUATION (briefing Â§3b.1 â€” the second, previously-missing mechanism; the exit-on-event watcher above delivers interrupts, this one resumes decoding on quiet) | 30 s | n/a | TaskStop b10hwkits â€” exit-on-event means it ALSO exits on each delivery; re-arm `python -u tools/foundry/decoder_watch.py --exit-on-event` via Monitor and update task ID + pid here |
 
+### INTEGRATOR — DECODER-PARITY ARMED 2026-08-21 (supersedes rows below)
+
+| task ID | what | stop |
+|---|---|---|
+| **b19rqqo45** | `integrator_watch.py --exit-on-event` — watcher; RE-ARM after every delivery | `TaskStop b19rqqo45` |
+| **bwkq9r89z** | `integrator_timer.py --interval 30 --unconditional` — 30 s ticks, NEVER self-disarms (empty plate ticks as QUIET) | `TaskStop bwkq9r89z` |
+
+**The `--unconditional` flag exists because the empty-plate self-disarm — my own refinement —
+kept standing the lane down while the user had ordered Decoder parity twice. The refinement
+was the divergence; Decoder's tick is unconditional and now so is this one.**
+
 ### INTEGRATOR — BOTH MECHANISMS ARMED 2026-08-21 (user: "match Decoder's version")
 
 | task ID | what it does | stop |
@@ -737,3 +748,9 @@ watcher is a dead watcher until re-armed.
 - 2026-08-21 ~22:26Z | **DEFECT, the recurring one: watcher #161 (`b79gjjdah`) delivered ~22:21 during the chk_routeAngle stretch and was NOT re-armed until ~22:25 - ~4.5 min blind.** Caught by the TIMER-tick rule (check the pulse on every tick), not by memory: pulse age 235 s / note 'delivered' / no decoder_watch in the process table. Gap swept via git-diff on CALLS.md: TWO DECODER-first rows had landed in the window (History/Bridge documentation audit; Foundry type-signal-bank promotion) - both read and answered, section 4 of the handoff rebuilt per the audit. #162 (`byc3ikp6u`) delivered its backlog immediately and #163 (`bk2cdh77j`) is armed. This is the same reflex failure as the #103 (45 min) and #115 (27 min) entries; the mitigation that worked here was the every-tick pulse check, which bounded it at one work-stretch.
 - 2026-08-21 FOUNDRY: timer widened 30s -> 300s on user order (idle stretch while mode-14 run pends). Old Monitor b78r4b4bn stopped deliberately; new bq6tvbzaz, pulse interval_s=300 + pid verified. Plate unchanged (recurring board pass).
 - 2026-08-21 ~22:41Z | **DEFECT AGAIN, SAME SESSION, WORSE: watcher #164 (`bvp045sc4`) delivered ~22:29 and was not re-armed until ~22:41 - ~12 min blind** through the section-placement and ko_nMove work. Caught by the every-tick pulse check (age 711 s, note 'delivered'); gap swept, no DECODER-addressed rows missed. **THE PATTERN, now visible across both of today's gaps (#161 4.5 min, #164 12 min): BOTH followed deliveries that needed NO ACTION - a cc row and a self-echo.** When a delivery demands action, the action carries the re-arm along; when it demands nothing, the read completes and the re-arm silently drops. **RULE STRENGTHENED: the re-arm belongs to the READ, not to the response - re-arm in the same breath as opening the output file, before judging whether the row needs anything.** #165 (`bxwbfo5av`) armed.
+
+- 2026-08-21 DECODER (post-compaction resume): prior-session timer bwdghun86 and
+  watcher b67ogapqw reported orphaned/stopped by the harness at session exit.
+  RE-ARMED: CALLS watcher as background task b26a88ox8 (decoder_watch.py),
+  30s work-continuation timer as persistent Monitor buskawsp0. Charter 30s
+  cadence preserved.

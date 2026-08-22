@@ -415,3 +415,51 @@ diff confirming no churn.
 clean-looking zero is indistinguishable from an all-clear.** Run it from
 `D:/XXXXXXX/WWDP`. Filed to Foundry; `watcher_census.py`'s crash-after-output is
 still open too.
+
+
+## SESSION UPDATE 11 (2026-08-21, fifth instance, post-compaction) — current state
+
+### Where the campaign stands (re-derive from objdiff, not from here)
+
+- **ym1: 98/124 exact** (WWDP `b3432a6c`). createInit CLOSED byte-exact;
+  _nodeCB_BackBone exact; decideType snapped as a side effect; _nodeCB_Head
+  logic-exact, parked on bss-position of its static's guard block. Full batch
+  ledger: `docs/state/ww-staging/decode-drafts/ym1-progress.md` batch 11.
+- Estate exact counts elsewhere unchanged this stretch: ko1 180/203 fully
+  written, p2 135/145 (mirror-family park), ob1/so/aj1/kamome as recorded.
+  kamome is certified MATCH×4.
+- **NEXT on ym1 (~26 non-exact):** the createHeap family as ONE cluster
+  (bodyCreateHeap 192 rows, head/itemCreateHeap, CreateHeap share the
+  arc/model vocabulary), then next_msgStatus 172 / _execute 174 / _draw 128,
+  then the talk/attention cluster (chk_talk, chkAttention, setAttention,
+  privateCut, setStt, anmAtr, demo). Pool/bss parks converge with TU state —
+  do not chase them per-function.
+- After ym1: **yw1 (8/119)** — read ym1 first, likely 1:1 sibling. Then the
+  queue as chartered. At each TU close: flip Matching in configure.py and run
+  the four-version gate MYSELF before filing (standing order).
+
+### Levers minted this stretch (bank additions)
+
+- **Wrapper-XrotM scheduling lever** (proven, 4-row swing on
+  _nodeCB_BackBone): `mDoMtx_stack_c::XrotM(m_jnt.getBackbone_y())` — the
+  wrapper form pre-evaluates an INLINE-ACCESSOR argument (lha before
+  lis/addi of &now); the direct `mDoMtx_XrotM(now, accessor())` evaluates
+  left-to-right. Asymmetry: with a PLAIN FIELD argument the wrapper emits
+  &now first — pre-evaluation fires only for inline-call arguments.
+- **Switch-join truncation type signal** (createInit): a SINGLE `clrlwi.` at
+  the join with clean per-case `bl; b` bodies means the case callees return
+  bool AND the result var is bool; int-returning callees add a per-case
+  `clrlwi` (7 extra rows). This retype alone snapped decideType exact.
+- Derived-member shadowing trap: ym1's own 0x704 cyl was carved as `mCyl`,
+  silently shadowing `fopNpc_npc_c::mCyl` (0x574) — createInit uses BOTH
+  (base mStts/mCyl for the npc cylinder, derived m704 for the kari
+  mass-area). Renamed m704. When carving a member whose type also exists in
+  the base, check the base for a same-named field FIRST.
+
+### Monitors (state at last write)
+
+30s work-continuation timer: Monitor task `buskawsp0` (persistent). CALLS
+watcher: background task `b26a88ox8` (re-arm at every READ of the board —
+both historical gaps followed no-action deliveries). Prior-session tasks
+bwdghun86/b67ogapqw were orphaned by the session exit and are dead; do not
+look for them. All arms logged in `tools/foundry/MONITOR-REGISTRY.md`.
