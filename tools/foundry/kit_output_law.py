@@ -14,9 +14,15 @@
 #   Anything else refuses, loudly, before the write.
 #
 # Kits adopt it by replacing raw open/copy with lawful_write()/lawful_copy().
-# The retooled kits (actor_kit, enemy_port_kit skeleton emitter) route here;
-# a kit that bypasses it is findable by grep (raw .arc writes = the kit_laws
-# tools-law that pairs with this helper).
+#
+# ⚠ ADOPTION CLAIM CORRECTED 2026-08-22. This header previously read "the
+# retooled kits (actor_kit, enemy_port_kit skeleton emitter) route here".
+# THEY DO NOT. Measured: actor_kit.py imports this module ZERO times and
+# performs NINE raw writes; only port_kit.py calls in, once. **A law with a
+# false adoption claim is worse than no law - it is a law everyone believes
+# is running**, and this one has been believed for as long as the sentence
+# stood. Run `ww_kit_layout.py --audit` for the live adoption state instead
+# of trusting a sentence in a header (this one included).
 #
 # Usage as a tool:  kit_output_law.py --selftest
 # ===========================================================================
