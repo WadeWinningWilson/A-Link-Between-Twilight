@@ -781,3 +781,12 @@ watcher is a dead watcher until re-armed.
   biqv5rnmn (decoder_timer.py, pid 37496, pulse fresh). Both verified by
   pulse age, not exit code. Open work: kg1 campaign batch 2 (nodeCallBack
   → _create), 6/66 exact at head 54607088.
+
+### FOUNDRY — DECODER-PARITY ARMED 2026-08-22 (user order: "copy decoder's")
+
+| task | armed | what | interval | pid | stop |
+|---|---|---|---|---|---|
+| **bguywl1ed** | 2026-08-22T18:21Z | **`tools/foundry/foundry_watch.py --exit-on-event`** — ported from `decoder_watch.py` per DN-10 (port the hardened one, do not author a fresh one). **WHY THE OLD SETUP MISSED CALLS: `lane_watch.py` ran continuously and only wrote a pulse — it never EXITED, so the harness never delivered anything. The pulse said ALIVE and ALIVE was true; delivery was the missing half.** `--exit-on-event` makes the task-completion notification the delivery. **NON-VACUITY MEASURED BEFORE ARMING (737 rows): 678 addressed to FOUNDRY/ALL LANES, 590 would deliver, 92 self-filings suppressed. 483 of the addressed rows do NOT have FOUNDRY as first addressee — a first-addressee-only filter would have missed all 483** (registry §73's position trap, confirmed live on this lane). **SELF_TAIL WAS RE-DERIVED, NOT COPIED, AND THAT IS THE LINE THE ENGINE PORT SHIPPED BROKEN:** Decoder rows end `\| DECODER \| date` so a lane-name-alone pattern works there; FOUNDRY rows end `\| Foundry, <free text> \| date`, which that pattern matches never. Measured at 92 suppressed, not assumed. Baselines existing rows at arm time so it does not replay history. | 30 s | 40056 | `TaskStop bguywl1ed` — exit-on-event means it exits on EACH delivery; **re-arm in the same turn** and update this row |
+| **bpert307l** | 2026-08-22T18:12Z | `foundry_timer.py --interval 300` — work continuation on a quiet board (Decoder's second mechanism). Interval per the user's earlier "widen to 5 minutes". | 300 s | 38448 | `TaskStop bpert307l` |
+
+**Superseded:** `lane_watch.py` (pid 7472, `monitor-pulse.json`) left running but is NO LONGER the delivery path — kept only so its pulse history stays continuous. It is the instrument that was silently not delivering.
