@@ -269,6 +269,57 @@ artifact currently say what was ruled?"* is re-runnable by anyone, at any time,
 with no before-state. That is the form that caught receipt ② after the
 announcement had been correct — and unread — for hours.
 
+## PUBLISHED ZEROS — a zero is a claim about an INSTRUMENT, not about a tree
+
+**Every zero I publish must ship with a POSITIVE CONTROL: the same command,
+unchanged, finding something known to be present.** Without it a zero is
+indistinguishable from a broken command, and the two look *identical* in a
+document.
+
+**How this rule was earned (2026-08-21, in the most permanent artifact I
+have written).** I marked the plugin-only-Outset era boundary in `DO-NOT.md`
+and, wanting to verify rather than relay, grepped the shipped `.dusk` for
+`RARC`/`Yaz0`/`J3D2`/`bdl4`/`TIMG`/`dzb`. **Zero hits. I published it as
+proof that no donor bytes ship.** `.dusk` is a **DEFLATE zip**. The payload
+is compressed; the grep could not see a single member's bytes. **It would
+have returned zero over a container stuffed with donor arcs.** Housing/Engine
+caught it with the control I never ran: the same command finds **0** hits for
+`WwRegistry`, `ww_donor_disc`, and `dusk` — all certainly present.
+
+**THE CLAIM SURVIVED; MY EVIDENCE DID NOT.** The corrected test — decompress,
+then scan — finds **27** magics, every one a `.text` immediate or a log
+literal, with no data section big enough to hold an arc. **A true conclusion
+reached by a blind instrument is not a verified conclusion, it is a
+coincidence.** Had donor bytes been in there, my sweep would have reported the
+same zero and the marker would have blessed a breach.
+
+**THE ASYMMETRY THAT MAKES THIS LANE-CRITICAL:** a wrong *positive* gets
+challenged, because it accuses someone. **A wrong zero gets FILED** — it
+flatters everyone, closes the question, and hardens into a citation the moment
+it lands in a permanent doc. **Zeros are the only claims that get safer-looking
+as they get more wrong.**
+
+**RULE, therefore:**
+1. **Publish no zero without demonstrating the command RED** on a known
+   positive — a planted string, a member you know exists, a control file.
+2. **Name the instrument's blind spot** where the zero is recorded, not in the
+   commit message: *"grep over a compressed container"*, *"greps only tracked
+   files"*, *"case-sensitive"*.
+3. **Prefer presence-shaped evidence to absence-shaped evidence** where one
+   exists. `.data` is 2.5 KB — *there is nowhere for an arc to hide* — is
+   stronger than any count of things not found, because it survives the
+   instrument being wrong.
+4. This is `control.py`'s standing requirement (every gate demonstrated RED)
+   **applied to prose.** I built that instrument and then exempted my own
+   sentences from it. **A gate you enforce on tools and not on your own
+   writing is a gate on the cheaper half of the estate.**
+
+**Housing Security already meets this bar** — the strip-set binary covenant is
+negative-controlled with a planted `Outset`/`Aryll` blob that reports `BREACH`
+and exits 1, and its `` form was positively re-controlled on 2026-08-21
+(works in `grep -iE`; the `` failure this estate hit was in **`awk`**).
+**The doctrine is not new to the estate. It was new to me.**
+
 ## Relationship to Housing Security (keep them separate)
 
 Both are Claude lanes; both audit. The distinction is load-bearing:

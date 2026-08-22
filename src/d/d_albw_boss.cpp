@@ -5,17 +5,25 @@
 #include "Z2AudioLib/Z2Instances.h"
 #include "d/actor/d_a_b_bq.h"
 #include "d/actor/d_a_b_gm.h"
+#include "d/actor/d_a_b_go.h"
+#include "d/actor/d_a_b_ob.h"
 #include "d/actor/d_a_b_zant.h"
+#include "d/actor/d_a_e_fm.h"
 #include "d/actor/d_a_e_gm.h"
+#include "SSystem/SComponent/c_math.h"
 #include "d/d_albw_hp_mult.h"
 #include "d/d_cc_uty.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_kankyo.h"
 #include "f_op/f_op_actor_mng.h"
 #include "f_pc/f_pc_manager.h"
 #include "f_pc/f_pc_name.h"
 #include "dusk/settings.h"
+#include "m_Do/m_Do_ext.h"
+#include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -618,6 +626,302 @@ bool dAlbwBoss_zantQueryHealthBar(int* o_current, int* o_max) {
     return true;
 }
 
+// ============================================
+// NEW CODE — ALBW Port
+// Fyrus health bar — single pool via lock-on HP display (Boss HP scaler). Hide
+// during intro (ACTION_START) and death (ACTION_END) only; knockdown / look-pass
+// stay visible. HUD-only (not Boss-Refinement gated).
+// Matches daE_FM_ACTION in d_a_e_fm.cpp (enum is TU-local, not in the header).
+// ============================================
+static constexpr s16 kAlbwFmActionDown = 9;
+static constexpr s16 kAlbwFmActionADown = 10;
+static constexpr s16 kAlbwFmActionStart = 11;
+static constexpr s16 kAlbwFmActionEnd = 12;
+
+bool dAlbwBoss_fyrusQueryHealthBar(int* o_current, int* o_max) {
+    if (o_current == NULL || o_max == NULL) {
+        return false;
+    }
+    *o_current = 0;
+    *o_max = 0;
+
+    fopAc_ac_c* actor = fopAcM_SearchByName(fpcNm_E_FM_e);
+    if (actor == NULL || !fopAcM_IsActor(actor)) {
+        return false;
+    }
+
+    const e_fm_class* fm = (const e_fm_class*)actor;
+    if (fm->mAction == kAlbwFmActionStart || fm->mAction == kAlbwFmActionEnd) {
+        return false;
+    }
+    // 0 HP during floor-down still shows an empty bar until last-hit END.
+    if (actor->health <= 0 && fm->mAction != kAlbwFmActionDown &&
+        fm->mAction != kAlbwFmActionADown)
+    {
+        return false;
+    }
+
+    const dAlbwHP_LockonDisplay hp = dAlbwHP_getLockonDisplayHp(actor);
+    if (hp.max <= 0) {
+        return false;
+    }
+    *o_current = hp.current;
+    *o_max = hp.max;
+    return true;
+}
+
+// ============================================
+// NEW CODE — ALBW Boss Refinement
+// Fyrus §8/§9: 50% → stuck B_GO (proxy E_FM) → 15% shed kids, stay hollow.
+// Native pieces: E_FM fire-off (792 + PUTOUT), B_GO Create/stick (field_0x692),
+// B_GO unused sph/cyl, cc_at_check drain. Latch is the Diababa HP% pattern.
+// ============================================
+static constexpr int kAlbwFmGolemEnterPct = 50;
+static constexpr int kAlbwFmGolemExitPct = 15;
+static constexpr s16 kAlbwFmVanillaHp = 50;
+static constexpr s16 kAlbwFmRefinementHp = 200;
+static constexpr s16 kAlbwFmKidHp = 30;
+
+static u8 s_fyrusGolemPhase = 0;  // 0 none, 1 clump live, 2 kids loose, 3 kids done
+static fpc_ProcID s_fyrusGolemId = fpcM_ERROR_PROCESS_ID_e;
+static u8 s_fyrusResumeFightPending = 0;
+
+// §10 ablaze vulnerability counter (pre-50% only).
+static constexpr int kAlbwFmAblazeVulnCredits = 14;
+static u8 s_fyrusAttackCredits = 0;
+static u8 s_fyrusAblazeVulnOpen = 0;
+
+static bool fyrusHpAtMostPct(fopAc_ac_c* i_fm, int i_pct) {
+    if (i_fm == NULL || i_fm->field_0x560 <= 0) {
+        return false;
+    }
+    return static_cast<int>(i_fm->health) * 100 <= static_cast<int>(i_fm->field_0x560) * i_pct;
+}
+
+static void fyrusDespawnGolem() {
+    fopAc_ac_c* golem = NULL;
+    if (s_fyrusGolemId != fpcM_ERROR_PROCESS_ID_e) {
+        golem = fopAcM_SearchByID(s_fyrusGolemId);
+    }
+    if (golem != NULL && fopAcM_IsActor(golem) && fopAcM_GetName(golem) == fpcNm_B_GO_e) {
+        b_go_class* go = (b_go_class*)golem;
+        for (int i = 0; i < GORON_CHILD_MAX; i++) {
+            const fpc_ProcID childId = go->mGoronChildIDs[i];
+            if (childId != fpcM_ERROR_PROCESS_ID_e) {
+                fopAcM_delete(childId);
+            }
+        }
+        fopAcM_delete(golem);
+    } else if (s_fyrusGolemId != fpcM_ERROR_PROCESS_ID_e) {
+        fopAcM_delete(s_fyrusGolemId);
+        s_fyrusGolemId = fpcM_ERROR_PROCESS_ID_e;
+    }
+    daB_GO_setDisplayModelImage(false);
+}
+
+void dAlbwBoss_fyrusResetFightState() {
+    s_fyrusGolemPhase = 0;
+    s_fyrusGolemId = fpcM_ERROR_PROCESS_ID_e;
+    s_fyrusResumeFightPending = 0;
+    s_fyrusAttackCredits = 0;
+    s_fyrusAblazeVulnOpen = 0;
+    daB_GO_setDisplayModelImage(false);
+}
+
+bool dAlbwBoss_fyrusAblazePhase() {
+    return dAlbwBossRefinement_isEnabled() && s_fyrusGolemPhase == 0;
+}
+
+bool dAlbwBoss_fyrusHollowPhase() {
+    return dAlbwBossRefinement_isEnabled() && s_fyrusGolemPhase == 3;
+}
+
+bool dAlbwBoss_fyrusAblazeVulnOpen() {
+    return s_fyrusAblazeVulnOpen != 0;
+}
+
+void dAlbwBoss_fyrusOnAttackCommit(bool i_perfectParry) {
+    if (!dAlbwBoss_fyrusAblazePhase() || s_fyrusAblazeVulnOpen) {
+        return;
+    }
+    const int add = i_perfectParry ? 2 : 1;
+    const int next = static_cast<int>(s_fyrusAttackCredits) + add;
+    if (next >= kAlbwFmAblazeVulnCredits) {
+        s_fyrusAttackCredits = static_cast<u8>(kAlbwFmAblazeVulnCredits);
+        s_fyrusAblazeVulnOpen = 1;
+    } else {
+        s_fyrusAttackCredits = static_cast<u8>(next);
+    }
+}
+
+void dAlbwBoss_fyrusOnAblazeVulnDamaged() {
+    s_fyrusAblazeVulnOpen = 0;
+    s_fyrusAttackCredits = 0;
+}
+
+void dAlbwBoss_fyrusSyncFireVulnState(e_fm_class* i_fm) {
+    if (!dAlbwBossRefinement_isEnabled() || i_fm == NULL) {
+        return;
+    }
+    if (dAlbwBoss_fyrusAblazePhase()) {
+        if (s_fyrusAblazeVulnOpen) {
+            i_fm->field_0x792 = 0;
+            i_fm->field_0x770 = 1;
+        } else {
+            i_fm->field_0x792 = 1;
+            i_fm->field_0x770 = 0;
+        }
+    } else if (dAlbwBoss_fyrusHollowPhase()) {
+        i_fm->field_0x792 = 0;
+        if (i_fm->field_0x770 == 0) {
+            i_fm->field_0x770 = 1;
+        }
+    }
+}
+
+bool dAlbwBoss_fyrusShouldChipAblazeDamage() {
+    return dAlbwBoss_fyrusAblazePhase() && !s_fyrusAblazeVulnOpen;
+}
+
+void dAlbwBoss_fyrusApplyChipDamage(e_fm_class* i_fm, int i_hpBefore) {
+    if (i_fm == NULL || !dAlbwBoss_fyrusShouldChipAblazeDamage()) {
+        return;
+    }
+    const int dealt = i_hpBefore - i_fm->health;
+    if (dealt <= 0) {
+        return;
+    }
+    int chip = dealt * 1 / 100;
+    if (chip < 1) {
+        chip = 1;
+    }
+    i_fm->health = static_cast<s16>(std::max(0, i_hpBefore - chip));
+    s_fyrusAttackCredits = 0;
+}
+
+bool dAlbwBoss_fyrusGolemWindowIsLive() {
+    return dAlbwBossRefinement_isEnabled() && s_fyrusGolemPhase == 1;
+}
+
+bool dAlbwBoss_fyrusGolemKidsLoose() {
+    return dAlbwBossRefinement_isEnabled() && s_fyrusGolemPhase == 2 &&
+           s_fyrusGolemId != fpcM_ERROR_PROCESS_ID_e;
+}
+
+bool dAlbwBoss_fyrusIsOurGolem(fpc_ProcID i_id) {
+    return i_id != fpcM_ERROR_PROCESS_ID_e && i_id == s_fyrusGolemId;
+}
+
+void dAlbwBoss_fyrusClearGolemActor() {
+    s_fyrusGolemId = fpcM_ERROR_PROCESS_ID_e;
+}
+
+void dAlbwBoss_fyrusOnGolemKidsCleared() {
+    if (!dAlbwBossRefinement_isEnabled() || s_fyrusGolemPhase != 2) {
+        return;
+    }
+    s_fyrusGolemPhase = 3;
+    s_fyrusResumeFightPending = 1;
+
+    // Reopen core weak spot (770 was forced 0 for the whole golem window — §9).
+    fopAc_ac_c* fm = fopAcM_SearchByName(fpcNm_E_FM_e);
+    if (fm != NULL && fopAcM_IsActor(fm) && fm->health > 0) {
+        ((e_fm_class*)fm)->field_0x770 = 1;
+    }
+}
+
+bool dAlbwBoss_fyrusTakeResumeFightPending() {
+    if (s_fyrusResumeFightPending == 0) {
+        return false;
+    }
+    s_fyrusResumeFightPending = 0;
+    return true;
+}
+
+bool dAlbwBoss_fyrusTryGolemLookPos(cXyz** o_pos) {
+    if (o_pos == NULL || !dAlbwBoss_fyrusGolemWindowIsLive()) {
+        return false;
+    }
+    if (s_fyrusGolemId == fpcM_ERROR_PROCESS_ID_e) {
+        return false;
+    }
+    fopAc_ac_c* golem = fopAcM_SearchByID(s_fyrusGolemId);
+    if (golem == NULL || !fopAcM_IsActor(golem)) {
+        return false;
+    }
+    *o_pos = &golem->eyePos;
+    return true;
+}
+
+void dAlbwBoss_fyrusTryFloorDown(fopAc_ac_c* i_fm) {
+    if (!dAlbwBossRefinement_isEnabled() || i_fm == NULL || !fopAcM_IsActor(i_fm)) {
+        return;
+    }
+    if (fopAcM_GetName(i_fm) != fpcNm_E_FM_e || i_fm->health > 0) {
+        return;
+    }
+
+    e_fm_class* fm = (e_fm_class*)i_fm;
+    if (fm->mAction == kAlbwFmActionEnd || fm->mAction == kAlbwFmActionDown ||
+        fm->mAction == kAlbwFmActionADown || fm->mAction == kAlbwFmActionStart)
+    {
+        return;
+    }
+
+    fm->mAction = kAlbwFmActionDown;
+    fm->mMode = 0;
+    fm->mDownCnt = 3;
+}
+
+bool dAlbwBoss_fyrusStayHollow() {
+    return dAlbwBossRefinement_isEnabled() && s_fyrusGolemPhase != 0;
+}
+
+s16 dAlbwBoss_fyrusCreateHp() {
+    return dAlbwBossRefinement_isEnabled() ? kAlbwFmRefinementHp : kAlbwFmVanillaHp;
+}
+
+s16 dAlbwBoss_fyrusKidCreateHp() {
+    return kAlbwFmKidHp;
+}
+
+void dAlbwBoss_fyrusUpdateGolemWindow(fopAc_ac_c* i_fm) {
+    if (!dAlbwBossRefinement_isEnabled() || i_fm == NULL || !fopAcM_IsActor(i_fm)) {
+        return;
+    }
+    if (fopAcM_GetName(i_fm) != fpcNm_E_FM_e) {
+        return;
+    }
+
+    const e_fm_class* fm = (const e_fm_class*)i_fm;
+    if (fm->mAction == kAlbwFmActionStart) {
+        return;
+    }
+
+    if (s_fyrusGolemPhase == 0 && fm->mAction != kAlbwFmActionEnd &&
+        fyrusHpAtMostPct(i_fm, kAlbwFmGolemEnterPct))
+    {
+        s_fyrusGolemPhase = 1;
+        const int roomNo = fopAcM_GetRoomNo(i_fm);
+        s_fyrusGolemId = fopAcM_create(fpcNm_B_GO_e, 0, &i_fm->current.pos, roomNo,
+                                       &i_fm->shape_angle, NULL, -1);
+    }
+
+    if (s_fyrusGolemPhase == 1 &&
+        (fm->mAction == kAlbwFmActionEnd || i_fm->health <= 0 ||
+         fyrusHpAtMostPct(i_fm, kAlbwFmGolemExitPct)))
+    {
+        if (fm->mAction == kAlbwFmActionEnd) {
+            fyrusDespawnGolem();
+        }
+        s_fyrusGolemPhase = 2;
+    }
+
+    if (s_fyrusGolemPhase == 2 && fm->mAction == kAlbwFmActionEnd) {
+        fyrusDespawnGolem();
+    }
+}
+
 bool dAlbwBoss_armogohmaQueryHealthBar(dAlbwBoss_ArmogohmaBarState* o_state) {
     if (o_state == NULL) {
         return false;
@@ -749,6 +1053,8 @@ void dAlbwBoss_onStageLoad() {
     // Zant's per-phase bar tracker is HUD-only (bossHealthBars), independent of Boss
     // Refinement, so reset it before the Refinement early-out below.
     dAlbwBoss_zantResetFightState();
+    dAlbwBoss_fyrusResetFightState();
+    dAlbwBoss_morpheelResetFightState();
 
     if (!dAlbwBossRefinement_isEnabled()) {
         return;
@@ -824,6 +1130,395 @@ bool dAlbwBoss_tryApplyActorBootstrap(s16 i_procName, fopAc_ac_c* i_actor) {
     }
 
     return false;
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Morpheel bubbled eye-mass)
+// ============================================
+
+static AlbwMorpheelRefPhase s_morpheelPhase = ALBW_MORPHEEL_REF_OFF;
+static fpc_ProcID s_morpheelBossId = fpcM_ERROR_PROCESS_ID_e;
+static s16 s_morpheelOrbitAngle = 0;
+static bool s_morpheelBombsSpawned = false;
+static bool s_morpheelFightLive = false;
+static bool s_morpheelBombsSeenAlive = false;
+// Sequential grab pass (one tentacle at a time).
+enum {
+    MORPHEEL_GRAB_IDLE = 0,
+    MORPHEEL_GRAB_STRIKE,  // waiting for current slot to Consume / finish ATTACK
+    MORPHEEL_GRAB_GAP,     // inter-tentacle delay
+    MORPHEEL_GRAB_HOLD,    // successful catch — pass ends after release
+};
+static s16 s_morpheelGrabPass = MORPHEEL_GRAB_IDLE;
+static int s_morpheelGrabStart = 0;
+static int s_morpheelGrabIndex = 0;  // 0..7 attempts completed in this pass
+static s16 s_morpheelGrabGapTimer = 0;
+static bool s_morpheelGrabStrikeClaimed = false;
+
+static int morpheelGrabCurrentSlot() {
+    return (s_morpheelGrabStart + s_morpheelGrabIndex) % kAlbwMorpheelTentacleCount;
+}
+
+static void morpheelGrabPassReset() {
+    s_morpheelGrabPass = MORPHEEL_GRAB_IDLE;
+    s_morpheelGrabStart = 0;
+    s_morpheelGrabIndex = 0;
+    s_morpheelGrabGapTimer = 0;
+    s_morpheelGrabStrikeClaimed = false;
+}
+
+// Chu Worm bubble BMD (E_SM / BMDE_SM) — session-cached, DN-10 donor port.
+static request_of_phase_process_class s_morpheelChuPhase;
+static J3DModel* s_morpheelChuBubble = NULL;
+static s8 s_morpheelChuLoad = 0;  // 0=idle 1=loading 2=ready 3=fail
+
+static fopAc_ac_c* morpheelBossActor() {
+    if (s_morpheelBossId == fpcM_ERROR_PROCESS_ID_e) {
+        return NULL;
+    }
+    fopAc_ac_c* actor = fopAcM_SearchByID(s_morpheelBossId);
+    if (actor == NULL || !fopAcM_IsActor(actor) || fopAcM_GetName(actor) != fpcNm_B_OB_e) {
+        return NULL;
+    }
+    return actor;
+}
+
+void dAlbwBoss_morpheelResetFightState() {
+    s_morpheelPhase = ALBW_MORPHEEL_REF_OFF;
+    s_morpheelBossId = fpcM_ERROR_PROCESS_ID_e;
+    s_morpheelOrbitAngle = 0;
+    s_morpheelBombsSpawned = false;
+    s_morpheelFightLive = false;
+    s_morpheelBombsSeenAlive = false;
+    morpheelGrabPassReset();
+}
+
+void dAlbwBoss_morpheelEnsureInit(fopAc_ac_c* i_boss) {
+    if (!dAlbwBossRefinement_isEnabled() || i_boss == NULL) {
+        return;
+    }
+    if (fopAcM_GetName(i_boss) != fpcNm_B_OB_e) {
+        return;
+    }
+    s_morpheelBossId = fopAcM_GetID(i_boss);
+    // Armed but not live until Midna/intro settle — avoids cutscene fights + false CLAW.
+    s_morpheelPhase = ALBW_MORPHEEL_REF_RING;
+    s_morpheelOrbitAngle = 0;
+    s_morpheelBombsSpawned = false;
+    s_morpheelFightLive = false;
+    s_morpheelBombsSeenAlive = false;
+    morpheelGrabPassReset();
+    if (s_morpheelChuLoad == 0) {
+        s_morpheelChuLoad = 1;
+    }
+}
+
+void dAlbwBoss_morpheelTickBubbleLoad() {
+    if (!dAlbwBossRefinement_isEnabled() || s_morpheelChuLoad != 1) {
+        return;
+    }
+    const int rv = dComIfG_resLoad(&s_morpheelChuPhase, "E_SM");
+    if (rv != cPhs_COMPLEATE_e) {
+        return;
+    }
+    if (s_morpheelChuBubble == NULL) {
+        // Donor: daE_SM_c::CreateHeap BMDE_SM (0x21), flags match Chu.
+        J3DModelData* modelData = (J3DModelData*)dComIfG_getObjectRes("E_SM", 0x21);
+        if (modelData != NULL) {
+            s_morpheelChuBubble = mDoExt_J3DModel__create(modelData, 0, 0x11020203);
+        }
+    }
+    s_morpheelChuLoad = (s_morpheelChuBubble != NULL) ? 2 : 3;
+}
+
+f32 dAlbwBoss_morpheelBubbleRadius() {
+    return kAlbwMorpheelBubbleRadius * kAlbwMorpheelBubbleScale;
+}
+
+bool dAlbwBoss_morpheelDrawChuBubble(fopAc_ac_c* i_boss) {
+    if (i_boss == NULL || !dAlbwBoss_morpheelBubbleUp() || s_morpheelChuBubble == NULL) {
+        return false;
+    }
+    // Uniform Chu shell centered on the eye mass (Y ofs fixes BMDE_SM high pivot).
+    mDoMtx_stack_c::transS(i_boss->current.pos.x,
+                           i_boss->current.pos.y + kAlbwMorpheelBubbleYOfs,
+                           i_boss->current.pos.z);
+    mDoMtx_stack_c::scaleM(kAlbwMorpheelBubbleScale, kAlbwMorpheelBubbleScale,
+                           kAlbwMorpheelBubbleScale);
+    s_morpheelChuBubble->setBaseTRMtx(mDoMtx_stack_c::get());
+    g_env_light.setLightTevColorType_MAJI(s_morpheelChuBubble, &i_boss->tevStr);
+    fopAcM_setEffectMtx(i_boss, s_morpheelChuBubble->getModelData());
+    J3DMaterial* mat = s_morpheelChuBubble->getModelData()->getMaterialNodePointer(0);
+    if (mat != NULL && mat->getTevKColor(1) != NULL) {
+        mat->getTevKColor(1)->a = 167;  // field_0x694 == 1.0f on Chu
+    }
+    mDoExt_modelUpdateDL(s_morpheelChuBubble);
+    return true;
+}
+
+void dAlbwBoss_morpheelRequestTentacleGrab() {
+    if (!dAlbwBoss_morpheelFightIsLive() || s_morpheelGrabPass != MORPHEEL_GRAB_IDLE) {
+        return;
+    }
+    s_morpheelGrabStart = (int)cM_rndF((f32)kAlbwMorpheelTentacleCount - 0.01f);
+    s_morpheelGrabIndex = 0;
+    s_morpheelGrabGapTimer = 0;
+    s_morpheelGrabStrikeClaimed = false;
+    s_morpheelGrabPass = MORPHEEL_GRAB_STRIKE;
+}
+
+bool dAlbwBoss_morpheelConsumeTentacleGrab(int i_slot) {
+    if (s_morpheelGrabPass != MORPHEEL_GRAB_STRIKE || s_morpheelGrabStrikeClaimed) {
+        return false;
+    }
+    if (i_slot != morpheelGrabCurrentSlot()) {
+        return false;
+    }
+    s_morpheelGrabStrikeClaimed = true;
+    return true;
+}
+
+bool dAlbwBoss_morpheelTentacleGrabBusy() {
+    return s_morpheelGrabPass != MORPHEEL_GRAB_IDLE;
+}
+
+static void morpheelGrabAdvanceAfterMiss() {
+    s_morpheelGrabIndex++;
+    s_morpheelGrabStrikeClaimed = false;
+    if (s_morpheelGrabIndex >= kAlbwMorpheelTentacleCount) {
+        morpheelGrabPassReset();
+        return;
+    }
+    s_morpheelGrabPass = MORPHEEL_GRAB_GAP;
+    s_morpheelGrabGapTimer =
+        (s16)(kAlbwMorpheelGrabGapMin +
+              cM_rndF((f32)(kAlbwMorpheelGrabGapMax - kAlbwMorpheelGrabGapMin)));
+}
+
+void dAlbwBoss_morpheelNotifyTentacleStrikeMiss() {
+    if (s_morpheelGrabPass == MORPHEEL_GRAB_HOLD || s_morpheelGrabPass == MORPHEEL_GRAB_IDLE) {
+        return;
+    }
+    morpheelGrabAdvanceAfterMiss();
+}
+
+void dAlbwBoss_morpheelNotifyTentacleGrabCaught() {
+    s_morpheelGrabPass = MORPHEEL_GRAB_HOLD;
+}
+
+void dAlbwBoss_morpheelNotifyTentacleGrabHoldDone() {
+    morpheelGrabPassReset();
+}
+
+void dAlbwBoss_morpheelNotifyTentacleGrabDone() {
+    if (s_morpheelGrabPass == MORPHEEL_GRAB_HOLD) {
+        dAlbwBoss_morpheelNotifyTentacleGrabHoldDone();
+    } else {
+        dAlbwBoss_morpheelNotifyTentacleStrikeMiss();
+    }
+}
+
+bool dAlbwBoss_morpheelIsActive() {
+    return dAlbwBossRefinement_isEnabled() && s_morpheelPhase != ALBW_MORPHEEL_REF_OFF &&
+           s_morpheelPhase != ALBW_MORPHEEL_REF_HANDOFF;
+}
+
+bool dAlbwBoss_morpheelFightIsLive() {
+    return dAlbwBoss_morpheelIsActive() && s_morpheelFightLive;
+}
+
+void dAlbwBoss_morpheelMarkBombsSpawned() {
+    s_morpheelBombsSpawned = true;
+}
+
+void dAlbwBoss_morpheelSetFightLive(bool i_live) {
+    s_morpheelFightLive = i_live;
+}
+
+AlbwMorpheelRefPhase dAlbwBoss_morpheelGetPhase() {
+    return s_morpheelPhase;
+}
+
+bool dAlbwBoss_morpheelBubbleUp() {
+    return dAlbwBoss_morpheelFightIsLive() &&
+           (s_morpheelPhase == ALBW_MORPHEEL_REF_RING || s_morpheelPhase == ALBW_MORPHEEL_REF_CLAW);
+}
+
+bool dAlbwBoss_morpheelEyeHookAllowed() {
+    return dAlbwBoss_morpheelFightIsLive() &&
+           (s_morpheelPhase == ALBW_MORPHEEL_REF_CLAW || s_morpheelPhase == ALBW_MORPHEEL_REF_EXPOSED);
+}
+
+bool dAlbwBoss_morpheelEyeDamageAllowed() {
+    return dAlbwBoss_morpheelFightIsLive() && s_morpheelPhase == ALBW_MORPHEEL_REF_EXPOSED;
+}
+
+void dAlbwBoss_morpheelOnEyeHooked() {
+    if (!dAlbwBoss_morpheelIsActive()) {
+        return;
+    }
+    if (s_morpheelPhase == ALBW_MORPHEEL_REF_CLAW) {
+        s_morpheelPhase = ALBW_MORPHEEL_REF_EXPOSED;
+        fopAc_ac_c* boss = morpheelBossActor();
+        if (boss != NULL) {
+            csXyz rot(0, boss->shape_angle.y, 0);
+            dComIfGp_particle_set(0x877E, &boss->current.pos, &boss->tevStr, &rot, NULL);
+            dComIfGp_particle_set(0x877F, &boss->current.pos, &boss->tevStr, &rot, NULL);
+            dComIfGp_particle_set(0x8780, &boss->current.pos, &boss->tevStr, &rot, NULL);
+        }
+    }
+}
+
+void dAlbwBoss_morpheelOnEyeDepleted() {
+    if (s_morpheelPhase == ALBW_MORPHEEL_REF_OFF) {
+        return;
+    }
+    s_morpheelPhase = ALBW_MORPHEEL_REF_HANDOFF;
+}
+
+struct MorpheelBombCountCtx {
+    int count;
+};
+
+static void* s_morpheelBombCount_sub(void* i_actor, void* i_data) {
+    MorpheelBombCountCtx* ctx = (MorpheelBombCountCtx*)i_data;
+    if (!fopAcM_IsActor(i_actor) || fopAcM_GetName(i_actor) != fpcNm_E_OctBg_e) {
+        return NULL;
+    }
+    fopAc_ac_c* fish = (fopAc_ac_c*)i_actor;
+    if (dAlbwBoss_morpheelIsRingBombParam(fopAcM_GetParam(fish))) {
+        ctx->count++;
+    }
+    return NULL;
+}
+
+void dAlbwBoss_morpheelTick(fopAc_ac_c* i_boss) {
+    if (!dAlbwBossRefinement_isEnabled() || i_boss == NULL) {
+        return;
+    }
+    dAlbwBoss_morpheelTickBubbleLoad();
+    if (s_morpheelPhase == ALBW_MORPHEEL_REF_OFF || s_morpheelPhase == ALBW_MORPHEEL_REF_HANDOFF) {
+        return;
+    }
+    if (!s_morpheelFightLive) {
+        return;
+    }
+
+    s_morpheelOrbitAngle += 0x40;  // slow spin of surface cover
+
+    if (s_morpheelGrabPass == MORPHEEL_GRAB_GAP) {
+        if (s_morpheelGrabGapTimer > 0) {
+            s_morpheelGrabGapTimer--;
+        }
+        if (s_morpheelGrabGapTimer <= 0) {
+            s_morpheelGrabPass = MORPHEEL_GRAB_STRIKE;
+            s_morpheelGrabStrikeClaimed = false;
+        }
+    }
+
+    if (s_morpheelPhase == ALBW_MORPHEEL_REF_RING && s_morpheelBombsSpawned) {
+        MorpheelBombCountCtx ctx = {0};
+        fpcM_Search(s_morpheelBombCount_sub, &ctx);
+        if (ctx.count > 0) {
+            s_morpheelBombsSeenAlive = true;
+        }
+        if (s_morpheelBombsSeenAlive && ctx.count <= 0) {
+            s_morpheelPhase = ALBW_MORPHEEL_REF_CLAW;
+        }
+    }
+}
+
+bool dAlbwBoss_morpheelTryGetEyePos(cXyz* o_pos) {
+    if (o_pos == NULL || !dAlbwBoss_morpheelIsActive()) {
+        return false;
+    }
+    fopAc_ac_c* boss = morpheelBossActor();
+    if (boss == NULL) {
+        return false;
+    }
+    *o_pos = boss->current.pos;
+    return true;
+}
+
+bool dAlbwBoss_morpheelTryRootTentacle(int i_slot, cXyz* o_pos, s16* o_homeYaw) {
+    if (o_pos == NULL || !dAlbwBoss_morpheelFightIsLive()) {
+        return false;
+    }
+    cXyz eye;
+    if (!dAlbwBoss_morpheelTryGetEyePos(&eye)) {
+        return false;
+    }
+    const s16 fan = (s16)(i_slot * (0x10000 / 8));
+    o_pos->x = eye.x + kAlbwMorpheelTentacleRootR * cM_ssin(fan);
+    o_pos->y = eye.y + 40.0f;
+    o_pos->z = eye.z + kAlbwMorpheelTentacleRootR * cM_scos(fan);
+    if (o_homeYaw != NULL) {
+        *o_homeYaw = fan;
+    }
+    return true;
+}
+
+bool dAlbwBoss_morpheelIsRingBombParam(u32 i_param) {
+    return (i_param & 0xFFFFFF00u) == kAlbwMorpheelRingBombParam;
+}
+
+int dAlbwBoss_morpheelRingBombSlot(u32 i_param) {
+    if (!dAlbwBoss_morpheelIsRingBombParam(i_param)) {
+        return -1;
+    }
+    return (int)(i_param & 0xFFu);
+}
+
+// Fibonacci sphere direction for slot i of n — covers full bubble surface.
+static void morpheelSurfaceDir(int i_slot, int i_count, f32* o_x, f32* o_y, f32* o_z) {
+    const int n = (i_count < 1) ? 1 : i_count;
+    f32 y = 0.0f;
+    if (n == 1) {
+        y = 0.0f;
+    } else {
+        y = 1.0f - (2.0f * (f32)i_slot) / (f32)(n - 1);
+    }
+    const f32 r = std::sqrt(std::max(0.0f, 1.0f - y * y));
+    const f32 theta = (f32)i_slot * 2.3999632f;  // golden angle
+    *o_x = std::cos(theta) * r;
+    *o_y = y;
+    *o_z = std::sin(theta) * r;
+}
+
+bool dAlbwBoss_morpheelSnapRingBomb(fopAc_ac_c* i_fish) {
+    if (i_fish == NULL || !dAlbwBoss_morpheelFightIsLive()) {
+        return false;
+    }
+    if (s_morpheelPhase != ALBW_MORPHEEL_REF_RING && s_morpheelPhase != ALBW_MORPHEEL_REF_CLAW) {
+        return false;
+    }
+    const int slot = dAlbwBoss_morpheelRingBombSlot(fopAcM_GetParam(i_fish));
+    if (slot < 0 || slot >= kAlbwMorpheelRingBombs) {
+        return false;
+    }
+    cXyz eye;
+    if (!dAlbwBoss_morpheelTryGetEyePos(&eye)) {
+        return false;
+    }
+    f32 dx, dy, dz;
+    morpheelSurfaceDir(slot, kAlbwMorpheelRingBombs, &dx, &dy, &dz);
+    // Slow spin so the cover isn't frozen.
+    const s16 spin = s_morpheelOrbitAngle;
+    const f32 c = cM_scos(spin);
+    const f32 s = cM_ssin(spin);
+    const f32 rx = dx * c - dz * s;
+    const f32 rz = dx * s + dz * c;
+    const f32 rad = dAlbwBoss_morpheelBubbleRadius();
+    const f32 cy = eye.y + kAlbwMorpheelBubbleYOfs;
+    i_fish->current.pos.x = eye.x + rad * rx;
+    i_fish->current.pos.y = cy + rad * dy;
+    i_fish->current.pos.z = eye.z + rad * rz;
+    i_fish->old.pos = i_fish->current.pos;
+    i_fish->speedF = 0.0f;
+    i_fish->speed.set(0.0f, 0.0f, 0.0f);
+    i_fish->current.angle.y = cM_atan2s(rx, rz);
+    i_fish->shape_angle.y = i_fish->current.angle.y;
+    return true;
 }
 
 // ============================================

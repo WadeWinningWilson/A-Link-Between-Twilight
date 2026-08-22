@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 # ============================================================================
+# ERA WARNING (Foundry kit-family sweep, 2026-08-21 - user order: kits may
+# still carry mount/bake/legs-era recipes; History saw remnants and this
+# sweep CONFIRMED them family-wide).
+#
+# THE LAWS HERE INCLUDE MOUNT-ERA LAWS (RE_ACQUIRE accepts both
+# dExtWwMount/dExtNpcMount spellings). They lint FORK-side kits
+# correctly and MUST NOT be read as plugin law - a plugin TU matching
+# RE_ACQUIRE is a defect, not a compliance.
+#
+# Era doctrine of record: actor_kit.py's banner + its era-split checklist
+# ([FORK] vs [PLUGIN] columns) and the trace method at
+# docs/state/ww-plugin-outset.md #How-ports-land. PLUGIN delivery never
+# routes through dExtNpcMount / f_pc edits / files.cmake / model_replacements
+# - those are FORK-era mechanisms a stock-dusklight user never receives.
+# This banner marks the era; a DEEP retool of this kit is a named plate item,
+# not implied by the banner's presence.
+# ============================================================================
+# ============================================================================
 # kit_laws.py — §423: the sky-campaign's five laws, as an EXECUTABLE LINT.
 #
 # Housing Security ferried five laws for the porting kits (Foundry-Intake §423,

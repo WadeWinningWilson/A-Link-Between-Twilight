@@ -11,8 +11,10 @@ Not `B_FR`. Chains/handles are in-archive (`BMDR_KUSARI`, `BMDR_HANDLE`,
 **Related:** `Obj_fm` / `OBJ_FMOBJ` (arena chain platform, deleted mid-intro);
 `Obj_HHASHI` pillars; occasional `E_BA` Keese spawns on blast.
 
-**ALBW today:** HP mult + fight-victory rupees. **TEMP orphan look-pass wired**
-(Boss Refinement On). No permanent fight verbs / HP HUD / Golem cameo code yet.
+**ALBW today:** HP mult + fight-victory rupees + **Boss HP HUD** (`Twilit Igniter FYRUS`).
+**TEMP orphan look-pass wired** (Boss Refinement On). **§8/§9 B_GO window wired** (Refinement On):
+50% stun + PUTOUT + stuck Golem (kids on hidden `IS` skeleton) → proxy HP → 15% kid peel, stay hollow.
+Refinement Create HP **200** (vanilla 50), then Boss HP ×. 0 HP → Fyrus floor-down, last hit `END`.
 
 **Date:** 2026-07-24.
 
@@ -95,6 +97,7 @@ arrow Tg. Now: `SetTgSPrm(0x3)` + `OnAtNoTgHitInfSet`, apply before
 
 Still unused: `DEAD`, `DOWNFR`. Preview plays once → `WAIT01` → `ACTION_NORMAL`.
 No HP chip / no fight state change. Skip during START / END / DOWN / A_DOWN.
+**Core Tg is not look-pass** — weak-spot shots fall through to `cc_at_check` (bar + `CHANCEDAMAGE`). Body-only projectiles still map as above.
 
 ### 2b. Look-pass playtest (user 2026-07-24) — research only
 
@@ -142,6 +145,16 @@ HIO: near whip `field_0x24` ≈ **600**, far blast `field_0x20` ≈ **1500**, bl
 
 While `1829`: yaws toward player. End: 50% chance → `ACTION_FIRE` (breath) if still in near range, else `ACTION_NORMAL`.
 
+**Frequency (vanilla — no dedicated cooldown):** Whip fires whenever `FIGHT_RUN` sees the near cone **or** wall+pillar. There is **no** `mTimers[]` gate. It “doesn’t fire every time” because:
+
+1. Must already be in `FIGHT_RUN` (not mid-blast / breath / down / stagger).
+2. Front cone `0x3000` (~67.5°) — beside or behind him, no whip.
+3. After a whip, **50%** of finishes divert to fire breath (`ACTION_FIRE`) if still in range — that’s the main extra wait.
+4. Near-range whip **preempts** blast (`else if` on the far check).
+5. Return path `NORMAL` → `FIGHT_RUN` reseeds blast CD, but whip can fire again immediately if still in the cone (including during the 20–30f wait-in-place).
+
+Refinement **+50% anim speed** shortens the whip clip itself (~2/3 wall-clock), which raises whip cadence whenever he isn’t diverted to breath. **Frequency knobs not changed this pass** (candidate: drop the 50% breath divert, or widen the cone).
+
 **Reuse for B_GO:** whip is pure frame-flag At on existing chain spheres — not a separate actor. Golem cannot “borrow” this without either parenting to Fyrus chains or authoring its own At.
 
 ### 3b. Engage: fireball / arena blast (`ACTION_F_FIGHT`) — detail
@@ -165,6 +178,19 @@ While `1829`: yaws toward player. End: 50% chance → `ACTION_FIRE` (breath) if 
 | ≥ ~70 | `field_0x790 = 0` done |
 
 Anim end → `TEXANM_FM`, often `ACTION_ANIMAL` (30%) or `NORMAL`.
+
+**Frequency (vanilla — this one *does* have a timer):**
+
+| Gate | Value @ 30 logic Hz |
+|------|---------------------|
+| `mTimers[2]` seed on every `FIGHT_RUN` mode 0 | `HIO field_0x40` (120) + rnd(0..60) → **120–180f ≈ 4.0–6.0s** |
+| Far range | `pl_check(≈1500)` and **not** in whip cone (whip `else if` wins up close) |
+| Out-of-arena (`field_0x809`) + facing ±0x400 | **Ignores** `mTimers[2]` — forced blast |
+| Start sync | `F_FIGHT` waits until `mpFmBtk[0]` (idle FM tex) hits frame 0 before charging |
+
+Reseed happens whenever he re-enters `FIGHT_RUN` (after whip, breath, blast→NORMAL, etc.). Staying in `FIGHT_RUN` mode 2 lets the timer run down once, then blast can repeat as soon as far-range is true.
+
+Refinement **+50% execution** (anim 1.5× + `field_0x790` extra tick every other frame + FX 1.5×) makes the charge/explosion shorter; **it does not cut `mTimers[2]`**. So blast still waits ~4–6s between `FIGHT_RUN` entries. Candidate frequency bump (not this pass): seed **80 + rnd(0..40)** (2/3 of vanilla = +50% cadence).
 
 **Reuse for B_GO:** blast damage is `mEffAtSph` on Fyrus + FX models already on `E_FM`. For a golem phase you’d either keep Fyrus frozen (no `790`) or spawn a separate AoE — do **not** assume B_GO has this pipeline.
 
@@ -195,6 +221,130 @@ Param `0xFFFF1F02` decode (`d_a_e_ba`):
 
 So: **fire Keese**, appear mode, children of Fyrus, soft mercy when Link is low on arrows/HP. Not a free mid-fight reinforce.
 
+### 3d. Attack trigger reference (master table)
+
+HIO defaults @ 30 logic Hz: near **600**, far **1500**, blast CD seed **120** (+0..60 rnd),
+arena radius **~1100** (`field_0xa0`). Refinement **+50%** anim/FX speed on whip, blast,
+breath (does **not** shorten blast CD timer).
+
+| Attack | Action / anim | Trigger (must already be in fight — not down / Golem hold / kid phase*) | Damage / effect | Notes |
+|--------|-------------|------------------------------------------------------------------------|-----------------|-------|
+| **Engage** | `NORMAL` → `FIGHT_RUN` | Same BG as Link (`!fopAcM_otherBgCheck`) while wandering | — | Reseeds blast CD `mTimers[2]` |
+| **Chain whip** | `N_FIGHT` / `ATTACK02` | From `FIGHT_RUN` walk: **(A)** Link within **~600** and **~67°** front cone, **or (B)** wall hit + pillar (`HHASHI`) within **500** ahead | `mChainAtSph` + hand `mAtSph`; frames **30–40** (L arm) / **50–60** (R arm) | No dedicated cooldown; near check **beats** blast (`else if`) |
+| **Fire breath** | `FIRE` / `ANIMAL` | **50%** after whip ends if still in near **600** + front cone | Joint-3 `mAtSph` (breath window **~98–9a**); mouth fire particles | Distinct from roar `ANIMAL02` |
+| **Blast AOE** | `F_FIGHT` / `ATTACK` + `TEXANM_ATTACK` | From `FIGHT_RUN` walk: **(A)** Link within **~1500**, **`mTimers[2]==0`**, **or (B)** pushed outside arena (`field_0x809`) + facing Link **±~45°** (ignores CD) | Expanding `mEffAtSph` + FX models; commit **`field_0x790`** @ anim **~88** | Waits `TEXANM_FM` or **`PUTOUT_WAIT`** BTK frame 0 (hollow fix) before charge |
+| **Roar** | `ANIMAL` / `ANIMAL02` | **30%** after blast ends; **or** `DAMAGE_RUN` mode 1 timer path | Particles only (`animal_eff_set` type 2) | No At |
+| **Latent body fire** | passive (walk / idle) | **`field_0x792 != 0`** (ablaze) + Link touches body `mCcSph[]` | Fire contact At on 8 body spheres | **See §3e — broken in current Refinement pass** |
+| **Chain yank → down** | `STOP` → `DOWN` | Rear chain (2/3) stretched + grab while walking; or pillar slam timing | Opens core; impact **extinguishes** (`792=0`) | Refinement: no HP snap to 50 on down |
+| **Core chip** | `DAMAGE_RUN` / `CHANCEDAMAGE` | Core `mCoreSph` Tg hit while upright | `cc_at_check` → real HP pool | Does **not** clear `792` |
+| **Fire Keese** | child `E_BA` | Blast commit when arrows **≤5** or hearts **≤4** | Fire Keese AI | Cap **4** live in room |
+| **Look-pass flinch** | `ANM_PREVIEW` orphan BCK | Refinement: body projectile Tg (not core) | No HP / no phase change | Bow/hook/boom/sling → orphan react |
+
+\*Refinement **kid phase** (15% peel → last B_GOS dead): Fyrus forced passive — no
+`FIGHT_RUN`, attn/look suppressed; resume only after `fyrusOnGolemKidsCleared`.
+
+**Priority in `FIGHT_RUN` (same frame):** chain whip check **first**, then blast CD /
+far range, then edge blast.
+
+### 3e. Latent body fire — status (playtest 2026-08)
+
+Vanilla **“walk into ablaze Fyrus → chip damage”** is **`field_0x792`** gating body
+`mCcSph[]` **`OnAtVsPlayerBit`** every Execute (`792==0` → **`OffAtVsPlayerBit`**).
+
+| Phase | Expected body burn | Current Refinement behavior |
+|-------|-------------------|----------------------------|
+| **Pre-50%** (lit, `792=1`) | Contact fire on approach | **Reported broken** — open bug; suspect Cc / look-pass interaction, not yet root-caused |
+| **50%→15%** Golem window | Off (`792=0` + stun hold) | Correct (by design) |
+| **15% kid peel + after** | Off (`fyrusStayHollow`, no re-light on get-up) | Correct (by design) |
+
+Do **not** “fix” post-50% hollow by re-lighting `792` without a design pass — §8/§9
+require stay-hollow. Pre-50% lit-phase burn needs a donor-aligned Cc audit (body At vs
+look-pass Tg grp).
+
+**Investigation (2026-08-19) — likely root cause pre-50%:**
+
+Refinement look-pass (`e_fm_albwLookPassApplyBodyTg`) puts **projectile Tg** on the
+same **`mCcSph[0..7]`** used for latent body **At**. While open it also sets
+**`OnAtNoTgHitInfSet()`** so arrow/claw At doesn’t write bogus Tg hit info (comment in
+`d_a_e_fm.cpp`: “Body fire At also hits arrow Tg”).
+
+`cCcS::SetAtTgCommonHitInf` gates At↔Tg crosses on **`!pat_obj->ChkAtNoTgHitInfSet()`**.
+With that bit set on Fyrus’s body At, **At→Link Tg contact may never register** even
+when `792==1` and `OnAtVsPlayerBit` is on — vanilla never dual-purposed these spheres.
+
+**Confirm A/B:** Boss Refinement **Off** → walk into lit Fyrus pre-50% (burn should
+return). Refinement **On** → burn absent while look-pass Tg is active.
+
+**Sanctioned fix direction (next pass):** separate look-pass Tg from body-burn At
+(donor pattern: don’t share the same sphere for both), or only enable `AtNoTgHitInf` on
+projectile-class hits — not a blanket body-sphere flag.
+
+### 3f. Proposed tuning (not implemented — playtest targets)
+
+| Knob | Current | Requested | Where |
+|------|---------|-----------|--------|
+| Breath after whip | **50%** (`cM_rndF(1.0f) < 0.5f` in `e_fm_n_fight`) | **70%** | One literal in `d_a_e_fm.cpp` |
+| Whip / blast / breath anim speed | Refinement **1.5×** (`kAlbwFmAttackAnimSpeed`) | **+15% faster** — clarify intent: **1.15× vanilla** vs **1.5×→1.725×** vs **replace 50% boost with 15%** | `kAlbwFmAttackAnimSpeed` + blast `field_0x790` extra tick |
+| Blast cooldown seed | **120 + rnd(0..60)** frames on each `FIGHT_RUN` entry | **80 + rnd(0..40)** (~2.7–4 s) | HIO `field_0x40` |
+| Blast far range | **1500** | **1200** (narrower band) | HIO `field_0x20` |
+| Breath execute speed | **1.0×** (`BCK_FM_ANIMAL`) | **1.15×** uniform; morf **3** on `ANIMAL` start (WAIT01 kept before `ACTION_FIRE`) | `e_fm_fire` / `kAlbwFmBreath*` |
+
+### 3g. Golem-phase room camera (investigation — 2026-08-19)
+
+**Symptom:** Room camera still **centers / pulls toward Fyrus** during B_GO clump
+(phase 1) and B_GOS kid crowd (phase 2), instead of vanilla boss-room framing on
+the active threat.
+
+**Two separate systems (do not conflate):**
+
+| System | Driver | Golem phase today |
+|--------|--------|-------------------|
+| Link look / neck | `daPy_py_c::setLookPos` → `mLookPosFromOut` | Phase 1: redirect to B_GO `eyePos` via `dAlbwBoss_fyrusTryGolemLookPos`. Phase 2: **`set_look_pos = false`** — no update; stale pos may remain Fyrus. |
+| Chase / lock framing | `dAttention` **`fopAc_AttnFlag_BATTLE_e`** → `LockonTarget(0)` | Phase 1: B_GO gets BATTLE attn. Phase 2: **31× B_GOS** get BATTLE attn; B_GO attn cleared; Fyrus attn off. |
+
+**Likely causes (ranked):**
+
+1. **Phase 2 has no look redirect** — `fyrusTryGolemLookPos` gates on
+   `fyrusGolemWindowIsLive()` (**phase 1 only**). Kid phase clears Fyrus look
+   but never repoints; `mLookPosFromOut` can stay on Fyrus `eyePos` from earlier
+   fight frames (`daAlink_c::getLookAtPos` still reads it when
+   `ERFLG0_UNK_4` + angle check pass).
+
+2. **`setLookPosFromOut` origin-distance gate** — once `ERFLG0_UNK_4` is set,
+   a new look pos is **rejected** if the stored pos is closer to **world origin**
+   than the candidate (`current.pos.abs2(mLookPosFromOut) <
+   current.pos.abs2(*i_pos)`). In the Mines arena this can **block the B_GO
+   redirect** even in phase 1, leaving Fyrus eyePos winning.
+
+3. **Fyrus geometric anchor** — Fyrus stays at room center (huge, stun hold).
+   Chase cam `relationalPos(mpPlayerActor, …)` is player-anchored, but lock-on
+   roll bias (`mCamParam` flag **0x1000**) and attention midpoint math still
+   blend toward **`LockonTarget(0)`**. With 31 kids, target may hop; Fyrus mass
+   at center still reads as the “boss pole” in the room.
+
+4. **`onBossRoomWait()` still runs** on E_FM every fight frame (vanilla boss
+   rooms) — keeps boss-room player stance; **not** the center bug by itself, but
+   confirms the room is still “Fyrus boss context.”
+
+**Would “order camera to track Golem” help or murkier?**
+
+| Phase | Track B_GO? | Verdict |
+|-------|-------------|---------|
+| **1 — clump** | Already intended (`setLookPos` + B_GO BATTLE attn). Fix **abs2 gate** + verify lock target clears Fyrus, don’t add a second cam owner. | **Clarify existing wiring** before new camera code. |
+| **2 — kids loose** | B_GO is frozen/passive; camera on parent **ignores the fight**. | **Murky / wrong** — track **nearest B_GOS** or kid-cluster centroid, not parent. |
+| **Fyrus-only fight** | User wants **vanilla** cam. | **Do not** leave golem overrides active outside phases 1–2. |
+
+**Sanctioned fix direction (next pass, not this one):**
+
+- Extend look redirect through **phase 2** (kids), or **clear** `mLookPosFromOut` /
+  `ERFLG0_UNK_4` when entering golem phases so Fyrus cannot stick.
+- Fix or bypass the **origin `abs2`** compare for Fyrus→golem handoff (donor:
+  boss cam uses attention lock, not this helper — audit before baking).
+- Ensure Fyrus is **removed from lock-on list** when `attn_on == false` (not
+  only flags cleared — verify `dAttention` drops stale E_FM entry).
+- Phase 2: pick **one** camera policy — nearest kid lock, or no lock (pure
+  vanilla room cam) — avoid dual B_GO + kid targets.
+
 ---
 
 ## 4. Collision note (orphans)
@@ -213,8 +363,8 @@ the fight — dead prep, unrelated to orphans.
 1. ~~TEMP item→orphan BCK preview~~ **done** (§2a–2b).
 2. ~~Fire-off / vulnerability research~~ **done** (§7).
 3. ~~Whip / blast / Keese + 50%→15% B_GO design~~ **done** (§3a–c, §8).
-4. Implement §8 window (not started) — then `Boss-Fights-RefinedFyrus.md`.
-5. Wire Boss HP HUD query for `E_FM` if bars should show him.
+4. ~~Implement §8 window~~ **wired** (Refinement On) — playtest Mines, then `Boss-Fights-RefinedFyrus.md`.
+5. ~~Wire Boss HP HUD query for `E_FM`~~ **done** (`dAlbwBoss_fyrusQueryHealthBar`, name **Twilit Igniter FYRUS**). Hidden during `ACTION_START` / `ACTION_END`. Gated on `game.bossHealthBars`. Vanilla knockdown still resets `health` to 50, so the bar can refill on a down until §8 changes the pool. **Refinement:** upright core hits now `cc_at_check` (no A_DOWN `health=50` snap).
 
 **See also:** [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md) (look-pass → production pattern),
 [boss-fights-handoff.md](boss-fights-handoff.md), [state/boss-fights.md](state/boss-fights.md).
@@ -255,6 +405,8 @@ Parent timer `field_0x692` toggles:
 So “merge” is a **temporary stick-to-skeleton cycle**, not a permanent single mesh. Visually they clump into a giant; mechanically they stay 31 actors + 1 parent.
 
 Parent Draw is gated by HIO `mDisplayModelImage` (**default false**) — the big model is **invisible** unless that HIO is flipped. What you see in play is mostly the stuck children.
+
+**§8:** do **not** force the parent mesh on. `B_go` BMD `IS` is the same leftover skeleton as cut `E_IS` (Armos Titan). Kids stick to parent joints with the Titan mesh hidden — invisible armature + 31 gorons.
 
 ### 6b. Health pools — your suspicion confirmed
 
@@ -448,15 +600,15 @@ Ablaze (792=1, 770=1)
 ## 8. Design lock — 50%→15% B_GO window (2026-07-24)
 
 **Yes — feasible.** Matches the fire-off / stun / proxy-HP pieces already mapped.
-Research lock only; not coded.
+**Wired 2026-08-18** (Boss Refinement On). Playtest Mines next.
 
 ### 8a. Contract
 
 | Gate | Behavior |
 |------|----------|
-| Fyrus HP crosses **≤ 50%** of `field_0x560` (true max, after Boss HP ×) | Enter **stun hold** once; `field_0x792 = 0`; play **`TEXANM_PUTOUT` → `TEXANM_PUTOUT_WAIT`**; stun BCK (pick at implement: `CHANCE` / `DAMAGE_*` / `DOWNWAIT`); **spawn `B_GO`** (kids stick, never detach — §6) |
-| While golem live | Hits on B_GO/B_GOS **proxy-drain E_FM** (shared bar). Fyrus does **not** whip / blast / breath / walk-At. Core Tg on Fyrus optional off so damage only goes through golem |
-| Fyrus HP crosses **≤ 15%** | Cascade despawn B_GO + kids; end stun; **resume Fyrus fight** (decide at implement: re-light `792=1` + `TEXANM_FM`, or stay hollow until a later UP) |
+| Fyrus HP crosses **≤ 50%** of `field_0x560` (true max, after Boss HP ×) | Enter **stun hold** once; `field_0x792 = 0`; play **`TEXANM_PUTOUT` → `TEXANM_PUTOUT_WAIT`**; random-rotate stun BCKs (`CHANCE` / `DAMAGE_L` / `DAMAGE_R`); **spawn `B_GO`** (kids stick, never detach — §6; parent `IS` mesh stays hidden). Fight **starts full** — this gate is from combat damage, not room spawn. Refinement Create HP **200** (vanilla 50), then scaler. |
+| While golem live | Hits on **parent B_GO only** proxy-drain E_FM (shared bar). Fyrus **untargetable** (no battle attn / core Tg). No whip / blast / breath / walk-At. |
+| Fyrus HP crosses **≤ 15%** | Cascade despawn B_GO + kids; end stun hold; **resume Fyrus still hollow** (`792` stays 0, keep `PUTOUT_WAIT` — do not re-light) |
 
 ```text
 [ ablaze fight ]
@@ -465,7 +617,7 @@ Research lock only; not coded.
 stun + PUTOUT → PUTOUT_WAIT + 792=0 + spawn B_GO (stuck)
     │ shared pool: proxy hits → E_FM  (50% … 15%)
     ▼
-HP ≤ 15% → despawn B_GO → Fyrus continues
+HP ≤ 15% → despawn B_GO → Fyrus continues **hollow** (no re-light)
 ```
 
 ### 8b. Why this fits the code
@@ -476,22 +628,271 @@ HP ≤ 15% → despawn B_GO → Fyrus continues
 - **Shared pool** must ignore B_GO’s dead `health=1000` stubs — proxy only (§6b).
 - **Fyrus attack mute** during window: do not run `fight_run` → `N_FIGHT` / `F_FIGHT` (§3a–b); clear `field_0x790` / `1829` so leftover blast/whip At cannot fire. Keese (`mDoCreateBa`) only arms on blast commit — muted if blast never starts (§3c).
 
-### 8c. Open implement choices (not locked)
+### 8c. Cc / targeting lock (user 2026-08-18)
 
-1. Which stun BCK loops for the hold (`CHANCE` vs `DAMAGE_L/R` vs `DOWNWAIT`).
-2. After 15%: re-ignite fire immediately, or stay hollow until next vanilla down/UP.
-3. Snap HP to exactly 50% on enter (prevent overshoot from a big hit), or only latch the phase flag.
-4. Can Fyrus still take core damage during golem phase, or golem-only?
-5. B_GO offense: none (statue) vs new At — vanilla B_GO has **no** whip/blast/Keese; those stay on `E_FM` (§3).
+| Choice | Lock |
+|--------|------|
+| Lock-on | **Golem parent only.** Fyrus untargetable for the whole window |
+| Hull | **Mimic Fyrus** — wire parent’s unused sph/cyl as joint body volumes (not 31 kid Co) |
+| Kid Cc | **Off** while stuck (vanilla Co-off stays). No kid Tg |
+| Damage | Parent hull Tg → `cc_at_check` on E_FM (real sword/arrow/FA/outfit/scaler). Ignore 1000 stubs. i-frames on B_GO `unk_0x690`, not Fyrus leftover invuln |
+| Golem At | Wire unused joint-3 sph At on native `unk_0x660` frames 25–33 (Fyrus `at_sph` type/Atp/spl). B_GO **walks** (`h_wait`/`h_walk`/`h_attack`); Fyrus stays in stun hold |
+| Hull init | One-shot `mStts.Init` when weight is not yet 0xFA (inverted `!=` check never armed Tg) |
+| 50% gate | **Not** a room-start. Latch when remaining HP first drops to ≤50% from combat. Do **not** snap HP up to 50% (overshoot stays) |
+| 15% exit | **Stay hollow** — `792` stays 0, no `TEXANM_FM` re-light |
+| Stun BCK | **Random rotate** among `CHANCE` / `DAMAGE_L` / `DAMAGE_R` while held (re-roll when clip ends; prefer not the same twice) |
 
-### 8d. Suggested implement order
+### 8d. Implement order
 
-1. Refinement HP% latch on `E_FM` (50% enter / 15% exit).
-2. Stun hold + `792=0` + `PUTOUT`→`PUTOUT_WAIT`; mute fight actions / At.
-3. Spawn `B_GO`, force stick, show mesh HIO, Tg + proxy → E_FM.
-4. Exit: cascade delete, resume Fyrus, clear latch.
-5. Playtest Mines arena space / softlock; then write `Boss-Fights-RefinedFyrus.md`.
+1. ~~`E_FM` HP% latch (50% enter / 15% exit)~~ **done** (`dAlbwBoss_fyrusUpdateGolemWindow`).
+2. ~~Enter: stun + PUTOUT + mute + untarget~~ **done** (`ACTION_ALBW_GOLEM_HOLD`).
+3. ~~Spawn `B_GO` stuck + hide parent `IS` mesh~~ **done** (`field_0x692=2` pinned; HIO display stays off).
+4. ~~Parent Fyrus-style body Cc + proxy~~ **done** (unused sph/cyl, `cc_at_check` → E_FM). Hull Tg one-shot init + Golem `unk_0x690` i-frames.
+5. ~~Exit at ≤15%: cascade despawn, keep hollow~~ **done**.
+6. ~~B_GO walk + slam At stub~~ **wired** (kids stay stuck; Fyrus does not walk).
+7. Playtest Mines (Golem walks/slams, hull swords/arrows move the real bar, Fyrus stays put, no fire return); then `Boss-Fights-RefinedFyrus.md`.
 
 ---
 
-*End Fyrus research (orphans §1–5, attacks §3, Golem §6, fire-off §7, B_GO window §8).*
+## 9. Current plan (2026-08-18, post-playtest)
+
+Locked fight + 15% kid peel **wired**. Unused B_GO clips (`FALL`, `DEAD_01/02`, …) wait until this pass is playtested.
+
+### 9a. Locked fight
+
+| Beat | What |
+|------|------|
+| Pool | Refinement Create HP **200**, then Boss HP × / region. Vanilla stays 50. No mid-fight snap to 50. |
+| Bar | Real `cc_at_check` (swords, arrows, FA, outfit, scaler). Core hits skip look-pass. Empty bar stays up during floor-down until last-hit `END`. |
+| 50% | Fyrus stun hold + PUTOUT / hollow. Spawn `B_GO`. Kids **stuck** (`field_0x692 = 2` pinned). Parent `IS` mesh **hidden**. Parent walks / slams. Hull Tg → E_FM. Look-pos on Golem `eyePos`. |
+| Camera | While window live: Fyrus `setLookPos` points at B_GO `eyePos`. After 15%: Fyrus owns look-pos again. |
+| 15% | **Shed** — unmerge (`field_0x692 = 1`), hull off, parent idle/hidden. Kids fall and soldier. Fyrus stays hollow (`792=0`). Parent deletes when the last kid stones. |
+| Kids done (phase 3) | **`field_0x770 = 1`** — core weak spot reopens (stay hollow). `FIGHT_RUN` resume when Link on arena BG. |
+| 0 HP | Fyrus `ACTION_DOWN` with `mDownCnt = 3` (stays down until last hit). Floor core open. **Last hit** → vanilla `ACTION_END` / `DEMOEND` (not `FM_DEAD`). Not a B_GO defeat. |
+| Deferred | Look-pass unused Fyrus clips (`DEAD`, `DOWNFR`) and unused parent B_GO clips (`FALL`, `DEAD_01/02`, …). |
+
+### 9b. Kid-soldier layer (at 15% peel)
+
+Native unmerge drops kids into `WAIT` / `WALK`. After peel settle (`mTimers[2]`), if Link is
+within **500** XZ and **300** vertical of a kid, it enters `ACTION_FIGHT` — half the donor
+OBJ_GRA search radius (1000). Chase uses `RUN_A`; punch uses **`grA` BCK 11** (OBJ_GRA
+`setBaseAnm(3)` / `step` At windows on joints 11 and 17). Leaving **500** XZ (or vertical
+≥ 300) **de-aggro**s back to `WAIT`. Punch still commits at **230** XZ / **15°** facing.
+Not Dangoro.
+
+Each kid **30** HP (own pool, then enemy scaler). `cc_at_check` + 6-frame i-frames — not
+OBJ_GRA’s one-hit curl. At 0: `TO_STONE_NORMAL` then delete. Body Tg cyl mirrors OBJ_GRA
+placement (foot + fwd 20, H 280, R 100) during kid phase — see §9c.
+
+### 9c. OBJ_GRA soldier reactions — donor reference (kid tuning)
+
+**Purpose:** Map native Regular Soldier (`daObj_GrA_c`, `mMode == 0`) reactions to
+**Link actions**, and record what is ported onto `B_GOS`. Code paths: `hitChk()` (body Tg),
+`step()` (punch At). Donor does **not** filter by weapon ID — only `ChkTgHit()` /
+`ChkAtShieldHit()` / `ChkAtHit()`.
+
+**Port lock (2026-08-19, wired same day):**
+
+| Reaction | Port? | Notes |
+|----------|-------|-------|
+| Head-back (`grA` 12 / 13) | **Yes** | **`AT_TYPE_SHIELD_ATTACK`** on body Tg only (not block/parry); play speed **1/1.15** (~15% longer) |
+| Totter (`grA` 14) | **Yes** | Punch `ChkAtHit` only (Link not guarding); **not** arrows |
+| **`defence` (`grA` 10)** | **No** | Silent chip + i-frames only |
+| `rollReturn` | **No** | Dungeon patrol soldier; not Fyrus kid context |
+
+#### Target range (B_GOS vs OBJ_GRA)
+
+| Gate | OBJ_GRA donor | B_GOS (wired) |
+|------|---------------|---------------|
+| Aggro / de-aggro | **1000** XZ (`getSrchCircleR`); walk leash **1100**; `\|Δy\| < 300` | **500** XZ aggro **and** de-aggro; `\|Δy\| < 300`; no home leash |
+| Punch commit | **230** XZ; **15°** facing | Same (**230** XZ, **15°**) |
+| Distance measure | XZ (`absXZ`) | XZ (`fopAcM_searchPlayerDistanceXZ`) |
+
+#### Reaction table (OBJ_GRA vs B_GOS)
+
+| OBJ_GRA reaction | Donor trigger | Link action / condition | B_GOS |
+|------------------|---------------|-------------------------|-------|
+| **`defence`** — guard recoil, BCK 10 | Body cyl `ChkTgHit()` in `hitChk()` | Any body-cyl weapon hit | **Not ported** — chip + i-frames |
+| **Head-back** — `grA` 12 / 13 | Link shield bash (`AT_TYPE_SHIELD_ATTACK`) on body cyl | Guard-attack / bash into kid | **`ACTION_HEAD_BACK`** (block/parry on punch: no reaction) |
+| **Totter** — `grA` 14 | Punch `ChkAtHit()` (not shield) | Link eats punch; not arrows | **`ACTION_TOTTER`** |
+| **`rollReturn`** | Body hit during post-punch aggro timer | Patrol dungeon behavior | **Not ported** |
+| **Stone / death** | HP 0 | Sustained body damage | **`ACTION_STONE_DIE`** at 0 HP |
+
+```text
+Kid aggro: Link within 500 XZ + |dy| < 300 → FIGHT
+    │ Link leaves 500 XZ → de-aggro WAIT
+    ▼
+Kid punches (230 XZ, 15°)
+  ├─ Link guarding     → no kid anim (Link-side feedback only)
+  ├─ Link shield bash  → head-back (grA 12/13, 15% longer)
+  └─ Link not guarding → punch connect → totter (grA 14)
+
+Link hits kid body → cc_at_check chip (no defence anim)
+```
+
+**Golem phase 1 (cross-ref):** Player parry on B_GO slam — **`SetAtSpl(1)` + bit 12**
+on all slam At volumes (`b_go_albwApplyParryableSlamAt`, wired 2026-08-19). Enemy-side
+`b_go_albwShieldStaggerCheck()` still aborts slam on `ChkAtShieldHit` → `ANM_DAMAGE_01`.
+Golem slams do **not** count toward Fyrus §10 counter.
+
+### 9d. Playtest watch
+
+| Gap | Why it matters |
+|-----|----------------|
+| 31 punchers | Crowd lock-on and TTK (31 × 50 at 1×). |
+| Punch BCK on `B_gos` GRA_A | `grA` index 11 on the kid model — if the clip is missing, punch falls back to `RUN_A` with the same At windows. |
+| Floor-down vs kids | Soldiers still punching during Fyrus DOWNWAIT can steal attention. |
+| Camera | After 15% look-pos returns to Fyrus, not a kid. |
+
+---
+
+## 10. Design lock — fire-off counter vulnerability (2026-08-19, user spec)
+
+**Status:** Implemented (2026-08-19). Replaces naive “770 open whenever 792=0” for
+ablaze phase; golem window unchanged.
+
+### 10a. Terms (avoid confusion with golem `s_fyrusGolemPhase`)
+
+| Name | When | `792` / `770` intent |
+|------|------|----------------------|
+| **Ablaze phase** | Pre-50% normal Fyrus fight | Fire **on** until counter fills; vuln **closed** until fire-off |
+| **Golem window** | 50%→15% + kid crowd | Frozen — no counter, no vuln (existing §8) |
+| **Hollow phase** | Post–last kid (golem phase 3) | Fire **off** by design; vuln rules differ (§10e) |
+
+### 10b. Master rule (ablaze phase)
+
+**Vulnerability (`770=1`) is tied to fire-off (`792=0`).** Core is not a sustained
+pinata while ablaze.
+
+**Attack counter** (target **14**):
+
+- Each Fyrus **commit** of a damage-class attack (§10c) adds credits **once** —
+  player outcome does **not** stack an extra credit on top for dodge / eat hit /
+  normal parry.
+- **+1** credit per commit: Link dodges, takes the hit, or **normal** shield parry.
+- **+2** credits per commit on **perfect** shield parry: **+1** for the attack
+  commit **+1** bonus for the perfect parry (user: confirm “1 bonus” at
+  implementation touch-base — do not code until agreed).
+- **L/R chain whips** = **two separate commits** when both arms fire (each arm
+  resolves independently).
+- At **14**: `792=0`, `770=1` (fire off, vuln open).
+
+**Example (one whip commit):** player runs → **+1 total**. Perfect parry that
+same whip → **+2 total** (not +1 attack + another +1 dodge).
+
+**Shield / burn (while `792=1`):**
+
+| Shield | Normal parry | Perfect parry |
+|--------|--------------|---------------|
+| Ordon / Wooden | Durability loss; **burn** | No burn |
+| Hylian | No burn | No burn |
+
+All listed Fyrus attacks parryable/shieldable (wooden needs perfect to avoid burn).
+
+**Pre–fire-off chip damage (before 14 fill):**
+
+Any player damage to Fyrus body / non-vuln (swords, arrows, FA, etc.) deals **1%**
+of normal output and **resets the attack counter to 0**. **Does not** open vuln
+(`770` stays 0), **does not** trigger stun-close cycle.
+
+### 10c. Damage attacks that count toward 14
+
+**Strictly Fyrus-owned commits only:**
+
+| Attack | Count |
+|--------|-------|
+| Chain whip L | +1 or +2 (perfect) per arm commit |
+| Chain whip R | +1 or +2 (perfect) per arm commit |
+| Blast AOE | +1 or +2 per blast commit |
+| Fire breath | +1 or +2 per breath commit |
+
+**Does NOT count:** body burn contact, fire keese, B_GO slam, any non–E_FM actor.
+
+Commit = At window / anim commit fires even if Link is out of range (§10g #1).
+
+### 10d. Ablaze phase — vuln window + stun-close (anti-abuse)
+
+**Loop:**
+
+1. Counter → **14** → fire off, vuln open (`792=0`, `770=1`).
+2. **Any player-inflicted damage** to the open vuln (arrow, sword, FA, …) →
+   **cut stun** (reimplemented stuns only — **no** vanilla run-away / chain-trip).
+3. Stun resolves → **`770=0`**, **`792=1`**, counter **reset to 0**.
+4. Back to ablaze; earn 14 again. **No** vanilla `STOP`→trip in ablaze phase.
+
+**Abuse fix:** vuln cannot stay open for multi-arrow stun spam — first qualifying
+vuln hit ends the window and relights fire.
+
+### 10e. Hollow phase (post-kids)
+
+**No 14-counter** for now (revisit only if high-scaling playtest demands it).
+Golem window unchanged (§8).
+
+| Beat | Behavior |
+|------|----------|
+| Default | Fire off (`792=0`), vuln open (`770=1`) after last kid |
+| One arrow to vuln | **Vanilla** run-away → Link chain trip → `ACTION_DOWN` |
+| Arrow does **not** temporarily close vuln — goes straight into vanilla down setup |
+| Down core hits | Last vuln hit while down → vanilla `ACTION_END` / fight close |
+
+### 10g. Clarifications — resolved (2026-08-19)
+
+| # | Question | Answer |
+|---|----------|--------|
+| 1 | Commit out of range? | **Yes** — commit counts |
+| 2 | Perfect parry math | **+1 attack + +1 bonus = +2** — confirmed at implementation |
+| 3 | Counter after stun-close | **Reset to 0** |
+| 4 | What triggers stun-close? | **Any** player damage on open vuln |
+| 5 | What counts toward 14? | Whip L/R, blast, breath only |
+| 6 | Hollow arrow | No counter; no vuln close; vanilla down path |
+| 7 | Pre-14 body damage | **1%** chip + **counter reset**; no vuln open; no stun |
+| 8 | Phase names | **Ablaze** = pre-50%; **Hollow** = post-kids |
+
+**Hold:** ~~No implementation until perfect-parry bonus (+1 vs double-count) is
+explicitly signed off.~~ Signed off 2026-08-19; coded in `d_albw_boss.cpp` /
+`d_a_e_fm.cpp` §10 hooks.
+
+---
+
+## 8e. Golem-phase chain whip — **OPTIONAL / PAUSED** (2026-08-19)
+
+Golem phase 1 offense today: **slam only** (`ANM_ATTACK`, live). No whip read on
+the Titan skeleton from vanilla `B_go` orphans (`START_L/R` = wall chain-pull, not
+outward whip).
+
+| Path | Status | Notes |
+|------|--------|-------|
+| **Path B — new Titan BCK** | **Paused** | Blender + SuperBMD new whip on unchanged `B_go` skeleton → repack `B_go.arc` → `h_sweep` + frame-gated At in `d_a_b_go.cpp`. Outside tools required for art. |
+| **Option D — E_FM overlay** | **Not chosen** | B_GO triggers; E_FM runs native `ATTACK02` at clump transform with draw swap + hold-pin exception. No new assets; code-heavy. |
+| **Path 2 — fake whip on B_GO orphans** | **Rejected** | Wrong verb; no Fyrus whip read. |
+
+**Resume when:** user explicitly unpause Path B (asset pass first) or picks Option D
+(code pass first). Until then, golem window playtest scope is slam + hull damage only.
+
+---
+
+## 9e. Playtest checklist — remaining (2026-08-19)
+
+**Combo:** Boss Refinement **On**, Boss Health Bars **On**, Mines (`D_MN04B` arena).
+Wipe Dawn cache after build.
+
+| # | Beat | What to verify |
+|---|------|----------------|
+| 1 | **Pre-50% ablaze** | §10 counter fills on whip L/R, blast, breath (+2 on perfect parry); 1% chip + counter reset on pre-14 body hits; fire-off at 14 → vuln open |
+| 2 | **Vuln window** | First vuln hit → cut stun → fire relights, counter reset; no multi-arrow vuln spam |
+| 3 | **50% gate** | Stun + PUTOUT + B_GO spawn; Fyrus frozen; look-pos on golem `eyePos`; hull swords/arrows move **real** bar |
+| 4 | **Golem slam** | Walk→attack at 300; parry works (`SetAtSpl(1)` + bit 12); shield hit → `ANM_DAMAGE_01`; trimmed `h_wait` cadence feels right |
+| 5 | **15% peel** | Kids unmerge; parent idle/hidden; Fyrus stays hollow; camera returns to Fyrus |
+| 6 | **Kid soldiers** | 500 XZ aggro/de-aggro; punch at 230/15°; **totter only on punch connect** (not shield block); **head-back on shield bash only**; 50 HP → stone |
+| 7 | **Last kid cleared** | Fyrus resumes `FIGHT_RUN` on arena BG (hollow); core vuln open |
+| 8 | **0 HP** | Floor-down (`mDownCnt=3`); bar stays until last-hit `END` |
+| 9 | **Hollow arrow** | One vuln arrow → vanilla run-away / chain trip / down (no §10 counter) |
+| 10 | **Breath timing** | B morf + uniform speed; no 3.33× lead-in (C reverted) |
+| 11 | **Crowd / camera** | 31× lock-on feel; floor-down vs punching kids; post-15% camera not stuck on kid |
+
+**Deferred (not in this pass):** golem whip (§8e); unused E_FM / B_GO orphan look-pass;
+`DEAD` / `DOWNFR` / `FALL` / `DEAD_01/02` clips.
+
+---
+
+*End Fyrus research (… §10 vulnerability counter).*

@@ -938,6 +938,13 @@ void daAlink_c::changeLink(int param_0) {
         mpWlMidnaHandModel = NULL;
         mpWlMidnaHairModel = NULL;
     }
+
+    if (param_0) {
+        daMidna_c* midna = daPy_py_c::getMidnaActor();
+        if (midna != NULL) {
+            midna->resetDemoBck();
+        }
+    }
 }
 
 void daAlink_c::onWolfEyeUp() {

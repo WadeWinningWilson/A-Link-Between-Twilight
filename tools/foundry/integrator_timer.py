@@ -63,6 +63,16 @@
 # mid-session would silently reclassify every existing row, and this file's
 # whole purpose is to not do that class of thing quietly.
 # ============================================================================
+import sys
+# ============================================================================
+# CP1252 GUARD, added 2026-08-21 after this timer DIED ON ITS OWN PLATE: a
+# U+2194 arrow in a plate item reached print() on a cp1252 console and the
+# heartbeat crashed at tick 4 -- the EXACT failure file_row.py already
+# documents ("the work happened, the report died"). The plate is DATA; the
+# timer must survive whatever bytes the plate carries.
+# ============================================================================
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import argparse
 import json
 import os
@@ -113,6 +123,11 @@ def main():
                     help="seconds between ticks (default 180)")
     ap.add_argument("--plate", default=DEFAULT_PLATE)
     ap.add_argument("--max-ticks", type=int, default=0, help="0 = unbounded")
+    # DECODER PARITY (user order, twice: 2026-08-21). Decoder's timer ticks
+    # UNCONDITIONALLY; my empty-plate self-disarm kept standing this lane down
+    # while the user wanted it live. The refinement was the divergence.
+    ap.add_argument("--unconditional", action="store_true",
+                    help="never self-disarm; empty plate ticks as QUIET (Decoder parity)")
     args = ap.parse_args()
 
     # --help must not arm. argparse exits before reaching here, which is the
@@ -130,6 +145,9 @@ def main():
             pulse(args.interval, tick, "PLATE-MISSING", None)
             print("INTEGRATOR-TICK %d - PLATE FILE MISSING (%s). Not treating as empty; "
                   "this is a fault, not quiet." % (tick, args.plate), flush=True)
+        elif not open_items and args.unconditional:
+            pulse(args.interval, tick, "QUIET", None)
+            print("INTEGRATOR-TICK %d - plate empty, %d done. QUIET (unconditional mode; check the board/inbox)." % (tick, done), flush=True)
         elif not open_items:
             pulse(args.interval, tick, "EMPTY-DISARMED", None)
             print("INTEGRATOR-TIMER disarming: plate EMPTY after %d done. A timer that "

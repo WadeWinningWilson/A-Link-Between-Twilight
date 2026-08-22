@@ -303,12 +303,38 @@ def load_seen():
 
 
 def save_seen(rows):
-    try:
-        SEEN_DB.write_text(json.dumps({k: list(v) for k, v in rows.items()}),
-                           encoding="utf-8")
-    except OSError as e:
-        emit("HISTORY-WATCH ** CANNOT PERSIST BASELINE ** %s — a re-arm will "
-             "amnesty anything filed while this ran" % e)
+    """Atomic write + bounded retry.
+
+    WHY NOT write_text: it TRUNCATES ON OPEN, so a concurrent reader (or a
+    second watcher instance) sees a half-file, and on Windows an overlapping
+    handle surfaces as `OSError [Errno 22] Invalid argument` -- which this
+    function used to swallow into a warning. The cost was not the warning: a
+    failed persist AMNESTIES every row filed during that run, so the next arm
+    starts blind and blindness looks exactly like quiet.
+
+    Observed live 2026-08-21 (Errno 22, 530 keys); the same write-race class
+    Foundry fixed in file_row.py, so it takes the same remedy: write a temp
+    file in the SAME directory, then os.replace() onto the target -- atomic on
+    NTFS and POSIX alike, so a reader sees the complete old file or the
+    complete new one, never a torn one.
+    """
+    payload = json.dumps({k: list(v) for k, v in rows.items()})
+    last = None
+    for attempt in range(4):
+        tmp = SEEN_DB.with_suffix(".json.tmp%d" % attempt)
+        try:
+            tmp.write_text(payload, encoding="utf-8")
+            os.replace(str(tmp), str(SEEN_DB))
+            return
+        except OSError as e:
+            last = e
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            time.sleep(0.15 * (attempt + 1))
+    emit("HISTORY-WATCH ** CANNOT PERSIST BASELINE ** %s — a re-arm will "
+         "amnesty anything filed while this ran" % last)
 
 
 def main():

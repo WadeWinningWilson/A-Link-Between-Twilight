@@ -115,3 +115,32 @@ the three slots. That is the next step and it is cheap.
 **What IS settled: no data was lost, nothing is corrupt, the card layer is
 identical between the trees, and the empty-slot path is unreachable for
 checksum-valid data.**
+
+---
+
+## 2026-08-18 — Conejo is in the same Card A folder, wrong filename
+
+Live `01-GZ2E-gczelda2.gci` (mtime 2026-06-06) is still **Link / empty / empty**.
+Zero `Conejo`, zero `F_SP121`. That file is not the missing logs.
+
+The two Conejo quest logs are already on disk as:
+
+`%AppData%\Roaming\TwilitRealm\Dusklight\USA\Card A\REL_Loader_v2_us.gci`
+
+Header is `GZ2E01` / `gczelda2` — it is a Twilight Princess card image, not a
+REL loader. GCI Folder mode only mounts `01-GZ2E-gczelda2.gci`, so this file
+is ignored at file select. Checksums **VALID** on all three slots:
+
+| Slot | Name | Return stage |
+|------|------|----------------|
+| 0 | Conejo | `F_SP121` Hyrule Field |
+| 1 | Conejo | `F_SP103` Ordon |
+| 2 | Link | `F_SP103` Ordon |
+
+Restored 2026-08-18 16:55: live `01-GZ2E-gczelda2.gci` replaced with that
+Conejo card (SHA `06680e00…e0f72aa8`). Pre-swap Link card kept at
+`Documents/dusklight-backups/conejo-restore-20260818-1655/`.
+`REL_Loader_v2_us.gci` left in place as a duplicate.
+
+Older Conejo cards (Forest Temple / Faron, no Field) still exist under
+`D:\Dolpheen Plz\Texture Packs\ZTP4K 3.0b (1080p)\User\GC\USA\Card A\`.

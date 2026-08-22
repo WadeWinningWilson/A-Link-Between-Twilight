@@ -55,6 +55,21 @@
 // falls through untouched, whatever the host's real array size is.
 // ============================================================================
 
+// ============================================================
+// THE RECEIVER'S OWN PROCESS LAYOUT, NOT A HAND-ROLLED OFFSET
+// ============================================================
+// This file carries a standing "NO STRUCT OFFSETS" note whose reasoning
+// is right and whose conclusion no longer binds: it rejected reading
+// `profname` at a HARD-CODED 0x0E ("probably safe is exactly the
+// reasoning that produced the byte-reversed J3D2 magic"). Including the
+// receiver's own header is the opposite move - the layout is the
+// receiver's, checked by the compiler, and drifts with it.
+// Needed because the capped delete receipts are sampled BY TIME and the
+// grass cohort is created late: the first 10 victims all sat at pid
+// 78-103 while GRASS_e spans pid 23-276, so that sample can never answer
+// "was this class ever deleted".
+// ============================================================
+#include "f_pc/f_pc_base.h"
 #include "registry.h"
 #include "ww_kankyo.h"
 #include "ww_kankyo_wind.h"
@@ -74,6 +89,11 @@
 #include "JSystem/J3DGraphBase/J3DShape.h"
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "JSystem/J3DGraphBase/J3DPacket.h"
+// Integrator 2026-08-21: H11 build. `J3DDrawBuffer::entryNum` is read at :3189
+// and :5398; J3DPacket.h only FORWARD-DECLARES the class. Vanilla defines it at
+// libs/JSystem/include/JSystem/J3DGraphBase/J3DDrawBuffer.h - a missing include,
+// NOT an API divergence.
+#include "JSystem/J3DGraphBase/J3DDrawBuffer.h"
 #include "JSystem/JUtility/JUTNameTab.h"
 #include "JSystem/JUtility/JUTTexture.h"
 #include "SSystem/SComponent/c_counter.h"
@@ -861,6 +881,15 @@ DEFINE_HOOK_SYMBOL("?fopScnM_ChangeReq@@YAHPEAVscene_class@@FFG@Z",
 //     scene refusing deletion would hold Execute at INIT indefinitely
 DEFINE_HOOK_SYMBOL("?fpcNdRq_Execute@@YAHPEAUnode_create_request@@@Z",
                    int(void*), NdRqExecute);
+// ============================================================
+// H11 (folded into the mode-15 set) - DELETIONS ARE UNLOGGED
+// ============================================================
+// The receiver logs `fpcBs_Create:` and has NO delete line at all - the
+// only "delete" strings in a run are this plugin's own hook_manifest
+// naming the symbols. So "0 deletes after the warp" is VACUOUS, not
+// evidence that pre-warp actors persist into the WW stage. This hook is
+// already INSTALLED/ATTACHED, so the counter costs one receipt.
+// ============================================================
 DEFINE_HOOK_SYMBOL("?fpcBs_Delete@@YAHPEAUbase_process_class@@@Z",
                    int(void*), BsDelete);
 
@@ -1026,6 +1055,17 @@ DEFINE_HOOK_SYMBOL("?CrrPos@dBgS_Acch@@QEAAXAEAVdBgS@@@Z",
 
 typedef void* (*FnJ3DParse)(const void*, unsigned int);
 FnJ3DParse s_fnJ3DLoadBDL = nullptr;   // loadBinaryDisplayList — bdl4 path
+// ============================================================
+// ANIMATION LOADER - the choke's missing arm (History/Bridge
+// surfaced it on the Salvage port; registry.cpp is this lane's).
+// TWO-ARG BY NECESSITY: the receiver's convenience overload
+// `load(p) { return load(p, J3DLOADER_UNK_FLAG0); }`
+// (J3DAnmLoader.h:44) is an inline - a symbol resolved by name has
+// NO default argument to inherit, so the flag is passed EXPLICITLY.
+// J3DLOADER_UNK_FLAG0 = 0, read from the enum, not assumed.
+// ============================================================
+typedef void* (*FnAnmLoad)(const void*, int);
+FnAnmLoad s_fnJ3DAnmLoad = nullptr;
 FnJ3DParse s_fnJ3DLoadBMD = nullptr;   // load                  — bmd3 path
 
 // ============================================================================
@@ -2048,6 +2088,63 @@ const unsigned int kJ3DMdlFlag_UseSingleDL = 0x40000;
 // WW d_resorce.cpp 'BDL ' arm: loadBinaryDisplayList(res, 0x00002020).
 // 0x2020 = UsePostTexMtx|DoBdlMaterialCalc — NOT TP BMD 0x59020010, NOT 0x1010.
 const unsigned int kWwBdlLoadFlags = 0x00002020u;
+// Brief A/B gate for stretch suspect #3 (WW consume: 0x2020 + setToonTex +
+// keep MDL3 SharedDL). TEMP default ON (finish) so a normal launch tests the
+// gate — last run logged mode=ww because WW_BDL_CONSUME was unset. Restore WW
+// with WW_BDL_CONSUME=ww. Does NOT delete the WW path — diagnostic only.
+const unsigned int kFinishBdlLoadFlags = 0x59020010u;
+
+static int wwBdlConsumeFinishGate() {
+    static int s_gate = -1;
+    if (s_gate < 0) {
+        // Default ON for this A/B install. Env "ww" / "0" / "off" restores
+        // current WW consume; "finish" / "gate" / "1" keeps the gate.
+        s_gate = 1;
+        const char* e = std::getenv("WW_BDL_CONSUME");
+        if (e != nullptr && e[0] != '\0') {
+            if (std::strcmp(e, "ww") == 0 || std::strcmp(e, "0") == 0 ||
+                std::strcmp(e, "off") == 0) {
+                s_gate = 0;
+            } else if (std::strcmp(e, "finish") == 0 ||
+                       std::strcmp(e, "gate") == 0 ||
+                       std::strcmp(e, "1") == 0) {
+                s_gate = 1;
+            } else if (std::strcmp(e, "finish_toon") == 0 ||
+                       std::strcmp(e, "2") == 0) {
+                // ================================================
+                // THE THIRD ARM THIS FILE'S OWN TIP ASKED FOR AND
+                // NOBODY HAD RUN: "split finish vs flags vs
+                // skip-setToonTex".
+                // ================================================
+                // The stretch fix bundled TWO changes - always
+                // finish, AND drop setToonTex - and shipped them as
+                // one switch. Donor law is 0x2020 + setToonTex
+                // (d_resorce.cpp). A material that samples the toon
+                // texture and never receives it renders BLACK, which
+                // is what the user reports seeing on the donor
+                // vegetation. This arm keeps the finish consume that
+                // cured the stretch and RESTORES setToonTex, so the
+                // two halves of that bundle can be told apart.
+                // Outcome is informative either way: black gone +
+                // stretch gone = the bundle was over-broad; stretch
+                // back = the two are genuinely coupled and the cost
+                // is a real trade rather than an oversight.
+                // ================================================
+                s_gate = 2;
+            }
+        }
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"bdl_consume_gate\",\"mode\":\"%s\","
+             "\"reads\":\"TEMP default=finish (gate #3); set WW_BDL_CONSUME=ww "
+             "to restore 0x2020+setToonTex+keep MDL3\"}",
+             s_gate == 2 ? "finish_toon" : (s_gate ? "finish" : "ww"));
+    }
+    return s_gate;
+}
+
+static unsigned int wwBdlLoadFlags() {
+    return wwBdlConsumeFinishGate() ? kFinishBdlLoadFlags : kWwBdlLoadFlags;
+}
 
 // finishBgModelData / wwParseModelOnce: load is step one of four. getRes and
 // loadResource were stopping at load — empty shared DLs → Aurora tcg src 21.
@@ -2200,6 +2297,9 @@ void wwWorldizeShapeBounds(void* i_parsed, const char* i_arc) {
 }
 
 void wwInvalidateParsedModels(const char* arc);
+void wwInvalidateParsedAnims(const char* arc);
+void wwResetParsedAnims();
+void* wwParseAnimOnce(void* raw, const char* arc, int index);
 void wwInvalidateParsedModelsAll(const char* why);
 FnGetObjRes      s_fnGetObjRes = nullptr;
 FnEntrySolidHeap s_fnEntrySolidHeap = nullptr;
@@ -2376,6 +2476,7 @@ int WwAkabe_delete(void* self) {
         std::free(m->bgw);
         m->bgw = nullptr;
         wwInvalidateParsedModels(kAkabeArcs[m->type]);
+        wwInvalidateParsedAnims(kAkabeArcs[m->type]);
         if (s_fnResDelete != nullptr) { s_fnResDelete(m->phs, kAkabeArcs[m->type]); }
     }
     return 1;
@@ -2482,6 +2583,20 @@ FnCullFar        s_fnCullFar = nullptr;
 FnRndF           s_fnRndF = nullptr;
 FnBgwMove        s_fnBgwMove = nullptr;
 FnModelUpdateDL  s_fnModelUpdateDL = nullptr;
+// ============================================================
+// MODE 12 - THE RECEIVER'S OWN SUBMITTER
+// ============================================================
+// daBg_c::draw() submits room models with mDoExt_modelEntryDL
+// (d_a_bg.cpp:452) and Room44's model.bdl - the SAME 448 B/mat
+// SharedDL class as Alwd - survives every frame that way.
+// lwood submits with mDoExt_modelUpdateDL instead, and the two
+// differ in one decisive place: EntryDL carries a TARGET_PC
+// frame-interp early-out (`if (!is_sim_frame()) { diff(); return; }`)
+// and UpdateDL has NONE - so lwood submits on EVERY frame, sim or
+// interpolated, while every receiver model submits only on sim
+// frames. DN-10 step 1: use the donor-faithful path the survivor
+// already uses rather than inventing a fourth suppression mode.
+FnModelUpdateDL  s_fnModelEntryDL = nullptr;
 const unsigned int kLwoodOffTevStr = 496;
 
 // ============================================================================
@@ -2567,6 +2682,10 @@ void lwoodSetMtx(void* self) {
     m->model->setBaseTRMtx(*reinterpret_cast<Mtx*>(s_fnMtxGet()));
 }
 
+int WwLwood_isDelete(void*);
+static int lwoodDrawMode();
+static void lwoodCreateFlags(unsigned int* modelFlag, unsigned int* differedFlag);
+
 int WwLwood_solidHeapCB(void* self) {
     LwoodMembers* m = lwoodMembers(self);
     if (s_fnGetObjRes == nullptr || s_fnJ3DModelCreateC == nullptr || s_fnDBgWCtor == nullptr ||
@@ -2583,7 +2702,10 @@ int WwLwood_solidHeapCB(void* self) {
         return 0;
     }
     // Donor: mDoExt_J3DModel__create(modelData, 0x80000, 0x11000022)
-    m->model = static_cast<J3DModel*>(s_fnJ3DModelCreateC(parsed, 0x80000u, 0x11000022u));
+    unsigned int modelFlag = 0x80000u;
+    unsigned int differedFlag = 0x11000022u;
+    lwoodCreateFlags(&modelFlag, &differedFlag);
+    m->model = static_cast<J3DModel*>(s_fnJ3DModelCreateC(parsed, modelFlag, differedFlag));
     if (m->model == nullptr) {
         logf(LOG_LEVEL_ERROR, "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":0,\"why\":\"model\"}");
         return 0;
@@ -2620,9 +2742,9 @@ int WwLwood_solidHeapCB(void* self) {
     logf(LOG_LEVEL_INFO,
          "[WwRegistry] {\"ev\":\"lwood_heap\",\"ok\":1,\"bdl\":%d,\"dzb\":%d,"
          "\"locked\":%d,\"flags\":\"0x%08X\","
-         "\"reads\":\"shared ModelData (WW); BDL 0x2020 + setToonTex\"}",
+         "\"reads\":\"shared ModelData (WW); BDL flags from WW_BDL_CONSUME\"}",
          kLwoodBdlIndex, kLwoodDzbIndex,
-         (md != nullptr && md->isLocked()) ? 1 : 0, kWwBdlLoadFlags);
+         (md != nullptr && md->isLocked()) ? 1 : 0, wwBdlLoadFlags());
     return 1;
 }
 
@@ -2726,6 +2848,7 @@ int WwLwood_delete(void* self) {
         m->bgw = nullptr;
     }
     wwInvalidateParsedModels(kLwoodArc);
+    wwInvalidateParsedAnims(kLwoodArc);
     if (s_fnResDelete != nullptr) {
         s_fnResDelete(m->phs, kLwoodArc);
     }
@@ -2744,23 +2867,57 @@ int WwLwood_isDelete(void*) { return 1; }
 //   0 full · 1 none (PASS 133253) · 2 UpdateDL only (FAIL 134152) ·
 //   3 tev+lists, no submit · 4 lists+UpdateDL, no tev ·
 //   5 lists+UpdateDL once then skip (PASS 134723) ·
-//   6 hide all shapes then lists+UpdateDL (empty-mesh test)
-// Default 4 after mode-5 PASS — multi-submit vs tev split.
+//   6 hide shapes (skips MatPacket entry entirely — no SharedDL, no drawFast)
+//   7 = mode4 + WW_LWOOD_SKIP_PATCH implied at load (see wwSetToonTex)
+//   8 = mode4 but only 2 submits (n=2 probe; 3 dies)
+//   9 = mode4; create uses UseSharedDL not Differed (see lwoodCreateFlags)
+//  10 = mode4 but SharedDL mSize forced 0 (shapes still drawFast)
+//  11 = mode4 but ShapePacket Hidden (SharedDL callDL still runs; no drawFast)
+// Default 1 — playable Outset while Alwd draw is bisected. Fork ExtNpc ≠ mode.
 static int lwoodDrawMode() {
     static int s_mode = -1;
     if (s_mode < 0) {
         const char* e = std::getenv("WW_LWOOD_DRAW");
-        s_mode = (e != nullptr && e[0] != '\0') ? std::atoi(e) : 4;
-        if (s_mode < 0 || s_mode > 6) {
-            s_mode = 4;
+        s_mode = (e != nullptr && e[0] != '\0') ? std::atoi(e) : 1;
+        if (s_mode < 0 || s_mode > 16) {
+            s_mode = 1;
         }
         logf(LOG_LEVEL_INFO,
              "[WwRegistry] {\"ev\":\"lwood_draw_mode\",\"mode\":%d,"
              "\"reads\":\"0=full 1=none 2=UDL 3=tev 4=lists+UDL 5=one-submit "
-             "6=hideAll; default 4; mode5 PASS=one-shot OK\"}",
+             "6=hideAll(no entry) 7=skipPatch 8=two-submit 9=noDifferedCreate "
+             "10=zeroSharedDL 11=hideShapePackets 12=entryDL(receiver submitter) "
+             "13=census(full submit, chain logged BEFORE it) "
+             "14=restoreShapePacket(entryIn contract, PROVEN NO-OP) "
+             "15=probe set (H1-H11) 16=FIX CANDIDATE: clear the stale next; "
+             "default 1 (playable; room MDL3 same class survives)\"}",
              s_mode);
     }
     return s_mode;
+}
+
+// Create-flag bisect (WW donor is 0x80000 + 0x11000022). Mode 9 / env
+// WW_LWOOD_CREATE=shared forces UseSharedDL (0x20000) so DifferedDL is not
+// allocated — diagnostic only; not WW-faithful for ship.
+static void lwoodCreateFlags(unsigned int* modelFlag, unsigned int* differedFlag) {
+    *modelFlag = 0x80000u;
+    *differedFlag = 0x11000022u;
+    const int mode = lwoodDrawMode();
+    const char* e = std::getenv("WW_LWOOD_CREATE");
+    const bool wantShared =
+        mode == 9 || (e != nullptr && (std::strcmp(e, "shared") == 0 || std::strcmp(e, "9") == 0));
+    if (wantShared) {
+        *modelFlag = 0x20000u;  // J3DMdlFlag_UseSharedDL
+        *differedFlag = 0u;
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_create_flags\",\"model\":\"0x20000\","
+             "\"differed\":\"0\",\"reads\":\"diagnostic UseSharedDL; no DifferedDL\"}");
+    } else if (e != nullptr && std::strcmp(e, "bgdiff") == 0) {
+        *differedFlag = 0x11000084u;
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"lwood_create_flags\",\"model\":\"0x80000\","
+             "\"differed\":\"0x11000084\",\"reads\":\"daBg-like differed bits\"}");
+    }
 }
 
 static void lwoodHideAllShapes(J3DModel* model) {
@@ -2778,6 +2935,83 @@ static void lwoodHideAllShapes(J3DModel* model) {
             shp->hide();
         }
     }
+}
+
+// Mode 10: keep MatPacket entry + drawFast, but SharedDL callDL writes 0 bytes.
+// ============================================================
+// Mode 10 arm — REPORTS WHAT IT DID, because a silent arm makes
+// the bisect unreadable in BOTH directions: a PASS would read as
+// "SharedDL was the killer" and a FAIL as "so it is the vtx path",
+// when the honest third case is "this changed nothing." The caller
+// used to log `lwood_zero_shareddl` unconditionally after this ran,
+// so all three looked identical. Returns the zeroed count; the
+// caller shouts when it is 0. (Alwd carries 448 B SharedDL per
+// material — see _research/alwd_mdl3_decode.txt — so 0 is a defect,
+// not a valid reading.)
+// ============================================================
+static int lwoodZeroSharedDlSizes(J3DModel* model, int* outMats, unsigned* outBytes) {
+    if (outMats != nullptr) {
+        *outMats = 0;
+    }
+    if (outBytes != nullptr) {
+        *outBytes = 0;
+    }
+    if (model == nullptr) {
+        return -1;
+    }
+    J3DModelData* data = model->getModelData();
+    if (data == nullptr) {
+        return -2;
+    }
+    int zeroed = 0;
+    const u16 n = data->getMaterialNum();
+    if (outMats != nullptr) {
+        *outMats = (int)n;
+    }
+    for (u16 i = 0; i < n; i++) {
+        J3DMaterial* mat = data->getMaterialNodePointer(i);
+        if (mat == nullptr) {
+            continue;
+        }
+        J3DDisplayListObj* dl = mat->getSharedDisplayListObj();
+        if (dl != nullptr) {
+            if (outBytes != nullptr) {
+                *outBytes += (unsigned)dl->mSize;
+            }
+            dl->mSize = 0;
+            zeroed++;
+        }
+    }
+    return zeroed;
+}
+
+// Mode 11: SharedDL still callDL'd from MatPacket::draw; ShapePacket::drawFast
+// early-outs on J3DShpFlag_Hidden (packet flag, not shape Visible).
+// ============================================================
+// Mode 11 arm — per-INSTANCE (ShapePackets belong to the J3DModel,
+// not the shared ModelData), and it now returns the packet count so
+// the caller can prove EVERY instance was armed. The kill needs
+// n>=3 trees submitting, so "armed once, logged once" cannot tell
+// an armed fleet from one armed tree and two live ones.
+// ============================================================
+static int lwoodHideShapePackets(J3DModel* model) {
+    if (model == nullptr) {
+        return -1;
+    }
+    J3DModelData* data = model->getModelData();
+    if (data == nullptr) {
+        return -2;
+    }
+    int hidden = 0;
+    const u16 n = data->getShapeNum();
+    for (u16 i = 0; i < n; i++) {
+        J3DShapePacket* pkt = model->getShapePacket(i);
+        if (pkt != nullptr) {
+            pkt->onFlag(J3DShpFlag_Hidden);
+            hidden++;
+        }
+    }
+    return hidden;
 }
 
 int WwLwood_draw(void* self) {
@@ -2799,15 +3033,31 @@ int WwLwood_draw(void* self) {
 
     static int s_submitBudget = -1;
     if (s_submitBudget < 0) {
-        s_submitBudget = (mode == 5) ? 1 : 1000000;
+        if (mode == 5) {
+            s_submitBudget = 1;
+        } else if (mode == 8) {
+            s_submitBudget = 2;
+        } else {
+            s_submitBudget = 1000000;
+        }
     }
 
     dKy_tevstr_c* tev =
         reinterpret_cast<dKy_tevstr_c*>(static_cast<char*>(self) + kLwoodOffTevStr);
     cXyz* pos = reinterpret_cast<cXyz*>(static_cast<char*>(self) + kOffCurrentPos);
     const bool doTev = (mode == 0 || mode == 3);
-    const bool doLists = (mode == 0 || mode == 3 || mode == 4 || mode == 5 || mode == 6);
-    bool doSubmit = (mode == 0 || mode == 2 || mode == 4 || mode == 5 || mode == 6);
+    const bool doLists =
+        (mode == 0 || mode == 3 || mode == 4 || mode == 5 || mode == 7 || mode == 8 ||
+         mode == 9 || mode == 10 || mode == 11 || mode == 12 || mode == 13 ||
+         mode == 14 || mode == 15 ||
+         mode == 16);
+    // Mode 6: hide shapes only — do NOT UpdateDL. 162313 proved UpdateDL while
+    // hidden survives Dawn but spams frame_interp (viewMtx stretch / input lag).
+    bool doSubmit =
+        (mode == 0 || mode == 2 || mode == 4 || mode == 5 || mode == 7 || mode == 8 ||
+         mode == 9 || mode == 10 || mode == 11 || mode == 12 || mode == 13 ||
+         mode == 14 || mode == 15 ||
+         mode == 16);
     if (doSubmit && s_submitBudget <= 0) {
         doSubmit = false;
         static int s_capSkip = 0;
@@ -2831,6 +3081,47 @@ int WwLwood_draw(void* self) {
                      : 0u);
         }
     }
+    if (mode == 10) {
+        // Once is correct HERE and only here: SharedDL hangs off the SHARED
+        // ModelData (lwood_heap: "shared ModelData (WW)"), so zeroing it once
+        // covers every instance. Contrast mode 11 below, which must arm each.
+        static int s_z = 0;
+        if (s_z == 0) {
+            s_z = 1;
+            int mats = 0;
+            unsigned bytes = 0;
+            const int zeroed = lwoodZeroSharedDlSizes(m->model, &mats, &bytes);
+            logf(zeroed > 0 ? LOG_LEVEL_INFO : LOG_LEVEL_WARN,
+                 "[WwRegistry] {\"ev\":\"lwood_zero_shareddl\",\"zeroed\":%d,"
+                 "\"mats\":%d,\"bytes_was\":%u,\"armed\":%d,\"reads\":\"mode10; "
+                 "zeroed=0 means THE ARM DID NOTHING and neither a PASS nor a FAIL "
+                 "may be read as evidence about SharedDL\"}",
+                 zeroed, mats, bytes, zeroed > 0 ? 1 : 0);
+        }
+    }
+    if (mode == 11) {
+        // ShapePackets are per J3DModel — must arm every instance, not once.
+        const int hidden = lwoodHideShapePackets(m->model);
+        static int s_hpCalls = 0;
+        static int s_hpPkts = 0;
+        static int s_hpFail = 0;
+        s_hpCalls++;
+        if (hidden > 0) {
+            s_hpPkts += hidden;
+        } else {
+            s_hpFail++;
+        }
+        // The kill needs n>=3 submitting trees, so the fleet count is the
+        // reading — one armed tree beside two live ones looks like "armed".
+        if (s_hpCalls <= 4 || (s_hpCalls % 300) == 0 || hidden <= 0) {
+            logf(s_hpFail == 0 ? LOG_LEVEL_INFO : LOG_LEVEL_WARN,
+                 "[WwRegistry] {\"ev\":\"lwood_hide_shapepackets\",\"call\":%d,"
+                 "\"hidden\":%d,\"pkts_total\":%d,\"unarmed_calls\":%d,"
+                 "\"reads\":\"mode11; unarmed_calls>0 means some instance still "
+                 "draws its shapes and a PASS is not attributable\"}",
+                 s_hpCalls, hidden, s_hpPkts, s_hpFail);
+        }
+    }
     if (doTev) {
         dKyWw_settingTevStruct((int)kTevTypeBg0, pos, tev);
         dKyWw_setLightTevColorType(m->model, tev);
@@ -2838,8 +3129,311 @@ int WwLwood_draw(void* self) {
     if (doLists) {
         dComIfGd_setListBG();
     }
-    if (doSubmit && s_fnModelUpdateDL != nullptr) {
-        s_fnModelUpdateDL(m->model);
+    // ============================================================
+    // MODE 13 - THE PACKET-CHAIN CENSUS, LOGGED BEFORE THE SUBMIT
+    // ============================================================
+    // Modes 10, 11 and 12 all FAILED at n=3: not SharedDL content, not
+    // drawFast, not the submitter. The one mode that PASSES while models
+    // still exist is 6 - and 6 is the only one that skips the MatPacket
+    // ENTRY. So the suspect is the entry itself. MatPackets are per
+    // J3DModel (`J3DModel::mMatPacket`, 0xC0), but J3DDrawBuffer MERGES
+    // packets it considers `isSame`, and all lwood instances share one
+    // ModelData - so they share MATERIALS. This census reports whether
+    // the chain the third instance enters is already circular.
+    // Logged BEFORE the submit on purpose: the run dies inside it, and a
+    // receipt written after the call is a receipt that never arrives.
+    // ============================================================
+    // ============================================================
+    // MODE 14 - RESTORE THE PACKET'S OWN SHAPE, PER FRAME
+    // ============================================================
+    // ROOT CAUSE, read out of the receiver's own source rather than guessed:
+    //   * J3DDrawBuffer::entryMatSort MERGES packets whose material isSame -
+    //     `packet->addShapePacket(pMatPacket->getShapePacket())` - and
+    //     addShapePacket PREPENDS without clearing.
+    //   * The per-frame reset that makes that safe lives in
+    //     J3DJoint::entryIn(): `matPacket->setShapePacket(shapePacket)`
+    //     restores each MatPacket to ITS OWN shape before entry.
+    //   * That joint walk runs on the `i_model->entry()` branch. lwood does
+    //     NOT take it: mDoExt_modelEntryDL/UpdateDL pick `mDoExt_modelDiff`
+    //     when `SharedDL != NULL && !modelData->isLocked()`, and lwood is
+    //     exactly that - `lwood_heap` reports **locked:0** and mode 10
+    //     measured 448 B of SharedDL per material.
+    //   * So the chain is never reset, each frame prepends onto the last
+    //     frame's chain, and it eventually CLOSES - census `cycle:1`. A draw
+    //     walker on a circular list never returns: the GX FIFO grows until
+    //     `fifo::write_data: buffer size overflow` at 4 GB.
+    // The fix is the receiver's own line, applied at the consume boundary -
+    // not a new invention, and not a guard around the symptom.
+    // ============================================================
+    if (mode == 14) {
+        struct OwnShape { void* model; void* mat[4]; void* shape[4]; };
+        static OwnShape s_own[8];
+        static int s_ownN = 0;
+        J3DModelData* md14 = m->model->getModelData();
+        const u16 nm14 = (md14 != nullptr) ? md14->getMaterialNum() : 0;
+        OwnShape* rec = nullptr;
+        for (int k = 0; k < s_ownN; k++) {
+            if (s_own[k].model == (void*)m->model) { rec = &s_own[k]; break; }
+        }
+        if (rec == nullptr && s_ownN < 8) {
+            // FIRST SIGHT: the packet still points at its OWN shape, because
+            // nothing has merged into it yet. That is the value to restore.
+            rec = &s_own[s_ownN++];
+            rec->model = (void*)m->model;
+            for (int i = 0; i < 4; i++) { rec->mat[i] = nullptr; rec->shape[i] = nullptr; }
+            for (u16 i = 0; i < nm14 && i < 4; i++) {
+                J3DMatPacket* mp = m->model->getMatPacket(i);
+                rec->mat[i] = (void*)mp;
+                rec->shape[i] = (mp != nullptr) ? (void*)mp->getShapePacket() : nullptr;
+            }
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_shapepkt_learn\",\"model\":\"%p\",\"mats\":%u,"
+                 "\"reads\":\"mode14; captured each MatPacket's OWN ShapePacket at first sight\"}",
+                 (void*)m->model, (unsigned)nm14);
+        }
+        if (rec != nullptr) {
+            int restored = 0, alreadyOk = 0;
+            for (u16 i = 0; i < nm14 && i < 4; i++) {
+                J3DMatPacket* mp = m->model->getMatPacket(i);
+                if (mp == nullptr || rec->shape[i] == nullptr) { continue; }
+                if ((void*)mp->getShapePacket() != rec->shape[i]) {
+                    mp->setShapePacket((J3DShapePacket*)rec->shape[i]);
+                    restored++;
+                } else {
+                    alreadyOk++;
+                }
+            }
+            static int s_restN = 0;
+            s_restN++;
+            if (s_restN <= 4 || (s_restN % 300) == 0) {
+                logf(LOG_LEVEL_INFO,
+                     "[WwRegistry] {\"ev\":\"lwood_shapepkt_restore\",\"call\":%d,"
+                     "\"restored\":%d,\"already\":%d,\"reads\":\"mode14; restored=0 every call "
+                     "would mean the chain was never being clobbered and this mode proves nothing\"}",
+                     s_restN, restored, alreadyOk);
+            }
+        }
+    }
+
+    // ============================================================
+    // MODE 15 - THE TEN-HYPOTHESIS PROBE SET, ONE RUN
+    // ============================================================
+    // Six single-hypothesis modes cost six boots and produced two
+    // retractions. This set instruments every branch that could produce
+    // the cycle, so one run discriminates instead of one run eliminating.
+    //   H1  PHASE      - draws since the last observed frame turnover
+    //   H2  DOUBLE     - draws per instance per frame (>1 = entered twice)
+    //   H3  STATE      - MatPacket isLocked / isChanged at entry time
+    //   H4  SLOT       - texture identity feeding entryMatSort's hash
+    //   H5  SAME       - isSame() against instance 0 (the merge precondition)
+    //   H6  STALE      - ShapePacket->getNextPacket() BEFORE the submit
+    //   H7  BUFFER     - which draw buffer (opa vs xlu) the material sorts to
+    //   H8  MTX        - anm matrix present (entryIn's early paths)
+    //   H9  CONTROL    - the SURVIVING room model measured with the SAME fields
+    //   H10 ENTRYNUM   - J3DDrawBuffer::entryNum growth per frame
+    // H9 is the point: the room model survives every frame on the same
+    // backend, so any field where lwood and room AGREE cannot be the cause.
+    // ============================================================
+    if (mode == 15) {
+        static int s_p15 = 0;
+        static void* s_firstModel = nullptr;
+        static J3DMatPacket* s_firstMat = nullptr;
+        static int s_lastEntryNum = 0;
+        s_p15++;
+        J3DModelData* md15 = m->model->getModelData();
+        const u16 nm15 = (md15 != nullptr) ? md15->getMaterialNum() : 0;
+        if (s_firstModel == nullptr) {
+            s_firstModel = (void*)m->model;
+            s_firstMat = (nm15 > 0) ? m->model->getMatPacket(0) : nullptr;
+        }
+        const int entryNow = J3DDrawBuffer::entryNum;
+        // ------------------------------------------------------------
+        // H1 (PHASE) and H2 (DOUBLE ENTRY) - REWRITTEN. The first version
+        // shipped H1 not at all and H2 as `same_model_as_first`, which is
+        // an IDENTITY field, not an entry counter: it could never have
+        // shown a model entered twice in one frame. A probe leg that
+        // cannot produce the reading it is named for is a placebo, and
+        // eliminating on it would retire a hypothesis nobody tested.
+        //
+        // The frame boundary is `g_Counter.mCounter0` - the receiver's own
+        // sim tick, already used by this file's painter gate. NOT
+        // J3DDrawBuffer::entryNum: that is only ever ++'d (J3DJoint.cpp:184)
+        // and never reset, so it is monotonic and cannot mark a frame.
+        // ------------------------------------------------------------
+        const unsigned int tick15 = g_Counter.mCounter0;
+        static unsigned int s_tickPrev = 0xFFFFFFFFu;
+        static int s_drawsThisTick = 0;
+        static void* s_seenThisTick[8] = {nullptr};
+        static int s_seenN = 0;
+        static int s_maxPerTick = 0;
+        if (tick15 != s_tickPrev) {
+            s_tickPrev = tick15;
+            s_drawsThisTick = 0;
+            s_seenN = 0;
+        }
+        s_drawsThisTick++;
+        int dupThisTick = 0;
+        for (int k = 0; k < s_seenN; k++) {
+            if (s_seenThisTick[k] == (void*)m->model) { dupThisTick++; }
+        }
+        if (s_seenN < 8) { s_seenThisTick[s_seenN++] = (void*)m->model; }
+        if (s_drawsThisTick > s_maxPerTick) { s_maxPerTick = s_drawsThisTick; }
+        for (u16 i = 0; i < nm15 && i < 2; i++) {
+            J3DMatPacket* mp = m->model->getMatPacket(i);
+            if (mp == nullptr) { continue; }
+            J3DShapePacket* sp = mp->getShapePacket();
+            J3DMaterial* mat = mp->getMaterial();
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_h15\",\"p\":%d,\"model\":\"%p\",\"mat\":%u,"
+                 "\"h1_tick\":%u,\"h1_draws_this_tick\":%d,\"h1_max_per_tick\":%d,"
+                 "\"h2_dup_entries_this_tick\":%d,\"h3_locked\":%d,\"h3_changed\":%d,"
+                 "\"h4_texno\":%u,\"h5_same_as_first\":%d,\"h6_stale_next\":\"%p\","
+                 "\"h7_opa_texedge\":%d,\"h8_has_anm\":%d,\"h10_entrynum\":%d,"
+                 "\"h10_delta\":%d,\"reads\":\"mode15 H1-H10; compare EVERY field against the "
+                 "lwood_h15_room control - a field where they AGREE cannot be the cause\"}",
+                 s_p15, (void*)m->model, (unsigned)i,
+                 tick15, s_drawsThisTick, s_maxPerTick, dupThisTick,
+                 mp->isLocked() ? 1 : 0,
+                 mp->isChanged() ? 1 : 0,
+                 (mat != nullptr) ? (unsigned)mat->getTexNo(0) : 0xFFFFu,
+                 (s_firstMat != nullptr && mp != s_firstMat) ? (s_firstMat->isSame(mp) ? 1 : 0) : -1,
+                 (sp != nullptr) ? (void*)sp->getNextPacket() : nullptr,
+                 (mat != nullptr) ? (mat->isDrawModeOpaTexEdge() ? 1 : 0) : -1,
+                 // H8 guarded: getAnmMtx() dereferences mMtxBuffer with no null
+                 // check of its own. A probe that faults is worse than a probe
+                 // missing a field - and this one would have faulted inside the
+                 // very draw it was built to observe.
+                 (m->model->getMtxBuffer() != nullptr &&
+                  m->model->getAnmMtx(0) != nullptr) ? 1 : 0,
+                 entryNow, entryNow - s_lastEntryNum);
+        }
+        s_lastEntryNum = entryNow;
+    }
+
+    // ============================================================
+    // MODE 16 - THE FIX CANDIDATE. Clear the packet's OWN stale `next`.
+    // ============================================================
+    // This targets the ONE thing that was actually measured, and nothing
+    // it was inferred to mean:
+    //   * `h6_stale_next` is NON-NULL on 75/75 post-first-draw samples and
+    //     NULL on all 8 first-draw samples - an in-flight transition.
+    //   * Followed by identity, those links close: 8 of 8 chains form two
+    //     per-material rings (0->2->1->0, model[3] dangling in), 6 of 6
+    //     target packets are themselves victims.
+    //   * A walker on a circular packet list never returns, which is what
+    //     drives `fifo::write_data: buffer size overflow` at 4 GB.
+    //
+    // WHY THIS IS NOT MODE 14 AGAIN. Mode 14 restored the MatPacket's HEAD
+    // (`setShapePacket`) and measured `restored:0, already:2` - a proven
+    // no-op, because `J3DJoint::entryIn` already sets the head every frame.
+    // It never touched the SHAPE PACKET'S OWN `next`, which is the field
+    // the census actually finds non-null. Different field, different site.
+    //
+    // WHY IT IS THE RECEIVER'S OWN OPERATION, not an invention: this is
+    // exactly what `J3DDrawBuffer::entryMatSort` does on the packet it is
+    // entering - `pMatPacket->getShapePacket()->drawClear()` - applied at
+    // the point where THIS plugin submits, because lwood's instances reach
+    // the buffer through a path where that clear lands on a packet that a
+    // previous merge has already re-pointed.
+    //
+    // WHAT IT DOES NOT CLAIM: a cause. The user's standard is a CONFIRMED
+    // DRAW ON A NON-CRASHED OUTSET, and this is a candidate until that
+    // exists. It reports whether it changed anything, so a PASS cannot be
+    // read as "the fix worked" when the field was already NULL.
+    // ============================================================
+    if (mode == 16) {
+        J3DModelData* md16 = m->model->getModelData();
+        const u16 nm16 = (md16 != nullptr) ? md16->getMaterialNum() : 0;
+        int cleared = 0, alreadyNull = 0;
+        for (u16 i = 0; i < nm16 && i < 4; i++) {
+            J3DMatPacket* mp = m->model->getMatPacket(i);
+            if (mp == nullptr) { continue; }
+            J3DShapePacket* sp = mp->getShapePacket();
+            if (sp == nullptr) { continue; }
+            if (sp->getNextPacket() != nullptr) {
+                sp->drawClear();   // the receiver's own call, same as entryMatSort
+                cleared++;
+            } else {
+                alreadyNull++;
+            }
+        }
+        static int s_fixN = 0;
+        s_fixN++;
+        if (s_fixN <= 4 || (s_fixN % 300) == 0) {
+            logf(LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_fix_clear_next\",\"call\":%d,\"cleared\":%d,"
+                 "\"already_null\":%d,\"reads\":\"mode16 FIX CANDIDATE. cleared>0 means the "
+                 "stale link this run's census measures was actually broken here; cleared=0 on "
+                 "every call means the field was already NULL and a PASS says NOTHING about "
+                 "the fix - the same no-op trap mode 14 fell into\"}",
+                 s_fixN, cleared, alreadyNull);
+        }
+    }
+
+    // WW_LWOOD_CENSUS=1 rides ANY mode: the census found the merge, so it must
+    // travel to the mode that tests the FIX, not stay welded to mode 13.
+    static int s_censusEnv = -1;
+    if (s_censusEnv < 0) {
+        const char* ce = std::getenv("WW_LWOOD_CENSUS");
+        s_censusEnv = (ce != nullptr && ce[0] == '1') ? 1 : 0;
+    }
+    if (mode == 13 || s_censusEnv == 1) {
+        static int s_censusN = 0;
+        s_censusN++;
+        J3DModelData* md = m->model->getModelData();
+        const u16 nmat = (md != nullptr) ? md->getMaterialNum() : 0;
+        for (u16 i = 0; i < nmat && i < 4; i++) {
+            J3DMatPacket* mp = m->model->getMatPacket(i);
+            if (mp == nullptr) {
+                continue;
+            }
+            // Walk the packet chain, bounded, and report a repeat as a CYCLE.
+            const J3DPacket* seen[24];
+            int len = 0;
+            bool cycle = false;
+            for (const J3DPacket* q = mp->getShapePacket() != nullptr
+                                         ? (const J3DPacket*)mp->getShapePacket()
+                                         : nullptr;
+                 q != nullptr && len < 24; q = q->getNextPacket()) {
+                for (int k = 0; k < len; k++) {
+                    if (seen[k] == q) { cycle = true; break; }
+                }
+                if (cycle) { break; }
+                seen[len++] = q;
+            }
+            logf(cycle ? LOG_LEVEL_WARN : LOG_LEVEL_INFO,
+                 "[WwRegistry] {\"ev\":\"lwood_pkt_census\",\"draw\":%d,\"model\":\"%p\","
+                 "\"mat\":%u,\"matpkt\":\"%p\",\"shapepkt\":\"%p\",\"chain\":%d,"
+                 "\"cycle\":%d,\"dl_size\":%u,\"reads\":\"mode13; chain=24 means it hit the "
+                 "walk cap, not that the list ends there; cycle=1 is the kill\"}",
+                 s_censusN, (void*)m->model, (unsigned)i, (void*)mp,
+                 (void*)mp->getShapePacket(), len, cycle ? 1 : 0,
+                 (unsigned)(mp->getDisplayListObj() != nullptr ? mp->getDisplayListSize() : 0u));
+        }
+    }
+
+    // Mode 12 routes through the RECEIVER's own submitter (see s_fnModelEntryDL).
+    // Falls back loudly rather than silently drawing via the wrong function: a
+    // mode that quietly ran the arm it was meant to replace would read as a
+    // result for the path it never took.
+    bool entryPath = false;
+    if (doSubmit) {
+        if (mode == 12) {
+            if (s_fnModelEntryDL != nullptr) {
+                s_fnModelEntryDL(m->model);
+                entryPath = true;
+            } else {
+                static int s_noEntry = 0;
+                if (s_noEntry++ == 0) {
+                    logf(LOG_LEVEL_WARN,
+                         "[WwRegistry] {\"ev\":\"lwood_entrydl_unresolved\",\"reads\":\"mode12 "
+                         "asked for mDoExt_modelEntryDL and the symbol did not resolve - THIS RUN "
+                         "SAYS NOTHING ABOUT THE RECEIVER PATH\"}");
+                }
+            }
+        } else if (s_fnModelUpdateDL != nullptr) {
+            s_fnModelUpdateDL(m->model);
+        }
         if (mode == 5) {
             s_submitBudget--;
         }
@@ -2852,8 +3446,11 @@ int WwLwood_draw(void* self) {
     if (s_drawN <= 3 || (s_drawN % 300) == 0) {
         logf(LOG_LEVEL_INFO,
              "[WwRegistry] {\"ev\":\"lwood_draw\",\"n\":%d,\"mode\":%d,"
-             "\"tev\":%d,\"lists\":%d,\"submit\":%d,\"reads\":\"submit alive\"}",
-             s_drawN, mode, doTev ? 1 : 0, doLists ? 1 : 0, doSubmit ? 1 : 0);
+             "\"tev\":%d,\"lists\":%d,\"submit\":%d,\"submit_fn\":\"%s\","
+             "\"reads\":\"submit alive; submit_fn names WHICH receiver function ran - "
+             "entry = daBg's own path (frame-interp aware), update = the plugin's\"}",
+             s_drawN, mode, doTev ? 1 : 0, doLists ? 1 : 0, doSubmit ? 1 : 0,
+             entryPath ? "entry" : (doSubmit ? "update" : "none"));
     }
     return 1;
 }
@@ -2959,6 +3556,10 @@ void wwInvalidateParsedModelsAll(const char* why) {
     }
     s_parsedModelCount = 0;
     s_worldizedN = 0;
+    // Animations share the arcs models live in, so they share the release
+    // seam. Evicting one table and not the other would leave parsed anim
+    // objects pointing into a buffer the model table just declared dead.
+    wwResetParsedAnims();
 }
 
 // ========================================================================
@@ -3012,7 +3613,18 @@ static void wwSetToonTex(J3DModelData* pModel) {
             pTev3->a = pTevBlock->getTevStageNum();
         }
     }
-    if (isBDL && s_fnModelTexturePatch != nullptr) {
+    // Mode 7 / WW_LWOOD_SKIP_PATCH=1: tev3.a only — isolate SharedDL GD patch.
+    static int s_skipPatch = -1;
+    if (s_skipPatch < 0) {
+        const char* skip = std::getenv("WW_LWOOD_SKIP_PATCH");
+        s_skipPatch = (skip != nullptr && skip[0] == '1') ? 1 : 0;
+        if (lwoodDrawMode() == 7) {
+            s_skipPatch = 1;
+        }
+    }
+    const int didPatch =
+        (isBDL && s_skipPatch == 0 && s_fnModelTexturePatch != nullptr) ? 1 : 0;
+    if (didPatch) {
         s_fnModelTexturePatch(pModel);
     }
     static int s_toonN = 0;
@@ -3020,24 +3632,162 @@ static void wwSetToonTex(J3DModelData* pModel) {
         s_toonN++;
         logf(LOG_LEVEL_INFO,
              "[WwRegistry] {\"ev\":\"set_toon_tex\",\"bdl\":%d,\"za_names\":%d,"
-             "\"patch_fn\":%d,\"mats\":%u,"
-             "\"reads\":\"WW setToonTex via mDoExt_modelTexturePatch; no ZA rebind\"}",
-             isBDL, zaSeen, s_fnModelTexturePatch != nullptr ? 1 : 0,
+             "\"patch_fn\":%d,\"patched\":%d,\"mats\":%u,"
+             "\"reads\":\"WW setToonTex; ZA skipped; patch=mDoExt_modelTexturePatch\"}",
+             isBDL, zaSeen, s_fnModelTexturePatch != nullptr ? 1 : 0, didPatch,
              (unsigned)pModel->getMaterialNum());
     }
 }
 
 // After loadBinaryDisplayList: WW setToonTex; TP-style finish only if no baked DL.
-static void wwAfterBdlLoad(void** pParsed, const char* tag) {
+// Returns 1 if wwFinishModelData ran.
+// WW_BDL_CONSUME=finish gates suspect #3: always finish, no setToonTex.
+static int wwAfterBdlLoad(void** pParsed, const char* tag) {
     if (pParsed == nullptr || *pParsed == nullptr) {
-        return;
+        return 0;
+    }
+    const int gate = wwBdlConsumeFinishGate();
+    if (gate == 2) {
+        // finish_toon: the finish consume that cured stretch, PLUS the
+        // donor's own setToonTex. Order matches the donor arm below -
+        // toon first, then the finish - so the only difference from
+        // `finish` is the presence of the toon texture.
+        wwSetToonTex(static_cast<J3DModelData*>(*pParsed));
+        wwFinishModelData(pParsed, tag);
+        return 1;
+    }
+    if (gate) {
+        wwFinishModelData(pParsed, tag);
+        return 1;
     }
     J3DModelData* md = static_cast<J3DModelData*>(*pParsed);
     wwSetToonTex(md);
     J3DMaterial* m0 = (md->getMaterialNum() > 0) ? md->getMaterialNodePointer(0) : nullptr;
-    if (m0 == nullptr || m0->getSharedDisplayListObj() == nullptr) {
+    J3DDisplayListObj* sdl =
+        (m0 != nullptr) ? m0->getSharedDisplayListObj() : nullptr;
+    if (m0 == nullptr || sdl == nullptr) {
         wwFinishModelData(pParsed, tag);
+        return 1;
     }
+    return 0;
+}
+
+// ============================================================================
+// wwParseAnimOnce - THE ANIMATION ARM OF THE getObjectRes CHOKE
+// ============================================================================
+// The receiver replaces raw bytes with a PARSED object at arc-load for
+// animations exactly as it does for geometry (d_resorce.cpp:506-510). The
+// plugin served models through wwParseModelOnce and handed animations back
+// RAW, so a consumer casting to J3DAnmTevRegKey* was casting file bytes.
+//
+// DISPATCH IS ON THE FILE MAGIC, not on the arc's node type: at this choke we
+// hold (arc, index, raw) and not the node table, and the magic is authoritative
+// anyway - same reasoning as the model arm's 'J3D2'/'bdl4' test.
+//
+// SEVEN TYPES, NOT SIX: the receiver's else-if also routes 'BXA '.
+//
+// BCK IS DELIBERATELY NOT HANDLED HERE, AND SAYS SO OUT LOUD. Its path is not
+// a bare load(): d_resorce.cpp:485-505 rebases a chunk offset at +0x1C and
+// constructs mDoExt_transAnmBas, whose constructor DOES NOT RESOLVE in the
+// stock exe (measured: zero hits for ??0mDoExt_transAnmBas@@). Returning raw
+// with a WARN is the honest failure - a silent pass-through is what created
+// this defect class in the first place.
+//
+// Memo discipline is the model table's, for the same reasons written there:
+// three-field key (arc, index, raw), and eviction at both release seams,
+// because an address is not a durable key and a parsed object over a freed
+// arc is dead the moment the arc goes.
+// ============================================================================
+struct WwParsedAnim {
+    const char* arc;
+    int         index;
+    void*       raw;
+    void*       parsed;
+};
+const int kMaxParsedAnims = 64;
+WwParsedAnim s_parsedAnims[kMaxParsedAnims] = {};
+int s_parsedAnimCount = 0;
+
+void wwInvalidateParsedAnims(const char* arc) {
+    if (arc == nullptr) { return; }
+    int w = 0, dropped = 0;
+    for (int i = 0; i < s_parsedAnimCount; i++) {
+        const bool same = (s_parsedAnims[i].arc == arc) ||
+                          (s_parsedAnims[i].arc != nullptr &&
+                           std::strcmp(s_parsedAnims[i].arc, arc) == 0);
+        if (same) { dropped++; continue; }
+        s_parsedAnims[w++] = s_parsedAnims[i];
+    }
+    s_parsedAnimCount = w;
+    if (dropped > 0) {
+        logf(LOG_LEVEL_INFO,
+             "[WwRegistry] {\"ev\":\"anim_parse_evict\",\"arc\":\"%s\",\"dropped\":%d,"
+             "\"left\":%d,\"reads\":\"same law as the model table - a parsed anim over a "
+             "released arc is dead the moment the arc is freed\"}",
+             arc, dropped, s_parsedAnimCount);
+    }
+}
+
+void wwResetParsedAnims() { s_parsedAnimCount = 0; }
+
+void* wwParseAnimOnce(void* raw, const char* arc, int index) {
+    if (raw == nullptr) { return nullptr; }
+    for (int i = 0; i < s_parsedAnimCount; i++) {
+        if (s_parsedAnims[i].raw == raw &&
+            s_parsedAnims[i].index == index &&
+            s_parsedAnims[i].arc != nullptr && arc != nullptr &&
+            std::strcmp(s_parsedAnims[i].arc, arc) == 0) {
+            return s_parsedAnims[i].parsed;
+        }
+    }
+    // 'J3D1' - not a raw J3D animation image => already parsed, pass through.
+    if (*static_cast<const unsigned int*>(raw) != 0x3144334Au) { return raw; }
+    const unsigned int sub = *reinterpret_cast<const unsigned int*>(
+        static_cast<const unsigned char*>(raw) + 4);
+    // 'btk1' 'brk1' 'btp1' 'bpk1' 'blk1' 'bva1' 'bxa1' - the seven the
+    // receiver routes to J3DAnmLoaderDataBase::load.
+    const bool loadFamily =
+        (sub == 0x316B7462u || sub == 0x316B7262u || sub == 0x31707462u ||
+         sub == 0x316B7062u || sub == 0x316B6C62u || sub == 0x31617662u ||
+         sub == 0x31617862u);
+    if (sub == 0x316B6362u) {   // 'bck1' - the unreachable path, named not hidden
+        static int s_bckWarn = 0;
+        if (s_bckWarn++ == 0) {
+            logf(LOG_LEVEL_WARN,
+                 "[WwRegistry] {\"ev\":\"anim_parse_bck_unsupported\",\"arc\":\"%s\","
+                 "\"index\":%d,\"reads\":\"BCK needs the chunk rebase + mDoExt_transAnmBas "
+                 "(d_resorce.cpp:485-505) and that constructor does not resolve by name in the "
+                 "stock exe - returning RAW and saying so, because a silent pass-through is "
+                 "exactly the defect this arm exists to fix\"}",
+                 arc != nullptr ? arc : "?", index);
+        }
+        return raw;
+    }
+    if (!loadFamily || s_fnJ3DAnmLoad == nullptr) {
+        static int s_unkWarn = 0;
+        if (s_unkWarn++ == 0) {
+            logf(LOG_LEVEL_WARN,
+                 "[WwRegistry] {\"ev\":\"anim_parse_skip\",\"arc\":\"%s\",\"sub\":%u,"
+                 "\"loader\":%d,\"reads\":\"J3D1 image the receiver does not route to load(), "
+                 "or the loader symbol never resolved - raw returned unchanged\"}",
+                 arc != nullptr ? arc : "?", sub, s_fnJ3DAnmLoad != nullptr ? 1 : 0);
+        }
+        return raw;
+    }
+    void* parsed = s_fnJ3DAnmLoad(raw, 0);   // J3DLOADER_UNK_FLAG0
+    if (parsed != nullptr && s_parsedAnimCount < kMaxParsedAnims) {
+        s_parsedAnims[s_parsedAnimCount].arc    = arc;
+        s_parsedAnims[s_parsedAnimCount].index  = index;
+        s_parsedAnims[s_parsedAnimCount].raw    = raw;
+        s_parsedAnims[s_parsedAnimCount].parsed = parsed;
+        s_parsedAnimCount++;
+    }
+    logf(parsed != nullptr ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+         "[WwRegistry] {\"ev\":\"anim_parse\",\"arc\":\"%s\",\"index\":%d,\"sub\":%u,"
+         "\"ok\":%d,\"cached\":%d,\"reads\":\"receiver's own J3DAnmLoaderDataBase::load, "
+         "flag J3DLOADER_UNK_FLAG0 passed explicitly (no default arg through a resolved symbol)\"}",
+         arc != nullptr ? arc : "?", index, sub, parsed != nullptr ? 1 : 0, s_parsedAnimCount);
+    return parsed;
 }
 
 void* wwParseModelOnce(void* raw, const char* arc, int index) {
@@ -3058,10 +3808,9 @@ void* wwParseModelOnce(void* raw, const char* arc, int index) {
     void* parsed = nullptr;
     int finishRan = 0;
     if (sub == 0x346C6462u && s_fnJ3DLoadBDL != nullptr) {          // 'bdl4'
-        parsed = s_fnJ3DLoadBDL(raw, kWwBdlLoadFlags);
+        parsed = s_fnJ3DLoadBDL(raw, wwBdlLoadFlags());
         if (parsed != nullptr) {
-            wwAfterBdlLoad(&parsed, arc);
-            finishRan = 1;  // logged as "after path ran"; may have skipped finish
+            finishRan = wwAfterBdlLoad(&parsed, arc);
         }
     } else if (sub == 0x33646D62u && s_fnJ3DLoadBMD != nullptr) {   // 'bmd3'
         parsed = s_fnJ3DLoadBMD(raw, 0x29020030);
@@ -3082,13 +3831,19 @@ void* wwParseModelOnce(void* raw, const char* arc, int index) {
     {
         J3DModelData* md = static_cast<J3DModelData*>(parsed);
         const int locked = (md != nullptr && md->isLocked()) ? 1 : 0;
+        J3DMaterial* m0 =
+            (md != nullptr && md->getMaterialNum() > 0) ? md->getMaterialNodePointer(0) : nullptr;
+        J3DDisplayListObj* sdl =
+            (m0 != nullptr) ? m0->getSharedDisplayListObj() : nullptr;
+        const unsigned int sdlSize = (sdl != nullptr) ? sdl->getDisplayListSize() : 0u;
         logf(parsed != nullptr ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
              "[WwRegistry] {\"ev\":\"model_parse_once\",\"arc\":\"%s\","
              "\"idx\":%d,\"sub\":\"0x%08X\",\"raw\":\"%p\",\"parsed\":\"%p\","
-             "\"n\":%d,\"flags\":\"0x%08X\",\"locked\":%d,\"finish\":%d,"
-             "\"reads\":\"WW BDL=0x2020+setToonTex; finish only if no baked DL\"}",
+             "\"n\":%d,\"flags\":\"0x%08X\",\"locked\":%d,\"finish_ran\":%d,"
+             "\"shared_dl\":%d,\"shared_dl_size\":%u,"
+             "\"reads\":\"WW_BDL_CONSUME=ww|finish; finish_ran under ww only if SharedDL null\"}",
              arc != nullptr ? arc : "?", index, sub, raw, parsed, s_parsedModelCount,
-             kWwBdlLoadFlags, locked, finishRan);
+             wwBdlLoadFlags(), locked, finishRan, sdl != nullptr ? 1 : 0, sdlSize);
     }
     return parsed;
 }
@@ -3529,7 +4284,7 @@ void on_resLoadResource(ModContext*, void* args, void* retval, void*) {
             if (s_fnJ3DLoadBMD != nullptr) { parsed = s_fnJ3DLoadBMD(p, 0x29020030); }
             wwFinishModelData(&parsed, "loadResource");
         } else if (sub == 0x62646C34u) {                       // 'bdl4'
-            if (s_fnJ3DLoadBDL != nullptr) { parsed = s_fnJ3DLoadBDL(p, kWwBdlLoadFlags); }
+            if (s_fnJ3DLoadBDL != nullptr) { parsed = s_fnJ3DLoadBDL(p, wwBdlLoadFlags()); }
             wwAfterBdlLoad(&parsed, "loadResource");
         } else {
             continue;   // J3D2 but not a model container — not ours.
@@ -4080,13 +4835,76 @@ void on_ndRqExecute(ModContext*, void* args, void* retval, void*) {
     }
 }
 
+// ============================================================
+// H11 AGGREGATE TOTALS (Integrator, 2026-08-21). The capped receipts above
+// answer WHICH processes died; they cannot answer HOW MANY. The purge
+// question ("were the 118 GRASS_e + 11 ITEM_e ever deleted?") needs totals,
+// and both hooks were already counting in function-local statics that died
+// unread. Promoted to file scope, emitted in the shutdown line. No behavior
+// change to the capped receipts.
+// ============================================================
+int s_bsDelPost = 0;    // fpcBs_Delete calls post-warp (grants + refusals)
+int s_bsDelRefused = 0; // of those, ret==0 refusals
+int s_mDelPost = 0;     // fpcM_Delete calls post-warp
+
+// ============================================================
+// PER-CLASS DELETE CENSUS - the uncapped answer the totals cannot give
+// ============================================================
+// `bs_del_post` says HOW MANY died; the capped receipts say WHICH TEN died
+// FIRST. Neither answers "did the purge reach GRASS_e", because the cap
+// closes before that class is created. Counting by `profname` costs one
+// table and no sampling: a class with count 0 was never deleted, and that
+// is a fact about the CLASS rather than about the window.
+// No enum values are hard-coded - the name comes from the process itself.
+// ============================================================
+const int kMaxDelClasses = 48;
+short s_delName[kMaxDelClasses] = {0};
+int   s_delCount[kMaxDelClasses] = {0};
+int   s_delClasses = 0;
+int   s_delOverflow = 0;
+
+// ORDERING, because the CAPPED receipts cannot supply it and I tried to use
+// them for exactly that. I attempted to test "the purge is a point-in-time
+// sweep, so actors created later survive" by treating the LAST `bs_delete`
+// receipt as the sweep's end - and the receipts stop at TEN by cap, not at
+// the end of deleting. The arithmetic came out inverted and the test was
+// vacuous. Third time the cap has bitten a reading tonight.
+// `s_delFirstAt`/`s_delLastAt` record the `bs_del_post` INDEX at which each
+// class was first and last deleted: ordering with no flood and no cap.
+int s_delFirstAt[kMaxDelClasses] = {0};
+int s_delLastAt[kMaxDelClasses] = {0};
+
+void wwNoteDeleteClass(void* procRaw) {
+    base_process_class* bp = static_cast<base_process_class*>(procRaw);
+    if (bp == nullptr) { s_delOverflow++; return; }
+    const short pn = bp->profname;
+    for (int i = 0; i < s_delClasses; i++) {
+        if (s_delName[i] == pn) {
+            s_delCount[i]++;
+            s_delLastAt[i] = s_bsDelPost;
+            return;
+        }
+    }
+    if (s_delClasses < kMaxDelClasses) {
+        s_delName[s_delClasses] = pn;
+        s_delCount[s_delClasses] = 1;
+        s_delFirstAt[s_delClasses] = s_bsDelPost;
+        s_delLastAt[s_delClasses] = s_bsDelPost;
+        s_delClasses++;
+    } else {
+        s_delOverflow++;   // table full - REPORTED, never silently dropped
+    }
+}
+
 void on_bsDelete(ModContext*, void* args, void* retval, void*) {
-    static int nPost = 0;
     if (!s_warpMoment) { return; }       // boot deletions are known-good noise
     const int rt = (retval != nullptr) ? *static_cast<int*>(retval) : -1;
     // Refusals always (they are the hang); grants first 10 (the grass wave).
     static int shownRefuse = 0, shownOk = 0;
-    nPost++;
+    s_bsDelPost++;
+    if (rt == 0) { s_bsDelRefused++; }
+    wwNoteDeleteClass(mods::arg<void*>(args, 0));
+    const int nPost = s_bsDelPost;
     if (rt == 0 ? (shownRefuse < 12) : (shownOk < 10)) {
         (rt == 0 ? shownRefuse : shownOk)++;
         logf(rt == 0 ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
@@ -4223,8 +5041,8 @@ void on_ndRqReRequest(ModContext*, void* args, void*, void*) {
 
 void on_mDelete(ModContext*, void* args, void* retval, void*) {
     if (!s_warpMoment) { return; }
-    static int n = 0;
-    n++;
+    s_mDelPost++;
+    const int n = s_mDelPost;
     const int rt = (retval != nullptr) ? *static_cast<int*>(retval) : -1;
     if (n <= 12) {
         logf(LOG_LEVEL_INFO,
@@ -4892,6 +5710,86 @@ HookAction on_modelEntryDL(ModContext*, void* args, void*, void*) {
             }
         }
     }
+    // ============================================================
+    // H9 - THE CONTROL LEG OF THE MODE-15 SET
+    // ============================================================
+    // The room model survives EVERY frame on this backend. Measuring it with
+    // the SAME fields as lwood is what makes the other nine hypotheses
+    // decidable: any field where the survivor and the victim AGREE cannot be
+    // the cause, however plausible it looks in isolation. Gated on the same
+    // env as the probe so a normal run pays nothing.
+    // ============================================================
+    {
+        static int s_h9env = -1;
+        if (s_h9env < 0) {
+            const char* he = std::getenv("WW_LWOOD_DRAW");
+            s_h9env = (he != nullptr && he[0] == '1' && he[1] == '5' && he[2] == '\0') ? 1 : 0;
+        }
+        if (s_h9env == 1 && model != nullptr) {
+            // ------------------------------------------------------------
+            // PER-MODEL SAMPLING, NOT FIRST-N-CALLS. The first version logged
+            // `s_h9n <= 6`, and there are more than six room models - so the
+            // control observed SIX MODELS EXACTLY ONCE EACH. A first
+            // observation is precisely where the VICTIMS also read a NULL
+            // `next`, so `0/6 survivors have a stale next` was what that
+            // control MUST produce whether or not survivors ever develop one.
+            // The survivor side of H6 was structurally uninformative and the
+            // discriminator rested on the victim side alone.
+            // Breadth-over-depth is the defect: a control that never sees a
+            // SECOND frame cannot contradict an IN-FLIGHT transition.
+            // ------------------------------------------------------------
+            static void* s_h9Models[16] = {nullptr};
+            static int s_h9Counts[16] = {0};
+            static int s_h9Known = 0;
+            int slot = -1;
+            for (int k = 0; k < s_h9Known; k++) {
+                if (s_h9Models[k] == model) { slot = k; break; }
+            }
+            if (slot < 0 && s_h9Known < 16) {
+                slot = s_h9Known++;
+                s_h9Models[slot] = model;
+                s_h9Counts[slot] = 0;
+            }
+            const int perModel = (slot >= 0) ? ++s_h9Counts[slot] : 0;
+            static int s_h9n = 0;
+            s_h9n++;
+            if (perModel <= 6 || (perModel % 300) == 0) {
+                J3DModel* rm = static_cast<J3DModel*>(model);
+                J3DModelData* rd = rm->getModelData();
+                if (rd != nullptr && rd->getMaterialNum() > 0) {
+                    J3DMatPacket* rmp = rm->getMatPacket(0);
+                    // h5 needs a reference on the CONTROL side too - the first
+                    // surviving MatPacket seen - or the field can only ever be -1.
+                    static J3DMatPacket* s_h9FirstMat = nullptr;
+                    if (s_h9FirstMat == nullptr) { s_h9FirstMat = rmp; }
+                    J3DShapePacket* rsp = (rmp != nullptr) ? rmp->getShapePacket() : nullptr;
+                    J3DMaterial* rmat = (rmp != nullptr) ? rmp->getMaterial() : nullptr;
+                    logf(LOG_LEVEL_INFO,
+                         "[WwRegistry] {\"ev\":\"lwood_h15_room\",\"n\":%d,\"obs_of_this_model\":%d,"
+                         "\"model\":\"%p\","
+                         "\"h3_locked\":%d,\"h3_changed\":%d,\"h4_texno\":%u,"
+                         "\"h5_same_as_first\":%d,\"h6_stale_next\":\"%p\","
+                         "\"h7_opa_texedge\":%d,\"h8_has_anm\":%d,\"h10_entrynum\":%d,"
+                         "\"reads\":\"H9 CONTROL - the model that SURVIVES, same fields as "
+                         "lwood_h15; agreement on a field ELIMINATES that hypothesis. h5/h8 "
+                         "ADDED 2026-08-21: the first control leg omitted them, so those two "
+                         "hypotheses had no survivor side and were structurally un-eliminable "
+                         "- a control narrower than the victim leg silently shrinks the test\"}",
+                         s_h9n, perModel, (void*)rm,
+                         (rmp != nullptr && rmp->isLocked()) ? 1 : 0,
+                         (rmp != nullptr && rmp->isChanged()) ? 1 : 0,
+                         (rmat != nullptr) ? (unsigned)rmat->getTexNo(0) : 0xFFFFu,
+                         (s_h9FirstMat != nullptr && rmp != nullptr && rmp != s_h9FirstMat)
+                             ? (s_h9FirstMat->isSame(rmp) ? 1 : 0) : -1,
+                         (rsp != nullptr) ? (void*)rsp->getNextPacket() : nullptr,
+                         (rmat != nullptr) ? (rmat->isDrawModeOpaTexEdge() ? 1 : 0) : -1,
+                         (rm->getMtxBuffer() != nullptr && rm->getAnmMtx(0) != nullptr) ? 1 : 0,
+                         J3DDrawBuffer::entryNum);
+                }
+            }
+        }
+    }
+
     s_drawEntries++;
     // The head of a live J3DModel is a heap vtable; `0x3244334A` there would
     // mean a RAW 'J3D2' buffer reached the draw list, which is a different
@@ -5144,7 +6042,7 @@ void on_getRes(ModContext*, void* args, void* retval, void*) {
             }
             if (out == nullptr) {
                 if (sub == 0x346C6462u && s_fnJ3DLoadBDL != nullptr) {        // 'bdl4'
-                    out = s_fnJ3DLoadBDL(got, kWwBdlLoadFlags);
+                    out = s_fnJ3DLoadBDL(got, wwBdlLoadFlags());
                     wwAfterBdlLoad(&out, mods::arg<const char*>(args, 1));
                 } else if (sub == 0x33646D62u && s_fnJ3DLoadBMD != nullptr) { // 'bmd3'
                     out = s_fnJ3DLoadBMD(got, 0x29020030);
@@ -5163,6 +6061,34 @@ void on_getRes(ModContext*, void* args, void* retval, void*) {
             }
             if (out != nullptr && retval != nullptr) {
                 *static_cast<void**>(retval) = out;   // hand back the PARSED model
+            }
+        }
+        // ================================================================
+        // THE ANIMATION ARM, AT THE SAME CHOKE AND FOR THE SAME REASON
+        // ================================================================
+        // 'J3D1' is the animation magic; the block above only ever tested
+        // 'J3D2', so every BTK/BRK/BTP/BPK/BLK/BVA/BXA came back RAW and the
+        // consumer cast file bytes to a parsed type. The receiver parses
+        // these at arc-load exactly as it parses geometry
+        // (d_resorce.cpp:506-510) - so this is the same defect class as the
+        // model arm, one file family over.
+        //
+        // Deferred on a fork host for the identical DN-3 reason as above: the
+        // host's own layer parses at consume time and a second parser over
+        // one buffer is the double-parse this file already forbids.
+        // ================================================================
+        if (head == 0x3144334Au && s_hostIsFork) { noteDefer("consume_parse_anim"); }
+        if (head == 0x3144334Au && !s_hostIsFork) {
+            // INDEX -1 ON PURPOSE: this is the BY-NAME overload
+            // (arg0 = arc, arg1 = resource NAME, no index exists here). I
+            // first wrote `mods::arg<int>(args, 1)` and that reads the name
+            // POINTER as an integer - a garbage key that would have made
+            // every lookup a miss and re-parsed the same buffer forever,
+            // which is the exact double-parse DN-3 forbids. By-name callers
+            // key on (arc, -1, raw); by-index callers keep their real index.
+            void* anm = wwParseAnimOnce(got, mods::arg<const char*>(args, 0), -1);
+            if (anm != nullptr && anm != got && retval != nullptr) {
+                *static_cast<void**>(retval) = anm;   // hand back the PARSED anim
             }
         }
         return;  // resolved — not our business
@@ -7308,6 +8234,10 @@ ModResult wwRegistry_initialize() {
                  reinterpret_cast<void**>(&s_fnJ3DModelCreateC)},
                 {"?mDoExt_modelUpdateDL@@YAXPEAVJ3DModel@@@Z",
                  reinterpret_cast<void**>(&s_fnModelUpdateDL)},
+                {"?load@J3DAnmLoaderDataBase@@SAPEAVJ3DAnmBase@@PEBXW4J3DAnmLoaderDataBaseFlag@@@Z",
+                 reinterpret_cast<void**>(&s_fnJ3DAnmLoad)},
+                {"?mDoExt_modelEntryDL@@YAXPEAVJ3DModel@@@Z",
+                 reinterpret_cast<void**>(&s_fnModelEntryDL)},
                 {"?mDoExt_modelTexturePatch@@YAXPEAVJ3DModelData@@@Z",
                  reinterpret_cast<void**>(&s_fnModelTexturePatch)},
                 {"?fopAcM_setCullSizeFar@@YAXPEAVfopAc_ac_c@@M@Z",
@@ -7862,8 +8792,26 @@ ModResult wwRegistry_shutdown() {
     // call. Anything above 1 is donor placement data reaching our row, and
     // that remains true whether the stage was entered by a warp-menu
     // selection, Fado's door, or anything else.
+    // ------------------------------------------------------------
+    // PER-CLASS DELETE CENSUS, emitted BEFORE the shutdown line so a
+    // truncated tail cannot eat it. One row per class; a class that never
+    // appears was never deleted, which is the whole question for GRASS_e.
+    // ------------------------------------------------------------
+    for (int i = 0; i < s_delClasses; i++) {
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"del_by_class\",\"profname\":%d,\"deleted\":%d,"
+            "\"first_at\":%d,\"last_at\":%d,"
+            "\"classes\":%d,\"overflow\":%d,\"reads\":\"UNCAPPED count of post-warp "
+            "fpcBs_Delete calls for this profname. Cross-ref the number against the "
+            "loader's own 'profname=fpcNm_X (N)' lines. A class ABSENT from this list "
+            "was NEVER deleted - unlike the capped bs_delete receipts, which only show "
+            "the first ten by TIME and close before late-created classes exist.\"}",
+            (int)s_delName[i], s_delCount[i], s_delFirstAt[i], s_delLastAt[i],
+            s_delClasses, s_delOverflow);
+    }
+
     logf(LOG_LEVEL_INFO,
-        "[WwRegistry] {\"ev\":\"shutdown\",\"pf_hits\":%d,\"dyl_hits\":%d,"
+        "[WwRegistry] {\"ev\":\"shutdown\",\"bs_del_post\":%d,\"bs_del_refused\":%d,\"m_del_post\":%d,\"pf_hits\":%d,\"dyl_hits\":%d,"
         "\"name_hits\":%d,\"name_hits_from_selftest\":1,"
         "\"startstage_now\":\"%s\",\"stage_changes\":%d,"
         "\"search_calls_total\":%d,"
@@ -7880,6 +8828,9 @@ ModResult wwRegistry_shutdown() {
         "stage_loader_calls>0 = stage data was PARSED. both 0 after a warp = "
         "the load phase never ran and the fault is scene phase order, not the "
         "name - which is already proven correct\"}",
+        // H11 aggregate totals FIRST - the format string leads with them,
+        // and the order comment below is there because order was wrong once.
+        s_bsDelPost, s_bsDelRefused, s_mDelPost,
         s_pfHits, s_dylHits, s_nameHits,
         // FRESH READ, not the cache. The previous receipt printed
         // `s_lastSeenStage`, which is only updated when the sampler runs — so
@@ -7898,5 +8849,25 @@ ModResult wwRegistry_shutdown() {
         // as a matching type.
         s_stageReads, s_searchCallsTotal, s_setStageResCalls, s_loaderCalls,
         s_multWw, s_multTp, s_glbCalls, s_msgGroupSkipped);
+
+    // ------------------------------------------------------------------
+    // PER-CLASS DELETE TABLE (Integrator, 2026-08-21). History/Bridge
+    // authored the counting; the table was filled and NEVER PRINTED - the
+    // same counters-die-unread defect as the totals this afternoon, one
+    // iteration later. One line, profname:count pairs; profname is the
+    // numeric enum value - census_join maps it to a name downstream.
+    // ------------------------------------------------------------------
+    {
+        char dcbuf[1024]; int off = 0;
+        for (int i = 0; i < s_delClasses && off < (int)sizeof(dcbuf) - 24; i++) {
+            off += std::snprintf(dcbuf + off, sizeof(dcbuf) - off, "%s\"%d\":%d",
+                                 (i ? "," : ""), (int)s_delName[i], s_delCount[i]);
+        }
+        logf(LOG_LEVEL_INFO,
+            "[WwRegistry] {\"ev\":\"del_classes\",\"classes\":%d,\"overflow\":%d,"
+            "\"counts\":{%s},\"reads\":\"post-warp fpcBs_Delete by profname enum; a class "
+            "ABSENT here was NEVER deleted - that is a fact about the class, not a window\"}",
+            s_delClasses, s_delOverflow, dcbuf);
+    }
     return MOD_OK;
 }

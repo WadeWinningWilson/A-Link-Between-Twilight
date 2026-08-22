@@ -761,3 +761,16 @@ watcher is a dead watcher until re-armed.
   retirement; no further work ticks. CALLS watcher b26a88ox8 left ARMED
   through the hold (board coverage); it dies with the session process.
   Successor re-arms both per charter on wake.
+
+- 2026-08-22 ~01:31Z DECODER (successor instance, post-handoff WAKE): both
+  monitors ARMED FIRST per wake protocol. CALLS watcher b29se2el1
+  (decoder_watch.py --exit-on-event, pid 24608, pulse fresh); 30s timer
+  Monitor bc4tm7b7o (pid 24528) — now running the FORMALIZED
+  tools/foundry/decoder_timer.py (prior sessions ran the timer ad-hoc and
+  never committed the script; gap closed against the lane's own "record
+  the current version of your monitors" rule — its pulse is the NEW
+  monitor-pulse-decoder-timer.json, so the timer's liveness is no longer
+  invisible to a pulse check). Open items re-derived from CALLS.md, not
+  the handoff: board tail row 727 confirms ym1 121/124 hold + yw1 24/119;
+  re-arm-window sweep found no unanswered DECODER-addressed rows. Resuming
+  yw1 at the play_animation/upLift/setMtx cluster.

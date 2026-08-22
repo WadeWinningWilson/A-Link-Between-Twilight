@@ -79,6 +79,100 @@ the answer to any future instance who reads these entries as arbitrary
 severity. They are not strict because someone was cautious in the abstract.
 They are strict because the estate has already paid for the alternative.
 
+### 🏁 THE ERA THIS ACCOUNT OPENS — CLOSED 2026-08-21
+
+**USER: *"THIS PROGRESS IS FOUNDATIONAL."* Marked by the Librarian on the
+user's order, in this file rather than in a CALLS row, because CALLS is
+append-only and scrolls: the account above records how the mounted/bake era
+BEGAN, and this records the day it ENDED. Both bookends, one page.**
+
+**WHAT WAS ACHIEVED — PLUGIN-ONLY OUTSET ON VANILLA.** Stock `dusklight-main`
++ **one** `ww_donor_disc.dusk` + the user's own GZLE01 ISO: Outset sea, island
+geometry, grass, vrbox/cloud ring, waves/shore, kankyo/wind and the WW cam
+ports — **playable. Not the fork exe.** Landed by Engine on their return;
+Housing/Engine had been covering both roles.
+
+**THE TWO TERMS THAT MAKE IT "PLUGIN-ONLY" RATHER THAN "IT RUNS" — both
+RE-DERIVED BY THE LIBRARIAN IN THE STOCK TREE, not accepted from the row:**
+
+- **Game source genuinely stock.** `dusklight-main` @ `c880d46fb5`, branch
+  `main`, **0 ahead / 0 behind `origin/main`, ZERO edits under `src/`,
+  `include/`, `sdk/`.**
+- **Zero-bake intact — BUT NOT BY THE TEST FIRST PUBLISHED HERE.** The
+  original wording claimed the shipped `.dusk` carried **zero** occurrences of
+  `RARC`/`Yaz0`/`J3D2`/`bdl4`/`TIMG`/`dzb`. **That test was VACUOUS and the
+  Librarian published it.** `.dusk` is a **DEFLATE zip** (`50 4b 03 04`);
+  `mod.dll` ships 784,384 B compressed to 236,922 B, so a grep over the
+  container **cannot see any member's bytes and returns zero either way.**
+  Housing/Engine's positive control proved it: the same command finds **0**
+  hits for `WwRegistry`, `ww_donor_disc` and `dusk` — all certainly present.
+  **THE CORRECTED TEST, WHICH CAN ACTUALLY FAIL:** decompress, then scan. The
+  magics **are** there — **27 hits** (`RARC` 4, `Yaz0` 3, `J3D2` 5, `bdl4` 2,
+  `bmd3` 2, `INF1` 3, `dzb` 8) — and **every one is a `.text` immediate
+  compare or a `[WwRegistry]` log/error literal** (`"shorter than a RARC
+  header"`, `"why":"not RARC","got":"%.4s"`, `alwd.dzb` as a *filename
+  string*). **That is what an honest zero-bake plugin MUST carry: it parses
+  donor formats, so it names them.** Section sizes close it independently —
+  `.data` **2.5 KB**, `.rsrc` **1.5 KB**, `modmeta` **8 KB**, with 555 KB of
+  the 766 KB in `.text`: **there is nowhere for a donor arc to hide.**
+  **THE CLAIM HOLDS; THE ORIGINAL EVIDENCE DID NOT. Use payload-absence, never
+  magic-absence.**
+  *(The "6 KB discrepancy" this marker also once reported was a UNIT
+  MISMATCH the Librarian manufactured while trying to be scrupulous:
+  237,981 B = 232.4 KiB = 238.0 KB. One number, two correct readings,
+  zero disagreement. md5 `cc00092ef79ca5e6b5820adf67e2c75d`.)*
+
+**⚖️ THE QUALIFICATION, CARRIED INTO THE MARKER RATHER THAN A CLEAN HEADLINE
+— a marker that overstates is worse than none:**
+
+- **`extern/aurora` runs +2 LOCAL commits** over vanilla's pin
+  (`cf3ffc9886` → `e9ec4a7`, verified). So the product is **stock game source
+  + a PATCHED BACKEND + one `.dusk`.** **User ruling: accepted as-is**, with
+  enveloping the patch into the plugin as the eventual target — *"a patch will
+  work just as cleanly until we decide to move it."*
+- **"Playable" ships with TREES OFF** (`WW_LWOOD_DRAW` mode 1; Alwd
+  multi-submit kills Dawn at n≈3).
+- **✅ IT RAN ON THE STOCK BINARY — VERIFIED, NOT OBSERVED.** *(This bullet
+  read "NO VANILLA RUN LOG EXISTS ON THIS MACHINE" for a few hours on
+  2026-08-21. Housing/Engine produced the run.)*
+  `dusklight-20260821-143653.log`, re-derived here at source: build stamp
+  **`rev c880d46fb57ec…`** = the stock rev · the log **names its own
+  install**, `~/Documents/dusklight-main/build/.../ww_donor_disc.dusk`
+  (not inferred) · and the three fork markers **proven to fire elsewhere read
+  ZERO** — `[ExtWw]` **0** and `[ExtNpcMount]` **0** here against **4,068** and
+  **92** on the fork control. **An absence is only evidence if the run did the
+  work:** `shape_worldize` R44_00 room 44, `bdl_consume_gate mode=finish`,
+  11,700 `bg_draw`, clean shutdown, no fault. **A boot-and-die would have read
+  zero fork markers too.**
+- **⚖️ WHAT IS STILL OPEN — WHICH BINARY RAN IS SETTLED; WHAT THE FRAME
+  LOOKED LIKE IS NOT.** This registry's own aurora caution (`3eed7c2` converts
+  a fatal into a **silent non-draw**) means **no log certifies a real picture**
+  — a run can be clean, complete, fault-free, and still have drawn nothing.
+  **USER CONFIRMATION OF THE PICTURE IS OWED, and until it is given the word
+  "playable" at the top of this marker rests on the observed session, not on
+  any artifact.** *(This is the estate's standing rule about visual claims,
+  applied to its own milestone: never certify a picture from metrics.)*
+- **⚠️ THE MILESTONE ARTIFACT IS NOT REPRODUCIBLE FROM ANY COMMIT.**
+  The shipped `.dusk` was built from **uncommitted source**:
+  `WW_BDL_CONSUME`, `bdl_consume_gate`, `lwood_zero_shareddl`,
+  `lwood_hide_shapepackets`, `WW_LWOOD_SKIP_PATCH` are in the shipped
+  `mod.dll` and **absent from HEAD tree-wide**. These are **not probes** —
+  `WW_BDL_CONSUME` is the finish-consume credited with closing the stretch.
+  **Reverting the working tree to tidy it DELETES THE MILESTONE'S LOAD-BEARING
+  FIX.** Committing is the user's call and has not been taken.
+
+**WHY THIS IS AN ERA BOUNDARY AND NOT A STATUS UPDATE.** The account above
+describes a project that put WW content on screen by **mounting** it onto
+receiver procs and **baking** its lighting to match — the two practices this
+registry's most binding entries (DN-9, DN-10) exist to forbid. Everything since
+has been the systematic retirement of those shortcuts. **On 2026-08-21 the
+donor's own content ran on an unmodified receiver with no donor bytes shipped:
+the thing the shortcuts were substituting FOR.** `era: plugin-delivery` stops
+being an aspiration and becomes a description.
+
+**The laws did not merely survive the era that produced them — they outlasted
+it.**
+
 **Confirmed at source, not taken on faith:** the `swood` Ivan stood in for is a
 real donor actor whose family was **later ported natively** — `d_stage.cpp`
 carries `OBJNAME("swood"…)`, `swood3`, `swood5` under the §696 vegetation

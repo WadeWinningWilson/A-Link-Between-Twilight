@@ -1,0 +1,1 @@
+{"batch": 1, "actor": "AGGREGATE(6 actors, Otble harvest era)", "result": "aggregate", "passes": 1, "fails": 5, "cause": "per-actor causes not recorded at the time; roadmap E3 baseline", "ts": "2026-08-21T00:00:00Z", "seed": true}

@@ -54,6 +54,17 @@ finalDmg ≈ Atp × damageMultiplier × outfitReceived × regionDamage
 
 Then `setDamagePoint` truncates and **+1 if any leftover tenth**. Wolf adds 2× on the magnification path (outfit received does **not** apply in wolf). Life units: **4 pieces = 1 heart**.
 
+**Bug (fixed — source gate):** `regionDamage` used to apply inside `damageMagnification()` with no source tag. Now `getDamageMult()` is **1.0 unless a COVER site holds `dAlbwRegionMult_DamageScaleScope`** (fail-closed to vanilla).
+
+### Region Damage source coverage (locked 2026-08-21 — **gate shipped**)
+
+| Verdict | Sources |
+|---------|---------|
+| **COVER** | Enemy/boss CC hits; enemy/flower bombs; trap actors; **hazard polys** (lava/ice/fire/electric floors & walls); boss scripted chips (Morpheel hold); Stallord `setPlayerDamage`; PM fail chip (post-scale) |
+| **EXCLUDE** | Fall/land height (`setLandDamagePoint`); player bombs; **sand wall**; **freeze DoT**; **throw/spit HP**; scene-carry `getLastSceneDamage`; goat/goron shove; Kago mishap |
+
+**Throw HP:** Applied once at reaction start in vanilla. Locked **EXCLUDE** from RD — retail piece count after non-region magnifiers only.
+
 Reference Atps for planning tables:
 
 | Enemy | Atp | Notes |
@@ -117,8 +128,83 @@ Assume a field kill pays **20** rupees base (Enemy Death Rupees on).
 |------|--------|
 | Where | Postman Upgrades → `VISIBLE_MQ_HEART` / `dAlbwMQ_*` |
 | Cap today | **17** half-heart tiers; gauge stop at **20♥**; prices end at **9999** |
-| **Product (locked)** | After soft-cap price **9999**, keep exponential-ish prices; those later buys grant **¼♥** each. **Unlimited** hearts for now (diminishing returns later) |
-| **Wallet (locked)** | Raise **Colossal** cap **9999 → 50000** (`mRupee` is `u16`, max 65535 — 50000 fits). HUD needs 5-digit support |
+| **Product (locked)** | After soft-cap price **9999**, continue buys forever; grant **¼♥** each; price = **9999 + 333×n** (n = buys past soft-cap) |
+| **Hearts HUD (locked)** | Classic: hearts past 20 **overlay / stack on the 20th** slot. LoP Health Bar: **leave fixed trough + % fill** (may retune width later — not required for C) |
+| **Wallet (locked, C1)** | Colossal **9999 → 50000**. `mRupee` stays `u16` (no save layout change). **Must** ship 5-digit rupee HUD + widen `mRupeeNum` / `moveRupee` / `drawRupee` off `s16` with the cap |
+| **Wallet (future)** | **99999** deferred — needs storage &gt; `u16` and a migration plan first (see below). Do not naive-widen `mRupee` in place |
+
+#### Phase C1 — Rupee HUD: **insert path locked** (implement plan)
+
+**Product look**
+
+```
+[💎 jewel]  0 9 9 9 9     @ 9999   (leading place on when ≥10000, or always-pad — see step C1-HUD)
+[💎 jewel]  1 0 0 0 0     @ 10000
+[💎 jewel]  5 0 0 0 0     @ 50000
+```
+
+Insert = **one new digit pane beside** the vanilla four (same art/size). **Not** overlay. **Not** replace. Economy uses real `mRupee` (u16); HUD digits are display only.
+
+**Rejected**
+
+| Path | Why not |
+|------|---------|
+| Overlay on thousands | Messy double-glyph |
+| Free-draw primary counter | Doesn’t inherit LoP / cluster transforms |
+| BLO `r_n_5` edit | Heavier; not needed for C1 |
+| Cap-only to 50k | Breaks HUD + s16 tick/clamp |
+
+---
+
+##### C1 work order (single ship)
+
+| Step | Work | Files / hooks | Done when |
+|------|------|---------------|-----------|
+| **C1-1** | Widen tick/apply off `s16`: `mRupeeNum` → **`s32`**; `moveRupee` max/sum/clamp use **`s32`**; `drawRupee(s32)` | `d_meter2.h/.cpp`, `d_meter2_draw.h/.cpp` | 50k can tick and clamp without wrap |
+| **C1-2** | **Insert** 10000s digit: clone (+ shadow) from `r_n_4` / `_s`; `appendChild` on **same parent as `r_n_*`**; order **jewel → clone → vanilla row** | `initRupeeKey`, `drawRupee` | Pane follows LoP / `r_k_n` moves |
+| **C1-3** | 5-place math (balloon `setScoreNum` style); textures 0–9 only; clone = `/10000`, vanilla = remainder as today | `drawRupee` | `10000`/`50000` read correctly |
+| **C1-4** | **Clearance:** if jewel→clone gap tight, shift **entire** vanilla digit row **+1 advance** while 5th shown; restore under 10000 (default: **shift-on-show**, not permanent empty slot) | `drawRupee` | No overlap on gem or thousands |
+| **C1-5** | Same count **scale / alpha** as vanilla digits; `getRupeeDigitMetrics` leftmost includes clone when shown (`+n` popup) | `drawRupee`, metrics, popup | Popup clear of leading digit |
+| **C1-6** | `COLOSSAL_WALLET_MAX = 50000`; editor label if needed | `d_save.h`, editor strings | Cap holds 50k; **old saves OK** (`mRupee` stays u16) |
+
+**Leading zeros (product default for implement):**  
+Under 10000 keep **today’s** show/hide (thousands hidden &lt;1000; no permanent `00000` pad) unless playtest asks for always-five. At ≥10000 always five places (`1xxxx`…`5xxxx`). Optional later: always `00000`–style pad.
+
+**Playtest gates**
+
+1. Classic + LoP: `0` → `9999` looks unchanged; `10000` / `50000` readable, gem not covered.  
+2. Earn/spend/shop at 10k+ uses real balance (not digit wrap).  
+3. `+n` popup still left of leftmost digit.  
+4. No FPS/factory work — normal `build_run.bat` only.
+
+**Follow-ups (not C1):** 99999 / `mRupee` widen; permanent reserved gap; frame (`moyou_*`) widen if playtest wants it.
+
+---
+
+##### Background (why insert) — short
+
+| Piece today | Fact |
+|-------------|------|
+| BLO digits | 4 only (`r_n_1`…`4` + shadows) |
+| Cap | Colossal **9999**; `mRupee` **u16** (50k fits) |
+| Tick | `mRupeeNum` / `moveRupee` **`s16`** — must widen with cap |
+| LoP | Moves wallet via `r_k_n`; clone must share digit parent to follow |
+
+Donor patterns: balloon 5-place math; item-pane `appendChild` clone; **not** popup free-draw as primary.
+
+#### What a +2-byte `mRupee` widen would mean (future 99999)
+#### What a +2-byte `mRupee` widen would mean (future 99999)
+
+`mRupee` sits mid-struct in `dSv_player_status_a_c` (after life fields, before oil / items / wallet size). Growing it `u16`→`u32` **shifts every later field by 2 bytes** in the quest-log blob.
+
+| If you widen with no migration | Likely playability hit |
+|--------------------------------|------------------------|
+| Load old save on new build | Wrong bytes read as oil, item slots, wallet size, magic, etc. — inventory / meter / form glitches, possible soft-lock |
+| Load new save on old build | Same class of mis-parse |
+| “Start a new save” only | New files OK; **all existing quest logs incompatible** unless converter runs |
+
+**Does not force a new save for 50k** — constant-only cap change. **99999** needs either: (1) careful load migration that rewrites blobs, (2) overflow side-store (unused event / trailing padding) so offsets stay, or (3) accept 65535 ceiling. Research that path before coding 99999.
+
 
 ### Sword-specific damage upgrades (locked shape)
 
@@ -205,9 +291,17 @@ On **normal / failed shield block** only:
 
 **Queue:** pending recoverable chip inputs (HP already lost; queue = what can still return).
 
-**FIFO:** oldest input first; **one reclaim = that one input’s HP only** (never the whole queue).
+**FIFO reclaim:** oldest input first; **one reclaim = that one input’s HP only** (never the whole queue).
 
-**Shared 6 s** timer; resets on new chip; expiry / death / 0 HP → clear all. No other cap.
+**Time model (locked — LoP hybrid; replaces old snap-6s wipe):**
+
+| Phase | Duration | Behavior |
+|-------|----------|----------|
+| **Grace** | **3 s** | Recoverable pool **does not melt**. New chip **refreshes grace** (and extends lifetime). |
+| **Melt** | **6 s** | After grace, remaining recoverable pieces **linearly drain** to 0. |
+| **Total** | **9 s** | From last chip: 3s hold + 6s melt (unless refreshed / wiped / reclaimed). |
+
+Death / 0 HP / open-hit wipe still clear all. No other cap.
 
 **Regain:**
 - Damaging hit (any arsenal, wolf/human, multi-hit per tick) → **1** input.
@@ -216,9 +310,9 @@ On **normal / failed shield block** only:
 **Other HP interactions:**
 - Potion/heal: fills HP and **consumes** matching recoverability (FIFO).
 - **Enemy open hit** (non-block): **wipe entire queue +** that hit’s HP loss.
-- PM chip: **adds** to queue.
+- PM chip: **adds** to queue; **refreshes grace**.
 
-**HUD:** Phase 2 — LoP bar + faded recoverable hearts.
+**HUD:** see **§4.5 E-HUD** (**shipped**).
 
 ### 4.4 Gates / classification
 
@@ -230,6 +324,30 @@ On **normal / failed shield block** only:
 **Future desire (not implemented; needs scrutiny):** user wants **all** guard-breaks to apply only when a **perfect parry was not achieved**. Guard-break is largely **enemy-/AtSpl-specific** (ALBW already defers some breaks) — separate research pass before changing break rules.
 
 **Magic Armor (PM):** Hearts at risk → like **no armor**. Enemy hit with **0 HP** absorb → queue **stays**. ALBW unfunded → like no armor. **Outfit swap does not wipe** reclaim queue. Detail §9.
+
+### 4.5 E-HUD — faded reclaim (**shipped**)
+
+**Goal:** Show reclaimable HP like LoP Guard Regain — **dull red** segment / heart quarters — on **both** LoP Health Bar and classic hearts. Replicate the **visual difference** (same hue, ~half brightness, hard cut), not LoP’s absolute RGB.
+
+**Inspiration screenshot:** LoP bar with live crimson vs darker dull-red regain (repo asset / chat 2026-08-21). Measured contrast: dull ≈ **0.45–0.50×** live red luminance; sharp vertical join; empty track near-black.
+
+#### Timing (sim + HUD share one clock)
+
+Same as §4.3: **3s grace** (no melt; chips refresh) → **6s linear melt** → gone. Total **9s** from last chip unless refreshed/wiped/reclaimed. Implemented in `d_albw_parry_master`; HUD reads `dParryMaster_getRecoverablePieces()`.
+
+#### Color (relative to Dusklight live)
+
+| Surface | Live | Dull reclaim |
+|---------|------|--------------|
+| **LoP Health Bar** | Kantera tint black **(90,18,18)** / white **(215,40,40)** | Hybrid: black **(77,15,15)** / white **(183,34,34)** (~0.85×) + reclaim pass **0.95×** α |
+| **Classic hearts** | Texture fill; HIO α filled **0.7**, empty base **0.4** | Full ghost hearts at **0.5×** mark α via `applyParryMasterHeartReclaim()` |
+
+No grey. Hard edge live↔dull. Dull clearly above empty trough.
+
+#### Draw paths
+
+1. **`drawLopHealthBar()`** — pass 1 dull to `life + reclaim`; pass 2 live crimson on top.
+2. **`applyParryMasterHeartReclaim()`** (each frame before heart rasterize) — empty hearts in reclaim range as dull ghosts (melt shrinks them).
 
 ---
 
@@ -368,12 +486,14 @@ All product locks above are **planned / not coded** unless marked shipped. Phase
 
 ### Phase C — Wallet + heart uncap
 
+**Locks:** Colossal **50k**; HUD = **insert** 10000s digit (jewel → clone → vanilla row); hearts past 20 = **overlay on 20th**; Health Bar leave; shop **+333** / **¼♥**. No 99999 yet.
+
 | # | Work | Hooks / files | Gate |
 |---|------|---------------|------|
-| C1 | Colossal wallet **9999 → 50000** | `d_save.h` / wallet helpers; **5-digit** rupee HUD | Cap holds 50000; HUD no clip; u16 safe |
-| C2 | MQ heart shop: after soft-cap **9999**, continue buys at **¼♥** each, **unlimited** | `d_albw_master_quest.*` | Soft-cap still 9999; next buys +¼♥; prices keep climbing |
+| **C1** | Insert-path 5-digit HUD + Colossal **50000** + s32 tick | `d_meter2*` / `d_save.h` | **Shipped** — playtest 10k/50k on classic+LoP |
+| **C2** | Heart shop past soft-cap: **+333**, **¼♥**; 20th overlay | `d_albw_master_quest.*`; `drawLife` | Unlimited buys; HUD readable past 20♥ |
 
-**Why before sword shop:** Late hearts and Atp upgrades need wallet headroom and HUD that can show five digits.
+**Why before sword shop:** Late hearts and Atp need wallet headroom and a HUD that can show five digits.
 
 ---
 
@@ -390,17 +510,14 @@ All product locks above are **planned / not coded** unless marked shipped. Phase
 
 ---
 
-### Phase E — Parry Master (core) — **DONE** (HUD deferred)
+### Phase E — Parry Master
 
 | # | Work | Status |
 |---|------|--------|
-| E1 | Setting + speedrun Off | **Shipped** (`game.parryMaster`) |
-| E2 | Fail chip 15% post-scale | **Shipped** |
-| E3 | Fail meter 5%×base per eff ATP | **Shipped** (`dMeter2_drainALBWAmount`) |
-| E4 | Reclaim queue | **Shipped** (`d_albw_parry_master.cpp`) |
-| E5 | Guard-break exempt | **Shipped** (no PM on break path) |
+| E1–E5 | Setting, chip, meter, queue, GB exempt | **Core shipped** |
+| **E-HUD** | Dull-red reclaim on Health Bar + hearts; sim **3s grace + 6s melt (9s total)**, chips refresh grace | **Shipped** — §4.5 |
 
-**Still deferred:** E-HUD (LoP bar / faded hearts). Guard-break×perfect = Phase G research.
+Guard-break×perfect = Phase G research.
 
 ---
 
@@ -423,18 +540,18 @@ All product locks above are **planned / not coded** unless marked shipped. Phase
 | Horse + shield PM | Assumed foot-equivalent until proven otherwise |
 | Open room mult tweaks | Field r2/r7/r14, Hidden Village, Prison, grottos — not decided |
 | Per-enemy Atp tables | **Out of scope** unless newly briefed |
-| PM HUD polish | After E core |
+| PM HUD polish | After E core | **Superseded** — full plan §4.5 E-HUD |
 
 ---
 
 ### Dependency sketch
 
 ```
-A DONE → B DONE ∥ E DONE
-           └── C (wallet 50k + heart uncap)   [next]
+A DONE → B DONE ∥ E core DONE → E-HUD DONE
+           └── C (wallet 50k + heart uncap)
                 └── D (sword Atp shop)
 F (scaler + NG+) ── after playtest of E
 G (research)     ── anytime
 ```
 
-**Next:** Phase **C** when asked. Build note: `files.cmake` added `d_albw_parry_master.cpp` — expect one CMake re-run; confirm `/O2` after.
+**Next (user pick):** Phase **C** (wallet 50k + heart uncap), or polish.

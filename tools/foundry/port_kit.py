@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 # ============================================================================
+# ERA WARNING (Foundry kit-family sweep, 2026-08-21 - user order: kits may
+# still carry mount/bake/legs-era recipes; History saw remnants and this
+# sweep CONFIRMED them family-wide).
+#
+# K2's SCAFFOLD EMITS THE FORK LANDING ROUTE (f_pc_name.h band,
+# OBJNAME, files.cmake). That route is FORK-ONLY convenience, never
+# delivery - the plugin counterpart is actor_kit --land-plugin, which
+# emits registry.cpp above-enum rows instead.
+#
+# Era doctrine of record: actor_kit.py's banner + its era-split checklist
+# ([FORK] vs [PLUGIN] columns) and the trace method at
+# docs/state/ww-plugin-outset.md #How-ports-land. PLUGIN delivery never
+# routes through dExtNpcMount / f_pc edits / files.cmake / model_replacements
+# - those are FORK-era mechanisms a stock-dusklight user never receives.
+# This banner marks the era; a DEEP retool of this kit is a named plate item,
+# not implied by the banner's presence.
+# ============================================================================
+# ============================================================================
 # port_kit.py — K1/K2 of the port-automation plan (tale §849, user go 08-13).
 #
 # The MATCHED-port pipeline is ~70% mechanical; this kit does the mechanical
@@ -196,6 +214,21 @@ def golden(arc_name):
 
 
 def scaffold(stem, objname, profname):
+    # ========================================================================
+    # ERA GUARD (deep retool 2026-08-21): K2's emission is the FORK landing
+    # route (f_pc_name.h band / OBJNAME / files.cmake). For a PLUGIN-era port
+    # there is ONE emitter, and it is not this one — duplicating the
+    # registry-block generator here would give the estate two diverging
+    # emitters, which is how the §113 hand-list rot started. Redirect instead.
+    # ========================================================================
+    if "--plugin" in sys.argv:
+        print("K2 [PLUGIN]: the plugin landing emitter lives in actor_kit -")
+        print("  python tools/foundry/actor_kit.py %s --land-plugin --objnames %s"
+              % (stem, objname))
+        print("  (emits a paste-ready registry.cpp block, touches nothing;")
+        print("   this K2 fork route emits f_pc/files.cmake edits a stock-")
+        print("   dusklight user never receives)")
+        return 0
     """K2: the §747 registration blocks with live-grepped anchors."""
     # Calibrated to the REAL table shape (X-macro rows with /* 0xNNN */
     # comments, f_pc_name.h:831-835 band) — the first-run regex guessed a

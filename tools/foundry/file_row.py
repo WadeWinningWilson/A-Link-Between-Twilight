@@ -46,8 +46,10 @@
 # Exit 0 verified · 1 NOT verified (nothing was reported as done) · 2 bad input.
 # ============================================================================
 import io
+import os
 import re
 import sys
+import time
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
@@ -62,7 +64,38 @@ def read():
 
 
 def write(text):
-    io.open(CALLS, "w", encoding="utf-8", newline="\r\n").write(text)
+    # ========================================================================
+    # ATOMIC WRITE, added 2026-08-21 after a real near-miss (Housing/Engine,
+    # CALLS row 555): `io.open(CALLS, "w").write(text)` TRUNCATES ON OPEN,
+    # before a single byte of `text` lands. Many lanes hold this file open
+    # concurrently (watchers tail it, other lanes filter it mid-write); a
+    # sharing violation or any failure between the open() truncate and the
+    # write() completing leaves CALLS.md EMPTY. 554 rows / 1.8 MB survived
+    # that time by luck, not by the tool's design.
+    #
+    # FIX: write to a TEMP FILE in the same directory, then os.replace() onto
+    # CALLS.md. os.replace is atomic on both POSIX and Windows (NTFS) - the
+    # readers this file has (watchers, other lanes' `read()`) see either the
+    # complete old file or the complete new file, never a truncated one.
+    #
+    # RETRY: a Windows sharing violation (WinError 32, surfaces as errno 13
+    # or 22 through the CRT) on the FINAL replace is transient - another lane
+    # holding a brief read lock, not a real failure. Bounded retry (5 tries,
+    # 100ms apart) rather than propagating immediately, which is what turned
+    # this into a filing-tool crash in the first place.
+    # ========================================================================
+    tmp = CALLS.with_suffix(CALLS.suffix + ".tmp%d" % os.getpid())
+    io.open(tmp, "w", encoding="utf-8", newline="\r\n").write(text)
+    last_err = None
+    for attempt in range(5):
+        try:
+            os.replace(str(tmp), str(CALLS))
+            return
+        except OSError as e:
+            last_err = e
+            time.sleep(0.1)
+    tmp.unlink(missing_ok=True)
+    raise last_err
 
 
 def byte_audit():

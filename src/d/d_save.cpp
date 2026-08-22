@@ -149,7 +149,8 @@ u16 dSv_player_status_a_c::getRupeeMax() const {
             #endif
         // ============================================
         // NEW CODE — ALBW Port
-        // Colossal Wallet: always 9999; unaffected by biggerWallets setting.
+        // Colossal Wallet: always COLOSSAL_WALLET_MAX (50k); unaffected by
+        // biggerWallets setting.
         // ============================================
         case COLOSSAL_WALLET:
             return COLOSSAL_WALLET_MAX;

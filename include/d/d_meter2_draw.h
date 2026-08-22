@@ -71,6 +71,8 @@ public:
     // LoP "Health Bar" mode: draw a red life bar reusing the kantera meter widgets,
     // above the green ALBW meter; the heart row is hidden in draw().
     void drawLopHealthBar();
+    // Parry Master: dull-red reclaim ghosts on classic hearts (no-op in Health Bar mode).
+    void applyParryMasterHeartReclaim();
     // Focused Arts meter (kantera widget, lilac): drawFocusedArtsMeter routes it to the
     // top-left durability slot (vanilla) or the LoP sword-panel strip; the Kantera helper
     // does the two-pass banked/charging render at a kantera-local rect.
@@ -109,7 +111,10 @@ public:
     f32 getNowLightDropRateCalc();
     void setAlphaLightDropAnimeMin();
     void setAlphaLightDropAnimeMax();
-    void drawRupee(s16);
+    // ============================================
+    // MODIFIED CODE — ALBW Port (Phase C1): was s16; 50k counter.
+    // ============================================
+    void drawRupee(s32);
     void setAlphaRupeeChange(bool);
     void setAlphaRupeeAnimeMin();
     void setAlphaRupeeAnimeMax();
@@ -232,6 +237,18 @@ private:
     /* 0x2B0 */ CPaneMgr* mpRupeeKeyParent;
     /* 0x2B4 */ CPaneMgr* mpRupeeParent[3];
     /* 0x2C0 */ CPaneMgr* mpRupeeTexture[4][2];
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C1)
+    // Inserted 10000s digit (shadow + main), parented with r_n_*.
+    // ============================================
+    CPaneMgr* mpRupeeTenThousand[2]{};
+    f32 mRupeeDigitAdvance{};
+    f32 mRupeeFiveDigitShiftSign{1.0f};
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
     /* 0x2E0 */ CPaneMgr* mpKeyParent;
     /* 0x2E4 */ CPaneMgr* mpKeyTexture[5];
     /* 0x2F8 */ CPaneMgr* mpButtonParent;

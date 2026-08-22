@@ -265,6 +265,8 @@ public:
     BOOL setUpperAnimeAndSe(daMidna_ANM);
     BOOL setFaceAnime(u16, u16);
     void endHighModel();
+    void removeDemoBodyBck();
+    void resetDemoBck();
     BOOL setDemoAnm();
     void setFaceBtp(u16, int);
     void setFaceBtk(u16, int);

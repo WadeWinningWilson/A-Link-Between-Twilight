@@ -7,11 +7,15 @@
 
 #if TARGET_PC
 
+#include "d/actor/d_a_nbomb.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_stage.h"
 #include "dusk/settings.h"
+#include "f_pc/f_pc_name.h"
 #include <cmath>
 #include <cstring>
+
+static int sDamageScaleDepth = 0;
 
 namespace {
 
@@ -204,7 +208,8 @@ f32 dAlbwRegionMult_getTableMult() {
 
 f32 dAlbwRegionMult_getDamageMult() {
     // Standalone setting — does not require Region Multipliers master.
-    if (!dusk::getSettings().game.regionDamage.getValue()) {
+    // Source-gated: COVER sites must hold DamageScaleScope (default = vanilla).
+    if (!dusk::getSettings().game.regionDamage.getValue() || sDamageScaleDepth <= 0) {
         return 1.0f;
     }
     return resolveTableMult();
@@ -257,6 +262,34 @@ u16 dAlbwRegionMult_scaleRupees(u16 amount) {
     const f32 mult =
         dAlbwRegionMult_getRupeeMult() * dAlbwRegionMult_getRegionDamageRupeeMult();
     return scaleAmountU16(amount, mult);
+}
+
+void dAlbwRegionMult_pushDamageScale() {
+    sDamageScaleDepth++;
+}
+
+void dAlbwRegionMult_popDamageScale() {
+    if (sDamageScaleDepth > 0) {
+        sDamageScaleDepth--;
+    }
+}
+
+bool dAlbwRegionMult_isPlayerBomb(fopAc_ac_c* i_actor) {
+    if (i_actor == NULL || fopAcM_GetName(i_actor) != fpcNm_NBOMB_e) {
+        return false;
+    }
+    daNbomb_c* bomb = static_cast<daNbomb_c*>(i_actor);
+    if (bomb->checkPlayerMake()) {
+        return true;
+    }
+    switch (bomb->mType) {
+    case daNbomb_c::TYPE_NORMAL_PLAYER:
+    case daNbomb_c::TYPE_WATER_PLAYER:
+    case daNbomb_c::TYPE_INSECT_PLAYER:
+        return true;
+    default:
+        return false;
+    }
 }
 
 #endif  // TARGET_PC

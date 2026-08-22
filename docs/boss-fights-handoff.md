@@ -8,7 +8,7 @@
 
 **Related docs:** [albw-port.md](albw-port.md) (docket), [combat-refinements-handoff.md](combat-refinements-handoff.md) (field combat: enemy targeting, hidden skills × meter), [albw-boss-hp-hud-tuning-brief.md](albw-boss-hp-hud-tuning-brief.md) (HUD art), [shield-combat.md](shield-combat.md) (parry/bash/durability).
 
-**Per-boss canonical docs:** [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md), [Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md).
+**Per-boss canonical docs:** [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md), [Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md), [Boss-Fights-Morpheel-research.md](Boss-Fights-Morpheel-research.md), [Boss-Fights-Stallord-research.md](Boss-Fights-Stallord-research.md).
 
 **FPS / golden build (separate doc):** [state/drive-fps.md](state/drive-fps.md) + [future-performance-leaning.md](future-performance-leaning.md) — not covered here.
 

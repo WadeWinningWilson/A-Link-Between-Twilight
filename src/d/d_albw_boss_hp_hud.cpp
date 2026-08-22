@@ -14,8 +14,7 @@
  * drawn as three tinted rects (border / empty track / red fill); the name is
  * a J2DTextBox in the message font with a black outline.
  *
- * Prototype scope: Armogohma — phase 1 body (B_GM) then phase 2 core (E_GM TYPE_GOMA).
- * Visibility/query: dAlbwBoss_armogohmaQueryHealthBar().
+ * Prototype scope: Armogohma (composite), Diababa, Shade, Zant, Fyrus.
  */
 
 #if TARGET_PC
@@ -99,6 +98,8 @@ static const char* bossDisplayName(s16 profName) {
         return "Hero of Time";  // the combat Hero's Shade
     case fpcNm_B_ZANT_e:
         return "Usurper King Zant";
+    case fpcNm_E_FM_e:
+        return "Twilit Igniter FYRUS";
     default:
         return NULL;
     }
@@ -179,8 +180,8 @@ void dAlbwBossHpHud_draw() {
         return;
     }
 
-    // Pick the active boss. Armogohma (composite) first, then Diababa, then the
-    // Hero's Shade. Arenas never coexist; only {current,max,name}/fillRatio
+    // Pick the active boss. Armogohma (composite) first, then Diababa, Shade,
+    // Zant, Fyrus. Arenas never coexist; only {current,max,name}/fillRatio
     // selection differs — bar render is shared.
     // ============================================
     // MODIFIED CODE — ALBW Port
@@ -211,6 +212,9 @@ void dAlbwBossHpHud_draw() {
             // ============================================
             fillRatio = static_cast<f32>(sCur) / static_cast<f32>(sMax);
             name = bossDisplayName(fpcNm_B_ZANT_e);
+        } else if (dAlbwBoss_fyrusQueryHealthBar(&sCur, &sMax) && sMax > 0 && sCur > 0) {
+            fillRatio = static_cast<f32>(sCur) / static_cast<f32>(sMax);
+            name = bossDisplayName(fpcNm_E_FM_e);
         }
     }
 

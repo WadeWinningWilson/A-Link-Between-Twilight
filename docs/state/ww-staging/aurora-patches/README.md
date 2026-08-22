@@ -1,65 +1,35 @@
-# AURORA PATCH BACKUPS — uncommitted submodule work, captured 2026-08-17
+# AURORA PATCHES — MOVED (pointer, not content)
 
-> Written by **INTEGRATOR** during Phase 0/1, **before** any submodule
-> operation. Both work-sets below were **uncommitted, in a submodule, in two
-> different checkouts, and tracked by nothing.** A `git submodule update` after
-> the Phase-1 fast-forward would have tried to check aurora out from
-> `81f12f31` to `cf3ffc98` straight over them.
->
-> This estate has already lost hours of uncommitted work to a stray `checkout`.
-> These are the insurance, not the deliverable.
+era: plugin-delivery
+<!-- era rationale: pointer only; content relocated to the plugin folder on user order 2026-08-22 | Foundry -->
 
-Both work-sets sit on the **same** aurora base commit,
-`81f12f31d23ec822d8bde2031c91e94c470911eb` (`origin/fix-png-122-g81f12f3`).
+> **THE AURORA PATCH SET IS NOT HERE. It is:**
+> ### `mods-src/ww_donor_disc/aurora-patch/`
 
-| patch | source checkout | files | scope |
-|---|---|---|---|
-| `dusklight-main-aurora-81f12f31.patch` | `dusklight-main/extern/aurora` | 4 | 49 insertions — skip-draw + TEV alpha-op |
-| `fork-aurora-81f12f31.patch` | `dusklight/extern/aurora` | 13 | 995 insertions — the above **plus** display-list / FIFO / command-processor work |
+## Why it moved (user order, 2026-08-22)
 
-The fork's set is a **superset** of `dusklight-main`'s on the four shared files
-(`lib/gfx/pipeline_cache.cpp`, `lib/gx/pipeline.cpp`, `lib/gx/shader.cpp`,
-`lib/webgpu/gpu.cpp`).
+> *"the patch should leave in its own folder in the plugin repo"*
 
-## Why these four files matter — they are not incidental
+**And there was a real exposure reason on top of the order.** This path —
+`docs/state/ww-staging/` — is matched by **no** never-push strip rule: the
+generated rules key on `(^|/)ww_` (underscore), and `ww-staging` is a
+**dash**. The plugin folder `mods-src/ww_donor_disc/` **does** match, which
+is why `FORK-STRIP-LEDGER.md` already lives there. So the aurora patch set
+was sitting in a location that would ship in the fork release; it now sits
+in one that structurally cannot. Same distinction that produced the
+duplicate-ledger incident earlier — recorded here so it is not re-learned.
 
-They convert Dawn/WebGPU **shader and pipeline validation failures from FATAL
-into skip-draw**, and fix a real TEV bug:
+## What moved
 
-- `gpu.cpp` — the uncaptured-error callback no longer `FATAL`s on
-  `ShaderModule` / `WGSL` / `RenderPipeline` validation errors; it logs and
-  continues.
-- `pipeline.cpp` — a null shader module returns an empty pipeline and logs,
-  instead of proceeding.
-- `pipeline_cache.cpp` — `get_pipeline` returns false on a null handle, so a
-  failed `CreateRenderPipeline` becomes a skipped draw.
-- `shader.cpp` — **`tev_alpha_op` was emitting colour-path `.r`/`.rg`/`.rgb`
-  swizzles on operands that are already `f32` scalars**, which is invalid WGSL
-  and made `CreateShaderModule` FATAL on `COMP_A8` / R8-on-alpha materials. Now
-  the compare ops are expressed as scalar `select(...)`.
+| file | note |
+|---|---|
+| `AURORA-PATCH-LEDGER.md` | the protocol + entries (patch file FIRST, apply SECOND) |
+| `AURORA-PATCH-0001-skipdraw-tev-logger.patch` | the live 53-line accepted patch, byte-verified |
+| `TRACKED-lwood-candidate-9files.md` | the 995-line WW work-set measurement (filename retains its original, now-inaccurate "9files" — corrected in-content) |
+| `fork-aurora-81f12f31.patch` | Integrator's 2026-08-17 capture of the WW work-set — the canonical 995-line recovery path |
+| `dusklight-main-aurora-81f12f31.patch` | Integrator's 2026-08-17 loss-protection capture |
+| `fork-aurora-stash-albw-pad-guard.patch` | Integrator's extraction of the orphaned pad-guard stash |
+| `HISTORICAL-README.md` | the original 2026-08-17 README (renamed to free this filename for this pointer) |
 
-**Read that against `HANDOFF-INTEGRATOR.md` §7.4:** *"The `lwood` draw crash is
-UNROOTED. Deterministic on every submitting boot, no CPU exception at all — the
-backend is Dawn/WebGPU, and a device-lost kills the process at submission."*
-This is work aimed squarely at that failure class. **Losing it would have cost
-the root-cause trail, not just the code.**
-
-## Restore
-
-```
-cd <checkout>/extern/aurora
-git checkout 81f12f31d23ec822d8bde2031c91e94c470911eb
-git apply <this-dir>/<patch>
-```
-
-Both patches were verified by `git apply --check --reverse` against the tree
-they came from at capture time — they are faithful, not approximate. **A first
-capture attempt silently grabbed the fork's *superproject* diff instead of
-aurora's; the reverse-apply check is what caught it.** Do not skip that check
-when re-capturing.
-
-## Still open
-
-Neither work-set is committed to any branch. **Patches in a directory are a
-backup, not version control** — the durable fix is a branch in each aurora
-checkout. Owner: user/Integrator.
+Tracked files moved with `git mv` so history follows them. **Do not re-add
+content here.** Rows and patches go in the plugin folder.

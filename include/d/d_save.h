@@ -37,10 +37,11 @@ static const int BIG_WALLET_MAX = 600;
 static const int GIANT_WALLET_MAX = 1000;
 // ============================================
 // NEW CODE — ALBW Port
-// Colossal Wallet: 9,999-rupee cap, awarded on Cave of Ordeals completion.
-// The biggerWallets setting does not scale this value — it is always 9999.
+// Colossal Wallet: 50,000-rupee cap (Phase C1). Awarded on Cave of Ordeals
+// completion. biggerWallets does not scale this — always COLOSSAL_WALLET_MAX.
+// Fits u16 mRupee (no save-layout change). HUD uses insert 10000s digit.
 // ============================================
-static const int COLOSSAL_WALLET_MAX = 9999;
+static const int COLOSSAL_WALLET_MAX = 50000;
 // ============================================
 // NEW CODE ENDS HERE
 // ============================================

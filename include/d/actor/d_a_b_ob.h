@@ -17,6 +17,11 @@ enum b_ob_action {
     OB_ACTION_CORE_CHANCE,
     OB_ACTION_CORE_END,
 
+#if TARGET_PC
+    // Boss Refinement: bubbled eye-mass composite phase 1 (not vanilla).
+    OB_ACTION_CORE_COMPOSITE = 10,
+#endif
+
     // Phase 2
     OB_ACTION_FISH_NORMAL = 100,
     OB_ACTION_FISH_VACUME,

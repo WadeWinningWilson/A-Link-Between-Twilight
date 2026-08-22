@@ -162,6 +162,7 @@ scan() {
 
 # Stamp BEFORE the first sleep, so an arming failure is visible immediately
 # rather than one interval later.
+transient=0
 stamp "armed" "startup"
 
 trap 'stamp "stopped" "interrupt"; exit 0' INT TERM
@@ -176,10 +177,37 @@ while true; do
     continue
   fi
 
+  # ==========================================================================
+  # RETRY ONCE BEFORE DECLARING FAILURE (2026-08-21).
+  #
+  # MEASURED, NOT GUESSED: this watcher reported `scan failed rc=1` with an
+  # EMPTY stderr while the Librarian was filing three rows. Re-running the
+  # identical scan seconds later gave rc=0 over 492 rows. Cause: `file_row.py`
+  # REWRITES CALLS.md, and a scan landing mid-write hits a Windows file lock,
+  # which this awk surfaces as a nonzero exit with NO MESSAGE.
+  #
+  # WHY THIS MATTERED ENOUGH TO PATCH: the failure branch stamps `degraded`
+  # and sleeps 60s. So every time this lane filed a row it BLINDED ITS OWN
+  # WATCHER for a minute — and did it precisely when the board was most
+  # active. A self-inflicted blind spot correlated with activity is worse
+  # than a random one.
+  #
+  # A single retry separates "the file was busy" from "the scan is broken".
+  # A REAL failure still reports, still degrades: this widens no eyes shut.
+  # ==========================================================================
   scan > "$SP/librarian-cur.txt" 2>"$SP/librarian-err.txt"
   rc=$?
   if [ $rc -ne 0 ]; then
-    echo "WATCH ERROR: scan failed rc=$rc — $(head -c 200 "$SP/librarian-err.txt")"
+    sleep 2
+    scan > "$SP/librarian-cur.txt" 2>"$SP/librarian-err.txt"
+    rc=$?
+    if [ $rc -eq 0 ]; then
+      transient=$((transient + 1))
+      stamp "scan_retry_ok" "running"
+    fi
+  fi
+  if [ $rc -ne 0 ]; then
+    echo "WATCH ERROR: scan failed rc=$rc (twice, 2s apart) - $(head -c 200 "$SP/librarian-err.txt")"
     stamp "scan_fail_rc$rc" "degraded"
     sleep 60
     continue

@@ -23,6 +23,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/d_albw_boss.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shield.h"
 #include "d/d_item_data.h"
 #endif
 
@@ -169,6 +170,8 @@ enum daE_FM_ACTION {
     ACTION_END,
 #if TARGET_PC
     ACTION_ANM_PREVIEW,  // TEMP: orphan BCK look-pass (revert after pick)
+    ACTION_ALBW_GOLEM_HOLD,
+    ACTION_ALBW_ABLAZE_STUN,
 #endif
 };
 
@@ -193,7 +196,7 @@ daE_FM_HIO_c::daE_FM_HIO_c() {
     field_0x14 = 5.0f;
     field_0x18 = 4.0f;
     field_0x1c = 20000.0f;
-    field_0x20 = 1500.0f;
+    field_0x20 = 1200.0f;
     field_0x24 = 600.0f;
     field_0x28 = 3.0f;
     field_0x2c = 2.5f;
@@ -204,7 +207,7 @@ daE_FM_HIO_c::daE_FM_HIO_c() {
     field_0x38 = 0x18;
 
     field_0x3c = 1.0f;
-    field_0x40 = 120.0f;
+    field_0x40 = 80.0f;
     field_0x44 = 1000.0f;
     chain_size = 2.0f;
     field_0x4c = 35.0f;
@@ -346,36 +349,76 @@ static void anm_init(e_fm_class* i_this, int i_anm, f32 i_morf, u8 i_mode, f32 i
     i_this->mAnm = i_anm;
 }
 
+static bool e_fm_tickCrossed(s16 i_prev, s16 i_now, s16 i_mark) {
+    return i_prev < i_mark && i_now >= i_mark;
+}
+
 #if TARGET_PC
 // TEMP orphan look-pass — which BCK ACTION_ANM_PREVIEW should play.
 static int s_albwFmPreviewAnmId = BCK_FM_CHANCE;
 
-// Body CcSph ships with Tg type 0 (At-only). Refinement look-pass opens
-// projectile Tg so bow / claw / boom / sling can fire orphan BCKs.
+// Body mCcSph stay At-only (latent burn). Look-pass Tg uses mFEffAtSph (donor
+// prep spheres, never wired in vanilla) so burn At→player is not blocked by
+// OnAtNoTgHitInfSet on the same collider.
 static const u32 kAlbwFmLookPassTg =
     AT_TYPE_ARROW | AT_TYPE_HOOKSHOT | AT_TYPE_BOOMERANG | AT_TYPE_SLINGSHOT;
 
+static const cXyz kAlbwFmLookPassParkPos(20000.0f, -23000.0f, 40000.0f);
+
+// Whip (ATTACK02) + blast (ATTACK + field_0x790 FX): +50% execution speed.
+static constexpr f32 kAlbwFmAttackAnimSpeed = 1.5f;
+// Fire breath (BCK_FM_ANIMAL): +15% execute speed; lead-in A/B/C 70% shorter when Refinement on.
+static constexpr f32 kAlbwFmBreathAnimSpeed = 1.15f;
+static constexpr f32 kAlbwFmBreathLeadInMorf = 3.0f;
+
+static f32 e_fm_albwAttackAnimSpeed() {
+    return dAlbwBossRefinement_isEnabled() ? kAlbwFmAttackAnimSpeed : 1.0f;
+}
+
+static f32 e_fm_albwBreathAnimSpeed() {
+    return dAlbwBossRefinement_isEnabled() ? kAlbwFmBreathAnimSpeed : 1.0f;
+}
+
+static f32 e_fm_albwBreathLeadInMorf() {
+    return dAlbwBossRefinement_isEnabled() ? kAlbwFmBreathLeadInMorf : 10.0f;
+}
+
 // Tg SPrm must be 0x3 (Set + grp bit). OnTgSetBit alone leaves GetGrp()==0
 // so projectile At never matches — first look-pass pass was dead on arrival.
-// Body fire At also hits arrow Tg (burns shots); mute At→Tg info while open.
-static void e_fm_albwLookPassApplyBodyTg(e_fm_class* i_this, bool i_enable) {
-    for (int i = 0; i < 8; i++) {
-        if (i_enable) {
-            i_this->mCcSph[i].SetTgType(kAlbwFmLookPassTg);
-            i_this->mCcSph[i].SetTgSPrm(0x3);
-            i_this->mCcSph[i].OnTgNoHitMark();
-            i_this->mCcSph[i].OnAtNoTgHitInfSet();
-        } else {
-            i_this->mCcSph[i].SetTgType(0);
-            i_this->mCcSph[i].SetTgSPrm(0);
-            i_this->mCcSph[i].OffAtNoTgHitInfSet();
-        }
-    }
+static void e_fm_albwLookPassOpenBodyTgSph(dCcD_Sph* i_sph) {
+    i_sph->OffAtSetBit();
+    i_sph->SetTgType(kAlbwFmLookPassTg);
+    i_sph->SetTgSPrm(0x3);
+    i_sph->OnTgNoHitMark();
+}
+
+static void e_fm_albwLookPassParkBodyTgSph(dCcD_Sph* i_sph) {
+    i_sph->SetC(kAlbwFmLookPassParkPos);
+    i_sph->OffAtSetBit();
+    i_sph->SetTgType(0);
+    i_sph->SetTgSPrm(0);
+    i_sph->OffTgSetBit();
 }
 
 static bool e_fm_albwLookPassWantTg(e_fm_class* i_this) {
     return dAlbwBossRefinement_isEnabled() && i_this->mAction != ACTION_ANM_PREVIEW &&
-           i_this->mAction != ACTION_START && i_this->mAction != ACTION_END;
+           i_this->mAction != ACTION_ALBW_GOLEM_HOLD && i_this->mAction != ACTION_START &&
+           i_this->mAction != ACTION_END;
+}
+
+// Mirror body At sphere layout onto Tg-only shadow spheres for look-pass.
+static void e_fm_albwLookPassSyncBodySph(e_fm_class* i_this) {
+    const bool want = e_fm_albwLookPassWantTg(i_this);
+    for (int i = 0; i < 8; i++) {
+        if (want) {
+            e_fm_albwLookPassOpenBodyTgSph(&i_this->mFEffAtSph[i]);
+            i_this->mFEffAtSph[i].SetC(i_this->mCcSph[i].GetC());
+            i_this->mFEffAtSph[i].SetR(i_this->mCcSph[i].GetR());
+        } else {
+            e_fm_albwLookPassParkBodyTgSph(&i_this->mFEffAtSph[i]);
+        }
+        dComIfG_Ccsp()->Set(&i_this->mFEffAtSph[i]);
+    }
 }
 
 static void e_fm_albwLookPassProbe(const char* fmt, ...) {
@@ -431,6 +474,178 @@ static void e_fm_anm_preview(e_fm_class* i_this) {
     i_this->speedF = 0.0f;
 }
 
+// §8 B_GO window: Fyrus stun hold. Fire-off is the down-impact 792 block plus
+// the unused PUTOUT texanm; stun BCKs are the native CHANCE / DAMAGE_L / DAMAGE_R.
+static int s_albwFmGolemStunAnm = -1;
+
+static int e_fm_albwPickGolemStunAnm() {
+    static const int kStunAnm[] = {BCK_FM_CHANCE, BCK_FM_DAMAGE_L, BCK_FM_DAMAGE_R};
+    int idx = (int)cM_rndF(3.0f);
+    if (idx > 2) {
+        idx = 2;
+    }
+    if (s_albwFmGolemStunAnm >= 0 && kStunAnm[idx] == s_albwFmGolemStunAnm) {
+        idx = (idx + 1) % 3;
+    }
+    s_albwFmGolemStunAnm = kStunAnm[idx];
+    return s_albwFmGolemStunAnm;
+}
+
+static void e_fm_albwGolemHold(e_fm_class* i_this) {
+    i_this->speedF = 0.0f;
+    i_this->field_0x790 = 0;
+    i_this->field_0x1829 = 0;
+    i_this->field_0x770 = 0;
+    i_this->mDoCreateBa = FALSE;
+
+    if (i_this->field_0x792 != 0) {
+        i_this->field_0x792 = 0;
+    }
+
+    switch (i_this->mMode) {
+    case 0:
+        i_this->mPlayTexAnmNo = TEXANM_PUTOUT;
+        i_this->mpFmBrk[TEXANM_PUTOUT]->setFrame(0.0f);
+        i_this->mpFmBtk[TEXANM_PUTOUT]->setFrame(0.0f);
+        anm_init(i_this, e_fm_albwPickGolemStunAnm(), 5.0f, 0, 1.0f);
+        i_this->mMode = 1;
+        break;
+    case 1:
+        if (i_this->mPlayTexAnmNo == TEXANM_PUTOUT) {
+            mDoExt_brkAnm* putoutBrk = i_this->mpFmBrk[TEXANM_PUTOUT];
+            if (putoutBrk->getFrame() >= putoutBrk->getEndFrame() - 2.0f) {
+                i_this->mPlayTexAnmNo = TEXANM_PUTOUT_WAIT;
+                i_this->mpFmBrk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+                i_this->mpFmBtk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+            }
+        }
+        if (i_this->mpFmModelMorf->isStop()) {
+            anm_init(i_this, e_fm_albwPickGolemStunAnm(), 5.0f, 0, 1.0f);
+        }
+        break;
+    }
+}
+
+// Hollow phase displays PUTOUT_WAIT; native f_fight/fire gate on TEXANM_FM BTK frame.
+static bool e_fm_albwTexReadyForFireStart(e_fm_class* i_this) {
+    if (dAlbwBoss_fyrusStayHollow() && i_this->field_0x792 == 0) {
+        return (int)i_this->mpFmBtk[TEXANM_PUTOUT_WAIT]->getFrame() == 0;
+    }
+    return (int)i_this->mpFmBtk[TEXANM_FM]->getFrame() == 0;
+}
+
+static void e_fm_albwRestoreFightTex(e_fm_class* i_this) {
+    if (dAlbwBoss_fyrusStayHollow()) {
+        i_this->mPlayTexAnmNo = TEXANM_PUTOUT_WAIT;
+        i_this->mpFmBrk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+        i_this->mpFmBtk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+    } else {
+        i_this->mPlayTexAnmNo = TEXANM_FM;
+        i_this->mpFmBrk[TEXANM_FM]->setFrame(0.0f);
+        i_this->mpFmBtk[TEXANM_FM]->setFrame(0.0f);
+    }
+}
+
+static bool e_fm_albwTryResumeFight(e_fm_class* i_this) {
+    if (!dAlbwBossRefinement_isEnabled() || i_this->health <= 0) {
+        return false;
+    }
+    if (!dAlbwBoss_fyrusHollowPhase()) {
+        return false;
+    }
+    if (i_this->mAction == ACTION_END || i_this->mAction == ACTION_DOWN ||
+        i_this->mAction == ACTION_A_DOWN || i_this->mAction == ACTION_START ||
+        i_this->mAction == ACTION_ALBW_ABLAZE_STUN)
+    {
+        return false;
+    }
+
+    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+    if (player == NULL || fopAcM_otherBgCheck(i_this, player)) {
+        return false;
+    }
+
+    if (i_this->mAction == ACTION_ALBW_GOLEM_HOLD) {
+        i_this->mAction = ACTION_NORMAL;
+        i_this->mMode = 0;
+        i_this->mPlayTexAnmNo = TEXANM_PUTOUT_WAIT;
+        i_this->mpFmBrk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+        i_this->mpFmBtk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+    }
+
+    const bool passive = i_this->mAction == ACTION_NORMAL ||
+                         (i_this->mAction == ACTION_F_FIGHT && i_this->mMode == 0) ||
+                         (i_this->mAction == ACTION_FIRE && i_this->mMode == 0);
+    if (!passive) {
+        return false;
+    }
+
+    i_this->mAction = ACTION_FIGHT_RUN;
+    i_this->mMode = 0;
+    i_this->mTimers[0] = 0;
+    i_this->mTimers[2] = 0;
+    dAlbwBoss_fyrusSyncFireVulnState(i_this);
+    e_fm_albwRestoreFightTex(i_this);
+    return true;
+}
+
+// §10: one-frame deferred commit resolve (shield perfect latched in dShield).
+static u8 s_albwFmCommitPending = 0;
+
+static void e_fm_albwQueueCommit(u8 i_kind) {
+    if (!dAlbwBoss_fyrusAblazePhase() || dAlbwBoss_fyrusAblazeVulnOpen()) {
+        return;
+    }
+    s_albwFmCommitPending = i_kind;
+}
+
+static void e_fm_albwResolvePendingCommit(e_fm_class* /*i_this*/) {
+    if (s_albwFmCommitPending == 0) {
+        return;
+    }
+    const bool perfect = dShield_takeFyrusAttackPerfectParry();
+    dAlbwBoss_fyrusOnAttackCommit(perfect);
+    s_albwFmCommitPending = 0;
+}
+
+static bool e_fm_albwWantParryableAt() {
+    return dAlbwBossRefinement_isEnabled() && !dAlbwBoss_fyrusGolemWindowIsLive();
+}
+
+// Gra/GOS pattern: AtSpl 1 + SPrm bit 12 (ChkAtNoGuard keys off AtSpl, not bit 12 alone).
+static void e_fm_albwApplyParryableAt(dCcD_Sph* i_sph) {
+    if (i_sph == NULL || !e_fm_albwWantParryableAt()) {
+        return;
+    }
+    i_sph->SetAtSpl((dCcG_At_Spl)1);
+    i_sph->OnAtSPrmBit(12);
+    i_sph->OnAtVsPlayerBit();
+}
+
+static void e_fm_albwAblazeVulnStun(e_fm_class* i_this) {
+    i_this->speedF = 0.0f;
+    i_this->field_0x790 = 0;
+    i_this->field_0x1829 = 0;
+
+    switch (i_this->mMode) {
+    case 0:
+        anm_init(i_this, e_fm_albwPickGolemStunAnm(), 5.0f, 0, 1.0f);
+        i_this->mMode = 1;
+        break;
+    case 1:
+        if (i_this->mpFmModelMorf->isStop()) {
+            dAlbwBoss_fyrusSyncFireVulnState(i_this);
+            e_fm_albwRestoreFightTex(i_this);
+            i_this->mAction = ACTION_FIGHT_RUN;
+            i_this->mMode = 0;
+            i_this->mTimers[0] = 0;
+            i_this->mTimers[2] = 0;
+            i_this->mDamageInvulnerabilityTimer = 10;
+        }
+        break;
+    }
+}
+
 static int e_fm_albwLookPassAnmFromHit(cCcD_Obj* hit) {
     if (hit == NULL) {
         return -1;
@@ -454,33 +669,53 @@ static int e_fm_albwLookPassAnmFromHit(cCcD_Obj* hit) {
 
 // Map look-pass tools → orphan BCKs (no HP / no fight state change).
 // Not gated on mDamageInvulnerabilityTimer — body Tg grp / fire At were the blockers.
+// Core Tg is the real weak-spot path (cc_at_check). Body projectile sph overlap
+// the chest, so a core hit this frame must not become CHANCE-with-no-bar.
 static bool e_fm_tryAlbwAnmPreview(e_fm_class* i_this) {
     if (!dAlbwBossRefinement_isEnabled()) {
         return false;
     }
-    if (i_this->mAction == ACTION_ANM_PREVIEW || i_this->mAction == ACTION_START ||
+    if (i_this->mAction == ACTION_ANM_PREVIEW || i_this->mAction == ACTION_ALBW_GOLEM_HOLD ||
+        i_this->mAction == ACTION_ALBW_ABLAZE_STUN || i_this->mAction == ACTION_START ||
         i_this->mAction == ACTION_END || i_this->mAction == ACTION_DOWN ||
         i_this->mAction == ACTION_A_DOWN)
     {
         return false;
     }
 
+    if (i_this->mCoreSph.ChkTgHit()) {
+        for (int i = 0; i < 8; i++) {
+            i_this->mFEffAtSph[i].ClrTgHit();
+        }
+        return false;
+    }
+
     cCcD_Obj* hit = NULL;
     int hitSph = -1;
     for (int i = 0; i < 8; i++) {
-        if (i_this->mCcSph[i].ChkTgHit()) {
-            hit = i_this->mCcSph[i].GetTgHitObj();
+        if (i_this->mFEffAtSph[i].ChkTgHit()) {
+            hit = i_this->mFEffAtSph[i].GetTgHitObj();
             hitSph = i;
             break;
         }
     }
-    if (hit == NULL && i_this->mCoreSph.ChkTgHit()) {
-        hit = i_this->mCoreSph.GetTgHitObj();
-        hitSph = 100;
-    }
     if (hit == NULL) {
         return false;
     }
+
+#if TARGET_PC
+    if (dAlbwBoss_fyrusShouldChipAblazeDamage()) {
+        const int hpBefore = i_this->health;
+        i_this->mAtInfo.mpCollider = hit;
+        cc_at_check(i_this, &i_this->mAtInfo);
+        dAlbwBoss_fyrusApplyChipDamage(i_this, hpBefore);
+        for (int i = 0; i < 8; i++) {
+            i_this->mFEffAtSph[i].ClrTgHit();
+        }
+        i_this->mCoreSph.ClrTgHit();
+        return false;
+    }
+#endif
 
     const int anm = e_fm_albwLookPassAnmFromHit(hit);
     if (anm < 0) {
@@ -499,7 +734,7 @@ static bool e_fm_tryAlbwAnmPreview(e_fm_class* i_this) {
     i_this->speedF = 0.0f;
 
     for (int i = 0; i < 8; i++) {
-        i_this->mCcSph[i].ClrTgHit();
+        i_this->mFEffAtSph[i].ClrTgHit();
     }
     i_this->mCoreSph.ClrTgHit();
     return true;
@@ -714,11 +949,16 @@ static BOOL pl_check(e_fm_class* i_this, f32 i_range, s16 i_sightRange) {
 
 static void e_fm_normal(e_fm_class* i_this) {
     fopAc_ac_c* player = dComIfGp_getPlayer(0);
+#if TARGET_PC
+    if (!dAlbwBoss_fyrusGolemKidsLoose())
+#endif
+    {
     if (i_this->mMode >= 0 && !fopAcM_otherBgCheck(i_this, player)) {
         i_this->mAction = ACTION_FIGHT_RUN;
         i_this->mMode = 0;
         i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_FIND, -1);
         return;
+    }
     }
 
     cXyz sp50;
@@ -727,7 +967,11 @@ static void e_fm_normal(e_fm_class* i_this) {
     s16 spA = 0x3000;
     int anm_frame = (int)i_this->mpFmModelMorf->getFrame();
 
+#if TARGET_PC
+    i_this->field_0x7c0 = dAlbwBoss_fyrusGolemKidsLoose() ? 0 : 1;
+#else
     i_this->field_0x7c0 = 1;
+#endif
 
     switch (i_this->mMode) {
     case 2:
@@ -803,6 +1047,14 @@ static void e_fm_normal(e_fm_class* i_this) {
 }
 
 static void e_fm_fight_run(e_fm_class* i_this) {
+#if TARGET_PC
+    if (dAlbwBoss_fyrusGolemKidsLoose()) {
+        i_this->mAction = ACTION_NORMAL;
+        i_this->mMode = 0;
+        i_this->speedF = 0.0f;
+        return;
+    }
+#endif
     fopAc_ac_c* player = dComIfGp_getPlayer(0);
     cXyz sp4C;
     cXyz sp40;
@@ -861,10 +1113,16 @@ static void e_fm_fight_run(e_fm_class* i_this) {
                 }
 
                 if (i_this->mChain[i].field_0x6174 > var_f30 && ((i == 2 && (anm_frame & 252) == 12) || (i == 3 && (anm_frame & 252) == 40))) {
+#if TARGET_PC
+                    if (!dAlbwBoss_fyrusAblazePhase()) {
+#endif
                     i_this->mAction = ACTION_STOP;
                     i_this->mMode = 0;
                     i_this->field_0x808 = i;
                     return;
+#if TARGET_PC
+                    }
+#endif
                 }
             }
         }
@@ -906,7 +1164,7 @@ static void e_fm_fight_run(e_fm_class* i_this) {
 }
 
 static void e_fm_n_fight(e_fm_class* i_this) {
-    int anm_frame = i_this->mpFmModelMorf->getFrame();
+    f32 anm_frame = i_this->mpFmModelMorf->getFrame();
     cXyz sp28;
     cXyz sp1C;
 
@@ -914,47 +1172,57 @@ static void e_fm_n_fight(e_fm_class* i_this) {
 
     switch (i_this->mMode) {
     case 0:
+#if TARGET_PC
+        anm_init(i_this, BCK_FM_ATTACK02, 10.0f, 0, e_fm_albwAttackAnimSpeed());
+#else
         anm_init(i_this, BCK_FM_ATTACK02, 10.0f, 0, 1.0f);
+#endif
         i_this->mSound.startCreatureSound(Z2SE_EN_FM_ATTACK02_CHAIN, 0, -1);
         i_this->mMode = 1;
         break;
     case 1:
-        if (anm_frame >= 30 && anm_frame <= 40) {
+        if (anm_frame >= 30.0f && anm_frame <= 40.0f) {
             i_this->field_0x1829 = 1;
             i_this->field_0x1828 = 1;
 
-            if (anm_frame == AREG_S(6) + 35) {
+            if (i_this->mpFmModelMorf->checkFrame(AREG_S(6) + 35.0f)) {
                 i_this->field_0x2399 = 2;
             }
 
-            if (anm_frame == 30) {
+            if (i_this->mpFmModelMorf->checkFrame(30.0f)) {
                 i_this->mSound.startCreatureSound(Z2SE_EN_FM_BUN, 0, -1);
                 i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_UDEHURI, -1);
             }
 
-            if (anm_frame == 35) {
+            if (i_this->mpFmModelMorf->checkFrame(35.0f)) {
                 carry_off(i_this, i_this->field_0x1828);
+#if TARGET_PC
+                e_fm_albwQueueCommit(1);
+#endif
             }
-        } else if (anm_frame >= 50 && anm_frame <= 60) {
+        } else if (anm_frame >= 50.0f && anm_frame <= 60.0f) {
             i_this->field_0x1829 = 1;
             i_this->field_0x1828 = 0;
 
-            if (anm_frame == AREG_S(7) + 57) {
+            if (i_this->mpFmModelMorf->checkFrame(AREG_S(7) + 57.0f)) {
                 i_this->field_0x2399 = 1;
             }
 
-            if (anm_frame == 52) {
+            if (i_this->mpFmModelMorf->checkFrame(52.0f)) {
                 i_this->mSound.startCreatureSound(Z2SE_EN_FM_BUN, 0, -1);
                 i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_UDEHURI, -1);
             }
 
-            if (anm_frame == 53) {
+            if (i_this->mpFmModelMorf->checkFrame(53.0f)) {
                 carry_off(i_this, i_this->field_0x1828);
+#if TARGET_PC
+                e_fm_albwQueueCommit(2);
+#endif
             }
         }
 
         if (i_this->mpFmModelMorf->isStop()) {
-            if (cM_rndF(1.0f) < 0.5f && pl_check(i_this, l_HIO.field_0x24 + TREG_F(11), 0x3000)) {
+            if (cM_rndF(1.0f) < 0.7f && pl_check(i_this, l_HIO.field_0x24 + TREG_F(11), 0x3000)) {
                 i_this->mAction = ACTION_FIRE;
                 anm_init(i_this, BCK_FM_WAIT01, 20.0f, 2, 1.0f);
             } else {
@@ -1000,12 +1268,22 @@ static void tame_eff_set(e_fm_class* i_this) {
 static void e_fm_f_fight(e_fm_class* i_this) {
     cXyz sp30;
     cXyz sp24;
-    int anm_frame = i_this->mpFmModelMorf->getFrame();
 
     switch (i_this->mMode) {
     case 0:
+#if TARGET_PC
+        if (e_fm_albwTexReadyForFireStart(i_this)) {
+#else
         if ((int)i_this->mpFmBtk[0]->getFrame() == 0) {
+#endif
+#if TARGET_PC
+            const f32 atk_spd = e_fm_albwAttackAnimSpeed();
+            anm_init(i_this, BCK_FM_ATTACK, 10.0f, 0, atk_spd);
+            i_this->mpFmBrk[TEXANM_ATTACK]->setPlaySpeed(atk_spd);
+            i_this->mpFmBtk[TEXANM_ATTACK]->setPlaySpeed(atk_spd);
+#else
             anm_init(i_this, BCK_FM_ATTACK, 10.0f, 0, 1.0f);
+#endif
             i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_ATTACK_TAME, -1);
             i_this->mSound.startCreatureSound(Z2SE_EN_FM_ATTACK_TAME, 0, -1);
 
@@ -1018,8 +1296,11 @@ static void e_fm_f_fight(e_fm_class* i_this) {
     case 1:
         tame_eff_set(i_this);        
 
-        if (anm_frame == TREG_S(7) + 88) {
+        if (i_this->mpFmModelMorf->checkFrame(TREG_S(7) + 88.0f)) {
             i_this->field_0x790 = 1;
+#if TARGET_PC
+            e_fm_albwQueueCommit(3);
+#endif
             dComIfGp_getVibration().StartQuake(VIBMODE_Q_POWER3, 1, cXyz(0.0f, 1.0f, 0.0f));
             i_this->mSound.startCreatureSound(Z2SE_EN_FM_BLAST, 0, -1);
             i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_BLAST_GAOO, -1);
@@ -1037,9 +1318,15 @@ static void e_fm_f_fight(e_fm_class* i_this) {
             }
 
             i_this->mMode = 0;
+#if TARGET_PC
+            e_fm_albwRestoreFightTex(i_this);
+            i_this->mpFmBrk[TEXANM_ATTACK]->setPlaySpeed(1.0f);
+            i_this->mpFmBtk[TEXANM_ATTACK]->setPlaySpeed(1.0f);
+#else
             i_this->mPlayTexAnmNo = TEXANM_FM;
             i_this->mpFmBrk[TEXANM_FM]->setFrame(0.0f);
             i_this->mpFmBtk[TEXANM_FM]->setFrame(0.0f);
+#endif
         }
         break;
     }
@@ -1097,9 +1384,17 @@ static void e_fm_fire(e_fm_class* i_this) {
 
     switch (i_this->mMode) {
     case 0:
+#if TARGET_PC
+        if (e_fm_albwTexReadyForFireStart(i_this)) {
+#else
         if ((int)i_this->mpFmBtk[0]->getFrame() == 0) {
+#endif
             i_this->field_0x1830 = 0.0f;
+#if TARGET_PC
+            anm_init(i_this, BCK_FM_ANIMAL, e_fm_albwBreathLeadInMorf(), 0, e_fm_albwBreathAnimSpeed());
+#else
             anm_init(i_this, BCK_FM_ANIMAL, 10.0f, 0, 1.0f);
+#endif
             i_this->mMode = 1;
             i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_GAOO_SHORT, -1);
         }
@@ -1112,6 +1407,11 @@ static void e_fm_fire(e_fm_class* i_this) {
                 i_this->field_0x1828 = 2;
                 i_this->field_0x7b6 = 3;
                 i_this->field_0x5c8 = 4;
+#if TARGET_PC
+                if (i_this->mpFmModelMorf->checkFrame((f32)(l_HIO.field_0x98 + 15))) {
+                    e_fm_albwQueueCommit(4);
+                }
+#endif
             }
         }
 
@@ -1119,9 +1419,13 @@ static void e_fm_fire(e_fm_class* i_this) {
             i_this->mAction = ACTION_NORMAL;
             i_this->mMode = 0;
             i_this->mTimers[0] = 0;
+#if TARGET_PC
+            e_fm_albwRestoreFightTex(i_this);
+#else
             i_this->mPlayTexAnmNo = TEXANM_FM;
             i_this->mpFmBrk[TEXANM_FM]->setFrame(0.0f);
             i_this->mpFmBtk[TEXANM_FM]->setFrame(0.0f);
+#endif
             i_this->field_0x7b6 = 0;
             i_this->field_0x5c8 = 2;
         }
@@ -1173,7 +1477,14 @@ static void e_fm_stop(e_fm_class* i_this) {
             dComIfGp_getVibration().StopQuake(0x1F);
             i_this->mAction = ACTION_DOWN;
             i_this->mMode = 0;
+#if TARGET_PC
+            // Refinement: one pool — do not snap back to 50 (or 200).
+            if (!dAlbwBossRefinement_isEnabled()) {
+                i_this->health = 50;
+            }
+#else
             i_this->health = 50;
+#endif
             i_this->mDownCnt++;
             i_this->mChain[i_this->field_0x808].field_0x6178 = 0.0f;
 
@@ -1278,10 +1589,16 @@ static void e_fm_damage_run(e_fm_class* i_this) {
                 }
 
                 if (i_this->mChain[i].field_0x6174 > var_f30 && ((i == 2 && (anm_frame & 252) == 12) || (i == 3 && (anm_frame & 252) == 40))) {
+#if TARGET_PC
+                    if (!dAlbwBoss_fyrusAblazePhase()) {
+#endif
                     i_this->mAction = ACTION_STOP;
                     i_this->mMode = 0;
                     i_this->field_0x808 = i;
                     return;
+#if TARGET_PC
+                    }
+#endif
                 }
             }
         }
@@ -2046,6 +2363,11 @@ static s8 e_fm_down(e_fm_class* i_this) {
         }
 
         if (i_this->mTimers[1] == 0) {
+#if TARGET_PC
+            if (dAlbwBossRefinement_isEnabled() && i_this->health <= 0) {
+                break;
+            }
+#endif
             anm_init(i_this, BCK_FM_UP, 10.0f, 0, 1.0f);
             i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_UP, -1);
             i_this->mMode = 3;
@@ -2062,17 +2384,32 @@ static s8 e_fm_down(e_fm_class* i_this) {
         if (i_this->mpFmModelMorf->isStop()) {
             anm_init(i_this, BCK_FM_ANIMAL02, 10.0f, 0, 1.0f);
             i_this->mMode = 4;
+#if TARGET_PC
+            if (!dAlbwBoss_fyrusStayHollow()) {
+                i_this->mPlayTexAnmNo = TEXANM_ANIMAL;
+                i_this->mpFmBrk[TEXANM_ANIMAL]->setFrame(0.0f);
+                i_this->mpFmBtk[TEXANM_ANIMAL]->setFrame(0.0f);
+            }
+#else
             i_this->mPlayTexAnmNo = TEXANM_ANIMAL;
             i_this->mpFmBrk[TEXANM_ANIMAL]->setFrame(0.0f);
             i_this->mpFmBtk[TEXANM_ANIMAL]->setFrame(0.0f);
+#endif
         }
         break;
     case 4:
         sp8 = 0;
 
         if (anm_frame == 60) {
+#if TARGET_PC
+            if (!dAlbwBoss_fyrusStayHollow()) {
+                i_this->field_0x792 = 1;
+                Z2GetAudioMgr()->changeBgmStatus(4);
+            }
+#else
             i_this->field_0x792 = 1;
             Z2GetAudioMgr()->changeBgmStatus(4);
+#endif
         }
 
         if (anm_frame == 65) {
@@ -2087,9 +2424,21 @@ static s8 e_fm_down(e_fm_class* i_this) {
         if (i_this->mpFmModelMorf->isStop()) {
             i_this->mAction = ACTION_NORMAL;
             i_this->mMode = 0;
+#if TARGET_PC
+            if (!dAlbwBoss_fyrusStayHollow()) {
+                i_this->mPlayTexAnmNo = TEXANM_FM;
+                i_this->mpFmBrk[TEXANM_FM]->setFrame(0.0f);
+                i_this->mpFmBtk[TEXANM_FM]->setFrame(0.0f);
+            } else {
+                i_this->mPlayTexAnmNo = TEXANM_PUTOUT_WAIT;
+                i_this->mpFmBrk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+                i_this->mpFmBtk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+            }
+#else
             i_this->mPlayTexAnmNo = TEXANM_FM;
             i_this->mpFmBrk[TEXANM_FM]->setFrame(0.0f);
             i_this->mpFmBtk[TEXANM_FM]->setFrame(0.0f);
+#endif
             i_this->mDamageInvulnerabilityTimer = 2;
             i_this->field_0x770 = 1;
         }
@@ -2309,6 +2658,10 @@ static void damage_check(e_fm_class* i_this) {
     i_this->field_0xa60.Move();
 
 #if TARGET_PC
+    e_fm_albwResolvePendingCommit(i_this);
+#endif
+
+#if TARGET_PC
     // Look-pass before invuln gate — projectiles must register even if a short
     // damage window is open (body Tg grp / fire At were the real blockers).
     if (e_fm_tryAlbwAnmPreview(i_this)) {
@@ -2358,6 +2711,48 @@ static void damage_check(e_fm_class* i_this) {
                 /* dSv_event_flag_c::F_0670 - Goron Mines - Hitting knocked-down Fyrus */
                 dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[670]);
             } else {
+#if TARGET_PC
+                // Refinement: core hits drain the real HP pool (same cc_at_check as
+                // DOWNWAIT). Skip the 10-chip A_DOWN that snaps health back to 50.
+                if (dAlbwBossRefinement_isEnabled()) {
+                    i_this->mAtInfo.mpCollider = i_this->mCoreSph.GetTgHitObj();
+
+                    if (dAlbwBoss_fyrusAblazePhase() && dAlbwBoss_fyrusAblazeVulnOpen()) {
+                        cc_at_check(i_this, &i_this->mAtInfo);
+                        dAlbwBoss_fyrusOnAblazeVulnDamaged();
+                        dAlbwBoss_fyrusSyncFireVulnState(i_this);
+                        i_this->mPlayTexAnmNo = TEXANM_FM;
+                        i_this->mpFmBrk[TEXANM_FM]->setFrame(0.0f);
+                        i_this->mpFmBtk[TEXANM_FM]->setFrame(0.0f);
+                        i_this->mAction = ACTION_ALBW_ABLAZE_STUN;
+                        i_this->mMode = 0;
+                        i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_CHANCEDAMAGE, -1);
+                        dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[254]);
+                    } else if (dAlbwBoss_fyrusShouldChipAblazeDamage()) {
+                        const int hpBefore = i_this->health;
+                        cc_at_check(i_this, &i_this->mAtInfo);
+                        dAlbwBoss_fyrusApplyChipDamage(i_this, hpBefore);
+                    } else if (dAlbwBoss_fyrusHollowPhase()) {
+                        cc_at_check(i_this, &i_this->mAtInfo);
+                        i_this->field_0x804++;
+                        dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[254]);
+                        if (i_this->mAction != ACTION_ALBW_GOLEM_HOLD && i_this->health > 0) {
+                            i_this->mAction = ACTION_DAMAGE_RUN;
+                            anm_init(i_this, BCK_FM_CHANCEDAMAGE, 3.0f, 0, 1.0f);
+                            i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_CHANCEDAMAGE, -1);
+                            i_this->mMode = 0;
+                        }
+                    } else if (i_this->mAction != ACTION_ALBW_GOLEM_HOLD && i_this->health > 0) {
+                        cc_at_check(i_this, &i_this->mAtInfo);
+                        i_this->mAction = ACTION_DAMAGE_RUN;
+                        anm_init(i_this, BCK_FM_CHANCEDAMAGE, 3.0f, 0, 1.0f);
+                        i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_CHANCEDAMAGE, -1);
+                        i_this->mMode = 0;
+                        dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[254]);
+                    }
+                } else
+#endif
+                {
                 i_this->field_0x804++;
                 /* dSv_event_flag_c::F_0254 - For E3 2006 - Hit boss's weak spot at least once */
                 dComIfGs_onEventBit(dSv_event_flag_c::saveBitLabels[254]);
@@ -2373,6 +2768,7 @@ static void damage_check(e_fm_class* i_this) {
                     i_this->mSound.startCreatureVoice(Z2SE_EN_FM_V_CHANCEDAMAGE, -1);
                 }
                 i_this->mMode = 0;
+                }
             }
 
             i_this->field_0x2398 = 30;
@@ -2704,7 +3100,12 @@ static void chain_control3(e_fm_class* i_this, chain_s* i_chain_s, int param_2) 
         fopAc_ac_c* var_r24 = NULL;
         if (i_chain_s->field_0x617c == 0 || i_chain_s->field_0x617e != 0) {
             if (i_chain_s->pos[i_chain_s->field_0x61d0 - 1].y < 0.0f) {
+#if TARGET_PC
+                if (!dAlbwBoss_fyrusGolemWindowIsLive())
+#endif
+                {
                 daPy_py_c::setLookPos(&i_chain_s->pos[i_chain_s->field_0x61d0 - 1]);
+                }
             }
 
             if (i_chain_s->field_0x617d == 0) {
@@ -2785,6 +3186,26 @@ static void action(e_fm_class* i_this) {
     s8 attn_on = FALSE;
     s8 set_look_pos = TRUE;
     damage_check(i_this);
+#if TARGET_PC
+    dAlbwBoss_fyrusUpdateGolemWindow(i_this);
+    if (dAlbwBoss_fyrusGolemWindowIsLive()) {
+        if (i_this->mAction != ACTION_ALBW_GOLEM_HOLD && i_this->mAction != ACTION_END) {
+            i_this->mAction = ACTION_ALBW_GOLEM_HOLD;
+            i_this->mMode = 0;
+        }
+    } else if (i_this->mAction == ACTION_ALBW_GOLEM_HOLD) {
+        i_this->mAction = ACTION_NORMAL;
+        i_this->mMode = 0;
+        i_this->mPlayTexAnmNo = TEXANM_PUTOUT_WAIT;
+        i_this->mpFmBrk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+        i_this->mpFmBtk[TEXANM_PUTOUT_WAIT]->setFrame(0.0f);
+    }
+    if (dAlbwBoss_fyrusHollowPhase()) {
+        e_fm_albwTryResumeFight(i_this);
+    }
+    dAlbwBoss_fyrusSyncFireVulnState(i_this);
+    dAlbwBoss_fyrusTryFloorDown(i_this);
+#endif
     s8 bossroom_wait_on = TRUE;
 
     i_this->field_0x1b07c = 1;
@@ -2845,6 +3266,14 @@ static void action(e_fm_class* i_this) {
 #if TARGET_PC
     case ACTION_ANM_PREVIEW:
         e_fm_anm_preview(i_this);
+        i_this->field_0x1b07c = 0;
+        break;
+    case ACTION_ALBW_GOLEM_HOLD:
+        e_fm_albwGolemHold(i_this);
+        i_this->field_0x1b07c = 0;
+        break;
+    case ACTION_ALBW_ABLAZE_STUN:
+        e_fm_albwAblazeVulnStun(i_this);
         i_this->field_0x1b07c = 0;
         break;
 #endif
@@ -2930,6 +3359,13 @@ static void action(e_fm_class* i_this) {
     cLib_addCalcAngleS2(&i_this->mBodyRotX, sp16 / 2, 0x10, 0x200);
     cLib_addCalcAngleS2(&i_this->mHeadRotZ, sp14, 0x10, 0x200);
 
+#if TARGET_PC
+    if (dAlbwBoss_fyrusGolemKidsLoose()) {
+        attn_on = FALSE;
+        set_look_pos = FALSE;
+    }
+#endif
+
     if (attn_on) {
         fopAcM_OnStatus(actor, 0);
         actor->attention_info.flags = fopAc_AttnFlag_BATTLE_e;
@@ -2939,7 +3375,16 @@ static void action(e_fm_class* i_this) {
     }
 
     if (set_look_pos) {
+#if TARGET_PC
+        cXyz* golemLook = NULL;
+        if (dAlbwBoss_fyrusTryGolemLookPos(&golemLook) && golemLook != NULL) {
+            daPy_py_c::setLookPos(golemLook);
+        } else {
+            daPy_py_c::setLookPos(&actor->eyePos);
+        }
+#else
         daPy_py_c::setLookPos(&actor->eyePos);
+#endif
     }
 
     if (i_this->mDoCreateBa) {
@@ -3017,8 +3462,15 @@ static void effect_set(e_fm_class* i_this) {
     cLib_addCalc2(&i_this->mChainColorR, var_f28, 1.0f, var_f27);
 
     if (i_this->field_0x790 != 0) {
+        s16 prev_790 = i_this->field_0x790;
         i_this->field_0x790++;
-        if (i_this->field_0x790 == 10) {
+#if TARGET_PC
+        // +50% execution: extra tick every other frame (1.5× wall-clock).
+        if (dAlbwBossRefinement_isEnabled() && (i_this->mCounter & 1) == 0) {
+            i_this->field_0x790++;
+        }
+#endif
+        if (e_fm_tickCrossed(prev_790, i_this->field_0x790, 10)) {
             for (int i = 0; i < 4; i++) {
                 carry_off(i_this, i);
             }
@@ -3027,16 +3479,21 @@ static void effect_set(e_fm_class* i_this) {
             hasira_hahen_hit(&actor->current.pos, 1000.0f + VREG_F(14), 100.0f + VREG_F(15), -1);
         }
 
-        if (i_this->field_0x790 == 2) {
+        if (e_fm_tickCrossed(prev_790, i_this->field_0x790, 2)) {
             for (int i = 0; i < 2; i++) {
                 static int ef_bck[] = {7, 8};
-                i_this->mpAttackEfModelMorf[i]->setAnm((J3DAnmTransform*)dComIfG_getObjectRes("E_fm", ef_bck[i]), 0, 1.0f, 1.0f, 0.0f, -1.0f, NULL);
+#if TARGET_PC
+                const f32 fx_spd = e_fm_albwAttackAnimSpeed();
+#else
+                const f32 fx_spd = 1.0f;
+#endif
+                i_this->mpAttackEfModelMorf[i]->setAnm((J3DAnmTransform*)dComIfG_getObjectRes("E_fm", ef_bck[i]), 0, 1.0f, fx_spd, 0.0f, -1.0f, NULL);
                 i_this->mpAttackEfModelMorf[i]->setFrame(0.0f);
                 i_this->mpAttackEfBtk[i]->setFrame(0.0f);
 
                 if (i == 1) {
                     i_this->mpAttackEfBrk->setFrame(0.0f);
-                    i_this->field_0x798 = 2.5f + KREG_F(7);
+                    i_this->field_0x798 = (2.5f + KREG_F(7)) * fx_spd;
                 }
             }
 
@@ -3072,7 +3529,7 @@ static void effect_set(e_fm_class* i_this) {
         fire_range = (10.5f + KREG_F(6)) * (l_HIO.field_0x28 * i_this->mpAttackEfModelMorf[1]->getFrame());
 
         if (i_this->field_0x790 < (TREG_S(6) + 43)) {
-            if (i_this->field_0x790 == (TREG_S(6) + 41)) {
+            if (e_fm_tickCrossed(prev_790, i_this->field_0x790, TREG_S(6) + 41)) {
                 dComIfGp_getVibration().StopQuake(0x1F);
             }
 
@@ -3086,6 +3543,9 @@ static void effect_set(e_fm_class* i_this) {
             i_this->mEffAtSph.SetC(actor->current.pos);
             i_this->mEffAtSph.SetR(fire_range);
             dComIfG_Ccsp()->Set(&i_this->mEffAtSph);
+#if TARGET_PC
+            e_fm_albwApplyParryableAt(&i_this->mEffAtSph);
+#endif
 
             i_this->field_0x7b6 = 2;
             fpcM_Search(s_hasira_eff_sub, i_this);
@@ -3235,11 +3695,6 @@ static int daE_FM_Execute(e_fm_class* i_this) {
     cXyz sp10C(-20000.0f, 20000.0f, 20000.0f);
     i_this->field_0x1aff0 = 0;
 
-#if TARGET_PC
-    // Apply Tg before Ccsp()->Set so this frame's registration has grp bits.
-    e_fm_albwLookPassApplyBodyTg(i_this, e_fm_albwLookPassWantTg(i_this));
-#endif
-
     MTXCopy(model->getAnmMtx(3), *calc_mtx);
     sp130.set(20.0f, 0.0f, 0.0f);
     MtxPosition(&sp130, &sp124);
@@ -3382,8 +3837,8 @@ static int daE_FM_Execute(e_fm_class* i_this) {
     }
 
 #if TARGET_PC
-    // Re-assert after At bit tweaks (OnAtVsPlayerBit touches At SPrm).
-    e_fm_albwLookPassApplyBodyTg(i_this, e_fm_albwLookPassWantTg(i_this));
+    // Tg-only shadow spheres track body burn At layout (see kAlbwFmLookPassTg).
+    e_fm_albwLookPassSyncBodySph(i_this);
 #endif
 
     i_this->field_0x182b = 0;
@@ -3416,6 +3871,9 @@ static int daE_FM_Execute(e_fm_class* i_this) {
         }
 
         dComIfG_Ccsp()->Set(&i_this->mAtSph);
+#if TARGET_PC
+        e_fm_albwApplyParryableAt(&i_this->mAtSph);
+#endif
     } else {
         i_this->field_0x182a = 0;
     }
@@ -3493,12 +3951,15 @@ static int daE_FM_Execute(e_fm_class* i_this) {
                     }
 
                     dComIfG_Ccsp()->Set(&i_this->mChainAtSph[j]);
-
+#if TARGET_PC
+                    e_fm_albwApplyParryableAt(&i_this->mChainAtSph[j]);
+#else
                     if (daPy_getPlayerActorClass()->checkEquipHeavyBoots()) {
                         i_this->mChainAtSph[j].SetAtSpl((dCcG_At_Spl)2);
                     } else {
                         i_this->mChainAtSph[j].SetAtSpl((dCcG_At_Spl)14);
                     }
+#endif
                 }
             }
         }
@@ -4004,8 +4465,13 @@ static int daE_FM_Create(fopAc_ac_c* i_this) {
         a_this->mAcch.Set(fopAcM_GetPosition_p(i_this), fopAcM_GetOldPosition_p(i_this), i_this, 1, &a_this->mAcchCir, fopAcM_GetSpeed_p(i_this), NULL, NULL);
         a_this->mAcchCir.SetWall(100.0f, 400.0f);
 
+#if TARGET_PC
+        i_this->health = dAlbwBoss_fyrusCreateHp();
+        i_this->field_0x560 = i_this->health;
+#else
         i_this->health = 50;
         i_this->field_0x560 = 50;
+#endif
 
         a_this->field_0xa24.Init(0xFA, 0, i_this);
 

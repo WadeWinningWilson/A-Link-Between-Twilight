@@ -11,7 +11,7 @@
 All features in this document apply **only when Outfit Stats is enabled** (dedicated settings toggle — exact key TBD at implement).
 
 - **Human Link only** — wolf form uses existing wolf damage rules; outfit cloth multipliers do not apply.
-- **Independent of** the global **Damage Multiplier** cheat/difficulty slider (`game.damageMultiplier`) — outfit mults stack **multiplicatively** with that setting when both are active.
+- **Independent of** the global **Damage Multiplier** (`game.damageMultiplier`) — outfit mults stack **multiplicatively** with that setting when both are active. Planned reuse of that slider as **NG+ run scaler** (1× first run, +1× per New Game) is documented in [region-damage-difficulty.md](region-damage-difficulty.md); until that lands, treat it as the manual 1–8× control.
 - Ordon’s **2.5× received-damage** applies from **game start** when the toggle is on (new save, Ordon equipped).
 
 ---

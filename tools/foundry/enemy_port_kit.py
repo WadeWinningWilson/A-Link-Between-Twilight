@@ -1,3 +1,22 @@
+# ============================================================================
+# ERA WARNING (Foundry kit-family sweep, 2026-08-21 - user order: kits may
+# still carry mount/bake/legs-era recipes; History saw remnants and this
+# sweep CONFIRMED them family-wide).
+#
+# THIS KIT'S MODEL RULE IS MOUNT-ERA AND INVERTED FOR PLUGIN PORTS:
+# 'route dExtNpcMount_acquireModelData - NEVER raw' is correct FORK-side
+# and IMPOSSIBLE plugin-side (the symbol does not exist on vanilla; the
+# plugin's model path is the receiver getRes choke point). MOD_ARCS
+# points at the model_replacements era.
+#
+# Era doctrine of record: actor_kit.py's banner + its era-split checklist
+# ([FORK] vs [PLUGIN] columns) and the trace method at
+# docs/state/ww-plugin-outset.md #How-ports-land. PLUGIN delivery never
+# routes through dExtNpcMount / f_pc edits / files.cmake / model_replacements
+# - those are FORK-era mechanisms a stock-dusklight user never receives.
+# This banner marks the era; a DEEP retool of this kit is a named plate item,
+# not implied by the banner's presence.
+# ============================================================================
 """Foundry §230: the Enemy Port Kit — one command per donor actor, everything
 History derived by hand for the pig (§225-§229), generated.
 
@@ -48,9 +67,23 @@ PATTERNS = [
 
 # Res-routing law (§229 DN-3 for direct ports): required handling per res type.
 RES_ROUTING = [
+    # ========================================================================
+    # ERA-SPLIT 2026-08-21 (deep retool, follows actor_kit's precedent): the
+    # model law was MOUNT-ERA stated as if universal. It stays TRUE for FORK
+    # ports and is IMPOSSIBLE for PLUGIN ports — dExtNpcMount does not exist
+    # on vanilla; a plugin TU routed through it cannot link. The plugin law is
+    # the receiver's own getRes choke point (trace method step 4, lwood R2-R6
+    # template; d_resorce.cpp parses BMD-family AT LOAD, so the slot already
+    # holds J3DModelData* — 'parse-at-consume' is the RECEIVER'S job there,
+    # not the port's).
+    # ========================================================================
     (("BDL", "BMD", "BDLM", "BDLI", "BDLC"),
-     "MODEL — NEVER raw: route dExtNpcMount_acquireModelData(arc, name) "
-     "(parse-at-consume, DN-3); NULL-guard → graceful missing actor"),
+     "MODEL [FORK] — NEVER raw: route dExtNpcMount_acquireModelData(arc, "
+     "name) (parse-at-consume, DN-3); NULL-guard → graceful missing actor. "
+     "[PLUGIN] — the receiver getRes choke point via registry.cpp hooks; "
+     "the receiver parses BMD-family at load, the slot holds J3DModelData* "
+     "already (res_consumer_census.py is the receipt). dExtNpcMount is "
+     "FORK-ONLY and will not link against vanilla."),
     (("BCK", "BAS"),
      "ANIM — raw getObjectRes is FINE (bound via morf/setAnm binder, which "
      "fixes it)"),

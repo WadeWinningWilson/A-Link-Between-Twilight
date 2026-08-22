@@ -1,6 +1,6 @@
 /**
  * d_albw_parry_master.cpp
- * Parry Master — fail chip, base-meter tax, FIFO reclaim queue.
+ * Parry Master — fail chip, base-meter tax, FIFO reclaim + LoP grace/melt.
  */
 
 #include "d/d_albw_parry_master.h"
@@ -8,6 +8,7 @@
 #if TARGET_PC
 
 #include "d/actor/d_a_alink.h"
+#include "d/d_albw_region_mult.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
 #include "dusk/settings.h"
@@ -18,7 +19,7 @@ namespace {
 
 constexpr f32 kChipFraction = 0.15f;
 constexpr f32 kMeterPerAtp = 545.0f;  // 5% of sOilBaseMax (10900) per ATP
-constexpr auto kQueueTtl = std::chrono::seconds(6);
+constexpr auto kGraceDur = std::chrono::seconds(3);
 constexpr int kQueueCap = 32;
 
 struct ChipEntry {
@@ -28,8 +29,13 @@ struct ChipEntry {
 ChipEntry sQueue[kQueueCap];
 int sQueueHead = 0;
 int sQueueCount = 0;
-std::chrono::steady_clock::time_point sQueueExpire{};
-bool sQueueArmed = false;
+
+f32 sLivePool = 0.0f;
+f32 sPoolAtMeltStart = 0.0f;
+std::chrono::steady_clock::time_point sGraceEnd{};
+std::chrono::steady_clock::time_point sMeltStart{};
+bool sArmed = false;
+bool sMelting = false;
 bool sApplyingChip = false;
 bool sApplyingReclaim = false;
 
@@ -44,25 +50,69 @@ int tenthsRound(f32 value) {
     return whole;
 }
 
+int sumFifo() {
+    int sum = 0;
+    for (int i = 0; i < sQueueCount; ++i) {
+        sum += sQueue[(sQueueHead + i) % kQueueCap].pieces;
+    }
+    return sum;
+}
+
 void clearQueueInternal() {
     sQueueHead = 0;
     sQueueCount = 0;
-    sQueueArmed = false;
+    sLivePool = 0.0f;
+    sPoolAtMeltStart = 0.0f;
+    sArmed = false;
+    sMelting = false;
 }
 
-void pushChip(u16 pieces) {
+void refreshGrace(const std::chrono::steady_clock::time_point& now) {
+    sGraceEnd = now + kGraceDur;
+    sMelting = false;
+}
+
+// Trim oldest FIFO entries so sumFifo() <= floor(sLivePool).
+void syncFifoToLivePool() {
+    int target = static_cast<int>(sLivePool);
+    if (target < 0) {
+        target = 0;
+    }
+    while (sQueueCount > 0 && sumFifo() > target) {
+        ChipEntry& e = sQueue[sQueueHead];
+        const int excess = sumFifo() - target;
+        if (e.pieces <= excess) {
+            sQueueHead = (sQueueHead + 1) % kQueueCap;
+            sQueueCount--;
+        } else {
+            e.pieces = static_cast<u16>(e.pieces - excess);
+            break;
+        }
+    }
+    if (sQueueCount == 0 || sLivePool <= 0.0f) {
+        clearQueueInternal();
+    }
+}
+
+void pushChip(u16 pieces, const std::chrono::steady_clock::time_point& now) {
     if (pieces == 0) {
         return;
     }
     if (sQueueCount >= kQueueCap) {
+        const u16 dropped = sQueue[sQueueHead].pieces;
         sQueueHead = (sQueueHead + 1) % kQueueCap;
         sQueueCount--;
+        sLivePool -= static_cast<f32>(dropped);
+        if (sLivePool < 0.0f) {
+            sLivePool = 0.0f;
+        }
     }
     const int idx = (sQueueHead + sQueueCount) % kQueueCap;
     sQueue[idx].pieces = pieces;
     sQueueCount++;
-    sQueueExpire = std::chrono::steady_clock::now() + kQueueTtl;
-    sQueueArmed = true;
+    sLivePool += static_cast<f32>(pieces);
+    sArmed = true;
+    refreshGrace(now);
 }
 
 u16 popOne() {
@@ -72,10 +122,16 @@ u16 popOne() {
     const u16 pieces = sQueue[sQueueHead].pieces;
     sQueueHead = (sQueueHead + 1) % kQueueCap;
     sQueueCount--;
-    if (sQueueCount == 0) {
-        sQueueArmed = false;
-    } else {
-        sQueueExpire = std::chrono::steady_clock::now() + kQueueTtl;
+    sLivePool -= static_cast<f32>(pieces);
+    if (sLivePool < 0.0f) {
+        sLivePool = 0.0f;
+    }
+    if (sMelting) {
+        sPoolAtMeltStart = sLivePool;
+        sMeltStart = std::chrono::steady_clock::now();
+    }
+    if (sQueueCount == 0 || sLivePool <= 0.0f) {
+        clearQueueInternal();
     }
     return pieces;
 }
@@ -98,7 +154,6 @@ bool dParryMaster_isEnabled() {
     if (!dusk::getSettings().game.parryMaster.getValue()) {
         return false;
     }
-    // Economy requires Shield Parry perfect/fail classification.
     return dusk::getSettings().game.shieldParryCombat.getValue();
 }
 
@@ -112,13 +167,45 @@ void dParryMaster_clearQueue() {
     clearQueueInternal();
 }
 
+int dParryMaster_getRecoverablePieces() {
+    if (!dParryMaster_isEnabled() || !sArmed) {
+        return 0;
+    }
+    int pieces = static_cast<int>(sLivePool + 0.0001f);
+    if (pieces < 0) {
+        return 0;
+    }
+    return pieces;
+}
+
 void dParryMaster_update() {
-    if (!dParryMaster_isEnabled() || !sQueueArmed) {
+    if (!dParryMaster_isEnabled() || !sArmed) {
         return;
     }
-    if (std::chrono::steady_clock::now() >= sQueueExpire) {
-        clearQueueInternal();
+
+    const auto now = std::chrono::steady_clock::now();
+    if (!sMelting) {
+        if (now >= sGraceEnd) {
+            sMelting = true;
+            sMeltStart = sGraceEnd;
+            sPoolAtMeltStart = sLivePool;
+        }
+        return;
     }
+
+    const f32 meltSec =
+        std::chrono::duration<f32>(now - sMeltStart).count();
+    if (meltSec >= 6.0f || sPoolAtMeltStart <= 0.0f) {
+        clearQueueInternal();
+        return;
+    }
+
+    sLivePool = sPoolAtMeltStart * (1.0f - meltSec / 6.0f);
+    if (sLivePool <= 0.0f) {
+        clearQueueInternal();
+        return;
+    }
+    syncFifoToLivePool();
 }
 
 void dParryMaster_onFailedBlock(daAlink_c* i_link, int i_atp) {
@@ -129,11 +216,11 @@ void dParryMaster_onFailedBlock(daAlink_c* i_link, int i_atp) {
         return;
     }
 
-    // Post-scale damage, then ×0.15, then tenths (same rule as setDamagePoint).
+    // COVER: chip + meter tax from region-scaled enemy Atp (same as open hit).
+    dAlbwRegionMult_DamageScaleScope regionDmg;
     const f32 magnified = static_cast<f32>(i_atp) * i_link->damageMagnification(FALSE, 0);
     const int chip = tenthsRound(magnified * kChipFraction);
 
-    // Meter tax: round(effAtp × 545) pinned to base capacity fractions.
     const int meterDrain = static_cast<int>(magnified * kMeterPerAtp + 0.5f);
     if (meterDrain > 0) {
         dMeter2_drainALBWAmount(meterDrain);
@@ -143,10 +230,11 @@ void dParryMaster_onFailedBlock(daAlink_c* i_link, int i_atp) {
         return;
     }
 
+    const auto now = std::chrono::steady_clock::now();
     sApplyingChip = true;
     dComIfGp_setItemLifeCount(static_cast<f32>(-chip), 0);
     i_link->onResetFlg1(daPy_py_c::RFLG1_DAMAGE_IMPACT);
-    pushChip(static_cast<u16>(chip));
+    pushChip(static_cast<u16>(chip), now);
     sApplyingChip = false;
 }
 
@@ -181,12 +269,24 @@ void dParryMaster_onHeal(int i_pieces) {
         ChipEntry& entry = sQueue[sQueueHead];
         if (entry.pieces <= remaining) {
             remaining -= entry.pieces;
-            popOne();
+            sLivePool -= static_cast<f32>(entry.pieces);
+            sQueueHead = (sQueueHead + 1) % kQueueCap;
+            sQueueCount--;
         } else {
             entry.pieces = static_cast<u16>(entry.pieces - remaining);
+            sLivePool -= static_cast<f32>(remaining);
             remaining = 0;
-            sQueueExpire = std::chrono::steady_clock::now() + kQueueTtl;
         }
+    }
+    if (sLivePool < 0.0f) {
+        sLivePool = 0.0f;
+    }
+    if (sMelting) {
+        sPoolAtMeltStart = sLivePool;
+        sMeltStart = std::chrono::steady_clock::now();
+    }
+    if (sQueueCount == 0 || sLivePool <= 0.0f) {
+        clearQueueInternal();
     }
 }
 

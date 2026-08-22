@@ -149,6 +149,30 @@ def authored_by_me(line):
                for f in fields[-2:])
 
 
+# ============================================================
+# READ WITH ONE RETRY - THE READ RACE AGAINST OUR OWN FILING TOOL
+# ============================================================
+# `file_row.py` REWRITES CALLS.md. A scan landing mid-write hits a Windows
+# file lock and read_text raises OSError. This watcher's loop caught only
+# KeyboardInterrupt, so that OSError propagated out and KILLED THE PROCESS -
+# leaving the pulse frozen at note:"running" with no delivery and no stderr.
+# That is not hypothetical: pid 31212 died exactly that way earlier today and
+# was found only because its pulse mtime went stale, not because anything
+# reported. Librarian hit the same race with a 60 s degraded sleep; the same
+# cause, a worse outcome here.
+# The blind spot CORRELATES WITH ACTIVITY - it fires when rows are landing,
+# which is when a watcher matters most.
+# Retry once, 2 s apart. A genuinely unreadable board still raises, and the
+# caller still reports it: this widens no eyes shut.
+# ============================================================
+def _read_calls():
+    try:
+        return CALLS.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        time.sleep(2)
+        return CALLS.read_text(encoding="utf-8", errors="replace")
+
+
 def board_rows():
     """CALLS rows addressed to this lane, both states -> {hash: (excerpt, mine)}.
 
@@ -159,7 +183,7 @@ def board_rows():
     if not CALLS.is_file():
         return None
     rows = {}
-    for ln in CALLS.read_text(encoding="utf-8", errors="replace").splitlines():
+    for ln in _read_calls().splitlines():
         if addressed_to_me(ln) and not is_own_filing(ln):
             s = ln.strip()
             # IDENTITY vs CONTENT are two different keys and conflating them
@@ -271,6 +295,15 @@ def main():
                      % (event, passes))
                 write_pulse(passes, "exited-on-event: %s" % event, "delivered")
                 return 0
+
+        except OSError as e:
+            # SURVIVE, LOUDLY. A scan failure must degrade this watcher, never
+            # end it - a dead watcher and a quiet board are indistinguishable
+            # from outside, and that is how a call goes unread.
+            emit("ENGINE-WATCH ** SCAN DEGRADED ** %s: %s - retried once and "
+                 "still failed; STAYING UP, next pass in %ds"
+                 % (type(e).__name__, e, INTERVAL))
+            write_pulse(passes, "scan-failed", "degraded")
 
         except KeyboardInterrupt:
             emit("ENGINE-WATCH stopped (interrupt) after %d pass(es)" % passes)

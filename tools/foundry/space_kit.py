@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 # ============================================================================
+# ERA WARNING (Foundry kit-family sweep, 2026-08-21 - user order: kits may
+# still carry mount/bake/legs-era recipes; History saw remnants and this
+# sweep CONFIRMED them family-wide).
+#
+# THIS KIT'S OWN HEADER NAMES ITS BAKE-ERA CHAIN ('merge_event's
+# bake-era chain stays in the skeleton dir') and MOD points at
+# model_replacements. Its disc-first donor reads are era-correct; the
+# bake/skeleton paths are the fork-era remnant.
+#
+# Era doctrine of record: actor_kit.py's banner + its era-split checklist
+# ([FORK] vs [PLUGIN] columns) and the trace method at
+# docs/state/ww-plugin-outset.md #How-ports-land. PLUGIN delivery never
+# routes through dExtNpcMount / f_pc edits / files.cmake / model_replacements
+# - those are FORK-era mechanisms a stock-dusklight user never receives.
+# This banner marks the era; a DEEP retool of this kit is a named plate item,
+# not implied by the banner's presence.
+# ============================================================================
+# ============================================================================
 # space_kit.py — the Space Kit driver (build order §3.1 + Pass-3 battery)
 #
 # Implements, per docs/WW Linked/space-kit-design.md (§323-refined, §325-trimmed):

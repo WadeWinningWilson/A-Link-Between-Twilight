@@ -2695,31 +2695,32 @@ void dMeter2_c::moveLightDrop() {
 }
 
 void dMeter2_c::moveRupee() {
-    s16 temp_r5;
-    s32 temp_r0;
-
-    temp_r5 = dComIfGs_getRupeeMax();
-    s16 r29 = 0;
+    // ============================================
+    // MODIFIED CODE — ALBW Port (Phase C1)
+    // s32 clamp/tick so Colossal 50k does not truncate in s16.
+    // ============================================
+    const s32 rupeeMax = static_cast<s32>(dComIfGs_getRupeeMax());
+    s32 pending = 0;
     bool draw_rupee = false;
 
     if (dComIfGp_getItemRupeeCount() != 0) {
-        r29 = dComIfGs_getRupee() + dComIfGp_getItemRupeeCount();
-        if (r29 > temp_r5) {
-            r29 = temp_r5;
-        } else if (r29 < 0) {
-            r29 = 0;
+        pending = static_cast<s32>(dComIfGs_getRupee()) + dComIfGp_getItemRupeeCount();
+        if (pending > rupeeMax) {
+            pending = rupeeMax;
+        } else if (pending < 0) {
+            pending = 0;
         }
 
-        dComIfGs_setRupee(r29);
+        dComIfGs_setRupee(static_cast<u16>(pending));
         dComIfGp_clearItemRupeeCount();
 
-        if (dComIfGs_getRupee() - mRupeeNum >= 5) {
+        if (static_cast<s32>(dComIfGs_getRupee()) - mRupeeNum >= 5) {
             onRupeeSoundBit(2);
             if (isRupeeSoundBit(3)) {
                 offRupeeSoundBit(3);
                 offRupeeSoundBit(1);
             }
-        } else if (dComIfGs_getRupee() - mRupeeNum <= -5) {
+        } else if (static_cast<s32>(dComIfGs_getRupee()) - mRupeeNum <= -5) {
             onRupeeSoundBit(3);
             if (isRupeeSoundBit(2)) {
                 offRupeeSoundBit(2);
@@ -2728,13 +2729,14 @@ void dMeter2_c::moveRupee() {
         }
     }
 
-    if (mRupeeNum != dComIfGs_getRupee()) {
-        if (mRupeeNum < dComIfGs_getRupee()) {
+    const s32 savedRupee = static_cast<s32>(dComIfGs_getRupee());
+    if (mRupeeNum != savedRupee) {
+        if (mRupeeNum < savedRupee) {
             mRupeeNum++;
             draw_rupee = true;
 
             if (isRupeeSoundBit(2) & 1) {
-                if (mRupeeNum != dComIfGs_getRupee()) {
+                if (mRupeeNum != savedRupee) {
                     if (!isRupeeSoundBit(0)) {
                         onRupeeSoundBit(0);
                         mDoAud_seStart(Z2SE_LUPY_INC_CNT_1, NULL, 0, 0);
@@ -2747,12 +2749,12 @@ void dMeter2_c::moveRupee() {
                     offRupeeSoundBit(0);
                 }
             }
-        } else if (mRupeeNum > dComIfGs_getRupee()) {
+        } else if (mRupeeNum > savedRupee) {
             mRupeeNum--;
             draw_rupee = true;
 
             if (isRupeeSoundBit(3) & 1) {
-                if (mRupeeNum != dComIfGs_getRupee()) {
+                if (mRupeeNum != savedRupee) {
                     if (!isRupeeSoundBit(1)) {
                         onRupeeSoundBit(1);
                         mDoAud_seStart(Z2SE_LUPY_DEC_CNT_1, NULL, 0, 0);
@@ -2767,6 +2769,9 @@ void dMeter2_c::moveRupee() {
             }
         }
     }
+    // ============================================
+    // MODIFIED CODE ENDS HERE
+    // ============================================
 
     if (mRupeeKeyScale != g_drawHIO.mRupeeKeyScale) {
         mRupeeKeyScale = g_drawHIO.mRupeeKeyScale;

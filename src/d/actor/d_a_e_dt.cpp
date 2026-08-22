@@ -22,6 +22,7 @@
 #include "m_Do/m_Do_lib.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_region_mult.h"
 #endif
 
 class daE_DT_HIO_c {
@@ -1187,7 +1188,14 @@ void daE_DT_c::executeJump() {
             }
             press_pos.y = mAcch.GetGroundH();
             daPy_getPlayerActorClass()->onPressedDamage(press_pos, press_angle);
+#if TARGET_PC
+            {
+                dAlbwRegionMult_DamageScaleScope regionDmg;
+                daPy_py_c::setPlayerDamage(4, 1);
+            }
+#else
             daPy_py_c::setPlayerDamage(4, 1);
+#endif
             field_0x704 = 3;
             Z2GetAudioMgr()->changeSubBgmStatus(1);
             break;

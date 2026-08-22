@@ -21,6 +21,24 @@
 #               flags resolved (user ruling) + the room's coincidence rule.
 #
 # Default is scaffold-only (writes to scratchpad, touches nothing).
+#
+# ============================================================================
+# ERA WARNING — RETOOLED 2026-08-21 (Foundry, user order: kits may still carry
+# mount/bake/legs-era recipes).
+#
+# THIS KIT'S LANDING PIPELINE IS FORK-ERA. --land/--activate edit the FORK
+# TREE (f_pc_name.h, f_pc_profile_lst, files.cmake, OBJNAME rows) — the
+# delivery model the PLUGIN replaces. A user on stock dusklight NEVER receives
+# a tree-landed actor. Under the standing plugin-side order:
+#   · scaffold/review tiers remain valid for BOTH targets;
+#   · --land/--activate are FORK-ONLY conveniences, never delivery;
+#   · plugin delivery = the trace method (ww-plugin-outset.md §How ports
+#     land) + a registry.cpp above-enum row. A PLUGIN-TARGET LANDING MODE IS
+#     NOT BUILT YET — that gap is on Foundry's plate, named, not implied.
+# Three checklist rules below were harvested from tree-side ports and have
+# been ERA-SPLIT rather than deleted (fork guidance kept, plugin column
+# added), because deleting a still-true fork recipe to fix a plugin gap is
+# the substitution error inverted.
 # ============================================================================
 import hashlib
 import re
@@ -35,29 +53,52 @@ from ww2tp_codemod import apply as codemod_apply
 RECEIVER = Path("C:/Users/xxxxx/Documents/dusklight")
 DONOR = Path("D:/XXXXXXX/WW DP")
 DONOR_OBJ = Path("D:/XXXXXXX/Ex WW/files/res/Object")
+# MOD is the FORK-ERA arc-staging target (model_replacements era) — used only
+# by --land arc staging, kept for fork work, NOT a plugin delivery path.
 MOD = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/"
             "model_replacements/WW-Crew-Restoration")
-SCRATCH = Path("C:/Users/xxxxx/AppData/Local/Temp/claude/"
-               "C--Users-ryana-Documents-dusklight/"
-               "cfe21ec7-19db-4fe0-b9e2-f96f30a4db65/scratchpad") / "actor_kit"
+# SCRATCH was hardcoded to a DEAD session's scratchpad (found in the 2026-08-21
+# era audit) — every scaffold written after that session died went to a
+# directory nothing would ever read. Now session-independent.
+import tempfile
+SCRATCH = Path(tempfile.gettempdir()) / "actor_kit"
 
 # the §-catalog: every landed-port pitfall, cited — the REVIEW checklist
 CHECKLIST = [
-    ("DN-3 model resolve", "model via dExtNpcMount_acquireModelData(arc, bmd) "
-     "— NOT dComIfG_getObjectRes+res-header (lamp §327 / toripost §253 recipe)"),
+    # ERA-SPLIT 2026-08-21: the mount recipe is FORK-ONLY. dExtNpcMount is
+    # tree-side (57 files, absent from dusklight-main) and on Engine's do-not
+    # list; a plugin port routed through it cannot even link. The plugin's
+    # model path IS the receiver getRes choke point (trace method step 4).
+    ("DN-3 model resolve [FORK]", "model via dExtNpcMount_acquireModelData(arc, "
+     "bmd) — NOT dComIfG_getObjectRes+res-header (lamp §327 / toripost §253)"),
+    ("DN-3 model resolve [PLUGIN]", "model via the receiver's own getRes choke "
+     "point hooked in registry.cpp (lwood R2-R6 template) — dExtNpcMount does "
+     "not exist on vanilla; MOUNT IS THE BANNED ERA, not a recipe"),
     ("cPhs/assert idiom", "cPhs_State -> cPhs_Step; JUT_ASSERT -> NULL-guard "
      "(port assert panics; donor retail assert compiles out)"),
     ("particle arity", "particle_set 6-arg -> 10-arg; setSimple 2-arg -> 7-arg "
      "(WW default args made explicit)"),
-    ("TEV/lighting", "settingTevStruct TEV_TYPE_ACTOR + setLightTevColorType "
-     "— check §47 donor-look path on WW host stages"),
+    ("TEV/lighting [FORK]", "settingTevStruct TEV_TYPE_ACTOR + "
+     "setLightTevColorType — check §47 donor-look path on WW host stages"),
+    # ERA-SPLIT: §47's host-stage machinery is tree-side. Plugin-side, TEV
+    # types are receiver enums consumed through the same choke points the
+    # trace method names — and TEV_TYPE_BG0 was an R4 authored-constant
+    # failure (wrote 0, truth 1): NEVER hand-author the constant, read it
+    # from the receiver header once E2 lands typed includes.
+    ("TEV/lighting [PLUGIN]", "TEV type constants from receiver headers "
+     "(typed, post-E2), applied at the modelEntryDL/consume boundary — no "
+     "hand-authored TEV constants (R4 precedent)"),
     ("modelCalc order", "modelCalc BEFORE btp/face anim consume (pitfall C — "
      "recurring Aryll/Grandma render bug)"),
     ("staff-claim this", "any event staff registration passes the ACTOR ptr "
      "(§270 NULL-actor class — codemod detector should have flagged)"),
     ("anm_prm endianness", "rodata anim-param tables byte-order (§258 class)"),
-    ("shims header", "missing WW constants -> d_ext_ww_actor_shims.h if shared, "
-     "LOCAL value-faithful #defines if TU-only (lamp banner pattern)"),
+    ("shims header [FORK]", "missing WW constants -> d_ext_ww_actor_shims.h "
+     "if shared, LOCAL value-faithful #defines if TU-only (lamp banner)"),
+    # ERA-SPLIT: d_ext_ww_actor_shims.h is a FORK-TREE file, not in
+    # dusklight-main. A plugin TU including it fails on the target binary.
+    ("shims header [PLUGIN]", "missing WW constants -> plugin-local shim "
+     "header inside mods-src/ww_donor_disc/, value-faithful, donor-cited"),
 ]
 
 
@@ -151,14 +192,94 @@ def _stamp_lineage(txt, actor):
     return "".join(lines)
 
 
+def _emit_plugin_landing(actor):
+    """--land-plugin: the plugin-era counterpart of _apply_registrations.
+
+    WHAT THE FORK PATH EDITS (f_pc_name.h / profile lst / files.cmake /
+    OBJNAME rows), THE PLUGIN PATH EXPRESSES AS REGISTRY ROWS: an above-enum
+    index const (`kWwProfileBase + N`), a profile-table row, and placement
+    rows in `kObjectNames` -- the only path that reaches a user's own
+    unmodified binary. This emits all three, derived not guessed:
+
+      - N = max existing `kWwProfileBase + n` in registry.cpp, plus one
+      - placement rows from the DONOR'S OWN OBJNAME table (never authored)
+      - insertion anchors located by grep AT EMIT TIME (line numbers drift)
+
+    What it CANNOT emit is the profile itself: `s_<actor>Profile` is a
+    trace-method port (donor profile -> method table -> create/draw), not a
+    table row. The block carries that as an explicit TODO naming the donor
+    symbols, because a generator that stubbed a profile would be authoring
+    exactly what DN-10 says must be ported."""
+    reg = Path("C:/Users/xxxxx/Documents/dusklight/mods-src/ww_donor_disc/registry.cpp")
+    txt = read(reg)
+    used = [int(m) for m in re.findall(r"kWwProfileBase \+ (\d+)", txt)]
+    nxt = max(used) + 1 if used else 0
+    short = actor[4:] if actor.startswith("d_a_") else actor
+    camel = "".join(w.capitalize() for w in short.split("_"))
+    names_arg = ""
+    if "--objnames" in sys.argv:
+        names_arg = sys.argv[sys.argv.index("--objnames") + 1]
+    names = [n for n in names_arg.split(",") if n]
+    rows = donor_objname_rows(names) if names else {}
+    missing = [n for n in names if n not in rows]
+
+    block = []
+    block.append("// ==== %s: PLUGIN LANDING (generated by actor_kit --land-plugin) ====" % actor)
+    block.append("// Paste targets are ANCHORS below -- registry.cpp is Engine's file;")
+    block.append("// this block was EMITTED, not applied. Trace method governs the port.")
+    block.append("const short k%sIndex = kWwProfileBase + %d;  // %d" % (camel, nxt, 4096 + nxt))
+    block.append("// TODO (trace method, NOT generatable): port s_%sProfile from the" % short)
+    block.append("//   donor's own profile (d_a_%s: l_daPROC_%s_Method chain) -- a" % (short, camel))
+    block.append("//   generator that stubbed this would AUTHOR what DN-10 says to PORT.")
+    block.append("// profile-table row (anchor: s_profiles):")
+    block.append("    {k%sIndex, static_cast<const void*>(&s_%sProfile), true}," % (camel, short))
+    if rows:
+        block.append("// placement rows (anchor: kObjectNames), donor-cited:")
+        for nm, (proc, arg) in rows.items():
+            block.append('    // Donor d_stage.cpp OBJNAME("%s", %s, %s).' % (nm, proc, arg))
+            block.append('    {"%s", k%sIndex, %s},' % (nm, camel, arg))
+    if missing:
+        block.append("// !! NO DONOR OBJNAME ROW for: %s -- NOT emitted (never authored)." % ",".join(missing))
+    out = SCRATCH / actor
+    out.mkdir(parents=True, exist_ok=True)
+    dest = out / "land_plugin_registry_block.txt"
+    dest.write_text("\n".join(block) + "\n", encoding="utf-8")
+
+    def anchor(pat):
+        for i, ln in enumerate(txt.splitlines(), 1):
+            if pat in ln:
+                last = i
+        return last
+    print("PLUGIN LANDING BLOCK EMITTED (nothing touched): %s" % dest)
+    print("  next above-enum index : kWwProfileBase + %d  (derived from %d existing)" % (nxt, len(used)))
+    print("  anchors in registry.cpp AS OF NOW (re-grep before pasting, lines drift):")
+    print("    index consts region ~ line %d (last kWwProfileBase use)" % anchor("kWwProfileBase +"))
+    print("    profile table end   ~ line %d" % anchor("&s_"))
+    print("    kObjectNames end    ~ line %d" % anchor("kObjectNames["))
+    if missing:
+        print("  WARNING: %d name(s) have no donor OBJNAME row and were NOT emitted." % len(missing))
+    print("  The profile itself is a TRACE-METHOD PORT -- see the TODO in the block.")
+    return 0
+
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
         sys.exit("usage: actor_kit.py <d_a_xxx> [--objnames A,B] [--land] "
-                 "[--activate]")
+                 "[--activate] [--land-plugin]")
     actor = args[0]
     land = "--land" in sys.argv
     activate = "--activate" in sys.argv
+    # ========================================================================
+    # PLUGIN-TARGET LANDING (era retool follow-through, 2026-08-21). Emits a
+    # PASTE-READY registry block and TOUCHES NOTHING -- registry.cpp is
+    # Engine's shipping file; Foundry emits, the owning lane lands. Runs
+    # BEFORE the fork-era gates because it writes no tree file for them to
+    # protect.
+    # ========================================================================
+    if "--land-plugin" in sys.argv:
+        return _emit_plugin_landing(sys.argv[1])
 
     # ========================================================================
     # §426 BLOCKING PRE-FLIGHT — the five sky-campaign laws (§423), enforced.
@@ -255,14 +376,30 @@ def main():
 
     rep += ["## DN / escalation flags", ""] + \
         ([f"- {f}" for f in dn_flags] or ["- none detected"]) + [""]
+    # ERA-LABELLED 2026-08-21 (History/Bridge caught it on Salvage step 5):
+    # this line was the ONE registration-plan entry with no [FORK]/[PLUGIN]
+    # split, unlike its checklist neighbours -- a MISMATCH here reads as a
+    # halt on the PLUGIN path when the plugin never touches f_pc_profile_lst
+    # (registry.cpp:1335 kWwProfileBase / :1338 isWwProcName / :180
+    # fpcPf_Get hook rides the OOB guard instead). The tempting "fix" is a
+    # receiver enum edit to satisfy an instrument -- exactly the mutation
+    # DN-10 forbids. [PLUGIN] line makes that impossible to reach for.
     rep += ["## Registration plan", "",
-            f"- enum: `X({enum_sym})` at index 0x{idx:X} (f_pc_name.h append)",
+            f"- enum: `X({enum_sym})` at index 0x{idx:X} (f_pc_name.h append) [FORK]",
             f"- profile table: `&{prof_sym}.base.base` as entry #{tbl} "
             f"(f_pc_profile_lst.cpp) — **assert {tbl} == 0x{idx:X} "
-            f"({'OK' if tbl == idx else 'MISMATCH — STOP'})**",
-            f"- extern: `extern actor_process_profile_definition {prof_sym};`",
-            f"- files.cmake: `src/d/actor/{actor}.cpp`",
-            "- OBJNAME rows (ACTIVATE stage only):"] + \
+            f"({'OK' if tbl == idx else 'MISMATCH — STOP'})** [FORK — this STOP "
+            f"does not bind a plugin-side port]",
+            f"- [PLUGIN] registration: `kWwProfileBase`-relative index via "
+            f"registry.cpp (`--land-plugin`); f_pc_profile_lst.cpp is never "
+            f"written and this enum's numeric VALUE is not used for placement "
+            f"— but donor code that REFERENCES {enum_sym} BY NAME (creates, "
+            f"searches, proc-name compares) still needs translation to the "
+            f"plugin-assigned proc name at the consumption boundary (DN-10 "
+            f"step 2). Do not edit the receiver enum to satisfy this assert.",
+            f"- extern: `extern actor_process_profile_definition {prof_sym};` [FORK]",
+            f"- files.cmake: `src/d/actor/{actor}.cpp` [FORK]",
+            "- OBJNAME rows (ACTIVATE stage only) [FORK]:"] + \
         [f"  - `OBJNAME(\"{nm}\", {enum_sym}, {sub})`  (donor proc {dproc})"
          for nm, (dproc, sub) in rows.items()] + [""]
     rep += ["## Collision pre-flight", ""] + \

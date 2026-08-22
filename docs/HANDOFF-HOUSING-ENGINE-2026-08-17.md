@@ -24,7 +24,175 @@ Retired on the user's all-lanes retirement order, 2026-08-17 (Decoder exempt).
 
 ---
 
-> ## LANE AWAKE — resumed 2026-08-18T15:14Z on the user's order. Watcher ARMED.
+> # ⭐ 2026-08-21 — ERA BOUNDARY: **PLUGIN-ONLY OUTSET ON VANILLA IS ACHIEVED.**
+>
+> **User's ruling: *"THIS PROGRESS IS FOUNDATIONAL."*** Marked in `DO-NOT.md § ORIGIN`
+> beside the founding account whose era it closes. **Engine landed it, then was
+> usage-blocked again — THIS LANE HOLDS BOTH ROLES.** Write-up:
+> **`docs/state/ww-plugin-outset.md`**.
+>
+> **THE CLAIM:** stock `dusklight-main` + `ww_donor_disc.dusk` + the user's own GZLE01
+> ISO, warp `sea` room 44 / **point 5** — **not the fork exe**. Stretch closed via a
+> Pale BDL finish-consume at the consumption boundary (`WW_BDL_CONSUME`); donor arm
+> KEPT for A/B per DN-10 step 2.
+>
+> **ALL THREE HARD TERMS NOW VERIFIED (term 3 closed 2026-08-21, see below) — re-derived in the STOCK tree before marking:**
+> **① source genuinely stock** (`c880d46fb5`, 0 ahead / 0 behind `origin/main`, **zero
+> modifications under `src/`, `include/`, `sdk/`**) · **② zero-bake holds** (shipped
+> `.dusk` 238 KB, **zero** `RARC`/`Yaz0`/`J3D2`/`bdl4`/`TIMG`/`dzb` — **no donor bytes
+> ship**) · *qualification ruled ACCEPTED and carried into the marker:* `extern/aurora`
+> is a **pointer** change (+2 local commits, no remote branch), not a dirty worktree.
+>
+> > **⚠ TERM 2 RE-AUDITED 2026-08-21 — THE CLAIM SURVIVES, THE EVIDENCE ABOVE DOES NOT.**
+> > **`.dusk` IS A DEFLATE ZIP** (`50 4b 03 04`, 4 members, `mod.dll` 784,384 B inside
+> > 237,981 B shipped). **That grep cannot see any member's bytes.** Positive control on
+> > the exact published command: `WwRegistry` → **0**, `ww_donor_disc` → **0**, `dusk` →
+> > **0** — all three certainly present. ***A test that reads zero for things that are
+> > there cannot have its zero read as absence.*** Re-run on the EXTRACTED payload the
+> > magics ARE present — `RARC` 4 · `Yaz0` 3 · `J3D2` 5 · `bdl4` 2 · `bmd3` 2 · `INF1` 3 ·
+> > `dzb` 8 — and **all 27 are `.text` immediates or `[WwRegistry]` log literals**, which
+> > is exactly what an honest zero-bake plugin must carry to recognise those formats in
+> > the user's own ISO. **No donor payload ships; the claim is true on a corrected test.**
+> > **The right test is payload-absence, not magic-absence** — magic-absence fails an
+> > honest plugin and passes a baked one that compressed its cargo.
+> > Full audit: [`FINDING-milestone-terms-audit.md`](state/ww-staging/FINDING-milestone-terms-audit.md).
+>
+> ## ✅ TERM 3 — **VERIFIED 2026-08-21. ALL THREE TERMS NOW STAND.**
+>
+> **The run: `dusklight-20260821-143653.log`** (42 s, clean shutdown, no fault).
+> `term3_verify.py` returns **VERIFIED (exit 0)** — and the verdict does not rest on
+> that one tool. **Five independent facts, any one of which could have falsified it:**
+> 1. **`Build: v1.4.1-145-dirty (rev c880d46fb57ec…)`** — the stock rev, re-derived
+>    clean in its own tree the same day.
+> 2. **The install is named IN the log, not inferred from a path I chose:**
+>    `~/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/mods/ww_donor_disc.dusk`,
+>    alongside 4 other mods from that same folder (**5 mods; the fork install loads 2**).
+>    That `.dusk` is the pinned artifact — md5 `cc00092ef79ca5e6b5820adf67e2c75d`, 237,981 B.
+> 3. **Both markers PROVEN to fire read ZERO**: `[ExtWw]` and `[ExtNpcMount]` — 4,068
+>    and 92 lines on the fork control, **0 and 0 here**.
+> 4. **MODULE ATTRIBUTION OVER EVERY LINE, not just a marker grep:** all 4,870 records
+>    carry an emitting module, and **not one is a fork-only module**. All 15 distinct
+>    bracket tags resolve to the stock exe, the plugin, or the demo mods — including the
+>    four that looked like fork tags: **`[Demo]` is a mod's DISPLAY NAME** (*"[Demo]
+>    Ambient Occlusion"*), and `[CURRENT]`/`[PAUSE]`/`[STBWAIT]` are **ZEV event names
+>    interpolated into a stock `frameInterp` message** — data, not literals. *A
+>    string-in-binary sweep flagged all four; only module attribution cleared them.*
+> 5. **COVERAGE — the absence is from a run that DID THE WORK**, which is the failure
+>    mode a clean absence hides: 2,058 `[WwRegistry]` lines · `shape_worldize` **`R44_00`
+>    room 44** (8+8+1 shapes) · `bdl_consume_gate mode=finish` · **11,700 `bg_draw`** ·
+>    19,811 draw entries · 109,800 ground queries / 28,416 hits · `startstage_now:"sea"`.
+>    **A 42-second boot-and-die would also have read zero fork markers.**
+>
+> **⚠ WHAT THIS DOES AND DOES NOT SETTLE.** It settles *which binary ran*: **stock, plugin
+> only.** It does **not** settle *what the frame looked like* — this document's own aurora
+> caution (`3eed7c2` converts a fatal into a silent non-draw) means a log cannot certify a
+> real frame.
+>
+> > **✅ AND THE USER SUPPLIED EXACTLY THAT, 2026-08-21 — THE FRAME IS REAL.**
+> > *"Outset drew, looked right (barring the still unported items/TP placement like grass
+> > that need to be replaced). Matches Engine's documentation of the progress visually."*
+> > **This is the half no instrument in this estate can produce**, and it is what the
+> > aurora caution was holding open: `3eed7c2` can silence a fatal, so a clean log plus a
+> > blank screen is a shape this build can actually take. **It did not take it.**
+> > **The milestone is now closed on both halves: the right binary AND a real picture.**
+> >
+> > **ONE ITEM CARRIED OUT OF THE CONFIRMATION, IN THE USER'S OWN SCOPE:** *unported items
+> > and TP-native placement — grass named specifically — still need replacing.* **The
+> > island renders; some of what stands on it is still the receiver's.** That is the
+> > next content surface, not a defect in the terms.
+>
+> ## ⬜ (SUPERSEDED BY THE ABOVE) THE OPEN GOAL — VERIFY TERM 3: *"actually plugin-only"*
+>
+> **A HOLD was in force; the VERIFICATION CALL SUPERSEDES IT — this lane is called to
+> verify, not wait.** Term 3 needs a **POSITIVE CONTROL, NOT AN ABSENCE**: *"no fork
+> code ran"* cannot be proven by failing to find fork activity. In order:
+> 1. **Prove the discriminator CAN fire** — run the FORK, confirm `[daBg] §898-P1` /
+>    `§757` / `№257` appear. Only then does their absence on vanilla mean anything.
+>    *Most likely step to be skipped: it requires deliberately making the test go red.*
+>    > **⚠ AND IT WOULD HAVE BEEN SKIPPED INTO A WALL. `[daBg]` FIRES 0 TIMES ON EVERY
+>    > FORK LOG ON DISK** (4 fork runs today, all booting `sea` room 44) — the whole
+>    > `§898`/`§757`/`№257` family is **unproven at runtime, on the fork, right now**;
+>    > `№257` was already recorded as reading zero while healthy. **USE THE TWO THAT ARE
+>    > PROVEN TO FIRE:** `[ExtWw]` **4,068 lines** and `[ExtNpcMount]` **92 lines** on
+>    > `dusklight-20260821-114625.log`, both from fork `src/d/`.
+>    >
+>    > **PURITY, WHICH NOBODY HAD CHECKED — A MARKER THE PLUGIN CAN EMIT IS NOT A FORK
+>    > DISCRIMINATOR**, because the plugin loads on both binaries. Swept `mod.dll`:
+>    > **VALID** (fork exe ✓ / vanilla exe 0 / plugin 0): `[daBg]` · `898-P1` · `898-P2` ·
+>    > `257 skip` · `BgW REGISTERED` · **`[ExtWw]` bracketed** · `ExtNpcMount` ·
+>    > `checkDekuLeafGlide`. **CONTAMINATED — DO NOT USE:** bare `ExtWw` (**7** in the
+>    > plugin) and **`dExtWwSave_isWwHostStage` (1 — the plugin hooks it by name)**.
+>    > Static half is otherwise DONE: **10/10 fork-only markers in the fork exe, 0/10 in
+>    > the vanilla exe.**
+> 2. **Prove binary identity, not path** — the run's own `Build:` line reads
+>    `c880d46fb5`, and the loaded `.dusk` is the 238 KB artifact **by size/hash**.
+>    *A stale-artifact zero already cost one run.*
+>    > **HASH PINNED 2026-08-21: md5 `cc00092ef79ca5e6b5820adf67e2c75d`, 237,981 B,
+>    > built 2026-08-19 17:12:36 — BYTE-IDENTICAL in both installs' `mods/` folders.**
+>    > (The AppData `mods/` folder holds only `ww_donor_disc.dusk.epoch1-parked`; the
+>    > live artifact is the install-local one.)
+> 2b. **⛔ AND THE RUN ITSELF DOES NOT EXIST YET — THERE IS NO VANILLA LOG ON THIS
+>    MACHINE.** The logs folder holds 10 `dusklight-*.log` and **all 10 are fork builds**
+>    (`efa49c5c06` ×6, `40cbc5febb` ×4); **`c880d46fb5` appears in none**, and no copy is
+>    archived in-tree. **Term 3 is blocked on a fresh vanilla run — not on analysis.**
+> 3. **Prove the exe is unpatched AT RUNTIME** — git covers source; the log's
+>    symbol-manifest build id pins what executed.
+> 4. **Name the falsifier first** — any fork-only log line, any `wwHost`-gated fork
+>    behaviour, any `src/d/` symbol resolving in the process.
+>
+> **⚙ ALL FOUR ARE NOW ONE COMMAND — `tools/foundry/term3_verify.py`.** It **refuses to
+> return a verdict unless a marker is first shown to FIRE** in a `--control` fork log,
+> excludes the two contaminated markers by construction, and checks the `Build:` line
+> and the on-disk `.dusk` md5 before it will say VERIFIED. **Non-vacuity exercised on
+> all three exit paths before shipping:** judged a fork log → **FALSIFIED** (exit 1);
+> judged with no control → **INDETERMINATE** (exit 2); the green path is unreachable
+> without a vanilla log, *which is exactly the missing input.*
+> ```
+> python tools/foundry/term3_verify.py --log <vanilla-run.log> --control <fork-run.log>
+> ```
+> **THE ONLY REMAINING INPUT IS THE RUN ITSELF:** boot the **vanilla** exe
+> (`dusklight-main/build/windows-msvc-relwithdebinfo/dusklight.exe`) with the plugin,
+> let it reach Outset, quit — then point the tool at the new log. Not taken here: the
+> boot writes to the user's save/cache state, so it is theirs to start.
+>
+> ### Other open items
+> - **⛔ THE UNCOMMITTED `registry.cpp` EDITS ALREADY RODE INTO THE MILESTONE BUILD, AND
+>   THEY ARE NOT PROBES.** Proven by content, not timestamps: `WW_BDL_CONSUME` (**4**),
+>   `bdl_consume_gate`, `lwood_zero_shareddl`, `lwood_hide_shapepackets`,
+>   `WW_LWOOD_SKIP_PATCH` are all **inside the shipped `mod.dll`** and **absent from
+>   `HEAD`** — tree-wide, `WW_BDL_CONSUME` at `HEAD` survives only as a *mention in
+>   `CALLS.md`*. **`WW_BDL_CONSUME` IS THE FINISH-CONSUME THIS DOCUMENT CREDITS WITH
+>   CLOSING THE STRETCH BUG — reverting the diff to tidy the tree DELETES THE MILESTONE'S
+>   LOAD-BEARING FIX.** The builder is untracked too (`standalone/build_install.bat`, plus
+>   `_research/` and the two `_research_alwd_*.py`). **The tree cannot rebuild the artifact
+>   it shipped.** Committing is the user's call and was not taken.
+> - **`JKRExpHeap` OOM** on the fork's demo/Aryll path (`ExtNpcMount:D1 →
+>   loadBinaryDisplayList`) — unfixed; the working run stepped around it.
+> - **BMT `CLASS-ON-RAW`** — latent, armed (§2).
+> - **⚠ WATCHERS, RE-DERIVED FROM PULSE MTIMES 2026-08-21T21:22Z — the "two down" line
+>   was stale by one:** ALIVE = Engine (14 passes), Decoder, **Librarian (18 passes —
+>   back up, no longer down)**, History/Bridge (armed, 431 rows), Foundry.
+>   **DOWN: Integrator alone** — `monitor-pulse-integrator.json` last wrote **2026-08-17
+>   23:01**, state `EMPTY-DISARMED`, i.e. **3.6 days**. Re-arm is NOT taken here: the
+>   user's standing order was *"stop monitoring integrator and the build"*, later
+>   re-armed by order (`b93qtapdk`) — **that contradiction is the user's to settle.**
+>
+> ### SUPERSEDED — do not re-chase
+> **The whole BG draw-path investigation.** **Seventeen suspects died on that hunt.**
+> Ledger: **`docs/state/ww-staging/FINDING-outset-blank-overturned.md`** — read it
+> before proposing any new theory here. Every one of those was killed by measuring
+> again *wider*, never by review.
+>
+> ---
+>
+> **(prior) LANE AWAKE — resumed 2026-08-18T15:14Z. Watcher ARMED.**
+>
+> **▶ ADDENDUM 2026-08-18 (Engine/Bridge, plugin retrace).** The OPEN list below
+> is **STALE for vanilla+plugin play.** Cull/sky/celestial are USER-PASS on
+> stock `dusklight-main` + `ww_donor_disc.dusk` (worldize + shape-show + vrbox
+> flush; no vanilla `src/` edit). Do not re-chase `daBg` per-shape clip as the
+> next vanilla-binary test. Live tip: [`docs/state/ww-plugin-outset.md`](state/ww-plugin-outset.md).
+> Remaining: Link WHITE after Pale overlay (donor actor-leg next). Wave B held.
 >
 > *(Stood down 07:27Z on the all-lanes order; woken ~8h later. The instruction
 > below was written for that gap and it WORKED — re-arming was the first action on
@@ -92,10 +260,58 @@ Retired on the user's all-lanes retirement order, 2026-08-17 (Decoder exempt).
 > > indistinguishable from "never ran"* — but it is not free. Expect more, as
 > > compile errors rather than dead hypotheses.
 >
-> **⚠ `room_set_bgw = 0` IS NOT THE SYMPTOM IT LOOKED LIKE — `setBgW` is inline,
-> so that probe cannot report anything else. See §2.** The live symptom is that
-> **the transition never completes** (`scn_change_req` 141 fired / 137 returning 0)
-> **and Outset draws nothing.**
+> **AND THAT SURFACE IS NOW ENUMERATED, NOT AWAITED — `tools/foundry/fork_api_delta.py`,
+> artifact `docs/state/ww-staging/FINDING-fork-api-delta.md`: 324 fork-only names
+> across 45 headers, out of 1,139 shared under `include/`.** `d_a_alink.h` alone
+> carries 37 (`checkDekuLeafGlide`, `flurryBeginSwing`, `procCutGsHurricane`, the
+> `dAlbwAlink_*` cluster) — our own feature work, where you would expect it.
+> **The tool REFUSES to report unless it re-finds `d/d_stage.h::getBgW` first**,
+> because a prior sweep for this returned zero and its author rightly refused to
+> publish it: *a sweep for divergence that cannot detect a KNOWN divergence is not
+> evidence of convergence.*
+> **⚠ AND THE CLASS IT DOES NOT MEASURE IS THE WORSE ONE: it diffs NAMES, so a
+> SIGNATURE that changed while keeping its name is invisible — that will not fail
+> as a missing identifier, it will COMPILE AND DO THE WRONG THING.** Unowned and
+> uncounted.
+>
+> ## ✅ 2026-08-18 — **OUTSET DRAWS ON THE FORK.** A WORKING RUN EXISTS.
+>
+> Fork build `v1.4.1-312` (`rev 0abbfdbb91`) + its **own matched epoch-1 plugin**
+> (`build/windows-msvc-relwithdebinfo/mods/ww_donor_disc.dusk`, built one second
+> after the exe) + warp to **point 11** → **renders.** Log
+> `dusklight-20260818-165110.log`, 1.65 MB, no crash.
+>
+> **THAT RUN IS A POSITIVE CONTROL, AND IT KILLS TWO READINGS THIS DOCUMENT USED
+> TO REASON FROM:**
+> - **`room_set_bgw` = 0 ON A RUN THAT DRAWS PERFECTLY.** So *"no BgW is ever bound
+>   to a room"* is **falsified by observation**, not merely by my source argument
+>   that the probe is unmeasurable (`setBgW` is inline; `registry.cpp:921` said so).
+> - **`№257 skip` = 0 on the same working run.** The skip branch does not fire in
+>   normal operation either. ***I offered it as a free discriminator twice and it
+>   was wrong both times*** — first because the tested binary lacked the code at
+>   all, then because it reads zero while healthy.
+>
+> ***Both readings are zero in the healthy state. Reasoning from either is
+> known-invalid — this block is the receipt.***
+>
+> **And one number defies the obvious reading:** vanilla made **2,700**
+> `bgw_ground` calls with 274 hits and drew **nothing**; the working fork run made
+> **572** and drew fine. **Ground-query volume was never the discriminator.**
+>
+> **WHAT IS AND IS NOT ESTABLISHED:** fork draws / vanilla does not is *consistent*
+> with the ungated per-shape clip (§682 predicts whole-terrain holes on
+> island-sized WW geometry) and `d_a_bg.cpp:424` is the leading candidate — **but
+> the fork differs from vanilla by the whole of `src/d/`, not by one hunk. This is
+> a confirmed SYMPTOM difference, not an isolated cause.** Proving the gate needs
+> that gate alone toggled.
+>
+> **STILL OPEN AND UNFIXED:** the `JKRExpHeap` OOM in the demo/Aryll path
+> (`ExtNpcMount:D1 → loadBinaryDisplayList`, log 085217) — the working run stepped
+> around it, it did not fix it. And **the warp menu offers spawn points the stage
+> cannot satisfy**: point 23 aborts at `dStage_playerInit` because `sea`'s PLYR
+> table holds 0-11, 99-103, 128, 151, 201-206 and **no 23**. Without
+> `JUT_ASSERT(1636)` the next line reads **one past the end** of the entry array —
+> so "23 worked before" was an out-of-bounds read landing on plausible memory.
 
 ## 1. WHAT THIS LANE OWNS
 

@@ -116,6 +116,10 @@ struct ShieldRowLayout {
     bool valid;
 };
 bool dShield_getLastRowLayout(ShieldRowLayout* o_row);
+
+// Fyrus §10 attack-counter: latch perfect parry at block time; consumed on commit resolve.
+void dShield_noteFyrusAttackParry(bool i_perfect);
+bool dShield_takeFyrusAttackPerfectParry();
 // ============================================
 // NEW CODE ENDS HERE
 // ============================================

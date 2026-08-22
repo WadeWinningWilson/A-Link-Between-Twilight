@@ -17,6 +17,7 @@
 #include "d/d_albw_shield.h"
 #include "d/d_albw_parry_master.h"
 #include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_region_mult.h"
 #include "d/d_albw_boss.h"
 #endif
 
@@ -605,7 +606,15 @@ BOOL daAlink_c::checkDamageAction() {
 
     if (poly_dmg_flags != 0) {
         int sp28 = (poly_dmg_flags & 7);
+#if TARGET_PC
+        {
+            // COVER: hazard polys (lava / ice / fire / electric floors & walls).
+            dAlbwRegionMult_DamageScaleScope regionDmg;
+            setDamagePoint(1, poly_dmg_flags & 0x80, TRUE, 0);
+        }
+#else
         setDamagePoint(1, poly_dmg_flags & 0x80, TRUE, 0);
+#endif
 
         if (checkWolf()) {
             mDamageTimer = mpHIO->mDamage.m.mWolfFloorInvincibleTime;
@@ -842,7 +851,25 @@ BOOL daAlink_c::checkDamageAction() {
             // NEW CODE ENDS HERE
             // ============================================
 #endif
+#if TARGET_PC
+            {
+                // COVER: enemy/trap/boss CC — except Link-bag bombs (EXCLUDE).
+                bool scaleRegion = true;
+                if (tghit_gobj != NULL && tghit_gobj->GetAtType() == AT_TYPE_BOMB) {
+                    scaleRegion = !dAlbwRegionMult_isPlayerBomb(tghit_ac);
+                }
+                if (scaleRegion) {
+                    dAlbwRegionMult_DamageScaleScope regionDmg;
+                    setDamagePoint(dmg, at_mtrl == dCcD_MTRL_FIRE || at_mtrl == dCcD_MTRL_ICE, TRUE,
+                                   0);
+                } else {
+                    setDamagePoint(dmg, at_mtrl == dCcD_MTRL_FIRE || at_mtrl == dCcD_MTRL_ICE, TRUE,
+                                   0);
+                }
+            }
+#else
             setDamagePoint(dmg, at_mtrl == dCcD_MTRL_FIRE || at_mtrl == dCcD_MTRL_ICE, TRUE, 0);
+#endif
 
 #ifdef TARGET_PC
             if (tghit_ac_name == fpcNm_Obj_Carry_e) {

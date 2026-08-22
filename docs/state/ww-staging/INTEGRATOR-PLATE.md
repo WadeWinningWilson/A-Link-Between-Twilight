@@ -12,9 +12,14 @@
 
 ## Open (actionable by this lane)
 
-- [ ] OUTSET BLACK — **SHARPENED, and it CORRECTS my own 'no collision registers' claim.** Boot 082116, probes live: **`cbgw_set` n=3 ret=0 (cBgW::Set SUCCEEDED)** · **`dbgs_regist` n=3 ret=0 (dBgS::Regist SUCCEEDED — ADMITTED to the searchable set)** · **`bgw_ground` 2,700 calls / 274 TRUES / distinct 3** (queries run and HIT) · **`room_set_bgw` = 0**. I conflated two instruments: room_set_bgw is `roomControl::setBgW(room, bgw)` — the ROOM-BINDING call — not the registration. So collision REGISTERS and ANSWERS, but **NO BgW IS EVER BOUND TO A ROOM**. Room derives to -1 because no room owns geometry (DN-1: the player's room is DERIVED from the BG under his feet). The plugin's own note gives the read: 'the ROOM BgW absent from distinct = never reached by the element loop' — distinct=3, so establish WHETHER THE ROOM'S BgW IS ONE OF THOSE THREE. Matches the archive's historical trace exactly (dBgS::Regist ret=0 ADMITTED and ALINK STILL -INF) — same shape, still unresolved. NEXT: who calls roomControl::setBgW on a normal TP room load, and why it never runs for R44_00.
+- [x] Call read and DISCHARGED 2026-08-21: the animation arm (wwParseAnimOnce) built + staged (240,022 B @ 16:06). Both queued builds now in one artifact. Answered on the board, verified.
 
-- [~] BLOCKED Fork aurora work-set - 13 files / 995 insertions, uncommitted, patch-file-only. USER'S CALL. The only thing here still losable to a stray command.
+- [x] Live calls READ AND ANSWERED (602 user ruling / 604 Salvage / 607 API audit / 608 DN-11). Mode 15 built, armed, run; H9 elimination filed - H6 stale-next is the last hypothesis standing.
+- [x] Aurora work-set (fork) PROTECTED 2026-08-21 — branch `ww-fork-aurora-81f12f31`, commit `fc2e1cd`. Local only, not pushed. DUPLICATE plate line; the timer was reading this stale copy.
+
+- [x] Outset black — SUPERSEDED by the mode-15 run. The 'no collision registers' claim in this line was WITHDRAWN (room_set_bgw is an inlining artifact, Housing/Engine's ruling). Live thread is now H6, filed to HOUSING/ENGINE. Not this lane's action.
+
+- [x] Fork aurora work-set PROTECTED 2026-08-21 — branch `ww-fork-aurora-81f12f31`, commit `fc2e1cd`, 13 files / 995 insertions. LOCAL ONLY, not pushed, superproject gitlink untouched. Both aurora work-sets are now in git rather than in patch files.
 - [~] BLOCKED Route (B) - plugin out of the fork. User said "A, then B ultimately"; structural, not this lane's to trigger.
 
 *INTEGRATOR STANDING ROLE: I am the only lane that COMPILES, and I own STAGING. Phases 0 and 1 are DONE.

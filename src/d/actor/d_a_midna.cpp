@@ -998,12 +998,17 @@ void daMidna_c::setBodyPartMatrix() {
     mDoMtx_stack_c::transM(6.5f, 0.0f, 0.0f);
 
     if (checkStateFlg1(FLG1_UNK_10)) {
-        mpDemoHDTmpBmd->setBaseTRMtx(mDoMtx_stack_c::get());
-        if (mpDemoHDTmpBck != NULL) {
-            mpDemoHDTmpBck->entry(mpDemoHDTmpBmd->getModelData());
-        }
+        if (mpDemoHDTmpBmd == NULL || dStage_roomControl_c::getDemoArcName()[0] == '\0') {
+            offStateFlg1(FLG1_UNK_10);
+            removeDemoBodyBck();
+        } else {
+            mpDemoHDTmpBmd->setBaseTRMtx(mDoMtx_stack_c::get());
+            if (mpDemoHDTmpBck != NULL) {
+                mpDemoHDTmpBck->entry(mpDemoHDTmpBmd->getModelData());
+            }
 
-        mpDemoHDTmpBmd->calc();
+            mpDemoHDTmpBmd->calc();
+        }
     }
 
     BOOL bvar8 = false;
@@ -1548,6 +1553,52 @@ void daMidna_c::endHighModel() {
     }
 }
 
+void daMidna_c::removeDemoBodyBck() {
+    if (mpDemoHDTmpBck != NULL && mpDemoHDTmpBmd != NULL) {
+        mpDemoHDTmpBck->remove(mpDemoHDTmpBmd->getModelData());
+    }
+}
+
+void daMidna_c::resetDemoBck() {
+    removeDemoBodyBck();
+    endHighModel();
+
+    mBckHeap[0].resetArcNo();
+    mBckHeap[0].resetIdx();
+    mBckHeap[1].resetArcNo();
+    mBckHeap[1].resetIdx();
+    mBckHeap[2].resetIdx();
+    mBtpHeap.resetArcNo();
+    mBtpHeap.resetIdx();
+    mBtkHeap.resetArcNo();
+    mBtkHeap.resetIdx();
+
+    offStateFlg1((daMidna_FLG1)(FLG1_UNK_10 | FLG1_UNK_40));
+
+    if (mLeftHandShapeIdx == 0xfd) {
+        mLeftHandShapeIdx = 0xfe;
+    }
+    if (mRightHandShapeIdx == 0xfd) {
+        mRightHandShapeIdx = 0xfe;
+    }
+
+    if (mpDemoFCBlendBrk != NULL) {
+        if (mpDemoFCBlendBmd != NULL) {
+            mpDemoFCBlendBmd->getModelData()->removeTevRegAnimator(mpDemoFCBlendBrk);
+        }
+        mpDemoFCBlendBrk = NULL;
+    }
+    field_0x668 = NULL;
+
+    J3DAnmTransform* bck =
+        (J3DAnmTransform*)mBckHeap[0].loadDataIdx(m_anmDataTable[ANM_WAITA].mResID);
+    if (bck != NULL) {
+        setBckAnime(bck, -1, 0.0f);
+        mUpperBck.init(mpMorf->getAnm(), TRUE, J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1, false);
+        mFaceBck.init(mpMorf->getAnm(), TRUE, J3DFrameCtrl::EMode_LOOP, 1.0f, 0, -1, false);
+    }
+}
+
 BOOL daMidna_c::setDemoAnm() {
     dDemo_actor_c* demo_actor = dDemo_c::getActor(demoActorID);
     if (demo_actor == NULL) {
@@ -1915,6 +1966,10 @@ void daMidna_c::setBckAnime(J3DAnmTransform* i_bck, int i_attr, f32 i_morf) {
 void daMidna_c::setAnm() {
     u16 sVar4, res_id;
     offStateFlg0((daMidna_FLG0)(FLG0_NO_HAIR_SCALE | FLG0_UNK_200000));
+
+    if (!mBckHeap[0].checkNoSetArcNo() && dStage_roomControl_c::getDemoArcName()[0] == '\0') {
+        resetDemoBck();
+    }
 
     if (setDemoAnm()) {
         return;
@@ -3023,29 +3078,15 @@ void daMidna_c::setDemoData() {
             mDemoType = 0;
             mDemoMode = 0;
             field_0x8dc = 0.0f;
-            endHighModel();
-            if (mLeftHandShapeIdx == 0xfd) {
-                mLeftHandShapeIdx = 0xfe;
-            }
-            if (mRightHandShapeIdx == 0xfd) {
-                mRightHandShapeIdx = 0xfe;
-            }
-
-            offStateFlg1((daMidna_FLG1)(FLG1_SHADOW_NO_DRAW | FLG1_NO_MASK_DRAW | FLG1_UNK_40
-                                        | FLG1_UNK_20 | FLG1_UNK_10 | FLG1_FORCE_NORMAL_COL
-                                        | FLG1_FORCE_TIRED_COL | FLG1_SHADOW_MODEL_DRAW_DEMO_FORCE
-                                        | FLG1_UNK_1));
         }
+
+        resetDemoBck();
+
+        offStateFlg1((daMidna_FLG1)(FLG1_SHADOW_NO_DRAW | FLG1_NO_MASK_DRAW | FLG1_UNK_20
+                                    | FLG1_FORCE_NORMAL_COL | FLG1_FORCE_TIRED_COL
+                                    | FLG1_SHADOW_MODEL_DRAW_DEMO_FORCE | FLG1_UNK_1));
 
         offStateFlg0((daMidna_FLG0)(FLG0_UNK_2000000 | FLG0_UNK_1000000));
-
-        if (mpDemoFCBlendBrk != NULL) {
-            if (mpDemoFCBlendBmd != NULL) {
-                mpDemoFCBlendBmd->getModelData()->removeTevRegAnimator(mpDemoFCBlendBrk);
-            }
-            mpDemoFCBlendBrk = NULL;
-        }
-        field_0x668 = NULL;
 
     } else {
         dDemo_actor_c* demo_actor = dDemo_c::getActor(demoActorID);

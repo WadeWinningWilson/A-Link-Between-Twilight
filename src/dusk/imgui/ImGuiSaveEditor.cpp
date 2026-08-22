@@ -660,7 +660,7 @@ namespace dusk {
 
         // ============================================
         // MODIFIED CODE — ALBW Port
-        // Added COLOSSAL_WALLET (size 3, 9999 rupees) to the wallet picker.
+        // Added COLOSSAL_WALLET (size 3, 50000 rupees) to the wallet picker.
         // walletSize is clamped to avoid an out-of-bounds access if a future
         // save has an unexpected wallet size value.
         // ============================================
@@ -668,7 +668,7 @@ namespace dusk {
             "Normal",
             "Big",
             "Giant",
-            "Colossal (9999)",  // ALBW Port — Cave of Ordeals reward
+            "Colossal (50000)",  // ALBW Port — Cave of Ordeals reward / Phase C1
         };
         int walletSize = statusA.getWalletSize();
         // Guard against out-of-bounds when wallet size exceeds our table.

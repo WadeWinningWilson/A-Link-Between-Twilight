@@ -2,6 +2,8 @@
  * d_albw_parry_master.h
  * Parry Master — fail chip HP, base-meter tax, reclaim queue (LoP-style).
  * Setting: game.parryMaster. Speedrun forces Off.
+ *
+ * Time: 3s grace (no melt; chips refresh) → 6s linear melt → gone (9s total).
  */
 
 #pragma once
@@ -32,5 +34,8 @@ void dParryMaster_onHeal(int i_pieces);
 
 // Death / 0 HP.
 void dParryMaster_clearQueue();
+
+// HUD: remaining reclaimable life pieces (after grace/melt). 0 when inactive.
+int dParryMaster_getRecoverablePieces();
 
 #endif  // TARGET_PC

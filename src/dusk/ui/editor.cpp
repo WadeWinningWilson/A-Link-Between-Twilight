@@ -1097,7 +1097,7 @@ void populate_select_equip_picker(Pane& pane, u8& equip, const std::array<u8, Si
 
 // ============================================
 // MODIFIED CODE — ALBW Port
-// Added "Colossal" (size 3, 9999 rupees) to the wallet size picker.
+// Added "Colossal" (size 3, 50000 rupees) to the wallet size picker.
 // ============================================
 static const std::array<Rml::String, 4> walletSizeNames = {
     "Normal",

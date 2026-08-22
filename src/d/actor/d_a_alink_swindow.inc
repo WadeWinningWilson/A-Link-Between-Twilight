@@ -123,6 +123,13 @@ int daAlink_c::loadModelDVD() {
             mpWlMidnaHandModel = NULL;
             mpWlMidnaHairModel = NULL;
 
+            {
+                daMidna_c* midna = daPy_py_c::getMidnaActor();
+                if (midna != NULL) {
+                    midna->resetDemoBck();
+                }
+            }
+
             if (!checkNoResetFlg2(FLG2_UNK_280000)) {
                 const bool isMeta =
                     (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY);

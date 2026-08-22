@@ -1,0 +1,52 @@
+=== alwd.bdl size=10112 ===
+INF1 size=128
+VTX1 size=1088
+SHP1 size=1216 shapes=2
+MAT3 size=1824
+MDL3 mats=2
+  mat0: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat1: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+TEX1 size=4192
+
+=== room44_bdl0.bdl size=399872 ===
+INF1 size=288
+VTX1 size=78624
+SHP1 size=105216 shapes=8
+MAT3 size=5824
+MDL3 mats=8
+  mat0: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat1: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat2: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat3: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat4: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat5: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat6: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+  mat7: dl=448 bp=73 xf=7 drawish=0 other=0 pad=0 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x10', '0x61']
+TEX1 size=205248
+
+=== room44_bdl1.bdl size=111296 ===
+INF1 size=288
+VTX1 size=14880
+SHP1 size=15712 shapes=8
+MAT3 size=7840
+MDL3 mats=8
+  mat0: dl=416 bp=66 xf=5 drawish=0 other=0 pad=21 first_bp=['28', 'FE', '3E', '3F', 'FE', '32', '33', 'E2'] ops=['0x0', '0x10', '0x61']
+  mat1: dl=672 bp=94 xf=9 drawish=0 other=0 pad=29 first_bp=['94', '88', '80', '84', '95', '89', '81', '85'] ops=['0x0', '0x10', '0x61']
+  mat2: dl=608 bp=87 xf=9 drawish=0 other=0 pad=8 first_bp=['94', '88', '80', '84', '95', '89', '81', '85'] ops=['0x0', '0x10', '0x61']
+  mat3: dl=608 bp=87 xf=9 drawish=0 other=0 pad=8 first_bp=['94', '88', '80', '84', '95', '89', '81', '85'] ops=['0x0', '0x10', '0x61']
+  mat4: dl=864 bp=112 xf=12 drawish=0 other=0 pad=4 first_bp=['94', '88', '80', '84', '95', '89', '81', '85'] ops=['0x0', '0x10', '0x61']
+  mat5: dl=608 bp=87 xf=9 drawish=0 other=0 pad=8 first_bp=['94', '88', '80', '84', '95', '89', '81', '85'] ops=['0x0', '0x10', '0x61']
+  mat6: dl=704 bp=104 xf=9 drawish=0 other=0 pad=11 first_bp=['94', '88', '80', '84', '95', '89', '81', '85'] ops=['0x0', '0x10', '0x61']
+  mat7: dl=512 bp=73 xf=8 drawish=0 other=0 pad=27 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x0', '0x10', '0x61']
+TEX1 size=66176
+
+=== room44_bdl2.bdl size=3360 ===
+INF1 size=96
+VTX1 size=544
+SHP1 size=480 shapes=1
+MAT3 size=1120
+MDL3 mats=1
+  mat0: dl=448 bp=70 xf=7 drawish=0 other=0 pad=15 first_bp=['94', '88', '80', '84', '28', 'FE', '30', '31'] ops=['0x0', '0x10', '0x61']
+TEX1 size=160
+
+room44 bdl count=3

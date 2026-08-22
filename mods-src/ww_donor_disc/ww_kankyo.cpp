@@ -298,6 +298,40 @@ void applyBgOverlay(dKy_tevstr_c* i_tevstr, int n) {
     i_tevstr->TevKColor.b = clipU8(scaleCol(kyRatioS16(k0a->b, k0b->b, t), bgR));
     i_tevstr->mLightMode = 0;
     applyFog(i_tevstr, p0, p1, t);
+    // ============================================================
+    // WHAT THE BG OVERLAY ACTUALLY WRITES - the receipt the black
+    // question needs, and the one my AmbCol lever was NOT.
+    // ============================================================
+    // `_sub` pushes TevColor and TevKColor into the material; those two
+    // are the BG colour path. History/Bridge read `Pale[3].bg3_c0` from
+    // the disc as literally (0,0,0), and 36 of the 101 BG draws in the
+    // black run are bg3 (type 35). If that is right, this receipt shows
+    // TevColor all-zero for n=3 and NON-zero for n=0..2 - which would
+    // mean the donor's own palette writes black for that slot and the
+    // defect is the TYPE SELECTION, not the write. If TevKColor is
+    // non-zero while TevColor is zero, the colour lives in k0 and the
+    // consume side is reading the wrong register.
+    // Sampled per bg index so all four are visible without flooding.
+    {
+        static int s_bgSeen[4] = {0,0,0,0};
+        // PER-INDEX sampling, plus a periodic re-log: `selectPale()` interpolates
+        // by time of day, so a first-samples-only gate reports the palette at ONE
+        // moment and would hide a value that goes black later. History/Bridge's
+        // warning about sampling gates hiding the exact failure, applied here
+        // before it costs a run rather than after.
+        if (n >= 0 && n < 4 && (s_bgSeen[n]++ < 2 || (s_bgSeen[n] % 600) == 0)) {
+            kankyoLog("[WwRegistry] {\"ev\":\"bg_overlay\",\"bg\":%d,\"pale\":[%d,%d],"
+                      "\"tev_c0\":[%d,%d,%d],\"tev_k0\":[%d,%d,%d],\"bg_ratio\":%d,"
+                      "\"reads\":\"what the BG leg WRITES. all-zero c0 on one index = the "
+                      "donor palette is black there and the defect is TYPE SELECTION; "
+                      "k0 non-zero with c0 zero = the colour is in the other register\"}",
+                      n, s_selPal0, s_selPal1,
+                      (int)i_tevstr->TevColor.r, (int)i_tevstr->TevColor.g,
+                      (int)i_tevstr->TevColor.b,
+                      (int)i_tevstr->TevKColor.r, (int)i_tevstr->TevKColor.g,
+                      (int)i_tevstr->TevKColor.b, (int)(bgR * 100.0f));
+        }
+    }
 }
 
 // lightType 9/10 = TP Alink. Vanilla settingTevStruct fills AmbCol only;
@@ -741,6 +775,32 @@ bool dKyWw_tryWwMaji(void* i_dataRaw, void* i_tevstrRaw, int* o_type) {
     if (s_palet == nullptr || s_paletN <= 0) {
         return false;
     }
+    // ============================================================
+    // MODEL -> LIGHT-TYPE LINK - the missing half of the bg3 argument
+    // ============================================================
+    // History/Bridge measured `Pale[3].bg3 = (0,0,0)` and 36 of 101 BG draws
+    // at type 35; I found the receiver picks the type by MODEL SLOT
+    // (`d_a_bg.cpp:336`, `l_tevStrType[6] = {32,33,34,35,35,32}`), and room
+    // 44 resolves only slots 0 and 1 -> types 32 and 33. So those 36 bg3
+    // draws are probably NOT Outset's models - but "probably" is what this
+    // receipt exists to remove. Logging the MODEL DATA POINTER beside the
+    // type makes the link joinable against the parse/worldize receipts,
+    // which already carry the arc name (R44_00 and friends).
+    // Sampled per type so all five observed types appear without flooding.
+    {
+        static int s_typeSeen[64] = {0};
+        const int ti = (t >= 0 && t < 64) ? t : 63;
+        if (s_typeSeen[ti]++ < 3) {
+            kankyoLog("[WwRegistry] {\"ev\":\"bg_model_type\",\"type\":%d,\"bg\":%d,"
+                      "\"data\":\"%p\",\"mats\":%d,\"reads\":\"join `data` against the "
+                      "model parse/worldize receipts to name the ARC. The receiver picks the "
+                      "type by MODEL SLOT (l_tevStrType[6]={32,33,34,35,35,32}); room 44 has "
+                      "only slots 0-1, so a type-35 draw here belongs to some OTHER room - "
+                      "most likely a pre-warp TP room that was never purged\"}",
+                      t, overlayBgIndex(t), (void*)i_data,
+                      (int)i_data->getMaterialNum());
+        }
+    }
     overlayTev(t, i_tevstr);
     // Types 9/10 = Alink. Consume-boundary (vanilla MAJI, not WW _sub flatten):
     // AmbCol from Pale actor_c0; TevColor left 0 (vanilla actor settingTevStruct);
@@ -768,6 +828,58 @@ bool dKyWw_tryWwMaji(void* i_dataRaw, void* i_tevstrRaw, int* o_type) {
             dKyWw_writeAmbCol(mat, i_tevstr);
             dKyWw_setLightTevColorType_sub(mat, i_tevstr, false);
         } else {
+            // ============================================================
+            // THE BG LEG NOW WRITES AmbCol TOO - the black-vegetation lever
+            // ============================================================
+            // The player leg has always called writeAmbCol because, as the
+            // note above records, "TP player materials consume AmbCol. WW
+            // _sub never wrote it." **The receiver's daBg-drawn ROOM models
+            // are lit by that same TP path and consume AmbCol identically** -
+            // and this branch never wrote it, so their ambient stayed
+            // whatever `settingTevStruct` left, which for stage `sea` is
+            // nothing: the receiver's own kankyo has no data for a WW stage.
+            // Unlit -> BLACK, which is what the user reports on the donor
+            // vegetation in room 44 (model.bdl + model1.bdl, daBg path).
+            //
+            // ELIMINATED FIRST, so this is not the next guess in a queue:
+            // `WW_BDL_CONSUME=finish_toon` restored setToonTex, was confirmed
+            // ENGAGED in boot 171434, and the vegetation stayed black. The
+            // toon-texture explanation is dead; "nothing writes the colour"
+            // is what survives.
+            //
+            // Reversible and self-reporting: WW_BG_AMBCOL=0 restores the old
+            // behaviour, and the receipt carries the colour actually written
+            // so a black screen with a non-zero write means the lever is
+            // right and the VALUE is wrong - a different defect from this one.
+            // ============================================================
+            static int s_bgAmbEnv = -1;
+            if (s_bgAmbEnv < 0) {
+                const char* e = std::getenv("WW_BG_AMBCOL");
+                // DEFAULT OFF, 2026-08-22 - THIS LEVER IS MISCONCEIVED AND I
+                // am leaving it selectable rather than deleting it only so the
+                // reasoning stays visible. `applyBgOverlay` writes TevColor and
+                // TevKColor and DELIBERATELY NEVER TOUCHES AmbCol; `_sub` then
+                // pushes those two into the material. AmbCol is the ACTOR path
+                // (TP actor materials consume it), not the BG path. So writing
+                // AmbCol here pushes a field the BG draw does not read, using a
+                // value the BG overlay never populated - i.e. whatever stale
+                // content the tevstr carried. Opt in with WW_BG_AMBCOL=1.
+                s_bgAmbEnv = (e != nullptr && e[0] == '1') ? 1 : 0;
+            }
+            if (s_bgAmbEnv == 1) {
+                dKyWw_writeAmbCol(mat, i_tevstr);
+                static int s_bgAmbN = 0;
+                s_bgAmbN++;
+                if (s_bgAmbN == 1 || (s_bgAmbN % 600) == 0) {
+                    kankyoLog("[WwRegistry] {\"ev\":\"bg_ambcol\",\"n\":%d,\"type\":%d,"
+                              "\"amb\":[%d,%d,%d],\"reads\":\"WW ambient written into a "
+                              "daBg-drawn material. amb all-zero here means the OVERLAY is the "
+                              "defect, not the write; non-zero + still black means the write "
+                              "lands somewhere the draw does not read\"}",
+                              s_bgAmbN, t, (int)i_tevstr->AmbCol.r, (int)i_tevstr->AmbCol.g,
+                              (int)i_tevstr->AmbCol.b);
+                }
+            }
             dKyWw_setLightTevColorType_sub(mat, i_tevstr, true);
         }
         mat_num--;

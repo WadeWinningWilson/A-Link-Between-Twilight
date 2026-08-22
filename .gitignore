@@ -129,3 +129,14 @@ tools/bmd_reskin/B_gm_37_final.bmd
 
 # Vendor tool clones (embedded git repos - not project content; would commit as broken gitlinks)
 tools/vendor/
+
+# ZERO-BAKE ENFORCEMENT (2026-08-22): donor byte extracts must never be
+# committed, even fork-locally. Research scripts that READ the user's own
+# disc are committed; their binary OUTPUT is not -- it is reproducible by
+# re-running them, and shipping donor bytes is the one hard line.
+# Added after a commit briefly included 524 KB of J3D2bdl4 model data
+# because an untracked-DIRECTORY status line hid its contents from the
+# pre-commit donor scan.
+mods-src/ww_donor_disc/_research/*.bdl
+mods-src/ww_donor_disc/_research/*.bmd
+mods-src/ww_donor_disc/_research/*.bin
