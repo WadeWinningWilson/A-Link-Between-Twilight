@@ -190,3 +190,26 @@ setNrmVtx sweep + apex + setBackNrm + 3x DCStoreRangeNoSync.
 - daHo_HIO_c vtbl is weak here, global in donor (donor likely defines a
   genMessage out-of-line somewhere; no such function in the TU — check
   at Matching-flip time).
+
+
+## Sweep-harness pilot (2026-08-22): ho_move rotation park HARDENED
+
+`tools/foundry/decoder_sweep.py` (NEW INSTRUMENT, v0 of the
+transform-search harness the park family names): given binary
+source-spelling slots, it compiles every combination direct-mwcc
+(bypassing ninja, cflags auto-read from build.ninja), scores one symbol
+via objdiff-cli, restores source AND object, reports the top
+combinations. 32 builds ≈ 4 min.
+
+Pilot result on ho_move's caller-save temp-rotation park: the full
+2^5 space over {windAngle-naming, x-temp, z-temp, t-ternary-arms,
+lift-operand-order} NEVER beats the 97.03 baseline, shows ZERO
+interaction effects, and confirms x-temp (+0.26) and t-arms (+0.14) as
+the only live knobs — all already at their best setting. The rotation
+seed is not reachable through this toggle family; the park stands with
+mechanical falsification instead of hand-probe anecdotes.
+
+Next harness targets: the six-TU park family (ko1 x6, ym1 chngAnmAtr,
+kg1 wait_action/getMsg heads, mgameboard sinit, grid setNrmVtx/_execute)
+— each needs its slots authored from the existing falsification notes,
+then one sweep per function.
