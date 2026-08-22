@@ -67,6 +67,17 @@ marks an item blocked on someone else and does not count as open.
   absent or `n=0` ⇒ binding never happened for `sea`, and that is the defect.
   `WW_BG_AMBCOL` stays OFF: misconceived on the write side AND premised on a
   falsified fact.
+- [x] **DN-15 CLOSURE + btitex dedupe — DONE 2026-08-22** (`242c3ead74`, `46d4679948`).
+  `ww_sky.cpp` itself merged into `d_kankyo_wether.cpp` and DELETED: the split had
+  moved the bodies but the FILE still declared two donor units under a name no donor
+  uses. **MOVING THE BODIES IS NOT RETIRING THE FILE.** Resolved by donor declaration
+  (`wether_move_sun` :474, `wether_move_star` :596, packet draw()s — all
+  d_kankyo_wether). btitex 4 copies → 1 pair, diffed identical first, donor-named.
+  **I HAD REPORTED THE TREE CONFORMING WHEN IT WAS NOT** — that reading came from the
+  pre-commit hook, which checks STAGED FILES ONLY. Full-tree run found 1 violation.
+  A gate's silence is only as wide as its scope; run it with no arguments.
+  **FULL-TREE GATE NOW: conforming, 0 violations.**
+
 - [ ] **PORTING QUEUE — History has a backlog; this lane is now free.** lwood was the
   blocker holding the WW actor port; with the packet discipline understood, the same
   one-entry-per-fill rule applies to every J3D-path WW actor ported next.
