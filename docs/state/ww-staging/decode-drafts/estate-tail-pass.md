@@ -56,3 +56,16 @@ WWDP commits: 7624deba, 69605d23, 09c244ee (+ yw1/grid ledgers).
   next fresh-eyes candidates
 - p2 family 98.5-99.9 (10 fns), ob1 (3), bridge (2), kamome-actor (2),
   ym1 kari_1 (1) — untouched this pass
+
+## Second-round parks (2026-08-22 late, falsified)
+
+- so::_nodeControl 99.67 / _createHeap 99.67: pure one-pair callee-reg
+  swaps (CSE temp vs param-copy slot tie), values identical — kari.
+- so::cutMiniGameProc 99.22: the `-range * 0.5f` fneg/load order (donor
+  loads range, negates, THEN loads 0.5f; ours pre-loads 0.5f) — a named
+  negRange local is FOLDED AWAY (bytes unchanged, falsified) — plus two
+  branch-layout rows. kari.
+- The estate's remaining sub-1% tails are now predominantly this class;
+  further hand passes are low-yield. The sweep harness with cross-site
+  slot sets, or the parse of MWCC's operand-order tie rules, is the
+  instrument-shaped path.
