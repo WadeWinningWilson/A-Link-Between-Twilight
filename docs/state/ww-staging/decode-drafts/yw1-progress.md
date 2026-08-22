@@ -1,5 +1,24 @@
 # yw1 (Sue-Belle) decode campaign — anchor
 
+**STATUS 2026-08-22: ALL 119 FUNCTIONS WRITTEN in one successor session
+(8 -> 119 written, 109/119 exact, TU fuzzy 98.71). Remaining 10 sub-100
+are ALL reg-alloc/pool micro-shapes, semantically complete:**
+- setHairAngle 94.7 (the 693-row hair-physics sim — 3-joint spring chain
+  with wind + head-motion drive; retail keeps an extra saved GPR for the
+  extsh'd dY/dZ pair; anmMtx pair-cache lever applied: donor caches
+  getAnmMtx in a local for ADJACENT multVec pairs, recomputes for
+  singles)
+- walk_1 91.9 (prm-access CSE), turn_1 96.3 / talk_1 98.8 (saved-reg
+  order), lookBack 99.2 / chk_areaIN 99.0 / shadowDraw / _create /
+  _nodeCB_Hair 99.9x (float-pool anchors), __sinit 75.9 (static-init
+  layout).
+- setHairAngle donor data: file statics l_eye_offset {15,10,0},
+  l_head_center_offset {15,0,0}, l_neck_front {0,1,0}, l_neck_top {1,0,0}
+  (const Vec, rodata); spring 0.2f, damper deadzone 0.01f, head-flip
+  guard 0.7f, gravity 7.5f, sway phase 1500+4096*power, amplitudes
+  2280/3908/7568 at 3.0f/6.0f step lags, power = (wind^2 +
+  0.65*headSpeed)*0.25 clamped 1.
+
 Opened 2026-08-21, same session that closed ym1 to 121/124. yw1 is the ym1
 sibling PLUS: hair physics (3-joint chain), the water POT (TSUBO) subsystem,
 path walking (dNpc_PathRun_c), partner search vs BM1 (Grandma).
