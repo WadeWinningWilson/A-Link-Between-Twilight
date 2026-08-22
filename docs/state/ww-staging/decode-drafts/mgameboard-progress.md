@@ -82,6 +82,41 @@ already proven from the caller side during the kg1 campaign.
   (18,19)/(15,16)/(14,17) — **MWCC evaluates call args right-to-left,
   so the SECOND source arg's getRes lands first in the binary**.
 
+## Batch 3: 17/23 exact, fuzzy 78.78 - CLOSED TO PARKS (WWDP ff1a25fe)
+
+- Verified via DIRECT-mwcc scratch compiles while ninja world-rebuilds
+  held the lock (header edits to d_2dnumber/d_seafightgame trigger
+  repo-wide rebuilds - budget for that before touching shared headers).
+- CursorMove/_execute/CreateInit/MiniGameInit/set_2dposition exact;
+  set_mtx 99.8 / MinigameMain 99.9 / _draw 97.9 / CreateHeap 95.3
+  (register-naming + pool residues).
+- LEVERS: (a) **bitwise-| bool** - `if ((A == 0) | (B == 0)) over =
+  true;` emits the cntlzw+or value form; spelling it || emits
+  short-circuit branches (ji1 family, now proven on u8 fields);
+  (b) **f32-local anti-fold** - `f32 alpha = 80.5f;` then pass defeats
+  MWCC float const-prop (a LITERAL folds even through an inline f32
+  param - my earlier inline-boundary theory was WRONG, corrected here);
+  (c) hoisted declarations set saved-reg order (mark/ship/shipNum
+  declared before the loops = kg1 split-decl lever generalized);
+  (d) hoist repeated record reads into locals (ship sx/sy) when the
+  target loads them once.
+- **m_cur_table = full 64-entry brace initializer**, cXyz(x, y, 0) with
+  x,y = -87.5 + 25*index (col fastest, y ascends by row) - recovered
+  from the 5KB sinit (64 stack temps live simultaneously, per-element
+  dtor registration).
+- **PARK (novel harness shape): sinit copy-call.** Target CALLS
+  __ct__4cXyzFRC4cXyz 64x (temp built inline from pool floats, then
+  copy ctor CALLED into the element; the TU even emits the out-of-line
+  copy ctor). Falsified: cXyz(f,f,f) elements elide under GC 1.0/1.1/
+  1.2.5/1.2.5n/1.3.2 alike; removing the repo's #ifdef __MWERKS__
+  explicit copy ctor changes nothing (0 calls); cXyz(cXyz(...)) gives
+  128 calls (2/element). No spelling found that yields exactly one
+  un-elided copy per element. Costs sinit (55.98) + the phantom
+  __ct__4cXyzFRC4cXyz symbol; everything else in the TU unaffected.
+- Dead-pool tell: target rodata carries 0.8/0.75/-0.75 with ZERO .text
+  references (DCE'd donor code still occupying @-slots) - unreachable
+  by any spelling; absorbed as pool residue.
+
 ## NEXT
 
 _execute (state dispatch over mState), set_2dposition, CreateInit,
