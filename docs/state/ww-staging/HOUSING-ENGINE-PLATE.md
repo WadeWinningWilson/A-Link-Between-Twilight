@@ -40,6 +40,17 @@ marks an item blocked on someone else and does not count as open.
   ran anyway because they sat outside it — file deleted with no merge done, restored
   from HEAD after confirming no other lane's work was in the diff.
   **NOT verified: never RUN.** Waves and sky unobserved since this work began.
+- [x] **RULING FILED — in-tree target does NOT gain `FEATURES webgpu`** (`478cd79dca`,
+  CALLS row filed). The call CALLS.md left this lane as `ww_gfx_spike.cpp`'s owner.
+  The spike is a STOOD-DOWN diagnostic and the GX path it bypassed is fixed, so
+  widening the canonical target's dependency surface (dawn) buys nothing. Gated with
+  conditional inline no-ops in `registry.h`; **all four call sites byte-identical** —
+  main.cpp and registry.cpp untouched. Closes 4 of the 23 unresolved symbols; the
+  other 19 (dllimport static data, symgen filter) are not this lane's.
+  **MEASURED:** standalone builds exit 0, spike still compiled, artifact fresh.
+  **NOT LINK-TESTED:** no parent project here includes the in-tree target, so the
+  in-tree link is reasoned from static evidence only. Integrator can settle it.
+
 - [ ] **WW GRASS AND FLOWERS STILL BLACK** — user-confirmed, next on this lane. NOT the
   same defect as lwood: lwood was a packet-chain cycle, this is colour/material. Prior
   work already falsified `finish_toon`; the `bg_overlay` / AmbCol receipts are built and
