@@ -1,0 +1,284 @@
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+index 50a8ea6..80d06a1 100644
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -1179,7 +1179,8 @@ bool get_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
+     return false;
+   }
+   pipeline = it->second.pipeline;
+-  return true;
++  // №46 F2: failed CreateRenderPipeline leaves a null handle — skip-draw.
++  return static_cast<bool>(pipeline);
+ }
+ 
+ } // namespace aurora::gfx
+diff --git a/lib/gx/pipeline.cpp b/lib/gx/pipeline.cpp
+index 74f3d8a..41973ce 100644
+--- a/lib/gx/pipeline.cpp
++++ b/lib/gx/pipeline.cpp
+@@ -11,10 +11,20 @@ static Module Log("aurora::gx");
+ wgpu::RenderPipeline create_pipeline(const PipelineConfig& config) {
+   ZoneScoped;
+   const auto shader = build_shader(config.shaderConfig);
++  if (!shader) {
++    // №46 F2: bad WGSL → skip-draw via bind_pipeline failure (never FATAL).
++    Log.error("create_pipeline: null shader module (hash {:x})", xxh3_hash(config.shaderConfig));
++    return {};
++  }
+   const auto label = fmt::format("GX Pipeline {:x} shader {:x}",
+                                  xxh3_hash(config, static_cast<HashType>(gfx::ShaderType::GX)),
+                                  xxh3_hash(config.shaderConfig));
+-  return build_pipeline(config, {}, shader, label.c_str());
++  auto pipeline = build_pipeline(config, {}, shader, label.c_str());
++  if (!pipeline) {
++    Log.error("create_pipeline: CreateRenderPipeline failed (hash {:x})",
++              xxh3_hash(config, static_cast<HashType>(gfx::ShaderType::GX)));
++  }
++  return pipeline;
+ }
+ 
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass) {
+diff --git a/lib/gx/shader.cpp b/lib/gx/shader.cpp
+index f45a059..fa3821d 100644
+--- a/lib/gx/shader.cpp
++++ b/lib/gx/shader.cpp
+@@ -88,6 +88,14 @@ static bool uses_texture_sample(const TevStage& stage) noexcept {
+          a.c == GX_CA_TEXA || a.d == GX_CA_TEXA;
+ }
+ 
++static bool is_texmap_sampled(GXTexMapID texMapId, const ShaderInfo& info) noexcept {
++  if (texMapId == GX_TEXMAP_NULL) {
++    return false;
++  }
++  const u32 id = underlying(texMapId);
++  return id < info.sampledTextures.size() && info.sampledTextures.test(id);
++}
++
+ u8 color_channel(GXChannelID id) noexcept {
+   switch (id) {
+     DEFAULT_FATAL("unimplemented color channel {}", id);
+@@ -381,8 +389,32 @@ static std::string tev_color_op(GXTevOp op, std::string_view bias, std::string_v
+ 
+ static std::string tev_alpha_op(GXTevOp op, std::string_view bias, std::string_view scale, bool clamp,
+                                 std::string_view a, std::string_view b, std::string_view c, std::string_view d) {
++  // Alpha args are already f32 scalars. Color-path compare ops use .r/.rg/.rgb swizzles —
++  // those are invalid here (WW COMP_A8 / R8-on-alpha → CreateShaderModule FATAL). №46 F1.
+   const auto overflow = [](std::string_view reg) { return fmt::format("tev_overflow_f32({})", reg); };
+-  std::string expr = tev_op(op, bias, scale, overflow(a), overflow(b), overflow(c), d, "0.0"sv);
++  const auto oa = overflow(a);
++  const auto ob = overflow(b);
++  const auto oc = overflow(c);
++  std::string expr;
++  switch (op) {
++  case GX_TEV_ADD:
++  case GX_TEV_SUB:
++    expr = tev_op(op, bias, scale, oa, ob, oc, d, "0.0"sv);
++    break;
++  case GX_TEV_COMP_R8_GT:
++  case GX_TEV_COMP_GR16_GT:
++  case GX_TEV_COMP_BGR24_GT:
++  case GX_TEV_COMP_RGB8_GT: // also GX_TEV_COMP_A8_GT
++    expr = fmt::format("select(0.0, {2}, round({0} * 255.0) > round({1} * 255.0)) + {3}", oa, ob, oc, d);
++    break;
++  case GX_TEV_COMP_R8_EQ:
++  case GX_TEV_COMP_GR16_EQ:
++  case GX_TEV_COMP_BGR24_EQ:
++  case GX_TEV_COMP_RGB8_EQ: // also GX_TEV_COMP_A8_EQ
++    expr = fmt::format("select(0.0, {2}, round({0} * 255.0) == round({1} * 255.0)) + {3}", oa, ob, oc, d);
++    break;
++    DEFAULT_FATAL("unimplemented tev alpha op {}", underlying(op));
++  }
+   return clamp ? fmt::format("clamp({}, 0.0, 1.0)", expr) : fmt::format("clamp({}, -4.0, 4.0)", expr);
+ }
+ 
+@@ -1190,7 +1222,8 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+     } else if (tcg.src == GX_TG_TANGENT) {
+       vtxXfrAttrs += fmt::format("\n    var tc{} = vec4f({}, 1.0);", i, nbt_slice_local(NbtSlice::T));
+     } else
+-      UNLIKELY FATAL("unhandled tcg src {}", underlying(tcg.src));
++      UNLIKELY FATAL("unhandled tcg src {} (tcg index {} numTexGens {})", underlying(tcg.src), i,
++                     g_gxState.numTexGens);
+     if (tcg.type == GX_TG_MTX2x4 || tcg.type == GX_TG_MTX3x4) {
+       if (info.indexAttr.test(GX_VA_TEX0MTXIDX + i)) {
+         vtxXfrAttrs += fmt::format("\n    var tc{0}_tmp = tc{0} * ubuf.postex_mtx[in_texmtxidx{0} / 3u];", i);
+@@ -1274,6 +1307,13 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+     const auto& indStage = config.indStages[i];
+     const u32 texCoordId = underlying(indStage.texCoordId);
+     const u32 texMapId = underlying(indStage.texMapId);
++    if (!is_texmap_sampled(indStage.texMapId, info)) {
++      fragmentFnPre += fmt::format(
++          "\n    // Indirect stage {0} (unbound texmap — neutral)"
++          "\n    var t_IndTexCoord{0} = vec3f(0.0);",
++          i);
++      continue;
++    }
+     // GX applies the SU texture-coordinate scale before the indirect stage scale.
+     // The shader carries normalized UVs, so convert that texel-space result back
+     // into normalized coordinates for the indirect texture sample.
+@@ -1440,7 +1480,7 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+           fragmentFnPre += fmt::format("\n    t_TexCoord = {};", finalCoord);
+         }
+ 
+-        if (needsTextureSample && hasBaseTexture) {
++        if (needsTextureSample && is_texmap_sampled(stage.texMapId, info)) {
+           u32 texMapId = underlying(stage.texMapId);
+           if (useSimpleCoords) {
+             fragmentFnPre += fmt::format("\n    var ind{0}_uv = t_TexCoord;", i);
+@@ -1455,7 +1495,11 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+       continue;
+     }
+ 
+-    CHECK(stage.texMapId != GX_TEXMAP_NULL, "unmapped texture for stage {}", i);
++    if (!is_texmap_sampled(stage.texMapId, info)) {
++      fragmentFnPre += fmt::format("\n    var sampled{0} = vec4f(0.0);", i);
++      continue;
++    }
++
+     CHECK(stage.texCoordId != GX_TEXCOORD_NULL, "unmapped texcoord for stage {}", i);
+     if (uvIn.empty()) {
+       // No indirect texturing
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+index 0f93d70..d322555 100644
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -13,6 +13,37 @@ Module Log("aurora::gx");
+ 
+ bool is_alpha_bump_channel(GXChannelID id) { return id == GX_ALPHA_BUMP || id == GX_ALPHA_BUMPN; }
+ 
++// [HousingTemp HT-10 / Housing §480] Latched report for a rejected texture id.
++// One line per distinct (site, id) pair: an unfalsifiable guard is the defect,
++// not the guard itself. A clean log must mean "never fired".
++void ww_report_rejected_texmap(const char* site, unsigned id) {
++  struct Seen {
++    const char* site;
++    unsigned id;
++  };
++  static Seen sSeen[16];
++  static int sCount = 0;
++  for (int i = 0; i < sCount; i++) {
++    if (sSeen[i].id == id && sSeen[i].site == site) {
++      return;
++    }
++  }
++  if (sCount < 16) {
++    sSeen[sCount++] = Seen{site, id};
++    Log.warn("[HT-10] rejected out-of-range texMapId {} at {} -- that TEV fetch renders "
++             "TRANSPARENT BLACK. Garbage ids of this shape are what a desynced FIFO "
++             "produces, so treat this as a corruption signal, not cosmetics.",
++             id, site);
++  } else {
++    static bool sFull = false;
++    if (!sFull) {
++      sFull = true;
++      Log.warn("[HT-10] rejected-texMapId table full (16 distinct) -- further rejections "
++               "are UNREPORTED; absence of a line past this point proves nothing.");
++    }
++  }
++}
++
+ Vec4<float> texture_size_bias(const gfx::TextureBind& tex) {
+   auto width = static_cast<float>(tex.texObj.width());
+   auto height = static_cast<float>(tex.texObj.height());
+@@ -55,10 +86,25 @@ void color_arg_reg_info(GXTevColorArg arg, const TevStage& stage, ShaderInfo& in
+     break;
+   case GX_CC_TEXC:
+   case GX_CC_TEXA:
+-    CHECK(stage.texCoordId != GX_TEXCOORD_NULL, "tex coord not bound");
+-    CHECK(stage.texMapId != GX_TEXMAP_NULL, "tex map not bound");
+-    info.sampledTexCoords.set(stage.texCoordId);
+-    info.sampledTextures.set(stage.texMapId);
++    if (stage.texCoordId != GX_TEXCOORD_NULL && stage.texCoordId < info.sampledTexCoords.size())
++      info.sampledTexCoords.set(stage.texCoordId);
++    if (stage.texMapId != GX_TEXMAP_NULL && stage.texMapId < info.sampledTextures.size()) {
++      info.sampledTextures.set(stage.texMapId);
++    } else if (stage.texMapId != GX_TEXMAP_NULL) {
++      // ====================================================================
++      // [HousingTemp HT-10 / Housing §480] KEEP THE BEHAVIOUR, REJECT THE
++      // SILENCE. Rejecting an out-of-range texMapId is correct -- the previous
++      // behaviour was std::bitset::set() THROWING with no try/catch anywhere in
++      // lib/gx or lib/gfx, i.e. a crash. But the bounds test absorbs GARBAGE
++      // ids as readily as null ones, and a desynced FIFO produces exactly
++      // garbage ids -- so an unlogged guard launders corrupt GX state into a
++      // plausible transparent-black draw. That is better for stability and
++      // worse for diagnosis, and it can suppress the very signal §464 hunts.
++      // Latched per distinct (stage-kind, id) so a clean log means "never
++      // fired" rather than "fired ten thousand times".
++      // ====================================================================
++      ww_report_rejected_texmap("tev-color", stage.texMapId);
++    }
+     break;
+   case GX_CC_RASC:
+   case GX_CC_RASA:
+@@ -129,10 +175,13 @@ void alpha_arg_reg_info(GXTevAlphaArg arg, const TevStage& stage, ShaderInfo& in
+     }
+     break;
+   case GX_CA_TEXA:
+-    CHECK(stage.texCoordId != GX_TEXCOORD_NULL, "tex coord not bound");
+-    CHECK(stage.texMapId != GX_TEXMAP_NULL, "tex map not bound");
+-    info.sampledTexCoords.set(stage.texCoordId);
+-    info.sampledTextures.set(stage.texMapId);
++    if (stage.texCoordId != GX_TEXCOORD_NULL && stage.texCoordId < info.sampledTexCoords.size())
++      info.sampledTexCoords.set(stage.texCoordId);
++    if (stage.texMapId != GX_TEXMAP_NULL && stage.texMapId < info.sampledTextures.size()) {
++      info.sampledTextures.set(stage.texMapId);
++    } else if (stage.texMapId != GX_TEXMAP_NULL) {
++      ww_report_rejected_texmap("tev-alpha", stage.texMapId);  // HT-10
++    }
+     break;
+   case GX_CA_RASA:
+     if (stage.channelId != GX_COLOR_NULL && stage.channelId != GX_COLOR_ZERO &&
+@@ -244,9 +293,15 @@ ShaderInfo build_shader_info(const ShaderConfig& config) noexcept {
+     }
+     info.usedIndStages.set(stage.indTexStage);
+     const auto& indStage = config.indStages[stage.indTexStage];
+-    info.sampledTextures.set(indStage.texMapId);
+-    info.sampledTexCoords.set(indStage.texCoordId);
+-    info.sampledIndTextures.set(indStage.texMapId);
++    if (indStage.texMapId != GX_TEXMAP_NULL && indStage.texMapId < info.sampledTextures.size()) {
++      info.sampledTextures.set(indStage.texMapId);
++    } else if (indStage.texMapId != GX_TEXMAP_NULL) {
++      ww_report_rejected_texmap("ind-stage", indStage.texMapId);  // HT-10
++    }
++    if (indStage.texCoordId != GX_TEXCOORD_NULL && indStage.texCoordId < info.sampledTexCoords.size())
++      info.sampledTexCoords.set(indStage.texCoordId);
++    if (indStage.texMapId != GX_TEXMAP_NULL && indStage.texMapId < info.sampledIndTextures.size())
++      info.sampledIndTextures.set(indStage.texMapId);
+     // Track which indirect matrix is used
+     if (stage.indTexMtxId >= GX_ITM_0 && stage.indTexMtxId <= GX_ITM_2) {
+       info.usedIndTexMtxs.set(stage.indTexMtxId - GX_ITM_0);
+@@ -264,7 +319,8 @@ ShaderInfo build_shader_info(const ShaderConfig& config) noexcept {
+     }
+     const auto& tcg = config.tcgs[i];
+     if (tcg.type >= GX_TG_BUMP0 && tcg.type <= GX_TG_BUMP7) {
+-      info.sampledTexCoords.set(tcg.embossSrc);
++      if (tcg.embossSrc != GX_TEXCOORD_NULL && tcg.embossSrc < info.sampledTexCoords.size())
++        info.sampledTexCoords.set(tcg.embossSrc);
+       info.lightingEnabled = true;
+     }
+   }
+diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
+index 37fb564..564fce2 100644
+--- a/lib/webgpu/gpu.cpp
++++ b/lib/webgpu/gpu.cpp
+@@ -971,10 +971,19 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+     });
+     deviceDescriptor.SetUncapturedErrorCallback(
+         [](const wgpu::Device& device, wgpu::ErrorType type, wgpu::StringView message) {
+-          if (g_initialized) {
++          // №46 F2: shader/pipeline validation from exotic WW materials must skip-draw, not kill the process.
++          const std::string_view msg{message.data, message.length};
++          const bool shaderOrPipeline =
++              type == wgpu::ErrorType::Validation &&
++              (msg.find("ShaderModule") != std::string_view::npos ||
++               msg.find("WGSL") != std::string_view::npos ||
++               msg.find("RenderPipeline") != std::string_view::npos ||
++               msg.find("CreateShaderModule") != std::string_view::npos ||
++               msg.find("CreateRenderPipeline") != std::string_view::npos);
++          if (g_initialized && !shaderOrPipeline) {
+             FATAL("WebGPU error {}: {}", underlying(type), message);
+           } else {
+-            Log.warn("WebGPU error {}: {}", underlying(type), message);
++            Log.error("WebGPU error {}: {}", underlying(type), message);
+           }
+         });
+     deviceDescriptor.SetDeviceLostCallback(
