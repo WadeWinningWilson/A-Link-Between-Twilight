@@ -119,9 +119,16 @@ running receiver code.
 ## The mechanism this explains
 
 The receiver's grass/flower managers draw through their **own `J3DPacket` +
-`entryImm`** — the same property that makes them immune to the lwood
-packet-merge hazard — so they never pass through `dKyWw_tryWwMaji` and never
-receive a WW overlay. Their colour comes from the receiver's `g_env_light`,
+`entryImm`**, so they never pass through `dKyWw_tryWwMaji` and never receive a WW
+overlay.
+
+> ⚠️ **RETRACTED HERE 2026-08-22: this sentence used to add "the same property
+> that makes them immune to the lwood packet-merge hazard". THAT WAS MINE AND IT
+> IS FALSE — see `FINDING-entryimm-is-not-immunity.md`.** `entryImm` avoids the
+> `entryMatSort` merge, which is all I verified; it has its OWN self-link route
+> (a second entry before `drawClear()` sets `next=self`), which THIS PLUGIN'S OWN
+> SOURCE states verbatim and which I wrote into the lwood fix myself. Nothing
+> else in this finding depends on the retracted clause. Their colour comes from the receiver's `g_env_light`,
 which has nothing for a WW stage. **Unlit → black.** It accounts for grass *and*
 flowers together, which a single mistyped material would not.
 
