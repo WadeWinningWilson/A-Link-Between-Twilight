@@ -134,6 +134,28 @@ Outset-first charter did NOT select this TU, smallest-open-TU did.**
   = {4,3,NONE}, idx 10 = {9,next 8,NONE}, idx 11 = {4,3,speed -1.0}
   (reverse-play row); anm 9 at frame 31 -> mBtpAnm.setFrame(1).
 
+## Batch 7: fuzzy 48.65 -> 53.85 (18/66 exact; WWDP 351e6434)
+
+- kg1_talk_camera 100: `dComIfGp_getCamera(dComIfGp_getPlayerCameraID(0))`
+  (bdk:2776 precedent), Stay/Set(m_camera_ctr, m_camera_eye,
+  m_camera_fovy, 0)/Reset/SetTrimSize(1) guarded by m751 && camera —
+  needed `#include "f_op/f_op_camera.h"` (camera_class body lives there,
+  d_camera.h only forward-declares).
+- wait_action_init 100: clr_seq_flag() + setAction(&wait_action).
+  **LEVER: a 12-byte anonymous .data @-sym {0, -1, reloc->method} is a
+  PTMF CONSTANT** — the member at 0x6E4 is the ActionFunc ptmf (called
+  via __ptmf_scall in _execute), NOT a cXyz; .data relocs on the third
+  word give the exact method. setAction spelled as the header inline.
+- getMsg 93.86 PARKED (semantically complete): scoreboard ladder exact
+  (event regs 0xBEFF best / 0xFF07 play-count clamp<3, onEventBit 0xE04,
+  msgs 0x1D4D..0x1D64) except the FINAL m770 tail: donor emits a real
+  branch diamond (cmplwi/bne/li/b/li) where our build folds {7501,7502}
+  to addic+subfe. 10-variant probe bank (if/else, inverted, bool/s8/u16/
+  int/ptr operand, switch, double-if, msg-var) ALL fold under GC 1.3.2
+  -O3,s; target itself uses the fold idiom elsewhere (wait_action), so
+  flags are right and the donor spelling is something none of the 10
+  shapes reach. Harness-class micro-shape - same family as ym1 kari_1.
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
