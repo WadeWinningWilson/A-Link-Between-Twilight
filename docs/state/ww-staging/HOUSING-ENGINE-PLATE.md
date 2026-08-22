@@ -66,6 +66,20 @@ marks an item blocked on someone else and does not count as open.
   forbidden — DN-11 (no TP assets in WW spaces) and DN-10 (port the donor's system).
   **AWAITING USER CONFIRMATION** that the black objects are those TP grass actors;
   measured everything else, but that last step is theirs.
+- [ ] **SERVE THE DOL-RESIDENT VEGETATION ASSETS — NEW, MINE, RAISED BEFORE THE PORT.**
+  Artifact: `FINDING-vegetation-assets-are-DOL-resident.md`. The donor's three
+  vegetation managers pull **48 asset headers / 186.1 KB** of textures (108 KB),
+  display lists (39 KB) and geometry (43 KB) that are **compiled into the executable,
+  not stored in any arc**. Pasting them into plugin source would ship 186 KB of donor
+  bytes as C arrays — a zero-bake violation on the first commit.
+  **ROUTE IS VIABLE, CHECKED:** `sys/main.dol` (3,822,272 B) is on the user's disc and
+  the debug maps carry the symbols with sizes — `l_K_kusa_00TEX @ 805a82e0 size 0x1000`
+  (`d_grass.o`), `l_Txq_bessou_hanaTEX @ 805b64c0` (`d_flower.o`).
+  **⚠️ THE GAP: those are DEBUG addresses; the user's disc is retail.** Mapping debug
+  symbols onto the retail DOL is the actual work and is UNSTARTED. Serving
+  DOL-resident tables is the same job as serving arc members — this lane's.
+  History can land the CODE port meanwhile; only the DATA waits on this.
+
 - [ ] **PORTING QUEUE — History has a backlog; this lane is now free.** lwood was the
   blocker holding the WW actor port; with the packet discipline understood, the same
   one-entry-per-fill rule applies to every J3D-path WW actor ported next.
