@@ -51,33 +51,21 @@ marks an item blocked on someone else and does not count as open.
   **NOT LINK-TESTED:** no parent project here includes the in-tree target, so the
   in-tree link is reasoned from static evidence only. Integrator can settle it.
 
-- [ ] **WW GRASS AND FLOWERS STILL BLACK** — user-confirmed. **THE STANDING LEAD IS
-  DEAD: falsified offline 2026-08-22** (`2cf3463e11`, artifact
-  `FINDING-sea-kankyo-data-present.md`, tool `tools/foundry/ww_dzs_kankyo.py`).
-  Stage `sea` DOES have kankyo data — `sea/Stage.arc` → `stage.dzs` carries Pale x57
-  (**none** all-zero), EnvR x52, Colo x10, and `selectPale()` resolves IN RANGE at
-  every hop for room 44 (`EnvR[44]=[0,1,2,0,0,0,0,0]` → `Colo[0]` → Pale 0..5, all
-  populated). So "no data for a WW stage" explains nothing; the inline comment
-  asserting it is corrected (`8b7be04b13`).
-  **This item was written down as boot-blocked and it was not** — it was a DATA
-  question. Fifth finding to fall to opening the disc.
-  **STILL NEEDS THE BOOT, and one receipt forks it — already unconditional, nothing
-  to arm:** `pale_bind` at `registry.cpp:6916`. Counts present ⇒ defect is DOWNSTREAM
-  (the write, or what the daBg draw consumes — read `bg_overlay` next). Receipt
-  absent or `n=0` ⇒ binding never happened for `sea`, and that is the defect.
-  `WW_BG_AMBCOL` stays OFF: misconceived on the write side AND premised on a
-  falsified fact.
-- [x] **DN-15 CLOSURE + btitex dedupe — DONE 2026-08-22** (`242c3ead74`, `46d4679948`).
-  `ww_sky.cpp` itself merged into `d_kankyo_wether.cpp` and DELETED: the split had
-  moved the bodies but the FILE still declared two donor units under a name no donor
-  uses. **MOVING THE BODIES IS NOT RETIRING THE FILE.** Resolved by donor declaration
-  (`wether_move_sun` :474, `wether_move_star` :596, packet draw()s — all
-  d_kankyo_wether). btitex 4 copies → 1 pair, diffed identical first, donor-named.
-  **I HAD REPORTED THE TREE CONFORMING WHEN IT WAS NOT** — that reading came from the
-  pre-commit hook, which checks STAGED FILES ONLY. Full-tree run found 1 violation.
-  A gate's silence is only as wide as its scope; run it with no arguments.
-  **FULL-TREE GATE NOW: conforming, 0 violations.**
-
+- [~] **WW GRASS AND FLOWERS BLACK — REFRAMED, NOT A LIGHTING DEFECT. Artifact:
+  `FINDING-outset-vegetation-is-TP-grass.md`.** The WW colour path WORKS at every hop
+  (pale_bind 57/37/52/10; bg_overlay writes real colour; room 44 models correctly
+  typed 32/33/35 — 8/8/1 mats confirmed offline; actor_leg amb = Pale[4].actor_c0).
+  **THE WW VEGETATION ACTORS ARE NOT PORTED.** Room 44 places 164 of them
+  (`kusax1` 46, `kusax21` 36, `kusax7` 30, `pflower` 41, `flwr*` 11) and `kusax` /
+  `pflower` / `flwr` appear **0 times** in the boot log — no spawn, no failure.
+  What IS on Outset is the RECEIVER's `fpcNm_GRASS_e`: **100 created AFTER the sea
+  bind.** TP grass draws via its own J3DPacket+entryImm, never reaches the WW overlay,
+  and takes colour from a receiver kankyo that has nothing for a WW stage → unlit.
+  **BLOCKED ON A LANE HANDOFF, not on this lane:** the fix is porting the donor's
+  `kusa`/`pflower` actors (HISTORY, porting queue). Colour-patching TP grass is
+  forbidden — DN-11 (no TP assets in WW spaces) and DN-10 (port the donor's system).
+  **AWAITING USER CONFIRMATION** that the black objects are those TP grass actors;
+  measured everything else, but that last step is theirs.
 - [ ] **PORTING QUEUE — History has a backlog; this lane is now free.** lwood was the
   blocker holding the WW actor port; with the packet discipline understood, the same
   one-entry-per-fill rule applies to every J3D-path WW actor ported next.
