@@ -101,6 +101,39 @@ Outset-first charter did NOT select this TU, smallest-open-TU did.**
   the member (m_eye_tex_pattern was my m6F4); (c) SJIS HIO labels embed
   as UTF-8 in source, sjiswrap converts at compile.
 
+## Batch 6: fuzzy 36.95 -> 48.65 (16/66 exact; WWDP c2de8d4a)
+
+- eventOrder/checkOrder/clr_seq_flag/anmAtr/daNpc_Kg1_bcks_setAnm all 100;
+  setAnm 97.2 pool-pending (instruction-identical, pool 16 bytes short
+  until the TU fills).
+- Event cluster: eventOrder = OR-guard (m732==2||==1) -> onCondition
+  (CANTALK) + orderSpeakEvent on 2; else-if 3/4/5 ->
+  fopAcM_orderOtherEventId(this, m784/m786/m788, 0xff, 0xffff, 0, 1) +
+  onCondition(dEvtCnd_UNK2_e). checkOrder reads the command ONCE
+  (`u16 command = eventInfo.getCommand()`) - a single lhz serving both
+  compares rules OUT the yw1-style two-inline-calls spelling (each call
+  would emit its own load); evmng start/end checks + m730 talk latch.
+- anmAtr: `static const u8 anm_atr[9] = {1,2,4,5,6,7,8,9,10}` (named
+  $-sym), getMesgAnimeAttrInfo/clearMesgAnimeAttrInfo pair, m74D dest.
+- setAnm = the dLib idiom, kg1 keeps a PRIVATE clone
+  daNpc_Kg1_bcks_setAnm = dLib_bcks_setAnm minus `force`, PLUS a
+  negative-playSpeed rewind: `if (mPlaySpeed < 0) morf->setFrame(
+  morf->getEndFrame())` (the fctiwz+extsh double-conversion = McaMorf
+  setFrame's (s16) cast, getEndFrame's s16->f32 - both inline tells).
+- LEVER (table storage trio, one function): `static const` local table
+  -> NAMED $-sym, NO stack copy; plain `const` local table -> stack
+  copy loop; the 12x dLib_anm_prm_c prm table non-static -> anonymous
+  @-image + copy loop. The 8-byte rolling copy's iteration count (24)
+  counts 8-byte PAIRS, not entries.
+- TRAP REPAID: first symbol dump was `| head`-truncated and hid
+  a_anm_bck_tbl$4952/a_anm_btp_tbl$4953 - cost one wrong spelling
+  (const local) before the full dump ruled static. Donor name is
+  a_anm_bck_tbl (no 's').
+- Salvatore's anim map: bck res {0x11,0x1A,0x16,0x19,0x14,0x12,0x13,
+  0x15,0x17,0x18}, btp map {0,0,0,0,1,0,1,1,2,3,0,0}, prm rows: idx 5
+  = {4,3,NONE}, idx 10 = {9,next 8,NONE}, idx 11 = {4,3,speed -1.0}
+  (reverse-play row); anm 9 at frame 31 -> mBtpAnm.setFrame(1).
+
 ## NEXT
 
 Rebuild header on the fopNpc template (actor size from g_profile_NPC_KG1),
