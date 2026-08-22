@@ -127,6 +127,21 @@ the upLift reverse-decl lever (that one is same-kind locals only).
   BOTTOM in retail = donor spelled `if (!bit) { return c ? B : C; }
   return A;` (negated wrap, tail hoisted).
 
+## Batches 9-10: 49 -> 57/119 exact (same successor session)
+
+- Talk/attention cluster ALL EXACT FIRST BUILD (pure ym1/hi1 twin
+  vocabulary, zero falsifications): eventOrder/checkOrder (m7C1 s8 order
+  slot, m77C talk-latch), chk_parts_notMov (m758/m75A/m75C vs
+  m_jnt.mAngles + current.angle.y), setAttention (attnY =
+  l_HIO.children[m7C5].mPrm.field_0x14 — the 170.0f; eye override from
+  m72C when m760||param — NOTE yw1 indexes children[m7C5] directly, ym1
+  used [mSubType - 1]), decideType (param-switch, NOT fopAcM_GetName like
+  ym1 — m7C5=0 always, m7C6 = 0..3), chk_talk (m772 = PreItemNo),
+  chkAttention (verbatim ym1), next_msgStatus (single case 0x8A3 →
+  0x8A4/0x8A6/0x8A5 on 0x2A20 + daynight).
+- Carves: m758/m75A/m75C s16 (anim-settle snapshot) · m760 int ·
+  m77C u8 · m7C1 → s8.
+
 ## Carved so far
 mPhs 0x6C4 · m_hed/bbone_jnt_num 0x6CC/D · m_hair1/2/3 0x6CE-D0 ·
 m704 fpc_ProcID (pot) · mPathRun 0x70C (dNpc_PathRun_c, 8b) ·
