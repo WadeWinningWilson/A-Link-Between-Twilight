@@ -180,6 +180,37 @@ partner_search_sub + partner_search. THREE LEVERS:
    normalize that retail lacks; retype the whole chain (partner_search_sub
    → bool, ret → bool).
 
+## Batches 14-16: 69 -> 109/119 exact (same successor session)
+
+- **event_proc + demo** (ym1 twins; demo return field m77E is bool — the
+  no-normalize return lever again). **shadowDraw/_delete/_create** written:
+  **the fopAcM_SetupActor instantiation snapped ~29 blocked functions in
+  one build (66→102)** — the profile statics, ctor inline, vtable dtors,
+  Create/Delete/Execute/Draw/IsDelete wrappers were all waiting on it.
+  _create: yw1 checks resLoad state BEFORE decideType (ym1 inverse), no
+  resLoaded flag, cull box (-40,-20,-40, 40,210,40), a_siz_tbl {0}.
+- **_draw/_execute exact.** _draw: dSnap id 0x4B; the stripped debug-draw
+  block keeps ym1's GXColor+pos spelling (orphan-pool reproduction).
+  _execute: m714/m720 home pos+angle latch (m77A), no chk_nbt_attn branch,
+  the m777 hidden-state release re-uses the **else-return lever**, and
+  (status & ~0x3F) | 0x28 is ONE folded RMW (not OffStatus+OnStatus —
+  those emit two).
+- **Action ladder**: wait_1/2/3, wait_action1/2 EXACT; walk_1 92%.
+  New 1-row lever: **case blocks emit in SOURCE order** — wait_action1's
+  dispatch reads 1,4,3,5,2 in retail, so the donor wrote the cases in that
+  order; reordering my numerically-sorted cases to the emission order was
+  the whole fix. Duplicated `return 1` inside timer branches (wait_2/3).
+  knob00's u8-local lever re-paid in walk_1 (m776 byte-mask).
+- **chk_areaIN** (ls1 twin but targetAngleY takes &current.pos not the
+  param) and **lookBack** (hi1 twin: yw1 case1 writes temp5 DIRECTLY, no
+  m738 roundtrip; case4 = searchByID(m708, NULL) partner look) at 99%,
+  blocked only on float-pool anchors that settle when setHairAngle lands.
+- Parked at 96-99% (reg-alloc micro-shapes, semantically complete):
+  turn_1 (this→r30/targetY→r31 swap + 4 bytes), talk_1 (+4 bytes),
+  walk_1 (prm-access CSE r29 caching vs retail per-use reload).
+- REMAINING: setHairAngle (693-line hair-physics sim — the one real
+  function left), + the parked micro-shapes + pool anchors.
+
 ## Carved so far
 mPhs 0x6C4 · m_hed/bbone_jnt_num 0x6CC/D · m_hair1/2/3 0x6CE-D0 ·
 m704 fpc_ProcID (pot) · mPathRun 0x70C (dNpc_PathRun_c, 8b) ·
