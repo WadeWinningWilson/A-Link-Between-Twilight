@@ -14,6 +14,7 @@
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_sword_atp.h"
 #include "d/d_focused_arts.h"
 #include "dusk/hurricane_test.h"
 #endif
@@ -86,6 +87,9 @@ u32 daAlink_c::getSwordAtType() {
 }
 
 void daAlink_c::initCutTurnAt(f32 i_radius, int i_atp) {
+#if TARGET_PC
+    i_atp += dAlbwSwordAtp_getBonusForEquipped();
+#endif
     mAtSph.ResetAtHit();
     mAtSph.OnAtSetBit();
     mAtSph.SetAtType(getSwordAtType());
@@ -275,6 +279,9 @@ void daAlink_c::setCylAtParam(u32 i_AtType, dCcG_At_Spl i_spl, u8 i_hitMark, u8 
 
 void daAlink_c::setSwordAtParam(dCcG_At_Spl i_spl, u8 i_hitMark, u8 i_AtSe, int i_atp, f32 param_4,
                                 f32 i_radius) {
+#if TARGET_PC
+    i_atp += dAlbwSwordAtp_getBonusForEquipped();
+#endif
     dCcD_Cps* atCps = mAtCps;
     
     #if DEBUG

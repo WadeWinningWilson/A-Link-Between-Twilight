@@ -6,7 +6,6 @@
 #include "bool_button.hpp"
 #include "button.hpp"
 #include "d/actor/d_a_player.h"
-#include "d/d_albw_outfit.h"
 #include "d/d_albw_potion.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
@@ -2834,7 +2833,7 @@ EditorWindow::EditorWindow() {
                     "recent events) — no need to open the dev console.<br/>"
                     "<b>FA Cheat + Max Bank</b>: tier 3 cheat and bank starts full (3/3) on load.<br/>"
                     "<b>With Debug + Max Bank</b>: max bank cheat plus the debug overlay.<br/>"
-                    "Requires <b>Settings → Gameplay → Focused Arts</b>." +
+                    "Requires <b>Settings → ALBW → Systems → Focused Arts</b>." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         static constexpr std::array<const char*, 3> kTrueAlbwModes = {
@@ -2884,28 +2883,9 @@ EditorWindow::EditorWindow() {
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         leftPane.add_section("ALBW WIP");
-        // Soulbound Red Potion moved to Settings → Gameplay (next to Quick Equip Wheel).
-        editor_bool_option(leftPane, rightPane, getSettings().game.bossRefinement, "Boss Refinement",
-            "Treat Ordon, Wooden, and Master swords as valid boss swords (Zant, Ganondorf, "
-            "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
-        // Link's Cap (capWear) lives in Settings → Interface → ALBW Visuals.
-        leftPane.add_section("Sumo Outfit");
-        editor_bool_option(leftPane, rightPane, getSettings().game.sumoOutfitFists, "Fists Only",
-            "Hide the sword/shield/items for a bare-knuckle look. Works with the hat on or off.  "
-            "Applies only while the Sumo Outfit is worn." +
-                Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return !dAlbwOutfit_isSumoWorn(); });
-        editor_bool_option(leftPane, rightPane, getSettings().game.shadeRefuge, "Shade's Refuge",
-            "Lies-of-P-style Shade Watcher rest points: rest to full-heal and set a respawn "
-            "point, respawn at the last watcher on death, and buy a return-to-watcher service "
-            "in the shop. Off disables the whole system." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
-        editor_bool_option(leftPane, rightPane, getSettings().game.realtimePotions, "Realtime Potions",
-            "Dark-Souls-flask style: drink potions and refill the lantern with oil WHILE moving, "
-            "instead of the full-body locking animation. Covers all bottle potions and oil "
-            "refill (not fairies). Off keeps the vanilla locking use." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
+        // Soulbound Red Potion → Settings → ALBW → Quality of Life.
+        // Boss Refinement / Outfit Stats / Shade's Refuge / Realtime Potions /
+        // Fists Only / Deku Leaf Glide → Settings → ALBW.
         editor_bool_option(leftPane, rightPane, getSettings().game.heroShadeSecretBoss,
             "Hero's Shade Secret Boss",
             "Post-game secret boss: after all Hidden Skills are learned, a final Hero's "
@@ -2929,14 +2909,9 @@ EditorWindow::EditorWindow() {
             "active/stored wardrobe counts, equipped sword/shield/outfit, and passive recovery "
             "rates per 100ms (base vs taxed)." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
-        editor_bool_option(leftPane, rightPane, getSettings().game.outfitStats, "Outfit Stats",
-            "Per-outfit received-damage multipliers, Zora water grace, swim speed, non-Zora "
-            "diving, and Sumo + wooden-sword offensive kit. Off keeps vanilla cloth behavior." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.albwMagicArmorRentableDebug,
             "Magic Armor Rentable (Debug)",
-            "Lists Magic Armor as rentable in the Postman shop before story strip. Turning this "
-            "off does not remove purchased ownership (save stash / equip bits are kept)." +
+            "Lists Magic Armor as rentable in the Postman shop before the vanilla purchase." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showDarknutBashDebug,
             "Darknut Bash Debug Log",
@@ -3206,12 +3181,6 @@ EditorWindow::EditorWindow() {
             "Render the held WW skin exactly like the WW boots: ambient-only, no SC draw "
             "scope / authentic TEV replay. Matte + bloom-free; SC ink/spec parts may read "
             "flat or unrealized — that trade-off is the experiment." +
-                Rml::String(kAlbwUnfinishedDisclaimer));
-        editor_bool_option(leftPane, rightPane, getSettings().game.dekuLeafGlideTest,
-            "Deku Leaf glide (P1 test)",
-            "Re-gates TP's cucco-glide onto a 'leaf out' state — no cucco needed. While ON, "
-            "run/jump off a ledge to float: gentle fall, stick-steer, wind updrafts lift you. "
-            "Reuses cucco tuning (Alink HIO). Model/billow/gust/cost are later phases." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         leftPane.register_control(
             leftPane.add_child<NumberButton>(NumberButton::Props{

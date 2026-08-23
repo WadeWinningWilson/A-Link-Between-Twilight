@@ -2014,6 +2014,24 @@ void dMeter2Draw_c::changeTextureLife(int i_no, bool param_1, u8 i_quarterNum) {
 
 void dMeter2Draw_c::drawLife(s16 i_maxLife, s16 i_life, f32 i_posX, f32 i_posY) {
     s16 max_heart_cnt = i_maxLife / 5;
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C2)
+    // Classic HUD has 20 heart panes. Past 20♥ (MQ shop ¼♥ uncapped), stack on
+    // the 20th: show at most 20 containers and clamp displayed life to 20♥ so
+    // overflow sits on the last heart rather than inventing a 21st slot.
+    // ============================================
+#if TARGET_PC
+    if (max_heart_cnt > 20) {
+        max_heart_cnt = 20;
+        const s16 lifeCap = static_cast<s16>(20 * 4);
+        if (i_life > lifeCap) {
+            i_life = lifeCap;
+        }
+    }
+#endif
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     s16 heart_cnt = i_life / 4;
     s16 heart_quarters = i_life % 4;
     if (i_life == max_heart_cnt * 4) {
@@ -2829,7 +2847,17 @@ void dMeter2Draw_c::applyParryMasterHeartReclaim() {
     }
 
     const s16 maxLife = (s16)dComIfGs_getMaxLife();
-    const s16 maxHearts = (s16)(maxLife / 5);
+    s16 maxHearts = (s16)(maxLife / 5);
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C2)
+    // Match drawLife's 20-slot clamp so reclaim ghosts stay on the visible row.
+    // ============================================
+    if (maxHearts > 20) {
+        maxHearts = 20;
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     const s16 fullLife = (s16)(maxHearts * 4);
     s16 life = (s16)dComIfGs_getLife();
     if (life < 0) {

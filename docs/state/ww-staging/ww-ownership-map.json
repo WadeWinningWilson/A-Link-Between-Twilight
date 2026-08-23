@@ -241,7 +241,7 @@
    "t2_sites": "",
    "flags": "-",
    "route": "HISTORY/BRIDGE",
-   "verdict": "ALBW-SKINS (History 08-16: flipped from WW-PORT \u2014 namespace dWwItemmdl, editor bow-demo replay helper; matches its own .cpp sibling; skins regex needs the underscore and this header has none)",
+   "verdict": "ALBW-SKINS (History 08-16: flipped from WW-PORT — namespace dWwItemmdl, editor bow-demo replay helper; matches its own .cpp sibling; skins regex needs the underscore and this header has none)",
    "category": "albw-skins"
   },
   "include/d/ext_evt/evt1_boundary.h": {
@@ -529,7 +529,7 @@
    "t2_sites": "1",
    "flags": "sw",
    "route": "USER",
-   "verdict": "FORK / ALBW-skins \u2014 NO plugin share. 1 skins hunk (:1700-1708 cel-shade ambient) + its donor-derived helper (:1654-1682 demoModelUsesZAtoon, KIT-DONOR-HUNK d/d_resorce.cpp MatchingFor) which serves the SKINS path. AXIS-A FORK, AXIS-B donor-derived \u2014 the axes decouple here. Rest native (History 08-16)",
+   "verdict": "FORK / ALBW-skins — NO plugin share. 1 skins hunk (:1700-1708 cel-shade ambient) + its donor-derived helper (:1654-1682 demoModelUsesZAtoon, KIT-DONOR-HUNK d/d_resorce.cpp MatchingFor) which serves the SKINS path. AXIS-A FORK, AXIS-B donor-derived — the axes decouple here. Rest native (History 08-16)",
    "category": "albw-skins"
   },
   "src/d/actor/d_a_demo_item.cpp": {
@@ -862,7 +862,7 @@
    "t2_sites": "",
    "flags": "sw",
    "route": "USER",
-   "verdict": "SPLIT \u2014 skins 1 hunk (emitter_create :1505-1512, get-item beam suppress) -> ALBW \u00b7 port 4 WW-host-gated hunks (:121 handleDemoMessage \u00b7 :140 dExtDmesg_setMessage \u00b7 :497 donor transform KIT-DONOR-HUNK NonMatching \u00b7 :1087 WW_DEMO00 route) -> PLUGIN \u00b7 rest native (History 08-16, read per hunk)",
+   "verdict": "SPLIT — skins 1 hunk (emitter_create :1505-1512, get-item beam suppress) -> ALBW · port 4 WW-host-gated hunks (:121 handleDemoMessage · :140 dExtDmesg_setMessage · :497 donor transform KIT-DONOR-HUNK NonMatching · :1087 WW_DEMO00 route) -> PLUGIN · rest native (History 08-16, read per hunk)",
    "category": "shared-per-hunk"
   },
   "src/d/d_door.cpp": {
@@ -943,7 +943,7 @@
    "t2_sites": "",
    "flags": "sw",
    "route": "USER",
-   "verdict": "PLUGIN / WW-port throughout \u2014 NOT dual. Its 5 dWwItemmdl_ sites (:7374-:7737) are WW clothes-get MESSAGE PRESENTATION driven by donor msg 3095/4410 (native item box mFukiKind 9), i.e. PORT hunks calling the skins module's flag API. A skins MARKER is not a skins HUNK. DN-9 retirement unaffected (History 08-16)",
+   "verdict": "PLUGIN / WW-port throughout — NOT dual. Its 5 dWwItemmdl_ sites (:7374-:7737) are WW clothes-get MESSAGE PRESENTATION driven by donor msg 3095/4410 (native item box mFukiKind 9), i.e. PORT hunks calling the skins module's flag API. A skins MARKER is not a skins HUNK. DN-9 retirement unaffected (History 08-16)",
    "category": "ww-port"
   },
   "src/d/d_ext_npc_population.cpp": {
@@ -1503,6 +1503,15 @@
    "route": "HOUSING",
    "verdict": "SHARED per-hunk CONFIRMED (Housing 08-16: WW_DEMO00 slot already served by dWwProfileRegister_lookup)",
    "category": "shared-per-hunk"
+  },
+  "src/dusk/ui/editor.cpp": {
+   "membership": ". . . .",
+   "commits": "none",
+   "t2_sites": "",
+   "flags": "-",
+   "route": "BUILD-ANALYSIS",
+   "verdict": "ALBW (2026-08-23): receiver editor / ALBW settings UI; dWwItemmdl hooks are ALBW viewer surface, not a WW TU.",
+   "category": "albw"
   }
  }
 }

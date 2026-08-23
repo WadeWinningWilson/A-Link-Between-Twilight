@@ -1,14 +1,14 @@
 <div align="center">
-  <img src="res/logo.png" alt="Logo" width="640">
+  <img src="res/albt-logo.png" alt="A Link Between Twilight" width="640">
 
   <p align="center">
     <a href="https://github.com/WadeWinningWilson/A-Link-Between-Dusklight">A Link Between Dusklight on GitHub</a>
   </p>
 </div>
 
-# A Link Between Dusklight
+# A Link Between Twilight
 
-**A Link Between Dusklight** is a PC mod for [Dusklight](https://github.com/TwilitRealm/dusklight) — the open-source reimplementation of _The Legend of Zelda: Twilight Princess_ — that adds an _A Link Between Worlds_–style **energy meter**, **death item strip**, **Postman rental shop**, and a suite of optional combat and economy tweaks (shield parry/durability, wolf combat, enemy HP scaling, death rupee orb, enemy death rupees, and more).
+**A Link Between Twilight** is a PC mod for [Dusklight](https://github.com/TwilitRealm/dusklight) — the open-source reimplementation of _The Legend of Zelda: Twilight Princess_ — that adds an _A Link Between Worlds_–style **energy meter**, **death item strip**, **Postman rental shop**, and a suite of optional combat and economy tweaks (shield parry/durability, wolf combat, enemy HP scaling, death rupee orb, enemy death rupees, and more).
 
 > **You must provide your own legal copy of the game.** This repository does not include copyrighted assets.
 
@@ -21,19 +21,24 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | ALBW energy meter HUD | ✅ |
 | Meter drain (sword, agility, hidden skills) | ✅ |
 | Manual shield / parry & bash charges / durability (optional) | ✅ |
+| Focused Arts — hidden skill charge bank & finishers (optional) | ✅ |
+| Extra Item Slot + Quick Equip Wheel (optional) | ✅ |
 | Strip 13 items on Death | ✅ |
 | Rupee Recovery Orb — half wallet on death, recover via Tear of Light (optional) | ✅ |
+| Outfit Stats + Sumo fists-only visual (optional) | ✅ |
+| Shade's Refuge + Realtime Potions — soulslike rest/drink (optional, WIP) | ⏳ |
+| Deku Leaf Glide (optional, WIP) | ⏳ |
 | Postman rental shop + Oocoo dungeon warp | ✅ (shop footer polish WIP) |
 | Cycle Z-Targeting | ✅ |
 | Wolf Link combat overhaul (optional) | ✅ |
 | Enemy HP multipliers — Normal / Mid-Boss / Boss / Final (optional) | ✅ |
 | Enemy Wealth + HUD popup (optional) | ✅ |
-| Colossal Wallet / final pricing pass | ⏳ |
-| Upstream Dusklight v1.3.1 merge | ⏳ |
+| Final Pricing Passes| ⏳ |
 | Postman shop — heart & ALBW meter upgrades (Master Quest) | ✅ (stamina row icon swap pending) |
-| Lockout slingshot — visual ranged-open feedback | ⏳ |
-| Enemy HP multiplier — finish true max-HP migration | ⏳ |
-| Zant & Ganon finale boss changes | ⏳ |
+| Enemy HP multiplier final touches| ⏳ |
+| Boss Refinement| ⏳ |
+
+Debug toggles stay under Level Editor → ALBW.
 
 Full gameplay, settings, and source file list: **[docs/albw-port.md](docs/albw-port.md)** (includes **Next on the docket**).
 

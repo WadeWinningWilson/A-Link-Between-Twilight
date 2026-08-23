@@ -2,9 +2,9 @@
 
 | Field | Value |
 |-------|--------|
-| **status** | **HOLD 2026-08-23:** Bisect paused. Do **not** wipe play exe, run `_factory_recover`, cmake reconfigure, or settings/overlay A/Bs. Play snapshot: `build/fps-hold-backup-20260823/` (+ `fps-backup-20260823-poisoned/`). WW stays `.DISABLED` only. Interp/shadow left at user-stable values. |
+| **status** | **HOLD + checkpoint `94e53cbffc`:** FPS restore docs + `_factory_recover` backup-before-clean committed. Play exe snapshotted at `build/fps-hold-backup-20260823/`. Full dusk-api-coexist WIP remains **uncommitted** (seam gate blocks while dirty `editor.cpp` lacks map entry). No bisect/rebuild until user says go. |
 | **owner_impl** | Build-analysis |
-| **next** | Resume WIP/`F_SP121` code bisect only when user says go — reversible toggles only; backup exe before any rebuild. |
+| **next** | On go: either adjudicate `editor.cpp` into ownership map then commit coexist WIP, or resume `F_SP121` code bisect with reversible toggles only. |
 | **do_not** | Routine `cmake --preset` / `reconfigure_build.bat`; spawn endless git worktrees; blame WIP features while ninja has **zero** `/O2`; treat menu FPS as enough; leave `DUSK_DRIVE*` set |
 | **healthy_bar** | Field typical **≥ ~220** (often ~250; Outset was ~260–280 pre-grass). Alarm: **~33 stable** (no `/O2`); **~100–120 stable** (soft factory / bad link); Outset **~100s with pops ~212** = content (grass-class), not factory |
 | **updated** | 2026-08-23 — onboarding card for new instances |

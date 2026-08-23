@@ -14,24 +14,21 @@
 namespace {
 
 // Full byte of dSv_event_c::mEvent[] — indices 100–102 (confirmed unused by vanilla).
+// 104 = post-soft-cap bonus quarter-pips (103 = Focused Arts; 105 = potion capacity).
 static constexpr u16 kHeartShopTierReg      = static_cast<u16>(100 << 8) | 0xFF;
 static constexpr u16 kMeterShopTierReg      = static_cast<u16>(101 << 8) | 0xFF;
 static constexpr u16 kBonusHalfHeartsReg    = static_cast<u16>(102 << 8) | 0xFF;
+static constexpr u16 kBonusQuarterHeartsReg = static_cast<u16>(104 << 8) | 0xFF;
 
-static constexpr int kAlbwMQMaxLifeQuarters = 80;  // 20 hearts
+// Soft-cap shop still uses half-heart grants up to this many array tiers.
+// Past that: +333 price steps and quarter-heart grants (Phase C2).
+static constexpr int kAlbwMQMaxLifeQuarters = 80;  // 20 hearts — piece/container soft stop only
 
-// ============================================
-// Alpha-cleanup repricing (2026-07-14): the old early tiers (44/56/72...)
-// predated the death-economy rework and made the first half-hearts nearly
-// free. Tiers 1-10 raised per user curve; tiers 11-17 kept as-is.
-// ============================================
 static constexpr int kHeartShopPrices[kAlbwMQHeartShopTiers] = {
     225, 250, 275, 325, 375, 425, 500, 575, 675, 800,
     1000, 2100, 3200, 4000, 5000, 8000, 9999,
 };
 
-// Tiers 1-20 replaced per user curve (linear 100..1000, then +200 steps,
-// then +250 steps); tiers 21-23 kept at 3333. T20 = 3033 as specified.
 static constexpr int kMeterShopPrices[kAlbwMQMeterShopTiers] = {
     100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
     1200, 1400, 1600, 1800, 2000, 2250, 2500, 2750, 3000, 3033,
@@ -54,15 +51,36 @@ static void writeBonusHalfHearts(u8 count) {
     writeTierReg(kBonusHalfHeartsReg, count);
 }
 
-// Half a heart = +2 quarter-pips. Bonus is stored separately because (maxLife/5)*4 jumps in steps of 4.
-// Do not bump save maxLife here — that adds a phantom full container on top of the bonus.
+static u8 readBonusQuarterHearts() {
+    return readTierReg(kBonusQuarterHeartsReg);
+}
+
+static void writeBonusQuarterHearts(u8 count) {
+    writeTierReg(kBonusQuarterHeartsReg, count);
+}
+
+// Half a heart = +2 quarter-pips via bonus half-heart counter (save maxLife untouched).
 static void grantHalfHeartMaxCapacity() {
-    if (dComIfGs_getMaxLifeGauge() + 2 > kAlbwMQMaxLifeQuarters) {
+    const u8 halves = readBonusHalfHearts();
+    if (halves >= 255) {
         return;
     }
-
-    writeBonusHalfHearts(static_cast<u8>(readBonusHalfHearts() + 1));
+    writeBonusHalfHearts(static_cast<u8>(halves + 1));
     dComIfGp_setItemLifeCount(2.0f, 0);
+}
+
+// Quarter heart = +1 quarter-pip (Phase C2 past soft-cap).
+static void grantQuarterHeartMaxCapacity() {
+    const u8 quarters = readBonusQuarterHearts();
+    if (quarters >= 255) {
+        return;
+    }
+    writeBonusQuarterHearts(static_cast<u8>(quarters + 1));
+    dComIfGp_setItemLifeCount(1.0f, 0);
+}
+
+static bool heartShopPastSoftCap(int tier) {
+    return tier >= kAlbwMQHeartShopTiers;
 }
 
 }  // namespace
@@ -71,7 +89,7 @@ int dAlbwMQ_getBonusMaxLifeQuarters() {
     if (!dAlbwMQ_isEnabled()) {
         return 0;
     }
-    return readBonusHalfHearts() * 2;
+    return static_cast<int>(readBonusHalfHearts()) * 2 + static_cast<int>(readBonusQuarterHearts());
 }
 
 u16 dAlbwMQ_getDisplayMaxLifeInternal() {
@@ -88,9 +106,7 @@ int dAlbwMQ_getHeartShopTier() {
     if (tier < 0) {
         return 0;
     }
-    if (tier > kAlbwMQHeartShopTiers) {
-        return kAlbwMQHeartShopTiers;
-    }
+    // u8 reg — allow full 0..255 for unlimited post-soft-cap buys (Phase C2).
     return tier;
 }
 
@@ -106,10 +122,14 @@ int dAlbwMQ_getMeterShopTier() {
 }
 
 int dAlbwMQ_getHeartShopPrice(int tier) {
-    if (tier < 0 || tier >= kAlbwMQHeartShopTiers) {
+    if (tier < 0) {
         return 0;
     }
-    return kHeartShopPrices[tier];
+    if (tier < kAlbwMQHeartShopTiers) {
+        return kHeartShopPrices[tier];
+    }
+    // First buy past the 9999 soft-cap: n=1 → 10332; then +333 each.
+    return 9999 + 333 * (tier - (kAlbwMQHeartShopTiers - 1));
 }
 
 int dAlbwMQ_getMeterShopPrice(int tier) {
@@ -123,10 +143,13 @@ bool dAlbwMQ_canPurchaseHeartShop() {
     if (!dAlbwMQ_isEnabled()) {
         return false;
     }
-    if (dComIfGs_getMaxLifeGauge() + 2 > kAlbwMQMaxLifeQuarters) {
-        return false;
+    // Phase C2: same Upgrades row stays purchasable past soft-cap / past 20♥.
+    // Soft stop only when bonus counters are saturated (u8).
+    const int tier = dAlbwMQ_getHeartShopTier();
+    if (heartShopPastSoftCap(tier)) {
+        return readBonusQuarterHearts() < 255;
     }
-    return dAlbwMQ_getHeartShopTier() < kAlbwMQHeartShopTiers;
+    return readBonusHalfHearts() < 255;
 }
 
 bool dAlbwMQ_canPurchaseMeterShop() {
@@ -140,8 +163,15 @@ bool dAlbwMQ_tryPurchaseHeartShop() {
     if (!dAlbwMQ_canPurchaseHeartShop()) {
         return false;
     }
-    grantHalfHeartMaxCapacity();
-    writeTierReg(kHeartShopTierReg, static_cast<u8>(dAlbwMQ_getHeartShopTier() + 1));
+    const int tier = dAlbwMQ_getHeartShopTier();
+    if (heartShopPastSoftCap(tier)) {
+        grantQuarterHeartMaxCapacity();
+    } else {
+        grantHalfHeartMaxCapacity();
+    }
+    if (tier < 255) {
+        writeTierReg(kHeartShopTierReg, static_cast<u8>(tier + 1));
+    }
     return true;
 }
 
@@ -180,11 +210,12 @@ const char* dAlbwMQ_getMeterShopName() {
 }
 
 const char* dAlbwMQ_getHeartShopDesc() {
-    if (dComIfGs_getMaxLifeGauge() + 2 > kAlbwMQMaxLifeQuarters) {
-        return "Sold out.";
-    }
     if (!dAlbwMQ_canPurchaseHeartShop()) {
         return "Sold out.";
+    }
+    if (heartShopPastSoftCap(dAlbwMQ_getHeartShopTier())) {
+        return "Permanently increases your maximum health by a quarter heart. "
+               "These don't grow on trees you know!";
     }
     return "Permanently increases your maximum health by half a heart.";
 }

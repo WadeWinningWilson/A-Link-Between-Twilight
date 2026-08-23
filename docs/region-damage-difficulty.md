@@ -132,6 +132,295 @@ Assume a field kill pays **20** rupees base (Enemy Death Rupees on).
 | **Hearts HUD (locked)** | Classic: hearts past 20 **overlay / stack on the 20th** slot. LoP Health Bar: **leave fixed trough + % fill** (may retune width later — not required for C) |
 | **Wallet (locked, C1)** | Colossal **9999 → 50000**. `mRupee` stays `u16` (no save layout change). **Must** ship 5-digit rupee HUD + widen `mRupeeNum` / `moveRupee` / `drawRupee` off `s16` with the cap |
 | **Wallet (future)** | **99999** deferred — needs storage &gt; `u16` and a migration plan first (see below). Do not naive-widen `mRupee` in place |
+| **Shop page (locked, C2)** | Heart upgrades stay on **Upgrades & Services** (same page as today). **No second page** for hearts. (Phase D sword Atp picker is separate and still planned later.) |
+
+#### Phase C2 — Heart shop research (2026-08-21; **before** implement)
+
+**Product (locked)**
+
+| Phase | Price | Grant | Shop row |
+|-------|-------|-------|----------|
+| Soft tiers 1–17 (unchanged array) | … → **9999** | **½♥** each (+2 quarter-pips) | Existing `VISIBLE_MQ_HEART` |
+| Past soft-cap | **9999 + 333×n** (n = buys after tier 17) | **¼♥** each (+1 quarter-pip) | **Same row**, same page |
+| Cap | Unlimited for now | — | Never sold-out by tier array |
+
+Classic HUD past 20♥: fill / stack on **20th** heart only. Health Bar: leave.
+
+---
+
+##### Shop system map (fragile — do not invent a second path)
+
+Postman UI is **two layers**: rental list logic (`d_albw_rental.cpp`) → native letter-select renderer (`d_albw_shop.cpp`).
+
+```
+kPages[]  →  rebuildActivePages()  →  sActivePages[] (non-empty tabs only)
+                ↓ L/R
+         currentCategory()
+                ↓
+         rebuildVisibleList()  →  sVisibleList[] (THIS PAGE ONLY)
+                ↓
+         getVisibleList()      →  dALBWVisibleEntry[] (names/prices/descs)
+                ↓
+         dALBWShop_c::populateRows()  →  6-row viewport + scroll
+```
+
+| Piece | Fact | C2 rule |
+|-------|------|---------|
+| Pages | Items / Swords / Shields / Armor / **Upgrades & Services** | Heart stays on **Upgrades** |
+| Page existence | `categoryHasVisibleRows(CAT_UPGRADES)` true if MQ on **or** potion/FA/shade/oocoo rows | Keep MQ clause; unlimited heart must **not** empty the page gate |
+| Heart row build | Always pushed when `cat==UPGRADES && MQ` (even if `!purchasable`) | Keep; do **not** add `VISIBLE_*` or a new page |
+| Sold-out name | `showNameWhenSoldOut = true` → still **"Heart Upgrade"** | Keep |
+| Sold-out price today | `price = 0` when `!purchasable` | With unlimited, row stays purchasable → real formula price |
+| Viewport | **6** rows; scroll follows selection | More Upgrades rows already OK; heart is still one row |
+| Purchase | `tryPurchase` → price check → `dAlbwMQ_tryPurchaseHeartShop` → deduct → `rebuildActivePages` + `rebuildVisibleList` | Same path; only MQ helpers change |
+| Price type | `int` in visible entry; shop `snprintf("%d Rupees")` | Fine for 5-digit; deduct still `(u16)price` — OK until ~65k |
+| **Fragility lesson** | Armor tab once vanished when page-gate ≠ row-builder (clothes ownership). Keep-alives must **mirror** `rebuildVisibleList` | Touch **only** MQ heart helpers + HUD overlay; do not “simplify” page rebuild |
+
+**Do not for C2:** new shop page, new `VisibleKind`, dual heart rows, ImGui shop, or skipping `rebuildVisibleList` after buy.
+
+---
+
+##### MQ heart state today
+
+| Store | Width | Role |
+|-------|-------|------|
+| Event reg **100** (`kHeartShopTierReg`) | **u8** (0–255) | Purchase count / next tier index |
+| Event reg **102** (`kBonusHalfHeartsReg`) | **u8** | Bonus **half**-hearts (×2 → quarter-pips in gauge) |
+| Soft array | 17 prices ending **9999** | `canPurchase` false when `tier >= 17` **or** gauge would exceed **80** (20♥) |
+| Grant | `grantHalfHeartMaxCapacity` | +2 quarters; refuses if `gauge+2 > 80` |
+| `getMaxLifeGauge` | save max + `getBonusMaxLifeQuarters()` | True HP ceiling |
+
+**Implement sketch (not coded)**
+
+1. **Price:** tier &lt; 17 → array; else `9999 + 333 * (tier - 17)`.  
+2. **canPurchase:** MQ on; drop “tier &lt; 17” and “gauge ≤ 80” stops (unlimited). Still fail if wallet short (caller).  
+3. **Grant:** tier &lt; 17 → keep **½♥**; tier ≥ 17 → **¼♥** (+1 quarter). Prefer redefining bonus reg as **quarter-pips** (or additive quarter counter) so ½ and ¼ compose; u8 quarters ≈ 63♥ bonus headroom before needing another reg.  
+4. **Tier bump:** keep incrementing u8 (255 soft ceiling of buys — note in playtest; not product “sold out”).  
+5. **Piece / container MQ grants:** still hard-capped at 20♥ today — **leave capped** unless product says otherwise (C2 = shop row).  
+6. **HUD:** `drawLife` only has **20** `mpLifeParts`. If `max_heart_cnt > 20`, clamp visible slots to 20 and **overlay** extra fill on index 19 (20th). Health Bar already % of true max — leave.  
+7. **Parry Master heart reclaim:** uses heart indices — verify overlay doesn’t break dull reclaim on the 20th (playtest).
+
+---
+
+##### Copy — Upgrades page (same row)
+
+**Name:** keep **`Heart Upgrade`**.
+
+| State | Description (proposed) |
+|-------|-------------------------|
+| Soft-cap phase (next buy still ½♥) | `Permanently increases your maximum health by half a heart.` *(current)* |
+| Past soft-cap (¼♥ buys) | `Permanently increases your maximum health by a quarter heart. Extra hearts stack on your last heart container.` |
+| Optional short sold-out | Only if a hard cap returns later: `Sold out.` — not needed while unlimited |
+
+Stamina / other Upgrades rows: **unchanged**.
+
+---
+
+##### C2 implement checklist (when greenlit)
+
+| # | Work | Touch |
+|---|------|-------|
+| C2-1 | Price formula + canPurchase/tryPurchase/grant ¼♥ past soft-cap | `d_albw_master_quest.*` only for economy |
+| C2-2 | Desc strings (table above) | `dAlbwMQ_getHeartShopDesc` |
+| C2-3 | Classic HUD overlay past 20 | `drawLife` (+ reclaim smoke-test) |
+| C2-4 | Confirm rental row still single Upgrades entry; no page/kind changes | `d_albw_rental` **read-only** unless price pub path needs sold-out≠0 fix |
+
+**Out of scope:** Phase D sword page; Health Bar width; 99999 wallet; piece/container past 20.
+
+**Playtest (2026-08-21):** LoP HUD at ≥10000 — overlap + wrong 10k digit color + shift direction. Research: **C1-HUD follow-up** below.
+
+#### Phase C1-HUD — follow-up research (2026-08-21)
+
+**Reported (LoP, ≥10000):** vanilla four-digit row shifts one slot; inserted 10k digit overlaps; clone shows correct **font** but **white** vs cream digits; catch-up slow on large grants.
+
+##### 1. Layout / shift (overlap)
+
+**Shipped logic** (`d_meter2_draw.cpp`):
+
+| Piece | Behavior |
+|-------|----------|
+| Clone | Runtime `J2DPicture` at **leftmost** vanilla slot (`leftIdx` from init `r_n_*` X) |
+| Vanilla row | All four `mpRupeeTexture[*]` get `paneTrans(..., + fiveShift)` while ≥10000 |
+| `fiveShift` | `mRupeeFiveDigitShiftSign × mRupeeDigitAdvance` |
+| Sign | Init: jewel X vs clone X — `+1` shift row **away** from jewel |
+| Advance | One inter-digit spacing from init BLO (nearest right neighbor of leftIdx) |
+
+**Likely overlap causes (match screenshot):**
+
+1. **`mRupeeDigitAdvance` too small** — fallback `sizeX × 0.6` if neighbor probe fails; one advance may be **less than full glyph width**, so shifted thousands still sits on clone.
+2. **Clone shares leftIdx geometry** — until `fiveShift` fully clears one digit width, thousands (now showing `digit_3` of remainder) and 10k place occupy the same real estate.
+3. **LoP vs classic** — shift sign/advance computed from **init** BLO positions (bottom-right). LoP only lifts `r_k_n` (`sLopRupeeYOffset`); local digit spacing unchanged, but **user-reported shift “left” in LoP** suggests verifying sign against **runtime** jewel→digit order (top-right anchor may need re-measure after LoP cache, not only init centers).
+4. **Classic HUD untested** in report — same code runs; worth A/B before assuming LoP-only.
+
+**C1-4 intent was “shift entire vanilla row +1 advance while 5th shown”** — implemented, but magnitude/sign may need tuning or **runtime** advance from global digit metrics (post-LoP), not init-only.
+
+##### 2. Color (10k digit white)
+
+Vanilla digits inherit **BLO material tint** (cream/gold) on `r_n_*` / `r_n_*_s`. C1 clone path:
+
+```cpp
+J2DPicture* pic = JKR_NEW J2DPicture(..., src->getTexture(0)->getTexInfo(), NULL);
+parent->appendChild(pic);
+```
+
+**Does not copy** `src->getBlack()` / `src->getWhite()`. New pane defaults to **identity white** → bright digit vs neighbors. **C1-5 gap:** alpha wired in `setAlphaRupeeChange`; **black/white not**. `changeTexture()` each frame does not restore tint.
+
+**Fix shape (when implementing):** at init (and after `changeTexture` if needed), `pic->setBlackWhite(src->getBlack(), src->getWhite())` on both shadow + face clones.
+
+##### 3. Rupee counter catch-up speed
+
+**Pipeline:**
+
+```
+pickup / shop / enemy grant
+  → dComIfGp_setItemRupeeCount(±N)   // accumulates (+=)
+moveRupee() each meter frame
+  → flush: save = getRupee() + pending; clear pending (instant wallet)
+  → display mRupeeNum ±= 1 per frame until == save
+  → drawRupee(mRupeeNum)
+```
+
+**Key facts:**
+
+| Fact | Detail |
+|------|--------|
+| Tick rate | **±1 per frame** — no larger steps in code |
+| Large delta | Save jumps on flush; **HUD still counts 1/frame** |
+| `>= 5` threshold | **Sound only** (`Z2SE_LUPY_INC_CNT_1` / `_2`) — not faster tick |
+| Not a C1 regression | Same vanilla mechanism; Colossal 50k + ×3 region rupees make gaps huge |
+| Example | +3000 grant ≈ **50 s** @ 60 fps to finish animating |
+
+**Optional product directions (not chosen):** snap display when `\|delta\| > N`; multi-step per frame; time-based lerp; HD-style faster roll — all depart from vanilla +1/frame.
+
+**Extra wrinkle:** slow tick crossing **9999→10000** toggles 5-digit layout mid-animation (shift + clone appear while `mRupeeNum` still climbing).
+
+##### 5. Tiered tick speed — research (2026-08-22, product proposal)
+
+**Tier table (locked 2026-08-22):**
+
+| Remaining gap `\|savedRupee − mRupeeNum\|` | Step / frame |
+|-------------------------------------------|--------------|
+| 0–**100** (inclusive) | ±1 |
+| **101–500** (inclusive) | ±20 |
+| **501–1000** (inclusive) | ±100 |
+| **≥1001** | ±1000 |
+
+Each frame: `step = stepForRemaining(rem)` then `mRupeeNum += sign × min(step, rem)` — **always lands exactly** on save (no overshoot).
+
+**Verdict: feasible** — `dMeter2_c::moveRupee()` only. Save flushes instantly; display animates.
+
+---
+
+###### Latch vs re-tier (item 2 — more detail)
+
+Two ways to pick the step size each frame:
+
+| Mode | Rule | +2033 example (0 → 2033) | Matches “1000s then ones”? |
+|------|------|--------------------------|----------------------------|
+| **A. Latch at flush** | Step fixed from **initial** \|Δ\| when grant hits | +1000, +1000, +33 (3 frames) | **No** — second jump is another 1000-chunk, then snap 33 |
+| **B. Re-tier from remaining** (recommended) | Each frame, tier from **current** \|saved − display\| | +1000 → then +100×10 → then +1×33 | **Yes** — bulk 1000, hundreds roll, ones finish |
+
+**Product intent (+2033):** Mode **B**. After the first +1000, remainder **1033** is in the 501–1000 band → step **100**, not another 1000. When remainder hits **33**, step drops to **±1** until display equals save.
+
+**Exact value:** Guaranteed by `min(step, rem)` every frame — e.g. rem **33** at ±1 tier → 33 frames; rem **15** at ±20 tier → one frame +15 (not +20).
+
+**New grant mid-animation:** Save updates on flush; **re-tier from new remaining** automatically absorbs it (no separate latch field required).
+
+---
+
+###### Example trace: +2033 grant
+
+Assume wallet was synced; grant flushes save to **2033**, display starts at **0**.
+
+| Frame | Remaining | Tier | Step applied | Display after |
+|-------|-----------|------|--------------|---------------|
+| 1 | 2033 | ≥1001 | 1000 | 1000 |
+| 2–11 | 1033→33 | 501–1000 | 100 ×10 | 2000 |
+| 12–44 | 33→0 | 0–100 | 1 ×33 | **2033** |
+
+~44 frames @ 60 fps ≈ **0.7 s** (vs ~34 s at ±1 only).
+
+---
+
+**Sound (item 3 — plain language)**
+
+Vanilla plays a **counting sound** while the display catches up (“fast roll” when change ≥5). That is **separate** from how many rupees the number moves per frame.
+
+**Recommendation:** arm fast-roll SFX when **initial** \|Δ\| ≥ **101** (first tier above ±1); keep **one tick sound per animation frame** while rolling; **`CNT_2`** when display hits save. Exact final digit does not require per-rupee sounds — the **number** still ends on 2033 exactly.
+
+Small grants **1–100**: ±1, optional silent (vanilla only beeps when \|Δ\|≥5 today).
+
+---
+
+**Sound sync (vanilla model today)**
+
+`mRupeeSound` bits in `moveRupee()`:
+
+| Bit | Role |
+|-----|------|
+| **2** | “Fast **increase** roll” — set when flush Δ ≥ **5** |
+| **3** | “Fast **decrease** roll” — set when flush Δ ≤ **−5** |
+| **0** | Toggle: while bit 2, alternate frames → `Z2SE_LUPY_INC_CNT_1` |
+| **1** | Toggle: while bit 3, alternate frames → `Z2SE_LUPY_DEC_CNT_1` |
+| (end) | On reaching `savedRupee`: `LUPY_*_CNT_2`, clear bits |
+
+Sounds are **per animation frame**, not per rupee — vanilla already decouples tick size from SE rate when bit 2 is on (+1/frame but SE every other frame).
+
+**To keep audio aligned with tiered steps:**
+
+| Change | Recommendation |
+|--------|----------------|
+| Fast-roll threshold | Raise bit **2/3** arm from `≥5` to **`≥101`** (first tier that uses step > 1) — avoids “fast roll” SFX on 5–99 that still tick ±1 |
+| While animating | Keep **one** `INC_CNT_1` / `DEC_CNT_1` alternation **per display frame** (unchanged) — works with ±20/100/1000; roll ends quickly on big grants with a single `CNT_2` |
+| Small grants 1–100 | Bit 2 off, ±1, **silent** (same as vanilla Δ<5 today for 1–4; 5–100 would stay ±1 — product call whether 5–100 should arm bit 2 for tick sound only) |
+| `_delete` | Already plays `CNT_2` if bits 2/3 set — still valid |
+
+**No sync work needed for:** enemy `+n` popup (fixed 120f, grant amount — independent); `drawRupee(mRupeeNum)` (each step redraws); wallet size / LoP layout flags (unchanged).
+
+**Edge cases**
+
+| Case | Handling |
+|------|----------|
+| Cross **10000** in one step | `drawRupee` toggles 5-digit layout that frame — OK; may pop layout (same as slow cross, faster) |
+| Magic armor / shop spend | Same tiers on `\|Δ\|` decrease |
+| Debug slider (`d_menu_window_HIO`) | Uses `setItemRupeeCount` — picks up tiers automatically |
+| Δ > 1000 but remainder < step | Final clamp frame lands exactly on save |
+| Frame hitches | Variable frame rate = variable wall-clock; step is per **meter** frame (vanilla) |
+
+**Product locks (updated)**
+
+1. ~~Boundaries~~ — **locked** (table above).
+2. ~~Latch vs re-tier~~ — **re-tier from remaining** (Mode B) for 1000-then-ones feel + exact landing.
+3. Sound — arm fast roll at initial \|Δ\| ≥ **101**; exact value is display math, not SFX.
+
+**Setting (locked 2026-08-22):**
+
+| Field | Value |
+|-------|--------|
+| **Name** | Faster Rupee Tick |
+| **Home** | Settings → **Quality of Life** — **directly after Bigger Wallets** (wallet / rupee HUD cluster; same section as Disable Rupee Cutscenes, No Rupee Returns) |
+| **Key** | `game.fasterRupeeTick` (suggested) |
+| **Default** | **Off** — vanilla ±1/frame when disabled |
+| **Help** | "When the rupee counter is catching up after a large gain or loss, roll in bigger steps (up to 1000 per frame) so the display reaches the correct total faster. Off uses the original one-rupee-per-frame animation." |
+| **Hook** | `moveRupee()`: if off, existing ±1 path; if on, Mode B tiers + `min(step, rem)` |
+
+*Not* under ALBW Master Quest or Difficulty — affects all rupee motion (pickups, shops, armor drain, enemy grants), not MQ-only.
+
+**Files:** `settings.h` / `settings.cpp`, `d_meter2.cpp` (`moveRupee` + `stepForRemaining(rem)` helper). No save/HUD layout change.
+
+---
+
+##### 6. Implement checklist (C1-HUD fix pass)
+
+| # | Item |
+|---|------|
+| H1 | Copy black/white from `leftIdx` clone source to both 10k panes |
+| H2 | Tune `fiveShift` — verify advance ≥ digit width; re-probe after LoP layout cached |
+| H3 | Confirm shift sign classic **and** LoP (runtime jewel vs leftmost digit) |
+| H4 | Playtest 9999→10000 transition during animated tick |
+| H5 | **Tiered tick:** re-tier from **remaining**; 1/20/100/1000 + `min(step,rem)`; sound arm ≥101 |
+
+---
 
 #### Phase C1 — Rupee HUD: **insert path locked** (implement plan)
 
@@ -210,7 +499,7 @@ Donor patterns: balloon 5-place math; item-pane `appendChild` clone; **not** pop
 
 **Effect:** +**1 Atp** per purchase to the **shop-selected** sword. **NG+ Tier 4:** Tier-1-like prices but **+2 Atp** per buy.
 
-**UI:** picker on a **second Upgrades page**. Rows: **Wood, Ordon, Master, Light** — only after obtained (story or Dusklight editor).
+**UI:** picker on a **dedicated Sword Upgrades page** (not QS `CAT_SWORDS`, not crowded Upgrades). **Four independent rows** — Wooden / Ordon / Master / Light — each its own save slot and purchase ladder. Row appears **only if that sword is in possession** (see possession check below).
 
 | Tier | Gate | Steps |
 |------|------|-------|
@@ -229,6 +518,88 @@ Donor patterns: balloon 5-place math; item-pane `appendChild` clone; **not** pop
 | **Poes** | **`getPohSpiritNum()`** — increments on collect; **no normal decrement**. Jovani uses milestones (20/60) on this total | No depletable “souls in pocket” | `getPohSpiritNum() >= N`. Shop payment does not reduce the number |
 
 “Currently held” fits bottles for bugs (awkward vs needing 12) and **doesn’t exist for Poes**. **Locked:** Tier 2/3 = non-consuming progress checks (insect first-bit count + `getPohSpiritNum()`).
+
+#### Phase D — implement research (2026-08-21; **before** code)
+
+**Page:** New category (e.g. **Sword Upgrades**), not `CAT_SWORDS` (QS wardrobe — tab **vanishes** if QS off) and not crowding **Upgrades & Services**. Mirror `categoryHasVisibleRows` ↔ `rebuildVisibleList` (Armor tab lesson).
+
+**Per-sword rows (product lock):**
+
+| Row | Item | Show when |
+|-----|------|-----------|
+| Wooden Sword | `dItemNo_WOOD_STICK_e` | Possessed |
+| Ordon Sword | `dItemNo_SWORD_e` | Possessed |
+| Master Sword | `dItemNo_MASTER_SWORD_e` | Possessed |
+| Light Sword | `dItemNo_LIGHT_SWORD_e` | Possessed |
+
+**Possession check (implement):** `dComIfGs_isItemFirstBit(itemNo)` for that sword (permanent obtain). Do **not** require currently equipped / B-button. Wardrobe-stored still counts (first-bit stays). Missing sword → **no row** (not greyed sold-out).
+
+**Descriptions (product lock):** **Tier-shared** templates — same wording for all four swords at a given tier; only the **name** is per-sword. **N** = that sword’s **next-purchase gate** (bug count for Tier 2, soul count for Tier 3), not owned totals. Exact copy (no surrounding quotes; leading spaces intentional where present):
+
+| Tier | Description |
+|------|-------------|
+| **1** | ` I hope you don't mind, but I've been using your house to sleep in every now and then, and I found this whetstone. I can sharpen your sword to repay your hospitality!` |
+| **2** | ` I'm going to let you in on a new tip from a master swordsman in castle town, they say if you lather the pheremones of N bugs, your sword will get stronger` (substitute **N**) |
+| **3** | `A gruff resistance member scolded me recently, saying slathering bugs on a sword never works. The true secret is refining with N souls, creepy magic but true.` (substitute **N**) |
+
+**Examples (N = next gate):** Tier 2 first step → *“…pheremones of **4** bugs…”*; Tier 3 mid ladder → *“…refining with **20** souls…”*.
+
+**Shop feasibility (research 2026-08-21 — feasible, no code yet):**
+
+| Fact | Implication |
+|------|-------------|
+| `ve.desc` is `const char*` on `dALBWVisibleEntry`; shop does `snprintf(mDescBuf, 256, "%s\n\nPrice:  %d Rupees", ve.desc, ve.price)` | Dynamic body is fine if getter returns a durable C string |
+| Heart/meter/FA descs today are **string literals** (no `%d` in body) | Sword Tier 2/3 need a **formatted buffer**, not a literal |
+| `getVisibleList` fills **all** rows’ `desc` pointers in one pass | **One shared static buffer would clobber** — Ordon’s “4 bugs” overwritten by Master’s “8 bugs”. Need **per-sword buffers** (×4) or equivalent |
+| `mDescBuf[256]` holds desc + price footer | Draft Tier 1–3 lengths (~160–190) + `Price: …` fit; keep an eye if Tier 4 copy is longer |
+| Word-wrap already runs on `mDescBuf` | Long Postman voice is OK; parchment already wraps MQ heart text |
+
+**Do not:** bake N into one global string; format only on highlight (list still stores pointers per row).
+
+**Atp apply:** Vanilla move Atp is **hardcoded** into `setSwordAtParam` / `initCutTurnAt` / sword `setCylAtParam` (`d_a_alink_cut.inc`). Hook: `SetAtAtp(vanilla_move_Atp + bonus)` where bonus is for **equipped** sword only. Do **not** buff wolf / iron ball / FA.
+
+**Save:** Event regs **106–109** Atp bonus u8 ×4 swords; **110–113** purchase step u8 ×4. (100–105 taken by MQ/FA/potion/C2 quarters.)
+
+**Gates:** Insect count = **first-bit only** (`dMenu_Insect`-style), **not** `checkGetInsectNum` (requires Agitha turn-in). Poes = `getPohSpiritNum()`. NG+ = `getClearCount() != 0`.
+
+**Do-not:** QS-gate the Atp page; consume bugs/poes; bake Atp in shop UI; skip rebuild after buy; put rows only on Upgrades; change C2 heart regs; share one Atp counter across all swords; show a row for a sword never obtained.
+
+**Playtest risk:** `at_power_get` cliffs (many enemies treat Atp≥4 as huge). Early A/B when bonuses push 3→4.
+
+**Open product (non-blocking):** expand Tier 2/3 ellipses to five explicit bug/poe+₽ steps at implement; write the shared tier desc strings.
+
+#### Phase D — Master Quest gate (research 2026-08-21)
+
+**Product lock:** Sword Atp shop rides the **same** Settings → **ALBW Master Quest** toggle as heart + stamina (`game.masterQuest` / `dAlbwMQ_isEnabled()`).
+
+**How heart/stamina use it today**
+
+| Layer | Behavior |
+|-------|----------|
+| Setting | `dusk::getSettings().game.masterQuest` (default **off**). UI: Settings → ALBW Master Quest → “Master Quest” |
+| API | `dAlbwMQ_isEnabled()` → that bool only |
+| Upgrades page gate | `categoryHasVisibleRows(CAT_UPGRADES)` ORs `dAlbwMQ_isEnabled()` so the tab can exist for heart/meter |
+| Row build | Heart + meter rows only if `cat == UPGRADES && dAlbwMQ_isEnabled()` |
+| canPurchase / tryPurchase | First line: `if (!dAlbwMQ_isEnabled()) return false` |
+| Runtime effect when MQ **off** | Bonus HP quarters → **0** (`getBonusMaxLifeQuarters`); meter shop steps ignored in meter2 — **regs keep values**, toggle back restores |
+
+Help text today (implement will extend): *“…adds Postman heart and stamina upgrades…”*
+
+**D must mirror (same switch, new page) — save persists; setting only chooses which Atp is live**
+
+| Surface | Rule |
+|---------|------|
+| Sword Upgrades **page existence** | `categoryHasVisibleRows(CAT_SWORD_ATP)` true only if **MQ on** and ≥1 possessed sword row would build |
+| Row build | MQ on + `isItemFirstBit` for that sword |
+| canPurchase / tryPurchase | Fail closed if `!dAlbwMQ_isEnabled()` |
+| Combat when MQ **ON** | `vanilla_move_Atp + saved_bonus` for equipped sword (e.g. move was 2, bonus 16 → **18**) |
+| Combat when MQ **OFF** | **Vanilla move Atp only** (bonus dormant — e.g. same slash stays **2**, not wiped to a fake “10”) |
+| Persist | Turning MQ off **must not clear** regs 106–113; turn back on → same purchased bonus resumes |
+| Settings copy | Update Master Quest help to mention **sword** upgrades alongside heart/stamina |
+
+**Illustrative numbers:** User example “18 purchased / 10 vanilla” means *effective power with upgrades on vs off* — engine path is still **per-move vanilla Atp + u8 bonus**, not a single absolute “sword Atp = 10” field. Do **not** invent a second absolute Atp store that overwrites vanilla move tables.
+
+**Do not:** separate “Sword MQ” setting; show Sword Upgrades when MQ off; apply saved Atp bonuses while MQ off; **wipe** purchased Atp when MQ toggles off; gate only the page but not combat (or vice versa).
 
 ### Capacity → ALBW meter discount (shipped — Phase B2)
 
@@ -490,8 +861,8 @@ All product locks above are **planned / not coded** unless marked shipped. Phase
 
 | # | Work | Hooks / files | Gate |
 |---|------|---------------|------|
-| **C1** | Insert-path 5-digit HUD + Colossal **50000** + s32 tick | `d_meter2*` / `d_save.h` | **Shipped** — playtest 10k/50k on classic+LoP |
-| **C2** | Heart shop past soft-cap: **+333**, **¼♥**; 20th overlay | `d_albw_master_quest.*`; `drawLife` | Unlimited buys; HUD readable past 20♥ |
+| **C1** | Insert-path 5-digit HUD + Colossal **50000** + s32 tick | `d_meter2*` / `d_save.h` | **Shipped** |
+| **C2** | Heart shop past soft-cap: **+333**, **¼♥**; same Upgrades row; 20th overlay | `d_albw_master_quest.*`; `drawLife` | **Shipped** — playtest past 9999 / past 20♥ |
 
 **Why before sword shop:** Late hearts and Atp need wallet headroom and a HUD that can show five digits.
 
@@ -499,12 +870,16 @@ All product locks above are **planned / not coded** unless marked shipped. Phase
 
 ### Phase D — Sword Atp shop
 
-| # | Work | Hooks / files | Gate |
-|---|------|---------------|------|
-| D1 | 2nd Upgrades page picker: Wood / Ordon / Master / Light (obtained only) | Postman / MQ shop UI | Rows appear only when owned |
-| D2 | Persist per-sword Atp bonus; apply on hit | Save field + attack Atp path | +1 Atp per buy; survives reload |
-| D3 | Tiers 1–3 prices + **non-consuming** bug/poe gates | Insect first-bit count; `getPohSpiritNum()` | Failed gate = no buy; counts unchanged |
-| D4 | NG+ Tier 4: Tier-1 prices, **+2 Atp** | NG+ flag | Only when NG+; +2 per buy |
+**Shipped (2026-08-21):** `d_albw_sword_atp.*` + Postman **Sword Upgrades** page + combat hook in `d_a_alink_cut.inc`. See §3c.
+
+| # | Work | Status |
+|---|------|--------|
+| D0 | MQ gate everywhere | **Shipped** |
+| D1 | Four rows (Wood / Ordon / Master / Light) | **Shipped** |
+| D2 | Per-sword save + Atp apply | **Shipped** |
+| D2b | Tier descs + N format | **Shipped** |
+| D3 | Bug/poe gates (non-consuming) | **Shipped** |
+| D4 | NG+ Tier 4 (+2 Atp) | **Shipped** |
 
 **Why after C:** Expensive tiers need Colossal 50k. Largest UI + save surface in the player-help package.
 
@@ -536,11 +911,28 @@ Guard-break×perfect = Phase G research.
 
 | Item | Note |
 |------|------|
-| Guard-break only if perfect missed | Enemy/AtSpl specific — research pass |
+| Guard-break only if perfect missed | Enemy **AtSpl 9/10/11** path (`isGuardBreakAttack`) — research / implement when briefed |
+| Iron ball swing “breaks all guards” | **Ratified 2026-08-21 — not a universal AtSpl/Atp opener** (see below) |
 | Horse + shield PM | Assumed foot-equivalent until proven otherwise |
 | Open room mult tweaks | Field r2/r7/r14, Hidden Village, Prison, grottos — not decided |
 | Per-enemy Atp tables | **Out of scope** unless newly briefed |
-| PM HUD polish | After E core | **Superseded** — full plan §4.5 E-HUD |
+
+#### Iron ball swing vs enemy guards (G ratification)
+
+**Player report:** swinging Ball and Chain (not throwing) seems to break every enemy’s guard — useful if true for generalizing perfect-parry-before-break.
+
+**Code verdict:** **Partially useful observation, wrong shared mechanism for Phase G.**
+
+| Fact | Detail |
+|------|--------|
+| Swing Atp / AtSpl | **Atp 2**, AtSpl **0** (`d_a_alink_ironball.inc`) |
+| Throw Atp / AtSpl | **Atp 3**, AtSpl **0** |
+| Type | Always `AT_TYPE_IRON_BALL` |
+| Why it *feels* universal | Many enemies **special-case that type** (and some `at_power_get` PowerTypes treat iron ball like Atp≥4 → power 200). Per-enemy branches, not one global “unblockable” |
+| Still resist / soft | e.g. **Lizalfos shield** often just clanks; **Darknut front** heavy-stagger, not pierce; no IRON_BALL branch → normal Atp chip |
+| Player guard-break (PM/G) | Still enemy **AtSpl 9 / 10 / 11** only (`d_albw_shield.cpp` `isGuardBreakAttack`) |
+
+**Phase G path:** keep extending the **shared AtSpl 9/10/11** deferral (perfect → no shatter). Do **not** copy iron-ball’s scattered `ChkAtType(AT_TYPE_IRON_BALL)` tree as the generalizer. Iron ball remains a separate heavy-type surface (lockout / durability skip already exist).
 
 ---
 
@@ -548,10 +940,10 @@ Guard-break×perfect = Phase G research.
 
 ```
 A DONE → B DONE ∥ E core DONE → E-HUD DONE
-           └── C (wallet 50k + heart uncap)
-                └── D (sword Atp shop)
+           └── C DONE (wallet 50k + heart uncap)
+                └── D (sword Atp shop) ← next research-complete
 F (scaler + NG+) ── after playtest of E
-G (research)     ── anytime
+G (research)     ── AtSpl path; iron ball ratified as non-template
 ```
 
-**Next (user pick):** Phase **C** (wallet 50k + heart uncap), or polish.
+**Next (user pick):** Phase **D** implement (research locked), or Phase **G** brief on AtSpl×perfect, or polish.

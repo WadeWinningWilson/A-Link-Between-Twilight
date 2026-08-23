@@ -20,6 +20,7 @@
 #include "dusk/hurricane_test.h"
 #include "dusk/truetest.hpp"
 #include "dusk/settings.h"
+#include "d/d_albw_outfit.h"
 #include "d/d_albw_potion.h"
 #include "graphics_tuner.hpp"
 #include "m_Do/m_Do_main.h"
@@ -111,12 +112,6 @@ constexpr std::array kLopHudModes = {
     "Off",
     "Vanilla Hearts",
     "Health Bar",
-};
-
-// §308 M5 — WW cutscene dialogue box renderer. Order matches enum WwDialogueStyle.
-constexpr std::array kWwDialogueModes = {
-    "Reconstructed",
-    "Native",
 };
 
 constexpr std::array kMagicArmorModes = {
@@ -1272,316 +1267,6 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 pane.clear();
                 pane.add_text("Multiplies incoming damage.");
             });
-        // ============================================
-        // NEW CODE — ALBW Port
-        // True max-HP multipliers (1–16× per category) and global Link
-        // damage decrease. Both default to 1× (vanilla). True HP is applied
-        // once per enemy in fopAc_Execute; Link damage decrease divides
-        // attack power in d_cc_uty.cpp.
-        // ============================================
-        leftPane.add_section("ALBW Settings");
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Health Multiplier",
-                .getValue =
-                    [] {
-                        return fmt::format(
-                            "{}× / {}× / {}× / {}×",
-                            getSettings().game.hpMultNormal.getValue(),
-                            getSettings().game.hpMultMidBoss.getValue(),
-                            getSettings().game.hpMultBoss.getValue(),
-                            getSettings().game.hpMultFinalBoss.getValue());
-                    },
-                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
-                .isModified =
-                    [] {
-                        return getSettings().game.hpMultNormal.getValue() !=
-                                   getSettings().game.hpMultNormal.getDefaultValue() ||
-                               getSettings().game.hpMultMidBoss.getValue() !=
-                                   getSettings().game.hpMultMidBoss.getDefaultValue() ||
-                               getSettings().game.hpMultBoss.getValue() !=
-                                   getSettings().game.hpMultBoss.getDefaultValue() ||
-                               getSettings().game.hpMultFinalBoss.getValue() !=
-                                   getSettings().game.hpMultFinalBoss.getDefaultValue();
-                    },
-            }),
-            rightPane,
-            [](Pane& pane) {
-                pane.clear();
-                pane.add_section("Health Multiplier");
-                pane.add_text(
-                    "Per-category true max-HP multipliers (1–16×). 1× is vanilla; only newly "
-                    "spawned enemies pick up changes.");
-                auto addCategoryMult = [&](const Rml::String& key, ConfigVar<int>& value) {
-                    pane.add_child<NumberButton>(NumberButton::Props{
-                        .key = key,
-                        .getValue = [&value] { return value.getValue(); },
-                        .setValue =
-                            [&value](int mult) {
-                                value.setValue(mult);
-                                config::Save();
-                            },
-                        .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
-                        .isModified =
-                            [&value] {
-                                return value.getValue() != value.getDefaultValue();
-                            },
-                        .min = 1,
-                        .max = 16,
-                        .suffix = "×",
-                    });
-                };
-                addCategoryMult("Common", getSettings().game.hpMultNormal);
-                addCategoryMult("Mid-Boss", getSettings().game.hpMultMidBoss);
-                addCategoryMult("Boss", getSettings().game.hpMultBoss);
-                addCategoryMult("Final Boss", getSettings().game.hpMultFinalBoss);
-                pane.add_rml(
-                    "<br/><b>Common</b>: Bokoblins, Stalfos, Lizalfos, Keese, and other regular "
-                    "encounters.<br/>"
-                    "<b>Mid-Boss</b>: Ook, Dangoro, Death Sword, Deku Toad, Skull Kid, King "
-                    "Bulblin, Darkhammer, Twilit Bloat, Phantom Zant, etc.<br/>"
-                    "<b>Boss</b>: Diababa, Fyrus, Morpheel, Stallord, Blizzeta, Armogohma, "
-                    "Argorok, and Zant.<br/>"
-                    "<b>Final Boss</b>: Dark Beast Ganon and the Ganondorf sword fight.");
-            });
-        leftPane.register_control(
-            leftPane.add_child<NumberButton>(NumberButton::Props{
-                .key = "Link Damage Decrease ×",
-                .getValue = [] { return getSettings().game.linkDamageDecreaseMult.getValue(); },
-                .setValue =
-                    [](int value) {
-                        getSettings().game.linkDamageDecreaseMult.setValue(value);
-                        config::Save();
-                    },
-                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
-                .isModified =
-                    [] {
-                        return getSettings().game.linkDamageDecreaseMult.getValue() !=
-                               getSettings().game.linkDamageDecreaseMult.getDefaultValue();
-                    },
-                .min = 1,
-                .max = 16,
-                .suffix = "×",
-            }),
-            rightPane, [](Pane& pane) {
-                pane.clear();
-                pane.add_text(
-                    "Divides Link's attack power against all enemies (1× is vanilla). "
-                    "Stacks with true HP multipliers if both are raised. "
-                    "Independent of enemy category.");
-            });
-        // ============================================
-        // NEW CODE — ALBW Port (Region Damage + Region Multipliers)
-        // Region Damage is standalone (incoming to Link). Region Multipliers
-        // master gates Health / Rupees only. Same province/dungeon table.
-        // ============================================
-        addSpeedrunDisabledOption("Region Damage", getSettings().game.regionDamage,
-            "Scales incoming damage to Link by province/dungeon "
-            "(Ordon/Faron 1.00 → … → Hyrule Castle 3.15; Field rooms use "
-            "Faron/Eldin/Lanayru pockets). Stacks with Damage Multiplier and "
-            "Outfit Stats. Independent of Region Multipliers (enemy HP / rupees).");
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Region Multipliers",
-                .getValue =
-                    []() -> Rml::String {
-                        if (!getSettings().game.regionMult.getValue()) {
-                            return "Off";
-                        }
-                        Rml::String axes;
-                        if (getSettings().game.regionMultHealth.getValue()) {
-                            axes += "HP";
-                        }
-                        if (getSettings().game.regionMultRupees.getValue()) {
-                            if (!axes.empty()) {
-                                axes += "+";
-                            }
-                            axes += "Rup";
-                        }
-                        if (axes.empty()) {
-                            return "On (no axes)";
-                        }
-                        return fmt::format("On ({})", axes);
-                    },
-                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
-                .isModified =
-                    [] {
-                        return getSettings().game.regionMult.getValue() !=
-                                   getSettings().game.regionMult.getDefaultValue() ||
-                               getSettings().game.regionMultHealth.getValue() !=
-                                   getSettings().game.regionMultHealth.getDefaultValue() ||
-                               getSettings().game.regionMultRupees.getValue() !=
-                                   getSettings().game.regionMultRupees.getDefaultValue();
-                    },
-            }),
-            rightPane,
-            [](Pane& pane) {
-                pane.clear();
-                pane.add_section("Region Multipliers");
-                pane.add_text(
-                    "Scales enemy HP and enemy-death rupees by the same province/dungeon "
-                    "table as Region Damage. Incoming damage to Link is the separate "
-                    "Region Damage setting. Each axis can be toggled independently while "
-                    "the master is On.");
-
-                auto addOnOff = [&pane](const Rml::String& label, ConfigVar<bool>& value) {
-                    pane.add_text(label);
-                    pane
-                        .add_button({
-                            .text = "Off",
-                            .isSelected = [&value] { return !value.getValue(); },
-                            .isDisabled = []() -> bool {
-                                return getSettings().game.speedrunMode;
-                            },
-                        })
-                        .on_pressed([&value] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            value.setValue(false);
-                            config::Save();
-                        });
-                    pane
-                        .add_button({
-                            .text = "On",
-                            .isSelected = [&value] { return value.getValue(); },
-                            .isDisabled = []() -> bool {
-                                return getSettings().game.speedrunMode;
-                            },
-                        })
-                        .on_pressed([&value] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            value.setValue(true);
-                            config::Save();
-                        });
-                };
-
-                addOnOff("Master", getSettings().game.regionMult);
-                addOnOff("Health (enemy HP)", getSettings().game.regionMultHealth);
-                addOnOff("Rupees (enemy-death payouts)", getSettings().game.regionMultRupees);
-                pane.add_rml(
-                    "<br/>Health stacks on category Health Multiplier (newly spawned enemies). "
-                    "Rupees scale Enemy Death Rupees grants only — shops unchanged.");
-            });
-        // ============================================
-        // NEW CODE ENDS HERE
-        // ============================================
-        addOption("Stick Cycle Lock-on", getSettings().game.stickCycleLockon,
-            "While Z-targeting, right stick left/right cycles between nearby enemies that are "
-            "in combat with you instead of manually rotating the lock-on camera.");
-        addOption("No Ammo Drops", getSettings().game.noAmmoDrops,
-            "Bombs, arrows, and seeds will not drop from enemies. Magic pickups (seed drops) replace them.");
-        addOption("Hold-A Crawl", getSettings().game.enableHoldACrawl,
-            "Hold A for 1 second while standing (little/no stick) to crawl. Gated so it "
-            "never steals door Open, talk Speak, or Enter prompts, and stick-forward A "
-            "still rolls. Keep holding A under clearance to stay down; release A to stand. "
-            "Interim until WW crawl-hole wall codes arm native Enter.");
-        addOption("Manual Shielding", getSettings().game.manualShielding,
-            "Hold ZR to raise your shield without Z-target lock-on; move freely while guarding. "
-            "Shield bash is ZR+B. Off preserves vanilla auto-guard on Z-target.");
-        addOption("Shield Parry & Bash Charges", getSettings().game.shieldParryCombat,
-            "Perfect-guard timing earns bash charges and ALBW meter. Failed blocks cost meter "
-            "and charges. Off uses traditional TP guard (no parry economy).");
-        addSpeedrunDisabledOption("Parry Master", getSettings().game.parryMaster,
-            "Failed blocks chip HP (15% of scaled damage) and tax ALBW from base meter capacity; "
-            "perfect parries and landed hits reclaim recent chip. Guard-break shatter is exempt. "
-            "Requires Shield Parry & Bash Charges. Speedrun forces Off.");
-        addOption("Shield Durability", getSettings().game.shieldDurability,
-            "Shield HP by tier; failed blocks drain it. Hylian repairs on parry and takes more "
-            "damage per hit. Break at 0 uses guard break (replaces vanilla slip counter).");
-        addOption("Death Recovery Orb", getSettings().game.deathRecoveryOrb,
-            "After Talo is rescued, dying halves your rupees and leaves a Tear of Light at the "
-            "death spot to recover part of them. Off keeps your wallet unchanged and spawns no orb. "
-            "Item strip and meter refill on death are unaffected.");
-        addOption("Wolf Link Combat", getSettings().game.wolfLinkCombat,
-            "ALBW wolf form: bite charges for Midna field attacks, twilight/non-twilight damage "
-            "split, non-twilight stun, and low-HP bite healing. Off uses vanilla Twilight Princess "
-            "wolf combat.");
-        addOption("Focused Arts", getSettings().game.focusedArts,
-            "Charge bank and spend columns for Hidden Skills, Special Finishers, and Postman "
-            "Focused Arts scroll upgrades. Off keeps standard ALBW hidden-skill meter costs.");
-        addOption("Enemy Death Rupees", getSettings().game.enemyDeathRupees,
-            "Credit rupees directly to your wallet when enemies die and when boss fights end. "
-            "Vanilla drop tables (hearts, jars, ground rupees) are unchanged.");
-        static constexpr std::array<const char*, 3> kExtraItemSlotModes = {
-            "Off",
-            "Extra Only",
-            "Extra + Quick Swap",
-        };
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Extra Item Slot",
-                .getValue =
-                    [] {
-                        const auto mode = getSettings().game.extraItemSlotMode.getValue();
-                        const auto index = static_cast<size_t>(mode);
-                        return kExtraItemSlotModes[index < kExtraItemSlotModes.size() ? index : 0];
-                    },
-                .isModified =
-                    [] {
-                        return getSettings().game.extraItemSlotMode.getValue() !=
-                               getSettings().game.extraItemSlotMode.getDefaultValue();
-                    },
-            }),
-            rightPane,
-            [](Pane& pane) {
-                for (int i = 0; i < static_cast<int>(kExtraItemSlotModes.size()); ++i) {
-                    pane
-                        .add_button({
-                            .text = kExtraItemSlotModes[i],
-                            .isSelected =
-                                [i] {
-                                    return getSettings().game.extraItemSlotMode.getValue() ==
-                                           static_cast<ExtraItemSlotMode>(i);
-                                },
-                        })
-                        .on_pressed([i] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.extraItemSlotMode.setValue(
-                                static_cast<ExtraItemSlotMode>(i));
-                            applyDpadQuickSwapPresetBinds();
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "<br/><b>Off</b>: vanilla d-pad.<br/>"
-                    "<b>Extra Only</b>: Midna on left D-pad, third item on Z.<br/>"
-                    "<b>Extra + Quick Swap</b>: also maps Up/Right/Down to cycle sword, "
-                    "cycle shield, and wolf transform. Map moves to M / Tab and the "
-                    "controller touchpad by default (no touchpad? rebind Open Map in "
-                    "Controller Config — L3 recommended).");
-            });
-        config_bool_select(leftPane, rightPane, getSettings().game.quickEquipWheel,
-            {
-                .key = "Quick Equip Wheel",
-                .helpText =
-                    "Hold the Item Wheel bind (L1 under Extra + Quick Swap) to open a "
-                    "filtered tools ring. Release over an item to assign it to Z only — "
-                    "X and Y stay unchanged. Tap still opens the full wheel. Requires "
-                    "Extra Item Slot (Extra Only or Extra + Quick Swap).",
-                .isDisabled =
-                    [] {
-                        return getSettings().game.extraItemSlotMode.getValue() ==
-                               ExtraItemSlotMode::Off;
-                    },
-            });
-        config_bool_select(leftPane, rightPane, getSettings().game.albwSoulboundRedPotion,
-            {
-                .key = "Soulbound Red Potion",
-                .helpText =
-                    "Dedicated red potion bottle in inventory slot 11 (multi-use charges). "
-                    "On = grant the bottle and show it on the Quick Equip / item wheel; "
-                    "Off = clear red from slot 11 (empty bottle). WIP — capacity shop and "
-                    "fill rules still expanding.",
-                .onChange =
-                    [](bool value) { dAlbwPotion_editorSetSoulboundEnabled(value); },
-            });
-        // ============================================
-        // NEW CODE ENDS HERE
-        // ============================================
-        leftPane.add_section("ALBW Master Quest");
-        addOption("Master Quest", getSettings().game.masterQuest,
-            "Recommended once per playthrough. Halves heart container and heart-piece "
-            "set rewards; adds Postman heart and stamina upgrades. Disables dungeon ALBW "
-            "meter growth in favor of shop purchases.");
         addSpeedrunDisabledOption(
             "Instant Death", getSettings().game.instantDeath, "Any hit will instantly kill you.");
         addSpeedrunDisabledOption("No Heart Drops", getSettings().game.noHeartDrops,
@@ -1674,6 +1359,537 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .key = "Show RTA",
                 .helpText = "Display the RTA timer. IGT is always visible.",
                 .isDisabled = [] { return !getSettings().game.speedrunMode; },
+            });
+    });
+
+    // ============================================
+    // ALBW — top-level settings tree (Systems / Difficulty / QoL / Master Quest / Visuals)
+    // ============================================
+    add_tab("ALBW", [this](Rml::Element* content) {
+        auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
+        auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
+
+        static constexpr const char* kAlbwUnfinishedDisclaimer =
+            "<br/><br/><b>Not fully tested!</b> Turning on these settings may crash, softlock, "
+            "or otherwise break your saves. Continue with caution.";
+
+        auto addOption = [&](const Rml::String& key, ConfigVar<bool>& value,
+                             const Rml::String& helpText) {
+            config_bool_select(leftPane, rightPane, value,
+                {
+                    .key = key,
+                    .helpText = helpText,
+                });
+        };
+        auto addSpeedrunDisabledOption = [&](const Rml::String& key, ConfigVar<bool>& value,
+                                             const Rml::String& helpText) {
+            add_speedrun_disabled_option(leftPane, rightPane, value, key, helpText);
+        };
+
+        leftPane.add_section("Systems");
+        addOption("Manual Shielding", getSettings().game.manualShielding,
+            "Hold ZR to raise your shield without Z-target lock-on; move freely while guarding. "
+            "Shield bash is ZR+B. Off preserves vanilla auto-guard on Z-target.");
+        addOption("Shield Parry & Bash Charges", getSettings().game.shieldParryCombat,
+            "Perfect-guard timing earns bash charges and ALBW meter. Failed blocks cost meter "
+            "and charges. Off uses traditional TP guard (no parry economy).");
+        addOption("Shield Durability", getSettings().game.shieldDurability,
+            "Gives each shield their own durability meter. Imperfect parries drain the "
+            "shield's durability.");
+        addSpeedrunDisabledOption("Parry Master", getSettings().game.parryMaster,
+            "Makes the parry system even more challenging with health and stamina "
+            "punishments for failed parries but allows perfect parries to recoup health. "
+            "Requires Shield Parry & Bash Charges.");
+        addOption("Focused Arts", getSettings().game.focusedArts,
+            "New system for Hidden Skills. Encourages more skilled play to build up charges "
+            "for Hidden Skills to increase various attack damages/special effects and unlock "
+            "special finisher moves. Unlock higher tiers via Postman shop.");
+        addOption("Wolf Link Combat", getSettings().game.wolfLinkCombat,
+            "Unlocks new moves for Link's wolf form. Build up charges to unlock them, with "
+            "some differing effects for twilight and non-twilight enemies. Also allows wolf "
+            "Link to heal his health with continued attacks.");
+        addOption("Death Recovery Orb", getSettings().game.deathRecoveryOrb,
+            "After Talo is rescued, dying halves your rupees and leaves a Tear of Light at the "
+            "death spot to recover part of them. Off keeps your wallet unchanged and spawns no "
+            "orb. Item strip and meter refill on death are unaffected.");
+        addOption("Enemy Death Rupees", getSettings().game.enemyDeathRupees,
+            "Credit rupees directly to your wallet when enemies die and when boss fights end. "
+            "Vanilla drop tables (hearts, jars, ground rupees) are unchanged.");
+        addOption("Outfit Stats", getSettings().game.outfitStats,
+            Rml::String("Outfit related defensive stats and abilities. Also unlocks higher "
+                        "Zora swim speed and diving in non-Zora outfits.") +
+                kAlbwUnfinishedDisclaimer);
+        addOption("Boss Refinement", getSettings().game.bossRefinement,
+            Rml::String("Allows sword usage on any boss, brings new moves, phases, or otherwise "
+                        "to make bosses a more challenging experience.") +
+                kAlbwUnfinishedDisclaimer);
+        addOption("Shade's Refuge", getSettings().game.shadeRefuge,
+            Rml::String("Adds Soulslike rest points across dungeons and world that allow the "
+                        "player to rest/heal, and warp to Ordon.") +
+                kAlbwUnfinishedDisclaimer);
+        addOption("Realtime Potions", getSettings().game.realtimePotions,
+            Rml::String("Soulslike potions, drink while moving instead of pausing the world "
+                        "timer.") +
+                kAlbwUnfinishedDisclaimer);
+
+        leftPane.add_section("Difficulty");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Health Multiplier",
+                .getValue =
+                    [] {
+                        return fmt::format(
+                            "{}× / {}× / {}× / {}×",
+                            getSettings().game.hpMultNormal.getValue(),
+                            getSettings().game.hpMultMidBoss.getValue(),
+                            getSettings().game.hpMultBoss.getValue(),
+                            getSettings().game.hpMultFinalBoss.getValue());
+                    },
+                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
+                .isModified =
+                    [] {
+                        return getSettings().game.hpMultNormal.getValue() !=
+                                   getSettings().game.hpMultNormal.getDefaultValue() ||
+                               getSettings().game.hpMultMidBoss.getValue() !=
+                                   getSettings().game.hpMultMidBoss.getDefaultValue() ||
+                               getSettings().game.hpMultBoss.getValue() !=
+                                   getSettings().game.hpMultBoss.getDefaultValue() ||
+                               getSettings().game.hpMultFinalBoss.getValue() !=
+                                   getSettings().game.hpMultFinalBoss.getDefaultValue();
+                    },
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Health Multiplier");
+                pane.add_text(
+                    "Per-category true max-HP multipliers (1–16×). 1× is vanilla; only newly "
+                    "spawned enemies pick up changes.");
+                auto addCategoryMult = [&](const Rml::String& key, ConfigVar<int>& value) {
+                    pane.add_child<NumberButton>(NumberButton::Props{
+                        .key = key,
+                        .getValue = [&value] { return value.getValue(); },
+                        .setValue =
+                            [&value](int mult) {
+                                value.setValue(mult);
+                                config::Save();
+                            },
+                        .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
+                        .isModified =
+                            [&value] {
+                                return value.getValue() != value.getDefaultValue();
+                            },
+                        .min = 1,
+                        .max = 16,
+                        .suffix = "×",
+                    });
+                };
+                addCategoryMult("Common", getSettings().game.hpMultNormal);
+                addCategoryMult("Mid-Boss", getSettings().game.hpMultMidBoss);
+                addCategoryMult("Boss", getSettings().game.hpMultBoss);
+                addCategoryMult("Final Boss", getSettings().game.hpMultFinalBoss);
+                pane.add_rml(
+                    "<br/><b>Common</b>: Bokoblins, Stalfos, Lizalfos, Keese, and other regular "
+                    "encounters.<br/>"
+                    "<b>Mid-Boss</b>: Ook, Dangoro, Death Sword, Deku Toad, Skull Kid, King "
+                    "Bulblin, Darkhammer, Twilit Bloat, Phantom Zant, etc.<br/>"
+                    "<b>Boss</b>: Diababa, Fyrus, Morpheel, Stallord, Blizzeta, Armogohma, "
+                    "Argorok, and Zant.<br/>"
+                    "<b>Final Boss</b>: Dark Beast Ganon and the Ganondorf sword fight.");
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Link Damage Decrease ×",
+                .getValue = [] { return getSettings().game.linkDamageDecreaseMult.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.linkDamageDecreaseMult.setValue(value);
+                        config::Save();
+                    },
+                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
+                .isModified =
+                    [] {
+                        return getSettings().game.linkDamageDecreaseMult.getValue() !=
+                               getSettings().game.linkDamageDecreaseMult.getDefaultValue();
+                    },
+                .min = 1,
+                .max = 16,
+                .suffix = "×",
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_text(
+                    "Divides Link's attack power against all enemies (1× is vanilla). "
+                    "Stacks with true HP multipliers if both are raised. "
+                    "Independent of enemy category.");
+            });
+        addSpeedrunDisabledOption("Region Damage", getSettings().game.regionDamage,
+            "Scales incoming damage to Link by province/dungeon "
+            "(Ordon/Faron 1.00 → … → Hyrule Castle 3.15; Field rooms use "
+            "Faron/Eldin/Lanayru pockets). Stacks with Damage Multiplier and "
+            "Outfit Stats. Independent of Region Multipliers (enemy HP / rupees).");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Region Multipliers",
+                .getValue =
+                    []() -> Rml::String {
+                        if (!getSettings().game.regionMult.getValue()) {
+                            return "Off";
+                        }
+                        Rml::String axes;
+                        if (getSettings().game.regionMultHealth.getValue()) {
+                            axes += "HP";
+                        }
+                        if (getSettings().game.regionMultRupees.getValue()) {
+                            if (!axes.empty()) {
+                                axes += "+";
+                            }
+                            axes += "Rup";
+                        }
+                        if (axes.empty()) {
+                            return "On (no axes)";
+                        }
+                        return fmt::format("On ({})", axes);
+                    },
+                .isDisabled = []() -> bool { return getSettings().game.speedrunMode; },
+                .isModified =
+                    [] {
+                        return getSettings().game.regionMult.getValue() !=
+                                   getSettings().game.regionMult.getDefaultValue() ||
+                               getSettings().game.regionMultHealth.getValue() !=
+                                   getSettings().game.regionMultHealth.getDefaultValue() ||
+                               getSettings().game.regionMultRupees.getValue() !=
+                                   getSettings().game.regionMultRupees.getDefaultValue();
+                    },
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Region Multipliers");
+                pane.add_text(
+                    "Scales enemy HP and enemy-death rupees by the same province/dungeon "
+                    "table as Region Damage. Incoming damage to Link is the separate "
+                    "Region Damage setting. Each axis can be toggled independently while "
+                    "the master is On.");
+
+                auto addOnOff = [&pane](const Rml::String& label, ConfigVar<bool>& value) {
+                    pane.add_text(label);
+                    pane
+                        .add_button({
+                            .text = "Off",
+                            .isSelected = [&value] { return !value.getValue(); },
+                            .isDisabled = []() -> bool {
+                                return getSettings().game.speedrunMode;
+                            },
+                        })
+                        .on_pressed([&value] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            value.setValue(false);
+                            config::Save();
+                        });
+                    pane
+                        .add_button({
+                            .text = "On",
+                            .isSelected = [&value] { return value.getValue(); },
+                            .isDisabled = []() -> bool {
+                                return getSettings().game.speedrunMode;
+                            },
+                        })
+                        .on_pressed([&value] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            value.setValue(true);
+                            config::Save();
+                        });
+                };
+
+                addOnOff("Master", getSettings().game.regionMult);
+                addOnOff("Health (enemy HP)", getSettings().game.regionMultHealth);
+                addOnOff("Rupees (enemy-death payouts)", getSettings().game.regionMultRupees);
+                pane.add_rml(
+                    "<br/>Health stacks on category Health Multiplier (newly spawned enemies). "
+                    "Rupees scale Enemy Death Rupees grants only — shops unchanged.");
+            });
+
+        leftPane.add_section("Quality of Life");
+        addOption("Crawl Anywhere", getSettings().game.enableHoldACrawl,
+            "Crawl anywhere just like in Wind Waker.");
+        addOption("Deku Leaf Glide", getSettings().game.dekuLeafGlideTest,
+            Rml::String("Brings the Deku Leaf from Wind Waker to Twilight Princess. While ON, "
+                        "run/jump off a ledge to start gliding.") +
+                kAlbwUnfinishedDisclaimer);
+        addOption("Stick Cycle Lock-on", getSettings().game.stickCycleLockon,
+            "While Z-targeting, right stick left/right cycles between nearby enemies that are "
+            "in combat with you instead of manually rotating the lock-on camera.");
+        addOption("No Ammo Drops", getSettings().game.noAmmoDrops,
+            "Bombs, arrows, and seeds will not drop from enemies. Magic pickups (seed drops) "
+            "replace them.");
+        static constexpr std::array<const char*, 3> kExtraItemSlotModes = {
+            "Off",
+            "Extra Only",
+            "Extra + Quick Swap",
+        };
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Extra Item Slot",
+                .getValue =
+                    [] {
+                        const auto mode = getSettings().game.extraItemSlotMode.getValue();
+                        const auto index = static_cast<size_t>(mode);
+                        return kExtraItemSlotModes[index < kExtraItemSlotModes.size() ? index : 0];
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.extraItemSlotMode.getValue() !=
+                               getSettings().game.extraItemSlotMode.getDefaultValue();
+                    },
+            }),
+            rightPane,
+            [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kExtraItemSlotModes.size()); ++i) {
+                    pane
+                        .add_button({
+                            .text = kExtraItemSlotModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.extraItemSlotMode.getValue() ==
+                                           static_cast<ExtraItemSlotMode>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.extraItemSlotMode.setValue(
+                                static_cast<ExtraItemSlotMode>(i));
+                            applyDpadQuickSwapPresetBinds();
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/><b>Off</b>: vanilla d-pad.<br/>"
+                    "<b>Extra Only</b>: Midna on left D-pad, third item on Z.<br/>"
+                    "<b>Extra + Quick Swap</b>: also maps Up/Right/Down to cycle sword, "
+                    "cycle shield, and wolf transform. Map moves to M / Tab and the "
+                    "controller touchpad by default (no touchpad? rebind Open Map in "
+                    "Controller Config — L3 recommended).");
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.quickEquipWheel,
+            {
+                .key = "Quick Equip Wheel",
+                .helpText =
+                    "Hold the Item Wheel bind (L1 under Extra + Quick Swap) to open a "
+                    "filtered tools ring. Release over an item to assign it to Z only — "
+                    "X and Y stay unchanged. Tap still opens the full wheel. Requires "
+                    "Extra Item Slot (Extra Only or Extra + Quick Swap).",
+                .isDisabled =
+                    [] {
+                        return getSettings().game.extraItemSlotMode.getValue() ==
+                               ExtraItemSlotMode::Off;
+                    },
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.albwSoulboundRedPotion,
+            {
+                .key = "Soulbound Red Potion",
+                .helpText =
+                    "Dedicated red potion bottle in inventory slot 11 (multi-use charges). "
+                    "On = grant the bottle and show it on the Quick Equip / item wheel; "
+                    "Off = clear red from slot 11 (empty bottle). WIP — capacity shop and "
+                    "fill rules still expanding.",
+                .onChange =
+                    [](bool value) { dAlbwPotion_editorSetSoulboundEnabled(value); },
+            });
+
+        leftPane.add_section("Master Quest");
+        addOption("Master Quest", getSettings().game.masterQuest,
+            "Recommended once per playthrough. Halves heart container and heart-piece "
+            "set rewards; adds Postman heart, stamina, and sword upgrades. Disables dungeon "
+            "ALBW meter growth in favor of shop purchases.");
+
+        leftPane.add_section("Visuals");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Link's Cap",
+                .getValue =
+                    [] {
+                        switch (getSettings().game.capWear.getValue()) {
+                            case CapWearMode::None:  return Rml::String("Hair");
+                            case CapWearMode::Green: return Rml::String("Green (Hero's)");
+                            case CapWearMode::Red:   return Rml::String("Red (Magic)");
+                            case CapWearMode::Blue:  return Rml::String("Blue (Zora)");
+                            default:                 return Rml::String("Off");
+                        }
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.capWear;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                const auto opt = [&pane](const char* label, CapWearMode mode) {
+                    pane
+                        .add_button({
+                            .text = label,
+                            .isSelected =
+                                [mode] {
+                                    return getSettings().game.capWear.getValue() == mode;
+                                },
+                        })
+                        .on_pressed([mode] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.capWear.setValue(mode);
+                            config::Save();
+                        });
+                };
+                opt("Off", CapWearMode::Off);
+                opt("Hair", CapWearMode::None);
+                opt("Green (Hero's)", CapWearMode::Green);
+                opt("Red (Magic)", CapWearMode::Red);
+                opt("Blue (Zora)", CapWearMode::Blue);
+                pane.add_rml(
+                    "<br/>Headpiece worn across every outfit.<br/><br/>"
+                    "<b>Off</b>: each outfit keeps its own default hair/hat.<br/>"
+                    "<b>Hair</b>: bald / topknot look on every outfit.<br/>"
+                    "<b>Green / Red / Blue</b>: Hero's, Magic, or Zora headpiece on any base.");
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.sumoOutfitFists,
+            {
+                .key = "Fists Only",
+                .helpText =
+                    Rml::String("Hide Link's sword/shield for a bare-knuckle look. Applies only "
+                                "while the Sumo Outfit is worn.") +
+                    kAlbwUnfinishedDisclaimer,
+                .isDisabled = [] { return !dAlbwOutfit_isSumoWorn(); },
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Parry Icons",
+                .getValue =
+                    [] {
+                        return kParryIconModes[static_cast<u8>(
+                            getSettings().game.parryIconsMode.getValue())];
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.parryIconsMode;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kParryIconModes.size()); ++i) {
+                    pane
+                        .add_button({
+                            .text = kParryIconModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.parryIconsMode.getValue() ==
+                                           static_cast<ParryIcons>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.parryIconsMode.setValue(static_cast<ParryIcons>(i));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Icon shown for shield-bash charges (parry combat).<br/><br/>"
+                    "<b>Spur Only</b>: original Epona-spur graphic.<br/>"
+                    "<b>Spur+Shield</b>: spur with your equipped shield's emblem.<br/>"
+                    "<b>Shield Only</b>: just the shield emblem.");
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Shield HUD Visibility",
+                .getValue =
+                    [] {
+                        return kShieldHudVisibilityModes[static_cast<u8>(
+                            getSettings().game.shieldHudVisibility.getValue())];
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.shieldHudVisibility;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kShieldHudVisibilityModes.size()); ++i) {
+                    pane
+                        .add_button({
+                            .text = kShieldHudVisibilityModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.shieldHudVisibility.getValue() ==
+                                           static_cast<ShieldHudVisibility>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.shieldHudVisibility.setValue(
+                                static_cast<ShieldHudVisibility>(i));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>When the shield durability meter and parry charge icons appear.<br/><br/>"
+                    "<b>Off</b>: only while guarding (+ brief linger after).<br/>"
+                    "<b>Durability Meter Always On</b> / <b>Parry Charge Always On</b> / "
+                    "<b>Durability + Parry</b>: keep the chosen element(s) visible in the "
+                    "field.<br/><br/>"
+                    "Still hidden during cutscenes, dialogue, shops, pause, and other "
+                    "vanilla HUD-suppressed states. Requires the matching Shield Durability or "
+                    "Shield Parry feature to be enabled.");
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.bossHealthBars,
+            {
+                .key = "Boss Health Bars",
+                .helpText = "Show a health bar with the boss name for major boss fights. "
+                            "Scales with the Boss HP and Boss Refinement settings.",
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.showEponaSpurHud,
+            {
+                .key = "Epona Spur HUD",
+                .helpText = "Show dash-spur icons while riding Epona.<br/><br/>"
+                            "Does not affect wolf bite charges, shield durability, parry icons, "
+                            "or other HUD elements.",
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Lies of Link HUD",
+                .getValue =
+                    [] {
+                        return kLopHudModes[static_cast<u8>(
+                            getSettings().game.lopHud.getValue())];
+                    },
+                .isModified =
+                    [] {
+                        const auto& mode = getSettings().game.lopHud;
+                        return mode.getValue() != mode.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < static_cast<int>(kLopHudModes.size()); ++i) {
+                    pane
+                        .add_button({
+                            .text = kLopHudModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.lopHud.getValue() ==
+                                           static_cast<LopHudMode>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.lopHud.setValue(static_cast<LopHudMode>(i));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Rearrange the HUD into a Lies of P-style layout: life, stamina and "
+                    "shield stacked top-left, rupees top-right, items and bash spurs "
+                    "bottom-left.<br/><br/>"
+                    "<b>Off</b>: vanilla TP corner layout.<br/>"
+                    "<b>Vanilla Hearts</b>: LoP layout, keep the heart containers.<br/>"
+                    "<b>Health Bar</b>: LoP layout with a Lies-of-P health bar instead of "
+                    "hearts.");
             });
     });
 
@@ -1984,228 +2200,6 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         add_speedrun_disabled_option(leftPane, rightPane, getSettings().game.recordingMode,
             "Recording Mode",
             "Disables the game HUD and all background music.<br/><br/>Useful for recording footage.");
-
-        leftPane.add_section("ALBW Visuals");
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Link's Cap",
-                .getValue =
-                    [] {
-                        switch (getSettings().game.capWear.getValue()) {
-                            case CapWearMode::None:  return Rml::String("Hair");
-                            case CapWearMode::Green: return Rml::String("Green (Hero's)");
-                            case CapWearMode::Red:   return Rml::String("Red (Magic)");
-                            case CapWearMode::Blue:  return Rml::String("Blue (Zora)");
-                            default:                 return Rml::String("Off");
-                        }
-                    },
-                .isModified =
-                    [] {
-                        const auto& mode = getSettings().game.capWear;
-                        return mode.getValue() != mode.getDefaultValue();
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                const auto opt = [&pane](const char* label, CapWearMode mode) {
-                    pane
-                        .add_button({
-                            .text = label,
-                            .isSelected =
-                                [mode] {
-                                    return getSettings().game.capWear.getValue() == mode;
-                                },
-                        })
-                        .on_pressed([mode] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.capWear.setValue(mode);
-                            config::Save();
-                        });
-                };
-                opt("Off", CapWearMode::Off);
-                opt("Hair", CapWearMode::None);
-                opt("Green (Hero's)", CapWearMode::Green);
-                opt("Red (Magic)", CapWearMode::Red);
-                opt("Blue (Zora)", CapWearMode::Blue);
-                pane.add_rml(
-                    "<br/>Headpiece worn across every outfit.<br/><br/>"
-                    "<b>Off</b>: each outfit keeps its own default hair/hat.<br/>"
-                    "<b>Hair</b>: bald / topknot look on every outfit.<br/>"
-                    "<b>Green / Red / Blue</b>: Hero's, Magic, or Zora headpiece on any base.");
-            });
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Parry Icons",
-                .getValue =
-                    [] {
-                        return kParryIconModes[static_cast<u8>(
-                            getSettings().game.parryIconsMode.getValue())];
-                    },
-                .isModified =
-                    [] {
-                        const auto& mode = getSettings().game.parryIconsMode;
-                        return mode.getValue() != mode.getDefaultValue();
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                for (int i = 0; i < static_cast<int>(kParryIconModes.size()); ++i) {
-                    pane
-                        .add_button({
-                            .text = kParryIconModes[i],
-                            .isSelected =
-                                [i] {
-                                    return getSettings().game.parryIconsMode.getValue() ==
-                                           static_cast<ParryIcons>(i);
-                                },
-                        })
-                        .on_pressed([i] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.parryIconsMode.setValue(static_cast<ParryIcons>(i));
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "<br/>Icon shown for shield-bash charges (parry combat).<br/><br/>"
-                    "<b>Spur Only</b>: original Epona-spur graphic.<br/>"
-                    "<b>Spur+Shield</b>: spur with your equipped shield's emblem.<br/>"
-                    "<b>Shield Only</b>: just the shield emblem.");
-            });
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Shield HUD Visibility",
-                .getValue =
-                    [] {
-                        return kShieldHudVisibilityModes[static_cast<u8>(
-                            getSettings().game.shieldHudVisibility.getValue())];
-                    },
-                .isModified =
-                    [] {
-                        const auto& mode = getSettings().game.shieldHudVisibility;
-                        return mode.getValue() != mode.getDefaultValue();
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                for (int i = 0; i < static_cast<int>(kShieldHudVisibilityModes.size()); ++i) {
-                    pane
-                        .add_button({
-                            .text = kShieldHudVisibilityModes[i],
-                            .isSelected =
-                                [i] {
-                                    return getSettings().game.shieldHudVisibility.getValue() ==
-                                           static_cast<ShieldHudVisibility>(i);
-                                },
-                        })
-                        .on_pressed([i] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.shieldHudVisibility.setValue(
-                                static_cast<ShieldHudVisibility>(i));
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "<br/>When the shield durability meter and parry charge icons appear.<br/><br/>"
-                    "<b>Off</b>: only while guarding (+ brief linger after).<br/>"
-                    "<b>Durability Meter Always On</b> / <b>Parry Charge Always On</b> / "
-                    "<b>Durability + Parry</b>: keep the chosen element(s) visible in the "
-                    "field.<br/><br/>"
-                    "Still hidden during cutscenes, dialogue, shops, pause, and other "
-                    "vanilla HUD-suppressed states. Requires the matching Shield Durability or "
-                    "Shield Parry feature to be enabled.");
-            });
-        config_bool_select(leftPane, rightPane, getSettings().game.bossHealthBars,
-            {
-                .key = "Boss Health Bars",
-                .helpText = "Show a health bar with the boss name for major boss fights. "
-                            "Scales with the Boss HP and Boss Refinement settings.",
-            });
-        config_bool_select(leftPane, rightPane, getSettings().game.showEponaSpurHud,
-            {
-                .key = "Epona Spur HUD",
-                .helpText = "Show dash-spur icons while riding Epona.<br/><br/>"
-                            "Does not affect wolf bite charges, shield durability, parry icons, "
-                            "or other HUD elements.",
-            });
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Lies of Link HUD",
-                .getValue =
-                    [] {
-                        return kLopHudModes[static_cast<u8>(
-                            getSettings().game.lopHud.getValue())];
-                    },
-                .isModified =
-                    [] {
-                        const auto& mode = getSettings().game.lopHud;
-                        return mode.getValue() != mode.getDefaultValue();
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                for (int i = 0; i < static_cast<int>(kLopHudModes.size()); ++i) {
-                    pane
-                        .add_button({
-                            .text = kLopHudModes[i],
-                            .isSelected =
-                                [i] {
-                                    return getSettings().game.lopHud.getValue() ==
-                                           static_cast<LopHudMode>(i);
-                                },
-                        })
-                        .on_pressed([i] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.lopHud.setValue(static_cast<LopHudMode>(i));
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "<br/>Rearrange the HUD into a Lies of P-style layout: life, stamina and "
-                    "shield stacked top-left, rupees top-right, items and bash spurs "
-                    "bottom-left.<br/><br/>"
-                    "<b>Off</b>: vanilla TP corner layout.<br/>"
-                    "<b>Vanilla Hearts</b>: LoP layout, keep the heart containers.<br/>"
-                    "<b>Health Bar</b>: LoP layout with a Lies-of-P health bar instead of "
-                    "hearts.");
-            });
-        // §308 M5 — WW cutscene dialogue box renderer (WW host stages only).
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "WW Dialogue Box",
-                .getValue =
-                    [] {
-                        return kWwDialogueModes[static_cast<u8>(
-                            getSettings().game.wwDialogue.getValue())];
-                    },
-                .isModified =
-                    [] {
-                        const auto& mode = getSettings().game.wwDialogue;
-                        return mode.getValue() != mode.getDefaultValue();
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                for (int i = 0; i < static_cast<int>(kWwDialogueModes.size()); ++i) {
-                    pane
-                        .add_button({
-                            .text = kWwDialogueModes[i],
-                            .isSelected =
-                                [i] {
-                                    return getSettings().game.wwDialogue.getValue() ==
-                                           static_cast<WwDialogueStyle>(i);
-                                },
-                        })
-                        .on_pressed([i] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            getSettings().game.wwDialogue.setValue(
-                                static_cast<WwDialogueStyle>(i));
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "<br/>Which box renders Wind Waker dialogue — cutscenes (Grandma's "
-                    "tale) and NPC conversations alike. Only affects WW host stages; "
-                    "Twilight Princess dialogue is untouched.<br/><br/>"
-                    "<b>Reconstructed</b>: the TP dialogue box driven by the ported "
-                    "step-in-step flow (default, stable).<br/>"
-                    "<b>Native</b>: the donor's own dMesg box and font, reading the "
-                    "original WW text directly.");
-            });
     });
 }
 

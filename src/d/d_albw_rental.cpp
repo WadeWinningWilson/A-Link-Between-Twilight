@@ -39,6 +39,7 @@
 #include "d/d_albw_oocoo.h"
 #include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_master_quest.h"
+#include "d/d_albw_sword_atp.h"
 #include "d/d_albw_potion.h"
 #include "d/d_focused_arts.h"
 #include "d/d_albw_sumo_test.h"
@@ -73,7 +74,8 @@ enum ALBWShopCategory {
     CAT_ITEMS,
     CAT_ARMOR,
     CAT_UPGRADES,
-    CAT_SWORDS,   // future page; no entries tagged yet
+    CAT_SWORDS,      // Quick Swap wardrobe storage
+    CAT_SWORD_ATP,   // Master Quest per-sword Atp upgrades
     CAT_COUNT,
 };
 
@@ -84,11 +86,12 @@ struct ALBWShopPage {
 
 // Page order = left-to-right tab order (Items → Swords → Shields → Outfits → Upgrades).
 static const ALBWShopPage kPages[] = {
-    { CAT_ITEMS,    "Items"               },
-    { CAT_SWORDS,   "Swords"              },
-    { CAT_SHIELDS,  "Shields"             },
-    { CAT_ARMOR,    "Armor"               },
-    { CAT_UPGRADES, "Upgrades & Services" },
+    { CAT_ITEMS,      "Items"               },
+    { CAT_SWORDS,     "Swords"              },
+    { CAT_SWORD_ATP,  "Sword Upgrades"      },
+    { CAT_SHIELDS,    "Shields"             },
+    { CAT_ARMOR,      "Armor"               },
+    { CAT_UPGRADES,   "Upgrades & Services" },
 };
 static constexpr int kPageCount = sizeof(kPages) / sizeof(kPages[0]);
 // ============================================
@@ -297,6 +300,7 @@ static ALBWRentalState sState = STATE_CLOSED;
 enum VisibleKind {
     VISIBLE_MQ_HEART = 0,
     VISIBLE_MQ_METER,
+    VISIBLE_SWORD_ATP,
     VISIBLE_POTION_CAPACITY,
     VISIBLE_FA_TIER,
     VISIBLE_WOLF_HOWL,     // ALBW Port: Wolf Howl art unlock (Upgrades page, state purchase)
@@ -332,7 +336,7 @@ struct VisibleEntry {
     bool        storageRetrieve;
 };
 
-static constexpr int kVisibleListMax = 3 + kItemCount + kSwordCount + 3;
+static constexpr int kVisibleListMax = 3 + kAlbwSwordAtpCount + kItemCount + kSwordCount + 3;
 static VisibleEntry sVisibleList[kVisibleListMax];
 static int          sVisibleCount     = 0;  // total rows shown (inc. ?????)
 static int          sAvailCount       = 0;  // purchasable rows only (for button state)
@@ -496,6 +500,9 @@ static bool categoryHasVisibleRows(ALBWShopCategory cat) {
                 return true;
             }
         }
+    }
+    if (cat == CAT_SWORD_ATP && dAlbwSwordAtp_pageHasVisibleRows()) {
+        return true;
     }
     // ============================================
     // Armor page keep-alive for rows that live OUTSIDE kItems[] — invisible to
@@ -684,6 +691,21 @@ static void rebuildVisibleList() {
             sAvailCount++;
         }
         sVisibleCount++;
+    }
+
+    if (cat == CAT_SWORD_ATP && dAlbwMQ_isEnabled()) {
+        for (int swordId = 0; swordId < kAlbwSwordAtpCount && sVisibleCount < kVisibleListMax; ++swordId) {
+            if (!dAlbwSwordAtp_isSwordPossessed(swordId)) {
+                continue;
+            }
+            sVisibleList[sVisibleCount].kind        = VISIBLE_SWORD_ATP;
+            sVisibleList[sVisibleCount].kItemsIdx   = swordId;
+            sVisibleList[sVisibleCount].purchasable = dAlbwSwordAtp_canPurchase(swordId);
+            if (sVisibleList[sVisibleCount].purchasable) {
+                sAvailCount++;
+            }
+            sVisibleCount++;
+        }
     }
 
     if (cat == CAT_UPGRADES && dAlbwPotion_shouldShowCapacityShopRow()) {
@@ -1028,6 +1050,35 @@ static void tryPurchase(int visIdx) {
         sStatusMsg            = "May your stamina carry you far.\nThank you for your patronage!";
         sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
         rebuildActivePages();  // a purchase can empty the current page
+        rebuildVisibleList();
+        return;
+    }
+
+    if (sVisibleList[visIdx].kind == VISIBLE_SWORD_ATP) {
+        const int swordId = sVisibleList[visIdx].kItemsIdx;
+        const int price   = dAlbwSwordAtp_getShopPrice(swordId);
+        u16 rupees        = dComIfGs_getRupee();
+        if (price <= 0) {
+            return;
+        }
+        if (rupees < (u16)price) {
+            sStatusMsg          = "Sincerest apologies, but we can't return\nthat to you for that little..";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        if (!dAlbwSwordAtp_tryPurchase(swordId)) {
+            sStatusMsg          = "You haven't met the requirements yet.";
+            sStatusExpiry       = clock::now() + kPurchaseCooldownFailure;
+            sJustFailedPurchase = true;
+            return;
+        }
+        dComIfGs_setRupee(rupees - (u16)price);
+        sPurchasedThisSession = true;
+        sJustPurchased        = true;
+        sStatusMsg            = "Your blade cuts a little deeper now.\nThank you for your patronage!";
+        sStatusExpiry         = clock::now() + kPurchaseCooldownSuccess;
+        rebuildActivePages();
         rebuildVisibleList();
         return;
     }
@@ -1665,6 +1716,18 @@ const dALBWVisibleEntry* dALBWRental_getVisibleList(int* outCount) {
             sPubList[i].desc           = dAlbwMQ_getMeterShopDesc();
             sPubList[i].itemNo         = (u8)dItemNo_MAGIC_LV1_e;  // fallback icon
             sPubList[i].customIconName = "stamina_upgrade";  // dedicated custom slot
+            sPubList[i].isOocooService = false;
+            sPubList[i].showNameWhenSoldOut = true;
+            sPubList[i].isStorageStore = false;
+            sPubList[i].isStorageRetrieve = false;
+        } else if (sVisibleList[i].kind == VISIBLE_SWORD_ATP) {
+            const int swordId = sVisibleList[i].kItemsIdx;
+            sPubList[i].name           = dAlbwSwordAtp_getShopName(swordId);
+            sPubList[i].price          = sVisibleList[i].purchasable
+                ? dAlbwSwordAtp_getShopPrice(swordId) : 0;
+            sPubList[i].purchasable    = sVisibleList[i].purchasable;
+            sPubList[i].desc           = dAlbwSwordAtp_getShopDesc(swordId);
+            sPubList[i].itemNo         = dAlbwSwordAtp_getItemNo(swordId);
             sPubList[i].isOocooService = false;
             sPubList[i].showNameWhenSoldOut = true;
             sPubList[i].isStorageStore = false;

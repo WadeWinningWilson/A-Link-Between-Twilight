@@ -115,7 +115,7 @@ enum class TrueAlbwMode : int {
 
 // Cap Wear: which headpiece Link wears, applied GLOBALLY to every outfit (the sumo body AND
 // the native clothes), decoupled so each cap resolves on any base via the cap donor.
-// UI label: "Link's Cap" (Interface → ALBW Visuals).
+// UI label: "Link's Cap" (Settings → ALBW → Visuals).
 //   Off   — native: each outfit keeps its own hat (the sumo body keeps its topknot).
 //   None  — UI "Hair": force the bald sumo topknot (alSumou 0x33) on every outfit.
 //   Green — Link's cap   al_head (Kmdl) — UI "Green (Hero's)".
@@ -303,7 +303,7 @@ struct UserSettings {
         // Helm punish flow, hidden-skill dispatch, ALBW meter costs, Jump Strike charge gate.
         // Always on (ALBW core); retained for save compat — not shown in settings UI.
         ConfigVar<bool> hiddenSkillRework;
-        // Focused Arts charge bank + spend columns (Settings → Gameplay).
+        // Focused Arts charge bank + spend columns (Settings → ALBW → Systems).
         ConfigVar<bool> focusedArts;
         // Legacy key game.focusedArtsTest — migrated into focusedArts on load; kept registered.
         ConfigVar<bool> focusedArtsTest;
@@ -380,7 +380,7 @@ struct UserSettings {
         //   sumoOutfitFists — hide weapons (fists only)
         ConfigVar<bool> sumoOutfit;
         ConfigVar<bool> sumoOutfitFists;
-        //   capWear         — GLOBAL "Link's Cap" setting in Interface → ALBW Visuals
+        //   capWear         — GLOBAL "Link's Cap" setting in Settings → ALBW → Visuals
         //                     (Off/Hair/Green/Red/Blue): headpiece across EVERY outfit.
         //                     Off = each outfit's default; Hair (None) = bald/topknot;
         //                     Green/Red/Blue = Hero's/Magic/Zora headpiece on any base.
@@ -418,13 +418,9 @@ struct UserSettings {
         ConfigVar<bool> masterQuest;
         // Boss Refinement: any-sword boss damage gates; future Zant/Ganon redesign layers.
         ConfigVar<bool> bossRefinement;
-        // Shade's Refuge: Lies-of-P-style Shade Watcher rest/respawn/return system
-        // (watcher spawns, death-screen "Last Shade Watcher" option, shop return
-        // service). Off = whole system disabled. WIP — default off.
+        // Shade's Refuge: Soulslike rest points (rest/heal + warp to Ordon). Off = disabled. WIP.
         ConfigVar<bool> shadeRefuge;
-        // Realtime Potions: use consumables WHILE moving (Dark-Souls-flask style)
-        // instead of the full-body locking drink/pour. Covers all bottle potions +
-        // lantern-oil refill (NOT fairy). Off = vanilla locking use. WIP — default off.
+        // Realtime Potions: drink while moving instead of pausing world timer. Off = vanilla. WIP.
         ConfigVar<bool> realtimePotions;
         // Hero's Shade Secret Boss: post-game real duel vs the Hero's Shade after
         // all Hidden Skills (F_0344). Off = disabled. WIP — default off.

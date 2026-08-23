@@ -1,8 +1,8 @@
 # WW-layer build exclusion — GENERATED, do not hand-edit.
 # regenerate: python tools/ww_crew_restoration_skeleton/ww_layer_manifest.py --emit-cmake
-# tool_sha256:      e016334b5de3792daccd7da8f7b009104e1c6c085d25aed4473451336256ec58
-# files_cmake_sha256: ade77bda6519063307711095151e860611e5eeff39a93adbcc3eee27d4e2ab24
-# count: 68
+# tool_sha256:      a9a77b4d2f434fb5a661964879e79e478cc2023410a46d6e7f02311fa3eb53a1
+# files_cmake_sha256: 2dfc9529e916bb8931451d1427cfa41c16af94b3851bf023680b00f254aa6c2e  (EOL-normalized)
+# count: 78
 #
 # BASIS: WHAT MOVES TO THE PLUGIN (§576) = declared donor lineage
 # (native-port + bridge-owed) PLUS host-plumbing that serves the WW
@@ -71,15 +71,22 @@ set(WW_LAYER_FILES
     src/d/actor/d_a_kb.cpp
     src/d/actor/d_a_knob00.cpp
     src/d/actor/d_a_lamp.cpp
+    src/d/actor/d_a_lwood.cpp
     src/d/actor/d_a_npc_ba1.cpp
     src/d/actor/d_a_npc_bm1.cpp
     src/d/actor/d_a_npc_jb1.cpp
     src/d/actor/d_a_npc_ls1.cpp
+    src/d/actor/d_a_npc_p1.cpp
     src/d/actor/d_a_npc_zl1.cpp
     src/d/actor/d_a_obj_mshokki.cpp
     src/d/actor/d_a_obj_otble.cpp
+    src/d/actor/d_a_obj_paper.cpp
+    src/d/actor/d_a_obj_plant.cpp
+    src/d/actor/d_a_obj_shelf.cpp
     src/d/actor/d_a_obj_toripost.cpp
     src/d/actor/d_a_spc_item01.cpp
+    src/d/actor/d_a_tag_kb_item.cpp
+    src/d/actor/d_a_tag_so.cpp
     src/d/actor/d_a_ww_demo00.cpp
     src/d/actor/d_a_ww_item.cpp
     src/d/actor/d_a_ww_shutter.cpp
@@ -93,6 +100,7 @@ set(WW_LAYER_FILES
     src/d/d_ext_tree.cpp
     src/d/d_ext_ww_actor_shims.cpp
     src/d/d_kankyo_ww_sky.cpp
+    src/d/d_kankyo_ww_wind.cpp
     src/d/d_npc.cpp
     src/d/d_ww_itemmdl_pc.cpp
     src/d/d_ww_itemmdl_test.cpp
@@ -101,8 +109,10 @@ set(WW_LAYER_FILES
     src/d/ext_evt/evt1_event_manager.cpp
     src/d/ext_line/mdoext1_3dline.cpp
     src/d/ext_plugin/ww_cam_crawl.cpp
+    src/d/ext_plugin/ww_event_names.cpp
     src/d/ext_plugin/ww_import_gate.cpp
     src/d/ext_plugin/ww_item_data.cpp
+    src/d/ext_plugin/ww_layer_select.cpp
     src/d/ext_plugin/ww_profile_register.cpp
     src/d/ext_plugin/ww_room_loader.cpp
     src/d/ext_plugin/ww_stage_loader.cpp
