@@ -5,6 +5,8 @@ alwaysApply: true
 
 # Build / FPS safety (Windows RelWithDebInfo)
 
+**Live card for new instances:** [docs/state/build-fps.md](../../docs/state/build-fps.md) — diagnose → restore → measure.
+
 ## Hard bans
 
 - Do **not** run `cmake --preset`, `reconfigure_build.bat`, or wipe `build/` for routine compiles.
@@ -21,6 +23,13 @@ alwaysApply: true
    - Recovery is **main-tree** flag pin + one intentional reconfigure + full rebuild (see guidelines). Worktree copy is emergency-only legacy.
 4. After every successful build: wipe `%AppData%\TwilitRealm\Dusklight\dawn_cache.db*` and `pipeline_cache.db*`.
 5. Do **not** casually overwrite a known-good play `dusklight.exe` without a field FPS measure after.
+
+## If field FPS is poisoned — restore path
+
+1. `findstr /C:"/O2" build\windows-msvc-relwithdebinfo\build.ninja` — **0 hits ⇒ factory poison**.
+2. `cmd /c tools\_factory_recover.bat` (one intentional reconfigure + clean + full rebuild).
+3. Wipe dawn + pipeline caches; measure **field** (not menu only). Target typical ≥ ~220.
+4. If `/O2` already present and only Outset is ~100s → content (e.g. WW grass), not another cmake.
 
 ## FPS triage (do not feature-bisect first)
 

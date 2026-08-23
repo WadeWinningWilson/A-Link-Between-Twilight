@@ -1,5 +1,8 @@
 # Drive / FPS oracle — live state
 
+> **Field RelWithDebInfo poison (~33 / ~100–120)?** That is **not** this file.
+> Go to **[build-fps.md](build-fps.md)** (`tools\_factory_recover.bat`). This page is the **capped ~144 drive oracle** only.
+
 | Field | Value |
 |-------|--------|
 | **status** | Tracks B–J complete; mean ~143.8–144 on good sessions; intermittent ~105 cliffs (~17%) on WIP **and** v1.4.1 |
@@ -7,8 +10,9 @@
 | **next** | Profiler on hitch frame; use labeled `load_save` drives for regression — not shield-mission FPS |
 | **do_not** | Use `DUSK_DRIVE=armogohma_shield` as FPS baseline; leave `DUSK_DRIVE*` set during manual play; commit drive/`local_dev_backup/`; start with `reconfigure_build.bat` for routine checks; revert HUD/FA/parry to “fix” FPS |
 | **golden_sha** | `76b715abc6` (user-confirmed 144) |
-| **updated** | 2026-06-25 protocol + 2026-06-18 bisect status |
+| **updated** | 2026-08-23 (pointer to build-fps factory restore) |
 | **detail** | [performance-handoff.md](../performance-handoff.md) (drive protocol + hitch research) |
+| **factory** | [build-fps.md](build-fps.md) — RelWithDebInfo `/O2` poison restore |
 | **build_map** | [build-fps-guidelines.md](../build-fps-guidelines.md) |
 | **leaning** | [future-performance-leaning.md](../future-performance-leaning.md) |
 

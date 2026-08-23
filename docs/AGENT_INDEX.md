@@ -33,6 +33,10 @@ era: era-independent
 > occurrence self-documents. Check here BEFORE re-diagnosing a "new" cutscene/control bug,
 > and update the entry when a probe fires.
 
+> ⚡ **Field FPS poisoned (~33 / ~100–120 / Outset stuck in 100s)?** → **[state/build-fps.md](state/build-fps.md) FIRST**
+> (diagnose `/O2` → `tools\_factory_recover.bat` → field measure). Do **not** feature-bisect or spawn
+> worktrees until that card says factory is healthy. Detail: [build-fps-guidelines.md](build-fps-guidelines.md).
+>
 > ⛔ **[DO-NOT.md](DO-NOT.md) — hard stops. Read it before touching BG/collision
 > registration, room identity, or any surface it names. Entries are permanent
 > rejections with the failure mechanism spelled out; no AI instance may
@@ -106,9 +110,9 @@ era: era-independent
 | **Housing/Engine lane (receiver-side WW + Housing Security)** | [HANDOFF-HOUSING-ENGINE-2026-08-17.md](HANDOFF-HOUSING-ENGINE-2026-08-17.md) — **current instance handoff, start here** | [HANDOFF-HOUSING-ENGINE-2026-08-16.md](HANDOFF-HOUSING-ENGINE-2026-08-16.md) · [HANDOFF-HOUSING-ENGINE-2026-08-14.md](HANDOFF-HOUSING-ENGINE-2026-08-14.md) · [HANDOFF-HOUSING-ENGINE.md](HANDOFF-HOUSING-ENGINE.md) (pre-§1002) · [HOUSING-HANDOFF.md](HOUSING-HANDOFF.md) (**retired-instance record**, 2026-08-04) — each prior file owns only the history it records; [HOUSINGTEMP-HANDOFF.md](HOUSINGTEMP-HANDOFF.md) is a **different lane's charter** |
 | Field combat refinements | [state/combat-refinements.md](state/combat-refinements.md) | [combat-refinements-handoff.md](combat-refinements-handoff.md) |
 | Boss fights | [state/boss-fights.md](state/boss-fights.md) | [boss-fights-handoff.md](boss-fights-handoff.md), [Boss-Fights-RefinedDiababa.md](Boss-Fights-RefinedDiababa.md), [Boss-Fights-RefinedGohma.md](Boss-Fights-RefinedGohma.md), [Boss-Fights-Fyrus-research.md](Boss-Fights-Fyrus-research.md) |
-| Drive / FPS oracle | [state/drive-fps.md](state/drive-fps.md) | [performance-handoff.md](performance-handoff.md), [build-fps-guidelines.md](build-fps-guidelines.md), [future-performance-leaning.md](future-performance-leaning.md) |
-| Build / FPS review | [state/drive-fps.md](state/drive-fps.md) | [build-fps-guidelines.md](build-fps-guidelines.md) (has its own doc map) |
-| Region / damage difficulty | [state/region-damage-difficulty.md](state/region-damage-difficulty.md) | [region-damage-difficulty.md](region-damage-difficulty.md) — A+B+E core done; **E-HUD plan §4.5** (3s grace+6s melt); next C or E-HUD |
+| **Build / FPS factory (poison restore)** | **[state/build-fps.md](state/build-fps.md)** — **start here if field FPS collapsed** | [build-fps-guidelines.md](build-fps-guidelines.md), [ww-fps-bisect.md](state/ww-fps-bisect.md), `tools\_factory_recover.bat` |
+| Drive / FPS oracle (~144 cap) | [state/drive-fps.md](state/drive-fps.md) | [performance-handoff.md](performance-handoff.md), [build-fps-guidelines.md](build-fps-guidelines.md), [future-performance-leaning.md](future-performance-leaning.md) |
+| Region / damage difficulty | [state/region-damage-difficulty.md](state/region-damage-difficulty.md) | [region-damage-difficulty.md](region-damage-difficulty.md) — **D shipped**; playtest sword shop; next F/G |
 | Shield / parry | — | [shield-combat.md](shield-combat.md); Parry Master → [region-damage-difficulty.md](region-damage-difficulty.md) §4 |
 | ALBW port overview | — | [albw-port.md](albw-port.md) |
 | Cut Actors / Demo Restore | [state/cut-actors-demo-restore.md](state/cut-actors-demo-restore.md) | [Interconnected Chats/Cut-Actors-Demo-Restore-Cursor-History.md](Interconnected%20Chats/Cut-Actors-Demo-Restore-Cursor-History.md), [TPHistory.md](TPHistory.md) §7; cutscene/layer RE: [WW Linked/noclip-fast-track.md](WW%20Linked/noclip-fast-track.md) (elevated identity-match method) |
@@ -136,7 +140,7 @@ era: era-independent
 
 | Doc | When |
 |-----|------|
-| [building.md](building.md) + [build-fps-guidelines.md](build-fps-guidelines.md) | Build / launch / FPS hygiene |
+| [state/build-fps.md](state/build-fps.md) + [building.md](building.md) + [build-fps-guidelines.md](build-fps-guidelines.md) | FPS poison restore · build / launch hygiene |
 | [code-conventions.md](code-conventions.md) | `#if TARGET_PC`, Dusk markers |
 | [commit-and-push.md](commit-and-push.md) | Commits / push (only when asked) |
 

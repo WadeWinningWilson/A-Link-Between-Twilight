@@ -2,6 +2,8 @@
 
 **Audience:** Cursor agents and anyone building uncommitted WIP. Goal: keep **field ~220–250 FPS** (stable ~250, dips ~220; Outset often ~220–280) under natural user play after the 2026-07-19 RelWithDebInfo factory fix. **~139–144** below is the older VSync-capped oracle band — do **not** treat 144 as healthy field performance anymore. Alarm bands: **~100–127** soft-poison / bad link; **~33** broken CMake flags (no `/O2`).
 
+> **New instance / FPS just died?** Live restore card: **[state/build-fps.md](state/build-fps.md)** — diagnose `/O2` → `tools\_factory_recover.bat` → field measure. Do not feature-bisect first.
+
 **Role:** This is the **build-analysis chat** doc set. Feature agents (HUD, bosses, combat) implement; **this chat** reviews builds, diagnoses FPS drift, and optimizes in place. If you are a new instance and the user sent you here after a build — read the map below before changing code.
 
 ---

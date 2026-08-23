@@ -25,3 +25,4 @@ History · Housing Security · Librarian (Claude). Doc-structure maintenance is 
 
 Build/workflow rules: [.cursor/rules/build-fps-safe.mdc](.cursor/rules/build-fps-safe.mdc)
 (RelWithDebInfo via `build_run.bat`; never reconfigure CMake mid-session).
+**Field FPS poisoned?** → [docs/state/build-fps.md](docs/state/build-fps.md) (`tools\_factory_recover.bat`) before feature bisects.
