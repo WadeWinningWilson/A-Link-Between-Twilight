@@ -386,7 +386,8 @@ struct UserSettings {
         //                     Green/Red/Blue = Hero's/Magic/Zora headpiece on any base.
         ConfigVar<CapWearMode> capWear;
         ConfigVar<bool> shieldDurability;
-        // Halve wallet on death and spawn a Tear-of-Light recovery orb (F_0625 gate unchanged).
+        // Halve wallet on death and spawn a Soul of Light (F_0625 gate unchanged).
+        // UI label: "Soul of Light". Config key stays game.deathRecoveryOrb.
         ConfigVar<bool> deathRecoveryOrb;
         // Wolf charge economy, field attack damage/stun, bite healing. Off = vanilla TP wolf.
         ConfigVar<bool> wolfLinkCombat;

@@ -24,7 +24,7 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | Focused Arts — hidden skill charge bank & finishers (optional) | ✅ |
 | Extra Item Slot + Quick Equip Wheel (optional) | ✅ |
 | Strip 13 items on Death | ✅ |
-| Rupee Recovery Orb — half wallet on death, recover via Tear of Light (optional) | ✅ |
+| Soul of Light — half wallet on death, recover at the death spot (optional) | ✅ |
 | Outfit Stats + Sumo fists-only visual (optional) | ✅ |
 | Shade's Refuge + Realtime Potions — soulslike rest/drink (optional, WIP) | ⏳ |
 | Deku Leaf Glide (optional, WIP) | ⏳ |

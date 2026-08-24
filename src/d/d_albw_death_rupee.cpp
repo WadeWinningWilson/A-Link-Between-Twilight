@@ -1,6 +1,6 @@
 // ============================================
 // NEW CODE — ALBW Port
-// Death rupee halving + recovery orb at death XYZ.
+// Death rupee halving + Soul of Light at death XYZ.
 // ============================================
 #include "d/d_albw_death_rupee.h"
 
@@ -90,7 +90,7 @@ static void orbDebugReset() {
         fp = fopen("albw_orb_debug.txt", "w");
     }
     if (fp) {
-        fprintf(fp, "--- ALBW death recovery orb ---\n");
+        fprintf(fp, "--- ALBW Soul of Light ---\n");
         fclose(fp);
     }
 }

@@ -30,7 +30,7 @@ Pause **Settings → ALBW**. Most toggles live under that tab, grouped as **Syst
 | **Manual Shielding** | Off | Hold **ZR** to guard without Z-target lock-on; **ZR+B** shield bash. Off = vanilla auto-guard on Z-target. |
 | **Shield Parry & Bash Charges** | On | Perfect-guard timing earns bash charges and ALBW meter; failed blocks cost meter and charges. Off = traditional TP guard. |
 | **Shield Durability** | Off | Shield HP by tier; failed blocks drain it. Hylian repairs on parry. Break at 0 triggers guard break. |
-| **Death Recovery Orb** | Off | After Talo is rescued, dying halves your wallet and leaves a Tear of Light at the death spot to recover part of it. Item strip and meter refill on death are unaffected. |
+| **Soul of Light** | Off | After Talo is rescued, dying halves your wallet and leaves a Soul of Light at the death spot to recover part of it. Item strip and meter refill on death are unaffected. |
 | **Wolf Link Combat** | Off | ALBW wolf form: bite charges for Midna field attacks, twilight/non-twilight damage split, non-twilight stun, low-HP bite healing. Off = vanilla TP wolf combat. |
 | **Enemy Death Rupees** | Off | Credit rupees directly to your wallet when enemies die and when boss fights end. Vanilla drop tables (hearts, jars, ground rupees) are unchanged. |
 | **Extra Item Slot** | Off | **Off** / **Extra Only** (Midna on left D-pad, Z item) / **Extra + Quick Swap** (also Up = cycle sword, Right = cycle shield, Down = transform; map defaults to M / Tab). See `docs/d-pad-reworking.md`. |
@@ -57,11 +57,11 @@ Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 - **Magic Armor** and **Deity Armor** use extra eligibility rules (wallet / prior armor strip). **Deity session flow** (shop-only, not quick-swappable): [albw-deity-armor-shop.md](albw-deity-armor-shop.md).
 - Meter refills on death regardless of optional economy settings.
 
-### Death — Recovery Orb (optional)
+### Death — Soul of Light (optional)
 
-- Gated on **Death Recovery Orb** and progress after **Talo is rescued** (event bit F_0625).
-- On real player death: wallet halved (round up), Tear of Light spawns at death location when you reload that room.
-- Picking up the orb returns **50% of what was lost** (see **[albw-death-recovery-orb-brief.md](albw-death-recovery-orb-brief.md)**).
+- Gated on **Soul of Light** and progress after **Talo is rescued** (event bit F_0625).
+- On real player death: wallet halved (round up), a Soul of Light spawns at the death location when you reload that room.
+- Picking it up returns **50% of what was lost** (see **[albw-death-recovery-orb-brief.md](albw-death-recovery-orb-brief.md)**).
 
 ### Death — Oocoo warp (Postman service)
 
@@ -133,7 +133,7 @@ When **Enemy Death Rupees** is on:
 | Native talk box | `src/d/d_albw_dialogue.cpp`, `include/d/d_albw_dialogue.h` |
 | Shared UI text helpers | `src/d/d_albw_ui_text.cpp`, `include/d/d_albw_ui_text.h` |
 | Oocoo warp service | `src/d/d_albw_oocoo.cpp`, `include/d/d_albw_oocoo.h` |
-| Death Recovery Orb | `src/d/d_albw_death_rupee.cpp`, `include/d/d_albw_death_rupee.h` |
+| Soul of Light | `src/d/d_albw_death_rupee.cpp`, `include/d/d_albw_death_rupee.h` |
 | Enemy HP multipliers | `src/d/d_albw_hp_mult.cpp`, `include/d/d_albw_hp_mult.h` |
 | Shield parry / durability / bash | `src/d/d_albw_shield.cpp`, `include/d/d_albw_shield.h` |
 | Wolf combat + stun | `src/d/d_albw_wolf_stun.cpp`, `include/d/d_albw_wolf_stun.h` |

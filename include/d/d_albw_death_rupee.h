@@ -3,7 +3,7 @@
 
 // ============================================
 // NEW CODE — ALBW Port
-// Death rupee penalty (half wallet, round up) and recovery orb at death location.
+// Death rupee penalty (half wallet, round up) and Soul of Light at death location.
 // Gated on F_0625 (Talo rescued), same as ALBW item strip.
 // Also gated on Dusk setting game.deathRecoveryOrb (default off).
 // ============================================
@@ -13,7 +13,7 @@ class fopAc_ac_c;
 
 class daAlink_c;
 
-// True when the Death Recovery Orb setting is enabled (Dusk settings menu).
+// True when the Soul of Light setting is enabled (Dusk settings menu).
 bool dALBWDeathRupees_isEnabled();
 
 // Record death X/Z and floor reference Y at procCoDeadInit (before game-over corrupts pos).
@@ -37,7 +37,7 @@ void dALBWDeathRupees_tickSpawn();
 // True when this field item actor is the ALBW recovery orb (custom rupee grant).
 bool dALBWDeathRupees_onOrbItemGet(fopAc_ac_c* itemActor);
 
-// Tear of Light (daObjDrop_c) pickup — grants recovery rupees, not a story tear.
+// Soul of Light uses Tear of Light (daObjDrop_c) — grants recovery rupees, not a story tear.
 bool dALBWDeathRupees_onOrbDropGet(fopAc_ac_c* dropActor);
 
 // daObjDrop_c::create — skip tbox gate while spawning the recovery orb.

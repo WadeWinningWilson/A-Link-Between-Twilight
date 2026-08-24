@@ -1408,10 +1408,10 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Unlocks new moves for Link's wolf form. Build up charges to unlock them, with "
             "some differing effects for twilight and non-twilight enemies. Also allows wolf "
             "Link to heal his health with continued attacks.");
-        addOption("Death Recovery Orb", getSettings().game.deathRecoveryOrb,
-            "After Talo is rescued, dying halves your rupees and leaves a Tear of Light at the "
-            "death spot to recover part of them. Off keeps your wallet unchanged and spawns no "
-            "orb. Item strip and meter refill on death are unaffected.");
+        addOption("Soul of Light", getSettings().game.deathRecoveryOrb,
+            "After Talo is rescued, dying halves your rupees and leaves a Soul of Light at the "
+            "death spot to recover part of them. Off keeps your wallet unchanged and spawns "
+            "nothing. Item strip and meter refill on death are unaffected.");
         addOption("Enemy Death Rupees", getSettings().game.enemyDeathRupees,
             "Credit rupees directly to your wallet when enemies die and when boss fights end. "
             "Vanilla drop tables (hearts, jars, ground rupees) are unchanged.");
