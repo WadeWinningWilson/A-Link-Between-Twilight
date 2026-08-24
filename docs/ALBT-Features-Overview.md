@@ -33,6 +33,7 @@ Pause **Settings → ALBW**. Most toggles live under that tab, grouped as **Syst
 | **Shield Durability** | Off | Shield HP by tier; failed blocks drain it. Hylian repairs on parry. Break at 0 triggers guard break. |
 | **Soul of Light** | Off | After Talo is rescued, dying halves your wallet and leaves a Soul of Light at the death spot to recover part of it. Item strip and meter refill on death are unaffected. |
 | **Wolf Link Combat** | Off | Bites build charges for Midna Charge Attacks, plus new wolf howl and Midna Arm attacks so wolf is viable for harder encounters. Midna charge attacks deal higher damage to twilight enemies and freeze non-twilight enemies in place. Wolf Howl plays new songs as you collect them. Off = vanilla TP wolf combat. |
+| **Boss Refinement** | Off | New moves, phases, and sword use on bosses that normally require a specific weapon. Coverage below. Off = vanilla boss fights. |
 | **Enemy Death Rupees** | Off | Credit rupees directly to your wallet when enemies die and when boss fights end. Vanilla drop tables (hearts, jars, ground rupees) are unchanged. |
 | **Extra Item Slot** | Off | **Off** / **Extra Only** (Midna on left D-pad, Z item) / **Extra + Quick Swap** (Up = cycle sword, Right = cycle shield, Down = quickswap outfits; map defaults to M / Tab). |
 | **Master Quest** | Off | Recommended once per playthrough. Halves heart-container and heart-piece rewards; Postman sells heart, stamina, and sword upgrades; dungeon ALBW meter growth is disabled in favor of those shop purchases. |
@@ -73,6 +74,19 @@ When **Wolf Link Combat** is on:
 - Midna charge attacks deal **higher damage to twilight enemies** and **freeze non-twilight enemies** in place.
 - **Wolf Howl** plays new songs as you collect them.
 - Wolf form remains **outside** the ALBW Magic Meter economy.
+
+### Boss Refinement (optional)
+
+**Settings → ALBW → Systems.** Default Off. When on, bosses can use new moves and phases, and the sword works on fights that normally require a specific weapon.
+
+**Covered now**
+
+- **Diababa, Fyrus, and Armogohma** — nearly finalized, not polished.
+- **Morpheel** — early stages.
+
+**Not covered yet**
+
+Stallord, Blizzeta, Argorok, Zant, and Ganon / Ganondorf stay vanilla for now. Those fights have plans only.
 
 ### Death — item strip
 
