@@ -1,4 +1,4 @@
-# Claude instructions — A Link Between Dusklight
+# Claude instructions — A Link Between Twilight
 
 > ⛔ **FIRST: [docs/DO-NOT.md](docs/DO-NOT.md) — the hard-stop registry.**
 > Permanently rejected approaches with confirmed cascading failures. If your

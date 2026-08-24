@@ -1,6 +1,6 @@
 # Patch Notes for v0.55
 
-**A Link Between Dusklight** — changes since [v0.5](../README.md) (`ALBW-Dusklight-v0.5`).
+**A Link Between Twilight** — changes since [v0.5](../README.md).
 
 ---
 
@@ -76,4 +76,4 @@
 
 Built on [Dusklight](https://github.com/TwilitRealm/dusklight). Provide your own legal copy of _Twilight Princess_.
 
-For full gameplay and build instructions, see **[README](../README.md)** and **[docs/albw-port.md](albw-port.md)**.
+For full gameplay and build instructions, see **[README](../README.md)** and **[docs/ALBT-Features-Overview.md](ALBT-Features-Overview.md)**.

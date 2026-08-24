@@ -1,8 +1,8 @@
-# ALBW Port (PC)
+# ALBT Features Overview
 
-**ALBW-Dusklight** adds an _A Link Between Worlds_–style energy meter, death item strip, Postman rental economy, and optional combat/economy systems to the PC build of [Dusklight](https://github.com/TwilitRealm/dusklight). All mod code is gated on `#if TARGET_PC`.
+**A Link Between Twilight** adds an _A Link Between Worlds_–style energy meter, death item strip, Postman rental economy, and optional combat/economy systems to the PC build of [Dusklight](https://github.com/TwilitRealm/dusklight). All mod code is gated on `#if TARGET_PC`.
 
-Clone **[ALBW-Dusklight](https://github.com/WadeWinningWilson/A-Link-Between-Dusklight)** and follow the **[README](../README.md)** for build steps.
+Clone **[A Link Between Twilight](https://github.com/WadeWinningWilson/A-Link-Between-Twilight)** and follow the **[README](../README.md)** for play and build steps.
 
 ## Build flag
 
@@ -21,11 +21,11 @@ When **ON**, greeting, shop, and farewell use in-game BLO screens and fonts.
 
 ## Settings
 
-Pause menu → **Quality of Life** → **ALBW Settings** (single section):
+Pause **Settings → ALBW**. Most toggles live under that tab, grouped as **Systems**, **Difficulty**, **Quality of Life**, **Master Quest**, and **Visuals**:
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
-| **Enemy HP ×** (Normal / Mid-Boss / Boss / Final Boss) | 1× each | Scales effective enemy HP by dividing incoming attack power in `d_cc_uty.cpp` (1–16× per category). *Planned: true max-HP scaling — see [Next on the docket](#next-on-the-docket).* |
+| **Enemy HP ×** (Normal / Mid-Boss / Boss / Final Boss) | 1× each | Scales effective enemy HP by dividing incoming attack power in `d_cc_uty.cpp` (1–16× per category). *Planned: true max-HP scaling.* |
 | **No Ammo Drops** | On | Bombs, arrows, and seeds no longer drop from enemies; magic pickups replace them. |
 | **Manual Shielding** | Off | Hold **ZR** to guard without Z-target lock-on; **ZR+B** shield bash. Off = vanilla auto-guard on Z-target. |
 | **Shield Parry & Bash Charges** | On | Perfect-guard timing earns bash charges and ALBW meter; failed blocks cost meter and charges. Off = traditional TP guard. |
@@ -162,7 +162,7 @@ When **Enemy Death Rupees** is on:
 
 ---
 
-## Next on the docket
+## Planned work
 
 Planned work after v0.55, in rough priority order:
 

@@ -2,7 +2,7 @@
   <img src="res/albt-logo.png" alt="A Link Between Twilight" width="640">
 
   <p align="center">
-    <a href="https://github.com/WadeWinningWilson/A-Link-Between-Dusklight">A Link Between Dusklight on GitHub</a>
+    <a href="https://github.com/WadeWinningWilson/A-Link-Between-Twilight">A Link Between Twilight on GitHub</a>
   </p>
 </div>
 
@@ -28,7 +28,6 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | Outfit Stats + Sumo fists-only visual (optional) | ✅ |
 | Shade's Refuge + Realtime Potions — soulslike rest/drink (optional, WIP) | ⏳ |
 | Deku Leaf Glide (optional, WIP) | ⏳ |
-| Postman rental shop + Oocoo dungeon warp | ✅ (shop footer polish WIP) |
 | Cycle Z-Targeting | ✅ |
 | Wolf Link combat overhaul (optional) | ✅ |
 | Enemy HP multipliers — Normal / Mid-Boss / Boss / Final (optional) | ✅ |
@@ -38,11 +37,59 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | Enemy HP multiplier final touches| ⏳ |
 | Boss Refinement| ⏳ |
 
-Debug toggles stay under Level Editor → ALBW.
+Turn on or off most settings and features to your preference under **Settings → ALBW** (Systems, Difficulty, Quality of Life, Master Quest, Visuals).
 
-Full gameplay, settings, and source file list: **[docs/albw-port.md](docs/albw-port.md)** (includes **Next on the docket**).
+Full gameplay, settings, and source file list: **[docs/ALBT-Features-Overview.md](docs/ALBT-Features-Overview.md)**.
 
 Latest release notes: **[docs/patch-notes-v0.55.md](docs/patch-notes-v0.55.md)** (v0.55 since v0.5).
+
+---
+
+## Play the latest release (Windows)
+
+You do **not** need to compile. Companion mods are a separate install, found inside: `companion_mods\_release\`
+
+### 1. Source tree + Windows build
+
+Download **two** things from GitHub:
+
+1. **Source** — on [the repository](https://github.com/WadeWinningWilson/A-Link-Between-Twilight), use **Code → Download ZIP** (or clone). Extract it. That folder is the source tree (`companion_mods`, docs, and the rest).
+2. **Windows build** — from **[Releases](https://github.com/WadeWinningWilson/A-Link-Between-Twilight/releases)**, the current zip:
+
+   **[A-Link-Between-Twilight-v-0.8-windows-x86_64.zip](https://github.com/WadeWinningWilson/A-Link-Between-Twilight/releases/download/v-0.8/A-Link-Between-Twilight-v-0.8-windows-x86_64.zip)** (pre-release alpha).
+
+   Extract it. Inside is `build\windows-msvc-relwithdebinfo\` — `dusklight.exe`, the runtime DLLs, and `res/`.
+
+Copy that entire **`build`** folder into the extracted source.
+
+### 2. First run
+
+Same disc support as Dusklight: your own legal **GameCube USA** Twilight Princess disc image.
+
+Run `build\windows-msvc-relwithdebinfo\dusklight.exe` once. Pick the disc in the launcher, or pass `--dvd "C:\path\to\your\game.iso"`. Then quit. First run creates `data\` next to the exe so companion mods have somewhere to land.
+
+GPU: D3D12, Vulkan, or Metal capable card recommended.
+
+### 3. Companion mods
+
+Found in `companion_mods\_release\` in the source tree.
+
+| Pack | What it does |
+|------|----------------|
+| **Armogohma Custom** | Reveal model for the refined Armogohma phase-3 fight |
+| **MM-SkullKid-Reskin** | Majora's Mask Skull Kid over TP's Skull Kid |
+| **Wind Waker Skins** | Wind Waker skins of TP equipment, from TP's own files (Deku Leaf included) |
+
+Run the game once and quit (step 2), then either:
+
+- Double-click **`INSTALL.bat`** in `companion_mods\_release\`, **or**
+- Unzip **`ALBT-companion-mods-v1.zip`** yourself into `data\model_replacements\` next to `dusklight.exe` (and into `%APPDATA%\TwilitRealm\Dusklight\model_replacements\` if you use that tree).
+
+The installer also copies to AppData, turns on **Boss Refinement**, and enables the packs in `config.json` (it writes a `.bak` first). If you unzip by hand, turn **Boss Refinement** on in the pause menu yourself — the Armogohma reveal stays off without it. If it cannot find `dusklight.exe`, it asks you to pick that folder.
+
+More detail: [companion_mods/_release/README.md](companion_mods/_release/README.md).
+
+To remove the packs, delete those folders from each `model_replacements\` you copied to. Restore `config.json.bak` or turn Boss Refinement off in the pause menu.
 
 ---
 
@@ -59,8 +106,8 @@ More detail: [docs/building.md](docs/building.md).
 ### 2. Clone this repository
 
 ```powershell
-git clone --recursive https://github.com/WadeWinningWilson/A-Link-Between-Dusklight.git
-cd A-Link-Between-Dusklight
+git clone --recursive https://github.com/WadeWinningWilson/A-Link-Between-Twilight.git
+cd A-Link-Between-Twilight
 git submodule update --init --recursive
 ```
 
@@ -110,8 +157,7 @@ Re-run `cmake --preset ...` only when you change CMake options (e.g. toggling `T
 
 ## Game setup
 
-1. Dump a supported **GameCube USA or EUR** Twilight Princess image ([Dolphin ripping guide](https://wiki.dolphin-emu.org/index.php?title=Ripping_Games)).
-2. Point Dusklight at that file on first run (**Select Disc Image**) or via `--dvd`.
+Provide your own legal **GameCube USA** Twilight Princess disc image. Point the game at it on first run (**Select Disc Image**) or via `--dvd`.
 
 GPU: D3D12, Vulkan, or Metal capable card recommended (see upstream Dusklight notes for older iGPUs).
 
@@ -119,20 +165,20 @@ GPU: D3D12, Vulkan, or Metal capable card recommended (see upstream Dusklight no
 
 ## Building on macOS / Linux
 
-The **A Link Between Dusklight mod code is PC-only** (`#if TARGET_PC`). You can still build vanilla Dusklight from this tree using the presets in [docs/building.md](docs/building.md); the meter and rental systems will not be included on those platforms.
+The **A Link Between Twilight mod code is PC-only** (`#if TARGET_PC`). You can still build vanilla Dusklight from this tree using the presets in [docs/building.md](docs/building.md); the meter and rental systems will not be included on those platforms.
 
 ---
 
 # Upstream Dusklight
 
-This repo is a full Dusklight source tree with **A Link Between Dusklight** integrated. For vanilla Dusklight releases, documentation, and community links:
+This repo is a full Dusklight source tree with **A Link Between Twilight** integrated. For vanilla Dusklight releases, documentation, and community links:
 
 - [TwilitRealm/dusklight](https://github.com/TwilitRealm/dusklight)
 - [Official site](https://twilitrealm.dev) · [Discord](https://discord.gg/6NpMhefCK9)
 
 # Credits
 
-- **A Link Between Dusklight:** WadeWinningWilson — [A-Link-Between-Dusklight](https://github.com/WadeWinningWilson/A-Link-Between-Dusklight) (GitHub repo name)
+- **A Link Between Twilight:** WadeWinningWilson — [A-Link-Between-Twilight](https://github.com/WadeWinningWilson/A-Link-Between-Twilight) (GitHub repo name)
 - **Inspired by:** CaptainKittyCa2
 - **Dusklight:** [TwilitRealm](https://github.com/TwilitRealm/dusklight) and [contributors](https://github.com/TwilitRealm/dusklight/graphs/contributors)
 - **Decomp / Aurora / community:** see upstream [README](https://github.com/TwilitRealm/dusklight/blob/main/README.md) credits

@@ -149,9 +149,9 @@ Recommended IDEs:
 * [CLion](https://www.jetbrains.com/clion/)
 * [Visual Studio Code](https://code.visualstudio.com/download/)
 
-### ALBW-Dusklight mod (PC)
+### A Link Between Twilight mod (PC)
 
-If you are building **[ALBW-Dusklight](https://github.com/WadeWinningWilson/A-Link-Between-Dusklight)**, use that repo’s [README](../README.md) — clone it with `--recursive`, then configure with `-DTARGET_PC_NATIVE_UI=ON` for the native rental shop UI. See [ALBW port](albw-port.md) for gameplay details.
+If you are building **[A Link Between Twilight](https://github.com/WadeWinningWilson/A-Link-Between-Twilight)**, use that repo’s [README](../README.md) — clone it with `--recursive`, then configure with `-DTARGET_PC_NATIVE_UI=ON` for the native rental shop UI. See [ALBT Features Overview](ALBT-Features-Overview.md) for gameplay details.
 
 ### Optional: ALBW native UI (PC)
 
@@ -162,9 +162,9 @@ Add `-DTARGET_PC_NATIVE_UI=ON` to your CMake configure line for native rental sh
 * Clone and initialize the repository (ALBW mod or vanilla Dusklight):
 
 ```sh
-# ALBW mod (recommended for this fork):
-git clone --recursive https://github.com/WadeWinningWilson/A-Link-Between-Dusklight.git
-cd A-Link-Between-Dusklight
+# A Link Between Twilight (recommended for this fork):
+git clone --recursive https://github.com/WadeWinningWilson/A-Link-Between-Twilight.git
+cd A-Link-Between-Twilight
 
 # Or vanilla Dusklight only:
 # git clone --recursive https://github.com/TwilitRealm/dusklight.git

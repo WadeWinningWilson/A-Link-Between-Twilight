@@ -1,4 +1,4 @@
-# Copilot instructions — A Link Between Dusklight
+# Copilot instructions — A Link Between Twilight
 
 ⛔ FIRST: read docs/DO-NOT.md — the hard-stop registry of permanently rejected
 approaches (confirmed cascading failures). If a change touches a surface an
