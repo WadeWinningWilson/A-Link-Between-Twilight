@@ -31,6 +31,7 @@ ActionBindsMap& getActionBinds() {
         {ActionBinds::TURBO_SPEED_BUTTON,  {&getSettings().actionBindings.turboSpeedButton,  "Turbo Speed Button"}},
         {ActionBinds::CYCLE_SWORD,         {&getSettings().actionBindings.cycleSword,        "Cycle Sword"}},
         {ActionBinds::CYCLE_SHIELD,        {&getSettings().actionBindings.cycleShield,       "Cycle Shield"}},
+        {ActionBinds::CYCLE_OUTFIT,        {&getSettings().actionBindings.cycleOutfit,       "Cycle Outfit"}},
         {ActionBinds::QUICK_TRANSFORM,     {&getSettings().actionBindings.quickTransform,    "Quick Transform"}},
         {ActionBinds::OPEN_ITEM_WHEEL,     {&getSettings().actionBindings.openItemWheel,     "Open Item Wheel"}},
     };
@@ -52,6 +53,21 @@ bool isActionBound(ActionBinds action, u32 port) {
 }
 
 void updateActionBindings() {
+    // ============================================
+    // One-shot preset re-apply on first controller connect (alpha
+    // cleanup, map-button fix): the boot-time
+    // applyDpadQuickSwapPresetBinds() call in m_Do_main runs before pads
+    // initialize, so its device-aware map preset (touchpad on controller
+    // vs M on keyboard) sees no controller at boot. Re-run once when
+    // port 0's controller appears so existing configs migrate without a
+    // settings-menu visit.
+    // ============================================
+    static bool sPresetReappliedForPad = false;
+    if (!sPresetReappliedForPad && aurora::input::get_controller_for_player(0)) {
+        sPresetReappliedForPad = true;
+        applyDpadQuickSwapPresetBinds();
+    }
+
     for (u32 port = 0; port < PAD_CHANMAX; ++port) {
         // Move the current press to the previous frame
         for (auto& pressData : actionPressData[port]) {
@@ -132,6 +148,10 @@ bool getActionBindHold(ActionBinds action, u32 port) {
            actionPressData[port][static_cast<int>(action)].pressedPrevFrame;
 }
 
+bool getActionBindDown(ActionBinds action, u32 port) {
+    return actionPressData[port][static_cast<int>(action)].pressedCurFrame;
+}
+
 bool getActionBindHoldAnyPort(ActionBinds action) {
     for (u32 port = 0; port < PAD_CHANMAX; ++port) {
         if (getActionBindHold(action, port)) {
@@ -204,6 +224,10 @@ bool isDpadQuickSwapEnabled() {
     return getSettings().game.extraItemSlotMode.getValue() == ExtraItemSlotMode::ExtraAndQuickSwap;
 }
 
+bool isQuickEquipWheelEnabled() {
+    return getSettings().game.quickEquipWheel.getValue() && isExtraItemSlotEnabled();
+}
+
 bool callMidnaReservesDpadLeft(u32 port) {
     if (!isExtraItemSlotEnabled() || port != 0) {
         return false;
@@ -223,6 +247,11 @@ bool dpadUpReservedForQuickSwap(u32 port) {
 }
 
 bool dpadDownReservedForQuickSwap(u32 port) {
+    return isDpadQuickSwapEnabled() &&
+           bindUsesPadButton(ActionBinds::CYCLE_OUTFIT, port, PAD_BUTTON_DOWN);
+}
+
+bool quickTransformBoundToDpadDown(u32 port) {
     return isDpadQuickSwapEnabled() &&
            bindUsesPadButton(ActionBinds::QUICK_TRANSFORM, port, PAD_BUTTON_DOWN);
 }

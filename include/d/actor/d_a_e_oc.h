@@ -16,6 +16,7 @@
  * 
  */
 class daRotBridge_c;
+class Z2Creature;
 
 class daE_OC_c : public fopEn_enemy_c {
 public:
@@ -70,10 +71,18 @@ public:
     void executeFall();
     void executeFindStay();
     void executeMoveOut();
+#if TARGET_PC
+    void executeConfuse();
+#endif
     bool checkWaterSurface();
     void action();
     void mtx_set();
     void cc_set();
+#if TARGET_PC
+    // Update hurt-sphere centers while pause-stunned (execute/cc_set skipped).
+    void refreshStunHurtColliders();
+    Z2Creature* getStunBridgeSound() { return &mSound; }
+#endif
     int execute();
     int _delete();
     int CreateHeap();
@@ -86,6 +95,16 @@ public:
     int getActionMode() { return mActionMode; }
     daE_OC_c* getTalkOc() { return mpTalk; }
     J3DModel* getOcModel() { return mpMorf->getModel(); }
+
+#if TARGET_PC
+    // Flurry Rush Phase 3 — melee telegraph query (Bokoblin club swings).
+    enum FlurryTelegraphAxis {
+        FlurryTelegraph_None = 0,
+        FlurryTelegraph_Vertical,    // attack B — sidestep
+        FlurryTelegraph_Horizontal,  // attack C — backflip
+    };
+    FlurryTelegraphAxis queryFlurryMeleeTelegraph() const;
+#endif
 
 private:
     /* 0x5a0 */ request_of_phase_process_class mPhaseReqs[2];

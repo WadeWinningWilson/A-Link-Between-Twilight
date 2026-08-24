@@ -72,6 +72,21 @@ static int const l_twFlagIdx[13] = {
     0, 1, 2, 4, -1, -1, 0, 1, 1, 2, 2, 4, 4,
 };
 
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (twilight-border fallback)
+// Province index (DarkClearLV bit) for a gate type; -1 = invalid type.
+// Used by d_albw_twilight_border to decide whether a missing authored
+// wall should be fallback-spawned (only while its province is uncleared).
+// ============================================
+s32 daObjTwGate_albwProvinceForType(int i_type) {
+    if (i_type < 0 || i_type >= (int)(sizeof(l_twFlagIdx) / sizeof(l_twFlagIdx[0]))) {
+        return -1;
+    }
+    return l_twFlagIdx[i_type];
+}
+#endif
+
 static Vec const l_cheeckPos0[13] = {
     {-572.6072f, 314.9037f, -20792.293f},
     {-24536.904f, -7234.991f, 73427.242f},

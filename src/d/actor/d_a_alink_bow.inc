@@ -154,6 +154,43 @@ void daAlink_c::makeArrow() {
 void daAlink_c::deleteArrow() {
     daArrow_c* arrow_p = (daArrow_c*)mItemAcKeep.getActor();
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (DIAGNOSTIC — remove after crash is pinned)
+    // Bomb-arrow interrupt crash: eye laser / any hit landing while Link holds a
+    // bomb arrow. Writes to albw_bombarrow_debug.txt — the mod's debug-log
+    // convention (OS_REPORT is not surfaced here). arrow_p is logged FIRST,
+    // before the fopAcM_GetName() deref below, so a dangling pointer (use-after-
+    // free) is still captured; selNum underflow vs a bad pointer tells us which.
+    // ============================================
+    {
+        static bool sBombArrowLogReset = false;
+        char path[512];
+        path[0] = '\0';
+        const char* user = getenv("USERPROFILE");
+        if (user && user[0] != '\0') {
+            snprintf(path, sizeof(path), "%s/Documents/dusklight/albw_bombarrow_debug.txt", user);
+        } else {
+            strncpy(path, "albw_bombarrow_debug.txt", sizeof(path) - 1);
+        }
+        FILE* fp = fopen(path, sBombArrowLogReset ? "a" : "w");
+        if (fp == NULL) {
+            fp = fopen("albw_bombarrow_debug.txt", sBombArrowLogReset ? "a" : "w");
+        }
+        if (fp != NULL) {
+            sBombArrowLogReset = true;
+            fprintf(fp,
+                    "[deleteArrow] arrow_p=%p selItemId=%d selNum=%d dmgTimer=%d invT=%d modeFlg8=%d\n",
+                    (void*)arrow_p, (int)mSelectItemId, (int)dComIfGp_getSelectItemNum(mSelectItemId),
+                    (int)mDamageTimer, (int)mpHIO->mDamage.m.mInvincibleTime, (int)checkModeFlg(8));
+            fclose(fp);
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
+
     if (arrow_p != NULL && fopAcM_GetName(arrow_p) == fpcNm_ARROW_e) {
         if (arrow_p->checkBombArrow() &&
             (mDamageTimer == mpHIO->mDamage.m.mInvincibleTime || checkModeFlg(8)))
@@ -589,8 +626,57 @@ void daAlink_c::setBowModel() {
     J3DAnmTransform* bck = (J3DAnmTransform*)mAnmHeap9.loadDataIdx(dRes_ID_ALANM_BCK_BVJMPCL_e);
     JKRHeap* heap = setItemHeap();
 
-    mHeldItemModel = initModel(loadAramBmd(dRes_ID_ALANM_BMD_AL_BOW_e, 0x4C00), 0);
-    
+    J3DModelData* bowModelData = NULL;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (native WW bow skin: Layer-B al_bow replacement)
+    // A rebuilt WW bow BMD authored in al_bow's model space replaces Link's held bow
+    // wholesale — driven by the vanilla held-bow path everywhere (incl. first person)
+    // with TP's own arrow. Rigid single joint: the 7-joint BVJMPCL BCK still inits
+    // for shoot timing, and J3D applies anims per MODEL joint, so the 1-joint mesh
+    // is safe (same contract as the old 2-joint itemmdl swap below). Draw side:
+    // modelDraw's boots-style ambient branch keys on s_albwWwBowNative (WW materials
+    // crush under MAJI). When present this wins over the legacy scope path.
+    // ============================================
+    s_albwWwBowNative = dusk::custom_assets::try_load("AlAnm", dRes_INDEX_ALANM_BMD_AL_BOW_e);
+    if (s_albwWwBowNative != NULL) {
+        bowModelData = s_albwWwBowNative;
+    }
+    // ============================================
+    // NEW CODE — ALBW Port (Track B held bow skin)
+    // When the toggle is on, swap Link's held bow mesh for the retail WW
+    // itemmdl vbow. Data comes from the cached retained heap (getVbowModelData
+    // manages its own heap + restores it); NULL falls back to vanilla AL_BOW.
+    // The BVJMPCL BCK still inits for shoot-timing (field_0x33dc) but is not
+    // applied to the 2-bone vbow (see d_a_alink.cpp calc) — stiff but functional.
+    // ============================================
+    bool wwSkin = false;
+    if (bowModelData == NULL &&
+        dusk::getSettings().game.wwItemmdlHeldSkin.getValue() == dusk::WwHeldSkinMode::Bow) {
+        bowModelData = dWwItemmdl_getVbowModelData("itemmdl");
+        if (bowModelData != NULL) {
+            dWwItemmdl_patchModelForPc(bowModelData);
+            wwSkin = true;
+        }
+    }
+#endif
+    if (bowModelData == NULL) {
+        bowModelData = loadAramBmd(dRes_ID_ALANM_BMD_AL_BOW_e, 0x4C00);
+    }
+#if TARGET_PC
+    if (wwSkin) {
+        // Match the get-item J3DModel create flags (mdl 0x80000, diff 0x11000084 — see
+        // daItemBase_c::CreateItemHeap) so mDoExt_modelUpdateDL realizes the locked bdl3 body
+        // material. initModel(data, 0) uses diff=0, leaving the body ambient unrealized (black)
+        // while SC self-colored via the post-DL callback.
+        mHeldItemModel = initModel(bowModelData, 0x80000, 0x11000084);
+    } else {
+        mHeldItemModel = initModel(bowModelData, 0);
+    }
+#else
+    mHeldItemModel = initModel(bowModelData, 0);
+#endif
+
     if (!mItemBck.init(bck, FALSE, 2, 1.0f, 0, -1, false)) {
         JUT_ASSERT(894, 0);
     }

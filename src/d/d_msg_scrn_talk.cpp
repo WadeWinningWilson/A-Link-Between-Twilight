@@ -24,6 +24,7 @@
 #include <cstring>
 
 #if TARGET_PC
+#include "dusk/logging.h"  // §65 probe
 #include "dusk/settings.h"
 #endif
 
@@ -38,6 +39,11 @@ dMsgScrnTalk_c::dMsgScrnTalk_c(u8 param_1, u8 param_2, JKRExpHeap* param_3) {
     JUT_ASSERT(70, mpScreen != NULL);
     bool fg = mpScreen->setPriority("zelda_message_window_new.blo", 0x20000,
                                     dComIfGp_getMsgArchive(1));
+    // §65 H6 probe — did the talk-box FRAME actually load in this space?
+    // (WW interiors may lack the msg archive; a failed frame = text-only render
+    // that masquerades as a caption.)
+    DuskLog.warn("[MsgScrnTalk] §65 ctor: frame blo={} arc={}", fg ? "OK" : "FAIL",
+                 dComIfGp_getMsgArchive(1) != NULL ? 1 : 0);
     JUT_ASSERT(77, fg != false);
     dPaneClass_showNullPane(mpScreen);
     mpTxScreen = JKR_NEW J2DScreen();

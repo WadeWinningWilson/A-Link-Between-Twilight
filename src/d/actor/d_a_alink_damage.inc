@@ -10,9 +10,15 @@
 #include "d/d_msg_object.h"
 #ifdef TARGET_PC
 #include "d/actor/d_a_obj_carry.h"
+#include "d/actor/d_a_b_bq.h"
+#include "d/d_menu_ring.h"
 #include "dusk/achievements.h"
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
+#include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_region_mult.h"
+#include "d/d_albw_boss.h"
 #endif
 
 #if DEBUG
@@ -163,6 +169,8 @@ f32 daAlink_c::damageMagnification(BOOL i_checkZoraMag, int param_1) {
     if (dusk::getSettings().game.instantDeath) {
         base_mag = 9999.0f;
     }
+    base_mag *= dAlbwOutfitStats_getReceivedDamageMult();
+    base_mag *= dAlbwRegionMult_getDamageMult();
     #endif
 
     if (checkWolf() && !checkCargoCarry() && param_1 == 0) {
@@ -233,10 +241,18 @@ int daAlink_c::setDamagePoint(int i_dmgAmount, BOOL i_checkZoraMag, BOOL i_setDm
         }
 #endif
         dComIfGp_setItemLifeCount(-i_dmgAmount, 0);
+#if TARGET_PC
+        if (i_dmgAmount > 0) {
+            dParryMaster_onHpLoss(i_dmgAmount);
+        }
+#endif
     }
 
 #if TARGET_PC
     dusk::AchievementSystem::get().signal("player_damaged");
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+        dMenu_Ring_c::forceQuickConfirmClose();
+    }
 #endif
     onResetFlg1(RFLG1_DAMAGE_IMPACT);
     mSwordUpTimer = 0;
@@ -590,7 +606,15 @@ BOOL daAlink_c::checkDamageAction() {
 
     if (poly_dmg_flags != 0) {
         int sp28 = (poly_dmg_flags & 7);
+#if TARGET_PC
+        {
+            // COVER: hazard polys (lava / ice / fire / electric floors & walls).
+            dAlbwRegionMult_DamageScaleScope regionDmg;
+            setDamagePoint(1, poly_dmg_flags & 0x80, TRUE, 0);
+        }
+#else
         setDamagePoint(1, poly_dmg_flags & 0x80, TRUE, 0);
+#endif
 
         if (checkWolf()) {
             mDamageTimer = mpHIO->mDamage.m.mWolfFloorInvincibleTime;
@@ -717,12 +741,16 @@ BOOL daAlink_c::checkDamageAction() {
 #if TARGET_PC
                     if (dShield_onShieldHit(this, at_spl, tghit_ac)) {
                         dShield_playParrySuccessFeedback(this, var_r29->GetTgHitPosP());
+                        dParryMaster_onPerfectParry();
                         return 0;
                     }
                     if (dShield_onFailedGuardBreakBlock(this, at_spl, tghit_ac)) {
                         return 1;
                     }
                     dShield_onFailedGuardBlock(tghit_ac);
+                    if (tghit_gobj != NULL) {
+                        dParryMaster_onFailedBlock(this, tghit_gobj->GetAtAtp());
+                    }
 #endif
 #if TARGET_PC
                     if (dShield_isDurabilityEnabled() && dShield_onBlockHit(this, at_spl, false, tghit_ac)) {
@@ -787,11 +815,61 @@ BOOL daAlink_c::checkDamageAction() {
             if (checkMagicArmorWearAbility() && tghit_ac != NULL) {
                 dMeter2_onArmorEncounterHit(fopAcM_GetID(tghit_ac), true);
             }
+            // ALBW magic armor: always depower on enemy body hit; block HP + −500
+            // only when the wallet and meter can fund it (see Outfit Stats §6 Phase 1).
+            if (checkMagicArmorWearAbility() &&
+                dusk::getSettings().game.armorRupeeDrain.getValue() == dusk::MagicArmorMode::ALBW)
+            {
+                const bool deityActive = dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e) &&
+                                         dComIfGs_getRupee() > 5000;
+                if (deityActive) {
+                    s32 newRupees = (s32)dComIfGs_getRupee() - 2500;
+                    dComIfGs_setRupee((u16)(newRupees < 0 ? 0 : newRupees));
+                    dmg = 0;
+                } else {
+                    const bool canBlock = dMeter2_canALBWArmorBlock() && dComIfGs_getRupee() >= 500;
+                    dMeter2_onALBWArmorHit();
+                    if (canBlock) {
+                        s32 newRupees = (s32)dComIfGs_getRupee() - 500;
+                        dComIfGs_setRupee((u16)(newRupees < 0 ? 0 : newRupees));
+                        dmg = 0;
+                    }
+                }
+            }
+            // Diababa siphon (Boss Refinement): heal boss by % of Link max lost.
+            // Poison spray, retaliation thrash, or middle-head lunge.
+            if (dmg > 0 && tghit_ac_name == fpcNm_B_BQ_e && tghit_ac != NULL &&
+                dAlbwBoss_diababaHitShouldSiphon(tghit_ac))
+            {
+                dAlbwBoss_diababaOnPoisonDamage(dmg);
+            }
+            // Side heads: flat 3% of Diababa max HP per damaging hit.
+            if (dmg > 0 && tghit_ac_name == fpcNm_B_BH_e) {
+                dAlbwBoss_diababaOnSideHeadDamage();
+            }
             // ============================================
             // NEW CODE ENDS HERE
             // ============================================
 #endif
+#if TARGET_PC
+            {
+                // COVER: enemy/trap/boss CC — except Link-bag bombs (EXCLUDE).
+                bool scaleRegion = true;
+                if (tghit_gobj != NULL && tghit_gobj->GetAtType() == AT_TYPE_BOMB) {
+                    scaleRegion = !dAlbwRegionMult_isPlayerBomb(tghit_ac);
+                }
+                if (scaleRegion) {
+                    dAlbwRegionMult_DamageScaleScope regionDmg;
+                    setDamagePoint(dmg, at_mtrl == dCcD_MTRL_FIRE || at_mtrl == dCcD_MTRL_ICE, TRUE,
+                                   0);
+                } else {
+                    setDamagePoint(dmg, at_mtrl == dCcD_MTRL_FIRE || at_mtrl == dCcD_MTRL_ICE, TRUE,
+                                   0);
+                }
+            }
+#else
             setDamagePoint(dmg, at_mtrl == dCcD_MTRL_FIRE || at_mtrl == dCcD_MTRL_ICE, TRUE, 0);
+#endif
 
 #ifdef TARGET_PC
             if (tghit_ac_name == fpcNm_Obj_Carry_e) {

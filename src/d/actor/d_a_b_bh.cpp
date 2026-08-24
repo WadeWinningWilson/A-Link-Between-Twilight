@@ -104,12 +104,72 @@ static daB_BH_HIO_c l_HIO;
 static b_bh_class* bh[2];
 
 #if TARGET_PC
-static bool b_bh_albwEnrageSubmerged(b_bq_class* bq_p) {
-    return dAlbwBossRefinement_isEnabled() && bq_p->field_0x6fb == 3;
+b_bh_class* daB_BH_getPtr(int i_id) {
+    if (i_id < 0 || i_id > 1) {
+        return NULL;
+    }
+    return bh[i_id];
+}
+#endif
+
+#if TARGET_PC
+// Keep in sync with daB_BQ_ACT in d_a_b_bq.cpp.
+static constexpr s16 kAlbwBqActionDamage = 3;
+static constexpr s16 kAlbwBqActionRunawayTest = 5;
+static constexpr s16 kAlbwBqActionLunge = 7;
+
+// Boss Refinement side-head pacing: roll waits −40%; attack executes +15%.
+static constexpr f32 kAlbwBhRollMult = 0.6f;
+static constexpr f32 kAlbwBhAttackSpeed = 1.15f;
+
+static f32 b_bh_albwRollMult() {
+    return dAlbwBossRefinement_isEnabled() ? kAlbwBhRollMult : 1.0f;
+}
+
+static f32 b_bh_albwAttackAnmSpeed() {
+    return dAlbwBossRefinement_isEnabled() ? kAlbwBhAttackSpeed : 1.0f;
+}
+
+static s16 b_bh_albwScaleRoll(f32 frames) {
+    s16 t = (s16)(frames * b_bh_albwRollMult());
+    return t < 1 ? 1 : t;
+}
+
+static s16 b_bh_albwScaleAttackTimer(f32 frames) {
+    if (!dAlbwBossRefinement_isEnabled()) {
+        return (s16)frames;
+    }
+    s16 t = (s16)(frames / kAlbwBhAttackSpeed);
+    return t < 1 ? 1 : t;
+}
+
+static bool b_bh_albwConductorActive(b_bq_class* bq_p) {
+    if (!dAlbwBossRefinement_isEnabled() || bq_p->field_0x6fb != 3) {
+        return false;
+    }
+    // Phase-2 retaliation: middle head submerged (RUNAWAY mode 2) + 5-hit script.
+    return bq_p->mAction == kAlbwBqActionRunawayTest && bq_p->mMode == 2;
 }
 
 static bool b_bh_albwSideHeadsDecouple(b_bq_class* bq_p) {
-    return dAlbwBossRefinement_isEnabled() && bq_p->mAction == 5 && bq_p->mMode < 3;
+    return dAlbwBossRefinement_isEnabled() && bq_p->mAction == kAlbwBqActionRunawayTest &&
+           bq_p->mMode < 3;
+}
+
+// No concurrent side-head attacks during middle-head lunge.
+static bool b_bh_albwMiddleHeadLungeActive(b_bq_class* bq_p) {
+    return dAlbwBossRefinement_isEnabled() && bq_p->mAction == kAlbwBqActionLunge;
+}
+
+// Vanilla aborts the dash at ~1700 from home — short of the front wall band
+// (~2570–2800 from arena origin). Refinement stretches travel only (homes stay).
+static constexpr f32 kAlbwBhLungeMaxTravel = 2800.0f;
+
+static f32 b_bh_albwLungeMaxTravel() {
+    if (dAlbwBossRefinement_isEnabled()) {
+        return kAlbwBhLungeMaxTravel;
+    }
+    return 1700.0f + YREG_F(5);
 }
 #endif
 
@@ -122,11 +182,7 @@ static void b_bh_wait(b_bh_class* i_this) {
     f32 temp_f31 = 30.0f + TREG_F(12);
     if (bq_p->field_0x6fb != 0) {
 #if TARGET_PC
-        if (b_bh_albwEnrageSubmerged(bq_p)) {
-            if (i_this->mTimers[1] > 30) {
-                i_this->mTimers[1] = 30;
-            }
-        } else
+        if (!b_bh_albwConductorActive(bq_p))
 #endif
         {
             if (i_this->mID == 0) {
@@ -150,10 +206,14 @@ static void b_bh_wait(b_bh_class* i_this) {
         anm_init(i_this, BCK_BH_WAIT, 10.0f, 2, 1.0f);
         i_this->mMode = 1;
         if (a_this->health <= 1) {
-            i_this->mTimers[1] = ((f32)l_HIO.attack_freq_a / 2) + cM_rndF((f32)l_HIO.attack_freq_a / 2);
+            i_this->mTimers[1] =
+                ((f32)l_HIO.attack_freq_a / 2) + cM_rndF((f32)l_HIO.attack_freq_a / 2);
         } else {
             i_this->mTimers[1] = l_HIO.attack_freq_a + cM_rndF(l_HIO.attack_freq_a);
         }
+#if TARGET_PC
+        i_this->mTimers[1] = b_bh_albwScaleRoll((f32)i_this->mTimers[1]);
+#endif
         break;
     case 1:
         if (i_this->mTimers[0] == 0) {
@@ -163,36 +223,33 @@ static void b_bh_wait(b_bh_class* i_this) {
             i_this->field_0x674.y = BREG_F(3) + (i_this->mBasePos.y + (550.0f * l_HIO.model_size) + cM_rndFX(200.0f));
             i_this->field_0x690 = 0.0f;
 
-            if (i_this->mTimers[1] == 0 &&
-                (bq_p->field_0x6fe == 0
 #if TARGET_PC
-                 || b_bh_albwEnrageSubmerged(bq_p)
+            if (!b_bh_albwConductorActive(bq_p) && !b_bh_albwMiddleHeadLungeActive(bq_p))
 #endif
-                 ))
             {
-                fopAc_ac_c* const player = dComIfGp_getPlayer(0);
-                if ((i_this->mBasePos - player->current.pos).abs() < 2800.0f) {
-                    a_this->speedF = 0.0f;
-                    i_this->mAction = ACTION_ATTACK_1;
-                    i_this->mMode = 0;
+                if (i_this->mTimers[1] == 0 && bq_p->field_0x6fe == 0) {
+                    fopAc_ac_c* const player = dComIfGp_getPlayer(0);
+                    if ((i_this->mBasePos - player->current.pos).abs() < 2800.0f) {
+                        a_this->speedF = 0.0f;
+                        i_this->mAction = ACTION_ATTACK_1;
+                        i_this->mMode = 0;
 
-                    if (bq_p->field_0x6fa == 0 && bh[1 - i_this->mID]->mAction == ACTION_WAIT && bh[1 - i_this->mID]->mTimers[3] == 0) {
-                        i_this->field_0x6a0 = 1;
-                        bh[1 - i_this->mID]->mAction = ACTION_ATTACK_1;
-                        bh[1 - i_this->mID]->mMode = 0;
-                        bh[1 - i_this->mID]->field_0x6a0 = 1;
-                        bq_p->field_0x6fa = 2.0f + cM_rndF(2.99f);
-                    } else {
-#if TARGET_PC
-                        if (b_bh_albwEnrageSubmerged(bq_p)) {
-                            bq_p->field_0x6fe = 50.0f + cM_rndF(50.0f);
-                        } else
-#endif
+                        if (bq_p->field_0x6fa == 0 && bh[1 - i_this->mID]->mAction == ACTION_WAIT &&
+                            bh[1 - i_this->mID]->mTimers[3] == 0)
                         {
+                            i_this->field_0x6a0 = 1;
+                            bh[1 - i_this->mID]->mAction = ACTION_ATTACK_1;
+                            bh[1 - i_this->mID]->mMode = 0;
+                            bh[1 - i_this->mID]->field_0x6a0 = 1;
+                            bq_p->field_0x6fa = 2.0f + cM_rndF(2.99f);
+                        } else {
                             bq_p->field_0x6fe = 200.0f + cM_rndF(150.0f);
-                        }
-                        if (bq_p->field_0x6fa != 0) {
-                            bq_p->field_0x6fa--;
+#if TARGET_PC
+                            bq_p->field_0x6fe = b_bh_albwScaleRoll((f32)bq_p->field_0x6fe);
+#endif
+                            if (bq_p->field_0x6fa != 0) {
+                                bq_p->field_0x6fa--;
+                            }
                         }
                     }
                 }
@@ -238,17 +295,35 @@ static void b_bh_wait(b_bh_class* i_this) {
 
 static void b_bh_attack_1(b_bh_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    b_bq_class* bq_p = (b_bq_class*)fopAcM_SearchByID(a_this->parentActorID);
 
     cXyz sp2C;
     cXyz sp20;
     f32 target_speed = 0.0f;
     f32 var_f30 = 100.0f + YREG_F(2);
+#if TARGET_PC
+    const f32 atkAnmSpd = b_bh_albwAttackAnmSpeed();
+    const s16 atkAnimGate = b_bh_albwScaleAttackTimer(NREG_S(4) + 8);
+    const s16 atkSeGate = b_bh_albwScaleAttackTimer(22);
+#else
+    const f32 atkAnmSpd = 1.0f;
+    const s16 atkAnimGate = NREG_S(4) + 8;
+    const s16 atkSeGate = 22;
+#endif
 
     switch (i_this->mMode) {
     case 0:
-        anm_init(i_this, BCK_BH_ATTACKWAIT, 5.0f, 2, 1.0f);
+        anm_init(i_this, BCK_BH_ATTACKWAIT, 5.0f, 2, atkAnmSpd);
         i_this->mMode = 2;
+#if TARGET_PC
+        if (b_bh_albwConductorActive(bq_p)) {
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(22);
+        } else {
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(NREG_S(0) + 35);
+        }
+#else
         i_this->mTimers[0] = NREG_S(0) + 35;
+#endif
 
         if (i_this->field_0x6a0 != 0) {
             i_this->mSound.startCreatureVoice(Z2SE_EN_BH_V_SP_ATTACK, -1);
@@ -257,8 +332,8 @@ static void b_bh_attack_1(b_bh_class* i_this) {
         }
         break;
     case 2:
-        if (i_this->mTimers[0] == NREG_S(4) + 8) {
-            anm_init(i_this, BCK_BH_ATTACK, 3.0f, 0, 1.0f);
+        if (i_this->mTimers[0] == atkAnimGate) {
+            anm_init(i_this, BCK_BH_ATTACK, 3.0f, 0, atkAnmSpd);
         }
 
         a_this->current.angle.y = i_this->field_0x684;
@@ -287,19 +362,36 @@ static void b_bh_attack_1(b_bh_class* i_this) {
 
         if (i_this->mTimers[0] == 0) {
             i_this->mMode = 3;
+#if TARGET_PC
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(25);
+#else
             i_this->mTimers[0] = 25;
+#endif
             i_this->field_0x6a0 = 0;
         }
         break;
     case 3:
-        if (i_this->mTimers[0] == 22) {
+        if (i_this->mTimers[0] == atkSeGate) {
             i_this->mSound.startCreatureSound(Z2SE_EN_BH_ATTACK, 0, -1);
         }
 
         target_speed = 200.0f + YREG_F(0);
         var_f30 = 100.0f + YREG_F(1);
-        if (i_this->mTimers[0] == 0 || i_this->field_0x688 < (500.0f + YREG_F(6)) || i_this->field_0x68c > (1700.0f + YREG_F(5))) {
+#if TARGET_PC
+        target_speed *= b_bh_albwAttackAnmSpeed();
+        var_f30 *= b_bh_albwAttackAnmSpeed();
+        if (i_this->mTimers[0] == 0 || i_this->field_0x688 < (500.0f + YREG_F(6)) ||
+            i_this->field_0x68c > b_bh_albwLungeMaxTravel())
+#else
+        if (i_this->mTimers[0] == 0 || i_this->field_0x688 < (500.0f + YREG_F(6)) ||
+            i_this->field_0x68c > (1700.0f + YREG_F(5)))
+#endif
+        {
+#if TARGET_PC
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(YREG_S(2) + 20);
+#else
             i_this->mTimers[0] = YREG_S(2) + 20;
+#endif
             i_this->mMode = 4;
         }
         break;
@@ -307,7 +399,15 @@ static void b_bh_attack_1(b_bh_class* i_this) {
         if (i_this->mTimers[0] == 0) {
             i_this->mAction = ACTION_WAIT;
             i_this->mMode = 0;
+#if TARGET_PC
+            if (b_bh_albwConductorActive(bq_p)) {
+                i_this->mTimers[0] = b_bh_albwScaleAttackTimer(8);
+            } else {
+                i_this->mTimers[0] = b_bh_albwScaleRoll(60.0f + cM_rndF(50.0f));
+            }
+#else
             i_this->mTimers[0] = 60.0f + cM_rndF(50.0f);
+#endif
             i_this->field_0x674.x = i_this->mBasePos.x + cM_rndFX(300.0f);
             i_this->field_0x674.z = i_this->mBasePos.z + cM_rndFX(300.0f);
             i_this->field_0x674.y = BREG_F(3) + (i_this->mBasePos.y + (550.0f * l_HIO.model_size) + cM_rndFX(200.0f));
@@ -461,6 +561,9 @@ static s8 b_bh_down(b_bh_class* i_this) {
             } else {
                 i_this->mTimers[1] = 400;
             }
+#if TARGET_PC
+            i_this->mTimers[1] = b_bh_albwScaleRoll((f32)i_this->mTimers[1]);
+#endif
         }
     }
 
@@ -486,11 +589,7 @@ static void b_bh_b_wait(b_bh_class* i_this) {
 
     if (bq_p->field_0x6fb != 0) {
 #if TARGET_PC
-        if (b_bh_albwEnrageSubmerged(bq_p)) {
-            if (i_this->mTimers[1] > 30) {
-                i_this->mTimers[1] = 30;
-            }
-        } else
+        if (!b_bh_albwConductorActive(bq_p))
 #endif
         {
             if (i_this->mID == 0) {
@@ -520,6 +619,9 @@ static void b_bh_b_wait(b_bh_class* i_this) {
         anm_init(i_this, BCK_BH_WAIT, 10.0f, 2, 1.0f);
         i_this->mMode = 1;
         i_this->mTimers[1] = l_HIO.attack_freq_b + cM_rndF(l_HIO.attack_freq_b);
+#if TARGET_PC
+        i_this->mTimers[1] = b_bh_albwScaleRoll((f32)i_this->mTimers[1]);
+#endif
         break;
     case 1:
         if (i_this->mTimers[0] == 0) {
@@ -529,25 +631,20 @@ static void b_bh_b_wait(b_bh_class* i_this) {
             i_this->field_0x674.y = BREG_F(3) + (i_this->field_0x6b0.y + (550.0f * l_HIO.model_size) + cM_rndFX(200.0f));
             i_this->field_0x690 = 0.0f;
 
-            if (i_this->mTimers[1] == 0 &&
-                (bq_p->field_0x6fe == 0
 #if TARGET_PC
-                 || b_bh_albwEnrageSubmerged(bq_p)
+            if (!b_bh_albwConductorActive(bq_p) && !b_bh_albwMiddleHeadLungeActive(bq_p))
 #endif
-                 ))
             {
-                fopAc_ac_c* const player = dComIfGp_getPlayer(0);
-                if ((i_this->field_0x6b0 - player->current.pos).abs() < 2800.0f) {
-                    a_this->speedF = 0.0f;
-                    i_this->mAction = ACTION_B_ATTACK_1;
-                    i_this->mMode = 0;
-#if TARGET_PC
-                    if (b_bh_albwEnrageSubmerged(bq_p)) {
-                        bq_p->field_0x6fe = 50.0f + cM_rndF(50.0f);
-                    } else
-#endif
-                    {
+                if (i_this->mTimers[1] == 0 && bq_p->field_0x6fe == 0) {
+                    fopAc_ac_c* const player = dComIfGp_getPlayer(0);
+                    if ((i_this->field_0x6b0 - player->current.pos).abs() < 2800.0f) {
+                        a_this->speedF = 0.0f;
+                        i_this->mAction = ACTION_B_ATTACK_1;
+                        i_this->mMode = 0;
                         bq_p->field_0x6fe = 100.0f + cM_rndF(100.0f);
+#if TARGET_PC
+                        bq_p->field_0x6fe = b_bh_albwScaleRoll((f32)bq_p->field_0x6fe);
+#endif
                     }
                 }
             }
@@ -593,17 +690,34 @@ static void b_bh_b_attack_1(b_bh_class* i_this) {
     cXyz sp1C;
     f32 target_speed = 0.0f;
     f32 speed_step = 100.0f + YREG_F(2);
+#if TARGET_PC
+    const f32 atkAnmSpd = b_bh_albwAttackAnmSpeed();
+    const s16 atkAnimGate = b_bh_albwScaleAttackTimer(NREG_S(4) + 8);
+    const s16 atkSeGate = b_bh_albwScaleAttackTimer(22);
+#else
+    const f32 atkAnmSpd = 1.0f;
+    const s16 atkAnimGate = NREG_S(4) + 8;
+    const s16 atkSeGate = 22;
+#endif
 
     switch (i_this->mMode) {
     case 0:
-        anm_init(i_this, BCK_BH_ATTACKWAIT, 5.0f, 2, 1.0f);
+        anm_init(i_this, BCK_BH_ATTACKWAIT, 5.0f, 2, atkAnmSpd);
         i_this->mMode = 2;
+#if TARGET_PC
+        if (b_bh_albwConductorActive(bq_p)) {
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(22);
+        } else {
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(NREG_S(0) + 35);
+        }
+#else
         i_this->mTimers[0] = NREG_S(0) + 35;
+#endif
         i_this->mSound.startCreatureVoice(Z2SE_EN_BH_V_ATTACK, -1);
         break;
     case 2:
-        if (i_this->mTimers[0] == NREG_S(4) + 8) {
-            anm_init(i_this, BCK_BH_ATTACK, 3.0f, 0, 1.0f);
+        if (i_this->mTimers[0] == atkAnimGate) {
+            anm_init(i_this, BCK_BH_ATTACK, 3.0f, 0, atkAnmSpd);
         }
 
         a_this->current.angle.y = i_this->field_0x684;
@@ -623,19 +737,35 @@ static void b_bh_b_attack_1(b_bh_class* i_this) {
 
         if (i_this->mTimers[0] == 0) {
             i_this->mMode = 3;
+#if TARGET_PC
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(25);
+#else
             i_this->mTimers[0] = 25;
+#endif
         }
         break;
     case 3:
-        if (i_this->mTimers[0] == 22) {
+        if (i_this->mTimers[0] == atkSeGate) {
             i_this->mSound.startCreatureSound(Z2SE_EN_BH_ATTACK, 0, -1);
         }
 
         target_speed = 200.0f + YREG_F(0);
         speed_step = 100.0f + YREG_F(1);
-
-        if (i_this->mTimers[0] == 0 || i_this->field_0x688 < (500.0f + YREG_F(6)) || i_this->field_0x68c > (1700.0f + YREG_F(5))) {
+#if TARGET_PC
+        target_speed *= b_bh_albwAttackAnmSpeed();
+        speed_step *= b_bh_albwAttackAnmSpeed();
+        if (i_this->mTimers[0] == 0 || i_this->field_0x688 < (500.0f + YREG_F(6)) ||
+            i_this->field_0x68c > b_bh_albwLungeMaxTravel())
+#else
+        if (i_this->mTimers[0] == 0 || i_this->field_0x688 < (500.0f + YREG_F(6)) ||
+            i_this->field_0x68c > (1700.0f + YREG_F(5)))
+#endif
+        {
+#if TARGET_PC
+            i_this->mTimers[0] = b_bh_albwScaleAttackTimer(YREG_S(3) + 10);
+#else
             i_this->mTimers[0] = YREG_S(3) + 10;
+#endif
             i_this->mMode = 4;
         }
         break;
@@ -643,7 +773,15 @@ static void b_bh_b_attack_1(b_bh_class* i_this) {
         if (i_this->mTimers[0] == 0) {
             i_this->mAction = ACTION_B_WAIT;
             i_this->mMode = 0;
+#if TARGET_PC
+            if (b_bh_albwConductorActive(bq_p)) {
+                i_this->mTimers[0] = b_bh_albwScaleAttackTimer(8);
+            } else {
+                i_this->mTimers[0] = b_bh_albwScaleRoll(60.0f + cM_rndF(50.0f));
+            }
+#else
             i_this->mTimers[0] = 60.0f + cM_rndF(50.0f);
+#endif
             i_this->field_0x674.x = i_this->field_0x6b0.x + cM_rndFX(300.0f);
             i_this->field_0x674.z = i_this->field_0x6b0.z + cM_rndFX(300.0f);
             i_this->field_0x674.y = BREG_F(3) + (i_this->field_0x6b0.y + (550.0f * l_HIO.model_size) + cM_rndFX(200.0f));
@@ -1007,6 +1145,9 @@ static void damage_check(b_bh_class* i_this) {
         i_this->mAction = ACTION_WAIT;
         i_this->mMode = 1;
         i_this->mTimers[1] = l_HIO.attack_freq_a + cM_rndF(l_HIO.attack_freq_a);
+#if TARGET_PC
+        i_this->mTimers[1] = b_bh_albwScaleRoll((f32)i_this->mTimers[1]);
+#endif
         i_this->mTimers[0] = 0;
         anm_init(i_this, BCK_BH_NODAMAGE, 3.0f, 0, 1.0f);
         i_this->mSound.startCreatureVoice(Z2SE_EN_BH_V_NODAMAGE, -1);
@@ -1375,7 +1516,15 @@ static int daB_BH_Execute(b_bh_class* i_this) {
     MtxPosition(&sp30, &sp24);
 
     i_this->mCcSph.SetC(sp24);
+#if TARGET_PC
+    f32 atR = (100.0f + YREG_F(3)) * l_HIO.model_size;
+    if (dAlbwBossRefinement_isEnabled()) {
+        atR *= 1.02f;  // +2% head At sphere
+    }
+    i_this->mCcSph.SetR(atR);
+#else
     i_this->mCcSph.SetR((100.0f + YREG_F(3)) * l_HIO.model_size);
+#endif
 
     if (i_this->field_0x688 > 1000.0f && dComIfGp_checkPlayerStatus0(0, 0x80000)) {
         i_this->mTgSph.SetR(2.5f * ((100.0f + YREG_F(3)) * l_HIO.model_size));

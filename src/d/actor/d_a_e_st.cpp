@@ -13,7 +13,17 @@
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_lockout.h"
+#include "d/d_meter2_info.h"
 #endif
+
+static s16 albwStAimAngleY(fopAc_ac_c* i_actor) {
+#if TARGET_PC
+    if (dAlbwLockout_hasRivalTarget(i_actor)) {
+        return dAlbwLockout_getRivalAimAngleY(i_actor);
+    }
+#endif
+    return fopAcM_searchPlayerAngleY(i_actor);
+}
 
 enum E_st_RES_File_ID {
     /* BCK */
@@ -390,6 +400,32 @@ static BOOL pl_check(e_st_class* i_this, f32 i_distance) {
     if (player->current.pos.y - a_this->current.pos.y >= 750.0f || dComIfGp_event_runCheck()) {
         return FALSE;
     }
+
+#if TARGET_PC
+    if (dAlbwLockout_hasRivalTarget(a_this)) {
+        fopAc_ac_c* confuseTarget = dAlbwLockout_getRivalTarget(a_this);
+        if (confuseTarget == NULL) {
+            return FALSE;
+        }
+
+        f32 dist = dAlbwLockout_getRivalAimDistance(a_this);
+        if (dist >= i_distance) {
+            return FALSE;
+        }
+
+        pos_delta = confuseTarget->current.pos - a_this->current.pos;
+        cMtx_XrotS(*calc_mtx, -i_this->field_0x69c.x);
+        cMtx_YrotM(*calc_mtx, -i_this->field_0x69c.y);
+        MtxPosition(&pos_delta, &pos);
+        s16 angle = a_this->current.angle.y - cM_atan2s(pos.x, pos.z);
+
+        if (angle < 0x6000 && angle > -0x6000) {
+            return TRUE;
+        }
+
+        return FALSE;
+    }
+#endif
 
     if (i_this->mPlayerDistance < i_distance) {
         daPy_py_c* player = (daPy_py_c*)dComIfGp_getPlayer(0);
@@ -936,7 +972,7 @@ static void e_st_jump_attack(e_st_class* i_this) {
 
         case JUMP_ATTACK_PHASE_HUG:
             unk_flag = 1;
-            cLib_addCalcAngleS2(&a_this->current.angle.y, fopAcM_searchPlayerAngleY(a_this), 4, 0x1000);
+            cLib_addCalcAngleS2(&a_this->current.angle.y, albwStAimAngleY(a_this), 4, 0x1000);
             pos = daPy_getPlayerActorClass()->getHeadTopPos() - a_this->current.pos;
             cMtx_YrotS(*calc_mtx, cM_atan2s(pos.x, pos.z));
             cMtx_XrotM(*calc_mtx, -cM_atan2s(pos.y, JMAFastSqrt(pos.x * pos.x + pos.z * pos.z)));
@@ -1185,7 +1221,7 @@ static void e_st_hang(e_st_class* i_this) {
 
     cLib_addCalc2(&a_this->current.pos.y, i_this->mBgPos.y, 0.1f, a_this->speed.y);
     cLib_addCalc2(&a_this->speed.y, a_this->speedF, 1.0f, 0.5f);
-    cLib_addCalcAngleS2(&a_this->current.angle.y, fopAcM_searchPlayerAngleY(a_this), 0x10, 0x200);
+    cLib_addCalcAngleS2(&a_this->current.angle.y, albwStAimAngleY(a_this), 0x10, 0x200);
 
     if (i_this->arg1 == 0 && i_this->mTimers[1] == 0) {
         int _;
@@ -1287,7 +1323,7 @@ static void e_st_hang_shoot(e_st_class* i_this) {
     }
 
     cLib_addCalc2(&a_this->current.pos.y, i_this->mBgPos.y, 0.2f, 15.0f);
-    cLib_addCalcAngleS2(&a_this->current.angle.y, fopAcM_searchPlayerAngleY(a_this), 4, 0x1000);
+    cLib_addCalcAngleS2(&a_this->current.angle.y, albwStAimAngleY(a_this), 4, 0x1000);
 }
 
 static void e_st_hang_drop(e_st_class* i_this) {
@@ -1456,7 +1492,7 @@ static s8 e_st_hang_2(e_st_class* i_this) {
             break;
     }
 
-    cLib_addCalcAngleS2(&a_this->current.angle.y, fopAcM_searchPlayerAngleY(a_this), 0x10, 0x400);
+    cLib_addCalcAngleS2(&a_this->current.angle.y, albwStAimAngleY(a_this), 0x10, 0x400);
 
     if (unk_flag || (daPy_getPlayerActorClass()->getStCaught() && fopAcM_GetParam(a_this) == 1)) {
         i_this->mSound.startCreatureSound(Z2SE_EN_ST_SILK_RELEASE, 0, -1);
@@ -1515,7 +1551,7 @@ static void e_st_hang_2_shoot(e_st_class* i_this) {
             break;
     }
 
-    cLib_addCalcAngleS2(&a_this->current.angle.y, fopAcM_searchPlayerAngleY(a_this), 4, 0x1000);
+    cLib_addCalcAngleS2(&a_this->current.angle.y, albwStAimAngleY(a_this), 4, 0x1000);
 }
 
 static void e_st_s_damage(e_st_class* i_this) {
@@ -1536,7 +1572,7 @@ static void e_st_s_damage(e_st_class* i_this) {
             break;
     }
 
-    cLib_addCalcAngleS2(&a_this->current.angle.y, fopAcM_searchPlayerAngleY(a_this), 4, 0x1000);
+    cLib_addCalcAngleS2(&a_this->current.angle.y, albwStAimAngleY(a_this), 4, 0x1000);
 
     if (i_this->field_0x7e0 > 0.1f) {
         cXyz sp1c, sp28;
@@ -1842,6 +1878,17 @@ static void e_st_g_normal(e_st_class* i_this) {
     }
 }
 
+#if TARGET_PC
+static void e_st_confuse_idle(e_st_class* i_this) {
+    fopEn_enemy_c* a_this = (fopEn_enemy_c*)&i_this->actor;
+
+    a_this->speedF = 0.0f;
+    if (i_this->mAnm != BCK_ST_WAIT) {
+        anm_init(i_this, BCK_ST_WAIT, 10.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+    }
+}
+#endif
+
 static s8 e_st_g_fight(e_st_class* i_this) {
     fopEn_enemy_c* a_this = (fopEn_enemy_c*)&i_this->actor;
     cXyz sp64, sp70;
@@ -1864,8 +1911,19 @@ static s8 e_st_g_fight(e_st_class* i_this) {
             // fallthrough
         case G_FIGHT_PHASE_MOVE:
             maxStep = 0x400;
-            i_this->mAngleFromPlayer = fopAcM_searchPlayerAngleY(a_this);
+            i_this->mAngleFromPlayer = albwStAimAngleY(a_this);
             target = (VREG_F(2) + 3.5f) * l_HIO.basic_size;
+#if TARGET_PC
+            if (dAlbwLockout_hasRivalTarget(a_this)) {
+                maxStep = 0x800;
+                if (i_this->mPlayerDistance < combat_start_dist + 300.0f) {
+                    i_this->mActionPhase = G_FIGHT_PHASE_WAIT02;
+                    anm_init(i_this, BCK_ST_WAIT02, 5.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+                    i_this->mTimers[0] = 0;
+                    break;
+                }
+            } else
+#endif
             if (pl_check(i_this, combat_start_dist)) {
                 i_this->mActionPhase = G_FIGHT_PHASE_WAIT02;
                 anm_init(i_this, BCK_ST_WAIT02, 5.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
@@ -1875,7 +1933,12 @@ static s8 e_st_g_fight(e_st_class* i_this) {
         
         case G_FIGHT_PHASE_WAIT02:
             rv = true;
-            i_this->mAngleFromPlayer = fopAcM_searchPlayerAngleY(a_this);
+            i_this->mAngleFromPlayer = albwStAimAngleY(a_this);
+#if TARGET_PC
+            if (dAlbwLockout_hasRivalTarget(a_this)) {
+                i_this->mTimers[0] = 0;
+            }
+#endif
 
             if (i_this->mTimers[0] == 0) {
                 anm_init(i_this, BCK_ST_ATTACKA, 5.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
@@ -1922,13 +1985,27 @@ static s8 e_st_g_fight(e_st_class* i_this) {
     cLib_addCalcAngleS2(&a_this->current.angle.y, i_this->mAngleFromPlayer, 2, maxStep);
 
     if (isPreparingAttack && i_this->mPlayerDistance > combat_start_dist + 100.0f) {
-        i_this->mActionPhase = PHASE_INIT;
+#if TARGET_PC
+        if (!dAlbwLockout_hasRivalTarget(a_this))
+#endif
+        {
+            i_this->mActionPhase = PHASE_INIT;
+        }
     }
 
     if (!pl_check(i_this, l_HIO.pl_recognize_dist + 100.0f) || isStop) {
-        i_this->mAction = ACTION_G_NORMAL;
-        i_this->mActionPhase = PHASE_INIT;
-        rv = false;
+#if TARGET_PC
+        if (dAlbwLockout_hasRivalTarget(a_this)) {
+            if (isStop) {
+                i_this->mActionPhase = PHASE_INIT;
+            }
+        } else
+#endif
+        {
+            i_this->mAction = ACTION_G_NORMAL;
+            i_this->mActionPhase = PHASE_INIT;
+            rv = false;
+        }
     }
 
     if (i_this->mAtSph.ChkAtHit()) {
@@ -2034,7 +2111,7 @@ static void e_st_g_wind(e_st_class* i_this) {
         
         case G_WIND_PHASE_WINDDAMAGE:
 #if TARGET_PC
-            if (dAlbwLockout_isBoomerangStunActive(a_this)) {
+            if (dAlbwLockout_isSlingshotStunActive(a_this)) {
                 break;
             }
 #endif
@@ -2198,9 +2275,23 @@ static void damage_check_g(e_st_class* i_this) {
         if (i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_BOOMERANG)) {
             i_this->mAction = ACTION_G_WIND;
             i_this->mActionPhase = PHASE_INIT;
+            i_this->mInvulnerabilityTimer = 10;
+            return;
+        }
+
+        if (i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+#if TARGET_PC
+            if (dMeter2_isALBWLocked()) {
+                dAlbwLockout_onSlingshotHit(a_this);
+                i_this->mInvulnerabilityTimer = 10;
+                return;
+            }
+#endif
+            i_this->mAction = ACTION_G_WIND;
+            i_this->mActionPhase = PHASE_INIT;
             i_this->mInvulnerabilityTimer =
-                dAlbwLockout_getBoomerangStunFrames(10);
-            dAlbwLockout_onBoomerangHitNative(a_this);
+                dAlbwLockout_getSlingshotStunFrames(10);
+            dAlbwLockout_onSlingshotHitNative(a_this);
             return;
         }
 
@@ -2422,6 +2513,33 @@ static void action(e_st_class* i_this) {
     a_this->field_0x566 = 0;
     i_this->mSph.SetAtSpl((dCcG_At_Spl)0);
 
+#if TARGET_PC
+    s8 albwConfuseOverride = 0;
+    if (i_this->arg0 == 2 && dAlbwLockout_isConfused(a_this)) {
+        if (dAlbwLockout_getConfuseTarget(a_this) == NULL) {
+            e_st_confuse_idle(i_this);
+            albwConfuseOverride = 1;
+        } else if (i_this->mAction != ACTION_G_FIGHT && i_this->mAction != ACTION_G_DAMAGE &&
+                   i_this->mAction != ACTION_G_S_DAMAGE && i_this->mAction != ACTION_G_WIND &&
+                   i_this->mAction != ACTION_G_DEF)
+        {
+            i_this->mAction = ACTION_G_FIGHT;
+            i_this->mActionPhase = PHASE_INIT;
+        }
+    } else if (i_this->arg0 == 2 && dAlbwLockout_isProvoked(a_this)) {
+        if (dAlbwLockout_getProvokeSource(a_this) == NULL) {
+            albwConfuseOverride = 1;
+        } else if (i_this->mAction != ACTION_G_FIGHT && i_this->mAction != ACTION_G_DAMAGE &&
+                   i_this->mAction != ACTION_G_S_DAMAGE && i_this->mAction != ACTION_G_WIND &&
+                   i_this->mAction != ACTION_G_DEF)
+        {
+            i_this->mAction = ACTION_G_FIGHT;
+            i_this->mActionPhase = PHASE_INIT;
+        }
+    }
+
+    if (!albwConfuseOverride) {
+#endif
     switch (i_this->mAction) {
         case ACTION_WAIT:
             e_st_wait(i_this);
@@ -2572,6 +2690,9 @@ static void action(e_st_class* i_this) {
             i_this->field_0xa58 = 2;
             break;
     }
+#if TARGET_PC
+    }
+#endif
 
     if (isLinkSearch) {
         i_this->mSound.setLinkSearch(true);
@@ -2709,6 +2830,11 @@ static int daE_ST_Execute(e_st_class* i_this) {
     cXyz pos, sph_center;
 
     i_this->mPlayerDistance = fopAcM_searchPlayerDistance(a_this);
+#if TARGET_PC
+    if (dAlbwLockout_hasRivalTarget(a_this)) {
+        i_this->mPlayerDistance = dAlbwLockout_getRivalAimDistance(a_this);
+    }
+#endif
     f32 scale = l_HIO.basic_size;
     if (small) {
         scale = 1.0f;
@@ -2849,6 +2975,9 @@ static int daE_ST_Execute(e_st_class* i_this) {
     }
     i_this->mAtSph.SetC(sph_center);
     i_this->mAtSph.SetR((JREG_F(5) + 30.0f) * scale);
+#if TARGET_PC
+    dAlbwLockout_syncConfuseAtBits(a_this, &i_this->mAtSph);
+#endif
     dComIfG_Ccsp()->Set(&i_this->mAtSph);
 
     if (i_this->arg0 == 2) {

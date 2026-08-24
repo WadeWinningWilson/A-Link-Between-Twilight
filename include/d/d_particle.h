@@ -109,10 +109,13 @@ public:
     virtual void drawAfter(JPABaseEmitter* param_0) { cleanupModel(param_0); }
     virtual void setup(JPABaseEmitter*, cXyz const*, csXyz const*, s8);
 
-    static void setModel(JPABaseEmitter* param_0, J3DModelData* param_1,
-                         const dKy_tevstr_c& param_2, u8 param_3, J3DAnmTexPattern* param_4,
-                         u8 param_5) {
-        setModel(param_0, param_1, param_2, param_3, param_4, 0, param_5);
+    // [WwTsubo-probe] §832: return propagated — the 7-arg form reports a
+    // busy/failed model slot (int) and this wrapper silently discarded it;
+    // an ignored false here is an INVISIBLE shatter.
+    static int setModel(JPABaseEmitter* param_0, J3DModelData* param_1,
+                        const dKy_tevstr_c& param_2, u8 param_3, J3DAnmTexPattern* param_4,
+                        u8 param_5) {
+        return setModel(param_0, param_1, param_2, param_3, param_4, 0, param_5);
     }
 
     static dPa_modelEcallBack& getEcallback() { return mEcallback; }
@@ -507,6 +510,12 @@ public:
     // supplemental resource slot so the recovery orb renders in stages whose
     // own archive lacks them (dungeons). Async; returns true once available.
     bool ensureTearSceneRes();
+    // Ferry W-LINE: WW common.jpc (0x0031) in emitter-manager slot 3.
+    bool ensureWwWindlineRes();
+    // Ferry V-d (§201): any WW-common id (0x0031 windline, 0x03DA/0x03DB grass),
+    // one supplemental slot each — lazy-loaded on first resolve.
+    bool ensureWwCommonRes(u16 i_resID);
+    bool hasWwWindlineRes(u16 i_resID) const;
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================

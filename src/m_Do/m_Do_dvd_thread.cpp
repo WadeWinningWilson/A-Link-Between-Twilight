@@ -224,6 +224,9 @@ mDoDvdThd_mountArchive_c* mDoDvdThd_mountArchive_c::create(char const* pArchiveP
         JKR_NEW_ARGS (mDoExt_getCommandHeap(), -4) mDoDvdThd_mountArchive_c(mountDirection);
     if (mountArcCmd != NULL) {
         mountArcCmd->mEntryNumber = my_DVDConvertPathToEntrynum(pArchivePath);
+        // NOTE: on PC, mod overrides for this arc are served transparently by the
+        // Aurora DVD overlay (dusk::custom_assets, Layer A) — my_DVDConvertPath
+        // above already resolves to the overlay entry, so no special-casing here.
         if (mountArcCmd->mEntryNumber == -1) {
             mountArcCmd->mIsDone = true;
             JKR_DELETE(mountArcCmd);

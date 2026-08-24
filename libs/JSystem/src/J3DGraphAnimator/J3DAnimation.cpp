@@ -1,6 +1,9 @@
 #include "JSystem/JSystem.h" // IWYU pragma: keep
 
 #include "JSystem/J3DGraphAnimator/J3DAnimation.h"
+#if TARGET_PC
+extern "C" float dusk_world_sim_time_scale;
+#endif
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"
 #include "JSystem/J3DGraphBase/J3DStruct.h"
 #include "JSystem/JMath/JMath.h"
@@ -134,8 +137,16 @@ int J3DFrameCtrl::checkPass(f32 passFrame) {
 
 
 void J3DFrameCtrl::update() {
+#if TARGET_PC
+    updateWithRateScale(dusk_world_sim_time_scale);
+#else
+    updateWithRateScale(1.0f);
+#endif
+}
+
+void J3DFrameCtrl::updateWithRateScale(f32 rateScale) {
     mState = 0;
-    mFrame += mRate;
+    mFrame += mRate * rateScale;
 
     switch (mAttribute) {
     case EMode_NONE:

@@ -28,13 +28,21 @@
 #if TARGET_PC
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_master_quest.h"
+#include "d/d_albw_outfit.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_wardrobe.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
+#include "d/d_albw_sumo_test.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_potion.h"
 #include "d/d_attention.h"
 #include "d/actor/d_a_player.h"
 #include "d/actor/d_a_alink.h"
+#include "d/actor/d_a_midna.h"
 #include "dusk/action_bindings.h"
+#include "dusk/leveledit/enumerate.hpp"
 #include "dusk/memory.h"
 #include "dusk/settings.h"
 #include <chrono>
@@ -93,8 +101,10 @@ static std::chrono::steady_clock::time_point sLastRecoveryTime = std::chrono::st
 // ============================================
 static std::chrono::steady_clock::time_point sLastSpinnerDrainTime = std::chrono::steady_clock::now();
 static std::chrono::steady_clock::time_point sLastDomRodDrainTime  = std::chrono::steady_clock::now();
+static std::chrono::steady_clock::time_point sLastDekuLeafDrainTime = std::chrono::steady_clock::now();
 static bool sSpinnerActive        = false;
 static bool sDomRodActive         = false;
+static bool sDekuLeafActive       = false;
 static bool sHookshotFire         = false;
 static bool sDoubleHookshotFire   = false;
 static bool sALBWArmorDepleted    = false;
@@ -135,10 +145,12 @@ static bool sALBWPlayerIdle = false;
 // NEW CODE — ALBW Port
 // Meter lockout latch.
 // Set when internal sALBWMeter reaches zero or below (debt); cleared at sOilMaxVar.
-// Spending may push the meter negative on the action that caused depletion; HUD
-// shows max(0, internal) until debt is repaid. Lockout blocks new sword/agility/
+// Pre-lockout: depleting actions may overspend down to kALBWMaxDebt (-5450);
+// HUD shows max(0, internal) until debt is repaid. Lockout: further drains floor
+// at 0 so item uses cannot dig endlessly. Lockout blocks new sword/agility/
 // hidden-skill actions; the proc already in progress is not interrupted.
-// Spinner and Dominion Rod are blocked while internal meter <= 0.
+// Spinner and Dominion Rod statue control are blocked while internal meter <= 0.
+// Dom Rod confuse throw is allowed during lockout (see canALBWDomRodConfuseThrow).
 // sALBWMovementExhausted clears at sOilBaseMax; lockout perks still apply until full.
 // ============================================
 static bool sALBWLocked = false;
@@ -269,8 +281,51 @@ static void albwRefreshLockoutState(bool i_playDecSound) {
     }
 }
 
+#if TARGET_PC
+#include "d/d_save.h"
+#include "d/d_item_data.h"
+
+// Big quiver 75% / Giant 50%. Bomb: base 100%, Giant bag (×2 max) 50%.
+static int scaleAlbwQuiverDrain(int base) {
+    const u8 arrowMax = dComIfGs_getArrowMax();
+    if (arrowMax >= GIANT_QUIVER_MAX) {
+        return (base * 50) / 100;
+    }
+    if (arrowMax >= BIG_QUIVER_MAX) {
+        return (base * 75) / 100;
+    }
+    return base;
+}
+
+static int scaleAlbwBombDrain(int base) {
+    // TP only has base bag vs Giant (LV2 first-bit doubles max via getBombMax).
+    const u8 bombMax = dComIfGs_getBombMax(dItemNo_NORMAL_BOMB_e);
+    if (bombMax >= 60) {
+        return (base * 50) / 100;
+    }
+    return base;
+}
+#endif
+
+// Max repayable overspend before lockout (one half-base / HS-sized spend).
+static constexpr int kALBWMaxDebt = -5450;
+
 static void albwDrainMeter(int amount, const std::chrono::steady_clock::time_point& i_now) {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
     sALBWMeter -= amount;
+    if (sALBWLocked) {
+        // Lockout: no further dig past empty.
+        if (sALBWMeter < 0) {
+            sALBWMeter = 0;
+        }
+    } else if (sALBWMeter < kALBWMaxDebt) {
+        // Pre-lockout: allow repayable debt down to one half-meter overspend.
+        sALBWMeter = kALBWMaxDebt;
+    }
     sLastRecoveryTime = i_now;
     albwRefreshLockoutState(true);
 }
@@ -299,6 +354,14 @@ static int albwLockoutRecoveryRate() {
 
     return expansion / kALBWLockoutExpandRecoveryTicks;
 }
+
+int dMeter2_getALBWNormalRecoveryRate() {
+    return computeALBWRecoveryRate();
+}
+
+int dMeter2_getALBWLockoutRecoveryRate() {
+    return albwLockoutRecoveryRate();
+}
 // ============================================
 // NEW CODE ENDS HERE
 // ============================================
@@ -321,9 +384,6 @@ static int albwLockoutRecoveryRate() {
 #if TARGET_PC
 void dMeter2_onALBWSling() {
     sSlingMade = true;
-    if (sALBWLocked) {
-        dAlbwLockout_onSlingFired();
-    }
 }
 
 void dMeter2_onALBWBoom() {
@@ -377,14 +437,13 @@ static bool dMeter2_isALBWLockoutZTargetRecovery() {
     return attn != NULL && attn->Lockon();
 }
 
-// Continuous-drain items are forced off when internal meter is at or below zero.
-bool dMeter2_canALBWSpinner() { return sALBWMeter > 0; }
+// Spinner: mount while meter > 0, or during lockout (lockout perk: +15% ride speed).
+// Continuous drain still runs while unlocked; during lockout drain floors at 0.
+bool dMeter2_canALBWSpinner() { return sALBWLocked || sALBWMeter > 0; }
 bool dMeter2_canALBWDomRod() { return sALBWMeter > 0; }
+bool dMeter2_canALBWDomRodConfuseThrow() { return sALBWLocked; }
 
 bool dMeter2_canALBWSling() {
-    if (sALBWLocked) {
-        return dAlbwLockout_canFireSling();
-    }
     return true;
 }
 
@@ -402,6 +461,13 @@ bool dMeter2_canALBWArrow() {
 bool dMeter2_canALBWBomb() {
     if (sALBWLocked) {
         return true;
+    }
+    return true;
+}
+
+bool dMeter2_canALBWBombling() {
+    if (sALBWLocked) {
+        return dAlbwLockout_canUseBombling();
     }
     return true;
 }
@@ -430,6 +496,22 @@ bool dMeter2_canALBWIronball() {
 void dMeter2_onALBWSpinner()  { sSpinnerActive = true; }
 void dMeter2_onALBWDomRod()   { sDomRodActive  = true; }
 bool dMeter2_isALBWDepleted() { return sALBWMeter <= 0; }
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide)
+// Continuous drain, modelled on the Spinner. Rate is faithful to WW: the Deku
+// Leaf there burns 1 magic unit per 40 game updates at 30Hz = 0.75 magic/sec off
+// a 32-point bar = 2.34% of the bar per second. Scaled onto sOilBaseMax (10900)
+// that is ~255 units/sec = ~26 per 100ms tick, giving ~43s of glide at base tier.
+// WW also charges 1 unit up front when the glide starts (32nd of the bar).
+// Costs are fixed fractions of sOilBaseMax, so meter upgrades buy longer glides
+// rather than changing the per-second burn (matches the other ALBW item costs).
+// ============================================
+void dMeter2_onALBWDekuLeaf() { sDekuLeafActive = true; }
+bool dMeter2_canALBWDekuLeaf() { return sALBWMeter > 0; }
+void dMeter2_onALBWDekuLeafStart() {
+    // up-front charge = 1/32 of the base meter, mirroring WW's initial -1 magic
+    albwDrainMeter(sOilBaseMax / 32, std::chrono::steady_clock::now());
+}
 // ============================================
 // NEW CODE — ALBW Port
 // Clawshot drain signals and pre-fire gates.
@@ -468,27 +550,48 @@ bool dMeter2_canALBWDoubleHookshot() {
 // Gate functions let the procInit caller decide whether to proceed:
 //   canALBWSword/Sidestep/BackJump/RollJump/HiddenSkill: blocked while sALBWLocked
 //     (internal meter at or below zero). No minimum meter while unlocked — a
-//     started action may push the meter into debt; lockout blocks the next action.
+//     started action may drain to 0 and enter lockout; lockout blocks the next action.
 //   Ranged/items: no minimum while unlocked; lockout perks apply while locked.
 // ============================================
 void dMeter2_onALBWSword() {
 #if TARGET_PC
-    if (dFocusedArts_shouldSuppressAlbwMeterDrain()) {
+    if (dFlurryRush_shouldSuppressAlbwSpend() || dFocusedArts_shouldSuppressAlbwMeterDrain()) {
         return;
     }
 #endif
     sSwordSwing = true;
 }
-void dMeter2_onALBWSidestep()    { sSidestep    = true; }
-void dMeter2_onALBWBackJump()    { sBackJump    = true; }
-void dMeter2_onALBWRollJump()    { sRollJump    = true; }
+void dMeter2_onALBWSidestep() {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
+    sSidestep = true;
+}
+void dMeter2_onALBWBackJump() {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
+    sBackJump = true;
+}
+void dMeter2_onALBWRollJump() {
+#if TARGET_PC
+    if (dFlurryRush_shouldSuppressAlbwSpend()) {
+        return;
+    }
+#endif
+    sRollJump = true;
+}
 void dMeter2_onALBWHiddenSkill() {
     if (sHiddenSkill) {
         return;
     }
 
 #if TARGET_PC
-    if (dFocusedArts_shouldSuppressAlbwMeterDrain()) {
+    if (dFlurryRush_shouldSuppressAlbwSpend() || dFocusedArts_shouldSuppressAlbwMeterDrain()) {
         return;
     }
 #endif
@@ -509,8 +612,9 @@ void dMeter2_commitALBWHiddenSkillIfPending() {
     commitALBWHiddenSkillDrain(std::chrono::steady_clock::now());
 }
 // Sword, agility, and hidden skills: no minimum meter while lockout is clear
-// (drain may push internal meter into debt). Once internal hits zero, lockout
-// latches and NEW actions are blocked — the current animation still finishes.
+// (drain may push internal meter into debt down to kALBWMaxDebt). Once
+// internal hits zero, lockout latches and NEW actions are blocked — the
+// current animation still finishes.
 bool dMeter2_canALBWSword()       { return !sALBWLocked; }
 bool dMeter2_canALBWSidestep()    { return !sALBWLocked; }
 bool dMeter2_canALBWBackJump()    { return !sALBWLocked; }
@@ -614,8 +718,27 @@ void dMeter2_addALBWFraction(int numerator, int denominator) {
     albwRefreshLockoutState(false);
 }
 
+void dMeter2_addALBWBaseFraction(int numerator, int denominator) {
+    if (denominator <= 0) {
+        return;
+    }
+    int amount = (sOilBaseMax * numerator) / denominator;
+    sALBWMeter += amount;
+    if (sALBWMeter > sOilMaxVar) {
+        sALBWMeter = sOilMaxVar;
+    }
+    albwRefreshLockoutState(false);
+}
+
 void dMeter2_subALBWFraction(int numerator, int denominator) {
     int amount = (sOilMaxVar * numerator) / denominator;
+    albwDrainMeter(amount, std::chrono::steady_clock::now());
+}
+
+void dMeter2_drainALBWAmount(int amount) {
+    if (amount <= 0) {
+        return;
+    }
     albwDrainMeter(amount, std::chrono::steady_clock::now());
 }
 
@@ -771,17 +894,43 @@ bool dMeter2_playerOwnsRentalItem(u8 itemNo) {
 }
 
 void dMeter2_stripRentalItemOnDeath(u8 itemNo) {
+    // ============================================
+    // Magic Armor (alpha cleanup): handled BEFORE the worn-only ownership
+    // gate below, which made the strip a no-op whenever the player died
+    // with Magic owned-but-not-worn — the wardrobe/outfit system tracks
+    // ownership via its own stash bit that the old strip never consulted,
+    // so Magic silently survived every death. New behavior: death
+    // CONFISCATES Magic into Postman wardrobe storage (stored bit set,
+    // ownership kept — clearing ownership while stored would orphan it,
+    // since Retrieve never re-grants the stash bit). Save-state only; no
+    // clothes-change rebuild fires here (respawn rebuilds the model), so
+    // none of the sumo/cap swap-crash classes are reachable. The clothes
+    // reset to Hero's stays synchronous with the confiscation so the
+    // per-frame syncWornOwnership latch seeds Hero's, not Magic.
+    // onALBWRentalEligible is kept: the Deity gate reads that permanent
+    // bit and must survive Magic loss.
+    // ============================================
+    if (itemNo == (u8)dItemNo_ARMOR_e) {
+        const bool worn = dComIfGs_getSelectEquipClothes() == itemNo;
+        const bool owned = dAlbwOutfit_isOwned(D_ALBW_OUTFIT_MAGIC);
+        if (!worn && !owned && !dComIfGs_isItemFirstBit(itemNo)) {
+            return;
+        }
+        dMeter2_onALBWRentalEligible(itemNo);
+        dComIfGs_offItemFirstBit(itemNo);
+        if (worn) {
+            dComIfGs_setSelectEquipClothes((u8)dItemNo_WEAR_KOKIRI_e);
+        }
+        if (owned && !dAlbwWardrobe_isStoredOutfit(D_ALBW_OUTFIT_MAGIC)) {
+            dAlbwWardrobe_storeOutfitOnDeath(D_ALBW_OUTFIT_MAGIC);
+        }
+        return;
+    }
+
     if (!dMeter2_playerOwnsRentalItem(itemNo)) {
         return;
     }
     dMeter2_onALBWRentalEligible(itemNo);
-    if (itemNo == (u8)dItemNo_ARMOR_e) {
-        dComIfGs_offItemFirstBit(itemNo);
-        if (dComIfGs_getSelectEquipClothes() == itemNo) {
-            dComIfGs_setSelectEquipClothes((u8)dItemNo_WEAR_KOKIRI_e);
-        }
-        return;
-    }
     dMeter2_clearAllPossessionForms(itemNo);
 }
 
@@ -793,6 +942,15 @@ void dMeter2_stripAllALBWInventoryOnDeath() {
     if (dComIfGs_isItemFirstBit((u8)dItemNo_DEITY_ARMOR_e)) {
         dComIfGs_offItemFirstBit((u8)dItemNo_DEITY_ARMOR_e);
     }
+    // ============================================
+    // Deity wardrobe coherence (outfit-tab migration): purchases now also
+    // record wardrobe stash ownership (bit 695), so death must clear the
+    // stash + stored bits alongside the ability first-bit — the same
+    // 694/711 coherence rule the Magic confiscation follows (an owned-but-
+    // stored orphan would linger in wardrobe UIs otherwise).
+    // ============================================
+    dComIfGs_offEventBit(dSv_event_flag_c::saveBitLabels[695]);
+    dComIfGs_offEventBit(dSv_event_flag_c::saveBitLabels[712]);
 }
 
 static const u8 sShieldRentalItemNos[3] = {
@@ -801,10 +959,11 @@ static const u8 sShieldRentalItemNos[3] = {
     (u8)dItemNo_HYLIA_SHIELD_e,
 };
 static constexpr int kShieldRentalEligibleBase = 685; // saveBitLabels[685..687]
-// Dusk: one-time shop upgrade — hold Ordon/Wooden/Hylian shields simultaneously (max 3).
-static constexpr int kMultiShieldUpgradeBit = 688; // saveBitLabels[688] — future shop purchase
-static constexpr int kMaxOwnedShieldsDefault = 1;
-static constexpr int kMaxOwnedShieldsUpgraded = 3;
+// Dusk: legacy multi-shield shop upgrade bit. The "one shield at a time" cap it
+// used to gate has been retired — shields are always carried simultaneously now —
+// so this bit and its getter/setter are inert. Kept only to avoid reshuffling
+// save-bit labels; safe to remove in a future save-format pass.
+static constexpr int kMultiShieldUpgradeBit = 688; // saveBitLabels[688] — inert (legacy)
 
 static void dMeter2_setCollectShieldForItem(u8 itemNo) {
     switch (itemNo) {
@@ -834,10 +993,6 @@ static void dMeter2_ensureShieldOwned(u8 itemNo) {
     dMeter2_setCollectShieldForItem(itemNo);
 }
 
-static int dMeter2_getMaxOwnedShields() {
-    return dMeter2_playerHasMultiShieldUpgrade() ? kMaxOwnedShieldsUpgraded : kMaxOwnedShieldsDefault;
-}
-
 bool dMeter2_isShieldItem(u8 itemNo) {
     return itemNo == (u8)dItemNo_WOOD_SHIELD_e || itemNo == (u8)dItemNo_SHIELD_e ||
            itemNo == (u8)dItemNo_HYLIA_SHIELD_e;
@@ -850,13 +1005,6 @@ bool dMeter2_playerHasAnyShield() {
     return dComIfGs_isItemFirstBit((u8)dItemNo_WOOD_SHIELD_e) ||
            dComIfGs_isItemFirstBit((u8)dItemNo_SHIELD_e) ||
            dComIfGs_isItemFirstBit((u8)dItemNo_HYLIA_SHIELD_e);
-}
-
-static void dMeter2_clearAllShieldPossession() {
-    dComIfGs_offItemFirstBit((u8)dItemNo_WOOD_SHIELD_e);
-    dComIfGs_offItemFirstBit((u8)dItemNo_SHIELD_e);
-    dComIfGs_offItemFirstBit((u8)dItemNo_HYLIA_SHIELD_e);
-    dMeter2Info_setShield(dItemNo_NONE_e, false);
 }
 
 bool dMeter2_playerHasMultiShieldUpgrade() {
@@ -983,12 +1131,12 @@ bool dMeter2_grantShieldOwnership(u8 itemNo) {
         return false;
     }
 
-    if (!dMeter2_playerHasMultiShieldUpgrade() && dMeter2_playerHasAnyShield() &&
-        !dMeter2_shieldIsOwned(itemNo))
-    {
-        dMeter2_clearAllShieldPossession();
-    }
-
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Shields now stack (one of each tier). The old "replace the previous shield"
+    // wipe is retired — grant simply marks this tier owned and leaves any other
+    // owned shields intact. Carry weight lives in Outfit Stats, not ownership.
+    // ============================================
     dMeter2_ensureShieldOwned(itemNo);
     return true;
 }
@@ -998,20 +1146,16 @@ bool dMeter2_canAcquireShield(u8 itemNo) {
         return true;
     }
 
-    if (dMeter2_shieldIsOwned(itemNo)) {
-        return true;
-    }
-
-    if (dMeter2_countOwnedShields() == 0) {
-        return true;
-    }
-
-    if (dMeter2_playerHasMultiShieldUpgrade()) {
-        return dMeter2_countOwnedShields() < dMeter2_getMaxOwnedShields();
-    }
-
-    // Default: one shield at a time — rental/grant replaces the previous shield.
-    return false;
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Shields are carried simultaneously now — the one-shield-at-a-time cap (and
+    // the never-shipped multi-shield shop upgrade that used to lift it) are
+    // retired. Carry weight is modeled via Outfit Stats (heavier loadouts slow
+    // ALBW meter recovery), so shield ownership itself is unconstrained. Each
+    // tier is a distinct item first-bit, so this naturally caps at one of each
+    // (Ordon / Wooden / Hylian); re-acquiring an owned tier is a no-op grant.
+    // ============================================
+    return dMeter2_shieldIsOwned(itemNo) || dMeter2_countOwnedShields() < 3;
 }
 
 void dMeter2_onShieldDestroyedForRental(u8 itemNo) {
@@ -1055,12 +1199,27 @@ bool dMeter2_isCasualWearEligible() {
     return dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[47]);
 }
 
+bool dMeter2_isHerosWearEligible() {
+    return dComIfGs_isCollectClothes(KOKIRI_CLOTHES_FLAG) != 0 ||
+           dComIfGs_isItemFirstBit((u8)dItemNo_WEAR_KOKIRI_e) != 0;
+}
+
+bool dMeter2_isZoraWearEligible() {
+    return dComIfGs_isItemFirstBit((u8)dItemNo_WEAR_ZORA_e) != 0;
+}
+
 // Grant + auto-equip a clothes item and trigger the model swap, mirroring the
 // vanilla collection-menu equip path (setSelectEquipClothes + setClothesChange).
 void dMeter2_grantRentalClothes(u8 itemNo) {
     dComIfGs_onItemFirstBit(itemNo);
     dComIfGs_setSelectEquipClothes(itemNo);
     dComIfGp_setSelectEquipClothes(itemNo);
+#if TARGET_PC
+    // Sumo overlay revert owns the setClothesChange(0) when the body is swapped in.
+    if (dAlbwSumoTest_isOutfitActive()) {
+        return;
+    }
+#endif
     if (daPy_getPlayerActorClass() != NULL) {
         daPy_getPlayerActorClass()->setClothesChange(0);
     }
@@ -1402,10 +1561,16 @@ int dMeter2_c::_execute() {
     dMeter2Info_allUseButton();
     dMeter2Info_offUseButton(0x800);
 #if TARGET_PC
-    if (dusk::isExtraItemSlotEnabled() && !daPy_getPlayerActorClass()->checkWolf()) {
-        const u8 zItem = dComIfGp_getSelectItem(SELECT_ITEM_DOWN);
-        if (zItem != dItemNo_NONE_e && zItem != 0) {
-            dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+    if (dusk::isExtraItemSlotEnabled()) {
+        if (!daPy_getPlayerActorClass()->checkWolf()) {
+            const u8 zItem = dComIfGp_getSelectItem(SELECT_ITEM_DOWN);
+            if (zItem != dItemNo_NONE_e && zItem != 0) {
+                dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+            }
+        } else if (daMidna_c* midna = daPy_py_c::getMidnaActor()) {
+            if (midna->checkMetamorphoseEnableBase()) {
+                dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+            }
         }
     }
 #endif
@@ -1424,7 +1589,7 @@ int dMeter2_c::_execute() {
 int dMeter2_c::_draw() {
     #if TARGET_PC
     if (dusk::getSettings().game.recordingMode || dusk::getSettings().game.minimalHUD ||
-        dusk::getSettings().game.debugFlyCam)
+        dusk::leveledit::editor_fly_cam_active())
     {
         return 1;
     }
@@ -1711,7 +1876,8 @@ void dMeter2_c::moveLife() {
             }
         }
 
-        s16 new_life = dComIfGs_getLife() + dComIfGp_getItemLifeCount();
+        s16 old_life = dComIfGs_getLife();
+        s16 new_life = old_life + dComIfGp_getItemLifeCount();
         if (new_life > life_count) {
             new_life = life_count;
         } else if (new_life < 0) {
@@ -1720,6 +1886,16 @@ void dMeter2_c::moveLife() {
 
         dComIfGs_setLife((u8)new_life);
         dComIfGp_clearItemLifeCount();
+#if TARGET_PC
+        {
+            const int delta = static_cast<int>(new_life) - static_cast<int>(old_life);
+            if (delta > 0) {
+                dParryMaster_onHeal(delta);
+            } else if (new_life == 0) {
+                dParryMaster_clearQueue();
+            }
+        }
+#endif
 
         if (mNowLifeGauge == dComIfGs_getLife() && mLifeCountType != 0) {
             mLifeCountType = 0;
@@ -2002,17 +2178,22 @@ void dMeter2_c::moveKantera() {
         // ============================================
 
         if (sBombArrowMade) {
-            albwDrainMeter(kALBWBombArrowDrain, sNow);
+            // Comment on kALBWBombArrowDrain: 5450 arrow + 2725 bomb.
+            const int bombArrowCost =
+                scaleAlbwQuiverDrain(5450) + scaleAlbwBombDrain(2725);
+            albwDrainMeter(bombArrowCost, sNow);
             sBombArrowMade = false;
         } else if (sArrowMade) {
-            albwDrainMeter(5450, sNow);
+            albwDrainMeter(scaleAlbwQuiverDrain(5450), sNow);
             sArrowMade = false;
         } else if (sBombAmmo) {
-            albwDrainMeter(5450, sNow);
+            albwDrainMeter(scaleAlbwBombDrain(5450), sNow);
             sBombAmmo = false;
         } else if (sBoomThrow) {
             if (sALBWLocked) {
-                dMeter2_addALBWFraction(3, 20);
+                // 30% of base meter capacity during lockout.
+                sALBWMeter += (sOilBaseMax * 3) / 10;
+                albwRefreshLockoutState(false);
             } else {
                 albwDrainMeter(2725, sNow);
             }
@@ -2087,6 +2268,24 @@ void dMeter2_c::moveKantera() {
             sSpinnerActive = false;
         }
         // ============================================
+        // NEW CODE — ALBW Port
+        // Continuous drain: Deku Leaf glide
+        // sDekuLeafActive is set every frame by the glide proc while airborne.
+        // Fixed rate (not tier-scaled): WW's 0.75 magic/sec off a 32-point bar
+        // = 2.34%/sec, which on sOilBaseMax 10900 is ~26 units per 100ms tick.
+        // Base tier -> ~43s of glide; meter upgrades extend that, matching how
+        // the other ALBW costs stay pinned to sOilBaseMax fractions.
+        // ============================================
+        if (sDekuLeafActive) {
+            auto msLeaf = std::chrono::duration_cast<std::chrono::milliseconds>(
+                sNow - sLastDekuLeafDrainTime).count();
+            if (msLeaf >= 100) {
+                albwDrainMeter((sOilBaseMax * 234) / 100000, sNow);  // 2.34%/sec -> per 100ms
+                sLastDekuLeafDrainTime = sNow;
+            }
+            sDekuLeafActive = false;
+        }
+        // ============================================
         // NEW CODE ENDS HERE
         // ============================================
 
@@ -2114,7 +2313,7 @@ void dMeter2_c::moveKantera() {
         // ============================================
         // NEW CODE — ALBW Port
         // Passive recovery: normal rates while unlocked; faster 7s/3s rates during lockout.
-        // Internal meter may be negative (debt); HUD shows max(0, internal).
+        // Internal meter may be negative (pre-lockout debt); HUD shows max(0, internal).
         // ============================================
         const int sNormalRecovery = computeALBWRecoveryRate();
         const bool sALBWGuarding = dMeter2_isALBWRecoveryPausedByGuard();
@@ -2125,6 +2324,14 @@ void dMeter2_c::moveKantera() {
             allowPassiveRecovery = allowPassiveRecovery && dMeter2_isALBWLockoutZTargetRecovery();
         } else if (sALBWPlayerIdle) {
             sRecoveryRate = (sNormalRecovery * 105) / 100;
+        }
+
+        const f32 wardrobeMult = dAlbwWardrobe_getRecoveryMult();
+        if (wardrobeMult < 0.999f) {
+            sRecoveryRate = static_cast<int>(static_cast<f32>(sRecoveryRate) * wardrobeMult);
+            if (sRecoveryRate < 1) {
+                sRecoveryRate = 1;
+            }
         }
 
         sALBWPlayerIdle = false;
@@ -2488,31 +2695,32 @@ void dMeter2_c::moveLightDrop() {
 }
 
 void dMeter2_c::moveRupee() {
-    s16 temp_r5;
-    s32 temp_r0;
-
-    temp_r5 = dComIfGs_getRupeeMax();
-    s16 r29 = 0;
+    // ============================================
+    // MODIFIED CODE — ALBW Port (Phase C1)
+    // s32 clamp/tick so Colossal 50k does not truncate in s16.
+    // ============================================
+    const s32 rupeeMax = static_cast<s32>(dComIfGs_getRupeeMax());
+    s32 pending = 0;
     bool draw_rupee = false;
 
     if (dComIfGp_getItemRupeeCount() != 0) {
-        r29 = dComIfGs_getRupee() + dComIfGp_getItemRupeeCount();
-        if (r29 > temp_r5) {
-            r29 = temp_r5;
-        } else if (r29 < 0) {
-            r29 = 0;
+        pending = static_cast<s32>(dComIfGs_getRupee()) + dComIfGp_getItemRupeeCount();
+        if (pending > rupeeMax) {
+            pending = rupeeMax;
+        } else if (pending < 0) {
+            pending = 0;
         }
 
-        dComIfGs_setRupee(r29);
+        dComIfGs_setRupee(static_cast<u16>(pending));
         dComIfGp_clearItemRupeeCount();
 
-        if (dComIfGs_getRupee() - mRupeeNum >= 5) {
+        if (static_cast<s32>(dComIfGs_getRupee()) - mRupeeNum >= 5) {
             onRupeeSoundBit(2);
             if (isRupeeSoundBit(3)) {
                 offRupeeSoundBit(3);
                 offRupeeSoundBit(1);
             }
-        } else if (dComIfGs_getRupee() - mRupeeNum <= -5) {
+        } else if (static_cast<s32>(dComIfGs_getRupee()) - mRupeeNum <= -5) {
             onRupeeSoundBit(3);
             if (isRupeeSoundBit(2)) {
                 offRupeeSoundBit(2);
@@ -2521,13 +2729,14 @@ void dMeter2_c::moveRupee() {
         }
     }
 
-    if (mRupeeNum != dComIfGs_getRupee()) {
-        if (mRupeeNum < dComIfGs_getRupee()) {
+    const s32 savedRupee = static_cast<s32>(dComIfGs_getRupee());
+    if (mRupeeNum != savedRupee) {
+        if (mRupeeNum < savedRupee) {
             mRupeeNum++;
             draw_rupee = true;
 
             if (isRupeeSoundBit(2) & 1) {
-                if (mRupeeNum != dComIfGs_getRupee()) {
+                if (mRupeeNum != savedRupee) {
                     if (!isRupeeSoundBit(0)) {
                         onRupeeSoundBit(0);
                         mDoAud_seStart(Z2SE_LUPY_INC_CNT_1, NULL, 0, 0);
@@ -2540,12 +2749,12 @@ void dMeter2_c::moveRupee() {
                     offRupeeSoundBit(0);
                 }
             }
-        } else if (mRupeeNum > dComIfGs_getRupee()) {
+        } else if (mRupeeNum > savedRupee) {
             mRupeeNum--;
             draw_rupee = true;
 
             if (isRupeeSoundBit(3) & 1) {
-                if (mRupeeNum != dComIfGs_getRupee()) {
+                if (mRupeeNum != savedRupee) {
                     if (!isRupeeSoundBit(1)) {
                         onRupeeSoundBit(1);
                         mDoAud_seStart(Z2SE_LUPY_DEC_CNT_1, NULL, 0, 0);
@@ -2560,6 +2769,9 @@ void dMeter2_c::moveRupee() {
             }
         }
     }
+    // ============================================
+    // MODIFIED CODE ENDS HERE
+    // ============================================
 
     if (mRupeeKeyScale != g_drawHIO.mRupeeKeyScale) {
         mRupeeKeyScale = g_drawHIO.mRupeeKeyScale;
@@ -4109,7 +4321,10 @@ void dMeter2_c::moveBombNum() {
 
 void dMeter2_c::moveBottleNum() {
     for (int i = 0; i < 4; i++) {
-        if (dComIfGs_getItem((u8)(i + SLOT_11), true) == dItemNo_BEE_CHILD_e) {
+        const u8 slotItem = dComIfGs_getItem((u8)(i + SLOT_11), true);
+        if (slotItem == dItemNo_BEE_CHILD_e ||
+            dAlbwPotion_isSoulboundRedInSlot((u8)(i + SLOT_11)))
+        {
             if (mBottleNum[i] != dComIfGs_getBottleNum(i)) {
                 for (int j = 0; j < 2; j++) {
                     if (i + SLOT_11 == dComIfGs_getSelectItemIndex(j)) {

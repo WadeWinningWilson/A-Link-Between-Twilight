@@ -9,6 +9,7 @@
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
+#include "d/ext_plugin/ww_stage_loader.h"  // §892 dExtWw_getLayerNo
 #include "d/d_item.h"
 #include "d/d_map_path_dmap.h"
 #include "d/d_menu_fmap.h"
@@ -30,7 +31,10 @@
 #if TARGET_PC
 #include "d/d_albw_master_quest.h"
 #include "d/d_albw_shield.h"
+#include "d/d_albw_potion.h"
+#include "d/d_ext_save_guard.h"
 #include "dusk/action_bindings.h"
+#include "dusk/debug_warp.h"
 #include "d/d_kankyo.h"
 #include "dusk/truetest.hpp"
 #endif
@@ -103,7 +107,13 @@ void dComIfG_play_c::setItemBombNumCount(u8 i_item, s16 count) {
         return;
     }
 #endif
+#if TARGET_PC
+    if (i_item >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return;
+    }
+#else
     JUT_ASSERT(176, 0 <= i_item && i_item < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     mItemInfo.mItemBombNumCount[i_item] += count;
 }
 
@@ -113,7 +123,13 @@ s16 dComIfG_play_c::getItemBombNumCount(u8 i_item) {
         return mItemInfo.field_0x4ec8;
     }
 #endif
+#if TARGET_PC
+    if (i_item >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return 0;
+    }
+#else
     JUT_ASSERT(197, 0 <= i_item && i_item < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     return mItemInfo.mItemBombNumCount[i_item];
 }
 
@@ -124,7 +140,13 @@ void dComIfG_play_c::clearItemBombNumCount(u8 i_item) {
         return;
     }
 #endif
+#if TARGET_PC
+    if (i_item >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return;
+    }
+#else
     JUT_ASSERT(220, 0 <= i_item && i_item < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     mItemInfo.mItemBombNumCount[i_item] = 0;
 }
 
@@ -162,6 +184,17 @@ void dComIfG_get_timelayer(int* o_layer) {
 int dComIfG_play_c::getLayerNo_common_common(const char* i_stageName, int i_roomNo, int o_layer) {
     int layer = o_layer;
     if (layer < 0) {
+        // ====================================================================
+        // §892 (corrected §891, §884/§889 spawn root): WW host stages resolve
+        // by WW'S OWN story-layer algorithm — the donor's getLayerNo, ported
+        // verbatim (ww_layer_select.cpp) — through THIS method, the engine's
+        // one selection surface (the donor's own: WW d_com_inf_game.cpp:185 is
+        // this same per-stage-name switch, one generation earlier). TP stage
+        // branches below are untouched; stage names are disjoint.
+        // ====================================================================
+        if (i_stageName != NULL && dExtWwSave_isWwHostStage(i_stageName)) {
+            return dExtWw_getLayerNo(i_roomNo);
+        }
         layer = -1;
 
         // Stage is in a Twilight state
@@ -903,12 +936,36 @@ int dComIfG_play_c::getLayerNo_common(char const* i_stageName, int i_roomID, int
 
 int dComIfG_play_c::getLayerNo(int param_1) {
     UNUSED(param_1);
+#if TARGET_PC
+    // Warp-menu Room layer override (Jailer LAYER-0 SPAWN): force the
+    // d_stage layerActorLoader / StubWatch site to the selected layer.
+    {
+        const s8 forced = dusk::ui::getRoomLayerOverride();
+        if (forced >= 0) {
+            return forced;
+        }
+    }
+#endif
     int layerNo = 0;
     int roomNo = dComIfGp_roomControl_getStayNo();
 
     if (roomNo <= -1) {
         roomNo = dComIfGp_getStartStageRoomNo();
     }
+
+#if TARGET_PC
+    // §892: the donor's getLayerNo CONSUMES its room argument (WW
+    // d_com_inf_game.cpp:185); the receiver marked it UNUSED — drift. WW host
+    // stages honor it (sea's isle rooms carry different story layers; the
+    // readMult per-room loop depends on it). TP callers keep the receiver's
+    // stay-room resolution unchanged (shared-path law: WW-scoped only).
+    {
+        const char* sn892 = dComIfGp_getStartStageName();
+        if (param_1 >= 0 && sn892 != NULL && dExtWwSave_isWwHostStage(sn892)) {
+            roomNo = param_1;
+        }
+    }
+#endif
 
     layerNo = getLayerNo_common(dComIfGp_getStartStageName(), roomNo, dComIfGp_getStartStageLayer());
     return layerNo;
@@ -1529,6 +1586,11 @@ BOOL dComIfGs_isStageTbox(int i_stageNo, int i_no) {
 }
 
 void dComIfGs_onStageSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onSwitch(i_no, -1);
     }
@@ -1537,6 +1599,11 @@ void dComIfGs_onStageSwitch(int i_stageNo, int i_no) {
 }
 
 void dComIfGs_offStageSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("offStageSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_offSwitch(i_no, -1);
     }
@@ -1553,6 +1620,11 @@ BOOL dComIfGs_isStageSwitch(int i_stageNo, int i_no) {
 }
 
 void dComIfGs_onDungeonItemMap(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onDungeonItemMap", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onDungeonItemMap();
     }
@@ -1577,6 +1649,11 @@ s32 dComIfGs_isDungeonItemMap(int i_stageNo) {
 }
 
 void dComIfGs_onDungeonItemCompass(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onDungeonItemCompass", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onDungeonItemCompass();
     }
@@ -1601,6 +1678,11 @@ s32 dComIfGs_isDungeonItemCompass(int i_stageNo) {
 }
 
 void dComIfGs_onDungeonItemBossKey(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onDungeonItemBossKey", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onDungeonItemBossKey();
     }
@@ -1625,6 +1707,11 @@ s32 dComIfGs_isDungeonItemBossKey(int i_stageNo) {
 }
 
 void dComIfGs_onStageBossEnemy(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageBossEnemy", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageBossEnemy();
     }
@@ -1649,6 +1736,11 @@ s32 dComIfGs_isStageBossEnemy(int i_stageNo) {
 }
 
 void dComIfGs_onStageMiddleBoss(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageMiddleBoss", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageMiddleBoss();
     }
@@ -1673,6 +1765,11 @@ s32 dComIfGs_isStageMiddleBoss(int i_stageNo) {
 }
 
 void dComIfGs_onStageLife(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageLife", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageLife();
     }
@@ -1697,6 +1794,11 @@ s32 dComIfGs_isStageLife(int i_stageNo) {
 }
 
 void dComIfGs_onStageBossDemo(int i_stageNo) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onStageBossDemo", i_stageNo, -1)) {
+        return;
+    }
+#endif
     if (i_stageNo == dStage_stagInfo_GetSaveTbl(dComIfGp_getStageStagInfo())) {
         dComIfGs_onStageBossDemo();
     }
@@ -2230,13 +2332,38 @@ s16 dComIfGp_getSelectItemNum(int i_selItemIdx) {
     if (selectItem == dItemNo_NORMAL_BOMB_e || selectItem == dItemNo_WATER_BOMB_e || selectItem == dItemNo_POKE_BOMB_e ||
         selectItem == dItemNo_BOMB_ARROW_e)
     {
-        u8 slot_no = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx) - SLOT_15;
-        itemNum = dComIfGs_getBombNum(slot_no);
+        u8 bagSlot = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx);
+        if (bagSlot >= SLOT_15 && bagSlot < SLOT_18) {
+            itemNum = dComIfGs_getBombNum(bagSlot - SLOT_15);
+        } else {
+            // Select button points at a non-bag inventory slot that still holds a
+            // bomb type (editor / custom assign). Prefer the bag that stores that
+            // type; fall back to first matching bag contents.
+            for (int i = 0; i < dSv_player_item_c::BOMB_BAG_MAX; i++) {
+                if (dComIfGs_getItem((u8)(i + SLOT_15), false) == selectItem) {
+                    itemNum = dComIfGs_getBombNum(i);
+                    break;
+                }
+            }
+#if TARGET_PC
+            // ALBW ammo is meter-gated; show at least 1 so HUD/router never look empty.
+            if (itemNum <= 0) {
+                itemNum = 1;
+            }
+#endif
+        }
     } else if (selectItem == dItemNo_PACHINKO_e) {
         itemNum = dComIfGs_getPachinkoNum();
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
         u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
         itemNum = dComIfGs_getBottleNum(slot_no);
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            itemNum = dComIfGs_getBottleNum(kAlbwPotionSoulboundBottleIdx);
+        }
+#endif
     }
 
     return itemNum;
@@ -2256,6 +2383,13 @@ int dComIfGp_getSelectItemMaxNum(int i_selItemIdx) {
         itemNum = dComIfGs_getPachinkoMax();
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
         itemNum = dComIfGs_getBottleMax();
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            itemNum = dAlbwPotion_getMaxUses();
+        }
+#endif
     }
 
     return itemNum;
@@ -2267,7 +2401,11 @@ void dComIfGp_setSelectItemNum(int i_selItemIdx, s16 i_num) {
     if (selectItem == dItemNo_NORMAL_BOMB_e || selectItem == dItemNo_WATER_BOMB_e || selectItem == dItemNo_POKE_BOMB_e ||
         selectItem == dItemNo_BOMB_ARROW_e)
     {
-        u8 mix_slotNo = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx) - SLOT_15;
+        u8 bagSlot = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx);
+        if (bagSlot < SLOT_15 || bagSlot >= SLOT_18) {
+            return;
+        }
+        u8 mix_slotNo = bagSlot - SLOT_15;
 
         if (i_num > dComIfGs_getBombMax(selectItem)) {
             i_num = dComIfGs_getBombMax(selectItem);
@@ -2282,6 +2420,16 @@ void dComIfGp_setSelectItemNum(int i_selItemIdx, s16 i_num) {
             i_num = dComIfGs_getBottleMax();
         }
         dComIfGs_setBottleNum(bottle_slot_no, i_num);
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            if (i_num > dAlbwPotion_getMaxUses()) {
+                i_num = dAlbwPotion_getMaxUses();
+            }
+            dComIfGs_setBottleNum(kAlbwPotionSoulboundBottleIdx, i_num);
+        }
+#endif
     }
 }
 
@@ -2291,13 +2439,24 @@ void dComIfGp_addSelectItemNum(int i_selItemIdx, s16 i_num) {
     if (selectItem == dItemNo_NORMAL_BOMB_e || selectItem == dItemNo_WATER_BOMB_e || selectItem == dItemNo_POKE_BOMB_e ||
         selectItem == dItemNo_BOMB_ARROW_e)
     {
-        u8 slot_no = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx) - SLOT_15;
+        u8 bagSlot = dComIfGs_getSelectMixItemNoArrowIndex(i_selItemIdx);
+        if (bagSlot < SLOT_15 || bagSlot >= SLOT_18) {
+            return;
+        }
+        u8 slot_no = bagSlot - SLOT_15;
         dComIfGp_setItemBombNumCount(slot_no, i_num);
     } else if (selectItem == dItemNo_PACHINKO_e) {
         dComIfGp_setItemPachinkoNumCount(i_num);
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
         u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
         dComIfGs_addBottleNum(slot_no, i_num);
+#if TARGET_PC
+    } else if (dAlbwPotion_isSoulboundRedItem(selectItem)) {
+        u8 slot = dComIfGs_getSelectItemIndex(i_selItemIdx);
+        if (dAlbwPotion_isSoulboundRedInSlot(slot)) {
+            dComIfGs_addBottleNum(kAlbwPotionSoulboundBottleIdx, i_num);
+        }
+#endif
     }
 }
 

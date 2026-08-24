@@ -41,6 +41,8 @@ void resetForSpeedrunMode() {
     aurora_set_pause_on_focus_lost(false);
 
     getSettings().backend.enableAdvancedSettings.setSpeedrunValue(false);
+    // Level Editor (Phase 1) — incompatible with speedrun mode.
+    getSettings().backend.enableLevelEditor.setSpeedrunValue(false);
     getSettings().game.recordingMode.setSpeedrunValue(false);
     getSettings().game.debugFlyCam.setSpeedrunValue(false);
 }

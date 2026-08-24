@@ -882,6 +882,10 @@ void dMeter2_onALBWBomb();
 void dMeter2_onALBWBombArrow();
 void dMeter2_onALBWIronball();
 void dMeter2_onALBWSpinner();
+// Deku Leaf glide: continuous drain at WW's faithful rate (~2.34% of base/sec).
+void dMeter2_onALBWDekuLeaf();       // call every frame while gliding
+void dMeter2_onALBWDekuLeafStart();  // one-off up-front charge when the glide begins
+bool dMeter2_canALBWDekuLeaf();      // false once the meter is empty -> drop the glide
 void dMeter2_onALBWDomRod();
 void dMeter2_onALBWHookshot();
 void dMeter2_onALBWDoubleHookshot();
@@ -893,6 +897,7 @@ bool dMeter2_canALBWSling();
 bool dMeter2_canALBWBoom();
 bool dMeter2_canALBWArrow();
 bool dMeter2_canALBWBomb();
+bool dMeter2_canALBWBombling();
 bool dMeter2_canALBWBombArrow();
 bool dMeter2_canALBWIronball();
 bool dMeter2_canALBWHookshot();
@@ -906,10 +911,17 @@ void dMeter2_drainALBWToLockout();
 void dMeter2_restoreALBWMeterToFull();
 bool dMeter2_canALBWSpinner();
 bool dMeter2_canALBWDomRod();
+bool dMeter2_canALBWDomRodConfuseThrow();
 void dMeter2_addALBWFraction(int numerator, int denominator);
+// Refill a fraction of base capacity (sOilBaseMax), not expanded max — lockout perk restores.
+void dMeter2_addALBWBaseFraction(int numerator, int denominator);
 void dMeter2_subALBWFraction(int numerator, int denominator);
+// Drain a fixed ALBW amount (Parry Master base-capacity tax, etc.).
+void dMeter2_drainALBWAmount(int amount);
 int dMeter2_getALBWMeterValue();
 int dMeter2_getALBWMaxValue();
+int dMeter2_getALBWNormalRecoveryRate();
+int dMeter2_getALBWLockoutRecoveryRate();
 void dMeter2_fillALBWMeter();
 void dMeter2_onALBWMeterShopPurchase();
 void dMeter2_onALBWRentalEligible(u8 itemNo);
@@ -939,11 +951,15 @@ bool dMeter2_grantShieldOwnership(u8 itemNo);
 // dMeter2_isCasualWearEligible() — "worn once" gate for the Ordon outfit: true
 //   once the player has escaped the Hyrule Castle Sewers (saveBitLabels[47]),
 //   i.e. has worn the Ordon clothes through the intro. True ALBW bypasses this.
+// dMeter2_isHerosWearEligible() / dMeter2_isZoraWearEligible() — same idea for
+//   Hero's Clothes and Zora Armor (collection / item-first-bit from story obtain).
 // dMeter2_grantRentalClothes() — grant + auto-equip a clothes item (e.g. casual
 //   wear) and trigger the model swap. The shop is the only way to don the Ordon
 //   outfit; vanilla collection menus can switch it back off.
 // ============================================
 bool dMeter2_isCasualWearEligible();
+bool dMeter2_isHerosWearEligible();
+bool dMeter2_isZoraWearEligible();
 void dMeter2_grantRentalClothes(u8 itemNo);
 // ============================================
 // NEW CODE ENDS HERE

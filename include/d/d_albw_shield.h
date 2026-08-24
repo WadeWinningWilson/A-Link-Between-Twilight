@@ -36,6 +36,10 @@ void dShield_destroyFromDurability(daAlink_c* i_link);
 void dShield_repairDurabilityFraction(int numerator, int denominator);
 
 bool dShield_shouldDrawDurabilityHud();
+// True when Shield HUD Visibility pins the parry icons (ParryAlways/BothAlways).
+// Mode verdict only — no shield-possession conditions; safe in wolf form.
+bool dShield_isParryHudPinned();
+f32 dShield_getShieldHudDrawAlpha();
 u16 dShield_getDurability();
 u16 dShield_getDurabilityMax();
 // 0 = Ordon, 1 = Wooden, 2 = Hylian (for meter tint).
@@ -82,9 +86,15 @@ bool dShield_tryBeginHelmSplitter();
 
 void dShield_onGuardAttackConnect();
 
+// After a successful bash vs an enemy: next damaging hit from Link deals +5% (no stack; consumed).
+void dShield_armBashNextHitBoost();
+bool dShield_tryConsumeBashNextHitBoost(u16& io_attackPower);
+
 u8 dShield_getBashCharges();
 u8 dShield_getMaxBashCharges();
 void dShield_fillBashChargesToMax();
+// Grant one bash charge (clamped to max). Used by lockout bombling block perk.
+void dShield_addBashCharge(u8 i_amount);
 u8 dShield_getBashThreshold();
 u8 dShield_getDenyFlashFrames();
 bool dShield_canSpendBash();
@@ -106,6 +116,10 @@ struct ShieldRowLayout {
     bool valid;
 };
 bool dShield_getLastRowLayout(ShieldRowLayout* o_row);
+
+// Fyrus §10 attack-counter: latch perfect parry at block time; consumed on commit resolve.
+void dShield_noteFyrusAttackParry(bool i_perfect);
+bool dShield_takeFyrusAttackPerfectParry();
 // ============================================
 // NEW CODE ENDS HERE
 // ============================================

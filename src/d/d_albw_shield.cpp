@@ -7,8 +7,10 @@
 
 #include "d/dolzel.h" // IWYU pragma: keep
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
 #include "d/d_albw_combat.h"
 #include "d/d_albw_hp_mult.h"
+#include "d/d_albw_lockout.h"
 #include "d/d_albw_wolf_combat.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
@@ -17,6 +19,7 @@
 #include "d/d_meter2.h"
 #include "d/d_meter2_info.h"
 #include "d/d_meter2_draw.h"
+#include "d/d_albw_menu_res.h"  // swapGeneration (re-apply icons after a menu-arc swap)
 #include "d/d_albw_rental.h"  // suppress shield HUD while the rental shop owns input
 #include "m_Do/m_Do_controller_pad.h"
 #include "d/d_meter_HIO.h"
@@ -45,6 +48,8 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_set>
+
+static u8 s_fyrusAttackPerfectParry = 0;
 
 namespace {
 
@@ -241,6 +246,7 @@ u16 sShieldDurabilityMax = 0;
 bool sShieldBroken = false;
 u8 sLastDurabilityEquipShield = 0xFF;
 bool sBashAlbwGranted = false;
+bool sBashNextHitBoostPending = false;
 
 f32 sDenyPikariFrame = 0.0f;
 
@@ -560,8 +566,17 @@ bool isMountSpearGuardBreakExempt(fopAc_ac_c* i_attacker) {
         return false;
     }
 
+    // ============================================
+    // E_RDB removed from the exemption (alpha cleanup): King Bulblin never
+    // attacks while mounted — the joust hits come from E_WB (AtSpl 7) and
+    // E_RD (AtSpl 0), neither of which is a guard-break attack, so the
+    // E_RDB entry only ever blocked parries in the on-foot AXE fights
+    // (camp / F_SP118 / castle). Dropping it makes the axe swing and spin
+    // deferrable: successful parry cancels, failed parry still guard-breaks
+    // at 1.5x durability. B_GND (mounted Ganondorf) stays exempt.
+    // ============================================
     const s16 name = fopAcM_GetName(i_attacker);
-    return name == fpcNm_E_RDB_e || name == fpcNm_B_GND_e;
+    return name == fpcNm_B_GND_e;
 }
 
 bool isMeterGameplayHudVisible() {
@@ -646,6 +661,50 @@ bool isShieldAuxHudVisible(const daAlink_c* i_link) {
     return i_link->checkPlayerGuard();
 }
 
+bool isShieldHudPinnedDurability() {
+    if (!dShield_isDurabilityEnabled()) {
+        return false;
+    }
+
+    const dusk::ShieldHudVisibility mode = dusk::getSettings().game.shieldHudVisibility.getValue();
+    return mode == dusk::ShieldHudVisibility::DurabilityAlways ||
+           mode == dusk::ShieldHudVisibility::BothAlways;
+}
+
+bool isShieldHudPinnedParry() {
+    if (!dShield_isParryCombatEnabled()) {
+        return false;
+    }
+
+    const dusk::ShieldHudVisibility mode = dusk::getSettings().game.shieldHudVisibility.getValue();
+    return mode == dusk::ShieldHudVisibility::ParryAlways ||
+           mode == dusk::ShieldHudVisibility::BothAlways;
+}
+
+bool isShieldDurabilityHudVisible(const daAlink_c* i_link) {
+    if (i_link == NULL || dALBWRental_isOpen()) {
+        return false;
+    }
+
+    if (isShieldHudPinnedDurability()) {
+        return true;
+    }
+
+    return isShieldAuxHudVisible(i_link);
+}
+
+bool isShieldParryHudVisible(const daAlink_c* i_link) {
+    if (i_link == NULL || dALBWRental_isOpen()) {
+        return false;
+    }
+
+    if (isShieldHudPinnedParry()) {
+        return true;
+    }
+
+    return isShieldAuxHudVisible(i_link);
+}
+
 bool shouldShowDurabilityHud() {
     if (!dShield_isDurabilityEnabled()) {
         return false;
@@ -656,7 +715,7 @@ bool shouldShowDurabilityHud() {
         return false;
     }
 
-    return isShieldAuxHudVisible(link);
+    return isShieldDurabilityHudVisible(link);
 }
 
 bool shouldShowBashHud() {
@@ -673,7 +732,7 @@ bool shouldShowBashHud() {
         return false;
     }
 
-    return isShieldAuxHudVisible(link);
+    return isShieldParryHudVisible(link);
 }
 
 // ============================================
@@ -758,6 +817,19 @@ void shieldIconDbg(const char* fmt, ...);  // TEMP fwd decl (defined below)
 //   Spur+Shield -> swap the inner picture to the shield emblem, keep starburst.
 //   Shield Only -> swap to shield emblem AND hide the starburst.
 // The HUD is rebuilt on mode change (see draw), so this only ever adds state.
+bool isUsableShieldIconTimg(const ResTIMG* i_timg) {
+    if (i_timg == NULL) {
+        return false;
+    }
+    if (i_timg->width == 0 || i_timg->height == 0) {
+        return false;
+    }
+    if (i_timg->width > 256 || i_timg->height > 256) {
+        return false;
+    }
+    return true;
+}
+
 void applyParryIcons(ShieldTier i_tier) {
     const dusk::ParryIcons mode = dusk::getSettings().game.parryIconsMode.getValue();
     sHudIconTier = i_tier;
@@ -797,7 +869,7 @@ void applyParryIcons(ShieldTier i_tier) {
             timg = static_cast<ResTIMG*>(arc->getIdxResource(idx));
         }
     }
-    if (timg == NULL) {
+    if (!isUsableShieldIconTimg(timg)) {
         return;
     }
 
@@ -1049,13 +1121,30 @@ void dShield_resetSession() {
     sShieldBroken = false;
     sLastDurabilityEquipShield = 0xFF;
     sBashAlbwGranted = false;
+    sBashNextHitBoostPending = false;
     sShieldHudLingerFrames = 0;
+    s_fyrusAttackPerfectParry = 0;
+    dParryMaster_resetSession();
+}
+
+void dShield_noteFyrusAttackParry(bool i_perfect) {
+    if (i_perfect) {
+        s_fyrusAttackPerfectParry = 1;
+    }
+}
+
+bool dShield_takeFyrusAttackPerfectParry() {
+    const bool perfect = s_fyrusAttackPerfectParry != 0;
+    s_fyrusAttackPerfectParry = 0;
+    return perfect;
 }
 
 void dShield_updateGuardTracking(daAlink_c* i_link) {
     if (i_link == NULL) {
         return;
     }
+
+    dParryMaster_update();
 
     if (dShield_isDurabilityEnabled()) {
         syncDurabilityToEquip(i_link);
@@ -1145,7 +1234,17 @@ bool dShield_onShieldHit(daAlink_c* i_link, int i_atSpl, fopAc_ac_c* i_attacker)
         logChargeEvent("parry+");
     }
 
+#if TARGET_PC
+    // Lockout bombling perk: successful block/parry while orbiting bombling is out
+    // grants one extra bash charge (clamped in dShield_addBashCharge).
+    dAlbwLockout_onBlockWhileBomblingActive();
+#endif
+
     repairDurabilityOnParry(i_link);
+
+    if (i_attacker != NULL && fopAcM_GetName(i_attacker) == fpcNm_E_FM_e) {
+        dShield_noteFyrusAttackParry(true);
+    }
 
     return true;
 }
@@ -1354,6 +1453,33 @@ bool dShield_shouldDrawDurabilityHud() {
     return shouldShowDurabilityHud();
 }
 
+// ============================================
+// Exported MODE-ONLY verdict (alpha cleanup): true when the Shield HUD
+// Visibility setting pins the parry icons (ParryAlways / BothAlways).
+// Deliberately carries none of shouldShowBashHud()'s human-form-only
+// conditions (shield owned, not riding, tier charges) so the wolf charge
+// HUD — which must render in wolf form, where those are all false — can
+// follow the same setting. In Off mode callers keep their own
+// guard/linger behavior.
+// ============================================
+bool dShield_isParryHudPinned() {
+    return isShieldHudPinnedParry();
+}
+
+f32 dShield_getShieldHudDrawAlpha() {
+    dMeter2_c* meter = dMeter2Info_getMeterClass();
+    if (meter == NULL) {
+        return 0.0f;
+    }
+
+    dMeter2Draw_c* draw = meter->getMeterDrawPtr();
+    if (draw == NULL) {
+        return 0.0f;
+    }
+
+    return draw->getMeterGaugeAlphaRate(0);
+}
+
 u16 dShield_getDurability() {
     return sShieldDurability;
 }
@@ -1437,6 +1563,17 @@ bool dShield_tryBeginGuardAttack() {
     if (sBashCharges == 0) {
         sBashSpendChainActive = false;
     }
+
+    // ============================================
+    // BUG FIX (alpha cleanup): re-arm the bash-connect ALBW grant for this
+    // swing. sBashAlbwGranted exists to de-dupe the two connect call paths
+    // for ONE hit (pollGuardAttackHit per-frame + onGuardAttackConnect
+    // per-proc), but it was only ever cleared in dShield_resetSession()
+    // (reset-to-title) — so the +5% meter grant fired once per session and
+    // every later bash paid nothing. Clearing it per spent swing restores
+    // the intended once-per-connect payout.
+    // ============================================
+    sBashAlbwGranted = false;
 
     logChargeEvent("bash-start");
     dShield_debugLogToFile(
@@ -1662,7 +1799,30 @@ void dShield_onGuardAttackConnect() {
     fopAc_ac_c* hitActor = hitObj->GetAc();
     if (hitActor != NULL && fopAcM_GetGroup(hitActor) == fopAc_ENEMY_e) {
         dShield_tryGrantHelmPunishCredit((fopEn_enemy_c*)hitActor);
+        dShield_armBashNextHitBoost();
     }
+}
+
+void dShield_armBashNextHitBoost() {
+    if (!dShield_isParryCombatEnabled()) {
+        return;
+    }
+    // No stack — refresh to a single pending +5% hit.
+    sBashNextHitBoostPending = true;
+}
+
+bool dShield_tryConsumeBashNextHitBoost(u16& io_attackPower) {
+    if (!sBashNextHitBoostPending || io_attackPower == 0) {
+        return false;
+    }
+
+    sBashNextHitBoostPending = false;
+    const u32 boosted = (static_cast<u32>(io_attackPower) * 105u) / 100u;
+    io_attackPower = static_cast<u16>(boosted > 0xFFFFu ? 0xFFFFu : boosted);
+    if (io_attackPower < 1) {
+        io_attackPower = 1;
+    }
+    return true;
 }
 
 u8 dShield_getBashCharges() {
@@ -1682,6 +1842,22 @@ void dShield_fillBashChargesToMax() {
         return;
     }
     sBashCharges = maxCharges;
+}
+
+void dShield_addBashCharge(u8 i_amount) {
+    if (!dShield_isParryCombatEnabled() || i_amount == 0) {
+        return;
+    }
+    const u8 maxCharges = dShield_getMaxBashCharges();
+    if (maxCharges == 0) {
+        return;
+    }
+    if (sBashCharges + i_amount >= maxCharges) {
+        sBashCharges = maxCharges;
+    } else {
+        sBashCharges = static_cast<u8>(sBashCharges + i_amount);
+    }
+    logChargeEvent("bombling-block+");
 }
 
 u8 dShield_getBashThreshold() {
@@ -1710,6 +1886,14 @@ bool dShield_isBashSpendChainActive() {
 }
 
 void dShield_drawBashCharges() {
+    static bool sPrevParryCombatEnabled = false;
+    const bool parryCombatEnabled = dShield_isParryCombatEnabled();
+    if (sPrevParryCombatEnabled && !parryCombatEnabled) {
+        deleteBashHud();
+        sShieldHudLingerFrames = 0;
+    }
+    sPrevParryCombatEnabled = parryCombatEnabled;
+
     daAlink_c* link = daAlink_getAlinkActorClass();
     updateShieldHudLinger(link);
 
@@ -1736,6 +1920,11 @@ void dShield_drawBashCharges() {
         return;
     }
 
+    const f32 hudAlpha = dShield_getShieldHudDrawAlpha();
+    if (hudAlpha <= 0.0f) {
+        return;
+    }
+
     // Keep the HUD icon matching the equipped shield + selected mode
     // (re-applies on shield swap or mode change).
     const ShieldTier curIconTier = shieldTierFromLink(link);
@@ -1753,7 +1942,22 @@ void dShield_drawBashCharges() {
                           desiredMode);
         }
     }
-    if (curIconTier != sHudIconTier || desiredMode != sHudAppliedMode) {
+    // ============================================
+    // NEW CODE — ALBW Port (menu-arc swap tracking, 2026-07-11)
+    // The applied icon TIMG POINTS INTO the itemicon archive's resource data
+    // (applyParryIcons -> arc->getResource -> changeTexture, no copy). A mod
+    // toggle swaps that archive instance (d_albw_menu_res) and FREES the old
+    // one a swap later — the latched pictures then drew freed memory (the
+    // recurring "parry overlay static" breakage). Re-apply whenever a swap
+    // lands: the retired instance is still alive at that moment, so the
+    // pictures re-point to the CURRENT archive with no dangle window.
+    // ============================================
+    static int sLastMenuResSwapGen = -1;
+    const int menuResSwapGen = dAlbwMenuRes_swapGeneration();
+    if (curIconTier != sHudIconTier || desiredMode != sHudAppliedMode ||
+        menuResSwapGen != sLastMenuResSwapGen)
+    {
+        sLastMenuResSwapGen = menuResSwapGen;
         applyParryIcons(curIconTier);
     }
 
@@ -1834,18 +2038,18 @@ void dShield_drawBashCharges() {
             }
             sHud.mpIconOn->hide();
             sHud.mpIconOff->show();
-            sHud.mpIconOff->setAlphaRate(1.0f);
+            sHud.mpIconOff->setAlphaRate(hudAlpha);
             sHudShieldOffPic->setBlackWhite(JUtility::TColor(0, 0, 0, 0),
                                             filled ? JUtility::TColor(255, 255, 255, 255)
                                                    : JUtility::TColor(105, 105, 105, 255));
         } else if (filled) {
             sHud.mpIconOn->show();
             sHud.mpIconOff->hide();
-            sHud.mpIconOn->setAlphaRate(1.0f);
+            sHud.mpIconOn->setAlphaRate(hudAlpha);
         } else {
             sHud.mpIconOn->hide();
             sHud.mpIconOff->show();
-            sHud.mpIconOff->setAlphaRate(1.0f);
+            sHud.mpIconOff->setAlphaRate(hudAlpha);
         }
 
         sHud.mpIconOn->translate(posX, posY);

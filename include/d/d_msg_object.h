@@ -341,6 +341,21 @@ public:
 };
 
 s16 dMsgObject_getGroupID();
+
+// §644: message-archive hook. WW-AGNOSTIC host plumbing — names no donor,
+// holds no predicate, and is NULL unless a content layer installs it.
+//
+// A donor disc may not organise messages the way this engine does. This engine
+// selects one of ten archives from a PER-STAGE group id in STAG; another may
+// mount a single archive for the whole game and have no group concept at all.
+// The hook lets the layer that owns the donor answer with the donor's own
+// system rather than have a value invented for a field that does not exist.
+//
+// Fill o_path and *io_group and return true to take over; return false to
+// leave the engine's own selection untouched.
+typedef bool (*dMsg_groupArchiveHook_f)(char* o_path, int i_pathSize, int* io_group);
+void dMsg_setGroupArchiveHook(dMsg_groupArchiveHook_f i_hook);
+bool dMsg_resolveGroupArchive(char* o_path, int i_pathSize, int* io_group);
 void dMsgObject_setFundRaising(u16 param_0);
 u16 dMsgObject_getFundRaising();
 void dMsgObject_addOffering(s16 param_0);

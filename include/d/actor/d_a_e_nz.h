@@ -55,4 +55,10 @@ public:
 
 STATIC_ASSERT(sizeof(e_nz_class) == 0xa88);
 
+// ============================================================================
+// Sumo Outfit quick-swap gate: true while one or more Ghoul Rats are latched
+// onto Link (any stick slot occupied).  See dAlbwOutfit_isSwapBlockedState().
+// ============================================================================
+bool dE_NZ_isRatStuckOnPlayer();
+
 #endif /* D_A_E_NZ_H */

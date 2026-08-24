@@ -10,7 +10,7 @@
  * divides attack power, so it correctly does not affect the bar's max.
  *
  * Gated behind dusk::getSettings().game.bossHealthBars. Prototype scope:
- * Armogohma (fpcNm_B_GM_e) only; generalises to sBoss[] later.
+ * Armogohma, Diababa, Shade, Zant, Fyrus.
  */
 
 #pragma once

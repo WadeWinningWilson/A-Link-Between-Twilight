@@ -1,3 +1,7 @@
+// KIT-LINEAGE: host-plumbing
+// KIT-DONOR: none
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: UNKNOWN
 // ============================================
 // NEW CODE — ALBW Port (Native Dialogue Box)
 // ============================================
@@ -391,6 +395,19 @@ bool dALBWDialogue_c::checkDismiss() {
     }
     if (!(mDoCPd_c::getTrigA(PAD_1) || mDoCPd_c::getTrigB(PAD_1))) {
         return false;
+    }
+    if (advancePage()) {
+        if (mpArrow) {
+            mpArrow->arwAnimeInit();
+        }
+        return false;
+    }
+    return true;
+}
+
+bool dALBWDialogue_c::advancePageOrFinished() {
+    if (!mVisible || !mReady || mPageCount <= 0) {
+        return true;
     }
     if (advancePage()) {
         if (mpArrow) {

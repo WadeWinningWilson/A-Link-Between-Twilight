@@ -12,6 +12,12 @@
 #include "d/d_msg_class.h"
 #include "d/d_msg_object.h"
 #include "d/d_meter_HIO.h"
+#include "dusk/custom_assets.hpp"  // custom item-icon override (write_item_icon_timg)
+
+#if TARGET_PC
+#include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_mail.h"
+#endif
 
 #include <cstring>
 
@@ -804,6 +810,28 @@ int dMeter2Info_c::readItemTexture(u8 i_itemNo, void* i_texBuf1, J2DPicture* i_p
                                    void* i_texBuf4, J2DPicture* i_pic4, int param_9) {
     u8 itemType = getItemType(i_itemNo);
     int tex_num = 0;
+
+#if D_ALBW_CUSTOM_ICONS
+    // ============================================
+    // NEW CODE — ALBW Port / Dusklight
+    // Custom item-icon override: if an enabled mod ships icons/item_<N>.png, it is
+    // encoded to a GameCube RGB5A3 ResTIMG straight into the game's texture buffer
+    // and drawn UNTINTED (identity black/white) as a single layer, replacing the
+    // vanilla composite. No override -> write_item_icon_timg returns false and the
+    // vanilla path below runs unchanged. Covers every item/weapon/shop icon that
+    // routes through readItemTexture.
+    // ============================================
+    if (i_texBuf1 != NULL &&
+        dusk::custom_assets::write_item_icon_timg(i_itemNo, i_texBuf1, 0xC00)) {
+        DCStoreRangeNoSync(i_texBuf1, 0xC00);
+        if (i_pic1 != NULL) {
+            i_pic1->setBlackWhite(JUtility::TColor(0x00, 0x00, 0x00, 0x00),
+                                  JUtility::TColor(0xFF, 0xFF, 0xFF, 0xFF));
+            i_pic1->changeTexture((ResTIMG*)i_texBuf1, 0);
+        }
+        return 1;
+    }
+#endif
 
     if (i_texBuf1 != NULL) {
         if ((i_itemNo == dItemNo_KANTERA_e && dComIfGs_getOil() == 0) || i_itemNo == dItemNo_KANTERA2_e) {
@@ -1701,6 +1729,13 @@ void dMeter2Info_setSword(u8 i_itemId, bool i_offItemBit) {
         dComIfGs_offItemFirstBit(dComIfGs_getSelectEquipSword());
     }
 
+#if TARGET_PC
+    const u8 prevSword = dComIfGs_getSelectEquipSword();
+    if (prevSword != i_itemId) {
+        dFlurryRush_cancelOnSwordEquipChange();
+    }
+#endif
+
     dComIfGs_setSelectEquipSword(i_itemId);
     dComIfGp_setSelectEquipSword(i_itemId);
 }
@@ -1777,6 +1812,15 @@ dMenu_LetterData dMenu_Letter::letter_data[64] = {
     {0x0000, 0x0000, 0x0000, 0x0000}, {0x0000, 0x0000, 0x0000, 0x0000},
 };
 
+#if TARGET_PC
+namespace {
+struct AlbwMailLetterSlotInit {
+    AlbwMailLetterSlotInit() { dAlbwMail_init(); }
+};
+static AlbwMailLetterSlotInit sAlbwMailLetterSlotInit;
+}  // namespace
+#endif
+
 u8 dMeter2Info_getRecieveLetterNum() {
     u8 letterNum = 0;
 
@@ -1835,6 +1879,12 @@ int dMeter2Info_recieveLetter() {
             u16 eventFlag = dMenu_Letter::getLetterEventFlag(i);
             if (dComIfGs_isEventBit(dSv_event_flag_c::saveBitLabels[eventFlag])) {
                 dComIfGs_onLetterGetFlag(i);
+
+#if TARGET_PC
+                if (dAlbwMail_isRuntimeLetter(i)) {
+                    dAlbwMail_onDeliveryComplete();
+                }
+#endif
 
                 if (dComIfGs_getGetNumber(letterNum) == 0) {
                     dComIfGs_setGetNumber(letterNum, i + 1);

@@ -33,6 +33,37 @@ bool sInitialized = false;
 std::vector<std::unique_ptr<Document> > sDocumentStack;
 // Documents that don't participate in the focus stack
 std::vector<std::unique_ptr<Document> > sPassiveDocuments;
+
+struct ScopedStyles {
+    DocumentScope scope;
+    std::string id;
+    Rml::SharedPtr<Rml::StyleSheetContainer> sheet;
+};
+std::vector<ScopedStyles> sScopedStyles;
+
+std::vector<const Rml::StyleSheetContainer*> scoped_sheets(DocumentScope scope) {
+    std::vector<const Rml::StyleSheetContainer*> sheets;
+    for (const auto& entry : sScopedStyles) {
+        if (entry.scope == scope) {
+            sheets.push_back(entry.sheet.get());
+        }
+    }
+    return sheets;
+}
+
+void restyle_scope(DocumentScope scope) {
+    const auto sheets = scoped_sheets(scope);
+    const auto restyle_documents = [&sheets, scope](auto& documents) {
+        for (auto& doc : documents) {
+            if (doc != nullptr && doc->scope() == scope && !doc->closed()) {
+                doc->restyle(sheets);
+            }
+        }
+    };
+    restyle_documents(sDocumentStack);
+    restyle_documents(sPassiveDocuments);
+}
+
 std::deque<Toast> sToasts;
 bool sMenuNotificationRequested = false;
 
@@ -191,6 +222,34 @@ void handle_event(const SDL_Event& event) noexcept {
         sConnectedGamepads.erase(event.gdevice.which);
     }
     input::handle_event(event);
+}
+
+bool register_scoped_styles(DocumentScope scope, std::string id, const std::string& rcss) noexcept {
+    auto sheet = Rml::Factory::InstanceStyleSheetString(rcss);
+    if (sheet == nullptr) {
+        return false;
+    }
+    const auto it = std::ranges::find_if(sScopedStyles,
+        [scope, &id](const ScopedStyles& entry) { return entry.scope == scope && entry.id == id; });
+    if (it != sScopedStyles.end()) {
+        it->sheet = std::move(sheet);
+    } else {
+        sScopedStyles.push_back({scope, std::move(id), std::move(sheet)});
+    }
+    restyle_scope(scope);
+    return true;
+}
+
+void unregister_scoped_styles(DocumentScope scope, std::string_view id) noexcept {
+    const auto erased = std::erase_if(sScopedStyles,
+        [scope, id](const ScopedStyles& entry) { return entry.scope == scope && entry.id == id; });
+    if (erased != 0) {
+        restyle_scope(scope);
+    }
+}
+
+void apply_scoped_styles(Document& doc) noexcept {
+    doc.restyle(scoped_sheets(doc.scope()));
 }
 
 Document& push_document(std::unique_ptr<Document> doc, bool show, bool passive) noexcept {

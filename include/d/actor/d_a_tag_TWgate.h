@@ -135,4 +135,9 @@ private:
     /* 0x5E2 */ u8 mType;
 };
 
+#if TARGET_PC
+// Province index (DarkClearLV bit) for a tag gate type; -1 = invalid.
+s32 daTagTWGate_albwProvinceForType(int i_type);
+#endif
+
 #endif /* D_A_TAG_TWGATE_H */

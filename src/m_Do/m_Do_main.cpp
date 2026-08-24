@@ -4,6 +4,7 @@
  * PC Port Version - based on Aurora integration from Vorversion
  */
 
+#include "dusk/boot_stage.h"
 #include "m_Do/m_Do_main.h"
 #include <dolphin/vi.h>
 #include <cstring>
@@ -29,6 +30,8 @@
 #include "d/d_s_menu.h"
 #include "d/d_s_play.h"
 #include "dusk/time.h"
+#include "dusk/fps_probe.h"
+#include <cstdint>
 #include "f_ap/f_ap_game.h"
 #include "f_op/f_op_msg.h"
 #include "m_Do/m_Do_MemCard.h"
@@ -89,6 +92,9 @@
 #include "dusk/settings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/texture_replacements.hpp"
+#include "dusk/custom_assets.hpp"
+#include "dusk/data.hpp"
+#include "dusk/mod_loader.hpp"
 #include "dusk/io.hpp"
 #include "dusk/version.hpp"
 #include "dusk/discord_presence.hpp"
@@ -102,6 +108,10 @@
 
 #if DUSK_ENABLE_SENTRY_NATIVE
 #include "dusk/ui/reporting.hpp"
+#endif
+
+#if TARGET_PC
+#include "d/d_ext_seq_space.h"
 #endif
 
 // --- GLOBALS ---
@@ -129,6 +139,14 @@ bool dusk::RestartRequested = false;
 std::filesystem::path dusk::ConfigPath;
 std::filesystem::path dusk::CachePath;
 #endif
+
+// ============================================================================
+// Level Editor (Phase 1) — session flag definition. Defined unconditionally so
+// it links on every platform; the cross-platform save guards reference it. Set
+// true only by the launch-menu "Level Editor" action (PC only), so it stays
+// false everywhere else.
+// ============================================================================
+bool dusk::g_levelEditorSession = false;
 
 void dusk::RequestRestart() noexcept {
     RestartRequested = SupportsProcessRestart;
@@ -290,6 +308,9 @@ void main01(void) {
             continue;
         }
 
+        const auto ferryT_frame0 = dusk::fps_probe::now_ticks();
+        dusk::fps_probe::begin_frame();
+
         VIWaitForRetrace();
 
         dusk::lastFrameAuroraStats = *aurora_get_stats();
@@ -299,10 +320,12 @@ void main01(void) {
 
         const auto pacing = dusk::game_clock::advance_main_loop();
         if (pacing.is_interpolating) {
+            std::int64_t exe_ticks = 0;
             if (pacing.sim_ticks_to_run > 0) {
                 dusk::frame_interp::begin_frame(dusk::getSettings().game.enableFrameInterpolation, true, 0.0f);
                 dusk::frame_interp::set_ui_tick_pending(true);
 
+                const auto exe0 = dusk::fps_probe::now_ticks();
                 for (int sim_tick = 0; sim_tick < pacing.sim_ticks_to_run; ++sim_tick) {
                     dusk::frame_interp::begin_sim_tick();
                     mDoCPd_c::read();
@@ -312,17 +335,24 @@ void main01(void) {
                     mDoAud_Execute();
                     dusk::game_clock::commit_sim_tick();
                 }
+                exe_ticks = dusk::fps_probe::now_ticks() - exe0;
             }
 
-            dusk::frame_interp::begin_frame(dusk::getSettings().game.enableFrameInterpolation, false,
-                                            dusk::game_clock::sample_interpolation_step());
-            dusk::frame_interp::interpolate();
+            const auto draw0 = dusk::fps_probe::now_ticks();
+            {
+                DUSK_FPS_SCOPE(FrameInterp);
+                dusk::frame_interp::begin_frame(dusk::getSettings().game.enableFrameInterpolation, false,
+                                                dusk::game_clock::sample_interpolation_step());
+                dusk::frame_interp::interpolate();
+            }
             dusk::frame_interp::begin_presentation_camera();
             // run draw functions for anything specially marked to handle interp
             fpcM_DrawIterater((fpcM_DrawIteraterFunc)fpcM_Draw);
             cAPIGph_Painter();
             dusk::frame_interp::end_presentation_camera();
             dusk::frame_interp::set_ui_tick_pending(false);
+            const std::int64_t draw_ticks = dusk::fps_probe::now_ticks() - draw0;
+            dusk::fps_probe::set_master_exe_draw(exe_ticks, draw_ticks);
         } else {
             dusk::frame_interp::begin_frame(dusk::FrameInterpMode::Off, true, 0.0f);
             dusk::frame_interp::set_ui_tick_pending(true);
@@ -334,12 +364,18 @@ void main01(void) {
 
             // EXECUTE GAME LOGIC & RENDER
             // This calls mDoGph_Painter -> JFWDisplay -> GX Functions
+            // Master exe/draw split comes from fpcM_Management (note_fpcm_split).
             fapGm_Execute();
 
             mDoAud_Execute();
         }
 
-        aurora_end_frame();
+        {
+            const auto present0 = dusk::fps_probe::now_ticks();
+            aurora_end_frame();
+            dusk::fps_probe::add_present(dusk::fps_probe::now_ticks() - present0);
+        }
+        dusk::fps_probe::end_frame(dusk::fps_probe::now_ticks() - ferryT_frame0);
 
         FrameMark;
 
@@ -368,6 +404,7 @@ void main01(void) {
     } while (dusk::IsRunning);
 
     exit:;
+    dusk::mods::ModLoader::instance().shutdown();
     dusk::ui::shutdown();
 }
 
@@ -528,6 +565,18 @@ int game_main(int argc, char* argv[]) {
             ("console", "Show the Windows console window for logs", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
             ("dvd", "Path to DVD image file", cxxopts::value<std::string>())
             ("backend", "Graphics API backend to use (auto, d3d12, d3d11, metal, vulkan, null)", cxxopts::value<std::string>())
+#if TARGET_PC
+            ("extseq-dump",
+             "§60b: offline Ja1Parser event dump for package root (writes seq_events_engine_*.csv)",
+             cxxopts::value<std::string>())
+#endif
+#if TARGET_PC
+            ("stage",
+             "Dev: boot straight into a stage — NAME[,room[,layer]] (e.g. R_DL02 or R_DL02,1). "
+             "For stages with no in-game route yet; touches no game data.",
+             cxxopts::value<std::string>())
+#endif
+            ("mods", "Directory to load .dusk mod bundles from", cxxopts::value<std::string>())
             ("cvar", "Override configuration variables without modifying config", cxxopts::value<std::vector<std::string>>());
 
         arg_options.parse_positional({"dvd"});
@@ -556,6 +605,15 @@ int game_main(int argc, char* argv[]) {
 
     log_build_info();
 
+#if TARGET_PC
+    if (parsed_arg_options.count("extseq-dump")) {
+        const std::string pkg = parsed_arg_options["extseq-dump"].as<std::string>();
+        const int dumpRc = dExtSeqSpace_cliDumpEvents(pkg.c_str());
+        dusk::ShutdownFileLogging();
+        return dumpRc;
+    }
+#endif
+
     dusk::config::LoadFromUserPreferences();
     if (dusk::getSettings().game.speedrunMode) {
         dusk::resetForSpeedrunMode();
@@ -565,6 +623,15 @@ int game_main(int argc, char* argv[]) {
     dusk::android::update_surface_frame_rate();
     dusk::crash_reporting::initialize();
     dusk::crash_handler::install();
+
+#if TARGET_PC
+    // --stage: arm the dev boot warp. Parsing here, firing later -- the stage
+    // change needs a running play scene, so this only records the request.
+    if (parsed_arg_options.count("stage")) {
+        dBootStage_arm(parsed_arg_options["stage"].as<std::string>().c_str());
+    }
+#endif
+
     // TODO: How to handle this?
     // PADSetDefaultMapping(&defaultPadMapping, PAD_TYPE_STANDARD);
 
@@ -620,7 +687,7 @@ int game_main(int argc, char* argv[]) {
         config.allowJoystickBackgroundEvents = dusk::getSettings().game.allowBackgroundInput;
         config.pauseOnFocusLost = dusk::getSettings().game.pauseOnFocusLost;
         config.imGuiInitCallback = &aurora_imgui_init_callback;
-        config.allowTextureDumps = false;
+        config.allowTextureDumps = dusk::getSettings().game.allowTextureDumps;
         auroraInfo = aurora_initialize(argc, argv, &config);
     }
 
@@ -670,6 +737,7 @@ int game_main(int argc, char* argv[]) {
     }
 
     dusk::texture_replacements::reload();
+    dusk::custom_assets::scan();  // Layer A: scan mod data-trees + build override map
     dusk::ui::initialize();
     dusk::ui::push_document(std::make_unique<dusk::ui::Overlay>(), true, true);
     dusk::ui::push_document(std::make_unique<dusk::ui::TouchControls>(), false, true);
@@ -768,6 +836,14 @@ int game_main(int argc, char* argv[]) {
         dusk::IsGameLaunched = true;
     }
 
+    // ============================================
+    // NEW CODE — ALBW Port (Custom Assets, Layer A)
+    // Disc is open now; register data-tree mod files as Aurora DVD overlays so
+    // audio (.baa / .aw), arcs, and streams transparently load from loose files.
+    // Must run after aurora_dvd_open and after scan() (which ran above).
+    // ============================================
+    dusk::custom_assets::install_overlays();
+
 #if DUSK_ENABLE_SENTRY_NATIVE
     if (dusk::crash_reporting::get_consent() == dusk::crash_reporting::Consent::Unknown) {
         dusk::ui::push_document(std::make_unique<dusk::ui::CrashReportWindow>());
@@ -797,6 +873,28 @@ int game_main(int argc, char* argv[]) {
     // Development Mode
     // mDoMain::developmentMode = 1;  // Force Dev Mode for Debugging
     mDoDvdThd::SyncWidthSound = false;
+
+    // Mod search directories, highest priority first: user dir (--mods replaces it), then
+    // mods/ next to the app.
+    {
+        std::vector<dusk::mods::ModSearchDir> modDirs;
+        if (parsed_arg_options.contains("mods") &&
+            !parsed_arg_options["mods"].as<std::string>().empty())
+        {
+            modDirs.push_back({.path = parsed_arg_options["mods"].as<std::string>()});
+        } else {
+            modDirs.push_back({.path = dusk::ConfigPath / "mods"});
+        }
+        modDirs.push_back({
+            .path = dusk::data::base_path_relative("mods"),
+            .inPlaceNative = true,
+        });
+        dusk::mods::ModLoader::instance().set_search_dirs(std::move(modDirs));
+    }
+    dusk::mods::ModLoader::instance().set_cache_dir(dusk::CachePath / "mod_cache");
+
+    DuskLog.info("Initializing mods...");
+    dusk::mods::ModLoader::instance().init();
 
     OSReport("Starting main01 (Game Loop)...\n");
 

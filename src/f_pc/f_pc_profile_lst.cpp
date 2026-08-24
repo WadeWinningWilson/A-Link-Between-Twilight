@@ -1608,6 +1608,8 @@ process_profile_definition DUSK_CONST* DUSK_CONST g_fpcPfLst_ProfileList[] = {
     // (0x318). fpcPf_Get() indexes this array directly by fpcNm, so this entry
     // has to sit at the very end, in lockstep with the enum append.
     &g_profile_ALBW_SHADE_WATCHER.base.base,
+    &g_profile_ALBW_SHADE_BOSS_WOLF.base.base,
+    &g_profile_ALBW_MIDNA_ARM.base.base,
     NULL,
 };
 #endif

@@ -14,6 +14,10 @@
 #include "d/d_menu_save.h"
 #include "d/d_menu_skill.h"
 #include "d/d_menu_window.h"
+#if TARGET_PC
+#include "d/d_menu_ext_status.h"
+#include "d/d_ext_status.h"
+#endif
 
 #include "d/d_camera.h"
 #include "d/d_menu_window_HIO.h"
@@ -27,8 +31,10 @@
 #include "m_Do/m_Do_controller_pad.h"
 
 #ifdef TARGET_PC
-#include "dusk/frame_interpolation.h"
 #include "dusk/action_bindings.h"
+#include "dusk/frame_interpolation.h"
+#include "dusk/main.h"
+#include "dusk/settings.h"
 #endif
 
 class dDlst_MENU_CAPTURE_c : public dDlst_base_c {
@@ -142,9 +148,23 @@ private:
 #endif
 };
 
+// ============================================
+// Alpha cleanup: the Quick-Swap / Call-Midna D-pad reservations only apply
+// during live gameplay — while the game is paused (item screen, map
+// screens) the quick-swap actions self-gate anyway, so suppressing the
+// D-pad there just killed menu navigation for no benefit. Reserved
+// directions stay suppressed in the field (that is where quick swap owns
+// them); paused UIs get the full D-pad back.
+// ============================================
+#if TARGET_PC
+static bool dMw_quickSwapReservationActive() {
+    return !dComIfGp_isPauseFlag();
+}
+#endif
+
 BOOL dMw_UP_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadUpReservedForQuickSwap(0)) {
+    if (dusk::dpadUpReservedForQuickSwap(0) && dMw_quickSwapReservationActive()) {
         return false;
     }
 #endif
@@ -153,7 +173,7 @@ BOOL dMw_UP_TRIGGER() {
 
 BOOL dMw_DOWN_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadDownReservedForQuickSwap(0)) {
+    if (dusk::dpadDownReservedForQuickSwap(0) && dMw_quickSwapReservationActive()) {
         return false;
     }
 #endif
@@ -162,7 +182,10 @@ BOOL dMw_DOWN_TRIGGER() {
 
 BOOL dMw_LEFT_TRIGGER() {
 #if TARGET_PC
-    if (dusk::callMidnaReservesDpadLeft(0)) {
+    // Paged inventory owns L/R even while live (unpaused) quick-equip is open.
+    if (dusk::callMidnaReservesDpadLeft(0) && dMw_quickSwapReservationActive() &&
+        !dMenu_Ring_c::isQuickEquipPagesExclusive())
+    {
         return false;
     }
 #endif
@@ -175,7 +198,9 @@ BOOL dMw_LEFT_TRIGGER() {
 
 BOOL dMw_RIGHT_TRIGGER() {
 #if TARGET_PC
-    if (dusk::dpadRightReservedForQuickSwap(0)) {
+    if (dusk::dpadRightReservedForQuickSwap(0) && dMw_quickSwapReservationActive() &&
+        !dMenu_Ring_c::isQuickEquipPagesExclusive())
+    {
         return false;
     }
 #endif
@@ -297,6 +322,11 @@ initFunc init_proc[] = {
     &dMw_c::insect_open2_init,
     &dMw_c::insect_move_init,
     &dMw_c::insect_close_init,
+#if TARGET_PC
+    &dMw_c::ext_status_open_init,
+    &dMw_c::ext_status_move_init,
+    &dMw_c::ext_status_close_init,
+#endif
 };
 
 typedef void (dMw_c::*procFunc)();
@@ -336,6 +366,11 @@ procFunc move_proc[] = {
     &dMw_c::insect_open2_proc,
     &dMw_c::insect_move_proc,
     &dMw_c::insect_close_proc,
+#if TARGET_PC
+    &dMw_c::ext_status_open_proc,
+    &dMw_c::ext_status_move_proc,
+    &dMw_c::ext_status_close_proc,
+#endif
 };
 
 void dMw_c::key_wait_init(u8 i_proc) {
@@ -356,6 +391,11 @@ void dMw_c::key_wait_init(u8 i_proc) {
     case RING_CLOSE:
         dMw_ring_delete();
         break;
+#if TARGET_PC
+    case EXT_STATUS_CLOSE:
+        dMw_ext_status_delete();
+        break;
+#endif
     case SAVE_CLOSE:
         dMw_fade_in();
         dMw_save_delete();
@@ -694,7 +734,8 @@ void dMw_c::key_wait_proc() {
             }
         } else if ((((dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER()
 #if TARGET_PC
-                      || (dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
+                      || (!dusk::isQuickEquipWheelEnabled() &&
+                          dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0) &&
                           dusk::getActionBindTrig(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0))
 #endif
                       ) && !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER()) || dMeter2Info_isMenuInForce(2) || dMeter2Info_isTouchKeyCheck(2)) &&
@@ -732,6 +773,88 @@ void dMw_c::key_wait_proc() {
             field_0x14B = 0;
             dComIfGp_setHeapLockFlag(1);
         }
+#if TARGET_PC
+        // Tap vs hold on OPEN_ITEM_WHEEL when Quick Equip Wheel is enabled.
+        {
+            static bool s_wheelHoldActive = false;
+            static u16 s_wheelHoldFrames = 0;
+            static bool s_openedQuickRing = false;
+            constexpr u16 kQuickHoldFrames = 8;  // ~250ms at 30Hz sim
+
+            const bool featureOn = dusk::isQuickEquipWheelEnabled() &&
+                                   dusk::isActionBound(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+            const bool canOpen =
+                featureOn && dMeter2Info_isWindowAccept(2) &&
+                (dMeter2Info_getMapStatus() == 0 || dMeter2Info_getMapStatus() == 1) &&
+                dMeter2Info_isItemOpenCheck() && !dComIfGp_isEnableNextStage() &&
+                !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER() && !dMw_UP_TRIGGER() &&
+                !dMw_DOWN_TRIGGER() && mMenuProc == NO_MENU;
+
+            if (!featureOn) {
+                s_wheelHoldActive = false;
+                s_wheelHoldFrames = 0;
+                s_openedQuickRing = false;
+            } else if (canOpen) {
+                // Use Down (pressed this frame), not Hold — Hold is false on the press edge
+                // and was incorrectly treated as a tap-release (always opened full wheel).
+                const bool down =
+                    dusk::getActionBindDown(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+                const bool pressed =
+                    dusk::getActionBindTrig(dusk::ActionBinds::OPEN_ITEM_WHEEL, 0);
+
+                if (pressed) {
+                    s_wheelHoldActive = true;
+                    s_wheelHoldFrames = 0;
+                    s_openedQuickRing = false;
+                }
+
+                if (s_wheelHoldActive && down) {
+                    if (s_wheelHoldFrames < 0xFFFF) {
+                        s_wheelHoldFrames++;
+                    }
+                    if (!s_openedQuickRing && s_wheelHoldFrames >= kQuickHoldFrames) {
+                        dMsgObject_setKillMessageFlag();
+                        if (dComIfGp_isHeapLockFlag() == 5) {
+                            dMeter2Info_getMeterClass()->emphasisButtonDelete();
+                        }
+                        u8 ringOrigin = 0;
+                        daPy_py_c* player = daPy_getPlayerActorClass();
+                        if (player != nullptr && player->checkWolf()) {
+                            ringOrigin = 2;
+                        }
+                        dMenu_Ring_c::setPendingQuickEquip(true);
+                        field_0x14B = 2;
+                        dMw_ring_create(ringOrigin);
+                        mMenuProc = RING_OPEN;
+                        field_0x14B = 0;
+                        dComIfGp_setHeapLockFlag(1);
+                        s_openedQuickRing = true;
+                    }
+                } else if (s_wheelHoldActive && !down) {
+                    if (!s_openedQuickRing) {
+                        dMsgObject_setKillMessageFlag();
+                        if (dComIfGp_isHeapLockFlag() == 5) {
+                            dMeter2Info_getMeterClass()->emphasisButtonDelete();
+                        }
+                        u8 ringOrigin = 0;
+                        daPy_py_c* player = daPy_getPlayerActorClass();
+                        if (player != nullptr && player->checkWolf()) {
+                            ringOrigin = 2;
+                        }
+                        dMenu_Ring_c::setPendingQuickEquip(false);
+                        field_0x14B = 2;
+                        dMw_ring_create(ringOrigin);
+                        mMenuProc = RING_OPEN;
+                        field_0x14B = 0;
+                        dComIfGp_setHeapLockFlag(1);
+                    }
+                    s_wheelHoldActive = false;
+                    s_wheelHoldFrames = 0;
+                    s_openedQuickRing = false;
+                }
+            }
+        }
+#endif
     }
 }
 
@@ -767,6 +890,23 @@ void dMw_c::collect_open_proc() {
 }
 
 void dMw_c::collect_move_proc() {
+#if TARGET_PC
+    // Level Editor — belt deny before COLLECT_CLOSE fade (1x.1). If Save was
+    // somehow requested, clear it here so we never fade-out→SAVE_OPEN.
+    if (dusk::g_levelEditorSession && mpMenuCollect->getSubWindowOpenCheck() == 1) {
+        Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        mpMenuCollect->clearSubWindowOpenCheck();
+        mpMenuCollect->_move();
+        return;
+    }
+    // Sibling Ext Status (Tools/Quest/Atlas) — L/R while Collect has no submenu.
+    if (mpMenuCollect->getSubWindowOpenCheck() == 0 && !mpMenuCollect->isKeyCheck() &&
+        (dMw_LEFT_TRIGGER() || dMw_RIGHT_TRIGGER()))
+    {
+        mMenuProc = EXT_STATUS_OPEN;
+        return;
+    }
+#endif
     if (mpMenuCollect->getSubWindowOpenCheck()) {
         mMenuProc = COLLECT_CLOSE;
     } else if ((dMw_isPush_S_Button() && !mpMenuCollect->isKeyCheck()) || mpMenuCollect->isOutCheck()) {
@@ -779,6 +919,20 @@ void dMw_c::collect_move_proc() {
 void dMw_c::collect_close_proc() {
     if (mDoGph_gInf_c::getFader()->getStatus() == 0) {
         if (mpMenuCollect->getSubWindowOpenCheck() == 1) {
+#if TARGET_PC
+            // Level Editor — required secondary deny (1x.1). Primary deny is in
+            // wait_proc / pointerActivateCurrent; this catches any path that
+            // still set check==1 (brittle Save-icon coords) so SAVE_OPEN never
+            // runs. collect_close_init already faded out — fade back in and
+            // stay on collect (collect was not deleted; only SAVE_OPEN deletes).
+            if (dusk::g_levelEditorSession) {
+                Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+                mpMenuCollect->clearSubWindowOpenCheck();
+                dMw_fade_in();
+                mMenuProc = COLLECT_MOVE;
+                return;
+            }
+#endif
             mMenuProc = SAVE_OPEN;
         } else if (mpMenuCollect->getSubWindowOpenCheck() == 2) {
             mMenuProc = OPTIONS_OPEN;
@@ -1117,6 +1271,67 @@ void dMw_c::insect_close_proc() {
     }
 }
 
+#if TARGET_PC
+void dMw_c::ext_status_open_init(u8) {
+    dMeter2Info_setWindowStatus(11);
+    dMw_ext_status_create();
+}
+
+void dMw_c::ext_status_move_init(u8) {}
+
+void dMw_c::ext_status_close_init(u8) {}
+
+void dMw_c::ext_status_open_proc() {
+    mMenuProc = EXT_STATUS_MOVE;
+}
+
+void dMw_c::ext_status_move_proc() {
+    if (mpMenuExtStatus == NULL) {
+        mMenuProc = COLLECT_MOVE;
+        dMeter2Info_setWindowStatus(3);
+        return;
+    }
+    mpMenuExtStatus->_move();
+    if (mpMenuExtStatus->wantsClose()) {
+        mMenuProc = EXT_STATUS_CLOSE;
+        return;
+    }
+    const s8 handoff = mpMenuExtStatus->getCollectHandoff();
+    if (handoff >= 0) {
+        mpMenuExtStatus->clearCollectHandoff();
+        dMw_ext_status_delete();
+        dMeter2Info_setWindowStatus(3);
+        mMenuProc = COLLECT_MOVE;
+        Z2GetAudioMgr()->seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    }
+}
+
+void dMw_c::ext_status_close_proc() {
+    dMw_ext_status_delete();
+    // Close entire pause (Collect was kept alive under Ext Status).
+    mMenuProc = COLLECT_CLOSE;
+}
+
+void dMw_c::dMw_ext_status_create() {
+    if (mpMenuExtStatus != NULL) {
+        return;
+    }
+    mpMenuExtStatus = JKR_NEW dMenu_ExtStatus_c(mpStick, mpCStick);
+    if (mpMenuExtStatus != NULL) {
+        mpMenuExtStatus->_create();
+    }
+}
+
+bool dMw_c::dMw_ext_status_delete() {
+    if (mpMenuExtStatus != NULL) {
+        mpMenuExtStatus->_delete();
+        JKR_DELETE(mpMenuExtStatus);
+        mpMenuExtStatus = NULL;
+    }
+    return true;
+}
+#endif
+
 void dMw_c::dMw_capture_create() {
     if (!dComIfGp_isPauseFlag() && mpCapture == NULL) {
         mpCapture = JKR_NEW dDlst_MENU_CAPTURE_c();
@@ -1140,16 +1355,29 @@ void dMw_c::dMw_ring_create(u8 i_origin) {
     markMemSize();
     dComIfGp_setHeapLockFlag(1);
 
+#if TARGET_PC
+    // Peek before ctor consumes pending — live quick-wheel skips freeze-frame pause.
+    const bool liveQuick = dMenu_Ring_c::peekPendingQuickEquip();
+#endif
+
     mpMenuRing = JKR_NEW dMenu_Ring_c(mpHeap, mpStick, mpCStick, i_origin);
     JUT_ASSERT(2038, mpMenuRing != NULL);
     mpMenuRing->_create();
 
-    if (mpCapture == NULL) {
-        mpCapture = JKR_NEW dDlst_MENU_CAPTURE_c();
-        JUT_ASSERT(2043, mpCapture != NULL);
-    }
+#if TARGET_PC
+    if (liveQuick && mpMenuRing->isQuickEquipMode()) {
+        // No capture / no onPauseFlag — world keeps ticking at reduced sim scale.
+        dMenu_Ring_c::setQuickEquipLiveWorld(true);
+    } else
+#endif
+    {
+        if (mpCapture == NULL) {
+            mpCapture = JKR_NEW dDlst_MENU_CAPTURE_c();
+            JUT_ASSERT(2043, mpCapture != NULL);
+        }
 
-    mpCapture->setCaptureFlag();
+        mpCapture->setCaptureFlag();
+    }
 
 #ifdef TARGET_PC
     dusk::frame_interp::request_presentation_sync();
@@ -1157,6 +1385,9 @@ void dMw_c::dMw_ring_create(u8 i_origin) {
 }
 
 bool dMw_c::dMw_ring_delete() {
+#if TARGET_PC
+    dMenu_Ring_c::setQuickEquipLiveWorld(false);
+#endif
     if (mpMenuRing != NULL) {
         mpMenuRing->_delete();
         JKR_DELETE(mpMenuRing);
@@ -1641,6 +1872,9 @@ int dMw_c::_create() {
     mpMenuFishing = NULL;
     mpMenuSkill = NULL;
     mpMenuInsect = NULL;
+#if TARGET_PC
+    mpMenuExtStatus = NULL;
+#endif
     mMemSize = 0;
     field_0x144 = 3;
 
@@ -1701,6 +1935,12 @@ int dMw_c::_draw() {
             if (mpMenuCollect != NULL) {
                 mpMenuCollect->draw();
             }
+#if TARGET_PC
+        } else if (dMeter2Info_getWindowStatus() == 11) {
+            if (mpMenuExtStatus != NULL) {
+                dComIfGd_set2DOpa(mpMenuExtStatus);
+            }
+#endif
         } else if (dMeter2Info_getWindowStatus() == 4) {
             if (mpMenuFmap != NULL) {
                 mpMenuFmap->_draw();
@@ -1739,6 +1979,16 @@ int dMw_c::_draw() {
             dComIfGd_set2DOpa(mpMenuRing);
         }
     }
+#if TARGET_PC
+    // Live quick-equip skips pause/capture — still submit the ring so icons draw.
+    else if (dMenu_Ring_c::isQuickEquipLiveWorld() && dMeter2Info_getWindowStatus() == 2 &&
+             mpMenuRing != NULL)
+    {
+        mpMenuRing->drawFlag0();
+        dComIfGd_set2DOpa(mpMenuRing);
+        dComIfGd_set2DOpa(mpMenuRing);
+    }
+#endif
     return 1;
 }
 
@@ -1780,6 +2030,11 @@ int dMw_c::_delete() {
     } else if (!dMw_insect_delete()) {
         mDoExt_setCurrentHeap(heap);
         return 0;
+#if TARGET_PC
+    } else if (!dMw_ext_status_delete()) {
+        mDoExt_setCurrentHeap(heap);
+        return 0;
+#endif
     } else if (!dMw_ring_delete()) {
         mDoExt_setCurrentHeap(heap);
         return 0;

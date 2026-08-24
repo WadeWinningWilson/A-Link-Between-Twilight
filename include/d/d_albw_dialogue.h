@@ -27,8 +27,14 @@ public:
     /// internally; only the last page returns true.
     bool checkDismiss();
 
+    /// §184 Bug 3b: auto-advance without A. Returns true when the last page
+    /// finished (caller may close + resume); false if another page is now up.
+    bool advancePageOrFinished();
+
     bool isReady()   const { return mReady; }
     bool isVisible() const { return mVisible; }
+    int  pageCount() const { return mPageCount; }
+    int  pageIndex() const { return mPageIndex; }
 
     virtual void draw() override;
 

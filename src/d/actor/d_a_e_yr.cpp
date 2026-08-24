@@ -10,6 +10,9 @@
 #include "d/d_cc_d.h"
 #include "d/d_path.h"
 #include "f_op/f_op_actor_enemy.h"
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
 
 class e_yrHIO_c : public fOpAcm_HIO_entry_c {
 public:
@@ -1760,6 +1763,16 @@ static s8 e_yr_damage(e_yr_class* i_this) {
         i_this->field_0xebc = cM_rndF(400.0f);
         i_this->field_0xec6 = 15 + TREG_S(7);
         actor->health = 0;
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (alpha cleanup)
+        // The cut-down finisher zeroes health here, outside cc_at_check, so
+        // the common kill-rupee hook never sees this death — grant manually,
+        // mirroring the E_YC hang-bite pattern (d_a_e_yc.cpp). onEnemyKill
+        // is idempotent per actor id, so a prior cc_at_check grant is safe.
+        // ============================================
+        dAlbwEnemyRupees_onEnemyKill(actor);
+#endif
     }
 
     s8 retVal = 0;

@@ -89,6 +89,8 @@ public:
     cXyz mHairInterpCurr[HAIR_STRAND_COUNT * HAIR_SEGMENT_COUNT];
     bool mHairInterpPrevValid;
     bool mHairInterpCurrValid;
+    // Cut Actors: angle.x == 0x0E51 at create → load gen-2 E_s1.arc (not shipping E_S2).
+    bool mUseEs1Arc;
 #endif
 };
 

@@ -10,6 +10,11 @@
 #include "d/d_item_data.h"
 #include "f_op/f_op_actor_mng.h"
 
+#if TARGET_PC
+#include "d/d_ww_itemmdl_pc.h"
+#include "dusk/settings.h"
+#endif
+
 int daItemBase_c::DeleteBase(const char* i_resName) {
     dComIfG_resDelete(&mPhase, i_resName);
     return 1;
@@ -27,7 +32,51 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
                                  s16 i_bckName, s16 i_bxaName, s16 i_brkName, s16 i_btpName) {
     JUT_ASSERT(0, 0 <= m_itemNo && m_itemNo <= 255);
 
-    J3DModelData* modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+    J3DModelData* modelData = NULL;
+#if TARGET_PC
+    if (dWwItemmdl_clothesBundleForItem(m_itemNo)) {
+        // Grandma clothes: mount/API create path (acquire+finish), not bow-era raw getObjectRes.
+        // Host WEAR_KOKIRI still carries F_gD_rupy BRK indices; donor FUKU has no anms
+        // (mSrtIdx/mTevIdx = -1). Binding that BRK against vfuku's material table AVs in
+        // J3DAnmTevRegKey::searchUpdateMaterialID — clear TP anm indices (donor-faithful).
+        // §66: CheckItemCreateHeap already passes kit arc + -1 anms; keep the clear here so
+        // any non-kit caller (field path) cannot reintroduce the BRK AV.
+        i_btkName = -1;
+        i_bpkName = -1;
+        i_bckName = -1;
+        i_bxaName = -1;
+        i_brkName = -1;
+        i_btpName = -1;
+        modelData = dWwItemmdl_getClothesBundleModelData();
+        (void)i_arcName;
+        (void)i_bmdName;
+    } else if (m_itemNo == dItemNo_BOW_e && dusk::getSettings().game.wwItemmdlGetItem.getValue()) {
+        if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+            dWwItemmdl_bracketLog("CreateItemHeap: enter");
+            dWwItemmdl_logHeap("CreateItemHeap enter");
+        }
+
+        if (dWwItemmdl_use2DIsolateHeap()) {
+            dWwItemmdl_bracketLog("2D isolate: O_gD_bow mesh (itemmdl arc at create)");
+            modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+        } else {
+            // Viewer: load the selected itemmdl BDL index (default 0xF = vbow → identical bow
+            // path). Set the index + Replay to preview any of the 21 WW meshes in the get-item spin.
+            modelData = dWwItemmdl_getItemmdlModelData(
+                static_cast<u16>(dusk::getSettings().game.wwItemmdlViewerBdlIndex.getValue()));
+            if (modelData != NULL) {
+                dWwItemmdl_patchModelForPc(modelData);
+                if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+                    dWwItemmdl_log2QPrimeAudit("heap", modelData, fopAcM_GetRoomNo(this));
+                }
+            }
+        }
+    } else {
+        modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+    }
+#else
+    modelData = (J3DModelData*)dComIfG_getObjectRes(i_arcName, i_bmdName);
+#endif
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
@@ -69,6 +118,16 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
     }
 
     mpModel = mDoExt_J3DModel__create(modelData, modelflags, flags);
+#if TARGET_PC
+    if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+        if (mpModel != NULL) {
+            dWwItemmdl_bracketLog("CreateItemHeap: after J3DModel__create OK");
+            dWwItemmdl_logHeap("after J3DModel__create");
+        } else {
+            dWwItemmdl_bracketLog("CreateItemHeap: J3DModel__create FAILED");
+        }
+    }
+#endif
     if (mpModel == NULL) {
         return 0;
     }
@@ -138,6 +197,15 @@ int daItemBase_c::CreateItemHeap(char const* i_arcName, s16 i_bmdName, s16 i_btk
     if (!clothCreate()) {
         return 0;
     }
+
+#if TARGET_PC
+    if (dWwItemmdl_isPhase2BracketBow(m_itemNo)) {
+        const int heap_result = __CreateHeap() ? TRUE : FALSE;
+        dWwItemmdl_bracketLog(heap_result ? "CreateItemHeap: __CreateHeap OK" :
+                                             "CreateItemHeap: __CreateHeap FAILED");
+        return heap_result;
+    }
+#endif
 
     return __CreateHeap() ? TRUE : FALSE;
 }

@@ -13,9 +13,16 @@
 #include "JSystem/JHostIO/JORServer.h"
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "SSystem/SComponent/c_math.h"
+#include "Z2AudioLib/Z2SeqMgr.h"  // Z2GetSeqMgr / stopWolfHowlSong (Wolf Howl music stop)
+#include "d/d_ext_save_guard.h"  // §47: donor-space player ambient tuner
+#include "d/d_bg_s_gnd_chk.h"  // §652 probe: direct ground query
 #include "d/d_item.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_outfit.h"
+#include "d/d_albw_sumo_test.h"
+#include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_region_mult.h"
 #include "d/d_pane_class.h"
 #include "d/d_demo.h"
 #include "d/actor/d_a_crod.h"
@@ -56,16 +63,23 @@
 #include "d/d_albw_death_rupee.h"
 #include "d/d_albw_combat.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_flurry_rush.h"
 #include "d/d_albw_shield.h"
+#include "d/d_menu_ring.h"
 #include "dusk/trace_noop.h"
 #include "d/d_albw_wolf_stun.h"
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_wolf_combat.h"
 #include "d/d_albw_wolf_charge_hud.h"
 #include "dusk/action_bindings.h"
+#include "dusk/dpad_quick_swap.h"
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
+#include "d/d_ww_itemmdl_pc.h"
+#include "d/d_demo_leftover_viewer.h"
+#include "dusk/custom_assets.hpp"
 #include "dusk/hurricane_test.h"
+#include "dusk/logging.h"  // DuskLog — TEMP arc/model lifecycle trace (STRIP with D_ALBW_ARC_LIFECYCLE_DEBUG)
 #include "res/Object/Alink.h"
 #include <cstring>
 #include <dusk/string.hpp>
@@ -91,6 +105,237 @@ static const char l_bArcName[] = "Bmdl";
 
 static const char l_kArcName[] = "Kmdl";
 
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Magic Armor model-validity flag)
+// Single source of truth for "the model currently built for Magic Armor is the REAL
+// Mmdl model (ml.bmd/ml_head.bmd), not the Kmdl fallback."  changeLink's Magic branch
+// can fall back to Link's Hero's body when Mmdl isn't resolvable (shop-buy under churn),
+// but the wear flag stays Magic — so draw()'s Magic-only ops (water-drop color material
+// indices, the rupee-drain Brk animators) would read off the end of the wrong model and
+// crash.  Gating those ops on this flag makes the DRAW match the MODEL: a fallback body
+// is drawn as a plain body (no Magic ops) until the real Mmdl model is built.
+// ============================================
+static bool s_albwMagicModelReady = false;
+
+// ============================================
+// NEW CODE — ALBW Port (GLOBAL Cap Wear — native override resolution flag)
+// True when changeLink's non-sumo Cap Wear override actually built the requested cap/topknot
+// this build; false when it FELL BACK to the outfit's native hat (the chosen arc wasn't
+// resident yet -- e.g. right after crossing the owning-base boundary, before the non-sumo cap
+// donor finishes loading).  The outfit module reads it (dAlbwAlink_nativeCapResolved) to
+// self-heal: re-fire one native rebuild once the donor lands, so the cap appears on every base
+// without ever blocking a normal outfit swap.  Defaults true (nothing to resolve: Off/sumo/wolf).
+// ============================================
+static bool s_albwNativeCapResolved = true;
+#endif
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (arc epoch / generation gate for the cycling crash)
+// loadModelDVD frees Link's clothes arc heap (mpArcHeap->freeAll) and reloads the next
+// arc INTO THE SAME HEAP ADDRESS, so a model left from a prior load points at reloaded/
+// garbage data while its J3DModel/J3DModelData addresses AND material count all still look
+// valid — an archive-pointer compare or a matNum heuristic cannot detect this (proven by
+// the 2026-06-29 lifecycle trace: every base arc reloaded at the same 0x..a6c0 archive).
+// s_albwArcEpoch is bumped on every freeAll; changeLink/changeWolf stamp the epoch the
+// current clothes models were built in.  modelDraw/shadowDraw then skip the arc-heap
+// clothes models when the two differ (the heap was freed under them) — a reliable,
+// address-reuse-proof seatbelt that replaces the matNum heuristic for those models.
+// ============================================
+static u32 s_albwArcEpoch = 0;
+static u32 s_albwClothesModelEpoch = 0;
+// Track B iron-boots skin: true when mpLinkBootModels were built as the WW vboot (2-joint prop)
+// instead of al_bootsH. Gates the foot-rig (skip OOB setAnmMtx) and the WW draw recipe.
+static bool s_albwWwBootsSkinned = false;
+// ============================================
+// NEW CODE — ALBW Port (native WW bow skin: Layer-B al_bow replacement)
+// Non-NULL when Link's held bow model data came from the loose rebuilt WW bow BMD
+// (AlAnm_788.bmd, authored in al_bow model space). Gates the boots-style ambient
+// draw for that model (WW materials crush under MAJI) and disables the legacy
+// wwItemmdlHeldSkin scope path while active.
+// ============================================
+static J3DModelData* s_albwWwBowNative = NULL;
+
+// ============================================
+// NEW CODE — ALBW Port (cap/face-donor lifecycle safety — declared in d_a_alink.h)
+// External linkage so the sumo module can invalidate the clothes generation when it frees the
+// Kmdl cap/face donor (a free that, unlike the pipeline's freeAll, does not bump the epoch).
+// ============================================
+void dAlbwAlink_invalidateClothesEpoch() { ++s_albwArcEpoch; }
+
+void dAlbwAlink_resyncClothesEpoch() { s_albwClothesModelEpoch = s_albwArcEpoch; }
+
+void dAlbwAlink_abortStuckClothesChange(daAlink_c* link) {
+    if (link != NULL) {
+        link->albwAbortStuckClothesChange();
+    }
+}
+
+// True when the last native changeLink resolved the requested Cap Wear cap/topknot (false on
+// fallback to the outfit's native hat).  The outfit module self-heals off this (see the static).
+bool dAlbwAlink_nativeCapResolved() { return s_albwNativeCapResolved; }
+
+// Latched by Custom Models winner change. Same-arc re-equip still rebuilds in place
+// (Custom-Model-API §9 — hot-free under live models zombies the pipeline). Cleared on
+// the next clothes settle; cross-arc quick-swap is what remounts from the new FST.
+static bool s_albwForceClothesRemount = false;
+
+void dAlbwAlink_requestClothesRemount() { s_albwForceClothesRemount = true; }
+
+// ============================================
+// NEW CODE — ALBW Port (universal model-state consistency token)
+// Encodes the draw-relevant identity of Link's clothes models (wolf / sumo-body / wear
+// kind).  changeLink/changeWolf stamp s_albwBuiltModelState with the token the models were
+// built for; draw() compares it to the live token and skips the WHOLE Link draw for the
+// frame if they disagree (or the arc epoch moved).  Because every crashing consumer
+// (modelDraw->getFog, setWaterDropColor material indices, the Magic Brk animators, the
+// shadow adds) runs inside draw(), this ONE choke-point guard prevents ALL of them from
+// ever walking stale/mismatched model state — the single method that replaces per-consumer
+// gating.  The serialization/coalescing fixes keep the tokens in agreement during normal
+// play, so the guard does not fire (no visible flicker); it is purely the crash seatbelt.
+// ============================================
+static u32 s_albwBuiltModelState = 0xFFFFFFFF;
+static inline u32 albwModelStateToken(bool wolf, bool sumoBody, bool casual, bool zora,
+                                      bool magic) {
+    return (wolf ? 1u : 0u) | (sumoBody ? 2u : 0u) | (casual ? 4u : 0u) | (zora ? 8u : 0u) |
+           (magic ? 16u : 0u);
+}
+
+// ============================================
+// NEW CODE — ALBW Port (build-time corruption DETECTOR)
+// We do not yet know WHY a clothes-model build occasionally comes out corrupt (a material
+// with a WILD mPEBlock -> the getFog crash).  Instead of gating the symptom per-consumer,
+// catch it AT BIRTH: at the end of changeLink, walk every clothes model's materials.  A
+// valid material's PEBlock is part of the same BMD as its J3DModelData (< ~1MB away); a
+// corrupt one is ~GBs off.  getPEBlock() is a member read (no deref), so the scan never
+// faults.  When a build is corrupt we log the FULL context (which model/material, current +
+// previous arc, sumo flag, arc/heap pointers, build #) so the pipeline cause is findable,
+// and flag the build so draw()'s guard skips Link until the next clean rebuild (insurance
+// that also keeps the session alive to collect MORE corrupt-build samples).
+// albwFirstCorruptMat returns the first bad material index, or -1 if the model is clean/absent.
+// ============================================
+static bool        s_albwBuildIntegrityOk = true;
+static const char* s_albwPrevArcName      = NULL;
+static u32         s_albwBuildCounter      = 0;
+static int albwFirstCorruptMat(J3DModel* m) {
+    if (m == NULL) return -1;            // absent model is not corrupt
+    J3DModelData* md = m->getModelData();
+    if (md == NULL) return -2;
+    u16 n = md->getMaterialNum();
+    if (n > 256) return -3;              // wild material count = corrupt
+    const intptr_t base  = (intptr_t)md;
+    const intptr_t kNear = (intptr_t)0x10000000;  // 256MB; BMD < 1MB, corruption ~GBs
+    for (u16 k = 0; k < n; k++) {
+        J3DMaterial* mat = md->getMaterialNodePointer(k);
+        if (mat == NULL) return (int)k;
+        intptr_t d = (intptr_t)mat->getPEBlock() - base;
+        if (d < -kNear || d > kNear) return (int)k;
+    }
+    return -1;
+}
+
+// ============================================
+// NEW CODE — ALBW Port (build-then-swap clothes load: never free a live model)
+// Second arc heap + its own phase request.  loadModelDVD loads the NEW clothes arc into
+// the alt heap while the OLD models stay fully valid in mpArcHeap, builds the new models
+// from it (changeLink repoints mpLinkModel etc.), THEN frees the old heap and swaps the
+// two heaps/requests.  There is no instant where a live pointer references freed memory,
+// so draw / calc / shadow / any future consumer always sees a valid model — the real
+// invariant enforced at the source, not per-consumer gating.  Scoped to the NORMAL clothes
+// change (non-metamorphose, non-sumo); wolf transform + the sumo skip-path keep their
+// existing in-place flow.  Falls back to in-place free-then-load if the alt heap is NULL.
+// ============================================
+static JKRExpHeap*                    s_albwArcHeapB   = NULL;        // alt heap; ping-pongs with mpArcHeap
+static request_of_phase_process_class s_albwPhaseReqB  = {NULL, 0};   // alt heap's load request
+static const char*                    s_albwSwapOldArc = NULL;        // old arc to free after the swap
+static bool                           s_albwSwapActive = false;       // mid build-then-swap (guards retry re-init)
+
+void daAlink_c::albwAbortStuckClothesChange() {
+    // draw() early-outs the entire Link body while mClothesChangeWaitTimer != 0.
+    // After a Custom Models FST flip (Beta Link Kmdl off → Kokiri textures),
+    // build-then-swap can bounce timer 1↔2 forever on a never-complete resLoad —
+    // playable but invisible. Abort restores the pre-swap models (still valid in
+    // mpArcHeap) and clears the hide gate.
+    if (mClothesChangeWaitTimer == 0 && !s_albwSwapActive) {
+        dAlbwAlink_resyncClothesEpoch();
+        return;
+    }
+    DuskLog.warn("[Alink] abort stuck clothes change (timer={} swapActive={} arc={} oldArc={})",
+                 (int)mClothesChangeWaitTimer, s_albwSwapActive ? 1 : 0,
+                 mArcName ? mArcName : "(null)",
+                 s_albwSwapOldArc ? s_albwSwapOldArc : "(null)");
+    const char* liveArc = s_albwSwapOldArc != NULL ? s_albwSwapOldArc : mArcName;
+    if (s_albwSwapActive) {
+        // Drop the hung alt-heap load; live models still reference mpArcHeap
+        // unless a force-remount already tore it down.
+        if (mArcName != NULL) {
+            if (!dComIfG_resDelete(&s_albwPhaseReqB, mArcName)) {
+                dComIfG_deleteObjectResMain(mArcName);
+            }
+        }
+        cPhs_Reset(&s_albwPhaseReqB);
+        if (s_albwArcHeapB != NULL) {
+            s_albwArcHeapB->freeAll();
+        }
+        // Point mArcName back at the arc still resident in the live heap.
+        if (s_albwSwapOldArc != NULL) {
+            mArcName = s_albwSwapOldArc;
+        }
+        s_albwSwapActive = false;
+        s_albwSwapOldArc = NULL;
+    }
+    s_albwForceClothesRemount = false;
+    mClothesChangeWaitTimer = 0;
+    s_albwBuildIntegrityOk = true;
+    // Equip/flags may still say Hero's while models are Ordon — draw() then skips
+    // forever (builtModelState != curState). Reconcile to the live arc and rebuild.
+    dAlbwOutfit_onClothesLoadFailed(liveArc != NULL ? liveArc : mArcName, "abort");
+    dAlbwAlink_resyncClothesEpoch();
+    changeLink(1);
+}
+
+// ============================================
+// NEW CODE — ALBW Port (root-motion foot re-anchor after a model rebuild)
+// A model rebuild (changeLink / changeWolf) swaps mpLinkModel, so the foot joint jumps vs
+// the stored previous foot position (field_0x37b0) -> setFootSpeed measures a huge per-frame
+// displacement -> speedF spikes -> Link teleports (only while the stick drives movement, so
+// field_0x33a0 feeds speedF).  This counter is armed at the end of each rebuild; while > 0,
+// setFootSpeed zeroes the foot speed for the frame AND lets its store loop re-anchor
+// field_0x37b0 to the (valid, calc'd) NEW-model foot in LOCAL space, so normal root motion
+// resumes from ~0 displacement.  The multi-frame window covers model-calc latency and the
+// metamorphose double-build (two changeLink calls re-arm it).  NOTE: the previous fix wrote
+// current.pos into field_0x37b0, but that is WORLD space while field_0x37b0/sp18 are LOCAL
+// (mInvMtx * getAnmMtx(foot)) -- the space mismatch left the displacement just as garbage.
+// ============================================
+static int                            s_albwFootReseedFrames = 0;
+#endif
+
+#if TARGET_PC
+// ============================================
+// TEMP INSTRUMENTATION — ALBW Port (arc/model free->build->draw lifecycle trace)
+// Step 1 of the cycling-crash fix: pinpoint WHICH Link model is left pointing at a
+// freed/reused arc, and WHAT freed it.  All logs are EVENT-DRIVEN (a clothes-change
+// rebuild, an arc-heap freeAll, or the Kmdl donor free) — never per-frame — so they
+// add no hot-path cost.  Set the toggle to 0 (or delete this block + its call sites)
+// to STRIP before any upstream push.  Output lands in the main dusklight-<ts>.log
+// alongside the crash backtrace, so the BUILD / FREEALL / donor lines correlate
+// directly with the "modelDraw: skip corrupt model" line and the rva= fault.
+// ============================================
+#define D_ALBW_ARC_LIFECYCLE_DEBUG 0
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+// Live archive pointer registered for an arc NAME (NULL if not registered or freed/
+// mid-read).  Same lookup the Magic-fallback log uses; reading it at build, at freeAll,
+// and at donor-free lets one repro show exactly when a model's source arc was freed out
+// from under it (the freeAll-bypasses-refcount root).
+static void* albwArcArchive(const char* arc) {
+    if (arc == NULL) return NULL;
+    dRes_info_c* info = g_dComIfG_gameInfo.mResControl.getObjectResInfo(arc);
+    return (info != NULL) ? (void*)info->getArchive() : NULL;
+}
+#endif
+#endif
+
 static const char l_zArcName[] = "Zmdl";
 
 static const char l_mArcName[] = "Mmdl";
@@ -111,6 +356,248 @@ static const char l_arcName[] = "Alink";
 const char* daAlink_c::getAlinkArcName() {
     return l_arcName;
 }
+
+#if TARGET_PC
+// NEW CODE — ALBW Port (native WW bow skin): expose the bow-active state so the
+// arrow actor can gate its own WW skin on it (arrow WW <=> bow WW).
+bool daAlink_c::checkWwBowSkinActive() {
+    return s_albwWwBowNative != NULL;
+}
+#endif
+
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
+// Runtime glide-active state: the debug toggle only ENABLES the leaf; the player engages the
+// glide by pressing A mid-air (A again = let go → fall), à la WW (doTrigger toggle). One Link,
+// so a file-static is fine; reset at each auto-jump entry so every ledge jump starts un-glided.
+// ============================================
+static bool s_dekuLeafGlideActive = false;
+
+// "Leaf out AND engaged" predicate that re-gates the cucco-glide chassis. Kept out of non-PC
+// builds (settings are PC-only). Becomes a real leaf-item/equip check later.
+bool daAlink_c::checkDekuLeafGlide() const {
+#if TARGET_PC
+    return dusk::getSettings().game.dekuLeafGlideTest.getValue() && s_dekuLeafGlideActive;
+#else
+    return false;
+#endif
+}
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P3b — leaf model load + hold)
+// The WW Deku Leaf (vleaf, itemmdl 0x15) has no TP model to override, so we load it as a
+// standalone Layer-B loose BMD ("Wind Waker Deku Leaf" mod) and hold it on Link ourselves.
+// Session-cached J3DModel on the persistent game heap (survives clothes-heap rebuilds);
+// positioned above the head (joint 4) each frame while gliding, drawn boots-style (no MAJI).
+// ============================================
+static J3DModel* s_dekuLeafModel = NULL;
+// Billow phase, advanced each frame while gliding (WW uses 0x82f/frame). Drives the rib flap.
+static s16 s_dekuLeafBillowPhase = 0;
+
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P3e — hand weld). REVERTIBLE: comment out the
+// #define to fall back to the plain midpoint anchor + all-ribs-flutter (no pin, no freeze).
+// Diagnostic (ALBW-LEAF-GRIP, 17/17 samples) proved the two grip ribs nearest Link's hands are:
+//   LEFT hand  <-> joint 8 (model-name "Barm2");  RIGHT hand <-> joint 6 (model-name "Farm2").
+// (Model names do NOT match world sides — pairing was measured, not assumed.) We pin those two
+// rib tips to the hand world positions and freeze billow on both grip ribs (joints 5-8), leaving
+// the free ribs (Larm 1,2 / Rarm 3,4) to flutter — mirrors WW keeping grip roots still.
+// ============================================
+#define DEKU_LEAF_HAND_WELD 1
+#if DEKU_LEAF_HAND_WELD
+static cXyz s_dekuLeafLHandW(0.0f, 0.0f, 0.0f);  // left  hand world pos, refreshed pre-calc
+static cXyz s_dekuLeafRHandW(0.0f, 0.0f, 0.0f);  // right hand world pos, refreshed pre-calc
+// TIP-TARGETED PIN: snapping the joint ORIGIN to the hand parked the joint in Link's palm while
+// the visible grip tip flew ~40 units away. Instead we place the joint so its grip TIP lands on
+// the hand: origin = hand - R * tipLocal, with R the joint's runtime rotation. tipLocal measured
+// in Blender (joint-local space) off the grip strands: Larm2 |39.4|, Rarm2 |41.7|.
+// Set DEKU_LEAF_TIP_PIN 0 to fall back to the old origin-pin if the joint frames don't match.
+#define DEKU_LEAF_TIP_PIN 1
+static cXyz s_dekuLeafTipLocal2(-17.98f, 30.07f, 17.93f);  // jnt 2 (Larm2 -> RIGHT hand)
+static cXyz s_dekuLeafTipLocal4(8.35f, 39.61f, 10.00f);    // jnt 4 (Rarm2 -> LEFT  hand)
+#endif
+
+// ============================================
+// NEW CODE — ALBW Port (Deku Leaf glide, WIP P3d — rib billow)
+// Re-implements WW's parachute rib articulation with our OWN math (no WW source): a per-joint
+// callback that applies a sin-driven local rotation to the canopy's rib joints during modelCalc,
+// so the leaf flaps in flight. Root(0) stays put; arm-roots (1,3,5,7) and tips (2,4,6,8) flap,
+// tips more, each arm phase-offset so it billows rather than pulsing in lockstep.
+// ============================================
+static int dekuLeafJointCB(J3DJoint* i_joint, int param_1) {
+    if (param_1 != 0) {
+        return 1;
+    }
+    J3DModel* model = j3dSys.getModel();
+    if (model == NULL) {
+        return 1;
+    }
+    int jnt = i_joint->getJntNo();
+#if DEKU_LEAF_HAND_WELD
+    // Grip ribs held by the hands: jnt 2 (Larm2) -> LEFT hand, jnt 4 (Rarm2) -> RIGHT hand.
+    // Pairing re-measured after the +180 baseRotY facing turn swapped the leaf's sides
+    // (ALBW-LEAF-GRIP: 9/9 L->idx2, R->idx4; was 2->right/4->left before the turn). Grip ribs
+    // are weighted to their own strand only, so pinning them can't drag the canopy.
+    if (jnt == 2 || jnt == 4) {
+        Mtx m;
+        MTXCopy(model->getAnmMtx(jnt), m);      // keep the rib's orientation...
+        const cXyz& hp = (jnt == 2) ? s_dekuLeafLHandW : s_dekuLeafRHandW;
+#if DEKU_LEAF_TIP_PIN
+        // ...and offset the origin so the grip TIP (not the joint) rests in the hand.
+        const cXyz& tl = (jnt == 4) ? s_dekuLeafTipLocal4 : s_dekuLeafTipLocal2;
+        const f32 ox = m[0][0] * tl.x + m[0][1] * tl.y + m[0][2] * tl.z;
+        const f32 oy = m[1][0] * tl.x + m[1][1] * tl.y + m[1][2] * tl.z;
+        const f32 oz = m[2][0] * tl.x + m[2][1] * tl.y + m[2][2] * tl.z;
+        m[0][3] = hp.x - ox;
+        m[1][3] = hp.y - oy;
+        m[2][3] = hp.z - oz;
+#else
+        m[0][3] = hp.x;                          // legacy: snap the joint origin onto the hand
+        m[1][3] = hp.y;
+        m[2][3] = hp.z;
+#endif
+        model->setAnmMtx(jnt, m);
+        MTXCopy(m, J3DSys::mCurrentMtx);
+        return 1;
+    }
+    if (jnt == 1 || jnt == 3) {                  // grip-rib inner segment: frozen (no billow)
+        MTXCopy(model->getAnmMtx(jnt), J3DSys::mCurrentMtx);
+        return 1;
+    }
+#endif
+    if (jnt >= 1 && jnt <= 8) {
+        Mtx m;
+        MTXCopy(model->getAnmMtx(jnt), m);
+        const s16 amp = (jnt % 2 == 0) ? 0x0900 : 0x0480;      // tips flap ~2x the arm-roots
+        const s16 phase = (s16)(s_dekuLeafBillowPhase + jnt * 0x1800);  // per-arm offset
+        const s16 ang = (s16)(amp * cM_ssin(phase));
+        cMtx_ZrotM(m, ang);
+        model->setAnmMtx(jnt, m);
+        MTXCopy(m, J3DSys::mCurrentMtx);
+    }
+    return 1;
+}
+
+// =============================================================================================
+// Deku Leaf overhead mount — Route B: weld the STEM to Link's hands (playtested orientation)
+// ---------------------------------------------------------------------------------------------
+// The leaf's model origin sits at the stem/grab end (bbox Z starts at 0 = stem, 42 = canopy top).
+// We anchor that origin to the MIDPOINT of Link's two hand matrices every frame, so the grab
+// point tracks the hands. Scale is applied via setBaseScale, which pivots about the model origin
+// (= the anchored grab point) -> the stem stays welded to the hands at ANY scale; only the canopy
+// grows above. Offset is now expressed relative to the hand midpoint (small nudge, keep ~0 so the
+// grab point stays on the hands). Orientation rotations are the CONFIRMED-WORKING pair:
+//   Y = +0x4000, X = -0x4000  -> canopy arced flat overhead, peak up (order Y then X after yaw).
+//   Do NOT add a Z axis (tried, unnecessary).
+// =============================================================================================
+static cXyz s_dekuLeafOffset(0.0f, 0.0f, 0.0f);  // nudge in facing frame from the hand midpoint
+static f32  s_dekuLeafScale = 1.0f;              // uniform scale about the welded grab point
+static s16 s_dekuLeafBaseRotY = 0xC000;   // 90 -> 270 (+180): turns the leaf to face front about the
+                                          // VERTICAL axis (calibrated sim: azimuth +15 -> -165, canopy
+                                          // stays up). This is the real "front facing" fix, NOT an X flip.
+static s16 s_dekuLeafBaseRotX = -0x4000;  // -90 deg X (the confirmed-good "It's in!" orientation)
+// Spin about the leaf's OWN dome axis (applied innermost, after X). Canopy stays flat overhead;
+// this only changes WHICH ribs face the hands. Playtest showed Link gripping the wrong pair, so
+// spin 90 deg to bring the perpendicular ribs (Larm2/Rarm2) around to the hands.
+static s16 s_dekuLeafSpin = 0x4000;       // 90 deg spin (flip sign if it lands the wrong way)
+// Dedicated 180 X flip, applied INNERMOST (after the spin) so it flips the finished leaf about
+// its own local X without recombining the tuned trio above. Kept separate on purpose: setting
+// baseRotX to +0x4000 is the same 180 but it collapsed the leaf into a stalk. 0 disables; flip
+// sign or move before YrotM(baseRotY) if it lands the wrong way. The tip-pin recomputes from the
+// live joint matrix, so the grips stay welded to the hands through this flip.
+static s16 s_dekuLeafFlipX = 0x0000;      // DISABLED: 180 X flipped it upside down; the real facing
+                                          // fix is the +180 on baseRotY above (rotation about vertical).
+
+void daAlink_c::updateDekuLeafModel() {
+    if (s_dekuLeafModel == NULL) {
+        J3DModelData* data = dusk::custom_assets::try_load("itemmdl", 0x15);
+        if (data == NULL) {
+            return;  // mod folder disabled / file missing — no leaf this frame
+        }
+        JKRHeap* gameHeap = mDoExt_getGameHeap();
+        JKRHeap* prevHeap = (gameHeap != NULL) ? mDoExt_setCurrentHeap(gameHeap) : NULL;
+        s_dekuLeafModel = mDoExt_J3DModel__create(data, 0x80000, 0x11000084);
+        if (prevHeap != NULL) {
+            mDoExt_setCurrentHeap(prevHeap);
+        }
+        if (s_dekuLeafModel == NULL) {
+            return;
+        }
+        // Install the rib billow callback on the canopy's arm joints (1..8; root 0 static).
+        for (u16 jn = 1; jn <= 8; jn++) {
+            data->getJointNodePointer(jn)->setCallBack(dekuLeafJointCB);
+        }
+    }
+
+    // advance the billow phase each frame (WW cadence)
+    s_dekuLeafBillowPhase += 0x82f;
+
+    // Route B weld-anchor: midpoint of Link's two hand matrices (WORLD). The leaf's stem origin
+    // rides this point, so the grab point tracks the hands; scale (below) pivots about it, keeping
+    // the stem welded to the hands regardless of scale while only the canopy grows.
+    cXyz lHand, rHand;
+    mDoMtx_multVecZero(getLeftHandMatrix(), &lHand);
+    mDoMtx_multVecZero(getRightHandMatrix(), &rHand);
+#if DEKU_LEAF_HAND_WELD
+    s_dekuLeafLHandW = lHand;  // grip-rib pin targets, read by dekuLeafJointCB during modelCalc
+    s_dekuLeafRHandW = rHand;
+#endif
+    cXyz anchor((lHand.x + rHand.x) * 0.5f, (lHand.y + rHand.y) * 0.5f, (lHand.z + rHand.z) * 0.5f);
+    mDoMtx_stack_c::transS(anchor.x, anchor.y, anchor.z);
+    mDoMtx_stack_c::YrotM(shape_angle.y);
+    mDoMtx_stack_c::transM(s_dekuLeafOffset.x, s_dekuLeafOffset.y, s_dekuLeafOffset.z);
+    mDoMtx_stack_c::YrotM(s_dekuLeafBaseRotY);  // reorient the canopy peak to world-up
+    mDoMtx_stack_c::XrotM(s_dekuLeafBaseRotX);
+    mDoMtx_stack_c::ZrotM(s_dekuLeafSpin);      // spin ribs about the dome axis
+    mDoMtx_stack_c::XrotM(s_dekuLeafFlipX);     // innermost: 180 X flip of the finished leaf
+    s_dekuLeafModel->setBaseTRMtx(mDoMtx_stack_c::get());
+    // Scale pivots about the model origin (the welded grab point) so the stem stays on the hands.
+    s_dekuLeafModel->setBaseScale(cXyz(s_dekuLeafScale, s_dekuLeafScale, s_dekuLeafScale));
+    modelCalc(s_dekuLeafModel);
+
+    // ============================================
+    // TEMP DIAG — ALBW-LEAF-GRIP (rib-tip vs hand pairing). STRIP before push.
+    // After the leaf is placed+calc'd, dump each rib-tip (arm2 joints 2/4/6/8) WORLD pos and both
+    // hand WORLD positions, then pick the nearest rib tip to each hand. Proves which two ribs to
+    // weld to the hands and whether the pairing is stable (names can't be trusted post-rotation).
+    // Throttled ~1 sample / 2s. Parse tag: "ALBW-LEAF-GRIP".
+    // ============================================
+    {
+        static int s_leafGripThrottle = 0;
+        if (--s_leafGripThrottle <= 0) {
+            s_leafGripThrottle = 120;
+            static int s_leafGripSample = 0;
+            s_leafGripSample++;
+            static const int ribJnt[4] = {2, 4, 6, 8};
+            static const char* ribName[4] = {"Larm2", "Rarm2", "Farm2", "Barm2"};
+            cXyz ribPos[4];
+            for (int r = 0; r < 4; r++) {
+                MtxP m = s_dekuLeafModel->getAnmMtx(ribJnt[r]);
+                ribPos[r] = cXyz(m[0][3], m[1][3], m[2][3]);
+                DuskLog.debug("ALBW-LEAF-GRIP s={} rib {} idx={} world {} {} {}", s_leafGripSample,
+                              ribName[r], ribJnt[r], ribPos[r].x, ribPos[r].y, ribPos[r].z);
+            }
+            cXyz hands[2] = {lHand, rHand};
+            static const char* handName[2] = {"L", "R"};
+            for (int h = 0; h < 2; h++) {
+                DuskLog.debug("ALBW-LEAF-GRIP s={} hand {} world {} {} {}", s_leafGripSample,
+                              handName[h], hands[h].x, hands[h].y, hands[h].z);
+                int best = -1;
+                f32 bestD2 = 1e30f;
+                for (int r = 0; r < 4; r++) {
+                    f32 dx = hands[h].x - ribPos[r].x, dy = hands[h].y - ribPos[r].y,
+                        dz = hands[h].z - ribPos[r].z;
+                    f32 d2 = dx * dx + dy * dy + dz * dz;
+                    if (d2 < bestD2) { bestD2 = d2; best = r; }
+                }
+                DuskLog.debug("ALBW-LEAF-GRIP s={} hand {} NEAREST rib {} idx={} dist2 {}",
+                              s_leafGripSample, handName[h], ribName[best], ribJnt[best], bestD2);
+            }
+        }
+    }
+}
+#endif
 
 static void daAlink_tgHitCallback(fopAc_ac_c* i_tgActor, dCcD_GObjInf* i_tgObjInf, fopAc_ac_c* i_atActor,
                                   dCcD_GObjInf* i_atObjInf) {
@@ -1379,6 +1866,7 @@ const daAlink_procInitTable daAlink_c::m_procInitTable[] = {
 #if TARGET_PC
     { &daAlink_c::procCutGsHurricane, 0x101 },
     { &daAlink_c::procCutGsHurricaneTired, 0x10001185 },
+    { &daAlink_c::procFlurryRush, 0x101 },
 #endif
 };
 
@@ -1927,6 +2415,7 @@ static dJntColData_c l_wolfJntColData[] = {
 #include "d/actor/d_a_alink_cut.inc"
 #if TARGET_PC
 #include "d/actor/d_a_alink_hurricane.inc"
+#include "d/actor/d_a_alink_flurry.inc"
 #endif
 
 #include "d/actor/d_a_alink_damage.inc"
@@ -2476,6 +2965,18 @@ static int daAlink_modelCallBack(J3DJoint* i_joint, int param_1) {
 }
 
 int daAlink_c::headModelCallBack(int i_jointNo) {
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Cap Wear geometry safety)
+    // The per-joint cap-physics below indexes field_0x302c[]/field_0x3040[] (size 10).  The
+    // green cap (al_head) stays within that range, but a non-green cap (the Magic/Zora helmet)
+    // may have more joints -> out-of-bounds.  Skip the cap physics for any joint past the array
+    // range; that joint just keeps its default anim matrix (the helmet attaches rigidly there).
+    // ============================================
+    if (i_jointNo >= 10) {
+        return 1;
+    }
+#endif
     if (mpDemoHDTmpBck == NULL || !mpDemoHDTmpBck->getBckAnm() || (checkEndResetFlg1(ERFLG1_UNK_400000) && i_jointNo < 6)) {
         if (checkNoResetFlg2(FLG2_STATUS_WINDOW_DRAW)) {
             mDoMtx_stack_c::copy(J3DSys::mCurrentMtx);
@@ -3411,6 +3912,23 @@ void daAlink_c::setNeckAngle() {
     int sp14 = 2;
 
     offNoResetFlg1(FLG1_MIDNA_HAIR_ATN_POS);
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Midna Arm art — hair-reach visual)
+    // Re-apply the arm actor's published reach target after the per-frame clear above, so
+    // daMidna_c's hair visibly reaches toward the strike point while the art runs (the same
+    // mechanism the Wchain / Beast-Ganon aim uses below).
+    // ============================================
+    {
+        cXyz reachPos;
+        if (dAlbwMidnaArm_getReachPos(&reachPos)) {
+            onNoResetFlg1(FLG1_MIDNA_HAIR_ATN_POS);
+            mMidnaHairAtnPos = reachPos;
+        }
+    }
+#endif
+
     cXyz* var_r30 = getNeckAimPos(&sp18, &sp14, 1);
 
     if (var_r30 != NULL && checkModeFlg(0x08000100)) {
@@ -4836,6 +5354,10 @@ int daAlink_c::setStartProcInit() {
                 if (start_mode == 1) {
                     if (checkWolf()) {
                         mNormalSpeed = 0.5f * mpHIO->mWolf.mWlSwim.m.mMaxSpeed;
+#if TARGET_PC
+                        // Match wolf swim +20% cap (see kAlbwWolfSwimSpeedMul).
+                        mNormalSpeed *= 1.20f;
+#endif
                     } else {
                         mNormalSpeed = 0.5f * mpHIO->mSwim.m.mForwardMaxSpeed;
                     }
@@ -4855,6 +5377,10 @@ int daAlink_c::setStartProcInit() {
             } else if (start_mode == 1) {
                 if (checkWolf()) {
                     mNormalSpeed = mpHIO->mWolf.mWlMove.m.mIdleToWalkRate * mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+                    // Match wolf land run +5% cap (see kAlbwWolfLandRunSpeedMul).
+                    mNormalSpeed *= 1.05f;
+#endif
                     speedF = mNormalSpeed;
                     procWolfMoveInit();
                 } else {
@@ -4880,8 +5406,12 @@ int daAlink_c::setStartProcInit() {
                     procCrawlMoveInit(0, 0);
                 }
             } else if (checkWolf()) {
-                if (mNormalSpeed > mpHIO->mWolf.mWlMove.m.mMaxSpeed) {
-                    mNormalSpeed = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+                f32 wolfRunMax = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+                wolfRunMax *= 1.05f;
+#endif
+                if (mNormalSpeed > wolfRunMax) {
+                    mNormalSpeed = wolfRunMax;
                 }
                 speedF = mNormalSpeed;
                 procWolfMoveInit();
@@ -4998,8 +5528,21 @@ int daAlink_c::create() {
         }
 
         setArcName(checkWolf());
-        setOriginalHeap(&mpArcHeap, 0xA2800);
+        // 0x100000: Beta Link Kmdl (~551KB RARC + BMD data) fits; 0xA2800 was vanilla.
+        // Do NOT bump to 2MB×2 — that OOM-aborts game-heap allocs on save load
+        // (JKRExpHeap allocation failure). Post-toggle Hero's ERROR is mObjectInfo
+        // dual-mount / FST-stale, not heap size (gen-1 Beta Hero's loads on 1MB).
+        setOriginalHeap(&mpArcHeap, 0x100000);
         JKRHEAP_NAME(mpArcHeap, "Alink ArcHeap");
+#if TARGET_PC
+        // Second arc heap for build-then-swap (same size as mpArcHeap).  The normal clothes
+        // change loads the next arc here while the old models stay live, then frees the old
+        // heap and swaps.  If this allocation fails, loadModelDVD falls back to in-place load.
+        if (s_albwArcHeapB == NULL) {
+            setOriginalHeap(&s_albwArcHeapB, 0x100000);
+            JKRHEAP_NAME(s_albwArcHeapB, "Alink ArcHeapB");
+        }
+#endif
         if (dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap) != cPhs_COMPLEATE_e) {
             return cPhs_INIT_e;
         }
@@ -5062,6 +5605,9 @@ int daAlink_c::create() {
 
     dComIfGs_setRestartRoom(current.pos, shape_angle.y, getStartRoomNo());
     field_0x3780 = current.pos;
+    // tale §818: §796's per-actor roof-clamp opt-out RETIRED — the WW-host
+    // skip now lives at the source (dBgS_Acch::GroundCheck, one mechanism for
+    // every acch user: player, pots, props). Vanilla clear restored.
     mLinkAcch.ClrGndThinCellingOff();
 
     int bg_roomId = dComIfG_Bgsp().GetRoomId(mLinkAcch.m_gnd);
@@ -6012,6 +6558,15 @@ void daAlink_c::setItemMatrix(int param_0) {
     modelCalc(mpLinkHatModel);
 
     if (checkEquipHeavyBoots()) {
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (WW iron-boots skin)
+        // The re-rigged vboot carries al_bootsH's exact 4-joint skeleton (indices 1/2/3), so it
+        // rides the vanilla per-foot rig below with NO special-casing — both instances, real
+        // setAnmMtx articulation. (The old stiff 2-joint pin is preserved in commit 44ab0a2f1a.)
+        // ============================================
+#endif
+        {
         for (int i = 0; i < 2; i++) {
             mpLinkBootModels[i]->setBaseTRMtx(mpLinkModel->getBaseTRMtx());
             modelCalc(mpLinkBootModels[i]);
@@ -6020,6 +6575,35 @@ void daAlink_c::setItemMatrix(int param_0) {
         mpLinkBootModels[0]->setAnmMtx(1, mpLinkModel->getAnmMtx(0x13));
         mpLinkBootModels[0]->setAnmMtx(2, mpLinkModel->getAnmMtx(0x14));
         mpLinkBootModels[0]->setAnmMtx(3, mpLinkModel->getAnmMtx(0x15));
+
+#if TARGET_PC
+        // ============================================
+        // TEMP DIAG — ALBW-BOOT-DIAG (WW iron-boots shard measurement). STRIP before push.
+        // Dumps the EXACT matrices the boot rig injects (base TR + ankle/foot/toe anm mtx
+        // 0x13/0x14/0x15) so an offline script can multiply them against al_bootsh's verts
+        // vs the WW re-rig's verts and MEASURE the shard magnitude / required Z-slimming.
+        // Throttled ~1 sample / 2s; boots-equipped only. Parse tag: "ALBW-BOOT-DIAG".
+        // ============================================
+        {
+            static int s_albwBootDiagThrottle = 0;
+            if (--s_albwBootDiagThrottle <= 0) {
+                s_albwBootDiagThrottle = 120;
+                static int s_albwBootDiagSample = 0;
+                s_albwBootDiagSample++;
+                MtxP diagMtx[4] = {mpLinkModel->getBaseTRMtx(), mpLinkModel->getAnmMtx(0x13),
+                                   mpLinkModel->getAnmMtx(0x14), mpLinkModel->getAnmMtx(0x15)};
+                static const char* diagName[4] = {"base", "j1_ankle13", "j2_foot14", "j3_toe15"};
+                for (int d = 0; d < 4; d++) {
+                    MtxP m = diagMtx[d];
+                    DuskLog.debug("ALBW-BOOT-DIAG s={} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+                                  s_albwBootDiagSample, diagName[d],
+                                  m[0][0], m[0][1], m[0][2], m[0][3],
+                                  m[1][0], m[1][1], m[1][2], m[1][3],
+                                  m[2][0], m[2][1], m[2][2], m[2][3]);
+                }
+            }
+        }
+#endif
 
         mDoMtx_stack_c::XrotS(-0x8000);
 #ifdef TARGET_PC
@@ -6039,6 +6623,7 @@ void daAlink_c::setItemMatrix(int param_0) {
 #ifdef TARGET_PC
         }
 #endif
+        }
     }
 
     if (!checkNoResetFlg2(FLG2_STATUS_WINDOW_DRAW)) {
@@ -6083,8 +6668,28 @@ void daAlink_c::setItemMatrix(int param_0) {
                 } else {
                     mHeldItemModel->setBaseTRMtx(mpLinkModel->getAnmMtx(mRightItemJntNo));
                 }
+#if TARGET_PC
+                // Track B: live-tunable held vbow scale (WW mesh differs in size from AL_BOW).
+                if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                        dusk::WwHeldSkinMode::Bow &&
+                    checkBowItem(mEquipItem)) {
+                    const f32 s =
+                        dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
+                    mHeldItemModel->setBaseScale(cXyz(s, s, s));
+                }
+#endif
             } else if (checkHookshotItem(mEquipItem)) {
                 setHookshotPos();
+#if TARGET_PC
+                // Track B: live-tunable held vhook scale (WW mesh differs in size from AL_HS).
+                if (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                        dusk::WwHeldSkinMode::Hookshot &&
+                    mHeldItemModel != NULL) {
+                    const f32 s =
+                        dusk::getSettings().game.wwItemmdlHeldBowScalePct.getValue() / 100.0f;
+                    mHeldItemModel->setBaseScale(cXyz(s, s, s));
+                }
+#endif
             } else if (mEquipItem == dItemNo_IRONBALL_e) {
                 setIronBallPos();
             } else {
@@ -6104,7 +6709,17 @@ void daAlink_c::setItemMatrix(int param_0) {
                     field_0x33dc = mItemBck.getBckAnm()->getFrameMax() - 0.001f;
                 }
 
-                mItemBck.entry(mHeldItemModel->getModelData(), field_0x33dc);
+#if TARGET_PC
+                // Track B: the held WW mesh is a low-bone prop; the vanilla item BCK targets a
+                // different rig and would garble it. Skip the anim entry (stiff but functional).
+                if (!((dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                           dusk::WwHeldSkinMode::Bow &&
+                       checkBowItem(mEquipItem)) ||
+                      (dusk::getSettings().game.wwItemmdlHeldSkin.getValue() ==
+                           dusk::WwHeldSkinMode::Hookshot &&
+                       checkHookshotItem(mEquipItem))))
+#endif
+                    mItemBck.entry(mHeldItemModel->getModelData(), field_0x33dc);
             }
 
             mHeldItemModel->calc();
@@ -6208,6 +6823,20 @@ void daAlink_c::setHandIndex(daAlink_c::daAlink_ANM i_anmID) {
 
 void daAlink_c::setSwordAtCollision(int param_0) {
     cXyz work;
+
+    // ========================================================================
+    // §61 — feed-side probe (H1/H9 of the grass cut-detection round): prove
+    // the sword AT actually enters the mass system on WW host stages, and
+    // when, so the veg-side massN=0 line can be attributed (never-fed vs
+    // cleared-before-poll). Remove with the rest of §61.
+    // ========================================================================
+    {
+        static u32 s_swN = 0;
+        if ((s_swN++ % 20) == 0) {
+            DuskLog.warn("[Alink] §61 swordAT set proc={} pos=({:.0f},{:.0f},{:.0f})",
+                         (int)mProcID, current.pos.x, current.pos.y, current.pos.z);
+        }
+    }
 
     if (checkCutDashAnime() && (checkCutDashEnemyHit(mAtCps[0]) ||
                                 checkCutDashEnemyHit(mAtCps[1]) || checkCutDashEnemyHit(mAtCps[2])))
@@ -6323,7 +6952,12 @@ void daAlink_c::setWolfAtCollision() {
             setSwordHitVibration(&mTgCyls[2]);
         }
 
-        if (mProcID == PROC_WOLF_ROLL_ATTACK) {
+        if (mProcID == PROC_WOLF_ROLL_ATTACK
+#if TARGET_PC
+            // Wolf Howl AOE: the combat howl uses the same Link-centered radial collider.
+            || (mProcID == PROC_WOLF_HOWL && mWolfCombatHowlActive)
+#endif
+        ) {
             mAtCyl.SetC(current.pos);
 
             dComIfG_Ccsp()->Set(&mAtCyl);
@@ -6529,6 +7163,15 @@ void daAlink_c::setAtCollision() {
                 mAtCps[0].SetStartEnd(spBC, spB0);
                 spA4 = spB0 - spBC;
                 mAtCps[0].SetAtVec(spA4);
+#if TARGET_PC
+                // Lockout single-claw contact damage (Hero's Shade AtAtp pattern).
+                // Only on the flying tip (mode 3 / HS_MODE_SHOOT); double claw stays grab-only.
+                if (mEquipItem == dItemNo_HOOKSHOT_e && mItemMode == 3) {
+                    mAtCps[0].SetAtAtp(dAlbwLockout_getHookshotContactAtp());
+                } else {
+                    mAtCps[0].SetAtAtp(0);
+                }
+#endif
                 dComIfG_Ccsp()->Set(&mAtCps[0]);
             } else {
                 mAtCps[0].ResetAtHit();
@@ -8244,8 +8887,16 @@ void daAlink_c::setFaceBtp(u16 i_resIdx, BOOL i_isPriIdx, u16 i_arcNo) {
 
     if (btp != NULL) {
         mpFaceBtp = btp;
-        mpFaceBtp->searchUpdateMaterialID(field_0x06c0);
-        field_0x06c0->entryTexNoAnimator(mpFaceBtp);
+#if TARGET_PC
+        // Same execute-path clothes-change guard as setFaceBtk (see there): field_0x06c0 is
+        // freed while mClothesChangeWaitTimer != 0; skip wiring the animator onto it.  The
+        // latest btp is recorded above and changeModelDataDirect re-entries it after rebuild.
+        if (mClothesChangeWaitTimer == 0)
+#endif
+        {
+            mpFaceBtp->searchUpdateMaterialID(field_0x06c0);
+            field_0x06c0->entryTexNoAnimator(mpFaceBtp);
+        }
 
         if (i_arcNo == 0xFFFF) {
             if (i_resIdx == dRes_ID_ALANM_BTP_FMABA03_e || (i_resIdx == dRes_ID_ALANM_BTP_WL_FMABA01_e && checkUnderMove0BckNoArcWolf(WANM_WAIT_WIND))) {
@@ -8292,6 +8943,23 @@ void daAlink_c::setFaceBtk(u16 i_resIdx, BOOL i_isPriIdx, u16 i_arcNo) {
 
     if (btk != NULL) {
         mpFaceBtk = btk;
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (execute-path clothes-change guard)
+        // While a clothes change is in flight, loadModelDVD's freeAll has freed field_0x06c0
+        // (the cached face model data, = mpLinkFaceModel->getModelData()) until changeLink
+        // rebuilds it.  Wiring the animator onto it now walks freed memory — the
+        // procHorseWait -> setSyncRide -> setFaceBtk -> searchUpdateMaterialID ->
+        // JUTNameTab::getIndex crash seen while riding Epona and switching clothes.  This is
+        // the EXECUTE-path analogue of draw()'s clothes-timer early-return: the one rule is
+        // "no clothes-model data is safe to touch while mClothesChangeWaitTimer != 0".  The
+        // latest btk is recorded above, and changeModelDataDirect re-entries it onto the
+        // rebuilt model when the change completes, so the animation self-heals.
+        // ============================================
+        if (mClothesChangeWaitTimer != 0) {
+            return;
+        }
+#endif
         mpFaceBtk->searchUpdateMaterialID(field_0x06c0);
         field_0x06c0->entryTexMtxAnimator(mpFaceBtk);
         daAlink_matAnm_c::setMorfFrame(3);
@@ -8712,6 +9380,56 @@ void daAlink_c::setFrontWallType() {
             }
 
             int var_r29 = dComIfG_Bgsp().GetWallCode(mLinkLinChk);
+            // ================================================================
+            // §63 — ladder-regression probe (№242 item 4). The interior dzb's
+            // wall codes are PROVEN intact (ti rows carry 4/5 in word1, donor
+            // == mod), so the fault is runtime: either the line check never
+            // resolves the ladder poly (BG-type filtering — the №110
+            // "ladder/ledge on GLOBAL_e" suspicion) or the code arrives and a
+            // later gate eats it. Log the code + wall-hit state when nonzero
+            // or when pushing a wall, rate-limited.
+            // №257 / Verdict 2: tag phase pre|in|post so after-exit wallCode
+            // splits "attributes destroyed" (0) from "present but unadmitted"
+            // (4, hit=0).
+            // ================================================================
+            {
+                static u32 s_ldN = 0;
+                static u8 s_ldPhase = 0;  // 0=pre, 1=in, 2=post
+                const char* stage = dComIfGp_getStartStageName();
+                if (dExtWwSave_isWwHostStage(stage)) {
+                    if (stage[0] == 'R') {
+                        s_ldPhase = 1;
+                    } else if (stage[0] == 'F' && s_ldPhase == 1) {
+                        s_ldPhase = 2;
+                    }
+                }
+                if ((var_r29 != 0 || mLinkAcch.ChkWallHit()) && (s_ldN++ % 30) == 0) {
+                    // §63 r2: wallCode=0 with wallHit=1 at the interior ladder
+                    // (log 173414) means the line check resolves a poly WITHOUT
+                    // the code — name WHICH BG owns the resolved poly (the
+                    // №110 GLOBAL_e suspicion needs the owner to be readable).
+                    fopAc_ac_c* bgOwner =
+                        dComIfG_Bgsp().GetActorPointer(mLinkLinChk);
+                    dBgW_Base* bgw = dComIfG_Bgsp().GetBgWBasePointer(mLinkLinChk);
+                    const char* phase =
+                        s_ldPhase == 0 ? "pre" : (s_ldPhase == 1 ? "in" : "post");
+                    // G1/G2/G3 discriminator (History ferry 2026-07-24):
+                    // LineCross-visible but WallCorrect-invisible → if
+                    // m_priority ∉ {0,1,2} = G1; priority fine + cylinder-miss
+                    // = G2; through-flag = G3. Also dump acch flags.
+                    DuskLog.warn(
+                        "[Alink] §63 phase={} wallCode={} wallHit={} proc={} bgOwner={} "
+                        "bgName={} roomId={} prio={} used={} moveBg={} acchFlags={:#x}",
+                        phase, var_r29, mLinkAcch.ChkWallHit() ? 1 : 0, (int)mProcID,
+                        bgOwner != NULL ? 1 : 0,
+                        bgOwner != NULL ? (int)fopAcM_GetName(bgOwner) : -1,
+                        bgw != NULL ? bgw->GetRoomId() : -1,
+                        bgw != NULL ? (int)bgw->GetPriority() : -1,
+                        bgw != NULL && bgw->ChkUsed() ? 1 : 0,
+                        bgw != NULL && bgw->ChkMoveBg() ? 1 : 0,
+                        (unsigned)mLinkAcch.GetFlags());
+                }
+            }
             dBgW_Base* sp3C = dComIfG_Bgsp().GetBgWBasePointer(mLinkLinChk);
 
             if ((var_r29 == 3 || var_r29 == 1) && (sp4C || (sp3C != NULL && !sp3C->ChkPushPullOk()))) {
@@ -8729,6 +9447,10 @@ void daAlink_c::setFrontWallType() {
                 offNoResetFlg3(FLG3_UNK_400000);
             }
 
+            // №256: do NOT relax ChkWallHit for ladder codes — that parallel gate
+            // restored interior climb but stripped exterior ladder SFX + ledge-grab
+            // (wrong poly/attribute path). Interior mounts must join TP's daBg
+            // registration (PRIORITY_0 GLOBAL_e) so wallHit arrives honestly.
             if (!mLinkAcch.ChkWallHit() && !checkWolf() && (var_r29 != 1 || mProcID != PROC_HANG_READY) && (var_r29 != 3 || checkModeFlg(0x40000) || checkModeFlg(2) || !(sp40 <= 51.0f)) && mProcID != PROC_HOOKSHOT_FLY && !checkModeFlg(0x200000)) {
                 offNoResetFlg3(FLG3_UNK_400000);
                 return;
@@ -9449,6 +10171,12 @@ BOOL daAlink_c::midnaTalkTrigger() const {
     if (dShield_isTestingParryReworkEnabled() && checkPlayerGuard()) {
         return FALSE;
     }
+    if (dusk::isLayeredLeftDpadActive(0)) {
+        if (dusk::consumeLayeredLeftMidnaTrig(0)) {
+            return TRUE;
+        }
+        return FALSE;
+    }
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
@@ -9534,11 +10262,20 @@ void daAlink_c::setStickData() {
         }
         mMoveAngle = mDemo.getMoveAngle();
         mMoveValue = mStickValue;
-    } else if (checkDeadHP() || dMeter2Info_getPauseStatus() == 1) {
+    } else if (checkDeadHP() || dMeter2Info_getPauseStatus() == 1
+#if TARGET_PC
+               || dMenu_Ring_c::isQuickEquipLiveWorld()
+#endif
+    ) {
         mStickValue = 0.0f;
         mMoveValue = 0.0f;
         mStickAngle = 0;
         mMoveAngle = 0;
+#if TARGET_PC
+        if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+            mNormalSpeed = 0.0f;
+        }
+#endif
     } else if (checkMidnaLockJumpPoint() && getMidnaActor()->checkNoInput()) {
         mStickValue = 0.0f;
         mMoveValue = 0.0f;
@@ -10005,6 +10742,24 @@ void daAlink_c::setNormalSpeedF(f32 i_speed, f32 i_deceleration) {
             max_speed = temp_f30;
         }
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Realtime Potions — walk-speed cap while consuming)
+    // While a realtime drink/pour is active (game.realtimePotions), cap Link to
+    // walking speed so healing on the move is a committed, slowed action —
+    // players must pick their moment in combat. Same min-clamp pattern as the
+    // indoor/slope caps above, so the game's own accel/decel eases the slowdown
+    // (no snap). mRealtimeUseActive is only set when the setting is on, so no
+    // extra setting check is needed here.
+    // ============================================
+    if (mRealtimeUseActive) {
+        temp_f30 = mMaxSpeed * 0.5f;  // ~half run = a brisk walk (tunable)
+        if (max_speed > temp_f30) {
+            max_speed = temp_f30;
+        }
+    }
+#endif
 
     if (checkNoResetFlg3(FLG3_UNK_1000)) {
         f32 sp18;
@@ -11762,6 +12517,49 @@ int daAlink_c::checkNormalAction() {
     }
 #endif
 
+#if TARGET_PC
+    // №105 P2: gated hold-A crawl (interim — native ENTER only arms wall_code==6 /
+    // ladder here; WW crawl holes have no adapt_dzb wall-code remap yet).
+    // Gates: DoStatus NONE (never steal OPEN/SPEAK/ENTER/roll), stick ≤ front-roll
+    // rate (standing A crawls; push-stick A still rolls), ground + wait procs.
+    // Require A held ≥ 1.0s while gates stay true; reset on release / gate break;
+    // one fire per hold (re-arm when A is released).
+    {
+        static u16 s_holdACrawlFrames = 0;
+        static bool s_holdACrawlLatched = false;
+        constexpr u16 kHoldACrawlFrames = 30;  // 1.0s at 30Hz sim
+
+        const bool aDown = doButton();
+        const bool gates =
+            dusk::getSettings().game.enableHoldACrawl.getValue() && !checkWolf() &&
+            !checkEventRun() && mLinkAcch.ChkGroundHit() &&
+            dComIfGp_getDoStatus() == BUTTON_STATUS_NONE &&
+            mStickValue <= getFrontRollRate() &&
+            (mProcID == PROC_WAIT || mProcID == PROC_TIRED_WAIT || mProcID == PROC_SERVICE_WAIT);
+
+        if (!aDown) {
+            s_holdACrawlFrames = 0;
+            s_holdACrawlLatched = false;
+        } else if (!gates) {
+            s_holdACrawlFrames = 0;
+        } else if (!s_holdACrawlLatched) {
+            if (s_holdACrawlFrames < 0xFFFF) {
+                s_holdACrawlFrames++;
+            }
+            if (s_holdACrawlFrames >= kHoldACrawlFrames) {
+                s_holdACrawlLatched = true;
+                s_holdACrawlFrames = 0;
+                field_0x306e = (s16)(shape_angle.y + 0x8000);
+                field_0x34ec = current.pos;
+                field_0x34ec.x -= 35.0f * cM_ssin(field_0x306e);
+                field_0x34ec.z -= 35.0f * cM_scos(field_0x306e);
+                return procCrawlStartInit();
+            }
+        }
+    }
+#endif
+
+    // Crawl / wolf-lie: native BUTTON_STATUS_ENTER (ladder / future hole wall-codes).
     if (doTrigger()) {
         if (dComIfGp_getDoStatus() == BUTTON_STATUS_UNK_137) {
             orderPeep();
@@ -11984,6 +12782,13 @@ BOOL daAlink_c::checkItemAction() {
         }
 #endif
         if (mEquipItem == 0x103) {
+#if TARGET_PC
+            if (dFlurryRush_isActive() && dFlurryRush_getMode() == dFlurryRushMode_Melee &&
+                mProcID != PROC_FLURRY_RUSH && swordSwingTrigger())
+            {
+                return procFlurryRushInit();
+            }
+#endif
             daPy_frameCtrl_c* frame_ctrl = &mUpperFrameCtrl[2];
 
             if ((checkUpperAnime(dRes_ID_ALANM_BCK_CUTDL_e) && frame_ctrl->getFrame() <= mpHIO->mCut.mCutDashLeft.m.mCutAnm.mCancelFrame) ||
@@ -12551,6 +13356,16 @@ int daAlink_c::checkNextAction(int param_0) {
         return 1;
     }
 
+#if TARGET_PC
+    // Live quick-equip: control-lock voluntary move/item; Cc/damage still run.
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+        mNormalSpeed = 0.0f;
+        mStickValue = 0.0f;
+        mMoveValue = 0.0f;
+        return 1;
+    }
+#endif
+
     if (checkGroundSpecialMode()) {
         return 1;
     }
@@ -12938,7 +13753,7 @@ void daAlink_c::setBodyAngleXReadyAnime(int param_0) {
     field_0x310a = mBodyAngle.x;
 }
 
-void daAlink_c::setMagicArmorBrk(int i_status) {
+BOOL daAlink_c::setMagicArmorBrk(int i_status) {
     static const char* bodyBrkName[3] = {
         "ml_body_power_down.brk",
         "ml_body_power_up_a.brk",
@@ -12951,19 +13766,42 @@ void daAlink_c::setMagicArmorBrk(int i_status) {
         "ml_head_power_up_b.brk",
     };
 
+    mMagicArmorBodyBrk = NULL;
+    mMagicArmorHeadBrk = NULL;
+
+    if (i_status < 0 || i_status > 2) {
+        return FALSE;
+    }
+    if (mpLinkModel == NULL || mpLinkHatModel == NULL) {
+        OSReport("setMagicArmorBrk: missing link model (body=%p hat=%p)\n", mpLinkModel, mpLinkHatModel);
+        return FALSE;
+    }
+
     J3DModelData* modelData = mpLinkModel->getModelData();
     mMagicArmorBodyBrk = (J3DAnmTevRegKey*)dComIfG_getObjectRes(l_mArcName, bodyBrkName[i_status]);
+    if (mMagicArmorBodyBrk == NULL || modelData == NULL) {
+        OSReport("setMagicArmorBrk: missing body BRK %s in %s\n", bodyBrkName[i_status], l_mArcName);
+        mMagicArmorBodyBrk = NULL;
+        return FALSE;
+    }
     mMagicArmorBodyBrk->searchUpdateMaterialID(modelData);
     modelData->entryTevRegAnimator(mMagicArmorBodyBrk);
     mMagicArmorBodyBrk->setFrame(0.0f);
 
     modelData = mpLinkHatModel->getModelData();
     mMagicArmorHeadBrk = (J3DAnmTevRegKey*)dComIfG_getObjectRes(l_mArcName, headBrkName[i_status]);
+    if (mMagicArmorHeadBrk == NULL || modelData == NULL) {
+        OSReport("setMagicArmorBrk: missing head BRK %s in %s\n", headBrkName[i_status], l_mArcName);
+        mMagicArmorBodyBrk = NULL;
+        mMagicArmorHeadBrk = NULL;
+        return FALSE;
+    }
     mMagicArmorHeadBrk->searchUpdateMaterialID(modelData);
     modelData->entryTevRegAnimator(mMagicArmorHeadBrk);
     mMagicArmorHeadBrk->setFrame(0.0f);
 
     field_0x2fd7 = i_status;
+    return TRUE;
 }
 
 BOOL daAlink_c::checkMagicArmorHeavy() const {
@@ -13211,6 +14049,18 @@ void daAlink_c::setFootSpeed() {
         mDoMtx_concat(mInvMtx, mpLinkModel->getAnmMtx(field_0x30be), mDoMtx_stack_c::get());
         mDoMtx_stack_c::multVecZero(&sp18[1]);
 
+#if TARGET_PC
+        if (s_albwFootReseedFrames > 0) {
+            // Post-rebuild: field_0x37b0 holds the OLD model's foot, so the displacement vs the
+            // new-model foot (sp18) is garbage -> zero the foot speed this frame.  The store loop
+            // below re-anchors field_0x37b0 = sp18 (new model, LOCAL space) so the next frame
+            // measures ~0.  Decrement only on this old-frame-valid path so the window always
+            // lands on local-space seeds, never the else-branch's world-space current.pos.
+            s_albwFootReseedFrames--;
+            var_f31 = 0.0f;
+        } else
+#endif
+        {
         int var_r28;
         if (sp18[0].y < sp18[1].y) {
             var_r28 = 0;
@@ -13224,6 +14074,23 @@ void daAlink_c::setFootSpeed() {
 
         if (fabsf(mSpeedModifier) < 1.0f && checkInputOnR() && fabsf(field_0x33a4 - mStickValue) < 0.2f) {
             var_f31 = (0.3f * var_f31) + (0.7f * field_0x33a0);
+        }
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+        // TEMP teleport probe: when the foot-displacement spikes, dump the raw inputs so we can
+        // see WHICH term is garbage -- the current foot positions sp18 (mInvMtx*getAnmMtx), the
+        // stored previous foot field_0x37b0, the resulting delta sp8, and current.pos for scale.
+        // If sp18 is huge -> foot joint / mInvMtx discontinuity after rebuild.  If field_0x37b0 is
+        // huge (== current.pos) while sp18 is small -> a space mismatch (local vs world).  STRIP.
+        if (var_f31 > 200.0f) {
+            DuskLog.debug("ALBW-LIFE FOOT vf31={} sp18a=({},{},{}) sp18b=({},{},{}) prevA=({},{},{}) "
+                          "prevB=({},{},{}) sp8=({},{},{}) cpos=({},{},{}) jA={} jB={}",
+                          var_f31, sp18[0].x, sp18[0].y, sp18[0].z, sp18[1].x, sp18[1].y, sp18[1].z,
+                          field_0x37b0[0].x, field_0x37b0[0].y, field_0x37b0[0].z,
+                          field_0x37b0[1].x, field_0x37b0[1].y, field_0x37b0[1].z,
+                          sp8.x, sp8.y, sp8.z, current.pos.x, current.pos.y, current.pos.z,
+                          (int)field_0x30bc, (int)field_0x30be);
+        }
+#endif
         }
     } else {
         var_f31 = 0.0f;
@@ -13277,7 +14144,11 @@ void daAlink_c::posMove() {
         speedF += mod;
     }
 
-    if (getZoraSwim() && !checkZoraWearAbility()) {
+    if (getZoraSwim() && !checkZoraWearAbility()
+#if TARGET_PC
+        && !dAlbwOutfitStats_allowsSubmergedSwim(this)
+#endif
+    ) {
         speedF *= mpHIO->mSwim.m.mFloatUpSwimSpeedRate;
     }
 
@@ -13352,7 +14223,12 @@ void daAlink_c::posMove() {
                     speed.y = mpHIO->mWolf.mWlSwim.m.mMaxSurfacingSpeed;
                 }
             }
-        } else if (!checkEquipHeavyBoots() && getZoraSwim()) {
+        } else if (!checkEquipHeavyBoots() && (getZoraSwim()
+#if TARGET_PC
+                                                 || dAlbwOutfitStats_isSubmergedHumanSwim(this)
+#endif
+                                                 ))
+        {
             speed.y = -sp28 * cM_ssin(var_r26);
         } else if ((checkBootsOrArmorHeavy() && mProcID != PROC_DEAD) || mProcID == PROC_SWIM_DIVE)
         {
@@ -13811,6 +14687,24 @@ void daAlink_c::setLastSceneMode(u32* o_mode) {
 }
 
 int daAlink_c::startRestartRoom(u32 i_mode, int param_1, int i_dmgAmount, BOOL i_isEventRun) {
+    // ========================================================================
+    // §433-P61: the void CHOKE POINT -- every restart passes here regardless
+    // of which branch/caller armed it. mode+param identify the trigger family
+    // (5/0xC9 = magne-void, lava, drown, fall...); position localizes it.
+    // ========================================================================
+    {
+        static int s_p61 = 0;
+        if (s_p61 < 12) {
+            s_p61++;
+            DuskLog.info("[ExtSpan] 433-P61 startRestartRoom mode={} param={:#x} dmg={} evt={} "
+                         "pos=({}, {}, {}) gndCode={} gndH={} waterY={} fallStartY={} "
+                         "falling={} inWater={}",
+                         (int)i_mode, param_1, i_dmgAmount, (int)i_isEventRun, current.pos.x,
+                         current.pos.y, current.pos.z, (int)mGroundCode, mLinkAcch.GetGroundH(),
+                         mWaterY, field_0x33c8, (int)(checkModeFlg(2) != 0),
+                         (int)(checkModeFlg(0x40000) != 0));
+        }
+    }
     if (!checkNoResetFlg0(FLG0_UNK_4000) &&
         (i_isEventRun || dComIfGp_event_compulsory(this, NULL, 0xFFFF)))
     {
@@ -13871,7 +14765,24 @@ void daAlink_c::checkRoofRestart() {
         && (mProcID != PROC_CRAWL_START && mProcID != PROC_CRAWL_END && !checkCoachGuardGame()))
     {
         s16 bg_actorName = getMoveBGActorName(mLinkAcch.m_roof, TRUE);
-        if (bg_actorName == fpcNm_OBJ_SO_e || bg_actorName == fpcNm_Obj_SCannon_e) {
+        // ====================================================================
+        // §435 (P61 conviction, log 200233: mode=5 param=0xc9, gndCode=0,
+        // standing, repeated at one spot with Y pressed down): TP's CRUSH
+        // check vs the WW bridge's deforming ribbon -- the sagging span's
+        // neighbor quads cross above Link's head as his plank deflects, and
+        // TP reads floor+roof as a squish. TP's own fix mechanism is this
+        // exemption list for moving BGs that legitimately sandwich Link
+        // (OBJ_SO / SCannon); the span joins it.
+        // ====================================================================
+        if (bg_actorName == fpcNm_OBJ_SO_e || bg_actorName == fpcNm_Obj_SCannon_e ||
+            bg_actorName == fpcNm_EXT_SPAN_e) {
+            static int s_p63 = 0;
+            if (bg_actorName == fpcNm_EXT_SPAN_e && s_p63 < 4) {
+                s_p63++;
+                DuskLog.info("[ExtSpan] 433-P63 crush-check EXEMPTED (roof=span ribbon) at "
+                             "({}, {}, {})",
+                             current.pos.x, current.pos.y, current.pos.z);
+            }
             return;
         }
 
@@ -13903,6 +14814,58 @@ BOOL daAlink_c::checkRestartRoom() {
     {
         return procCoSwimFreezeReturnInit();
     } else if (!checkCargoCarry() && (mGroundCode == 4 || mGroundCode == 10 || (-G_CM3D_F_INF == mLinkAcch.GetGroundH() && !checkModeFlg(0x40000)))) {
+        // ====================================================================
+        // §433-P60: void-out fingerprint (bridge investigation). Names the
+        // exact ground code + height + position that armed the restart branch.
+        // ====================================================================
+        {
+            static int s_p60 = 0;
+            if (s_p60 < 12) {
+                s_p60++;
+                DuskLog.info("[ExtSpan] 433-P60 restartRoom ARMED: gndCode={} gndH={} "
+                             "pos=({}, {}, {}) waterY={} att1={}",
+                             (int)mGroundCode, mLinkAcch.GetGroundH(), current.pos.x,
+                             current.pos.y, current.pos.z, mWaterY, (int)mGndPolyAtt1);
+                // ============================================================
+                // tale §780 (§771 zero-clearance discriminator): the player's
+                // own ground resolve just MISSED here, while the §757 probe's
+                // plain +500 GndChk HIT the same column. Fire THREE diagnostic
+                // casts at this exact moment and position — the split names
+                // the failing parameter class in one run:
+                //   A plain dBgS_GndChk, +500       (probe semantics — expected HIT)
+                //   B plain dBgS_GndChk, +30        (low start, the acch window class)
+                //   C dBgS_LinkGndChk,   +500       (the PLAYER'S flag class — Link
+                //                                    pass-flags skip Link-through polys)
+                // A hit + B miss = start-height class (§771 proper).
+                // A hit + C miss = LINK pass-flag class (the §654 clear missed a bit).
+                // A miss         = the bg died SINCE Regist (lifetime).
+                // WW-host-scoped; rides the same 12-shot budget. DN-10-clean.
+                // ============================================================
+                const char* sn780 = dComIfGp_getStartStageName();
+                if (sn780 != NULL && dExtWwSave_isWwHostStage(sn780)) {
+                    dBgS_GndChk chkA;
+                    cXyz pA(current.pos.x, current.pos.y + 500.0f, current.pos.z);
+                    chkA.SetPos(&pA);
+                    const f32 hA = dComIfG_Bgsp().GroundCross(&chkA);
+                    dBgS_GndChk chkB;
+                    cXyz pB(current.pos.x, current.pos.y + 30.0f, current.pos.z);
+                    chkB.SetPos(&pB);
+                    const f32 hB = dComIfG_Bgsp().GroundCross(&chkB);
+                    dBgS_LinkGndChk chkC;
+                    chkC.SetPos(&pA);
+                    const f32 hC = dComIfG_Bgsp().GroundCross(&chkC);
+                    // tale §791/§792: acchFlags is the direct receipt — GRND_NONE
+                    // (0x2) or LINE_CHECK_NONE (0x4000) set here = the truncated
+                    // door/entrance proc's latch, №269's ground-flavor sibling.
+                    DuskLog.warn("[ExtSpan] §780 tri-cast @({:.0f},{:.0f},{:.0f}): "
+                                 "A(+500 plain)={} B(+30 plain)={} C(+500 Link)={} acch={:#x}",
+                                 current.pos.x, current.pos.y, current.pos.z,
+                                 hA <= -1e9f ? -99999.0f : hA, hB <= -1e9f ? -99999.0f : hB,
+                                 hC <= -1e9f ? -99999.0f : hC,
+                                 (unsigned)mLinkAcch.GetFlags());
+                }
+            }
+        }
         BOOL temp_r28 = mWaterY > mLinkAcch.GetGroundH();
 
         f32 var_f31;
@@ -14119,12 +15082,37 @@ int daAlink_c::checkSceneChange(int i_exitID) {
             exit_mode = 0;
         }
 
-        if (eventInfo.checkCommandDoor()
+        BOOL gateOpen798 = eventInfo.checkCommandDoor()
             || mProcID == PROC_WARP
             || mProcID == PROC_WOLF_DIG
             || mProcID == PROC_WOLF_DIG_THROUGH
             || field_0x3106 != 0
-            || dComIfGp_event_compulsory(this, NULL, -1))
+            || dComIfGp_event_compulsory(this, NULL, -1);
+#if TARGET_PC
+        // ====================================================================
+        // tale §798 — INTERIOR EXIT GATE RECEIPT: the walk-out at Ojhous
+        // grounded on the exit pad (exit id 0 valid, outer condition passed)
+        // and never warped — this gate is the last decision before
+        // dStage_changeSceneExitId, and the donor carries the same shape
+        // (checkCommandDoor OR compulsory, WW DP player_main:10814). When it
+        // DENIES a real exit on a WW host, log the inputs — the failing one
+        // names the fix. One-shot-ish, WW-scoped, sight only.
+        // ====================================================================
+        if (!gateOpen798 && i_exitID != 0x3F) {
+            static int s_g798 = 0;
+            const char* sn798 = dComIfGp_getStartStageName();
+            if (s_g798 < 8 && sn798 != NULL && dExtWwSave_isWwHostStage(sn798)) {
+                s_g798++;
+                DuskLog.warn("[ExtSpan] §798 exit gate DENIED: exitID={} cmdDoor={} proc={} "
+                             "f3106={} compulsory={} evtStatus-ish(runEvt)='{}'",
+                             i_exitID, eventInfo.checkCommandDoor() ? 1 : 0, (int)mProcID,
+                             (int)field_0x3106,
+                             dComIfGp_event_compulsory(this, NULL, -1) ? 1 : 0,
+                             dComIfGp_getEventManager().getRunEventName());
+            }
+        }
+#endif
+        if (gateOpen798)
         {
             BOOL isScnChange = false;
 
@@ -14819,7 +15807,28 @@ int daAlink_c::changeItemTriggerKeepProc(u8 i_selItemIdx, int i_procType) {
         } else if (checkCanoeRide()) {
             procCanoeBottleDrinkInit(sel_item);
         } else {
-            procBottleDrinkInit(sel_item);
+            // ============================================
+            // NEW CODE — ALBW Port (Realtime Potions)
+            // On foot with game.realtimePotions: drink as a moving upper-body
+            // overlay (startRealtimeUse) instead of the locking proc. Only
+            // single-drink heal potions qualify; multi-stage/nasty items and
+            // fairy/worm fall back to the vanilla locking drink so their special
+            // behavior is preserved. canDrinkSelectItem mirrors the vanilla
+            // guard (blocks an empty soulbound bottle).
+            // ============================================
+#if TARGET_PC
+            if (dusk::getSettings().game.realtimePotions.getValue() && !mRealtimeUseActive &&
+                sel_item != dItemNo_MILK_BOTTLE_e && sel_item != dItemNo_HALF_MILK_BOTTLE_e &&
+                sel_item != dItemNo_UGLY_SOUP_e && sel_item != dItemNo_CHUCHU_PURPLE_e &&
+                sel_item != dItemNo_CHUCHU_BLACK_e && sel_item != dItemNo_BEE_CHILD_e &&
+                sel_item != dItemNo_FAIRY_e && sel_item != dItemNo_WORM_e &&
+                dAlbwPotion_canDrinkSelectItem(i_selItemIdx, (u8)sel_item)) {
+                startRealtimeUse((u16)sel_item, false, i_selItemIdx);
+            } else
+#endif
+            {
+                procBottleDrinkInit(sel_item);
+            }
         }
     } else if (i_procType == ITEM_PROC_KANDELAAR_POUR) {
         if (checkReinRide()) {
@@ -14827,7 +15836,17 @@ int daAlink_c::changeItemTriggerKeepProc(u8 i_selItemIdx, int i_procType) {
         } else if (checkCanoeRide()) {
             procCanoeKandelaarPourInit();
         } else {
-            procKandelaarPourInit();
+            // ============================================
+            // NEW CODE — ALBW Port (Realtime Potions — lantern oil refill)
+            // ============================================
+#if TARGET_PC
+            if (dusk::getSettings().game.realtimePotions.getValue() && !mRealtimeUseActive) {
+                startRealtimeUse((u16)getReadyItem(), true, i_selItemIdx);
+            } else
+#endif
+            {
+                procKandelaarPourInit();
+            }
         }
     } else if (i_procType == ITEM_PROC_FISHING_FOOD) {
         procFishingFoodInit();
@@ -15004,8 +16023,13 @@ int daAlink_c::checkNewItemChange(u8 i_selItemIdx) {
                     if (acceptSubjectModeChange()) {
                         return ITEM_PROC_SUBJECTIVITY;
                     }
-                } else if (sel_item == dItemNo_POKE_BOMB_e && dComIfGp_getSelectItemNum(i_selItemIdx) &&
+                } else if (sel_item == dItemNo_POKE_BOMB_e &&
+#if TARGET_PC
+                           // Ammo decoupling: bag count is cosmetic on PC; lockout uses canALBWBombling.
                            field_0x2fcf < 2)
+#else
+                           dComIfGp_getSelectItemNum(i_selItemIdx) && field_0x2fcf < 2)
+#endif
                 {
                     return ITEM_PROC_PICK_PUT;
                 }
@@ -15361,6 +16385,47 @@ void daAlink_c::changeWarpMaterial(daAlink_c::daAlink_WARP_MAT_MODE i_matMode) {
 
 void daAlink_c::commonProcInit(daAlink_c::daAlink_PROC i_procID) {
     int i;
+
+#if TARGET_PC
+    if (mProcID == PROC_FLURRY_RUSH && i_procID != PROC_FLURRY_RUSH) {
+        dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port (Wolf Howl combat art — interruption cleanup)
+    // If ANY proc other than the howl takes over (damage knockback, dodge, transform, ...) while a
+    // combat howl is active, clear the combat-howl flags here at the single proc-change chokepoint.
+    // Without this the flags stay stuck TRUE after an interrupted howl — which, among other things,
+    // permanently blocked the wolf-charge counter (its earn guard excludes howl-AOE hits via
+    // mWolfCombatHowlActive).  A clean howl exit also passes through here (checkNextActionWolf),
+    // which is fine — the flags are being cleared at that point anyway.
+    // ============================================
+    if (mWolfCombatHowlActive && i_procID != PROC_WOLF_HOWL) {
+        mWolfCombatHowlActive = false;
+        mWolfHowlEnding       = false;
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port (Realtime Potions — interruption cleanup)
+    // Link stays in his move/wait proc during a realtime drink/pour, so this
+    // single proc-change chokepoint fires on every proc change. Free ground
+    // locomotion (stand/walk/run/turn, incl. Z-target) is allowed to overlap;
+    // any other action (roll, jump, attack, guard, damage, transform, warp, ...)
+    // cancels the overlay. Heal/consume already applied stay applied (bottle
+    // gone); a cancel before the heal frame costs nothing (bottle kept).
+    // ============================================
+    if (mRealtimeUseActive) {
+        const bool locomotion =
+            i_procID == PROC_SERVICE_WAIT || i_procID == PROC_TIRED_WAIT ||
+            i_procID == PROC_WAIT || i_procID == PROC_MOVE ||
+            i_procID == PROC_ATN_MOVE || i_procID == PROC_ATN_ACTOR_WAIT ||
+            i_procID == PROC_ATN_ACTOR_MOVE || i_procID == PROC_WAIT_TURN ||
+            i_procID == PROC_MOVE_TURN || i_procID == PROC_TURN_MOVE;
+        if (!locomotion) {
+            endRealtimeUse(true);
+        }
+    }
+#endif
 
     if (mProcID == PROC_TOOL_DEMO) {
         speed.y = 0.0f;
@@ -16216,6 +17281,9 @@ int daAlink_c::procSideStepInit(int i_jumpDirection) {
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
+    if (i_jumpDirection != DIR_BACKWARD) {
+        dFlurryRush_tryPerfectDodge(dFlurryPerfectDodge_SideStep);
+    }
 #endif
     if (i_jumpDirection == DIR_BACKWARD && !checkHeavyStateOn(TRUE, TRUE) &&
         (checkNoUpperAnime() || checkEquipAnime() || (field_0x2fcc != 0 && checkUpperGuardAnime())))
@@ -16296,6 +17364,15 @@ int daAlink_c::procSideStep() {
 }
 
 int daAlink_c::procSideStepLandInit() {
+#if TARGET_PC
+    if (dFlurryRush_tryEnterProcFromPerfectDodge()) {
+        const int flurryResult = procFlurryRushInit();
+        if (flurryResult != 0) {
+            return flurryResult;
+        }
+        dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+#endif
     commonProcInit(PROC_SIDESTEP_LAND);
 
     if (field_0x2f98 == 1) {
@@ -16974,6 +18051,11 @@ void daAlink_c::backJumpSpeedDec() {
 }
 
 int daAlink_c::procBackJumpInit(int param_0) {
+#if TARGET_PC
+    if (param_0 == 0) {
+        dFlurryRush_tryPerfectDodge(dFlurryPerfectDodge_BackJump);
+    }
+#endif
     u32 isHorseRide = checkHorseRide();
     BOOL is_prev_guardAnm = checkUpperGuardAnime();
     BOOL is_prev_ganonFinish = mProcID == PROC_GANON_FINISH;
@@ -17046,6 +18128,15 @@ int daAlink_c::procBackJump() {
 }
 
 int daAlink_c::procBackJumpLandInit(int i_cutDirection) {
+#if TARGET_PC
+    if (dFlurryRush_tryEnterProcFromPerfectDodge()) {
+        const int flurryResult = procFlurryRushInit();
+        if (flurryResult != 0) {
+            return flurryResult;
+        }
+        dFlurryRush_end(dFlurryRushEnd_Interrupt);
+    }
+#endif
     commonProcInit(PROC_BACK_JUMP_LAND);
     setSingleAnimeParam(ANM_BACKFLIP_LAND, &mpHIO->mBackJump.m.mLandAnm);
     mNormalSpeed = 0.0f;
@@ -17228,6 +18319,12 @@ int daAlink_c::procAutoJumpInit(int param_0) {
         mMaxSpeed = mpHIO->mAutoJump.m.mMaxJumpSpeed;
     }
 
+#if TARGET_PC
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1): every ledge jump starts un-glided; the
+    // player presses A mid-air to engage the float (handled in procAutoJump).
+    s_dekuLeafGlideActive = false;
+#endif
+
     if (checkGrabGlide()) {
         offModeFlg(4);
     }
@@ -17265,6 +18362,58 @@ int daAlink_c::procAutoJumpInit(int param_0) {
 int daAlink_c::procAutoJump() {
     int direction = getDirectionFromCurrentAngle();
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1 — A-toggle activation)
+    // Mid-air after a ledge jump, A engages the leaf float; A again lets go → immediate fall
+    // (WW uses the same doTrigger toggle). Only when the debug toggle is ON and we're not
+    // holding a cucco — so vanilla A behaviour / combat is untouched when the leaf is off.
+    // ============================================
+    if (dusk::getSettings().game.dekuLeafGlideTest.getValue() && !checkGrabRooster() && doTrigger()) {
+        // Meter gate: can't open the leaf on an empty meter (WW likewise refuses at 0 magic).
+        if (!s_dekuLeafGlideActive && !dMeter2_canALBWDekuLeaf()) {
+            // no charge — leave the toggle alone and fall normally
+        } else {
+        s_dekuLeafGlideActive = !s_dekuLeafGlideActive;
+        if (s_dekuLeafGlideActive) {
+            // engage: cucco-tuned glide profile + gentle terminal velocity
+            mMaxSpeed = mpHIO->mAutoJump.m.mCuccoJumpMaxSpeed;
+            field_0x3478 = mpHIO->mAutoJump.m.mCuccoFallMaxSpeed;
+            setSpecialGravity(-1.0f, field_0x3478, FALSE);
+            mProcVar2.field_0x300c = 1;
+            dMeter2_onALBWDekuLeafStart();   // WW charges 1 unit up front
+        } else {
+            // let go: restore normal gravity so Link drops immediately
+            mProcVar2.field_0x300c = 0;
+            setSpecialGravity(mpHIO->mAutoJump.m.mGravity, mpHIO->mAutoJump.m.mMaxFallSpeed, TRUE);
+        }
+        }
+    }
+    // Per-frame pose assertion while gliding: the normal auto-jump anim logic re-runs each frame
+    // and clobbers a one-shot set (the "only via weird jumps" symptom). Re-assert the overhead
+    // cucco hold — GRABD base + WALKHBS layer — whenever WALKHBS isn't the active upper anime.
+    if (checkDekuLeafGlide()) {
+        // ============================================
+        // NEW CODE — ALBW Port (Deku Leaf glide, P4 — meter cost)
+        // Bleed the ALBW meter every frame we're gliding (d_meter2 does the 100ms tick at
+        // WW's faithful rate). When it runs dry, drop the leaf and restore normal gravity —
+        // WW does the same, dumping Link out of the float once magic hits zero.
+        // ============================================
+        if (!dMeter2_canALBWDekuLeaf()) {
+            s_dekuLeafGlideActive = false;
+            mProcVar2.field_0x300c = 0;
+            setSpecialGravity(mpHIO->mAutoJump.m.mGravity, mpHIO->mAutoJump.m.mMaxFallSpeed, TRUE);
+        } else {
+            dMeter2_onALBWDekuLeaf();
+            mProcVar2.field_0x300c = 1;
+            if (!checkUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e)) {
+                setUpperAnimeBaseSpeed(dRes_ID_ALANM_BCK_GRABD_e, 0.0f, 3.0f);
+                setUpperAnime(dRes_ID_ALANM_BCK_WALKHBS_e, UPPER_1, 1.0f, 0.0f, -1, 3.0f);
+            }
+        }
+    }
+#endif
+
     #if VERSION == VERSION_SHIELD_DEBUG
     if (!checkStageName("F_SP115") && mGrabItemAcKeep.getActor() != NULL) {
         if ((fopAcM_GetName(mGrabItemAcKeep.getActor()) == fpcNm_NI_e && ((ni_class*)mGrabItemAcKeep.getActor())->checkGold() != TRUE) ||
@@ -17279,7 +18428,15 @@ int daAlink_c::procAutoJump() {
     if (checkInputOnR() && direction == DIR_BACKWARD) {
         cLib_chaseF(&mNormalSpeed, 0.0f, mStickValue * 0.2f);
     } else if (checkGrabGlide()) {
-        cLib_chaseF(&mNormalSpeed, mMaxSpeed, 0.1f);
+        // ============================================
+        // NEW CODE — ALBW Port (Deku Leaf glide): the leaf flies 20% faster than the vanilla
+        // cucco glide (playtested: 10% read good, 20% preferred). Scoped to checkDekuLeafGlide()
+        // so the cucco keeps its stock top speed. Tune s_dekuLeafGlideSpeedScale to adjust.
+        // ============================================
+        const f32 s_dekuLeafGlideSpeedScale = 1.20f;
+        const f32 glideMaxSpeed =
+            checkDekuLeafGlide() ? (mMaxSpeed * s_dekuLeafGlideSpeedScale) : mMaxSpeed;
+        cLib_chaseF(&mNormalSpeed, glideMaxSpeed, 0.1f);
     } else if (!checkInputOnR()) {
         cLib_chaseF(&mNormalSpeed, 0.0f, 0.1f);
     }
@@ -17653,6 +18810,12 @@ int daAlink_c::procLandInit(f32 param_0) {
     } else if (checkNoResetFlg0(FLG0_WATER_IN_MOVE)) {
         mUnderFrameCtrl[0].setRate(mUnderFrameCtrl[0].getRate() * 0.34999999f);
     }
+
+#if TARGET_PC
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P3): landing ends the glide — clear the engaged
+    // flag (after the cushioned-land check above) so the leaf disappears on touchdown.
+    s_dekuLeafGlideActive = false;
+#endif
 
     field_0x2f9d = 4;
     setFootEffectProcType(4);
@@ -18238,6 +19401,57 @@ int daAlink_c::procGoronRideWait() {
 }
 
 int daAlink_c::execute() {
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+    // TEMP: teleport-on-swap probe.  A clothes change should not move Link; log current.pos +
+    // the one-frame XZ delta through every clothes change (clothesTimer != 0) and ~8 frames
+    // after, so the teleport frame stands out as a big dXZ.  procID lets us rule out a
+    // legit warp/respawn.  STRIP before push.
+    {
+        static f32  s_albwPrevX   = 0.0f;
+        static f32  s_albwPrevZ   = 0.0f;
+        static bool s_albwHavePrev = false;
+        static int  s_albwPosWatch = 0;
+        f32 dx = s_albwHavePrev ? (current.pos.x - s_albwPrevX) : 0.0f;
+        f32 dz = s_albwHavePrev ? (current.pos.z - s_albwPrevZ) : 0.0f;
+        if (mClothesChangeWaitTimer != 0) {
+            s_albwPosWatch = 8;
+        }
+        if (s_albwPosWatch > 0) {
+            // Log speedF/speed/angle too: at the snap frame, a huge speedF => velocity-driven
+            // (the move integrated a giant step); normal speedF with a big dXZ => a direct
+            // position write elsewhere.  Non-zero speedF during the dXZ=0 freeze => the
+            // position update is being blocked while speed persists (then released = snap).
+            DuskLog.debug("ALBW-LIFE POS timer={} pos=({},{},{}) dXZ=({},{}) spdF={} "
+                          "spd=({},{},{}) angY={} procID={} maxSpd={} normSpd={} hioMaxSpd={}",
+                          mClothesChangeWaitTimer, current.pos.x, current.pos.y, current.pos.z,
+                          dx, dz, speedF, speed.x, speed.y, speed.z, current.angle.y, mProcID,
+                          mMaxSpeed, mNormalSpeed,
+                          (mpHIO != NULL ? mpHIO->mMove.m.mMaxSpeed : -1.0f));
+            // The speedF spike comes from `mod = field_0x33a0 * (1 - getOldFrameRate()) *
+            // mSpeedModifier` (line ~13467).  Log the three terms: a wild getOldFrameRate
+            // (anim-blend frame rate, corrupted by the clothes-change model rebuild) is the
+            // prime suspect.  STRIP before push.
+            DuskLog.debug("ALBW-LIFE SPDTERMS f33a0={} spdMod={} oldFR={}",
+                          field_0x33a0, mSpeedModifier,
+                          (field_0x2060 != NULL ? field_0x2060->getOldFrameRate() : -999.0f));
+            s_albwPosWatch--;
+        }
+        s_albwPrevX = current.pos.x;
+        s_albwPrevZ = current.pos.z;
+        s_albwHavePrev = true;
+    }
+#endif
+    // ============================================
+    // NEW CODE — ALBW Port (Sumo Link visual test)
+    // Dev-only model-swap driver (editor -> ALBW -> SumoTest).  Runs before the
+    // model update so a queued clothes-change is applied the same frame.
+    // ============================================
+#if TARGET_PC
+    dAlbwSumoTest_exec(this);
+#endif
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     if (loadModelDVD() && !checkNoResetFlg2(FLG2_STATUS_WINDOW_DRAW)) {
         loadShieldModelDVD();
     }
@@ -18753,6 +19967,16 @@ int daAlink_c::execute() {
         dAlbwWolfStun_update();
         dAlbwLockout_update();
         dFocusedArts_update();
+        dFlurryRush_update();
+        if (dFlurryRush_isActive()) {
+            mDamageTimer = mpHIO->mDamage.m.mInvincibleTime;
+        }
+        // Realtime Potions: advance the moving drink/pour overlay every frame
+        // while Link stays in his normal move/wait proc (game.realtimePotions).
+        // allAnimePlay() (above) advances mUpperFrameCtrl[2] regardless of proc.
+        if (mRealtimeUseActive) {
+            checkRealtimeUse();
+        }
         // ============================================
         // NEW CODE ENDS HERE
         // ============================================
@@ -18784,7 +20008,13 @@ int daAlink_c::execute() {
                 current.pos = pos;
             }
 
-            if (!mLinkAcch.ChkGroundHit() && !mLinkAcch.ChkRoofHit() && getZoraSwim()) {
+            if (!mLinkAcch.ChkGroundHit() && !mLinkAcch.ChkRoofHit()
+                && (getZoraSwim()
+#if TARGET_PC
+                    || dAlbwOutfitStats_isSubmergedHumanSwim(this)
+#endif
+                    ))
+            {
                 current.pos.y = pos.y;
             }
 
@@ -18807,6 +20037,7 @@ int daAlink_c::execute() {
                 if (!checkNoResetFlg0(FLG0_UNK_80) ||
                     mWaterY - var_f31 <= mpHIO->mSwim.m.mStartHeight - 5.0f)
                 {
+                    // Geometry land-exit: always allow for Outfit Stats too.
                     swimOutAfter(0);
                 }
             }
@@ -19221,11 +20452,15 @@ int daAlink_c::execute() {
                         mZ2Link.setLinkState(4);
                     }
                 } else if (armorMode == dusk::MagicArmorMode::ALBW) {
-                    if (dMeter2_isALBWArmorDepleted() && field_0x2fd7 != 0) {
+                    if ((dMeter2_isALBWArmorDepleted() || dComIfGs_getRupee() < 500) &&
+                        field_0x2fd7 != 0)
+                    {
                         setMagicArmorBrk(0);
                         seStartOnlyReverb(Z2SE_AL_M_ARMER_TURNOFF);
                         mZ2Link.setLinkState(5);
-                    } else if (!dMeter2_isALBWArmorDepleted() && dComIfGs_getRupee() >= 500 && field_0x2fd7 == 0) {
+                    } else if (!dMeter2_isALBWArmorDepleted() && dComIfGs_getRupee() >= 500 &&
+                               field_0x2fd7 == 0)
+                    {
                         setMagicArmorBrk(1);
                         seStartOnlyReverb(Z2SE_AL_M_ARMER_RECOVER);
                         mZ2Link.setLinkState(4);
@@ -19581,13 +20816,34 @@ void daAlink_c::setDrawHand() {
 }
 
 bool daAlink_c::checkSwordDraw() {
-    return ((checkSwordGet() && mSwordChangeWaitTimer == 0) && !checkNoResetFlg2(FLG2_UNK_2080000))
+    // ============================================
+    // MODIFIED CODE — ALBW Port (SumoTest equipment draw)
+    // FLG2_UNK_2080000 = 0x2000000 | 0x80000, so the sumo body flag
+    // (FLG2_UNK_80000) suppresses the sword whenever the sumo body is worn (the
+    // minigame has no weapons).  For the SumoTest dev OUTFIT, drop just the sumo
+    // bit (keep FLG2_UNK_2000000) so the sword still draws.
+    // ============================================
+    daPy_FLG2 drawSuppress = FLG2_UNK_2080000;
+#if TARGET_PC
+    if (dAlbwSumoTest_showWeapons()) {
+        drawSuppress = FLG2_UNK_2000000;
+    }
+#endif
+    return ((checkSwordGet() && mSwordChangeWaitTimer == 0) && !checkNoResetFlg2(drawSuppress))
             && (!checkWolf() || !dComIfGs_isEventBit(dSv_event_flag_c::M_068));
 }
 
 bool daAlink_c::checkShieldDraw() {
+    // MODIFIED — ALBW Port (SumoTest): drop the sumo bit (0x80000) from the
+    // shield suppression mask for the SumoTest dev outfit (see checkSwordDraw).
+    daPy_FLG2 drawSuppress = FLG2_UNK_4080000;
+#if TARGET_PC
+    if (dAlbwSumoTest_showWeapons()) {
+        drawSuppress = FLG2_UNK_4000000;
+    }
+#endif
     return mShieldModel != NULL &&
-           ((checkShieldGet() && mShieldChangeWaitTimer == 0) && !checkNoResetFlg2(FLG2_UNK_4080000)) &&
+           ((checkShieldGet() && mShieldChangeWaitTimer == 0) && !checkNoResetFlg2(drawSuppress)) &&
            (!checkWolf() || !dComIfGs_isEventBit(dSv_event_flag_c::M_068));
 }
 
@@ -19798,9 +21054,17 @@ void daAlink_c::shadowDraw() {
                     dComIfGd_addRealShadow(shadowID, mpWlMidnaHairModel);
                 }
             } else {
+#if TARGET_PC
+                // Generation gate (shadow path): skip the clothes-model shadow adds when the
+                // arc heap was freed under them.  addRealShadow -> J3DShape::drawFast walks the
+                // same freed model data the direct draw does (the documented shadow crash).
+                if (s_albwClothesModelEpoch == s_albwArcEpoch)
+#endif
+                {
                 dComIfGd_addRealShadow(shadowID, mpLinkFaceModel);
                 dComIfGd_addRealShadow(shadowID, mpLinkHatModel);
                 dComIfGd_addRealShadow(shadowID, mpLinkHandModel);
+                }
 
                 if (mLeftHandIndex == 0xFB) {
                     dComIfGd_addRealShadow(shadowID, mpDemoHLTmpModel);
@@ -19849,6 +21113,11 @@ void daAlink_c::shadowDraw() {
                     }
                 }
 
+#if TARGET_PC
+                // Generation gate (shadow path): kantera + boots are clothes models in mpArcHeap.
+                if (s_albwClothesModelEpoch == s_albwArcEpoch)
+#endif
+                {
                 if (checkNoResetFlg2(FLG2_UNK_1)) {
                     dComIfGd_addRealShadow(shadowID, mpKanteraModel);
                 }
@@ -19857,6 +21126,7 @@ void daAlink_c::shadowDraw() {
                     for (int i = 0; i < 2; i++) {
                         dComIfGd_addRealShadow(shadowID, mpLinkBootModels[i]);
                     }
+                }
                 }
 
                 if (checkSpinnerRide()) {
@@ -19886,6 +21156,8 @@ void daAlink_c::shadowDraw() {
 }
 
 void daAlink_c::modelCalc(J3DModel* i_model) {
+    // HEAD: no calc while clothes timer is set. Drawing/posing the old outfit through
+    // the whole build-then-swap load made quick-select feel lagged vs post-merge.
     if (mClothesChangeWaitTimer == 0) {
         i_model->calc();
     }
@@ -19897,7 +21169,194 @@ void daAlink_c::basicModelDraw(J3DModel* i_model) {
 }
 
 void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
-    g_env_light.setLightTevColorType_MAJI(i_model, &tevStr);
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (freed-arc model backstop + instrumentation)
+    // The cycling crash (rva=0x3ab43a): under heavy outfit cycling a clothes change can
+    // leave one of Link's models pointing at a J3DModelData in an arc heap that was
+    // freed (freeAll) without that model being rebuilt — the model-lifecycle root.  The
+    // env-light pass below (setLightTevColorType_MAJI -> J3DMaterial::getFog) then walks
+    // freed material memory and faults on a garbage pointer.  The J3DModel object itself
+    // is still valid (stable heap), so a NULL check alone can't catch it — but a dangling
+    // J3DModelData reads back a wild material count (Link's real models have < ~20).  We
+    // read getMaterialNum() here, which is STRICTLY shallower than the faulting walk, so
+    // this never adds crash surface; if it looks corrupt, skip the draw (the model just
+    // misses a frame, already mid-cycle) and log WHICH model so the stale free->build
+    // handoff is pinpointed for the precise upstream fix.
+    // ============================================
+    if (i_model == NULL) {
+        return;
+    }
+    // ============================================
+    // NEW CODE — ALBW Port (arc epoch / generation gate)
+    // Reliable, address-reuse-proof replacement for the matNum heuristic on the clothes
+    // models: if the arc heap was freed (freeAll bumped s_albwArcEpoch) AFTER these models
+    // were built (changeLink/changeWolf stamped s_albwClothesModelEpoch) and they have NOT
+    // been rebuilt, this model's J3DModelData points at a freed/reloaded slot — skip it.
+    // Gate ONLY the mpArcHeap-derived clothes models; sword/shield/held items live in
+    // other heaps with their own lifecycle and must not be skipped on the clothes epoch.
+    // ============================================
+    if (s_albwClothesModelEpoch != s_albwArcEpoch &&
+        (i_model == mpLinkModel || i_model == mpLinkFaceModel || i_model == mpLinkHatModel ||
+         i_model == mpLinkHandModel || i_model == mpLinkBootModels[0] ||
+         i_model == mpLinkBootModels[1] || i_model == mpKanteraModel ||
+         i_model == mpKanteraGlowModel || i_model == mWoodSwordModel)) {
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+        DuskLog.debug("ALBW-LIFE modelDraw SKIP stale-epoch model={} modelEpoch={} arcEpoch={} "
+                      "[body={} face={} hat={} hand={}]",
+                      (void*)i_model, s_albwClothesModelEpoch, s_albwArcEpoch, (void*)mpLinkModel,
+                      (void*)mpLinkFaceModel, (void*)mpLinkHatModel, (void*)mpLinkHandModel);
+#endif
+        return;
+    }
+    {
+        J3DModelData* md = i_model->getModelData();
+        u16 matNum = (md != NULL) ? md->getMaterialNum() : 0xFFFF;
+        if (md == NULL || matNum > 256) {
+            // DuskLog (not OSReport — OSReportDisable() is called in-game, so OSReport is
+            // dropped during gameplay; DuskLog.debug reaches the dusklight-<ts>.log).
+            DuskLog.debug("ALBW-LIFE modelDraw SKIP corrupt model={} md={} mat={} "
+                          "[body={} face={} hat={} hand={}]",
+                          (void*)i_model, (void*)md, matNum, (void*)mpLinkModel,
+                          (void*)mpLinkFaceModel, (void*)mpLinkHatModel, (void*)mpLinkHandModel);
+            return;
+        }
+    }
+#endif
+
+#if TARGET_PC
+    // ============================================
+    // TEMP DIAGNOSTIC — ALBW Port (Link Hat cap invisible on the BLS sumo body)
+    // The cap loads + positions correctly but does not render on the sumo body.  Prime
+    // suspect: setWaterDropColor (which applies the cap material's TevColor) is gated
+    // !checkNoResetFlg2(FLG2_UNK_80000), so on the sumo body the cap material color is NEVER
+    // applied and may stay black/zero -> invisible.  This logs the cap's draw-time state for
+    // BOTH the sumo body and normal Link so the TevColor (material 0, color index 1 -- the one
+    // setWaterDropColor writes at line ~20401) can be compared.  drawn=1 means it reached the
+    // entryDL submit (param_1==0).  Throttled to ~1 line / 2s, hat model only.  STRIP before push.
+    // ============================================
+    if (i_model == mpLinkHatModel) {
+        static int s_albwCapDbgThrottle = 0;
+        if (--s_albwCapDbgThrottle <= 0) {
+            s_albwCapDbgThrottle = 120;
+            J3DModelData* hmd = i_model->getModelData();
+            const J3DGXColorS10* tc = (hmd != NULL && hmd->getMaterialNum() > 0)
+                                          ? hmd->getMaterialNodePointer(0)->getTevColor(1)
+                                          : NULL;
+            DuskLog.debug(
+                "ALBW-CAP hat sumo={} mat={} shapes={} param1={} drawn={} tev0_mat0=({},{},{},{})",
+                checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, hmd ? hmd->getMaterialNum() : 0xFFFF,
+                hmd ? hmd->getShapeNum() : 0xFFFF, (int)param_1, (param_1 == 0) ? 1 : 0,
+                tc ? (int)tc->r : -999, tc ? (int)tc->g : -999, tc ? (int)tc->b : -999,
+                tc ? (int)tc->a : -999);
+        }
+    }
+#endif
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Track B held WW bow skin)
+    // MAJI crushes the WW cel materials to black (same as the get-item saga). For the held
+    // vbow, replicate the get-item recipe instead: struct-0 + fixed warm ambient (no MAJI),
+    // and activate the SC realization draw scope so the callback colors SC + body texgen
+    // during modelEntryDL. Everything else (other models) keeps normal MAJI lighting.
+    // ============================================
+    // NEW CODE — ALBW Port (WW iron-boots skin — RIG-FIRST stage)
+    // The re-rigged vboot is worn as BOTH boot instances (per-foot, real setAnmMtx via the
+    // vanilla calc). They deliberately do NOT take the held-bow cel recipe: that path uses
+    // modelUpdateDL + a global SC scope built for ONE prop, and running it over the two boots'
+    // SHARED model data corrupted the deferred draw (took all of Link down). So the boots fall
+    // through to the normal clothes draw below (MAJI + modelEntryDL, exactly like al_bootsH).
+    // The SC pass may read dark under MAJI — cel color is the NEXT stage, done without the
+    // shared-data modelUpdateDL. This stage proves the rig/fit on the foot.
+    // ============================================
+    const dusk::WwHeldSkinMode wwSkinMode = dusk::getSettings().game.wwItemmdlHeldSkin.getValue();
+    // Legacy itemmdl scope path is disabled while the native al_bow-replacement skin is
+    // active (its post-DL callback keys on the same Vbow_v material names and would
+    // replay the white-konst spec over the native BMD -> bloom).
+    const bool wwHeldBow =
+        (i_model == mHeldItemModel) && s_albwWwBowNative == NULL &&
+        ((wwSkinMode == dusk::WwHeldSkinMode::Bow && checkBowItem(mEquipItem)) ||
+         (wwSkinMode == dusk::WwHeldSkinMode::Hookshot && checkHookshotItem(mEquipItem)));
+    // Item switched away from the WW held skin: drop the stale scope so the post-DL callback
+    // (fires at draw-buffer DRAIN) never dereferences a freed itemmdl model.
+    if (i_model == mHeldItemModel && !wwHeldBow) {
+        dWwItemmdl_clearBowDrawScope();
+    }
+    if (wwHeldBow) {
+        // ============================================
+        // NEW CODE — ALBW Port (held WW skin: boots-style lighting A/B toggle)
+        // Render the held WW item EXACTLY like the boots: ambient-only, NO SC draw scope /
+        // authentic TEV replay. The scope's white-konst spec/ink replay is what blooms; this
+        // shows the matte alternative. May leave SC parts unrealized (the scope exists
+        // because the retail BDL's exotic stages don't survive TP's draw path unaided) —
+        // that trade-off is exactly what the A/B is for.
+        // ============================================
+        // The custom rebuilt vbow BMD (no MDL3) takes this path AUTOMATICALLY — its
+        // materials render natively, so the scope's TEV replay is unnecessary.
+        if (dusk::getSettings().game.wwItemmdlHeldBootsStyle.getValue() ||
+            dWwItemmdl_usingCustomHeldModel(i_model)) {
+            dWwItemmdl_clearBowDrawScope();
+            g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+            dWwItemmdl_setWwBowActorAmbient(&tevStr);
+            dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
+            mDoExt_modelUpdateDL(i_model);
+            daMirror_c::entry(i_model);
+            return;
+        }
+        // WW cel bow: get-item recipe — struct-0 + warm ambient (NO MAJI) + modelUpdateDL.
+        // CRITICAL: the MatDrawPostDl callback fires at draw-buffer DRAIN (after this returns),
+        // like the get-item demo (begin at spawn, clear at Delete). Do NOT clear here — that
+        // killed the callback before drain, so SC/body never realized. Re-point each frame via
+        // begin (idempotent); cleared above on item switch.
+        dWwItemmdl_beginBowDrawScope(i_model, fopAcM_GetID(this));
+        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+        dWwItemmdl_setWwBowActorAmbient(&tevStr);
+        dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
+        mDoExt_modelUpdateDL(i_model);
+        daMirror_c::entry(i_model);
+        return;
+    }
+
+    // ============================================
+    // NEW CODE — ALBW Port (WW iron-boots skin — cel lighting recipe)
+    // The re-rigged vboot wears as BOTH boot instances. Under MAJI its WW cel materials crush to
+    // black (the same get-item / held-bow saga). Replicate the get-item LIGHTING recipe only:
+    // struct-0 + fixed warm ambient (no MAJI) + per-material ambient-only. Deliberately WITHOUT
+    // the held-bow SC draw scope + modelUpdateDL — the two boots SHARE one J3DModelData and that
+    // path corrupted the deferred draw (took all of Link down, see the held-bow note above). The
+    // normal modelEntryDL path is used instead (exactly like al_bootsH), so the shared-data draw
+    // stays valid. applyBowMaterialAmbientOnly is accept-any and the SC recipe keys on the "SC_"
+    // prefix, so SC_boot/boot are handled without bow-specific code.
+    // ============================================
+    if ((s_albwWwBootsSkinned &&
+         (i_model == mpLinkBootModels[0] || i_model == mpLinkBootModels[1])) ||
+        (s_albwWwBowNative != NULL && i_model == mHeldItemModel &&
+         i_model->getModelData() == s_albwWwBowNative) ||
+        (s_dekuLeafModel != NULL && i_model == s_dekuLeafModel)) {
+        // WW Deku Leaf shares the boots/bow anti-MAJI ambient recipe (matte WW cel).
+        g_env_light.settingTevStruct(0, &current.pos, &tevStr);
+        dWwItemmdl_setWwBowActorAmbient(&tevStr);
+        dWwItemmdl_applyBowMaterialAmbientOnly(i_model, &tevStr);
+        if (param_1 == 0) {
+            mDoExt_modelEntryDL(i_model);
+        } else {
+            i_model->calcMaterial();
+            i_model->diff();
+        }
+        daMirror_c::entry(i_model);
+        return;
+    }
+#endif
+
+    // §47: donor-space lighting recipe for the player. When it handles the
+    // lighting it returns true and MAJI is SKIPPED — that bypass is the whole
+    // point, since MAJI is where the excess light comes from (the donor cast
+    // never runs it). Outside donor stages, and at the default setting, this is
+    // false and the receiver's path is untouched.
+    if (!dExtWw_applyPlayerDonorLook(i_model, &tevStr)) {
+        g_env_light.setLightTevColorType_MAJI(i_model, &tevStr);
+    }
 
     if (param_1 == 0) {
         mDoExt_modelEntryDL(i_model);
@@ -19912,6 +21371,23 @@ void daAlink_c::modelDraw(J3DModel* i_model, int param_1) {
 void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
     static const GXColorS10 notColor0 = {0x00, 0x00, 0x00, 0xFF};
     J3DGXColorS10* var_r31;
+
+    // ============================================
+    // NEW CODE — ALBW Port (Cap Wear recolor safety)
+    // The recolor below indexes the HAT material by the wear-flag branch (Magic touches hat
+    // mats 1+2, Zora mat 1, Hero's/casual mat 0).  With Cap Wear a foreign cap can be on Link
+    // (e.g. the green al_head, 2 mats, over a Magic body whose branch writes hat mat 2) -> an
+    // off-the-end read.  Guard every mpLinkHatModel material write by the cap's ACTUAL count so
+    // a mismatched cap recolors only what it has.  ALBW_HAT_TEV is also used by the existing
+    // wear-flag branches (harmless: a native cap always has the expected material).
+    // ============================================
+    J3DModelData* const albwHatMd = (mpLinkHatModel != NULL) ? mpLinkHatModel->getModelData() : NULL;
+    const u16 albwHatMatNum = (albwHatMd != NULL) ? albwHatMd->getMaterialNum() : 0;
+#define ALBW_HAT_TEV(idx)                                                  \
+    do {                                                                   \
+        if (albwHatMd != NULL && albwHatMatNum > (u16)(idx))               \
+            albwHatMd->getMaterialNodePointer(idx)->setTevColor(1, i_color); \
+    } while (0)
 
     if (&field_0x32a0[0] == i_color) {
         if (checkNoResetFlg2(FLG2_UNK_80000) || checkZoraWearAbility() ||
@@ -19935,9 +21411,17 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(13)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(0)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(1)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(1)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(1);
             }
+#if TARGET_PC
+        // Only run the Magic Armor material ops on the REAL Mmdl model — the Kmdl
+        // fallback body lacks this material layout and getMaterialNodePointer(2) on its
+        // hat reads off the end (the shop-buy-Magic draw crash).  Fall through to the
+        // Hero's branch below, which matches the fallback body.
+        } else if (checkMagicArmorWearAbility() && s_albwMagicModelReady) {
+#else
         } else if (checkMagicArmorWearAbility()) {
+#endif
 #if TARGET_PC
             if (field_0x064C->getMaterialNum() >= 12)
 #endif
@@ -19947,8 +21431,8 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(9)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(8)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(6)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(2)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(1)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(2);
+            ALBW_HAT_TEV(1);
             }
         } else if (checkCasualWearFlg()) {
 #if TARGET_PC
@@ -19956,7 +21440,7 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
 #endif
             {
             field_0x064C->getMaterialNodePointer(7)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(0)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(0);
             field_0x064C->getMaterialNodePointer(5)->setTevColor(1, var_r31);
             }
         } else {
@@ -19969,13 +21453,14 @@ void daAlink_c::setWaterDropColor(const J3DGXColorS10* i_color) {
             field_0x064C->getMaterialNodePointer(0)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(1)->setTevColor(1, i_color);
             field_0x064C->getMaterialNodePointer(2)->setTevColor(1, i_color);
-            mpLinkHatModel->getModelData()->getMaterialNodePointer(0)->setTevColor(1, i_color);
+            ALBW_HAT_TEV(0);
             field_0x064C->getMaterialNodePointer(16)->setTevColor(1, var_r31);
             field_0x064C->getMaterialNodePointer(15)->setTevColor(1, var_r31);
             field_0x064C->getMaterialNodePointer(14)->setTevColor(1, var_r31);
             }
         }
     }
+#undef ALBW_HAT_TEV
 }
 
 void daAlink_c::initTevCustomColor() {
@@ -20026,9 +21511,39 @@ int daAlink_c::draw() {
 
             g_env_light.setLightTevColorType_MAJI(mpWlChangeModel, &tevStr);
             mDoExt_modelEntryDL(mpWlChangeModel);
+            return 1;
         }
+        // HEAD: hide for the clothes-change timer. Brief cut → new outfit (snappy).
+        // WIP drew old models through s_albwSwapActive and felt like swap lag.
         return 1;
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (universal model-state consistency guard)
+    // THE single choke point that prevents every "use stale/mismatched clothes-model state"
+    // crash (getFog/mPEBlock, setWaterDropColor material indices, the Magic Brk animators,
+    // the shadow adds) — they ALL run below this point in draw().  If Link's models were not
+    // built for the current arc epoch AND the current wear/sumo state, the data they hold
+    // does not match what we are about to draw, so skip the whole Link draw this frame (the
+    // same safe early-out the clothes-change timer uses just above).  The serialization /
+    // sumo-flap coalescing keeps these tokens in agreement during normal play, so this does
+    // not fire (no flicker); it is the crash seatbelt for any residual/unforeseen mismatch.
+    // ============================================
+    {
+        u32 curState = albwModelStateToken(checkWolf(), checkNoResetFlg2(FLG2_UNK_80000),
+            checkCasualWearFlg(), checkZoraWearFlg(), checkMagicArmorWearFlg());
+        if (s_albwClothesModelEpoch != s_albwArcEpoch || s_albwBuiltModelState != curState ||
+            !s_albwBuildIntegrityOk) {
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+            DuskLog.debug("ALBW-LIFE draw SKIP inconsistent built={} cur={} epoch m/a={}/{} integrityOk={}",
+                          s_albwBuiltModelState, curState, s_albwClothesModelEpoch,
+                          s_albwArcEpoch, s_albwBuildIntegrityOk ? 1 : 0);
+#endif
+            return 1;
+        }
+    }
+#endif
 
     BOOL isPlayerNoDraw = checkPlayerNoDraw();
     BOOL var_r29 = FALSE;
@@ -20094,7 +21609,19 @@ int daAlink_c::draw() {
 
     if (!checkWolf()) {
         if (var_r31) {
-            if (checkMagicArmorWearAbility() && mClothesChangeWaitTimer == 0) {
+            // ============================================
+            // NEW CODE — ALBW Port (Magic Armor BRK null backstop)
+            // The Magic Armor rupee-drain Brk animators (mMagicArmorBodyBrk/HeadBrk) are
+            // set up in changeLink's Magic branch via setMagicArmorBrk(), which can FAIL
+            // (and leave these NULL) when Magic is reached through the ALBW shop / a
+            // missing-Mmdl fallback build — paths vanilla never hits, so vanilla never
+            // null-checks here.  entry/removeTevRegAnimator(NULL) derefs null+0x10 and
+            // crashes in draw() (J3DMaterialTable::entryTevRegAnimator).  Guard both calls.
+            // Real fix lives in the Magic Armor changeLink setup (ensure the Brk is built);
+            // this is the crash-safe backstop.
+            // ============================================
+            if (checkMagicArmorWearAbility() && mClothesChangeWaitTimer == 0 &&
+                mMagicArmorBodyBrk != NULL && mMagicArmorHeadBrk != NULL) {
                 mpLinkModel->getModelData()->removeTevRegAnimator(mMagicArmorBodyBrk);
                 mpLinkHatModel->getModelData()->removeTevRegAnimator(mMagicArmorHeadBrk);
             }
@@ -20106,7 +21633,8 @@ int daAlink_c::draw() {
                 setWaterDropColor((J3DGXColorS10*)&tevStr.TevColor);
             }
         } else {
-            if (checkMagicArmorWearAbility()) {
+            if (checkMagicArmorWearAbility() &&
+                mMagicArmorBodyBrk != NULL && mMagicArmorHeadBrk != NULL) {
                 mpLinkModel->getModelData()->entryTevRegAnimator(mMagicArmorBodyBrk);
                 mpLinkHatModel->getModelData()->entryTevRegAnimator(mMagicArmorHeadBrk);
             }
@@ -20180,6 +21708,20 @@ int daAlink_c::draw() {
         }
 
         modelDraw(mpLinkModel, isPlayerNoDraw);
+
+#if TARGET_PC
+        // NEW CODE — ALBW Port (Deku Leaf glide, WIP P3b): while gliding, hold the WW Deku Leaf
+        // overhead and draw it boots-style. Loaded lazily; skipped entirely when not gliding.
+        if (checkDekuLeafGlide()) {
+            updateDekuLeafModel();
+            if (s_dekuLeafModel != NULL) {
+                modelDraw(s_dekuLeafModel, isPlayerNoDraw);
+                // The boots-style recipe left the leaf's warm ambient in the shared tevStr; restore
+                // Link's environment tevStr so the face/hands drawn after don't inherit it.
+                g_env_light.settingTevStruct(checkWolf() ? 9 : 10, &current.pos, &tevStr);
+            }
+        }
+#endif
 
         if (dComIfGp_checkCameraAttentionStatus(field_0x317c, 0x20)) {
 #if PLATFORM_SHIELD
@@ -20380,6 +21922,11 @@ int daAlink_c::draw() {
         dComIfGd_entryZSortXluList(&m_swordBlur, m_swordBlur.field_0x308[0]);
     }
 
+#if TARGET_PC
+    // Demo leftover viewer (orphan Demo*.arc BMDs at Link's feet).
+    dDemoLeftoverViewer::draw();
+#endif
+
     return 1;
 }
 
@@ -20415,6 +21962,18 @@ daAlink_c::~daAlink_c() {
     if (mpArcHeap != NULL) {
         mDoExt_destroyExpHeap(mpArcHeap);
     }
+#if TARGET_PC
+    // Free the build-then-swap alt heap too (file-static; would otherwise leak / dangle if
+    // Link is recreated, e.g. a cutscene rebuild).  Reset swap state for the next instance.
+    if (s_albwArcHeapB != NULL) {
+        mDoExt_destroyExpHeap(s_albwArcHeapB);
+        s_albwArcHeapB = NULL;
+    }
+    s_albwSwapActive = false;
+    s_albwSwapOldArc = NULL;
+    s_albwForceClothesRemount = false;
+    cPhs_Reset(&s_albwPhaseReqB);
+#endif
 
     dComIfG_resDelete(&mShieldPhaseReq, mShieldArcName);
     if (mpShieldArcHeap != NULL) {

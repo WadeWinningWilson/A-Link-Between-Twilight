@@ -38,6 +38,16 @@ int daAlink_kandelaarModelCallBack(J3DJoint* param_0, int param_1);
 extern BOOL l_debugMode;
 extern const char l_wArcName[];
 extern const char l_bArcName[];
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (wolf loco speed)
+// Normal land run +5%, swim +20%. Applied only to run-cap and swim-cap
+// assignments (not A-dash, gaze/atn, slope climb, or attack leaps).
+// ============================================
+static constexpr f32 kAlbwWolfLandRunSpeedMul = 1.05f;
+static constexpr f32 kAlbwWolfSwimSpeedMul    = 1.20f;
+#endif
 extern const char l_kArcName[];
 extern const char l_zArcName[];
 extern const char l_mArcName[];
@@ -236,6 +246,9 @@ void daAlink_c::changeWolf() {
     mHeight = 115.0f;
     mLinkAcch.SetRoofCrrHeight(mHeight);
     mMaxSpeed = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+    mMaxSpeed *= kAlbwWolfLandRunSpeedMul;
+#endif
 
     l_autoUpHeight = mpHIO->mWolf.mWlWallHang.m.mAutoWalkHeight + 0.01f;
     l_autoDownHeight = -l_autoUpHeight;
@@ -307,10 +320,24 @@ void daAlink_c::changeWolf() {
     mMagicArmorHeadBrk = NULL;
 
     field_0x2fc7 = dStage_stagInfo_GetWolfDashType(dComIfGp_getStage()->getStagInfo());
+
+#if TARGET_PC
+    // Wolf models also live in mpArcHeap (mpLinkModel = wolf body) — stamp the epoch and the
+    // state token so draw()'s consistency guard does not treat the fresh wolf build as stale.
+    s_albwClothesModelEpoch = s_albwArcEpoch;
+    s_albwBuiltModelState = albwModelStateToken(true,
+        checkNoResetFlg2(FLG2_UNK_80000), checkCasualWearFlg(), checkZoraWearFlg(),
+        checkMagicArmorWearFlg());
+#endif
 }
 
 void daAlink_c::changeLink(int param_0) {
     JKRHeap* current_heap = mAnmHeap3.setAnimeHeap();
+#if TARGET_PC
+    if (dAlbwOutfit_isSumoWorn() && dAlbwSumoTest_prepareChangeLink()) {
+        onNoResetFlg2(FLG2_UNK_200000);
+    }
+#endif
     offNoResetFlg2(daPy_FLG2(FLG2_UNK_100000 | FLG2_UNK_80000));
     mMagicArmorBodyBrk = NULL;
     mMagicArmorHeadBrk = NULL;
@@ -321,10 +348,52 @@ void daAlink_c::changeLink(int param_0) {
         offNoResetFlg2(FLG2_UNK_200000);
         onNoResetFlg2(FLG2_UNK_80000);
 
-        modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x31));
+        modelData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x31));  // 3b: private slot, global fallback
         mpLinkModel = mDoExt_J3DModel__create(modelData, 0x80000, 0x11000084);
-        mpLinkHatModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x33)), 0);
-        mpLinkHandModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes("alSumou", 0x32)), 0);
+#if TARGET_PC
+        // Sumo Outfit "Link Hat": load Link's cap (Kmdl al_head.bmd) instead of
+        // the sumo headpiece (alSumou 0x33).  On a re-apply while already sumo,
+        // Kmdl may not be resident (the clothes-change skips the arc reload when
+        // the sumo flag is set), so getObjectRes can return NULL; fall back to
+        // the sumo headpiece (kept resident by the sumo module) so we never build
+        // a model from a null J3DModelData and crash.
+        // WIP: the cap loads but does not render on the BLS body (material/draw
+        // issue, not transform — position is correct via body head joint 4).
+        if (dAlbwSumoTest_wantLinkCap()) {
+            // Cap Wear: the cap model + arc come from game.capWear -- green al_head/Kmdl,
+            // red ml_head/Mmdl, blue zl_head/Zmdl.  The sumo module keeps the chosen arc resident
+            // on any base (resourcesReady cap donor); a NULL here = not-yet-resident -> topknot.
+            const char* capArc  = dAlbwSumoTest_capArcName();
+            const char* capName = dAlbwSumoTest_capModelName();
+            // 3b: prefer the PRIVATE independent cap (gen-swapped -> tracks the Custom Models
+            // toggle).  Fall back to the global donor arc (prior behavior) until it is resident.
+            J3DModelData* capData = dAlbwSumoTest_independentCapData();
+            if (capData == NULL) {
+                capData = static_cast<J3DModelData*>(dComIfG_getObjectRes(capArc, capName));
+            }
+            if (capData == NULL) {
+                capData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33));  // 3b topknot fallback
+            }
+            mpLinkHatModel = initModel(capData, 0);
+        } else
+#endif
+        {
+            mpLinkHatModel =
+                initModel(static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33)), 0);  // 3b topknot
+        }
+        mpLinkHandModel = initModel(static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x32)), 0);  // 3b hand
+#if TARGET_PC
+        // Link Hat: shape visibility lives on the shared al_head.bmd J3DModelData,
+        // and a prior use of the model may have left shapes hidden.  Force every
+        // cap-model shape visible so the cap renders.
+        if (dAlbwSumoTest_wantLinkCap() && mpLinkHatModel != NULL &&
+            mpLinkHatModel->getModelData()->getJointNum() > 6) {
+            J3DModelData* capMd = mpLinkHatModel->getModelData();
+            for (u16 caps = 0; caps < capMd->getShapeNum(); caps++) {
+                capMd->getShapeNodePointer(caps)->show();
+            }
+        }
+#endif
     } else if (checkCasualWearFlg()) {
         onNoResetFlg2(FLG2_UNK_100000);
 
@@ -340,26 +409,73 @@ void daAlink_c::changeLink(int param_0) {
         mpLinkHandModel =
             initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_zArcName, "al_hands.bmd")), 0);
     } else if (checkMagicArmorWearFlg()) {
-        mpLinkModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml.bmd")), 0x1000000);
-        mpLinkHatModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml_head.bmd")), 0x1000000);
-        mpLinkHandModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "al_hands.bmd")), 0);
-
-#if TARGET_PC
-        if (dComIfGs_getRupee() != 0 || dusk::getSettings().game.armorRupeeDrain.getValue() != dusk::MagicArmorMode::NORMAL)
-#else
-        if (dComIfGs_getRupee() != 0)
-#endif
-        {
-            setMagicArmorBrk(1);
-        } else {
-            setMagicArmorBrk(0);
+        J3DModelData* bodyData =
+            static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml.bmd"));
+        J3DModelData* headData =
+            static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "ml_head.bmd"));
+        J3DModelData* handData =
+            static_cast<J3DModelData*>(dComIfG_getObjectRes(l_mArcName, "al_hands.bmd"));
+        bool useMmdlFlags = bodyData != NULL && headData != NULL && handData != NULL;
+        // Tell draw() whether this is the REAL Magic model.  On the Kmdl fallback below,
+        // the body is Link's Hero's body but the wear flag stays Magic; draw() must NOT
+        // run its Magic-only material/Brk ops on it (it reads off the end and crashes).
+        s_albwMagicModelReady = useMmdlFlags;
+        if (!useMmdlFlags) {
+            // Log the Mmdl residency state so the ROOT (why ml.bmd isn't resolvable on a
+            // shop-buy under churn) is visible: a registered-but-null archive == freed /
+            // mid-read (aliasing class); not-registered == never loaded.
+            dRes_info_c* mmdlInfo = g_dComIfG_gameInfo.mResControl.getObjectResInfo(l_mArcName);
+            DuskLog.debug("ALBW-LIFE changeLink Magic FALLBACK: missing Mmdl part in {} "
+                          "(body={} head={} hand={}) resInfo={} archive={}",
+                          l_mArcName, (void*)bodyData, (void*)headData, (void*)handData,
+                          (void*)mmdlInfo, (void*)(mmdlInfo != NULL ? mmdlInfo->getArchive() : NULL));
+            bodyData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al.bmd"));
+            headData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_head.bmd"));
+            handData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_hands.bmd"));
+        }
+        if (bodyData != NULL) {
+            mpLinkModel = initModel(bodyData, useMmdlFlags ? 0x1000000 : 0);
+        }
+        if (headData != NULL) {
+            mpLinkHatModel = initModel(headData, useMmdlFlags ? 0x1000000 : 0);
+        }
+        if (handData != NULL) {
+            mpLinkHandModel = initModel(handData, 0);
         }
 
-        mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
-        mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+#if TARGET_PC
+        if (dusk::getSettings().game.armorRupeeDrain.getValue() == dusk::MagicArmorMode::ALBW) {
+            if (!dMeter2_isALBWArmorDepleted() && dComIfGs_getRupee() >= 500) {
+                if (setMagicArmorBrk(1)) {
+                    mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                    mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+                }
+            } else if (setMagicArmorBrk(0)) {
+                mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+            }
+        } else if (dComIfGs_getRupee() != 0 ||
+                   dusk::getSettings().game.armorRupeeDrain.getValue() != dusk::MagicArmorMode::NORMAL)
+        {
+            if (setMagicArmorBrk(1)) {
+                mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+            }
+        } else if (setMagicArmorBrk(0)) {
+            mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+            mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+        }
+#else
+        if (dComIfGs_getRupee() != 0) {
+            if (setMagicArmorBrk(1)) {
+                mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+                mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+            }
+        } else if (setMagicArmorBrk(0)) {
+            mMagicArmorBodyBrk->setFrame(mMagicArmorBodyBrk->getFrameMax());
+            mMagicArmorHeadBrk->setFrame(mMagicArmorHeadBrk->getFrameMax());
+        }
+#endif
     } else {
         mpLinkModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al.bmd")), 0);
         mpLinkHatModel =
@@ -368,13 +484,113 @@ void daAlink_c::changeLink(int param_0) {
             initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_hands.bmd")), 0);
     }
 
-    if (checkNoResetFlg2(FLG2_UNK_200000) || !checkZoraWearFlg()) {
-        mpLinkFaceModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd")), 0x20200);
-    } else {
-        mpLinkFaceModel =
-            initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "zl_face.bmd")), 0x20200);
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (GLOBAL Cap Wear — non-sumo override)
+    // The native cascade above built this outfit's OWN hat (mpLinkHatModel).  Apply the global
+    // Cap Wear setting (game.capWear) so the chosen cap/topknot shows on EVERY native outfit, not
+    // just the sumo body (the sumo branch near the top owns its own cap).  Skip the sumo body
+    // (FLG2_UNK_80000 -- handled there) and wolf.  The chosen arc is held resident off its owning
+    // base by the sumo module's non-sumo cap donor (nativeCapResourcesReady); a NULL here means
+    // not-yet-resident, so we LEAVE the native hat and let the outfit module self-heal
+    // (dAlbwAlink_nativeCapResolved) re-fire one rebuild once the donor lands.  We never build
+    // mpLinkHatModel from a NULL J3DModelData.  Risk #1 (a foreign cap's materials read off the
+    // end in setWaterDropColor) is bounded by ALBW_HAT_TEV / getMaterialNum (commit 55c30fb496).
+    // ============================================
+    s_albwNativeCapResolved = true;  // default: Off / sumo / wolf -> nothing to override
+    if (dusk::getSettings().game.capWear.getValue() != dusk::CapWearMode::Off &&
+        !checkNoResetFlg2(FLG2_UNK_80000) && !checkWolf()) {
+        const bool wantTopknot = dAlbwSumoTest_wantTopknot();
+        const char* capArc  = wantTopknot ? "alSumou" : dAlbwSumoTest_capArcName();
+        const char* capName = wantTopknot ? "topknot(0x33)" : dAlbwSumoTest_capModelName();
+        (void)capArc;
+        (void)capName;
+        // None uses the resident alSumou topknot; Green/Red/Blue come from the model-agnostic
+        // INDEPENDENT loader (private array+heap, base-independent, no aliasing).  NULL while it
+        // loads / on failure -> keep the native hat (self-heal re-fires once it's ready).
+        J3DModelData* capData =
+            wantTopknot ? static_cast<J3DModelData*>(dAlbwSumoTest_sumoRes(0x33))  // 3b: private, tracks toggle
+                        : dAlbwSumoTest_independentCapData();
+
+        if (capData != NULL) {
+            // On a Magic base the cascade bound mMagicArmorHeadBrk to the ml_head we are
+            // replacing; drop the head Brk so draw()'s Magic head shimmer does not animate the
+            // orphaned model (simpleAnmPlay null-guards).  The body Brk stays (the body is intact).
+            mMagicArmorHeadBrk = NULL;
+            mpLinkHatModel = initModel(capData, 0);
+            // Shape visibility lives on the shared J3DModelData; a prior use may have hidden
+            // shapes.  Force the cap's shapes visible (mirrors the sumo branch).
+            J3DModelData* capMd = mpLinkHatModel->getModelData();
+            for (u16 cs = 0; cs < capMd->getShapeNum(); cs++) {
+                capMd->getShapeNodePointer(cs)->show();
+            }
+        } else {
+            s_albwNativeCapResolved = false;  // not resident yet -> keep native hat; self-heal later
+        }
     }
+#endif
+
+    // ============================================
+    // NEW CODE — ALBW Port (Sumo Outfit equipment attach)
+    // The alSumou "BLS" skeleton places the hand / weapon locators at different
+    // joint indices than Link's normal body: HANDL=9, HANDR=14, WEAPONL=10,
+    // WEAPONR=15.  Without this remap the sword/shield/held items attach to the
+    // wrong BLS joints and read as invisible on the sumo body.  Override ONLY for
+    // the sumo body — for normal clothes the game sets these joints dynamically
+    // (per equipped item), so we must not clobber them or every outfit swap puts
+    // the sword at the legs.  On revert the game restores them itself.
+    // ============================================
+    if (checkNoResetFlg2(FLG2_UNK_80000)) {
+        mLeftHandJntNo  = 9;   // BLS_JNT_HANDL
+        mRightHandJntNo = 14;  // BLS_JNT_HANDR
+        mLeftItemJntNo  = 10;  // BLS_JNT_WEAPONL
+        mRightItemJntNo = 15;  // BLS_JNT_WEAPONR
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+
+    J3DModelData* faceData = NULL;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Sumo Outfit face)
+    // The sumo body has no face of its own (alSumou 0x33 is only the topknot), so it
+    // borrows Link's standard al_face.bmd.  Source it from the RESIDENT BASE clothes
+    // arc (mArcName): Bmdl (Ordon), Kmdl (Hero's) and Mmdl (Magic) all ship al_face,
+    // so over those bases the sumo face is correct with no extra residency.  ONLY the
+    // Zora base (Zmdl) lacks al_face — it has just zl_face.bmd, whose chin/neck
+    // geometry reads as the "chin strap" on the sumo body — so there alone we fall
+    // back to Kmdl's al_face (the sumo module keeps Kmdl resident for the Zora base
+    // only; see d_albw_sumo_test.cpp resourcesReady()/releaseFaceDonor()).
+    //
+    // Why gate the Kmdl borrow to the Zora base: the resource manager is refcounted by
+    // arc NAME, but Link's clothes pipeline frees its arc heap with mpArcHeap->freeAll()
+    // (bypassing the refcount).  Over a Hero's base the pipeline's Kmdl lives in that
+    // heap, so a second sumo-side refcount on "Kmdl" dangles when the heap is freed —
+    // the dual-Kmdl crash / chin-strap regression.  Over the Zora base the pipeline
+    // holds Zmdl instead, so our Kmdl is an independent entry and never aliases it.
+    // ============================================
+    if (checkNoResetFlg2(FLG2_UNK_80000)) {
+        // 3b: prefer the private Kmdl al_face (tracks the Custom Models toggle, base-independent).
+        faceData = static_cast<J3DModelData*>(dAlbwSumoTest_sumoFaceData());
+        if (faceData == NULL) {
+            // Fallback (private Kmdl not resident yet / feature off): the base-arc al_face.
+            if (checkZoraWearFlg()) {
+                faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(l_kArcName, "al_face.bmd"));
+            } else {
+                faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd"));
+            }
+        }
+    }
+#endif
+    if (faceData == NULL) {
+        if (checkNoResetFlg2(FLG2_UNK_200000) || !checkZoraWearFlg()) {
+            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_face.bmd"));
+        } else {
+            faceData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "zl_face.bmd"));
+        }
+    }
+    mpLinkFaceModel = initModel(faceData, 0x20200);
 
 #ifdef TARGET_PC
     // Update Adult Link's eye maxLOD to prevent the eyes from disappearing
@@ -396,8 +612,31 @@ void daAlink_c::changeLink(int param_0) {
     }
 #endif
 
-    modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_bootsH.bmd"));
     u16 i;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (WW iron-boots skin via Custom Model API — Layer B)
+    // Try a loose per-arc WW boot override "<arc>_<al_bootsH index>.bmd" from an enabled Custom
+    // Models folder (e.g. "Wind Waker Skins"). al_bootsH sits at index 0xD in Kmdl/Mmdl and 0xC
+    // in Bmdl/Zmdl. try_load returns NULL (folder disabled / file absent) -> vanilla al_bootsH.
+    // The re-rigged BMD carries al_bootsH's exact 4-joint skeleton, so the vanilla per-foot rig
+    // below drives it with zero special-casing (standard initModel + normal clothes draw path).
+    // When the WW boot loads, s_albwWwBootsSkinned flips true so modelDraw() renders it with the
+    // get-item cel lighting recipe (struct-0 + ambient-only) instead of MAJI, which crushes the
+    // WW cel materials to black (the get-item / held-bow saga).
+    // ============================================
+    s_albwWwBootsSkinned = false;
+    const int bootsHIdx = (mArcName == l_bArcName || mArcName == l_zArcName) ? 0xC : 0xD;
+    modelData = dusk::custom_assets::try_load(mArcName, bootsHIdx);
+    if (modelData != NULL) {
+        s_albwWwBootsSkinned = true;
+    }
+    if (modelData == NULL)
+#endif
+    {
+        modelData = static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_bootsH.bmd"));
+    }
+
     for (i = 0; i < 2; i++) {
         mpLinkBootModels[i] = initModel(modelData, 0);
     }
@@ -414,12 +653,121 @@ void daAlink_c::changeLink(int param_0) {
 
     mWoodSwordModel = initModel(static_cast<J3DModelData*>(dComIfG_getObjectRes(mArcName, "al_SWB.bmd")), 0);
 
+#if TARGET_PC
+    // Clothes models just (re)built from the current arc heap — stamp the live epoch and the
+    // wear/sumo state they were built for so draw()'s consistency guard treats them as valid.
+    s_albwClothesModelEpoch = s_albwArcEpoch;
+    // changeLink always builds human Link — stamp wolf=false even during metamorphose
+    // (FLG1_IS_WOLF may still be set until changeCommon() below).
+    s_albwBuiltModelState = albwModelStateToken(false,
+        checkNoResetFlg2(FLG2_UNK_80000), checkCasualWearFlg(), checkZoraWearFlg(),
+        checkMagicArmorWearFlg());
+
+    // Build-time corruption DETECTOR (see albwFirstCorruptMat): scan every clothes model the
+    // instant it is built.  Logs full context on a corrupt build and flags it so draw() skips
+    // Link until the next clean rebuild (no crash, session keeps running to collect samples).
+    {
+        struct { const char* name; J3DModel* m; } l_mdls[] = {
+            {"body", mpLinkModel},   {"face", mpLinkFaceModel}, {"hat", mpLinkHatModel},
+            {"hand", mpLinkHandModel}, {"boot0", mpLinkBootModels[0]},
+            {"boot1", mpLinkBootModels[1]}, {"kantera", mpKanteraModel},
+            {"wsword", mWoodSwordModel},
+        };
+        s_albwBuildIntegrityOk = true;
+        for (int l_i = 0; l_i < (int)(sizeof(l_mdls) / sizeof(l_mdls[0])); l_i++) {
+            int l_bad = albwFirstCorruptMat(l_mdls[l_i].m);
+            if (l_bad != -1) {
+                s_albwBuildIntegrityOk = false;
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+                J3DModelData* l_bmd = l_mdls[l_i].m ? l_mdls[l_i].m->getModelData() : NULL;
+                // Bad material's PEBlock VALUE + its offset from md: a small offset (e.g. a few
+                // KB, or near 0) means an UNRELOCATED offset -> the arc wasn't fully loaded/
+                // patched when changeLink built (load-completion race); a wild ~GB-off pointer
+                // means it points at freed/aliased data (stale).  Decides which fix.
+                void* l_peb = NULL;
+                intptr_t l_pebOff = 0;
+                if (l_bmd != NULL && l_bad >= 0 && (u16)l_bad < l_bmd->getMaterialNum() &&
+                    l_bmd->getMaterialNodePointer((u16)l_bad) != NULL) {
+                    l_peb = (void*)l_bmd->getMaterialNodePointer((u16)l_bad)->getPEBlock();
+                    l_pebOff = (intptr_t)l_peb - (intptr_t)l_bmd;
+                }
+                DuskLog.debug("ALBW-LIFE *** BUILD-CORRUPT *** model={} badMat={} matNum={} md={} "
+                              "peb={} pebOff={} mArcName={} prevArc={} flg80000={} arc={} kmdl={} "
+                              "heap={} build#={}",
+                              l_mdls[l_i].name, l_bad, (l_bmd ? l_bmd->getMaterialNum() : 0),
+                              (void*)l_bmd, l_peb, (long long)l_pebOff,
+                              (mArcName ? mArcName : "(null)"),
+                              (s_albwPrevArcName ? s_albwPrevArcName : "(null)"),
+                              checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, albwArcArchive(mArcName),
+                              albwArcArchive(l_kArcName), (void*)mpArcHeap, s_albwBuildCounter);
+#endif
+            }
+        }
+        s_albwPrevArcName = mArcName;
+        s_albwBuildCounter++;
+    }
+#endif
+
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+    // TEMP: build snapshot — ties each rebuilt Link model to the live archive pointers of
+    // the arcs it could have been built from (mArcName / Kmdl / alSumou).  A later FREEALL
+    // or releaseFaceDonor line freeing one of those archives, followed by the modelDraw
+    // "skip corrupt" line naming the same model pointer, pinpoints the exact stale
+    // free->build->draw handoff.  STRIP before push (see D_ALBW_ARC_LIFECYCLE_DEBUG).
+    {
+        J3DModelData* bMd = (mpLinkModel     != NULL) ? mpLinkModel->getModelData()     : NULL;
+        J3DModelData* fMd = (mpLinkFaceModel != NULL) ? mpLinkFaceModel->getModelData() : NULL;
+        J3DModelData* hMd = (mpLinkHatModel  != NULL) ? mpLinkHatModel->getModelData()  : NULL;
+        J3DModelData* nMd = (mpLinkHandModel != NULL) ? mpLinkHandModel->getModelData() : NULL;
+        // The crash is always the HAND in getFog (mPEBlock->getFog) — log the hand's matNum
+        // and material(0)'s PEBlock AT BUILD.  If the PEBlock is already wild here, the model
+        // is corrupt at build (load/relocate race); if it's sane here but the matching
+        // handDraw line below shows it wild, something stomps it after build.
+        u16 nMat = (nMd != NULL) ? nMd->getMaterialNum() : 0xFFFF;
+        void* nPEB = (nMd != NULL && nMat > 0 && nMat <= 256)
+                         ? (void*)nMd->getMaterialNodePointer(0)->getPEBlock() : NULL;
+        DuskLog.debug("ALBW-LIFE changeLink BUILD flg80000={} mArcName={} arc[m={} K={} sumo={}] "
+                      "body={}/{} face={}/{} hat={}/{} hand={}/{} handMat={} handPEB={}",
+                      checkNoResetFlg2(FLG2_UNK_80000) ? 1 : 0, (mArcName ? mArcName : "(null)"),
+                      albwArcArchive(mArcName), albwArcArchive(l_kArcName), albwArcArchive("alSumou"),
+                      (void*)mpLinkModel, (void*)bMd, (void*)mpLinkFaceModel, (void*)fMd,
+                      (void*)mpLinkHatModel, (void*)hMd, (void*)mpLinkHandModel, (void*)nMd,
+                      nMat, nPEB);
+    }
+    // Cutscene-anim crash probe: dump the body anm-pack slots at the rebuild.  setDemoBodyBck
+    // binds a demo-arc BCK into a pack slot; the blend calc walks all 3.  resetDemoBck only
+    // re-sets slot 0 (via ANM_WAIT), so a demo BCK left in under1/upper1/upper2 survives the
+    // cutscene -> freed when the demo arc frees -> J3DMtxCalcAnimation null crash on rebuild.
+    // Compare these to the "setDemoBodyBck" pointers to spot the lingering freed slot.  STRIP.
+    DuskLog.debug("ALBW-LIFE ANMPACK under0={} under1={} under2={} upper0={} upper1={} upper2={}",
+                  (void*)getNowAnmPackUnder(UNDER_0), (void*)getNowAnmPackUnder(UNDER_1),
+                  (void*)getNowAnmPackUnder(UNDER_2), (void*)getNowAnmPackUpper(UPPER_0),
+                  (void*)getNowAnmPackUpper(UPPER_1), (void*)getNowAnmPackUpper(UPPER_2));
+#endif
+
     mDoExt_setCurrentHeap(current_heap);
 
     dComIfGs_setTransformStatus(0);
     mpLinkModel->setUserArea((uintptr_t)this);
     mpLinkHatModel->setUserArea((uintptr_t)this);
     changeModelDataDirect(param_0);
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (root-motion foot-tracking reset on clothes/transform rebuild)
+    // field_0x33a0 is the per-frame foot-displacement "speed" (root motion): it measures how
+    // far the foot joint moved vs the stored previous foot position (field_0x37b0).  A model
+    // rebuild makes the foot joint discontinuous vs the stored previous -> the "foot moved"
+    // distance comes out absurd (hundreds-to-thousands of units) -> speedF explodes -> Link
+    // teleports (the 0.7 smoothing latches it; only while the stick drives movement).
+    // Arm the foot-reseed window so setFootSpeed zeroes the spike and re-anchors field_0x37b0
+    // to the new model's foot in LOCAL space over the next few frames.  We do NOT write
+    // current.pos into field_0x37b0 here (the earlier fix did): current.pos is WORLD space but
+    // field_0x37b0/sp18 are LOCAL (mInvMtx * getAnmMtx(foot)), so that just swapped one garbage
+    // delta for another and did not fix the teleport.
+    // ============================================
+    s_albwFootReseedFrames = 3;
+    field_0x33a0 = 0.0f;
+#endif
     field_0x06e4 = NULL;
 
     u8 var_r27;
@@ -589,6 +937,13 @@ void daAlink_c::changeLink(int param_0) {
         mpWlMidnaMaskModel = NULL;
         mpWlMidnaHandModel = NULL;
         mpWlMidnaHairModel = NULL;
+    }
+
+    if (param_0) {
+        daMidna_c* midna = daPy_py_c::getMidnaActor();
+        if (midna != NULL) {
+            midna->resetDemoBck();
+        }
     }
 }
 
@@ -1481,8 +1836,14 @@ int daAlink_c::checkNextActionWolf(int param_0) {
         }
     } else if (checkWolfDashMode()) {
         mMaxSpeed = mpHIO->mWolf.mWlMove.m.mMaxSpeed;
+#if TARGET_PC
+        mMaxSpeed *= kAlbwWolfLandRunSpeedMul;
+#endif
     } else {
         mMaxSpeed = mpHIO->mWolf.mWlMoveNoP.m.mMaxSpeed;
+#if TARGET_PC
+        mMaxSpeed *= kAlbwWolfLandRunSpeedMul;
+#endif
     }
 
     if (checkWolfGroundSpecialMode()) {
@@ -3150,6 +3511,37 @@ int daAlink_c::procWolfHowlInit(int param_0) {
 
     commonProcInit(PROC_WOLF_HOWL);
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Wolf Howl combat, increment 3 — correct duet pose)
+    // Consume the one-shot combat-howl request (set by handleWolfHowlBurst).  A vanilla demo howl
+    // (d_a_alink_demo.inc) leaves the request false, so it plays a plain howl — never the combat
+    // pose/AOE, even if a prior combat howl was interrupted and left state behind.
+    // ============================================
+    mWolfCombatHowlActive = mWolfHowlWantCombat;
+    mWolfHowlWantCombat   = false;
+
+    if (mWolfCombatHowlActive) {
+        // The DUET "singing with the Golden Wolf" pose (WANM_HOWL_SUCCESS / WL_HOWLC), looped — this
+        // is the pose wolf Link plays in the Hero's-Shade room while the duet songs sound.  Mirrors
+        // the vanilla success branch in procWolfHowlDemo (setLoop(27)/setAttribute(2) hold the
+        // sustained-sing portion).  procWolfHowlCombat drives its duration off the song length.
+        setSingleAnimeWolfBase(WANM_HOWL_SUCCESS);
+        mUnderFrameCtrl[0].setLoop(27);
+        mUnderFrameCtrl[0].setAttribute(2);
+        setFaceBasicTexture(FTANM_WL_HOWLC);
+        mProcVar3.field_0x300e = 0;
+        mProcVar2.field_0x300c = 0;
+        mNormalSpeed = 0.0f;
+        // Link-centered radial AOE collider (roll-attack pattern; placed by setWolfAtCollision's
+        // PROC_WOLF_HOWL branch, armed each singing frame in procWolfHowlCombat).  Placeholders to
+        // tune toward Great Spin.
+        setCylAtParam(AT_TYPE_WOLF_CUT_TURN, dCcG_At_Spl_UNK_1, 3, dCcD_SE_WOLF_BITE, 8, 300.0f,
+                      155.0f);
+        return 1;
+    }
+#endif
+
     if (param_0 != 0) {
         setSingleAnimeWolfParam(WANM_HOWL_SIT, &mpHIO->mWolf.mWlHowl.m.mSittingHowlAnm);
         onModeFlg(0x800000);
@@ -3169,6 +3561,13 @@ int daAlink_c::procWolfHowlInit(int param_0) {
 
 int daAlink_c::procWolfHowl() {
     daPy_frameCtrl_c* frameCtrl_p = mUnderFrameCtrl;
+
+#if TARGET_PC
+    // A combat howl has its own song-driven lifecycle (looping duet pose + AOE + song-length timing).
+    if (mWolfCombatHowlActive) {
+        return procWolfHowlCombat();
+    }
+#endif
 
     if (checkAnmEnd(frameCtrl_p)) {
         if (doButton()) {
@@ -3202,6 +3601,132 @@ int daAlink_c::procWolfHowl() {
 
     return 1;
 }
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Wolf Howl VFX — base KAITENGIRIL)
+// The plain KAITENGIRIL "Light" set (A-D) with its OWN authored colors + sparkle: emitted
+// fire-and-forget through the NULL-tevStr overload so nothing tints or alters its particles, and
+// each burst lives out its natural lifetime (NO immortal / forced continuous emission — that was
+// what changed the particles).  Re-emitted on a cadence from procWolfHowlCombat to sustain for the
+// song.
+// FINAL LOOK (user-tuned 2026-07-13, baked as the l_wolfHowlVfx* defaults below): natural angle
+// (tilt/roll 0), 90% width/height, sweep 300 (~one rev / 3.6 s), no orbit, burst every frame.
+// The editor tuner ("Wolf Howl VFX: Apply Tuner" + sliders) still overrides these live for later
+// re-tuning; with the override OFF this baked look is what ships.
+// ============================================
+static const int l_wolfHowlVfxPeriod    = 1;      // re-emit cadence (frames) — every frame
+static const f32 l_wolfHowlVfxYOffset   = 30.0f;  // wolf mid-body height above his feet
+static const s16 l_wolfHowlVfxSweepRate = 300;    // emit-yaw wind per elapsed frame (~one rev / 3.6 s)
+static const f32 l_wolfHowlVfxOrbit     = 0.0f;   // emission-point orbit radius (0 = centered)
+static const int l_wolfHowlVfxTiltDeg   = 0;      // global X-pitch (0 = the effect's natural angle)
+static const int l_wolfHowlVfxRollDeg   = 0;      // global Z-roll
+static const int l_wolfHowlVfxWidthPct  = 90;     // particle scale X/Z
+static const int l_wolfHowlVfxHeightPct = 90;     // particle scale Y
+
+void daAlink_c::setWolfHowlSpinEffect() {
+    // Tuner (editor); when the master override is OFF, use the baked defaults above (the finalized
+    // shipping look).
+    const bool useOverride = dusk::getSettings().game.wolfHowlVfxOverride.getValue();
+    const int  tiltDeg   = useOverride ? dusk::getSettings().game.wolfHowlTiltDeg.getValue()
+                                       : l_wolfHowlVfxTiltDeg;
+    const int  rollDeg   = useOverride ? dusk::getSettings().game.wolfHowlRollDeg.getValue()
+                                       : l_wolfHowlVfxRollDeg;
+    const int  widthPct  = useOverride ? dusk::getSettings().game.wolfHowlWidthPct.getValue()
+                                       : l_wolfHowlVfxWidthPct;
+    const int  heightPct = useOverride ? dusk::getSettings().game.wolfHowlHeightPct.getValue()
+                                       : l_wolfHowlVfxHeightPct;
+    const int  sweepRate = useOverride ? dusk::getSettings().game.wolfHowlSweepRate.getValue()
+                                       : l_wolfHowlVfxSweepRate;
+    const int  orbit     = useOverride ? dusk::getSettings().game.wolfHowlOrbit.getValue()
+                                       : (int)l_wolfHowlVfxOrbit;
+
+    // Effect rotation (the goal): a yaw that winds over the howl so the ring SWEEPS around the wolf —
+    // the wolf himself never turns.  The emission point also orbits a little so the sweep reads even
+    // though KAITENGIRIL's spray is nearly symmetric about its vertical axis.  Driven off
+    // mWolfHowlElapsed so it advances continuously across the bursts.
+    const s16 sweep = (s16)(shape_angle.y + (s16)(mWolfHowlElapsed * sweepRate));
+
+    cXyz  fxPos(current.pos.x + cM_ssin(sweep) * (f32)orbit,
+                current.pos.y + l_wolfHowlVfxYOffset,
+                current.pos.z + cM_scos(sweep) * (f32)orbit);
+    csXyz fxRot((s16)cM_deg2s((f32)tiltDeg), sweep, (s16)cM_deg2s((f32)rollDeg));
+
+    // Width scales X/Z (horizontal spread), Height scales Y (vertical) — split scale tuner.
+    cXyz        scaleVec((f32)widthPct * 0.01f, (f32)heightPct * 0.01f, (f32)widthPct * 0.01f);
+    const cXyz* scaleArg = (widthPct != 100 || heightPct != 100) ? &scaleVec : NULL;
+
+    // Base KAITENGIRIL (A-D), fire-and-forget with NULL tevStr (4-arg overload keeps the effect's own
+    // colors + particles).  No local tilt, no immortal — just the plain effect.
+    static const u16 effNames[4] = {
+        ID_ZI_J_KAITENGIRIL_A, ID_ZI_J_KAITENGIRIL_B, ID_ZI_J_KAITENGIRIL_C, ID_ZI_J_KAITENGIRIL_D,
+    };
+    for (int i = 0; i < 4; i++) {
+        dComIfGp_particle_set(effNames[i], &fxPos, &fxRot, scaleArg);
+    }
+}
+
+// ============================================
+// NEW CODE — ALBW Port (Wolf Howl combat lifecycle — song-driven duration + AOE, increment 3)
+// The combat howl plays the looping WANM_HOWL_SUCCESS duet pose (set in procWolfHowlInit) and lasts
+// exactly as long as the chosen song, then a 1 s buffer, then the WANM_HOWL_END exit -> gameplay.
+//   * "Song still playing" = Z2SeqMgr::isItemGetDemo() — true from song start (it covers the ~49-frame
+//     fanfare ramp via mFanfareCount) through playback, and flips false when the non-looping tune
+//     ends.  This auto-fits every tune's length, so no per-song timer is needed.
+//   * A short startup grace (mWolfHowlElapsed > 15) ignores the 1-frame pre-attach gap so it can't
+//     false-trigger the end on frame 0.
+//   * A hard cap (~30 s) force-ends a stuck howl (e.g. a silent tune, or another fanfare holding the
+//     shared isItemGetDemo() flag true).
+//   * The Link-centered AOE collider is armed every singing frame (placed by setWolfAtCollision).
+// ============================================
+int daAlink_c::procWolfHowlCombat() {
+    // Exit phase: the WANM_HOWL_END anim is playing -> return to gameplay when it finishes.
+    if (mWolfHowlEnding) {
+        if (checkAnmEnd(mUnderFrameCtrl)) {
+            mWolfCombatHowlActive = false;
+            mWolfHowlEnding       = false;
+            checkNextActionWolf(0);
+        }
+        return 1;
+    }
+
+    if (mWolfHowlElapsed < 0xFFFF) {
+        mWolfHowlElapsed++;
+    }
+
+    const bool songPlaying = Z2GetSeqMgr()->isItemGetDemo();
+    const bool songEnded   = mWolfHowlElapsed > 15 && !songPlaying;
+    const bool hardCap     = mWolfHowlElapsed > 1800;  // 60 s failsafe (30 Hz sim tick)
+
+    if (songEnded || hardCap) {
+        if (mWolfHowlFramesLeft > 0) {
+            mWolfHowlFramesLeft--;  // 1 s buffer after the song, for a clean return to gameplay
+        } else {
+            Z2GetSeqMgr()->stopWolfHowlSong();  // safety (already ended); field BGM fades back
+            setSingleAnimeWolfBase(WANM_HOWL_END);
+            mWolfHowlEnding = true;
+        }
+    } else {
+        mWolfHowlFramesLeft = 30;  // still singing -> keep the 1 s (30 Hz) buffer fresh
+        // Re-emit the ring on a cadence so it sustains for the song (first burst on frame 1, then
+        // every `period` frames), tied to the same AOE window.  Period is tuner-driven (default when
+        // the override is off).
+        int period = dusk::getSettings().game.wolfHowlVfxOverride.getValue()
+                         ? dusk::getSettings().game.wolfHowlPeriod.getValue()
+                         : l_wolfHowlVfxPeriod;
+        if (period < 1) {
+            period = 1;
+        }
+        if ((mWolfHowlElapsed - 1) % period == 0) {
+            setWolfHowlSpinEffect();
+        }
+    }
+
+    // Keep the Link-centered AOE collider armed while singing.
+    onResetFlg0(RFLG0_UNK_2);
+    return 1;
+}
+#endif
 
 int daAlink_c::procWolfAutoJumpInit(int param_0) {
     commonProcInit(PROC_WOLF_AUTO_JUMP);
@@ -6514,6 +7039,9 @@ void daAlink_c::setSpeedAndAngleSwimWolf() {
     } else {
         mMaxSpeed = mpHIO->mWolf.mWlSwim.m.mMaxSpeedWeak;
     }
+#if TARGET_PC
+    mMaxSpeed *= kAlbwWolfSwimSpeedMul;
+#endif
 
     f32 speed;
     s16 prev_angle;

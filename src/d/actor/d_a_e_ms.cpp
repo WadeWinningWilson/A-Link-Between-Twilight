@@ -13,6 +13,10 @@
 #include "f_op/f_op_actor_enemy.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 class daE_MS_HIO_c : public JORReflexible {
 public:
     daE_MS_HIO_c();
@@ -567,6 +571,9 @@ static void e_ms_wolfbite(e_ms_class* i_this) {
             i_this->mMode = 0;
             i_this->mSound.startCreatureVoice(Z2SE_EN_MS_V_DEATH, -1);
             i_this->health = 0;
+#if TARGET_PC
+            dAlbwEnemyRupees_onEnemyKill(i_this);
+#endif
             if (player->checkWolfEnemyLeftThrow()) {
                 i_this->current.angle.y = player->shape_angle.y - 0x4000;
             } else {
@@ -596,6 +603,9 @@ static void damage_check(e_ms_class* i_this) {
                 i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT))
             {
                 i_this->health = 0;
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(i_this);
+#endif
             }
 
             if (i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_UNK)) {

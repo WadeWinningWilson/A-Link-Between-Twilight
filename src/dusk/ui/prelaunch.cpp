@@ -5,6 +5,7 @@
 #include "dusk/file_select.hpp"
 #include "dusk/iso_validate.hpp"
 #include "dusk/main.h"
+#include "dusk/leveledit/enumerate.hpp"
 #include "dusk/settings.h"
 #include "dusk/update_check.hpp"
 #include "modal.hpp"
@@ -45,7 +46,7 @@ const Rml::String kDocumentSource = R"RML(
         <menu>
             <hero class="intro-item delay-0">
                 <eyebrow><span>Twilit Realm</span> presents</eyebrow>
-                <img src="res/logo.png" />
+                <img src="res/albt-logo.png" />
             </hero>
             <div id="menu-list" />
         </menu>
@@ -641,6 +642,7 @@ void ensure_initialized() noexcept {
     state.initialLanguage = getSettings().game.language;
     state.initialGraphicsBackend = getSettings().backend.graphicsBackend;
     state.initialCardFileType = getSettings().backend.cardFileType;
+    state.initialLevelEditor = getSettings().backend.enableLevelEditor.getValue();
     state.errorString.clear();
     state.initialized = true;
     refresh_configured_disc_state();
@@ -666,6 +668,11 @@ bool is_restart_pending() noexcept {
     if (getSettings().game.language.getValue() != state.initialLanguage) {
         return true;
     }
+    // Level Editor (Phase 1) — toggling it needs a relaunch to add/remove the
+    // launch-menu entry, so prompt the restart like the other backend options.
+    if (getSettings().backend.enableLevelEditor.getValue() != state.initialLevelEditor) {
+        return true;
+    }
     return false;
 }
 
@@ -684,7 +691,9 @@ void try_apply_mirrored_layout(Rml::Element* body) {
     body->SetClass("mirrored", getSettings().game.enableMirrorMode.getValue());
 }
 
-Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementById("root")) {
+Prelaunch::Prelaunch()
+    : Document(kDocumentSource, false, DocumentScope::Prelaunch),
+      mRoot(mDocument->GetElementById("root")) {
     ensure_initialized();
     begin_update_check();
 
@@ -718,6 +727,43 @@ Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementB
             pop(false);
         });
         apply_intro_animation(mMenuButtons.back()->root(), "delay-1");
+
+        // ====================================================================
+        // Level Editor (Phase 1) — opt-in launch entry. Shown only when the
+        // feature is enabled AND a disc is loaded. Launches exactly like Play
+        // but marks the session so editor code activates. A normal Play launch
+        // leaves g_levelEditorSession false, so nothing else changes.
+        // ====================================================================
+        if (getSettings().backend.enableLevelEditor.getValue() && activeDiscLoaded) {
+            mMenuButtons.push_back(std::make_unique<Button>(menuList, "Level Editor"));
+            mMenuButtons.back()->on_pressed([this] {
+                if (prelaunch_state().activeDiscPath.empty()) {
+                    open_iso_picker();
+                    return;
+                }
+
+                mDoAud_seStartMenu(kSoundPlay);
+                show_menu_notification();
+
+                if (getSettings().audio.menuSounds) {
+                    JAISoundHandle* handle = g_mEnvSeMgr.field_0x144.getHandle();
+                    if (*handle) {
+                        (*handle)->stop(60);
+                        (*handle)->releaseHandle();
+                    }
+                }
+
+                if (g_mDoMemCd_control.mCardCommand == mDoMemCd_Ctrl_c::Command_e::COMM_NONE_e) {
+                    mDoMemCd_ThdInit();
+                }
+
+                g_levelEditorSession = true;
+                dusk::leveledit::enable_session_fly_cam(true);
+                IsGameLaunched = true;
+                pop(false);
+            });
+            apply_intro_animation(mMenuButtons.back()->root(), "delay-2");
+        }
 
         mMenuButtons.push_back(std::make_unique<Button>(menuList, "Settings"));
         mMenuButtons.back()->on_pressed([this] {
@@ -767,44 +813,56 @@ Prelaunch::Prelaunch() : Document(kDocumentSource), mRoot(mDocument->GetElementB
     });
 }
 
+void Prelaunch::try_show_restart_modal() {
+    if (!is_restart_pending()) {
+        // Nothing pending — allow a future toggle to prompt again (e.g. user
+        // dismissed "Restart later", then flipped Level Editor again).
+        mRestartSuppressed = false;
+        return;
+    }
+    if (mRestartSuppressed) {
+        return;
+    }
+
+    const auto dismiss = [this](Modal& modal) {
+        mRestartSuppressed = true;
+        modal.pop();
+    };
+    std::vector<ModalAction> actions;
+    if constexpr (dusk::SupportsProcessRestart) {
+        actions.push_back(ModalAction{
+            .label = "Restart later",
+            .onPressed = dismiss,
+        });
+        actions.push_back(ModalAction{
+            .label = "Restart now",
+            .onPressed = [](Modal&) { dusk::RequestRestart(); },
+        });
+    } else {
+        actions.push_back(ModalAction{
+            .label = "OK",
+            .onPressed = dismiss,
+        });
+    }
+    push(std::make_unique<Modal>(Modal::Props{
+        .title = "Apply Options",
+        .bodyRml =
+            dusk::SupportsProcessRestart ?
+                "A restart is required to apply selected options.<br/><br/>Restart now to "
+                "apply them immediately?" :
+                "A restart is required to apply selected options.<br/><br/>Close and reopen "
+                "Dusklight to apply them.",
+        .actions = std::move(actions),
+        .onDismiss = dismiss,
+    }));
+}
+
 void Prelaunch::show() {
     Document::show();
     mDocument->SetAttribute("open", "");
     mRoot->SetAttribute("open", "");
 
-    if (is_restart_pending() && !mRestartSuppressed) {
-        const auto dismiss = [this](Modal& modal) {
-            mRestartSuppressed = true;
-            modal.pop();
-        };
-        std::vector<ModalAction> actions;
-        if constexpr (dusk::SupportsProcessRestart) {
-            actions.push_back(ModalAction{
-                .label = "Restart later",
-                .onPressed = dismiss,
-            });
-            actions.push_back(ModalAction{
-                .label = "Restart now",
-                .onPressed = [](Modal&) { dusk::RequestRestart(); },
-            });
-        } else {
-            actions.push_back(ModalAction{
-                .label = "OK",
-                .onPressed = dismiss,
-            });
-        }
-        push(std::make_unique<Modal>(Modal::Props{
-            .title = "Apply Options",
-            .bodyRml =
-                dusk::SupportsProcessRestart ?
-                    "A restart is required to apply selected options.<br/><br/>Restart now to "
-                    "apply them immediately?" :
-                    "A restart is required to apply selected options.<br/><br/>Close and reopen "
-                    "Dusklight to apply them.",
-            .actions = std::move(actions),
-            .onDismiss = dismiss,
-        }));
-    }
+    try_show_restart_modal();
 }
 
 void Prelaunch::hide(bool close) {

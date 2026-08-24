@@ -1,5 +1,6 @@
 ﻿#include "d/d_com_static.h"
 #include "d/d_debug_viewer.h"
+#include "f_pc/f_pc_name.h"  // ALBW: exempt Hero's Shade from suspend zones
 #include "d/d_demo.h"
 #include "d/d_s_play.h"
 #include "d/actor/d_a_arrow.h"
@@ -199,6 +200,23 @@ bool daSus_c::check(s8 i_roomNo, cXyz const& i_pos) {
 }
 
 void daSus_c::check(fopAc_ac_c* i_actor) {
+#if TARGET_PC
+    // ALBW Port — Hero's Shade Secret Boss: never suspend the Hero's Shade, so it
+    // renders/executes in F_SP200 arena spots that lie inside a stage suspend
+    // zone (the vanilla Shade sits outside those zones). Harmless to vanilla
+    // lesson Shades — they are placed outside suspend zones already.
+    if (fopAcM_GetName(i_actor) == fpcNm_NPC_KN_e) {
+        fopAcM_OffStatus(i_actor, 0x20000000);
+        return;
+    }
+    // Same exemption for the Shade's projectile (KN_BULLET) — it spawns inside the
+    // F_SP200 suspend zone, so without this it gets suspended (no Execute → no
+    // movement, no particles, no damage): the throw plays but nothing fires.
+    if (fopAcM_GetName(i_actor) == fpcNm_KN_BULLET_e) {
+        fopAcM_OffStatus(i_actor, 0x20000000);
+        return;
+    }
+#endif
     if (fopAcM_GetGroup(i_actor) != 1 && fopAcM_GetGroup(i_actor) != 5) {
         daSus_c::data_c* pData = mData;
         u8 res = 0;

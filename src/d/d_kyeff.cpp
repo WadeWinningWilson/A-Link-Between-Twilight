@@ -9,6 +9,9 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_kankyo_wether.h"
 #include <cstring>
+#if TARGET_PC
+#include "dusk/fps_probe.h"
+#endif
 
 #if DEBUG
 class dKyeff_HIO_c : public JORReflexible {
@@ -66,6 +69,9 @@ static int dKyeff_Draw(dKyeff_c* i_this) {
 
 int dKyeff_c::execute() {
     if (strcmp(dComIfGp_getStartStageName(), "Name") != 0) {
+#if TARGET_PC
+        DUSK_FPS_SCOPE(Kankyo);
+#endif
         dKyw_wether_move();
     }
 

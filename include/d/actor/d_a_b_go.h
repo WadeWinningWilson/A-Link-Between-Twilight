@@ -86,5 +86,9 @@ public:
     /* 0x14 */ bool mDisplayModelImage;
 };
 
+#if TARGET_PC
+// Native HIO gate for the parent amalgam mesh (default off). Fyrus §8 forces it.
+void daB_GO_setDisplayModelImage(bool i_display);
+#endif
 
 #endif /* D_A_B_GO_H */

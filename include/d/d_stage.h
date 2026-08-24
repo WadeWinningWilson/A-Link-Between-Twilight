@@ -41,7 +41,12 @@ struct stage_vrboxcol_info_class {
     /* 0x09 */ GXColor kumo_shadow_col;
     /* 0x0D */ GXColor kasumi_outer_col;
     /* 0x11 */ GXColor kasumi_inner_col;
-};  // Size: 0x18
+};  // Size: 0x15 — matches dm defaults (dKyd_l_vr_box_data_struct) and PC sizeof.
+    // №144: a prior "0x18" comment caused convert_lighting to insert a 3-byte pad;
+    // indexing then landed mid-record (magenta kasumi / black kumo at vr=2).
+
+static_assert(sizeof(stage_vrboxcol_info_class) == 0x15,
+              "VRB0 record must stay 21 bytes (no pad)");
 
 // Virt
 struct stage_vrbox_info_class {
@@ -1218,6 +1223,10 @@ public:
         JUT_ASSERT(2778, 0 <= i_roomNo && i_roomNo < 64);
         mStatus[i_roomNo].mpBgW = i_bgw;
     }
+    static dBgW_Base* getBgW(int i_roomNo) {
+        JUT_ASSERT(2782, 0 <= i_roomNo && i_roomNo < 64);
+        return mStatus[i_roomNo].mpBgW;
+    }
     static dBgp_c* getBgp(int i_roomNo) {
 #if DEBUG
         return (dBgp_c*)mBgp[i_roomNo];
@@ -1412,7 +1421,29 @@ void dStage_Delete();
 void dStage_restartRoom(u32 roomParam, u32 mode, int param_2);
 int dStage_RoomCheck(cBgS_GndChk* gndChk);
 void dStage_dt_c_roomReLoader(void* i_data, dStage_dt_c* stageDt, int param_2);
+// ============================================================================
+// §635: PLYR PARAMETER hook. WW-AGNOSTIC host plumbing — names no donor, holds
+// no predicate, NULL unless installed, so the receiver links and behaves
+// identically with any content layer excluded.
+//
+// It exists because the PLYR parameter word is a PACKED FORMAT, and a donor
+// disc can pack it differently. This engine reads bits 12-16 as the player's
+// start mode (daAlink_c::getStartMode), and a foreign word puts an unrelated
+// value there — outside the 0-14 vocabulary its own 1277 shipped PLYR entries
+// use — so the arrival branch never runs.
+//
+// The hook fires INSIDE dStage_playerInit, after the record is copied into the
+// create-append and before the create is queued. That timing is the whole
+// point: the actor is queued during the room load, so nothing downstream of
+// the load can still reach it.
+// ============================================================================
+typedef void (*dStage_plyrParamHook_f)(u32* io_parameters);
+void dStage_setPlyrParamHook(dStage_plyrParamHook_f i_hook);
+
 void dStage_dt_c_roomLoader(void* i_data, dStage_dt_c* stageDt, int param_2);
+// §661: the stage-side sibling. Declared for the same reason the room one is —
+// a seam outside this TU delegates to it.
+void dStage_dt_c_stageLoader(void* i_data, dStage_dt_c* i_stage);
 dStage_KeepDoorInfo* dStage_GetKeepDoorInfo();
 dStage_KeepDoorInfo* dStage_GetRoomKeepDoorInfo();
 void dStage_dt_c_fieldMapLoader(void* i_data, dStage_dt_c* i_stage);

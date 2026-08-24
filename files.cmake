@@ -171,9 +171,11 @@ set(DOLZEL_FILES
         src/d/d_gameover.cpp
         src/d/d_albw_oocoo.cpp
         src/d/d_albw_shade_refuge.cpp
+        src/d/d_albw_twilight_border.cpp
         src/d/d_albw_death_rupee.cpp
         src/d/d_albw_rental.cpp
         src/d/d_albw_master_quest.cpp
+        src/d/d_albw_sword_atp.cpp
         src/d/d_albw_shop.cpp
         src/d/d_albw_dialogue.cpp
         src/d/d_albw_ui_text.cpp
@@ -186,10 +188,59 @@ set(DOLZEL_FILES
         src/d/d_albw_boss.cpp
         src/d/d_albw_wolf_stun.cpp
         src/d/d_albw_wolf_charge_hud.cpp
+        src/d/d_albw_flurry_rush.cpp
+        src/d/ext_plugin/ww_profile_register.cpp
+        src/d/d_demo_leftover_viewer.cpp
+        src/dusk/public_missing_symbols.cpp
+        src/d/d_ext_mod_flags.cpp
+        src/d/d_ww_itemmdl_pc.cpp
+        src/d/d_ww_itemmdl_test.cpp
+        src/d/ext_plugin/ww_itemmdl_dispatch.cpp
+        src/dusk/leveledit/pick.cpp
+        src/dusk/bmd_endian_restore.cpp
+        src/dusk/ui/mod_window.cpp
+        src/dusk/ui/mods.cpp
+        src/dusk/mods/loader/bundle_disk.cpp
+        src/dusk/mods/loader/bundle_zip.cpp
+        src/dusk/mods/loader/context.cpp
+        src/dusk/mods/loader/depgraph.cpp
+        src/dusk/mods/loader/loader.cpp
+        src/dusk/mods/loader/native_module.cpp
+        src/dusk/mods/loader/prepatch.cpp
+        src/dusk/mods/log_buffer.cpp
+        src/dusk/mods/manifest.cpp
+        src/dusk/mods/svc/camera.cpp
+        src/dusk/mods/svc/config.cpp
+        src/dusk/mods/svc/game.cpp
+        src/dusk/mods/svc/hook.cpp
+        src/dusk/mods/svc/host.cpp
+        src/dusk/mods/svc/log.cpp
+        src/dusk/mods/svc/overlay.cpp
+        src/dusk/mods/svc/registry.cpp
+        src/dusk/mods/svc/resource.cpp
+        src/dusk/mods/svc/ui.cpp
+        src/d/d_albw_parry_master.cpp
+        src/d/d_albw_shade_boss.cpp
         src/d/d_albw_rupee_popup.cpp
         src/d/d_albw_boss_hp_hud.cpp
         src/d/d_albw_lop_item_belt.cpp
         src/dusk/truetest.cpp
+        src/dusk/sim_time_scale.cpp
+        src/dusk/boot_stage.cpp
+        src/dusk/bmd_export.cpp
+        src/dusk/leveledit/enumerate.cpp
+        src/dusk/leveledit/raycast.cpp
+        src/d/d_cut_actor_spawn.cpp
+        src/d/d_albw_sumo_test.cpp
+        src/d/d_albw_outfit.cpp
+        src/d/d_albw_outfit_debug.cpp
+        src/d/d_albw_outfit_stats.cpp
+        src/d/d_albw_wardrobe.cpp
+        src/d/d_albw_mail.cpp
+        src/d/d_albw_skill_scroll.cpp
+        src/d/d_albw_potion.cpp
+        src/d/d_albw_region_mult.cpp
+        src/d/d_albw_menu_res.cpp
         src/d/d_kankyo.cpp
         src/d/d_kyeff.cpp
         src/d/d_kyeff2.cpp
@@ -981,6 +1032,8 @@ set(REL_FILES
         src/d/actor/d_a_npc_guard.cpp
         src/d/actor/d_a_npc_gwolf.cpp
         src/d/actor/d_a_albw_shade_watcher.cpp
+        src/d/actor/d_a_albw_shade_boss_wolf.cpp
+        src/d/actor/d_a_albw_midna_arm.cpp
         src/d/actor/d_a_npc_hanjo.cpp
         src/d/actor/d_a_npc_henna0.cpp
         src/d/actor/d_a_npc_hoz.cpp
@@ -1468,6 +1521,7 @@ set(DUSK_FILES
         src/dusk/layout.cpp
         src/dusk/logging.cpp
         src/dusk/settings.cpp
+        src/dusk/custom_assets.cpp
         src/dusk/speedrun.cpp
         src/dusk/string.cpp
         src/dusk/stubs.cpp

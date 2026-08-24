@@ -1,3 +1,7 @@
+// KIT-LINEAGE: mixed
+// KIT-DONOR: per-hunk
+// KIT-DONOR-REF: zeldaret/tww@1d57f0468986987ec26a3d1800bdc1aaad3794db
+// KIT-DONOR-STATUS: per-hunk
 // d_particle is odd in that it doesn't appear to include dolzel.pch.
 // It uses ...data pooling, but weak data from the PCH (e.g. Z2Calc::cNullVec)
 // isn't present like would be expected for a TU using pooling.
@@ -8,7 +12,13 @@
 // weak data from it (unlike here).
 
 #include "d/d_particle.h"
+#include "d/ww_jpa.h"  // §233: native WW JPAC1 parse + bind (replaces the converter)
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <filesystem>
+#include "dusk/logging.h"
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.h"
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "JSystem/JKernel/JKRExpHeap.h"
@@ -25,6 +35,10 @@
 #include "m_Do/m_Do_graphic.h"
 #include "m_Do/m_Do_lib.h"
 #include "tracy/Tracy.hpp"
+#if TARGET_PC
+#include "dusk/logging.h"
+#include "dusk/main.h"
+#endif
 
 #ifndef __MWERKS__
 #include "dusk/math.h"
@@ -306,6 +320,7 @@ static void drawSecond_light8(JPABaseEmitter* i_emitter) {
     GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, true, GX_TEVPREV);
 }
 
+
 static void drawSecond_b_light8(JPABaseEmitter* i_emitter) {
     UNUSED(i_emitter);
     dScnKy_env_light_c* envLight = dKy_getEnvlight();
@@ -362,6 +377,7 @@ static void static_light8EcallBack(JPABaseEmitter* i_emitter) {
         break;
     }
 }
+
 
 static void static_gen_b_light8EcallBack(JPABaseEmitter* i_emitter) {
     GXFlush();
@@ -680,8 +696,28 @@ void dPa_modelEcallBack::setupModel(JPABaseEmitter* i_emitter) {
 
 void dPa_modelEcallBack::drawModel(JPABaseEmitter* i_emitter, f32 (*param_1)[4]) {
     JUT_ASSERT(1542, i_emitter != NULL);
-    
+
     model_c* pModel = getModel(i_emitter);
+    // ========================================================================
+    // [WwTsubo-probe] §832 draw-side twin (sight-only, LOUD-once each way):
+    // fires the first time the particle system actually asks a model emitter
+    // to draw. With the break-site receipt this splits the chain three ways —
+    // no receipt = dispatch never ran; receipt but no draw line = particle
+    // callback never invoked (emitter dead/culled); draw with model=null =
+    // emitter->model mapping lost between setModel and draw.
+    // ========================================================================
+    {
+        static bool s_drawn = false, s_null = false;
+        if (pModel && !s_drawn) {
+            s_drawn = true;
+            DuskLog.info("[WwTsubo-probe] drawModel FIRST DRAW: emitter={} pos=({:.1f},{:.1f},{:.1f})",
+                         (void*)i_emitter, param_1[0][3], param_1[1][3], param_1[2][3]);
+        } else if (!pModel && !s_null) {
+            s_null = true;
+            DuskLog.warn("[WwTsubo-probe] drawModel with NO model bound (emitter={}) — "
+                         "mapping lost between setModel and draw", (void*)i_emitter);
+        }
+    }
     if (pModel) {
         pModel->draw(param_1);
     }
@@ -780,14 +816,76 @@ dPa_simpleData_c::dPa_simpleData_c() {
     /* empty function */
 }
 
+#if TARGET_PC
+// ============================================================
+// §P2 emitter-parity tap (Foundry, bus §206/§207): receiver mirror of the
+// donor DuskTap at JPAEmitterManager::createSimpleEmitterID @8025F0E4 — one
+// line per simple-emitter creation with resource id + position, so
+// tools/foundry/probe_differ.py can hold our emitter density to the computed
+// donor law (docs/WW Linked/windline-donor-profile.md). Both port call sites
+// of createSimpleEmitterID route through this. HIGH VOLUME — toggle
+// DUSK_EMITTER_TAP=1 for capture sessions only, default OFF.
+// ============================================================
+static bool dPa_emitterTapEnv() {
+    const char* v = std::getenv("DUSK_EMITTER_TAP");
+    return !(v == NULL || v[0] == '\0' || (v[0] == '0' && v[1] == '\0'));
+}
+static void dPa_emitterTapLog(u16 i_resID, f32 i_x, f32 i_y, f32 i_z) {
+    if (!dPa_emitterTapEnv()) {
+        return;
+    }
+    // Dusklight log lines carry no timestamps, and the differ's rate math needs
+    // one — so the tap line embeds ms since first tap.
+    static const std::chrono::steady_clock::time_point s_t0 =
+        std::chrono::steady_clock::now();
+    const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - s_t0)
+                             .count();
+    DuskLog.info("[DuskLog] §P2 emitter t={} id={:04x} pos=({:.1f},{:.1f},{:.1f})",
+                 ms, static_cast<unsigned>(i_resID), i_x, i_y, i_z);
+}
+#endif
+
+#if TARGET_PC
+// §220: defined further down with the WW supplemental machinery; declared here
+// so the simple-callback registration path can use the same resolver.
+static u8 dPa_wwWindlineResRM(const dPa_control_c* i_pa, u16 i_resID, u8 i_rmID);
+#endif
+
 JPABaseEmitter* dPa_simpleEcallBack::createEmitter(JPAEmitterManager* param_0) {
     u8 id = dPa_control_c::getRM_ID(mID);
+#if TARGET_PC
+    // ========================================================================
+    // §220 — the SIMPLE path must see WW supplemental banks too.
+    //
+    // The decomp's grass spawns through setSimple (d_grass.cpp:153), whose
+    // receiver equivalent is this registration-backed subsystem — and its own
+    // draw() is a SINGLE unlit pass (no setDrawTimes(2)/drawSecond_light8),
+    // which is the faithful presentation. It was unusable for WW ids only
+    // because resolution here goes straight through getRM_ID with no WW hook,
+    // so a WW-supplemental id resolved to the TP primary bank and failed.
+    // Same forced-slot resolver the general set() path uses (§201).
+    // ========================================================================
+    // §225: no per-site hook needed any more — getRM_ID resolves WW banks
+    // itself, so `id` above is already the supplemental slot when applicable.
+#endif
     JPAResourceManager* this_00 = param_0->getResourceManager(id);
     u32 uVar1 = this_00->getResUserWork(mID);
     if (mEmitter == NULL) {
         static JGeometry::TVec3<f32> pos(0.0f, 0.0f, 0.0f);
 
-        mEmitter = param_0->createSimpleEmitterID(pos, mID, field_0xa, dPa_control_c::getRM_ID(mID), NULL, NULL);
+#if TARGET_PC
+        // §P2 emitter-parity tap — simple-callback creation site (pos is bound
+        // per-frame later; identity/density is what the differ needs here).
+        dPa_emitterTapLog(mID, pos.x, pos.y, pos.z);
+#endif
+        // §223 FIX: use the RESOLVED bank id, not a fresh getRM_ID(mID).
+        // §220 hooked the WW resolver into `id` above, but this call re-derived
+        // the bank from scratch and discarded that result — so a WW-supplemental
+        // id was looked up in TP's primary bank, found nothing, returned NULL,
+        // and newSimple reported failure even though the bank WAS resident
+        // (§222 evidence: res=1, table only ~6/25 used, so not capacity).
+        mEmitter = param_0->createSimpleEmitterID(pos, mID, field_0xa, id, NULL, NULL);
         if (mEmitter == NULL) {
             return NULL;
         }
@@ -1213,7 +1311,25 @@ dPa_control_c::dPa_control_c() {
 }
 
 u8 dPa_control_c::getRM_ID(u16 param_0) {
-    return (param_0 & 0x8000) == 0 ? FALSE : TRUE;
+    const u8 base = (param_0 & 0x8000) == 0 ? FALSE : TRUE;
+#if TARGET_PC
+    // ========================================================================
+    // §225 ROOT FIX — resolve WW-supplemental banks HERE, once.
+    //
+    // This helper is the single funnel every bank lookup goes through
+    // (common vs scene). Hooking the WW resolver at each CALL SITE instead was
+    // whack-a-mole and cost three rounds: §201 patched set(), §220 patched
+    // createEmitter's first lookup, §223 found the creation call re-deriving
+    // it, and set() at :907 was doing the same again — spawning from TP's
+    // primary bank, reading a bogus resUserWork, and drawing nothing (the
+    // "spawns but invisible until a stage change" symptom).
+    //
+    // Non-WW ids are returned untouched, so TP behaviour is unchanged.
+    // ========================================================================
+    return dPa_wwWindlineResRM(g_dComIfG_gameInfo.play.getParticle(), param_0, base);
+#else
+    return base;
+#endif
 }
 
 void dPa_control_c::createCommon(void const* param_0) {
@@ -1231,7 +1347,12 @@ void dPa_control_c::createCommon(void const* param_0) {
 #if TARGET_PC
     // ALBW Port: third resource slot reserved for the supplemental tear
     // archive (ensureTearSceneRes) used by the death recovery orb.
-    mEmitterMng = JKR_NEW_ARGS (mHeap, 0) JPAEmitterManager(3000, 250, mHeap, 0x13, 3);
+    // Fourth slot: Ferry W-LINE WW common.jpc (0x0031 wind streaks).
+    // V-d (§201): slots 4/5 host the WW-common grass ids (0x03DA cut, 0x03DB run)
+    // alongside slot 3's windline — one manager per extracted emitter.
+    // §231 wave-emit ferry: slots 6-11 host the WW ship-wake family + pig ripple
+    // (0x24/0x26/0x34-0x37). Slot count 6 → 12 to make room.
+    mEmitterMng = JKR_NEW_ARGS (mHeap, 0) JPAEmitterManager(3000, 250, mHeap, 0x13, 12);
 #else
     mEmitterMng = JKR_NEW_ARGS (mHeap, 0) JPAEmitterManager(3000, 250, mHeap, 0x13, 2);
 #endif
@@ -1365,6 +1486,333 @@ static u8 dPa_tearResFallbackRM(const dPa_control_c* i_pa, u16 i_resID, u8 i_rmI
         return i_rmID;
     }
     return sTearResMng->checkUserIndexDuplication(i_resID) ? 2 : i_rmID;
+}
+
+// =============================================================================
+// Ferry W-LINE — WW common.jpc supplemental (slot 3) for ID 0x0031 wind streaks.
+// Purity: TP primary common may also own 0x31 — WW hosts MUST resolve from this
+// slot. Probe at first spawn: [WwWind] windline emitter bank=…
+//
+// §176 / W-LINE-b: donor file is JPAC1-00; TP JPAResourceLoader only accepts
+// JPAC2-10. Pre-check via checkUserIndexDuplication after a raw load was a false
+// negative (empty manager). Fix: verify 0x31 with donor v10 layout, convert the
+// single emitter + its TEX1 into a JPAC2-10 blob, then register through the same
+// JPAResourceManager + entryResourceManager path as Pscene011/tear.
+// Breach probe + disarm unchanged.
+// =============================================================================
+static constexpr u16 kWwWindlineResId = 0x0031;  // donor ID_AK_JN_WINDLINE00 (≠ TP enum 0x46)
+static constexpr u8 kWwWindlineRmSlot = 3;
+
+// =============================================================================
+// Ferry V-d (§201) — the WW-common id SET, one supplemental slot each.
+//
+// The extractor below converts ONE JPAC1 emitter per call, so each WW-common id
+// gets its own JPAC2 blob + JPAResourceManager + slot. That keeps the proven
+// windline path byte-identical (slot 3) instead of refactoring a working
+// converter into a multi-resource one — smaller blast radius, per the
+// consume-time/№181 lesson about touching load-bearing paths.
+//
+// 0x03DA = ID_IT_JN_O_KUSA_KEN (grass CUT scatter, donor d_grass.cpp:249) —
+// replaces the TP 0x89D7 the port was drawing in WW space (a №31 breach, not
+// just a wrong colour: §192).
+// 0x03DB = ID_IT_JN_O_KUSA_RUN (run-through) — registered now, wired later
+// (donor gates it on speedF > 16, d_grass.cpp:77).
+// =============================================================================
+struct WwCommonRes {
+    u16 resId;
+    u8 slot;
+    JPAResourceManager* mng;
+    bool failed;
+};
+
+static WwCommonRes sWwCommon[] = {
+    {kWwWindlineResId, kWwWindlineRmSlot, NULL, false},
+    // KIT-DONOR-HUNK: d/d_grass.cpp Matching
+    {0x03DA, 4, NULL, false},
+    {0x03DB, 5, NULL, false},
+    // KIT-DONOR-HUNK-END
+    // 241/flowers: the donor's flower cut + run-through VFX. Same JN bank and
+    // the SAME block shape as the grass ids above (BEM1/FLD1/BSP1/ESP1/TDB1,
+    // key=0 fld=1 tex=1 -- verified by an offline walk of the staged archive),
+    // so they exercise the proven bind path with nothing new in it.
+    // d_flower.cpp: white flowers use ID_IT_JN_FLOWER_W, pink ID_IT_JN_FLOWER_P.
+    // NOTE the slot column is VESTIGIAL since 235 -- ensureWwCommonRes assigns
+    // every WW-common id to kWwWindlineRmSlot and one shared manager. It is kept
+    // only so the table still reads as the donor bank map. Do not add ids here
+    // expecting a real slot: ridMax is 12 and 3..11 are already spent.
+    {0x03DD, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_FLOWER_P (pink)
+    {0x03DE, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_FLOWER_W (white)
+    // §231 wave-emit ferry (Foundry §223): the WW ship-wake family + pig ripple, all
+    // verified present in the staged common.jpc (offline gclib). One supplemental slot
+    // each; lazy-loaded + routed on first emit via dPa_wwWindlineResRM (table-driven).
+    // §843 WW BREAKABLE-PROP SHATTER FAMILY. The receiver enum's AK_/IT_ names
+    // carry TP values; these are the DONOR ids (WW DP d_particle_name.h) and
+    // without a row here the supplemental router refuses them — pots broke with
+    // no shards (user report). All five VERIFIED PRESENT in the staged
+    // common.jpc by an offline JPAC1-00 walk before landing (tale §843/§845;
+    // 193 declared == 193 JEFF blocks parsed, control 0x0031 present).
+    {0x0017, kWwWindlineRmSlot, NULL, false},  // TUBOHAHEN     — pot shards
+    {0x0018, kWwWindlineRmSlot, NULL, false},  // TUBOKONAGONA  — pot dust
+    {0x03E5, kWwWindlineRmSlot, NULL, false},  // TR_HAHEN_A    — barrel
+    {0x03E7, kWwWindlineRmSlot, NULL, false},  // TR_HAHEN_C    — stool/pail/hbox2S/woodS
+    {0x03E8, kWwWindlineRmSlot, NULL, false},  // DOKURO00      — skull/try
+    // ⚠ COMMENTS BELOW CORRECTED AGAINST THE DONOR HEADER (WW DP
+    // d_particle_name.h) — the §231 labels carried donor NAMES over values that
+    // mean something else in donor space. Ids left ARMED pending consumer
+    // adjudication (the only callers, pig/zl1 ripple, currently hit the §225
+    // NULL setShipTail shim, so nothing requests these two today — but wiring
+    // the shim against the RECEIVER enum would draw these silently; see the
+    // CALLS row. Receiver ID_AK_JN_HAMON00 is 0x026; the DONOR ripple is
+    // 0x0033, armed below with the adjudicated batch.)
+    {0x0024, 6, NULL, false},   // donor 0x0024 = ID_AK_JN_ELEMENTKUSA00 (§231 said SHIPIMPACT00 — that is 0x0034)
+    {0x0026, 7, NULL, false},   // donor 0x0026 = ID_AK_JN_ROUNDATTACK01 (§231 said HAMON00 — that is 0x0033)
+    {0x0034, 8, NULL, false},   // ID_AK_JN_SHIPIMPACT00 (§231 said "SHIPWARP-family"; value correct)
+    // §396 lamp candle (bus §368/§394/§395 thread): the §327 port took the
+    // RECEIVER enum's ID_AK_JN_TORCH/KAGEROU00 — same NAMES as the donor's
+    // dPa_name but TP's VALUES (0x41/0x47), so the lamp asked TP's banks for
+    // ids that aren't resident and the emitter was NULL forever (§395 log).
+    // These are the DONOR's values (WW DP d_particle_name.h:121/:37), both
+    // verified present in the staged common.jpc by offline JPAC1-00 walk.
+    {0x01EA, kWwWindlineRmSlot, NULL, false},  // WW ID_AK_JN_TORCH (candle flame)
+    {0x4004, kWwWindlineRmSlot, NULL, false},  // WW ID_AK_JP_O_KAGEROU00 (heat haze)
+    {0x0035, 9, NULL, false},   // ID_AK_JN_SHIPSPLASH00
+    {0x0036, 10, NULL, false},  // ID_AK_JN_SHIPTAIL00
+    {0x0037, 11, NULL, false},  // ID_AK_JN_SHIPWAVE00 (the wake — ikada:327/334)
+    // §977 dPa_name adjudication, armed PER-ID (never globally): rows carry the
+    // DONOR values (WW DP d_particle_name.h — the receiver enum shares the
+    // donor's NAMES, not its VALUES: HAMON00 is 0x026 receiver / 0x0033 donor,
+    // OK is 0x005 / 0x000D, the STS_HAHEN pair 0x050/0x082 vs 0x03E2/0x03E3).
+    // All four verified PRESENT in the staged common.jpc by offline JPAC1-00
+    // walk, 193 declared == 193 parsed (§843 discipline). The stone pair clears
+    // d_a_stone's deps gate; the ks pair half-clears d_a_ks — its third effect
+    // 0x8068 is SCENE-bank (0x8000 bit), which this COMMON-bank table cannot
+    // serve; that omission stays on the owed ledger, not silently dropped.
+    {0x03E2, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_M_STS_HAHEN (stone shatter, d_a_stone)
+    {0x03E3, kWwWindlineRmSlot, NULL, false},  // ID_IT_JN_STS_HAHEN (stone shards, d_a_stone)
+    {0x0033, kWwWindlineRmSlot, NULL, false},  // ID_AK_JN_HAMON00 (the REAL donor ripple, d_a_ks + future setShipTail wiring)
+    {0x000D, kWwWindlineRmSlot, NULL, false},  // ID_AK_JN_OK (d_a_ks)
+};
+static constexpr int kWwCommonCount = (int)(sizeof(sWwCommon) / sizeof(sWwCommon[0]));
+
+static JKRExpHeap* sWwWindHeap = NULL;
+static bool sWwWindProbeLogged = false;
+
+static WwCommonRes* wwCommonEntry(u16 i_resID) {
+    for (int i = 0; i < kWwCommonCount; i++) {
+        if (sWwCommon[i].resId == i_resID) {
+            return &sWwCommon[i];
+        }
+    }
+    return NULL;
+}
+
+bool dPa_control_c::ensureWwWindlineRes() {
+    return ensureWwCommonRes(kWwWindlineResId);
+}
+
+bool dPa_control_c::ensureWwCommonRes(u16 i_resID) {
+    WwCommonRes* e = wwCommonEntry(i_resID);
+    if (e == NULL) {
+        return false;
+    }
+    if (e->mng != NULL) {
+        return true;
+    }
+    if (e->failed) {
+        return false;
+    }
+    if (sWwWindHeap == NULL) {
+        // §235: the donor common.jpc is ~425 KB and is now RETAINED (the native
+        // accessors point into it). 0x80000 left no room for the bound
+        // resources + textures, and the overflow showed up as a hard crash
+        // inside JPAResource::init rather than a clean NULL — heap corruption,
+        // no handler output. Size for archive + resources with headroom.
+        sWwWindHeap = JKRCreateExpHeap(0x180000, mDoExt_getArchiveHeap(), false);
+        JKRHEAP_NAME(sWwWindHeap, "WW common particle res");
+        if (sWwWindHeap == NULL) {
+            e->failed = true;
+            return false;
+        }
+    }
+
+    namespace fs = std::filesystem;
+    fs::path path;
+    const char* modFolders[] = {"WW-Crew-Restoration", "WW-Crew-Restoration.SKELETON_BAK"};
+    for (const char* mod : modFolders) {
+        fs::path cand = dusk::ConfigPath / "model_replacements" / mod / "particle" / "common.jpc";
+        if (fs::exists(cand)) {
+            path = cand;
+            break;
+        }
+    }
+    if (path.empty()) {
+        static bool s_warned;
+        if (!s_warned) {
+            s_warned = true;
+            DuskLog.warn(
+                "[WwWind] missing model_replacements/*/particle/common.jpc "
+                "(donor WW common.jpc) — WW common particles idle");
+        }
+        return false;
+    }
+
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in) {
+        e->failed = true;
+        return false;
+    }
+    const std::streamsize sz = in.tellg();
+    in.seekg(0);
+    if (sz <= 0) {
+        e->failed = true;
+        return false;
+    }
+    void* raw = sWwWindHeap->alloc((u32)sz, 0x20);
+    if (raw == NULL) {
+        e->failed = true;
+        DuskLog.warn("[WwWind] common.jpc alloc failed size={}", (int)sz);
+        return false;
+    }
+    if (!in.read(reinterpret_cast<char*>(raw), sz)) {
+        sWwWindHeap->free(raw);
+        e->failed = true;
+        return false;
+    }
+
+    const u8* rawBytes = reinterpret_cast<const u8*>(raw);
+    // ========================================================================
+    // §233 — NATIVE WW PATH (phases 1+2). The JPAC1→JPAC2 byte converter is no
+    // longer used: the archive is parsed in place by ww_jpa::Archive (a port of
+    // JPAEmitterArchiveLoader_v10) and bound into a receiver JPAResource by
+    // named accessor, per the user's "port, never mount" ruling (§232).
+    //
+    // The raw buffer is now RETAINED for the session: the accessors and the
+    // registered textures point INTO the donor bytes (that is the whole point —
+    // nothing is copied), so freeing it would dangle. One archive serves every
+    // WW-common id; each id still gets its own manager + supplemental slot.
+    // ========================================================================
+    // §235: parse ONCE and keep it. Re-reading the 425 KB archive per id was
+    // the other half of the heap exhaustion.
+    static ww_jpa::Archive s_wwArc;
+    static bool s_wwArcReady = false;
+    if (!s_wwArcReady) {
+        if (!s_wwArc.parse(rawBytes, (u32)sz)) {
+            sWwWindHeap->free(raw);
+            e->failed = true;
+            DuskLog.error("[wwJPA] common.jpc is not a JPAC1-00 archive — parse failed");
+            return false;
+        }
+        s_wwArcReady = true;  // buffer deliberately retained: accessors point into it
+        DuskLog.info("[wwJPA] archive parsed natively: {} emitters, {} textures",
+                     (int)s_wwArc.resourceCount(), (int)s_wwArc.textureCount());
+    } else {
+        sWwWindHeap->free(raw);  // already parsed: this read was redundant
+        raw = NULL;
+    }
+
+    // ========================================================================
+    // §235 — ONE manager for every WW-common id, not one per id.
+    //
+    // Per-id managers meant the 96-entry donor texture table was registered
+    // again for each id, on top of a retained 425 KB archive — which is what
+    // exhausted the heap and killed the grass bind. A single manager holds all
+    // WW resources and the texture table ONCE; every WW id then resolves to the
+    // same supplemental slot, which also keeps the donor's global TDB1 indices
+    // valid without remapping.
+    // ========================================================================
+    static JPAResourceManager* s_wwMgr = NULL;
+    if (s_wwMgr == NULL) {
+        static const u8 kEmptyJpac2[0x10] = {'J', 'P', 'A', 'C', '2', '-', '1', '0',
+                                             0,   0,   0,   0,   0,   0,   0,   0x10};
+        s_wwMgr = JKR_NEW_ARGS(sWwWindHeap, 0) JPAResourceManager(kEmptyJpac2, sWwWindHeap);
+        if (s_wwMgr == NULL) {
+            e->failed = true;
+            return false;
+        }
+        s_wwMgr->resMaxNum = (u16)kWwCommonCount;
+        s_wwMgr->pResAry = JKR_NEW_ARRAY_ARGS(JPAResource*, kWwCommonCount, sWwWindHeap, 0);
+        s_wwMgr->texMaxNum = s_wwArc.textureCount();
+        s_wwMgr->pTexAry =
+            JKR_NEW_ARRAY_ARGS(JPATexture*, s_wwMgr->texMaxNum, sWwWindHeap, 0);
+        if (s_wwMgr->pResAry == NULL || s_wwMgr->pTexAry == NULL) {
+            s_wwMgr = NULL;
+            e->failed = true;
+            return false;
+        }
+    }
+    e->mng = s_wwMgr;
+    e->slot = kWwWindlineRmSlot;  // all WW-common ids share the one slot
+
+    if (!ww_jpa::bindResource(s_wwArc, e->resId, e->mng, sWwWindHeap)) {
+        e->mng = NULL;
+        e->failed = true;
+        DuskLog.error("[wwJPA] bind of {:#06x} failed", (unsigned)e->resId);
+        return false;
+    }
+    e->mng->swapTexture(mDoGph_gInf_c::getFrameBufferTimg(), "dummy");
+    mEmitterMng->entryResourceManager(e->mng, e->slot);
+    if (!e->mng->checkUserIndexDuplication(e->resId)) {
+        DuskLog.error("[wwJPA] bound manager lacks id {:#06x}", (unsigned)e->resId);
+        e->mng = NULL;
+        e->failed = true;
+        return false;
+    }
+    DuskLog.info("[wwJPA] WW-common id={:#06x} bound natively (slot {}) path='{}'",
+                 (unsigned)e->resId, (int)e->slot, path.string());
+    return true;
+}
+
+bool dPa_control_c::hasWwWindlineRes(u16 i_resID) const {
+    const WwCommonRes* e = wwCommonEntry(i_resID);
+    return e != NULL && e->mng != NULL && e->mng->checkUserIndexDuplication(i_resID);
+}
+
+// Force WW common particle resources onto their supplemental slot — never TP primary.
+static u8 dPa_wwWindlineResRM(const dPa_control_c* i_pa, u16 i_resID, u8 i_rmID) {
+    WwCommonRes* e = wwCommonEntry(i_resID);
+    if (e == NULL) {
+        return i_rmID;
+    }
+    // Ferry V-d: lazy-load on first request so a WW-common id never silently
+    // resolves to the TP primary bank (that fallback IS the №31 breach).
+    if (e->mng == NULL && !e->failed && i_pa != NULL) {
+        const_cast<dPa_control_c*>(i_pa)->ensureWwCommonRes(i_resID);
+    }
+    if (e->mng == NULL) {
+        return i_rmID;
+    }
+    if (!e->mng->checkUserIndexDuplication(i_resID)) {
+        return i_rmID;
+    }
+    return e->slot;  // V-d: per-id slot, not a single windline slot
+}
+
+void dPa_wwWindlineLogBankProbe(u8 rmSlot, u16 i_resID) {
+    // V-d: probe ONCE PER ID (the breach question is per-resource, and 0x31
+    // resolving correctly must not mask a later 0x3DA falling to TP primary).
+    WwCommonRes* e = wwCommonEntry(i_resID);
+    if (e == NULL) {
+        return;
+    }
+    static u16 s_logged[kWwCommonCount] = {};
+    static int s_loggedN = 0;
+    for (int i = 0; i < s_loggedN; i++) {
+        if (s_logged[i] == i_resID) {
+            return;
+        }
+    }
+    if (s_loggedN < kWwCommonCount) {
+        s_logged[s_loggedN++] = i_resID;
+    }
+    sWwWindProbeLogged = true;
+    const char* bank = (rmSlot == e->slot) ? "supplemental" : (rmSlot == 0) ? "primary" : "other";
+    if (rmSlot == 0) {
+        DuskLog.error("[WwWind] WW-common emitter bank=primary id=0x{:04X} — №31 BREACH (TP particle in WW space); stop",
+                      (int)i_resID);
+    } else {
+        DuskLog.info("[WwWind] WW-common emitter bank={} id=0x{:04X} slot={}", bank, (int)i_resID,
+                     (int)rmSlot);
+    }
 }
 // ============================================
 // NEW CODE ENDS HERE
@@ -1598,6 +2046,10 @@ JPABaseEmitter* dPa_control_c::set(u8 param_0, u16 param_1, cXyz const* i_pos,
     // ALBW Port: route tear FX through the supplemental archive when the
     // current stage's scene archive lacks them (death recovery orb in dungeons).
     local_e0 = dPa_tearResFallbackRM(this, param_1, local_e0);
+    // Ferry W-LINE / V-d: force WW-common ids (0x0031 windline, 0x03DA/0x03DB
+    // grass) onto their supplemental slot — never the TP primary bank.
+    local_e0 = dPa_wwWindlineResRM(this, param_1, local_e0);
+    dPa_wwWindlineLogBankProbe(local_e0, param_1);  // no-ops for non-WW-common ids
 #endif
     JPAResourceManager* local_a8 = mEmitterMng->getResourceManager(local_e0);
     if (local_a8 == NULL) {
@@ -1612,6 +2064,10 @@ JPABaseEmitter* dPa_control_c::set(u8 param_0, u16 param_1, cXyz const* i_pos,
 
     dPa_group_id_change(&local_ac, &param_0);
     JGeometry::TVec3<f32> aTStack_78(i_pos->x, i_pos->y, i_pos->z);
+#if TARGET_PC
+    // §P2 emitter-parity tap — scene-particle creation site (live position).
+    dPa_emitterTapLog(param_1, i_pos->x, i_pos->y, i_pos->z);
+#endif
     JPABaseEmitter* this_00 = mEmitterMng->createSimpleEmitterID(
         aTStack_78, param_1, param_0,
         local_e0, NULL, NULL

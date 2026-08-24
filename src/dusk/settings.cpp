@@ -40,6 +40,7 @@ UserSettings g_userSettings = {
         // Quality of Life
         .enableQuickTransform {"game.enableQuickTransform", false},
         .extraItemSlotMode {"game.extraItemSlot", ExtraItemSlotMode::Off},
+        .quickEquipWheel {"game.quickEquipWheel", false},
         .hideTvSettingsScreen {"game.hideTvSettingsScreen", true},
         .biggerWallets {"game.biggerWallets", false},
         .noReturnRupees {"game.noReturnRupees", false},
@@ -47,19 +48,59 @@ UserSettings g_userSettings = {
         .noSwordRecoil {"game.noSwordRecoil", false},
         .manualShielding {"game.manualShielding", false},
         .shieldParryCombat {"game.shieldParryCombat", true},
+        .parryMaster {"game.parryMaster", false},
         .hiddenSkillRework {"game.hiddenSkillRework", true},
+        .focusedArts {"game.focusedArts", false},
         .focusedArtsTest {"game.focusedArtsTest", false},
         .focusedArtsCheat {"game.focusedArtsCheat", FocusedArtsCheatMode::Off},
+        .flurryRush {"game.flurryRush", false},
+        .customModelsDisabled {"game.customModelsDisabled", ""},
+        .customModelsOrder {"game.customModelsOrder", ""},
+        .customModelsAllowCoreOverride {"game.customModelsAllowCoreOverride", false},
+        .wwItemmdlGetItem {"game.wwItemmdlGetItem", false},
+        .wwItemmdlGetItem2DIsolate {"game.wwItemmdlGetItem2DIsolate", false},
+        .wwItemmdlBowScSuppress {"game.wwItemmdlBowScSuppress", false},
+        .wwItemmdlBowScK0Cap {"game.wwItemmdlBowScK0Cap", 150},
+        .wwItemmdlBowScOutputCeiling {"game.wwItemmdlBowScOutputCeiling", 185},
+        .wwItemmdlHeldSkin {"game.wwItemmdlHeldSkin", WwHeldSkinMode::Off},
+        .wwItemmdlHeldBowScalePct {"game.wwItemmdlHeldBowScalePct", 100},
+        .wwItemmdlHeldBootsStyle {"game.wwItemmdlHeldBootsStyle", false},
+        .wwPlayerDonorLook {"game.wwPlayerDonorLook", false},
+        .dekuLeafGlideTest {"game.dekuLeafGlideTest", false},
+        // №105 P2: gated hold-A crawl ≥1s (DoStatus NONE + stick ≤ roll rate). Default ON —
+        // native ENTER does not arm WW crawl holes until adapt_dzb wall-codes land.
+        .enableHoldACrawl {"game.enableHoldACrawl", true},
+        .wwItemmdlViewerBdlIndex {"game.wwItemmdlViewerBdlIndex", 0xF},
+        .sumoOutfit {"game.sumoOutfit", false},
+        .sumoOutfitFists {"game.sumoOutfitFists", false},
+        .capWear {"game.capWear", CapWearMode::Off},
         .shieldDurability {"game.shieldDurability", false},
         .deathRecoveryOrb {"game.deathRecoveryOrb", false},
         .wolfLinkCombat {"game.wolfLinkCombat", false},
+        .wolfArtsDevTest {"game.wolfArtsDevTest", false},
+        .wolfHowlVfxOverride {"game.wolfHowlVfxOverride", false},
+        // Defaults = the finalized wolf-howl ring look (user-tuned 2026-07-13); the l_wolfHowlVfx*
+        // constants in d_a_alink_wolf.inc mirror these for the override-OFF path.
+        .wolfHowlTiltDeg {"game.wolfHowlTiltDeg", 0},
+        .wolfHowlRollDeg {"game.wolfHowlRollDeg", 0},
+        .wolfHowlWidthPct {"game.wolfHowlWidthPct", 90},
+        .wolfHowlHeightPct {"game.wolfHowlHeightPct", 90},
+        .wolfHowlSweepRate {"game.wolfHowlSweepRate", 300},
+        .wolfHowlOrbit {"game.wolfHowlOrbit", 0},
+        .wolfHowlPeriod {"game.wolfHowlPeriod", 1},
         .enemyDeathRupees {"game.enemyDeathRupees", false},
         .masterQuest {"game.masterQuest", false},
         .bossRefinement {"game.bossRefinement", false},
         .shadeRefuge {"game.shadeRefuge", false},
+        .realtimePotions {"game.realtimePotions", false},
+        .heroShadeSecretBoss {"game.heroShadeSecretBoss", false},
+        .albwJuniorMailTest {"game.albwJuniorMailTest", false},
+        .albwSoulboundRedPotion {"game.albwSoulboundRedPotion", false},
         .parryIconsMode {"game.parryIconsMode", ParryIcons::SpurShield},
+        .shieldHudVisibility {"game.shieldHudVisibility", ShieldHudVisibility::Off},
         .bossHealthBars {"game.bossHealthBars", false},
         .lopHud {"game.lopHud", LopHudMode::Off},
+        .wwDialogue {"game.wwDialogue", WwDialogueStyle::Reconstructed},
         .showEponaSpurHud {"game.showEponaSpurHud", true},
         .trueAlbwMode {"game.trueAlbwMode", TrueAlbwMode::Off},
         .damageMultiplier {"game.damageMultiplier", 1},
@@ -69,6 +110,13 @@ UserSettings g_userSettings = {
         .hpMultFinalBoss  {"game.hpMultFinalBoss",  1},
         .linkDamageDecreaseMult {"game.linkDamageDecreaseMult", 1},
         .showLockonHpDebug {"game.showLockonHpDebug", false},
+        .showWardrobeRecoveryDebug {"game.showWardrobeRecoveryDebug", false},
+        .albwMagicArmorRentableDebug {"game.albwMagicArmorRentableDebug", false},
+        .outfitStats {"game.outfitStats", false},
+        .regionDamage {"game.regionDamage", false},
+        .regionMult {"game.regionMult", false},
+        .regionMultHealth {"game.regionMultHealth", true},
+        .regionMultRupees {"game.regionMultRupees", true},
         .showDarknutBashDebug {"game.showDarknutBashDebug", false},
         .stickCycleLockon {"game.stickCycleLockon", false},
         .noHeartDrops {"game.noHeartDrops", false},
@@ -102,6 +150,7 @@ UserSettings g_userSettings = {
         .depthOfFieldMode{"game.depthOfFieldMode", DepthOfFieldMode::Dusk},
         .disableWaterRefraction {"game.disableWaterRefraction", false},
         .enableTextureReplacements {"game.enableTextureReplacements", true},
+        .allowTextureDumps {"game.allowTextureDumps", false},
         .enableFrameInterpolation {"game.enableFrameInterpolation", FrameInterpMode::Off},
         .internalResolutionScale {"game.internalResolutionScale", 0},
         .shadowResolutionMultiplier {"game.shadowResolutionMultiplier", 1},
@@ -200,6 +249,10 @@ UserSettings g_userSettings = {
         .checkForUpdates {"backend.checkForUpdates", true},
         .cardFileType {"backend.cardFileType", static_cast<int>(CARD_GCIFOLDER)},
         .enableAdvancedSettings {"backend.enableAdvancedSettings", false},
+        // Level Editor (Phase 1) — off by default; opt-in via advanced settings.
+        .enableLevelEditor {"backend.enableLevelEditor", false},
+        // Optional additional disc image — generic; consumed by extensions only.
+        .extraIsoPath {"backend.extraIsoPath", ""},
     },
 
     // Not sure if there's a better way to declare this
@@ -252,6 +305,12 @@ UserSettings g_userSettings = {
             ActionBindConfigVar{"actionBindings.cycleShield_port2", PAD_NATIVE_BUTTON_INVALID},
             ActionBindConfigVar{"actionBindings.cycleShield_port3", PAD_NATIVE_BUTTON_INVALID},
         },
+        .cycleOutfit {
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port0", PAD_NATIVE_BUTTON_INVALID},
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port1", PAD_NATIVE_BUTTON_INVALID},
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port2", PAD_NATIVE_BUTTON_INVALID},
+            ActionBindConfigVar{"actionBindings.cycleOutfit_port3", PAD_NATIVE_BUTTON_INVALID},
+        },
         .quickTransform {
             ActionBindConfigVar{"actionBindings.quickTransform_port0", PAD_NATIVE_BUTTON_INVALID},
             ActionBindConfigVar{"actionBindings.quickTransform_port1", PAD_NATIVE_BUTTON_INVALID},
@@ -297,6 +356,7 @@ void registerSettings() {
     Register(g_userSettings.game.language);
     Register(g_userSettings.game.enableQuickTransform);
     Register(g_userSettings.game.extraItemSlotMode);
+    Register(g_userSettings.game.quickEquipWheel);
     Register(g_userSettings.game.hideTvSettingsScreen);
     Register(g_userSettings.game.biggerWallets);
     Register(g_userSettings.game.noReturnRupees);
@@ -304,17 +364,53 @@ void registerSettings() {
     Register(g_userSettings.game.noSwordRecoil);
     Register(g_userSettings.game.manualShielding);
     Register(g_userSettings.game.shieldParryCombat);
+    Register(g_userSettings.game.parryMaster);
     Register(g_userSettings.game.hiddenSkillRework);
+    Register(g_userSettings.game.focusedArts);
     Register(g_userSettings.game.focusedArtsTest);
     Register(g_userSettings.game.focusedArtsCheat);
+    Register(g_userSettings.game.flurryRush);
+    Register(g_userSettings.game.customModelsDisabled);
+    Register(g_userSettings.game.customModelsOrder);
+    Register(g_userSettings.game.customModelsAllowCoreOverride);
+    Register(g_userSettings.game.wwItemmdlGetItem);
+    Register(g_userSettings.game.wwItemmdlGetItem2DIsolate);
+    Register(g_userSettings.game.wwItemmdlBowScSuppress);
+    Register(g_userSettings.game.wwItemmdlBowScK0Cap);
+    Register(g_userSettings.game.wwItemmdlBowScOutputCeiling);
+    Register(g_userSettings.game.wwItemmdlHeldSkin);
+    Register(g_userSettings.game.wwItemmdlHeldBowScalePct);
+    Register(g_userSettings.game.wwItemmdlHeldBootsStyle);
+    Register(g_userSettings.game.wwPlayerDonorLook);
+    Register(g_userSettings.game.dekuLeafGlideTest);
+    Register(g_userSettings.game.enableHoldACrawl);
+    Register(g_userSettings.game.wwItemmdlViewerBdlIndex);
+    Register(g_userSettings.game.sumoOutfit);
+    Register(g_userSettings.game.sumoOutfitFists);
+    Register(g_userSettings.game.capWear);
+    Register(g_userSettings.game.wwDialogue);
     Register(g_userSettings.game.shieldDurability);
     Register(g_userSettings.game.deathRecoveryOrb);
     Register(g_userSettings.game.wolfLinkCombat);
+    Register(g_userSettings.game.wolfArtsDevTest);
+    Register(g_userSettings.game.wolfHowlVfxOverride);
+    Register(g_userSettings.game.wolfHowlTiltDeg);
+    Register(g_userSettings.game.wolfHowlRollDeg);
+    Register(g_userSettings.game.wolfHowlWidthPct);
+    Register(g_userSettings.game.wolfHowlHeightPct);
+    Register(g_userSettings.game.wolfHowlSweepRate);
+    Register(g_userSettings.game.wolfHowlOrbit);
+    Register(g_userSettings.game.wolfHowlPeriod);
     Register(g_userSettings.game.enemyDeathRupees);
     Register(g_userSettings.game.masterQuest);
     Register(g_userSettings.game.bossRefinement);
     Register(g_userSettings.game.shadeRefuge);
+    Register(g_userSettings.game.realtimePotions);
+    Register(g_userSettings.game.heroShadeSecretBoss);
+    Register(g_userSettings.game.albwJuniorMailTest);
+    Register(g_userSettings.game.albwSoulboundRedPotion);
     Register(g_userSettings.game.parryIconsMode);
+    Register(g_userSettings.game.shieldHudVisibility);
     Register(g_userSettings.game.bossHealthBars);
     Register(g_userSettings.game.lopHud);
     Register(g_userSettings.game.showEponaSpurHud);
@@ -326,6 +422,13 @@ void registerSettings() {
     Register(g_userSettings.game.hpMultFinalBoss);
     Register(g_userSettings.game.linkDamageDecreaseMult);
     Register(g_userSettings.game.showLockonHpDebug);
+    Register(g_userSettings.game.showWardrobeRecoveryDebug);
+    Register(g_userSettings.game.albwMagicArmorRentableDebug);
+    Register(g_userSettings.game.outfitStats);
+    Register(g_userSettings.game.regionDamage);
+    Register(g_userSettings.game.regionMult);
+    Register(g_userSettings.game.regionMultHealth);
+    Register(g_userSettings.game.regionMultRupees);
     Register(g_userSettings.game.showDarknutBashDebug);
     Register(g_userSettings.game.stickCycleLockon);
     Register(g_userSettings.game.noHeartDrops);
@@ -360,6 +463,7 @@ void registerSettings() {
     Register(g_userSettings.game.depthOfFieldMode);
     Register(g_userSettings.game.disableWaterRefraction);
     Register(g_userSettings.game.enableTextureReplacements);
+    Register(g_userSettings.game.allowTextureDumps);
     Register(g_userSettings.game.internalResolutionScale);
     Register(g_userSettings.game.resampler);
     Register(g_userSettings.game.shadowResolutionMultiplier);
@@ -437,6 +541,8 @@ void registerSettings() {
     Register(g_userSettings.backend.checkForUpdates);
     Register(g_userSettings.backend.cardFileType);
     Register(g_userSettings.backend.enableAdvancedSettings);
+    Register(g_userSettings.backend.enableLevelEditor);
+    Register(g_userSettings.backend.extraIsoPath);
 
     Register(g_userSettings.actionBindings.firstPersonCamera[0]);
     Register(g_userSettings.actionBindings.firstPersonCamera[1]);
@@ -470,6 +576,10 @@ void registerSettings() {
     Register(g_userSettings.actionBindings.cycleShield[1]);
     Register(g_userSettings.actionBindings.cycleShield[2]);
     Register(g_userSettings.actionBindings.cycleShield[3]);
+    Register(g_userSettings.actionBindings.cycleOutfit[0]);
+    Register(g_userSettings.actionBindings.cycleOutfit[1]);
+    Register(g_userSettings.actionBindings.cycleOutfit[2]);
+    Register(g_userSettings.actionBindings.cycleOutfit[3]);
     Register(g_userSettings.actionBindings.quickTransform[0]);
     Register(g_userSettings.actionBindings.quickTransform[1]);
     Register(g_userSettings.actionBindings.quickTransform[2]);

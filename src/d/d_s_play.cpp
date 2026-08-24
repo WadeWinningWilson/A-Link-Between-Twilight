@@ -1,4 +1,4 @@
-﻿/**
+/**
  * d_s_play.cpp
  * Main Gameplay Scene
  */
@@ -9,6 +9,7 @@
 #include "JSystem/JUtility/JUTConsole.h"
 #include "JSystem/JUtility/JUTGamePad.h"
 #include "SSystem/SComponent/c_counter.h"
+#include "dusk/logging.h"  // §352b scene-delete stamp
 #include "c/c_dylink.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_demo.h"
@@ -41,12 +42,29 @@
 
 #if TARGET_PC
 #include "d/d_albw_boss.h"
+#include "d/d_albw_menu_res.h"
+#include "d/d_albw_wolf_stun.h"
 #include "d/d_focused_arts.h"
+#include "dusk/fps_probe.h"
 #if TARGET_PC
 #include "dusk/truetest.hpp"
 #endif
 #include "d/d_albw_death_rupee.h"
+#include "d/d_albw_mail.h"
+#include "d/d_ww_itemmdl_test.h"
+#include "d/d_demo_leftover_viewer.h"
+#include "d/d_cut_actor_spawn.h"
+#include "d/d_ext_npc_mount.h"
+#include "d/d_ext_dmesg.h"               // §308 M3 native dMesg viewable box
+#include "d/d_ext_seq_space.h"
+#include "d/d_ext_npc_doors.h"
+#include "d/d_ext_save_guard.h"  // §49: storyboard dialogue poll + draw
+#include "d/d_ww_itemmdl_pc.h"
+#include "d/d_albw_twilight_border.h"
 #include "dusk/autosave.h"
+#include "dusk/debug_warp.h"
+#include "dusk/leveledit/enumerate.hpp"
+#include "dusk/main.h"
 #include "dusk/memory.h"
 #include "dusk/ui/ui.hpp"
 #include <cstdlib>
@@ -558,9 +576,62 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
     dStage_DebugDisp();
     #endif
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (load-order Phase 1 follow-up)
+    // Re-mount boot-resident menu 2D arcs (itemicon/clctres/dmapres) when the
+    // Custom Models overlay changes, so menu/outfit icons track a toggle like
+    // everything else. Idle cost: one int compare. See d_albw_menu_res.h.
+    // ============================================
+    {
+        DUSK_FPS_SCOPE(MenuRes);
+        dAlbwMenuRes_drive();
+    }
+    // Twilight-border fallback: restore missing province walls (see
+    // d_albw_twilight_border.h — strictly no-op when vanilla spawned them).
+    dAlbwTwilightBorder_drive();
+    dAlbwWolfStun_beforeMove();
+#endif
     dComIfG_Ccsp()->Move();
+#if TARGET_PC
+    dAlbwWolfStun_afterMove();
+#endif
     dComIfG_Bgsp().ClrMoveFlag();
 
+#if TARGET_PC
+    // ========================================================================
+    // §398 PENDING-CONSUMPTION PROBE (tale black-screen, log 092751: point-200
+    // pending armed gFrm=2877 and NEVER consumed). This is the ONLY consumer;
+    // the 4 ways it can starve, discriminated per fire (rate-limited):
+    //   H1 fopOvlpM_IsPeek() stuck (an overlap wipe never closed — suspect:
+    //      the native door entry's wipe)  H2 resetToOpening  H3 ChangeReq
+    //      returns 0 every frame (request refused)  H4 pending disabled late.
+    // Change-only-ish: logs only while a pending exists. Strip with §336.
+    // ========================================================================
+    {
+        static int s_n398 = 0;
+        if (dComIfGp_isEnableNextStage() && (s_n398++ % 60) == 0) {
+            // §398d: the queue-head request's phase names WHERE a stuck
+            // transition is parked (fadeFase: 0 IsDoingOverlap, 1 IsDoneOverlap,
+            // 2 Execute, 3 ClearOverlap, 4 IsDoneOverlap).
+            extern int fpcNdRq_DebugHead(int*, int*, int*);
+            extern int fopOvlpM_DebugState(int*, int*, int*, int*, int*, int*);
+            int qType = -1, qName = -1, qPhase = -1;
+            const int qHas = fpcNdRq_DebugHead(&qType, &qName, &qPhase);
+            // §398e: NEVER call fopOvlpM_IsDone here — cReq_Is_Done consumes
+            // the one-shot done latch the scene request itself waits on.
+            int oAct = -1, oPeek = -1, oPh = -1, oBF = -1, oTask = -1, oTF = -1;
+            const int oHas =
+                fopOvlpM_DebugState(&oAct, &oPeek, &oPh, &oBF, &oTask, &oTF);
+            DuskLog.warn("[Scn] §398 pending='{}' pt={} reset={} gFrm={} q={}:{}/{}ph{} "
+                         "ovlp={}:act{} peek{} ph{} bf{:#x} task{} tf{:#x}",
+                         dComIfGp_getNextStageName(), (int)dComIfGp_getNextStagePoint(),
+                         dComIfG_resetToOpening(i_this) ? 1 : 0, (int)g_Counter.mCounter0,
+                         qHas, qType, qName, qPhase, oHas, oAct, oPeek, oPh,
+                         (unsigned)oBF, oTask, (unsigned)oTF);
+        }
+    }
+#endif
     if (!fopOvlpM_IsPeek() && !dComIfG_resetToOpening(i_this)) {
         if (dComIfGp_isEnableNextStage()
             #if DEBUG
@@ -577,6 +648,17 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
             #endif
 
             int rt = fopScnM_ChangeReq(i_this, fpcNm_PLAY_SCENE_e, l_wipeType[wipe], 5);
+#if TARGET_PC
+            // §398 H3: a refused request (rt=0) retries silently forever.
+            {
+                static int s_n398r = 0;
+                if (rt == 0 && (s_n398r++ % 60) == 0) {
+                    DuskLog.warn("[Scn] §398 ChangeReq REFUSED wipe={} pending='{}' gFrm={}",
+                                 (int)wipe, dComIfGp_getNextStageName(),
+                                 (int)g_Counter.mCounter0);
+                }
+            }
+#endif
 
             int hour = dKy_getdaytime_hour();
             BOOL isDaytime = (hour >= 6 && hour < 18) ? FALSE : TRUE;
@@ -690,6 +772,18 @@ static int dScnPly_Draw(dScnPly_c* i_this) {
         attention->Draw();
     }
 
+#if TARGET_PC
+    // Level Editor — queue AFTER BeforeOfDraw cleared the packet list.
+    // Queuing from Execute was wiped every frame (never painted).
+    dusk::leveledit::draw_selection_highlight();
+    dusk::leveledit::draw_pick_hover();
+    // §49: storyboard dialogue. Same constraint as the editor above — the
+    // widget ends in set2DOpa, so it must be queued from Draw, not Execute.
+    dExtWw_drawDemoMessage();
+    // §308 M3: native dMesg viewable test box (WW host stages; set2DOpaTop → Draw).
+    dExtDmesg_drawTestBox();
+#endif
+
     #if DEBUG
     if (g_envHIO.mOther.mDisplayParticleInfo) {
         g_envHIO.mOther.printParticle();
@@ -745,11 +839,47 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
 
 #if TARGET_PC
     dALBWDeathRupees_tickSpawn();
+    dAlbwMail_tickNorthFaron();
+    dWwItemmdl::tickBowGetItemDemoReplay();
+    dWwItemmdl_tickHeldBowArcMount();
+    dDemoLeftoverViewer::tick();
+    dCutActorSpawn::tick();
+    // FPS_BISECT_A1b: RULED OUT (2026-07-19) — menu ~288 / field still ~100–115 with polls off.
+    {
+        DUSK_FPS_SCOPE(Mount);
+        dExtNpcMount_pollBgWarps();
+    }
+    dExtNpcMount_pollRegionTriggers();  // [tale_loft] → TALE_DEMO (Demo01 / tale.stb)
+    {
+        DUSK_FPS_SCOPE(DemoMsg);
+        dExtWw_pollDemoMessage();  // §49: show/replace/dismiss storyboard lines
+    }
+    {
+        DUSK_FPS_SCOPE(Doors);
+        dExtNpcDoors_poll();
+    }
+    dExtNpcMount_pollIdentifyProbe();  // §41: Z-target identity probe (change-only log)
+    dExtNpcMount_pollCullProbe();      // §95: tree/mount cull probe (DUSK_CULL_PROBE=1)
+    dExtSeqSpace_poll();                  // §52 (B): JA1 space gate + package detect (no parser yet)
+    // Gate 8: before pauseTimer early-return — hitlag must not silence click pick/diag.
+    if (dusk::g_levelEditorSession) {
+        dusk::leveledit::tick_editor_session_input();
+        dusk::leveledit::tick_world_pick_hover();
+        dusk::leveledit::try_world_pick_on_click();
+    }
 #endif
 
     if (!fopOvlpM_IsPeek()) {
         if (mDoAud_zelAudio_c::isBgmSet()) {
+#if TARGET_PC
+            // §52: ExtSeq owns BGM on foreign hosts — never start TP scene BGM
+            // while the JA1 path is suppressing (silence beats a foreign sound).
+            if (!dExtSeqSpace_shouldSuppressJa2Bgm()) {
+                mDoAud_sceneBgmStart();
+            }
+#else
             mDoAud_sceneBgmStart();
+#endif
             mDoAud_load2ndDynamicWave();
             mDoAud_zelAudio_c::offBgmSet();
         }
@@ -874,12 +1004,42 @@ static int dScnPly_Delete(dScnPly_c* i_this) {
     #endif
     dStage_Delete();
 
+#if TARGET_PC
+    // §352b: scene-delete entry stamp — the far bound of the §351 in-status-1
+    // control gap (demo-END → HERE). Pairs with §347a ARM gFrm + §352c sampler.
+    DuskLog.info("[Play] §352b SCENE DELETE gFrm={}", (int)g_Counter.mCounter0);
+#endif
     dComIfGp_event_remove();
 
     dComIfGp_particle_removeScene(0);
 
-    dComIfGp_getMsgDtArchive(1)->removeResourceAll();
-    JKRUnmountArchive(dComIfGp_getMsgDtArchive(1));
+    // ========================================================================
+    // A_mori exit crash (run 161726, symbolicated to this line): slot 1 is
+    // set ONLY in phase_4 (:1611, and only when the message-group mount
+    // command exists) and was unmounted HERE without being CLEARED — so the
+    // pointer dangles until the next phase_4, and a delete that runs without
+    // an intervening re-set (a §398-refused changeover tearing down before
+    // create completes, or a mount that never produced a command) dereferences
+    // freed memory. The heap's poison fill is how a "pointer" of
+    // 0xFFFFFFFFFFFFFFFF reaches a vtable call. This create/delete pair is
+    // the slot's lifecycle OWNER, so the fix lives here, at the source:
+    // tolerate a scene that never set the slot, and clear after unmount so a
+    // stale pointer cannot survive this line. On a healthy cycle (every
+    // mainline TP delete) the slot is freshly set and both changes are
+    // behavior-neutral.
+    // ========================================================================
+    {
+        JKRArchive* msgDt1 = dComIfGp_getMsgDtArchive(1);
+        if (msgDt1 != NULL) {
+            msgDt1->removeResourceAll();
+            JKRUnmountArchive(msgDt1);
+            dComIfGp_setMsgDtArchive(1, NULL);
+        } else {
+            DuskLog.warn("[Play] msg-archive slot 1 unset at scene delete — teardown "
+                         "skipped (pre-fix this was the run-161726 crash); a scene "
+                         "died before phase_4 or its message-group mount never ran");
+        }
+    }
 
     #if DEBUG
     dJcame_c::remove();
@@ -1165,6 +1325,11 @@ static int phase_0(dScnPly_c* i_this) {
 static int phase_1(dScnPly_c* i_this) {
     dStage_roomControl_c::setProcID(fopScnM_GetID(i_this));
 
+#if TARGET_PC
+    // Room layer override: survives the warp that set it, clears on the next load.
+    dusk::ui::onStageLoadRoomLayerOverride();
+#endif
+
     dComIfGp_setStartStage(dComIfGp_getNextStartStage());
 
     if (dComIfGp_getStartStageLayer() < 0 && daPy_py_c::checkRoomRestartStart()) {
@@ -1182,10 +1347,35 @@ static int phase_1(dScnPly_c* i_this) {
     dusk::truetest::onStageLoad();
 #endif
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (alpha cleanup: warp-menu safety)
+    // Arrival story triggers below permanently mutate progression
+    // (DarkClearLV bits, item grants). When this stage load came from the
+    // level-editor warp menu, skip them — a debug warp to e.g. Lake Hylia
+    // spring p20 used to mark Lanayru "twilight cleared" without the
+    // vessel, suppressing the twilight gate. One-shot, transition-scoped;
+    // normal play and TRUETEST policies (truetest::onStageLoad above) are
+    // untouched.
+    // ============================================
+    const bool albwDebugWarpSuppress = dusk::ui::consumeDebugWarpStorySuppress();
+    if (!albwDebugWarpSuppress) {
+#endif
+    // ============================================
+    // Vessel gating (alpha cleanup): in vanilla these spawn points are only
+    // reachable via the post-vessel cutscenes, so requiring the Vessel of
+    // Light is behavior-neutral for normal play — but it stops any
+    // sequence-broken arrival (warps, future mod paths) from permanently
+    // marking a province "twilight cleared" without earning it, which
+    // despawns that province's twilight gate.
+    // ============================================
     // Stage: Faron Woods, Room: Faron Spring
     if (!strcmp(dComIfGp_getStartStageName(), "F_SP108") && dComIfGp_getStartStageRoomNo() == 1 &&
         dComIfGp_getStartStagePoint() == 3)
     {
+#if TARGET_PC
+        if (dComIfGs_isLightDropGetFlag(0))
+#endif
         dComIfGs_onDarkClearLV(0);
         execItemGet(dItemNo_WEAR_KOKIRI_e);
     }
@@ -1193,12 +1383,18 @@ static int phase_1(dScnPly_c* i_this) {
     else if (!strcmp(dComIfGp_getStartStageName(), "F_SP109") &&
              dComIfGp_getStartStageRoomNo() == 0 && dComIfGp_getStartStagePoint() == 30)
     {
+#if TARGET_PC
+        if (dComIfGs_isLightDropGetFlag(1))
+#endif
         dComIfGs_onDarkClearLV(1);
     }
     // Stage: Lake Hylia, Room: Fountain
     else if (!strcmp(dComIfGp_getStartStageName(), "F_SP115") &&
              dComIfGp_getStartStageRoomNo() == 1 && dComIfGp_getStartStagePoint() == 20)
     {
+#if TARGET_PC
+        if (dComIfGs_isLightDropGetFlag(2))
+#endif
         dComIfGs_onDarkClearLV(2);
     }
     // Stage: Sacred Grove, Room: Lost Woods
@@ -1215,6 +1411,9 @@ static int phase_1(dScnPly_c* i_this) {
         dComIfGs_onItemFirstBit(dItemNo_HORSE_FLUTE_e);
         dComIfGs_setItem(SLOT_21, dItemNo_HORSE_FLUTE_e);
     }
+#if TARGET_PC
+    }
+#endif
 
     if ((u8)dKy_darkworld_stage_check(dComIfGp_getStartStageName(),
                                       dComIfGp_getStartStageRoomNo()) == true)
@@ -1519,6 +1718,7 @@ static int phase_4(dScnPly_c* i_this) {
 
     dAttention_c* attention = dComIfGp_getAttention();
     JKR_NEW_ARGS (attention) dAttention_c(dComIfGp_getPlayer(0), 0);
+    dExtNpcMount_onStageReady();
     dComIfGp_getVibration().Init();
     daYkgr_c::init();
 

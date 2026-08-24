@@ -10,11 +10,16 @@
 #include "d/d_item_data.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_save.h"
+#include "dusk/map_loader_definitions.h"
 #include "dusk/truetest.hpp"
+#include <cstring>
 
 namespace {
 
-constexpr int kPrice = 150;
+// Priced for the post-death-economy era (rupee halving on death, ALBW
+// inventory strip): 150 predated those systems and priced the service
+// out of exactly the moments it exists for.
+constexpr int kPrice = 15;
 
 char sDeathDungeonStage[8] = {};
 bool sDiedInDungeon        = false;
@@ -34,6 +39,36 @@ bool hasMetOocooSrOnce() {
 
 bool postmanRentalActive() {
     return dusk::truetest::isAlbwPostmanUnlocked();
+}
+
+// ============================================
+// Entrance resolution (alpha cleanup — crash fix). The old warp hardcoded
+// room 0 / point 0, but not every dungeon HAS a room 0 (Goron Mines D_MN04
+// and Hyrule Castle D_MN09 start at room 1), and setNextStage does no
+// validation — the load of the nonexistent room crashed the game. Resolve
+// the entrance from the level-editor warp table instead: its first room
+// entry + first point is the same baseline the warp menu lands on when a
+// dungeon is selected. Unknown stage -> caller must not warp.
+// ============================================
+bool resolveDungeonEntrance(const char* i_stage, s8* o_roomNo, s16* o_point) {
+    if (i_stage == NULL || i_stage[0] == '\0') {
+        return false;
+    }
+
+    for (const auto& region : gameRegions) {
+        for (const auto& map : region.maps) {
+            if (map.mapFile == NULL || std::strcmp(map.mapFile, i_stage) != 0) {
+                continue;
+            }
+            if (map.mapRooms.empty() || map.mapRooms[0].roomPoints.empty()) {
+                return false;
+            }
+            *o_roomNo = (s8)map.mapRooms[0].roomNo;
+            *o_point = map.mapRooms[0].roomPoints[0];
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace
@@ -70,6 +105,16 @@ bool dALBWOocoo_canShowInShop() {
     if (!sDiedInDungeon || !sChoseOrdonAfterDeath) {
         return false;
     }
+    // ============================================
+    // Never sell a warp we cannot land: if the death stage has no entry in
+    // the warp table, hide the service row entirely instead of crashing or
+    // refunding later.
+    // ============================================
+    s8 roomNo;
+    s16 point;
+    if (!resolveDungeonEntrance(sDeathDungeonStage, &roomNo, &point)) {
+        return false;
+    }
     return !sUsedOocooThisDeath;
 }
 
@@ -102,8 +147,23 @@ void dALBWOocoo_executePendingWarp() {
         return;
     }
 
-    // Entrance spawn: room 0, point 0 (vanilla escape-warp landing pattern).
-    dComIfGp_setNextStage(sDeathDungeonStage, 0, 0, -1);
+    // ============================================
+    // Entrance spawn from the warp-table baseline (first room entry, first
+    // point) — see resolveDungeonEntrance. setNextStage args are
+    // (stage, point, room, layer); the old call passed a hardcoded room 0
+    // that does not exist in D_MN04/D_MN09. If resolution fails here
+    // (canShowInShop should have prevented the sale), refund and bail
+    // rather than warp blind.
+    // ============================================
+    s8 roomNo;
+    s16 point;
+    if (!resolveDungeonEntrance(sDeathDungeonStage, &roomNo, &point)) {
+        dComIfGs_setRupee(dComIfGs_getRupee() + (u16)kPrice);
+        sUsedOocooThisDeath = false;
+        return;
+    }
+
+    dComIfGp_setNextStage(sDeathDungeonStage, point, roomNo, -1);
 
     daAlink_c* link = daAlink_getAlinkActorClass();
     if (link != NULL) {

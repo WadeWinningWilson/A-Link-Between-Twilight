@@ -15,6 +15,7 @@ enum class ActionBinds {
     TURBO_SPEED_BUTTON,
     CYCLE_SWORD,
     CYCLE_SHIELD,
+    CYCLE_OUTFIT,
     QUICK_TRANSFORM,
     OPEN_ITEM_WHEEL,
     COUNT,
@@ -48,6 +49,9 @@ bool getActionBindTrig(ActionBinds action, u32 port);
 
 bool getActionBindHold(ActionBinds action, u32 port);
 
+/** True while the bind is down this frame (includes the press edge). */
+bool getActionBindDown(ActionBinds action, u32 port);
+
 bool getActionBindHoldAnyPort(ActionBinds action);
 
 int getActionBindButton(ActionBinds action, u32 port);
@@ -59,11 +63,15 @@ bool isExtraItemSlotEnabled();
 /** True when D-Pad Quick Swap mode is active. */
 bool isDpadQuickSwapEnabled();
 
+/** Hold OPEN_ITEM_WHEEL → filtered tools → release to Z. Needs Extra Item Slot + setting. */
+bool isQuickEquipWheelEnabled();
+
 /** True when Call Midna uses left d-pad (default or custom bind). Map open must yield. */
 bool callMidnaReservesDpadLeft(u32 port = 0);
 
 bool dpadUpReservedForQuickSwap(u32 port = 0);
 bool dpadDownReservedForQuickSwap(u32 port = 0);
+bool quickTransformBoundToDpadDown(u32 port = 0);
 bool dpadRightReservedForQuickSwap(u32 port = 0);
 
 /** R held for cheat chords (digital R or analog RT latch). */

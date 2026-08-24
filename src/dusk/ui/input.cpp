@@ -13,6 +13,8 @@
 #include <array>
 
 #include "dusk/action_bindings.h"
+#include "dusk/leveledit/enumerate.hpp"
+#include "dusk/main.h"
 
 namespace dusk::ui::input {
 namespace {
@@ -674,7 +676,13 @@ void process_axis_direction(
 }  // namespace
 
 void sync_input_block() noexcept {
-    const bool shouldBlock = any_document_visible();
+    bool shouldBlock = any_document_visible();
+#if TARGET_PC
+    // Level Editor: keep controller live alongside keyboard/mouse hotkeys.
+    if (dusk::g_levelEditorSession && dusk::leveledit::session_pc_hotkeys_enabled()) {
+        shouldBlock = false;
+    }
+#endif
     if (sPadInputBlocked == shouldBlock) {
         return;
     }

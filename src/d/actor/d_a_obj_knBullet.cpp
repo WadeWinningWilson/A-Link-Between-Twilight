@@ -29,6 +29,9 @@ const static dCcD_SrcSph l_sph_src = {
 int daObjKnBullet_c::Create() {
     fopAcM_ct(this, daObjKnBullet_c);
 
+    mSpeedMul = 1.0f;   // ALBW: default = vanilla (lesson balls unchanged)
+    mRadiusMul = 1.0f;
+
     setBaseMtx();
     fopAcM_SetMtx(this, mMtx);
     mTimer = l_DATA.lifetime + 30;
@@ -94,7 +97,7 @@ void daObjKnBullet_c::col_init() {
     mCcSph.Set(l_sph_src);
     mCcSph.SetStts(&mCcStts);
     mCcSph.SetC(current.pos);
-    mCcSph.SetR(l_DATA.radius);
+    mCcSph.SetR(l_DATA.radius * mRadiusMul);
 }
 
 BOOL daObjKnBullet_c::col_chk() {
@@ -103,7 +106,7 @@ BOOL daObjKnBullet_c::col_chk() {
     }
 
     if (mActionMode == 1) {
-        cXyz move_vec(0.0f, 0.0f, l_DATA.move_speed);
+        cXyz move_vec(0.0f, 0.0f, l_DATA.move_speed * mSpeedMul);
         mDoMtx_stack_c::YrotS(shape_angle.y);
         mDoMtx_stack_c::multVec(&move_vec, &speed);
 
@@ -114,7 +117,7 @@ BOOL daObjKnBullet_c::col_chk() {
                 sp20.y += 150.0f;
                 speed = sp20 - current.pos;
                 speed.normalizeZP();
-                speed *= l_DATA.move_speed;
+                speed *= l_DATA.move_speed * mSpeedMul;
 
                 mCcSph.SetAtSPrm(0x13);
                 mActionMode = 2;
@@ -149,7 +152,7 @@ BOOL daObjKnBullet_c::col_chk() {
     }
 
     mCcSph.SetC(current.pos);
-    mCcSph.SetR(l_DATA.radius);
+    mCcSph.SetR(l_DATA.radius * mRadiusMul);
     dComIfG_Ccsp()->Set(&mCcSph);
     return TRUE;
 }

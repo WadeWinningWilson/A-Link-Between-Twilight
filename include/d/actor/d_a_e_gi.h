@@ -46,7 +46,12 @@ public:
 
     bool isBattleOn() { return mIsBattleOn; }
     bool isAttackStart() { return mIsAttackStart; }
-    
+
+#if TARGET_PC
+    // Wolf-freeze coverage: scream-prevention timer still live?
+    bool albwCryTimerActive() const { return mCryTimer != 0; }
+#endif
+
 private:
     /* 0x05AC */ request_of_phase_process_class mPhase;
     /* 0x05B4 */ mDoExt_McaMorfSO* mpModelMorf;
@@ -92,5 +97,11 @@ private:
 };
 
 STATIC_ASSERT(sizeof(daE_GI_c) == 0x107c);
+
+#if TARGET_PC
+// True while i_actor owns the active scream (file-static m_cry_gi with a
+// live mCryTimer) — the wolf-freeze system skips freezing that state.
+bool daE_GI_isScreamOwner(fopAc_ac_c* i_actor);
+#endif
 
 #endif /* D_A_E_GI_H */

@@ -8,6 +8,21 @@ class JKRArchive;
 class JKRHeap;
 class JKRSolidHeap;
 
+// ============================================================================
+// §635: arc FILENAME hook. WW-AGNOSTIC host plumbing — it names no donor, holds
+// no predicate, and is NULL unless something installs it, so the receiver links
+// and behaves identically with any content layer excluded.
+//
+// It exists because an archive's on-disk NAME is not always the receiver's key
+// for it. A donor disc may file the same resource under its own convention
+// (Wind Waker ships Room44.arc / Stage.arc where this engine asks for R44_00 /
+// Stg_00). Under the zero-bake rule the asset is never renamed, so the LOOKUP
+// moves instead. Returning NULL means "no alias" and the original name is used.
+// ============================================================================
+typedef const char* (*dRes_arcFileNameHook_f)(const char* i_arcName);
+void dRes_setArcFileNameHook(dRes_arcFileNameHook_f i_hook);
+const char* dRes_aliasArcFileName(const char* i_arcName);
+
 class dRes_info_c {
 public:
     dRes_info_c();
@@ -31,6 +46,20 @@ public:
     void* getRes(s32 i_index) {
         JUT_ASSERT(25, i_index >= 0 && i_index < getResNum());
         return *(mRes + i_index);
+    }
+
+    // §634: write side of getRes. WW-AGNOSTIC host plumbing — it names no
+    // donor format and carries no WW predicate, so it stays in the build with
+    // the WW layer excluded and is not a leg.
+    //
+    // It exists because setRes()'s fixup dispatches on the RARC directory node
+    // 4CC, and a donor archive can file a resource under a node type this
+    // receiver has no branch for. The parallel donor stack then publishes the
+    // properly-loaded resource into the slot, so every receiver consumer reads
+    // what it always expected and no consumer learns anything happened.
+    void setRes(s32 i_index, void* i_res) {
+        JUT_ASSERT(25, i_index >= 0 && i_index < getResNum());
+        *(mRes + i_index) = i_res;
     }
 
     s32 getResNum() { return mArchive->countFile(); }

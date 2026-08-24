@@ -27,11 +27,26 @@ s16 daAlink_c::getSpinnerRideMoveTime() {
 }
 
 f32 daAlink_c::getSpinnerRideSpeedF() {
+    f32 speed;
     if (checkLv4BossRoom()) {
-        return mpHIO->mItem.mSpinner.m.mBossRideSpeed;
+        speed = mpHIO->mItem.mSpinner.m.mBossRideSpeed;
+    } else {
+        speed = mpHIO->mItem.mSpinner.m.mRideSpeed;
     }
 
-    return mpHIO->mItem.mSpinner.m.mRideSpeed;
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (spinner lockout perk)
+    // +15% travel speed while locked. Drain rate is unchanged (time-based).
+    // ============================================
+    if (dMeter2_isALBWLocked()) {
+        speed *= 1.15f;
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
+    return speed;
 }
 
 f32 daAlink_c::getSpinnerRideDecSpeedMax() const {
@@ -98,9 +113,8 @@ int daAlink_c::procSpinnerReadyInit() {
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
-    // Block spinner activation while the meter is in lockout.
-    // Mirrors the canALBW* pattern: return 0 (no-op) so the item
-    // button press is silently ignored until the meter recovers.
+    // Gate spinner mount: meter > 0 outside lockout; allowed during lockout
+    // (perk: +15% ride speed). Silent no-op when blocked.
     // ============================================
     if (!dMeter2_canALBWSpinner()) {
         return 0;
@@ -204,13 +218,11 @@ int daAlink_c::procSpinnerWait() {
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port
-    // Force-eject when the ALBW meter is fully depleted.
-    // Uses the same exit path as the normal "stop riding" input
-    // so all animation and gravity state is reset cleanly.
-    // If the meter is not depleted, signal to moveKantera() that
-    // the spinner is actively draining this frame.
+    // Force-eject when the ALBW meter is fully depleted — but not during
+    // lockout, where the spinner perk keeps the ride available (drain floors
+    // at 0). Outside lockout, same exit path as a normal dismount.
     // ============================================
-    if (dMeter2_isALBWDepleted()) {
+    if (dMeter2_isALBWDepleted() && !dMeter2_isALBWLocked()) {
         mNormalSpeed = 0.0f;
         setJumpMode();
         return procFallInit(1, mpHIO->mAutoJump.m.mFallInterpolation);

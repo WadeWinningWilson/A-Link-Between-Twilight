@@ -177,6 +177,7 @@ public:
     bool ChkGroundAway() const { return (m_flags & FLAG_GROUND_AWAY) != 0; }
     void ClrGroundHit() { m_flags &= ~FLAG_GROUND_HIT; }
     void SetGroundCheckOffset(f32 offset) { m_gnd_chk_offset = offset; }
+    u32 GetFlags() const { return m_flags; }
 
     cM3dGCyl* GetWallBmdCylP() { return &m_wall_cyl; }
     fopAc_ac_c* getMyAc() { return m_my_ac; }

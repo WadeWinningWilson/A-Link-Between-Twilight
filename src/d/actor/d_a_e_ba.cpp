@@ -14,6 +14,10 @@
 #include "f_pc/f_pc_name.h"
 #include "f_op/f_op_actor_enemy.h"
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 class daE_BA_HIO_c {
 public:
     daE_BA_HIO_c();
@@ -640,6 +644,9 @@ static void e_ba_wolfbite(e_ba_class* i_this) {
             i_this->mTimer[0] = 60;
             i_this->mMode = 2;
             a_this->health = 0;
+#if TARGET_PC
+            dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
         }
         break;
 

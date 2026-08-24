@@ -18,6 +18,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shield.h"
 #endif
 
 class daE_GOB_HIO_c : public JORReflexible {
@@ -235,6 +236,36 @@ static void damage_check(e_gob_class* i_this) {
     if (i_this->mDamageInvulnerabilityTimer == 0 && i_this->mCcSph.ChkTgHit()) {
         i_this->mDamageInvulnerabilityTimer = 6;
         i_this->mAtInfo.mpCollider = i_this->mCcSph.GetTgHitObj();
+
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (alpha cleanup)
+        // Shield bash knocks Dangoro down. Bash charges are earned by
+        // parrying, and parrying his huge slam is deliberately hard — a
+        // connecting bash rewards that by forcing the hip-down knockdown
+        // (same state as the AP>=30 / 4-cut path below). Checked BEFORE
+        // the field_0xd20 guard clank so the bash pierces his guard, and
+        // limited to live-combat actions so a bash can never yank him out
+        // of the ball roll, grab, or cutscene states.
+        // ============================================
+        {
+            cCcD_Obj* hitObj = i_this->mCcSph.GetTgHitObj();
+            if (dShield_isParryCombatEnabled() && hitObj != NULL &&
+                hitObj->ChkAtType(AT_TYPE_SHIELD_ATTACK) &&
+                (i_this->mAction == ACTION_FIGHT || i_this->mAction == ACTION_ATTACK ||
+                 i_this->mAction == ACTION_DEFENCE))
+            {
+                i_this->mAction = ACTION_DAMAGE;
+                i_this->mMode = 0;
+                i_this->mPlayerCutLRC = pl_cut_LRC(daPy_getPlayerActorClass()->getCutType());
+                i_this->mSound.startCreatureVoice(Z2SE_EN_GOB_V_HIP_DOWN, -1);
+                return;
+            }
+        }
+        // ============================================
+        // NEW CODE ENDS HERE
+        // ============================================
+#endif
 
         if (i_this->field_0xd20 != 0) {
             def_se_set(&i_this->mSound, i_this->mCcSph.GetTgHitObj(), 0x2A, NULL);

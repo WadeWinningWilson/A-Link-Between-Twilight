@@ -3,10 +3,41 @@
 #include "editor.hpp"
 #include "pane.hpp"
 
+#include "dusk/debug_warp.h"
 #include "dusk/map_loader_definitions.h"
 #include "fmt/format.h"
 
 namespace dusk::ui {
+// NEW CODE — ALBW Port (alpha cleanup: warp-menu safety)
+static bool sDebugWarpStorySuppress = false;
+static s8 sRoomLayerOverride = -1;
+static bool sClearRoomLayerOverrideOnStageLoad = false;
+
+void markDebugWarpStorySuppress() {
+    sDebugWarpStorySuppress = true;
+}
+
+bool consumeDebugWarpStorySuppress() {
+    const bool pending = sDebugWarpStorySuppress;
+    sDebugWarpStorySuppress = false;
+    return pending;
+}
+
+void setRoomLayerOverride(s8 layer) {
+    sRoomLayerOverride = layer;
+    sClearRoomLayerOverrideOnStageLoad = false;
+}
+
+s8 getRoomLayerOverride() {
+    return sRoomLayerOverride;
+}
+
+void onStageLoadRoomLayerOverride() {
+    if (sClearRoomLayerOverrideOnStageLoad) {
+        sRoomLayerOverride = -1;
+    }
+    sClearRoomLayerOverrideOnStageLoad = true;
+}
 namespace {
 
 constexpr int kMinLayer = -1;

@@ -242,6 +242,23 @@ void onStageLoad() {
     applyGanonGatePolicyMigration();
     syncGanonBarrierEventFlags();
 
+    // ============================================
+    // Twilight-bubble self-heal (alpha cleanup, Lanayru sequence-break).
+    // The bubble policy's offDarkClearLV() used to run ONCE at bootstrap;
+    // any later event that set a province's cleared bit (e.g. arriving at
+    // the Lake Hylia fountain trigger) stuck permanently and silently
+    // despawned that province's twilight gate — a soft-lock for a
+    // progressing player. Re-assert "not cleared" every field load for
+    // provinces whose Vessel of Light is still incomplete; once the
+    // vessel IS complete, the legit clear is respected and never undone.
+    // (Faron stays cleared per the bubble policy; bit 3 has no vessel.)
+    // ============================================
+    for (u8 province = 1; province <= 2; province++) {
+        if (!dComIfGs_isLightDropGetFlag(province) && dComIfGs_isDarkClearLV(province)) {
+            dComIfGs_offDarkClearLV(province);
+        }
+    }
+
     if (reserve().isBootstrapApplied()) {
         return;
     }

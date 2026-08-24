@@ -24,6 +24,9 @@
 #include "dusk/extras.h"
 #include "dusk/logging.h"
 #endif
+#if TARGET_PC
+#include "d/d_ext_npc_mount.h"
+#endif
 
 dRes_info_c::dRes_info_c() {
     mCount = 0;
@@ -50,6 +53,20 @@ dRes_info_c::~dRes_info_c() {
     }
 }
 
+static dRes_arcFileNameHook_f s_arcFileNameHook = NULL;
+
+void dRes_setArcFileNameHook(dRes_arcFileNameHook_f i_hook) {
+    s_arcFileNameHook = i_hook;
+}
+
+const char* dRes_aliasArcFileName(const char* i_arcName) {
+    if (s_arcFileNameHook == NULL || i_arcName == NULL) {
+        return i_arcName;
+    }
+    const char* alias = s_arcFileNameHook(i_arcName);
+    return alias != NULL ? alias : i_arcName;
+}
+
 int dRes_info_c::set(char const* i_arcName, char const* i_path, u8 i_mountDirection, JKRHeap* i_heap) {
 #ifdef __MWERKS__
     JUT_ASSERT(120, strlen(i_arcName) <= NAME_MAX);
@@ -57,7 +74,9 @@ int dRes_info_c::set(char const* i_arcName, char const* i_path, u8 i_mountDirect
 
     if (*i_path != '\0') {
         char path[40];
-        snprintf(path, sizeof(path), "%s%s.arc", i_path, i_arcName);
+        // §635: on-disk name may differ from the receiver's key (see the hook).
+        snprintf(path, sizeof(path), "%s%s.arc", i_path,
+                 dRes_aliasArcFileName(i_arcName));
         mDMCommand = mDoDvdThd_mountArchive_c::create(path, i_mountDirection, i_heap);
 
         if (mDMCommand == NULL) {
@@ -211,6 +230,27 @@ void dRes_info_c::offWarpMaterial(J3DModelData* i_modelData) {
 
 void dRes_info_c::setWarpSRT(J3DModelData* i_modelData, const cXyz& i_pos, f32 i_transX,
                              f32 i_transY) {
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Layer-B custom models: warp tex-scroll null guard)
+    // Vanilla assumes every Link model's material[0] carries a tex matrix at slot
+    // texGenNum-1 — true for all stock clothing materials. WW itemmdl materials end
+    // with an SRTG/Color0 texgen that uses NO tex matrix (SC_boot: 3 texgens, texMtx
+    // slots {0,1} only), so getTexMtx(texGenNum-1) returns NULL and the mSRT write
+    // below faults at +0x1c. warpModelTexScroll scrolls the boot model on EVERY
+    // human-form warp (equipped or not), so the WW boot skin crashed every warp-out
+    // (e.g. post-boss escape warps). Skip the scroll for such models — they simply
+    // don't get the swirl effect. See Custom-Model-API-Work.md (Layer-B crash-avoidance).
+    // ============================================
+    {
+        J3DMaterial* mat0 = (i_modelData != NULL) ? i_modelData->getMaterialNodePointer(0) : NULL;
+        J3DTexGenBlock* tgb = (mat0 != NULL) ? mat0->getTexGenBlock() : NULL;
+        if (tgb == NULL || tgb->getTexGenNum() == 0 ||
+            tgb->getTexMtx(tgb->getTexGenNum() - 1) == NULL) {
+            return;
+        }
+    }
+#endif
     J3DMaterial* material = i_modelData->getMaterialNodePointer(0);
     J3DTexGenBlock* texGenBlock = material->getTexGenBlock();
     u32 texGenNum = texGenBlock->getTexGenNum();
@@ -235,7 +275,18 @@ J3DModelData* dRes_info_c::loaderBasicBmd(u32 i_tag, void* i_data) {
         flags ^= 0x60020;
     }
 
-    i_data = J3DModelLoaderDataBase::load(i_data, flags);
+    void* loaded = J3DModelLoaderDataBase::load(i_data, flags);
+#if TARGET_PC
+    // TP object BMDR: baked blobs may lack a J3D2 wrapper — try the binary DL loader before failing.
+    if (loaded == NULL && (i_tag == 'BMDR' || i_tag == 'BMWR')) {
+        loaded = J3DModelLoaderDataBase::loadBinaryDisplayList(i_data, flags);
+        if (loaded == NULL) {
+            const u32 head = i_data != NULL ? *(const u32*)i_data : 0;
+            DuskLog.warn("[dRes] BMDR load+bdl fallback failed (head={:08x})", head);
+        }
+    }
+#endif
+    i_data = loaded;
     if (i_data == NULL) {
         return NULL;
     }
@@ -507,9 +558,24 @@ int dRes_info_c::loadResource() {
                            nodeType == 'BRK ' || nodeType == 'BLK ' || nodeType == 'BVA ' ||
                            nodeType == 'BXA ')
                 {
-                    res = J3DAnmLoaderDataBase::load(res);
-                    if (res == NULL) {
-                        return -1;
+#if TARGET_PC
+                    // D2 A/B: ExtNpc manifests may ask to leave BTP unparsed (WW blink
+                    // tables are a near-NULL suspect; mount L1 does not bind BTP yet).
+                    if (nodeType == 'BTP ' && dExtNpcMount_shouldSkipBtp(mArchiveName)) {
+                        DuskLog.info("[dRes] skip_btp: leaving '{}' raw in arc '{}'",
+                                     mArchive->mStringTable +
+                                         (mArchive->findIdxResource(fileIndex)
+                                              ->type_flags_and_name_offset &
+                                          0xFFFFFF),
+                                     mArchiveName);
+                        // Keep archive pointer so index stays valid; do not instantiate.
+                    } else
+#endif
+                    {
+                        res = J3DAnmLoaderDataBase::load(res);
+                        if (res == NULL) {
+                            return -1;
+                        }
                     }
                 } else if (nodeType == 'DZB ') {
                     res = cBgS::ConvDzb(res);
@@ -943,6 +1009,10 @@ void* dRes_control_c::getRes(char const* i_arcName, char const* i_resName, dRes_
 }
 
 void* dRes_control_c::getIDRes(char const* i_arcName, u16 i_resID, dRes_info_c* i_resInfo, int i_infoNum) {
+    // §266 Foundry probe RESOLVED + stripped: getIDRes resolves mod-arc ids correctly
+    // (id 0x7→idx13, 0xb→24, 0x16→35 against the real 38-entry mod Ba.arc). The engine
+    // id path is INNOCENT; the ba1 model distortion is a render/skeleton bug, not
+    // resource loading. See docs/state/grandma-native-tale.md §266.
     dRes_info_c* resInfo = getResInfoLoaded(i_arcName, i_resInfo, i_infoNum);
     if (resInfo == NULL) {
         return resInfo;

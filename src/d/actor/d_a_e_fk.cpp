@@ -8,6 +8,9 @@
 #include "d/actor/d_a_e_fk.h"
 #include "d/d_s_play.h"
 #include "d/actor/d_a_player.h"
+#if TARGET_PC
+#include "d/d_albw_wolf_combat.h"
+#endif
 #include "d/actor/d_a_horse.h"
 #include "Z2AudioLib/Z2Instances.h"
 #include "f_op/f_op_actor_enemy.h"
@@ -615,6 +618,22 @@ void daE_FK_c::At_Check(int i_sphIdx) {
         if ((s16)mAtInfo.mAttackPower > 0) {
             S16_SUB(health, mAtInfo.mAttackPower);
         }
+
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (wolf freeze coverage)
+        // This actor resolves damage through its own At_Check and never
+        // routes through cc_at_check — the only place the wolf freeze
+        // dispatches — so it was the one enemy that took Midna-lock damage
+        // but could never be frozen. Apply the stun directly; the central
+        // gate inside dAlbwWolfStun_apply handles all exclusions/guards.
+        // ============================================
+        if (dAlbwWolfCombat_isEnabled() && daPy_py_c::checkNowWolf() &&
+            mAtInfo.mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK) &&
+            (s16)mAtInfo.mAttackPower > 0 && health > 0) {
+            dAlbwWolfStun_apply(this);
+        }
+#endif
 
         int unk_r29 = 0;
 

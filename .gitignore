@@ -62,6 +62,18 @@ albw_backup_*/
 # ALBW temp debug dumps from dev sessions
 albw_*_debug.txt
 
+# ============================================================================
+# Port kits — donor-derived source, never committed (user ruling 2026-08-02).
+#
+# These hold machine-decompiled donor actor code (m2c output from split asm)
+# used as porting aids. They pass the exe greplist gate because docs/ is exempt,
+# but they are donor CODE rather than analysis, and the covenant keeps donor
+# content out of the repo — the same call already made for the raw DuskTap
+# capture traces. Keep them local; the project's own ported implementations
+# live in src/ and are committed normally.
+# ============================================================================
+docs/WW Linked/port-kits/
+
 # Local-only captured diagnostic dumps (preserved for reference, never commit)
 Diagnostic files/
 
@@ -98,3 +110,38 @@ extract
 # Trailer PNG assets (local copies; see docs/trailer-handoff.md)
 trailer/assets/*
 !trailer/assets/.gitkeep
+
+# Crash dumps + runtime logs (debug artifacts)
+crashdumps/
+myeasylog.log
+
+# ALBT companion mods — separate release, not shipped with Dusklight/ALBW (legal isolation)
+companion_mods/*
+!companion_mods/README.md
+
+# Downloaded ProcDump tool (binaries)
+tools/procdump/
+
+# BMD reskin tool: python cache + regeneratable outputs (keep *.py + prereskin SOURCE)
+tools/bmd_reskin/__pycache__/
+tools/bmd_reskin/B_gm_37_reskinned.bmd
+tools/bmd_reskin/B_gm_37_final.bmd
+
+# Vendor tool clones (embedded git repos - not project content; would commit as broken gitlinks)
+tools/vendor/
+
+# ZERO-BAKE ENFORCEMENT (2026-08-22): donor byte extracts must never be
+# committed, even fork-locally. Research scripts that READ the user's own
+# disc are committed; their binary OUTPUT is not -- it is reproducible by
+# re-running them, and shipping donor bytes is the one hard line.
+# Added after a commit briefly included 524 KB of J3D2bdl4 model data
+# because an untracked-DIRECTORY status line hid its contents from the
+# pre-commit donor scan.
+mods-src/ww_donor_disc/_research/*.bdl
+mods-src/ww_donor_disc/_research/*.bmd
+mods-src/ww_donor_disc/_research/*.bin
+
+# Companion release pack ships; other companion_mods/ work folders stay local
+!companion_mods/_release/
+!companion_mods/_release/**
+!companion_mods/_release/*.zip

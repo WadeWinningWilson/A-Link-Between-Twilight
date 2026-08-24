@@ -19,7 +19,24 @@
 #include <cstring>
 
 #if TARGET_PC
+#include "d/d_albw_skill_scroll.h"
 #include "dusk/menu_pointer.h"
+#include "dusk/string.hpp"
+#include "dusk/ui/touch_controls.hpp"
+
+namespace {
+enum {
+    kSkillPageVanilla = 0,
+    kSkillPageAlbw = 1,
+};
+
+void enable_skill_turn_page_controls(bool enabled) {
+    const auto controlOverride =
+        enabled ? dusk::ui::ControlOverride::Action : dusk::ui::ControlOverride::Default;
+    dusk::ui::set_control_override(dusk::ui::Control::L, controlOverride);
+    dusk::ui::set_control_override(dusk::ui::Control::R, controlOverride);
+}
+}  // namespace
 #endif
 
 typedef void (dMenu_Skill_c::*initFunc)();
@@ -50,8 +67,18 @@ dMenu_Skill_c::dMenu_Skill_c(JKRExpHeap* i_heap, STControl* i_stcontrol, CSTCont
     mStringID = 0;
     mProcFrame = 0;
     mIndex = 0;
-    field_0x209 = 255;
-    field_0x20a = 255;
+    mPageIndex = 0;
+    mPageKind = 0;
+#if TARGET_PC
+    mpTitleString = NULL;
+    mDetailPage = 0;
+    mDetailPageCount = 1;
+    mAlbwListOffset = 0;
+    mDetailTitle[0] = '\0';
+    for (int i = 0; i < kAlbwSkillScrollMaxPages; i++) {
+        mDetailPages[i][0] = '\0';
+    }
+#endif
     skill_init_calc();
     mPosX = 0.0f;
     mBarScale[1] = 1.0f;
@@ -185,8 +212,63 @@ bool dMenu_Skill_c::isSync() {
     return 1;
 }
 
+#if TARGET_PC
+namespace {
+u8 albwListPageCount(int albwCount) {
+    if (albwCount <= 0) {
+        return 0;
+    }
+    return static_cast<u8>((albwCount + kAlbwSkillScrollPageCap - 1) / kAlbwSkillScrollPageCap);
+}
+}  // namespace
+
+void dMenu_Skill_c::applySkillPageState() {
+    const int albwCount = dAlbwSkillScroll_getCount();
+    const u8 vanillaPages = mTotalSkillNum > 0 ? 1 : 0;
+
+    if (vanillaPages > 0 && mPageIndex < vanillaPages) {
+        mPageKind = kSkillPageVanilla;
+        mAlbwListOffset = 0;
+        mSkillNum = mTotalSkillNum < 7 ? mTotalSkillNum : 7;
+        return;
+    }
+
+    mPageKind = kSkillPageAlbw;
+    const int albwPageIdx = mPageIndex - vanillaPages;
+    mAlbwListOffset = static_cast<u8>(albwPageIdx * kAlbwSkillScrollPageCap);
+    int remaining = albwCount - mAlbwListOffset;
+    if (remaining < 0) {
+        remaining = 0;
+    }
+    mSkillNum = remaining < kAlbwSkillScrollPageCap ? static_cast<u8>(remaining)
+                                                    : static_cast<u8>(kAlbwSkillScrollPageCap);
+}
+#endif
+
 void dMenu_Skill_c::skill_init_calc() {
     mTotalSkillNum = getSkillNum();
+#if TARGET_PC
+    const int albwCount = dAlbwSkillScroll_getCount();
+    const u8 vanillaPages = mTotalSkillNum > 0 ? 1 : 0;
+    const u8 albwPages = albwListPageCount(albwCount);
+
+    mRemainder = vanillaPages + albwPages;
+    if (mRemainder == 0) {
+        mRemainder = 1;
+    }
+
+    // Prefer vanilla page when present; otherwise land on ALBW page-2 content.
+    mPageIndex = 0;
+    if (vanillaPages > 0) {
+        applySkillPageState();
+    } else if (albwPages > 0) {
+        applySkillPageState();
+    } else {
+        mPageKind = kSkillPageVanilla;
+        mAlbwListOffset = 0;
+        mSkillNum = 0;
+    }
+#else
     if (mTotalSkillNum < 7) {
         mSkillNum = mTotalSkillNum;
     } else {
@@ -198,6 +280,7 @@ void dMenu_Skill_c::skill_init_calc() {
     } else {
         mRemainder = mTotalSkillNum / 7 + 1;
     }
+#endif
 }
 
 void dMenu_Skill_c::init() {
@@ -248,6 +331,9 @@ int dMenu_Skill_c::_open() {
 }
 
 int dMenu_Skill_c::_close() {
+#if TARGET_PC
+    enable_skill_turn_page_controls(false);
+#endif
     s16 closeFrame = g_drawHIO.mSkillListScreen.mCloseFrame[0];
     mFrame = 0;
     if (mFrame <= 0) {
@@ -272,6 +358,9 @@ int dMenu_Skill_c::_close() {
 }
 
 void dMenu_Skill_c::wait_init() {
+#if TARGET_PC
+    enable_skill_turn_page_controls(mRemainder > 1);
+#endif
     setAButtonString(0x40C);
     setBButtonString(0x3f9);
 }
@@ -288,10 +377,16 @@ void dMenu_Skill_c::wait_move() {
         if (mDoCPd_c::getTrigB(PAD_1) != 0) {
             mpDrawCursor->offPlayAnime(0);
             mStatus = 3;
-        } else if (mDoCPd_c::getTrigA(PAD_1)) {
+#if TARGET_PC
+            enable_skill_turn_page_controls(false);
+#endif
+        } else if (mDoCPd_c::getTrigA(PAD_1) && mSkillNum > 0) {
             mProcess = PROC_WAIT_MOVE;
             Z2GetAudioMgr()->seStart(Z2SE_SY_EXP_WIN_OPEN, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();
+#if TARGET_PC
+            enable_skill_turn_page_controls(false);
+#endif
         } else if (mpStick->checkUpTrigger()) {
             if (mIndex) {
                 mIndex--;
@@ -299,9 +394,25 @@ void dMenu_Skill_c::wait_move() {
                                          0);
             }
 
-        } else if (mpStick->checkDownTrigger() && mIndex < mSkillNum - 1) {
+        } else if (mpStick->checkDownTrigger() && mSkillNum > 0 && mIndex < mSkillNum - 1) {
             mIndex++;
             Z2GetAudioMgr()->seStart(Z2SE_SY_CURSOR_ITEM, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port
+        // Page turning. GC trigger clicks (L/R) are binding-dependent on PC:
+        // a controller profile that maps the click to a button suppresses the
+        // analog-pull synthesis entirely, so a pad can have no working L/R.
+        // Accept D-pad Left/Right as bind-agnostic page inputs alongside them.
+        // ============================================
+        } else if (mDoCPd_c::getTrigR(PAD_1) || mDoCPd_c::getTrigRight(PAD_1)) {
+            changePage(1);
+        } else if (mDoCPd_c::getTrigL(PAD_1) || mDoCPd_c::getTrigLeft(PAD_1)) {
+            changePage(-1);
+        // ============================================
+        // NEW CODE ENDS HERE
+        // ============================================
+#endif
         }
         if (oldIndex != mIndex) {
             changeActiveColor();
@@ -348,10 +459,34 @@ void dMenu_Skill_c::read_open_init() {
 
     mProcFrame = 0;
     int index = mIndex;
-    mStringID = i_id[index];
     mpTextParent->setAlphaRate(0.0f);
-    setNameString(i_id1[index]);
-    mpString->getString(mStringID, (J2DTextBox*)mpTextPane->getPanePtr(), NULL, NULL, NULL, 0);
+#if TARGET_PC
+    if (isAlbwScrollPage()) {
+        dAlbwSkillScrollEntry entry;
+        mStringID = 0;
+        if (dAlbwSkillScroll_getEntry(mAlbwListOffset + index, &entry)) {
+            // Auto-flow: wrap the plain-prose body into 4-line pages and
+            // show page 0; read_move_move() handles page turning.
+            mDetailPageCount = static_cast<u8>(dAlbwSkillScroll_buildDetailPages(
+                entry.detailBody, mDetailPages, kAlbwSkillScrollMaxPages));
+            dusk::SafeStringCopyTruncate(mDetailTitle, entry.detailTitle);
+        } else {
+            mDetailPageCount = 1;
+            mDetailTitle[0] = '\0';
+            mDetailPages[0][0] = '\0';
+        }
+        setDetailPage(0);
+    } else
+#endif
+    {
+#if TARGET_PC
+        mDetailPage = 0;
+        mDetailPageCount = 1;
+#endif
+        mStringID = i_id[index];
+        setNameString(i_id1[index]);
+        mpString->getString(mStringID, (J2DTextBox*)mpTextPane->getPanePtr(), NULL, NULL, NULL, 0);
+    }
     setAButtonString(0);
     setBButtonString(0);
     mpBlackTex->setAlpha(0);
@@ -378,6 +513,34 @@ void dMenu_Skill_c::read_move_init() {
 }
 
 void dMenu_Skill_c::read_move_move() {
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Detail pagination for auto-wrapped ALBW bodies: A / D-pad Right / R
+    // advance a page (A on the last page closes as vanilla); D-pad Left / L
+    // go back. B always closes via the vanilla path below.
+    // ============================================
+    if (isAlbwScrollPage() && mDetailPageCount > 1) {
+        const bool nextTrig = mDoCPd_c::getTrigA(PAD_1) || mDoCPd_c::getTrigR(PAD_1) ||
+                              mDoCPd_c::getTrigRight(PAD_1);
+        const bool prevTrig = mDoCPd_c::getTrigL(PAD_1) || mDoCPd_c::getTrigLeft(PAD_1);
+        if (nextTrig && mDetailPage + 1 < mDetailPageCount) {
+            setDetailPage(mDetailPage + 1);
+            Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_SUB_NEXT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
+                                     0);
+            return;
+        }
+        if (prevTrig && mDetailPage > 0) {
+            setDetailPage(mDetailPage - 1);
+            Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_SUB_NEXT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
+                                     0);
+            return;
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
     if (mDoCPd_c::getTrigA(PAD_1) != 0) {
         Z2GetAudioMgr()->seStart(Z2SE_SY_EXP_WIN_CLOSE, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
         dMeter2Info_set2DVibration();
@@ -532,6 +695,13 @@ void dMenu_Skill_c::screenSetMenu() {
     textBox->setFont(mDoExt_getSubFont());
     textBox->setString(0x200, "");
     mpString->getString(0x6a4, textBox, NULL, NULL, NULL, 0);
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port
+    // Keep the title textbox so setPageText() can append a page indicator.
+    // ============================================
+    mpTitleString = textBox;
+#endif
 }
 
 void dMenu_Skill_c::screenSetLetter() {
@@ -638,12 +808,42 @@ void dMenu_Skill_c::setPageText() {
         1709, 1708, 1710, 1711, 1712, 1713, 1714,
     };
 
+#if TARGET_PC
+    for (int i = 0; i < 7; i++) {
+        for (int j = 0; j < 4; j++) {
+            SAFE_STRCPY(mpFTagPicture[i][j]->getStringPtr(), "");
+        }
+    }
+
+    if (isAlbwScrollPage()) {
+        for (int i = 0; i < mSkillNum; i++) {
+            dAlbwSkillScrollEntry entry;
+            if (!dAlbwSkillScroll_getEntry(mAlbwListOffset + i, &entry)) {
+                continue;
+            }
+            // Truncate instead of crashing if a name outgrows the 0x40 row buffer.
+            for (int j = 0; j < 4; j++) {
+                const char* text = (j < 2) ? entry.listTitle : entry.listName;
+                dusk::TextSpan span = mpFTagPicture[i][j]->getStringPtr();
+                dusk::SafeStringCopyTruncate(span.buffer, span.size, text);
+            }
+        }
+        setRowVisibility();
+        updatePageTitle();
+        return;
+    }
+#endif
+
     for (int i = 0; i < mSkillNum; i++) {
         mpString->getString(i_id0[i], mpFTagPicture[i][0], NULL, NULL, NULL, 0);
         mpString->getString(i_id0[i], mpFTagPicture[i][1], NULL, NULL, NULL, 0);
         mpString->getString(i_id1[i], mpFTagPicture[i][2], NULL, NULL, NULL, 0);
         mpString->getString(i_id1[i], mpFTagPicture[i][3], NULL, NULL, NULL, 0);
     }
+#if TARGET_PC
+    setRowVisibility();
+    updatePageTitle();
+#endif
 }
 
 void dMenu_Skill_c::setAButtonString(u16 i_stringID) {
@@ -681,6 +881,100 @@ void dMenu_Skill_c::setNameString(u16 i_stringID) {
         }
     }
 }
+
+#if TARGET_PC
+void dMenu_Skill_c::setNameStringRaw(const char* text) {
+    const char* src = text != NULL ? text : "";
+    for (int i = 0; i < 4; i++) {
+        // Truncate instead of crashing if a title outgrows the 0x40 pane buffer.
+        dusk::TextSpan span = mpNameString[i]->getStringPtr();
+        dusk::SafeStringCopyTruncate(span.buffer, span.size, src);
+    }
+}
+
+bool dMenu_Skill_c::isAlbwScrollPage() const {
+    return mPageKind == kSkillPageAlbw;
+}
+
+void dMenu_Skill_c::setRowVisibility() {
+    for (int i = 0; i < 7; i++) {
+        if (i < mSkillNum) {
+            mpTagPicture[i][1]->show();
+            mpTagPicture[i][2]->show();
+        } else {
+            mpTagPicture[i][1]->hide();
+            mpTagPicture[i][2]->hide();
+        }
+    }
+}
+
+// ============================================
+// NEW CODE — ALBW Port
+// Page indicator, mirroring the letters screen's paged title.
+// Only rewrites the title when a second page exists; single-page
+// saves keep the vanilla localized "Skills" string untouched.
+// ============================================
+void dMenu_Skill_c::updatePageTitle() {
+    if (mpTitleString == NULL || mRemainder <= 1) {
+        return;
+    }
+    char title[0x40];
+    SAFE_SPRINTF(title, "%s (%d/%d)", isAlbwScrollPage() ? "ALBW Skills" : "Skills",
+                 mPageIndex + 1, mRemainder);
+    SAFE_STRCPY(mpTitleString->getStringPtr(), title);
+}
+
+// ============================================
+// NEW CODE — ALBW Port
+// Show one auto-wrapped detail page: body text plus a "(p/n)" suffix on
+// the detail title whenever the body spans more than one page.
+// ============================================
+void dMenu_Skill_c::setDetailPage(int page) {
+    if (page < 0) {
+        page = 0;
+    }
+    if (page >= mDetailPageCount) {
+        page = mDetailPageCount - 1;
+    }
+    mDetailPage = static_cast<u8>(page);
+
+    if (mDetailPageCount > 1) {
+        char title[0x60];
+        SAFE_SPRINTF(title, "%s (%d/%d)", mDetailTitle, mDetailPage + 1, mDetailPageCount);
+        setNameStringRaw(title);
+    } else {
+        setNameStringRaw(mDetailTitle);
+    }
+    ((J2DTextBox*)mpTextPane->getPanePtr())->setString(0x200, mDetailPages[mDetailPage]);
+}
+
+void dMenu_Skill_c::changePage(int delta) {
+    if (mRemainder <= 1 || delta == 0) {
+        return;
+    }
+
+    const u8 oldPage = mPageIndex;
+    if (delta > 0 && mPageIndex + 1 < mRemainder) {
+        mPageIndex++;
+    } else if (delta < 0 && mPageIndex > 0) {
+        mPageIndex--;
+    } else {
+        return;
+    }
+
+    if (oldPage == mPageIndex) {
+        return;
+    }
+
+    // Page order: vanilla HS (0), then ALBW scroll chunks of 7.
+    applySkillPageState();
+
+    mIndex = 0;
+    setPageText();
+    changeActiveColor();
+    Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_SUB_NEXT, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+}
+#endif
 
 u8 dMenu_Skill_c::getSkillNum() {
     static u32 evt_id[7] = {

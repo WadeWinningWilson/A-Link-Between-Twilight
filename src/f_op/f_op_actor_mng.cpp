@@ -28,6 +28,10 @@
 #include "f_op/f_op_camera_mng.h"
 #include "f_op/f_op_scene_mng.h"
 #include "m_Do/m_Do_lib.h"
+#if TARGET_PC
+#include "d/d_menu_ring.h"
+#include "dusk/sim_time_scale.h"
+#endif
 #include <cstring>
 
 #define MAKE_ITEM_PARAMS(itemNo, itemBitNo, param_2, param_3)                                      \
@@ -819,14 +823,26 @@ void fopAcM_calcSpeed(fopAc_ac_c* i_actor) {
 void fopAcM_posMove(fopAc_ac_c* i_actor, const cXyz* i_movePos) {
     cXyz* pos = fopAcM_GetPosition_p(i_actor);
     cXyz* speed = fopAcM_GetSpeed_p(i_actor);
-    pos->x += speed->x;
-    pos->y += speed->y;
-    pos->z += speed->z;
+#if TARGET_PC
+    // Flurry Rush: world/enemies at 0.1x; Link moves at full speed for quick hits.
+    // Quick-equip live wheel: control-locked (stick zeroed); keep Link on sim scale.
+    f32 simScale = dusk::getSimTimeScale();
+    if (i_actor != nullptr && fopAcM_GetName(i_actor) == fpcNm_ALINK_e &&
+        !dMenu_Ring_c::isQuickEquipLiveWorld())
+    {
+        simScale = 1.0f;
+    }
+#else
+    const f32 simScale = 1.0f;
+#endif
+    pos->x += speed->x * simScale;
+    pos->y += speed->y * simScale;
+    pos->z += speed->z * simScale;
 
     if (i_movePos != NULL) {
-        pos->x += i_movePos->x;
-        pos->y += i_movePos->y;
-        pos->z += i_movePos->z;
+        pos->x += i_movePos->x * simScale;
+        pos->y += i_movePos->y * simScale;
+        pos->z += i_movePos->z * simScale;
     }
 }
 
@@ -2461,6 +2477,20 @@ bool fopAcM_wt_c::waterCheck(cXyz const* i_pos) {
 
 BOOL fopAcM_getNameString(const fopAc_ac_c* i_actor, TEXT_SPAN o_name) {
     SAFE_STRCPY(o_name, dStage_getName(fopAcM_GetProfName(i_actor), i_actor->argument));
+    return TRUE;
+}
+
+BOOL fopAcM_getNameString(const fopAc_ac_c* i_actor, char* o_name) {
+    if (o_name == NULL) {
+        return FALSE;
+    }
+    const char* name = dStage_getName(fopAcM_GetProfName(i_actor), i_actor->argument);
+    if (name == NULL) {
+        o_name[0] = '\0';
+        return FALSE;
+    }
+    std::strncpy(o_name, name, 31);
+    o_name[31] = '\0';
     return TRUE;
 }
 

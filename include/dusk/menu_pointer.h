@@ -62,4 +62,7 @@ bool hit_rect(f32 left, f32 top, f32 right, f32 bottom, f32 padding = 0.0f) noex
 bool hit_pane(CPaneMgr* pane, f32 padding = 0.0f) noexcept;
 bool hit_pane(J2DPane* pane, f32 padding = 0.0f) noexcept;
 
+// Map SDL window mouse position to game screen space (matches mDoLib_project output).
+bool map_window_mouse_to_game_screen(f32 windowX, f32 windowY, f32& outX, f32& outY) noexcept;
+
 }  // namespace dusk::menu_pointer

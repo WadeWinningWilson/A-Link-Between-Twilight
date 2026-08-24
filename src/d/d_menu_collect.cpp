@@ -19,6 +19,9 @@
 #include "d/d_menu_option.h"
 #include "d/d_menu_save.h"
 #include "d/d_menu_skill.h"
+#if TARGET_PC
+#include "d/d_albw_skill_scroll.h"
+#endif
 #include "d/d_meter_HIO.h"
 #include "d/d_msg_class.h"
 #include "d/d_msg_object.h"
@@ -37,7 +40,22 @@
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 
 #if TARGET_PC
+#include "d/d_albw_sumo_test.h"
+#include "d/d_albw_wardrobe.h"
+#include "dusk/main.h"
 #include "dusk/menu_pointer.h"
+
+static void collectDenyStoredEquip() {
+    Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+}
+
+static bool collectTryEquipItemNo(u8 itemNo) {
+    if (!dAlbwWardrobe_canEquipItemNo(itemNo)) {
+        collectDenyStoredEquip();
+        return false;
+    }
+    return true;
+}
 #endif
 
 typedef void (dMenu_Collect2D_c::*initFunc)();
@@ -419,6 +437,11 @@ bool dMenu_Collect2D_c::isSkillIconVisible() {
     {
         return true;
     }
+#if TARGET_PC
+    if (dAlbwSkillScroll_shouldShowCollectIcon()) {
+        return true;
+    }
+#endif
     return false;
 }
 
@@ -580,6 +603,14 @@ void dMenu_Collect2D_c::screenSet() {
     field_0x22d[0][2] = 0;
     field_0x22d[1][2] = 0;
     field_0x22d[2][2] = 0;
+#if TARGET_PC
+    // ALBW wardrobe: show owned alternate outfits even while Ordon is equipped.
+    // Vanilla hides this row whenever WEAR_CASUAL is active, which breaks the
+    // collection screen after buying Ordon from the rental shop.
+    field_0x22d[3][2] = dComIfGs_isItemFirstBit(0x2F);
+    field_0x22d[4][2] = dComIfGs_isItemFirstBit(0x31);
+    field_0x22d[5][2] = dComIfGs_isItemFirstBit(0x30);
+#else
     if (dComIfGs_getSelectEquipClothes() == dItemNo_WEAR_CASUAL_e) {
         field_0x22d[3][2] = 0;
         field_0x22d[4][2] = 0;
@@ -589,6 +620,39 @@ void dMenu_Collect2D_c::screenSet() {
         field_0x22d[4][2] = dComIfGs_isItemFirstBit(0x31);
         field_0x22d[5][2] = dComIfGs_isItemFirstBit(0x30);
     }
+#endif
+#if TARGET_PC
+    if (dAlbwWardrobe_isResistanceActive()) {
+        if (field_0x22d[3][0]) {
+            const u8 itemNo = dComIfGs_isItemFirstBit(dItemNo_SWORD_e) ? (u8)dItemNo_SWORD_e
+                                                                        : (u8)dItemNo_WOOD_STICK_e;
+            field_0x22d[3][0] = dAlbwWardrobe_canShowItemNo(itemNo);
+        }
+        if (field_0x22d[4][0]) {
+            const u8 itemNo =
+                dComIfGs_isItemFirstBit(dItemNo_LIGHT_SWORD_e) ? (u8)dItemNo_LIGHT_SWORD_e
+                                                               : (u8)dItemNo_MASTER_SWORD_e;
+            field_0x22d[4][0] = dAlbwWardrobe_canShowItemNo(itemNo);
+        }
+        if (field_0x22d[3][1]) {
+            const u8 itemNo = dComIfGs_isItemFirstBit(dItemNo_SHIELD_e) ? (u8)dItemNo_SHIELD_e
+                                                                        : (u8)dItemNo_WOOD_SHIELD_e;
+            field_0x22d[3][1] = dAlbwWardrobe_canShowItemNo(itemNo);
+        }
+        if (field_0x22d[4][1]) {
+            field_0x22d[4][1] = dAlbwWardrobe_canShowItemNo((u8)dItemNo_HYLIA_SHIELD_e);
+        }
+        if (field_0x22d[3][2]) {
+            field_0x22d[3][2] = dAlbwWardrobe_canShowItemNo((u8)dItemNo_WEAR_ZORA_e);
+        }
+        if (field_0x22d[4][2]) {
+            field_0x22d[4][2] = dAlbwWardrobe_canShowItemNo((u8)dItemNo_WEAR_KOKIRI_e);
+        }
+        if (field_0x22d[5][2]) {
+            field_0x22d[5][2] = dAlbwWardrobe_canShowItemNo((u8)dItemNo_ARMOR_e);
+        }
+    }
+#endif
     field_0x22d[6][2] = 0;
     field_0x22d[0][3] = 1;
     if (checkItemGet(dItemNo_BOW_e, 1)) {
@@ -1207,12 +1271,22 @@ void dMenu_Collect2D_c::changeSword() {
     case 3:
         if (dComIfGs_isItemFirstBit(dItemNo_SWORD_e)) {
             if (dComIfGs_getSelectEquipSword() != dItemNo_SWORD_e) {
+#if TARGET_PC
+                if (!collectTryEquipItemNo((u8)dItemNo_SWORD_e)) {
+                    break;
+                }
+#endif
                 dMeter2Info_setSword(dItemNo_SWORD_e, false);
                 setEquipItemFrameColorSword(0);
                 mDoAud_seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0);
                 dMeter2Info_set2DVibration();
             }
         } else if (dComIfGs_getSelectEquipSword() != dItemNo_WOOD_STICK_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_WOOD_STICK_e)) {
+                break;
+            }
+#endif
             dMeter2Info_setSword(dItemNo_WOOD_STICK_e, false);
             setEquipItemFrameColorSword(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
@@ -1222,6 +1296,11 @@ void dMenu_Collect2D_c::changeSword() {
     case 4:
         if (dComIfGs_isItemFirstBit(dItemNo_LIGHT_SWORD_e)) {
             if (dComIfGs_getSelectEquipSword() != dItemNo_LIGHT_SWORD_e) {
+#if TARGET_PC
+                if (!collectTryEquipItemNo((u8)dItemNo_LIGHT_SWORD_e)) {
+                    break;
+                }
+#endif
                 dMeter2Info_setSword(dItemNo_LIGHT_SWORD_e, false);
                 setEquipItemFrameColorSword(1);
                 Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
@@ -1229,6 +1308,11 @@ void dMenu_Collect2D_c::changeSword() {
                 dMeter2Info_set2DVibration();
             }
         } else if (dComIfGs_getSelectEquipSword() != dItemNo_MASTER_SWORD_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_MASTER_SWORD_e)) {
+                break;
+            }
+#endif
             dMeter2Info_setSword(dItemNo_MASTER_SWORD_e, false);
             setEquipItemFrameColorSword(1);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
@@ -1237,6 +1321,11 @@ void dMenu_Collect2D_c::changeSword() {
         break;
     case 5:
         if (dComIfGs_getSelectEquipSword() != dItemNo_LIGHT_SWORD_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_LIGHT_SWORD_e)) {
+                break;
+            }
+#endif
             dMeter2Info_setSword(dItemNo_LIGHT_SWORD_e, false);
             setEquipItemFrameColorSword(2);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
@@ -1251,6 +1340,11 @@ void dMenu_Collect2D_c::changeShield() {
     case 3:
         if (dComIfGs_isItemFirstBit(dItemNo_SHIELD_e)) {
             if (dComIfGs_getSelectEquipShield() != dItemNo_SHIELD_e) {
+#if TARGET_PC
+                if (!collectTryEquipItemNo((u8)dItemNo_SHIELD_e)) {
+                    break;
+                }
+#endif
                 dMeter2Info_setShield(dItemNo_SHIELD_e, false);
                 setEquipItemFrameColorShield(0);
                 daAlink_getAlinkActorClass()->setShieldChange();
@@ -1260,6 +1354,11 @@ void dMenu_Collect2D_c::changeShield() {
             }
         } else if (dComIfGs_isItemFirstBit(dItemNo_WOOD_SHIELD_e)) {
             if (dComIfGs_getSelectEquipShield() != dItemNo_WOOD_SHIELD_e) {
+#if TARGET_PC
+                if (!collectTryEquipItemNo((u8)dItemNo_WOOD_SHIELD_e)) {
+                    break;
+                }
+#endif
                 dMeter2Info_setShield(dItemNo_WOOD_SHIELD_e, false);
                 setEquipItemFrameColorShield(0);
                 daAlink_getAlinkActorClass()->setShieldChange();
@@ -1271,6 +1370,11 @@ void dMenu_Collect2D_c::changeShield() {
         break;
     case 4:
         if (dComIfGs_getSelectEquipShield() != dItemNo_HYLIA_SHIELD_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_HYLIA_SHIELD_e)) {
+                break;
+            }
+#endif
             dMeter2Info_setShield(dItemNo_HYLIA_SHIELD_e, false);
             setEquipItemFrameColorShield(1);
             daAlink_getAlinkActorClass()->setShieldChange();
@@ -1285,8 +1389,17 @@ void dMenu_Collect2D_c::changeClothe() {
     switch (mCursorX) {
     case 3:
         if (dComIfGs_getSelectEquipClothes() != dItemNo_WEAR_KOKIRI_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_WEAR_KOKIRI_e)) {
+                break;
+            }
+            dAlbwSumoTest_clearWorn();
+#endif
             dMeter2Info_setCloth(dItemNo_WEAR_KOKIRI_e, false);
             setEquipItemFrameColorClothes(0);
+#if TARGET_PC
+            dAlbwSumoTest_onVanillaClothesMenuLeave();  // leave sumo via the safe reload path
+#endif
             daPy_getPlayerActorClass()->setClothesChange(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();
@@ -1294,8 +1407,17 @@ void dMenu_Collect2D_c::changeClothe() {
         break;
     case 4:
         if (dComIfGs_getSelectEquipClothes() != dItemNo_WEAR_ZORA_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_WEAR_ZORA_e)) {
+                break;
+            }
+            dAlbwSumoTest_clearWorn();
+#endif
             dMeter2Info_setCloth(dItemNo_WEAR_ZORA_e, false);
             setEquipItemFrameColorClothes(1);
+#if TARGET_PC
+            dAlbwSumoTest_onVanillaClothesMenuLeave();  // leave sumo via the safe reload path
+#endif
             daPy_getPlayerActorClass()->setClothesChange(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();
@@ -1303,8 +1425,17 @@ void dMenu_Collect2D_c::changeClothe() {
         break;
     case 5:
         if (dComIfGs_getSelectEquipClothes() != dItemNo_ARMOR_e) {
+#if TARGET_PC
+            if (!collectTryEquipItemNo((u8)dItemNo_ARMOR_e)) {
+                break;
+            }
+            dAlbwSumoTest_clearWorn();
+#endif
             dMeter2Info_setCloth(dItemNo_ARMOR_e, false);
             setEquipItemFrameColorClothes(2);
+#if TARGET_PC
+            dAlbwSumoTest_onVanillaClothesMenuLeave();  // leave sumo via the safe reload path
+#endif
             daPy_getPlayerActorClass()->setClothesChange(0);
             Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_SET_X, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             dMeter2Info_set2DVibration();
@@ -1812,6 +1943,16 @@ void dMenu_Collect2D_c::wait_proc() {
     if (dMw_A_TRIGGER()) {
         if (mCursorX == 0 && mCursorY == 5) {
             if (mDoGph_gInf_c::getFader()->mStatus == 1) {
+#if TARGET_PC
+                // Level Editor — deny Save at selection (1x.1). Cursor stays;
+                // never open SAVE. Secondary never-enter-SAVE_OPEN guard lives
+                // in dMw_c::collect_close_proc.
+                if (dusk::g_levelEditorSession) {
+                    Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
+                                             -1.0f, 0);
+                    return;
+                }
+#endif
                 mSubWindowOpenCheck = 1;
                 Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_CHANGE_WINDOW, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
                                          -1.0f, 0);
@@ -1914,6 +2055,11 @@ void dMenu_Collect2D_c::wait_proc() {
 void dMenu_Collect2D_c::pointerActivateCurrent() {
     if (mCursorX == 0 && mCursorY == 5) {
         if (mDoGph_gInf_c::getFader()->mStatus == 1) {
+            // Level Editor — deny Save at selection (1x.1); pointer path.
+            if (dusk::g_levelEditorSession) {
+                Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+                return;
+            }
             mSubWindowOpenCheck = 1;
             Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_CHANGE_WINDOW, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
                                      -1.0f, 0);

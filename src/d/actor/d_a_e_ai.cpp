@@ -9,6 +9,10 @@
 
 #include "f_op/f_op_actor_enemy.h"
 
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#endif
+
 class daE_AI_HIO_c : public JORReflexible {
 public:
     daE_AI_HIO_c();
@@ -422,6 +426,9 @@ void e_ai_class::e_ai_damage() {
                     dComIfGs_onSwitch(m_swbit, fopAcM_GetRoomNo(this));
                 }
 
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(this);
+#endif
                 fopAcM_delete(this);
             }
         }

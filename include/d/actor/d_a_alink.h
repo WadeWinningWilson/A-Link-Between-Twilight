@@ -1369,6 +1369,7 @@ public:
         /* 0x15F */ PROC_QUAKE_WAIT,
         /* 0x160 */ PROC_CUT_GS_HURRICANE,
         /* 0x161 */ PROC_CUT_GS_HURRICANE_TIRED,
+        /* 0x162 */ PROC_FLURRY_RUSH,
 
         PROC_MAX,
     };
@@ -1432,6 +1433,12 @@ public:
 
     static BOOL getE3Zhint();
     static const char* getAlinkArcName();
+#if TARGET_PC
+    // NEW CODE — ALBW Port: true when Link's held bow is the native WW skin
+    // (Layer-B al_bow replacement is loaded). Lets the arrow actor couple its
+    // WW skin to the bow skin. See d_a_alink_bow.inc / s_albwWwBowNative.
+    static bool checkWwBowSkinActive();
+#endif
     static bool checkStageName(char const* i_stageName);
     void tgHitCallback(fopAc_ac_c* i_atActor, dCcD_GObjInf* i_tgObjInf, dCcD_GObjInf* i_atObjInf);
     void coHitCallback(fopAc_ac_c* i_coHitActor, dCcD_GObjInf* i_coHitObj);
@@ -1682,7 +1689,7 @@ public:
     void getBodyAngleXBasePos(cXyz* o_pos);
     s16 getBodyAngleXAtnActor(int);
     void setBodyAngleXReadyAnime(int);
-    void setMagicArmorBrk(int i_status);
+    BOOL setMagicArmorBrk(int i_status);
     BOOL checkMagicArmorHeavy() const;
     BOOL checkHeavyStateOn(BOOL, BOOL);
     void initGravity();
@@ -1920,6 +1927,18 @@ public:
     int procCutGsHurricane();
     int procCutGsHurricaneTiredInit();
     int procCutGsHurricaneTired();
+    int procFlurryRushInit();
+    int procFlurryRush();
+    f32 flurryEngageDistance() const;
+    bool flurryIsWithinEngageRange(fopAc_ac_c* i_target) const;
+    void flurryEnterWaitFirstSwing();
+    bool flurryUpdateSnapToTarget();
+    void flurryBeginSwing(int i_swingIndex);
+    bool flurryCheckSwordHit();
+    void flurryReserveChainInput();
+    bool flurryConsumeChainInput();
+    bool flurryTryChainSwing(int i_nextSwingIndex);
+    int flurryExitToWait(int i_reason);
 #endif
     int procCutTurnChargeInit();
     int procCutTurnCharge();
@@ -2975,6 +2994,10 @@ public:
     int procWolfBackJumpLand();
     int procWolfHowlInit(int);
     int procWolfHowl();
+#if TARGET_PC
+    int  procWolfHowlCombat();     // ALBW Port: song-driven combat-howl lifecycle (duet pose + AOE)
+    void setWolfHowlSpinEffect();  // ALBW Port: emit the base KAITENGIRIL Great-Spin ring
+#endif
     int procWolfAutoJumpInit(int);
     int procWolfAutoJump();
     int procWolfFallInit(int, f32 i_morf);
@@ -3416,6 +3439,9 @@ public:
     virtual BOOL checkMetamorphose() const {
         return mProcID == PROC_METAMORPHOSE && mProcVar1.field_0x300a == 0;
     }
+    BOOL checkMetamorphoseProcActive() const {
+        return mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY;
+    }
     virtual BOOL checkWolfDownAttackPullOut() const { return mProcID == PROC_WOLF_DOWN_AT_LAND; }
     virtual cXyz* getMidnaAtnPos() const { return (cXyz*)&mMidnaAtnPos; }
     virtual bool checkCopyRodEquip() const { return mEquipItem == dItemNo_COPY_ROD_e; }
@@ -3472,6 +3498,11 @@ public:
     }
     virtual void changeDragonActor(fopAc_ac_c* i_actor);
     virtual u8 getClothesChangeWaitTimer() const { return mClothesChangeWaitTimer; }
+#if TARGET_PC
+    // Abort a hung loadModelDVD (timer bouncing 1↔2 on never-complete resLoad) so
+    // draw() can run again. Used after Custom Models toggles (e.g. Beta Link → Kokiri).
+    void albwAbortStuckClothesChange();
+#endif
     virtual u8 getShieldChangeWaitTimer() const { return mShieldChangeWaitTimer; }
     virtual BOOL checkBootsOrArmorHeavy() const;
     virtual fpc_ProcID getBottleOpenAppearItem() const;
@@ -3758,7 +3789,17 @@ public:
 
     bool checkResetRootMtx(int param_0) const { return field_0x2f90 != 0 && param_0 == 1; }
 
-    BOOL checkGrabGlide() { return checkGrabRooster(); }
+    // ============================================
+    // NEW CODE — ALBW Port (Deku Leaf glide, WIP P1)
+    // The glide chassis keys entirely off checkGrabGlide(); OR the leaf state in so all the
+    // float/steer/updraft/land sites light up without a cucco held. checkDekuLeafGlide() is a
+    // debug toggle for now (settings.game.dekuLeafGlideTest) — later becomes "leaf item out".
+    // ============================================
+    bool checkDekuLeafGlide() const;
+    BOOL checkGrabGlide() { return checkGrabRooster() || checkDekuLeafGlide(); }
+#if TARGET_PC
+    void updateDekuLeafModel();  // P3b: lazy-load + position the held WW Deku Leaf model
+#endif
 
     bool checkCopyRodRevive() const { return mProcID == PROC_COPY_ROD_REVIVE; }
     bool checkHorseGetOffMode() const { return mProcID == PROC_HORSE_GETOFF; }
@@ -4573,6 +4614,10 @@ public:
 
 #if TARGET_PC
     void handleWolfHowl();
+    // Wolf Art (D-pad Up): combat howl AOE. Gated on wolf form + Wolf Combat + quick-swap mode +
+    // howl unlocked (or the dev toggle), spends 1 wolf charge, triggers the howl.
+    void handleWolfHowlBurst();
+    void handleWolfArmBurst();  // ALBW Port: D-pad Right — spawn the Midna Arm auto-attack art
     void handleQuickTransform();
     bool checkAimContext();
     bool checkAimInputContext();
@@ -4604,13 +4649,47 @@ public:
     // ============================================
     // NEW CODE — ALBW Port
     // Wolf charge economy (gated on game.wolfLinkCombat). mWolfChargeCount: earned by wolf bites (5 bites =
-    // +1 charge, cap 2 base). mWolfBiteCount: running bite tally, resets at 5.
+    // +1 charge, cap 2 base). mWolfBiteCount: fractional charge accumulator in FIFTEENTHS
+    // (bite = 3, chest/grab-mash = 1; completes at 15; leftover dropped when a completion
+    // lands on the cap — see dAlbwWolfCombat_onBiteConnect/onChestMashHit).
     // mWolfSpendChainActive: set on first spend when ≥2 charges; allows
     // chaining field attacks down to 0 before the chain closes.
     // ============================================
     u8   mWolfChargeCount      = 0;
     u8   mWolfBiteCount        = 0;
     bool mWolfSpendChainActive = false;
+    // Wolf Art — Howl AOE in progress: set by handleWolfHowlBurst(), read by procWolfHowl and
+    // (later increments) the AOE collider / looped Great-Spin VFX / howl music.  Cleared when the
+    // howl proc ends.
+    bool mWolfCombatHowlActive = false;
+    // One-shot "this howl is a combat howl" request: set by handleWolfHowlBurst, consumed by
+    // procWolfHowlInit into mWolfCombatHowlActive (so a vanilla demo howl is never a combat one).
+    bool mWolfHowlWantCombat   = false;
+    // Combat howl is in its WANM_HOWL_END exit anim (returning to gameplay).
+    bool mWolfHowlEnding       = false;
+    // Post-song buffer countdown (frames): after the song ends, wait this long before the exit anim.
+    u16  mWolfHowlFramesLeft   = 0;
+    // Total combat-howl frames elapsed (startup grace for the song poll + hard-cap failsafe).
+    u16  mWolfHowlElapsed      = 0;
+    // ============================================
+    // NEW CODE — ALBW Port (Realtime Potions — game.realtimePotions)
+    // Drink a potion / pour lantern oil as an UPPER_2 upper-body overlay while
+    // Link keeps moving in his normal move/wait proc (Dark-Souls-flask style; no
+    // event_compulsory / event camera / mNormalSpeed lock). Own state — the
+    // proc-owned mProcVarX / mItemVar0 scratch union belongs to the concurrent
+    // move proc and must NOT be reused here.
+    // ============================================
+    bool mRealtimeUseActive      = false;  // overlay lifecycle live
+    u8   mRealtimeUsePhase        = 0;      // 0 start, 1 drink/pour, 2 end
+    bool mRealtimeUseIsOil        = false;  // lantern-oil pour vs bottle drink
+    bool mRealtimeUseEffectDone   = false;  // heal/oil granted + item consumed
+    bool mRealtimeUseKanteraKeep  = false;  // oil: relight the lantern on teardown
+    u16  mRealtimeUseItem         = 0;      // consumable item number
+    u8   mRealtimeUseSelIdx       = 0;      // select-item slot captured at start
+
+    bool startRealtimeUse(u16 i_itemNo, bool i_isOil, u8 i_selIdx);
+    void checkRealtimeUse();
+    void endRealtimeUse(bool i_resetUpper);
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
@@ -8492,5 +8571,35 @@ static fopAc_ac_c* daAlink_searchLightBall(fopAc_ac_c* i_actor, void* i_data);
 inline daAlink_c* daAlink_getAlinkActorClass() {
     return (daAlink_c*)dComIfGp_getLinkPlayer();
 }
+
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (cap/face-donor lifecycle safety)
+// Bump Link's clothes-model generation so draw()/shadowDraw skip the body/face/hat/hand
+// models until the next changeLink re-stamps the epoch.  The sumo module calls this when it
+// frees the Kmdl cap/face donor OUTSIDE Link's own freeAll (which is the only thing that
+// bumps the epoch normally), so the shadow pass (addRealShadow -> J3DShape::drawFast) cannot
+// draw a cap left dangling at the freed al_head — the documented releaseFaceDonor crash.
+// Defined in d_a_alink.cpp.
+// ============================================
+void dAlbwAlink_invalidateClothesEpoch();
+
+// Emergency unhide: stamp the clothes-model epoch to the current arc epoch so draw()
+// stops skipping body/face/etc. after a failed Custom-Models remount left the hide
+// seatbelt stuck. Does NOT free or rebuild anything — only clears the skip gate.
+void dAlbwAlink_resyncClothesEpoch();
+
+// Abort hung clothes change + unhide (see daAlink_c::albwAbortStuckClothesChange).
+void dAlbwAlink_abortStuckClothesChange(daAlink_c* link);
+
+// Custom Models FST flip: next same-arc clothes re-equip must free-then-remount instead of
+// rebuilding in place from the stale mpArcHeap (Linkle/Beta toggle with Cap Wear Off).
+void dAlbwAlink_requestClothesRemount();
+
+// GLOBAL Cap Wear: true when the last native changeLink built the requested cap/topknot, false
+// on fallback to the native hat (chosen arc not resident yet).  Read by the outfit module to
+// self-heal the cap after a base-boundary crossing without blocking outfit swaps.
+bool dAlbwAlink_nativeCapResolved();
+#endif
 
 #endif /* D_A_D_A_ALINK_H */

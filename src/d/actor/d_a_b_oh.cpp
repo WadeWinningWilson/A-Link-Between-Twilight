@@ -8,8 +8,13 @@
 #include "d/actor/d_a_b_ob.h"
 #include "d/actor/d_a_b_oh.h"
 #include "d/actor/d_a_player.h"
+#include "d/actor/d_a_alink.h"
 #include "c/c_damagereaction.h"
 #include "Z2AudioLib/Z2Instances.h"
+#if TARGET_PC
+#include "d/d_albw_boss.h"
+#include "d/d_albw_region_mult.h"
+#endif
 
 enum B_oh_RES_File_ID {
     /* BCK */
@@ -173,6 +178,25 @@ static void wait(b_oh_class* i_this) {
     case 1:
         cLib_addCalc2(&i_this->field_0x608, 1.0f, 0.1f, 0.005f);
 
+        if (player_p == NULL) {
+            break;
+        }
+
+#if TARGET_PC
+        // Eye-mass P1: sequential grab pass — one arm at a time, no Lakebed Y gate.
+        if (dAlbwBoss_morpheelIsActive()) {
+            if (!dAlbwBoss_morpheelFightIsLive()) {
+                break;
+            }
+            if (dAlbwBoss_morpheelConsumeTentacleGrab(i_this->field_0x5c8)) {
+                i_this->mAction = OH_ACTION_ATTACK;
+                i_this->mActionPhase = 0;
+                i_this->field_0xc98 = 0;
+            }
+            break;
+        }
+#endif
+
         if (i_this->field_0xca8 == 0 && player_p->current.pos.y < -23000.0f &&
             i_this->mDistToPlayer < 1300.0f && i_this->mTimers[0] == 0 && boss->field_0x4744 == 0 &&
             boss->field_0x4794 == 0)
@@ -186,7 +210,87 @@ static void wait(b_oh_class* i_this) {
     }
 }
 
+#if TARGET_PC
+// Eye-rooted lunge toward Link — straight reach, not Lakebed floor sweep.
+static void attack_eye_mass(b_oh_class* i_this) {
+    daPy_py_c* player_p = (daPy_py_c*)dComIfGp_getPlayer(0);
+    i_this->field_0xca0++;
+
+    switch (i_this->mActionPhase) {
+    case 0:
+        i_this->mActionPhase = 2;
+        i_this->mTimers[0] = 100;
+        i_this->field_0xca0 = 0;
+        i_this->field_0xc98 = 0x800;  // fast pose lerp out of idle curl
+        i_this->field_0xca2 = 0;
+        i_this->field_0xca4 = 0;
+        i_this->field_0xc9c = 0.0f;
+        i_this->field_0xc8c = 0.0f;
+        i_this->field_0xc90 = 0.0f;
+        i_this->field_0xc94 = 0;
+        i_this->field_0xc96 = 2500;
+        i_this->field_0xc88 = ((s16)(i_this->mAngleToPlayer - i_this->current.angle.y) > 0) ? 1 : -1;
+        // fallthrough
+    case 2:
+        if (player_p == NULL || i_this->mTimers[0] == 0) {
+            i_this->mAction = OH_ACTION_WAIT;
+            i_this->mActionPhase = 0;
+            i_this->field_0xc98 = 0;
+            i_this->field_0xca2 = 0;
+            dAlbwBoss_morpheelNotifyTentacleStrikeMiss();
+            return;
+        }
+
+        cLib_addCalcAngleS2(&i_this->field_0xc98, 0x1000, 1, 128);
+        // Aim the tentacle base at Link (full 3D), then stretch.
+        cLib_addCalcAngleS2(&i_this->current.angle.y, i_this->mAngleToPlayer, 1, 0xC00);
+        {
+            cXyz to_p = player_p->current.pos - i_this->current.pos;
+            const f32 xz = JMAFastSqrt(to_p.x * to_p.x + to_p.z * to_p.z);
+            const s16 pitch = (s16)(-cM_atan2s(to_p.y, xz));
+            cLib_addCalcAngleS2(&i_this->current.angle.x, pitch, 1, 0xA00);
+        }
+        cLib_addCalc2(&i_this->mTentacleLength, kAlbwMorpheelTentacleStrikeLength, 0.35f, 4.0f);
+        cLib_addCalc2(&i_this->field_0xc8c, 800.0f, 0.5f, 80.0f);
+        cLib_addCalcAngleS2(&i_this->field_0xc94, 8000, 1, 400);
+        cLib_addCalcAngleS2(&i_this->field_0xca2, 4, 1, 1);
+        cLib_addCalcAngleS2(&i_this->field_0xca4, 0, 1, 400);  // no tip fold-back
+        cLib_addCalc2(&i_this->field_0xc9c, 60.0f, 0.5f, 10.0f);
+
+        if (i_this->field_0xca0 > 18) {
+            for (int i = 7; i < 15; i++) {
+                if (!i_this->mColliders[i].ChkCoHit()) {
+                    continue;
+                }
+                cCcD_Obj* obj_p = i_this->mColliders[i].GetCoHitObj();
+                if (fopAcM_GetName(obj_p->GetAc()) != fpcNm_ALINK_e || dComIfGp_event_runCheck()) {
+                    continue;
+                }
+                if (player_p->checkHookshotShootReturnMode() || boss->field_0x4744 != 0) {
+                    continue;
+                }
+                i_this->mAction = OH_ACTION_CAUGHT;
+                i_this->mActionPhase = 10;
+                i_this->mTimers[0] = kAlbwMorpheelGrabHoldFrames;
+                i_this->mTimers[1] = kAlbwMorpheelGrabChipInterval;
+                dAlbwBoss_morpheelNotifyTentacleGrabCaught();
+                boss->mOISound.startTentacleSound(Z2SE_EN_OI_TENT_SWING, i_this->field_0x5c8, 0,
+                                                  dComIfGp_getReverb(fopAcM_GetRoomNo(i_this)));
+                return;
+            }
+        }
+        break;
+    }
+}
+#endif
+
 static void attack(b_oh_class* i_this) {
+#if TARGET_PC
+    if (dAlbwBoss_morpheelFightIsLive()) {
+        attack_eye_mass(i_this);
+        return;
+    }
+#endif
     daPy_py_c* player_p = (daPy_py_c*)dComIfGp_getPlayer(0);
     i_this->field_0xca0++;
 
@@ -306,6 +410,38 @@ static void attack(b_oh_class* i_this) {
 static void caught(b_oh_class* i_this) {
     i_this->field_0x5f4 = 6;
 
+#if TARGET_PC
+    // Refinement hold: struggle + ¼ heart/sec × 4s, then knockback. No eat demo.
+    if (i_this->mActionPhase >= 10) {
+        daAlink_c* link = (daAlink_c*)daPy_getPlayerActorClass();
+        cLib_addCalcAngleS2(&i_this->field_0xca2, 8, 1, 1);
+        cLib_addCalcAngleS2(&i_this->field_0xca4, i_this->field_0xc88 * 9000, 1, 500);
+        i_this->field_0x60c = 400.0f;
+
+        if (!(i_this->field_0x5cc & 0xF)) {
+            dComIfGp_getVibration().StartShock(2, 31, cXyz(0.0f, 1.0f, 0.0f));
+        }
+
+        if (link != NULL && i_this->mTimers[1] == 0) {
+            dAlbwRegionMult_DamageScaleScope regionDmg;
+            link->setDamagePoint(kAlbwMorpheelGrabChipDamage, FALSE, TRUE, 0);
+            i_this->mTimers[1] = kAlbwMorpheelGrabChipInterval;
+        }
+
+        if (i_this->mTimers[0] == 0) {
+            if (link != NULL) {
+                link->setThrowDamage(i_this->current.angle.y + 0x8000, 35.0f, 40.0f, 0, 0, 2);
+            }
+            i_this->mAction = OH_ACTION_WAIT;
+            i_this->mActionPhase = 0;
+            i_this->field_0xc98 = 0;
+            i_this->mTimers[0] = 120;
+            dAlbwBoss_morpheelNotifyTentacleGrabHoldDone();
+        }
+        return;
+    }
+#endif
+
     switch (i_this->mActionPhase) {
     case 0:
         i_this->mActionPhase = 1;
@@ -401,13 +537,23 @@ static void action(b_oh_class* i_this) {
     case OH_ACTION_ATTACK:
         attack(a_this);
         var_r28 = 2;
-        boss->field_0x4794 = 180;
+#if TARGET_PC
+        if (!dAlbwBoss_morpheelFightIsLive())
+#endif
+        {
+            boss->field_0x4794 = 180;
+        }
         break;
     case OH_ACTION_CAUGHT:
         caught(a_this);
         var_r27 = false;
         var_r28 = 3;
-        boss->field_0x4794 = 180;
+#if TARGET_PC
+        if (!dAlbwBoss_morpheelFightIsLive())
+#endif
+        {
+            boss->field_0x4794 = 180;
+        }
         break;
     case OH_ACTION_END:
         end(a_this);
@@ -458,53 +604,94 @@ static void action(b_oh_class* i_this) {
         cLib_addCalcAngleS2(&a_this->current.angle.x, -0xF2C, 4, 100);
         cLib_addCalcAngleS2(&a_this->current.angle.y, a_this->home.angle.y, 4, 0x100);
     } else if (var_r28 == 2) {
-        f32 var_f4 = a_this->field_0xc8c;
-        for (int i = a_this->field_0xca8; i < 30; i++) {
-            if (i >= 30 - a_this->field_0xca2) {
-                a_this->field_0x6d0[i].y = a_this->field_0xca4;
-            } else {
+#if TARGET_PC
+        if (dAlbwBoss_morpheelFightIsLive()) {
+            // Straight-ish reach along aimed heading — kill idle curl / tip fold-in.
+            for (int i = a_this->field_0xca8; i < 30; i++) {
                 a_this->field_0x6d0[i].y = 0;
-            }
-
-            if (i >= 13) {
-                var_f4 *= a_this->field_0xc90 + 1.0f;
-            }
-
-            a_this->field_0x6d0[i].x =
-                var_f4 * cM_ssin(a_this->field_0xc94 + i * a_this->field_0xc96);
-
-            if (i >= 18) {
+                a_this->field_0x6d0[i].x =
+                    (s16)(a_this->field_0xc8c * cM_ssin(a_this->field_0xc94 + i * a_this->field_0xc96) *
+                          0.15f);
+                a_this->field_0x838[i].y = 0;
                 a_this->field_0x838[i].x =
-                    a_this->field_0xc9c * cM_ssin(a_this->field_0x5cc * 1000 + i * -4000);
-            } else {
-                a_this->field_0x838[i].x = 0;
-            }
-
-            a_this->field_0x838[i].y = 0;
-            a_this->field_0x964[i] =
-                a_this->field_0x610 + 1.0f +
-                a_this->field_0x610 * cM_ssin(a_this->field_0x5f6 + i * -10000);
-        }
-    } else if (var_r28 == 3) {
-        for (int i = a_this->field_0xca8; i < 30; i++) {
-            a_this->field_0x838[i].y = 0;
-            a_this->field_0x838[i].x = 0;
-
-            if (i >= 30 - a_this->field_0xca2) {
-                a_this->field_0x6d0[i].y = a_this->field_0xca4;
-                a_this->field_0x6d0[i].x = 0;
+                    (i >= 18) ? (s16)(a_this->field_0xc9c *
+                                     cM_ssin(a_this->field_0x5cc * 1000 + i * -4000))
+                              : (s16)0;
                 a_this->field_0x964[i] = 1.0f;
-            } else {
-                a_this->field_0x6d0[i].y = 0;
-                a_this->field_0x6d0[i].x = 2250;
+            }
+        } else
+#endif
+        {
+            f32 var_f4 = a_this->field_0xc8c;
+            for (int i = a_this->field_0xca8; i < 30; i++) {
+                if (i >= 30 - a_this->field_0xca2) {
+                    a_this->field_0x6d0[i].y = a_this->field_0xca4;
+                } else {
+                    a_this->field_0x6d0[i].y = 0;
+                }
+
+                if (i >= 13) {
+                    var_f4 *= a_this->field_0xc90 + 1.0f;
+                }
+
+                a_this->field_0x6d0[i].x =
+                    var_f4 * cM_ssin(a_this->field_0xc94 + i * a_this->field_0xc96);
+
+                if (i >= 18) {
+                    a_this->field_0x838[i].x =
+                        a_this->field_0xc9c * cM_ssin(a_this->field_0x5cc * 1000 + i * -4000);
+                } else {
+                    a_this->field_0x838[i].x = 0;
+                }
+
+                a_this->field_0x838[i].y = 0;
                 a_this->field_0x964[i] =
                     a_this->field_0x610 + 1.0f +
                     a_this->field_0x610 * cM_ssin(a_this->field_0x5f6 + i * -10000);
             }
         }
+    } else if (var_r28 == 3) {
+#if TARGET_PC
+        if (dAlbwBoss_morpheelFightIsLive() && a_this->mActionPhase >= 10) {
+            daPy_py_c* player_p = (daPy_py_c*)dComIfGp_getPlayer(0);
+            for (int i = a_this->field_0xca8; i < 30; i++) {
+                a_this->field_0x6d0[i].y = 0;
+                a_this->field_0x6d0[i].x = (i >= 30 - a_this->field_0xca2) ? 0 : 400;
+                a_this->field_0x838[i].x = 0;
+                a_this->field_0x838[i].y = 0;
+                a_this->field_0x964[i] = 1.0f;
+            }
+            if (player_p != NULL) {
+                cLib_addCalcAngleS2(&a_this->current.angle.y, a_this->mAngleToPlayer, 2, 0x400);
+                cXyz to_p = player_p->current.pos - a_this->current.pos;
+                const f32 xz = JMAFastSqrt(to_p.x * to_p.x + to_p.z * to_p.z);
+                cLib_addCalcAngleS2(&a_this->current.angle.x, (s16)(-cM_atan2s(to_p.y, xz)), 2,
+                                    0x400);
+            }
+            cLib_addCalc2(&a_this->mTentacleLength, kAlbwMorpheelTentacleStrikeLength, 0.2f, 2.0f);
+        } else
+#endif
+        {
+            for (int i = a_this->field_0xca8; i < 30; i++) {
+                a_this->field_0x838[i].y = 0;
+                a_this->field_0x838[i].x = 0;
 
-        cLib_addCalcAngleS2(&a_this->current.angle.x, 0xA92, 4, 0x200);
-        cLib_addCalcAngleS2(&a_this->current.angle.y, a_this->home.angle.y, 4, 0x800);
+                if (i >= 30 - a_this->field_0xca2) {
+                    a_this->field_0x6d0[i].y = a_this->field_0xca4;
+                    a_this->field_0x6d0[i].x = 0;
+                    a_this->field_0x964[i] = 1.0f;
+                } else {
+                    a_this->field_0x6d0[i].y = 0;
+                    a_this->field_0x6d0[i].x = 2250;
+                    a_this->field_0x964[i] =
+                        a_this->field_0x610 + 1.0f +
+                        a_this->field_0x610 * cM_ssin(a_this->field_0x5f6 + i * -10000);
+                }
+            }
+
+            cLib_addCalcAngleS2(&a_this->current.angle.x, 0xA92, 4, 0x200);
+            cLib_addCalcAngleS2(&a_this->current.angle.y, a_this->home.angle.y, 4, 0x800);
+        }
     }
 
     a_this->field_0x600 =
@@ -519,17 +706,34 @@ static void action(b_oh_class* i_this) {
     cLib_addCalc0(&a_this->field_0x60c, 0.1f, 50.0f);
     cLib_addCalc2(&a_this->field_0x610, 0.2f, 0.1f, 0.01f);
 
-    if (var_r28 <= 3) {
-        cLib_addCalc2(&a_this->mTentacleLength, l_HIO.mLength, 0.1f, 0.5f);
+#if TARGET_PC
+    if (!(dAlbwBoss_morpheelFightIsLive() &&
+          (a_this->mAction == OH_ACTION_ATTACK ||
+           (a_this->mAction == OH_ACTION_CAUGHT && a_this->mActionPhase >= 10))))
+#endif
+    {
+        if (var_r28 <= 3) {
+            cLib_addCalc2(&a_this->mTentacleLength, l_HIO.mLength, 0.1f, 0.5f);
+        }
     }
 
-    MTXCopy(boss->mBodyParts[0].mpMorf->getModel()->getAnmMtx(a_this->field_0x5c8 + 8),
-            mDoMtx_stack_c::get());
-    mDoMtx_stack_c::multVecZero(&a_this->current.pos);
+#if TARGET_PC
+    cXyz eye_root;
+    s16 eye_yaw = 0;
+    if (dAlbwBoss_morpheelTryRootTentacle(a_this->field_0x5c8, &eye_root, &eye_yaw)) {
+        a_this->current.pos = eye_root;
+        a_this->home.angle.y = eye_yaw;
+    } else
+#endif
+    {
+        MTXCopy(boss->mBodyParts[0].mpMorf->getModel()->getAnmMtx(a_this->field_0x5c8 + 8),
+                mDoMtx_stack_c::get());
+        mDoMtx_stack_c::multVecZero(&a_this->current.pos);
 
-    sp90.x = a_this->current.pos.x - boss->home.pos.x;
-    sp90.z = a_this->current.pos.z - boss->home.pos.z;
-    a_this->home.angle.y = cM_atan2s(sp90.x, sp90.z);
+        sp90.x = a_this->current.pos.x - boss->home.pos.x;
+        sp90.z = a_this->current.pos.z - boss->home.pos.z;
+        a_this->home.angle.y = cM_atan2s(sp90.x, sp90.z);
+    }
     cLib_addCalcAngleS2(&a_this->shape_angle.y, a_this->current.angle.y, 2, 0x2000);
     cLib_addCalcAngleS2(&a_this->shape_angle.x, a_this->current.angle.x, 2, 0x2000);
 
@@ -599,6 +803,15 @@ static void damage_check(b_oh_class* i_this) {
                 i_this->mActionPhase = 0;
                 i_this->field_0xc98 = 0;
                 i_this->field_0xca2 = 0;
+#if TARGET_PC
+                if (dAlbwBoss_morpheelFightIsLive()) {
+                    if (i_this->mAction == OH_ACTION_CAUGHT && i_this->mActionPhase >= 10) {
+                        dAlbwBoss_morpheelNotifyTentacleGrabHoldDone();
+                    } else {
+                        dAlbwBoss_morpheelNotifyTentacleStrikeMiss();
+                    }
+                }
+#endif
             }
 
             if (boss->mDemoAction != 0) {
@@ -619,9 +832,8 @@ static int daB_OH_Execute(b_oh_class* i_this) {
         return 1;
     }
 
-    if (i_this->field_0x5c8 == 0) {
-        boss = (b_ob_class*)fopAcM_SearchByID(i_this->parentActorID);
-    }
+    // Always refresh — slot-0-only left 1..7 on a stale static after room reload.
+    boss = (b_ob_class*)fopAcM_SearchByID(i_this->parentActorID);
 
     if (boss == NULL) {
         return 1;
@@ -661,6 +873,22 @@ static int daB_OH_Execute(b_oh_class* i_this) {
     i_this->mpBtk->play();
     i_this->mpBrk->play();
     i_this->mpMorf->modelCalc();
+
+#if TARGET_PC
+    // Pin Link to tip during refinement hold (after bones settle).
+    if (i_this->mAction == OH_ACTION_CAUGHT && i_this->mActionPhase >= 10) {
+        daAlink_c* link = (daAlink_c*)daPy_getPlayerActorClass();
+        if (link != NULL) {
+            cXyz tip;
+            MTXCopy(model_p->getAnmMtx(29), mDoMtx_stack_c::get());
+            mDoMtx_stack_c::multVecZero(&tip);
+            link->current.pos = tip;
+            link->old.pos = tip;
+            link->speedF = 0.0f;
+            link->speed.set(0.0f, 0.0f, 0.0f);
+        }
+    }
+#endif
 
     int tmp = 1;
     if (i_this->mDistToPlayer > 150.0f && i_this->mAction == OH_ACTION_WAIT) {

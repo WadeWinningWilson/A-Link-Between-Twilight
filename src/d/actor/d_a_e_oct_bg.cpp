@@ -20,6 +20,9 @@
 #include "SSystem/SComponent/c_math.h"
 #include "JSystem/J3DGraphBase/J3DMaterial.h"
 #include "Z2AudioLib/Z2Instances.h"
+#if TARGET_PC
+#include "d/d_albw_boss.h"
+#endif
 
 static dCcD_SrcSph cc_obg_src = {
     {
@@ -122,11 +125,38 @@ void daE_OctBg_c::action() {
         field_0xbad--;
     }
     if (!checkExplode()) {
+#if TARGET_PC
+        // Ring escorts stay inert until the refinement fight goes live (after Midna).
+        if (dAlbwBoss_morpheelIsRingBombParam(fopAcM_GetParam(this)) &&
+            !dAlbwBoss_morpheelFightIsLive())
+        {
+            speedF = 0.0f;
+            speed.set(0.0f, 0.0f, 0.0f);
+            attention_info.flags = 0;
+            field_0x8c0.OffTgSetBit();
+            field_0x9f8.OffAtSetBit();
+            if (field_0x5b4 != NULL) {
+                mtx_set();
+            }
+            return;
+        }
+        if (dAlbwBoss_morpheelIsRingBombParam(fopAcM_GetParam(this))) {
+            field_0x8c0.OnTgSetBit();
+        }
+#endif
         damage_check();
         (this->*field_0xb58)();
         shape_angle = current.angle;
         fopAcM_posMoveF(this, field_0x884.GetCCMoveP());
         field_0x6ac.CrrPos(dComIfG_Bgsp());
+#if TARGET_PC
+        // Boss Refinement ring escort — pin to eye orbit unless dying/hooked.
+        if (!checkAction(&daE_OctBg_c::damage) && !checkAction(&daE_OctBg_c::hook) &&
+            !checkAction(&daE_OctBg_c::bomb_wait))
+        {
+            dAlbwBoss_morpheelSnapRingBomb(this);
+        }
+#endif
         field_0x5bc.setLinkSearch(field_0xb74);
         if (field_0xb8c > 0x2000) {
             field_0xb8c = 0x2000;
@@ -202,6 +232,9 @@ void daE_OctBg_c::cc_set() {
 }
 
 void daE_OctBg_c::mtx_set() {
+    if (field_0x5b4 == NULL || field_0x5b4->getModel() == NULL) {
+        return;
+    }
     mDoMtx_stack_c::transS(current.pos.x, current.pos.y, current.pos.z);
     mDoMtx_stack_c::transM(0.0f, l_HIO.field_0x18 * 25.0f, 0.0f);
     mDoMtx_stack_c::ZXYrotM(shape_angle.x, shape_angle.y, shape_angle.z);
@@ -835,7 +868,14 @@ int daE_OctBg_c::create() {
             unk_bss_79++;
         }
         setAction(&daE_OctBg_c::born_swim);
-        daE_OctBg_Execute(this);
+#if TARGET_PC
+        // Ring escorts: don't run AI on the create frame — parent may still be
+        // loading siblings into E_bg. First real execute happens next frame.
+        if (!dAlbwBoss_morpheelIsRingBombParam(fopAcM_GetParam(this)))
+#endif
+        {
+            daE_OctBg_Execute(this);
+        }
 
     }
     return rv;

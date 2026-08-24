@@ -21,6 +21,14 @@
 #include "f_pc/f_pc_priority.h"
 #include "m_Do/m_Do_controller_pad.h"
 
+#include <cstdint>
+
+#if TARGET_PC
+#include "d/d_albw_wolf_stun.h"
+#include "dusk/fps_probe.h"
+#include "dusk/frame_interpolation.h"
+#endif
+
 #include "tracy/Tracy.hpp"
 
 void fpcM_Draw(void* i_proc) {
@@ -65,10 +73,20 @@ void fpcM_Management(fpcM_ManagementFunc i_preExecuteFn, fpcM_ManagementFunc i_p
 
 #ifdef TARGET_PC
             // FRAME INTERP NOTE: Called in m_Do_main when interp is enabled
+            // Ferry T: non-interp master exe/draw split (painter+actor-draw vs execute).
+            std::int64_t ferryT_painter = 0;
+            std::int64_t ferryT_exe = 0;
+            std::int64_t ferryT_draw = 0;
             if (!dusk::frame_interp::is_enabled())
 #endif
             {
+#ifdef TARGET_PC
+                const auto t0 = dusk::fps_probe::now_ticks();
+#endif
                 cAPIGph_Painter();
+#ifdef TARGET_PC
+                ferryT_painter = dusk::fps_probe::now_ticks() - t0;
+#endif
             }
 
             if (!dPa_control_c::isStatus(1)) {
@@ -90,12 +108,33 @@ void fpcM_Management(fpcM_ManagementFunc i_preExecuteFn, fpcM_ManagementFunc i_p
             }
 
             if (!fapGm_HIO_c::isCaptureScreen()) {
+#ifdef TARGET_PC
+                const auto tExe0 = dusk::fps_probe::now_ticks();
+#endif
                 fpcEx_Handler((fpcLnIt_QueueFunc)fpcM_Execute);
+#ifdef TARGET_PC
+                ferryT_exe = dusk::fps_probe::now_ticks() - tExe0;
+#endif
             }
 
+#if TARGET_PC
+            dAlbwWolfStun_captureAfterExecute();
+#endif
+
             if (!fapGm_HIO_c::isCaptureScreen() || fapGm_HIO_c::getCaptureScreenDivH() != 1) {
+#ifdef TARGET_PC
+                const auto tDw0 = dusk::fps_probe::now_ticks();
+#endif
                 fpcDw_Handler((fpcDw_HandlerFuncFunc)fpcM_DrawIterater, (fpcDw_HandlerFunc)fpcM_Draw);
+#ifdef TARGET_PC
+                ferryT_draw = dusk::fps_probe::now_ticks() - tDw0;
+#endif
             }
+#ifdef TARGET_PC
+            if (!dusk::frame_interp::is_enabled()) {
+                dusk::fps_probe::note_fpcm_split(ferryT_exe, ferryT_painter + ferryT_draw);
+            }
+#endif
 
             if (i_postExecuteFn != NULL) {
                 i_postExecuteFn();

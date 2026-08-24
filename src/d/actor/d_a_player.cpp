@@ -29,7 +29,12 @@ bool daPy_frameCtrl_c::checkAnmEnd() {
 }
 
 void daPy_frameCtrl_c::updateFrame() {
+#if TARGET_PC
+    // Flurry Rush slows the world, not Link.
+    updateWithRateScale(1.0f);
+#else
     update();
+#endif
     offNowSetFlg();
 }
 

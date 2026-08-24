@@ -12,8 +12,12 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_horse.h"
 #include "d/d_albw_hp_mult.h"
+#include "d/d_albw_region_mult.h"
 #include "d/d_attention.h"
 #include "d/d_focused_arts.h"
+#include "d/d_albw_flurry_rush.h"
+#include "d/d_albw_wardrobe.h"
+#include "dusk/sim_time_scale.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
 #include "f_op/f_op_actor.h"
@@ -22,6 +26,7 @@
 #include "dusk/data.hpp"
 #include "dusk/dusk.h"
 #include "dusk/main.h"
+#include "dusk/bmd_export.hpp"
 #include "m_Do/m_Do_main.h"
 
 #include <aurora/lib/internal.hpp>
@@ -112,6 +117,32 @@ namespace dusk {
             ImGui::MenuItem("Bloom", nullptr, &m_showBloomWindow);
             ImGui::MenuItem("Stub Log", nullptr, &m_showStubLog);
             ImGui::MenuItem("Actor Spawner", nullptr, &m_showActorSpawner);
+
+            if (dusk::IsGameLaunched && ImGui::BeginMenu("BMD Export (dev)")) {
+                if (ImGui::MenuItem("Export E_PM body (0x1D)")) {
+                    const auto out = dusk::ConfigPath / "bmd_export" / "E_PM_29_EDITABLE.bmd";
+                    const auto result = dusk::bmd_export::dump_object_res_bmd(
+                        "E_PM", 0x1d, out.string().c_str());
+                    m_lastBmdExportMessage = result.message;
+                }
+                if (ImGui::MenuItem("Export E_PM lamp (0x1E)")) {
+                    const auto out = dusk::ConfigPath / "bmd_export" / "E_PM_30_lamp.bmd";
+                    const auto result = dusk::bmd_export::dump_object_res_bmd(
+                        "E_PM", 0x1e, out.string().c_str());
+                    m_lastBmdExportMessage = result.message;
+                }
+                if (ImGui::MenuItem("Export E_PM trumpet (0x1F)")) {
+                    const auto out = dusk::ConfigPath / "bmd_export" / "E_PM_31_trumpet.bmd";
+                    const auto result = dusk::bmd_export::dump_object_res_bmd(
+                        "E_PM", 0x1f, out.string().c_str());
+                    m_lastBmdExportMessage = result.message;
+                }
+                if (!m_lastBmdExportMessage.empty()) {
+                    ImGui::Separator();
+                    ImGui::TextWrapped("%s", m_lastBmdExportMessage.c_str());
+                }
+                ImGui::EndMenu();
+            }
 
             if (!dusk::IsGameLaunched) {
                 ImGui::EndDisabled();
@@ -463,6 +494,11 @@ namespace dusk {
             ImGuiStringViewText(
                 fmt::format("Category: {}\n", lockonHpCategoryName(category)));
             ImGuiStringViewText(fmt::format("True HP mult: {}x\n", trueHpMult));
+            ImGuiStringViewText(fmt::format(
+                "Region mult: {:.2f}x (dmg {:.2f} / hp {:.2f} / rup {:.2f}×rd {:.0f})\n",
+                dAlbwRegionMult_getTableMult(), dAlbwRegionMult_getDamageMult(),
+                dAlbwRegionMult_getHealthMult(), dAlbwRegionMult_getRupeeMult(),
+                dAlbwRegionMult_getRegionDamageRupeeMult()));
             ImGuiStringViewText(
                 fmt::format("Battle targets nearby: {}\n", battleTargets));
 
@@ -495,7 +531,7 @@ namespace dusk {
             const int fillDen = dFocusedArts_getFillDenominator();
             const int spendCol = dFocusedArts_getSpendColumn();
 
-            ImGui::Text("Focused Arts (test)");
+            ImGui::Text("Focused Arts");
             ImGui::Separator();
             ImGuiStringViewText(fmt::format("Tier: {} (purchased {})\n",
                                             dFocusedArts_getEffectiveTier(),
@@ -552,6 +588,119 @@ namespace dusk {
             if (ImGui::Button("Reset FA meter")) {
                 dFocusedArts_resetRuntimeState();
             }
+            if (dFlurryRush_isEnabled()) {
+                ImGui::Separator();
+                ImGui::Text("Flurry Rush (FlurryTEST)");
+                const dFlurryRushSwordProfile profile = dFlurryRush_getEquippedSwordProfile();
+                const dFlurryRushProfile prof = dFlurryRush_getProfile(profile);
+                ImGuiStringViewText(fmt::format("Profile: {} (gate {} cost {} max {} hits)\n",
+                                                dFlurryRush_getProfileLabel(profile),
+                                                prof.spendGate, prof.barCost, prof.maxHits));
+                ImGuiStringViewText(fmt::format(
+                    "FA dodge spend: {} (bank {}/{} gate {} cost {})\n",
+                    dFlurryRush_canOfferPerfectDodgeSpend() ? "ready" : "blocked",
+                    dFocusedArts_getBankCount(), maxBank, prof.spendGate, prof.barCost));
+                ImGuiStringViewText(fmt::format("Active: {} mode={} hits={} started={}\n",
+                                                dFlurryRush_isActive() ? "yes" : "no",
+                                                dFlurryRush_getModeLabel(dFlurryRush_getMode()),
+                                                dFlurryRush_getHitCount(),
+                                                dFlurryRush_hasStartedAttack() ? "yes" : "no"));
+                if (dFlurryRush_isActive() && !dFlurryRush_hasStartedAttack()) {
+                    ImGuiStringViewText(fmt::format("Start gate: {:.2f}s\n",
+                                                    dFlurryRush_getStartGateRemainingSeconds()));
+                }
+                ImGuiStringViewText(fmt::format("World sim: {:.1f}x (live {:.1f}x)  Link: 1.0x  ALBW suppress: {}\n",
+                                                dFlurryRush_getTimeScale(),
+                                                dusk::getSimTimeScale(),
+                                                dFlurryRush_shouldSuppressAlbwSpend() ? "yes"
+                                                                                      : "no"));
+                ImGuiStringViewText(fmt::format("Lock telegraph: {}\n",
+                                                dFlurryRush_getTelegraphLabel(
+                                                    dFlurryRush_queryLockTargetTelegraph())));
+                if (dFlurryRush_hasPendingPerfectDodge()) {
+                    ImGuiStringViewText(fmt::format("Pending perfect dodge: {} (enter proc on land)\n",
+                                                    dFlurryRush_getDodgeKindLabel(
+                                                        dFlurryRush_getPendingDodgeKind())));
+                }
+                const char* lastDodge = dFlurryRush_getLastDodgeAttemptText();
+                if (lastDodge[0] != '\0') {
+                    ImGuiStringViewText(fmt::format("Last dodge try: {}\n", lastDodge));
+                }
+                const char* lastEvent = dFlurryRush_getLastEventText();
+                if (lastEvent[0] != '\0') {
+                    ImGuiStringViewText(fmt::format("Last: {}\n", lastEvent));
+                }
+                if (!dFlurryRush_isActive()) {
+                    if (ImGui::Button("Start Flurry Rush (debug)")) {
+                        dFlurryRush_debugBeginMeleeOnLockTarget();
+                    }
+                } else {
+                    if (ImGui::Button("Mark attack started (debug)")) {
+                        dFlurryRush_onAttackStarted();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("End Flurry Rush")) {
+                        dFlurryRush_end(dFlurryRushEnd_Debug);
+                    }
+                }
+            }
+        }
+        ImGui::End();
+        ImGui::PopFont();
+    }
+
+    void ImGuiMenuTools::ShowWardrobeRecoveryDebugOverlay() {
+        if (!dAlbwWardrobe_isDebugOverlayEnabled() || !dusk::IsGameLaunched ||
+            !isPlaySceneActive())
+        {
+            return;
+        }
+
+        dAlbwWardrobeDebugSnapshot snap{};
+        dAlbwWardrobe_fillDebugSnapshot(&snap);
+
+        ImGui::PushFont(ImGuiEngine::fontMono);
+
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav;
+        SetOverlayWindowLocation(2);
+        windowFlags |= ImGuiWindowFlags_NoMove;
+
+        ImGui::SetNextWindowBgAlpha(0.65f);
+        if (ImGui::Begin("Wardrobe Recovery", nullptr, windowFlags)) {
+            ImGui::Text("Quick Swap Resistance");
+            ImGui::Separator();
+            ImGuiStringViewText(
+                fmt::format("Quick Swap: {}  Resistance: {}  Wolf: {}\n",
+                            snap.quickSwapEnabled ? "ON" : "off",
+                            snap.resistanceActive ? "active" : "inactive",
+                            snap.wolfForm ? "yes" : "no"));
+            ImGuiStringViewText(fmt::format("Recovery mult: {:.2f}\n", snap.recoveryMult));
+            ImGuiStringViewText(
+                fmt::format("Penalties: sword {:.0f}%  shield {:.0f}%  outfit {:.0f}%\n",
+                            snap.swordPenalty * 100.0f, snap.shieldPenalty * 100.0f,
+                            snap.outfitPenalty * 100.0f));
+            ImGui::Separator();
+            ImGuiStringViewText(fmt::format("Equipped: {} / {} / {}\n", snap.equippedSword,
+                                            snap.equippedShield, snap.equippedOutfit));
+            ImGuiStringViewText(
+                fmt::format("Active wardrobe: {} swords, {} shields, {} outfits ({} owned)\n",
+                            snap.activeSwords, snap.activeShields, snap.activeOutfitTypes,
+                            snap.ownedOutfitTypes));
+            ImGuiStringViewText(fmt::format("Postman stored: {} swords, {} shields, {} outfits\n",
+                                            snap.storedSwords, snap.storedShields,
+                                            snap.storedOutfitTypes));
+            ImGui::Separator();
+            ImGuiStringViewText(
+                fmt::format("Passive recovery / 100ms: {} -> {} (normal)\n",
+                            snap.baseNormalRecoveryPer100ms, snap.taxedNormalRecoveryPer100ms));
+            ImGuiStringViewText(
+                fmt::format("Lockout recovery / 100ms: {} -> {} (lockout)\n",
+                            snap.baseLockoutRecoveryPer100ms, snap.taxedLockoutRecoveryPer100ms));
+            ImGuiStringViewText(
+                fmt::format("ALBW meter: {} / {}  locked={}\n", dMeter2_getALBWMeterValue(),
+                            dMeter2_getALBWMaxValue(), dMeter2_isALBWLocked() ? "yes" : "no"));
         }
         ImGui::End();
         ImGui::PopFont();

@@ -1,4 +1,5 @@
 #include "f_ap/f_ap_game.h"
+#include <cstdint>
 #include <cstring>
 #include "DynamicLink.h"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.h"
@@ -16,8 +17,10 @@
 #include "d/d_tresure.h"
 #include "dusk/achievements.h"
 #include "dusk/frame_interpolation.h"
+#include "dusk/fps_probe.h"
 #include "dusk/livesplit.h"
 #include "dusk/logging.h"
+#include "dusk/mod_loader.hpp"
 #include "f_op/f_op_camera_mng.h"
 #include "f_op/f_op_draw_tag.h"
 #include "f_op/f_op_overlap_mng.h"
@@ -29,9 +32,13 @@
 #include "tracy/Tracy.hpp"
 #include <dusk/gamepad_color.h>
 #include <dusk/autosave.h>
+#include "d/d_albw_flurry_rush.h"
+#include "d/d_menu_ring.h"
+#include "d/d_meter2_info.h"
 #include "dusk/action_bindings.h"
 #include "dusk/dpad_quick_swap.h"
 #include "dusk/menu_pointer.h"
+#include "dusk/sim_time_scale.h"
 #endif
 
 fapGm_HIO_c::fapGm_HIO_c() {
@@ -734,11 +741,19 @@ void fapGm_After() {
 }
 
 #ifdef TARGET_PC
+static std::int64_t s_ferryT_recordT0 = 0;
+
 static void fapGm_Before() {
     dusk::frame_interp::begin_record();
+    s_ferryT_recordT0 = dusk::fps_probe::now_ticks();
 }
 
 static void fapGm_AfterRecord() {
+    if (s_ferryT_recordT0 != 0) {
+        dusk::fps_probe::add_bucket(dusk::fps_probe::Bucket::FrameInterp,
+                                    dusk::fps_probe::now_ticks() - s_ferryT_recordT0);
+        s_ferryT_recordT0 = 0;
+    }
     dusk::frame_interp::end_record();
     fapGm_After();
 }
@@ -767,23 +782,39 @@ static void duskExecute() {
     }
 
     if (dusk::isPadModifierRHeldExclusive(PAD_1) && mDoCPd_c::getTrigY(PAD_1)) {
-        if (!dusk::isDpadQuickSwapEnabled()) {
-            if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
-                dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
-            }
+        if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
+            dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
         }
     }
 
     if (dusk::canUseDpadQuickSwap(0)) {
         if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
-            if (dusk::getActionBindTrig(dusk::ActionBinds::QUICK_TRANSFORM, 0)) {
-                dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
-            }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SWORD, 0)) {
-                dusk::cycleNextSword();
+                dusk::cycleNextSword();  // human form: sword cycle (no-ops in wolf form)
+                // ALBW Port: D-pad Up in WOLF form = Wolf Howl art.  handleWolfHowlBurst()
+                // self-gates on wolf + Wolf Combat + unlock/charge, so it no-ops in human form;
+                // cycleNextSword() likewise no-ops in wolf form — the two are form-exclusive.
+                dynamic_cast<daAlink_c*>(link)->handleWolfHowlBurst();
             }
             if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_SHIELD, 0)) {
-                dusk::cycleNextShield();
+                dusk::cycleNextShield();  // human form: shield cycle (no-ops in wolf form)
+                // ALBW Port: D-pad Right in WOLF form = "Midna's Grasp" art.  Self-gates on
+                // wolf + Wolf Combat + unlock/charges, so it no-ops in human form (form-exclusive
+                // with cycleNextShield, same pattern as the Wolf Howl above).
+                dynamic_cast<daAlink_c*>(link)->handleWolfArmBurst();
+            }
+            if (dusk::getActionBindTrig(dusk::ActionBinds::CYCLE_OUTFIT, 0)) {
+                dusk::cycleNextOutfit();
+            }
+        }
+    }
+
+    dusk::tickLayeredLeftDpad(0);
+
+    if (dusk::getActionBindTrig(dusk::ActionBinds::QUICK_TRANSFORM, 0)) {
+        if (!dusk::quickTransformBoundToDpadDown(0)) {
+            if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
+                dynamic_cast<daAlink_c*>(link)->handleQuickTransform();
             }
         }
     }
@@ -799,8 +830,21 @@ static void duskExecute() {
         if (const auto link = g_dComIfG_gameInfo.play.getPlayer(0)) {
             auto spinnerActor = (fopAc_ac_c*)dynamic_cast<daAlink_c*>(link)->getSpinnerActor();
             if (spinnerActor) {
+#if TARGET_PC
+                // Lockout spinner perk: +15% on Fast Spinner step and soft cap too.
+                f32 step = 2.f;
+                f32 cap  = 60.f;
+                if (dMeter2_isALBWLocked()) {
+                    step *= 1.15f;
+                    cap *= 1.15f;
+                }
+                if (spinnerActor->speedF < cap) {
+                    spinnerActor->speedF += step;
+                }
+#else
                 if (spinnerActor->speedF < 60.f)
                     spinnerActor->speedF += 2.f;
+#endif
             }
         }
     }
@@ -851,6 +895,8 @@ static void duskExecute() {
     if (dusk::getSettings().game.infiniteOxygen) {
         dComIfGp_setOxygen(dComIfGp_getMaxOxygen());
     }
+
+    dusk::mods::ModLoader::instance().tick();
 }
 #endif
 
@@ -861,6 +907,17 @@ void fapGm_Execute() {
         DuskLog.debug("fapGm_Execute frame={}", sExecCount);
     }
     sExecCount++;
+
+#if TARGET_PC
+    // Keep world pace aligned with flurry / quick-equip every sim tick.
+    // Link stays at 1.0x during Flurry only (see fopAcM_posMove + daPy_frameCtrl_c).
+    // Quick-equip live wheel: 0.3x world (70% slowdown), no pause flag.
+    f32 simScale = dFlurryRush_getTimeScale();
+    if (dMenu_Ring_c::isQuickEquipLiveWorld()) {
+        simScale = dMenu_Ring_c::getQuickEquipSimScale();
+    }
+    dusk::setSimTimeScale(simScale);
+#endif
 
     #if DEBUG
     JUTDbPrint::getManager()->setCharColor(g_HIO.mColor);

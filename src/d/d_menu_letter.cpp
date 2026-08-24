@@ -19,6 +19,7 @@
 
 #ifdef TARGET_PC
 #include "dusk/achievements.h"
+#include "d/d_albw_mail.h"
 #include "dusk/menu_pointer.h"
 #include "dusk/ui/touch_controls.hpp"
 
@@ -275,8 +276,16 @@ void dMenu_Letter_c::_draw() {
                 uVar10 = (J2DTextBox*)field_0x2f4[i]->getPanePtr();
             }
             J2DTextBox* uVar18 = (J2DTextBox*)field_0x2ec[i]->getPanePtr();
-            mpString->getStringPage(dMenu_Letter::getLetterText(dVar1), field_0x3e3 - 1,
-                                    D_MENU_LETTER_LINE_MAX, uVar18, uVar10, NULL, NULL, 0);
+#if TARGET_PC
+            if (dAlbwMail_isRuntimeLetter(dVar1)) {
+                dAlbwMail_drawLetterBodyPage(dVar1, field_0x3e3 - 1, D_MENU_LETTER_LINE_MAX, uVar18,
+                                             uVar10, mpString);
+            } else
+#endif
+            {
+                mpString->getStringPage(dMenu_Letter::getLetterText(dVar1), field_0x3e3 - 1,
+                                        D_MENU_LETTER_LINE_MAX, uVar18, uVar10, NULL, NULL, 0);
+            }
         }
         mpString->drawOutFont((J2DTextBox*)field_0x2ec[1]->getPanePtr(), -1.0f);
         if (mProcess == 4) {
@@ -440,7 +449,16 @@ void dMenu_Letter_c::wait_move() {
                 Z2GetAudioMgr()->seStart(Z2SE_SY_CURSOR_ITEM, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f,
                                          0);
             }
-        } else if (mDoCPd_c::getTrigR(PAD_1)) {
+        // ============================================
+        // MODIFIED CODE — ALBW Port (PC only)
+        // GC trigger clicks (L/R) are binding-dependent on PC (see
+        // d_menu_skill.cpp wait_move); accept D-pad Left/Right too.
+        // ============================================
+        } else if (mDoCPd_c::getTrigR(PAD_1)
+#if TARGET_PC
+                   || mDoCPd_c::getTrigRight(PAD_1)
+#endif
+        ) {
             if (field_0x36f < field_0x374 - 1) {
                 field_0x372 = field_0x36f;
                 field_0x36f++;
@@ -448,7 +466,11 @@ void dMenu_Letter_c::wait_move() {
                 Z2GetAudioMgr()->seStart(Z2SE_SY_MENU_SUB_NEXT, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
                                          -1.0f, 0);
             }
-        } else if (mDoCPd_c::getTrigL(PAD_1)) {
+        } else if (mDoCPd_c::getTrigL(PAD_1)
+#if TARGET_PC
+                   || mDoCPd_c::getTrigLeft(PAD_1)
+#endif
+        ) {
             if (field_0x36f) {
                 field_0x372 = field_0x36f;
                 field_0x36f--;
@@ -563,10 +585,25 @@ void dMenu_Letter_c::read_open_init() {
             text1 = (J2DTextBox*)field_0x2f4[i]->getPanePtr();
         }
         J2DTextBox* text2 = (J2DTextBox*)field_0x2ec[i]->getPanePtr();
-        mpString->getStringPage(dMenu_Letter::getLetterText(idx), field_0x3e3 - 1,
-                                D_MENU_LETTER_LINE_MAX, text2, text1, NULL, NULL, 0);
+#if TARGET_PC
+        if (dAlbwMail_isRuntimeLetter(idx)) {
+            dAlbwMail_drawLetterBodyPage(idx, field_0x3e3 - 1, D_MENU_LETTER_LINE_MAX, text2, text1,
+                                         mpString);
+        } else
+#endif
+        {
+            mpString->getStringPage(dMenu_Letter::getLetterText(idx), field_0x3e3 - 1,
+                                    D_MENU_LETTER_LINE_MAX, text2, text1, NULL, NULL, 0);
+        }
     }
-    field_0x3e2 = mpString->getPageMax(D_MENU_LETTER_LINE_MAX);
+#if TARGET_PC
+    if (dAlbwMail_isRuntimeLetter(idx)) {
+        field_0x3e2 = dAlbwMail_getLetterBodyPageMax(idx, mpString, D_MENU_LETTER_LINE_MAX);
+    } else
+#endif
+    {
+        field_0x3e2 = mpString->getPageMax(D_MENU_LETTER_LINE_MAX);
+    }
     if (field_0x3e2 > 1) {
         char acStack_30[20];
         SAFE_SPRINTF(acStack_30, "%d/%d", field_0x3e3, field_0x3e2);
@@ -718,8 +755,16 @@ void dMenu_Letter_c::read_next_fadein_init() {
             text1 = (J2DTextBox*)field_0x2f4[i]->getPanePtr();
         }
         J2DTextBox* text2 = (J2DTextBox*)field_0x2ec[i]->getPanePtr();
-        mpString->getStringPage(dMenu_Letter::getLetterText(idx), field_0x3e3 - 1,
-                                D_MENU_LETTER_LINE_MAX, text2, text1, NULL, NULL, 0);
+#if TARGET_PC
+        if (dAlbwMail_isRuntimeLetter(idx)) {
+            dAlbwMail_drawLetterBodyPage(idx, field_0x3e3 - 1, D_MENU_LETTER_LINE_MAX, text2, text1,
+                                         mpString);
+        } else
+#endif
+        {
+            mpString->getStringPage(dMenu_Letter::getLetterText(idx), field_0x3e3 - 1,
+                                    D_MENU_LETTER_LINE_MAX, text2, text1, NULL, NULL, 0);
+        }
     }
     char acStack_30[10];
     SAFE_SPRINTF(acStack_30, "%d/%d", field_0x3e3, field_0x3e2);
@@ -1254,10 +1299,20 @@ void dMenu_Letter_c::setPageText() {
     int dVar1 = field_0x36f * 6;
     for (int i = 0; i < field_0x373; i++) {
         u8 idx = field_0x3ac[i + dVar1] - 1;
-        mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x124[i][0], NULL, NULL, NULL, 0);
-        mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x124[i][1], NULL, NULL, NULL, 0);
-        mpString->getString(dMenu_Letter::getLetterName(idx),field_0x124[i][2], NULL, NULL, NULL, 0);
-        mpString->getString(dMenu_Letter::getLetterName(idx),field_0x124[i][3], NULL, NULL, NULL, 0);
+#if TARGET_PC
+        if (dAlbwMail_isRuntimeLetter(idx)) {
+            dAlbwMail_drawLetterSubject(idx, field_0x124[i][0]);
+            dAlbwMail_drawLetterSubject(idx, field_0x124[i][1]);
+            dAlbwMail_drawLetterSender(idx, field_0x124[i][2]);
+            dAlbwMail_drawLetterSender(idx, field_0x124[i][3]);
+        } else
+#endif
+        {
+            mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x124[i][0], NULL, NULL, NULL, 0);
+            mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x124[i][1], NULL, NULL, NULL, 0);
+            mpString->getString(dMenu_Letter::getLetterName(idx),field_0x124[i][2], NULL, NULL, NULL, 0);
+            mpString->getString(dMenu_Letter::getLetterName(idx),field_0x124[i][3], NULL, NULL, NULL, 0);
+        }
     }
     for (int i = 0; i < 6; i++) {
         if (i < field_0x373) {
@@ -1277,10 +1332,20 @@ void dMenu_Letter_c::setDMYPageText() {
     int dVar1 = field_0x372 * 6;
     for (int i = 0; i < field_0x373; i++) {
         u8 idx = field_0x3ac[i + dVar1] - 1;
-        mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x184[i][0], NULL, NULL, NULL, 0);
-        mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x184[i][1], NULL, NULL, NULL, 0);
-        mpString->getString(dMenu_Letter::getLetterName(idx),field_0x184[i][2], NULL, NULL, NULL, 0);
-        mpString->getString(dMenu_Letter::getLetterName(idx),field_0x184[i][3], NULL, NULL, NULL, 0);
+#if TARGET_PC
+        if (dAlbwMail_isRuntimeLetter(idx)) {
+            dAlbwMail_drawLetterSubject(idx, field_0x184[i][0]);
+            dAlbwMail_drawLetterSubject(idx, field_0x184[i][1]);
+            dAlbwMail_drawLetterSender(idx, field_0x184[i][2]);
+            dAlbwMail_drawLetterSender(idx, field_0x184[i][3]);
+        } else
+#endif
+        {
+            mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x184[i][0], NULL, NULL, NULL, 0);
+            mpString->getString(dMenu_Letter::getLetterSubject(idx),field_0x184[i][1], NULL, NULL, NULL, 0);
+            mpString->getString(dMenu_Letter::getLetterName(idx),field_0x184[i][2], NULL, NULL, NULL, 0);
+            mpString->getString(dMenu_Letter::getLetterName(idx),field_0x184[i][3], NULL, NULL, NULL, 0);
+        }
     }
     for (int i = 0; i < 6; i++) {
         if (i < field_0x373) {

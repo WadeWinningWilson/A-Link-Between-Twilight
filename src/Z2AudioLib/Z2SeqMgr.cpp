@@ -1423,6 +1423,47 @@ void Z2SeqMgr::stopWolfHowlSong() {
     }
 }
 
+#if TARGET_PC
+// ============================================
+// NEW CODE — ALBW Port (Wolf Howl combat art)
+// Is the current fanfare one of the wolf-howl tunes?  Mirrors stopWolfHowlSong's case list, checking
+// both the pending id (mFanfareCount ramp, before the handle attaches) and the playing handle.  Used
+// by Z2SeMgr::isSoundCulling to let enemy SFX through during the combat howl ONLY — other fanfares
+// (item-get jingles etc.) keep the vanilla culling.
+// ============================================
+static bool z2IsWolfHowlBgmID(u32 id) {
+    switch (id) {
+    case Z2BGM_HOWL_TOBIKUSA:
+    case Z2BGM_HOWL_UMAKUSA:
+    case Z2BGM_HOWL_ZELDASONG:
+    case Z2BGM_HOWL_LIGHT_PRLD:
+    case Z2BGM_LIGHT_PRLD_DUO:
+    case Z2BGM_SOUL_REQ_HOWL:
+    case Z2BGM_SOUL_REQ_DUO:
+    case Z2BGM_HEALING_HOWL:
+    case Z2BGM_HEALING_DUO:
+    case Z2BGM_NEW_01_HOWL:
+    case Z2BGM_NEW_01_DUO:
+    case Z2BGM_NEW_02_HOWL:
+    case Z2BGM_NEW_02_DUO:
+    case Z2BGM_NEW_03_HOWL:
+    case Z2BGM_NEW_03_DUO:
+        return true;
+    }
+    return false;
+}
+
+bool Z2SeqMgr::isWolfHowlSong() {
+    if (z2IsWolfHowlBgmID(mFanfareID)) {
+        return true;
+    }
+    if (mFanfareHandle && z2IsWolfHowlBgmID(mFanfareHandle->getID())) {
+        return true;
+    }
+    return false;
+}
+#endif
+
 void Z2SeqMgr::setHeightVolMod(bool isVolMod, u32 fadeTime) {
     mFlags.mHeightVolMod = isVolMod;
     if (!isVolMod) {

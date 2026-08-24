@@ -29,6 +29,17 @@ void dKyw_evt_wind_set(s16 angleX, s16 angleY);
 void dKyw_custom_windpower(f32 pow);
 void dKyw_evt_wind_set_go();
 void dKyw_wether_proc();
+#if TARGET_PC
+// §101 — package calm map / kytag01 influences for hosted WW foam.
+struct WAVE_INFO;
+WAVE_INFO* const* dKyw_getWaveInfl();
+void dKyw_wave_calm_onStage(const char* stage);
+void dKyw_wave_calm_update();
+// Ferry F Stage 2 — ambient wind on WW host stages (F_DL*/R_DL* only).
+void dKyw_ww_host_wind_onStage(const char* stage);
+// Ferry W-LINE — wind streaks teardown (also called from wether_delete).
+void dKyw_ww_windline_delete();
+#endif
 void dKyw_get_AllWind_vec(cXyz* i_position, cXyz* i_direction, f32* i_power);
 void dKyw_pntwind_cut(WIND_INFLUENCE* i_pntwind);
 cXyz dKyw_pntwind_get_vecpow(cXyz* param_0);
@@ -354,6 +365,38 @@ public:
     /* 0x00018 */ u8* mpKumoLightRes;
     /* 0x0001C */ EF_EVIL_EFF mEffect[2000];
     /* 0x2135C */ u8 field_0x2135c[8];
+};
+
+// §97b — WW shore-foam (donor d_kankyo_wether). Separable weather packet; not d_a_sea.
+struct WAVE_EFF {
+    WAVE_EFF();
+    ~WAVE_EFF();
+
+    /* 0x00 */ cXyz mPos;
+    /* 0x0C */ cXyz mBasePos;
+    /* 0x18 */ f32 mSpeed;
+    /* 0x1C */ f32 mScale;
+    /* 0x20 */ f32 mCounterSpeed;
+    /* 0x24 */ f32 mCounter;
+    /* 0x28 */ f32 mAlpha;
+    /* 0x2C */ f32 mStrengthEnv;
+    /* 0x30 */ s16 field_0x30;
+    /* 0x32 */ s16 field_0x32;
+    /* 0x34 */ s8 mStatus;
+};
+
+class dKankyo_wave_Packet : public J3DPacket {
+public:
+    dKankyo_wave_Packet() {}
+
+    virtual void draw();
+    virtual ~dKankyo_wave_Packet();
+
+    /* 0x0010 */ u8* mpTexUsonami;
+    /* 0x0014 */ u8* mpTexUsonamiM;
+    /* 0x0018 */ WAVE_EFF mEff[300];
+    /* 0x41B8 */ f32 mSkewWidth;
+    /* 0x41BC */ f32 mSkewDir;
 };
 
 #endif /* D_KANKYO_D_KANKYO_WETHER_H */

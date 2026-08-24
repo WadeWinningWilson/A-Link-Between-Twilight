@@ -270,6 +270,7 @@ public:
     BOOL chkAction(actionFunc);
     BOOL setAction(actionFunc);
     int wait(void*);
+    int heroShadeCombat(void*);  // ALBW: mType-7 combat AI (Hero's Shade Secret Boss)
     int talk(void*);
     int test(void*);
     void setSceneChange(int);
@@ -427,7 +428,7 @@ private:
     /* 0x0E50 */ dKy_tevstr_c mTevStr;
     /* 0x11D8 */ NPC_KN_HIO_CLASS* mpHIO;
     /* 0x11DC */ dCcD_Cyl mCylCc;
-    /* 0x1318 */ dCcD_Sph mSphCc[2];
+    /* 0x1318 */ dCcD_Sph mSphCc[3];  // ALBW: [2] is a base sphere for the mType-7 combat swing (point-blank)
     /* 0x1588 */ mDoExt_bckAnm mPodBck;
     /* 0x15A4 */ u32 mPodAnmFlags;
     /* 0x15A8 */ u32 field_0x15A8;
@@ -461,6 +462,6 @@ private:
     /* 0x1754 */ u8 field_0x1754;
 };
 
-STATIC_ASSERT(sizeof(daNpc_Kn_c) == 0x1758);
+STATIC_ASSERT(sizeof(daNpc_Kn_c) == 0x1890);  // ALBW: +1 dCcD_Sph (0x138) for the 3rd blade sphere
 
 #endif /* D_A_NPC_KN_H */

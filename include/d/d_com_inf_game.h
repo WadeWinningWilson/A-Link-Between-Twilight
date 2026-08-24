@@ -17,7 +17,19 @@
 #include "m_Do/m_Do_graphic.h"
 #include <cstring>
 
+// Mods reach this header through the game ABI include set, which has no Tracy on it.
+#if defined(DUSK_BUILDING_GAME)
 #include "tracy/Tracy.hpp"
+#else
+#ifndef ZoneScoped
+#define ZoneScoped
+#define ZoneScopedN(name)
+#endif
+#endif
+
+#if TARGET_PC
+#include "d/d_ext_save_guard.h"
+#endif
 
 enum dComIfG_ButtonStatus {
     /* 0x00 */ BUTTON_STATUS_NONE,
@@ -648,6 +660,7 @@ public:
     u16 getItemNowLife() { return mItemInfo.mItemNowLife; }
     void setItemNowLife(u16 life) { mItemInfo.mItemNowLife = life; }
     u8 getMesgStatus() { return mItemInfo.mMesgStatus; }
+    void setMesgStatus(u8 status) { mItemInfo.mMesgStatus = status; }  // §245 scope subsystem
     u8 getRStatus() { return mItemInfo.mRStatus; }
     bool isRSetFlag(u8 flag) { return (mItemInfo.mRSetFlag & flag) ? true : false; }
     void setRStatus(u8 status, u8 flag) {
@@ -1049,7 +1062,7 @@ public:
 
 STATIC_ASSERT(122384 == sizeof(dComIfG_inf_c));
 
-extern dComIfG_inf_c g_dComIfG_gameInfo;
+DUSK_GAME_EXTERN dComIfG_inf_c g_dComIfG_gameInfo;
 extern GXColor g_blackColor;
 extern GXColor g_clearColor;
 extern GXColor g_whiteColor;
@@ -1941,10 +1954,20 @@ inline BOOL dComIfGs_isSaveTbox(int i_stageNo, int i_no) {
 }
 
 inline void dComIfGs_onSaveSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onSaveSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getSavedata().getSave(i_stageNo).getBit().onSwitch(i_no);
 }
 
 inline void dComIfGs_offSaveSwitch(int i_stageNo, int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("offSaveSwitch", i_stageNo, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getSavedata().getSave(i_stageNo).getBit().offSwitch(i_no);
 }
 
@@ -2117,10 +2140,20 @@ inline BOOL dComIfGs_isStageMiddleBoss() {
 }
 
 inline void dComIfGs_onTbox(int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("onTbox", -1, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getMemory().getBit().onTbox(i_no);
 }
 
 inline void dComIfGs_offTbox(int i_no) {
+#if TARGET_PC
+    if (dExtWwSave_refuseNativeWrite("offTbox", -1, i_no)) {
+        return;
+    }
+#endif
     g_dComIfG_gameInfo.info.getMemory().getBit().offTbox(i_no);
 }
 
@@ -2826,11 +2859,67 @@ inline int dComIfGp_evmng_getMyStaffId(const char* i_staffname, fopAc_ac_c* i_ac
     return dComIfGp_getPEvtManager()->getMyStaffId(i_staffname, i_actor, i_tagId);
 }
 
+
+// ============================================================
+// §423 A4 — THE DISPATCH SEAM (the JA1/DSP-boundary equivalent).
+//
+// SCOPE CORRECTION to the §423 plan, stated plainly: the plan said "flip the
+// 26 evmng accessors". Only THREE of them diverge between the games —
+// getMyActIdx, getIsAddvance, cutEnd (audit №284's proven fork surface). The
+// other 23 are data getters over the SHARED format (getMyIntegerP/StringP/
+// FloatP/XyzP, setGoal, …) and have no WW version BECAUSE THEY DO NOT
+// DIVERGE. Flipping them would have been ceremony; per the [E7] law, share
+// what agrees. So A4 is three lines of dispatch, not twenty-six.
+//
+// Gate is JEvent1::evt1_isActive() — false while DUSK_EVT1_NATIVE == 0, so
+// this whole seam is compiled-live but inert until the switch flips.
+// ============================================================
+#include "d/ext_evt/evt1_boundary.h"
+
+namespace JEvent1 {
+int evt1_getMyActIdx(int, DUSK_CONST char* DUSK_CONST*, int, BOOL, int);
+BOOL evt1_getIsAddvance(int);
+void evt1_cutEnd(int);
+}
+
 inline int dComIfGp_evmng_getIsAddvance(int i_staffId) {
+    if (JEvent1::evt1_isActive()) {
+        return JEvent1::evt1_getIsAddvance(i_staffId);
+    }
     return dComIfGp_getPEvtManager()->getIsAddvance(i_staffId);
 }
 
+// §717 H1 probe: out-of-line reporter for the §713c guard (defined in
+// d_event.cpp — receiver TU, present in every build configuration).
+void dEvtFork_guardReport(int i_staffId);
+
 inline int dComIfGp_evmng_getMyActIdx(int i_staffId, DUSK_CONST char* DUSK_CONST* i_actions, int i_actionNum, BOOL param_3, BOOL param_4) {
+    // ========================================================================
+    // §713c (WAVE-1 row 16, History's above-the-fork requirement): TEARDOWN
+    // GUARD ABOVE THE STACK FORK. Both managers below walk the SAME
+    // dEvDtBase_c staff structures, and an actor still in its demo action can
+    // query after its event ended and the base was torn down (the knob00
+    // fault at staff+0x218 — №283/№285 lifetime family, game-agnostic). One
+    // liveness test here covers BOTH stacks for EVERY demo actor; each
+    // dialect keeps its own no-match contract (WW -1, TP 0).
+    // ========================================================================
+    {
+        dEvDtBase_c& base = dComIfGp_getEventManager().getBase();
+        if (base.getStaffP() == NULL || base.getHeaderP() == NULL) {
+            // §717 H1: this return was SILENT — if it fires DURING an event
+            // (type set, staff not yet built / BASE_NULL selected) it kills
+            // every cut invisibly. The report is out-of-line (d_event.cpp) and
+            // one-shots the full discriminator tuple.
+            dEvtFork_guardReport(i_staffId);
+            return JEvent1::evt1_isActive() ? -1 : 0;
+        }
+    }
+    // §423 A4: the WW manager's no-match contract is -1; TP's is 0. Each game
+    // now gets its own, so §295's gate in d_event_manager.cpp has nothing left
+    // to do (deletes at A5/A6).
+    if (JEvent1::evt1_isActive()) {
+        return JEvent1::evt1_getMyActIdx(i_staffId, i_actions, i_actionNum, param_3, param_4);
+    }
     return dComIfGp_getPEvtManager()->getMyActIdx(i_staffId, i_actions, i_actionNum, param_3, param_4);
 }
 
@@ -2855,6 +2944,13 @@ inline int dComIfGp_evmng_getMySubstanceNum(int i_staffId, DUSK_CONST char* i_da
 }
 
 inline void dComIfGp_evmng_cutEnd(int i_staffId) {
+    // §423 A4: the donor's cutEnd has NO event-mode gate; TP's does (restored
+    // by №285). Each game gets its own — §320's global `if (false && …)` is
+    // now compensating for nothing.
+    if (JEvent1::evt1_isActive()) {
+        JEvent1::evt1_cutEnd(i_staffId);
+        return;
+    }
     dComIfGp_getPEvtManager()->cutEnd(i_staffId);
 }
 
@@ -3777,6 +3873,11 @@ inline void dComIfGp_setItemNowLife(u16 life) {
 
 inline u8 dComIfGp_getMesgStatus() {
     return g_dComIfG_gameInfo.play.getMesgStatus();
+}
+
+// §245 scope subsystem: WW fopMsgM_getScopeMode() writes the regular mesg status.
+inline void dComIfGp_setMesgStatus(u8 status) {
+    g_dComIfG_gameInfo.play.setMesgStatus(status);
 }
 
 inline u8 dComIfGp_getRStatus() {

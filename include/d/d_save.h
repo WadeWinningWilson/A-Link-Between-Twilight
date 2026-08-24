@@ -37,10 +37,11 @@ static const int BIG_WALLET_MAX = 600;
 static const int GIANT_WALLET_MAX = 1000;
 // ============================================
 // NEW CODE — ALBW Port
-// Colossal Wallet: 9,999-rupee cap, awarded on Cave of Ordeals completion.
-// The biggerWallets setting does not scale this value — it is always 9999.
+// Colossal Wallet: 50,000-rupee cap (Phase C1). Awarded on Cave of Ordeals
+// completion. biggerWallets does not scale this — always COLOSSAL_WALLET_MAX.
+// Fits u16 mRupee (no save-layout change). HUD uses insert 10000s digit.
 // ============================================
-static const int COLOSSAL_WALLET_MAX = 9999;
+static const int COLOSSAL_WALLET_MAX = 50000;
 // ============================================
 // NEW CODE ENDS HERE
 // ============================================
@@ -945,6 +946,12 @@ public:
             mData[0] &= ~0x08;
         }
     }
+
+    // Bytes 1..79: ExtModFlags blob (Phase O2). Byte 0 remains dusk policy bits.
+    static const int EXT_MOD_FLAGS_OFF = 1;
+    static const int EXT_MOD_FLAGS_SIZE = 79;
+    u8* getExtModFlags() { return mData + EXT_MOD_FLAGS_OFF; }
+    const u8* getExtModFlags() const { return mData + EXT_MOD_FLAGS_OFF; }
 
 private:
     u8 mData[80];

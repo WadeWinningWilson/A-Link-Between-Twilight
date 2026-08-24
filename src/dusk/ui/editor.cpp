@@ -6,13 +6,26 @@
 #include "bool_button.hpp"
 #include "button.hpp"
 #include "d/actor/d_a_player.h"
+#include "d/d_albw_potion.h"
+#include "d/d_com_inf_game.h"
 #include "d/d_kankyo.h"
 #include "d/d_meter2_info.h"
 #include "dusk/config.hpp"
+#include "dusk/leveledit/enumerate.hpp"
+#include "dusk/ui/input.hpp"
+#include "dusk/logging.h"
+#include "dusk/main.h"
 #include "dusk/map_loader_definitions.h"
+#include "dusk/custom_assets.hpp"
 #include "dusk/settings.h"
 #include "dusk/truetest.hpp"
+#include "d/d_ww_itemmdl_test.h"
+#include "d/d_demo_leftover_viewer.h"
+#include "d/d_cut_actor_spawn.h"
+#include "d/d_ext_npc_mount.h"
+#include "f_op/f_op_actor_mng.h"
 #include "m_Do/m_Do_audio.h"
+#include "Z2AudioLib/Z2SeqMgr.h"  // Wolf Howl tune preview (Z2BGM_* ids, Z2GetSeqMgr)
 #include "number_button.hpp"
 #include "pane.hpp"
 #include "select_button.hpp"
@@ -25,6 +38,8 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -653,7 +668,7 @@ constexpr std::array<DefaultInventoryEntry, 22> defaultInventory = {
     DefaultInventoryEntry{SLOT_8, dItemNo_COPY_ROD_e},
     DefaultInventoryEntry{SLOT_9, dItemNo_HOOKSHOT_e},
     DefaultInventoryEntry{SLOT_10, dItemNo_W_HOOKSHOT_e},
-    DefaultInventoryEntry{SLOT_11, dItemNo_EMPTY_BOTTLE_e},
+    DefaultInventoryEntry{SLOT_11, dItemNo_RED_BOTTLE_e},
     DefaultInventoryEntry{SLOT_12, dItemNo_EMPTY_BOTTLE_e},
     DefaultInventoryEntry{SLOT_13, dItemNo_EMPTY_BOTTLE_e},
     DefaultInventoryEntry{SLOT_14, dItemNo_EMPTY_BOTTLE_e},
@@ -896,7 +911,17 @@ void populate_item_slot_picker(Pane& pane, int slot) {
     pane.add_button(fmt::format("Default ({})", get_item_name(get_slot_default(slot))))
         .on_pressed([slot] {
             mDoAud_seStartMenu(kSoundItemChange);
-            dComIfGs_setItem(slot, get_slot_default(slot));
+            const u8 itemId = get_slot_default(slot);
+            dComIfGs_setItem(slot, itemId);
+            if (itemId == dItemNo_NORMAL_BOMB_e || itemId == dItemNo_WATER_BOMB_e ||
+                itemId == dItemNo_POKE_BOMB_e)
+            {
+                const int bagIdx = slot - SLOT_15;
+                if (bagIdx >= 0 && bagIdx < 3 && dComIfGs_getBombNum(bagIdx) == 0) {
+                    u8 maxNum = dComIfGs_getBombMax(itemId);
+                    dComIfGs_setBombNum(bagIdx, maxNum > 0 ? maxNum : 30);
+                }
+            }
         });
 
     pane.add_section("Items");
@@ -920,7 +945,41 @@ void populate_item_slot_picker(Pane& pane, int slot) {
             })
             .on_pressed([slot, itemId] {
                 mDoAud_seStartMenu(kSoundItemChange);
-                dComIfGs_setItem(slot, static_cast<u8>(itemId));
+                const u8 id = static_cast<u8>(itemId);
+                // Bomb types MUST live in SLOT_15/16/17 — ammo/HUD use (slot-15) as bag
+                // index. Placing them elsewhere OOBs and crashes. Redirect to the
+                // canonical bag slot; XY buttons should point at that bag slot.
+                int bagSlot = -1;
+                if (id == dItemNo_NORMAL_BOMB_e) {
+                    bagSlot = SLOT_15;
+                } else if (id == dItemNo_WATER_BOMB_e) {
+                    bagSlot = SLOT_16;
+                } else if (id == dItemNo_POKE_BOMB_e) {
+                    bagSlot = SLOT_17;
+                }
+
+                if (bagSlot >= 0) {
+                    dComIfGs_setItem(static_cast<u8>(bagSlot), id);
+                    dComIfGs_onItemFirstBit(id);
+                    const int bagIdx = bagSlot - SLOT_15;
+                    u8 maxNum = dComIfGs_getBombMax(id);
+                    if (maxNum == 0) {
+                        maxNum = 30;
+                    }
+                    if (dComIfGs_getBombNum(bagIdx) == 0) {
+                        dComIfGs_setBombNum(bagIdx, maxNum);
+                    }
+                    // If the user edited a non-bag slot, do not leave a bomb type there.
+                    if (slot != bagSlot &&
+                        (get_player_item()->mItems[slot] == dItemNo_NORMAL_BOMB_e ||
+                         get_player_item()->mItems[slot] == dItemNo_WATER_BOMB_e ||
+                         get_player_item()->mItems[slot] == dItemNo_POKE_BOMB_e))
+                    {
+                        dComIfGs_setItem(slot, dItemNo_NONE_e);
+                    }
+                } else {
+                    dComIfGs_setItem(slot, id);
+                }
             });
     }
 }
@@ -1037,7 +1096,7 @@ void populate_select_equip_picker(Pane& pane, u8& equip, const std::array<u8, Si
 
 // ============================================
 // MODIFIED CODE — ALBW Port
-// Added "Colossal" (size 3, 9999 rupees) to the wallet size picker.
+// Added "Colossal" (size 3, 50000 rupees) to the wallet size picker.
 // ============================================
 static const std::array<Rml::String, 4> walletSizeNames = {
     "Normal",
@@ -1407,7 +1466,422 @@ void editor_bool_option(Pane& leftPane, Pane& rightPane, ConfigVar<bool>& var,
         });
 }
 
+// WW itemmdl viewer item list (label -> BDL index, from itemmdl.h). Drives the viewer dropdown.
+struct WwItemmdlViewerItem {
+    const char* label;
+    int index;
+};
+static const WwItemmdlViewerItem kWwItemmdlViewerItems[] = {
+    {"Bow", 0xF},           {"Skull Hammer", 0x12}, {"Bomb", 0xC},          {"Boomerang", 0xD},
+    {"Iron Boots", 0xE},    {"Picto Box", 0x10},    {"Tingle Tuner", 0x11}, {"Sail", 0x13},
+    {"Hookshot", 0x14},     {"Deku Leaf", 0x15},    {"Magic Armor", 0x16},  {"Grappling Hook", 0x17},
+    {"Wind Waker", 0x18},   {"Telescope", 0x19},    {"Spoils Bag", 0x5},    {"Bait Bag", 0x6},
+    {"Delivery Bag", 0x7},  {"Bottle (blue)", 0x8}, {"Bottle (green)", 0x9},{"Bottle (red)", 0xA},
+    {"Bottle (special)", 0xB},
+};
+static Rml::String wwItemmdlViewerLabel() {
+    const int idx = getSettings().game.wwItemmdlViewerBdlIndex.getValue();
+    for (const auto& e : kWwItemmdlViewerItems) {
+        if (e.index == idx) {
+            return Rml::String(e.label);
+        }
+    }
+    return Rml::String("Bow");
+}
+
 }  // namespace
+
+// Bug gate 2 — Stage tab deferred refresh + RAII alive (dual APPROVED).
+// Raw Pane*/Button* are only safe while alive==true (flipped false before
+// mContentComponents destroy on hide/clear_content/dtor).
+struct EditorWindow::StageTabState : std::enable_shared_from_this<EditorWindow::StageTabState> {
+    // G2: one expanded name-group at a time; rows capped (show more raises limit).
+    static constexpr size_t kPerGroupCap = 150;
+
+    Pane* left = nullptr;
+    Pane* right = nullptr;
+    Button* flyCamBtn = nullptr;
+    Button* selectModeBtn = nullptr;
+    Button* pcHotkeysBtn = nullptr;
+    bool needsRefresh = false;
+    bool alive = true;
+    std::string expandedName;  // empty = all groups collapsed
+    size_t expandedLimit = kPerGroupCap;
+    std::string scrollToName;  // gate 5: ScrollIntoView this header after rebuild
+
+    void invalidate(const char* reason) noexcept {
+        DuskLog.info("StageTab invalidate reason={} alive={} left={} right={} fly={} select={} pc={} needs={}",
+                     reason, alive, static_cast<const void*>(left),
+                     static_cast<const void*>(right), static_cast<const void*>(flyCamBtn),
+                     static_cast<const void*>(selectModeBtn),
+                     static_cast<const void*>(pcHotkeysBtn), needsRefresh);
+        alive = false;
+        needsRefresh = false;
+        expandedName.clear();
+        expandedLimit = kPerGroupCap;
+        scrollToName.clear();
+        left = nullptr;
+        right = nullptr;
+        flyCamBtn = nullptr;
+        selectModeBtn = nullptr;
+        pcHotkeysBtn = nullptr;
+        dusk::leveledit::set_selection_detail_handler({});
+    }
+
+    static void fill_selection_detail(Pane* right, const dusk::leveledit::PlacedActor& sel) {
+        right->clear();
+        right->add_section(sel.name);
+        right->add_rml(dusk::leveledit::format_placed_actor_detail_rml(sel));
+    }
+
+    static const char* pc_hotkeys_label() {
+        return dusk::leveledit::session_pc_hotkeys_enabled()
+                   ? "PC Hotkeys: On (keyboard + mouse with controller)"
+                   : "PC Hotkeys: Off (UI blocks keyboard)";
+    }
+
+    static const char* select_mode_label() {
+        return dusk::leveledit::session_select_mode_enabled()
+                   ? "Select Mode: On (V or click to disable)"
+                   : "Select Mode: Off (V or click to enable)";
+    }
+
+    static const char* fly_cam_label() {
+        return dusk::leveledit::session_fly_cam_enabled() ? "Fly Cam: On (click to disable)"
+                                                          : "Fly Cam: Off (click to enable)";
+    }
+
+    void refresh() {
+        if (!alive || left == nullptr || right == nullptr) {
+            DuskLog.info("StageRefresh skipped alive={} left={} right={}", alive,
+                         static_cast<const void*>(left), static_cast<const void*>(right));
+            return;
+        }
+        DuskLog.info("StageRefresh begin left={} right={}", static_cast<const void*>(left),
+                     static_cast<const void*>(right));
+        left->clear();
+        right->clear();
+        flyCamBtn = nullptr;
+        selectModeBtn = nullptr;
+        pcHotkeysBtn = nullptr;
+
+        auto self = shared_from_this();
+        dusk::leveledit::set_selection_detail_handler([self](const dusk::leveledit::PlacedActor& sel) {
+            if (!self->alive || self->right == nullptr) {
+                return;
+            }
+            fill_selection_detail(self->right, sel);
+        });
+
+        auto result = dusk::leveledit::enumerate_room_actors();
+        const char* srcLabel =
+            result.source == dusk::leveledit::EnumSource::Buffer ? "buffer" : "live fallback";
+        int joinedCount = 0;
+        int unspawnedCount = 0;
+        int spawnPointCount = 0;
+        for (const auto& a : result.actors) {
+            if (a.isSpawnPoint) {
+                ++spawnPointCount;
+            } else if (a.unspawned) {
+                ++unspawnedCount;
+            } else {
+                ++joinedCount;
+            }
+        }
+
+        left->add_section(fmt::format(
+            "{} · {} placed · {} joined · {} unspawned · {} PLYR · "
+            "{} live-in-room · room {}",
+            srcLabel, result.actors.size(), joinedCount, unspawnedCount, spawnPointCount,
+            result.liveActorsInRoom, dComIfGp_roomControl_getStayNo()));
+        left->add_rml(fmt::format(
+            "Resource: <b>{}</b><br/>"
+            "List = authored placements. Kill an enemy → Refresh → that row becomes "
+            "<b>unspawned</b> (join is live).",
+            result.resourceKey));
+
+        // Option B: defer rebuild — never clear() from this callback.
+        left->add_button("Refresh").on_pressed([self] {
+            if (!self->alive) {
+                return;
+            }
+            DuskLog.info("StageRefresh queued");
+            // Collapse groups on full re-enum (bounded teardown).
+            self->expandedName.clear();
+            self->expandedLimit = kPerGroupCap;
+            self->needsRefresh = true;
+        });
+        left->add_button("Clear selection").on_pressed([self] {
+            dusk::leveledit::clear_selection();
+            if (self->alive && self->right != nullptr) {
+                self->right->clear();
+            }
+            DuskLog.info("StageSelection cleared");
+        });
+
+        // Option A: toggle latch + in-place label; no refresh().
+        auto& flyBtn = left->add_button(fly_cam_label());
+        flyCamBtn = &flyBtn;
+        flyBtn.on_pressed([self] {
+            if (!self->alive || self->flyCamBtn == nullptr) {
+                return;
+            }
+            dusk::leveledit::enable_session_fly_cam(!dusk::leveledit::session_fly_cam_enabled());
+            DuskLog.info("StageFlyCam toggle enabled={} btn={}",
+                         dusk::leveledit::session_fly_cam_enabled(),
+                         static_cast<const void*>(self->flyCamBtn));
+            self->flyCamBtn->set_text(fly_cam_label());
+        });
+
+        auto& selectBtn = left->add_button(select_mode_label());
+        selectModeBtn = &selectBtn;
+        selectBtn.on_pressed([self] {
+            if (!self->alive || self->selectModeBtn == nullptr) {
+                return;
+            }
+            if (!dusk::leveledit::editor_fly_cam_active()) {
+                DuskLog.info("StageSelectMode ignored — fly cam inactive");
+                return;
+            }
+            dusk::leveledit::enable_session_select_mode(
+                !dusk::leveledit::session_select_mode_enabled());
+            DuskLog.info("StageSelectMode toggle enabled={} btn={}",
+                         dusk::leveledit::session_select_mode_enabled(),
+                         static_cast<const void*>(self->selectModeBtn));
+            self->selectModeBtn->set_text(select_mode_label());
+        });
+
+        auto& pcBtn = left->add_button(pc_hotkeys_label());
+        pcHotkeysBtn = &pcBtn;
+        pcBtn.on_pressed([self] {
+            if (!self->alive || self->pcHotkeysBtn == nullptr) {
+                return;
+            }
+            dusk::leveledit::enable_session_pc_hotkeys(
+                !dusk::leveledit::session_pc_hotkeys_enabled());
+            DuskLog.info("StagePcHotkeys toggle enabled={} btn={}",
+                         dusk::leveledit::session_pc_hotkeys_enabled(),
+                         static_cast<const void*>(self->pcHotkeysBtn));
+            self->pcHotkeysBtn->set_text(pc_hotkeys_label());
+            dusk::ui::input::sync_input_block();
+        });
+
+        auto shared = std::make_shared<dusk::leveledit::EnumerateResult>(std::move(result));
+        const size_t total = shared->actors.size();
+
+        // G2: group by actor name (proc as secondary label). Collapsed headers only
+        // until expand — expand/collapse queues deferred refresh (gate-3).
+        std::map<std::string, std::vector<size_t>> groups;
+        for (size_t i = 0; i < shared->actors.size(); ++i) {
+            groups[shared->actors[i].name].push_back(i);
+        }
+
+        left->add_rml(fmt::format(
+            "<i>{} name groups · expand one group (max {} rows + Show more). "
+            "chunkTag / layer on each row.</i>",
+            groups.size(), kPerGroupCap));
+
+        size_t rowButtons = 0;
+        Button* scrollTarget = nullptr;
+        Button* firstRowUnderScroll = nullptr;
+        for (const auto& [name, indices] : groups) {
+            const bool expanded = (expandedName == name);
+            s16 procSample = -1;
+            if (!indices.empty() && indices.front() < shared->actors.size()) {
+                procSample = shared->actors[indices.front()].procname;
+            }
+            const Rml::String header = fmt::format(
+                "{} {} ({}) · proc {}", expanded ? "[-]" : "[+]", name, indices.size(), procSample);
+            auto& headerBtn = left->add_button(header);
+            if (!scrollToName.empty() && scrollToName == name) {
+                scrollTarget = &headerBtn;
+            }
+            headerBtn.on_pressed([self, name] {
+                if (!self->alive) {
+                    return;
+                }
+                // Always scroll back to this header after rebuild (expand or collapse).
+                self->scrollToName = name;
+                if (self->expandedName == name) {
+                    self->expandedName.clear();
+                    self->expandedLimit = kPerGroupCap;
+                } else {
+                    self->expandedName = name;
+                    self->expandedLimit = kPerGroupCap;
+                }
+                DuskLog.info("StageGroupExpand queued name={} open={}", name,
+                             !self->expandedName.empty());
+                self->needsRefresh = true;
+            });
+
+            if (!expanded) {
+                continue;
+            }
+
+            const size_t shown = std::min(indices.size(), expandedLimit);
+            for (size_t j = 0; j < shown; ++j) {
+                const size_t i = indices[j];
+                const auto& a = shared->actors[i];
+                const char* status = a.isSpawnPoint ? " · spawn"
+                                    : a.unspawned   ? " · unspawned"
+                                                    : " · live";
+                const Rml::String label = fmt::format("{} · #{} · L{}{}", a.chunkTag, a.setID,
+                                                      a.layer, status);
+                ++rowButtons;
+                auto& rowBtn = left->add_button(label);
+                if (scrollTarget != nullptr && firstRowUnderScroll == nullptr && j == 0 &&
+                    scrollToName == name) {
+                    firstRowUnderScroll = &rowBtn;
+                }
+                rowBtn.on_pressed([self, shared, i] {
+                    if (!self->alive || self->right == nullptr) {
+                        return;
+                    }
+                    if (i >= shared->actors.size()) {
+                        return;
+                    }
+                    const auto& sel = shared->actors[i];
+                    dusk::leveledit::set_selected_index(static_cast<int>(i));
+                    dusk::leveledit::set_selection_snapshot(sel, true);
+                });
+            }
+            if (indices.size() > shown) {
+                left->add_button(fmt::format("Show more ({} remaining in {})",
+                                             indices.size() - shown, name))
+                    .on_pressed([self, name] {
+                        if (!self->alive) {
+                            return;
+                        }
+                        self->scrollToName = name;
+                        self->expandedLimit += kPerGroupCap;
+                        DuskLog.info("StageGroupShowMore queued limit={}", self->expandedLimit);
+                        self->needsRefresh = true;
+                    });
+            }
+        }
+
+        // Gate 5 S1/S3: after rebuild, land on toggled header (+ first row if expanded).
+        if (scrollTarget != nullptr && scrollTarget->root() != nullptr) {
+            scrollTarget->root()->ScrollIntoView(Rml::ScrollIntoViewOptions{
+                Rml::ScrollAlignment::Start,
+                Rml::ScrollAlignment::Nearest,
+                Rml::ScrollBehavior::Instant,
+                Rml::ScrollParentage::Closest,
+            });
+            if (firstRowUnderScroll != nullptr && firstRowUnderScroll->root() != nullptr) {
+                firstRowUnderScroll->root()->ScrollIntoView(Rml::ScrollIntoViewOptions{
+                    Rml::ScrollAlignment::Nearest,
+                    Rml::ScrollAlignment::Nearest,
+                    Rml::ScrollBehavior::Instant,
+                    Rml::ScrollParentage::Closest,
+                });
+            }
+            DuskLog.info("StageScrollIntoView name={}", scrollToName.c_str());
+        }
+        scrollToName.clear();
+
+        DuskLog.info("StageRefresh end actors={} groups={} expanded={} rowButtons={}", total,
+                     groups.size(), expandedName.empty() ? "(none)" : expandedName.c_str(),
+                     rowButtons);
+    }
+
+    void drain_deferred_refresh() {
+        // No per-frame log — only breadcrumb when a deferred rebuild actually runs.
+        if (!alive || !needsRefresh) {
+            return;
+        }
+        DuskLog.info("StageTick drain alive={} left={} right={}", alive,
+                     static_cast<const void*>(left), static_cast<const void*>(right));
+        needsRefresh = false;
+        if (left == nullptr || right == nullptr) {
+            return;
+        }
+        refresh();
+    }
+};
+
+void EditorWindow::teardown_stage_tab(const char* reason) noexcept {
+    DuskLog.info("EditorStageTeardown reason={} hasTick={} hasState={}", reason,
+                 static_cast<bool>(mStageTabTick), static_cast<bool>(mStageTabState));
+    mStageTabTick = nullptr;
+    if (mStageTabState) {
+        mStageTabState->invalidate(reason);
+        mStageTabState.reset();
+    }
+    // Keep selection for in-world highlight after Editor/Stage closes (1a/1b).
+    // Drop raw live ptr only — process ID stays so draw can rebind (Gate 8d).
+    dusk::leveledit::set_selection_detail_handler({});
+    dusk::leveledit::detach_selection_live();
+}
+
+void EditorWindow::clear_content_now(const char* reason) noexcept {
+    teardown_stage_tab(reason);
+    const size_t n = mContentComponents.size();
+    Window::clear_content();
+    DuskLog.info("StageContentCleared reason={} components={}", reason, n);
+}
+
+void EditorWindow::drain_deferred_ui() {
+    // Order: clear/rebuild first (leave Stage), then hide — all outside Rml dispatch.
+    if (mPendingClearOnly) {
+        mPendingClearOnly = false;
+        clear_content_now("deferred_clear");
+    }
+    if (mPendingTabBuilder) {
+        auto builder = std::move(*mPendingTabBuilder);
+        mPendingTabBuilder.reset();
+        clear_content_now("deferred_tab_replace");
+        if (builder) {
+            builder(mContentRoot);
+        }
+        DuskLog.info("StageContentRebuilt deferred");
+    }
+    if (mPendingHide) {
+        const bool close = mPendingHideClose;
+        mPendingHide = false;
+        mPendingHideClose = false;
+        DuskLog.info("EditorHide deferred close={} visible={}", close, visible());
+        // Gate 4: clear Stage widget list BEFORE Window::hide / document teardown.
+        clear_content_now(close ? "hide_clear_close" : "hide_clear");
+        Window::hide(close);
+    }
+}
+
+void EditorWindow::update() {
+    drain_deferred_ui();
+    if (mStageTabTick) {
+        mStageTabTick();
+    }
+    Window::update();
+}
+
+void EditorWindow::hide(bool close) {
+    // Defer hide so Transitionend / close click is not mid-destroy of Stage list.
+    DuskLog.info("EditorHide queue close={} visible={}", close, visible());
+    mPendingHide = true;
+    mPendingHideClose = close;
+}
+
+void EditorWindow::clear_content() noexcept {
+    // Called from tab switch path only via replace_content now; keep sync path
+    // for any direct callers — still tear down Stage state immediately.
+    clear_content_now("clear_content_sync");
+}
+
+void EditorWindow::replace_content(TabBuilder builder) {
+    // Gate 3 H-B: never destroy hundreds of Stage buttons inside tab Click.
+    DuskLog.info("EditorReplaceContent queue");
+    mPendingClearOnly = false;
+    mPendingTabBuilder = std::move(builder);
+}
+
+EditorWindow::~EditorWindow() {
+    // Flush any pending work without going through Rml; then hard teardown.
+    mPendingTabBuilder.reset();
+    mPendingClearOnly = false;
+    mPendingHide = false;
+    teardown_stage_tab("dtor");
+}
 
 EditorWindow::EditorWindow() {
     add_tab("Player Status", [this](Rml::Element* content) {
@@ -1531,6 +2005,41 @@ EditorWindow::EditorWindow() {
                 .getValue = [] { return formNames[get_player_status()->getTransformStatus()]; },
             }),
             rightPane, [](Pane& pane) { populate_form_picker(pane); });
+        add_toggle_button(leftPane,
+                          ToggleEntry{
+                              .text = "End-Game Transform (Midna + Crystal)",
+                              .isSelected =
+                                  [] {
+                                      return dComIfGs_isEventBit(dSv_event_flag_c::M_077) &&
+                                             dComIfGs_isTransformLV(3) &&
+                                             dComIfGs_isEventBit(dSv_event_flag_c::F_0250);
+                                  },
+                              .setSelected =
+                                  [](bool selected) {
+                                      set_event_bit(dSv_event_flag_c::M_077, selected);
+                                      set_event_bit(dSv_event_flag_c::F_0250, selected);
+                                      auto* statusB = get_player_status_b();
+                                      for (int i = 0; i <= 3; ++i) {
+                                          if (selected) {
+                                              statusB->onTransformLV(i);
+                                          } else {
+                                              statusB->offTransformLV(i);
+                                          }
+                                      }
+                                  },
+                          });
+        add_toggle_button(leftPane,
+                          ToggleEntry{
+                              .text = "Dominion Rod Restored (Shad)",
+                              .isSelected =
+                                  [] {
+                                      return dComIfGs_isEventBit(dSv_event_flag_c::F_0302);
+                                  },
+                              .setSelected =
+                                  [](bool selected) {
+                                      set_event_bit(dSv_event_flag_c::F_0302, selected);
+                                  },
+                          });
 
         leftPane.add_section("World");
         leftPane.register_control(
@@ -1717,6 +2226,17 @@ EditorWindow::EditorWindow() {
             for (int slot = 0; slot < 24; ++slot) {
                 dComIfGs_setItem(slot, get_slot_default(slot));
             }
+            // Bomb bag ammo is separate from the item IDs — fill if empty so bombs are usable.
+            for (int bag = 0; bag < 3; ++bag) {
+                if (dComIfGs_getBombNum(bag) == 0) {
+                    const u8 bombItem = dComIfGs_getItem(static_cast<u8>(bag + SLOT_15), false);
+                    u8 maxNum = dComIfGs_getBombMax(bombItem);
+                    dComIfGs_setBombNum(bag, maxNum > 0 ? maxNum : 30);
+                }
+            }
+#if TARGET_PC
+            dAlbwPotion_applyDefaultInventorySlot11();
+#endif
             rightPane.clear();
         }),
             rightPane, {});
@@ -2030,11 +2550,235 @@ EditorWindow::EditorWindow() {
         leftPane.add_text(
             "Experimental ALBW settings. Enable the editor from the main menu to access this "
             "tab.");
-        editor_bool_option(leftPane, rightPane, getSettings().game.focusedArtsTest,
-            "Focused Arts Test",
-            "Enables the Focused Arts charge bank, meter fill, tier spend columns, and special "
-            "finishers. Off keeps standard ALBW hidden-skill meter costs and rework combat only." +
+        editor_bool_option(leftPane, rightPane, getSettings().game.flurryRush, "FlurryTest",
+            "Enables Flurry Rush (perfect-dodge slow-mo melee + Back Slice aerial-bow finisher). "
+            "Requires Focused Arts." +
+                Rml::String(kAlbwUnfinishedDisclaimer),
+            [] { return !getSettings().game.focusedArts.getValue(); });
+        editor_bool_option(leftPane, rightPane, getSettings().game.wolfArtsDevTest,
+            "Wolf Arts Dev Test",
+            "DEV/TEST: bypass the wolf-art shop unlocks AND the wolf-charge cost so the Wolf arts "
+            "(howl / punch / giant) fire immediately. Needs Wolf Link Combat + quick-swap on; wolf "
+            "form; D-pad Up = Howl. Keep OFF for normal play." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wolfHowlVfxOverride,
+            "Wolf Howl VFX: Apply Tuner",
+            "OFF = the built-in default ring look (rotation on, no extra tilt, 1.0x). ON = apply the "
+            "Tilt / Width / Height / Sweep Rate / Orbit / Period sliders below. Flip OFF to compare "
+            "against the default, ON to tune." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Tilt (deg)",
+                .getValue = [] { return getSettings().game.wolfHowlTiltDeg.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlTiltDeg.setValue(std::clamp(value, 0, 360));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlTiltDeg.getValue() !=
+                               getSettings().game.wolfHowlTiltDeg.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 360,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring X-pitch in degrees (KAITENGIRIL). Full 0-360 sweep — KAITENGIRIL "
+                    "sits at a natural angle, so sweep past 90/270 to find the value where it lies "
+                    "completely horizontal. Live-tunable during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Roll (deg)",
+                .getValue = [] { return getSettings().game.wolfHowlRollDeg.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlRollDeg.setValue(std::clamp(value, 0, 360));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlRollDeg.getValue() !=
+                               getSettings().game.wolfHowlRollDeg.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 360,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring Z-roll in degrees (KAITENGIRIL). The second leveling axis — pair "
+                    "with Tilt to cancel KAITENGIRIL's natural angle on both axes for a fully "
+                    "horizontal ring. Full 0-360 sweep, live-tunable during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Width %",
+                .getValue = [] { return getSettings().game.wolfHowlWidthPct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlWidthPct.setValue(std::clamp(value, 10, 400));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlWidthPct.getValue() !=
+                               getSettings().game.wolfHowlWidthPct.getDefaultValue();
+                    },
+                .min = 10,
+                .max = 400,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring particle scale on X/Z, the horizontal spread (100 = 1.0x). "
+                    "Live-tunable during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Height %",
+                .getValue = [] { return getSettings().game.wolfHowlHeightPct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlHeightPct.setValue(std::clamp(value, 10, 400));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlHeightPct.getValue() !=
+                               getSettings().game.wolfHowlHeightPct.getDefaultValue();
+                    },
+                .min = 10,
+                .max = 400,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Wolf Howl ring particle scale on Y, the vertical size (100 = 1.0x). Live-tunable "
+                    "during a howl." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Sweep Rate",
+                .getValue = [] { return getSettings().game.wolfHowlSweepRate.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlSweepRate.setValue(std::clamp(value, 0, 4000));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlSweepRate.getValue() !=
+                               getSettings().game.wolfHowlSweepRate.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 4000,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "How fast the ring sweeps around the wolf (emit-yaw wind per frame). 0 = no "
+                    "rotation; ~500 = one revolution every ~2 s; higher = faster. The wolf never "
+                    "turns — only the effect." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Orbit",
+                .getValue = [] { return getSettings().game.wolfHowlOrbit.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlOrbit.setValue(std::clamp(value, 0, 300));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlOrbit.getValue() !=
+                               getSettings().game.wolfHowlOrbit.getDefaultValue();
+                    },
+                .min = 0,
+                .max = 300,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "How far off-center the sweep swings (emission-point orbit radius). 0 = centered "
+                    "on the wolf; higher = a wider circling ring. Helps the rotation read on the "
+                    "near-symmetric spray." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Wolf Howl Period",
+                .getValue = [] { return getSettings().game.wolfHowlPeriod.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wolfHowlPeriod.setValue(std::clamp(value, 1, 60));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wolfHowlPeriod.getValue() !=
+                               getSettings().game.wolfHowlPeriod.getDefaultValue();
+                    },
+                .min = 1,
+                .max = 60,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Re-emit cadence in frames — burst density. Lower = denser / smoother sweep "
+                    "(1 = every frame); higher = sparser." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        // ============================================
+        // NEW CODE — ALBW Port (Wolf Howl tune audition)
+        // Preview the candidate howl tunes: select one to play it (cutting off the current), so we
+        // can confirm which actually play (some Z2BGM_HOWL_* ids are silent) and which sound like
+        // the Hero's-Shade / wolf duet.  HOWL / DUO (sing-with-the-wolf) / STONE variants.
+        // ============================================
+        static const struct { const char* name; u32 bgm; } kHowlTunes[] = {
+            // The 6 DUETS (current move pool — all confirmed working).
+            {"DUO LightPrld", Z2BGM_LIGHT_PRLD_DUO}, {"DUO SoulReq", Z2BGM_SOUL_REQ_DUO},
+            {"DUO Healing", Z2BGM_HEALING_DUO},      {"DUO New01", Z2BGM_NEW_01_DUO},
+            {"DUO New02", Z2BGM_NEW_02_DUO},         {"DUO New03", Z2BGM_NEW_03_DUO},
+            // Working solo howls (the rest are silent; STONE variants intentionally omitted).
+            {"HOWL Tobikusa", Z2BGM_HOWL_TOBIKUSA},  {"HOWL Umakusa", Z2BGM_HOWL_UMAKUSA},
+            {"HOWL ZeldaSong", Z2BGM_HOWL_ZELDASONG},
+        };
+        static constexpr int kHowlTuneCount = (int)(sizeof(kHowlTunes) / sizeof(kHowlTunes[0]));
+        static int s_howlPreviewIdx = 0;
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key      = "Preview Howl Tune",
+                .getValue = [] { return Rml::String(kHowlTunes[s_howlPreviewIdx].name); },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Preview Howl Tune (audition)");
+                for (int i = 0; i < kHowlTuneCount; i++) {
+                    pane.add_button({
+                                        .text = kHowlTunes[i].name,
+                                        .isSelected = [i] { return s_howlPreviewIdx == i; },
+                                    })
+                        .on_pressed([i] {
+                            s_howlPreviewIdx = i;
+                            Z2GetSeqMgr()->stopWolfHowlSong();  // cut off the current preview
+                            mDoAud_subBgmStart(kHowlTunes[i].bgm);
+                        });
+                }
+                pane.add_button({.text = "-- Stop --"}).on_pressed([] {
+                    Z2GetSeqMgr()->stopWolfHowlSong();
+                });
+            });
         static constexpr std::array<const char*, 5> kFocusedArtsCheatModes = {
             "Off",
             "FA Cheat ON",
@@ -2055,7 +2799,7 @@ EditorWindow::EditorWindow() {
                 .isDisabled =
                     [] {
                         return getSettings().game.speedrunMode ||
-                               !getSettings().game.focusedArtsTest.getValue();
+                               !getSettings().game.focusedArts.getValue();
                     },
                 .isModified =
                     [] {
@@ -2088,7 +2832,8 @@ EditorWindow::EditorWindow() {
                     "<b>With Debug</b>: same as ON plus an in-game FA overlay (bank, fill, ALBW, "
                     "recent events) — no need to open the dev console.<br/>"
                     "<b>FA Cheat + Max Bank</b>: tier 3 cheat and bank starts full (3/3) on load.<br/>"
-                    "<b>With Debug + Max Bank</b>: max bank cheat plus the debug overlay." +
+                    "<b>With Debug + Max Bank</b>: max bank cheat plus the debug overlay.<br/>"
+                    "Requires <b>Settings → ALBW → Systems → Focused Arts</b>." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
         static constexpr std::array<const char*, 3> kTrueAlbwModes = {
@@ -2137,19 +2882,36 @@ EditorWindow::EditorWindow() {
                     "bootstrap. Change at file select or title — locked during field play." +
                     Rml::String(kAlbwUnfinishedDisclaimer));
             });
-        editor_bool_option(leftPane, rightPane, getSettings().game.bossRefinement, "Boss Refinement",
-            "Treat Ordon, Wooden, and Master swords as valid boss swords (Zant, Ganondorf, "
-            "Argorok). Future layers add Zant tool phases and Ganondorf duel redesign." +
+        leftPane.add_section("ALBW WIP");
+        // Soulbound Red Potion → Settings → ALBW → Quality of Life.
+        // Boss Refinement / Outfit Stats / Shade's Refuge / Realtime Potions /
+        // Fists Only / Deku Leaf Glide → Settings → ALBW.
+        editor_bool_option(leftPane, rightPane, getSettings().game.heroShadeSecretBoss,
+            "Hero's Shade Secret Boss",
+            "Post-game secret boss: after all Hidden Skills are learned, a final Hero's "
+            "Wolf Shade appears and warps you to the arena for a real duel vs the Hero's "
+            "Shade (full health bar + victory). Off disables the whole system." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
-        editor_bool_option(leftPane, rightPane, getSettings().game.shadeRefuge, "Shade's Refuge",
-            "Lies-of-P-style Shade Watcher rest points: rest to full-heal and set a respawn "
-            "point, respawn at the last watcher on death, and buy a return-to-watcher service "
-            "in the shop. Off disables the whole system." +
+        editor_bool_option(leftPane, rightPane, getSettings().game.albwJuniorMailTest,
+            "Junior Postman Mail Test",
+            "Phase 0 onboarding mail in North Faron (F_SP108 room 6): spawns the deliver "
+            "Postman and queues the strip-feature letter while ignoring story/delivered save "
+            "gates. Leave off for normal F_0601 && !delivered gating." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showLockonHpDebug,
             "Show Lock-on HP Debug",
             "While Z-targeting, shows the locked enemy's current HP, max HP, ALBW category, "
             "and true HP multiplier in a small on-screen overlay." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.showWardrobeRecoveryDebug,
+            "Wardrobe Recovery Debug",
+            "In-game overlay for Quick Swap resistance: recovery mult, penalty breakdown, "
+            "active/stored wardrobe counts, equipped sword/shield/outfit, and passive recovery "
+            "rates per 100ms (base vs taxed)." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.albwMagicArmorRentableDebug,
+            "Magic Armor Rentable (Debug)",
+            "Lists Magic Armor as rentable in the Postman shop before the vanilla purchase." +
                 Rml::String(kAlbwUnfinishedDisclaimer));
         editor_bool_option(leftPane, rightPane, getSettings().game.showDarknutBashDebug,
             "Darknut Bash Debug Log",
@@ -2162,8 +2924,452 @@ EditorWindow::EditorWindow() {
             "~2 s tired lockout). Audio: Zant spin 1.05× + Gale tornado 0.85× @ 25% + spinner "
             "ride @ 35%. Particle layout uses Interface → ALBW Visuals → Hurricane Spin Visual." +
                 Rml::String(kAlbwUnfinishedDisclaimer),
-            [] { return getSettings().game.speedrunMode; });
+            []() -> bool { return getSettings().game.speedrunMode; });
+        // ============================================
+        // NEW CODE — ALBW Port (Demo Leftover Viewer + Cut Actors)
+        // Demo lane: all unique BMD/BDL from retail Demo*.arc (365), category filter.
+        // Cut-actor lane: E_ms / E_dt / stubs / titan presets via fopAcM_create.
+        // ============================================
+        leftPane.add_section("Demo Leftover Viewer");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Demo category",
+                .getValue =
+                    [] {
+                        return Rml::String(dDemoLeftoverViewer::categoryName(
+                            dDemoLeftoverViewer::categoryFilter()));
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Demo category");
+                static const int kCats[] = {
+                    dDemoLeftoverViewer::CAT_GOLD,  dDemoLeftoverViewer::CAT_LINK,
+                    dDemoLeftoverViewer::CAT_MIDNA, dDemoLeftoverViewer::CAT_WOLF,
+                    dDemoLeftoverViewer::CAT_NPC,   dDemoLeftoverViewer::CAT_BOSS,
+                    dDemoLeftoverViewer::CAT_PROP,  dDemoLeftoverViewer::CAT_ALL,
+                };
+                for (int cat : kCats) {
+                    pane
+                        .add_button({
+                            .text = dDemoLeftoverViewer::categoryName(cat),
+                            .isSelected =
+                                [cat] {
+                                    return dDemoLeftoverViewer::categoryFilter() == cat;
+                                },
+                        })
+                        .on_pressed([cat] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dDemoLeftoverViewer::setCategoryFilter(cat);
+                        });
+                }
+                pane.add_rml(
+                    "Filters the <b>365</b> unique Demo*.arc meshes. "
+                    "<b>Gold leftovers</b> = original/high/henkei/demo00 crumbs. "
+                    "Labels show [body]/[face]/[hand]/… — partials are often intentional "
+                    "cutscene pieces." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Demo model",
+                .getValue =
+                    [] {
+                        const auto* e =
+                            dDemoLeftoverViewer::entry(dDemoLeftoverViewer::selectedIndex());
+                        return Rml::String(e != nullptr ? e->label : "(none)");
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Demo model");
+                const int n = dDemoLeftoverViewer::filteredCount();
+                // Cap list length so RmlUi stays responsive; prefer category filter.
+                constexpr int kMaxButtons = 120;
+                const int show = n < kMaxButtons ? n : kMaxButtons;
+                for (int fi = 0; fi < show; ++fi) {
+                    const int ci = dDemoLeftoverViewer::filteredCatalogIndex(fi);
+                    const auto* e = dDemoLeftoverViewer::entry(ci);
+                    if (e == nullptr) {
+                        continue;
+                    }
+                    pane
+                        .add_button({
+                            .text = e->label,
+                            .isSelected =
+                                [ci] {
+                                    return dDemoLeftoverViewer::selectedIndex() == ci;
+                                },
+                        })
+                        .on_pressed([ci] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dDemoLeftoverViewer::setSelectedIndex(ci);
+                        });
+                }
+                if (n > kMaxButtons) {
+                    pane.add_rml(fmt::format(
+                        "<br/>Showing {0}/{1} — narrow the category filter to see the rest.",
+                        kMaxButtons, n));
+                }
+                pane.add_rml(
+                    "<br/>Spawn draws at Link's feet (no AI actor)." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Spawn demo model at feet")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dDemoLeftoverViewer::requestSpawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Load the selected Demo mesh ~1.5 m in front of Link. Status: " +
+                    Rml::String(dDemoLeftoverViewer::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Despawn demo model")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dDemoLeftoverViewer::requestDespawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml("Free viewer model + Demo arc. Status: " +
+                             Rml::String(dDemoLeftoverViewer::status()) +
+                             Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+
+        leftPane.add_section("Cut Actors");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Cut actor",
+                .getValue =
+                    [] {
+                        const auto* e = dCutActorSpawn::entry(dCutActorSpawn::selectedIndex());
+                        return Rml::String(e != nullptr ? e->label : "(none)");
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Cut / stub actors");
+                for (int i = 0; i < dCutActorSpawn::entryCount(); ++i) {
+                    const auto* e = dCutActorSpawn::entry(i);
+                    if (e == nullptr) {
+                        continue;
+                    }
+                    pane
+                        .add_button({
+                            .text = e->label,
+                            .isSelected =
+                                [i] { return dCutActorSpawn::selectedIndex() == i; },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            dCutActorSpawn::setSelectedIndex(i);
+                        });
+                }
+                const auto* cur = dCutActorSpawn::entry(dCutActorSpawn::selectedIndex());
+                pane.add_rml(
+                    Rml::String("<br/>") +
+                    (cur != nullptr ? cur->note : "") +
+                    "<br/><br/>Real enemies create live procs. "
+                    "<b>STUB</b> entries are external-payload sockets — invisible without a mod." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Spawn cut actor at feet")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dCutActorSpawn::requestSpawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "fopAcM_create at Link's feet (same path as Actor Spawner). "
+                    "Tracked for despawn: " +
+                    Rml::String(fmt::format("{}", dCutActorSpawn::trackedCount())) +
+                    ". Status: " + Rml::String(dCutActorSpawn::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Despawn cut actors")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dCutActorSpawn::requestDespawn();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Delete every cut actor this tool still tracks (up to 32). "
+                    "Safe if they already died or left the room. Status: " +
+                    Rml::String(dCutActorSpawn::status()) +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+
+        // №27 N4: identity audition — cycle head / lock name (user is the WW expert).
+        leftPane.register_control(
+            leftPane.add_button("Cycle head (nearest ExtNpc)")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+                    if (player == NULL) {
+                        return;
+                    }
+                    dExtNpcMount_cycleHeadNearest(player->current.pos, 800.0f);
+                }),
+            rightPane,
+            [](Pane& pane) {
+                fopAc_ac_c* player = dComIfGp_getPlayer(0);
+                const char* name = "";
+                if (player != NULL) {
+                    name = dExtNpcMount_nearestDisplayName(player->current.pos, 800.0f);
+                }
+                pane.add_rml(
+                    "№27 N4: cycle head attach on the nearest external NPC (body+head split). "
+                    "Nearest: <b>" +
+                    Rml::String(name != nullptr && name[0] ? name : "(none)") + "</b>." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_button("Lock identity = census key (nearest)")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    fopAc_ac_c* player = dComIfGp_getPlayer(0);
+                    if (player == NULL) {
+                        return;
+                    }
+                    // Placeholder lock: keeps current display_name into identity.ini.
+                    // User renames via editing identity.ini after visual confirm, or
+                    // replaces this button's name string once an input field exists.
+                    const char* cur =
+                        dExtNpcMount_nearestDisplayName(player->current.pos, 800.0f);
+                    if (cur != NULL && cur[0]) {
+                        dExtNpcMount_setDisplayNameNearest(player->current.pos, 800.0f, cur);
+                    }
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Writes <code>population/identity.ini</code> for the nearest ExtNpc. "
+                    "After you recognize someone, edit that file to the real name "
+                    "(e.g. <code>display_name=RealName</code>) — Cursor must not invent names." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+
+        // Wind Waker Item Viewer — get-item toggle + SC color tuning + item dropdown + replay.
+        // The held/worn skin selector lives in its own "Wind Waker Skins" section below.
+        leftPane.add_section("Wind Waker Item Viewer");
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlGetItem,
+            "WW itemmdl get-item",
+            "Use retail itemmdl.arc vbow for Hero's Bow get-item spin (Phase 2 heap wiring). "
+            "Off = vanilla O_gD_bow." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlGetItem2DIsolate,
+            "WW itemmdl 2D isolate",
+            "Diagnostic: itemmdl arc at create, O_gD_bow mesh on heap (Phase 2 branch 2D). "
+            "Requires WW itemmdl get-item ON. Log-only localize — not a shipping path." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlBowScSuppress,
+            "WW bow SC suppress (A/B)",
+            "Hide SC_Vbow_v ink pass during get-item draw. Compare close-up cream tips vs "
+            "cel outline. Requires WW itemmdl get-item ON." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        editor_bool_option(leftPane, rightPane, getSettings().game.wwItemmdlHeldBootsStyle,
+            "WW held skin: boots-style light (A/B)",
+            "Render the held WW skin exactly like the WW boots: ambient-only, no SC draw "
+            "scope / authentic TEV replay. Matte + bloom-free; SC ink/spec parts may read "
+            "flat or unrealized — that trade-off is the experiment." +
+                Rml::String(kAlbwUnfinishedDisclaimer));
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "WW bow SC K0 cap",
+                .getValue = [] {
+                    return getSettings().game.wwItemmdlBowScK0Cap.getValue();
+                },
+                .setValue = [](int value) {
+                    getSettings().game.wwItemmdlBowScK0Cap.setValue(std::clamp(value, 0, 255));
+                    config::Save();
+                },
+                .isModified = [] {
+                    return getSettings().game.wwItemmdlBowScK0Cap.getValue() !=
+                           getSettings().game.wwItemmdlBowScK0Cap.getDefaultValue();
+                },
+                .min = 0,
+                .max = 255,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Cosmetic SC cap tone: scales kColor[0] (K0) RGB toward matte silver. "
+                    "150 = target pewter; 255 = baked authentic white. kColor[2] untouched "
+                    "(OpaTexEdge alpha threshold). Requires WW itemmdl get-item ON." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "WW bow SC out ceiling",
+                .getValue = [] {
+                    return getSettings().game.wwItemmdlBowScOutputCeiling.getValue();
+                },
+                .setValue = [](int value) {
+                    getSettings().game.wwItemmdlBowScOutputCeiling.setValue(
+                        std::clamp(value, 0, 255));
+                    config::Save();
+                },
+                .isModified = [] {
+                    return getSettings().game.wwItemmdlBowScOutputCeiling.getValue() !=
+                           getSettings().game.wwItemmdlBowScOutputCeiling.getDefaultValue();
+                },
+                .min = 0,
+                .max = 255,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Cosmetic SC-pass output RGB ceiling (bloom threshold). 185 = default; "
+                    "255 = off. Keeps K0-tuned caps, pulls string/nock below bloom. "
+                    "Requires WW itemmdl get-item ON." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Viewer item",
+                .getValue = [] { return wwItemmdlViewerLabel(); },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Wind Waker Item Viewer");
+                const auto opt = [&pane](const char* label, int index) {
+                    pane.add_button({
+                                        .text = label,
+                                        .isSelected =
+                                            [index] {
+                                                return getSettings().game.wwItemmdlViewerBdlIndex
+                                                           .getValue() == index;
+                                            },
+                                    })
+                        .on_pressed([index] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.wwItemmdlViewerBdlIndex.setValue(index);
+                            config::Save();
+                        });
+                };
+                for (const auto& e : kWwItemmdlViewerItems) {
+                    opt(e.label, e.index);
+                }
+            });
+        leftPane.register_control(
+            leftPane.add_button("Replay Get-Item Demo (viewer item)")
+                .on_pressed([] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dWwItemmdl::requestBowGetItemDemoReplay();
+                }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Dev replay: close the editor in the field to start the bow get-item spin. "
+                    "Auto-ends after <b>6 seconds</b>. WW itemmdl toggle selects which arc "
+                    "preloads (itemmdl vs O_gD_bow). Status: " +
+                    Rml::String(dWwItemmdl::getBowGetItemDemoReplayStatus() != nullptr
+                                    ? dWwItemmdl::getBowGetItemDemoReplayStatus()
+                                    : "idle") +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
+        leftPane.add_section("Wind Waker Skins");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Held/worn skin",
+                .getValue =
+                    [] {
+                        switch (getSettings().game.wwItemmdlHeldSkin.getValue()) {
+                            case WwHeldSkinMode::Bow:       return Rml::String("Bow");
+                            case WwHeldSkinMode::IronBoots: return Rml::String("Iron Boots");
+                            case WwHeldSkinMode::Hookshot:  return Rml::String("Hookshot");
+                            default:                        return Rml::String("Off");
+                        }
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_section("Wind Waker Skins");
+                const auto opt = [&pane](const char* label, WwHeldSkinMode mode) {
+                    pane.add_button({
+                                        .text = label,
+                                        .isSelected =
+                                            [mode] {
+                                                return getSettings().game.wwItemmdlHeldSkin
+                                                           .getValue() == mode;
+                                            },
+                                    })
+                        .on_pressed([mode] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.wwItemmdlHeldSkin.setValue(mode);
+                            config::Save();
+                        });
+                };
+                opt("Off", WwHeldSkinMode::Off);
+                opt("Bow", WwHeldSkinMode::Bow);
+                opt("Iron Boots", WwHeldSkinMode::IronBoots);
+                opt("Hookshot", WwHeldSkinMode::Hookshot);
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Held skin scale %",
+                .getValue = [] { return getSettings().game.wwItemmdlHeldBowScalePct.getValue(); },
+                .setValue =
+                    [](int value) {
+                        getSettings().game.wwItemmdlHeldBowScalePct.setValue(
+                            std::clamp(value, 1, 1000));
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.wwItemmdlHeldBowScalePct.getValue() !=
+                               getSettings().game.wwItemmdlHeldBowScalePct.getDefaultValue();
+                    },
+                .min = 1,
+                .max = 1000,
+            }),
+            rightPane,
+            [](Pane& pane) {
+                pane.add_rml(
+                    "Scale % for the selected WW skin (100 = 1.0x), live-tunable (Bow / Hookshot). "
+                    "Iron Boots is a worn re-rigged model driven by the vanilla foot rig (scale is "
+                    "baked in the asset, not this slider); applies on the next clothes rebuild: "
+                    "change outfit or reload the area after selecting it." +
+                    Rml::String(kAlbwUnfinishedDisclaimer));
+            });
     });
+
+    // ========================================================================
+    // Level Editor — Stage Inspector (1a). Gated on g_levelEditorSession.
+    // Zero mutation: enumerate + list + detail only.
+    // ========================================================================
+    if (g_levelEditorSession) {
+        add_tab("Stage", [this](Rml::Element* content) {
+            // Tab switch / reopen: drop any prior Stage state before new panes.
+            teardown_stage_tab("stage_tab_open");
+
+            auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
+            auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
+
+            auto state = std::make_shared<StageTabState>();
+            state->left = &leftPane;
+            state->right = &rightPane;
+            mStageTabState = state;
+            // weak_ptr: if Editor/Stage closes before the tick, lock fails.
+            mStageTabTick = [weak = std::weak_ptr<StageTabState>(state)] {
+                if (auto s = weak.lock()) {
+                    s->drain_deferred_refresh();
+                }
+            };
+            DuskLog.info("StageTab open left={} right={}", static_cast<const void*>(state->left),
+                         static_cast<const void*>(state->right));
+            state->refresh();
+        });
+    }
 }
 
 }  // namespace dusk::ui

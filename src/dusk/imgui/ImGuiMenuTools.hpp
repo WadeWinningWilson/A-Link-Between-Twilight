@@ -29,6 +29,7 @@ namespace dusk {
         void ShowInputViewer();
         void ShowLockonHpOverlay();
         void ShowFocusedArtsDebugOverlay();
+        void ShowWardrobeRecoveryDebugOverlay();
         void ShowActorSpawner();
 
     private:
@@ -62,6 +63,7 @@ namespace dusk {
         bool m_showActorSpawner = false;
         int m_inputOverlayCorner = 3;
         std::string m_controllerName;
+        std::string m_lastBmdExportMessage;
     };
 }
 

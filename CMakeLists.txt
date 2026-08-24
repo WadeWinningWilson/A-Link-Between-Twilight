@@ -302,7 +302,13 @@ FetchContent_Declare(json
     URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
     DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
-FetchContent_MakeAvailable(cxxopts json)
+message(STATUS "dusklight: Fetching miniz")
+FetchContent_Declare(miniz
+    URL https://github.com/richgel999/miniz/releases/download/3.0.2/miniz-3.0.2.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(cxxopts json miniz)
 
 if (DUSK_ENABLE_SENTRY_NATIVE)
     message(STATUS "dusklight: Fetching sentry-native")
@@ -366,11 +372,14 @@ set(DUSK_COPYRIGHT "Copyright (C) Twilit Realm contributors")
 source_group("dolzel" FILES ${DOLZEL_FILES} ${Z2AUDIOLIB_FILES} ${REL_FILES})
 source_group("dusklight" FILES ${DUSK_FILES} ${DUSK_HTTP_BACKEND_FILES})
 
-set(GAME_COMPILE_DEFS TARGET_PC TARGET_PC_NATIVE_UI WIDESCREEN_SUPPORT=1 AVOID_UB=1 VERSION=0 MTX_USE_PS=1)
+set(GAME_COMPILE_DEFS TARGET_PC TARGET_PC_NATIVE_UI WIDESCREEN_SUPPORT=1 AVOID_UB=1 VERSION=0 MTX_USE_PS=1
+    DUSK_BUILDING_GAME=1 DUSK_CODE_MODS=1 DUSK_HAS_FUNCHOOK=0 DUSK_HAS_PREPATCH=0)
 
 set(GAME_INCLUDE_DIRS
     include
     src
+    sdk/include
+    ${miniz_SOURCE_DIR}
     assets/GZ2E01 # TODO: make this dynamic if needed?
     libs/JSystem/include
     libs
@@ -512,7 +521,7 @@ if (CMAKE_CXX_LINK_GROUP_USING_RESCAN_SUPPORTED OR CMAKE_LINK_GROUP_USING_RESCAN
     set(JSYSTEM_LINK_LIBRARIES "$<LINK_GROUP:RESCAN,${JSYSTEM_LIBRARIES}>")
 endif ()
 
-set(DUSK_FILES src/dusk/main.cpp ${GAME_BASE_FILES} ${GAME_DEBUG_FILES})
+set(DUSK_FILES src/dusk/main.cpp ${GAME_BASE_FILES} ${GAME_DEBUG_FILES} ${miniz_SOURCE_DIR}/miniz.c)
 if(ANDROID)
     add_library(dusklight SHARED ${DUSK_FILES})
     set_target_properties(dusklight PROPERTIES OUTPUT_NAME main)

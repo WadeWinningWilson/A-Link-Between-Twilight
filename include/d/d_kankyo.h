@@ -75,6 +75,32 @@ struct DUNGEON_LIGHT {
     /* 0x2C */ LIGHT_INFLUENCE mInfluence;
 };  // Size: 0x4C
 
+// §101 — donor kytag01 / mpWaveInfl (kills usonami strength inside inner radius).
+struct WAVE_INFO {
+    /* 0x00 */ cXyz mPos;
+    /* 0x0C */ f32 mOuterRadius;
+    /* 0x10 */ f32 mInnerRadius;
+    /* 0x14 */ f32 field_0x14;
+};
+
+// §97b — WW shore-foam channel (donor WAVECHAN). Appended on env_light; not mid-struct.
+struct WAVECHAN {
+    /* 0x00 */ f32 field_0x0;
+    /* 0x04 */ f32 field_0x4;
+    /* 0x08 */ f32 field_0x8;
+    /* 0x0C */ f32 mWaveSpeed;
+    /* 0x10 */ f32 mWaveSpawnDist;
+    /* 0x14 */ f32 mWaveSpawnRadius;
+    /* 0x18 */ f32 mWaveScale;
+    /* 0x1C */ f32 mWaveScaleRand;
+    /* 0x20 */ f32 mWaveCounterSpeedScale;
+    /* 0x24 */ f32 mWaveScaleBottom;
+    /* 0x28 */ f32 mWaveFlatInter;
+    /* 0x2C */ s16 mWaveCount;
+    /* 0x2E */ u8 mWaveReset;
+    /* 0x2F */ u8 field_0x2f;
+};  // Size: 0x30
+
 struct BOSS_LIGHT {
     /* 0x00 */ cXyz mPos;
     /* 0x0C */ GXColor mColor;
@@ -469,11 +495,16 @@ public:
     /* 0x130A */ u8 field_0x130a;
     /* 0x130B */ u8 field_0x130b;
     /* 0x130C */ u8 staffroll_next_timer;
-};  // Size: 0x1310
+    // §97b — WW shore foam (appended; do not insert mid-struct — prior size was 0x1310).
+    /* 0x1310 */ WAVECHAN mWaveChan;
+    /* 0x1340 */ u8 mWaveInitialized;
+    /* 0x1341 */ u8 field_0x1341[3];
+    /* 0x1344 */ dKankyo_wave_Packet* mpWavePacket;
+};  // Size: 0x1348
 
 extern dScnKy_env_light_c g_env_light;
 
-STATIC_ASSERT(sizeof(dScnKy_env_light_c) == 4880);
+STATIC_ASSERT(sizeof(dScnKy_env_light_c) == 4936);
 
 inline dScnKy_env_light_c* dKy_getEnvlight() {
     return &g_env_light;
@@ -1005,6 +1036,13 @@ void dKy_actor_addcol_set(s16 r, s16 g, s16 b, f32 ratio);
 void dKy_fog_startendz_set(f32 param_0, f32 param_1, f32 ratio);
 void dKy_vrbox_addcol_set(s16 r, s16 g, s16 b, f32 ratio);
 void dKy_GxFog_set();
+#if TARGET_PC
+/** §97b — arm/disarm shore foam (flatInter 0 = full, ≥1 = off). */
+void dKy_usonami_set(f32 flatInter);
+void dKy_wave_chan_init();
+void dKy_get_seacolor(GXColor* amb, GXColor* dif);
+void dKy_GxFog_sea_set();
+#endif
 u8 dKy_pol_argument_get(const cBgS_PolyInfo* polyinfo_p);
 void dKy_Sound_set(cXyz pos, int param_1, fpc_ProcID actor_id, int timer);
 void dKy_bg_MAxx_proc(void* bg_model_p);

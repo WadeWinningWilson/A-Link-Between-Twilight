@@ -7,6 +7,7 @@
 #include "dusk/io.hpp"
 #include "dusk/settings.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <limits>
@@ -15,6 +16,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "dusk/action_bindings.h"
 #include "dusk/main.h"
@@ -27,8 +29,26 @@ using json = nlohmann::json;
 
 aurora::Module DuskConfigLog("dusk::config");
 
-static absl::flat_hash_map<std::string_view, ConfigVarBase*> RegisteredConfigVars;
-static bool RegistrationDone = false;
+static absl::flat_hash_map<std::string, ConfigVarBase*> RegisteredConfigVars;
+// Keys read from config (or given as launch args) with no CVar registered yet. Kept so a mod
+// registering its CVars long after startup still picks up its saved values, and so Save()
+// preserves keys owned by a mod that is currently disabled.
+static absl::flat_hash_map<std::string, nlohmann::json> UnregisteredConfigVars;
+static absl::flat_hash_map<std::string, std::string> UnregisteredConfigVarOverrides;
+
+namespace {
+
+struct ChangeSubscription {
+    Subscription token;
+    ChangeCallback callback;
+};
+absl::flat_hash_map<std::string, std::vector<ChangeSubscription> > s_changeSubscriptions;
+absl::flat_hash_map<Subscription, std::string> s_changeTokenNames;
+Subscription s_nextChangeToken = 1;
+// Names currently being notified; guards against a callback re-notifying its own CVar.
+std::vector<std::string> s_activeChangeNotifications;
+
+}  // namespace
 
 static std::optional<dusk::ui::ControlAnchor> parse_control_anchor(std::string_view value) {
     if (value == "none") {
@@ -148,11 +168,11 @@ static void ReplaceFile(const std::filesystem::path& source, const std::filesyst
     }
 }
 
-ConfigVarBase::ConfigVarBase(const char* name, const ConfigImplBase* impl)
-    : name(name), registered(false), layer(ConfigVarLayer::Default), impl(impl) {}
+ConfigVarBase::ConfigVarBase(std::string name, const ConfigImplBase* impl)
+    : name(std::move(name)), registered(false), layer(ConfigVarLayer::Default), impl(impl) {}
 
 const char* ConfigVarBase::getName() const noexcept {
-    return name;
+    return name.c_str();
 }
 
 const ConfigImplBase* ConfigVarBase::getImpl() const noexcept {
@@ -187,12 +207,12 @@ void ConfigImpl<T>::loadFromJson(ConfigVar<T>& cVar, const json& jsonValue) {
 
             const Underlying raw = b ? static_cast<Underlying>(1) : static_cast<Underlying>(0);
 
-            cVar.setValue(sanitizeEnumValue(cVar, static_cast<T>(raw)), false);
+            cVar.load_value(sanitizeEnumValue(cVar, static_cast<T>(raw)));
             return;
         }
     }
 
-    cVar.setValue(sanitizeEnumValue(cVar, jsonValue.get<T>()), false);
+    cVar.load_value(sanitizeEnumValue(cVar, jsonValue.get<T>()));
 }
 
 template <ConfigValue T>
@@ -201,48 +221,45 @@ nlohmann::json ConfigImpl<T>::dumpToJson(const ConfigVar<T>& cVar) {
 }
 
 template <ConfigValue T>
-requires std::is_integral_v<T>&& std::is_signed_v<T> static void loadFromArgImpl(
-    ConfigVar<T>& cVar, const std::string_view stringValue) {
+requires std::is_integral_v<T>&& std::is_signed_v<T> static T parse_arg_value(
+    const ConfigVar<T>&, const std::string_view stringValue) {
     const std::string str(stringValue);
     const auto result = std::stoll(str);
     if (result >= std::numeric_limits<T>::min() && result <= std::numeric_limits<T>::max()) {
-        cVar.setOverrideValue(result);
-    } else {
-        throw std::out_of_range("Value is too large");
+        return static_cast<T>(result);
     }
+    throw std::out_of_range("Value is too large");
 }
 
 template <ConfigValue T>
-requires std::is_integral_v<T>&& std::is_unsigned_v<T> static void loadFromArgImpl(
-    ConfigVar<T>& cVar, const std::string_view stringValue) {
+requires std::is_integral_v<T>&& std::is_unsigned_v<T> static T parse_arg_value(
+    const ConfigVar<T>&, const std::string_view stringValue) {
     const std::string str(stringValue);
     const auto result = std::stoull(str);
     if (result <= std::numeric_limits<T>::max()) {
-        cVar.setOverrideValue(result);
-    } else {
-        throw std::out_of_range("Value is too large");
+        return static_cast<T>(result);
     }
+    throw std::out_of_range("Value is too large");
 }
 
-static void loadFromArgImpl(ConfigVar<f32>& cVar, const std::string_view stringValue) {
+static f32 parse_arg_value(const ConfigVar<f32>&, const std::string_view stringValue) {
     const std::string str(stringValue);
-    const auto result = std::stof(str);
-    cVar.setOverrideValue(result);
+    return std::stof(str);
 }
 
-static void loadFromArgImpl(ConfigVar<f64>& cVar, const std::string_view stringValue) {
+static f64 parse_arg_value(const ConfigVar<f64>&, const std::string_view stringValue) {
     const std::string str(stringValue);
-    const auto result = std::stod(str);
-    cVar.setOverrideValue(result);
+    return std::stod(str);
 }
 
-static void loadFromArgImpl(ConfigVar<std::string>& cVar, const std::string_view stringValue) {
-    cVar.setOverrideValue(std::string(stringValue));
+static std::string parse_arg_value(
+    const ConfigVar<std::string>&, const std::string_view stringValue) {
+    return std::string(stringValue);
 }
 
 template <ConfigValue T>
-requires std::is_enum_v<T> static void loadFromArgImpl(
-    ConfigVar<T>& cVar, const std::string_view stringValue) {
+requires std::is_enum_v<T> static T parse_arg_value(
+    const ConfigVar<T>& cVar, const std::string_view stringValue) {
     using Underlying = std::underlying_type_t<T>;
     const std::string str(stringValue);
 
@@ -251,23 +268,21 @@ requires std::is_enum_v<T> static void loadFromArgImpl(
         if (result >= std::numeric_limits<Underlying>::min() &&
             result <= std::numeric_limits<Underlying>::max())
         {
-            cVar.setOverrideValue(sanitizeEnumValue(cVar, static_cast<T>(result)));
-        } else {
-            throw std::out_of_range("Value is too large");
+            return sanitizeEnumValue(cVar, static_cast<T>(result));
         }
+        throw std::out_of_range("Value is too large");
     } else {
         const auto result = std::stoull(str);
         if (result <= std::numeric_limits<Underlying>::max()) {
-            cVar.setOverrideValue(sanitizeEnumValue(cVar, static_cast<T>(result)));
-        } else {
-            throw std::out_of_range("Value is too large");
+            return sanitizeEnumValue(cVar, static_cast<T>(result));
         }
+        throw std::out_of_range("Value is too large");
     }
 }
 
 template <ConfigValue T>
 void ConfigImpl<T>::loadFromArg(ConfigVar<T>& cVar, const std::string_view stringValue) {
-    loadFromArgImpl(cVar, stringValue);
+    cVar.load_override_value(parse_arg_value(cVar, stringValue));
 }
 
 template <>
@@ -275,11 +290,11 @@ void ConfigImpl<bool>::loadFromArg(ConfigVar<bool>& cVar, const std::string_view
     if (stringValue == "1" || stringValue == "TRUE" || stringValue == "true" ||
         stringValue == "True")
     {
-        cVar.setOverrideValue(true);
+        cVar.load_override_value(true);
     } else if (stringValue == "0" || stringValue == "FALSE" || stringValue == "false" ||
                stringValue == "False")
     {
-        cVar.setOverrideValue(false);
+        cVar.load_override_value(false);
     } else {
         throw InvalidConfigError("Value cannot be parsed as boolean");
     }
@@ -312,11 +327,11 @@ void ConfigImpl<FrameInterpMode>::loadFromJson(
 
         const FrameInterpMode mode = b ? FrameInterpMode::Unlimited : FrameInterpMode::Off;
 
-        cVar.setValue(sanitizeEnumValue(cVar, mode), false);
+        cVar.load_value(sanitizeEnumValue(cVar, mode));
         return;
     }
 
-    cVar.setValue(sanitizeEnumValue(cVar, jsonValue.get<FrameInterpMode>()), false);
+    cVar.load_value(sanitizeEnumValue(cVar, jsonValue.get<FrameInterpMode>()));
 }
 
 template <>
@@ -347,7 +362,7 @@ void ConfigImpl<ui::ControlLayout>::loadFromJson(
         }
     }
 
-    cVar.setValue(std::move(layout), false);
+    cVar.load_value(std::move(layout));
 }
 
 template <>
@@ -382,25 +397,63 @@ template class ConfigImpl<dusk::MenuScaling>;
 template class ConfigImpl<dusk::Resampler>;
 template class ConfigImpl<dusk::MagicArmorMode>;
 template class ConfigImpl<dusk::ParryIcons>;
+template class ConfigImpl<dusk::ShieldHudVisibility>;
 template class ConfigImpl<dusk::LopHudMode>;
 template class ConfigImpl<dusk::ExtraItemSlotMode>;
 template class ConfigImpl<dusk::TrueAlbwMode>;
 template class ConfigImpl<dusk::FocusedArtsCheatMode>;
+template class ConfigImpl<dusk::CapWearMode>;
+template class ConfigImpl<dusk::WwHeldSkinMode>;
+template class ConfigImpl<dusk::WwDialogueStyle>;
 template class ConfigImpl<dusk::ui::ControlLayout>;
 }  // namespace dusk::config
 
 void dusk::config::Register(ConfigVarBase& configVar) {
-    const auto& name = configVar.getName();
-    if (RegistrationDone) {
-        DuskConfigLog.fatal("Tried to register CVar {} after registrations closed!", name);
-    }
-
+    const std::string_view name = configVar.getName();
     if (RegisteredConfigVars.contains(name)) {
         DuskConfigLog.fatal("Tried to register CVar {} twice!", name);
     }
 
     RegisteredConfigVars[name] = &configVar;
     configVar.markRegistered();
+
+    const auto unregPair = UnregisteredConfigVars.find(name);
+    if (unregPair != UnregisteredConfigVars.end()) {
+        const auto value = std::move(unregPair->second);
+        UnregisteredConfigVars.erase(name);
+
+        try {
+            configVar.getImpl()->loadFromJson(configVar, value);
+        } catch (std::exception& e) {
+            DuskConfigLog.error("Failed to load key '{}' from config value: {}", name, e.what());
+        }
+    }
+
+    const auto overridePair = UnregisteredConfigVarOverrides.find(name);
+    if (overridePair != UnregisteredConfigVarOverrides.end()) {
+        try {
+            configVar.getImpl()->loadFromArg(configVar, overridePair->second);
+        } catch (std::exception& e) {
+            DuskConfigLog.error("Failed to load key '{}' from override arg: {}", name, e.what());
+        }
+    }
+}
+
+void dusk::config::unregister(ConfigVarBase& configVar) {
+    const std::string_view name = configVar.getName();
+    const auto it = RegisteredConfigVars.find(name);
+    if (it == RegisteredConfigVars.end() || it->second != &configVar) {
+        DuskConfigLog.fatal("Tried to unregister CVar '{}' that is not registered!", name);
+    }
+
+    const auto layer = configVar.getLayer();
+    if (layer == ConfigVarLayer::Value || layer == ConfigVarLayer::Speedrun) {
+        UnregisteredConfigVars.insert_or_assign(
+            std::string{name}, configVar.getImpl()->dumpToJson(configVar));
+    }
+
+    RegisteredConfigVars.erase(it);
+    configVar.unmarkRegistered();
 }
 
 void ConfigVarBase::markRegistered() {
@@ -410,9 +463,60 @@ void ConfigVarBase::markRegistered() {
     registered = true;
 }
 
-void dusk::config::FinishRegistration() {
-    RegistrationDone = true;
+void ConfigVarBase::unmarkRegistered() {
+    if (!registered)
+        abort();
+
+    registered = false;
 }
+
+bool ConfigVarBase::has_subscribers() const {
+    return s_changeSubscriptions.contains(name);
+}
+
+void ConfigVarBase::notify_changed(const void* previousValue) {
+    const auto subsIt = s_changeSubscriptions.find(name);
+    if (subsIt == s_changeSubscriptions.end()) {
+        return;
+    }
+    if (std::ranges::find(s_activeChangeNotifications, name) != s_activeChangeNotifications.end()) {
+        DuskConfigLog.error("Recursive change notification for CVar '{}' suppressed", name);
+        return;
+    }
+
+    s_activeChangeNotifications.push_back(name);
+    // Copied so callbacks can subscribe/unsubscribe safely.
+    const auto subscriptions = subsIt->second;
+    for (const auto& sub : subscriptions) {
+        sub.callback(*this, previousValue);
+    }
+    s_activeChangeNotifications.pop_back();
+}
+
+Subscription dusk::config::subscribe(std::string_view name, ChangeCallback callback) {
+    const auto token = s_nextChangeToken++;
+    s_changeSubscriptions[std::string{name}].push_back({token, std::move(callback)});
+    s_changeTokenNames.emplace(token, std::string{name});
+    return token;
+}
+
+void dusk::config::unsubscribe(Subscription token) {
+    const auto nameIt = s_changeTokenNames.find(token);
+    if (nameIt == s_changeTokenNames.end()) {
+        DuskConfigLog.fatal("Tried to unsubscribe unknown change token {}!", token);
+    }
+
+    const auto subsIt = s_changeSubscriptions.find(nameIt->second);
+    auto& subscriptions = subsIt->second;
+    std::erase_if(
+        subscriptions, [token](const ChangeSubscription& sub) { return sub.token == token; });
+    if (subscriptions.empty()) {
+        s_changeSubscriptions.erase(subsIt);
+    }
+    s_changeTokenNames.erase(nameIt);
+}
+
+void dusk::config::FinishRegistration() {}
 
 void dusk::config::LoadFromUserPreferences() {
     const auto configJsonPath = GetConfigJsonPath();
@@ -432,11 +536,14 @@ static void LoadFromPath(const char* path) {
         return;
     }
 
+    UnregisteredConfigVars.clear();
+
     for (const auto& el : j.items()) {
         const auto& key = el.key();
         auto configVar = RegisteredConfigVars.find(key);
         if (configVar == RegisteredConfigVars.end()) {
-            DuskConfigLog.error("Unknown key '{}' found in config!", key);
+            // Not an error: mod CVars register long after the config is read.
+            UnregisteredConfigVars.emplace(key, el.value());
             continue;
         }
 
@@ -459,13 +566,17 @@ static void LoadFromPath(const char* path) {
 
     // Hidden Skill Rework is always on; normalize legacy saves that disabled it.
     dusk::getSettings().game.hiddenSkillRework.setValue(true, false);
+
+    // Promote legacy Focused Arts Test into the official Gameplay toggle.
+    if (dusk::getSettings().game.focusedArtsTest.getValue() &&
+        !dusk::getSettings().game.focusedArts.getValue())
+    {
+        dusk::getSettings().game.focusedArts.setValue(true, false);
+    }
+    dusk::getSettings().game.focusedArtsTest.setValue(false, false);
 }
 
 void dusk::config::LoadFromFileName(const char* path) {
-    if (!RegistrationDone) {
-        DuskConfigLog.fatal("Registration not finished yet!");
-    }
-
     DuskConfigLog.info("Loading config from '{}'", path);
 
     try {
@@ -499,6 +610,12 @@ void dusk::config::Save() {
         if (layer == ConfigVarLayer::Value || layer == ConfigVarLayer::Speedrun) {
             j[pair.first] = pair.second->getImpl()->dumpToJson(*pair.second);
         }
+    }
+
+    // Keys whose owning CVar is not currently registered (unloaded mod, older/newer build)
+    // are written back untouched instead of being dropped.
+    for (const auto& pair : UnregisteredConfigVars) {
+        j[pair.first] = pair.second;
     }
 
     try {

@@ -8,6 +8,7 @@
 #include "d/actor/d_a_e_s1.h"
 #include "SSystem/SComponent/c_math.h"
 #include "Z2AudioLib/Z2Instances.h"
+#include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_path.h"
@@ -17,6 +18,10 @@
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include <cstring>
+#if TARGET_PC
+#include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_wolf_combat.h"
+#endif
 
 class daE_S1_HIO_c {
 public:
@@ -95,10 +100,84 @@ daE_S1_HIO_c::daE_S1_HIO_c() {
     mInvincible = 0;
 }
 
+#if TARGET_PC
+// Cut Actors sentinel (csXyz.x): selects gen-2 E_s1.arc + mapAnm / S1 joint-col.
+static const s16 kEs1Gen2AngleX = 0x0E51;
+
+static const char* es1_arcName(const e_s1_class* i_this) {
+    return i_this->mUseEs1Arc ? "E_s1" : "E_S2";
+}
+
+// Logical ANM_* values are E_S2 indices. Map to E_s1.h indices (missing → fallback).
+static int es1_mapAnm(int s2ResNo) {
+    switch (s2ResNo) {
+    case ANM_ATTACK:
+        return 5;
+    case ANM_ATTACK_02:
+        return 6;
+    case ANM_DAMAGED:
+        return 9;
+    case ANM_DASH_01:
+        return 0xA;
+    case ANM_DASH_02:
+        return 0xB;
+    case ANM_DEAD_02:
+        return 0xD;
+    case ANM_DEAD_03:
+        return 0xE;
+    case ANM_DEAD_04:
+        return 0xF;
+    case ANM_DEADWAIT_02:
+        return 0x10;
+    case ANM_DEADWAIT_03:
+        return 0x11;
+    case ANM_DEADWAIT_04:
+        return 0x12;
+    case ANM_DEADWAKE_02:
+        return 0x10;  // no deadwake on E_s1 → deadwait
+    case ANM_DEADWAKE_03:
+        return 0x11;
+    case ANM_DEADWAKE_04:
+        return 0x12;
+    case ANM_DOWN:
+        return 0x14;
+    case ANM_HANGED:
+    case ANM_HANG_DAMAGE:
+        return 9;  // damaged
+    case ANM_HANG_BRUSH:
+    case ANM_HANG_BRUSH2:
+    case ANM_HANG_WAIT:
+    case ANM_SHOUT:
+        return 0x1B;  // wait02
+    case ANM_SHRINK:
+        return 0x17;
+    case ANM_SHRINK_DOWN:
+        return 0x18;
+    case ANM_STICK:
+        return 0x19;
+    case ANM_WAIT_01:
+        return 0x1A;
+    case ANM_WAIT_02:
+        return 0x1B;
+    case ANM_WALK:
+        return 0x1C;
+    default:
+        return 0x1A;
+    }
+}
+#endif
+
 static void anm_init(e_s1_class* i_this, int i_resNo, f32 i_morf, u8 i_attr, f32 i_speed) {
-    J3DAnmTransform* pbck = (J3DAnmTransform*)dComIfG_getObjectRes("E_S2", i_resNo);
+#if TARGET_PC
+    const char* arc = es1_arcName(i_this);
+    const int resNo = i_this->mUseEs1Arc ? es1_mapAnm(i_resNo) : i_resNo;
+#else
+    const char* arc = "E_S2";
+    const int resNo = i_resNo;
+#endif
+    J3DAnmTransform* pbck = (J3DAnmTransform*)dComIfG_getObjectRes(arc, resNo);
     i_this->mpMorf->setAnm(pbck, i_attr, i_morf, i_speed, 0.0f, -1.0f);
-    i_this->mAnm = i_resNo;
+    i_this->mAnm = i_resNo;  // keep logical E_S2 ANM_* for AI comparisons
 }
 
 #if TARGET_PC
@@ -325,6 +404,9 @@ static void e_s1_enter_fail_wait(e_s1_class* i_this) {
     i_this->mHitInvincibilityTimer = 10;
     a_this->speedF = 0.0f;
     i_this->mSound.startCreatureVoice(Z2SE_EN_NS_V_DEATH, -1);
+#if TARGET_PC
+    dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
 }
 
 static bool s_pack_any_above_1;
@@ -409,16 +491,30 @@ static void damage_check(e_s1_class* i_this) {
                 if (player->getCutType() != daPy_py_c::CUT_TYPE_WOLF_B_LEFT && player->getCutType() != daPy_py_c::CUT_TYPE_WOLF_B_RIGHT &&
                     i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_WOLF_ATTACK))
                 {
-                    if (!player->onWolfEnemyHangBite(a_this)) {
+                    if (player->onWolfEnemyHangBite(a_this)) {
+                        OS_REPORT("S1 PL BITE HANG \n");
+                        i_this->mAction = ACT_WOLFBITE;
+                        i_this->mMode = 0;
+                        i_this->mHitInvincibilityTimer = 1000;
+                        i_this->mSound.startCollisionSE(Z2SE_HIT_WOLFBITE, 0x1F);
                         return;
                     }
 
-                    OS_REPORT("S1 PL BITE HANG \n");
-                    i_this->mAction = ACT_WOLFBITE;
-                    i_this->mMode = 0;
-                    i_this->mHitInvincibilityTimer = 1000;
-                    i_this->mSound.startCollisionSE(Z2SE_HIT_WOLFBITE, 0x1F);
+#if TARGET_PC
+                    // Plan W1: instrument hang-bite refuse (cutType / stale keep / HP).
+                    // W2: do NOT bare-return — fall through to normal damage so ALBW
+                    // cutType divergence / stale latch keep cannot mute the hit.
+                    {
+                        daAlink_c* link = (daAlink_c*)player;
+                        fopAc_ac_c* keep = link->field_0x281c.getActor();
+                        OS_REPORT(
+                            "S1 BITE HANG FAIL cut=%d keep=%08x health=%d gen2=%d\n",
+                            (int)player->getCutType(), keep != NULL ? (u32)fopAcM_GetID(keep) : 0u,
+                            (int)a_this->health, a_this->mUseEs1Arc ? 1 : 0);
+                    }
+#else
                     return;
+#endif
                 }
 
                 at_power_check(&i_this->mAtInfo);
@@ -1194,6 +1290,21 @@ static void e_s1_shout(e_s1_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
     i_this->mHitInvincibilityTimer = 10;
 
+#if TARGET_PC
+    // No SHOUT BCK on E_s1 — revive HP and return to wait (mapAnm would play wait02).
+    if (i_this->mUseEs1Arc) {
+        if (i_this->mMode == 0) {
+            a_this->health = 50;
+            anm_init(i_this, ANM_WAIT_02, 5.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+            i_this->mAction = ACT_WAIT;
+            i_this->mMode = 1;
+            i_this->mTimers[0] = 0;
+            i_this->mTimers[2] = 40;
+        }
+        return;
+    }
+#endif
+
     switch (i_this->mMode) {
     case 0:
         a_this->health = 50;
@@ -1388,12 +1499,39 @@ static void e_s1_wolfbite(e_s1_class* i_this) {
     cLib_addCalc0(&a_this->speedF, 1.0f, 2.0f);
     i_this->mAcchCir.SetWall(50.0f, 250.0f + nREG_F(11));
 
+#if TARGET_PC
+    // Gen-2 E_s1 has no hang BCKs — abort hang into fight-run with damage clip.
+    if (i_this->mUseEs1Arc) {
+        if (i_this->mMode == 0) {
+            anm_init(i_this, ANM_DAMAGED, 2.0f, J3DFrameCtrl::EMode_NONE, 1.0f);
+            a_this->health -= 5;
+            player->offWolfEnemyHangBite();
+            e_this->offWolfBiteDamage();
+            dAlbwWolfCombat_onBiteConnect();
+            i_this->mAction = ACT_FIGHT_RUN;
+            i_this->mMode = 0;
+        }
+        return;
+    }
+#endif
+
     switch (i_this->mMode) {
     case 0:
         anm_init(i_this, ANM_HANGED, 3.0f, 0, 1.0f);
         i_this->mMode = 1;
         i_this->mSound.startCreatureVoice(Z2SE_EN_NS_V_HANGED, -1);
         a_this->health -= 5;
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (alpha cleanup)
+        // The chest-grab applies damage internally, so cc_at_check (the
+        // only vanilla charge-accrual site) never sees these bites and
+        // the whole sequence earned zero wolf charge. Credit the initial
+        // chomp as a normal bite (3/15) and each A-mash hit below at
+        // 1/15 of a charge (helper no-ops outside wolf combat).
+        // ============================================
+        dAlbwWolfCombat_onBiteConnect();
+#endif
         i_this->field_0x6bb = 0;
         break;
     case 1:
@@ -1412,9 +1550,16 @@ static void e_s1_wolfbite(e_s1_class* i_this) {
             anm_init(i_this, ANM_HANG_DAMAGE, 2.0f, 0, 1.0f);
             i_this->mSound.startCreatureVoice(Z2SE_EN_NS_V_HANGEDAMAGE, -1);
             a_this->health -= 5;
+#if TARGET_PC
+            // Per-mash charge credit: 1/15 of a charge (see case 0 comment).
+            dAlbwWolfCombat_onChestMashHit();
+#endif
 
             if (i_this->health <= 0) {
                 player->offWolfEnemyHangBite();
+#if TARGET_PC
+                dAlbwEnemyRupees_onEnemyKill(a_this);
+#endif
                 if (i_this->mGroupID == 0xFF) {
                     i_this->mAction = ACT_FAIL;
                 } else {
@@ -1910,6 +2055,18 @@ static int daE_S1_Execute(e_s1_class* i_this) {
         i_this->field_0x6aa--;
     }
 
+#if TARGET_PC
+    // Plan W2c: HP floor + fail-route if health hit 0 outside damage_check.
+    if (a_this->health < 0) {
+        a_this->health = 0;
+    }
+    if (a_this->health <= 0 && i_this->mAction != ACT_FAIL && i_this->mAction != ACT_FAIL_WAIT &&
+        i_this->mAction != ACT_WOLFBITE)
+    {
+        e_s1_enter_fail_wait(i_this);
+    }
+#endif
+
     action(i_this);
 
     if (strcmp(dComIfGp_getStartStageName(), "F_SP121") == 0 && i_this->mPrm1 == 0xFE) {
@@ -2125,7 +2282,19 @@ static int daE_S1_IsDelete(e_s1_class* i_this) {
 
 static int daE_S1_Delete(e_s1_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+#if TARGET_PC
+    dComIfG_resDelete(&i_this->mPhase, es1_arcName(i_this));
+    // Plan W2a: clear hang-bite keep if Link was latched on this beast.
+    {
+        daPy_py_c* player = daPy_getPlayerActorClass();
+        if (player != NULL && player->checkWolfEnemyBiteAllOwn(a_this)) {
+            ((daAlink_c*)player)->resetWolfEnemyBiteAll();
+            OS_REPORT("E_S1 delete: resetWolfEnemyBiteAll (was latched)\n");
+        }
+    }
+#else
     dComIfG_resDelete(&i_this->mPhase, "E_S2");
+#endif
 
     if (i_this->mInitHIO) {
         hio_set = false;
@@ -2152,10 +2321,39 @@ static dJntColData_c jc_data[] = {
     {0, 1, 24, 10.0f, &jv_offset},
 };
 
+#if TARGET_PC
+// S1_JNT_* remaps of the shipping S2 jc_data rows (backbone/head/arms/legs).
+static dJntColData_c jc_data_s1[] = {
+    {0, 1, 1, 30.0f, &jv_offset},   // BACKBONE1
+    {0, 1, 2, 30.0f, &jv_offset},   // BACKBONE2
+    {0, 1, 3, 25.0f, &jv_offset},   // HEAD (S2 used NECK@3)
+    {0, 1, 8, 15.0f, &jv_offset},   // ARML2
+    {0, 1, 9, 10.0f, &jv_offset},   // HANDL
+    {0, 1, 15, 15.0f, &jv_offset},  // ARMR2
+    {0, 1, 16, 10.0f, &jv_offset},  // HANDR
+    {0, 1, 22, 10.0f, &jv_offset},  // LEGL2
+    {0, 1, 25, 10.0f, &jv_offset},  // LEGR2
+};
+#endif
+
 static int useHeapInit(fopAc_ac_c* i_this) {
     e_s1_class* a_this = (e_s1_class*)i_this;
 
-    a_this->mpMorf = JKR_NEW mDoExt_McaMorfSO((J3DModelData*)dComIfG_getObjectRes("E_S2", 0x22), NULL, NULL, (J3DAnmTransform*)dComIfG_getObjectRes("E_S2", 0x1D), 0, 1.0f, 0, -1, &a_this->mSound, 0x80000, 0x11000084);
+#if TARGET_PC
+    const char* arc = es1_arcName(a_this);
+    const int bmdIdx = a_this->mUseEs1Arc ? 0x1F : 0x22;
+    const int waitIdx = a_this->mUseEs1Arc ? 0x1A : 0x1D;
+    dJntColData_c* jntData = a_this->mUseEs1Arc ? jc_data_s1 : jc_data;
+#else
+    const char* arc = "E_S2";
+    const int bmdIdx = 0x22;
+    const int waitIdx = 0x1D;
+    dJntColData_c* jntData = jc_data;
+#endif
+
+    a_this->mpMorf = JKR_NEW mDoExt_McaMorfSO((J3DModelData*)dComIfG_getObjectRes(arc, bmdIdx), NULL,
+                                             NULL, (J3DAnmTransform*)dComIfG_getObjectRes(arc, waitIdx),
+                                             0, 1.0f, 0, -1, &a_this->mSound, 0x80000, 0x11000084);
     if (a_this->mpMorf == NULL || a_this->mpMorf->getModel() == NULL) {
         return 0;
     }
@@ -2164,7 +2362,7 @@ static int useHeapInit(fopAc_ac_c* i_this) {
         return 0;
     }
 
-    if (!a_this->mJntCol.init(i_this, jc_data, a_this->mpMorf->getModel(), 9)) {
+    if (!a_this->mJntCol.init(i_this, jntData, a_this->mpMorf->getModel(), 9)) {
         return 0;
     }
 
@@ -2175,7 +2373,17 @@ static int daE_S1_Create(fopAc_ac_c* i_this) {
     e_s1_class* a_this = (e_s1_class*)i_this;
     fopAcM_ct(a_this, e_s1_class);
 
+#if TARGET_PC
+    a_this->mUseEs1Arc = (i_this->current.angle.x == kEs1Gen2AngleX);
+    if (a_this->mUseEs1Arc) {
+        // Sentinel is not a gameplay pitch — clear so shape matches facing.
+        i_this->current.angle.x = i_this->shape_angle.x = 0;
+        OS_REPORT("E_S1 gen-2 profile: loading E_s1.arc\n");
+    }
+    int phase_state = dComIfG_resLoad(&a_this->mPhase, es1_arcName(a_this));
+#else
     int phase_state = dComIfG_resLoad(&a_this->mPhase, "E_S2");
+#endif
     if (phase_state == cPhs_COMPLEATE_e) {
         OS_REPORT("E_S1 PARAM %x\n", fopAcM_GetParam(i_this));
         OS_REPORT("E_S1 AZ    %x\n", i_this->current.angle.z);
@@ -2321,6 +2529,20 @@ static int daE_S1_Create(fopAc_ac_c* i_this) {
         a_this->mSound.init(&i_this->current.pos, &i_this->eyePos, 3, 1);
         a_this->mSound.setEnemyName("E_s1");
         a_this->mAtInfo.mpSound = &a_this->mSound;
+
+#if TARGET_PC
+        // Gen-2 mesh is authored smaller than shipping E_S2. Draw uses
+        // mBaseSize * scale.x; Cc spheres use mBaseSize only — keep hitboxes retail.
+        // Default 1.25; live-tune with WREG_F(29) (spawn shipping + gen-2 side-by-side).
+        if (a_this->mUseEs1Arc) {
+            f32 s = 1.25f + WREG_F(29);
+            if (s < 0.25f) {
+                s = 0.25f;
+            }
+            i_this->scale.set(s, s, s);
+            OS_REPORT("E_S1 gen-2 scale %f (WREG_F(29) offset)\n", s);
+        }
+#endif
 
         a_this->field_0x6aa = 30;
 

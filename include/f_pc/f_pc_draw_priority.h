@@ -351,6 +351,8 @@ enum {
     fpcDwPi_NPC_DOC_e,
     fpcDwPi_NPC_GWOLF_e,
     fpcDwPi_ALBW_SHADE_WATCHER_e,
+    fpcDwPi_ALBW_SHADE_BOSS_WOLF_e,
+    fpcDwPi_ALBW_MIDNA_ARM_e,
     fpcDwPi_NPC_LEN_e,
     fpcDwPi_NPC_LUD_e,
     fpcDwPi_NPC_FAIRY_SEIREI_e,

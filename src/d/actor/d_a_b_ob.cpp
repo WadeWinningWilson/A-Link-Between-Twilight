@@ -16,6 +16,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_boss.h"
 #endif
 
 enum B_oh_RES_File_ID {
@@ -373,13 +374,27 @@ static int daB_OB_Draw(b_ob_class* i_this) {
                 &a_this->tevStr, 0, 1.0f, dDlst_shadowControl_c::getSimpleTex());
         }
 
+#if TARGET_PC
+        // Boss Refinement: Chu Worm bubble BMD (E_SM) at vanilla Chu size on the eye.
+        // Falls back silently until the arc finishes loading.
+        if (!dAlbwBoss_morpheelDrawChuBubble(a_this) && dAlbwBoss_morpheelBubbleUp()) {
+            dAlbwBoss_morpheelTickBubbleLoad();
+        }
+#endif
+
         g_env_light.settingTevStruct(0, &a_this->home.pos, &a_this->tevStr);
         g_env_light.setLightTevColorType_MAJI(i_this->mBodyParts[0].mpMorf->getModel(),
                                               &a_this->tevStr);
         i_this->mBodyParts[0].mpMorf->entryDL();
     }
 
-    if (i_this->mSuiBrkFrame > 0.0f) {
+#if TARGET_PC
+    // Vanilla mouth sui only — Chu bubble owns the shell draw while BubbleUp.
+    if (i_this->mSuiBrkFrame > 0.0f && !dAlbwBoss_morpheelBubbleUp())
+#else
+    if (i_this->mSuiBrkFrame > 0.0f)
+#endif
+    {
         g_env_light.setLightTevColorType_MAJI(i_this->mpSuiModel, &a_this->tevStr);
         i_this->mpSuiBrk->entry(i_this->mpSuiModel->getModelData());
         i_this->mpSuiBtk->entry(i_this->mpSuiModel->getModelData());
@@ -669,6 +684,307 @@ static void bombfishset(b_ob_class* i_this) {
     }
 }
 
+#if TARGET_PC
+// Set at intro title-card end; consumed only after demo_camera clears mDemoAction,
+// the event bus is idle, AND a calm settle window — same-frame / next-frame
+// handoff still raced Evt 1→5→0 teardown and crashed.
+static bool s_morpheelPendingHandoff = false;
+static s16 s_morpheelHandoffSettle = 0;
+static const s16 kMorpheelHandoffSettleFrames = 90;  // ~1.5s after Evt idle
+// Slot index must NOT live in mTimers[] — Execute decrements those every frame
+// and was stuck re-requesting slot 0 forever (100+ E_OctBg creates, none orbiting).
+static int s_morpheelRingNextSlot = 0;
+
+// AIM → FIRE (arrive) → 40% tentacle / 60% reshoot → WANDER → AIM.
+// Own timer — never mTimers[] (Execute auto-decrements and arena clamp must not re-arm).
+enum {
+    MORPHEEL_LUNGE_AIM = 0,
+    MORPHEEL_LUNGE_FIRE = 1,
+    MORPHEEL_LUNGE_WAIT_GRAB = 2,
+    MORPHEEL_LUNGE_WANDER = 3,
+};
+static s16 s_morpheelLungePhase = MORPHEEL_LUNGE_AIM;
+static s16 s_morpheelLungeTimer = 0;
+static s16 s_morpheelLockYaw = 0;
+static s16 s_morpheelLockPitch = 0;
+static cXyz s_morpheelAimPos;
+static bool s_morpheelPostArriveSpent = false;
+
+// Boss Refinement: spawn one surface bomb (staggered; 12-at-once killed E_bg load).
+static void morpheel_spawn_one_ring_bomb(b_ob_class* i_this, int i_slot) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    if (i_slot < 0 || i_slot >= kAlbwMorpheelRingBombs) {
+        return;
+    }
+    cXyz pos = a_this->current.pos;
+    pos.y += 200.0f;
+    csXyz angle(0, (s16)(i_slot * (0x10000 / kAlbwMorpheelRingBombs)), 0);
+    const u32 param = kAlbwMorpheelRingBombParam | (u32)i_slot;
+    fopAcM_createChild(fpcNm_E_OctBg_e, fopAcM_GetID(a_this), param, &pos,
+                       fopAcM_GetRoomNo(a_this), &angle, NULL, -1, NULL);
+    if (i_slot == 0) {
+        i_this->mOISound.startCreatureVoice(Z2SE_EN_OI_BG_APPEAR, -1);
+    }
+}
+
+static void* s_morpheel_ring_count_sub(void* i_actor, void* i_data) {
+    int* count = (int*)i_data;
+    if (!fopAcM_IsActor(i_actor) || fopAcM_GetName(i_actor) != fpcNm_E_OctBg_e) {
+        return NULL;
+    }
+    if (dAlbwBoss_morpheelIsRingBombParam(fopAcM_GetParam((fopAc_ac_c*)i_actor))) {
+        (*count)++;
+    }
+    return NULL;
+}
+
+static int morpheel_count_ring_bombs() {
+    int count = 0;
+    fpcM_Search(s_morpheel_ring_count_sub, &count);
+    return count;
+}
+
+static bool morpheel_tentacles_ready(b_ob_class* i_this) {
+    for (int i = 0; i < 8; i++) {
+        if (fopAcM_SearchByID(i_this->mTentacleActorIDs[i]) == NULL) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void morpheel_force_tentacles_wait(b_ob_class* i_this) {
+    for (int i = 0; i < 8; i++) {
+        b_oh_class* tentacle = (b_oh_class*)fopAcM_SearchByID(i_this->mTentacleActorIDs[i]);
+        if (tentacle == NULL) {
+            continue;
+        }
+        // Only pin START/NON — never yank ATTACK/CAUGHT (grab path needs to run).
+        if (tentacle->mAction == OH_ACTION_START || tentacle->mAction == OH_ACTION_NON) {
+            tentacle->mAction = OH_ACTION_WAIT;
+            tentacle->mActionPhase = 0;
+            tentacle->mTimers[0] = 30;
+            tentacle->field_0xcac = 0.0f;
+            tentacle->field_0x608 = 1.0f;
+            tentacle->mTentacleLength = 70.0f;
+        }
+    }
+}
+
+static void morpheel_lunge_begin_aim(b_ob_class* i_this) {
+    s_morpheelLungePhase = MORPHEEL_LUNGE_AIM;
+    s_morpheelLungeTimer = (s16)(20.0f + cM_rndF(20.0f));
+    i_this->speedF = 0.0f;
+}
+
+static void morpheel_lunge_begin_wander(b_ob_class* i_this) {
+    s_morpheelPostArriveSpent = false;
+    s_morpheelLungePhase = MORPHEEL_LUNGE_WANDER;
+    s_morpheelLungeTimer = (s16)(40.0f + cM_rndF(40.0f));
+    i_this->speedF = 0.0f;
+    i_this->current.angle.y += (s16)cM_rndFX(0x2800);
+}
+
+static void morpheel_lunge_on_arrive(b_ob_class* i_this) {
+    i_this->speedF = 0.0f;
+    // First arrival: 40% tentacle / 60% one more shot. Second arrival (reshoot done) → wander.
+    if (!s_morpheelPostArriveSpent) {
+        s_morpheelPostArriveSpent = true;
+        if (cM_rndF(1.0f) < 0.4f) {
+            dAlbwBoss_morpheelRequestTentacleGrab();
+            s_morpheelLungePhase = MORPHEEL_LUNGE_WAIT_GRAB;
+            // 8 × (~100 strike + ~90 gap) + hold headroom
+            s_morpheelLungeTimer = 2400;
+        } else {
+            morpheel_lunge_begin_aim(i_this);
+        }
+    } else {
+        morpheel_lunge_begin_wander(i_this);
+    }
+}
+
+// Boss Refinement phase-1: eye leads, Chu bubble, surface fish, aim/lunge motion.
+static int core_composite(b_ob_class* i_this) {
+    fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
+    daPy_py_c* player = (daPy_py_c*)dComIfGp_getPlayer(0);
+    int move_mode = 0;
+
+    if (player == NULL) {
+        a_this->speedF = 0.0f;
+        return 0;
+    }
+
+    dAlbwBoss_morpheelTickBubbleLoad();
+
+    // Deny clawshot latch until CLAW/EXPOSED — ClrTgHit alone does not cancel carry.
+    if (dAlbwBoss_morpheelIsActive() && !dAlbwBoss_morpheelEyeHookAllowed()) {
+        if (fopAcM_checkHookCarryNow(a_this)) {
+            fopAcM_cancelHookCarryNow(a_this);
+        }
+    }
+
+    const bool blocked = dComIfGp_event_runCheck() || cDmrNowMidnaTalk();
+    if (blocked) {
+        a_this->speedF = 0.0f;
+        if (!dAlbwBoss_morpheelFightIsLive() && i_this->mMode < 2) {
+            i_this->mMode = 0;
+            i_this->mTimers[0] = 0;
+        }
+        return 0;
+    }
+
+    switch (i_this->mMode) {
+    case 0:
+        if (!morpheel_tentacles_ready(i_this)) {
+            a_this->speedF = 0.0f;
+            break;
+        }
+        anm_init(i_this, BCK_OI_WAIT, 5.0f, J3DFrameCtrl::EMode_LOOP, 1.0f);
+        a_this->gravity = 0.0f;
+        a_this->speed.y = 0.0f;
+        a_this->speedF = 0.0f;
+        i_this->field_0x479c = 0.0f;
+        if (a_this->current.pos.y < i_this->field_0x47a0 + 150.0f) {
+            a_this->current.pos.y = i_this->field_0x47a0 + 400.0f;
+        }
+        a_this->old.pos = a_this->current.pos;
+        morpheel_force_tentacles_wait(i_this);
+        dAlbwBoss_morpheelSetFightLive(true);
+        i_this->mTimers[0] = 20;
+        i_this->mTimers[2] = 0;
+        s_morpheelRingNextSlot = 0;
+        s_morpheelPostArriveSpent = false;
+        morpheel_lunge_begin_aim(i_this);
+        i_this->mMode = 1;
+        OS_REPORT("B_OB Morpheel composite: live after intro\n");
+        break;
+    case 1:
+        a_this->speedF = 0.0f;
+        morpheel_force_tentacles_wait(i_this);
+        if (i_this->mTimers[0] != 0) {
+            break;
+        }
+        i_this->mMode = 2;
+        morpheel_lunge_begin_aim(i_this);
+        OS_REPORT("B_OB Morpheel composite: lunge + surface fish begin\n");
+        break;
+    case 2: {
+        move_mode = 2;
+        dAlbwBoss_morpheelTick(a_this);
+        // Do not force WAIT every frame — tentacles must be free to ATTACK/CAUGHT.
+
+        if (s_morpheelRingNextSlot < kAlbwMorpheelRingBombs && i_this->mTimers[2] == 0) {
+            if (morpheel_count_ring_bombs() >= kAlbwMorpheelRingBombs) {
+                s_morpheelRingNextSlot = kAlbwMorpheelRingBombs;
+                dAlbwBoss_morpheelMarkBombsSpawned();
+            } else {
+                morpheel_spawn_one_ring_bomb(i_this, s_morpheelRingNextSlot);
+                OS_REPORT("B_OB Morpheel composite: spawn slot %d\n", s_morpheelRingNextSlot);
+                s_morpheelRingNextSlot++;
+                i_this->mTimers[2] = 30;
+                if (s_morpheelRingNextSlot >= kAlbwMorpheelRingBombs) {
+                    dAlbwBoss_morpheelMarkBombsSpawned();
+                }
+            }
+        }
+
+        if (dAlbwBoss_morpheelGetPhase() == ALBW_MORPHEEL_REF_HANDOFF) {
+            i_this->mAction = OB_ACTION_CORE_END;
+            i_this->mMode = 0;
+            return 0;
+        }
+
+        if (s_morpheelLungeTimer > 0) {
+            s_morpheelLungeTimer--;
+        }
+
+        cXyz to_player = player->current.pos - a_this->current.pos;
+        f32 dist = to_player.abs();
+        const s16 yaw_to =
+            (dist > 1.0f) ? cM_atan2s(to_player.x, to_player.z) : a_this->current.angle.y;
+        const s16 pitch_to =
+            (dist > 1.0f)
+                ? (s16)(-cM_atan2s(to_player.y,
+                                   JMAFastSqrt(to_player.x * to_player.x + to_player.z * to_player.z)))
+                : a_this->current.angle.x;
+
+        switch (s_morpheelLungePhase) {
+        case MORPHEEL_LUNGE_AIM:
+            a_this->speedF = 0.0f;
+            cLib_addCalcAngleS2(&a_this->current.angle.y, yaw_to, 2, 0x800);
+            cLib_addCalcAngleS2(&a_this->current.angle.x, pitch_to, 2, 0x600);
+            if (s_morpheelLungeTimer == 0) {
+                s_morpheelLockYaw = a_this->current.angle.y;
+                s_morpheelLockPitch = a_this->current.angle.x;
+                s_morpheelAimPos = player->current.pos;
+                s_morpheelLungePhase = MORPHEEL_LUNGE_FIRE;
+                s_morpheelLungeTimer = 55;
+                a_this->speedF = kAlbwMorpheelLungeSpeed;
+            }
+            break;
+        case MORPHEEL_LUNGE_FIRE: {
+            a_this->current.angle.y = s_morpheelLockYaw;
+            a_this->current.angle.x = s_morpheelLockPitch;
+            a_this->speedF = kAlbwMorpheelLungeSpeed;
+            cXyz to_aim = s_morpheelAimPos - a_this->current.pos;
+            const f32 aim_dist = to_aim.abs();
+            const f32 hx = cM_ssin(s_morpheelLockYaw);
+            const f32 hz = cM_scos(s_morpheelLockYaw);
+            const f32 along = to_aim.x * hx + to_aim.z * hz;
+            // Arrive at locked aim point (or overshoot / timeout).
+            if (aim_dist < 200.0f || along < 0.0f || s_morpheelLungeTimer == 0) {
+                morpheel_lunge_on_arrive(i_this);
+            }
+            break;
+        }
+        case MORPHEEL_LUNGE_WAIT_GRAB:
+            a_this->speedF = 0.0f;
+            // Pass ends itself (all 8 missed, or grab hold finished). Safety timeout only.
+            if (!dAlbwBoss_morpheelTentacleGrabBusy()) {
+                morpheel_lunge_begin_wander(i_this);
+            } else if (s_morpheelLungeTimer == 0) {
+                dAlbwBoss_morpheelNotifyTentacleGrabHoldDone();
+                morpheel_lunge_begin_wander(i_this);
+            }
+            break;
+        case MORPHEEL_LUNGE_WANDER:
+            a_this->speedF = 18.0f;
+            if (s_morpheelLungeTimer == 0) {
+                morpheel_lunge_begin_aim(i_this);
+            }
+            break;
+        }
+
+        i_this->mYAngleToPlayer = a_this->current.angle.y;
+        i_this->mXAngleToPlayer = a_this->current.angle.x;
+
+        cXyz from_home = a_this->current.pos - a_this->home.pos;
+        f32 xz = JMAFastSqrt(from_home.x * from_home.x + from_home.z * from_home.z);
+        // Soft redirect only — never re-arm STOP/timer every frame (that stuck the eye).
+        if (xz > 2800.0f) {
+            a_this->current.angle.y = cM_atan2s(-from_home.x, -from_home.z);
+            s_morpheelLockYaw = a_this->current.angle.y;
+        }
+        if (xz > 3200.0f) {
+            const f32 scale = 2800.0f / xz;
+            a_this->current.pos.x = a_this->home.pos.x + from_home.x * scale;
+            a_this->current.pos.z = a_this->home.pos.z + from_home.z * scale;
+        }
+        if (a_this->current.pos.y < i_this->field_0x47a0 + 150.0f) {
+            a_this->current.pos.y = i_this->field_0x47a0 + 150.0f;
+        }
+        if (a_this->current.pos.y > i_this->field_0x47a0 + 2200.0f) {
+            a_this->current.pos.y = i_this->field_0x47a0 + 2200.0f;
+        }
+        break;
+    }
+    }
+
+    a_this->shape_angle.z += 0x200;
+    return move_mode;
+}
+#endif
+
 static void core_hook(b_ob_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
     i_this->mHitIFrameTimer = 20;
@@ -684,8 +1000,22 @@ static void core_hook(b_ob_class* i_this) {
     }
 
     if (i_this->mTimers[0] == 0 && !fopAcM_checkHookCarryNow(a_this)) {
-        i_this->mAction = OB_ACTION_CORE_CHANCE;
-        i_this->mMode = 0;
+#if TARGET_PC
+        if (dAlbwBoss_morpheelIsActive()) {
+            // Back to chase (mode 2) — never re-enter spawn settle.
+            dAlbwBoss_morpheelSetFightLive(true);
+            i_this->mAction = OB_ACTION_CORE_COMPOSITE;
+            i_this->mMode = 2;
+            if (s_morpheelRingNextSlot < kAlbwMorpheelRingBombs) {
+                s_morpheelRingNextSlot = kAlbwMorpheelRingBombs;
+                dAlbwBoss_morpheelMarkBombsSpawned();
+            }
+        } else
+#endif
+        {
+            i_this->mAction = OB_ACTION_CORE_CHANCE;
+            i_this->mMode = 0;
+        }
     }
 
     a_this->shape_angle.z += 0xA00;
@@ -791,6 +1121,10 @@ static void core_end(b_ob_class* i_this) {
     int frame = i_this->mBodyParts[0].mpMorf->getFrame();
     i_this->mHitIFrameTimer = 10;
 
+#if TARGET_PC
+    dAlbwBoss_morpheelOnEyeDepleted();
+#endif
+
     cXyz particle_pos;
     switch (i_this->mMode) {
     case 0:
@@ -826,6 +1160,9 @@ static void core_end(b_ob_class* i_this) {
                 fopAc_ac_c* tentacle = fopAcM_SearchByID(i_this->mTentacleActorIDs[i]);
                 fopAcM_delete(tentacle);
             }
+#if TARGET_PC
+            fpcM_Search(s_bfdel_sub, i_this);
+#endif
         }
 
         if (i_this->mTimers[0] <= 50) {
@@ -918,6 +1255,14 @@ static void core_action(b_ob_class* i_this) {
         look_at_player = false;
         attn_ON = false;
         break;
+#if TARGET_PC
+    case OB_ACTION_CORE_COMPOSITE:
+        var_r26 = core_composite(i_this);
+        look_at_player = false;
+        // Never auto-trigger the buried-body eat demo during composite.
+        check_eat = false;
+        break;
+#endif
     }
 
     if (check_eat && i_this->mDemoAction == 0) {
@@ -989,6 +1334,35 @@ static void core_damage_check(b_ob_class* i_this) {
 
     if (i_this->mHitIFrameTimer == 0 && i_this->mCcSph.ChkTgHit()) {
         i_this->mAtInfo.mpCollider = i_this->mCcSph.GetTgHitObj();
+
+#if TARGET_PC
+        if (dAlbwBoss_morpheelIsActive()) {
+            const bool is_hook = i_this->mAtInfo.mpCollider->ChkAtType(AT_TYPE_HOOKSHOT);
+            if (is_hook) {
+                if (!dAlbwBoss_morpheelEyeHookAllowed()) {
+                    i_this->mHitIFrameTimer = 10;
+                    i_this->mCcSph.ClrTgHit();
+                    fopAcM_cancelHookCarryNow(a_this);
+                    return;
+                }
+                dAlbwBoss_morpheelOnEyeHooked();
+                i_this->mAction = OB_ACTION_CORE_HOOK;
+                i_this->mMode = 0;
+                i_this->mSound.startCreatureSound(Z2SE_EN_OI_CORE_PULLOUT, 0, -1);
+                dComIfGs_onOneZoneSwitch(7, -1);
+                i_this->mHitIFrameTimer = 10;
+                return;
+            }
+            if (!dAlbwBoss_morpheelEyeDamageAllowed()) {
+                // Shell rebound — Chu Worm style (no HP drain).
+                mDoAud_seStart(Z2SE_EN_SC_SL_REBOUND, &a_this->current.pos, 0, 0);
+                i_this->mHitIFrameTimer = 10;
+                i_this->mCcSph.ClrTgHit();
+                return;
+            }
+        }
+#endif
+
         cc_at_check(a_this, &i_this->mAtInfo);
 
         dComIfGp_particle_set(dPa_RM(ID_ZI_S_OI_ISO_COREHIT_A), &a_this->current.pos, NULL, NULL);
@@ -1007,6 +1381,13 @@ static void core_damage_check(b_ob_class* i_this) {
 
             if (a_this->health <= 0 && !dComIfGp_event_runCheck()) {
                 i_this->field_0x4744 = 1;
+#if TARGET_PC
+                if (dAlbwBoss_morpheelIsActive()) {
+                    dAlbwBoss_morpheelOnEyeDepleted();
+                    i_this->mAction = OB_ACTION_CORE_END;
+                    i_this->mMode = 0;
+                }
+#endif
             } else {
                 i_this->field_0x5d13 = 1;
             }
@@ -1837,7 +2218,12 @@ static void fish_move(b_ob_class* i_this) {
         part->mpMorf->getModel()->setBaseTRMtx(mDoMtx_stack_c::get());
         part->mpMorf->modelCalc();
 
-        if (i == 0 && i_this->mSuiBrkFrame > 0.0f) {
+        if (i == 0 && i_this->mSuiBrkFrame > 0.0f
+#if TARGET_PC
+            // Bubble shell owns the sui mtx/draw path — don't fight it on the body joint.
+            && !dAlbwBoss_morpheelBubbleUp()
+#endif
+        ) {
             i_this->mpSuiBrk->setFrame(i_this->mSuiBrkFrame);
             i_this->mpSuiBtk->play();
 
@@ -2448,6 +2834,8 @@ static void demo_camera(b_ob_class* i_this) {
             i_this->field_0x5cd0 = 0;
             i_this->mAction = 1;
             i_this->mMode = 0;
+            // Refinement handoff waits until demo 32 ends (timer 200) — switching
+            // to COMPOSITE here left event_runCheck true and froze the eye forever.
 
             for (int i = 1; i < 7; i++) {
                 tentacle = (b_oh_class*)fopAcM_SearchByID(i_this->mTentacleActorIDs[i]);
@@ -2501,11 +2889,35 @@ static void demo_camera(b_ob_class* i_this) {
 
         if (i_this->mDemoActionTimer == 200) {
             i_this->mDemoAction = 100;
-            for (int i = 0; i < 8; i++) {
-                tentacle = (b_oh_class*)fopAcM_SearchByID(i_this->mTentacleActorIDs[i]);
-                tentacle->mAction = 1;
-                tentacle->mActionPhase = 1;
-                tentacle->mTimers[0] = cM_rndF(50.0f) + 100.0f;
+#if TARGET_PC
+            if (dAlbwBossRefinement_isEnabled()) {
+                // Hold tentacles idle through Evt teardown + settle — vanilla's
+                // action=1/phase=1 poke on this frame races the close and crashed.
+                for (int i = 0; i < 8; i++) {
+                    tentacle = (b_oh_class*)fopAcM_SearchByID(i_this->mTentacleActorIDs[i]);
+                    if (tentacle == NULL) {
+                        continue;
+                    }
+                    tentacle->mAction = OH_ACTION_WAIT;
+                    tentacle->mActionPhase = 0;
+                    tentacle->mTimers[0] = 200;
+                }
+                // Arm only — COMPOSITE after demo 100 + Evt idle + settle frames.
+                dAlbwBoss_morpheelEnsureInit(a_this);
+                s_morpheelPendingHandoff = true;
+                s_morpheelHandoffSettle = 0;
+            } else
+#endif
+            {
+                for (int i = 0; i < 8; i++) {
+                    tentacle = (b_oh_class*)fopAcM_SearchByID(i_this->mTentacleActorIDs[i]);
+                    if (tentacle == NULL) {
+                        continue;
+                    }
+                    tentacle->mAction = 1;
+                    tentacle->mActionPhase = 1;
+                    tentacle->mTimers[0] = cM_rndF(50.0f) + 100.0f;
+                }
             }
 
             Z2GetAudioMgr()->bgmStart(Z2BGM_BOSS_OCTAEEL_0, 0, 0);
@@ -3015,12 +3427,48 @@ static void demo_camera(b_ob_class* i_this) {
     }
 }
 
+#if TARGET_PC
+static void morpheel_try_post_intro_handoff(b_ob_class* i_this) {
+    if (!s_morpheelPendingHandoff || !dAlbwBossRefinement_isEnabled()) {
+        return;
+    }
+    if (i_this->mDemoAction != 0 || dComIfGp_event_runCheck() || cDmrNowMidnaTalk()) {
+        s_morpheelHandoffSettle = 0;
+        return;
+    }
+    if (s_morpheelHandoffSettle < kMorpheelHandoffSettleFrames) {
+        s_morpheelHandoffSettle++;
+        return;
+    }
+    if (i_this->mAction == OB_ACTION_CORE_COMPOSITE) {
+        s_morpheelPendingHandoff = false;
+        s_morpheelHandoffSettle = 0;
+        return;
+    }
+    dAlbwBoss_morpheelEnsureInit((fopAc_ac_c*)i_this);
+    i_this->mAction = OB_ACTION_CORE_COMPOSITE;
+    i_this->mMode = 0;
+    i_this->mTimers[0] = 0;
+    i_this->mTimers[1] = 0;
+    i_this->mTimers[2] = 0;
+    i_this->mTimers[3] = 0;
+    s_morpheelRingNextSlot = 0;
+    s_morpheelPendingHandoff = false;
+    s_morpheelHandoffSettle = 0;
+    OS_REPORT("B_OB Morpheel composite: handoff after intro settle\n");
+}
+#endif
+
 static int daB_OB_Execute(b_ob_class* i_this) {
     fopAc_ac_c* a_this = (fopAc_ac_c*)i_this;
 
     if (cDmrNowMidnaTalk()) {
         return 1;
     }
+
+#if TARGET_PC
+    morpheel_try_post_intro_handoff(i_this);
+#endif
 
     fopAc_ac_c* player = (fopAc_ac_c*)dComIfGp_getPlayer(0);
     cXyz sp70;
@@ -3148,11 +3596,25 @@ static int daB_OB_Execute(b_ob_class* i_this) {
             sp7C.x += 22222.0f;
         }
 
+#if TARGET_PC
+        // Bubbled eye-mass: contact damage matching Chu shell radius / draw center.
+        if (dAlbwBoss_morpheelFightIsLive() && dAlbwBoss_morpheelBubbleUp()) {
+            sp7C.y += kAlbwMorpheelBubbleYOfs;
+            i_this->mCcSph.SetC(sp7C);
+            i_this->mCcSph.SetR(dAlbwBoss_morpheelBubbleRadius());
+            i_this->mCcSph.OnAtSetBit();
+        } else {
+            i_this->mCcSph.SetC(sp7C);
+            i_this->mCcSph.SetR(l_HIO.mCoreSize * 50.0f);
+            i_this->mCcSph.OffAtSetBit();
+        }
+#else
         i_this->mCcSph.SetC(sp7C);
         i_this->mCcSph.SetR(l_HIO.mCoreSize * 50.0f);
+        i_this->mCcSph.OffAtSetBit();
+#endif
 
         dComIfG_Ccsp()->Set(&i_this->mCcSph);
-        i_this->mCcSph.OffAtSetBit();
 
         if (!dComIfGp_event_runCheck()) {
             i_this->mCcSph.OnCoSetBit();
@@ -3619,8 +4081,25 @@ static int daB_OB_Create(fopAc_ac_c* i_this) {
             a_this->mAction = OB_ACTION_CORE_HAND_MOVE;
             Z2GetAudioMgr()->bgmStart(Z2BGM_BOSS_OCTAEEL_0, 0, 0);
             dComIfGs_onOneZoneSwitch(5, -1);
+#if TARGET_PC
+            if (dAlbwBossRefinement_isEnabled()) {
+                dAlbwBoss_morpheelEnsureInit(a_this);
+                a_this->mAction = OB_ACTION_CORE_COMPOSITE;
+                a_this->mMode = 0;
+                a_this->mTimers[0] = 0;
+                s_morpheelPendingHandoff = false;
+                s_morpheelHandoffSettle = 0;
+            }
+#endif
         } else {
             a_this->mAction = OB_ACTION_CORE_START;
+#if TARGET_PC
+            // Refinement arms state only — COMPOSITE starts after the vanilla
+            // eye-appear intro (demo 30→32), not instead of it.
+            if (dAlbwBossRefinement_isEnabled()) {
+                dAlbwBoss_morpheelEnsureInit(a_this);
+            }
+#endif
         }
 
         for (int i = 0; i < 8; i++) {

@@ -1,0 +1,924 @@
+// ============================================
+// NEW CODE — ALBW Port (Mods window — load-order mod manager UI)
+// See mods.hpp. Interaction model:
+//   - Left pane lists mods in PRIORITY order (top wins conflicts), one
+//     POSITION-BOUND row per mod or collapsed collection (variants live in
+//     the right pane), with per-frame labels (order_view — a cheap setting-
+//     string parse, no disk I/O), so moves update in place without rebuilding
+//     the pane from inside a button's own event handler.
+//   - GRAB-AND-PLACE reorder: A/click grabs the focused mod (highlight + > <
+//     markers); Up/Down then MOVES it one slot per press — the pane's normal
+//     focus move runs after ours and lands on the adjacent row, which now
+//     shows the grabbed mod, so the cursor rides along; A places it. Clicking
+//     a DIFFERENT row while holding drops the held mod AT that row
+//     (move_mod_group_to — any distance, one rescan).
+//   - Right pane: per-mod panel with Enable/Disable (including whole-collection
+//     Off), variant picker, Rescan, Open folder, status/conflict notes, and
+//     modinfo screenshot — plus Packages (.dusk) below.
+//   - "Allow Core Override" (D4) lives under Options.
+//   - "Packages (.dusk)" is the ModLoader half of the same page: bundles with
+//     native code and their own UI panels, listed with status (Active/Failed/
+//     Suspended/Disabled) and Enable/Disable/Reload. Load order does not apply
+//     to them, so they are their own section rather than extra rows above.
+// ============================================
+
+#include "mods.hpp"
+
+#include <aurora/lib/gfx/png_io.hpp>  // load_png_file (modinfo screenshot preview)
+#include <aurora/rmlui.hpp>           // register_texture_provider (modshot://)
+#include <fmt/format.h>
+
+#include "Z2AudioLib/Z2SeMgr.h"
+#include "bool_button.hpp"
+#include "button.hpp"
+#include "dusk/config.hpp"
+#include "dusk/custom_assets.hpp"
+#include "dusk/data.hpp"
+#include "dusk/logging.h"
+#include "dusk/mods/log_buffer.hpp"
+#include "dusk/mods/svc/ui.hpp"
+#include "dusk/settings.h"
+#include "m_Do/m_Do_audio.h"
+#include "pane.hpp"
+#include "ui.hpp"  // escape()
+
+#include <SDL3/SDL_misc.h>
+
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <cstddef>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace dusk::ui {
+namespace {
+
+struct ModUiGroup {
+    std::string key;
+    bool is_collection = false;
+    std::vector<std::string> members;
+};
+
+std::vector<ModUiGroup> build_ui_groups(const std::vector<std::string>& folders) {
+    std::vector<ModUiGroup> groups;
+    std::unordered_map<std::string, size_t> index;
+    for (const std::string& path : folders) {
+        const std::string key = dusk::custom_assets::mod_group_key(path.c_str());
+        const bool is_variant = dusk::custom_assets::mod_is_collection_variant(path.c_str());
+        auto it = index.find(key);
+        if (it == index.end()) {
+            index.emplace(key, groups.size());
+            groups.push_back({key, is_variant, {path}});
+        } else {
+            groups[it->second].members.push_back(path);
+            groups[it->second].is_collection =
+                groups[it->second].is_collection || is_variant;
+        }
+    }
+    return groups;
+}
+
+using ModUiGroupMap = std::unordered_map<std::string, ModUiGroup>;
+
+ModUiGroupMap build_ui_group_map(const std::vector<ModUiGroup>& groups) {
+    ModUiGroupMap out;
+    for (const ModUiGroup& group : groups) {
+        out.emplace(group.key, group);
+    }
+    return out;
+}
+
+std::vector<std::string> group_keys_in_priority_order(
+    const std::vector<std::string>& folders) {
+    std::vector<std::string> keys;
+    for (const auto& entry : dusk::custom_assets::order_view(folders)) {
+        const std::string key = dusk::custom_assets::mod_group_key(entry.first.c_str());
+        if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
+            keys.push_back(key);
+        }
+    }
+    return keys;
+}
+
+const ModUiGroup* group_at_slot(const std::vector<std::string>& folders,
+                                 const ModUiGroupMap& groups_by_key, size_t slot) {
+    const std::vector<std::string> keys = group_keys_in_priority_order(folders);
+    if (slot >= keys.size()) {
+        return nullptr;
+    }
+    const auto it = groups_by_key.find(keys[slot]);
+    if (it == groups_by_key.end()) {
+        return nullptr;
+    }
+    return &it->second;
+}
+
+std::string group_row_title(const ModUiGroup& group) {
+    if (group.members.empty()) {
+        return group.key;
+    }
+    if (!group.is_collection) {
+        return dusk::custom_assets::display_name(group.members[0].c_str());
+    }
+    const std::string display = dusk::custom_assets::display_name(group.members[0].c_str());
+    const auto colon = display.find(": ");
+    if (colon != std::string::npos) {
+        return display.substr(0, colon);
+    }
+    return group.key;
+}
+
+bool group_any_enabled(const ModUiGroup& group) {
+    for (const std::string& member : group.members) {
+        if (dusk::custom_assets::is_folder_enabled(member.c_str())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string group_active_variant_name(const ModUiGroup& group) {
+    for (const std::string& member : group.members) {
+        if (dusk::custom_assets::is_folder_enabled(member.c_str())) {
+            return dusk::custom_assets::display_name(member.c_str());
+        }
+    }
+    return {};
+}
+
+std::string group_status_note(const ModUiGroup& group) {
+    for (const std::string& member : group.members) {
+        const char* note = dusk::custom_assets::mod_status_note(member.c_str());
+        if (note != nullptr && note[0] != '\0') {
+            return note;
+        }
+    }
+    return {};
+}
+
+dusk::custom_assets::FolderConflicts group_conflicts(const ModUiGroup& group) {
+    dusk::custom_assets::FolderConflicts total;
+    for (const std::string& member : group.members) {
+        if (!dusk::custom_assets::is_folder_enabled(member.c_str())) {
+            continue;
+        }
+        const auto c = dusk::custom_assets::folder_conflicts(member.c_str());
+        total.wins += c.wins;
+        total.losses += c.losses;
+        total.overridesCore = total.overridesCore || c.overridesCore;
+        total.overriddenByCore = total.overriddenByCore || c.overriddenByCore;
+    }
+    return total;
+}
+
+// Short status for list rows / detail header (closer to main's Active/Disabled).
+std::string group_status_label(const ModUiGroup& group) {
+    if (!group_any_enabled(group)) {
+        return "Off";
+    }
+    std::string label = "On";
+    if (group.is_collection) {
+        const std::string active = group_active_variant_name(group);
+        if (!active.empty()) {
+            label += " — " + active;
+        }
+    }
+    const auto c = group_conflicts(group);
+    if (c.wins != 0 || c.losses != 0) {
+        label += " · Conflicts";
+    }
+    if (c.overridesCore) {
+        label += " · Overrides core";
+    }
+    const std::string note = group_status_note(group);
+    if (!note.empty()) {
+        label += " · " + note;
+    }
+    return label;
+}
+
+void open_mod_folder_in_shell(const std::string& folder) {
+#if DUSK_CAN_OPEN_DATA_FOLDER
+    const std::string path = dusk::custom_assets::mod_folder_path(folder.c_str());
+    if (path.empty()) {
+        return;
+    }
+#if defined(_WIN32)
+    const std::string url = "file:///" + path;
+#else
+    const std::string url = "file://" + path;
+#endif
+    // Normalize separators for file URLs on Windows.
+    std::string normalized = url;
+    for (char& ch : normalized) {
+        if (ch == '\\') {
+            ch = '/';
+        }
+    }
+    if (!SDL_OpenURL(normalized.c_str())) {
+        DuskLog.warn("Failed to open mod folder '{}': {}", path, SDL_GetError());
+    }
+#else
+    (void)folder;
+#endif
+}
+
+const std::string* group_panel_folder(const ModUiGroup& group) {
+    if (group.members.empty()) {
+        return nullptr;
+    }
+    for (const std::string& member : group.members) {
+        if (dusk::custom_assets::is_folder_enabled(member.c_str())) {
+            return &member;
+        }
+    }
+    return &group.members[0];
+}
+
+// A ControlledButton whose label is re-read every frame — rows are
+// position-bound (row i shows the mod at load-order slot i), so a move changes
+// which mod a slot shows and the per-frame text keeps the list correct.
+class ModOrderRowButton : public ControlledButton {
+public:
+    ModOrderRowButton(Rml::Element* parent, ControlledButton::Props props,
+        std::function<Rml::String()> getText)
+        : ControlledButton(parent, std::move(props)), mGetText(std::move(getText)) {}
+
+    void update() override {
+        if (mGetText) {
+            set_text(mGetText());
+        }
+        ControlledButton::update();
+    }
+
+private:
+    std::function<Rml::String()> mGetText;
+};
+
+// Grab-and-place state: the load-order slot currently "held" (-1 = none).
+// File-scope because the row lambdas outlive the build function; reset on
+// every window build.
+int s_grabbedSlot = -1;
+// Deferred-apply flag: Up/Down steps during a grab persist ONLY the order
+// (move_folder apply=false); the rescan happens ONCE at place/drop/close.
+// A 10-step drag used to fire 10 scans + 10 overlay generations — the bump
+// storm that let resident-model refreshes latch stale (Linkle/Link hybrid).
+bool s_orderDirty = false;
+
+void apply_pending_order() {
+    if (s_orderDirty) {
+        s_orderDirty = false;
+        dusk::custom_assets::apply_order_changes();
+    }
+}
+
+// ============================================
+// modinfo.ini screenshot preview (modshot:// texture provider)
+// One slot: only one mod panel is visible at a time. The decoded RGBA stays
+// resident until another mod's screenshot replaces it, so the RuntimeTexture
+// span handed to RmlUi can't dangle. ?rev= in the source string busts RmlUi's
+// per-source texture cache when the slot changes. PNG only for now (aurora
+// ships a PNG decoder; jpg/tga/bmp would need a new dependency).
+// ============================================
+struct ScreenshotSlot {
+    std::string path;                  // absolute path currently decoded
+    aurora::gfx::ConvertedTexture tex; // RGBA8
+    uint64_t rev = 0;
+};
+ScreenshotSlot s_shot;
+
+std::optional<aurora::rmlui::RuntimeTexture> modshot_provider(std::string_view) {
+    if (s_shot.tex.data.empty() || s_shot.tex.width == 0 || s_shot.tex.height == 0) {
+        return std::nullopt;
+    }
+    return aurora::rmlui::RuntimeTexture{
+        .width = s_shot.tex.width,
+        .height = s_shot.tex.height,
+        .rgba8 = std::span(reinterpret_cast<const std::byte*>(s_shot.tex.data.data()),
+                           s_shot.tex.data.size()),
+        .premultipliedAlpha = false,
+    };
+}
+
+void ensure_modshot_provider() {
+    static bool registered = false;
+    if (!registered) {
+        aurora::rmlui::register_texture_provider("modshot", modshot_provider);
+        registered = true;
+    }
+}
+
+// Load (or reuse) the screenshot for the focused mod; returns the <img> RML
+// or "" when there is no usable screenshot.
+std::string screenshot_rml(const std::string& absPath) {
+    if (absPath.empty()) {
+        return {};
+    }
+    std::string lower = absPath;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower.size() < 4 || lower.compare(lower.size() - 4, 4, ".png") != 0) {
+        return {};  // PNG only (see provider block comment)
+    }
+    if (s_shot.path != absPath) {
+        auto png = aurora::gfx::png::load_png_file(absPath);
+        if (!png || png->width == 0 || png->height == 0) {
+            return {};
+        }
+        s_shot.path = absPath;
+        s_shot.tex = std::move(*png);
+        ++s_shot.rev;
+    }
+    // Fit to a fixed panel width, preserving aspect.
+    const uint32_t w = 300;
+    const uint32_t h = std::max<uint32_t>(1, s_shot.tex.height * w / s_shot.tex.width);
+    return fmt::format("<img src=\"modshot://shot?rev={}\" width=\"{}\" height=\"{}\"/>",
+                       s_shot.rev, w, h);
+}
+
+// RML-escape + convert newlines (modinfo descriptions) to <br/>.
+std::string rml_multiline(const std::string& text) {
+    std::string out = escape(text);
+    std::string withBreaks;
+    withBreaks.reserve(out.size());
+    for (char c : out) {
+        if (c == '\n') {
+            withBreaks += "<br/>";
+        } else {
+            withBreaks.push_back(c);
+        }
+    }
+    return withBreaks;
+}
+
+void populate_mod_detail_panel(Pane& pane, const ModUiGroup& group) {
+    const std::string* panel_folder = group_panel_folder(group);
+    if (panel_folder == nullptr) {
+        return;
+    }
+
+    const auto meta = dusk::custom_assets::mod_info(panel_folder->c_str());
+    pane.add_section(meta.name.empty() ? group_row_title(group) : meta.name);
+
+    const bool anyOn = group_any_enabled(group);
+    const auto c = group_conflicts(group);
+    const std::string statusLabel = group_status_label(group);
+    pane.add_rml(fmt::format("<b>Status:</b> {}<br/>", escape(statusLabel)));
+
+    if (anyOn && (c.wins != 0 || c.losses != 0)) {
+        pane.add_rml(fmt::format(
+            "<div><b>Before disabling:</b> this pack currently wins <b>{}</b> and loses "
+            "<b>{}</b> overlay conflict(s). Turning it off changes what lower/higher mods "
+            "show.</div><br/>",
+            c.wins, c.losses));
+    }
+
+    pane.add_section("Actions");
+    if (anyOn) {
+        const std::string key = group.key;
+        pane.add_button(group.is_collection ? "Disable collection" : "Disable")
+            .on_pressed([key] {
+                mDoAud_seStartMenu(kSoundItemChange);
+                dusk::custom_assets::set_mod_group_enabled(key.c_str(), false);
+                config::Save();
+            });
+    } else if (!group.is_collection) {
+        const std::string key = group.key;
+        pane.add_button("Enable").on_pressed([key] {
+            mDoAud_seStartMenu(kSoundItemChange);
+            dusk::custom_assets::set_mod_group_enabled(key.c_str(), true);
+            config::Save();
+        });
+    } else {
+        pane.add_rml("<i>Collection is Off — pick a variant below to enable.</i><br/>");
+    }
+
+    pane.add_button("Rescan / Apply now").on_pressed([] {
+        mDoAud_seStartMenu(kSoundItemChange);
+        dusk::custom_assets::rescan_and_install();
+    });
+
+    {
+        const std::string openFolder = *panel_folder;
+        pane.add_button("Open folder").on_pressed([openFolder] {
+            mDoAud_seStartMenu(kSoundItemChange);
+            open_mod_folder_in_shell(openFolder);
+        });
+    }
+
+    if (group.is_collection) {
+        pane.add_rml(fmt::format(
+            "<br/><b>Collection</b> — {} variant(s). Pick one to enable; siblings disable "
+            "automatically. Use <b>Disable collection</b> to turn the whole group Off.<br/>",
+            group.members.size()));
+        pane.add_section("Variants");
+        for (const std::string& variant : group.members) {
+            const std::string label = dusk::custom_assets::display_name(variant.c_str());
+            pane.add_button({
+                                  .text = label,
+                                  .isSelected =
+                                      [variant] {
+                                          return dusk::custom_assets::is_folder_enabled(
+                                              variant.c_str());
+                                      },
+                              })
+                .on_pressed([variant] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dusk::custom_assets::select_collection_variant(variant.c_str());
+                    config::Save();
+                });
+        }
+    }
+
+    const std::string shot = screenshot_rml(meta.screenshot);
+    if (!shot.empty()) {
+        pane.add_rml(shot);
+    }
+    std::string byline;
+    if (!meta.version.empty()) {
+        byline += escape(meta.version);
+    }
+    if (!meta.author.empty()) {
+        if (!byline.empty()) {
+            byline += " — ";
+        }
+        byline += "by " + escape(meta.author);
+    }
+    if (!byline.empty()) {
+        pane.add_rml("<i>" + byline + "</i>");
+    }
+    if (!meta.description.empty()) {
+        pane.add_rml(rml_multiline(meta.description));
+    }
+
+    const std::string statusNote = group_status_note(group);
+    std::string info;
+    if (!statusNote.empty()) {
+        info += fmt::format("<b>Note:</b> {}<br/>", escape(statusNote));
+    }
+    if (c.wins != 0 || c.losses != 0) {
+        info += fmt::format("Conflicts: wins <b>{}</b> asset(s), loses <b>{}</b> to higher "
+                            "mods.<br/>",
+                            c.wins, c.losses);
+    }
+    if (c.overridesCore) {
+        info += "<b>Overrides bundled core content.</b><br/>";
+    }
+    if (c.overriddenByCore) {
+        info += "Some of its assets are overridden by core content.<br/>";
+    }
+    if (info.empty()) {
+        info = "No conflicts with other enabled mods.<br/>";
+    }
+    std::string tail =
+        "<br/>Changes apply the next time the asset loads (textures apply instantly). "
+        "<b>Rescan / Apply now</b> rebuilds overlays immediately.";
+    if (meta.description.empty() && shot.empty()) {
+        tail += "<br/><br/><i>Mods can describe themselves here: add a modinfo.ini (name, "
+                "version, author, description, screenshot) to the mod folder.</i>";
+    }
+    pane.add_rml(info + tail);
+}
+
+// ============================================
+// .dusk package half (ModLoader) — see the ModsWindow::build_packages* members.
+// ============================================
+
+bool package_enabled(const dusk::mods::LoadedMod& mod) {
+    return mod.cvarIsEnabled != nullptr && mod.cvarIsEnabled->getValue();
+}
+
+const char* package_status(const dusk::mods::LoadedMod& mod) {
+    if (mod.loadFailed) {
+        return "Failed";
+    }
+    if (mod.active) {
+        return "Active";
+    }
+    if (mod.suspendedByProvider) {
+        return "Suspended";
+    }
+    return "Disabled";
+}
+
+std::string package_title(const dusk::mods::LoadedMod& mod) {
+    return mod.metadata.name.empty() ? mod.metadata.id : mod.metadata.name;
+}
+
+std::string package_row_text(const dusk::mods::LoadedMod& mod) {
+    if (mod.metadata.version.empty()) {
+        return fmt::format("{} — {}", package_title(mod), package_status(mod));
+    }
+    return fmt::format(
+        "{} v{} — {}", package_title(mod), mod.metadata.version, package_status(mod));
+}
+
+const char* log_level_name(LogLevel level) {
+    switch (level) {
+    case LOG_LEVEL_TRACE:
+        return "trace";
+    case LOG_LEVEL_DEBUG:
+        return "debug";
+    case LOG_LEVEL_WARN:
+        return "warn";
+    case LOG_LEVEL_ERROR:
+        return "error";
+    default:
+        return "info";
+    }
+}
+
+// The mod's own lines from the shared ring buffer, oldest first.
+std::vector<dusk::mods::log::Line> package_log_lines(const std::string& modId) {
+    std::vector<dusk::mods::log::Line> all;
+    dusk::mods::log::copy_since(0, all);
+    const std::vector<std::string> ids = dusk::mods::log::ids();
+    std::vector<dusk::mods::log::Line> mine;
+    for (auto& line : all) {
+        if (line.modIndex < ids.size() && ids[line.modIndex] == modId) {
+            mine.push_back(std::move(line));
+        }
+    }
+    return mine;
+}
+
+}  // namespace
+
+void ModsWindow::hide(bool close) {
+    apply_pending_order();  // drag interrupted by closing the window
+    Window::hide(close);
+}
+
+ModsWindow::ModsWindow() {
+    take_package_snapshot();  // the first tab build happens inside add_tab
+
+    add_tab("Mods", [this](Rml::Element* content) {
+        auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
+        auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
+
+        s_grabbedSlot = -1;  // never carry a grab across window rebuilds
+        apply_pending_order();  // defensive: stale dirty order from a prior build
+        ensure_modshot_provider();
+
+        leftPane.add_section("Load Order — top wins");
+        const auto corePacks = dusk::custom_assets::list_core_packs();
+        if (!corePacks.empty()) {
+            leftPane.add_rml(fmt::format(
+                "<b>{} core pack(s)</b> bundled — always on, {} user mods in conflicts.",
+                corePacks.size(),
+                getSettings().game.customModelsAllowCoreOverride.getValue() ? "overridable by"
+                                                                            : "winning over"));
+        }
+        const auto folders =
+            std::make_shared<const std::vector<std::string>>(dusk::custom_assets::list_folders());
+        if (folders->empty()) {
+            leftPane.add_rml(
+                "No mods found. Drop a folder under <b>model_replacements/</b> (a full-mod "
+                "<b>files/</b> tree, loose <i>&lt;arc&gt;_&lt;idx&gt;.bmd</i>, <b>icons/</b>, "
+                "or <b>textures/</b>) and reopen this menu.");
+        } else {
+            const auto groups_by_key = std::make_shared<const ModUiGroupMap>(
+                build_ui_group_map(build_ui_groups(*folders)));
+            const size_t group_count = group_keys_in_priority_order(*folders).size();
+            for (size_t i = 0; i < group_count; ++i) {
+                auto& row = leftPane.add_child<ModOrderRowButton>(
+                    ControlledButton::Props{
+                        .text = fmt::format("{}. mod group", i + 1),
+                        .isSelected = [i] { return s_grabbedSlot == static_cast<int>(i); },
+                    },
+                    [folders, groups_by_key, i]() -> Rml::String {
+                        const ModUiGroup* group = group_at_slot(*folders, *groups_by_key, i);
+                        if (group == nullptr) {
+                            return Rml::String("-");
+                        }
+                        const auto c = group_conflicts(*group);
+                        std::string badge;
+                        if (!group_status_note(*group).empty()) {
+                            badge += "  [POP!]";
+                        }
+                        if (c.wins != 0 || c.losses != 0) {
+                            badge += fmt::format("  [{}w/{}l{}]", c.wins, c.losses,
+                                                 c.overridesCore       ? " CORE!"
+                                                 : c.overriddenByCore  ? " core"
+                                                                       : "");
+                        }
+                        const bool grabbed = s_grabbedSlot == static_cast<int>(i);
+                        std::string title = group_row_title(*group);
+                        if (group->is_collection && group->members.size() > 1) {
+                            title += fmt::format("  ({} variants)", group->members.size());
+                        }
+                        const std::string status = group_status_label(*group);
+                        return fmt::format("{}{}. {} — {}{}{}", grabbed ? "> " : "", i + 1,
+                                           title, status, badge, grabbed ? " <" : "");
+                    });
+                row.on_nav_command([folders, groups_by_key, i](Rml::Event&, NavCommand cmd) -> bool {
+                    const int slot = static_cast<int>(i);
+                    const std::vector<std::string> keys =
+                        group_keys_in_priority_order(*folders);
+                    if (cmd == NavCommand::Confirm) {
+                        if (i >= keys.size()) {
+                            return true;
+                        }
+                        if (s_grabbedSlot < 0) {
+                            s_grabbedSlot = slot;
+                        } else if (s_grabbedSlot == slot) {
+                            s_grabbedSlot = -1;
+                            apply_pending_order();
+                        } else {
+                            if (s_grabbedSlot >= static_cast<int>(keys.size())) {
+                                apply_pending_order();
+                            } else if (dusk::custom_assets::move_mod_group_to(
+                                           keys[s_grabbedSlot].c_str(), slot)) {
+                                config::Save();
+                                s_orderDirty = false;
+                            } else {
+                                apply_pending_order();
+                            }
+                            s_grabbedSlot = -1;
+                        }
+                        mDoAud_seStartMenu(kSoundItemChange);
+                        return true;
+                    }
+                    if ((cmd == NavCommand::Up || cmd == NavCommand::Down) &&
+                        s_grabbedSlot == slot)
+                    {
+                        const int delta = cmd == NavCommand::Up ? -1 : 1;
+                        const int target = slot + delta;
+                        if (i >= keys.size() || target < 0 ||
+                            target >= static_cast<int>(keys.size()))
+                        {
+                            return true;
+                        }
+                        const std::string& group_key = keys[i];
+                        if (dusk::custom_assets::move_mod_group(group_key.c_str(), delta,
+                                                              /*apply=*/false)) {
+                            s_grabbedSlot = target;
+                            s_orderDirty = true;
+                            config::Save();
+                            mDoAud_seStartMenu(kSoundItemChange);
+                        }
+                        return false;
+                    }
+                    return false;
+                });
+                leftPane.register_control(
+                    row, rightPane, [this, folders, groups_by_key, i](Pane& pane) {
+                        mSelectedPackage = nullptr;  // pane no longer hosts package panels
+                        pane.clear();
+                        const ModUiGroup* group = group_at_slot(*folders, *groups_by_key, i);
+                        if (group == nullptr) {
+                            return;
+                        }
+                        populate_mod_detail_panel(pane, *group);
+                    });
+            }
+        }
+
+        build_packages(leftPane, rightPane);
+
+        leftPane.add_section("Options");
+        leftPane.register_control(
+            leftPane.add_child<BoolButton>(BoolButton::Props{
+                .key = "Allow Core Override",
+                .getValue =
+                    [] { return getSettings().game.customModelsAllowCoreOverride.getValue(); },
+                .setValue =
+                    [](bool value) {
+                        getSettings().game.customModelsAllowCoreOverride.setValue(value);
+                        // Core-vs-user sequence changed — re-resolve every site.
+                        dusk::custom_assets::scan();
+                        dusk::custom_assets::install_overlays();
+                        config::Save();
+                    },
+                .isModified =
+                    [] {
+                        return getSettings().game.customModelsAllowCoreOverride.getValue() !=
+                               getSettings().game.customModelsAllowCoreOverride
+                                   .getDefaultValue();
+                    },
+            }),
+            rightPane, [this](Pane& pane) {
+                mSelectedPackage = nullptr;  // pane no longer hosts package panels
+                pane.clear();
+                pane.add_section("Allow Core Override");
+                pane.add_rml(
+                    "<b>Off (recommended):</b> the game's bundled core content (boss "
+                    "models, Wind Waker gear, future first-party assets) always wins when a "
+                    "custom mod replaces the same asset.<br/><br/>"
+                    "<b>On:</b> your custom mods win instead and can restyle core content. "
+                    "<b>Warning:</b> overriding core assets can break boss fights or other "
+                    "features — turn this off again if something misbehaves.");
+            });
+    });
+}
+
+void ModsWindow::build_packages(Pane& listPane, Pane& detailPane) {
+    mPackageRows.clear();
+    mPackageRowMods.clear();
+
+    listPane.add_section("Packages (.dusk)");
+    auto packages = mods::ModLoader::instance().mods();
+    if (packages.empty()) {
+        listPane.add_rml(
+            "No .dusk packages in the mods folder. Drop a <b>.dusk</b> bundle (or an unpacked "
+            "bundle folder) into <b>mods/</b> and restart. Load order above does not apply to "
+            "packages.");
+        return;
+    }
+
+    for (mods::LoadedMod& mod : packages) {
+        auto& row = listPane.add_child<ControlledButton>(ControlledButton::Props{
+            .text = package_row_text(mod),
+        });
+        mPackageRows.push_back(&row);
+        mPackageRowMods.push_back(&mod);
+        listPane.register_control(row, detailPane, [this, target = &mod](Pane& pane) {
+            pane.clear();
+            mSelectedPackage = target;
+            build_package_detail(pane, *target);
+        });
+    }
+}
+
+void ModsWindow::build_package_detail(Pane& pane, mods::LoadedMod& mod) {
+    const std::string modId = mod.metadata.id;
+    pane.add_section(package_title(mod));
+
+    std::string header = fmt::format("<b>Status:</b> {}", package_status(mod));
+    std::string byline;
+    if (!mod.metadata.version.empty()) {
+        byline = "v" + escape(mod.metadata.version);
+    }
+    if (!mod.metadata.author.empty()) {
+        if (!byline.empty()) {
+            byline += " — ";
+        }
+        byline += "by " + escape(mod.metadata.author);
+    }
+    if (!byline.empty()) {
+        header += "<br/><i>" + byline + "</i>";
+    }
+    pane.add_rml(header);
+
+    if (package_enabled(mod)) {
+        pane.add_button("Disable").on_pressed([modId] {
+            mDoAud_seStartMenu(kSoundItemChange);
+            mods::ModLoader::instance().request_disable(modId);
+        });
+        // A native lib loaded in place stays resident for the session.
+        if (!mod.inPlace) {
+            pane.add_button("Reload").on_pressed([modId] {
+                mDoAud_seStartMenu(kSoundItemChange);
+                mods::ModLoader::instance().request_reload(modId);
+            });
+        }
+    } else {
+        pane.add_button("Enable").on_pressed([modId] {
+            mDoAud_seStartMenu(kSoundItemChange);
+            mods::ModLoader::instance().request_enable(modId);
+        });
+    }
+
+    std::string info;
+    if (mod.loadFailed && !mod.failureReason.empty()) {
+        info += fmt::format("<b>Reason:</b> {}<br/>", escape(mod.failureReason));
+    } else if (mod.suspendedByProvider) {
+        std::string providers;
+        for (const auto& edge : mod.dependencies) {
+            if (edge.required && edge.mod != nullptr && !edge.mod->active) {
+                if (!providers.empty()) {
+                    providers += ", ";
+                }
+                providers += edge.mod->metadata.name;
+            }
+        }
+        info += fmt::format("<b>Waiting on:</b> {}<br/>", escape(providers));
+    }
+    std::string activeDependents;
+    for (const auto& edge : mod.dependents) {
+        if (edge.mod != nullptr && edge.mod->active) {
+            if (!activeDependents.empty()) {
+                activeDependents += ", ";
+            }
+            activeDependents += edge.mod->metadata.name;
+        }
+    }
+    if (mod.active && !activeDependents.empty()) {
+        info += fmt::format("Disabling or reloading also restarts: {}<br/>",
+            escape(activeDependents));
+    }
+    if (!mod.metadata.description.empty()) {
+        info += rml_multiline(mod.metadata.description);
+    }
+    if (!info.empty()) {
+        pane.add_rml(info);
+    }
+
+    // Mod-provided controls (ui_register_mods_panel); only a live image may be called into.
+    if (mod.active) {
+        mods::svc::ui_build_mods_panels(mod, pane);
+    }
+
+    const auto lines = package_log_lines(modId);
+    if (lines.empty()) {
+        return;
+    }
+    pane.add_section("Recent log");
+    constexpr size_t kTail = 12;
+    std::string tail;
+    for (size_t i = lines.size() > kTail ? lines.size() - kTail : 0; i < lines.size(); ++i) {
+        tail += fmt::format(
+            "<i>[{}]</i> {}<br/>", log_level_name(lines[i].level), escape(lines[i].message));
+    }
+    pane.add_rml(tail);
+    pane.add_button("Copy Full Log").on_pressed([modId] {
+        std::string text;
+        for (const auto& line : package_log_lines(modId)) {
+            text += fmt::format("[{}] {}\n", log_level_name(line.level), line.message);
+        }
+        Rml::GetSystemInterface()->SetClipboardText(text);
+        mDoAud_seStartMenu(kSoundClick);
+        push_toast({.content = "Copied to clipboard", .duration = std::chrono::seconds(2)});
+    });
+}
+
+void ModsWindow::take_package_snapshot() {
+    mPackages.clear();
+    for (mods::LoadedMod& mod : mods::ModLoader::instance().mods()) {
+        mPackages.push_back({
+            .mod = &mod,
+            .active = mod.active,
+            .loadFailed = mod.loadFailed,
+            .enabled = package_enabled(mod),
+            .suspended = mod.suspendedByProvider,
+            .cacheGeneration = mod.cacheGeneration,
+        });
+    }
+}
+
+bool ModsWindow::package_snapshot_dirty() {
+    auto packages = mods::ModLoader::instance().mods();
+    bool dirty = packages.size() != mPackages.size();
+    if (!dirty) {
+        size_t index = 0;
+        for (mods::LoadedMod& mod : packages) {
+            const PackageSnapshot& snapshot = mPackages[index++];
+            if (snapshot.mod != &mod || snapshot.active != mod.active ||
+                snapshot.loadFailed != mod.loadFailed ||
+                snapshot.enabled != package_enabled(mod) ||
+                snapshot.suspended != mod.suspendedByProvider ||
+                snapshot.cacheGeneration != mod.cacheGeneration)
+            {
+                dirty = true;
+                break;
+            }
+        }
+    }
+    if (dirty) {
+        take_package_snapshot();
+    }
+    return dirty;
+}
+
+bool ModsWindow::content_has_focus() const {
+    auto* focused = mDocument != nullptr ? mDocument->GetFocusLeafNode() : nullptr;
+    for (const auto* node = focused; node != nullptr; node = node->GetParentNode()) {
+        if (node == mContentRoot) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ModsWindow::update() {
+    if (package_snapshot_dirty()) {
+        // Rows carry the status text and the action set, so a state change rebuilds the tab
+        // rather than patching in place. The detail pane comes back empty; re-focusing the
+        // row the user was on re-runs its register_control callback and repopulates it.
+        const bool restoreFocus = content_has_focus();
+        mods::LoadedMod* selected = std::exchange(mSelectedPackage, nullptr);
+        refresh_active_tab();
+        if (restoreFocus && selected != nullptr) {
+            for (size_t i = 0; i < mPackageRowMods.size(); ++i) {
+                if (mPackageRowMods[i] == selected) {
+                    mPackageRows[i]->focus();
+                    break;
+                }
+            }
+        }
+    }
+
+    if (mSelectedPackage != nullptr && mSelectedPackage->active) {
+        mods::svc::ui_update_mods_panels(*mSelectedPackage);
+    }
+
+    Window::update();
+}
+
+}  // namespace dusk::ui

@@ -101,6 +101,12 @@ const LinkSpawnOverride kLinkSpawnOverrides[] = {
     // Outside the Diababa boss room (D_MN05 r12): land Link beside/facing the
     // wolf, not on top of it.
     { "D_MN05", 12, { 7160.7280f, 3309.4785f, -15697.7324f }, (s16)-17084 },
+    // Outside the Fyrus boss room, Goron Mines (D_MN04 r12): land Link beside
+    // the wolf, not on top of it.
+    { "D_MN04", 12, { -5602.1411f, 1976.1000f, -12241.3027f }, (s16)15311 },
+    // Outside the Morpheel boss room, Lakebed Temple (D_MN01 r3): land Link
+    // beside the wolf, not on top of it.
+    { "D_MN01", 3, { -21.7639f, -340.0000f, 679.8380f }, (s16)-32604 },
 };
 }  // namespace
 
@@ -126,8 +132,9 @@ void dShadeRefuge_resolveLinkSpawn(const char* i_stage, s8 i_roomNo,
 // proven game-over refuge sequence (setRestartRoom + setNextStage, point -1).
 // ============================================
 namespace {
-// TODO(user): confirm the rupee price for this shop row (placeholder).
-constexpr int kReturnPrice     = 50;
+// Priced with Oocoo's Return (alpha cleanup): both are death/travel
+// conveniences in the post-death-economy era, so they share the 15r tier.
+constexpr int kReturnPrice     = 15;
 bool          sPendingReturnWarp = false;
 }  // namespace
 

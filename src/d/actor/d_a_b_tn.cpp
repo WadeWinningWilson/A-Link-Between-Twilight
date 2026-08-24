@@ -15,10 +15,12 @@
 #include "f_op/f_op_actor_enemy.h"
 #include "f_op/f_op_camera_mng.h"
 #if TARGET_PC
+#include "d/d_albw_combat.h"
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_hp_mult.h"
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_shield.h"
+#include "d/d_meter2_info.h"
 #include "dusk/settings.h"
 #include "SSystem/SComponent/c_counter.h"
 #include <cstdarg>
@@ -1578,12 +1580,19 @@ void daB_TN_c::damage_check() {
                 mAtInfo.mpCollider->ChkAtType(AT_TYPE_40) ||
                 mAtInfo.mpCollider->ChkAtType(AT_TYPE_HOOKSHOT))
             {
-                mTimer9 = dAlbwLockout_getBoomerangStunFrames(15);
+                mTimer9 = 15;
             }
 
-            if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_BOOMERANG) ||
-                mAtInfo.mpCollider->ChkAtType(AT_TYPE_40)) {
-                dAlbwLockout_onBoomerangHitNative(this);
+            if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+#if TARGET_PC
+                if (dMeter2_isALBWLocked()) {
+                    dAlbwLockout_onSlingshotHit(this);
+                } else
+#endif
+                {
+                    mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
+                    dAlbwLockout_onSlingshotHitNative(this);
+                }
             }
         }
 
@@ -1591,11 +1600,34 @@ void daB_TN_c::damage_check() {
     }
 
     int cut_type = daPy_getPlayerActorClass()->getCutType();
+#if TARGET_PC
+    // ============================================
+    // Guard-opener rework: an active open window (field_0xaa2, armed by a
+    // shield bash OR an opener hit below) bypasses the central-shield fast
+    // path too, so window-period hits actually land in the armored phase.
+    // ============================================
+    if (field_0xaa2 == 0 && mActionMode1 < 8 && mSphC.ChkTgHit() &&
+        mSphC.GetTgHitObj()->ChkAtType(18) &&
+        cut_type != daPy_py_c::CUT_TYPE_HEAD_JUMP &&
+        cut_type != daPy_py_c::CUT_TYPE_MORTAL_DRAW_B &&
+        cut_type != daPy_py_c::CUT_TYPE_MORTAL_DRAW_A)
+#else
     if (mActionMode1 < 8 && mSphC.ChkTgHit() && mSphC.GetTgHitObj()->ChkAtType(18) &&
         cut_type != daPy_py_c::CUT_TYPE_HEAD_JUMP &&
         cut_type != daPy_py_c::CUT_TYPE_MORTAL_DRAW_B &&
         cut_type != daPy_py_c::CUT_TYPE_MORTAL_DRAW_A)
+#endif
     {
+#if TARGET_PC
+        // Opener hit (Hurricane / Combat Howl / Midna arm) on the central
+        // shield: clank this hit but open the guard window so follow-up
+        // hits (Hurricane revolutions, arm re-strikes) connect.
+        if (dAlbwCombat_isGuardOpenerHit(mSphC.GetTgHitObj())) {
+            albwBeginGuardOpenWindow(kAlbwGuardOpenerWindowFrames);
+            setShieldEffect(&mSphC);
+            return;
+        }
+#endif
         def_se_set(&mSound, mSphC.GetTgHitObj(), 42, this);
         if (mSphC.GetTgHitObj()->ChkAtType(AT_TYPE_SHIELD_ATTACK)) {
 #if TARGET_PC
@@ -1651,7 +1683,17 @@ void daB_TN_c::damage_check() {
                 return;
             }
 
+#if TARGET_PC
+            // ============================================
+            // Guard-opener rework: the armored-phase block now honors the
+            // ALBW guard-open window (field_0xaa2), mirroring the unarmored
+            // block below — previously only phase 2 honored it, which is
+            // why bash/opener windows never helped in the armored fight.
+            // ============================================
+            if (field_0xaa2 == 0 && dStack_160.ChkTgShield()) {
+#else
             if (dStack_160.ChkTgShield()) {
+#endif
                 if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SHIELD_ATTACK)) {
                     if (mActionMode1 == ACT_GUARDH && field_0xaa8) {
                         return;
@@ -1665,6 +1707,14 @@ void daB_TN_c::damage_check() {
                     field_0xaa8 = true;
                     def_se_set(&mSound, dStack_160.GetTgHitObj(), 42, this);
                 } else {
+#if TARGET_PC
+                    // Opener hit on a raised arm shield: clank + open window.
+                    if (dAlbwCombat_isGuardOpenerHit(mAtInfo.mpCollider)) {
+                        albwBeginGuardOpenWindow(kAlbwGuardOpenerWindowFrames);
+                        setShieldEffect(&dStack_160);
+                        return;
+                    }
+#endif
                     field_0xaa8 = false;
                     setShieldEffect(&dStack_160);
                 }
@@ -1706,6 +1756,15 @@ void daB_TN_c::damage_check() {
                     field_0xaa8 = true;
                     def_se_set(&mSound, dStack_160.GetTgHitObj(), 42, this);
                 } else {
+#if TARGET_PC
+                    // Opener hit on a raised arm shield (unarmored phase —
+                    // arms stay up vs wolf via checkNowWolf): clank + open.
+                    if (dAlbwCombat_isGuardOpenerHit(mAtInfo.mpCollider)) {
+                        albwBeginGuardOpenWindow(kAlbwGuardOpenerWindowFrames);
+                        setShieldEffect(&dStack_160);
+                        return;
+                    }
+#endif
                     field_0xaa8 = false;
                     setShieldEffect(&dStack_160);
                 }
@@ -1732,6 +1791,16 @@ void daB_TN_c::damage_check() {
             if (field_0xa91) {
 #endif
                 if (mCutFlag || (getCutType() & 4) != 0) {
+#if TARGET_PC
+                    // Opener hit routed to the facing guard-stagger branch
+                    // (no shield sphere involved): clank + open window so
+                    // the follow-up revolutions/strikes land.
+                    if (dAlbwCombat_isGuardOpenerHit(mAtInfo.mpCollider)) {
+                        albwBeginGuardOpenWindow(kAlbwGuardOpenerWindowFrames);
+                        setShieldEffect(&dStack_160);
+                        return;
+                    }
+#endif
                     setShieldEffect(&dStack_160);
                     if (mCutFlag) {
                         setActionMode(ACT_GUARDL, ACTION2_11_e);
@@ -1797,9 +1866,26 @@ void daB_TN_c::damage_check() {
         if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_BOOMERANG) ||
             mAtInfo.mpCollider->ChkAtType(AT_TYPE_40))
         {
-            dAlbwLockout_onBoomerangHitNative(this);
             if (mActionMode1 < 8) {
-                mTimer9 = dAlbwLockout_getBoomerangStunFrames(15);
+                mTimer9 = 15;
+            } else {
+                setActionMode(ACT_GUARDL, ACTION2_10_e);
+            }
+        } else if (mAtInfo.mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+#if TARGET_PC
+            if (dMeter2_isALBWLocked()) {
+                dAlbwLockout_onSlingshotHit(this);
+                if (mActionMode1 < 8) {
+                    mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
+                } else {
+                    setActionMode(ACT_GUARDL, ACTION2_10_e);
+                }
+                return;
+            }
+#endif
+            dAlbwLockout_onSlingshotHitNative(this);
+            if (mActionMode1 < 8) {
+                mTimer9 = dAlbwLockout_getSlingshotStunFrames(15);
             } else {
                 setActionMode(ACT_GUARDL, ACTION2_10_e);
             }

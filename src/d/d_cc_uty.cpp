@@ -27,6 +27,9 @@
 #include "dusk/hurricane_test.h"
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_boss.h"
+#include "d/d_albw_outfit_stats.h"
+#include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
 #endif
 
 static int plCutLRC[58] = {
@@ -379,21 +382,37 @@ fopAc_ac_c* at_power_check(dCcU_AtInfo* i_AtInfo) {
     return i_AtInfo->mpActor;
 }
 
+// ============================================
+// NEW CODE — ALBW Port
+// D-pad wolf-art fixed hit powers (tuning knobs). Both arts' raw atp
+// (howl AOE 8, Midna arm 4) fall on the vanilla at_power_get
+// ">= 4 -> 200" ending-blow tier — ~7-10x a wolf bite (20-30) — so
+// their damage is pinned in cc_at_check instead (Hurricane-override
+// pattern). User-tuned 2026-07-15: 100 each.
+// ============================================
+static const int kAlbwHowlAoeHitPower  = 100;
+static const int kAlbwMidnaArmHitPower = 100;
+// ============================================
+// NEW CODE ENDS HERE
+// ============================================
+
 fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
     daPy_py_c* player_p = (daPy_py_c*)dComIfGp_getPlayer(0);
+
+#if TARGET_PC
+    // Lockout slingshot: pause + ranged-open tag for every enemy that reaches cc_at_check.
+    if (dMeter2_isALBWLocked() && i_AtInfo->mpCollider != NULL &&
+        fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e &&
+        i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
+        dAlbwLockout_onSlingshotHit(i_enemy);
+    }
+#endif
+
     i_AtInfo->mpActor = at_power_check(i_AtInfo);
 
     f32 x_diff;
     f32 z_diff;
     if (i_AtInfo->mpActor != NULL) {
-#if TARGET_PC
-        if (dMeter2_isALBWLocked() && i_AtInfo->mpCollider != NULL &&
-            fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e &&
-            (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_BOOMERANG) ||
-             i_AtInfo->mpCollider->ChkAtType(AT_TYPE_40))) {
-            dAlbwLockout_onBoomerangHit(i_enemy);
-        }
-#endif
         cXyz tmp = i_AtInfo->mpActor->speed;
         tmp.y = 0.0f;
         if (tmp.abs() > 100.0f) {
@@ -464,9 +483,40 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                         dFocusedArts_getEndingBlowGreatSpinAoePower(i_AtInfo->mAttackPower);
                 }
             }
+
+            i_AtInfo->mAttackPower =
+                dAlbwOutfitStats_applyOutgoingDamageMult(i_AtInfo->mAttackPower);
         }
 
 #if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port
+        // D-pad wolf-art damage overrides. Pinned AFTER the vanilla
+        // modifiers (so the 200-tier table value is replaced outright)
+        // but BEFORE the global sliders below (invincibleEnemies /
+        // dAlbwHP_applyMult / bash +5%) so those still stack. Running
+        // inside cc_at_check also covers frozen-enemy bridge hits.
+        //  - Combat Howl AOE: ALINK-owned WOLF_CUT_TURN collider while
+        //    mWolfCombatHowlActive — same disambiguation as the
+        //    guard-opener classifier (Link cannot wolf-spin mid-howl).
+        //  - Midna arm: its own actor, so its name is sufficient.
+        // ============================================
+        if (dAlbwWolfCombat_isEnabled() && i_AtInfo->mAttackPower > 0 &&
+            fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
+            if (i_AtInfo->mpActor != NULL &&
+                fopAcM_GetName(i_AtInfo->mpActor) == fpcNm_ALBW_MIDNA_ARM_e) {
+                i_AtInfo->mAttackPower = kAlbwMidnaArmHitPower;
+            } else if (i_AtInfo->mHitType == HIT_TYPE_LINK_NORMAL_ATTACK &&
+                       i_AtInfo->mpCollider->ChkAtType(AT_TYPE_WOLF_CUT_TURN)) {
+                const daAlink_c* link = daAlink_getAlinkActorClass();
+                if (link != NULL && link->mWolfCombatHowlActive) {
+                    i_AtInfo->mAttackPower = kAlbwHowlAoeHitPower;
+                }
+            }
+        }
+        // ============================================
+        // NEW CODE ENDS HERE
+        // ============================================
         if (dusk::getSettings().game.invincibleEnemies &&
             fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
             i_AtInfo->mAttackPower = 0;
@@ -493,6 +543,8 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                 atType = AT_TYPE_IRON_BALL;
             } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
                 atType = AT_TYPE_SLINGSHOT;
+            } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SPINNER)) {
+                atType = AT_TYPE_SPINNER;
             }
             if (atType != 0) {
                 dFocusedArts_applyItemDamageBoost(i_AtInfo->mAttackPower);
@@ -509,6 +561,8 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                 atType = AT_TYPE_IRON_BALL;
             } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SLINGSHOT)) {
                 atType = AT_TYPE_SLINGSHOT;
+            } else if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_SPINNER)) {
+                atType = AT_TYPE_SPINNER;
             }
             if (atType != 0) {
                 dFocusedArts_applyItemDamageBoost(i_AtInfo->mAttackPower);
@@ -527,7 +581,7 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         //
         // Twilight enemies (shadow/dusk forms):  70 % of scaled damage,
         //   no stun; these enemies feel weaker against wolf form.
-        // Non-twilight enemies:                  50 % of scaled damage,
+        // Non-twilight enemies:                  25 % of scaled damage,
         //   compensated by the 300-frame stun dispatched after deduction.
         //
         // Zant excluded — his fight's phase scripts check AT_TYPE_WOLF_*
@@ -549,9 +603,9 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
                     i_AtInfo->mAttackPower = 1;
                 }
             } else {
-                // Non-twilight: base × rawMult × 0.50, stun applied below
+                // Non-twilight: base × rawMult × 0.25, stun applied below
                 i_AtInfo->mAttackPower =
-                    (i_AtInfo->mAttackPower * rawMult * rawMult * 5) / 10;
+                    (i_AtInfo->mAttackPower * rawMult * rawMult * 25) / 100;
                 if (i_AtInfo->mAttackPower < 1) {
                     i_AtInfo->mAttackPower = 1;
                 }
@@ -566,11 +620,42 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
         // ============================================
 #endif
 
+#if TARGET_PC
+        // Successful shield bash arms +5% on the next damaging hit (any source).
+        if (i_AtInfo->mAttackPower > 0 && fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
+            dShield_tryConsumeBashNextHitBoost(i_AtInfo->mAttackPower);
+        }
+
+        // Lockout double-claw finisher: fixed ATP 30 after all remaps.
+        {
+            const u16 clawSlashPower = dAlbwLockout_getDoubleClawSlashAttackPower();
+            if (clawSlashPower != 0 && fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
+                i_AtInfo->mAttackPower = clawSlashPower;
+            }
+        }
+#endif
+
         if (i_AtInfo->mAttackPower != 0) {
             i_enemy->health -= i_AtInfo->mAttackPower;
 #if TARGET_PC
+            if (i_AtInfo->mpActor != NULL &&
+                (fopAcM_GetGroup(i_AtInfo->mpActor) == fopAc_PLAYER_e ||
+                 (i_AtInfo->mpCollider != NULL &&
+                  i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK))))
+            {
+                dParryMaster_onDealtDamage();
+            }
             if (fopAcM_GetGroup(i_enemy) == fopAc_ENEMY_e) {
                 dAlbwEnemyRupees_tryKillAfterDamage(i_enemy, i_AtInfo->mAttackPower);
+                if (dMeter2_isALBWLocked() && i_AtInfo->mpActor != NULL &&
+                    fopAcM_GetGroup(i_AtInfo->mpActor) == fopAc_ENEMY_e &&
+                    dAlbwLockout_isConfused(i_AtInfo->mpActor))
+                {
+                    cXyz hitPos = i_enemy->current.pos;
+                    hitPos.y += 100.0f;
+                    dComIfGp_setHitMark(3, i_enemy, &hitPos, NULL, NULL, 0);
+                    dAlbwLockout_onConfuseFriendlyFireHit(i_enemy, i_AtInfo->mpActor);
+                }
                 if (i_AtInfo->mpCollider != NULL &&
                     !i_AtInfo->mpCollider->ChkAtType(AT_TYPE_NORMAL_SWORD) &&
                     !i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MASTER_SWORD) &&
@@ -642,36 +727,39 @@ fopAc_ac_c* cc_at_check(fopAc_ac_c* i_enemy, dCcU_AtInfo* i_AtInfo) {
             if (link != NULL && daPy_py_c::checkNowWolf()) {
 
                 // --- Wolf normal bite: charge accumulation ---
+                // Special D-pad ARTS never build charges: the combat-howl AOE rides Link's own
+                // collider (AT_TYPE_WOLF_CUT_TURN, owner = ALINK) so it would otherwise pass this
+                // guard — exclude it via mWolfCombatHowlActive (Link can't bite mid-howl, so the
+                // flag exactly identifies howl-AOE hits; the vanilla roll attack, same AT type,
+                // still counts).  The Midna-arm art is a separate non-ALINK actor and is excluded
+                // automatically (mHitType stays generic).
                 if (i_AtInfo->mHitType == HIT_TYPE_LINK_NORMAL_ATTACK &&
                     !i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK) &&
+                    !link->mWolfCombatHowlActive &&
                     i_AtInfo->mAttackPower > 0)
                 {
-                    link->mWolfBiteCount++;
-                    if (link->mWolfBiteCount >= 5) {
-                        link->mWolfBiteCount = 0;
-                        if (link->mWolfChargeCount < 2) {
-                            link->mWolfChargeCount++;
-                            dAlbwWolfChargeHud_notify();
-                        }
-                        // Heal 1/4 heart when at or below 50 % max HP
-                        const u16 curHP = dComIfGs_getLife();
-                        const u16 maxHP = dComIfGs_getMaxLifeGauge();
-                        if (curHP * 2 <= maxHP) {
-                            dComIfGp_setItemLifeCount(1.0f, 0);
-                        }
-                    }
+                    // Tally lives in dAlbwWolfCombat_onBiteConnect (alpha cleanup:
+                    // extracted so hang-bite/chest-mash paths that bypass
+                    // cc_at_check can award the same economy).
+                    dAlbwWolfCombat_onBiteConnect();
                 }
 
                 // --- Wolf field attack: stun non-twilight survivors ---
                 if (i_AtInfo->mpCollider->ChkAtType(AT_TYPE_MIDNA_LOCK) &&
-                    i_AtInfo->mAttackPower > 0 &&
-                    i_enemy->health > 0 &&
-                    !dAlbwWolfStun_isTwilightEnemy(fopAcM_GetName(i_enemy)))
+                    i_AtInfo->mAttackPower > 0)
                 {
-                    dAlbwWolfStun_apply(i_enemy);
+                    if (dFocusedArts_isMdForcedWolfActive()) {
+                        dComIfGp_setItemLifeCount(4.0f, 0);
+                    }
+                    if (i_enemy->health > 0 &&
+                        !dAlbwWolfStun_isTwilightEnemy(fopAcM_GetName(i_enemy)))
+                    {
+                        dAlbwWolfStun_apply(i_enemy);
+                    }
                 }
             }
         }
+
         // ============================================
         // NEW CODE ENDS HERE
         // ============================================

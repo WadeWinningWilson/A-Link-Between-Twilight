@@ -4,6 +4,7 @@
 // ============================================
 #include "d/d_albw_enemy_rupee.h"
 #include "d/d_albw_rupee_popup.h"
+#include "d/d_albw_region_mult.h"
 
 #if TARGET_PC
 
@@ -64,13 +65,24 @@ static void markKillGranted(fopAc_ac_c* enemy) {
             return;
         }
     }
+    // ============================================
+    // BUG FIX (alpha cleanup): at capacity this used to RESET THE WHOLE
+    // TABLE (sGrantedKillIdCount = 0), forgetting every granted kill at
+    // once — in long sessions (Cave of Ordeals) that let an enemy killed
+    // while wolf-frozen pay out a second time after thawing. Evict as a
+    // ring instead: only the single oldest entry is forgotten per insert.
+    // ============================================
     if (sGrantedKillIdCount >= kGrantedKillIdCap) {
-        sGrantedKillIdCount = 0;
+        static int sGrantedKillEvictIdx = 0;
+        sGrantedKillActorIds[sGrantedKillEvictIdx] = actorId;
+        sGrantedKillEvictIdx = (sGrantedKillEvictIdx + 1) % kGrantedKillIdCap;
+        return;
     }
     sGrantedKillActorIds[sGrantedKillIdCount++] = actorId;
 }
 
 static void grantRupees(u16 amount) {
+    amount = dAlbwRegionMult_scaleRupees(amount);
     if (amount == 0) {
         return;
     }
@@ -93,14 +105,11 @@ static bool isBulblinKingSpawn(fopAc_ac_c* enemy) {
 }
 
 static u16 resolveBulblinKillRupees(fopAc_ac_c* enemy) {
+    // King-spawn param variants still pay via fight-victory (E_RDB), not field kill.
     if (isBulblinKingSpawn(enemy)) {
         return 0;
     }
-    const u8 weaponType = static_cast<u8>((fopAcM_GetParam(enemy) & 0xF00) >> 8);
-    if (weaponType >= 2) {
-        return 5;
-    }
-    return 1;
+    return 15;
 }
 
 static u16 resolvePoeKillRupees(fopAc_ac_c* enemy) {
@@ -244,7 +253,7 @@ static u16 lookupKillRupees(s16 profName, fopAc_ac_c* enemy) {
     case fpcNm_E_S1_e:
         return 15;
     case fpcNm_E_RDY_e:
-        return 5;
+        return 15;
     case fpcNm_E_YD_e:
         return 1;
     case fpcNm_E_YH_e:
@@ -252,6 +261,15 @@ static u16 lookupKillRupees(s16 profName, fopAc_ac_c* enemy) {
     case fpcNm_E_YM_e:
         return 1;
     case fpcNm_E_YC_e:
+        return 15;
+    // ============================================
+    // BUG FIX (alpha cleanup): E_YR — the STANDARD solo twilight kargarok
+    // (patrol/dive attacker; the decomp brief "Rider?" is misleading —
+    // E_YC is the one carrying the Shadow Bulblin rider) — was missing
+    // here entirely, so it fell to the default 0 payout. Match the E_KR /
+    // E_YC kargarok rate.
+    // ============================================
+    case fpcNm_E_YR_e:
         return 15;
     case fpcNm_E_YK_e:
         return 1;

@@ -18,6 +18,7 @@ enum J3DSysDrawBuf {
 
 class J3DMtxCalc;
 class J3DModel;
+class J3DMaterial;
 class J3DMatPacket;
 class J3DShapePacket;
 class J3DShape;
@@ -70,6 +71,8 @@ struct J3DSys {
     int mVtxPosNum = 0;
     int mVtxNrmNum = 0;
     int mVtxColNum = 0;
+    using MatDrawPostDlCallback = void (*)(J3DMaterial*);
+    MatDrawPostDlCallback mMatDrawPostDlCallback = nullptr;
 #endif
     /* 0x118 */ BE(Vec)* mNBTScale;
 
@@ -200,6 +203,14 @@ struct J3DSys {
     }
 
     J3DModel* getModel() { return mModel; }
+
+#if TARGET_PC
+    void setMatDrawPostDlCallback(MatDrawPostDlCallback callback) {
+        mMatDrawPostDlCallback = callback;
+    }
+
+    MatDrawPostDlCallback getMatDrawPostDlCallback() const { return mMatDrawPostDlCallback; }
+#endif
 
     static Mtx mCurrentMtx;
     static Vec mCurrentS;

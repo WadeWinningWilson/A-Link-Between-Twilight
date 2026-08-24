@@ -20,6 +20,8 @@
 #include "d/d_albw_oocoo.h"
 #include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_rental.h"
+#include "d/d_albw_mail.h"
+#include "d/d_msg_flow.h"
 #include "d/actor/d_a_player.h"
 #include "dusk/ui/ui.hpp"
 #include "Z2AudioLib/Z2SceneMgr.h"
@@ -40,6 +42,7 @@
 // ============================================
 #if TARGET_PC
 static bool             s_rentalEvtStarted   = false;
+static dMsgFlow_c       sAlbwMailDeliverFlow;
 #if TARGET_PC_NATIVE_UI
 static dALBWShop_c*     s_pALBWShop      = nullptr;
 // Single persistent dialogue window. BLOs are loaded once and reused for both
@@ -470,23 +473,17 @@ cPhs_Step daNpc_Post_c::create() {
         // ALBW_POST_SFX — search this tag to find all related touch-points.
         // ============================================
 #if TARGET_PC
-        if (getBitSW() == 0x42) {
-            // Arc 0x4B owns the postman voice wave handles (confirmed via JASBank diagnostic).
-            // Asynchronous load; status reaches 2 well before the player reaches the postman.
+        if (getBitSW() == 0x42 || dAlbwMail_isDeliverPostman(this)) {
             Z2GetSceneMgr()->loadSeWave(0x4B);
-            field_0x1014 = 0;  // no pending voice yet
-            field_0x1015 = 0;  // BGM not playing yet
-// ============================================
-// NEW CODE — ALBW Port (Native Shop Window)
-// Allocate the shop window object once when the ALBW postman actor is created.
-// ============================================
+            field_0x1014 = 0;
+            field_0x1015 = 0;
 #if TARGET_PC_NATIVE_UI
-            // Shop is allocated on first talk (letres.arc mount is heavy); dialogue is light.
-            if (!s_pALBWDialogue) s_pALBWDialogue = JKR_NEW dALBWDialogue_c();
+            if (getBitSW() == 0x42) {
+                if (!s_pALBWDialogue) {
+                    s_pALBWDialogue = JKR_NEW dALBWDialogue_c();
+                }
+            }
 #endif
-// ============================================
-// NEW CODE ENDS HERE
-// ============================================
         }
 #endif
         // ============================================
@@ -609,26 +606,22 @@ int daNpc_Post_c::Delete() {
     // ALBW_POST_SFX — search this tag to find all related touch-points.
     // ============================================
 #if TARGET_PC
-    if (getBitSW() == 0x42) {
-        dALBWRental_clearVanillaTalkSuppress();
+    if (getBitSW() == 0x42 || dAlbwMail_isDeliverPostman(this)) {
+        if (getBitSW() == 0x42) {
+            dALBWRental_clearVanillaTalkSuppress();
+#if TARGET_PC_NATIVE_UI
+            JKR_DELETE(s_pALBWShop);
+            s_pALBWShop = nullptr;
+            JKR_DELETE(s_pALBWDialogue);
+            s_pALBWDialogue = nullptr;
+            s_greetStep = 0;
+#endif
+        }
         Z2GetSceneMgr()->eraseSeWave(0x4B);
-        // Safety: stop BGM if actor is destroyed mid-interaction.
         if (field_0x1015) {
             mDoAud_subBgmStop();
             field_0x1015 = 0;
         }
-// ============================================
-// NEW CODE — ALBW Port (Native UI)
-// Release all native UI objects when the ALBW postman actor is destroyed.
-// ============================================
-#if TARGET_PC_NATIVE_UI
-        JKR_DELETE(s_pALBWShop);     s_pALBWShop     = nullptr;
-        JKR_DELETE(s_pALBWDialogue); s_pALBWDialogue = nullptr;
-        s_greetStep = 0;
-#endif
-// ============================================
-// NEW CODE ENDS HERE
-// ============================================
     }
 #endif
     // ============================================
@@ -1617,7 +1610,15 @@ int daNpc_Post_c::cutDeliver(int i_staffId) {
                 mMotionSeqMngr.setNo(MOT_WAIT_A, 5.0f, FALSE, 0);
                 speedF = 0.0f;
                 speed.setall(0.0f);
-                initTalk(0x14, NULL);
+#if TARGET_PC
+                if (dAlbwMail_isDeliverPostman(this)) {
+                    sAlbwMailDeliverFlow.initWord(this, dAlbwMail_getDeliverSpeech(), 0xFF, 0,
+                                                  NULL);
+                } else
+#endif
+                {
+                    initTalk(0x14, NULL);
+                }
                 break;
 
             case 6:
@@ -1678,6 +1679,11 @@ int daNpc_Post_c::cutDeliver(int i_staffId) {
                 mHide = true;
                 mEventTimer = timer;
                 mDoAud_subBgmStop();
+#if TARGET_PC
+                if (dAlbwMail_isDeliverPostman(this)) {
+                    dAlbwMail_onDeliverCutsceneFinished(dAlbwMail_hasReceivedBundle());
+                }
+#endif
                 break;
 
             case 11:
@@ -1734,6 +1740,14 @@ int daNpc_Post_c::cutDeliver(int i_staffId) {
             break;
 
         case 5:
+#if TARGET_PC
+            if (dAlbwMail_isDeliverPostman(this)) {
+                if (sAlbwMailDeliverFlow.doFlow(this, NULL, 0)) {
+                    rv = 1;
+                }
+                break;
+            }
+#endif
             if (talkProc(NULL, FALSE, NULL, FALSE) && mFlow.checkEndFlow()) {
                 rv = 1;
             }
@@ -1751,6 +1765,14 @@ int daNpc_Post_c::cutDeliver(int i_staffId) {
         case 8:
             field_0xe26 = 0;
             if (mFlow.doFlow(NULL, NULL, 0)) {
+#if TARGET_PC
+                if (dAlbwMail_isDeliverPostman(this)) {
+                    if (!dAlbwMail_hasReceivedBundle()) {
+                        dMeter2Info_recieveLetter();
+                    }
+                    dAlbwMail_onDeliverCutsceneFinished(dAlbwMail_hasReceivedBundle());
+                }
+#endif
                 rv = 1;
             }
             break;
@@ -1827,7 +1849,24 @@ int daNpc_Post_c::wait(void* param_1) {
                         if (actor_p->chkPointInArea(player->current.pos)) {
                             if (daPy_getPlayerActorClass()->checkBoarRide()) {
                                 actor_p->noEffect();
-                            } else if (daPy_getPlayerActorClass()->eventInfo.chkCondition(1) != FALSE && dMeter2Info_getNewLetterNum()) {
+#if TARGET_PC
+                            } else if (dAlbwMail_isDeliverPostman(this)) {
+                                if (!dComIfGp_event_runCheck() && dAlbwMail_canTriggerDeliver() &&
+                                    dMeter2Info_getNewLetterNum() > 0) {
+                                    dAlbwMail_onDeliverCutsceneOrdered();
+                                    mActorPos = actor_p->current.pos;
+                                    if (daPy_getPlayerActorClass()->checkHorseRide()) {
+                                        mEvtNo = EVT_DELIVERTO_PLAYER_ON_HORSE;
+                                    } else if (daPy_py_c::checkNowWolf()) {
+                                        mEvtNo = EVT_DELIVERTO_WOLF;
+                                    } else {
+                                        mEvtNo = EVT_DELIVER;
+                                    }
+                                    break;
+                                }
+#endif
+                            } else if (daPy_getPlayerActorClass()->eventInfo.chkCondition(1) != FALSE &&
+                                       dMeter2Info_getNewLetterNum()) {
                                 mActorPos = actor_p->current.pos;
 
                                 f32 fVar2 = player->current.pos.absXZ(actor_p->current.pos);

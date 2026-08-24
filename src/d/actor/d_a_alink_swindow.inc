@@ -82,12 +82,23 @@ void daAlink_c::setOriginalHeap(JKRExpHeap** i_ppheap, u32 i_size) {
 
 void daAlink_c::setClothesChange(int param_0) {
     if (!checkWolf()) {
+#if TARGET_PC
+        // Ignore re-entrant requests while a reload is in flight — resetting the
+        // timer mid-sequence corrupts loadModelDVD() and crashes under mash/warp.
+        if (mClothesChangeWaitTimer != 0) {
+            return;
+        }
+#endif
         mClothesChangeWaitTimer = 4;
+#if TARGET_PC
+        // Each new change re-preps the build-then-swap; never inherit a stuck swap flag.
+        s_albwSwapActive = false;
+#endif
 
         if (param_0 != 0) {
             onNoResetFlg2(FLG2_UNK_200000);
         }
-    }    
+    }
 }
 
 void daAlink_c::setShieldChange() {
@@ -112,20 +123,55 @@ int daAlink_c::loadModelDVD() {
             mpWlMidnaHandModel = NULL;
             mpWlMidnaHairModel = NULL;
 
-            if (!checkNoResetFlg2(FLG2_UNK_280000)) {
-                if (!dComIfG_resDelete(&mPhaseReq, mArcName)) {
-#if TARGET_PC
-                    // resDelete no-ops if load was in-progress; force-unregister before freeAll
-                    dComIfG_deleteObjectResMain(mArcName);
-#endif
+            {
+                daMidna_c* midna = daPy_py_c::getMidnaActor();
+                if (midna != NULL) {
+                    midna->resetDemoBck();
                 }
-                cPhs_Reset(&mPhaseReq);
-                mpArcHeap->freeAll();
+            }
 
-                if (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY) {
-                    setArcName(!checkWolf());
-                } else {
-                    setArcName(checkWolf());
+            if (!checkNoResetFlg2(FLG2_UNK_280000)) {
+                const bool isMeta =
+                    (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY);
+#if TARGET_PC
+                // BUILD-THEN-SWAP prep (normal clothes change, alt heap available): keep the
+                // OLD models fully valid -- do NOT free here.  Just remember the old arc (to
+                // free after the swap) and point mArcName at the new arc.  Runs once; the
+                // timer 1->2 retry re-enters at ==1, never here.  See d_a_alink.cpp.
+                if (!isMeta && s_albwArcHeapB != NULL) {
+                    if (!s_albwSwapActive) {
+                        s_albwSwapOldArc = mArcName;
+                        setArcName(checkWolf());   // non-meta -> the new clothes arc
+                        // Drop only true abandoned rows (no archive, no DVD command).
+                        dAlbwSumoTest_sanitizeClothesArc(mArcName);
+                        cPhs_Reset(&s_albwPhaseReqB);
+                        s_albwSwapActive = true;
+                    }
+                } else
+#endif
+                {
+                    // In-place free-then-load: wolf metamorphose, or fallback (no alt heap).
+#if TARGET_PC && D_ALBW_ARC_LIFECYCLE_DEBUG
+                    DuskLog.debug("ALBW-LIFE loadModelDVD FREEALL mArcName={} arc={} heap={} procID={}",
+                                  (mArcName ? mArcName : "(null)"), albwArcArchive(mArcName),
+                                  (void*)mpArcHeap, mProcID);
+#endif
+                    if (!dComIfG_resDelete(&mPhaseReq, mArcName)) {
+#if TARGET_PC
+                        // resDelete no-ops if load in-progress; force-unregister before freeAll
+                        dComIfG_deleteObjectResMain(mArcName);
+#endif
+                    }
+                    cPhs_Reset(&mPhaseReq);
+                    mpArcHeap->freeAll();
+#if TARGET_PC
+                    ++s_albwArcEpoch;  // in-place free: prior-epoch models are now stale
+#endif
+                    if (isMeta) {
+                        setArcName(!checkWolf());
+                    } else {
+                        setArcName(checkWolf());
+                    }
                 }
             }
         } else if (mClothesChangeWaitTimer == 1) {
@@ -133,23 +179,130 @@ int daAlink_c::loadModelDVD() {
                 mClothesChangeWaitTimer = 0;
                 changeLink(1);
             } else {
-                int phase_state = dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap);
-                if (phase_state == cPhs_COMPLEATE_e) {
-                    mClothesChangeWaitTimer = 0;
-
-                    if (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY) {
-                        if (checkWolf()) {
-                            changeLink(0);
-                        } else {
-                            changeWolf();
-                        }
-                    } else {
+                const bool isMeta =
+                    (mProcID == PROC_METAMORPHOSE || mProcID == PROC_METAMORPHOSE_ONLY);
+#if TARGET_PC
+                if (s_albwSwapActive) {
+                    // BUILD-THEN-SWAP: load the new arc into the alt heap, build from it, then
+                    // free the old heap and swap.  The old models stay valid until the swap,
+                    // so draw/calc/shadow never see freed memory -- no freed-window crash.
+                    if (mArcName == s_albwSwapOldArc) {
+                        // Same arc re-equipped: still resident in mpArcHeap -> rebuild in place.
+                        // (Custom-Model-API §9: same-arc deliberately does not DVD-remount —
+                        // hot-freeing the global clothes arc under live models zombies the
+                        // pipeline. Linkle/Beta track on the next DIFFERENT-arc outfit switch.)
+                        mClothesChangeWaitTimer = 0;
+                        s_albwSwapActive = false;
+                        s_albwForceClothesRemount = false;
                         changeLink(1);
+                        return 1;
                     }
-
-                    return 1;
+                    // HEAD: plain resLoad into heapB. Ordon→Hero's after Beta relies on a
+                    // healthy global mObjectInfo Kmdl donor (held over non-Hero's — see
+                    // holdGlobalKmdlDonorForClothes — Cap Wear Off included); setRes
+                    // then incCounts instead of a fresh DVD mount that zombies after FST flips.
+                    const int loadSt =
+                        dComIfG_resLoad(&s_albwPhaseReqB, mArcName, s_albwArcHeapB);
+                    if (loadSt == cPhs_COMPLEATE_e) {
+                        mClothesChangeWaitTimer = 0;
+                        changeLink(1);  // builds the new models from the alt heap; repoints refs
+#if D_ALBW_ARC_LIFECYCLE_DEBUG
+                        DuskLog.debug("ALBW-LIFE SWAP newArc={} oldArc={} -> free old heap={}",
+                                      (mArcName ? mArcName : "(null)"),
+                                      (s_albwSwapOldArc ? s_albwSwapOldArc : "(null)"),
+                                      (void*)mpArcHeap);
+#endif
+                        // Live ptrs now reference the alt heap, so the old heap is free to drop.
+                        if (!dComIfG_resDelete(&mPhaseReq, s_albwSwapOldArc)) {
+                            dComIfG_deleteObjectResMain(s_albwSwapOldArc);
+                        }
+                        cPhs_Reset(&mPhaseReq);
+                        mpArcHeap->freeAll();
+                        // Swap heaps + phase requests so mpArcHeap / mPhaseReq track the live arc.
+                        {
+                            JKRExpHeap* l_th = mpArcHeap;
+                            mpArcHeap = s_albwArcHeapB;
+                            s_albwArcHeapB = l_th;
+                        }
+                        {
+                            request_of_phase_process_class l_tr = mPhaseReq;
+                            mPhaseReq = s_albwPhaseReqB;
+                            s_albwPhaseReqB = l_tr;
+                        }
+                        s_albwSwapActive = false;
+                        s_albwForceClothesRemount = false;
+                        return 1;
+                    }
+                    if (loadSt == cPhs_ERROR_e) {
+                        // HEAD: keep LIVE models, purge abandoned rows, timer=2 retry.
+                        // Do NOT reconcile outfit to Ordon (that pinned the D-pad ring).
+                        const char* failedArc = mArcName;
+                        dRes_info_c* info =
+                            failedArc != NULL ? dComIfG_getObjectResInfo(failedArc) : NULL;
+                        const bool inFlight = info != NULL && info->getArchive() == NULL &&
+                                              info->getDMCommand() != NULL;
+                        const bool zombie = info != NULL && info->getArchive() == NULL &&
+                                            info->getDMCommand() == NULL;
+                        {
+                            const u32 heapFree = s_albwArcHeapB != NULL
+                                                     ? (u32)s_albwArcHeapB->getTotalFreeSize()
+                                                     : 0u;
+                            const u32 heapTotal = s_albwArcHeapB != NULL
+                                                      ? (u32)s_albwArcHeapB->getHeapSize()
+                                                      : 0u;
+                            DuskLog.warn(
+                                "[Alink] build-then-swap resLoad ERROR for {} (old={}) — "
+                                "heapB free={}/{} inFlight={} zombie={}",
+                                failedArc ? failedArc : "(null)",
+                                s_albwSwapOldArc ? s_albwSwapOldArc : "(null)", heapFree,
+                                heapTotal, inFlight ? 1 : 0, zombie ? 1 : 0);
+                        }
+                        if (!inFlight) {
+                            cPhs_Reset(&s_albwPhaseReqB);
+                            if (s_albwArcHeapB != NULL) {
+                                s_albwArcHeapB->freeAll();
+                            }
+                            if (zombie) {
+                                dAlbwSumoTest_sanitizeClothesArc(failedArc);
+                            }
+                        }
+                        mClothesChangeWaitTimer = 2;
+                        return 0;
+                    }
+                    mClothesChangeWaitTimer = 2;  // alt arc not loaded yet; retry
+                } else
+#endif
+                {
+                    // In-place load: wolf metamorphose, or fallback (no alt heap).
+                    const int loadSt = dComIfG_resLoad(&mPhaseReq, mArcName, mpArcHeap);
+                    if (loadSt == cPhs_COMPLEATE_e) {
+                        mClothesChangeWaitTimer = 0;
+                        if (isMeta) {
+                            if (checkWolf()) {
+                                changeLink(0);
+#if TARGET_PC
+                                dAlbwOutfit_onMetamorphoseToHuman(this);
+#endif
+                            } else {
+                                changeWolf();
+                            }
+                        } else {
+                            changeLink(1);
+                        }
+                        return 1;
+                    }
+                    if (loadSt == cPhs_ERROR_e) {
+                        // In-place already freed the live heap at timer==2 — best we can
+                        // do is stop spinning and unhide; outfit sync may retry later.
+                        DuskLog.warn(
+                            "[Alink] in-place clothes resLoad ERROR for {} — clearing timer",
+                            mArcName ? mArcName : "(null)");
+                        mClothesChangeWaitTimer = 0;
+                        dAlbwAlink_resyncClothesEpoch();
+                        return 0;
+                    }
+                    mClothesChangeWaitTimer = 2;
                 }
-                mClothesChangeWaitTimer = 2;
             }
         }
     } else {
@@ -262,7 +415,13 @@ void daAlink_c::changeModelDataDirect(int param_0) {
 
         if (!checkNoResetFlg2(daPy_FLG2(FLG2_UNK_100000 | FLG2_UNK_80000))) {
             for (i = 6; i < 8; i++) {
-                modelData->getJointNodePointer(i)->setCallBack(daAlink_headModelCallBack);
+                // ALBW: guard against hat models with < 8 joints (some modded
+                // outfits) — getJointNodePointer(6/7) returns null there and the
+                // Collection/status menu crashed on setCallBack. Skip if absent.
+                J3DJoint* hatJoint = modelData->getJointNodePointer(i);
+                if (hatJoint != NULL) {
+                    hatJoint->setCallBack(daAlink_headModelCallBack);
+                }
             }
         }
     }

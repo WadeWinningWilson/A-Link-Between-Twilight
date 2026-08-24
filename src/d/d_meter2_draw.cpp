@@ -8,6 +8,7 @@
 #include "d/d_meter2_draw.h"
 #include "JSystem/J2DGraph/J2DAnmLoader.h"
 #include "JSystem/J2DGraph/J2DGrafContext.h"
+#include "JSystem/J2DGraph/J2DPicture.h"
 #include "JSystem/J2DGraph/J2DScreen.h"
 #include "JSystem/J2DGraph/J2DTextBox.h"
 #include "JSystem/JKernel/JKRExpHeap.h"
@@ -26,6 +27,8 @@
 #include <cstring>
 #if TARGET_PC
 #include "d/d_albw_shield.h"
+#include "d/d_albw_parry_master.h"
+#include "d/d_albw_outfit_stats.h"
 #include "d/d_albw_wolf_charge_hud.h"
 #include "d/d_albw_rupee_popup.h"
 #include "d/d_albw_boss_hp_hud.h"
@@ -183,10 +186,14 @@ bool lopFaMeterActive() {
     if (!dFocusedArts_isEnabled()) {
         return false;
     }
-    if (daPy_getPlayerActorClass()->checkWolf()) {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == NULL || player->checkWolf()) {
         return false;
     }
-    return dComIfGs_getSelectEquipSword() != dItemNo_WOOD_STICK_e;
+    if (dComIfGs_getSelectEquipSword() == dItemNo_WOOD_STICK_e) {
+        return dAlbwOutfitStats_allowsWoodHiddenSkills();
+    }
+    return true;
 }
 // ============================================
 // NEW CODE ENDS HERE
@@ -448,6 +455,19 @@ dMeter2Draw_c::~dMeter2Draw_c() {
         JKR_DELETE(mpRupeeTexture[i][1]);
         mpRupeeTexture[i][1] = NULL;
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C1)
+    // ============================================
+    for (int j = 0; j < 2; j++) {
+        JKR_DELETE(mpRupeeTenThousand[j]);
+        mpRupeeTenThousand[j] = NULL;
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
 
     for (int i = 0; i < 3; i++) {
         JKR_DELETE(mpRupeeParent[i]);
@@ -975,6 +995,10 @@ void dMeter2Draw_c::draw() {
         lopShowPane(mpLifeParent);
         mLopLifeHidden = false;
     }
+    // Classic hearts: Parry Master reclaim ghosts (must run every frame for melt).
+    if (!mLopHealthBarActive) {
+        applyParryMasterHeartReclaim();
+    }
     // ============================================
     // NEW CODE ENDS HERE
     // ============================================
@@ -1387,8 +1411,90 @@ void dMeter2Draw_c::initRupeeKey() {
         mpRupeeTexture[i][1]->getPanePtr()->setBasePosition(J2DBasePosition_4);
     }
 
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C1)
+    // Insert 10000s digit after the jewel, before the vanilla digit row.
+    // Clone shares the leftmost digit's parent so LoP / r_k_n moves follow.
+    // ============================================
+    {
+        int leftIdx = 0;
+        f32 leftX = mpRupeeTexture[0][1]->getInitCenterPosX();
+        for (int i = 1; i < 4; i++) {
+            const f32 x = mpRupeeTexture[i][1]->getInitCenterPosX();
+            if (x < leftX) {
+                leftX = x;
+                leftIdx = i;
+            }
+        }
+
+        f32 nearestRight = 1.0e9f;
+        f32 nearestAny = 1.0e9f;
+        for (int i = 0; i < 4; i++) {
+            if (i == leftIdx) {
+                continue;
+            }
+            const f32 dx = mpRupeeTexture[i][1]->getInitCenterPosX() - leftX;
+            const f32 adx = std::fabs(dx);
+            if (adx < nearestAny && adx > 0.5f) {
+                nearestAny = adx;
+            }
+            if (dx > 0.5f && dx < nearestRight) {
+                nearestRight = dx;
+            }
+        }
+        mRupeeDigitAdvance = (nearestRight < 1.0e8f) ? nearestRight : nearestAny;
+        if (mRupeeDigitAdvance < 0.5f) {
+            mRupeeDigitAdvance = mpRupeeTexture[leftIdx][1]->getInitSizeX() * 0.6f;
+        }
+
+        // Jewel parent is created below; default away-from-left (+X). Refined after rupi_n init.
+        mRupeeFiveDigitShiftSign = 1.0f;
+
+        static u64 const kTenThousandTag[2] = {MULTI_CHAR('r_n_5_s'), MULTI_CHAR('r_n_5')};
+        for (int j = 0; j < 2; j++) {
+            J2DPicture* src = static_cast<J2DPicture*>(mpRupeeTexture[leftIdx][j]->getPanePtr());
+            JUT_ASSERT(0, src != NULL);
+            J2DPane* parent = src->getParentPane();
+            JUT_ASSERT(0, parent != NULL);
+
+            const JGeometry::TBox2<f32> box(src->getBounds().i.x, src->getBounds().i.y,
+                                           src->getBounds().f.x, src->getBounds().f.y);
+            J2DPicture* pic = JKR_NEW J2DPicture(kTenThousandTag[j], box,
+                                                src->getTexture(0)->getTexInfo(), NULL);
+            JUT_ASSERT(0, pic != NULL);
+            pic->setBasePosition(J2DBasePosition_4);
+            parent->appendChild(pic);
+            pic->hide();
+
+            mpRupeeTenThousand[j] = JKR_NEW CPaneMgr(mpScreen, kTenThousandTag[j], 0, NULL);
+            JUT_ASSERT(0, mpRupeeTenThousand[j] != NULL);
+            mpRupeeTenThousand[j]->getPanePtr()->setBasePosition(J2DBasePosition_4);
+            mpRupeeTenThousand[j]->hide();
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
+
     mpRupeeParent[0] = JKR_NEW CPaneMgr(mpScreen, MULTI_CHAR('rupi_n'), 2, NULL);
     JUT_ASSERT(0, mpRupeeParent[0] != NULL);
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C1)
+    // Shift digits away from the jewel when the 10000s place is shown.
+    // ============================================
+    if (mpRupeeTenThousand[1] != NULL && mpRupeeParent[0] != NULL) {
+        const f32 jewelX = mpRupeeParent[0]->getInitCenterPosX();
+        const f32 leftDigitX = mpRupeeTenThousand[1]->getInitCenterPosX();
+        mRupeeFiveDigitShiftSign = (jewelX <= leftDigitX) ? 1.0f : -1.0f;
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
 
     mpRupeeParent[1] = JKR_NEW CPaneMgr(mpScreen, MULTI_CHAR('moyou_rn'), 2, NULL);
     JUT_ASSERT(0, mpRupeeParent[1] != NULL);
@@ -1908,6 +2014,24 @@ void dMeter2Draw_c::changeTextureLife(int i_no, bool param_1, u8 i_quarterNum) {
 
 void dMeter2Draw_c::drawLife(s16 i_maxLife, s16 i_life, f32 i_posX, f32 i_posY) {
     s16 max_heart_cnt = i_maxLife / 5;
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C2)
+    // Classic HUD has 20 heart panes. Past 20♥ (MQ shop ¼♥ uncapped), stack on
+    // the 20th: show at most 20 containers and clamp displayed life to 20♥ so
+    // overflow sits on the last heart rather than inventing a 21st slot.
+    // ============================================
+#if TARGET_PC
+    if (max_heart_cnt > 20) {
+        max_heart_cnt = 20;
+        const s16 lifeCap = static_cast<s16>(20 * 4);
+        if (i_life > lifeCap) {
+            i_life = lifeCap;
+        }
+    }
+#endif
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     s16 heart_cnt = i_life / 4;
     s16 heart_quarters = i_life % 4;
     if (i_life == max_heart_cnt * 4) {
@@ -2290,6 +2414,21 @@ bool dMeter2Draw_c::getRupeeDigitMetrics(f32* o_width, f32* o_height, f32* o_adv
             leftX = c.x;
         }
     }
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C1)
+    // Include inserted 10000s digit when visible so +n popup clears it.
+    // ============================================
+    if (mpRupeeTenThousand[1] != NULL && mpRupeeTenThousand[1]->getPanePtr() != NULL &&
+        mpRupeeTenThousand[1]->isVisible())
+    {
+        const Vec c = mpRupeeTenThousand[1]->getGlobalVtxCenter(false, 0);
+        if (c.x < leftX) {
+            leftX = c.x;
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
     *o_leftCenterX = leftX;
     *o_centerY = centerY;
 
@@ -2618,7 +2757,18 @@ void dMeter2Draw_c::drawFocusedArtsMeter() {
 // row). Hearts are hidden in draw() while this mode is active.
 // ============================================
 void dMeter2Draw_c::drawLopHealthBar() {
-    if (!mLopHealthBarActive || mMeterAlphaRate[0] <= 0.0f) {
+    if (!mLopHealthBarActive) {
+        return;
+    }
+    // Human form: gate on ALBW meter alpha (same HUD-hide set as the green meter).
+    // Wolf form pins mMeterAlphaRate[0] to 0 on purpose (stamina hidden) — use the
+    // life/parent HUD alpha instead so Health Bar still follows LoP life UI rules.
+    const bool wolfForm = daPy_getPlayerActorClass()->checkWolf();
+    f32 barAlpha = mMeterAlphaRate[0];
+    if (wolfForm) {
+        barAlpha = (mpLifeParent != NULL) ? mpLifeParent->getAlphaRate() : g_drawHIO.mParentAlpha;
+    }
+    if (barAlpha <= 0.0f) {
         return;
     }
     if (mpKanteraScreen == NULL || mpMagicBase == NULL || mpMagicParent == NULL ||
@@ -2643,16 +2793,42 @@ void dMeter2Draw_c::drawLopHealthBar() {
     }
     const s16 fill32 = (fullLife > 0) ? (s16)((s32)life * 32 / fullLife) : 0;
 
+    // Parry Master reclaim: dull-red extension beyond live (~0.45–0.50× live luminance).
+    s16 reclaim = 0;
+    if (dParryMaster_isEnabled()) {
+        reclaim = (s16)dParryMaster_getRecoverablePieces();
+    }
+    s16 combined = life + reclaim;
+    if (fullLife > 0 && combined > fullLife) {
+        combined = fullLife;
+    }
+    const s16 fillCombined32 =
+        (fullLife > 0) ? (s16)((s32)combined * 32 / fullLife) : 0;
+
     // Position in the ALBW meter's local space: same X, lifted above it.
+    // (Coords stay valid in wolf — stamina is only alpha-hidden, not relocated.)
     const f32 barX = field_0x5e4[0] + kLopHealthBarOffX;
     const f32 barY = field_0x5f0[0] - kLopHealthBarAbovePx;
 
+    const JUtility::TColor liveBlack(90, 18, 18, 255);
+    const JUtility::TColor liveWhite(215, 40, 40, 255);
+    // Hybrid vs live: ~0.85× luminance + ~0.95 α — readable on TP BGs, still a hard cut.
+    const JUtility::TColor dullBlack(77, 15, 15, 255);
+    const JUtility::TColor dullWhite(183, 34, 34, 255);
+    const f32 dullAlpha = barAlpha * 0.95f;
+
+    // Pass 1: dull reclaim to (life + reclaim); pass 2: live crimson on top.
+    if (reclaim > 0 && fillCombined32 > fill32) {
+        applyMagicMeterLayoutTransient(32, fillCombined32, barX, barY, kLopHealthBarWidthScale, 0);
+        mpMagicMeter->setBlackWhite(dullBlack, dullWhite);
+        mpMagicParent->setAlphaRate(dullAlpha);
+        setAlphaMagicChange(true);
+        mpKanteraScreen->draw(0.0f, 0.0f, graf_ctx);
+    }
+
     applyMagicMeterLayoutTransient(32, fill32, barX, barY, kLopHealthBarWidthScale, 0);
-
-    // Crimson fill (dark → bright), mirroring the durability bar's tint approach.
-    mpMagicMeter->setBlackWhite(JUtility::TColor(90, 18, 18, 255),
-                                JUtility::TColor(215, 40, 40, 255));
-
+    mpMagicMeter->setBlackWhite(liveBlack, liveWhite);
+    mpMagicParent->setAlphaRate(barAlpha);
     setAlphaMagicChange(true);
     mpKanteraScreen->draw(0.0f, 0.0f, graf_ctx);
 
@@ -2663,6 +2839,88 @@ void dMeter2Draw_c::drawLopHealthBar() {
     applyMagicMeterSlot(0);
     mpMagicParent->setAlphaRate(mMeterAlphaRate[0]);
     setAlphaMagicChange(true);
+}
+
+void dMeter2Draw_c::applyParryMasterHeartReclaim() {
+    if (mLopHealthBarActive || mpLifeParent == NULL) {
+        return;
+    }
+
+    const s16 maxLife = (s16)dComIfGs_getMaxLife();
+    s16 maxHearts = (s16)(maxLife / 5);
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C2)
+    // Match drawLife's 20-slot clamp so reclaim ghosts stay on the visible row.
+    // ============================================
+    if (maxHearts > 20) {
+        maxHearts = 20;
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+    const s16 fullLife = (s16)(maxHearts * 4);
+    s16 life = (s16)dComIfGs_getLife();
+    if (life < 0) {
+        life = 0;
+    }
+    if (fullLife > 0 && life > fullLife) {
+        life = fullLife;
+    }
+
+    int reclaim = 0;
+    if (dParryMaster_isEnabled()) {
+        reclaim = dParryMaster_getRecoverablePieces();
+    }
+    s16 ghostEnd = (s16)(life + reclaim);
+    if (fullLife > 0 && ghostEnd > fullLife) {
+        ghostEnd = fullLife;
+    }
+
+    // Match drawLife() heart indexing.
+    s16 heart_cnt = life / 4;
+    s16 heart_quarters = life % 4;
+    if (life == fullLife) {
+        heart_quarters = 0;
+    }
+    if (heart_quarters == 0) {
+        heart_cnt--;
+    }
+
+    const f32 liveMark = (mHeartAlpha * mLifeParentHeartAlpha) * mLifeParentAlpha;
+    const f32 ghostMark = liveMark * 0.5f;
+
+    for (int i = 0; i < 20; i++) {
+        if (i >= maxHearts) {
+            continue;
+        }
+
+        // Live-filled / partial slot — leave drawLife + setAlphaLifeChange alone.
+        if (life > 0 && i <= heart_cnt) {
+            mpHeartMark[i]->setAlphaRate(liveMark);
+            continue;
+        }
+
+        const s16 heartStart = (s16)(i * 4);
+        if (reclaim > 0 && heartStart < ghostEnd) {
+            changeTextureLife(i, true, 0xFF);
+            mpHeartMark[i]->setAlphaRate(ghostMark);
+            if (mpLifeTexture[i][0] != NULL) {
+                mpLifeTexture[i][0]->setAlphaRate(ghostMark);
+            }
+            if (mpLifeTexture[i][1] != NULL) {
+                mpLifeTexture[i][1]->setAlphaRate(ghostMark);
+            }
+        } else {
+            changeTextureLife(i, false, 0xFF);
+            mpHeartMark[i]->setAlphaRate(liveMark);
+            if (mpLifeTexture[i][0] != NULL) {
+                mpLifeTexture[i][0]->setAlphaRate(liveMark);
+            }
+            if (mpLifeTexture[i][1] != NULL) {
+                mpLifeTexture[i][1]->setAlphaRate(liveMark);
+            }
+        }
+    }
 }
 // ============================================
 // NEW CODE ENDS HERE
@@ -2691,6 +2949,7 @@ void dMeter2Draw_c::drawShieldDurabilityBelowAlbw() {
     f32 widthScale = dShield_getDurabilityMeterWidthScale();
 
     f32 barX, barY;
+    bool useLopRowLayout = false;
 #if TARGET_PC
     // ============================================
     // NEW CODE — ALBW Port (Lies of Link HUD)
@@ -2699,35 +2958,37 @@ void dMeter2Draw_c::drawShieldDurabilityBelowAlbw() {
     // in its screen's local space (scale 1, fixed root offset vs the global ortho).
     // Convert the global target to local by subtracting that offset — measured once
     // from the just-drawn ALBW meter (its global corner0 minus its paneTrans). Width
-    // spans the shield row.
+    // spans the shield row. When parry icons are not drawn (durability-only always-on),
+    // fall back to the ALBW anchor below.
     // ============================================
     if (mLopHudActive) {
         ShieldRowLayout row;
-        if (!dShield_getLastRowLayout(&row) || row.iconW < 1.0f) {
-            return;
-        }
-        const f32 rowSpan =
-            row.slotCount > 1 ? row.spacing * (f32)(row.slotCount - 1) + row.iconW : row.iconW;
-        const f32 targetX = row.firstCenterX - row.iconW * 0.5f + kLopDurabilityOffX;
-        const f32 targetY = row.centerY + row.iconW * 0.5f + kLopDurabilityGapPx;
+        if (dShield_getLastRowLayout(&row) && row.iconW >= 1.0f) {
+            useLopRowLayout = true;
+            const f32 rowSpan =
+                row.slotCount > 1 ? row.spacing * (f32)(row.slotCount - 1) + row.iconW : row.iconW;
+            const f32 targetX = row.firstCenterX - row.iconW * 0.5f + kLopDurabilityOffX;
+            const f32 targetY = row.centerY + row.iconW * 0.5f + kLopDurabilityGapPx;
 
-        static bool sKanteraOffCached = false;
-        static f32 sKanteraOffX = 0.0f;
-        static f32 sKanteraOffY = 0.0f;
-        if (!sKanteraOffCached) {
-            Mtx m;
-            J2DPane* mp = mpMagicParent->getPanePtr();
-            const Vec c0 = mpMagicParent->getGlobalVtx(mp, &m, 0, false, 0);
-            sKanteraOffX = c0.x - field_0x5e4[0];
-            sKanteraOffY = c0.y - field_0x5f0[0];
-            sKanteraOffCached = true;
-        }
-        barX = targetX - sKanteraOffX;
-        barY = targetY - sKanteraOffY;
+            static bool sKanteraOffCached = false;
+            static f32 sKanteraOffX = 0.0f;
+            static f32 sKanteraOffY = 0.0f;
+            if (!sKanteraOffCached) {
+                Mtx m;
+                J2DPane* mp = mpMagicParent->getPanePtr();
+                const Vec c0 = mpMagicParent->getGlobalVtx(mp, &m, 0, false, 0);
+                sKanteraOffX = c0.x - field_0x5e4[0];
+                sKanteraOffY = c0.y - field_0x5f0[0];
+                sKanteraOffCached = true;
+            }
+            barX = targetX - sKanteraOffX;
+            barY = targetY - sKanteraOffY;
 
-        const f32 baseW = mpMagicBase->getInitSizeX() * g_drawHIO.mMagicMeterScale;
-        widthScale = (baseW > 0.0f) ? (rowSpan / baseW) : widthScale;
-    } else
+            const f32 baseW = mpMagicBase->getInitSizeX() * g_drawHIO.mMagicMeterScale;
+            widthScale = (baseW > 0.0f) ? (rowSpan / baseW) : widthScale;
+        }
+    }
+    if (!useLopRowLayout)
 #endif
     {
         const f32 albwX = field_0x5e4[0];
@@ -3031,14 +3292,51 @@ void dMeter2Draw_c::setAlphaLightDropAnimeMax() {
     }
 }
 
-void dMeter2Draw_c::drawRupee(s16 i_rupeeNum) {
-    mpRupeeTexture[3][0]->hide();
-    mpRupeeTexture[3][1]->hide();
+void dMeter2Draw_c::drawRupee(s32 i_rupeeNum) {
+    // ============================================
+    // MODIFIED CODE — ALBW Port (Phase C1)
+    // 5-place counter: insert 10000s digit (clone) before vanilla row when ≥10000.
+    // ============================================
+    if (i_rupeeNum < 0) {
+        i_rupeeNum = 0;
+    }
 
-    // digits are descending order (3, 2, 1, 0)
-    int digit_3 = i_rupeeNum / 1000;
-    int num = i_rupeeNum % 1000;
+#if TARGET_PC
+    const bool showTenThousand = (i_rupeeNum >= 10000);
+    const f32 fiveShift =
+        (showTenThousand && mpRupeeTenThousand[1] != NULL)
+            ? (mRupeeFiveDigitShiftSign * mRupeeDigitAdvance)
+            : 0.0f;
 
+    s32 rest = i_rupeeNum;
+    const int digit_4 = rest / 10000;
+    rest %= 10000;
+#else
+    s32 rest = i_rupeeNum;
+#endif
+    const int digit_3 = rest / 1000;
+    rest %= 1000;
+    const int digit_2 = rest / 100;
+    rest %= 100;
+    const int digit_1 = rest / 10;
+    const int digit_0 = rest % 10;
+
+#if TARGET_PC
+    if (mpRupeeTenThousand[0] != NULL && mpRupeeTenThousand[1] != NULL) {
+        if (!showTenThousand) {
+            mpRupeeTenThousand[0]->hide();
+            mpRupeeTenThousand[1]->hide();
+        } else {
+            mpRupeeTenThousand[0]->show();
+            mpRupeeTenThousand[1]->show();
+            ResTIMG* timg4 = getNumberTexture(digit_4);
+            static_cast<J2DPicture*>(mpRupeeTenThousand[0]->getPanePtr())->changeTexture(timg4, 0);
+            static_cast<J2DPicture*>(mpRupeeTenThousand[1]->getPanePtr())->changeTexture(timg4, 0);
+        }
+    }
+#endif
+
+    // Thousands place: hide under 1000 (vanilla); always show when ≥10000 (may be 0).
     if (i_rupeeNum < 1000) {
         mpRupeeTexture[3][0]->hide();
         mpRupeeTexture[3][1]->hide();
@@ -3050,23 +3348,21 @@ void dMeter2Draw_c::drawRupee(s16 i_rupeeNum) {
         static_cast<J2DPicture*>(mpRupeeTexture[3][0]->getPanePtr())->changeTexture(timg, 0);
         static_cast<J2DPicture*>(mpRupeeTexture[3][1]->getPanePtr())->changeTexture(timg, 0);
     }
-    int digit_2 = num / 100;
-    num %= 100;
 
     ResTIMG* timg = getNumberTexture(digit_2);
     static_cast<J2DPicture*>(mpRupeeTexture[2][0]->getPanePtr())->changeTexture(timg, 0);
     static_cast<J2DPicture*>(mpRupeeTexture[2][1]->getPanePtr())->changeTexture(timg, 0);
 
-    int digit_1 = num / 10;
-    num %= 10;
-
     timg = getNumberTexture(digit_1);
     static_cast<J2DPicture*>(mpRupeeTexture[1][0]->getPanePtr())->changeTexture(timg, 0);
     static_cast<J2DPicture*>(mpRupeeTexture[1][1]->getPanePtr())->changeTexture(timg, 0);
 
-    timg = getNumberTexture(num);
+    timg = getNumberTexture(digit_0);
     static_cast<J2DPicture*>(mpRupeeTexture[0][0]->getPanePtr())->changeTexture(timg, 0);
     static_cast<J2DPicture*>(mpRupeeTexture[0][1]->getPanePtr())->changeTexture(timg, 0);
+    // ============================================
+    // MODIFIED CODE ENDS HERE
+    // ============================================
 
 #if TARGET_PC
     const f32 rupeeKeyUserScale = dGetUserHudScale();
@@ -3121,9 +3417,31 @@ void dMeter2Draw_c::drawRupee(s16 i_rupeeNum) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 2; j++) {
             mpRupeeTexture[i][j]->scale(g_drawHIO.mRupeeCountScale, g_drawHIO.mRupeeCountScale);
+#if TARGET_PC
+            // Shift vanilla row away from jewel while 10000s place is inserted.
+            mpRupeeTexture[i][j]->paneTrans(g_drawHIO.mRupeeCountPosX + fiveShift,
+                                            g_drawHIO.mRupeeCountPosY);
+#else
             mpRupeeTexture[i][j]->paneTrans(g_drawHIO.mRupeeCountPosX, g_drawHIO.mRupeeCountPosY);
+#endif
         }
     }
+
+#if TARGET_PC
+    // ============================================
+    // NEW CODE — ALBW Port (Phase C1)
+    // Clone stays at the pre-shift leftmost slot (inserted place).
+    // ============================================
+    if (mpRupeeTenThousand[0] != NULL && mpRupeeTenThousand[1] != NULL) {
+        for (int j = 0; j < 2; j++) {
+            mpRupeeTenThousand[j]->scale(g_drawHIO.mRupeeCountScale, g_drawHIO.mRupeeCountScale);
+            mpRupeeTenThousand[j]->paneTrans(g_drawHIO.mRupeeCountPosX, g_drawHIO.mRupeeCountPosY);
+        }
+    }
+    // ============================================
+    // NEW CODE ENDS HERE
+    // ============================================
+#endif
 }
 
 void dMeter2Draw_c::setAlphaRupeeChange(bool param_0) {
@@ -3178,6 +3496,20 @@ void dMeter2Draw_c::setAlphaRupeeChange(bool param_0) {
                     field_0x7d0 * (field_0x7cc * (mRupeeCountAlpha * mRupeeAlpha)));
             }
         }
+#if TARGET_PC
+        // ============================================
+        // NEW CODE — ALBW Port (Phase C1)
+        // ============================================
+        if (mpRupeeTenThousand[0] != NULL && mpRupeeTenThousand[1] != NULL) {
+            for (int j = 0; j < 2; j++) {
+                mpRupeeTenThousand[j]->setAlphaRate(
+                    field_0x7d0 * (field_0x7cc * (mRupeeCountAlpha * mRupeeAlpha)));
+            }
+        }
+        // ============================================
+        // NEW CODE ENDS HERE
+        // ============================================
+#endif
     }
 }
 

@@ -10,6 +10,7 @@
 #include "d/actor/d_a_obj_carry.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
+#include "d/d_ext_save_flags.h"
 #include "d/d_save.h"
 #include "d/d_save_init.h"
 #include "f_op/f_op_scene_mng.h"
@@ -17,6 +18,10 @@
 #include <cstring>
 
 #include "dusk/version.hpp"
+
+#if TARGET_PC
+#include "d/d_albw_potion.h"
+#endif
 
 #if PLATFORM_WII || PLATFORM_SHIELD
 #include <revolution/sc.h>
@@ -144,7 +149,8 @@ u16 dSv_player_status_a_c::getRupeeMax() const {
             #endif
         // ============================================
         // NEW CODE — ALBW Port
-        // Colossal Wallet: always 9999; unaffected by biggerWallets setting.
+        // Colossal Wallet: always COLOSSAL_WALLET_MAX (50k); unaffected by
+        // biggerWallets setting.
         // ============================================
         case COLOSSAL_WALLET:
             return COLOSSAL_WALLET_MAX;
@@ -482,6 +488,13 @@ void dSv_player_item_c::setBottleItemIn(u8 curItemIn, u8 newItemIn) {
 
     for (int i = 0; i < 4; i++) {
         if (curItemIn == mItems[i + SLOT_11]) {
+#if TARGET_PC
+            if (dAlbwPotion_isSoulboundRedInSlot(i + SLOT_11) &&
+                !dAlbwPotion_isSoulboundRedItem(newItemIn))
+            {
+                return;
+            }
+#endif
             setItem(i + SLOT_11, newItemIn);
             if (newItemIn == dItemNo_HOT_SPRING_e) {
                 dMeter2Info_setHotSpringTimer(i + SLOT_11);
@@ -779,12 +792,26 @@ void dSv_player_item_record_c::setBombNum(u8 i_bagIdx, u8 i_bombNum) {
     }
 #endif
 
+#if TARGET_PC
+    // Bomb ammo arrays are only for SLOT_15..17 (bagIdx 0..2). Callers that pass
+    // inventory slot math for non-bag slots must not crash.
+    if (i_bagIdx >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return;
+    }
+#else
     JUT_ASSERT(1651, 0 <= i_bagIdx && i_bagIdx < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     mBombNum[i_bagIdx] = i_bombNum;
 }
 
 u8 dSv_player_item_record_c::getBombNum(u8 i_bagIdx) const {
+#if TARGET_PC
+    if (i_bagIdx >= dSv_player_item_c::BOMB_BAG_MAX) {
+        return 0;
+    }
+#else
     JUT_ASSERT(1718, 0 <= i_bagIdx && i_bagIdx < dSv_player_item_c::BOMB_BAG_MAX);
+#endif
     return mBombNum[i_bagIdx];
 }
 
@@ -1517,6 +1544,16 @@ void dSv_info_c::init() {
     initZone();
     mTmp.init();
 
+    // ========================================================================
+    // §305 wire ① — donor event-flag block follows TP's own lifecycle: init()
+    // resets it, card_to_memory() below repopulates it from the sidecar.
+    // Call-site census (receipts): the only NON-DEBUG init() callers are the
+    // file-select open (d_file_select.cpp:275) and the opening/title scene
+    // (d_s_play.cpp:1613) — both strictly BEFORE any card_to_memory(), so
+    // this reset can never zero a loaded save.
+    // ========================================================================
+    dExtWwSv_reset();
+
 #if DEBUG
     unk_0x0 = 0;
     unk_0x1 = 0;
@@ -1874,6 +1911,14 @@ int dSv_info_c::memory_to_card(char* card_ptr, int dataNum) {
     }
 
     printf("SAVE size:%d\n", (int)(card_ptr - var_r29));
+
+    // ========================================================================
+    // §305 wire ① — persist the donor event-flag block beside the quest log
+    // it belongs to (same dataNum), only on a SUCCESSFUL in-card store. Kept
+    // out of the card image: no slot slack, and the checksum covers in-slot
+    // bytes (mDoMemCdRWm_SetCheckSumGameData) — sidecar fails safe instead.
+    // ========================================================================
+    dExtWwSvIo_storeSlot(dataNum);
     return 0;
 }
 
@@ -1924,6 +1969,14 @@ int dSv_info_c::card_to_memory(char* i_cardPtr, int i_dataNum) {
     }
 
     printf("LOAD size:%d\n", (int)(i_cardPtr - var_r30));
+
+    // ========================================================================
+    // §305 wire ① — repopulate the donor event-flag block for the loaded
+    // quest log. Missing/bad sidecar -> dExtWwSvIo leaves the block at
+    // donor new-game state (fail-safe on its own 'WWEV' magic); the TP
+    // save just loaded is untouched either way.
+    // ========================================================================
+    dExtWwSvIo_restoreSlot(i_dataNum);
     return 0;
 }
 

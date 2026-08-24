@@ -804,6 +804,38 @@ PROCS_NOT_WII \
 /* 0x316 */ X(fpcNm_METER2_e) \
 /* 0x317 */ X(fpcNm_GAMEOVER_e) \
 /* 0x318 */ X(fpcNm_ALBW_SHADE_WATCHER_e) \
+/* 0x319 */ X(fpcNm_ALBW_SHADE_BOSS_WOLF_e) \
+/* 0x31A */ X(fpcNm_ALBW_MIDNA_ARM_e) \
+/* 0x31B */ X(fpcNm_EXT_BG10_e) \
+/* 0x31C */ X(fpcNm_KNOB00_e) \
+/* 0x31D */ X(fpcNm_EXT_VEG_e) \
+/* 0x31E */ X(fpcNm_EXT_SPAN_e) \
+/* 0x31F */ X(fpcNm_ESA_e) \
+/* 0x320 */ X(fpcNm_KB_e) \
+/* 0x321 */ X(fpcNm_KAMOME_e) \
+/* 0x322 */ X(fpcNm_NPC_BM1_e) \
+/* 0x323 */ X(fpcNm_NPC_BM2_e) \
+/* 0x324 */ X(fpcNm_NPC_BM3_e) \
+/* 0x325 */ X(fpcNm_NPC_BM4_e) \
+/* 0x326 */ X(fpcNm_NPC_BM5_e) \
+/* 0x327 */ X(fpcNm_NPC_LS1_e) \
+/* 0x328 */ X(fpcNm_OBJ_TORIPOST_e) \
+/* 0x329 */ X(fpcNm_NPC_ZL1_e) \
+/* 0x32A */ X(fpcNm_NPC_BA1_e) \
+/* 0x32B */ X(fpcNm_WW_DEMO00_e) \
+/* 0x32C */ X(fpcNm_LAMP_e) \
+/* 0x32D */ X(fpcNm_Obj_Mshokki_e) \
+/* 0x32E */ X(fpcNm_SPC_ITEM01_e) \
+/* 0x32F */ X(fpcNm_OBJ_OTBLE_e) \
+/* 0x330 */ X(fpcNm_EXT_EP_e) \
+/* 0x331 */ X(fpcNm_WW_ITEM_e) \
+/* 0x332 */ X(fpcNm_WW_SHUTTER_e) \
+/* 0x333 */ X(fpcNm_WW_SHUTTER2_e) \
+/* 0x334 */ X(fpcNm_WW_TSUBO_e) \
+/* 0x335 */ X(fpcNm_NPC_JB1_e) \
+/* 0x336 */ X(fpcNm_Obj_Shelf_e) \
+/* 0x337 */ X(fpcNm_Obj_Paper_e) \
+/* 0x338 */ X(fpcNm_Obj_Plant_e) /* 0x339 */ X(fpcNm_Lwood_e) /* 0x33A */ X(fpcNm_NPC_P1_e) /* 0x33B */ X(fpcNm_TAG_KB_ITEM_e) /* 0x33C */ X(fpcNm_TAG_SO_e) \
 
 #define X(name) name,
 enum {

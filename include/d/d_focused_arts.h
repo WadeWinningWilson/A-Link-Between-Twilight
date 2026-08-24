@@ -2,7 +2,7 @@
  * d_focused_arts.h
  * Focused Arts — shop tier purchases, charge bank query API, runtime meter state.
  *
- * Enabled when game.focusedArtsTest is on (Hidden Skill Rework is always active for ALBW).
+ * Enabled when game.focusedArts is on (Hidden Skill Rework is always active for ALBW).
  * Shop (or focusedArtsCheat) grants tiers 1→2→3 one at a time via tryPurchaseShopTier().
  */
 
@@ -47,6 +47,12 @@ int  dFocusedArts_getFillNumerator();
 int  dFocusedArts_getFillDenominator();
 bool dFocusedArts_isSpendReady();
 bool dFocusedArts_hasSpecialFinisherAvailable();
+
+// Fill bank to max (Ordon tutorial scarecrow / practice dummy). No-op if FA off or bank full.
+void dFocusedArts_fillBank();
+
+// Soft-clear one banked charge (e.g. lockout water-bomb consequence). No-op if bank empty.
+void dFocusedArts_clearOneBankCharge();
 
 // Spend sequence (0 = not spending; 3/2/1 = active spend column for this HS).
 int  dFocusedArts_getSpendColumn();
@@ -112,5 +118,13 @@ u16 dFocusedArts_getEndingBlowGreatSpinAoePower(u16 i_greatSpinAttackPower);
 // Postman shop: show next tier row while save tier < 3 and cheat is not granting all tiers.
 bool dFocusedArts_shouldShowShopTierRow();
 int  dFocusedArts_getNextShopTierIndex();  // purchased + 1 (1..3); 0 if sold out
+
+// Flurry Rush perfect-dodge spend (Phase 5). Wood: gate/cost 0 → always allowed, no bank change.
+bool dFocusedArts_canPerfectDodgeSpend(int i_spendGate, int i_barCost);
+bool dFocusedArts_onPerfectDodgeSpend(int i_spendGate, int i_barCost);
+
+// MD T1 finisher @ ≤1 heart: timed forced-wolf window (15s or manual transform).
+// While active + Wolf Link Combat, every damaging wolf attack restores 1 heart.
+bool dFocusedArts_isMdForcedWolfActive();
 
 #endif

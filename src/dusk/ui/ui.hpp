@@ -15,6 +15,18 @@ class Document;
 
 using clock = std::chrono::steady_clock;
 
+// Style-injection targets: mods register RCSS against a scope, which is applied to every
+// document created with it (see register_scoped_styles).
+enum class DocumentScope : u8 {
+    None,
+    Prelaunch,
+    Window,
+    MenuBar,
+    Overlay,
+    TouchControls,
+    GraphicsTuner,
+};
+
 struct Toast {
     Rml::String type;
     Rml::String title;
@@ -75,6 +87,9 @@ void update() noexcept;
 Document& push_document(
     std::unique_ptr<Document> doc, bool show = true, bool passive = false) noexcept;
 void focus_top_document(bool show) noexcept;
+bool register_scoped_styles(DocumentScope scope, std::string id, const std::string& rcss) noexcept;
+void unregister_scoped_styles(DocumentScope scope, std::string_view id) noexcept;
+void apply_scoped_styles(Document& doc) noexcept;
 bool any_document_visible() noexcept;
 bool is_prelaunch_open() noexcept;
 Document* top_document() noexcept;

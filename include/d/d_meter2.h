@@ -139,14 +139,18 @@ private:
     /* 0x1A4 */ int mNowOxygen;
     /* 0x1A8 */ int mMaxOxygen;
     /* 0x1AC */ int field_0x1ac;
-    /* 0x1B0 */ s16 mRupeeNum;
-    /* 0x1B2 */ s16 mKeyNum;
-    /* 0x1B4 */ s16 field_0x1b4;
-    /* 0x1B6 */ u16 mSubContentsStringType;
-    /* 0x1B8 */ u16 field_0x1b8[5];
-    /* 0x1C2 */ u8 mLightDropNum;
-    /* 0x1C3 */ u8 mNeedLightDropNum;
-    /* 0x1C4 */ u8 mDoStatus;
+    // ============================================
+    // MODIFIED CODE — ALBW Port (Phase C1)
+    // Was s16; Colossal 50k needs a tick mirror past 32767.
+    // ============================================
+    /* 0x1B0 */ s32 mRupeeNum;
+    /* 0x1B4 */ s16 mKeyNum;
+    /* 0x1B6 */ s16 field_0x1b4;
+    /* 0x1B8 */ u16 mSubContentsStringType;
+    /* 0x1BA */ u16 field_0x1b8[5];
+    /* 0x1C4 */ u8 mLightDropNum;
+    /* 0x1C5 */ u8 mNeedLightDropNum;
+    /* 0x1C6 */ u8 mDoStatus;
     /* 0x1C5 */ u8 mAStatus;
     /* 0x1C6 */ u8 field_0x1c6;
     /* 0x1C7 */ u8 mCollectSmell;

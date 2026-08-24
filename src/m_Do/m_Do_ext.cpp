@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 #include "dusk/logging.h"
+#include "dusk/dvd_asset.hpp"  // §486 l_mat2DL accessor (HT-12b)
 #include "dusk/frame_interpolation.h"
 
 u8 mDoExt::CurrentHeapAdjustVerbose;
@@ -2693,8 +2694,96 @@ static u8 l_mat1DL[141] ATTRIBUTE_ALIGN(32) = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
+
+#if TARGET_PC
+// ============================================================================
+// [Housing] §446-P62/P63 COMPARATIVE ROPE PROBE (bus §441b spec): the title
+// horse REINS are a WORKING 3DlineMat1 control (same class, same BE l_mat1DL);
+// the Outset bridge ropes draw on the same path. Log the first few calls per
+// OBJECT so reins (title boot) and rope mats self-document; the diff of these
+// lines names the exact differing parameter.
+//
+// §467 DEFECTS FIXED, both found by HousingTemp's instrument audit -- and both
+// had already produced FALSE EVIDENCE that was reported as a finding:
+//  1. CAPACITY. The table held 16 slots but every object burns TWO (setMaterial
+//     keys on `this`, draw keys on `this + 1`), so real capacity was EIGHT
+//     objects. Two spans x (1 rail + 4 hangers) = 10 mats alone. Overflow made
+//     "mat never initialised" and "mat past slot 8" INDISTINGUISHABLE, which is
+//     exactly how §466 concluded the ropes were absent when the ExtSpan lines
+//     show they were live. Now 64 slots, and the key is explicit rather than
+//     pointer arithmetic on `this`.
+//  2. THE PROMISED LATCH DID NOT EXIST. The old comment said "caller logs once
+//     via its own latch"; neither call site had one, and both gated on n > 0,
+//     so the -1 overflow return was silently discarded. Overflow now reports
+//     itself HERE, once, so the probe can never again fail quietly.
+// Same defect class as the 512-entry FIFO ring. Instruments get the same
+// verbatim rigour as ports.
+// ============================================================================
+enum WwProbeKind { kWwProbeSetMaterial = 0, kWwProbeDraw = 1 };
+
+static int wwProbe3DlineSeen(const void* obj, WwProbeKind kind) {
+    static const void* s_obj[64];
+    static u8 s_kind[64];
+    static int s_cnt[64];
+    static int s_used = 0;
+    for (int i = 0; i < s_used; i++) {
+        if (s_obj[i] == obj && s_kind[i] == (u8)kind) {
+            return ++s_cnt[i];
+        }
+    }
+    if (s_used < 64) {
+        s_obj[s_used] = obj;
+        s_kind[s_used] = (u8)kind;
+        s_cnt[s_used] = 1;
+        s_used++;
+        return 1;
+    }
+    {
+        static bool s_overflowWarned = false;
+        if (!s_overflowWarned) {
+            s_overflowWarned = true;
+            DuskLog.warn("[Housing] 467 3dline probe table FULL (64 entries) -- further objects "
+                         "are UNTRACKED. Absence of a P62/P63 line past this point proves "
+                         "NOTHING about whether that mat drew.");
+        }
+    }
+    return -1;
+}
+#endif
+
 void mDoExt_3DlineMat1_c::setMaterial() {
     ZoneScoped;
+#if TARGET_PC
+    // §473: claim the breadcrumb. The owner is STICKY, so without this a
+    // 3Dline's direct descriptor changes are reported under whichever
+    // J3DShape ran last -- which is exactly the "stale owner" case that made
+    // the §472 output unreadable. Diagnostic only (HT-5 strip list).
+    GXAuroraSetDlOwner(this, "3DlineMat");
+#endif
+#if TARGET_PC
+    {
+        int n = wwProbe3DlineSeen(this, kWwProbeSetMaterial);
+        // HT-8 second half: the latch signals table overflow with -1, and
+        // `n > 0` dropped it at BOTH call sites. The one-time warning inside
+        // the latch sits far upstream in the log, so a reader who finds no P62
+        // line here concludes "it did not draw" when the truth is "it was never
+        // tracked". Absence has to be annotated where it is read, not only where
+        // it is caused -- UNKNOWN is not CLEAN.
+        if (n < 0) {
+            static bool s_untrackedNoted = false;
+            if (!s_untrackedNoted) {
+                s_untrackedNoted = true;
+                DuskLog.warn("[Housing] HT-8 3dline probe UNTRACKED (table full) "
+                             "-- absence of a line below proves nothing");
+            }
+        }
+        if (n > 0 && n <= 6) {
+            DuskLog.info("[Housing] 446-P62 3dline setMaterial this={} numLines={} "
+                         "maxPts={} curPts={} call#{}",
+                         (void*)this, (int)mNumLines, (int)field_0x32, (int)field_0x34, n);
+        }
+    }
+#endif
     j3dSys.reinitGX();
     GXSetNumIndStages(0);
     dKy_setLight_again();
@@ -2705,6 +2794,9 @@ void mDoExt_3DlineMat1_c::setMaterial() {
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_CLR_RGBA, GX_F32, 0);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_CLR_RGB, GX_RGB8, 6);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_CLR_RGBA, GX_F32, 0);
+    // TP-lineage path, untouched. The donor's tevstr/toon branch belongs to WW
+    // content ONLY and lives in dExtWw3DlineMat1_c (d_a_ext_plank_span.cpp) --
+    // see §460: WW data must not change how TP's own actors render.
     dKy_GxFog_set();
     GXCallDisplayList(l_mat1DL, 0x80);
     GXLoadPosMtxImm(j3dSys.getViewMtx(), GX_PNMTX0);
@@ -2713,10 +2805,52 @@ void mDoExt_3DlineMat1_c::setMaterial() {
 
 void mDoExt_3DlineMat1_c::draw() {
     ZoneScoped;
+#if TARGET_PC
+    {
+        int n = wwProbe3DlineSeen(this, kWwProbeDraw);  // §467: kind-keyed, not this+1
+        // 451-H1/H6/H7: the array pointers this draw binds, the double-buffer
+        // index, and whether frame interpolation is suppressing the flip. If a
+        // later draw inherits these bindings, or a buffer is stale/freed, it
+        // shows up here as a pointer that does not change (or does) per frame.
+        if (n > 0 && n <= 2) {
+            DuskLog.info("[Housing] 451-P65 3dline arrays this={} pos={} nrm={} tex={} "
+                         "isDrawn={} interp={} lines={}",
+                         (void*)this, (void*)mpLines[0].field_0x8[mIsDrawn],
+                         (void*)mpLines[0].field_0x10[mIsDrawn],
+                         (void*)mpLines[0].field_0x18[mIsDrawn], (int)mIsDrawn,
+                         (int)dusk::frame_interp::is_enabled(), (int)mNumLines);
+        }
+        // HT-8 second half: the latch signals table overflow with -1, and
+        // `n > 0` dropped it at BOTH call sites. The one-time warning inside
+        // the latch sits far upstream in the log, so a reader who finds no P62
+        // line here concludes "it did not draw" when the truth is "it was never
+        // tracked". Absence has to be annotated where it is read, not only where
+        // it is caused -- UNKNOWN is not CLEAN.
+        if (n < 0) {
+            static bool s_untrackedNoted = false;
+            if (!s_untrackedNoted) {
+                s_untrackedNoted = true;
+                DuskLog.warn("[Housing] HT-8 3dline probe UNTRACKED (table full) "
+                             "-- absence of a line below proves nothing");
+            }
+        }
+        if (n > 0 && n <= 6) {
+            DuskLog.info("[Housing] 446-P63 3dline draw this={} numLines={} curPts={} "
+                         "vertNum={} tex={}x{} fmt={} color=({},{},{},{}) tevstr={} isDrawn={}",
+                         (void*)this, (int)mNumLines, (int)field_0x34,
+                         (int)(u16)(field_0x34 << 1), GXGetTexObjWidth(&mTextureObject),
+                         GXGetTexObjHeight(&mTextureObject),
+                         (int)GXGetTexObjFmt(&mTextureObject), (int)mColor.r, (int)mColor.g,
+                         (int)mColor.b, (int)mColor.a, (void*)mpTevStr, (int)mIsDrawn);
+        }
+    }
+#endif
     GXLoadTexObj(&mTextureObject, GX_TEXMAP0);
     GXSetTexCoordScaleManually(GX_TEXCOORD0, 1, GXGetTexObjWidth(&mTextureObject), GXGetTexObjHeight(&mTextureObject));
     GXSetTevColor(GX_TEVREG2, mColor);
     if (mpTevStr != NULL) {
+        // TP-lineage feed, untouched (§460). The donor's C0/C1 feed is WW-only
+        // and lives in dExtWw3DlineMat1_c::draw.
         dKy_Global_amb_set(mpTevStr);
     }
     mDoExt_3Dline_c* lines = mpLines;
@@ -2921,8 +3055,45 @@ void mDoExt_3DlineMat1_c::update(int param_0, f32 param_1, GXColor& param_2, u16
     }
 }
 
+// HT-12 (531): the include below is RETAINED but cannot supply `l_mat2DL`.
+// Verified 2026-08-06: `assets/l_mat2DL__d_a_grass.h` does not exist anywhere
+// in this tree, and at the ONE site that genuinely uses it
+// (d_flower.inc:296-297) the contract is include-then-INVOKE --
+// `l_mat2DL__d_a_grass(<tex symbol>)` -- a macro taking a texture symbol, not a
+// variable. `l_mat2DL` itself is a #define local to d_flower.inc:287. This TU
+// includes the header and never invokes the macro, so on non-PC `l_mat2DL` is
+// undeclared here.
 #if !TARGET_PC
 #include "assets/l_mat2DL__d_a_grass.h"
+#endif
+
+// §486: l_mat2DL accessor, mirroring the proven pattern at d_flower.inc:282
+// (same rel, same offset, same size). On non-PC this resolves to the asset
+// header exactly as the flower path does.
+#if TARGET_PC
+static u8* mDoExt_l_mat2DL_get() {
+    static u8 buf[0x99];
+    static bool _ = (dusk::LoadArchivedRelAsset(buf, 'AMEM', "d_a_grass.rel",
+                                                {{dusk::version::GameVersion::GcnUsa, 0xBB20},
+                                                 {dusk::version::GameVersion::GcnPal, 0xBB20}},
+                                                0x99),
+                     true);
+    return buf;
+}
+#else
+// HT-12 REOPENED AND MADE LOUD (531). My 486 note claimed HT-12 fixed; it was
+// not. Returning `l_mat2DL` here reproduces the exact defect HousingTemp filed
+// -- an undeclared identifier on a target nobody builds -- one level down from
+// where it was. A latent break that only surfaces for whoever first builds GC
+// is precisely the 3b category, so it is stated at compile time instead.
+//
+// To close it, ONE of:
+//   (a) add `assets/l_mat2DL__d_a_grass.h` and invoke the macro here with the
+//       same texture symbol the material expects, as d_flower.inc:297 does; or
+//   (b) use the runtime accessor on this target too -- the asset is in
+//       d_a_grass.rel @ 0xBB20 (0x99 bytes) and does not depend on TARGET_PC.
+#error "l_mat2DL is undeclared on non-PC: assets/l_mat2DL__d_a_grass.h is absent from this tree and its macro is never invoked here. See HT-12."
+static u8* mDoExt_l_mat2DL_get() { return NULL; }
 #endif
 
 void mDoExt_3DlineMat2_c::setMaterial() {
@@ -2937,7 +3108,27 @@ void mDoExt_3DlineMat2_c::setMaterial() {
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_NRM_XYZ, GX_RGB8, 6);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_CLR_RGBA, GX_F32, 0);
     dKy_GxFog_set();
-    GXCallDisplayList(NULL, 0x80); // DEBUG NONMATCHING - this is supposed to reference l_mat2DL
+    // ========================================================================
+    // §486 (HousingTemp HT-12 / HT-12b). This originally called
+    // GXCallDisplayList(NULL, 0x80) behind a "DEBUG NONMATCHING" stub comment:
+    // aurora inlines a called list's bytes into the FIFO, so 128 bytes would be
+    // read from address 0 and parsed as GX opcodes -- a guaranteed FIFO fatal.
+    //
+    // My §458 disarm carried TWO defects, both found by HousingTemp:
+    //  HT-12  the #else branch referenced l_mat2DL, which has no declaration in
+    //         this TU -- disarming a PC landmine planted a non-PC build break,
+    //         dormant only because nobody builds that target.
+    //         *** STILL OPEN as of 531. My fix moved that reference into the
+    //         accessor's own #else rather than resolving it; the non-PC branch
+    //         is now an explicit #error. HT-12b IS closed -- the PC accessor
+    //         below is real, live, and calls the true list. ***
+    //  HT-12b the premise "PC has no list to call" was FALSE. d_flower.inc:282
+    //         already pulls l_mat2DL from d_a_grass.rel at 0xBB20 (0x99 bytes)
+    //         on PC, and the donor calls it with 0x80, which fits.
+    // So the correct fix is not to skip on PC -- it is to call the REAL list on
+    // both targets, using the accessor pattern this codebase already proves.
+    // ========================================================================
+    GXCallDisplayList(mDoExt_l_mat2DL_get(), 0x80);
     GXLoadPosMtxImm(j3dSys.getViewMtx(), 0);
     GXLoadNrmMtxImm(cMtx_getIdentity(), 0);
 }
@@ -3102,12 +3293,50 @@ void mDoExt_3DlineMatSortPacket::setMat(mDoExt_3DlineMat_c* i_3DlineMat) {
 }
 
 void mDoExt_3DlineMatSortPacket::draw() {
+#if TARGET_PC
+    // ========================================================================
+    // [Housing] §446-P64 CHAIN WITNESS. Architectural fact this probe exists
+    // for: setMaterial() runs ONCE, on the HEAD mat only (the most recently
+    // enqueued -- setMat prepends), and EVERY mat in the chain then draws
+    // under that single setup. So a chain mixing mats of different shape is
+    // normal, but a chain whose HEAD is a rope mat means the ropes chose the
+    // material state for every other 3Dline user that frame. Logged on chain
+    // -length CHANGE so it stays quiet once the scene is stable.
+    // ========================================================================
+    {
+        int len = 0;
+        for (mDoExt_3DlineMat_c* m = mp3DlineMat; m != NULL; m = m->field_0x4) {
+            len++;
+            if (len > 256) {
+                break;  // cycle guard: a corrupt field_0x4 would hang the walk
+            }
+        }
+        static int s_lastLen = -1;
+        if (len != s_lastLen) {
+            s_lastLen = len;
+            DuskLog.info("[Housing] 446-P64 3dline chain len={} head={}", len,
+                         (void*)mp3DlineMat);
+        }
+    }
+#endif
     mp3DlineMat->setMaterial();
     mDoExt_3DlineMat_c* lineMat = mp3DlineMat;
     do {
         lineMat->draw();
         lineMat = lineMat->field_0x4;
     } while (lineMat != NULL);
+#if TARGET_PC
+    // 464: prove the packet's cache invalidation actually runs for the rope
+    // chain. If this never logs while ropes are live, the reset is not being
+    // reached and THAT is the leak; if it logs every frame, the descriptor is
+    // being changed by something outside this packet.
+    {
+        static u32 s_n = 0;
+        if ((++s_n % 600) == 1) {
+            DuskLog.info("[Housing] 464-P67 3dline packet reset reached (call #{})", s_n);
+        }
+    }
+#endif
     J3DShape::resetVcdVatCache();
 }
 
