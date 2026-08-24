@@ -65,6 +65,9 @@ ctx.*
 objdiff.json
 compile_commands.json
 
+# Machine-local cmake overrides (WW plugin reconnect recipe; never ships)
+cmake/local_paths.cmake
+
 # Miscellaneous
 *.exe
 *.zip

@@ -99,10 +99,10 @@ if not "%DUSK_SKIP_SEAM_GATE%"=="1" (
     echo [seam-gate] SKIPPED via DUSK_SKIP_SEAM_GATE=1 - row/ownership checks did NOT run.
 )
 
-REM §806: ww_donor_disc_package rides the canonical build — the mod DLL/.dusk
-REM otherwise never rebuilds (its target is not a dusklight dependency), and a
-REM stale donor-disc reader silently serves yesterday's roster.
-ninja -j8 -C "%~dp0build\windows-msvc-relwithdebinfo" dusklight ww_donor_disc_package
+REM CMakeLists is the graph. Plugin is OFF there, so this is dusklight only —
+REM do not name ww_donor_disc_package; ninja would fail on a target that does
+REM not exist. Plugin work is standalone/ in the WW repo.
+ninja -j8 -C "%~dp0build\windows-msvc-relwithdebinfo" dusklight
 set "BUILDERR=%ERRORLEVEL%"
 
 REM Always release the lock - success, failure, or compile error.

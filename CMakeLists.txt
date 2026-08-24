@@ -741,48 +741,41 @@ if (TARGET crashpad_handler)
 endif ()
 
 # =============================================================================
-# FORK-LOCAL WW PLUGIN BUILD (L2/L2a — never pushed; see NEVER-PUSH-STRIP-SET).
+# WW PLUGIN — OPT-IN ONLY (standing order 2026-08-23).
 #
-# In-tree build of the donor-disc reader plugin so one normal build drops the
-# .dusk into ${CMAKE_BINARY_DIR}/mods — the loader's "mods next to the app"
-# search dir. Services-only mod: nothing links into the exe, files.cmake is
-# untouched, and the DUSK_EXCLUDE_WW gate build never configures it, so the
-# separability gate's tree stays WW-plugin-free too.
+# The fork builds WITHOUT the plugin. A sibling checkout of
+# "A Link Between Twilight WW" must NOT auto-hook: FEATURES game makes that
+# target link dusklight_imports.lib, and a plugin that cannot resolve host
+# symbols takes down the default ninja graph. The fork command is
+# `ninja dusklight`; do not keep a second target list in the bat.
+#
+# The plugin's real build is standalone/ in its own repo. Reconnection is a
+# user decision — no instance may self-approve it. When that day comes:
+#   cmake -DDUSK_ENABLE_WW_PLUGIN=ON -DDUSK_WW_PLUGIN_DIR=<path>
+# or set those in the gitignored cmake/local_paths.cmake (included below).
+#
+# add_subdirectory needs an explicit BINARY dir: the source is not beneath
+# this directory, and CMake requires the second argument in that case.
 # =============================================================================
-# -----------------------------------------------------------------------------
-# THE PLUGIN SOURCE LIVES OUTSIDE THIS REPO (2026-08-22).
-#
-# It used to be an in-tree copy at mods-src/ww_donor_disc. There were TWO live
-# copies -- that one and the extracted repo -- and they diverged: the in-tree
-# copy carried the whole lwood once-per-frame-fill fix (LwoodFillGuard,
-# wwLwoodAlreadyEnteredThisFill, the entryMatSort/addShapePacket hooks, 208
-# code lines) that the extracted repo did not have at all. **Repointing this
-# build without reconciling first would have silently reverted lwood.** They
-# were reconciled first; the in-tree copy is snapshotted at
-# Documents/ww_donor_disc-intree-backup-2026-08-22 with a per-file sha256
-# manifest, then removed so ONE source of truth remains.
-#
-# PATH IS A CACHE VARIABLE, NOT A LITERAL. An absolute path baked in here
-# would break every other builder including a fresh clone of this same repo.
-# It defaults to the sibling directory and the build SKIPS CLEANLY when the
-# folder is absent -- so a dusklight checkout without the plugin still
-# configures and builds, exactly as the old EXISTS guard allowed.
-#
-# add_subdirectory needs an explicit BINARY dir here: the source is not
-# beneath this directory, and CMake requires the second argument in that case.
-# -----------------------------------------------------------------------------
-set(DUSK_WW_PLUGIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../A Link Between Twilight WW"
-        CACHE PATH "Source directory of the WW donor-disc plugin (outside this repo)")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/local_paths.cmake" OPTIONAL)
 
-if (DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID
-        AND EXISTS "${DUSK_WW_PLUGIN_DIR}/CMakeLists.txt")
+option(DUSK_ENABLE_WW_PLUGIN
+        "Build the out-of-tree WW donor-disc plugin as part of this tree (default OFF)"
+        OFF)
+# STRING, not PATH: CMake rewrites an empty CACHE PATH to CMAKE_CURRENT_SOURCE_DIR,
+# which would then EXISTS-match this repo's own CMakeLists.txt.
+set(DUSK_WW_PLUGIN_DIR "" CACHE STRING
+        "Source directory of the WW donor-disc plugin (outside this repo). Empty = skip.")
+
+if (DUSK_ENABLE_WW_PLUGIN AND DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID
+        AND DUSK_WW_PLUGIN_DIR AND EXISTS "${DUSK_WW_PLUGIN_DIR}/CMakeLists.txt")
     include(cmake/GameABIConfig.cmake)  # include_guard'd; no-op when already present
     include(cmake/ModSDK.cmake)
     add_subdirectory("${DUSK_WW_PLUGIN_DIR}" "${CMAKE_BINARY_DIR}/ww_donor_disc")
-elseif (DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID)
+elseif (DUSK_ENABLE_WW_PLUGIN AND DUSK_ENABLE_CODE_MODS AND NOT DUSK_EXCLUDE_WW AND NOT ANDROID)
     message(STATUS
-            "WW plugin not built: no CMakeLists.txt at '${DUSK_WW_PLUGIN_DIR}'. "
-            "Set -DDUSK_WW_PLUGIN_DIR=<path> to point at it. This is not an error.")
+            "WW plugin requested (DUSK_ENABLE_WW_PLUGIN=ON) but no CMakeLists.txt at '${DUSK_WW_PLUGIN_DIR}'. "
+            "Set -DDUSK_WW_PLUGIN_DIR=<path>. This is not an error.")
 endif ()
 
 # =============================================================================
