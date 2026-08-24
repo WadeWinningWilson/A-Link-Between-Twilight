@@ -68,9 +68,22 @@ def load_map():
             if isinstance(i, dict) and i.get("file")}
 
 
-def changed_files():
-    """Working-tree changes vs HEAD. The gate judges what THIS build carries."""
+def changed_files(staged=False):
+    """Files the gate may judge.
+
+    B1 (`build_run.bat check`) uses the working tree: the compile carries
+    whatever is on disk. B5 (pre-commit `check --staged`) uses the index so
+    leftover WIP cannot block an unrelated commit — the same bystander rule
+    as `ww_layout_gate.py --staged`. A gate that punishes bystanders gets
+    disabled, and a disabled gate protects nothing.
+    """
     try:
+        if staged:
+            r = subprocess.run(
+                ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+                capture_output=True, text=True, cwd=str(REPO), timeout=60)
+            return [f.replace("\\", "/") for f in (r.stdout or "").splitlines()
+                    if f.strip()]
         r = subprocess.run(["git", "status", "--porcelain"], capture_output=True,
                            text=True, cwd=str(REPO), timeout=60)
     except Exception:
@@ -88,7 +101,7 @@ def block(problems, path, why, fix):
     problems.append({"file": path, "why": why, "fix": fix})
 
 
-def check(verbose=True):
+def check(verbose=True, staged=False):
     problems = []
     omap = load_map()
 
@@ -114,7 +127,7 @@ def check(verbose=True):
               "`python tools/foundry/seam_gate.py check`.")
 
     # (2) CLASSIFIER — every changed WW-layer file must have a KNOWN ownership.
-    for f in changed_files():
+    for f in changed_files(staged=staged):
         if not (f.startswith("src/") or f.startswith("include/")):
             continue
         if f not in omap:
@@ -217,7 +230,7 @@ def selftest():
         print("  ** cannot run classifier case: no ww-port file in the map **")
         return 1
     real_changed, keep = changed_files, CLASSIFIED_OK
-    changed_files = lambda: [victim]          # synthetic condition, not the tree
+    changed_files = lambda staged=False: [victim]          # synthetic condition, not the tree
     rc, probs = check(verbose=False)
     results.append(("known-good category passes", 1 if probs else 0, 0))
     CLASSIFIED_OK = set()                      # now nothing is classified
@@ -231,7 +244,7 @@ def selftest():
     try:
         tmp.write_text('// KIT-LINEAGE: probe\n// dWwCtl marker\n',
                        encoding='utf-8')
-        changed_files = lambda: ['src/.seamgate_ctl_tmp.cpp']
+        changed_files = lambda staged=False: ['src/.seamgate_ctl_tmp.cpp']
         rc, probs = check(verbose=False)
         env = [p for p in probs if 'NOT in the ownership map' in p['why']]
         results.append(('new-universe marker file blocks',
@@ -256,15 +269,17 @@ def selftest():
 
 
 def main():
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
+    staged = "--staged" in sys.argv[1:]
+    args = [a for a in sys.argv[1:] if a != "--staged"]
+    cmd = args[0] if args else "check"
     if cmd == "check":
-        rc, _ = check()
+        rc, _ = check(staged=staged)
         return rc
     if cmd == "explain":
         return explain()
     if cmd == "selftest":
         return selftest()
-    print("usage: seam_gate.py check | explain | selftest")
+    print("usage: seam_gate.py check [--staged] | explain | selftest")
     return 2
 
 

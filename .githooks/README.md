@@ -28,7 +28,7 @@ git config --unset core.hooksPath
 | check | what it catches | cost |
 |---|---|---|
 | `row_store.py validate` | malformed rows: bad id, undeclared `doorway`/`destination`, non-schema axis state, `PATCH` with no negative-control, stored `provenance`, citation without a read timestamp | sub-second |
-| `seam_gate.py check` | a baselined row gone with no `RETIRED.md` entry; a changed WW-layer file whose ownership category nobody has classified | sub-second |
+| `seam_gate.py check --staged` | a baselined row gone with no `RETIRED.md` entry; a **staged** WW-layer file whose ownership category nobody has classified (working-tree WIP is B1 / `build_run.bat`) | sub-second |
 
 Neither invokes the compiler. **A slow pre-commit hook gets disabled, and a
 disabled hook protects nothing** — so this one stays cheap on purpose.
