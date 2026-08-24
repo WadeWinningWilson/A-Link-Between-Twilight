@@ -8,7 +8,7 @@ _Generated from tool joins. Exceptions: `day1_exceptions.ini`._
 
 ## 0. Baseline (day1-guard)
 
-**Log:** `C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\logs\dusklight-20260720-143311.log`
+**Log:** `%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\logs\dusklight-20260720-143311.log`
 
 | metric | n |
 |--------|--:|
@@ -111,7 +111,7 @@ Narrative-ish (`data`/`hybrid`) placements: **16** (of 25 trigger rows).
 
 ## 8. Interiors (EVNT counts from Yaz0 Stage.arc)
 
-Extract root: `D:\XXXXXXX\Ex WW`
+Extract root: `<decomp-root>\Ex WW`
 
 | stage | EVNT |
 |-------|-----:|

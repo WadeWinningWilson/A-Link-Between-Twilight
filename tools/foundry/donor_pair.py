@@ -54,8 +54,8 @@ import re
 import sys
 from pathlib import Path
 
-PLUG = Path(r"C:\Users\xxxxx\Documents\A Link Between Twilight WW")
-DONOR = Path(r"D:\XXXXXXX\WW DP\src")
+PLUG = Path(r"%USERPROFILE%\Documents\A Link Between Twilight WW")
+DONOR = Path(r"<decomp-root>\WW DP\src")
 
 FUNC = re.compile(
     r'^[A-Za-z_][\w:<>,\s\*&]*?([A-Za-z_]\w*(?:::[A-Za-z_~]\w*)?)\s*\([^;]*?\)\s*(?:const\s*)?\{',

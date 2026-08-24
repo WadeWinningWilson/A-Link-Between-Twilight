@@ -9,13 +9,13 @@ Run with the Foundry 3.12 venv python (needs wwrando @ D:\\Decomps\\wwrando).
 import sys, io, os, json, traceback
 from collections import Counter
 
-sys.path.insert(0, r"D:\XXXXXXX\wwrando")
-sys.path.insert(0, r"D:\XXXXXXX\wwrando\wwlib")
+sys.path.insert(0, r"<decomp-root>\wwrando")
+sys.path.insert(0, r"<decomp-root>\wwrando\wwlib")
 
 from gclib.rarc import RARC
 from wwlib.dzx import DZx
 
-STAGE_ROOT = r"D:\XXXXXXX\Ex WW\files\res\Stage"
+STAGE_ROOT = r"<decomp-root>\Ex WW\files\res\Stage"
 ACTOR_CHUNKS = {"ACTR", "ACT0", "ACT1", "ACT2", "ACT3", "SCOB", "TRES", "PLYR",
                 "SHIP", "DOOR", "TGOB", "TGSC", "TGDR", "TRES", "SCLS",
                 "RPAT", "RPPN", "PATH", "PPNT", "Pale", "Virt", "EnvR", "Colo"}
@@ -109,7 +109,7 @@ def census_arc(arc_path):
 
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else \
-        r"C:\Users\xxxxx\Documents\dusklight\docs\WW Linked\fact-sheets"
+        r"%USERPROFILE%\Documents\dusklight\docs\WW Linked\fact-sheets"
     os.makedirs(os.path.join(out_dir, "json"), exist_ok=True)
 
     index_rows, failures = [], []

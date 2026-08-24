@@ -2,15 +2,15 @@
 import struct
 import sys
 
-sys.path.insert(0, r"C:\Users\xxxxx\Documents\dusklight\tools\demo_cut_content")
+sys.path.insert(0, r"%USERPROFILE%\Documents\dusklight\tools\demo_cut_content")
 from dzr_placements import rarc_members
 
-OUT = r"C:\Users\xxxxx\Documents\dusklight\tools\_tmp_fado_door4.out.txt"
+OUT = r"%USERPROFILE%\Documents\dusklight\tools\_tmp_fado_door4.out.txt"
 lines = []
 
 # Map SCLS exit index -> dest
 scls = {}
-for mname, blob in rarc_members(r"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R00_00.arc"):
+for mname, blob in rarc_members(r"<decomp-root>\Ex TP\files\res\Stage\F_SP103\R00_00.arc"):
     if mname != "room.dzr":
         continue
     n = struct.unpack_from(">I", blob, 0)[0]

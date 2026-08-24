@@ -22,12 +22,12 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
 
-WORK = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work")
+WORK = Path(r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work")
 NERREL = WORK / "mm_refs_hd" / "_nerrel_skull_kid"
-TEX_DIR = Path(r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla")
+TEX_DIR = Path(r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla")
 # vanilla dump from the original BMD (has the blink flipbook frames .2/.3)
 VERIFY_TEX_DIR = Path(
-    r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify")
+    r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify")
 OUT = WORK / "paint_v1"
 
 SS = 4  # supersample factor for mask rasterization

@@ -49,7 +49,7 @@ mine to maintain but belong to everyone.
   Integrator's file and the user ruled it good-but-not-priority.
 - **Old items never closed:** 12 stale `.bat` deletions awaiting the user's nod;
   the `mods-src` → `WW-Crew-Restoration\plugin\` rehome; the mod-folder move to
-  `C:\Users\xxxxx\Documents\A LBT WW`.
+  `%USERPROFILE%\Documents\A LBT WW`.
 
 ---
 
@@ -187,8 +187,8 @@ one disagreement.
 
 Things a successor would never think to question:
 
-- **Donor arcs: `D:\XXXXXXX\Ex WW`. Decomp SOURCE: `D:\XXXXXXX\WW DP\src`.**
-  Debug linker maps: `D:\XXXXXXX\WW Debug maps`. **Read the donor's own system
+- **Donor arcs: `<decomp-root>\Ex WW`. Decomp SOURCE: `<decomp-root>\WW DP\src`.**
+  Debug linker maps: `<decomp-root>\WW Debug maps`. **Read the donor's own system
   FIRST — DN-10.** A fix whose write-up cites only receiver files has not
   cleared step 1.
 - **ZERO-BAKE: no donor asset is ever edited, anywhere.** Every donor→receiver
@@ -211,7 +211,7 @@ Things a successor would never think to question:
 - **The x64 profile chain is 0x28 / 0x38 / 0x48** (base / leaf / actor), alignof
   8. **The headers' own `/* 0x.. */` comments are GameCube 32-bit and are WRONG
   for the target on all three.** Compiler-measured with a failing control.
-- **Python is `D:/XXXXXXX/foundry-py312/Scripts/python.exe`.**
+- **Python is `<decomp-root>/foundry-py312/Scripts/python.exe`.**
 - **CONTENT AND CODE GO THROUGH Write-TOOL FILES ONLY.** Never heredocs or
   `python -c` with escapes. Unquoted delimiters have injected literal backspaces
   and NUL bytes into source and docs at least six times — invisible to Read,

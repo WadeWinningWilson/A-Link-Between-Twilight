@@ -5,7 +5,7 @@ Read it first; this file is the campaign-state supplement.)
 
 ## 1. Who you are, immediately
 You are the DECODER lane of the dusklight estate. Read
-`C:\Users\xxxxx\Documents\dusklight\docs\DECODER-BRIEFING.md` in full before
+`%USERPROFILE%\Documents\dusklight\docs\DECODER-BRIEFING.md` in full before
 anything else. Operating loop (briefing 3b): a 30-second work-continuation
 TIMER + an exit-on-event WATCHER, both as background tasks.
 **CRITICAL TRAP**: the timer MUST be created with the Monitor tool
@@ -13,7 +13,7 @@ TIMER + an exit-on-event WATCHER, both as background tasks.
 $(date -u +%H:%M:%SZ) — your queue here"; done). A plain background Bash loop
 is SILENT (only notifies on exit) — this bit two instances. The watcher:
 `python tools/foundry/decoder_watch.py --exit-on-event` run from
-`C:\Users\xxxxx\Documents\dusklight`, re-armed after every delivery. Log every
+`%USERPROFILE%\Documents\dusklight`, re-armed after every delivery. Log every
 arm/stand-down in `tools/foundry/MONITOR-REGISTRY.md`. The previous
 instance's monitors die with its session — arm your own on startup.
 
@@ -36,7 +36,7 @@ instance's monitors die with its session — arm your own on startup.
   SESSION UPDATE 10.** Sections 4 and 7 below still say PENDING; they are STALE.
 
 ## 3. Workspace and tooling map
-- Repo: `D:\XXXXXXX\WWDP` (fork of zeldaret/tww). Git tip `1673d54c`, tree
+- Repo: `<decomp-root>\WWDP` (fork of zeldaret/tww). Git tip `1673d54c`, tree
   clean, ~40 local commits on main (user.name WadeWinningWilson; end commit
   messages with the Claude co-author line). NOTE: the folder's real name is
   "WW DP" (with a space); WWDP is its 8.3 alias — `tools/project.py` is
@@ -47,7 +47,7 @@ instance's monitors die with its session — arm your own on startup.
   Build a REL: `ninja build/GZLE01/TU/TU.rel`
   Reconfigure/version switch: `python configure.py -v GZLE01|GZLJ01|GZLP01|D44J01`
 - objdiff one-shot (run from repo root):
-  `D:\XXXXXXX\tools\objdiff-cli.exe diff -p . -u TU/d/actor/TU -o out.json MANGLED_NAME`
+  `<decomp-root>\tools\objdiff-cli.exe diff -p . -u TU/d/actor/TU -o out.json MANGLED_NAME`
   JSON: left/right -> symbols[] -> instructions[] (diff_kind,
   instruction.formatted). TU report: `objdiff-cli report generate -p . -o rep.json`
 - Target split asm per TU: `build/GZLE01/TU/asm/d/actor/TU.s`
@@ -99,21 +99,21 @@ Per-TU anchors (each doc's TAIL is its live end):
   2026-08-18). Upstream PRs #1173/#1174/#1175 — check for feedback.
 
 ## 5. Key files/folders index
-- Charter: C:\Users\xxxxx\Documents\dusklight\docs\DECODER-BRIEFING.md
-- This brief: C:\Users\xxxxx\Documents\dusklight\docs\DECODER-HANDOFF.md
-- Campaign anchors: C:\Users\xxxxx\Documents\dusklight\docs\state\ww-staging\decode-drafts\p2-progress.md and ob1-progress.md
-- Monitor log: C:\Users\xxxxx\Documents\dusklight\tools\foundry\MONITOR-REGISTRY.md
-- Watcher script: C:\Users\xxxxx\Documents\dusklight\tools\foundry\decoder_watch.py
-- Repo: D:\XXXXXXX\WWDP — configure.py; tools/project.py (path patch);
+- Charter: %USERPROFILE%\Documents\dusklight\docs\DECODER-BRIEFING.md
+- This brief: %USERPROFILE%\Documents\dusklight\docs\DECODER-HANDOFF.md
+- Campaign anchors: %USERPROFILE%\Documents\dusklight\docs\state\ww-staging\decode-drafts\p2-progress.md and ob1-progress.md
+- Monitor log: %USERPROFILE%\Documents\dusklight\tools\foundry\MONITOR-REGISTRY.md
+- Watcher script: %USERPROFILE%\Documents\dusklight\tools\foundry\decoder_watch.py
+- Repo: <decomp-root>\WWDP — configure.py; tools/project.py (path patch);
   include/d/dolzel_rel_lit.pch and .h; include/weak_data.h;
   src/PowerPC_EABI_Support/MSL/MSL_C/MSL_Common/Include/math.h
   (SQRTF_CONST_LITERALS branch); src/d/actor/d_a_npc_p2.cpp,
   d_a_npc_p2_cut.inc, include/d/actor/d_a_npc_p2.h;
   src/d/actor/d_a_npc_ob1.* skeleton
-- Tools: D:\XXXXXXX\tools\objdiff-cli.exe; compilers at
+- Tools: <decomp-root>\tools\objdiff-cli.exe; compilers at
   build/compilers/GC/1.3.2 (1.3.2 is CORRECT — 1.3.2r tested and ruled out)
-- Retail RELs (Yaz0-compressed): D:\XXXXXXX\WWDP\orig\GZLE01\files\rels\
-- Scratch experiments: C:\Users\xxxxx\AppData\Local\Temp\claude\pooltest\
+- Retail RELs (Yaz0-compressed): <decomp-root>\WWDP\orig\GZLE01\files\rels\
+- Scratch experiments: %USERPROFILE%\AppData\Local\Temp\claude\pooltest\
   (previous session's scratchpad; disposable — everything of value is in
   the anchors and commits)
 
@@ -121,7 +121,7 @@ Per-TU anchors (each doc's TAIL is its live end):
 1. Read DECODER-BRIEFING.md, then this file, then both campaign anchors.
 2. Arm YOUR timer (Monitor tool!) and watcher; log both in
    MONITOR-REGISTRY.md.
-3. cd D:\XXXXXXX\WWDP; git log --oneline -5; git status — confirm tip
+3. cd <decomp-root>\WWDP; git log --oneline -5; git status — confirm tip
    1673d54c and a clean tree.
 4. If the user has ruled on Equivalent-vs-SHA for p2: act on it (the PR
    staging path is in p2-progress round 16b). If not, ask once, then
@@ -413,7 +413,7 @@ diff confirming no churn.
 `pool_position.py` prints `0 LOGIC-EXACT, 0 REAL` when run outside the decomp repo
 — it calls `objdiff report generate -p .`, matches no unit, returns empty. **A
 clean-looking zero is indistinguishable from an all-clear.** Run it from
-`D:/XXXXXXX/WWDP`. Filed to Foundry; `watcher_census.py`'s crash-after-output is
+`<decomp-root>/WWDP`. Filed to Foundry; `watcher_census.py`'s crash-after-output is
 still open too.
 
 

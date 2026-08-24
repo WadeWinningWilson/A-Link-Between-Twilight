@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 EXE = REPO / "build" / "windows-msvc-relwithdebinfo" / "dusklight.exe"
 PDB = REPO / "build" / "windows-msvc-relwithdebinfo" / "dusklight.pdb"
-ARCHIVE = Path("C:/Users/xxxxx/Documents/dusklight-pdb-archive")
+ARCHIVE = Path("%USERPROFILE%/Documents/dusklight-pdb-archive")
 MANIFEST = REPO / "docs" / "state" / "ww-staging" / "BUILD-IDENTITY.md"
 
 

@@ -2,10 +2,10 @@
 import struct
 import sys
 
-sys.path.insert(0, r"C:\Users\xxxxx\Documents\dusklight\tools\demo_cut_content")
+sys.path.insert(0, r"%USERPROFILE%\Documents\dusklight\tools\demo_cut_content")
 from dzr_placements import rarc_members
 
-OUT = r"C:\Users\xxxxx\Documents\dusklight\tools\_tmp_fado_door3.out.txt"
+OUT = r"%USERPROFILE%\Documents\dusklight\tools\_tmp_fado_door3.out.txt"
 lines = []
 
 
@@ -46,7 +46,7 @@ def dump_actors(blob, tag, num, off, stride):
 
 
 for room in ("R00_00.arc", "R01_00.arc"):
-    path = rf"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\{room}"
+    path = rf"<decomp-root>\Ex TP\files\res\Stage\F_SP103\{room}"
     lines.append(f"=== {room}")
     for mname, blob in rarc_members(path):
         if mname != "room.dzr":

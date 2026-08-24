@@ -37,8 +37,8 @@ from pathlib import Path
 
 import dolphin_memory_engine as dme
 
-DONOR = Path("D:/XXXXXXX/WW DP")
-OUT = Path("C:/Users/xxxxx/Documents/ww-arc-staging")
+DONOR = Path("<decomp-root>/WW DP")
+OUT = Path("%USERPROFILE%/Documents/ww-arc-staging")
 RAM_START, RAM_END = 0x80000000, 0x81800000
 CHUNK = 0x100000
 

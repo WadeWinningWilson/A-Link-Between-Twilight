@@ -20,7 +20,7 @@ from mm_stk_gen_object_c import XML, Symbols
 
 import sys
 
-GEN = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin"
+GEN = Path(r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin"
            r"\_work\object_stk\gen_c\object_stk_gen.c")
 # DL sets: mask (worn), and the head DL (reference geometry already imported
 # into Blender, used to derive the head-local -> Blender transform).

@@ -1,4 +1,4 @@
-# Room bake report — Room0.arc -> C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\files\res\Stage\R_DL01\R00_00.arc (§267)
+# Room bake report — Room0.arc -> %USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\files\res\Stage\R_DL01\R00_00.arc (§267)
 
 mode: DRY-RUN
 

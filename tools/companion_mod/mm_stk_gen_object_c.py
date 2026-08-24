@@ -59,7 +59,7 @@ ROM = Path(
     r"\roms\Legend of Zelda, The - Majora's Mask (USA).z64"
 )
 WORK = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk"
 )
 XML = WORK / "object_stk.xml"
 OUT_DIR = WORK / "gen_c"

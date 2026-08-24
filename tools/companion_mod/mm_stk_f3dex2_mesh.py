@@ -45,7 +45,7 @@ G_LOADBLOCK = 0xF3
 
 SCALE = 100.0  # N64 s16 coords -> Blender-ish units
 
-WORK = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk")
+WORK = Path(r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk")
 XML = WORK / "object_stk.xml"
 DEFAULT_OUT = WORK / "mesh_export"
 

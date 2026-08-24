@@ -30,8 +30,8 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TOOLS)
 from api_surface import build_index, SKIP, CALL  # noqa: E402
 
-DONOR_SRC = r"D:\XXXXXXX\WW DP\src"
-RECEIVER = r"C:\Users\xxxxx\Documents\dusklight"
+DONOR_SRC = r"<decomp-root>\WW DP\src"
+RECEIVER = r"%USERPROFILE%\Documents\dusklight"
 
 CORE_ROOT = re.compile(r"(_create|_execute|_draw|_delete|CreateHeap|"
                        r"createInit|Draw$|Execute$|Create$)", re.I)

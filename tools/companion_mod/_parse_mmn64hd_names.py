@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 RTZ = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
 )
 PAT = re.compile(r"#([0-9A-F]{8})#(\d+)#(\d+)(?:#([0-9A-F]{8}))?_(.+)\.dds$")
 PRIOR = [

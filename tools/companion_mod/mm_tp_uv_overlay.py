@@ -17,8 +17,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-WORK = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work")
-TEX_DIR = Path(r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla")
+WORK = Path(r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work")
+TEX_DIR = Path(r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla")
 OUT = WORK / "region_map"
 SCALE = 4
 

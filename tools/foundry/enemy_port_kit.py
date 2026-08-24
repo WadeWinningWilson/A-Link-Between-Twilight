@@ -39,8 +39,8 @@ import sys, os, re, subprocess
 
 PY = sys.executable
 TOOLS = os.path.dirname(os.path.abspath(__file__))
-RECEIVER = r"C:\Users\xxxxx\Documents\dusklight"
-MOD_ARCS = r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\arcs"
+RECEIVER = r"%USERPROFILE%\Documents\dusklight"
+MOD_ARCS = r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\WW-Crew-Restoration\arcs"
 
 # WW->TP rename dictionary — accumulates per port (§229 pig compile cascade).
 RENAMES = {
@@ -100,9 +100,9 @@ def run(tool, *args):
 # v3 (§232 dogfood gaps): include closure · symbol equivalence · typed skeleton
 # ---------------------------------------------------------------------------
 INCLUDE_RE = re.compile(r'^\s*#include\s+"([^"]+)"', re.M)
-DONOR_INC = r"D:\XXXXXXX\WW DP\include"
-DONOR_ASSETS = r"D:\XXXXXXX\WW DP\assets\GZLE01"
-DONOR_SRC = r"D:\XXXXXXX\WW DP\src"
+DONOR_INC = r"<decomp-root>\WW DP\include"
+DONOR_ASSETS = r"<decomp-root>\WW DP\assets\GZLE01"
+DONOR_SRC = r"<decomp-root>\WW DP\src"
 
 def _donor_path(rel):
     for root in (DONOR_INC, DONOR_ASSETS, DONOR_SRC):
@@ -218,7 +218,7 @@ def main():
             continue
         try:
             import io as _io
-            sys.path.insert(0, r"D:\XXXXXXX\wwrando")
+            sys.path.insert(0, r"<decomp-root>\wwrando")
             from gclib.rarc import RARC
             data = open(ap, "rb").read()
             rarc = RARC(_io.BytesIO(data))

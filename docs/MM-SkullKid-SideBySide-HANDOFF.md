@@ -18,8 +18,8 @@ Previous agent attempted “step 1”: MM `object_stk` mesh + materials beside T
 | Asset / tool | Path / command | Notes |
 |--------------|----------------|-------|
 | TP body DAE | `%AppData%\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae` | SuperBMD export; armature `skeleton_root`, meshes `mesh-0..2` |
-| TP vanilla PNGs | `D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla\` | `pm_tex01`, `pm_leaf01`, `pm_eye.*` |
-| Blender blend (TP only) | `D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend` | **May contain bad MM import + duplicate TP objects — clean or revert** |
+| TP vanilla PNGs | `<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla\` | `pm_tex01`, `pm_leaf01`, `pm_eye.*` |
+| Blender blend (TP only) | `<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend` | **May contain bad MM import + duplicate TP objects — clean or revert** |
 | TP import script | `tools/blender_socket/mm_skullkid_import.py` | Socket `:9876` |
 | TP texture relink | `tools/blender_socket/mm_skullkid_blender_textures.py` | Vanilla vs `--mm` |
 | Nerrel source PNGs (18) | `companion_mods/MM-SkullKid-Reskin/_work/mm_refs_hd/_nerrel_skull_kid/` | Authoritative MM **color** reference; sync via `mm_sync_nerrel_skull_kid.py` |
@@ -116,10 +116,10 @@ Manifest claims 247 tris but many parts have **0 tris** (pelvis, right upper arm
 ## Key paths (quick copy)
 
 ```
-Repo: c:\Users\xxxxx\Documents\dusklight
+Repo: %USERPROFILE%\Documents\dusklight
 
 TP DAE:     %AppData%\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae
-Blend:      D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend
+Blend:      <decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend
 Nerrel:     companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd\_nerrel_skull_kid\
 object_stk: companion_mods\MM-SkullKid-Reskin\_work\object_stk\
 BROKEN OBJ: companion_mods\MM-SkullKid-Reskin\_work\object_stk\mesh_export\

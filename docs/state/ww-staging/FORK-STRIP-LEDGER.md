@@ -3,7 +3,7 @@
 > **THE LEDGER IS NOT HERE.**
 >
 > **AUTHORITATIVE (2026-08-22 onward):**
-> ### `C:/Users/xxxxx/Documents/A Link Between Twilight WW/FORK-STRIP-LEDGER.md`
+> ### `%USERPROFILE%/Documents/A Link Between Twilight WW/FORK-STRIP-LEDGER.md`
 > The plugin became its own project outside the fork on user order, and the
 > ledger moved with it — it is a record about the PLUGIN's relationship to the
 > fork, so it belongs beside the plugin.

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-p = Path(r"c:\Users\xxxxx\Documents\dusklight\src\d\d_albw_rental.cpp")
+p = Path(r"%USERPROFILE%\Documents\dusklight\src\d\d_albw_rental.cpp")
 c = p.read_text(encoding="utf-8")
 
 start = c.find("    if (sVisibleList[visIdx].kind == VISIBLE_MIDNA_ARM) {")

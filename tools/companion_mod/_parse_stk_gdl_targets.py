@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mm_extract_object_stk import DMADATA_OFF, ROM, load_blob, object_stk_vrom, parse_dmadata
 
 XML = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk\object_stk.xml"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk\object_stk.xml"
 )
 G_DL = 0xDE
 

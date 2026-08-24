@@ -21,10 +21,10 @@ except ImportError:
     raise SystemExit("pip install Pillow texture2ddecoder")
 
 RTZ = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
 )
 OUT = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mmn64hd_chars"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mmn64hd_chars"
 )
 
 

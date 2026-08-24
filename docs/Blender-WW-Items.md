@@ -42,7 +42,7 @@
 
 **Cross-refs:** game-side heap/crash detail → [`Custom-Model-API-Work.md`](Custom-Model-API-Work.md); item pipeline + the get-item lighting recipe this borrowed → [`wind-waker-item-work.md`](wind-waker-item-work.md) (Layer A/B PROVEN PATH); implementation log → [`Interconnected Chats/Wind Curs-Wind Clau.md`](Interconnected%20Chats/Wind%20Curs-Wind%20Clau.md).
 
-**Files:** blend `D:\XXXXXXX\Ex TP\Blender workflow\vboot_rerig_DONE.blend`; DAEs + `vboot_materials.json` + `vboot_tex_headers.json` + the 3 PNGs in `…\DAE files\`; the current (broken) deployed BMD was `vboot_new.dae` → `vboot_tex.bmd`. Compare against `al_bootsh.dae` / `al_bootsh_hierarchy.json` (the target structure).
+**Files:** blend `<decomp-root>\Ex TP\Blender workflow\vboot_rerig_DONE.blend`; DAEs + `vboot_materials.json` + `vboot_tex_headers.json` + the 3 PNGs in `…\DAE files\`; the current (broken) deployed BMD was `vboot_new.dae` → `vboot_tex.bmd`. Compare against `al_bootsh.dae` / `al_bootsh_hierarchy.json` (the target structure).
 
 ---
 
@@ -97,7 +97,7 @@
 
 ### ⚠️ Asset built 2026-07-02 — but skin structure is WRONG (see status correction above)
 
-**Deliverable:** `D:\XXXXXXX\Ex TP\Blender workflow\DAE files\vboot.bdl` (re-rigged, textured, BDL format). **Blend:** `D:\XXXXXXX\Ex TP\Blender workflow\vboot_rerig_DONE.blend`. Validated by round-trip: **4 joints** (0=root, 1/2/3 = al_bootsHA/B/C — matches al_bootsh indices), **2 materials** (`SC_boot`, `boot`), textures embedded.
+**Deliverable:** `<decomp-root>\Ex TP\Blender workflow\DAE files\vboot.bdl` (re-rigged, textured, BDL format). **Blend:** `<decomp-root>\Ex TP\Blender workflow\vboot_rerig_DONE.blend`. Validated by round-trip: **4 joints** (0=root, 1/2/3 = al_bootsHA/B/C — matches al_bootsh indices), **2 materials** (`SC_boot`, `boot`), textures embedded.
 
 **How it was actually driven — Claude ⇄ Blender socket bridge (NO Desktop MCP needed).** The Cowork/epitaxy build of Claude Desktop **ignores `claude_desktop_config.json` mcpServers** — no hammer ever appears, and editing that file is futile (the app rewrites it on launch; even a read-only lock didn't surface a hammer). **Bypass:** the `blender-mcp` addon runs a plain socket server on **`localhost:9876`**. A short Python client (`socket` → send `{"type":"execute_code","params":{"code":...}}` / `get_scene_info` / `get_viewport_screenshot`) drives Blender directly from a terminal — read scene, run `bpy`, screenshot to a PNG and view it. This is the reliable path; don't chase the Desktop hammer.
 
@@ -211,7 +211,7 @@ print("Separated into:", [o.name for o in bpy.context.selected_objects])
 ```python
 import bpy
 # Select the mesh(es) + armature you want to export first.
-out = r"C:\Users\xxxxx\Documents\ww_export\vboot_new.dae"   # <-- edit path (folder must exist)
+out = r"%USERPROFILE%\Documents\ww_export\vboot_new.dae"   # <-- edit path (folder must exist)
 bpy.ops.wm.collada_export(filepath=out, selected=True, apply_modifiers=True,
                           include_armatures=True)
 print("Exported ->", out)

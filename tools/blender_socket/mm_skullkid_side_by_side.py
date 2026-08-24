@@ -24,21 +24,21 @@ HOST = "127.0.0.1"
 PORT = 9876
 
 TP_DAE = Path(
-    r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae"
+    r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae"
 )
 BLEND_OUT = Path(
-    r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend"
+    r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend"
 )
 MM_MESH_DIR = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk\mesh_export"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk\mesh_export"
 )
 MM_OBJ = MM_MESH_DIR / "MM_SkullKid_body.obj"
 MM_TEX_N64 = MM_MESH_DIR / "textures_n64"
 NERREL_DIR = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd\_nerrel_skull_kid"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd\_nerrel_skull_kid"
 )
 TP_TEX_VANILLA = Path(
-    r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla"
+    r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla"
 )
 
 # Best-effort DL group -> object_stk OutName (N64 textures in textures_n64/)

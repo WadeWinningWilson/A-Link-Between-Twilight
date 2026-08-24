@@ -56,7 +56,7 @@ Outset-camera regression from v1 — fixed).
 - Teardown (no reposition): `src/d/d_event.cpp:443–460`, `:589–617`, `:1056–1069`
 - Demo cast bind: `src/d/d_demo.cpp:1039–1106` (`JSGFindObject` → `fopAcM_searchFromName` →
   `appendActor` sets `demoActorID`)
-- Donor inherit mechanism: `D:/XXXXXXX/WW DP/src/d/actor/d_a_player_dproc.inc:181–197`
+- Donor inherit mechanism: `<decomp-root>/WW DP/src/d/actor/d_a_player_dproc.inc:181–197`
 
 ## §317/§287 LOG RESULT (2026-08-01) — spawn root = tale never FINISHES
 Ran the tale; the diagnostics answered both questions:
@@ -242,7 +242,7 @@ only on evidence of a WW talker there. One exterior verification talk still owed
 
 ## §327 ONE-PASS PORT PLAN (user order 2026-08-01): Lamp + mshokki + SPitem + knob00
 Write ALL FOUR ports now; unstaged arcs (Mshokki, SPitem's) just idle until Foundry stages them.
-Per actor (the cookbook's [DIRECT-PORT CRASH RECIPES](../WW-Restoration-Cookbook-CANONICAL.md)): donor include/src from D:/XXXXXXX/WW DP/{include/d/actor,src/d/actor}/
+Per actor (the cookbook's [DIRECT-PORT CRASH RECIPES](../WW-Restoration-Cookbook-CANONICAL.md)): donor include/src from <decomp-root>/WW DP/{include/d/actor,src/d/actor}/
 → port include/d/actor/ + src/d/actor/ (dolzel.h not dolzel_rel.h; res/Object/<Arc>.h donor res
 ids → use residmap.csv ids or raw indices w/ comment; §-tagged block comments; WW particle ids
 via dPa_name — if unresolved at runtime that's the §205/§206 Foundry particle surface, log not
@@ -993,7 +993,7 @@ replace with native pathing; DECOMP-FIRST; delete №89 complex when the native 
 KNOB event surviving 118f with the guard as the only release). Supersedes the old "do not
 weaken forceEndDoorEvent" ruling.
 
-DONOR SPEC (D:/XXXXXXX/WW DP): knob00 has NO stage change; Link's dProcDoorOpen only plays the
+DONOR SPEC (<decomp-root>/WW DP): knob00 has NO stage change; Link's dProcDoorOpen only plays the
 anim + cutEnd. The warp is a STAGE STAFF inside the door EVENT itself (d_event_data.cpp:20-52):
 reads Stage/StartCode/RoomNo/Layer/Mode/Wipe props → dComIfGp_setNextStage. The scene reload IS
 the teardown (§323 archetype) — the donor has NO watchdog because the event orders its own next
@@ -1353,7 +1353,7 @@ mass (angular quads ×(1+16·elev³) balloon overhead; drift barely perceptible)
 DELIVERABLE: decompiled-or-equivalent bodies of both functions (per-cloud spawn
 distribution, wind drift application, alpha/size lifecycle, draw geometry + color use of
 mVrkumoColor/mVrkumoCenterColor incl. CenterColor which TP dropped). Debug linker maps:
-D:\XXXXXXX\WW Debug maps (372 per-actor tables) — d_kankyo_rain symbols give layout;
+<decomp-root>\WW Debug maps (372 per-actor tables) — d_kankyo_rain symbols give layout;
 noclip d_kankyo_wether.ts vrkumo is the working reference reconstruction (reference-tier
 ONLY per user ruling — Winditor/binary is law). Receiver swap point is exactly two
 functions behind dKyWw_isSkyHost(); TP stages untouched. DOES NOT BLOCK §418 (native
@@ -1674,7 +1674,7 @@ WHOSE TURN: user (verify 21:39:14: title boots, bridge intact sans ropes) · Hou
 ## §443 ATTRIBUTION CORRECTION (2026-08-04, user confrontation — on the record)
 Every prior "Winditor-law/Winditor receipt" stamp in §405-§441 was MY OWN byte-parsing
 of donor files, falsely attributed — the tool was never consulted (it is LOCAL at
-D:\XXXXXXX\Winditor; I never asked). The rule is now in standing memory: no source
+<decomp-root>\Winditor; I never asked). The rule is now in standing memory: no source
 stamped unless actually consulted; if a directed referee is unavailable, ASK.
 FIRST REAL WINDITOR CONSULT (templates/MapEntityData/bridge.json + ActorDatabase):
 - Bridge param LAYOUT certified: Type=param&0xFF, byte2 unknown, Path=param>>16 —
@@ -2243,7 +2243,7 @@ have the DL "decoded", we have the exact BYTES in the decomp build output. DuskT
 earns its keep where donor RUNTIME behaviour is unknown/undecompiled (vrkumo); here
 the decomp is cheaper and a higher evidence tier.
 PORTED, donor-verbatim, with a deliberate blast-radius decision:
- 1. l_toonMat1DL copied UNALTERED (0xA5 bytes) from D:\XXXXXXX\WW DP\build\GZLE01\
+ 1. l_toonMat1DL copied UNALTERED (0xA5 bytes) from <decomp-root>\WW DP\build\GZLE01\
     include\assets\l_toonMat1DL.h, called with 0xA0 as the donor does. Kept BIG-
     ENDIAN -- aurora drains with bigEndian=true, which is why §441b's LE swap broke
     the title reins. Register state only; gate stays clean.
@@ -4134,7 +4134,7 @@ them. Analysis and a recommendation, for the user to ratify or reject:
   not by rule. Make it the rule.
 
 ### Q3 — §445 `dKy_GxFog_set` removal: **RE-JUSTIFIED FROM SOURCE. Upheld.**
-Read the donor directly (`D:\XXXXXXX\WW DP\src\d\actor\d_a_vrbox.cpp:20-56`, per DECOMP-FIRST).
+Read the donor directly (`<decomp-root>\WW DP\src\d\actor\d_a_vrbox.cpp:20-56`, per DECOMP-FIRST).
 **The donor's `daVrbox_Draw` contains no fog call of any kind.** Its sequence:
 `daVrbox_color_set` → `mbVrboxInvisible` gate → `roomControl_getStayNo` / `getFileListInfo` →
 `y_origin = fili->mSeaLevel` → `y_offset = (mInvViewMtx[1][3] - y_origin) * 0.09f` → `transS` →
@@ -5304,7 +5304,7 @@ Those are CONTENT decisions, architecture-independent, and cheap — the recipe 
 end-to-end until they are filled, and filling them is not wasted under either path.
 
 ## NATIVE ROOMS — STEP 3 DONE (2026-08-08, History): the first VERBATIM donor room arcs
-Copied D:/XXXXXXX/Ex WW/files/res/Stage/Ojhous2/Room{0,1}.arc → R_DL02/R{00,01}_00.arc.
+Copied <decomp-root>/Ex WW/files/res/Stage/Ojhous2/Room{0,1}.arc → R_DL02/R{00,01}_00.arc.
 BYTE-IDENTITY PROVEN, not assumed — sha256 matched source↔destination on both:
   Room0.arc → R00_00.arc  sha256 11bd5d3759cb4939…  281,809 b  VERBATIM
   Room1.arc → R01_00.arc  sha256 4a2928a7ebcaaad7…  264,224 b  VERBATIM
@@ -6519,7 +6519,7 @@ sentiment was correct and is now the board's order.
 
 ## §729 HISTORY: INTERIOR STAGES CONFIRMED ON THE VANILLA DISC — every one. The porting queue is unblocked today, and A_mori rides along.
 **Lane: History, answering §728-Integrator step 1 by direct enumeration of the extracted
-GZLE01 filesystem (D:/XXXXXXX/Ex WW/files — the same on-roster image wwDonorDisc mounts,
+GZLE01 filesystem (<decomp-root>/Ex WW/files — the same on-roster image wwDonorDisc mounts,
 §716's audited FST):**
 
 `
@@ -7076,7 +7076,7 @@ project's assembled *pack files*, not the *stages*. Nine destinations, all on di
 > holds all the kits, at least the other lanes should utilize them (kit right now works for mainly
 > mounts/legs, not native disc)"*
 **Verified against the kit itself** (`tools/ww_crew_restoration_skeleton/space_kit.py`):
-- `:36` inputs read `D:/XXXXXXX/Ex WW/files/res/Stage/<DonorStageDir>` — **the EXTRACTED tree, not the disc**
+- `:36` inputs read `<decomp-root>/Ex WW/files/res/Stage/<DonorStageDir>` — **the EXTRACTED tree, not the disc**
 - `:68` `HOST_DEMO_ARC = MOD / "arcs/Demo01.arc"` — **writes into the MOUNT's arcs/**
 - zero `disc` / `dvd` / `source=` handling anywhere in it
 **The kit is mount-shaped end to end. The user's read is exactly correct.**
@@ -7153,7 +7153,7 @@ mounts/legs, not native disc')"* — the instruction is recorded where the code 
 a bus. Good practice.
 
 **TWO RESIDUES, neither blocking, both worth naming before they become permanent:**
-1. **Stale docstring.** `:36` still reads *"Inputs : inventory — D:/XXXXXXX/Ex WW/files/res/Stage/
+1. **Stale docstring.** `:36` still reads *"Inputs : inventory — <decomp-root>/Ex WW/files/res/Stage/
    <DonorStageDirName>"*. The kit is now **disc-first with a labeled tree fallback**
    (`:99 "SOURCE: disc configured but unusable … falling back to tree"`). A reader of the header
    would still believe it is tree-only. One-line fix; it is the §594 stale-state class in a
@@ -7704,7 +7704,7 @@ and the difference is the whole bug.**
 **DN-10 DIRECTION — do not guard this.** The question is what the DONOR's evt1 advance
 condition requires that the receiver is not satisfying (cut-end signal, flag 560/565/570
 service, or the actor that owns SHUTTER_DOOR never reporting done). Read WW's own event
-advance in `D:\XXXXXXX\WW DP\src` and port what is missing. **Do NOT force `adv`, do NOT
+advance in `<decomp-root>\WW DP\src` and port what is missing. **Do NOT force `adv`, do NOT
 release Link with a timer, do NOT clamp his Y.** Any of those is a DN-10 step-3 construct with
 no proof, and it would hide the unported system underneath a walking player.
 
@@ -8380,7 +8380,7 @@ receipts, and the run you just made is the one that cracked the fall open.
 User instruction: *"that room is WRONG... Compare with the three sources: decomp, winditor, and
 noclip."* Done. **The hypothesis is disproven, and the check that disproved it names the bug.**
 
-**SOURCE 1 — THE DECOMP (`D:/XXXXXXX/WW DP/src`), actor identity from WW's own headers:**
+**SOURCE 1 — THE DECOMP (`<decomp-root>/WW DP/src`), actor identity from WW's own headers:**
     d_a_npc_ji1.cpp : "NPC - Orca / [Jiisan]"
     d_a_npc_aj1.cpp : "NPC - Sturgeon"
     d_a_npc_ba1.cpp : "NPC - Link's Grandma"
@@ -8391,7 +8391,7 @@ noclip."* Done. **The hypothesis is disproven, and the check that disproved it n
 **Ojhous Room0 contains ORCA. LinkRM contains GRANDMA (x4).** Ojhous is the conjoined
 Orca-downstairs / Sturgeon-upstairs house — which is why the screenshot shows a LADDER; it is the
 connection between Room0 and Room1, and it belongs there.
-**SOURCE 3 — WINDITOR (`D:/XXXXXXX/Winditor/BulkDataProcessingScripts/stage_names.txt`):**
+**SOURCE 3 — WINDITOR (`<decomp-root>/Winditor/BulkDataProcessingScripts/stage_names.txt`):**
 `LinkRM` `LinkUG` `Ojhous` `Ojhous2` `Omasao` `Onobuta` `Pjavdou` — distinct stages, no aliasing.
 *(noclip not consulted — I did not open it, and per the source-attribution rule I will not stamp
 a source I did not read. The three above agree and are sufficient; noclip remains available if
@@ -9348,7 +9348,7 @@ row is now a mechanism with a donor citation, not a mystery. USER → nothing ow
 
 **L2C DUMP-HOOK SPEC (Engine, small):** in custom_assets' runtime BDL adaptation path, behind `DUSK_L2C_DUMP` (default 0): write each adapted model's BYTES to `%APPDATA%/TwilitRealm/Dusklight/l2c_dump/<ArcName>__<member>.bdl` (pre-existing dir ok, overwrite ok, one file per adapted member, RAW adapted bytes exactly as handed to the consumer). No format invention — the harness diffs bytes. One run of Outset with the flag on produces the corpus.
 
-**RULINGS RECORDED** (ww-staging/RULING-plugin-home.md): plugin source → `WW-Crew-Restoration\plugin\` (content-only rule amended: contained subfolder is the exception); the WW-Crew-Restoration folder rehomes WHOLESALE to `C:\Users\xxxxx\Documents\A LBT WW` — ONE coordinated move, LATER (post-wave or Engine's next plugin-build touch), spec in the artifact. mods-src/ in-tree = staging with that named exit. **Plain-.iso ruling confirmed** (user's image verified already compliant: GZLE01 @ byte 0, exact GC size).
+**RULINGS RECORDED** (ww-staging/RULING-plugin-home.md): plugin source → `WW-Crew-Restoration\plugin\` (content-only rule amended: contained subfolder is the exception); the WW-Crew-Restoration folder rehomes WHOLESALE to `%USERPROFILE%\Documents\A LBT WW` — ONE coordinated move, LATER (post-wave or Engine's next plugin-build touch), spec in the artifact. mods-src/ in-tree = staging with that named exit. **Plain-.iso ruling confirmed** (user's image verified already compliant: GZLE01 @ byte 0, exact GC size).
 
 WHOSE TURN: **Foundry** — L2c harness (in progress as of this section). **Housing/Engine** — bisect + interiors + the dump hook. **History** — transition actors on bisect-clear. **Integrator** — decomp-true standing check adopted. **user** — waking lanes; one Outset run with DUSK_L2C_DUMP=1 once Engine lands the hook.
 
@@ -9772,7 +9772,7 @@ on it — the standing check doing exactly what §792 adopted it for.**
 **WHAT THIS MEANS FOR §800's "port Onobuta", stated before anyone spends on it:**
 1. **Rose/Ko1/Ym1 are NOT source ports.** DN-10 step 1 for a Nonmatching-EMPTY donor is the
    ja1 [3] precedent: instruction-by-instruction reconstruction from the retail asm + the
-   debug maps (D:/XXXXXXX/WW Debug maps, 372 per-actor tables). That is a CAMPAIGN per NPC,
+   debug maps (<decomp-root>/WW Debug maps, 372 per-actor tables). That is a CAMPAIGN per NPC,
    not a window — and it needs a deliberate ruling (user/integrator) on whether the asm-
    reconstruction cost is wanted now or the NPCs wait for upstream decomp progress.
 2. **The portable half is real and big: TSUBO** — MATCHED, 3,647 lines, and it is the
@@ -10289,7 +10289,7 @@ re-runnable (`VC/Tools/Llvm/bin/llvm-symbolizer.exe`, the x64 one, NOT the ARM64
     2. **JABUN**  (`d_a_npc_jb1`, MATCHED, 0 markers, 728 lines) — Pjavdou's occupant
     3. **THE THREE ASM RECONSTRUCTIONS** — `ob1` Rose (73 markers) · `ko1` Joel & Zill (134) ·
        `ym1` Mesa & Abe (81); all empty `/* Nonmatching */` stubs, so the ja1 precedent
-       (instruction-by-instruction from retail asm + `D:/XXXXXXX/WW Debug maps`, 372 per-actor
+       (instruction-by-instruction from retail asm + `<decomp-root>/WW Debug maps`, 372 per-actor
        tables) is the path. **The user has ACCEPTED the campaign cost — it is scheduled, not
        declined.** That is a change from my half, which recommended parking them indefinitely;
        the user placed them THIRD rather than nowhere, and third is now the plan.
@@ -12500,7 +12500,7 @@ build HELD on the one ruling.
 
 MATERIALS RECEIPT for reconstructing donor _execute (:125, the HELD marker) to
 byte-exactness by the ja1 method:
-· RETAIL link map: D:/XXXXXXX/Ex WW/files/maps/d_a_obj_lpalm.map — EXISTS (per-
+· RETAIL link map: <decomp-root>/Ex WW/files/maps/d_a_obj_lpalm.map — EXISTS (per-
   function addresses/sizes within the module; retail truth).
 · DEBUG map: d_a_obj_lpalmD.map — EXISTS, 2,262 lines (names).
 · MODULE BYTES: NOT loose in files/rels/ (235 rels there; lpalm absent by name) —
@@ -13780,7 +13780,7 @@ lastSceneMode write and Fairy04's actual trigger path; A_mori still draw-side.
 **Reads only; nothing built. Retracted before it reached a port.**
 
 **What I had not read when I wrote §902:** the donor's DECLARATION.
-`D:/XXXXXXX/WW DP/include/d/d_com_inf_game.h:2221-2223` —
+`<decomp-root>/WW DP/include/d/d_com_inf_game.h:2221-2223` —
 `dComIfGp_setNextStage(const char*, s16, s8, s8 i_layer = -1, f32 i_lastSpeed = 0.0f,
 u32 i_lastMode = 0, BOOL i_setPoint = TRUE, s8 i_wipe = 0)`. **`i_lastMode` has a DEFAULT of
 0 in the donor**, and the donor's own short-form sites use it (`d_s_name.cpp:103`,
@@ -18704,7 +18704,7 @@ while the standing rule is **allocate first, cite `<bus> §N`** — this section
 the first one I allocated (`staging.py alloc tale HISTORY`).
 
 **`port_preflight` is ACTOR-SHAPED and this is a real gap, not my error:** it
-resolves donor TUs only under `D:\XXXXXXX\WW DP\src\d\actor\`, so for a system
+resolves donor TUs only under `<decomp-root>\WW DP\src\d\actor\`, so for a system
 port living in `src/d/` and `src/f_op/` **three of its four legs report MISSING —
 which is the tool looking in the wrong place, not evidence about the system.**
 Its readiness leg works because `decomp_status` resolves paths properly.
@@ -18760,7 +18760,7 @@ different meanings." **It was wrong twice over: the receiver defines it in the
 and pushed the project into a large port on a phantom. **A grep that finds nothing
 is evidence about the grep.**
 
-**SOURCE 3 — WINDITOR, an INDEPENDENT C# implementation** (`D:/XXXXXXX/Winditor`),
+**SOURCE 3 — WINDITOR, an INDEPENDENT C# implementation** (`<decomp-root>/Winditor`),
 not derived from either decomp. Its INF1 reader is `ReadUInt16 / Skip(2) /
 ReadUInt32 / ReadUInt32 / ReadUInt32` — exactly the donor and receiver struct. Its
 MAT3 record read order matches `J3DMaterialInitData` field for field and width for

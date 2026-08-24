@@ -24,9 +24,9 @@ Run with D:\\Decomps\\foundry-py312\\Scripts\\python.exe (gclib venv).
 import io, os, re, sys
 from collections import Counter, defaultdict
 
-AAF = r"D:\XXXXXXX\Ex WW\files\Audiores\JaiInit.aaf"
-SEQ_ARC = r"D:\XXXXXXX\Ex WW\files\Audiores\Seqs\JaiSeqs.arc"
-MOD_BANKS = (r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight"
+AAF = r"<decomp-root>\Ex WW\files\Audiores\JaiInit.aaf"
+SEQ_ARC = r"<decomp-root>\Ex WW\files\Audiores\Seqs\JaiSeqs.arc"
+MOD_BANKS = (r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight"
              r"\model_replacements\WW-Crew-Restoration\audio\ww_jaudio1\banks")
 
 # Donor sCmdPList (JASSeqParser.cpp:15, verbatim order) — op = 0xC0 + index.
@@ -45,7 +45,7 @@ DONOR_CMDS = [
 ]
 # Port Ja1Parser::Cmd_Process dispatch — PARSED LIVE from ja1_parser.cpp
 # (§266: hardcoding it hid landings; now every parser fix shows up on rerun).
-PORT_PARSER = (r"C:\Users\xxxxx\Documents\dusklight\src\d\ext_seq"
+PORT_PARSER = (r"%USERPROFILE%\Documents\dusklight\src\d\ext_seq"
                r"\ja1_parser.cpp")
 
 def port_dispatch():

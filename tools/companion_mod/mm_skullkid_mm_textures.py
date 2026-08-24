@@ -21,11 +21,11 @@ ROM = Path(
     r"D:\Extractuibs\Extractions 6.5\MM64 shiz\Zelda64Recompiled-v1.2.2-Windows\roms\Legend of Zelda, The - Majora's Mask (USA).z64"
 )
 RTZ = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
 )
-OUT_MM = Path(r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_mm_src")
-OUT_TP = Path(r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_mm")
-VANILLA = Path(r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla")
+OUT_MM = Path(r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_mm_src")
+OUT_TP = Path(r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_mm")
+VANILLA = Path(r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\textures_vanilla")
 
 # object_stk virtual start (US MM) from zeldaret/mm dmadata
 OBJECT_STK_ROM = 0x00C03350

@@ -84,7 +84,7 @@ re-measure `origin/main..HEAD` before scoping, never cite this one).
 >
 > It read: *"Phase 1's 'the merge' is a reconciliation of ~635 against 2,861, not a
 > catch-up. Scope it on both numbers."* **The NUMBERS are right. What they GOVERN is
-> not.** They describe **`C:\Users\xxxxx\Documents\dusklight` — the FORK, which is the
+> not.** They describe **`%USERPROFILE%\Documents\dusklight` — the FORK, which is the
 > MOD.** Phase 1's host upgrade happened in a **different repository**.
 >
 > **MEASURED IN BOTH TREES, 2026-08-18, on Integrator's correction:**
@@ -173,7 +173,7 @@ a stale measurement carries no retraction language for a keyword to catch.
 
 ## 1. WHAT I OWN
 
-- **DECOMP-FIRST donor reads and rulings.** The donor tree is `D:\XXXXXXX\WW DP\src`. My
+- **DECOMP-FIRST donor reads and rulings.** The donor tree is `<decomp-root>\WW DP\src`. My
   charter is: read the donor's own system before anything is written. Recent output —
   `tag_so` behaviour spec (§991), the `mWipeDirection` withdrawal (§930), the layer-select
   and arrival-table ports.

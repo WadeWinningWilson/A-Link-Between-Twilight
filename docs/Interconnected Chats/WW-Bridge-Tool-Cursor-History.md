@@ -141,10 +141,10 @@ Absorbs Phase A + §11 additions. **This is the execute plan.**
 
 ### Phase D — Execute notes
 
-**Sibling home (user 2026-07-19):** `C:\Users\xxxxx\Documents\albt bridge`
+**Sibling home (user 2026-07-19):** `%USERPROFILE%\Documents\albt bridge`
 
 **B0 landed:**
-- Package `ww_bridge` at `C:\Users\xxxxx\Documents\albt bridge`.
+- Package `ww_bridge` at `%USERPROFILE%\Documents\albt bridge`.
 - Commands: `census`, `regen-proof`, `diff-live`.
 - Outset strict byte-MATCH verified by auditor (`md5 e0302104…`).
 
@@ -754,7 +754,7 @@ Full write-up: interconnected bus §28 Bridge response. Tool **0.3.0**.
 
 ## §26 Bridge implementation (2026-07-20)
 
-Sibling tool (`C:\Users\xxxxx\Documents\albt bridge`), decomp `D:\XXXXXXX\WW DP`.
+Sibling tool (`%USERPROFILE%\Documents\albt bridge`), decomp `<decomp-root>\WW DP`.
 
 | Ask | CLI | Artifact |
 |-----|-----|----------|

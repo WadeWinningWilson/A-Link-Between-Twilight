@@ -14,16 +14,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM")
+ROOT = Path(r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM")
 TEX_VANILLA = ROOT / "textures_vanilla"
 TEX_MM = ROOT / "textures_mm"
-VERIFY = Path(r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify")
+VERIFY = Path(r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify")
 DEPLOY = Path(
-    r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\MM-SkullKid-Reskin"
+    r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\model_replacements\MM-SkullKid-Reskin"
 )
-MODINFO = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\modinfo.ini")
+MODINFO = Path(r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\modinfo.ini")
 SRC_BMD = Path(
-    r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\E_PM_29_EDITABLE.bmd"
+    r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\E_PM_29_EDITABLE.bmd"
 )
 RETEXTURE = Path(__file__).resolve().parents[1] / "companion_mod" / "bmd_retexture.py"
 BLENDER_TEX = Path(__file__).resolve().parent / "mm_skullkid_blender_textures.py"

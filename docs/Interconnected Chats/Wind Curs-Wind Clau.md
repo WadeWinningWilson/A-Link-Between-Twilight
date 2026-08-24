@@ -18,7 +18,7 @@
 
 ## ▶ ASSET SIDE — Iron Boots WW re-rig DONE (2026-07-02)
 
-**New track (Blender/asset, not draw-time skin):** Iron Boots are a **worn** model (`al_bootsh`, foot-bone-driven joints 1/2/3), so WW `vboot` was **re-rigged in Blender** to al_bootsh's skeleton. **Result: `vboot.bdl` built & validated** — 4 joints (0=root,1/2/3=A/B/C matching al_bootsh), `SC_boot`/`boot` materials, `V_boot.png`. Files: `D:\XXXXXXX\Ex TP\Blender workflow\DAE files\vboot.bdl` + `vboot_rerig_DONE.blend`. Full method: **[Blender-WW-Items.md → Task 1 DONE](../Blender-WW-Items.md)**.
+**New track (Blender/asset, not draw-time skin):** Iron Boots are a **worn** model (`al_bootsh`, foot-bone-driven joints 1/2/3), so WW `vboot` was **re-rigged in Blender** to al_bootsh's skeleton. **Result: `vboot.bdl` built & validated** — 4 joints (0=root,1/2/3=A/B/C matching al_bootsh), `SC_boot`/`boot` materials, `V_boot.png`. Files: `<decomp-root>\Ex TP\Blender workflow\DAE files\vboot.bdl` + `vboot_rerig_DONE.blend`. Full method: **[Blender-WW-Items.md → Task 1 DONE](../Blender-WW-Items.md)**.
 
 **Hard-won facts (don't re-derive):**
 - The Cowork/epitaxy **Claude Desktop build ignores `claude_desktop_config.json` mcpServers** — no hammer, and it rewrites that file on launch (read-only lock didn't help). **Drive Blender via the addon's `localhost:9876` socket directly** (Python `socket` → `execute_code`/`get_scene_info`/`get_viewport_screenshot`). This works; don't chase the hammer.
@@ -2339,7 +2339,7 @@ The consistent offset means it's **deterministic**, not the "flaky memory race" 
 
 **Command (paste before launching the game):**
 ```
-C:\Users\xxxxx\Documents\dusklight\tools\procdump\procdump64.exe -accepteula -ma -e -t -w dusklight.exe C:\Users\xxxxx\Documents\dusklight\crashdumps
+%USERPROFILE%\Documents\dusklight\tools\procdump\procdump64.exe -accepteula -ma -e -t -w dusklight.exe %USERPROFILE%\Documents\dusklight\crashdumps
 ```
 Then reproduce the crash **once** (go straight to the reliably-crashing sequence — no need to replay the passing rooms; we need a single dump). Dump lands in `crashdumps\`.
 

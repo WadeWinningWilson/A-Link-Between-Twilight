@@ -14,9 +14,9 @@ Run with D:\\Decomps\\foundry-py312\\Scripts\\python.exe (gclib venv).
 """
 import io, os, re, json, sys
 
-FILES = r"D:\XXXXXXX\Ex WW\files"
-OUT_MD = r"C:\Users\xxxxx\Documents\dusklight\docs\WW Linked\stb-cast-index.md"
-OUT_JSON = (r"C:\Users\xxxxx\Documents\dusklight\docs\WW Linked\fact-sheets"
+FILES = r"<decomp-root>\Ex WW\files"
+OUT_MD = r"%USERPROFILE%\Documents\dusklight\docs\WW Linked\stb-cast-index.md"
+OUT_JSON = (r"%USERPROFILE%\Documents\dusklight\docs\WW Linked\fact-sheets"
             r"\json\stb-cast.json")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from island_roster import objname_table

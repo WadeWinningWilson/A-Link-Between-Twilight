@@ -10,7 +10,7 @@
 
 # image[fork]: build/windows-msvc-relwithdebinfo/dusklight.exe
 #   symbols: 277452
-# image[upstream]: C:/Users/xxxxx/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/dusklight.exe
+# image[upstream]: %USERPROFILE%/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/dusklight.exe
 #   symbols: 272796
 
 | symbol | fork | upstream |

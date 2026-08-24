@@ -90,7 +90,7 @@ This applies to **pushes only** — do not block or rewrite local commits over i
 | Leak | Pattern | Fix |
 |------|---------|-----|
 | Windows username | `C:\Users\<name>\…` | `%USERPROFILE%\…` or a relative / env-var root |
-| Machine drive paths | `D:\XXXXXXX\…`, other absolute local roots | a configurable `ROOT`/env var, or relative path |
+| Machine drive paths | `<decomp-root>\…`, other absolute local roots | a configurable `ROOT`/env var, or relative path |
 | Personal contact | email, real name in file *contents* | remove (committer identity in git metadata is separate) |
 | Secrets | tokens, keys, passwords | remove + rotate |
 
@@ -111,7 +111,7 @@ scripts, and handoff docs are the usual carriers.
 
 > **Known standing item (2026-07):** the MM-SkullKid / companion-mod tooling under
 > `tools/companion_mod/`, `tools/blender_socket/`, and `docs/Blender-MM-SkullKid.md` contain
-> `C:\Users\xxxxx\…` / `D:\XXXXXXX\…` literals. Scrub (or un-track, since `companion_mods/` data is
+> `%USERPROFILE%\…` / `<decomp-root>\…` literals. Scrub (or un-track, since `companion_mods/` data is
 > already gitignored for legal isolation) **before** those files are ever pushed.
 
 ---

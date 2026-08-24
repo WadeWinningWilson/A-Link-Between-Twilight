@@ -7,10 +7,10 @@
 | **status** | §128 motion dump CLEAR; Engine compositing fix shipped (await user eye) |
 | **next** | History nledger classify; user verify crash swoosh |
 | **do-not** | Invent sea RGB / purpose labels; put drive code in `src/`; push while Ivan gated |
-| **tool_root** | `C:\Users\xxxxx\Documents\albt bridge` |
+| **tool_root** | `%USERPROFILE%\Documents\albt bridge` |
 | **tool_version** | **0.35.0** |
-| **decomp** | `D:\XXXXXXX\WW DP` (`WW_DECOMP`) |
-| **ww_extract** | `D:\XXXXXXX\Ex WW` (`WW_EXTRACT`) |
+| **decomp** | `<decomp-root>\WW DP` (`WW_DECOMP`) |
+| **ww_extract** | `<decomp-root>\Ex WW` (`WW_EXTRACT`) |
 | **schema_version** | **2** |
 | **updated** | 2026-07-25 |
 

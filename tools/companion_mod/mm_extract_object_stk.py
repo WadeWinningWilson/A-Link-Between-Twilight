@@ -29,7 +29,7 @@ GOBJECT_TABLE_ROM = 0x001D040
 ROM = Path(
     r"D:\Extractuibs\Extractions 6.5\MM64 shiz\Zelda64Recompiled-v1.2.2-Windows\roms\Legend of Zelda, The - Majora's Mask (USA).z64"
 )
-WORK = Path(r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk")
+WORK = Path(r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk")
 XML_URL = "https://raw.githubusercontent.com/zeldaret/mm/main/assets/xml/objects/object_stk.xml"
 
 TEX_SIZE = {

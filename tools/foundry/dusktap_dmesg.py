@@ -29,7 +29,7 @@
 #   nowMesgCode .sbss:0x803F7030               (symbols.txt:19104)
 #
 # Usage (foundry python):
-#   D:\XXXXXXX\foundry-py312\Scripts\python.exe dusktap_dmesg.py [out.csv]
+#   <decomp-root>\foundry-py312\Scripts\python.exe dusktap_dmesg.py [out.csv]
 # Start Dolphin + the donor ISO first; probe attaches and follows.
 # Stop with Ctrl+C — summary is printed and CSV closed cleanly.
 # ============================================================================
@@ -142,7 +142,7 @@ KEYS = ["msg_code", "line_count", "font_now", "char_space", "box_width",
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else (
-        "C:/Users/xxxxx/Documents/ww-arc-staging/dusktap_dmesg_%d.csv"
+        "%USERPROFILE%/Documents/ww-arc-staging/dusktap_dmesg_%d.csv"
         % int(time.time()))
     print("waiting for Dolphin (launch the donor ISO whenever)…")
     while True:

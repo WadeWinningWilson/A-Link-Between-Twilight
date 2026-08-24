@@ -15,9 +15,9 @@ e.g.   island_roster.py --island sea Room44.arc rosters/outset-island.md
 import sys, os, re, json
 from collections import Counter, defaultdict
 
-FS_JSON = r"C:\Users\xxxxx\Documents\dusklight\docs\WW Linked\fact-sheets\json"
+FS_JSON = r"%USERPROFILE%\Documents\dusklight\docs\WW Linked\fact-sheets\json"
 STB_CAST = os.path.join(FS_JSON, "stb-cast.json")
-DONOR_SRC = r"D:\XXXXXXX\WW DP\src\d"
+DONOR_SRC = r"<decomp-root>\WW DP\src\d"
 DSTAGE = os.path.join(DONOR_SRC, "d_stage.cpp")
 
 def objname_table():
@@ -44,7 +44,7 @@ def profile_files():
     return out
 
 _BASE_CACHE = {}
-DONOR_INC_ACTOR = r"D:\XXXXXXX\WW DP\include\d\actor"
+DONOR_INC_ACTOR = r"<decomp-root>\WW DP\include\d\actor"
 
 def base_tier(src_rel):
     """§241+§242: TWO gates per actor.

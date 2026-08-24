@@ -33,8 +33,8 @@ import os
 import re
 import sys
 
-FORK = r"C:\Users\xxxxx\Documents\dusklight"
-VANILLA = r"C:\Users\xxxxx\Documents\dusklight-main"
+FORK = r"%USERPROFILE%\Documents\dusklight"
+VANILLA = r"%USERPROFILE%\Documents\dusklight-main"
 
 # The known divergence this tool must re-find or shut up: file, name.
 CONTROL = ("d/d_stage.h", "getBgW")

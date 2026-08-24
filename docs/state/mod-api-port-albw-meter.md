@@ -79,9 +79,9 @@ On main, lantern oil remains the stock system. Options:
 
 | Piece | Where |
 |-------|--------|
-| Mod checkout | `C:\Users\xxxxx\Documents\albw-meter` (cloned from [TwilitRealm/mod-template](https://github.com/TwilitRealm/mod-template), 2026-07-22) |
-| Host (main) checkout | `C:\Users\xxxxx\Documents\dusklight-main` — built RelWithDebInfo, `DUSK_ENABLE_CODE_MODS=ON`. Exe: `build\windows-msvc-relwithdebinfo\dusklight.exe` |
-| P1 `.dusk` | `C:\Users\xxxxx\Documents\albw-meter\build\mods\albw_meter.dusk` — also copied to `%APPDATA%\TwilitRealm\Dusklight\mods\` |
+| Mod checkout | `%USERPROFILE%\Documents\albw-meter` (cloned from [TwilitRealm/mod-template](https://github.com/TwilitRealm/mod-template), 2026-07-22) |
+| Host (main) checkout | `%USERPROFILE%\Documents\dusklight-main` — built RelWithDebInfo, `DUSK_ENABLE_CODE_MODS=ON`. Exe: `build\windows-msvc-relwithdebinfo\dusklight.exe` |
+| P1 `.dusk` | `%USERPROFILE%\Documents\albw-meter\build\mods\albw_meter.dusk` — also copied to `%APPDATA%\TwilitRealm\Dusklight\mods\` |
 | This fork | Reference implementation + playtest oracle until parity; then retire engine copies |
 
 Build the mod with FetchDusklight / `DUSKLIGHT_DIR` / `DUSKLIGHT_VERSION` pinned to **main**, never against this ALBT tree.

@@ -23,10 +23,10 @@ except ImportError:
     raise SystemExit("pip install Pillow texture2ddecoder")
 
 RTZ = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm-mods\MMN64HD\mm_MMN64HD.rtz"
 )
 OUT = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd"
 )
 XML_URL = "https://raw.githubusercontent.com/zeldaret/mm/main/assets/xml/objects/object_stk.xml"
 SCALES = (8, 16, 32, 64)

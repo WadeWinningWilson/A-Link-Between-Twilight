@@ -11,7 +11,7 @@ was tooling LOOSE beside assets, not tooling existing.
 
 ## Ruling 2 (the deeper one, user-identified)
 The WW-Crew-Restoration folder itself leaves Dusklight-owned locations
-entirely. New home: `C:\Users\xxxxx\Documents\A LBT WW`. Timing delegated to
+entirely. New home: `%USERPROFILE%\Documents\A LBT WW`. Timing delegated to
 Foundry.
 
 ## Foundry determination: ONE move, at the rehome — LATER
@@ -21,7 +21,7 @@ a 3-line CMake seam (dusklight CMakeLists.txt:753-756, EXISTS-guarded
 hop — the folder itself moves to A LBT WW later. One coordinated move beats
 two. At the rehome slot:
 
-1. mod folder → `C:\Users\xxxxx\Documents\A LBT WW\WW-Crew-Restoration\`
+1. mod folder → `%USERPROFILE%\Documents\A LBT WW\WW-Crew-Restoration\`
 2. `mods-src\ww_donor_disc\*` → `<newhome>\WW-Crew-Restoration\plugin\`
 3. CMake gains a `WW_PLUGIN_SOURCE_DIR` cache var pointing there (survives any
    future move; EXISTS-guard kept)

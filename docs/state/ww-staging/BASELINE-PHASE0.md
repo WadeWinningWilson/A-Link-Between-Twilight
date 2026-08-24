@@ -165,7 +165,7 @@ it. It is not scrap and it was not re-run.
 > predicted **443 conflicted paths**, then reported that *"the ownership map is
 > not the conflict map."* **The user corrected the target: this fork is itself
 > the mod. The clean dusklight that needs the merge is
-> `C:\Users\xxxxx\Documents\dusklight-main`.**
+> `%USERPROFILE%\Documents\dusklight-main`.**
 >
 > That 443-conflict prediction was a correct measurement of the **wrong
 > repository** — the estate's single most-repeated failure shape (§5: *a correct
@@ -176,7 +176,7 @@ it. It is not scrap and it was not re-run.
 
 ## The real target, measured
 
-`C:\Users\xxxxx\Documents\dusklight-main`, branch `main`:
+`%USERPROFILE%\Documents\dusklight-main`, branch `main`:
 
 | measure | value |
 |---|---|
@@ -225,7 +225,7 @@ Confirmed. **Phase 5 must build no parallel mechanism.**
 ## What Phase 1 reduces to
 
 ```
-cd C:\Users\xxxxx\Documents\dusklight-main
+cd %USERPROFILE%\Documents\dusklight-main
 git merge --ff-only origin/main
 ```
 
@@ -253,7 +253,7 @@ a textual-merge question to predict before.
 ## The fast-forward landed
 
 ```
-cd C:\Users\xxxxx\Documents\dusklight-main
+cd %USERPROFILE%\Documents\dusklight-main
 git merge --ff-only origin/main        # exit 0
 ```
 

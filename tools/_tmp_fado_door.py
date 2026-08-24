@@ -2,10 +2,10 @@
 import struct
 import sys
 
-sys.path.insert(0, r"C:\Users\xxxxx\Documents\dusklight\tools\demo_cut_content")
+sys.path.insert(0, r"%USERPROFILE%\Documents\dusklight\tools\demo_cut_content")
 from dzr_placements import rarc_members
 
-OUT = r"C:\Users\xxxxx\Documents\dusklight\tools\_tmp_fado_door.out.txt"
+OUT = r"%USERPROFILE%\Documents\dusklight\tools\_tmp_fado_door.out.txt"
 
 
 def dump_arc(arc, label, lines):
@@ -74,14 +74,14 @@ def main():
     lines = []
     for room in ("R00_00.arc", "R01_00.arc"):
         dump_arc(
-            rf"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\{room}",
+            rf"<decomp-root>\Ex TP\files\res\Stage\F_SP103\{room}",
             "F_SP103",
             lines,
         )
     # Also list R_SP01 room files for the gap claim
     import os
 
-    rsp = r"D:\XXXXXXX\Ex TP\files\res\Stage\R_SP01"
+    rsp = r"<decomp-root>\Ex TP\files\res\Stage\R_SP01"
     lines.append("=== R_SP01 files: " + ", ".join(sorted(os.listdir(rsp))))
     with open(OUT, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 ROWS = REPO / "docs" / "state" / "ww-staging" / "tracker" / "rows"
 OWN_EXE = REPO / "build" / "windows-msvc-relwithdebinfo" / "dusklight.exe"
-UP_EXE = Path("C:/Users/xxxxx/Documents/dusklight-main/build/"
+UP_EXE = Path("%USERPROFILE%/Documents/dusklight-main/build/"
               "windows-msvc-relwithdebinfo/dusklight.exe")
 
 # match broadly, validate against the domain (§P3) - a novel doorway value

@@ -1,6 +1,6 @@
 $sym = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\Llvm\x64\bin\llvm-symbolizer.exe"
-$exe = "c:\Users\xxxxx\Documents\dusklight\build\windows-msvc-relwithdebinfo\dusklight.exe"
-$outPath = "c:\Users\xxxxx\Documents\dusklight\tools\_symcrash.out.txt"
+$exe = "%USERPROFILE%\Documents\dusklight\build\windows-msvc-relwithdebinfo\dusklight.exe"
+$outPath = "%USERPROFILE%\Documents\dusklight\tools\_symcrash.out.txt"
 $rvas = @(
   "0xd75d1","0x149bd0","0x544d6e","0x5474f7","0x546fb5",
   "0xeec39","0xeecd1","0xe8be1","0xeefb9","0xebe9e",

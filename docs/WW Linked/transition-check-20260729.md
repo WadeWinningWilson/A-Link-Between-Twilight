@@ -1,6 +1,6 @@
 # P11 receiver transition check
 
-log: `C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\logs\dusklight-20260728-202030.log`
+log: `%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\logs\dusklight-20260728-202030.log`
 
 | host stage | room | point | donor edge exists? |
 |---|---|---|---|

@@ -20,12 +20,12 @@ GITHUB_WEB = (
     "ZELDA%20MAJORA'S%20MASK/Nerrel/Characters/Skull%20Kid"
 )
 OUT = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd"
 )
 NERREL_DIR = OUT / "_nerrel_skull_kid"
 MANIFEST_LOCAL = OUT / "manifest_all.json"
 XML = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk\object_stk.xml"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\object_stk\object_stk.xml"
 )
 SCALES = (8, 16, 32, 64)
 HASH_RE = re.compile(r"#([0-9A-F]{8})#", re.I)

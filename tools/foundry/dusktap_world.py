@@ -40,8 +40,8 @@ from pathlib import Path
 
 import dolphin_memory_engine as dme
 
-DONOR = Path("D:/XXXXXXX/WW DP")
-OUT = Path("C:/Users/xxxxx/Documents/ww-arc-staging")
+DONOR = Path("<decomp-root>/WW DP")
+OUT = Path("%USERPROFILE%/Documents/ww-arc-staging")
 
 LY_LIST = 0x803726DC          # l_fpcLy_LayerList (node_list_class)
 LN_QUEUE = 0x803F6180         # g_fpcLn_Queue (node_lists_tree_class)

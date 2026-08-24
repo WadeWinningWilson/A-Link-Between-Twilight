@@ -260,7 +260,7 @@ Use when extending beyond bow; indices in `itemmdl.h` are TP-bundle layout, not 
 
 **Purpose:** Phase 3+ **cel / scene-lighting lineage** reference — not a substitute for [TWW](#tww-decomp-reference-zeldarettww) on WW `itemmdl` behavior. Hypothesis: SS is an evolved Wii-era stack on the same TP/TWW lighting *ideas* (actor palettes, `MA**` material slots), but with **nw4r::g3d + EGG** instead of JSystem J3D, and a **watercolor / soft-shaded** look — not WW ink outlines.
 
-**Local scan clone:** `c:\Users\xxxxx\Documents\ss-decomp-scan` (sparse checkout, external to dusklight repo). **Decomp progress:** ~25% code matched ([decomp.dev/ss](https://decomp.dev/ss)); many item-model helpers still live under `src/toBeSorted/`.
+**Local scan clone:** `%USERPROFILE%\Documents\ss-decomp-scan` (sparse checkout, external to dusklight repo). **Decomp progress:** ~25% code matched ([decomp.dev/ss](https://decomp.dev/ss)); many item-model helpers still live under `src/toBeSorted/`.
 
 ### Engine stack vs Dusk / TP
 

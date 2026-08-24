@@ -11,10 +11,10 @@ HOST = "127.0.0.1"
 PORT = 9876
 
 DAE_BODY = Path(
-    r"C:\Users\xxxxx\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae"
+    r"%USERPROFILE%\AppData\Roaming\TwilitRealm\Dusklight\bmd_export\superbmd_verify\E_PM_29.dae"
 )
 BLEND_OUT = Path(
-    r"D:\XXXXXXX\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend"
+    r"<decomp-root>\Ex TP\Blender workflow\Custom porting work\MM\MM_SkullKid_v1.blend"
 )
 
 

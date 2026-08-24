@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 OUT = Path(
-    r"c:\Users\xxxxx\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd"
+    r"%USERPROFILE%\Documents\dusklight\companion_mods\MM-SkullKid-Reskin\_work\mm_refs_hd"
 )
 GROUPS_ROOT = OUT / "_groups"
 

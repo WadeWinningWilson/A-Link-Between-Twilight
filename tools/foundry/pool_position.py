@@ -14,9 +14,9 @@ import re
 import subprocess
 import sys
 
-OBJDIFF = 'D:/XXXXXXX/tools/objdiff-cli.exe'
+OBJDIFF = '<decomp-root>/tools/objdiff-cli.exe'
 TU = sys.argv[1] if len(sys.argv) > 1 else 'd_a_npc_ko1'
-TMP = 'C:/Users/xxxxx/AppData/Local/Temp'
+TMP = '%USERPROFILE%/AppData/Local/Temp'
 # a pool reference: <mnem> <reg>, <disp>(<base>)
 POOL = re.compile(r'^(lfs|lfd|lwz|lha|lhz|lbz)\s+(\S+),\s*(-?0x[0-9a-f]+)\((r\d+)\)$')
 # A string-pool reference is 'addi rA, rB, <offset-into-the-string-blob>'.

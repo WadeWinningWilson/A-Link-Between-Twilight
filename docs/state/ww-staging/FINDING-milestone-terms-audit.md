@@ -17,7 +17,7 @@ Every row below was measured today against the files, not carried forward.
 
 ## ① Source genuinely stock — **HOLDS, re-derived independently**
 
-`C:/Users/xxxxx/Documents/dusklight-main`: `HEAD = c880d46fb5`,
+`%USERPROFILE%/Documents/dusklight-main`: `HEAD = c880d46fb5`,
 `git rev-list --left-right --count origin/main...HEAD` = **0 0**,
 `git status --porcelain -- src include sdk` = **empty**. Unchanged from the claim.
 

@@ -1416,7 +1416,7 @@ clean.
 
 ### The resource
 
-`zeldaret/tww` cloned to **`D:\XXXXXXX\WW DP`** (user-directed) — 81 MB, 8,092 files, shallow
+`zeldaret/tww` cloned to **`<decomp-root>\WW DP`** (user-directed) — 81 MB, 8,092 files, shallow
 (`--depth 1`; deepen on request). HEAD `61a3a0a`, **dated 2026-07-19** — actively maintained.
 Targets **`GZLE01` (USA rev 0)**, matching the project's extract and the §3 US pin.
 
@@ -1496,7 +1496,7 @@ neither.
 
 ## §26 Bridge response — ASK 1 / 2 / 3 landed (2026-07-20)
 
-Tool root: `C:\Users\xxxxx\Documents\albt bridge`. Decomp: `D:\XXXXXXX\WW DP` (`--decomp-root` / `WW_DECOMP`).
+Tool root: `%USERPROFILE%\Documents\albt bridge`. Decomp: `<decomp-root>\WW DP` (`--decomp-root` / `WW_DECOMP`).
 
 ### ASK 1 — DONE (gates B2)
 
@@ -1715,7 +1715,7 @@ ASK 4 slots naturally beside it, since both are `verify`-adjacent.
 
 ## §28 Bridge response — ASK 4 / ASK 5 landed (2026-07-20)
 
-Tool `0.3.0`. Sibling packages under `C:\Users\xxxxx\Documents\albt bridge\`.
+Tool `0.3.0`. Sibling packages under `%USERPROFILE%\Documents\albt bridge\`.
 
 ### ASK 4 — DONE (extends `verify`)
 
@@ -2385,8 +2385,8 @@ to build it.
 ### Artifacts (user-directed)
 
 ```
-D:\XXXXXXX\Ex WW\_extracted\Stage_decompressed\sea\Stage.arc      149,191 → 773,920 b
-D:\XXXXXXX\Ex WW\_extracted\Stage_decompressed\A_mori\Stage.arc    41,935 → 207,808 b
+<decomp-root>\Ex WW\_extracted\Stage_decompressed\sea\Stage.arc      149,191 → 773,920 b
+<decomp-root>\Ex WW\_extracted\Stage_decompressed\A_mori\Stage.arc    41,935 → 207,808 b
 ```
 
 Both verified `RARC` after decompression. Written under the existing `_extracted/` convention so the
@@ -2449,7 +2449,7 @@ python -m ww_bridge quest-triggers
 
 Reads Yaz0 `sea/Stage.arc` directly (same `yaz0_dec` as `adapt_bdl_arcs.py`); also works on the
 auditor's decompressed copy under `_extracted/Stage_decompressed/`. Default:
-`D:\XXXXXXX\Ex WW\files\res\Stage\sea\Stage.arc` (`WW_EXTRACT` / `--stage-arc`).
+`<decomp-root>\Ex WW\files\res\Stage\sea\Stage.arc` (`WW_EXTRACT` / `--stage-arc`).
 
 ### Proof — ASK 6 indices → Nintendo names
 
@@ -2507,7 +2507,7 @@ which is good news — but "done" would be wrong.**
 Animations are **not** placement data (no census equivalent), so the socket shape differs — but it
 fits cleanly, and the decomp supplies the binding layer outright.
 
-**Discovery:** `D:\XXXXXXX\WW DP\assets\GZLE01\res\Object\<Arc>.h` — **577 generated per-arc headers**
+**Discovery:** `<decomp-root>\WW DP\assets\GZLE01\res\Object\<Arc>.h` — **577 generated per-arc headers**
 for **GZLE01 (USA)**, matching this project's §3 region pin. Each maps semantic resource slots to
 indices, e.g. for `Kb`: `dRes_INDEX_KB_BCK_DAMAGE1_e`, `…_EAT1_e`, `…_NAKU1_e` (9 BCK slots).
 
@@ -2555,7 +2555,7 @@ Same join pattern as the socket ledger. **Report-only, suggest-never-fill, Outse
 
 ### ASK 7 — animation coverage ledger
 
-**Binding layer already exists:** `D:\XXXXXXX\WW DP\assets\GZLE01\res\Object\<Arc>.h` — **577 per-arc
+**Binding layer already exists:** `<decomp-root>\WW DP\assets\GZLE01\res\Object\<Arc>.h` — **577 per-arc
 headers**, USA build, matching the §3 region pin. Each declares named slots
 (`dRes_INDEX_KB_BCK_EAT1_e`, `…_DAMAGE1_e`, `…_NAKU1_e`).
 
@@ -2966,7 +2966,7 @@ embeds its full path.
 
 ### C — the developer's username appears **725 times** in the binary
 
-`C:\Users\xxxxx\…` throughout. **This is a distribution-hygiene defect independent of the covenant** —
+`%USERPROFILE%\…` throughout. **This is a distribution-hygiene defect independent of the covenant** —
 a shipped binary should not disclose the author's home directory layout. Raised here because it has
 never been flagged and it ships with every build.
 
@@ -3316,7 +3316,7 @@ needs real transcoding. **Wave banks share the `.aw` container**, and dusklight 
 
 ### The decisive finding — Outset's theme is SEQUENCED, not streamed
 
-Authoritative source: `D:\XXXXXXX\WW DP\include\JAZelAudio\JAZelAudio_BGM.h`.
+Authoritative source: `<decomp-root>\WW DP\include\JAZelAudio\JAZelAudio_BGM.h`.
 
 - **`JA_BGM_ISLAND_LINK = 0x80000001`** — Link's island = **Outset exterior**
 - **`JA_BGM_HOUSE = 0x80000008`** — interior house theme
@@ -3387,7 +3387,7 @@ Tool **0.11.0**. Research only — no audio bytes converted or copied.
 python -m ww_bridge audio-map [--bgm ISLAND_LINK HOUSE]
 ```
 
-Artifact: `C:\Users\xxxxx\Documents\albt bridge\reports\audio_map.md`
+Artifact: `%USERPROFILE%\Documents\albt bridge\reports\audio_map.md`
 
 ### Class split — CONFIRMED (no longer inferred)
 
@@ -3491,7 +3491,7 @@ Tool **0.12.0**. User: “bridge go for it” after §48 recommend. Research onl
 python -m ww_bridge seq-banks [--bgm ISLAND_LINK HOUSE]
 ```
 
-Artifact: `C:\Users\xxxxx\Documents\albt bridge\reports\seq_banks.md`
+Artifact: `%USERPROFILE%\Documents\albt bridge\reports\seq_banks.md`
 
 ### Method (grounded)
 
@@ -3652,7 +3652,7 @@ Tool **0.13.0**.
 python -m ww_bridge bms-dialect
 ```
 
-Artifact: `C:\Users\xxxxx\Documents\albt bridge\reports\bms_dialect.md`
+Artifact: `%USERPROFILE%\Documents\albt bridge\reports\bms_dialect.md`
 
 ### Method
 
@@ -4857,7 +4857,7 @@ persists, the next target is elsewhere by Engine's own statement.
 | `n2i_link_0.aw` | 73,664 b | 73,664 b | **md5 identical** `bf702fb8…` |
 | `n_zelda_0.aw` | 925,760 b | 925,760 b | **md5 identical** `6dcbf41a…` |
 
-Donor root: `D:\XXXXXXX\Ex WW\files\Audiores\`. Stronger than the invariant requires — it demands
+Donor root: `<decomp-root>\Ex WW\files\Audiores\`. Stronger than the invariant requires — it demands
 byte-size identity; these are byte-identical.
 
 **Slices also verified** (a *shaping* stage, per №31-B — extraction can corrupt what copying cannot).
@@ -4938,11 +4938,11 @@ resolution/mixing, and "layers louder" becomes the sole target.
 User asked, ahead of the cutscene test, whether animations can be ported now. Housing Security does
 not build this — the answer below is porting-policy scope: **what is housed, and what blocks use.**
 
-Run: `ww_bridge anim-ledger --mod-root <mod> --decomp-root "D:\XXXXXXX\WW DP"` →
+Run: `ww_bridge anim-ledger --mod-root <mod> --decomp-root "<decomp-root>\WW DP"` →
 `arcs=34 headers=32 missing_arcs=0 orphan_arcs=2`, exit 0, `SUGGEST NEVER FILL` respected.
 
-> **Root gotcha:** anim-ledger wants the **decomp source** (`D:\XXXXXXX\WW DP`), *not* the disc
-> extract (`D:\XXXXXXX\Ex WW`). Given the extract it fails with `missing …\include\d\d_stage.h`.
+> **Root gotcha:** anim-ledger wants the **decomp source** (`<decomp-root>\WW DP`), *not* the disc
+> extract (`<decomp-root>\Ex WW`). Given the extract it fails with `missing …\include\d\d_stage.h`.
 > It failed **loudly and named the missing file** — №31-C behaving correctly in the wild.
 
 ### Supply: COMPLETE. Nothing to port.
@@ -6136,7 +6136,7 @@ recursion** — mirroring `JASTrack.cpp:530-533`. Acceptance = probe re-run (chi
 ## §77 CAPTURE COMPARISON — old captures re-analyzed (inconclusive, with reasons); wav-compare tool spec (Housing Security, 2026-07-22)
 
 User's actual ask (corrected from my misread): not "can we dump audio" — that was done Jul 20
-(`C:\Users\xxxxx\Videos\WW comparisons`: `WWOutsetEx/Int.mkv` = Dolphin, `TPOutsetEx/Int.mkv` = ours;
+(`%USERPROFILE%\Videos\WW comparisons`: `WWOutsetEx/Int.mkv` = Dolphin, `TPOutsetEx/Int.mkv` = ours;
 earlier comparison found no difference) — but **can a tool/probe ANALYZE donor-vs-ours audio.**
 
 ### Today's re-analysis of the existing captures (numpy RMS envelopes, 1s/5s windows)
@@ -6274,7 +6274,7 @@ arrangement; recording starts before island entry; ≥1 full loop each.
 Tool **0.24.0**. §77 offline + §77b live analyzer closed as one session pipeline.
 
 ```bat
-cd /d "C:\Users\xxxxx\Documents\albt bridge"
+cd /d "%USERPROFILE%\Documents\albt bridge"
 pip install -r requirements-audio.txt
 python -m ww_bridge live-ab --list-devices
 python -m ww_bridge live-ab --device-a <idx> --device-b <idx> --tag ilinkin
@@ -10864,7 +10864,7 @@ shape — same-visit fire prevented by entry-scoped arming, exactly right.
 ## §192 GET-ITEM BOX — decomp-referenced; text drift + sticky-flag reroute fixed (History)
 
 Playtest confirmed: **props stay ✓, no double-play ✓** (§190/§186 held). Two get-item-box bugs remained;
-decomp-referenced (D:\XXXXXXX\WW DP) and fixed:
+decomp-referenced (<decomp-root>\WW DP) and fixed:
 
 **The donor model (key insight):** WW has **NO sticky get-item presentation flag.** The box kind is
 re-derived PER MESSAGE from that message's BMG `mTextboxType` (`d_mesg.cpp:1958-1964`: `==9` →
@@ -11099,7 +11099,7 @@ J3D/**JPC**/REL/DOL: offline decode capability lands in a Claude lane, un-gating
 Bridge-shaped hole (JPA color decodes, arc surgery). (2) **wwrando source** — `wwlib` DZx
 parser + event/item-table code = P6's per-island census engine, ready-made, GZLE01-native.
 (3) **zeldaret/tww refresh cadence** — decomp now 72.13%/58.73% linked and moving; local
-`D:\XXXXXXX\WW DP\src` snapshot should be pulled periodically (each matched actor = free law).
+`<decomp-root>\WW DP\src` snapshot should be pulled periodically (each matched actor = free law).
 **T2 EVALUATE:** **Felk's Python-scripting Dolphin fork** (scripted taps + savestate/input
 control, no C++ rebuilds — DuskTap-successor candidate + P5 driver; an MCP wrapper exists);
 **Lobsterzelda lua-support Dolphin** (TAS community: desync-free for WW — the cure if F1
@@ -11121,12 +11121,12 @@ audit the intake ledger. Engine/Bridge → gated, nothing asked. History/Librari
 ## §200 TIER-1 ADOPTED + PILOT PASSED 8/8 — offline JPC censusing is now a Claude-lane capability (Foundry, 2026-07-28)
 
 User ratified T1; executed same session. **INSTALLED:** gclib in a pinned **Python 3.12
-venv `D:\XXXXXXX\foundry-py312`** (uv-managed). Critical finding: gclib is **incompatible
+venv `<decomp-root>\foundry-py312`** (uv-managed). Critical finding: gclib is **incompatible
 with Python 3.14** (PEP 649 lazy annotations break its bunfoe field machinery in ways that
 can SILENTLY drop parsed fields — a hand-patched 3.14 attempt was working-but-untrustworthy
 and was uninstalled; verdict-producing instruments don't run on shims). **CLONED:** wwrando →
-`D:\XXXXXXX\wwrando` (wwlib: dzx/events/dzb/charts/stage_searcher — the P6 census engine).
-**DECOMP REFRESHED:** `D:\XXXXXXX\WW DP` fast-forwarded 61a3a0a→be8da68 — 189 files / ~9k
+`<decomp-root>\wwrando` (wwlib: dzx/events/dzb/charts/stage_searcher — the P6 census engine).
+**DECOMP REFRESHED:** `<decomp-root>\WW DP` fast-forwarded 61a3a0a→be8da68 — 189 files / ~9k
 insertions of new matched law in 9 days; weekly-ish `git pull --ff-only` is now standing.
 **PILOT (audit-grade, `tools/foundry/jpc_crosscheck.py`): 8/8 PASS** — from donor bytes,
 independently of Bridge: common.jpc = 193 particles incl. windline 0x0031 + grass
@@ -13283,7 +13283,7 @@ invented per covenant**, so they gate the assembly.
 **Root cause (all three confirmed):** (a) upstream `WW-DP/src/.../d_a_npc_ba1.cpp` = **98 `Nonmatching`**
 — a bodyless matching skeleton; no clean donor `.cpp` exists anywhere, so a `git pull` won't help
 (this is the wait-for-the-donor case DECOMP-FIRST names). (b) `tools/foundry/rel_decomp.py` has **no
-rodata pass** (grep-empty). (c) The bytes DO exist: `D:\XXXXXXX\WW DP\build\GZLE01\d_a_npc_ba1\asm\d\actor\d_a_npc_ba1.s`
+rodata pass** (grep-empty). (c) The bytes DO exist: `<decomp-root>\WW DP\build\GZLE01\d_a_npc_ba1\asm\d\actor\d_a_npc_ba1.s`
 (304 KB, table labels + relocations intact).
 
 **→ FOUNDRY ASK (bounded, tool-shaped):** add a `.rodata`-initializer pass to the pipeline (or
@@ -13410,11 +13410,11 @@ User ruling implemented: decomp participation is GO (REL extension + m2c + Ba1 p
 
 **(1) THE "REL EXTENSION" NEEDED NO CUSTOM PARSER.** The donor extracted tree (`Ex WW`: sys/ +
 files/) junctioned into the decomp's `orig/GZLE01` satisfies dtk directly (DOL sha1 receipt held).
-`dtk dol split` (v1.8.3, fetched to `D:\XXXXXXX\tools\dtk.exe`) emitted **relocated, symbol-
+`dtk dol split` (v1.8.3, fetched to `<decomp-root>\tools\dtk.exe`) emitted **relocated, symbol-
 annotated asm for all 416 modules / 39,319 functions in 10 seconds** — every REL actor now has
 `build/GZLE01/<mod>/asm/*.s` with names from the project symbol tables and relocations resolved.
 
-**(2) m2c IS SET UP AND PRODUCES GOOD DRAFTS.** `D:\XXXXXXX\m2c` (-t ppc = ppc-mwcc-c++). Caveat
+**(2) m2c IS SET UP AND PRODUCES GOOD DRAFTS.** `<decomp-root>\m2c` (-t ppc = ppc-mwcc-c++). Caveat
 found: m2c's context parser is C-only — the tww decompctx context (C++) is unusable, so we run
 context-free; the draft uses inferred `unkNNN` fields. That gap is closed by receipts:
 
@@ -13436,7 +13436,7 @@ siblings are the naming/typing oracle. 4 m2c failures to hand-decode via dol_dis
 pass → assemble cpp in donor file order → port via kit v4 [Ba1 IS a CUTSCENE actor —
 tale.stb/tale_2] → acceptance vs the golden `tale` trace, the P3 target).
 
-**Weekly upstream-sync rule now standing:** `git -C "D:\XXXXXXX\WW DP" pull` before starting any
+**Weekly upstream-sync rule now standing:** `git -C "<decomp-root>\WW DP" pull` before starting any
 stub — upstream actively decompiles NPCs; never duplicate an actor they've started.
 
 **WHOSE TURN:** Foundry → ba1 worklist steps 1–3 (hand-decodes + naming/types passes); History →
@@ -14572,7 +14572,7 @@ port has no WW demo-message subsystem at all: `getDmsgArchive` is never set — 
 `/res/Msg/dmsgres.arc` at boot, d_s_logo.cpp:876/518 — and substitutes a dialogue catalog via
 `dExtWw_handleDemoMessage`. That's the NEXT layer; the frame-198 suspend blocks before we reach it.)
 
-DONOR CONTRACT (History read, D:\XXXXXXX\WW DP\src): a storyboard message suspends the control; the
+DONOR CONTRACT (History read, <decomp-root>\WW DP\src): a storyboard message suspends the control; the
 box builds from `getDmsgArchive()`; on player-dismiss `dMesg_closeProc` calls
 `dComIfGp_demo_get()->getControl()->unsuspend(1)` (d_mesg.cpp:2112) — release is owned by the box
 close. The donor SOURCE gives me the contract but NOT what tale.stb itself suspends on at frame 198 or
@@ -15163,7 +15163,7 @@ observed instead of inferred). Sampled at 120 Hz, transition-stamped CSV + live 
 **RUN PROCEDURE (user, ~5 min):**
 1. Launch mainline Dolphin with the donor US ISO; get to Outset first-quest, ideally a savestate
    at Link's house door pre-tale.
-2. `D:\XXXXXXX\foundry-py312\Scripts\python.exe C:\Users\xxxxx\Documents\dusklight\tools\foundry\dusktap_dmesg.py`
+2. `<decomp-root>\foundry-py312\Scripts\python.exe %USERPROFILE%\Documents\dusklight\tools\foundry\dusktap_dmesg.py`
    (console says "hooked"; CSV lands in ww-arc-staging/).
 3. Play the tale start to finish — enter, sit through all nine boxes at a natural reading pace,
    let it tear down, walk a few steps after control returns. Ctrl+C the probe.
@@ -19978,7 +19978,7 @@ the step-2 manifest work. ENGINE → hold the kill switches (V2's precondition).
 the decomp, and Winditor**. The §512 V-series leaned on decomp + our own measurement and **did
 not account for noclip or Winditor at all**. Amendments landed in
 [ttw-methods-review.md](ttw-methods-review.md) → "Amendments — the three primary sources".
-Winditor was **surveyed at `D:\XXXXXXX\Winditor` for this entry** — consulted, not assumed (§443).
+Winditor was **surveyed at `<decomp-root>\Winditor` for this entry** — consulted, not assumed (§443).
 
 **A1 — V1 becomes a THREE-source differ (material change).** As specified it diffs a donor
 header against a receiver header — but both are OUR transcriptions, and the bug class it targets
@@ -21420,7 +21420,7 @@ case can be produced) · **user** (nothing new; Q2/HT-1/HT-11 already ruled — 
 
 ## §524 — Foundry: CONFORMANCE RUN AGAINST STOCK UPSTREAM DUSKLIGHT. Portability holds; the delta is one symbol, and it is noise.
 
-The user supplied a **built stock checkout** — `C:/Users/xxxxx/Documents/
+The user supplied a **built stock checkout** — `%USERPROFILE%/Documents/
 dusklight-main`, origin `TwilitRealm/dusklight`, HEAD `95608438c1` — carrying
 both `dusklight.exe` and a generated `dusklight_exports.def`. That was the one
 thing blocking a real portability answer (§520–§523). Run, not assumed.
@@ -23328,7 +23328,7 @@ installed and adapted; **arc presence PASSES, 83 -> 85 arcs.**
 ### Root cause: they were extracted but never adapted in
 
 Both existed in the user's own extraction
-(`D:/XXXXXXX/Ex WW/files/res/Object/`) the whole time. What was missing was the
+(`<decomp-root>/Ex WW/files/res/Object/`) the whole time. What was missing was the
 adaptation step — installed arcs are NOT raw copies, which I verified before
 touching anything: `Mk.arc` is 97,280 bytes installed against 55,128 at source,
 and `Ah.arc` is byte-different at identical size. Copying the raw arcs would have
@@ -27967,7 +27967,7 @@ Per the campaign charter: read the donor's own stage-load path FIRST, then decid
 what the receiver must host. **This section is the first half and deliberately
 stops there.** Nothing below compares to TP, and nothing below proposes a design.
 
-Source: `D:/XXXXXXX/WW DP/src/d/d_stage.cpp` (2,444 ln) · `d_s_room.cpp`.
+Source: `<decomp-root>/WW DP/src/d/d_stage.cpp` (2,444 ln) · `d_s_room.cpp`.
 
 ### The path, end to end
 
@@ -28246,9 +28246,9 @@ run hit.**
 
 ```
 tools/foundry/accessor_differ.py
-  A DONOR      D:/XXXXXXX/WW DP/include/d/d_stage.h
+  A DONOR      <decomp-root>/WW DP/include/d/d_stage.h
   B RECEIVER   dusklight include/d/d_stage.h
-  C VALIDATOR  D:/XXXXXXX/Winditor/Editor/resources/templates/*.json
+  C VALIDATOR  <decomp-root>/Winditor/Editor/resources/templates/*.json
 ```
 
 Winditor is a WIND WAKER editor, so **C validates the DONOR side only** — stated
@@ -28467,7 +28467,7 @@ lesson this session kept paying for: **`docs/WW Linked/native-rooms-3b-scope.md`
 ### The measurement that makes 3b plannable
 
 ```
-dStage_dt_c_roomLoader     donor  D:/XXXXXXX/WW DP/src/d/d_stage.cpp:2180   22 chunks
+dStage_dt_c_roomLoader     donor  <decomp-root>/WW DP/src/d/d_stage.cpp:2180   22 chunks
                         receiver  src/d/d_stage.cpp:3035                    14 chunks
 ```
 
@@ -29125,8 +29125,8 @@ pocket for when verbatim arcs arrive in bulk; it is not needed for the pilot.
 ### The board for step 3 (HISTORY)
 
 ```
-copy   D:/XXXXXXX/Ex WW/files/res/Stage/Ojhous2/Room0.arc -> R_DL02/R00_00.arc
-       D:/XXXXXXX/Ex WW/files/res/Stage/Ojhous2/Room1.arc -> R_DL02/R01_00.arc
+copy   <decomp-root>/Ex WW/files/res/Stage/Ojhous2/Room0.arc -> R_DL02/R00_00.arc
+       <decomp-root>/Ex WW/files/res/Stage/Ojhous2/Room1.arc -> R_DL02/R01_00.arc
        VERBATIM — no bake_room_chunks, no chunk surgery. The seam translates
        at load. (Stage.arc/stage.dzs merging is a separate later decision —
        the shell's stage.dzs serves until the dedicated path needs donor EVNT.)
@@ -30580,7 +30580,7 @@ receiver  daAlink_c::getStartMode()   { return (param >> 0xC) & 0x1F; }         
                                                                   ^^^^
 ```
 
-`D:/XXXXXXX/WW DP/include/d/actor/d_a_player_main.h:1880`, and **checked against
+`<decomp-root>/WW DP/include/d/actor/d_a_player_main.h:1880`, and **checked against
 `zeldaret/tww` main online — byte-identical to the local copy**, so nothing has
 moved upstream. The online check also returned a useful negative: **neither
 decomp defines a named enum** for these modes, so the vocabulary is undocumented
@@ -33586,7 +33586,7 @@ the disc-served island — §694/§695/§696 chain proven end to end in pixels.
 
 **swood spike artifact — comparison verdict (NO edits, per user order):** extracted vertex
 blobs are BYTE-IDENTICAL to the donor's own build artifacts (l_pos 972 / l_color 40 /
-l_texCoord 128, verified against D:/XXXXXXX/WW DP/build/GZLE01/bin/assets); strides and DL
+l_texCoord 128, verified against <decomp-root>/WW DP/build/GZLE01/bin/assets); strides and DL
 call sizes match the donor draw table exactly. Defect is RUNTIME GX-STATE class — same
 family as this TU's own §477 receipt (sticky descriptors); prime suspect: the S8 shadow
 pass and F32 model pass sharing GX_VTXFMT0 across aurora's cached state. First probe when
@@ -34881,7 +34881,7 @@ tree; observation-only) supplied a briefing + 4 scripts. Assessed against the tr
 Their own framing — *"everything here is a lead to verify"* — was right: roughly half survives.
 
 **⛔ REJECT — their `dzr_census.py`. Do not let its numbers into any lane.** Hash-compared both:
-**ours = 3,149 bytes and delegates to `gclib` + `wwlib.dzx` from `D:\XXXXXXX\wwrando`**
+**ours = 3,149 bytes and delegates to `gclib` + `wwlib.dzx` from `<decomp-root>\wwrando`**
 (LagoLunatic's randomizer — community-authoritative, validated by an enormous number of real
 playthroughs over exactly that RARC/Yaz0/DZX path). **Theirs = 14,054 bytes with `import struct`,
 its own `yaz0_decompress()` and `rarc_files()` — a from-scratch reimplementation.** Their claim

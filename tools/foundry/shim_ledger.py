@@ -13,7 +13,7 @@ Library: ledger() -> {name: (kind, header, line)} for enemy_port_kit.
 """
 import os, re, glob
 
-RECEIVER = r"C:\Users\xxxxx\Documents\dusklight"
+RECEIVER = r"%USERPROFILE%\Documents\dusklight"
 LEDGER_MD = os.path.join(RECEIVER, "docs", "WW Linked", "port-kits",
                          "_shims-ledger.md")
 

@@ -216,7 +216,7 @@ explicit and visible — the MO2 contract.
 > **Dusklight — continue the load-order mod system (Phase 1).**
 >
 > Context: I'm building "Dusklight," an A-Link-Between-Worlds-style mod on a Twilight
-> Princess PC decomp (`C:\Users\xxxxx\Documents\dusklight`). A prior chat designed a
+> Princess PC decomp (`%USERPROFILE%\Documents\dusklight`). A prior chat designed a
 > Mod-Organizer-2-style **load-order** evolution of the `dusk::custom_assets` system.
 > **Read first:** `docs/Mod-Load-Order-Design.md` (the full design + risks + decisions),
 > then `docs/Custom-Model-API-Work.md` (the underlying system), then

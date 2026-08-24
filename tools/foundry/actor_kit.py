@@ -3,7 +3,7 @@
 # actor_kit.py — the Actor Kit driver (§329): one command per donor actor.
 #
 # Composes the §248 instruments into a port scaffold + review + registration:
-#   1. donor TU + header pulled from the decomp (D:/XXXXXXX/WW DP)
+#   1. donor TU + header pulled from the decomp (<decomp-root>/WW DP)
 #   2. ww2tp_codemod AUTO rules applied; REVIEW notes carried into the report
 #   3. registration PLAN computed against the live tree (f_pc_name.h index,
 #      f_pc_profile_lst.h extern, f_pc_profile_lst.cpp table slot — index
@@ -50,12 +50,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from ww2tp_codemod import apply as codemod_apply
 
-RECEIVER = Path("C:/Users/xxxxx/Documents/dusklight")
-DONOR = Path("D:/XXXXXXX/WW DP")
-DONOR_OBJ = Path("D:/XXXXXXX/Ex WW/files/res/Object")
+RECEIVER = Path("%USERPROFILE%/Documents/dusklight")
+DONOR = Path("<decomp-root>/WW DP")
+DONOR_OBJ = Path("<decomp-root>/Ex WW/files/res/Object")
 # MOD is the FORK-ERA arc-staging target (model_replacements era) — used only
 # by --land arc staging, kept for fork work, NOT a plugin delivery path.
-MOD = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/"
+MOD = Path("%USERPROFILE%/AppData/Roaming/TwilitRealm/Dusklight/"
             "model_replacements/WW-Crew-Restoration")
 # SCRATCH was hardcoded to a DEAD session's scratchpad (found in the 2026-08-21
 # era audit) — every scaffold written after that session died went to a
@@ -210,7 +210,7 @@ def _emit_plugin_landing(actor):
     table row. The block carries that as an explicit TODO naming the donor
     symbols, because a generator that stubbed a profile would be authoring
     exactly what DN-10 says must be ported."""
-    reg = Path("C:/Users/xxxxx/Documents/dusklight/mods-src/ww_donor_disc/registry.cpp")
+    reg = Path("%USERPROFILE%/Documents/dusklight/mods-src/ww_donor_disc/registry.cpp")
     txt = read(reg)
     used = [int(m) for m in re.findall(r"kWwProfileBase \+ (\d+)", txt)]
     nxt = max(used) + 1 if used else 0

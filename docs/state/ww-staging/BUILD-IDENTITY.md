@@ -2,7 +2,7 @@
 
 > The 08-12 crash was permanently unsymbolicatable because its PDB
 > was gone. This index keeps every build's identity durable. Blobs
-> live OUTSIDE the repo (C:\Users\xxxxx\Documents\dusklight-pdb-archive); rows live here.
+> live OUTSIDE the repo (%USERPROFILE%\Documents\dusklight-pdb-archive); rows live here.
 
 | build_id | exe mtime | exe bytes | pdb blob |
 |---|---|---|---|

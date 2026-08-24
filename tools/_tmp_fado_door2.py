@@ -2,10 +2,10 @@
 import struct
 import sys
 
-sys.path.insert(0, r"C:\Users\xxxxx\Documents\dusklight\tools\demo_cut_content")
+sys.path.insert(0, r"%USERPROFILE%\Documents\dusklight\tools\demo_cut_content")
 from dzr_placements import rarc_members
 
-OUT = r"C:\Users\xxxxx\Documents\dusklight\tools\_tmp_fado_door2.out.txt"
+OUT = r"%USERPROFILE%\Documents\dusklight\tools\_tmp_fado_door2.out.txt"
 lines = []
 
 needles = [
@@ -23,7 +23,7 @@ needles = [
 ]
 
 for room in ("R00_00.arc", "R01_00.arc", "STG_00.arc"):
-    path = rf"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\{room}"
+    path = rf"<decomp-root>\Ex TP\files\res\Stage\F_SP103\{room}"
     for mname, blob in rarc_members(path):
         for nd in needles:
             idx = 0
@@ -50,7 +50,7 @@ for room in ("R00_00.arc", "R01_00.arc", "STG_00.arc"):
 
 # SCLS stride 13
 lines.append("--- SCLS stride13 F_SP103/R00 ---")
-for mname, blob in rarc_members(r"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R00_00.arc"):
+for mname, blob in rarc_members(r"<decomp-root>\Ex TP\files\res\Stage\F_SP103\R00_00.arc"):
     if mname != "room.dzr":
         continue
     n = struct.unpack_from(">I", blob, 0)[0]
@@ -70,7 +70,7 @@ for mname, blob in rarc_members(r"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R00_0
 
 # Also check R01 SCLS for Link house etc
 lines.append("--- SCLS stride13 F_SP103/R01 ---")
-for mname, blob in rarc_members(r"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R01_00.arc"):
+for mname, blob in rarc_members(r"<decomp-root>\Ex TP\files\res\Stage\F_SP103\R01_00.arc"):
     if mname != "room.dzr":
         continue
     n = struct.unpack_from(">I", blob, 0)[0]
@@ -92,7 +92,7 @@ for mname, blob in rarc_members(r"D:\XXXXXXX\Ex TP\files\res\Stage\F_SP103\R01_0
 lines.append("--- global knob00 hits in Stage (first 40) ---")
 import os
 
-STAGE = r"D:\XXXXXXX\Ex TP\files\res\Stage"
+STAGE = r"<decomp-root>\Ex TP\files\res\Stage"
 count = 0
 for stage in sorted(os.listdir(STAGE)):
     sdir = os.path.join(STAGE, stage)

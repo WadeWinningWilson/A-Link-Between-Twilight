@@ -83,7 +83,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "ww_crew_restoration_skele
 from jstudio_stb import yaz0_dec, rarc_members
 from merge_event import EventFile, arc_member, ESZ, SSZ, CSZ, DSZ
 
-DONOR_ROOT = Path("D:/XXXXXXX/Ex WW/files/res/Stage")
+DONOR_ROOT = Path("<decomp-root>/Ex WW/files/res/Stage")
 
 # ============================================================================
 # NATIVE-DISC INPUT (user routing via tale-bus WHOSE-TURN: "kit right now works
@@ -149,7 +149,7 @@ def donor_rooms(stage_name):
             return sorted(names)
     return sorted(q.name for q in (DONOR_ROOT / stage_name).glob("Room*.arc"))
 
-MOD = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/model_replacements/WW-Crew-Restoration")
+MOD = Path("%USERPROFILE%/AppData/Roaming/TwilitRealm/Dusklight/model_replacements/WW-Crew-Restoration")
 HOST_STG = MOD / "files/res/Stage/R_DL01/STG_00.arc"
 HOST_ROOM0 = MOD / "files/res/Stage/R_DL01/R00_00.arc"
 # Row-21 retirement made arcs/ a moving target: the live overlay first, the
