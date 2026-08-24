@@ -1,8 +1,7 @@
 # ALBT Companion Mods
 
-Unzip these folders yourself. **`INSTALL.bat` is only a reminder** — it does not
-install into a portable alpha (that build reads `data\` next to the exe, not
-AppData).
+Model packs for **A Link Between Twilight / Dusklight**. The pack zip ships
+next to this file; the installer copies it into both places the game reads.
 
 | Pack | What it does |
 |---|---|
@@ -11,27 +10,32 @@ AppData).
 | `Wind Waker Skins` | Wind Waker-styled Link and equipment models |
 | `Wind Waker Deku Leaf` | Deku Leaf item model |
 
-## Where to put them
+## Install
 
-Copy each pack folder (the folder itself, not just the files inside) into
-**either or both**:
+1. Extract the **play zip** and run `dusklight.exe` once (iso / first-run setup).
+2. Exit.
+3. Double-click **`INSTALL.bat`** in this folder (`companion_mods/_release`).
 
-1. **Portable alpha** (the zip you downloaded):
+The installer unpacks `ALBT-companion-mods-v1.zip` and copies the four packs to:
 
-   `build\windows-msvc-relwithdebinfo\data\model_replacements\`
+1. **Portable alpha** — `data\model_replacements\` next to `dusklight.exe`
+2. **Local Dusklight** — `%APPDATA%\TwilitRealm\Dusklight\model_replacements\`
 
-2. **Local Dusklight** (AppData):
+If it cannot see the alpha folder (source zip and play zip extracted in different
+places), it asks you to pick the folder that contains `dusklight.exe`.
 
-   `%APPDATA%\TwilitRealm\Dusklight\model_replacements\`
+## Why the installer touches config.json
 
-Example after placing Armogohma:
+Copying the Armogohma model is not enough on its own. The phase-3 reveal is
+gated on `game.bossRefinement`, which **defaults to off**, and any pack listed
+in `game.customModelsDisabled` is ignored even when its files are present. The
+installer sets the first and removes these packs from the second, then makes
+sure each is un-prefixed in `game.customModelsOrder`.
 
-`...\model_replacements\Armogohma Custom\B_gm_37.bmd`
+Each `config.json` it changes is saved as `config.json.bak` first.
 
-If `model_replacements` is missing, create it next to `texture_replacements`.
+## Uninstall
 
-## In-game gates
-
-The Armogohma reveal also needs **Boss Refinement** and **Custom Models** on
-in Settings. A pack listed as disabled under Custom Models will not load even
-when the files are present.
+Delete the four folders from each `model_replacements\` it wrote. To undo the
+settings change, restore `config.json.bak` or turn Boss Refinement off in the
+in-game menu.

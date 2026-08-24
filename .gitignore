@@ -144,12 +144,14 @@ trailer/assets/*
 crashdumps/
 myeasylog.log
 
-# ALBT companion mods — pack binaries stay local; install notes ship.
+# ALBT companion mods — loose pack binaries stay local; the release zip ships.
 companion_mods/*
 !companion_mods/README.md
 !companion_mods/_release/
 !companion_mods/_release/README.md
 !companion_mods/_release/INSTALL.bat
+!companion_mods/_release/install.ps1
+!companion_mods/_release/ALBT-companion-mods-v1.zip
 
 # Downloaded ProcDump tool (binaries)
 tools/procdump/
