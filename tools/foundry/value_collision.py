@@ -22,9 +22,9 @@ Usage: value_collision.py <donor.cpp> [donor.h ...] [--out collisions.md]
 """
 import os, re, sys
 
-DONOR_ROOTS = [r"D:\XXXXXXX\WW DP\include", r"D:\XXXXXXX\WW DP\src"]
-RECEIVER_ROOTS = [r"C:\Users\xxxxx\Documents\dusklight\include",
-                  r"C:\Users\xxxxx\Documents\dusklight\src"]
+DONOR_ROOTS = [r"<decomp-root>\WW DP\include", r"<decomp-root>\WW DP\src"]
+RECEIVER_ROOTS = [r"%USERPROFILE%\Documents\dusklight\include",
+                  r"%USERPROFILE%\Documents\dusklight\src"]
 
 ENUM_RE = re.compile(r"enum\s+(\w+)?\s*(?::\s*[\w:]+)?\s*\{(.*?)\}", re.S)
 MEM_RE = re.compile(r"^\s*(\w+)\s*(?:=\s*([^,/]+?))?\s*(?:,|$)", re.M)

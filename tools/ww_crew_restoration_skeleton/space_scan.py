@@ -36,7 +36,7 @@ from merge_event import EventFile, arc_member, ESZ, SSZ, CSZ, DSZ
 
 MOD = (Path(os.environ["APPDATA"]) / "TwilitRealm" / "Dusklight"
        / "model_replacements" / "WW-Crew-Restoration")
-DONOR = Path(r"D:/XXXXXXX/Ex WW/files/res/Stage")
+DONOR = Path(r"<decomp-root>/Ex WW/files/res/Stage")
 
 FINDINGS = []
 
@@ -242,7 +242,7 @@ def main() -> int:
 
         # ---- R10: stb casts ----------------------------------------------
         import json
-        stb_p = (Path(r"C:/Users/xxxxx/Documents/dusklight/docs/WW Linked")
+        stb_p = (Path(r"%USERPROFILE%/Documents/dusklight/docs/WW Linked")
                  / "fact-sheets" / "json" / "stb-cast.json")
         if stb_p.is_file():
             cast = json.load(open(stb_p, encoding="utf-8"))

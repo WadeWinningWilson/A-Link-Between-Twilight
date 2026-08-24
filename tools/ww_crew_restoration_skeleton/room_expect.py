@@ -37,9 +37,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from jstudio_stb import yaz0_dec, rarc_members
 
-RECEIVER = Path("C:/Users/xxxxx/Documents/dusklight")
-DONOR_STAGE = Path("D:/XXXXXXX/Ex WW/files/res/Stage")
-MOD = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/"
+RECEIVER = Path("%USERPROFILE%/Documents/dusklight")
+DONOR_STAGE = Path("<decomp-root>/Ex WW/files/res/Stage")
+MOD = Path("%USERPROFILE%/AppData/Roaming/TwilitRealm/Dusklight/"
            "model_replacements/WW-Crew-Restoration")
 OUT = MOD / "npc" / "room_expect.csv"
 

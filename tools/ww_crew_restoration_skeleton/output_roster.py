@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-MOD = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/"
+MOD = Path("%USERPROFILE%/AppData/Roaming/TwilitRealm/Dusklight/"
            "model_replacements/WW-Crew-Restoration")
 ROSTER = MOD / "output_roster.csv"
 MAGIC = "WWOUT"

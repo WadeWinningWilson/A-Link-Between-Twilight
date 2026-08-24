@@ -18,9 +18,9 @@ compiler refused.
 ## Denominator and filter, stated as code
 
 - **Population:** headers present in **BOTH** trees under `include/`, extensions
-  `.h`/`.hpp`. Fork = `C:/Users/xxxxx/Documents/dusklight`, vanilla =
-  `C:/Users/xxxxx/Documents/dusklight-main`.
-- **Predicate:** `re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(")` over each file with
+  `.h`/`.hpp`. Fork = `%USERPROFILE%/Documents/dusklight`, vanilla =
+  `%USERPROFILE%/Documents/dusklight-main`.
+- **Predicate:** `re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")` over each file with
   block and line comments stripped, minus a keyword NOISE set; per-file **name-set**
   difference `fork - vanilla`.
 - **Numerator is a subset of the denominator** (both sides are the same shared list).

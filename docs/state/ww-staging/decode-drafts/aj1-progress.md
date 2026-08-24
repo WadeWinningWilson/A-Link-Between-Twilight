@@ -424,7 +424,7 @@ function-local static owning the eight cut names, `cut_move_*` returning `bool`.
 
 **THE CASCADE, exactly as Round 8 predicted.** After `privateCut`,
 `bodyCreateHeap`'s residual offsets went from ~0x3D low to **exactly 8 low** -
-and 8 bytes is precisely `"Ojhous2 "`. The Round 4 map named `wait_action2` as
+and 8 bytes is precisely `"Ojhous2\0"`. The Round 4 map named `wait_action2` as
 its only user. Writing `wait_action2` closed all 9 rows **without touching
 `bodyCreateHeap` at all**, taking it to EXACT. One more datum for the principle
 that has driven this entire session: **fix the placement root cause and every
@@ -1438,7 +1438,7 @@ narrow types everywhere else are correct — several are strongly load-bearing
 **This is recorded as a CLOSED lead, not an open one.** I named "check every
 local's type" as the next step in a report; it is now done, mechanically, and
 the answer is no. Nobody should re-run it. (Script:
-`C:/Users/xxxxx/AppData/Local/Temp/typesweep.py` — transient, but the method is
+`%USERPROFILE%/AppData/Local/Temp/typesweep.py` — transient, but the method is
 three lines: regex the narrow declarations out of each residual function's body,
 widen one at a time, rebuild, re-measure, always restoring the file.)
 

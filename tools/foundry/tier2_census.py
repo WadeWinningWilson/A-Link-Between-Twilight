@@ -81,7 +81,7 @@ RE_TABLE = re.compile(r"^\s*(?:static\s+)?[\w:*&<>\s]+?\**\s*(\w+)\s*"
 WW_FN = re.compile(r"dExtWw|wwRoom|ww[A-Z]|WwRoom|dKyWw|daWwTsubo|dExtWwCam")
 
 
-UPSTREAM_EXE = ("C:/Users/xxxxx/Documents/dusklight-main/build/"
+UPSTREAM_EXE = ("%USERPROFILE%/Documents/dusklight-main/build/"
                 "windows-msvc-relwithdebinfo/dusklight.exe")
 _UP = None
 

@@ -18,9 +18,9 @@ Usage:
 """
 import argparse, hashlib, os, re, sys
 
-FORK_EXE   = r"C:/Users/xxxxx/Documents/dusklight/build/windows-msvc-relwithdebinfo/dusklight.exe"
-VAN_EXE    = r"C:/Users/xxxxx/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/dusklight.exe"
-DUSK       = r"C:/Users/xxxxx/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/mods/ww_donor_disc.dusk"
+FORK_EXE   = r"%USERPROFILE%/Documents/dusklight/build/windows-msvc-relwithdebinfo/dusklight.exe"
+VAN_EXE    = r"%USERPROFILE%/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/dusklight.exe"
+DUSK       = r"%USERPROFILE%/Documents/dusklight-main/build/windows-msvc-relwithdebinfo/mods/ww_donor_disc.dusk"
 DUSK_MD5   = "cc00092ef79ca5e6b5820adf67e2c75d"
 DUSK_SIZE  = 237981
 STOCK_REV  = "c880d46fb5"

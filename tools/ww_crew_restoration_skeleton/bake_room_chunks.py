@@ -36,7 +36,7 @@ Usage:
   bake_room_chunks.py <donor-room-arc> <native-room-arc> [--tags T1,T2]
                       [--write] [--report out.md]
 e.g.
-  bake_room_chunks.py "D:/XXXXXXX/Ex WW/files/res/Stage/sea/Room44.arc" \
+  bake_room_chunks.py "<decomp-root>/Ex WW/files/res/Stage/sea/Room44.arc" \
       <MOD>/files/res/Stage/F_DL01/R44_00.arc
 """
 from __future__ import annotations
@@ -72,7 +72,7 @@ from pathlib import Path
 import grow_rdl01_stg as g
 from adapt_bdl_arcs import be32, yaz0_dec
 
-RECEIVER = Path(r"C:\Users\xxxxx\Documents\dusklight")
+RECEIVER = Path(r"%USERPROFILE%\Documents\dusklight")
 MOD = (Path(os.environ["APPDATA"]) / "TwilitRealm" / "Dusklight"
        / "model_replacements" / "WW-Crew-Restoration")
 

@@ -2,7 +2,7 @@
 # Usage:
 #   restore_event_staff.py [--write]        (default is DRY-RUN; --write commits)
 #
-#   Inputs   : donor  D:/XXXXXXX/Ex WW/files/res/Stage/LinkRM/Stage.arc
+#   Inputs   : donor  <decomp-root>/Ex WW/files/res/Stage/LinkRM/Stage.arc
 #              target <mod>/files/res/Stage/R_DL01/STG_00.arc
 #   Targets  : hard-coded — (TALE_DEMO, ALL), (TALE_DEMO2, ALL)
 #   Outputs  : the target arc, rewritten in place when --write is given
@@ -55,8 +55,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import grow_rdl01_stg as g
 from merge_event import EventFile, arc_member, ESZ, SSZ, CSZ, DSZ
 
-DONOR_STAGE = Path("D:/XXXXXXX/Ex WW/files/res/Stage/LinkRM/Stage.arc")
-HOST_STG = Path("C:/Users/xxxxx/AppData/Roaming/TwilitRealm/Dusklight/"
+DONOR_STAGE = Path("<decomp-root>/Ex WW/files/res/Stage/LinkRM/Stage.arc")
+HOST_STG = Path("%USERPROFILE%/AppData/Roaming/TwilitRealm/Dusklight/"
                 "model_replacements/WW-Crew-Restoration/files/res/Stage/"
                 "R_DL01/STG_00.arc")
 HDR = 56

@@ -177,3 +177,8 @@ tools/vendor/
 mods-src/ww_donor_disc/_research/*.bdl
 mods-src/ww_donor_disc/_research/*.bmd
 mods-src/ww_donor_disc/_research/*.bin
+
+# Machine logs that leaked local paths — never commit
+.vexp/*.log
+.vexp/*.log.*
+build_ls1.log

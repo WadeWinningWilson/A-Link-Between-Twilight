@@ -29,7 +29,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
 
-UPSTREAM = Path("C:/Users/xxxxx/Documents/dusklight-main/build/"
+UPSTREAM = Path("%USERPROFILE%/Documents/dusklight-main/build/"
                 "windows-msvc-relwithdebinfo/dusklight.exe")
 
 # The binding surface the migration depends on, each with WHY it matters.
