@@ -28,7 +28,6 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | Outfit Stats + Sumo fists-only visual (optional) | ✅ |
 | Shade's Refuge + Realtime Potions — soulslike rest/drink (optional, WIP) | ⏳ |
 | Deku Leaf Glide (optional, WIP) | ⏳ |
-| Postman rental shop + Oocoo dungeon warp | ✅ (shop footer polish WIP) |
 | Cycle Z-Targeting | ✅ |
 | Wolf Link combat overhaul (optional) | ✅ |
 | Enemy HP multipliers — Normal / Mid-Boss / Boss / Final (optional) | ✅ |
