@@ -14,7 +14,7 @@
 
 Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](https://twilitrealm.dev).
 
-## Features (summary)
+## Features Include (**toggle to your preference!**)
 
 | Feature | Status |
 |--------|--------|
