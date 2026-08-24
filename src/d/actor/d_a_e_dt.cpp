@@ -22,6 +22,7 @@
 #include "m_Do/m_Do_lib.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_region_mult.h"
 #endif
 
@@ -1486,6 +1487,7 @@ void daE_DT_c::executeDeath() {
             dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
             dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_E_DT_e);
+            dShadeRefuge_trySpawnOnDefeat();
 #endif
         }
         break;

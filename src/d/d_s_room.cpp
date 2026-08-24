@@ -71,6 +71,43 @@ const ShadeWatcherSpawn kShadeWatchers[] = {
     { "D_MN01", 3, { 3.2476f, -320.0000f, -333.0269f }, (s16)366, NULL },
 };
 }  // namespace
+
+// ============================================
+// NEW CODE — ALBW Port — "Shade's Refuge" (defeat-triggered spawn)
+// The room-creation spawn loop below only evaluates each row's gate ONCE, when
+// the room is first created (see objectSetCheck() -> the dScnRoom_Create phase
+// machine). A miniboss defeated WHILE the player is already standing in its
+// arena (the normal case — a miniboss defeat causes no room reload) never gets
+// a second gate evaluation, so its watcher would not appear until the room is
+// torn down and rebuilt (leave far enough to unload it, then return). Call
+// this directly from the miniboss's own defeat transition (right next to its
+// existing dAlbwEnemyRupees_tryGrantFightVictory hook) so the watcher appears
+// the instant the fight ends — no revisit required.
+//
+// Only matches gate != NULL rows: a NULL-gated row is already always-present
+// from room creation, so there is no live-transition gap to fix for it.
+// Idempotent — fopAcM_SearchByName guards against a double-spawn (e.g. if a
+// defeat-flag write happens to fire more than once).
+// ============================================
+void dShadeRefuge_trySpawnOnDefeat() {
+    if (!dShadeRefuge_isEnabled()) {
+        return;
+    }
+
+    for (int wi = 0; wi < (int)(sizeof(kShadeWatchers) / sizeof(kShadeWatchers[0])); wi++) {
+        const ShadeWatcherSpawn& w = kShadeWatchers[wi];
+        if (w.gate != NULL && strcmp(dComIfGp_getStartStageName(), w.stage) == 0 && w.gate()) {
+            if (fopAcM_SearchByName(fpcNm_ALBW_SHADE_WATCHER_e) != NULL) {
+                return;  // already present — avoid a double-spawn
+            }
+            static const cXyz kWatcherScale = { 1.0f, 1.0f, 1.0f };
+            const csXyz kWatcherAngle = { 0, w.angleY, 0 };
+            fopAcM_create(fpcNm_ALBW_SHADE_WATCHER_e, 0x0100,
+                          &w.pos, w.room, &kWatcherAngle, &kWatcherScale, -1);
+            return;
+        }
+    }
+}
 #endif
 
 static int dScnRoom_Draw(room_of_scene_class* i_this) {

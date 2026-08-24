@@ -15,6 +15,7 @@
 #if TARGET_PC
 #include "dusk/achievements.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #endif
 
 class daE_TH_HIO_c : public JORReflexible {
@@ -516,6 +517,7 @@ static void e_th_end(e_th_class* i_this) {
             dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
             dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_E_TH_e);
+            dShadeRefuge_trySpawnOnDefeat();
 #endif
         }
         break;

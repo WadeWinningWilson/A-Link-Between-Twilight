@@ -18,6 +18,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_shield.h"
 #endif
 
@@ -1996,6 +1997,7 @@ static void demo_camera(e_gob_class* i_this) {
             dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
             dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_E_GOB_e);
+            dShadeRefuge_trySpawnOnDefeat();
 #endif
             fopAcM_onSwitch(actor, 14);
         }

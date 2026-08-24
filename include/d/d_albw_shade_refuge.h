@@ -17,6 +17,14 @@
 // service. WIP feature kept behind this until finished.
 bool dShadeRefuge_isEnabled();
 
+// Re-checks the Shade Watcher spawn table for the current stage and spawns any
+// row whose gate just flipped true (e.g. a miniboss defeat), even though the
+// room this watcher lives in already finished its one-shot creation pass. Call
+// this from a miniboss's own defeat transition, right next to its existing ALBW
+// post-defeat hook. Defined in d_s_room.cpp (owns the spawn table); a no-op if
+// the setting is off, no row matches, or the watcher already exists.
+void dShadeRefuge_trySpawnOnDefeat();
+
 void dShadeRefuge_setRespawn(const char* i_stage, s8 i_roomNo, const cXyz& i_pos, s16 i_angleY);
 void dShadeRefuge_clearRespawn();
 bool dShadeRefuge_hasRespawn();

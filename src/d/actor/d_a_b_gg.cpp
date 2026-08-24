@@ -15,6 +15,7 @@
 #include <cstring>
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #endif
 
 class daB_GG_HIO_c : public JORReflexible {
@@ -3295,6 +3296,7 @@ void daB_GG_c::DeathCam() {
                     dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
                     dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_B_GG_e);
+                    dShadeRefuge_trySpawnOnDefeat();
 #endif
                 }
                 fopAcM_delete(this);
@@ -3314,6 +3316,7 @@ void daB_GG_c::DeathCam() {
                 dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
                 dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_B_GG_e);
+                dShadeRefuge_trySpawnOnDefeat();
 #endif
             }
 

@@ -17,6 +17,7 @@
 #if TARGET_PC
 #include "d/d_albw_combat.h"
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_hp_mult.h"
 #include "d/d_albw_lockout.h"
 #include "d/d_albw_shield.h"
@@ -4793,6 +4794,7 @@ void daB_TN_c::executeEnding() {
         dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
         dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_B_TN_e);
+        dShadeRefuge_trySpawnOnDefeat();
 #endif
         return;
 

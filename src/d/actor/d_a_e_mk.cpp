@@ -22,6 +22,7 @@
 #include <cstring>
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #endif
 
 class daE_MK_HIO_c : public JORReflexible {
@@ -1594,6 +1595,7 @@ static void demo_camera_end(e_mk_class* i_this) {
             dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
             dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_E_MK_e);
+            dShadeRefuge_trySpawnOnDefeat();
 #endif
             // fallthrough
         case 2:

@@ -1063,6 +1063,15 @@
    "verdict": "SPLIT - port 2 WW hunks (dExtWw_drawDemoMessage :782 + dExtWw_pollDemoMessage :855, the s49 storyboard-dialogue pair) -> PLUGIN . skins 2 hunks (dWwItemmdl bow-demo :843-844) -> ALBW . rest native. dExtWw_* call sites UNGUARDED by isWwHostStage - state-gated in callees, recorded scope-shape not defect (H/B ruled 08-16, envelope find #2)",
    "category": "shared-per-hunk"
   },
+  "src/d/d_s_room.cpp": {
+   "membership": ". . . .",
+   "commits": "both",
+   "t2_sites": "1",
+   "flags": "w",
+   "route": "HOUSING",
+   "verdict": "SHARED per-hunk: native room scene + WW room-load seam (dExtWwRoom_loadRoomDzr, 2026-08-09) + ALBW Shade's Refuge spawn table. Absent from the 2026-08-16 map cut; classified 2026-08-24 so ALBW spawn-on-defeat can land without a false new-universe block.",
+   "category": "shared-per-hunk"
+  },
   "src/d/d_stage.cpp": {
    "membership": "X . . X",
    "commits": "both",

@@ -19,6 +19,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 #if TARGET_PC
 #include "d/d_albw_enemy_rupee.h"
+#include "d/d_albw_shade_refuge.h"
 #include "d/d_albw_wolf_combat.h"
 #endif
 
@@ -2976,6 +2977,7 @@ void daE_VA_c::executeOpaciDeath() {
         dComIfGs_onStageMiddleBoss();
 #if TARGET_PC
         dAlbwEnemyRupees_tryGrantFightVictory(fpcNm_E_VT_e);
+        dShadeRefuge_trySpawnOnDefeat();
 #endif
         field_0x1364 = 0;
 
