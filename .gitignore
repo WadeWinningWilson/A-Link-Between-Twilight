@@ -24,8 +24,33 @@ orig/*/*
 *.raw
 *.gci
 
-# Build files
-build/
+# Build files — only the play RelWithDebInfo tree is published.
+# Other siblings (fps backups, ww-excluded, windows-msvc Debug) stay local.
+build/*
+!build/windows-msvc-relwithdebinfo/
+!build/windows-msvc-relwithdebinfo/**
+build/windows-msvc-relwithdebinfo/CMakeFiles/
+build/windows-msvc-relwithdebinfo/_deps/
+build/windows-msvc-relwithdebinfo/libjpeg-turbo-ext-prefix/
+build/windows-msvc-relwithdebinfo/libjpeg-turbo-install/
+build/windows-msvc-relwithdebinfo/ww_donor_disc/
+build/windows-msvc-relwithdebinfo/mods/
+build/windows-msvc-relwithdebinfo/mods-src/
+build/windows-msvc-relwithdebinfo/mods-retired-2026-08-16/
+build/windows-msvc-relwithdebinfo/mods-unplugged-2026-08-23/
+build/windows-msvc-relwithdebinfo/_CPack_Packages/
+build/windows-msvc-relwithdebinfo/*.pdb
+build/windows-msvc-relwithdebinfo/**/CMakeFiles/
+build/windows-msvc-relwithdebinfo/CMakeCache.txt
+build/windows-msvc-relwithdebinfo/CPackConfig.cmake
+build/windows-msvc-relwithdebinfo/CPackSourceConfig.cmake
+build/windows-msvc-relwithdebinfo/cmake_install.cmake
+build/windows-msvc-relwithdebinfo/**/cmake_install.cmake
+build/windows-msvc-relwithdebinfo/**/CTestTestfile.cmake
+build/windows-msvc-relwithdebinfo/**/*_include.cmake
+build/windows-msvc-relwithdebinfo/TracyTargets.cmake
+build/windows-msvc-relwithdebinfo/install_manifest.txt
+build/windows-msvc-relwithdebinfo/*.lnk
 .ninja_*
 build.ninja
 
@@ -40,6 +65,7 @@ compile_commands.json
 # Miscellaneous
 *.exe
 *.zip
+!build/windows-msvc-relwithdebinfo/dusklight.exe
 
 # CoNavigate dev traces (never commit session logs)
 **/conavigate/
