@@ -1,8 +1,10 @@
-# ALBW Port (PC)
+# A Link Between Twilight (PC)
 
-**ALBW-Dusklight** adds an _A Link Between Worlds_–style energy meter, death item strip, Postman rental economy, and optional combat/economy systems to the PC build of [Dusklight](https://github.com/TwilitRealm/dusklight). All mod code is gated on `#if TARGET_PC`.
+**A Link Between Twilight** is a PC build of [Dusklight](https://github.com/TwilitRealm/dusklight) with an *A Link Between Worlds*–style energy meter, death item strip, Postman rental economy, and a suite of optional combat, HUD, and economy systems. All of this mod code is gated on `#if TARGET_PC`.
 
-Clone **[ALBW-Dusklight](https://github.com/WadeWinningWilson/A-Link-Between-Dusklight)** and follow the **[README](../README.md)** for build steps.
+Clone **[A-Link-Between-Twilight](https://github.com/WadeWinningWilson/A-Link-Between-Twilight)** and follow the **[README](../README.md)** for build steps.
+
+This is the public Twilight tree. It does **not** ship Wind Waker actor TUs or a WW layer.
 
 ## Build flag
 
@@ -21,23 +23,34 @@ When **ON**, greeting, shop, and farewell use in-game BLO screens and fonts.
 
 ## Settings
 
-Pause menu → **Quality of Life** → **ALBW Settings** (single section):
+Pause menu → **Quality of Life** → **ALBW Settings** (and related Visuals / HUD rows):
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
-| **Enemy HP ×** (Normal / Mid-Boss / Boss / Final Boss) | 1× each | Scales effective enemy HP by dividing incoming attack power in `d_cc_uty.cpp` (1–16× per category). *Planned: true max-HP scaling — see [Next on the docket](#next-on-the-docket).* |
+| **Enemy HP ×** (Normal / Mid-Boss / Boss / Final Boss) | 1× each | Scales enemy durability. Spawn-time true max-HP path exists; the live `d_cc_uty` divide path is still the one that fires on every hit. |
 | **No Ammo Drops** | On | Bombs, arrows, and seeds no longer drop from enemies; magic pickups replace them. |
 | **Manual Shielding** | Off | Hold **ZR** to guard without Z-target lock-on; **ZR+B** shield bash. Off = vanilla auto-guard on Z-target. |
 | **Shield Parry & Bash Charges** | On | Perfect-guard timing earns bash charges and ALBW meter; failed blocks cost meter and charges. Off = traditional TP guard. |
+| **Parry Master** | Off | Harder parry economy (health/stamina cost). Speedrun-locked. |
+| **Focused Arts** | Off | Hidden-skill charge bank and finishers, separate from vanilla hidden-skill input. |
 | **Shield Durability** | Off | Shield HP by tier; failed blocks drain it. Hylian repairs on parry. Break at 0 triggers guard break. |
 | **Death Recovery Orb** | Off | After Talo is rescued, dying halves your wallet and leaves a Tear of Light at the death spot to recover part of it. Item strip and meter refill on death are unaffected. |
-| **Wolf Link Combat** | Off | ALBW wolf form: bite charges for Midna field attacks, twilight/non-twilight damage split, non-twilight stun, low-HP bite healing. Off = vanilla TP wolf combat. |
-| **Enemy Death Rupees** | Off | Credit rupees directly to your wallet when enemies die and when boss fights end. Vanilla drop tables (hearts, jars, ground rupees) are unchanged. |
-| **Extra Item Slot** | Off | **Off** / **Extra Only** (Midna on left D-pad, Z item) / **Extra + Quick Swap** (also Up = cycle sword, Right = cycle shield, Down = transform; map defaults to M / Tab). See `docs/d-pad-reworking.md`. |
+| **Wolf Link Combat** | Off | Bite-charge Midna arts, twilight/non-twilight damage split, non-twilight stun, low-HP bite healing, charge HUD. Off = vanilla TP wolf combat. |
+| **Outfit Stats** | Off | Per-outfit stat/swim/dive rules (Zora speed and dive outside Zora tunics when on). |
+| **Boss Refinement** | Off | Reworked dungeon-boss fights (Diababa, Armogohma, Fyrus, Morpheel, plus sword-gate rules on Zant/Ganon). Off = vanilla scripts. |
+| **Shade's Refuge** | Off | Soulslike rest points (rest/heal + warp to Ordon). **WIP.** |
+| **Realtime Potions** | Off | Drink while moving instead of pausing the world timer. **WIP.** |
+| **Enemy Death Rupees** | Off | Credit rupees directly to your wallet when enemies die and when boss fights end. Vanilla drop tables are unchanged. |
+| **Master Quest** | Off | Postman heart and ALBW meter capacity upgrades; halved heart-container/piece grants. |
+| **Extra Item Slot** | Off | **Off** / **Extra Only** (Midna on left D-pad, Z item) / **Extra + Quick Swap** (Up = cycle sword, Right = cycle shield, Down = transform; map defaults to M / Tab). |
+| **Quick Equip Wheel** | Off | Live item wheel (needs Extra Item Slot on). |
+| **Soulbound Red Potion** | Off | Dedicated multi-use red potion in inventory slot 11. |
+| **Boss Health Bars** | Off | Named health bar for main dungeon bosses / Ganondorf. |
+| **LoP HUD** | Off | Lies-of-P style HUD layout (vanilla hearts or health bar). |
+
+Debug / editor-only rows (item skins, wolf-art test unlocks, lock-on HP overlay, True ALBW mode) stay under Level Editor → ALBW.
 
 Design details for shield systems: **[shield-combat.md](shield-combat.md)**.
-
-Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 
 ---
 
@@ -46,9 +59,10 @@ Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 ### ALBW energy meter
 
 - Replaces the lantern-oil HUD with an ALBW-style stamina bar for **human Link**.
-- Drains on sword swings, agility actions, and hidden-skill use; passive recovery when not guarding.
-- **Wolf Link is unaffected** — wolf combat uses its own optional overhaul (below), not the meter.
+- Drains on sword swings, agility actions, and hidden-skill use; meter-gated ammo HUD clamp; passive recovery when not guarding.
+- **Wolf Link is unaffected** — wolf combat uses its own optional overhaul, not this meter.
 - While actively guarding, passive ALBW recovery (including idle boost) is paused; parry rewards refill via explicit meter grants.
+- Exhausted movement lockout and tired-idle / heavy-state live in `d_a_alink` + `d_albw_lockout.cpp`.
 
 ### Death — item strip
 
@@ -93,7 +107,7 @@ Items appear in the shop only if they were **stripped on death** and are **not c
 
 **Postman actor:** custom voice SFX, optional BGM, `evtTalk()` intercept keeps Link locked during shop. Wolf Link gets a dismissal toast and no shop.
 
-Shop footer polish (analog-stick hint, tagline) is still WIP — see **[albw-shop-icon-alignment.md](albw-shop-icon-alignment.md)** and maintainer notes below.
+Shop footer polish (analog-stick hint, tagline) is still WIP — see **[albw-shop-icon-alignment.md](albw-shop-icon-alignment.md)**.
 
 ### Shield combat (optional)
 
@@ -105,13 +119,36 @@ Three independent toggles under **ALBW Settings** (see table above):
 
 ALBW recovery pause while guarding is always active on PC when the mod is built in.
 
+### Focused Arts (optional)
+
+When **Focused Arts** is on, hidden skills use a charge bank and finisher rules instead of vanilla one-shot input. See `d_focused_arts.cpp`.
+
 ### Wolf Link combat (optional)
 
 When **Wolf Link Combat** is on:
 
-- Bite charge system for Midna field attacks (with dedicated charge HUD).
+- Bite charges feed Midna field attacks (howl / arm / charge upgrade via Postman shop rows).
+- Dedicated wolf charge HUD; deny flash when a spend is refused.
 - Twilight vs non-twilight damage split, non-twilight enemy stun, low-HP bite healing.
 - Wolf form remains **outside** the ALBW energy meter economy.
+
+### Boss Refinement (optional)
+
+When **Boss Refinement** is on, the native boss TUs consume `d_albw_boss.cpp` at the fight boundary:
+
+- **Diababa** — late-phase hang, retaliation poison, siphon windows.
+- **Armogohma** — 4% eye chip, Dominion-Rod statue count, floor phase 3.
+- **Fyrus** — golem window, ablaze/hollow phases, chip on the real bar.
+- **Morpheel** — eye-hook / bubble / tentacle-grab phase machine.
+- **Zant / Ganondorf** — Master-Sword (or any-sword) collider gates; not a full script rewrite.
+
+Off = the same TUs run vanilla. Boss HP HUD is a separate toggle.
+
+### Outfit Stats, wardrobe, mail
+
+- **Outfit Stats** — per-tunic rules (swim/dive, etc.).
+- Wardrobe / cap-wear / sumo-fists visuals.
+- Junior Postman mail and soulbound potion persist through save (`d_albw_mail.cpp`, `d_save.cpp`).
 
 ### Enemy Death Rupees (optional)
 
@@ -120,7 +157,10 @@ When **Enemy Death Rupees** is on:
 - **Additive only** — vanilla enemy drop tables (hearts, jars, ground rupees) are unchanged.
 - Field kills credit the wallet via per-enemy lookup tables; boss/mid-boss **fight victories** grant once per profile name per session.
 - A native **"+n"** popup beside the rupee counter shows each grant (`d_albw_rupee_popup.cpp`, drawn from `d_meter2_draw.cpp`).
-- Many enemies hook death in their actor files in addition to the central `d_cc_uty.cpp` path (Deku Baba segments, Skulltulas, Beamos, etc.).
+
+### Mod loader (Dusk-API)
+
+The public tree compiles the zip/disk mod loader and host services (no funchook). Companion-mod installers live under `companion_mods/_release/`.
 
 ---
 
@@ -136,69 +176,38 @@ When **Enemy Death Rupees** is on:
 | Death Recovery Orb | `src/d/d_albw_death_rupee.cpp`, `include/d/d_albw_death_rupee.h` |
 | Enemy HP multipliers | `src/d/d_albw_hp_mult.cpp`, `include/d/d_albw_hp_mult.h` |
 | Shield parry / durability / bash | `src/d/d_albw_shield.cpp`, `include/d/d_albw_shield.h` |
+| Movement / combat lockout | `src/d/d_albw_lockout.cpp`, `include/d/d_albw_lockout.h` |
+| Focused Arts | `src/d/d_focused_arts.cpp`, `include/d/d_focused_arts.h` |
 | Wolf combat + stun | `src/d/d_albw_wolf_stun.cpp`, `include/d/d_albw_wolf_stun.h` |
 | Wolf charge HUD | `src/d/d_albw_wolf_charge_hud.cpp`, `include/d/d_albw_wolf_charge_hud.h` |
+| Boss refinement | `src/d/d_albw_boss.cpp`, `include/d/d_albw_boss.h` |
+| Boss HP HUD | `src/d/d_albw_boss_hp_hud.cpp` |
+| Outfit / wardrobe / mail | `src/d/d_albw_outfit.cpp`, `src/d/d_albw_wardrobe.cpp`, `src/d/d_albw_mail.cpp` |
 | Enemy Death Rupees | `src/d/d_albw_enemy_rupee.cpp`, `include/d/d_albw_enemy_rupee.h` |
 | Rupee grant HUD popup | `src/d/d_albw_rupee_popup.cpp`, `include/d/d_albw_rupee_popup.h` |
+| Quick equip + Ext Status host | `src/d/d_ext_mod_flags.cpp`, `include/d/d_ext_quick_equip.h` |
 | ALBW meter HUD + recovery | `src/d/d_meter2.cpp`, `src/d/d_meter2_draw.cpp` |
 | Collision / kill hooks | `src/d/d_cc_uty.cpp` |
 | Death strip + orb hook | `src/d/d_gameover.cpp` |
-| Orb room spawn | `src/d/d_s_room.cpp` |
 | Postman hook | `src/d/actor/d_a_npc_post.cpp` |
-| Link guard / manual shield | `src/d/actor/d_a_alink.cpp`, `src/d/actor/d_a_alink_guard.inc` |
-| Vanilla talk suppress | `src/d/d_msg_object.cpp`, `src/d/d_msg_scrn_talk.cpp` |
+| Link guard / meter / wolf | `src/d/actor/d_a_alink.cpp`, `d_a_alink_guard.inc`, `d_a_alink_wolf.inc` |
 | Settings UI | `src/dusk/ui/settings.cpp`, `src/dusk/settings.cpp` |
-| Per-enemy kill hooks | `src/d/actor/d_a_e_*.cpp`, `src/d/actor/d_a_b_*.cpp`, `src/d/actor/d_a_obj_bemos.cpp`, … |
-
-## Related docs
-
-| Doc | Topic |
-|-----|--------|
-| [combat-refinements-handoff.md](combat-refinements-handoff.md) | Field combat backlog: enemy windup targeting, hidden skills × ALBW meter |
-| [shield-combat.md](shield-combat.md) | Shield design, Dawnlight port notes, playtest checklist |
-| [albw-death-recovery-orb-brief.md](albw-death-recovery-orb-brief.md) | Death orb state machine and spawn rules |
-| [albw-shop-icon-alignment.md](albw-shop-icon-alignment.md) | Shop row icons, footer layout constraints |
+| Mod loader | `src/dusk/mods/loader/`, `sdk/include/mods/` |
 
 ---
 
 ## Next on the docket
 
-Planned work after v0.55, in rough priority order:
+Shipped since the v0.55 / v-0.7 write-up: upstream Dusklight through **v1.4.1+**, Focused Arts, Extra Item Slot + quick-equip wheel, Boss Refinement (Diababa / Gohma / Fyrus / Morpheel + Zant/Ganon sword gates), Outfit Stats, wolf-art shop unlocks, lockout/tired-idle, Dusk-API loader, companion-mod zip.
 
-### 1. Merge upstream Dusklight v1.3.1
+Still open:
 
-Rebase / submodule sync with **[TwilitRealm/dusklight v1.3.1](https://github.com/TwilitRealm/dusklight/releases)** (2026-05-27 hotfix on 1.3.0): config save/load fixes, Arbiter's Grounds / Hyrule Castle chain geometry, text-input clear-with-Enter, and other engine fixes.
-
-**Touch points:** git submodule / merge base, conflict pass on shared files (`m_Do_main`, actor infra, settings, build presets), full rebuild and smoke test (Postman shop, meter HUD, wolf combat, Darknut parry).
-
-### 2. Postman heart & stamina upgrades — ✅ finalized (2026-06)
-
-**Shipped** on the Postman **Upgrades & Services** page when **Master Quest** is on (`d_albw_master_quest.cpp`, `d_albw_rental.cpp`):
-
-- Escalating-price **heart** purchases (half-heart / container progression).
-- Escalating-price **ALBW stamina meter** capacity purchases.
-
-**Remaining polish:** swap the **stamina upgrade row icon** in shop UI (heart icon is correct).
-
-**Touch points:** `d_albw_master_quest.cpp`, `d_albw_rental.cpp` (`CAT_UPGRADES`), `d_meter2.cpp` (meter max), save event regs 100–102.
-
-### 3. Actual enemy HP multiplier (deferred)
-
-Replace (or offer alongside) today's **attack-power division** intercept in `dAlbwHP_applyMult()` with **real max-HP scaling** on enemies at spawn or init — so 16× means 16× HP without integer-division plateaus or the `max(1, …)` floor distorting time-to-kill.
-
-**Why:** Current divide-by-mult approach saturates early on normal sword hits (see maintainer discussion: damage hits 1 per hit once multiplier ≥ ⌊attackPower/2⌋ + 1). True HP mult keeps high slider values meaningful across all attack strengths. `dAlbwHP_tryApplyTrueMaxHp()` exists but the divide path in `d_cc_uty.cpp` is still active — finish migration after Dusklight merge.
-
-**Touch points:** `d_albw_hp_mult.cpp`, enemy init paths (`health` / `mMaxHp` fields per actor), `d_cc_uty.cpp` (remove or gate divide path), wolf charge scaling in `d_cc_uty.cpp` (today uses `dAlbwHP_getRawMult()` to undo the divide).
-
-### 4. Lockout boomerang — visual “ranged open” feedback (future)
-
-Gameplay debuff (`dAlbwLockout_onBoomerangHit`, 4s window) is in; **no dedicated VFX/HUD yet**. Later: enemy shimmer / status icon / lock-on tint while `dAlbwLockout_isRangedOpened()` so players know bow / bomb / iron ball will connect before the timer expires.
-
-### 5. Zant & Ganon boss changes
-
-ALBW-specific fight tuning for the **Zant** and **Ganon / Ganondorf** finale — phase scripts, damage expectations, and durability rules that still treat Zant as excluded from wolf combat overrides (`fpcNm_B_ZANT_e` in `d_cc_uty.cpp`).
-
-**Scope TBD:** document desired phase behavior, HP category overrides, and any bespoke parry/durability rules before implementation. Final-boss category already exists in `d_albw_hp_mult.cpp` (`sFinalBoss` list).
+1. **True enemy HP multiplier** — finish migrating off the `d_cc_uty` attack-power divide so 16× is 16× HP, not early 1-damage plateaus.
+2. **Shade's Refuge / realtime potions** — still marked WIP; rest/drink loop needs a playtest pass.
+3. **Deku Leaf glide** — debug toggle only.
+4. **Hero's Shade secret boss** — gated, default off, not a finished fight.
+5. **Shop footer / stamina-upgrade icon** — analog-stick hint, tagline, Master Quest stamina row art.
+6. **Final pricing pass** — Postman catalog numbers.
 
 ---
 

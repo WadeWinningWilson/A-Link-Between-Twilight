@@ -2,7 +2,7 @@
   <img src="res/albt-logo.png" alt="A Link Between Twilight" width="640">
 
   <p align="center">
-    <a href="https://github.com/WadeWinningWilson/A-Link-Between-Dusklight">A Link Between Dusklight on GitHub</a>
+    <a href="https://github.com/WadeWinningWilson/A-Link-Between-Twilight">A Link Between Twilight on GitHub</a>
   </p>
 </div>
 
@@ -33,16 +33,14 @@ Inspired by CaptainKittyCa2’s ALBW meter mod work. Base game by [TwilitRealm](
 | Wolf Link combat overhaul (optional) | ✅ |
 | Enemy HP multipliers — Normal / Mid-Boss / Boss / Final (optional) | ✅ |
 | Enemy Wealth + HUD popup (optional) | ✅ |
-| Final Pricing Passes| ⏳ |
+| Final Pricing Passes | ⏳ |
 | Postman shop — heart & ALBW meter upgrades (Master Quest) | ✅ (stamina row icon swap pending) |
-| Enemy HP multiplier final touches| ⏳ |
-| Boss Refinement| ⏳ |
+| Enemy HP multiplier final touches | ⏳ |
+| Boss Refinement (Diababa, Gohma, Fyrus, Morpheel + Zant/Ganon sword gates) | ✅ |
 
 Debug toggles stay under Level Editor → ALBW.
 
-Full gameplay, settings, and source file list: **[docs/albw-port.md](docs/albw-port.md)** (includes **Next on the docket**).
-
-Latest release notes: **[docs/patch-notes-v0.55.md](docs/patch-notes-v0.55.md)** (v0.55 since v0.5).
+Full gameplay, settings, and source file list: **[docs/albw-port.md](docs/albw-port.md)**. Older notes: **[docs/patch-notes-v0.55.md](docs/patch-notes-v0.55.md)**.
 
 ---
 
@@ -59,8 +57,8 @@ More detail: [docs/building.md](docs/building.md).
 ### 2. Clone this repository
 
 ```powershell
-git clone --recursive https://github.com/WadeWinningWilson/A-Link-Between-Dusklight.git
-cd A-Link-Between-Dusklight
+git clone --recursive https://github.com/WadeWinningWilson/A-Link-Between-Twilight.git
+cd A-Link-Between-Twilight
 git submodule update --init --recursive
 ```
 
@@ -119,20 +117,20 @@ GPU: D3D12, Vulkan, or Metal capable card recommended (see upstream Dusklight no
 
 ## Building on macOS / Linux
 
-The **A Link Between Dusklight mod code is PC-only** (`#if TARGET_PC`). You can still build vanilla Dusklight from this tree using the presets in [docs/building.md](docs/building.md); the meter and rental systems will not be included on those platforms.
+The **A Link Between Twilight mod code is PC-only** (`#if TARGET_PC`). You can still build vanilla Dusklight from this tree using the presets in [docs/building.md](docs/building.md); the meter and rental systems will not be included on those platforms.
 
 ---
 
 # Upstream Dusklight
 
-This repo is a full Dusklight source tree with **A Link Between Dusklight** integrated. For vanilla Dusklight releases, documentation, and community links:
+This repo is a full Dusklight source tree with **A Link Between Twilight** integrated. For vanilla Dusklight releases, documentation, and community links:
 
 - [TwilitRealm/dusklight](https://github.com/TwilitRealm/dusklight)
 - [Official site](https://twilitrealm.dev) · [Discord](https://discord.gg/6NpMhefCK9)
 
 # Credits
 
-- **A Link Between Dusklight:** WadeWinningWilson — [A-Link-Between-Dusklight](https://github.com/WadeWinningWilson/A-Link-Between-Dusklight) (GitHub repo name)
+- **A Link Between Twilight:** WadeWinningWilson — [A-Link-Between-Twilight](https://github.com/WadeWinningWilson/A-Link-Between-Twilight)
 - **Inspired by:** CaptainKittyCa2
 - **Dusklight:** [TwilitRealm](https://github.com/TwilitRealm/dusklight) and [contributors](https://github.com/TwilitRealm/dusklight/graphs/contributors)
 - **Decomp / Aurora / community:** see upstream [README](https://github.com/TwilitRealm/dusklight/blob/main/README.md) credits
