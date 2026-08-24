@@ -50,6 +50,9 @@ build/windows-msvc-relwithdebinfo/**/CTestTestfile.cmake
 build/windows-msvc-relwithdebinfo/**/*_include.cmake
 build/windows-msvc-relwithdebinfo/TracyTargets.cmake
 build/windows-msvc-relwithdebinfo/install_manifest.txt
+build/windows-msvc-relwithdebinfo/dusklight.rc
+build/windows-msvc-relwithdebinfo/dusklight_exports_input.rsp
+build/windows-msvc-relwithdebinfo/lib/pkgconfig/
 build/windows-msvc-relwithdebinfo/*.lnk
 .ninja_*
 build.ninja
