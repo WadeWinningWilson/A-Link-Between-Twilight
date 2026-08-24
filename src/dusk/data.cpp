@@ -28,7 +28,8 @@ aurora::Module Log{"dusk::data"};
 
 constexpr auto kLocationDescriptorName = "data_location.json";
 
-constexpr std::array<std::string_view, 4> kUserDataDirectories = {
+constexpr std::array<std::string_view, 5> kUserDataDirectories = {
+    "model_replacements",
     "texture_replacements",
     "USA",
     "EUR",
@@ -875,6 +876,16 @@ void ensure_data_directory(const std::filesystem::path& dataPath) {
     if (ec) {
         Log.fatal("Failed to create data directory '{}': {}", io::fs_path_to_string(dataPath),
             ec.message());
+    }
+    // Same layout under AppData or portable `data/`: custom models sit next to
+    // texture_replacements. Aurora mkdir's the texture dir on load; model
+    // replacements were scan-only and never created on a fresh data tree.
+    for (const auto name : kUserDataDirectories) {
+        std::filesystem::create_directories(dataPath / name, ec);
+        if (ec) {
+            Log.warn("Failed to create data subdirectory '{}': {}",
+                io::fs_path_to_string(dataPath / name), ec.message());
+        }
     }
 }
 

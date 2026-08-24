@@ -250,39 +250,106 @@ struct DiskEntry {
     bool variant;      // true for an exploded collection variant
 };
 
+// Portable `data/` and AppData both own a model_replacements tree. Create
+// both; scan unions them so a pack in either location loads (Armogohma /
+// leaf / Skull Kid stay findable in the alpha without abandoning AppData).
+std::vector<std::filesystem::path> model_replacement_roots() {
+    std::vector<std::filesystem::path> out;
+    std::error_code ec;
+    auto add = [&](const std::filesystem::path& base) {
+        if (base.empty()) {
+            return;
+        }
+        const std::filesystem::path root = base / "model_replacements";
+        std::filesystem::create_directories(root, ec);
+        std::filesystem::path key = std::filesystem::weakly_canonical(root, ec);
+        if (ec) {
+            key = root;
+        }
+        for (const auto& existing : out) {
+            if (existing == key) {
+                return;
+            }
+        }
+        out.push_back(key);
+    };
+    add(ConfigPath);
+    add(CachePath);
+    return out;
+}
+
+std::filesystem::path resolve_mod_root(const std::string& name) {
+    std::error_code ec;
+    for (const auto& root : model_replacement_roots()) {
+        const auto p = root / name;
+        if (std::filesystem::is_directory(p, ec)) {
+            return p;
+        }
+    }
+    return ConfigPath / "model_replacements" / name;
+}
+
+bool mod_dir_exists(const std::string& name) {
+    std::error_code ec;
+    for (const auto& root : model_replacement_roots()) {
+        if (std::filesystem::is_directory(root / name, ec)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Disk enumeration of model_replacements/, alphabetical (the stable append
 // order for entries not yet in the order setting), with collection wrappers
 // exploded into per-variant entries.
 std::vector<DiskEntry> disk_entries() {
     std::vector<DiskEntry> out;
-    const std::filesystem::path root = ConfigPath / "model_replacements";
     std::error_code ec;
-    if (!std::filesystem::exists(root, ec)) {
-        return out;
-    }
-    for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
-        if (!entry.is_directory(ec)) {
+    std::vector<std::string> seen;
+    auto already = [&](const std::string& name) {
+        for (const auto& s : seen) {
+            if (s == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const auto& root : model_replacement_roots()) {
+        if (!std::filesystem::exists(root, ec)) {
             continue;
         }
-        const std::string name = entry.path().filename().string();
-        if (folder_content(entry.path()).any()) {
-            out.push_back({name, false});
-            continue;
-        }
-        // No content of its own — a collection wrapper? Explode contentful
-        // immediate subfolders into variant entries (one level only).
-        bool anyVariant = false;
-        for (const auto& sub : std::filesystem::directory_iterator(entry.path(), ec)) {
-            if (!sub.is_directory(ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
+            if (!entry.is_directory(ec)) {
                 continue;
             }
-            if (folder_content(sub.path()).any()) {
-                out.push_back({name + "/" + sub.path().filename().string(), true});
-                anyVariant = true;
+            const std::string name = entry.path().filename().string();
+            if (already(name)) {
+                continue;
             }
-        }
-        if (!anyVariant) {
-            out.push_back({name, false});  // plain (empty-ish) folder — list as before
+            seen.push_back(name);
+            if (folder_content(entry.path()).any()) {
+                out.push_back({name, false});
+                continue;
+            }
+            // No content of its own — a collection wrapper? Explode contentful
+            // immediate subfolders into variant entries (one level only).
+            bool anyVariant = false;
+            for (const auto& sub : std::filesystem::directory_iterator(entry.path(), ec)) {
+                if (!sub.is_directory(ec)) {
+                    continue;
+                }
+                if (folder_content(sub.path()).any()) {
+                    const std::string vname = name + "/" + sub.path().filename().string();
+                    if (!already(vname)) {
+                        seen.push_back(vname);
+                        out.push_back({vname, true});
+                    }
+                    anyVariant = true;
+                }
+            }
+            if (!anyVariant) {
+                out.push_back({name, false});
+            }
         }
     }
     std::sort(out.begin(), out.end(),
@@ -412,7 +479,6 @@ struct Source {
 std::vector<Source> ordered_sources() {
     std::vector<Source> out;
     const std::filesystem::path coreDir = core_root();
-    const std::filesystem::path userDir = ConfigPath / "model_replacements";
     const bool userWins = getSettings().game.customModelsAllowCoreOverride.getValue();
     const auto pushCore = [&out, &coreDir] {
         for (const std::string& pack : core_pack_names()) {
@@ -423,7 +489,7 @@ std::vector<Source> ordered_sources() {
         pushCore();  // D4 default: core wins every conflict with a user mod
     }
     for (const OrderEntry& e : full_order_list()) {
-        out.push_back({e.name, userDir / e.name, e.enabled, false});
+        out.push_back({e.name, resolve_mod_root(e.name), e.enabled, false});
     }
     if (userWins) {
         pushCore();  // override allowed: user mods layer above core (§4.1)
@@ -950,10 +1016,8 @@ std::vector<std::string> list_folders() {
     // actually exist on disk — stale order entries are kept in the setting but
     // never shown or resolved.
     std::vector<std::string> out;
-    const std::filesystem::path root = ConfigPath / "model_replacements";
-    std::error_code ec;
     for (const OrderEntry& e : full_order_list()) {
-        if (std::filesystem::is_directory(root / e.name, ec)) {
+        if (mod_dir_exists(e.name)) {
             out.push_back(e.name);
         }
     }
@@ -1158,10 +1222,8 @@ static std::vector<OrderEntry> flatten_group_blocks(
 }
 
 static bool group_block_on_disk(const std::vector<OrderEntry>& block) {
-    const std::filesystem::path root = ConfigPath / "model_replacements";
-    std::error_code ec;
     for (const OrderEntry& e : block) {
-        if (std::filesystem::is_directory(root / e.name, ec)) {
+        if (mod_dir_exists(e.name)) {
             return true;
         }
     }
@@ -1260,9 +1322,10 @@ std::string mod_folder_path(const char* folder) {
         return {};
     }
     std::error_code ec;
-    const auto abs = std::filesystem::absolute(ConfigPath / "model_replacements" / folder, ec);
+    const auto resolved = resolve_mod_root(folder);
+    const auto abs = std::filesystem::absolute(resolved, ec);
     if (ec) {
-        return io::fs_path_to_string(ConfigPath / "model_replacements" / folder);
+        return io::fs_path_to_string(resolved);
     }
     return io::fs_path_to_string(abs);
 }
@@ -1920,11 +1983,10 @@ ModInfo mod_info(const char* folder) {
     if (folder == nullptr) {
         return out;
     }
-    const std::filesystem::path userRoot = ConfigPath / "model_replacements";
     const std::string name(folder);
     const size_t slash = name.find('/');
     if (slash == std::string::npos) {
-        parse_modinfo(userRoot / name, out);
+        parse_modinfo(resolve_mod_root(name), out);
         return out;
     }
 
@@ -1932,10 +1994,10 @@ ModInfo mod_info(const char* folder) {
     // description, screenshot...), let a variant-local ini override on top,
     // and make sure the DISPLAY NAME stays per-variant — a bare collection
     // name would render 17 identical rows.
-    parse_modinfo(userRoot / name.substr(0, slash), out);
+    parse_modinfo(resolve_mod_root(name.substr(0, slash)), out);
     const std::string collectionName = out.name;
     out.name.clear();
-    parse_modinfo(userRoot / name, out);  // variant's own ini (rare)
+    parse_modinfo(resolve_mod_root(name), out);  // variant's own ini (rare)
     if (out.name.empty() && !collectionName.empty()) {
         out.name = collectionName + ": " + name.substr(slash + 1);
     }
@@ -2093,8 +2155,7 @@ namespace {
 // customModelsAllowCoreOverride) — first match wins ("top wins").
 std::filesystem::path resolve_override(const char* fname) {
     std::error_code ec;
-    const std::filesystem::path userRoot = ConfigPath / "model_replacements";
-    if (std::filesystem::exists(userRoot, ec)) {
+    for (const auto& userRoot : model_replacement_roots()) {
         std::filesystem::path direct = userRoot / fname;
         if (std::filesystem::exists(direct, ec)) {
             return direct;

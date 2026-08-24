@@ -144,9 +144,12 @@ trailer/assets/*
 crashdumps/
 myeasylog.log
 
-# ALBT companion mods — separate release, not shipped with Dusklight/ALBW (legal isolation)
+# ALBT companion mods — pack binaries stay local; install notes ship.
 companion_mods/*
 !companion_mods/README.md
+!companion_mods/_release/
+!companion_mods/_release/README.md
+!companion_mods/_release/INSTALL.bat
 
 # Downloaded ProcDump tool (binaries)
 tools/procdump/
