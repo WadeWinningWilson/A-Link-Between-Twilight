@@ -40,7 +40,7 @@ Pause **Settings → ALBW**. Most toggles live under that tab, grouped as **Syst
 
 Design details for shield systems: **[shield-combat.md](shield-combat.md)**.
 
-Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
+Release history: **[patch-notes-v-0.8.md](patch-notes-v-0.8.md)** (alpha). Prior: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 
 ---
 

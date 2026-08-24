@@ -41,7 +41,7 @@ Turn on or off most settings and features to your preference under **Settings â†
 
 Full gameplay, settings, and source file list: **[docs/ALBT-Features-Overview.md](docs/ALBT-Features-Overview.md)**.
 
-Latest release notes: **[docs/patch-notes-v0.55.md](docs/patch-notes-v0.55.md)** (v0.55 since v0.5).
+Latest release notes: **[docs/patch-notes-v-0.8.md](docs/patch-notes-v-0.8.md)** (v-0.8 alpha; [v0.55](docs/patch-notes-v0.55.md) is the previous notes).
 
 ---
 
