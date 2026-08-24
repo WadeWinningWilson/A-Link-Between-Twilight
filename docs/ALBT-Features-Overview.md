@@ -29,11 +29,13 @@ Pause **Settings → ALBW**. Most toggles live under that tab, grouped as **Syst
 | **No Ammo Drops** | On | Bombs, arrows, and seeds no longer drop from enemies; magic pickups replace them. |
 | **Manual Shielding** | Off | Hold **ZR** to guard without Z-target lock-on; **ZR+B** shield bash. Off = vanilla auto-guard on Z-target. |
 | **Shield Parry & Bash Charges** | On | Perfect-guard timing earns bash charges and ALBW meter; failed blocks cost meter and charges. Off = traditional TP guard. |
+| **Parry Master** | Off | Harder parries: failed parries cost health and stamina, perfect parries recoup health. Requires **Shield Parry & Bash Charges**. |
 | **Shield Durability** | Off | Shield HP by tier; failed blocks drain it. Hylian repairs on parry. Break at 0 triggers guard break. |
 | **Soul of Light** | Off | After Talo is rescued, dying halves your wallet and leaves a Soul of Light at the death spot to recover part of it. Item strip and meter refill on death are unaffected. |
-| **Wolf Link Combat** | Off | ALBW wolf form: bite charges for Midna field attacks, twilight/non-twilight damage split, non-twilight stun, low-HP bite healing. Off = vanilla TP wolf combat. |
+| **Wolf Link Combat** | Off | Bites build charges for Midna Charge Attacks, plus new wolf howl and Midna Arm attacks so wolf is viable for harder encounters. Midna charge attacks deal higher damage to twilight enemies and freeze non-twilight enemies in place. Wolf Howl plays new songs as you collect them. Off = vanilla TP wolf combat. |
 | **Enemy Death Rupees** | Off | Credit rupees directly to your wallet when enemies die and when boss fights end. Vanilla drop tables (hearts, jars, ground rupees) are unchanged. |
-| **Extra Item Slot** | Off | **Off** / **Extra Only** (Midna on left D-pad, Z item) / **Extra + Quick Swap** (also Up = cycle sword, Right = cycle shield, Down = transform; map defaults to M / Tab). See `docs/d-pad-reworking.md`. |
+| **Extra Item Slot** | Off | **Off** / **Extra Only** (Midna on left D-pad, Z item) / **Extra + Quick Swap** (Up = cycle sword, Right = cycle shield, Down = quickswap outfits; map defaults to M / Tab). |
+| **Master Quest** | Off | Recommended once per playthrough. Halves heart-container and heart-piece rewards; Postman sells heart, stamina, and sword upgrades; dungeon ALBW meter growth is disabled in favor of those shop purchases. |
 
 Design details for shield systems: **[shield-combat.md](shield-combat.md)**.
 
@@ -43,12 +45,34 @@ Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 
 ## Gameplay
 
-### ALBW energy meter
+### ALBW Magic Meter
 
-- Replaces the lantern-oil HUD with an ALBW-style stamina bar for **human Link**.
+Replaces the lantern-oil HUD with the restored Magic Meter, implementing an ALBW-style stamina bar for **human Link**.
+
 - Drains on sword swings, agility actions, and hidden-skill use; passive recovery when not guarding.
 - **Wolf Link is unaffected** — wolf combat uses its own optional overhaul (below), not the meter.
 - While actively guarding, passive ALBW recovery (including idle boost) is paused; parry rewards refill via explicit meter grants.
+
+### Shield combat (optional)
+
+Independent toggles under **Settings → ALBW → Systems**:
+
+- **Manual shielding** — hold ZR to guard without Z-target lock-on; **ZR+B** shield bash. Off = vanilla auto-guard on Z-target.
+- **Shield Parry & Bash Charges** — perfect-block window, charge bank by shield tier, bash spend rules, ALBW meter rewards/penalties. Off = traditional TP guard.
+- **Parry Master** — harder parries: failed parries cost health and stamina, perfect parries recoup health. Requires **Shield Parry & Bash Charges**.
+- **Shield Durability** — separate shield-HP meter and HUD; mid-boss/boss hits scale durability loss via HP category.
+
+ALBW recovery pause while guarding is always active on PC when the mod is built in.
+
+### Wolf Link combat (optional)
+
+When **Wolf Link Combat** is on:
+
+- Bites build charges for **Midna Charge Attacks**.
+- New **wolf howl** and **Midna Arm** attacks, so wolf is viable for harder encounters.
+- Midna charge attacks deal **higher damage to twilight enemies** and **freeze non-twilight enemies** in place.
+- **Wolf Howl** plays new songs as you collect them.
+- Wolf form remains **outside** the ALBW Magic Meter economy.
 
 ### Death — item strip
 
@@ -78,40 +102,25 @@ Release history: **[patch-notes-v0.55.md](patch-notes-v0.55.md)**.
 
 Items appear in the shop only if they were **stripped on death** and are **not currently owned**.
 
-**Native UI** (`TARGET_PC_NATIVE_UI=ON`):
-
 - **13 rentable items** in ascending price order (Slingshot through Deity Armor).
 - **Six visible rows** with scroll; selection follows D-pad / stick.
-- **Letter-select layout** (`zelda_letter_select_6menu.blo` + `select_base.blo`): icon, name (`?????` when locked), rupee price per row; parchment description on the right.
+- Icon, name (`?????` when locked), rupee price per row; parchment description on the right.
 - **Rent** with A when purchasable; **Leave** with B.
-- **Native dialogue:** first visit uses three greeting pages; returning customers get one page; farewell depends on whether you rented this session.
+- First visit uses three greeting pages; returning customers get one page; farewell depends on whether you rented this session.
 
-**ImGui fallback** (`TARGET_PC_NATIVE_UI=OFF`):
+Wolf Link gets a dismissal and no shop.
 
-- `dALBWRental_imguiDraw()` — shop window in the main loop.
-- `dusk::ui::push_toast()` — greeting and farewell.
+### Master Quest (optional)
 
-**Postman actor:** custom voice SFX, optional BGM, `evtTalk()` intercept keeps Link locked during shop. Wolf Link gets a dismissal toast and no shop.
+**Settings → ALBW → Master Quest.** Recommended once per playthrough (default Off).
 
-Shop footer polish (analog-stick hint, tagline) is still WIP — see **[albw-shop-icon-alignment.md](albw-shop-icon-alignment.md)** and maintainer notes below.
+When **Master Quest** is on:
 
-### Shield combat (optional)
+- Heart containers and heart-piece set rewards are **halved**.
+- Dungeon **ALBW Magic Meter** growth is disabled; meter capacity is bought from the Postman instead.
+- The Postman **Upgrades & Services** page sells escalating-price **heart** purchases, **stamina / Magic Meter** capacity purchases, and **sword** upgrades.
 
-Three independent toggles under **ALBW Settings** (see table above):
-
-- **Manual shielding** — Dawnlight-style guard chord (hold ZR); no auto-guard from Z-target alone.
-- **Shield Parry & Bash Charges** — perfect-block window, charge bank by shield tier, bash spend rules, ALBW meter rewards/penalties.
-- **Shield Durability** — separate shield-HP meter and HUD; mid-boss/boss hits scale durability loss via HP category.
-
-ALBW recovery pause while guarding is always active on PC when the mod is built in.
-
-### Wolf Link combat (optional)
-
-When **Wolf Link Combat** is on:
-
-- Bite charge system for Midna field attacks (with dedicated charge HUD).
-- Twilight vs non-twilight damage split, non-twilight enemy stun, low-HP bite healing.
-- Wolf form remains **outside** the ALBW energy meter economy.
+Turning the setting off leaves purchased upgrades saved; they apply again when Master Quest is turned back on.
 
 ### Enemy Death Rupees (optional)
 
@@ -172,18 +181,7 @@ Rebase / submodule sync with **[TwilitRealm/dusklight v1.3.1](https://github.com
 
 **Touch points:** git submodule / merge base, conflict pass on shared files (`m_Do_main`, actor infra, settings, build presets), full rebuild and smoke test (Postman shop, meter HUD, wolf combat, Darknut parry).
 
-### 2. Postman heart & stamina upgrades — ✅ finalized (2026-06)
-
-**Shipped** on the Postman **Upgrades & Services** page when **Master Quest** is on (`d_albw_master_quest.cpp`, `d_albw_rental.cpp`):
-
-- Escalating-price **heart** purchases (half-heart / container progression).
-- Escalating-price **ALBW stamina meter** capacity purchases.
-
-**Remaining polish:** swap the **stamina upgrade row icon** in shop UI (heart icon is correct).
-
-**Touch points:** `d_albw_master_quest.cpp`, `d_albw_rental.cpp` (`CAT_UPGRADES`), `d_meter2.cpp` (meter max), save event regs 100–102.
-
-### 3. Actual enemy HP multiplier (deferred)
+### 2. Actual enemy HP multiplier (deferred)
 
 Replace (or offer alongside) today's **attack-power division** intercept in `dAlbwHP_applyMult()` with **real max-HP scaling** on enemies at spawn or init — so 16× means 16× HP without integer-division plateaus or the `max(1, …)` floor distorting time-to-kill.
 
@@ -191,11 +189,11 @@ Replace (or offer alongside) today's **attack-power division** intercept in `dAl
 
 **Touch points:** `d_albw_hp_mult.cpp`, enemy init paths (`health` / `mMaxHp` fields per actor), `d_cc_uty.cpp` (remove or gate divide path), wolf charge scaling in `d_cc_uty.cpp` (today uses `dAlbwHP_getRawMult()` to undo the divide).
 
-### 4. Lockout slingshot — visual “ranged open” feedback (future)
+### 3. Lockout slingshot — visual “ranged open” feedback (future)
 
 Gameplay debuff (`dAlbwLockout_onSlingshotHit`, 4s window) is in; **no dedicated VFX/HUD yet**. Later: enemy shimmer / status icon / lock-on tint while `dAlbwLockout_isRangedOpened()` so players know bow / bomb / iron ball will connect before the timer expires.
 
-### 5. Zant & Ganon boss changes
+### 4. Zant & Ganon boss changes
 
 ALBW-specific fight tuning for the **Zant** and **Ganon / Ganondorf** finale — phase scripts, damage expectations, and durability rules that still treat Zant as excluded from wolf combat overrides (`fpcNm_B_ZANT_e` in `d_cc_uty.cpp`).
 

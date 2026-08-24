@@ -1667,7 +1667,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "<br/><b>Off</b>: vanilla d-pad.<br/>"
                     "<b>Extra Only</b>: Midna on left D-pad, third item on Z.<br/>"
                     "<b>Extra + Quick Swap</b>: also maps Up/Right/Down to cycle sword, "
-                    "cycle shield, and wolf transform. Map moves to M / Tab and the "
+                    "cycle shield, and quickswap outfits. Map moves to M / Tab and the "
                     "controller touchpad by default (no touchpad? rebind Open Map in "
                     "Controller Config — L3 recommended).");
             });
