@@ -2754,13 +2754,6 @@ static int wwProbe3DlineSeen(const void* obj, WwProbeKind kind) {
 void mDoExt_3DlineMat1_c::setMaterial() {
     ZoneScoped;
 #if TARGET_PC
-    // §473: claim the breadcrumb. The owner is STICKY, so without this a
-    // 3Dline's direct descriptor changes are reported under whichever
-    // J3DShape ran last -- which is exactly the "stale owner" case that made
-    // the §472 output unreadable. Diagnostic only (HT-5 strip list).
-    GXAuroraSetDlOwner(this, "3DlineMat");
-#endif
-#if TARGET_PC
     {
         int n = wwProbe3DlineSeen(this, kWwProbeSetMaterial);
         // HT-8 second half: the latch signals table overflow with -1, and
