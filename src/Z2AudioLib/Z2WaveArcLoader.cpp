@@ -114,7 +114,7 @@ void Z2WaveArcLoader::onDraw(JAWGraphContext* graf) {
 
     mTotalUsedSize = 0;
 
-    for (JSUTreeIterator<JASHeap> i = rootheap->getFirstChild(); (int)i != (int)rootheap->getEndChild(); ++i) {
+    for (JSUTreeIterator<JASHeap> i = rootheap->getFirstChild(); i != rootheap->getEndChild(); ++i) {
         intptr_t sp40 = (char*)i->getBase() - (char*)pbase;
         u32 sp3C = i->getSize();
         mTotalUsedSize += sp3C;

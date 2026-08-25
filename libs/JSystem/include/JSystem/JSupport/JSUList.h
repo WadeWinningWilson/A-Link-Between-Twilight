@@ -230,7 +230,9 @@ public:
         return *this;
     }
 
-    operator int() { return (int)mTree; }
+    // GameCube used operator int() as a pointer-null test (and as a truncated
+    // pointer compare in Z2WaveArcLoader). 64-bit PC cannot cast T* to int.
+    operator bool() const { return this->mTree != NULL; }
 
     T* getObject() const { return this->mTree->getObject(); }
 
