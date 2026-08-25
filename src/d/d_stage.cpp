@@ -742,15 +742,15 @@ static dStage_objectNameInf l_objectName[] = {
     //   population's fopAcM_create(..., i_argument = -1) exactly (the demo NPCs
     //   Ji1/Ko1/Bm1..3 all use 255 the same way). The port's 3-field OBJNAME drops
     //   the donor's 4th field (60) as every port row does.
-    OBJNAME("Ls1",     fpcNm_NPC_LS1_e,          255),
+    OBJNAME("Ls1",     fpcNm_NPC_LS1_e,          -1),
     // §254 Tetra: donor d_stage.cpp:725 OBJNAME("Zl1", fpcNm_NPC_ZL1_e, 255, 60).
     //   255 == (s8)-1 matches the census fopAcM_create(..., -1). Real NPC_ZL1 now
     //   exists (0x329), so demos (meet_tetra/awake/stolensister/...) bind natively.
-    OBJNAME("Zl1",     fpcNm_NPC_ZL1_e,          255),
+    OBJNAME("Zl1",     fpcNm_NPC_ZL1_e,          -1),
     // §261: JACT 'Ba1' now routes to the native NPC_BA1 direct port (was the
     // HENNA0 mount stand-in, arg 26). Donor create arg 255 = (s8)-1, matching the
     // Ls1/Zl1 rows; the census identity is now the real actor.
-    OBJNAME("Ba1",     fpcNm_NPC_BA1_e,           255),
+    OBJNAME("Ba1",     fpcNm_NPC_BA1_e,           -1),
     OBJNAME("Otble", fpcNm_OBJ_OTBLE_e, 0),  // §329 Actor-Kit
     // §327 WW wall/loft lamp: donor d/d_stage.cpp:919 is
     //   OBJNAME("Lamp", fpcNm_LAMP_e, 255, 0) — replicated verbatim (the port's
@@ -758,7 +758,7 @@ static dStage_objectNameInf l_objectName[] = {
     // (s8)-1 -> the placement's own DZR params reach the actor). This native row
     // REPLACES the retired Lamp->NPC_LAMP mount stand-in, which is parked in
     // d_ext_npc_population.cpp (§327; DN-9 — donor system now ported).
-    OBJNAME("Lamp",    fpcNm_LAMP_e,              255),
+    OBJNAME("Lamp",    fpcNm_LAMP_e,              -1),
     // §327 WW tableware: donor d/d_stage.cpp:1131-1133 — one actor, three rows;
     // the row arg 0/1/2 selects pot/osara/koppu (daObjMshokki_c::param_get_arg).
     OBJNAME("MPot",    fpcNm_Obj_Mshokki_e,         0),
@@ -767,20 +767,20 @@ static dStage_objectNameInf l_objectName[] = {
     // §327 WW wall shield / special placed item: donor d/d_stage.cpp:1169 is
     //   OBJNAME("SPitem", fpcNm_SPC_ITEM01_e, 255, 0) — replicated verbatim
     // (255 -> DZR params carry the WW itemNo in the low byte).
-    OBJNAME("SPitem",  fpcNm_SPC_ITEM01_e,        255),
+    OBJNAME("SPitem",  fpcNm_SPC_ITEM01_e,        -1),
     // §328 WW knob doors: donor d/d_stage.cpp:465-472 — eight rows, all to
     //   fpcNm_KNOB00_e: OBJNAME("KNOB00".."KNOB03" + "KNOB00D".."KNOB03D",
     //   fpcNm_KNOB00_e, 255, 0) — replicated verbatim (port 3-field macro).
     // fpcNm_KNOB00_e is the §27-registered slot 0x31C; which implementation
     // spawns is selected by DUSK_WW_KNOB00_NATIVE (d/actor/d_a_knob00.h §328).
-    OBJNAME("KNOB00",  fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB01",  fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB02",  fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB03",  fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB00D", fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB01D", fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB02D", fpcNm_KNOB00_e,            255),
-    OBJNAME("KNOB03D", fpcNm_KNOB00_e,            255),
+    OBJNAME("KNOB00",  fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB01",  fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB02",  fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB03",  fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB00D", fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB01D", fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB02D", fpcNm_KNOB00_e,            -1),
+    OBJNAME("KNOB03D", fpcNm_KNOB00_e,            -1),
     // KIT-DONOR-HUNK-END
     OBJNAME("carry00", fpcNm_Obj_Carry_e,         -1),
     OBJNAME("carry01", fpcNm_Obj_Carry_e,         -1),
