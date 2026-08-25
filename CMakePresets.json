@@ -19,7 +19,13 @@
       "hidden": true,
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL"
+      }
+    },
+    {
+      "name": "msvc-relwithdebinfo-flags",
+      "hidden": true,
+      "cacheVariables": {
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "/O2 /Ob1 /DNDEBUG",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "/O2 /Ob1 /DNDEBUG",
         "CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO": "/debug /INCREMENTAL:NO"
@@ -197,6 +203,7 @@
       "displayName": "Windows (MSVC) RelWithDebInfo",
       "inherits": [
         "relwithdebinfo",
+        "msvc-relwithdebinfo-flags",
         "windows-msvc"
       ]
     },
@@ -252,6 +259,7 @@
       "displayName": "Windows (Clang) RelWithDebInfo",
       "inherits": [
         "relwithdebinfo",
+        "msvc-relwithdebinfo-flags",
         "windows-clang"
       ]
     },
@@ -539,6 +547,7 @@
       "hidden": true,
       "inherits": [
         "relwithdebinfo",
+        "msvc-relwithdebinfo-flags",
         "ci"
       ],
       "cacheVariables": {

@@ -87,7 +87,6 @@
 #include "d/d_ext_npc_mount.h"
 #include "d/d_kankyo_tev_str.h"
 #include "dusk/logging.h"
-extern "C" void aurora_gx_state_snapshot(char*, unsigned long);  // §387
 #include "dusk/main.h"
 #include "f_op/f_op_actor.h"
 #include "f_op/f_op_actor_mng.h"
@@ -1611,9 +1610,9 @@ void daExtVeg_c::drawBlades() {
                 static bool s_tapA = false;
                 if (!s_tapA) {
                     s_tapA = true;
-                    char buf[2048] = {};
-                    aurora_gx_state_snapshot(buf, sizeof(buf));
-                    DuskLog.info("[GXTap] §387 A(rawGX veg blades) {}", buf);
+                    // aurora_gx_state_snapshot is WW-aurora-only (not on the
+                    // committed pin). Do not call it from TUs public CI compiles.
+                    DuskLog.info("[GXTap] §387 A(rawGX veg blades) snapshot omitted (public aurora pin)");
                 }
             }
             GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (u16)st.count);

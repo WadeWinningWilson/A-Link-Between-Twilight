@@ -296,20 +296,6 @@ void J3DShape::loadCurrentMtx() const {
 }
 
 void J3DShape::loadPreDrawSetting() const {
-#if TARGET_PC
-    // ========================================================================
-    // [Housing] §471 P2 OWNER BREADCRUMB — DEBUG RESIDUE, ON THE HT-5 STRIP
-    // LIST. Foundry's set_dl_owner records who submitted a display list, so an
-    // anomaly can name its author instead of a bare pointer.
-    // Placed OUTSIDE the sOldVcdVatCmd check ON PURPOSE: the failing shape is
-    // exactly the one that SKIPS the VCD call (J3D's cache hit), so tagging
-    // inside the branch would miss the only case we care about. The owner is
-    // sticky, so it also covers the shape's own geometry list submitted later
-    // by J3DShapeDraw::draw().
-    // Diagnostic only — records an identity, changes no behaviour.
-    // ========================================================================
-    GXAuroraSetDlOwner(this, "J3DShape");
-#endif
     if (sOldVcdVatCmd != mVcdVatCmd) {
         GXCallDisplayList(mVcdVatCmd, kVcdVatDLSize);
         sOldVcdVatCmd = mVcdVatCmd;
@@ -332,29 +318,12 @@ void J3DShape::setArrayAndBindPipeline() const {
 }
 
 #if TARGET_PC
-// §387 GX-STATE TAP B — the FAILING submission path (J3D shape draw). Armed by
-// the room-model probe for a SPECIFIC material index so the snapshot lands on
-// the plant material and nothing else; compared against tap A (raw-GX veg,
-// same texture bytes) to name the differing GX field. Read-only; one shot.
-extern "C" void aurora_gx_state_snapshot(char*, unsigned long);
-int g_extWwGxTapShape = -1;   // shape index to tap (-1 = off), set by the probe
+int g_extWwGxTapShape = -1;
 bool g_extWwGxTapFired = false;
 #endif
 
 void J3DShape::drawFast() const {
     ZoneScoped;
-#if TARGET_PC
-    if (g_extWwGxTapShape >= 0 && !g_extWwGxTapFired &&
-        (int)getIndex() == g_extWwGxTapShape) {
-        g_extWwGxTapFired = true;
-        char buf[2048] = {};
-        aurora_gx_state_snapshot(buf, sizeof(buf));
-        OSReport("[GXTap] 387 B(J3D shape %d) %s\n", g_extWwGxTapShape, buf);
-    }
-#endif
-#if TARGET_PC
-    GXAuroraSetDlOwner(this, "J3DShape");  // §471 P2 breadcrumb (HT-5 strip list)
-#endif
     if (sOldVcdVatCmd != mVcdVatCmd) {
         GXCallDisplayList(mVcdVatCmd, kVcdVatDLSize);
         sOldVcdVatCmd = mVcdVatCmd;
@@ -402,9 +371,6 @@ void J3DShape::simpleDraw() const {
 }
 
 void J3DShape::simpleDrawCache() const {
-#if TARGET_PC
-    GXAuroraSetDlOwner(this, "J3DShape");  // §471 P2 breadcrumb (HT-5 strip list)
-#endif
     if (sOldVcdVatCmd != mVcdVatCmd) {
         GXCallDisplayList(mVcdVatCmd, kVcdVatDLSize);
         sOldVcdVatCmd = mVcdVatCmd;

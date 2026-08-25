@@ -109,11 +109,9 @@ struct WwFullMat3Scope {
 }  // namespace
 
 #if TARGET_PC
-extern "C" void aurora_gx_state_snapshot(char*, unsigned long);  // §387b
-extern "C" void aurora_gx_draw_probe_arm(int);                   // §391b
 // §387 — GX-state tap B controls (defined in J3DShape.cpp). The room-model
-// probe arms the tap on the plant material's shape so the snapshot lands on
-// that draw and nothing else.
+// probe arms the tap on the plant material's shape. Snapshot/probe-arm aurora
+// APIs are WW-aurora-only (not on the committed pin); public CI must not call them.
 extern int g_extWwGxTapShape;
 extern bool g_extWwGxTapFired;
 #endif
@@ -138,12 +136,8 @@ void roomVerifyTick() {
             const char* stage = dComIfGp_getStartStageName();
             dExtRoomVerify_run(stage != NULL ? stage : "?", room);
 #if TARGET_PC
-            // §391b — arm the per-draw GX census for THIS room, at the same
-            // settle point as the manifest report, so the two describe the same
-            // frame. Arming clears the probe's signature set (see
-            // aurora_gx_draw_probe_arm): without that scoping the title screen
-            // and every room walked through en route spend the budget first.
-            aurora_gx_draw_probe_arm(1);
+            // §391b — per-draw GX census used to arm here via
+            // aurora_gx_draw_probe_arm (WW aurora only; not on the committed pin).
 #endif
         }
     }
@@ -11264,10 +11258,7 @@ int dExtNpcMount_draw(dExtNpcMount_c* i_this) {
                 static bool s_tapB = false;
                 if (!s_tapB) {
                     s_tapB = true;
-                    char buf[2048] = {};
-                    aurora_gx_state_snapshot(buf, sizeof(buf));
-                    DuskLog.info("[GXTap] §387b B(J3D room model, post-updateDL) {}",
-                                 buf);
+                    DuskLog.info("[GXTap] §387b B(J3D room model, post-updateDL) snapshot omitted (public aurora pin)");
                 }
             }
             if (i == 1 && i_this->mpBgBtk != NULL && data != NULL &&
