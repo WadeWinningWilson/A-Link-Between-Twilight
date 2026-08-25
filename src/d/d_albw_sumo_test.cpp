@@ -21,6 +21,7 @@
 #include "SSystem/SComponent/c_phase.h"
 #include "m_Do/m_Do_ext.h"
 #include "JSystem/J3DGraphAnimator/J3DModelData.h"
+#include "dusk/extras.h"  // stricmp (MSL extras; POSIX build has no CRT stricmp)
 
 // ============================================
 // DEBUG — model-agnostic cap loader (Phase 2).  Logs the private mount/load lifecycle so the

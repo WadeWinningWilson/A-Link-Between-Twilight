@@ -49,6 +49,8 @@
 #include "d/ext_plugin/ww_room_loader.h"
 #include "d/ext_plugin/ww_stage_loader.h"
 #include "d/d_stage.h"
+#include "d/d_kankyo_ww_wind.h"
+#include "d/d_ext_ww_actor_shims.h"
 
 #if defined(DUSK_EXCLUDE_WW_ACTIVE)
 
@@ -235,6 +237,49 @@ void dExtNpcWorld_bump(const char* /*reason*/) {
 // where the 20 WW indices are already NULL, so those actors simply do not
 // create. That is the correct plugin behaviour: no plugin, no WW actors.
 process_profile_definition DUSK_CONST* dWwProfileRegister_lookup(s16 /*index*/) {
+    return NULL;
+}
+
+// ===========================================================================
+// 2026-08-23 cluster: the manifest regeneration moved ww_layer_select.cpp,
+// ww_event_names.cpp, d_kankyo_ww_wind.cpp and d_ext_ww_actor_shims.cpp into
+// the exclusion set, and the clone-simulation link proved six symbols in them
+// are still called from mixed/leg TUs that the build keeps. Every caller was
+// read before these were written, and every one already carries its own
+// NULL/false/no-op fall-through — none of these defaults invents behaviour.
+// ===========================================================================
+
+// d_com_inf_game.cpp:196 — reachable ONLY behind dExtWwSave_isWwHostStage(),
+// which this cluster defaults to false above, so this cannot be reached in an
+// excluded build. -1 is the function's own "no stage layer" sentinel, chosen
+// so even an impossible call reads as "nothing decided", never as layer 0.
+int dExtWw_getLayerNo(int /*i_roomNo*/) {
+    return -1;
+}
+
+// d_event_manager.cpp:97/:740 and d_event.cpp — all three callers test the
+// result for NULL and fall through to the receiver's own stored event name.
+// NULL is the callers' documented "not a WW event" answer, verbatim.
+const char* dExtWwEvt_getArrivalEventName(int /*i_eventInfoIdx*/) {
+    return NULL;
+}
+const char* dExtWwEvt_getStageEventName(int /*i_eventInfoIdx*/) {
+    return NULL;
+}
+const char* dExtWwEvt_getStageEventNameForRecord(const void* /*i_record*/) {
+    return NULL;
+}
+
+// d_kankyo_wether.cpp (dKyw_wether_move) — the per-frame conducted-wind
+// driver. With no WW layer there is no conducted wind to move; a no-op is the
+// pre-port receiver, byte for byte.
+void dKyWw_wind_set() {
+}
+
+// d_ext_dmesg.cpp:1035 — the caller's own next lines are `if (txt == NULL)
+// txt = i_fallbackText;` and an empty-text early return, so NULL routes the
+// talk box to its fallback exactly as a missing BMG already does.
+const char* dExtWwMsg_textByMsgNo(u16 /*i_msgNo*/) {
     return NULL;
 }
 
