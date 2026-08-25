@@ -1,0 +1,142 @@
+# Package macOS / iOS / Android the way TwilitRealm dusklight ships them:
+#   macOS — ad-hoc codesign + ditto zip
+#   iOS   — Payload/Dusklight.app IPA (AltStore / iloader re-sign on the device)
+#   Android — zipaligned, debug-signed APK so phones will install it
+# Does not cut a new version tag. Attach the uploaded artifacts to an existing release.
+name: Package mobile and macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Actions run id whose artifacts to package"
+        required: true
+        type: string
+      version:
+        description: "Release version string, e.g. v-0.8.1"
+        required: true
+        type: string
+
+jobs:
+  apple:
+    name: macOS codesign + iOS IPA
+    runs-on: macos-latest
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download Apple CI artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download "${{ inputs.run_id }}" --repo "${{ github.repository }}" --dir artifacts \
+            --name dusklight-UNKNOWN-VERSION-macos-appleclang-arm64 \
+            --name dusklight-UNKNOWN-VERSION-macos-appleclang-x86_64 \
+            --name dusklight-UNKNOWN-VERSION-ios-appleclang-arm64
+          find artifacts -maxdepth 3 -type d -print
+
+      - name: Ad-hoc sign macOS apps and zip with ditto
+        env:
+          VER: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          package_macos() {
+            local src_app="$1"
+            local zip_name="$2"
+            local work
+            work="$(mktemp -d)"
+            cp -R "$src_app" "$work/Dusklight.app"
+            chmod +x "$work/Dusklight.app/Contents/MacOS/Dusklight"
+            chmod +x "$work/Dusklight.app/Contents/MacOS/crashpad_handler" || true
+            codesign --force --sign - "$work/Dusklight.app/Contents/MacOS/crashpad_handler" || true
+            codesign --force --deep --sign - "$work/Dusklight.app"
+            codesign -dv --verbose=2 "$work/Dusklight.app"
+            ditto -c -k --keepParent "$work/Dusklight.app" "out/$zip_name"
+            rm -rf "$work"
+          }
+          package_macos artifacts/dusklight-UNKNOWN-VERSION-macos-appleclang-arm64/Dusklight.app \
+            "dusklight-${VER}-macos-arm64.zip"
+          package_macos artifacts/dusklight-UNKNOWN-VERSION-macos-appleclang-x86_64/Dusklight.app \
+            "dusklight-${VER}-macos-x86_64.zip"
+
+      - name: Wrap iOS app as IPA
+        env:
+          VER: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          src="artifacts/dusklight-UNKNOWN-VERSION-ios-appleclang-arm64/Dusklight.app"
+          work="$(mktemp -d)"
+          mkdir -p "$work/Payload"
+          cp -R "$src" "$work/Payload/Dusklight.app"
+          chmod +x "$work/Payload/Dusklight.app/Dusklight"
+          # Sideload tools (AltStore / iloader) re-sign with the user's Apple ID.
+          (cd "$work" && zip -ry "$GITHUB_WORKSPACE/out/dusklight-${VER}-ios-arm64.ipa" Payload)
+          rm -rf "$work"
+          unzip -l "out/dusklight-${VER}-ios-arm64.ipa" | head -20
+
+      - name: Upload Apple packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: apple-release-${{ inputs.version }}
+          path: out/*
+          if-no-files-found: error
+
+  android:
+    name: Sign Android APK
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download Android CI artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download "${{ inputs.run_id }}" --repo "${{ github.repository }}" --dir artifacts \
+            --name dusklight-UNKNOWN-VERSION-android-arm64
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install build-tools
+        run: sdkmanager "build-tools;35.0.0"
+
+      - name: Zipalign and debug-sign APK
+        env:
+          VER: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          unsigned="$(find artifacts -name '*.apk' | head -1)"
+          mkdir -p out
+          aligned="$RUNNER_TEMP/aligned.apk"
+          "$BT/zipalign" -p -f 4 "$unsigned" "$aligned"
+          # Same identity assembleDebug uses. Sideload works; Play Protect may warn.
+          keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -storepass android \
+            -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/debug.keystore" --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android \
+            --out "out/dusklight-${VER}-android-arm64.apk" "$aligned"
+          "$BT/apksigner" verify --verbose "out/dusklight-${VER}-android-arm64.apk"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release-${{ inputs.version }}
+          path: out/*.apk
+          if-no-files-found: error
