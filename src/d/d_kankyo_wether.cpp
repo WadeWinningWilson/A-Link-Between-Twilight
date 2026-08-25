@@ -1643,7 +1643,7 @@ static void dKyr_ww_wind_move() {
                 }
 
                 f32 windVec_absXZ =
-                    std::sqrtf(windVec.x * windVec.x + windVec.z * windVec.z);
+                    std::sqrt(windVec.x * windVec.x + windVec.z * windVec.z);
                 windEff.mAngleXZ = cM_atan2s(windVec.x, windVec.z);
                 windEff.mAngleY = cM_atan2s(windVec.y, windVec_absXZ);
                 windEff.field_0x28 = 0;
@@ -1674,7 +1674,7 @@ static void dKyr_ww_wind_move() {
                 }
             } else {
                 f32 windVec_absXZ =
-                    std::sqrtf(windVec.x * windVec.x + windVec.z * windVec.z);
+                    std::sqrt(windVec.x * windVec.x + windVec.z * windVec.z);
                 s16 targetAngleXZ = cM_atan2s(windVec.x, windVec.z);
                 s16 targetAngleY = cM_atan2s(windVec.y, windVec_absXZ);
                 cLib_addCalcAngleS(&windEff.mAngleY, targetAngleY, 10, 1000, 1);

@@ -648,9 +648,17 @@ if(DUSK_EXCLUDE_WW)
     # from. If files.cmake has moved since, the list is stale and would silently
     # UNDER-exclude -- the exact "stamp reports FRESH on stale content" failure
     # this campaign has already paid for once. Refuse rather than under-exclude.
-    file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/files.cmake" _fc_now)
+    #
+    # Stamp is SHA256 of files.cmake with newlines folded to LF (the cmake
+    # header's "EOL-normalized" digest). file(SHA256) hashes the on-disk
+    # bytes, so a Windows CRLF checkout never matches Linux CI. Trailing
+    # commentary on the stamp line is not part of the digest.
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/files.cmake" _fc_raw)
+    string(REPLACE "\r\n" "\n" _fc_lf "${_fc_raw}")
+    string(SHA256 _fc_now "${_fc_lf}")
     file(STRINGS "${_ww_exclude_cmake}" _stamp_line REGEX "^# files_cmake_sha256:")
     string(REGEX REPLACE "^# files_cmake_sha256:[ ]*" "" _fc_stamped "${_stamp_line}")
+    string(REGEX REPLACE "[^0-9a-fA-F].*$" "" _fc_stamped "${_fc_stamped}")
     if(NOT _fc_now STREQUAL _fc_stamped)
         message(FATAL_ERROR
             "WW exclusion list is STALE: files.cmake has changed since it was generated.\n"
