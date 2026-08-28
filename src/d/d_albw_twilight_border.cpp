@@ -10,6 +10,7 @@
 #if TARGET_PC
 
 #include "d/d_com_inf_game.h"
+#include "d/d_kankyo_data.h"
 #include "d/actor/d_a_obj_twGate.h"
 #include "d/actor/d_a_tag_TWgate.h"
 #include "dusk/leveledit/enumerate.hpp"
@@ -51,6 +52,27 @@ int sNextCheckFrame = 0;
 // Dedupe by proc + room + proximity: the same border wall is authored once
 // per twilight layer variant (e.g. L13 + L14) with possibly differing type
 // params — spawning both would stack two walls on the same spot.
+// Mirror vanilla twilight *spread* — not the same as "province uncleared."
+// dKy_F_SP121Check (d_kankyo.cpp:11220) blocks Faron twilight until Ordon
+// Day 2 complete (F_0565 / saveBitLabels value 0x4510 — same gate getLayerNo
+// uses for F_SP108 pre-twilight). Later provinces follow the clear chain.
+// Fallback must not spawn borders pre-spread (Talo quest / fresh Faron visit).
+bool isProvinceTwilightSpread(u8 i_province) {
+    switch (i_province) {
+    case KY_DARKLV_FARON:
+        // Ordon Day 2 finished — twilight may spread into Faron province.
+        return dComIfGs_isEventBit(0x4510);
+    case KY_DARKLV_ELDIN:
+        return dComIfGs_isDarkClearLV(KY_DARKLV_FARON);
+    case KY_DARKLV_LANAYRU:
+        return dComIfGs_isDarkClearLV(KY_DARKLV_ELDIN);
+    case 4:  // Hyrule-field border (l_twFlagIdx twGt*/twGn* type 4)
+        return dComIfGs_isDarkClearLV(KY_DARKLV_LANAYRU);
+    default:
+        return false;
+    }
+}
+
 bool wasSpawnedNear(s16 i_proc, s8 i_room, const cXyz& i_pos) {
     constexpr f32 kDedupeDist = 500.0f;
     for (const SpawnKey& k : sSpawned) {
@@ -129,6 +151,10 @@ void checkRoom(int i_stayRoom) {
 
         if (province < 0 || dComIfGs_isDarkClearLV(static_cast<u8>(province))) {
             continue;  // invalid, or province legitimately cleared — vanilla absence is correct
+        }
+
+        if (!isProvinceTwilightSpread(static_cast<u8>(province))) {
+            continue;  // twilight has not reached this province yet — day-layer absence is correct
         }
 
         if (wasSpawnedNear(row.procname, static_cast<s8>(i_stayRoom), row.spawnPos)) {
