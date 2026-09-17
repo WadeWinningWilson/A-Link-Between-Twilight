@@ -45,7 +45,9 @@ Latest release notes: **[docs/patch-notes-v-0.8.md](docs/patch-notes-v-0.8.md)**
 
 ---
 
-## Play the latest release (Windows)
+## Play the latest release (Multi-Platform)
+
+Just install the .Dusk! In progress, so if you want the full package this fork is still a viable option.
 
 You do **not** need to compile. Companion mods are a separate install, found inside: `companion_mods\_release\`
 
