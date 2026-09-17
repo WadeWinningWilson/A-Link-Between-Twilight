@@ -6,7 +6,7 @@
   </p>
 </div>
 
-# A Link Between Twilight
+# A Link Between Twilight, Now Available as a .Dusk!
 
 **A Link Between Twilight** is a PC mod for [Dusklight](https://github.com/TwilitRealm/dusklight) — the open-source reimplementation of _The Legend of Zelda: Twilight Princess_ — that adds an _A Link Between Worlds_–style **energy meter**, **death item strip**, **Postman rental shop**, and a suite of optional combat and economy tweaks (shield parry/durability, wolf combat, enemy HP scaling, death rupee orb, enemy death rupees, and more).
 
